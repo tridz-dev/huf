@@ -805,7 +805,7 @@ def validate_app_capabilities(capabilities: dict, agent_doc) -> list:
 		# capability can never be meaningfully validated, so we fail closed
 		# rather than pretend it passed. See
 		# docs/hub-orchestrator-unified-builder-plan.md Phase 10 and
-		# docs/hub-orchestrator-app-builder-todo.md.
+		# the hub-orchestrator-app-builder-todo note (workspace).
 		errors.append(
 			"App capability 'video_output' cannot be validated yet: the "
 			"Agent DocType has no video-generation-model field (analogous "

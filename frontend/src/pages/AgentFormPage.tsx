@@ -1709,7 +1709,7 @@ export function AgentFormPage() {
         // (huf/ai/agent_config_api.py's AGENT_SECTIONS) - so saving from any
         // other tab must persist it via its own general-section call instead
         // of silently dropping it, which is what happened before this fix
-        // (see Tracks/safwan-erooth.AuthDebug/FINDINGS.md, "Bug D").
+        // (see the AuthDebug workspace track, "Bug D").
         if (disabledChanged && section !== 'general') {
           const generalRevision = sectionRevisions.general;
           if (!generalRevision) {

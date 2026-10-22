@@ -118,7 +118,7 @@ def resolve_run_identity_and_authorize(
 	four surfaces below intentionally keeps its own way of surfacing a
 	rejection (HTTP exception vs. a persisted Gateway Event / Flow Run
 	status), because collapsing that too would itself be a behavior change.
-	See Tracks/safwan-erooth.IntegrationsGatewaysAudit/findings/GW-11-refactor.md
+	See the GW-11-refactor note in the IntegrationsGatewaysAudit workspace track
 	for the full design rationale. Track-Item: GW-11.
 
 	Args:

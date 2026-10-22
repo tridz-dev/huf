@@ -3,7 +3,7 @@
  * views. Safe to do with a plain <a href> (no client-side routing, no
  * SSO/token handoff) because huf's frontend is installed as a Frappe app on
  * the same site/session as Desk in the standard deployment - see
- * Tracks/safwan-erooth.DeskAIArtifactWorkspace/PLAN.md, "Phase 4 finding".
+ * the DeskAIArtifactWorkspace workspace track, "Phase 4 finding".
  *
  * No existing doctype -> Desk-route slug helper was found in this repo (nor
  * in the vendored frappe framework we could locate under the time available

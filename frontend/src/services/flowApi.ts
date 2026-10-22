@@ -29,7 +29,7 @@ export interface FlowDefinitionDoc {
 
 /**
  * The graph JSON stored in definition_json -- the Flow profile of the shared graph-IR
- * (huf/ai/graph/graph_ir.schema.json `$defs/FlowGraph`, see Tracks/safwan-erooth.DeterministicAgent/spec/graph-ir.md).
+ * (huf/ai/graph/graph_ir.schema.json `$defs/FlowGraph`, see the DeterministicAgent workspace track).
  *
  * There is no top-level `edges` array any more: each node carries its own successor
  * pointer (`next`) and error route (`on_error`); self-routing node types (condition,

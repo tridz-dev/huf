@@ -12,7 +12,7 @@
  *   serialize time, and reconstructs it from those pointers at deserialize time. See
  *   huf/huf/doctype/flow_definition/flow_definition.py's `_validate_definition_json`
  *   for the server-side gate this shape now has to satisfy, and
- *   Tracks/safwan-erooth.DeterministicAgent/spec/graph-ir.md for the shape itself.
+ *   the DeterministicAgent workspace track for the shape itself.
  */
 
 import type { Flow, FlowNode, FlowEdge, FlowNodeData, FlowStatus } from '@/types/flow.types';

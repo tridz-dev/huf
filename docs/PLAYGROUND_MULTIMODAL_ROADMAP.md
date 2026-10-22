@@ -1,7 +1,7 @@
 # Huf Playground — Multimodal Roadmap (Plan Stub)
 
 Status: plan seed / RFC. No implementation. Written against the `huf` worktree at
-`Tracks/safwan-erooth.PlaygroundMediaRoadmap/worktrees/huf` (branch `main`).
+`the PlaygroundMediaRoadmap workspace track` (branch `main`).
 
 ---
 

@@ -145,7 +145,7 @@ Calling has separate per-minute pricing [V that it is separate; U on rates/incre
 | 4 | Business-initiated + permission-request flow | ~1 week, blocked on Meta/country |
 Total to usable Phase 1: about 2-3 weeks; spike alone 2-3 days (matches GAP_ANALYSIS).
 
-## 12. Spike: `tools/wa_call_spike.py`
+## 12. Spike: `wa_call_spike.py` (kept in the workspace track, not in this repo)
 Standalone; aiohttp webhook server (GET challenge, POST HMAC check), connect -> RTCPeerConnection + remote offer + gated MediaPlayer track -> pre_accept -> wait connected -> accept (same SDP) -> open gate -> play N s -> terminate; terminate webhook handler; timing log; injectable post; `--dry-run`; `--selftest`.
 aiortc facts used [L]: `MediaPlayer(file)` decodes through ffmpeg/PyAV; `setLocalDescription` returns after ICE gathering so `localDescription.sdp` is final; Opus is encoded by aiortc. The gate does not read the file before accept, so nothing is consumed early.
 Selftest result (Python 3.14.7, aiortc 1.15.0, aiohttp 3.14.5, macOS): PASS. Action order pre_accept, accept, terminate; 0 frames received before accept; 147 frames received (about 3 s tone); webhook->answer_built 5.3 s (ICE gathering), accept->first outbound frame 25 ms.
@@ -178,7 +178,7 @@ Implemented (all mocked-tested, nothing invoked live, default OFF):
 - `whatsapp_management.py`: `get_calling_settings`, `set_calling_settings`, `call_action`, `send_call_permission_request` (admin only; permission request obeys opt-out and the 24 h window).
 - `whatsapp_call_flow.py`: state machine `run_call` (received, answering, pre_accepted, connected, accepted, playing, terminating, completed|failed|rejected), `answer_inbound_call_job`, `AiortcMediaSession` (lazy import; `get_media_backend()` reports `not_installed`, the job then rejects the call and marks the event Failed).
 - Gateway fields: `calling_enabled` (Check, default 0), `call_greeting_audio`, `call_reply_audio`, `call_closing_audio`, `call_max_seconds`.
-- Offline simulator `tools/wa_call_sim.py` (+ tests in `huf/ai/tests/test_whatsapp_calls.py`).
+- Offline simulator `huf/ai/tests/wa_call_sim.py` (+ tests in `huf/ai/tests/test_whatsapp_calls.py`).
 
 Behaviour: calling off -> a metadata Event (Rejected, "Calling is not enabled") and NO Graph call. Calling on, caller not in an approved Sender access entry (or blocked/opted out; `Open` and `Pairing` policies do NOT admit a caller, no pairing request is created) -> `reject` action sent and recorded on the Event (success or error), status Rejected. Approved caller -> Event Received, `answer_inbound_call_job` enqueued (idempotent on `call_id`); flow: pre_accept, wait media, accept with the SAME SDP, open the audio gate, play clips, terminate. `terminate`/status webhooks update the same Event (COMPLETED -> Succeeded, FAILED -> Failed).
 
@@ -190,7 +190,7 @@ Stubbed / not verified: `AiortcMediaSession` (ported from the spike, never run a
 `CallAudioSource.next_clip(heard) -> AudioClip | None` (bot side; `wants_caller_audio` makes the flow `listen` after each clip), `CallAudioSink.write(clip)` (caller side, must not persist), `MediaSession` (transport: `create_answer`, `wait_connected`, `open_gate`, `play`, `listen`, `close`). Now: `FilePlayback` (2-3 files in order) and `InMemoryAudioSink`. A realtime provider (e.g. Gemini Live) later implements a duplex source/sink pair over the same `MediaSession` (stream frames instead of clips); the flow, admission, events and terminate logic stay unchanged. The clip-based `next_clip` is turn-based, so a true streaming bridge will need a frame-level `MediaSession.stream(source, sink)` addition.
 
 ### 14.2 Simulating a call without Meta
-`python tools/wa_call_sim.py [--unknown]` (bench python; no site, DB, network or aiortc needed) feeds a signed simulated `calls` connect webhook through the real adapter parser and `run_call` with `FakeMediaSession`: greeting -> caller file(s) heard (memory only) -> bot reply -> closing -> terminate, then a simulated terminate webhook; it prints a metadata-only report (states, actions, played, heard hashes). `--unknown` shows the reject path. An aiortc loopback variant is not implemented.
+`python huf/ai/tests/wa_call_sim.py [--unknown]` (bench python; no site, DB, network or aiortc needed) feeds a signed simulated `calls` connect webhook through the real adapter parser and `run_call` with `FakeMediaSession`: greeting -> caller file(s) heard (memory only) -> bot reply -> closing -> terminate, then a simulated terminate webhook; it prints a metadata-only report (states, actions, played, heard hashes). `--unknown` shows the reject path. An aiortc loopback variant is not implemented.
 
 ## 15. SIP vs WebRTC (aiortc) signalling [V: developers.facebook.com/docs/whatsapp/cloud-api/calling/sip, fetched 2026-10-21]
 
@@ -241,16 +241,16 @@ Consequence: if Meta's offer is ice-lite with public host candidates, the full-I
 
 aiortc limits: one STUN and one TURN server are used (first of each).
 
-### Measured today [L] (this Mac, home NAT, `tools/wa_call_ice_probe.py`)
+### Measured today [L] (this Mac, home NAT, `wa_call_ice_probe.py` (kept in the workspace track, not in this repo))
 - Outbound UDP and replies work. Public STUN returned srflx `103.94.138.221`.
 - Mapping is address/port dependent: Google saw port 50715, Cloudflare 50716 for the same local socket (symmetric-like). Fine vs an ice-lite public peer, bad for hole-punching to a full-ICE peer.
 - Public Open Relay (`openrelay.metered.ca`) is dead: DNS now resolves to 192.0.2.1 (TEST-NET), TCP 80/443/3478 time out. You need your own TURN (coturn, or a metered/Twilio/Cloudflare account) if the fallback is required.
-- Loopback proof `tools/wa_call_loopback_test.py` [L]: Huf's real `AiortcMediaSession` + `run_call` answered an aiortc "Meta" peer; action order pre_accept, accept, terminate; Opus greeting decoded on the peer (97 frames, 95 non-silent), silent before accept.
+- Loopback proof `wa_call_loopback_test.py` (kept in the workspace track, not in this repo) [L]: Huf's real `AiortcMediaSession` + `run_call` answered an aiortc "Meta" peer; action order pre_accept, accept, terminate; Opus greeting decoded on the peer (97 frames, 95 non-silent), silent before accept.
 
 ## 17. Ops: running a live call test (needs the owner)
 
 Prereqs: Calling enabled on the test number (already done by the owner, do not change from here), webhook `calls` field subscribed, ngrok HTTP tunnel to the bench webhook, aiortc + ffmpeg in the bench Python (`pip install aiortc`; `brew`/apt ffmpeg), Gateway: `calling_enabled=1`, an allowed caller, greeting audio uploaded (private File, Opus/ogg/wav ok).
-1. Probe the network first: `python tools/wa_call_ice_probe.py` (add `--turn-test --turn-url host:443` with `TURN_USER`/`TURN_PASS` env to test your own TURN). Expect "outbound UDP: OK".
+1. Probe the network first: `python wa_call_ice_probe.py` (add `--turn-test --turn-url host:443` with `TURN_USER`/`TURN_PASS` env to test your own TURN). Expect "outbound UDP: OK".
 2. Optional env/site config for TURN (above); leave unset for the first attempt.
 3. Start the bench with the ngrok override already used for WhatsApp webhooks; confirm the `connect` webhook arrives (Gateway Event "Received").
 4. From the admitted phone, call the business number. Watch: Event goes Answering, pre_accepted, connected, accepted, completed; you hear the greeting; the call hangs up.
