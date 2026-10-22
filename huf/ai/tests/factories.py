@@ -274,7 +274,7 @@ def make_agent_tool_function(tool_name=None, tool_type=None, **overrides):
 
 
 # ---------------------------------------------------------------------------
-# Deterministic test-tool fixtures (huf/ai/test_tools.py)
+# Deterministic test-tool fixtures (huf/ai/tool_testing.py)
 # ---------------------------------------------------------------------------
 #
 # Two flavors, for the two test layers this repo distinguishes
@@ -292,12 +292,12 @@ def make_agent_tool_function(tool_name=None, tool_type=None, **overrides):
 #   permission-check -> handler-resolution -> handler-call ->
 #   persistence path end to end.
 #
-# Each handler in huf/ai/test_tools.py has one builder pair here, keyed by a
+# Each handler in huf/ai/tool_testing.py has one builder pair here, keyed by a
 # short handler name in ``TEST_TOOL_SPEC_BUILDERS``.
 
 import json as _json
 
-_TEST_TOOL_FUNCTION_MODULE = "huf.ai.test_tools"
+_TEST_TOOL_FUNCTION_MODULE = "huf.ai.tool_testing"
 
 
 def _build_test_tool_spec(tool_name, description, function_path, **overrides):
@@ -319,7 +319,7 @@ def _build_test_tool_spec(tool_name, description, function_path, **overrides):
 
 
 def build_echo_tool_spec(**overrides):
-    """Spec for ``huf.ai.test_tools.echo`` — returns its input unchanged."""
+    """Spec for ``huf.ai.tool_testing.echo`` — returns its input unchanged."""
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_echo"),
         description="Test tool: returns its input arguments unchanged.",
@@ -331,7 +331,7 @@ def build_echo_tool_spec(**overrides):
 
 
 def build_deterministic_add_tool_spec(**overrides):
-    """Spec for ``huf.ai.test_tools.deterministic_add`` — sums a list of numbers."""
+    """Spec for ``huf.ai.tool_testing.deterministic_add`` — sums a list of numbers."""
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_deterministic_add"),
         description="Test tool: deterministically sums a list of numbers.",
@@ -347,7 +347,7 @@ def build_deterministic_add_tool_spec(**overrides):
 
 
 def build_deterministic_fail_tool_spec(**overrides):
-    """Spec for ``huf.ai.test_tools.deterministic_fail`` — always raises."""
+    """Spec for ``huf.ai.tool_testing.deterministic_fail`` — always raises."""
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_deterministic_fail"),
         description="Test tool: always raises a known exception (failure-path testing).",
@@ -359,7 +359,7 @@ def build_deterministic_fail_tool_spec(**overrides):
 
 
 def build_permission_protected_mutation_tool_spec(**overrides):
-    """Spec for ``huf.ai.test_tools.permission_protected_mutation``.
+    """Spec for ``huf.ai.tool_testing.permission_protected_mutation``.
 
     Sets ``required_permission="write"`` plus a real ``reference_doctype``
     ("ToDo") so the actual ``TOOL_PERMISSIONS``/``required_permission`` gate
@@ -383,7 +383,7 @@ def build_permission_protected_mutation_tool_spec(**overrides):
 
 
 def build_slow_or_timeout_tool_spec(**overrides):
-    """Spec for ``huf.ai.test_tools.slow_or_timeout`` — capped, deterministic sleep."""
+    """Spec for ``huf.ai.tool_testing.slow_or_timeout`` — capped, deterministic sleep."""
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_slow_or_timeout"),
         description="Test tool: sleeps for a capped, deterministic duration (timeout-path testing).",

@@ -1,5 +1,5 @@
 """Layer A (mocked-frappe, no bench) unit tests for the deterministic test
-tool family (``huf/ai/test_tools.py``) and their ``Agent Tool Function``
+tool family (``huf/ai/tool_testing.py``) and their ``Agent Tool Function``
 factories (``huf/ai/tests/factories.py``).
 
 These are real, invokable tool handlers (NOT the provider-level simulation
@@ -66,7 +66,7 @@ if "agents" not in sys.modules:
     agents_mock.FunctionTool = _FakeFunctionTool
     sys.modules["agents"] = agents_mock
 
-from huf.ai import test_tools  # noqa: E402
+from huf.ai import tool_testing  # noqa: E402
 from huf.ai.tests import factories  # noqa: E402
 from huf.ai.tool_registry import PermissionAwareToolRegistry  # noqa: E402
 from huf.ai.sdk_tools import get_function_from_name, create_function_tool  # noqa: E402
@@ -83,52 +83,52 @@ class TestEchoHandler(unittest.TestCase):
         frappe.conf.developer_mode = 1
 
     def test_returns_input_unchanged(self):
-        result = test_tools.echo(a=1, b="two", c=[3, 4])
+        result = tool_testing.echo(a=1, b="two", c=[3, 4])
         self.assertEqual(result, {"echoed": {"a": 1, "b": "two", "c": [3, 4]}})
 
     def test_empty_input_roundtrips(self):
-        self.assertEqual(test_tools.echo(), {"echoed": {}})
+        self.assertEqual(tool_testing.echo(), {"echoed": {}})
 
     def test_result_is_json_serializable(self):
-        result = test_tools.echo(x={"nested": True}, y=[1, 2, 3])
+        result = tool_testing.echo(x={"nested": True}, y=[1, 2, 3])
         json.dumps(result)  # must not raise
 
     def test_blocked_when_developer_mode_off(self):
         frappe.conf.developer_mode = 0
-        result = test_tools.echo(a=1)
+        result = tool_testing.echo(a=1)
         self.assertEqual(result["echoed"], {})
         self.assertTrue(result.get("blocked"))
 
 
 class TestDeterministicAddHandler(unittest.TestCase):
     def test_sums_numbers(self):
-        result = test_tools.deterministic_add(numbers=[1, 2, 3, 4])
+        result = tool_testing.deterministic_add(numbers=[1, 2, 3, 4])
         self.assertEqual(result, {"success": True, "sum": 10, "count": 4})
 
     def test_empty_list_sums_to_zero(self):
-        result = test_tools.deterministic_add(numbers=[])
+        result = tool_testing.deterministic_add(numbers=[])
         self.assertEqual(result["sum"], 0)
 
     def test_none_defaults_to_empty(self):
-        result = test_tools.deterministic_add()
+        result = tool_testing.deterministic_add()
         self.assertEqual(result["sum"], 0)
         self.assertEqual(result["count"], 0)
 
     def test_deterministic_across_calls(self):
         numbers = [10, -3, 2.5]
-        r1 = test_tools.deterministic_add(numbers=numbers)
-        r2 = test_tools.deterministic_add(numbers=numbers)
+        r1 = tool_testing.deterministic_add(numbers=numbers)
+        r2 = tool_testing.deterministic_add(numbers=numbers)
         self.assertEqual(r1, r2)
 
 
 class TestDeterministicFailHandler(unittest.TestCase):
     def test_raises_known_exception_type(self):
-        with self.assertRaises(test_tools.DeterministicTestToolFailure):
-            test_tools.deterministic_fail()
+        with self.assertRaises(tool_testing.DeterministicTestToolFailure):
+            tool_testing.deterministic_fail()
 
     def test_raises_known_message(self):
-        with self.assertRaises(test_tools.DeterministicTestToolFailure) as ctx:
-            test_tools.deterministic_fail(any_arg="ignored")
+        with self.assertRaises(tool_testing.DeterministicTestToolFailure) as ctx:
+            tool_testing.deterministic_fail(any_arg="ignored")
         self.assertIn("intentional test failure", str(ctx.exception))
 
     def test_exception_path_via_on_invoke_tool(self):
@@ -140,7 +140,7 @@ class TestDeterministicFailHandler(unittest.TestCase):
         tool = create_function_tool(
             name="test_deterministic_fail",
             description="fails",
-            tool_name="huf.ai.test_tools.deterministic_fail",
+            tool_name="huf.ai.tool_testing.deterministic_fail",
             parameters={"type": "object", "properties": {}},
         )
         self.assertIsNotNone(tool)
@@ -157,29 +157,29 @@ class TestSlowOrTimeoutHandler(unittest.TestCase):
 
     def test_sleeps_requested_duration(self):
         start = time.monotonic()
-        result = test_tools.slow_or_timeout(duration=0.05)
+        result = tool_testing.slow_or_timeout(duration=0.05)
         elapsed = time.monotonic() - start
         self.assertGreaterEqual(elapsed, 0.05)
         self.assertEqual(result["slept_duration"], 0.05)
         self.assertFalse(result["capped"])
 
     def test_caps_at_max_sleep_seconds(self):
-        result = test_tools.slow_or_timeout(duration=999)
-        self.assertEqual(result["slept_duration"], test_tools.MAX_SLEEP_SECONDS)
+        result = tool_testing.slow_or_timeout(duration=999)
+        self.assertEqual(result["slept_duration"], tool_testing.MAX_SLEEP_SECONDS)
         self.assertTrue(result["capped"])
         self.assertEqual(result["requested_duration"], 999)
 
     def test_negative_duration_clamped_to_zero(self):
-        result = test_tools.slow_or_timeout(duration=-5)
+        result = tool_testing.slow_or_timeout(duration=-5)
         self.assertEqual(result["slept_duration"], 0.0)
 
     def test_invalid_duration_falls_back_to_default(self):
-        result = test_tools.slow_or_timeout(duration="not-a-number")
+        result = tool_testing.slow_or_timeout(duration="not-a-number")
         self.assertEqual(result["requested_duration"], 0.1)
 
     def test_blocked_when_developer_mode_off(self):
         frappe.conf.developer_mode = 0
-        result = test_tools.slow_or_timeout(duration=0.05)
+        result = tool_testing.slow_or_timeout(duration=0.05)
         self.assertFalse(result["success"])
         self.assertTrue(result.get("blocked"))
 
@@ -187,13 +187,13 @@ class TestSlowOrTimeoutHandler(unittest.TestCase):
 class TestPermissionProtectedMutationHandler(unittest.TestCase):
     def test_denied_when_no_write_permission(self):
         frappe.has_permission = MagicMock(return_value=False)
-        result = test_tools.permission_protected_mutation(record_id="X", value="v")
+        result = tool_testing.permission_protected_mutation(record_id="X", value="v")
         self.assertFalse(result["success"])
         self.assertTrue(result["permission_denied"])
 
     def test_allowed_when_write_permission_present(self):
         frappe.has_permission = MagicMock(return_value=True)
-        result = test_tools.permission_protected_mutation(record_id="X", value="v")
+        result = tool_testing.permission_protected_mutation(record_id="X", value="v")
         self.assertTrue(result["success"])
         self.assertEqual(result["record_id"], "X")
         self.assertEqual(result["value"], "v")
@@ -210,7 +210,7 @@ class TestFactories(unittest.TestCase):
         for name, spec in specs.items():
             self.assertEqual(spec["doctype"], "Agent Tool Function")
             self.assertEqual(spec["types"], "Custom Function")
-            self.assertTrue(spec["function_path"].startswith("huf.ai.test_tools."))
+            self.assertTrue(spec["function_path"].startswith("huf.ai.tool_testing."))
             json.loads(spec["params"])  # must be valid JSON
 
     def test_permission_protected_spec_has_required_permission_and_reference_doctype(self):
@@ -223,7 +223,7 @@ class TestFactories(unittest.TestCase):
             spec = builder()
             fn = get_function_from_name(spec["function_path"])
             self.assertIsNotNone(fn, f"could not resolve {spec['function_path']}")
-            self.assertEqual(fn.__module__, "huf.ai.test_tools")
+            self.assertEqual(fn.__module__, "huf.ai.tool_testing")
 
 
 class TestPermissionGateRealPath(unittest.TestCase):
