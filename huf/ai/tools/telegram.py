@@ -1214,6 +1214,9 @@ def handle_action(**kwargs) -> str:
     if isinstance(key, tuple):  # (error JSON,)
         return key[0]
     if key:
+        refusal = _scope_refusal(action, kwargs)  # scope BEFORE any cached result is returned
+        if refusal:
+            return refusal
         existing = _idem_claim(key)
         if existing is not None:
             return existing
@@ -1223,14 +1226,17 @@ def handle_action(**kwargs) -> str:
     return _scoped_dispatch(action, handler, kwargs)
 
 
-def _scoped_dispatch(action: str, handler: Callable[..., str], kwargs: dict) -> str:
+def _scope_refusal(action: str, kwargs: dict) -> Optional[str]:
+    """Refusal JSON when this call is not allowed inside the run's gateway scope (no mutation), else None."""
     gateway = scope.run_gateway()
     if not gateway:
-        return handler(**kwargs)  # not a Telegram gateway run: explicit chat ids / Integration Settings recipients
-
-    # Inside a Telegram gateway run the model is not trusted: webhook control is refused and every
-    # target chat is checked against the gateway's recipient scope and send caps.
-    kwargs.pop("gateway_name", None)
+        state, _ = scope.gateway_state()
+        if state == "invalid":
+            return _refused(
+                "action_not_permitted",
+                "This run's gateway is disabled, missing or not a Telegram gateway; Telegram tools are unavailable.",
+            )
+        return None
     if action in GATEWAY_BLOCKED_ACTIONS:
         return _refused("action_not_permitted", f"{action} is not available to agents running inside a gateway.")
     if action in CHAT_ACTIONS:
@@ -1246,13 +1252,32 @@ def _scoped_dispatch(action: str, handler: Callable[..., str], kwargs: dict) -> 
         gate = GATEWAY_FLAG_GATES.get(action)
         if gate and not _gateway_flag(gateway, gate[0]):
             return _refused("action_not_permitted", f"{action} needs the gateway's {gate[1]} access for agents to be enabled.")
-        kwargs["chat_id"] = chat
+    return None
+
+
+def _scoped_dispatch(action: str, handler: Callable[..., str], kwargs: dict) -> str:
+    refusal = _scope_refusal(action, kwargs)
+    if refusal:
+        return refusal
+    gateway = scope.run_gateway()
+    if not gateway:
+        return handler(**kwargs)  # not inside a gateway run: explicit chat ids / Integration Settings recipients
+
+    # Inside a Telegram gateway run the model is not trusted (checked above); pin the target chat.
+    kwargs.pop("gateway_name", None)
+    if action in CHAT_ACTIONS:
+        run_id = scope.effective_run_id()
+        kwargs["chat_id"] = _resolve_chat_id(kwargs) or scope.current_chat(run_id)
         kwargs.pop("recipient_name", None)
         if action in SEND_ACTIONS:
             refusal = scope.claim_send(gateway, run_id)
             if refusal:
                 return refusal
-            raw = handler(**kwargs)
+            try:
+                raw = handler(**kwargs)
+            except Exception:
+                scope.release_send(gateway, run_id)
+                raise
             if not _succeeded(raw):
                 scope.release_send(gateway, run_id)
             return raw

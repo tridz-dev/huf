@@ -138,5 +138,105 @@ class TestCaps(unittest.TestCase):
 		self.assertEqual(len(self.cache.store[scope._run_key("GW", "RUN")]), 1)
 
 
+class TestGatewayState(unittest.TestCase):
+	def setUp(self):
+		self.addCleanup(patch.stopall)
+		self.flags = patch.object(scope.frappe, "flags", SimpleNamespace(huf_current_agent_run_id="R")).start()
+
+	def lookups(self, channel, gateway_row):
+		def get_value(doctype, name, fields=None, as_dict=False):
+			if doctype == "Agent Run":
+				return "C"
+			if doctype == "Agent Conversation":
+				return channel
+			return gateway_row
+		return patch.object(scope.frappe, "db", SimpleNamespace(get_value=get_value)).start()
+
+	def test_no_run_is_none(self):
+		scope.frappe.flags.huf_current_agent_run_id = None
+		self.assertEqual(scope.gateway_state(), ("none", ""))
+
+	def test_non_gateway_channel_is_none(self):
+		self.lookups("desk", None)
+		self.assertEqual(scope.gateway_state(), ("none", ""))
+
+	def test_enabled_telegram(self):
+		self.lookups("gateway:GW", {"provider": "Telegram", "is_enabled": 1})
+		self.assertEqual(scope.gateway_state(), ("telegram", "GW"))
+
+	def test_whatsapp_disabled_missing_are_invalid(self):
+		for row in ({"provider": "WhatsApp", "is_enabled": 1}, {"provider": "Telegram", "is_enabled": 0}, None):
+			self.lookups("gateway:GW", row)
+			self.assertEqual(scope.gateway_state()[0], "invalid")
+
+	def test_db_error_is_invalid(self):
+		def boom(*a, **k):
+			raise RuntimeError("db down")
+		patch.object(scope.frappe, "db", SimpleNamespace(get_value=boom)).start()
+		self.assertEqual(scope.gateway_state()[0], "invalid")
+		self.assertEqual(scope.run_gateway(), "")
+
+
+class AtomicRedis:
+	"""Thread-safe fake exposing the Redis counter API (the real client is atomic server-side)."""
+
+	def __init__(self):
+		import threading
+		self.d, self.lock = {}, threading.Lock()
+
+	def make_key(self, k):
+		return "k:" + k
+
+	def incrby(self, k, n):
+		with self.lock:
+			self.d[k] = self.d.get(k, 0) + n
+			return self.d[k]
+
+	def decrby(self, k, n):
+		return self.incrby(k, -n)
+
+	def expire(self, k, s):
+		return True
+
+	def ttl(self, k):
+		return 100
+
+
+class TestAtomicCaps(unittest.TestCase):
+	def setUp(self):
+		self.addCleanup(patch.stopall)
+
+	def hammer(self, cache, **over):
+		import threading
+		results = []
+		patch.object(scope, "_cache", return_value=cache).start()
+		patch.object(scope, "settings", return_value=conf(**over)).start()
+
+		def work():
+			results.append(scope.claim_send("GW", "RUN"))
+		threads = [threading.Thread(target=work) for _ in range(60)]
+		[t.start() for t in threads]
+		[t.join() for t in threads]
+		return sum(1 for r in results if r is None)
+
+	def test_redis_run_cap_never_exceeded(self):
+		self.assertEqual(self.hammer(AtomicRedis(), per_run=7, per_day=0), 7)
+
+	def test_redis_day_cap_never_exceeded(self):
+		self.assertEqual(self.hammer(AtomicRedis(), per_run=0, per_day=11), 11)
+
+	def test_fallback_lock_cap_never_exceeded(self):
+		self.assertEqual(self.hammer(FakeCache(), per_run=5, per_day=0), 5)
+
+	def test_redis_release_frees_slot(self):
+		cache = AtomicRedis()
+		patch.object(scope, "_cache", return_value=cache).start()
+		patch.object(scope, "settings", return_value=conf(per_run=1)).start()
+		self.assertIsNone(scope.claim_send("GW", "RUN"))
+		self.assertIsNotNone(scope.claim_send("GW", "RUN"))
+		scope.release_send("GW", "RUN")
+		self.assertIsNone(scope.claim_send("GW", "RUN"))
+
+
 if __name__ == "__main__":
 	unittest.main()
