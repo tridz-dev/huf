@@ -23,6 +23,7 @@ from frappe.rate_limiter import rate_limit
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai import whatsapp_outbound_policy as policy
+from huf.ai.gateway_adapters import provider_hooks
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 
 
@@ -357,15 +358,17 @@ def _whatsapp_send_errors(provider: str | None) -> tuple[type[BaseException], ..
     import the whatsapp modules. Returns ``()`` (matches nothing in ``except``)
     for every other provider.
     """
-    if provider != "WhatsApp":
-        return ()
-    from huf.ai.gateway_adapters.whatsapp import WhatsAppWindowClosed
-    from huf.ai.gateway_adapters.whatsapp_bridge import BridgeError
-
-    return (WhatsAppWindowClosed, BridgeError)
+    hook = provider_hooks.get(provider, "send_errors")
+    return hook() if hook is not None else ()
 
 
 WHATSAPP_FALLBACK_NOTE = "Fallback template sent; agent reply suppressed (24h window closed)"
+
+
+def _provider_error_text(provider: str | None, exc: BaseException) -> str:
+    """Operator-readable delivery error text via the provider's ``error_text`` hook."""
+    hook = provider_hooks.get(provider, "error_text")
+    return hook(exc) if hook is not None else (_redact_error_text(str(exc)) or "Delivery failed")
 
 
 def _whatsapp_error_text(exc: BaseException) -> str:
@@ -384,11 +387,8 @@ def _normalize_sender_for_provider(provider: str | None, entry_type: str, extern
     number a human types); inbound sender ids already are wa_ids, so only the
     punctuation/prefix form is normalised -- never digits added or removed.
     """
-    if provider == "WhatsApp" and entry_type == "Sender":
-        from huf.ai.gateway_adapters.whatsapp_bridge import normalize_phone
-
-        return normalize_phone(external_id) or str(external_id)
-    return str(external_id)
+    hook = provider_hooks.get(provider, "normalize_sender")
+    return hook(entry_type, external_id) if hook is not None else str(external_id)
 
 
 _MEDIA_SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]")
@@ -436,6 +436,12 @@ def _media_file_name(msg_type: str, media: dict, media_id: str, downloaded: dict
     if ext and "." not in os.path.basename(name):
         name = f"{name}.{ext}"[:100]
     return name
+
+
+def _save_event_media(event, gateway) -> list[str]:
+    """Provider ``media_save`` hook; no hook = no inbound media is saved."""
+    hook = provider_hooks.get(gateway.provider, "media_save")
+    return hook(event, gateway) if hook is not None else []
 
 
 def _save_whatsapp_media(event, gateway) -> list[str]:
@@ -594,7 +600,11 @@ _LIVE_ENTRY_STATES = ("Approved", "Pending", ENTRY_STATE_OPTED_OUT, ENTRY_STATE_
 
 # Providers that run STOP/START handling and the per-sender inbound limit.
 # Other providers keep their previous behaviour byte-for-byte.
-CONSENT_PROVIDERS = ("WhatsApp",)
+def _consent_enabled(provider: str | None) -> bool:
+    hook = provider_hooks.get(provider, "consent_required")
+    return bool(hook()) if hook is not None else False
+
+
 DEFAULT_OPT_OUT_KEYWORDS = "STOP\nUNSUBSCRIBE\nCANCEL\nEND\nQUIT"
 DEFAULT_OPT_IN_KEYWORDS = "START\nUNSTOP\nSUBSCRIBE"
 DEFAULT_OPT_OUT_REPLY = (
@@ -767,8 +777,14 @@ def _linked_sender_ids(gateway_name: str, provider: str | None, sender: str) -> 
     """The normalised sender id plus the other WhatsApp id (phone <-> BSUID) seen with it on an event."""
     primary = _normalize_sender_for_provider(provider, "Sender", sender)
     ids = [primary]
-    if provider != "WhatsApp" or not primary:
+    if not primary or provider_hooks.get(provider, "linked_sender_ids") is None:
         return ids
+    return provider_hooks.call(provider, "linked_sender_ids", gateway_name, primary)
+
+
+def _whatsapp_linked_sender_ids(gateway_name: str, primary: str, provider: str) -> list[str]:
+    """Phone <-> BSUID aliases seen with ``primary`` (WhatsApp ``linked_sender_ids`` hook)."""
+    ids = [primary]
     from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 
     if bridge.is_bsuid(primary):
@@ -987,7 +1003,7 @@ def record_consent_event(event, gateway, context: dict[str, Any]) -> dict | None
 
 def _handle_consent_event(event, gateway, context: dict[str, Any]) -> dict | None:
     """STOP/START handling. Returns a result dict when handled."""
-    if gateway.provider not in CONSENT_PROVIDERS or context.get("is_room"):
+    if not _consent_enabled(gateway.provider) or context.get("is_room"):
         return None
     sender_id = str(context.get("sender_id") or "")
     if not sender_id:
@@ -1034,7 +1050,7 @@ def _handle_consent_event(event, gateway, context: dict[str, Any]) -> dict | Non
 
 def _sender_rate_limit_reason(gateway, context: dict[str, Any]) -> str:
     """Return a rejection reason when the sender exceeded the per-10-minute limit."""
-    if gateway.provider not in CONSENT_PROVIDERS:
+    if not _consent_enabled(gateway.provider):
         return ""
     sender_id = str(context.get("sender_id") or "")
     limit = getattr(gateway, "inbound_sender_limit", None)
@@ -1184,7 +1200,7 @@ def _create_pairing_request(
             if gateway.integration_settings:
                 from huf.ai.gateway_adapters.types import GatewayReply
 
-                if gateway.provider == "WhatsApp":
+                if provider_hooks.get(gateway.provider, "adapter_context") is not None:
                     # Needs gateway_context so the adapter can apply the 24h
                     # window check and the fallback template (A7).
                     from huf.ai.gateway_webhook import get_gateway_adapter
@@ -1895,16 +1911,16 @@ _RECOVERY_FIELDS = [
 ]  # fmt: skip
 
 
-def _reply_parts_for_run(agent_run: str) -> list[str]:
+def _reply_parts_for_run(agent_run: str, provider: str | None = None) -> list[str]:
     """Rebuild the reply parts from the finished Agent Run (empty when it cannot be recovered)."""
     if not agent_run:
         return []
-    from huf.ai.gateway_adapters import whatsapp_format as wf
-
+    if provider_hooks.get(provider, "recover_reply_parts") is None:
+        return []
     response = frappe.db.get_value("Agent Run", agent_run, "response")
     if not response:
         return []
-    return wf.split_body(wf.to_whatsapp(response)) or [response]
+    return provider_hooks.call(provider, "recover_reply_parts", response)
 
 
 def _recover_orphaned_events(limit: int = 50) -> int:
@@ -1958,7 +1974,8 @@ def _recover_orphaned_events(limit: int = 50) -> int:
 
 def _recover_retrying_reply(row: dict) -> None:
     attempts = int(row.get("recovery_attempts") or 0) + 1  # already spent above
-    parts = [] if row.get("reply_message_id") else _reply_parts_for_run(row.get("agent_run") or "")
+    provider = frappe.db.get_value("Gateway", row.get("gateway"), "provider") if row.get("gateway") else None
+    parts = [] if row.get("reply_message_id") else _reply_parts_for_run(row.get("agent_run") or "", provider)
     if not parts:
         fail_event_after_budget(
             row["name"],
@@ -2188,12 +2205,12 @@ def _flow_trigger_payload(event, gateway, attachments: list[str]) -> dict:
     interactive = message.get("interactive") if isinstance(message.get("interactive"), dict) else {}
     reply = interactive.get("button_reply") or interactive.get("list_reply") or {}
     sender = str(event.sender_id or "")
-    return {
+    payload = {
         "gateway_event": event.name,
         "gateway": gateway.name,
         "provider": gateway.provider,
         "sender_id": sender,
-        "wa_id": sender if gateway.provider == "WhatsApp" else "",
+        "wa_id": "",
         "conversation_id": event.conversation_id,
         "thread_id": event.thread_id,
         "message_id": event.provider_event_id,
@@ -2204,6 +2221,10 @@ def _flow_trigger_payload(event, gateway, attachments: list[str]) -> dict:
         "reply_to_message_id": str(context.get("id") or "") or None,
         "interactive_reply": {"id": reply.get("id"), "title": reply.get("title")} if reply else None,
     }
+    extra = provider_hooks.get(gateway.provider, "extra_event_fields")
+    if extra is not None:
+        payload.update(extra(event, gateway, sender) or {})
+    return payload
 
 
 def _start_flow_for_event(event, gateway) -> dict:
@@ -2214,7 +2235,7 @@ def _start_flow_for_event(event, gateway) -> dict:
     if existing:
         event.db_set("status", "Running")
         return {"event_name": event.name, "status": "Running", "flow_run_id": existing}
-    attachments = _save_whatsapp_media(event, gateway) if gateway.provider == "WhatsApp" else []
+    attachments = _save_event_media(event, gateway)
     # Route authorisation already happened (enabled gateway, flow bound by an admin), so the run is
     # created on the gateway's behalf: the execution user needs no Huf User role.
     flow_run = create_flow_run(
@@ -2262,8 +2283,9 @@ def finish_flow_event(flow_run_name: str, status: str, reply_text: str | None = 
         if not text or _is_no_reply(text):
             event.db_set({"status": "Succeeded", **({"reply_status": "suppressed"} if text else {})})
             return
-        if gateway.provider == "WhatsApp":
-            _send_whatsapp_reply(event, gateway, None, text)
+        send_hook = provider_hooks.get(gateway.provider, "send_reply")
+        if send_hook is not None:
+            send_hook(event, gateway, None, text)
             return
         from huf.ai.gateway_webhook import send_gateway_reply
 
@@ -2356,15 +2378,14 @@ def _process_gateway_event(event_name: str) -> dict:
             from huf.ai.gateway_webhook import send_gateway_reply
 
             attachment_note = _describe_attachments(event.raw_payload)
-            saved_files: list[str] = []
-            if gateway.provider == "WhatsApp":
-                saved_files = _save_whatsapp_media(event, gateway)
-                if saved_files:
-                    attachment_note = "\n".join(
-                        [attachment_note] * bool(attachment_note)
-                        + [f"[Attachment saved: {file_url}]" for file_url in saved_files]
-                    )
-            media_type = _inbound_media_type(event) if gateway.provider == "WhatsApp" else None
+            saved_files = _save_event_media(event, gateway)
+            if saved_files:
+                attachment_note = "\n".join(
+                    [attachment_note] * bool(attachment_note)
+                    + [f"[Attachment saved: {file_url}]" for file_url in saved_files]
+                )
+            kind_hook = provider_hooks.get(gateway.provider, "inbound_kind")
+            media_type = kind_hook(event) if kind_hook is not None else None
             # The agent is the only responder for an unsaved attachment; the standalone note is sent
             # only if the run fails or yields no reply.
             attachment_unavailable = bool(media_type and not saved_files)
@@ -2408,8 +2429,9 @@ def _process_gateway_event(event_name: str) -> dict:
                 return _suppress_reply(event, result.get("agent_run_id"), NO_REPLY_NOTE)
             if _is_no_reply(response):
                 return _suppress_reply(event, result.get("agent_run_id"), NO_REPLY_NOTE)
-            if gateway.provider == "WhatsApp":
-                return _send_whatsapp_reply(event, gateway, result.get("agent_run_id"), str(response))
+            send_hook = provider_hooks.get(gateway.provider, "send_reply")
+            if send_hook is not None:
+                return send_hook(event, gateway, result.get("agent_run_id"), str(response))
             try:
                 _throttle_outbound_send(gateway.name, _outbound_rate_cap(gateway.provider))
                 delivery = send_gateway_reply(gateway, event, str(response))
@@ -2526,14 +2548,9 @@ def _suppress_reply(event, agent_run_id, note: str) -> dict:
 def _maybe_mark_read_typing(event, gateway) -> None:
     """Read receipt + typing indicator when a run is about to start. Best effort, never raises."""
     try:
-        if gateway.provider != "WhatsApp":
-            return
-        enabled = getattr(gateway, "typing_indicator", None)
-        if enabled is not None and not int(enabled):
-            return
-        from huf.ai.gateway_webhook import mark_gateway_read_typing
-
-        mark_gateway_read_typing(gateway, event)
+        hook = provider_hooks.get(gateway.provider, "typing")
+        if hook is not None:
+            hook(event, gateway)
     except Exception:
         pass
 
@@ -2668,8 +2685,8 @@ def _handle_reply_send_failure(event, gateway, exc: BaseException, parts: list[s
         except Exception:
             frappe.logger("huf").warning("Gateway reply retry could not be scheduled")
 
-    if isinstance(cause, _whatsapp_send_errors("WhatsApp")):
-        error_text = _whatsapp_error_text(cause)
+    if isinstance(cause, _whatsapp_send_errors(gateway.provider)):
+        error_text = _provider_error_text(gateway.provider, cause)
     else:
         error_text = _redact_error_text(str(cause)) or operator_text
     delivery_error = f"gave up after {attempt} attempts: {operator_text}" if cls.get("retryable") else operator_text
