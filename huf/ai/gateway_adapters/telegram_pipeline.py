@@ -99,6 +99,13 @@ def reply_target(event: Any) -> tuple[str | None, str | None]:
 	return forum_thread_id(event), (getattr(event, "thread_id", None) or None)
 
 
+def ephemeral_for(event: Any) -> dict | None:
+	"""Ephemeral reply params when the inbound was an ephemeral group command, else None."""
+	from huf.ai.gateway_adapters.telegram_ephemeral import ephemeral_params
+
+	return ephemeral_params(getattr(event, "raw_payload", None)) or None
+
+
 def classify(exc: BaseException) -> dict:
 	"""Classify a send error: ``retryable``, ``delay`` (None = default backoff), ``blocked``, ``code``, ``operator_text``."""
 	cause = exc.cause if isinstance(exc, TelegramPartsError) else exc
@@ -129,7 +136,7 @@ def build_sender(adapter: Any) -> TelegramSender:
 
 def send_parts_with(
 	sender: TelegramSender, chat_id: Any, parts: list[str], *, thread_id: Any = None, reply_to: Any = None,
-	markup: dict | None = None, on_sent: Any = None, media: bool = False,
+	markup: dict | None = None, on_sent: Any = None, media: bool = False, ephemeral: dict | None = None,
 ) -> SimpleNamespace:
 	"""Send ``parts`` in order. Raises ``TelegramPartsError(cause, sent_ids, remaining)`` on failure.
 
@@ -139,6 +146,11 @@ def send_parts_with(
 	"""
 	sent: list = []
 	parts = list(parts)
+	if ephemeral:  # media cannot be sent ephemerally: drop it (text still goes out privately)
+		from huf.ai.gateway_adapters import telegram_media_reply as media_reply
+
+		parts = [p for p in parts if not media_reply.is_media_only(p)]
+		media = False
 	if media:
 		parts = _send_media_first(sender, chat_id, parts, thread_id, reply_to, sent, on_sent)
 		if not parts:
@@ -150,7 +162,7 @@ def send_parts_with(
 		try:
 			msgs = sender.send_text(
 				chat_id, part, reply_to=reply_to if i == 0 else None, thread_id=thread_id,
-				markup=markup if i == len(parts) - 1 else None,
+				markup=markup if i == len(parts) - 1 else None, **({"ephemeral": ephemeral} if ephemeral else {}),
 			)
 		except Exception as exc:
 			raise TelegramPartsError(exc, sent, list(parts[i:])) from exc
@@ -212,7 +224,7 @@ def send_parts(gateway: Any, event: Any, parts: list[str], quote: bool) -> Simpl
 		sender, event.conversation_id, list(parts), thread_id=thread_id,
 		reply_to=reply_to if quote else None, markup=markup,
 		on_sent=lambda ids: telegram_messages.record_sent(gateway.name, event.conversation_id, event.name, ids),
-		media=True,
+		media=True, ephemeral=ephemeral_for(event),
 	)
 
 

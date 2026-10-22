@@ -79,6 +79,7 @@ class TelegramSender:
 	def _common(
 		self, chat_id: Any, *, reply_to: Any = None, thread_id: Any = None, markup: Mapping[str, Any] | None = None,
 		silent: bool = False, protect: bool = False, effect_id: str | None = None,
+		ephemeral: Mapping[str, Any] | None = None,
 	) -> dict[str, Any]:
 		payload: dict[str, Any] = {"chat_id": chat_id}
 		if thread_id not in (None, ""):
@@ -101,6 +102,12 @@ class TelegramSender:
 			payload["protect_content"] = True
 		if effect_id:
 			payload["message_effect_id"] = effect_id
+		if ephemeral:  # only the receiver sees it; the ephemeral quote replaces a normal reply
+			payload.update({k: v for k, v in ephemeral.items() if k != "reply_parameters"})
+			if reply_to not in (None, "") and ephemeral.get("reply_parameters"):
+				payload["reply_parameters"] = dict(ephemeral["reply_parameters"])
+			else:
+				payload.pop("reply_parameters", None)
 		return payload
 
 	def _call_with_fallback(self, method: str, payload: dict[str, Any], text_key: str, plain: str) -> Any:
@@ -119,7 +126,7 @@ class TelegramSender:
 	def send_text(
 		self, chat_id: Any, text: str, *, reply_to: Any = None, thread_id: Any = None,
 		markup: Mapping[str, Any] | None = None, silent: bool = False, protect: bool = False,
-		link_preview: bool = True, effect_id: str | None = None,
+		link_preview: bool = True, effect_id: str | None = None, ephemeral: dict | None = None,
 	) -> list[Mapping[str, Any]]:
 		"""Send ``text`` as one or more messages (<= 4096 chars each); returns the Message dicts."""
 		parts = render_parts(text, self.parse_mode)
@@ -131,7 +138,7 @@ class TelegramSender:
 			payload = self._common(
 				chat_id, reply_to=reply_to if i == 0 else None, thread_id=thread_id,
 				markup=markup if last else None, silent=silent, protect=protect,
-				effect_id=effect_id if i == 0 else None,
+				effect_id=effect_id if i == 0 else None, ephemeral=ephemeral,
 			)
 			payload["text"] = part.text
 			if part.parse_mode:
@@ -196,14 +203,17 @@ class TelegramSender:
 	def send_media(
 		self, kind: str, chat_id: Any, media: MediaInput, *, caption: str = "", reply_to: Any = None,
 		thread_id: Any = None, markup: Mapping[str, Any] | None = None, silent: bool = False,
-		protect: bool = False, extra: Mapping[str, Any] | None = None,
+		protect: bool = False, extra: Mapping[str, Any] | None = None, ephemeral: dict | None = None,
 	) -> list[Mapping[str, Any]]:
 		"""Send one media item. A caption over 1024 chars is sent as a follow-up text message."""
 		if kind not in MEDIA_METHODS:
 			raise ValueError(f"Unsupported media kind: {kind}")
 		method, field = MEDIA_METHODS[kind]
 		value, upload = _upload_part(kind, media)
-		payload = self._common(chat_id, reply_to=reply_to, thread_id=thread_id, markup=markup, silent=silent, protect=protect)
+		payload = self._common(
+			chat_id, reply_to=reply_to, thread_id=thread_id, markup=markup, silent=silent, protect=protect,
+			ephemeral=ephemeral,
+		)
 		files = None
 		if upload:
 			files = {field: upload}
