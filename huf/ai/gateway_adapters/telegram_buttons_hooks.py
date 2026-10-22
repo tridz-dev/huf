@@ -10,7 +10,7 @@ from huf.ai.gateway_adapters import provider_hooks
 PROVIDER = "Telegram"
 
 
-def agent_instructions():
+def agent_instructions(gateway=None):
 	from huf.ai.gateway_adapters import telegram_buttons
 
 	return telegram_buttons.AGENT_INSTRUCTIONS
