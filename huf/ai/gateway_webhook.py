@@ -442,12 +442,20 @@ def _update_reply_status(gateway_name: str, status: dict) -> None:
 _LAST_EVENT_THROTTLE_SECONDS = 60
 
 
+def _is_lock_error(exc: BaseException) -> bool:
+	return isinstance(exc, (frappe.QueryDeadlockError, frappe.QueryTimeoutError)) or "deadlock" in str(exc).lower()
+
+
 def touch_last_event(gateway) -> None:
 	"""Stamp ``Gateway.last_event_at`` on a successful inbound ingest or reply, at most once a minute.
 
-	``gateway`` is a Gateway doc (its loaded value drives the throttle) or a name. Cheap ``db_set`` without
-	touching ``modified``; never raises and never commits.
+	``gateway`` is a Gateway doc (its loaded value drives the throttle) or a name. Cheap ``set_value`` without
+	touching ``modified``; never raises and never commits. Callers that just wrote terminal event state commit
+	it first, so a deadlock here (two workers stamping the same Gateway row) cannot roll that state back.
+	Lock errors are retried briefly, then logged at WARNING by type name only.
 	"""
+	import time
+
 	try:
 		now = frappe.utils.now_datetime()
 		name = gateway if isinstance(gateway, str) else gateway.name
@@ -456,11 +464,21 @@ def touch_last_event(gateway) -> None:
 			last = frappe.utils.get_datetime(last)
 			if 0 <= (now - last).total_seconds() < _LAST_EVENT_THROTTLE_SECONDS:
 				return
-		frappe.db.set_value("Gateway", name, "last_event_at", now, update_modified=False)
+		for attempt in range(3):
+			try:
+				frappe.db.set_value("Gateway", name, "last_event_at", now, update_modified=False)
+				break
+			except Exception as exc:
+				if not _is_lock_error(exc) or attempt == 2:
+					raise
+				time.sleep(0.05 * (attempt + 1))
 		if not isinstance(gateway, str):
 			gateway.set("last_event_at", now)
-	except Exception:
-		pass
+	except Exception as exc:
+		try:
+			frappe.logger("huf.gateway").warning("touch_last_event failed: %s", type(exc).__name__)
+		except Exception:
+			pass
 
 
 def _record_unknown_phone_ids(gateway_name: str, phone_ids) -> None:
