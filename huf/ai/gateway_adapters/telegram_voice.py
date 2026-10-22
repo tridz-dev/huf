@@ -64,9 +64,9 @@ def _claim(event) -> bool:
 	return wv._claim(event)
 
 
-def _synthesize(agent_name: str, text: str, conversation_id, run_id) -> bytes:
+def _synthesize(agent_name: str, text: str, conversation_id, run_id, voice: str | None = None) -> bytes:
 	# Ask the TTS provider for Ogg/Opus directly (OpenAI ``response_format='opus'``) to skip ffmpeg.
-	return wv._synthesize(agent_name, text, conversation_id, run_id, response_format=TTS_FORMAT)
+	return wv._synthesize(agent_name, text, conversation_id, run_id, response_format=TTS_FORMAT, voice=voice)
 
 
 def is_ogg_opus(content: bytes) -> bool:
@@ -82,6 +82,24 @@ def _convert(content: bytes) -> bytes:
 
 def _conversation(run_id):
 	return wv._conversation(run_id)
+
+
+def speech_upload(run_id, text: str, voice: str | None = None) -> tuple:
+	"""Synthesize ``text`` with the run's agent TTS; returns the ``(filename, ogg_opus, mime)`` upload tuple.
+
+	Used by the telegram tool's ``send_speech``. Raises ``ValueError`` / ``FileSendError`` with a message
+	the agent can read (no TTS model/provider, ffmpeg or provider failure, empty or oversized audio).
+	"""
+	agent = frappe.db.get_value("Agent Run", run_id, "agent") if run_id else None
+	if not agent:
+		raise ValueError("send_speech needs an agent run to pick the agent's TTS model")
+	conversation = _conversation(run_id)
+	if not conversation:
+		raise ValueError("the agent run has no conversation to attach the audio to")
+	ogg = _convert(_synthesize(agent, wv.plain_text(text), conversation, run_id, voice=voice))
+	if not ogg or len(ogg) > MAX_UPLOAD_BYTES:
+		raise ValueError("the converted voice note is empty or over the 50MB Bot API limit")
+	return (OGG_FILENAME, ogg, send_file.OGG_OPUS_MIME)
 
 
 # ------------------------------------------------------------------ send

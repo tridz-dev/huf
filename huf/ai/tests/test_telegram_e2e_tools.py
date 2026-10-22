@@ -56,6 +56,7 @@ TG_ARGS = {
 	"send_photo": {"photo": PHOTO},
 	"send_document": {"document": "https://cdn.test/a.pdf"},
 	"send_voice": {"voice": "https://cdn.test/a.ogg"},
+	"send_speech": {"text": "hello"},
 	"send_audio": {"audio": "https://cdn.test/a.mp3"},
 	"send_video": {"video": "https://cdn.test/a.mp4"},
 	"send_animation": {"animation": "https://cdn.test/a.gif"},
@@ -234,6 +235,10 @@ class Harness(unittest.TestCase):
 		self.gw_invalid = False  # inside a gateway run whose gateway is disabled / missing / not Telegram
 		self.admins = [dict(ADMIN_BINDING)]  # active Admin cockpit bindings that approval buttons go to
 		self.addCleanup(patch.stopall)
+		from huf.ai.gateway_adapters import telegram_voice
+
+		patch.object(
+			telegram_voice, "speech_upload", return_value=("reply.ogg", b"OggS", "audio/ogg")).start()  # no TTS/ffmpeg
 
 		def make_client(token, *, timeout=30):
 			return TelegramBotClient(

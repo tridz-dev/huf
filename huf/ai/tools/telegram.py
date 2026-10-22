@@ -414,6 +414,38 @@ def _handle_send_voice(**kwargs) -> str:
     return _send_media_action("voice", kwargs, ("voice", "audio", "file", "file_url"))
 
 
+MAX_SPEECH_CHARS = 2000
+
+
+def _handle_send_speech(**kwargs) -> str:
+    """Synthesize ``text`` with the agent's configured TTS and send it as a Telegram voice note."""
+    chat_id, err = _chat_or_error(kwargs)
+    if err:
+        return err
+    text = str(kwargs.get("text") or kwargs.get("message") or "").strip()
+    if not text:
+        return _error("text is required for send_speech")
+    if len(text) > MAX_SPEECH_CHARS:
+        return _error(f"text is {len(text)} characters; send_speech allows at most {MAX_SPEECH_CHARS}. Shorten it or send text.")
+    try:
+        from huf.ai.gateway_adapters import telegram_voice
+
+        media = telegram_voice.speech_upload(
+            scope.effective_run_id(), text, str(kwargs.get("voice") or "").strip() or None)
+        kw = _common_kw(kwargs, chat_id)
+    except Exception as exc:
+        detail = getattr(exc, "message", None) or str(exc)
+        return _error(
+            f"send_speech failed: {str(detail)[:300]} (is a TTS model configured on the agent, and ffmpeg installed?). "
+            "Send the text as a normal message instead."
+        )
+    if kwargs.get("caption"):
+        kw["caption"] = str(kwargs["caption"])[:1024]
+    if kwargs.get("message_effect_id"):
+        kw["extra"] = {"message_effect_id": str(kwargs["message_effect_id"])}
+    return _run_sender("sendVoice", lambda sender: sender.send_media("voice", chat_id, media, **kw), upload=True)
+
+
 def _handle_send_audio(**kwargs) -> str:
     return _send_media_action("audio", kwargs, ("audio", "file", "file_url"))
 
@@ -1197,6 +1229,7 @@ def handle_action(**kwargs) -> str:
         "send_photo": _handle_send_photo,
         "send_document": _handle_send_document,
         "send_voice": _handle_send_voice,
+        "send_speech": _handle_send_speech,
         "send_audio": _handle_send_audio,
         "send_video": _handle_send_video,
         "send_animation": _handle_send_animation,
@@ -1366,7 +1399,7 @@ def _record_tool_send(gateway: str, chat, action: str, kwargs: dict, raw: str) -
 GATEWAY_BLOCKED_ACTIONS = frozenset({"set_webhook", "delete_webhook", "get_updates"})
 # Actions that take a target chat (checked against the gateway scope).
 CHAT_ACTIONS = frozenset({
-    "send_message", "reply_to_message", "send_photo", "send_document", "send_voice", "send_audio", "send_video",
+    "send_message", "reply_to_message", "send_photo", "send_document", "send_voice", "send_speech", "send_audio", "send_video",
     "send_animation", "send_sticker", "send_media_group", "send_location", "send_contact", "set_reaction",
     "send_chat_action", "edit_message_text", "edit_message_caption", "edit_message_reply_markup",
     "delete_message", "pin_message", "unpin_message", "forward_message", "copy_message", "get_chat_info",
@@ -1376,7 +1409,7 @@ CHAT_ACTIONS = frozenset({
 })
 # Actions that create a new message (counted against the per-run / per-day caps).
 SEND_ACTIONS = frozenset({
-    "send_message", "reply_to_message", "send_photo", "send_document", "send_voice", "send_audio", "send_video",
+    "send_message", "reply_to_message", "send_photo", "send_document", "send_voice", "send_speech", "send_audio", "send_video",
     "send_animation", "send_sticker", "send_media_group", "send_location", "send_contact", "forward_message",
     "copy_message", "send_video_note", "send_venue", "send_dice", "send_poll", "send_checklist", "send_template",
 })

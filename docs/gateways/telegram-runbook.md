@@ -321,10 +321,17 @@ Registry entry: `TELEGRAM_TOOLS` in `huf/ai/tools/_registry.py`. Dispatch table:
 
 Actions (dispatch order as in the table):
 
-- **Send**: `send_message`, `reply_to_message`, `send_photo`, `send_document`, `send_voice`, `send_audio`,
+- **Send**: `send_message`, `reply_to_message`, `send_photo`, `send_document`, `send_voice`, `send_speech`, `send_audio`,
   `send_video`, `send_animation`, `send_sticker`, `send_media_group` (2 to 10 items), `send_location`,
   `send_contact`, `send_video_note`, `send_venue`, `send_dice`, `send_poll`, `stop_poll`, `send_checklist`
   (Business account; needs the gateway's business flag), `send_template`.
+- **Speech** (`send_speech`): `text` (required, max 2000 characters), optional `voice` (TTS voice name; default is
+  the agent's `tts_voice`), `caption`, `reply_to_message_id`, `chat_id` (defaults to the current chat). It reuses the
+  voice-reply TTS path (agent `tts_model`, Ogg/Opus requested directly, ffmpeg only if needed) and sends via
+  `sendVoice`. Recipient scope, per-run/day caps, `delivered_reply` and duplicate-reply suppression apply like any
+  send. With no TTS model/provider or on ffmpeg/TTS failure it returns an error text so the agent can send text.
+  Gap: image generation is provider-specific and is not part of the telegram tool. The `telegram-media` block has
+  no speech item (it would need a format change); use the tool action.
 - **Templates**: `list_templates`, `preview_template` (no send), `send_template` (section 10).
 - **Forum topics**: `create_forum_topic`, `edit_forum_topic`, `close_forum_topic`, `reopen_forum_topic`,
   `delete_forum_topic` (the bot needs manage-topics rights).

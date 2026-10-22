@@ -26,11 +26,11 @@ VOICE_MODE_FIELD = "voice_reply_mode"
 MEDIA_TEXT = (
 	"Media: add a fenced ```telegram-media block with JSON {\"items\": [{\"type\": \"photo|video|audio|voice|"
 	"document|sticker|location|contact|venue|poll|dice\", \"source\": \"file_url|file_id|url|text\", "
-	"\"value\": \"...\", \"caption\": \"\"}]}; sent before the text. Typing is automatic; inbound reactions are recorded."
+	"\"value\": \"...\", \"caption\": \"\"}]}; sent before the text; inbound reactions are recorded."
 )
 TOOL_TEXT = (
 	"telegram tool: send_message/reply_to_message, set_reaction, edit_message_text, delete_message (ids from "
-	"'Current message'/list_messages); after a tool send here, add no final text; list_templates/send_template, polls, topics, get_file."
+	"'Current message'/list_messages); after a tool send here add no final text; list_templates/send_template, polls, topics, get_file; send_speech(text)=voice."
 )
 FLAG_TEXT = {
 	FLAG_GROUP_ADMIN: "telegram_admin tool: group moderation (requires confirm).",

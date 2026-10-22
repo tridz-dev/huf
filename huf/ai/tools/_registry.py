@@ -209,7 +209,7 @@ TELEGRAM_TOOLS = [
 			"(other chats are refused unless the gateway allows them; sends are capped per run and per day). Actions: "
 			"send_message (text/message, parse_mode, reply_markup), reply_to_message (text, reply_to_message_id), "
 			"send_photo / send_document (photo|document|file|file_url, caption, reply_markup), "
-			"send_voice (OGG/Opus voice note), send_audio (audio, title, performer), send_video (video, supports_streaming), "
+			"send_voice (OGG/Opus voice note from an existing file), send_speech (text, optional voice, caption, reply_to_message_id: synthesizes speech with the agent's TTS model and sends a voice note; max 2000 chars; errors if no TTS is configured, then send text), send_audio (audio, title, performer), send_video (video, supports_streaming), "
 			"send_animation (GIF/MP4), send_sticker, "
 			"send_media_group (items: 2-10 of {type photo|video|audio|document, media, caption}), "
 			"send_location (latitude, longitude), send_contact (phone_number, first_name, last_name), "
@@ -238,7 +238,7 @@ TELEGRAM_TOOLS = [
 		"category": "Communication Tools",
 		"parameters": [
 			_action(
-				"send_message|reply_to_message|send_photo|send_document|send_voice|send_audio|send_video|send_animation|"
+				"send_message|reply_to_message|send_photo|send_document|send_voice|send_speech|send_audio|send_video|send_animation|"
 				"send_sticker|send_media_group|send_location|send_contact|set_reaction|send_chat_action|edit_message_text|"
 				"edit_message_caption|edit_message_reply_markup|delete_message|pin_message|unpin_message|forward_message|"
 				"copy_message|answer_callback_query|get_updates|get_chat_info|get_me|set_webhook|delete_webhook|"
@@ -249,10 +249,10 @@ TELEGRAM_TOOLS = [
 			_p("chat_id", description="Telegram chat/channel ID (numeric or @username). Optional in a gateway conversation (defaults to the current chat). Alternative to recipient_name."),
 			_p("recipient_name", description="Human-friendly recipient name from Integration Settings (alternative to chat_id)."),
 			_p("message", description="Message text (alias for text)."),
-			_p("text", description="Message or edited text; also the callback answer text."),
+			_p("text", description="Message or edited text; also the callback answer text. For send_speech: the text to speak (required, max 2000 characters)."),
 			_p("photo", description="Photo source: Telegram file_id, public URL, or Frappe File docname/file_url."),
 			_p("document", description="Document source: Telegram file_id, public URL, or Frappe File docname/file_url."),
-			_p("voice", description="send_voice source (OGG/Opus, MP3 or M4A): file_id, public URL, or Frappe File."),
+			_p("voice", description="send_voice source (OGG/Opus, MP3 or M4A): file_id, public URL, or Frappe File. For send_speech: optional TTS voice name (e.g. alloy); defaults to the agent's tts_voice."),
 			_p("audio", description="send_audio source: file_id, public URL, or Frappe File."),
 			_p("video", description="send_video source: file_id, public URL, or Frappe File."),
 			_p("animation", description="send_animation source: file_id, public URL, or Frappe File."),
