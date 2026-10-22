@@ -36,3 +36,16 @@ export function updateTelegramSettings(
 		.then((res) => unwrap<TelegramSettings>(res))
 		.catch((e) => ({ ok: false as const, error: getFrappeErrorMessage(e) }));
 }
+
+export interface GatewayUser { name: string; full_name: string }
+
+/** Enabled users who may run this gateway's agents (gateway admins only). */
+export function listGatewayUsers(gateway: string): Promise<Result<GatewayUser[]>> {
+	return call
+		.get(`${BASE}.list_gateway_users`, { gateway })
+		.then((res) => {
+			const r = unwrap<{ users?: GatewayUser[] }>(res);
+			return r.ok ? { ok: true as const, data: r.data.users ?? [] } : r;
+		})
+		.catch((e) => ({ ok: false as const, error: getFrappeErrorMessage(e) }));
+}

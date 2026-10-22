@@ -61,6 +61,15 @@ FIELD_SPECS: dict[str, dict[str, Any]] = {
 	"telegram_streaming": {"type": "check", "group": "modes"},
 	"telegram_default_template": {"type": "link", "group": "modes", "doctype": "Telegram Message Template"},
 	"telegram_welcome_template": {"type": "link", "group": "modes", "doctype": "Telegram Message Template"},
+	"telegram_welcome_cooldown_seconds": {"type": "int", "group": "modes", "min": 0, "max": 86400},
+	"telegram_guard_captcha": {"type": "select", "group": "modes", "options": ["Off", "Arithmetic", "Emoji"]},
+	"telegram_guard_question_text": {"type": "text", "group": "modes", "max_len": 500},
+	# Routing and run identity
+	"default_target_type": {"type": "select", "group": "routing", "options": ["", "Agent", "Flow"], "allow_empty": True},
+	"default_agent": {"type": "link", "group": "routing", "doctype": "Agent", "missing": "That agent doesn't exist."},
+	"default_flow": {"type": "link", "group": "routing", "doctype": "Flow Definition", "missing": "That flow doesn't exist."},
+	"execution_user": {"type": "link", "group": "routing", "doctype": "User", "missing": "That user doesn't exist."},
+	"error_reply_text": {"type": "text", "group": "replies", "max_len": 500},
 }
 
 EDITABLE_FIELDS = tuple(FIELD_SPECS)
@@ -102,7 +111,9 @@ def coerce_value(spec: dict[str, Any], raw: Any, options: list[str] | None = Non
 		return number
 	if kind == "select":
 		text = "" if raw is None else str(raw)
-		allowed = options or spec.get("options") or []
+		allowed = list(options or spec.get("options") or [])
+		if spec.get("allow_empty") and "" not in allowed:
+			allowed.append("")
 		if text not in allowed:
 			raise ValueError("is not one of the allowed choices")
 		return text
@@ -174,6 +185,43 @@ def build_settings(row: dict[str, Any], field_info: dict[str, dict[str, Any]]) -
 	}
 
 
+def _plain(exc: Exception) -> str:
+	from frappe.utils import strip_html
+
+	return strip_html(str(exc)).strip() or "That change couldn't be saved."
+
+
+def _execution_roles() -> list[str]:
+	return list(frappe.get_hooks("huf_gateway_execution_roles") or ["Huf Gateway User"])
+
+
+@frappe.whitelist()
+def list_gateway_users(gateway: str | None = None) -> dict[str, Any]:
+	"""Enabled users who may run a gateway's agents (role 'Huf Gateway User'; never Administrator)."""
+	row = _load_gateway(gateway)
+	if "success" in row:
+		return row
+	holders = frappe.get_all(
+		"Has Role",
+		filters={"role": ["in", _execution_roles()], "parenttype": "User"},
+		pluck="parent",
+		limit_page_length=0,
+	)
+	users = []
+	if holders:
+		users = frappe.get_all(
+			"User",
+			filters={"name": ["in", sorted(set(holders))], "enabled": 1},
+			fields=["name", "full_name"],
+			order_by="full_name asc",
+			limit_page_length=0,
+		)
+	return {
+		"success": True,
+		"users": [{"name": u["name"], "full_name": u.get("full_name") or u["name"]} for u in users if u["name"] != "Administrator"],
+	}
+
+
 def _read(gateway: str) -> dict[str, Any]:
 	info = _field_info()
 	doc = frappe.get_doc("Gateway", gateway)
@@ -201,12 +249,17 @@ def update_telegram_settings(gateway: str | None = None, values: Any = None) -> 
 	clean, skipped, errors = validate_updates(values, info)
 	for name, spec in FIELD_SPECS.items():
 		if spec["type"] == "link" and clean.get(name) and not frappe.db.exists(spec["doctype"], clean[name]):
-			errors.append({"field": name, "message": "That template doesn't exist."})
+			errors.append({"field": name, "message": spec.get("missing", "That template doesn't exist.")})
 			clean.pop(name)
 	if errors:
 		return {"success": False, "error": "invalid", "message": _("Some settings are not valid."), "errors": errors}
 	if clean:
 		doc = frappe.get_doc("Gateway", row["name"])
 		doc.update(clean)
-		doc.save()
+		try:
+			doc.save()
+		except frappe.ValidationError as exc:
+			# The Gateway controller checks the run-as user's role and agent access; show its words.
+			frappe.clear_last_message()
+			return _error("invalid", _plain(exc))
 	return {"success": True, "gateway": row["name"], "skipped": skipped, **_read(row["name"])}

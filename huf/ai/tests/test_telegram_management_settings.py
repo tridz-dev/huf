@@ -14,7 +14,7 @@ INFO = {n: {"options": list(s.get("options", []))} for n, s in FIELD_SPECS.items
 
 class TestTelegramSettings(unittest.TestCase):
 	def test_no_credential_fields_are_editable(self):
-		for bad in ("integration_settings", "bot_token", "webhook_secret", "is_enabled", "execution_user"):
+		for bad in ("integration_settings", "bot_token", "webhook_secret", "is_enabled"):
 			self.assertNotIn(bad, EDITABLE_FIELDS)
 
 	def test_unknown_field_is_an_error(self):
@@ -60,3 +60,68 @@ class TestTelegramSettings(unittest.TestCase):
 		self.assertEqual(out["options"], {"direct_policy": ["Open"]})
 		self.assertIn("telegram_streaming", out["unavailable"])
 		self.assertNotIn("direct_policy", out["unavailable"])
+
+
+class TestTelegramSettingsExtended(unittest.TestCase):
+	def test_new_fields_are_allow_listed(self):
+		for name in (
+			"telegram_guard_captcha", "telegram_guard_question_text", "telegram_welcome_cooldown_seconds",
+			"default_target_type", "default_agent", "default_flow", "execution_user", "error_reply_text",
+		):
+			self.assertIn(name, FIELD_SPECS)
+		for bad in ("integration_settings", "bot_token", "webhook_secret", "is_enabled"):
+			self.assertNotIn(bad, FIELD_SPECS)
+
+	def test_captcha_choices_and_target_type_empty(self):
+		spec = FIELD_SPECS["telegram_guard_captcha"]
+		self.assertEqual(coerce_value(spec, "Emoji"), "Emoji")
+		with self.assertRaises(ValueError):
+			coerce_value(spec, "Hard")
+		spec = FIELD_SPECS["default_target_type"]
+		self.assertEqual(coerce_value(spec, "", ["Agent", "Flow"]), "")
+		self.assertEqual(coerce_value(spec, "Flow", ["Agent", "Flow"]), "Flow")
+
+	def test_cooldown_and_text_bounds(self):
+		self.assertEqual(coerce_value(FIELD_SPECS["telegram_welcome_cooldown_seconds"], "0"), 0)
+		with self.assertRaises(ValueError):
+			coerce_value(FIELD_SPECS["telegram_welcome_cooldown_seconds"], -1)
+		with self.assertRaises(ValueError):
+			coerce_value(FIELD_SPECS["error_reply_text"], "x" * 501)
+
+	def test_link_fields_are_trimmed(self):
+		self.assertEqual(coerce_value(FIELD_SPECS["execution_user"], " a@b.c "), "a@b.c")
+
+	def test_validate_updates_accepts_routing(self):
+		clean, _, errors = validate_updates({"default_target_type": "Agent", "default_agent": "Bot"}, INFO)
+		self.assertEqual((clean, errors), ({"default_target_type": "Agent", "default_agent": "Bot"}, []))
+
+
+def _raw(fn):
+	return getattr(fn, "__wrapped__", fn)
+
+
+class TestListGatewayUsersPermission(unittest.TestCase):
+	def test_denied_without_gateway_admin(self):
+		from unittest import mock
+
+		import frappe
+
+		from huf.ai import telegram_management_settings as m
+
+		with mock.patch.object(m, "_load_gateway", side_effect=frappe.PermissionError("no")):
+			with self.assertRaises(frappe.PermissionError):
+				_raw(m.list_gateway_users)("G")
+
+	def test_excludes_administrator_and_disabled(self):
+		from unittest import mock
+
+		from huf.ai import telegram_management_settings as m
+
+		def fake_get_all(doctype, **kw):
+			if doctype == "Has Role":
+				return ["Administrator", "a@x.com", "a@x.com"]
+			return [{"name": "Administrator", "full_name": "Administrator"}, {"name": "a@x.com", "full_name": ""}]
+
+		with mock.patch.object(m, "_load_gateway", return_value={"name": "G"}), mock.patch.object(m.frappe, "get_all", fake_get_all), mock.patch.object(m, "_execution_roles", return_value=["Huf Gateway User"]):
+			out = _raw(m.list_gateway_users)("G")
+		self.assertEqual(out["users"], [{"name": "a@x.com", "full_name": "a@x.com"}])

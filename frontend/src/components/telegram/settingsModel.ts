@@ -2,7 +2,7 @@ import type { TelegramSettings, TelegramSettingValue, TelegramSettingValues } fr
 
 /** Field layout, plain-language copy and dirty-tracking for the Telegram Settings tab. */
 
-export type FieldKind = 'select' | 'switch' | 'number' | 'text' | 'template';
+export type FieldKind = 'select' | 'switch' | 'number' | 'text' | 'template' | 'agent' | 'flow' | 'user';
 
 export interface FieldDef {
 	name: string;
@@ -15,18 +15,20 @@ export interface FieldDef {
 	warning?: string;
 	warnValue?: string;
 	/** Only show when another field has one of these values. */
-	showWhen?: { field: string; equals: string };
+	showWhen?: { field: string; equals?: string; notEquals?: string };
+	/** Select that may be left unset (stored as an empty string). */
+	allowEmpty?: boolean;
+	/** Show the warning once the value differs from the saved one. */
+	warnOnChange?: boolean;
 	min?: number;
 }
 
 export interface SectionDef {
-	id: 'replies' | 'access' | 'agent' | 'modes';
+	id: 'replies' | 'routing' | 'access' | 'agent' | 'modes';
 	title: string;
 	description: string;
 	fields: FieldDef[];
 }
-
-export const TEMPLATES_COMING_SOON = 'Templates coming soon';
 
 export const SETTINGS_SECTIONS: SectionDef[] = [
 	{
@@ -68,6 +70,48 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
 				kind: 'number',
 				min: 1,
 				help: 'How many times to try a reply that hits a temporary Telegram error.',
+			},
+			{
+				name: 'error_reply_text',
+				label: 'Message when the agent fails',
+				kind: 'text',
+				help: 'Sent to the person if the agent cannot answer. Leave empty to stay silent.',
+			},
+		],
+	},
+	{
+		id: 'routing',
+		title: 'Routing',
+		description: 'Who answers messages by default, and which account they run as.',
+		fields: [
+			{
+				name: 'default_target_type',
+				label: 'Answer messages with',
+				kind: 'select',
+				allowEmpty: true,
+				optionLabels: { Agent: 'An agent', Flow: 'A flow' },
+				help: 'Used when no command or rule picks something more specific.',
+			},
+			{
+				name: 'default_agent',
+				label: 'Default agent',
+				kind: 'agent',
+				showWhen: { field: 'default_target_type', equals: 'Agent' },
+			},
+			{
+				name: 'default_flow',
+				label: 'Default flow',
+				kind: 'flow',
+				showWhen: { field: 'default_target_type', equals: 'Flow' },
+			},
+			{
+				name: 'execution_user',
+				label: 'Run agents as',
+				kind: 'user',
+				help: 'Agents act with this person\'s access. Only enabled users with the Huf Gateway User role are listed.',
+				warning:
+					'Agents will use this person\'s permissions from now on. If the new user cannot open the default agent, saving will be refused.',
+				warnOnChange: true,
 			},
 		],
 	},
@@ -217,8 +261,29 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
 			},
 			{ name: 'telegram_inline_enabled', label: 'Inline mode', kind: 'switch', help: 'People can use the bot from any chat by typing its name.' },
 			{ name: 'telegram_streaming', label: 'Stream replies', kind: 'switch', help: 'Show the answer as it is written instead of all at once.' },
-			{ name: 'telegram_default_template', label: 'Default template', kind: 'template' },
+			{ name: 'telegram_default_template', label: 'Default template', kind: 'template', help: 'Used when a send does not name a template.' },
 			{ name: 'telegram_welcome_template', label: 'Welcome template', kind: 'template', help: 'Sent when someone joins or starts the bot.' },
+			{
+				name: 'telegram_welcome_cooldown_seconds',
+				label: 'Welcome cooldown (seconds)',
+				kind: 'number',
+				min: 0,
+				help: 'Wait this long before welcoming the same person again. 0 turns the wait off.',
+			},
+			{
+				name: 'telegram_guard_captcha',
+				label: 'Verify new group members',
+				kind: 'select',
+				help: 'Ask people joining a group to solve a quick check before they can talk.',
+				optionLabels: { Off: 'Off', Arithmetic: 'A sum', Emoji: 'Pick the emoji' },
+			},
+			{
+				name: 'telegram_guard_question_text',
+				label: 'Verification message',
+				kind: 'text',
+				help: 'Shown above the check. Leave empty for the standard wording.',
+				showWhen: { field: 'telegram_guard_captcha', notEquals: 'Off' },
+			},
 		],
 	},
 ];
@@ -260,12 +325,22 @@ export function hasInvalidNumber(draft: SettingsDraft): boolean {
 }
 
 export function isVisible(field: FieldDef, draft: SettingsDraft): boolean {
-	return !field.showWhen || draft[field.showWhen.field] === field.showWhen.equals;
+	const w = field.showWhen;
+	if (!w) return true;
+	const v = draft[w.field];
+	if (w.equals !== undefined) return v === w.equals;
+	if (w.notEquals !== undefined) return v !== undefined && v !== w.notEquals;
+	return true;
 }
 
 /** The warning to show for a field in its current state, if any. */
-export function activeWarning(field: FieldDef, value: TelegramSettingValue | undefined): string | null {
+export function activeWarning(
+	field: FieldDef,
+	value: TelegramSettingValue | undefined,
+	saved?: TelegramSettingValue,
+): string | null {
 	if (!field.warning) return null;
+	if (field.warnOnChange) return value !== saved ? field.warning : null;
 	if (field.kind === 'switch') return value === true ? field.warning : null;
 	return value === field.warnValue ? field.warning : null;
 }
