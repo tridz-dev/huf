@@ -1,0 +1,10 @@
+{
+  "update_id": 2001,
+  "chat_join_request": {
+    "chat": {"id": -1001234, "type": "supergroup", "title": "Huf Guests"},
+    "from": {"id": 777, "is_bot": false, "first_name": "Sam", "username": "sam"},
+    "user_chat_id": 777,
+    "date": 1760000000,
+    "bio": "hello"
+  }
+}
