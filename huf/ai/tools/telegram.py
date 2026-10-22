@@ -1078,14 +1078,35 @@ def _handle_list_messages(**kwargs) -> str:
         limit = max(1, min(_coerce_int(kwargs.get("limit"), _LIST_DEFAULT), _LIST_MAX))
     except Exception:
         limit = _LIST_DEFAULT
+    in_run = bool(scope.run_gateway())
+    if in_run and chat != scope.current_chat(scope.effective_run_id()):
+        return _refused("action_not_permitted", "list_messages only reads the current chat.")
+    filters = {"gateway": gateway, "conversation_id": ["like", f"{chat}%"]}
+    order = "received_at desc"
     try:
+        if in_run:
+            # Controlled read for the gateway execution user: current gateway + current chat only, redacted fields.
+            rows = frappe.get_all(
+                "Gateway Event", filters=filters,
+                fields=["provider_event_id", "sender_id", "message_text", "status", "received_at"],
+                order_by=order, limit_page_length=limit, ignore_permissions=True,
+            )
+            items = [
+                {
+                    "id": r.get("provider_event_id"), "time": str(r.get("received_at") or ""),
+                    "sender": str(r.get("sender_id") or ""), "kind": "inbound",
+                    "text": _redact_text(r.get("message_text")), "status": r.get("status"),
+                }
+                for r in rows
+            ]
+            return _ok({"items": items, "count": len(items)})
         if not frappe.has_permission("Gateway Event", "read"):
             return _refused("permission_denied", "Not permitted to read Gateway Events.")
         rows = frappe.get_list(
             "Gateway Event",
-            filters={"gateway": gateway, "conversation_id": ["like", f"{chat}%"]},
+            filters=filters,
             fields=["name", "provider_event_id", "sender_id", "message_text", "status", "received_at", "reply_status"],
-            order_by="received_at desc",
+            order_by=order,
             limit_page_length=limit,
         )
     except frappe.PermissionError:
