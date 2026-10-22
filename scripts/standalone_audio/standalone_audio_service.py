@@ -8,7 +8,7 @@ public audio API (huf.ai.audio_api).
 These tests mock frappe (and LiteLLM) so the pure logic can be exercised
 without a full Frappe bench and without hitting real providers:
 
-    python -m unittest huf.tests.standalone_audio_service
+    python -m unittest scripts.standalone_audio.standalone_audio_service
 """
 
 import base64
@@ -32,7 +32,7 @@ from unittest.mock import MagicMock, patch
 # The standalone_ prefix keeps `bench run-tests` from discovering it. Run it
 # explicitly instead:
 #
-#   python -m unittest huf.tests.standalone_audio_service
+#   python -m unittest scripts.standalone_audio.standalone_audio_service
 
 
 class ThrowError(Exception):
