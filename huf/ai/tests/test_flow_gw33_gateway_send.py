@@ -160,7 +160,7 @@ class TestToolCallSendsWithoutLLMTurn(IntegrationTestCase):
 		}
 
 		with patch("huf.ai.tools.telegram._get_token", return_value="fake-test-bot-token"), \
-			patch("httpx.post", return_value=fake_response) as mock_post:
+			patch("requests.post", return_value=fake_response) as mock_post:
 			from huf.ai.flow_engine import create_flow_run, run_flow as engine_run_flow
 
 			# trigger_type="Doc Event" exercises the same non-Manual,
