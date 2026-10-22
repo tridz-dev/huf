@@ -3,7 +3,7 @@
  *
  * A conversation created by Huf Desktop is pinned to that computer (`execution_host = desktop`).
  * The web client of the same user can continue it remotely. This module wraps the whitelisted
- * endpoints in `huf.ai.desktop_sessions` and turns the structured (non-raising) run failures
+ * endpoints in `huf.ai.desktop.sessions` and turns the structured (non-raising) run failures
  * `desktop_offline`, `workspace_changed`, `remote_disabled` and `permission_denied` into a typed
  * error the composer can render.
  */
@@ -155,7 +155,7 @@ function unwrap<T>(result: unknown): T {
 /** The session user's desktop devices (online state, last seen, remote-control switch, mode). */
 export async function listDesktopHosts(): Promise<DesktopHost[]> {
   try {
-    const result = await call.get('huf.ai.desktop_sessions.list_desktop_hosts');
+    const result = await call.get('huf.ai.desktop.sessions.list_desktop_hosts');
     const rows = unwrap<unknown>(result);
     return Array.isArray(rows) ? (rows as DesktopHost[]) : [];
   } catch (error) {
@@ -179,7 +179,7 @@ export async function setDesktopPermissionMode(
   mode: PermissionMode,
 ): Promise<SetPermissionModeResult> {
   try {
-    const result = await call.post('huf.ai.desktop_sessions.set_desktop_permission_mode', {
+    const result = await call.post('huf.ai.desktop.sessions.set_desktop_permission_mode', {
       device_id: deviceId,
       mode,
     });
@@ -214,7 +214,7 @@ export async function rebindDesktopConversation(
   workspaceFingerprint?: string,
 ): Promise<RebindResult> {
   try {
-    const result = await call.post('huf.ai.desktop_sessions.rebind_desktop_conversation', {
+    const result = await call.post('huf.ai.desktop.sessions.rebind_desktop_conversation', {
       conversation,
       workspace_fingerprint: workspaceFingerprint,
     });

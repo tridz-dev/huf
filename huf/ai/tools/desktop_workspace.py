@@ -228,9 +228,9 @@ def _validate_executor_context(
 	# server signed at run start. ``Agent Run.runtime_context`` is writable by a Huf User on insert,
 	# so an unsigned or altered pin is REMOTE with no policy (the dispatcher then needs remote control
 	# on for the desktop and the agent). ``device_id`` rides the same signature.
-	from huf.ai.desktop_executor import verify_pin
+	from huf.ai.desktop.executor import verify_pin
 
-	from huf.ai.desktop_executor import pin_is_fresh
+	from huf.ai.desktop.executor import pin_is_fresh
 
 	if verify_pin(desktop_ctx, run.get("conversation") or "", run) and pin_is_fresh(run):
 		ctx["origin"] = desktop_ctx.get("origin") if desktop_ctx.get("origin") in ("desktop", "remote") else "remote"
@@ -244,7 +244,7 @@ def _validate_executor_context(
 			# Desktop origin is single-use: only the execution that claimed the pin keeps it. Any
 			# other execution of this run (re-queued, drained again) is remote against the agent's
 			# policy as it is now.
-			from huf.ai.desktop_executor import holds_pin_claim, replay_policy
+			from huf.ai.desktop.executor import holds_pin_claim, replay_policy
 
 			if not holds_pin_claim(desktop_ctx, run.name):
 				ctx["origin"] = "remote"
@@ -265,7 +265,7 @@ def _in_web_request() -> bool:
 
 def _import_dispatch_lazily():
 	"""Import dispatch lazily (kept as a seam so tests can substitute it)."""
-	from huf.ai import desktop_executor
+	from huf.ai.desktop import executor as desktop_executor
 
 	return desktop_executor.dispatch
 

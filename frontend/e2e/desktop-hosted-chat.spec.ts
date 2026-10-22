@@ -38,7 +38,7 @@ async function mockHostedChat(page: Page, host: Record<string, unknown> = {}) {
   await page.route('**/api/resource/Agent?**', (r) => r.fulfill(json({ data: [AGENT] })));
   await page.route('**/api/resource/Agent%20Conversation/conv-1**', (r) => r.fulfill(json({ data: HOSTED })));
   await page.route('**/api/resource/Agent%20Conversation?**', (r) => r.fulfill(json({ data: [HOSTED] })));
-  await page.route('**/api/method/huf.ai.desktop_sessions.list_desktop_hosts**', (r) =>
+  await page.route('**/api/method/huf.ai.desktop.sessions.list_desktop_hosts**', (r) =>
     r.fulfill(
       json({
         message: [
@@ -78,7 +78,7 @@ test.describe('Desktop-hosted chat', () => {
   test('changing the permission mode shows the mode the desktop confirmed', async ({ page }) => {
     await mockHostedChat(page);
     let body: { device_id?: string; mode?: string } = {};
-    await page.route('**/api/method/huf.ai.desktop_sessions.set_desktop_permission_mode**', (r) => {
+    await page.route('**/api/method/huf.ai.desktop.sessions.set_desktop_permission_mode**', (r) => {
       body = r.request().postDataJSON();
       return r.fulfill(json({ message: { ok: true, applied_mode: 'full', device_id: 'dev1' } }));
     });
@@ -94,7 +94,7 @@ test.describe('Desktop-hosted chat', () => {
 
   test('a refused mode change is shown, not hidden', async ({ page }) => {
     await mockHostedChat(page);
-    await page.route('**/api/method/huf.ai.desktop_sessions.set_desktop_permission_mode**', (r) =>
+    await page.route('**/api/method/huf.ai.desktop.sessions.set_desktop_permission_mode**', (r) =>
       r.fulfill(json({ message: { ok: false, error: { code: 'mode_not_applied', message: 'no', applied_mode: 'ask' } } })),
     );
     await goto(page, '/chat/conv-1');
@@ -154,7 +154,7 @@ test.describe('Desktop-hosted chat', () => {
         : r.fulfill(json({ message: { success: true, queued: true, status: 'Queued', conversation_id: 'conv-1', agent_run_id: 'run-2', sequence: 2 } }));
     });
     let rebound = false;
-    await page.route('**/api/method/huf.ai.desktop_sessions.rebind_desktop_conversation**', (r) => {
+    await page.route('**/api/method/huf.ai.desktop.sessions.rebind_desktop_conversation**', (r) => {
       rebound = true;
       return r.fulfill(json({ message: { ok: true, conversation: 'conv-1', host_label: 'Laptop - other' } }));
     });

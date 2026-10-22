@@ -1209,7 +1209,7 @@ def _link_preexisting_user_message(conversation_name: str, run_name: str):
 
 def desktop_executor_origin_ip():
     """IP literal of the request that starts a remote-origin run (see ``request_origin_ip``)."""
-    from huf.ai.desktop_executor import request_origin_ip
+    from huf.ai.desktop.executor import request_origin_ip
 
     return request_origin_ip()
 
@@ -1231,8 +1231,8 @@ def _resolve_desktop_request(desktop_executor_id, desktop_lease_secret=None, age
     if not desktop_executor_id:
         return None, None
     try:
-        from huf.ai import desktop_policy, desktop_sessions
-        from huf.ai.desktop_executor import lease_remote_control, origin_for, resolve_desktop_ctx
+        from huf.ai.desktop import policy as desktop_policy, sessions as desktop_sessions
+        from huf.ai.desktop.executor import lease_remote_control, origin_for, resolve_desktop_ctx
 
         ctx = resolve_desktop_ctx(desktop_executor_id, user=frappe.session.user)
         if ctx:
@@ -1277,7 +1277,7 @@ def _resolve_desktop_for_run(agent_doc, conversation, desktop_executor_id, deskt
     control gives a structured ``error`` and NEVER a server-side run. Any other conversation uses
     the optional ``desktop_executor_id`` exactly as before.
     """
-    from huf.ai import desktop_sessions
+    from huf.ai.desktop import sessions as desktop_sessions
 
     if desktop_sessions.is_hosted(conversation):
         return desktop_sessions.resolve_hosted_run(conversation, agent_doc, desktop_lease_secret)
@@ -1296,7 +1296,7 @@ def _desktop_runtime_context(desktop_ctx, conversation_id=None, run=None, sign=T
     """
     if not desktop_ctx:
         return None
-    from huf.ai.desktop_executor import sign_pin
+    from huf.ai.desktop.executor import sign_pin
 
     pin = {
         "executor_id": desktop_ctx.get("executor_id"),
@@ -1327,7 +1327,7 @@ def _sign_run_desktop_pin(run_doc, runtime_context, conversation_id):
     The run name and creation time exist only after the insert, so the pin is written unsigned and
     signed in the same transaction (nothing can drain the run before it commits). An unsigned pin
     is treated as remote, so a failure here fails closed."""
-    from huf.ai.desktop_executor import sign_pin
+    from huf.ai.desktop.executor import sign_pin
 
     pin = dict((runtime_context or {}).get("desktop") or {})
     if not pin:
@@ -1367,7 +1367,7 @@ def _desktop_ctx_from_runtime_context(
         frappe.logger("huf").warning("Dropping desktop pin: conversation belongs to another user")
         return None
     try:
-        from huf.ai.desktop_executor import resolve_desktop_ctx
+        from huf.ai.desktop.executor import resolve_desktop_ctx
 
         live = resolve_desktop_ctx(pinned.get("executor_id"), user=run_owner)
     except Exception as exc:
@@ -1384,7 +1384,7 @@ def _desktop_ctx_from_runtime_context(
     # altered pin (a forged Agent Run) is treated as REMOTE with no policy, which the dispatcher
     # refuses unless remote control is on for the desktop and the agent.
     try:
-        from huf.ai.desktop_executor import pin_is_fresh, verify_pin
+        from huf.ai.desktop.executor import pin_is_fresh, verify_pin
 
         # The signature must be FOR THIS RUN (name, conversation, agent, creation, prompt): a pin
         # copied out of another run, or kept while the run is rewritten and re-queued, fails it. With
@@ -1405,7 +1405,7 @@ def _desktop_ctx_from_runtime_context(
             # Desktop origin is single-use: only the execution that claims the pin gets it. A run
             # that is executed again (re-queued by a client, or drained again after a lost lease) is
             # a fresh server decision, REMOTE, against the agent's current policy.
-            from huf.ai.desktop_executor import claim_desktop_pin, replay_policy
+            from huf.ai.desktop.executor import claim_desktop_pin, replay_policy
 
             if not claim_desktop_pin(run.get("name") if isinstance(run, dict) else run.name):
                 frappe.logger("huf").warning("Desktop pin already used: run is executed again as remote")
@@ -1748,7 +1748,7 @@ def run_agent_sync(
         # This request executes the run itself, so it is the one execution allowed to use the
         # pin's desktop origin. Claimed now, a client that sets the run back to Queued afterwards
         # gets it drained as remote.
-        from huf.ai.desktop_executor import claim_desktop_pin
+        from huf.ai.desktop.executor import claim_desktop_pin
 
         claim_desktop_pin(run_doc.name)
 
@@ -2007,7 +2007,7 @@ def _execute_agent_run(
     conversation = frappe.get_doc("Agent Conversation", conversation_id)
     # A desktop-hosted conversation never runs without a live pin to its own device (a queued run
     # drained after the desktop went offline fails here instead of running on the server).
-    from huf.ai import desktop_sessions
+    from huf.ai.desktop import sessions as desktop_sessions
 
     desktop_sessions.assert_hosted_pin(conversation, desktop_ctx)
     run_doc = frappe.get_doc("Agent Run", run_id)
@@ -3101,7 +3101,7 @@ class _RunHeartbeat:
 
 def _begin_desktop_job_budget(conversation_id):
     try:
-        from huf.ai.desktop_executor import begin_job_budget
+        from huf.ai.desktop.executor import begin_job_budget
 
         begin_job_budget(conversation_id)
     except Exception as exc:  # advisory accounting: never blocks the drain
@@ -3110,7 +3110,7 @@ def _begin_desktop_job_budget(conversation_id):
 
 def _end_desktop_job_budget(conversation_id):
     try:
-        from huf.ai.desktop_executor import end_job_budget
+        from huf.ai.desktop.executor import end_job_budget
 
         end_job_budget(conversation_id)
     except Exception as exc:
@@ -3134,7 +3134,7 @@ def _desktop_run_requeue_block(run_id):
     if not pinned:
         return None
     try:
-        from huf.ai.desktop_executor import run_executed_mutations
+        from huf.ai.desktop.executor import run_executed_mutations
 
         if run_executed_mutations(run_id):
             return _(
@@ -3230,7 +3230,7 @@ def _drain_run(run_doc, lock_key: str):
         if isinstance(context, dict) and context.get("desktop"):
             # A run executed again must not repeat desktop calls that already ran.
             try:
-                from huf.ai.desktop_executor import begin_run_attempt
+                from huf.ai.desktop.executor import begin_run_attempt
 
                 begin_run_attempt(run_doc.name)
             except Exception as exc:
@@ -3450,7 +3450,7 @@ def _client_safe_desktop_error(desktop_error: dict) -> str:
     err = desktop_error or {}
     if err.get("code") == "remote_disabled":
         # Which switch is off is curated (fixed strings in desktop_sessions), never interpolated user text.
-        from huf.ai.desktop_sessions import REMOTE_DISABLED_MESSAGE
+        from huf.ai.desktop.sessions import REMOTE_DISABLED_MESSAGE
 
         disabled_by = err.get("disabled_by")
         specific = REMOTE_DISABLED_MESSAGE.get(disabled_by) if isinstance(disabled_by, str) else None
@@ -3779,7 +3779,7 @@ async def _run_agent_stream_impl(
                 if desktop_ctx.get("origin") == "desktop":
                     # This request executes the run itself: it is the one execution allowed to use
                     # the pin's desktop origin (tool handlers check holds_pin_claim).
-                    from huf.ai.desktop_executor import claim_desktop_pin
+                    from huf.ai.desktop.executor import claim_desktop_pin
 
                     claim_desktop_pin(run_doc.name)
             if not skip_user_message:

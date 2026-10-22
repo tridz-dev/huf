@@ -141,7 +141,7 @@ import uuid
 import frappe
 import redis
 
-from huf.ai import desktop_policy
+from huf.ai.desktop import policy as desktop_policy
 
 PROTOCOL_VERSION = 1
 
@@ -2390,7 +2390,7 @@ def _mcp_call_unavailable(executor_id, catalog_hash, params, agent_name):
 	server and tool are in the catalog PINNED to the run, the agent is allowed, a browser tool
 	is one of the curated ones, and ``arguments`` validate against the pinned input schema.
 	Returns ``(code, message)`` or None."""
-	from huf.ai import desktop_mcp
+	from huf.ai.desktop import mcp as desktop_mcp
 
 	if not catalog_hash:
 		return ("tool_unavailable", "No local MCP catalog is pinned to this run.")

@@ -22,7 +22,7 @@ class AgentConversation(Document):
 	def _guard_desktop_host_fields(self):
 		"""The host of a conversation is set by the server when a desktop creates it and is never
 		editable afterwards (a conversation never migrates between host types). Only
-		``huf.ai.desktop_sessions`` sets ``flags.huf_desktop_host_write``; every other write,
+		``huf.ai.desktop.sessions`` sets ``flags.huf_desktop_host_write``; every other write,
 		including a web session's ``frappe.client.set_value`` on its own conversation, is refused."""
 		if self.flags.get(HOST_WRITE_FLAG):
 			return

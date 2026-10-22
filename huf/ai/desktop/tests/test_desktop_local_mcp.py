@@ -6,11 +6,11 @@ cases L12, L13, L14, L28 and L32 for these groups).
 
 Real Redis, real users, real Agent Runs, real leases and catalogs published through the whitelisted
 endpoints, real Agent documents with registry rows attached, and a background thread that plays the
-desktop (see ``desktop_local_test_support``). The pure helpers in ``huf.ai.desktop_mcp`` (naming,
+desktop (see ``desktop_local_test_support``). The pure helpers in ``huf.ai.desktop.mcp`` (naming,
 collisions, budget, schema validation) are also tested directly.
 
 Run with:
-	bench --site <site> run-tests --app huf --module huf.ai.tests.test_desktop_local_mcp
+	bench --site <site> run-tests --app huf --module huf.ai.desktop.tests.test_desktop_local_mcp
 """
 
 import asyncio
@@ -20,8 +20,8 @@ from types import SimpleNamespace
 
 import frappe
 
-from huf.ai import desktop_executor as dx
-from huf.ai import desktop_mcp as dm
+from huf.ai.desktop import executor as dx
+from huf.ai.desktop import mcp as dm
 from huf.testing import desktop_local_test_support as sup
 from huf.testing import desktop_test_helpers as h
 from huf.testing.desktop_local_test_support import BIDI, catalog, obj_schema, server, tool

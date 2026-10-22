@@ -9,7 +9,7 @@ Real Redis, real users, real Agent Runs, real leases and a background thread tha
 (pin, request, untrusted marking), and the mutation ledger on ``proc.start`` / ``proc.stop``.
 
 Run with:
-	bench --site <site> run-tests --app huf --module huf.ai.tests.test_desktop_processes
+	bench --site <site> run-tests --app huf --module huf.ai.desktop.tests.test_desktop_processes
 """
 
 import asyncio
@@ -19,7 +19,7 @@ from types import SimpleNamespace
 
 import frappe
 
-from huf.ai import desktop_executor as dx
+from huf.ai.desktop import executor as dx
 from huf.testing import desktop_local_test_support as sup
 from huf.testing import desktop_test_helpers as h
 from huf.ai.tools import desktop_local as dl
