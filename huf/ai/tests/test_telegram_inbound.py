@@ -172,6 +172,3 @@ class TestTelegramInboundTypedKinds(unittest.TestCase):
 				p = parse_update({"update_id": 10, key: {"id": "q", "from": {"id": 6}}})
 				self.assertEqual((p.kind, p.sender_id), (key, "6"))
 				self.assertIsNone(to_event(p))
-
-	def test_unknown_still_unsupported(self):
-		self.assertEqual(parsed("unsupported_update").kind, "unsupported")

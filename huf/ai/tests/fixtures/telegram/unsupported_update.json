@@ -1,15 +1,6 @@
 {
   "update_id": 1025,
-  "poll_answer": {
-    "poll_id": "p1",
-    "user": {
-      "id": 111,
-      "is_bot": false,
-      "first_name": "Jane",
-      "username": "janedoe"
-    },
-    "option_ids": [
-      0
-    ]
+  "future_update_type": {
+    "id": "x1"
   }
 }
