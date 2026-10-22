@@ -7,6 +7,8 @@ agents must not invent their own ad-hoc test commands. That entry point is:
 ./scripts/huf-verify.sh <target> [--base <ref>]
 ```
 
+For running tests by hand (bench `run-tests`, Vitest, Playwright) and where test files belong, see `CONTRIBUTING.md`.
+
 ## Targets
 
 | Target | What it runs | Needs a bench? |

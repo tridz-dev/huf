@@ -20,7 +20,7 @@ ALLOWED_TOP_LEVEL = {
     ".dockerignore", ".editorconfig", ".env.example", ".eslintrc", ".github", ".gitignore",
     ".mailmap", ".pre-commit-config.yaml", ".semgrep.yml", "AGENTS.md", "CITATION.cff",
     "CLAUDE.md", "DESIGN.md", "LICENSE", "README.md", "api-docs", "docker", "docs", "frontend",
-    "huf", "package.json", "pyproject.toml", "scripts", "yarn.lock",
+    "huf", "package.json", "pyproject.toml", "scripts", "yarn.lock", "CONTRIBUTING.md",
 }
 
 FORBIDDEN = [
