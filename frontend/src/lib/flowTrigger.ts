@@ -9,7 +9,7 @@
 
 /**
  * Doc events a Flow trigger can use: the intersection of the backend's
- * huf.ai.automation_hooks.SUPPORTED_DOC_EVENTS and the Flow graph IR enum
+ * huf.ai.automation.hooks.SUPPORTED_DOC_EVENTS and the Flow graph IR enum
  * (graph_ir.schema.json TriggerDocEventNode.config.event). The backend also accepts
  * before_insert, validate, before_save, after_save, before_submit, before_rename,
  * after_rename and after_delete, but the node config cannot hold them, so the panel does not offer them.

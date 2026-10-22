@@ -1,8 +1,8 @@
 import frappe
 from frappe import _
 
-from huf.ai.automation_runner import run_automation
-from huf.ai.automation_runtime_flag import automation_runtime_is_new
+from huf.ai.automation.runner import run_automation
+from huf.ai.automation.runtime_flag import automation_runtime_is_new
 
 
 @frappe.whitelist()

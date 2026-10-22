@@ -376,7 +376,7 @@ def _resolve_instruction(automation, trigger_context):
 			if rendered and rendered.strip():
 				instruction = rendered
 	elif trigger_context.get("_doc_event_supplement"):
-		# Doc Event triggers (huf/ai/automation_hooks.py) compose an
+		# Doc Event triggers (huf/ai/automation/hooks.py) compose an
 		# event-specific supplement (event name, doc data, prompt_field
 		# content, OCR/audio-transcribed attachment text) and pass it here
 		# via this reserved trigger_context key. Per the plan's explicit

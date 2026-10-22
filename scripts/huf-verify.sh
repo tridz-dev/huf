@@ -38,7 +38,8 @@
 #                            first, then the old huf/ai/tests mapping;
 #                            huf/ai/procedure/<x>.py maps to huf/ai/procedure/tests/test_procedure_<x>.py
 #                            and huf/ai/tools/<x>.py to huf/ai/tools/tests/test_tool_<x>.py;
-#                            huf/ai/desktop/<x>.py to huf/ai/desktop/tests/test_desktop_<x>.py when it exists)
+#                            huf/ai/desktop/<x>.py to huf/ai/desktop/tests/test_desktop_<x>.py when it exists;
+#                            huf/ai/automation/<x>.py to huf/ai/automation/tests/test_automation_<x>.py when it exists)
 #   anything else         -> no targeted check added (falls back to `quick` if nothing matched)
 
 set -uo pipefail
@@ -341,6 +342,13 @@ map_backend_module() {
     huf/ai/graph/*.py)
       if [ -f "$ROOT/huf/ai/graph/tests/test_graph_${base}.py" ]; then
         candidate="huf/ai/graph/tests/test_graph_${base}.py"
+      fi ;;
+    huf/ai/automation/tests/test_*.py)
+      # a changed automation test module maps to itself
+      candidate="$f" ;;
+    huf/ai/automation/*.py)
+      if [ -f "$ROOT/huf/ai/automation/tests/test_automation_${base}.py" ]; then
+        candidate="huf/ai/automation/tests/test_automation_${base}.py"
       fi ;;
   esac
   if [ -f "$ROOT/$candidate" ]; then

@@ -2,8 +2,8 @@ import frappe
 from frappe import _
 from frappe.utils import add_to_date, now_datetime
 
-from huf.ai.automation_runner import _resolve_instruction, run_automation
-from huf.ai.automation_runtime_flag import automation_runtime_is_new
+from huf.ai.automation.runner import _resolve_instruction, run_automation
+from huf.ai.automation.runtime_flag import automation_runtime_is_new
 
 # Short-lived per-trigger lock so an overlapping scheduler tick (or a manual
 # invocation racing a real tick) can't double-fire the same due trigger.

@@ -5,7 +5,7 @@
 Domain logic for the Automation doctype.
 
 Plain Python functions, no HTTP/whitelisting concerns and no permission
-checks (those belong to the calling layer -- see ``huf.ai.automation_api``,
+checks (those belong to the calling layer -- see ``huf.ai.automation.api``,
 which is the whitelisted, permission-checked wrapper around this module).
 
 Separation of concerns:
@@ -18,7 +18,7 @@ Separation of concerns:
 - ``list_automations``    -> filtered listing
 
 Trigger CRUD (Automation Trigger child records) is intentionally out of
-scope here -- ``automation_api.py`` talks to the Automation Trigger doctype
+scope here -- ``automation/api.py`` talks to the Automation Trigger doctype
 directly, the same way ``project_api.py`` talks to Conversation Pin
 directly, since there is no meaningfully separate "trigger domain logic"
 beyond straightforward doc CRUD.
@@ -181,12 +181,12 @@ def validate_automation(automation_doc) -> None:
     (e.g. before ``run_automation_now``).
 
     Checks:
-        - agent and instruction are present (mirrors automation_runner's
+        - agent and instruction are present (mirrors automation.runner's
           own guards, checked here too so bad config is caught at
           save-time rather than only at run-time).
         - conversation_mode is one of the doctype's allowed options.
         - conversation_mode == "Dedicated" does not require a pre-existing
-          ``conversation`` -- automation_runner._resolve_conversation_routing
+          ``conversation`` -- automation.runner._resolve_conversation_routing
           creates one lazily on first run and persists it back onto the
           Automation. What *is* required is that automation_name be set,
           since the lazy-creation path keys the conversation's external_id
@@ -268,11 +268,11 @@ def resume_automation(automation):
 def resolve_automation(automation_name: str):
     """
     Load an Automation by name with a clear not-found error, factored out
-    so ``automation_api.py`` (and anything else that needs an Automation
+    so ``automation/api.py`` (and anything else that needs an Automation
     doc by name) does not each re-implement the existence check.
 
     Note: this does *not* perform permission checks -- callers that expose
-    this over HTTP (automation_api.py) are responsible for calling
+    this over HTTP (automation/api.py) are responsible for calling
     ``doc.has_permission(...)`` themselves, matching project_api.py's
     convention of keeping permission checks at the whitelisted layer.
 
