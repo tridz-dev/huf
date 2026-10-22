@@ -103,15 +103,19 @@ def handle_update(gateway, adapter, request) -> dict | None:
 		return _ack(parsed.kind)
 	if parsed.kind == "message_reaction_count":
 		return _ack(parsed.kind)
+	edit_message_id = ""
 	if parsed.kind == "callback_query":
+		from huf.ai.gateway_adapters import telegram_buttons
+
 		payload = adapter.verify_callback_data(parsed.callback_data, parsed.chat_id)
-		if payload is None:
-			frappe.logger("huf").warning(
-				f"Telegram gateway {gateway.name}: dropped callback_query with invalid signature "
-				f"(update {parsed.update_id})"
+		decision = telegram_buttons.handle_callback(parsed, payload, adapter.sender, gateway.name)
+		if decision["action"] != "ingest":
+			frappe.logger("huf").info(
+				f"Telegram gateway {gateway.name}: callback_query {decision['reason']} (update {parsed.update_id})"
 			)
-			return _ack("callback_query", "invalid signature; dropped")
-		parsed = replace(parsed, text=payload)
+			return _ack("callback_query", decision["reason"])
+		edit_message_id = decision["edit_message_id"]
+		parsed = replace(parsed, text=decision["text"])
 	try:
 		event = to_event(parsed, ())
 	except ValueError:
@@ -119,7 +123,11 @@ def handle_update(gateway, adapter, request) -> dict | None:
 	if event is None:
 		return _ack(parsed.kind)
 	raw = dict(event.raw_payload)
-	raw["telegram_meta"] = {**_meta(parsed), "callback_data": parsed.text if parsed.kind == "callback_query" else ""}
+	raw["telegram_meta"] = {
+		**_meta(parsed),
+		"callback_data": parsed.text if parsed.kind == "callback_query" else "",
+		**({"edit_message_id": edit_message_id} if edit_message_id else {}),
+	}
 	result = ingest_gateway_event(
 		gateway.name,
 		event.provider_event_id,
