@@ -221,8 +221,8 @@ EXPECTED = {
 	"dice": (True, "message", None),
 	"forwarded": (True, "message", None),
 	"reply_quote": (True, "message", None),
-	"edited_message": (False, None, "edited_message"),
-	"channel_post": (False, None, "channel_post"),
+	"edited_message": (True, "message", None),
+	"channel_post": (True, "message", None),
 	"start_payload": (True, "message", None),
 	"reaction_added": (True, "reaction", None),
 	"business_message": (False, None, "business"),
@@ -403,7 +403,7 @@ class TestNonMessageKindsDoNotRunAgent(unittest.TestCase):
 
 class TestDuplicateDelivery(unittest.TestCase):
 	def test_registered_handler_runs_once_per_update_id(self):
-		spy = mock.Mock(return_value=None)  # None falls through to the default path
+		spy = mock.Mock(return_value={"success": True, "handled": True})  # a handler that answers short-circuits
 		h = Harness(duplicate_aware=True)
 		with mock.patch.dict(ing._UPDATE_HANDLERS, {"message": spy}):
 			first = h.handle(load_fixture("message_text"))
@@ -426,12 +426,13 @@ class TestDuplicateDelivery(unittest.TestCase):
 		self.assertEqual({c.args[1] for c in h.ingest.call_args_list}, {update_id})
 
 	def test_text_redelivery_stopped_by_update_guard(self):
-		# The "message" handlers are registered, so a second delivery of the same update id is acked, not re-run.
+		# Handlers that fall through release the claim, so redelivery reaches ingest, which dedups by update id
+		# (and a failed first ingest stays retryable).
 		h = Harness(duplicate_aware=True)
 		h.handle(load_fixture("message_text"))
 		again = h.handle(load_fixture("message_text"))
-		self.assertEqual(again["ignored"], "message")
-		self.assertEqual(h.ingest.call_count, 1)
+		self.assertTrue(again["duplicate"])
+		self.assertEqual(h.ingest.call_count, 2)
 
 	def test_handler_exception_releases_delivery_for_retry(self):
 		calls = []
@@ -451,14 +452,14 @@ class TestDuplicateDelivery(unittest.TestCase):
 		self.assertEqual(again, {"success": True, "handled": True})
 
 	def test_unsupported_handler_redelivery_acked_not_rerun(self):
-		# "unsupported" carries inline/guest/stream chains; a spy on it must run once for a redelivered update.
-		spy = mock.Mock(return_value=None)
+		# inline_query now parses as its own kind; a spy on it must run once for a redelivered update.
+		spy = mock.Mock(return_value={"success": True, "handled": True})
 		h = Harness()
-		with mock.patch.dict(ing._UPDATE_HANDLERS, {"unsupported": spy}):
+		with mock.patch.dict(ing._UPDATE_HANDLERS, {"inline_query": spy}):
 			h.handle(load_fixture("inline_query"))
 			again = h.handle(load_fixture("inline_query"))
 		self.assertEqual(spy.call_count, 1)
-		self.assertEqual(again["ignored"], "unsupported")
+		self.assertEqual(again["ignored"], "inline_query")
 
 
 class TestSecretHygiene(unittest.TestCase):
