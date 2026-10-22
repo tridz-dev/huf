@@ -132,7 +132,11 @@ class TestTelegramGatewayAdapter(unittest.TestCase):
 		self.assertEqual(delivery.provider_message_id, "42")
 		self.assertEqual(self.calls, [{
 			"url": "https://api.telegram.org/bot123:ABC/sendMessage",
-			"json_data": {"chat_id": "999", "text": "hi there", "reply_to_message_id": 10},
+			"json_data": {
+				"chat_id": "999",
+				"text": "hi there",
+				"reply_parameters": {"message_id": 10, "allow_sending_without_reply": True},
+			},
 			"timeout": 10,
 		}])
 

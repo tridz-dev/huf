@@ -119,8 +119,7 @@ class TelegramGatewayAdapter(GatewayAdapter):
 			http_get=lambda *a, **k: self._http_get(*a, **k),
 			max_flood_retries=max_flood_retries,
 		)
-		# "legacy" keeps the flat reply_to_message_id field Telegram still accepts.
-		self.sender = TelegramSender(self.client, parse_mode=parse_mode, reply_style="legacy")
+		self.sender = TelegramSender(self.client, parse_mode=parse_mode)
 
 	# -- inbound -------------------------------------------------------------------------------
 

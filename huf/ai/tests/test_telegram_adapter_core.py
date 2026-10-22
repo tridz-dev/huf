@@ -83,7 +83,7 @@ class TestAdapterCore(unittest.TestCase):
 		delivery = self.adapter.send_reply(GatewayReply("999", "y" * 5000, reply_to_provider_message_id="4"))
 		calls = self.api.of("sendMessage")
 		self.assertEqual(len(calls), 2)
-		self.assertEqual(calls[0]["payload"]["reply_to_message_id"], 4)
+		self.assertEqual(calls[0]["payload"]["reply_parameters"]["message_id"], 4)
 		self.assertEqual(delivery.provider_message_id, "101")
 		self.assertEqual(delivery.provider_response["message_ids"], [101, 102])
 
