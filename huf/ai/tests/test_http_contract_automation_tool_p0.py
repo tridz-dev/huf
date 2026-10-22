@@ -79,7 +79,7 @@ class HttpContractTests(unittest.TestCase):
 
     "Huf Manager" has Automation create/write/delete but is NOT System
     Manager -- the exact shape needed to exercise the run_as_user
-    escalation guard (huf.ai.automation_runner._check_run_as_user_permission).
+    escalation guard (huf.ai.automation.runner._check_run_as_user_permission).
     """
 
     findings: list[str] = []
@@ -129,7 +129,7 @@ class HttpContractTests(unittest.TestCase):
     def test_01_automation_crud_create_update(self):
         name = f"_Test P62 HTTP Automation {RUN_TAG}"
         r = self.admin.post(
-            _api("method/huf.ai.automation_api.create_automation"),
+            _api("method/huf.ai.automation.api.create_automation"),
             data={
                 "automation_name": name,
                 "agent": self.agent_name,
@@ -148,7 +148,7 @@ class HttpContractTests(unittest.TestCase):
 
         # Real round-trip update.
         r = self.admin.post(
-            _api("method/huf.ai.automation_api.update_automation"),
+            _api("method/huf.ai.automation.api.update_automation"),
             data={"automation": doc["name"], "instruction": "Updated instruction (HTTP test)."},
             timeout=30,
         )
@@ -161,7 +161,7 @@ class HttpContractTests(unittest.TestCase):
     # ------------------------------------------------------------------
     def test_02_automation_auth_guest_denied(self):
         r = requests.post(
-            _api("method/huf.ai.automation_api.create_automation"),
+            _api("method/huf.ai.automation.api.create_automation"),
             data={
                 "automation_name": f"_Test P62 HTTP Automation Guest {RUN_TAG}",
                 "agent": self.agent_name,
@@ -170,7 +170,7 @@ class HttpContractTests(unittest.TestCase):
             timeout=30,
         )
         # Real observed behavior: Frappe's whitelist guest-permission layer
-        # rejects before automation_api's own has_permission check runs.
+        # rejects before automation.api's own has_permission check runs.
         self.assertEqual(r.status_code, 403, f"expected 403 for Guest, got {r.status_code}: {r.text[:500]}")
         body = r.json()
         # Frappe's standard "clean" 403 envelope: {"exc_type": "PermissionError", ...}
@@ -188,7 +188,7 @@ class HttpContractTests(unittest.TestCase):
 
         name = f"_Test P62 HTTP Escalation {RUN_TAG}"
         r = self.non_sm.post(
-            _api("method/huf.ai.automation_api.create_automation"),
+            _api("method/huf.ai.automation.api.create_automation"),
             data={
                 "automation_name": name,
                 "agent": self.agent_name,
@@ -210,7 +210,7 @@ class HttpContractTests(unittest.TestCase):
             "triggers) -- NOT for the manual run_automation_now API, which "
             "always passes initiating_user=frappe.session.user and so "
             "silently bypasses the run_as_user value entirely (documented "
-            "in automation_runner.py's own docstring)."
+            "in automation/runner.py's own docstring)."
         )
 
         # Exercise the ACTUAL enforcement point: the Webhook trigger path,
@@ -219,7 +219,7 @@ class HttpContractTests(unittest.TestCase):
         slug = f"p62-escalation-{RUN_TAG}"
         key = uuid.uuid4().hex
         r = self.non_sm.post(
-            _api("method/huf.ai.automation_api.create_trigger"),
+            _api("method/huf.ai.automation.api.create_trigger"),
             data={
                 "automation": doc["name"],
                 "trigger_type": "Webhook",
@@ -232,7 +232,7 @@ class HttpContractTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
 
         r = requests.post(
-            _api("method/huf.ai.automation_webhook.handle_automation_webhook"),
+            _api("method/huf.ai.automation.webhook.handle_automation_webhook"),
             params={"slug": slug},
             headers={"X-Webhook-Key": key},
             json={"ping": "p62"},
@@ -251,7 +251,7 @@ class HttpContractTests(unittest.TestCase):
         # endpoint in this suite) -- even on a 500.
         self.assertEqual(body.get("message"), {"success": False, "error": "Automation run failed."}, body)
         self.findings.append(
-            "FINDING (webhook boundary): huf.ai.automation_webhook."
+            "FINDING (webhook boundary): huf.ai.automation.webhook."
             "handle_automation_webhook catches ALL exceptions from "
             "run_automation() -- including the PermissionError raised by "
             "_check_run_as_user_permission for a genuine security-relevant "
@@ -273,14 +273,14 @@ class HttpContractTests(unittest.TestCase):
     # ------------------------------------------------------------------
     def test_04_automation_invalid_missing_required_param(self):
         r = self.admin.post(
-            _api("method/huf.ai.automation_api.create_automation"),
+            _api("method/huf.ai.automation.api.create_automation"),
             data={
                 # automation_name and instruction omitted; agent present.
                 "agent": self.agent_name,
             },
             timeout=30,
         )
-        # Real observed behavior: automation_api.create_automation takes
+        # Real observed behavior: automation.api.create_automation takes
         # automation_name/instruction as required *positional* Python
         # parameters, not with an internal frappe.throw() validation --
         # Frappe's whitelist dispatcher (frappe.call(method, **form_dict))
@@ -319,7 +319,7 @@ class HttpContractTests(unittest.TestCase):
             "types": "Custom Function",
             "agent": self.agent_name,
             "tool_type": "Miscellaneous",
-            "function_path": "huf.ai.automation_api.list_automations",
+            "function_path": "huf.ai.automation.api.list_automations",
             "params": "{}",
         }
         r = self.admin.post(
@@ -330,7 +330,7 @@ class HttpContractTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
         created = r.json()["data"]
         self.assertEqual(created["tool_name"], tool_name)
-        self.assertEqual(created["function_path"], "huf.ai.automation_api.list_automations")
+        self.assertEqual(created["function_path"], "huf.ai.automation.api.list_automations")
         doc_name = created["name"]
         self.__class__.tool_id = doc_name
 
@@ -339,7 +339,7 @@ class HttpContractTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
         fetched = r.json()["data"]
         self.assertEqual(fetched["tool_name"], tool_name)
-        self.assertEqual(fetched["function_path"], "huf.ai.automation_api.list_automations")
+        self.assertEqual(fetched["function_path"], "huf.ai.automation.api.list_automations")
 
     # ------------------------------------------------------------------
     # 6. TOOL-AUTH-001 -- same tool-creation request, unauthenticated.
@@ -353,7 +353,7 @@ class HttpContractTests(unittest.TestCase):
                 "types": "Custom Function",
                 "agent": self.agent_name,
                 "tool_type": "Miscellaneous",
-                "function_path": "huf.ai.automation_api.list_automations",
+                "function_path": "huf.ai.automation.api.list_automations",
                 "params": "{}",
             },
             timeout=30,

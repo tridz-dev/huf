@@ -244,20 +244,20 @@ override_doctype_class = {
 
 doc_events = {
     "*": {
-        "validate": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "before_insert": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "after_insert": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "before_save": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "after_save": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "before_submit": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "after_submit": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "before_cancel": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "on_submit": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "on_update": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "before_rename": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "after_rename": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "on_trash": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "after_delete": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+        "validate": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_insert": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_insert": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_save": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_save": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_submit": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_submit": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_cancel": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "on_submit": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "on_update": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_rename": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_rename": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "on_trash": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_delete": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
     },
     "WhatsApp Templates": {
         "before_validate": "huf.ai.gateway_adapters.whatsapp_template_guard.guard_template_write",
@@ -269,14 +269,14 @@ doc_events = {
         "on_update": "huf.huf.doctype.huf_user_role.huf_user_role.sync_from_frappe_user",
     },
     "Agent Trigger": {
-        "after_insert": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
-        "on_update": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
-        "on_trash": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
+        "after_insert": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
+        "on_update": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
+        "on_trash": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
     },
     "Automation Trigger": {
-        "after_insert": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
-        "on_update": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
-        "on_trash": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
+        "after_insert": "huf.ai.automation.hooks.clear_doc_event_automation_cache",
+        "on_update": "huf.ai.automation.hooks.clear_doc_event_automation_cache",
+        "on_trash": "huf.ai.automation.hooks.clear_doc_event_automation_cache",
     },
     "AI Provider": {
         "on_update": "huf.ai.app_seeding.hub_orchestrator.on_ai_provider_update",
@@ -321,7 +321,7 @@ doc_events = {
 scheduler_events = {
     "all": [
         "huf.ai.agent_scheduler.run_scheduled_agents",
-        "huf.ai.automation_scheduler.run_due_automations"
+        "huf.ai.automation.scheduler.run_due_automations"
     ],
     "daily": [
         "huf.ai.knowledge.maintenance.cleanup_orphaned_files",

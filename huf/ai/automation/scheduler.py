@@ -2,8 +2,8 @@ import frappe
 from frappe import _
 from frappe.utils import add_to_date, now_datetime
 
-from .automation_runner import _resolve_instruction, run_automation
-from .automation_runtime_flag import automation_runtime_is_new
+from huf.ai.automation.runner import _resolve_instruction, run_automation
+from huf.ai.automation.runtime_flag import automation_runtime_is_new
 
 # Short-lived per-trigger lock so an overlapping scheduler tick (or a manual
 # invocation racing a real tick) can't double-fire the same due trigger.
@@ -198,7 +198,7 @@ def _submit_batch_job_for_automation_trigger(t, automation_doc, prompt):
 		batch_job.save(ignore_permissions=True)
 		return
 
-	from .agent_integration import _run_async_safely
+	from huf.ai.agent_integration import _run_async_safely
 
 	try:
 		result = _run_async_safely(submit_batch(agent, requests))

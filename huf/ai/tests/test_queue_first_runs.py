@@ -625,7 +625,7 @@ class TestQueueFirstRuns(unittest.TestCase):
     @patch("huf.ai.agent_scheduler.run_agent_sync")
     def test_legacy_scheduler_no_ops_under_new_runtime(self, mock_run, mock_frappe, mock_runtime_is_new):
         """Legacy scheduler no-ops under the default "new" automation runtime,
-        leaving run_due_automations (huf.ai.automation_scheduler) as the sole executor."""
+        leaving run_due_automations (huf.ai.automation.scheduler) as the sole executor."""
         agent_scheduler.run_scheduled_agents()
 
         mock_run.assert_not_called()

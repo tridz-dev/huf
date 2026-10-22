@@ -2,7 +2,7 @@
 # For license information, please see license.txt
 
 """
-Layer A (mocked-frappe, no bench) tests proving `huf/ai/automation_scheduler.py`'s
+Layer A (mocked-frappe, no bench) tests proving `huf/ai/automation/scheduler.py`'s
 due-trigger decision is deterministic and reproducible under a controllable
 fake clock - per project rule: "Automation/scheduler tests must not sleep for
 real time. Introduce a testable clock/time abstraction where required. Test:
@@ -15,7 +15,7 @@ docstring for why a name-patch, not a product-code clock dependency, is the
 right seam here).
 
 Run standalone (no bench) from the repo root:
-    PYTHONPATH=. python3 huf/ai/tests/test_automation_scheduler_clock.py -v
+    PYTHONPATH=. python3 huf/ai/automation/tests/test_automation_scheduler_clock.py -v
 """
 
 import sys
@@ -37,7 +37,7 @@ if "frappe.utils" not in sys.modules:
 	sys.modules["frappe.utils"] = utils_mock
 	sys.modules["frappe"].utils = utils_mock
 
-from huf.ai import automation_scheduler  # noqa: E402
+from huf.ai.automation import scheduler as automation_scheduler  # noqa: E402
 from huf.testing.clock_helpers import FakeClock, patch_clock  # noqa: E402
 
 

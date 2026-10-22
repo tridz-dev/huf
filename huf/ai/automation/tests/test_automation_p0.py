@@ -6,8 +6,8 @@ Real-Frappe (Layer B) integration tests for the Automation runtime
 described in the CURRENT_STATE audit (archived in the workspace) section 7 ("Automations").
 
 Covers the CURRENT DEFAULT active runtime only (Automation / Automation
-Trigger / ``automation_scheduler.py`` — confirmed default "new" via
-``huf/ai/automation_runtime_flag.py::automation_runtime_is_new()``, which
+Trigger / ``automation/scheduler.py`` — confirmed default "new" via
+``huf/ai/automation/runtime_flag.py::automation_runtime_is_new()``, which
 returns True unless ``site_config.json`` explicitly sets
 ``automation_trigger_runtime: "legacy"``). The legacy ``Agent Trigger`` /
 ``agent_scheduler.py`` path is not exercised here — see AUTO-007 note below
@@ -20,13 +20,13 @@ sharing the same site/bench.
 
 Time-sensitive assertions (AUTO-002/003/004) use
 ``huf.testing.clock_helpers.FakeClock``/``patch_clock`` patched onto
-``huf.ai.automation_scheduler``'s own ``now_datetime``/``add_to_date``
+``huf.ai.automation.scheduler``'s own ``now_datetime``/``add_to_date``
 names (the exact pattern already proven working in
-``huf/ai/tests/test_automation_scheduler_clock.py``, a from-import module).
+``huf/ai/automation/tests/test_automation_scheduler_clock.py``, a from-import module).
 No ``time.sleep()`` anywhere in this file.
 
 Run with:
-    bench --site <site> run-tests --app huf --module huf.ai.tests.test_automation_p0
+    bench --site <site> run-tests --app huf --module huf.ai.automation.tests.test_automation_p0
 """
 
 import datetime
@@ -34,8 +34,8 @@ import datetime
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai import automation_scheduler
-from huf.ai.automation_runner import _check_run_as_user_permission, run_automation
+from huf.ai.automation import scheduler as automation_scheduler
+from huf.ai.automation.runner import _check_run_as_user_permission, run_automation
 from huf.testing.clock_helpers import patch_clock
 from huf.testing.factories import (
     make_agent,
@@ -117,7 +117,7 @@ class TestAutomationP0(IntegrationTestCase):
         overrides.setdefault("automation_name", f"{PREFIX} {frappe.generate_hash(length=8)}")
         overrides.setdefault("instruction", "__TEST_SCENARIO__:TEST_TEXT")
         # `Automation.status` defaults to "Draft" (make_automation()'s own
-        # docstring), but automation_runner.py::run_automation now refuses
+        # docstring), but automation/runner.py::run_automation now refuses
         # to fire a non-"Active" Automation ("... is not Active (status:
         # Draft) -- resume it to let triggers run."), added alongside this
         # merge's automation-lifecycle work. Every test in this file submits
@@ -449,7 +449,7 @@ class TestAutomationP0(IntegrationTestCase):
 
     # -- AUTO-007 -----------------------------------------------------
     #
-    # SKIPPED: doc-event trigger routing (huf/ai/automation_hooks.py's
+    # SKIPPED: doc-event trigger routing (huf/ai/automation/hooks.py's
     # run_hooked_automations) queues work via frappe.db.after_commit.add(...)
     # + huf.utils.background_jobs.enqueue(...) onto a real RQ "long" queue —
     # there is no synchronous, in-process call this test could invoke that

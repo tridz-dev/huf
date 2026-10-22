@@ -105,7 +105,7 @@ export function ChatWindowHeader({
             // AutomationFormPage already reads `?agent=` to pre-select the
             // Agent on the create form; the rest (instruction, description)
             // is left for the user to fill in from what they just discussed
-            // -- see huf.ai.automation_api.draft_automation_from_conversation.
+            // -- see huf.ai.automation.api.draft_automation_from_conversation.
             navigate(`/automations/new?agent=${encodeURIComponent(draft.agent)}`);
         } catch (error) {
             // draftAutomationFromConversation re-throws via handleFrappeError

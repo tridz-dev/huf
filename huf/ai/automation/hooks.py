@@ -6,7 +6,7 @@ from frappe.utils import now_datetime
 from frappe.utils.background_jobs import enqueue
 from frappe.utils.safe_exec import get_safe_globals, safe_eval
 
-from .automation_runtime_flag import automation_runtime_is_new
+from huf.ai.automation.runtime_flag import automation_runtime_is_new
 
 CACHE_KEY = "huf:doc_event_automation_triggers"
 
@@ -191,7 +191,7 @@ def run_automation_for_doc(trigger, doc, event_name, initiating_user=None, origi
 	originating_run_id: the Agent Run ID that triggered this automation (if any),
 	threaded from frappe.flags.huf_current_agent_run_id at hook time (ST-09.5).
 	"""
-	from .automation_runner import run_automation
+	from huf.ai.automation.runner import run_automation
 
 	original_user = frappe.session.user
 	try:
@@ -336,7 +336,7 @@ def run_automation_for_doc(trigger, doc, event_name, initiating_user=None, origi
 		# Compose the event-specific supplement. Precedence is explicit and
 		# not hidden: Automation.instruction (the task's own base
 		# instruction) always runs first; this supplement is appended after
-		# it by automation_runner._resolve_instruction whenever
+		# it by automation.runner._resolve_instruction whenever
 		# trigger_context carries "_doc_event_supplement" AND
 		# automation.input_template is not set (input_template, when set,
 		# is a full override of the default composition — see that

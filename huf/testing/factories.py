@@ -677,7 +677,7 @@ def make_automation(automation_name=None, agent=None, instruction=None, **overri
     (see `make_agent_trigger()` below) — `Automation` is the parent entity;
     its actual firing conditions live on child ``Automation Trigger`` rows
     (see `make_automation_trigger()`), run via
-    `huf/ai/automation_runner.py::run_automation` per
+    `huf/ai/automation/runner.py::run_automation` per
     the CURRENT_STATE audit (archived in the workspace) section 7.
     """
     if agent is None:

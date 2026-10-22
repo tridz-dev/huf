@@ -3,7 +3,7 @@ from frappe import _
 from frappe.utils import add_to_date, now_datetime
 
 from .agent_integration import _run_async_safely, run_agent_sync
-from .automation_runtime_flag import automation_runtime_is_new
+from huf.ai.automation.runtime_flag import automation_runtime_is_new
 
 _PROVIDER_BRAND_TO_BATCH_JOB_PROVIDER = {
 	"openai": "OpenAI",
@@ -86,7 +86,7 @@ def run_scheduled_agents():
 	"""Execute due scheduled agent triggers.
 
 	DEPRECATED: This is the legacy scheduler path. Use the new
-	automation_scheduler.run_automation_triggers instead once
+	automation.scheduler.run_automation_triggers instead once
 	automation_runtime_is_new() is the sole mode on your site.
 	Will be removed in a future version after Remediation WP-08
 	ships and automation_runtime_is_new() is the default on all

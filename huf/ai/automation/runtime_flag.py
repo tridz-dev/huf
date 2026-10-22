@@ -4,7 +4,7 @@
 """Shared site-config flag gating live Automation runtime code paths.
 
 Stage 2 hard-cuts ``hooks.py``'s scheduler/doc-event registrations onto the
-new ``automation_scheduler.py`` / ``automation_hooks.py`` entrypoints, but
+new ``automation/scheduler.py`` / ``automation/hooks.py`` entrypoints, but
 keeps a one-line rollback available without a code revert: setting
 ``automation_trigger_runtime`` to ``"legacy"`` in ``site_config.json`` makes
 every new entrypoint that checks this flag act as disabled and hands the work

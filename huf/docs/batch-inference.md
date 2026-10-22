@@ -17,14 +17,14 @@ interactively — batch has no realtime path.
 ## How to enable it
 
 On a **Schedule**-type **Automation Trigger**, set **Execution Mode** to
-**Batch**. This is the live automation path (`huf/ai/automation_scheduler.py`)
+**Batch**. This is the live automation path (`huf/ai/automation/scheduler.py`)
 and is the supported way to use batch mode going forward.
 
 Batch mode is **not** available on the legacy **Agent Trigger** doctype's
 schedule triggers by default — that legacy scheduler
 (`huf/ai/agent_scheduler.py`) only submits batch jobs on a site that has
-opted into legacy automation runtime mode via `automation_runtime_flag`
-(see `huf/ai/automation_runtime_flag.py`). On a site running the new
+opted into legacy automation runtime mode via `automation.runtime_flag`
+(see `huf/ai/automation/runtime_flag.py`). On a site running the new
 automation runtime (the default), use Automation Trigger, not Agent Trigger,
 for batch scheduling.
 
@@ -75,5 +75,5 @@ for batch scheduling.
 | `huf/ai/providers/batch/openai_batch.py` | OpenAI batch submit/poll/fetch via LiteLLM's async batch primitives; JSONL request building, status mapping, and custom_id-keyed result parsing. |
 | `huf/ai/providers/batch/anthropic_batch.py` | Anthropic batch submit/poll/fetch via the direct Anthropic SDK's Message Batches API; same request/response shape as the OpenAI module. |
 | `huf/ai/batch_poll.py` | The poll/writeback cron job (`poll_pending_batch_jobs`): polls every pending `Batch Job`, maps native provider status onto `Batch Job.status`, and on completion fetches results, builds the capped `result_summary`, and estimates cost. |
-| `huf/ai/automation_scheduler.py` | Live automation scheduler. `_submit_batch_job_for_automation_trigger` submits a single-request batch job for a due Schedule+Batch `Automation Trigger`. |
-| `huf/ai/agent_scheduler.py` | Legacy agent scheduler. `_submit_batch_job_for_trigger` is the equivalent for legacy `Agent Trigger` schedules, gated behind `automation_runtime_flag`. |
+| `huf/ai/automation/scheduler.py` | Live automation scheduler. `_submit_batch_job_for_automation_trigger` submits a single-request batch job for a due Schedule+Batch `Automation Trigger`. |
+| `huf/ai/agent_scheduler.py` | Legacy agent scheduler. `_submit_batch_job_for_trigger` is the equivalent for legacy `Agent Trigger` schedules, gated behind `automation.runtime_flag`. |

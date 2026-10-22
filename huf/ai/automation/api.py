@@ -5,8 +5,8 @@
 Whitelisted API endpoints for the Automation doctype and its Automation
 Trigger children.
 
-Thin wrappers around ``huf.ai.automation_service`` (domain logic) and
-``huf.ai.automation_runner.run_automation`` (execution). Every endpoint
+Thin wrappers around ``huf.ai.automation.service`` (domain logic) and
+``huf.ai.automation.runner.run_automation`` (execution). Every endpoint
 resolves "the current user" from ``frappe.session.user`` and enforces
 permissions via ``frappe.has_permission`` / a document's own
 ``has_permission`` check -- a ``user`` value supplied by the client is
@@ -19,7 +19,8 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
-from huf.ai import automation_service, automation_runtime_flag
+from huf.ai.automation import runtime_flag as automation_runtime_flag
+from huf.ai.automation import service as automation_service
 
 
 def _ensure_agent_automations_editable(agent_name):
@@ -251,7 +252,7 @@ def run_automation_now(automation: str) -> dict:
         automation: Automation name.
 
     Returns:
-        The dict returned by ``huf.ai.automation_runner.run_automation``
+        The dict returned by ``huf.ai.automation.runner.run_automation``
         (``success``, ``status``, ``agent_run_id``, ``conversation_id``, ...).
     """
     doc = automation_service.resolve_automation(automation)
@@ -260,7 +261,7 @@ def run_automation_now(automation: str) -> dict:
 
     automation_service.validate_automation(doc)
 
-    from huf.ai.automation_runner import run_automation
+    from huf.ai.automation.runner import run_automation
 
     return run_automation(automation, now=True, initiating_user=frappe.session.user)
 

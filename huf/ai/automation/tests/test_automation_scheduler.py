@@ -14,19 +14,19 @@ Covers:
 - A trigger that raises is swallowed, logged via frappe.log_error, and
   does not stop the remaining triggers in the batch from firing.
 
-Run with: bench --site <site> run-tests --app huf --module huf.ai.tests.test_automation_scheduler
+Run with: bench --site <site> run-tests --app huf --module huf.ai.automation.tests.test_automation_scheduler
 """
 import unittest
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-from huf.ai import automation_scheduler
+from huf.ai.automation import scheduler as automation_scheduler
 
 
 class TestRunDueAutomations(unittest.TestCase):
-    @patch("huf.ai.automation_scheduler.automation_runtime_is_new", return_value=False)
-    @patch("huf.ai.automation_scheduler.frappe")
-    @patch("huf.ai.automation_scheduler.run_automation")
+    @patch("huf.ai.automation.scheduler.automation_runtime_is_new", return_value=False)
+    @patch("huf.ai.automation.scheduler.frappe")
+    @patch("huf.ai.automation.scheduler.run_automation")
     def test_no_op_under_legacy_runtime(self, mock_run_automation, mock_frappe, mock_runtime_is_new):
         automation_scheduler.run_due_automations()
 
@@ -34,9 +34,9 @@ class TestRunDueAutomations(unittest.TestCase):
         mock_frappe.get_all.assert_not_called()
         mock_run_automation.assert_not_called()
 
-    @patch("huf.ai.automation_scheduler.automation_runtime_is_new", return_value=True)
-    @patch("huf.ai.automation_scheduler.frappe")
-    @patch("huf.ai.automation_scheduler.run_automation")
+    @patch("huf.ai.automation.scheduler.automation_runtime_is_new", return_value=True)
+    @patch("huf.ai.automation.scheduler.frappe")
+    @patch("huf.ai.automation.scheduler.run_automation")
     def test_no_op_when_doctype_missing(self, mock_run_automation, mock_frappe, mock_runtime_is_new):
         mock_frappe.db.exists.return_value = False
 
@@ -45,10 +45,10 @@ class TestRunDueAutomations(unittest.TestCase):
         mock_frappe.get_all.assert_not_called()
         mock_run_automation.assert_not_called()
 
-    @patch("huf.ai.automation_scheduler.now_datetime")
-    @patch("huf.ai.automation_scheduler.automation_runtime_is_new", return_value=True)
-    @patch("huf.ai.automation_scheduler.frappe")
-    @patch("huf.ai.automation_scheduler.run_automation")
+    @patch("huf.ai.automation.scheduler.now_datetime")
+    @patch("huf.ai.automation.scheduler.automation_runtime_is_new", return_value=True)
+    @patch("huf.ai.automation.scheduler.frappe")
+    @patch("huf.ai.automation.scheduler.run_automation")
     def test_due_trigger_fires(self, mock_run_automation, mock_frappe, mock_runtime_is_new, mock_now_datetime):
         now = datetime(2026, 1, 1, 12, 0, 0)
         mock_now_datetime.return_value = now
@@ -77,10 +77,10 @@ class TestRunDueAutomations(unittest.TestCase):
         self.assertTrue(kwargs.get("now"))
         self.assertEqual(kwargs.get("trigger_context", {}).get("type"), "schedule")
 
-    @patch("huf.ai.automation_scheduler.now_datetime")
-    @patch("huf.ai.automation_scheduler.automation_runtime_is_new", return_value=True)
-    @patch("huf.ai.automation_scheduler.frappe")
-    @patch("huf.ai.automation_scheduler.run_automation")
+    @patch("huf.ai.automation.scheduler.now_datetime")
+    @patch("huf.ai.automation.scheduler.automation_runtime_is_new", return_value=True)
+    @patch("huf.ai.automation.scheduler.frappe")
+    @patch("huf.ai.automation.scheduler.run_automation")
     def test_cache_lock_short_circuits_second_fire(
         self, mock_run_automation, mock_frappe, mock_runtime_is_new, mock_now_datetime
     ):
@@ -107,10 +107,10 @@ class TestRunDueAutomations(unittest.TestCase):
         mock_frappe.db.get_value.assert_not_called()
         mock_run_automation.assert_not_called()
 
-    @patch("huf.ai.automation_scheduler.now_datetime")
-    @patch("huf.ai.automation_scheduler.automation_runtime_is_new", return_value=True)
-    @patch("huf.ai.automation_scheduler.frappe")
-    @patch("huf.ai.automation_scheduler.run_automation")
+    @patch("huf.ai.automation.scheduler.now_datetime")
+    @patch("huf.ai.automation.scheduler.automation_runtime_is_new", return_value=True)
+    @patch("huf.ai.automation.scheduler.frappe")
+    @patch("huf.ai.automation.scheduler.run_automation")
     def test_stale_batch_recheck_prevents_execution(
         self, mock_run_automation, mock_frappe, mock_runtime_is_new, mock_now_datetime
     ):
@@ -139,11 +139,11 @@ class TestRunDueAutomations(unittest.TestCase):
 
         mock_run_automation.assert_not_called()
 
-    @patch("huf.ai.automation_scheduler.add_to_date")
-    @patch("huf.ai.automation_scheduler.now_datetime")
-    @patch("huf.ai.automation_scheduler.automation_runtime_is_new", return_value=True)
-    @patch("huf.ai.automation_scheduler.frappe")
-    @patch("huf.ai.automation_scheduler.run_automation")
+    @patch("huf.ai.automation.scheduler.add_to_date")
+    @patch("huf.ai.automation.scheduler.now_datetime")
+    @patch("huf.ai.automation.scheduler.automation_runtime_is_new", return_value=True)
+    @patch("huf.ai.automation.scheduler.frappe")
+    @patch("huf.ai.automation.scheduler.run_automation")
     def test_next_execution_claimed_before_execution(
         self, mock_run_automation, mock_frappe, mock_runtime_is_new, mock_now_datetime, mock_add_to_date
     ):
@@ -187,10 +187,10 @@ class TestRunDueAutomations(unittest.TestCase):
         self.assertIn("run_automation", call_order)
         self.assertLess(call_order.index("set_value"), call_order.index("run_automation"))
 
-    @patch("huf.ai.automation_scheduler.now_datetime")
-    @patch("huf.ai.automation_scheduler.automation_runtime_is_new", return_value=True)
-    @patch("huf.ai.automation_scheduler.frappe")
-    @patch("huf.ai.automation_scheduler.run_automation")
+    @patch("huf.ai.automation.scheduler.now_datetime")
+    @patch("huf.ai.automation.scheduler.automation_runtime_is_new", return_value=True)
+    @patch("huf.ai.automation.scheduler.frappe")
+    @patch("huf.ai.automation.scheduler.run_automation")
     def test_raising_trigger_is_swallowed_and_does_not_block_batch(
         self, mock_run_automation, mock_frappe, mock_runtime_is_new, mock_now_datetime
     ):

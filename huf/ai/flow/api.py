@@ -604,7 +604,7 @@ def flow_webhook_clean(flow_id: str | None = None, webhook_key: str | None = Non
 # Flow triggers are not a separate scheduler: a Flow with a schedule or doc-event trigger
 # is converted to an Agent Procedure (the run path in use) and an Automation that targets
 # that Procedure carries the trigger, so it fires through the same dispatchers
-# (automation_scheduler.run_due_automations / automation_hooks.run_hooked_automations).
+# (automation.scheduler.run_due_automations / automation.hooks.run_hooked_automations).
 # The Automation is only Active once the Procedure is Testing/Active -- conversion never
 # activates a Procedure (I8), so a fresh trigger sits in Draft until a human enables it.
 
@@ -770,7 +770,7 @@ def set_flow_trigger(
 			frappe.throw(_("A doc_event trigger needs reference_doctype and doc_event."))
 		if not frappe.db.exists("DocType", reference_doctype):
 			frappe.throw(_("DocType '{0}' not found").format(reference_doctype))
-		from huf.ai.automation_hooks import SUPPORTED_DOC_EVENTS
+		from huf.ai.automation.hooks import SUPPORTED_DOC_EVENTS
 
 		if doc_event not in SUPPORTED_DOC_EVENTS:
 			frappe.throw(_("Unsupported doc_event '{0}'").format(doc_event))

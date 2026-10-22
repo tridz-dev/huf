@@ -11,7 +11,7 @@ decision. Make time-based behaviour reproducible."
 
 Why a patch helper instead of a product-code clock dependency
 ---------------------------------------------------------------
-Both `huf/ai/automation_scheduler.py` and `huf/ai/agent_scheduler.py` read
+Both `huf/ai/automation/scheduler.py` and `huf/ai/agent_scheduler.py` read
 "now" via a single call at the top of their whitelisted entrypoint:
 
     from frappe.utils import now_datetime, add_to_date
@@ -44,7 +44,7 @@ time forward deterministically instead of sleeping for real time.
 
 Usage
 -----
-    from huf.ai import automation_scheduler
+    from huf.ai.automation import scheduler as automation_scheduler
     from huf.testing.clock_helpers import FakeClock, patch_clock
 
     with patch_clock(automation_scheduler, initial="2026-01-01 00:00:00") as clock:
@@ -128,7 +128,7 @@ class FakeClock:
 @contextmanager
 def patch_clock(module, initial="2026-01-01 00:00:00", clock: "FakeClock | None" = None):
 	"""Patch the `now_datetime`/`add_to_date` names bound inside `module`
-	(e.g. `huf.ai.automation_scheduler` or `huf.ai.agent_scheduler`) so they
+	(e.g. `huf.ai.automation.scheduler` or `huf.ai.agent_scheduler`) so they
 	route through a `FakeClock` instead of the real wall clock.
 
 	Yields the `FakeClock` in use so the caller can `.advance()`/`.set()` it

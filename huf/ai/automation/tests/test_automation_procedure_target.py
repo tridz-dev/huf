@@ -4,7 +4,7 @@
 """Automation -> Agent Procedure target, and the Flow trigger API built on it.
 
 Run with:
-	bench --site <site> run-tests --app huf --module huf.ai.tests.test_automation_procedure_target
+	bench --site <site> run-tests --app huf --module huf.ai.automation.tests.test_automation_procedure_target
 """
 
 import datetime
@@ -14,9 +14,10 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai import automation_hooks, automation_scheduler
+from huf.ai.automation import hooks as automation_hooks
+from huf.ai.automation import scheduler as automation_scheduler
 from huf.ai.flow import api as flow_api
-from huf.ai.automation_runner import run_automation
+from huf.ai.automation.runner import run_automation
 from huf.testing.factories import make_agent, make_ai_model, make_ai_provider, make_automation
 
 PREFIX = "_Test PrE"
@@ -272,7 +273,7 @@ class TestProcedureDispatch(_Base):
 
 		todo = None
 		try:
-			with patch("huf.ai.automation_hooks.enqueue") as mock_enqueue:
+			with patch("huf.ai.automation.hooks.enqueue") as mock_enqueue:
 				# The real hooks.py doc_events registration fires on insert.
 				todo = frappe.get_doc({"doctype": "ToDo", "description": "prE doc event"}).insert(
 					ignore_permissions=True
@@ -463,7 +464,7 @@ class TestRunAsEscalation(_Base):
 		frappe.set_user("Administrator")
 
 	def test_manager_cannot_escalate_via_update_automation(self):
-		from huf.ai import automation_service
+		from huf.ai.automation import service as automation_service
 
 		doc, _p = self._procedure_automation()
 		manager = self._user(("Huf Manager",))
@@ -487,7 +488,7 @@ class TestRunAsEscalation(_Base):
 		self.assertEqual(auto.run_as_set_by, "Administrator")
 
 	def test_fire_time_checks_who_set_run_as_user(self):
-		from huf.ai.automation_runner import _check_run_as_user_permission
+		from huf.ai.automation.runner import _check_run_as_user_permission
 
 		doc, _p = self._procedure_automation()
 		weak = self._user(("Huf Manager",))
@@ -597,7 +598,7 @@ class TestFixE(_Base):
 
 	def _doc_event_context(self, automation):
 		trigger = {"automation": automation.name, "name": "t-m5", "file_attachments": []}
-		with patch("huf.ai.automation_runner.run_automation") as mock_run:
+		with patch("huf.ai.automation.runner.run_automation") as mock_run:
 			automation_hooks.run_automation_for_doc(
 				trigger, {"doctype": "ToDo", "name": "x1", "description": "d"}, "after_insert"
 			)

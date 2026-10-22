@@ -7,7 +7,7 @@ Net-new runtime: a grep across the whole ``huf/`` tree found no live HTTP
 route resolving the legacy "Agent Trigger" doctype's Webhook type either --
 ``webhook_slug`` was schema-only before this file. There is therefore no
 legacy behavior to preserve or fall back to; the
-``automation_trigger_runtime`` flag (see ``automation_runtime_flag.py``)
+``automation_trigger_runtime`` flag (see ``automation/runtime_flag.py``)
 being ``"legacy"`` just means this endpoint is disabled.
 
 Follows the same allow_guest whitelisted-webhook convention already used by
@@ -60,8 +60,8 @@ _INVALID_KEY = {"success": False, "error": "Invalid webhook key."}
 @frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
 def handle_automation_webhook():
 	"""Resolve `?slug=...` to an Automation Trigger and run its Automation."""
-	from huf.ai.automation_runner import run_automation
-	from huf.ai.automation_runtime_flag import automation_runtime_is_new
+	from huf.ai.automation.runner import run_automation
+	from huf.ai.automation.runtime_flag import automation_runtime_is_new
 
 	if not automation_runtime_is_new():
 		frappe.local.response["http_status_code"] = 503
