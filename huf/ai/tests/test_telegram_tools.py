@@ -33,6 +33,8 @@ class TestTelegramTools(unittest.TestCase):
 		self.addCleanup(patch.stopall)
 		patch.object(tool, "_make_client", side_effect=fake_make_client).start()
 		patch.object(tool, "_get_token", return_value=TOKEN).start()
+		patch.object(tool.scope, "run_gateway", return_value="").start()  # legacy (non-gateway) path
+		patch("huf.ai.http_handler.validate_url", return_value=(True, None)).start()  # no DNS in unit tests
 
 	def run_action(self, **kwargs):
 		return json.loads(tool.handle_action(**kwargs))
