@@ -1341,9 +1341,58 @@ def _admission(gateway, context: dict[str, Any]) -> tuple[bool, str]:
     room_ok = _policy_admits(gateway.room_policy, gateway, "Room", conversation_id)
     sender_ok = _policy_admits(gateway.room_sender_policy, gateway, "Sender", sender_id)
     mentioned = bool(context.get("mentioned"))
+    if not room_ok and mentioned and gateway.room_policy == "Allow list":
+        try:
+            _record_pending_room(gateway, conversation_id)
+        except Exception:
+            frappe.logger("huf").warning("Pending room entry failed", exc_info=True)
     if gateway.mention_required and not mentioned:
         return False, "Room messages must mention the gateway"
     return room_ok and sender_ok, "Room or sender is not approved for this gateway"
+
+
+def _record_pending_room(gateway, chat_id: str, label: str = "") -> str:
+    """Pending Room access entry for an unknown room that addressed the bot (idempotent, capped).
+
+    Returns the entry name, or ``""`` when nothing was created (policy not Allow list, an entry already
+    exists in any live state, or the pending limit is reached). Never replies to the room.
+    """
+    if getattr(gateway, "room_policy", None) != "Allow list" or not chat_id:
+        return ""
+    external_id = _normalize_sender_for_provider(gateway.provider, "Room", str(chat_id))
+    existing = frappe.get_all(
+        "Gateway Access Entry",
+        filters={
+            "gateway": gateway.name, "entry_type": "Room", "provider": gateway.provider,
+            "external_id": external_id, "state": ["!=", ENTRY_STATE_EXPIRED],
+        },
+        pluck="name",
+        limit_page_length=1,
+    )
+    if existing:
+        return ""
+    limit = _int_setting(gateway, "pairing_pending_limit", PAIRING_DEFAULT_PENDING_LIMIT)
+    if limit > 0:
+        pending = frappe.get_all(
+            "Gateway Access Entry", filters={"gateway": gateway.name, "state": "Pending"},
+            pluck="name", limit_page_length=limit,
+        )
+        if len(pending or []) >= limit:
+            return ""
+    doc = frappe.get_doc(
+        {
+            "doctype": "Gateway Access Entry",
+            "gateway": gateway.name,
+            "entry_type": "Room",
+            "provider": gateway.provider,
+            "external_id": external_id,
+            "pairing_code": _new_unique_pairing_code(gateway.name),
+            "state": "Pending",
+            "expires_at": add_to_date(now_datetime(), minutes=int(gateway.get("pairing_ttl_minutes") or 60)),
+            "display_label": (label or f"Room {external_id}")[:140],
+        }
+    ).insert(ignore_permissions=True)
+    return doc.name
 
 
 def _find_pending_entry_by_code(pairing_code: str, gateway: str) -> str | None:

@@ -202,6 +202,10 @@ def apply_membership_change(gateway, parsed) -> dict:
 			svc._record_room_opt_out(gateway, parsed.chat_id)
 		elif transition == "added":
 			svc._record_room_opt_in(gateway, parsed.chat_id)
+			try:
+				svc._record_pending_room(gateway, parsed.chat_id)
+			except Exception:
+				frappe.logger("huf").warning("Pending room entry failed", exc_info=True)
 	return _ack(parsed.kind, transition, transition=transition)
 
 

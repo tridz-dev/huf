@@ -201,21 +201,11 @@ def _send_media_first(sender, chat_id, parts, thread_id, reply_to, sent, on_sent
 
 
 DUPLICATE_NOTE = "Final reply suppressed: the telegram tool already replied in this chat"
-DUPLICATE_RATIO = 0.6
 
 
 def duplicates_tool_reply(tool_texts: list, final_text: str) -> bool:
-	"""True when the telegram tool already sent a text to this chat that is substantially the final text."""
-	import difflib
-
-	final = " ".join(str(final_text or "").split()).lower()
-	if not final or not tool_texts:
-		return False
-	for sent in tool_texts:
-		sent = " ".join(str(sent or "").split()).lower()
-		if sent and difflib.SequenceMatcher(None, sent, final).ratio() > DUPLICATE_RATIO:
-			return True
-	return False
+	"""True when the telegram tool already delivered to this chat in the run: the final plain reply is skipped."""
+	return bool(tool_texts) and bool(str(final_text or "").strip())
 
 
 # -- frappe-bound ---------------------------------------------------------------------------------

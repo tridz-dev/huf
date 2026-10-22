@@ -30,7 +30,7 @@ MEDIA_TEXT = (
 )
 TOOL_TEXT = (
 	"telegram tool: send_message/reply_to_message, set_reaction, edit_message_text, delete_message (use the "
-	"ids from 'Current message'; edit your earlier messages via ids from list_messages), list_templates/send_template, polls, topics, get_file."
+	"ids from 'Current message'; edit your earlier messages via ids from list_messages); after a tool send to this chat, end with no final text; list_templates/send_template, polls, topics, get_file."
 )
 FLAG_TEXT = {
 	FLAG_GROUP_ADMIN: "telegram_admin tool: group moderation (requires confirm).",

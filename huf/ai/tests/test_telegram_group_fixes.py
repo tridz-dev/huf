@@ -166,7 +166,8 @@ class TestDuplicateReply(unittest.TestCase):
 	def test_similarity(self):
 		sent = ["Sure, the report is ready and attached below."]
 		self.assertTrue(tp.duplicates_tool_reply(sent, "Sure! The report is ready and attached below."))
-		self.assertFalse(tp.duplicates_tool_reply(sent, "Also, remember the meeting at 5pm tomorrow."))
+		# any successful current-chat tool send suppresses the final plain reply
+		self.assertTrue(tp.duplicates_tool_reply(sent, "Also, remember the meeting at 5pm tomorrow."))
 		self.assertFalse(tp.duplicates_tool_reply([], "anything"))
 
 	def test_scope_records_and_reads(self):

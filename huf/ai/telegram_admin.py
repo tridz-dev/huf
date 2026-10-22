@@ -613,7 +613,7 @@ def _resolve_doctype(text: str) -> tuple[str, str]:
 
 def _desk_url(dt: str, dn: str) -> str:
 	import frappe
-	from frappe.utils import get_url
+	from huf.ai.telegram_public_url import public_url as get_url
 
 	return get_url(f"/app/{frappe.scrub(dt).replace('_', '-')}/{dn}")
 
@@ -1167,7 +1167,7 @@ def miniapp_launch_url(binding: dict) -> str:
 	"""HTTPS launch URL for the admin Mini App (no secrets in the URL; auth is initData only)."""
 	try:
 		import frappe
-		from frappe.utils import get_url
+		from huf.ai.telegram_public_url import public_url as get_url
 
 		base = (frappe.conf.get("huf_telegram_admin_miniapp_url") or get_url("/huf/telegram-admin")).strip()
 	except Exception:
