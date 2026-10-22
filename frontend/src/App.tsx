@@ -106,6 +106,7 @@ const IntegrationServiceFormPageWrapper = lazy(
 const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
 const WhatsAppManagePage = lazy(() => import('./pages/WhatsAppManagePage'));
+const TelegramManagePage = lazy(() => import('./pages/TelegramManagePage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 const GeneralSettingsPage = lazy(() => import('./pages/GeneralSettingsPage'));
 const DeveloperSettingsPage = lazy(() => import('./pages/DeveloperSettingsPage'));
@@ -802,6 +803,18 @@ function AppShell() {
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <WhatsAppManagePage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/telegram"
+            element={
+              <ProtectedRoute requiredCapability="system.integrations.manage">
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <TelegramManagePage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>

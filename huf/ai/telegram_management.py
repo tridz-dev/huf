@@ -245,3 +245,23 @@ def get_telegram_health(gateway: str | None = None) -> dict[str, Any]:
 	for c in checks:
 		c["hint"] = _safe_text(c.get("hint"), credentials)
 	return {"success": True, "gateway": build_health(row, presence, checks, pending)}
+
+
+@frappe.whitelist()
+def list_telegram_gateways() -> dict[str, Any]:
+	"""Telegram gateways the caller may manage, for the page's gateway switcher (names and state only)."""
+	if not _can_manage_integrations():
+		raise frappe.PermissionError(_("Not permitted to manage gateways"))
+	rows = frappe.get_all(
+		"Gateway",
+		filters={"provider": TELEGRAM_PROVIDER},
+		fields=["name", "is_enabled", "last_event_at"],
+		limit_page_length=100,
+	)
+	return {
+		"success": True,
+		"gateways": [
+			{"name": r["name"], "enabled": bool(r.get("is_enabled")), "has_events": bool(r.get("last_event_at"))}
+			for r in rows or []
+		],
+	}
