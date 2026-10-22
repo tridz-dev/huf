@@ -4,7 +4,7 @@ import { doctype } from '@/data/doctypes';
 // TODO(#473-followup): The consolidated gateway DocType uses per-channel admission
 // fields (direct_policy, room_policy, room_sender_policy, mention_required,
 // pairing_ttl_minutes) instead of the older access_policy. Keep this file in sync
-// with huf/huf/doctype/gateway/gateway.json. See docs/gateway-todo.md.
+// with huf/huf/doctype/gateway/gateway.json.
 export type GatewayProvider =
   | 'WhatsApp'
   | 'Messenger'

@@ -2235,7 +2235,6 @@ The Gateways feature (channel inbound adapters) is merged into `develop` but is 
 user-ready. The UI navigation and Flow Run trigger are temporarily disabled while the
 provider adapters and connection forms are finished. See:
 
-- `docs/gateway-todo.md` — detailed shame list and restoration checklist.
 - `#473-followup` comments in `frontend/src/services/gatewayApi.ts`,
   `frontend/src/pages/GatewaysPage.tsx`, `frontend/src/components/app-sidebar.tsx`,
   `frontend/src/App.tsx`, `huf/huf/doctype/flow_run/flow_run.json`, and
