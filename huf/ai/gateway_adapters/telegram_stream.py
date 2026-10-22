@@ -258,7 +258,10 @@ def make_runner(
 			sender, chat_id, draft_id_for(event_name), thread_id=thread_id, keep_on_stop=keep_on_stop,
 			min_interval=min_interval, clock=clock,
 		)
-		state.update(draft_id=updater.draft_id, event=event_name, keep_on_stop=keep_on_stop, stopped=False, run_id="")
+		state.update(
+			draft_id=updater.draft_id, event=event_name, keep_on_stop=keep_on_stop, stopped=False, run_id="",
+			draft_text=False,
+		)
 		partial = {"text": ""}
 		snapshot: dict = {}
 
@@ -270,8 +273,8 @@ def make_runner(
 					updater.start()
 				elif ctype == "delta":
 					partial["text"] = str(chunk.get("full_response") or partial["text"])
-					if not state.stopped():
-						updater.push(partial["text"])
+					if not state.stopped() and updater.push(partial["text"]) and partial["text"].strip():
+						state.update(draft_text=True)  # real text is visible: typing keepalive can stop
 			except Exception:
 				pass  # streaming must never break the run
 			return False

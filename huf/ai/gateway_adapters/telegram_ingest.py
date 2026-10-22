@@ -301,7 +301,9 @@ def _typing_failure_kind(exc: Exception) -> str:
 
 
 def _start_keepalive(gateway, sender, chat_id, thread) -> None:
-	"""Keep ``typing`` alive until the reply starts (best effort). Skips while a draft stream is active."""
+	"""Keep ``typing`` alive until the reply starts (best effort). Stops once a draft shows real text.
+
+	The empty "Thinking" draft placeholder does not count: it is not a reliable visible indicator."""
 	try:
 		from huf.ai.gateway_adapters import telegram_stream as ts, telegram_typing_keepalive as ka
 		from huf.ai.gateway_adapters import telegram_typing_metrics as tm
@@ -322,7 +324,7 @@ def _start_keepalive(gateway, sender, chat_id, thread) -> None:
 		ka.start(
 			ka.key_for(name, chat_id, thread),
 			tick,
-			lambda: bool(ts.StreamState(name, chat_id).get().get("draft_id")),
+			lambda: bool(ts.StreamState(name, chat_id).get().get("draft_text")),
 			site=site,
 		)
 	except Exception:

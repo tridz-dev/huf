@@ -84,6 +84,8 @@ def _agent_run_failure(result) -> tuple[str, str] | None:
         reason = _redact_error_text(str(result.get("error") or "The agent run failed."))
         return code, reason
     response = result.get("response")
+    if (not response or not str(response).strip()) and result.get("tool_calls_made"):
+        return None  # a tool already delivered the reply; an empty final text is fine
     if not response or not str(response).strip():
         return "agent_run_failed", "Gateway agent run completed without a text response."
     return None
@@ -2564,7 +2566,7 @@ def _process_gateway_event(event_name: str) -> dict:
             if attachment_unavailable and (_is_no_reply(response) or not str(response or "").strip()):
                 _send_fallback_once(event, gateway, "attachment")
                 return _suppress_reply(event, result.get("agent_run_id"), NO_REPLY_NOTE)
-            if _is_no_reply(response):
+            if _is_no_reply(response) or (not str(response or "").strip() and result.get("tool_calls_made")):
                 _reply_finished(event, gateway)
                 return _suppress_reply(event, result.get("agent_run_id"), NO_REPLY_NOTE)
             send_hook = provider_hooks.get(gateway.provider, "send_reply")

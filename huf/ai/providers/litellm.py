@@ -83,6 +83,23 @@ class SimpleResult:
         self.cost = cost
 
 
+def _empty_response_message(normalized_model: str) -> str:
+    """Error text for an empty completion; only blames the Ollama endpoint for Ollama models."""
+    if str(normalized_model).startswith("ollama/"):
+        return (
+            f"Model '{normalized_model}' returned an empty response. "
+            "Reasoning models such as gpt-oss require the Ollama chat "
+            "endpoint. Use the 'ollama_chat/' model prefix (e.g. "
+            "'ollama_chat/gpt-oss:20b') or select a provider whose brand "
+            "is 'Ollama' so Huf normalizes the prefix automatically."
+        )
+    return (
+        f"Model '{normalized_model}' returned an empty response. "
+        "Verify the model is available, the provider is reachable, and "
+        "the request is supported by this model."
+    )
+
+
 class ProviderUnavailableError(Exception):
     """Raised when the LLM provider cannot serve this request (conn refused, model missing,
     bad model prefix, auth). Distinct from content-level errors.
@@ -1898,9 +1915,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
                 _raise_provider_unavailable(raw_msg, normalized_model)
 
-            # Empty-response guard: reasoning models (e.g. gpt-oss) on the 'ollama/'
-            # endpoint can return empty content with no tool calls. Retry the completion
-            # once; if still empty, fail loudly instead of storing an empty reply.
+            # Empty-response guard. Retry the completion once. A model that already ran tools
+            # this run may legitimately end with no text (the tool delivered the reply, e.g. a
+            # Telegram send), so that is a success with an empty final answer. Only an empty
+            # first answer is an error.
             for _empty_check in range(2):
                 _choice = response.choices[0].message
                 if getattr(_choice, "tool_calls", None) or (_choice.content or "").strip():
@@ -1911,12 +1929,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         title="LiteLLM Empty Response"
                     )
                     response = await _litellm_completion_with_retry(**completion_kwargs)
+                elif any(i.type == "tool_call_item" for i in all_new_items):
+                    break
                 else:
-                    raw_msg = (
-                        f"Model '{normalized_model}' returned an empty response. "
-                        "Known issue with reasoning models (e.g. gpt-oss) on the 'ollama/' "
-                        "endpoint — use the 'ollama_chat/' prefix or check the model."
-                    )
+                    raw_msg = _empty_response_message(normalized_model)
                     raise ProviderUnavailableError(raw_msg, log_message=raw_msg)
 
             # Extract response
@@ -3082,20 +3098,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
 
         # Never report an empty response as a successful completion.
         if not full_response.strip() and not had_tool_calls:
-            if normalized_model.startswith("ollama/"):
-                msg = (
-                    f"Model '{normalized_model}' returned an empty response. "
-                    "Reasoning models such as gpt-oss require the Ollama chat "
-                    "endpoint. Use the 'ollama_chat/' model prefix (e.g. "
-                    "'ollama_chat/gpt-oss:20b') or select a provider whose brand "
-                    "is 'Ollama' so Huf normalizes the prefix automatically."
-                )
-            else:
-                msg = (
-                    f"Model '{normalized_model}' returned an empty response. "
-                    "Verify the model is loaded, the provider is reachable, and "
-                    "the request is supported by this model."
-                )
+            msg = _empty_response_message(normalized_model)
             frappe.log_error(message=msg, title="LiteLLM Empty Response")
             yield {"type": "error", "error": msg, "public": True}
             return
