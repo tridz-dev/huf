@@ -346,11 +346,14 @@ class E2EBase(unittest.TestCase):
 		self.fx = FakeFrappe()
 		self.clock = [time.time()]
 		self.cache = ta.MemCache(clock=lambda: self.clock[0])
+		from huf.ai.tests.telegram_fakes import isolate_admin_cache, set_local_flags
+
+		set_local_flags(self, in_test=False)
+		isolate_admin_cache(self, ta, self.cache)
 		self.adapter = FakeAdapter()
 		self.gateway = SimpleNamespace(name=GW)
 		fx = self.fx
 		patches = [
-			patch.object(frappe.local, "flags", SimpleNamespace(in_test=False), create=True),
 			patch.object(frappe, "db", fx, create=True),
 			patch.object(frappe, "session", fx.session, create=True),
 			patch.object(frappe, "set_user", fx.set_user, create=True),

@@ -9,7 +9,7 @@ from unittest import mock
 
 from huf.ai.gateway_adapters import GatewayInboundRequest, telegram_business as biz, telegram_ingest as ing
 from huf.ai.gateway_adapters.telegram import WEBHOOK_SECRET_HEADER, TelegramGatewayAdapter
-from huf.ai.tests.telegram_fakes import SECRET, TOKEN, FakeBotApi
+from huf.ai.tests.telegram_fakes import SECRET, TOKEN, FakeBotApi, clear_update_dedup, isolate_update_dedup
 
 GW = SimpleNamespace(name="gw1", provider="Telegram", mention_required=0)
 OWNER = 900
@@ -55,6 +55,7 @@ class Base(unittest.TestCase):
 			("deleted_business_messages", biz.handle_deleted_business_messages),
 		):
 			ing.register_update_handler(kind, fn)
+		isolate_update_dedup(self)
 		self.api = FakeBotApi()
 		self.adapter = TelegramGatewayAdapter(
 			{"token": TOKEN, "webhook_secret": SECRET}, http_post=self.api.http_post, download_attachments=False
@@ -71,6 +72,7 @@ class Base(unittest.TestCase):
 		biz._OBSERVERS[:] = self._saved[2]
 
 	def feed(self, payload):
+		clear_update_dedup()  # fixtures reuse fixed update ids; a site cache would otherwise ack them as duplicates
 		req = GatewayInboundRequest(json.dumps(payload).encode(), headers={WEBHOOK_SECRET_HEADER: SECRET})
 		with mock.patch("huf.ai.gateway_service.ingest_gateway_event") as ingest:
 			result = ing.handle_update(GW, self.adapter, req)
