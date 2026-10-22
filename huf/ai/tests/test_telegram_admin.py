@@ -3,6 +3,7 @@
 
 """Telegram admin cockpit (WP-9). Pure-logic tests: no site, no live Telegram, no LLM (fakes only)."""
 
+import dataclasses
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -84,7 +85,7 @@ class Base(unittest.TestCase):
 			patch.object(ta, "_current_user", lambda: self.user[0]),
 			patch.object(ta, "_set_user", self._set_user),
 			patch.object(ta, "_user_enabled", lambda u: True),
-			patch.object(ta, "get_binding", lambda tg, gw: self.bindings.get((str(tg), gw))),
+			patch.object(ta, "get_binding", lambda tg, gw, **kw: self.bindings.get((str(tg), gw))),
 			patch.object(ta, "_touch_binding", lambda name: None),
 			patch.object(ta, "_commit", lambda: None),
 			patch.object(ta, "_rollback", lambda: None),
@@ -506,3 +507,166 @@ class TestPureHelpers(unittest.TestCase):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class FakeRedis:
+	"""Minimal atomic-counter redis surface (make_key / incrby / expire)."""
+
+	def __init__(self):
+		self.counts, self.ttls = {}, {}
+
+	def make_key(self, key):
+		return f"site|{key}"
+
+	def incrby(self, key, n):
+		self.counts[key] = self.counts.get(key, 0) + n
+		return self.counts[key]
+
+	def expire(self, key, ttl):
+		self.ttls[key] = ttl
+
+
+class TestAtomicRate(unittest.TestCase):
+	def test_uses_incr_and_expire_once(self):
+		r = FakeRedis()
+		res = [ta.check_rate("u:1", 3, 60, cache=r, now=120.0) for _ in range(5)]
+		self.assertEqual(res, [True, True, True, False, False])
+		(key,) = r.counts
+		self.assertTrue(key.startswith("site|huf_tg_adm_rl:u:1:"))
+		self.assertEqual(r.ttls, {key: 60})
+
+	def test_falls_back_when_redis_errors(self):
+		r = FakeRedis()
+		r.incrby = MagicMock(side_effect=ConnectionError("down"))
+		res = [ta.check_rate("u:fb", 2, 60, cache=r, now=120.0) for _ in range(3)]
+		self.assertEqual(res, [True, True, False])
+
+
+class TestRunAsRestore(Base):
+	def test_restores_previous_user_not_guest(self):
+		self.user[0] = "someone@x.com"
+		with self.assertRaises(ValueError):
+			with ta.run_as(BOUND):
+				raise ValueError("x")
+		self.assertEqual(self.user[0], "someone@x.com")
+
+	def test_restore_failure_logged_and_raised_clearly(self):
+		calls = []
+
+		def set_user(u):
+			calls.append(u)
+			if len(calls) > 1:
+				raise RuntimeError("redis gone")
+			self.user[0] = u
+
+		with (
+			patch.object(ta, "_set_user", set_user),
+			patch.object(ta, "_log_restore_failure") as logged,
+			self.assertRaises(ta.AdminError) as cm,
+		):
+			with ta.run_as(BOUND):
+				pass
+		self.assertIn("restore", str(cm.exception).lower())
+		logged.assert_called_once()
+
+	def test_restore_failure_masks_nothing_when_body_raised(self):
+		def set_user(u):
+			if u == "Guest":
+				raise RuntimeError("redis gone")
+			self.user[0] = u
+
+		with (
+			patch.object(ta, "_set_user", set_user),
+			patch.object(ta, "_log_restore_failure"),
+			self.assertRaises(ta.AdminError) as cm,
+		):
+			with ta.run_as(BOUND):
+				raise ValueError("body")
+		self.assertIsInstance(cm.exception.__cause__, RuntimeError)
+
+
+class TestLiveAdminRecheck(unittest.TestCase):
+	def setUp(self):
+		import frappe
+
+		self.cache = ta.MemCache(clock=lambda: self.now)
+		self.now = NOW
+		self.row = {**BINDING, "role_scope": "Admin"}
+		self.admin = [True]
+		self.enabled = [True]
+		self.audits = []
+		db = MagicMock()
+		db.get_value = lambda *a, **k: _Row(self.row)
+		for p in (
+			patch.object(frappe, "db", db, create=True),
+			patch("huf.permissions.is_gateway_admin", lambda u=None: self.admin[0]),
+			patch.object(ta, "_user_enabled", lambda u: self.enabled[0]),
+			patch.object(ta, "write_audit", lambda b, a, r, **kw: self.audits.append((b, a, r))),
+		):
+			p.start()
+			self.addCleanup(p.stop)
+
+	def get(self):
+		return ta.get_binding(TG, GW, cache=self.cache)
+
+	def test_still_admin_stays_admin(self):
+		self.assertEqual(self.get()["role_scope"], "Admin")
+		self.assertEqual(self.audits, [])
+
+	def test_demoted_to_operator_audited_once_and_cached(self):
+		self.admin[0] = False
+		for _ in range(3):
+			self.assertEqual(self.get()["role_scope"], "Operator")
+		self.assertEqual(len(self.audits), 1)
+		self.assertEqual(self.audits[0][2], "scope_downgraded")
+
+	def test_recheck_after_ttl(self):
+		self.assertEqual(self.get()["role_scope"], "Admin")
+		self.admin[0] = False
+		self.assertEqual(self.get()["role_scope"], "Admin")  # cached <= 60s
+		self.now += 61
+		self.assertEqual(self.get()["role_scope"], "Operator")
+
+	def test_disabled_user_is_inactive(self):
+		self.enabled[0] = False
+		self.assertIsNone(self.get())
+		self.assertIsNone(self.get())
+		self.assertEqual(len(self.audits), 1)
+
+	def test_operator_binding_skips_checks(self):
+		self.row["role_scope"] = "Operator"
+		self.admin[0] = False
+		self.assertEqual(self.get()["role_scope"], "Operator")
+		self.assertEqual(self.audits, [])
+
+
+class _Row(dict):
+	def __getattr__(self, k):
+		return self[k]
+
+
+class TestPrivateOnly(Base):
+	def _no_lookup(self):
+		return patch.object(ta, "get_binding", side_effect=AssertionError("binding looked up"))
+
+	def test_group_channel_business_refused_before_binding_lookup(self):
+		variants = [
+			_msg("/help", command="help", chat_type="group", chat="-100"),
+			_msg("/help", command="help", chat_type="supergroup", chat="-100"),
+			_msg("/help", command="help", chat_type="channel", chat="-100"),
+			_msg("/start BIND-ABC", command="start", start_payload="BIND-ABC", chat_type="group", chat="-1"),
+		]
+		base = _msg("/help", command="help")
+		post = dataclasses.replace(base, kind="channel_post")
+		biz = dataclasses.replace(base, kind="business_message")
+		biz2 = dataclasses.replace(base, business_connection_id="bc1")
+		chan = dataclasses.replace(base, is_channel=True)
+		with self._no_lookup():
+			for v in variants + [post, biz, biz2, chan]:
+				self.assertIsNone(self.handle_msg(v))
+		self.adapter.sender.send_text.assert_not_called()
+
+	def test_unbound_private_user_gets_no_reply(self):
+		self.bindings.clear()
+		self.assertIsNone(self.handle_msg(_msg("/audit", command="audit")))
+		self.adapter.sender.send_text.assert_not_called()

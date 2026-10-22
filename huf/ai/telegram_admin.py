@@ -26,7 +26,9 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import logging
 import secrets
+import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -142,16 +144,36 @@ def action_hash(action: dict) -> str:
 # -- rate limits -------------------------------------------------------------------------------
 
 
+_RL_LOCK = threading.Lock()
+
+
 def check_rate(key: str, limit: int, window: int, *, cache: Any = None, now: float | None = None) -> bool:
-	"""Fixed-window counter. True while under ``limit`` (the call is counted)."""
+	"""Fixed-window counter. True while under ``limit`` (the call is counted).
+
+	Atomic via Redis INCRBY + EXPIRE when the cache exposes them; otherwise (or if Redis errors) a
+	lock-guarded read-modify-write on the cache's ``get_value`` / ``set_value`` (process-local safe).
+	"""
 	c = _cache(cache)
 	current = time.time() if now is None else now
 	bucket = f"huf_tg_adm_rl:{key}:{int(current // window)}"
-	count = int(c.get_value(bucket) or 0)
-	if count >= limit:
-		return False
-	c.set_value(bucket, count + 1, expires_in_sec=window)
-	return True
+	try:
+		make_key = getattr(c, "make_key", None)
+		if make_key is not None and hasattr(c, "incrby") and hasattr(c, "expire"):
+			rkey = make_key(bucket)
+			count = int(c.incrby(rkey, 1))
+			if count == 1:
+				c.expire(rkey, window)
+			return count <= limit
+	except Exception:
+		pass
+	if not hasattr(c, "get_value"):
+		c = _LOCAL
+	with _RL_LOCK:
+		count = int(c.get_value(bucket) or 0)
+		if count >= limit:
+			return False
+		c.set_value(bucket, count + 1, expires_in_sec=window)
+		return True
 
 
 # -- nonces (two-step confirm) -----------------------------------------------------------------
@@ -332,23 +354,87 @@ def _user_enabled(user: str) -> bool:
 	return bool(frappe.db.get_value("User", user, "enabled"))
 
 
+def _log_restore_failure(user: str, previous: str) -> None:
+	try:
+		import frappe
+
+		frappe.log_error(
+			title="Telegram admin: failed to restore user",
+			message=f"run_as({user!r}) could not restore {previous!r}",
+		)
+	except Exception:
+		logging.getLogger(__name__).exception("telegram admin: failed to restore user %s", previous)
+
+
 @contextmanager
 def run_as(user: str):
-	"""Execute the body as ``user`` under normal permission checks; always restores the previous user."""
+	"""Execute the body as ``user`` under normal permission checks; always restores the previous user.
+
+	If restoring fails it is logged and re-raised as AdminError (never silently leaving the bound user
+	active); a last-resort drop to Guest is attempted first.
+	"""
 	if not user or user in FORBIDDEN_USERS:
 		raise AdminError(MSG_DENIED)
 	if not _user_enabled(user):
 		raise AdminError("The bound Frappe user is disabled.")
-	previous = _current_user()
+	previous = _current_user() or "Guest"
 	_set_user(user)
 	try:
 		yield user
 	finally:
-		_set_user(previous or "Guest")
+		try:
+			_set_user(previous)
+		except Exception as exc:
+			_log_restore_failure(user, previous)
+			try:
+				_set_user("Guest")
+			except Exception:
+				pass
+			raise AdminError("Could not restore the previous session user; request aborted.") from exc
 
 
-def get_binding(tg_user: Any, gateway: str) -> dict | None:
-	"""Active binding row for this Telegram user on this gateway (system lookup)."""
+_ADMIN_RECHECK_TTL = 60
+_AUDIT_ONCE_TTL = 3600
+
+
+def _live_scope(row: dict, cache: Any = None) -> str:
+	"""Re-validate a bound Admin: 'Admin' | 'Operator' (no longer gateway admin) | '' (user disabled)."""
+	c = _cache(cache)
+	user = row["frappe_user"]
+	ckey = f"huf_tg_adm_live:{row['name']}:{user}"
+	hit = c.get_value(ckey)
+	if hit is not None:
+		return hit if hit != "-" else ""
+	verdict = "Admin"
+	if not _user_enabled(user):
+		verdict = ""
+	else:
+		try:
+			from huf.permissions import is_gateway_admin
+
+			if not is_gateway_admin(user):
+				verdict = "Operator"
+		except Exception:
+			verdict = "Operator"  # fail closed
+	c.set_value(ckey, verdict or "-", expires_in_sec=_ADMIN_RECHECK_TTL)
+	if verdict != "Admin" and _claim(c, f"huf_tg_adm_dem:{row['name']}:{verdict or 'off'}", _AUDIT_ONCE_TTL):
+		try:
+			write_audit(
+				row,
+				{"op": "scope_recheck", "was": "Admin", "now": verdict or "inactive"},
+				"scope_downgraded" if verdict else "user_disabled",
+			)
+			_commit()
+		except Exception:
+			pass
+	return verdict
+
+
+def get_binding(tg_user: Any, gateway: str, *, cache: Any = None) -> dict | None:
+	"""Active binding row for this Telegram user on this gateway (system lookup).
+
+	Admin scope is re-validated against the live Frappe user (cached <= 60s).
+	"""
 	import frappe
 
 	row = frappe.db.get_value(
@@ -359,7 +445,13 @@ def get_binding(tg_user: Any, gateway: str) -> dict | None:
 	)
 	if not row or row.frappe_user in FORBIDDEN_USERS:
 		return None
-	return dict(row)
+	row = dict(row)
+	if row.get("role_scope") == "Admin":
+		live = _live_scope(row, cache)
+		if not live:
+			return None
+		row["role_scope"] = live
+	return row
 
 
 def _touch_binding(name: str) -> None:
@@ -815,7 +907,16 @@ def handle_message(
 	gateway, adapter, parsed, request=None, *, cache: Any = None, now: float | None = None
 ) -> dict | None:
 	"""Intercept bind codes and cockpit slash commands in private chats; None = not ours (fall through)."""
-	if parsed.kind != "message" or parsed.chat_type != "private" or parsed.is_bot or not parsed.sender_id:
+	# Private-chat, human, bound-only: refuse everything else before any binding lookup (no existence leak).
+	if (
+		parsed.kind != "message"
+		or parsed.chat_type != "private"
+		or parsed.is_bot
+		or not parsed.sender_id
+		or getattr(parsed, "is_channel", False)
+		or getattr(parsed, "business_connection_id", "")
+		or getattr(parsed, "sender_business_bot", "")
+	):
 		return None
 	tg_user, chat_id = str(parsed.sender_id), str(parsed.chat_id)
 	payload = str(parsed.start_payload or "")
@@ -823,7 +924,7 @@ def handle_message(
 		return _handle_bind(gateway, adapter, parsed, payload, cache=cache, now=now)
 	if parsed.command not in COMMANDS:
 		return None
-	binding = get_binding(tg_user, gateway.name)
+	binding = get_binding(tg_user, gateway.name, cache=cache)
 	if not binding:
 		return None  # unbound users never see the cockpit; the command goes to normal routing
 	ctx = Ctx(binding=binding, tg_user=tg_user, chat_id=chat_id, gateway=gateway.name, cache=cache, now=now)
@@ -953,7 +1054,7 @@ def handle_callback(
 		answer(MSG_DENIED)
 		return _ack("not_private")
 	tg_user, chat_id = str(parsed.sender_id), str(parsed.chat_id)
-	binding = get_binding(tg_user, gateway.name)
+	binding = get_binding(tg_user, gateway.name, cache=cache)
 	if not binding:
 		answer(MSG_DENIED)
 		return _ack("no_binding")
