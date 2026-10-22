@@ -263,22 +263,31 @@ def delete_webhook_now(gateway: str | None = None, confirm: Any = 0, drop_pendin
 
 MINI_APP_PATH = "/huf/tg-app"
 MENU_BUTTON_TEXT = "Console"
+PRIVATE_COMMANDS: list[dict[str, str]] = [
+	{"command": "start", "description": "Link this chat to your account"},
+	{"command": "help", "description": "Show what you can do here"},
+	{"command": "me", "description": "Show who you are linked as"},
+	{"command": "find", "description": "Search your records"},
+	{"command": "open", "description": "Open a record"},
+	{"command": "approvals", "description": "Review items waiting for you"},
+	{"command": "digest", "description": "Get a summary of recent activity"},
+	{"command": "audit", "description": "Review recent cockpit actions"},
+	{"command": "unbind", "description": "Unlink this chat from your account"},
+]
+# Telegram answers from the MOST SPECIFIC scope that has a list, so default-only writes are invisible
+# to private chats and group admins. Every UI scope is therefore planned explicitly.
 RECOMMENDED_COMMANDS: dict[str, list[dict[str, str]]] = {
-	"default": [
-		{"command": "start", "description": "Link this chat to your account"},
-		{"command": "help", "description": "Show what you can do here"},
-		{"command": "me", "description": "Show who you are linked as"},
-		{"command": "find", "description": "Search your records"},
-		{"command": "open", "description": "Open a record"},
-		{"command": "approvals", "description": "Review items waiting for you"},
-		{"command": "digest", "description": "Get a summary of recent activity"},
-		{"command": "unbind", "description": "Unlink this chat from your account"},
-	],
+	"default": PRIVATE_COMMANDS,
+	"all_private_chats": PRIVATE_COMMANDS,
 	"all_group_chats": [
 		{"command": "help", "description": "Show what you can do here"},
 		{"command": "me", "description": "Show who you are linked as"},
 	],
 }
+# Scopes always written by apply (they carry the plan even when identical to the current list).
+ALWAYS_SET_SCOPES = ("default", "all_group_chats")
+# Scopes the plan defines nothing for: a stale list there would hide the default list, so it is deleted.
+CLEARED_SCOPES = ("all_chat_administrators",)
 
 
 def mini_app_url(gateway: str, base_url: str) -> str:
@@ -291,14 +300,40 @@ def _current_commands(client: Any, scope: str) -> list[dict[str, Any]]:
 	return list(tc.get_commands(client, scope=scope) or [])
 
 
+def _same_list(current: list[dict[str, Any]], recommended: list[dict[str, str]]) -> bool:
+	return [(c.get("command"), c.get("description")) for c in current] == [
+		(r["command"], r["description"]) for r in recommended
+	]
+
+
+def _scope_action(scope: str, current: list[dict[str, Any]]) -> str:
+	"""set | delete | keep. Unlisted scopes are only touched when they hold a stale list."""
+	if scope in CLEARED_SCOPES:
+		return "delete" if current else "keep"
+	if scope in ALWAYS_SET_SCOPES:
+		return "set"
+	return "set" if current and not _same_list(current, RECOMMENDED_COMMANDS[scope]) else "keep"
+
+
+def _plan_commands(client: Any) -> list[dict[str, Any]]:
+	rows = []
+	for scope in UI_SCOPES:
+		current = _current_commands(client, scope)
+		action = _scope_action(scope, current)
+		rows.append({
+			"scope": scope,
+			"current": current,
+			"recommended": RECOMMENDED_COMMANDS.get(scope, []),
+			"action": action,
+		})
+	return rows
+
+
 def plan_recommended_setup(client: Any, gateway: str, base_url: str) -> dict[str, Any]:
 	https_ok = base_url.startswith("https://")
 	url = mini_app_url(gateway, base_url)
 	current_menu = client.call("getChatMenuButton", {}) or {"type": "default"}
-	scopes = [
-		{"scope": s, "current": _current_commands(client, s), "recommended": cmds}
-		for s, cmds in RECOMMENDED_COMMANDS.items()
-	]
+	scopes = _plan_commands(client)
 	return {
 		"commands": scopes,
 		"menu_button": {
@@ -307,7 +342,7 @@ def plan_recommended_setup(client: Any, gateway: str, base_url: str) -> dict[str
 			"https_ok": https_ok,
 			"warning": "" if https_ok else "Telegram only opens web apps over https. This site's address is not https, so the menu button will be left as it is.",
 		},
-		"replaces_existing_commands": any(s["current"] for s in scopes),
+		"replaces_existing_commands": any(s["action"] != "keep" for s in scopes),
 	}
 
 
@@ -317,10 +352,22 @@ def apply_plan(client: Any, gateway: str, base_url: str, include_menu_button: bo
 	changed: dict[str, Any] = {"commands": [], "menu_button": None}
 	undo: dict[str, Any] = {"commands": [], "menu_button": None}
 	if replace_commands:
-		for scope, cmds in RECOMMENDED_COMMANDS.items():
-			undo["commands"].append({"scope": scope, "commands": _current_commands(client, scope)})
-			tc.set_commands(client, cmds, scope=scope)
-			changed["commands"].append({"scope": scope, "count": len(cmds)})
+		# Decide every scope from the pre-write state, then write.
+		for row in _plan_commands(client):
+			scope, action = row["scope"], row["action"]
+			if action == "keep":
+				continue
+			undo["commands"].append({"scope": scope, "action": action, "commands": row["current"]})
+			if action == "delete":
+				tc.delete_commands(client, scope=scope)
+			else:
+				tc.set_commands(client, RECOMMENDED_COMMANDS[scope], scope=scope)
+			changed["commands"].append({
+				"scope": scope,
+				"action": action,
+				"count": len(row["recommended"]),
+				"previous_count": len(row["current"]),
+			})
 	if include_menu_button:
 		undo["menu_button"] = client.call("getChatMenuButton", {}) or {"type": "default"}
 		button = menu_button_payload("web_app", MENU_BUTTON_TEXT, mini_app_url(gateway, base_url))
@@ -366,7 +413,8 @@ def apply_recommended_setup(
 
 	out = _with_client(gateway, run)
 	if out.get("success"):
-		_audit_setup(row["name"], "ok", f"commands={cmds} menu_button={menu}")
+		scopes = ",".join(f"{c['scope']}:{c['action']}" for c in out.get("changed", {}).get("commands", []))
+		_audit_setup(row["name"], "ok", f"commands={cmds} scopes={scopes} menu_button={menu}")
 	else:
 		_audit_setup(row["name"], "failed", str(out.get("message") or out.get("error"))[:300])
 	return out

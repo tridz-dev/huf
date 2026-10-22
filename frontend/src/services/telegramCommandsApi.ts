@@ -128,14 +128,16 @@ export function validateMenuButton(type: MenuButtonType, text: string, url: stri
 
 // -- recommended setup ---------------------------------------------------------------------------
 
+/** set = publish the recommended list; delete = remove a stale list the plan does not define; keep = untouched. */
+export type CommandAction = 'set' | 'delete' | 'keep';
 export interface RecommendedPlan {
-	commands: { scope: CommandScope; current: BotCommand[]; recommended: BotCommand[] }[];
+	commands: { scope: CommandScope; current: BotCommand[]; recommended: BotCommand[]; action: CommandAction }[];
 	menu_button: { current: MenuButton; recommended: MenuButton; https_ok: boolean; warning: string };
 	replaces_existing_commands: boolean;
 }
 export interface RecommendedResult {
-	changed: { commands: { scope: CommandScope; count: number }[]; menu_button: MenuButton | null };
-	previous: { commands: { scope: CommandScope; commands: BotCommand[] }[]; menu_button: MenuButton | null };
+	changed: { commands: { scope: CommandScope; action: CommandAction; count: number; previous_count: number }[]; menu_button: MenuButton | null };
+	previous: { commands: { scope: CommandScope; action: CommandAction; commands: BotCommand[] }[]; menu_button: MenuButton | null };
 }
 export const getRecommendedSetup = (gateway: string) => req<{ plan: RecommendedPlan }>('get', 'recommended_setup', { gateway });
 /** Overwrites the bot's published commands: the server refuses without confirm. */

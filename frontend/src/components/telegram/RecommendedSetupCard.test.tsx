@@ -15,7 +15,10 @@ import { RecommendedSetupCard } from './RecommendedSetupCard';
 
 const plan = (https: boolean): api.RecommendedPlan => ({
 	commands: [
-		{ scope: 'default', current: [{ command: 'initiate', description: 'x' }], recommended: [{ command: 'help', description: 'Help' }, { command: 'me', description: 'Me' }] },
+		{ scope: 'default', current: [{ command: 'initiate', description: 'x' }], recommended: [{ command: 'help', description: 'Help' }, { command: 'me', description: 'Me' }], action: 'set' },
+		{ scope: 'all_private_chats', current: [{ command: 'initiate', description: 'x' }], recommended: [{ command: 'help', description: 'Help' }, { command: 'me', description: 'Me' }], action: 'set' },
+		{ scope: 'all_chat_administrators', current: [{ command: 'eliminate', description: 'x' }], recommended: [], action: 'delete' },
+		{ scope: 'all_group_chats', current: [], recommended: [{ command: 'help', description: 'Help' }], action: 'keep' },
 	],
 	menu_button: {
 		current: { type: 'commands' },
@@ -35,11 +38,14 @@ beforeEach(() => {
 describe('RecommendedSetupCard', () => {
 	it('shows old vs new and applies only after confirming', async () => {
 		render(<RecommendedSetupCard gateway="G" />);
-		expect(await screen.findByText('Now: /initiate')).toBeInTheDocument();
-		expect(screen.getByText('New: /help /me')).toBeInTheDocument();
+		expect((await screen.findAllByText('Now: /initiate'))).toHaveLength(2);
+		expect(screen.getAllByText('New: /help /me')).toHaveLength(2);
+		expect(screen.getByText('Now: /eliminate')).toBeInTheDocument();
+		expect(screen.getByText('New: removed (the Commands list applies)')).toBeInTheDocument();
 		await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
 		expect(api.applyRecommendedSetup).not.toHaveBeenCalled();
 		expect(screen.getByText(/replaces the commands currently published/)).toBeInTheDocument();
+		expect(screen.getByText(/private-chat and group-admin lists that differ are replaced too/)).toBeInTheDocument();
 		await userEvent.click(screen.getByRole('button', { name: 'Replace and apply' }));
 		await waitFor(() => expect(api.applyRecommendedSetup).toHaveBeenCalledWith('G', true, true));
 		expect(toast.success).toHaveBeenCalled();
@@ -57,7 +63,7 @@ describe('RecommendedSetupCard', () => {
 	it('shows the error toast on failure', async () => {
 		vi.mocked(api.applyRecommendedSetup).mockResolvedValue({ ok: false, error: 'boom' });
 		render(<RecommendedSetupCard gateway="G" />);
-		await screen.findByText('Now: /initiate');
+		await screen.findByText('Now: /eliminate');
 		await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
 		await userEvent.click(screen.getByRole('button', { name: 'Replace and apply' }));
 		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('boom'));
