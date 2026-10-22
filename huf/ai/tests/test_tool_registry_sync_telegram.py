@@ -55,7 +55,7 @@ class TestTelegramToolSync(unittest.TestCase):
 		self.assertEqual(payload["types"], "App Provided")
 		fields = {p["fieldname"] for p in payload["parameters"]}
 		self.assertIn("action", fields)
-		self.assertIn("confirmation_token", fields)
+		self.assertNotIn("confirmation_token", fields)  # removed: approval is a human press, never an agent argument
 
 	def test_existing_telegram_row_is_refreshed(self):
 		_, _, updated = _run_sync(existing=["telegram", "telegram_admin"])
