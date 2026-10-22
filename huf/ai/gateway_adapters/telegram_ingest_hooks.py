@@ -20,6 +20,19 @@ def typing(event, gateway):
 	ing.send_typing_for_event(event, gateway)
 
 
+def reply_finished(event, gateway):
+	"""Stop the typing keepalive for this chat (reply starting, suppressed or failed)."""
+	from huf.ai.gateway_adapters import telegram_typing_keepalive as ka
+	from huf.ai.gateway_adapters.telegram_threads import thread_id_for_reply
+
+	try:
+		raw = ing._raw(event)
+		msg = ing._message(raw) or (raw.get("callback_query") or {}).get("message") or {}
+		ka.stop(ka.key_for(gateway.name, str(event.conversation_id or ""), thread_id_for_reply(msg)))
+	except Exception:
+		pass
+
+
 def mark_read_typing(adapter, provider_event_id, chat_id=None, thread_id=None):
 	"""Telegram has no read receipts; typing needs a chat id (``provider_event_id`` is an update id)."""
 	if not chat_id:
@@ -33,3 +46,4 @@ provider_hooks.register(PROVIDER, "media_save", ing.save_media)
 provider_hooks.register(PROVIDER, "typing", typing)
 provider_hooks.register(PROVIDER, "mark_read_typing", mark_read_typing)
 provider_hooks.register(PROVIDER, "extra_event_fields", ing.extra_fields)
+provider_hooks.register(PROVIDER, "reply_finished", reply_finished)

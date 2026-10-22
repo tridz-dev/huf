@@ -205,6 +205,7 @@ def _fail_event_for_agent_run(
     event, gateway, result, error_code: str, reason: str, fallback_kind: str = "error"
 ) -> dict:
     """Mark the event Failed for a failed agent run and send nothing (bar the default fallback reply)."""
+    _reply_finished(event, gateway)
     agent_run_id = result.get("agent_run_id") if isinstance(result, dict) else None
     message = f"{error_code}: {reason}"[:500]
     values = {"status": "Failed", "error_message": message, "delivery_error": message[:140]}
@@ -2473,6 +2474,7 @@ def _process_gateway_event(event_name: str) -> dict:
                 _send_fallback_once(event, gateway, "attachment")
                 return _suppress_reply(event, result.get("agent_run_id"), NO_REPLY_NOTE)
             if _is_no_reply(response):
+                _reply_finished(event, gateway)
                 return _suppress_reply(event, result.get("agent_run_id"), NO_REPLY_NOTE)
             send_hook = provider_hooks.get(gateway.provider, "send_reply")
             if send_hook is not None:
@@ -2535,6 +2537,10 @@ def _process_gateway_event(event_name: str) -> dict:
         # can never surface stuck at "Running" -- re-raising afterwards still
         # propagates the failure to the job queue for logging/retry policy.
         frappe.db.rollback()
+        try:
+            _reply_finished(event, frappe.get_doc("Gateway", event.gateway))
+        except Exception:
+            pass
         event.db_set({"status": "Failed", "error_message": message[-500:]})
         frappe.db.commit()
         frappe.log_error(message, "Gateway event failed")
@@ -2600,6 +2606,16 @@ def _maybe_mark_read_typing(event, gateway) -> None:
         pass
 
 
+def _reply_finished(event, gateway) -> None:
+	"""Tell the provider the run ended so it can stop typing keepalives. Best effort, never raises."""
+	try:
+		hook = provider_hooks.get(gateway.provider, "reply_finished")
+		if hook is not None:
+			hook(event, gateway)
+	except Exception:
+		pass
+
+
 def _reply_max_attempts(gateway) -> int:
     try:
         value = int(getattr(gateway, "retry_max_attempts", 0) or 0)
@@ -2633,6 +2649,7 @@ def _send_telegram_reply(event, gateway, agent_run_id, response: str) -> dict:
     """Telegram reply: opt-out gate, format + split, idempotent part send (see telegram_pipeline)."""
     from huf.ai.gateway_adapters import telegram_pipeline as tp
 
+    _reply_finished(event, gateway)
     if agent_run_id:
         event.db_set("agent_run", agent_run_id)
     if event.sender_id and is_opted_out(gateway, event.sender_id):

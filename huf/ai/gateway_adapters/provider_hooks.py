@@ -37,6 +37,8 @@ Hook signatures (``gateway`` / ``event`` are Gateway / Gateway Event documents):
 - ``agent_event_context(event, gateway) -> str``: one-line note about the inbound message (ids the agent needs for
   reply/react/edit tools), appended to the channel note. Default none; failures yield no note.
 - ``attempt_reply_parts(event, gateway, parts, attempt) -> dict``: provider-owned send/retry of reply parts (WP-1b).
+- ``reply_finished(event, gateway) -> None``: the run ended (reply starting, suppressed or failed); stop any typing
+  keepalive. Called guarded, never raises. WhatsApp does not register it.
 - ``ingest_update(adapter, request, gateway) -> response | None``: handle a verified webhook update before
   ``normalize_inbound``; a non-None return is the HTTP response (non-message updates, drops) (WP-1c).
 """
