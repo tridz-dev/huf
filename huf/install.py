@@ -199,6 +199,13 @@ def after_migrate():
 		logger.info(
 			f"Synced tools after migrate: {result.get('total_tools', 0)} tools from {len(result.get('synced_apps', []))} apps"
 		)
+		if result.get("error_count"):
+			# A tool that fails import/validation is silently skipped by the sync,
+			# so a new registry block (e.g. telegram_admin) would just not appear.
+			frappe.log_error(
+				title="Tool sync after migrate had errors",
+				message="\n".join(result.get("errors", [])),
+			)
 	except Exception as e:
 		logger.warning(f"Failed to sync tools after migrate: {e!s}")
 
