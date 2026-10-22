@@ -258,24 +258,58 @@ def extra_fields(event, gateway, sender) -> dict:
 	}
 
 
+def _typing_failure_kind(exc: Exception) -> str:
+	if getattr(exc, "blocked_by_user", False):
+		return "blocked"
+	if getattr(exc, "chat_not_found", False):
+		return "chat_not_found"
+	if getattr(exc, "flood_control", False):
+		return "flood_control"
+	code = getattr(exc, "error_code", None)
+	return f"api_{code}" if code else type(exc).__name__
+
+
 def send_typing_for_event(event, gateway) -> bool:
-	"""sendChatAction typing for a private chat or an addressed group message. Best effort."""
+	"""Telegram typing indicator (sendChatAction) for the inbound update. The only typing implementation.
+
+	Gate: ``Gateway.typing_indicator`` (off = no call). Addressed rule: private chats always; groups only when
+	the message mentions/commands the bot (or ``mention_required`` is off). Thread: the forum topic or private
+	topic id only (``thread_id_for_reply``), never a plain reply-chain id (Telegram rejects it). Best effort:
+	never raises, never fails the run. Logs one line per attempt (``Telegram typing sent|failed chat=... ``).
+	"""
+	from huf.ai.gateway_adapters.telegram_threads import thread_id_for_reply
+
+	chat_id = ""
 	try:
-		meta = _raw(event).get("telegram_meta") or {}
-		chat_type = meta.get("chat_type") or "private"
-		if chat_type in ("channel",):
+		enabled = getattr(gateway, "typing_indicator", None)
+		if enabled is not None and not int(enabled):
 			return False
+		raw = _raw(event)
+		meta = raw.get("telegram_meta") or {}
+		chat_type = meta.get("chat_type") or "private"
+		if chat_type == "channel":
+			return False
+		msg = _message(raw) or (raw.get("callback_query") or {}).get("message") or {}
 		if chat_type != "private" and gateway.get("mention_required"):
-			msg = _message(_raw(event))
 			ents = list(msg.get("entities") or []) + list(msg.get("caption_entities") or [])
 			if not any(e.get("type") in ("mention", "bot_command", "text_mention") for e in ents):
 				return False
+		chat_id = str(event.conversation_id or "")
+		thread = thread_id_for_reply(msg)
+	except Exception:
+		frappe.logger("huf").warning("Telegram typing skipped: inbound update unreadable", exc_info=True)
+		return False
+	try:
 		from huf.ai.gateway_webhook import get_gateway_adapter
 
-		thread = meta.get("message_thread_id") or None
-		return bool(get_gateway_adapter(gateway).send_typing(event.conversation_id, "typing", thread))
-	except Exception:
+		get_gateway_adapter(gateway).sender.send_chat_action(chat_id, "typing", thread_id=thread)
+	except Exception as exc:
+		kind = _typing_failure_kind(exc)
+		frappe.logger("huf").warning(f"Telegram typing failed chat={chat_id} action=typing type={kind}")
 		return False
+	suffix = f" thread={thread}" if thread else ""
+	frappe.logger("huf").info(f"Telegram typing sent chat={chat_id} action=typing{suffix}")
+	return True
 
 
 def save_media(event, gateway) -> list[str]:

@@ -54,15 +54,10 @@ def recover_reply_parts(response):
 	return telegram_pipeline.make_parts(response)
 
 
-def typing(event, gateway):
-	from huf.ai.gateway_adapters import telegram_pipeline
-
-	telegram_pipeline.send_typing(gateway, event)
-
-
+# "typing" is NOT registered here: telegram_ingest_hooks owns it (imported later, so it wins).
 for _name, _fn in (
 	("send_reply", send_reply), ("send_parts", send_parts), ("attempt_reply_parts", attempt_reply_parts),
 	("send_errors", send_errors), ("error_text", error_text), ("reply_target", reply_target),
-	("recover_reply_parts", recover_reply_parts), ("typing", typing),
+	("recover_reply_parts", recover_reply_parts),
 ):
 	provider_hooks.register(PROVIDER, _name, _fn)
