@@ -2705,7 +2705,7 @@ def _send_telegram_reply(event, gateway, agent_run_id, response: str) -> dict:
         guest_result = guest_hook(event, gateway, response)
         if guest_result is not None:
             return guest_result
-    parts = tp.make_parts(response) or [response]
+    parts = tp.make_parts(response, tp.reply_scope(gateway, event)) or [response]
     voice_hook = provider_hooks.get(gateway.provider, "voice_reply")
     if voice_hook is not None:
         return voice_hook(

@@ -139,11 +139,16 @@ def _auth(token: str = "", *, cache: Any = None, now: float | None = None) -> tu
 	raw = _request_token(token)
 	if not raw:
 		raise unauth
-	if not ta.check_rate(f"mapi_ip:{ta._client_ip()}", IP_RATE_LIMIT, API_RATE_WINDOW, cache=cache, now=now):
+	ip = ta._client_ip()
+	if ip and not ta.check_rate(f"mapi_ip:{ip}", IP_RATE_LIMIT, API_RATE_WINDOW, cache=cache, now=now):
 		raise ApiError("rate_limited", "Too many requests.", 429)
 	session = ta.resolve_session_token(raw, cache=cache, now=now)
 	if not session:
 		raise unauth
+	if not ip:  # unknown client IP: a per-user bucket, never one shared empty-IP bucket
+		user_key = f"mapi_nouip:{session.get('gateway')}:{session.get('telegram_user_id')}"
+		if not ta.check_rate(user_key, IP_RATE_LIMIT, API_RATE_WINDOW, cache=cache, now=now):
+			raise ApiError("rate_limited", "Too many requests.", 429)
 	# resolve_session_token already confirmed an active binding; re-read it so the CURRENT role scope
 	# (e.g. Admin demoted to Operator) applies, not the scope frozen into the token at mint time.
 	binding = ta.get_binding(session["telegram_user_id"], session["gateway"], cache=cache)

@@ -127,6 +127,7 @@ class E2EBase(unittest.TestCase):
 			is_enabled=1,
 			telegram_business_policy="Observe",
 			telegram_join_policy="Queue",
+			room_policy="Open",
 			telegram_guard_captcha=0,
 			telegram_welcome_template=None,
 		)
@@ -340,6 +341,7 @@ class TestJoinRequests(E2EBase):
 			provider=PROVIDER,
 			default_agent="Sec",
 			telegram_join_policy="Queue",
+			room_policy="Open",
 			telegram_guard_captcha=0,
 		)
 		self.patch("huf.ai.telegram_guard._load_gateway", return_value=self.gate)
@@ -378,8 +380,8 @@ class TestJoinRequests(E2EBase):
 		kwargs = self.enqueue.call_args.kwargs
 
 		cases = {
-			'{"decision": "approve", "reason": "fits"}': "approve",
-			'```json\n{"decision": "approve"}\n```': "approve",
+			'{"decision": "approve", "reason": "fits"}': None,  # S1: an agent approve is downgraded to queue
+			'```json\n{"decision": "approve"}\n```': None,
 			'{"decision": "decline"}': "decline",
 			"approve!": None,
 			'{"decision": "approve", "extra": 1}': None,
@@ -430,10 +432,8 @@ class TestJoinRequests(E2EBase):
 		self.assertFalse(tg.submit_answer("gw1", nonce, init_data(42), "4")["done"])
 		done = tg.submit_answer("gw1", nonce, init_data(42), "5")
 		self.assertEqual((done["ok"], done["done"]), (True, True))
-		self.assertEqual(
-			self.api.last("answerChatJoinRequestQuery")["payload"],
-			{"chat_join_request_query_id": "q-guard", "result": "approve"},
-		)
+		self.assertEqual(self.api.last("approveChatJoinRequest")["payload"]["user_id"], 42)
+		self.assertEqual(self.api.of("answerChatJoinRequestQuery"), [])  # the query was spent by the web app
 		with self.assertRaises(tg.GuardError):
 			tg.submit_answer("gw1", nonce, init_data(42), "5")  # single use
 
@@ -454,7 +454,7 @@ class TestJoinRequests(E2EBase):
 		for _ in range(tg.MAX_ATTEMPTS):
 			last = tg.submit_answer("gw1", nonce, init_data(42), "0")
 		self.assertEqual((last["ok"], last["done"]), (False, True))
-		self.assertEqual(self.api.last("answerChatJoinRequestQuery")["payload"]["result"], "decline")
+		self.assertEqual(self.api.last("declineChatJoinRequest")["payload"]["user_id"], 42)
 
 	def test_guard_without_captcha_answers_queue_synchronously(self):
 		self.gate.telegram_join_policy = "Queue"
@@ -960,7 +960,7 @@ class TestHandlerChain(E2EBase):
 		self.patch("frappe.set_user")
 		self.patch(
 			"huf.ai.telegram_guard._load_gateway",
-			return_value=SimpleNamespace(name="gw1", provider=PROVIDER, telegram_join_policy="Decline"),
+			return_value=SimpleNamespace(name="gw1", provider=PROVIDER, telegram_join_policy="Decline", room_policy="Open"),
 		)
 		self.patch("huf.ai.telegram_guard._client_for", return_value=self.adapter.client)
 		self.gw.direct_policy = "Open"
@@ -995,7 +995,7 @@ class TestHandlerChain(E2EBase):
 	def test_join_request_reaches_groups_handler_once_through_unsupported_chain(self):
 		self.patch(
 			"huf.ai.telegram_guard._load_gateway",
-			return_value=SimpleNamespace(name="gw1", provider=PROVIDER, telegram_join_policy="Decline"),
+			return_value=SimpleNamespace(name="gw1", provider=PROVIDER, telegram_join_policy="Decline", room_policy="Open"),
 		)
 		self.patch("huf.ai.telegram_guard._client_for", return_value=self.adapter.client)
 		result = self.send(join_update(9600, query_id="q-chain"))

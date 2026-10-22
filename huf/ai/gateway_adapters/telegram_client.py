@@ -230,6 +230,9 @@ class TelegramBotClient:
 			response = self._http_get(url, timeout=timeout)
 		except Exception as exc:
 			raise TelegramApiError("getFile", self.redact(f"download failed: {exc}"), error_code=599) from None
+		status = getattr(response, "status_code", None)
+		if isinstance(status, int) and status >= 400:
+			raise TelegramApiError("getFile", f"download failed: HTTP {status}", error_code=status)
 		content = response.content if hasattr(response, "content") else response
 		if not content:
 			raise TelegramApiError("getFile", "empty file download")

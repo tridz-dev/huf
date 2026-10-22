@@ -121,6 +121,15 @@ def record_pending_join(gateway, ctx: dict) -> str:
 	)
 	if existing:
 		return existing[0]
+	limit = svc._int_setting(gateway, "pairing_pending_limit", svc.PAIRING_DEFAULT_PENDING_LIMIT)
+	if limit > 0:
+		pending = frappe.get_all(
+			"Gateway Access Entry", filters={"gateway": gateway.name, "state": "Pending"}, pluck="name",
+			limit_page_length=limit,
+		)
+		if len(pending or []) >= limit:
+			frappe.logger("huf").warning(f"Telegram gateway {gateway.name}: pending join cap reached; not recorded")
+			return ""
 	label = f"Join request: {ctx['user_name'] or ctx['user_id']} -> {ctx['chat_title'] or ctx['chat_id']}"
 	doc = frappe.get_doc(
 		{
@@ -145,6 +154,11 @@ def handle_join_request(gateway, adapter, parsed, request) -> dict | None:
 	if ctx is None:
 		return None
 	ctx["gateway"] = gateway.name
+	from huf.ai import telegram_guard
+
+	if not telegram_guard.room_admitted(gateway, ctx["chat_id"]):  # no admission, no join handling
+		frappe.logger("huf").info(f"Telegram gateway {gateway.name}: join request for an unadmitted room ignored")
+		return _ack("chat_join_request", "room not admitted", decision="ignore")
 	decision = decide(ctx)
 	client = adapter.client
 	error = ""

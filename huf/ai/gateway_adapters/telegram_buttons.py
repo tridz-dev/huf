@@ -254,7 +254,7 @@ def _hash(text: str) -> str:
 	return hashlib.sha1(str(text).encode("utf-8")).hexdigest()
 
 
-def prepare_reply(response: str, *, cache: Any = None) -> str:
+def prepare_reply(response: str, *, cache: Any = None, scope: str = "") -> str:
 	"""Strip the button block from ``response``; remember its spec keyed by the final text's last part.
 
 	Called by ``telegram_pipeline.make_parts`` before splitting. Returns the visible text (a short
@@ -266,28 +266,28 @@ def prepare_reply(response: str, *, cache: Any = None) -> str:
 	if spec is not None:
 		if not visible:
 			visible = PLACEHOLDER_TEXT
-		remember_spec(visible, spec, cache=cache)
+		remember_spec(visible, spec, cache=cache, scope=scope)
 	return visible
 
 
-def remember_spec(visible: str, spec: dict, *, cache: Any = None) -> None:
+def remember_spec(visible: str, spec: dict, *, cache: Any = None, scope: str = "") -> None:
 	"""Store ``spec`` under the hash of the last paragraph-chunk(s) of ``visible`` (retry-safe)."""
 	try:
 		from huf.ai.gateway_adapters.telegram_format import split_message
 
 		parts = split_message(visible) or [visible]
-		_cache(cache).set_value(f"huf_tg_btn:{_hash(parts[-1])}", spec, expires_in_sec=TTL_SECONDS)
+		_cache(cache).set_value(f"huf_tg_btn:{_hash(scope + chr(0) + parts[-1])}", spec, expires_in_sec=TTL_SECONDS)
 	except Exception:
 		pass
 
 
-def spec_for_text(joined: str, *, cache: Any = None) -> dict | None:
+def spec_for_text(joined: str, *, cache: Any = None, scope: str = "") -> dict | None:
 	"""Find the remembered spec for the (possibly partially-sent) parts joined with blank lines."""
 	try:
 		c = _cache(cache)
 		candidate = str(joined)
 		while True:
-			spec = c.get_value(f"huf_tg_btn:{_hash(candidate)}")
+			spec = c.get_value(f"huf_tg_btn:{_hash(scope + chr(0) + candidate)}")
 			if isinstance(spec, dict):
 				return spec
 			if "\n\n" not in candidate:
@@ -308,7 +308,10 @@ def default_signer(event: Any, gateway: Any) -> Callable[[str], str]:
 def markup_for(event: Any, gateway: Any, response_text: str, *, signer: Any = None, cache: Any = None) -> dict | None:
 	"""``reply_markup_for`` implementation. Never raises: a button failure must not block the reply."""
 	try:
-		spec = spec_for_text(response_text, cache=cache)
+		from huf.ai.gateway_adapters.telegram_media_reply import scope_key
+
+		scope = scope_key(getattr(gateway, "name", ""), getattr(event, "conversation_id", ""), getattr(event, "name", ""))
+		spec = spec_for_text(response_text, cache=cache, scope=scope)
 		if spec is None:
 			return None
 		return build_markup(spec, signer or default_signer(event, gateway))

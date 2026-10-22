@@ -21,7 +21,7 @@ CTX = {"gateway": "gw1", "chat_id": "-100", "user_id": "42", "query_id": "Q1", "
 
 
 def gw(**kw):
-	base = dict(name="gw1", provider="Telegram", default_agent="agent1", telegram_join_policy="Queue")
+	base = dict(name="gw1", provider="Telegram", default_agent="agent1", telegram_join_policy="Queue", room_policy="Open")
 	base.update(kw)
 	return SimpleNamespace(**base)
 
@@ -64,7 +64,7 @@ def fixed_question(answer="9"):
 
 class TestPolicy(unittest.TestCase):
 	def test_queue_and_decline_mapping(self):
-		with Env(gw(telegram_join_policy="Queue")):
+		with Env(gw(telegram_join_policy="Queue", room_policy="Open")):
 			self.assertEqual(g.gateway_policy(CTX), "queue")
 		with Env(gw(telegram_join_policy="Decline")):
 			self.assertEqual(g.gateway_policy(CTX), "decline")
@@ -113,9 +113,15 @@ class TestAgentDecision(unittest.TestCase):
 	def test_resolve_applies_plain_approve_without_query(self):
 		with Env() as env:
 			out = g.resolve_agent_join("gw1", dict(CTX), runner=lambda *a: '{"decision":"approve"}')
-			self.assertEqual(out, "approve")
-			self.assertEqual(env.fake.last("approveChatJoinRequest")["payload"], {"chat_id": -100, "user_id": 42})
+			self.assertEqual(out, "queue")  # S1: agent output never admits anyone
+			self.assertFalse(env.fake.of("approveChatJoinRequest"))
 			self.assertFalse(env.fake.of("answerChatJoinRequestQuery"))
+
+	def test_resolve_agent_decline_is_applied(self):
+		with Env() as env:
+			out = g.resolve_agent_join("gw1", dict(CTX), runner=lambda *a: '{"decision":"decline"}')
+			self.assertEqual(out, "decline")
+			self.assertEqual(env.fake.last("declineChatJoinRequest")["payload"], {"chat_id": -100, "user_id": 42})
 
 	def test_resolve_bad_json_makes_no_call(self):
 		with Env() as env:
@@ -159,10 +165,11 @@ class TestCaptcha(unittest.TestCase):
 	def test_correct_answer_approves_once_then_replay_fails(self):
 		res = g.submit_answer("gw1", self.nonce, init_data(), "9")
 		self.assertTrue(res["ok"])
-		self.assertEqual(self.env.fake.last("answerChatJoinRequestQuery")["payload"]["result"], "approve")
+		self.assertEqual(self.env.fake.last("approveChatJoinRequest")["payload"], {"chat_id": -100, "user_id": 42})
 		with self.assertRaises(g.GuardError):
 			g.submit_answer("gw1", self.nonce, init_data(), "9")
-		self.assertEqual(len(self.env.fake.of("answerChatJoinRequestQuery")), 1)
+		self.assertEqual(len(self.env.fake.of("approveChatJoinRequest")), 1)
+		self.assertFalse(self.env.fake.of("answerChatJoinRequestQuery"))  # the query was spent by the web app
 
 	def test_wrong_answers_then_decline(self):
 		for i in range(g.MAX_ATTEMPTS - 1):
@@ -170,7 +177,8 @@ class TestCaptcha(unittest.TestCase):
 			self.assertEqual((res["ok"], res["done"]), (False, False))
 		res = g.submit_answer("gw1", self.nonce, init_data(), "1")
 		self.assertTrue(res["done"])
-		self.assertEqual(self.env.fake.last("answerChatJoinRequestQuery")["payload"]["result"], "decline")
+		self.assertEqual(len(self.env.fake.of("declineChatJoinRequest")), 1)
+		self.assertFalse(self.env.fake.of("answerChatJoinRequestQuery"))
 		with self.assertRaises(g.GuardError):
 			g.submit_answer("gw1", self.nonce, init_data(), "9")
 
@@ -370,8 +378,8 @@ class TestChallengeHardening(unittest.TestCase):
 			results, _ = self._race(nonce, ["1"] * 25)
 		self.assertLessEqual(len(compared), g.MAX_ATTEMPTS)  # only counted submissions reach the comparison
 		self.assertTrue(any(r["done"] for r in results))
-		self.assertEqual(len(self.env.fake.of("answerChatJoinRequestQuery")), 1)
-		self.assertEqual(self.env.fake.last("answerChatJoinRequestQuery")["payload"]["result"], "decline")
+		self.assertEqual(len(self.env.fake.of("declineChatJoinRequest")), 1)
+		self.assertFalse(self.env.fake.of("answerChatJoinRequestQuery"))
 
 	def test_parallel_wrong_answers_respect_emoji_budget(self):
 		q = {"kind": "emoji", "prompt": "Tap the cat", "options": list(g.EMOJI_POOL[:6]), "answer": "🐱"}
@@ -386,7 +394,7 @@ class TestChallengeHardening(unittest.TestCase):
 		with mock.patch.object(g, "_answer_hash", counting_hash):
 			self._race(nonce, ["🐶"] * 20)
 		self.assertLessEqual(len(compared), g.EMOJI_MAX_ATTEMPTS)
-		self.assertEqual(len(self.env.fake.of("answerChatJoinRequestQuery")), 1)
+		self.assertEqual(len(self.env.fake.of("declineChatJoinRequest")), 1)
 		with self.assertRaises(g.GuardError):
 			g.submit_answer("gw1", nonce, init_data(), "🐱")
 
@@ -396,13 +404,13 @@ class TestChallengeHardening(unittest.TestCase):
 			g.submit_answer("gw1", nonce, init_data(), "1")
 		with self.assertRaises(g.GuardError):
 			g.submit_answer("gw1", nonce, init_data(), "9")
-		self.assertEqual(self.env.fake.of("answerChatJoinRequestQuery")[-1]["payload"]["result"], "decline")
+		self.assertEqual(len(self.env.fake.of("declineChatJoinRequest")), 1)
 
 	def test_parallel_correct_answers_approve_once(self):
 		nonce = g.issue_challenge("gw1", CTX, question=fixed_question())
 		results, _ = self._race(nonce, ["9"] * 10)
 		self.assertEqual(sum(1 for r in results if r.get("ok")), 1)
-		self.assertEqual(len(self.env.fake.of("answerChatJoinRequestQuery")), 1)
+		self.assertEqual(len(self.env.fake.of("approveChatJoinRequest")), 1)
 
 	def test_emoji_has_six_options_and_two_attempts(self):
 		self.assertEqual(g.EMOJI_OPTIONS, 6)
@@ -429,7 +437,8 @@ class TestChallengeHardening(unittest.TestCase):
 		self.assertEqual((first["ok"], first["done"]), (False, False))
 		second = g.submit_answer("gw1", nonce, init_data(), "🐶")
 		self.assertTrue(second["done"])
-		self.assertEqual(self.env.fake.last("answerChatJoinRequestQuery")["payload"]["result"], "decline")
+		self.assertEqual(len(self.env.fake.of("declineChatJoinRequest")), 1)
+		self.assertFalse(self.env.fake.of("answerChatJoinRequestQuery"))
 
 
 if __name__ == "__main__":
