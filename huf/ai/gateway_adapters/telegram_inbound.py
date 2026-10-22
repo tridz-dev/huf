@@ -12,7 +12,7 @@ typed object.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Mapping
 
 from huf.ai.gateway_adapters.types import GatewayAttachment, NormalizedGatewayEvent
@@ -85,6 +85,18 @@ class TelegramUpdate:
 	sender_business_bot: str = ""  # message.sender_business_bot.id
 	business_connection_id: str = ""
 	rich_text: str = ""  # agent-readable text: forward/reply context + body + media/extra descriptions
+	inline_query_id: str = ""  # inline_query.id
+	query_text: str = ""  # inline_query.query / chosen_inline_result.query / pre-checkout payload text
+	inline_offset: str = ""  # inline_query.offset
+	result_id: str = ""  # chosen_inline_result.result_id
+	inline_message_id: str = ""  # chosen_inline_result.inline_message_id
+	join_user_chat_id: str = ""  # chat_join_request.user_chat_id
+	join_query_id: str = ""  # chat_join_request.query_id
+	invite_link: str = ""  # chat_join_request.invite_link.invite_link
+	guest_query_id: str = ""  # guest_message.guest_query_id
+	bio: str = ""  # chat_join_request.bio
+	poll_id: str = ""  # poll.id / poll_answer.poll_id
+	poll_option_ids: tuple[int, ...] = ()  # poll_answer.option_ids
 
 	@property
 	def is_room(self) -> bool:
@@ -448,7 +460,77 @@ def parse_update(update: Mapping[str, Any]) -> TelegramUpdate:
 				member_old_status=str(_map(cm.get("old_chat_member")).get("status") or ""),
 				member_new_status=str(_map(cm.get("new_chat_member")).get("status") or ""),
 			)
-	return TelegramUpdate(kind="unsupported", update_id=update_id, raw=update)
+	return _parse_typed(update, update_id) or TelegramUpdate(kind="unsupported", update_id=update_id, raw=update)
+
+
+def _parse_typed(update: Mapping[str, Any], update_id: str) -> TelegramUpdate | None:
+	"""Inline / join / guest / stop / poll / payment updates. Identity fields only; no event is built."""
+	gm = _map(update.get("guest_message"))
+	if gm:
+		return replace(_parse_message("guest_message", update, gm), guest_query_id=str(gm.get("guest_query_id") or ""))
+	iq = _map(update.get("inline_query"))
+	if iq:
+		user = _map(iq.get("from"))
+		return TelegramUpdate(
+			kind="inline_query", update_id=update_id, raw=update,
+			chat_id=str(user.get("id") or ""), chat_type=str(iq.get("chat_type") or "private"),
+			sender_id=str(user.get("id") or ""), display_name=_sender_name(user), is_bot=bool(user.get("is_bot")),
+			inline_query_id=str(iq.get("id") or ""), query_text=str(iq.get("query") or ""),
+			inline_offset=str(iq.get("offset") or ""), text=str(iq.get("query") or ""),
+		)
+	ci = _map(update.get("chosen_inline_result"))
+	if ci:
+		user = _map(ci.get("from"))
+		return TelegramUpdate(
+			kind="chosen_inline_result", update_id=update_id, raw=update,
+			chat_id=str(user.get("id") or ""), sender_id=str(user.get("id") or ""),
+			display_name=_sender_name(user), is_bot=bool(user.get("is_bot")),
+			result_id=str(ci.get("result_id") or ""), query_text=str(ci.get("query") or ""),
+			inline_message_id=str(ci.get("inline_message_id") or ""), text=str(ci.get("query") or ""),
+		)
+	jr = _map(update.get("chat_join_request"))
+	if jr:
+		user, chat = _map(jr.get("from")), _map(jr.get("chat"))
+		return TelegramUpdate(
+			kind="chat_join_request", update_id=update_id, raw=update,
+			chat_id=str(chat.get("id") if chat.get("id") is not None else ""),
+			chat_type=str(chat.get("type") or "private"), sender_id=str(user.get("id") or ""),
+			display_name=_sender_name(user), is_bot=bool(user.get("is_bot")),
+			join_user_chat_id=str(jr.get("user_chat_id") or ""), join_query_id=str(jr.get("query_id") or ""),
+			invite_link=str(_map(jr.get("invite_link")).get("invite_link") or ""), bio=str(jr.get("bio") or ""),
+		)
+	sg = _map(update.get("stopped_message_generation"))
+	if sg:
+		user, chat = _map(sg.get("from")), _map(sg.get("chat"))
+		return TelegramUpdate(
+			kind="stopped_message_generation", update_id=update_id, raw=update,
+			chat_id=str(chat.get("id") if chat.get("id") is not None else user.get("id", "")),
+			chat_type=str(chat.get("type") or "private"), sender_id=str(user.get("id") or ""),
+			display_name=_sender_name(user), message_id=str(sg.get("message_id") or ""),
+		)
+	pa = _map(update.get("poll_answer"))
+	if pa:
+		user = _map(pa.get("user"))
+		actor = _map(pa.get("voter_chat"))
+		return TelegramUpdate(
+			kind="poll_answer", update_id=update_id, raw=update,
+			chat_id=str(actor.get("id") or user.get("id") or ""), sender_id=str(user.get("id") or actor.get("id") or ""),
+			display_name=_sender_name(user), poll_id=str(pa.get("poll_id") or ""),
+			poll_option_ids=tuple(int(i) for i in (pa.get("option_ids") or []) if isinstance(i, int)),
+		)
+	poll = _map(update.get("poll"))
+	if poll:
+		return TelegramUpdate(kind="poll", update_id=update_id, raw=update, poll_id=str(poll.get("id") or ""),
+			text=_cap(poll.get("question")))
+	for key in ("shipping_query", "pre_checkout_query"):
+		pq = _map(update.get(key))
+		if pq:
+			user = _map(pq.get("from"))
+			return TelegramUpdate(
+				kind=key, update_id=update_id, raw=update, chat_id=str(user.get("id") or ""),
+				sender_id=str(user.get("id") or ""), display_name=_sender_name(user), is_bot=bool(user.get("is_bot")),
+			)
+	return None
 
 
 _NO_EVENT_KINDS = (
@@ -458,6 +540,15 @@ _NO_EVENT_KINDS = (
 	"unsupported",
 	"business_connection",
 	"deleted_business_messages",
+	"inline_query",
+	"chosen_inline_result",
+	"chat_join_request",
+	"guest_message",
+	"stopped_message_generation",
+	"poll",
+	"poll_answer",
+	"shipping_query",
+	"pre_checkout_query",
 )
 
 

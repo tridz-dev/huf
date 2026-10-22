@@ -124,3 +124,51 @@ class TestTelegramInbound(unittest.TestCase):
 	def test_missing_identifiers_raise(self):
 		with self.assertRaises(ValueError):
 			to_event(parse_update({"update_id": 1, "message": {"message_id": 1, "chat": {}, "from": {}, "text": "x"}}))
+
+
+class TestTelegramInboundTypedKinds(unittest.TestCase):
+	def test_inline_query(self):
+		p = parsed("inline_query")
+		self.assertEqual((p.kind, p.inline_query_id, p.query_text, p.sender_id), ("inline_query", "iq-1", "weekly report", "111"))
+		self.assertEqual((p.inline_offset, p.chat_type), ("", "sender"))
+		self.assertIsNone(to_event(p))
+
+	def test_chosen_inline_result(self):
+		p = parsed("chosen_inline_result")
+		self.assertEqual((p.kind, p.result_id, p.query_text, p.inline_message_id), ("chosen_inline_result", "ask-abc", "weekly report", "imid-1"))
+		self.assertEqual(p.sender_id, "111")
+		self.assertIsNone(to_event(p))
+
+	def test_chat_join_request(self):
+		p = parsed("chat_join_request")
+		self.assertEqual((p.kind, p.chat_id, p.sender_id, p.join_user_chat_id, p.bio), ("chat_join_request", "-1001234", "777", "777", "hello"))
+		p2 = parse_update({"update_id": 5, "chat_join_request": {"chat": {"id": -1, "type": "channel"}, "from": {"id": 9},
+			"user_chat_id": 9, "query_id": "jq", "invite_link": {"invite_link": "https://t.me/+x"}}})
+		self.assertEqual((p2.join_query_id, p2.invite_link), ("jq", "https://t.me/+x"))
+		self.assertIsNone(to_event(p))
+
+	def test_guest_message(self):
+		p = parsed("guest_message")
+		self.assertEqual((p.kind, p.guest_query_id, p.sender_id, p.chat_id), ("guest_message", "gq-abc123", "777", "-1009988"))
+		self.assertEqual(p.text, "@mybot what is 2+2?")
+		self.assertIsNone(to_event(p))
+
+	def test_stopped_message_generation(self):
+		p = parse_update({"update_id": 7, "stopped_message_generation": {"chat": {"id": 42, "type": "private"}, "from": {"id": 42}, "draft_id": 3}})
+		self.assertEqual((p.kind, p.chat_id, p.sender_id), ("stopped_message_generation", "42", "42"))
+		self.assertIsNone(to_event(p))
+
+	def test_poll_and_poll_answer(self):
+		p = parse_update({"update_id": 8, "poll": {"id": "p1", "question": "Lunch?"}})
+		self.assertEqual((p.kind, p.poll_id, p.text), ("poll", "p1", "Lunch?"))
+		a = parse_update({"update_id": 9, "poll_answer": {"poll_id": "p1", "user": {"id": 5}, "option_ids": [0, 2]}})
+		self.assertEqual((a.kind, a.poll_id, a.sender_id, a.poll_option_ids), ("poll_answer", "p1", "5", (0, 2)))
+		self.assertIsNone(to_event(p))
+		self.assertIsNone(to_event(a))
+
+	def test_payment_kinds(self):
+		for key in ("shipping_query", "pre_checkout_query"):
+			with self.subTest(key):
+				p = parse_update({"update_id": 10, key: {"id": "q", "from": {"id": 6}}})
+				self.assertEqual((p.kind, p.sender_id), (key, "6"))
+				self.assertIsNone(to_event(p))
