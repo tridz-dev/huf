@@ -10,13 +10,20 @@
 from __future__ import annotations
 
 
-def public_base_url() -> str:
+def configured_host() -> str:
+	"""The site ``host_name`` ("" when unset or unreadable)."""
 	import frappe
 
 	try:
-		host = str(frappe.conf.get("host_name") or "").strip().rstrip("/")
+		return str(frappe.conf.get("host_name") or "").strip().rstrip("/")
 	except Exception:
-		host = ""
+		return ""
+
+
+def public_base_url() -> str:
+	import frappe
+
+	host = configured_host()
 	if host.startswith(("https://", "http://")):
 		return host
 	return str(frappe.utils.get_url() or "").rstrip("/")

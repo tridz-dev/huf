@@ -220,7 +220,7 @@ class TestCaptcha(unittest.TestCase):
 
 	def test_captcha_launch_sends_web_app_and_defers(self):
 		gate = gw(telegram_guard_captcha=1)
-		with Env(gate) as env, mock.patch.dict("frappe.conf", {"host_name": ""}), mock.patch("frappe.utils.get_url", return_value="https://huf.example.com"):
+		with Env(gate) as env, mock.patch("huf.ai.telegram_public_url.configured_host", return_value=""), mock.patch("frappe.utils.get_url", return_value="https://huf.example.com"):
 			self.assertEqual(g.gateway_policy(CTX), "defer")
 			payload = env.fake.last("sendChatJoinRequestWebApp")["payload"]
 		self.assertEqual(payload["chat_join_request_query_id"], "Q1")
@@ -228,7 +228,7 @@ class TestCaptcha(unittest.TestCase):
 		self.assertNotIn(TOKEN, payload["web_app_url"])
 
 	def test_captcha_launch_failure_queues(self):
-		with Env(gw(telegram_guard_captcha=1)) as env, mock.patch.dict("frappe.conf", {"host_name": ""}), mock.patch("frappe.utils.get_url", return_value="http://x"):
+		with Env(gw(telegram_guard_captcha=1)) as env, mock.patch("huf.ai.telegram_public_url.configured_host", return_value=""), mock.patch("frappe.utils.get_url", return_value="http://x"):
 			self.assertEqual(g.gateway_policy(CTX), "queue")  # http URL rejected -> queue
 
 

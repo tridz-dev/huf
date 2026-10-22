@@ -39,7 +39,7 @@ class Base(unittest.TestCase):
 			_credentials=lambda r: {"token": "1:SECRET"},
 			_client=lambda c: client,
 			_audit_setup=mock.DEFAULT,
-		), mock.patch.dict("frappe.conf", {"host_name": ""}), mock.patch("frappe.utils.get_url", lambda *a, **k: url)
+		), mock.patch("huf.ai.telegram_public_url.configured_host", lambda: url)
 
 
 class TestPlan(Base):
