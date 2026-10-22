@@ -202,12 +202,12 @@ class TestMisc(Base):
 	def test_typing_best_effort(self):
 		with mock.patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=self.adapter), \
 				mock.patch("huf.ai.gateway_webhook.event_contact_name", return_value=""):
-			self.assertTrue(tp.send_typing(SimpleNamespace(provider="Telegram"), FakeEvent()))
+			self.assertTrue(tp.send_typing(SimpleNamespace(provider="Telegram", name="G"), FakeEvent()))
 			self.assertEqual(self.api.last("sendChatAction")["payload"]["action"], "typing")
 			self.api.queue("sendChatAction", FakeBotApi.error("Forbidden: bot was blocked by the user", 403))
-			self.assertFalse(tp.send_typing(SimpleNamespace(provider="Telegram"), FakeEvent()))
+			self.assertFalse(tp.send_typing(SimpleNamespace(provider="Telegram", name="G"), FakeEvent()))
 		with mock.patch("huf.ai.gateway_webhook.get_gateway_adapter", side_effect=RuntimeError("x")):
-			self.assertFalse(tp.send_typing(SimpleNamespace(provider="Telegram"), FakeEvent()))
+			self.assertFalse(tp.send_typing(SimpleNamespace(provider="Telegram", name="G"), FakeEvent()))
 
 	def test_hooks_registered(self):
 		for name in ("send_reply", "send_parts", "attempt_reply_parts", "send_errors", "error_text",
