@@ -535,7 +535,7 @@ class TestListMessagesInGatewayRun(Base):
 		self.assertEqual(kw["filters"]["gateway"], "gw")
 		self.assertEqual(kw["filters"]["conversation_id"], ["like", "9%"])
 		item = r["results"]["items"][0]
-		self.assertEqual(set(item), {"id", "time", "sender", "kind", "text", "status"})
+		self.assertEqual(set(item), {"id", "time", "sender", "kind", "text", "status", "direction"})
 		self.assertNotIn(TOKEN, item["text"])
 
 	def test_other_chat_refused(self):

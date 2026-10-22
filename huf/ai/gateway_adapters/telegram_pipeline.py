@@ -137,6 +137,7 @@ def build_sender(adapter: Any) -> TelegramSender:
 def send_parts_with(
 	sender: TelegramSender, chat_id: Any, parts: list[str], *, thread_id: Any = None, reply_to: Any = None,
 	markup: dict | None = None, on_sent: Any = None, media: bool = False, ephemeral: dict | None = None,
+	on_part: Any = None,
 ) -> SimpleNamespace:
 	"""Send ``parts`` in order. Raises ``TelegramPartsError(cause, sent_ids, remaining)`` on failure.
 
@@ -170,6 +171,8 @@ def send_parts_with(
 		sent.extend(ids)
 		if on_sent and ids:
 			on_sent(ids)
+		if on_part and ids:
+			on_part(ids, "text", part)
 	return SimpleNamespace(
 		provider_message_id=str(sent[0]) if sent else "", provider_response={"message_ids": sent}
 	)
@@ -224,6 +227,8 @@ def send_parts(gateway: Any, event: Any, parts: list[str], quote: bool) -> Simpl
 		sender, event.conversation_id, list(parts), thread_id=thread_id,
 		reply_to=reply_to if quote else None, markup=markup,
 		on_sent=lambda ids: telegram_messages.record_sent(gateway.name, event.conversation_id, event.name, ids),
+		on_part=lambda ids, kind, text: telegram_messages.record_outbound(
+			gateway.name, event.conversation_id, ids, kind=kind, text=text),
 		media=True, ephemeral=ephemeral_for(event),
 	)
 
