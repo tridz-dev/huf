@@ -682,6 +682,13 @@ def handle_action(action: str = "", **kwargs) -> str:
 			if refusal:
 				raise Refused("action_not_permitted", json.loads(refusal)["message"])
 			args["chat_id"] = chat
+		if action == "set_my_commands" and str(args.get("command_scope") or "default") in ("chat", "chat_member", "chat_administrators"):
+			target = scope.normalize_chat(args.get("chat_id"))
+			if not target:
+				raise Refused("invalid_argument", "chat_id is required for a chat-scoped command list")
+			refusal = scope.check_recipient(gateway, run_id, target)
+			if refusal:
+				raise Refused("action_not_permitted", json.loads(refusal)["message"])
 		if action == "set_chat_menu_button" and args.get("chat_id") not in (None, ""):
 			target = scope.normalize_chat(args.get("chat_id"))
 			if not target:

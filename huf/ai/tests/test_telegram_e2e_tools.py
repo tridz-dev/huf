@@ -424,7 +424,6 @@ class TestGatewayScopeMatrix(Harness):
 		self.assertEqual(res.get("error"), "action_not_permitted", res)
 		self.assertEqual(self.sent("setChatMenuButton"), [])
 
-	@unittest.expectedFailure  # GAP: set_my_commands(chat_id=...) is not recipient-scope checked (human-approved only)
 	def test_profile_command_scope_gap(self):
 		"""A chat-scoped setMyCommands for a non-scoped chat should be refused before asking for approval."""
 		self.configure_scope("Current contact")
