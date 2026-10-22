@@ -238,5 +238,74 @@ class TestAtomicCaps(unittest.TestCase):
 		self.assertIsNone(scope.claim_send("GW", "RUN"))
 
 
+class PipeRedis(AtomicRedis):
+	def __init__(self, fail_after_incr=False):
+		super().__init__()
+		self.ttls, self.fail_after_incr = {}, fail_after_incr
+
+	def pipeline(self, transaction=True):
+		outer = self
+
+		class P:
+			def __init__(self):
+				self.ops = []
+
+			def set(self, k, v, nx=False, ex=None):
+				self.ops.append(("set", k, v, nx, ex))
+
+			def incrby(self, k, n):
+				self.ops.append(("incr", k, n))
+
+			def execute(self):
+				out = []
+				for op in self.ops:
+					if op[0] == "set":
+						if op[3] and op[1] in outer.d:
+							out.append(None)
+						else:
+							outer.d[op[1]] = op[2]
+							outer.ttls[op[1]] = op[4]
+							out.append(True)
+					else:
+						out.append(outer.incrby(op[1], op[2]))
+				return out
+		return P()
+
+
+class TestAtomicTtl(unittest.TestCase):
+	def setUp(self):
+		self.addCleanup(patch.stopall)
+
+	def test_counter_always_created_with_ttl(self):
+		c = PipeRedis()
+		patch.object(scope, "_cache", return_value=c).start()
+		patch.object(scope, "settings", return_value=conf(per_run=3, per_day=5)).start()
+		self.assertIsNone(scope.claim_send("GW", "RUN"))
+		self.assertTrue(c.ttls and all(v == scope.DAY_SECONDS for v in c.ttls.values()))
+
+	def test_exception_after_incr_does_not_double_count(self):
+		c = PipeRedis()
+		real = c.ttl
+		state = {"n": 0}
+
+		def boom(k):
+			raise RuntimeError("redis gone")
+		c.ttl = boom
+		cache = FakeCache()
+		patch.object(scope, "_cache", return_value=c).start()
+		# day cap of 1 reached on 2nd claim path: force failure after the run counter was incremented
+		patch.object(scope, "settings", return_value=conf(per_run=5, per_day=1)).start()
+		orig = scope._incr
+		def flaky(cl, key):
+			state["n"] += 1
+			if state["n"] == 2:
+				raise RuntimeError("boom")
+			return orig(cl, key)
+		patch.object(scope, "_incr", side_effect=flaky).start()
+		scope.claim_send("GW", "RUN")  # falls back to list path
+		run_counter = [v for k, v in c.d.items() if "RUN" in k]
+		self.assertEqual(run_counter, [0])  # released before fallback
+
+
 if __name__ == "__main__":
 	unittest.main()
