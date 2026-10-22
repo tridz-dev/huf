@@ -670,3 +670,66 @@ class TestPrivateOnly(Base):
 		self.bindings.clear()
 		self.assertIsNone(self.handle_msg(_msg("/audit", command="audit")))
 		self.adapter.sender.send_text.assert_not_called()
+
+
+class TestAgentActionApproval(Base):
+	"""Op ``agent_action``: a destructive agent request executes only from an Admin's own button press."""
+
+	def setUp(self):
+		super().setUp()
+		self.bindings[(TG, GW)]["role_scope"] = "Admin"
+		self.action = {"op": "agent_action", "gateway": GW, "chat": "-100", "action": "ban",
+			"args": {"user_id": 5, "chat_id": "-100"}, "fp": "fp1"}
+		self.ran = []
+		from huf.ai.tools import telegram_admin_tools as tools
+
+		patch.object(tools, "execute_approved", side_effect=lambda a: self.ran.append(a) or "Done: ban").start()
+		self.addCleanup(patch.stopall)
+
+	def press(self, verb, **kw):
+		ta.agent_action_mark_pending("fp1", cache=self.cache)
+		nonce = ta.issue_nonce(TG, CHAT, self.action, cache=self.cache, now=self.now, ttl=600)
+		data = self.adapter.sign_callback_data(ta.callback_payload(verb, nonce), CHAT)
+		return self.handle_cb(data, **kw)
+
+	def test_describe(self):
+		self.assertIn("ban", ta.describe(self.action))
+
+	def test_approve_executes_and_audits(self):
+		self.press("c")
+		self.assertEqual(len(self.ran), 1)
+		self.assertEqual(self.audit[-1]["result"], "ok")
+		self.assertEqual(self.audit[-1]["action"]["op"], "agent_action")
+
+	def test_reject_does_not_execute_and_blocks_later_approve(self):
+		self.press("x")
+		self.assertEqual(self.ran, [])
+		self.assertEqual(self.audit[-1]["result"], "rejected")
+		self.assertFalse(ta.agent_action_pending("fp1", cache=self.cache))
+		nonce = ta.issue_nonce(TG, CHAT, self.action, cache=self.cache, now=self.now, ttl=600)
+		self.handle_cb(self.adapter.sign_callback_data(ta.callback_payload("c", nonce), CHAT))
+		self.assertEqual(self.ran, [])
+
+	def test_operator_scope_cannot_approve(self):
+		self.bindings[(TG, GW)]["role_scope"] = "Operator"
+		self.press("c")
+		self.assertEqual(self.ran, [])
+
+	def test_other_gateway_action_refused(self):
+		self.action["gateway"] = "other-gw"
+		self.press("c")
+		self.assertEqual(self.ran, [])
+
+	def test_foreign_user_cannot_use_nonce(self):
+		nonce = ta.issue_nonce(TG, CHAT, self.action, cache=self.cache, now=self.now, ttl=600)
+		ta.agent_action_mark_pending("fp1", cache=self.cache)
+		self.bindings[("888", GW)] = {**BINDING, "telegram_user_id": "888", "role_scope": "Admin", "chat_id": "888"}
+		self.handle_cb(self.adapter.sign_callback_data(ta.callback_payload("c", nonce), "888"), sender="888", chat="888")
+		self.assertEqual(self.ran, [])
+
+	def test_nonce_single_use_and_ttl_10_minutes(self):
+		nonce = ta.issue_nonce(TG, CHAT, self.action, cache=self.cache, now=self.now, ttl=600)
+		with self.assertRaises(ta.AdminError):
+			ta.consume_nonce(nonce, TG, CHAT, cache=self.cache, now=self.now + 601)
+		nonce = ta.issue_nonce(TG, CHAT, self.action, cache=self.cache, now=self.now, ttl=600)
+		ta.consume_nonce(nonce, TG, CHAT, cache=self.cache, now=self.now + 599)
