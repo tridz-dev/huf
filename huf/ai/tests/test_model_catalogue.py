@@ -13,7 +13,7 @@ Or standalone: python -m unittest huf.ai.tests.test_model_catalogue
 
 import unittest
 
-from huf.ai.model_catalogue import DEPRECATED, MODELS
+from huf.ai.model_catalogue import MODELS, RETIRED
 
 # Must match the "modalities" field's `options` in
 # huf/huf/doctype/ai_model/ai_model.json exactly.
@@ -87,20 +87,20 @@ class TestModelCatalogue(unittest.TestCase):
             "MODELS is not sorted deterministically by (provider, model_name)",
         )
 
-    def test_deprecated_names_not_present_in_models(self):
+    def test_retired_names_not_present_in_models(self):
         model_names = {entry["model_name"] for entry in MODELS}
-        overlap = set(DEPRECATED) & model_names
+        overlap = set(RETIRED) & model_names
         self.assertEqual(
             overlap, set(),
-            f"DEPRECATED names also present in MODELS: {overlap}",
+            f"RETIRED names also present in MODELS: {overlap}",
         )
 
-    def test_deprecated_is_a_tuple_of_strings(self):
-        self.assertIsInstance(DEPRECATED, tuple)
-        for name in DEPRECATED:
+    def test_retired_maps_names_to_replacement_or_none(self):
+        self.assertIsInstance(RETIRED, dict)
+        for name, replacement in RETIRED.items():
             self.assertIsInstance(name, str)
             self.assertTrue(name)
-
+            self.assertTrue(replacement is None or isinstance(replacement, str))
 
 if __name__ == "__main__":
     unittest.main()
