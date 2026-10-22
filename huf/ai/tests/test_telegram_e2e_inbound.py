@@ -513,7 +513,6 @@ class TestEdgeCases(unittest.TestCase):
 		self.assertTrue(ev.is_room)
 		self.assertEqual(ev.sender_id, ev.conversation_id)
 
-	@unittest.expectedFailure
 	def test_edit_not_misreported_as_duplicate(self):
 		# Suspected bug (telegram_ingest.handle_update): edited_message / channel_post fall through to the
 		# "message" category, whose _first_delivery guard already claimed this update id, so the ack says

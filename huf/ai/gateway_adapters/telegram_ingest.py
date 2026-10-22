@@ -143,19 +143,28 @@ def handle_update(gateway, adapter, request) -> dict | None:
 	if parsed.bot_blocked or parsed.bot_unblocked:
 		return _handle_block_change(gateway, parsed)
 	raw_key = next((k for k in (parsed.raw or {}) if k != "update_id"), "")
+	claimed = False
 	for key in dict.fromkeys((parsed.kind, raw_key, category)):
 		handler = _UPDATE_HANDLERS.get(key)
-		if handler is not None:
-			# Message ingestion is deduplicated by ingest_gateway_event; this guards handlers that short-circuit.
+		if handler is None:
+			continue
+		# Message ingestion is deduplicated by ingest_gateway_event; this guards handlers that short-circuit.
+		# Claim the update ONCE (several keys can match one update), and keep the claim only if a handler answers.
+		if not claimed:
 			if not _first_delivery(gateway.name, parsed.update_id):
 				return _ack(parsed.kind, "duplicate update ignored")
-			try:
-				handled = handler(gateway, adapter, parsed, request)
-			except Exception:
-				_release_delivery(gateway.name, parsed.update_id)  # let Telegram's retry run the handler again
-				raise
-			if handled is not None:
-				return handled
+			claimed = True
+		try:
+			handled = handler(gateway, adapter, parsed, request)
+		except Exception:
+			_release_delivery(gateway.name, parsed.update_id)  # let Telegram's retry run the handler again
+			raise
+		if handled is not None:
+			return handled
+	if claimed:
+		# No handler answered: the update continues to normal ingestion, which has its own dedup, and a failed
+		# ingest must stay retryable.
+		_release_delivery(gateway.name, parsed.update_id)
 	if category in ("membership", "business", "other"):
 		# Unhandled kinds (join/guard, business, inline); acked so Telegram never retries.
 		return _ack(parsed.kind)
