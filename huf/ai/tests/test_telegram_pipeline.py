@@ -221,3 +221,20 @@ class TestMisc(Base):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class TestSpokenText(unittest.TestCase):
+	def test_media_and_button_fences_are_not_spoken(self):
+		from huf.ai.gateway_adapters import telegram_pipeline as tp
+
+		text = (
+			"Here is your report.\n```telegram-media\n"
+			'{"items":[{"type":"photo","source":"url","value":"https://example.com/a.png"}]}\n```\n'
+			'```telegram-buttons\n{"rows":[[{"text":"Ok","url":"https://example.com"}]]}\n```\nBye.'
+		)
+		spoken = tp.spoken_text(text)
+		self.assertIn("Here is your report.", spoken)
+		self.assertIn("Bye.", spoken)
+		self.assertNotIn("telegram-media", spoken)
+		self.assertNotIn("telegram-buttons", spoken)
+		self.assertNotIn("example.com", spoken)

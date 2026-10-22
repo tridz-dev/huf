@@ -2615,7 +2615,9 @@ def _send_telegram_reply(event, gateway, agent_run_id, response: str) -> dict:
     parts = tp.make_parts(response) or [response]
     voice_hook = provider_hooks.get(gateway.provider, "voice_reply")
     if voice_hook is not None:
-        return voice_hook(event, gateway, response, lambda: _attempt_reply_parts(event, gateway, parts, 1))
+        return voice_hook(
+            event, gateway, tp.spoken_text(response), lambda: _attempt_reply_parts(event, gateway, parts, 1)
+        )
     return _attempt_reply_parts(event, gateway, parts, 1)
 
 

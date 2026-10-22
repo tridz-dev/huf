@@ -69,6 +69,14 @@ def make_parts(response: str) -> list[str]:
 	return split_message(response) or ([str(response)] if str(response or "").strip() else [])
 
 
+def spoken_text(response: str) -> str:
+	"""Reply text with the agent's ```telegram-media``` and ```telegram-buttons``` blocks removed (for TTS)."""
+	from huf.ai.gateway_adapters import telegram_buttons, telegram_media_reply as media_reply
+
+	visible, _items = media_reply.strip_reply(response)
+	return telegram_buttons.extract(visible)[0]
+
+
 def forum_thread_id(event: Any) -> str | None:
 	"""Forum topic id from the stored update (``thread_id`` on the event is the inbound message id)."""
 	raw = getattr(event, "raw_payload", None)
