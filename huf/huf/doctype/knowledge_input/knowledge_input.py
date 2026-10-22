@@ -85,7 +85,17 @@ class KnowledgeInput(Document):
 		return ext_map.get(ext, "application/octet-stream")
 	
 	def after_insert(self):
-		"""Queue processing after insert."""
+		"""Queue processing after insert.
+
+		Skipped when flags.skip_auto_index is set -- bulk ingestion
+		(huf.ai.knowledge.bulk.orchestrator) creates its Knowledge Input docs
+		with that flag and calls process_knowledge_input() directly and
+		synchronously right after insert, since it's already running inside a
+		background worker. Without this guard both paths would fire and every
+		bulk-ingested document would be indexed twice.
+		"""
+		if self.flags.get("skip_auto_index"):
+			return
 		self.queue_processing()
 	
 	def queue_processing(self):
