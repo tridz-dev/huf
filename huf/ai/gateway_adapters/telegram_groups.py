@@ -42,6 +42,12 @@ DECISIONS = admin.JOIN_RESULTS
 _policy: Callable[[dict], str] | None = None
 
 
+def _gateway_policy(ctx: dict) -> str:
+	from huf.ai import telegram_guard
+
+	return telegram_guard.gateway_policy(ctx)
+
+
 def register_join_policy(fn: Callable[[dict], str] | None) -> None:
 	"""Install the join decision function (None restores the default: queue)."""
 	global _policy
@@ -54,12 +60,12 @@ def default_policy(ctx: dict) -> str:
 
 def decide(ctx: dict) -> str:
 	try:
-		decision = (_policy or default_policy)(ctx)
+		decision = (_policy or _gateway_policy)(ctx)
 	except Exception as exc:
 		frappe.logger("huf").warning(f"Telegram join policy failed ({type(exc).__name__}); queueing")
 		return "queue"
 	decision = str(decision or "").strip().lower()
-	return decision if decision in DECISIONS else "queue"
+	return decision if decision in DECISIONS + ("defer",) else "queue"
 
 
 def _ack(kind: str, note: str = "", **extra: Any) -> dict:
@@ -131,9 +137,13 @@ def handle_join_request(gateway, adapter, parsed, request) -> dict | None:
 	ctx = join_request_ctx(parsed.raw)
 	if ctx is None:
 		return None
+	ctx["gateway"] = gateway.name
 	decision = decide(ctx)
 	client = adapter.client
 	error = ""
+	if decision == "defer":  # a Guard Mini App challenge owns the answer (telegram_guard)
+		frappe.logger("huf").info(f"Telegram gateway {gateway.name}: join request deferred to Guard Mini App")
+		return _ack("chat_join_request", "defer", decision="defer")
 	try:
 		if decision == "queue":
 			record_pending_join(gateway, ctx)
@@ -188,7 +198,19 @@ def apply_membership_change(gateway, parsed) -> dict:
 	return _ack(parsed.kind, transition, transition=transition)
 
 
+def _maybe_welcome(gateway, parsed) -> None:
+	from huf.ai import telegram_guard
+
+	telegram_guard.maybe_welcome(gateway, parsed)
+
+
 def handle_membership(gateway, adapter, parsed, request) -> dict | None:
 	if parsed.chat_type == "private":
 		return None  # private block / unblock is handled by telegram_ingest
-	return apply_membership_change(gateway, parsed)
+	ack = apply_membership_change(gateway, parsed)
+	if parsed.kind == "chat_member" and ack.get("transition") == "added":
+		try:
+			_maybe_welcome(gateway, parsed)
+		except Exception as exc:
+			frappe.logger("huf").warning(f"Telegram welcome failed ({type(exc).__name__})")
+	return ack
