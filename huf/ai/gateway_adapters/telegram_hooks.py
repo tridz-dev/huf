@@ -49,3 +49,4 @@ import huf.ai.gateway_adapters.telegram_business_hooks  # noqa: E402,F401  (WP-8
 import huf.ai.gateway_adapters.telegram_stream_hooks  # noqa: E402,F401  (WP-6)
 import huf.ai.gateway_adapters.telegram_groups_hooks  # noqa: E402,F401  (WP-8c)
 import huf.ai.gateway_adapters.telegram_modes_hooks  # noqa: E402,F401  (WP-8e)
+import huf.ai.gateway_adapters.telegram_integration_hooks  # noqa: E402,F401  (coordinator)

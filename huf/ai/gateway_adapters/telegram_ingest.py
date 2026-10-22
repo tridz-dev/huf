@@ -77,7 +77,13 @@ def _handle_block_change(gateway, parsed: TelegramUpdate) -> dict:
 	from huf.ai import gateway_service as svc
 
 	if parsed.chat_type != "private" or not parsed.sender_id:
-		return _ack(parsed.kind, "non-private membership change recorded only")
+		try:
+			from huf.ai.gateway_adapters import telegram_groups
+
+			telegram_groups.apply_membership_change(gateway, parsed)
+		except Exception:
+			frappe.logger("huf").warning("Telegram membership change could not be applied", exc_info=True)
+		return _ack(parsed.kind, "non-private membership change recorded")
 	if parsed.bot_blocked:
 		if svc._sender_is_known(gateway, parsed.sender_id):
 			svc._record_opt_out(gateway, parsed.sender_id, parsed.display_name)
@@ -127,6 +133,11 @@ def handle_update(gateway, adapter, request) -> dict | None:
 		from huf.ai.gateway_adapters import telegram_buttons
 
 		payload = adapter.verify_callback_data(parsed.callback_data, parsed.chat_id)
+		from huf.ai.gateway_adapters import telegram_business
+
+		business = telegram_business.handle_draft_callback(adapter, parsed, payload)
+		if business is not None:
+			return _ack("callback_query", f"business draft {business.get('result', '')}")
 		decision = telegram_buttons.handle_callback(parsed, payload, adapter.sender, gateway.name)
 		if decision["action"] != "ingest":
 			frappe.logger("huf").info(

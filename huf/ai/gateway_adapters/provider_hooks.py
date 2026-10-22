@@ -30,6 +30,8 @@ Hook signatures (``gateway`` / ``event`` are Gateway / Gateway Event documents):
 - ``webhook_signals() -> bool``: record verify/signature health timestamps on the Gateway.
 - ``mark_read_typing(adapter, provider_event_id) -> bool``: adapter-level read receipt + typing.
 - ``failed_status(gateway_name, status) -> None``: record a failed outbound delivery status.
+- ``conversation_key(event) -> str | None``: agent conversation key (default thread/conversation/sender).
+- ``guest_reply(event, gateway, response) -> dict | None``: provider-specific reply path; non-None short-circuits.
 - ``agent_runner(event, gateway) -> callable | None``: replacement for run_agent_sync (e.g. streaming) (WP-6).
 - ``agent_instructions() -> str``: short channel note prepended to the agent prompt for this provider (WP-5).
 - ``attempt_reply_parts(event, gateway, parts, attempt) -> dict``: provider-owned send/retry of reply parts (WP-1b).

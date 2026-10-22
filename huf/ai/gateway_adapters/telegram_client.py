@@ -33,6 +33,7 @@ ALLOWED_UPDATES: tuple[str, ...] = (
 	"edited_business_message",
 	"deleted_business_messages",
 	"stopped_message_generation",
+	"guest_message",
 )
 
 

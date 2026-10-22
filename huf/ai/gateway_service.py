@@ -2415,15 +2415,19 @@ def _process_gateway_event(event_name: str) -> dict:
             fallback_note = ""
             _maybe_mark_read_typing(event, gateway)
             _commit_unless_testing()  # keep Running status and saved media across a retry rollback
+            key_hook = provider_hooks.get(gateway.provider, "conversation_key")
+            conversation_ref = (key_hook(event) if key_hook else None) or (
+                event.thread_id or event.conversation_id or event.sender_id
+            )
             runner_hook = provider_hooks.get(gateway.provider, "agent_runner")
             run_fn = (runner_hook(event, gateway) if runner_hook else None) or run_agent_sync
             result = _run_agent_serialised(
                 run_fn,
-                lock_key=f"huf_gw_conv:{gateway.name}:{event.thread_id or event.conversation_id or event.sender_id}",
+                lock_key=f"huf_gw_conv:{gateway.name}:{conversation_ref}",
                 agent_name=event.target_agent,
                 prompt=prompt,
                 channel_id=f"gateway:{gateway.name}",
-                external_id=event.thread_id or event.conversation_id or event.sender_id,
+                external_id=conversation_ref,
                 now=True,
                 client_idempotency_key=f"gateway-event:{event.name}",
                 files=media_files or None,
@@ -2600,6 +2604,11 @@ def _send_telegram_reply(event, gateway, agent_run_id, response: str) -> dict:
         event.db_set("agent_run", agent_run_id)
     if event.sender_id and is_opted_out(gateway, event.sender_id):
         return _suppress_reply(event, agent_run_id, tp.OPT_OUT_NOTE)
+    guest_hook = provider_hooks.get(gateway.provider, "guest_reply")
+    if guest_hook is not None:
+        guest_result = guest_hook(event, gateway, response)
+        if guest_result is not None:
+            return guest_result
     parts = tp.make_parts(response) or [response]
     voice_hook = provider_hooks.get(gateway.provider, "voice_reply")
     if voice_hook is not None:
