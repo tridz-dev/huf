@@ -2592,7 +2592,11 @@ def _send_telegram_reply(event, gateway, agent_run_id, response: str) -> dict:
         event.db_set("agent_run", agent_run_id)
     if event.sender_id and is_opted_out(gateway, event.sender_id):
         return _suppress_reply(event, agent_run_id, tp.OPT_OUT_NOTE)
-    return _attempt_reply_parts(event, gateway, tp.make_parts(response) or [response], 1)
+    parts = tp.make_parts(response) or [response]
+    voice_hook = provider_hooks.get(gateway.provider, "voice_reply")
+    if voice_hook is not None:
+        return voice_hook(event, gateway, response, lambda: _attempt_reply_parts(event, gateway, parts, 1))
+    return _attempt_reply_parts(event, gateway, parts, 1)
 
 
 def _send_voice_only(event, gateway, response: str) -> bool:
