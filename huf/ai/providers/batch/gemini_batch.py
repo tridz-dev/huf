@@ -154,7 +154,7 @@ def _messages_to_contents(messages: list[dict]) -> list[dict]:
 	`contents: [{"role": "user"|"model", "parts": [{"text": ...}]}]` (see
 	huf/ai/providers/google.py, which builds this shape inline for realtime
 	calls; there is no shared translation helper elsewhere in this repo, e.g.
-	sdk_tools.py/tool_serializer.py, to reuse -- confirmed by search). "system"
+	sdk_tools.py/huf/ai/tools/serializer.py, to reuse -- confirmed by search). "system"
 	messages are folded into the first user turn's text since Phase 1 scope is
 	single-request scheduled batches (a single prompt), not multi-turn
 	conversations or tool use -- this is a deliberate simplification, not a

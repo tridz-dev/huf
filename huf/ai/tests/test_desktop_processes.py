@@ -328,7 +328,7 @@ class TestExposure(sup.ExposureBase):
 		self.assertLessEqual(DESKTOP_WORKSPACE_TOOL_NAMES | DESKTOP_PROCESS_TOOL_NAMES, names)
 
 	def test_invoke_tool_refuses_every_process_tool(self):
-		from huf.ai.tool_invocation import invoke_tool
+		from huf.ai.tools.invocation import invoke_tool
 
 		self.register(sup.PROC_CAPS)
 		frappe.set_user(self.user)

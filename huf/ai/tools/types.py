@@ -1,4 +1,4 @@
-from huf.ai.tool_registry import PermissionAwareToolRegistry
+from huf.ai.tools.registry import PermissionAwareToolRegistry
 
 # Guest-allowed tools of these types MUST pin a reference_doctype; otherwise the
 # LLM could supply an arbitrary doctype and, combined with the guest

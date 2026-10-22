@@ -30,9 +30,9 @@ huf/
 │   │   ├── agent_hooks.py        # DocType event triggers
 │   │   ├── conversation_manager.py # Conversation history
 │   │   ├── sdk_tools.py          # Tool serialization
-│   │   ├── tool_functions.py     # CRUD operations
-│   │   ├── tool_registry.py      # Tool discovery from hooks
-│   │   ├── tool_serializer.py    # Provider-agnostic tool format
+│   │   ├── tools/functions.py    # CRUD operations
+│   │   ├── tools/registry.py     # Tool discovery from hooks
+│   │   ├── tools/serializer.py   # Provider-agnostic tool format
 │   │   ├── mcp_client.py         # MCP protocol support
 │   │   ├── http_handler.py       # HTTP tools with SSRF protection
 │   │   ├── run.py                # Provider routing layer
@@ -266,7 +266,7 @@ toast.success("Agent created");
 3. **`run.py`**: `RunProvider` routes to appropriate LLM provider
 4. **`providers/litellm.py`**: Unified provider handling via LiteLLM
 5. **`sdk_tools.py`**: Converts `Agent Tool Function` DocTypes to SDK tools
-6. **`tool_functions.py`**: Low-level Frappe database operations
+6. **`tools/functions.py`**: Low-level Frappe database operations
 
 ### Flow Engine
 1. **`flow_engine.py`**: Core engine - loads definitions, creates runs, executes nodes, evaluates edges

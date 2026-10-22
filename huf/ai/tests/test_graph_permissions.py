@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 
 def _install_standalone_frappe_stub():
 	"""Make ``huf`` (and everything it transitively imports at module load time --
-	``huf.ai.tool_registry``, which does ``import frappe`` / ``from frappe import _`` /
+	``huf.ai.tools.registry``, which does ``import frappe`` / ``from frappe import _`` /
 	``from frappe.utils import now_datetime`` at its top level) importable without a real
 	Frappe bench.
 
@@ -62,7 +62,7 @@ from huf.ai.graph.permissions import (
 	envelope_declares,
 	static_tool_closure,
 )
-from huf.ai.tool_registry import PermissionAwareToolRegistry
+from huf.ai.tools.registry import PermissionAwareToolRegistry
 
 
 # ----------------------------------------------------------------------------------

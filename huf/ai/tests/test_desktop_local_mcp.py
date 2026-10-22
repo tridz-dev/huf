@@ -845,7 +845,7 @@ class TestExposure(sup.ExposureBase):
 		self.assertFalse({n for n in names if n.startswith(DESKTOP_DYNAMIC_TOOL_PREFIXES)})
 
 	def test_invoke_tool_refuses_every_mcp_and_browser_row(self):
-		from huf.ai.tool_invocation import invoke_tool
+		from huf.ai.tools.invocation import invoke_tool
 
 		self.register(sup.ALL_CAPS)
 		frappe.set_user(self.user)

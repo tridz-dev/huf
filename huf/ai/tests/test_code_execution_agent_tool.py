@@ -16,8 +16,9 @@ from unittest.mock import patch
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from huf.ai import sdk_tools, tool_invocation
-from huf.ai.tool_registry import PermissionAwareToolRegistry
+from huf.ai import sdk_tools
+from huf.ai.tools import invocation as tool_invocation
+from huf.ai.tools.registry import PermissionAwareToolRegistry
 from huf.ai.tools import code_execution
 from huf.install import create_code_execution_tools
 

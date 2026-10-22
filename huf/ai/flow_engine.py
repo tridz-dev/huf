@@ -32,7 +32,7 @@ What changed in T-22, and why (defect ids are from the track plan):
   :class:`~huf.ai.graph.executor.GraphContext` carried by
   :class:`FlowRunContext` and threaded through every executor.
 * **I5 -- telemetry.** ``Agent Tool Call`` records are emitted by
-  ``huf.ai.tool_invocation`` (through ``flow_tool_executor``), not assembled
+  ``huf.ai.tools.invocation`` (through ``flow_tool_executor``), not assembled
   here. Exactly one record per atomic operation.
 """
 
@@ -75,7 +75,7 @@ from huf.ai.graph.transforms import Limits as TransformLimits
 from huf.ai.graph.templates import TemplateError
 from huf.ai.graph.transforms import run_transform
 from huf.ai.output_budget import OutputBudget, OutputBudgetExceeded, enforce_output_budget
-from huf.ai.tool_invocation import RunContext
+from huf.ai.tools.invocation import RunContext
 from huf.ai.transaction import commit_if_background
 
 

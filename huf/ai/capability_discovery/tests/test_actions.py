@@ -176,7 +176,7 @@ class TestZeroConfigDiscovery(IntegrationTestCase):
         # to prove huf.ai.capability_discovery.api.search_app_actions has NO huf_tools declaration
         # (i.e. declared_actions_for_app / huf_tools scanning alone would never surface it),
         # so its presence below proves the new zero-config discovery path is doing real work.
-        from huf.ai.tool_registry import _normalize_hook_tools
+        from huf.ai.tools.registry import _normalize_hook_tools
 
         declared_paths = set()
         for hook_entry in frappe.get_hooks("huf_tools", app_name=REAL_APP) or []:

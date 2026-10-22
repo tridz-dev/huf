@@ -1127,7 +1127,7 @@ This file acts as a bridge between Huf's `Agent Tool Function` DocType and the `
 -   **Method: `handle_get_list`, `handle_create_document`, etc.**
     -   These are the actual functions that get executed when a standard DocType tool is called. They contain the logic to interact with the Frappe database (e.g., `frappe.get_list`, `frappe.get_doc`) and format the response in a way the AI can understand.
 
-#### `tool_functions.py`
+#### `tools/functions.py`
 
 This file contains the low-level functions that directly perform Frappe database operations.
 
@@ -1154,7 +1154,7 @@ This file implements the OpenRouter provider with custom retry logic and enhance
     -   **API Key Management**: Retrieves API key from `AI Provider` DocType using secure password field.
     -   **Multi-turn Tool Calling**: Supports multiple rounds of tool calling in a single agent run (up to 10 rounds).
     -   **Retry Logic**: Implements exponential backoff for rate limit (429) errors with up to 5 retries.
-    -   **Tool Serialization**: Uses `tool_serializer.serialize_tools()` for provider-agnostic tool format.
+    -   **Tool Serialization**: Uses `huf/ai/tools/serializer.py` `serialize_tools()` for provider-agnostic tool format.
     -   **Usage Tracking**: Accumulates token usage across multiple rounds of tool calling.
 -   **Function: `_post_with_retry(url, headers, payload, max_retries=5)`**
     -   Handles HTTP POST requests with automatic retry for rate limiting.
@@ -1293,7 +1293,7 @@ This file provides OpenAI Whisper integration for audio transcription.
     -   **Security**: Validates OpenAI API key configuration before processing.
     -   **Cleanup**: Automatically removes temporary files after transcription.
 
-#### `tool_registry.py`
+#### `tools/registry.py`
 
 This file provides automatic tool discovery and synchronization from app hooks.
 
@@ -1314,7 +1314,7 @@ This file provides automatic tool discovery and synchronization from app hooks.
 -   **Caching System**: Uses `Agent Settings` singleton to store last sync timestamps.
 -   **Sync Logic**: Only syncs when apps have been modified since last sync.
 
-#### `tool_serializer.py`
+#### `tools/serializer.py`
 
 This file provides provider-agnostic tool serialization for multi-provider AI agents.
 
@@ -1769,7 +1769,7 @@ Each registered tool must include:
 
 ### Synchronization Process
 
-#### Automatic Sync (`tool_registry.py`)
+#### Automatic Sync (`tools/registry.py`)
 
 -   **Trigger**: Sync occurs when apps are modified or on system startup
 -   **Cache Management**: Uses `Agent Settings` singleton to track last sync times

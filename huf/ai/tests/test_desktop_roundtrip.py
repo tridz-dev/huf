@@ -533,7 +533,7 @@ class TestDesktopRoundTrip(unittest.TestCase):
 	def test_a_flow_or_procedure_cannot_reach_the_handlers_through_invoke_tool(self):
 		import asyncio
 
-		from huf.ai.tool_invocation import invoke_tool
+		from huf.ai.tools.invocation import invoke_tool
 
 		frappe.set_user("Administrator")
 		row = frappe.db.get_value(

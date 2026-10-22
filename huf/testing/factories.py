@@ -288,7 +288,7 @@ def make_agent_tool_function(tool_name=None, tool_type=None, **overrides):
 
 
 # ---------------------------------------------------------------------------
-# Deterministic test-tool fixtures (huf/ai/tool_testing.py)
+# Deterministic test-tool fixtures (huf/testing/tool_testing.py)
 # ---------------------------------------------------------------------------
 #
 # Two flavors, for the two test layers this repo distinguishes
@@ -296,7 +296,7 @@ def make_agent_tool_function(tool_name=None, tool_type=None, **overrides):
 #
 # - ``build_*_tool_spec()`` return a plain dict shaped like the fields Frappe
 #   would read off an ``Agent Tool Function`` document. Layer A (mocked-
-#   frappe, no bench — huf/ai/tests/test_test_tools.py) tests wrap these in
+#   frappe, no bench — huf/ai/tools/tests/test_test_tools.py) tests wrap these in
 #   ``types.SimpleNamespace`` to feed attribute-access-only code
 #   (``PermissionAwareToolRegistry``/``create_function_tool``) without a real
 #   DB.
@@ -306,12 +306,12 @@ def make_agent_tool_function(tool_name=None, tool_type=None, **overrides):
 #   permission-check -> handler-resolution -> handler-call ->
 #   persistence path end to end.
 #
-# Each handler in huf/ai/tool_testing.py has one builder pair here, keyed by a
+# Each handler in huf/testing/tool_testing.py has one builder pair here, keyed by a
 # short handler name in ``TEST_TOOL_SPEC_BUILDERS``.
 
 import json as _json
 
-_TEST_TOOL_FUNCTION_MODULE = "huf.ai.tool_testing"
+_TEST_TOOL_FUNCTION_MODULE = "huf.testing.tool_testing"
 
 
 def _build_test_tool_spec(tool_name, description, function_path, **overrides):
@@ -333,7 +333,7 @@ def _build_test_tool_spec(tool_name, description, function_path, **overrides):
 
 
 def build_echo_tool_spec(**overrides):
-    """Spec for ``huf.ai.tool_testing.echo`` — returns its input unchanged."""
+    """Spec for ``huf.testing.tool_testing.echo`` — returns its input unchanged."""
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_echo"),
         description="Test tool: returns its input arguments unchanged.",
@@ -345,7 +345,7 @@ def build_echo_tool_spec(**overrides):
 
 
 def build_deterministic_add_tool_spec(**overrides):
-    """Spec for ``huf.ai.tool_testing.deterministic_add`` — sums a list of numbers."""
+    """Spec for ``huf.testing.tool_testing.deterministic_add`` — sums a list of numbers."""
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_deterministic_add"),
         description="Test tool: deterministically sums a list of numbers.",
@@ -361,7 +361,7 @@ def build_deterministic_add_tool_spec(**overrides):
 
 
 def build_deterministic_fail_tool_spec(**overrides):
-    """Spec for ``huf.ai.tool_testing.deterministic_fail`` — always raises."""
+    """Spec for ``huf.testing.tool_testing.deterministic_fail`` — always raises."""
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_deterministic_fail"),
         description="Test tool: always raises a known exception (failure-path testing).",
@@ -373,11 +373,11 @@ def build_deterministic_fail_tool_spec(**overrides):
 
 
 def build_permission_protected_mutation_tool_spec(**overrides):
-    """Spec for ``huf.ai.tool_testing.permission_protected_mutation``.
+    """Spec for ``huf.testing.tool_testing.permission_protected_mutation``.
 
     Sets ``required_permission="write"`` plus a real ``reference_doctype``
     ("ToDo") so the actual ``TOOL_PERMISSIONS``/``required_permission`` gate
-    in ``PermissionAwareToolRegistry._can_use_tool`` (huf/ai/tool_registry.py:
+    in ``PermissionAwareToolRegistry._can_use_tool`` (huf/ai/tools/registry.py:
     91-105) is exercised — that gate only runs when ``reference_doctype`` is
     set.
     """
@@ -397,7 +397,7 @@ def build_permission_protected_mutation_tool_spec(**overrides):
 
 
 def build_slow_or_timeout_tool_spec(**overrides):
-    """Spec for ``huf.ai.tool_testing.slow_or_timeout`` — capped, deterministic sleep."""
+    """Spec for ``huf.testing.tool_testing.slow_or_timeout`` — capped, deterministic sleep."""
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_slow_or_timeout"),
         description="Test tool: sleeps for a capped, deterministic duration (timeout-path testing).",

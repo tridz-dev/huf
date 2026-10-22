@@ -152,7 +152,7 @@ after_migrate = [
 
 # before_uninstall = "huf.uninstall.before_uninstall"
 after_uninstall = [
-    "huf.ai.tool_registry.sync_app_tools",
+    "huf.ai.tools.registry.sync_app_tools",
     "huf.ai.skills.hooks.sync_app_skills",
 ]
 
@@ -456,8 +456,8 @@ fixtures = [
 # Integration Tools Hook
 # ----------------------
 # Register all external integration tools (Slack, GitHub, etc.)
-# The tool_registry.sync_discovered_tools() function reads this hook
-to_sync_tools = "huf.ai.tool_registry.sync_discovered_tools"
+# The huf.ai.tools.registry.sync_discovered_tools() function reads this hook
+to_sync_tools = "huf.ai.tools.registry.sync_discovered_tools"
 
 # Register integration tools from _registry
 huf_tools = "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS"

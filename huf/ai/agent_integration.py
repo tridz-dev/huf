@@ -13,7 +13,7 @@ from frappe.utils.background_jobs import enqueue
 from frappe.utils import now_datetime, add_to_date
 
 from frappe import _
-from .tool_functions import (
+from huf.ai.tools.functions import (
 	create_document,
     get_document,
 	get_list,
@@ -39,7 +39,7 @@ from frappe.rate_limiter import rate_limit
 from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
 from huf.ai.model_metadata import resolve_model_context_window
 from huf.permissions import has_capability
-from huf.ai.tool_serializer import serialize_tools
+from huf.ai.tools.serializer import serialize_tools
 from huf.ai.run_budget import RunBudget, RunBudgetExceeded, get_current_budget, set_current_budget
 
 class _LazyLogger:
@@ -146,8 +146,8 @@ class AgentManager:
         create_agent_tools() merges several origins into a single flat list
         with no surviving type tag: user-authored `Agent Tool Function`
         docs, tools seeded from the registry/app-discovery pipeline (synced
-        via huf.ai.tool_registry.sync_discovered_tools, which stamps
-        `types = "App Provided"` — see huf/ai/tool_registry.py), the
+        via huf.ai.tools.registry.sync_discovered_tools, which stamps
+        `types = "App Provided"` — see huf/ai/tools/registry.py), the
         always-on `ask_user` builder tool, and a handful of tools built
         directly in code with no backing `Agent Tool Function` doc at all
         (get_conversation_data/set_conversation_data/load_conversation_data,
