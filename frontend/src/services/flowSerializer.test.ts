@@ -111,7 +111,7 @@ describe('flowSerializer', () => {
     it('maps end node type to output', () => {
       // The graph-IR's BackendNodeType has no 'end' variant -- the shared
       // Flow/Procedure vocabulary calls a terminal node 'output' (matching
-      // OutputNode in huf/ai/graph/graph_ir.schema.json). huf/ai/flow_engine.py's
+      // OutputNode in huf/ai/graph/graph_ir.schema.json). huf/ai/flow/engine.py's
       // dispatch table treats 'output' as an alias of its existing 'end' handler.
       const flow = createTestFlow([
         {
@@ -218,7 +218,7 @@ describe('flowSerializer', () => {
     // These 8 action types are not explicitly mapped in mapFrontendNodeTypeToBackend
     // and fall through to the default: return 'tool.call' at line ~80.
     // This causes data loss because tool.call nodes without a tool_name are rejected
-    // by the engine at flow_engine.py:571-573.
+    // by the engine at flow/engine.py:571-573.
     // These tests document the current broken behavior.
 
     it("KNOWN DEFECT: 'code' action silently serializes to tool.call", () => {
@@ -231,7 +231,7 @@ describe('flowSerializer', () => {
     });
 
     it("KNOWN DEFECT: 'email' action silently serializes to tool.call", () => {
-      // tool.call with no tool_name is rejected by engine at flow_engine.py:571-573
+      // tool.call with no tool_name is rejected by engine at flow/engine.py:571-573
       const flow = createTestFlow([
         createActionNodeWithUnmappedType('node1', 'email'),
       ]);
@@ -241,7 +241,7 @@ describe('flowSerializer', () => {
 
     it("KNOWN DEFECT: 'webhook' action silently serializes to tool.call", () => {
       // Note: 'webhook' here refers to an action webhook, not the trigger webhook.
-      // tool.call with no tool_name is rejected by engine at flow_engine.py:571-573
+      // tool.call with no tool_name is rejected by engine at flow/engine.py:571-573
       const flow = createTestFlow([
         createActionNodeWithUnmappedType('node1', 'webhook'),
       ]);
@@ -250,7 +250,7 @@ describe('flowSerializer', () => {
     });
 
     it("KNOWN DEFECT: 'file' action silently serializes to tool.call", () => {
-      // tool.call with no tool_name is rejected by engine at flow_engine.py:571-573
+      // tool.call with no tool_name is rejected by engine at flow/engine.py:571-573
       const flow = createTestFlow([
         createActionNodeWithUnmappedType('node1', 'file'),
       ]);
@@ -259,7 +259,7 @@ describe('flowSerializer', () => {
     });
 
     it("KNOWN DEFECT: 'date' action silently serializes to tool.call", () => {
-      // tool.call with no tool_name is rejected by engine at flow_engine.py:571-573
+      // tool.call with no tool_name is rejected by engine at flow/engine.py:571-573
       const flow = createTestFlow([
         createActionNodeWithUnmappedType('node1', 'date'),
       ]);
@@ -268,7 +268,7 @@ describe('flowSerializer', () => {
     });
 
     it("KNOWN DEFECT: 'slack' action silently serializes to tool.call", () => {
-      // tool.call with no tool_name is rejected by engine at flow_engine.py:571-573
+      // tool.call with no tool_name is rejected by engine at flow/engine.py:571-573
       const flow = createTestFlow([
         createActionNodeWithUnmappedType('node1', 'slack'),
       ]);
@@ -277,7 +277,7 @@ describe('flowSerializer', () => {
     });
 
     it("KNOWN DEFECT: 'sheets' action silently serializes to tool.call", () => {
-      // tool.call with no tool_name is rejected by engine at flow_engine.py:571-573
+      // tool.call with no tool_name is rejected by engine at flow/engine.py:571-573
       const flow = createTestFlow([
         createActionNodeWithUnmappedType('node1', 'sheets'),
       ]);
@@ -286,7 +286,7 @@ describe('flowSerializer', () => {
     });
 
     it("KNOWN DEFECT: 'notion' action silently serializes to tool.call", () => {
-      // tool.call with no tool_name is rejected by engine at flow_engine.py:571-573
+      // tool.call with no tool_name is rejected by engine at flow/engine.py:571-573
       const flow = createTestFlow([
         createActionNodeWithUnmappedType('node1', 'notion'),
       ]);

@@ -301,7 +301,7 @@ class Gateway(Document):
 
     def _validate_agent_access(self):
         """Verify execution_user has access to the default_agent."""
-        from huf.ai.agent_access import check_agent_access
+        from huf.ai.agent.access import check_agent_access
 
         agent = frappe.get_doc("Agent", self.default_agent)
         if not check_agent_access(agent, self.execution_user, for_execution=True):

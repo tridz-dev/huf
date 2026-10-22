@@ -12,6 +12,8 @@ import json
 import unittest
 from unittest.mock import patch
 
+import frappe
+
 from huf.ai.gateway_adapters import whatsapp_bridge as wb
 from huf.ai.gateway_adapters import whatsapp_format as wf
 from huf.ai.gateway_adapters import whatsapp_messages as wm
@@ -58,6 +60,12 @@ class _Base(unittest.TestCase):
 		):
 			p.start()
 			self.addCleanup(p.stop)
+		# The media-link preflight is skipped only while frappe.flags.in_test is set; pin it so an
+		# earlier test that cleared the flag cannot make these tests fetch cdn.example.
+		# (frappe.flags is dict-backed, so set it directly rather than with patch.object.)
+		previous_in_test = frappe.flags.get("in_test")
+		frappe.flags.in_test = True
+		self.addCleanup(frappe.flags.__setitem__, "in_test", previous_in_test)
 		self.post = Post()
 
 

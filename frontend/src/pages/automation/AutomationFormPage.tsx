@@ -79,14 +79,14 @@ function toTriggerRow(trigger: AutomationTriggerDoc): TriggerRow {
  * Automation Trigger's autoname is `field:trigger_name` (reqd, unique) --
  * the UI never surfaces a "trigger name" field to the user (not in this
  * track's field lists for any trigger type), so generate a stable, unique
- * one client-side. NOTE: as of this writing `automation_api.create_trigger`
+ * one client-side. NOTE: as of this writing `automation.api.create_trigger`
  * deliberately excludes `trigger_name` from the set of fields it copies out
  * of `kwargs` (see its `_TRIGGER_FIELDS` docstring -- the exclusion was
  * meant to stop *renames* going through the generic update path, but
  * `create_trigger` uses the same tuple and so also drops it on create,
  * which will make `doc.insert()` fail on the field's `reqd` constraint).
  * This is a pre-existing backend gap outside this task's file list
- * (`automation_api.py`) -- sending the value here is still correct so the
+ * (`automation/api.py`) -- sending the value here is still correct so the
  * frontend contract is right the moment that gap is closed.
  */
 function generateTriggerName(automationName: string, triggerType: string): string {

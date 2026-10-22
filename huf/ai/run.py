@@ -131,7 +131,7 @@ class RunProvider:
         function does not execute any of its body and does not need `await` --
         it synchronously returns an async-generator object, with all real work
         deferred until the caller does `async for chunk in stream`. The one
-        caller (`huf/ai/agent_integration.py`, `stream = RunProvider.run_stream(...)`
+        caller (`huf/ai/agent/integration.py`, `stream = RunProvider.run_stream(...)`
         followed by `async for` over it) already consumes it that way, so no
         change is needed here.
         """

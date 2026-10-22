@@ -9,9 +9,9 @@ creation, and never re-derived from it afterwards -- ``validate()`` refuses to l
 either field change on an existing row, and the runtime (T-23) must read
 ``pinned_definition_json`` off this document, never re-fetch ``procedure``.
 
-Execution is serialized per-run with ``huf.ai.procedure_lock`` (GT-08): any code path
+Execution is serialized per-run with ``huf.ai.procedure.lock`` (GT-08): any code path
 that advances this run's steps must first acquire
-``huf.ai.procedure_lock.ProcedureRunLock(run.name)`` and bail out (not retry inline) if
+``huf.ai.procedure.lock.ProcedureRunLock(run.name)`` and bail out (not retry inline) if
 it does not get the lock -- another worker already owns this run's advancement.
 """
 
@@ -30,7 +30,7 @@ def get_permission_query_conditions(user=None):
 	"""Restrict Agent Procedure Run list/read to runs the user owns,
 	unless the user has agent.view_all capability.
 
-	Fix for the same defect pattern as F-02 (see huf.ai.agent_integration
+	Fix for the same defect pattern as F-02 (see huf.ai.agent.integration
 	.get_run_permission_conditions, the reference implementation this mirrors):
 	Huf User / Huf Manager hold create+write on this DocType but there was no
 	if_owner restriction and no permission_query_conditions hook, so any

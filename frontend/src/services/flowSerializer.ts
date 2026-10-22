@@ -56,7 +56,7 @@ export function defaultContract(): BackendContract {
  * checks the *shape* of `fingerprint` (64 lowercase hex chars, graph-ir.md section 7) --
  * it does not itself recompute and compare it against the graph's canonical form, so a
  * stable placeholder is schema-valid. A real content-addressed fingerprint (matching
- * `huf.ai.procedure_versioning.compute_fingerprint`'s algorithm) is intentionally left
+ * `huf.ai.procedure.versioning.compute_fingerprint`'s algorithm) is intentionally left
  * as backend-computed, not duplicated in the frontend.
  */
 function placeholderFingerprint(seed: string): string {
@@ -249,7 +249,7 @@ export function deserializeFlow(
         // The graph-IR carries no per-graph `version`/`settings` any more -- version
         // lives on the Flow Definition doctype record, and run settings (mode,
         // max_hops, conversation_mode) are now engine-side defaults
-        // (huf.ai.flow_engine.DEFAULT_MAX_HOPS et al.) rather than authored per-Flow.
+        // (huf.ai.flow.engine.DEFAULT_MAX_HOPS et al.) rather than authored per-Flow.
         version: 1,
     };
 }

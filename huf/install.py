@@ -122,7 +122,7 @@ def after_install():
     sync_tool_types()
     sync_default_tool_categories()
     seed_skill_categories()
-    from huf.ai.tool_registry import sync_discovered_tools
+    from huf.ai.tools.registry import sync_discovered_tools
     sync_discovered_tools(use_cache=False)
     frappe.db.commit()
     """
@@ -194,7 +194,7 @@ def after_migrate():
 		sync_tool_types()
 		sync_default_tool_categories()
 		seed_skill_categories()
-		from huf.ai.tool_registry import sync_discovered_tools
+		from huf.ai.tools.registry import sync_discovered_tools
 		result = sync_discovered_tools(use_cache=False)  # Full scan (apps_to_scan=None)
 		logger.info(
 			f"Synced tools after migrate: {result.get('total_tools', 0)} tools from {len(result.get('synced_apps', []))} apps"
@@ -1058,7 +1058,7 @@ def create_flow_tools():
         tool_type_doc.name1 = "Workflow Tools"
         tool_type_doc.insert()
         
-    from huf.ai.flow_tools import flow_tool_definitions
+    from huf.ai.flow.tools import flow_tool_definitions
     
     for tool_def in flow_tool_definitions:
         tool_name = tool_def["tool_name"]

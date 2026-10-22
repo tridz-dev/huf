@@ -8,7 +8,7 @@ import threading
 
 import frappe
 
-from huf.ai import desktop_executor as dx
+from huf.ai.desktop import executor as dx
 
 FP = "0123456789abcdef"
 

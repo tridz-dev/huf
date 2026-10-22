@@ -211,7 +211,7 @@ def _validate_agent_access(agent: str) -> None:
     if not frappe.db.exists("Agent", agent):
         frappe.throw(_("Agent {0} does not exist").format(agent))
 
-    from huf.ai.agent_integration import _is_user_allowed
+    from huf.ai.agent.integration import _is_user_allowed
 
     agent_doc = frappe.get_cached_doc("Agent", agent)
     if not _is_user_allowed(agent_doc, frappe.session.user):

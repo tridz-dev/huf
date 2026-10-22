@@ -23,7 +23,7 @@ class AutomationTrigger(Document):
 
 	def _set_initial_next_execution(self):
 		"""Schedule-type triggers are only ever picked up by
-		automation_scheduler.run_due_automations() via a
+		automation.scheduler.run_due_automations() via a
 		``next_execution <= now`` filter, which excludes NULL in SQL. A
 		freshly created (or re-enabled) Schedule trigger with no
 		next_execution yet would therefore never fire -- compute an initial
@@ -42,7 +42,7 @@ class AutomationTrigger(Document):
 		)
 		if self.next_execution and not schedule_changed:
 			return
-		from huf.ai.automation_scheduler import compute_next_execution
+		from huf.ai.automation.scheduler import compute_next_execution
 
 		self.next_execution = compute_next_execution(self.as_dict(), now_datetime())
 

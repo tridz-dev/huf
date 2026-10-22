@@ -338,7 +338,7 @@ class TestMakeAutomationAndTriggers(FactoriesTestCase):
 
     def test_make_agent_trigger_is_the_legacy_doctype(self):
         """Both Automation Trigger (new) and Agent Trigger (legacy) must be
-        supported per docs/testing/CURRENT_STATE.md section 7's dual-runtime
+        supported per the CURRENT_STATE audit (archived in the workspace) section 7's dual-runtime
         finding - this asserts the legacy factory targets the distinct
         "Agent Trigger" doctype, not "Automation Trigger"."""
         factories.make_agent_trigger(agent="Agent-1")

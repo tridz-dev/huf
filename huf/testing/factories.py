@@ -14,7 +14,7 @@ This module is a from-scratch rewrite against current `develop`'s actual
 schema, verified field-by-field against the real doctype JSON (citations in
 each function's docstring) rather than guessed.
 
-Project rule this module exists to serve (see `docs/testing/CURRENT_STATE.md`):
+Project rule this module exists to serve (see the CURRENT_STATE audit (archived in the workspace)):
 tests must build their own deterministic world and assert real behavior,
 never `if no model: skipTest(...)` away essential regression coverage.
 Every factory here is safe to call with zero pre-existing fixtures on a
@@ -288,15 +288,15 @@ def make_agent_tool_function(tool_name=None, tool_type=None, **overrides):
 
 
 # ---------------------------------------------------------------------------
-# Deterministic test-tool fixtures (huf/ai/tool_testing.py)
+# Deterministic test-tool fixtures (huf/testing/tool_testing.py)
 # ---------------------------------------------------------------------------
 #
 # Two flavors, for the two test layers this repo distinguishes
-# (docs/testing/CURRENT_STATE.md):
+# (the CURRENT_STATE audit (archived in the workspace)):
 #
 # - ``build_*_tool_spec()`` return a plain dict shaped like the fields Frappe
 #   would read off an ``Agent Tool Function`` document. Layer A (mocked-
-#   frappe, no bench — huf/ai/tests/test_test_tools.py) tests wrap these in
+#   frappe, no bench — huf/ai/tools/tests/test_test_tools.py) tests wrap these in
 #   ``types.SimpleNamespace`` to feed attribute-access-only code
 #   (``PermissionAwareToolRegistry``/``create_function_tool``) without a real
 #   DB.
@@ -306,12 +306,12 @@ def make_agent_tool_function(tool_name=None, tool_type=None, **overrides):
 #   permission-check -> handler-resolution -> handler-call ->
 #   persistence path end to end.
 #
-# Each handler in huf/ai/tool_testing.py has one builder pair here, keyed by a
+# Each handler in huf/testing/tool_testing.py has one builder pair here, keyed by a
 # short handler name in ``TEST_TOOL_SPEC_BUILDERS``.
 
 import json as _json
 
-_TEST_TOOL_FUNCTION_MODULE = "huf.ai.tool_testing"
+_TEST_TOOL_FUNCTION_MODULE = "huf.testing.tool_testing"
 
 
 def _build_test_tool_spec(tool_name, description, function_path, **overrides):
@@ -333,7 +333,7 @@ def _build_test_tool_spec(tool_name, description, function_path, **overrides):
 
 
 def build_echo_tool_spec(**overrides):
-    """Spec for ``huf.ai.tool_testing.echo`` — returns its input unchanged."""
+    """Spec for ``huf.testing.tool_testing.echo`` — returns its input unchanged."""
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_echo"),
         description="Test tool: returns its input arguments unchanged.",
@@ -345,7 +345,7 @@ def build_echo_tool_spec(**overrides):
 
 
 def build_deterministic_add_tool_spec(**overrides):
-    """Spec for ``huf.ai.tool_testing.deterministic_add`` — sums a list of numbers."""
+    """Spec for ``huf.testing.tool_testing.deterministic_add`` — sums a list of numbers."""
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_deterministic_add"),
         description="Test tool: deterministically sums a list of numbers.",
@@ -361,7 +361,7 @@ def build_deterministic_add_tool_spec(**overrides):
 
 
 def build_deterministic_fail_tool_spec(**overrides):
-    """Spec for ``huf.ai.tool_testing.deterministic_fail`` — always raises."""
+    """Spec for ``huf.testing.tool_testing.deterministic_fail`` — always raises."""
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_deterministic_fail"),
         description="Test tool: always raises a known exception (failure-path testing).",
@@ -373,11 +373,11 @@ def build_deterministic_fail_tool_spec(**overrides):
 
 
 def build_permission_protected_mutation_tool_spec(**overrides):
-    """Spec for ``huf.ai.tool_testing.permission_protected_mutation``.
+    """Spec for ``huf.testing.tool_testing.permission_protected_mutation``.
 
     Sets ``required_permission="write"`` plus a real ``reference_doctype``
     ("ToDo") so the actual ``TOOL_PERMISSIONS``/``required_permission`` gate
-    in ``PermissionAwareToolRegistry._can_use_tool`` (huf/ai/tool_registry.py:
+    in ``PermissionAwareToolRegistry._can_use_tool`` (huf/ai/tools/registry.py:
     91-105) is exercised — that gate only runs when ``reference_doctype`` is
     set.
     """
@@ -397,7 +397,7 @@ def build_permission_protected_mutation_tool_spec(**overrides):
 
 
 def build_slow_or_timeout_tool_spec(**overrides):
-    """Spec for ``huf.ai.tool_testing.slow_or_timeout`` — capped, deterministic sleep."""
+    """Spec for ``huf.testing.tool_testing.slow_or_timeout`` — capped, deterministic sleep."""
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_slow_or_timeout"),
         description="Test tool: sleeps for a capped, deterministic duration (timeout-path testing).",
@@ -597,7 +597,7 @@ def make_agent_conversation(agent=None, session_id=None, **overrides):
     `make_agent()`. ``status`` defaults to "Active" per the doctype.
     The controller (`agent_conversation.py`) is a 9-line stub with no
     `validate()` logic — all behavior lives in
-    `huf/ai/conversation_manager.py`, per `CURRENT_STATE.md` section 6.
+    `huf/ai/conversation_manager.py`, per the CURRENT_STATE audit section 6.
     """
     if agent is None:
         agent = make_agent().name
@@ -662,7 +662,7 @@ def make_agent_run(conversation=None, agent=None, provider=None, model=None, **o
 
 # ---------------------------------------------------------------------------
 # Automation (new runtime) / Agent Trigger (legacy) — both live per
-# CURRENT_STATE.md section 7's dual-doctype finding.
+# CURRENT_STATE audit section 7's dual-doctype finding.
 # ---------------------------------------------------------------------------
 
 
@@ -677,8 +677,8 @@ def make_automation(automation_name=None, agent=None, instruction=None, **overri
     (see `make_agent_trigger()` below) — `Automation` is the parent entity;
     its actual firing conditions live on child ``Automation Trigger`` rows
     (see `make_automation_trigger()`), run via
-    `huf/ai/automation_runner.py::run_automation` per
-    `docs/testing/CURRENT_STATE.md` section 7.
+    `huf/ai/automation/runner.py::run_automation` per
+    the CURRENT_STATE audit (archived in the workspace) section 7.
     """
     if agent is None:
         agent = make_agent().name
@@ -731,7 +731,7 @@ def make_agent_trigger(agent=None, trigger_name=None, trigger_type="Manual", **o
     Required fields per `huf/huf/doctype/agent_trigger/agent_trigger.json`:
     ``trigger_name`` (Data, reqd=1), ``agent`` (Link -> Agent, reqd=1).
     Both this doctype and ``Automation``/``Automation Trigger`` are
-    confirmed still live on current `develop` (`docs/testing/CURRENT_STATE.md`
+    confirmed still live on current `develop` (the CURRENT_STATE audit (archived in the workspace)
     section 7's runtime-flag finding) — support both explicitly rather than
     assuming one has fully replaced the other. Use `make_automation_trigger()`
     for the new runtime, this for legacy-path regression coverage.

@@ -1,5 +1,5 @@
 /**
- * Pure helpers mapping the Flow builder's trigger forms onto huf.ai.flow_api
+ * Pure helpers mapping the Flow builder's trigger forms onto huf.ai.flow.api
  * set_flow_trigger / get_flow_trigger, and API state onto user-facing messages.
  *
  * Flow triggers are an Automation bound to the Flow's converted Agent Procedure, so
@@ -9,7 +9,7 @@
 
 /**
  * Doc events a Flow trigger can use: the intersection of the backend's
- * huf.ai.automation_hooks.SUPPORTED_DOC_EVENTS and the Flow graph IR enum
+ * huf.ai.automation.hooks.SUPPORTED_DOC_EVENTS and the Flow graph IR enum
  * (graph_ir.schema.json TriggerDocEventNode.config.event). The backend also accepts
  * before_insert, validate, before_save, after_save, before_submit, before_rename,
  * after_rename and after_delete, but the node config cannot hold them, so the panel does not offer them.

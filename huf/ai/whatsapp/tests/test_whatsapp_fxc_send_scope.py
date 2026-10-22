@@ -94,7 +94,7 @@ class TestTrustedFlowIsScopedAndCapped(_Base):
 
 class TestFlowAuthorGatewayBinding(unittest.TestCase):
 	def test_author_without_write_access_cannot_bind_config_gateway(self):
-		from huf.ai import flow_engine
+		from huf.ai.flow import engine as flow_engine
 
 		flow_run = SimpleNamespace(owner="nobody@example.com", name="FR", get=lambda k, d=None: None)
 		with patch.object(frappe, "has_permission", return_value=False), patch.object(frappe.db, "exists", return_value=True):
@@ -102,7 +102,7 @@ class TestFlowAuthorGatewayBinding(unittest.TestCase):
 				self.assertEqual(whatsapp._trusted_gateway.get(), "")
 
 	def test_author_with_write_access_binds_config_gateway(self):
-		from huf.ai import flow_engine
+		from huf.ai.flow import engine as flow_engine
 
 		flow_run = SimpleNamespace(owner="a@example.com", name="FR", get=lambda k, d=None: None)
 		with patch.object(frappe, "has_permission", return_value=True), patch.object(frappe.db, "exists", return_value=True):

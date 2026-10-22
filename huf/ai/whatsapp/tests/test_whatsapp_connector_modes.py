@@ -223,7 +223,7 @@ class TestDirectMode(_Scenarios, IntegrationTestCase):
 			("requests.post", lambda url, json=None, headers=None, timeout=None, **kw: fake_post(url, json=json, headers=headers, timeout=timeout)),
 			("huf.ai.gateway_webhook._ingest_rate_gate", lambda: None),
 			("huf.ai.gateway_service._throttle_outbound_send", lambda *a, **k: None),
-			("huf.ai.agent_integration.run_agent_sync", fake_run),
+			("huf.ai.agent.integration.run_agent_sync", fake_run),
 		):
 			patcher = patch(target, new)
 			patcher.start()

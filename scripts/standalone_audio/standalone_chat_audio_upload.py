@@ -3,7 +3,7 @@
 
 """
 Unit tests for audio routing in the chat attachment pipeline
-(huf.ai.agent_chat).
+(huf.ai.agent.chat).
 
 Audio attachments must bypass the OCR/Vision modality gate: an audio upload
 is allowed whenever STT is resolvable for the agent
@@ -60,7 +60,7 @@ frappe_mock.get_meta = MagicMock()
 # hence AsyncMock; _run_async_safely runs the coroutine it is given.
 #
 # Stubs are reused (and only extended with missing attributes) when another
-# suite already installed them: huf.ai.agent_hooks lazily re-imports
+# suite already installed them: huf.ai.agent.hooks lazily re-imports
 # huf.ai.sdk_tools at call time, so replacing an existing stub module object
 # would steal that lazy binding from whichever suite installed it first.
 def _get_or_create_stub(module_name, **attrs):
@@ -90,7 +90,7 @@ def _run_async_safely(coro):
 
 
 _get_or_create_stub(
-    "huf.ai.agent_integration",
+    "huf.ai.agent.integration",
     _run_async_safely=_run_async_safely,
     _is_truthy=lambda value: (
         value.strip().lower() in ("1", "true", "yes") if isinstance(value, str) else bool(value)
@@ -102,7 +102,8 @@ conversation_manager_stub = _get_or_create_stub(
 )
 _get_or_create_stub("huf.ai.transcription_handler")
 
-from huf.ai import agent_chat, audio_service  # noqa: E402
+from huf.ai import audio_service
+from huf.ai.agent import chat as agent_chat  # noqa: E402
 
 
 def _agent_dict(**overrides):

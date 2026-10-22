@@ -57,7 +57,7 @@ class RunBudget:
 
         ``parent_run_id`` names a row in the ``Agent Run`` doctype (the field
         on Agent Run itself is ``parent_run``, not ``parent_run_id`` —
-        `huf/ai/agent_integration.py:1257`). Ancestry/depth are read from the
+        `huf/ai/agent/integration.py:1257`). Ancestry/depth are read from the
         ``budget_depth``/``budget_ancestry`` fields that ST-09.8 adds to
         Agent Run, not from fields named ``depth``/``ancestry`` (Agent Run
         has neither today).

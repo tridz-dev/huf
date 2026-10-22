@@ -15,7 +15,7 @@ def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
 
         target_agent = frappe.get_doc("Agent", target_agent_name)
 
-        from huf.ai.agent_integration import _is_user_allowed
+        from huf.ai.agent.integration import _is_user_allowed
         if not _is_user_allowed(target_agent, frappe.session.user):
             return {
                 "success": False,
@@ -41,7 +41,7 @@ def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
         budget.check_spend(estimated_cost)
 
         job = enqueue(
-            "huf.ai.agent_integration.run_agent_sync",
+            "huf.ai.agent.integration.run_agent_sync",
             queue="default",
             timeout=1500,
             is_async=True,

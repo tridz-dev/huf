@@ -78,7 +78,7 @@ class TestFlowAndInvocation(unittest.TestCase):
 		self.assertTrue(any("approved" in p for p in found))
 
 	def test_telemetry_uses_unique_server_lookup(self):
-		from huf.ai import tool_invocation
+		from huf.ai.tools import invocation as tool_invocation
 		ctx = MagicMock(call_id=None)
 		with patch("huf.ai.mcp_client.find_unique_mcp_server_for_tool", return_value="SRV") as f, \
 				patch.object(tool_invocation.frappe, "get_doc") as gd:

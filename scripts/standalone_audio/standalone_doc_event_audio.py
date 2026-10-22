@@ -2,7 +2,7 @@
 # See license.txt
 
 """
-Unit tests for doc-event trigger audio routing in huf.ai.agent_hooks.
+Unit tests for doc-event trigger audio routing in huf.ai.agent.hooks.
 
 Attachments configured on Agent Trigger ``file_attachments`` are classified
 per file: audio goes to the canonical audio service
@@ -68,9 +68,9 @@ sys.modules["frappe.utils.safe_exec"] = safe_exec_stub
 # module-level import; handle_ocr_document is a lazy import inside
 # run_agent_for_doc (async, hence AsyncMock for run_until_complete).
 run_agent_sync_mock = MagicMock()
-agent_integration_stub = types.ModuleType("huf.ai.agent_integration")
+agent_integration_stub = types.ModuleType("huf.ai.agent.integration")
 agent_integration_stub.run_agent_sync = run_agent_sync_mock
-sys.modules["huf.ai.agent_integration"] = agent_integration_stub
+sys.modules["huf.ai.agent.integration"] = agent_integration_stub
 
 handle_ocr_document_mock = AsyncMock(
     return_value={"success": True, "text": "ocr text", "file_hash": "abc123"}
@@ -79,7 +79,8 @@ sdk_tools_stub = types.ModuleType("huf.ai.sdk_tools")
 sdk_tools_stub.handle_ocr_document = handle_ocr_document_mock
 sys.modules["huf.ai.sdk_tools"] = sdk_tools_stub
 
-from huf.ai import agent_hooks, audio_service  # noqa: E402
+from huf.ai import audio_service
+from huf.ai.agent import hooks as agent_hooks  # noqa: E402
 
 
 def _doc_event_inputs(filename, field="attachment"):

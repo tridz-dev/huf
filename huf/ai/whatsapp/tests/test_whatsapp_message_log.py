@@ -477,7 +477,7 @@ class TestReplyDeliveryTracking(_Base):
 		for target, new in (
 			("huf.ai.gateway_webhook._ingest_rate_gate", lambda: None),
 			("huf.ai.gateway_service._throttle_outbound_send", lambda *a, **k: None),
-			("huf.ai.agent_integration.run_agent_sync", lambda **k: {"response": "ok", "agent_run_id": "RUN-X"}),
+			("huf.ai.agent.integration.run_agent_sync", lambda **k: {"response": "ok", "agent_run_id": "RUN-X"}),
 		):
 			patcher = patch(target, new)
 			patcher.start()

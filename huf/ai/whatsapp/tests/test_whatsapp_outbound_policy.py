@@ -18,7 +18,7 @@ from huf.ai.gateway_adapters.whatsapp import (
 	WhatsAppGatewayAdapter,
 )
 from huf.ai.gateway_webhook import get_gateway_adapter as real_get_gateway_adapter  # fixture patches the module attr
-from huf.ai.tests.test_gateway_pairing_hardening import _GatewayFixture
+from huf.ai.gateway_adapters.tests.test_gateway_pairing_hardening import _GatewayFixture
 
 PHONE = "15551230001"
 CREDS = {

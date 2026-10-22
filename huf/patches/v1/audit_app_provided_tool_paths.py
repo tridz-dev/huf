@@ -4,12 +4,12 @@ import frappe
 def execute():
 	"""
 	Audit App Provided tool functions against the hook-declared allow-set
-	(huf.ai.tool_registry.get_hook_declared_function_paths). Report only;
+	(huf.ai.tools.registry.get_hook_declared_function_paths). Report only;
 	does not delete or modify data. Run manually before deploying ST-05.1/
 	ST-05.2 so any row that would start failing validation is known ahead
 	of time.
 	"""
-	from huf.ai.tool_registry import get_hook_declared_function_paths
+	from huf.ai.tools.registry import get_hook_declared_function_paths
 
 	allowed_paths = get_hook_declared_function_paths(use_cache=False)
 

@@ -9,8 +9,8 @@ WHAT THIS MODULE IS
 A pure, deterministic function/module that takes the raw artifacts of an
 Agent Run — a doc-like ``agent`` object, a ``SimpleResult``-shaped provider
 return (the exact shape ``huf.ai.providers.litellm.run()``/
-``huf.ai.providers.test_provider.run()`` produce, see
-`huf/ai/providers/test_provider.py`'s module docstring for the contract),
+``huf.ai.providers.stub_provider.run()`` produce, see
+`huf/ai/providers/stub_provider.py`'s module docstring for the contract),
 and optionally the ``Agent Run``/``Agent Message`` DB rows a real execution
 would persist — and reduces them to a normalized, deterministic dict that is
 safe to snapshot to disk and diff in code review.
@@ -80,13 +80,13 @@ just not reorderable).
 WHAT THIS MODULE DOES NOT DO (yet) — SCOPE / FOLLOW-UP
 ---------------------------------------------------------
 This module normalizes whatever raw artifacts are handed to it. Today (no
-live Frappe bench in this worktree — see docs/testing/CURRENT_STATE.md), the
+live Frappe bench in this worktree — see the CURRENT_STATE audit (archived in the workspace)), the
 only realistically-testable path is calling
-`huf.ai.providers.test_provider.run()` directly with a hand-built minimal
+`huf.ai.providers.stub_provider.run()` directly with a hand-built minimal
 fake ``agent`` object (a `SimpleNamespace` mirroring the exact attributes
 real product code reads off a real `Agent` doc: `.name`, `.agent_name`,
 `.provider`, `.model`, `.instructions`, `.max_turns` — see
-`huf/ai/agent_integration.py:499` and `huf/ai/providers/litellm.py:688`),
+`huf/ai/agent/integration.py:499` and `huf/ai/providers/litellm.py:688`),
 NOT the full `_execute_agent_run`/`run_agent_sync` orchestration (which
 needs a real Frappe DB to persist real `Agent Run`/`Agent Message` rows and
 emit real lifecycle events).
@@ -96,7 +96,7 @@ provider-level trace (agent config + provider call + usage + terminal
 status), with a *synthesized* state-transition sequence and *synthesized*
 Agent Message-shaped rows describing what a real orchestration would have
 persisted around that provider call, per the documented contract in
-`agent_integration.py` (history fetch -> provider invocation -> tool-call
+`agent/integration.py` (history fetch -> provider invocation -> tool-call
 loop over `result.new_items` -> usage/cost persistence -> final message
 persist). It does NOT drive real DB rows.
 
@@ -108,7 +108,7 @@ rows (via `huf.testing.factories`), and feed those real rows into this same
 from a real `frappe.get_doc(...).as_dict()` or from the synthesized shape
 built here — the normalization contract is the same either way). That pass
 should also capture the real realtime `agent_run_status` lifecycle events
-(`_emit_run_lifecycle_event`, `agent_integration.py:535`) as the state
+(`_emit_run_lifecycle_event`, `agent/integration.py:535`) as the state
 transitions, replacing the synthesized sequence.
 """
 
@@ -178,7 +178,7 @@ def normalize_tool_result(raw_result):
 def _normalize_new_items(new_items):
     """Walk `result.new_items` (a list of `SimpleNamespace` items shaped like
     `huf.ai.providers.litellm.run()` produces — see
-    `huf/ai/providers/test_provider.py` module docstring's "Tool-call
+    `huf/ai/providers/stub_provider.py` module docstring's "Tool-call
     scenario contract" section) into a normalized list of tool-call/
     tool-result pairs. Real `tool_call_id` values are opaque and
     provider-generated; they are replaced with an index-stable placeholder,
@@ -208,7 +208,7 @@ def _normalize_new_items(new_items):
                 }
             )
         elif item_type == "tool_call_output_item":
-            # raw_item is a plain dict for this item type (see test_provider.py).
+            # raw_item is a plain dict for this item type (see stub_provider.py).
             raw = raw_item if isinstance(raw_item, dict) else {}
             call_id = raw.get("id")
             normalized.append(

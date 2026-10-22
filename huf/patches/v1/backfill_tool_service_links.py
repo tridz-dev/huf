@@ -63,7 +63,7 @@ def _ensure_builtin_services():
 
 def _resync_tools():
 	try:
-		from huf.ai.tool_registry import sync_discovered_tools
+		from huf.ai.tools.registry import sync_discovered_tools
 
 		sync_discovered_tools(use_cache=False)
 	except Exception as e:

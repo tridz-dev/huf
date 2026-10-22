@@ -35,7 +35,12 @@
 #   huf/**  (*.py)        -> backend (scoped to huf/ai/tests/test_<basename>.py if it
 #                            exists as a dotted module, else the full `--app huf` suite;
 #                            huf/ai/whatsapp/<x>.py maps to huf/ai/whatsapp/tests/test_whatsapp_<x>.py
-#                            first, then the old huf/ai/tests mapping)
+#                            first, then the old huf/ai/tests mapping;
+#                            huf/ai/procedure/<x>.py maps to huf/ai/procedure/tests/test_procedure_<x>.py
+#                            and huf/ai/tools/<x>.py to huf/ai/tools/tests/test_tool_<x>.py;
+#                            huf/ai/desktop/<x>.py to huf/ai/desktop/tests/test_desktop_<x>.py when it exists;
+#                            huf/ai/automation/<x>.py to huf/ai/automation/tests/test_automation_<x>.py when it exists;
+#                            huf/ai/agent/<x>.py to huf/ai/agent/tests/test_agent_<x>.py when it exists)
 #   anything else         -> no targeted check added (falls back to `quick` if nothing matched)
 
 set -uo pipefail
@@ -304,9 +309,61 @@ map_backend_module() {
     huf/ai/whatsapp/tests/test_*.py)
       # a changed WhatsApp test module maps to itself
       candidate="$f" ;;
+    huf/ai/procedure/tests/test_*.py)
+      candidate="$f" ;;
+    huf/ai/procedure/*.py)
+      if [ -f "$ROOT/huf/ai/procedure/tests/test_procedure_${base}.py" ]; then
+        candidate="huf/ai/procedure/tests/test_procedure_${base}.py"
+      fi ;;
     huf/ai/whatsapp/*.py)
       if [ -f "$ROOT/huf/ai/whatsapp/tests/test_whatsapp_${base}.py" ]; then
         candidate="huf/ai/whatsapp/tests/test_whatsapp_${base}.py"
+      fi ;;
+    huf/ai/tools/tests/test_*.py)
+      # a changed tools test module maps to itself
+      candidate="$f" ;;
+    huf/ai/tools/*.py)
+      if [ -f "$ROOT/huf/ai/tools/tests/test_tool_${base}.py" ]; then
+        candidate="huf/ai/tools/tests/test_tool_${base}.py"
+      fi ;;
+    huf/ai/desktop/tests/test_*.py)
+      # a changed desktop test module maps to itself
+      candidate="$f" ;;
+    huf/ai/desktop/*.py)
+      if [ -f "$ROOT/huf/ai/desktop/tests/test_desktop_${base}.py" ]; then
+        candidate="huf/ai/desktop/tests/test_desktop_${base}.py"
+      fi ;;
+    huf/ai/flow/tests/test_*.py|huf/ai/graph/tests/test_*.py)
+      # a changed flow/graph test module maps to itself
+      candidate="$f" ;;
+    huf/ai/flow/*.py)
+      if [ -f "$ROOT/huf/ai/flow/tests/test_flow_${base}.py" ]; then
+        candidate="huf/ai/flow/tests/test_flow_${base}.py"
+      fi ;;
+    huf/ai/graph/*.py)
+      if [ -f "$ROOT/huf/ai/graph/tests/test_graph_${base}.py" ]; then
+        candidate="huf/ai/graph/tests/test_graph_${base}.py"
+      fi ;;
+    huf/ai/automation/tests/test_*.py)
+      # a changed automation test module maps to itself
+      candidate="$f" ;;
+    huf/ai/automation/*.py)
+      if [ -f "$ROOT/huf/ai/automation/tests/test_automation_${base}.py" ]; then
+        candidate="huf/ai/automation/tests/test_automation_${base}.py"
+      fi ;;
+    huf/ai/gateway_adapters/tests/test_*.py)
+      # a changed gateway adapter test module maps to itself
+      candidate="$f" ;;
+    huf/ai/gateway_adapters/*.py)
+      if [ -f "$ROOT/huf/ai/gateway_adapters/tests/test_gateway_${base}.py" ]; then
+        candidate="huf/ai/gateway_adapters/tests/test_gateway_${base}.py"
+      fi ;;
+    huf/ai/agent/tests/test_*.py)
+      # a changed agent test module maps to itself
+      candidate="$f" ;;
+    huf/ai/agent/*.py)
+      if [ -f "$ROOT/huf/ai/agent/tests/test_agent_${base}.py" ]; then
+        candidate="huf/ai/agent/tests/test_agent_${base}.py"
       fi ;;
   esac
   if [ -f "$ROOT/$candidate" ]; then

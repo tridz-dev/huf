@@ -6,7 +6,7 @@
 The desktop app repo (``desktop-poc``, ``npm run verify``, stage ``live-bench``) starts its real
 executor against a LOCAL bench, registers a lease, and then needs the backend to dispatch tool calls
 to it exactly as an agent run would. An agent run needs a model; this does not. It calls the same
-``huf.ai.desktop_executor.dispatch`` an agent tool calls, with the same pinned run context
+``huf.ai.desktop.executor.dispatch`` an agent tool calls, with the same pinned run context
 (``resolve_desktop_ctx``: executor id, fingerprint, user, the catalog the lease publishes, device id),
 so everything the backend does on a real dispatch happens: lease checks, capability checks, the
 agent-policy ceiling, the remote-origin gate, catalog and argument validation, the wait for the
@@ -24,7 +24,7 @@ import uuid
 import frappe
 from frappe import _
 
-from huf.ai import desktop_executor as dx
+from huf.ai.desktop import executor as dx
 
 FLAG = "huf_desktop_live_test"
 
