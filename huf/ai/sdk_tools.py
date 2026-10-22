@@ -20,18 +20,18 @@ from huf.ai.handlers.crud import *
 from huf.ai.handlers.crud import _sanitize_for_doctype
 from huf.ai.handlers.media import *
 from huf.ai.handlers.media import _resolve_tts_config
-from huf.ai.tool_invocation import (
+from huf.ai.tools.invocation import (
     CLIENT_SIDE_TOOL_FUNCTION_PATH,
     CLIENT_SIDE_TOOL_TYPE,
     DYNAMIC_FUNCTION_PATH_TYPES,
     TYPE_TO_FUNCTION_PATH,
     build_extra_args,
 )
-from huf.ai.tool_invocation import (
+from huf.ai.tools.invocation import (
     check_tool_permission as _check_tool_permission,
 )
-from huf.ai.tool_registry import PermissionAwareToolRegistry
-from huf.ai.tool_types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES
+from huf.ai.tools.registry import PermissionAwareToolRegistry
+from huf.ai.tools.types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES
 from huf.ai.tools.perplexity import handle_perplexity_search
 
 logger = frappe.logger("huf")
@@ -131,7 +131,7 @@ def _pin_run_identity(args_dict: dict, ctx, nonce: str = None) -> dict:
     return args_dict
 
 
-# _check_tool_permission moved to huf.ai.tool_invocation.check_tool_permission
+# _check_tool_permission moved to huf.ai.tools.invocation.check_tool_permission
 # (T-10) so the deterministic tool path shares the same guest/mutating-type
 # gate; imported above as _check_tool_permission to keep this call site
 # unchanged. The old signature accepted an unused `context` positional arg
@@ -589,7 +589,7 @@ def create_agent_tools(agent, model_name: str = None, desktop_ctx: dict | None =
                     # fetch its schema) until the model discovers it.
                     continue
 
-            # Resolution moved to huf.ai.tool_invocation (T-10): one
+            # Resolution moved to huf.ai.tools.invocation (T-10): one
             # type->function_path map shared with the deterministic tool
             # path, instead of a hand-duplicated if/elif chain. Behavior is
             # identical to the chain this replaced -- Custom
@@ -627,7 +627,7 @@ def create_agent_tools(agent, model_name: str = None, desktop_ctx: dict | None =
                     del params["additionalProperties"]
 
                 # extra_args derivation moved to
-                # huf.ai.tool_invocation.build_extra_args (T-10) -- same
+                # huf.ai.tools.invocation.build_extra_args (T-10) -- same
                 # branches, same values. GET/POST's tool_name is deliberately
                 # NOT taken from there: this file injects it via the
                 # dedicated `_function.__name__ in [...]` check below
@@ -1083,7 +1083,7 @@ def get_function_from_name(tool_name: str, tool_type: str | None = None) -> Call
     """
 
     if tool_type == "App Provided":
-        from huf.ai.tool_registry import get_hook_declared_function_paths
+        from huf.ai.tools.registry import get_hook_declared_function_paths
         if tool_name not in get_hook_declared_function_paths():
             frappe.logger("huf").debug(
                 f"App Provided function path not in hook allow-set: {tool_name}"

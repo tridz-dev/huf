@@ -35,6 +35,7 @@
 #   huf/**  (*.py)        -> backend (scoped to huf/ai/tests/test_<basename>.py if it
 #                            exists as a dotted module, else the full `--app huf` suite;
 #                            huf/ai/whatsapp/<x>.py maps to huf/ai/whatsapp/tests/test_whatsapp_<x>.py
+#                            and huf/ai/tools/<x>.py to huf/ai/tools/tests/test_tool_<x>.py
 #                            first, then the old huf/ai/tests mapping)
 #   anything else         -> no targeted check added (falls back to `quick` if nothing matched)
 
@@ -307,6 +308,13 @@ map_backend_module() {
     huf/ai/whatsapp/*.py)
       if [ -f "$ROOT/huf/ai/whatsapp/tests/test_whatsapp_${base}.py" ]; then
         candidate="huf/ai/whatsapp/tests/test_whatsapp_${base}.py"
+      fi ;;
+    huf/ai/tools/tests/test_*.py)
+      # a changed tools test module maps to itself
+      candidate="$f" ;;
+    huf/ai/tools/*.py)
+      if [ -f "$ROOT/huf/ai/tools/tests/test_tool_${base}.py" ]; then
+        candidate="huf/ai/tools/tests/test_tool_${base}.py"
       fi ;;
   esac
   if [ -f "$ROOT/$candidate" ]; then

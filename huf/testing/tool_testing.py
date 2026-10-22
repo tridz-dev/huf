@@ -1,7 +1,7 @@
 """Deterministic tool handlers used ONLY by the regression-safety test suite.
 
 These are real, importable ``Agent Tool Function`` handler functions — the
-same kind of plain Python function that ``huf/ai/tool_functions.py`` defines
+same kind of plain Python function that ``huf/ai/tools/functions.py`` defines
 for CRUD tools — wired to real DocType records via the factories in
 ``huf/testing/factories.py``. They exist so tests can exercise the REAL
 tool-execution path (assembly -> permission check -> handler resolution ->
@@ -9,12 +9,12 @@ handler call -> result -> persistence) end to end, instead of the
 provider-level simulation in ``huf/ai/providers/test_provider.py``.
 
 Handler signature/return-type convention matched from
-``huf/ai/tool_functions.py`` (see e.g. ``get_document``/``update_document``
+``huf/ai/tools/functions.py`` (see e.g. ``get_document``/``update_document``
 there):
   - plain function, typed positional/keyword params (no ``self``)
   - returns a JSON-serializable ``dict`` (commonly with a ``success`` key and
     an ``error``/``permission_denied`` key on the failure path — see
-    ``update_document``, huf/ai/tool_functions.py:90-113)
+    ``update_document``, huf/ai/tools/functions.py:90-113)
   - permission checks (when relevant) are done inline with
     ``frappe.has_permission(...)``, returning
     ``{"success": False, "error": ..., "permission_denied": True}`` rather
@@ -79,10 +79,10 @@ def permission_protected_mutation(record_id: str, value: str) -> dict:
     """A mutation gated by a specific required permission.
 
     Mirrors ``update_document``'s inline permission-check convention
-    (huf/ai/tool_functions.py:107-112): this handler does its own
+    (huf/ai/tools/functions.py:107-112): this handler does its own
     defense-in-depth ``frappe.has_permission`` check on top of whatever
     gate already ran at assembly time
-    (``PermissionAwareToolRegistry._can_use_tool``, huf/ai/tool_registry.py:70-106)
+    (``PermissionAwareToolRegistry._can_use_tool``, huf/ai/tools/registry.py:70-106)
     and at invocation time (``on_invoke_tool``, huf/ai/sdk_tools.py:437-441).
 
     The corresponding ``Agent Tool Function`` fixture
@@ -90,8 +90,8 @@ def permission_protected_mutation(record_id: str, value: str) -> dict:
     ``create_test_tool_doc``) sets ``required_permission="write"`` and a
     ``reference_doctype`` so the
     real ``TOOL_PERMISSIONS``/``required_permission`` gate in
-    ``tool_registry.py`` is actually exercised (that gate only fires when
-    ``reference_doctype`` is set — huf/ai/tool_registry.py:91-105).
+    ``huf/ai/tools/registry.py`` is actually exercised (that gate only fires when
+    ``reference_doctype`` is set — huf/ai/tools/registry.py:91-105).
     """
     reference_doctype = "ToDo"
 

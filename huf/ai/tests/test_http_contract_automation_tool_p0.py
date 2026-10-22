@@ -376,9 +376,9 @@ class HttpContractTests(unittest.TestCase):
                 "types": "Custom Function",
                 "agent": self.agent_name,
                 "tool_type": "Miscellaneous",
-                # huf.ai.tool_functions.get_document exists and is
+                # huf.ai.tools.functions.get_document exists and is
                 # importable, but has no @frappe.whitelist() decorator.
-                "function_path": "huf.ai.tool_functions.get_document",
+                "function_path": "huf.ai.tools.functions.get_document",
                 "params": "{}",
             },
             timeout=30,

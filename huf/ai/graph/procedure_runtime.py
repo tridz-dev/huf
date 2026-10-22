@@ -7,7 +7,7 @@ This module is the T-23 seam: it drives ``huf.ai.graph.executor.GraphExecutor`` 
 over a pinned Procedure graph, delegating every atomic operation to the module that
 already owns it:
 
-	tool.call  -> huf.ai.tool_invocation.invoke_tool_sync (T-10) -- permission checks and
+	tool.call  -> huf.ai.tools.invocation.invoke_tool_sync (T-10) -- permission checks and
 	              Agent Tool Call telemetry live there; this module never re-implements
 	              either (I5).
 	transform  -> huf.ai.graph.transforms.run_transform (T-12)
@@ -1164,7 +1164,7 @@ def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutco
 	activation time), executes it via :func:`execute_procedure` with a real ``tool_invoker``
 	that authorizes each call (I1, ``huf.ai.graph.permissions.authorize_tool_call``) and
 	emits exactly one ``Agent Tool Call`` telemetry record per invocation
-	(I5, ``huf.ai.tool_invocation.invoke_tool_sync(..., telemetry=True)``), records one
+	(I5, ``huf.ai.tools.invocation.invoke_tool_sync(..., telemetry=True)``), records one
 	``Agent Procedure Step`` child row per node visited, and writes the run's terminal
 	status/output/error back once.
 
@@ -1175,7 +1175,7 @@ def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutco
 	import frappe
 	from frappe.utils import now_datetime
 
-	from huf.ai import tool_invocation as _tool_invocation
+	from huf.ai.tools import invocation as _tool_invocation
 	from huf.ai.graph import permissions as _permissions
 	from huf.ai.graph.executor import fingerprint as _fingerprint
 	from huf.ai.graph.validator import validate_procedure_graph

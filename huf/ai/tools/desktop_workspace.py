@@ -23,7 +23,7 @@ does both in sequence (tests, plain callers).
 
 Pin token (N8). The handlers refuse to run unless the call carries ``_dx_pin``, an HMAC
 that only ``sdk_tools`` (the ``pin_run_context`` path of a Desktop-pinned agent run) can
-mint, bound to the run, executor and user. Flows, procedures, ``tool_invocation.invoke_tool``
+mint, bound to the run, executor and user. Flows, procedures, ``huf.ai.tools.invocation.invoke_tool``
 and direct API calls cannot mint it, so they cannot drive a desktop with self-chosen ids.
 
 See PLAN.md §3.7-3.8 for limits and specifications.

@@ -36,7 +36,7 @@ from uuid import uuid4
 
 import frappe
 
-from huf.ai.tool_types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES, MUTATING_TOOL_TYPES
+from huf.ai.tools.types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES, MUTATING_TOOL_TYPES
 
 logger = frappe.logger("huf")
 
@@ -303,7 +303,7 @@ def get_function_from_name(tool_name: str, tool_type: str | None = None) -> Call
 	The real implementation stays single-sourced in sdk_tools.py (seam
 	audit §"Recommended target shape": "already single-sourced ... just
 	needs to move if sdk_tools.py itself is refactored" -- it wasn't, so
-	this module imports it lazily to avoid a sdk_tools<->tool_invocation
+	this module imports it lazily to avoid a sdk_tools<->huf.ai.tools.invocation
 	import cycle (sdk_tools imports resolution helpers from this module).
 	"""
 	from huf.ai.sdk_tools import get_function_from_name as _impl

@@ -272,7 +272,7 @@ class TestSavedFlowInvokesRealTool(unittest.TestCase):
 		# tool.call's own path in _exec_tool_call only writes an Agent Tool
 		# Call record itself for the MCP branch; a built-in tool's telemetry
 		# is written by the invocation service it delegates through
-		# (huf.ai.tool_invocation) -- either way, exactly one real record for
+		# (huf.ai.tools.invocation) -- either way, exactly one real record for
 		# this call proves the tool actually ran, not just that the flow
 		# reached "Success".
 		self.assertIn(tool_calls[0]["status"], ("Completed", "Success"))

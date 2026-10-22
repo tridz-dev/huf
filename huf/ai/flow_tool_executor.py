@@ -1,10 +1,10 @@
 """Deterministic tool executor for Flow Engine tool.call nodes.
 
-Thin delegator onto ``huf.ai.tool_invocation`` -- the single resolve+invoke
+Thin delegator onto ``huf.ai.tools.invocation`` -- the single resolve+invoke
 path shared with the LLM tool path (``sdk_tools.py``). Resolution, the
 permission gate (guest/mutating-type check, ``ignore_permissions``
 stripping, guest doctype pinning), signature-aware argument filtering, and
-coroutine handling all now live there; see ``tool_invocation.py`` and
+coroutine handling all now live there; see ``huf/ai/tools/invocation.py`` and
 ``TRACK/spec/tool-invocation-seam.md`` for the audit this replaces.
 
 Public contract is unchanged: ``execute(tool_name, args, user=None)`` still
@@ -16,7 +16,7 @@ from contextlib import contextmanager
 
 import frappe
 
-from huf.ai.tool_invocation import RunContext, invoke_tool_sync
+from huf.ai.tools.invocation import RunContext, invoke_tool_sync
 
 _ambient_run_context: contextvars.ContextVar = contextvars.ContextVar(
 	"huf_flow_tool_run_context", default=None
@@ -52,7 +52,7 @@ def execute(
 	Execute an Agent Tool Function deterministically.
 
 	Finds the tool by tool_name, resolves its handler function via the
-	shared ``huf.ai.tool_invocation`` resolver, and executes it with the
+	shared ``huf.ai.tools.invocation`` resolver, and executes it with the
 	provided arguments -- the same resolution and permission enforcement
 	used by the LLM tool path (``sdk_tools.py``), so results and access
 	control match agent tool calls exactly.

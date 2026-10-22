@@ -537,7 +537,7 @@ class TestSkillDispatch(LocalSkillsBase):
 		self.nothing_was_published()
 
 	def test_invoke_tool_refuses_every_desktop_tool(self):
-		from huf.ai.tool_invocation import invoke_tool
+		from huf.ai.tools.invocation import invoke_tool
 
 		frappe.set_user("Administrator")
 		names = TestExposure._ensure_rows()

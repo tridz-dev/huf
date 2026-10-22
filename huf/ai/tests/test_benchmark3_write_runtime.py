@@ -16,7 +16,7 @@ failure converges to exactly the right document count -- all against an in-memor
 ``_FakeTodoStore`` standing in for ERPNext's ``ToDo`` doctype. It does NOT prove that a
 real ``frappe.get_doc("ToDo", ...).insert()`` behaves the same way under a real MariaDB
 transaction, that ``Agent Tool Call``/``Agent Procedure Step`` rows persist correctly
-through a real ``bench`` worker crash, or that ``huf.ai.tool_invocation.invoke_tool_sync``'s
+through a real ``bench`` worker crash, or that ``huf.ai.tools.invocation.invoke_tool_sync``'s
 real authorization/telemetry wiring is exercised -- those require a bench and are out of
 this file's reach (see the task's "TEST HARNESS RULES" and "DO NOT TOUCH THE BENCH").
 ``huf.ai.graph.idempotency``'s ``reserve_idempotency_key``/``release_idempotency_key`` are

@@ -44,7 +44,7 @@ from litellm import token_counter
 
 from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 from huf.ai.providers.litellm import _normalize_model_name, _resolve_cache_settings
-from huf.ai.tool_serializer import serialize_tools
+from huf.ai.tools.serializer import serialize_tools
 
 
 def _count(pricing_model, text):

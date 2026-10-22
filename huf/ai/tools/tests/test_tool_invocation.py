@@ -1,6 +1,6 @@
-"""Tests for huf.ai.tool_invocation (T-10).
+"""Tests for huf.ai.tools.invocation (T-10).
 
-The module under test is imported normally (``from huf.ai import tool_invocation``) so this
+The module under test is imported normally (``from huf.ai.tools import invocation``) so this
 suite exercises the real ``sdk_tools``/``tool_types`` wiring on both a real Frappe bench and
 standalone. Frappe itself is never mutated globally: each test patches the ``frappe`` name
 *on the module under test* (``patch.object(tool_invocation, "frappe", <double>)``), scoped to
@@ -10,7 +10,7 @@ or not. This mirrors the pattern in ``huf.ai.tests.test_graph_permissions``
 (``_FrappeDouble`` / ``TestAuthorizeToolCallI1Intersection``).
 
 The only sys.modules surgery in this file is a narrow, standalone-only stub that makes ``huf``
-(and its transitive ``import frappe`` at module-load time, e.g. in ``huf.ai.tool_registry``)
+(and its transitive ``import frappe`` at module-load time, e.g. in ``huf.ai.tools.registry``)
 importable without a real bench. On a real bench 'frappe' already has a ``__file__`` and this
 stub is a no-op. Run with either:
 
@@ -36,8 +36,8 @@ from unittest.mock import MagicMock, patch
 def _install_standalone_frappe_stub():
 	"""Make ``huf`` importable without a real Frappe bench.
 
-	``huf/__init__.py`` does an unconditional ``import frappe``, and ``huf.ai.tool_types``
-	pulls in ``huf.ai.tool_registry``, which does ``import frappe`` / ``from frappe import
+	``huf/__init__.py`` does an unconditional ``import frappe``, and ``huf.ai.tools.types``
+	pulls in ``huf.ai.tools.registry``, which does ``import frappe`` / ``from frappe import
 	_`` / ``from frappe.utils import now_datetime`` at module load time. On a real bench
 	'frappe' is already the genuine package (has a ``__file__``); never touch that. This
 	stub only exists for the frappe-free local/CI path.
@@ -61,7 +61,7 @@ def _install_standalone_frappe_stub():
 
 _install_standalone_frappe_stub()
 
-from huf.ai import tool_invocation as ti  # noqa: E402 -- must follow the stub install above
+from huf.ai.tools import invocation as ti  # noqa: E402 -- must follow the stub install above
 
 
 class _FakeSession:
@@ -113,7 +113,7 @@ class _FakeDoc:
 
 
 class _ToolInvocationFrappeDouble:
-	"""Minimal stand-in for the ``frappe`` module as ``tool_invocation.py`` uses it.
+	"""Minimal stand-in for the ``frappe`` module as ``huf/ai/tools/invocation.py`` uses it.
 
 	Deliberately a plain object, not a MagicMock: it behaves the same with or without a
 	bench, so tests built against it prove the same thing in both environments.

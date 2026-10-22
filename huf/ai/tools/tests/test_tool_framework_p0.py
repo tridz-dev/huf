@@ -54,7 +54,7 @@ from huf.testing.factories import (
     make_mcp_server,
     make_user,
 )
-from huf.ai.tool_registry import PermissionAwareToolRegistry
+from huf.ai.tools.registry import PermissionAwareToolRegistry
 from huf.ai.sdk_tools import create_function_tool, get_function_from_name
 from huf.install import create_huf_roles
 
@@ -127,7 +127,7 @@ class TestToolFrameworkP0(IntegrationTestCase):
 
         reloaded = frappe.get_doc("Agent Tool Function", doc.name)
 
-        self.assertEqual(reloaded.function_path, "huf.ai.tool_testing.deterministic_add")
+        self.assertEqual(reloaded.function_path, "huf.testing.tool_testing.deterministic_add")
         self.assertEqual(reloaded.types, "Custom Function")
         self.assertTrue(reloaded.is_read_only)
 
@@ -290,7 +290,7 @@ class TestToolFrameworkP0(IntegrationTestCase):
         get_function_from_name (import/attribute error swallowed, only a
         debug log line) -- and create_function_tool built on top of it
         also returns None, rather than either one raising."""
-        broken_path = "huf.ai.tool_testing.this_function_does_not_exist_p33"
+        broken_path = "huf.testing.tool_testing.this_function_does_not_exist_p33"
 
         # Direct resolution: must return None, not raise.
         self.assertIsNone(get_function_from_name(broken_path))
@@ -329,7 +329,7 @@ class TestToolFrameworkP0(IntegrationTestCase):
 
     def test_tool_perm_001_handler_level_gate_denies_without_permission(self):
         """permission_protected_mutation does its own inline
-        frappe.has_permission("ToDo", "write") check (huf/ai/tool_testing.py)
+        frappe.has_permission("ToDo", "write") check (huf/testing/tool_testing.py)
         independent of the assembly-time registry gate. Exercised through
         the real on_invoke_tool closure (sdk_tools.create_function_tool),
         not by calling the handler function directly.

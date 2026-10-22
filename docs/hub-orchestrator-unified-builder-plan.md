@@ -74,7 +74,7 @@ explicitly rather than assumed.
 All handlers in `huf/ai/tools/builder.py` (+ `huf/ai/tools/ask_user.py`), registered via
 a static `BUILDER_TOOLS` list in `huf/ai/tools/_registry.py:1013-1230`
 (`category: "Builder"`), synced into `Agent Tool Function` records by
-`sync_discovered_tools()` (`huf/ai/tool_registry.py:363`, `types: "App Provided"`).
+`sync_discovered_tools()` (`huf/ai/tools/registry.py:363`, `types: "App Provided"`).
 
 | Capability | Function | Location |
 |---|---|---|

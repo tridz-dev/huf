@@ -10,10 +10,10 @@ import typing
 import frappe
 from frappe import _, is_whitelisted
 from frappe.model.document import Document
-from huf.ai.tool_registry import get_hook_declared_function_paths
+from huf.ai.tools.registry import get_hook_declared_function_paths
 
 
-# Identifier parameters the built-in document operations use (see tool_functions.py and
+# Identifier parameters the built-in document operations use (see huf/ai/tools/functions.py and
 # prepare_function_params). They are arguments to the operation, not fields of the
 # reference DocType, so they must not be checked against the DocType meta.
 RESERVED_IDENTIFIER_PARAMS = {

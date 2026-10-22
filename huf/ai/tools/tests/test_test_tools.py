@@ -1,5 +1,5 @@
 """Layer A (mocked-frappe, no bench) unit tests for the deterministic test
-tool family (``huf/ai/tool_testing.py``) and their ``Agent Tool Function``
+tool family (``huf/testing/tool_testing.py``) and their ``Agent Tool Function``
 factories (``huf/testing/factories.py``).
 
 These are real, invokable tool handlers (NOT the provider-level simulation
@@ -7,7 +7,7 @@ in ``huf/ai/providers/test_provider.py``). The tests here prove:
 
 1. Each handler's direct behavior (echo/add/fail/slow).
 2. The permission-protected handler's gate is checked using the REAL
-   ``PermissionAwareToolRegistry`` resolution path from ``tool_registry.py``,
+   ``PermissionAwareToolRegistry`` resolution path from ``huf/ai/tools/registry.py``,
    fed the factory-built spec as a ``SimpleNamespace`` (attribute access,
    same shape ``frappe.get_cached_doc`` would return).
 3. ``get_function_from_name``/``create_function_tool`` from ``sdk_tools.py``
@@ -70,9 +70,9 @@ if "agents" not in sys.modules and _ilu.find_spec("agents") is None:
     agents_mock.FunctionTool = _FakeFunctionTool
     sys.modules["agents"] = agents_mock
 
-from huf.ai import tool_testing  # noqa: E402
+from huf.testing import tool_testing  # noqa: E402
 from huf.testing import factories  # noqa: E402
-from huf.ai.tool_registry import PermissionAwareToolRegistry  # noqa: E402
+from huf.ai.tools.registry import PermissionAwareToolRegistry  # noqa: E402
 from huf.ai.sdk_tools import get_function_from_name, create_function_tool  # noqa: E402
 
 
@@ -166,7 +166,7 @@ class TestDeterministicFailHandler(unittest.TestCase):
         tool = create_function_tool(
             name="test_deterministic_fail",
             description="fails",
-            tool_name="huf.ai.tool_testing.deterministic_fail",
+            tool_name="huf.testing.tool_testing.deterministic_fail",
             parameters={"type": "object", "properties": {}},
         )
         self.assertIsNotNone(tool)
@@ -240,7 +240,7 @@ class TestFactories(unittest.TestCase):
         for name, spec in specs.items():
             self.assertEqual(spec["doctype"], "Agent Tool Function")
             self.assertEqual(spec["types"], "Custom Function")
-            self.assertTrue(spec["function_path"].startswith("huf.ai.tool_testing."))
+            self.assertTrue(spec["function_path"].startswith("huf.testing.tool_testing."))
             json.loads(spec["params"])  # must be valid JSON
 
     def test_permission_protected_spec_has_required_permission_and_reference_doctype(self):
@@ -253,12 +253,12 @@ class TestFactories(unittest.TestCase):
             spec = builder()
             fn = get_function_from_name(spec["function_path"])
             self.assertIsNotNone(fn, f"could not resolve {spec['function_path']}")
-            self.assertEqual(fn.__module__, "huf.ai.tool_testing")
+            self.assertEqual(fn.__module__, "huf.testing.tool_testing")
 
 
 class TestPermissionGateRealPath(unittest.TestCase):
     """Exercise the REAL PermissionAwareToolRegistry._can_use_tool gate
-    (tool_registry.py:70-106) against the permission_protected_mutation
+    (huf/ai/tools/registry.py:70-106) against the permission_protected_mutation
     fixture, standalone.
     """
 
@@ -290,7 +290,7 @@ class TestPermissionGateRealPath(unittest.TestCase):
     def test_gate_blocks_echo_for_guest_when_not_allowed(self):
         # echo is not in MUTATING_TOOL_TYPES (it's "Custom Function"), and the
         # registry's Guest branch returns False for any non-explicitly-allowed
-        # Guest access regardless of mutating status (tool_registry.py:78-88).
+        # Guest access regardless of mutating status (huf/ai/tools/registry.py:78-88).
         spec = factories.build_echo_tool_spec()
         tool_doc = _spec_to_namespace(spec)
         self.assertFalse(PermissionAwareToolRegistry._can_use_tool(tool_doc, "Guest"))

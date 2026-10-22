@@ -48,14 +48,14 @@ class TestMaintenanceEndpointAuthorization(unittest.TestCase):
             '__self__'  # Would indicate a bound method decorator
         ))
 
-    # ST-06.2 Tests: tool_registry.py - require System Manager
+    # ST-06.2 Tests: huf/ai/tools/registry.py - require System Manager
     @patch('frappe.only_for')
-    @patch('huf.ai.tool_registry.get_tools_by_app')
+    @patch('huf.ai.tools.registry.get_tools_by_app')
     def test_st06_2_sync_discovered_tools_system_manager_only(
         self, mock_get_tools, mock_only_for
     ):
         """ST-06.2: sync_discovered_tools should require System Manager role."""
-        from huf.ai import tool_registry
+        from huf.ai.tools import registry as tool_registry
 
         # Set up mock to raise PermissionError when not System Manager
         def only_for_side_effect(role):

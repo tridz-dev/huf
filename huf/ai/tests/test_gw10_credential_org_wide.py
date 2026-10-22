@@ -101,7 +101,7 @@ class TestGW10OrgWideCredentialScope(IntegrationTestCase):
 			"tool_name": self.tool_name,
 			"tool_type": "Miscellaneous",
 			"types": "Custom Function",
-			"function_path": "huf.ai.tool_testing.echo",
+			"function_path": "huf.testing.tool_testing.echo",
 			"description": "Test tool for GW-10 credential resolution",
 			"owner": "Administrator",
 			"disabled": 0,

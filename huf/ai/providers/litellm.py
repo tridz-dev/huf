@@ -27,7 +27,7 @@ import frappe
 import litellm
 from litellm import InternalServerError, RateLimitError, APIError, BadRequestError, ContextWindowExceededError
 from litellm.utils import trim_messages
-from huf.ai.tool_serializer import serialize_tools
+from huf.ai.tools.serializer import serialize_tools
 from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 from huf.ai.prompt_cache.capabilities import resolve_capabilities
 from huf.ai.transaction import transaction_checkpoint

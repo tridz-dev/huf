@@ -50,7 +50,7 @@ rules:
     languages:
       - python
     message: >
-      Functions in huf/ai/tool_functions.py and huf/ai/tool_testing.py are handlers
+      Functions in huf/ai/tools/functions.py and huf/testing/tool_testing.py are handlers
       that 'Agent Tool Function' records of type 'Custom Function' resolve via
       function_path and require to be @frappe.whitelist()-decorated (see
       AgentToolFunction.validate() in
@@ -69,6 +69,6 @@ rules:
       - pattern-not-regex: '^def _.*'
     paths:
       include:
-        - huf/ai/tool_functions.py
-        - huf/ai/tool_testing.py
+        - huf/ai/tools/functions.py
+        - huf/testing/tool_testing.py
     severity: WARNING

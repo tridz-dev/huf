@@ -31,9 +31,9 @@ except ImportError:
 
 import frappe  # noqa: E402
 
-from huf.ai.tool_doctype_guard import _check_doctype_allowed  # noqa: E402
+from huf.ai.tools.doctype_guard import _check_doctype_allowed  # noqa: E402
 from huf.ai.handlers import crud as crud_module  # noqa: E402
-from huf.ai import tool_functions  # noqa: E402
+from huf.ai.tools import functions as tool_functions  # noqa: E402
 
 
 def _patch_frappe(testcase, **attrs):
@@ -174,7 +174,7 @@ class TestCrudHandlerGates(unittest.TestCase):
         self.assertFalse(result.get("success", False))
 
     def test_handle_get_report_result_denies_when_report_denylisted(self):
-        with patch("huf.ai.tool_doctype_guard._DENYLISTED_DOCTYPES", {"report"}):
+        with patch("huf.ai.tools.doctype_guard._DENYLISTED_DOCTYPES", {"report"}):
             result = crud_module.handle_get_report_result(report_name="Some Report")
         self.assertFalse(result.get("success", False))
 
@@ -186,7 +186,7 @@ class TestCrudHandlerGates(unittest.TestCase):
 
 
 class TestToolFunctionsGates(unittest.TestCase):
-    """Test that tool_functions.py handlers gate on doctype."""
+    """Test that huf/ai/tools/functions.py handlers gate on doctype."""
 
     def setUp(self):
         _patch_frappe(
@@ -271,7 +271,7 @@ class TestToolFunctionsGates(unittest.TestCase):
         self.assertFalse(result.get("success", False))
 
     def test_get_report_result_denies_when_report_denylisted(self):
-        with patch("huf.ai.tool_doctype_guard._DENYLISTED_DOCTYPES", {"report"}):
+        with patch("huf.ai.tools.doctype_guard._DENYLISTED_DOCTYPES", {"report"}):
             result = tool_functions.get_report_result("Some Report")
         self.assertFalse(result.get("success", False))
         frappe.get_doc.assert_not_called()

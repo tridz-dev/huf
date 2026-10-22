@@ -15,7 +15,7 @@ import unittest
 
 import frappe
 
-from huf.ai.tool_registry import PermissionAwareToolRegistry
+from huf.ai.tools.registry import PermissionAwareToolRegistry
 from huf.install import create_huf_roles
 
 
