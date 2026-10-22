@@ -27,7 +27,7 @@ from frappe.tests import IntegrationTestCase
 from huf.ai import flow_api
 from huf.ai.flow_engine import create_flow_run
 from huf.ai.flow_engine import run_flow as engine_run_flow
-from huf.ai.tests.factories import make_agent_tool_function
+from huf.testing.factories import make_agent_tool_function
 
 
 class TestFlowFailureSemantics(IntegrationTestCase):

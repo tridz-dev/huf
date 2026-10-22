@@ -26,7 +26,7 @@ Usage (real bench, `IntegrationTestCase` style — see
 ad-hoc `setUp`/`tearDown` cleanup rather than a shared base-class fixture
 loader):
 
-    from huf.ai.tests.factories import make_agent, make_ai_provider_and_model
+    from huf.testing.factories import make_agent, make_ai_provider_and_model
 
     class TestSomething(IntegrationTestCase):
         def setUp(self):

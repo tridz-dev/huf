@@ -28,9 +28,9 @@ AGENT-GOLDEN-002, ...) that each:
        `agent_integration.py::_execute_agent_run` (history fetch -> provider
        invocation -> tool-call-loop persistence over `result.new_items` ->
        usage/cost persistence -> final message persist).
-    4. Normalize that trace via `huf.ai.tests.golden_trace.normalize_trace`
+    4. Normalize that trace via `huf.testing.golden_trace.normalize_trace`
        and compare it against a versioned snapshot file in
-       `huf/ai/tests/golden_traces/<SCENARIO_ID>.json`.
+       `huf/testing/golden_traces/<SCENARIO_ID>.json`.
 
 WHY NOT THE REAL `_execute_agent_run`/`run_agent_sync` ORCHESTRATION
 ----------------------------------------------------------------------
@@ -46,7 +46,7 @@ not asserted as "this is what the DB would literally contain."
 FOLLOW-UP (not in this pass)
 ------------------------------
 Once a bench exists, a second pass should:
-    - Use `huf.ai.tests.factories.make_agent`/`make_agent_conversation`/
+    - Use `huf.testing.factories.make_agent`/`make_agent_conversation`/
       `make_agent_run` to build REAL doc rows (still wired to provider
       "test_provider" so scenarios stay deterministic).
     - Drive the REAL `huf.ai.agent_integration.run_agent_sync`/
@@ -70,7 +70,7 @@ not touch a DB) and is runnable directly:
     python3 -m unittest huf.ai.tests.test_golden_scenarios -v
 
 The FIRST run in a fresh checkout writes the initial snapshot files under
-`huf/ai/tests/golden_traces/*.json` if they do not yet exist (this is
+`huf/testing/golden_traces/*.json` if they do not yet exist (this is
 intentional and logged loudly — see `_compare_or_write_snapshot` below).
 Every subsequent run compares against the committed snapshot and fails
 loudly with a full diff on any drift, per GOAL.md section 7: "A changed
@@ -86,7 +86,7 @@ import sys
 import unittest
 from types import ModuleType, SimpleNamespace
 
-_GOLDEN_TRACES_DIR = os.path.join(os.path.dirname(__file__), "golden_traces")
+_GOLDEN_TRACES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "testing", "golden_traces")
 _HUF_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
@@ -138,7 +138,7 @@ def _bootstrap_bare_environment():
     _stub_package("huf", _HUF_ROOT)
     _stub_package("huf.ai", os.path.join(_HUF_ROOT, "ai"))
     _stub_package("huf.ai.providers", os.path.join(_HUF_ROOT, "ai", "providers"))
-    _stub_package("huf.ai.tests", os.path.join(_HUF_ROOT, "ai", "tests"))
+    _stub_package("huf.testing", os.path.join(_HUF_ROOT, "testing"))
 
     if "huf.ai.providers.litellm" not in sys.modules:
         fake_litellm_provider = ModuleType("huf.ai.providers.litellm")
@@ -164,7 +164,7 @@ def _bootstrap_bare_environment():
 _bootstrap_bare_environment()
 
 from huf.ai.providers import test_provider  # noqa: E402
-from huf.ai.tests.golden_trace import normalize_trace, to_json  # noqa: E402
+from huf.testing.golden_trace import normalize_trace, to_json  # noqa: E402
 
 
 def _make_fake_agent(agent_name, instructions, max_turns=10):

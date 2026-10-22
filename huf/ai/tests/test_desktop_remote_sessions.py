@@ -32,7 +32,7 @@ from huf.ai import desktop_policy as dp
 from huf.ai import desktop_sessions as ds
 from huf.ai.conversation_manager import ConversationManager
 from huf.ai.sdk_tools import create_agent_tools
-from huf.ai.tests import desktop_test_helpers as h
+from huf.testing import desktop_test_helpers as h
 from huf.ai.tools import desktop_workspace as dw
 from huf.api.v1.endpoints.conversations import _to_public_shape
 

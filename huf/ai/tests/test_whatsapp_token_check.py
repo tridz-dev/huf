@@ -11,7 +11,7 @@ import unittest
 import frappe
 
 from huf.ai import whatsapp_management as mgmt, whatsapp_token_check as tc
-from huf.ai.tests import fake_graph_server as fake
+from huf.testing import fake_graph_server as fake
 from huf.ai.tests import test_whatsapp_fake_graph as fg
 
 NON_ADMIN = "wa-tokencheck-user@example.com"

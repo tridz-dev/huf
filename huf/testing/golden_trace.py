@@ -103,7 +103,7 @@ persist). It does NOT drive real DB rows.
 A second, later pass — once a bench exists — should extend this harness to
 drive the REAL `_execute_agent_run`/`run_agent_sync` path with a real
 `IntegrationTestCase`, a real `Agent`/`Agent Run`/`Agent Message` set of
-rows (via `huf.ai.tests.factories`), and feed those real rows into this same
+rows (via `huf.testing.factories`), and feed those real rows into this same
 `normalize_trace()` function (it does not care whether its input dicts came
 from a real `frappe.get_doc(...).as_dict()` or from the synthesized shape
 built here — the normalization contract is the same either way). That pass

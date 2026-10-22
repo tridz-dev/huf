@@ -18,7 +18,7 @@ These are standalone unit tests against the module loaded directly from
 its file path — `huf.huf.doctype.agent.agent` pulls in heavy sibling
 modules (agent_integration, orchestration, prompt_cache_capabilities) that
 are not needed to exercise archive_agent/delete_agent_cascade/PQC, so they
-are stubbed out here the same way `huf/ai/tests/_stub_env.py` stubs
+are stubbed out here the same way `huf/testing/_stub_env.py` stubs
 frappe/litellm/agents for the rest of this standalone test suite.
 
 Run with: bench --site <site> run-tests --app huf --module huf.ai.tests.test_agent_archive_delete
@@ -31,7 +31,7 @@ import types
 import unittest
 from unittest.mock import MagicMock, call, patch
 
-from huf.ai.tests import _stub_env
+from huf.testing import _stub_env
 
 _stub_env.install()
 

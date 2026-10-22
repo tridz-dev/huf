@@ -15,7 +15,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.tests import desktop_test_helpers as h
+from huf.testing import desktop_test_helpers as h
 from huf.ai.tools import desktop_workspace
 
 

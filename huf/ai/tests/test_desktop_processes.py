@@ -20,8 +20,8 @@ from types import SimpleNamespace
 import frappe
 
 from huf.ai import desktop_executor as dx
-from huf.ai.tests import desktop_local_test_support as sup
-from huf.ai.tests import desktop_test_helpers as h
+from huf.testing import desktop_local_test_support as sup
+from huf.testing import desktop_test_helpers as h
 from huf.ai.tools import desktop_local as dl
 from huf.ai.tools._registry import (
 	DESKTOP_PROCESS_TOOL_NAMES,

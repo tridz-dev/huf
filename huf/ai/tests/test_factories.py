@@ -2,7 +2,7 @@
 # For license information, please see license.txt
 
 """
-Layer A (mocked-frappe, no bench) unit tests for `huf/ai/tests/factories.py`.
+Layer A (mocked-frappe, no bench) unit tests for `huf/testing/factories.py`.
 
 These do NOT exercise real Frappe validation (no bench is available in this
 environment — see that module's docstring). Instead they mock
@@ -37,7 +37,7 @@ except ImportError:
     frappe_mock._ = lambda x: x
     sys.modules["frappe"] = frappe_mock
 
-from huf.ai.tests import factories  # noqa: E402
+from huf.testing import factories  # noqa: E402
 
 
 def _mock_inserted_doc(get_doc_mock):

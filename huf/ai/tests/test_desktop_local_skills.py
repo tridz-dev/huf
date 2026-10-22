@@ -23,7 +23,7 @@ from huf.ai import agent_integration as ai
 from huf.ai import desktop_executor as dx
 from huf.ai.desktop_policy import default_policy
 from huf.ai.sdk_tools import create_agent_tools
-from huf.ai.tests import desktop_test_helpers as h
+from huf.testing import desktop_test_helpers as h
 from huf.ai.tools import desktop_local as dl
 from huf.ai.tools import desktop_workspace as dw
 from huf.ai.tools._registry import (

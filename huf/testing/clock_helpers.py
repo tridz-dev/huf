@@ -45,7 +45,7 @@ time forward deterministically instead of sleeping for real time.
 Usage
 -----
     from huf.ai import automation_scheduler
-    from huf.ai.tests.clock_helpers import FakeClock, patch_clock
+    from huf.testing.clock_helpers import FakeClock, patch_clock
 
     with patch_clock(automation_scheduler, initial="2026-01-01 00:00:00") as clock:
         automation_scheduler.run_due_automations()

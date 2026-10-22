@@ -17,7 +17,7 @@ Tests for huf.ai.context_segments.count_tool_exchange_tokens:
 with a deterministic side_effect keyed on text length, so these tests can
 assert on exact counted totals rather than "it ran" -- and the patch works
 the same way whether litellm is real (under a bench) or stubbed (see
-huf/ai/tests/_stub_env.py for the frappe-less standalone environment).
+huf/testing/_stub_env.py for the frappe-less standalone environment).
 """
 
 import sys
@@ -25,7 +25,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()
