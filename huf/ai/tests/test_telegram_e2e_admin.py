@@ -19,11 +19,30 @@ from unittest.mock import patch
 import frappe
 
 from huf.ai import telegram_admin as ta
-from huf.ai import telegram_miniapp_api as api
+from huf.ai import telegram_miniapp_api as _api
 from huf.ai.gateway_adapters import telegram_admin_hooks
 from huf.ai.gateway_adapters import telegram_miniapp as miniapp
 from huf.ai.gateway_adapters.telegram_inbound import TelegramUpdate
 from huf.ai.tests.test_telegram_admin import FakeAdapter
+
+
+class _HeaderApi:
+	"""Mini App endpoints with ``token=`` delivered via the X-Huf-Tg-Token header (the only accepted transport)."""
+
+	def __getattr__(self, name):
+		fn = getattr(_api, name)
+		if not callable(fn):
+			return fn
+
+		def call(*a, token=None, **kw):
+			raw = token or ""
+			with patch("frappe.get_request_header", lambda h: raw if h == _api.TOKEN_HEADER else None):
+				return fn(*a, **kw)
+
+		return call
+
+
+api = _HeaderApi()
 
 TOKEN = "123456:TEST-not-a-real-token"
 GW = "tg-gw"
@@ -509,6 +528,61 @@ class TestRevocation(E2EBase):
 		downgrades = [r for r in self.audit() if r["result"] == "scope_downgraded"]
 		self.assertEqual(len(downgrades), 1)
 		self.assertEqual(api.audit(token=token)["data"]["scope"], "own")
+
+
+class TestHardening(E2EBase):
+	def test_claim_fallback_is_single_use_under_concurrency(self):
+		class Slow(ta.MemCache):  # widen the check-then-set window; no make_key => lock-guarded fallback
+			def get_value(self, key):
+				value = super().get_value(key)
+				time.sleep(0.002)
+				return value
+
+		cache, wins = Slow(), []
+		barrier = threading.Barrier(8)
+
+		def go():
+			barrier.wait()
+			wins.append(ta._claim(cache, "nonce-1", 60))
+
+		threads = [threading.Thread(target=go) for _ in range(8)]
+		for t in threads:
+			t.start()
+		for t in threads:
+			t.join()
+		self.assertEqual(wins.count(True), 1, wins)
+
+	def test_callback_with_missing_chat_type_is_refused(self):
+		self.bind(BOUND, "Operator")
+		self.send("/unbind")
+		data = self.button("Confirm")
+		for chat_type in ("", None, "group", "supergroup"):
+			upd = dataclasses.replace(_press(data), chat_type=chat_type)
+			res = ta.handle_callback(self.gateway, self.adapter, upd, cache=self.cache)
+			self.assertEqual(res["note"], "not_private", chat_type)
+		self.assertIsNotNone(ta.get_binding(TG, GW, cache=self.cache))
+
+	def test_message_with_missing_chat_type_is_not_handled(self):
+		self.bind(BOUND, "Operator")
+		upd = dataclasses.replace(_upd("/me"), chat_type="")
+		self.assertIsNone(ta.handle_message(self.gateway, self.adapter, upd, cache=self.cache))
+
+	def test_restore_failure_chains_the_body_exception_and_leaves_no_bound_user(self):
+		calls = []
+
+		def set_user(user):
+			calls.append(user)
+			if user == "prev-user":
+				raise RuntimeError("restore boom")
+
+		self.fx.session.user = "prev-user"
+		with patch.object(frappe, "set_user", set_user):
+			with self.assertRaises(ta.AdminError) as ctx:
+				with ta.run_as(BOUND):
+					raise ValueError("body failed")
+		self.assertIsInstance(ctx.exception.__cause__, ValueError)
+		self.assertEqual(calls[-1], "Guest")  # last-resort drop: the bound user is not left active
+		self.assertNotEqual(calls[-1], BOUND)
 
 
 class TestMiniAppParity(E2EBase):

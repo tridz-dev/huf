@@ -119,6 +119,9 @@ def _cache(cache: Any = None) -> Any:
 	return _LOCAL
 
 
+_CLAIM_LOCK = threading.Lock()
+
+
 def _claim(c: Any, key: str, ttl: int) -> bool:
 	"""Atomically mark ``key`` as used; True only for the first caller (Redis SET NX when available)."""
 	try:
@@ -127,10 +130,11 @@ def _claim(c: Any, key: str, ttl: int) -> bool:
 			return bool(c.set(make_key(key), 1, nx=True, ex=ttl))
 	except Exception:
 		pass
-	if c.get_value(key):
-		return False
-	c.set_value(key, 1, expires_in_sec=ttl)
-	return True
+	with _CLAIM_LOCK:
+		if c.get_value(key):
+			return False
+		c.set_value(key, 1, expires_in_sec=ttl)
+		return True
 
 
 def _sha(text: str) -> str:
@@ -403,18 +407,26 @@ def run_as(user: str):
 		raise AdminError("The bound Frappe user is disabled.")
 	previous = _current_user() or "Guest"
 	_set_user(user)
+	body_exc: BaseException | None = None
 	try:
 		yield user
+	except BaseException as exc:
+		body_exc = exc
+		raise
 	finally:
 		try:
 			_set_user(previous)
 		except Exception as exc:
 			_log_restore_failure(user, previous)
+			if body_exc is not None:
+				logging.getLogger(__name__).error("telegram admin: body failed before restore failure: %r", body_exc)
 			try:
 				_set_user("Guest")
 			except Exception:
 				pass
-			raise AdminError("Could not restore the previous session user; request aborted.") from exc
+			raise AdminError("Could not restore the previous session user; request aborted.") from (
+				body_exc or exc
+			)
 
 
 _ADMIN_RECHECK_TTL = 60
@@ -1085,7 +1097,7 @@ def handle_callback(
 	if parsed_payload is None:
 		answer(MSG_DENIED)
 		return _ack("forged_callback")
-	if parsed.chat_type and parsed.chat_type != "private":
+	if parsed.chat_type != "private":
 		answer(MSG_DENIED)
 		return _ack("not_private")
 	tg_user, chat_id = str(parsed.sender_id), str(parsed.chat_id)

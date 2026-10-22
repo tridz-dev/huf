@@ -14,8 +14,10 @@ import json
 import re
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from huf.ai import telegram_admin as ta
 from huf.ai import telegram_send_scope as scope
 from huf.ai import telegram_templates as tpl
 from huf.ai.gateway_adapters.telegram_client import TelegramBotClient
@@ -28,6 +30,10 @@ BOT = 999
 CUR = "-1001"  # chat of the current gateway conversation
 OTHER = "-2002"  # allowed only by Allow-list / Approved / Any number
 DENIED = "-3003"  # outside every allow-list
+ADMIN_BINDING = {
+	"name": "b1", "telegram_user_id": "900", "chat_id": "900", "gateway": "gw1", "role_scope": "Admin",
+	"frappe_user": "a@x.com",
+}
 SECRET = TOKEN.split(":", 1)[-1]
 PHOTO = "https://cdn.test/a.jpg"
 TG_BASE = "https://api.telegram.org"
@@ -207,6 +213,8 @@ class Harness(unittest.TestCase):
 		self.owner = False
 		self.cap = 50
 		self.flags = {"group": True, "profile": True, "business": True}
+		self.gw_invalid = False  # inside a gateway run whose gateway is disabled / missing / not Telegram
+		self.admins = [dict(ADMIN_BINDING)]  # active Admin cockpit bindings that approval buttons go to
 		self.addCleanup(patch.stopall)
 
 		def make_client(token, *, timeout=30):
@@ -233,6 +241,13 @@ class Harness(unittest.TestCase):
 		patch.object(adm, "_is_owner_run", side_effect=lambda gw, chat: self.owner).start()
 		patch.object(adm, "_is_paired_admin", side_effect=lambda gw, uid: str(uid) == "777").start()
 		patch.object(scope, "run_gateway", side_effect=lambda: "gw1" if self.gw_on else "").start()
+		patch.object(
+			scope, "gateway_state",
+			side_effect=lambda: ("invalid", "") if self.gw_invalid else (("telegram", "gw1") if self.gw_on else ("none", "")),
+		).start()
+		patch.object(adm, "_admin_bindings", side_effect=lambda gw: list(self.admins)).start()
+		patch.object(adm, "_callback_signer", side_effect=lambda gw, chat: (lambda p: p + "|sig")).start()
+		patch.object(adm, "_gateway_token", return_value=TOKEN).start()
 		patch.object(scope, "effective_run_id", side_effect=lambda: self.run_id).start()
 		patch.object(scope, "current_chat", side_effect=lambda run_id: CUR).start()
 		patch.object(scope, "settings", side_effect=lambda gw: dict(self.conf)).start()
@@ -269,6 +284,28 @@ class Harness(unittest.TestCase):
 
 	def sent(self, method):
 		return [c for c in self.api.calls if c["method"] == method]
+
+	def approval_buttons(self):
+		"""Approve/Reject callback_data of the last approval prompt sent to an admin chat."""
+		markup = self.sent("sendMessage")[-1]["payload"]["reply_markup"]["inline_keyboard"][0]
+		return {b["text"]: b["callback_data"] for b in markup}
+
+	def press_admin(self, label, tg_user="900"):
+		"""Press an approval button through the real admin callback handler (signature stub: ``|sig``)."""
+		parsed = SimpleNamespace(
+			kind="callback_query", callback_data=self.approval_buttons()[label], callback_query_id="cq",
+			chat_id=tg_user, chat_type="private", sender_id=tg_user, message_id=11,
+		)
+		adapter = MagicMock()
+		adapter.verify_callback_data.side_effect = lambda raw, chat: raw.rsplit("|", 1)[0]
+		binding = dict(ADMIN_BINDING, telegram_user_id=tg_user, chat_id=tg_user)
+		with (
+			patch.object(ta, "get_binding", return_value=binding),
+			patch.object(ta, "write_audit"),
+			patch.object(ta, "_commit"),
+			patch.object(ta, "_rollback"),
+		):
+			return ta.handle_callback(SimpleNamespace(name="gw1"), adapter, parsed, cache=self.cache), adapter
 
 
 class TestRegistryParity(Harness):
@@ -312,8 +349,8 @@ class TestEnvelope(Harness):
 				res = self.adm_call(action, **ADMIN_ARGS[action])
 				self.assertIsInstance(res.get("success"), bool, res)
 				if action in MUTATING:
-					self.assertEqual(res.get("error"), "needs_confirmation", res)
-					self.assertTrue(res.get("confirmation_token"))
+					self.assertTrue(res["success"], res)
+					self.assertEqual(res.get("status"), "pending_human_approval", res)
 				elif res["success"]:
 					self.assertEqual(res["action"], action)
 					self.assertIn("result", res)
@@ -380,24 +417,23 @@ class TestGatewayScopeMatrix(Harness):
 					self.assertIn("recipient", res.get("message", ""))
 					self.assertEqual(self.api.calls, [])
 
-	@unittest.expectedFailure  # BUG: profile actions skip the recipient scope check
-	def test_profile_chat_scope_gap(self):
-		"""Known gap: profile actions take a ``chat_id`` but are not checked against the send scope."""
+	def test_profile_chat_scope_is_enforced(self):
+		"""``set_chat_menu_button`` with a chat_id is checked against the send scope."""
 		self.configure_scope("Current contact")
 		res = self.adm_call("set_chat_menu_button", chat_id=DENIED, menu_button={"type": "default"})
 		self.assertEqual(res.get("error"), "action_not_permitted", res)
 		self.assertEqual(self.sent("setChatMenuButton"), [])
 
-	@unittest.expectedFailure  # BUG: confirmed setMyCommands skips the recipient scope check
-	def test_profile_command_scope_gap_after_confirmation(self):
-		"""Known gap: a chat-scoped setMyCommands for a non-scoped chat goes through once confirmed."""
+	@unittest.expectedFailure  # GAP: set_my_commands(chat_id=...) is not recipient-scope checked (human-approved only)
+	def test_profile_command_scope_gap(self):
+		"""A chat-scoped setMyCommands for a non-scoped chat should be refused before asking for approval."""
 		self.configure_scope("Current contact")
 		args = {
 			"commands": [{"command": "a", "description": "b"}], "command_scope": "chat", "chat_id": DENIED,
 		}
-		token = self.adm_call("set_my_commands", **args)["confirmation_token"]
-		res = self.adm_call("set_my_commands", confirm=True, confirmation_token=token, **args)
+		res = self.adm_call("set_my_commands", **args)
 		self.assertEqual(res.get("error"), "action_not_permitted", res)
+		self.assertEqual(self.sent("sendMessage"), [])
 		self.assertEqual(self.sent("setMyCommands"), [])
 
 
@@ -424,6 +460,8 @@ class TestAdminFlagMatrix(Harness):
 
 
 class TestConfirmation(Harness):
+	"""Non-owner runs need a HUMAN admin's button press; owner runs keep ``confirm: true``."""
+
 	def setUp(self):
 		super().setUp()
 		self.gw_on = True
@@ -431,44 +469,97 @@ class TestConfirmation(Harness):
 	def mutated(self):
 		return [c["method"] for c in self.api.calls if c["method"] in MUTATING.values()]
 
-	def test_two_step_for_each_destructive_action(self):
+	def test_non_owner_destructive_action_is_pending_until_admin_approves(self):
 		for action, method in MUTATING.items():
 			args = ADMIN_ARGS[action]
 			with self.subTest(action=action):
 				self.api.calls.clear()
+				self.cache.d.clear()
 				first = self.adm_call(action, **args)
-				self.assertEqual(first["error"], "needs_confirmation")
-				token = first["confirmation_token"]
-				self.assertEqual(self.mutated(), [], "nothing may be mutated before confirmation")
-
-				mismatch = self.adm_call(action, confirm=True, confirmation_token=token, reason="x", **args)
-				self.assertEqual(mismatch["error"], "confirmation_mismatch")
-				self.assertEqual(self.mutated(), [])
-				# the token is single use, even after a mismatch
-				again = self.adm_call(action, confirm=True, confirmation_token=token, **args)
-				self.assertEqual(again["error"], "confirmation_invalid")
-
-				token = self.adm_call(action, **args)["confirmation_token"]
-				ok = self.adm_call(action, confirm=True, confirmation_token=token, **args)
-				self.assertTrue(ok["success"], ok)
+				self.assertEqual(first["status"], "pending_human_approval", first)
+				self.assertEqual(self.mutated(), [], "nothing may be mutated before approval")
+				prompt = self.sent("sendMessage")[-1]["payload"]
+				self.assertEqual(prompt["chat_id"], 900)  # the Admin binding's chat, not the agent's
+				self.assertEqual(set(self.approval_buttons()), {"Approve", "Reject"})
+				ack, _ = self.press_admin("Approve")
+				self.assertEqual(ack["note"], "confirmed")
 				self.assertEqual(self.mutated(), [method])
-				replay = self.adm_call(action, confirm=True, confirmation_token=token, **args)
-				self.assertEqual(replay["error"], "confirmation_invalid")
+				replay, _ = self.press_admin("Approve")  # nonce is single use
+				self.assertEqual(replay["note"], "nonce_rejected")
+				self.assertEqual(self.mutated(), [method])
 
-	def test_confirm_flag_without_token_is_not_enough(self):
-		res = self.adm_call("ban", confirm=True, user_id=5)
-		self.assertEqual(res["error"], "needs_confirmation")
-		self.assertTrue(res.get("confirmation_token"))
+	def test_reject_press_executes_nothing_and_blocks_later_approve(self):
+		self.adm_call("ban", user_id=5)
+		buttons = self.approval_buttons()
+		ack, _ = self.press_admin("Reject")
+		self.assertEqual(ack["note"], "cancelled")
+		self.assertEqual(self.mutated(), [])
+		self.assertEqual([k for k in self.cache.d if k.startswith("huf_tg_adm_pend:") and not k.endswith(":u")], [])
+		# the Approve button of the same request is dead once the request was resolved
+		ack, _ = self.press_admin("Approve")
+		self.assertEqual(self.mutated(), [], buttons)
+
+	def test_agent_supplied_confirm_and_token_are_ignored(self):
+		for extra in ({"confirm": True}, {"confirm": True, "confirmation_token": "whatever"}):
+			with self.subTest(extra=extra):
+				self.cache.d.clear()
+				res = self.adm_call("ban", user_id=5, **extra)
+				self.assertEqual(res["status"], "pending_human_approval", res)
+				self.assertEqual(self.mutated(), [])
+
+	def test_duplicate_pending_request_is_not_resent(self):
+		self.adm_call("ban", user_id=5)
+		again = self.adm_call("ban", user_id=5, confirm=True)
+		self.assertEqual(again["status"], "pending_human_approval")
+		self.assertEqual(len(self.sent("sendMessage")), 1)
+
+	def test_no_admin_available_refuses_without_sending_or_counting(self):
+		self.admins = []
+		for action in MUTATING:
+			with self.subTest(action=action):
+				res = self.adm_call(action, confirm=True, **ADMIN_ARGS[action])
+				self.assertFalse(res["success"], res)
+				self.assertEqual(res["error"], "no_admin_available")
+		self.assertEqual(self.sent("sendMessage"), [])
+		self.assertEqual(self.mutated(), [])
+
+	def test_admin_prompt_delivery_failure_is_no_admin_available(self):
+		self.api.queue("sendMessage", FakeBotApi.error("Forbidden: bot was blocked by the user", 403))
+		res = self.adm_call("ban", user_id=5)
+		self.assertEqual(res["error"], "no_admin_available")
+		self.assertEqual(self.mutated(), [])
+
+	def test_foreign_admin_of_other_gateway_cannot_approve(self):
+		self.adm_call("ban", user_id=5)
+		parsed = SimpleNamespace(
+			kind="callback_query", callback_data=self.approval_buttons()["Approve"], callback_query_id="cq",
+			chat_id="900", chat_type="private", sender_id="900", message_id=11,
+		)
+		adapter = MagicMock()
+		adapter.verify_callback_data.side_effect = lambda raw, chat: raw.rsplit("|", 1)[0]
+		binding = dict(ADMIN_BINDING, gateway="other-gw")
+		with (
+			patch.object(ta, "get_binding", return_value=binding),
+			patch.object(ta, "write_audit"),
+			patch.object(ta, "_commit"),
+			patch.object(ta, "_rollback"),
+		):
+			ta.handle_callback(SimpleNamespace(name="other-gw"), adapter, parsed, cache=self.cache)
 		self.assertEqual(self.mutated(), [])
 
 	def test_owner_run_needs_confirm_flag_only(self):
 		self.owner = True
-		first = self.adm_call("ban", user_id=5)
-		self.assertEqual(first["error"], "needs_confirmation")
-		self.assertNotIn("confirmation_token", first)
-		self.assertEqual(self.mutated(), [])
-		self.assertTrue(self.adm_call("ban", user_id=5, confirm=True)["success"])
-		self.assertEqual(self.mutated(), ["banChatMember"])
+		for action, method in MUTATING.items():
+			with self.subTest(action=action):
+				self.api.calls.clear()
+				first = self.adm_call(action, **ADMIN_ARGS[action])
+				self.assertEqual(first["error"], "needs_confirmation")
+				self.assertNotIn("confirmation_token", first)
+				self.assertEqual(self.mutated(), [])
+				ok = self.adm_call(action, confirm=True, **ADMIN_ARGS[action])
+				self.assertTrue(ok["success"], ok)
+				self.assertEqual(self.mutated(), [method])
+		self.assertEqual(self.sent("sendMessage"), [], "owner runs never ask a human admin")
 
 
 class TestIdempotency(Harness):
@@ -566,6 +657,38 @@ class TestCaps(Harness):
 		self.api.queue("banChatMember", FakeBotApi.error("Bad Request: user is an administrator", 400))
 		self.assertFalse(self.adm_call("ban", user_id=5, confirm=True)["success"])
 		self.assertTrue(self.adm_call("ban", user_id=5, confirm=True)["success"])
+
+
+class TestInvalidGatewayRefusal(Harness):
+	"""A gateway run whose gateway is disabled / missing / non-Telegram is refused by the telegram tool."""
+
+	def setUp(self):
+		super().setUp()
+		self.gw_invalid = True  # run_gateway() is '' (patched) while gateway_state() says invalid
+
+	def test_every_action_is_refused_without_a_bot_call(self):
+		for action in TG_ENUM:
+			with self.subTest(action=action):
+				res = self.tg_call(action, chat_id=CUR, **TG_ARGS[action])
+				self.assertFalse(res["success"], res)
+				self.assertEqual(res["error"], "action_not_permitted", res)
+		self.assertEqual(self.api.calls, [])
+
+	def test_refusal_precedes_idempotency_replay(self):
+		self.gw_invalid = False
+		self.gw_on = True
+		first = self.tg_call("send_message", chat_id=CUR, text="hi", idempotency_key="k9")
+		self.assertTrue(first["success"])
+		self.gw_on = False
+		self.gw_invalid = True
+		res = self.tg_call("send_message", chat_id=CUR, text="hi", idempotency_key="k9")
+		self.assertEqual(res["error"], "action_not_permitted")
+		self.assertEqual(len(self.sent("sendMessage")), 1)
+
+	def test_non_gateway_run_is_unchanged(self):
+		self.gw_invalid = False
+		self.gw_on = False
+		self.assertTrue(self.tg_call("get_me")["success"])
 
 
 class TestTokenNeverLeaks(Harness):
