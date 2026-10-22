@@ -63,7 +63,8 @@ class TestInline(Base):
 		r = payload["results"][0]
 		self.assertEqual(r["type"], "article")
 		self.assertIn("Ask the assistant: weekly report", r["title"])
-		self.assertNotIn("reply_markup", r)
+		self.assertEqual(r["input_message_content"]["message_text"], "Thinking...")
+		self.assertIn("inline_keyboard", r["reply_markup"])
 		self.assertEqual(payload["cache_time"], 30)
 		self.assertTrue(payload["is_personal"])
 		self.assertNotIn("button", payload)
@@ -133,7 +134,8 @@ class TestInline(Base):
 		res, _ = self.run_query()
 		self.assertTrue(res["success"])
 
-	def test_chosen_recorded_without_agent_run_or_query_text(self):
+	def test_chosen_recorded_without_query_text(self):
+		patch.object(ti.frappe, "enqueue").start()
 		raw = load_fixture("chosen_inline_result")
 		with patch.object(ti.frappe, "logger") as lg:
 			res = ti.handle_chosen_inline_result(gw(), self.adapter, parsed_for(raw), None)
@@ -147,10 +149,129 @@ class TestInline(Base):
 		for key in ("inline_query", "chosen_inline_result", "unsupported"):
 			self.assertIn(key, ing._UPDATE_HANDLERS)
 		self.assertIsNone(ti.dispatch(gw(), self.adapter, parsed_for({"update_id": 1}), None))
+		patch.object(ti.frappe, "enqueue").start()
 		self.assertEqual(
 			ti.dispatch(gw(), self.adapter, parsed_for(load_fixture("chosen_inline_result")), None)["handled"],
 			"chosen_inline_result",
 		)
+
+
+class ChosenBase(Base):
+	def setUp(self):
+		super().setUp()
+		self.cache = {}
+		fc = MagicMock()
+		fc.get_value.side_effect = lambda k: self.cache.get(k)
+		fc.set_value.side_effect = lambda k, v, expires_in_sec=None: self.cache.__setitem__(k, v)
+		patch.object(ti.frappe, "cache", return_value=fc).start()
+		seen = set()
+		patch.object(ing, "_first_delivery", side_effect=lambda g, k: k not in seen and not seen.add(k)).start()
+		self.enq = patch.object(ti.frappe, "enqueue").start()
+
+	def raw(self, **over):
+		raw = load_fixture("chosen_inline_result")
+		raw["chosen_inline_result"].update(over)
+		raw["chosen_inline_result"]["result_id"] = over.get("result_id", "ask-abc")
+		return raw
+
+	def choose(self, raw=None, gateway=None):
+		return ti.handle_chosen_inline_result(gateway or gw(), self.adapter, parsed_for(raw or self.raw()), None)
+
+
+class TestChosenEnqueue(ChosenBase):
+	def test_chosen_enqueues_job(self):
+		res = self.choose()
+		self.assertEqual(res["note"], "agent run queued")
+		args, kwargs = self.enq.call_args
+		self.assertEqual(args[0], ti.JOB)
+		self.assertEqual(kwargs["queue"], "short")
+		self.assertEqual(kwargs["inline_message_id"], "imid-1")
+		self.assertEqual(kwargs["query"], "weekly report")
+
+	def test_idempotent_per_message(self):
+		self.choose()
+		self.choose()
+		self.assertEqual(self.enq.call_count, 1)
+
+	def test_feedback_off_degrades_and_logs_once(self):
+		raw = self.raw()
+		del raw["chosen_inline_result"]["inline_message_id"]
+		with patch.object(ti.frappe, "logger") as lg:
+			self.choose(raw)
+			self.choose(raw)
+		self.enq.assert_not_called()
+		self.assertEqual(lg.return_value.warning.call_count, 1)
+
+	def test_rate_limit(self):
+		for i in range(ti.RATE_LIMIT + 1):
+			self.choose(self.raw(inline_message_id=f"m{i}"))
+		self.assertEqual(self.enq.call_count, ti.RATE_LIMIT)
+		method, payload = self.adapter.client.call.call_args.args
+		self.assertEqual(method, "editMessageText")
+		self.assertEqual(payload["inline_message_id"], f"m{ti.RATE_LIMIT}")
+
+	def test_disabled_flag(self):
+		g = gw()
+		g.telegram_inline_enabled = 0
+		self.choose(gateway=g)
+		self.enq.assert_not_called()
+		res, call = self.run_query(gateway=g)
+		self.assertIsNone(call)
+
+	def test_unpaired_runs_nothing(self):
+		self.admit.return_value = False
+		self.choose()
+		self.enq.assert_not_called()
+		self.adapter.client.call.assert_not_called()
+
+	def test_non_ask_result_ignored(self):
+		self.choose(self.raw(result_id="other"))
+		self.enq.assert_not_called()
+
+
+class TestInlineJob(ChosenBase):
+	def run_job(self, result=None, exc=None):
+		g = gw()
+		g.default_agent = "A"
+		with patch.object(ti, "_load_gateway", return_value=g), patch.object(
+			ti, "_adapter", return_value=self.adapter
+		), patch.object(ti, "_run_agent", side_effect=exc, return_value=result) as ra:
+			out = ti.run_inline_job("GW", "imid-1", "111", "weekly report")
+		return out, ra
+
+	def test_job_edits_with_inline_message_id(self):
+		out, ra = self.run_job({"success": True, "response": "Hello **world**\n```telegram-buttons\n{}\n```"})
+		self.assertEqual(out["result"], "answered")
+		method, payload = self.adapter.client.call.call_args.args
+		self.assertEqual(method, "editMessageText")
+		self.assertEqual(payload["inline_message_id"], "imid-1")
+		self.assertIn("world", payload["text"])
+		self.assertNotIn("telegram-buttons", payload["text"])
+		self.assertLessEqual(len(payload["text"]), 4096)
+		self.assertNotIn("chat_id", payload)
+
+	def test_failure_edits_apology(self):
+		out, _ = self.run_job(exc=RuntimeError("boom"))
+		self.assertEqual(out["result"], "failed")
+		self.assertEqual(self.adapter.client.call.call_args.args[1]["text"], ti.APOLOGY_TEXT)
+
+	def test_plain_fallback_on_parse_error(self):
+		from huf.ai.gateway_adapters.telegram_client import TelegramApiError
+
+		self.adapter.client.call.side_effect = [
+			TelegramApiError("editMessageText", "Bad Request: can't parse entities", error_code=400),
+			True,
+		]
+		out, _ = self.run_job({"success": True, "response": "hi"})
+		self.assertEqual(out["result"], "answered")
+		self.assertNotIn("parse_mode", self.adapter.client.call.call_args.args[1])
+
+	def test_job_skips_when_disabled(self):
+		g = gw()
+		g.telegram_inline_enabled = 0
+		with patch.object(ti, "_load_gateway", return_value=g), patch.object(ti, "_adapter", return_value=self.adapter):
+			out = ti.run_inline_job("GW", "imid-1", "111", "q")
+		self.assertEqual(out["result"], "skipped")
 
 
 if __name__ == "__main__":
