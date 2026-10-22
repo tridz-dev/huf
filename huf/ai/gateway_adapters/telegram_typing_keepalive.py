@@ -40,8 +40,9 @@ def key_for(gateway_name: Any, chat_id: Any, thread_id: Any = None) -> str:
 
 
 class _Keepalive:
-	def __init__(self, key, send, skip, clock, wait, interval, max_seconds) -> None:
+	def __init__(self, key, send, skip, clock, wait, interval, max_seconds, site=None) -> None:
 		self.key = key
+		self.site = site
 		self.send = send
 		self.skip = skip
 		self.clock = clock
@@ -51,7 +52,22 @@ class _Keepalive:
 		self.wait = wait or self.stop_flag.wait
 		self.deadline = clock() + max_seconds
 
+	def _bind_site(self) -> bool:
+		"""Give this thread a Frappe site context (cache access) once; True when we own it and must destroy."""
+		if not self.site:
+			return False
+		try:
+			import frappe
+
+			if getattr(frappe.local, "site", None):
+				return False
+			frappe.init(site=self.site)
+			return True
+		except Exception:
+			return False
+
 	def run(self) -> None:
+		owns_ctx = self._bind_site()
 		try:
 			while not self.stop_flag.is_set():
 				self.wait(self.interval)
@@ -66,6 +82,13 @@ class _Keepalive:
 		except Exception:
 			pass
 		finally:
+			if owns_ctx:
+				try:
+					import frappe
+
+					frappe.destroy()
+				except Exception:
+					pass
 			with _lock:
 				if _active.get(self.key) is self:
 					_active.pop(self.key, None)
@@ -81,6 +104,7 @@ def start(
 	interval: float = INTERVAL,
 	max_seconds: float = MAX_SECONDS,
 	spawn: bool = True,
+	site: str | None = None,
 ) -> bool:
 	"""Start (or extend) the keepalive for ``key``. Returns True when a thread is running. Never raises."""
 	try:
@@ -93,7 +117,7 @@ def start(
 				return True
 			if len(_active) >= MAX_THREADS:
 				return False
-			ka = _Keepalive(key, send, skip, clock, wait, interval, max_seconds)
+			ka = _Keepalive(key, send, skip, clock, wait, interval, max_seconds, site)
 			_active[key] = ka
 		if spawn:
 			threading.Thread(target=ka.run, name="huf-tg-typing", daemon=True).start()

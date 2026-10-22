@@ -102,3 +102,43 @@ class TestTypingKeepalive(TestCase):
 		with patch("frappe.flags", SimpleNamespace(in_test=True)):
 			self.assertFalse(ka.start("g:1:", MagicMock(), spawn=False))
 		self.assertEqual(ka.active_count(), 0)
+
+
+class TestKeepaliveSiteContext(TestCase):
+	def setUp(self):
+		ka.ENABLED = True
+		self.addCleanup(setattr, ka, "ENABLED", None)
+		self.addCleanup(patch.stopall)
+
+	def test_thread_without_local_site_inits_and_destroys_and_records(self):
+		import frappe
+
+		from huf.ai.gateway_adapters import telegram_typing_metrics as tm
+
+		calls = []
+		patch("frappe.local", SimpleNamespace()).start()
+		patch("frappe.init", side_effect=lambda site=None, **k: calls.append(("init", site))).start()
+		patch("frappe.destroy", side_effect=lambda: calls.append(("destroy",))).start()
+		rec = patch.object(tm, "record_keepalive_tick").start()
+		ticks = iter([False, True])
+		ran = []
+
+		def tick():
+			ran.append(1)
+			tm.record_keepalive_tick("GW")
+
+		ok = ka.start("gs:1:", tick, lambda: next(ticks), wait=lambda s: None, site="s.local", spawn=False)
+		self.assertTrue(ok)
+		ka._active["gs:1:"].run()
+		self.assertEqual(calls, [("init", "s.local"), ("destroy",)])
+		self.assertEqual(len(ran), 1)  # second tick honoured the stream skip
+		rec.assert_called_once_with("GW")
+		self.assertEqual(ka.active_count(), 0)
+
+	def test_init_failure_never_raises(self):
+		patch("frappe.local", SimpleNamespace()).start()
+		patch("frappe.init", side_effect=RuntimeError("x")).start()
+		send = MagicMock()
+		ka.start("gs:2:", send, lambda: True, wait=lambda s: None, site="s", spawn=False)
+		ka._active["gs:2:"].run()
+		send.assert_not_called()

@@ -264,30 +264,59 @@ def _refuse_day(limit: int, retry: int) -> str:
 	)
 
 
+def _incr(c, key: str) -> int:
+	"""Atomically create-with-TTL (SET NX EX) then INCR in one transaction; TTL is always present."""
+	try:
+		pipe = c.pipeline(transaction=True)
+		pipe.set(key, 0, nx=True, ex=DAY_SECONDS)
+		pipe.incrby(key, 1)
+		return int(pipe.execute()[-1])
+	except AttributeError:
+		pass  # client without pipeline support: INCR then guarantee a TTL below
+	n = int(c.incrby(key, 1))
+	try:
+		ttl = int(c.ttl(key))
+	except Exception:
+		ttl = -1
+	if n == 1 or ttl < 0:
+		c.expire(key, DAY_SECONDS)
+	return n
+
+
 def _claim_atomic(c, conf: dict, gateway: str, run_id: Optional[str]) -> Optional[str]:
-	"""INCR + EXPIRE counters (fixed 24h window from the first send); over-cap increments are rolled back."""
+	"""Counters created with TTL atomically (fixed 24h window); over-cap increments and failures are rolled back."""
 	run_k = c.make_key(_run_key(gateway, run_id) + ":n") if (conf["per_run"] and run_id) else None
 	day_k = c.make_key(_day_key(gateway) + ":n") if conf["per_day"] else None
-	if run_k:
-		n = int(c.incrby(run_k, 1))
-		if n == 1:
-			c.expire(run_k, DAY_SECONDS)
-		if n > conf["per_run"]:
-			c.decrby(run_k, 1)
-			return _refuse_run(conf["per_run"])
-	if day_k:
-		n = int(c.incrby(day_k, 1))
-		if n == 1:
-			c.expire(day_k, DAY_SECONDS)
-		if n > conf["per_day"]:
-			c.decrby(day_k, 1)
-			if run_k:
+	held: list[str] = []
+	try:
+		if run_k:
+			n = _incr(c, run_k)
+			held.append(run_k)
+			if n > conf["per_run"]:
 				c.decrby(run_k, 1)
+				held.clear()
+				return _refuse_run(conf["per_run"])
+		if day_k:
+			n = _incr(c, day_k)
+			held.append(day_k)
+			if n > conf["per_day"]:
+				c.decrby(day_k, 1)
+				held.remove(day_k)
+				if run_k:
+					c.decrby(run_k, 1)
+					held.clear()
+				try:
+					ttl = int(c.ttl(day_k))
+				except Exception:
+					ttl = DAY_SECONDS
+				return _refuse_day(conf["per_day"], ttl if ttl > 0 else DAY_SECONDS)
+	except Exception:
+		for k in held:  # never double count when the caller falls back to the list path
 			try:
-				ttl = int(c.ttl(day_k))
+				c.decrby(k, 1)
 			except Exception:
-				ttl = DAY_SECONDS
-			return _refuse_day(conf["per_day"], ttl if ttl > 0 else DAY_SECONDS)
+				pass
+		raise
 	return None
 
 

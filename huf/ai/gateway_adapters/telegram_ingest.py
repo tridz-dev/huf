@@ -300,6 +300,9 @@ def _start_keepalive(gateway, sender, chat_id, thread) -> None:
 		from huf.ai.gateway_adapters import telegram_typing_metrics as tm
 
 		name = gateway.name
+		import frappe
+
+		site = getattr(frappe.local, "site", None)  # captured here: the thread has no site context
 
 		def tick() -> None:
 			try:
@@ -313,6 +316,7 @@ def _start_keepalive(gateway, sender, chat_id, thread) -> None:
 			ka.key_for(name, chat_id, thread),
 			tick,
 			lambda: bool(ts.StreamState(name, chat_id).get().get("draft_id")),
+			site=site,
 		)
 	except Exception:
 		pass
