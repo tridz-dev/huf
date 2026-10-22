@@ -11,7 +11,7 @@ from huf.ai.decision.runtime import DecisionRuntime
 from huf.ai.decision.types import CandidateSource, DecisionPolicy, DecisionRequest, Option, Question, QuestionKind, StateBinding
 
 
-FIXTURES = Path(__file__).parents[4] / "docs" / "fixtures" / "decision-runtime" / "jev-systemone"
+FIXTURES = Path(__file__).parent / "fixtures" / "jev-systemone"
 
 
 def fixture_transport(name):
