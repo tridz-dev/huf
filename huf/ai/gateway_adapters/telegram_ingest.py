@@ -110,7 +110,8 @@ def handle_update(gateway, adapter, request) -> dict | None:
 	category = classify(parsed)
 	if parsed.bot_blocked or parsed.bot_unblocked:
 		return _handle_block_change(gateway, parsed)
-	for key in (parsed.kind, category):
+	raw_key = next((k for k in (parsed.raw or {}) if k != "update_id"), "")
+	for key in dict.fromkeys((parsed.kind, raw_key, category)):
 		handler = _UPDATE_HANDLERS.get(key)
 		if handler is not None:
 			handled = handler(gateway, adapter, parsed, request)

@@ -2415,8 +2415,10 @@ def _process_gateway_event(event_name: str) -> dict:
             fallback_note = ""
             _maybe_mark_read_typing(event, gateway)
             _commit_unless_testing()  # keep Running status and saved media across a retry rollback
+            runner_hook = provider_hooks.get(gateway.provider, "agent_runner")
+            run_fn = (runner_hook(event, gateway) if runner_hook else None) or run_agent_sync
             result = _run_agent_serialised(
-                run_agent_sync,
+                run_fn,
                 lock_key=f"huf_gw_conv:{gateway.name}:{event.thread_id or event.conversation_id or event.sender_id}",
                 agent_name=event.target_agent,
                 prompt=prompt,
