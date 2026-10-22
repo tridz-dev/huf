@@ -22,6 +22,7 @@ import {
 	type MenuButtonType,
 } from '@/services/telegramCommandsApi';
 import { ProfileCard } from './ProfileCard';
+import { RecommendedSetupCard } from './RecommendedSetupCard';
 
 const SELECT_CLASS = 'h-9 rounded-md border border-line bg-paper px-2 text-sm text-ink';
 
@@ -176,6 +177,7 @@ export function MenuButtonCard({ gateway }: { gateway: string }) {
 export function CommandsTab({ gateway }: { gateway: string }) {
 	return (
 		<div className="space-y-4">
+			<RecommendedSetupCard gateway={gateway} />
 			<CommandsEditor gateway={gateway} />
 			<div className="grid items-start gap-4 lg:grid-cols-2">
 				<ProfileCard gateway={gateway} />

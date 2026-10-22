@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/frappe-sdk', () => ({ call: { get: vi.fn(), post: vi.fn() } }));
 import { call } from '@/lib/frappe-sdk';
 import {
+	applyRecommendedSetup,
 	checkToken,
 	cleanCommands,
 	deleteWebhookNow,
 	getCommands,
+	getRecommendedSetup,
 	setCommands,
 	setWebhookNow,
 	validateCommands,
@@ -79,5 +81,18 @@ describe('validation helpers', () => {
 		expect(validateMenuButton('web_app', 'Open', 'http://x')).toMatch(/https/);
 		expect(validateMenuButton('web_app', '', 'https://x')).toMatch(/text/);
 		expect(validateMenuButton('web_app', 'Open', 'https://x')).toBeNull();
+	});
+});
+
+describe('recommended setup calls', () => {
+	it('plan uses GET', async () => {
+		get.mockResolvedValue({ message: { success: true, plan: {} } } as never);
+		await getRecommendedSetup('G');
+		expect(get).toHaveBeenCalledWith('huf.ai.telegram_management_commands.recommended_setup', { gateway: 'G' });
+	});
+	it('apply always sends confirm=1', async () => {
+		post.mockResolvedValue({ message: { success: true } } as never);
+		await applyRecommendedSetup('G', false, true);
+		expect(post).toHaveBeenCalledWith('huf.ai.telegram_management_commands.apply_recommended_setup', { gateway: 'G', confirm: 1, include_menu_button: 0, replace_commands: 1 });
 	});
 });
