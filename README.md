@@ -140,6 +140,14 @@ Connect your agents to inbound and outbound communication channels:
 
 - **Supported Channels** — Gmail / Email, Telegram, Slack, WhatsApp, and custom HTTP Webhooks
 - **Access & Binding Rules** — Control which users or external senders can invoke specific agents or flows
+
+#### Telegram
+
+- Webhook gateway with pairing-first access, text/media/voice in and out, buttons, and edit-in-place
+- Group addressing by mention, forum threads, bot-to-bot loop guard, and guest mode
+- Business (Secretary) mode is observe-only by default; streaming is off unless `huf_telegram_streaming` is set
+- Owner/admin cockpit in private chats: signed buttons, confirm-before-write, and audit rows
+- Setup, troubleshooting and tests: `docs/gateways/telegram-runbook.md`; cockpit design: `docs/gateways/telegram-admin-cockpit.md`
 - **Event-Driven Messaging** — Inbound messages trigger agent runs; responses route back to the original channel automatically
 
 ### Knowledge Grounding
