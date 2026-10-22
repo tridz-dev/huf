@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Tridz Technologies Pvt Ltd and Contributors
 # See license.txt
 
-"""Bench-only integration tests for huf.ai.procedure_approval_api.
+"""Bench-only integration tests for huf.ai.procedure.approval_api.
 
 Covers the manual-approval gate for write Agent Procedures (I8):
 - request_procedure_approval(): any user with Agent Procedure read access can request
@@ -14,7 +14,7 @@ Covers the manual-approval gate for write Agent Procedures (I8):
   "Approved"; the pre-existing read-only-only path is unaffected.
 
 Run with:
-  bench --site <site> run-tests --app huf --module huf.ai.tests.test_procedure_approval_api
+  bench --site <site> run-tests --app huf --module huf.ai.procedure.tests.test_procedure_approval_api
 """
 
 from unittest.mock import patch
@@ -22,7 +22,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai import procedure_approval_api
+from huf.ai.procedure import approval_api as procedure_approval_api
 from huf.ai.transaction import commit_if_background
 
 NON_MANAGER_ROLES = ["Huf User"]

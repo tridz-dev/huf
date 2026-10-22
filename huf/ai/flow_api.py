@@ -623,7 +623,7 @@ def _flow_trigger_row(automation_name: str):
 
 def _graph_matches_fingerprint(procedure_graph: dict, procedure) -> bool:
 	"""True when the converted Flow graph hashes to the bound procedure row's fingerprint."""
-	from huf.ai.procedure_versioning import compute_fingerprint
+	from huf.ai.procedure.versioning import compute_fingerprint
 
 	graph = dict(procedure_graph)
 	graph["profile"] = "procedure"
@@ -633,7 +633,7 @@ def _graph_matches_fingerprint(procedure_graph: dict, procedure) -> bool:
 
 def _flow_trigger_is_stale(flow_id: str, procedure_name: str) -> bool:
 	"""True when the Flow's current graph no longer matches the procedure the trigger is bound to."""
-	from huf.ai.procedure_conversion import analyze_conversion
+	from huf.ai.procedure.conversion import analyze_conversion
 
 	bound = frappe.db.get_value(
 		"Agent Procedure", procedure_name, ["name", "fingerprint", "schema_version"], as_dict=True
@@ -651,7 +651,7 @@ def _flow_trigger_is_stale(flow_id: str, procedure_name: str) -> bool:
 def _ensure_flow_procedure(flow_id: str) -> str:
 	"""Return the name of an Agent Procedure version matching the Flow's current
 	definition, converting (a new immutable Draft version) only if none does."""
-	from huf.ai.procedure_conversion import analyze_conversion
+	from huf.ai.procedure.conversion import analyze_conversion
 
 	_doc, flow_graph = _load_flow_graph(flow_id)
 	result = analyze_conversion(flow_graph)
@@ -1382,7 +1382,7 @@ def get_pending_approvals(limit: int = 50) -> list:
 #
 # "Flow is what you draw, Procedure is what it compiles to -- the same picture
 # at two stages." The determinism check, entry rewiring and Procedure-graph
-# compilation live in huf.ai.procedure_conversion (frappe-free, unit tested on
+# compilation live in huf.ai.procedure.conversion (frappe-free, unit tested on
 # its own); this layer only adds permission checks and the Agent Procedure
 # creation, following the same whitelisted-endpoint shape as the rest of this
 # module.
@@ -1413,7 +1413,7 @@ def analyze_flow_conversion(flow_id: str) -> dict:
 	if not frappe.has_permission("Flow Definition", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
-	from huf.ai.procedure_conversion import analyze_conversion
+	from huf.ai.procedure.conversion import analyze_conversion
 
 	_doc, flow_graph = _load_flow_graph(flow_id)
 	result = analyze_conversion(flow_graph)
@@ -1450,7 +1450,7 @@ def convert_flow_to_procedure(flow_id: str, procedure_id: str | None = None) -> 
 	if not frappe.has_permission("Agent Procedure", "create"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
-	from huf.ai.procedure_conversion import analyze_conversion
+	from huf.ai.procedure.conversion import analyze_conversion
 
 	flow_doc, flow_graph = _load_flow_graph(flow_id)
 	result = analyze_conversion(flow_graph)

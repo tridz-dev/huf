@@ -10,7 +10,7 @@ never iterated at all.
 
 frappe.cache() is patched to a small hand-written fake implementing real
 set(nx=)/expire/delete semantics (not a MagicMock, per this track's test
-convention documented in huf.ai.tests.test_procedure_lock -- a MagicMock's
+convention documented in huf.ai.procedure.tests.test_procedure_lock -- a MagicMock's
 .set() is truthy by default regardless of nx, which would make the
 "second acquire fails" assertion meaningless).
 

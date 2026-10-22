@@ -7,13 +7,13 @@
 Unlike test_procedure_proposal.py / test_procedure_runtime.py (frappe-free, run with
 plain pytest against hand-stubbed modules), this file needs a real bench and a real site
 -- it exercises the full propose -> accept -> approve -> replay path through actual
-frappe.get_doc(...).insert() calls, huf.ai.tools.builder, huf.ai.procedure_proposal,
-huf.ai.procedure_approval_api, and huf.ai.graph.procedure_runtime.run_agent_procedure_run,
+frappe.get_doc(...).insert() calls, huf.ai.tools.builder, huf.ai.procedure.proposal,
+huf.ai.procedure.approval_api, and huf.ai.graph.procedure_runtime.run_agent_procedure_run,
 proving the fix works against the real ORM/DB, not just the pure compilation/execution
 logic those other two files already cover.
 
 Run with:
-  bench --site <site> run-tests --app huf --module huf.ai.tests.test_procedure_write_path_bench
+  bench --site <site> run-tests --app huf --module huf.ai.procedure.tests.test_procedure_write_path_bench
 
 Does not call any LLM: the "Agent Run" this test builds is a hand-inserted Agent Run +
 Agent Tool Call pair with status="Completed", exactly the shape a real completed run
@@ -31,8 +31,8 @@ import unittest
 import frappe
 
 from huf.ai.graph.procedure_runtime import ProcedureOutcome, run_agent_procedure_run
-from huf.ai.procedure_approval_api import approve_procedure
-from huf.ai.procedure_proposal import accept_procedure_proposal, propose_procedure_from_run
+from huf.ai.procedure.approval_api import approve_procedure
+from huf.ai.procedure.proposal import accept_procedure_proposal, propose_procedure_from_run
 from huf.ai.tools.builder import create_agent_tool
 
 

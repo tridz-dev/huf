@@ -56,7 +56,7 @@ export function defaultContract(): BackendContract {
  * checks the *shape* of `fingerprint` (64 lowercase hex chars, graph-ir.md section 7) --
  * it does not itself recompute and compare it against the graph's canonical form, so a
  * stable placeholder is schema-valid. A real content-addressed fingerprint (matching
- * `huf.ai.procedure_versioning.compute_fingerprint`'s algorithm) is intentionally left
+ * `huf.ai.procedure.versioning.compute_fingerprint`'s algorithm) is intentionally left
  * as backend-computed, not duplicated in the frontend.
  */
 function placeholderFingerprint(seed: string): string {

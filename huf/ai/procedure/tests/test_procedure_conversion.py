@@ -1,9 +1,9 @@
 # Copyright (c) 2026, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
-"""Unit tests for huf.ai.procedure_conversion (T-52).
+"""Unit tests for huf.ai.procedure.conversion (T-52).
 
-Frappe-free -- ``huf.ai.procedure_conversion`` imports ``huf.ai.graph.validator`` and
+Frappe-free -- ``huf.ai.procedure.conversion`` imports ``huf.ai.graph.validator`` and
 ``huf.ai.graph.permissions``, both of which do ``import frappe`` at module load time
 (``permissions.default_tool_classifier`` calls ``frappe.get_cached_doc``), so this file
 installs the same narrow standalone stub as ``test_graph_permissions.py`` before
@@ -11,8 +11,8 @@ importing anything under test, and every fixture below supplies its own
 ``classify_tool`` fake instead of touching the real registry.
 
 Run with:
-  pytest huf/ai/tests/test_procedure_conversion.py
-  bench --site <site> run-tests --app huf --module huf.ai.tests.test_procedure_conversion
+  pytest huf/ai/procedure/tests/test_procedure_conversion.py
+  bench --site <site> run-tests --app huf --module huf.ai.procedure.tests.test_procedure_conversion
 """
 
 import sys
@@ -41,7 +41,7 @@ def _install_standalone_frappe_stub():
 
 _install_standalone_frappe_stub()
 
-from huf.ai.procedure_conversion import (
+from huf.ai.procedure.conversion import (
 	BLOCKING_NODE_TYPES,
 	ConversionResult,
 	analyze_conversion,

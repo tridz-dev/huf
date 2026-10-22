@@ -3,7 +3,7 @@
 
 """Tests for huf.ai.graph.fallback (T-32).
 
-Frappe-free, mirroring huf.ai.tests.test_procedure_runtime: :func:`execute_procedure` is
+Frappe-free, mirroring huf.ai.procedure.tests.test_procedure_runtime: :func:`execute_procedure` is
 driven directly with a hand-written ``FakeInvoker`` (no frappe, no bench) to produce a real
 ``ProcedureOutcome``, which is then fed into ``huf.ai.graph.fallback``'s builders. This
 proves the fallback module against genuine runtime output, not a hand-rolled stand-in for

@@ -4,7 +4,7 @@
 """Bench-only integration tests for Agent Procedure (T-20).
 
 Requires a real site (frappe.tests.IntegrationTestCase). Covers what
-huf.ai.tests.test_procedure_versioning cannot: DB-level uniqueness (structural
+huf.ai.procedure.tests.test_procedure_versioning cannot: DB-level uniqueness (structural
 immutability), Document.save() guards, tier locking through huf.ai.system_records, and
 permission_query_conditions.
 

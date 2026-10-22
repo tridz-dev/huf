@@ -17,7 +17,7 @@
 - Generative execution lives in `huf/ai/run.py`; this PR must not add Jev to it or LiteLLM completion semantics.
 - Agent override/allowlist handling exists in `huf/ai/agent_integration.py`; automatic eligibility resolver is not present yet and remains a later phase.
 - `huf/ai/run_budget.py` exists and remains authoritative; PR 1 adds no routing integration.
-- `huf/ai/flow_engine.py` contains `router.llm`; conversion blockers in `procedure_conversion.py` currently include `agent.run`, `router.llm`, and `human.approval`.
+- `huf/ai/flow_engine.py` contains `router.llm`; conversion blockers in `procedure/conversion.py` currently include `agent.run`, `router.llm`, and `human.approval`.
 - `huf/ai/graph/procedure_runtime.py` documents “NO LLM ANYWHERE IN THIS PATH” and has a closed procedure node tuple; leave it untouched.
 - `huf/ai/tools/lazy_discovery.py` calls `PermissionAwareToolRegistry.get_allowed_tools()` and re-resolves bound Procedures before exposing details.
 - `AI Provider` currently owns URL validation in `huf/huf/doctype/ai_provider/ai_provider.py`; existing coverage is in `huf/ai/tests/test_ai_provider_validation.py`. The helper extraction must preserve current localhost/private IP/HTTPS behavior.

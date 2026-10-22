@@ -16,7 +16,7 @@ Covers:
     fresh dict (a new "request") sees nothing from a previous one.
 
 Run with:
-  bench --site <site> run-tests --app huf --module huf.ai.tests.test_procedure_cache
+  bench --site <site> run-tests --app huf --module huf.ai.procedure.tests.test_procedure_cache
 """
 
 import sys

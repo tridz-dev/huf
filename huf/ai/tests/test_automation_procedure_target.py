@@ -579,7 +579,7 @@ class TestFixE(_Base):
 		self.assertEqual(trigger.next_execution, kept)
 
 	def test_m3_unset_entry_flow_is_not_convertible(self):
-		from huf.ai.procedure_conversion import analyze_conversion
+		from huf.ai.procedure.conversion import analyze_conversion
 
 		defn = _flow_definition(
 			[

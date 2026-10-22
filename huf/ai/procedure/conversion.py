@@ -38,7 +38,7 @@ from typing import Any
 
 from huf.ai.graph.permissions import compute_static_envelope, default_tool_classifier
 from huf.ai.graph.validator import ValidationError, validate_graph
-from huf.ai.procedure_versioning import compute_fingerprint
+from huf.ai.procedure.versioning import compute_fingerprint
 
 # The three node types PLAN.md's T-52 task card names as disqualifying for determinism.
 # A Flow containing any of these cannot be converted -- it genuinely needs an LLM or a
@@ -109,7 +109,7 @@ def _iter_all_nodes(graph: dict) -> list[dict]:
 	the spec requires ``foreach.config.body`` / ``parallel.config.branches`` members to
 	be referenced by id from the same top-level array, never nested inline (spec/graph-
 	ir.md 2.1/2.2/6), so this already reaches every node exactly the way
-	``huf.ai.procedure_versioning._iter_all_nodes`` does for the equivalent Procedure-
+	``huf.ai.procedure.versioning._iter_all_nodes`` does for the equivalent Procedure-
 	side check.
 	"""
 	nodes = graph.get("nodes")

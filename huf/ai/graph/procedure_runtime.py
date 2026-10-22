@@ -27,7 +27,7 @@ Two-layer split, deliberately:
   a database -- it is unit-testable with a hand-written fake invoker, standalone, with no
   bench (mirrors ``huf.ai.graph.transforms`` / ``huf.ai.graph.expressions``).
 * :func:`run_agent_procedure_run` is the frappe-facing entry point. It loads an
-  ``Agent Procedure Run`` document, takes the run lock (``huf.ai.procedure_lock``, GT-08),
+  ``Agent Procedure Run`` document, takes the run lock (``huf.ai.procedure.lock``, GT-08),
   builds the real ``tool_invoker`` (I1 authorization via ``huf.ai.graph.permissions`` +
   T-10 telemetry), records one ``Agent Procedure Step`` row per node visited, and updates
   the run's status/output. It is the only place in this module that touches Frappe.
@@ -1158,7 +1158,7 @@ _APPROVAL_PENDING_PREFIX = "approval_pending:"
 def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutcome":
 	"""Advance one ``Agent Procedure Run`` to completion.
 
-	Loads the run, takes ``huf.ai.procedure_lock.ProcedureRunLock`` (GT-08) -- refusing to
+	Loads the run, takes ``huf.ai.procedure.lock.ProcedureRunLock`` (GT-08) -- refusing to
 	advance if another worker already holds it, never retrying inline -- validates the
 	pinned graph (defence in depth; T-24's validator is expected to have already run at
 	activation time), executes it via :func:`execute_procedure` with a real ``tool_invoker``
@@ -1179,11 +1179,11 @@ def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutco
 	from huf.ai.graph import permissions as _permissions
 	from huf.ai.graph.executor import fingerprint as _fingerprint
 	from huf.ai.graph.validator import validate_procedure_graph
-	from huf.ai.procedure_lock import ProcedureRunLock
+	from huf.ai.procedure.lock import ProcedureRunLock
 	from huf.ai.transaction import commit_if_background
 
 	from huf.ai.graph.cache import get_cached_result, set_cached_result
-	from huf.ai.procedure_versioning import verify_fingerprint
+	from huf.ai.procedure.versioning import verify_fingerprint
 
 	run = frappe.get_doc("Agent Procedure Run", run_name)
 

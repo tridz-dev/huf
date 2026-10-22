@@ -176,13 +176,13 @@ export interface ProcedureValidationResult {
 
 /** Runs the T-50 validation harness (`huf.ai.graph.validation_harness`) against this
  * Procedure's real run history and returns its promotion decision. See
- * `huf.ai.procedure_validation_api.run_validation_harness` for what is and is not measured. */
+ * `huf.ai.procedure.validation_api.run_validation_harness` for what is and is not measured. */
 export async function runProcedureValidation(
   procedureName: string,
   runs?: number
 ): Promise<ProcedureValidationResult | undefined> {
   try {
-    const result = await call.get('huf.ai.procedure_validation_api.run_validation_harness', {
+    const result = await call.get('huf.ai.procedure.validation_api.run_validation_harness', {
       procedure_name: procedureName,
       ...(runs ? { runs } : {}),
     });
@@ -202,12 +202,12 @@ export interface ProcedureApprovalResult {
 
 /** Flags a write Procedure (is_read_only=0) as ready for manual review. Any user with
  * Agent Procedure read access may call this -- it grants no binding rights by itself,
- * see `approveProcedure`. See `huf.ai.procedure_approval_api.request_procedure_approval`. */
+ * see `approveProcedure`. See `huf.ai.procedure.approval_api.request_procedure_approval`. */
 export async function requestProcedureApproval(
   procedureName: string
 ): Promise<ProcedureApprovalResult | undefined> {
   try {
-    const result = await call.post('huf.ai.procedure_approval_api.request_procedure_approval', {
+    const result = await call.post('huf.ai.procedure.approval_api.request_procedure_approval', {
       procedure_name: procedureName,
     });
     return (result?.message ?? result) as ProcedureApprovalResult;
@@ -218,14 +218,14 @@ export async function requestProcedureApproval(
 
 /** Approves or rejects a write Procedure for binding. Restricted server-side to System
  * Manager / Huf Manager (I8 gate) -- see
- * `huf.ai.procedure_approval_api.approve_procedure`. */
+ * `huf.ai.procedure.approval_api.approve_procedure`. */
 export async function approveProcedure(
   procedureName: string,
   approve: boolean,
   note?: string
 ): Promise<ProcedureApprovalResult | undefined> {
   try {
-    const result = await call.post('huf.ai.procedure_approval_api.approve_procedure', {
+    const result = await call.post('huf.ai.procedure.approval_api.approve_procedure', {
       procedure_name: procedureName,
       approve,
       ...(note ? { note } : {}),
