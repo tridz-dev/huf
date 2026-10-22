@@ -263,5 +263,71 @@ class TestWelcome(unittest.TestCase):
 				self.assertFalse(g.maybe_welcome(gw(telegram_welcome_template="Hi"), self.parsed(), now=5))
 
 
+class TestGuardFields(unittest.TestCase):
+	def test_captcha_mode_field_and_off(self):
+		self.assertEqual(g.captcha_mode(gw(telegram_guard_captcha="Arithmetic")), "math")
+		self.assertEqual(g.captcha_mode(gw(telegram_guard_captcha="Emoji")), "emoji")
+		with mock.patch("frappe.conf", {}, create=True):
+			self.assertEqual(g.captcha_mode(gw(telegram_guard_captcha="Off")), "")
+			self.assertFalse(g.captcha_enabled(gw()))
+		with mock.patch("frappe.conf", {"huf_telegram_guard_captcha": 1}, create=True):
+			self.assertEqual(g.captcha_mode(gw(telegram_guard_captcha="Off")), "random")
+
+	def test_question_text_sanitised(self):
+		out = g.question_text_of(gw(telegram_guard_question_text="Hi <script>x</script>\n there"))
+		self.assertNotIn("<", out)
+		self.assertNotIn("\n", out)
+		self.assertEqual(g.question_text_of(gw()), "")
+
+	def test_custom_prompt_in_challenge(self):
+		with Env():
+			nonce = g.issue_challenge("gw1", CTX, question=fixed_question(), custom_text="Prove you are human.")
+			rec = g._cache().get_value(f"huf_tg_guard:{nonce}")
+		self.assertTrue(rec["prompt"].startswith("Prove you are human."))
+
+	def test_cooldown_field(self):
+		self.assertEqual(g.welcome_cooldown_of(gw(telegram_welcome_cooldown_seconds=5)), 5)
+		self.assertEqual(g.welcome_cooldown_of(gw(telegram_welcome_cooldown_seconds=0)), 0)
+		with mock.patch("frappe.conf", {}, create=True):
+			self.assertEqual(g.welcome_cooldown_of(gw()), g.WELCOME_COOLDOWN)
+
+
+class TestWelcomeServiceMessage(unittest.TestCase):
+	def msg(self, members, chat_type="supergroup"):
+		raw = {"message": {"chat": {"id": -100, "title": "Club"}, "new_chat_members": members}}
+		return SimpleNamespace(raw=raw, chat_id="-100", chat_type=chat_type)
+
+	def run_it(self, fn, sent):
+		fake_mod = SimpleNamespace(send_template=lambda *a, **k: sent.append(a) or {})
+		with mock.patch.dict("sys.modules", {"huf.ai.telegram_templates": fake_mod}), \
+			mock.patch("huf.ai.telegram_templates", fake_mod, create=True):
+			return fn()
+
+	def test_each_member_once_bots_skipped(self):
+		sent, gate = [], gw(telegram_welcome_template="Hi", telegram_welcome_cooldown_seconds=30)
+		members = [{"id": 1, "first_name": "A"}, {"id": 2, "first_name": "B"}, {"id": 3, "is_bot": True}]
+		with Env(gate):
+			n = self.run_it(lambda: g.welcome_new_members(gate, self.msg(members), now=100), sent)
+			again = self.run_it(lambda: g.welcome_new_members(gate, self.msg(members), now=110), sent)
+			later = self.run_it(lambda: g.welcome_new_members(gate, self.msg(members), now=140), sent)
+		self.assertEqual((n, again, later), (2, 0, 2))
+
+	def test_no_double_welcome_with_chat_member(self):
+		sent, gate = [], gw(telegram_welcome_template="Hi")
+		cm = SimpleNamespace(chat_id="-100", chat_type="supergroup", raw={"chat_member": {
+			"chat": {"id": -100, "title": "Club"},
+			"new_chat_member": {"status": "member", "user": {"id": 1, "first_name": "A"}}}})
+		with Env(gate):
+			self.assertTrue(self.run_it(lambda: g.maybe_welcome(gate, cm, now=100), sent))
+			n = self.run_it(lambda: g.welcome_new_members(gate, self.msg([{"id": 1, "first_name": "A"}]), now=101), sent)
+		self.assertEqual(n, 0)
+		self.assertEqual(len(sent), 1)
+
+	def test_private_chat_skipped(self):
+		gate = gw(telegram_welcome_template="Hi")
+		with Env(gate):
+			self.assertEqual(g.welcome_new_members(gate, self.msg([{"id": 1}], "private")), 0)
+
+
 if __name__ == "__main__":
 	unittest.main()

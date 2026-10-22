@@ -26,6 +26,13 @@ recorded as a Pending Gateway Access Entry (``entry_type`` "Room", ``external_id
 PAIR- code, gateway pairing TTL) using the pairing helpers; the ``join:`` id matches no real room so
 approving it grants nothing. No one is notified.
 
+Service messages: ``new_chat_members`` / ``left_chat_member`` arrive as ordinary ``message`` updates and are
+handled here (welcome once per member, departures logged) and not forwarded to the agent. A welcome is deduped
+per gateway + chat + user within the welcome cooldown, so a ``chat_member`` update and a ``new_chat_members``
+message for the same join never welcome twice. Telegram only delivers service messages to a bot that can see
+group messages (group privacy mode off, or the bot is an admin); with privacy mode on they may not arrive and
+the ``chat_member`` update (bot must be an admin) is the only trigger.
+
 Membership: changes are logged; the bot being removed from a non-private chat marks the chat unsendable via
 the same opted-out access-entry state private blocks use (``apply_membership_change``).
 """
@@ -214,3 +221,32 @@ def handle_membership(gateway, adapter, parsed, request) -> dict | None:
 		except Exception as exc:
 			frappe.logger("huf").warning(f"Telegram welcome failed ({type(exc).__name__})")
 	return ack
+
+
+def handle_service_message(gateway, adapter, parsed, request) -> dict | None:
+	"""``new_chat_members`` / ``left_chat_member`` service messages in groups. None for any other message."""
+	if parsed.kind != "message" or parsed.chat_type == "private":
+		return None
+	message = (parsed.raw or {}).get("message")
+	if not isinstance(message, dict):
+		return None
+	if message.get("new_chat_members"):
+		welcomed = 0
+		try:
+			from huf.ai import telegram_guard
+
+			welcomed = telegram_guard.welcome_new_members(gateway, parsed)
+		except Exception as exc:
+			frappe.logger("huf").warning(f"Telegram welcome failed ({type(exc).__name__})")
+		frappe.logger("huf").info(
+			f"Telegram gateway {gateway.name}: new_chat_members chat={parsed.chat_id} "
+			f"count={len(message['new_chat_members'])} welcomed={welcomed}"
+		)
+		return _ack("new_chat_members", "joined", welcomed=welcomed)
+	left = message.get("left_chat_member")
+	if isinstance(left, dict):
+		frappe.logger("huf").info(
+			f"Telegram gateway {gateway.name}: left_chat_member chat={parsed.chat_id} user={left.get('id')}"
+		)
+		return _ack("left_chat_member", "left", user_id=str(left.get("id") or ""))
+	return None

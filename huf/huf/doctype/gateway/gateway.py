@@ -78,6 +78,12 @@ class Gateway(Document):
                     self.telegram_business_policy
                 )
             )
+        cooldown = self.get("telegram_welcome_cooldown_seconds")
+        if cooldown not in (None, "") and int(cooldown) < 0:
+            frappe.throw(_("Welcome cooldown cannot be negative."))
+        captcha = self.get("telegram_guard_captcha") or "Off"
+        if captcha != "Off" and (self.get("telegram_join_policy") or "Queue") == "Decline":
+            frappe.throw(_("Join verification cannot be used while group join requests are set to Decline."))
         raw = (self.get("telegram_bot_allowlist") or "").strip()
         if raw:
             parts = [p.strip() for p in raw.replace("\n", ",").split(",") if p.strip()]
