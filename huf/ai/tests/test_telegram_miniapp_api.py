@@ -30,12 +30,15 @@ BINDING = {
 class Base(unittest.TestCase):
 	def setUp(self):
 		self.cache = ta.MemCache()
+		from huf.ai.tests.telegram_fakes import isolate_admin_cache, set_local_flags
+
+		set_local_flags(self, in_test=False)
+		isolate_admin_cache(self, ta, self.cache)
 		self.user = ["Guest"]
 		self.users_seen = []
 		self.audit = []
 		self.bindings = {(TG, GW): dict(BINDING)}
 		patches = [
-			patch.object(frappe.local, "flags", SimpleNamespace(in_test=False), create=True),
 			patch.object(ta, "_LOCAL", self.cache),
 			patch.object(ta, "_current_user", lambda: self.user[0]),
 			patch.object(ta, "_set_user", self._set_user),

@@ -10,7 +10,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from huf.ai.gateway_adapters import telegram_senders_more as more
+from huf.ai.gateway_adapters import telegram_messages, telegram_senders_more as more
 from huf.ai.gateway_adapters.telegram_client import TelegramBotClient
 from huf.ai.tests.telegram_fakes import TOKEN, FakeBotApi
 from huf.ai.tools import telegram as tool
@@ -50,6 +50,9 @@ class Base(unittest.TestCase):
 		patch.object(tool.scope, "effective_run_id", return_value="").start()
 		patch.object(tool.scope, "current_chat", return_value="").start()
 		patch.object(tool, "_idem_cache", return_value=self.cache).start()
+		# Sent-message bookkeeping defaults to the site's redis, which would leak ids across tests and runs.
+		self.msg_cache = FakeCache()
+		patch.object(telegram_messages, "_cache", lambda c=None: c if c is not None else self.msg_cache).start()
 
 	def run_action(self, **kwargs):
 		return json.loads(tool.handle_action(**kwargs))
@@ -359,6 +362,8 @@ class TestGatewayScope(Base):
 		self.counts = {}
 		patch.object(tool.scope, "_load", side_effect=lambda k: self.counts.setdefault(k, [])).start()
 		patch.object(tool.scope, "_save", side_effect=lambda k, v, ttl: self.counts.__setitem__(k, v)).start()
+		# Counters live in this dict; without this a site's redis INCR counters would persist across tests/runs.
+		patch.object(tool.scope, "_redis", return_value=None).start()
 
 	def test_other_chat_denied_for_every_new_action(self):
 		cases = {

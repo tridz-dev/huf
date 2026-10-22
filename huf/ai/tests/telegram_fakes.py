@@ -86,3 +86,59 @@ class FakeBotApi:
 	def http_get(self, url: str, *, timeout: int | None = None) -> FakeResponse:
 		self.gets.append(url)
 		return FakeResponse(content=self.file_bytes)
+
+
+# -- isolation helpers (tests must behave the same in the unit runner and on a real site with redis) --
+
+
+def set_local_flags(testcase, **values) -> None:
+	"""Give ``frappe.local.flags`` a complete ``frappe._dict`` for the test, then restore exactly what was there.
+
+	``patch.object(frappe.local, "flags", ..., create=True)`` is unsafe: on a site the attribute lives on the
+	werkzeug-style proxy, so mock deletes it on exit and later frappe code raises ``AttributeError: flags``.
+	"""
+	import frappe
+
+	missing = object()
+	old = getattr(frappe.local, "flags", missing)
+	new = frappe._dict(old) if old is not missing and old else frappe._dict()
+	new.update(values)
+	frappe.local.flags = new
+
+	def restore():
+		if old is missing:
+			try:
+				del frappe.local.flags
+			except Exception:
+				pass
+		else:
+			frappe.local.flags = old
+
+	testcase.addCleanup(restore)
+
+
+def clear_update_dedup() -> None:
+	"""Drop persisted ``huf_tg_upd:*`` update-id claims from a real redis cache (no-op without a site cache)."""
+	try:
+		import frappe
+
+		if not getattr(frappe.local, "site", None):
+			return
+		cache = frappe.cache() if callable(frappe.cache) else frappe.cache
+		cache.delete_keys("huf_tg_upd:*")
+	except Exception:
+		pass
+
+
+def isolate_update_dedup(testcase) -> None:
+	clear_update_dedup()
+	testcase.addCleanup(clear_update_dedup)
+
+
+def isolate_admin_cache(testcase, admin_module, cache) -> None:
+	"""Route ``telegram_admin`` rate-limit / nonce / session state to ``cache`` instead of the site's redis."""
+	from unittest.mock import patch
+
+	p = patch.object(admin_module, "_cache", lambda c=None: c if c is not None else cache)
+	p.start()
+	testcase.addCleanup(p.stop)

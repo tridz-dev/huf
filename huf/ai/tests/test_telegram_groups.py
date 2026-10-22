@@ -11,7 +11,7 @@ from huf.ai.gateway_adapters import GatewayInboundRequest, telegram_admin_action
 from huf.ai.gateway_adapters import telegram_ingest as ing
 from huf.ai.gateway_adapters.telegram import WEBHOOK_SECRET_HEADER, TelegramGatewayAdapter
 from huf.ai.gateway_adapters.telegram_client import TelegramBotClient
-from huf.ai.tests.telegram_fakes import SECRET, TOKEN, FakeBotApi, load_fixture
+from huf.ai.tests.telegram_fakes import SECRET, TOKEN, FakeBotApi, clear_update_dedup, isolate_update_dedup, load_fixture
 
 GW = SimpleNamespace(name="gw1", provider="Telegram", mention_required=0, get=lambda k, d=None: d)
 
@@ -31,10 +31,14 @@ def deliver(fixture, adapter):
 	"""Route through telegram_ingest.handle_update (handlers registered by telegram_hooks import)."""
 	import huf.ai.gateway_adapters.telegram_hooks  # noqa: F401
 
+	clear_update_dedup()  # the same fixture update_id may be delivered repeatedly within one test
 	return ing.handle_update(GW, adapter, req(load_fixture(fixture)))
 
 
 class TestJoinRequests(unittest.TestCase):
+	def setUp(self):
+		isolate_update_dedup(self)
+
 	def tearDown(self):
 		groups.register_join_policy(None)
 
