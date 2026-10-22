@@ -1066,6 +1066,20 @@ def _redact_text(text) -> str:
     return _SECRET_RE.sub("[redacted]", str(text or ""))[:_TEXT_MAX]
 
 
+def _merge_outbound(gateway: str, chat: str, items: list, limit: int) -> list:
+    """Add the bot's own recorded messages (direction outbound) to the inbound items, newest first."""
+    from huf.ai.gateway_adapters import telegram_messages
+
+    for it in items:
+        it["direction"] = "inbound"
+    out = [
+        {"id": str(r["message_id"]), "time": str(r.get("time") or ""), "sender": "bot", "kind": r.get("kind") or "text",
+         "text": _redact_text(r.get("text_preview")), "direction": "outbound"}
+        for r in telegram_messages.outbound_for_chat(gateway, chat)
+    ]
+    return sorted(items + out, key=lambda r: r.get("time") or "", reverse=True)[:limit]
+
+
 def _handle_list_messages(**kwargs) -> str:
     """Recent Gateway Events for this gateway and ONE chat (newest first, redacted, max 50)."""
     gateway = _template_gateway(kwargs)
@@ -1099,6 +1113,7 @@ def _handle_list_messages(**kwargs) -> str:
                 }
                 for r in rows
             ]
+            items = _merge_outbound(gateway, chat, items, limit)
             return _ok({"items": items, "count": len(items)})
         if not frappe.has_permission("Gateway Event", "read"):
             return _refused("permission_denied", "Not permitted to read Gateway Events.")
@@ -1270,6 +1285,14 @@ def _scope_refusal(action: str, kwargs: dict) -> Optional[str]:
             refusal = scope.check_recipient(gateway, run_id, kwargs.get("from_chat_id"))
         if refusal:
             return refusal
+        if action in OUTBOUND_ONLY_ACTIONS:
+            from huf.ai.gateway_adapters import telegram_messages
+
+            if not telegram_messages.is_outbound(gateway, scope.normalize_chat(chat), kwargs.get("message_id")):
+                return _refused(
+                    "action_not_permitted",
+                    f"{action} only works on messages the bot sent in this chat; get ids from list_messages.",
+                )
         gate = GATEWAY_FLAG_GATES.get(action)
         if gate and not _gateway_flag(gateway, gate[0]):
             return _refused("action_not_permitted", f"{action} needs the gateway's {gate[1]} access for agents to be enabled.")
@@ -1301,10 +1324,38 @@ def _scoped_dispatch(action: str, handler: Callable[..., str], kwargs: dict) -> 
                 raise
             if not _succeeded(raw):
                 scope.release_send(gateway, run_id)
-            elif action in ("send_message", "reply_to_message") and scope.normalize_chat(kwargs["chat_id"]) == scope.current_chat(run_id):
-                scope.note_current_chat_text(gateway, run_id, kwargs.get("text") or kwargs.get("message"))
+            else:
+                if action in ("send_message", "reply_to_message") and scope.normalize_chat(kwargs["chat_id"]) == scope.current_chat(run_id):
+                    scope.note_current_chat_text(gateway, run_id, kwargs.get("text") or kwargs.get("message"))
+                _record_tool_send(gateway, kwargs["chat_id"], action, kwargs, raw)
             return raw
     return handler(**kwargs)
+
+
+OUTBOUND_ONLY_ACTIONS = frozenset({"edit_message_text", "delete_message"})
+
+
+def _message_ids(node) -> list:
+    if isinstance(node, dict):
+        if node.get("message_id") is not None:
+            return [node["message_id"]]
+        return [i for v in node.values() for i in _message_ids(v)]
+    if isinstance(node, list):
+        return [i for v in node for i in _message_ids(v)]
+    return []
+
+
+def _record_tool_send(gateway: str, chat, action: str, kwargs: dict, raw: str) -> None:
+    """Remember message ids a tool send created in the current chat (best effort)."""
+    try:
+        from huf.ai.gateway_adapters import telegram_messages
+
+        ids = _message_ids(json.loads(raw).get("results"))
+        text = kwargs.get("text") or kwargs.get("message") or kwargs.get("caption") or ""
+        kind = "text" if action in ("send_message", "reply_to_message") else action.replace("send_", "")
+        telegram_messages.record_outbound(gateway, scope.normalize_chat(chat), ids, kind=kind, text=text)
+    except Exception:
+        pass
 
 
 GATEWAY_BLOCKED_ACTIONS = frozenset({"set_webhook", "delete_webhook", "get_updates"})

@@ -30,7 +30,7 @@ MEDIA_TEXT = (
 )
 TOOL_TEXT = (
 	"telegram tool: send_message/reply_to_message, set_reaction, edit_message_text, delete_message (use the "
-	"ids from 'Current message'), list_templates/send_template, polls, topics, get_file, list_messages."
+	"ids from 'Current message'; edit your earlier messages via ids from list_messages), list_templates/send_template, polls, topics, get_file."
 )
 FLAG_TEXT = {
 	FLAG_GROUP_ADMIN: "telegram_admin tool: group moderation (requires confirm).",
@@ -125,4 +125,12 @@ def event_context(event, gateway=None) -> str:
 	name = _clean_name(" ".join(str(sender.get(k) or "") for k in ("first_name", "last_name")))
 	if name:
 		parts.append(f"sender={name}")
-	return "Current message: " + ", ".join(parts)
+	line = "Current message: " + ", ".join(parts)
+	try:
+		from huf.ai.gateway_adapters import telegram_messages
+
+		gw = str(getattr(gateway, "name", "") or getattr(event, "gateway", "") or "")
+		last = telegram_messages.last_outbound_id(gw, chat_id) if gw else None
+	except Exception:
+		last = None
+	return f"{line}. Your previous message: id={last}" if last else line
