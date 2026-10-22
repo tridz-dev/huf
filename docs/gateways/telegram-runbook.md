@@ -64,9 +64,14 @@ Compared with WhatsApp (`docs/gateways/whatsapp-runbook.md`). "Yes" means implem
    - **Inline mode** (`/setinline`): needed for `@bot` inline queries.
    - **Inline feedback** (`/setinlinefeedback`): not referenced anywhere in this repository. Optional, set in
      BotFather only if you want Telegram's feedback events; no code path consumes them.
-3. **Group privacy** (`/setprivacy`): when enabled (default), the bot sees only commands, replies to its own
-   messages and mentions in groups. Disable it only if the bot must read all group messages. The gateway
-   addresses groups by mention anyway (`mention_required`), so keep privacy on unless needed.
+3. **Group privacy** (`/setprivacy`): with privacy ON (default) Telegram delivers to the bot only
+   `/commands`, replies to the bot's own messages and, when the bot is a group admin, all messages. Plain
+   `@mentions` of the bot are NOT delivered while privacy is on and the bot is not an admin. When you rely on
+   `mention_required`, turn Privacy OFF in BotFather (`/setprivacy` -> Disable, then remove and re-add the bot
+   so it applies) or make the bot a group admin. The gateway then admits only messages addressed to THIS bot:
+   its `@username`, a text mention of it, `/cmd@this_bot`, or a reply to one of its messages (mentions of other
+   bots do not count). Promoting a group to a supergroup changes its chat id; the approved Room entry is
+   re-keyed automatically when the migration service message arrives.
 4. **Commands** (`/setcommands`): optional. The gateway publishes commands through `setMyCommands` via
    `telegram_commands.set_commands` (scopes `default`, `all_private_chats`, `all_group_chats`, and others;
    max 100 commands, names `a-z 0-9 _` up to 32 characters, descriptions 1 to 256 characters).
@@ -269,7 +274,7 @@ Residual risks (from the design doc, still open):
 | Updates arrive but guest or business messages do not | `allowed_updates` was set with a short list | Re-set the webhook with `ALLOWED_UPDATES`. Health check `allowed_updates_ok` shows the gap. |
 | Pairing request pending, nothing happens after approval | Pairing creates a pending request; the triggering message never runs | Send a new message after approval. |
 | No pairing code reply | `pairing_reply_enabled` is off, or the policy is not Pairing | Check the gateway policy fields. |
-| Group message ignored | Bot not mentioned, not replied to, or group privacy blocks it | Mention `@<bot>` or reply to the bot. |
+| Group message ignored | Bot not mentioned, not replied to, or group privacy blocks it | Mention `@<bot>` or reply to the bot; with Group Privacy ON mentions are not delivered, so disable privacy or make the bot admin. |
 | Inline "Run" button does nothing | Not wired: no handler for `inl:run` | Expected today. Do not promise it to users. |
 | Inline results do not show | Inline mode off in BotFather, or the resolver returns nothing | Enable inline mode in BotFather; check the registered resolver. |
 | Save fails: `execution_user ... must have one of these roles: Huf Gateway User` | Run-as user lacks the role | Give the user the Huf Gateway User role, or pick another user. |

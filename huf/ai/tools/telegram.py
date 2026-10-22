@@ -1301,6 +1301,8 @@ def _scoped_dispatch(action: str, handler: Callable[..., str], kwargs: dict) -> 
                 raise
             if not _succeeded(raw):
                 scope.release_send(gateway, run_id)
+            elif action in ("send_message", "reply_to_message") and scope.normalize_chat(kwargs["chat_id"]) == scope.current_chat(run_id):
+                scope.note_current_chat_text(gateway, run_id, kwargs.get("text") or kwargs.get("message"))
             return raw
     return handler(**kwargs)
 

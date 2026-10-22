@@ -973,6 +973,42 @@ def _record_opt_out(gateway, sender_id: str, display_name: str | None = None) ->
     ).insert(ignore_permissions=True)
 
 
+def _live_room_entry(gateway, chat_id: str) -> dict | None:
+    rows = frappe.get_all(
+        "Gateway Access Entry",
+        filters={
+            "gateway": gateway.name,
+            "entry_type": "Room",
+            "provider": gateway.provider,
+            "external_id": _normalize_sender_for_provider(gateway.provider, "Room", chat_id),
+            "state": ["in", list(_LIVE_ENTRY_STATES)],
+        },
+        fields=["name", "state", "previous_state"],
+        order_by="modified desc",
+        limit_page_length=0,
+    )
+    for row in rows or []:
+        return row
+    return None
+
+
+def _record_room_opt_out(gateway, chat_id: str) -> None:
+    """The bot left/was removed from a room: mark the Room entry opted out. Never creates a Sender entry, and
+    never creates a Room entry for a room that was never approved/requested."""
+    row = _live_room_entry(gateway, chat_id)
+    if row and row["state"] != ENTRY_STATE_OPTED_OUT:
+        _save_entry(row["name"], {"state": ENTRY_STATE_OPTED_OUT, "previous_state": row["state"]})
+
+
+def _record_room_opt_in(gateway, chat_id: str) -> None:
+    row = _live_room_entry(gateway, chat_id)
+    if not row or row["state"] != ENTRY_STATE_OPTED_OUT:
+        return
+    previous = row.get("previous_state")
+    restored = previous if previous in _RESTORABLE_STATES else ENTRY_STATE_EXPIRED
+    _save_entry(row["name"], {"state": restored, "previous_state": ""})
+
+
 def _record_opt_out_linked(gateway, event, sender_id: str, display_name: str | None = None) -> None:
     """Record the opt-out under the sender id and, when the event carries both, the BSUID too."""
     _record_opt_out(gateway, sender_id, display_name)
@@ -2654,6 +2690,10 @@ def _send_telegram_reply(event, gateway, agent_run_id, response: str) -> dict:
         event.db_set("agent_run", agent_run_id)
     if event.sender_id and is_opted_out(gateway, event.sender_id):
         return _suppress_reply(event, agent_run_id, tp.OPT_OUT_NOTE)
+    from huf.ai import telegram_send_scope as tg_scope
+
+    if agent_run_id and tp.duplicates_tool_reply(tg_scope.current_chat_texts(gateway.name, agent_run_id), response):
+        return _suppress_reply(event, agent_run_id, tp.DUPLICATE_NOTE)
     guest_hook = provider_hooks.get(gateway.provider, "guest_reply")
     if guest_hook is not None:
         guest_result = guest_hook(event, gateway, response)

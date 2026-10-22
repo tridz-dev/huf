@@ -197,6 +197,24 @@ def _send_media_first(sender, chat_id, parts, thread_id, reply_to, sent, on_sent
 	return parts
 
 
+DUPLICATE_NOTE = "Final reply suppressed: the telegram tool already replied in this chat"
+DUPLICATE_RATIO = 0.6
+
+
+def duplicates_tool_reply(tool_texts: list, final_text: str) -> bool:
+	"""True when the telegram tool already sent a text to this chat that is substantially the final text."""
+	import difflib
+
+	final = " ".join(str(final_text or "").split()).lower()
+	if not final or not tool_texts:
+		return False
+	for sent in tool_texts:
+		sent = " ".join(str(sent or "").split()).lower()
+		if sent and difflib.SequenceMatcher(None, sent, final).ratio() > DUPLICATE_RATIO:
+			return True
+	return False
+
+
 # -- frappe-bound ---------------------------------------------------------------------------------
 
 
@@ -279,7 +297,9 @@ def handle_failure(event: Any, gateway: Any, exc: BaseException, parts: list[str
 	if cls["blocked"]:
 		# The user blocked the bot: mark the sender unsendable (opt-out entry) and dead-letter, no retry.
 		try:
-			if event.sender_id:
+			if str(event.conversation_id or "").startswith("-"):  # group/channel: the bot was removed
+				svc._record_room_opt_out(gateway, event.conversation_id)
+			elif event.sender_id:
 				svc._record_opt_out(gateway, event.sender_id)
 		except Exception:
 			pass

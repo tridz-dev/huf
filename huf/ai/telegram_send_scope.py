@@ -342,3 +342,28 @@ def release_send(gateway: str, run_id: Optional[str]) -> None:
 			day = _load(_day_key(gateway))
 			if day:
 				_save(_day_key(gateway), day[:-1], DAY_SECONDS)
+
+
+# -- current-chat text replies made by the tool (suppresses a near-duplicate final reply) ---------------------
+
+_REPLIED_TTL = 3600
+_REPLIED_MAX = 5
+
+
+def _replied_key(gateway: str, run_id: str) -> str:
+	return f"huf_tg_tool_replied:{gateway}:{run_id}"
+
+
+def note_current_chat_text(gateway: str, run_id: Optional[str], text: Any) -> None:
+	"""Remember that the agent's telegram tool already sent ``text`` to the run's own chat."""
+	text = str(text or "").strip()
+	if not gateway or not run_id or not text:
+		return
+	key = _replied_key(gateway, run_id)
+	_save(key, (_load(key) + [text[:4000]])[-_REPLIED_MAX:], _REPLIED_TTL)
+
+
+def current_chat_texts(gateway: str, run_id: Optional[str]) -> list:
+	if not gateway or not run_id:
+		return []
+	return _load(_replied_key(gateway, run_id))
