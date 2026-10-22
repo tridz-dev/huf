@@ -33,7 +33,9 @@ import time
 from typing import Any, Callable
 
 CHALLENGE_TTL = 600
-MAX_ATTEMPTS = 3
+MAX_ATTEMPTS = 3  # arithmetic challenge
+EMOJI_MAX_ATTEMPTS = 2  # emoji challenge: 2 of 6 options is the most a guesser gets per challenge
+EMOJI_OPTIONS = 6
 AGENT_TIMEOUT = 120
 RATE_LIMIT = 20
 RATE_WINDOW = 60
@@ -344,14 +346,20 @@ def _answer_hash(nonce: str, answer: str) -> str:
 	return hashlib.sha256(f"{nonce}:{str(answer).strip().lower()}".encode()).hexdigest()
 
 
+def attempts_for(kind: Any) -> int:
+	"""Wrong-answer budget for a challenge kind (emoji is the smaller answer space)."""
+	return EMOJI_MAX_ATTEMPTS if kind == "emoji" else MAX_ATTEMPTS
+
+
 def make_question(rng: random.Random | None = None, custom: str = "") -> dict:
 	"""``{"kind", "prompt", "options", "answer"}`` (answer never leaves the server)."""
 	rng = rng or random.SystemRandom()
 	if custom == "emoji" or (not custom and rng.random() < 0.5):
-		picks = rng.sample(EMOJI_POOL, 4)
+		picks = rng.sample(EMOJI_POOL, EMOJI_OPTIONS)
 		target = rng.choice(picks)
 		return {"kind": "emoji", "prompt": f"Tap the {EMOJI_NAMES[target]}", "options": picks, "answer": target}
-	a, b = rng.randint(2, 9), rng.randint(2, 9)
+	# Two-digit operands: 81 possible sums, still solvable by a person in seconds.
+	a, b = rng.randint(10, 99), rng.randint(10, 99)
 	return {"kind": "math", "prompt": f"What is {a} + {b}?", "options": [], "answer": str(a + b)}
 
 
@@ -368,7 +376,7 @@ def issue_challenge(
 			"g": gateway_name, "c": str(ctx["chat_id"]), "u": str(ctx["user_id"]), "q": str(ctx["query_id"]),
 			"t": str(ctx.get("chat_title") or ""), "n": str(ctx.get("user_name") or ""),
 			"kind": q["kind"], "prompt": prompt, "options": q["options"],
-			"h": _answer_hash(nonce, q["answer"]), "tries": 0, "exp": current + CHALLENGE_TTL,
+			"h": _answer_hash(nonce, q["answer"]), "tries": 0, "iat": current, "exp": current + CHALLENGE_TTL,
 		},
 		expires_in_sec=CHALLENGE_TTL,
 	)
@@ -429,7 +437,13 @@ def get_challenge(gateway_name: str, nonce: str, init_data: str, *, now: float |
 def submit_answer(
 	gateway_name: str, nonce: str, init_data: str, answer: str, *, now: float | None = None
 ) -> dict:
-	"""Verify the answer (single use). Returns ``{"ok": bool, "done": bool, "message": str}``."""
+	"""Verify the answer (single use). Returns ``{"ok": bool, "done": bool, "message": str}``.
+
+	Every submission is counted atomically (``check_rate``: Redis INCR) BEFORE the answer is compared, so
+	parallel requests cannot all read the same try count. Over the budget the challenge is invalidated.
+	"""
+	from huf.ai.telegram_admin import check_rate
+
 	if not _rate_ok(f"ga:{_client_ip()}"):
 		raise GuardError("Too many requests.")
 	gateway, rec, user = _authenticate(gateway_name, nonce, init_data, now=now)
@@ -437,9 +451,18 @@ def submit_answer(
 	key = f"huf_tg_guard:{nonce}"
 	ctx = {"chat_id": rec["c"], "user_id": rec["u"], "query_id": rec["q"], "chat_title": rec["t"],
 		"user_name": rec["n"]}
-	if secrets.compare_digest(_answer_hash(nonce, str(answer or "")), rec["h"]):
-		from huf.ai.telegram_admin import check_rate
+	issued = float(rec.get("iat") or float(rec.get("exp") or 0) - CHALLENGE_TTL)
 
+	def decline() -> dict:
+		cache.delete_value(key)
+		if check_rate(f"gdeclined:{nonce}", 1, CHALLENGE_TTL, now=issued):  # once, even under parallel misses
+			apply_decision(gateway, ctx, "decline", "captcha", "too many wrong answers")
+		return {"ok": False, "done": True, "message": "Verification failed."}
+
+	limit = attempts_for(rec.get("kind"))
+	if not check_rate(f"gtries:{nonce}", limit, CHALLENGE_TTL, now=issued):
+		return decline()
+	if secrets.compare_digest(_answer_hash(nonce, str(answer or "")), rec["h"]):
 		if not check_rate(f"gclaim:{nonce}", 1, CHALLENGE_TTL):  # concurrent replay of the same nonce
 			raise GuardError("Verification failed or expired.")
 		cache.delete_value(key)
@@ -448,10 +471,8 @@ def submit_answer(
 			return {"ok": False, "done": True, "message": "Could not complete verification; an admin will review."}
 		return {"ok": True, "done": True, "message": "Verified. Welcome!"}
 	rec["tries"] = int(rec.get("tries") or 0) + 1
-	if rec["tries"] >= MAX_ATTEMPTS:
-		cache.delete_value(key)
-		apply_decision(gateway, ctx, "decline", "captcha", "too many wrong answers")
-		return {"ok": False, "done": True, "message": "Verification failed."}
+	if rec["tries"] >= limit:
+		return decline()
 	cache.set_value(key, rec, expires_in_sec=CHALLENGE_TTL)
 	return {"ok": False, "done": False, "message": "Incorrect, try again."}
 
