@@ -30,6 +30,9 @@ Hook signatures (``gateway`` / ``event`` are Gateway / Gateway Event documents):
 - ``webhook_signals() -> bool``: record verify/signature health timestamps on the Gateway.
 - ``mark_read_typing(adapter, provider_event_id) -> bool``: adapter-level read receipt + typing.
 - ``failed_status(gateway_name, status) -> None``: record a failed outbound delivery status.
+- ``attempt_reply_parts(event, gateway, parts, attempt) -> dict``: provider-owned send/retry of reply parts (WP-1b).
+- ``ingest_update(adapter, request, gateway) -> response | None``: handle a verified webhook update before
+  ``normalize_inbound``; a non-None return is the HTTP response (non-message updates, drops) (WP-1c).
 """
 
 from __future__ import annotations
