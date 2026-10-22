@@ -8,8 +8,9 @@ Backend for the admin cockpit Mini App. Code: `huf/ai/telegram_miniapp_api.py`. 
 1. The Mini App POSTs `Telegram.WebApp.initData` to
    `/api/method/huf.ai.telegram_admin.telegram_miniapp_auth` (`init_data`, `gateway`) and receives
    `{token, expires_in: 900, role_scope, gateway}` (Frappe wraps it as `{"message": {...}}`).
-2. Every call below sends the token in header `X-Huf-Tg-Token: <token>` (or a `token` param; `Bearer ` prefix
-   tolerated). Endpoints are `allow_guest` only because the token is the credential.
+2. Every call below sends the token in header `X-Huf-Tg-Token: <token>` (`Bearer ` prefix tolerated). The token
+   is never accepted as a `token` query or body param: such a request gets the generic `unauthorized` 401, so the
+   secret never lands in URLs or access logs. Endpoints are `allow_guest` only because the token is the credential.
 3. Each call re-reads the live binding (revocation and Admin downgrade apply immediately) and runs as the
    bound Frappe user under normal permissions. Same origin, no CORS.
 
