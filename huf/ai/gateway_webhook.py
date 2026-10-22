@@ -872,6 +872,12 @@ def handle_gateway_webhook() -> dict | None:
 	if batched:
 		return _handle_batched_payload(gateway, adapter, request)
 
+	ingest_hook = provider_hooks.get(gateway.provider, "ingest_update")
+	if ingest_hook is not None:
+		handled = ingest_hook(gateway, adapter, request)
+		if handled is not None:
+			return handled
+
 	event = adapter.normalize_inbound(request)
 	result = ingest_gateway_event(
 		gateway.name,
