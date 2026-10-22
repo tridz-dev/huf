@@ -79,15 +79,51 @@ def join_policy_of(gateway) -> str:
 	return value if value in POLICIES else "Queue"
 
 
-def captcha_enabled(gateway) -> bool:
-	if getattr(gateway, "telegram_guard_captcha", None):
-		return True
+def captcha_mode(gateway) -> str:
+	"""Off ("") | "math" | "emoji" | "random". The Gateway field wins; site config is the fallback."""
+	field = str(getattr(gateway, "telegram_guard_captcha", None) or "").strip().lower()
+	if field in ("arithmetic", "math"):
+		return "math"
+	if field == "emoji":
+		return "emoji"
+	if field not in ("", "off"):
+		return "random"
 	try:
 		import frappe
 
-		return bool(frappe.conf.get("huf_telegram_guard_captcha"))
+		conf = frappe.conf.get("huf_telegram_guard_captcha")
 	except Exception:
-		return False
+		return ""
+	if isinstance(conf, str) and conf.strip().lower() in ("arithmetic", "math", "emoji"):
+		return "emoji" if conf.strip().lower() == "emoji" else "math"
+	return "random" if conf and str(conf).strip().lower() not in ("0", "off", "false") else ""
+
+
+def captcha_enabled(gateway) -> bool:
+	return bool(captcha_mode(gateway))
+
+
+def question_text_of(gateway) -> str:
+	"""Custom prompt for the verification page: control characters and angle brackets removed, capped."""
+	raw = str(getattr(gateway, "telegram_guard_question_text", None) or "")
+	raw = re.sub(r"[\x00-\x1f\x7f<>]+", " ", raw)
+	return re.sub(r"\s+", " ", raw).strip()[:300]
+
+
+def welcome_cooldown_of(gateway) -> int:
+	"""Seconds between welcomes for the same person in a group (Gateway field, then site config)."""
+	value = getattr(gateway, "telegram_welcome_cooldown_seconds", None)
+	if value in (None, ""):
+		try:
+			import frappe
+
+			value = frappe.conf.get("huf_telegram_welcome_cooldown")
+		except Exception:
+			value = None
+	try:
+		return max(0, int(value))
+	except (TypeError, ValueError):
+		return WELCOME_COOLDOWN
 
 
 def _load_gateway(name: str):
@@ -190,7 +226,9 @@ def _start_captcha(gateway, ctx: dict) -> str:
 	try:
 		import frappe
 
-		nonce = issue_challenge(gateway.name, ctx)
+		mode = captcha_mode(gateway)
+		question = make_question(custom=mode if mode in ("math", "emoji") else "")
+		nonce = issue_challenge(gateway.name, ctx, question=question, custom_text=question_text_of(gateway))
 		url = guard_url(gateway.name, nonce, base=frappe.utils.get_url())
 		admin.send_join_request_web_app(_client_for(gateway), ctx["query_id"], url)
 		return "defer"
@@ -317,16 +355,19 @@ def make_question(rng: random.Random | None = None, custom: str = "") -> dict:
 	return {"kind": "math", "prompt": f"What is {a} + {b}?", "options": [], "answer": str(a + b)}
 
 
-def issue_challenge(gateway_name: str, ctx: dict, *, question: dict | None = None, now: float | None = None) -> str:
+def issue_challenge(
+	gateway_name: str, ctx: dict, *, question: dict | None = None, now: float | None = None, custom_text: str = ""
+) -> str:
 	nonce = secrets.token_urlsafe(16)
 	q = question or make_question()
+	prompt = f"{custom_text} {q['prompt']}".strip() if custom_text else q["prompt"]
 	current = time.time() if now is None else now
 	_cache().set_value(
 		f"huf_tg_guard:{nonce}",
 		{
 			"g": gateway_name, "c": str(ctx["chat_id"]), "u": str(ctx["user_id"]), "q": str(ctx["query_id"]),
 			"t": str(ctx.get("chat_title") or ""), "n": str(ctx.get("user_name") or ""),
-			"kind": q["kind"], "prompt": q["prompt"], "options": q["options"],
+			"kind": q["kind"], "prompt": prompt, "options": q["options"],
 			"h": _answer_hash(nonce, q["answer"]), "tries": 0, "exp": current + CHALLENGE_TTL,
 		},
 		expires_in_sec=CHALLENGE_TTL,
@@ -443,17 +484,16 @@ def _welcome_variables(first_name: str, chat_title: str) -> dict:
 	return {"first_name": name, "name": name, "chat_title": str(chat_title or "")[:120]}
 
 
-def maybe_welcome(gateway, parsed, *, now: float | None = None, cooldown: int = WELCOME_COOLDOWN) -> bool:
-	"""Send the Gateway's welcome template for a member who just joined. True when sent."""
+def _welcome_one(gateway, chat_id, chat_title: str, member: dict, now, cooldown) -> bool:
+	"""Welcome one member once per (gateway, chat, user) within the cooldown. Bots are skipped."""
 	template = getattr(gateway, "telegram_welcome_template", None)
-	if not template or parsed.chat_type == "private":
-		return False
-	member = ((parsed.raw.get("chat_member") or {}).get("new_chat_member") or {}).get("user") or {}
-	if not member.get("id") or member.get("is_bot"):
+	if not template or not member.get("id") or member.get("is_bot"):
 		return False
 	current = time.time() if now is None else now
+	if cooldown is None:
+		cooldown = welcome_cooldown_of(gateway)
 	cache = _cache()
-	key = f"huf_tg_welcome:{gateway.name}:{parsed.chat_id}"
+	key = f"huf_tg_welcome:{gateway.name}:{chat_id}:{member['id']}"
 	last = cache.get_value(key)
 	if last and current - float(last) < cooldown:
 		return False
@@ -462,13 +502,35 @@ def maybe_welcome(gateway, parsed, *, now: float | None = None, cooldown: int = 
 	except ImportError:
 		_log("info", f"Telegram guard {gateway.name}: telegram_templates unavailable; welcome skipped")
 		return False
-	cache.set_value(key, current, expires_in_sec=cooldown)
+	if cooldown > 0:
+		cache.set_value(key, current, expires_in_sec=cooldown)
 	try:
-		title = (parsed.raw.get("chat_member") or {}).get("chat", {}).get("title", "")
 		telegram_templates.send_template(
-			gateway, parsed.chat_id, template, _welcome_variables(member.get("first_name"), title)
+			gateway, chat_id, template, _welcome_variables(member.get("first_name"), chat_title)
 		)
 	except Exception as exc:
 		_log("warning", f"Telegram guard {gateway.name}: welcome failed ({type(exc).__name__})")
 		return False
 	return True
+
+
+def maybe_welcome(gateway, parsed, *, now: float | None = None, cooldown: int | None = None) -> bool:
+	"""Send the Gateway's welcome template for a member who just joined (chat_member update)."""
+	if parsed.chat_type == "private":
+		return False
+	update = parsed.raw.get("chat_member") or {}
+	member = (update.get("new_chat_member") or {}).get("user") or {}
+	return _welcome_one(gateway, parsed.chat_id, (update.get("chat") or {}).get("title", ""), member, now, cooldown)
+
+
+def welcome_new_members(gateway, parsed, *, now: float | None = None, cooldown: int | None = None) -> int:
+	"""Welcome the members listed in a ``new_chat_members`` service message. Returns how many were sent."""
+	if parsed.chat_type == "private":
+		return 0
+	message = parsed.raw.get("message") or {}
+	title = (message.get("chat") or {}).get("title", "")
+	sent = 0
+	for member in (message.get("new_chat_members") or [])[:20]:
+		if isinstance(member, dict) and _welcome_one(gateway, parsed.chat_id, title, member, now, cooldown):
+			sent += 1
+	return sent

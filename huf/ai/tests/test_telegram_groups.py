@@ -225,5 +225,32 @@ class TestAdminActions(unittest.TestCase):
 			"huf.ai.gateway_adapters.telegram_client", fromlist=["x"]).TelegramApiError("x", "not enough rights"))))
 
 
+class TestServiceMessages(unittest.TestCase):
+	def parsed(self, message, chat_type="supergroup"):
+		return SimpleNamespace(kind="message", chat_type=chat_type, chat_id="-100", raw={"message": message})
+
+	def test_new_members_welcomes_and_acks(self):
+		msg = {"new_chat_members": [{"id": 1}]}
+		with mock.patch("huf.ai.telegram_guard.welcome_new_members", return_value=1) as w:
+			ack = groups.handle_service_message(GW, None, self.parsed(msg), None)
+		self.assertEqual((ack["ignored"], ack["welcomed"]), ("new_chat_members", 1))
+		w.assert_called_once()
+
+	def test_welcome_failure_still_acks(self):
+		with mock.patch("huf.ai.telegram_guard.welcome_new_members", side_effect=RuntimeError("x")):
+			ack = groups.handle_service_message(GW, None, self.parsed({"new_chat_members": [{"id": 1}]}), None)
+		self.assertEqual(ack["ignored"], "new_chat_members")
+
+	def test_left_member_recorded(self):
+		ack = groups.handle_service_message(GW, None, self.parsed({"left_chat_member": {"id": 9}}), None)
+		self.assertEqual((ack["ignored"], ack["user_id"]), ("left_chat_member", "9"))
+
+	def test_other_messages_and_private_fall_through(self):
+		self.assertIsNone(groups.handle_service_message(GW, None, self.parsed({"text": "hi"}), None))
+		self.assertIsNone(
+			groups.handle_service_message(GW, None, self.parsed({"new_chat_members": [{"id": 1}]}, "private"), None)
+		)
+
+
 if __name__ == "__main__":
 	unittest.main()

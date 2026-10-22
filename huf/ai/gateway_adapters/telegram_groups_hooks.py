@@ -28,3 +28,6 @@ ing.register_update_handler(
 )
 for _key in ("chat_member", "my_chat_member"):
 	ing.register_update_handler(_key, _chained(groups.handle_membership, ing._UPDATE_HANDLERS.get(_key)))
+ing.register_update_handler(
+	"message", _chained(groups.handle_service_message, ing._UPDATE_HANDLERS.get("message"))
+)

@@ -87,3 +87,26 @@ class TestTelegramValidation(unittest.TestCase):
 
 	def test_other_providers_untouched(self):
 		self._run(provider="WhatsApp", telegram_join_policy="Agent", telegram_bot_allowlist="x")
+
+
+class TestGuardFieldValidation(unittest.TestCase):
+	_run = TestTelegramValidation._run
+
+	def test_negative_cooldown_rejected(self):
+		with self.assertRaises(ValueError):
+			self._run(telegram_welcome_cooldown_seconds=-1)
+		self._run(telegram_welcome_cooldown_seconds=0)
+		self._run(telegram_welcome_cooldown_seconds=60)
+
+	def test_captcha_needs_non_decline_policy(self):
+		with self.assertRaises(ValueError):
+			self._run(telegram_guard_captcha="Emoji", telegram_join_policy="Decline")
+		self._run(telegram_guard_captcha="Off", telegram_join_policy="Decline")
+		self._run(telegram_guard_captcha="Arithmetic", telegram_join_policy="Queue")
+		self._run(telegram_guard_captcha="Arithmetic")
+
+	def test_new_fields_declared(self):
+		fields = {f["fieldname"]: f for f in json.load(open(GATEWAY_DIR / "gateway.json"))["fields"]}
+		self.assertEqual(fields["telegram_guard_captcha"]["options"], "Off\nArithmetic\nEmoji")
+		self.assertEqual(fields["telegram_welcome_cooldown_seconds"]["default"], "60")
+		self.assertEqual(fields["telegram_guard_question_text"]["fieldtype"], "Small Text")
