@@ -253,7 +253,9 @@ def _start_captcha(gateway, ctx: dict) -> str:
 		mode = captcha_mode(gateway)
 		question = make_question(custom=mode if mode in ("math", "emoji") else "")
 		nonce = issue_challenge(gateway.name, ctx, question=question, custom_text=question_text_of(gateway))
-		url = guard_url(gateway.name, nonce, base=frappe.utils.get_url())
+		from huf.ai.telegram_public_url import public_base_url
+
+		url = guard_url(gateway.name, nonce, base=public_base_url())
 		admin.send_join_request_web_app(_client_for(gateway), ctx["query_id"], url)
 		return "defer"
 	except Exception as exc:

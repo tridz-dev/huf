@@ -16,6 +16,7 @@ import frappe
 
 from huf.ai.gateway_adapters import telegram_commands as tc
 from huf.ai.gateway_adapters.telegram_client import ALLOWED_UPDATES, TelegramApiError
+from huf.ai.telegram_public_url import public_base_url
 from huf.ai.telegram_management import (
 	_client,
 	_credentials,
@@ -391,7 +392,7 @@ def _audit_setup(gateway: str, result: str, detail: str) -> None:
 @frappe.whitelist()
 def recommended_setup(gateway: str | None = None) -> dict[str, Any]:
 	"""The planned changes with the bot's current values, without applying anything."""
-	return _with_client(gateway, lambda c, r, cr: {"plan": plan_recommended_setup(c, r["name"], frappe.utils.get_url())})
+	return _with_client(gateway, lambda c, r, cr: {"plan": plan_recommended_setup(c, r["name"], public_base_url())})
 
 
 @frappe.whitelist(methods=["POST"])
@@ -409,7 +410,7 @@ def apply_recommended_setup(
 		return _error("invalid", "Nothing to apply.")
 
 	def run(c, r, cr):
-		return apply_plan(c, r["name"], frappe.utils.get_url(), menu, cmds)
+		return apply_plan(c, r["name"], public_base_url(), menu, cmds)
 
 	out = _with_client(gateway, run)
 	if out.get("success"):

@@ -15,6 +15,7 @@ from urllib.parse import quote
 
 import frappe
 from frappe import _
+from huf.ai.telegram_public_url import public_base_url
 
 ADMIN_ROLES = ("System Manager", "Huf Admin")
 TELEGRAM_PROVIDER = "Telegram"
@@ -67,7 +68,7 @@ def _require_gateway_admin(gateway: str) -> None:
 
 def _webhook_url(gateway_name: str) -> str:
 	return (
-		f"{frappe.utils.get_url()}/api/method/huf.ai.gateway_webhook.handle_gateway_webhook"
+		f"{public_base_url()}/api/method/huf.ai.gateway_webhook.handle_gateway_webhook"
 		f"?gateway_name={quote(gateway_name, safe='')}"
 	)
 
