@@ -7,7 +7,7 @@ real-Frappe integration tests (Layer B, run under `bench run-tests`).
 
 Concept salvaged from historical PR #359's `HufTestSuite` +
 `BootStrapTestData` (mirroring `ERPNextTestSuite`/`HRMSTestSuite`) — see
-`docs/testing/PR359_SALVAGE.md` ("HufTestSuite + BootStrapTestData shared
+the PR #359 salvage analysis (workspace) ("HufTestSuite + BootStrapTestData shared
 fixture base class", classified STALE-CONCEPT: the *idea* survives, the old
 code does not, because it was written against an earlier DocType shape).
 This module is a from-scratch rewrite against current `develop`'s actual

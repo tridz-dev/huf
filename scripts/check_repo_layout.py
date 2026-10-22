@@ -30,13 +30,6 @@ FORBIDDEN = [
     "*SALVAGE*.md", "*PLAN.md", "*CONTEXT.md",
 ]
 
-# Existing planning/audit docs flagged for owner review; new ones are blocked.
-GRANDFATHERED = {
-    "docs/HUF_AGENT_ADVANCED_SETTINGS_AUDIT.md",
-    "docs/hub-orchestrator-app-builder-todo.md",
-    "docs/testing/PR359_SALVAGE.md",
-    "docs/architecture/decision-runtime-pr1-tracker.md",
-}
 
 
 def main() -> int:
@@ -46,7 +39,7 @@ def main() -> int:
         top = p.split("/", 1)[0]
         if top not in ALLOWED_TOP_LEVEL:
             bad.append((p, f"top-level '{top}' is not allowed in this repo"))
-        elif p not in GRANDFATHERED and any(fnmatch.fnmatch(p, pat) for pat in FORBIDDEN) and not p.startswith("frontend/"):
+        elif any(fnmatch.fnmatch(p, pat) for pat in FORBIDDEN) and not p.startswith("frontend/"):
             bad.append((p, "looks like a workspace/agent working file"))
     if not bad:
         return 0

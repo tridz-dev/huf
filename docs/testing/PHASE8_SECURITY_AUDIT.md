@@ -2,7 +2,7 @@
 
 Verifies the current (`develop`-tracking, this branch) state of the 6 findings
 that PR #304 ("security: implement obvious fixes from round-2 security
-plans") explicitly deferred, per its own PR body and per `PR359_SALVAGE.md`'s
+plans") explicitly deferred, per its own PR body and per the PR #359 salvage analysis (workspace)'s
 cross-referenced table. Source of the original findings: PR #303 (docs-only
 plans, `doc/security-improvement-plans-2.md`, plans 008/010/011/012/014/015).
 

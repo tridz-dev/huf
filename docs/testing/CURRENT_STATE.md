@@ -93,7 +93,7 @@ Source: Phase 0 subsystem audits of `tridz-dev/huf` `develop` (base `29376ebc`) 
 
 ---
 
-## 10. Salvageable historical fixes / gaps (from PR audits, see `PR359_SALVAGE.md` for full detail)
+## 10. Salvageable historical fixes / gaps (from PR audits, see the PR #359 salvage analysis (workspace) for full detail)
 
 - Confirmed present on develop: SSRF guard in `http_handler.py` (ipaddress private/loopback check), `hmac.compare_digest` in `automation_webhook.py`/`flow_api.py`, `get_result_context` allow-list (`sdk_tools.py`), `delete_documents` per-doc permission check (`tool_functions.py`), code-block XSS escape (`code-block.tsx`), `innerHTML` entity-decoder XSS fix (`decodeHtmlEntities`), `returnTo` navigation validation (`AgentPromptFormPage.tsx`).
 - Confirmed **still open** (per PR #304's own text, not independently re-verified): conversation-mutation-API authz (#008), Huf Data Table capability bypass (#010), `transcribe_audio` arbitrary File read (#011), TTS/STT keys in `os.environ` (#012), HTML/SVG same-origin artifact execution (#014), JSX preview arbitrary JS execution (#015) — these are unclaimed P0/P1 security surfaces with no confirmed fix and no found test coverage.
