@@ -8,7 +8,7 @@ desktop_ctx. Covers S27 (no ctx), S28 (ctx but not attached), S29 (_dx_*
 overwrite), S30 (lease expired).
 
 Run with:
-	bench --site <site> run-tests --app huf --module huf.ai.tests.test_desktop_tool_exposure
+	bench --site <site> run-tests --app huf --module huf.ai.desktop.tests.test_desktop_tool_exposure
 """
 
 import asyncio
@@ -28,8 +28,8 @@ CTX = {"executor_id": EXECUTOR_ID, "fingerprint": "ctxfingerprint", "user": "Adm
 LIVE = {"executor_id": EXECUTOR_ID, "fingerprint": "abcdef0123456789", "user": "Administrator", "label": "ws"}
 
 _PATCH_LIVE = (
-	mock.patch("huf.ai.desktop_executor.is_lease_live", return_value=True),
-	mock.patch("huf.ai.desktop_executor.resolve_desktop_ctx", return_value=LIVE),
+	mock.patch("huf.ai.desktop.executor.is_lease_live", return_value=True),
+	mock.patch("huf.ai.desktop.executor.resolve_desktop_ctx", return_value=LIVE),
 )
 
 
@@ -156,16 +156,16 @@ class TestDesktopToolExposure(unittest.TestCase):
 	# S30
 	def test_s30_lease_expired_absent(self):
 		agent = self._make_agent(self.tool_docs)
-		with mock.patch("huf.ai.desktop_executor.is_lease_live", return_value=False), mock.patch(
-			"huf.ai.desktop_executor.resolve_desktop_ctx", return_value=None
+		with mock.patch("huf.ai.desktop.executor.is_lease_live", return_value=False), mock.patch(
+			"huf.ai.desktop.executor.resolve_desktop_ctx", return_value=None
 		):
 			tools = create_agent_tools(agent, desktop_ctx=dict(CTX))
 		self.assertEqual(self._desktop_tools(tools), [])
 
 	def test_ctx_owned_by_other_user_absent(self):
 		agent = self._make_agent(self.tool_docs)
-		with mock.patch("huf.ai.desktop_executor.is_lease_live", return_value=True), mock.patch(
-			"huf.ai.desktop_executor.resolve_desktop_ctx", return_value=None
+		with mock.patch("huf.ai.desktop.executor.is_lease_live", return_value=True), mock.patch(
+			"huf.ai.desktop.executor.resolve_desktop_ctx", return_value=None
 		):
 			tools = create_agent_tools(agent, desktop_ctx=dict(CTX, user="someone@example.com"))
 		self.assertEqual(self._desktop_tools(tools), [])
@@ -249,7 +249,7 @@ class TestDesktopToolExposure(unittest.TestCase):
 		return captured
 
 	def test_llm_supplied_run_identity_is_ignored(self):
-		from huf.ai.desktop_executor import derive_call_id
+		from huf.ai.desktop.executor import derive_call_id
 
 		captured = self._invoke_with_run_ctx(
 			{
@@ -318,7 +318,7 @@ class TestDesktopToolExposure(unittest.TestCase):
 			self.assertFalse(dw._pin_token_valid(bad, "AR-1", "exec-1", "u@example.com"))
 
 	def test_derive_call_id_is_bounded_and_wire_safe(self):
-		from huf.ai.desktop_executor import derive_call_id
+		from huf.ai.desktop.executor import derive_call_id
 
 		self.assertEqual(derive_call_id("AR-1", "call_1"), "AR-1:call_1")
 		long_id = derive_call_id("AR-1", "x" * 500)

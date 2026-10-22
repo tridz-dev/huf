@@ -15,7 +15,7 @@ import unittest
 
 import frappe
 
-from huf.ai import desktop_executor as dx
+from huf.ai.desktop import executor as dx
 from huf.testing import desktop_test_helpers as h
 from huf.ai.tools import desktop_workspace as dw
 from huf.ai.tools._registry import (

@@ -328,7 +328,7 @@ def _mcp_tool(build):
 		prepared = dict(prepared)
 		refusal = prepared.pop("_refuse", None)
 		if refusal:
-			from huf.ai import desktop_executor
+			from huf.ai.desktop import executor as desktop_executor
 
 			return desktop_executor._error(prepared["op"], prepared["ctx"].get("label"), *refusal)
 		return desktop_workspace._import_dispatch_lazily()(**prepared)
@@ -346,7 +346,7 @@ def _mcp_tool(build):
 def handle_mcp_tool_call(pinned, /, **model_kwargs):
 	"""Backs every eager ``lmcp__*`` / ``lbrowser__*`` tool: the model's top-level arguments
 	are the MCP tool's arguments, the server and tool come from the pin."""
-	from huf.ai import desktop_mcp
+	from huf.ai.desktop import mcp as desktop_mcp
 
 	server = _mcp_name(pinned.get("_dx_mcp_server"), "server")
 	tool = _mcp_name(pinned.get("_dx_mcp_tool"), "tool")
@@ -365,7 +365,7 @@ def handle_mcp_tool_call(pinned, /, **model_kwargs):
 def handle_mcp_call(pinned, /, server: str = None, tool: str = None, arguments=None, **_ignored):
 	"""Call a local MCP tool that is not available directly. ``arguments`` is validated against the
 	input schema pinned to the run before anything is sent."""
-	from huf.ai import desktop_mcp
+	from huf.ai.desktop import mcp as desktop_mcp
 
 	server = _mcp_name(server, "server")
 	tool = _mcp_name(tool, "tool")
@@ -382,8 +382,8 @@ def handle_mcp_find(query: str = "", server: str = None, limit: int = 8, **kwarg
 
 
 def _find_prepare(**kwargs):
-	from huf.ai import desktop_executor as dx
-	from huf.ai import desktop_mcp
+	from huf.ai.desktop import executor as dx
+	from huf.ai.desktop import mcp as desktop_mcp
 
 	ident = {key: kwargs.pop(key, None) for key in desktop_workspace._IDENTITY_KEYS}
 	agent = kwargs.pop("_dx_agent", None)

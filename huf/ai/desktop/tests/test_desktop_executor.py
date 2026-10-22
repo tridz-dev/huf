@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
-"""Tests for huf.ai.desktop_executor (lease API, event submit, blocking dispatch).
+"""Tests for huf.ai.desktop.executor (lease API, event submit, blocking dispatch).
 
 Covers PLAN.md security cases S22-S26 (deadline extension, offline fast-fail,
 ack timeout, wrong user, wrong executor / expired / duplicate) plus lease
@@ -10,7 +10,7 @@ in-memory fake (strict about the site key prefix) whose ``blpop`` never blocks, 
 captured, so no Redis or socket server is needed.
 
 Run with:
-	bench --site <site> run-tests --app huf --module huf.ai.tests.test_desktop_executor
+	bench --site <site> run-tests --app huf --module huf.ai.desktop.tests.test_desktop_executor
 """
 
 import json
@@ -19,7 +19,7 @@ from unittest import mock
 
 import frappe
 
-from huf.ai import desktop_executor as dx
+from huf.ai.desktop import executor as dx
 from huf.testing import desktop_test_helpers as h
 
 EXEC_ID = "exec-0001-aaaa"

@@ -381,7 +381,7 @@ def _host_for_new_conversation(execution_host, desktop_executor_id, desktop_leas
         return None
     if execution_host != "desktop":
         frappe.throw(_("Invalid execution_host"), frappe.ValidationError)
-    from huf.ai.desktop_sessions import host_from_desktop_request
+    from huf.ai.desktop.sessions import host_from_desktop_request
 
     return host_from_desktop_request(desktop_executor_id, desktop_lease_secret)
 

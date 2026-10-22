@@ -8,7 +8,7 @@ and a background thread that plays the desktop (polls ``list_pending_desktop_too
 through ``submit_desktop_tool_event``). Nothing in the executor path is mocked.
 
 Run with:
-	bench --site <site> run-tests --app huf --module huf.ai.tests.test_desktop_local_skills
+	bench --site <site> run-tests --app huf --module huf.ai.desktop.tests.test_desktop_local_skills
 """
 
 import asyncio
@@ -20,8 +20,8 @@ from types import SimpleNamespace
 import frappe
 
 from huf.ai import agent_integration as ai
-from huf.ai import desktop_executor as dx
-from huf.ai.desktop_policy import default_policy
+from huf.ai.desktop import executor as dx
+from huf.ai.desktop.policy import default_policy
 from huf.ai.sdk_tools import create_agent_tools
 from huf.testing import desktop_test_helpers as h
 from huf.ai.tools import desktop_local as dl

@@ -37,7 +37,8 @@
 #                            huf/ai/whatsapp/<x>.py maps to huf/ai/whatsapp/tests/test_whatsapp_<x>.py
 #                            first, then the old huf/ai/tests mapping;
 #                            huf/ai/procedure/<x>.py maps to huf/ai/procedure/tests/test_procedure_<x>.py
-#                            and huf/ai/tools/<x>.py to huf/ai/tools/tests/test_tool_<x>.py)
+#                            and huf/ai/tools/<x>.py to huf/ai/tools/tests/test_tool_<x>.py;
+#                            huf/ai/desktop/<x>.py to huf/ai/desktop/tests/test_desktop_<x>.py when it exists)
 #   anything else         -> no targeted check added (falls back to `quick` if nothing matched)
 
 set -uo pipefail
@@ -322,6 +323,13 @@ map_backend_module() {
     huf/ai/tools/*.py)
       if [ -f "$ROOT/huf/ai/tools/tests/test_tool_${base}.py" ]; then
         candidate="huf/ai/tools/tests/test_tool_${base}.py"
+      fi ;;
+    huf/ai/desktop/tests/test_*.py)
+      # a changed desktop test module maps to itself
+      candidate="$f" ;;
+    huf/ai/desktop/*.py)
+      if [ -f "$ROOT/huf/ai/desktop/tests/test_desktop_${base}.py" ]; then
+        candidate="huf/ai/desktop/tests/test_desktop_${base}.py"
       fi ;;
   esac
   if [ -f "$ROOT/$candidate" ]; then

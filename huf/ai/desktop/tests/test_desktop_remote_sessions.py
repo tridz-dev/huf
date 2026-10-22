@@ -11,7 +11,7 @@ Frappe user calling the same endpoints WITHOUT the secret. The only patched infr
 ``frappe.enqueue`` (no worker is running; a queued run is drained explicitly where a test needs it).
 
 Run with:
-	bench --site <site> run-tests --app huf --module huf.ai.tests.test_desktop_remote_sessions
+	bench --site <site> run-tests --app huf --module huf.ai.desktop.tests.test_desktop_remote_sessions
 """
 
 import base64
@@ -27,9 +27,9 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from huf.ai import agent_chat
 from huf.ai import agent_integration as ai
-from huf.ai import desktop_executor as dx
-from huf.ai import desktop_policy as dp
-from huf.ai import desktop_sessions as ds
+from huf.ai.desktop import executor as dx
+from huf.ai.desktop import policy as dp
+from huf.ai.desktop import sessions as ds
 from huf.ai.conversation_manager import ConversationManager
 from huf.ai.sdk_tools import create_agent_tools
 from huf.testing import desktop_test_helpers as h

@@ -338,7 +338,7 @@ class TestPublicMessageGuards(unittest.TestCase):
 
     def test_remote_disabled_says_which_switch_is_off(self):
         from huf.ai.agent_integration import _client_safe_desktop_error
-        from huf.ai.desktop_sessions import REMOTE_DISABLED_MESSAGE
+        from huf.ai.desktop.sessions import REMOTE_DISABLED_MESSAGE
 
         for off in ("desktop", "agent"):
             self.assertEqual(

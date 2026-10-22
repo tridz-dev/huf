@@ -22,8 +22,8 @@ on the desktop through a control request on the lease channel, and records an au
 import frappe
 from frappe import _
 
-from huf.ai import desktop_executor as dx
-from huf.ai import desktop_policy
+from huf.ai.desktop import executor as dx
+from huf.ai.desktop import policy as desktop_policy
 
 REMOTE_DISABLED_MESSAGE = {
 	"desktop": "Remote control is turned off on this desktop.",

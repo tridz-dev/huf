@@ -10,7 +10,7 @@ and answers via ``submit_desktop_tool_event``) against the live Redis cache. Som
 cases deliberately wait longer than the 5 s redis-cache socket timeout.
 
 Run with:
-	bench --site <site> run-tests --app huf --module huf.ai.tests.test_desktop_roundtrip
+	bench --site <site> run-tests --app huf --module huf.ai.desktop.tests.test_desktop_roundtrip
 """
 
 import contextvars
@@ -22,7 +22,7 @@ from unittest import mock
 import frappe
 
 from huf.ai import agent_integration as ai
-from huf.ai import desktop_executor as dx
+from huf.ai.desktop import executor as dx
 from huf.testing import desktop_test_helpers as h
 from huf.ai.tools import desktop_workspace as dw
 
