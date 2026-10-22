@@ -269,6 +269,21 @@ def _typing_failure_kind(exc: Exception) -> str:
 	return f"api_{code}" if code else type(exc).__name__
 
 
+def _start_keepalive(gateway, sender, chat_id, thread) -> None:
+	"""Keep ``typing`` alive until the reply starts (best effort). Skips while a draft stream is active."""
+	try:
+		from huf.ai.gateway_adapters import telegram_stream as ts, telegram_typing_keepalive as ka
+
+		name = gateway.name
+		ka.start(
+			ka.key_for(name, chat_id, thread),
+			lambda: sender.send_chat_action(chat_id, "typing", thread_id=thread),
+			lambda: bool(ts.StreamState(name, chat_id).get().get("draft_id")),
+		)
+	except Exception:
+		pass
+
+
 def send_typing_for_event(event, gateway) -> bool:
 	"""Telegram typing indicator (sendChatAction) for the inbound update. The only typing implementation.
 
@@ -302,11 +317,13 @@ def send_typing_for_event(event, gateway) -> bool:
 	try:
 		from huf.ai.gateway_webhook import get_gateway_adapter
 
-		get_gateway_adapter(gateway).sender.send_chat_action(chat_id, "typing", thread_id=thread)
+		sender = get_gateway_adapter(gateway).sender
+		sender.send_chat_action(chat_id, "typing", thread_id=thread)
 	except Exception as exc:
 		kind = _typing_failure_kind(exc)
 		frappe.logger("huf").warning(f"Telegram typing failed chat={chat_id} action=typing type={kind}")
 		return False
+	_start_keepalive(gateway, sender, chat_id, thread)
 	suffix = f" thread={thread}" if thread else ""
 	frappe.logger("huf").info(f"Telegram typing sent chat={chat_id} action=typing{suffix}")
 	return True
