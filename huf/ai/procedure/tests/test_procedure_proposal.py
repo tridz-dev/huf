@@ -1,12 +1,12 @@
 # Copyright (c) 2026, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
-"""Unit tests for huf.ai.procedure_proposal (Run & Propose Procedure).
+"""Unit tests for huf.ai.procedure.proposal (Run & Propose Procedure).
 
-Frappe-free -- ``huf.ai.procedure_proposal`` does ``import frappe`` / ``from frappe import
+Frappe-free -- ``huf.ai.procedure.proposal`` does ``import frappe`` / ``from frappe import
 _`` / ``from frappe.utils import now_datetime`` at its own top level (it defines two
 ``@frappe.whitelist()`` endpoints), and it imports ``huf.ai.graph.validator`` /
-``huf.ai.graph.permissions`` / ``huf.ai.procedure_versioning``, which do the same. This
+``huf.ai.graph.permissions`` / ``huf.ai.procedure.versioning``, which do the same. This
 file installs the same narrow standalone stub as ``test_procedure_conversion.py`` /
 ``test_graph_permissions.py`` before importing anything under test, and every fixture
 below supplies its own ``classify_tool`` fake instead of touching the real registry (the
@@ -22,8 +22,8 @@ around these and are exercised by bench-based tests, not here -- matching
 ``test_procedure_conversion.py``'s own split against ``huf.ai.flow_api``.
 
 Run with:
-  pytest huf/ai/tests/test_procedure_proposal.py
-  bench --site <site> run-tests --app huf --module huf.ai.tests.test_procedure_proposal
+  pytest huf/ai/procedure/tests/test_procedure_proposal.py
+  bench --site <site> run-tests --app huf --module huf.ai.procedure.tests.test_procedure_proposal
 """
 
 import copy
@@ -57,7 +57,7 @@ _install_standalone_frappe_stub()
 
 from huf.ai.graph.permissions import ToolPermission
 from huf.ai.graph.validator import GraphValidationError
-from huf.ai.procedure_proposal import (
+from huf.ai.procedure.proposal import (
 	ProposalResult,
 	_build_procedure_document_payload,
 	_snake_case,

@@ -1,7 +1,7 @@
 import { call } from '@/lib/frappe-sdk';
 import { handleFrappeError } from '@/lib/frappe-error';
 
-// ─── Run -> Procedure proposal (huf.ai.procedure_proposal) ─────────────
+// ─── Run -> Procedure proposal (huf.ai.procedure.proposal) ─────────────
 //
 // Two-step flow for turning a completed Agent Run into a deterministic
 // Procedure: `propose_procedure_from_run` is a read-only PREVIEW (nothing
@@ -24,7 +24,7 @@ export interface ProcedureGraphRef {
 /**
  * One node of the compiled graph. The backend emits `type: "tool.call"` nodes carrying
  * `config.tool_id` / `config.input`, chained by `next`, terminating in a single
- * `type: "output"` node -- see huf/ai/procedure_proposal.py::compile_procedure_from_trace.
+ * `type: "output"` node -- see huf/ai/procedure/proposal.py::compile_procedure_from_trace.
  */
 export interface ProcedureProposalNode {
   id: string;
@@ -84,7 +84,7 @@ export interface ProcedureProposalAcceptResult {
  * would it look like? Creates nothing. */
 export async function proposeProcedureFromRun(agentRunName: string): Promise<ProcedureProposal> {
   try {
-    const result = await call.get('huf.ai.procedure_proposal.propose_procedure_from_run', {
+    const result = await call.get('huf.ai.procedure.proposal.propose_procedure_from_run', {
       agent_run_name: agentRunName,
     });
     return result.message as ProcedureProposal;
@@ -102,7 +102,7 @@ export async function acceptProcedureProposal(
   procedureName: string
 ): Promise<ProcedureProposalAcceptResult> {
   try {
-    const result = await call.post('huf.ai.procedure_proposal.accept_procedure_proposal', {
+    const result = await call.post('huf.ai.procedure.proposal.accept_procedure_proposal', {
       agent_run_name: agentRunName,
       procedure_graph: JSON.stringify(procedureGraph),
       procedure_name: procedureName,

@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
-"""Unit tests for huf.ai.procedure_lock (T-21, GT-08).
+"""Unit tests for huf.ai.procedure.lock (T-21, GT-08).
 
 Runs standalone (frappe-free stub, per this package's convention -- see
 huf.ai.tests.test_graph_permissions for the documented reason the stub must be
@@ -13,8 +13,8 @@ delete/nx semantics (not a MagicMock, per this track's test convention: a MagicM
 acquire fails" assertion meaningless).
 
 Run with:
-  pytest huf/ai/tests/test_procedure_lock.py
-  bench --site <site> run-tests --app huf --module huf.ai.tests.test_procedure_lock
+  pytest huf/ai/procedure/tests/test_procedure_lock.py
+  bench --site <site> run-tests --app huf --module huf.ai.procedure.tests.test_procedure_lock
 """
 
 import sys
@@ -38,7 +38,7 @@ _install_standalone_frappe_stub()
 
 import frappe
 
-from huf.ai import procedure_lock
+from huf.ai.procedure import lock as procedure_lock
 
 
 class FakeCache:

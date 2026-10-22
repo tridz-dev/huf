@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
-"""Frappe-free unit tests for huf.ai.procedure_versioning (T-20).
+"""Frappe-free unit tests for huf.ai.procedure.versioning (T-20).
 
 This module has zero import-time frappe dependency, so these tests run under plain
 pytest with no bench and no stub, and unmodified on a bench (real frappe simply is not
@@ -9,8 +9,8 @@ imported by the module under test). See huf/ai/tests/test_graph_permissions.py f
 sibling pattern this test package uses when a module under test DOES need frappe.
 
 Run with:
-  pytest huf/ai/tests/test_procedure_versioning.py
-  bench --site <site> run-tests --app huf --module huf.ai.tests.test_procedure_versioning
+  pytest huf/ai/procedure/tests/test_procedure_versioning.py
+  bench --site <site> run-tests --app huf --module huf.ai.procedure.tests.test_procedure_versioning
 """
 
 import copy
@@ -37,8 +37,8 @@ def _install_standalone_frappe_stub():
 
 _install_standalone_frappe_stub()
 
-from huf.ai import procedure_versioning
-from huf.ai.procedure_versioning import (
+from huf.ai.procedure import versioning as procedure_versioning
+from huf.ai.procedure.versioning import (
 	CONTENT_FIELDS,
 	FLOW_ONLY_NODE_TYPES,
 	FlowOnlyNodeError,

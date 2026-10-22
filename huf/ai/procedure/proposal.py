@@ -6,14 +6,14 @@ graph-IR Agent Procedure for human review.
 
 This is a narrow, deliberately conservative first slice of the trace-mining compiler
 GOAL.md sketches as Phase 4 / 4A-4D and PLAN.md ss9 explicitly defers ("Compiling from
-observed runs stays out of scope" -- ``huf.ai.procedure_conversion``'s own docstring says
+observed runs stays out of scope" -- ``huf.ai.procedure.conversion``'s own docstring says
 the same thing about itself). It is NOT that compiler: there is no pattern mining across
 many runs (4A), no cross-run parameterization or dedup (4B/4C), no optimization pass
 (4D). The input is exactly one already-completed ``Agent Run`` and its own ordered
 ``Agent Tool Call`` rows; the output is a single candidate Procedure graph, or a specific
 refusal reason. Multi-run generalization is future work this module does not attempt.
 
-Two-step contract, mirroring ``huf.ai.procedure_conversion`` / ``huf.ai.flow_api``'s
+Two-step contract, mirroring ``huf.ai.procedure.conversion`` / ``huf.ai.flow_api``'s
 analyze/convert split for Flow-to-Procedure conversion:
 
 1. :func:`propose_procedure_from_run` -- read-only. Loads the run's tool-call trace,
@@ -47,7 +47,7 @@ inside Procedure execution) exists to rule out. So every argument value is eithe
 Frappe-free by design where it matters: :func:`compile_procedure_from_trace` (and every
 helper it calls) is pure -- plain dicts and strings in, a :class:`ProposalResult` out --
 so the compilation and refusal logic is unit-testable with plain ``pytest``/``unittest``,
-no bench required, exactly the split ``huf.ai.procedure_conversion`` uses for the
+no bench required, exactly the split ``huf.ai.procedure.conversion`` uses for the
 Flow-to-Procedure direction. Only the two ``@frappe.whitelist()`` entry points
 (:func:`propose_procedure_from_run`, :func:`accept_procedure_proposal`) and their small
 frappe-touching helpers (:func:`_load_tool_calls`, :func:`_load_agent_run`) import or call
@@ -68,7 +68,7 @@ from frappe.utils import now_datetime
 from huf.ai.graph.idempotency import derive_idempotency_key
 from huf.ai.graph.permissions import ToolClassifier, compute_static_envelope, default_tool_classifier
 from huf.ai.graph.validator import GraphValidationError, validate_graph
-from huf.ai.procedure_versioning import compute_fingerprint
+from huf.ai.procedure.versioning import compute_fingerprint
 
 # Default recovery mode for an auto-proposed write node absent other signal (T-40,
 # GOAL.md ss2.3): fail closed, no retry, no compensation -- the safest choice when nothing
@@ -114,7 +114,7 @@ _CAMEL_BOUNDARY_RE = re.compile(r"(?<!^)(?=[A-Z])")
 class ProposalResult:
 	"""Outcome of :func:`compile_procedure_from_trace`. ``procedure_graph`` and
 	``input_schema`` are populated only when ``proposable`` is true -- symmetrical with
-	``ConversionResult`` in ``huf.ai.procedure_conversion``: a refused proposal never
+	``ConversionResult`` in ``huf.ai.procedure.conversion``: a refused proposal never
 	carries a half-built graph a caller could accidentally persist.
 	"""
 
@@ -359,7 +359,7 @@ def compile_procedure_from_trace(
 	"""Compile ``tool_calls`` (already ordered oldest-first, as recorded for one Agent
 	Run) into a candidate Procedure graph, or refuse with a specific reason. Pure: no
 	frappe access of its own (``classify_tool``'s default does touch frappe when called --
-	the frappe-free unit tests pass a fake, exactly as ``huf.ai.procedure_conversion``'s
+	the frappe-free unit tests pass a fake, exactly as ``huf.ai.procedure.conversion``'s
 	tests do for the same reason).
 
 	``tool_calls[i]`` is expected to carry ``tool`` (str), ``tool_args`` (dict),

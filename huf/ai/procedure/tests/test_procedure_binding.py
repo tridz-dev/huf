@@ -16,7 +16,7 @@ and are re-run unmodified against a real one. Covers:
     execute_procedure directly -- and pins a fresh Agent Procedure Run to bound.procedure.
 
 Run with:
-  bench --site <site> run-tests --app huf --module huf.ai.tests.test_procedure_binding
+  bench --site <site> run-tests --app huf --module huf.ai.procedure.tests.test_procedure_binding
 """
 
 import sys

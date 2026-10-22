@@ -13,7 +13,7 @@ Run with:
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai import procedure_lock
+from huf.ai.procedure import lock as procedure_lock
 from huf.ai.transaction import commit_if_background
 
 
@@ -168,8 +168,8 @@ class TestAgentProcedureRunPinning(_FlagsSafeIntegrationTestCase):
 
 
 class TestAgentProcedureRunLock(_FlagsSafeIntegrationTestCase):
-	"""Exercises the real frappe.cache()-backed lock (huf.ai.procedure_lock) against
-	an actual run name -- huf.ai.tests.test_procedure_lock covers the pure logic with a
+	"""Exercises the real frappe.cache()-backed lock (huf.ai.procedure.lock) against
+	an actual run name -- huf.ai.procedure.tests.test_procedure_lock covers the pure logic with a
 	fake cache; this proves the same module works against the real cache backend."""
 
 	def setUp(self):

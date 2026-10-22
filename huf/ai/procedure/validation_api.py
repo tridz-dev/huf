@@ -7,7 +7,7 @@ The harness itself (``aggregate_runs`` / ``evaluate_promotion``) is pure and fra
 turns a caller-supplied ``NRunReport`` into a :class:`PromotionDecision`. Nothing in this repo
 yet wires a live agentic-vs-deterministic N-run comparison for an arbitrary ``Agent Procedure``
 -- that comparison only exists today against the four hand-built benchmark fixtures exercised
-by this track's own tests (see ``huf/ai/tests/test_procedure_runtime.py`` and friends), each of
+by this track's own tests (see ``huf/ai/procedure/tests/test_procedure_runtime.py`` and friends), each of
 which needs a bespoke fake tool layer that has no generic, Procedure-name-driven equivalent.
 
 So rather than fabricate a report (which the harness's own MEASUREMENT HONESTY principle
