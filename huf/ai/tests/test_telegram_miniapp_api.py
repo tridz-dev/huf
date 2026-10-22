@@ -60,7 +60,10 @@ class Base(unittest.TestCase):
 		self.user[0] = user
 
 	def call(self, fn, *a, token=None, **kw):
-		return fn(*a, token=self.token if token is None else token, **kw)
+		"""Invoke an endpoint with the token sent in the X-Huf-Tg-Token header (the only accepted transport)."""
+		raw = self.token if token is None else token
+		with patch("frappe.get_request_header", lambda h: raw if h == api.TOKEN_HEADER else None):
+			return fn(*a, **kw)
 
 	def assertErr(self, res, code, status=None):
 		self.assertFalse(res["ok"], res)
@@ -71,14 +74,24 @@ class Base(unittest.TestCase):
 class TestAuth(Base):
 	def test_missing_token(self):
 		self.assertErr(api.me(), "unauthorized")
-		self.assertErr(api.me(token="short"), "unauthorized")
+		self.assertErr(self.call(api.me, token="short"), "unauthorized")
 
 	def test_unknown_token(self):
-		self.assertErr(api.me(token="x" * 40), "unauthorized")
+		self.assertErr(self.call(api.me, token="x" * 40), "unauthorized")
 
 	def test_expired_token(self):
 		old = ta.mint_session_token(self.bindings[(TG, GW)], now=time.time() - 5000)
-		self.assertErr(api.me(token=old), "unauthorized")
+		self.assertErr(self.call(api.me, token=old), "unauthorized")
+
+	def test_query_param_token_rejected(self):
+		# The token must never be accepted from the URL/param; only the header counts.
+		self.assertErr(api.me(token=self.token), "unauthorized")
+		self.assertErr(api.config(token=self.token), "unauthorized")
+		self.assertErr(api.act_confirm("nonce", token=self.token), "unauthorized")
+
+	def test_query_param_rejected_even_with_valid_header(self):
+		with patch("frappe.get_request_header", lambda h: self.token if h == api.TOKEN_HEADER else None):
+			self.assertErr(api.me(token=self.token), "unauthorized")
 
 	def test_revoked_token(self):
 		self.assertTrue(self.call(api.revoke_token)["ok"])
@@ -353,7 +366,7 @@ class TestActions(Base):
 		other = {**BINDING, "name": "bind-9", "telegram_user_id": "888", "frappe_user": "other@example.com"}
 		self.bindings[("888", GW)] = other
 		other_token = ta.mint_session_token(other)
-		res = api.act_confirm(nonce, token=other_token)
+		res = self.call(api.act_confirm, nonce, token=other_token)
 		self.assertErr(res, "permission_denied")
 		self.assertEqual(applied, [])
 		# the owner can still confirm: a foreign press must not burn the nonce

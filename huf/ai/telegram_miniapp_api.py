@@ -6,8 +6,8 @@
 Contract: ``docs/gateways/telegram-miniapp-api.md``. Security summary:
 
 - Endpoints are ``allow_guest`` only because the caller has no Frappe session; authentication is the opaque
-  bearer token minted by ``telegram_admin.telegram_miniapp_auth`` (header ``X-Huf-Tg-Token`` or ``token``
-  param). Each call resolves the token, re-reads the LIVE binding (including the Admin re-check, so a
+  bearer token minted by ``telegram_admin.telegram_miniapp_auth`` (header ``X-Huf-Tg-Token`` only; a
+  ``token`` query/body param is refused so the secret never lands in access logs). Each call resolves the token, re-reads the LIVE binding (including the Admin re-check, so a
   downgrade or revocation applies immediately) and runs every data access inside
   ``telegram_admin.run_as(bound user)`` under normal Frappe permission checks. Never Administrator/Guest,
   never ``ignore_permissions`` for business data.
@@ -113,6 +113,13 @@ def _rollback() -> None:
 
 
 def _request_token(token: str = "") -> str:
+	"""Return the bearer token from the ``X-Huf-Tg-Token`` header only.
+
+	The ``token`` argument exists only because Frappe binds the URL query string to the whitelisted function
+	signature; a non-empty value is refused (empty string) so tokens never travel in URLs or access logs.
+	"""
+	if (token or "").strip():
+		return ""
 	value = ""
 	try:
 		import frappe
@@ -120,7 +127,7 @@ def _request_token(token: str = "") -> str:
 		value = frappe.get_request_header(TOKEN_HEADER) or ""
 	except Exception:
 		pass
-	value = (value or token or "").strip()
+	value = value.strip()
 	if value.lower().startswith("bearer "):
 		value = value[7:].strip()
 	return value

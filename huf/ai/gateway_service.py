@@ -8,6 +8,7 @@ does not expose a guest endpoint: each adapter owns its verification contract.
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import os
 import random
@@ -221,6 +222,29 @@ def _fail_event_for_agent_run(
         "fallback_sent": fallback_sent,
     }
 
+
+
+def _call_instructions_hook(hook, gateway) -> str | None:
+	"""Run a provider ``agent_instructions`` hook; never let a hook failure fail the inbound event.
+
+	Passes ``gateway`` only when the hook accepts a positional argument (inspected, not inferred from a
+	caught TypeError, which would also swallow TypeErrors raised inside the hook). Any exception yields
+	``None`` (no channel note) and a warning without the error message, which may carry secrets.
+	"""
+	try:
+		sig = inspect.signature(hook)
+	except (TypeError, ValueError):
+		sig = None
+	takes_gateway = sig is None or any(
+		p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD, p.VAR_POSITIONAL) for p in sig.parameters.values()
+	)
+	try:
+		return hook(gateway) if takes_gateway else hook()
+	except Exception as exc:
+		frappe.logger("huf").warning(
+			f"Agent instructions hook failed for provider {getattr(gateway, 'provider', None)}: {type(exc).__name__}"
+		)
+		return None
 
 
 def _idempotency_key(gateway_name: str, provider_event_id: str) -> str:
@@ -2408,10 +2432,7 @@ def _process_gateway_event(event_name: str) -> dict:
 
             instructions_hook = provider_hooks.get(gateway.provider, "agent_instructions")
             if instructions_hook is not None:
-                try:
-                    channel_note = instructions_hook(gateway)
-                except TypeError:  # hooks registered with the older no-argument signature
-                    channel_note = instructions_hook()
+                channel_note = _call_instructions_hook(instructions_hook, gateway)
                 if channel_note:
                     prompt = f"[Channel note: {channel_note}]\n{prompt}"
 
