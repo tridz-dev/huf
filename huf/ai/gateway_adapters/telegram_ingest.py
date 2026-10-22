@@ -87,6 +87,18 @@ def _handle_block_change(gateway, parsed: TelegramUpdate) -> dict:
 	return _ack("bot_unblocked", "sender restored")
 
 
+_UPDATE_HANDLERS: dict[str, Any] = {}
+
+
+def register_update_handler(key: str, fn) -> None:
+	"""Register ``fn(gateway, adapter, parsed, request) -> dict | None`` for an update kind or category.
+
+	``key`` is a Telegram update kind (``inline_query``, ``chat_join_request``, ``business_message`` ...) or a
+	``classify()`` category. A non-None return is the webhook response; None falls through to the default ack.
+	"""
+	_UPDATE_HANDLERS[key] = fn
+
+
 def handle_update(gateway, adapter, request) -> dict | None:
 	from huf.ai.gateway_service import ingest_gateway_event
 	from huf.ai.gateway_webhook import _event_context, touch_last_event
@@ -98,8 +110,14 @@ def handle_update(gateway, adapter, request) -> dict | None:
 	category = classify(parsed)
 	if parsed.bot_blocked or parsed.bot_unblocked:
 		return _handle_block_change(gateway, parsed)
+	for key in (parsed.kind, category):
+		handler = _UPDATE_HANDLERS.get(key)
+		if handler is not None:
+			handled = handler(gateway, adapter, parsed, request)
+			if handled is not None:
+				return handled
 	if category in ("membership", "business", "other"):
-		# Handled by later work packages (join/guard, business, inline); acked so Telegram never retries.
+		# Unhandled kinds (join/guard, business, inline); acked so Telegram never retries.
 		return _ack(parsed.kind)
 	if parsed.kind == "message_reaction_count":
 		return _ack(parsed.kind)
