@@ -200,7 +200,7 @@ export function parseButtons(json: string): ButtonsModel | null {
 		if (!Array.isArray(row)) return null;
 		const out: EditorButton[] = [];
 		for (const b of row as Record<string, unknown>[]) {
-			const kind = BUTTON_KINDS.find((k) => b?.[k] !== undefined && b?.[k] !== '');
+			const kind = BUTTON_KINDS.find((k) => b && typeof b === 'object' && k in b);
 			if (!kind) { out.push({ text: String(b?.text ?? ''), kind: 'callback', value: '' }); continue; }
 			out.push({ text: String(b.text ?? ''), kind, value: String(b[kind]) });
 		}
