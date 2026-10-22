@@ -1,3 +1,5 @@
+import { CommandsTab } from './CommandsTab';
+import { ConnectionTab } from './ConnectionTab';
 import { OverviewPanel } from './OverviewPanel';
 import { SettingsTab } from './SettingsTab';
 import type { TelegramTabDef } from './tabTypes';
@@ -10,6 +12,8 @@ import type { TelegramTabDef } from './tabTypes';
 export const TELEGRAM_TABS: TelegramTabDef[] = [
 	{ id: 'overview', label: 'Overview', component: OverviewPanel },
 	{ id: 'settings', label: 'Settings', component: SettingsTab },
+	{ id: 'commands', label: 'Commands & profile', component: CommandsTab },
+	{ id: 'connection', label: 'Connection', component: ConnectionTab },
 ];
 
 export const DEFAULT_TELEGRAM_TAB = 'overview';
