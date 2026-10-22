@@ -2,7 +2,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_to_date, now_datetime
 
-from .agent_integration import _run_async_safely, run_agent_sync
+from huf.ai.agent_integration import _run_async_safely, run_agent_sync
 from huf.ai.automation.runtime_flag import automation_runtime_is_new
 
 _PROVIDER_BRAND_TO_BATCH_JOB_PROVIDER = {
@@ -169,7 +169,7 @@ def run_scheduled_agents():
 
 			# This tick owns the claim: enqueue the scheduled run
 			frappe.enqueue(
-				"huf.ai.agent_scheduler.execute_scheduled_agent",
+				"huf.ai.agent.scheduler.execute_scheduled_agent",
 				agent_trigger=t["name"],
 				agent=t.get("agent"),
 				enqueue_after_commit=True,

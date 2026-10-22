@@ -7,7 +7,7 @@ from huf.ai.automation.runtime_flag import automation_runtime_is_new
 
 # Short-lived per-trigger lock so an overlapping scheduler tick (or a manual
 # invocation racing a real tick) can't double-fire the same due trigger.
-# Mirrors the lock pattern in huf/ai/agent_hooks.py's run_hooked_agents.
+# Mirrors the lock pattern in huf/ai/agent/hooks.py's run_hooked_agents.
 _LOCK_PREFIX = "huf:automation_scheduler:lock:"
 _LOCK_TTL_SEC = 60
 
@@ -38,7 +38,7 @@ def run_due_automations():
 	"""Fire every due Schedule-type Automation Trigger.
 
 	Registered in hooks.py's ``scheduler_events["all"]`` alongside (not
-	replacing) the legacy ``huf.ai.agent_scheduler.run_scheduled_agents`` —
+	replacing) the legacy ``huf.ai.agent.scheduler.run_scheduled_agents`` —
 	each checks ``automation_runtime_is_new()`` and no-ops when the other
 	runtime is active, so exactly one of the two ever actually executes.
 	"""
@@ -144,7 +144,7 @@ def _fire_due_trigger(t, now):
 def _submit_batch_job_for_automation_trigger(t, automation_doc, prompt):
 	"""Submit a single-request batch job for a due Schedule+Batch Automation Trigger.
 
-	Mirrors ``huf.ai.agent_scheduler._submit_batch_job_for_trigger`` (the legacy
+	Mirrors ``huf.ai.agent.scheduler._submit_batch_job_for_trigger`` (the legacy
 	Agent Trigger equivalent), but resolves its Agent via ``automation_doc.agent``
 	instead of a trigger-carried agent name, and links the created Batch Job back
 	via ``automation_trigger`` rather than ``agent_trigger``.
@@ -156,7 +156,7 @@ def _submit_batch_job_for_automation_trigger(t, automation_doc, prompt):
 	wrapped, so a submission failure can be recorded on the Batch Job instead of
 	aborting before next_execution is advanced.
 	"""
-	from huf.ai.agent_scheduler import _PROVIDER_BRAND_TO_BATCH_JOB_PROVIDER
+	from huf.ai.agent.scheduler import _PROVIDER_BRAND_TO_BATCH_JOB_PROVIDER
 
 	agent = frappe.get_doc("Agent", automation_doc.agent)
 	provider_brand = frappe.db.get_value("AI Provider", agent.provider, "provider_brand")

@@ -10,7 +10,7 @@ Trigger / ``automation/scheduler.py`` — confirmed default "new" via
 ``huf/ai/automation/runtime_flag.py::automation_runtime_is_new()``, which
 returns True unless ``site_config.json`` explicitly sets
 ``automation_trigger_runtime: "legacy"``). The legacy ``Agent Trigger`` /
-``agent_scheduler.py`` path is not exercised here — see AUTO-007 note below
+``agent/scheduler.py`` path is not exercised here — see AUTO-007 note below
 for why the doc-event legacy/new distinction was skipped entirely for this
 file.
 

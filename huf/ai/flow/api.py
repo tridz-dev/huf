@@ -523,7 +523,7 @@ def _run_flow_webhook(flow_id: str, webhook_key: str | None, payload: dict | Non
 	# shared resolve_run_identity_and_authorize() helper. The webhook-key check
 	# above already authorizes this trigger, so authorized is always True here --
 	# this call only resolves who the run executes as, matching prior behavior.
-	from huf.ai.agent_access import TRIGGER_FLOW_WEBHOOK, resolve_run_identity_and_authorize
+	from huf.ai.agent.access import TRIGGER_FLOW_WEBHOOK, resolve_run_identity_and_authorize
 
 	identity = resolve_run_identity_and_authorize(
 		None,

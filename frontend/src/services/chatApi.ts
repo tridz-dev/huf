@@ -415,7 +415,7 @@ export async function transcribeAudio(
   params: TranscribeAudioParams
 ): Promise<TranscribeAudioResponse> {
   try {
-    const result = await call.post('huf.ai.agent_chat.upload_audio_and_transcribe_web', {
+    const result = await call.post('huf.ai.agent.chat.upload_audio_and_transcribe_web', {
       filename: params.filename,
       b64data: params.b64data,
       agent: params.agent,
@@ -450,7 +450,7 @@ export async function uploadFileAndProcess(
   params: UploadFileParams
 ): Promise<UploadFileResponse> {
   try {
-    const result = await call.post('huf.ai.agent_chat.upload_file_and_process_web', {
+    const result = await call.post('huf.ai.agent.chat.upload_file_and_process_web', {
       filename: params.filename,
       b64data: params.b64data,
       agent: params.agent,
@@ -483,7 +483,7 @@ export async function uploadFileAttachment(
   params: UploadFileAttachmentParams
 ): Promise<UploadFileAttachmentResponse> {
   try {
-    const result = await call.post('huf.ai.agent_chat.upload_file_attachment_web', {
+    const result = await call.post('huf.ai.agent.chat.upload_file_attachment_web', {
       filename: params.filename,
       b64data: params.b64data,
       agent: params.agent,
@@ -529,7 +529,7 @@ export async function prepareMessageWithFile(
   params: PrepareMessageWithFileParams
 ): Promise<PrepareMessageWithFileResponse> {
   try {
-    const result = await call.post('huf.ai.agent_chat.prepare_message_with_file_web', {
+    const result = await call.post('huf.ai.agent.chat.prepare_message_with_file_web', {
       file_id: params.file_id,
       filename: params.filename,
       agent: params.agent,
@@ -636,7 +636,7 @@ export async function newConversation(
   params: NewConversationParams
 ): Promise<NewConversationResponse> {
   try {
-    const result = await call.post('huf.ai.agent_chat.new_conversation', {
+    const result = await call.post('huf.ai.agent.chat.new_conversation', {
       agent: params.agent,
       message: params.message,
       skip_user_message: params.skip_user_message ? 1 : 0,
@@ -657,7 +657,7 @@ export async function sendMessageToConversation(
   params: SendMessageParams
 ): Promise<SendMessageResponse> {
   try {
-    const result = await call.post('huf.ai.agent_chat.send_message_to_conversation', {
+    const result = await call.post('huf.ai.agent.chat.send_message_to_conversation', {
       conversation: params.conversation,
       message: params.message,
       skip_user_message: params.skip_user_message ? 1 : 0,
@@ -685,7 +685,7 @@ export async function setConversationModelOverride(
   params: SetConversationModelOverrideParams
 ): Promise<SetConversationModelOverrideResponse> {
   try {
-    const result = await call.post('huf.ai.agent_chat.set_conversation_model_override', {
+    const result = await call.post('huf.ai.agent.chat.set_conversation_model_override', {
       conversation: params.conversation,
       model_override: params.modelOverride ?? undefined,
     });
@@ -777,7 +777,7 @@ export async function forkConversation(
   params: ForkConversationParams
 ): Promise<ForkConversationResponse> {
   try {
-    const result = await call.post('huf.ai.agent_chat.fork_conversation', {
+    const result = await call.post('huf.ai.agent.chat.fork_conversation', {
       conversation_id: params.conversationId,
       mode: params.mode,
       title: params.title,

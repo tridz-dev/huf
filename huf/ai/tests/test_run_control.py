@@ -492,7 +492,7 @@ class TestRendererFinalizesOnDisconnect(unittest.TestCase):
 	def test_renderer_acloses_async_gen_after_terminal_error_chunk(self):
 		import inspect
 
-		from huf.ai import agent_stream_renderer as r
+		from huf.ai.agent import stream_renderer as r
 
 		src = inspect.getsource(r)
 		self.assertIn("async_gen.aclose()", src)

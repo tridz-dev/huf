@@ -1,10 +1,10 @@
 """Streaming response endpoint for the Huf public developer API (v1).
 
-Mirrors `huf.ai.agent_stream_renderer.AgentStreamRenderer` (the existing,
+Mirrors `huf.ai.agent.stream_renderer.AgentStreamRenderer` (the existing,
 working SSE implementation): reuses `run_agent_stream()` exactly as that
 renderer calls it, and replicates its server-side `run_immediately`
 enforcement (see `AgentStreamRenderer._render_agent_stream`, around
-huf/ai/agent_stream_renderer.py:164-170) rather than inventing a new check.
+huf/ai/agent/stream_renderer.py:164-170) rather than inventing a new check.
 
 ------------------------------------------------------------------------
 WIRING NOTE FOR THE REVIEWER (router.py) - NOT APPLIED HERE ON PURPOSE
@@ -81,7 +81,7 @@ from typing import Generator
 import frappe
 from werkzeug.wrappers import Response
 
-from huf.ai.agent_access import assert_agent_access
+from huf.ai.agent.access import assert_agent_access
 from huf.ai.agent_integration import (
 	_client_safe_error,
 	_conversation_lock_key,
@@ -178,7 +178,7 @@ def handle_stream_response(
 
 	# Queue-first policy: streaming is a direct-execution compatibility
 	# path, allowed only when the agent opts in via 'Run Immediately'.
-	# Replicates huf/ai/agent_stream_renderer.py:164-170 exactly - do not
+	# Replicates huf/ai/agent/stream_renderer.py:164-170 exactly - do not
 	# invent a different check here.
 	if not getattr(agent_doc, "run_immediately", 0):
 		raise ValidationError(

@@ -181,7 +181,7 @@ def _build_batch_requests(requests: list[dict]) -> tuple[list[dict], str]:
 
 	Every request in a single Gemini batch job targets the same `model` (it's
 	part of the URL path, not the per-request body) -- this repo's Phase 1
-	scope only ever submits single-request batches (see agent_scheduler.py /
+	scope only ever submits single-request batches (see agent/scheduler.py /
 	automation/scheduler.py's `_submit_batch_job_for_*` callers), so using the
 	first request's model for the whole batch is safe today; a future
 	multi-request batch spanning models would need per-model batches instead.
@@ -214,7 +214,7 @@ def _build_batch_requests(requests: list[dict]) -> tuple[list[dict], str]:
 async def submit_batch(agent, requests: list[dict]) -> dict:
 	"""Create a Gemini batch job via the direct REST API.
 
-	Inline-only for Phase 1 scope: every caller today (agent_scheduler.py /
+	Inline-only for Phase 1 scope: every caller today (agent/scheduler.py /
 	automation/scheduler.py's scheduled-trigger batch jobs) submits exactly one
 	request per batch, far under Gemini's <20MB inline request-list cap, so
 	the file-upload path (`client.files.upload` + a JSONL `input_config.

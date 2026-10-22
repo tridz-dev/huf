@@ -6,7 +6,7 @@ import json
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from huf.ai.agent_hooks import clear_doc_event_agents_cache
+from huf.ai.agent.hooks import clear_doc_event_agents_cache
 from frappe.utils import now_datetime
 from huf.ai.agent_integration import run_agent_sync 
 import random
@@ -668,7 +668,7 @@ class Agent(Document):
 
     
     def has_permission(self, permission_type=None, verbose=False):
-        from huf.ai.agent_access import check_agent_access
+        from huf.ai.agent.access import check_agent_access
         from huf.permissions import has_capability
         user = frappe.session.user
 

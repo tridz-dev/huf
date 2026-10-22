@@ -36,7 +36,7 @@ Run with:
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.agent_chat import get_history
+from huf.ai.agent.chat import get_history
 from huf.ai.agent_integration import run_agent_sync
 from huf.testing.factories import (
     make_agent,
@@ -213,7 +213,7 @@ class TestChatP0(IntegrationTestCase):
     def test_chat_003_owner_or_system_manager_read_gate(self):
         """A conversation's history may be read by its owner or a System
         Manager -- and by nobody else, per the explicit gate in
-        ``agent_chat.py::get_history`` (line ~293):
+        ``agent/chat.py::get_history`` (line ~293):
         ``if conv_doc.owner != frappe.session.user and "System Manager" not
         in frappe.get_roles(): frappe.throw(..., frappe.PermissionError)``.
         """
@@ -264,14 +264,14 @@ class TestChatP0(IntegrationTestCase):
         abort server-side.
 
         This introspects the actual whitelisted API surface of the two
-        chat-related modules (``huf.ai.agent_chat``, ``huf.ai.chat_api``)
+        chat-related modules (``huf.ai.agent.chat``, ``huf.ai.chat_api``)
         plus ``huf.ai.agent_integration`` (where ``run_agent_sync``/
         ``get_agent_run_status`` live) for any ``@frappe.whitelist()``
         function whose name contains "cancel" or "stop" and appears to
         operate on a Conversation/Agent Run, rather than re-asserting the
         CURRENT_STATE audit claim blindly.
         """
-        import huf.ai.agent_chat as agent_chat_module
+        import huf.ai.agent.chat as agent_chat_module
         import huf.ai.chat_api as chat_api_module
         import huf.ai.agent_integration as agent_integration_module
 

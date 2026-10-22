@@ -38,7 +38,7 @@ def get_doc_event_automation_triggers(event: str):
 	config — so a change to the Automation's agent/instructions takes effect
 	on the very next fire without a cache-clear. Config resolution happens
 	fresh inside run_automation() every time. This is the key behavioral
-	difference from the legacy huf.ai.agent_hooks cache, which baked in
+	difference from the legacy huf.ai.agent.hooks cache, which baked in
 	provider/model/instructions at cache time.
 	"""
 	if not frappe.db.exists("DocType", "Automation Trigger"):
@@ -109,7 +109,7 @@ def clear_doc_event_automation_cache(doc=None, method=None):
 
 def run_hooked_automations(doc, method=None, *args, **kwargs):
 	"""hooks.py doc_events entrypoint — the Automation-side counterpart of
-	huf.ai.agent_hooks.run_hooked_agents. Registered alongside (not
+	huf.ai.agent.hooks.run_hooked_agents. Registered alongside (not
 	replacing) the legacy function; both check automation_runtime_is_new()
 	so exactly one runtime actually queues work for a given fire.
 	"""

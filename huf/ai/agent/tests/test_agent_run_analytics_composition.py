@@ -2,10 +2,10 @@
 # For license information, please see license.txt
 
 """
-Tests for huf.ai.agent_run_analytics._accumulate_composition and
+Tests for huf.ai.agent.run_analytics._accumulate_composition and
 _load_segment_tokens.
 
-`huf/ai/tests/test_agent_run_analytics.py` already covers DIMENSION_FIELDS
+`huf/ai/agent/tests/test_agent_run_analytics.py` already covers DIMENSION_FIELDS
 append-last compatibility (`_dimension_key`, `_bucket_start`, and the
 "conversation appended last so stored keys stay decodable" contract) -- not
 duplicated here.
@@ -28,14 +28,14 @@ import sys
 import os
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, "testing"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, os.pardir, "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")))
 
-from huf.ai.agent_run_analytics import _accumulate_composition, _load_segment_tokens  # noqa: E402
+from huf.ai.agent.run_analytics import _accumulate_composition, _load_segment_tokens  # noqa: E402
 
 
 class TestAccumulateComposition(unittest.TestCase):

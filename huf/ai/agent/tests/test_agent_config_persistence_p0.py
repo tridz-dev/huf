@@ -8,10 +8,10 @@ Phase 3 P0 regression tests for the Agent config-persistence contract
     load -> modify -> save -> reload -> runtime uses new value.
 
 A field merely rendering in the React editor is not enough; every test here
-does a real round-trip through `huf.ai.agent_config_api` against a real
+does a real round-trip through `huf.ai.agent.config_api` against a real
 Frappe DB (Layer B, `IntegrationTestCase`, run under `bench run-tests`).
 
-Distinct from the existing `huf/ai/tests/test_agent_config_api.py` (which
+Distinct from the existing `huf/ai/agent/tests/test_agent_config_api.py` (which
 covers narrow-section-read, cross-section rejection, and rename): this file
 targets the five specific P0 scenarios called out for this track --
 multi-section CRUD round-trip, the optimistic-concurrency stale-revision
@@ -28,7 +28,7 @@ bench.
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.agent_config_api import get_agent_section, update_agent_section
+from huf.ai.agent.config_api import get_agent_section, update_agent_section
 from huf.testing.factories import make_agent, make_ai_provider_and_model, make_user
 
 
@@ -120,7 +120,7 @@ class TestAgentConfigPersistenceP0(IntegrationTestCase):
 		# Someone else mutates the Agent out-of-band (T1 > T0), advancing
 		# `modified` without going through the section API at all -- the
 		# exact "changed after the section was loaded" scenario
-		# _assert_revision (agent_config_api.py:~173) exists to catch.
+		# _assert_revision (agent/config_api.py:~173) exists to catch.
 		frappe.db.set_value("Agent", agent.name, "description", "_Test P31 out-of-band change")
 		frappe.db.commit()
 
@@ -279,7 +279,7 @@ class TestAgentConfigPersistenceP0(IntegrationTestCase):
 		before = get_agent_section(agent.name, "tools")
 		self.assertIn("agent_tool", before["values"])
 
-		# OBSERVED: as of this write, agent_config_api.py's AGENT_SECTIONS /
+		# OBSERVED: as of this write, agent/config_api.py's AGENT_SECTIONS /
 		# update_agent_section contain no agent_modality-conditional gating
 		# at all -- the "tools" section's fields are unconditionally
 		# editable server-side regardless of agent_modality. This matches

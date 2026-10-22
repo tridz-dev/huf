@@ -151,14 +151,14 @@ class TestDottedPathsResolve(IntegrationTestCase):
 	def test_resolver_fails_for_bogus_paths(self):
 		for bogus in (
 			"huf.ai.nonexistent_module.fn",
-			"huf.ai.agent_scheduler.no_such_function",
+			"huf.ai.agent.scheduler.no_such_function",
 			"huf.totally_missing.thing",
 		):
 			with self.assertRaises((ImportError, AttributeError), msg=bogus):
 				resolve_dotted_path(bogus)
 		self.assertEqual(len(self._failures({"huf.ai.nonexistent_module.fn"})), 1)
 		# and a real one resolves
-		self.assertTrue(callable(resolve_dotted_path("huf.ai.agent_scheduler.run_scheduled_agents")))
+		self.assertTrue(callable(resolve_dotted_path("huf.ai.agent.scheduler.run_scheduled_agents")))
 
 	# ---- 1. hooks.py ---------------------------------------------------
 	def test_hooks_paths_resolve(self):

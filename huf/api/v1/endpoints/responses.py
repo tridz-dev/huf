@@ -9,7 +9,7 @@ no authorization logic is duplicated here.
 
 import frappe
 
-from huf.ai.agent_access import assert_agent_access
+from huf.ai.agent.access import assert_agent_access
 from huf.ai.chat_api import run_agent_sync_chat
 from huf.api.v1.context import RequestContext
 from huf.api.v1.endpoints.conversations import _get_owned_conversation

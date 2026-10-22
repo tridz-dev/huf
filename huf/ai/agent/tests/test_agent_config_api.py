@@ -3,8 +3,8 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.agent_access import check_agent_access
-from huf.ai.agent_config_api import (
+from huf.ai.agent.access import check_agent_access
+from huf.ai.agent.config_api import (
 	READ_ONLY_FIELDS,
 	_get_section_fields,
 	get_agent_section,

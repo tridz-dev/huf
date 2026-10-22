@@ -8,7 +8,7 @@ INTENTIONAL PERMISSION SPLIT: ``update_agent_section``'s write-permission gate
 (``agent_doc.check_permission("write")``, which for the Agent DocType routes
 through ``huf.permissions.has_capability(user, "agent.edit")``) is a
 deliberately separate axis from execution-time access control
-(``huf.ai.agent_access.check_agent_access`` / ``assert_agent_access``, which
+(``huf.ai.agent.access.check_agent_access`` / ``assert_agent_access``, which
 gates on ``allow_guest`` / ``allowed_users`` / ``allowed_roles``). Config-edit
 answers "who may build/configure agents" -- an authoring concern; execution
 access answers "who may run this specific agent" -- an audience concern. The

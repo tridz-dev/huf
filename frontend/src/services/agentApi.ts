@@ -30,7 +30,7 @@ export async function getAgentSection(
   section: AgentConfigSection,
 ): Promise<AgentSectionResponse> {
   try {
-    const result = await call.get('huf.ai.agent_config_api.get_agent_section', {
+    const result = await call.get('huf.ai.agent.config_api.get_agent_section', {
       agent_name: name,
       section,
     });
@@ -47,7 +47,7 @@ export async function updateAgentSection(
   expectedModified: string,
 ): Promise<AgentSectionResponse> {
   try {
-    const result = await call.post('huf.ai.agent_config_api.update_agent_section', {
+    const result = await call.post('huf.ai.agent.config_api.update_agent_section', {
       agent_name: name,
       section,
       values: JSON.stringify(values),

@@ -685,7 +685,7 @@ class TestGatewayReplyDelivery(unittest.TestCase):
         mock_send.return_value = SimpleNamespace(provider_message_id="vk-message-1")
 
         with patch.dict(sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=mock_run)}), patch(
-            "huf.ai.agent_access.check_agent_access", return_value=True
+            "huf.ai.agent.access.check_agent_access", return_value=True
         ) as mock_check:
             result = gateway_service.process_gateway_event(event.name)
 
@@ -871,7 +871,7 @@ class TestGatewayAgentAdmissionIdentity(unittest.TestCase):
         target_agent_doc = MagicMock(allow_guest=True)
         mock_frappe.get_doc.side_effect = [event, configured_gateway, target_agent_doc]
 
-        with patch("huf.ai.agent_access.check_agent_access", return_value=False) as mock_check:
+        with patch("huf.ai.agent.access.check_agent_access", return_value=False) as mock_check:
             result = gateway_service.process_gateway_event(event.name)
 
         assert result == {"event_name": event.name, "status": "Rejected"}
@@ -899,7 +899,7 @@ class TestGatewayAgentAdmissionIdentity(unittest.TestCase):
         mock_send.return_value = SimpleNamespace(provider_message_id="tg-1")
 
         with patch.dict(sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=mock_run)}), patch(
-            "huf.ai.agent_access.check_agent_access", return_value=True
+            "huf.ai.agent.access.check_agent_access", return_value=True
         ):
             result = gateway_service.process_gateway_event(event.name)
 
@@ -930,9 +930,9 @@ class TestSurvivingRunAgentSyncCheck(unittest.TestCase):
         goes through ``frappe.throw`` -> ``frappe.msgprint``, which needs a
         bound Frappe request context and so is only exercisable under
         ``bench run-tests``.)"""
-        from huf.ai import agent_access
+        from huf.ai.agent import access as agent_access
 
-        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+        with patch("huf.ai.agent.access.frappe.get_roles", return_value=[]), patch(
             "huf.permissions.has_capability", return_value=False
         ):
             self.assertFalse(
@@ -940,9 +940,9 @@ class TestSurvivingRunAgentSyncCheck(unittest.TestCase):
             )
 
     def test_entitled_execution_user_accepted_by_assert_agent_access(self):
-        from huf.ai.agent_access import assert_agent_access
+        from huf.ai.agent.access import assert_agent_access
 
-        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+        with patch("huf.ai.agent.access.frappe.get_roles", return_value=[]), patch(
             "huf.permissions.has_capability", return_value=False
         ):
             assert_agent_access(self._agent(), user="entitled-bot")
@@ -951,10 +951,10 @@ class TestSurvivingRunAgentSyncCheck(unittest.TestCase):
         """Regression guard for the old semantics: under the Guest pre-gate an
         allow_guest=1 agent was reachable by any gateway regardless of
         execution_user. Under the execution_user model it is not."""
-        from huf.ai.agent_access import check_agent_access
+        from huf.ai.agent.access import check_agent_access
 
         agent = self._agent(allow_guest=True)
-        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+        with patch("huf.ai.agent.access.frappe.get_roles", return_value=[]), patch(
             "huf.permissions.has_capability", return_value=False
         ):
             self.assertFalse(check_agent_access(agent, "under-privileged-bot"))

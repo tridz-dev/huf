@@ -48,7 +48,7 @@ class AgentConversation(Document):
 		(``frappe/model/delete_doc.py``), so without this, deleting a
 		conversation either raises ``LinkExistsError`` (if artifacts still
 		point at it) or -- via the generic
-		``huf.ai.agent_chat._orphan_conversation_links`` sweep that runs ahead
+		``huf.ai.agent.chat._orphan_conversation_links`` sweep that runs ahead
 		of ``frappe.delete_doc`` -- silently orphans the artifact rows, their
 		attached private Files, and the on-disk ``code_execution/<key>``
 		directory. This deletes them instead of merely clearing the link.

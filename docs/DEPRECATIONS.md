@@ -4,7 +4,7 @@ This document tracks deprecated features and their planned removal dates.
 
 ## run_scheduled_agents
 
-**Module:** `huf.ai.agent_scheduler.run_scheduled_agents`
+**Module:** `huf.ai.agent.scheduler.run_scheduled_agents`
 
 **Deprecated:** 2026-09-04
 

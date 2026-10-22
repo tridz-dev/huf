@@ -1,6 +1,6 @@
 import frappe
 from frappe.utils.background_jobs import enqueue
-from .agent_integration import run_agent_sync
+from huf.ai.agent_integration import run_agent_sync
 from frappe.utils.safe_exec import get_safe_globals, safe_eval
 from uuid import uuid4
 from frappe.utils import now_datetime
@@ -157,7 +157,7 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
         # the background worker already had (typically Administrator) with no
         # log entry. The fallback itself is unchanged (still falls back); it
         # is no longer silent.
-        from huf.ai.agent_access import TRIGGER_DOC_EVENT, resolve_run_identity_and_authorize
+        from huf.ai.agent.access import TRIGGER_DOC_EVENT, resolve_run_identity_and_authorize
 
         identity = resolve_run_identity_and_authorize(
             None,

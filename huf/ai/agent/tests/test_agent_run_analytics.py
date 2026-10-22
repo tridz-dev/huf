@@ -2,7 +2,7 @@ from datetime import datetime
 
 from frappe.tests import UnitTestCase
 
-from huf.ai.agent_run_analytics import (
+from huf.ai.agent.run_analytics import (
     DIMENSION_FIELDS,
     CORRECTION_WINDOW_HOURS,
     _bucket_start,
@@ -75,7 +75,7 @@ class TestAgentRunAnalytics(UnitTestCase):
         to the maximum start_time of contributing runs, enabling refresh_rollups to skip
         recomputation for buckets outside the correction window.
         """
-        from huf.ai.agent_run_analytics import _affected_dimensions
+        from huf.ai.agent.run_analytics import _affected_dimensions
         from frappe.utils import add_to_date, now_datetime
 
         # Test that _affected_dimensions returns a dict, not a set

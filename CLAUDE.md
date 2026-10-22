@@ -25,9 +25,9 @@ huf/
 ├── huf/                          # Backend (Frappe app)
 │   ├── ai/                       # Core AI logic
 │   │   ├── agent_integration.py  # AgentManager, run_agent_sync, run_agent_stream
-│   │   ├── agent_stream_renderer.py # SSE page renderer for streaming
-│   │   ├── agent_scheduler.py    # Scheduled agent execution
-│   │   ├── agent_hooks.py        # DocType event triggers
+│   │   ├── agent/stream_renderer.py # SSE page renderer for streaming
+│   │   ├── agent/scheduler.py    # Scheduled agent execution
+│   │   ├── agent/hooks.py        # DocType event triggers
 │   │   ├── conversation_manager.py # Conversation history
 │   │   ├── sdk_tools.py          # Tool serialization
 │   │   ├── tools/functions.py    # CRUD operations
@@ -262,7 +262,7 @@ toast.success("Agent created");
 1. **`agent_integration.py`**: `AgentManager` prepares agents, provides both sync and streaming execution:
    - `run_agent_sync()` - **Queue-first by default**: persists an `Agent Run` (Queued) and returns an acknowledgement; a per-conversation FIFO drainer executes it and emits `agent_run_status` realtime events. `now=true` or the Agent's advanced `run_immediately` policy selects direct inline execution (see `docs/queue-first-agent-runs.md`)
    - `run_agent_stream()` - Async generator yielding chunks for real-time streaming; direct-execution mode, allowed only for agents with `run_immediately` enabled (enforced server-side in the stream renderer)
-2. **`agent_stream_renderer.py`**: SSE page renderer for `/huf/stream/<agent_name>` endpoint
+2. **`agent/stream_renderer.py`**: SSE page renderer for `/huf/stream/<agent_name>` endpoint
 3. **`run.py`**: `RunProvider` routes to appropriate LLM provider
 4. **`providers/litellm.py`**: Unified provider handling via LiteLLM
 5. **`sdk_tools.py`**: Converts `Agent Tool Function` DocTypes to SDK tools
@@ -283,8 +283,8 @@ HUF supports Server-Sent Events (SSE) for real-time agent response streaming:
 - **Chunk types**: `delta` (partial response), `tool_call`, `complete`, `error`
 
 ### Event-Driven Agents
-- **`agent_hooks.py`**: Document event triggers (`after_insert`, `on_submit`, etc.)
-- **`agent_scheduler.py`**: Scheduled agent execution
+- **`agent/hooks.py`**: Document event triggers (`after_insert`, `on_submit`, etc.)
+- **`agent/scheduler.py`**: Scheduled agent execution
 
 ### Knowledge System
 - **`knowledge/indexer.py`**: Ingestion pipeline with chunking

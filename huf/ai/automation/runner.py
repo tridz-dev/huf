@@ -6,7 +6,7 @@
 Every trigger type (Manual, Schedule, Doc Event, Webhook, App Event) is
 expected to eventually converge on :func:`run_automation` as its single
 execution path. This module is intentionally independent of the legacy
-``huf/ai/agent_scheduler.py`` and ``huf/ai/agent_hooks.py`` files, which
+``huf/ai/agent/scheduler.py`` and ``huf/ai/agent/hooks.py`` files, which
 continue to drive the older "Agent Trigger" doctype unchanged. Nothing here
 imports from, or is imported by, those two files.
 
@@ -350,7 +350,7 @@ def _resolve_instruction(automation, trigger_context):
 	template via ``frappe.render_template`` — the standard Frappe-wide
 	templating convention (used for print formats, notifications, email
 	templates, etc.). No template/variable-substitution helper already
-	exists specifically in huf/ai/ (agent_hooks.py builds prompts with plain
+	exists specifically in huf/ai/ (agent/hooks.py builds prompts with plain
 	f-strings, not a reusable template), so this follows the platform-level
 	convention rather than inventing a bespoke syntax.
 

@@ -97,7 +97,7 @@ def _stub_agent_module_dependencies():
         frappe.logger = MagicMock(return_value=MagicMock())
         frappe.generate_hash = MagicMock(return_value="x" * 32)
 
-    agent_hooks = _make_module("huf.ai.agent_hooks")
+    agent_hooks = _make_module("huf.ai.agent.hooks")
     agent_hooks.clear_doc_event_agents_cache = MagicMock(name="clear_doc_event_agents_cache")
 
     agent_integration = _make_module("huf.ai.agent_integration")

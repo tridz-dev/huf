@@ -29,7 +29,7 @@ from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableE
 from huf.ai.providers.errors import ProviderError, classify_status, redact_text
 from huf.ai.transaction import safe_commit, transaction_checkpoint
 from huf.ai.run_control import touch_run_alive
-from huf.ai.agent_access import (
+from huf.ai.agent.access import (
     assert_agent_access,
     check_agent_access as _check_agent_access,
     resolve_run_identity_and_authorize,
@@ -661,7 +661,7 @@ def _is_user_allowed(agent_doc, user: str) -> bool:
 
     Thin wrapper kept for backward compatibility with existing callers
     (e.g. huf/ai/handlers/agent_runner.py); delegates to the shared
-    huf.ai.agent_access helper, which is now the single source of truth.
+    huf.ai.agent.access helper, which is now the single source of truth.
     """
     return _check_agent_access(agent_doc, user)
 

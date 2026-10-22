@@ -327,7 +327,7 @@ A single DocType providing a real-time chat interface for conversational agents.
 -   Real-time chat UI with markdown rendering
 -   Message history display
 -   Only available for agents with `allow_chat` enabled
--   Server Actions: `huf.ai.agent_chat.get_agent_chat_messages`, `huf.ai.agent_chat.send_agent_chat_message`
+-   Server Actions: `huf.ai.agent.chat.get_agent_chat_messages`, `huf.ai.agent.chat.send_agent_chat_message`
 
 #### 10. Agent Trigger
 
@@ -1201,7 +1201,7 @@ This file implements the unified LiteLLM provider that handles all LLM interacti
     -   Finds a tool by name in the agent's tools list using generator expression.
     -   Returns the first matching tool or `None` if not found.
 
-#### `agent_chat.py`
+#### `agent/chat.py`
 
 This file provides the backend API for the Agent Chat interface.
 
@@ -1213,7 +1213,7 @@ This file provides the backend API for the Agent Chat interface.
     -   Calls the agent and returns the response.
     -   Manages chat-specific conversation persistence and message formatting.
 
-#### `agent_hooks.py`
+#### `agent/hooks.py`
 
 This file handles document event-based agent triggering.
 
@@ -1239,7 +1239,7 @@ This file handles document event-based agent triggering.
     -   Constructs a prompt that includes the event name and document identifiers.
     -   Calls `run_agent_sync()` with appropriate `channel_id` and `external_id` parameters for conversation management.
 
-#### `agent_scheduler.py`
+#### `agent/scheduler.py`
 
 This file handles scheduled agent execution based on `Agent Trigger` configurations.
 
@@ -1253,7 +1253,7 @@ This file handles scheduled agent execution based on `Agent Trigger` configurati
     -   Error handling with logging for failed executions.
     -   Commits database changes after each successful execution.
 
-#### `agent_stream_renderer.py`
+#### `agent/stream_renderer.py`
 
 This file provides Server-Sent Events (SSE) streaming for real-time agent responses.
 
@@ -1617,7 +1617,7 @@ The Huf system includes Server-Sent Events (SSE) streaming capabilities for real
 
 ### SSE Implementation
 
-#### Agent Stream Renderer (`huf/ai/agent_stream_renderer.py`)
+#### Agent Stream Renderer (`huf/ai/agent/stream_renderer.py`)
 
 -   **Class: `AgentStreamRenderer(BaseRenderer)`**
     -   Custom page renderer that handles SSE streaming for agents

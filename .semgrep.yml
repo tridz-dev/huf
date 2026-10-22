@@ -20,7 +20,7 @@ rules:
         - huf/ai/knowledge/indexer.py
         - huf/ai/orchestration/orchestrator.py
         - huf/ai/orchestration/scheduler.py
-        - huf/ai/agent_scheduler.py
+        - huf/ai/agent/scheduler.py
         # Test fixtures may need explicit commits.
         - huf/ai/app_seeding/tests/test_seed_fk.py
         # The centralized transaction wrapper itself is allowed to commit.
