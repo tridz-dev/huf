@@ -26,13 +26,12 @@ from typing import Optional
 
 import frappe
 logger = frappe.logger("huf")
-import httpx
 
+from huf.ai.gateway_adapters.telegram_client import ALLOWED_UPDATES, TelegramApiError, TelegramBotClient
 from huf.ai.tools.credentials import get_credential, update_last_error
 
 
 SERVICE_NAME = "telegram"
-BASE_URL = "https://api.telegram.org/bot"
 
 
 def _error(msg: str) -> str:
@@ -76,23 +75,14 @@ def _resolve_chat_id(kwargs: dict) -> Optional[str]:
     return None
 
 
-def _make_api_url(token: str, method: str) -> str:
-    return f"{BASE_URL}{token}/{method}"
+def _make_client(token: str, *, timeout: int = 30) -> TelegramBotClient:
+    """Bot API client for ``token``. Tests patch this to inject a fake HTTP layer."""
+    return TelegramBotClient(token, timeout=timeout)
 
 
-def _sanitize_token(text: str, token: str) -> str:
-    """Redact the bot token from log/error messages."""
-    if token and text:
-        return text.replace(token, "***")
-    return text
-
-
-def _parse_json_response(response: httpx.Response) -> dict:
-    """Parse httpx response JSON safely."""
-    try:
-        return response.json()
-    except Exception:
-        return {"ok": False, "description": response.text or "Non-JSON response"}
+def _apply_reply(payload: dict, reply_to_message_id) -> None:
+    """Reply via ``reply_parameters`` (the Bot API form the gateway sender uses)."""
+    payload["reply_parameters"] = {"message_id": _coerce_int(reply_to_message_id), "allow_sending_without_reply": True}
 
 
 def _close_files(files: Optional[dict]):
@@ -100,7 +90,7 @@ def _close_files(files: Optional[dict]):
     if not files:
         return
     for item in files.values():
-        # httpx files value is a tuple: (filename, file_object, mime_type)
+        # files value is a tuple: (filename, file_object, mime_type)
         if isinstance(item, tuple) and len(item) >= 2:
             file_obj = item[1]
             try:
@@ -110,7 +100,7 @@ def _close_files(files: Optional[dict]):
 
 
 def _api_request(method: str, payload: dict, files: Optional[dict] = None, token: Optional[str] = None) -> str:
-    """Call a Telegram Bot API method and return a JSON result string."""
+    """Call a Telegram Bot API method through ``TelegramBotClient``; return a JSON result string."""
     if token is None:
         token = _get_token()
     if not token:
@@ -118,45 +108,24 @@ def _api_request(method: str, payload: dict, files: Optional[dict] = None, token
         update_last_error(SERVICE_NAME, error_msg)
         return _error(error_msg)
 
-    url = _make_api_url(token, method)
-
+    client = _make_client(token, timeout=60 if files else 30)
     try:
-        if files:
-            # When uploading files, send params as form data
-            response = httpx.post(url, data=payload, files=files, timeout=60)
-        else:
-            response = httpx.post(url, json=payload, timeout=30)
-
-        response.raise_for_status()
-        data = _parse_json_response(response)
-
-        if not data.get("ok"):
-            description = data.get("description", "Unknown Telegram API error")
-            error_code = data.get("error_code", "?")
-            error_msg = f"Telegram API error {error_code}: {description}"
-            update_last_error(SERVICE_NAME, error_msg)
-            return _error(error_msg)
-
-        return json.dumps({"success": True, "results": data.get("result")}, default=str)
-    except httpx.TimeoutException:
-        error_msg = f"Telegram {method} timed out"
+        result = client.call(method, payload, files=files)
+    except TelegramApiError as exc:
+        # The client already redacts the token from description and network errors.
+        detail = f"error {exc.error_code}: {exc.description}" if exc.error_code is not None else exc.description
+        error_msg = f"Telegram {method} {detail}"
         logger.warning(error_msg)
         update_last_error(SERVICE_NAME, error_msg)
         return _error(error_msg)
-    except httpx.HTTPStatusError as e:
-        safe_error = _sanitize_token(str(e), token)
-        error_msg = f"Telegram {method} error: {safe_error}"
+    except Exception as exc:
+        error_msg = f"Telegram {method} error: {client.redact(exc)}"
         logger.warning(error_msg)
         update_last_error(SERVICE_NAME, error_msg)
-        return _error(safe_error)
-    except Exception as e:
-        safe_error = _sanitize_token(str(e), token)
-        error_msg = f"Telegram {method} error: {safe_error}"
-        logger.warning(error_msg)
-        update_last_error(SERVICE_NAME, error_msg)
-        return _error(safe_error)
+        return _error(error_msg)
     finally:
         _close_files(files)
+    return json.dumps({"success": True, "results": result}, default=str)
 
 
 def _coerce_int(value, default: int = 0) -> int:
@@ -233,7 +202,7 @@ def _build_message_payload(kwargs: dict) -> tuple:
 
     reply_to_message_id = kwargs.get("reply_to_message_id")
     if reply_to_message_id:
-        payload["reply_to_message_id"] = _coerce_int(reply_to_message_id)
+        _apply_reply(payload, reply_to_message_id)
 
     return payload, None
 
@@ -287,7 +256,7 @@ def _handle_send_photo(**kwargs) -> str:
 
     reply_to_message_id = kwargs.get("reply_to_message_id")
     if reply_to_message_id:
-        payload["reply_to_message_id"] = _coerce_int(reply_to_message_id)
+        _apply_reply(payload, reply_to_message_id)
 
     return _api_request("sendPhoto", payload, files)
 
@@ -321,7 +290,7 @@ def _handle_send_document(**kwargs) -> str:
 
     reply_to_message_id = kwargs.get("reply_to_message_id")
     if reply_to_message_id:
-        payload["reply_to_message_id"] = _coerce_int(reply_to_message_id)
+        _apply_reply(payload, reply_to_message_id)
 
     return _api_request("sendDocument", payload, files)
 
@@ -398,7 +367,7 @@ def _handle_set_webhook(**kwargs) -> str:
     url = kwargs.get("url")
     if not url:
         return _error("url is required")
-    payload = {"url": url}
+    payload = {"url": url, "allowed_updates": list(ALLOWED_UPDATES)}
     secret_token = kwargs.get("secret_token")
     if secret_token:
         payload["secret_token"] = secret_token
@@ -416,7 +385,7 @@ def setup_webhook(token: str, webhook_url: str, secret_token: Optional[str] = No
 
     Returns the raw Telegram API result dict (not a JSON string).
     """
-    payload = {"url": webhook_url}
+    payload = {"url": webhook_url, "allowed_updates": list(ALLOWED_UPDATES)}
     if secret_token:
         payload["secret_token"] = secret_token
 
