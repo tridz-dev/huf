@@ -41,6 +41,8 @@ Hook signatures (``gateway`` / ``event`` are Gateway / Gateway Event documents):
 
 from __future__ import annotations
 
+import importlib
+import logging
 from typing import Any, Callable
 
 _HOOKS: dict[tuple[str, str], Callable[..., Any]] = {}
@@ -55,9 +57,14 @@ def _load() -> None:
 	global _loaded
 	if _loaded:
 		return
+	# Set first so a hook module that calls ``get`` while importing cannot recurse.
 	_loaded = True
-	import huf.ai.gateway_adapters.telegram_hooks  # noqa: F401
-	import huf.ai.gateway_adapters.whatsapp_hooks  # noqa: F401
+	# WhatsApp first and each provider isolated: a broken Telegram module must never unregister WhatsApp.
+	for module in ("whatsapp_hooks", "telegram_hooks"):
+		try:
+			importlib.import_module(f"huf.ai.gateway_adapters.{module}")
+		except Exception:
+			logging.getLogger("huf").exception("Gateway provider hooks failed to load: %s", module)
 
 
 def get(provider: str | None, hook_name: str, default: Any = None) -> Any:

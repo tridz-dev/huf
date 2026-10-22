@@ -71,3 +71,34 @@ class TestCallSiteDefaults(unittest.TestCase):
 		finally:
 			provider_hooks._HOOKS.pop(("Demo3", "typing"), None)
 		self.assertEqual(len(calls), 1)
+
+
+class TestLoaderIsolation(unittest.TestCase):
+	def test_broken_telegram_module_does_not_unregister_whatsapp(self):
+		import importlib
+		import sys
+		from unittest.mock import patch
+
+		from huf.ai.gateway_adapters import provider_hooks as ph
+
+		saved_hooks = dict(ph._HOOKS)
+		saved_loaded = ph._loaded
+		real_import = importlib.import_module
+
+		def fake_import(name, *args, **kwargs):
+			if name.endswith(".telegram_hooks"):
+				raise ImportError("simulated broken telegram module")
+			return real_import(name, *args, **kwargs)
+
+		try:
+			ph._HOOKS.clear()
+			ph._loaded = False
+			for mod in ("huf.ai.gateway_adapters.whatsapp_hooks", "huf.ai.gateway_adapters.telegram_hooks"):
+				sys.modules.pop(mod, None)
+			with patch.object(importlib, "import_module", side_effect=fake_import):
+				self.assertIsNotNone(ph.get("WhatsApp", "normalize_sender"))
+				self.assertIsNone(ph.get("Telegram", "normalize_sender"))
+		finally:
+			ph._HOOKS.clear()
+			ph._HOOKS.update(saved_hooks)
+			ph._loaded = saved_loaded
