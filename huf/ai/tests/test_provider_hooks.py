@@ -36,7 +36,7 @@ class TestProviderHooksRegistry(unittest.TestCase):
 		self.assertTrue(provider_hooks.get("WhatsApp", "send_reply"))
 		self.assertTrue(provider_hooks.get("WhatsApp", "consent_required")())
 		self.assertFalse(provider_hooks.get("Telegram", "consent_required")())
-		self.assertIsNone(provider_hooks.get("Telegram", "send_reply"))
+		self.assertTrue(provider_hooks.get("Telegram", "send_reply"))  # registered by WP-1b
 		self.assertEqual(provider_hooks.call("Telegram", "normalize_sender", "Sender", 42), "42")
 
 

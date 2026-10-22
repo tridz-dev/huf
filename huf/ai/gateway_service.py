@@ -2584,6 +2584,17 @@ def _send_whatsapp_reply(event, gateway, agent_run_id, response: str) -> dict:
     return result
 
 
+def _send_telegram_reply(event, gateway, agent_run_id, response: str) -> dict:
+    """Telegram reply: opt-out gate, format + split, idempotent part send (see telegram_pipeline)."""
+    from huf.ai.gateway_adapters import telegram_pipeline as tp
+
+    if agent_run_id:
+        event.db_set("agent_run", agent_run_id)
+    if event.sender_id and is_opted_out(gateway, event.sender_id):
+        return _suppress_reply(event, agent_run_id, tp.OPT_OUT_NOTE)
+    return _attempt_reply_parts(event, gateway, tp.make_parts(response) or [response], 1)
+
+
 def _send_voice_only(event, gateway, response: str) -> bool:
     from huf.ai import whatsapp_voice_reply as voice
 
@@ -2609,6 +2620,9 @@ def _finish_voice_only(event, gateway) -> dict:
 
 
 def _attempt_reply_parts(event, gateway, parts: list[str], attempt: int) -> dict:
+    attempt_hook = provider_hooks.get(gateway.provider, "attempt_reply_parts")
+    if attempt_hook is not None:
+        return attempt_hook(event, gateway, parts, attempt)
     from huf.ai.gateway_webhook import send_gateway_parts, touch_last_event
 
     try:
