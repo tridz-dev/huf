@@ -21,7 +21,7 @@ than only the calling module's ``frappe``, since this module holds its own
 
 Webhook and App Event trigger types have no legacy counterpart (confirmed
 by grep across the whole ``huf/`` tree -- see
-``Tracks/safwan-erooth.ChatSidebarTriggerStage2/CONTEXT.md``), so for those
+``the ChatSidebarTriggerStage2 workspace track``), so for those
 two "legacy" simply means "disabled" rather than "fall back to an old path".
 """
 

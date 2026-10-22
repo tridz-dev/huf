@@ -5,7 +5,7 @@
 # Plain-channel-message support would require a separate always-on bot process (24h+ effort)
 # out of proportion to the 8-13h slash-command-only path. Product owner chose not to invest.
 # Code remains intact and unreachable; provider registration will not proceed.
-# See HUF_INTEGRATIONS_GATEWAYS_AUDIT.md and Tracks/safwan-erooth.IntegrationsGatewaysAudit
+# See HUF_INTEGRATIONS_GATEWAYS_AUDIT.md and the IntegrationsGatewaysAudit workspace track
 # for full analysis.
 
 from __future__ import annotations

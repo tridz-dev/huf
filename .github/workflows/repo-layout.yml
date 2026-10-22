@@ -5,6 +5,9 @@ on:
   push:
     branches: [develop, pre-develop, main]
 
+permissions:
+  contents: read
+
 jobs:
   layout:
     name: Repo layout · no workspace files
