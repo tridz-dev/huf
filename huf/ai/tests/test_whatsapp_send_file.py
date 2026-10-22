@@ -18,7 +18,7 @@ import frappe
 from huf.ai import whatsapp_send_file as sf
 from huf.ai import whatsapp_send_scope as scope
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
-from huf.ai.tests.fake_graph import FakeGraph, FakeResponse
+from huf.testing.fake_graph import FakeGraph, FakeResponse
 from huf.ai.tools import whatsapp
 
 GW = "GW-SENDFILE"

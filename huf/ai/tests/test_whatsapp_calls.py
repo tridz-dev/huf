@@ -23,7 +23,7 @@ from huf.ai.gateway_adapters import whatsapp_calls as wc  # noqa: E402
 from huf.ai.gateway_adapters.whatsapp_bridge import BridgeError  # noqa: E402
 
 SDP = "v=0\r\ns=secret-offer-with-ips 10.1.2.3\r\n"
-SIM_PATH = Path(__file__).resolve().parent / "wa_call_sim.py"
+SIM_PATH = Path(__file__).resolve().parents[2] / "testing" / "wa_call_sim.py"
 
 
 def _spec():

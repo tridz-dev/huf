@@ -22,7 +22,7 @@ same way it is already refused for a user with no permission at all.
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.tests.factories import make_user
+from huf.testing.factories import make_user
 
 GATEWAY_INTEGRATION_DOCTYPES = (
 	"Gateway",

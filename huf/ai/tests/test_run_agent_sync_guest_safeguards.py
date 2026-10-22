@@ -31,7 +31,7 @@ from frappe.tests import IntegrationTestCase
 
 from huf.ai.agent_integration import run_agent_sync
 from huf.ai.chat_api import run_agent_sync_chat
-from huf.ai.tests.factories import make_agent, make_ai_provider_and_model
+from huf.testing.factories import make_agent, make_ai_provider_and_model
 
 PREFIX = "ST-R4.3-guest-safeguards"
 

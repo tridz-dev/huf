@@ -170,7 +170,7 @@ class TestGatewayRunAsUserEndToEnd(unittest.TestCase):
 		self.exec_user = _make_user("e2e", [GATEWAY_ROLE])
 		self.assertEqual(frappe.get_roles(self.exec_user).count("System Manager"), 0)
 
-		from huf.ai.tests.factories import make_agent, make_ai_model, make_ai_provider
+		from huf.testing.factories import make_agent, make_ai_model, make_ai_provider
 
 		if frappe.db.exists("AI Provider", "Test_Provider"):
 			provider = frappe.get_doc("AI Provider", "Test_Provider")

@@ -24,7 +24,7 @@ from huf.ai import flow_api
 from huf.ai.flow_engine import run_flow
 from huf.ai.gateway_service import process_gateway_event
 from huf.ai.tests import test_whatsapp_full_stack as fs
-from huf.ai.tests.factories import make_agent_tool_function
+from huf.testing.factories import make_agent_tool_function
 
 LIMITS = {
 	"max_nodes": 20,

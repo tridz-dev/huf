@@ -8,7 +8,7 @@ in-process fake media session:
     greeting -> caller file(s) heard (in memory only) -> bot reply file(s) -> terminate
 
 Run inside the bench python (needs frappe importable, no site):
-    python huf/ai/tests/wa_call_sim.py [--caller 15550001111] [--unknown]
+    python huf/testing/wa_call_sim.py [--caller 15550001111] [--unknown]
 """
 from __future__ import annotations
 

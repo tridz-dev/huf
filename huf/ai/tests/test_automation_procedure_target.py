@@ -16,7 +16,7 @@ from frappe.tests import IntegrationTestCase
 
 from huf.ai import automation_hooks, automation_scheduler, flow_api
 from huf.ai.automation_runner import run_automation
-from huf.ai.tests.factories import make_agent, make_ai_model, make_ai_provider, make_automation
+from huf.testing.factories import make_agent, make_ai_model, make_ai_provider, make_automation
 
 PREFIX = "_Test PrE"
 
@@ -441,7 +441,7 @@ class TestFlowTriggerApi(_Base):
 
 class TestRunAsEscalation(_Base):
 	def _user(self, roles):
-		from huf.ai.tests.factories import make_user
+		from huf.testing.factories import make_user
 
 		user = make_user(email=f"prE-{frappe.generate_hash(length=8)}@example.com", roles=roles)
 		self._users = getattr(self, "_users", []) + [user.name]
@@ -649,7 +649,7 @@ class TestLegacyFlowScheduleCleanup(_Base):
 
 class TestListFlowToolsHidesCodeExecution(_Base):
 	def test_code_execution_tools_not_offered(self):
-		from huf.ai.tests.factories import make_agent_tool_function
+		from huf.testing.factories import make_agent_tool_function
 
 		docs = {
 			"code": make_agent_tool_function(types="Code Execution"),

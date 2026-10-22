@@ -29,7 +29,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.agent_config_api import get_agent_section, update_agent_section
-from huf.ai.tests.factories import make_agent, make_ai_provider_and_model, make_user
+from huf.testing.factories import make_agent, make_ai_provider_and_model, make_user
 
 
 class TestAgentConfigPersistenceP0(IntegrationTestCase):

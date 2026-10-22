@@ -24,7 +24,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from huf.ai.tests import _stub_env
+from huf.testing import _stub_env
 
 _stub_env.install()
 

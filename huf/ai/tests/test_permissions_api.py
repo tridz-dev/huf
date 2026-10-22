@@ -16,7 +16,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.permissions_api import invite_user, update_user_role
-from huf.ai.tests.factories import make_user
+from huf.testing.factories import make_user
 
 
 class TestPermissionsAPISelfTargetingAndCapabilities(IntegrationTestCase):

@@ -182,7 +182,7 @@ class TestSavedFlowInvokesRealTool(unittest.TestCase):
 		self._names.setdefault(doctype, []).append(name)
 
 	def _make_tool(self):
-		from huf.ai.tests.factories import create_test_tool_doc
+		from huf.testing.factories import create_test_tool_doc
 
 		doc = create_test_tool_doc(
 			"deterministic_add",

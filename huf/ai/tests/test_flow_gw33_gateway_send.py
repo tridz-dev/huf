@@ -41,7 +41,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai import flow_api
-from huf.ai.tests.factories import make_agent_tool_function
+from huf.testing.factories import make_agent_tool_function
 
 
 class TestToolCallSendsWithoutLLMTurn(IntegrationTestCase):

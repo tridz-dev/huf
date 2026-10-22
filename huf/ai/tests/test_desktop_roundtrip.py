@@ -23,7 +23,7 @@ import frappe
 
 from huf.ai import agent_integration as ai
 from huf.ai import desktop_executor as dx
-from huf.ai.tests import desktop_test_helpers as h
+from huf.testing import desktop_test_helpers as h
 from huf.ai.tools import desktop_workspace as dw
 
 CAPS = ["fs.read", "fs.write", "fs.trash", "exec"]

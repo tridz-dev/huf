@@ -48,7 +48,7 @@ import unittest
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.tests.factories import (
+from huf.testing.factories import (
     create_test_tool_doc,
     make_agent,
     make_mcp_server,

@@ -56,7 +56,7 @@ Hooks include ruff (import sort, lint, format), prettier, eslint, file checks, `
 | Product code (backend) | `huf/` (e.g. `huf/ai/`, `huf/huf/doctype/<doctype>/`) | Keep product modules free of `test_` in the name. |
 | Feature tests, library code under `huf/ai/` | `<package>/tests/test_<name>.py` (co-located, e.g. `huf/ai/decision/tests/`) | Test-only helpers do not go here. |
 | Feature tests, DocType | `test_<doctype>.py` directly in the DocType folder (e.g. `huf/huf/doctype/flow_definition/test_flow_definition_schema.py`) | Same folder as the controller. |
-| Test infrastructure (fakes, factories, helpers) | `huf/testing/` (planned, created in a later change) | Never name these files `test_*`. |
+| Test infrastructure (fakes, factories, helpers) | `huf/testing/` | Never name these files `test_*`. |
 | Fixtures | Next to the tests that use them, in a `fixtures/` folder under that tests package | Do not put fixtures in `docs/`. |
 | Docs | `docs/` | Repo-level entry points stay at the root (`AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`). |
 | Scripts | `scripts/` | Includes `huf-verify.sh` and the layout guard. |

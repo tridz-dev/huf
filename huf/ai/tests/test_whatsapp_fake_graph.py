@@ -5,7 +5,7 @@
 
 Nothing in the code under test is patched at the HTTP layer: the WhatsApp Account
 ``url`` and the Integration Settings ``graph_api_url`` point at
-:class:`~huf.ai.tests.fake_graph_server.FakeGraphServer`, so genuine ``requests``
+:class:`~huf.testing.fake_graph_server.FakeGraphServer`, so genuine ``requests``
 calls are made (by Huf and by frappe_whatsapp). The fake validates every request
 against Meta's documented schema, and each test fails if it recorded a violation.
 
@@ -28,7 +28,7 @@ from huf.ai import gateway_service, gateway_webhook, whatsapp_management as mgmt
 from huf.ai.gateway_adapters import GatewayInboundRequest, whatsapp_bridge as bridge
 from huf.ai.gateway_adapters.types import GatewayAttachment, GatewayReply
 from huf.ai.gateway_adapters.whatsapp import WhatsAppWindowClosed
-from huf.ai.tests import fake_graph_server as fake
+from huf.testing import fake_graph_server as fake
 from huf.ai.tools import whatsapp as wa_tool
 
 SENDER = "15551234567"

@@ -1,6 +1,6 @@
 """Layer A (mocked-frappe, no bench) unit tests for the deterministic test
 tool family (``huf/ai/tool_testing.py``) and their ``Agent Tool Function``
-factories (``huf/ai/tests/factories.py``).
+factories (``huf/testing/factories.py``).
 
 These are real, invokable tool handlers (NOT the provider-level simulation
 in ``huf/ai/providers/test_provider.py``). The tests here prove:
@@ -67,7 +67,7 @@ if "agents" not in sys.modules:
     sys.modules["agents"] = agents_mock
 
 from huf.ai import tool_testing  # noqa: E402
-from huf.ai.tests import factories  # noqa: E402
+from huf.testing import factories  # noqa: E402
 from huf.ai.tool_registry import PermissionAwareToolRegistry  # noqa: E402
 from huf.ai.sdk_tools import get_function_from_name, create_function_tool  # noqa: E402
 

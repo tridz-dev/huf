@@ -3,7 +3,7 @@
 These are real, importable ``Agent Tool Function`` handler functions — the
 same kind of plain Python function that ``huf/ai/tool_functions.py`` defines
 for CRUD tools — wired to real DocType records via the factories in
-``huf/ai/tests/factories.py``. They exist so tests can exercise the REAL
+``huf/testing/factories.py``. They exist so tests can exercise the REAL
 tool-execution path (assembly -> permission check -> handler resolution ->
 handler call -> result -> persistence) end to end, instead of the
 provider-level simulation in ``huf/ai/providers/test_provider.py``.
@@ -86,7 +86,7 @@ def permission_protected_mutation(record_id: str, value: str) -> dict:
     and at invocation time (``on_invoke_tool``, huf/ai/sdk_tools.py:437-441).
 
     The corresponding ``Agent Tool Function`` fixture
-    (``huf.ai.tests.factories.build_permission_protected_mutation_tool_spec`` /
+    (``huf.testing.factories.build_permission_protected_mutation_tool_spec`` /
     ``create_test_tool_doc``) sets ``required_permission="write"`` and a
     ``reference_doctype`` so the
     real ``TOOL_PERMISSIONS``/``required_permission`` gate in

@@ -9,7 +9,7 @@ real time. Introduce a testable clock/time abstraction where required. Test:
 current time -> advance -> due automation -> scheduler decision."
 
 No `time.sleep()` anywhere in this file. "Now" is entirely driven by
-`huf.ai.tests.clock_helpers.FakeClock`, patched into `automation_scheduler`'s
+`huf.testing.clock_helpers.FakeClock`, patched into `automation_scheduler`'s
 own `now_datetime`/`add_to_date` names via `patch_clock` (see that module's
 docstring for why a name-patch, not a product-code clock dependency, is the
 right seam here).
@@ -38,7 +38,7 @@ if "frappe.utils" not in sys.modules:
 	sys.modules["frappe"].utils = utils_mock
 
 from huf.ai import automation_scheduler  # noqa: E402
-from huf.ai.tests.clock_helpers import FakeClock, patch_clock  # noqa: E402
+from huf.testing.clock_helpers import FakeClock, patch_clock  # noqa: E402
 
 
 def _due_trigger(name="AT-0001", automation="AUTO-0001", next_execution=None,

@@ -42,7 +42,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.agent_integration import run_agent_sync
-from huf.ai.tests.factories import make_agent, make_ai_model, make_ai_provider
+from huf.testing.factories import make_agent, make_ai_model, make_ai_provider
 
 PREFIX = "_Test P0CI"
 

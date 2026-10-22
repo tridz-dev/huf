@@ -20,7 +20,7 @@ from unittest import mock
 import frappe
 
 from huf.ai import desktop_executor as dx
-from huf.ai.tests import desktop_test_helpers as h
+from huf.testing import desktop_test_helpers as h
 
 EXEC_ID = "exec-0001-aaaa"
 FP = "0123456789abcdef"
