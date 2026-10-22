@@ -3,7 +3,7 @@ from frappe import _
 from frappe.utils import add_to_date, now_datetime
 
 from .agent_integration import _run_async_safely, run_agent_sync
-from .automation_runtime_flag import automation_runtime_is_new
+from huf.ai.automation_runtime_flag import automation_runtime_is_new
 
 _PROVIDER_BRAND_TO_BATCH_JOB_PROVIDER = {
 	"openai": "OpenAI",

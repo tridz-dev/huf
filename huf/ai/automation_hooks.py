@@ -6,7 +6,7 @@ from frappe.utils import now_datetime
 from frappe.utils.background_jobs import enqueue
 from frappe.utils.safe_exec import get_safe_globals, safe_eval
 
-from .automation_runtime_flag import automation_runtime_is_new
+from huf.ai.automation_runtime_flag import automation_runtime_is_new
 
 CACHE_KEY = "huf:doc_event_automation_triggers"
 
@@ -191,7 +191,7 @@ def run_automation_for_doc(trigger, doc, event_name, initiating_user=None, origi
 	originating_run_id: the Agent Run ID that triggered this automation (if any),
 	threaded from frappe.flags.huf_current_agent_run_id at hook time (ST-09.5).
 	"""
-	from .automation_runner import run_automation
+	from huf.ai.automation_runner import run_automation
 
 	original_user = frappe.session.user
 	try:
