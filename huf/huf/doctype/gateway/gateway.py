@@ -49,6 +49,7 @@ class Gateway(Document):
         self._validate_consent_settings()
         self._validate_reply_settings()
         self._validate_send_scope()
+        self._validate_telegram_settings()
 
         # ST-04.4: Validate required credentials are set
         if self.is_enabled and self.provider:
@@ -61,6 +62,33 @@ class Gateway(Document):
         # ST-04.4: Verify execution_user has access to default_agent if set
         if self.is_enabled and self.execution_user and self.default_agent:
             self._validate_agent_access()
+
+    def _validate_telegram_settings(self):
+        """Telegram-only checks; other providers are untouched."""
+        if self.provider != "Telegram":
+            return
+        if self.get("telegram_join_policy") == "Agent" and not self.default_agent:
+            frappe.throw(_("Group join requests handled by an agent need a default agent. Choose one first."))
+        if self.get("telegram_business_policy") in ("Draft", "Reply") and not (
+            (self.default_target_type == "Agent" and self.default_agent)
+            or (self.default_target_type == "Flow" and self.default_flow)
+        ):
+            frappe.throw(
+                _("Business chats set to {0} need a default agent or flow to write the replies.").format(
+                    self.telegram_business_policy
+                )
+            )
+        raw = (self.get("telegram_bot_allowlist") or "").strip()
+        if raw:
+            parts = [p.strip() for p in raw.replace("\n", ",").split(",") if p.strip()]
+            bad = [p for p in parts if not p.isdigit()]
+            if bad:
+                frappe.throw(
+                    _("Allowed bots must be numeric Telegram bot IDs separated by commas. Not valid: {0}").format(
+                        ", ".join(bad[:5])
+                    )
+                )
+            self.telegram_bot_allowlist = ", ".join(parts)
 
     def _validate_whatsapp(self):
         """Derive ``phone_number_id`` and enforce the one-enabled-gateway-per-number rule.
