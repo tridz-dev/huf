@@ -199,9 +199,9 @@ def apply_membership_change(gateway, parsed) -> dict:
 		from huf.ai import gateway_service as svc
 
 		if transition == "removed":
-			svc._record_opt_out(gateway, parsed.chat_id, f"Chat {parsed.chat_id}")
+			svc._record_room_opt_out(gateway, parsed.chat_id)
 		elif transition == "added":
-			svc._record_opt_in(gateway, parsed.chat_id)
+			svc._record_room_opt_in(gateway, parsed.chat_id)
 	return _ack(parsed.kind, transition, transition=transition)
 
 
@@ -223,6 +223,48 @@ def handle_membership(gateway, adapter, parsed, request) -> dict | None:
 	return ack
 
 
+def migrate_room(gateway, old_id: str, new_id: str) -> bool:
+	"""Basic group -> supergroup: re-key the approved Room entry to the new chat id. Idempotent; the old entry
+	stays as Revoked with a note. Returns True when a new entry was created."""
+	from frappe.utils import now_datetime
+
+	from huf.ai import gateway_service as svc
+
+	if not old_id or not new_id or old_id == new_id:
+		return False
+	if svc._has_access_entry(gateway, "Room", new_id):
+		return False
+	if not svc._has_access_entry(gateway, "Room", old_id):
+		return False
+	old = svc._live_room_entry(gateway, old_id)
+	old_doc = frappe.get_doc("Gateway Access Entry", old["name"])
+	frappe.get_doc(
+		{
+			"doctype": "Gateway Access Entry",
+			"gateway": gateway.name,
+			"entry_type": "Room",
+			"provider": gateway.provider,
+			"external_id": svc._normalize_sender_for_provider(gateway.provider, "Room", new_id),
+			"state": "Approved",
+			"display_label": old_doc.display_label,
+			"expires_at": old_doc.expires_at,
+			"approved_by": old_doc.approved_by,
+			"approved_at": now_datetime(),
+			"notes": f"Migrated from chat {old_id} (basic group promoted to supergroup)",
+		}
+	).insert(ignore_permissions=True)
+	svc._save_entry(
+		old_doc,
+		{
+			"state": svc.ENTRY_STATE_REVOKED,
+			"revoked_at": now_datetime(),
+			"notes": f"{old_doc.notes or ''}\nMigrated to supergroup {new_id}".strip(),
+		},
+	)
+	frappe.logger("huf").info(f"Telegram gateway {gateway.name}: room {old_id} migrated to {new_id}")
+	return True
+
+
 def handle_service_message(gateway, adapter, parsed, request) -> dict | None:
 	"""``new_chat_members`` / ``left_chat_member`` service messages in groups. None for any other message."""
 	if parsed.kind != "message" or parsed.chat_type == "private":
@@ -230,6 +272,15 @@ def handle_service_message(gateway, adapter, parsed, request) -> dict | None:
 	message = (parsed.raw or {}).get("message")
 	if not isinstance(message, dict):
 		return None
+	old_id, new_id = message.get("migrate_from_chat_id"), message.get("migrate_to_chat_id")
+	if old_id is not None or new_id is not None:
+		# migrate_to arrives in the old chat, migrate_from in the new one; both name the pair.
+		if new_id is not None:
+			old_id = parsed.chat_id
+		else:
+			new_id = parsed.chat_id
+		moved = migrate_room(gateway, str(old_id), str(new_id))
+		return _ack("migrate_chat", "migrated" if moved else "nothing to migrate", old=str(old_id), new=str(new_id))
 	if message.get("new_chat_members"):
 		welcomed = 0
 		try:

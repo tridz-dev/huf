@@ -475,6 +475,8 @@ class TestMembership(E2EBase):
 		super().setUp()
 		self.opt_out = self.patch("huf.ai.gateway_service._record_opt_out")
 		self.opt_in = self.patch("huf.ai.gateway_service._record_opt_in")
+		self.room_out = self.patch("huf.ai.gateway_service._record_room_opt_out")
+		self.room_in = self.patch("huf.ai.gateway_service._record_room_opt_in")
 
 	def group_membership(self, old, new, update_id):
 		return {
@@ -491,14 +493,16 @@ class TestMembership(E2EBase):
 	def test_bot_removed_from_group_marks_chat_unsendable(self):
 		result = self.send(self.group_membership("member", "left", 5001))
 		self.assertTrue(result["success"])
-		self.opt_out.assert_called_once()
-		self.assertEqual(str(self.opt_out.call_args.args[1]), "-100123")
+		self.room_out.assert_called_once()
+		self.assertEqual(str(self.room_out.call_args.args[1]), "-100123")
+		self.opt_out.assert_not_called()
 		self.ingest.assert_not_called()
 
 	def test_bot_readded_to_group_restores_chat(self):
 		self.send(self.group_membership("left", "member", 5002))
-		self.opt_in.assert_called_once()
-		self.assertEqual(str(self.opt_in.call_args.args[1]), "-100123")
+		self.room_in.assert_called_once()
+		self.assertEqual(str(self.room_in.call_args.args[1]), "-100123")
+		self.opt_in.assert_not_called()
 		self.opt_out.assert_not_called()
 
 	def test_private_block_marks_known_sender_unsendable_and_unknown_is_not_stored(self):

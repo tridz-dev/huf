@@ -94,6 +94,29 @@ def _handle_block_change(gateway, parsed: TelegramUpdate) -> dict:
 
 
 _UPDATE_HANDLERS: dict[str, Any] = {}
+_ADDRESSING_KINDS = ("message", "edited_message")
+
+
+def _with_addressing(gateway, adapter, parsed: TelegramUpdate) -> TelegramUpdate:
+	"""Group messages: ``mentioned`` means addressed to THIS bot (its @mention, text_mention, /cmd@bot, a reply
+	to one of its messages), not just any mention entity. The bot identity is the token's numeric id plus a
+	cached getMe username; with no username only id-based signals (reply to the bot, text_mention) count.
+	"""
+	if parsed.kind not in _ADDRESSING_KINDS or not parsed.is_room or parsed.is_channel:
+		return parsed
+	msg = (parsed.raw or {}).get(parsed.kind)
+	if not isinstance(msg, dict):
+		return parsed
+	try:
+		from huf.ai.gateway_adapters import telegram_modes_hooks as mh, telegram_threads as th
+
+		addressed = th.is_addressed_to_bot(msg, mh._bot_username(adapter, gateway), mh._own_id(adapter))
+	except Exception:
+		frappe.logger("huf").warning("Telegram addressing check failed", exc_info=True)
+		return parsed
+	return replace(parsed, mentioned=addressed)
+
+
 _DEDUP_TTL = 600
 
 
@@ -188,6 +211,7 @@ def handle_update(gateway, adapter, request) -> dict | None:
 			return _ack("callback_query", decision["reason"])
 		edit_message_id = decision["edit_message_id"]
 		parsed = replace(parsed, text=decision["text"])
+	parsed = _with_addressing(gateway, adapter, parsed)
 	try:
 		event = to_event(parsed, ())
 	except ValueError:

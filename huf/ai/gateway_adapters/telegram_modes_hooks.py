@@ -61,6 +61,8 @@ def prefilter(gateway, adapter, parsed, request) -> dict | None:
 		return None
 	chat_id = parsed.chat_id or (msg.get("chat") or {}).get("id")
 	thread = th.thread_id_for_reply(msg)
+	if msg.get("migrate_to_chat_id") or msg.get("migrate_from_chat_id"):
+		return None  # supergroup migration service message: handled by telegram_groups
 	bot_id = lg.sender_bot_id(msg)
 	if bot_id is None:
 		if parsed.is_room and not parsed.is_channel and getattr(gateway, "mention_required", 0):

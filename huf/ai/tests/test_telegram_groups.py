@@ -108,15 +108,18 @@ class TestMembership(unittest.TestCase):
 		from huf.ai.gateway_adapters.telegram_inbound import parse_update
 
 		p = parse_update(load_fixture("my_chat_member_group_removed"))
-		with mock.patch("huf.ai.gateway_service._record_opt_out") as out:
+		with mock.patch("huf.ai.gateway_service._record_room_opt_out") as out, mock.patch(
+			"huf.ai.gateway_service._record_opt_out"
+		) as sender_out:
 			res = groups.handle_membership(GW, ad, p, None)
 		self.assertEqual(res["transition"], "removed")
-		out.assert_called_once_with(GW, "-1001234", "Chat -1001234")
+		out.assert_called_once_with(GW, "-1001234")
+		sender_out.assert_not_called()  # a chat id must never become a Sender entry
 
 	def test_bot_added_restores_and_promoted_logged(self):
 		from huf.ai.gateway_adapters.telegram_inbound import parse_update
 
-		with mock.patch("huf.ai.gateway_service._record_opt_in") as inn:
+		with mock.patch("huf.ai.gateway_service._record_room_opt_in") as inn:
 			res = groups.handle_membership(GW, None, parse_update(load_fixture("my_chat_member_group_added")), None)
 		self.assertEqual(res["transition"], "added")
 		inn.assert_called_once_with(GW, "-1001234")
