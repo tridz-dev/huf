@@ -166,7 +166,8 @@ class TestDuplicateReply(unittest.TestCase):
 	def test_similarity(self):
 		sent = ["Sure, the report is ready and attached below."]
 		self.assertTrue(tp.duplicates_tool_reply(sent, "Sure! The report is ready and attached below."))
-		self.assertFalse(tp.duplicates_tool_reply(sent, "Also, remember the meeting at 5pm tomorrow."))
+		# any successful current-chat tool send suppresses the final plain reply
+		self.assertTrue(tp.duplicates_tool_reply(sent, "Also, remember the meeting at 5pm tomorrow."))
 		self.assertFalse(tp.duplicates_tool_reply([], "anything"))
 
 	def test_scope_records_and_reads(self):
@@ -193,10 +194,10 @@ class TestDuplicateReply(unittest.TestCase):
 		self.assertTrue(res["reply_suppressed"])
 		self.assertEqual(res["status"], "Succeeded")
 
-	def test_different_final_sent_as_followup(self):
+	def test_final_after_tool_send_is_suppressed(self):
 		res, att, _ = self._send(["Done, I created the task."], "By the way the deadline moved to Friday.")
-		att.assert_called_once()
-		self.assertEqual(res["status"], "Succeeded")
+		att.assert_not_called()
+		self.assertEqual(res.get("reply_status"), "suppressed")
 
 
 if __name__ == "__main__":

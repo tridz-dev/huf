@@ -1325,8 +1325,9 @@ def _scoped_dispatch(action: str, handler: Callable[..., str], kwargs: dict) -> 
             if not _succeeded(raw):
                 scope.release_send(gateway, run_id)
             else:
-                if action in ("send_message", "reply_to_message") and scope.normalize_chat(kwargs["chat_id"]) == scope.current_chat(run_id):
-                    scope.note_current_chat_text(gateway, run_id, kwargs.get("text") or kwargs.get("message"))
+                if action in SEND_ACTIONS and scope.normalize_chat(kwargs["chat_id"]) == scope.current_chat(run_id):
+                    scope.note_current_chat_text(
+                        gateway, run_id, kwargs.get("text") or kwargs.get("message") or kwargs.get("caption") or f"[{action}]")
                 _record_tool_send(gateway, kwargs["chat_id"], action, kwargs, raw)
             return raw
     return handler(**kwargs)

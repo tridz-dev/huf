@@ -29,8 +29,8 @@ MEDIA_TEXT = (
 	"\"value\": \"...\", \"caption\": \"\"}]}; sent before the text. Typing is automatic; inbound reactions are recorded."
 )
 TOOL_TEXT = (
-	"telegram tool: send_message/reply_to_message, set_reaction, edit_message_text, delete_message (use the "
-	"ids from 'Current message'; edit your earlier messages via ids from list_messages), list_templates/send_template, polls, topics, get_file."
+	"telegram tool: send_message/reply_to_message, set_reaction, edit_message_text, delete_message (ids from "
+	"'Current message'/list_messages); after a tool send here, add no final text; list_templates/send_template, polls, topics, get_file."
 )
 FLAG_TEXT = {
 	FLAG_GROUP_ADMIN: "telegram_admin tool: group moderation (requires confirm).",
