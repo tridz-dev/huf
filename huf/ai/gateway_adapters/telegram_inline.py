@@ -11,8 +11,8 @@ query, inline_message_id?}. ``savePreparedInlineMessage`` is Mini App only and o
 Rules: only admitted senders get results (same policy as DMs, evaluated read-only: no pairing request is
 created, no code is sent); unknown senders get ONE "Pair this bot" article plus a start_parameter button and no
 data. Results come from deterministic resolvers only (no LLM inside the 10s inline window); resolvers run as
-the gateway ``execution_user`` and never as Administrator. Pressing "Run" on the default result is handled by
-the existing callback flow later; this module only produces the spec.
+the gateway ``execution_user`` and never as Administrator. The default result posts the question as plain
+text; a Run action is not wired (inline-sent messages carry no chat id for callback verification).
 """
 
 from __future__ import annotations
@@ -60,7 +60,8 @@ def _article(result_id: str, title: str, text: str, description: str = "", reply
 
 
 def default_resolver(query: str, user_ctx: dict) -> list[dict]:
-	"""'Ask the assistant: <query>' with a Run callback button (spec only; no agent execution here)."""
+	"""'Ask the assistant: <query>' article that posts the question as text (no button: inline-sent messages
+	carry no chat id, so a signed callback could not be verified; add a Run action when that path exists)."""
 	query = (query or "").strip()
 	if not query:
 		return []
@@ -70,10 +71,7 @@ def default_resolver(query: str, user_ctx: dict) -> list[dict]:
 			f"ask-{digest}",
 			f"Ask the assistant: {query[:80]}",
 			f"Ask the assistant: {query[:500]}",
-			description="Tap Run on the sent message to get an answer",
-			reply_markup={
-				"inline_keyboard": [[{"text": "Run", "callback_data": f"{RUN_CALLBACK_PREFIX}:{digest}"}]]
-			},
+			description="Send this question as a message",
 		)
 	]
 

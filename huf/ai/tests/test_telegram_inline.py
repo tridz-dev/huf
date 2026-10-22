@@ -63,7 +63,7 @@ class TestInline(Base):
 		r = payload["results"][0]
 		self.assertEqual(r["type"], "article")
 		self.assertIn("Ask the assistant: weekly report", r["title"])
-		self.assertEqual(r["reply_markup"]["inline_keyboard"][0][0]["text"], "Run")
+		self.assertNotIn("reply_markup", r)
 		self.assertEqual(payload["cache_time"], 30)
 		self.assertTrue(payload["is_personal"])
 		self.assertNotIn("button", payload)

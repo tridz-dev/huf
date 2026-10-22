@@ -66,3 +66,62 @@ class TestRawKeyDispatch(unittest.TestCase):
 		ing.register_update_handler("stopped_message_generation", lambda g, a, p, r: {"success": True, "stopped": 1})
 		with patch.object(ing, "classify", return_value="other"):
 			self.assertEqual(ing.handle_update(MagicMock(), adapter, MagicMock())["stopped"], 1)
+
+
+class TestDuplicateUpdates(unittest.TestCase):
+	def test_second_delivery_of_the_same_update_is_acked_without_running_handlers(self):
+		adapter = MagicMock()
+		parsed = MagicMock()
+		parsed.kind = "inline_query"
+		parsed.update_id = "555"
+		parsed.bot_blocked = False
+		parsed.bot_unblocked = False
+		parsed.raw = {"update_id": 555, "inline_query": {}}
+		adapter.parse_update.return_value = parsed
+		calls = []
+		saved = dict(ing._UPDATE_HANDLERS)
+		ing._UPDATE_HANDLERS["inline_query"] = lambda g, a, p, r: calls.append(1) or {"success": True}
+		gateway = MagicMock()
+		gateway.name = "GW"
+		try:
+			with patch.object(ing, "classify", return_value="other"), patch.object(
+				ing, "_first_delivery", side_effect=[True, False]
+			):
+				first = ing.handle_update(gateway, adapter, MagicMock())
+				second = ing.handle_update(gateway, adapter, MagicMock())
+		finally:
+			ing._UPDATE_HANDLERS.clear()
+			ing._UPDATE_HANDLERS.update(saved)
+		self.assertTrue(first["success"])
+		self.assertEqual(len(calls), 1)
+		self.assertTrue(second["success"])
+
+
+class TestFailedHandlerReleasesClaim(unittest.TestCase):
+	def test_handler_exception_releases_the_dedup_claim_and_reraises(self):
+		adapter = MagicMock()
+		parsed = MagicMock()
+		parsed.kind = "inline_query"
+		parsed.update_id = "556"
+		parsed.bot_blocked = False
+		parsed.bot_unblocked = False
+		parsed.raw = {"update_id": 556, "inline_query": {}}
+		adapter.parse_update.return_value = parsed
+
+		def boom(*args):
+			raise RuntimeError("handler failed")
+
+		saved = dict(ing._UPDATE_HANDLERS)
+		ing._UPDATE_HANDLERS["inline_query"] = boom
+		gateway = MagicMock()
+		gateway.name = "GW"
+		try:
+			with patch.object(ing, "classify", return_value="other"), patch.object(
+				ing, "_first_delivery", return_value=True
+			), patch.object(ing, "_release_delivery") as release:
+				with self.assertRaises(RuntimeError):
+					ing.handle_update(gateway, adapter, MagicMock())
+		finally:
+			ing._UPDATE_HANDLERS.clear()
+			ing._UPDATE_HANDLERS.update(saved)
+		release.assert_called_once_with("GW", "556")

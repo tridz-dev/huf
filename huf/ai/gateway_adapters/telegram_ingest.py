@@ -94,6 +94,32 @@ def _handle_block_change(gateway, parsed: TelegramUpdate) -> dict:
 
 
 _UPDATE_HANDLERS: dict[str, Any] = {}
+_DEDUP_TTL = 600
+
+
+def _release_delivery(gateway_name: str, update_id: Any) -> None:
+	try:
+		frappe.cache().delete_value(f"huf_tg_upd:{gateway_name}:{update_id}")
+	except Exception:
+		pass
+
+
+def _first_delivery(gateway_name: str, update_id: Any) -> bool:
+	"""True the first time this update id is seen for the gateway (Telegram retries are acked, not re-run)."""
+	if not update_id:
+		return True
+	key = f"huf_tg_upd:{gateway_name}:{update_id}"
+	try:
+		cache = frappe.cache()
+		make_key = getattr(cache, "make_key", None)
+		if make_key is not None and hasattr(cache, "set"):
+			return bool(cache.set(make_key(key), 1, nx=True, ex=_DEDUP_TTL))
+		if cache.get_value(key):
+			return False
+		cache.set_value(key, 1, expires_in_sec=_DEDUP_TTL)
+	except Exception:
+		pass
+	return True
 
 
 def register_update_handler(key: str, fn) -> None:
@@ -120,7 +146,14 @@ def handle_update(gateway, adapter, request) -> dict | None:
 	for key in dict.fromkeys((parsed.kind, raw_key, category)):
 		handler = _UPDATE_HANDLERS.get(key)
 		if handler is not None:
-			handled = handler(gateway, adapter, parsed, request)
+			# Message ingestion is deduplicated by ingest_gateway_event; this guards handlers that short-circuit.
+			if not _first_delivery(gateway.name, parsed.update_id):
+				return _ack(parsed.kind, "duplicate update ignored")
+			try:
+				handled = handler(gateway, adapter, parsed, request)
+			except Exception:
+				_release_delivery(gateway.name, parsed.update_id)  # let Telegram's retry run the handler again
+				raise
 			if handled is not None:
 				return handled
 	if category in ("membership", "business", "other"):
