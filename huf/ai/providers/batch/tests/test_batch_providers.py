@@ -14,7 +14,7 @@ this file establishes its own minimal convention rather than following one.
 
 Runnable standalone (no bench/site needed) via:
 
-	python3 -m unittest huf.ai.providers.batch.test_batch_providers
+	python3 -m unittest huf.ai.providers.batch.tests.test_batch_providers
 
 ...PROVIDED `frappe`, `litellm`, and `anthropic` are not already importable
 for real in the environment in a way that conflicts with the stubs below (the
@@ -69,7 +69,7 @@ except Exception:
 
 _SKIP_REASON = (
 	"standalone mocked tests -- run outside bench: "
-	"python3 -m unittest huf.ai.providers.batch.test_batch_providers"
+	"python3 -m unittest huf.ai.providers.batch.tests.test_batch_providers"
 )
 
 
@@ -128,8 +128,8 @@ if not _HAS_REAL_FRAPPE:
 	# re-imported/re-executed.
 	import pathlib
 
-	_THIS_DIR = pathlib.Path(__file__).resolve().parent  # .../huf/ai/providers/batch
-	_PROVIDERS_DIR = _THIS_DIR.parent  # .../huf/ai/providers
+	_BATCH_DIR = pathlib.Path(__file__).resolve().parents[1]  # .../huf/ai/providers/batch
+	_PROVIDERS_DIR = _BATCH_DIR.parent  # .../huf/ai/providers
 	_AI_DIR = _PROVIDERS_DIR.parent  # .../huf/ai
 	_HUF_PKG_DIR = _AI_DIR.parent  # .../huf (the inner "huf" Python package dir)
 

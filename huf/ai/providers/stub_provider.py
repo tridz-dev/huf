@@ -10,8 +10,8 @@ description below): this module is invoked from INSIDE
 body, before any `frappe.get_doc`/network/LLM-SDK code runs:
 
     if provider and provider.lower() == "test_provider":
-        from huf.ai.providers import test_provider as _test_provider
-        return await _test_provider.run(agent, enhanced_prompt, provider, model, context=context)
+        from huf.ai.providers import stub_provider as _stub_provider
+        return await _stub_provider.run(agent, enhanced_prompt, provider, model, context=context)
 
 Why not the `huf.ai.run.RunProvider.run()` custom-provider fallback branch
 (`frappe.get_module(f"huf.ai.providers.{provider.lower()}")`), which this
@@ -615,7 +615,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
     Invoked from inside `huf.ai.providers.litellm.run()` itself (see the
     `provider.lower() == "test_provider"` check near the top of that
-    coroutine), and `return await test_provider.run(...)`-ed from there, so
+    coroutine), and `return await stub_provider.run(...)`-ed from there, so
     it is awaited by the same real call site that awaits a real litellm
     call: `await RunProvider.run(...)` in
     `huf/ai/agent_integration.py:1620`. See this module's top-level
@@ -627,7 +627,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
     scenario = _extract_scenario(enhanced_prompt)
     if scenario is None:
         raise UnknownTestScenarioError(
-            "huf.ai.providers.test_provider.run() requires a "
+            "huf.ai.providers.stub_provider.run() requires a "
             "'__TEST_SCENARIO__:<NAME>' marker somewhere in enhanced_prompt; "
             "none was found."
         )
@@ -714,7 +714,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
     the `provider.lower() == "test_provider"` check mirroring `run()`'s own,
     near the top of that async-generator function), and re-yielded
     chunk-by-chunk from there via `async for _chunk in
-    test_provider.run_stream(...): yield _chunk`. See this module's
+    stub_provider.run_stream(...): yield _chunk`. See this module's
     top-level docstring's "TEST_STREAM_INTERRUPT and the run_stream export"
     section for why `run_stream()` needs its own export and dispatch table
     distinct from `run()`'s.
@@ -724,7 +724,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
     scenario = _extract_scenario(enhanced_prompt)
     if scenario is None:
         raise UnknownTestScenarioError(
-            "huf.ai.providers.test_provider.run_stream() requires a "
+            "huf.ai.providers.stub_provider.run_stream() requires a "
             "'__TEST_SCENARIO__:<NAME>' marker somewhere in enhanced_prompt; "
             "none was found."
         )

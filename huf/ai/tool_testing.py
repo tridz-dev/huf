@@ -6,7 +6,7 @@ for CRUD tools — wired to real DocType records via the factories in
 ``huf/testing/factories.py``. They exist so tests can exercise the REAL
 tool-execution path (assembly -> permission check -> handler resolution ->
 handler call -> result -> persistence) end to end, instead of the
-provider-level simulation in ``huf/ai/providers/test_provider.py``.
+provider-level simulation in ``huf/ai/providers/stub_provider.py``.
 
 Handler signature/return-type convention matched from
 ``huf/ai/tool_functions.py`` (see e.g. ``get_document``/``update_document``

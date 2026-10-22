@@ -11,13 +11,13 @@ Every test submits a run through the real whitelisted entrypoint
 functions like ``_execute_agent_run`` directly), then asserts against real
 DB rows (``Agent Run`` / ``Agent Message`` / ``Agent Tool Call``). Provider
 behavior is made fully deterministic by routing the Agent through the HUF
-Test Provider (``huf/ai/providers/test_provider.py``), not a real LLM.
+Test Provider (``huf/ai/providers/stub_provider.py``), not a real LLM.
 
 Routing to the test provider
 -----------------------------
 ``huf.ai.providers.litellm.run()`` special-cases ``provider.lower() ==
 "test_provider"`` near the top of its body (before any real network/DB
-work), delegating to ``huf.ai.providers.test_provider.run()``. The
+work), delegating to ``huf.ai.providers.stub_provider.run()``. The
 ``provider`` value that reaches that check is the ``AI Provider`` document's
 own ``name`` (NOT ``provider_brand``) -- verified by reading:
 
@@ -42,7 +42,7 @@ document's ``name`` matters here.
 Scenario selection
 -------------------
 A scenario is chosen by embedding ``__TEST_SCENARIO__:<NAME>`` anywhere in
-the ``prompt`` argument to ``run_agent_sync`` -- ``test_provider.py``'s
+the ``prompt`` argument to ``run_agent_sync`` -- ``stub_provider.py``'s
 ``_extract_scenario`` scans the whole (wrapped) prompt, not just a prefix.
 
 Queue-first vs. direct execution
@@ -228,7 +228,7 @@ class TestAgentRuntimeP0(IntegrationTestCase):
     def test_agent_run_002_tool_single_scenario_persists_tool_call_and_message(self):
         """TEST_TOOL_SINGLE: the provider returns an already-executed
         tool_call_item/tool_call_output_item pair (per
-        ``test_provider.py``'s "Tool-call scenario contract" -- HUF's own
+        ``stub_provider.py``'s "Tool-call scenario contract" -- HUF's own
         loop in ``litellm.py::run()`` executes tools itself; there is no
         outer-loop tool invocation to fake). ``agent_integration.py``'s
         replay code (~line 1628-1780, ``process_tool_call``/``log_tool_call``)
@@ -308,7 +308,7 @@ class TestAgentRuntimeP0(IntegrationTestCase):
     def test_agent_run_003_provider_timeout_ends_run_failed_without_crashing(self):
         """TEST_PROVIDER_TIMEOUT: the test provider raises
         ``ProviderUnavailableError`` (the exact class/shape a real litellm
-        timeout produces -- see ``test_provider.py``'s docstring). The real
+        timeout produces -- see ``stub_provider.py``'s docstring). The real
         ``except ProviderUnavailableError as e:`` boundary handler in
         ``_execute_agent_run`` (``agent_integration.py`` ~line 2058) must
         catch it, set the ``Agent Run`` to status "Failed" with a persisted

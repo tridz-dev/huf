@@ -5,7 +5,7 @@
 Layer A (mocked-frappe, no bench) unit tests for the HUF Test Provider.
 
 Covers:
-- test_provider.run() directly, for the TEST_TEXT scenario: return shape
+- stub_provider.run() directly, for the TEST_TEXT scenario: return shape
   matches the litellm.SimpleResult contract (final_output/usage/new_items/cost)
   and content is fixed/deterministic.
 - Marker extraction is robust to the prompt-wrapping agent_integration.py
@@ -29,7 +29,7 @@ Covers:
   `await RunProvider.run(...)`) awaits it, which is after
   `RunProvider.run()`'s own try/except has already returned. A synchronous
   `side_effect` mock does not simulate anything a real Agent Run can produce;
-  see `huf/ai/providers/test_provider.py`'s module docstring for the full
+  see `huf/ai/providers/stub_provider.py`'s module docstring for the full
   analysis.
 
 Run standalone (no bench) from the repo root:
@@ -86,13 +86,13 @@ except ImportError:
     sys.modules["litellm"] = litellm_pkg_mock
     sys.modules["litellm.utils"] = MagicMock()
 
-from huf.ai.providers import test_provider  # noqa: E402
+from huf.ai.providers import stub_provider  # noqa: E402
 from huf.ai.providers import litellm as litellm_module  # noqa: E402
 
 
 def _make_agent(**overrides):
     """Minimal fake `agent` object exposing only the attributes litellm.run()
-    actually reads (instructions/tools/max_turns) - test_provider.run() does
+    actually reads (instructions/tools/max_turns) - stub_provider.run() does
     not read any of them for TEST_TEXT, but we mirror the shape so this fake
     is interchangeable with the one used in test_provider_error_contract.py.
     """
@@ -106,14 +106,14 @@ def _make_agent(**overrides):
 
 
 class TestTestProviderDirect(unittest.TestCase):
-    """Exercise huf.ai.providers.test_provider.run() directly."""
+    """Exercise huf.ai.providers.stub_provider.run() directly."""
 
     def test_test_text_scenario_returns_litellm_shaped_result(self):
         agent = _make_agent()
         prompt = "__TEST_SCENARIO__:TEST_TEXT"
 
         result = asyncio.run(
-            test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+            stub_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
         )
 
         # Shape: matches litellm.SimpleResult's public contract exactly.
@@ -123,7 +123,7 @@ class TestTestProviderDirect(unittest.TestCase):
         self.assertTrue(hasattr(result, "cost"))
 
         # Content: fixed and deterministic.
-        self.assertEqual(result.final_output, test_provider._TEST_TEXT_RESPONSE)
+        self.assertEqual(result.final_output, stub_provider._TEST_TEXT_RESPONSE)
         self.assertEqual(result.new_items, [])
         self.assertEqual(result.cost, 0.0)
 
@@ -131,8 +131,8 @@ class TestTestProviderDirect(unittest.TestCase):
         # the same way agent_integration.py reads it (dict.get, not getattr -
         # see huf/ai/agent_integration.py:1791-1792).
         self.assertIsInstance(result.usage, dict)
-        self.assertEqual(result.usage.get("input_tokens"), test_provider._TEST_TEXT_INPUT_TOKENS)
-        self.assertEqual(result.usage.get("output_tokens"), test_provider._TEST_TEXT_OUTPUT_TOKENS)
+        self.assertEqual(result.usage.get("input_tokens"), stub_provider._TEST_TEXT_INPUT_TOKENS)
+        self.assertEqual(result.usage.get("output_tokens"), stub_provider._TEST_TEXT_OUTPUT_TOKENS)
 
     def test_marker_found_even_when_not_at_prompt_start(self):
         """agent_integration.py wraps the raw prompt inside a larger template
@@ -147,28 +147,28 @@ class TestTestProviderDirect(unittest.TestCase):
         )
 
         result = asyncio.run(
-            test_provider.run(agent, wrapped_prompt, "Test_Provider", "test-model")
+            stub_provider.run(agent, wrapped_prompt, "Test_Provider", "test-model")
         )
-        self.assertEqual(result.final_output, test_provider._TEST_TEXT_RESPONSE)
+        self.assertEqual(result.final_output, stub_provider._TEST_TEXT_RESPONSE)
 
     def test_missing_marker_raises(self):
         agent = _make_agent()
-        with self.assertRaises(test_provider.UnknownTestScenarioError):
-            asyncio.run(test_provider.run(agent, "no marker here", "Test_Provider", "test-model"))
+        with self.assertRaises(stub_provider.UnknownTestScenarioError):
+            asyncio.run(stub_provider.run(agent, "no marker here", "Test_Provider", "test-model"))
 
     def test_unknown_scenario_name_raises(self):
         agent = _make_agent()
         prompt = "__TEST_SCENARIO__:NOT_A_REAL_SCENARIO"
-        with self.assertRaises(test_provider.UnknownTestScenarioError):
-            asyncio.run(test_provider.run(agent, prompt, "Test_Provider", "test-model"))
+        with self.assertRaises(stub_provider.UnknownTestScenarioError):
+            asyncio.run(stub_provider.run(agent, prompt, "Test_Provider", "test-model"))
 
     def test_repeated_calls_are_deterministic(self):
         """Same input -> byte-identical output, every time (no randomness, no clock)."""
         agent = _make_agent()
         prompt = "__TEST_SCENARIO__:TEST_TEXT"
 
-        first = asyncio.run(test_provider.run(agent, prompt, "Test_Provider", "test-model"))
-        second = asyncio.run(test_provider.run(agent, prompt, "Test_Provider", "test-model"))
+        first = asyncio.run(stub_provider.run(agent, prompt, "Test_Provider", "test-model"))
+        second = asyncio.run(stub_provider.run(agent, prompt, "Test_Provider", "test-model"))
 
         self.assertEqual(first.final_output, second.final_output)
         self.assertEqual(first.usage, second.usage)
@@ -178,7 +178,7 @@ class TestTestProviderDirect(unittest.TestCase):
 class TestTestProviderToolScenarios(unittest.TestCase):
     """Exercise TEST_TOOL_SINGLE / TEST_TOOL_MULTI / TEST_PROVIDER_TIMEOUT
     directly, proving their shape matches litellm.run()'s real
-    success/error paths (see test_provider.py's "Tool-call scenario
+    success/error paths (see stub_provider.py's "Tool-call scenario
     contract" docstring section for the contract this asserts against).
     """
 
@@ -200,7 +200,7 @@ class TestTestProviderToolScenarios(unittest.TestCase):
         prompt = "__TEST_SCENARIO__:TEST_TOOL_SINGLE"
 
         result = asyncio.run(
-            test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+            stub_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
         )
 
         # Shape: matches litellm.SimpleResult's public contract exactly.
@@ -209,14 +209,14 @@ class TestTestProviderToolScenarios(unittest.TestCase):
         self.assertTrue(hasattr(result, "new_items"))
         self.assertTrue(hasattr(result, "cost"))
 
-        self.assertEqual(result.final_output, test_provider._TEST_TOOL_SINGLE_RESPONSE)
+        self.assertEqual(result.final_output, stub_provider._TEST_TOOL_SINGLE_RESPONSE)
         self.assertEqual(result.cost, 0.0)
         self.assertIsInstance(result.usage, dict)
         self.assertEqual(
-            result.usage.get("input_tokens"), test_provider._TEST_TOOL_SINGLE_INPUT_TOKENS
+            result.usage.get("input_tokens"), stub_provider._TEST_TOOL_SINGLE_INPUT_TOKENS
         )
         self.assertEqual(
-            result.usage.get("output_tokens"), test_provider._TEST_TOOL_SINGLE_OUTPUT_TOKENS
+            result.usage.get("output_tokens"), stub_provider._TEST_TOOL_SINGLE_OUTPUT_TOKENS
         )
 
         # new_items: exactly one already-executed tool_call_item/
@@ -225,12 +225,12 @@ class TestTestProviderToolScenarios(unittest.TestCase):
         # instruction for some outer loop to go execute a tool.
         self.assertEqual(len(result.new_items), 2)
         self._assert_tool_call_item_shape(
-            result.new_items[0], test_provider._TOOL_NAME, test_provider._TOOL_ARGS,
-            test_provider._TOOL_CALL_ID_1,
+            result.new_items[0], stub_provider._TOOL_NAME, stub_provider._TOOL_ARGS,
+            stub_provider._TOOL_CALL_ID_1,
         )
         self._assert_tool_call_output_item_shape(
-            result.new_items[1], test_provider._TOOL_NAME, test_provider._TOOL_RESULT,
-            test_provider._TOOL_CALL_ID_1,
+            result.new_items[1], stub_provider._TOOL_NAME, stub_provider._TOOL_RESULT,
+            stub_provider._TOOL_CALL_ID_1,
         )
 
     def test_tool_multi_returns_two_executed_tool_call_round_trips(self):
@@ -238,30 +238,30 @@ class TestTestProviderToolScenarios(unittest.TestCase):
         prompt = "__TEST_SCENARIO__:TEST_TOOL_MULTI"
 
         result = asyncio.run(
-            test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+            stub_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
         )
 
-        self.assertEqual(result.final_output, test_provider._TEST_TOOL_MULTI_RESPONSE)
+        self.assertEqual(result.final_output, stub_provider._TEST_TOOL_MULTI_RESPONSE)
         self.assertEqual(result.cost, 0.0)
 
         # Two full round-trips = four new_items, alternating call/output,
         # each pair matching litellm.run()'s per-round-loop append shape.
         self.assertEqual(len(result.new_items), 4)
         self._assert_tool_call_item_shape(
-            result.new_items[0], test_provider._TOOL_NAME, test_provider._TOOL_ARGS,
-            test_provider._TOOL_CALL_ID_1,
+            result.new_items[0], stub_provider._TOOL_NAME, stub_provider._TOOL_ARGS,
+            stub_provider._TOOL_CALL_ID_1,
         )
         self._assert_tool_call_output_item_shape(
-            result.new_items[1], test_provider._TOOL_NAME, test_provider._TOOL_RESULT,
-            test_provider._TOOL_CALL_ID_1,
+            result.new_items[1], stub_provider._TOOL_NAME, stub_provider._TOOL_RESULT,
+            stub_provider._TOOL_CALL_ID_1,
         )
         self._assert_tool_call_item_shape(
-            result.new_items[2], test_provider._TOOL_NAME_2, test_provider._TOOL_ARGS_2,
-            test_provider._TOOL_CALL_ID_2,
+            result.new_items[2], stub_provider._TOOL_NAME_2, stub_provider._TOOL_ARGS_2,
+            stub_provider._TOOL_CALL_ID_2,
         )
         self._assert_tool_call_output_item_shape(
-            result.new_items[3], test_provider._TOOL_NAME_2, test_provider._TOOL_RESULT_2,
-            test_provider._TOOL_CALL_ID_2,
+            result.new_items[3], stub_provider._TOOL_NAME_2, stub_provider._TOOL_RESULT_2,
+            stub_provider._TOOL_CALL_ID_2,
         )
 
     def test_provider_timeout_raises_provider_unavailable_error(self):
@@ -276,15 +276,15 @@ class TestTestProviderToolScenarios(unittest.TestCase):
 
         with self.assertRaises(litellm_module.ProviderUnavailableError) as ctx:
             asyncio.run(
-                test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+                stub_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
             )
 
         exc = ctx.exception
         self.assertTrue(hasattr(exc, "public_message"))
         self.assertTrue(hasattr(exc, "log_message"))
-        self.assertEqual(exc.public_message, test_provider._TEST_TIMEOUT_MESSAGE)
-        self.assertEqual(exc.log_message, test_provider._TEST_TIMEOUT_LOG_MESSAGE)
-        self.assertEqual(str(exc), test_provider._TEST_TIMEOUT_MESSAGE)
+        self.assertEqual(exc.public_message, stub_provider._TEST_TIMEOUT_MESSAGE)
+        self.assertEqual(exc.log_message, stub_provider._TEST_TIMEOUT_LOG_MESSAGE)
+        self.assertEqual(str(exc), stub_provider._TEST_TIMEOUT_MESSAGE)
 
     def test_provider_timeout_via_real_litellm_routing(self):
         """Exercise the exact same real routing path as TEST_TEXT's routing
@@ -304,14 +304,14 @@ class TestTestProviderToolScenarios(unittest.TestCase):
 class TestLiteLLMRunRoutesToTestProvider(unittest.TestCase):
     """Prove the REAL routing path: `huf.ai.providers.litellm.run()`'s own
     `provider.lower() == "test_provider"` check dispatches to
-    `huf.ai.providers.test_provider`, before any `frappe.get_doc`/network
+    `huf.ai.providers.stub_provider`, before any `frappe.get_doc`/network
     code in `litellm.run()` executes.
 
     This exercises the exact coroutine `RunProvider.run()` returns and the
     real caller (`agent_integration.py:1620`) awaits - not a mocked
     synchronous failure of `litellm.run` routed through the
     `huf.ai.run.RunProvider.run()` custom-provider fallback branch (which,
-    per this module's and `test_provider.py`'s docstrings, is not reachable
+    per this module's and `stub_provider.py`'s docstrings, is not reachable
     on a real litellm execution failure since `litellm.run` is `async def`).
     """
 
@@ -331,7 +331,7 @@ class TestLiteLLMRunRoutesToTestProvider(unittest.TestCase):
                 litellm_module.run(agent, prompt, "Test_Provider", "test-model", context=None)
             )
 
-            self.assertEqual(result.final_output, test_provider._TEST_TEXT_RESPONSE)
+            self.assertEqual(result.final_output, stub_provider._TEST_TEXT_RESPONSE)
             self.assertEqual(result.cost, 0.0)
             mock_get_doc.assert_not_called()
 
@@ -346,7 +346,7 @@ class TestLiteLLMRunRoutesToTestProvider(unittest.TestCase):
         result = asyncio.run(
             litellm_module.run(agent, prompt, "TEST_PROVIDER", "test-model", context=None)
         )
-        self.assertEqual(result.final_output, test_provider._TEST_TEXT_RESPONSE)
+        self.assertEqual(result.final_output, stub_provider._TEST_TEXT_RESPONSE)
 
     def test_real_provider_name_does_not_route_to_test_provider(self):
         """Sanity check the routing check is scoped: a real provider name
@@ -383,7 +383,7 @@ class TestLiteLLMRunRoutesToTestProvider(unittest.TestCase):
 class TestTestProviderErrorScenarios(unittest.TestCase):
     """Exercise TEST_PROVIDER_429 / _400 / _401 / _500, each of which mirrors
     a distinct real error-normalization bucket in `litellm.run()` (see
-    `test_provider.py`'s "Error scenarios" docstring section for the full
+    `stub_provider.py`'s "Error scenarios" docstring section for the full
     citation of each)."""
 
     def test_provider_429_raises_bare_rate_limit_error(self):
@@ -397,7 +397,7 @@ class TestTestProviderErrorScenarios(unittest.TestCase):
 
         with self.assertRaises(litellm_pkg.RateLimitError) as ctx:
             asyncio.run(
-                test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+                stub_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
             )
         self.assertIn("TEST_PROVIDER_429", str(ctx.exception))
         # Must NOT be a ProviderUnavailableError - that's the whole point of
@@ -413,11 +413,11 @@ class TestTestProviderErrorScenarios(unittest.TestCase):
 
         with self.assertRaises(litellm_module.ProviderUnavailableError) as ctx:
             asyncio.run(
-                test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+                stub_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
             )
         exc = ctx.exception
-        self.assertEqual(exc.public_message, test_provider._TEST_400_MESSAGE)
-        self.assertEqual(exc.log_message, test_provider._TEST_400_LOG_MESSAGE)
+        self.assertEqual(exc.public_message, stub_provider._TEST_400_MESSAGE)
+        self.assertEqual(exc.log_message, stub_provider._TEST_400_LOG_MESSAGE)
 
     def test_provider_401_raises_not_configured_message(self):
         """Mirrors _sanitize_provider_error_message's 'invalid api key'
@@ -427,14 +427,14 @@ class TestTestProviderErrorScenarios(unittest.TestCase):
 
         with self.assertRaises(litellm_module.ProviderUnavailableError) as ctx:
             asyncio.run(
-                test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+                stub_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
             )
         exc = ctx.exception
         self.assertEqual(
             exc.public_message,
             "This provider is not configured correctly yet. Add or update its API key and try again.",
         )
-        self.assertEqual(exc.public_message, test_provider._TEST_401_MESSAGE)
+        self.assertEqual(exc.public_message, stub_provider._TEST_401_MESSAGE)
 
     def test_provider_500_raises_temporarily_unavailable_message(self):
         """Mirrors the explicit InternalServerError clause (litellm.py
@@ -444,19 +444,19 @@ class TestTestProviderErrorScenarios(unittest.TestCase):
 
         with self.assertRaises(litellm_module.ProviderUnavailableError) as ctx:
             asyncio.run(
-                test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+                stub_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
             )
         exc = ctx.exception
         self.assertEqual(
             exc.public_message,
             "The AI provider is temporarily unavailable. Please try again in a moment.",
         )
-        self.assertEqual(exc.public_message, test_provider._TEST_500_MESSAGE)
+        self.assertEqual(exc.public_message, stub_provider._TEST_500_MESSAGE)
 
     def test_error_scenarios_route_through_real_litellm_dispatch(self):
         """Each error scenario must also raise identically when reached via
         the real litellm.run() routing check (provider.lower() ==
-        'test_provider'), not just when test_provider.run() is called
+        'test_provider'), not just when stub_provider.run() is called
         directly."""
         agent = _make_agent()
 
@@ -484,7 +484,7 @@ class TestTestProviderStructuredOutputAndCachedUsage(unittest.TestCase):
         prompt = "__TEST_SCENARIO__:TEST_STRUCTURED_OUTPUT"
 
         result = asyncio.run(
-            test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+            stub_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
         )
 
         # final_output is just choice.content (litellm.py ~1082-1083) - no
@@ -505,7 +505,7 @@ class TestTestProviderStructuredOutputAndCachedUsage(unittest.TestCase):
         result = asyncio.run(
             litellm_module.run(agent, prompt, "Test_Provider", "test-model", context=context)
         )
-        self.assertEqual(result.final_output, test_provider._TEST_STRUCTURED_OUTPUT_RESPONSE)
+        self.assertEqual(result.final_output, stub_provider._TEST_STRUCTURED_OUTPUT_RESPONSE)
 
     def test_cached_usage_scenario_has_nonzero_cached_tokens(self):
         """Field names must match litellm.run()'s own total_usage accounting
@@ -515,26 +515,26 @@ class TestTestProviderStructuredOutputAndCachedUsage(unittest.TestCase):
         prompt = "__TEST_SCENARIO__:TEST_CACHED_USAGE"
 
         result = asyncio.run(
-            test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+            stub_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
         )
 
-        self.assertEqual(result.final_output, test_provider._TEST_TEXT_RESPONSE)
+        self.assertEqual(result.final_output, stub_provider._TEST_TEXT_RESPONSE)
         self.assertEqual(
-            result.usage.get("cached_tokens"), test_provider._TEST_CACHED_USAGE_CACHED_TOKENS
+            result.usage.get("cached_tokens"), stub_provider._TEST_CACHED_USAGE_CACHED_TOKENS
         )
         self.assertGreater(result.usage.get("cached_tokens"), 0)
         self.assertEqual(result.usage.get("cache_creation_tokens"), 0)
         self.assertEqual(result.usage.get("cache_miss_tokens"), 0)
         self.assertEqual(
-            result.usage.get("input_tokens"), test_provider._TEST_CACHED_USAGE_INPUT_TOKENS
+            result.usage.get("input_tokens"), stub_provider._TEST_CACHED_USAGE_INPUT_TOKENS
         )
         self.assertEqual(
-            result.usage.get("output_tokens"), test_provider._TEST_CACHED_USAGE_OUTPUT_TOKENS
+            result.usage.get("output_tokens"), stub_provider._TEST_CACHED_USAGE_OUTPUT_TOKENS
         )
 
 
 class TestTestProviderStreamInterrupt(unittest.TestCase):
-    """Exercise TEST_STREAM_INTERRUPT via test_provider.run_stream() directly
+    """Exercise TEST_STREAM_INTERRUPT via stub_provider.run_stream() directly
     and via the real litellm.run_stream() routing check."""
 
     def _collect_chunks(self, agen):
@@ -548,28 +548,28 @@ class TestTestProviderStreamInterrupt(unittest.TestCase):
         prompt = "__TEST_SCENARIO__:TEST_STREAM_INTERRUPT"
 
         chunks = self._collect_chunks(
-            test_provider.run_stream(agent, prompt, "Test_Provider", "test-model", context=None)
+            stub_provider.run_stream(agent, prompt, "Test_Provider", "test-model", context=None)
         )
 
         # Two normal delta chunks, then exactly one error chunk, then done -
         # never a raised exception out of the generator.
         self.assertEqual(len(chunks), 3)
         self.assertEqual(chunks[0]["type"], "delta")
-        self.assertEqual(chunks[0]["content"], test_provider._STREAM_INTERRUPT_CHUNKS[0])
+        self.assertEqual(chunks[0]["content"], stub_provider._STREAM_INTERRUPT_CHUNKS[0])
         self.assertEqual(chunks[1]["type"], "delta")
-        self.assertEqual(chunks[1]["content"], test_provider._STREAM_INTERRUPT_CHUNKS[1])
+        self.assertEqual(chunks[1]["content"], stub_provider._STREAM_INTERRUPT_CHUNKS[1])
         self.assertEqual(
             chunks[1]["full_response"],
-            test_provider._STREAM_INTERRUPT_CHUNKS[0] + test_provider._STREAM_INTERRUPT_CHUNKS[1],
+            stub_provider._STREAM_INTERRUPT_CHUNKS[0] + stub_provider._STREAM_INTERRUPT_CHUNKS[1],
         )
         self.assertEqual(chunks[2]["type"], "error")
-        self.assertEqual(chunks[2]["error"], test_provider._STREAM_INTERRUPT_ERROR_MESSAGE)
+        self.assertEqual(chunks[2]["error"], stub_provider._STREAM_INTERRUPT_ERROR_MESSAGE)
         self.assertTrue(chunks[2]["error"].startswith("LiteLLM Streaming Error:"))
 
     def test_stream_interrupt_via_real_litellm_run_stream_routing(self):
         """Prove litellm.run_stream()'s own early
         provider.lower() == 'test_provider' check dispatches to
-        test_provider.run_stream() and re-yields every chunk, before any
+        stub_provider.run_stream() and re-yields every chunk, before any
         frappe.get_doc/network code in run_stream()'s real body executes."""
         agent = _make_agent()
         prompt = "__TEST_SCENARIO__:TEST_STREAM_INTERRUPT"
@@ -585,17 +585,17 @@ class TestTestProviderStreamInterrupt(unittest.TestCase):
 
     def test_missing_marker_raises_in_run_stream(self):
         agent = _make_agent()
-        with self.assertRaises(test_provider.UnknownTestScenarioError):
+        with self.assertRaises(stub_provider.UnknownTestScenarioError):
             self._collect_chunks(
-                test_provider.run_stream(agent, "no marker here", "Test_Provider", "test-model")
+                stub_provider.run_stream(agent, "no marker here", "Test_Provider", "test-model")
             )
 
     def test_unknown_stream_scenario_raises(self):
         agent = _make_agent()
         prompt = "__TEST_SCENARIO__:NOT_A_REAL_STREAM_SCENARIO"
-        with self.assertRaises(test_provider.UnknownTestScenarioError):
+        with self.assertRaises(stub_provider.UnknownTestScenarioError):
             self._collect_chunks(
-                test_provider.run_stream(agent, prompt, "Test_Provider", "test-model")
+                stub_provider.run_stream(agent, prompt, "Test_Provider", "test-model")
             )
 
 

@@ -46,7 +46,7 @@ from huf.testing.factories import make_agent, make_ai_model, make_ai_provider
 
 PREFIX = "_Test P0CI"
 
-# Mirrors huf/ai/providers/test_provider.py's TEST_TEXT/TEST_CACHED_USAGE
+# Mirrors huf/ai/providers/stub_provider.py's TEST_TEXT/TEST_CACHED_USAGE
 # constants: both scenarios report input_tokens=10, output_tokens=8;
 # TEST_CACHED_USAGE additionally reports 6 of those 10 input tokens as
 # cache reads (cached_tokens=6). Chosen here to compute the exact expected

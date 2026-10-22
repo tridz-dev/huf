@@ -15,9 +15,9 @@ AGENT-GOLDEN-002, ...) that each:
        `instructions`, `max_turns` — see `huf/ai/agent_integration.py:499`
        and `huf/ai/providers/litellm.py:688`), wired to provider
        "test_provider" with the right `__TEST_SCENARIO__:<NAME>` marker
-       (see `huf/ai/providers/test_provider.py`'s module docstring for the
+       (see `huf/ai/providers/stub_provider.py`'s module docstring for the
        full triggering-mechanism contract).
-    2. Call `huf.ai.providers.test_provider.run()` directly (this is the
+    2. Call `huf.ai.providers.stub_provider.run()` directly (this is the
        exact function `huf.ai.providers.litellm.run()` delegates to for
        `provider.lower() == "test_provider"`, awaited from the same real
        call site a real provider call is — see that module's docstring for
@@ -94,7 +94,7 @@ def _bootstrap_bare_environment():
     """This worktree has no live Frappe bench (see docs/testing/CURRENT_STATE.md
     and this file's module docstring). `huf/__init__.py` does an unconditional
     `import frappe` at package-import time, and
-    `huf.ai.providers.test_provider`'s error scenarios lazily
+    `huf.ai.providers.stub_provider`'s error scenarios lazily
     `from huf.ai.providers.litellm import ProviderUnavailableError` — which in
     turn pulls in the real `litellm` pip package plus a long transitive chain
     of `huf.ai.*` modules that themselves import `frappe`. None of that is
@@ -102,21 +102,21 @@ def _bootstrap_bare_environment():
 
     If a real `frappe` install IS available (the future bench-backed pass,
     or CI), this function is a complete no-op: the `import frappe` probe
-    below succeeds and nothing is stubbed, so `huf.ai.providers.test_provider`
+    below succeeds and nothing is stubbed, so `huf.ai.providers.stub_provider`
     and `huf.ai.providers.litellm` import and behave exactly as real product
     code.
 
     Otherwise, we pre-seed `sys.modules` with minimal stand-ins so that
     `huf`/`huf.ai`/`huf.ai.providers` resolve to their REAL on-disk packages
-    (via `__path__`, so `test_provider.py`'s actual file is still what gets
-    imported and executed — nothing about `test_provider.py`'s own logic is
+    (via `__path__`, so `stub_provider.py`'s actual file is still what gets
+    imported and executed — nothing about `stub_provider.py`'s own logic is
     faked), while short-circuiting the one transitive dependency this
     harness's scenarios actually touch: `huf.ai.providers.litellm`'s
     `ProviderUnavailableError` class, stood in with an identical
     `(public_message, log_message=None)` shape (see that class's real
-    definition cited in `huf/ai/providers/test_provider.py`'s module
+    definition cited in `huf/ai/providers/stub_provider.py`'s module
     docstring, "Error scenarios" section). This does NOT change what
-    `test_provider.py` does — it only lets Python resolve one import name
+    `stub_provider.py` does — it only lets Python resolve one import name
     without needing the real `litellm` pip package or the rest of `huf.ai`'s
     transitive import graph, which this harness's provider-level scenarios
     do not exercise.
@@ -146,7 +146,7 @@ def _bootstrap_bare_environment():
         class ProviderUnavailableError(Exception):
             """Stand-in for the real `huf.ai.providers.litellm.ProviderUnavailableError`
             (see that class's real definition/contract cited in
-            `test_provider.py`'s module docstring) — same
+            `stub_provider.py`'s module docstring) — same
             `(public_message, log_message=None)` shape, same two readable
             attributes. Only used so this bare-environment harness can
             exercise `TEST_PROVIDER_500` without the real `litellm` pip
@@ -163,7 +163,7 @@ def _bootstrap_bare_environment():
 
 _bootstrap_bare_environment()
 
-from huf.ai.providers import test_provider  # noqa: E402
+from huf.ai.providers import stub_provider  # noqa: E402
 from huf.testing.golden_trace import normalize_trace, to_json  # noqa: E402
 
 
@@ -183,9 +183,9 @@ def _make_fake_agent(agent_name, instructions, max_turns=10):
 
 
 def _run_provider(agent, prompt, context=None):
-    """Call `test_provider.run()` synchronously (it's a coroutine function;
+    """Call `stub_provider.run()` synchronously (it's a coroutine function;
     there is no running event loop in a plain unittest run)."""
-    return asyncio.run(test_provider.run(agent, prompt, agent.provider, agent.model, context=context))
+    return asyncio.run(stub_provider.run(agent, prompt, agent.provider, agent.model, context=context))
 
 
 def _synthesize_messages(agent, prompt, result):
