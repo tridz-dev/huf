@@ -309,6 +309,14 @@ class AgentManager:
             logger.warning(f"Failed to load knowledge tools: {e!s}")
             self.tool_setup_warnings.append(f"knowledge tools: {e!s}")
 
+        # A caller handling untrusted content (Telegram secretary runs) restricts the run to an explicit
+        # allow-list of tool names; an empty list means no tools at all.
+        allowed = getattr(frappe.local, "huf_run_tool_allowlist", None)
+        if allowed is not None:
+            allowed = set(allowed)
+            self.tools = [t for t in self.tools if getattr(t, "name", None) in allowed]
+            self.tool_sources = {k: v for k, v in self.tool_sources.items() if k in allowed}
+
     def _setup_client(self):
         """Configure OpenAI provider from the AI Provider doc"""
         api_key = self.settings.get_password("api_key")
