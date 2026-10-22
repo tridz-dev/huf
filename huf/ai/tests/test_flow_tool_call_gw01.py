@@ -42,7 +42,9 @@ from unittest.mock import MagicMock, patch
 # at import time, which a bare top-level MagicMock cannot satisfy.
 if "frappe" not in sys.modules:
 	sys.modules["frappe"] = MagicMock()
-for _mod_name in (
+# Only stub submodules when frappe itself is a stub; under a real frappe these
+# are importable and a MagicMock here would shadow them for the whole process.
+for _mod_name in () if not isinstance(sys.modules["frappe"], MagicMock) else (
 	"frappe.utils",
 	"frappe.desk",
 	"frappe.desk.doctype",

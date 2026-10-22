@@ -114,7 +114,7 @@ class TestAgentContextArtifactRecordAuth(IntegrationTestCase):
 		try:
 			from huf.ai.record_access import user_can_read_context_artifact
 
-			with patch("huf.permissions.has_capability", return_value=True):
+			with patch("huf.ai.record_access.has_capability", return_value=True):
 				assert user_can_read_context_artifact(artifact_doc, user="carol@example.com") is True
 		finally:
 			artifact_doc.delete()

@@ -43,6 +43,14 @@ WEBP_ANIMATED = b"RIFF\x00\x00\x00\x00WEBPVP8X\x0a\x00\x00\x00\x02" + b"\x00" * 
 OGG = b"OggS" + b"\x00" * 64
 
 
+
+def _tool(action, **kwargs):
+	"""Call the agent tool the way a run does: the gateway is bound server-side, never taken from the args."""
+	# The chat contact is the recipient under test, so recipient scope passes and the 24h window rules decide.
+	with wa_tool.trusted_gateway(kwargs.get("gateway_name") or "", contact=str(kwargs.get("to") or "")):
+		return wa_tool.handle_action(action, **kwargs)
+
+
 class FakeGraphCase(IntegrationTestCase):
 	"""Shared server + fixtures."""
 
@@ -362,14 +370,14 @@ class TestDirectMode(FakeGraphCase):
 
 	def test_agent_tool_send_media_gating(self):
 		args = {"to": SENDER, "kind": "image", "link": "https://cdn.example/a.png", "caption": "x", "gateway_name": self.direct_gateway.name}
-		refused = json.loads(wa_tool.handle_action("send_media", **args))
+		refused = json.loads(_tool("send_media", **args))
 		self.assertEqual(refused["error"], "proactive_send_not_permitted")
 		self.assertEqual(self.server.requests, [])
 		self._inbound(self.direct_gateway)
 		with patch.object(wa_tool, "_get_whatsapp_credentials", return_value=(self.server.phone_id, self.server.token)):
-			ok = json.loads(wa_tool.handle_action("send_media", **args))
+			ok = json.loads(_tool("send_media", **args))
 			self.assertTrue(ok["success"], ok)
-			bad = json.loads(wa_tool.handle_action("send_media", **{**args, "kind": "gif"}))
+			bad = json.loads(_tool("send_media", **{**args, "kind": "gif"}))
 		self.assertEqual(bad["error"], "validation_failed")
 		self.assertEqual(self.server.sent[-1]["image"]["link"], "https://cdn.example/a.png")
 
@@ -469,7 +477,7 @@ class TestDirectMode(FakeGraphCase):
 
 	def test_typed_agent_tool_actions_direct(self):
 		args = {"to": SENDER, "gateway_name": self.direct_gateway.name}
-		closed = json.loads(wa_tool.handle_action("send_location", latitude=1, longitude=2, **args))
+		closed = json.loads(_tool("send_location", latitude=1, longitude=2, **args))
 		self.assertEqual(closed["error"], "proactive_send_not_permitted")
 		self.assertEqual(self.server.requests, [])
 		self._inbound(self.direct_gateway)
@@ -484,7 +492,7 @@ class TestDirectMode(FakeGraphCase):
 				("send_sticker", {"media_id": "42"}, "sticker"),
 				("send_image", {"link": "https://cdn.example/a.png"}, "image"),
 			):
-				res = json.loads(wa_tool.handle_action(action, **extra, **args))
+				res = json.loads(_tool(action, **extra, **args))
 				self.assertTrue(res["success"], (action, res))
 				self.assertEqual(self.server.sent[-1]["type"], mtype)
 
@@ -714,12 +722,12 @@ class TestBridgeMode(FakeGraphCase):
 
 	def test_tool_send_media_and_create_template_gating(self):
 		args = {"to": SENDER, "kind": "image", "link": "https://cdn.example/a.png", "gateway_name": self.bridge_gateway.name}
-		self.assertEqual(json.loads(wa_tool.handle_action("send_media", **args))["error"], "proactive_send_not_permitted")
+		self.assertEqual(json.loads(_tool("send_media", **args))["error"], "proactive_send_not_permitted")
 		self._inbound(self.bridge_gateway)
-		ok = json.loads(wa_tool.handle_action("send_media", **args))
+		ok = json.loads(_tool("send_media", **args))
 		self.assertTrue(ok["success"], ok)
 		self.assertEqual(self.server.sent[-1]["type"], "image")
-		refused = json.loads(wa_tool.handle_action("create_template", template_name="t_x", category="UTILITY", language_code="en_US", body="hi"))
+		refused = json.loads(_tool("create_template", template_name="t_x", category="UTILITY", language_code="en_US", body="hi"))
 		self.assertEqual(refused["error"], "management_not_permitted")
 
 	def test_inbound_media_download_via_bridge_account(self):
@@ -846,7 +854,7 @@ class TestBridgeMode(FakeGraphCase):
 	def test_typed_agent_tool_actions_via_bridge(self):
 		gw = self.bridge_gateway.name
 		args = {"to": SENDER, "gateway_name": gw, "latitude": 1, "longitude": 2}
-		self.assertEqual(json.loads(wa_tool.handle_action("send_location", **args))["error"], "proactive_send_not_permitted")
+		self.assertEqual(json.loads(_tool("send_location", **args))["error"], "proactive_send_not_permitted")
 		self._inbound(self.bridge_gateway)
 		for action, extra, mtype in (
 			("send_location", {"latitude": 1, "longitude": 2}, "location"),
@@ -855,12 +863,12 @@ class TestBridgeMode(FakeGraphCase):
 			("send_sticker", {"media_id": "42"}, "sticker"),
 		):
 			posts = len(self.server.requests_to("POST", "/messages"))
-			res = json.loads(wa_tool.handle_action(action, to=SENDER, gateway_name=gw, **extra))
+			res = json.loads(_tool(action, to=SENDER, gateway_name=gw, **extra))
 			self.assertTrue(res["success"], (action, res))
 			self.assertEqual(len(self.server.requests_to("POST", "/messages")) - posts, 1)
 			self.assertTrue(frappe.db.exists("WhatsApp Message", {"message_id": res["data"]["message_id"]}))
 		self._opt_out(self.bridge_gateway)
-		self.assertEqual(json.loads(wa_tool.handle_action("send_location", **args))["error"], "opted_out")
+		self.assertEqual(json.loads(_tool("send_location", **args))["error"], "opted_out")
 
 
 class TestTemplateWizard(FakeGraphCase):

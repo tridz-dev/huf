@@ -148,6 +148,20 @@ def make_ai_provider(provider_name=None, provider_brand="openai", **overrides):
     return doc
 
 
+def ensure_ai_model(model_name="gpt-4", provider_name="OpenAI"):
+    """Return the named ``AI Model``, creating it (and its provider) if the site lacks it.
+
+    The model catalogue refresh/retire patches remove stock models such as ``gpt-4``
+    from a migrated site, so tests that link an Agent to one must own the fixture
+    instead of assuming seed data.
+    """
+    if not frappe.db.exists("AI Provider", provider_name):
+        make_ai_provider(provider_name=provider_name)
+    if not frappe.db.exists("AI Model", model_name):
+        make_ai_model(provider=provider_name, model_name=model_name)
+    return model_name
+
+
 def make_ai_model(provider=None, model_name=None, **overrides):
     """Create an ``AI Model`` linked to an ``AI Provider``.
 

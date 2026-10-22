@@ -6,7 +6,9 @@ preventing users from enumerating procedure runs created by other users.
 
 import frappe
 from frappe.tests import IntegrationTestCase
-from huf.ai.agent_integration import get_procedure_run_permission_conditions
+from huf.huf.doctype.agent_procedure_run.agent_procedure_run import (
+	get_permission_query_conditions as get_procedure_run_permission_conditions,
+)
 
 
 class TestProcedureRunListScope(IntegrationTestCase):

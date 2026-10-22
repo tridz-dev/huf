@@ -191,7 +191,14 @@ class TestDirectModeMessageLog(_Base):
 			self.make_event(self.gw, f"wamid.L{i}", i)
 		self.assertEqual(len(self.log(limit=0)["items"]), 1)  # clamped up to 1
 		self.assertEqual(len(self.log(limit=-5)["items"]), 1)
-		self.assertEqual(len(self.log(limit="x")["items"]), 3)  # falls back to the default
+		# `limit: int` is type-checked on the whitelisted API where Frappe enforces annotations (it raises
+		# FrappeTypeError); where it does not, the unparsable value falls back to the default.
+		try:
+			fallback = self.log(limit="x")
+		except frappe.exceptions.FrappeTypeError:
+			pass
+		else:
+			self.assertEqual(len(fallback["items"]), 3)
 		self.assertEqual(len(self.log(limit=10_000)["items"]), 3)
 
 	def test_gateways_are_isolated(self):
@@ -239,6 +246,7 @@ class TestDirectModeMessageLog(_Base):
 				calls.append(a[0] if a else None)
 				return real(*a, **k)
 
+			self.log(limit=limit)  # warm per-process caches (meta, roles) so only the page queries are counted
 			with patch.object(frappe.db, "sql", spy):
 				self.log(limit=limit)
 			return len(calls)
@@ -416,6 +424,7 @@ class TestBridgeModeMessageLog(_Base):
 				calls.append(1)
 				return real(*a, **k)
 
+			self.log(limit=limit)  # warm per-process caches (meta, roles) so only the page queries are counted
 			with patch.object(frappe.db, "sql", spy):
 				self.log(limit=limit)
 			return len(calls)

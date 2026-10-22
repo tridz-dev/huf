@@ -279,6 +279,7 @@ _IDENTITY_KEYS = (
 	"agent_run_id",
 	"call_id",
 	"conversation_id",
+	"tool_call_id",
 )
 
 
@@ -292,6 +293,8 @@ def _desktop_tool(op: str):
 	def decorator(build):
 		def prepare(**kwargs):
 			ident = {key: kwargs.pop(key, None) for key in _IDENTITY_KEYS}
+			pinned_agent = kwargs.pop("_dx_agent", None)
+			pinned_display = kwargs.pop("_dx_agent_display", None)
 			built = build(**kwargs)
 			params, timeout_ms = built if isinstance(built, tuple) else (built, MAX_FS_TIMEOUT_MS)
 			_validate_params_size(params)
@@ -307,8 +310,11 @@ def _desktop_tool(op: str):
 				"params": params,
 				"ctx": dx_ctx,
 				"call_id": ident["call_id"],
+				"tool_call_id": ident["tool_call_id"],
 				"conversation_id": ident["conversation_id"],
 				"agent_run_id": ident["agent_run_id"],
+				"agent_name": str(pinned_agent) if pinned_agent else None,
+				"agent_display_name": str(pinned_display) if pinned_display else None,
 				"timeout_ms": timeout_ms,
 				# Decided here (the handler runs on the request/job thread, ``execute`` in a worker).
 				"web_request": _in_web_request(),

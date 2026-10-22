@@ -129,6 +129,14 @@ class TestStreamSalvageOnDisconnect(unittest.TestCase):
 
 		self._agent_run_status = "Started"
 
+		def _fake_sql(query, values=None, *a, **k):
+			# Guarded finalizer UPDATE (... where name=%s and status='Started'): honour the guard.
+			if "tabAgent Run" in query and "status='Started'" in query and self._agent_run_status == "Started":
+				self.set_value_calls.append(
+					(values[-1], {"status": "Failed", "error_message": values[0]})
+				)
+			return []
+
 		def _fake_get_value(doctype, name=None, fieldname=None, **kwargs):
 			if doctype == "Agent Run" and fieldname == "status":
 				return self._agent_run_status
@@ -164,6 +172,7 @@ class TestStreamSalvageOnDisconnect(unittest.TestCase):
 			patch.object(agent_integration.frappe, "session", MagicMock(user="test@example.com"), create=True),
 			patch.object(agent_integration.frappe, "has_permission", lambda *a, **k: True, create=True),
 			patch.object(agent_integration.frappe.db, "set_value", _fake_set_value, create=True),
+			patch.object(agent_integration.frappe.db, "sql", _fake_sql, create=True),
 			patch.object(agent_integration.frappe.db, "get_value", _fake_get_value, create=True),
 			patch.object(agent_integration.frappe.db, "count", lambda *a, **k: 0, create=True),
 			patch.object(agent_integration.frappe, "log_error", lambda *a, **k: None, create=True),
@@ -238,6 +247,9 @@ class TestStreamSalvageOnDisconnect(unittest.TestCase):
 
 			loop = asyncio.new_event_loop()
 			try:
+				# The first chunk is always the run_started handshake (emitted before the provider call).
+				first = loop.run_until_complete(gen.__anext__())
+				self.assertEqual(first.get("type"), "run_started")
 				if take == 0:
 					task = loop.create_task(gen.__anext__())
 					# Never set `gate` -- just pump the loop long enough for
@@ -260,14 +272,14 @@ class TestStreamSalvageOnDisconnect(unittest.TestCase):
 
 	def test_partial_disconnect_salvages_success_with_partial_text(self):
 		"""5 chunks total, close after 3: salvage finally must write
-		status=Success with the partial accumulated text."""
+		status=Failed 'Client disconnected' (partial reply kept as a message)."""
 		self._drive_partial_stream(["a", "b", "c", "d", "e"], take=3)
 
 		self.assertTrue(self.set_value_calls, "expected the salvage finally to write Agent Run")
 		name, values = self.set_value_calls[-1]
 		self.assertEqual(name, self.run_doc.name)
-		self.assertEqual(values.get("status"), "Success")
-		self.assertEqual(values.get("response"), "abc")
+		self.assertEqual(values.get("status"), "Failed")
+		self.assertEqual(values.get("error_message"), "Client disconnected")
 
 	def test_disconnect_before_any_chunk_salvages_failed(self):
 		"""Close before any chunk is yielded: full_response is empty, so
@@ -279,7 +291,38 @@ class TestStreamSalvageOnDisconnect(unittest.TestCase):
 		name, values = self.set_value_calls[-1]
 		self.assertEqual(name, self.run_doc.name)
 		self.assertEqual(values.get("status"), "Failed")
-		self.assertEqual(values.get("error_message"), "Stream disconnected before response was generated")
+		self.assertEqual(values.get("error_message"), "Client disconnected")
+
+	def test_cancel_marker_marks_run_cancelled_and_emits_run_started_first(self):
+		"""A cancelled run emits run_started first, then a cancelled error; the Agent Run ends Failed
+		with 'Cancelled by user' (checked before the first provider call)."""
+		fake_stream = _FakeProviderStream(["a", "b"])
+		chunks = []
+
+		async def drive():
+			gen = agent_integration.run_agent_stream(
+				agent_name="test-agent",
+				prompt="hello",
+				channel_id="test",
+				external_id="test@example.com",
+				conversation_id=None,
+				create_new=True,
+			)
+			async for c in gen:
+				chunks.append(c)
+
+		with patch.object(agent_integration.RunProvider, "run_stream", lambda *a, **k: fake_stream), patch(
+			"huf.ai.run_control.is_run_cancelled", lambda run_id: True
+		):
+			asyncio.run(drive())
+
+		self.assertEqual(chunks[0]["type"], "run_started")
+		self.assertEqual(chunks[0]["agent_run_id"], self.run_doc.name)
+		self.assertTrue(any(c.get("cancelled") for c in chunks))
+		self.assertFalse(any(c.get("type") == "delta" for c in chunks))
+		name, values = self.set_value_calls[-1]
+		self.assertEqual(values.get("status"), "Failed")
+		self.assertEqual(values.get("error_message"), "Cancelled by user")
 
 	def test_no_salvage_write_when_run_already_terminal(self):
 		"""If the run's status is no longer 'Started' (already resolved by

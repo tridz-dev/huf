@@ -181,7 +181,12 @@ const NOT_CONVERTIBLE_RE = /cannot take a schedule or doc-event trigger:?\s*(.*)
 /** Turn a thrown API error into an inline message; non-deterministic flows are called out. */
 export function triggerErrorInfo(err: unknown): TriggerErrorInfo {
   const raw = (err instanceof Error ? err.message : typeof err === 'string' ? err : '') || '';
-  const text = raw.replace(/<[^>]*>/g, '').trim();
+  let stripped = raw;
+  for (let prev = ''; prev !== stripped; ) {
+    prev = stripped;
+    stripped = stripped.replace(/<[^>]*>/g, '');
+  }
+  const text = stripped.trim();
   const m = NOT_CONVERTIBLE_RE.exec(text);
   if (m || /Flow Is Not Convertible/i.test(text)) {
     const reason = (m?.[1] ?? '').trim();

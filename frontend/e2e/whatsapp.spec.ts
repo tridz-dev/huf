@@ -113,7 +113,7 @@ test.describe('WhatsApp console', () => {
     await mockWhatsApp(page);
     await goto(page, '/whatsapp');
     await waitForContent(page);
-    await expect(page.getByRole('heading', { name: 'Manage WhatsApp' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'WhatsApp', level: 1 })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Overview' })).toHaveAttribute('data-state', 'active');
     await expect(page.getByText(/steps? left/)).toBeVisible();
     await expect(page).toHaveURL(/gateway=GW-1/);
@@ -161,7 +161,7 @@ test.describe('WhatsApp console', () => {
   test('the send panel posts a text message from the chosen gateway', async ({ page }) => {
     const calls = await mockWhatsApp(page);
     await goto(page, '/whatsapp?tab=messages&gateway=GW-1&send=1');
-    await page.getByLabel('Recipient number').fill('+15551234567');
+    await page.getByLabel('To', { exact: true }).fill('+15551234567');
     await page.getByLabel('Message text').fill('hi from the console');
     await page.getByRole('button', { name: 'Send', exact: true }).click();
     await expect.poll(() => calls.find((c) => c.method === 'send_text_message')?.args).toMatchObject({

@@ -2404,7 +2404,7 @@ def state_key(account: str | None, docname: str) -> str:
 	account = str(account or "")
 	key = f"{account}{STATE_KEY_SEP}{docname}"
 	if len(key) > _NAME_MAX:
-		digest = hashlib.sha1(key.encode("utf-8")).hexdigest()[:16]
+		digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
 		key = f"{account[:60]}{STATE_KEY_SEP}{digest}"
 	return key
 

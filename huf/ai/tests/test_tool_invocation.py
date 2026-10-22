@@ -146,6 +146,9 @@ class _FrappeDoubleTestCase(unittest.TestCase):
 		patcher = patch.object(ti, "frappe", self.frappe)
 		patcher.start()
 		self.addCleanup(patcher.stop)
+		# Many tests below assign ``ti.get_function_from_name`` directly; restore it for every
+		# subclass so a stub handler can never leak into later tests that run real tools.
+		self.addCleanup(setattr, ti, "get_function_from_name", ti.get_function_from_name)
 
 
 class ResolveToolDocTests(_FrappeDoubleTestCase):

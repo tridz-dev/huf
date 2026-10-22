@@ -19,7 +19,15 @@ without actually solving the problem.
 
 from urllib.parse import urlparse
 
-from weasyprint import default_url_fetcher
+try:
+	# WeasyPrint < 69
+	from weasyprint import default_url_fetcher
+except ImportError:
+	try:
+		from weasyprint.urls import default_url_fetcher
+	except ImportError:
+		# WeasyPrint >= 70 replaced the function with the URLFetcher class.
+		default_url_fetcher = None
 
 from huf.ai.artifacts.render.design_tokens import (
 	BODY_STACK,
@@ -122,19 +130,56 @@ def google_fonts_import() -> str:
 	return f"@import url('https://fonts.googleapis.com/css2?{families}&display=swap');"
 
 
-def safe_url_fetcher(url: str):
-	"""WeasyPrint url_fetcher permitting only data: URLs and allowlisted font hosts.
-
-	Raises ValueError for anything else. WeasyPrint treats a raising fetcher
-	as "this resource is unavailable" and continues rendering the document,
-	so a blocked request degrades that one resource rather than failing the
-	whole export.
-	"""
+def _check_url_allowed(url: str) -> None:
+	"""Raise ValueError unless ``url`` is a data: URL or an allowlisted font host."""
 	if url.startswith("data:"):
-		return default_url_fetcher(url)
+		return
 
 	hostname = (urlparse(url).hostname or "").lower()
 	if hostname in ALLOWED_RESOURCE_HOSTS:
-		return default_url_fetcher(url)
+		return
 
 	raise ValueError(f"Blocked external resource fetch to disallowed host: {url!r}")
+
+
+if default_url_fetcher is not None:
+
+	def safe_url_fetcher(url: str):
+		"""WeasyPrint url_fetcher permitting only data: URLs and allowlisted font hosts.
+
+		Raises ValueError for anything else. WeasyPrint treats a raising fetcher
+		as "this resource is unavailable" and continues rendering the document,
+		so a blocked request degrades that one resource rather than failing the
+		whole export.
+		"""
+		_check_url_allowed(url)
+		result = default_url_fetcher(url)
+		# Redirect protection: if the server redirected, the final URL must
+		# itself pass the allowlist, otherwise discard the response.
+		final_url = result.get("redirected_url") if isinstance(result, dict) else None
+		if final_url and final_url != url:
+			try:
+				_check_url_allowed(final_url)
+			except ValueError:
+				close = getattr(result.get("file_obj"), "close", None)
+				if close:
+					close()
+				raise
+		return result
+
+else:
+	from weasyprint.urls import URLFetcher
+
+	class _SafeURLFetcher(URLFetcher):
+		"""WeasyPrint >= 70 fetcher: same policy as the function form above.
+
+		WeasyPrint 70 requires a URLFetcher (it reads ``_fail_on_errors`` from it
+		when a fetch raises), so a bare function no longer works.
+		"""
+
+		def fetch(self, url, headers=None):
+			_check_url_allowed(url)
+			return super().fetch(url, headers)
+
+	#: Callable ``url -> URLFetcherResponse``; drop-in for the function form.
+	safe_url_fetcher = _SafeURLFetcher(allow_redirects=False, allowed_protocols=("data", "https"))

@@ -15,7 +15,7 @@ class TestAgentToolFunction(IntegrationTestCase):
 				"tool_name": f"test_{frappe.generate_hash(length=8)}",
 				"types": types,
 				"description": "Test tool",
-				"reference_doctype": "Lead",
+				"reference_doctype": "ToDo",  # core doctype: Lead only exists when CRM/ERPNext is installed
 				"parameters": parameters,
 			}
 		)

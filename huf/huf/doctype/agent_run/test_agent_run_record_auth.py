@@ -84,7 +84,7 @@ class TestAgentRunRecordAuth(IntegrationTestCase):
 		try:
 			from huf.ai.record_access import user_can_read_run
 
-			with patch("huf.permissions.has_capability", return_value=True):
+			with patch("huf.ai.record_access.has_capability", return_value=True):
 				assert user_can_read_run(run_doc, user="carol@example.com") is True
 		finally:
 			run_doc.delete()

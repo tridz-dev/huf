@@ -197,7 +197,9 @@ class TestGatewayValidation(unittest.TestCase):
 		from huf.huf.doctype.gateway.gateway import Gateway
 
 		values = {"voice_reply_mode": mode}
-		fake = SimpleNamespace(get=lambda k, d=None: values.get(k, d), provider=provider)
+		fake = SimpleNamespace(
+			get=lambda k, d=None: values.get(k, d), provider=provider, _warn_voice_ffmpeg=lambda: None
+		)
 		return frappe, lambda: Gateway._validate_reply_settings(fake)
 
 	def test_valid_modes_pass(self):

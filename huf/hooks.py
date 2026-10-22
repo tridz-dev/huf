@@ -194,7 +194,6 @@ permission_query_conditions = {
     "Agent Tool Call": "huf.ai.agent_integration.get_tool_call_permission_conditions",
     "Agent Run Prompt Snapshot": "huf.ai.agent_integration.get_prompt_snapshot_permission_conditions",
     "Huf API Key": "huf.huf.doctype.huf_api_key.huf_api_key.get_api_key_permission_conditions",
-    "Agent Procedure Run": "huf.ai.agent_integration.get_procedure_run_permission_conditions",
     "Flow Definition": "huf.huf.doctype.flow_definition.flow_definition.get_permission_query_conditions",
     "Agent Procedure": "huf.huf.doctype.agent_procedure.agent_procedure.get_permission_query_conditions",
     "Agent Procedure Binding": "huf.huf.doctype.agent_procedure_binding.agent_procedure_binding.get_permission_query_conditions",
@@ -346,9 +345,15 @@ scheduler_events = {
         ],
         "*/5 * * * *": [
             "huf.ai.agent_run_analytics.refresh_rollups",
+            # Safety net: fail runs orphaned in 'Started' (stale > huf_stale_run_minutes (15) / huf_stale_run_minutes_background (60, non-stream)).
+            "huf.ai.run_control.sweep_stale_runs",
         ],
         "*/15 * * * *": [
             "huf.ai.batch_poll.poll_pending_batch_jobs",
+        ],
+        "*/30 * * * *": [
+            # Fail runs left 'Queued' longer than huf_stale_queued_hours (24) with no live drain lock.
+            "huf.ai.run_control.sweep_dead_queued_runs",
         ]
     },
     "hourly": [

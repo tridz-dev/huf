@@ -20,6 +20,8 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils.password import set_encrypted_password
 
+from huf.testing.factories import ensure_ai_model
+
 
 class TestSecretsPasswordFields(IntegrationTestCase):
     """Test that password fields store and retrieve secrets correctly."""
@@ -235,6 +237,7 @@ class TestSecretsPasswordFields(IntegrationTestCase):
 
     def _create_agent_if_missing(self):
         """Helper: create a minimal Agent for testing (Link target of Automation.agent)."""
+        ensure_ai_model("gpt-4", "OpenAI")
         if not frappe.db.exists("Agent", "Test Agent"):
             frappe.get_doc({
                 "doctype": "Agent",

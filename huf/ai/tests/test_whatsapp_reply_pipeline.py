@@ -468,8 +468,8 @@ class _PipelineMixin(_E2EMixin):
 		name = self._inbound("wamid.R8")
 		self._process(name)
 		kw = self._retries()[0]
-		frappe.cache().set(f"huf_gw_reply_retry:{name}:{kw['attempt']}", 1, ex=60)
-		self.addCleanup(frappe.cache().delete_value, f"huf_gw_reply_retry:{name}:{kw['attempt']}")
+		frappe.cache().set(f"huf_gw_reply_retry:{name}", 1, ex=60)  # one in-flight retry per event, whatever the attempt
+		self.addCleanup(frappe.cache().delete_value, f"huf_gw_reply_retry:{name}")
 		self.assertTrue(self._run_retry(kw).get("skipped"))
 		self.assertEqual(len(self.meta.sends()), 1)
 
@@ -512,25 +512,35 @@ class _PipelineMixin(_E2EMixin):
 		self.assertIn("24 hours", self._event(name).delivery_error)
 
 	# ---- failed run
-	def test_error_reply_text_takes_precedence_and_is_limited_to_once(self):
+	def test_error_reply_text_takes_precedence_and_is_sent_once_per_event(self):
 		self._set_fallback_text("credential apology")
 		self._set_gateway(error_reply_text="Sorry, try again later.")
 		self._fail_run(error="x", error_kind="rate_limited")
-		frappe.cache().delete_value(f"huf_gw_fallback_reply:{self.gateway.name}:{SENDER}")
-		self.addCleanup(frappe.cache().delete_value, f"huf_gw_fallback_reply:{self.gateway.name}:{SENDER}")
-		out1 = self._process(self._inbound("wamid.F1"))
-		out2 = self._process(self._inbound("wamid.F2"))
+		first, second = self._inbound("wamid.F1"), self._inbound("wamid.F2")
+		for name in (first, second):  # the once-only claim is per event, so a re-run must not resend
+			key = f"huf_gw_fallback_reply:{name}:error"
+			frappe.cache().delete_value(key)
+			self.addCleanup(frappe.cache().delete_value, key)
+		out1 = self._process(first)
+		out2 = self._process(second)
 		self.assertTrue(out1["fallback_sent"])
-		self.assertFalse(out2["fallback_sent"])
+		self.assertTrue(out2["fallback_sent"])
+		self.assertFalse(gateway_service._send_fallback_once(self._event(first), self.gateway))
+		sends = self.meta.sends()
+		self.assertEqual(len(sends), 2)
+		self.assertEqual({s["body"]["text"]["body"] for s in sends}, {"Sorry, try again later."})
+
+	def test_failed_run_sends_only_the_default_apology_once(self):
+		self._fail_run(error="x", error_kind="rate_limited")
+		name = self._inbound("wamid.F3")
+		key = f"huf_gw_fallback_reply:{name}:error"
+		frappe.cache().delete_value(key)
+		self.addCleanup(frappe.cache().delete_value, key)
+		out = self._process(name)
+		self.assertEqual(out["status"], "Failed")
 		sends = self.meta.sends()
 		self.assertEqual(len(sends), 1)
-		self.assertEqual(sends[0]["body"]["text"]["body"], "Sorry, try again later.")
-
-	def test_failed_run_sends_nothing_by_default(self):
-		self._fail_run(error="x", error_kind="rate_limited")
-		out = self._process(self._inbound("wamid.F3"))
-		self.assertEqual(out["status"], "Failed")
-		self.assertEqual(self.meta.sends(), [])
+		self.assertIn("something went wrong", sends[0]["body"]["text"]["body"])
 
 	# ---- NO_REPLY / opt-out / reactions
 	def test_no_reply_sentinel_sends_nothing_and_succeeds(self):
@@ -578,9 +588,9 @@ class _PipelineMixin(_E2EMixin):
 		name = self._event_name("wamid.X1")
 		out = self._process(name)
 		event = self._event(name)
-		self.assertEqual(event.status, "Rejected")
+		self.assertEqual(event.status, "Recorded")  # ingest records a reaction; processing leaves it alone
 		self.assertEqual(event.error_message, "reaction_recorded: no run")
-		self.assertTrue(out["reaction"])
+		self.assertEqual(out["status"], "Recorded")
 		self.assertEqual(self.run_mock.call_count, 0)
 		self.assertEqual(self.meta.calls, [])
 

@@ -114,7 +114,7 @@ class TestAgentToolCallRecordAuth(IntegrationTestCase):
 		try:
 			from huf.ai.record_access import user_can_read_tool_call
 
-			with patch("huf.permissions.has_capability", return_value=True):
+			with patch("huf.ai.record_access.has_capability", return_value=True):
 				assert user_can_read_tool_call(tool_doc, user="carol@example.com") is True
 		finally:
 			tool_doc.delete()

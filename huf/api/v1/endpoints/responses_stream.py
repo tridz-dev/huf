@@ -83,6 +83,7 @@ from werkzeug.wrappers import Response
 
 from huf.ai.agent_access import assert_agent_access
 from huf.ai.agent_integration import (
+	_client_safe_error,
 	_conversation_lock_key,
 	_DIRECT_LOCK_ATTEMPTS,
 	_DIRECT_LOCK_RETRY_DELAY,
@@ -274,6 +275,8 @@ def handle_stream_response(
 			while True:
 				try:
 					chunk = loop.run_until_complete(async_gen.__anext__())
+					if chunk.get("type") == "run_started":
+						continue  # internal handshake for the desktop client; not part of the public v1 events
 					public_type, payload = _map_chunk(chunk)
 					yield _sse_line(public_type, payload)
 
@@ -283,11 +286,11 @@ def handle_stream_response(
 					break
 				except Exception as e:
 					frappe.log_error(frappe.get_traceback(), "Huf API v1 Stream Chunk Error")
-					yield _sse_line("response.failed", {"error": str(e)})
+					yield _sse_line("response.failed", {"error": _client_safe_error(e)})
 					break
 		except Exception as e:
 			frappe.log_error(frappe.get_traceback(), "Huf API v1 Stream Setup Error")
-			yield _sse_line("response.failed", {"error": f"Stream setup error: {str(e)}"})
+			yield _sse_line("response.failed", {"error": _client_safe_error(e)})
 		finally:
 			if async_gen is not None:
 				try:

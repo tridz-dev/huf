@@ -487,6 +487,16 @@ class TestDesktopRoundTrip(unittest.TestCase):
 		self.assertTrue(all(i.startswith(dx.derive_call_id(self.run_name, "0")) for i in ids))
 		_json.dumps(ids)
 
+	def test_pin_run_identity_sends_the_llm_tool_call_id_and_discards_the_models(self):
+		from huf.ai import sdk_tools
+
+		args = {"path": "a.txt", "tool_call_id": "forged"}
+		sdk_tools._pin_run_identity(
+			args, mock.Mock(context={"agent_run_id": self.run_name}, tool_call_id="call_a1b2c3__thought__xyz"), "n1"
+		)
+		self.assertEqual(args["tool_call_id"], "call_a1b2c3__thought__xyz")
+		self.assertNotEqual(args["call_id"], args["tool_call_id"])
+
 	# ---- N8
 	def test_handlers_refuse_a_call_that_was_not_pinned_by_the_run(self):
 		with self.assertRaises(frappe.PermissionError):

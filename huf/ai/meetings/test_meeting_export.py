@@ -12,6 +12,11 @@ class TestMeetingExport(unittest.TestCase):
     def setUp(self):
         frappe.set_user("Administrator")
         self._meetings = []
+        # frappe.response is only bound inside a real request; bind a scratch one for these tests.
+        previous_response = getattr(frappe.local, "response", None)
+        if previous_response is None:
+            frappe.local.response = frappe._dict()
+            self.addCleanup(setattr, frappe.local, "response", None)
 
     def tearDown(self):
         frappe.set_user("Administrator")

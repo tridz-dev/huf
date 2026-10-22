@@ -42,7 +42,18 @@ if not hasattr(frappe, "_") or not callable(getattr(frappe, "_", None)):
 # an awaitable at all.
 if not isinstance(getattr(frappe, "whitelist", None), type(lambda: None)):
     frappe.whitelist = lambda *a, **kw: (lambda f: f)
-if "frappe.utils.file_manager" not in sys.modules:
+def _file_manager_missing():
+    # With a real frappe the module is importable even if not loaded yet; stubbing it
+    # would then replace it process-wide (bench run-tests shares one process).
+    import importlib.util
+
+    try:
+        return importlib.util.find_spec("frappe.utils.file_manager") is None
+    except Exception:
+        return True
+
+
+if "frappe.utils.file_manager" not in sys.modules and _file_manager_missing():
     file_manager_module = type(sys)("frappe.utils.file_manager")
     file_manager_module.save_file = MagicMock(name="save_file")
     sys.modules["frappe.utils.file_manager"] = file_manager_module

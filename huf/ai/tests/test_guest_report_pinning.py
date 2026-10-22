@@ -37,7 +37,8 @@ except ImportError:
 import frappe  # noqa: E402
 
 # Stub agents SDK (same pattern as test_test_tools.py)
-if "agents" not in sys.modules:
+import importlib.util as _ilu
+if "agents" not in sys.modules and _ilu.find_spec("agents") is None:
 	class _FakeFunctionTool:
 		def __init__(self, name, description, params_json_schema, on_invoke_tool, strict_json_schema=False):
 			self.name = name
