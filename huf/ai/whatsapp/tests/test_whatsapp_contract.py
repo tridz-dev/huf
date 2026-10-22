@@ -3,7 +3,7 @@
 
 """Contract tests for the WhatsApp Cloud API adapter, driven by recorded webhook fixtures.
 
-Each fixture under ``fixtures/whatsapp`` is a realistic Meta webhook body. Bodies are
+Each fixture under ``fixtures/`` is a realistic Meta webhook body. Bodies are
 signed with a test app secret so ``verify_inbound`` and ``parse_payload`` run exactly
 as they do for a live delivery.
 """
@@ -19,7 +19,7 @@ from huf.ai.gateway_adapters.whatsapp_bridge import message_time
 from huf.ai.gateway_adapters.whatsapp_inbound import render_message_text
 from huf.ai.gateway_adapters.whatsapp import WhatsAppGatewayAdapter
 
-FIXTURE_DIR = pathlib.Path(__file__).parent / "fixtures" / "whatsapp"
+FIXTURE_DIR = pathlib.Path(__file__).parent / "fixtures"
 
 TEST_APP_SECRET = "test-app-secret-not-real"
 PHONE_NUMBER_ID = "106540352242922"

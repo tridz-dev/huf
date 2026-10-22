@@ -15,7 +15,7 @@ from huf.ai.whatsapp import account_events as ae
 from huf.ai.gateway_adapters.types import GatewayInboundRequest
 from huf.ai.gateway_adapters.whatsapp import WhatsAppGatewayAdapter
 
-FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "whatsapp"
+FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 CREDS = {"phone_number_id": "106540352242922", "access_token": "t", "webhook_verify_token": "v", "app_secret": "s"}
 REMOVED = {"event": "PARTNER_REMOVED"}
 PREFS = [{"wa_id": "16315551181", "category": "marketing_messages", "value": "resume", "timestamp": 1731700000}]
@@ -104,7 +104,7 @@ class TestOwnWaba(unittest.TestCase):
 		setter.assert_called_once()
 
 	def test_gateway_json_declares_waba_field(self):
-		meta = json.loads((pathlib.Path(__file__).parents[2] / "huf/doctype/gateway/gateway.json").read_text())
+		meta = json.loads((pathlib.Path(__file__).parents[3] / "huf/doctype/gateway/gateway.json").read_text())
 		self.assertIn("whatsapp_business_account_id", meta["field_order"])
 		self.assertIn("whatsapp_business_account_id", [f["fieldname"] for f in meta["fields"]])
 
@@ -150,7 +150,7 @@ class TestConsentOrdering(unittest.TestCase):
 		self.assertTrue(get_all.call_args.kwargs["order_by"].startswith("meta_timestamp desc"))
 
 	def test_consent_doctype_declares_meta_timestamp(self):
-		meta = json.loads((pathlib.Path(__file__).parents[2] / "huf/doctype/gateway_consent/gateway_consent.json").read_text())
+		meta = json.loads((pathlib.Path(__file__).parents[3] / "huf/doctype/gateway_consent/gateway_consent.json").read_text())
 		self.assertIn("meta_timestamp", meta["field_order"])
 
 

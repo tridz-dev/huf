@@ -178,7 +178,7 @@ Implemented (all mocked-tested, nothing invoked live, default OFF):
 - `whatsapp/management.py`: `get_calling_settings`, `set_calling_settings`, `call_action`, `send_call_permission_request` (admin only; permission request obeys opt-out and the 24 h window).
 - `whatsapp_call_flow.py`: state machine `run_call` (received, answering, pre_accepted, connected, accepted, playing, terminating, completed|failed|rejected), `answer_inbound_call_job`, `AiortcMediaSession` (lazy import; `get_media_backend()` reports `not_installed`, the job then rejects the call and marks the event Failed).
 - Gateway fields: `calling_enabled` (Check, default 0), `call_greeting_audio`, `call_reply_audio`, `call_closing_audio`, `call_max_seconds`.
-- Offline simulator `huf/testing/wa_call_sim.py` (+ tests in `huf/ai/tests/test_whatsapp_calls.py`).
+- Offline simulator `huf/testing/wa_call_sim.py` (+ tests in `huf/ai/whatsapp/tests/test_whatsapp_calls.py`).
 
 Behaviour: calling off -> a metadata Event (Rejected, "Calling is not enabled") and NO Graph call. Calling on, caller not in an approved Sender access entry (or blocked/opted out; `Open` and `Pairing` policies do NOT admit a caller, no pairing request is created) -> `reject` action sent and recorded on the Event (success or error), status Rejected. Approved caller -> Event Received, `answer_inbound_call_job` enqueued (idempotent on `call_id`); flow: pre_accept, wait media, accept with the SAME SDP, open the audio gate, play clips, terminate. `terminate`/status webhooks update the same Event (COMPLETED -> Succeeded, FAILED -> Failed).
 

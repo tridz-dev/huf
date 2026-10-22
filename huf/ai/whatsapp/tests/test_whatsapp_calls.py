@@ -23,7 +23,7 @@ from huf.ai.gateway_adapters import whatsapp_calls as wc  # noqa: E402
 from huf.ai.gateway_adapters.whatsapp_bridge import BridgeError  # noqa: E402
 
 SDP = "v=0\r\ns=secret-offer-with-ips 10.1.2.3\r\n"
-SIM_PATH = Path(__file__).resolve().parents[2] / "testing" / "wa_call_sim.py"
+SIM_PATH = Path(__file__).resolve().parents[3] / "testing" / "wa_call_sim.py"
 
 
 def _spec():
@@ -522,7 +522,7 @@ class TestManagementApi(unittest.TestCase):
 
 class TestGatewayDoctypeDefaults(unittest.TestCase):
 	def test_calling_field_default_off(self):
-		path = Path(__file__).resolve().parents[2] / "huf" / "doctype" / "gateway" / "gateway.json"
+		path = Path(__file__).resolve().parents[3] / "huf" / "doctype" / "gateway" / "gateway.json"
 		fields = {f["fieldname"]: f for f in json.loads(path.read_text())["fields"]}
 		self.assertEqual(fields["calling_enabled"]["default"], "0")
 		self.assertEqual(fields["calling_enabled"]["fieldtype"], "Check")

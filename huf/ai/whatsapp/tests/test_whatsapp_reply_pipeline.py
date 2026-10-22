@@ -23,7 +23,7 @@ from huf.ai import gateway_service, gateway_webhook
 from huf.ai.gateway_adapters import whatsapp as wa
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_errors as we
-from huf.ai.tests.test_whatsapp_e2e_agent import (
+from huf.ai.whatsapp.tests.test_whatsapp_e2e_agent import (
 	PHONE_ID,
 	SENDER,
 	FakeMeta,

@@ -13,7 +13,7 @@ from huf.ai import gateway_service
 from huf.ai.gateway_adapters.types import GatewayInboundRequest
 from huf.ai.gateway_adapters.whatsapp import WhatsAppGatewayAdapter
 
-FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "whatsapp"
+FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 CREDS = {
 	"phone_number_id": "106540352242922",
 	"access_token": "t",
