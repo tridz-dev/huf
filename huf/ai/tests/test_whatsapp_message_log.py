@@ -21,7 +21,8 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf import install
-from huf.ai import gateway_webhook, whatsapp_management as mgmt
+from huf.ai import gateway_webhook
+from huf.ai.whatsapp import management as mgmt
 from huf.ai.gateway_adapters import GatewayInboundRequest, whatsapp_bridge as bridge
 from huf.ai.gateway_service import process_gateway_event
 
@@ -569,7 +570,7 @@ class TestWhatsAppAppTile(_Base):
 			(doc.title, doc.route, doc.source_app, doc.launch_mode, doc.category, doc.enabled),
 			("WhatsApp", "/huf/whatsapp", "huf", "Route", "Communicate", 1),
 		)
-		self.assertEqual(doc.permission_method, "huf.ai.whatsapp_management.can_launch_whatsapp_app")
+		self.assertEqual(doc.permission_method, "huf.ai.whatsapp.management.can_launch_whatsapp_app")
 		self.assertEqual(doc.description, "Manage WhatsApp templates and see messages handled by your agents.")
 		frappe.db.set_value("HUF App", doc.name, {"enabled": 0, "title": "Hand edited"})
 		install.create_whatsapp_app()
@@ -613,4 +614,4 @@ class TestWhatsAppAppTile(_Base):
 		from huf.ai import apps_api
 
 		self.assertFalse(apps_api._call_permission_method(
-			"huf.ai.whatsapp_management.can_launch_whatsapp_app", "Guest", {"app_id": "whatsapp"}))
+			"huf.ai.whatsapp.management.can_launch_whatsapp_app", "Guest", {"app_id": "whatsapp"}))

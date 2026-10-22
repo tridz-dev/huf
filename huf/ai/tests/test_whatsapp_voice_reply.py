@@ -14,8 +14,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from huf.ai import gateway_service
-from huf.ai import whatsapp_send_file as send_file
-from huf.ai import whatsapp_voice_reply as voice
+from huf.ai.whatsapp import send_file as send_file
+from huf.ai.whatsapp import voice_reply as voice
 
 VOICE_PAYLOAD = {"message": {"type": "audio", "audio": {"id": "m1", "voice": True}}}
 AUDIO_PAYLOAD = {"message": {"type": "audio", "audio": {"id": "m1"}}}

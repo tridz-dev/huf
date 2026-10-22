@@ -17,7 +17,7 @@ if isinstance(frappe, MagicMock):
 	frappe.whitelist = lambda *args, **kwargs: (lambda fn: fn)
 	frappe.PermissionError = PermissionError
 
-from huf.ai import whatsapp_management as mgmt  # noqa: E402
+from huf.ai.whatsapp import management as mgmt  # noqa: E402
 from huf.ai.gateway_adapters import whatsapp_call_flow as flow  # noqa: E402
 from huf.ai.gateway_adapters import whatsapp_calls as wc  # noqa: E402
 from huf.ai.gateway_adapters.whatsapp_bridge import BridgeError  # noqa: E402
@@ -451,7 +451,7 @@ class TestSimulator(unittest.TestCase):
 
 class TestManagementApi(unittest.TestCase):
 	def setUp(self):
-		patcher = patch("huf.ai.whatsapp_management.frappe")
+		patcher = patch("huf.ai.whatsapp.management.frappe")
 		self.frappe = patcher.start()
 		self.addCleanup(patcher.stop)
 		self.frappe.PermissionError = PermissionError

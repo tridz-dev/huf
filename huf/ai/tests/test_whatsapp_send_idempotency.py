@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.utils import add_to_date, now_datetime
 
-from huf.ai import whatsapp_send_keys as keys
+from huf.ai.whatsapp import send_keys as keys
 from huf.ai.tools import whatsapp
 
 GW = "GW-IDEM"

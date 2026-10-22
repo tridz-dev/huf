@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import frappe
 
-from huf.ai import whatsapp_management as mgmt
+from huf.ai.whatsapp import management as mgmt
 from huf.ai.tests import test_whatsapp_full_stack as fs
 
 

@@ -15,8 +15,8 @@ if isinstance(frappe, MagicMock):
 	frappe.whitelist = lambda *args, **kwargs: (lambda fn: fn)
 	frappe.PermissionError = PermissionError
 
-from huf.ai import whatsapp_health as wh  # noqa: E402
-from huf.ai import whatsapp_send_file as sf  # noqa: E402
+from huf.ai.whatsapp import health as wh  # noqa: E402
+from huf.ai.whatsapp import send_file as sf  # noqa: E402
 
 NOW = datetime(2026, 10, 14, 12, 0, 0)
 
@@ -106,7 +106,7 @@ class TestGatewayWarning(unittest.TestCase):
 		doc = MagicMock()
 		doc.get = lambda k, d=None: {"voice_reply_mode": mode, "provider": "WhatsApp"}.get(k, d)
 		doc.provider = "WhatsApp"
-		with patch("huf.ai.whatsapp_send_file.ffmpeg_status", return_value=status), patch.object(frappe, "msgprint") as mp:
+		with patch("huf.ai.whatsapp.send_file.ffmpeg_status", return_value=status), patch.object(frappe, "msgprint") as mp:
 			Gateway._warn_voice_ffmpeg(doc)
 		return mp
 

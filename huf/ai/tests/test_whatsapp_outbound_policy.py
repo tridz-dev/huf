@@ -9,8 +9,8 @@ from frappe.tests import IntegrationTestCase
 from frappe.utils import now_datetime
 
 from huf.ai import gateway_service as gsvc
-from huf.ai import whatsapp_account_events as events
-from huf.ai import whatsapp_outbound_policy as policy
+from huf.ai.whatsapp import account_events as events
+from huf.ai.whatsapp import outbound_policy as policy
 from huf.ai.gateway_adapters import GatewayReply
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters.whatsapp import (

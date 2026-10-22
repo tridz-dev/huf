@@ -456,7 +456,7 @@ def _gateway_stamp(gateway: dict[str, Any], field: str) -> datetime | None:
 def _cached_token_check(gateway_name: str) -> dict[str, Any] | None:
 	"""The last live token check, from cache only (no network, no secrets). None when never checked."""
 	try:
-		from huf.ai.whatsapp_token_check import _result_key
+		from huf.ai.whatsapp.token_check import _result_key
 
 		cached = frappe.cache().get_value(_result_key(gateway_name))
 	except Exception:
@@ -528,7 +528,7 @@ def build_health(
 			mode = None
 	facts["voice_reply_mode"] = mode or "Off"
 	if facts["voice_reply_mode"] != "Off":
-		from huf.ai.whatsapp_send_file import ffmpeg_status
+		from huf.ai.whatsapp.send_file import ffmpeg_status
 
 		facts["ffmpeg_status"] = ffmpeg_status()
 	result = evaluate(facts, now)

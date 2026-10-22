@@ -6,7 +6,7 @@ Source of truth:
 
 - `huf/ai/gateway_adapters/whatsapp.py`: adapter (ingress verification, parsing, outbound sends)
 - `huf/ai/gateway_adapters/whatsapp_bridge.py`: the only module that touches `frappe_whatsapp` DocTypes
-- `huf/ai/whatsapp_management.py`: whitelisted management API
+- `huf/ai/whatsapp/management.py`: whitelisted management API
 - `huf/ai/gateway_webhook.py`: `handle_gateway_webhook` (the single Meta callback)
 - `huf/ai/tools/whatsapp.py`: agent tool
 
@@ -184,7 +184,7 @@ Place it in the site's `server` block before the generic Frappe proxy location. 
 
 ### 3.4 Verify the setup
 
-Call `huf.ai.whatsapp_management.get_setup_status` (System Manager or Huf Admin), or open the WhatsApp page in the Huf console (`/whatsapp`). It reports:
+Call `huf.ai.whatsapp.management.get_setup_status` (System Manager or Huf Admin), or open the WhatsApp page in the Huf console (`/whatsapp`). It reports:
 
 - `bridge_available`
 - the WhatsApp Accounts found
@@ -234,7 +234,7 @@ Set `override_callback_uri` to the Huf URL of the Gateway that owns that number 
 
 ## Message log
 
-`huf.ai.whatsapp_management.list_message_log` (GET) returns a gateway-scoped, newest-first log of the messages
+`huf.ai.whatsapp.management.list_message_log` (GET) returns a gateway-scoped, newest-first log of the messages
 a WhatsApp gateway handled. It needs the same access as `list_messages` (read on the Gateway; the account is
 derived from `Gateway.whatsapp_account`).
 
@@ -258,7 +258,7 @@ derived from `Gateway.whatsapp_account`).
 Huf seeds a first-party `WhatsApp` tile in the app launcher (`/huf/whatsapp`, category Communicate) on install
 and migrate. An admin's `enabled` choice is never overwritten. The tile is shown only to System Manager, Huf Admin
 or users with `system.integrations.manage`, and only while at least one enabled WhatsApp gateway exists
-(`huf.ai.whatsapp_management.can_launch_whatsapp_app`).
+(`huf.ai.whatsapp.management.can_launch_whatsapp_app`).
 
 ## 4. The 24-hour window and templates
 
@@ -281,7 +281,7 @@ Approval and pairing notifications follow the same rule. If the window is closed
 
 **UI**: the WhatsApp page in the Huf console (`/whatsapp`).
 
-**Management API** (`huf.ai.whatsapp_management`, all whitelisted):
+**Management API** (`huf.ai.whatsapp.management`, all whitelisted):
 
 | Function | Method | What it does |
 |---|---|---|

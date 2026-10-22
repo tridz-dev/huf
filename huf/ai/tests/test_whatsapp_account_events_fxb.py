@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from huf.ai import gateway_webhook
-from huf.ai import whatsapp_account_events as ae
+from huf.ai.whatsapp import account_events as ae
 from huf.ai.gateway_adapters.types import GatewayInboundRequest
 from huf.ai.gateway_adapters.whatsapp import WhatsAppGatewayAdapter
 

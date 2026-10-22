@@ -25,7 +25,8 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import now_datetime
 
-from huf.ai import gateway_webhook, whatsapp_management as mgmt
+from huf.ai import gateway_webhook
+from huf.ai.whatsapp import management as mgmt
 from huf.ai.gateway_adapters import GatewayInboundRequest, whatsapp_bridge as bridge
 from huf.ai.gateway_adapters.types import GatewayReply
 from huf.ai.gateway_adapters.whatsapp import WhatsAppGatewayAdapter, WhatsAppWindowClosed
@@ -859,7 +860,7 @@ class TestWhatsAppCoreWithoutBridge(IntegrationTestCase):
 		for module in (
 			"huf.ai.gateway_adapters.whatsapp_bridge",
 			"huf.ai.gateway_adapters.whatsapp",
-			"huf.ai.whatsapp_management",
+			"huf.ai.whatsapp.management",
 			"huf.ai.gateway_webhook",
 		):
 			importlib.import_module(module)

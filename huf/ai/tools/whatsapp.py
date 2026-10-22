@@ -20,7 +20,7 @@ WhatsApp gateway (a chat run, a flow run, a forged context) is refused with
 ``gateway_context_required``; there is no fallback to a default account or to the first
 Integration Settings row. Sends are authorised for the run's own gateway (the gateway admitted the sender), so its execution
 user needs no Gateway write; template creation still requires write authority
-(``whatsapp_management._send_authority``); reads require Gateway read authority.
+(``huf.ai.whatsapp.management._send_authority``); reads require Gateway read authority.
 
 Privilege gating (A8)
 ---------------------
@@ -63,7 +63,7 @@ from typing import Optional, Any
 import frappe
 import requests
 
-from huf.ai import whatsapp_send_file as send_file
+from huf.ai.whatsapp import send_file as send_file
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_messages as wm
 from huf.ai.gateway_adapters import whatsapp_templates as wt
@@ -229,7 +229,7 @@ def _authorize(action: str, gateway_name: str) -> Optional[str]:
 	gateway's execution user needs no Gateway write. Template management (``create_template``) keeps
 	requiring real write authority; every other action requires read.
 	"""
-	from huf.ai import whatsapp_management as mgmt
+	from huf.ai.whatsapp import management as mgmt
 
 	try:
 		if action == "create_template":
@@ -253,7 +253,7 @@ def _gateway_phone_id(gateway_name: str) -> str:
 
 def _disconnect_refusal(gateway_name: str) -> Optional[str]:
 	"""The normal JSON refusal when the run gateway's number is Disconnected, else None."""
-	from huf.ai import whatsapp_account_events as _ae
+	from huf.ai.whatsapp import account_events as _ae
 
 	refusal = _ae.send_refusal(_gateway_phone_id(gateway_name))
 	return json.dumps(refusal, default=str) if refusal else None
@@ -320,7 +320,7 @@ def _mark_outreach(gateway_name: str, kwargs: dict, raw: str) -> None:
 			return
 		if _has_entry(gateway_name, recipient):
 			return
-		from huf.ai import whatsapp_outbound_policy as policy
+		from huf.ai.whatsapp import outbound_policy as policy
 
 		policy.record_template_outreach(gateway_name, recipient)
 	except Exception:
@@ -334,7 +334,7 @@ def _scope_refusal(kwargs: dict, gateway_name: str) -> Optional[str]:
 	gets no wider reach than the gateway's configured scope. Fills ``to`` with the current contact when
 	left out.
 	"""
-	from huf.ai import whatsapp_send_scope as send_scope
+	from huf.ai.whatsapp import send_scope as send_scope
 
 	run_id = _effective_run_id()
 	if not _recipient(kwargs):
@@ -348,8 +348,8 @@ def _scope_refusal(kwargs: dict, gateway_name: str) -> Optional[str]:
 
 
 def _idempotent_send(action: str, kwargs: dict, gateway_name: str) -> str:
-	"""Run a send at most once per idempotency key (durable; see ``huf.ai.whatsapp_send_keys``)."""
-	from huf.ai import whatsapp_send_keys as send_keys
+	"""Run a send at most once per idempotency key (durable; see ``huf.ai.whatsapp.send_keys``)."""
+	from huf.ai.whatsapp import send_keys as send_keys
 
 	try:
 		explicit = send_keys.explicit_key(kwargs)
@@ -368,7 +368,7 @@ def _idempotent_send(action: str, kwargs: dict, gateway_name: str) -> str:
 
 def _capped_dispatch(action: str, kwargs: dict, gateway_name: str, run_id: Optional[str]) -> str:
 	"""Run the send unless it would exceed the gateway's per-run / per-day cap (checked after the claim)."""
-	from huf.ai import whatsapp_send_scope as send_scope
+	from huf.ai.whatsapp import send_scope as send_scope
 
 	refusal = send_scope.check_caps(gateway_name, run_id)
 	if refusal:
@@ -923,7 +923,7 @@ def _list_messages(kwargs: dict) -> str:
 	contact = bridge.normalize_phone(kwargs.get("to") or kwargs.get("recipient") or kwargs.get("phone_number") or "")
 	if not contact:
 		return _refused("contact_required", "Name the contact ('to') whose messages should be listed.")
-	from huf.ai import whatsapp_management as mgmt
+	from huf.ai.whatsapp import management as mgmt
 
 	try:
 		result = mgmt.list_message_log(
@@ -995,7 +995,7 @@ def _create_template_draft(acct: dict, payload: dict, gateway_name: str) -> str:
 	on the run gateway is re-checked here, right at the bypass.
 	"""
 	try:
-		from huf.ai import whatsapp_management as mgmt
+		from huf.ai.whatsapp import management as mgmt
 
 		refused = mgmt._send_authority(gateway_name)
 		if refused:

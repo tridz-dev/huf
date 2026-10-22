@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import frappe
 
-from huf.ai import whatsapp_account_events as ae
+from huf.ai.whatsapp import account_events as ae
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.tools import whatsapp
 
@@ -106,8 +106,8 @@ class TestRunBoundSendAuthority(unittest.TestCase):
 
 	def _denying_mgmt(self):
 		return (
-			patch("huf.ai.whatsapp_management._send_authority", side_effect=frappe.PermissionError("no")),
-			patch("huf.ai.whatsapp_management._gateway_write_allowed", return_value=False),
+			patch("huf.ai.whatsapp.management._send_authority", side_effect=frappe.PermissionError("no")),
+			patch("huf.ai.whatsapp.management._gateway_write_allowed", return_value=False),
 		)
 
 	def test_send_actions_do_not_need_gateway_write(self):

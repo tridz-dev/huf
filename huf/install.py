@@ -556,7 +556,7 @@ def create_whatsapp_app():
 		"enabled": 1,
 		"sync_status": "Active",
 		"source_app": "huf",
-		"permission_method": "huf.ai.whatsapp_management.can_launch_whatsapp_app",
+		"permission_method": "huf.ai.whatsapp.management.can_launch_whatsapp_app",
 	}
 
 	existing_name = frappe.db.get_value("HUF App", {"app_id": WHATSAPP_APP_ID}, "name")

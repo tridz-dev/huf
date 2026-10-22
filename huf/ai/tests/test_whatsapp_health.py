@@ -14,8 +14,8 @@ if isinstance(frappe, MagicMock):
 	frappe.whitelist = lambda *args, **kwargs: (lambda fn: fn)
 	frappe.PermissionError = PermissionError
 
-from huf.ai import whatsapp_health as wh  # noqa: E402
-from huf.ai import whatsapp_management as mgmt  # noqa: E402
+from huf.ai.whatsapp import health as wh  # noqa: E402
+from huf.ai.whatsapp import management as mgmt  # noqa: E402
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge  # noqa: E402
 
 NOW = datetime(2026, 10, 14, 12, 0, 0)
@@ -204,7 +204,7 @@ class TestEventCounts(unittest.TestCase):
 
 class TestReads(unittest.TestCase):
 	def setUp(self):
-		p = patch("huf.ai.whatsapp_health.frappe")
+		p = patch("huf.ai.whatsapp.health.frappe")
 		self.frappe = p.start()
 		self.addCleanup(p.stop)
 
@@ -355,7 +355,7 @@ class TestScopedSetupStatus(unittest.TestCase):
 		"ACC-B": {"name": "ACC-B", "phone_id": "222", "status": "Active"}}
 
 	def setUp(self):
-		p = patch("huf.ai.whatsapp_management.frappe")
+		p = patch("huf.ai.whatsapp.management.frappe")
 		self.frappe = p.start()
 		self.addCleanup(p.stop)
 		self.frappe.PermissionError = PermissionError
@@ -379,7 +379,7 @@ class TestScopedSetupStatus(unittest.TestCase):
 			q = patch.object(bridge, target, return_value=value)
 			q.start()
 			self.addCleanup(q.stop)
-		h = patch("huf.ai.whatsapp_health.build_health", side_effect=self._fake_health)
+		h = patch("huf.ai.whatsapp.health.build_health", side_effect=self._fake_health)
 		h.start()
 		self.addCleanup(h.stop)
 

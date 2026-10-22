@@ -66,7 +66,7 @@ def check_template(gateway: str | None, recipient: Any, row: dict[str, Any] | No
 			f"The template is {status.lower()}, not approved, so it was not sent.", "template_not_approved"
 		)
 	if gateway and str(row.get("category") or "").upper() == "MARKETING":
-		from huf.ai import whatsapp_account_events as events
+		from huf.ai.whatsapp import account_events as events
 
 		if not events.is_marketing_allowed(gateway, recipient):
 			raise OutboundRefused(
@@ -94,7 +94,7 @@ def enforce_template(
 
 
 def has_received_template(gateway: str, recipient: Any) -> bool:
-	from huf.ai import whatsapp_account_events as events
+	from huf.ai.whatsapp import account_events as events
 
 	key = events._norm_sender(recipient)
 	return bool(key) and events._latest_consent(gateway, key, OUTREACH) is not None
@@ -102,7 +102,7 @@ def has_received_template(gateway: str, recipient: Any) -> bool:
 
 def record_template_outreach(gateway: str, recipient: Any) -> None:
 	"""Remember that ``recipient`` was sent a proactive template on ``gateway`` (idempotent)."""
-	from huf.ai import whatsapp_account_events as events
+	from huf.ai.whatsapp import account_events as events
 
 	key = events._norm_sender(recipient)
 	if not gateway or not key or not frappe.db.exists("Gateway", gateway):

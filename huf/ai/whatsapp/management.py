@@ -285,8 +285,8 @@ _GATEWAY_FIELDS = [
 
 
 def _gateway_status(gateway: dict[str, Any], connector_available: bool | None = None) -> dict[str, Any]:
-	"""Full per-gateway payload: configuration presence plus health (see ``whatsapp_health``)."""
-	from huf.ai import whatsapp_health as health
+	"""Full per-gateway payload: configuration presence plus health (see ``huf.ai.whatsapp.health``)."""
+	from huf.ai.whatsapp import health
 
 	if connector_available is None:
 		connector_available = bridge.is_available()
@@ -1464,9 +1464,9 @@ def can_launch_whatsapp_app(user: str | None = None, app: dict | None = None, **
 def check_token(gateway_name: str | None = None, force: Any = None) -> dict[str, Any]:
 	"""Is this gateway's Meta access token still good? Admin only; 1 call/10 s per gateway, cached 10 min."""
 	_require_admin()
-	from huf.ai import whatsapp_token_check
+	from huf.ai.whatsapp import token_check
 
-	return whatsapp_token_check.check_token_for_gateway(
+	return token_check.check_token_for_gateway(
 		gateway_name or "", force=str(force or "").lower() in ("1", "true", "yes")
 	)
 
