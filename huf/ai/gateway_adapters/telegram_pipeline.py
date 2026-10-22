@@ -68,10 +68,15 @@ def forum_thread_id(event: Any) -> str | None:
 	raw = getattr(event, "raw_payload", None)
 	if not isinstance(raw, dict):
 		return None
-	for key in ("message", "edited_message", "business_message"):
+	from huf.ai.gateway_adapters.telegram_threads import thread_id_for_reply
+
+	for key in ("message", "edited_message", "business_message", "channel_post"):
 		msg = raw.get(key)
-		if isinstance(msg, dict) and msg.get("message_thread_id") is not None:
-			return str(msg["message_thread_id"])
+		if isinstance(msg, dict):
+			return thread_id_for_reply(msg)
+	cb = raw.get("callback_query")
+	if isinstance(cb, dict) and isinstance(cb.get("message"), dict):
+		return thread_id_for_reply(cb["message"])
 	return None
 
 

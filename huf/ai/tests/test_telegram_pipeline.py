@@ -195,7 +195,7 @@ class TestFailureHandling(Base):
 
 class TestMisc(Base):
 	def test_reply_target(self):
-		ev = FakeEvent(raw_payload={"message": {"message_thread_id": 12}})
+		ev = FakeEvent(raw_payload={"message": {"message_thread_id": 12, "is_topic_message": True}})
 		self.assertEqual(tp.reply_target(ev), ("12", "77"))
 		self.assertEqual(tp.reply_target(FakeEvent()), (None, "77"))
 
