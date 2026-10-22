@@ -257,3 +257,116 @@ def delete_webhook_now(gateway: str | None = None, confirm: Any = 0, drop_pendin
 		return {"webhook": webhook_summary(c, _webhook_url(r["name"]))}
 
 	return _with_client(gateway, run)
+
+
+# -- recommended setup ---------------------------------------------------------------------------
+
+MINI_APP_PATH = "/huf/tg-app"
+MENU_BUTTON_TEXT = "Console"
+RECOMMENDED_COMMANDS: dict[str, list[dict[str, str]]] = {
+	"default": [
+		{"command": "start", "description": "Link this chat to your account"},
+		{"command": "help", "description": "Show what you can do here"},
+		{"command": "me", "description": "Show who you are linked as"},
+		{"command": "find", "description": "Search your records"},
+		{"command": "open", "description": "Open a record"},
+		{"command": "approvals", "description": "Review items waiting for you"},
+		{"command": "digest", "description": "Get a summary of recent activity"},
+		{"command": "unbind", "description": "Unlink this chat from your account"},
+	],
+	"all_group_chats": [
+		{"command": "help", "description": "Show what you can do here"},
+		{"command": "me", "description": "Show who you are linked as"},
+	],
+}
+
+
+def mini_app_url(gateway: str, base_url: str) -> str:
+	from urllib.parse import quote
+
+	return f"{base_url.rstrip('/')}{MINI_APP_PATH}?gw={quote(gateway, safe='')}"
+
+
+def _current_commands(client: Any, scope: str) -> list[dict[str, Any]]:
+	return list(tc.get_commands(client, scope=scope) or [])
+
+
+def plan_recommended_setup(client: Any, gateway: str, base_url: str) -> dict[str, Any]:
+	https_ok = base_url.startswith("https://")
+	url = mini_app_url(gateway, base_url)
+	current_menu = client.call("getChatMenuButton", {}) or {"type": "default"}
+	scopes = [
+		{"scope": s, "current": _current_commands(client, s), "recommended": cmds}
+		for s, cmds in RECOMMENDED_COMMANDS.items()
+	]
+	return {
+		"commands": scopes,
+		"menu_button": {
+			"current": current_menu,
+			"recommended": {"type": "web_app", "text": MENU_BUTTON_TEXT, "web_app": {"url": url}},
+			"https_ok": https_ok,
+			"warning": "" if https_ok else "Telegram only opens web apps over https. This site's address is not https, so the menu button will be left as it is.",
+		},
+		"replaces_existing_commands": any(s["current"] for s in scopes),
+	}
+
+
+def apply_plan(client: Any, gateway: str, base_url: str, include_menu_button: bool, replace_commands: bool) -> dict[str, Any]:
+	if include_menu_button and not base_url.startswith("https://"):
+		raise ValueError("The menu button needs an https site address. This site is not served over https, so nothing was changed.")
+	changed: dict[str, Any] = {"commands": [], "menu_button": None}
+	undo: dict[str, Any] = {"commands": [], "menu_button": None}
+	if replace_commands:
+		for scope, cmds in RECOMMENDED_COMMANDS.items():
+			undo["commands"].append({"scope": scope, "commands": _current_commands(client, scope)})
+			tc.set_commands(client, cmds, scope=scope)
+			changed["commands"].append({"scope": scope, "count": len(cmds)})
+	if include_menu_button:
+		undo["menu_button"] = client.call("getChatMenuButton", {}) or {"type": "default"}
+		button = menu_button_payload("web_app", MENU_BUTTON_TEXT, mini_app_url(gateway, base_url))
+		client.call("setChatMenuButton", {"menu_button": button})
+		changed["menu_button"] = button
+	return {"changed": changed, "previous": undo}
+
+
+def _audit_setup(gateway: str, result: str, detail: str) -> None:
+	try:
+		from huf.ai.telegram_admin import write_audit
+
+		write_audit(
+			{"telegram_user_id": "", "frappe_user": frappe.session.user, "gateway": gateway},
+			{"op": "apply_recommended_setup"}, result, detail=detail,
+		)
+	except Exception:
+		frappe.logger("huf").warning("telegram recommended setup audit write failed")
+
+
+@frappe.whitelist()
+def recommended_setup(gateway: str | None = None) -> dict[str, Any]:
+	"""The planned changes with the bot's current values, without applying anything."""
+	return _with_client(gateway, lambda c, r, cr: {"plan": plan_recommended_setup(c, r["name"], frappe.utils.get_url())})
+
+
+@frappe.whitelist()
+def apply_recommended_setup(
+	gateway: str | None = None, confirm: Any = 0, include_menu_button: Any = True, replace_commands: Any = True,
+) -> dict[str, Any]:
+	"""Publish the recommended commands and Console menu button. Overwrites the bot's command list: ``confirm=1`` required."""
+	row = _load_gateway(gateway)  # permission first, so confirm_required never leaks to non-admins
+	if "success" in row:
+		return row
+	if not _truthy(confirm):
+		return _error("confirm_required", "This replaces the commands currently published for this bot. Confirm to continue.")
+	menu, cmds = _truthy(include_menu_button), _truthy(replace_commands)
+	if not (menu or cmds):
+		return _error("invalid", "Nothing to apply.")
+
+	def run(c, r, cr):
+		return apply_plan(c, r["name"], frappe.utils.get_url(), menu, cmds)
+
+	out = _with_client(gateway, run)
+	if out.get("success"):
+		_audit_setup(row["name"], "ok", f"commands={cmds} menu_button={menu}")
+	else:
+		_audit_setup(row["name"], "failed", str(out.get("message") or out.get("error"))[:300])
+	return out
