@@ -141,7 +141,7 @@ def get_bot_profile(gateway: str | None = None, language: str | None = None) -> 
 	return _with_client(gateway, lambda c, r, cr: {"profile": profile_get(c, language), "limits": {"name": NAME_MAX, "short_description": ABOUT_MAX, "description": DESCRIPTION_MAX}})
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def set_bot_profile(
 	gateway: str | None = None, name: str | None = None, description: str | None = None,
 	short_description: str | None = None, language: str | None = None,
@@ -168,7 +168,7 @@ def _parse_commands(commands: Any) -> list[Any]:
 	return list(commands or [])
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def set_commands(gateway: str | None = None, scope: str = "default", language: str | None = None, commands: Any = None) -> dict[str, Any]:
 	def run(c, r, cr):
 		if scope not in UI_SCOPES:
@@ -180,7 +180,7 @@ def set_commands(gateway: str | None = None, scope: str = "default", language: s
 	return _with_client(gateway, run)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete_commands(gateway: str | None = None, scope: str = "default", language: str | None = None) -> dict[str, Any]:
 	def run(c, r, cr):
 		if scope not in UI_SCOPES:
@@ -196,7 +196,7 @@ def get_menu_button(gateway: str | None = None) -> dict[str, Any]:
 	return _with_client(gateway, lambda c, r, cr: {"menu_button": c.call("getChatMenuButton", {}) or {"type": "default"}})
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def set_menu_button(gateway: str | None = None, type: str = "commands", text: str = "", url: str = "") -> dict[str, Any]:  # noqa: A002
 	def run(c, r, cr):
 		button = menu_button_payload(type, text, url)
@@ -229,7 +229,7 @@ def refresh_webhook_health(gateway: str | None = None) -> dict[str, Any]:
 	return _with_client(gateway, lambda c, r, cr: {"webhook": webhook_summary(c, _webhook_url(r["name"]))})
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def set_webhook_now(gateway: str | None = None, confirm: Any = 0, drop_pending_updates: Any = 0) -> dict[str, Any]:
 	"""Point this bot's webhook at this site. Takes over delivery for the bot, so ``confirm=1`` is required."""
 	if not _truthy(confirm):
@@ -246,7 +246,7 @@ def set_webhook_now(gateway: str | None = None, confirm: Any = 0, drop_pending_u
 	return _with_client(gateway, run)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete_webhook_now(gateway: str | None = None, confirm: Any = 0, drop_pending_updates: Any = 0) -> dict[str, Any]:
 	"""Stop delivery to this site. Needs ``confirm=1``."""
 	if not _truthy(confirm):
@@ -394,7 +394,7 @@ def recommended_setup(gateway: str | None = None) -> dict[str, Any]:
 	return _with_client(gateway, lambda c, r, cr: {"plan": plan_recommended_setup(c, r["name"], frappe.utils.get_url())})
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def apply_recommended_setup(
 	gateway: str | None = None, confirm: Any = 0, include_menu_button: Any = True, replace_commands: Any = True,
 ) -> dict[str, Any]:

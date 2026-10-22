@@ -40,6 +40,10 @@ AGENT_TIMEOUT = 120
 RATE_LIMIT = 20
 RATE_WINDOW = 60
 WELCOME_COOLDOWN = 60
+WELCOME_CHAT_CAP = 20  # welcomes per chat per WELCOME_CHAT_WINDOW
+WELCOME_CHAT_WINDOW = 3600
+AGENT_JOIN_CAP = 30  # agent join-decision runs per gateway per AGENT_JOIN_WINDOW
+AGENT_JOIN_WINDOW = 3600
 EMOJI_POOL = ("🐱", "🐶", "🦊", "🐸", "🐼", "🦁", "🐯", "🐵", "🐧", "🐙")
 EMOJI_NAMES = {
 	"🐱": "cat", "🐶": "dog", "🦊": "fox", "🐸": "frog", "🐼": "panda",
@@ -146,6 +150,16 @@ def _bot_token(gateway) -> str:
 	return (_gateway_credentials(gateway).get("token") or "").strip()
 
 
+def room_admitted(gateway, chat_id: Any) -> bool:
+	"""True when this chat is admitted by the gateway's room policy (Open, or an Approved Room entry)."""
+	try:
+		from huf.ai import gateway_service as svc
+
+		return bool(svc._policy_admits(getattr(gateway, "room_policy", None), gateway, "Room", str(chat_id)))
+	except Exception:
+		return False
+
+
 # -- decisions + audit -------------------------------------------------------------------------
 
 
@@ -191,11 +205,19 @@ def apply_decision(gateway, ctx: dict, decision: str, source: str, detail: str =
 	error = ""
 	try:
 		client = _client_for(gateway)
+		plain_ok = False
 		if ctx.get("query_id"):
-			admin.answer_join_request_query(client, ctx["query_id"], decision)
-		elif decision == "approve":
+			try:
+				admin.answer_join_request_query(client, ctx["query_id"], decision)
+			except admin.AdminActionError:
+				if decision not in ("approve", "decline"):
+					raise
+				plain_ok = True  # query spent/invalid: fall back to the plain methods
+		else:
+			plain_ok = decision in ("approve", "decline")
+		if plain_ok and decision == "approve":
 			admin.approve_join_request(client, ctx["chat_id"], ctx["user_id"])
-		elif decision == "decline":
+		elif plain_ok and decision == "decline":
 			admin.decline_join_request(client, ctx["chat_id"], ctx["user_id"])
 	except admin.AdminActionError as exc:
 		error = f"{exc.code}: {exc}"
@@ -313,6 +335,12 @@ def agent_decision(gateway, ctx: dict, answers: str = "", *, runner: Callable | 
 def _schedule_agent_decision(gateway, ctx: dict) -> None:
 	import frappe
 
+	from huf.ai.telegram_admin import check_rate
+
+	if not check_rate(f"gagentjoin:{gateway.name}", AGENT_JOIN_CAP, AGENT_JOIN_WINDOW):
+		audit_decision(gateway.name, ctx, "queue", "agent", "agent run cap reached")
+		return
+
 	frappe.enqueue(
 		"huf.ai.telegram_guard.resolve_agent_join",
 		queue="short",
@@ -331,6 +359,9 @@ def resolve_agent_join(gateway_name: str, ctx: dict, *, runner: Callable | None 
 	decision, reason = agent_decision(gateway, ctx, runner=runner)
 	if decision == "queue":
 		audit_decision(gateway_name, ctx, "queue", "agent", reason)
+		return "queue"
+	if decision == "approve":  # the agent never admits anyone: a human decides
+		audit_decision(gateway_name, ctx, "queue", "agent", f"approve downgraded to queue: {reason}"[:300])
 		return "queue"
 	plain = {**ctx, "query_id": ""}
 	error = apply_decision(gateway, plain, decision, "agent", reason)
@@ -427,10 +458,18 @@ def _client_ip() -> str:
 		return ""
 
 
+def _rate_subject(user_id: Any = "") -> str:
+	"""Rate-limit subject: the client IP, or a per-user-only bucket when the IP is unknown."""
+	ip = _client_ip()
+	return ip if ip else f"nouip:{user_id}"
+
+
 def get_challenge(gateway_name: str, nonce: str, init_data: str, *, now: float | None = None) -> dict:
-	if not _rate_ok(f"gc:{_client_ip()}"):
+	if _client_ip() and not _rate_ok(f"gc:{_client_ip()}"):
 		raise GuardError("Too many requests.")
 	_gw, rec, _user = _authenticate(gateway_name, nonce, init_data, now=now)
+	if not _client_ip() and not _rate_ok(f"gc:{_rate_subject(_user.user_id)}"):
+		raise GuardError("Too many requests.")
 	return {"kind": rec["kind"], "prompt": rec["prompt"], "options": rec["options"], "chat_title": rec["t"]}
 
 
@@ -444,12 +483,15 @@ def submit_answer(
 	"""
 	from huf.ai.telegram_admin import check_rate
 
-	if not _rate_ok(f"ga:{_client_ip()}"):
+	if _client_ip() and not _rate_ok(f"ga:{_client_ip()}"):
 		raise GuardError("Too many requests.")
 	gateway, rec, user = _authenticate(gateway_name, nonce, init_data, now=now)
+	if not _client_ip() and not _rate_ok(f"ga:{_rate_subject(user.user_id)}"):
+		raise GuardError("Too many requests.")
 	cache = _cache()
 	key = f"huf_tg_guard:{nonce}"
-	ctx = {"chat_id": rec["c"], "user_id": rec["u"], "query_id": rec["q"], "chat_title": rec["t"],
+	# The query was spent by sendChatJoinRequestWebApp: resolve with the plain approve/decline methods.
+	ctx = {"chat_id": rec["c"], "user_id": rec["u"], "query_id": "", "chat_title": rec["t"],
 		"user_name": rec["n"]}
 	issued = float(rec.get("iat") or float(rec.get("exp") or 0) - CHALLENGE_TTL)
 
@@ -510,6 +552,8 @@ def _welcome_one(gateway, chat_id, chat_title: str, member: dict, now, cooldown)
 	template = getattr(gateway, "telegram_welcome_template", None)
 	if not template or not member.get("id") or member.get("is_bot"):
 		return False
+	if not room_admitted(gateway, chat_id):  # never welcome in a group the gateway does not serve
+		return False
 	current = time.time() if now is None else now
 	if cooldown is None:
 		cooldown = welcome_cooldown_of(gateway)
@@ -522,6 +566,10 @@ def _welcome_one(gateway, chat_id, chat_title: str, member: dict, now, cooldown)
 		from huf.ai import telegram_templates
 	except ImportError:
 		_log("info", f"Telegram guard {gateway.name}: telegram_templates unavailable; welcome skipped")
+		return False
+	from huf.ai.telegram_admin import check_rate
+
+	if not check_rate(f"gwelcome:{gateway.name}:{chat_id}", WELCOME_CHAT_CAP, WELCOME_CHAT_WINDOW):
 		return False
 	if cooldown > 0:
 		cache.set_value(key, current, expires_in_sec=cooldown)

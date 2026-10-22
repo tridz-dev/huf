@@ -13,7 +13,7 @@ from huf.ai.gateway_adapters.telegram import WEBHOOK_SECRET_HEADER, TelegramGate
 from huf.ai.gateway_adapters.telegram_client import TelegramBotClient
 from huf.ai.tests.telegram_fakes import SECRET, TOKEN, FakeBotApi, clear_update_dedup, isolate_update_dedup, load_fixture
 
-GW = SimpleNamespace(name="gw1", provider="Telegram", mention_required=0, get=lambda k, d=None: d)
+GW = SimpleNamespace(name="gw1", provider="Telegram", mention_required=0, room_policy="Open", get=lambda k, d=None: d)
 
 
 def make():

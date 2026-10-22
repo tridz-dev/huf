@@ -113,7 +113,7 @@ def _with_addressing(gateway, adapter, parsed: TelegramUpdate) -> TelegramUpdate
 		addressed = th.is_addressed_to_bot(msg, mh._bot_username(adapter, gateway), mh._own_id(adapter))
 	except Exception:
 		frappe.logger("huf").warning("Telegram addressing check failed", exc_info=True)
-		return parsed
+		return replace(parsed, mentioned=False)  # fail closed: an unverifiable message is not addressed to the bot
 	return replace(parsed, mentioned=addressed)
 
 

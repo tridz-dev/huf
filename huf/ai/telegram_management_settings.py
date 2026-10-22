@@ -236,7 +236,7 @@ def get_telegram_settings(gateway: str | None = None) -> dict[str, Any]:
 	return {"success": True, "gateway": row["name"], **_read(row["name"])}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update_telegram_settings(gateway: str | None = None, values: Any = None) -> dict[str, Any]:
 	row = _load_gateway(gateway)
 	if "success" in row:

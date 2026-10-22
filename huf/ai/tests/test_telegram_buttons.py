@@ -142,9 +142,9 @@ class TestMarkup(Base):
 		parts = tp.make_parts(long_text + block(spec))
 		self.assertTrue(all("telegram-buttons" not in p for p in parts))
 		import unittest.mock as m
+		event = SimpleNamespace(conversation_id=str(CHAT), name="EV1")
 		with m.patch.object(tb, "_cache", return_value=self.cache):
-			tp_parts = tp.make_parts(long_text + block(spec))
-			event = SimpleNamespace(conversation_id=str(CHAT))
+			tp_parts = tp.make_parts(long_text + block(spec), tp.reply_scope(None, event))
 			markup = tb.markup_for(event, None, "\n\n".join(tp_parts), signer=self.sign, cache=self.cache)
 			retry = tb.markup_for(event, None, tp_parts[-1], signer=self.sign, cache=self.cache)
 		self.assertIsNotNone(markup)

@@ -220,8 +220,15 @@ def _cache(cache: Any = None) -> Any:
 		return _LOCAL
 
 
-def _key(part: str) -> str:
-	return "huf_tg_media:" + hashlib.sha1(str(part).encode("utf-8")).hexdigest()
+def scope_key(gateway_name: Any, chat_id: Any, event_name: Any) -> str:
+	"""Cache scope for one reply: (gateway, chat, inbound event). Empty = unscoped (tests/legacy only)."""
+	if not (gateway_name or chat_id or event_name):
+		return ""
+	return f"{gateway_name}|{chat_id}|{event_name}"
+
+
+def _key(part: str, scope: str = "") -> str:
+	return "huf_tg_media:" + hashlib.sha1(f"{scope}\x00{part}".encode("utf-8")).hexdigest()
 
 
 def is_media_only(part: str) -> bool:
@@ -236,7 +243,7 @@ def strip_reply(response: str) -> tuple[str, list[dict]]:
 	return visible, items
 
 
-def remember(visible: str, items: list[dict], *, cache: Any = None) -> str:
+def remember(visible: str, items: list[dict], *, cache: Any = None, scope: str = "") -> str:
 	"""Remember ``items`` under the first part of the FINAL visible text; returns the text to split.
 
 	A unique placeholder part is returned when the reply has media but no text (``send_parts`` skips
@@ -250,29 +257,29 @@ def remember(visible: str, items: list[dict], *, cache: Any = None) -> str:
 		from huf.ai.gateway_adapters.telegram_format import split_message
 
 		first = (split_message(visible) or [visible])[0]
-		_cache(cache).set_value(_key(first), items, expires_in_sec=TTL_SECONDS)
+		_cache(cache).set_value(_key(first, scope), items, expires_in_sec=TTL_SECONDS)
 	except Exception:
 		pass
 	return visible
 
 
-def prepare_reply(response: str, *, cache: Any = None) -> str:
+def prepare_reply(response: str, *, cache: Any = None, scope: str = "") -> str:
 	"""``strip_reply`` + ``remember`` in one call (use when there is no other block to strip)."""
 	visible, items = strip_reply(response)
-	return remember(visible, items, cache=cache)
+	return remember(visible, items, cache=cache, scope=scope)
 
 
-def take_items(parts: list[str], *, cache: Any = None) -> list[dict]:
+def take_items(parts: list[str], *, cache: Any = None, scope: str = "") -> list[dict]:
 	"""Pop the remembered items for these parts (once: a retry never re-sends the media)."""
 	try:
 		c = _cache(cache)
 		for part in parts:
-			items = c.get_value(_key(part))
+			items = c.get_value(_key(part, scope))
 			if isinstance(items, list):
 				try:
-					c.delete_value(_key(part))
+					c.delete_value(_key(part, scope))
 				except Exception:
-					c.set_value(_key(part), None, expires_in_sec=1)
+					c.set_value(_key(part, scope), None, expires_in_sec=1)
 				return items
 	except Exception:
 		pass
