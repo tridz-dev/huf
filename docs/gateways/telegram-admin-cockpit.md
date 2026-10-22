@@ -78,6 +78,14 @@ Confirm             -> verify sig(chat) -> binding active -> rate -> consume n2 
 `Telegram Admin Audit` is append-only. The controller refuses updates and trash, and permissions grant
 only read/report/export to System Manager and read/report to Huf Manager.
 
+### Agent admin actions
+
+The `telegram_admin` agent tool reuses the same signed-button approval. Every state change (anything except the
+read-only `get_*` actions) is accepted only from a paired Admin+ owner chat and still needs a human to press
+the signed Approve button; a `confirm=true` argument from the agent is ignored. Requests from any other chat are
+refused with `owner_required`. Executed and refused calls (including `owner_required` and `no_admin_available`)
+write `Telegram Admin Audit` rows.
+
 ## Mini App launch contract
 
 - Launch URL: `miniapp_launch_url(binding)` returns `site_config.huf_telegram_admin_miniapp_url` or

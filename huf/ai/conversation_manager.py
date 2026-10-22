@@ -650,7 +650,7 @@ class ConversationManager:
             call_id, tool_name, tool_args = self._resolve_tool_call_details(
                 stored_tool_call_id, tool_call_link
             )
-            stored_call = None
+            stored_calls = []
             if stored_tool_calls:
                 try:
                     parsed = (
@@ -660,39 +660,41 @@ class ConversationManager:
                     )
                     if isinstance(parsed, dict):
                         parsed = [parsed]
-                    if isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
-                        stored_call = parsed[0]
+                    if isinstance(parsed, list):
+                        stored_calls = [c for c in parsed if isinstance(c, dict)]
                 except (json.JSONDecodeError, TypeError):
-                    stored_call = None
-            if stored_call:
-                fn = stored_call.get("function") or {}
-                call_id = stored_call.get("id") or call_id
-                tool_name = fn.get("name") or tool_name
-                tool_args = fn.get("arguments") or tool_args
+                    stored_calls = []
             if (
                 policy == "include_full"
                 and isinstance(content, str)
                 and "**Tool Result:**" in content
             ):
                 content = content.split("**Tool Result:**", 1)[1].strip()
-            assistant_msg = {
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [
+            if not stored_calls:
+                stored_calls = [{}]
+            # Replay EVERY declared call of a combined row so each keeps its tool message. The row stores one
+            # result: it belongs to the call matching ``tool_call_id`` (else the first); the others get a
+            # placeholder so the declaration is never left unfulfilled.
+            primary = next(
+                (i for i, c in enumerate(stored_calls) if stored_tool_call_id and c.get("id") == stored_tool_call_id),
+                0,
+            )
+            declared, tool_msgs = [], []
+            for i, stored_call in enumerate(stored_calls):
+                fn = stored_call.get("function") or {}
+                cid = stored_call.get("id") or (call_id if i == primary else f"{call_id}_{i}")
+                name = fn.get("name") or (tool_name if i == primary else "tool")
+                targs = fn.get("arguments") or (tool_args if i == primary else "{}")
+                declared.append({"id": cid, "type": "function", "function": {"name": name, "arguments": targs}})
+                tool_msgs.append(
                     {
-                        "id": call_id,
-                        "type": "function",
-                        "function": {"name": tool_name, "arguments": tool_args},
+                        "role": "tool",
+                        "tool_call_id": cid,
+                        "name": name,
+                        "content": content if i == primary else "[result not stored in this history row]",
                     }
-                ],
-            }
-            tool_msg = {
-                "role": "tool",
-                "tool_call_id": call_id,
-                "name": tool_name,
-                "content": content,
-            }
-            return [assistant_msg, tool_msg]
+                )
+            return [{"role": "assistant", "content": None, "tool_calls": declared}, *tool_msgs]
 
         # Assistant message that issued one or more tool calls.
         if role_mapped == "assistant" and msg_kind != "Tool Result" and (

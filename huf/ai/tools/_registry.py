@@ -2244,11 +2244,12 @@ TELEGRAM_ADMIN_TOOLS = [
 			"Telegram group administration, bot profile and secretary (business) actions. Only inside a Telegram gateway "
 			"conversation and only the groups the gateway admin enabled; otherwise refused with action_not_permitted. "
 			"The bot must be an admin with the needed right in the target chat (chat_id defaults to the current chat). "
-			"Destructive actions (ban, restrict, promote, delete_message, delete_business_messages, set_my_commands) need "
-			"confirm=true when the requester is the cockpit owner; in any other chat they return pending_human_approval "
-			"and run only after a human Admin presses Approve in Telegram (confirm/tokens from the agent are ignored; do "
-			"not retry). Business actions and set_chat_menu_button with a chat_id obey the gateway recipient scope and send "
-			"caps. Never targets chat admins. Capped per run. GROUP: ban/unban (user_id, until_date|duration_minutes, revoke_messages), "
+			"EVERY state change (all actions except get_admins and get_business_connection) is accepted only from a bound "
+			"admin's private cockpit chat and returns pending_human_approval: it runs only after a human Admin presses "
+			"Approve in Telegram (confirm/confirmation_token from the agent are ignored; do not retry). From any other "
+			"chat it is refused with owner_required: ask a bound admin instead. Business actions and set_chat_menu_button "
+			"with a chat_id obey the gateway recipient scope and send "
+			"caps. Never targets paired admins; ban/restrict/promote never target chat admins. Capped per run. GROUP: ban/unban (user_id, until_date|duration_minutes, revoke_messages), "
 			"restrict (user_id, preset mute|no_media|no_links|read_only|no_invites_or_pins or permissions, duration_minutes), "
 			"unrestrict, promote (user_id, rights list), demote, set_chat_title (title), set_chat_description (description), "
 			"pin/unpin (message_id), delete_message (message_id), approve_join_request/decline_join_request (user_id), "
@@ -2272,8 +2273,7 @@ TELEGRAM_ADMIN_TOOLS = [
 			_p("chat_id", description="Target chat (numeric or @username); defaults to the current chat."),
 			_p("user_id", type="integer", description="Target Telegram user id."),
 			_p("message_id", type="integer", description="Target message id."),
-			_p("confirm", type="boolean", description="Required true for destructive actions."),
-			_p("confirmation_token", description="Token returned by needs_confirmation; pass back with identical arguments."),
+			_p("confirm", type="boolean", description="Ignored (kept for compatibility): approval is always a human pressing Approve in Telegram."),
 			_p("business_connection_id", description="Business connection id (business actions)."),
 			_p("text", description="Message text (send_business_message)."),
 		],

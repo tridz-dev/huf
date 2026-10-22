@@ -1323,8 +1323,14 @@ def send_daily_digests() -> dict:
 		fields=["name", "telegram_user_id", "frappe_user", "gateway", "role_scope", "chat_id"],
 	)
 	adapters: dict[str, Any] = {}
+	usable: dict[str, bool] = {}
 	for b in bindings:
 		if not b.chat_id or b.frappe_user in FORBIDDEN_USERS:
+			continue
+		if b.gateway not in usable:  # disabled / non-Telegram gateways get no digest
+			row = frappe.db.get_value("Gateway", b.gateway, ["is_enabled", "provider"], as_dict=True)
+			usable[b.gateway] = bool(row and row.get("is_enabled") and row.get("provider") == "Telegram")
+		if not usable[b.gateway]:
 			continue
 		try:
 			with run_as(b.frappe_user):

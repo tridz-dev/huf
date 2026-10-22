@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
+import threading
 import time
 from typing import Any, Optional
 
@@ -39,32 +40,32 @@ FLAGS = {
 	"profile": "telegram_agent_allow_profile",
 	"business": "telegram_agent_allow_business",
 }
-# action -> (group, bot admin right required or None, destructive, counts against the cap)
+# action -> (group, bot admin right required or None, state-changing (needs owner run + human approval), counts against the cap)
 ACTIONS: dict[str, tuple[str, Optional[str], bool, bool]] = {
 	"ban": ("group", "can_restrict_members", True, True),
-	"unban": ("group", "can_restrict_members", False, True),
+	"unban": ("group", "can_restrict_members", True, True),
 	"restrict": ("group", "can_restrict_members", True, True),
-	"unrestrict": ("group", "can_restrict_members", False, True),
+	"unrestrict": ("group", "can_restrict_members", True, True),
 	"promote": ("group", "can_promote_members", True, True),
-	"demote": ("group", "can_promote_members", False, True),
-	"set_chat_title": ("group", "can_change_info", False, True),
-	"set_chat_description": ("group", "can_change_info", False, True),
-	"pin": ("group", "can_pin_messages", False, True),
-	"unpin": ("group", "can_pin_messages", False, True),
+	"demote": ("group", "can_promote_members", True, True),
+	"set_chat_title": ("group", "can_change_info", True, True),
+	"set_chat_description": ("group", "can_change_info", True, True),
+	"pin": ("group", "can_pin_messages", True, True),
+	"unpin": ("group", "can_pin_messages", True, True),
 	"delete_message": ("group", "can_delete_messages", True, True),
-	"approve_join_request": ("group", "can_invite_users", False, True),
-	"decline_join_request": ("group", "can_invite_users", False, True),
-	"create_invite_link": ("group", "can_invite_users", False, True),
-	"revoke_invite_link": ("group", "can_invite_users", False, True),
+	"approve_join_request": ("group", "can_invite_users", True, True),
+	"decline_join_request": ("group", "can_invite_users", True, True),
+	"create_invite_link": ("group", "can_invite_users", True, True),
+	"revoke_invite_link": ("group", "can_invite_users", True, True),
 	"get_admins": ("group", None, False, False),
 	"set_my_commands": ("profile", None, True, True),
-	"set_my_name": ("profile", None, False, True),
-	"set_my_description": ("profile", None, False, True),
-	"set_my_short_description": ("profile", None, False, True),
-	"set_chat_menu_button": ("profile", None, False, True),
+	"set_my_name": ("profile", None, True, True),
+	"set_my_description": ("profile", None, True, True),
+	"set_my_short_description": ("profile", None, True, True),
+	"set_chat_menu_button": ("profile", None, True, True),
 	"get_business_connection": ("business", None, False, False),
-	"send_business_message": ("business", None, False, True),
-	"read_business_message": ("business", None, False, True),
+	"send_business_message": ("business", None, True, True),
+	"read_business_message": ("business", None, True, True),
 	"delete_business_messages": ("business", None, True, True),
 }
 CHAT_ACTIONS = {a for a, v in ACTIONS.items() if v[0] == "group"}
@@ -130,9 +131,9 @@ def _cap_limit(gateway: str) -> int:
 	return value if value > 0 else DEFAULT_CAP
 
 
-# Destructive actions that ALWAYS need a human Admin's approval, even in an owner run (a prompt-injected agent
-# must not be able to ban / promote / mass-delete with a mere ``confirm=true``). Override by editing this set.
-ALWAYS_HUMAN_APPROVAL = frozenset({"delete_business_messages", "promote", "ban"})
+# Every state-changing action (anything not read-only get_*) needs a human Admin's signed Approve press, even in an
+# owner run: a prompt-injected agent must not change anything with a mere ``confirm=true``.
+ALWAYS_HUMAN_APPROVAL = frozenset(a for a, v in ACTIONS.items() if v[2])
 
 
 def _is_owner_run(gateway: str, chat: str) -> bool:
@@ -205,22 +206,63 @@ def _cap_count(gateway: str, run_id: str) -> int:
 		return 0
 
 
+def _cap_atomic():
+	try:
+		c = _cache()
+		if getattr(c, "make_key", None) and all(hasattr(c, n) for n in ("incrby", "decrby", "expire")):
+			return c
+	except Exception:
+		pass
+	return None
+
+
+_CAP_LOCK = threading.Lock()
+
+
 def _cap_claim(gateway: str, run_id: Optional[str]) -> None:
 	if not run_id:
 		return
 	limit = _cap_limit(gateway)
-	count = _cap_count(gateway, run_id)
-	if count >= limit:
-		raise Refused(
-			"admin_cap_exceeded",
-			f"This run already performed its limit of {limit} Telegram admin actions.",
-			limit=limit,
-		)
-	_cache().set_value(_cap_key(gateway, run_id), count + 1, expires_in_sec=24 * 3600)
+	c = _cap_atomic()
+	if c is not None:
+		from huf.ai.telegram_send_scope import _incr
+
+		try:
+			key = c.make_key(_cap_key(gateway, run_id) + ":n")
+			n = _incr(c, key)
+		except Exception:
+			c = None
+		else:
+			if n > limit:
+				c.decrby(key, 1)
+				raise Refused(
+					"admin_cap_exceeded",
+					f"This run already performed its limit of {limit} Telegram admin actions.",
+					limit=limit,
+				)
+			return
+	with _CAP_LOCK:
+		count = _cap_count(gateway, run_id)
+		if count >= limit:
+			raise Refused(
+				"admin_cap_exceeded",
+				f"This run already performed its limit of {limit} Telegram admin actions.",
+				limit=limit,
+			)
+		_cache().set_value(_cap_key(gateway, run_id), count + 1, expires_in_sec=24 * 3600)
 
 
 def _cap_release(gateway: str, run_id: Optional[str]) -> None:
-	if run_id:
+	if not run_id:
+		return
+	c = _cap_atomic()
+	if c is not None:
+		try:
+			c.decrby(c.make_key(_cap_key(gateway, run_id) + ":n"), 1)
+			return
+		except Exception:
+			pass
+	with _CAP_LOCK:
 		count = _cap_count(gateway, run_id)
 		_cache().set_value(_cap_key(gateway, run_id), max(count - 1, 0), expires_in_sec=24 * 3600)
 
@@ -287,24 +329,28 @@ def _admin_bindings(gateway: str) -> list[dict]:
 	return out
 
 
-def _gate_destructive(action: str, args: dict, gateway: str, chat: str) -> Optional[dict]:
-	"""Owner run: simple ``confirm=true``. Any other run: a HUMAN admin must approve (returns the pending action).
+def _require_owner(gateway: str) -> None:
+	if not _is_owner_run(gateway, scope.current_chat(scope.effective_run_id())):
+		raise Refused(
+			"owner_required",
+			"State-changing Telegram admin actions can only be started from a bound admin's private cockpit chat. "
+			"Do nothing here; ask a bound admin (Admin role in the Telegram cockpit) to request this action.",
+		)
 
-	An agent re-sending ``confirm`` / a token is never confirmation, so those arguments are ignored.
+
+def _gate_destructive(action: str, args: dict, gateway: str, chat: str) -> Optional[dict]:
+	"""Every state change needs an owner run (paired Admin+ binding chat) AND a human Approve button press.
+
+	``confirm`` / ``confirmation_token`` supplied by the model are never approval and are ignored.
 	"""
-	if action not in ALWAYS_HUMAN_APPROVAL and _is_owner_run(gateway, scope.current_chat(scope.effective_run_id())):
-		if not _truthy(args.get("confirm")):
-			raise Refused(
-				"needs_confirmation",
-				f"This is destructive: {_describe(action, args, chat)}. Call again with confirm=true to proceed.",
-				effect=_describe(action, args, chat),
-			)
+	_require_owner(gateway)
+	if action not in ALWAYS_HUMAN_APPROVAL:
 		return None
 	if not _admin_bindings(gateway):
 		raise Refused(
 			"no_admin_available",
 			"This action needs a human admin's approval, but this gateway has no active Admin-scope Telegram "
-			"cockpit binding to ask (a Viewer/Operator chat cannot approve its own actions). Nothing was done.",
+			"cockpit binding to ask. Nothing was done.",
 		)
 	body = {k: v for k, v in args.items() if k not in _CONTROL_KEYS}
 	return {
@@ -688,6 +734,8 @@ def handle_action(action: str = "", **kwargs) -> str:
 				"action_not_permitted",
 				f"This gateway does not allow agents to use {group} actions ({FLAGS[group]} is off).",
 			)
+		if destructive:
+			_require_owner(gateway)
 		chat = ""
 		if action in CHAT_ACTIONS:
 			chat = scope.normalize_chat(args.get("chat_id")) or scope.current_chat(run_id)
@@ -749,8 +797,7 @@ def handle_action(action: str = "", **kwargs) -> str:
 			_cap_release(gateway, run_id)
 		if send_claimed:
 			scope.release_send(gateway, run_id)
-		if refusal.payload["error"] != "needs_confirmation":
-			_audit(gateway, action, args, "refused", refusal.payload["error"])
+		_audit(gateway, action, args, "refused", refusal.payload["error"])
 		return _out(refusal.payload)
 	_audit(gateway, action, args, "ok")
 	return _out({"success": True, "action": action, "result": result})

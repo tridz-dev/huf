@@ -378,16 +378,25 @@ Safety layers, in order:
 2. Bot rights: `getChatMember(bot)` must show the admin right the action needs (for example
    `can_restrict_members` for ban and restrict, `can_promote_members` for promote, `can_delete_messages`,
    `can_pin_messages`, `can_invite_users`, `can_change_info`).
-3. Target protection: chat admins and the gateway's paired admins are never ban, restrict or demote targets,
-   and nobody can be given `can_promote_members`.
-4. Confirmation for destructive actions: `ban`, `restrict`, `promote`, `delete_message`,
-   `delete_business_messages` and `set_my_commands`. Run by the cockpit owner: the first call returns
-   `needs_confirmation`, and the agent must call again with `confirm=true`. Any other requester: the first call
-   returns a one-time `confirmation_token`, valid 5 minutes, bound to action, arguments, gateway and chat. The
-   agent passes it back with identical arguments after the requester approves.
-5. Cap: counted actions are capped per run. The limit is the gateway's `agent_send_cap_per_run` field; when that
-   field is 0 the code uses 5 (`DEFAULT_CAP`).
-6. Audit: every executed or refused action writes a `Telegram Admin Audit` row (`agent:<action>`).
+3. Target protection: paired cockpit admins of the gateway are never ban, restrict, promote or demote targets.
+   Chat owners and chat administrators are refused for ban, restrict and promote; `demote` may target a plain
+   chat administrator (the approving human sees the exact action). Nobody can be given `can_promote_members`.
+4. Owner run and human approval for EVERY state change (everything except the read-only `get_admins` and
+   `get_business_connection`): the run must come from the private chat of a paired cockpit binding with role Admin
+   or higher. Any other run (a group member, forwarded or pasted content, a Viewer/Operator chat) is refused with
+   `owner_required` and the agent is told to ask a bound admin. For an owner run the call returns
+   `pending_human_approval` and sends signed Approve / Reject buttons to the active Admin bindings; the action runs
+   only when an admin presses Approve (single-use nonce, valid 5 minutes, bound to the arguments). `confirm`
+   and `confirmation_token` arguments from the agent are ignored and never count as approval. Bot-wide profile
+   actions (`set_my_*`, `set_chat_menu_button`) follow the same rule, so they are only reachable from an owner run.
+   With no active Admin binding to ask, the call is refused with `no_admin_available` and nothing is done.
+5. Cap: counted actions are capped per run (atomic counter). The limit is the gateway's `agent_send_cap_per_run`
+   field; when that field is 0 the code uses 5 (`DEFAULT_CAP`).
+6. Audit: every executed or refused action (including `owner_required` and `no_admin_available` refusals) and
+   every request for approval writes a `Telegram Admin Audit` row (`agent:<action>`).
+
+Secretary (Telegram Business) Reply and Draft runs process untrusted customer text. They run with NO tools at all
+(empty tool allow-list), and the customer's display name is placed inside the quoted untrusted block of the prompt.
 
 ## 10. Message templates
 
@@ -651,7 +660,7 @@ assume the default settings unless a row says otherwise.
 | 6 | Template | Create a template with a `{{name}}` variable; ask the agent to `preview_template`, then `send_template` | Preview shows the substituted text. Send delivers it with its buttons. Missing variable blocks the send unless `allow_missing`. |
 | 7 | Inline | Type `@<bot> query` in another chat | Article results appear when inline mode is on in BotFather. Tapping "Run" does nothing (known gap 1). |
 | 8 | Admin bind | Create a binding code on the Admin bindings tab; send `/start <BIND-CODE>` privately; send `/me` | Binding created; `/me` shows the bound user and scope. The code cannot be reused. |
-| 9 | Admin action | Enable `telegram_agent_allow_group_admin`; ask the agent to ban a test user in a test group | Refused without the bot's ban right. With the right: first call needs confirmation; after confirm the ban runs and an audit row appears. Chat admins are never targets. |
+| 9 | Admin action | Enable `telegram_agent_allow_group_admin`; ask the agent to ban a test user in a test group | Refused without the bot's ban right. With the right: from a group member or non-admin chat the call is refused with `owner_required`; from the paired Admin's private chat it returns `pending_human_approval`, and the ban runs only after the admin presses Approve, with an audit row. Chat admins are never ban targets. |
 | 10 | Join request | Join policy Queue: request to join a test group. Then switch to Agent | Queue: request stays pending for admins. Agent: request queued, then approved or declined by the agent decision. With a welcome template set, a joining member gets the welcome (60 s cooldown). |
 | 11 | Guard | Enable `huf_telegram_guard_captcha`, join a Guard group | The join request shows the Guard Mini App. A wrong answer three times declines; the right answer approves. |
 | 12 | Business draft | Connect the business account with Business mode on; set policy Draft; send a message to the business account from another account | The owner's private chat gets a draft with Approve, Edit, Reject. Approve sends it as the owner. Nothing reaches the customer before approval. |

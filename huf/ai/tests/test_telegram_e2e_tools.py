@@ -124,19 +124,37 @@ ADMIN_ARGS = {
 	"set_my_short_description": {"short_description": "s"},
 	"set_chat_menu_button": {"menu_button": {"type": "default"}},
 	"get_business_connection": {"business_connection_id": "c"},
-	"send_business_message": {"business_connection_id": "c", "chat_id": 5, "text": "x"},
-	"read_business_message": {"business_connection_id": "c", "chat_id": 5, "message_id": 3},
+	"send_business_message": {"business_connection_id": "c", "chat_id": CUR, "text": "x"},
+	"read_business_message": {"business_connection_id": "c", "chat_id": CUR, "message_id": 3},
 	"delete_business_messages": {"business_connection_id": "c", "message_ids": [1]},
 }
-# destructive action -> the Bot API method it must call once confirmed
+# state-changing action -> the Bot API method it must call once a human admin approved it (send_business_message
+# is covered separately: its method, sendMessage, is also what the approval prompt uses)
 MUTATING = {
 	"ban": "banChatMember",
+	"unban": "unbanChatMember",
 	"restrict": "restrictChatMember",
+	"unrestrict": "restrictChatMember",
 	"promote": "promoteChatMember",
+	"demote": "promoteChatMember",
+	"set_chat_title": "setChatTitle",
+	"set_chat_description": "setChatDescription",
+	"pin": "pinChatMessage",
+	"unpin": "unpinChatMessage",
 	"delete_message": "deleteMessage",
+	"approve_join_request": "approveChatJoinRequest",
+	"decline_join_request": "declineChatJoinRequest",
+	"create_invite_link": "createChatInviteLink",
+	"revoke_invite_link": "revokeChatInviteLink",
 	"set_my_commands": "setMyCommands",
+	"set_my_name": "setMyName",
+	"set_my_description": "setMyDescription",
+	"set_my_short_description": "setMyShortDescription",
+	"set_chat_menu_button": "setChatMenuButton",
+	"read_business_message": "readBusinessMessage",
 	"delete_business_messages": "deleteBusinessMessages",
 }
+STATE_CHANGING = set(MUTATING) | {"send_business_message"}
 
 
 def _enum(tool_name: str) -> list[str]:
@@ -210,7 +228,7 @@ class Harness(unittest.TestCase):
 		self.run_id = "run1"
 		self.conf = {"scope": "Current contact", "allowlist": [], "per_run": 20, "per_day": 200}
 		self.approved = {OTHER}
-		self.owner = False
+		self.owner = True
 		self.cap = 50
 		self.flags = {"group": True, "profile": True, "business": True}
 		self.gw_invalid = False  # inside a gateway run whose gateway is disabled / missing / not Telegram
@@ -265,7 +283,7 @@ class Harness(unittest.TestCase):
 		patch.object(
 			adm.biz, "get_connection",
 			return_value={
-				"id": "c", "gateway": "gw1", "rights": {"can_delete_sent_messages": True}, "is_enabled": True,
+				"id": "c", "gateway": "gw1", "rights": {"can_delete_sent_messages": True, "can_read_messages": True}, "is_enabled": True,
 			},
 		).start()
 
@@ -325,7 +343,8 @@ class TestRegistryParity(Harness):
 		self.assertEqual(set(ADMIN_ARGS), set(ADMIN_ENUM))
 
 	def test_destructive_set_is_the_expected_one(self):
-		self.assertEqual({a for a, v in adm.ACTIONS.items() if v[2]}, set(MUTATING))
+		self.assertEqual({a for a, v in adm.ACTIONS.items() if v[2]}, STATE_CHANGING)
+		self.assertEqual({a for a in adm.ACTIONS if a.startswith("get_")}, set(adm.ACTIONS) - STATE_CHANGING)
 
 	def test_unknown_actions_are_refused(self):
 		self.assertIn("Unknown action", self.tg_call("nuke")["error"])
@@ -347,11 +366,12 @@ class TestEnvelope(Harness):
 
 	def test_admin_every_action_returns_standard_envelope(self):
 		self.gw_on = True
+		patch.object(adm, "ALWAYS_HUMAN_APPROVAL", frozenset(a for a, v in adm.ACTIONS.items() if v[2])).start()
 		for action in ADMIN_ENUM:
 			with self.subTest(action=action):
 				res = self.adm_call(action, **ADMIN_ARGS[action])
 				self.assertIsInstance(res.get("success"), bool, res)
-				if action in MUTATING:
+				if action in STATE_CHANGING:
 					self.assertTrue(res["success"], res)
 					self.assertEqual(res.get("status"), "pending_human_approval", res)
 				elif res["success"]:
@@ -462,11 +482,12 @@ class TestAdminFlagMatrix(Harness):
 
 
 class TestConfirmation(Harness):
-	"""Non-owner runs need a HUMAN admin's button press; owner runs keep ``confirm: true``."""
+	"""Every state change needs an owner run AND a HUMAN admin's button press; ``confirm`` is never approval."""
 
 	def setUp(self):
 		super().setUp()
 		self.gw_on = True
+		patch.object(adm, "ALWAYS_HUMAN_APPROVAL", frozenset(a for a, v in adm.ACTIONS.items() if v[2])).start()
 
 	def mutated(self):
 		return [c["method"] for c in self.api.calls if c["method"] in MUTATING.values()]
@@ -549,19 +570,24 @@ class TestConfirmation(Harness):
 			ta.handle_callback(SimpleNamespace(name="other-gw"), adapter, parsed, cache=self.cache)
 		self.assertEqual(self.mutated(), [])
 
-	def test_owner_run_needs_confirm_flag_only(self):
-		self.owner = True
-		for action, method in MUTATING.items():
+	def test_non_owner_run_is_refused_for_every_state_change(self):
+		self.owner = False
+		for action, (_g, _r, changing, _c) in adm.ACTIONS.items():
+			if not changing:
+				continue
 			with self.subTest(action=action):
 				self.api.calls.clear()
-				first = self.adm_call(action, **ADMIN_ARGS[action])
-				self.assertEqual(first["error"], "needs_confirmation")
-				self.assertNotIn("confirmation_token", first)
+				res = self.adm_call(action, confirm=True, **ADMIN_ARGS[action])
+				self.assertEqual(res["error"], "owner_required", res)
+				self.assertIn("bound admin", res["message"])
 				self.assertEqual(self.mutated(), [])
-				ok = self.adm_call(action, confirm=True, **ADMIN_ARGS[action])
-				self.assertTrue(ok["success"], ok)
-				self.assertEqual(self.mutated(), [method])
-		self.assertEqual(self.sent("sendMessage"), [], "owner runs never ask a human admin")
+				self.assertEqual(self.sent("sendMessage"), [])
+
+	def test_read_only_actions_stay_free_for_non_owner(self):
+		self.owner = False
+		for action in ("get_admins", "get_business_connection"):
+			res = self.adm_call(action, **ADMIN_ARGS[action])
+			self.assertNotEqual(res.get("error"), "owner_required", res)
 
 
 class TestIdempotency(Harness):
