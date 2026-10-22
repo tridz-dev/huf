@@ -1,5 +1,6 @@
 import { AccessTab } from './AccessTab';
 import { BindingsTab } from './BindingsTab';
+import { GroupsTab } from './GroupsTab';
 import { MessagesTab } from './MessagesTab';
 import { SendPanel } from './SendPanel';
 import { TemplatesTab } from './templates/TemplatesTab';
@@ -20,6 +21,7 @@ export const TELEGRAM_TABS: TelegramTabDef[] = [
 	{ id: 'templates', label: 'Templates', component: TemplatesTab },
 	{ id: 'messages', label: 'Messages', component: MessagesTab },
 	{ id: 'access', label: 'Access', component: AccessTab },
+	{ id: 'groups', label: 'Groups & joins', component: GroupsTab },
 	{ id: 'send', label: 'Send', component: SendPanel },
 	{ id: 'bindings', label: 'Admin bindings', component: BindingsTab },
 	{ id: 'commands', label: 'Commands & profile', component: CommandsTab },
