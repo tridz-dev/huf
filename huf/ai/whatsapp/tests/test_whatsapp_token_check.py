@@ -13,7 +13,7 @@ import frappe
 from huf.ai.whatsapp import management as mgmt
 from huf.ai.whatsapp import token_check as tc
 from huf.testing import fake_graph_server as fake
-from huf.ai.tests import test_whatsapp_fake_graph as fg
+from huf.ai.whatsapp.tests import test_whatsapp_fake_graph as fg
 
 NON_ADMIN = "wa-tokencheck-user@example.com"
 

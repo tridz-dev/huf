@@ -12,7 +12,7 @@ from __future__ import annotations
 import frappe
 
 from huf.ai.whatsapp import management as mgmt
-from huf.ai.tests import test_whatsapp_full_stack as fs
+from huf.ai.whatsapp.tests import test_whatsapp_full_stack as fs
 
 
 class TestWhatsAppGatewayIsolation(fs.TestWhatsAppMultiGateway):

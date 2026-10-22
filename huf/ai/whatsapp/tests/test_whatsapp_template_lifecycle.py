@@ -20,7 +20,7 @@ import frappe
 from huf.ai.whatsapp import management as mgmt
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.testing import fake_graph_server as fake
-from huf.ai.tests import test_whatsapp_fake_graph as fgc
+from huf.ai.whatsapp.tests import test_whatsapp_fake_graph as fgc
 from huf.ai.tools import whatsapp as wa_tool
 
 STATE = "WhatsApp Template State"

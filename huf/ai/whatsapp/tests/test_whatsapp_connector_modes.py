@@ -20,7 +20,7 @@ from huf.ai.whatsapp import management as mgmt
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters.whatsapp import WhatsAppWindowClosed
 from huf.ai.gateway_service import process_gateway_event
-from huf.ai.tests import test_whatsapp_full_stack as fs
+from huf.ai.whatsapp.tests import test_whatsapp_full_stack as fs
 
 
 class _Scenarios:

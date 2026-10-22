@@ -11,7 +11,7 @@ def _load(name):
 
 		return importlib.import_module(f"huf.ai.gateway_adapters.{name}")
 	except Exception:
-		path = os.path.join(os.path.dirname(__file__), "..", "gateway_adapters", f"{name}.py")
+		path = os.path.join(os.path.dirname(__file__), "..", "..", "gateway_adapters", f"{name}.py")
 		spec = importlib.util.spec_from_file_location(name, path)
 		mod = importlib.util.module_from_spec(spec)
 		spec.loader.exec_module(mod)
