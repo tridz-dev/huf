@@ -84,8 +84,8 @@ def _agent_run_failure(result) -> tuple[str, str] | None:
         reason = _redact_error_text(str(result.get("error") or "The agent run failed."))
         return code, reason
     response = result.get("response")
-    if (not response or not str(response).strip()) and result.get("tool_calls_made"):
-        return None  # a tool already delivered the reply; an empty final text is fine
+    if (not response or not str(response).strip()) and result.get("delivered_reply"):
+        return None  # a send tool already delivered a message to the chat; an empty final text is fine
     if not response or not str(response).strip():
         return "agent_run_failed", "Gateway agent run completed without a text response."
     return None
@@ -614,6 +614,7 @@ PAIRING_RESEND_COOLDOWN_MINUTES = 10
 PAIRING_APPROVAL_MAX_FAILURES_PER_MINUTE = 5
 PENDING_ENTRY_RETENTION_DAYS = 7
 PAIRING_DEFAULT_PENDING_LIMIT = 50
+PENDING_ROOM_LIMIT = 20  # max pending Room entries per gateway (separate from Sender pairing)
 PAIRING_DEFAULT_REPLY_DAILY_LIMIT = 20
 PAIRING_MAX_REQUESTS_PER_SENDER_PER_DAY = 3
 
@@ -1157,7 +1158,7 @@ def _pairing_cap_reason(gateway, sender_id: str) -> str:
     if limit > 0:
         pending = frappe.get_all(
             "Gateway Access Entry",
-            filters={"gateway": gateway.name, "state": "Pending"},
+            filters={"gateway": gateway.name, "state": "Pending", "entry_type": ["!=", "Room"]},
             pluck="name",
             limit_page_length=limit,
         )
@@ -1340,16 +1341,18 @@ def _admission(gateway, context: dict[str, Any]) -> tuple[bool, str]:
             return False, f"Sender pairing approval is required. Pairing code: {_mask_code(code)}"
         return (policy == "Allow list" and _has_access_entry(gateway, "Sender", sender_id), "Sender is not approved for this gateway")
 
+    mentioned = bool(context.get("mentioned"))
+    if gateway.mention_required and not mentioned:
+        return False, "Room messages must mention the gateway"  # cheap check first: no DB work
     room_ok = _policy_admits(gateway.room_policy, gateway, "Room", conversation_id)
     sender_ok = _policy_admits(gateway.room_sender_policy, gateway, "Sender", sender_id)
-    mentioned = bool(context.get("mentioned"))
     if not room_ok and mentioned and gateway.room_policy == "Allow list":
-        try:
-            _record_pending_room(gateway, conversation_id)
-        except Exception:
-            frappe.logger("huf").warning("Pending room entry failed", exc_info=True)
-    if gateway.mention_required and not mentioned:
-        return False, "Room messages must mention the gateway"
+        record_room = provider_hooks.get(gateway.provider, "record_pending_room")
+        if record_room is not None:  # provider opt-in (Telegram); WhatsApp groups never create Room entries
+            try:
+                record_room(gateway, conversation_id)
+            except Exception:
+                frappe.logger("huf").warning("Pending room entry failed", exc_info=True)
     return room_ok and sender_ok, "Room or sender is not approved for this gateway"
 
 
@@ -1373,14 +1376,13 @@ def _record_pending_room(gateway, chat_id: str, label: str = "") -> str:
     )
     if existing:
         return ""
-    limit = _int_setting(gateway, "pairing_pending_limit", PAIRING_DEFAULT_PENDING_LIMIT)
-    if limit > 0:
-        pending = frappe.get_all(
-            "Gateway Access Entry", filters={"gateway": gateway.name, "state": "Pending"},
-            pluck="name", limit_page_length=limit,
-        )
-        if len(pending or []) >= limit:
-            return ""
+    # Room entries have their own cap so throwaway groups can never fill the Sender pairing capacity.
+    pending = frappe.get_all(
+        "Gateway Access Entry", filters={"gateway": gateway.name, "state": "Pending", "entry_type": "Room"},
+        pluck="name", limit_page_length=PENDING_ROOM_LIMIT,
+    )
+    if len(pending or []) >= PENDING_ROOM_LIMIT:
+        return ""
     doc = frappe.get_doc(
         {
             "doctype": "Gateway Access Entry",
@@ -2566,7 +2568,7 @@ def _process_gateway_event(event_name: str) -> dict:
             if attachment_unavailable and (_is_no_reply(response) or not str(response or "").strip()):
                 _send_fallback_once(event, gateway, "attachment")
                 return _suppress_reply(event, result.get("agent_run_id"), NO_REPLY_NOTE)
-            if _is_no_reply(response) or (not str(response or "").strip() and result.get("tool_calls_made")):
+            if _is_no_reply(response) or (not str(response or "").strip() and result.get("delivered_reply")):
                 _reply_finished(event, gateway)
                 return _suppress_reply(event, result.get("agent_run_id"), NO_REPLY_NOTE)
             send_hook = provider_hooks.get(gateway.provider, "send_reply")

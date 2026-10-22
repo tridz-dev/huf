@@ -36,6 +36,13 @@ def consent_required() -> bool:
 	return False
 
 
+def record_pending_room(gateway, chat_id) -> str:
+	from huf.ai import gateway_service
+
+	return gateway_service._record_pending_room(gateway, chat_id)
+
+
+provider_hooks.register(PROVIDER, "record_pending_room", record_pending_room)
 provider_hooks.register(PROVIDER, "error_text", error_text)
 provider_hooks.register(PROVIDER, "normalize_sender", normalize_sender)
 provider_hooks.register(PROVIDER, "consent_required", consent_required)

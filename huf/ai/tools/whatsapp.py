@@ -63,6 +63,7 @@ from typing import Optional, Any
 import frappe
 import requests
 
+from huf.ai import run_delivery
 from huf.ai import whatsapp_send_file as send_file
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_messages as wm
@@ -373,7 +374,14 @@ def _capped_dispatch(action: str, kwargs: dict, gateway_name: str, run_id: Optio
 	refusal = send_scope.check_caps(gateway_name, run_id)
 	if refusal:
 		return refusal
-	return _dispatch(action, kwargs)
+	raw = _dispatch(action, kwargs)
+	if action.startswith("send_") and action != "send_reaction":
+		try:
+			if json.loads(raw).get("success"):
+				run_delivery.mark(run_id)
+		except Exception:
+			pass
+	return raw
 
 
 def _dispatch(action: str, kwargs: dict) -> str:
