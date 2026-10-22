@@ -2408,7 +2408,10 @@ def _process_gateway_event(event_name: str) -> dict:
 
             instructions_hook = provider_hooks.get(gateway.provider, "agent_instructions")
             if instructions_hook is not None:
-                channel_note = instructions_hook()
+                try:
+                    channel_note = instructions_hook(gateway)
+                except TypeError:  # hooks registered with the older no-argument signature
+                    channel_note = instructions_hook()
                 if channel_note:
                     prompt = f"[Channel note: {channel_note}]\n{prompt}"
 
