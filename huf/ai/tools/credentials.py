@@ -49,7 +49,7 @@ def require_credential(service: str, key: str) -> str:
 		# If per-agent/per-user credential scoping is needed in the future, it would
 		# require: (a) an owning-agent/owning-user field on Integration Settings,
 		# (b) filtering logic here, and (c) a migration plan for existing credentials.
-		# See Tracks/safwan-erooth.IntegrationsGatewaysAudit/findings/GW-10-decision.md
+		# See the GW-10-decision note in the IntegrationsGatewaysAudit workspace track
 		integration = frappe.get_all(
 			"Integration Settings",
 			filters={"service": service, "is_active": 1},
@@ -226,7 +226,7 @@ def update_last_error(service: str, error: str):
 	try:
 		# Find active integration settings for the service
 		# GW-10: Same org-wide credential scope rationale as require_credential.
-		# See require_credential() and Tracks/safwan-erooth.IntegrationsGatewaysAudit/findings/GW-10-decision.md
+		# See require_credential() and the GW-10-decision note in the IntegrationsGatewaysAudit workspace track
 		settings = frappe.get_all(
 			"Integration Settings",
 			filters={"service": service, "is_active": 1},

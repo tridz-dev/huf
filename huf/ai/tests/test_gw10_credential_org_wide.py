@@ -5,7 +5,7 @@ This test suite verifies that the org-wide credential scope is maintained:
 - Credential lookup succeeds without per-agent or per-user filtering
 - The design choice is explicitly locked in to prevent future regressions
 
-See: Tracks/safwan-erooth.IntegrationsGatewaysAudit/findings/GW-10-decision.md
+See: the GW-10-decision note in the IntegrationsGatewaysAudit workspace track
 """
 
 import frappe

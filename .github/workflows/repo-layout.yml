@@ -1,0 +1,14 @@
+name: Repo layout
+
+on:
+  pull_request:
+  push:
+    branches: [develop, pre-develop, main]
+
+jobs:
+  layout:
+    name: Repo layout · no workspace files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/check_repo_layout.py

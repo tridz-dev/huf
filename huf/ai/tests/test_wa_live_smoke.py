@@ -1,4 +1,4 @@
-"""Tests for tools/wa_live_smoke.py, driven by an injected fake Graph endpoint (no network)."""
+"""Tests for huf/ai/tests/wa_live_smoke.py, driven by an injected fake Graph endpoint (no network)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import unittest
 from datetime import datetime, timezone
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-_SMOKE_PATH = os.path.normpath(os.path.join(_THIS_DIR, "..", "..", "..", "tools", "wa_live_smoke.py"))
+_SMOKE_PATH = os.path.normpath(os.path.join(_THIS_DIR, "wa_live_smoke.py"))
 
 TOKEN = "EAAG-test-token-not-real"  # noqa: S105 - fake fixture, asserted never to be printed
 PHONE_ID = "123456789012345"
