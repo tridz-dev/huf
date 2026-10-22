@@ -26,6 +26,7 @@ TEXT_AND_VOICE = wv.TEXT_AND_VOICE
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # Bot API upload limit
 VOICE_KINDS = ("voice", "video_note", "audio")
 OGG_FILENAME = "reply.ogg"
+TTS_FORMAT = "opus"
 
 
 def _warn(message: str) -> None:
@@ -64,10 +65,18 @@ def _claim(event) -> bool:
 
 
 def _synthesize(agent_name: str, text: str, conversation_id, run_id) -> bytes:
-	return wv._synthesize(agent_name, text, conversation_id, run_id)
+	# Ask the TTS provider for Ogg/Opus directly (OpenAI ``response_format='opus'``) to skip ffmpeg.
+	return wv._synthesize(agent_name, text, conversation_id, run_id, response_format=TTS_FORMAT)
+
+
+def is_ogg_opus(content: bytes) -> bool:
+	"""True when ``content`` is already an Ogg container carrying an Opus stream (Telegram's voice format)."""
+	return bytes(content[:4]) == b"OggS" and b"OpusHead" in bytes(content[:512])
 
 
 def _convert(content: bytes) -> bytes:
+	if is_ogg_opus(content):
+		return content
 	return send_file.to_ogg_opus(content)
 
 

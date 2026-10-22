@@ -213,6 +213,11 @@ class TestGatewayValidation(unittest.TestCase):
 			run()
 
 	def test_non_whatsapp_rejected(self):
-		frappe, run = self._validate("Voice only", provider="Telegram")
+		frappe, run = self._validate("Voice only", provider="Slack")
 		with self.assertRaises(frappe.ValidationError):
+			run()
+
+	def test_telegram_voice_mode_accepted(self):
+		for mode in ("Voice only", "Text and voice"):
+			_, run = self._validate(mode, provider="Telegram")
 			run()

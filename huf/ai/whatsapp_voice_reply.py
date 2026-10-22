@@ -84,12 +84,17 @@ def _claim(event) -> bool:
 	return bool(frappe.cache().set(f"huf_gw_voice_reply:{event.name}", 1, ex=_CLAIM_SECONDS, nx=True))
 
 
-def _synthesize(agent_name: str, text: str, conversation_id: str | None, run_id: str | None) -> bytes:
+def _synthesize(
+	agent_name: str, text: str, conversation_id: str | None, run_id: str | None, response_format: str = "mp3"
+) -> bytes:
 	"""Text to speech with the agent's TTS model (its own provider key); returns the audio bytes."""
 	from huf.ai.handlers.media import handle_generate_audio
 
 	result = asyncio.run(
-		handle_generate_audio(input=text, agent_name=agent_name, conversation_id=conversation_id, agent_run_id=run_id)
+		handle_generate_audio(
+			input=text, agent_name=agent_name, conversation_id=conversation_id, agent_run_id=run_id,
+			response_format=response_format,
+		)
 	)
 	if not result.get("success"):
 		raise ValueError(str(result.get("error") or "Text to speech failed"))

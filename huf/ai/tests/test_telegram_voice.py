@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from huf.ai import gateway_service, media_prep
+from huf.ai import whatsapp_voice_reply as wv
 from huf.ai import whatsapp_send_file as send_file
 from huf.ai.gateway_adapters import provider_hooks, telegram_voice as tv
 from huf.ai.gateway_adapters.telegram import TelegramGatewayAdapter
@@ -174,6 +175,58 @@ class TestInboundVoice(unittest.TestCase):
 		stt.assert_called_once_with("FILE-1", "Agent A")
 		self.assertIn("hello bot", prep.prefix)
 		self.assertTrue(prep.files[0]["is_audio"])
+
+
+
+_REAL_SYNTH = tv._synthesize
+_REAL_CONVERT = tv._convert
+OGG_OPUS = b"OggS" + b"\x00" * 20 + b"OpusHead" + b"\x00" * 40
+
+
+class TestOpusDirect(_Base):
+	def test_tts_requested_as_opus(self):
+		with patch.object(wv, "_synthesize", return_value=OGG_OPUS) as synth:
+			out = _REAL_SYNTH("Agent A", "hi", "CONV-1", "RUN-1")
+		self.assertEqual(out, OGG_OPUS)
+		self.assertEqual(synth.call_args.kwargs.get("response_format"), "opus")
+
+	def test_opus_direct_skips_ffmpeg(self):
+		self.synth.return_value = OGG_OPUS
+		with patch.object(tv, "_convert", _REAL_CONVERT), patch.object(send_file, "to_ogg_opus") as ffmpeg:
+			self.reply(make_event(), make_gateway("Voice only"))
+		ffmpeg.assert_not_called()
+		self.assertEqual(self.api.last("sendVoice")["files"]["voice"][1], OGG_OPUS)
+		self.text_send.assert_not_called()
+
+	def test_opus_direct_works_without_ffmpeg_installed(self):
+		self.synth.return_value = OGG_OPUS
+		with patch.object(tv, "_convert", _REAL_CONVERT), patch.object(send_file.shutil, "which", return_value=None):
+			self.reply(make_event(), make_gateway("Voice only"))
+		self.assertEqual(len(self.api.of("sendVoice")), 1)
+		self.text_send.assert_not_called()
+
+	def test_non_ogg_bytes_fall_back_to_ffmpeg(self):
+		self.synth.return_value = b"ID3-mp3-bytes"
+		with patch.object(tv, "_convert", _REAL_CONVERT), patch.object(
+			send_file, "to_ogg_opus", return_value=OGG_OPUS
+		) as ffmpeg:
+			self.reply(make_event(), make_gateway("Voice only"))
+		ffmpeg.assert_called_once_with(b"ID3-mp3-bytes")
+		self.assertEqual(self.api.last("sendVoice")["files"]["voice"][1], OGG_OPUS)
+
+	def test_ogg_without_opus_stream_falls_back_to_ffmpeg(self):
+		self.assertFalse(tv.is_ogg_opus(b"OggS" + b"\x00" * 40 + b"\x01vorbis"))
+		self.assertTrue(tv.is_ogg_opus(OGG_OPUS))
+		self.assertFalse(tv.is_ogg_opus(b"ID3"))
+
+	def test_ffmpeg_missing_and_non_opus_falls_back_to_text(self):
+		self.synth.return_value = b"ID3-mp3-bytes"
+		with patch.object(tv, "_convert", _REAL_CONVERT), patch.object(send_file.shutil, "which", return_value=None):
+			with patch("frappe.logger"):
+				result = self.reply(make_event(), make_gateway("Voice only"))
+		self.assertEqual(self.api.of("sendVoice"), [])
+		self.text_send.assert_called_once()
+		self.assertEqual(result["status"], "Succeeded")
 
 
 if __name__ == "__main__":
