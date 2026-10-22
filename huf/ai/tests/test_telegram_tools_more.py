@@ -409,5 +409,107 @@ class TestSendersMore(unittest.TestCase):
 			more.build_poll("Q", ["a", "b", "c"], poll_type="quiz", correct_option_ids=[2, 0])
 
 
+class TestFailClosedGatewayRuns(Base):
+	"""Inside a gateway run that is not an enabled Telegram gateway, tools refuse (never unscoped)."""
+
+	def setUp(self):
+		super().setUp()
+		patch.object(tool.scope, "gateway_state", return_value=("invalid", "")).start()
+
+	def test_invalid_gateway_refuses_every_kind_of_action(self):
+		for kw in (
+			{"action": "send_message", "chat_id": "9", "text": "hi"},
+			{"action": "get_me"},
+			{"action": "set_webhook", "url": "https://x.example/h"},
+			{"action": "delete_webhook"},
+			{"action": "get_updates"},
+		):
+			r = self.run_action(**kw)
+			self.assertEqual(r["error"], "action_not_permitted", kw)
+		self.assertEqual(self.api.calls, [])
+
+	def test_invalid_gateway_refuses_even_with_idempotency_key(self):
+		r = self.run_action(action="send_message", chat_id="9", text="hi", idempotency_key="k")
+		self.assertEqual(r["error"], "action_not_permitted")
+
+	def test_non_gateway_run_unchanged(self):
+		tool.scope.gateway_state.return_value = ("none", "")
+		self.assertTrue(self.run_action(action="send_message", chat_id="9", text="hi")["success"])
+		self.assertTrue(self.run_action(action="get_me")["success"])
+
+
+class TestFailClosedEndToEnd(Base):
+	"""Real gateway_state against a fake DB: WhatsApp gateway, disabled mid-run, DB error."""
+
+	def setUp(self):
+		super().setUp()
+		patch.stopall()
+		self.addCleanup(patch.stopall)
+		self.api = FakeBotApi()
+		patch.object(tool, "update_last_error").start()
+		patch.object(tool, "_make_client", side_effect=lambda token, *, timeout=30: TelegramBotClient(
+			token, http_post=self.api.http_post, http_get=self.api.http_get, timeout=timeout, sleep=lambda s: None)).start()
+		patch.object(tool, "_get_token", return_value=TOKEN).start()
+		patch.object(tool, "_idem_cache", return_value=self.cache).start()
+		self.row = {"provider": "WhatsApp", "is_enabled": 1}
+		self.boom = False
+
+		def get_value(doctype, name, fields=None, as_dict=False):
+			if self.boom:
+				raise RuntimeError("db down")
+			if doctype == "Agent Run":
+				return "C"
+			if doctype == "Agent Conversation":
+				return "gateway:GW"
+			return self.row
+		patch.object(tool.scope.frappe, "flags", SimpleNamespace(huf_current_agent_run_id="R")).start()
+		patch.object(tool.scope.frappe, "db", SimpleNamespace(get_value=get_value)).start()
+
+	def test_whatsapp_gateway_run_refused(self):
+		self.assertEqual(self.run_action(action="send_message", chat_id="9", text="hi")["error"], "action_not_permitted")
+		self.assertEqual(self.run_action(action="set_webhook", url="https://x.example/h")["error"], "action_not_permitted")
+		self.assertEqual(self.api.calls, [])
+
+	def test_disabled_mid_run_refused(self):
+		self.row = {"provider": "Telegram", "is_enabled": 0}
+		self.assertEqual(self.run_action(action="send_message", chat_id="9", text="hi")["error"], "action_not_permitted")
+		self.assertEqual(self.api.calls, [])
+
+	def test_db_error_refused(self):
+		self.boom = True
+		self.assertEqual(self.run_action(action="delete_webhook")["error"], "action_not_permitted")
+		self.assertEqual(self.api.calls, [])
+
+
+class TestIdempotencyScopedFirst(Base):
+	def test_cached_result_not_returned_once_scope_forbids(self):
+		patch.object(tool.scope, "run_gateway", return_value="gw").start()
+		patch.object(tool.scope, "effective_run_id", return_value="run1").start()
+		patch.object(tool.scope, "current_chat", return_value="9").start()
+		patch.object(tool.scope, "settings", return_value={
+			"scope": "Current contact", "allowlist": [], "per_run": 5, "per_day": 10}).start()
+		patch.object(tool, "_token_for_run", return_value=TOKEN).start()
+		store = {}
+		patch.object(tool.scope, "_load", side_effect=lambda k: store.setdefault(k, [])).start()
+		patch.object(tool.scope, "_save", side_effect=lambda k, v, ttl: store.__setitem__(k, v)).start()
+		self.assertTrue(self.run_action(action="send_message", text="hi", idempotency_key="k")["success"])
+		# the same key now aimed at a forbidden chat must be refused by scope, not by the cache
+		r = self.run_action(action="send_message", chat_id="555", text="hi", idempotency_key="k")
+		self.assertEqual(r["error"], "recipient_not_permitted")
+		# the gateway going invalid means the original (cached) call is refused too
+		patch.object(tool.scope, "run_gateway", return_value="").start()
+		patch.object(tool.scope, "gateway_state", return_value=("invalid", "")).start()
+		r = self.run_action(action="send_message", text="hi", idempotency_key="k")
+		self.assertEqual(r["error"], "action_not_permitted")
+
+	def test_key_includes_gateway_and_chat(self):
+		patch.object(tool.scope, "run_gateway", return_value="gwA").start()
+		a = tool._idempotency_key("send_message", {"chat_id": "9", "idempotency_key": "k"})
+		tool.scope.run_gateway.return_value = "gwB"
+		b = tool._idempotency_key("send_message", {"chat_id": "9", "idempotency_key": "k"})
+		self.assertNotEqual(a, b)
+		self.assertIn("gwA", a)
+
+
 if __name__ == "__main__":
 	unittest.main()

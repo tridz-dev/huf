@@ -21,6 +21,7 @@ from __future__ import annotations
 import contextvars
 import json
 import re
+import threading
 import time
 from contextlib import contextmanager
 from types import SimpleNamespace
@@ -61,26 +62,38 @@ def effective_run_id() -> Optional[str]:
 	return getattr(frappe.flags, "huf_current_agent_run_id", None) or _trusted_run.get() or None
 
 
-def run_gateway() -> str:
-	"""The enabled Telegram Gateway the current run belongs to, or '' (not a gateway run)."""
+def gateway_state() -> tuple[str, str]:
+	"""``(state, gateway)``: ``none`` (not inside any gateway run), ``telegram`` (enabled Telegram gateway)
+	or ``invalid`` (inside a gateway run that is disabled, missing, another provider, or failed to resolve).
+	Fails closed: any lookup error while inside a gateway run is ``invalid``."""
 	try:
-		bound = _trusted_gateway.get()
-		name = bound
+		name = _trusted_gateway.get()
 		if not name:
-			run_id = getattr(frappe.flags, "huf_current_agent_run_id", None)
+			try:
+				run_id = getattr(frappe.flags, "huf_current_agent_run_id", None)
+			except Exception:  # no frappe context at all: cannot be inside an agent run
+				run_id = None
 			if not run_id:
-				return ""
+				return ("none", "")
 			conversation = frappe.db.get_value("Agent Run", run_id, "conversation")
-			channel = str(frappe.db.get_value("Agent Conversation", conversation, "channel") or "") if conversation else ""
+			channel = (
+				str(frappe.db.get_value("Agent Conversation", conversation, "channel") or "") if conversation else ""
+			)
 			if not channel.startswith("gateway:"):
-				return ""
+				return ("none", "")
 			name = channel[len("gateway:"):].strip()
 		row = frappe.db.get_value("Gateway", name, ["provider", "is_enabled"], as_dict=True) if name else None
 		if not row or row.get("provider") != PROVIDER or not row.get("is_enabled"):
-			return ""
-		return name
+			return ("invalid", "")
+		return ("telegram", name)
 	except Exception:
-		return ""
+		return ("invalid", "")
+
+
+def run_gateway() -> str:
+	"""The enabled Telegram Gateway the current run belongs to, or '' (see ``gateway_state``)."""
+	state, name = gateway_state()
+	return name if state == "telegram" else ""
 
 
 # -- chat id normalisation ---------------------------------------------------------------------
@@ -221,41 +234,111 @@ def _save(key: str, value: list, ttl: int) -> None:
 		pass
 
 
+_LOCK = threading.Lock()
+
+
+def _redis():
+	"""``(client, make_key)`` when the cache exposes atomic counters, else None."""
+	try:
+		c = _cache()
+		if getattr(c, "make_key", None) and all(hasattr(c, n) for n in ("incrby", "decrby", "expire")):
+			return c
+	except Exception:
+		pass
+	return None
+
+
+def _refuse_run(limit: int) -> str:
+	return _refusal(
+		"send_cap_exceeded",
+		f"This run has already sent its limit of {limit} Telegram messages. No more are sent in this run.",
+		cap="run", limit=limit, retry_after=None,
+	)
+
+
+def _refuse_day(limit: int, retry: int) -> str:
+	return _refusal(
+		"send_cap_exceeded",
+		f"This gateway reached its limit of {limit} agent Telegram messages in 24 hours. Try again later.",
+		cap="day", limit=limit, retry_after=max(1, min(retry, DAY_SECONDS)),
+	)
+
+
+def _claim_atomic(c, conf: dict, gateway: str, run_id: Optional[str]) -> Optional[str]:
+	"""INCR + EXPIRE counters (fixed 24h window from the first send); over-cap increments are rolled back."""
+	run_k = c.make_key(_run_key(gateway, run_id) + ":n") if (conf["per_run"] and run_id) else None
+	day_k = c.make_key(_day_key(gateway) + ":n") if conf["per_day"] else None
+	if run_k:
+		n = int(c.incrby(run_k, 1))
+		if n == 1:
+			c.expire(run_k, DAY_SECONDS)
+		if n > conf["per_run"]:
+			c.decrby(run_k, 1)
+			return _refuse_run(conf["per_run"])
+	if day_k:
+		n = int(c.incrby(day_k, 1))
+		if n == 1:
+			c.expire(day_k, DAY_SECONDS)
+		if n > conf["per_day"]:
+			c.decrby(day_k, 1)
+			if run_k:
+				c.decrby(run_k, 1)
+			try:
+				ttl = int(c.ttl(day_k))
+			except Exception:
+				ttl = DAY_SECONDS
+			return _refuse_day(conf["per_day"], ttl if ttl > 0 else DAY_SECONDS)
+	return None
+
+
 def claim_send(gateway: str, run_id: Optional[str], *, now: Optional[float] = None) -> Optional[str]:
-	"""Count one send against the run/day caps. Refusal JSON when over a cap (nothing is counted), else None."""
+	"""Count one send against the run/day caps. Refusal JSON when over a cap (nothing is counted), else None.
+
+	Atomic via Redis INCR+EXPIRE when available (rolled back on overshoot); otherwise a process-local lock
+	around a read-modify-write of timestamp lists.
+	"""
 	conf = settings(gateway)
+	c = _redis() if now is None else None
+	if c is not None:
+		try:
+			return _claim_atomic(c, conf, gateway, run_id)
+		except Exception:
+			pass
 	now = time.time() if now is None else now
-	run_sends = _load(_run_key(gateway, run_id)) if (conf["per_run"] and run_id) else []
-	if conf["per_run"] and run_id and len(run_sends) >= conf["per_run"]:
-		return _refusal(
-			"send_cap_exceeded",
-			f"This run has already sent its limit of {conf['per_run']} Telegram messages. No more are sent in this run.",
-			cap="run", limit=conf["per_run"], retry_after=None,
-		)
-	day = [t for t in _load(_day_key(gateway)) if isinstance(t, (int, float)) and t > now - DAY_SECONDS]
-	if conf["per_day"] and len(day) >= conf["per_day"]:
-		oldest = sorted(day)[len(day) - conf["per_day"]]
-		retry = int(oldest + DAY_SECONDS - now)
-		return _refusal(
-			"send_cap_exceeded",
-			f"This gateway reached its limit of {conf['per_day']} agent Telegram messages in 24 hours. Try again later.",
-			cap="day", limit=conf["per_day"], retry_after=max(1, min(retry, DAY_SECONDS)),
-		)
-	if conf["per_run"] and run_id:
-		_save(_run_key(gateway, run_id), run_sends + [now], DAY_SECONDS)
-	if conf["per_day"]:
-		_save(_day_key(gateway), day + [now], DAY_SECONDS)
+	with _LOCK:
+		run_sends = _load(_run_key(gateway, run_id)) if (conf["per_run"] and run_id) else []
+		if conf["per_run"] and run_id and len(run_sends) >= conf["per_run"]:
+			return _refuse_run(conf["per_run"])
+		day = [t for t in _load(_day_key(gateway)) if isinstance(t, (int, float)) and t > now - DAY_SECONDS]
+		if conf["per_day"] and len(day) >= conf["per_day"]:
+			oldest = sorted(day)[len(day) - conf["per_day"]]
+			return _refuse_day(conf["per_day"], int(oldest + DAY_SECONDS - now))
+		if conf["per_run"] and run_id:
+			_save(_run_key(gateway, run_id), run_sends + [now], DAY_SECONDS)
+		if conf["per_day"]:
+			_save(_day_key(gateway), day + [now], DAY_SECONDS)
 	return None
 
 
 def release_send(gateway: str, run_id: Optional[str]) -> None:
 	"""Undo the most recent claim after a failed or refused send."""
 	conf = settings(gateway)
-	if conf["per_run"] and run_id:
-		sends = _load(_run_key(gateway, run_id))
-		if sends:
-			_save(_run_key(gateway, run_id), sends[:-1], DAY_SECONDS)
-	if conf["per_day"]:
-		day = _load(_day_key(gateway))
-		if day:
-			_save(_day_key(gateway), day[:-1], DAY_SECONDS)
+	c = _redis()
+	if c is not None:
+		try:
+			if conf["per_run"] and run_id:
+				c.decrby(c.make_key(_run_key(gateway, run_id) + ":n"), 1)
+			if conf["per_day"]:
+				c.decrby(c.make_key(_day_key(gateway) + ":n"), 1)
+			return
+		except Exception:
+			pass
+	with _LOCK:
+		if conf["per_run"] and run_id:
+			sends = _load(_run_key(gateway, run_id))
+			if sends:
+				_save(_run_key(gateway, run_id), sends[:-1], DAY_SECONDS)
+		if conf["per_day"]:
+			day = _load(_day_key(gateway))
+			if day:
+				_save(_day_key(gateway), day[:-1], DAY_SECONDS)
