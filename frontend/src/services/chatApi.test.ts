@@ -31,7 +31,7 @@ describe('forkConversation', () => {
       title: 'Custom Fork Title',
     });
 
-    expect(postMock).toHaveBeenCalledWith('huf.ai.agent_chat.fork_conversation', {
+    expect(postMock).toHaveBeenCalledWith('huf.ai.agent.chat.fork_conversation', {
       conversation_id: 'CONV-001',
       mode: 'summary',
       title: 'Custom Fork Title',
@@ -55,7 +55,7 @@ describe('forkConversation', () => {
       mode: 'full_history',
     });
 
-    expect(postMock).toHaveBeenCalledWith('huf.ai.agent_chat.fork_conversation', {
+    expect(postMock).toHaveBeenCalledWith('huf.ai.agent.chat.fork_conversation', {
       conversation_id: 'CONV-002',
       mode: 'full_history',
       title: undefined,

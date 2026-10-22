@@ -6,7 +6,7 @@ Canonical backend audio service for Huf.
 
 Single home for audio upload guardrails, STT configuration resolution,
 audio transcription, and audio user-message creation. Chat endpoints
-(``huf.ai.agent_chat``), the ``transcribe_audio`` agent tool
+(``huf.ai.agent.chat``), the ``transcribe_audio`` agent tool
 (``huf.ai.sdk_tools.handle_transcribe_audio``), and the public audio API
 (``huf.ai.audio_api``) are thin wrappers around these functions.
 

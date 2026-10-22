@@ -1,17 +1,17 @@
 """
-Unit tests for huf.ai.agent_access.check_agent_access.
+Unit tests for huf.ai.agent.access.check_agent_access.
 
 These are pure unit tests against the helper function using
 unittest.mock — they do not require a live Frappe site/bench. Only the
 specific frappe APIs the helper calls (frappe.get_roles) are mocked.
 
-Run with: bench --site <site> run-tests --app huf --module huf.ai.tests.test_agent_access
+Run with: bench --site <site> run-tests --app huf --module huf.ai.agent.tests.test_agent_access
 """
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from huf.ai.agent_access import check_agent_access
+from huf.ai.agent.access import check_agent_access
 
 
 def _make_agent(
@@ -41,7 +41,7 @@ class TestCheckAgentAccess(unittest.TestCase):
             allowed_users=["someone-else@example.com"],
             allowed_roles=["Some Role"],
         )
-        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]):
+        with patch("huf.ai.agent.access.frappe.get_roles", return_value=[]):
             self.assertTrue(check_agent_access(agent_doc, "owner@example.com"))
 
     def test_system_manager_always_allowed_regardless_of_allowlists(self):
@@ -51,7 +51,7 @@ class TestCheckAgentAccess(unittest.TestCase):
             allowed_roles=["Some Role"],
         )
         with patch(
-            "huf.ai.agent_access.frappe.get_roles",
+            "huf.ai.agent.access.frappe.get_roles",
             return_value=["System Manager"],
         ):
             self.assertTrue(check_agent_access(agent_doc, "admin@example.com"))
@@ -63,13 +63,13 @@ class TestCheckAgentAccess(unittest.TestCase):
             allowed_roles=["Some Role"],
         )
         # frappe.get_roles must not even be consulted for Guest.
-        with patch("huf.ai.agent_access.frappe.get_roles") as mock_get_roles:
+        with patch("huf.ai.agent.access.frappe.get_roles") as mock_get_roles:
             self.assertTrue(check_agent_access(agent_doc, "Guest"))
             mock_get_roles.assert_not_called()
 
     def test_guest_denied_when_allow_guest_false(self):
         agent_doc = _make_agent(allow_guest=False)
-        with patch("huf.ai.agent_access.frappe.get_roles") as mock_get_roles:
+        with patch("huf.ai.agent.access.frappe.get_roles") as mock_get_roles:
             self.assertFalse(check_agent_access(agent_doc, "Guest"))
             mock_get_roles.assert_not_called()
 
@@ -77,7 +77,7 @@ class TestCheckAgentAccess(unittest.TestCase):
         agent_doc = _make_agent(
             owner="owner@example.com", allowed_users=[], allowed_roles=[], allow_all_users=True
         )
-        with patch("huf.ai.agent_access.frappe.get_roles", return_value=["Some Role"]), patch(
+        with patch("huf.ai.agent.access.frappe.get_roles", return_value=["Some Role"]), patch(
             "huf.permissions.has_capability", side_effect=_no_capabilities
         ):
             self.assertTrue(check_agent_access(agent_doc, "random@example.com"))
@@ -86,7 +86,7 @@ class TestCheckAgentAccess(unittest.TestCase):
         agent_doc = _make_agent(
             owner="owner@example.com", allowed_users=[], allowed_roles=[], allow_all_users=False
         )
-        with patch("huf.ai.agent_access.frappe.get_roles", return_value=["Some Role"]), patch(
+        with patch("huf.ai.agent.access.frappe.get_roles", return_value=["Some Role"]), patch(
             "huf.permissions.has_capability", side_effect=_no_capabilities
         ):
             self.assertFalse(check_agent_access(agent_doc, "random@example.com"))
@@ -97,7 +97,7 @@ class TestCheckAgentAccess(unittest.TestCase):
             allowed_users=["allowed@example.com"],
             allowed_roles=[],
         )
-        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+        with patch("huf.ai.agent.access.frappe.get_roles", return_value=[]), patch(
             "huf.permissions.has_capability", side_effect=_no_capabilities
         ):
             self.assertTrue(check_agent_access(agent_doc, "allowed@example.com"))
@@ -108,7 +108,7 @@ class TestCheckAgentAccess(unittest.TestCase):
             allowed_users=["allowed@example.com"],
             allowed_roles=[],
         )
-        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+        with patch("huf.ai.agent.access.frappe.get_roles", return_value=[]), patch(
             "huf.permissions.has_capability", side_effect=_no_capabilities
         ):
             self.assertFalse(check_agent_access(agent_doc, "other@example.com"))
@@ -120,7 +120,7 @@ class TestCheckAgentAccess(unittest.TestCase):
             allowed_roles=["Special Role"],
         )
         with patch(
-            "huf.ai.agent_access.frappe.get_roles",
+            "huf.ai.agent.access.frappe.get_roles",
             return_value=["Special Role", "Some Other Role"],
         ), patch("huf.permissions.has_capability", side_effect=_no_capabilities):
             self.assertTrue(check_agent_access(agent_doc, "someone@example.com"))
@@ -132,7 +132,7 @@ class TestCheckAgentAccess(unittest.TestCase):
             allowed_roles=["Special Role"],
         )
         with patch(
-            "huf.ai.agent_access.frappe.get_roles",
+            "huf.ai.agent.access.frappe.get_roles",
             return_value=["Unrelated Role"],
         ), patch("huf.permissions.has_capability", side_effect=_no_capabilities):
             self.assertFalse(check_agent_access(agent_doc, "someone@example.com"))
@@ -167,7 +167,7 @@ class TestCheckAgentAccess(unittest.TestCase):
         def _capable(user, capability):
             return capability == "agent.view_all"
 
-        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+        with patch("huf.ai.agent.access.frappe.get_roles", return_value=[]), patch(
             "huf.permissions.has_capability", side_effect=_capable
         ):
             self.assertTrue(check_agent_access(agent_doc, "capable-user@example.com"))

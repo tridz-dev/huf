@@ -13,7 +13,7 @@ the modules under test here also do submodule-style imports —
 satisfy (`ModuleNotFoundError: 'frappe' is not a package`). This module installs
 proper (empty-but-importable) submodules for exactly those import sites so the
 real production code under test — `huf.ai.providers.litellm`,
-`huf.ai.context_segments`, `huf.ai.agent_run_analytics`, `huf.ai.cost_calculator`
+`huf.ai.context_segments`, `huf.ai.agent.run_analytics`, `huf.ai.cost_calculator`
 — can be imported unmodified in this environment, where frappe is not installed
 and the `litellm` package resolves to a broken/partial namespace install (see
 `/opt/homebrew/lib/python3.14/site-packages/litellm.pth`, unrelated to this repo).
@@ -91,7 +91,7 @@ def install():
         frappe_utils.get_datetime = MagicMock(side_effect=lambda v: v)
         frappe_utils.now_datetime = MagicMock()
         # Identity passthrough is enough for tests that never exercise the
-        # aware/naive normalisation itself (agent_run_analytics_api.py imports
+        # aware/naive normalisation itself (agent/run_analytics_api.py imports
         # this at module level, so it must exist for the module to import at
         # all) -- tests that actually need real tz-conversion behaviour talk to
         # a live bench instead, since pytz's tzdata isn't available here.

@@ -25,8 +25,8 @@ from huf.ai.agent_integration import (
     recover_stalled_agent_runs,
     run_agent_sync,
 )
-from huf.ai import agent_chat
-from huf.ai import agent_scheduler
+from huf.ai.agent import chat as agent_chat
+from huf.ai.agent import scheduler as agent_scheduler
 from huf.ai.orchestration.planning import run_planning
 from huf.ai.flow.engine import _exec_agent_run
 
@@ -470,9 +470,9 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_run.assert_called_once()
         self.assertTrue(mock_run.call_args.kwargs.get("now"))
 
-    @patch("huf.ai.agent_chat.frappe")
-    @patch("huf.ai.agent_chat.ConversationManager")
-    @patch("huf.ai.agent_chat.run_agent_sync")
+    @patch("huf.ai.agent.chat.frappe")
+    @patch("huf.ai.agent.chat.ConversationManager")
+    @patch("huf.ai.agent.chat.run_agent_sync")
     def test_new_conversation_returns_queued_ack(self, mock_run, mock_cm_cls, mock_frappe):
         """Web-facing chat endpoints queue by default and surface the queued ack."""
         conversation = MagicMock()
@@ -502,8 +502,8 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_run.assert_called_once()
         self.assertNotIn("now", mock_run.call_args.kwargs)
 
-    @patch("huf.ai.agent_chat.frappe")
-    @patch("huf.ai.agent_chat.run_agent_sync")
+    @patch("huf.ai.agent.chat.frappe")
+    @patch("huf.ai.agent.chat.run_agent_sync")
     def test_send_message_to_conversation_returns_queued_ack(self, mock_run, mock_frappe):
         """Continuing a conversation also queues by default."""
         conv_doc = MagicMock()
@@ -561,10 +561,10 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_run.assert_called_once()
         self.assertTrue(mock_run.call_args.kwargs.get("now"))
 
-    @patch("huf.ai.agent_scheduler.automation_runtime_is_new", return_value=False)
+    @patch("huf.ai.agent.scheduler.automation_runtime_is_new", return_value=False)
     @patch("huf.ai.prompt_resolver.resolve_prompt")
-    @patch("huf.ai.agent_scheduler.frappe")
-    @patch("huf.ai.agent_scheduler.run_agent_sync")
+    @patch("huf.ai.agent.scheduler.frappe")
+    @patch("huf.ai.agent.scheduler.run_agent_sync")
     def test_scheduler_submits_queued_run(self, mock_run, mock_frappe, mock_resolve_prompt, mock_runtime_is_new):
         """Legacy scheduler (site pins automation_trigger_runtime to "legacy"):
         scheduled triggers are background workers; they hand runs to the queue."""
@@ -605,7 +605,7 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_run.assert_not_called()
         mock_frappe.enqueue.assert_called_once()
         self.assertEqual(
-            mock_frappe.enqueue.call_args.args[0], "huf.ai.agent_scheduler.execute_scheduled_agent"
+            mock_frappe.enqueue.call_args.args[0], "huf.ai.agent.scheduler.execute_scheduled_agent"
         )
 
         # The worker job then hands the run to the queue (no synchronous "now").
@@ -620,9 +620,9 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.assertNotIn("now", mock_run.call_args.kwargs)
         self.assertEqual(mock_run.call_args.args, ("Scheduled Agent", "scheduled prompt", "Test Provider", "test-model"))
 
-    @patch("huf.ai.agent_scheduler.automation_runtime_is_new", return_value=True)
-    @patch("huf.ai.agent_scheduler.frappe")
-    @patch("huf.ai.agent_scheduler.run_agent_sync")
+    @patch("huf.ai.agent.scheduler.automation_runtime_is_new", return_value=True)
+    @patch("huf.ai.agent.scheduler.frappe")
+    @patch("huf.ai.agent.scheduler.run_agent_sync")
     def test_legacy_scheduler_no_ops_under_new_runtime(self, mock_run, mock_frappe, mock_runtime_is_new):
         """Legacy scheduler no-ops under the default "new" automation runtime,
         leaving run_due_automations (huf.ai.automation.scheduler) as the sole executor."""
@@ -1118,8 +1118,8 @@ class TestQueueFirstRuns(unittest.TestCase):
     # File/audio flow: one user message, files reach the run
     # ------------------------------------------------------------------
 
-    @patch("huf.ai.agent_chat.frappe")
-    @patch("huf.ai.agent_chat.run_agent_sync")
+    @patch("huf.ai.agent.chat.frappe")
+    @patch("huf.ai.agent.chat.run_agent_sync")
     def test_send_message_forwards_skip_user_message_and_files(self, mock_run, mock_frappe):
         conv_doc = MagicMock()
         conv_doc.is_active = True
@@ -1147,9 +1147,9 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.assertIs(kwargs["skip_user_message"], True)
         self.assertEqual(kwargs["files"], files)
 
-    @patch("huf.ai.agent_chat.frappe")
-    @patch("huf.ai.agent_chat.ConversationManager")
-    @patch("huf.ai.agent_chat.run_agent_sync")
+    @patch("huf.ai.agent.chat.frappe")
+    @patch("huf.ai.agent.chat.ConversationManager")
+    @patch("huf.ai.agent.chat.run_agent_sync")
     def test_new_conversation_forwards_skip_user_message_and_files(
         self, mock_run, mock_cm_cls, mock_frappe
     ):

@@ -7,7 +7,7 @@ import json
 import frappe
 from frappe.utils import add_to_date, convert_utc_to_system_timezone, get_datetime, now_datetime
 
-from huf.ai.agent_run_analytics import DIMENSION_FIELDS
+from huf.ai.agent.run_analytics import DIMENSION_FIELDS
 
 
 ROLLUP_DOCTYPE = "Agent Run Analytics Rollup"
@@ -127,7 +127,7 @@ def _load_composition_totals(raw) -> dict:
 def _accumulate_composition(totals: dict, segment_tokens: dict) -> None:
     """Fold one rollup row's composition totals into a running total.
 
-    Mirrors `huf.ai.agent_run_analytics._accumulate_composition`: `None` means
+    Mirrors `huf.ai.agent.run_analytics._accumulate_composition`: `None` means
     "could not be counted" and must propagate as unknown, never be coerced to
     0. A segment's total becomes (and stays) `None` as soon as any
     contributing row reports `None` for it.
@@ -187,7 +187,7 @@ def get_execution_analytics(
 
     # If rollups are empty for this window, attempt a quick backfill refresh once and re-query
     if not rows and frappe.db.exists("Agent Run"):
-        from huf.ai.agent_run_analytics import refresh_rollups
+        from huf.ai.agent.run_analytics import refresh_rollups
         refresh_rollups(full_backfill=True)
         rows = _query_rollups(granularity, start, end)
 

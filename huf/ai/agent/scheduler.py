@@ -169,7 +169,7 @@ def run_scheduled_agents():
 
 			# This tick owns the claim: enqueue the scheduled run
 			frappe.enqueue(
-				"huf.ai.agent_scheduler.execute_scheduled_agent",
+				"huf.ai.agent.scheduler.execute_scheduled_agent",
 				agent_trigger=t["name"],
 				agent=t.get("agent"),
 				enqueue_after_commit=True,

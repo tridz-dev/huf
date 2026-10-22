@@ -8,7 +8,7 @@ new ``automation/scheduler.py`` / ``automation/hooks.py`` entrypoints, but
 keeps a one-line rollback available without a code revert: setting
 ``automation_trigger_runtime`` to ``"legacy"`` in ``site_config.json`` makes
 every new entrypoint that checks this flag act as disabled and hands the work
-back to the legacy ``agent_scheduler.py`` / ``agent_hooks.py`` entrypoints.
+back to the legacy ``agent/scheduler.py`` / ``agent/hooks.py`` entrypoints.
 
 Both sides check this flag, with opposite polarity: the new entrypoints
 return early when the mode is *not* ``"new"``, the legacy ones return early

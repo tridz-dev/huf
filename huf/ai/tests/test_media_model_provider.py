@@ -87,7 +87,7 @@ class TestImageModelProvider(IntegrationTestCase):
 		fake = MagicMock()
 		with (
 			patch("frappe.get_doc", side_effect=_router(agent, models, providers or PROVIDERS)),
-			patch("huf.ai.agent_access.assert_agent_access"),
+			patch("huf.ai.agent.access.assert_agent_access"),
 			patch("litellm.image_generation", return_value=MagicMock(data=[])) as image_generation,
 		):
 			fake.image_generation = image_generation
@@ -170,7 +170,7 @@ class TestGenerateAudioHandlerProvider(IntegrationTestCase):
 		saved = MagicMock(file_url="/private/files/a.wav", name="FILE-1")
 		with (
 			patch("frappe.get_doc", side_effect=_router(agent, models, providers or PROVIDERS)),
-			patch("huf.ai.agent_access.assert_agent_access"),
+			patch("huf.ai.agent.access.assert_agent_access"),
 			patch("litellm.speech", return_value=_fake_speech_response()) as speech,
 			patch("litellm.completion", return_value=_fake_completion_audio()) as completion,
 			patch("huf.ai.handlers.media.save_file", return_value=saved) as save,
@@ -240,7 +240,7 @@ class TestVideoModelProvider(IntegrationTestCase):
 		agent = _agent()
 		with (
 			patch("frappe.get_doc", side_effect=_router(agent, models, providers or PROVIDERS)),
-			patch("huf.ai.agent_access.assert_agent_access"),
+			patch("huf.ai.agent.access.assert_agent_access"),
 			patch("frappe.log_error"),
 		):
 			return asyncio.run(media.handle_generate_video(prompt="x", agent_name="WA Agent", model="veo"))

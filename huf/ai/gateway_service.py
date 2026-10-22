@@ -2312,7 +2312,7 @@ def _process_gateway_event(event_name: str) -> dict:
         # execution_user, NOT as Guest.
         #
         # It used to call assert_agent_access(agent_doc, user="Guest"), which
-        # short-circuits on `allow_guest` alone (agent_access.check_agent_access).
+        # short-circuits on `allow_guest` alone (agent/access.py check_agent_access).
         # That made Agent.allow_guest=1 the only way to put any Agent behind any
         # Gateway -- and because `Agent.allow_guest` is also the sole gate on the
         # unauthenticated `run_agent_sync` / `run_agent_sync_chat` endpoints, the
@@ -2335,8 +2335,8 @@ def _process_gateway_event(event_name: str) -> dict:
         # resolve_run_identity_and_authorize() helper alongside the other 3
         # "run an agent" trigger surfaces, but keeps its own rejection
         # reporting shape (a Gateway Event status/error_message, not a raised
-        # exception) -- see agent_access.RunIdentityResult's docstring.
-        from huf.ai.agent_access import TRIGGER_GATEWAY, resolve_run_identity_and_authorize
+        # exception) -- see agent/access.py RunIdentityResult's docstring.
+        from huf.ai.agent.access import TRIGGER_GATEWAY, resolve_run_identity_and_authorize
 
         agent_doc = frappe.get_doc("Agent", event.target_agent)
         identity = resolve_run_identity_and_authorize(

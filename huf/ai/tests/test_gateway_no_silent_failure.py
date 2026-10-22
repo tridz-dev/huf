@@ -121,7 +121,7 @@ class TestPaths(unittest.TestCase):
 			patch.object(gs.frappe, "get_doc", side_effect=[event, gw, MagicMock(owner="bot"), gw]),
 			patch.object(gs, "_process_time_block_reason", return_value=""),
 			patch.object(gs, "_is_reaction_event", return_value=False),
-			patch("huf.ai.agent_access.resolve_run_identity_and_authorize", return_value=SimpleNamespace(authorized=True)),
+			patch("huf.ai.agent.access.resolve_run_identity_and_authorize", return_value=SimpleNamespace(authorized=True)),
 			patch.object(gs.frappe, "set_user"),
 			patch.object(gs, "_describe_attachments", return_value=""),
 			patch.object(gs, "_save_whatsapp_media", return_value=[]),

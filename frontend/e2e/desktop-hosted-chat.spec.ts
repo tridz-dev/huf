@@ -107,7 +107,7 @@ test.describe('Desktop-hosted chat', () => {
   test('desktop_offline puts a banner above the composer and Retry resends', async ({ page }) => {
     await mockHostedChat(page);
     let calls = 0;
-    await page.route('**/api/method/huf.ai.agent_chat.send_message_to_conversation**', (r) => {
+    await page.route('**/api/method/huf.ai.agent.chat.send_message_to_conversation**', (r) => {
       calls += 1;
       if (calls === 1) {
         return r.fulfill(
@@ -147,7 +147,7 @@ test.describe('Desktop-hosted chat', () => {
   test('workspace_changed offers a rebind that resends', async ({ page }) => {
     await mockHostedChat(page);
     let sends = 0;
-    await page.route('**/api/method/huf.ai.agent_chat.send_message_to_conversation**', (r) => {
+    await page.route('**/api/method/huf.ai.agent.chat.send_message_to_conversation**', (r) => {
       sends += 1;
       return sends === 1
         ? r.fulfill(json({ message: { success: false, code: 'workspace_changed', error: 'workspace_changed', message: 'x', conversation_id: 'conv-1' } }))
@@ -171,7 +171,7 @@ test.describe('Desktop-hosted chat', () => {
 
   test('remote_disabled by the desktop tells the user to enable remote control there', async ({ page }) => {
     await mockHostedChat(page);
-    await page.route('**/api/method/huf.ai.agent_chat.send_message_to_conversation**', (r) =>
+    await page.route('**/api/method/huf.ai.agent.chat.send_message_to_conversation**', (r) =>
       r.fulfill(json({ message: { success: false, code: 'remote_disabled', error: 'remote_disabled', message: 'x', disabled_by: 'desktop' } })),
     );
     await goto(page, '/chat/conv-1');
@@ -184,7 +184,7 @@ test.describe('Desktop-hosted chat', () => {
 
   test('remote_disabled by the agent links to the agent permissions', async ({ page }) => {
     await mockHostedChat(page);
-    await page.route('**/api/method/huf.ai.agent_chat.send_message_to_conversation**', (r) =>
+    await page.route('**/api/method/huf.ai.agent.chat.send_message_to_conversation**', (r) =>
       r.fulfill(json({ message: { success: false, code: 'remote_disabled', error: 'remote_disabled', message: 'x', disabled_by: 'agent' } })),
     );
     await goto(page, '/chat/conv-1');

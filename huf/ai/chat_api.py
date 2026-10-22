@@ -5,7 +5,7 @@ from frappe import _
 from frappe.rate_limiter import rate_limit
 
 from .agent_integration import run_agent_sync
-from huf.ai.agent_access import assert_agent_access
+from huf.ai.agent.access import assert_agent_access
 from .conversation_manager import ConversationManager
 from huf.permissions import has_capability
 

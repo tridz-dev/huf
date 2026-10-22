@@ -157,7 +157,7 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
         # the background worker already had (typically Administrator) with no
         # log entry. The fallback itself is unchanged (still falls back); it
         # is no longer silent.
-        from huf.ai.agent_access import TRIGGER_DOC_EVENT, resolve_run_identity_and_authorize
+        from huf.ai.agent.access import TRIGGER_DOC_EVENT, resolve_run_identity_and_authorize
 
         identity = resolve_run_identity_and_authorize(
             None,

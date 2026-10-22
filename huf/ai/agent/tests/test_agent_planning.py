@@ -7,7 +7,7 @@ Tests cover:
 3. ST-08.3: provider errors don't block Agent save
 4. ST-08.6: scheduler pre-claims next_execution and enqueues
 
-Run with: bench --site <site> run-tests --app huf --module huf.ai.tests.test_agent_planning
+Run with: bench --site <site> run-tests --app huf --module huf.ai.agent.tests.test_agent_planning
 """
 import unittest
 from datetime import datetime, timedelta
@@ -151,15 +151,15 @@ class TestSchedulerPreClaim(unittest.TestCase):
     def tearDown(self):
         frappe.session.user = self._old_user
 
-    @patch("huf.ai.agent_scheduler.frappe.db.sql")
-    @patch("huf.ai.agent_scheduler.frappe.db.commit")
-    @patch("huf.ai.agent_scheduler.frappe.enqueue")
-    @patch("huf.ai.agent_scheduler.frappe.get_all")
+    @patch("huf.ai.agent.scheduler.frappe.db.sql")
+    @patch("huf.ai.agent.scheduler.frappe.db.commit")
+    @patch("huf.ai.agent.scheduler.frappe.enqueue")
+    @patch("huf.ai.agent.scheduler.frappe.get_all")
     def test_scheduler_issues_conditional_update_for_each_trigger(
         self, mock_get_all, mock_enqueue, mock_commit, mock_sql
     ):
         """Verify that run_scheduled_agents issues a conditional UPDATE for each trigger."""
-        from huf.ai.agent_scheduler import run_scheduled_agents
+        from huf.ai.agent.scheduler import run_scheduled_agents
 
         # Mock triggers list
         now = now_datetime().replace(microsecond=0)
@@ -184,10 +184,10 @@ class TestSchedulerPreClaim(unittest.TestCase):
 
         # Mock frappe permissions/db checks
         with nullcontext():  # session.user is set/restored in setUp/tearDown
-            with patch("huf.ai.agent_scheduler.frappe.db.exists", return_value=True):
-                with patch("huf.ai.agent_scheduler.frappe.has_permission", return_value=True):
-                    with patch("huf.ai.agent_scheduler.automation_runtime_is_new", return_value=False):
-                        with patch("huf.ai.agent_scheduler.frappe.get_doc") as mock_get_doc:
+            with patch("huf.ai.agent.scheduler.frappe.db.exists", return_value=True):
+                with patch("huf.ai.agent.scheduler.frappe.has_permission", return_value=True):
+                    with patch("huf.ai.agent.scheduler.automation_runtime_is_new", return_value=False):
+                        with patch("huf.ai.agent.scheduler.frappe.get_doc") as mock_get_doc:
                             mock_agent = MagicMock()
                             mock_agent.provider = "OpenAI"
                             mock_agent.model = "gpt-4"
@@ -201,15 +201,15 @@ class TestSchedulerPreClaim(unittest.TestCase):
         self.assertIn("next_execution = %(observed_next)s", update_call[0][0])
         self.assertIn("WHERE name = %(name)s", update_call[0][0])
 
-    @patch("huf.ai.agent_scheduler.frappe.db.sql")
-    @patch("huf.ai.agent_scheduler.frappe.db.commit")
-    @patch("huf.ai.agent_scheduler.frappe.enqueue")
-    @patch("huf.ai.agent_scheduler.frappe.get_all")
+    @patch("huf.ai.agent.scheduler.frappe.db.sql")
+    @patch("huf.ai.agent.scheduler.frappe.db.commit")
+    @patch("huf.ai.agent.scheduler.frappe.enqueue")
+    @patch("huf.ai.agent.scheduler.frappe.get_all")
     def test_scheduler_skips_trigger_if_rowcount_is_zero(
         self, mock_get_all, mock_enqueue, mock_commit, mock_sql
     ):
         """Verify that scheduler skips a trigger if another tick already claimed it (rowcount==0)."""
-        from huf.ai.agent_scheduler import run_scheduled_agents
+        from huf.ai.agent.scheduler import run_scheduled_agents
 
         now = now_datetime().replace(microsecond=0)
         past = now - timedelta(seconds=1)
@@ -232,24 +232,24 @@ class TestSchedulerPreClaim(unittest.TestCase):
         ]
 
         with nullcontext():  # session.user is set/restored in setUp/tearDown
-            with patch("huf.ai.agent_scheduler.frappe.db.exists", return_value=True):
-                with patch("huf.ai.agent_scheduler.frappe.has_permission", return_value=True):
-                    with patch("huf.ai.agent_scheduler.automation_runtime_is_new", return_value=False):
-                        with patch("huf.ai.agent_scheduler.frappe.get_doc"):
+            with patch("huf.ai.agent.scheduler.frappe.db.exists", return_value=True):
+                with patch("huf.ai.agent.scheduler.frappe.has_permission", return_value=True):
+                    with patch("huf.ai.agent.scheduler.automation_runtime_is_new", return_value=False):
+                        with patch("huf.ai.agent.scheduler.frappe.get_doc"):
                             run_scheduled_agents()
 
         # Verify enqueue was NOT called (we skipped due to rowcount==0)
         mock_enqueue.assert_not_called()
 
-    @patch("huf.ai.agent_scheduler.frappe.db.sql")
-    @patch("huf.ai.agent_scheduler.frappe.db.commit")
-    @patch("huf.ai.agent_scheduler.frappe.enqueue")
-    @patch("huf.ai.agent_scheduler.frappe.get_all")
+    @patch("huf.ai.agent.scheduler.frappe.db.sql")
+    @patch("huf.ai.agent.scheduler.frappe.db.commit")
+    @patch("huf.ai.agent.scheduler.frappe.enqueue")
+    @patch("huf.ai.agent.scheduler.frappe.get_all")
     def test_scheduler_enqueues_execute_scheduled_agent(
         self, mock_get_all, mock_enqueue, mock_commit, mock_sql
     ):
         """Verify that scheduler enqueues execute_scheduled_agent when rowcount==1."""
-        from huf.ai.agent_scheduler import run_scheduled_agents
+        from huf.ai.agent.scheduler import run_scheduled_agents
 
         now = now_datetime().replace(microsecond=0)
         past = now - timedelta(seconds=1)
@@ -272,10 +272,10 @@ class TestSchedulerPreClaim(unittest.TestCase):
         ]
 
         with nullcontext():  # session.user is set/restored in setUp/tearDown
-            with patch("huf.ai.agent_scheduler.frappe.db.exists", return_value=True):
-                with patch("huf.ai.agent_scheduler.frappe.has_permission", return_value=True):
-                    with patch("huf.ai.agent_scheduler.automation_runtime_is_new", return_value=False):
-                        with patch("huf.ai.agent_scheduler.frappe.get_doc"):
+            with patch("huf.ai.agent.scheduler.frappe.db.exists", return_value=True):
+                with patch("huf.ai.agent.scheduler.frappe.has_permission", return_value=True):
+                    with patch("huf.ai.agent.scheduler.automation_runtime_is_new", return_value=False):
+                        with patch("huf.ai.agent.scheduler.frappe.get_doc"):
                             run_scheduled_agents()
 
         # Verify enqueue was called with correct parameters
@@ -283,7 +283,7 @@ class TestSchedulerPreClaim(unittest.TestCase):
         call_args = mock_enqueue.call_args
         self.assertEqual(
             call_args[0][0],
-            "huf.ai.agent_scheduler.execute_scheduled_agent"
+            "huf.ai.agent.scheduler.execute_scheduled_agent"
         )
         self.assertEqual(call_args[1]["agent_trigger"], "trigger_1")
         self.assertEqual(call_args[1]["agent"], "test_agent")

@@ -1,6 +1,6 @@
 """Direct, per-conversation execution analytics for Agent Conversation.
 
-`Agent Run Analytics Rollup` (see `agent_run_analytics.py` / `agent_run_analytics_api.py`)
+`Agent Run Analytics Rollup` (see `agent/run_analytics.py` / `agent/run_analytics_api.py`)
 is recomputed on a 5-minute cron. That lag is fine for aggregate/trend views
 spanning many entities, but a single conversation typically holds only tens
 of runs, and a just-finished turn missing from its own conversation's
@@ -25,7 +25,7 @@ Every division in this module is guarded against a zero or `None`
 denominator (see `_compute_current`, `_compute_cache_effectiveness`, and
 the per-run delta in `_build_series`). Malformed `usage_snapshot` values
 (NULL, non-JSON, non-dict, missing keys) degrade to "no data" and never
-raise, matching the handling in `agent_run_analytics.py`.
+raise, matching the handling in `agent/run_analytics.py`.
 """
 
 from __future__ import annotations
@@ -134,7 +134,7 @@ def _empty_totals() -> dict:
         "cost": 0,
         "cache_read_tokens": 0,
         "cache_write_tokens": 0,
-        # Field names match agent_run_analytics_api.py's summary shape
+        # Field names match agent/run_analytics_api.py's summary shape
         # (duration_ms_sum / duration_count / average_duration_ms) rather
         # than inventing a second convention for the same idea.
         "duration_ms_sum": 0,

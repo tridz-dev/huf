@@ -94,7 +94,7 @@ website_route_rules = [
 
 # Register custom page renderer for SSE streaming and docs
 page_renderer = [
-    "huf.ai.agent_stream_renderer.AgentStreamRenderer",
+    "huf.ai.agent.stream_renderer.AgentStreamRenderer",
     "huf.ai.app_public_renderer.HufAppPublicRenderer",
     "huf.api.v1.router.ApiV1Router",
     # Per-app www/ template registry (Phase 2, HufAppDeskPortalDelivery):
@@ -244,20 +244,20 @@ override_doctype_class = {
 
 doc_events = {
     "*": {
-        "validate": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "before_insert": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "after_insert": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "before_save": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "after_save": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "before_submit": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "after_submit": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "before_cancel": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "on_submit": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "on_update": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "before_rename": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "after_rename": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "on_trash": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "after_delete": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "validate": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_insert": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_insert": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_save": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_save": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_submit": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_submit": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_cancel": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "on_submit": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "on_update": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_rename": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_rename": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "on_trash": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_delete": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
     },
     "WhatsApp Templates": {
         "before_validate": "huf.ai.gateway_adapters.whatsapp_template_guard.guard_template_write",
@@ -269,9 +269,9 @@ doc_events = {
         "on_update": "huf.huf.doctype.huf_user_role.huf_user_role.sync_from_frappe_user",
     },
     "Agent Trigger": {
-        "after_insert": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
-        "on_update": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
-        "on_trash": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
+        "after_insert": ["huf.ai.agent.hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
+        "on_update": ["huf.ai.agent.hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
+        "on_trash": ["huf.ai.agent.hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
     },
     "Automation Trigger": {
         "after_insert": "huf.ai.automation.hooks.clear_doc_event_automation_cache",
@@ -320,7 +320,7 @@ doc_events = {
 # }
 scheduler_events = {
     "all": [
-        "huf.ai.agent_scheduler.run_scheduled_agents",
+        "huf.ai.agent.scheduler.run_scheduled_agents",
         "huf.ai.automation.scheduler.run_due_automations"
     ],
     "daily": [
@@ -328,7 +328,7 @@ scheduler_events = {
         "huf.ai.knowledge.maintenance.optimize_indexes",
         # P2-10: Proactively mark expired Memory Records (past effective_until) as Expired
         "huf.ai.memory_tools.expire_stale_memory_records",
-        "huf.ai.agent_chat.purge_trashed_conversations",
+        "huf.ai.agent.chat.purge_trashed_conversations",
         "huf.ai.context_artifacts.purge_expired_context_artifacts",
         "huf.ai.gateway_service.purge_old_rejected_gateway_events",
         "huf.ai.gateway_service.cleanup_stale_access_entries",
@@ -344,7 +344,7 @@ scheduler_events = {
             "huf.ai.gateway_service.reap_stuck_gateway_events",
         ],
         "*/5 * * * *": [
-            "huf.ai.agent_run_analytics.refresh_rollups",
+            "huf.ai.agent.run_analytics.refresh_rollups",
             # Safety net: fail runs orphaned in 'Started' (stale > huf_stale_run_minutes (15) / huf_stale_run_minutes_background (60, non-stream)).
             "huf.ai.run_control.sweep_stale_runs",
         ],

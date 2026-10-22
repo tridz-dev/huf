@@ -145,7 +145,7 @@ class TestSetUserRestoreGuards(IntegrationTestCase):
         frappe.session.user = user
 
     def test_agent_hooks_restores_user(self):
-        from huf.ai.agent_hooks import run_agent_for_doc
+        from huf.ai.agent.hooks import run_agent_for_doc
 
         original_user = "test@example.com"
         target_user = "trigger@example.com"
@@ -154,7 +154,7 @@ class TestSetUserRestoreGuards(IntegrationTestCase):
         try:
             with patch("frappe.set_user", side_effect=self._tracking_set_user) as mock_set_user:
                 # The initiating user must exist for identity resolution to switch to it.
-                with patch("frappe.db.exists", return_value=True), patch("huf.ai.agent_hooks.run_agent_sync"):
+                with patch("frappe.db.exists", return_value=True), patch("huf.ai.agent.hooks.run_agent_sync"):
                     run_agent_for_doc(
                         doc={"doctype": "Note", "name": "TEST-001"},
                         agent_name="test-agent",

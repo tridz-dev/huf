@@ -15,13 +15,13 @@ check moved into `execute_scheduled_agent` (where `_submit_batch_job_for_trigger
 is now actually called) as defense-in-depth against an RQ worker retrying
 the same job after a crash mid-execution.
 
-Run with: bench --site <site> run-tests --app huf --module huf.ai.tests.test_agent_scheduler
+Run with: bench --site <site> run-tests --app huf --module huf.ai.agent.tests.test_agent_scheduler
 """
 import unittest
 from unittest.mock import MagicMock, patch
 from frappe.utils import now_datetime
 
-from huf.ai.agent_scheduler import execute_scheduled_agent, run_scheduled_agents
+from huf.ai.agent.scheduler import execute_scheduled_agent, run_scheduled_agents
 
 
 class TestAgentSchedulerPreClaim(unittest.TestCase):
@@ -39,8 +39,8 @@ class TestAgentSchedulerPreClaim(unittest.TestCase):
 			"execution_mode": "Batch",
 		}
 
-	@patch("huf.ai.agent_scheduler.frappe")
-	@patch("huf.ai.agent_scheduler.automation_runtime_is_new")
+	@patch("huf.ai.agent.scheduler.frappe")
+	@patch("huf.ai.agent.scheduler.automation_runtime_is_new")
 	def test_enqueues_when_pre_claim_wins(self, mock_automation_runtime_is_new, mock_frappe):
 		"""A tick that wins the conditional-UPDATE claim (rowcount == 1) enqueues execute_scheduled_agent."""
 		mock_automation_runtime_is_new.return_value = False
@@ -55,11 +55,11 @@ class TestAgentSchedulerPreClaim(unittest.TestCase):
 
 		mock_frappe.enqueue.assert_called_once()
 		call_kwargs = mock_frappe.enqueue.call_args
-		self.assertEqual(call_kwargs[0][0], "huf.ai.agent_scheduler.execute_scheduled_agent")
+		self.assertEqual(call_kwargs[0][0], "huf.ai.agent.scheduler.execute_scheduled_agent")
 		self.assertEqual(call_kwargs[1]["agent_trigger"], "trigger-batch-001")
 
-	@patch("huf.ai.agent_scheduler.frappe")
-	@patch("huf.ai.agent_scheduler.automation_runtime_is_new")
+	@patch("huf.ai.agent.scheduler.frappe")
+	@patch("huf.ai.agent.scheduler.automation_runtime_is_new")
 	def test_skips_enqueue_when_pre_claim_lost(self, mock_automation_runtime_is_new, mock_frappe):
 		"""A tick that loses the conditional-UPDATE claim (rowcount == 0, another tick already
 		claimed this trigger) must not enqueue a second execute_scheduled_agent job -- this is
@@ -94,8 +94,8 @@ class TestExecuteScheduledAgentIdempotency(unittest.TestCase):
 		self.agent_doc.provider = "test-provider"
 		self.agent_doc.model = "test-model"
 
-	@patch("huf.ai.agent_scheduler.frappe")
-	@patch("huf.ai.agent_scheduler._submit_batch_job_for_trigger")
+	@patch("huf.ai.agent.scheduler.frappe")
+	@patch("huf.ai.agent.scheduler._submit_batch_job_for_trigger")
 	@patch("huf.ai.prompt_resolver.resolve_prompt")
 	def test_batch_job_submitted_when_no_existing_job(
 		self, mock_resolve_prompt, mock_submit_batch, mock_frappe
@@ -113,8 +113,8 @@ class TestExecuteScheduledAgentIdempotency(unittest.TestCase):
 		self.assertEqual(call_args[0][1], self.agent_doc)
 		self.assertEqual(call_args[0][2], "Test prompt")
 
-	@patch("huf.ai.agent_scheduler.frappe")
-	@patch("huf.ai.agent_scheduler._submit_batch_job_for_trigger")
+	@patch("huf.ai.agent.scheduler.frappe")
+	@patch("huf.ai.agent.scheduler._submit_batch_job_for_trigger")
 	@patch("huf.ai.prompt_resolver.resolve_prompt")
 	def test_batch_job_skipped_when_pending_job_exists(
 		self, mock_resolve_prompt, mock_submit_batch, mock_frappe
@@ -129,8 +129,8 @@ class TestExecuteScheduledAgentIdempotency(unittest.TestCase):
 
 		mock_submit_batch.assert_not_called()
 
-	@patch("huf.ai.agent_scheduler.frappe")
-	@patch("huf.ai.agent_scheduler.automation_runtime_is_new")
+	@patch("huf.ai.agent.scheduler.frappe")
+	@patch("huf.ai.agent.scheduler.automation_runtime_is_new")
 	def test_legacy_scheduler_logs_when_new_runtime_active(
 		self,
 		mock_automation_runtime_is_new,

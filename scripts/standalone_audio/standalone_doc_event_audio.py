@@ -2,7 +2,7 @@
 # See license.txt
 
 """
-Unit tests for doc-event trigger audio routing in huf.ai.agent_hooks.
+Unit tests for doc-event trigger audio routing in huf.ai.agent.hooks.
 
 Attachments configured on Agent Trigger ``file_attachments`` are classified
 per file: audio goes to the canonical audio service
@@ -79,7 +79,8 @@ sdk_tools_stub = types.ModuleType("huf.ai.sdk_tools")
 sdk_tools_stub.handle_ocr_document = handle_ocr_document_mock
 sys.modules["huf.ai.sdk_tools"] = sdk_tools_stub
 
-from huf.ai import agent_hooks, audio_service  # noqa: E402
+from huf.ai import audio_service
+from huf.ai.agent import hooks as agent_hooks  # noqa: E402
 
 
 def _doc_event_inputs(filename, field="attachment"):

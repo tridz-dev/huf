@@ -15,11 +15,11 @@ import json
 import unittest
 from unittest.mock import MagicMock, patch
 
-from huf.ai import agent_chat
+from huf.ai.agent import chat as agent_chat
 from huf.ai import agent_integration as ai
 from huf.ai.desktop import executor as dx
 from huf.ai.desktop import policy as desktop_policy
-from huf.ai.agent_stream_renderer import AgentStreamRenderer
+from huf.ai.agent.stream_renderer import AgentStreamRenderer
 
 CTX = {"executor_id": "exec-1", "fingerprint": "fp1", "user": "u@example.com", "label": "ws"}
 
@@ -298,8 +298,8 @@ class TestRunAgentSyncThreading(unittest.TestCase):
 
 
 class TestChatEndpointsForward(unittest.TestCase):
-	@patch("huf.ai.agent_chat.run_agent_sync", return_value={"conversation_id": "C", "desktop_tools": {"available": False, "reason": "executor_unavailable"}})
-	@patch("huf.ai.agent_chat.frappe")
+	@patch("huf.ai.agent.chat.run_agent_sync", return_value={"conversation_id": "C", "desktop_tools": {"available": False, "reason": "executor_unavailable"}})
+	@patch("huf.ai.agent.chat.frappe")
 	def test_send_message_forwards_param_and_returns_status(self, f, run):
 		conv = MagicMock(is_active=1, agent="A", model="m", channel="Chat")
 		conv.name = "C"
@@ -309,8 +309,8 @@ class TestChatEndpointsForward(unittest.TestCase):
 		self.assertEqual(run.call_args.kwargs["desktop_executor_id"], "exec-1")
 		self.assertFalse(result["desktop_tools"]["available"])
 
-	@patch("huf.ai.agent_chat.run_agent_sync", return_value={"conversation_id": "C"})
-	@patch("huf.ai.agent_chat.frappe")
+	@patch("huf.ai.agent.chat.run_agent_sync", return_value={"conversation_id": "C"})
+	@patch("huf.ai.agent.chat.frappe")
 	def test_send_message_without_param_unchanged(self, f, run):
 		conv = MagicMock(is_active=1, agent="A", model="m", channel="Chat")
 		conv.name = "C"
@@ -320,9 +320,9 @@ class TestChatEndpointsForward(unittest.TestCase):
 		self.assertIsNone(run.call_args.kwargs["desktop_executor_id"])
 		self.assertNotIn("desktop_tools", result)
 
-	@patch("huf.ai.agent_chat.run_agent_sync", return_value={"conversation_id": "C", "desktop_tools": {"available": True, "reason": None}})
-	@patch("huf.ai.agent_chat.ConversationManager")
-	@patch("huf.ai.agent_chat.frappe")
+	@patch("huf.ai.agent.chat.run_agent_sync", return_value={"conversation_id": "C", "desktop_tools": {"available": True, "reason": None}})
+	@patch("huf.ai.agent.chat.ConversationManager")
+	@patch("huf.ai.agent.chat.frappe")
 	def test_new_conversation_forwards_and_surfaces_status(self, f, cm, run):
 		cm.return_value.create_new_conversation.return_value = MagicMock(name="C")
 		f.db.get_value.return_value = "x"
@@ -343,11 +343,11 @@ class TestStreamPathThreading(unittest.TestCase):
 			captured.update(kwargs)
 			yield {"type": "complete"}
 
-		with patch("huf.ai.agent_stream_renderer.frappe.form_dict", {"agent_name": "a", **params}), \
-				patch("huf.ai.agent_stream_renderer.frappe.request", new=MagicMock(method="GET")), \
-				patch("huf.ai.agent_stream_renderer.frappe.get_doc", return_value=agent_doc), \
-				patch("huf.ai.agent_stream_renderer.frappe.has_permission", return_value=True), \
-				patch("huf.ai.agent_stream_renderer.run_agent_stream", fake_stream):
+		with patch("huf.ai.agent.stream_renderer.frappe.form_dict", {"agent_name": "a", **params}), \
+				patch("huf.ai.agent.stream_renderer.frappe.request", new=MagicMock(method="GET")), \
+				patch("huf.ai.agent.stream_renderer.frappe.get_doc", return_value=agent_doc), \
+				patch("huf.ai.agent.stream_renderer.frappe.has_permission", return_value=True), \
+				patch("huf.ai.agent.stream_renderer.run_agent_stream", fake_stream):
 			response = renderer._render_agent_stream("a")
 			list(response.response)
 		return captured
@@ -375,12 +375,12 @@ class TestStreamPathThreading(unittest.TestCase):
 			yield {"type": "delta", "content": "hi"}
 			yield {"type": "complete"}
 
-		with patch("huf.ai.agent_stream_renderer.SSE_KEEPALIVE_S", 0.1), \
-				patch("huf.ai.agent_stream_renderer.frappe.form_dict", {"agent_name": "a", "prompt": "hi"}), \
-				patch("huf.ai.agent_stream_renderer.frappe.request", new=MagicMock(method="GET")), \
-				patch("huf.ai.agent_stream_renderer.frappe.get_doc", return_value=_agent_doc(run_immediately=1)), \
-				patch("huf.ai.agent_stream_renderer.frappe.has_permission", return_value=True), \
-				patch("huf.ai.agent_stream_renderer.run_agent_stream", slow_stream):
+		with patch("huf.ai.agent.stream_renderer.SSE_KEEPALIVE_S", 0.1), \
+				patch("huf.ai.agent.stream_renderer.frappe.form_dict", {"agent_name": "a", "prompt": "hi"}), \
+				patch("huf.ai.agent.stream_renderer.frappe.request", new=MagicMock(method="GET")), \
+				patch("huf.ai.agent.stream_renderer.frappe.get_doc", return_value=_agent_doc(run_immediately=1)), \
+				patch("huf.ai.agent.stream_renderer.frappe.has_permission", return_value=True), \
+				patch("huf.ai.agent.stream_renderer.run_agent_stream", slow_stream):
 			response = renderer._render_agent_stream("a")
 			body = "".join(c if isinstance(c, str) else c.decode() for c in response.response)
 		data_lines = [ln for ln in body.split("\n\n") if ln.startswith("data: ")]

@@ -78,7 +78,7 @@ def fork_conversation_impl(
 
     agent_doc = frappe.get_doc("Agent", agent_name)
 
-    from huf.ai.agent_access import assert_agent_access
+    from huf.ai.agent.access import assert_agent_access
 
     assert_agent_access(agent_doc, user=frappe.session.user)
 

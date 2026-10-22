@@ -2,12 +2,12 @@
 # For license information, please see license.txt
 
 """
-Duration coverage for huf.ai.agent_conversation_analytics_api.
+Duration coverage for huf.ai.agent.conversation_analytics_api.
 
 The conversation analytics response originally summed tokens/cost across
 every run but never surfaced duration, even though Agent Run.start_time/
 end_time were always being fetched by the scheduled rollup for exactly this
-purpose (agent_run_analytics.py's duration_ms_sum/duration_count). This file
+purpose (agent/run_analytics.py's duration_ms_sum/duration_count). This file
 covers the fix: _run_duration_ms's guard, _compute_totals's cumulative sum
 (matching the rollup's field names), and _compute_current's per-turn
 snapshot (never summed into totals, same discipline as peak_context_tokens).
@@ -18,14 +18,14 @@ import os
 import unittest
 from datetime import datetime, timedelta
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, "testing"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, os.pardir, "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")))
 
-from huf.ai.agent_conversation_analytics_api import (  # noqa: E402
+from huf.ai.agent.conversation_analytics_api import (  # noqa: E402
     _compute_current,
     _compute_totals,
     _run_duration_ms,

@@ -18,7 +18,7 @@ def _check_conversation_access(conversation: str) -> None:
 
 	Allowed when the user owns the conversation or holds the System Manager
 	role. Mirrors the ownership check already used for conversation file
-	uploads in ``huf.ai.agent_chat``.
+	uploads in ``huf.ai.agent.chat``.
 	"""
 	if not conversation:
 		frappe.throw(_("Conversation is required"), frappe.ValidationError)
