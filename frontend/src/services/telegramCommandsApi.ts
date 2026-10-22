@@ -125,3 +125,24 @@ export function validateMenuButton(type: MenuButtonType, text: string, url: stri
 	if (!url.trim().startsWith('https://')) return 'The web app address must start with https://';
 	return null;
 }
+
+// -- recommended setup ---------------------------------------------------------------------------
+
+export interface RecommendedPlan {
+	commands: { scope: CommandScope; current: BotCommand[]; recommended: BotCommand[] }[];
+	menu_button: { current: MenuButton; recommended: MenuButton; https_ok: boolean; warning: string };
+	replaces_existing_commands: boolean;
+}
+export interface RecommendedResult {
+	changed: { commands: { scope: CommandScope; count: number }[]; menu_button: MenuButton | null };
+	previous: { commands: { scope: CommandScope; commands: BotCommand[] }[]; menu_button: MenuButton | null };
+}
+export const getRecommendedSetup = (gateway: string) => req<{ plan: RecommendedPlan }>('get', 'recommended_setup', { gateway });
+/** Overwrites the bot's published commands: the server refuses without confirm. */
+export const applyRecommendedSetup = (gateway: string, includeMenuButton = true, replaceCommands = true) =>
+	req<RecommendedResult>('post', 'apply_recommended_setup', {
+		gateway,
+		confirm: 1,
+		include_menu_button: includeMenuButton ? 1 : 0,
+		replace_commands: replaceCommands ? 1 : 0,
+	});
