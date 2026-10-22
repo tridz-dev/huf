@@ -84,6 +84,21 @@ def _claim(event) -> bool:
 	return bool(frappe.cache().set(f"huf_gw_voice_reply:{event.name}", 1, ex=_CLAIM_SECONDS, nx=True))
 
 
+def _run_coro(coro):
+	"""Run ``coro`` to completion from sync code, also when a loop is already running on this thread
+	(the agent tool path): then it runs on a worker thread that keeps the caller's context (frappe.local)."""
+	try:
+		asyncio.get_running_loop()
+	except RuntimeError:
+		return asyncio.run(coro)
+	import concurrent.futures
+	import contextvars
+
+	ctx = contextvars.copy_context()
+	with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+		return pool.submit(ctx.run, asyncio.run, coro).result()
+
+
 def _synthesize(
 	agent_name: str, text: str, conversation_id: str | None, run_id: str | None, response_format: str = "mp3",
 	voice: str | None = None,
@@ -91,7 +106,7 @@ def _synthesize(
 	"""Text to speech with the agent's TTS model (its own provider key); returns the audio bytes."""
 	from huf.ai.handlers.media import handle_generate_audio
 
-	result = asyncio.run(
+	result = _run_coro(
 		handle_generate_audio(
 			input=text, agent_name=agent_name, conversation_id=conversation_id, agent_run_id=run_id,
 			response_format=response_format, **({"voice": voice} if voice else {}),

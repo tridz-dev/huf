@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import unittest
 from unittest.mock import patch
 
 from huf.ai import whatsapp_send_file as send_file
@@ -105,3 +106,19 @@ class TestSendSpeechGateway(Base):
 		self.assertFalse(out["success"])
 		self.release.assert_called_once()
 		self.mark.assert_not_called()
+
+
+class TestRunCoroInRunningLoop(unittest.TestCase):
+	def test_runs_inside_a_running_event_loop(self):
+		import asyncio
+
+		from huf.ai import whatsapp_voice_reply as wv
+
+		async def inner():
+			return 7
+
+		async def outer():
+			return wv._run_coro(inner())  # the agent tool path calls sync code from a running loop
+
+		self.assertEqual(asyncio.run(outer()), 7)
+		self.assertEqual(wv._run_coro(inner()), 7)
