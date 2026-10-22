@@ -53,7 +53,7 @@ class Api(FakeBotApi):
 
 class Base(unittest.TestCase):
 	flags = {"group": True, "profile": True, "business": True}
-	owner = False
+	owner = True
 	cap = 50
 	always_human = False  # legacy owner-path tests exercise ban/promote directly; set True for the real gate
 
@@ -130,15 +130,28 @@ class TestRights(Base):
 
 
 class TestConfirmation(Base):
-	def test_owner_needs_only_confirm(self):
-		Base.owner = True
-		self.addCleanup(setattr, Base, "owner", False)
-		# ban is in ALWAYS_HUMAN_APPROVAL now; delete_message keeps the simple owner confirm=true path
-		self.assertEqual(self.run_action("delete_message", message_id=3)["error"], "needs_confirmation")
-		self.assertTrue(self.run_action("delete_message", message_id=3, confirm=True)["success"])
+	def test_non_owner_refused_for_state_changes(self):
+		Base.owner = False
+		self.addCleanup(setattr, Base, "owner", True)
+		for action, kw in (("unban", {"user_id": 5}), ("set_chat_title", {"title": "x"}), ("pin", {"message_id": 3}),
+			("set_my_name", {"name": "x"}), ("create_invite_link", {})):
+			r = self.run_action(action, confirm=True, **kw)
+			self.assertEqual(r["error"], "owner_required", action)
+			self.assertIn("bound admin", r["message"])
+		self.assertEqual(self.api.of("sendMessage"), [])
+		self.assertEqual(self.api.of("pinChatMessage"), [])
+
+	def test_get_admins_free_for_non_owner(self):
+		Base.owner = False
+		self.addCleanup(setattr, Base, "owner", True)
+		self.assertTrue(self.run_action("get_admins")["success"])
+
+	def test_every_state_change_needs_human_approval(self):
+		self.assertEqual({a for a, v in tool.ACTIONS.items() if v[2]}, {a for a in tool.ACTIONS if not a.startswith("get_")})
+		self.assertEqual({a for a, v in tool.ACTIONS.items() if not v[2]}, {"get_admins", "get_business_connection"})
 
 	def test_non_destructive_needs_nothing(self):
-		self.assertTrue(self.run_action("set_chat_title", title="Hi")["success"])
+		self.assertTrue(self.run_action("get_admins")["success"])
 
 
 class TestCapsAndTargets(Base):
@@ -259,8 +272,6 @@ class TestProfile(Base):
 
 	def test_set_my_commands_confirm_and_payload(self):
 		cmds = [{"command": "help", "description": "Help", "is_ephemeral": True}]
-		r = self.run_action("set_my_commands", commands=cmds, command_scope="all_private_chats")
-		self.assertEqual(r["error"], "needs_confirmation")
 		r = self.run_action(
 			"set_my_commands", commands=cmds, command_scope="all_private_chats", confirm=True,
 		)
@@ -316,8 +327,6 @@ class TestBusiness(Base):
 		self.assertTrue(self.run_action("read_business_message", business_connection_id="c1", chat_id=5, message_id=9)["success"])
 		self.assertEqual(self.payload("readBusinessMessage")["message_id"], 9)
 		args = dict(business_connection_id="c1", message_ids=[1, 2])
-		t = self.run_action("delete_business_messages", **args)
-		self.assertEqual(t["error"], "needs_confirmation")
 		r = self.run_action("delete_business_messages", confirm=True, **args)
 		self.assertTrue(r["success"], r)
 		self.assertEqual(self.payload("deleteBusinessMessages"), {"business_connection_id": "c1", "message_ids": [1, 2]})
@@ -368,8 +377,6 @@ class TestBusinessScope(Base):
 		tool.scope.release_send.assert_called_with("gw1", "run1")
 
 	def test_delete_all_messages_needs_any_number_scope(self):
-		Base.owner = True
-		self.addCleanup(setattr, Base, "owner", False)
 		self.conns["c1"]["rights"]["can_delete_all_messages"] = True
 		with patch.object(tool.scope, "settings", return_value={"scope": "Allow-list"}):
 			r = self.run_action("delete_business_messages", business_connection_id="c1", message_ids=[1],
@@ -378,8 +385,6 @@ class TestBusinessScope(Base):
 		self.assertEqual(self.api.of("deleteBusinessMessages"), [])
 
 	def test_delete_checks_chat_scope(self):
-		Base.owner = True
-		self.addCleanup(setattr, Base, "owner", False)
 		with self.deny():
 			r = self.run_action("delete_business_messages", business_connection_id="c1", message_ids=[1],
 				chat_id=77, confirm=True)
@@ -401,7 +406,9 @@ class TestBusinessScope(Base):
 
 
 class TestHumanApproval(Base):
-	"""Non-owner runs cannot self-confirm: a human Admin approves via signed buttons."""
+	always_human = True
+
+	"""Owner runs cannot self-confirm either: a human Admin approves via signed buttons."""
 
 	def setUp(self):
 		super().setUp()
@@ -480,29 +487,30 @@ class TestOwnerRank(unittest.TestCase):
 class TestOwnerGate(Base):
 	always_human = True
 
-	def test_always_human_approval_set(self):
-		self.assertEqual(set(tool.ALWAYS_HUMAN_APPROVAL), {"delete_business_messages", "promote", "ban"})
-
-	def test_owner_ban_and_promote_still_need_human(self):
-		Base.owner = True
-		self.addCleanup(setattr, Base, "owner", False)
-		for action in ("ban", "promote"):
-			r = self.run_action(action, user_id=5, confirm=True)
+	def test_owner_destructive_goes_through_signed_button_not_confirm(self):
+		for action, kw in (("ban", {"user_id": 5}), ("unban", {"user_id": 5}), ("demote", {"user_id": 5}),
+			("set_chat_title", {"title": "x"}), ("set_my_name", {"name": "x"})):
+			r = self.run_action(action, confirm=True, **kw)
 			self.assertEqual(r["status"], "pending_human_approval", action)
 		self.assertEqual(self.api.of("banChatMember"), [])
+		self.assertEqual(self.api.of("unbanChatMember"), [])
+		self.assertEqual(self.api.of("setChatTitle"), [])
+		self.assertEqual(self.api.of("setMyName"), [])
 
-	def test_low_rank_chat_goes_to_human_and_refuses_without_admin(self):
+	def test_owner_without_admin_binding_refuses_without_admin(self):
 		self.admins = []
 		r = self.run_action("delete_message", message_id=3, confirm=True)
 		self.assertEqual(r["error"], "no_admin_available")
 		self.assertEqual(self.api.of("deleteMessage"), [])
 
-	def test_low_rank_chat_pending_approval(self):
+	def test_owner_pending_approval(self):
 		r = self.run_action("delete_message", message_id=3, confirm=True)
 		self.assertEqual(r["status"], "pending_human_approval")
 
 
 class TestApprovalOrdering(Base):
+	always_human = True
+
 	def test_pending_marked_before_send(self):
 		from huf.ai import telegram_admin as ta
 
