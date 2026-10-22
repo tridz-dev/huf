@@ -103,9 +103,9 @@ def enqueue_job(ctx: biz.BusinessContext, mode: str) -> bool:
 
 
 def draft_producer(ctx: biz.BusinessContext) -> str | None:
-	"""Async: enqueue the agent run; the job delivers the draft itself, so no text is returned here."""
+	"""Async: enqueue the agent run; the job delivers the draft itself (returns the ``DRAFT_QUEUED`` marker)."""
 	enqueue_job(ctx, "draft")
-	return None
+	return biz.DRAFT_QUEUED
 
 
 def chain_business_message(previous: Callable | None) -> Callable:
@@ -212,24 +212,51 @@ def run_business_job(
 		return {"result": "no_reply"}
 	adapter = _adapter(gateway)
 	if mode == "reply":
-		return _send_reply(gateway, adapter, conn, chat_id, message_id, reply)
+		return _send_reply(gateway, adapter, conn, chat_id, message_id, reply, who)
 	draft_id = biz.deliver_draft(adapter, conn, chat_id, message_id, reply, who)
 	return {"result": "draft", "draft_id": draft_id}
 
 
-def _send_reply(gateway, adapter, conn: dict, chat_id: str, message_id: str, reply: str) -> dict:
+def _send_reply(gateway, adapter, conn: dict, chat_id: str, message_id: str, reply: str, who: str = "") -> dict:
 	try:
 		footer = _credential(gateway, "business_disclosure").strip()
 	except Exception:
 		footer = ""
-	if footer:
-		reply = f"{reply}\n\n{footer}"
+	body = f"{reply}\n\n{footer}" if footer else reply
 	try:
-		biz.reply_as_business(conn["id"], chat_id, reply, sender=adapter.sender, reply_to=message_id)
+		biz.reply_as_business(conn["id"], chat_id, body, sender=adapter.sender, reply_to=message_id)
 	except biz.BusinessReplyBlocked as exc:
 		return {"result": "blocked", "reason": exc.reason}
+	except Exception as exc:
+		return _reply_failed(gateway, adapter, conn, chat_id, message_id, reply, who, exc)
 	_rate_hit(gateway.name, conn["id"], str(chat_id))
 	return {"result": "replied"}
+
+
+def _reply_failed(gateway, adapter, conn, chat_id, message_id, reply, who, exc: Exception) -> dict:
+	kind, reason = biz.classify_send_error(exc)
+	frappe.logger("huf").warning(
+		f"Telegram business {gateway.name}: auto-reply failed ({type(exc).__name__}, {kind})"
+	)
+	owner_chat = conn.get("user_chat_id")
+	label = who or str(chat_id)
+	fallback = kind in ("transient", "rights")
+	note = f"Auto-reply to {label} failed: {reason}."
+	if fallback:
+		note += " A draft is coming for you to review."
+	if owner_chat:
+		try:
+			adapter.sender.send_text(owner_chat, note)
+		except Exception:
+			pass
+	if not fallback:
+		return {"result": "failed", "reason": kind}
+	try:  # one fallback only: a draft goes to the owner, never back through the reply path
+		draft_id = biz.deliver_draft(adapter, conn, chat_id, message_id, reply, who)
+	except Exception as err:
+		frappe.logger("huf").warning(f"Telegram business {gateway.name}: fallback draft failed ({type(err).__name__})")
+		return {"result": "failed", "reason": kind}
+	return {"result": "draft", "draft_id": draft_id, "fallback": True}
 
 
 # -- owner edit routing ----------------------------------------------------------------------------
@@ -274,8 +301,13 @@ def handle_owner_message(gateway, adapter, parsed, request=None):
 	if not draft or draft.get("status") != "editing" or draft.get("owner_id") != str(parsed.sender_id):
 		return None
 	out = biz.submit_edit(adapter, draft_id, parsed.sender_id, text)
+	if out.get("result") in ("stale", "forbidden"):
+		return None  # not an active edit: leave to normal handling
 	if out.get("result") != "approved":
-		return None  # stale / blocked: leave to normal handling
+		# The owner was already told why it failed; this text was meant as the replacement, not a chat turn.
+		if out.get("result") == "failed":
+			biz._put(_editing_key(parsed.sender_id), "", 60)
+		return {"success": True, "ignored": "business", "note": "edited draft not sent", "result": out["result"]}
 	biz._put(_editing_key(parsed.sender_id), "", 60)
 	try:
 		adapter.sender.send_text(parsed.chat_id, "Sent.")
