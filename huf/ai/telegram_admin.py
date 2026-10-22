@@ -180,11 +180,12 @@ def check_rate(key: str, limit: int, window: int, *, cache: Any = None, now: flo
 
 
 def issue_nonce(
-	tg_user: Any, chat_id: Any, action: dict, *, cache: Any = None, now: float | None = None
+	tg_user: Any, chat_id: Any, action: dict, *, cache: Any = None, now: float | None = None, ttl: int | None = None
 ) -> str:
 	"""Single-use nonce for ``action`` bound to telegram user + chat + action hash (``NONCE_TTL``)."""
 	nonce = secrets.token_urlsafe(12)
 	current = time.time() if now is None else now
+	life = int(ttl or NONCE_TTL)
 	_cache(cache).set_value(
 		f"huf_tg_adm_n:{nonce}",
 		{
@@ -192,9 +193,9 @@ def issue_nonce(
 			"c": str(chat_id),
 			"h": action_hash(action),
 			"a": action,
-			"exp": current + NONCE_TTL,
+			"exp": current + life,
 		},
-		expires_in_sec=NONCE_TTL,
+		expires_in_sec=life,
 	)
 	return nonce
 
@@ -222,6 +223,29 @@ def consume_nonce(
 	except Exception:
 		pass
 	return action
+
+
+# -- agent actions awaiting a human admin (op "agent_action") -----------------------------------
+
+
+def agent_action_mark_pending(fp: str, *, cache: Any = None, ttl: int = 600) -> None:
+	_cache(cache).set_value(f"huf_tg_adm_pend:{fp}", 1, expires_in_sec=ttl)
+
+
+def agent_action_pending(fp: str, *, cache: Any = None) -> bool:
+	return bool(_cache(cache).get_value(f"huf_tg_adm_pend:{fp}"))
+
+
+def agent_action_take(fp: str, *, cache: Any = None) -> bool:
+	"""Resolve a pending agent action exactly once (first approve/reject press wins)."""
+	c = _cache(cache)
+	key = f"huf_tg_adm_pend:{fp}"
+	if not _claim(c, key + ":u", 600):
+		return False
+	had = bool(c.get_value(key))
+	c.delete_value(key)
+	c.delete_value(key + ":u")
+	return had
 
 
 def callback_payload(verb: str, nonce: str) -> str:
@@ -800,6 +824,9 @@ def describe(action: dict) -> str:
 		return f"Apply '{action['transition']}' to {action['dt']} {action['dn']}"
 	if op == "unbind":
 		return "Unlink this Telegram account from your Frappe user"
+	if op == "agent_action":
+		bits = json.dumps(redact(action.get("args") or {}), default=str)[:300]
+		return f"Agent action '{action.get('action')}' in chat {action.get('chat') or '(bot-wide)'} with {bits}"
 	raise AdminError("Unknown action.")
 
 
@@ -830,6 +857,14 @@ def execute(ctx: Ctx, action: dict, nonce: str, *, ip: str = "") -> str:
 				frappe.db.commit()
 				state = doc.get("workflow_state") or doc.get("status") or ""
 			result_text = f"Done: {action['dt']} {action['dn']} is now {state}".strip()
+		elif op == "agent_action":
+			if _rank(ctx.binding) < ROLE_RANK["Admin"] or action.get("gateway") != ctx.binding.get("gateway"):
+				raise AdminError(MSG_DENIED)
+			if not agent_action_take(action.get("fp") or "", cache=ctx.cache):
+				raise AdminError(MSG_EXPIRED)
+			from huf.ai.tools import telegram_admin_tools
+
+			result_text = telegram_admin_tools.execute_approved(action)
 		elif op == "unbind":
 			import frappe
 
@@ -1076,6 +1111,10 @@ def handle_callback(
 			return _ack("proposed")
 		if verb == "x":
 			text = "Cancelled."
+			if action.get("op") == "agent_action" and _rank(binding) >= ROLE_RANK["Admin"]:
+				if agent_action_take(action.get("fp") or "", cache=cache):
+					write_audit(binding, action, "rejected", nonce=nonce)
+					_commit()
 		else:
 			text = execute(ctx, action, nonce)
 	except AdminError as exc:

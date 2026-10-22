@@ -10,9 +10,8 @@ and gated per action group by a flag on the run's own Gateway (read server-side,
 A run that is not inside an enabled Telegram gateway is always refused. Safety layers, in order:
 scope (chat must be in the gateway's send scope), bot rights (getChatMember(bot) must show the needed admin
 right), target protection (chat admins and the gateway's paired admins are never ban/restrict/demote targets,
-and nobody can be given ``can_promote_members``), a two-step ``confirm`` for destructive actions (a one-time
-token bound to action+args+gateway+chat, 5 minutes, required when the trigger is not the cockpit owner),
-a per-run cap and an audit entry per executed action.
+and nobody can be given ``can_promote_members``), ``confirm=true`` for destructive actions in the owner's cockpit chat, and HUMAN approval (signed Approve/Reject
+buttons sent to the gateway's Admin cockpit bindings) for every other run, a per-run cap and an audit entry per executed action.
 
 Bot API verified against https://core.telegram.org/bots/api (Bot API 10.3).
 """
@@ -236,48 +235,154 @@ def _truthy(value: Any) -> bool:
 	return bool(value)
 
 
-def _gate_destructive(action: str, args: dict, gateway: str, chat: str) -> None:
-	owner = _is_owner_run(gateway, scope.current_chat(scope.effective_run_id()))
-	fingerprint = _fingerprint(action, args, gateway, chat)
-	confirmed = _truthy(args.get("confirm"))
-	token = str(args.get("confirmation_token") or "")
-	if owner:
-		if not confirmed:
+APPROVAL_TTL = 600
+
+
+def _gateway_token(gateway: str) -> Optional[str]:
+	from huf.ai.tools import telegram as tg_tool
+
+	return tg_tool._gateway_values(gateway).get("token") or None
+
+
+def _callback_signer(gateway: str, chat_id: str):
+	"""Sign callback_data with the gateway's own key (same derivation the adapter uses)."""
+	from huf.ai.gateway_adapters.telegram_keyboards import derive_callback_key, sign_callback
+	from huf.ai.tools import telegram as tg_tool
+
+	secret = tg_tool._gateway_values(gateway).get("webhook_secret", "")
+	if not secret:
+		return None
+	key = derive_callback_key(secret)
+	return lambda payload: sign_callback(key, payload, context=str(chat_id))
+
+
+def _admin_bindings(gateway: str) -> list[dict]:
+	"""ACTIVE Admin-scope cockpit bindings of this gateway (live scope re-validated)."""
+	from huf.ai import telegram_admin as ta
+
+	try:
+		rows = frappe.get_all(
+			"Telegram Admin Binding",
+			filters={"gateway": gateway, "is_active": 1, "role_scope": "Admin"},
+			fields=["telegram_user_id"],
+		)
+	except Exception:
+		rows = []
+	out = []
+	for row in rows:
+		binding = ta.get_binding(row.get("telegram_user_id"), gateway)
+		if binding and binding.get("role_scope") == "Admin" and binding.get("chat_id"):
+			out.append(binding)
+	return out
+
+
+def _gate_destructive(action: str, args: dict, gateway: str, chat: str) -> Optional[dict]:
+	"""Owner run: simple ``confirm=true``. Any other run: a HUMAN admin must approve (returns the pending action).
+
+	An agent re-sending ``confirm`` / a token is never confirmation, so those arguments are ignored.
+	"""
+	if _is_owner_run(gateway, scope.current_chat(scope.effective_run_id())):
+		if not _truthy(args.get("confirm")):
 			raise Refused(
 				"needs_confirmation",
 				f"This is destructive: {_describe(action, args, chat)}. Call again with confirm=true to proceed.",
 				effect=_describe(action, args, chat),
 			)
-		return
-	if token:
-		stored = None
+		return None
+	if not _admin_bindings(gateway):
+		raise Refused(
+			"no_admin_available",
+			"This action needs a human admin's approval, but this gateway has no active Admin-scope Telegram "
+			"cockpit binding to ask. Nothing was done.",
+		)
+	body = {k: v for k, v in args.items() if k not in _CONTROL_KEYS}
+	return {
+		"op": "agent_action",
+		"gateway": gateway,
+		"chat": chat,
+		"action": action,
+		"args": body,
+		"fp": _fingerprint(action, args, gateway, chat),
+	}
+
+
+def _request_human_approval(pending: dict, client) -> dict:
+	"""Store the pending action and send signed Approve/Reject buttons to every active Admin binding."""
+	from huf.ai import telegram_admin as ta
+	from huf.ai.gateway_adapters import telegram_keyboards as kb
+
+	gateway = pending["gateway"]
+	cache = _cache()
+	if ta.agent_action_pending(pending["fp"], cache=cache):
+		return {"status": "pending_human_approval", "message": "An admin approval for this exact action is already pending."}
+	targets = _admin_bindings(gateway)
+	if not targets:
+		raise Refused("no_admin_available", "No active Admin-scope Telegram binding to ask. Nothing was done.")
+	text = "An agent requests approval:\n" + ta.describe(pending) + f"\nValid {APPROVAL_TTL // 60} minutes."
+	delivered = 0
+	for binding in targets:
+		chat_id = str(binding["chat_id"])
+		sign = _callback_signer(gateway, chat_id)
+		if sign is None:
+			continue
+		rows = [[
+			kb.callback_button("Approve", sign(ta.callback_payload(
+				"c", ta.issue_nonce(binding["telegram_user_id"], chat_id, pending, cache=cache, ttl=APPROVAL_TTL)))),
+			kb.callback_button("Reject", sign(ta.callback_payload(
+				"x", ta.issue_nonce(binding["telegram_user_id"], chat_id, pending, cache=cache, ttl=APPROVAL_TTL)))),
+		]]
 		try:
-			stored = _cache().get_value(_confirm_key(token))
-			_cache().delete_value(_confirm_key(token))  # single use, consumed even on mismatch
+			client.call("sendMessage", {"chat_id": aa._id(chat_id), "text": text[:4000], "reply_markup": kb.inline_keyboard(rows)})
+			delivered += 1
 		except Exception:
-			stored = None
-		if not stored or stored.get("exp", 0) < time.time():
-			raise Refused("confirmation_invalid", "The confirmation token is unknown, expired or already used.")
-		if stored.get("fingerprint") != fingerprint:
-			raise Refused(
-				"confirmation_mismatch",
-				"The confirmation token was issued for different arguments, gateway or chat. Start again.",
-			)
-		if not confirmed:
-			raise Refused("needs_confirmation", "Pass confirm=true together with the confirmation_token.")
-		return
-	new_token = secrets.token_urlsafe(16)
-	_cache().set_value(
-		_confirm_key(new_token), {"fingerprint": fingerprint, "exp": time.time() + CONFIRM_TTL}, expires_in_sec=CONFIRM_TTL
-	)
-	raise Refused(
-		"needs_confirmation",
-		f"This is destructive: {_describe(action, args, chat)}. Ask the requester to approve, then call again with "
-		f"the same arguments, confirm=true and this confirmation_token (valid 5 minutes, single use).",
-		effect=_describe(action, args, chat),
-		confirmation_token=new_token,
-		expires_in=CONFIRM_TTL,
-	)
+			continue
+	if not delivered:
+		raise Refused("no_admin_available", "Could not reach any admin to approve this action. Nothing was done.")
+	ta.agent_action_mark_pending(pending["fp"], cache=cache, ttl=APPROVAL_TTL)
+	return {
+		"status": "pending_human_approval",
+		"message": f"A human admin must approve this in Telegram ({delivered} admin(s) asked, valid "
+		f"{APPROVAL_TTL // 60} minutes). Do not retry; tell the requester it is awaiting approval.",
+		"effect": _describe(action=pending["action"], args=pending["args"], chat=pending["chat"]),
+	}
+
+
+def execute_approved(pending: dict) -> str:
+	"""Run an admin-approved agent action (called ONLY from the admin's Approve button press)."""
+	from huf.ai import telegram_admin as ta
+
+	gateway = str(pending.get("gateway") or "")
+	name = str(pending.get("action") or "")
+	spec = ACTIONS.get(name)
+	if not gateway or not spec or not spec[2]:
+		raise ta.AdminError("Unknown action.")
+	group, right, _destructive, _counted = spec
+	args = dict(pending.get("args") or {})
+	chat = str(pending.get("chat") or "")
+	client = None
+	try:
+		if not _flag(gateway, group):
+			raise Refused("action_not_permitted", f"This gateway no longer allows agents to use {group} actions.")
+		token = _gateway_token(gateway)
+		if not token:
+			raise Refused("not_configured", "Telegram bot token not configured")
+		client = _make_client(token)
+		if name in CHAT_ACTIONS:
+			_check_bot_rights(client, chat, right, name)
+			if name in TARGET_ACTIONS:
+				_check_target(client, gateway, chat, _int(args, "user_id"), name)
+		elif group == "business":
+			_connection(gateway, args)
+		_execute(name, args, client, gateway, chat)
+	except TelegramApiError as exc:
+		raise ta.AdminError(f"Telegram error: {client.redact(exc.description) if client else exc.description}") from None
+	except aa.AdminActionError as exc:
+		raise ta.AdminError(str(exc)) from None
+	except Refused as refusal:
+		raise ta.AdminError(refusal.payload["message"]) from None
+	except ValueError as exc:
+		raise ta.AdminError(str(exc)) from None
+	return f"Done: {name} " + (f"in chat {chat}" if chat else "(bot-wide)")
 
 
 # -- checks --------------------------------------------------------------------------------------
@@ -409,9 +514,30 @@ def _connection(gateway: str, args: dict) -> dict:
 	if not cid:
 		raise Refused("invalid_argument", "business_connection_id is required")
 	conn = biz.get_connection(cid)
-	if not conn or (conn.get("gateway") and conn["gateway"] != gateway):
+	# Exact match only: a legacy/unbound connection (empty gateway) must not pass for every gateway.
+	if not conn or not gateway or str(conn.get("gateway") or "") != gateway:
 		raise Refused("unknown_connection", "This gateway does not know that business connection.")
 	return conn
+
+
+def _business_scope(action: str, args: dict, conn: dict, gateway: str, run_id: Optional[str]) -> None:
+	"""Business actions obey the same recipient scope as every other agent send."""
+	if action in ("send_business_message", "read_business_message"):
+		chat = scope.normalize_chat(args.get("chat_id"))
+		if not chat:
+			raise Refused("invalid_argument", "chat_id is required (numeric chat id)")
+	else:
+		chat = scope.normalize_chat(args.get("chat_id")) or scope.current_chat(run_id)
+		if args.get("chat_id") not in (None, "") and not scope.normalize_chat(args.get("chat_id")):
+			raise Refused("invalid_argument", "chat_id must be a numeric chat id")
+		if _truthy(args.get("all_messages")) and scope.settings(gateway)["scope"] != "Any number":
+			raise Refused(
+				"recipient_not_permitted",
+				"Deleting other people's messages (all_messages) needs the gateway recipient scope 'Any number'.",
+			)
+	refusal = scope.check_recipient(gateway, run_id, chat)
+	if refusal:
+		raise Refused("recipient_not_permitted", json.loads(refusal)["message"])
 
 
 # -- executors -----------------------------------------------------------------------------------
@@ -538,6 +664,7 @@ def handle_action(action: str = "", **kwargs) -> str:
 	run_id = scope.effective_run_id()
 	args = dict(kwargs)
 	counted_here = False
+	send_claimed = False
 	try:
 		if not gateway:
 			raise Refused("action_not_permitted", "Telegram admin actions are only available inside a Telegram gateway conversation.")
@@ -555,6 +682,13 @@ def handle_action(action: str = "", **kwargs) -> str:
 			if refusal:
 				raise Refused("action_not_permitted", json.loads(refusal)["message"])
 			args["chat_id"] = chat
+		if action == "set_chat_menu_button" and args.get("chat_id") not in (None, ""):
+			target = scope.normalize_chat(args.get("chat_id"))
+			if not target:
+				raise Refused("invalid_argument", "chat_id must be a numeric chat id")
+			refusal = scope.check_recipient(gateway, run_id, target)
+			if refusal:
+				raise Refused("action_not_permitted", json.loads(refusal)["message"])
 		token = _token()
 		if not token:
 			raise Refused("not_configured", "Telegram bot token not configured")
@@ -565,12 +699,20 @@ def handle_action(action: str = "", **kwargs) -> str:
 				if action in TARGET_ACTIONS:
 					_check_target(client, gateway, chat, _int(args, "user_id"), action)
 			elif group == "business" and action != "get_business_connection":
-				_connection(gateway, args)
-			if destructive:
-				_gate_destructive(action, args, gateway, chat)
+				_business_scope(action, args, _connection(gateway, args), gateway, run_id)
+			pending = _gate_destructive(action, args, gateway, chat) if destructive else None
 			if counted:
 				_cap_claim(gateway, run_id)
 				counted_here = True
+			if pending is not None:
+				status = _request_human_approval(pending, client)
+				_audit(gateway, action, args, "pending_human_approval")
+				return _out({"success": True, **status})
+			if action == "send_business_message":
+				cap_refusal = scope.claim_send(gateway, run_id)
+				if cap_refusal:
+					raise Refused("send_cap_exceeded", json.loads(cap_refusal)["message"])
+				send_claimed = True
 			result = _execute(action, args, client, gateway, chat)
 		except TelegramApiError as exc:
 			raise Refused("telegram_error", f"Telegram error: {client.redact(exc.description)}") from None
@@ -583,6 +725,8 @@ def handle_action(action: str = "", **kwargs) -> str:
 	except Refused as refusal:
 		if counted_here:
 			_cap_release(gateway, run_id)
+		if send_claimed:
+			scope.release_send(gateway, run_id)
 		if refusal.payload["error"] != "needs_confirmation":
 			_audit(gateway, action, args, "refused", refusal.payload["error"])
 		return _out(refusal.payload)
