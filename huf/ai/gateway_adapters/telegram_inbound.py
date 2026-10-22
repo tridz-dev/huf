@@ -29,7 +29,14 @@ MEDIA_FIELDS: tuple[tuple[str, str, bool], ...] = (
 	("animation", "animation", False),
 )
 
-_MESSAGE_KEYS = ("message", "edited_message", "channel_post", "edited_channel_post")
+_MESSAGE_KEYS = (
+	"message",
+	"edited_message",
+	"channel_post",
+	"edited_channel_post",
+	"business_message",
+	"edited_business_message",
+)
 _START_RE = re.compile(r"^/start(?:@\w+)?(?:\s+(\S+))?\s*$")
 _CAP = 300
 
@@ -74,6 +81,9 @@ class TelegramUpdate:
 	member_old_status: str = ""
 	member_new_status: str = ""
 	attachments_meta: tuple[Mapping[str, Any], ...] = ()
+	is_bot: bool = False  # from.is_bot (bot-to-bot loop prevention)
+	sender_business_bot: str = ""  # message.sender_business_bot.id
+	business_connection_id: str = ""
 
 	@property
 	def is_room(self) -> bool:
@@ -172,6 +182,7 @@ def media_refs(message: Mapping[str, Any]) -> list[dict[str, Any]]:
 				"file_unique_id": str(obj.get("file_unique_id") or ""),
 				"mime_type": str(obj.get("mime_type") or ("image/jpeg" if kind == "photo" else "")),
 				"filename": str(obj.get("file_name") or ""),
+				"file_size": int(obj.get("file_size") or 0),
 			}
 		)
 	return refs
@@ -230,6 +241,9 @@ def _parse_message(kind: str, update: Mapping[str, Any], message: Mapping[str, A
 		media_group_id=str(message.get("media_group_id") or ""),
 		content_kind=content_kind,
 		attachments_meta=tuple(refs),
+		is_bot=bool(sender.get("is_bot")),
+		sender_business_bot=str(_map(message.get("sender_business_bot")).get("id") or ""),
+		business_connection_id=str(message.get("business_connection_id") or ""),
 	)
 
 
@@ -254,6 +268,7 @@ def parse_update(update: Mapping[str, Any]) -> TelegramUpdate:
 			display_name=_sender_name(sender),
 			message_id=str(msg.get("message_id") or ""),
 			message_thread_id=str(msg["message_thread_id"]) if msg.get("message_thread_id") is not None else "",
+			is_bot=bool(sender.get("is_bot")),
 			text=str(cq.get("data") or ""),
 			callback_query_id=str(cq.get("id") or ""),
 			callback_data=str(cq.get("data") or ""),
@@ -281,6 +296,18 @@ def parse_update(update: Mapping[str, Any]) -> TelegramUpdate:
 			kind="message_reaction_count", update_id=update_id, raw=update,
 			chat_id=str(_map(mc.get("chat")).get("id", "")), message_id=str(mc.get("message_id") or ""),
 		)
+	for key in ("deleted_business_messages", "business_connection"):
+		bm = _map(update.get(key))
+		if bm:
+			user = _map(bm.get("user"))
+			return TelegramUpdate(
+				kind=key,
+				update_id=update_id,
+				raw=update,
+				chat_id=str(_map(bm.get("chat")).get("id", user.get("id", ""))),
+				sender_id=str(user.get("id") or ""),
+				business_connection_id=str(bm.get("business_connection_id") or bm.get("id") or ""),
+			)
 	for key in ("my_chat_member", "chat_member"):
 		cm = _map(update.get(key))
 		if cm:
@@ -291,10 +318,21 @@ def parse_update(update: Mapping[str, Any]) -> TelegramUpdate:
 				chat_id=str(_map(cm.get("chat")).get("id", "")),
 				chat_type=str(_map(cm.get("chat")).get("type") or "private"),
 				sender_id=str(_map(cm.get("from")).get("id") or ""),
+				is_bot=bool(_map(cm.get("from")).get("is_bot")),
 				member_old_status=str(_map(cm.get("old_chat_member")).get("status") or ""),
 				member_new_status=str(_map(cm.get("new_chat_member")).get("status") or ""),
 			)
 	return TelegramUpdate(kind="unsupported", update_id=update_id, raw=update)
+
+
+_NO_EVENT_KINDS = (
+	"my_chat_member",
+	"chat_member",
+	"message_reaction_count",
+	"unsupported",
+	"business_connection",
+	"deleted_business_messages",
+)
 
 
 def to_event(parsed: TelegramUpdate, attachments: tuple[GatewayAttachment, ...] = ()) -> NormalizedGatewayEvent | None:
@@ -302,7 +340,7 @@ def to_event(parsed: TelegramUpdate, attachments: tuple[GatewayAttachment, ...] 
 
 	Raises ``ValueError`` when an update that should become an event lacks identifiers.
 	"""
-	if parsed.kind in ("my_chat_member", "chat_member", "message_reaction_count", "unsupported"):
+	if parsed.kind in _NO_EVENT_KINDS:
 		return None
 	if not parsed.update_id or not parsed.sender_id or not parsed.chat_id:
 		raise ValueError("Telegram update is missing update, sender, or chat identifiers")

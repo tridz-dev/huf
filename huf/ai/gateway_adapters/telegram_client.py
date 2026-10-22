@@ -20,9 +20,19 @@ ALLOWED_UPDATES: tuple[str, ...] = (
 	"message",
 	"edited_message",
 	"callback_query",
-	"message_reaction",
+	"inline_query",
+	"chosen_inline_result",
+	"chat_join_request",
+	"chat_member",
 	"my_chat_member",
+	"message_reaction",
+	"message_reaction_count",
 	"channel_post",
+	"business_connection",
+	"business_message",
+	"edited_business_message",
+	"deleted_business_messages",
+	"stopped_message_generation",
 )
 
 

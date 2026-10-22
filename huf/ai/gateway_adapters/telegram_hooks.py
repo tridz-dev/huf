@@ -39,4 +39,5 @@ def consent_required() -> bool:
 provider_hooks.register(PROVIDER, "error_text", error_text)
 provider_hooks.register(PROVIDER, "normalize_sender", normalize_sender)
 provider_hooks.register(PROVIDER, "consent_required", consent_required)
-import huf.ai.gateway_adapters.telegram_pipeline_hooks  # noqa: E402,F401
+import huf.ai.gateway_adapters.telegram_pipeline_hooks  # noqa: E402,F401  (WP-1b)
+import huf.ai.gateway_adapters.telegram_ingest_hooks  # noqa: E402,F401  (WP-1c)
