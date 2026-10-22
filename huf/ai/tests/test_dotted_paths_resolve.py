@@ -102,15 +102,27 @@ def _scan_files(patterns, globs, exclude_dirs=("node_modules", "dist", "build", 
 	return out
 
 
+# Apps huf integrates with but does not require: a path that fails only because one of
+# these is not installed on the site under test is skipped, not reported as broken.
+OPTIONAL_APPS = ("frappe_whatsapp",)
+
+
 class TestDottedPathsResolve(IntegrationTestCase):
 	# ---- helpers -------------------------------------------------------
 	def _failures(self, paths, sources=None):
 		bad = []
+		installed = set(frappe.get_installed_apps())
 		for p in sorted(paths):
 			if p in KNOWN_BROKEN or p in NOT_A_PYTHON_PATH:
 				continue
 			try:
 				resolve_dotted_path(p)
+			except ModuleNotFoundError as e:
+				missing = (e.name or "").split(".")[0]
+				if missing in OPTIONAL_APPS and missing not in installed:
+					continue
+				src = ", ".join(sorted(sources.get(p, []))) if sources else ""
+				bad.append(f"{p} -> {type(e).__name__}: {e} [{src}]")
 			except Exception as e:  # noqa: BLE001
 				src = ", ".join(sorted(sources.get(p, []))) if sources else ""
 				bad.append(f"{p} -> {type(e).__name__}: {e} [{src}]")
