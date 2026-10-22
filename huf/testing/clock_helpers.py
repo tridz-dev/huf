@@ -28,7 +28,7 @@ calling the original function. The two real options are:
      optional `now=None` parameter, or a `huf.ai.clock` module every
      scheduler imports and calls through). This changes call signatures /
      adds a new import surface to code that's part of a live dual-runtime
-     migration (see docs/testing/CURRENT_STATE.md section 7) - higher risk
+     migration (see the CURRENT_STATE audit (archived in the workspace) section 7) - higher risk
      for a test-infra change.
   2. Patch the `now_datetime`/`add_to_date` names *inside* each scheduler
      module directly, via `unittest.mock.patch.object(module, "now_datetime",

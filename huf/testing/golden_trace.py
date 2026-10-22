@@ -80,7 +80,7 @@ just not reorderable).
 WHAT THIS MODULE DOES NOT DO (yet) — SCOPE / FOLLOW-UP
 ---------------------------------------------------------
 This module normalizes whatever raw artifacts are handed to it. Today (no
-live Frappe bench in this worktree — see docs/testing/CURRENT_STATE.md), the
+live Frappe bench in this worktree — see the CURRENT_STATE audit (archived in the workspace)), the
 only realistically-testable path is calling
 `huf.ai.providers.test_provider.run()` directly with a hand-built minimal
 fake ``agent`` object (a `SimpleNamespace` mirroring the exact attributes

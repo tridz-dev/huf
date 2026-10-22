@@ -3,7 +3,7 @@
 
 """
 Real-Frappe (Layer B) integration tests for the tool-calling framework
-described in ``docs/testing/CURRENT_STATE.md`` section 4.
+described in the CURRENT_STATE audit (archived in the workspace) section 4.
 
 Covers, each as a real DB/permission-check round trip (not mocked frappe):
 
@@ -202,7 +202,7 @@ class TestToolFrameworkP0(IntegrationTestCase):
         docs describe as the only gate. That check only happens later, at
         actual invocation time, inside mcp_client.execute_mcp_tool.
 
-        DRIFT NOTE: CURRENT_STATE.md section 4 says "the only gate for an
+        DRIFT NOTE: CURRENT_STATE audit section 4 says "the only gate for an
         MCP tool is frappe.has_permission('MCP Server','read',...)". Reading
         huf/ai/mcp_client.py::create_mcp_tools shows that check is NOT
         present at assembly time at all -- frappe.get_doc("MCP Server", ...)

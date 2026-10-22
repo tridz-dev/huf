@@ -35,7 +35,7 @@ AGENT-GOLDEN-002, ...) that each:
 WHY NOT THE REAL `_execute_agent_run`/`run_agent_sync` ORCHESTRATION
 ----------------------------------------------------------------------
 There is no live Frappe bench in this worktree today (see
-`docs/testing/CURRENT_STATE.md`) — `_execute_agent_run` needs a real
+the CURRENT_STATE audit (archived in the workspace)) — `_execute_agent_run` needs a real
 Frappe DB (`frappe.get_doc`, `Agent Run`/`Agent Message` inserts, redis
 locks, realtime socket emission). This harness deliberately stops at the
 level that IS realistically testable without one: the provider call itself,
@@ -91,7 +91,7 @@ _HUF_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 
 
 def _bootstrap_bare_environment():
-    """This worktree has no live Frappe bench (see docs/testing/CURRENT_STATE.md
+    """This worktree has no live Frappe bench (see the CURRENT_STATE audit (archived in the workspace)
     and this file's module docstring). `huf/__init__.py` does an unconditional
     `import frappe` at package-import time, and
     `huf.ai.providers.test_provider`'s error scenarios lazily

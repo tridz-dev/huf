@@ -3,7 +3,7 @@
 
 """
 Phase 3 P0 regression tests for the Agent config-persistence contract
-(`docs/testing/CURRENT_STATE.md` section 2, "Agent core"):
+(the CURRENT_STATE audit (archived in the workspace) section 2, "Agent core"):
 
     load -> modify -> save -> reload -> runtime uses new value.
 
@@ -194,7 +194,7 @@ class TestAgentConfigPersistenceP0(IntegrationTestCase):
 		concept at all, so it clobbers a prior section-API write even
 		without ever re-reading the section API's returned `modified` value.
 		This is the concrete, current-behavior demonstration of the
-		documented risk in CURRENT_STATE.md section 2 ("concurrent-save race
+		documented risk in CURRENT_STATE audit section 2 ("concurrent-save race
 		between these two paths is untested") -- confirmed here, not
 		"fixed": full-doc save wins unconditionally, no exception raised.
 		"""
@@ -283,10 +283,10 @@ class TestAgentConfigPersistenceP0(IntegrationTestCase):
 		# update_agent_section contain no agent_modality-conditional gating
 		# at all -- the "tools" section's fields are unconditionally
 		# editable server-side regardless of agent_modality. This matches
-		# CURRENT_STATE.md's claim (AgentFormPage.tsx:465-467 comment) that
+		# CURRENT_STATE audit's claim (AgentFormPage.tsx:465-467 comment) that
 		# hidden tabs remain PATCH-able. If this assertion ever starts
 		# raising instead, that means backend enforcement was added since
-		# and CURRENT_STATE.md/this comment are now stale -- flag for the
+		# and CURRENT_STATE audit/this comment are now stale -- flag for the
 		# coordinator's bench-verification pass rather than silently
 		# "fixing" this test to expect a throw.
 		result = update_agent_section(
