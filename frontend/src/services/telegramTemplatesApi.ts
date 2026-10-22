@@ -166,7 +166,9 @@ export type SaveResult = { ok: true; template: TemplateDraft } | ({ ok: false } 
 
 async function request<T>(method: string, args: Record<string, unknown>, verb: 'get' | 'post' = 'get'): Promise<Result<T>> {
 	try {
-		return unwrap<T>(await (verb === 'get' ? call.get : call.post)(`${BASE}.${method}`, args));
+		// Call as methods: the SDK relies on `this`, so a detached `call.get` throws 'reading axios'.
+		const response = verb === 'get' ? await call.get(`${BASE}.${method}`, args) : await call.post(`${BASE}.${method}`, args);
+		return unwrap<T>(response);
 	} catch (e) {
 		return { ok: false, error: getFrappeErrorMessage(e) };
 	}

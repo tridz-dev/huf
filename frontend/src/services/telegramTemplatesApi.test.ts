@@ -89,3 +89,14 @@ it('filterTemplates searches name and description', () => {
 	expect(filterTemplates(rows, 'users')).toHaveLength(1);
 	expect(filterTemplates(rows, '')).toHaveLength(2);
 });
+
+describe('SDK method binding', () => {
+	it('calls call.get and call.post as methods (the SDK needs `this`)', async () => {
+		get.mockResolvedValue({ message: { ok: true, data: [] } } as never);
+		post.mockResolvedValue({ message: { ok: true, data: {} } } as never);
+		await listTemplates('TG Parity');
+		await deleteTemplate('tg_welcome_demo');
+		expect(get.mock.contexts[0]).toBe(call);
+		expect(post.mock.contexts[0]).toBe(call);
+	});
+});
