@@ -3,7 +3,7 @@ tool family (``huf/ai/tool_testing.py``) and their ``Agent Tool Function``
 factories (``huf/testing/factories.py``).
 
 These are real, invokable tool handlers (NOT the provider-level simulation
-in ``huf/ai/providers/test_provider.py``). The tests here prove:
+in ``huf/ai/providers/stub_provider.py``). The tests here prove:
 
 1. Each handler's direct behavior (echo/add/fail/slow).
 2. The permission-protected handler's gate is checked using the REAL
