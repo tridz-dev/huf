@@ -1277,6 +1277,8 @@ def _scope_refusal(action: str, kwargs: dict) -> Optional[str]:
         return _refused("action_not_permitted", f"{action} is not available to agents running inside a gateway.")
     if action in CHAT_ACTIONS:
         run_id = scope.effective_run_id()
+        if scope.is_inline_run(run_id):
+            return _refused("action_not_permitted", "Inline-mode runs have no chat; Telegram chat actions are not available.")
         chat = _resolve_chat_id(kwargs) or scope.current_chat(run_id)
         if not chat:
             return _error("chat_id or recipient_name is required")

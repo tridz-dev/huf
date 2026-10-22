@@ -33,9 +33,16 @@ SEARCH_MAX = 25
 AUDIT_DEFAULT = 20
 AUDIT_MAX = 50
 SUMMARY_MAX_FIELDS = 12
-MINIAPP_CHAT = "miniapp"  # nonce "chat" binding for Mini App originated confirmations
+MINIAPP_CHAT = "miniapp"  # nonce "chat" binding prefix for Mini App originated confirmations
 
-_SECRET_FIELD_RE = re.compile(r"password|passwd|secret|token|api_?key|private_?key|otp", re.IGNORECASE)
+
+def nonce_chat(binding: dict) -> str:
+	"""Nonce binding scope: (gateway, telegram user) via the user arg, so ``miniapp:<gateway>``."""
+	return f"{MINIAPP_CHAT}:{binding['gateway']}"
+
+_SECRET_FIELD_RE = re.compile(
+	r"password|passwd|secret|token|key|otp|pairing_?code|hash|credential|signature|webhook", re.IGNORECASE
+)
 _HIDDEN_FIELDTYPES = ("Password", "Attach", "Attach Image", "Table", "Table MultiSelect", "Code", "JSON")
 
 
@@ -271,6 +278,19 @@ def _field_visible(df: Any) -> bool:
 	)
 
 
+def _masked_fields(doc: Any, meta: Any) -> set:
+	"""Fields the session user may not read: permlevel access denied or a Frappe field mask set."""
+	masked: set = set()
+	for df in meta.fields:
+		try:
+			denied = bool(getattr(df, "mask", None)) or not doc.has_permlevel_access_to(df.fieldname, df, "read")
+		except Exception:
+			denied = True  # fail closed
+		if denied:
+			masked.add(df.fieldname)
+	return masked
+
+
 def _h_get_doc_summary(binding: dict, session: dict, doctype: str, name: str) -> dict:
 	import frappe
 
@@ -287,8 +307,11 @@ def _h_get_doc_summary(binding: dict, session: dict, doctype: str, name: str) ->
 		{0: "Draft", 1: "Submitted", 2: "Cancelled"}.get(doc.docstatus) if meta.is_submittable else None
 	)
 	fields, fallback = [], []
+	masked = _masked_fields(doc, meta)
 	for df in meta.fields:
 		if not _field_visible(df):
+			continue
+		if df.fieldname in masked:
 			continue
 		value = doc.get(df.fieldname)
 		if value in (None, ""):
@@ -354,7 +377,7 @@ def _h_act_prepare(
 	if action not in ta._transitions(doc):
 		raise ApiError("invalid", "That action is not available for this record.", 400)
 	act = {"op": "workflow", "dt": dt, "dn": doc.name, "transition": action}
-	nonce = ta.issue_nonce(binding["telegram_user_id"], MINIAPP_CHAT, act, cache=cache, now=now)
+	nonce = ta.issue_nonce(binding["telegram_user_id"], nonce_chat(binding), act, cache=cache, now=now)
 	return {
 		"nonce": nonce,
 		"description": ta.describe(act),
@@ -367,7 +390,7 @@ def _h_act_confirm(binding: dict, session: dict, nonce: str, cache: Any = None, 
 	"""Not under ``run_as`` here: ``execute`` switches to the bound user itself and audits."""
 	if not isinstance(nonce, str) or not re.fullmatch(r"[A-Za-z0-9_-]{8,32}", nonce or ""):
 		raise ApiError("invalid", ta.MSG_EXPIRED, 400)
-	act = ta.consume_nonce(nonce, binding["telegram_user_id"], MINIAPP_CHAT, cache=cache, now=now)
+	act = ta.consume_nonce(nonce, binding["telegram_user_id"], nonce_chat(binding), cache=cache, now=now)
 	if act.get("op") != "workflow":
 		raise ApiError("invalid", ta.MSG_EXPIRED, 400)
 	ctx = ta.Ctx(

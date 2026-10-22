@@ -207,7 +207,7 @@ class TestInlineMode(E2EBase):
 		self.assertEqual(result["success"], True)
 		payload = self.api.last("answerInlineQuery")["payload"]
 		self.assertEqual(payload["results"][0]["id"], "pair")
-		self.assertEqual(payload["cache_time"], 0)
+		self.assertEqual(payload["cache_time"], 300)
 		self.assertEqual(payload["button"]["start_parameter"], "pair")
 		self.ingest.assert_not_called()
 

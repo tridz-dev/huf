@@ -230,3 +230,33 @@ class TestAdapterSendReply(Base):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class TestFileAllowList(unittest.TestCase):
+	def doc(self, private, dt=None, dn=None):
+		from types import SimpleNamespace
+
+		return SimpleNamespace(is_private=private, attached_to_doctype=dt, attached_to_name=dn)
+
+	def test_public_and_inbound_for_this_chat_only(self):
+		from unittest.mock import MagicMock, patch
+
+		self.assertTrue(mr._file_allowed_for_chat(self.doc(0), CHAT))
+		self.assertFalse(mr._file_allowed_for_chat(self.doc(1), CHAT))
+		self.assertFalse(mr._file_allowed_for_chat(self.doc(1, "ToDo", "T1"), CHAT))
+		import frappe
+
+		with patch.object(frappe, "db", MagicMock(**{"get_value.return_value": str(CHAT)})):
+			self.assertTrue(mr._file_allowed_for_chat(self.doc(1, "Gateway Event", "E1"), CHAT))
+			self.assertFalse(mr._file_allowed_for_chat(self.doc(1, "Gateway Event", "E1"), 999))
+
+	def test_default_resolver_refuses_private_file(self):
+		from unittest.mock import MagicMock, patch
+
+		import frappe
+
+		d = MagicMock(is_private=1, attached_to_doctype=None, attached_to_name=None)
+		with patch.object(frappe, "db", MagicMock(**{"get_value.return_value": "F1"})), patch.object(frappe, "get_doc", return_value=d):
+			with self.assertRaisesRegex(ValueError, "not allowed"):
+				mr.default_resolve_file("/private/files/secret.pdf", CHAT)
+		d.get_content.assert_not_called()

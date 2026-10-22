@@ -148,6 +148,18 @@ def settings(gateway: str) -> dict:
 	}
 
 
+def is_inline_run(run_id: Optional[str]) -> bool:
+	"""True when the run's conversation is an inline-mode run (external id ``inline:<sender>``): no chat, no sends."""
+	if not run_id:
+		return False
+	try:
+		conversation = frappe.db.get_value("Agent Run", run_id, "conversation")
+		external = frappe.db.get_value("Agent Conversation", conversation, "external_id") if conversation else ""
+		return str(external or "").startswith("inline:")
+	except Exception:
+		return False
+
+
 def current_chat(run_id: Optional[str]) -> str:
 	"""The Telegram chat (normalised) of the run's conversation, or '' when there is none."""
 	bound = _trusted_chat.get()

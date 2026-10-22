@@ -118,6 +118,7 @@ def _with_addressing(gateway, adapter, parsed: TelegramUpdate) -> TelegramUpdate
 
 
 _DEDUP_TTL = 600
+_DEDUP_WARNED = False
 
 
 def _release_delivery(gateway_name: str, update_id: Any) -> None:
@@ -141,7 +142,13 @@ def _first_delivery(gateway_name: str, update_id: Any) -> bool:
 			return False
 		cache.set_value(key, 1, expires_in_sec=_DEDUP_TTL)
 	except Exception:
-		pass
+		global _DEDUP_WARNED
+		if not _DEDUP_WARNED:
+			_DEDUP_WARNED = True
+			frappe.logger("huf").warning(
+				"Telegram update de-duplication cache failed; failing open (duplicate updates may be processed)",
+				exc_info=True,
+			)
 	return True
 
 
