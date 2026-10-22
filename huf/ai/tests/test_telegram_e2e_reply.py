@@ -110,6 +110,7 @@ class Base(unittest.TestCase):
 		self._patch(mr, "_cache", return_value=self.cache)
 		self._patch(tb, "_cache", return_value=self.cache)
 		self._patch(gateway_service, "is_opted_out", return_value=False)
+		self._patch(gateway_service, "_commit_unless_testing")
 		self._patch(gateway_service, "_throttle_outbound_send")
 		self._patch(gateway_service, "_outbound_rate_cap", return_value=0)
 		self._patch(gateway_service, "_record_reply_sent", side_effect=self._record_reply_sent)

@@ -2242,7 +2242,13 @@ def _persist_terminal_state(event_name: str, result: Any) -> None:
     expected = {"status": result["status"]}
     if result.get("agent_run_id"):
         expected["agent_run"] = result["agent_run_id"]
-    actual = frappe.db.get_value("Gateway Event", event_name, list(expected), as_dict=True) or {}
+    reply_id = str(result.get("provider_message_id") or "")[:255]
+    fields = list(expected) + ["reply_message_id", "reply_status"]
+    actual = frappe.db.get_value("Gateway Event", event_name, fields, as_dict=True) or {}
+    reply_lost = bool(reply_id) and actual.get("reply_message_id") != reply_id
+    if reply_lost:
+        expected["reply_message_id"] = reply_id
+        expected["reply_status"] = "sent"  # a repaired event must not look unsent, or a retry resends
     if all(actual.get(k) == v for k, v in expected.items()):
         return
     frappe.log_error(
@@ -2721,6 +2727,7 @@ def _finish_voice_only(event, gateway) -> dict:
     from huf.ai.gateway_webhook import touch_last_event
 
     event.db_set({"status": "Succeeded", "delivery_error": ""})
+    _commit_unless_testing()  # make the terminal state durable before the contended Gateway stamp
     touch_last_event(gateway)
     return {
         "event_name": event.name,

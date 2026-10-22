@@ -281,6 +281,7 @@ def attempt_parts(event: Any, gateway: Any, parts: list[str], attempt: int) -> d
 	if attempt > 1:
 		final["delivery_error"] = ""
 	event.db_set(final)
+	svc._commit_unless_testing()  # make the terminal state durable before the contended Gateway stamp
 	touch_last_event(gateway)
 	return {"event_name": event.name, "status": "Succeeded", "agent_run_id": event.agent_run,
 		"provider_message_id": delivery.provider_message_id, "attempts": attempt}
