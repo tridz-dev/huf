@@ -149,7 +149,7 @@ export function SearchView({ config, open }: { config: TgConfig | null; open: (r
       {error ? <p className="text-sm text-[var(--tg-destructive)]">{error}</p> : null}
       {items && items.length === 0 ? <p className="text-sm text-[var(--tg-hint)]">No results.</p> : null}
       {items?.map((i) => (
-        <Row key={i.name} title={i.title || i.name} sub={i.title ? i.name : undefined} onClick={() => open({ doctype, name: i.name })} />
+        <Row key={i.name} title={i.title || i.name} sub={i.title && i.title !== i.name ? i.name : undefined} onClick={() => open({ doctype, name: i.name })} />
       ))}
     </div>
   );

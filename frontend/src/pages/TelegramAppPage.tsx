@@ -55,7 +55,7 @@ export default function TelegramAppPage() {
   if (state.kind === 'loading') body = <p className="p-6 text-center text-sm">Loading...</p>;
   else if (state.kind === 'no-telegram') body = <NotInTelegram />;
   else if (state.kind === 'signed-out') body = <NotInTelegram message="You are signed out. Reopen the app from Telegram." />;
-  else if (state.kind === 'error') body = <NotInTelegram message={state.message} />;
+  else if (state.kind === 'error') body = <NotInTelegram title="Could not sign in" message={state.message} />;
   else body = (
     <TelegramApp
       config={state.config}
