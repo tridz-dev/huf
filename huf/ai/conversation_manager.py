@@ -641,8 +641,61 @@ class ConversationManager:
         stored_tool_calls = msg.get("tool_calls")
         msg_kind = msg.get("kind")
 
+        # Tool result message (combined UI mutation pattern from streaming).
+        if msg_kind == "Tool Result" and role_mapped == "assistant":
+            # Must run BEFORE the generic assistant tool-call branch: a combined
+            # row carries tool_calls/tool_call_id too, and falling into that
+            # branch emitted only the declaration (no tool message), which
+            # repair_message_sequence then dropped as unfulfilled.
+            call_id, tool_name, tool_args = self._resolve_tool_call_details(
+                stored_tool_call_id, tool_call_link
+            )
+            stored_call = None
+            if stored_tool_calls:
+                try:
+                    parsed = (
+                        json.loads(stored_tool_calls)
+                        if isinstance(stored_tool_calls, str)
+                        else stored_tool_calls
+                    )
+                    if isinstance(parsed, dict):
+                        parsed = [parsed]
+                    if isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
+                        stored_call = parsed[0]
+                except (json.JSONDecodeError, TypeError):
+                    stored_call = None
+            if stored_call:
+                fn = stored_call.get("function") or {}
+                call_id = stored_call.get("id") or call_id
+                tool_name = fn.get("name") or tool_name
+                tool_args = fn.get("arguments") or tool_args
+            if (
+                policy == "include_full"
+                and isinstance(content, str)
+                and "**Tool Result:**" in content
+            ):
+                content = content.split("**Tool Result:**", 1)[1].strip()
+            assistant_msg = {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": call_id,
+                        "type": "function",
+                        "function": {"name": tool_name, "arguments": tool_args},
+                    }
+                ],
+            }
+            tool_msg = {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": tool_name,
+                "content": content,
+            }
+            return [assistant_msg, tool_msg]
+
         # Assistant message that issued one or more tool calls.
-        if role_mapped == "assistant" and (
+        if role_mapped == "assistant" and msg_kind != "Tool Result" and (
             msg_kind == "Tool Call"
             or tool_call_link
             or stored_tool_call_id
@@ -682,30 +735,6 @@ class ConversationManager:
                     "content": None,
                     "tool_calls": tool_calls,
                 }
-
-        # Tool result message (combined UI mutation pattern from streaming).
-        if msg_kind == "Tool Result" and role_mapped == "assistant":
-            call_id, tool_name, tool_args = self._resolve_tool_call_details(
-                stored_tool_call_id, tool_call_link
-            )
-            assistant_msg = {
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [
-                    {
-                        "id": call_id,
-                        "type": "function",
-                        "function": {"name": tool_name, "arguments": tool_args},
-                    }
-                ],
-            }
-            tool_msg = {
-                "role": "tool",
-                "tool_call_id": call_id,
-                "name": tool_name,
-                "content": content,
-            }
-            return [assistant_msg, tool_msg]
 
         # Separate tool result message.
         if role_mapped == "tool":
