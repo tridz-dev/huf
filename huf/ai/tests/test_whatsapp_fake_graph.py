@@ -24,7 +24,8 @@ import frappe
 import requests
 from frappe.tests import IntegrationTestCase
 
-from huf.ai import gateway_service, gateway_webhook, whatsapp_management as mgmt
+from huf.ai import gateway_service, gateway_webhook
+from huf.ai.whatsapp import management as mgmt
 from huf.ai.gateway_adapters import GatewayInboundRequest, whatsapp_bridge as bridge
 from huf.ai.gateway_adapters.types import GatewayAttachment, GatewayReply
 from huf.ai.gateway_adapters.whatsapp import WhatsAppWindowClosed

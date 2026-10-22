@@ -12,8 +12,8 @@ from unittest.mock import MagicMock, patch
 
 import frappe
 
-from huf.ai import whatsapp_outbound_policy as policy
-from huf.ai import whatsapp_send_scope as scope
+from huf.ai.whatsapp import outbound_policy as policy
+from huf.ai.whatsapp import send_scope as scope
 from huf.ai.tools import whatsapp
 
 GW = "GW-FXC"

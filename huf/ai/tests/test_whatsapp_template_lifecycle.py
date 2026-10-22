@@ -17,7 +17,7 @@ from unittest.mock import patch
 
 import frappe
 
-from huf.ai import whatsapp_management as mgmt
+from huf.ai.whatsapp import management as mgmt
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.testing import fake_graph_server as fake
 from huf.ai.tests import test_whatsapp_fake_graph as fgc

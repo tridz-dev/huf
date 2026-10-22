@@ -163,7 +163,7 @@ describe('voice notes', () => {
   it('calls send_voice_note with the gateway and trims the link', async () => {
     await sendVoiceNote('GW-A', '15551234567', { link: ' https://cdn.example/v.ogg ' });
     const [method, args] = post.mock.calls[0] as [string, Record<string, unknown>];
-    expect(method).toBe('huf.ai.whatsapp_management.send_voice_note');
+    expect(method).toBe('huf.ai.whatsapp.management.send_voice_note');
     expect(args).toMatchObject({ gateway_name: 'GW-A', to: '15551234567', link: 'https://cdn.example/v.ogg' });
   });
 
@@ -223,7 +223,7 @@ describe('gateway-scoped calls', () => {
   it('sends templates from a gateway and no longer passes an account', async () => {
     await sendTemplateMessage({ gateway_name: 'GW-B', to: '15551234567', template_name: 'welcome', body_params: ['Ann'] });
     const [method, args] = post.mock.calls[0] as [string, Record<string, unknown>];
-    expect(method).toBe('huf.ai.whatsapp_management.send_template_message');
+    expect(method).toBe('huf.ai.whatsapp.management.send_template_message');
     expect(args.gateway_name).toBe('GW-B');
     expect('account' in args).toBe(false);
     expect(args.body_params).toBe('["Ann"]');

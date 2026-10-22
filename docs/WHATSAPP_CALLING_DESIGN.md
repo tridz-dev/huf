@@ -175,7 +175,7 @@ Decisions: scope = GREETING plus optional pre-recorded reply/closing clips (no l
 Implemented (all mocked-tested, nothing invoked live, default OFF):
 - `gateway_adapters/whatsapp_calls.py`: `calls` webhook normalisation (`WhatsAppCall`; connect, terminate, call-typed `statuses`), payload builders (call actions, calling settings, `call_permission_request`), `CallsGraph` Graph wrapper with injectable HTTP, strict `call_admission`, Gateway Event recording (`raw_payload.kind == "call"`, metadata only, SDP never stored), `handle_call` routing.
 - `whatsapp.py`: `parse_payload` returns `WhatsAppParsed.calls`; `gateway_webhook._handle_calls` routes them. Calls never start an agent run (no config switch exists yet).
-- `whatsapp_management.py`: `get_calling_settings`, `set_calling_settings`, `call_action`, `send_call_permission_request` (admin only; permission request obeys opt-out and the 24 h window).
+- `whatsapp/management.py`: `get_calling_settings`, `set_calling_settings`, `call_action`, `send_call_permission_request` (admin only; permission request obeys opt-out and the 24 h window).
 - `whatsapp_call_flow.py`: state machine `run_call` (received, answering, pre_accepted, connected, accepted, playing, terminating, completed|failed|rejected), `answer_inbound_call_job`, `AiortcMediaSession` (lazy import; `get_media_backend()` reports `not_installed`, the job then rejects the call and marks the event Failed).
 - Gateway fields: `calling_enabled` (Check, default 0), `call_greeting_audio`, `call_reply_audio`, `call_closing_audio`, `call_max_seconds`.
 - Offline simulator `huf/testing/wa_call_sim.py` (+ tests in `huf/ai/tests/test_whatsapp_calls.py`).

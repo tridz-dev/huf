@@ -131,14 +131,14 @@ class TestAuthority(unittest.TestCase):
 
 	def test_template_creation_without_write_authority_is_refused_before_any_send(self):
 		with patch.object(whatsapp, "_run_gateway", return_value="GW"), patch(
-			"huf.ai.whatsapp_management._send_authority", side_effect=frappe.PermissionError("no")
+			"huf.ai.whatsapp.management._send_authority", side_effect=frappe.PermissionError("no")
 		), patch.object(whatsapp, "_create_template") as send:
 			result = json.loads(whatsapp.handle_action("create_template", template_name="t"))
 		self.assertEqual(result["error"], "permission_denied")
 		send.assert_not_called()
 
 	def test_trusted_draft_bypass_rechecks_authority(self):
-		with patch("huf.ai.whatsapp_management._send_authority", side_effect=frappe.PermissionError("no")), patch.object(
+		with patch("huf.ai.whatsapp.management._send_authority", side_effect=frappe.PermissionError("no")), patch.object(
 			bridge, "create_draft"
 		) as draft:
 			result = json.loads(whatsapp._create_template_draft({"name": "WA"}, {}, "GW"))
@@ -147,7 +147,7 @@ class TestAuthority(unittest.TestCase):
 
 	def test_reads_need_read_authority(self):
 		with patch.object(whatsapp, "_run_gateway", return_value="GW"), patch(
-			"huf.ai.whatsapp_management._gateway_read_allowed", return_value=False
+			"huf.ai.whatsapp.management._gateway_read_allowed", return_value=False
 		), patch.object(whatsapp, "_list_messages") as listing:
 			result = json.loads(whatsapp.handle_action("list_messages", to="1"))
 		self.assertEqual(result["error"], "permission_denied")
@@ -188,7 +188,7 @@ class TestListMessages(unittest.TestCase):
 		page = {"success": True, "items": [{"message_id": "wamid.1"}], "next_cursor": "c2", "has_more": True}
 		with patch.object(whatsapp, "_run_gateway", return_value="GW"), patch.object(
 			whatsapp, "_authorize", return_value=None
-		), patch("huf.ai.whatsapp_management.list_message_log", return_value=page) as log:
+		), patch("huf.ai.whatsapp.management.list_message_log", return_value=page) as log:
 			return json.loads(whatsapp.handle_action("list_messages", **kwargs)), log
 
 	def test_scoped_to_run_gateway_and_contact_with_wamid_and_cursor(self):

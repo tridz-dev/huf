@@ -8,8 +8,8 @@ import pathlib
 import unittest
 from unittest.mock import MagicMock, patch
 
-from huf.ai import whatsapp_account_events as ae
-from huf.ai import whatsapp_health as wh
+from huf.ai.whatsapp import account_events as ae
+from huf.ai.whatsapp import health as wh
 from huf.ai.gateway_adapters import whatsapp_errors as we
 from huf.ai.gateway_adapters.types import GatewayInboundRequest
 from huf.ai.gateway_adapters.whatsapp import WhatsAppGatewayAdapter

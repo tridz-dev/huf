@@ -3,11 +3,11 @@ import { getFrappeErrorMessage } from '@/lib/frappe-error';
 
 /**
  * Typed client for the WhatsApp Overview/Settings page: per-gateway health,
- * setup checklist and the token check. The backend (whatsapp_health.py,
- * whatsapp_token_check.py) is built in parallel; this file is the agreed
+ * setup checklist and the token check. The backend (whatsapp/health.py,
+ * whatsapp/token_check.py) is built in parallel; this file is the agreed
  * contract. Reconcile field names with the backend's final report if they differ.
  */
-const BASE = 'huf.ai.whatsapp_management';
+const BASE = 'huf.ai.whatsapp.management';
 
 export type HealthState = 'healthy' | 'degraded' | 'blocked' | 'not_set_up' | 'disabled';
 export type HealthSeverity = 'error' | 'warning';

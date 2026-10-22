@@ -10,7 +10,8 @@ import unittest
 
 import frappe
 
-from huf.ai import whatsapp_management as mgmt, whatsapp_token_check as tc
+from huf.ai.whatsapp import management as mgmt
+from huf.ai.whatsapp import token_check as tc
 from huf.testing import fake_graph_server as fake
 from huf.ai.tests import test_whatsapp_fake_graph as fg
 

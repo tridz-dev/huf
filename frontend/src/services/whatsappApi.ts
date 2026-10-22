@@ -1,7 +1,7 @@
 import { call, file } from '@/lib/frappe-sdk';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 
-const BASE = 'huf.ai.whatsapp_management';
+const BASE = 'huf.ai.whatsapp.management';
 
 export const TEMPLATE_NAME_RE = /^[a-z0-9_]+$/;
 export const TEMPLATE_NAME_MAX = 512;

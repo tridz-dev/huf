@@ -32,7 +32,7 @@ from urllib.parse import quote, urljoin, urlparse
 import frappe
 import frappe.utils
 
-from huf.ai import whatsapp_outbound_policy as policy
+from huf.ai.whatsapp import outbound_policy as policy
 from huf.ai.gateway_adapters import whatsapp_messages as wm
 from huf.ai.gateway_adapters import whatsapp_templates as wt
 
@@ -256,7 +256,7 @@ def _may_bypass(trusted: bool) -> bool:
 
 
 def _refuse_if_disconnected(acct: dict[str, Any]) -> None:
-	from huf.ai import whatsapp_account_events as _ae
+	from huf.ai.whatsapp import account_events as _ae
 
 	if (refusal := _ae.send_refusal(acct.get("phone_id"))):
 		raise BridgeError(refusal)
@@ -715,7 +715,7 @@ def _graph_err(error: str, resp_or_exc: Any, **extra: Any) -> dict[str, Any]:
 
 def _graph_post_message(acct: dict[str, Any], data: dict[str, Any], http_post: Callable[..., Any] | None = None) -> str:
 	"""POST a ``/messages`` body with the account credentials; returns the wamid or raises BridgeError."""
-	from huf.ai import whatsapp_account_events as _ae
+	from huf.ai.whatsapp import account_events as _ae
 
 	if (refusal := _ae.send_refusal(acct.get("phone_id"))):
 		raise BridgeError(refusal)
@@ -923,7 +923,7 @@ def send_template(
 ) -> dict[str, Any]:
 	"""Send an approved template.
 
-	Goes through :mod:`huf.ai.whatsapp_outbound_policy` first: a STOPped contact, a BSUID recipient, a
+	Goes through :mod:`huf.ai.whatsapp.outbound_policy` first: a STOPped contact, a BSUID recipient, a
 	template that is not APPROVED and marketing to a contact who stopped marketing are refused with a
 	``BridgeError`` whose ``error`` is the policy code. ``gateway_name`` scopes the checks; without it
 	every Gateway linked to the account is checked.
@@ -1188,7 +1188,7 @@ def send_media(
 # ---------------------------------------------------------------------------
 def _post_typed_message(acct: dict[str, Any], data: dict[str, Any], http_post: Callable[..., Any] | None = None) -> str:
 	"""POST a ``/messages`` body; returns the wamid or raises BridgeError carrying the structured Graph error."""
-	from huf.ai import whatsapp_account_events as _ae
+	from huf.ai.whatsapp import account_events as _ae
 
 	if (refusal := _ae.send_refusal(acct.get("phone_id"))):
 		raise BridgeError(refusal)

@@ -14,7 +14,7 @@ if isinstance(frappe, MagicMock):
 	frappe.whitelist = lambda *args, **kwargs: (lambda fn: fn)
 	frappe.PermissionError = PermissionError
 
-from huf.ai import whatsapp_management as mgmt  # noqa: E402
+from huf.ai.whatsapp import management as mgmt  # noqa: E402
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge  # noqa: E402
 from huf.ai.gateway_adapters.whatsapp_bridge import BridgeError  # noqa: E402
 
@@ -29,7 +29,7 @@ def _cred(key: str, value: str) -> MagicMock:
 
 class TestWhatsAppManagement(unittest.TestCase):
 	def setUp(self):
-		frappe_patcher = patch("huf.ai.whatsapp_management.frappe")
+		frappe_patcher = patch("huf.ai.whatsapp.management.frappe")
 		self.frappe = frappe_patcher.start()
 		self.addCleanup(frappe_patcher.stop)
 		self.frappe.PermissionError = PermissionError
@@ -236,7 +236,7 @@ class TestWhatsAppManagementAuthority(unittest.TestCase):
 	"""Roles, Gateway authority and account isolation of the management API (mock-based)."""
 
 	def setUp(self):
-		patcher = patch("huf.ai.whatsapp_management.frappe")
+		patcher = patch("huf.ai.whatsapp.management.frappe")
 		self.frappe = patcher.start()
 		self.addCleanup(patcher.stop)
 		self.frappe.PermissionError = PermissionError
@@ -500,7 +500,7 @@ class TestOutboundTypeEndpoints(unittest.TestCase):
 	"""Every non-text send endpoint: authority, validation, opt-out, 24h window and the Gateway's own account."""
 
 	def setUp(self):
-		patcher = patch("huf.ai.whatsapp_management.frappe")
+		patcher = patch("huf.ai.whatsapp.management.frappe")
 		self.frappe = patcher.start()
 		self.addCleanup(patcher.stop)
 		self.frappe.PermissionError = PermissionError

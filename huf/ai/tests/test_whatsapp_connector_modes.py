@@ -15,7 +15,8 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai import gateway_webhook, whatsapp_management as mgmt
+from huf.ai import gateway_webhook
+from huf.ai.whatsapp import management as mgmt
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters.whatsapp import WhatsAppWindowClosed
 from huf.ai.gateway_service import process_gateway_event

@@ -22,7 +22,7 @@ from typing import Any
 
 import frappe
 
-from huf.ai import whatsapp_send_file as send_file
+from huf.ai.whatsapp import send_file as send_file
 
 MODE_FIELD = "voice_reply_mode"
 VOICE_ONLY = "voice_only"

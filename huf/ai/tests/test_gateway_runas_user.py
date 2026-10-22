@@ -324,7 +324,7 @@ class TestGatewayRunAsUserEndToEnd(unittest.TestCase):
 
 class TestExecutionUserNotAuthorizedHealth(unittest.TestCase):
 	def test_reason_reported_from_permission_error_events(self):
-		from huf.ai import whatsapp_health
+		from huf.ai.whatsapp import health
 
 		gateway = "GW-FIXF-HEALTH"
 		self.addCleanup(frappe.db.rollback)
@@ -332,14 +332,14 @@ class TestExecutionUserNotAuthorizedHealth(unittest.TestCase):
 		with patch.object(frappe.db, "count", side_effect=lambda dt, f=None, *a, **k: 2 if "like" in str(f) and "authorized" in str(f) else 0), \
 			patch.object(frappe, "get_all", return_value=[]), \
 			patch.object(frappe.db, "exists", return_value=False):
-			events = whatsapp_health.read_events(gateway, frappe.utils.now_datetime())
+			events = health.read_events(gateway, frappe.utils.now_datetime())
 		self.assertEqual(events["execution_unauthorized"], 2)
 
-		result = whatsapp_health.evaluate(
+		result = health.evaluate(
 			{"enabled": True, "execution_unauthorized": 2, "events_24h": {}},
 			frappe.utils.now_datetime(),
 		)
 		codes = [r["code"] for r in result["reasons"]]
 		self.assertIn("execution_user_not_authorized", codes)
-		quiet = whatsapp_health.evaluate({"enabled": True, "events_24h": {}}, frappe.utils.now_datetime())
+		quiet = health.evaluate({"enabled": True, "events_24h": {}}, frappe.utils.now_datetime())
 		self.assertNotIn("execution_user_not_authorized", [r["code"] for r in quiet["reasons"]])
