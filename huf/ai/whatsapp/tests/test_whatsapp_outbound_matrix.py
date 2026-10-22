@@ -57,12 +57,15 @@ class _Base(unittest.TestCase):
 			patch.object(wb, "is_available", return_value=True),
 			patch.object(wb, "_mirror_direct_send", side_effect=lambda a, p, w, t: {"success": True, "message_id": w}),
 			patch("frappe.has_permission", return_value=True),
-			# The media-link preflight is skipped only while frappe.flags.in_test is set; pin it so
-			# an earlier test that cleared the flag cannot make these tests fetch cdn.example.
-			patch.object(frappe.flags, "in_test", True, create=True),
 		):
 			p.start()
 			self.addCleanup(p.stop)
+		# The media-link preflight is skipped only while frappe.flags.in_test is set; pin it so an
+		# earlier test that cleared the flag cannot make these tests fetch cdn.example.
+		# (frappe.flags is dict-backed, so set it directly rather than with patch.object.)
+		previous_in_test = frappe.flags.get("in_test")
+		frappe.flags.in_test = True
+		self.addCleanup(frappe.flags.__setitem__, "in_test", previous_in_test)
 		self.post = Post()
 
 

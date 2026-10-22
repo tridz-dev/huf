@@ -92,5 +92,10 @@ def execute():
 		for row in rows:
 			current = row.get(fieldname)
 			updated = rewrite_path(current)
-			if updated != current:
-				frappe.db.set_value(doctype, row["name"], fieldname, updated, update_modified=False)
+			if updated == current:
+				continue
+			if doctype == "Scheduled Job Type" and frappe.db.exists(doctype, {fieldname: updated}):
+				# hooks.py sync already created the row for the new path: drop the stale duplicate.
+				frappe.delete_doc(doctype, row["name"], force=True, ignore_permissions=True)
+				continue
+			frappe.db.set_value(doctype, row["name"], fieldname, updated, update_modified=False)

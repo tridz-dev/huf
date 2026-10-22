@@ -87,6 +87,7 @@ class TestAdminAuthority(_Fixture, IntegrationTestCase):
 			frappe.get_doc(
 				{"doctype": "User", "email": "wp2.tester@example.com", "first_name": "WP2", "send_welcome_email": 0}
 			).insert(ignore_permissions=True)
+		self.addCleanup(frappe.set_user, frappe.session.user)
 		frappe.set_user("wp2.tester@example.com")
 		for p in (
 			patch.object(gsvc.frappe, "get_roles", return_value=list(frappe_roles)),

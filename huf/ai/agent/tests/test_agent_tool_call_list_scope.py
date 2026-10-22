@@ -43,6 +43,7 @@ class TestAgentToolCallListScope(IntegrationTestCase):
 
 	def test_huf_user_gets_where_clause(self):
 		"""Regular Huf User should get a WHERE clause filtering by agent_run owner."""
+		self.addCleanup(frappe.set_user, frappe.session.user)
 		frappe.set_user("alice@example.com")
 		result = get_tool_call_permission_conditions("alice@example.com")
 		assert result is not None
