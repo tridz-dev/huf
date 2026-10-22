@@ -14,7 +14,8 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai import automation_hooks, automation_scheduler, flow_api
+from huf.ai import automation_hooks, automation_scheduler
+from huf.ai.flow import api as flow_api
 from huf.ai.automation_runner import run_automation
 from huf.testing.factories import make_agent, make_ai_model, make_ai_provider, make_automation
 
@@ -620,11 +621,11 @@ class TestLegacyFlowScheduleCleanup(_Base):
 		from huf.patches.v1 import delete_legacy_flow_schedule_jobs
 
 		# Scheduled Job Type names are derived from the method.
-		frappe.db.delete("Scheduled Job Type", {"method": ["in", ["huf.ai.flow_api.execute_scheduled_flow", "huf.ai.prE_unrelated.job"]]})
+		frappe.db.delete("Scheduled Job Type", {"method": ["in", ["huf.ai.flow.api.execute_scheduled_flow", "huf.ai.prE_unrelated.job"]]})
 		doc = frappe.get_doc(
 			{
 				"doctype": "Scheduled Job Type",
-				"method": "huf.ai.flow_api.execute_scheduled_flow",
+				"method": "huf.ai.flow.api.execute_scheduled_flow",
 				"frequency": "Cron",
 				"cron_format": "*/5 * * * *",
 			}

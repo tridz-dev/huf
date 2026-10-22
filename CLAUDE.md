@@ -46,12 +46,12 @@ huf/
 │   │   │   ├── backends/         # Storage backends (SQLite FTS5)
 │   │   │   ├── extractors/       # Text extraction (PDF, DOCX, HTML)
 │   │   │   └── chunkers/         # Text chunking strategies
-│   │   ├── flow_engine.py        # Flow Engine: graph orchestration
-│   │   ├── flow_api.py           # Flow whitelisted API endpoints
-│   │   ├── flow_eval.py          # Safe expression evaluator for edges
-│   │   ├── flow_tool_executor.py # Deterministic tool execution
-│   │   ├── flow_orchestrator.py  # Router/orchestrator prompt + JSON parsing
-│   │   ├── flow_tools.py         # Flow tool definitions for huf_tools hook
+│   │   ├── flow/engine.py        # Flow Engine: graph orchestration
+│   │   ├── flow/api.py           # Flow whitelisted API endpoints
+│   │   ├── flow/eval.py          # Safe expression evaluator for edges
+│   │   ├── flow/tool_executor.py # Deterministic tool execution
+│   │   ├── flow/orchestrator.py  # Router/orchestrator prompt + JSON parsing
+│   │   ├── flow/tools.py         # Flow tool definitions for huf_tools hook
 │   │   └── orchestration/        # Multi-step workflow planning
 │   ├── huf/doctype/              # DocType definitions (47 total)
 │   ├── hooks.py                  # Frappe integration hooks
@@ -269,12 +269,12 @@ toast.success("Agent created");
 6. **`tools/functions.py`**: Low-level Frappe database operations
 
 ### Flow Engine
-1. **`flow_engine.py`**: Core engine - loads definitions, creates runs, executes nodes, evaluates edges
-2. **`flow_api.py`**: Whitelisted REST APIs for flow management and execution
-3. **`flow_eval.py`**: AST-based safe expression evaluator for edge conditions
-4. **`flow_tool_executor.py`**: Deterministic tool execution reusing sdk_tools handlers
-5. **`flow_orchestrator.py`**: Prompt construction and JSON parsing for router/orchestrator
-6. **`flow_tools.py`**: Tool definitions registered via `huf_tools` hook
+1. **`flow/engine.py`**: Core engine - loads definitions, creates runs, executes nodes, evaluates edges
+2. **`flow/api.py`**: Whitelisted REST APIs for flow management and execution
+3. **`flow/eval.py`**: AST-based safe expression evaluator for edge conditions
+4. **`flow/tool_executor.py`**: Deterministic tool execution reusing sdk_tools handlers
+5. **`flow/orchestrator.py`**: Prompt construction and JSON parsing for router/orchestrator
+6. **`flow/tools.py`**: Tool definitions registered via `huf_tools` hook
 
 ### Streaming Support
 HUF supports Server-Sent Events (SSE) for real-time agent response streaming:
@@ -459,16 +459,16 @@ const reader = response.body.getReader();
 ### Flow Engine API Calls
 ```python
 # Start a flow
-result = frappe.call('huf.ai.flow_api.run_flow', flow_id='my-flow', payload={'key': 'value'})
+result = frappe.call('huf.ai.flow.api.run_flow', flow_id='my-flow', payload={'key': 'value'})
 
 # Get flow run status
-status = frappe.call('huf.ai.flow_api.get_flow_run', flow_run_id='FR-00001')
+status = frappe.call('huf.ai.flow.api.get_flow_run', flow_run_id='FR-00001')
 
 # Approve a waiting flow
-frappe.call('huf.ai.flow_api.approve_flow_run', flow_run_id='FR-00001', comment='Looks good')
+frappe.call('huf.ai.flow.api.approve_flow_run', flow_run_id='FR-00001', comment='Looks good')
 
 # Webhook trigger (external)
-# POST /api/method/huf.ai.flow_api.flow_webhook?flow_id=my-flow&webhook_key=secret
+# POST /api/method/huf.ai.flow.api.flow_webhook?flow_id=my-flow&webhook_key=secret
 ```
 
 ## Security Considerations

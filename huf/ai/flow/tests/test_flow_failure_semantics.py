@@ -15,7 +15,7 @@ the node's own executor returns ``{"status": "failed"}``. The three cases:
   (e) failure handled by an ``on_failure`` edge -> run ``Success``.
 
 Run with:
-    bench --site <site> run-tests --app huf --module huf.ai.tests.test_flow_failure_semantics
+    bench --site <site> run-tests --app huf --module huf.ai.flow.tests.test_flow_failure_semantics
 """
 
 import unittest
@@ -24,9 +24,9 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai import flow_api
-from huf.ai.flow_engine import create_flow_run
-from huf.ai.flow_engine import run_flow as engine_run_flow
+from huf.ai.flow import api as flow_api
+from huf.ai.flow.engine import create_flow_run
+from huf.ai.flow.engine import run_flow as engine_run_flow
 from huf.testing.factories import make_agent_tool_function
 
 
@@ -112,7 +112,7 @@ class TestFlowFailureSemantics(IntegrationTestCase):
 		flow_run = create_flow_run(flow_id=flow_id, payload={}, trigger_type="Doc Event")
 		self._names["Flow Run"].append(flow_run.name)
 		failed_tool_result = {"success": False, "error": "simulated tool failure"}
-		with patch("huf.ai.flow_engine.execute_tool", return_value=failed_tool_result):
+		with patch("huf.ai.flow.engine.execute_tool", return_value=failed_tool_result):
 			engine_run_flow(flow_run.name)
 		flow_run.reload()
 		return flow_run

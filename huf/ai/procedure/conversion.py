@@ -15,7 +15,7 @@ scope (PLAN.md 9). The only input here is a Flow's own authored graph.
 Frappe-free by design (mirrors ``huf.ai.graph.transforms`` / ``expressions.py`` / the
 frappe-free half of ``permissions.py``): everything in this module is pure functions
 over plain dicts, so the conversion and refusal logic can be unit tested with plain
-``pytest``, no bench required. The whitelisted API wrapper (``huf.ai.flow_api``) is the
+``pytest``, no bench required. The whitelisted API wrapper (``huf.ai.flow.api``) is the
 only layer that touches ``frappe``.
 
 Two-step contract:
@@ -25,7 +25,7 @@ Two-step contract:
    convert). If convertible, also returns the compiled Procedure graph and a
    human-facing summary (reads/writes/estimated reduction), ready to hand to a review
    UI before anything is persisted.
-2. The caller (``huf.ai.flow_api.convert_flow_to_procedure``) is responsible for
+2. The caller (``huf.ai.flow.api.convert_flow_to_procedure``) is responsible for
    actually creating the ``Agent Procedure`` document -- always via the normal
    ``Agent Procedure`` creation path (``frappe.get_doc({...}).insert()``), always with
    ``tier="Draft"`` and never ``status="Active"`` (I8: no automatic activation).

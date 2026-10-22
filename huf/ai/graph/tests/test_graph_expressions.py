@@ -4,8 +4,8 @@
 module under test has zero frappe dependency, so this suite needs no live Frappe bench/site and runs
 anywhere:
 
-	python -m unittest huf.ai.tests.test_graph_expressions -v
-	# or: pytest huf/ai/tests/test_graph_expressions.py -v
+	python -m unittest huf.ai.graph.tests.test_graph_expressions -v
+	# or: pytest huf/ai/graph/tests/test_graph_expressions.py -v
 
 NOTE for this sandbox specifically: ``huf/__init__.py`` imports frappe unconditionally, so even
 ``import huf.ai.graph.expressions`` fails at package-init time here (no frappe installed). This
@@ -24,7 +24,7 @@ except Exception:  # pragma: no cover - exercised in frappe-less sandboxes
 	import os
 	import sys
 
-	_PATH = os.path.join(os.path.dirname(__file__), "..", "graph", "expressions.py")
+	_PATH = os.path.join(os.path.dirname(__file__), "..", "expressions.py")
 	_spec = importlib.util.spec_from_file_location("huf_graph_expressions_standalone", _PATH)
 	expr = importlib.util.module_from_spec(_spec)
 	sys.modules[_spec.name] = expr

@@ -7,7 +7,7 @@ Exercises ``huf.ai.context_artifacts._check_artifact_quotas``,
 ``purge_expired_context_artifacts``, ``delete_conversation_artifacts``, and
 the ``AgentConversation.on_trash`` cascade against a hand-written fake
 ``frappe`` -- no MagicMock-only affordances (``.side_effect`` etc.), per the
-house convention in ``huf.ai.tests.test_graph_permissions``.
+house convention in ``huf.ai.graph.tests.test_graph_permissions``.
 
 Run with:
   bench --site <site> run-tests --app huf --module huf.ai.tests.test_context_artifact_lifecycle

@@ -2,7 +2,7 @@
 
 Single resolver plus single invocation path shared by the LLM tool path
 (``huf.ai.sdk_tools``) and the deterministic Flow/Procedure tool path
-(``huf.ai.flow_tool_executor``). Before this module the two paths had drifted
+(``huf.ai.flow.tool_executor``). Before this module the two paths had drifted
 independently (GT-05 in ``TRACK/PLAN.md``): the type->handler map was
 hand-duplicated in both files, and the deterministic path had none of the
 permission machinery the LLM path enforces on every call.
@@ -45,7 +45,7 @@ logger = frappe.logger("huf")
 # Resolver: tool type -> function_path (single source of truth)
 #
 # Previously hand-duplicated at sdk_tools.py:184-250 (the create_agent_tools
-# if/elif chain) and flow_tool_executor.py:163-186 (_resolve_function_path's
+# if/elif chain) and flow/tool_executor.py:163-186 (_resolve_function_path's
 # type_to_handler dict) -- the seam audit's §1. One dict, one place now.
 # ---------------------------------------------------------------------------
 
@@ -505,7 +505,7 @@ def invoke_tool_sync(
 def _start_tool_call_telemetry(tool_name: str, args: dict, ctx: RunContext):
 	"""Insert an ``Agent Tool Call`` record with status Started, before
 	invocation. Ported from ``flow_engine._exec_tool_call``
-	(flow_engine.py:599-630 on the base checkout) -- the seam this task
+	(flow/engine.py:599-630 on the base checkout) -- the seam this task
 	moves per GT-05/I5, generalized so any caller gets it for free by
 	passing ``telemetry=True`` instead of assembling this block itself.
 	"""

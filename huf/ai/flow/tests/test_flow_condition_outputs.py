@@ -2,7 +2,7 @@
 
 import unittest
 
-from huf.ai import flow_engine
+from huf.ai.flow import engine as flow_engine
 from huf.ai.graph.executor import GraphContext
 
 

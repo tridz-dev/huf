@@ -2132,26 +2132,26 @@ Edges are sorted by priority (descending); first match wins.
 
 | Module | Purpose |
 |:-------|:--------|
-| `huf/ai/flow_engine.py` | Core engine: load, validate, execute, edge evaluation |
-| `huf/ai/flow_api.py` | Whitelisted API endpoints for UI and triggers |
-| `huf/ai/flow_eval.py` | Safe AST-based expression evaluator |
-| `huf/ai/flow_tool_executor.py` | Deterministic tool execution |
-| `huf/ai/flow_orchestrator.py` | Prompt construction and JSON parsing for router/orchestrator |
-| `huf/ai/flow_tools.py` | Tool definitions for the huf_tools hook |
+| `huf/ai/flow/engine.py` | Core engine: load, validate, execute, edge evaluation |
+| `huf/ai/flow/api.py` | Whitelisted API endpoints for UI and triggers |
+| `huf/ai/flow/eval.py` | Safe AST-based expression evaluator |
+| `huf/ai/flow/tool_executor.py` | Deterministic tool execution |
+| `huf/ai/flow/orchestrator.py` | Prompt construction and JSON parsing for router/orchestrator |
+| `huf/ai/flow/tools.py` | Tool definitions for the huf_tools hook |
 
 ### Whitelisted APIs
 
 | Method | Purpose |
 |:-------|:--------|
-| `huf.ai.flow_api.get_flow_definition` | Get flow definition |
-| `huf.ai.flow_api.save_flow_definition` | Save/update flow definition |
-| `huf.ai.flow_api.run_flow` | Start a flow run |
-| `huf.ai.flow_api.get_flow_run` | Get flow run status |
-| `huf.ai.flow_api.list_flow_runs` | List flow runs |
-| `huf.ai.flow_api.resume_flow_run` | Resume waiting flow |
-| `huf.ai.flow_api.approve_flow_run` | Approve a flow |
-| `huf.ai.flow_api.reject_flow_run` | Reject a flow |
-| `huf.ai.flow_api.flow_webhook` | Webhook trigger (allow_guest) |
+| `huf.ai.flow.api.get_flow_definition` | Get flow definition |
+| `huf.ai.flow.api.save_flow_definition` | Save/update flow definition |
+| `huf.ai.flow.api.run_flow` | Start a flow run |
+| `huf.ai.flow.api.get_flow_run` | Get flow run status |
+| `huf.ai.flow.api.list_flow_runs` | List flow runs |
+| `huf.ai.flow.api.resume_flow_run` | Resume waiting flow |
+| `huf.ai.flow.api.approve_flow_run` | Approve a flow |
+| `huf.ai.flow.api.reject_flow_run` | Reject a flow |
+| `huf.ai.flow.api.flow_webhook` | Webhook trigger (allow_guest) |
 
 ### Agent Tools
 

@@ -32,7 +32,7 @@ from unittest.mock import MagicMock
 
 
 def _install_standalone_frappe_stub():
-	"""See huf.ai.tests.test_graph_permissions._install_standalone_frappe_stub -- same
+	"""See huf.ai.graph.tests.test_graph_permissions._install_standalone_frappe_stub -- same
 	underlying gap: this module transitively imports huf.ai.graph.permissions, which
 	imports huf.ai.tools.registry, which does ``from frappe.utils import now_datetime`` at
 	top level. conftest.py's stub runs too late for the same reason documented there, so

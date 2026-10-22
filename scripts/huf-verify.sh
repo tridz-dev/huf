@@ -323,6 +323,17 @@ map_backend_module() {
       if [ -f "$ROOT/huf/ai/tools/tests/test_tool_${base}.py" ]; then
         candidate="huf/ai/tools/tests/test_tool_${base}.py"
       fi ;;
+    huf/ai/flow/tests/test_*.py|huf/ai/graph/tests/test_*.py)
+      # a changed flow/graph test module maps to itself
+      candidate="$f" ;;
+    huf/ai/flow/*.py)
+      if [ -f "$ROOT/huf/ai/flow/tests/test_flow_${base}.py" ]; then
+        candidate="huf/ai/flow/tests/test_flow_${base}.py"
+      fi ;;
+    huf/ai/graph/*.py)
+      if [ -f "$ROOT/huf/ai/graph/tests/test_graph_${base}.py" ]; then
+        candidate="huf/ai/graph/tests/test_graph_${base}.py"
+      fi ;;
   esac
   if [ -f "$ROOT/$candidate" ]; then
     echo "${candidate%.py}" | tr '/' '.'

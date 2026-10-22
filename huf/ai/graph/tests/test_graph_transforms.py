@@ -2,8 +2,8 @@
 
 Runnable with NO bench, either way:
 
-    python -m unittest huf.ai.tests.test_graph_transforms -v
-    pytest huf/ai/tests/test_graph_transforms.py -v
+    python -m unittest huf.ai.graph.tests.test_graph_transforms -v
+    pytest huf/ai/graph/tests/test_graph_transforms.py -v
 
 ``huf/__init__.py`` imports frappe unconditionally, so importing via the ``huf.ai.tests`` package path
 fails outside a bench. This module therefore loads ``huf/ai/graph/transforms.py`` directly by file
@@ -21,7 +21,7 @@ import sys
 import unittest
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-_TRANSFORMS_PATH = os.path.normpath(os.path.join(_THIS_DIR, "..", "graph", "transforms.py"))
+_TRANSFORMS_PATH = os.path.normpath(os.path.join(_THIS_DIR, "..", "transforms.py"))
 
 
 def _load_transforms_module():

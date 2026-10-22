@@ -1,5 +1,5 @@
 """
-Behavioural test suite for huf.ai.flow_engine.
+Behavioural test suite for huf.ai.flow.engine.
 
 Flow is an experimental, unreleased subsystem: there are zero Flow Definitions
 and zero Flow Runs on any real site today, and there were zero tests for this
@@ -29,7 +29,7 @@ no live bench, no DB):
     - TestKnownDefects                (F-1..F-4 expectedFailure acceptance tests)
 
 Bench-requiring (needs a live Frappe site; run with
-`bench --site <site> run-tests --app huf --module huf.ai.tests.test_flow_engine`):
+`bench --site <site> run-tests --app huf --module huf.ai.flow.tests.test_flow_engine`):
     - TestFlowRunLifecycleBench (UnitTestCase) -- exercises run_flow / resume_flow_run /
       approve_flow_run against real Flow Definition + Flow Run documents, to
       catch anything the frappe-free fakes below paper over (real db_set /
@@ -57,7 +57,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-# flow_engine.py does `from frappe.<dotted.submodule> import X` for a few
+# flow/engine.py does `from frappe.<dotted.submodule> import X` for a few
 # names (frappe.utils, frappe.desk.doctype.notification_log.notification_log,
 # frappe.desk.doctype.notification_settings.notification_settings). Unlike a
 # plain `import frappe` + attribute access, Python's import statement resolves
@@ -67,7 +67,7 @@ from unittest.mock import MagicMock, patch
 # name). Pre-register the specific dotted submodules flow_engine needs as
 # MagicMocks too, mirroring conftest's "only if frappe isn't already
 # importable" guard, so this file can be collected standalone (e.g. plain
-# `pytest huf/ai/tests/test_flow_engine.py`) as well as alongside the rest of
+# `pytest huf/ai/flow/tests/test_flow_engine.py`) as well as alongside the rest of
 # the suite.
 if "frappe" not in sys.modules:
 	sys.modules["frappe"] = MagicMock()
@@ -92,7 +92,7 @@ for _mod_name in (
 if isinstance(sys.modules.get("frappe"), MagicMock):
 	sys.modules["frappe"].whitelist = lambda *a, **k: (lambda f: f)
 
-from huf.ai import flow_engine
+from huf.ai.flow import engine as flow_engine
 from huf.ai.graph.executor import GraphContext
 
 
@@ -414,7 +414,7 @@ class TestExecTransform(unittest.TestCase):
 	tested here previously was never a schema-valid config a Flow Definition
 	could actually be saved with, so ``_exec_transform`` silently ignoring a
 	real ``op``/``input`` config was the bug (see
-	huf.ai.tests.test_flow_gw34_node_type_gap for the fuller regression
+	huf.ai.flow.tests.test_flow_gw34_node_type_gap for the fuller regression
 	suite). These tests now pin the schema's own shape, dispatched through
 	``huf.ai.graph.transforms.run_transform`` -- the same function
 	``procedure_runtime`` uses for the Procedure profile's ``transform`` node.
@@ -787,7 +787,7 @@ class TestFailedNodeWithNoSuccessorFailsRun(unittest.TestCase):
 	read ``next_node_id is None`` as "run boundary reached, complete the run
 	successfully" no matter what the node's own outcome was. Router.resolve's
 	fail-closed guard (I7) only fires when Flow's own ``default_resolver`` is
-	NOT supplied -- but flow_engine.py always supplies one
+	NOT supplied -- but flow/engine.py always supplies one
 	(``_build_router``'s ``default_resolver``), so a failed tool.call node
 	with no ``next``/``on_error`` pointer and no matching edge silently
 	completed the whole Flow Run as "Success". The fix enforces fail-closed
@@ -844,7 +844,7 @@ class TestFailedNodeWithNoSuccessorFailsRun(unittest.TestCase):
 
 class TestKnownDefects(unittest.TestCase):
 	def test_resumed_run_uses_definition_pinned_at_start_not_current(self):
-		"""F-1 (flow_definition.py:33, flow_engine.py:141): flow_version
+		"""F-1 (flow_definition.py:33, flow/engine.py:141): flow_version
 		auto-increments on every FlowDefinition save, and `load_definition` /
 		`run_flow` always re-fetch the CURRENT definition rather than the one
 		recorded on the Flow Run at creation time (`flow_run.flow_version`).
@@ -889,7 +889,7 @@ class TestKnownDefects(unittest.TestCase):
 		current_version_on_disk = {"v": 2}
 
 		def fake_load_definition(flow_id):
-			# This mirrors the ACTUAL (buggy) behaviour: flow_engine.py:141
+			# This mirrors the ACTUAL (buggy) behaviour: flow/engine.py:141
 			# always re-fetches whatever is current on disk, ignoring
 			# flow_run.flow_version entirely. A fixed implementation would key
 			# off `flow_run.flow_version` (== 1) here instead.
@@ -911,7 +911,7 @@ class TestKnownDefects(unittest.TestCase):
 		self.assertEqual(flow_run.status, "Success")
 
 	def test_loop_over_more_than_max_hops_items_still_completes(self):
-		"""F-3 (flow_engine.py ~1111, DEFAULT_MAX_HOPS ~34): each loop iteration
+		"""F-3 (flow/engine.py ~1111, DEFAULT_MAX_HOPS ~34): each loop iteration
 		burns one hop against the run's overall hop budget, via the same
 		`hop_count` the outer `_execute_loop` checks. A loop with more items
 		than `max_hops` can therefore never finish. Intended behaviour: loop

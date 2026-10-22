@@ -4,7 +4,7 @@
 importable/runnable under plain ``pytest``/``unittest`` with no bench, mirroring
 ``huf.ai.tools.execution_sandbox`` and ``huf.ai.graph.transforms``.
 
-Security shape (modeled directly on ``huf/ai/flow_eval.py``'s ``safe_eval_expression`` /
+Security shape (modeled directly on ``huf/ai/flow/eval.py``'s ``safe_eval_expression`` /
 ``_eval_node``, GT-03; do NOT edit that module -- Flow still depends on its exact bool-only
 behaviour and T-01 pins it with tests):
 
@@ -27,7 +27,7 @@ What this module adds on top of that shape, per ``spec/graph-ir.md`` section 4.2
   standalone ``{"$from": "..."}`` reference and a variable access embedded inside a larger
   ``Expression`` -- stay conceptually identical.
 - Operators: ``Eq, NotEq, Lt, LtE, Gt, GtE, In, NotIn, And, Or, Not, Add, Sub, Mult, Mod`` (carried
-  over from ``flow_eval.py``) plus ``Div`` (null on division by zero, never raises -- see totality
+  over from ``flow/eval.py``) plus ``Div`` (null on division by zero, never raises -- see totality
   below) and ``UAdd``/``USub`` for signed literals. Still no ``Pow``, no bitwise operators.
 - The only bare ``Name`` nodes ever in scope are the roots from section 4.1 (``input``, ``trigger``,
   ``row``, ``foreach``, or a ``<node_id>``); which names are actually bound is entirely up to the
@@ -39,7 +39,7 @@ out-of-range list indices resolve to ``None``/``null`` (never ``KeyError``/``Ind
 by zero resolves to ``None`` (never ``ZeroDivisionError``), and type-mismatched comparisons or binary
 operations resolve to ``None`` (never ``TypeError``) -- EXCEPT where a boolean is structurally
 required, where a non-boolean/None result is coerced with Python truthiness exactly as
-``flow_eval.py`` does today (:func:`evaluate_bool`). Malformed or disallowed expressions are instead
+``flow/eval.py`` does today (:func:`evaluate_bool`). Malformed or disallowed expressions are instead
 rejected **at parse time** with a typed :class:`ExpressionError` -- that is the one place this module
 is allowed to raise on bad input; nothing downstream of a successful :func:`parse_expression` call
 raises.
@@ -113,7 +113,7 @@ class ParsedExpression:
 
 
 # ----------------------------------------------------------------------------------------------
-# Allowed operators (flow_eval.py's SAFE_OPS, extended with Div/UAdd/USub per graph-ir.md 4.2)
+# Allowed operators (flow/eval.py's SAFE_OPS, extended with Div/UAdd/USub per graph-ir.md 4.2)
 # ----------------------------------------------------------------------------------------------
 
 
@@ -242,7 +242,7 @@ def evaluate_bool(parsed: ParsedExpression, bindings: dict) -> bool:
 	Use this -- never :func:`evaluate_value` -- for ``condition.config.expression``,
 	``applies_when[]``, and ``validate.assertions[].expression``, which structurally require a
 	boolean (spec/graph-ir.md section 4.2's one coercion point, carried over unchanged from
-	``flow_eval.py`` / GT-03). Total: never raises.
+	``flow/eval.py`` / GT-03). Total: never raises.
 	"""
 
 	try:

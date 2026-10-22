@@ -13,7 +13,7 @@ many runs (4A), no cross-run parameterization or dedup (4B/4C), no optimization 
 ``Agent Tool Call`` rows; the output is a single candidate Procedure graph, or a specific
 refusal reason. Multi-run generalization is future work this module does not attempt.
 
-Two-step contract, mirroring ``huf.ai.procedure.conversion`` / ``huf.ai.flow_api``'s
+Two-step contract, mirroring ``huf.ai.procedure.conversion`` / ``huf.ai.flow.api``'s
 analyze/convert split for Flow-to-Procedure conversion:
 
 1. :func:`propose_procedure_from_run` -- read-only. Loads the run's tool-call trace,
@@ -23,7 +23,7 @@ analyze/convert split for Flow-to-Procedure conversion:
    edited the graph client-side) and clicked Accept. Re-validates the graph exactly as
    step 1 did -- never trusts a client-round-tripped graph -- and only then persists it,
    via the same ``frappe.get_doc({...}).insert()`` shape as
-   ``huf.ai.flow_api.convert_flow_to_procedure``: ``tier="Draft"``, ``status="Draft"``.
+   ``huf.ai.flow.api.convert_flow_to_procedure``: ``tier="Draft"``, ``status="Draft"``.
    Neither step ever activates a procedure (I8); a human enables it separately.
 
 THE KEY DESIGN PROBLEM this module exists to solve is value binding: a tool call's
@@ -661,7 +661,7 @@ def _build_procedure_document_payload(
 ) -> dict:
 	"""The frappe.get_doc(...) payload for Accept, built only after
 	:func:`_revalidate_procedure_graph` has passed -- mirrors
-	``huf.ai.flow_api.convert_flow_to_procedure``'s shape exactly (``tier="Draft"``,
+	``huf.ai.flow.api.convert_flow_to_procedure``'s shape exactly (``tier="Draft"``,
 	``status="Draft"``), with a provenance block naming this as a run-proposal instead of
 	a flow-conversion.
 	"""
@@ -698,7 +698,7 @@ def _as_json(value: Any) -> Any:
 	"""``Agent Tool Call.tool_args`` / ``.tool_result`` are ``JSON`` fields that may come
 	back from ``frappe.get_all`` either already parsed or as their raw JSON text,
 	depending on how they were written -- mirrors the same defensive parse
-	``huf.ai.flow_api._load_flow_graph`` uses for ``definition_json``."""
+	``huf.ai.flow.api._load_flow_graph`` uses for ``definition_json``."""
 	if isinstance(value, str):
 		if not value.strip():
 			return None
@@ -780,7 +780,7 @@ def accept_procedure_proposal(agent_run_name: str, procedure_graph: dict | str, 
 	:func:`propose_procedure_from_run` would have given it, and nothing is written.
 
 	Same permission requirements as :func:`propose_procedure_from_run`. Returns the same
-	shape ``huf.ai.flow_api.convert_flow_to_procedure`` returns: ``{"name",
+	shape ``huf.ai.flow.api.convert_flow_to_procedure`` returns: ``{"name",
 	"procedure_id", "version", "status", "tier"}``.
 	"""
 	_load_agent_run(agent_run_name)

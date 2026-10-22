@@ -8,7 +8,7 @@
 by design (spec/graph-ir.md section 1: "the same seven [Procedure types], plus" the six
 Flow-only types). ``PROCEDURE_NODE_TYPES`` includes ``foreach``, ``parallel``, ``validate``
 and ``output`` -- so a schema-valid Flow Definition can save a node of any of these four
-types. But ``huf.ai.flow_engine._NODE_EXECUTORS`` had no entry for any of them: at runtime
+types. But ``huf.ai.flow.engine._NODE_EXECUTORS`` had no entry for any of them: at runtime
 ``GraphExecutor`` (via ``_execute_node``) raised "Unknown node type" the instant one ran,
 even though ``huf/huf/doctype/flow_definition/test_flow_definition_schema.py``'s own
 ``_valid_flow_definition()`` fixture uses an ``output`` node as its valid example.
@@ -26,14 +26,14 @@ names -- proving the executor now consumes them instead of raising "Unknown node
 reading a field that is never there.
 
 Run with:
-    bench --site <site> run-tests --app huf --module huf.ai.tests.test_flow_gw34_node_type_gap
+    bench --site <site> run-tests --app huf --module huf.ai.flow.tests.test_flow_gw34_node_type_gap
 """
 
 import sys
 import unittest
 from unittest.mock import MagicMock
 
-# Mirrors test_flow_tool_call_gw01.py's frappe-free stub setup -- huf.ai.flow_engine does
+# Mirrors test_flow_tool_call_gw01.py's frappe-free stub setup -- huf.ai.flow.engine does
 # `from frappe.<submodule> import X` at import time, which a bare top-level MagicMock
 # cannot satisfy.
 if "frappe" not in sys.modules:
@@ -52,7 +52,7 @@ for _mod_name in (
 if isinstance(sys.modules.get("frappe"), MagicMock):
 	sys.modules["frappe"].whitelist = lambda *a, **k: (lambda f: f)
 
-from huf.ai import flow_engine  # noqa: E402
+from huf.ai.flow import engine as flow_engine  # noqa: E402
 from huf.ai.graph.executor import GraphContext, PinnedVersion  # noqa: E402
 from huf.ai.graph.validator import FLOW_NODE_TYPES, PROCEDURE_NODE_TYPES  # noqa: E402
 

@@ -25,7 +25,7 @@ from unittest.mock import MagicMock, patch
 
 
 def _install_standalone_frappe_stub():
-	"""See huf.ai.tests.test_graph_permissions._install_standalone_frappe_stub -- same
+	"""See huf.ai.graph.tests.test_graph_permissions._install_standalone_frappe_stub -- same
 	rationale: huf/__init__.py does `import frappe` unconditionally at package-import
 	time, before conftest.py's stub would otherwise run.
 	"""

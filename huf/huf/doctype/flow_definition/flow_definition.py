@@ -60,7 +60,7 @@ class FlowDefinition(Document):
 		surfaced separately as ``stale`` on the trigger summary."""
 		if self.status == "Active":
 			return
-		from huf.ai.flow_api import _flow_automation_name
+		from huf.ai.flow.api import _flow_automation_name
 
 		automation = _flow_automation_name(self.flow_id)
 		if frappe.db.get_value("Automation", automation, "status") == "Active":
@@ -99,7 +99,7 @@ class FlowDefinition(Document):
 			# via a checkbox a non-admin could have ticked before the flow was locked.
 			return
 
-		from huf.ai.flow_api import convert_flow_to_procedure
+		from huf.ai.flow.api import convert_flow_to_procedure
 
 		try:
 			result = convert_flow_to_procedure(self.flow_id)

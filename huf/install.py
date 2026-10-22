@@ -1058,7 +1058,7 @@ def create_flow_tools():
         tool_type_doc.name1 = "Workflow Tools"
         tool_type_doc.insert()
         
-    from huf.ai.flow_tools import flow_tool_definitions
+    from huf.ai.flow.tools import flow_tool_definitions
     
     for tool_def in flow_tool_definitions:
         tool_name = tool_def["tool_name"]

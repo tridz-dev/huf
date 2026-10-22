@@ -332,7 +332,7 @@ scheduler_events = {
         "huf.ai.context_artifacts.purge_expired_context_artifacts",
         "huf.ai.gateway_service.purge_old_rejected_gateway_events",
         "huf.ai.gateway_service.cleanup_stale_access_entries",
-        "huf.ai.flow_state.purge_expired",
+        "huf.ai.flow.state.purge_expired",
         "huf.ai.whatsapp.send_keys.purge_expired",
     ],
     "cron": {

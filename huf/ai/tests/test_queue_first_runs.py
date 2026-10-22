@@ -28,7 +28,7 @@ from huf.ai.agent_integration import (
 from huf.ai import agent_chat
 from huf.ai import agent_scheduler
 from huf.ai.orchestration.planning import run_planning
-from huf.ai.flow_engine import _exec_agent_run
+from huf.ai.flow.engine import _exec_agent_run
 
 
 def _make_agent_doc(**overrides):
@@ -533,7 +533,7 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_run.assert_called_once()
         self.assertNotIn("now", mock_run.call_args.kwargs)
 
-    @patch("huf.ai.flow_engine.frappe")
+    @patch("huf.ai.flow.engine.frappe")
     @patch("huf.ai.agent_integration.run_agent_sync")
     def test_flow_engine_agent_node_forces_now_true(self, mock_run, mock_frappe):
         """Flow engine agent nodes must keep direct execution inside the flow worker."""

@@ -249,7 +249,7 @@ export function deserializeFlow(
         // The graph-IR carries no per-graph `version`/`settings` any more -- version
         // lives on the Flow Definition doctype record, and run settings (mode,
         // max_hops, conversation_mode) are now engine-side defaults
-        // (huf.ai.flow_engine.DEFAULT_MAX_HOPS et al.) rather than authored per-Flow.
+        // (huf.ai.flow.engine.DEFAULT_MAX_HOPS et al.) rather than authored per-Flow.
         version: 1,
     };
 }

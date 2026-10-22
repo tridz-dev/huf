@@ -9,7 +9,7 @@ package's conftest.py, and reconfigured per-test to exercise both the allow and 
 paths).
 
 Run with:
-  bench --site <site> run-tests --app huf --module huf.ai.tests.test_graph_permissions
+  bench --site <site> run-tests --app huf --module huf.ai.graph.tests.test_graph_permissions
 """
 
 import sys

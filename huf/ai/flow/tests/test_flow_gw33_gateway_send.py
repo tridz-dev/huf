@@ -21,7 +21,7 @@ This test drives exactly that: a Flow Definition saved through the real
 (``huf.ai.tools.telegram.handle_action``, action=send_message) -- the same
 tool module the T3 live-proof used -- run via ``flow_api.run_flow`` with
 ``trigger_type="Manual"`` (the same code path an Automation/Doc Event trigger
-would use; see ``huf.ai.flow_engine.create_flow_run``'s ``trigger_type``
+would use; see ``huf.ai.flow.engine.create_flow_run``'s ``trigger_type``
 parameter). The outbound Telegram Bot API call itself is mocked (no real
 bot token/network access in this environment) at the lowest level
 (``huf.ai.tools.telegram._api_request``), so this proves the mechanism
@@ -30,7 +30,7 @@ invocation, zero Agent Run of kind other than "tool") without needing a live
 credential -- the live-network proof already exists (T3).
 
 Run with:
-    bench --site <site> run-tests --app huf --module huf.ai.tests.test_flow_gw33_gateway_send
+    bench --site <site> run-tests --app huf --module huf.ai.flow.tests.test_flow_gw33_gateway_send
 """
 
 import json
@@ -40,7 +40,7 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai import flow_api
+from huf.ai.flow import api as flow_api
 from huf.testing.factories import make_agent_tool_function
 
 
@@ -118,7 +118,7 @@ class TestToolCallSendsWithoutLLMTurn(IntegrationTestCase):
 				{
 					"id": "send",
 					"type": "tool.call",
-					# No "next" -- last node in the chain. huf.ai.flow_engine
+					# No "next" -- last node in the chain. huf.ai.flow.engine
 					# has no "output" node executor at all (a separate,
 					# out-of-scope gap from GW-01/GW-33; see
 					# findings-cluster1.md), so an "output" terminal node
@@ -161,7 +161,7 @@ class TestToolCallSendsWithoutLLMTurn(IntegrationTestCase):
 
 		with patch("huf.ai.tools.telegram._get_token", return_value="fake-test-bot-token"), \
 			patch("httpx.post", return_value=fake_response) as mock_post:
-			from huf.ai.flow_engine import create_flow_run, run_flow as engine_run_flow
+			from huf.ai.flow.engine import create_flow_run, run_flow as engine_run_flow
 
 			# trigger_type="Doc Event" exercises the same non-Manual,
 			# Automation-style entry point a real Doc Event/Schedule trigger

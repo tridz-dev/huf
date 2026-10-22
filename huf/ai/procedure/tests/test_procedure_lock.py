@@ -4,7 +4,7 @@
 """Unit tests for huf.ai.procedure.lock (T-21, GT-08).
 
 Runs standalone (frappe-free stub, per this package's convention -- see
-huf.ai.tests.test_graph_permissions for the documented reason the stub must be
+huf.ai.graph.tests.test_graph_permissions for the documented reason the stub must be
 installed before ``huf`` is first imported) and unmodified on a real bench.
 
 frappe.cache() is patched to a small hand-written fake implementing real set/expire/

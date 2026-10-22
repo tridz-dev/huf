@@ -122,7 +122,7 @@ def run_flow(
 			payload = {}
 	payload = payload or {}
 
-	from huf.ai.flow_engine import create_flow_run, run_flow as engine_run_flow
+	from huf.ai.flow.engine import create_flow_run, run_flow as engine_run_flow
 
 	flow_run = create_flow_run(
 		flow_id=flow_id,
@@ -259,7 +259,7 @@ def resume_flow_run(flow_run_id: str, input: str | dict | None = None) -> dict:
 		except (json.JSONDecodeError, TypeError):
 			input = {}
 
-	from huf.ai.flow_engine import resume_flow_run as engine_resume
+	from huf.ai.flow.engine import resume_flow_run as engine_resume
 
 	engine_resume(flow_run_id, user_input=input)
 
@@ -286,7 +286,7 @@ def approve_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 	if not frappe.has_permission("Flow Run", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
-	from huf.ai.flow_engine import approve_flow_run as engine_approve
+	from huf.ai.flow.engine import approve_flow_run as engine_approve
 
 	engine_approve(flow_run_id, decision="approved", comment=comment)
 
@@ -313,7 +313,7 @@ def reject_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 	if not frappe.has_permission("Flow Run", "write"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
-	from huf.ai.flow_engine import approve_flow_run as engine_approve
+	from huf.ai.flow.engine import approve_flow_run as engine_approve
 
 	engine_approve(flow_run_id, decision="rejected", comment=comment)
 
@@ -535,7 +535,7 @@ def _run_flow_webhook(flow_id: str, webhook_key: str | None, payload: dict | Non
 	if payload is None:
 		payload = _parse_webhook_payload()
 
-	from huf.ai.flow_engine import create_flow_run, run_flow as engine_run_flow
+	from huf.ai.flow.engine import create_flow_run, run_flow as engine_run_flow
 
 	flow_run = create_flow_run(
 		flow_id=flow_id,
@@ -545,7 +545,7 @@ def _run_flow_webhook(flow_id: str, webhook_key: str | None, payload: dict | Non
 
 	# Run in background for webhooks
 	frappe.enqueue(
-		"huf.ai.flow_engine.run_flow",
+		"huf.ai.flow.engine.run_flow",
 		queue="default",
 		flow_run_name=flow_run.name,
 	)
@@ -1159,7 +1159,7 @@ def handle_run_flow(flow_id: str, payload: str | dict | None = None, mode: str |
 			except (json.JSONDecodeError, TypeError):
 				payload = {}
 
-		from huf.ai.flow_engine import create_flow_run, run_flow as engine_run_flow
+		from huf.ai.flow.engine import create_flow_run, run_flow as engine_run_flow
 
 		flow_run = create_flow_run(flow_id=flow_id, payload=payload or {}, mode=mode)
 		
@@ -1235,7 +1235,7 @@ def handle_resume_flow_run(flow_run_id: str, input: dict | None = None, **kwargs
 		return {"error": "Insufficient permissions to resume flow runs"}
 
 	try:
-		from huf.ai.flow_engine import resume_flow_run as engine_resume
+		from huf.ai.flow.engine import resume_flow_run as engine_resume
 
 		engine_resume(flow_run_id, user_input=input)
 		doc = frappe.get_doc("Flow Run", flow_run_id)
@@ -1267,7 +1267,7 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 		return {"error": "Insufficient permissions to approve flow runs"}
 
 	try:
-		from huf.ai.flow_engine import approve_flow_run as engine_approve, _verify_approval_permission
+		from huf.ai.flow.engine import approve_flow_run as engine_approve, _verify_approval_permission
 
 		doc = frappe.get_doc("Flow Run", flow_run_id)
 		waiting = json.loads(doc.waiting) if doc.waiting else {}

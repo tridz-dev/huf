@@ -8,7 +8,7 @@
 ``additionalProperties: false``) -- that is the ONLY shape
 ``huf.huf.doctype.flow_definition.flow_definition.FlowDefinition.validate()``
 will ever let a Flow Definition save with. But
-``huf.ai.flow_engine._exec_tool_call`` (the executor actually run by
+``huf.ai.flow.engine._exec_tool_call`` (the executor actually run by
 ``GraphExecutor``) used to read ``config.tool_name``/``config.args`` instead --
 a schema-valid tool.call node saved through ``flow_api.save_flow_definition``
 could never actually invoke a tool at runtime; it would immediately fail with
@@ -29,7 +29,7 @@ Two layers here:
     one telemetry record per call").
 
 Run with:
-    bench --site <site> run-tests --app huf --module huf.ai.tests.test_flow_tool_call_gw01
+    bench --site <site> run-tests --app huf --module huf.ai.flow.tests.test_flow_tool_call_gw01
 """
 
 import json
@@ -38,7 +38,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 # Mirrors test_flow_engine.py's frappe-free stub setup for the pure unit-test
-# class below -- huf.ai.flow_engine does `from frappe.<submodule> import X`
+# class below -- huf.ai.flow.engine does `from frappe.<submodule> import X`
 # at import time, which a bare top-level MagicMock cannot satisfy.
 if "frappe" not in sys.modules:
 	sys.modules["frappe"] = MagicMock()
@@ -58,7 +58,7 @@ for _mod_name in () if not isinstance(sys.modules["frappe"], MagicMock) else (
 if isinstance(sys.modules.get("frappe"), MagicMock):
 	sys.modules["frappe"].whitelist = lambda *a, **k: (lambda f: f)
 
-from huf.ai import flow_engine  # noqa: E402
+from huf.ai.flow import engine as flow_engine  # noqa: E402
 
 
 class _FakeFlowRun:
@@ -149,7 +149,7 @@ class TestSavedFlowInvokesRealTool(unittest.TestCase):
 	only executes its real-bench body when a genuine ``frappe`` module (not
 	the MagicMock stub installed above for the pure unit-test class in this
 	same file) is importable, so this file stays collectible standalone
-	(``pytest huf/ai/tests/test_flow_tool_call_gw01.py``) without a live
+	(``pytest huf/ai/flow/tests/test_flow_tool_call_gw01.py``) without a live
 	site, the same way test_flow_engine.py's bench-only classes do it.
 	"""
 
@@ -227,7 +227,7 @@ class TestSavedFlowInvokesRealTool(unittest.TestCase):
 					# The schema's canonical, and only accepted, config shape
 					# (additionalProperties: false) -- tool_id/input, not
 					# tool_name/args. No "next" -- this is the last node in the
-					# chain (huf.ai.flow_engine has no "output"/"foreach"/
+					# chain (huf.ai.flow.engine has no "output"/"foreach"/
 					# "parallel"/"validate" node executors at all, despite the
 					# shared graph-IR schema's Flow profile allowing those
 					# types -- a separate, out-of-scope gap for GW-01; see
@@ -245,7 +245,7 @@ class TestSavedFlowInvokesRealTool(unittest.TestCase):
 		}
 
 	def test_tool_call_node_invokes_real_tool_via_saved_flow(self):
-		from huf.ai import flow_api
+		from huf.ai.flow import api as flow_api
 
 		tool_doc = self._make_tool()
 		flow_id = f"_test-gw01-flow-{self.frappe.generate_hash(length=8)}"

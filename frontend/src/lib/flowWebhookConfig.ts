@@ -14,7 +14,7 @@ export function generateWebhookKey(): string {
 export function createWebhookTriggerDefaults(origin: string, newKey: () => string = generateWebhookKey): WebhookTriggerConfig {
   return {
     type: 'webhook',
-    url: `${origin}/api/method/huf.ai.flow_api.flow_webhook`,
+    url: `${origin}/api/method/huf.ai.flow.api.flow_webhook`,
     auth: newKey(),
     method: 'POST',
   };

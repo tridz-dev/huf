@@ -112,7 +112,7 @@ test.describe('flow node config round-trips (save + hard reload)', () => {
       await expect.soft(sidebar.readField('Conversation Mode')).resolves.toBe('Isolated (No history)');
 
       // API-level shape assertion: does the persisted node.config carry
-      // prompt_template flat (matching flow_engine.py's
+      // prompt_template flat (matching flow/engine.py's
       // `config.get("prompt_template")` fallback path and
       // flowSerializer.ts's `omitType(actionConfig)`), or has it drifted
       // to a nested `input.prompt_template` shape that only the newer

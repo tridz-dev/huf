@@ -7,8 +7,8 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai import flow_create_doc as cd
-from huf.ai import flow_engine
+from huf.ai.flow import create_doc as cd
+from huf.ai.flow import engine as flow_engine
 from huf.ai.graph.executor import GraphContext, PinnedVersion
 
 FIELDS = [

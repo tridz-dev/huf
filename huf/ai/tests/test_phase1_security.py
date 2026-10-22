@@ -296,7 +296,7 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
             pass
 
     def test_flow_webhook_rejects_invalid_key(self):
-        from huf.ai.flow_api import flow_webhook
+        from huf.ai.flow.api import flow_webhook
 
         defn_doc = SimpleNamespace(
             status="Active",
@@ -319,7 +319,7 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
 
     @unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
     def test_clean_flow_webhook_accepts_frappe_cloud_secret_header(self):
-        from huf.ai.flow_api import flow_webhook_clean
+        from huf.ai.flow.api import flow_webhook_clean
 
         definition_json = (
             '{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook",'
@@ -343,7 +343,7 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
                 with patch("frappe.db.exists", return_value=True):
                     with patch("frappe.get_doc", return_value=defn_doc):
                         with patch("frappe.set_user") as mock_set_user:
-                            with patch("huf.ai.flow_engine.create_flow_run", return_value=flow_run) as mock_create_run:
+                            with patch("huf.ai.flow.engine.create_flow_run", return_value=flow_run) as mock_create_run:
                                 with patch("frappe.enqueue") as mock_enqueue:
                                     result = flow_webhook_clean()
 
@@ -357,7 +357,7 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
             pass
 
     def test_clean_flow_webhook_rejects_ambiguous_key_without_flow_id(self):
-        from huf.ai.flow_api import flow_webhook_clean
+        from huf.ai.flow.api import flow_webhook_clean
 
         definition_json = (
             '{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook",'

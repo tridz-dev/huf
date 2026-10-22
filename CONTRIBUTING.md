@@ -13,7 +13,7 @@ bench --site <site> run-tests --app huf                              # whole app
 bench --site <site> run-tests --app huf --module <dotted.module>     # one module
 ```
 
-Example: `bench --site test_site run-tests --app huf --module huf.ai.tests.test_flow_eval_security`.
+Example: `bench --site test_site run-tests --app huf --module huf.ai.flow.tests.test_flow_eval_security`.
 
 `./scripts/huf-verify.sh backend` wraps the same command. It auto-detects a running bench through `docker exec` (see `HUF_BENCH_CONTAINER`, `HUF_BENCH_SITE`, `HUF_BENCH_PATH`) and parses the unittest summary, because `bench run-tests` can exit 0 on failures.
 

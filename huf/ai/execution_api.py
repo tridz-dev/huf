@@ -9,7 +9,7 @@ from frappe import _
 def get_pending_agent_execution_approvals(limit: int = 50) -> list[dict]:
 	"""List pending code/SSH execution approvals the current user may decide.
 
-	Mirrors ``huf.ai.flow_api.get_pending_approvals``: a whitelisted list
+	Mirrors ``huf.ai.flow.api.get_pending_approvals``: a whitelisted list
 	endpoint for a frontend approval inbox, scoped to what the *current
 	session user* is allowed to act on rather than every pending row.
 
