@@ -1,6 +1,6 @@
 import frappe
 from frappe.utils.background_jobs import enqueue
-from .agent_integration import run_agent_sync
+from huf.ai.agent_integration import run_agent_sync
 from frappe.utils.safe_exec import get_safe_globals, safe_eval
 from uuid import uuid4
 from frappe.utils import now_datetime
