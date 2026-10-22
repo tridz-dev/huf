@@ -1,0 +1,21 @@
+{
+  "update_id": 1010,
+  "message_reaction_count": {
+    "chat": {
+      "id": -1001234,
+      "type": "supergroup",
+      "title": "Team"
+    },
+    "message_id": 55,
+    "date": 1760000000,
+    "reactions": [
+      {
+        "type": {
+          "type": "emoji",
+          "emoji": "🔥"
+        },
+        "total_count": 3
+      }
+    ]
+  }
+}

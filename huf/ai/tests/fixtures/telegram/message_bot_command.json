@@ -1,0 +1,26 @@
+{
+  "update_id": 1003,
+  "message": {
+    "message_id": 10,
+    "from": {
+      "id": 111,
+      "is_bot": false,
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "chat": {
+      "id": -1001234,
+      "type": "supergroup",
+      "title": "Team"
+    },
+    "date": 1760000000,
+    "text": "/help@huf_bot now",
+    "entities": [
+      {
+        "type": "bot_command",
+        "offset": 0,
+        "length": 14
+      }
+    ]
+  }
+}

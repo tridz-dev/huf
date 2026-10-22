@@ -1,0 +1,34 @@
+{
+  "update_id": 1012,
+  "my_chat_member": {
+    "chat": {
+      "id": 111,
+      "type": "private",
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "from": {
+      "id": 111,
+      "is_bot": false,
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "date": 1760000000,
+    "old_chat_member": {
+      "status": "kicked",
+      "user": {
+        "id": 42,
+        "is_bot": true,
+        "first_name": "Huf"
+      }
+    },
+    "new_chat_member": {
+      "status": "member",
+      "user": {
+        "id": 42,
+        "is_bot": true,
+        "first_name": "Huf"
+      }
+    }
+  }
+}
