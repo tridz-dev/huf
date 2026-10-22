@@ -18,16 +18,29 @@ Actions:
     get_me              Get information about the bot
     set_webhook         Set a webhook URL for the bot
     delete_webhook      Remove the bot webhook
+
+Rich actions (WP-4): send_voice, send_audio, send_video, send_animation, send_sticker, send_media_group,
+send_location, send_contact, set_reaction, send_chat_action, edit_message_caption,
+edit_message_reply_markup, pin_message, unpin_message, forward_message, copy_message,
+answer_callback_query, plus a validated ``reply_markup`` on send_message/send_photo/send_document.
+
+Inside a run that belongs to a Telegram Gateway the recipient is the current chat by default and any
+other chat is checked against the gateway's send scope and caps (``huf.ai.telegram_send_scope``).
 """
 
 import json
 import os
-from typing import Optional
+import re
+from typing import Any, Callable, Optional
 
 import frappe
 logger = frappe.logger("huf")
 
+from huf.ai import telegram_send_scope as scope
+from huf.ai.gateway_adapters import telegram_senders_extra as extra
 from huf.ai.gateway_adapters.telegram_client import ALLOWED_UPDATES, TelegramApiError, TelegramBotClient
+from huf.ai.gateway_adapters.telegram_keyboards import derive_callback_key, sign_callback
+from huf.ai.gateway_adapters.telegram_outbound import TelegramSender
 from huf.ai.tools.credentials import get_credential, update_last_error
 
 
@@ -102,7 +115,7 @@ def _close_files(files: Optional[dict]):
 def _api_request(method: str, payload: dict, files: Optional[dict] = None, token: Optional[str] = None) -> str:
     """Call a Telegram Bot API method through ``TelegramBotClient``; return a JSON result string."""
     if token is None:
-        token = _get_token()
+        token = _token_for_run()
     if not token:
         error_msg = "Telegram bot token not configured"
         update_last_error(SERVICE_NAME, error_msg)
@@ -135,45 +148,158 @@ def _coerce_int(value, default: int = 0) -> int:
         return default
 
 
-def _resolve_file_payload(param_name: str, file_source):
+PHOTO_MAX_BYTES = 10 * 1024 * 1024
+FILE_MAX_BYTES = 50 * 1024 * 1024
+_FILE_ID_RE = re.compile(r"[A-Za-z0-9_-]{20,}")
+_VOICE_MIMES = ("audio/ogg", "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/m4a")
+_PARSE_MODES = ("Markdown", "HTML", "MarkdownV2")
+
+
+def _size_limit(kind: str) -> int:
+    return PHOTO_MAX_BYTES if kind == "photo" else FILE_MAX_BYTES
+
+
+def _mb(n: int) -> str:
+    return f"{n // (1024 * 1024)} MB"
+
+
+def _resolve_media(kind: str, source) -> Any:
+    """Resolve a media source for ``TelegramSender``: URL / file_id string, or ``(name, bytes, mime)``.
+
+    Public URLs go through the same SSRF guard as ``http_handler``; Frappe Files (docname or file_url)
+    are permission-checked and size-limited per Bot API (50 MB uploads, 10 MB photos). Raises ValueError
+    with a clear message otherwise.
     """
-    Resolve a media parameter for Telegram API.
+    source = str(source or "").strip()
+    if not source:
+        raise ValueError(f"{kind} source is required")
+    if source.lower().startswith(("http://", "https://")):
+        from huf.ai.http_handler import validate_url
 
-    Returns (payload_value, files_dict). If a local Frappe file is found, the
-    file is opened for multipart upload and payload_value is omitted (Telegram
-    reads it from the form part). Otherwise the value is sent as a string
-    (URL or Telegram file_id).
-    """
-    if not file_source:
-        return None, None
+        ok, err = validate_url(source)
+        if not ok:
+            raise ValueError(f"URL rejected: {err}")
+        return source
 
-    source = str(file_source).strip()
-
-    # Public URL
-    if source.startswith("http://") or source.startswith("https://"):
-        return source, None
-
-    # Try resolving as a Frappe file first (by docname or file_url)
     file_doc = None
     try:
         if frappe.db.exists("File", source):
             file_doc = frappe.get_doc("File", source)
         else:
-            file_name = frappe.db.get_value("File", {"file_url": source}, "name")
-            if file_name:
-                file_doc = frappe.get_doc("File", file_name)
+            name = frappe.db.get_value("File", {"file_url": source}, "name")
+            file_doc = frappe.get_doc("File", name) if name else None
     except Exception:
         file_doc = None
+    if file_doc is not None:
+        if not frappe.has_permission("File", "read", doc=file_doc):
+            raise ValueError("You do not have permission to read that file")
+        path = file_doc.get_full_path()
+        if not os.path.exists(path):
+            raise ValueError("The file is missing on the server")
+        limit = _size_limit(kind)
+        size = os.path.getsize(path)
+        if size > limit:
+            raise ValueError(f"File is {_mb(size)}; Telegram allows at most {_mb(limit)} for a {kind}")
+        mime = file_doc.content_type or "application/octet-stream"
+        if kind == "voice" and mime not in _VOICE_MIMES:
+            raise ValueError("A voice message must be OGG/Opus (audio/ogg), MP3 or M4A; use send_audio or send_document")
+        with open(path, "rb") as fh:
+            return (os.path.basename(path), fh.read(), mime)
+    if _FILE_ID_RE.fullmatch(source):
+        return source  # a Telegram file_id
+    raise ValueError("File source not recognised: use a public https URL, a Telegram file_id, or a Frappe File name/file_url")
 
-    if file_doc:
-        file_path = file_doc.get_full_path()
-        if os.path.exists(file_path):
-            filename = os.path.basename(file_path)
-            mime_type = file_doc.content_type or "application/octet-stream"
-            return None, {param_name: (filename, open(file_path, "rb"), mime_type)}
 
-    # Fallback: treat as Telegram file_id
-    return source, None
+def _parse_mode(kwargs: dict) -> Optional[str]:
+    mode = kwargs.get("parse_mode")
+    return mode if mode in _PARSE_MODES else None
+
+
+def _markup(kwargs: dict, chat_id=None) -> Optional[dict]:
+    """Validated ``reply_markup`` (None when absent); raises ValueError. Callback buttons are signed."""
+    raw = kwargs.get("reply_markup")
+    sign = None
+    gateway = scope.run_gateway()
+    if gateway:
+        secret = _gateway_values(gateway).get("webhook_secret", "")
+        if secret:
+            key = derive_callback_key(secret)
+            sign = lambda payload: sign_callback(key, payload, context=str(chat_id or ""))  # noqa: E731
+    return extra.normalize_reply_markup(raw, sign=sign)
+
+
+def _gateway_values(gateway: str) -> dict:
+    try:
+        settings_name = frappe.db.get_value("Gateway", gateway, "integration_settings")
+        if not settings_name:
+            return {}
+        doc = frappe.get_doc("Integration Settings", settings_name)
+        return {row.key: str(row.get_password("value") or "") for row in doc.credentials or [] if row.key}
+    except Exception:
+        return {}
+
+
+def _token_for_run() -> Optional[str]:
+    gateway = scope.run_gateway()
+    if gateway:
+        token = _gateway_values(gateway).get("token")
+        if token:
+            return token
+    return _get_token()
+
+
+def _run_sender(label: str, fn: Callable[[TelegramSender], Any], *, upload: bool = False) -> str:
+    """Run ``fn(sender)`` on a Bot API client; map failures to a redacted JSON error."""
+    token = _token_for_run()
+    if not token:
+        error_msg = "Telegram bot token not configured"
+        update_last_error(SERVICE_NAME, error_msg)
+        return _error(error_msg)
+    client = _make_client(token, timeout=60 if upload else 30)
+    try:
+        result = fn(TelegramSender(client))
+    except TelegramApiError as exc:
+        detail = f"error {exc.error_code}: {exc.description}" if exc.error_code is not None else exc.description
+        error_msg = f"Telegram {label} {detail}"
+        logger.warning(error_msg)
+        update_last_error(SERVICE_NAME, error_msg)
+        return _error(error_msg)
+    except ValueError as exc:
+        return _error(client.redact(exc))
+    except Exception as exc:
+        error_msg = f"Telegram {label} error: {client.redact(exc)}"
+        logger.warning(error_msg)
+        update_last_error(SERVICE_NAME, error_msg)
+        return _error(error_msg)
+    return json.dumps({"success": True, "results": result}, default=str)
+
+
+def _chat_or_error(kwargs: dict):
+    chat_id = _resolve_chat_id(kwargs)
+    return chat_id, (None if chat_id else _error("chat_id or recipient_name is required"))
+
+
+def _common_kw(kwargs: dict, chat_id) -> dict:
+    """Sender keyword arguments shared by the send_* actions."""
+    kw: dict = {}
+    if kwargs.get("reply_to_message_id"):
+        kw["reply_to"] = _coerce_int(kwargs["reply_to_message_id"])
+    if kwargs.get("message_thread_id") or kwargs.get("thread_id"):
+        kw["thread_id"] = _coerce_int(kwargs.get("message_thread_id") or kwargs.get("thread_id"))
+    if _truthy(kwargs.get("disable_notification")):
+        kw["silent"] = True
+    if _truthy(kwargs.get("protect_content")):
+        kw["protect"] = True
+    markup = _markup(kwargs, chat_id)
+    if markup:
+        kw["markup"] = markup
+    return kw
+
+
+def _truthy(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
 
 
 def _build_message_payload(kwargs: dict) -> tuple:
@@ -186,23 +312,28 @@ def _build_message_payload(kwargs: dict) -> tuple:
     if not text:
         return _error("text (or message) is required"), None
 
-    payload = {}
-    if chat_id:
-        payload["chat_id"] = chat_id
-    if text:
-        payload["text"] = text
-
-    parse_mode = kwargs.get("parse_mode")
-    if parse_mode in ("Markdown", "HTML", "MarkdownV2"):
+    payload = {"chat_id": chat_id, "text": text}
+    parse_mode = _parse_mode(kwargs)
+    if parse_mode:
         payload["parse_mode"] = parse_mode
 
     disable_notification = kwargs.get("disable_notification")
     if disable_notification is not None:
-        payload["disable_notification"] = bool(int(disable_notification))
+        payload["disable_notification"] = _truthy(disable_notification)
 
     reply_to_message_id = kwargs.get("reply_to_message_id")
     if reply_to_message_id:
         _apply_reply(payload, reply_to_message_id)
+
+    thread = kwargs.get("message_thread_id") or kwargs.get("thread_id")
+    if thread:
+        payload["message_thread_id"] = _coerce_int(thread)
+    try:
+        markup = _markup(kwargs, chat_id)
+    except ValueError as exc:
+        return _error(str(exc)), None
+    if markup:
+        payload["reply_markup"] = markup
 
     return payload, None
 
@@ -227,72 +358,260 @@ def _handle_reply_to_message(**kwargs) -> str:
     return _handle_send_message(**kwargs)
 
 
+def _send_media_action(kind: str, kwargs: dict, source_keys: tuple) -> str:
+    chat_id, err = _chat_or_error(kwargs)
+    if err:
+        return err
+    source = next((kwargs.get(k) for k in source_keys if kwargs.get(k)), None)
+    if not source:
+        return _error(f"{source_keys[0]} (or file/file_url) is required")
+    try:
+        media = _resolve_media(kind, source)
+        kw = _common_kw(kwargs, chat_id)
+    except ValueError as exc:
+        return _error(str(exc))
+    if kwargs.get("caption"):
+        kw["caption"] = str(kwargs["caption"])
+    extra_fields = {}
+    if _parse_mode(kwargs) and kw.get("caption"):
+        extra_fields["parse_mode"] = _parse_mode(kwargs)
+    for key in ("duration", "width", "height"):
+        if kwargs.get(key):
+            extra_fields[key] = _coerce_int(kwargs[key])
+    if kind == "video" and _truthy(kwargs.get("supports_streaming")):
+        extra_fields["supports_streaming"] = True
+    if kind in ("photo", "video", "animation") and _truthy(kwargs.get("has_spoiler")):
+        extra_fields["has_spoiler"] = True
+    for key in ("title", "performer"):
+        if kind == "audio" and kwargs.get(key):
+            extra_fields[key] = str(kwargs[key])
+    if extra_fields:
+        kw["extra"] = extra_fields
+    return _run_sender(
+        f"send{kind.capitalize()}", lambda sender: sender.send_media(kind, chat_id, media, **kw), upload=isinstance(media, tuple)
+    )
+
+
 def _handle_send_photo(**kwargs) -> str:
-    """Send a photo to a chat. Accepts URL, Telegram file_id, or Frappe File."""
-    chat_id = _resolve_chat_id(kwargs)
-    if not chat_id:
-        return _error("chat_id or recipient_name is required")
-
-    photo_source = kwargs.get("photo") or kwargs.get("file") or kwargs.get("file_url")
-    if not photo_source:
-        return _error("photo (or file/file_url) is required")
-
-    payload = {"chat_id": chat_id}
-    photo_value, files = _resolve_file_payload("photo", photo_source)
-    if photo_value:
-        payload["photo"] = photo_value
-
-    caption = kwargs.get("caption")
-    if caption:
-        payload["caption"] = caption
-
-    parse_mode = kwargs.get("parse_mode")
-    if parse_mode in ("Markdown", "HTML", "MarkdownV2"):
-        payload["parse_mode"] = parse_mode
-
-    disable_notification = kwargs.get("disable_notification")
-    if disable_notification is not None:
-        payload["disable_notification"] = bool(int(disable_notification))
-
-    reply_to_message_id = kwargs.get("reply_to_message_id")
-    if reply_to_message_id:
-        _apply_reply(payload, reply_to_message_id)
-
-    return _api_request("sendPhoto", payload, files)
+    """Send a photo. Accepts URL (SSRF-guarded), Telegram file_id, or Frappe File (<= 10 MB)."""
+    return _send_media_action("photo", kwargs, ("photo", "file", "file_url"))
 
 
 def _handle_send_document(**kwargs) -> str:
-    """Send a document to a chat. Accepts URL, Telegram file_id, or Frappe File."""
-    chat_id = _resolve_chat_id(kwargs)
-    if not chat_id:
-        return _error("chat_id or recipient_name is required")
+    """Send a document. Accepts URL (SSRF-guarded), Telegram file_id, or Frappe File (<= 50 MB)."""
+    return _send_media_action("document", kwargs, ("document", "file", "file_url"))
 
-    document_source = kwargs.get("document") or kwargs.get("file") or kwargs.get("file_url")
-    if not document_source:
-        return _error("document (or file/file_url) is required")
 
-    payload = {"chat_id": chat_id}
-    document_value, files = _resolve_file_payload("document", document_source)
-    if document_value:
-        payload["document"] = document_value
+def _handle_send_voice(**kwargs) -> str:
+    return _send_media_action("voice", kwargs, ("voice", "audio", "file", "file_url"))
 
+
+def _handle_send_audio(**kwargs) -> str:
+    return _send_media_action("audio", kwargs, ("audio", "file", "file_url"))
+
+
+def _handle_send_video(**kwargs) -> str:
+    return _send_media_action("video", kwargs, ("video", "file", "file_url"))
+
+
+def _handle_send_animation(**kwargs) -> str:
+    return _send_media_action("animation", kwargs, ("animation", "file", "file_url"))
+
+
+def _handle_send_sticker(**kwargs) -> str:
+    return _send_media_action("sticker", kwargs, ("sticker", "file", "file_url"))
+
+
+def _handle_send_media_group(**kwargs) -> str:
+    """Send an album of 2-10 photos/videos/audios/documents: ``items`` = [{type, media, caption}]."""
+    chat_id, err = _chat_or_error(kwargs)
+    if err:
+        return err
+    items = kwargs.get("items")
+    try:
+        if isinstance(items, str):
+            items = json.loads(items)
+        if not isinstance(items, list) or not 2 <= len(items) <= 10:
+            return _error("items must be a list of 2-10 {type, media, caption} objects")
+        built = []
+        for item in items:
+            if not isinstance(item, dict) or not item.get("media"):
+                return _error("each item needs a media source")
+            kind = item.get("type") or "photo"
+            if kind not in ("photo", "video", "audio", "document"):
+                return _error("item type must be photo, video, audio or document")
+            built.append({"type": kind, "media": _resolve_media(kind, item["media"]), "caption": item.get("caption") or ""})
+        kw = _common_kw({k: v for k, v in kwargs.items() if k != "reply_markup"}, chat_id)
+        kw.pop("markup", None)
+        kw.pop("protect", None)
+    except ValueError as exc:
+        return _error(str(exc))
+    return _run_sender(
+        "sendMediaGroup", lambda sender: sender.send_media_group(chat_id, built, **kw),
+        upload=any(isinstance(i["media"], tuple) for i in built),
+    )
+
+
+def _handle_send_location(**kwargs) -> str:
+    chat_id, err = _chat_or_error(kwargs)
+    if err:
+        return err
+    try:
+        lat, lon = float(kwargs.get("latitude")), float(kwargs.get("longitude"))
+    except (TypeError, ValueError):
+        return _error("latitude and longitude are required numbers")
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return _error("latitude must be -90..90 and longitude -180..180")
+    try:
+        kw = _common_kw(kwargs, chat_id)
+    except ValueError as exc:
+        return _error(str(exc))
+    kw.pop("protect", None)
+    return _run_sender("sendLocation", lambda sender: sender.send_location(chat_id, lat, lon, **kw))
+
+
+def _handle_send_contact(**kwargs) -> str:
+    chat_id, err = _chat_or_error(kwargs)
+    if err:
+        return err
+    phone = str(kwargs.get("phone_number") or kwargs.get("contact_phone") or "").strip()
+    first = str(kwargs.get("first_name") or kwargs.get("contact_name") or "").strip()
+    if not phone or not first:
+        return _error("phone_number and first_name are required")
+    try:
+        kw = _common_kw(kwargs, chat_id)
+    except ValueError as exc:
+        return _error(str(exc))
+    kw.pop("protect", None)
+    last = str(kwargs.get("last_name") or "")
+    return _run_sender("sendContact", lambda sender: sender.send_contact(chat_id, phone, first, last_name=last, **kw))
+
+
+def _need_message(kwargs: dict):
+    chat_id, err = _chat_or_error(kwargs)
+    if err:
+        return None, None, err
+    if not kwargs.get("message_id"):
+        return None, None, _error("message_id is required")
+    return chat_id, _coerce_int(kwargs["message_id"]), None
+
+
+def _handle_set_reaction(**kwargs) -> str:
+    chat_id, message_id, err = _need_message(kwargs)
+    if err:
+        return err
+    emoji = None if _truthy(kwargs.get("remove")) else (str(kwargs.get("emoji") or "").strip() or None)
+    return _run_sender(
+        "setMessageReaction", lambda s: s.set_reaction(chat_id, message_id, emoji, big=_truthy(kwargs.get("big")))
+    )
+
+
+def _handle_send_chat_action(**kwargs) -> str:
+    chat_id, err = _chat_or_error(kwargs)
+    if err:
+        return err
+    chat_action = str(kwargs.get("chat_action") or "typing")
+    thread = kwargs.get("message_thread_id") or kwargs.get("thread_id")
+    return _run_sender(
+        "sendChatAction", lambda s: s.send_chat_action(chat_id, chat_action, thread_id=_coerce_int(thread) if thread else None)
+    )
+
+
+def _handle_edit_message_caption(**kwargs) -> str:
+    chat_id, message_id, err = _need_message(kwargs)
+    if err:
+        return err
     caption = kwargs.get("caption")
-    if caption:
-        payload["caption"] = caption
+    if not caption:
+        return _error("caption is required")
+    try:
+        markup = _markup(kwargs, chat_id)
+    except ValueError as exc:
+        return _error(str(exc))
+    return _run_sender(
+        "editMessageCaption", lambda s: s.edit_message_caption(chat_id, message_id, str(caption), markup=markup)
+    )
 
-    parse_mode = kwargs.get("parse_mode")
-    if parse_mode in ("Markdown", "HTML", "MarkdownV2"):
-        payload["parse_mode"] = parse_mode
 
-    disable_notification = kwargs.get("disable_notification")
-    if disable_notification is not None:
-        payload["disable_notification"] = bool(int(disable_notification))
+def _handle_edit_message_reply_markup(**kwargs) -> str:
+    """Replace the inline keyboard; omit reply_markup to remove it."""
+    chat_id, message_id, err = _need_message(kwargs)
+    if err:
+        return err
+    try:
+        markup = _markup(kwargs, chat_id)
+    except ValueError as exc:
+        return _error(str(exc))
+    if markup and "inline_keyboard" not in markup:
+        return _error("only an inline_keyboard can be edited onto an existing message")
+    return _run_sender("editMessageReplyMarkup", lambda s: s.edit_message_reply_markup(chat_id, message_id, markup))
 
-    reply_to_message_id = kwargs.get("reply_to_message_id")
-    if reply_to_message_id:
-        _apply_reply(payload, reply_to_message_id)
 
-    return _api_request("sendDocument", payload, files)
+def _handle_pin_message(**kwargs) -> str:
+    chat_id, message_id, err = _need_message(kwargs)
+    if err:
+        return err
+    silent = not _truthy(kwargs.get("notify"))
+    return _run_sender("pinChatMessage", lambda s: s.pin_message(chat_id, message_id, silent=silent))
+
+
+def _handle_unpin_message(**kwargs) -> str:
+    chat_id, err = _chat_or_error(kwargs)
+    if err:
+        return err
+    mid = _coerce_int(kwargs["message_id"]) if kwargs.get("message_id") else None
+    return _run_sender("unpinChatMessage", lambda s: s.unpin_message(chat_id, mid))
+
+
+def _handle_forward_message(**kwargs) -> str:
+    return _forward_or_copy("forward", kwargs)
+
+
+def _handle_copy_message(**kwargs) -> str:
+    return _forward_or_copy("copy", kwargs)
+
+
+def _forward_or_copy(mode: str, kwargs: dict) -> str:
+    chat_id, err = _chat_or_error(kwargs)
+    if err:
+        return err
+    from_chat = str(kwargs.get("from_chat_id") or "").strip()
+    if not from_chat or not kwargs.get("message_id"):
+        return _error("from_chat_id and message_id are required")
+    message_id = _coerce_int(kwargs["message_id"])
+    thread = kwargs.get("message_thread_id") or kwargs.get("thread_id")
+    common = {
+        "thread_id": _coerce_int(thread) if thread else None,
+        "silent": _truthy(kwargs.get("disable_notification")),
+        "protect": _truthy(kwargs.get("protect_content")),
+    }
+    if mode == "forward":
+        return _run_sender(
+            "forwardMessage", lambda s: extra.forward_message(s.client, chat_id, from_chat, message_id, **common)
+        )
+    try:
+        markup = _markup(kwargs, chat_id)
+    except ValueError as exc:
+        return _error(str(exc))
+    return _run_sender(
+        "copyMessage",
+        lambda s: extra.copy_message(
+            s.client, chat_id, from_chat, message_id, caption=kwargs.get("caption"),
+            parse_mode=_parse_mode(kwargs), markup=markup, **common,
+        ),
+    )
+
+
+def _handle_answer_callback_query(**kwargs) -> str:
+    query_id = str(kwargs.get("callback_query_id") or "").strip()
+    if not query_id:
+        return _error("callback_query_id is required")
+    return _run_sender(
+        "answerCallbackQuery",
+        lambda s: s.answer_callback_query(
+            query_id, str(kwargs.get("text") or ""), show_alert=_truthy(kwargs.get("show_alert"))
+        ),
+    )
 
 
 def _handle_edit_message_text(**kwargs) -> str:
@@ -452,8 +771,25 @@ def handle_action(**kwargs) -> str:
         "reply_to_message": _handle_reply_to_message,
         "send_photo": _handle_send_photo,
         "send_document": _handle_send_document,
+        "send_voice": _handle_send_voice,
+        "send_audio": _handle_send_audio,
+        "send_video": _handle_send_video,
+        "send_animation": _handle_send_animation,
+        "send_sticker": _handle_send_sticker,
+        "send_media_group": _handle_send_media_group,
+        "send_location": _handle_send_location,
+        "send_contact": _handle_send_contact,
+        "set_reaction": _handle_set_reaction,
+        "send_chat_action": _handle_send_chat_action,
         "edit_message_text": _handle_edit_message_text,
+        "edit_message_caption": _handle_edit_message_caption,
+        "edit_message_reply_markup": _handle_edit_message_reply_markup,
         "delete_message": _handle_delete_message,
+        "pin_message": _handle_pin_message,
+        "unpin_message": _handle_unpin_message,
+        "forward_message": _handle_forward_message,
+        "copy_message": _handle_copy_message,
+        "answer_callback_query": _handle_answer_callback_query,
         "get_updates": _handle_get_updates,
         "get_chat_info": _handle_get_chat_info,
         "get_me": _handle_get_me,
@@ -466,7 +802,63 @@ def handle_action(**kwargs) -> str:
         valid = ", ".join(sorted(dispatch.keys()))
         return _error(f"Unknown action '{action}'. Valid actions: {valid}")
 
+    gateway = scope.run_gateway()
+    if not gateway:
+        return handler(**kwargs)  # not a Telegram gateway run: explicit chat ids / Integration Settings recipients
+
+    # Inside a Telegram gateway run the model is not trusted: webhook control is refused and every
+    # target chat is checked against the gateway's recipient scope and send caps.
+    kwargs.pop("gateway_name", None)
+    if action in GATEWAY_BLOCKED_ACTIONS:
+        return _refused("action_not_permitted", f"{action} is not available to agents running inside a gateway.")
+    if action in CHAT_ACTIONS:
+        run_id = scope.effective_run_id()
+        chat = _resolve_chat_id(kwargs) or scope.current_chat(run_id)
+        if not chat:
+            return _error("chat_id or recipient_name is required")
+        refusal = scope.check_recipient(gateway, run_id, chat)
+        if not refusal and action in ("forward_message", "copy_message"):
+            refusal = scope.check_recipient(gateway, run_id, kwargs.get("from_chat_id"))
+        if refusal:
+            return refusal
+        kwargs["chat_id"] = chat
+        kwargs.pop("recipient_name", None)
+        if action in SEND_ACTIONS:
+            refusal = scope.claim_send(gateway, run_id)
+            if refusal:
+                return refusal
+            raw = handler(**kwargs)
+            if not _succeeded(raw):
+                scope.release_send(gateway, run_id)
+            return raw
     return handler(**kwargs)
+
+
+GATEWAY_BLOCKED_ACTIONS = frozenset({"set_webhook", "delete_webhook", "get_updates"})
+# Actions that take a target chat (checked against the gateway scope).
+CHAT_ACTIONS = frozenset({
+    "send_message", "reply_to_message", "send_photo", "send_document", "send_voice", "send_audio", "send_video",
+    "send_animation", "send_sticker", "send_media_group", "send_location", "send_contact", "set_reaction",
+    "send_chat_action", "edit_message_text", "edit_message_caption", "edit_message_reply_markup",
+    "delete_message", "pin_message", "unpin_message", "forward_message", "copy_message", "get_chat_info",
+})
+# Actions that create a new message (counted against the per-run / per-day caps).
+SEND_ACTIONS = frozenset({
+    "send_message", "reply_to_message", "send_photo", "send_document", "send_voice", "send_audio", "send_video",
+    "send_animation", "send_sticker", "send_media_group", "send_location", "send_contact", "forward_message",
+    "copy_message",
+})
+
+
+def _refused(code: str, message: str) -> str:
+    return json.dumps({"success": False, "error": code, "message": message})
+
+
+def _succeeded(raw: str) -> bool:
+    try:
+        return bool(json.loads(raw).get("success"))
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------

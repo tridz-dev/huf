@@ -205,40 +205,78 @@ TELEGRAM_TOOLS = [
 	{
 		"tool_name": "telegram",
 		"description": (
-			"Manage a Telegram bot. Actions: send_message (chat_id or recipient_name, text/message, parse_mode), "
-			"reply_to_message (chat_id or recipient_name, text/message, reply_to_message_id), "
-			"send_photo (chat_id or recipient_name, photo/file/file_url, caption), "
-			"send_document (chat_id or recipient_name, document/file/file_url, caption), "
-			"edit_message_text (chat_id or recipient_name, message_id, text/message), "
-			"delete_message (chat_id or recipient_name, message_id), "
-			"get_updates (offset, limit), get_chat_info (chat_id or recipient_name), get_me, "
-			"set_webhook (url, secret_token), delete_webhook. "
+			"Manage a Telegram bot. In a Telegram gateway conversation chat_id is optional and defaults to the current chat "
+			"(other chats are refused unless the gateway allows them; sends are capped per run and per day). Actions: "
+			"send_message (text/message, parse_mode, reply_markup), reply_to_message (text, reply_to_message_id), "
+			"send_photo / send_document (photo|document|file|file_url, caption, reply_markup), "
+			"send_voice (OGG/Opus voice note), send_audio (audio, title, performer), send_video (video, supports_streaming), "
+			"send_animation (GIF/MP4), send_sticker, "
+			"send_media_group (items: 2-10 of {type photo|video|audio|document, media, caption}), "
+			"send_location (latitude, longitude), send_contact (phone_number, first_name, last_name), "
+			"set_reaction (message_id, emoji; remove=true clears), "
+			"send_chat_action (chat_action: typing|upload_photo|record_voice|upload_document|...), "
+			"edit_message_text (message_id, text), edit_message_caption (message_id, caption), "
+			"edit_message_reply_markup (message_id, reply_markup; omit to remove the keyboard), delete_message (message_id), "
+			"pin_message / unpin_message (message_id), forward_message / copy_message (from_chat_id, message_id), "
+			"answer_callback_query (callback_query_id, text, show_alert), get_chat_info, get_me, "
+			"get_updates, set_webhook (url, secret_token), delete_webhook (not available inside gateway conversations). "
+			"Media sources: Telegram file_id, public https URL, or a Frappe File name/file_url (max 50 MB, photos 10 MB). "
+			"reply_markup is a JSON object with one of: inline_keyboard [[{text, url}|{text, callback}]], keyboard [[\"text\"]], "
+			"remove_keyboard, force_reply. "
 			"Use get_integration_recipient to resolve a human name to a Telegram chat ID."
 		),
 		"function_path": "huf.ai.tools.telegram.handle_action",
 		"category": "Communication Tools",
 		"parameters": [
 			_action(
-				"send_message|reply_to_message|send_photo|send_document|"
-				"edit_message_text|delete_message|get_updates|get_chat_info|get_me|set_webhook|delete_webhook"
+				"send_message|reply_to_message|send_photo|send_document|send_voice|send_audio|send_video|send_animation|"
+				"send_sticker|send_media_group|send_location|send_contact|set_reaction|send_chat_action|edit_message_text|"
+				"edit_message_caption|edit_message_reply_markup|delete_message|pin_message|unpin_message|forward_message|"
+				"copy_message|answer_callback_query|get_updates|get_chat_info|get_me|set_webhook|delete_webhook"
 			),
-			_p("chat_id", description="Telegram chat/channel ID (numeric or @username). Alternative to recipient_name."),
+			_p("chat_id", description="Telegram chat/channel ID (numeric or @username). Optional in a gateway conversation (defaults to the current chat). Alternative to recipient_name."),
 			_p("recipient_name", description="Human-friendly recipient name from Integration Settings (alternative to chat_id)."),
 			_p("message", description="Message text (alias for text)."),
-			_p("text", description="Message or edited text."),
+			_p("text", description="Message or edited text; also the callback answer text."),
 			_p("photo", description="Photo source: Telegram file_id, public URL, or Frappe File docname/file_url."),
 			_p("document", description="Document source: Telegram file_id, public URL, or Frappe File docname/file_url."),
-			_p("file", description="Generic file source alias for photo/document."),
-			_p("file_url", description="Public file URL alias for photo/document."),
-			_p("caption", description="Caption for photo/document messages."),
+			_p("voice", description="send_voice source (OGG/Opus, MP3 or M4A): file_id, public URL, or Frappe File."),
+			_p("audio", description="send_audio source: file_id, public URL, or Frappe File."),
+			_p("video", description="send_video source: file_id, public URL, or Frappe File."),
+			_p("animation", description="send_animation source: file_id, public URL, or Frappe File."),
+			_p("sticker", description="send_sticker source: file_id, public URL, or Frappe File (WEBP/TGS/WEBM)."),
+			_p("file", description="Generic file source alias for any media action."),
+			_p("file_url", description="Public file URL or Frappe file_url alias for any media action."),
+			_p("caption", description="Caption for media messages, copy_message or edit_message_caption (max 1024 characters)."),
+			_p("items", type="array", description="send_media_group: 2-10 objects {type: photo|video|audio|document, media: source, caption}."),
+			_p("title", description="send_audio: track title."),
+			_p("performer", description="send_audio: performer."),
+			_p("supports_streaming", type="boolean", description="send_video: video suits streaming."),
+			_p("has_spoiler", type="boolean", description="Hide photo/video/animation behind a spoiler."),
+			_p("latitude", type="number", description="send_location latitude (-90..90)."),
+			_p("longitude", type="number", description="send_location longitude (-180..180)."),
+			_p("phone_number", description="send_contact phone number."),
+			_p("first_name", description="send_contact first name."),
+			_p("last_name", description="send_contact last name."),
+			_p("emoji", description="set_reaction: one emoji (Telegram's allowed reaction set)."),
+			_p("remove", type="boolean", description="set_reaction: true removes the reaction."),
+			_p("big", type="boolean", description="set_reaction: use the big reaction animation."),
+			_p("chat_action", description="send_chat_action: typing, upload_photo, record_video, upload_video, record_voice, upload_voice, upload_document, choose_sticker, find_location."),
+			_p("reply_markup", type="object", description="Keyboard: {inline_keyboard: [[{text, url}|{text, callback}]]} or {keyboard: [[\"text\"]], one_time_keyboard} or {remove_keyboard: true} or {force_reply: true}. Callback buttons are signed server-side."),
 			_p("parse_mode", description="Text formatting: Markdown, HTML, or MarkdownV2."),
 			_p("reply_to_message_id", type="integer", description="Message ID to reply to."),
-			_p("message_id", type="integer", description="Message ID to edit or delete."),
+			_p("message_thread_id", type="integer", description="Forum topic id to send into."),
+			_p("message_id", type="integer", description="Message ID to edit, delete, react to, pin, forward or copy."),
+			_p("from_chat_id", description="forward_message / copy_message: source chat (must also be an allowed recipient)."),
+			_p("callback_query_id", description="answer_callback_query: id of the callback query to answer."),
+			_p("show_alert", type="boolean", description="answer_callback_query: show a modal alert instead of a toast."),
+			_p("notify", type="boolean", description="pin_message: notify members (default silent)."),
 			_p("url", description="Webhook URL for set_webhook."),
 			_p("secret_token", description="Secret token for webhook verification."),
 			_p("offset", type="integer", description="Update offset for get_updates."),
 			_p("limit", type="integer", description="Max updates for get_updates (max 100)."),
 			_p("disable_notification", type="boolean", description="Send message silently."),
+			_p("protect_content", type="boolean", description="Prevent forwarding/saving of the sent message."),
 		],
 	},
 ]
