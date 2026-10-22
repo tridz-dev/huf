@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import random
+import threading
 import time
 import unittest
 from types import SimpleNamespace
@@ -327,6 +328,108 @@ class TestWelcomeServiceMessage(unittest.TestCase):
 		gate = gw(telegram_welcome_template="Hi")
 		with Env(gate):
 			self.assertEqual(g.welcome_new_members(gate, self.msg([{"id": 1}], "private")), 0)
+
+
+class TestChallengeHardening(unittest.TestCase):
+	"""Parallel wrong answers cannot exceed the per-challenge budget; success stays single use (F3)."""
+
+	def setUp(self):
+		self.env = Env().__enter__()
+
+	def tearDown(self):
+		self.env.__exit__()
+
+	def _race(self, nonce, answers):
+		results, errors = [], []
+		barrier = threading.Barrier(len(answers))
+
+		def worker(answer):
+			barrier.wait()
+			try:
+				results.append(g.submit_answer("gw1", nonce, init_data(), answer))
+			except g.GuardError as exc:
+				errors.append(str(exc))
+
+		threads = [threading.Thread(target=worker, args=(a,)) for a in answers]
+		for t in threads:
+			t.start()
+		for t in threads:
+			t.join()
+		return results, errors
+
+	def test_parallel_wrong_answers_respect_math_budget(self):
+		nonce = g.issue_challenge("gw1", CTX, question=fixed_question())
+		compared = []
+		real_hash = g._answer_hash
+
+		def counting_hash(n, answer):
+			compared.append(answer)
+			return real_hash(n, answer)
+
+		with mock.patch.object(g, "_answer_hash", counting_hash):
+			results, _ = self._race(nonce, ["1"] * 25)
+		self.assertLessEqual(len(compared), g.MAX_ATTEMPTS)  # only counted submissions reach the comparison
+		self.assertTrue(any(r["done"] for r in results))
+		self.assertEqual(len(self.env.fake.of("answerChatJoinRequestQuery")), 1)
+		self.assertEqual(self.env.fake.last("answerChatJoinRequestQuery")["payload"]["result"], "decline")
+
+	def test_parallel_wrong_answers_respect_emoji_budget(self):
+		q = {"kind": "emoji", "prompt": "Tap the cat", "options": list(g.EMOJI_POOL[:6]), "answer": "🐱"}
+		nonce = g.issue_challenge("gw1", CTX, question=q)
+		compared = []
+		real_hash = g._answer_hash
+
+		def counting_hash(n, answer):
+			compared.append(answer)
+			return real_hash(n, answer)
+
+		with mock.patch.object(g, "_answer_hash", counting_hash):
+			self._race(nonce, ["🐶"] * 20)
+		self.assertLessEqual(len(compared), g.EMOJI_MAX_ATTEMPTS)
+		self.assertEqual(len(self.env.fake.of("answerChatJoinRequestQuery")), 1)
+		with self.assertRaises(g.GuardError):
+			g.submit_answer("gw1", nonce, init_data(), "🐱")
+
+	def test_correct_answer_over_budget_is_declined(self):
+		nonce = g.issue_challenge("gw1", CTX, question=fixed_question())
+		for _ in range(g.MAX_ATTEMPTS):
+			g.submit_answer("gw1", nonce, init_data(), "1")
+		with self.assertRaises(g.GuardError):
+			g.submit_answer("gw1", nonce, init_data(), "9")
+		self.assertEqual(self.env.fake.of("answerChatJoinRequestQuery")[-1]["payload"]["result"], "decline")
+
+	def test_parallel_correct_answers_approve_once(self):
+		nonce = g.issue_challenge("gw1", CTX, question=fixed_question())
+		results, _ = self._race(nonce, ["9"] * 10)
+		self.assertEqual(sum(1 for r in results if r.get("ok")), 1)
+		self.assertEqual(len(self.env.fake.of("answerChatJoinRequestQuery")), 1)
+
+	def test_emoji_has_six_options_and_two_attempts(self):
+		self.assertEqual(g.EMOJI_OPTIONS, 6)
+		self.assertEqual(g.EMOJI_MAX_ATTEMPTS, 2)
+		self.assertEqual(g.attempts_for("emoji"), 2)
+		self.assertEqual(g.attempts_for("math"), g.MAX_ATTEMPTS)
+		for seed in range(50):
+			q = g.make_question(random.Random(seed), "emoji")
+			self.assertEqual(len(q["options"]), 6)
+			self.assertEqual(len(set(q["options"])), 6)
+			self.assertIn(q["answer"], q["options"])
+
+	def test_arithmetic_operands_are_two_digit(self):
+		for seed in range(50):
+			q = g.make_question(random.Random(seed), "math")
+			a, b = (int(x) for x in q["prompt"].removeprefix("What is ").removesuffix("?").split(" + "))
+			self.assertTrue(10 <= a <= 99 and 10 <= b <= 99)
+			self.assertEqual(q["answer"], str(a + b))
+
+	def test_emoji_wrong_answers_decline_after_two(self):
+		q = {"kind": "emoji", "prompt": "Tap the cat", "options": list(g.EMOJI_POOL[:6]), "answer": "🐱"}
+		nonce = g.issue_challenge("gw1", CTX, question=q)
+		first = g.submit_answer("gw1", nonce, init_data(), "🐶")
+		self.assertEqual((first["ok"], first["done"]), (False, False))
+		second = g.submit_answer("gw1", nonce, init_data(), "🐶")
+		self.assertTrue(second["done"])
+		self.assertEqual(self.env.fake.last("answerChatJoinRequestQuery")["payload"]["result"], "decline")
 
 
 if __name__ == "__main__":
