@@ -55,6 +55,7 @@ class Base(unittest.TestCase):
 	flags = {"group": True, "profile": True, "business": True}
 	owner = False
 	cap = 50
+	always_human = False  # legacy owner-path tests exercise ban/promote directly; set True for the real gate
 
 	def setUp(self):
 		self.api = Api()
@@ -71,6 +72,8 @@ class Base(unittest.TestCase):
 		patch.object(tool, "_flag", side_effect=lambda gw, g: self.flags[g]).start()
 		patch.object(tool, "_cap_limit", side_effect=lambda gw: self.cap).start()
 		patch.object(tool, "_is_owner_run", side_effect=lambda gw, chat: self.owner).start()
+		if not self.always_human:
+			patch.object(tool, "ALWAYS_HUMAN_APPROVAL", frozenset()).start()
 		patch.object(tool, "_is_paired_admin", side_effect=lambda gw, uid: str(uid) == "777").start()
 		patch.object(tool.scope, "run_gateway", return_value="gw1").start()
 		patch.object(tool.scope, "effective_run_id", return_value="run1").start()
@@ -130,8 +133,9 @@ class TestConfirmation(Base):
 	def test_owner_needs_only_confirm(self):
 		Base.owner = True
 		self.addCleanup(setattr, Base, "owner", False)
-		self.assertEqual(self.run_action("ban", user_id=5)["error"], "needs_confirmation")
-		self.assertTrue(self.run_action("ban", user_id=5, confirm=True)["success"])
+		# ban is in ALWAYS_HUMAN_APPROVAL now; delete_message keeps the simple owner confirm=true path
+		self.assertEqual(self.run_action("delete_message", message_id=3)["error"], "needs_confirmation")
+		self.assertTrue(self.run_action("delete_message", message_id=3, confirm=True)["success"])
 
 	def test_non_destructive_needs_nothing(self):
 		self.assertTrue(self.run_action("set_chat_title", title="Hi")["success"])
@@ -450,6 +454,93 @@ class TestHumanApproval(Base):
 			with self.assertRaises(self.ta.AdminError):
 				self.ta.execute(ctx, action, nonce)
 		self.assertEqual(len(self.api.of("deleteMessage")), 1)
+
+
+class TestOwnerRank(unittest.TestCase):
+	"""``_is_owner_run`` requires binding role rank >= Admin."""
+
+	def owner(self, role):
+		from types import SimpleNamespace
+
+		with patch.object(tool.frappe, "db", new=SimpleNamespace(get_value=lambda *a, **k: role), create=True):
+			return tool._is_owner_run("gw1", "55")
+
+	def test_viewer_and_operator_chat_not_owner(self):
+		self.assertFalse(self.owner("Viewer"))
+		self.assertFalse(self.owner("Operator"))
+
+	def test_admin_chat_is_owner(self):
+		self.assertTrue(self.owner("Admin"))
+
+	def test_no_binding_or_chat_not_owner(self):
+		self.assertFalse(self.owner(None))
+		self.assertFalse(tool._is_owner_run("gw1", ""))
+
+
+class TestOwnerGate(Base):
+	always_human = True
+
+	def test_always_human_approval_set(self):
+		self.assertEqual(set(tool.ALWAYS_HUMAN_APPROVAL), {"delete_business_messages", "promote", "ban"})
+
+	def test_owner_ban_and_promote_still_need_human(self):
+		Base.owner = True
+		self.addCleanup(setattr, Base, "owner", False)
+		for action in ("ban", "promote"):
+			r = self.run_action(action, user_id=5, confirm=True)
+			self.assertEqual(r["status"], "pending_human_approval", action)
+		self.assertEqual(self.api.of("banChatMember"), [])
+
+	def test_low_rank_chat_goes_to_human_and_refuses_without_admin(self):
+		self.admins = []
+		r = self.run_action("delete_message", message_id=3, confirm=True)
+		self.assertEqual(r["error"], "no_admin_available")
+		self.assertEqual(self.api.of("deleteMessage"), [])
+
+	def test_low_rank_chat_pending_approval(self):
+		r = self.run_action("delete_message", message_id=3, confirm=True)
+		self.assertEqual(r["status"], "pending_human_approval")
+
+
+class TestApprovalOrdering(Base):
+	def test_pending_marked_before_send(self):
+		from huf.ai import telegram_admin as ta
+
+		seen = []
+		orig = self.api.http_post
+
+		def spy(url, **kw):
+			if url.endswith("sendMessage"):
+				seen.append([k for k in self.cache.d if k.startswith("huf_tg_adm_pend:") and not k.endswith(":s")])
+			return orig(url, **kw)
+
+		self.api.http_post = spy
+		self.run_action("delete_message", message_id=3)
+		self.assertTrue(seen and seen[0], "pending mark must exist when buttons are sent")
+		self.assertTrue(any(ta.agent_action_pending(k.split(":", 1)[1], cache=self.cache) for k in seen[0]))
+
+	def test_undelivered_clears_mark(self):
+		with patch.object(tool, "_callback_signer", return_value=None):
+			r = self.run_action("delete_message", message_id=3)
+		self.assertEqual(r["error"], "no_admin_available")
+		self.assertFalse([k for k in self.cache.d if k.startswith("huf_tg_adm_pend:")])
+		self.assertEqual(self.run_action("delete_message", message_id=3)["status"], "pending_human_approval")
+
+	def test_concurrent_duplicate_sends_once(self):
+		import threading
+
+		results = []
+		barrier = threading.Barrier(6)
+
+		def go():
+			barrier.wait()
+			results.append(self.run_action("delete_message", message_id=9)["status"])
+
+		ts = [threading.Thread(target=go) for _ in range(6)]
+		[t.start() for t in ts]
+		[t.join() for t in ts]
+		self.assertEqual(results, ["pending_human_approval"] * 6)
+		self.assertEqual(len(self.api.of("sendMessage")), 1)
 
 
 if __name__ == "__main__":

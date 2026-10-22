@@ -239,6 +239,9 @@ class Harness(unittest.TestCase):
 		patch.object(adm, "_flag", side_effect=lambda gw, group: self.flags[group]).start()
 		patch.object(adm, "_cap_limit", side_effect=lambda gw: self.cap).start()
 		patch.object(adm, "_is_owner_run", side_effect=lambda gw, chat: self.owner).start()
+		# owner-path tests drive ban/promote/delete_business_messages with confirm=true; the always-human gate is
+		# covered in test_telegram_admin_tools (TestOwnerGate)
+		patch.object(adm, "ALWAYS_HUMAN_APPROVAL", frozenset()).start()
 		patch.object(adm, "_is_paired_admin", side_effect=lambda gw, uid: str(uid) == "777").start()
 		patch.object(scope, "run_gateway", side_effect=lambda: "gw1" if self.gw_on else "").start()
 		patch.object(

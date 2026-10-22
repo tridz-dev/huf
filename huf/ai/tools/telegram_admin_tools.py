@@ -130,18 +130,29 @@ def _cap_limit(gateway: str) -> int:
 	return value if value > 0 else DEFAULT_CAP
 
 
+# Destructive actions that ALWAYS need a human Admin's approval, even in an owner run (a prompt-injected agent
+# must not be able to ban / promote / mass-delete with a mere ``confirm=true``). Override by editing this set.
+ALWAYS_HUMAN_APPROVAL = frozenset({"delete_business_messages", "promote", "ban"})
+
+
 def _is_owner_run(gateway: str, chat: str) -> bool:
-	"""True when the run's chat is the private chat of a paired cockpit admin of this gateway."""
+	"""True when the run's chat is the private chat of a paired cockpit binding with role rank >= Admin.
+
+	Viewer / Operator binding chats are NOT owner runs (same rank rule as ``telegram_admin.execute``).
+	"""
 	if not chat:
 		return False
+	from huf.ai import telegram_admin as ta
+
 	try:
-		return bool(
-			frappe.db.get_value(
-				"Telegram Admin Binding", {"gateway": gateway, "chat_id": str(chat), "is_active": 1}, "name"
-			)
+		role = frappe.db.get_value(
+			"Telegram Admin Binding",
+			{"gateway": gateway, "chat_id": str(chat), "is_active": 1},
+			"role_scope",
 		)
 	except Exception:
 		return False
+	return ta.ROLE_RANK.get(role or "", 0) >= ta.ROLE_RANK["Admin"]
 
 
 def _is_paired_admin(gateway: str, user_id: Any) -> bool:
@@ -281,7 +292,7 @@ def _gate_destructive(action: str, args: dict, gateway: str, chat: str) -> Optio
 
 	An agent re-sending ``confirm`` / a token is never confirmation, so those arguments are ignored.
 	"""
-	if _is_owner_run(gateway, scope.current_chat(scope.effective_run_id())):
+	if action not in ALWAYS_HUMAN_APPROVAL and _is_owner_run(gateway, scope.current_chat(scope.effective_run_id())):
 		if not _truthy(args.get("confirm")):
 			raise Refused(
 				"needs_confirmation",
@@ -293,7 +304,7 @@ def _gate_destructive(action: str, args: dict, gateway: str, chat: str) -> Optio
 		raise Refused(
 			"no_admin_available",
 			"This action needs a human admin's approval, but this gateway has no active Admin-scope Telegram "
-			"cockpit binding to ask. Nothing was done.",
+			"cockpit binding to ask (a Viewer/Operator chat cannot approve its own actions). Nothing was done.",
 		)
 	body = {k: v for k, v in args.items() if k not in _CONTROL_KEYS}
 	return {
@@ -313,11 +324,15 @@ def _request_human_approval(pending: dict, client) -> dict:
 
 	gateway = pending["gateway"]
 	cache = _cache()
+	already = {"status": "pending_human_approval", "message": "An admin approval for this exact action is already pending."}
 	if ta.agent_action_pending(pending["fp"], cache=cache):
-		return {"status": "pending_human_approval", "message": "An admin approval for this exact action is already pending."}
+		return already
 	targets = _admin_bindings(gateway)
 	if not targets:
 		raise Refused("no_admin_available", "No active Admin-scope Telegram binding to ask. Nothing was done.")
+	# Mark pending atomically BEFORE sending so a fast Approve is not 'expired' and a concurrent duplicate sends nothing.
+	if not ta.agent_action_begin(pending["fp"], cache=cache, ttl=APPROVAL_TTL):
+		return already
 	text = "An agent requests approval:\n" + ta.describe(pending) + f"\nValid {APPROVAL_TTL // 60} minutes."
 	delivered = 0
 	for binding in targets:
@@ -337,8 +352,8 @@ def _request_human_approval(pending: dict, client) -> dict:
 		except Exception:
 			continue
 	if not delivered:
+		ta.agent_action_clear(pending["fp"], cache=cache)
 		raise Refused("no_admin_available", "Could not reach any admin to approve this action. Nothing was done.")
-	ta.agent_action_mark_pending(pending["fp"], cache=cache, ttl=APPROVAL_TTL)
 	return {
 		"status": "pending_human_approval",
 		"message": f"A human admin must approve this in Telegram ({delivered} admin(s) asked, valid "

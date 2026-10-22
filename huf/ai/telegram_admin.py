@@ -236,6 +236,27 @@ def agent_action_mark_pending(fp: str, *, cache: Any = None, ttl: int = 600) -> 
 	_cache(cache).set_value(f"huf_tg_adm_pend:{fp}", 1, expires_in_sec=ttl)
 
 
+def agent_action_begin(fp: str, *, cache: Any = None, ttl: int = 600) -> bool:
+	"""Atomically claim the right to request approval for ``fp`` and mark it pending BEFORE any button is sent.
+
+	True only for the first concurrent caller; a loser must not send a second approval.
+	"""
+	c = _cache(cache)
+	key = f"huf_tg_adm_pend:{fp}"
+	if not _claim(c, key + ":s", ttl):
+		return False
+	c.set_value(key, 1, expires_in_sec=ttl)
+	return True
+
+
+def agent_action_clear(fp: str, *, cache: Any = None) -> None:
+	"""Undo ``agent_action_begin`` (nothing was delivered)."""
+	c = _cache(cache)
+	key = f"huf_tg_adm_pend:{fp}"
+	c.delete_value(key)
+	c.delete_value(key + ":s")
+
+
 def agent_action_pending(fp: str, *, cache: Any = None) -> bool:
 	return bool(_cache(cache).get_value(f"huf_tg_adm_pend:{fp}"))
 
@@ -248,6 +269,7 @@ def agent_action_take(fp: str, *, cache: Any = None) -> bool:
 		return False
 	had = bool(c.get_value(key))
 	c.delete_value(key)
+	c.delete_value(key + ":s")
 	c.delete_value(key + ":u")
 	return had
 
