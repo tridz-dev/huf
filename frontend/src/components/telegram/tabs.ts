@@ -1,3 +1,8 @@
+import { AccessTab } from './AccessTab';
+import { BindingsTab } from './BindingsTab';
+import { MessagesTab } from './MessagesTab';
+import { SendPanel } from './SendPanel';
+import { TemplatesTab } from './templates/TemplatesTab';
 import { CommandsTab } from './CommandsTab';
 import { ConnectionTab } from './ConnectionTab';
 import { OverviewPanel } from './OverviewPanel';
@@ -12,6 +17,11 @@ import type { TelegramTabDef } from './tabTypes';
 export const TELEGRAM_TABS: TelegramTabDef[] = [
 	{ id: 'overview', label: 'Overview', component: OverviewPanel },
 	{ id: 'settings', label: 'Settings', component: SettingsTab },
+	{ id: 'templates', label: 'Templates', component: TemplatesTab },
+	{ id: 'messages', label: 'Messages', component: MessagesTab },
+	{ id: 'access', label: 'Access', component: AccessTab },
+	{ id: 'send', label: 'Send', component: SendPanel },
+	{ id: 'bindings', label: 'Admin bindings', component: BindingsTab },
 	{ id: 'commands', label: 'Commands & profile', component: CommandsTab },
 	{ id: 'connection', label: 'Connection', component: ConnectionTab },
 ];
