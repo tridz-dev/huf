@@ -85,7 +85,8 @@ def _claim(event) -> bool:
 
 
 def _synthesize(
-	agent_name: str, text: str, conversation_id: str | None, run_id: str | None, response_format: str = "mp3"
+	agent_name: str, text: str, conversation_id: str | None, run_id: str | None, response_format: str = "mp3",
+	voice: str | None = None,
 ) -> bytes:
 	"""Text to speech with the agent's TTS model (its own provider key); returns the audio bytes."""
 	from huf.ai.handlers.media import handle_generate_audio
@@ -93,7 +94,7 @@ def _synthesize(
 	result = asyncio.run(
 		handle_generate_audio(
 			input=text, agent_name=agent_name, conversation_id=conversation_id, agent_run_id=run_id,
-			response_format=response_format,
+			response_format=response_format, **({"voice": voice} if voice else {}),
 		)
 	)
 	if not result.get("success"):
