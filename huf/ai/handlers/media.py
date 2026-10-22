@@ -23,10 +23,10 @@ def _get_default_image_model(provider_name: str) -> str:
         str: Default image model name, or None if not supported
     """
     defaults = {
-        "openai": "dall-e-3",
-        "azure": "dall-e-3",  # Azure uses same models with azure/ prefix
-        "openrouter": "dall-e-3",  # OpenRouter can route to OpenAI models
-        "google": "google/gemini-2.5-flash-image",
+        "openai": "gpt-image-2",
+        "azure": "gpt-image-2",  # Azure uses same models with azure/ prefix
+        "openrouter": "google/gemini-3.1-flash-image",
+        "google": "gemini/gemini-3.1-flash-image",
         "vertex_ai": "vertex_ai/imagegeneration@006",
         "bedrock": "bedrock/stability.stable-diffusion-xl-v0",
         "recraft": "recraft/recraftv3",
@@ -432,12 +432,12 @@ def _get_default_tts_model(provider_name: str) -> str:
         str: Default TTS model name, or None if not supported
     """
     defaults = {
-        "openai": "tts-1",
-        "azure": "tts-1",
-        "google": "gemini/gemini-2.5-flash-preview-tts",
-        "gemini": "gemini/gemini-2.5-flash-preview-tts",
-        "vertex_ai": "vertex_ai/gemini-2.5-flash-preview-tts",
-        "elevenlabs": "elevenlabs/eleven_multilingual_v2",
+        "openai": "gpt-4o-mini-tts",
+        "azure": "gpt-4o-mini-tts",
+        "google": "gemini/gemini-3.8-flash-tts",
+        "gemini": "gemini/gemini-3.8-flash-tts",
+        "vertex_ai": "vertex_ai/gemini-3.8-flash-tts",
+        "elevenlabs": "elevenlabs/eleven_flash_v2_5",
         "aws": "aws/polly",
         "minimax": "minimax/speech-01",
     }
@@ -630,7 +630,7 @@ async def handle_generate_audio(
     Args:
         input: Text to convert to speech (required)
         voice: Voice to use (e.g., "alloy", "echo", "fable", "onyx", "nova", "shimmer")
-        model: Optional model name (e.g., "tts-1", "tts-1-hd", "gemini-2.5-flash-preview-tts")
+        model: Optional model name (e.g., "gpt-4o-mini-tts", "gemini-3.8-flash-tts")
         speed: Speech speed from 0.25 to 4.0 (default: 1.0)
         response_format: Audio format (mp3, opus, aac, flac, wav, pcm)
         agent_name: Automatically passed from context
@@ -899,7 +899,7 @@ async def handle_transcribe_audio(
         file_path: Absolute server path inside an allowed audio import
                directory (alternative to file_id/file_url)
         language: Optional language code (e.g., "en", "es", "fr") - ISO 639-1 format
-        model: Optional model name (e.g., "whisper-1", "whisper-large-v3")
+        model: Optional model name (e.g., "gpt-transcribe", "groq/whisper-large-v3-turbo")
                If not provided, defaults based on provider
         agent_name: Automatically passed from context
         conversation_id: Present for context but ignored; this tool does

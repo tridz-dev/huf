@@ -306,27 +306,37 @@ def import_local_audio(
     )
 
 
+# Provider -> default STT model. Every value whose provider is seeded must
+# resolve to a Transcription model in huf.ai.model_catalogue (enforced by
+# huf/ai/tests/test_model_catalogue_refresh.py). Google uses the
+# gemini-flash-latest alias because HUF transcribes Gemini audio through a
+# multimodal completion (MULTIMODAL_STT_PROVIDERS).
+DEFAULT_STT_MODELS = {
+    "openai": "gpt-transcribe",
+    "azure": "whisper-1",  # Azure deployments are customer-named; not catalogue-seeded
+    "groq": "groq/whisper-large-v3-turbo",
+    "mistral": "mistral/voxtral-mini-latest",
+    "elevenlabs": "elevenlabs/scribe_v2",
+    "deepgram": "deepgram/nova-3",
+    "google": "gemini/gemini-flash-latest",
+    "gemini": "gemini/gemini-flash-latest",
+    "vertex_ai": "gemini/gemini-flash-latest",
+}
+
+
 def _get_default_stt_model(provider_name: str) -> str:
     """
     Get default STT model for a provider.
     """
-    defaults = {
-        "openai": "whisper-1",
-        "azure": "whisper-1",
-        "groq": "groq/whisper-large-v3",
-        "deepgram": "deepgram/nova-2",
-        # Multimodal providers transcribe via completion with audio input
-        "google": "gemini/gemini-2.5-flash",
-        "gemini": "gemini/gemini-2.5-flash",
-        "vertex_ai": "gemini/gemini-2.5-flash",
-    }
-    return defaults.get(provider_name.lower())
+    return DEFAULT_STT_MODELS.get(provider_name.lower())
 
 
 def _find_transcription_model(provider: str) -> str:
     """
     Prefer an AI Model record flagged with the ``Transcription`` modality
-    for the given provider over the hardcoded provider default map.
+    for the given provider over the hardcoded provider default map. When the
+    provider's default STT model is among them it wins, so the choice does not
+    depend on which row was modified last.
     """
     try:
         models = frappe.get_all(
@@ -334,12 +344,19 @@ def _find_transcription_model(provider: str) -> str:
             filters={"provider": provider, "modalities": ["like", "%Transcription%"]},
             fields=["model_name"],
             order_by="modified desc",
-            limit=1,
         )
     except frappe.DoesNotExistError:
         return None
 
-    return models[0].model_name if models else None
+    models = [m.model_name for m in models]
+    if not models:
+        return None
+    default = _get_default_stt_model(provider or "") or ""
+    bare_default = default.split("/", 1)[1] if default.startswith("gemini/") else default
+    for candidate in (default, bare_default):
+        if candidate and candidate in models:
+            return candidate
+    return models[0]
 
 
 def resolve_stt_config(agent_name: str = None, model: str = None) -> dict:

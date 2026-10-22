@@ -25,7 +25,7 @@
   "allow_guest": 0,
   "agent_color": "#0EA5E9",
   "allow_file_upload": 1,
-  "image_generation_model": "nano-banana-pro",
-  "tts_model": "gemini-3.1-flash-tts-preview",
+  "image_generation_model": "gemini-3-pro-image",
+  "tts_model": "gemini-3.8-flash-tts",
   "audio_transcription_model": "gpt-4o-mini-transcribe"
 }

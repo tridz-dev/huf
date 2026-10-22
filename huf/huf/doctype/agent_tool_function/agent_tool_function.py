@@ -597,8 +597,8 @@ class AgentToolFunction(Document):
 					},
 					"model": {
 						"type": "string",
-						"description": "Speech model to use (default: whisper-1)",
-						"default": "whisper-1"
+						"description": "Speech model to use (default: gpt-transcribe)",
+						"default": "gpt-transcribe"
 					},
 					"provider": {
 						"type": "string",

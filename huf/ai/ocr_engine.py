@@ -247,11 +247,11 @@ def _default_model(provider_name: str, strategy: str) -> str | None:
     if strategy == "vision":
         return {
             "mistral": "mistral/mistral-small-latest",
-            "openai": "gpt-4o",
-            "google": "gemini/gemini-2.5-flash",
-            "gemini": "gemini/gemini-2.5-flash",
-            "vertex_ai": "vertex_ai/gemini-2.5-flash",
-            "anthropic": "claude-3-5-sonnet-20241022",
+            "openai": "gpt-5.4-mini",
+            "google": "gemini/gemini-flash-latest",
+            "gemini": "gemini/gemini-flash-latest",
+            "vertex_ai": "vertex_ai/gemini-3.8-flash",
+            "anthropic": "claude-haiku-5-5",
         }.get(provider)
 
     return None

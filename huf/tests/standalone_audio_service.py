@@ -284,7 +284,7 @@ class TestResolveSttConfig(unittest.TestCase):
 
         self.assertEqual(config["source"], "provider_default")
         self.assertEqual(config["provider_name"], "groq")
-        self.assertEqual(config["stt_model"], "groq/whisper-large-v3")
+        self.assertEqual(config["stt_model"], "groq/whisper-large-v3-turbo")
 
     def test_missing_api_key_raises(self):
         _install_docs(
