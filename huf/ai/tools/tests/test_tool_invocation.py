@@ -6,7 +6,7 @@ standalone. Frappe itself is never mutated globally: each test patches the ``fra
 *on the module under test* (``patch.object(tool_invocation, "frappe", <double>)``), scoped to
 that test via ``setUp``/``addCleanup``, using a plain hand-written double rather than a
 MagicMock -- so the same test proves the same thing whether frappe is the real bench package
-or not. This mirrors the pattern in ``huf.ai.tests.test_graph_permissions``
+or not. This mirrors the pattern in ``huf.ai.graph.tests.test_graph_permissions``
 (``_FrappeDouble`` / ``TestAuthorizeToolCallI1Intersection``).
 
 The only sys.modules surgery in this file is a narrow, standalone-only stub that makes ``huf``

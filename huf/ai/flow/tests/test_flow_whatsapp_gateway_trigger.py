@@ -20,8 +20,8 @@ from unittest.mock import patch
 
 import frappe
 
-from huf.ai import flow_api
-from huf.ai.flow_engine import run_flow
+from huf.ai.flow import api as flow_api
+from huf.ai.flow.engine import run_flow
 from huf.ai.gateway_service import process_gateway_event
 from huf.ai.whatsapp.tests import test_whatsapp_full_stack as fs
 from huf.testing.factories import make_agent_tool_function
@@ -292,7 +292,7 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 		name, _ = self._start("wamid.FL1")
 		run_name = frappe.db.get_value("Gateway Event", name, "flow_run")
 		frappe.db.set_value("Flow Run", run_name, "status", "Queued")
-		with patch("huf.ai.flow_engine._execute_loop", side_effect=RuntimeError("boom")):
+		with patch("huf.ai.flow.engine._execute_loop", side_effect=RuntimeError("boom")):
 			run_flow(run_name)
 		event = frappe.get_doc("Gateway Event", name)
 		self.assertEqual(event.status, "Failed")

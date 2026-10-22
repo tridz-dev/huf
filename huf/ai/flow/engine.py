@@ -44,17 +44,17 @@ from frappe.utils import now_datetime
 from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
 from frappe.desk.doctype.notification_settings.notification_settings import is_email_notifications_enabled
 
-from huf.ai import flow_create_doc, flow_state
+from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
 from huf.ai.graph.permissions import envelope_declares
-from huf.ai.flow_eval import safe_eval_expression
-from huf.ai.flow_orchestrator import (
+from huf.ai.flow.eval import safe_eval_expression
+from huf.ai.flow.orchestrator import (
 	build_flow_context_system_message,
 	build_orchestrator_prompt,
 	build_router_prompt,
 	parse_decision,
 )
-from huf.ai.flow_tool_executor import execute as execute_tool
-from huf.ai.flow_tool_executor import tool_run_context
+from huf.ai.flow.tool_executor import execute as execute_tool
+from huf.ai.flow.tool_executor import tool_run_context
 from huf.ai.graph.executor import (
 	ExecutionPolicy,
 	ExecutionResult,
@@ -1043,7 +1043,7 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			from huf.ai.mcp_client import execute_mcp_tool
 
 			# execute_mcp_tool is async; run it to completion the same way
-			# huf/ai/flow_tool_executor.py already does for coroutine results
+			# huf/ai/flow/tool_executor.py already does for coroutine results
 			# from sync flow-engine code.
 			import asyncio
 
@@ -1760,7 +1760,7 @@ def _exec_doc_create(flow_run, node: dict, config: dict, settings: dict) -> dict
 	``doc.create``: config ``doctype`` (literal) and ``fields`` (object of values / references).
 	Output ``{"doctype", "name"}`` so later nodes can use ``{"$from": "<node>.name"}``.
 
-	Policy lives in :mod:`huf.ai.flow_create_doc` (allow-list, field validation, no
+	Policy lives in :mod:`huf.ai.flow.create_doc` (allow-list, field validation, no
 	``ignore_permissions``). Each created document also counts against the graph contract's
 	``limits.max_writes`` for the run (absent or 0 means no writes are allowed).
 	"""

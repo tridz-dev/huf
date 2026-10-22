@@ -5,7 +5,7 @@
 
 Standalone-first: frappe is faked with a hand-written double (never a bare MagicMock --
 this file's own `PermissionError` alias trick and the `.throw()`/`.get_all()` shape mirror
-`huf.ai.tests.test_graph_permissions._FrappeDouble`), so these tests pass without a bench
+`huf.ai.graph.tests.test_graph_permissions._FrappeDouble`), so these tests pass without a bench
 and are re-run unmodified against a real one. Covers:
 
   * get_binding_cap() default + configured + malformed-config fallback.
@@ -26,7 +26,7 @@ from unittest.mock import MagicMock, patch
 
 
 def _install_standalone_frappe_stub():
-	"""See huf.ai.tests.test_graph_permissions._install_standalone_frappe_stub -- same
+	"""See huf.ai.graph.tests.test_graph_permissions._install_standalone_frappe_stub -- same
 	rationale: huf/__init__.py does `import frappe` unconditionally at package-import
 	time, before conftest.py's stub would otherwise run.
 	"""

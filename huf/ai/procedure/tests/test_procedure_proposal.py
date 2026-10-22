@@ -19,7 +19,7 @@ These tests exercise only the pure, frappe-free half of the module:
 ``accept_procedure_proposal`` runs before ever calling ``frappe.get_doc(...).insert()``).
 The two ``@frappe.whitelist()`` entry points themselves are thin frappe-I/O wrappers
 around these and are exercised by bench-based tests, not here -- matching
-``test_procedure_conversion.py``'s own split against ``huf.ai.flow_api``.
+``test_procedure_conversion.py``'s own split against ``huf.ai.flow.api``.
 
 Run with:
   pytest huf/ai/procedure/tests/test_procedure_proposal.py

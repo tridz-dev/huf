@@ -9,7 +9,7 @@ Pure unit tests, no frappe calls beyond what ``huf.ai.graph.permissions`` needs 
 frappe-backed default).
 
 Run with:
-  bench --site <site> run-tests --app huf --module huf.ai.tests.test_graph_validator
+  bench --site <site> run-tests --app huf --module huf.ai.graph.tests.test_graph_validator
 """
 
 import sys

@@ -2208,7 +2208,7 @@ def _flow_trigger_payload(event, gateway, attachments: list[str]) -> dict:
 
 def _start_flow_for_event(event, gateway) -> dict:
     """Start the routed Flow once per event; a re-queued or redelivered event never starts a second run."""
-    from huf.ai.flow_engine import create_flow_run
+    from huf.ai.flow.engine import create_flow_run
 
     existing = frappe.db.get_value("Gateway Event", event.name, "flow_run", for_update=True)
     if existing:
@@ -2225,7 +2225,7 @@ def _start_flow_for_event(event, gateway) -> dict:
     )
     event.db_set({"flow_run": flow_run.name, "status": "Running"})
     frappe.enqueue(
-        "huf.ai.flow_engine.run_flow",
+        "huf.ai.flow.engine.run_flow",
         queue="default",
         timeout=300,
         flow_run_name=flow_run.name,

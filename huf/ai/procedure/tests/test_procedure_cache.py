@@ -4,7 +4,7 @@
 """Unit tests for huf.ai.graph.cache (T-33).
 
 Standalone-first: frappe is faked with a hand-written double, never a bare MagicMock --
-mirrors huf.ai.tests.test_graph_permissions._FrappeDouble / test_procedure_binding.py.
+mirrors huf.ai.graph.tests.test_graph_permissions._FrappeDouble / test_procedure_binding.py.
 Covers:
 
   * Deterministic key normalisation -- equivalent inputs in different key order hit the
@@ -26,7 +26,7 @@ from unittest.mock import MagicMock, patch
 
 
 def _install_standalone_frappe_stub():
-	"""See huf.ai.tests.test_graph_permissions._install_standalone_frappe_stub -- same
+	"""See huf.ai.graph.tests.test_graph_permissions._install_standalone_frappe_stub -- same
 	rationale: huf/__init__.py does `import frappe` unconditionally at package-import
 	time, before conftest.py's stub would otherwise run.
 	"""

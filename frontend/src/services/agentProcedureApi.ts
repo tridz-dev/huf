@@ -67,7 +67,7 @@ const LIST_FIELDS = [
 ];
 
 /** Parses the `provenance` JSON string and returns the source Flow id, when this
- * Procedure was created via Flow -> Procedure conversion (see huf.ai.flow_api). */
+ * Procedure was created via Flow -> Procedure conversion (see huf.ai.flow.api). */
 export function getSourceFlowId(doc: Pick<AgentProcedureDoc, 'provenance'>): string | undefined {
   if (!doc.provenance) return undefined;
   try {

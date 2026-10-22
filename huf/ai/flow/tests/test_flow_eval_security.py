@@ -1,5 +1,5 @@
 """
-Security-focused unit tests for huf.ai.flow_eval.safe_eval_expression.
+Security-focused unit tests for huf.ai.flow.eval.safe_eval_expression.
 
 Layer A: pure unit tests against the AST-walking evaluator. No Frappe
 site/bench/database is required to exercise the evaluator logic itself,
@@ -8,13 +8,13 @@ package, so this module still imports `frappe` (no site connection is
 made).
 
 Run with:
-  bench --site <site> run-tests --app huf --module huf.ai.tests.test_flow_eval_security
+  bench --site <site> run-tests --app huf --module huf.ai.flow.tests.test_flow_eval_security
 """
 import unittest
 
 import frappe
 
-from huf.ai.flow_eval import safe_eval_expression
+from huf.ai.flow.eval import safe_eval_expression
 
 
 class TestFlowEvalSafeCases(unittest.TestCase):

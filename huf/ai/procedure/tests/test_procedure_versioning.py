@@ -5,7 +5,7 @@
 
 This module has zero import-time frappe dependency, so these tests run under plain
 pytest with no bench and no stub, and unmodified on a bench (real frappe simply is not
-imported by the module under test). See huf/ai/tests/test_graph_permissions.py for the
+imported by the module under test). See huf/ai/graph/tests/test_graph_permissions.py for the
 sibling pattern this test package uses when a module under test DOES need frappe.
 
 Run with:
@@ -22,7 +22,7 @@ import unittest
 def _install_standalone_frappe_stub():
 	"""Make ``huf`` importable without a real Frappe bench. ``huf/__init__.py`` does
 	``import frappe`` unconditionally at import time; conftest.py's own stub runs too
-	late for that (see huf.ai.tests.test_graph_permissions for the same precedent).
+	late for that (see huf.ai.graph.tests.test_graph_permissions for the same precedent).
 	On a real bench 'frappe' already has a __file__ and is left untouched.
 	"""
 	existing = sys.modules.get("frappe")

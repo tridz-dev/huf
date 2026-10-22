@@ -1,5 +1,5 @@
 /**
- * Pure helpers mapping the Flow builder's trigger forms onto huf.ai.flow_api
+ * Pure helpers mapping the Flow builder's trigger forms onto huf.ai.flow.api
  * set_flow_trigger / get_flow_trigger, and API state onto user-facing messages.
  *
  * Flow triggers are an Automation bound to the Flow's converted Agent Procedure, so

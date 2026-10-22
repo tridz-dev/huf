@@ -12,7 +12,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai import flow_api, flow_engine, flow_state
+from huf.ai.flow import api as flow_api, engine as flow_engine, state as flow_state
 from huf.ai.graph.executor import GraphContext
 
 LIMITS = {
