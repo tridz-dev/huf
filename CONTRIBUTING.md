@@ -53,7 +53,7 @@ Hooks include ruff (import sort, lint, format), prettier, eslint, file checks, `
 
 | What | Where | Notes |
 |---|---|---|
-| Product code (backend) | `huf/` (e.g. `huf/ai/`, `huf/huf/doctype/<doctype>/`) | Keep product modules free of `test_` in the name. |
+| Product code (backend) | `huf/` (e.g. `huf/ai/`, `huf/huf/doctype/<doctype>/`) | Keep product modules free of `test_` in the name (known exceptions still to rename or move: `huf/ai/providers/test_provider.py`, `huf/ai/providers/batch/test_batch_providers.py`, `huf/ai/meetings/test_meeting_*.py`). |
 | Feature tests, library code under `huf/ai/` | `<package>/tests/test_<name>.py` (co-located, e.g. `huf/ai/decision/tests/`) | Test-only helpers do not go here. |
 | Feature tests, DocType | `test_<doctype>.py` directly in the DocType folder (e.g. `huf/huf/doctype/flow_definition/test_flow_definition_schema.py`) | Same folder as the controller. |
 | Test infrastructure (fakes, factories, helpers) | `huf/testing/` | Never name these files `test_*`. |
