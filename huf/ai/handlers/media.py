@@ -1099,7 +1099,7 @@ async def handle_generate_video(
     """
     Generate a video using the agent's configured provider and video generation model.
 
-    STATUS (honest scoping, see docs/hub-orchestrator-unified-builder-plan.md
+    STATUS (honest scoping, see the hub-orchestrator unified builder plan (archived in the workspace)
     section A.4 and Phase 10): as of litellm==1.95.0 (the version pinned/
     installed for this app) there is NO generic ``litellm.video_generation``
     (or equivalent) call, unlike ``litellm.image_generation``. Video
@@ -1188,7 +1188,7 @@ async def handle_generate_video(
             "implemented for any provider. An AI Model with 'Video' "
             f"modality ('{video_model}') was resolved, but no provider "
             "API integration exists to actually generate the video. "
-            "See docs/hub-orchestrator-unified-builder-plan.md Phase 10."
+            "See the hub-orchestrator unified builder plan (archived in the workspace) Phase 10."
         )
 
     except NotImplementedError as e:

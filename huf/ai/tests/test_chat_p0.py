@@ -3,7 +3,7 @@
 
 """
 Real-Frappe (Layer B) integration tests for the Chat / conversation
-lifecycle described in ``docs/testing/CURRENT_STATE.md`` section 6
+lifecycle described in the CURRENT_STATE audit (archived in the workspace) section 6
 ("Chat / conversation E2E").
 
 Every test submits a run through the real whitelisted entrypoint
@@ -150,7 +150,7 @@ class TestChatP0(IntegrationTestCase):
           - persist ``conversation_index`` values across BOTH submissions
             that are distinct (no duplicates) and monotonically increasing --
             this directly exercises the ordering concern flagged in
-            CURRENT_STATE.md section 6: ``ConversationManager.add_message()``
+            CURRENT_STATE audit section 6: ``ConversationManager.add_message()``
             computes ``conversation_index`` via a non-atomic
             ``SELECT MAX(...)+1``, and the whitelisted ``add_message`` API
             does not visibly take the conversation lock before calling it.
@@ -205,7 +205,7 @@ class TestChatP0(IntegrationTestCase):
         # calls racing on the same `conversation_index`) -- that would
         # require two real concurrent DB connections/threads, which a single
         # `IntegrationTestCase` method run in-process cannot exercise
-        # faithfully. The ordering finding in CURRENT_STATE.md section 6
+        # faithfully. The ordering finding in CURRENT_STATE audit section 6
         # remains a *potential* race, not disproven or proven here.
 
     # -- CHAT-003 -----------------------------------------------------------
@@ -258,7 +258,7 @@ class TestChatP0(IntegrationTestCase):
 
     def test_chat_004_no_server_side_cancel_api_exists(self):
         """Prove the absence of a server-side cancel/stop API, per
-        CURRENT_STATE.md section 3/6: "No server-side cancel/stop API exists
+        CURRENT_STATE audit section 3/6: "No server-side cancel/stop API exists
         anywhere" -- frontend "Stop" only aborts the client-side fetch for
         the SSE streaming path; the queue-first REST path has nothing to
         abort server-side.
@@ -269,7 +269,7 @@ class TestChatP0(IntegrationTestCase):
         ``get_agent_run_status`` live) for any ``@frappe.whitelist()``
         function whose name contains "cancel" or "stop" and appears to
         operate on a Conversation/Agent Run, rather than re-asserting the
-        CURRENT_STATE.md claim blindly.
+        CURRENT_STATE audit claim blindly.
         """
         import huf.ai.agent_chat as agent_chat_module
         import huf.ai.chat_api as chat_api_module
@@ -299,20 +299,20 @@ class TestChatP0(IntegrationTestCase):
 
         if suspicious:
             self.fail(
-                "CURRENT_STATE.md is stale -- a cancel/stop-shaped whitelisted "
+                "CURRENT_STATE audit is stale -- a cancel/stop-shaped whitelisted "
                 "API now exists: " + ", ".join(suspicious) + ". Coordinator must "
-                "re-audit docs/testing/CURRENT_STATE.md section 6 and, if this "
+                "re-audit the CURRENT_STATE audit (archived in the workspace) section 6 and, if this "
                 "is a real cancel/stop endpoint operating on Conversation/Agent "
                 "Run, replace this absence-test with a real behavioral test of "
                 "it."
             )
         # No whitelisted cancel/stop-named function found -- matches
-        # CURRENT_STATE.md's Phase 0 grep-based audit finding.
+        # CURRENT_STATE audit's Phase 0 grep-based audit finding.
 
     # -- CHAT-005 -----------------------------------------------------------
 
     def test_chat_005_regenerate_never_mutates_existing_history(self):
-        """Per CURRENT_STATE.md section 6: "Regeneration never mutates
+        """Per CURRENT_STATE audit section 6: "Regeneration never mutates
         history in place -- always appends a new user+assistant turn."
         Submitting a second run on the same conversation must leave the
         ORIGINAL first user+assistant ``Agent Message`` rows completely

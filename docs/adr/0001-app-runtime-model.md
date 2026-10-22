@@ -5,7 +5,7 @@ Date: 2026-08-24
 
 ## Context
 
-Phase 0 of `docs/hub-orchestrator-unified-builder-plan.md` audited the existing
+Phase 0 of `the hub-orchestrator unified builder plan (archived in the workspace)` audited the existing
 `HUF App` and `Agent`/`Agent Message` DocTypes (plan §A) and Phase 1 (plan §D,
 §I) requires settling two open questions before any new tools or fields are
 built: whether HUF needs multiple modality-specific App runtimes, and who owns

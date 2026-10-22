@@ -3,7 +3,7 @@
 
 """
 Real-Frappe (Layer B) integration tests for the Agent Run execution
-lifecycle described in ``docs/testing/CURRENT_STATE.md`` section 3 ("Agent
+lifecycle described in the CURRENT_STATE audit (archived in the workspace) section 3 ("Agent
 runtime / execution lifecycle").
 
 Every test submits a run through the real whitelisted entrypoint
@@ -339,7 +339,7 @@ class TestAgentRuntimeP0(IntegrationTestCase):
 
     def test_agent_run_004_now_flag_forces_synchronous_direct_execution(self):
         """Queue-first is the documented default execution path
-        (CURRENT_STATE.md section 3: "default execution path enqueues").
+        (CURRENT_STATE audit section 3: "default execution path enqueues").
         Without a live ``bench worker`` draining the queue in this test
         process, a queued run would never reach a terminal status. This
         test pins down (and documents) that passing ``now=1`` is what makes

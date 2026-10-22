@@ -14,7 +14,7 @@ This module is a from-scratch rewrite against current `develop`'s actual
 schema, verified field-by-field against the real doctype JSON (citations in
 each function's docstring) rather than guessed.
 
-Project rule this module exists to serve (see `docs/testing/CURRENT_STATE.md`):
+Project rule this module exists to serve (see the CURRENT_STATE audit (archived in the workspace)):
 tests must build their own deterministic world and assert real behavior,
 never `if no model: skipTest(...)` away essential regression coverage.
 Every factory here is safe to call with zero pre-existing fixtures on a
@@ -292,7 +292,7 @@ def make_agent_tool_function(tool_name=None, tool_type=None, **overrides):
 # ---------------------------------------------------------------------------
 #
 # Two flavors, for the two test layers this repo distinguishes
-# (docs/testing/CURRENT_STATE.md):
+# (the CURRENT_STATE audit (archived in the workspace)):
 #
 # - ``build_*_tool_spec()`` return a plain dict shaped like the fields Frappe
 #   would read off an ``Agent Tool Function`` document. Layer A (mocked-
@@ -597,7 +597,7 @@ def make_agent_conversation(agent=None, session_id=None, **overrides):
     `make_agent()`. ``status`` defaults to "Active" per the doctype.
     The controller (`agent_conversation.py`) is a 9-line stub with no
     `validate()` logic — all behavior lives in
-    `huf/ai/conversation_manager.py`, per `CURRENT_STATE.md` section 6.
+    `huf/ai/conversation_manager.py`, per the CURRENT_STATE audit section 6.
     """
     if agent is None:
         agent = make_agent().name
@@ -662,7 +662,7 @@ def make_agent_run(conversation=None, agent=None, provider=None, model=None, **o
 
 # ---------------------------------------------------------------------------
 # Automation (new runtime) / Agent Trigger (legacy) — both live per
-# CURRENT_STATE.md section 7's dual-doctype finding.
+# CURRENT_STATE audit section 7's dual-doctype finding.
 # ---------------------------------------------------------------------------
 
 
@@ -678,7 +678,7 @@ def make_automation(automation_name=None, agent=None, instruction=None, **overri
     its actual firing conditions live on child ``Automation Trigger`` rows
     (see `make_automation_trigger()`), run via
     `huf/ai/automation_runner.py::run_automation` per
-    `docs/testing/CURRENT_STATE.md` section 7.
+    the CURRENT_STATE audit (archived in the workspace) section 7.
     """
     if agent is None:
         agent = make_agent().name
@@ -731,7 +731,7 @@ def make_agent_trigger(agent=None, trigger_name=None, trigger_type="Manual", **o
     Required fields per `huf/huf/doctype/agent_trigger/agent_trigger.json`:
     ``trigger_name`` (Data, reqd=1), ``agent`` (Link -> Agent, reqd=1).
     Both this doctype and ``Automation``/``Automation Trigger`` are
-    confirmed still live on current `develop` (`docs/testing/CURRENT_STATE.md`
+    confirmed still live on current `develop` (the CURRENT_STATE audit (archived in the workspace)
     section 7's runtime-flag finding) — support both explicitly rather than
     assuming one has fully replaced the other. Use `make_automation_trigger()`
     for the new runtime, this for legacy-path regression coverage.

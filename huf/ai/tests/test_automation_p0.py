@@ -3,7 +3,7 @@
 
 """
 Real-Frappe (Layer B) integration tests for the Automation runtime
-described in ``docs/testing/CURRENT_STATE.md`` section 7 ("Automations").
+described in the CURRENT_STATE audit (archived in the workspace) section 7 ("Automations").
 
 Covers the CURRENT DEFAULT active runtime only (Automation / Automation
 Trigger / ``automation_scheduler.py`` — confirmed default "new" via

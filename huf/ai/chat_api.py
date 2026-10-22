@@ -68,7 +68,7 @@ def run_agent_sync_chat(
     and an existing ``allow_guest=0`` agent must throw an identical
     ``frappe.PermissionError`` to a Guest caller) rather than delegating to
     ``run_agent_sync`` for that check — note the drift risk already flagged
-    in docs/testing/CURRENT_STATE.md ("`n` (guest-facing) duplicates
+    in the CURRENT_STATE audit (archived in the workspace) ("`n` (guest-facing) duplicates
     guest/capability/access checks from `run_agent_sync` rather than
     delegating"). When ``create_new`` is falsy, this function skips its own
     check entirely and delegates straight to ``run_agent_sync``, which

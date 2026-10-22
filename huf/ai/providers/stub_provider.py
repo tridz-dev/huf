@@ -218,7 +218,7 @@ the fully-resolved round-trip in `new_items`** — it does NOT return a
 "please call this tool" instruction for some outer loop to execute.
 
 This is not a simplification for testing purposes; it is what the real
-contract actually is. Per `docs/testing/CURRENT_STATE.md` section 4
+contract actually is. Per the CURRENT_STATE audit (archived in the workspace) section 4
 ("Tool-calling framework"): "Execution is NOT via the OpenAI Agents SDK
 Runner — HUF's own loop in `huf/ai/providers/litellm.py::run()` (~lines
 700-1170)". Reading that loop directly confirms it: inside

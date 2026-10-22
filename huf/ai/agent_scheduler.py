@@ -90,7 +90,7 @@ def run_scheduled_agents():
 	automation_runtime_is_new() is the sole mode on your site.
 	Will be removed in a future version after Remediation WP-08
 	ships and automation_runtime_is_new() is the default on all
-	internal benches. See doc/DEPRECATIONS.md for removal timeline.
+	internal benches. See docs/DEPRECATIONS.md for removal timeline.
 	"""
 	if automation_runtime_is_new():
 		frappe.logger().info("run_scheduled_agents: legacy scheduler is disabled; new automation_runtime is active")

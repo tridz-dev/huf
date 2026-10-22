@@ -4,7 +4,7 @@
 """
 _Test P34 AI Provider / AI Model P0 regression suite (Layer B, real Frappe).
 
-Covers the P0 findings for CURRENT_STATE.md section 5 ("Provider / model /
+Covers the P0 findings for CURRENT_STATE audit section 5 ("Provider / model /
 LLM gateway"): AI Provider/AI Model CRUD round-trips, the `provider_name`
 whitespace validation asymmetry (blocked on insert, warn-only on edit for
 existing records), local-LLM `api_key`/`api_base_url` validation, the
