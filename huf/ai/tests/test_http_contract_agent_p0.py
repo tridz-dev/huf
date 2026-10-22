@@ -96,7 +96,7 @@ RUN_AGENT = "_Test P61 HTTP Run Agent"
 
 GET_SECTION_METHOD = "huf.ai.agent.config_api.get_agent_section"
 UPDATE_SECTION_METHOD = "huf.ai.agent.config_api.update_agent_section"
-RUN_AGENT_SYNC_METHOD = "huf.ai.agent_integration.run_agent_sync"
+RUN_AGENT_SYNC_METHOD = "huf.ai.agent.integration.run_agent_sync"
 
 
 def _method_url(dotted_method: str) -> str:

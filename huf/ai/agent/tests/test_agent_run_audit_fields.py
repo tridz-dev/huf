@@ -13,14 +13,14 @@ Covers:
     caught exception types, so callers can flush it onto the run doc.
 
 Run with:
-    bench --site <site> run-tests --app huf --module huf.ai.tests.test_agent_run_audit_fields
+    bench --site <site> run-tests --app huf --module huf.ai.agent.tests.test_agent_run_audit_fields
 """
 import unittest
 from unittest.mock import patch
 
 import frappe
 
-from huf.ai.agent_integration import AgentManager, process_tool_call
+from huf.ai.agent.integration import AgentManager, process_tool_call
 
 
 class TestAuditIncompleteOnToolCallFailure(unittest.TestCase):
@@ -130,7 +130,7 @@ class TestAuditIncompleteOnToolCallFailure(unittest.TestCase):
         agent_run = self._make_agent_run(agent, conversation)
 
         with patch(
-            "huf.ai.agent_integration.frappe.get_doc",
+            "huf.ai.agent.integration.frappe.get_doc",
             side_effect=RuntimeError("boom: simulated persistence failure"),
         ):
             result = process_tool_call(

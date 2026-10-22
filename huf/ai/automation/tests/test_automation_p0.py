@@ -90,7 +90,7 @@ class TestAutomationP0(IntegrationTestCase):
         """Create an Agent wired to the HUF Test Provider.
 
         Reuses the exact idempotent get-or-create pattern established in
-        ``huf/ai/tests/test_agent_runtime_p0.py::_make_test_provider_agent``
+        ``huf/ai/agent/tests/test_agent_runtime_p0.py::_make_test_provider_agent``
         — the AI Provider document's ``name`` MUST be exactly
         "Test_Provider" (case-insensitive exact match, not a prefix) for
         ``litellm.run()``'s routing check (``provider.lower() ==

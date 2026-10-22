@@ -82,7 +82,7 @@ import frappe
 from werkzeug.wrappers import Response
 
 from huf.ai.agent.access import assert_agent_access
-from huf.ai.agent_integration import (
+from huf.ai.agent.integration import (
 	_client_safe_error,
 	_conversation_lock_key,
 	_DIRECT_LOCK_ATTEMPTS,
@@ -205,7 +205,7 @@ def handle_stream_response(
 	# Acquire the conversation-scoped execution lock before any byte of the
 	# SSE response is committed, so a lock miss surfaces as a synchronous
 	# 409 rather than as a mid-stream `response.failed` frame. Mirrors the
-	# direct-path locking in huf.ai.agent_integration (_conversation_lock_key
+	# direct-path locking in huf.ai.agent.integration (_conversation_lock_key
 	# / _DIRECT_LOCK_ATTEMPTS / _QUEUE_LOCK_TTL).
 	lock_key = None
 	heartbeat = None

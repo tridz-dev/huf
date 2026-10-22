@@ -260,7 +260,7 @@ def _run_lock_key(flow_run_name: str) -> str:
 def _acquire_run_lock(flow_run_name: str) -> bool:
 	"""Take the single-writer lock for a run.
 
-	Same shape as the distributed lock in ``agent_integration.py``: a Redis
+	Same shape as the distributed lock in ``agent/integration.py``: a Redis
 	``SET key value EX ttl NX``, which is atomic, so exactly one of two
 	concurrent callers gets ``True``. Before T-22 ``run_flow`` took no lock at
 	all and two concurrent calls could both advance the same cursor (F-4).
@@ -901,7 +901,7 @@ def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		inject_context = True
 
 	try:
-		from huf.ai.agent_integration import run_agent_sync
+		from huf.ai.agent.integration import run_agent_sync
 
 		result = run_agent_sync(
 			agent_name=agent_name,
@@ -1159,7 +1159,7 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 	conversation_id = _conversation_of(flow_run, run_ctx) if conv_mode == "flow_shared" else None
 
 	try:
-		from huf.ai.agent_integration import run_agent_sync
+		from huf.ai.agent.integration import run_agent_sync
 
 		result = run_agent_sync(
 			agent_name=router_agent_name,
@@ -2013,7 +2013,7 @@ def _call_orchestrator(
 	conversation_id = _conversation_of(flow_run, run_ctx) if conv_mode == "flow_shared" else None
 
 	try:
-		from huf.ai.agent_integration import run_agent_sync
+		from huf.ai.agent.integration import run_agent_sync
 
 		result = run_agent_sync(
 			agent_name=orchestrator_agent,

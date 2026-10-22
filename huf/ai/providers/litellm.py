@@ -1298,7 +1298,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
     # Deterministic HUF Test Provider routing. Checked first, before any
     # frappe.get_doc/network/LLM-SDK code below, so it is reached on the
     # exact same code path (this coroutine, once awaited by the real caller
-    # in `agent_integration.py`) a real provider would take - not via the
+    # in `agent/integration.py`) a real provider would take - not via the
     # `RunProvider.run()` custom-provider fallback branch in `huf/ai/run.py`,
     # which can only ever trigger on a synchronous failure to *construct*
     # this coroutine (this function is `async def`, so a real litellm

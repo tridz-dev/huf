@@ -17,7 +17,7 @@ after it resets a failed Meeting back to "Summarizing".
 import frappe
 from frappe import _
 
-from huf.ai.agent_integration import run_agent_sync
+from huf.ai.agent.integration import run_agent_sync
 from huf.ai.meetings.meeting_transcription import (
     MODEL_NOT_CONFIGURED_MESSAGE,
     _agent_is_configured,

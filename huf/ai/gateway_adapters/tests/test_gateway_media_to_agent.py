@@ -63,7 +63,7 @@ def _run_gateway(saved, run_result, *, event=None):
 		patch.object(gs, "_maybe_mark_read_typing"),
 		patch.object(gs, "_commit_unless_testing"),
 		patch.object(gs, "_run_agent_serialised", side_effect=lambda fn, lock_key, **kw: fn(**kw)),
-		patch.dict(sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=run)}),
+		patch.dict(sys.modules, {"huf.ai.agent.integration": SimpleNamespace(run_agent_sync=run)}),
 		patch.object(gs, "_send_fallback_once", fb),
 		patch.object(gs, "_send_whatsapp_reply", reply),
 		patch.object(gs.frappe, "log_error"),

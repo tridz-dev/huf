@@ -13,7 +13,7 @@ import frappe
 from frappe.website.page_renderers.base_renderer import BaseRenderer
 from werkzeug.wrappers import Response
 
-from huf.ai.agent_integration import (
+from huf.ai.agent.integration import (
 	_client_safe_error,
 	_has_queued_runs,
 	_resolve_effective_model,

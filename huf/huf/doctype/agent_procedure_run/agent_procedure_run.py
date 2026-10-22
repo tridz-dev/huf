@@ -30,7 +30,7 @@ def get_permission_query_conditions(user=None):
 	"""Restrict Agent Procedure Run list/read to runs the user owns,
 	unless the user has agent.view_all capability.
 
-	Fix for the same defect pattern as F-02 (see huf.ai.agent_integration
+	Fix for the same defect pattern as F-02 (see huf.ai.agent.integration
 	.get_run_permission_conditions, the reference implementation this mirrors):
 	Huf User / Huf Manager hold create+write on this DocType but there was no
 	if_owner restriction and no permission_query_conditions hook, so any

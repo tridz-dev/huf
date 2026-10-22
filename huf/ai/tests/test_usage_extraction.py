@@ -4,7 +4,7 @@
 """
 Unit tests for huf.ai.usage_extraction, the single source of truth for
 per-round LLM usage extraction (replaces four drifted inline copies in
-huf/ai/providers/litellm.py and huf/ai/agent_integration.py).
+huf/ai/providers/litellm.py and huf/ai/agent/integration.py).
 """
 
 import unittest

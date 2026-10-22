@@ -8,7 +8,7 @@ from frappe import _
 from frappe.model.document import Document
 from huf.ai.agent.hooks import clear_doc_event_agents_cache
 from frappe.utils import now_datetime
-from huf.ai.agent_integration import run_agent_sync 
+from huf.ai.agent.integration import run_agent_sync 
 import random
 
 from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
@@ -691,7 +691,7 @@ class Agent(Document):
                 return True
 
         # Access/Read Permissions — delegated to the shared helper so this
-        # stays in sync with huf.ai.agent_integration's access checks.
+        # stays in sync with huf.ai.agent.integration's access checks.
         return check_agent_access(self, user)
 
 

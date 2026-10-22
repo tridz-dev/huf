@@ -780,7 +780,7 @@ class TestDispatchBounds(DesktopExecutorTestCase):
 
 	# H2: total wait stays under the queue job timeout
 	def test_run_budget_is_below_the_queue_job_timeout(self):
-		from huf.ai import agent_integration as ai
+		from huf.ai.agent import integration as ai
 
 		self.assertLess(dx.run_wait_budget_s(), ai._QUEUE_LOCK_TTL)
 		self.assertLessEqual(dx.HARD_CAP_S, dx.run_wait_budget_s())

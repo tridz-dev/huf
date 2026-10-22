@@ -4,7 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 from huf.ai.orchestration.planning import run_planning
-from huf.ai.agent_integration import run_agent_sync
+from huf.ai.agent.integration import run_agent_sync
 from huf.ai.transaction import commit_if_background
 from huf.ai.run_budget import get_current_budget, estimate_run_cost
 

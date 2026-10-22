@@ -47,7 +47,7 @@ class TestGetAgentRunStatusPerms(IntegrationTestCase):
 				frappe.session.user = "alice@example.com"
 				frappe.set_user("alice@example.com")
 
-				from huf.ai.agent_integration import get_agent_run_status
+				from huf.ai.agent.integration import get_agent_run_status
 				result = get_agent_run_status(run_doc.name)
 
 				assert result["success"] is True
@@ -85,7 +85,7 @@ class TestGetAgentRunStatusPerms(IntegrationTestCase):
 				frappe.session.user = "bob@example.com"
 				frappe.set_user("bob@example.com")
 
-				from huf.ai.agent_integration import get_agent_run_status
+				from huf.ai.agent.integration import get_agent_run_status
 				with self.assertRaises(frappe.PermissionError):
 					get_agent_run_status(run_doc.name)
 			finally:

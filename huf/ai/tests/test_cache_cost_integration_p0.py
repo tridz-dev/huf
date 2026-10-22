@@ -14,9 +14,9 @@ caching on by default). Everything that already tests caching in this repo
 ``test_prompt_cache_mode_runtime.py``, ``cost_calculator.py``'s own
 ``_calculate_from_custom_pricing`` cached-token discount branch) is a pure
 unit test of an isolated function -- none of them submit a real run through
-``huf.ai.agent_integration.run_agent_sync`` and check that a cache hit
+``huf.ai.agent.integration.run_agent_sync`` and check that a cache hit
 actually lands as a lower persisted ``Agent Run.cost``. That plumbing gap
-(usage dict -> ``calculate_cost()`` call site in ``agent_integration.py`` ->
+(usage dict -> ``calculate_cost()`` call site in ``agent/integration.py`` ->
 ``Agent Run.cost``/``cached_tokens`` columns) is exactly what silently
 breaks if any of those pieces drift out of sync with each other, and a
 purely unit-level test suite cannot catch it. Since caching exists
@@ -41,7 +41,7 @@ Run with:
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.agent_integration import run_agent_sync
+from huf.ai.agent.integration import run_agent_sync
 from huf.testing.factories import make_agent, make_ai_model, make_ai_provider
 
 PREFIX = "_Test P0CI"

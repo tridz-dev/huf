@@ -10,7 +10,7 @@ Real: signed webhook -> ``handle_gateway_webhook`` -> ``ingest_gateway_event`` -
 ``process_gateway_event`` -> adapter send, with a real ``Agent`` as the Gateway
 default target, a real execution user, a real Gateway Access Entry and (bridge
 mode) the real frappe_whatsapp doctypes. Faked: only the LLM boundary
-(``huf.ai.agent_integration.run_agent_sync``) and the Meta HTTP boundary.
+(``huf.ai.agent.integration.run_agent_sync``) and the Meta HTTP boundary.
 """
 
 from __future__ import annotations
@@ -219,7 +219,7 @@ class _E2EMixin:
 			self.agent_calls.append(kwargs)
 			return {"response": REPLY, "agent_run_id": f"fake-run-{len(self.agent_calls)}"}
 
-		llm = patch("huf.ai.agent_integration.run_agent_sync", side_effect=fake_run)
+		llm = patch("huf.ai.agent.integration.run_agent_sync", side_effect=fake_run)
 		self.run_mock = llm.start()
 		self.addCleanup(llm.stop)
 

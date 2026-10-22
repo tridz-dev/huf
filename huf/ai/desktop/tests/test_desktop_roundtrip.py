@@ -21,7 +21,7 @@ from unittest import mock
 
 import frappe
 
-from huf.ai import agent_integration as ai
+from huf.ai.agent import integration as ai
 from huf.ai.desktop import executor as dx
 from huf.testing import desktop_test_helpers as h
 from huf.ai.tools import desktop_workspace as dw

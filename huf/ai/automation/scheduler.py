@@ -198,7 +198,7 @@ def _submit_batch_job_for_automation_trigger(t, automation_doc, prompt):
 		batch_job.save(ignore_permissions=True)
 		return
 
-	from huf.ai.agent_integration import _run_async_safely
+	from huf.ai.agent.integration import _run_async_safely
 
 	try:
 		result = _run_async_safely(submit_batch(agent, requests))

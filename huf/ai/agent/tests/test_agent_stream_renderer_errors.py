@@ -117,7 +117,7 @@ class TestStreamErrorMessageSavedContract(unittest.TestCase):
     def _collect(self, impl):
         import asyncio
 
-        from huf.ai import agent_integration
+        from huf.ai.agent import integration as agent_integration
 
         async def run():
             with patch.object(agent_integration, "_run_agent_stream_impl", impl), \
@@ -174,7 +174,7 @@ class TestStreamErrorMessageSavedContract(unittest.TestCase):
         self.assertEqual(self._collect(impl)[0]["error"], "Prompt is too long")
 
     def test_abandon_unsaved_run_marks_failed_and_frees_idempotency_key(self):
-        from huf.ai import agent_integration as ai
+        from huf.ai.agent import integration as ai
 
         with patch.object(ai.frappe.db, "rollback") as rb, \
                 patch.object(ai.frappe.db, "set_value") as sv, \
@@ -188,7 +188,7 @@ class TestStreamErrorMessageSavedContract(unittest.TestCase):
         cm.assert_called_once()
 
     def test_abandon_unsaved_run_logs_original_error(self):
-        from huf.ai import agent_integration as ai
+        from huf.ai.agent import integration as ai
 
         with patch.object(ai.frappe, "log_error") as le, \
                 patch.object(ai.frappe.db, "rollback"), patch.object(ai.frappe.db, "set_value"), \
@@ -206,7 +206,7 @@ class TestStreamErrorMessageSavedContract(unittest.TestCase):
 
         import asyncio
 
-        from huf.ai import agent_integration
+        from huf.ai.agent import integration as agent_integration
 
         async def run():
             with patch.object(agent_integration, "_run_agent_stream_impl", impl):
@@ -216,7 +216,7 @@ class TestStreamErrorMessageSavedContract(unittest.TestCase):
         self.assertEqual(seen["_state"], {"x": 1})
 
     def test_client_safe_error_exact_types_only(self):
-        from huf.ai.agent_integration import _GENERIC_STREAM_ERROR, _client_safe_error
+        from huf.ai.agent.integration import _GENERIC_STREAM_ERROR, _client_safe_error
         from huf.ai.providers.litellm import ProviderUnavailableError
         from huf.ai.run_budget import RunBudgetExceeded
 
@@ -269,7 +269,7 @@ class TestChunkLevelErrorForwarding(unittest.TestCase):
     """Provider error chunks: curated (`public`) text kept, raw text replaced, marker never leaked."""
 
     def _run(self, chunk):
-        from huf.ai import agent_integration as ai
+        from huf.ai.agent import integration as ai
 
         with patch.object(ai.frappe, "log_error") as le:
             out = ai._sanitize_error_chunk(chunk, chunk.get("error"))
@@ -297,7 +297,7 @@ class TestChunkLevelErrorForwarding(unittest.TestCase):
 
 class TestPublicMessageGuards(unittest.TestCase):
     def test_public_message_capped_and_flattened(self):
-        from huf.ai.agent_integration import _client_safe_error
+        from huf.ai.agent.integration import _client_safe_error
         from huf.ai.providers.litellm import ProviderUnavailableError
 
         out = _client_safe_error(ProviderUnavailableError("line1\nTraceback\x00 x\r\n" + "a" * 1000))
@@ -307,7 +307,7 @@ class TestPublicMessageGuards(unittest.TestCase):
         self.assertEqual(_client_safe_error(ProviderUnavailableError("")), "The request could not be completed. Please try again.")
 
     def test_str_exception_is_capped_and_client_path_unchanged(self):
-        from huf.ai.agent_integration import _client_safe_error
+        from huf.ai.agent.integration import _client_safe_error
         from huf.ai.providers.litellm import ProviderUnavailableError
 
         raw = "sk-secret " + "z" * 1000
@@ -318,7 +318,7 @@ class TestPublicMessageGuards(unittest.TestCase):
         self.assertEqual(_client_safe_error(e), e.public_message)
 
     def test_desktop_error_text_is_curated(self):
-        from huf.ai.agent_integration import _GENERIC_STREAM_ERROR, _client_safe_desktop_error
+        from huf.ai.agent.integration import _GENERIC_STREAM_ERROR, _client_safe_desktop_error
 
         leaked = {"code": "desktop_offline", "message": "Evil <script> label is offline"}
         self.assertNotIn("Evil", _client_safe_desktop_error(leaked))
@@ -337,7 +337,7 @@ class TestPublicMessageGuards(unittest.TestCase):
         self.assertIs(responses_stream._client_safe_error.__name__, "_client_safe_error")
 
     def test_remote_disabled_says_which_switch_is_off(self):
-        from huf.ai.agent_integration import _client_safe_desktop_error
+        from huf.ai.agent.integration import _client_safe_desktop_error
         from huf.ai.desktop.sessions import REMOTE_DISABLED_MESSAGE
 
         for off in ("desktop", "agent"):

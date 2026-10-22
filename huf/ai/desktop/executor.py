@@ -481,7 +481,7 @@ def run_wait_budget_s():
 	"""Total seconds one run may spend waiting on the desktop (below the queue job timeout)."""
 	timeout = DEFAULT_QUEUE_JOB_TIMEOUT_S
 	try:
-		from huf.ai import agent_integration
+		from huf.ai.agent import integration as agent_integration
 
 		timeout = int(getattr(agent_integration, "_QUEUE_LOCK_TTL", timeout))
 	except Exception:

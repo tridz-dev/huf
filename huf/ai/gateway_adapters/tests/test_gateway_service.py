@@ -684,7 +684,7 @@ class TestGatewayReplyDelivery(unittest.TestCase):
         mock_run = MagicMock(return_value={"agent_run_id": "AR-001", "response": "Hello back"})
         mock_send.return_value = SimpleNamespace(provider_message_id="vk-message-1")
 
-        with patch.dict(sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=mock_run)}), patch(
+        with patch.dict(sys.modules, {"huf.ai.agent.integration": SimpleNamespace(run_agent_sync=mock_run)}), patch(
             "huf.ai.agent.access.check_agent_access", return_value=True
         ) as mock_check:
             result = gateway_service.process_gateway_event(event.name)
@@ -827,7 +827,7 @@ class TestGatewayEventFailureHandling(unittest.TestCase):
         mock_run = MagicMock(return_value={"agent_run_id": "AR-002", "response": "Hello back"})
 
         with patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=real_adapter), patch.dict(
-            sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=mock_run)}
+            sys.modules, {"huf.ai.agent.integration": SimpleNamespace(run_agent_sync=mock_run)}
         ):
             with self.assertRaises(ValueError):
                 gateway_service.process_gateway_event(event.name)
@@ -898,7 +898,7 @@ class TestGatewayAgentAdmissionIdentity(unittest.TestCase):
         mock_run = MagicMock(return_value={"agent_run_id": "AR-099", "response": "hi"})
         mock_send.return_value = SimpleNamespace(provider_message_id="tg-1")
 
-        with patch.dict(sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=mock_run)}), patch(
+        with patch.dict(sys.modules, {"huf.ai.agent.integration": SimpleNamespace(run_agent_sync=mock_run)}), patch(
             "huf.ai.agent.access.check_agent_access", return_value=True
         ):
             result = gateway_service.process_gateway_event(event.name)
@@ -1105,7 +1105,7 @@ class TestWhatsAppGatewayService(unittest.TestCase):
         configured = gateway(name="WA", provider="WhatsApp", execution_user="bot", whatsapp_account="")
         mock_frappe.get_doc.side_effect = [event, configured, MagicMock(allow_guest=True, owner="bot")]
         mock_run = MagicMock(return_value={"agent_run_id": "AR-1", "response": "hi back"})
-        with patch.dict(sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=mock_run)}), patch(
+        with patch.dict(sys.modules, {"huf.ai.agent.integration": SimpleNamespace(run_agent_sync=mock_run)}), patch(
             "huf.ai.gateway_webhook.send_gateway_parts", side_effect=send_side_effect, return_value=send_return
         ), patch("huf.ai.gateway_service.is_opted_out", return_value=False), patch(
             "huf.ai.gateway_service._save_whatsapp_media", return_value=[]

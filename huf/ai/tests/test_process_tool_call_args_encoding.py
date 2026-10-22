@@ -20,7 +20,7 @@ import unittest
 
 import frappe
 
-from huf.ai.agent_integration import process_tool_call
+from huf.ai.agent.integration import process_tool_call
 
 
 class TestProcessToolCallArgsEncoding(unittest.TestCase):

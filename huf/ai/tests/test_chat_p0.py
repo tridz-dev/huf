@@ -7,11 +7,11 @@ lifecycle described in the CURRENT_STATE audit (archived in the workspace) secti
 ("Chat / conversation E2E").
 
 Every test submits a run through the real whitelisted entrypoint
-``huf.ai.agent_integration.run_agent_sync`` (never calling internal helpers
+``huf.ai.agent.integration.run_agent_sync`` (never calling internal helpers
 like ``ConversationManager.add_message``/``get_or_create_conversation``
 directly), forcing synchronous direct execution with ``now=1`` -- the same
 pattern already established and confirmed-working in
-``huf/ai/tests/test_agent_runtime_p0.py`` (see that file's module docstring
+``huf/ai/agent/tests/test_agent_runtime_p0.py`` (see that file's module docstring
 for the full "routing to the test provider" / "queue-first vs. direct
 execution" citation chain; not re-derived here).
 
@@ -37,7 +37,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.agent.chat import get_history
-from huf.ai.agent_integration import run_agent_sync
+from huf.ai.agent.integration import run_agent_sync
 from huf.testing.factories import (
     make_agent,
     make_ai_model,
@@ -265,7 +265,7 @@ class TestChatP0(IntegrationTestCase):
 
         This introspects the actual whitelisted API surface of the two
         chat-related modules (``huf.ai.agent.chat``, ``huf.ai.chat_api``)
-        plus ``huf.ai.agent_integration`` (where ``run_agent_sync``/
+        plus ``huf.ai.agent.integration`` (where ``run_agent_sync``/
         ``get_agent_run_status`` live) for any ``@frappe.whitelist()``
         function whose name contains "cancel" or "stop" and appears to
         operate on a Conversation/Agent Run, rather than re-asserting the
@@ -273,7 +273,7 @@ class TestChatP0(IntegrationTestCase):
         """
         import huf.ai.agent.chat as agent_chat_module
         import huf.ai.chat_api as chat_api_module
-        import huf.ai.agent_integration as agent_integration_module
+        import huf.ai.agent.integration as agent_integration_module
 
         suspicious = []
         for module in (agent_chat_module, chat_api_module, agent_integration_module):

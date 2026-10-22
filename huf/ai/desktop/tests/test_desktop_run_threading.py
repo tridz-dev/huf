@@ -16,7 +16,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from huf.ai.agent import chat as agent_chat
-from huf.ai import agent_integration as ai
+from huf.ai.agent import integration as ai
 from huf.ai.desktop import executor as dx
 from huf.ai.desktop import policy as desktop_policy
 from huf.ai.agent.stream_renderer import AgentStreamRenderer
@@ -40,14 +40,14 @@ def _agent_doc(**over):
 
 
 class TestResolveDesktopRequest(unittest.TestCase):
-	@patch("huf.ai.agent_integration.frappe")
+	@patch("huf.ai.agent.integration.frappe")
 	def test_absent_param_is_noop(self, _f):
 		self.assertEqual(ai._resolve_desktop_request(None), (None, None))
 		self.assertEqual(ai._resolve_desktop_request(""), (None, None))
 
 	@patch("huf.ai.desktop.executor.origin_for", return_value="desktop")
 	@patch("huf.ai.desktop.executor.resolve_desktop_ctx", return_value=CTX)
-	@patch("huf.ai.agent_integration.frappe")
+	@patch("huf.ai.agent.integration.frappe")
 	def test_owned_lease_resolves(self, f, resolve, _origin):
 		f.session.user = "u@example.com"
 		ctx, status = ai._resolve_desktop_request("exec-1")
@@ -58,7 +58,7 @@ class TestResolveDesktopRequest(unittest.TestCase):
 	@patch("huf.ai.desktop.executor.lease_remote_control", return_value=True)
 	@patch("huf.ai.desktop.executor.origin_for", return_value="remote")
 	@patch("huf.ai.desktop.executor.resolve_desktop_ctx", return_value=CTX)
-	@patch("huf.ai.agent_integration.frappe")
+	@patch("huf.ai.agent.integration.frappe")
 	def test_remote_origin_needs_the_agent_flag_and_the_desktop_switch(self, f, _resolve, _origin, _rc):
 		f.session.user = "u@example.com"
 		agent_off = {"allow_remote_desktop": 0}
@@ -70,7 +70,7 @@ class TestResolveDesktopRequest(unittest.TestCase):
 		self.assertTrue(status["available"])
 
 	@patch("huf.ai.desktop.executor.resolve_desktop_ctx", return_value=None)
-	@patch("huf.ai.agent_integration.frappe")
+	@patch("huf.ai.agent.integration.frappe")
 	def test_foreign_user_executor_ignored_with_warning(self, f, _resolve):
 		f.session.user = "other@example.com"
 		ctx, status = ai._resolve_desktop_request("exec-1")
@@ -80,7 +80,7 @@ class TestResolveDesktopRequest(unittest.TestCase):
 		f.logger.return_value.warning.assert_called()
 
 	@patch("huf.ai.desktop.executor.resolve_desktop_ctx", side_effect=RuntimeError("boom"))
-	@patch("huf.ai.agent_integration.frappe")
+	@patch("huf.ai.agent.integration.frappe")
 	def test_resolution_error_never_raises(self, f, _resolve):
 		ctx, status = ai._resolve_desktop_request("exec-1")
 		self.assertIsNone(ctx)
@@ -131,7 +131,7 @@ class TestWorkerPinVerification(unittest.TestCase):
 		run_doc.owner = owner
 		return run_doc
 
-	@patch("huf.ai.agent_integration._conversation_owner", return_value=None)
+	@patch("huf.ai.agent.integration._conversation_owner", return_value=None)
 	@patch("huf.ai.desktop.executor.resolve_desktop_ctx", return_value=CTX)
 	def test_owner_mismatch_drops_the_tools_without_resolving_the_lease(self, resolve, _conv):
 		context = {"desktop": ai._desktop_runtime_context(CTX)}
@@ -139,14 +139,14 @@ class TestWorkerPinVerification(unittest.TestCase):
 		self.assertIsNone(kwargs["desktop_ctx"])
 		resolve.assert_not_called()
 
-	@patch("huf.ai.agent_integration._conversation_owner", return_value=None)
+	@patch("huf.ai.agent.integration._conversation_owner", return_value=None)
 	@patch("huf.ai.desktop.executor.resolve_desktop_ctx")
 	def test_missing_owner_drops_the_tools(self, resolve, _conv):
 		context = {"desktop": ai._desktop_runtime_context(CTX)}
 		self.assertIsNone(ai._build_execution_kwargs(self._run_doc(None), context)["desktop_ctx"])
 		resolve.assert_not_called()
 
-	@patch("huf.ai.agent_integration._conversation_owner", return_value="victim@example.com")
+	@patch("huf.ai.agent.integration._conversation_owner", return_value="victim@example.com")
 	@patch("huf.ai.desktop.executor.resolve_desktop_ctx", return_value=CTX)
 	def test_conversation_owned_by_someone_else_drops_the_tools(self, resolve, _conv):
 		context = {"desktop": ai._desktop_runtime_context(CTX)}
@@ -154,13 +154,13 @@ class TestWorkerPinVerification(unittest.TestCase):
 		self.assertIsNone(kwargs["desktop_ctx"])
 		resolve.assert_not_called()
 
-	@patch("huf.ai.agent_integration._conversation_owner", return_value=CTX["user"])
+	@patch("huf.ai.agent.integration._conversation_owner", return_value=CTX["user"])
 	@patch("huf.ai.desktop.executor.resolve_desktop_ctx", return_value={**CTX, "user": "someone-else@example.com"})
 	def test_lease_owned_by_another_user_drops_the_tools(self, resolve, _conv):
 		context = {"desktop": ai._desktop_runtime_context(CTX)}
 		self.assertIsNone(ai._build_execution_kwargs(self._run_doc(CTX["user"]), context)["desktop_ctx"])
 
-	@patch("huf.ai.agent_integration._conversation_owner", return_value=CTX["user"])
+	@patch("huf.ai.agent.integration._conversation_owner", return_value=CTX["user"])
 	@patch("huf.ai.desktop.executor.resolve_desktop_ctx", return_value=CTX)
 	def test_sweeper_drain_as_administrator_resolves_from_the_run_owner(self, resolve, _conv):
 		"""Session user is Administrator (stale-run sweeper); the lease is resolved for the OWNER."""
@@ -238,11 +238,11 @@ class TestRunAgentSyncThreading(unittest.TestCase):
 				return json.loads(c.args[0]["runtime_context"])
 		self.fail("Agent Run doc not created")
 
-	@patch("huf.ai.agent_integration._execute_agent_run")
-	@patch("huf.ai.agent_integration.ConversationManager")
+	@patch("huf.ai.agent.integration._execute_agent_run")
+	@patch("huf.ai.agent.integration.ConversationManager")
 	@patch("huf.ai.desktop.executor.origin_for", return_value="desktop")
 	@patch("huf.ai.desktop.executor.resolve_desktop_ctx", return_value=CTX)
-	@patch("huf.ai.agent_integration.frappe")
+	@patch("huf.ai.agent.integration.frappe")
 	def test_immediate_path_passes_ctx_and_status(self, f, _resolve, _origin, cm, execute):
 		execute.return_value = {"success": True}
 		result = self._run(f, cm, immediate=1, desktop_executor_id="exec-1")
@@ -252,11 +252,11 @@ class TestRunAgentSyncThreading(unittest.TestCase):
 		self.assertEqual(result["desktop_tools"], {"available": True, "reason": None})
 		self.assertEqual(self._persisted_context(f)["desktop"]["executor_id"], "exec-1")
 
-	@patch("huf.ai.agent_integration._execute_agent_run")
-	@patch("huf.ai.agent_integration.ConversationManager")
+	@patch("huf.ai.agent.integration._execute_agent_run")
+	@patch("huf.ai.agent.integration.ConversationManager")
 	@patch("huf.ai.desktop.executor.origin_for", return_value="desktop")
 	@patch("huf.ai.desktop.executor.resolve_desktop_ctx", return_value=CTX)
-	@patch("huf.ai.agent_integration.frappe")
+	@patch("huf.ai.agent.integration.frappe")
 	def test_queued_path_persists_pin_and_status(self, f, _resolve, _origin, cm, execute):
 		result = self._run(f, cm, desktop_executor_id="exec-1")
 		self.assertTrue(result["queued"])
@@ -271,10 +271,10 @@ class TestRunAgentSyncThreading(unittest.TestCase):
 		self.assertFalse(dx.verify_pin(pin, "CONV-1", MagicMock(name="another run")))
 		self.assertTrue(result["desktop_tools"]["available"])
 
-	@patch("huf.ai.agent_integration._execute_agent_run")
-	@patch("huf.ai.agent_integration.ConversationManager")
+	@patch("huf.ai.agent.integration._execute_agent_run")
+	@patch("huf.ai.agent.integration.ConversationManager")
 	@patch("huf.ai.desktop.executor.resolve_desktop_ctx", return_value=None)
-	@patch("huf.ai.agent_integration.frappe")
+	@patch("huf.ai.agent.integration.frappe")
 	def test_foreign_executor_ignored_run_proceeds(self, f, _resolve, cm, execute):
 		execute.return_value = {"success": True}
 		result = self._run(f, cm, immediate=1, desktop_executor_id="someone-elses")
@@ -282,10 +282,10 @@ class TestRunAgentSyncThreading(unittest.TestCase):
 		self.assertNotIn("desktop", self._persisted_context(f))
 		self.assertFalse(result["desktop_tools"]["available"])
 
-	@patch("huf.ai.agent_integration._execute_agent_run")
-	@patch("huf.ai.agent_integration.ConversationManager")
+	@patch("huf.ai.agent.integration._execute_agent_run")
+	@patch("huf.ai.agent.integration.ConversationManager")
 	@patch("huf.ai.desktop.executor.resolve_desktop_ctx")
-	@patch("huf.ai.agent_integration.frappe")
+	@patch("huf.ai.agent.integration.frappe")
 	def test_absent_param_unchanged(self, f, resolve, cm, execute):
 		sentinel = {"success": True}
 		execute.return_value = sentinel

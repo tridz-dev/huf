@@ -24,7 +24,7 @@ This file provides context and instructions for Claude Code and other AI coding 
 huf/
 ├── huf/                          # Backend (Frappe app)
 │   ├── ai/                       # Core AI logic
-│   │   ├── agent_integration.py  # AgentManager, run_agent_sync, run_agent_stream
+│   │   ├── agent/integration.py  # AgentManager, run_agent_sync, run_agent_stream
 │   │   ├── agent/stream_renderer.py # SSE page renderer for streaming
 │   │   ├── agent/scheduler.py    # Scheduled agent execution
 │   │   ├── agent/hooks.py        # DocType event triggers
@@ -259,7 +259,7 @@ toast.success("Agent created");
 ## Key Backend Files
 
 ### Agent Execution Flow
-1. **`agent_integration.py`**: `AgentManager` prepares agents, provides both sync and streaming execution:
+1. **`agent/integration.py`**: `AgentManager` prepares agents, provides both sync and streaming execution:
    - `run_agent_sync()` - **Queue-first by default**: persists an `Agent Run` (Queued) and returns an acknowledgement; a per-conversation FIFO drainer executes it and emits `agent_run_status` realtime events. `now=true` or the Agent's advanced `run_immediately` policy selects direct inline execution (see `docs/queue-first-agent-runs.md`)
    - `run_agent_stream()` - Async generator yielding chunks for real-time streaming; direct-execution mode, allowed only for agents with `run_immediately` enabled (enforced server-side in the stream renderer)
 2. **`agent/stream_renderer.py`**: SSE page renderer for `/huf/stream/<agent_name>` endpoint
@@ -445,7 +445,7 @@ const agents = await db.getDocList('Agent', {
 const agent = await db.getDoc('Agent', agentName);
 
 // RPC calls (via call)
-const result = await call.post('huf.ai.agent_integration.run_agent_sync', {
+const result = await call.post('huf.ai.agent.integration.run_agent_sync', {
     agent_name: 'my-agent',
     prompt: 'Hello'
 });
