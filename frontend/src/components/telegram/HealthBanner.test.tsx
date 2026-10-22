@@ -4,7 +4,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import type { TelegramHealth } from '@/services/telegramApi';
-import { HealthBanner } from './HealthBanner';
+import { HealthBanner, typingLine } from './HealthBanner';
 
 const PASS = [
 	{ id: 'bot_reachable', label: 'x', ok: true, hint: '' },
@@ -64,5 +64,24 @@ describe('Telegram HealthBanner', () => {
 		expect(screen.getByLabelText('Loading health')).toBeInTheDocument();
 		rerender(<HealthBanner health={h()} checking onCheck={vi.fn()} />);
 		expect(screen.getByRole('button', { name: 'Checking…' })).toBeDisabled();
+	});
+});
+
+describe('Telegram HealthBanner typing line', () => {
+	it('shows last sent time and 24h count when typing is on', () => {
+		const typing = { last_sent_at: '2026-10-23 12:03:41', sent_count_24h: 18, last_error: null, last_error_at: null, keepalive_ticks: 4 };
+		render(<HealthBanner health={h({ typing })} onCheck={vi.fn()} />);
+		expect(screen.getByText('Typing indicator: last sent 12:03:41, 18 in 24h')).toBeInTheDocument();
+	});
+
+	it('is hidden when typing is off (null block)', () => {
+		render(<HealthBanner health={h({ typing: null })} onCheck={vi.fn()} />);
+		expect(screen.queryByText(/Typing indicator/)).toBeNull();
+	});
+
+	it('formats never-sent and failure time without internal error kinds', () => {
+		expect(typingLine({ last_sent_at: null, sent_count_24h: 0, last_error: 'blocked', last_error_at: '2026-10-23 09:00:02', keepalive_ticks: 0 })).toBe(
+			'Typing indicator: not sent yet · last failure 09:00:02',
+		);
 	});
 });

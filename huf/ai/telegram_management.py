@@ -26,6 +26,7 @@ _GATEWAY_FIELDS = [
 	"integration_settings",
 	"last_event_at",
 	"last_error",
+	"typing_indicator",
 ]
 
 CAPABILITY_FLAGS = (
@@ -133,6 +134,7 @@ def build_overview(
 		"last_error": gateway.get("last_error") or None,
 		"bot": bot,
 		"bot_error": bot_error or None,
+		"typing": build_typing(gateway),
 	}
 
 
@@ -186,6 +188,15 @@ def build_health(
 		"pending_update_count": pending_update_count,
 		"last_event_at": str(gateway["last_event_at"]) if gateway.get("last_event_at") else None,
 	}
+
+
+def build_typing(gateway: dict[str, Any]) -> dict[str, Any] | None:
+	"""Typing indicator counters for the Overview line; None when the gateway's typing indicator is off."""
+	if not int(gateway.get("typing_indicator") or 0):
+		return None
+	from huf.ai.gateway_adapters import telegram_typing_metrics
+
+	return telegram_typing_metrics.read(gateway["name"])
 
 
 @frappe.whitelist()
@@ -244,7 +255,9 @@ def get_telegram_health(gateway: str | None = None) -> dict[str, Any]:
 			pending = None
 	for c in checks:
 		c["hint"] = _safe_text(c.get("hint"), credentials)
-	return {"success": True, "gateway": build_health(row, presence, checks, pending)}
+	payload = build_health(row, presence, checks, pending)
+	payload["typing"] = build_typing(row)
+	return {"success": True, "gateway": payload}
 
 
 @frappe.whitelist()

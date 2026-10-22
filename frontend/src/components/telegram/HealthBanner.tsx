@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TimeStamp } from '@/components/whatsapp/TimeStamp';
-import { checkMessage, type TelegramHealth } from '@/services/telegramApi';
+import { checkMessage, type TelegramHealth, type TelegramTypingStatus } from '@/services/telegramApi';
 import {
 	BANNER_CHECKING,
 	BANNER_CHECK_NOW,
@@ -43,6 +43,19 @@ function buildPills(h: TelegramHealth): Pill[] {
 	}
 	pills.push({ label: CHECK_PILLS.receiving, ok: h.last_event_at != null });
 	return pills;
+}
+
+/** "2026-10-23 12:03:41" -> "12:03:41" (site-local; falls back to the raw text). */
+function clockPart(value: string): string {
+	const match = /(\d{2}:\d{2}:\d{2})/.exec(value);
+	return match ? match[1] : value;
+}
+
+/** One plain line for the typing indicator; never shows error kinds or chat ids. */
+export function typingLine(t: TelegramTypingStatus): string {
+	const sent = t.last_sent_at ? `last sent ${clockPart(t.last_sent_at)}, ${t.sent_count_24h} in 24h` : 'not sent yet';
+	const failed = t.last_error_at ? ` · last failure ${clockPart(t.last_error_at)}` : '';
+	return `Typing indicator: ${sent}${failed}`;
 }
 
 export function HealthBanner({ health: h, loading, checking, onCheck, onTurnOn }: HealthBannerProps) {
@@ -126,6 +139,7 @@ export function HealthBanner({ health: h, loading, checking, onCheck, onTurnOn }
 			</div>
 			<div className="text-xs text-steel">
 				{h.last_event_at ? <>Last message <TimeStamp value={h.last_event_at} /></> : NO_MESSAGES_YET}
+				{h.typing ? <div>{typingLine(h.typing)}</div> : null}
 			</div>
 		</div>
 	);

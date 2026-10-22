@@ -32,6 +32,17 @@ def event(chat_type="private", message=None, chat_id="111", **meta):
 	return SimpleNamespace(raw_payload=raw, conversation_id=chat_id, get=lambda k, d=None: raw)
 
 
+class FakeCache:
+	def __init__(self):
+		self.store = {}
+
+	def get_value(self, key):
+		return self.store.get(key)
+
+	def set_value(self, key, value, expires_in_sec=None):
+		self.store[key] = value
+
+
 class TypingCase(unittest.TestCase):
 	def setUp(self):
 		self.sender = mock.Mock()
@@ -43,6 +54,9 @@ class TypingCase(unittest.TestCase):
 		self.frappe = logger_patch.start()
 		self.addCleanup(logger_patch.stop)
 		self.log = self.frappe.logger.return_value
+		cache_patch = mock.patch("frappe.cache", return_value=FakeCache())
+		cache_patch.start()
+		self.addCleanup(cache_patch.stop)
 
 
 class TestHookSelection(unittest.TestCase):
@@ -108,7 +122,8 @@ class TestThreadId(TypingCase):
 class TestLogAndFailure(TypingCase):
 	def test_success_logs_one_line_without_token(self):
 		ing.send_typing_for_event(event(), gateway())
-		self.log.info.assert_called_once_with("Telegram typing sent chat=111 action=typing")
+		self.log.debug.assert_called_once_with("Telegram typing sent chat=111 action=typing")
+		self.log.info.assert_not_called()
 
 	def test_blocked_failure_is_logged_and_non_fatal(self):
 		self.sender.send_chat_action.side_effect = TelegramApiError(
