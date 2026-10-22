@@ -569,7 +569,7 @@ class TestRunAsRestore(Base):
 		self.assertIn("restore", str(cm.exception).lower())
 		logged.assert_called_once()
 
-	def test_restore_failure_masks_nothing_when_body_raised(self):
+	def test_restore_failure_chains_body_exception(self):
 		def set_user(u):
 			if u == "Guest":
 				raise RuntimeError("redis gone")
@@ -582,7 +582,8 @@ class TestRunAsRestore(Base):
 		):
 			with ta.run_as(BOUND):
 				raise ValueError("body")
-		self.assertIsInstance(cm.exception.__cause__, RuntimeError)
+		# the body's original exception is chained, not masked by the restore failure
+		self.assertIsInstance(cm.exception.__cause__, ValueError)
 
 
 class TestLiveAdminRecheck(unittest.TestCase):
