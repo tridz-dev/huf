@@ -187,6 +187,19 @@ class TestRunner(unittest.TestCase):
 		self.assertEqual(api.of("sendMessage"), [])  # final goes through the pipeline, not here
 		self.assertEqual(cache.get_value(ts._key("GW", CHAT)) in ({}, None), True)
 
+	def test_placeholder_keeps_typing_alive_until_real_text_is_shown(self):
+		seen = []
+		cache = FakeCache()
+
+		def hook(chunk):
+			seen.append(dict(ts.StreamState("GW", CHAT, cache).get()))
+
+		r, _, _ = self._runner(CHUNKS, cache=cache, hook=hook)
+		r(agent_name="a", prompt="p")
+		self.assertTrue(seen[0].get("draft_id"))  # run_started: placeholder only
+		self.assertFalse(seen[0].get("draft_text"))  # keepalive skip callback must stay False
+		self.assertTrue(any(s.get("draft_text") for s in seen[1:]))
+
 	def test_failing_drafts_never_lose_final(self):
 		api = FakeBotApi()
 		api.queue("sendMessageDraft", *[FakeBotApi.error("Bad Request", 400)] * 10)

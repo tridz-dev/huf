@@ -167,3 +167,12 @@ class TestBusyArithmetic(unittest.TestCase):
 		# A second message must survive a 30-minute run before being failed.
 		self.assertGreaterEqual(gs._REQUEUE_MAX * gs._CONVERSATION_LOCK_WAIT, 30 * 60)
 		self.assertGreaterEqual(gs._REQUEUE_TTL, gs._REQUEUE_MAX * (gs._CONVERSATION_LOCK_WAIT + 10))
+
+
+class TestEmptyReplyAfterToolDelivery(unittest.TestCase):
+	def test_empty_text_after_tool_calls_is_not_a_failure(self):
+		self.assertIsNone(gs._agent_run_failure({"success": True, "response": "", "tool_calls_made": 1}))
+
+	def test_empty_text_without_tool_calls_is_still_a_failure(self):
+		self.assertIsNotNone(gs._agent_run_failure({"success": True, "response": "", "tool_calls_made": 0}))
+		self.assertIsNotNone(gs._agent_run_failure({"success": True, "response": "  "}))

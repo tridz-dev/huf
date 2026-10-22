@@ -2746,6 +2746,7 @@ def _execute_agent_run(
         return {
             "success": True,
             "response": final_output,
+            "tool_calls_made": len(tool_call_message_map),
             "client_side_tool_calls": client_side_tool_calls,
             "structured": structured,
             "provider": resolved_provider,
@@ -4090,7 +4091,7 @@ async def _run_agent_stream_impl(
                         # empty assistant message; fail the run and emit an
                         # error frame instead of a success-looking complete.
                         error_msg = _(
-                            "The provider returned an empty response. For reasoning models on Ollama, use the 'ollama_chat/' model prefix."
+                            "The model returned an empty response. Check that the model is available and supports this request."
                         )
                         frappe.log_error(
                             title="Huf Provider",
@@ -4392,6 +4393,7 @@ async def _run_agent_stream_impl(
                     chunk["conversation_id"] = conversation.name
                     chunk["response"] = full_response
                     chunk["success"] = True
+                    chunk["tool_calls_made"] = len(tool_call_message_map)
                     chunk["agent_run_id"] = run_doc.name
                     chunk["agent_message_id"] = final_message.name
                     chunk["session_id"] = conv_manager.session_id
