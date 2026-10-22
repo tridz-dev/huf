@@ -13,7 +13,7 @@ from frappe.utils.background_jobs import enqueue
 from frappe.utils import now_datetime, add_to_date
 
 from frappe import _
-from .tool_functions import (
+from huf.ai.tool_functions import (
 	create_document,
     get_document,
 	get_list,
