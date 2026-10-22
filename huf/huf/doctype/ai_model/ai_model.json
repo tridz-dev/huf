@@ -11,6 +11,7 @@
   "modalities",
   "capabilities_section",
   "supports_reasoning",
+  "is_latest_alias",
   "reasoning_config_override",
   "context_window",
   "max_output_tokens",
@@ -62,6 +63,16 @@
    "fieldname": "supports_reasoning",
    "fieldtype": "Check",
    "label": "Supports Reasoning"
+  },
+  {
+   "default": "0",
+   "description": "Set by the seeded catalogue: this model name is a provider alias that always resolves to the provider's newest model of its family (e.g. gemini-flash-latest), rather than a pinned snapshot.",
+   "fieldname": "is_latest_alias",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Latest Alias",
+   "read_only": 1
   },
   {
    "description": "Optional JSON object to override reasoning capabilities (e.g. supports_thinking_blocks, supported_efforts).",
@@ -131,7 +142,7 @@
    "fieldname": "chat_capability_overrides_section",
    "fieldtype": "Section Break",
    "label": "Chat Capability Overrides",
-   "description": "Force these chat capabilities off for every agent using this model, regardless of each agent's own setting \u2014 useful for small/local models where the extra prompt instructions or tools would waste context."
+   "description": "Force these chat capabilities off for every agent using this model, regardless of each agent's own setting — useful for small/local models where the extra prompt instructions or tools would waste context."
   },
   {
    "fieldname": "disable_ask_user",
@@ -158,7 +169,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-09 03:51:03.550222",
+ "modified": "2026-10-22 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "AI Model",
