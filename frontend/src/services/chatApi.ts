@@ -817,7 +817,7 @@ export async function getAgentMessageIdForRun(agentRunId: string): Promise<strin
 }
 
 /**
- * Response of huf.ai.agent_integration.get_agent_run_status.
+ * Response of huf.ai.agent.integration.get_agent_run_status.
  * Statuses match the Agent Run doctype Select options.
  */
 export interface AgentRunStatusResponse {
@@ -873,7 +873,7 @@ export async function getPendingConversationRuns(
 
 export async function getAgentRunStatus(agentRunId: string): Promise<AgentRunStatusResponse> {
   try {
-    const result = await call.get('huf.ai.agent_integration.get_agent_run_status', {
+    const result = await call.get('huf.ai.agent.integration.get_agent_run_status', {
       agent_run_id: agentRunId,
     });
     return (result?.message ?? result) as AgentRunStatusResponse;

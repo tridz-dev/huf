@@ -53,7 +53,7 @@ for batch scheduling.
   `result_summary` field only (a capped JSON blob: success/error counts plus
   a small sample of responses). They are **not** threaded back into the
   originating `Agent Conversation` / `Agent Message` records. Doing so
-  requires understanding `agent_integration.py`'s conversation-lock model in
+  requires understanding `agent/integration.py`'s conversation-lock model in
   more depth than the current implementation covers safely, and is an
   explicitly deferred follow-up.
 - **Cost estimates are best-effort, not exact.** `estimated_cost` on a

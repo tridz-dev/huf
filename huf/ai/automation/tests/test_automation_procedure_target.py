@@ -312,7 +312,7 @@ class TestAgentTargetRegression(_Base):
 		self._automations.append(automation.name)
 		self.assertEqual(automation.target_type, "Agent")
 
-		with patch("huf.ai.agent_integration.run_agent_sync") as mock_run:
+		with patch("huf.ai.agent.integration.run_agent_sync") as mock_run:
 			mock_run.return_value = {"success": True, "agent_run_id": None, "conversation_id": None}
 			result = run_automation(automation.name, now=True, initiating_user="Administrator")
 

@@ -68,9 +68,9 @@ sys.modules["frappe.utils.safe_exec"] = safe_exec_stub
 # module-level import; handle_ocr_document is a lazy import inside
 # run_agent_for_doc (async, hence AsyncMock for run_until_complete).
 run_agent_sync_mock = MagicMock()
-agent_integration_stub = types.ModuleType("huf.ai.agent_integration")
+agent_integration_stub = types.ModuleType("huf.ai.agent.integration")
 agent_integration_stub.run_agent_sync = run_agent_sync_mock
-sys.modules["huf.ai.agent_integration"] = agent_integration_stub
+sys.modules["huf.ai.agent.integration"] = agent_integration_stub
 
 handle_ocr_document_mock = AsyncMock(
     return_value={"success": True, "text": "ocr text", "file_hash": "abc123"}

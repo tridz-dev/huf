@@ -12,7 +12,7 @@ AGENT-GOLDEN-002, ...) that each:
     1. Construct a minimal deterministic world: a fake ``agent`` object
        carrying exactly the attributes real product code reads off a real
        `Agent` doc for a provider call (`agent_name`, `provider`, `model`,
-       `instructions`, `max_turns` — see `huf/ai/agent_integration.py:499`
+       `instructions`, `max_turns` — see `huf/ai/agent/integration.py:499`
        and `huf/ai/providers/litellm.py:688`), wired to provider
        "test_provider" with the right `__TEST_SCENARIO__:<NAME>` marker
        (see `huf/ai/providers/stub_provider.py`'s module docstring for the
@@ -25,7 +25,7 @@ AGENT-GOLDEN-002, ...) that each:
     3. Capture the actual returned `SimpleResult`-shaped object (or the
        raised exception, for the failure scenario) plus a synthesized
        Agent-Run-lifecycle trace matching the documented execution steps in
-       `agent_integration.py::_execute_agent_run` (history fetch -> provider
+       `agent/integration.py::_execute_agent_run` (history fetch -> provider
        invocation -> tool-call-loop persistence over `result.new_items` ->
        usage/cost persistence -> final message persist).
     4. Normalize that trace via `huf.testing.golden_trace.normalize_trace`
@@ -49,7 +49,7 @@ Once a bench exists, a second pass should:
     - Use `huf.testing.factories.make_agent`/`make_agent_conversation`/
       `make_agent_run` to build REAL doc rows (still wired to provider
       "test_provider" so scenarios stay deterministic).
-    - Drive the REAL `huf.ai.agent_integration.run_agent_sync`/
+    - Drive the REAL `huf.ai.agent.integration.run_agent_sync`/
       `_execute_agent_run` path (as an `IntegrationTestCase`, per this
       repo's existing test convention, see `huf/huf/doctype/agent/
       test_agent.py`).
@@ -60,7 +60,7 @@ Once a bench exists, a second pass should:
       to change, only how the raw trace is assembled.
     - Replace the synthesized `state_transitions` list with the real
       `agent_run_status` realtime lifecycle events emitted by
-      `_emit_run_lifecycle_event` (`agent_integration.py:535`).
+      `_emit_run_lifecycle_event` (`agent/integration.py:535`).
 
 RUNNING THIS FILE
 ------------------
@@ -191,7 +191,7 @@ def _run_provider(agent, prompt, context=None):
 def _synthesize_messages(agent, prompt, result):
     """Synthesize the Agent-Message-shaped rows a real `_execute_agent_run`
     would persist for this provider call, per the documented sequence in
-    `agent_integration.py`: a user message, then one (kind="Tool Call")
+    `agent/integration.py`: a user message, then one (kind="Tool Call")
     message per tool_call_item/tool_call_output_item pair in
     `result.new_items`, then the final assistant message. This is a
     synthesis of the documented persistence contract, not a real DB read —
@@ -233,7 +233,7 @@ def _synthesize_messages(agent, prompt, result):
 
 def _synthesize_state_transitions(has_tool_calls, succeeded):
     """Synthesize the state-transition sequence a real Agent Run goes
-    through, per the documented lifecycle in `agent_integration.py` (queue
+    through, per the documented lifecycle in `agent/integration.py` (queue
     -> start -> [tool_call -> tool_result]* -> complete, or -> failed)."""
     transitions = ["queued", "started"]
     if has_tool_calls:

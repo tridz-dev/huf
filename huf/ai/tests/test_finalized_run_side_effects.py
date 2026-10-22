@@ -1,7 +1,7 @@
 import inspect
 import unittest
 
-from huf.ai import agent_integration as ai
+from huf.ai.agent import integration as ai
 
 
 class TestFinalizedRunSideEffects(unittest.TestCase):

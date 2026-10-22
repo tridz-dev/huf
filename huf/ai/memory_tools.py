@@ -519,7 +519,7 @@ def extract_memory_from_run(run_id):
 	}
 
 	try:
-		from huf.ai.agent_integration import run_agent_sync
+		from huf.ai.agent.integration import run_agent_sync
 		# Run in a dedicated conversation keyed by the source run. Without an
 		# explicit channel/external_id the run resolves to the user's own
 		# "api" session, writes its JSON reply into that chat history, and the

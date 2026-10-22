@@ -22,7 +22,7 @@ This module is deliberately a thin, frappe-light layer:
 * :func:`reserve_idempotency_key` / :func:`release_idempotency_key` are the only frappe-
   touching functions, and they touch nothing but ``frappe.cache()`` -- the same
   "cache set nx/ex" convention already used by ``huf.ai.procedure.lock`` (GT-08) and
-  ``huf.ai.agent_integration``'s queue lock. This is a *defense-in-depth* dedup layer,
+  ``huf.ai.agent.integration``'s queue lock. This is a *defense-in-depth* dedup layer,
   never the primary idempotency guard: the primary guard for benchmark-3-shaped
   Procedures is the graph's own read-before-write (an ``existing_followup_check``
   ``tool.call`` feeding a ``condition`` node) -- see

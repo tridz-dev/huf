@@ -11,7 +11,7 @@ continue to drive the older "Agent Trigger" doctype unchanged. Nothing here
 imports from, or is imported by, those two files.
 
 Agent execution itself is delegated to the existing
-``huf.ai.agent_integration.run_agent_sync`` entrypoint (the same function
+``huf.ai.agent.integration.run_agent_sync`` entrypoint (the same function
 used by the chat UI, flows, scheduled/legacy triggers, and integrations) so
 Automation runs get identical Agent Run bookkeeping, provider/model
 resolution, and queue-vs-direct execution semantics as every other caller.
@@ -259,7 +259,7 @@ def _execute(automation, trigger_name, trigger_context, now, commit=True, parent
 		automation
 	)
 
-	from huf.ai.agent_integration import run_agent_sync
+	from huf.ai.agent.integration import run_agent_sync
 
 	# Check spend cap before enqueuing child run (ST-09.6)
 	# Rebuild budget from parent_run_id if available

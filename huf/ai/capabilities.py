@@ -10,7 +10,7 @@ pre-existing behavior) and can be force-disabled per-AI-Model
 configured once to conserve prompt context, regardless of what any agent
 using it requests. Both the tool-availability gate
 (``huf.ai.tools.registry.PermissionAwareToolRegistry``) and the system-prompt
-instruction-injection gate (``huf.ai.agent_integration.AgentManager``) call
+instruction-injection gate (``huf.ai.agent.integration.AgentManager``) call
 this helper so they can never drift out of sync with each other.
 """
 

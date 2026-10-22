@@ -7,7 +7,7 @@ lifecycle described in the CURRENT_STATE audit (archived in the workspace) secti
 runtime / execution lifecycle").
 
 Every test submits a run through the real whitelisted entrypoint
-``huf.ai.agent_integration.run_agent_sync`` (never calling internal
+``huf.ai.agent.integration.run_agent_sync`` (never calling internal
 functions like ``_execute_agent_run`` directly), then asserts against real
 DB rows (``Agent Run`` / ``Agent Message`` / ``Agent Tool Call``). Provider
 behavior is made fully deterministic by routing the Agent through the HUF
@@ -21,10 +21,10 @@ work), delegating to ``huf.ai.providers.stub_provider.run()``. The
 ``provider`` value that reaches that check is the ``AI Provider`` document's
 own ``name`` (NOT ``provider_brand``) -- verified by reading:
 
-  - ``huf/ai/agent_integration.py::_resolve_effective_model`` -- returns
+  - ``huf/ai/agent/integration.py::_resolve_effective_model`` -- returns
     ``agent_doc.provider`` (a Link value, i.e. the AI Provider doc's
     ``name``) as ``effective_provider``.
-  - ``huf/ai/agent_integration.py:1620`` -- ``await RunProvider.run(agent,
+  - ``huf/ai/agent/integration.py:1620`` -- ``await RunProvider.run(agent,
     enhanced_prompt, resolved_provider, resolved_model_name, context)``,
     where ``resolved_provider`` is exactly that ``effective_provider``.
   - ``huf/huf/doctype/ai_provider/ai_provider.json`` -- ``"autoname":
@@ -50,7 +50,7 @@ Queue-first vs. direct execution
 ``run_agent_sync``'s default path is queue-first: it inserts the ``Agent
 Run`` as ``Queued`` and returns immediately without persisting a user
 message or executing anything inline
-(``huf/ai/agent_integration.py::run_agent_sync``, the
+(``huf/ai/agent/integration.py::run_agent_sync``, the
 ``is_queued = not agent_doc.run_immediately and not _is_truthy(now)`` branch).
 A test process has no running ``bench worker`` draining the queue, so a
 queued run would sit at status "Queued" forever and no assertions about a
@@ -75,7 +75,7 @@ cannot collide with fixtures created by another concurrent test file sharing
 the same site/bench.
 
 Run with:
-    bench --site <site> run-tests --app huf --module huf.ai.tests.test_agent_runtime_p0
+    bench --site <site> run-tests --app huf --module huf.ai.agent.tests.test_agent_runtime_p0
 """
 
 import json
@@ -83,7 +83,7 @@ import json
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.agent_integration import run_agent_sync
+from huf.ai.agent.integration import run_agent_sync
 from huf.testing.factories import (
     make_agent,
     make_ai_model,
@@ -194,7 +194,7 @@ class TestAgentRuntimeP0(IntegrationTestCase):
         ``role`` Select options are ``"user\\ntool\\nagent\\nsystem"`` --
         there is no "assistant" option; the assistant's own message is
         persisted with ``role="agent"`` (confirmed at the real call site,
-        ``agent_integration.py``: ``conv_manager.add_message(conversation,
+        ``agent/integration.py``: ``conv_manager.add_message(conversation,
         "agent", final_output, ...)`` in the success path).
         """
         agent = self._make_test_provider_agent()
@@ -230,7 +230,7 @@ class TestAgentRuntimeP0(IntegrationTestCase):
         tool_call_item/tool_call_output_item pair (per
         ``stub_provider.py``'s "Tool-call scenario contract" -- HUF's own
         loop in ``litellm.py::run()`` executes tools itself; there is no
-        outer-loop tool invocation to fake). ``agent_integration.py``'s
+        outer-loop tool invocation to fake). ``agent/integration.py``'s
         replay code (~line 1628-1780, ``process_tool_call``/``log_tool_call``)
         must persist a real ``Agent Tool Call`` row plus an ``Agent Message``
         (kind="Tool Call") from that replay, with the deterministic tool
@@ -280,7 +280,7 @@ class TestAgentRuntimeP0(IntegrationTestCase):
         self.assertEqual(json.loads(tc.tool_args), {"city": "Bengaluru"})
         # ``process_tool_call`` stores dict/list JSON results verbatim (not
         # wrapped in {"output": ...} -- that wrapping only applies to
-        # non-dict/list results, see agent_integration.py::process_tool_call).
+        # non-dict/list results, see agent/integration.py::process_tool_call).
         stored_result = tc.tool_result
         if isinstance(stored_result, str):
             stored_result = json.loads(stored_result)
@@ -310,7 +310,7 @@ class TestAgentRuntimeP0(IntegrationTestCase):
         ``ProviderUnavailableError`` (the exact class/shape a real litellm
         timeout produces -- see ``stub_provider.py``'s docstring). The real
         ``except ProviderUnavailableError as e:`` boundary handler in
-        ``_execute_agent_run`` (``agent_integration.py`` ~line 2058) must
+        ``_execute_agent_run`` (``agent/integration.py`` ~line 2058) must
         catch it, set the ``Agent Run`` to status "Failed" with a persisted
         ``error_message``, and return a structured
         ``{"success": False, "error": ...}`` result rather than letting the
@@ -384,7 +384,7 @@ class TestAgentRuntimeP0(IntegrationTestCase):
         exactly one ``role="agent"`` ``Agent Message`` -- no duplicates.
 
         The direct-execution path persists the user message itself
-        (``agent_integration.py``: ``conv_manager.add_message(conversation,
+        (``agent/integration.py``: ``conv_manager.add_message(conversation,
         "user", prompt, ...)`` immediately before calling
         ``_execute_agent_run``) and the success path persists exactly one
         assistant message (``conv_manager.add_message(conversation, "agent",

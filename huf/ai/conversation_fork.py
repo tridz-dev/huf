@@ -19,7 +19,7 @@ import frappe
 from frappe import _
 from frappe.utils import now
 
-from huf.ai.agent_integration import _run_async_safely
+from huf.ai.agent.integration import _run_async_safely
 from huf.ai.conversation_manager import ConversationManager
 from huf.ai.providers.litellm import get_simple_completion
 

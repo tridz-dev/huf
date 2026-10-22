@@ -26,7 +26,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from huf.ai.agent import chat as agent_chat
-from huf.ai import agent_integration as ai
+from huf.ai.agent import integration as ai
 from huf.ai.desktop import executor as dx
 from huf.ai.desktop import policy as dp
 from huf.ai.desktop import sessions as ds

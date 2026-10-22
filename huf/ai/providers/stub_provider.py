@@ -22,7 +22,7 @@ module used to document as its integration point? Because
 inside that body; it only constructs and returns a coroutine object. The
 actual execution (and any real litellm exception) happens later, when that
 coroutine is awaited by the real caller in
-`huf/ai/agent_integration.py:1620` (`await RunProvider.run(...)`) — which is
+`huf/ai/agent/integration.py:1620` (`await RunProvider.run(...)`) — which is
 AFTER `RunProvider.run()`'s own `try/except` around `litellm.run(...)` has
 already returned. So in a real Agent Run, that except block can only ever
 fire on a synchronous failure to *construct* the coroutine (e.g. wrong
@@ -60,14 +60,14 @@ Return contract (matches `huf.ai.providers.litellm.SimpleResult`, see
     result.usage           -> dict with at least "input_tokens"/"output_tokens"
                               keys (read via `usage.get("input_tokens", 0)` /
                               `usage.get("output_tokens", 0)` in
-                              `agent_integration.py` around line 1791-1792)
+                              `agent/integration.py` around line 1791-1792)
     result.new_items        -> list of `SimpleNamespace` items with a `.type`
                               of "tool_call_item" / "tool_call_output_item",
                               consumed by the tool-call-loop persistence code
-                              in `agent_integration.py` (~line 1620-1780).
+                              in `agent/integration.py` (~line 1620-1780).
                               TEST_TEXT never emits tool calls, so this is [].
     result.cost             -> float, read via `getattr(result, "cost", 0)`
-                              in `agent_integration.py:1782`.
+                              in `agent/integration.py:1782`.
 
 Triggering mechanism
 ---------------------
@@ -77,7 +77,7 @@ in `enhanced_prompt`:
     __TEST_SCENARIO__:TEST_TEXT
 
 We search the whole prompt (not just a fixed prefix) because
-`agent_integration.py::_execute_agent_run` wraps the raw user prompt inside a
+`agent/integration.py::_execute_agent_run` wraps the raw user prompt inside a
 larger "Current user message:\n{prompt}\n" template (and may prepend RAG/
 knowledge-context text) before calling `RunProvider.run()` — so a caller who
 sets `prompt = "__TEST_SCENARIO__:TEST_TEXT hello"` gets a marker that is no
@@ -232,7 +232,7 @@ a `role: tool` message, and only then makes the *next* round's completion
 call. There is no signal in `SimpleResult`/`new_items` meaning "outer caller,
 please go execute this" — by the time `litellm.run()` returns, every tool
 call in `new_items` has already been executed and paired with its output.
-`agent_integration.py`'s tool-call-loop persistence code (~1620-1780) only
+`agent/integration.py`'s tool-call-loop persistence code (~1620-1780) only
 *replays* `result.new_items` after the fact to write `Agent Tool Call` /
 `Agent Message` (kind="Tool Call") audit rows — it does not invoke tools
 itself.
@@ -242,7 +242,7 @@ deterministic sequence of already-resolved tool_call_item/tool_call_output_item
 pairs (referencing a made-up but realistic tool name/args/result), exactly
 mirroring the shape `litellm.run()` would have produced for a real agent
 whose model chose to call a real tool. There is no real `Agent Tool Function`
-invocation here, and no need for one: by the time `agent_integration.py`
+invocation here, and no need for one: by the time `agent/integration.py`
 consumes `result.new_items`, a real run's tool has *already* been executed by
 `litellm.run()` — so a scenario faking that pre-executed shape is faithful to
 the contract, not a shortcut around it.
@@ -618,7 +618,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
     coroutine), and `return await stub_provider.run(...)`-ed from there, so
     it is awaited by the same real call site that awaits a real litellm
     call: `await RunProvider.run(...)` in
-    `huf/ai/agent_integration.py:1620`. See this module's top-level
+    `huf/ai/agent/integration.py:1620`. See this module's top-level
     docstring for why this is the correct integration point instead of the
     `huf.ai.run.RunProvider.run()` custom-provider fallback branch.
 
@@ -650,7 +650,7 @@ def _fill_missing_usage_fields(result):
     scenario handlers above predate -- both added by the
     prompt-cache-auto-mode merge. `Agent Run.peak_context_tokens` and
     `Agent Run.round_count` are Int columns with a DB-level `NOT NULL
-    DEFAULT 0`; `agent_integration.py` reads each straight off
+    DEFAULT 0`; `agent/integration.py` reads each straight off
     `usage_payload.get(...)` with no `None` fallback (unlike
     `billed_input_tokens`, which IS guarded), so an absent key becomes an
     explicit `None` that overrides the column DEFAULT and fails the insert

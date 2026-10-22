@@ -187,12 +187,12 @@ after_app_uninstall = "huf.ai.app_seeding.apps_loader.on_app_uninstalled"
 # }
 permission_query_conditions = {
     "Agent": "huf.huf.doctype.agent.agent.get_permission_query_conditions",
-    "Agent Conversation": "huf.ai.agent_integration.get_conversation_permission_conditions",
-    "Agent Message": "huf.ai.agent_integration.get_message_permission_conditions",
-    "Agent Run": "huf.ai.agent_integration.get_run_permission_conditions",
-    "Agent Context Artifact": "huf.ai.agent_integration.get_context_artifact_permission_conditions",
-    "Agent Tool Call": "huf.ai.agent_integration.get_tool_call_permission_conditions",
-    "Agent Run Prompt Snapshot": "huf.ai.agent_integration.get_prompt_snapshot_permission_conditions",
+    "Agent Conversation": "huf.ai.agent.integration.get_conversation_permission_conditions",
+    "Agent Message": "huf.ai.agent.integration.get_message_permission_conditions",
+    "Agent Run": "huf.ai.agent.integration.get_run_permission_conditions",
+    "Agent Context Artifact": "huf.ai.agent.integration.get_context_artifact_permission_conditions",
+    "Agent Tool Call": "huf.ai.agent.integration.get_tool_call_permission_conditions",
+    "Agent Run Prompt Snapshot": "huf.ai.agent.integration.get_prompt_snapshot_permission_conditions",
     "Huf API Key": "huf.huf.doctype.huf_api_key.huf_api_key.get_api_key_permission_conditions",
     "Flow Definition": "huf.huf.doctype.flow_definition.flow_definition.get_permission_query_conditions",
     "Agent Procedure": "huf.huf.doctype.agent_procedure.agent_procedure.get_permission_query_conditions",
@@ -338,7 +338,7 @@ scheduler_events = {
     "cron": {
         "*/1 * * * *": [
             "huf.ai.orchestration.scheduler.process_orchestrations",
-            "huf.ai.agent_integration.recover_stalled_agent_runs",
+            "huf.ai.agent.integration.recover_stalled_agent_runs",
         ],
         "*/10 * * * *": [
             "huf.ai.gateway_service.reap_stuck_gateway_events",

@@ -2352,7 +2352,7 @@ def _process_gateway_event(event_name: str) -> dict:
         frappe.set_user(gateway.execution_user)
         event.db_set("status", "Running")
         if event.target_type == "Agent":
-            from huf.ai.agent_integration import run_agent_sync
+            from huf.ai.agent.integration import run_agent_sync
             from huf.ai.gateway_webhook import send_gateway_reply
 
             attachment_note = _describe_attachments(event.raw_payload)

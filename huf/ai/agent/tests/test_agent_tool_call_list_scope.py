@@ -6,7 +6,7 @@ preventing users from enumerating tool calls from other users' runs.
 
 import frappe
 from frappe.tests import IntegrationTestCase
-from huf.ai.agent_integration import get_tool_call_permission_conditions
+from huf.ai.agent.integration import get_tool_call_permission_conditions
 
 
 class TestAgentToolCallListScope(IntegrationTestCase):

@@ -86,7 +86,7 @@ only realistically-testable path is calling
 fake ``agent`` object (a `SimpleNamespace` mirroring the exact attributes
 real product code reads off a real `Agent` doc: `.name`, `.agent_name`,
 `.provider`, `.model`, `.instructions`, `.max_turns` — see
-`huf/ai/agent_integration.py:499` and `huf/ai/providers/litellm.py:688`),
+`huf/ai/agent/integration.py:499` and `huf/ai/providers/litellm.py:688`),
 NOT the full `_execute_agent_run`/`run_agent_sync` orchestration (which
 needs a real Frappe DB to persist real `Agent Run`/`Agent Message` rows and
 emit real lifecycle events).
@@ -96,7 +96,7 @@ provider-level trace (agent config + provider call + usage + terminal
 status), with a *synthesized* state-transition sequence and *synthesized*
 Agent Message-shaped rows describing what a real orchestration would have
 persisted around that provider call, per the documented contract in
-`agent_integration.py` (history fetch -> provider invocation -> tool-call
+`agent/integration.py` (history fetch -> provider invocation -> tool-call
 loop over `result.new_items` -> usage/cost persistence -> final message
 persist). It does NOT drive real DB rows.
 
@@ -108,7 +108,7 @@ rows (via `huf.testing.factories`), and feed those real rows into this same
 from a real `frappe.get_doc(...).as_dict()` or from the synthesized shape
 built here — the normalization contract is the same either way). That pass
 should also capture the real realtime `agent_run_status` lifecycle events
-(`_emit_run_lifecycle_event`, `agent_integration.py:535`) as the state
+(`_emit_run_lifecycle_event`, `agent/integration.py:535`) as the state
 transitions, replacing the synthesized sequence.
 """
 

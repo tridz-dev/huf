@@ -8,7 +8,7 @@ Covers:
 - stub_provider.run() directly, for the TEST_TEXT scenario: return shape
   matches the litellm.SimpleResult contract (final_output/usage/new_items/cost)
   and content is fixed/deterministic.
-- Marker extraction is robust to the prompt-wrapping agent_integration.py
+- Marker extraction is robust to the prompt-wrapping agent/integration.py
   actually does (marker not at prompt[0]).
 - Unknown/missing scenario markers raise UnknownTestScenarioError.
 - The REAL routing path this provider is actually reached through in
@@ -25,7 +25,7 @@ Covers:
   synchronously and relying on `huf.ai.run.RunProvider.run()`'s
   custom-provider fallback branch: `litellm.run()` is `async def`, so calling
   it only constructs a coroutine - a real execution failure can only surface
-  later, when the caller (`agent_integration.py:1620`,
+  later, when the caller (`agent/integration.py:1620`,
   `await RunProvider.run(...)`) awaits it, which is after
   `RunProvider.run()`'s own try/except has already returned. A synchronous
   `side_effect` mock does not simulate anything a real Agent Run can produce;
@@ -128,14 +128,14 @@ class TestTestProviderDirect(unittest.TestCase):
         self.assertEqual(result.cost, 0.0)
 
         # Usage: realistic-shaped, zero-cost, fixed token counts, and read
-        # the same way agent_integration.py reads it (dict.get, not getattr -
-        # see huf/ai/agent_integration.py:1791-1792).
+        # the same way agent/integration.py reads it (dict.get, not getattr -
+        # see huf/ai/agent/integration.py:1791-1792).
         self.assertIsInstance(result.usage, dict)
         self.assertEqual(result.usage.get("input_tokens"), stub_provider._TEST_TEXT_INPUT_TOKENS)
         self.assertEqual(result.usage.get("output_tokens"), stub_provider._TEST_TEXT_OUTPUT_TOKENS)
 
     def test_marker_found_even_when_not_at_prompt_start(self):
-        """agent_integration.py wraps the raw prompt inside a larger template
+        """agent/integration.py wraps the raw prompt inside a larger template
         ("Current user message:\n{prompt}\n"), so the marker is never
         literally prefix-of-string in production. Prove the scan handles that.
         """
@@ -308,7 +308,7 @@ class TestLiteLLMRunRoutesToTestProvider(unittest.TestCase):
     code in `litellm.run()` executes.
 
     This exercises the exact coroutine `RunProvider.run()` returns and the
-    real caller (`agent_integration.py:1620`) awaits - not a mocked
+    real caller (`agent/integration.py:1620`) awaits - not a mocked
     synchronous failure of `litellm.run` routed through the
     `huf.ai.run.RunProvider.run()` custom-provider fallback branch (which,
     per this module's and `stub_provider.py`'s docstrings, is not reachable

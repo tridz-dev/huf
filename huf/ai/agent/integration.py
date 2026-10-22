@@ -22,8 +22,8 @@ from huf.ai.tools.functions import (
     cancel_document,
 	delete_document,
 )
-from .conversation_manager import ConversationManager, safe_history_slice, safe_history_split
-from .run import RunProvider
+from huf.ai.conversation_manager import ConversationManager, safe_history_slice, safe_history_split
+from huf.ai.run import RunProvider
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
 from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableError
 from huf.ai.providers.errors import ProviderError, classify_status, redact_text
@@ -1723,7 +1723,7 @@ def run_agent_sync(
         # into each other's history. The prompt travels on the run itself.
         safe_commit()
         frappe.enqueue(
-            "huf.ai.agent_integration._run_queued_agent",
+            "huf.ai.agent.integration._run_queued_agent",
             queue="default",
             timeout=600,
             is_async=True,
@@ -1934,7 +1934,7 @@ def _notify_sub_agent_failure(agent_name, error_msg, parent_conversation_id, inv
         # NOTE: no ``now=1`` — the direct path can deadlock against the
         # parent conversation lock.
         frappe.enqueue(
-            "huf.ai.agent_integration.run_agent_sync",
+            "huf.ai.agent.integration.run_agent_sync",
             queue="default",
             timeout=300,
             is_async=True,
@@ -2678,7 +2678,7 @@ def _execute_agent_run(
                 # would be lost (deadlock). Going through the queue-first
                 # drainer lets the post-release sweep pick it up.
                 frappe.enqueue(
-                    "huf.ai.agent_integration.run_agent_sync",
+                    "huf.ai.agent.integration.run_agent_sync",
                     queue="default",
                     timeout=300,
                     is_async=True,
@@ -2721,7 +2721,7 @@ def _execute_agent_run(
                 or conv_title.startswith("Streaming chat with")
             ):
                 frappe.enqueue(
-                    "huf.ai.agent_integration.generate_conversation_title",
+                    "huf.ai.agent.integration.generate_conversation_title",
                     queue="default",
                     conversation_name=conversation.name,
                     agent_name=agent_name
@@ -2731,7 +2731,7 @@ def _execute_agent_run(
             current_history_len = len(history)
             if current_history_len >= history_limit:
                  frappe.enqueue(
-                    "huf.ai.agent_integration.run_background_summarization",
+                    "huf.ai.agent.integration.run_background_summarization",
                     queue="default",
                     conversation_name=conversation.name,
                     agent_name=agent_name
@@ -2844,7 +2844,7 @@ def _execute_agent_run(
                 # NOTE: no ``now=1`` — see the success hook above; the direct
                 # path can deadlock against the parent conversation lock.
                 frappe.enqueue(
-                    "huf.ai.agent_integration.run_agent_sync",
+                    "huf.ai.agent.integration.run_agent_sync",
                     queue="default",
                     timeout=300,
                     is_async=True,
@@ -3053,7 +3053,7 @@ def _has_queued_runs(conversation_id: str, exclude_run_id: str = None) -> bool:
 def _enqueue_drain(conversation_id: str):
     """Wake a drainer for this conversation. Safe to call repeatedly."""
     frappe.enqueue(
-        "huf.ai.agent_integration._run_queued_agent",
+        "huf.ai.agent.integration._run_queued_agent",
         queue="default",
         timeout=_QUEUE_LOCK_TTL,
         is_async=True,
@@ -4326,7 +4326,7 @@ async def _run_agent_stream_impl(
                         try:
                             silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' has responded. IMPORTANT: DO NOT assume this means the task was successful. Read the result carefully and appropriately relay it to the user.\nResult:\n{full_response}"
                             frappe.enqueue(
-                                "huf.ai.agent_integration.run_agent_sync",
+                                "huf.ai.agent.integration.run_agent_sync",
                                 queue="default",
                                 timeout=300,
                                 is_async=True,
@@ -4365,7 +4365,7 @@ async def _run_agent_stream_impl(
                             conv_title = frappe.db.get_value("Agent Conversation", conversation.name, "title")
                             if conv_title and (conv_title.startswith("Chat with") or conv_title.startswith("Conversation with") or conv_title.startswith("Streaming chat with")):
                                 frappe.enqueue(
-                                    "huf.ai.agent_integration.generate_conversation_title",
+                                    "huf.ai.agent.integration.generate_conversation_title",
                                     queue="default",
                                     conversation_name=conversation.name,
                                     agent_name=agent_name
@@ -4378,7 +4378,7 @@ async def _run_agent_stream_impl(
                     if context_strategy == "Summarize":
                         if len(history) >= history_limit:
                             frappe.enqueue(
-                                "huf.ai.agent_integration.run_background_summarization",
+                                "huf.ai.agent.integration.run_background_summarization",
                                 queue="default",
                                 conversation_name=conversation.name,
                                 agent_name=agent_name
@@ -4463,7 +4463,7 @@ async def _run_agent_stream_impl(
                         try:
                             silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
                             frappe.enqueue(
-                                "huf.ai.agent_integration.run_agent_sync",
+                                "huf.ai.agent.integration.run_agent_sync",
                                 queue="default",
                                 timeout=300,
                                 is_async=True,
@@ -4573,7 +4573,7 @@ async def _run_agent_stream_impl(
                 try:
                     silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
                     frappe.enqueue(
-                        "huf.ai.agent_integration.run_agent_sync",
+                        "huf.ai.agent.integration.run_agent_sync",
                         queue="default",
                         timeout=300,
                         is_async=True,

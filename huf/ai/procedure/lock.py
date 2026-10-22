@@ -5,11 +5,11 @@
 
 Flow has no equivalent: two concurrent ``run_flow(name)`` calls both advance the same
 ``current_node_id`` cursor with nothing serializing them. This module copies the
-precedent at ``huf/ai/agent_integration.py`` (``_conversation_lock_key`` /
+precedent at ``huf/ai/agent/integration.py`` (``_conversation_lock_key`` /
 ``_run_queued_agent``, around lines 1135-2398): ``frappe.cache().set(key, 1, ex=TTL,
 nx=True)`` to acquire, ``frappe.cache().expire(key, TTL)`` to heartbeat/extend, and
 ``frappe.cache().delete(key)`` to release -- the same "cache set nx/ex" convention
-``agent_integration.py`` itself attributes to ``huf/ai/knowledge/indexer.py``.
+``agent/integration.py`` itself attributes to ``huf/ai/knowledge/indexer.py``.
 
 Scope: one lock per Agent Procedure Run (not per procedure, not per conversation) --
 two different runs of the same procedure execute independently; only two attempts to

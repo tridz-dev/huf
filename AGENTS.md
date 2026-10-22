@@ -1080,7 +1080,7 @@ This enables fully cross-provider TTS: an agent using `OpenAI / gpt-4o` for conv
 
 The primary logic is located in the `huf/ai` directory.
 
-#### `agent_integration.py`
+#### `agent/integration.py`
 
 This file contains the main logic for creating and running agents.
 
@@ -1405,7 +1405,7 @@ Ingestion is a background process that converts raw inputs into indexed SQLite c
 -   **Query Processing**: Sanitizes input queries to prevent SQL injection and FTS syntax errors.
 -   **Multi-Source Search**: Aggregates results from multiple Knowledge Sources, sorting globally by score.
 
-#### 4. Agent Integration (`agent_integration.py` & `context_builder.py`)
+#### 4. Agent Integration (`agent/integration.py` & `context_builder.py`)
 
 Knowledge is injected into the agent execution loop in `run_agent_sync`:
 

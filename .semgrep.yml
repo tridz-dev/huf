@@ -37,7 +37,7 @@ rules:
       logging cleanly, e.g. frappe.log_error(f"Some dynamic message: {e}", "Label").
       Use keyword arguments with a short static title instead:
       frappe.log_error(title="Short Static Label", message=f"...dynamic details...").
-      See huf/ai/agent_integration.py (commit 1a43e76c) for the corrected pattern.
+      See huf/ai/agent/integration.py (commit 1a43e76c) for the corrected pattern.
     pattern-either:
       - pattern: frappe.log_error(f"...", ...)
       - pattern: frappe.log_error(f"...")

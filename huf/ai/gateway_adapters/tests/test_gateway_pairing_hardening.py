@@ -423,7 +423,7 @@ class TestPairingLifecycle(_GatewayFixture, IntegrationTestCase):
 		self.assertEqual(queued["status"], "Queued")
 		gsvc.revoke_gateway_access_entry(entry)
 		run = MagicMock()
-		with patch.dict("sys.modules", {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=run)}):
+		with patch.dict("sys.modules", {"huf.ai.agent.integration": SimpleNamespace(run_agent_sync=run)}):
 			result = gsvc.process_gateway_event(queued["event_name"])
 		self.assertEqual(result["status"], "Rejected")
 		run.assert_not_called()
@@ -435,7 +435,7 @@ class TestPairingLifecycle(_GatewayFixture, IntegrationTestCase):
 		queued = self.ingest(a, "15551230001", "hi")
 		self.ingest(a, "15551230001", "STOP")
 		run = MagicMock()
-		with patch.dict("sys.modules", {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=run)}):
+		with patch.dict("sys.modules", {"huf.ai.agent.integration": SimpleNamespace(run_agent_sync=run)}):
 			result = gsvc.process_gateway_event(queued["event_name"])
 		self.assertEqual(result["status"], "Rejected")
 		run.assert_not_called()

@@ -19,7 +19,7 @@ from types import SimpleNamespace
 
 import frappe
 
-from huf.ai import agent_integration as ai
+from huf.ai.agent import integration as ai
 from huf.ai.desktop import executor as dx
 from huf.ai.desktop.policy import default_policy
 from huf.ai.sdk_tools import create_agent_tools

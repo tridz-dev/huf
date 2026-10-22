@@ -14,7 +14,7 @@ from huf.ai import conversation_fork
 from huf.ai import media_prep
 from huf.ai import sdk_tools
 from huf.ai.agent.access import assert_agent_access
-from huf.ai.agent_integration import _is_truthy, _resolve_effective_model, _run_async_safely, run_agent_sync
+from huf.ai.agent.integration import _is_truthy, _resolve_effective_model, _run_async_safely, run_agent_sync
 from huf.ai.conversation_manager import ConversationManager
 
 

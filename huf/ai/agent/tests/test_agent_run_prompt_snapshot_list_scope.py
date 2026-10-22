@@ -6,7 +6,7 @@ preventing managers from enumerating snapshots from other users' runs.
 
 import frappe
 from frappe.tests import IntegrationTestCase
-from huf.ai.agent_integration import get_prompt_snapshot_permission_conditions
+from huf.ai.agent.integration import get_prompt_snapshot_permission_conditions
 
 
 class TestAgentRunPromptSnapshotListScope(IntegrationTestCase):

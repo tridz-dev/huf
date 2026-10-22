@@ -1,7 +1,7 @@
 """Single source of truth for "can user X run/access Agent Y".
 
 Replaces the previously duplicated, divergent logic in Agent.has_permission()
-(huf/huf/doctype/agent/agent.py) and _is_user_allowed() (huf/ai/agent_integration.py).
+(huf/huf/doctype/agent/agent.py) and _is_user_allowed() (huf/ai/agent/integration.py).
 """
 
 from dataclasses import dataclass, field

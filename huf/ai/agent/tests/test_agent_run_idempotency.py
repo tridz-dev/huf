@@ -13,7 +13,7 @@ found" on the second), matching the pattern used by
 without a full LLM round trip.
 
 Run with:
-    bench --site <site> run-tests --app huf --module huf.ai.tests.test_agent_run_idempotency
+    bench --site <site> run-tests --app huf --module huf.ai.agent.tests.test_agent_run_idempotency
 """
 import unittest
 from unittest.mock import patch

@@ -90,7 +90,7 @@ def _run_async_safely(coro):
 
 
 _get_or_create_stub(
-    "huf.ai.agent_integration",
+    "huf.ai.agent.integration",
     _run_async_safely=_run_async_safely,
     _is_truthy=lambda value: (
         value.strip().lower() in ("1", "true", "yes") if isinstance(value, str) else bool(value)
