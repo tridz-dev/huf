@@ -40,6 +40,7 @@ from huf.ai.reasoning import (
     detect_model_capabilities,
     resolve_reasoning,
     build_reasoning_kwargs,
+    rejects_sampling_params,
 )
 from huf.ai.run_budget import get_current_budget, RunBudgetExceeded
 
@@ -239,6 +240,28 @@ def _is_transient_litellm_error(exc: Exception) -> bool:
     return False
 
 
+SAMPLING_PARAM_KEYS = ("temperature", "top_p", "top_k")
+
+
+def _drop_sampling_params_if_rejected(completion_kwargs: dict, model_name: str) -> None:
+    """Remove sampling params from kwargs for models that reject them (Claude 5.x)."""
+    if rejects_sampling_params(model_name):
+        for key in SAMPLING_PARAM_KEYS:
+            completion_kwargs.pop(key, None)
+
+
+def _sampling_keys_rejected(err_msg: str, completion_kwargs: dict) -> list[str]:
+    """Sampling keys the provider rejected, judged from a BadRequestError message."""
+    msg = (err_msg or "").lower()
+    rejected = []
+    if "temperature" in completion_kwargs and "temperature" in msg and "deprecated" in msg:
+        rejected.append("temperature")
+    for key in ("top_p", "top_k"):
+        if key in completion_kwargs and key in msg and "not supported" in msg:
+            rejected.append(key)
+    return rejected
+
+
 async def _litellm_completion_with_retry(**completion_kwargs):
     """Call litellm.completion with transient-error retries and backoff."""
     max_retries = completion_kwargs.pop("_huf_max_retries", 2)
@@ -260,6 +283,14 @@ async def _litellm_completion_with_retry(**completion_kwargs):
                 completion_kwargs = dict(completion_kwargs)
                 completion_kwargs["thinking"] = {"type": "adaptive"}
                 completion_kwargs.setdefault("output_config", {"effort": "medium"})
+                return await asyncio.to_thread(litellm.completion, **completion_kwargs)
+            # Safety net: model rejects sampling params -> retry once without them.
+            rejected = _sampling_keys_rejected(str(exc), completion_kwargs)
+            if rejected:
+                logger.warning(f"Model rejected sampling params {rejected}; retrying without them")
+                completion_kwargs = dict(completion_kwargs)
+                for key in rejected:
+                    completion_kwargs.pop(key, None)
                 return await asyncio.to_thread(litellm.completion, **completion_kwargs)
             raise
         except Exception as exc:
@@ -1598,7 +1629,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             # first discovers and caches this.
             temperature_cache_key = _site_scoped_key(f"litellm_temperature_unsupported:{normalized_model}")
             top_p_cache_key = _site_scoped_key(f"litellm_top_p_unsupported:{normalized_model}")
-            if temperature is not None:
+            if temperature is not None and not rejects_sampling_params(normalized_model):
                 _temp_unsupported = _l1_get(temperature_cache_key)
                 if _temp_unsupported is None:
                     _temp_unsupported = frappe.cache().get_value(temperature_cache_key)
@@ -1639,7 +1670,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 completion_kwargs["cached_content"] = gemini_cached_content
 
             # Only add top_p if explicitly configured and not overridden by temperature
-            if top_p is not None:
+            if top_p is not None and not rejects_sampling_params(normalized_model):
                 _tp_unsupported = _l1_get(top_p_cache_key)
                 if _tp_unsupported is None:
                     _tp_unsupported = frappe.cache().get_value(top_p_cache_key)
@@ -2093,6 +2124,7 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
         if api_base:
             completion_kwargs["api_base"] = api_base
         
+        _drop_sampling_params_if_rejected(completion_kwargs, normalized_model)
         _setup_api_key(provider_name, api_key, completion_kwargs)
         
         try:
@@ -2147,6 +2179,7 @@ async def get_simple_completion_with_usage(
         if api_base:
             completion_kwargs["api_base"] = api_base
 
+        _drop_sampling_params_if_rejected(completion_kwargs, normalized_model)
         _setup_api_key(provider_name, api_key, completion_kwargs)
 
         try:
@@ -2438,7 +2471,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         # and caches this. Mirrors run()'s equivalent block.
         temperature_cache_key = _site_scoped_key(f"litellm_temperature_unsupported:{normalized_model}")
         top_p_cache_key = _site_scoped_key(f"litellm_top_p_unsupported:{normalized_model}")
-        if temperature is not None:
+        if temperature is not None and not rejects_sampling_params(normalized_model):
             _temp_unsupported = _l1_get(temperature_cache_key)
             if _temp_unsupported is None:
                 _temp_unsupported = frappe.cache().get_value(temperature_cache_key)
@@ -2469,7 +2502,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         completion_kwargs["messages"] = messages
 
         # Only add top_p if explicitly configured and not overridden by temperature
-        if top_p is not None:
+        if top_p is not None and not rejects_sampling_params(normalized_model):
             _tp_unsupported = _l1_get(top_p_cache_key)
             if _tp_unsupported is None:
                 _tp_unsupported = frappe.cache().get_value(top_p_cache_key)

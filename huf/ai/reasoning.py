@@ -96,6 +96,20 @@ def requires_adaptive_thinking(model_name: str) -> bool:
     return bool(_ANTHROPIC_ADAPTIVE_RE.match(mn))
 
 
+# Models that reject sampling parameters (temperature / top_p / top_k) outright with
+# "`temperature` is deprecated for this model". Claude 5.x is matched by rule; the
+# explicit set covers any other model Anthropic metadata marks the same way.
+ANTHROPIC_NO_SAMPLING_PARAMS_MODELS = frozenset()
+
+
+def rejects_sampling_params(model_name: str) -> bool:
+    """True for Anthropic models that reject temperature/top_p/top_k (Claude 5.x)."""
+    mn = (model_name or "").lower().split("/")[-1]
+    if mn in ANTHROPIC_NO_SAMPLING_PARAMS_MODELS:
+        return True
+    return requires_adaptive_thinking(mn)
+
+
 def detect_model_capabilities(
     model_name: str,
     provider: Optional[str] = None,
