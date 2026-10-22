@@ -43,6 +43,7 @@ import huf.ai.gateway_adapters.telegram_pipeline_hooks  # noqa: E402,F401  (WP-1
 import huf.ai.gateway_adapters.telegram_ingest_hooks  # noqa: E402,F401  (WP-1c)
 import huf.ai.gateway_adapters.telegram_voice_hooks  # noqa: E402,F401  (WP-7)
 import huf.ai.gateway_adapters.telegram_buttons_hooks  # noqa: E402,F401  (WP-5)
+import huf.ai.gateway_adapters.telegram_agent_context_hooks  # noqa: E402,F401  (WP-C; overrides WP-5)
 import huf.ai.gateway_adapters.telegram_inline_hooks  # noqa: E402,F401  (WP-8a)
 import huf.ai.gateway_adapters.telegram_guest_hooks  # noqa: E402,F401  (WP-8b)
 import huf.ai.gateway_adapters.telegram_business_hooks  # noqa: E402,F401  (WP-8d)
