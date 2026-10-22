@@ -2406,6 +2406,12 @@ def _process_gateway_event(event_name: str) -> dict:
             else:
                 prompt = f"{attachment_note}\n{event.message_text}" if attachment_note else event.message_text
 
+            instructions_hook = provider_hooks.get(gateway.provider, "agent_instructions")
+            if instructions_hook is not None:
+                channel_note = instructions_hook()
+                if channel_note:
+                    prompt = f"[Channel note: {channel_note}]\n{prompt}"
+
             fallback_note = ""
             _maybe_mark_read_typing(event, gateway)
             _commit_unless_testing()  # keep Running status and saved media across a retry rollback
