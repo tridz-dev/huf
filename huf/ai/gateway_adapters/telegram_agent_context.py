@@ -26,7 +26,7 @@ VOICE_MODE_FIELD = "voice_reply_mode"
 MEDIA_TEXT = (
 	"Media: add a fenced ```telegram-media block with JSON {\"items\": [{\"type\": \"photo|video|audio|voice|"
 	"document|sticker|location|contact|venue|poll|dice\", \"source\": \"file_url|file_id|url|text\", "
-	"\"value\": \"...\", \"caption\": \"\"}]}; sent before the text. Typing is automatic; inbound reactions are recorded."
+	"\"value\": \"...\", \"caption\": \"\"}]}; sent before the text. Inbound reactions are recorded."
 )
 TOOL_TEXT = (
 	"telegram tool: send_message/reply_to_message, set_reaction, edit_message_text, delete_message (use the "

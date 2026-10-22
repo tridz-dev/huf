@@ -36,7 +36,8 @@ class TestPendingRoom(unittest.TestCase):
 		calls = iter([existing or [], pending or []])
 		with mock.patch.object(frappe, "get_all", side_effect=lambda *a, **k: next(calls)), \
 				mock.patch.object(frappe, "get_doc", return_value=SimpleNamespace(insert=lambda **k: SimpleNamespace(name="E1"))) as gd, \
-				mock.patch.object(svc, "_new_unique_pairing_code", return_value="PAIR-1"):
+				mock.patch.object(svc, "_new_unique_pairing_code", return_value="PAIR-1"), \
+				mock.patch.object(svc, "now_datetime", return_value=0), mock.patch.object(svc, "add_to_date", return_value=0):
 			out = svc._record_pending_room(self.gw(policy), "-100123")
 			created.called = gd.called
 		return out, gd.called

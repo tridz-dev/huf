@@ -194,10 +194,10 @@ class TestDuplicateReply(unittest.TestCase):
 		self.assertTrue(res["reply_suppressed"])
 		self.assertEqual(res["status"], "Succeeded")
 
-	def test_different_final_sent_as_followup(self):
+	def test_final_after_tool_send_is_suppressed(self):
 		res, att, _ = self._send(["Done, I created the task."], "By the way the deadline moved to Friday.")
-		att.assert_called_once()
-		self.assertEqual(res["status"], "Succeeded")
+		att.assert_not_called()
+		self.assertEqual(res.get("reply_status"), "suppressed")
 
 
 if __name__ == "__main__":
