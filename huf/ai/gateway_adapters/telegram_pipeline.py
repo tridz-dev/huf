@@ -42,8 +42,10 @@ class TelegramPartsError(Exception):
 
 
 def reply_markup_for(event: Any, gateway: Any, response_text: str) -> dict | None:
-	"""Inline/reply keyboard for the last part. Buttons work package overrides; None = no keyboard."""
-	return None
+	"""Inline/reply keyboard for the last part (agent ``telegram-buttons`` block); None = no keyboard."""
+	from huf.ai.gateway_adapters import telegram_buttons
+
+	return telegram_buttons.markup_for(event, gateway, response_text)
 
 
 def before_send(event: Any, gateway: Any, parts: list[str]) -> list[str]:
@@ -55,6 +57,9 @@ def before_send(event: Any, gateway: Any, parts: list[str]) -> list[str]:
 
 
 def make_parts(response: str) -> list[str]:
+	from huf.ai.gateway_adapters import telegram_buttons
+
+	response = telegram_buttons.prepare_reply(response)  # strips the button block, remembers its spec
 	return split_message(response) or ([str(response)] if str(response or "").strip() else [])
 
 
@@ -145,9 +150,16 @@ def send_parts(gateway: Any, event: Any, parts: list[str], quote: bool) -> Simpl
 
 	adapter = get_gateway_adapter(gateway, event_contact_name(event))
 	thread_id, reply_to = reply_target(event)
+	sender = build_sender(adapter)
+	markup = reply_markup_for(event, gateway, "\n\n".join(parts))
+	from huf.ai.gateway_adapters import telegram_buttons
+
+	edited = telegram_buttons.try_edit(sender, event, list(parts), markup)
+	if edited is not None:
+		return edited
 	return send_parts_with(
-		build_sender(adapter), event.conversation_id, list(parts), thread_id=thread_id,
-		reply_to=reply_to if quote else None, markup=reply_markup_for(event, gateway, "\n\n".join(parts)),
+		sender, event.conversation_id, list(parts), thread_id=thread_id,
+		reply_to=reply_to if quote else None, markup=markup,
 		on_sent=lambda ids: telegram_messages.record_sent(gateway.name, event.conversation_id, event.name, ids),
 	)
 

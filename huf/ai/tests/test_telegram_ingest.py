@@ -95,7 +95,8 @@ class TestHandleUpdate(unittest.TestCase):
 		ad = adapter()
 		payload = load_fixture("callback_query")
 		payload["callback_query"]["data"] = ad.sign_callback_data("approve:42", "111")
-		_, m = run(payload, ad)
+		with mock.patch("huf.ai.gateway_adapters.telegram_buttons.time.time", return_value=1760000100.0):
+			_, m = run(payload, ad)
 		self.assertEqual(m.call_args.args[2]["message_text"], "approve:42")
 		meta = m.call_args.kwargs["raw_payload"]["telegram_meta"]
 		self.assertEqual((meta["callback_query_id"], meta["callback_data"]), ("cbq-1", "approve:42"))
