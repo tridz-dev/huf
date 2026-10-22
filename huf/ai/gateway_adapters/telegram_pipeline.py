@@ -49,8 +49,10 @@ def reply_markup_for(event: Any, gateway: Any, response_text: str) -> dict | Non
 
 
 def before_send(event: Any, gateway: Any, parts: list[str]) -> list[str]:
-	"""Hook to adjust/replace parts before sending (media, voice, streaming finalize). Identity here."""
-	return parts
+	"""Hook to adjust/replace parts before sending (media, voice, streaming finalize)."""
+	from huf.ai.gateway_adapters import telegram_stream
+
+	return telegram_stream.before_send(event, gateway, parts)
 
 
 # -- pure helpers -------------------------------------------------------------------------------
