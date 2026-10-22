@@ -219,6 +219,15 @@ TELEGRAM_TOOLS = [
 			"edit_message_reply_markup (message_id, reply_markup; omit to remove the keyboard), delete_message (message_id), "
 			"pin_message / unpin_message (message_id), forward_message / copy_message (from_chat_id, message_id), "
 			"answer_callback_query (callback_query_id, text, show_alert), get_chat_info, get_me, "
+			"send_video_note (video_note: round video, length, duration), send_venue (latitude, longitude, title, address), "
+			"send_dice (emoji: dice|dart|basketball|football|bowling|slot), "
+			"send_poll (question, options 2-12, is_anonymous, poll_type regular|quiz, correct_option_id 0-based, explanation, allows_multiple_answers, open_period 5+ seconds), stop_poll (message_id), "
+			"send_checklist (business_connection_id, title, tasks[]; needs business access enabled on the gateway), "
+			"send_template (template_name, variables) / list_templates / preview_template (template_name, variables), "
+			"create_forum_topic (name, icon_color) / edit_forum_topic / close_forum_topic / reopen_forum_topic / delete_forum_topic (message_thread_id; the bot needs manage-topics rights), "
+			"get_file (file_id: saves to a private Frappe File, max 20 MB, returns file_url), get_chat_member (user_id) / get_chat_administrators / get_chat_member_count, "
+			"list_messages (chat_id, limit<=50: recent logged messages), get_account_info (bot identity, modes, webhook health). "
+			"Send actions also take disable_notification, protect_content, message_effect_id and idempotency_key (a repeated key in the same run and chat returns the first result instead of sending again). "
 			"get_updates, set_webhook (url, secret_token), delete_webhook (not available inside gateway conversations). "
 			"Media sources: Telegram file_id, public https URL, or a Frappe File name/file_url (max 50 MB, photos 10 MB). "
 			"reply_markup is a JSON object with one of: inline_keyboard [[{text, url}|{text, callback}]], keyboard [[\"text\"]], "
@@ -232,7 +241,10 @@ TELEGRAM_TOOLS = [
 				"send_message|reply_to_message|send_photo|send_document|send_voice|send_audio|send_video|send_animation|"
 				"send_sticker|send_media_group|send_location|send_contact|set_reaction|send_chat_action|edit_message_text|"
 				"edit_message_caption|edit_message_reply_markup|delete_message|pin_message|unpin_message|forward_message|"
-				"copy_message|answer_callback_query|get_updates|get_chat_info|get_me|set_webhook|delete_webhook"
+				"copy_message|answer_callback_query|get_updates|get_chat_info|get_me|set_webhook|delete_webhook|"
+				"send_video_note|send_venue|send_dice|send_poll|stop_poll|send_checklist|send_template|list_templates|"
+				"preview_template|create_forum_topic|edit_forum_topic|close_forum_topic|reopen_forum_topic|delete_forum_topic|"
+				"get_file|get_chat_member|get_chat_administrators|get_chat_member_count|list_messages|get_account_info"
 			),
 			_p("chat_id", description="Telegram chat/channel ID (numeric or @username). Optional in a gateway conversation (defaults to the current chat). Alternative to recipient_name."),
 			_p("recipient_name", description="Human-friendly recipient name from Integration Settings (alternative to chat_id)."),
@@ -249,7 +261,6 @@ TELEGRAM_TOOLS = [
 			_p("file_url", description="Public file URL or Frappe file_url alias for any media action."),
 			_p("caption", description="Caption for media messages, copy_message or edit_message_caption (max 1024 characters)."),
 			_p("items", type="array", description="send_media_group: 2-10 objects {type: photo|video|audio|document, media: source, caption}."),
-			_p("title", description="send_audio: track title."),
 			_p("performer", description="send_audio: performer."),
 			_p("supports_streaming", type="boolean", description="send_video: video suits streaming."),
 			_p("has_spoiler", type="boolean", description="Hide photo/video/animation behind a spoiler."),
@@ -258,7 +269,7 @@ TELEGRAM_TOOLS = [
 			_p("phone_number", description="send_contact phone number."),
 			_p("first_name", description="send_contact first name."),
 			_p("last_name", description="send_contact last name."),
-			_p("emoji", description="set_reaction: one emoji (Telegram's allowed reaction set)."),
+			_p("emoji", description="set_reaction: one emoji (Telegram's allowed reaction set); send_dice: dice, dart, basketball, football, bowling or slot emoji."),
 			_p("remove", type="boolean", description="set_reaction: true removes the reaction."),
 			_p("big", type="boolean", description="set_reaction: use the big reaction animation."),
 			_p("chat_action", description="send_chat_action: typing, upload_photo, record_video, upload_video, record_voice, upload_voice, upload_document, choose_sticker, find_location."),
@@ -275,6 +286,30 @@ TELEGRAM_TOOLS = [
 			_p("secret_token", description="Secret token for webhook verification."),
 			_p("offset", type="integer", description="Update offset for get_updates."),
 			_p("limit", type="integer", description="Max updates for get_updates (max 100)."),
+			_p("video_note", description="send_video_note source: file_id or Frappe File (square MP4, <= 1 min)."),
+			_p("length", type="integer", description="send_video_note: diameter in pixels."),
+			_p("duration", type="integer", description="Media duration in seconds."),
+			_p("address", description="send_venue: street address."),
+			_p("question", description="send_poll: question (1-300 chars)."),
+			_p("options", type="array", description="send_poll: 2-12 answer option strings (1-100 chars each)."),
+			_p("is_anonymous", type="boolean", description="send_poll: anonymous votes (default true)."),
+			_p("poll_type", description="send_poll: regular (default) or quiz."),
+			_p("correct_option_id", type="integer", description="send_poll quiz: 0-based index of the correct option."),
+			_p("explanation", description="send_poll quiz: shown after a wrong answer (max 200 chars)."),
+			_p("allows_multiple_answers", type="boolean", description="send_poll: allow several answers."),
+			_p("open_period", type="integer", description="send_poll: seconds the poll stays open (5-2628000)."),
+			_p("business_connection_id", description="send_checklist: connected business account id."),
+			_p("title", description="send_audio: track title; send_venue: venue name; send_checklist: checklist title."),
+			_p("tasks", type="array", description="send_checklist: 1-30 task strings."),
+			_p("template_name", description="send_template / preview_template: Telegram Message Template name."),
+			_p("variables", type="object", description="send_template / preview_template: {variable: value} for {{var}} placeholders."),
+			_p("name", description="Forum topic name (create_forum_topic / edit_forum_topic)."),
+			_p("icon_color", type="integer", description="create_forum_topic icon color (7322096, 16766590, 13338331, 9367192, 16749490 or 16478047)."),
+			_p("icon_custom_emoji_id", description="Forum topic custom emoji id."),
+			_p("file_id", description="get_file: Telegram file_id to download (<= 20 MB)."),
+			_p("user_id", type="integer", description="get_chat_member: Telegram user id."),
+			_p("message_effect_id", description="Message effect id for send actions (private chats)."),
+			_p("idempotency_key", description="Optional unique key per intended send; a duplicate in the same run and chat returns the first result without resending."),
 			_p("disable_notification", type="boolean", description="Send message silently."),
 			_p("protect_content", type="boolean", description="Prevent forwarding/saving of the sent message."),
 		],
