@@ -19,7 +19,7 @@ cannot collide with fixtures created by another concurrent test file
 sharing the same site/bench.
 
 Time-sensitive assertions (AUTO-002/003/004) use
-``huf.ai.tests.clock_helpers.FakeClock``/``patch_clock`` patched onto
+``huf.testing.clock_helpers.FakeClock``/``patch_clock`` patched onto
 ``huf.ai.automation_scheduler``'s own ``now_datetime``/``add_to_date``
 names (the exact pattern already proven working in
 ``huf/ai/tests/test_automation_scheduler_clock.py``, a from-import module).
@@ -36,8 +36,8 @@ from frappe.tests import IntegrationTestCase
 
 from huf.ai import automation_scheduler
 from huf.ai.automation_runner import _check_run_as_user_permission, run_automation
-from huf.ai.tests.clock_helpers import patch_clock
-from huf.ai.tests.factories import (
+from huf.testing.clock_helpers import patch_clock
+from huf.testing.factories import (
     make_agent,
     make_ai_model,
     make_ai_provider,

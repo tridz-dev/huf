@@ -56,7 +56,7 @@ CORPUS = {
 
 
 def _body(html):
-	return html[html.index("<body>") :]
+	return html[html.index("<body") :]
 
 
 class TestRootFix(unittest.TestCase):

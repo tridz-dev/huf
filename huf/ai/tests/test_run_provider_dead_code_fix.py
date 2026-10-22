@@ -40,19 +40,37 @@ Run standalone (no bench) from the repo root:
 """
 
 import asyncio
+import contextlib
 import inspect
 import pathlib
 import sys
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()
 
 import huf.ai.run as run_module  # noqa: E402
 from huf.ai.run import RunProvider  # noqa: E402
+
+
+@contextlib.contextmanager
+def _litellm_module(fake):
+    """Make ``from huf.ai.providers import litellm`` resolve to ``fake``.
+
+    Patching only ``sys.modules`` is not enough once the real submodule has been imported
+    anywhere in the process: the import then resolves the attribute on the package, so the
+    stub is ignored and the real provider runs.
+    """
+    import huf.ai.providers as providers_pkg
+
+    with patch.dict(sys.modules, {"huf.ai.providers.litellm": fake}), patch.object(
+        providers_pkg, "litellm", fake, create=True
+    ):
+        yield
+
 
 
 class _BoomFromInsideLLMCall(Exception):
@@ -109,10 +127,7 @@ class TestRunProviderCatchesRealLLMFailures(unittest.IsolatedAsyncioTestCase):
                 return fake_fallback_module
             return real_get_module(module_path)
 
-        with patch.dict(
-            sys.modules,
-            {"huf.ai.providers.litellm": fake_litellm_module},
-        ), patch.object(run_module.frappe, "get_module", side_effect=fake_get_module), \
+        with _litellm_module(fake_litellm_module), patch.object(run_module.frappe, "get_module", side_effect=fake_get_module), \
            patch.object(run_module.frappe, "log_error", MagicMock()):
 
             agent = MagicMock()
@@ -129,7 +144,7 @@ class TestRunProviderCatchesRealLLMFailures(unittest.IsolatedAsyncioTestCase):
 
         fake_litellm_module = MagicMock()
         fake_litellm_module.run = raising_litellm_run
-        with patch.dict(sys.modules, {"huf.ai.providers.litellm": fake_litellm_module}), \
+        with _litellm_module(fake_litellm_module), \
              patch.object(run_module.frappe, "log_error", MagicMock()), \
              patch.object(run_module.frappe, "get_module", MagicMock()) as get_module_mock:
             with self.assertRaises(ProviderError) as ctx:
@@ -146,7 +161,7 @@ class TestRunProviderCatchesRealLLMFailures(unittest.IsolatedAsyncioTestCase):
         fake_litellm_module = MagicMock()
         fake_litellm_module.run = ok_litellm_run
 
-        with patch.dict(sys.modules, {"huf.ai.providers.litellm": fake_litellm_module}), \
+        with _litellm_module(fake_litellm_module), \
              patch.object(run_module.frappe, "get_module", MagicMock()) as get_module_mock:
 
             agent = MagicMock()

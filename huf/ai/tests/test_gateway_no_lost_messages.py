@@ -405,7 +405,7 @@ class TestRetryGatewayEvent(unittest.TestCase):
 
 	def test_is_whitelisted_post_only(self):
 		self.assertIn(gateway_service.retry_gateway_event, frappe.whitelisted)
-		self.assertEqual(frappe.allowed_http_methods_for_whitelisted_func[gateway_service.retry_gateway_event], ["POST"])
+		self.assertEqual(list(frappe.allowed_http_methods_for_whitelisted_func[gateway_service.retry_gateway_event]), ["POST"])
 
 	def test_replays_dead_letter_with_same_event_row(self):
 		row = self._dead()

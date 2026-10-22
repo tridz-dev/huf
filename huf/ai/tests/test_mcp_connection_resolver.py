@@ -49,9 +49,11 @@ class TestMCPConnectionResolver(unittest.TestCase):
         self.assertFalse(_is_safe_url("http://192.168.1.1/mcp"))
         self.assertFalse(_is_safe_url("http://10.0.0.1/mcp"))
 
-    def test_is_safe_url_allows_localhost_for_development(self):
-        self.assertTrue(_is_safe_url("http://localhost/mcp"))
-        self.assertTrue(_is_safe_url("http://127.0.0.1/mcp"))
+    def test_is_safe_url_rejects_localhost(self):
+        # SSRF hardening: loopback is no longer implicitly allowed
+        # (validate_url rejects any non-public resolved address).
+        self.assertFalse(_is_safe_url("http://localhost/mcp"))
+        self.assertFalse(_is_safe_url("http://127.0.0.1/mcp"))
 
     def test_is_safe_url_allows_public_https(self):
         self.assertTrue(_is_safe_url("https://mcp.higgsfield.ai/mcp"))

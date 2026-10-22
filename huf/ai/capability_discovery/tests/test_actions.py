@@ -46,7 +46,13 @@ class TestCapabilityActions(IntegrationTestCase):
             "params": json.dumps({"type": "object", "properties": {}}),
         }
         fields.update(overrides)
-        doc = frappe.get_doc(fields).insert(ignore_permissions=True)
+        # App Provided rows are only accepted for paths a huf_tools hook declares; the
+        # fixture path is synthetic, so declare it for the duration of the insert.
+        with patch(
+            "huf.huf.doctype.agent_tool_function.agent_tool_function.get_hook_declared_function_paths",
+            return_value={fields["function_path"]},
+        ):
+            doc = frappe.get_doc(fields).insert(ignore_permissions=True)
         self._tool_names.append(doc.name)
         return doc
 

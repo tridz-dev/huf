@@ -14,10 +14,20 @@ class TestGatewayPairingTools(IntegrationTestCase):
 
     def setUp(self):
         frappe.set_user("Administrator")
-        # Gateway.validate reads the execution user's own role rows; a fresh site may not have this one yet.
+        # Gateway.validate requires execution_user (defaults to the session
+        # user) to hold the "Huf Gateway User" role.
         if not frappe.db.exists("Role", "Huf Gateway User"):
-            frappe.get_doc({"doctype": "Role", "role_name": "Huf Gateway User"}).insert(ignore_permissions=True)
-        frappe.get_doc("User", "Administrator").add_roles("Huf Gateway User")
+            frappe.get_doc({"doctype": "Role", "role_name": "Huf Gateway User"}).insert(
+                ignore_permissions=True
+            )
+        admin = frappe.get_doc("User", "Administrator")
+        self._added_role = "Huf Gateway User" not in {r.role for r in admin.roles}
+        if self._added_role:
+            admin.add_roles("Huf Gateway User")
+
+    def tearDown(self):
+        if self._added_role:
+            frappe.db.delete("Has Role", {"parent": "Administrator", "role": "Huf Gateway User"})
 
     def test_setup_gateway_validation_failure(self):
         res = setup_gateway("Telegram", "Invalid Bot", {})

@@ -45,7 +45,8 @@ def _text(body):
 
 
 def _body(doc):
-	return doc[doc.index("<body>") + 6 : doc.rindex("</body>")].strip()
+	start = doc.index("<body")
+	return doc[doc.index(">", start) + 1 : doc.rindex("</body>")].strip()
 
 
 class TestNormalizer(unittest.TestCase):

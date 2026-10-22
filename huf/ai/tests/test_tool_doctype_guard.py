@@ -36,12 +36,24 @@ from huf.ai.handlers import crud as crud_module  # noqa: E402
 from huf.ai import tool_functions  # noqa: E402
 
 
+def _patch_frappe(testcase, **attrs):
+    """Replace attributes on the ``frappe`` module for one test and restore them
+    afterwards. These tests run in the same process as the whole app under
+    ``bench run-tests``, where ``frappe`` is the real module: a bare assignment
+    such as ``frappe.db = MagicMock()`` would otherwise stay in place for every
+    test that runs later."""
+    for name, value in attrs.items():
+        patcher = patch.object(frappe, name, value, create=True)
+        patcher.start()
+        testcase.addCleanup(patcher.stop)
+
+
 class TestDoctypeGuard(unittest.TestCase):
     """Test the core _check_doctype_allowed function."""
 
     def setUp(self):
+        _patch_frappe(self, db=MagicMock(), get_meta=MagicMock())
         frappe.db.exists = MagicMock(return_value=True)
-        frappe.get_meta = MagicMock()
 
     def test_deny_user_doctype(self):
         """User doctype is denied."""
@@ -60,7 +72,7 @@ class TestDoctypeGuard(unittest.TestCase):
         """Valid doctype is allowed."""
         mock_meta = MagicMock()
         mock_meta.issingle = False
-        frappe.get_meta = MagicMock(return_value=mock_meta)
+        _patch_frappe(self, get_meta=MagicMock(return_value=mock_meta))
         meta, err = _check_doctype_allowed("Customer")
         self.assertIsNotNone(meta)
         self.assertIsNone(err)
@@ -70,13 +82,16 @@ class TestCrudHandlerGates(unittest.TestCase):
     """Test that crud.py handlers gate on doctype."""
 
     def setUp(self):
-        frappe.db = MagicMock()
+        _patch_frappe(
+            self,
+            db=MagicMock(),
+            get_meta=MagicMock(),
+            get_doc=MagicMock(),
+            has_permission=MagicMock(return_value=True),
+            session=MagicMock(user="test_user"),
+            flags=MagicMock(),
+        )
         frappe.db.exists = MagicMock(return_value=True)
-        frappe.get_meta = MagicMock()
-        frappe.get_doc = MagicMock()
-        frappe.has_permission = MagicMock(return_value=True)
-        frappe.session = MagicMock(user="test_user")
-        frappe.flags = MagicMock()
         frappe.flags.get = lambda x, default=None: default
 
     def test_handle_create_document_denies_user(self):
@@ -174,13 +189,16 @@ class TestToolFunctionsGates(unittest.TestCase):
     """Test that tool_functions.py handlers gate on doctype."""
 
     def setUp(self):
-        frappe.db = MagicMock()
+        _patch_frappe(
+            self,
+            db=MagicMock(),
+            get_meta=MagicMock(),
+            get_doc=MagicMock(),
+            has_permission=MagicMock(return_value=True),
+            session=MagicMock(user="test_user"),
+            flags=MagicMock(),
+        )
         frappe.db.exists = MagicMock(return_value=True)
-        frappe.get_meta = MagicMock()
-        frappe.get_doc = MagicMock()
-        frappe.has_permission = MagicMock(return_value=True)
-        frappe.session = MagicMock(user="test_user")
-        frappe.flags = MagicMock()
         frappe.flags.get = lambda x, default=None: default
 
     def test_get_document_denies_user(self):

@@ -22,7 +22,7 @@ from frappe import _
 from frappe.rate_limiter import rate_limit
 from frappe.utils import add_to_date, now_datetime
 
-from huf.ai import whatsapp_outbound_policy as policy
+from huf.ai.whatsapp import outbound_policy as policy
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 
 
@@ -2554,7 +2554,7 @@ def _send_whatsapp_reply(event, gateway, agent_run_id, response: str) -> dict:
         event.db_set("agent_run", agent_run_id)
     if event.sender_id and is_opted_out(gateway, event.sender_id):
         return _suppress_reply(event, agent_run_id, "Recipient opted out: reply not sent")
-    from huf.ai import whatsapp_voice_reply as voice
+    from huf.ai.whatsapp import voice_reply as voice
 
     mode = voice.reply_mode(event, gateway, response)
     if mode == voice.VOICE_ONLY:
@@ -2568,7 +2568,7 @@ def _send_whatsapp_reply(event, gateway, agent_run_id, response: str) -> dict:
 
 
 def _send_voice_only(event, gateway, response: str) -> bool:
-    from huf.ai import whatsapp_voice_reply as voice
+    from huf.ai.whatsapp import voice_reply as voice
 
     _throttle_outbound_send(gateway.name, _outbound_rate_cap(gateway.provider))
     wamid = voice.send_voice_reply(event, gateway, response)

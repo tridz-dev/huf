@@ -38,7 +38,7 @@ from frappe.tests import IntegrationTestCase
 
 from huf.ai.agent_chat import get_history
 from huf.ai.agent_integration import run_agent_sync
-from huf.ai.tests.factories import (
+from huf.testing.factories import (
     make_agent,
     make_ai_model,
     make_ai_provider,
@@ -217,7 +217,10 @@ class TestChatP0(IntegrationTestCase):
         ``if conv_doc.owner != frappe.session.user and "System Manager" not
         in frappe.get_roles(): frappe.throw(..., frappe.PermissionError)``.
         """
-        agent = self._make_test_provider_agent()
+        # New agents are closed by default (check_agent_access); open this one
+        # to every authenticated user so user_a (a non-owner) may run it. The
+        # gate under test is the history read gate, not agent run access.
+        agent = self._make_test_provider_agent(allow_all_users=1)
 
         user_a = make_user(
             email=f"{PREFIX.lower().replace(' ', '-')}-a-{frappe.generate_hash(6)}@example.com"

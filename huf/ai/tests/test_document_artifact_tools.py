@@ -152,3 +152,16 @@ class TestShowArtifact(unittest.TestCase):
 		self.assertEqual(kwargs["message"]["type"], "open_artifact_pane")
 		self.assertEqual(kwargs["message"]["artifact_id"], self.artifact_in_a)
 		self.assertEqual(kwargs["message"]["conversation_id"], self.conversation_a)
+
+
+class TestDocumentChatReplyRule(unittest.TestCase):
+	"""The authoring instructions must keep the post-document chat reply short
+	and free of design-system vocabulary."""
+
+	def test_instructions_contain_reply_rule(self):
+		from huf.ai.document_artifact_instructions import DOCUMENT_ARTIFACT_INSTRUCTIONS as text
+
+		self.assertIn("at most 2", text)
+		self.assertIn("CSS variables", text)
+		self.assertIn("hex colours", text)
+		self.assertIn("within 15%", text)

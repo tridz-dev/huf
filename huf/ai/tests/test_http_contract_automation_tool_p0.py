@@ -87,7 +87,15 @@ class HttpContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Sanity: bench is actually up before running anything else.
-        r = requests.get(_api("method/ping"), timeout=30)
+        try:
+            r = requests.get(_api("method/ping"), timeout=30)
+        except requests.exceptions.ConnectionError as exc:
+            if os.environ.get("HUF_HTTP_TEST_REQUIRED"):
+                raise  # opt-in strict mode: fail instead of skipping
+            raise unittest.SkipTest(
+                f"HTTP contract tests need a running bench web server at {BASE_URL} "
+                f"(set HUF_HTTP_TEST_BASE_URL): {exc.__class__.__name__}"
+            )
         assert r.status_code == 200, f"bench not reachable at {BASE_URL}: {r.status_code}"
         assert r.json().get("message") == "pong", r.text
 

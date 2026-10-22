@@ -25,7 +25,7 @@ against a bench that is already up and reachable at BASE_URL (override via the
 HUF_HTTP_TEST_BASE_URL env var). It does NOT start or stop the bench.
 
 Fixtures used (created ahead of time via a one-off `bench console` script
-using `huf.ai.tests.factories`, not by this file, since this file only speaks
+using `huf.testing.factories`, not by this file, since this file only speaks
 HTTP):
   - Agent "_Test P51 Automation Agent 080be8d7" (provider "Test_Provider",
     is_system=1) — pre-existing on this bench from an earlier Phase 3-5
@@ -139,7 +139,15 @@ class HttpContractAgentP0(unittest.TestCase):
         # Confirm the bench is actually reachable before running anything —
         # a connection failure here should fail loudly and immediately, not
         # be misread as an assertion failure inside an individual test.
-        ping = requests.get(_method_url("ping"), timeout=10)
+        try:
+            ping = requests.get(_method_url("ping"), timeout=10)
+        except requests.exceptions.ConnectionError as exc:
+            if os.environ.get("HUF_HTTP_TEST_REQUIRED"):
+                raise  # opt-in strict mode: fail instead of skipping
+            raise unittest.SkipTest(
+                f"HTTP contract tests need a running bench web server at {BASE_URL} "
+                f"(set HUF_HTTP_TEST_BASE_URL): {exc.__class__.__name__}"
+            )
         assert ping.status_code == 200 and ping.json().get("message") == "pong", (
             f"Bench at {BASE_URL} is not reachable/healthy: "
             f"{ping.status_code} {ping.text[:300]}"

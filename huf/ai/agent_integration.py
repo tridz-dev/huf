@@ -28,6 +28,7 @@ from huf.ai.knowledge.context_builder import build_knowledge_context, inject_kno
 from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableError
 from huf.ai.providers.errors import ProviderError, classify_status, redact_text
 from huf.ai.transaction import safe_commit, transaction_checkpoint
+from huf.ai.run_control import touch_run_alive
 from huf.ai.agent_access import (
     assert_agent_access,
     check_agent_access as _check_agent_access,
@@ -608,6 +609,11 @@ class AgentManager:
                         instructions += DESKTOP_DOCUMENT_FILE_INSTRUCTIONS_WITH_SKILLS
                     else:
                         instructions += DESKTOP_DOCUMENT_FILE_INSTRUCTIONS_NO_SKILLS
+                    # Generic files (code, html, markdown...) go to the workspace, not inline artifacts.
+                    if "desktop_write_file" in {tool.name for tool in self.tools}:
+                        from huf.ai.document_artifact_instructions import DESKTOP_WORKSPACE_FILE_INSTRUCTIONS
+
+                        instructions += DESKTOP_WORKSPACE_FILE_INSTRUCTIONS
 
         # Inject Project-level instructions, if the conversation is scoped to a
         # HUF Project. This layer sits between the Agent's own instructions
@@ -679,7 +685,7 @@ def _canonical_run_status(status):
     return status
 
 
-def _emit_run_lifecycle_event(run_doc, conversation, status, extra=None):
+def _emit_run_lifecycle_event(run_doc, conversation, status, extra=None, user=None):
     """Emit a realtime lifecycle event for an Agent Run (Queued/Started/Success/Failed)."""
     try:
         message = {
@@ -695,7 +701,7 @@ def _emit_run_lifecycle_event(run_doc, conversation, status, extra=None):
         frappe.publish_realtime(
             event=f"conversation:{conversation.name}",
             message=message,
-            user=frappe.session.user,
+            user=user or frappe.session.user,
         )
     except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
             frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as exc:
@@ -835,6 +841,7 @@ def _resolve_mcp_server_for_run(agent_run, tool_name):
 def process_tool_call(agent_run, conversation, name=None, args=None, result=None, error=None, is_output=False, tool_call_id=None):
     """Process tool call - handle requests (insert) and outputs (update) separately"""
     try:
+        touch_run_alive(agent_run)  # tool boundary: refresh liveness for sweep_stale_runs
         if is_output:
             filters = {
                 "agent_run": agent_run,
@@ -2012,6 +2019,22 @@ def _execute_agent_run(
     frappe.flags.huf_current_agent_run_id = run_doc.name
 
     try:
+        if run_doc.status in ("Queued", "Failed"):
+            # Queued pickup: transition atomically. A Stop that failed the run after the drainer's
+            # pre-check (status now Failed, or the guarded UPDATE matches no row) must win.
+            if run_doc.status == "Failed" or not _guarded_start_queued_run(run_doc.name):
+                frappe.logger("huf").info(
+                    f"Run {run_doc.name} left Queued before pickup (cancelled?); not executing"
+                )
+                return {"success": False, "cancelled": True, "agent_run_id": run_doc.name}
+            run_doc.status = "Started"
+        from huf.ai.run_control import CANCELLED_BY_USER, is_run_cancelled
+
+        if is_run_cancelled(run_doc.name):
+            _guarded_fail_started_run(run_doc.name, CANCELLED_BY_USER)
+            frappe.db.commit()
+            return {"success": False, "cancelled": True, "agent_run_id": run_doc.name}
+
         run_doc.db_set("start_time", now_datetime())
 
         # Optimized history fetching with dynamic limit + buffer.
@@ -2038,6 +2061,7 @@ def _execute_agent_run(
                 conversation_id=run_doc.conversation
             )
 
+            touch_run_alive(run_doc.name)
             run_doc.db_set({
                 "agent_orchestration": orch_name,
                 "status": "Started", # Mark as started, but not "Success" yet
@@ -2052,6 +2076,7 @@ def _execute_agent_run(
                 "agent_run_id": run_doc.name
             }
         frappe.db.set_value("Agent Run", run_doc.name, "status", "Started", update_modified=True)
+        touch_run_alive(run_doc.name)
         _emit_run_lifecycle_event(run_doc, conversation, "started")
         safe_commit()
         transaction_checkpoint(reason="agent_streaming_progress")
@@ -2099,8 +2124,7 @@ def _execute_agent_run(
                 frappe.get_traceback(),
                 "Knowledge context build failed — aborting agent run"
             )
-            run_doc.db_set("status", "Failed", update_modified=True)
-            run_doc.db_set("error_message", error_msg)
+            _guarded_finish_started_run(run_doc.name, "Failed", error_message=error_msg)
             return {
                 "success": False,
                 "error": error_msg,
@@ -2402,7 +2426,12 @@ def _execute_agent_run(
                             "type": event_type,
                             "conversation_id": conversation.name,
                             "agent_run_id": run_doc.name,
-                            "tool_call_id": updated_tool_call_id,
+                            # LLM-issued call id: the key tool_call_started and the SSE tool_call
+                            # chunk use, so clients can fold this onto the row those created.
+                            # ``tool_call_ref`` is the Agent Tool Call docname.
+                            "tool_call_id": call_id or updated_tool_call_id,
+                            "call_id": call_id or None,
+                            "tool_call_ref": updated_tool_call_id,
                             "message_id": message_name or None,
                             "tool_name": tool_name,
                             "tool_status": tool_status,
@@ -2603,12 +2632,16 @@ def _execute_agent_run(
         if r_snap:
             run_update["reasoning_snapshot"] = r_snap
 
-        frappe.db.set_value("Agent Run", run_doc.name, run_update, update_modified=True)
+        # Guarded on status='Started': a concurrent sweep_stale_runs / cancel must not be
+        # overwritten by a late Success.
+        _finalized_here = _guarded_finish_started_run(
+            run_doc.name, "Success", **{k: v for k, v in run_update.items() if k != "status"}
+        )
         from huf.ai.memory_tools import should_extract_memory
 
         # An extraction run must never queue another extraction: its own
         # success would re-trigger the job and loop indefinitely.
-        if should_extract_memory(agent_doc, run_doc.run_kind):
+        if _finalized_here and should_extract_memory(agent_doc, run_doc.run_kind):
             try:
                 frappe.enqueue(
                     "huf.ai.memory_tools.extract_memory_from_run",
@@ -2729,8 +2762,7 @@ def _execute_agent_run(
         error_msg = str(e)
         error_kind = getattr(e, "kind", None) or "unknown"
         log_error_msg = redact_text(getattr(e, "log_message", error_msg))
-        run_doc.db_set("status", "Failed", update_modified=True)
-        run_doc.db_set("error_message", error_msg)
+        _guarded_finish_started_run(run_doc.name, "Failed", error_message=error_msg)
         frappe.log_error(
             title="Huf Provider",
             message=f"Provider unavailable for agent '{agent_name}': {log_error_msg}",
@@ -2800,8 +2832,7 @@ def _execute_agent_run(
                 )
 
         error_msg = redact_text(error_msg)
-        run_doc.db_set("status", "Failed", update_modified=True)
-        run_doc.db_set("error_message", error_msg)
+        _guarded_finish_started_run(run_doc.name, "Failed", error_message=error_msg)
         frappe.log_error(f"Agent Run Error: {redact_text(frappe.get_traceback())}", "Huf")
         _emit_run_lifecycle_event(run_doc, conversation, "failed", {"error": error_msg})
 
@@ -2869,6 +2900,122 @@ _QUEUE_HEARTBEAT_INTERVAL = 180  # refresh lock every 3 minutes
 _QUEUE_ORPHANED_QUEUED_AGE = 60  # seconds before a Queued run is considered orphaned
 _DIRECT_LOCK_ATTEMPTS = 3
 _DIRECT_LOCK_RETRY_DELAY = 1
+
+
+def _guarded_fail_started_run(run_name: str, message: str) -> bool:
+    """Fail a run only if still 'Started' (atomic vs. sweep_stale_runs / other finalizers).
+
+    Returns True only when the UPDATE changed a row.
+    """
+    frappe.db.sql(
+        """update `tabAgent Run` set status='Failed', error_message=%s, end_time=%s, modified=%s
+        where name=%s and status='Started'""",
+        (message, now_datetime(), now_datetime(), run_name),
+    )
+    n = getattr(getattr(frappe.db, "_cursor", None), "rowcount", None)
+    if isinstance(n, int) and not isinstance(n, bool) and n >= 0:
+        return n > 0
+    return frappe.db.get_value("Agent Run", run_name, "status") == "Failed"
+
+
+def _save_partial_reply(conv_manager, conversation, text, provider, model, agent_name, run_name) -> bool:
+    """Best-effort save of a partial reply; never raises so the guarded fail that follows always runs."""
+    try:
+        conv_manager.add_message(conversation, "agent", text, provider, model, agent_name, run_name)
+        return True
+    except Exception as exc:
+        frappe.logger("huf").warning(f"Partial reply save failed for {run_name}: {exc!r}")
+        return False
+
+
+def _guarded_start_queued_run(run_name: str) -> bool:
+    """Move a run Queued -> Started only if it is still 'Queued' (atomic vs. a concurrent Stop).
+
+    Returns True only when the UPDATE changed a row; commits so a concurrent cancel sees it.
+    """
+    ts = now_datetime()
+    frappe.db.sql(
+        """update `tabAgent Run` set status='Started', modified=%s
+        where name=%s and status='Queued'""",
+        (ts, run_name),
+    )
+    n = getattr(getattr(frappe.db, "_cursor", None), "rowcount", None)
+    if isinstance(n, int) and not isinstance(n, bool) and n >= 0:
+        changed = n > 0
+    else:
+        changed = frappe.db.get_value("Agent Run", run_name, "status") == "Started"
+    if changed:
+        frappe.db.commit()
+    return changed
+
+
+def _guarded_fail_queued_run(run_name: str, message: str) -> bool:
+    """Fail a run only if still 'Queued' (atomic vs. the drainer starting it).
+
+    Commits so a concurrent drainer sees the result, then emits the realtime 'failed' event.
+    Returns True only when the UPDATE changed a row.
+    """
+    ts = now_datetime()
+    frappe.db.sql(
+        """update `tabAgent Run` set status='Failed', error_message=%s, end_time=%s, modified=%s
+        where name=%s and status='Queued'""",
+        (message, ts, ts, run_name),
+    )
+    n = getattr(getattr(frappe.db, "_cursor", None), "rowcount", None)
+    if isinstance(n, int) and not isinstance(n, bool) and n >= 0:
+        changed = n > 0
+    else:
+        changed = frappe.db.get_value("Agent Run", run_name, "status") == "Failed"
+    if not changed:
+        return False
+    try:
+        frappe.db.commit()
+    except Exception as exc:  # commit is best-effort here; request teardown commits too
+        frappe.logger("huf").warning(f"Commit after failing queued run {run_name} failed: {exc!r}")
+    try:
+        row = frappe.db.get_value(
+            "Agent Run", run_name, ["agent", "conversation", "sequence", "owner"], as_dict=True
+        )
+        if row:
+            # Deliver to the run's owner (the initiating user), not whoever pressed Stop.
+            _emit_run_lifecycle_event(
+                SimpleNamespace(name=run_name, agent=row.get("agent"), sequence=row.get("sequence")),
+                SimpleNamespace(name=row.get("conversation")),
+                "failed",
+                {"error": message},
+                user=row.get("owner") or None,
+            )
+    except Exception as exc:
+        frappe.logger("huf").debug(f"Failed-run lifecycle event emission failed for {run_name}: {exc!r}")
+    return True
+
+
+def _guarded_finish_started_run(run_name: str, status: str, **fields) -> bool:
+    """Finalize a run (Success/Failed) only if still 'Started'; all fields land in one UPDATE.
+
+    Returns False (debug log, no raise) when someone else (sweep_stale_runs, cancel) already
+    finalized the run, so a late Success cannot overwrite e.g. 'Failed (Stale run)'.
+    """
+    fields = {k: v for k, v in fields.items() if k not in ("status", "modified")}
+    ts = now_datetime()
+    cols = ", ".join(f"`{k}`=%s" for k in fields)
+    sql = f"update `tabAgent Run` set status=%s, {cols + ', ' if cols else ''}modified=%s where name=%s and status='Started'"
+    frappe.db.sql(sql, (status, *fields.values(), ts, run_name))
+    n = getattr(getattr(frappe.db, "_cursor", None), "rowcount", None)
+    if isinstance(n, int) and not isinstance(n, bool) and n >= 0:
+        changed = n > 0
+    else:  # driver did not report a usable rowcount: trust the row itself
+        changed = frappe.db.get_value("Agent Run", run_name, "status") == status
+    if not changed:
+        frappe.logger("huf").debug(f"Agent Run {run_name} already finalized; skipped {status} write")
+        return False
+    # Safety net: a terminal run must not leave Queued/Started tool calls behind (shown as "Running").
+    try:
+        from huf.ai.run_control import mark_cancelled_tool_calls
+        mark_cancelled_tool_calls(run_name, message="Run finished before the tool completed")
+    except Exception:
+        frappe.logger("huf").warning(f"could not close open tool calls of run {run_name}")
+    return True
 
 
 def _conversation_lock_key(conversation_id: str) -> str:
@@ -3068,6 +3215,13 @@ def _run_queued_agent(lock_attempt=0, **kwargs):
 
 def _drain_run(run_doc, lock_key: str):
     """Execute a single queued run while keeping the conversation lock alive."""
+    from huf.ai.run_control import CANCELLED_BY_USER, is_run_cancelled
+
+    if is_run_cancelled(run_doc.name):
+        # The user pressed Stop while this run was still queued: never execute it.
+        if not _guarded_fail_queued_run(run_doc.name, CANCELLED_BY_USER):
+            _fail_queued_run(run_doc.name, CANCELLED_BY_USER)
+        return None
     heartbeat = _RunHeartbeat(lock_key)
     heartbeat.start()
     try:
@@ -3216,6 +3370,13 @@ def recover_stalled_agent_runs():
             if ttl and ttl > 0:
                 continue
             for run in conversation_runs:
+                from huf.ai.run_control import CANCELLED_BY_USER, is_run_cancelled, is_run_alive
+                if is_run_alive(run.name):
+                    continue  # a live direct stream owns it
+                if is_run_cancelled(run.name):
+                    # Never re-run a run the user stopped.
+                    _fail_queued_run(run.name, CANCELLED_BY_USER)
+                    continue
                 block = _desktop_run_requeue_block(run.name)
                 if block:
                     # Re-running would repeat writes / commands already applied on the user's
@@ -3233,9 +3394,13 @@ def recover_stalled_agent_runs():
         # One drain per conversation is enough (the drain is idempotent), so
         # no grouping needed here — drained_conversations dedupes repeats.
         queued_cutoff = add_to_date(now_datetime(), seconds=-_QUEUE_ORPHANED_QUEUED_AGE)
+        # Runs older than huf_stale_queued_hours are left for sweep_dead_queued_runs to fail,
+        # instead of being re-drained forever.
+        from huf.ai.run_control import get_stale_queued_hours
+        dead_cutoff = add_to_date(now_datetime(), hours=-get_stale_queued_hours())
         orphaned = frappe.db.get_all(
             "Agent Run",
-            filters={"status": "Queued", "modified": ("<", queued_cutoff)},
+            filters={"status": "Queued", "modified": ("between", [dead_cutoff, queued_cutoff])},
             fields=["name", "conversation"],
         )
         for run in orphaned:
@@ -3255,7 +3420,120 @@ def recover_stalled_agent_runs():
         frappe.log_error(f"Agent run recovery failed: {frappe.get_traceback()}", "Huf")
 
 
-async def run_agent_stream(
+_GENERIC_STREAM_ERROR = "The request could not be completed. Please try again."
+
+
+_PUBLIC_MESSAGE_MAX_LEN = 300
+
+_DESKTOP_ERROR_MESSAGES = {
+    "permission_denied": "Only the owner of a desktop-hosted conversation can run it.",
+    "desktop_offline": "The desktop is offline. This conversation runs only on that desktop.",
+    "workspace_changed": "The desktop has a different workspace open. Rebind this conversation to continue.",
+    "remote_disabled": "Remote control is turned off for this desktop or agent.",
+}
+
+
+def _bounded_public_message(text) -> str:
+    """Single-line, control-char-free, length-capped form of an already-curated message."""
+    import re
+
+    if not isinstance(text, str):
+        return ""
+    cleaned = re.sub(r"\s+", " ", re.sub(r"[\x00-\x1f\x7f]", " ", text)).strip()
+    if len(cleaned) > _PUBLIC_MESSAGE_MAX_LEN:
+        cleaned = cleaned[: _PUBLIC_MESSAGE_MAX_LEN - 1].rstrip() + "\u2026"
+    return cleaned
+
+
+def _client_safe_desktop_error(desktop_error: dict) -> str:
+    """Client text for a desktop resolution error: curated per code, never interpolated text."""
+    err = desktop_error or {}
+    if err.get("code") == "remote_disabled":
+        # Which switch is off is curated (fixed strings in desktop_sessions), never interpolated user text.
+        from huf.ai.desktop_sessions import REMOTE_DISABLED_MESSAGE
+
+        disabled_by = err.get("disabled_by")
+        specific = REMOTE_DISABLED_MESSAGE.get(disabled_by) if isinstance(disabled_by, str) else None
+        if specific:
+            return specific
+    return _DESKTOP_ERROR_MESSAGES.get(err.get("code")) or _GENERIC_STREAM_ERROR
+
+
+def _client_safe_error(e: Exception) -> str:
+    """Message safe to send to a stream client; full detail goes to frappe.log_error."""
+    # Subclasses such as DuplicateEntryError/LinkExistsError embed DB keys or document names: only the base
+    # user-facing types are passed through, everything else gets the generic text.
+    # Explicit allowlist of huf's own deliberately user-visible typed errors (exact types).
+    from huf.ai.run_budget import RunBudgetExceeded
+
+    if isinstance(e, ProviderUnavailableError):
+        # public_message must be curated text from the provider layer (log_message stays server-side);
+        # still defend in depth: drop control chars/newlines and cap the length.
+        return _bounded_public_message(getattr(e, "public_message", None)) or _GENERIC_STREAM_ERROR
+    if type(e) in (
+        frappe.ValidationError, frappe.PermissionError, frappe.DoesNotExistError, RunBudgetExceeded,
+    ):
+        msg = str(e)
+        if msg:
+            return msg
+    return _GENERIC_STREAM_ERROR
+
+
+def _sanitize_error_chunk(chunk: dict, raw_error: str) -> dict:
+    """Make a provider error chunk client-safe in place.
+
+    Producers set `public: True` only on text written deliberately for the user. Unmarked text that was
+    not already replaced by a curated message is raw provider text: log it server-side, send the generic one.
+    The marker itself never reaches the client.
+    """
+    is_public = bool(chunk.pop("public", False))
+    if chunk.get("error") == raw_error and not is_public:
+        frappe.log_error(f"Agent stream error chunk: {raw_error}", "Huf Streaming")
+        chunk["error"] = _GENERIC_STREAM_ERROR
+    return chunk
+
+
+def _abandon_unsaved_run(run_name, err) -> None:
+    """Mark a run whose user message never committed as Failed and free its idempotency key."""
+    try:
+        frappe.log_error(
+            title="Agent Run abandoned (user message not persisted)",
+            message=f"Run {run_name}: {type(err).__name__}: {err}",
+        )
+    except Exception:
+        pass
+    try:
+        frappe.db.rollback()
+        frappe.db.set_value(
+            "Agent Run", run_name,
+            {"status": "Failed", "error_message": _GENERIC_STREAM_ERROR, "idempotency_key": None},
+            update_modified=False,
+        )
+        frappe.db.commit()
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Agent Run abandon failed")
+
+
+async def run_agent_stream(*args, **kwargs):
+    """Streaming run. Error chunks carry ``message_saved``: True once the Agent Run and
+    user message were committed (a retry would duplicate it), False for rejections
+    raised before that point."""
+    state = {"message_saved": False}
+    agen = _run_agent_stream_impl(*args, _huf_stream_state=state, **kwargs)
+    try:
+        async for chunk in agen:
+            if isinstance(chunk, dict) and chunk.get("type") == "error":
+                chunk = {**chunk, "message_saved": state["message_saved"]}
+            yield chunk
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Agent Stream Error")
+        yield {"type": "error", "error": _client_safe_error(e), "message_saved": state["message_saved"]}
+    finally:
+        # Propagate aclose()/cancellation so the impl's salvage `finally` still runs.
+        await agen.aclose()
+
+
+async def _run_agent_stream_impl(
     agent_name: str,
     prompt: str,
     provider: str = None,
@@ -3275,6 +3553,7 @@ async def run_agent_stream(
     client_idempotency_key: str = None,
     desktop_executor_id: str = None,
     desktop_lease_secret: str = None,
+    _huf_stream_state: dict = None,
 ):
     """
     Streaming version of run_agent_sync.
@@ -3338,7 +3617,7 @@ async def run_agent_stream(
         except frappe.PermissionError as e:
             yield {
                 "type": "error",
-                "error": str(e) or "You are not authorized to use this agent."
+                "error": _client_safe_error(e) if str(e) else "You are not authorized to use this agent."
             }
             return
 
@@ -3455,6 +3734,7 @@ async def run_agent_stream(
             "doctype": "Agent Run",
             "agent": agent_name,
             "status": "Started",
+            "execution_mode": "stream",
             "conversation": conversation.name,
             "prompt": prompt,
             "prompt_template": resolved_prompt_template,
@@ -3470,23 +3750,62 @@ async def run_agent_stream(
             agent_doc, conversation, desktop_executor_id, desktop_lease_secret
         )
         if desktop_error:
-            yield {"type": "error", "error": desktop_error["message"], "code": desktop_error["code"], **{
+            yield {"type": "error", "error": _client_safe_desktop_error(desktop_error), "code": desktop_error["code"], **{
                 k: v for k, v in desktop_error.items() if k in ("last_seen", "host_device_id", "host_label")
             }}
             return
+        stream_runtime_context = None
         if desktop_ctx:
-            run_doc_data["runtime_context"] = frappe.as_json(
-                {"desktop": _desktop_runtime_context(desktop_ctx, conversation.name)}
-            )
+            # Written unsigned, then signed bound to the inserted run (name/creation exist only
+            # after insert), exactly like the queued path: the tool handlers verify the pin FOR
+            # THIS RUN, so a run-less signature never verifies and every call would go remote.
+            stream_runtime_context = {
+                "desktop": _desktop_runtime_context(desktop_ctx, conversation.name, sign=False)
+            }
+            run_doc_data["runtime_context"] = frappe.as_json(stream_runtime_context)
 
         run_doc = frappe.get_doc(run_doc_data)
         run_doc.insert()
-        if not skip_user_message:
-            conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
-        else:
-            _link_preexisting_user_message(conversation.name, run_doc.name)
-        run_doc.db_set("start_time", now_datetime())
-        safe_commit()
+        # Retry-safety: claim_desktop_pin commits the Agent Run (the pin protocol needs the
+        # signed pin + consumed marker durable before any tool call). If anything fails after
+        # that commit but before the user message is committed, message_saved stays False
+        # (no message exists), so the desktop may retry: we therefore mark the orphan run
+        # Failed and release its idempotency key so the retry starts a clean second run
+        # instead of hitting the duplicate_request path on the failed one. Pin order/claim
+        # semantics are unchanged.
+        try:
+            if stream_runtime_context:
+                _sign_run_desktop_pin(run_doc, stream_runtime_context, conversation.name)
+                if desktop_ctx.get("origin") == "desktop":
+                    # This request executes the run itself: it is the one execution allowed to use
+                    # the pin's desktop origin (tool handlers check holds_pin_claim).
+                    from huf.ai.desktop_executor import claim_desktop_pin
+
+                    claim_desktop_pin(run_doc.name)
+            if not skip_user_message:
+                conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
+            else:
+                _link_preexisting_user_message(conversation.name, run_doc.name)
+            run_doc.db_set("start_time", now_datetime())
+            safe_commit()
+        except Exception as _persist_err:
+            _abandon_unsaved_run(run_doc.name, _persist_err)
+            raise
+        # Mark the committed run live right away so a Stop during startup (pin claim, history load,
+        # tool prep) takes the cooperative path instead of being finalized as not-live.
+        touch_run_alive(run_doc.name)
+        if _huf_stream_state is not None:
+            # The Agent Run and user message are now committed: any later error chunk
+            # means the message was delivered, so a client retry would duplicate it.
+            _huf_stream_state["message_saved"] = True
+
+        # First chunk after the run row commits: lets the client record the run id before any provider
+        # output so Stop can cancel the run even while it is still "thinking".
+        yield {
+            "type": "run_started",
+            "agent_run_id": run_doc.name,
+            "conversation_id": conversation.name,
+        }
 
         if desktop_status is not None:
             yield {"type": "desktop_tools", **desktop_status}
@@ -3667,15 +3986,42 @@ async def run_agent_stream(
 
         # Stream from provider
         full_response = ""
+        cancelled_by_user = False
         try:
             stream = RunProvider.run_stream(agent, enhanced_prompt, resolved_provider, resolved_model_name, context)
 
-            async for chunk in stream:
+            from huf.ai.run_control import CANCELLED, iter_with_cancel_poll
+
+            # Polls the cancel marker before the first provider call, between chunks and (in 2s slices)
+            # while the provider is silent; a stalled/thinking call is interrupted.
+            poll = iter_with_cancel_poll(stream, run_doc.name)
+            async for chunk in poll:
+                if chunk is CANCELLED:
+                    cancelled_by_user = True
+                    # Returning from the consumer does not run the poller's finally: close it so the pending
+                    # provider read is cancelled and the provider stream is aclose()d now, not by GC.
+                    try:
+                        await poll.aclose()
+                    except Exception:
+                        pass
+                    yield {
+                        "type": "error",
+                        "error": "Run cancelled",
+                        "cancelled": True,
+                        "success": False,
+                        "agent_run_id": run_doc.name,
+                        "conversation_id": conversation.name
+                    }
+                    return
                 # Check deadline per chunk (ST-09.3)
                 try:
                     budget = get_current_budget()
                     budget.check_deadline()
                 except RunBudgetExceeded:
+                    try:
+                        await poll.aclose()
+                    except Exception:
+                        pass
                     yield {
                         "type": "error",
                         "error": "Run budget deadline exceeded",
@@ -3959,8 +4305,20 @@ async def run_agent_stream(
                     if r_snap_stream:
                         stream_run_update["reasoning_snapshot"] = r_snap_stream
 
-                    frappe.db.set_value("Agent Run", run_doc.name, stream_run_update, update_modified=True)
+                    _finalized_here = _guarded_finish_started_run(
+                        run_doc.name, "Success", **{k: v for k, v in stream_run_update.items() if k != "status"}
+                    )
                     safe_commit()
+                    if not _finalized_here:
+                        # A sweep/cancel already finalized this run: no success `done`, no post-run side effects.
+                        yield {
+                            "type": "error",
+                            "error": "Run was already finalized before it completed",
+                            "success": False,
+                            "agent_run_id": run_doc.name,
+                            "conversation_id": conversation.name,
+                        }
+                        return
 
                     # Handle Sub-Agent Success Lifecycle Hook
                     if parent_conversation_id and invoked_by_agent:
@@ -4043,6 +4401,7 @@ async def run_agent_stream(
 
                 elif chunk_type == "error":
                     error_msg = chunk.get("error", "Unknown error")
+                    _raw_chunk_error = error_msg
 
                     if "ContextWindowExceededError" in error_msg:
                         try:
@@ -4093,11 +4452,9 @@ async def run_agent_stream(
                                 f"Failed to handle rate limit in stream inner block: {str(inner_e)}"
                             )
 
-                    frappe.db.set_value("Agent Run", run_doc.name, {
-                        "status": "Failed",
-                        "error_message": error_msg,
-                        "end_time": now_datetime()
-                    }, update_modified=True)
+                    _guarded_finish_started_run(
+                        run_doc.name, "Failed", error_message=error_msg, end_time=now_datetime()
+                    )
                     safe_commit()
 
                     # Handle Sub-Agent Failure Lifecycle Hook
@@ -4139,6 +4496,7 @@ async def run_agent_stream(
                             user=frappe.session.user
                         )
 
+                    _sanitize_error_chunk(chunk, _raw_chunk_error)
                     chunk["success"] = False
                     chunk["agent_run_id"] = run_doc.name
                     chunk["conversation_id"] = conversation.name
@@ -4147,6 +4505,7 @@ async def run_agent_stream(
 
         except Exception as e:
             error_msg = str(e)
+            _raw_exc_msg = error_msg
             if isinstance(e, ProviderUnavailableError):
                 # Expected operational failure (connection refused, model not
                 # pulled, bad model prefix) — message is self-explanatory, no
@@ -4203,11 +4562,9 @@ async def run_agent_stream(
                         f"Failed to handle rate limit in stream inner block: {str(inner_e)}"
                     )
 
-            frappe.db.set_value("Agent Run", run_doc.name, {
-                "status": "Failed",
-                "error_message": error_msg,
-                "end_time": now_datetime()
-            }, update_modified=True)
+            _guarded_finish_started_run(
+                run_doc.name, "Failed", error_message=error_msg, end_time=now_datetime()
+            )
             safe_commit()
 
             # Handle Sub-Agent Failure Lifecycle Hook
@@ -4251,26 +4608,68 @@ async def run_agent_stream(
 
             yield {
                 "type": "error",
-                "error": error_msg,
+                "error": error_msg if error_msg != _raw_exc_msg else _client_safe_error(e),
                 "success": False,
                 "agent_run_id": run_doc.name,
                 "conversation_id": conversation.name
             }
 
     except Exception as e:
-        error_msg = str(e)
         frappe.log_error(f"Agent Stream Setup Error: {frappe.get_traceback()}", "Huf Streaming")
         yield {
             "type": "error",
-            "error": error_msg
+            "error": _client_safe_error(e)
         }
+    except (GeneratorExit, asyncio.CancelledError):
+        # The consumer went away (SSE client disconnected / generator closed / task cancelled).
+        client_disconnected = True
+        raise
     finally:
         if 'run_doc' in locals() and run_doc:
             try:
                 current_status = frappe.db.get_value("Agent Run", run_doc.name, "status")
                 if current_status == "Started":
                     response_text = locals().get("full_response", "")
-                    if response_text and str(response_text).strip():
+                    from huf.ai.run_control import is_run_cancelled as _is_cancelled
+                    # Stop closes the stream right after the cancel request: honour the marker even when the
+                    # disconnect won the race against the in-loop poll.
+                    if locals().get("cancelled_by_user") or _is_cancelled(run_doc.name):
+                        # User pressed Stop: keep the partial reply visible, mark the run cancelled.
+                        if response_text and str(response_text).strip() and 'conv_manager' in locals() and 'conversation' in locals():
+                            _save_partial_reply(
+                                conv_manager,
+                                conversation,
+                                response_text,
+                                locals().get("resolved_provider"),
+                                locals().get("resolved_model"),
+                                agent_name,
+                                run_doc.name,
+                            )
+                        from huf.ai.run_control import CANCELLED_BY_USER, mark_cancelled_tool_calls
+                        _guarded_fail_started_run(run_doc.name, CANCELLED_BY_USER)
+                        mark_cancelled_tool_calls(run_doc.name, locals().get("context") or {
+                            "conversation_id": getattr(locals().get("conversation"), "name", None),
+                            "agent_run_id": run_doc.name,
+                        })
+                    elif locals().get("client_disconnected"):
+                        # SSE client went away mid-run: keep the partial reply, fail the run, close tool rows.
+                        if response_text and str(response_text).strip() and 'conv_manager' in locals() and 'conversation' in locals():
+                            _save_partial_reply(
+                                conv_manager,
+                                conversation,
+                                response_text,
+                                locals().get("resolved_provider"),
+                                locals().get("resolved_model"),
+                                agent_name,
+                                run_doc.name,
+                            )
+                        from huf.ai.run_control import CLIENT_DISCONNECTED, mark_cancelled_tool_calls
+                        _guarded_fail_started_run(run_doc.name, CLIENT_DISCONNECTED)
+                        mark_cancelled_tool_calls(run_doc.name, locals().get("context") or {
+                            "conversation_id": getattr(locals().get("conversation"), "name", None),
+                            "agent_run_id": run_doc.name,
+                        }, message=CLIENT_DISCONNECTED)
+                    elif response_text and str(response_text).strip():
                         # Save generated text so user sees the response upon reload (ChatGPT pattern)
                         if 'conv_manager' in locals() and 'conversation' in locals():
                             conv_manager.add_message(
@@ -4282,17 +4681,15 @@ async def run_agent_stream(
                                 agent_name,
                                 run_doc.name
                             )
-                        frappe.db.set_value("Agent Run", run_doc.name, {
-                            "status": "Success",
-                            "response": response_text,
-                            "end_time": now_datetime()
-                        }, update_modified=True)
+                        _guarded_finish_started_run(
+                            run_doc.name, "Success", response=response_text, end_time=now_datetime()
+                        )
                     else:
-                        frappe.db.set_value("Agent Run", run_doc.name, {
-                            "status": "Failed",
-                            "error_message": "Stream disconnected before response was generated",
-                            "end_time": now_datetime()
-                        }, update_modified=True)
+                        _guarded_finish_started_run(
+                            run_doc.name, "Failed",
+                            error_message="Stream disconnected before response was generated",
+                            end_time=now_datetime(),
+                        )
                     safe_commit()
             except Exception as clean_err:
                 # Defensive finally cleanup: must not suppress the original exception.
@@ -4431,23 +4828,3 @@ def get_prompt_snapshot_permission_conditions(user):
 
 	# Only own runs' snapshots
 	return f"`tabAgent Run Prompt Snapshot`.agent_run IN (SELECT name FROM `tabAgent Run` WHERE owner = {frappe.db.escape(user)})"
-
-
-def get_procedure_run_permission_conditions(user):
-	"""
-	Restrict Agent Procedure Run list to runs the user owns.
-
-	Agent Procedure Run carries its own standard Frappe owner field.
-	"""
-	if not user:
-		user = frappe.session.user
-
-	from huf.permissions import has_capability, SYSTEM_MANAGER
-	if SYSTEM_MANAGER in frappe.get_roles(user):
-		return None
-
-	if has_capability(user, "agent.view_all"):
-		return None
-
-	# Only own runs
-	return f"`tabAgent Procedure Run`.owner = {frappe.db.escape(user)}"

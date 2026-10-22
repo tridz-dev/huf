@@ -253,7 +253,7 @@ class TestHeaderOriginBindingST073(unittest.TestCase):
 			mock_tool_doc = Mock()
 			mock_tool_doc.base_url = "https://api.example.com/"
 			mock_tool_doc.http_headers = [
-				Mock(key="Authorization", value="Bearer token123")
+				Mock(key="Authorization", get_password=Mock(return_value="Bearer token123"))
 			]
 			mock_tool_doc.allowed_for_guest = False
 			mock_get_doc.return_value = mock_tool_doc
@@ -292,7 +292,7 @@ class TestHeaderOriginBindingST073(unittest.TestCase):
 			mock_tool_doc = Mock()
 			mock_tool_doc.base_url = "https://api.example.com/"
 			mock_tool_doc.http_headers = [
-				Mock(key="Authorization", value="Bearer token123")
+				Mock(key="Authorization", get_password=Mock(return_value="Bearer token123"))
 			]
 			mock_tool_doc.allowed_for_guest = False
 			mock_get_doc.return_value = mock_tool_doc
@@ -332,7 +332,7 @@ class TestHeaderOriginBindingST073(unittest.TestCase):
 			mock_tool_doc = Mock()
 			mock_tool_doc.base_url = "https://api.example.com/"
 			mock_tool_doc.http_headers = [
-				Mock(key="Authorization", value="Bearer token123")
+				Mock(key="Authorization", get_password=Mock(return_value="Bearer token123"))
 			]
 			mock_tool_doc.allowed_for_guest = False
 			mock_get_doc.return_value = mock_tool_doc

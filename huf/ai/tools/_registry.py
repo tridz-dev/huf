@@ -10,6 +10,27 @@ Each entry is a dict with:
 """
 
 
+# Array parameters whose elements are objects (the doctype row has no item-type field, so the schema
+# builders look the fieldname up here instead of declaring every array as an array of strings).
+OBJECT_ARRAY_PARAMS = frozenset({"edits", "nodes", "edges", "data", "questions"})
+
+
+def is_registry_function_path(function_path):
+	"""True when ``function_path`` is the handler of a built-in registry tool."""
+	if not function_path:
+		return False
+	return any(t.get("function_path") == function_path for t in ALL_INTEGRATION_TOOLS)
+
+
+def array_items_schema(fieldname, function_path=None):
+	"""Items schema for an array param. The object-array rule applies to built-in registry tools only:
+	pass ``function_path`` for rows that may be user-defined, and a path that is not a registry handler
+	always gets string items. With ``function_path=None`` the caller asserts a registry spec."""
+	if function_path is not None and not is_registry_function_path(function_path):
+		return {"type": "string"}
+	return {"type": "object"} if fieldname in OBJECT_ARRAY_PARAMS else {"type": "string"}
+
+
 def _p(name, type="string", required=False, description=""):
 	return {
 		"label": name.replace("_", " ").title(),
@@ -18,6 +39,12 @@ def _p(name, type="string", required=False, description=""):
 		"required": int(required),
 		"description": description,
 	}
+
+
+def _ask_user_description():
+	from huf.ai.tools.ask_user import ASK_USER_DESCRIPTION
+
+	return ASK_USER_DESCRIPTION
 
 
 def _action(choices):
@@ -601,8 +628,8 @@ FRAPPE_GENERIC_TOOLS = [
         "category": "Frappe Generic Tools",
         "parameters": [
             _p("doctype", required=True, description="Target DocType name"),
-            _p("filters", type="json", description="JSON filter dict or list of [fieldname, operator, value] conditions"),
-            _p("fields", type="json", description="JSON list of fieldnames to return (default: all fields readable by your roles)"),
+            _p("filters", type="string", description="Filters as a JSON object string, e.g. '{\"status\": \"Open\"}' (a JSON list of [fieldname, operator, value] conditions is also accepted)"),
+            _p("fields", type="array", description="JSON list of fieldnames to return (default: all fields readable by your roles)"),
             _p("limit_start", type="integer", description="Offset for pagination (default 0)"),
             _p("limit_page_length", type="integer", description="Max rows to return (default 20)"),
             _p("order_by", description="SQL-style order-by clause, e.g. 'modified desc'"),
@@ -625,7 +652,7 @@ FRAPPE_GENERIC_TOOLS = [
         "category": "Frappe Generic Tools",
         "parameters": [
             _p("doctype", required=True, description="Target DocType name"),
-            _p("values", type="json", required=True, description="JSON object of fieldname/value pairs for the new record"),
+            _p("values", type="object", required=True, description="JSON object of fieldname/value pairs for the new record"),
         ],
     },
     {
@@ -636,7 +663,7 @@ FRAPPE_GENERIC_TOOLS = [
         "parameters": [
             _p("doctype", required=True, description="Target DocType name"),
             _p("name", required=True, description="Document name/ID to update"),
-            _p("values", type="json", required=True, description="JSON object of fieldname/value pairs to change"),
+            _p("values", type="object", required=True, description="JSON object of fieldname/value pairs to change"),
         ],
     },
     {
@@ -647,8 +674,8 @@ FRAPPE_GENERIC_TOOLS = [
         "parameters": [
             _p("doctype", required=True, description="Target DocType name"),
             _p("mode", required=True, description="One of 'list', 'form', 'report'"),
-            _p("filters", type="json", description="JSON filter dict/list (list and report modes)"),
-            _p("fields", type="json", description="JSON list of fieldnames to include"),
+            _p("filters", type="string", description="Filters as a JSON object string (list and report modes); a JSON list of conditions is also accepted"),
+            _p("fields", type="array", description="JSON list of fieldnames to include"),
             _p("name", description="Document name (form mode)"),
             _p("limit_start", type="integer", description="Offset for pagination (list/report modes)"),
             _p("limit_page_length", type="integer", description="Max rows (list/report modes)"),
@@ -1575,27 +1602,14 @@ BUILDER_TOOLS = [
 	},
 	{
 		"tool_name": "ask_user",
-		"description": (
-			"Ask the user a structured question in the chat. Returns a fenced 'ask-user' "
-			"block — include the returned 'block' value VERBATIM in your reply, then STOP "
-			"and wait for the user's answer. kind is one of yes_no|single_choice|multi_choice|"
-			"input|textarea; the choice kinds require options as "
-			"[{id, label, icon?, description?}] (icon must be a supported lucide name; "
-			"unsupported icons are dropped with a warning). Use this ONLY when structured UI "
-			"is clearly better than a typed reply: confirming right before executing a "
-			"mutating plan, choosing from a defined set of options, or collecting a "
-			"required value. Do NOT use it for greetings, small talk, open-ended "
-			"questions, or normal conversation — answer those in plain prose."
-		),
+		# Full description + strict nested schema live next to the function
+		# (huf.ai.tools.ask_user.ASK_USER_DESCRIPTION / ask_user.tool_params_schema).
+		"description": _ask_user_description(),
 		"function_path": "huf.ai.tools.ask_user.ask_user",
 		"category": "Builder",
 		"parameters": [
-			_p("question", required=True, description="The question to show the user"),
-			_p("kind", required=True, description="One of: yes_no, single_choice, multi_choice, input, textarea"),
-			_p("options", description="JSON list of options [{id, label, icon?, description?}] — required for single_choice/multi_choice"),
-			_p("allow_free_text", type="boolean", description="Allow a free-text answer in addition to options (default true)"),
-			_p("suggested_answers", description="JSON list of suggested free-text answers"),
-			_p("note", description="Optional extra context shown with the question"),
+			_p("questions", type="array", required=True, description="Questions [{id, text, options?, allow_multiple?, allow_free_text?, placeholder?}] — at least one"),
+			_p("title", description="Optional heading for the question card"),
 		],
 	},
 	{
@@ -2242,7 +2256,7 @@ DOCUMENT_ARTIFACT_TOOLS = [
 		"category": "Document Tools",
 		"parameters": [
 			_p("artifact_id", required=True, description="The id/name of the Artifact to redline"),
-			_p("edits", type="json", required=True, description="List of {find, replace} dicts describing the edits to mark as tracked changes"),
+			_p("edits", type="array", required=True, description="List of {find, replace} dicts describing the edits to mark as tracked changes"),
 			_p("author", description="Attribution for the tracked changes; defaults to the current user"),
 		],
 	},
@@ -2265,8 +2279,8 @@ RENDER_TOOLS = [
 		"category": "Render Tools",
 		"parameters": [
 			_p("diagram_type", required=True, description="One of: 'graph TD', 'graph LR', 'flowchart TD', 'flowchart LR'"),
-			_p("nodes", type="json", required=True, description="JSON list of nodes [{id, label}], e.g. [{\"id\": \"a\", \"label\": \"Start\"}]"),
-			_p("edges", type="json", description="JSON list of edges [{from, to, label}], e.g. [{\"from\": \"a\", \"to\": \"b\", \"label\": \"next\"}]. from/to must match declared node ids"),
+			_p("nodes", type="array", required=True, description="JSON list of nodes [{id, label}], e.g. [{\"id\": \"a\", \"label\": \"Start\"}]"),
+			_p("edges", type="array", description="JSON list of edges [{from, to, label}], e.g. [{\"from\": \"a\", \"to\": \"b\", \"label\": \"next\"}]. from/to must match declared node ids"),
 			_p("title", description="Artifact title (default 'Diagram')"),
 		],
 	},
@@ -2281,10 +2295,10 @@ RENDER_TOOLS = [
 		"category": "Render Tools",
 		"parameters": [
 			_p("chart_type", required=True, description="One of: 'bar', 'line', 'pie', 'area'"),
-			_p("data", type="json", required=True, description="JSON list of row objects, each containing at least the x_key field and every series_key field"),
-			_p("series_keys", type="json", description="JSON list of field names to plot as series/values (default ['value'])"),
+			_p("data", type="array", required=True, description="JSON list of row objects, each containing at least the x_key field and every series_key field"),
+			_p("series_keys", type="array", description="JSON list of field names to plot as series/values (default ['value'])"),
 			_p("x_key", description="Field used for the category/x axis, ignored for 'pie' (default 'label')"),
-			_p("colors", type="json", description="Optional JSON list of hex colors, mainly used for pie slices"),
+			_p("colors", type="array", description="Optional JSON list of hex colors, mainly used for pie slices"),
 			_p("title", description="Artifact title (default '<Chart Type> Chart')"),
 		],
 	},
@@ -2313,7 +2327,7 @@ RENDER_TOOLS = [
 		"category": "Render Tools",
 		"parameters": [
 			_p("component", required=True, description="Component name, must be one returned by list_app_components"),
-			_p("props", type="json", description="JSON object of prop name -> value, e.g. {\"variant\": \"secondary\"}"),
+			_p("props", type="object", description="JSON object of prop name -> value, e.g. {\"variant\": \"secondary\"}"),
 			_p("confirm", type="boolean", description="false = preview artifact only; true = return artifact to relay"),
 		],
 	},
@@ -2753,7 +2767,7 @@ LAZY_DISCOVERY_TOOLS = [
 		"function_path": "huf.ai.tools.lazy_discovery.handle_load_tools",
 		"category": "Tool Discovery",
 		"parameters": [
-			_p("tool_names", type="json", required=True, description="List of tool_name strings to load"),
+			_p("tool_names", type="array", required=True, description="List of tool_name strings to load"),
 		],
 	},
 ]

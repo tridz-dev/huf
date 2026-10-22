@@ -33,7 +33,9 @@
 #   frontend/e2e/**      -> e2e (mocked, fast subset)
 #   frontend/**          -> frontend (typecheck + unit + build + design parity)
 #   huf/**  (*.py)        -> backend (scoped to huf/ai/tests/test_<basename>.py if it
-#                            exists as a dotted module, else the full `--app huf` suite)
+#                            exists as a dotted module, else the full `--app huf` suite;
+#                            huf/ai/whatsapp/<x>.py maps to huf/ai/whatsapp/tests/test_whatsapp_<x>.py
+#                            first, then the old huf/ai/tests mapping)
 #   anything else         -> no targeted check added (falls back to `quick` if nothing matched)
 
 set -uo pipefail
@@ -298,6 +300,15 @@ map_backend_module() {
   local base
   base=$(basename "$f" .py)
   local candidate="huf/ai/tests/test_${base}.py"
+  case "$f" in
+    huf/ai/whatsapp/tests/test_*.py)
+      # a changed WhatsApp test module maps to itself
+      candidate="$f" ;;
+    huf/ai/whatsapp/*.py)
+      if [ -f "$ROOT/huf/ai/whatsapp/tests/test_whatsapp_${base}.py" ]; then
+        candidate="huf/ai/whatsapp/tests/test_whatsapp_${base}.py"
+      fi ;;
+  esac
   if [ -f "$ROOT/$candidate" ]; then
     echo "${candidate%.py}" | tr '/' '.'
   fi

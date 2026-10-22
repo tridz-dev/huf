@@ -20,18 +20,22 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
+# Bare-environment (no frappe) shim only; with a real frappe nothing may be
+# stubbed or it leaks into every later test in the shared bench process.
+_REAL_FRAPPE = True
 try:
     import frappe  # noqa: F401
 except ImportError:
+	_REAL_FRAPPE = False
 	frappe_mock = MagicMock()
 	frappe_mock._ = lambda x: x
 	sys.modules["frappe"] = frappe_mock
-if "frappe.utils" not in sys.modules:
+if not _REAL_FRAPPE and "frappe.utils" not in sys.modules:
 	utils_mock = MagicMock()
 	sys.modules["frappe.utils"] = utils_mock
 	sys.modules["frappe"].utils = utils_mock
 
-if "huf.ai.agent_integration" not in sys.modules:
+if not _REAL_FRAPPE and "huf.ai.agent_integration" not in sys.modules:
 	sys.modules["huf.ai.agent_integration"] = MagicMock()
 
 from huf.ai.orchestration import scheduler  # noqa: E402

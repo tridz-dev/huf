@@ -75,8 +75,15 @@ class TestMeetingRecording(unittest.TestCase):
         with self.assertRaises(frappe.ValidationError):
             self._upload(sequence=None)
 
+    def test_upload_chunk_accepts_late_chunk_after_stop(self):
+        # A chunk already in flight when the user (or auto-stop) stops the meeting must still land.
+        meeting_api.stop_recording(self.meeting["meeting_name"])
+        result = self._upload(sequence=0)
+        self.assertEqual(result["chunk_count"], 1)
+
     def test_upload_chunk_requires_running_meeting(self):
         meeting_api.stop_recording(self.meeting["meeting_name"])
+        frappe.db.set_value("Meeting", self.meeting["meeting_name"], "status", "Completed")
         with self.assertRaises(frappe.ValidationError):
             self._upload(sequence=0)
 

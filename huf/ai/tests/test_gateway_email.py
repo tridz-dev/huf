@@ -125,6 +125,10 @@ class TestEmailGatewayInboundIngestion(IntegrationTestCase):
         # rather than provisioning a separate service user.
         self._admin = frappe.get_doc("User", "Administrator")
         self._added_role = "Huf Gateway User" not in {r.role for r in self._admin.roles}
+        if not frappe.db.exists("Role", "Huf Gateway User"):
+            frappe.get_doc({"doctype": "Role", "role_name": "Huf Gateway User"}).insert(
+                ignore_permissions=True
+            )
         if self._added_role:
             self._admin.add_roles("Huf Gateway User")
 
