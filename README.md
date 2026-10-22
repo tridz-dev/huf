@@ -145,9 +145,14 @@ Connect your agents to inbound and outbound communication channels:
 
 - Webhook gateway with pairing-first access, text/media/voice in and out, buttons, and edit-in-place
 - Group addressing by mention, forum threads, bot-to-bot loop guard, and guest mode
-- Business (Secretary) mode is observe-only by default; streaming is off unless `huf_telegram_streaming` is set
-- Owner/admin cockpit in private chats: signed buttons, confirm-before-write, and audit rows
-- Setup, troubleshooting and tests: `docs/gateways/telegram-runbook.md`; cockpit design: `docs/gateways/telegram-admin-cockpit.md`
+- Message templates (text, variables, media, buttons) managed on the Templates tab and sent by agents
+- Agent reply blocks: `telegram-buttons` (inline and reply keyboards) and `telegram-media` (photos, files, locations, polls)
+- Agent tools: `telegram` (send, edit, forum, template and chat actions) and `telegram_admin` (group admin, bot profile, business), both gated per gateway
+- Business (Secretary) mode is observe-only by default; Draft sends a reply to the owner for approval first
+- Group join requests: Queue, Decline or Agent, with an optional Guard Mini App captcha
+- Streaming replies are read from `huf_telegram_streaming` in site config only; the Gateway checkbox is not yet honoured
+- Admin Mini App at `/huf/tg-app`; owner/admin cockpit in private chats with signed buttons, confirm-before-write, and audit rows
+- Setup, troubleshooting, known gaps and a live test checklist: `docs/gateways/telegram-runbook.md`; cockpit design: `docs/gateways/telegram-admin-cockpit.md`
 - **Event-Driven Messaging** — Inbound messages trigger agent runs; responses route back to the original channel automatically
 
 ### Knowledge Grounding
