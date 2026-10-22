@@ -273,11 +273,21 @@ def _start_keepalive(gateway, sender, chat_id, thread) -> None:
 	"""Keep ``typing`` alive until the reply starts (best effort). Skips while a draft stream is active."""
 	try:
 		from huf.ai.gateway_adapters import telegram_stream as ts, telegram_typing_keepalive as ka
+		from huf.ai.gateway_adapters import telegram_typing_metrics as tm
 
 		name = gateway.name
+
+		def tick() -> None:
+			try:
+				sender.send_chat_action(chat_id, "typing", thread_id=thread)
+			except Exception as exc:
+				tm.record_error(name, _typing_failure_kind(exc))
+				raise
+			tm.record_keepalive_tick(name)
+
 		ka.start(
 			ka.key_for(name, chat_id, thread),
-			lambda: sender.send_chat_action(chat_id, "typing", thread_id=thread),
+			tick,
 			lambda: bool(ts.StreamState(name, chat_id).get().get("draft_id")),
 		)
 	except Exception:
@@ -290,8 +300,10 @@ def send_typing_for_event(event, gateway) -> bool:
 	Gate: ``Gateway.typing_indicator`` (off = no call). Addressed rule: private chats always; groups only when
 	the message mentions/commands the bot (or ``mention_required`` is off). Thread: the forum topic or private
 	topic id only (``thread_id_for_reply``), never a plain reply-chain id (Telegram rejects it). Best effort:
-	never raises, never fails the run. Logs one line per attempt (``Telegram typing sent|failed chat=... ``).
+	never raises, never fails the run. Failures log at WARNING, successes at DEBUG; counters (last sent, 24h
+	count, last error type) live in the cache for the Overview (``telegram_typing_metrics``).
 	"""
+	from huf.ai.gateway_adapters import telegram_typing_metrics as tm
 	from huf.ai.gateway_adapters.telegram_threads import thread_id_for_reply
 
 	chat_id = ""
@@ -321,11 +333,13 @@ def send_typing_for_event(event, gateway) -> bool:
 		sender.send_chat_action(chat_id, "typing", thread_id=thread)
 	except Exception as exc:
 		kind = _typing_failure_kind(exc)
+		tm.record_error(gateway.name, kind)
 		frappe.logger("huf").warning(f"Telegram typing failed chat={chat_id} action=typing type={kind}")
 		return False
+	tm.record_sent(gateway.name, chat_id)
 	_start_keepalive(gateway, sender, chat_id, thread)
 	suffix = f" thread={thread}" if thread else ""
-	frappe.logger("huf").info(f"Telegram typing sent chat={chat_id} action=typing{suffix}")
+	frappe.logger("huf").debug(f"Telegram typing sent chat={chat_id} action=typing{suffix}")
 	return True
 
 

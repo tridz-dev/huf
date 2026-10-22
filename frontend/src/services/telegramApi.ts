@@ -41,6 +41,16 @@ export interface TelegramOverview {
 	last_error: string | null;
 	bot: TelegramBot | null;
 	bot_error: string | null;
+	typing?: TelegramTypingStatus | null;
+}
+
+/** Typing indicator counters (null when the gateway's typing indicator is off). Times are site-local strings. */
+export interface TelegramTypingStatus {
+	last_sent_at: string | null;
+	sent_count_24h: number;
+	last_error: string | null;
+	last_error_at: string | null;
+	keepalive_ticks: number;
 }
 
 export interface TelegramHealth {
@@ -51,6 +61,7 @@ export interface TelegramHealth {
 	checklist: TelegramChecklistItem[];
 	pending_update_count: number | null;
 	last_event_at: string | null;
+	typing?: TelegramTypingStatus | null;
 }
 
 export interface TelegramGatewayOption {
