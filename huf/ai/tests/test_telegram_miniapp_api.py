@@ -246,6 +246,33 @@ class TestSummary(Base):
 		self.assertEqual(res["data"]["actions"], ["Approve"])
 		doc.check_permission.assert_called_with("read")
 
+	def test_summary_hides_masked_and_broad_secret_names(self):
+		import frappe
+
+		meta = SimpleNamespace(
+			title_field=None, istable=0, issingle=0, is_submittable=0, get_workflow=lambda: None,
+			fields=[
+				_field("customer_name"), _field("pairing_code"), _field("sig_hash"), _field("access_key"),
+				_field("ssn_masked"), _field("territory"),
+			],
+		)
+		meta.fields[4].mask = 1
+		doc = self._doc(pairing_code="PC", sig_hash="H", access_key="K", ssn_masked="123", territory="N")
+		doc.has_permlevel_access_to.side_effect = lambda fn, df=None, pt="read": fn != "territory"
+		with (
+			patch.object(frappe, "get_meta", lambda dt: meta),
+			patch.object(frappe, "get_doc", lambda dt, dn: doc),
+			patch.object(ta, "_desk_url", lambda dt, dn: ""),
+			patch.object(ta, "_transitions", lambda d: []),
+		):
+			res = self.call(api.get_doc_summary, "Customer", "C-1")
+		self.assertEqual([f["fieldname"] for f in res["data"]["fields"]], ["customer_name"])
+
+	def test_nonce_bound_to_gateway(self):
+		act = {"op": "workflow", "dt": "Leave Application", "dn": "LA-1", "transition": "Approve"}
+		other = ta.issue_nonce(TG, f"{api.MINIAPP_CHAT}:OtherGW", act)
+		self.assertErr(self.call(api.act_confirm, other), "permission_denied")
+
 	def test_viewer_gets_no_actions(self):
 		import frappe
 
@@ -387,7 +414,7 @@ class TestActions(Base):
 		self.assertErr(self.call(api.act_confirm, "nope"), "invalid")
 		self.assertErr(self.call(api.act_confirm, "a" * 16), "refused")
 		act = {"op": "workflow", "dt": "Leave Application", "dn": "LA-1", "transition": "Approve"}
-		old = ta.issue_nonce(TG, api.MINIAPP_CHAT, act, now=NOW - 10_000)
+		old = ta.issue_nonce(TG, api.nonce_chat(BINDING), act, now=NOW - 10_000)
 		self.assertErr(self.call(api.act_confirm, old), "refused")
 
 	def test_unavailable_transition_and_denied_doctype(self):

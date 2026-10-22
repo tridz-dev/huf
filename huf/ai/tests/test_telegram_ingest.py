@@ -178,3 +178,15 @@ class TestHooks(unittest.TestCase):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class TestFirstDeliveryFailOpenWarns(unittest.TestCase):
+	def test_warns_once(self):
+		from unittest.mock import patch
+
+		ing._DEDUP_WARNED = False
+		with patch.object(ing.frappe, "cache", side_effect=RuntimeError("redis down")), \
+			patch.object(ing.frappe, "logger") as lg:
+			self.assertTrue(ing._first_delivery("GW", 1))
+			self.assertTrue(ing._first_delivery("GW", 2))
+		self.assertEqual(lg.return_value.warning.call_count, 1)

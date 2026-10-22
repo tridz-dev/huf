@@ -289,8 +289,25 @@ def take_items(parts: list[str], *, cache: Any = None, scope: str = "") -> list[
 # -- resolving + sending -----------------------------------------------------------------------
 
 
-def default_resolve_file(file_url: str) -> tuple[str, bytes]:
-	"""Read a Frappe File as the current (gateway execution) user; raises on missing/forbidden."""
+def _file_allowed_for_chat(doc: Any, chat_id: Any) -> bool:
+	"""Agent-emitted media may only name public Files or Files Telegram inbound saved for THIS chat."""
+	import frappe
+
+	if not doc.is_private:
+		return True
+	if chat_id in (None, "") or doc.attached_to_doctype != "Gateway Event" or not doc.attached_to_name:
+		return False
+	conv = frappe.db.get_value("Gateway Event", doc.attached_to_name, "conversation_id")
+	return bool(conv) and str(conv).startswith(str(chat_id))
+
+
+def default_resolve_file(file_url: str, chat_id: Any = None) -> tuple[str, bytes]:
+	"""Read a Frappe File for an agent-emitted media item; raises on missing/forbidden.
+
+	Beyond the execution user's read permission, only public Files and private Files attached to a Gateway
+	Event of this chat (Telegram inbound media) are allowed, so a prompt-injected agent cannot exfiltrate
+	arbitrary private files (e.g. ``/private/files/...``) the gateway user can read.
+	"""
 	import frappe
 
 	name = frappe.db.get_value("File", {"file_url": file_url}, "name")
@@ -298,6 +315,10 @@ def default_resolve_file(file_url: str) -> tuple[str, bytes]:
 		raise ValueError("file not found")
 	doc = frappe.get_doc("File", name)
 	doc.check_permission("read")
+	if not _file_allowed_for_chat(doc, chat_id):
+		raise ValueError(
+			"file not allowed: agents may only send public files or files received in this chat"
+		)
 	content = doc.get_content()
 	if isinstance(content, str):
 		content = content.encode("utf-8")
@@ -316,6 +337,7 @@ def _resolve(item: dict, resolve_file: Callable, check_url: Callable) -> Any:
 	if source == "file_id":
 		return value
 	if source == "url":
+		# Documented: the URL is fetched by Telegram's servers, not Huf; validate_url blocks private targets.
 		ok, why = check_url(value)
 		if not ok:
 			raise ValueError(f"url rejected: {why}")
@@ -388,7 +410,7 @@ def send_media_items(
 	resolve_file: Callable | None = None, check_url: Callable | None = None,
 ) -> SimpleNamespace:
 	"""Send ``items`` in order. Never raises: returns ``sent_ids`` and human-readable ``errors``."""
-	resolve_file = resolve_file or default_resolve_file
+	resolve_file = resolve_file or (lambda url: default_resolve_file(url, chat_id))
 	check_url = check_url or default_check_url
 	sent: list = []
 	errors: list[str] = []
