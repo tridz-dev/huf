@@ -675,7 +675,7 @@ class TestGatewayReplyDelivery(unittest.TestCase):
             conversation_id="2000000001",
             sender_id="42",
         )
-        configured_gateway = gateway(name="Support VK", execution_user="gateway-bot")
+        configured_gateway = gateway(name="Support VK", provider="VK", execution_user="gateway-bot")
         # Third item: the target Agent lookup for the pre-gate. Since GW-08 that
         # gate authorizes as the Gateway's execution_user, not as Guest, so this
         # Agent no longer needs allow_guest=1 to be reachable from a Gateway.
@@ -1165,7 +1165,7 @@ class TestWhatsAppGatewayService(unittest.TestCase):
 
     @patch("huf.ai.gateway_service.frappe")
     def test_non_whatsapp_provider_never_resolves_whatsapp_errors(self, mock_frappe):
-        assert gateway_service._whatsapp_send_errors("Telegram") == ()
+        assert gateway_service._whatsapp_send_errors("VK") == ()
         assert len(gateway_service._whatsapp_send_errors("WhatsApp")) == 2
 
     @patch("huf.ai.gateway_service.frappe")
