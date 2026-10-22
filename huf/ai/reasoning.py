@@ -12,6 +12,7 @@ while detecting capabilities and recording resolution/fallback telemetry.
 from dataclasses import dataclass, asdict, field
 from typing import Any, Dict, List, Optional
 import json
+import re
 import frappe
 import litellm
 
@@ -78,6 +79,21 @@ class ReasoningResolution:
             "provider": self.provider,
             "model_name": self.model_name,
         }
+
+
+# Anthropic models that reject `thinking.type=enabled` and require
+# `thinking.type=adaptive` + `output_config.effort`. Claude 5.x is matched by rule;
+# the explicit set covers anything else Anthropic metadata says needs it.
+_ANTHROPIC_ADAPTIVE_RE = re.compile(r"claude-(?:[a-z]+-)?5(?:[-.@]|$)")
+ANTHROPIC_ADAPTIVE_THINKING_MODELS = frozenset()
+
+
+def requires_adaptive_thinking(model_name: str) -> bool:
+    """True for Anthropic models that only accept adaptive thinking (Claude 5.x)."""
+    mn = (model_name or "").lower().split("/")[-1]
+    if mn in ANTHROPIC_ADAPTIVE_THINKING_MODELS:
+        return True
+    return bool(_ANTHROPIC_ADAPTIVE_RE.match(mn))
 
 
 def detect_model_capabilities(
@@ -175,11 +191,17 @@ def resolve_reasoning(
     # Mode is "on" or "auto" (and model supports reasoning if mode is auto)
     if policy.mode in ("on", "auto") and capabilities.supports_reasoning:
         if is_anthropic:
-            budget = policy.budget_tokens or 4096
-            resolved_native["thinking"] = {
-                "type": "enabled",
-                "budget_tokens": budget,
-            }
+            if requires_adaptive_thinking(model_name):
+                resolved_native["thinking"] = {"type": "adaptive"}
+                resolved_native["output_config"] = {
+                    "effort": policy.effort if policy.effort in ("low", "medium", "high") else "medium"
+                }
+            else:
+                budget = policy.budget_tokens or 4096
+                resolved_native["thinking"] = {
+                    "type": "enabled",
+                    "budget_tokens": budget,
+                }
             # For Anthropic thinking, modify_params helps handle missing blocks gracefully
             resolved_native["modify_params"] = True
         else:
@@ -228,6 +250,8 @@ def build_reasoning_kwargs(resolution: ReasoningResolution) -> Dict[str, Any]:
         kwargs["reasoning_effort"] = resolved["reasoning_effort"]
     if "thinking" in resolved:
         kwargs["thinking"] = resolved["thinking"]
+    if "output_config" in resolved:
+        kwargs["output_config"] = resolved["output_config"]
     if "reasoning_summary" in resolved:
         kwargs["reasoning_summary"] = resolved["reasoning_summary"]
 

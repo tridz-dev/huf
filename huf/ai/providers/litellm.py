@@ -248,6 +248,20 @@ async def _litellm_completion_with_retry(**completion_kwargs):
     for attempt in range(max_retries + 1):
         try:
             return await asyncio.to_thread(litellm.completion, **completion_kwargs)
+        except BadRequestError as exc:
+            # Safety net: model rejects thinking.type=enabled -> retry once with adaptive.
+            thinking = completion_kwargs.get("thinking")
+            if (
+                "thinking.type.enabled" in str(exc)
+                and isinstance(thinking, dict)
+                and thinking.get("type") == "enabled"
+            ):
+                logger.warning("Model requires adaptive thinking; retrying with thinking.type=adaptive")
+                completion_kwargs = dict(completion_kwargs)
+                completion_kwargs["thinking"] = {"type": "adaptive"}
+                completion_kwargs.setdefault("output_config", {"effort": "medium"})
+                return await asyncio.to_thread(litellm.completion, **completion_kwargs)
+            raise
         except Exception as exc:
             # Broad catch so _is_transient_litellm_error can classify and retry only known transient failures.
             last_exc = exc
