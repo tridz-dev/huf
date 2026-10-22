@@ -205,14 +205,20 @@ class TelegramGatewayAdapter(GatewayAdapter):
 		results: list[Mapping[str, Any]] = []
 		first = True
 		for att in reply.attachments:
-			kind = att.kind if att.kind in MEDIA_METHODS else "document"
+			kind = att.kind if att.kind in MEDIA_METHODS and att.kind not in ("document", "file") else _kind_from_mime(att.mime_type)
 			media = att.file_id or att.url
 			results.extend(
-				self.sender.send_media(kind, chat_id, media, reply_to=reply.reply_to_provider_message_id if first else None)
+				self.sender.send_media(
+					kind, chat_id, media, reply_to=reply.reply_to_provider_message_id if first else None,
+					thread_id=reply.thread_id,
+				)
 			)
 			first = False
 		results.extend(
-			self.sender.send_text(chat_id, reply.text, reply_to=reply.reply_to_provider_message_id if first else None)
+			self.sender.send_text(
+				chat_id, reply.text, reply_to=reply.reply_to_provider_message_id if first else None,
+				thread_id=reply.thread_id,
+			)
 		)
 		ids = [r.get("message_id") for r in results if isinstance(r, Mapping) and r.get("message_id") is not None]
 		if not ids:
@@ -245,6 +251,13 @@ class TelegramGatewayAdapter(GatewayAdapter):
 			return True
 		except TelegramApiError:
 			return False
+
+
+def _kind_from_mime(mime: str) -> str:
+	head = (mime or "").split("/", 1)[0]
+	if mime == "image/gif":
+		return "animation"
+	return head if head in ("photo", "video", "audio") else ("photo" if head == "image" else "document")
 
 
 def _with_text(parsed: TelegramUpdate, text: str) -> TelegramUpdate:

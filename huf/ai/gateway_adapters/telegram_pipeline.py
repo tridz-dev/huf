@@ -61,7 +61,11 @@ def before_send(event: Any, gateway: Any, parts: list[str]) -> list[str]:
 def make_parts(response: str) -> list[str]:
 	from huf.ai.gateway_adapters import telegram_buttons
 
+	from huf.ai.gateway_adapters import telegram_media_reply as media_reply
+
+	response, media_items = media_reply.strip_reply(response)  # agent ```telegram-media``` block
 	response = telegram_buttons.prepare_reply(response)  # strips the button block, remembers its spec
+	response = media_reply.remember(response, media_items)
 	return split_message(response) or ([str(response)] if str(response or "").strip() else [])
 
 
@@ -117,14 +121,23 @@ def build_sender(adapter: Any) -> TelegramSender:
 
 def send_parts_with(
 	sender: TelegramSender, chat_id: Any, parts: list[str], *, thread_id: Any = None, reply_to: Any = None,
-	markup: dict | None = None, on_sent: Any = None,
+	markup: dict | None = None, on_sent: Any = None, media: bool = False,
 ) -> SimpleNamespace:
 	"""Send ``parts`` in order. Raises ``TelegramPartsError(cause, sent_ids, remaining)`` on failure.
 
 	``reply_to`` quotes the inbound message on the first part only; ``markup`` goes on the last part.
-	``on_sent(ids)`` is called after each part succeeds.
+	``on_sent(ids)`` is called after each part succeeds. ``media=True`` first sends the agent's
+	``telegram-media`` items (never raises; a failure appends a short note part, the text still goes out).
 	"""
 	sent: list = []
+	parts = list(parts)
+	if media:
+		parts = _send_media_first(sender, chat_id, parts, thread_id, reply_to, sent, on_sent)
+		if not parts:
+			return SimpleNamespace(
+				provider_message_id=str(sent[0]) if sent else "", provider_response={"message_ids": sent}
+			)
+		reply_to = None if sent else reply_to
 	for i, part in enumerate(parts):
 		try:
 			msgs = sender.send_text(
@@ -140,6 +153,28 @@ def send_parts_with(
 	return SimpleNamespace(
 		provider_message_id=str(sent[0]) if sent else "", provider_response={"message_ids": sent}
 	)
+
+
+def _send_media_first(sender, chat_id, parts, thread_id, reply_to, sent, on_sent) -> list[str]:
+	"""Send remembered media items; returns the text parts still to send (placeholder dropped, note added)."""
+	from huf.ai.gateway_adapters import telegram_media_reply as media_reply
+
+	try:
+		items = media_reply.take_items(parts)
+		result = (
+			media_reply.send_media_items(sender, chat_id, items, thread_id, reply_to) if items else None
+		)
+	except Exception as exc:
+		items, result = [], SimpleNamespace(sent_ids=[], errors=[str(exc)[:120]])
+	parts = [p for p in parts if not media_reply.is_media_only(p)]
+	if result is None:
+		return parts
+	sent.extend(result.sent_ids)
+	if on_sent and result.sent_ids:
+		on_sent(list(result.sent_ids))
+	if result.errors:
+		parts.append(media_reply.failure_note(result.errors))
+	return parts
 
 
 # -- frappe-bound ---------------------------------------------------------------------------------
@@ -161,13 +196,15 @@ def send_parts(gateway: Any, event: Any, parts: list[str], quote: bool) -> Simpl
 	markup = reply_markup_for(event, gateway, "\n\n".join(parts))
 	from huf.ai.gateway_adapters import telegram_buttons
 
-	edited = telegram_buttons.try_edit(sender, event, list(parts), markup)
+	edited = None if any(p.startswith("\u2063tg-media:") for p in parts) else telegram_buttons.try_edit(
+		sender, event, list(parts), markup)
 	if edited is not None:
 		return edited
 	return send_parts_with(
 		sender, event.conversation_id, list(parts), thread_id=thread_id,
 		reply_to=reply_to if quote else None, markup=markup,
 		on_sent=lambda ids: telegram_messages.record_sent(gateway.name, event.conversation_id, event.name, ids),
+		media=True,
 	)
 
 

@@ -84,6 +84,7 @@ class TelegramUpdate:
 	is_bot: bool = False  # from.is_bot (bot-to-bot loop prevention)
 	sender_business_bot: str = ""  # message.sender_business_bot.id
 	business_connection_id: str = ""
+	rich_text: str = ""  # agent-readable text: forward/reply context + body + media/extra descriptions
 
 	@property
 	def is_room(self) -> bool:
@@ -163,6 +164,117 @@ def render_non_text(message: Mapping[str, Any]) -> tuple[str, str]:
 	return "", ""
 
 
+def _person(user: Any) -> str:
+	user = _map(user)
+	name = _sender_name(user)
+	if user.get("username") and user.get("first_name"):
+		name = f"{user['first_name']} ({name})"
+	return _cap(name or user.get("last_name") or user.get("title") or "", 80)
+
+
+def _forward_line(message: Mapping[str, Any]) -> str:
+	"""``[forwarded from X]`` from ``forward_origin`` (or the pre-7.0 ``forward_*`` fields)."""
+	origin = _map(message.get("forward_origin"))
+	who = ""
+	if origin:
+		kind = origin.get("type")
+		if kind == "user":
+			who = _person(origin.get("sender_user"))
+		elif kind == "hidden_user":
+			who = _cap(origin.get("sender_user_name"), 80)
+		elif kind == "chat":
+			who = _cap(_map(origin.get("sender_chat")).get("title"), 80)
+		elif kind == "channel":
+			who = _cap(_map(origin.get("chat")).get("title") or "channel", 80)
+			if origin.get("author_signature"):
+				who += f" ({_cap(origin['author_signature'], 40)})"
+		who = who or str(kind or "unknown")
+	elif message.get("forward_from") or message.get("forward_from_chat") or message.get("forward_sender_name"):
+		who = (
+			_person(message.get("forward_from"))
+			or _cap(_map(message.get("forward_from_chat")).get("title"), 80)
+			or _cap(message.get("forward_sender_name"), 80)
+		)
+	return f"[forwarded from {who}]" if who else ""
+
+
+def _brief(message: Mapping[str, Any]) -> str:
+	"""One-line summary of a (replied-to) message: its text/caption, else the content kind."""
+	body = message.get("text") or message.get("caption")
+	if body:
+		return _cap(body, 200)
+	kind, rendered = render_non_text(message)
+	if rendered:
+		return rendered
+	desc = describe_media(message)
+	return desc or ""
+
+
+def _reply_line(message: Mapping[str, Any]) -> str:
+	reply = _map(message.get("reply_to_message"))
+	quote = _map(message.get("quote"))
+	if not reply and not quote:
+		return ""
+	who = _person(reply.get("from")) or _cap(_map(reply.get("sender_chat")).get("title"), 80)
+	said = _cap(quote.get("text"), 200) if quote.get("text") else _brief(reply)
+	head = f"[replying to {who}" if who else "[replying to a message"
+	return f'{head}: "{said}"]' if said else f"{head}]"
+
+
+def describe_media(message: Mapping[str, Any]) -> str:
+	"""Readable one-liner for sticker / animation / video note / voice / audio / game / document-less kinds."""
+	if message.get("sticker"):
+		st = _map(message["sticker"])
+		flavour = "animated " if st.get("is_animated") else ("video " if st.get("is_video") else "")
+		bits = [f"[{flavour}sticker]", str(st.get("emoji") or "")]
+		if st.get("set_name"):
+			bits.append(f"set: {_cap(st['set_name'], 60)}")
+		return " ".join(b for b in bits if b)
+	if message.get("animation"):
+		a = _map(message["animation"])
+		return f"[gif/animation {a.get('duration')}s]" if a.get("duration") is not None else "[gif/animation]"
+	if message.get("video_note"):
+		d = _map(message["video_note"]).get("duration")
+		return f"[video note {d}s]" if d is not None else "[video note]"
+	if message.get("voice"):
+		d = _map(message["voice"]).get("duration")
+		return f"[voice message {d}s]" if d is not None else "[voice message]"
+	if message.get("audio"):
+		a = _map(message["audio"])
+		label = " - ".join(_cap(x, 80) for x in (a.get("performer"), a.get("title")) if x)
+		dur = f" {a['duration']}s" if a.get("duration") is not None else ""
+		return f"[audio{dur}] {label}".strip()
+	if message.get("game"):
+		return _cap(f"[game] {_map(message['game']).get('title', '')}", 120)
+	return ""
+
+
+def _extra_lines(message: Mapping[str, Any]) -> list[str]:
+	lines = []
+	loc = _map(message.get("location"))
+	if loc.get("live_period") and not message.get("venue"):
+		lines.append(f"(live location, shared for {loc['live_period']}s)")
+	if message.get("web_app_data"):
+		w = _map(message["web_app_data"])
+		lines.append(_cap(f"[web app data from {w.get('button_text', 'mini app')}] {w.get('data', '')}", 600))
+	if message.get("checklist"):
+		c = _map(message["checklist"])
+		tasks = " | ".join(
+			("[x] " if _map(t).get("completion_date") else "[ ] ") + _cap(_map(t).get("text"), 80)
+			for t in (c.get("tasks") or [])[:20]
+		)
+		lines.append(_cap(f"[checklist] {c.get('title', '')}: {tasks}", 800))
+	text = str(message.get("text") or message.get("caption") or "")
+	links = []
+	for ent in list(message.get("entities") or []) + list(message.get("caption_entities") or []):
+		if ent.get("type") == "text_link" and ent.get("url"):
+			label = _utf16_slice(text, int(ent.get("offset", 0)), int(ent.get("length", 0)))
+			links.append(f"{_cap(label, 60)} -> {_cap(ent['url'], 300)}")
+	if links:
+		lines.append("[links] " + "; ".join(links[:10]))
+	return lines
+
+
 def media_refs(message: Mapping[str, Any]) -> list[dict[str, Any]]:
 	"""File references on a message: dicts with kind, file_id, mime_type, filename, file_unique_id."""
 	refs = []
@@ -175,6 +287,11 @@ def media_refs(message: Mapping[str, Any]) -> list[dict[str, Any]]:
 			continue
 		if kind == "document" and _map(message.get("animation")).get("file_id") == obj.get("file_id"):
 			continue  # Telegram mirrors animations into ``document`` for old clients
+		if kind == "sticker" and obj.get("is_animated"):
+			# .tgs (Lottie) is not viewable by models: use the static thumbnail so the agent still sees it.
+			thumb = _map(obj.get("thumbnail") or obj.get("thumb"))
+			if thumb.get("file_id"):
+				obj = {**thumb, "mime_type": "image/webp", "file_name": "sticker_thumbnail.webp"}
 		refs.append(
 			{
 				"kind": kind,
@@ -219,6 +336,14 @@ def _parse_message(kind: str, update: Mapping[str, Any], message: Mapping[str, A
 	if rendered:
 		text = f"{text}\n{rendered}".strip() if text else rendered
 	reply = _map(message.get("reply_to_message"))
+	rich = text
+	if not command and not start:
+		rich = "\n".join(
+			x for x in (_forward_line(message), _reply_line(message), text, describe_media(message),
+				*_extra_lines(message)) if x
+		)
+	else:
+		rich = "\n".join(x for x in (text, describe_media(message), *_extra_lines(message)) if x)
 	return TelegramUpdate(
 		kind=kind,
 		update_id=str(update.get("update_id") or ""),
@@ -244,6 +369,7 @@ def _parse_message(kind: str, update: Mapping[str, Any], message: Mapping[str, A
 		is_bot=bool(sender.get("is_bot")),
 		sender_business_bot=str(_map(message.get("sender_business_bot")).get("id") or ""),
 		business_connection_id=str(message.get("business_connection_id") or ""),
+		rich_text=rich,
 	)
 
 
@@ -362,7 +488,7 @@ def to_event(parsed: TelegramUpdate, attachments: tuple[GatewayAttachment, ...] 
 		provider_event_id=parsed.update_id,
 		sender_id=parsed.sender_id,
 		conversation_id=parsed.chat_id,
-		message_text=parsed.text,
+		message_text=parsed.rich_text or parsed.text,
 		thread_id=parsed.message_id or None,
 		is_room=parsed.is_room,
 		mentioned=parsed.mentioned,
