@@ -27,6 +27,7 @@ import frappe
 import litellm
 from litellm import InternalServerError, RateLimitError, APIError, BadRequestError, ContextWindowExceededError
 from litellm.utils import trim_messages
+from huf.ai import run_delivery
 from huf.ai.tool_serializer import serialize_tools
 from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 from huf.ai.prompt_cache.capabilities import resolve_capabilities
@@ -1929,7 +1930,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         title="LiteLLM Empty Response"
                     )
                     response = await _litellm_completion_with_retry(**completion_kwargs)
-                elif any(i.type == "tool_call_item" for i in all_new_items):
+                elif run_delivery.current_run_delivered():
                     break
                 else:
                     raw_msg = _empty_response_message(normalized_model)
@@ -3097,7 +3098,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         _finalize_usage_totals(stream_total_usage)
 
         # Never report an empty response as a successful completion.
-        if not full_response.strip() and not had_tool_calls:
+        if not full_response.strip() and not run_delivery.current_run_delivered():
             msg = _empty_response_message(normalized_model)
             frappe.log_error(message=msg, title="LiteLLM Empty Response")
             yield {"type": "error", "error": msg, "public": True}

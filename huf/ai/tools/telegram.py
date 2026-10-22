@@ -36,6 +36,7 @@ from typing import Any, Callable, Optional
 import frappe
 logger = frappe.logger("huf")
 
+from huf.ai import run_delivery
 from huf.ai import telegram_send_scope as scope
 from huf.ai.gateway_adapters import telegram_senders_extra as extra
 from huf.ai.gateway_adapters import telegram_senders_more as more
@@ -1328,6 +1329,7 @@ def _scoped_dispatch(action: str, handler: Callable[..., str], kwargs: dict) -> 
                 scope.release_send(gateway, run_id)
             else:
                 if action in SEND_ACTIONS and scope.normalize_chat(kwargs["chat_id"]) == scope.current_chat(run_id):
+                    run_delivery.mark(run_id)
                     scope.note_current_chat_text(
                         gateway, run_id, kwargs.get("text") or kwargs.get("message") or kwargs.get("caption") or f"[{action}]")
                 _record_tool_send(gateway, kwargs["chat_id"], action, kwargs, raw)

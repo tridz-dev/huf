@@ -2,6 +2,7 @@
 
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 from unittest.mock import MagicMock, patch
 
 from huf.ai import gateway_service as gs
@@ -170,9 +171,29 @@ class TestBusyArithmetic(unittest.TestCase):
 
 
 class TestEmptyReplyAfterToolDelivery(unittest.TestCase):
-	def test_empty_text_after_tool_calls_is_not_a_failure(self):
-		self.assertIsNone(gs._agent_run_failure({"success": True, "response": "", "tool_calls_made": 1}))
+	def test_empty_text_after_delivering_tool_is_not_a_failure(self):
+		self.assertIsNone(gs._agent_run_failure({"success": True, "response": "", "tool_calls_made": 1, "delivered_reply": True}))
+
+	def test_empty_text_after_read_only_tool_is_a_failure(self):
+		self.assertIsNotNone(gs._agent_run_failure({"success": True, "response": "", "tool_calls_made": 2}))
+		self.assertIsNotNone(gs._agent_run_failure(
+			{"success": True, "response": "", "tool_calls_made": 2, "delivered_reply": False}))
 
 	def test_empty_text_without_tool_calls_is_still_a_failure(self):
 		self.assertIsNotNone(gs._agent_run_failure({"success": True, "response": "", "tool_calls_made": 0}))
 		self.assertIsNotNone(gs._agent_run_failure({"success": True, "response": "  "}))
+
+
+class TestRunDeliveryFlag(unittest.TestCase):
+	def test_flag_roundtrip_and_isolation(self):
+		from huf.ai import run_delivery as rd
+
+		store = {}
+		cache = mock.Mock(set_value=lambda k, v, expires_in_sec=None: store.__setitem__(k, v),
+			get_value=lambda k: store.get(k))
+		with mock.patch.object(rd.frappe, "cache", return_value=cache):
+			self.assertFalse(rd.delivered("RUN-1"))
+			rd.mark("RUN-1")
+			self.assertTrue(rd.delivered("RUN-1"))
+			self.assertFalse(rd.delivered("RUN-2"))
+			self.assertFalse(rd.delivered(""))

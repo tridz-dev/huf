@@ -24,6 +24,7 @@ from .tool_functions import (
 )
 from .conversation_manager import ConversationManager, safe_history_slice, safe_history_split
 from .run import RunProvider
+from huf.ai import run_delivery
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
 from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableError
 from huf.ai.providers.errors import ProviderError, classify_status, redact_text
@@ -2747,6 +2748,7 @@ def _execute_agent_run(
             "success": True,
             "response": final_output,
             "tool_calls_made": len(tool_call_message_map),
+            "delivered_reply": run_delivery.delivered(run_doc.name),
             "client_side_tool_calls": client_side_tool_calls,
             "structured": structured,
             "provider": resolved_provider,
@@ -4084,7 +4086,7 @@ async def _run_agent_stream_impl(
                 elif chunk_type == "complete":
                     full_response = chunk.get("full_response", full_response)
 
-                    if not (full_response or "").strip() and not tool_call_message_map:
+                    if not (full_response or "").strip() and not run_delivery.delivered(run_doc.name):
                         # Empty completion with no tool calls — the provider
                         # failed to generate content (known with reasoning
                         # models on the 'ollama/' endpoint). Never store an
@@ -4394,6 +4396,7 @@ async def _run_agent_stream_impl(
                     chunk["response"] = full_response
                     chunk["success"] = True
                     chunk["tool_calls_made"] = len(tool_call_message_map)
+                    chunk["delivered_reply"] = run_delivery.delivered(run_doc.name)
                     chunk["agent_run_id"] = run_doc.name
                     chunk["agent_message_id"] = final_message.name
                     chunk["session_id"] = conv_manager.session_id

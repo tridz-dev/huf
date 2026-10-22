@@ -49,7 +49,7 @@ class TestPendingRoom(unittest.TestCase):
 		self.assertEqual(self._run(existing=["E0"]), ("", False))
 
 	def test_pending_limit(self):
-		self.assertEqual(self._run(pending=["a", "b"]), ("", False))
+		self.assertEqual(self._run(pending=["r"] * svc.PENDING_ROOM_LIMIT), ("", False))
 
 	def test_only_allow_list(self):
 		self.assertEqual(self._run(policy="Open"), ("", False))
@@ -65,6 +65,44 @@ class TestPendingRoom(unittest.TestCase):
 			rec.reset_mock()
 			svc._admission(gw, {"is_room": True, "conversation_id": "-1", "sender_id": "5", "mentioned": False})
 			rec.assert_not_called()
+
+	def test_room_cap_ignores_sender_limit(self):
+		# pairing_pending_limit is 2 on the fixture; two pending Rooms must not block a third.
+		self.assertEqual(self._run(pending=["a", "b"]), ("E1", True))
+
+	def test_room_cap_query_is_room_only(self):
+		seen = []
+		def fake(*a, **k):
+			seen.append(k.get("filters"))
+			return []
+		with mock.patch.object(frappe, "get_all", side_effect=fake), \
+				mock.patch.object(frappe, "get_doc", return_value=SimpleNamespace(insert=lambda **k: SimpleNamespace(name="E1"))), \
+				mock.patch.object(svc, "_new_unique_pairing_code", return_value="P"), \
+				mock.patch.object(svc, "now_datetime", return_value=0), mock.patch.object(svc, "add_to_date", return_value=0):
+			svc._record_pending_room(self.gw(), "-1")
+		self.assertEqual(seen[1]["entry_type"], "Room")
+
+	def test_sender_pending_count_excludes_rooms(self):
+		with mock.patch.object(frappe, "get_all", return_value=[]) as ga, \
+				mock.patch.object(svc, "now_datetime", return_value=0), mock.patch.object(svc, "add_to_date", return_value=0):
+			svc._pairing_cap_reason(self.gw(), "5")
+		self.assertEqual(ga.call_args_list[0].kwargs["filters"]["entry_type"], ["!=", "Room"])
+
+	def test_whatsapp_group_never_records_room(self):
+		gw = SimpleNamespace(room_policy="Allow list", room_sender_policy="Open", mention_required=0,
+			direct_policy="Allow list", provider="WhatsApp")
+		with mock.patch.object(svc, "_has_access_entry", return_value=False), \
+				mock.patch.object(svc, "_record_pending_room") as rec:
+			svc._admission(gw, {"is_room": True, "conversation_id": "g", "sender_id": "5", "mentioned": True})
+		rec.assert_not_called()
+
+	def test_mention_required_short_circuits_before_db(self):
+		gw = SimpleNamespace(room_policy="Allow list", room_sender_policy="Open", mention_required=1,
+			direct_policy="Allow list", provider="Telegram")
+		with mock.patch.object(svc, "_policy_admits") as pa:
+			ok, _ = svc._admission(gw, {"is_room": True, "conversation_id": "-1", "sender_id": "5", "mentioned": False})
+		self.assertFalse(ok)
+		pa.assert_not_called()
 
 	def test_bot_added_records(self):
 		gw = SimpleNamespace(name="GW")

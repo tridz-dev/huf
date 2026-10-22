@@ -471,27 +471,27 @@ def _whitelist(**kw):
 		return lambda fn: fn
 
 
-@_whitelist(allow_guest=True, methods=["GET", "POST"])
+@_whitelist(allow_guest=True, methods=["POST"])
 def me(token: str = "") -> dict:
 	return _serve(token, _h_me)
 
 
-@_whitelist(allow_guest=True, methods=["GET", "POST"])
+@_whitelist(allow_guest=True, methods=["POST"])
 def config(token: str = "") -> dict:
 	return _serve(token, _h_config, as_user=False)
 
 
-@_whitelist(allow_guest=True, methods=["GET", "POST"])
+@_whitelist(allow_guest=True, methods=["POST"])
 def search(doctype: str, text: str = "", limit: int = SEARCH_DEFAULT, token: str = "") -> dict:
 	return _serve(token, lambda b, s: _h_search(b, s, doctype, text, limit))
 
 
-@_whitelist(allow_guest=True, methods=["GET", "POST"])
+@_whitelist(allow_guest=True, methods=["POST"])
 def get_doc_summary(doctype: str, name: str, token: str = "") -> dict:
 	return _serve(token, lambda b, s: _h_get_doc_summary(b, s, doctype, name))
 
 
-@_whitelist(allow_guest=True, methods=["GET", "POST"])
+@_whitelist(allow_guest=True, methods=["POST"])
 def approvals(token: str = "") -> dict:
 	return _serve(token, _h_approvals)
 
@@ -506,12 +506,12 @@ def act_confirm(nonce: str, token: str = "") -> dict:
 	return _serve(token, lambda b, s: _h_act_confirm(b, s, nonce), as_user=False)
 
 
-@_whitelist(allow_guest=True, methods=["GET", "POST"])
+@_whitelist(allow_guest=True, methods=["POST"])
 def digest(token: str = "") -> dict:
 	return _serve(token, _h_digest)
 
 
-@_whitelist(allow_guest=True, methods=["GET", "POST"])
+@_whitelist(allow_guest=True, methods=["POST"])
 def audit(limit: int = AUDIT_DEFAULT, token: str = "") -> dict:
 	return _serve(token, lambda b, s: _h_audit(b, s, limit))
 

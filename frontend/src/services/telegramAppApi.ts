@@ -157,20 +157,12 @@ function reauth(): Promise<TgAuthResult> {
   return reauthInFlight;
 }
 
-async function rawCall<T>(name: string, params: Record<string, unknown>, post: boolean): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
+async function rawCall<T>(name: string, params: Record<string, unknown>): Promise<T> {
+  // Always POST with the token in the header: a token must never travel in a URL (access logs, Referer).
+  const headers: Record<string, string> = { Accept: 'application/json', 'Content-Type': 'application/json' };
   if (token) headers[TOKEN_HEADER] = token;
-  let url = METHOD_BASE + name;
-  const init: RequestInit = { method: post ? 'POST' : 'GET', headers, credentials: 'omit' };
-  if (post) {
-    headers['Content-Type'] = 'application/json';
-    init.body = JSON.stringify(params);
-  } else {
-    const qs = new URLSearchParams();
-    for (const [k, v] of Object.entries(params)) if (v !== undefined) qs.set(k, String(v));
-    const q = qs.toString();
-    if (q) url += `?${q}`;
-  }
+  const url = METHOD_BASE + name;
+  const init: RequestInit = { method: 'POST', headers, credentials: 'omit', body: JSON.stringify(params) };
   let res: Response;
   try { res = await fetch(url, init); } catch {
     throw new TelegramAppError('network', 'Network error. Check your connection.');
@@ -179,14 +171,14 @@ async function rawCall<T>(name: string, params: Record<string, unknown>, post: b
 }
 
 /** Call an endpoint; on 401 re-authenticate once with the stored initData and retry. */
-export async function call<T>(name: string, params: Record<string, unknown> = {}, post = false): Promise<T> {
+export async function call<T>(name: string, params: Record<string, unknown> = {}): Promise<T> {
   try {
-    return await rawCall<T>(name, params, post);
+    return await rawCall<T>(name, params);
   } catch (e) {
     if (e instanceof TelegramAppError && e.code === 'unauthorized') {
       token = null;
       await reauth();
-      return rawCall<T>(name, params, post);
+      return rawCall<T>(name, params);
     }
     throw e;
   }
@@ -200,10 +192,10 @@ export const getDocSummary = (doctype: string, name: string) =>
   call<TgDocSummary>('get_doc_summary', { doctype, name });
 export const approvals = () => call<{ items: TgApprovalItem[] }>('approvals');
 export const actPrepare = (doctype: string, name: string, action: string) =>
-  call<TgActPrepare>('act_prepare', { doctype, name, action }, true);
-export const actConfirm = (nonce: string) => call<{ result: string }>('act_confirm', { nonce }, true);
+  call<TgActPrepare>('act_prepare', { doctype, name, action });
+export const actConfirm = (nonce: string) => call<{ result: string }>('act_confirm', { nonce });
 export const digest = () => call<TgDigest>('digest');
 export const audit = (limit = 20) => call<TgAudit>('audit', { limit });
 export async function revokeToken(): Promise<void> {
-  try { await call<{ revoked: boolean }>('revoke_token', {}, true); } finally { resetTelegramAppSession(); }
+  try { await call<{ revoked: boolean }>('revoke_token', {}); } finally { resetTelegramAppSession(); }
 }

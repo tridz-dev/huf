@@ -92,6 +92,12 @@ class TestAuth(Base):
 		self.assertErr(api.config(token=self.token), "unauthorized")
 		self.assertErr(api.act_confirm("nonce", token=self.token), "unauthorized")
 
+	def test_token_endpoints_are_post_only(self):
+		allowed = getattr(frappe, "allowed_http_methods_for_whitelisted_func", {})
+		for fn in (api.me, api.config, api.search, api.get_doc_summary, api.approvals, api.act_prepare,
+			api.act_confirm, api.digest, api.audit, api.revoke_token):
+			self.assertEqual(list(allowed.get(fn, [])), ["POST"], fn.__name__)
+
 	def test_query_param_rejected_even_with_valid_header(self):
 		with patch("frappe.get_request_header", lambda h: self.token if h == api.TOKEN_HEADER else None):
 			self.assertErr(api.me(token=self.token), "unauthorized")

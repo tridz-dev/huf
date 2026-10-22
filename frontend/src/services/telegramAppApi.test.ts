@@ -54,7 +54,9 @@ describe('telegramAppApi', () => {
     expect(res.items).toEqual([]);
     expect(getToken()).toBe('new');
     expect(fetchMock.mock.calls[3][1].headers['X-Huf-Tg-Token']).toBe('new');
-    expect(fetchMock.mock.calls[3][0]).toContain('doctype=X');
+    expect(fetchMock.mock.calls[3][0]).not.toContain('?');
+    expect(fetchMock.mock.calls[3][1].method).toBe('POST');
+    expect(JSON.parse(fetchMock.mock.calls[3][1].body).doctype).toBe('X');
   });
 
   it('surfaces non-401 errors without re-auth and POSTs JSON for act_confirm', async () => {

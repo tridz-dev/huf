@@ -31,15 +31,15 @@ expired/used confirmation), `rate_limited` 429, `internal` 500. Rate limits: 60 
 
 | Endpoint | Method | Params | `data` |
 |---|---|---|---|
-| `me` | GET/POST | - | `{frappe_user, full_name, role_scope, gateway, telegram_user_id}` |
-| `config` | GET/POST | - | `{gateway, bot_name, role_scope, session_ttl, confirm_ttl, limits:{search_max, audit_max}, features:{search, approvals, digest, act, audit, audit_all}}` (`act` = Operator+, `audit_all` = Admin) |
-| `search` | GET/POST | `doctype`, `text=""`, `limit=10` (max 25) | `{doctype, items:[{name, title}]}` |
-| `get_doc_summary` | GET/POST | `doctype`, `name` | `{doctype, name, title, workflow_state, status, docstatus, modified, fields:[{fieldname,label,fieldtype,value}], actions:[str], desk_url}` (`actions` empty below Operator) |
-| `approvals` | GET/POST | - | `{items:[{doctype, name, state, actions:[str]}]}` |
+| `me` | POST | - | `{frappe_user, full_name, role_scope, gateway, telegram_user_id}` |
+| `config` | POST | - | `{gateway, bot_name, role_scope, session_ttl, confirm_ttl, limits:{search_max, audit_max}, features:{search, approvals, digest, act, audit, audit_all}}` (`act` = Operator+, `audit_all` = Admin) |
+| `search` | POST | `doctype`, `text=""`, `limit=10` (max 25) | `{doctype, items:[{name, title}]}` |
+| `get_doc_summary` | POST | `doctype`, `name` | `{doctype, name, title, workflow_state, status, docstatus, modified, fields:[{fieldname,label,fieldtype,value}], actions:[str], desk_url}` (`actions` empty below Operator) |
+| `approvals` | POST | - | `{items:[{doctype, name, state, actions:[str]}]}` |
 | `act_prepare` | POST | `doctype`, `name`, `action` | `{nonce, description, expires_in: 300, action:{doctype,name,action}}` (Operator+; action must be a currently available workflow transition; nothing is changed) |
 | `act_confirm` | POST | `nonce` | `{result: "Done: ... is now <state>"}` (single use, bound to the Telegram user and the Mini App; executes via the cockpit `execute`, writes `Telegram Admin Audit`) |
-| `digest` | GET/POST | - | `{text, approvals:[{doctype,name,state}], actions_24h}` |
-| `audit` | GET/POST | `limit=20` (max 50) | `{scope: "own"|"all", items:[{action, frappe_user, reference_doctype, reference_name, result, creation}]}`; Admin sees all, others only their own rows |
+| `digest` | POST | - | `{text, approvals:[{doctype,name,state}], actions_24h}` |
+| `audit` | POST | `limit=20` (max 50) | `{scope: "own"|"all", items:[{action, frappe_user, reference_doctype, reference_name, result, creation}]}`; Admin sees all, others only their own rows |
 | `revoke_token` | POST | - | `{revoked: true}` (logout; token dies immediately) |
 
 Notes:

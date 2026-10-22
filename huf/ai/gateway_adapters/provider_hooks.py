@@ -25,6 +25,8 @@ Hook signatures (``gateway`` / ``event`` are Gateway / Gateway Event documents):
   (unregistered = the retry cannot be rebuilt).
 - ``linked_sender_ids(gateway_name, primary) -> list[str]``: alias ids that share a sender identity.
 - ``adapter_context(gateway, contact_name) -> dict | None``: ``gateway_context`` kwarg for the adapter.
+- ``record_pending_room(gateway, chat_id) -> str``: create a Pending Room access entry for an unknown room that
+  addressed the bot (Telegram only; unregistered = no Room entries, e.g. WhatsApp groups).
 - ``reply_target(event) -> tuple[thread_id, reply_to_provider_message_id]``: where a reply goes.
 - ``send_parts(gateway, event, parts, quote) -> Any``: send pre-formatted text parts in order.
 - ``webhook_signals() -> bool``: record verify/signature health timestamps on the Gateway.
