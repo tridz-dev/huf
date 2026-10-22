@@ -54,6 +54,10 @@ TEXT_CAP = 500
 BUSINESS_KINDS = ("business_connection", "business_message", "edited_business_message", "deleted_business_messages")
 
 
+# Returned by an async draft producer that enqueued its job: the draft will reach the owner later.
+DRAFT_QUEUED = object()
+
+
 class BusinessReplyBlocked(Exception):
 	"""A business send was refused locally (unknown / disabled connection or missing right)."""
 
@@ -283,6 +287,8 @@ def handle_business_message(gateway, adapter, parsed, request=None) -> dict:
 			text = _DRAFT_PRODUCER(ctx)
 		except Exception as exc:
 			frappe.logger("huf").warning(f"Telegram business draft failed: {type(exc).__name__}")
+		if text is DRAFT_QUEUED:
+			return _ack("draft queued", policy="draft", draft_queued=True)
 		if text:
 			draft_id = deliver_draft(adapter, conn, parsed.chat_id, parsed.message_id, text, parsed.display_name)
 			return _ack("draft sent to owner", policy="draft", draft_id=draft_id)
@@ -380,6 +386,9 @@ def deliver_draft(adapter, conn: dict, chat_id: str, message_id: str, text: str,
 			"message_id": str(message_id),
 			"text": text,
 			"status": "pending",
+			"who": who or str(chat_id),
+			"owner_chat": str(conn["user_chat_id"]),
+			"owner_msg_id": "",
 		},
 		DRAFT_TTL,
 	)
@@ -392,7 +401,13 @@ def deliver_draft(adapter, conn: dict, chat_id: str, message_id: str, text: str,
 		[[button("Approve", "a"), button("Edit", "e"), button("Reject", "r")]]
 	)
 	header = f"Draft reply to {who or chat_id}:\n\n"
-	adapter.sender.send_text(owner_chat, header + text, markup=markup)
+	sent = adapter.sender.send_text(owner_chat, header + text, markup=markup)
+	try:
+		draft = get_draft(draft_id)
+		draft["owner_msg_id"] = str((sent[0] or {}).get("message_id") or "")
+		_put(_draft_key(draft_id), draft, DRAFT_TTL)
+	except Exception:
+		pass
 	return draft_id
 
 
@@ -405,31 +420,129 @@ def _finish(draft: dict, status: str) -> None:
 	_put(_draft_key(draft["id"]), draft, DRAFT_TTL)
 
 
+_REASONS = {
+	"unknown_connection": "the business connection is no longer available",
+	"connection_disabled": "the business connection is turned off",
+	"no_reply_right": "the account no longer allows the bot to reply",
+}
+
+
+def classify_send_error(exc: Exception) -> tuple[str, str]:
+	"""``(kind, plain_reason)``; kind is ``transient`` | ``rights`` | ``permanent``. Never includes secrets."""
+	if isinstance(exc, BusinessReplyBlocked):
+		return "rights", _REASONS.get(exc.reason, "the bot is not allowed to reply for this account")
+	desc = str(getattr(exc, "description", "") or "").lower()
+	if hasattr(exc, "retryable"):
+		if "rights" in desc or "permission" in desc:
+			return "rights", "the bot does not have the rights to reply for this account"
+		if getattr(exc, "flood_control", False):
+			return "transient", "Telegram is rate limiting requests, try again shortly"
+		if exc.retryable:
+			return "transient", "Telegram had a temporary problem"
+		if "connection" in desc and "not found" in desc:
+			return "permanent", "the business connection was not found"
+		if getattr(exc, "blocked_by_user", False) or getattr(exc, "chat_not_found", False):
+			return "permanent", "the customer chat is unavailable"
+		return "permanent", "Telegram refused the message"
+	return "transient", "an unexpected error occurred"
+
+
+def _notify_owner(adapter, chat_id: Any, text: str) -> None:
+	try:
+		adapter.sender.send_text(chat_id, text)
+	except Exception:
+		pass
+
+
+def _answer(adapter, parsed, text: str) -> None:
+	cqid = getattr(parsed, "callback_query_id", "")
+	if not cqid:
+		return
+	try:
+		adapter.answer_callback(cqid, text)
+	except Exception:
+		pass
+
+
+def _close_draft_message(adapter, draft: dict, outcome: str, parsed=None) -> None:
+	"""Replace the draft's buttons with the outcome line (best effort)."""
+	chat = draft.get("owner_chat") or draft.get("owner_id")
+	msg_id = draft.get("owner_msg_id") or getattr(parsed, "message_id", "")
+	if not chat or not msg_id:
+		return
+	body = f"Draft reply to {draft.get('who') or draft.get('chat_id')}:\n\n{draft['text']}\n\n{outcome}"
+	try:
+		adapter.sender.edit_message_text(chat, msg_id, body, markup={"inline_keyboard": []})
+	except Exception:
+		try:
+			adapter.sender.edit_message_reply_markup(chat, msg_id, None)
+		except Exception:
+			pass
+
+
+_TOASTS = {
+	"approved": "Sent",
+	"rejected": "Rejected",
+	"editing": "Send your replacement text",
+	"stale": "This draft was already handled",
+	"forbidden": "Only the account owner can do this",
+	"blocked": "Could not send",
+	"retry": "Could not send, tap Approve to retry",
+	"failed": "Could not send",
+}
+_OUTCOMES = {"approved": "Sent.", "rejected": "Rejected."}
+
+
 def handle_draft_callback(adapter, parsed, payload: str | None) -> dict | None:
 	"""Handle a verified ``bz:<a|e|r>:<draft_id>`` callback. None = not a business-draft callback.
 
-	Returns ``{"handled": True, "result": approved|rejected|editing|stale|forbidden|blocked}``.
+	Returns ``{"handled": True, "result": approved|rejected|editing|stale|forbidden|blocked|retry|failed}``.
+	Always answers the callback query and never raises (the webhook must ack 200).
 	"""
 	if not payload or not payload.startswith(CALLBACK_PREFIX + ":"):
 		return None
+	try:
+		out = _draft_callback(adapter, parsed, payload)
+	except Exception as exc:  # last resort: never 500 the webhook
+		frappe.logger("huf").warning(f"Telegram business draft callback failed: {type(exc).__name__}")
+		out = {"result": "failed", "reason": "an unexpected error occurred"}
+	result = out.get("result", "stale")
+	toast = out.get("toast") or _TOASTS.get(result, "")
+	if result in ("blocked", "retry", "failed") and out.get("reason") and not out.get("toast"):
+		toast = f"Could not send: {out['reason']}"
+	_answer(adapter, parsed, toast)
+	return {"handled": True, **{k: v for k, v in out.items() if k != "toast"}}
+
+
+def _draft_callback(adapter, parsed, payload: str) -> dict:
 	parts = payload.split(":")
 	if len(parts) != 3:
-		return {"handled": True, "result": "stale"}
+		return {"result": "stale"}
 	action, draft_id = parts[1], parts[2]
 	draft = get_draft(draft_id)
-	if not draft or draft["status"] not in ("pending", "editing"):
-		return {"handled": True, "result": "stale"}
+	if not draft:
+		return {"result": "stale"}
 	if str(parsed.sender_id) != draft["owner_id"]:
-		return {"handled": True, "result": "forbidden"}
+		return {"result": "forbidden"}
+	if draft["status"] == "failed":
+		return {"result": "failed", "reason": "this draft failed and can't be retried", "toast": "This draft failed to send and can't be retried"}
+	if draft["status"] not in ("pending", "editing"):
+		return {"result": "stale"}
 	if action == "r":
 		_finish(draft, "rejected")
-		return {"handled": True, "result": "rejected"}
+		_close_draft_message(adapter, draft, _OUTCOMES["rejected"], parsed)
+		return {"result": "rejected"}
 	if action == "e":
 		_finish(draft, "editing")
-		return {"handled": True, "result": "editing", "draft_id": draft_id}
+		return {"result": "editing", "draft_id": draft_id}
 	if action == "a":
-		return {"handled": True, **_send_draft(adapter, draft, draft["text"])}
-	return {"handled": True, "result": "stale"}
+		out = _send_draft(adapter, draft, draft["text"], restore="pending", parsed=parsed)
+		if out["result"] == "approved":
+			_close_draft_message(adapter, draft, _OUTCOMES["approved"], parsed)
+		elif out["result"] == "failed":
+			_close_draft_message(adapter, draft, "Could not be sent.", parsed)
+		return out
+	return {"result": "stale"}
 
 
 def submit_edit(adapter, draft_id: str, owner_id: Any, new_text: str) -> dict:
@@ -439,17 +552,37 @@ def submit_edit(adapter, draft_id: str, owner_id: Any, new_text: str) -> dict:
 		return {"result": "stale"}
 	if str(owner_id) != draft["owner_id"]:
 		return {"result": "forbidden"}
-	return _send_draft(adapter, draft, new_text)
+	out = _send_draft(adapter, draft, new_text, restore="editing")
+	if out["result"] == "approved":
+		draft["text"] = new_text
+		_close_draft_message(adapter, draft, _OUTCOMES["approved"])
+	elif out["result"] == "failed":
+		_close_draft_message(adapter, draft, "Could not be sent.")
+	return out
 
 
-def _send_draft(adapter, draft: dict, text: str) -> dict:
+def _send_draft(adapter, draft: dict, text: str, restore: str = "pending", parsed=None) -> dict:
+	"""Send as the owner. Never raises: failures reset the draft (``restore``) or mark it ``failed``."""
 	_finish(draft, "sending")  # claim first: a double tap must not send twice
 	try:
 		reply_as_business(
 			draft["connection_id"], draft["chat_id"], text, sender=adapter.sender, reply_to=draft["message_id"]
 		)
-	except BusinessReplyBlocked as exc:
-		_finish(draft, "pending")
-		return {"result": "blocked", "reason": exc.reason}
+	except Exception as exc:
+		kind, reason = classify_send_error(exc)
+		frappe.logger("huf").warning(f"Telegram business draft send failed ({type(exc).__name__}, {kind})")
+		blocked = isinstance(exc, BusinessReplyBlocked)
+		if kind == "permanent":
+			_finish(draft, "failed")
+			result, note = "failed", "This draft can't be retried."
+		else:
+			_finish(draft, restore)
+			result = "blocked" if blocked else "retry"
+			note = "Send your replacement text again to retry." if restore == "editing" else "Tap Approve to retry."
+		_notify_owner(adapter, draft.get("owner_chat") or draft["owner_id"], f"Could not send: {reason}. {note}")
+		out = {"result": result, "reason": reason}
+		if blocked:
+			out["reason_code"] = exc.reason
+		return out
 	_finish(draft, "sent")
 	return {"result": "approved"}

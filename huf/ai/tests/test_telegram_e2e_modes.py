@@ -592,7 +592,7 @@ class TestBusinessMode(E2EBase):
 		self.connect({"can_reply": True})
 		self.policy("Draft")
 		result = self.send(biz_msg())
-		self.assertEqual(result["note"], "no draft produced")  # the job delivers the draft asynchronously
+		self.assertEqual(result["note"], "draft queued")  # the job delivers the draft asynchronously
 		self.enqueue_mock.assert_called_once()
 		self.assertEqual(self.enqueue_mock.call_args.kwargs["mode"], "draft")
 		out = agent.run_business_job(

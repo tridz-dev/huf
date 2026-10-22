@@ -271,3 +271,96 @@ class TestDraft(Base):
 
 	def test_foreign_callback_ignored(self):
 		self.assertIsNone(biz.handle_draft_callback(self.adapter, SimpleNamespace(sender_id="1"), "other:x"))
+
+
+class TestSendFailures(Base):
+	def setUp(self):
+		super().setUp()
+		self.feed(connection(rights={"can_reply": True}))
+		biz.register_business_policy(lambda c: "draft")
+		biz.register_draft_producer(lambda c: "Sure, 3pm works.")
+		self.draft_id = self.feed(message())["draft_id"]
+
+	def cb(self, action, cqid="cq1"):
+		data = self.adapter.sign_callback_data(f"bz:{action}:{self.draft_id}", OWNER)
+		payload = self.adapter.verify_callback_data(data, OWNER)
+		parsed = SimpleNamespace(sender_id=str(OWNER), callback_query_id=cqid, message_id="101")
+		return biz.handle_draft_callback(self.adapter, parsed, payload)
+
+	def status(self):
+		return biz.get_draft(self.draft_id)["status"]
+
+	def fail_next(self, description, code):
+		self.api.queue("sendMessage", FakeBotApi.error(description, code))
+
+	def owner_texts(self):
+		return [c["payload"]["text"] for c in self.sends() if str(c["payload"]["chat_id"]) == str(OWNER)]
+
+	def toast(self):
+		return self.api.last("answerCallbackQuery")["payload"]["text"]
+
+	def test_permanent_error_on_approve_marks_failed_and_notifies(self):
+		self.fail_next("Bad Request: business connection not found", 400)
+		out = self.cb("a")  # must not raise
+		self.assertEqual(out["result"], "failed")
+		self.assertEqual(self.status(), "failed")
+		self.assertTrue(self.owner_texts()[-1].startswith("Could not send: "))
+		self.assertNotIn(TOKEN, " ".join(self.owner_texts()))
+		self.assertIn("Could not send", self.toast())
+
+	def test_transient_error_on_approve_resets_pending_and_retry_works(self):
+		self.fail_next("Too Many Requests: retry after 5", 429)
+		out = self.cb("a")
+		self.assertEqual(out["result"], "retry")
+		self.assertEqual(self.status(), "pending")
+		self.assertIn("Could not send", self.owner_texts()[-1])
+		self.assertEqual(self.cb("a")["result"], "approved")
+		self.assertEqual(self.status(), "sent")
+
+	def test_unexpected_exception_does_not_propagate(self):
+		with mock.patch.object(biz, "reply_as_business", side_effect=RuntimeError("boom")):
+			out = self.cb("a")
+		self.assertEqual(out["result"], "retry")
+		self.assertEqual(self.status(), "pending")
+
+	def test_second_approve_on_failed_cannot_retry(self):
+		self.fail_next("Bad Request: business connection not found", 400)
+		self.cb("a")
+		n = len(self.sends())
+		self.assertEqual(self.cb("a", cqid="cq2")["result"], "failed")
+		self.assertEqual(len(self.sends()), n)
+		self.assertIn("can't be retried", self.toast())
+
+	def test_edit_send_failure_keeps_editing_and_notifies(self):
+		self.cb("e")
+		self.fail_next("Bad Gateway", 502)
+		out = biz.submit_edit(self.adapter, self.draft_id, OWNER, "4pm")
+		self.assertEqual(out["result"], "retry")
+		self.assertEqual(self.status(), "editing")
+		self.assertIn("Could not send", self.owner_texts()[-1])
+		self.assertEqual(biz.submit_edit(self.adapter, self.draft_id, OWNER, "4pm")["result"], "approved")
+
+	def test_edit_send_permanent_failure_marks_failed(self):
+		self.cb("e")
+		self.fail_next("Bad Request: business connection not found", 400)
+		self.assertEqual(biz.submit_edit(self.adapter, self.draft_id, OWNER, "4pm")["result"], "failed")
+		self.assertEqual(self.status(), "failed")
+
+	def test_approve_gives_toast_and_removes_buttons(self):
+		self.assertEqual(self.cb("a")["result"], "approved")
+		self.assertEqual(self.toast(), "Sent")
+		edit = self.api.last("editMessageText")["payload"]
+		self.assertEqual(edit["reply_markup"], {"inline_keyboard": []})
+		self.assertIn("Sent.", edit["text"])
+
+	def test_reject_and_edit_toasts(self):
+		self.cb("e")
+		self.assertEqual(self.toast(), "Send your replacement text")
+		self.cb("r", cqid="cq3")
+		self.assertEqual(self.toast(), "Rejected")
+		self.assertIn("Rejected.", self.api.last("editMessageText")["payload"]["text"])
+
+	def test_ack_for_queued_draft(self):
+		biz.register_draft_producer(lambda c: biz.DRAFT_QUEUED)
+		r = self.feed(message(text="again"))
+		self.assertIn("draft queued", json.dumps(r))

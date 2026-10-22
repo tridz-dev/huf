@@ -231,5 +231,67 @@ class TestReplyMode(Base):
 		self.enq.assert_not_called()
 
 
+class TestFailureHandling(Base):
+	policy = "Reply"
+
+	def owner_texts(self):
+		return [c["payload"]["text"] for c in self.sends() if str(c["payload"]["chat_id"]) == str(tb.OWNER)]
+
+	def test_transient_failure_notifies_and_falls_back_to_draft(self):
+		self.feed(tb.message())
+		self.api.queue("sendMessage", tb.FakeBotApi.error("Bad Gateway", 502))
+		out, _ = self.run_job("Hello!", who="Pat")
+		self.assertEqual((out["result"], out.get("fallback")), ("draft", True))
+		texts = self.owner_texts()
+		self.assertTrue(any(t.startswith("Auto-reply to Pat failed:") for t in texts))
+		self.assertTrue(texts[-1].startswith("Draft reply to"))
+		self.assertEqual(len([s for s in self.sends() if s["payload"].get("business_connection_id")]), 1)
+
+	def test_permanent_failure_notifies_without_draft(self):
+		self.feed(tb.message())
+		self.api.queue("sendMessage", tb.FakeBotApi.error("Bad Request: business connection not found", 400))
+		out, _ = self.run_job("Hello!")
+		self.assertEqual(out["result"], "failed")
+		texts = self.owner_texts()
+		self.assertEqual(len(texts), 1)
+		self.assertIn("Auto-reply to", texts[0])
+
+	def test_fallback_draft_failure_does_not_loop_or_raise(self):
+		self.feed(tb.message())
+		self.api.queue("sendMessage", tb.FakeBotApi.error("Bad Gateway", 502))
+		with mock.patch.object(biz, "deliver_draft", side_effect=RuntimeError("x")):
+			out, _ = self.run_job("Hello!")
+		self.assertEqual(out["result"], "failed")
+
+	def test_unexpected_exception_is_contained(self):
+		self.feed(tb.message())
+		with mock.patch.object(biz, "reply_as_business", side_effect=RuntimeError("boom")):
+			out, _ = self.run_job("Hello!")
+		self.assertEqual(out["result"], "draft")
+
+
+class TestDraftAckAndRecovery(Base):
+	def test_draft_policy_ack_says_queued(self):
+		import json
+
+		self.assertIn("draft queued", json.dumps(self.feed(tb.message())))
+
+	def test_replacement_text_still_routed_after_failed_first_attempt(self):
+		self.feed(tb.message())
+		draft_id = self.run_job("Sure")[0]["draft_id"]
+		cb = agent.wrap_draft_callback(biz.handle_draft_callback)
+		parsed = SimpleNamespace(sender_id=str(tb.OWNER), chat_id=str(tb.OWNER))
+		cb(self.adapter, parsed, f"bz:e:{draft_id}")
+		self.api.queue("sendMessage", tb.FakeBotApi.error("Bad Gateway", 502))
+		owner = SimpleNamespace(kind="message", chat_type="private", sender_id=str(tb.OWNER),
+			chat_id=str(tb.OWNER), text="better", is_bot=False)
+		first = agent.handle_owner_message(self.gateway, self.adapter, owner)
+		self.assertEqual(first["result"], "retry")  # handled, not leaked to the assistant agent
+		self.assertEqual(biz.get_draft(draft_id)["status"], "editing")
+		second = agent.handle_owner_message(self.gateway, self.adapter, owner)
+		self.assertEqual(second["result"], "approved")
+		self.assertEqual(self.sends()[-1]["payload"]["text"], "Sent.")
+
+
 if __name__ == "__main__":
 	unittest.main()
