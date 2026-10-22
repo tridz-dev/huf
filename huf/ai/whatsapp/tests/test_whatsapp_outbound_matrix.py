@@ -12,6 +12,8 @@ import json
 import unittest
 from unittest.mock import patch
 
+import frappe
+
 from huf.ai.gateway_adapters import whatsapp_bridge as wb
 from huf.ai.gateway_adapters import whatsapp_format as wf
 from huf.ai.gateway_adapters import whatsapp_messages as wm
@@ -55,6 +57,9 @@ class _Base(unittest.TestCase):
 			patch.object(wb, "is_available", return_value=True),
 			patch.object(wb, "_mirror_direct_send", side_effect=lambda a, p, w, t: {"success": True, "message_id": w}),
 			patch("frappe.has_permission", return_value=True),
+			# The media-link preflight is skipped only while frappe.flags.in_test is set; pin it so
+			# an earlier test that cleared the flag cannot make these tests fetch cdn.example.
+			patch.object(frappe.flags, "in_test", True, create=True),
 		):
 			p.start()
 			self.addCleanup(p.stop)

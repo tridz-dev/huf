@@ -19,6 +19,9 @@ class TestFetchToolParametersAuthorization(unittest.TestCase):
 	def setUp(self):
 		"""Save current user to restore after test."""
 		self.current_user = frappe.session.user
+		# Creating users below records the session user as invited_by: start from a known
+		# user, not whatever an earlier test left behind.
+		frappe.set_user("Administrator")
 
 		# frappe.only_for() unconditionally no-ops when frappe.flags.in_test
 		# is set (frappe/__init__.py:954), which bench run-tests sets for the
@@ -26,6 +29,10 @@ class TestFetchToolParametersAuthorization(unittest.TestCase):
 		# temporarily clearing that flag around the calls under test.
 		self.original_in_test = frappe.flags.in_test
 		frappe.flags.in_test = False
+		# Restore even when setUp fails part-way (tearDown does not run then), otherwise the
+		# cleared flag leaks into every later test and lets them reach the real network.
+		self.addCleanup(setattr, frappe.flags, "in_test", self.original_in_test)
+		self.addCleanup(frappe.set_user, self.current_user)
 
 		for email, roles in (
 			("test_huf_user@example.com", ["Huf User"]),
