@@ -14,7 +14,8 @@ def parsed(name):
 
 class TestTelegramInbound(unittest.TestCase):
 	def test_every_fixture_parses(self):
-		names = sorted(p.stem for p in FIXTURE_DIR.glob("*.json"))
+		# answer_* fixtures are expected API request payloads, not inbound updates.
+		names = sorted(p.stem for p in FIXTURE_DIR.glob("*.json") if not p.stem.startswith("answer_"))
 		self.assertGreaterEqual(len(names), 20)
 		for name in names:
 			with self.subTest(name):
