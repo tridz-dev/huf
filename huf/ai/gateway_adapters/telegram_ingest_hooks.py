@@ -16,9 +16,7 @@ def inbound_kind(event):
 
 
 def typing(event, gateway):
-	enabled = getattr(gateway, "typing_indicator", None)
-	if enabled is not None and not int(enabled):
-		return None
+	"""Owner of the Telegram ``typing`` hook. The gate and addressed rule live in ``send_typing_for_event``."""
 	ing.send_typing_for_event(event, gateway)
 
 

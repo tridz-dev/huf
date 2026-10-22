@@ -211,7 +211,7 @@ class TestMisc(Base):
 
 	def test_hooks_registered(self):
 		for name in ("send_reply", "send_parts", "attempt_reply_parts", "send_errors", "error_text",
-				"reply_target", "recover_reply_parts", "typing"):
+				"reply_target", "recover_reply_parts"):
 			self.assertIsNotNone(provider_hooks.get("Telegram", name), name)
 		self.assertEqual(provider_hooks.call("Telegram", "recover_reply_parts", "hi"), ["hi"])
 		self.assertEqual(provider_hooks.call("Telegram", "recover_reply_parts", "   "), [])

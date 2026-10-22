@@ -229,12 +229,11 @@ def send_parts(gateway: Any, event: Any, parts: list[str], quote: bool) -> Simpl
 
 
 def send_typing(gateway: Any, event: Any) -> bool:
-	"""Best-effort ``sendChatAction typing``; never raises."""
+	"""Best-effort ``sendChatAction typing``; never raises. Delegates to the single owner, telegram_ingest."""
 	try:
-		from huf.ai.gateway_webhook import event_contact_name, get_gateway_adapter
+		from huf.ai.gateway_adapters import telegram_ingest
 
-		adapter = get_gateway_adapter(gateway, event_contact_name(event))
-		return bool(adapter.send_typing(event.conversation_id, "typing", forum_thread_id(event)))
+		return telegram_ingest.send_typing_for_event(event, gateway)
 	except Exception:
 		return False
 

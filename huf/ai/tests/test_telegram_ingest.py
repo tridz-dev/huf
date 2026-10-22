@@ -157,10 +157,9 @@ class TestHooks(unittest.TestCase):
 		raw = {"telegram_meta": {"chat_type": "private"}}
 		ev = SimpleNamespace(raw_payload=raw, conversation_id="111", get=lambda k, d=None: raw)
 		fake = mock.Mock()
-		fake.send_typing.return_value = True
 		with mock.patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=fake):
 			self.assertTrue(ing.send_typing_for_event(ev, GW))
-		fake.send_typing.assert_called_once_with("111", "typing", None)
+		fake.sender.send_chat_action.assert_called_once_with("111", "typing", thread_id=None)
 
 	def test_typing_group_unaddressed_skipped(self):
 		raw = {"telegram_meta": {"chat_type": "supergroup"}, "message": {"text": "hi"}}
