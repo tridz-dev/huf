@@ -36,6 +36,30 @@ class TestGatewayToolHistory(unittest.TestCase):
         self.assertEqual(out[1]["tool_call_id"], "toolu_1")
         self.assertEqual(out[1]["content"], "ok-result")
 
+    def test_combined_row_replays_every_stored_call(self):
+        calls = [
+            {"id": "t1", "type": "function", "function": {"name": "a", "arguments": "{}"}},
+            {"id": "t2", "type": "function", "function": {"name": "b", "arguments": "{}"}},
+        ]
+        row = _combined("t2", name="b")
+        row["tool_calls"] = json.dumps(calls)
+        out = self._cm()._message_to_context(row)
+        self.assertEqual([m["role"] for m in out], ["assistant", "tool", "tool"])
+        self.assertEqual([c["id"] for c in out[0]["tool_calls"]], ["t1", "t2"])
+        self.assertEqual([m["tool_call_id"] for m in out[1:]], ["t1", "t2"])
+        self.assertEqual(out[2]["content"], "ok-result")  # matches the row's tool_call_id
+        self.assertNotEqual(out[1]["content"], "ok-result")
+        with patch("huf.ai.conversation_manager.frappe.log_error") as log:
+            self.assertEqual(repair_message_sequence(out, "c"), out)
+        log.assert_not_called()
+
+    def test_stored_call_without_id_falls_back_to_row_call_id(self):
+        row = _combined("t9")
+        row["tool_calls"] = json.dumps([{"type": "function", "function": {"name": "a", "arguments": "{}"}}])
+        out = self._cm()._message_to_context(row)
+        self.assertEqual(out[0]["tool_calls"][0]["id"], "t9")
+        self.assertEqual(out[1]["tool_call_id"], "t9")
+
     def test_history_survives_repair(self):
         cm = self._cm()
         rows = [_row(role="user", content="hi"), _combined("toolu_1"), _combined("toolu_2"),

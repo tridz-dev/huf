@@ -84,7 +84,7 @@ class ReasoningResolution:
 # Anthropic models that reject `thinking.type=enabled` and require
 # `thinking.type=adaptive` + `output_config.effort`. Claude 5.x is matched by rule;
 # the explicit set covers anything else Anthropic metadata says needs it.
-_ANTHROPIC_ADAPTIVE_RE = re.compile(r"claude-(?:[a-z]+-)?5(?:[-.@]|$)")
+_ANTHROPIC_ADAPTIVE_RE = re.compile(r"(?:^|[./])claude-(?:[a-z]+-)?5(?:[-.@:]|$)")
 ANTHROPIC_ADAPTIVE_THINKING_MODELS = frozenset()
 
 
@@ -93,7 +93,7 @@ def requires_adaptive_thinking(model_name: str) -> bool:
     mn = (model_name or "").lower().split("/")[-1]
     if mn in ANTHROPIC_ADAPTIVE_THINKING_MODELS:
         return True
-    return bool(_ANTHROPIC_ADAPTIVE_RE.match(mn))
+    return bool(_ANTHROPIC_ADAPTIVE_RE.search(mn))
 
 
 # Models that reject sampling parameters (temperature / top_p / top_k) outright with

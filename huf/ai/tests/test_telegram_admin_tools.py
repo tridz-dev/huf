@@ -551,5 +551,48 @@ class TestApprovalOrdering(Base):
 		self.assertEqual(len(self.api.of("sendMessage")), 1)
 
 
+class FakeRedisCache(MemCache):
+	"""Cache exposing atomic counters (pipeline absent -> INCR path), like frappe's redis cache."""
+
+	def __init__(self):
+		super().__init__()
+		self.incr_calls = 0
+
+	def make_key(self, k):
+		return "site|" + k
+
+	def incrby(self, k, n):
+		self.incr_calls += 1
+		self.d[k] = int(self.d.get(k, 0)) + n
+		return self.d[k]
+
+	def decrby(self, k, n):
+		self.d[k] = int(self.d.get(k, 0)) - n
+
+	def ttl(self, k):
+		return 100
+
+	def expire(self, k, s):
+		return True
+
+
+class TestAtomicCap(Base):
+	cap = 2
+
+	def test_claim_uses_atomic_incr_and_rolls_back_overshoot(self):
+		self.cache = FakeRedisCache()
+		patch.object(tool, "_cache", return_value=self.cache).start()
+		for _ in range(2):
+			tool._cap_claim("gw1", "runX")
+		with self.assertRaises(tool.Refused):
+			tool._cap_claim("gw1", "runX")
+		key = self.cache.make_key(tool._cap_key("gw1", "runX") + ":n")
+		self.assertEqual(self.cache.d[key], 2)  # the rejected claim was rolled back
+		tool._cap_release("gw1", "runX")
+		self.assertEqual(self.cache.d[key], 1)
+		tool._cap_claim("gw1", "runX")
+		self.assertGreaterEqual(self.cache.incr_calls, 4)
+
+
 if __name__ == "__main__":
 	unittest.main()

@@ -480,6 +480,37 @@ class TestMiniAppAuth(Base):
 		self.assertIsNone(ta.resolve_session_token(out["token"], cache=self.cache, now=NOW))
 
 
+class TestDailyDigestGateways(unittest.TestCase):
+	def test_disabled_and_non_telegram_gateways_are_skipped(self):
+		import contextlib
+
+		import frappe
+
+		def binding(name, gw):
+			return frappe._dict(name=name, telegram_user_id="1", frappe_user="u@x.com", gateway=gw,
+				role_scope="Admin", chat_id="9")
+
+		rows = {
+			"on": {"is_enabled": 1, "provider": "Telegram"},
+			"off": {"is_enabled": 0, "provider": "Telegram"},
+			"wa": {"is_enabled": 1, "provider": "WhatsApp"},
+		}
+		sender = MagicMock()
+		adapter = SimpleNamespace(sender=sender)
+		import frappe
+
+		with patch.object(frappe, "get_all", return_value=[binding("b1", "on"), binding("b2", "off"), binding("b3", "wa"),
+				binding("b4", "gone")]), \
+			patch.object(frappe, "db", MagicMock(get_value=lambda dt, name, fields, as_dict=False: rows.get(name))), \
+			patch.object(frappe, "get_doc", return_value=MagicMock()), \
+			patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=adapter), \
+			patch.object(ta, "run_as", side_effect=lambda u: contextlib.nullcontext()), \
+			patch.object(ta, "collect_digest", return_value={}), patch.object(ta, "compose_digest", return_value="d"):
+			out = ta.send_daily_digests()
+		self.assertEqual(out, {"sent": 1, "failed": 0})
+		self.assertEqual(sender.send_text.call_count, 1)
+
+
 class TestPureHelpers(unittest.TestCase):
 	def test_redact(self):
 		out = ta.redact({"api_key": "k", "nested": {"password": "p", "ok": "v"}, "list": [{"token": "t"}]})

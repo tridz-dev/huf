@@ -300,7 +300,11 @@ async def _litellm_completion_with_retry(**completion_kwargs):
                 completion_kwargs = dict(completion_kwargs)
                 completion_kwargs["thinking"] = {"type": "adaptive"}
                 completion_kwargs.setdefault("output_config", {"effort": "medium"})
-                return await asyncio.to_thread(litellm.completion, **completion_kwargs)
+                # Re-enter the retry loop (kwargs changed, so this BadRequest cannot recur) so a transient
+                # failure of the retried call gets the same transient handling as the first attempt.
+                return await _litellm_completion_with_retry(
+                    **completion_kwargs, _huf_max_retries=max_retries, _huf_base_delay=base_delay
+                )
             # Safety net: model rejects sampling params -> retry once without them.
             rejected = _sampling_keys_rejected(str(exc), completion_kwargs)
             if rejected:
@@ -308,7 +312,9 @@ async def _litellm_completion_with_retry(**completion_kwargs):
                 completion_kwargs = dict(completion_kwargs)
                 for key in rejected:
                     completion_kwargs.pop(key, None)
-                return await asyncio.to_thread(litellm.completion, **completion_kwargs)
+                return await _litellm_completion_with_retry(
+                    **completion_kwargs, _huf_max_retries=max_retries, _huf_base_delay=base_delay
+                )
             raise
         except Exception as exc:
             # Broad catch so _is_transient_litellm_error can classify and retry only known transient failures.

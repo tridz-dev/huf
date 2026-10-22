@@ -96,5 +96,25 @@ class TestSamplingRetry(unittest.TestCase):
 		self.assertEqual(m.call_count, 1)
 
 
+	def test_bad_request_retry_gets_transient_handling(self):
+		calls = []
+
+		def fake(**kw):
+			calls.append(kw)
+			if len(calls) == 1:
+				raise _bad("top_p is not supported for this model")
+			if len(calls) == 2:
+				raise ConnectionResetError("connection reset by peer")
+			return "ok"
+
+		with patch.object(prov.litellm, "completion", side_effect=fake):
+			out = asyncio.run(prov._litellm_completion_with_retry(
+				model="x", top_p=0.9, messages=[], _huf_base_delay=0))
+		self.assertEqual(out, "ok")
+		self.assertEqual(len(calls), 3)
+		self.assertNotIn("top_p", calls[1])
+		self.assertNotIn("top_p", calls[2])
+
+
 if __name__ == "__main__":
 	unittest.main()
