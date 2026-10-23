@@ -5,8 +5,7 @@
 
 from __future__ import annotations
 
-from huf.ai.gateway_adapters import provider_hooks
-from huf.ai.gateway_adapters import telegram_ingest as ing
+from huf.ai.gateway_adapters import provider_hooks, telegram_ingest as ing
 
 PROVIDER = "Telegram"
 

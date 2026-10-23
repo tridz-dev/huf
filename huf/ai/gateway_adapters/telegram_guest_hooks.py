@@ -5,8 +5,7 @@
 
 from __future__ import annotations
 
-from huf.ai.gateway_adapters import telegram_guest as guest
-from huf.ai.gateway_adapters import telegram_ingest as ing
+from huf.ai.gateway_adapters import telegram_guest as guest, telegram_ingest as ing
 
 
 def _chain(previous):
