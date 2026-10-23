@@ -70,8 +70,6 @@ TG_ARGS = {
 	"edit_message_caption": {"message_id": 3, "caption": "x"},
 	"edit_message_reply_markup": {"message_id": 3},
 	"delete_message": {"message_id": 3},
-	"pin_message": {"message_id": 3},
-	"unpin_message": {"message_id": 3},
 	"forward_message": {"from_chat_id": CUR, "message_id": 3},
 	"copy_message": {"from_chat_id": CUR, "message_id": 3},
 	"answer_callback_query": {"callback_query_id": "cb", "text": "x"},
@@ -89,11 +87,6 @@ TG_ARGS = {
 	"send_template": {"template_name": "t"},
 	"list_templates": {},
 	"preview_template": {"template_name": "t"},
-	"create_forum_topic": {"name": "n"},
-	"edit_forum_topic": {"message_thread_id": 5, "name": "n"},
-	"close_forum_topic": {"message_thread_id": 5},
-	"reopen_forum_topic": {"message_thread_id": 5},
-	"delete_forum_topic": {"message_thread_id": 5},
 	"get_file": {"file_id": "A" * 25},
 	"get_chat_member": {"user_id": 5},
 	"get_chat_administrators": {},
@@ -350,6 +343,14 @@ class TestRegistryParity(Harness):
 	def test_destructive_set_is_the_expected_one(self):
 		self.assertEqual({a for a, v in adm.ACTIONS.items() if v[2]}, STATE_CHANGING)
 		self.assertEqual({a for a in adm.ACTIONS if a.startswith("get_")}, set(adm.ACTIONS) - STATE_CHANGING)
+
+	def test_state_changing_actions_are_not_in_the_plain_tool(self):
+		gone = {"pin_message", "unpin_message", "create_forum_topic", "edit_forum_topic", "close_forum_topic",
+			"reopen_forum_topic", "delete_forum_topic"}
+		self.assertFalse(gone & set(TG_ENUM))
+		for action in gone:
+			res = self.tg_call(action, chat_id=CUR, message_id=3, message_thread_id=5, name="n")
+			self.assertEqual(res["error"], "owner_required", action)
 
 	def test_unknown_actions_are_refused(self):
 		self.assertIn("Unknown action", self.tg_call("nuke")["error"])
