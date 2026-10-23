@@ -16,6 +16,10 @@ class Gateway(Document):
     """
 
     def validate(self):
+        hours = self.get("telegram_web_session_hours")
+        if hours is not None and hours != 0 and not 1 <= int(hours) <= 720:
+            frappe.throw(_("Telegram session length must be between 1 and 720 hours."))
+
         if self.is_enabled and not self.execution_user:
             frappe.throw(_("Enabled gateways need a Run as user. Use a least-privileged service user."))
 

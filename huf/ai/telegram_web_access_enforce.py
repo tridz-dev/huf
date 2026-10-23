@@ -20,6 +20,12 @@ GATEWAY_DOCTYPE = "Gateway"
 DENIED_MESSAGE = "Not allowed in a Telegram session"
 _CACHE_TTL = 30
 _gateway_cache: dict = {}
+_binding_cache: dict = {}
+_roles_cache: dict = {}
+# Roles that are denied by default (kept in step with ``telegram_web_access.PRIVILEGED_ROLES``).
+PRIVILEGED_ROLES = frozenset({"System Manager", "Administrator"})
+# Request parameters that make Frappe run a (whitelisted) document method.
+METHOD_PARAMS = ("run_method", "cmd", "method")
 
 ASSET_PREFIXES = ("/assets", "/files")
 ALWAYS_ALLOWED_METHODS = frozenset({"frappe.ping", "ping", "logout", "web_logout"})
@@ -92,8 +98,33 @@ BLOCKED_DOCTYPES = frozenset(
 		"Session Default Settings",
 		"Telegram Admin Binding",
 		"Gateway",
+		"Role Profile",
+		"Custom Role",
+		"Module Profile",
+		"User Type",
+		"User Group",
+		"Webhook",
+		"Notification",
+		"Auto Email Report",
+		"Print Format",
+		"Custom Field",
+		"Property Setter",
+		"Customize Form",
+		"DocType",
+		"Report",
+		"Social Login Key",
+		"Connected App",
+		"Token Cache",
+		"Email Account",
+		"Email Domain",
+		"Access Log",
+		"Scheduled Job Type",
+		"Console Log",
+		"Deleted Document",
 	}
 )
+REPORT_METHODS = frozenset({"frappe.desk.query_report.run", "frappe.desk.query_report.get_script"})
+GETDOC_METHOD = "frappe.desk.form.load.getdoc"
 UPLOAD_METHODS = frozenset({"upload_file", "frappe.handler.upload_file"})
 WRITE_METHODS = frozenset({"POST", "PUT", "DELETE", "PATCH"})
 READ_HTTP = frozenset({"GET", "HEAD"})
@@ -190,8 +221,8 @@ def _session_expired() -> bool:
 		return False
 	try:
 		return datetime.now(tz=UTC) > datetime.fromisoformat(str(end))
-	except ValueError:
-		return True  # unreadable expiry: fail closed
+	except (ValueError, TypeError):
+		return True  # unreadable or naive (timezone-less) expiry: fail closed
 
 
 def _gateway_settings(gateway: str) -> dict:
@@ -205,6 +236,7 @@ def _gateway_settings(gateway: str) -> dict:
 			GATEWAY_DOCTYPE,
 			gateway,
 			[
+				"is_enabled",
 				"telegram_web_access_enabled",
 				"telegram_web_allowed_paths",
 				"telegram_web_extra_read_methods",
@@ -221,16 +253,58 @@ def _gateway_settings(gateway: str) -> dict:
 
 def clear_gateway_cache():
 	_gateway_cache.clear()
+	_binding_cache.clear()
+	_roles_cache.clear()
+
+
+def _cached(cache: dict, key, loader):
+	now = time.monotonic()
+	hit = cache.get(key)
+	if hit and now - hit[0] < _CACHE_TTL:
+		return hit[1]
+	value = loader()
+	cache[key] = (now, value)
+	return value
+
+
+def _binding_active(binding: str) -> bool:
+	"""True when the binding still exists and is active (cached ~30s)."""
+
+	def load():
+		try:
+			return bool(frappe.db.get_value("Telegram Admin Binding", binding, "is_active"))
+		except Exception:
+			return False
+
+	return bool(binding) and _cached(_binding_cache, binding, load)
+
+
+def _is_privileged(user: str) -> bool:
+	def load():
+		try:
+			return bool(PRIVILEGED_ROLES & set(frappe.get_roles(user)))
+		except Exception:
+			return True  # cannot tell: treat as privileged (fail closed)
+
+	return _cached(_roles_cache, user, load)
+
+
+def _revoke_current_session() -> None:
+	try:
+		sid = frappe.local.session.get("sid") or frappe.session.sid
+		if sid:
+			frappe.db.delete("Sessions", {"sid": sid})
+			frappe.cache.hdel("session", sid)
+			frappe.db.commit()
+	except Exception:
+		pass
 
 
 # -- decision ------------------------------------------------------------------------------------------
 
 
-def _doctypes_in(form_dict, path: str) -> set:
-	found = set()
-	if path.startswith("/api/resource/"):
-		seg = path[len("/api/resource/") :].split("/", 1)[0]
-		found.add(unquote(seg).lower())
+def _doctypes_in(form_dict, *path_doctypes) -> set:
+	found = {str(d).lower() for d in path_doctypes if d}
 	for key in ("doctype", "dt", "doc", "docs", "doclist", "args"):
 		v = form_dict.get(key) if form_dict else None
 		if isinstance(v, str):
@@ -252,6 +326,27 @@ def _doctypes_in(form_dict, path: str) -> set:
 _BLOCKED_DT_LOWER = frozenset(d.lower() for d in BLOCKED_DOCTYPES)
 
 
+def _report_ok(name) -> bool:
+	"""A Report may be run/opened only if it exists and neither it nor the report it derives from is on a
+	blocked doctype. Report code runs with the report's own permissions (see docs)."""
+	try:
+		for _i in range(4):
+			if not isinstance(name, str) or not name:
+				return False
+			row = frappe.db.get_value(
+				"Report", name, ["ref_doctype", "report_type", "reference_report"], as_dict=True
+			)
+			if not row or str(row.get("ref_doctype") or "").lower() in _BLOCKED_DT_LOWER:
+				return False
+			if row.get("report_type") == "Custom Report" and row.get("reference_report"):
+				name = row.get("reference_report")
+				continue
+			return True
+	except Exception:
+		pass
+	return False
+
+
 def _extra_methods(settings) -> set:
 	return {
 		m.strip() for m in (settings.get("telegram_web_extra_read_methods") or "").splitlines() if m.strip()
@@ -267,23 +362,42 @@ def decide(marker: dict, settings: dict, method: str, path: str, form_dict) -> b
 	norm = normalize_path(path)
 	if norm is None:
 		return False
-	if settings and not settings.get("telegram_web_access_enabled"):
-		return False
+	if not settings or not settings.get("telegram_web_access_enabled") or not settings.get("is_enabled"):
+		return False  # missing/unreadable/disabled gateway: closed
 	allow_writes = bool(marker.get("allow_writes"))
 
-	if norm.startswith(ASSET_PREFIXES[0] + "/") or norm.startswith(ASSET_PREFIXES[1] + "/"):
-		return method in READ_HTTP
-
-	cmd = None
-	api_method = norm.startswith("/api/method/") or norm.startswith("/api/v2/method/")
-	if api_method:
-		# method names are case-sensitive; take them from the decoded raw path
-		raw = normalize_path_keep_case(path)
-		cmd = raw.split("/method/", 1)[1] if raw and "/method/" in raw else None
-		cmd = cmd.replace("/", ".") if cmd else None
-	if cmd is None and form_dict.get("cmd"):
-		cmd = form_dict.get("cmd") if isinstance(form_dict.get("cmd"), str) else ""
+	# Frappe runs ``form_dict.cmd`` (query string or body) on ANY path, before path routing, so it is
+	# resolved first and nothing (assets, resources, navigation) may return early ahead of it.
+	form_cmd = form_dict.get("cmd")
+	if form_cmd:
+		if not isinstance(form_cmd, str):
+			return False
+		if norm == "/":
+			cmd = form_cmd
+		elif norm.startswith("/api/method/"):
+			raw = normalize_path_keep_case(path)
+			path_cmd = raw.split("/method/", 1)[1] if raw and "/method/" in raw else None
+			if path_cmd != form_cmd:
+				return False  # Frappe would run the ``cmd`` param, not the path method
+			cmd = form_cmd
+		else:
+			return False
 		api_method = True
+	else:
+		cmd = None
+		api_method = norm.startswith("/api/method/") or norm.startswith("/api/v2/method/")
+		if api_method:
+			# method names are case-sensitive; take them from the decoded raw path
+			raw = normalize_path_keep_case(path)
+			cmd = raw.split("/method/", 1)[1] if raw and "/method/" in raw else None
+			if cmd and "/" in cmd:
+				# /api/v2/method/<doctype>/<method> is a document method call; /api/method/a/b is not a thing
+				return False
+			cmd = cmd or None
+	if not api_method and (
+		norm.startswith(ASSET_PREFIXES[0] + "/") or norm.startswith(ASSET_PREFIXES[1] + "/")
+	):
+		return method in READ_HTTP
 	if api_method:
 		if not cmd:
 			return False
@@ -291,17 +405,43 @@ def decide(marker: dict, settings: dict, method: str, path: str, form_dict) -> b
 			return True
 		if any(cmd == b.rstrip(".") or cmd.startswith(b) for b in BLOCKED_METHOD_PREFIXES):
 			return False
-		if _doctypes_in(form_dict, norm) & _BLOCKED_DT_LOWER:
+		if cmd in REPORT_METHODS:
+			if not _report_ok(form_dict.get("report_name")):
+				return False
+		dts = _doctypes_in(form_dict, norm)
+		if cmd == GETDOC_METHOD and _doctypes_in(form_dict) == {"report"}:
+			# the report page loads its Report doc (desk query-report view); gate it like run/get_script
+			if not _report_ok(form_dict.get("name")):
+				return False
+		elif dts & _BLOCKED_DT_LOWER:
 			return False
 		if cmd in UPLOAD_METHODS:
 			return allow_writes and method == "POST"
 		if cmd in DEFAULT_READ_METHODS or cmd in _extra_methods(settings):
 			return True
 		return allow_writes and method in READ_HTTP | WRITE_METHODS
-	if norm.startswith("/api/resource") or norm.startswith("/api/v2/document"):
-		if _doctypes_in(form_dict, norm) & _BLOCKED_DT_LOWER:
+	segs = norm.split("/")[1:]  # ["api", "resource", <dt>, <name>] (lower-cased)
+	rest = None
+	if segs[:2] == ["api", "resource"]:
+		rest = segs[2:]
+	elif segs[:3] == ["api", "v2", "document"]:
+		rest = segs[3:]
+	elif segs[:3] == ["api", "v2", "doctype"]:
+		if method not in READ_HTTP:
+			return False
+		rest = segs[3:]
+		if len(rest) != 1:
+			return False
+	if rest is not None:
+		# only exact shapes: <dt> or <dt>/<name>; anything deeper (e.g. v2 .../method/<m>) is refused
+		if not 1 <= len(rest) <= 2:
+			return False
+		if _doctypes_in(form_dict, rest[0]) & _BLOCKED_DT_LOWER:
 			return False
 		if method in READ_HTTP:
+			# Frappe's GET handler runs a document method when one of these is present (read permission only)
+			if not allow_writes and any(k in form_dict for k in METHOD_PARAMS):
+				return False
 			return True
 		return allow_writes and method in WRITE_METHODS
 	if norm.startswith("/api/"):
@@ -334,15 +474,30 @@ def enforce():
 	req = getattr(frappe.local, "request", None)
 	if req is None:
 		return
-	if _session_expired():
-		deny()
 	try:
+		if _session_expired():
+			deny()
 		settings = _gateway_settings(marker.get("gateway") or "")
-		ok = decide(marker, settings, req.method, req.path, frappe.local.form_dict)
+		ok = _session_still_valid(marker, settings) and decide(
+			marker, settings, req.method, req.path, frappe.local.form_dict
+		)
+	except _Forbidden:
+		raise
 	except Exception:
 		ok = False
 	if not ok:
 		deny()
+
+
+def _session_still_valid(marker: dict, settings: dict) -> bool:
+	"""Binding must still be active, and the user must not have newly gained a privileged role."""
+	if not _binding_active(marker.get("binding") or ""):
+		_revoke_current_session()
+		return False
+	if not int(settings.get("telegram_web_allow_privileged") or 0) and _is_privileged(frappe.session.user):
+		_revoke_current_session()
+		return False
+	return True
 
 
 def deny():
@@ -402,8 +557,15 @@ def on_binding_update(doc, method=None):
 	if before is None:
 		return
 	deactivated = bool(before.is_active) and not doc.is_active
-	if deactivated or before.role_scope != doc.role_scope:
-		revoke_binding_sessions(doc.name, doc.frappe_user)
+	changed = any(
+		before.get(f) != doc.get(f) for f in ("role_scope", "frappe_user", "telegram_user_id", "gateway")
+	)
+	if deactivated or changed:
+		# the OLD user's rows hold the sessions that were created for this binding
+		revoke_binding_sessions(doc.name, before.frappe_user)
+		if doc.frappe_user != before.frappe_user:
+			revoke_binding_sessions(doc.name, doc.frappe_user)
+	_binding_cache.pop(doc.name, None)
 
 
 def on_binding_trash(doc, method=None):

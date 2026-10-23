@@ -35,6 +35,8 @@ describe('signed-in pages settings', () => {
 		expect(webAccessErrors({ ...on, telegram_web_allowed_paths: 'app/x' }).paths).toMatch(/start with/);
 		expect(hasWebAccessErrors({ ...on, telegram_web_allowed_paths: '/app/x' })).toBe(false);
 		expect(webAccessErrors({ ...on, telegram_web_session_hours: 0, telegram_web_allowed_paths: '/a' }).hours).toBeDefined();
+		expect(webAccessErrors({ ...on, telegram_web_session_hours: 721, telegram_web_allowed_paths: '/a' }).hours).toBeDefined();
+		expect(webAccessErrors({ ...on, telegram_web_session_hours: 720, telegram_web_allowed_paths: '/a' }).hours).toBeUndefined();
 	});
 
 	it('builds the copy link', () => {

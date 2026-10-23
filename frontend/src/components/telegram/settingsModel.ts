@@ -21,6 +21,7 @@ export interface FieldDef {
 	/** Show the warning once the value differs from the saved one. */
 	warnOnChange?: boolean;
 	min?: number;
+	max?: number;
 	/** Visual weight of the warning: amber (default) or red. */
 	tone?: 'danger';
 	/** Tucked behind an Advanced toggle. */
@@ -303,14 +304,14 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
 				label: 'Allow signed-in pages',
 				kind: 'switch',
 				warning:
-					'People who open these pages through Telegram are signed in without a password or second step. Telegram is trusted to identify them.',
+					'People who open these pages through Telegram are signed in without a password or second step. Telegram is trusted to identify them. Opening a page through Telegram can sign this person out of their other browser session depending on the site\'s simultaneous-session setting.',
 				tone: 'danger',
 			},
 			{
 				name: 'telegram_web_allowed_paths',
 				label: 'Pages people can open',
 				kind: 'lines',
-				help: 'One page address per line. Each starts with /.',
+				help: 'One page address per line. Each starts with /. This limits which pages open; data access follows the person\'s Huf permissions within the guard\'s rules.',
 				placeholder: '/app/query-report/Sales Register',
 			},
 			{
@@ -318,12 +319,13 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
 				label: 'Stay signed in for (hours)',
 				kind: 'number',
 				min: 1,
+				max: 720,
 			},
 			{
 				name: 'telegram_web_allow_privileged',
-				label: 'Allow administrators (System Manager)',
+				label: 'Allow administrators (System Manager and Administrator roles)',
 				kind: 'switch',
-				help: 'Let people with the System Manager role use these links.',
+				help: 'Let people with the System Manager or Administrator role use these links.',
 				warning: 'Not recommended. Only turn this on for a local or test setup with no sensitive data.',
 				tone: 'danger',
 			},
@@ -331,7 +333,7 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
 				name: 'telegram_web_allow_writes',
 				label: 'Allow changes (not just viewing)',
 				kind: 'switch',
-				help: 'Signed-in pages can save and edit, not only show data.',
+				help: 'Signed-in pages can save and edit, not only show data. Off means no changes through allowed methods (viewing may still log views). On blocks only a fixed list of sensitive areas such as users, roles and settings.',
 				warning: 'People opening these pages can change data, not just look at it.',
 			},
 			{
@@ -422,7 +424,7 @@ export function webAccessErrors(draft: SettingsDraft): { paths?: string; hours?:
 	if (paths.length === 0) out.paths = 'Add at least one page address.';
 	else if (paths.some((p) => !p.startsWith('/'))) out.paths = 'Each page address must start with /.';
 	const h = draft.telegram_web_session_hours;
-	if (typeof h !== 'number' || Number.isNaN(h) || h < 1) out.hours = 'Enter at least 1 hour.';
+	if (typeof h !== 'number' || Number.isNaN(h) || h < 1 || h > 720) out.hours = 'Enter between 1 and 720 hours.';
 	return out;
 }
 
