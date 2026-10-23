@@ -436,6 +436,50 @@ class TestInline(SynthBase):
 		self.assertEqual(self.enqueued, [])
 		self.assertEqual(self.api.calls, [])
 
+	def _button(self, uid=42, update_id=320, feedback=False):
+		if feedback:
+			self.gw.telegram_inline_feedback_enabled = 1
+		self.post(inline_update(update_id, uid=uid))
+		kb = self.calls("answerInlineQuery")[-1]["payload"]["results"][0]["reply_markup"]["inline_keyboard"][0][0]
+		return kb["text"], kb["callback_data"]
+
+	def _press(self, update_id, data, uid=42, imid="imid-1"):
+		return self.post({"update_id": update_id, "callback_query": {
+			"id": f"cq{update_id}", "from": _from(uid), "inline_message_id": imid, "chat_instance": "ci", "data": data}})
+
+	def _jobs(self):
+		return [k for a, k in self.enqueued if a and a[0] == inline.JOB]
+
+	def test_button_label_follows_feedback_flag(self):
+		self.assertEqual(self._button()[0], inline.TAP_LABEL)
+		self.assertEqual(self._button(update_id=321, feedback=True)[0], inline.WORKING_LABEL)
+
+	def test_button_press_runs_answer_once_and_replay_is_a_noop(self):
+		_label, data = self._button()
+		res = self._press(322, data)
+		self.assertEqual((res.get("handled"), res.get("note")), ("inline_callback", "agent run queued"))
+		self.assertEqual(len(self._jobs()), 1)
+		self.assertEqual(self._jobs()[0]["inline_message_id"], "imid-1")
+		self.assertEqual(self._jobs()[0]["query"], "weather")
+		self.assertEqual(self._press(323, data).get("note"), "already started")  # second tap, new update id
+		self.assertEqual(self._press(322, data).get("note"), "duplicate update ignored")  # redelivery
+		self.assertEqual(len(self._jobs()), 1)
+		self.assertEqual(self.events, [])
+
+	def test_press_after_chosen_inline_result_does_not_double_run(self):
+		_label, data = self._button()
+		self.post({"update_id": 324, "chosen_inline_result": {
+			"result_id": "ask-1", "from": _from(42), "query": "weather", "inline_message_id": "imid-1"}})
+		self.assertEqual(self._press(325, data).get("note"), "already started")
+		self.assertEqual(len(self._jobs()), 1)
+		self.assertTrue(inline.feedback_seen(self.gw.name))
+
+	def test_forged_unsigned_or_foreign_press_is_refused(self):
+		_label, data = self._button()
+		for n, (d, uid) in enumerate(((data[:-1] + ("A" if data[-1] != "A" else "B"), 42), ("inl:wait", 42), (data, 99))):
+			self.assertIn(self._press(330 + n, d, uid=uid).get("note"), ("bad signature", "expired or foreign"))
+		self.assertEqual(self._jobs(), [])
+
 
 # -- (2) callback_query: signed buttons and the admin Approve / Decline nonce flow --------------------------------
 

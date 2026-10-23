@@ -17,9 +17,11 @@ Agent-powered default result: "Ask the assistant: <query>" is an article whose m
 placeholder. When the user picks it Telegram sends ``chosen_inline_result``; we enqueue a short-queue job that
 runs the gateway default agent as the execution user and edits the placeholder with ``editMessageText``
 (``inline_message_id``). Telegram only includes ``inline_message_id`` when the message carries an inline
-keyboard, so the placeholder has a single inert "Working..." button, and the bot owner must enable inline
-feedback (BotFather ``/setinlinefeedback``, set to 100%). Without feedback no chosen result arrives (or it has
-no ``inline_message_id``): we degrade to doing nothing and log once per gateway.
+keyboard, so the placeholder carries one signed button. With BotFather inline feedback on (``/setinlinefeedback``,
+100%) the answer arrives by itself (button reads "Working..."). Without it no chosen result arrives, so the
+button reads "Tap to get the answer": pressing it (a ``callback_query`` carrying ``inline_message_id``) starts
+the same job. Both paths share one idempotency key per ``inline_message_id``. Receiving a chosen result is
+remembered in cache so the health warning clears on its own.
 """
 
 from __future__ import annotations
@@ -36,7 +38,13 @@ MAX_QUERY_LEN = 256
 MAX_NEXT_OFFSET_BYTES = 64
 PAIR_START_PARAMETER = "pair"
 ASK_PREFIX = "ask-"
-WAIT_CALLBACK = "inl:wait"
+WAIT_CALLBACK = "inl:wait"  # inert fallback when no signer is available
+GO_PREFIX = "inl:go:"  # signed: GO_PREFIX + query digest; the query itself is cached per gateway+sender
+CALLBACK_CONTEXT = "inline"  # inline messages carry no chat id, so the MAC context is a constant
+WORKING_LABEL = "Working..."
+TAP_LABEL = "Tap to get the answer"
+QUERY_TTL = 3600
+FEEDBACK_SEEN_TTL = 30 * 86400
 PLACEHOLDER_TEXT = "Thinking..."
 APOLOGY_TEXT = "Sorry, I couldn't answer that right now."
 JOB = "huf.ai.gateway_adapters.telegram_inline.run_inline_job"
@@ -82,7 +90,16 @@ def default_resolver(query: str, user_ctx: dict) -> list[dict]:
 	if not query:
 		return []
 	digest = hashlib.sha256(query.encode("utf-8")).hexdigest()[:16]
-	keyboard = {"inline_keyboard": [[{"text": "Working...", "callback_data": WAIT_CALLBACK}]]}
+	sign = user_ctx.get("sign")
+	data = WAIT_CALLBACK
+	if callable(sign):
+		try:
+			data = sign(f"{GO_PREFIX}{digest}")
+			_cache_put(_query_key(user_ctx.get("gateway", ""), user_ctx.get("sender_id", ""), digest), query, QUERY_TTL)
+		except Exception:
+			data = WAIT_CALLBACK
+	label = WORKING_LABEL if user_ctx.get("feedback") else TAP_LABEL
+	keyboard = {"inline_keyboard": [[{"text": label, "callback_data": data}]]}
 	return [
 		_article(
 			f"{ASK_PREFIX}{digest}",
@@ -242,7 +259,9 @@ def handle_inline_query(gateway, adapter, parsed, request) -> dict | None:
 	elif not user:
 		payload = build_answer(q["id"], [])
 	else:
-		ctx = {"user": user, "sender_id": q["sender_id"], "chat_type": q["chat_type"], "gateway": gateway.name}
+		ctx = {"user": user, "sender_id": q["sender_id"], "chat_type": q["chat_type"], "gateway": gateway.name,
+			"feedback": feedback_known(gateway),
+			"sign": lambda payload: adapter.sign_callback_data(payload, CALLBACK_CONTEXT)}
 		payload = build_answer(q["id"], collect_results(q["query"], ctx), parse_offset(q["offset"]))
 	try:
 		adapter.client.call("answerInlineQuery", payload)
@@ -270,6 +289,27 @@ def _cache_put(key: str, value, ttl: int) -> None:
 		frappe.cache().set_value(key, value, expires_in_sec=ttl)
 	except Exception:
 		pass
+
+
+def _query_key(gateway_name: str, sender_id: str, digest: str) -> str:
+	return f"huf:tginl:q:{gateway_name}:{sender_id}:{digest}"
+
+
+def _feedback_key(gateway_name: str) -> str:
+	return f"huf:tginl:fbseen:{gateway_name}"
+
+
+def feedback_seen(gateway_name: str) -> bool:
+	"""True once a ``chosen_inline_result`` has been received for this gateway (so BotFather feedback is on)."""
+	return bool(_cache_get(_feedback_key(gateway_name)))
+
+
+def feedback_known(gateway) -> bool:
+	"""Inline feedback is on: the operator ticked the flag, or a chosen_inline_result was observed."""
+	flag = gateway.get("telegram_inline_feedback_enabled") if hasattr(gateway, "get") else None
+	if flag is None:
+		flag = getattr(gateway, "telegram_inline_feedback_enabled", 0)
+	return bool(int(flag or 0)) or feedback_seen(getattr(gateway, "name", "") or "")
 
 
 def rate_allow(gateway_name: str, sender_id: str) -> bool:
@@ -310,22 +350,66 @@ def handle_chosen_inline_result(gateway, adapter, parsed, request) -> dict | Non
 		return done
 	if not is_admitted(gateway, sender_id) or not execution_user(gateway):
 		return done
+	_cache_put(_feedback_key(name), 1, FEEDBACK_SEEN_TTL)  # auto-clears the health warning
 	inline_message_id = str(chosen.get("inline_message_id") or "")
 	if not inline_message_id:
 		_log_feedback_off_once(name)
 		return done
+	return {**done, "note": start_run(gateway, adapter, sender_id, query, inline_message_id)}
+
+
+def start_run(gateway, adapter, sender_id: str, query: str, inline_message_id: str) -> str:
+	"""Queue the answer job once per inline message (shared by chosen_inline_result and the button press)."""
+	name = gateway.name
 	from huf.ai.gateway_adapters import telegram_ingest as ing
 
 	if not ing._first_delivery(name, f"inlinejob:{inline_message_id}"):
-		return done
+		return "already started"
 	if not rate_allow(name, sender_id):
 		_edit(adapter, inline_message_id, "You are sending too many requests. Please try again in a minute.")
-		return {**done, "note": "rate limited"}
+		return "rate limited"
 	frappe.enqueue(
 		JOB, queue="short", timeout=300, gateway_name=name, inline_message_id=inline_message_id,
 		sender_id=sender_id, query=query,
 	)
-	return {**done, "note": "agent run queued"}
+	return "agent run queued"
+
+
+def _answer_cb(adapter, callback_query_id: str, text: str) -> None:
+	try:
+		adapter.client.call("answerCallbackQuery", {"callback_query_id": callback_query_id, "text": text})
+	except Exception:
+		pass
+
+
+def handle_inline_callback(gateway, adapter, parsed, request) -> dict | None:
+	"""Press of the placeholder's button (callback_query with ``inline_message_id``, no ``message``).
+
+	Fallback when BotFather inline feedback is off: starts the same answer job, keyed by inline_message_id.
+	Returns None for ordinary callbacks so the normal pipeline handles them.
+	"""
+	cq = _map(_map(parsed.raw).get("callback_query"))
+	inline_message_id = str(cq.get("inline_message_id") or "")
+	if not cq or not inline_message_id or cq.get("message"):
+		return None
+	cq_id = str(cq.get("id") or "")
+	done = {"success": True, "handled": "inline_callback"}
+	payload = adapter.verify_callback_data(str(cq.get("data") or ""), CALLBACK_CONTEXT)
+	if not payload or not payload.startswith(GO_PREFIX):
+		_answer_cb(adapter, cq_id, "This button is not valid.")
+		return {**done, "note": "bad signature"}
+	sender_id = str(_map(cq.get("from")).get("id") or "")
+	if not inline_enabled(gateway) or not is_admitted(gateway, sender_id) or not execution_user(gateway):
+		_answer_cb(adapter, cq_id, "You can't use this.")
+		return {**done, "note": "not allowed"}
+	# The query was cached under the asking sender, so someone else pressing the button finds nothing.
+	query = _cache_get(_query_key(gateway.name, sender_id, payload[len(GO_PREFIX):]))
+	if not query:
+		_answer_cb(adapter, cq_id, "This request expired. Please ask again.")
+		return {**done, "note": "expired or foreign"}
+	note = start_run(gateway, adapter, sender_id, str(query), inline_message_id)
+	_answer_cb(adapter, cq_id, "Working on it..." if note != "rate limited" else "Too many requests.")
+	return {**done, "note": note}
 
 
 # -- job -------------------------------------------------------------------------------------------
