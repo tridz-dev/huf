@@ -92,7 +92,7 @@ def _resolve_chat_id(kwargs: dict) -> Optional[str]:
 
 def _make_client(token: str, *, timeout: int = 30) -> TelegramBotClient:
     """Bot API client for ``token``. Tests patch this to inject a fake HTTP layer."""
-    return TelegramBotClient(token, timeout=timeout)
+    return TelegramBotClient(token, timeout=timeout, test_environment=_test_env_for_run())
 
 
 def _apply_reply(payload: dict, reply_to_message_id) -> None:
@@ -239,6 +239,17 @@ def _gateway_values(gateway: str) -> dict:
         return {row.key: str(row.get_password("value") or "") for row in doc.credentials or [] if row.key}
     except Exception:
         return {}
+
+
+def _test_env_for_run() -> bool:
+    """True when the run's gateway targets Telegram's test servers."""
+    gateway = scope.run_gateway()
+    if not gateway:
+        return False
+    try:
+        return bool(frappe.db.get_value("Gateway", gateway, "telegram_test_environment"))
+    except Exception:
+        return False
 
 
 def _token_for_run() -> Optional[str]:

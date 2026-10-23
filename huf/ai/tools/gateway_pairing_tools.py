@@ -142,8 +142,12 @@ def setup_gateway(
 		try:
 			import requests
 
+			from huf.ai.gateway_adapters.telegram_client import bot_api_url
+
 			res = requests.post(
-				f"https://api.telegram.org/bot{credentials['token']}/setWebhook",
+				bot_api_url(
+					credentials["token"], "setWebhook", test_environment=bool(gw_doc.get("telegram_test_environment"))
+				),
 				json={"url": webhook_url},
 				timeout=10,
 			)

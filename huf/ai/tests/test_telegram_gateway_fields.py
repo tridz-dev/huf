@@ -16,6 +16,7 @@ NEW_FIELDS = {
 	"telegram_business_policy": "Select",
 	"telegram_join_policy": "Select",
 	"telegram_inline_enabled": "Check",
+	"telegram_test_environment": "Check",
 	"telegram_agent_allow_group_admin": "Check",
 	"telegram_agent_allow_business": "Check",
 	"telegram_agent_allow_profile": "Check",

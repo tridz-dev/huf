@@ -96,9 +96,11 @@ def _credentials(gateway: dict[str, Any]) -> dict[str, str]:
 
 
 def _client(credentials: dict[str, str]):
-	from huf.ai.gateway_adapters.telegram_client import TelegramBotClient
+	from huf.ai.gateway_adapters.telegram_client import TelegramBotClient, truthy_flag
 
-	return TelegramBotClient(credentials.get("token", ""))
+	return TelegramBotClient(
+		credentials.get("token", ""), test_environment=truthy_flag(credentials.get("test_environment"))
+	)
 
 
 def credential_presence(credentials: dict[str, str]) -> dict[str, bool]:

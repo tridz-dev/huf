@@ -179,6 +179,8 @@ def _gateway_credentials(gateway) -> dict[str, str]:
 	for row in settings.credentials or []:
 		if row.key:
 			credentials[row.key] = row.get_password("value") or ""
+	if gateway.get("provider") == "Telegram" and gateway.get("telegram_test_environment"):
+		credentials["test_environment"] = "1"  # read by the Telegram adapter/clients; not a secret
 	return credentials
 
 
