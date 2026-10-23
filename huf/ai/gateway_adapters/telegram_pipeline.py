@@ -60,11 +60,12 @@ def before_send(event: Any, gateway: Any, parts: list[str]) -> list[str]:
 
 def make_parts(response: str, scope: str = "") -> list[str]:
 	from huf.ai.gateway_adapters import telegram_buttons
-
 	from huf.ai.gateway_adapters import telegram_media_reply as media_reply
 
 	response, media_items = media_reply.strip_reply(response)  # agent ```telegram-media``` block
-	response = telegram_buttons.prepare_reply(response, scope=scope)  # strips the button block, remembers its spec
+	response = telegram_buttons.prepare_reply(
+		response, scope=scope
+	)  # strips the button block, remembers its spec
 	response = media_reply.remember(response, media_items, scope=scope)
 	return split_message(response) or ([str(response)] if str(response or "").strip() else [])
 
@@ -72,12 +73,15 @@ def make_parts(response: str, scope: str = "") -> list[str]:
 def reply_scope(gateway: Any, event: Any) -> str:
 	from huf.ai.gateway_adapters.telegram_media_reply import scope_key
 
-	return scope_key(getattr(gateway, "name", ""), getattr(event, "conversation_id", ""), getattr(event, "name", ""))
+	return scope_key(
+		getattr(gateway, "name", ""), getattr(event, "conversation_id", ""), getattr(event, "name", "")
+	)
 
 
 def spoken_text(response: str) -> str:
 	"""Reply text with the agent's ```telegram-media``` and ```telegram-buttons``` blocks removed (for TTS)."""
-	from huf.ai.gateway_adapters import telegram_buttons, telegram_media_reply as media_reply
+	from huf.ai.gateway_adapters import telegram_buttons
+	from huf.ai.gateway_adapters import telegram_media_reply as media_reply
 
 	visible, _items = media_reply.strip_reply(response)
 	return telegram_buttons.extract(visible)[0]
@@ -118,16 +122,30 @@ def classify(exc: BaseException) -> dict:
 	if isinstance(cause, TelegramApiError):
 		from huf.ai.gateway_adapters.telegram_hooks import error_text
 
-		out = {"retryable": cause.retryable, "delay": None, "blocked": cause.blocked_by_user,
-			"code": "blocked" if cause.blocked_by_user else ("chat_not_found" if cause.chat_not_found
-			else ("rate_limited" if cause.flood_control else "telegram_error")),
-			"operator_text": error_text(cause)}
+		out = {
+			"retryable": cause.retryable,
+			"delay": None,
+			"blocked": cause.blocked_by_user,
+			"code": "blocked"
+			if cause.blocked_by_user
+			else (
+				"chat_not_found"
+				if cause.chat_not_found
+				else ("rate_limited" if cause.flood_control else "telegram_error")
+			),
+			"operator_text": error_text(cause),
+		}
 		if cause.flood_control and cause.retry_after:
 			out["delay"] = float(cause.retry_after) + 1.0
 		return out
 	transient = isinstance(cause, (ConnectionError, TimeoutError, OSError))
-	return {"retryable": transient, "delay": None, "blocked": False, "code": "network" if transient else "error",
-		"operator_text": str(cause) or "Telegram delivery failed"}
+	return {
+		"retryable": transient,
+		"delay": None,
+		"blocked": False,
+		"code": "network" if transient else "error",
+		"operator_text": str(cause) or "Telegram delivery failed",
+	}
 
 
 def backoff_seconds(cls: dict, attempt: int) -> float:
@@ -141,9 +159,18 @@ def build_sender(adapter: Any) -> TelegramSender:
 
 
 def send_parts_with(
-	sender: TelegramSender, chat_id: Any, parts: list[str], *, thread_id: Any = None, reply_to: Any = None,
-	markup: dict | None = None, on_sent: Any = None, media: bool = False, ephemeral: dict | None = None,
-	on_part: Any = None, scope: str = "",
+	sender: TelegramSender,
+	chat_id: Any,
+	parts: list[str],
+	*,
+	thread_id: Any = None,
+	reply_to: Any = None,
+	markup: dict | None = None,
+	on_sent: Any = None,
+	media: bool = False,
+	ephemeral: dict | None = None,
+	on_part: Any = None,
+	scope: str = "",
 ) -> SimpleNamespace:
 	"""Send ``parts`` in order. Raises ``TelegramPartsError(cause, sent_ids, remaining)`` on failure.
 
@@ -168,8 +195,12 @@ def send_parts_with(
 	for i, part in enumerate(parts):
 		try:
 			msgs = sender.send_text(
-				chat_id, part, reply_to=reply_to if i == 0 else None, thread_id=thread_id,
-				markup=markup if i == len(parts) - 1 else None, **({"ephemeral": ephemeral} if ephemeral else {}),
+				chat_id,
+				part,
+				reply_to=reply_to if i == 0 else None,
+				thread_id=thread_id,
+				markup=markup if i == len(parts) - 1 else None,
+				**({"ephemeral": ephemeral} if ephemeral else {}),
 			)
 		except Exception as exc:
 			raise TelegramPartsError(exc, sent, list(parts[i:])) from exc
@@ -184,15 +215,15 @@ def send_parts_with(
 	)
 
 
-def _send_media_first(sender, chat_id, parts, thread_id, reply_to, sent, on_sent, scope: str = "") -> list[str]:
+def _send_media_first(
+	sender, chat_id, parts, thread_id, reply_to, sent, on_sent, scope: str = ""
+) -> list[str]:
 	"""Send remembered media items; returns the text parts still to send (placeholder dropped, note added)."""
 	from huf.ai.gateway_adapters import telegram_media_reply as media_reply
 
 	try:
 		items = media_reply.take_items(parts, scope=scope)
-		result = (
-			media_reply.send_media_items(sender, chat_id, items, thread_id, reply_to) if items else None
-		)
+		result = media_reply.send_media_items(sender, chat_id, items, thread_id, reply_to) if items else None
 	except Exception as exc:
 		items, result = [], SimpleNamespace(sent_ids=[], errors=[str(exc)[:120]])
 	parts = [p for p in parts if not media_reply.is_media_only(p)]
@@ -233,17 +264,28 @@ def send_parts(gateway: Any, event: Any, parts: list[str], quote: bool) -> Simpl
 	markup = reply_markup_for(event, gateway, "\n\n".join(parts))
 	from huf.ai.gateway_adapters import telegram_buttons
 
-	edited = None if any(p.startswith("\u2063tg-media:") for p in parts) else telegram_buttons.try_edit(
-		sender, event, list(parts), markup)
+	edited = (
+		None
+		if any(p.startswith("\u2063tg-media:") for p in parts)
+		else telegram_buttons.try_edit(sender, event, list(parts), markup)
+	)
 	if edited is not None:
 		return edited
 	return send_parts_with(
-		sender, event.conversation_id, list(parts), thread_id=thread_id,
-		reply_to=reply_to if quote else None, markup=markup,
-		on_sent=lambda ids: telegram_messages.record_sent(gateway.name, event.conversation_id, event.name, ids),
+		sender,
+		event.conversation_id,
+		list(parts),
+		thread_id=thread_id,
+		reply_to=reply_to if quote else None,
+		markup=markup,
+		on_sent=lambda ids: telegram_messages.record_sent(
+			gateway.name, event.conversation_id, event.name, ids
+		),
 		on_part=lambda ids, kind, text: telegram_messages.record_outbound(
-			gateway.name, event.conversation_id, ids, kind=kind, text=text),
-		media=True, ephemeral=ephemeral_for(event),
+			gateway.name, event.conversation_id, ids, kind=kind, text=text
+		),
+		media=True,
+		ephemeral=ephemeral_for(event),
 		scope=reply_scope(gateway, event),
 	)
 
@@ -280,8 +322,13 @@ def attempt_parts(event: Any, gateway: Any, parts: list[str], attempt: int) -> d
 	event.db_set(final)
 	svc._commit_unless_testing()  # make the terminal state durable before the contended Gateway stamp
 	touch_last_event(gateway)
-	return {"event_name": event.name, "status": "Succeeded", "agent_run_id": event.agent_run,
-		"provider_message_id": delivery.provider_message_id, "attempts": attempt}
+	return {
+		"event_name": event.name,
+		"status": "Succeeded",
+		"agent_run_id": event.agent_run,
+		"provider_message_id": delivery.provider_message_id,
+		"attempts": attempt,
+	}
 
 
 def handle_failure(event: Any, gateway: Any, exc: BaseException, parts: list[str], attempt: int) -> dict:
@@ -309,23 +356,49 @@ def handle_failure(event: Any, gateway: Any, exc: BaseException, parts: list[str
 	elif remaining and cls["retryable"] and attempt < max_attempts:
 		delay = backoff_seconds(cls, attempt)
 		try:
-			event.db_set({"status": "Running", "reply_status": "retrying",
-				"delivery_error": f"retrying ({attempt}/{max_attempts}) in {delay:.0f}s: {operator_text}"[:500]})
-			frappe.enqueue(
-				"huf.ai.gateway_service.retry_gateway_reply", queue="default", timeout=300,
-				enqueue_after_commit=True, event_name=event.name, parts_remaining=list(remaining),
-				attempt=attempt + 1, not_before=time.time() + delay,
+			event.db_set(
+				{
+					"status": "Running",
+					"reply_status": "retrying",
+					"delivery_error": f"retrying ({attempt}/{max_attempts}) in {delay:.0f}s: {operator_text}"[
+						:500
+					],
+				}
 			)
-			return {"event_name": event.name, "status": "Running", "reply_status": "retrying",
-				"retry_in_seconds": delay, "attempt": attempt, "agent_run_id": event.agent_run}
+			frappe.enqueue(
+				"huf.ai.gateway_service.retry_gateway_reply",
+				queue="default",
+				timeout=300,
+				enqueue_after_commit=True,
+				event_name=event.name,
+				parts_remaining=list(remaining),
+				attempt=attempt + 1,
+				not_before=time.time() + delay,
+			)
+			return {
+				"event_name": event.name,
+				"status": "Running",
+				"reply_status": "retrying",
+				"retry_in_seconds": delay,
+				"attempt": attempt,
+				"agent_run_id": event.agent_run,
+			}
 		except Exception:
 			frappe.logger("huf").warning("Telegram reply retry could not be scheduled")
 
 	cause = exc.cause if isinstance(exc, TelegramPartsError) else exc
 	error_text = svc._redact_error_text(str(cause)) or operator_text
-	delivery_error = f"gave up after {attempt} attempts: {operator_text}" if cls["retryable"] else operator_text
-	event.db_set({"status": "Failed", "reply_status": "sent" if event.reply_message_id else "failed",
-		"error_message": error_text[-500:], "delivery_error": delivery_error[:500]})
+	delivery_error = (
+		f"gave up after {attempt} attempts: {operator_text}" if cls["retryable"] else operator_text
+	)
+	event.db_set(
+		{
+			"status": "Failed",
+			"reply_status": "sent" if event.reply_message_id else "failed",
+			"error_message": error_text[-500:],
+			"delivery_error": delivery_error[:500],
+		}
+	)
 	frappe.log_error(f"{delivery_error}\n{error_text}", "Gateway Telegram delivery failed")
 	try:
 		from huf.ai.gateway_webhook import _set_gateway_error
@@ -333,5 +406,11 @@ def handle_failure(event: Any, gateway: Any, exc: BaseException, parts: list[str
 		_set_gateway_error(gateway.name, f"Reply to {event.name} failed: {delivery_error}")
 	except Exception:
 		pass
-	return {"event_name": event.name, "status": "Failed", "error": error_text, "error_code": cls["code"],
-		"agent_run_id": event.agent_run, "attempts": attempt}
+	return {
+		"event_name": event.name,
+		"status": "Failed",
+		"error": error_text,
+		"error_code": cls["code"],
+		"agent_run_id": event.agent_run,
+		"attempts": attempt,
+	}

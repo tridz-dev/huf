@@ -43,8 +43,19 @@ _ALLOWED_MIME = {
 }
 _DENIED_EXT = (".exe", ".bat", ".cmd", ".sh", ".js", ".msi", ".scr", ".com", ".vbs", ".ps1")
 _EVENT_FIELDS = [
-	"name", "creation", "status", "sender_id", "message_text", "reply_status", "reply_message_id",
-	"delivery_error", "error_message", "agent_run", "target_agent", "raw_payload", "conversation_id",
+	"name",
+	"creation",
+	"status",
+	"sender_id",
+	"message_text",
+	"reply_status",
+	"reply_message_id",
+	"delivery_error",
+	"error_message",
+	"agent_run",
+	"target_agent",
+	"raw_payload",
+	"conversation_id",
 ]
 
 
@@ -70,9 +81,14 @@ def classify_kind(raw: Any) -> str:
 	"""One of ``MESSAGE_KINDS`` for a stored raw Update."""
 	update = _raw_dict(raw)
 	for key, kind in (
-		("callback_query", "callback"), ("message_reaction", "reaction"), ("business_message", "business"),
-		("edited_business_message", "business"), ("inline_query", "inline"), ("chosen_inline_result", "inline"),
-		("guest_message", "guest"), ("chat_join_request", "join"),
+		("callback_query", "callback"),
+		("message_reaction", "reaction"),
+		("business_message", "business"),
+		("edited_business_message", "business"),
+		("inline_query", "inline"),
+		("chosen_inline_result", "inline"),
+		("guest_message", "guest"),
+		("chat_join_request", "join"),
 	):
 		if key in update:
 			return kind
@@ -96,7 +112,14 @@ def update_kind(raw: Any) -> str:
 
 
 def _message_of(update: dict[str, Any]) -> dict[str, Any]:
-	for key in ("message", "edited_message", "channel_post", "edited_channel_post", "business_message", "edited_business_message"):
+	for key in (
+		"message",
+		"edited_message",
+		"channel_post",
+		"edited_channel_post",
+		"business_message",
+		"edited_business_message",
+	):
 		if isinstance(update.get(key), dict):
 			return update[key]
 	cq = update.get("callback_query")
@@ -186,7 +209,9 @@ def _filters(filters: Any) -> dict[str, Any]:
 
 
 @frappe.whitelist()
-def list_messages(gateway: str | None = None, filters: Any = None, limit: Any = None, cursor: str | None = None) -> dict[str, Any]:
+def list_messages(
+	gateway: str | None = None, filters: Any = None, limit: Any = None, cursor: str | None = None
+) -> dict[str, Any]:
 	"""Inbound Gateway Events, newest first, with keyset pagination. Kind is derived from the raw Update."""
 	row = _require_admin(gateway)
 	if "success" in row:
@@ -213,10 +238,17 @@ def list_messages(gateway: str | None = None, filters: Any = None, limit: Any = 
 		flt = [["Gateway Event", k, "=", v] for k, v in where.items()]
 		if bound:
 			flt.append(["Gateway Event", "creation", "<=", bound[0]])
-		rows = frappe.get_all(
-			"Gateway Event", filters=flt, or_filters=or_filters, fields=_EVENT_FIELDS,
-			order_by="creation desc, name desc", limit_page_length=batch,
-		) or []
+		rows = (
+			frappe.get_all(
+				"Gateway Event",
+				filters=flt,
+				or_filters=or_filters,
+				fields=_EVENT_FIELDS,
+				order_by="creation desc, name desc",
+				limit_page_length=batch,
+			)
+			or []
+		)
 		fetched = len(rows)
 		last_raw = rows[-1] if rows else None
 		if bound:  # same-creation ties: keep strictly after the cursor row
@@ -232,7 +264,12 @@ def list_messages(gateway: str | None = None, filters: Any = None, limit: Any = 
 			break
 		bound = (str(last_raw["creation"]), last_raw["name"])
 	next_cursor = _encode_cursor(items[-1]["creation"], items[-1]["name"]) if has_more and items else None
-	return {"success": True, "items": [event_summary(r) for r in items], "next_cursor": next_cursor, "has_more": has_more}
+	return {
+		"success": True,
+		"items": [event_summary(r) for r in items],
+		"next_cursor": next_cursor,
+		"has_more": has_more,
+	}
 
 
 @frappe.whitelist()
@@ -241,7 +278,13 @@ def get_message(gateway: str | None = None, event: str | None = None) -> dict[st
 	row = _require_admin(gateway)
 	if "success" in row:
 		return row
-	data = frappe.db.get_value("Gateway Event", event, _EVENT_FIELDS + ["gateway", "reply_message_id"], as_dict=True) if event else None
+	data = (
+		frappe.db.get_value(
+			"Gateway Event", event, _EVENT_FIELDS + ["gateway", "reply_message_id"], as_dict=True
+		)
+		if event
+		else None
+	)
 	if not data or data.get("gateway") != row["name"]:
 		return _error("not_found", "Message not found.")
 	parts: list[int] = []
@@ -324,12 +367,37 @@ def list_bindings(gateway: str | None = None) -> dict[str, Any]:
 	row = _require_admin(gateway)
 	if "success" in row:
 		return row
-	rows = frappe.get_all(
-		"Telegram Admin Binding", filters={"gateway": row["name"]},
-		fields=["name", "frappe_user", "telegram_user_id", "telegram_username", "role_scope", "is_active", "paired_at", "last_seen_at"],
-		order_by="creation desc", limit_page_length=200,
-	) or []
-	return {"success": True, "items": [{**r, "is_active": bool(r.get("is_active")), "paired_at": str(r["paired_at"]) if r.get("paired_at") else None, "last_seen_at": str(r["last_seen_at"]) if r.get("last_seen_at") else None} for r in rows]}
+	rows = (
+		frappe.get_all(
+			"Telegram Admin Binding",
+			filters={"gateway": row["name"]},
+			fields=[
+				"name",
+				"frappe_user",
+				"telegram_user_id",
+				"telegram_username",
+				"role_scope",
+				"is_active",
+				"paired_at",
+				"last_seen_at",
+			],
+			order_by="creation desc",
+			limit_page_length=200,
+		)
+		or []
+	)
+	return {
+		"success": True,
+		"items": [
+			{
+				**r,
+				"is_active": bool(r.get("is_active")),
+				"paired_at": str(r["paired_at"]) if r.get("paired_at") else None,
+				"last_seen_at": str(r["last_seen_at"]) if r.get("last_seen_at") else None,
+			}
+			for r in rows
+		],
+	}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -354,7 +422,12 @@ def create_binding_code_for_me(gateway: str | None = None, role_scope: str = "Vi
 	from huf.ai import telegram_admin
 
 	res = telegram_admin.create_binding_code(row["name"], role_scope)
-	return {"success": True, "code": res["code"], "expires_in": res["expires_in"], "instructions": res["instructions"]}
+	return {
+		"success": True,
+		"code": res["code"],
+		"expires_in": res["expires_in"],
+		"instructions": res["instructions"],
+	}
 
 
 # -- business connections -----------------------------------------------------------------------
@@ -373,12 +446,17 @@ def list_business_connections(gateway: str | None = None) -> dict[str, Any]:
 		prefix = biz._conn_key("")
 		for key in frappe.cache().get_keys(prefix + "*") or []:
 			key = key.decode() if isinstance(key, bytes) else str(key)
-			conn = biz._get(key[key.index(prefix):]) if prefix in key else None
+			conn = biz._get(key[key.index(prefix) :]) if prefix in key else None
 			if isinstance(conn, dict) and conn.get("gateway") == row["name"]:
-				items.append({
-					"id": conn.get("id"), "owner_id": conn.get("owner_id"), "owner_name": conn.get("owner_name"),
-					"enabled": bool(conn.get("is_enabled", True)), "rights": conn.get("rights") or {},
-				})
+				items.append(
+					{
+						"id": conn.get("id"),
+						"owner_id": conn.get("owner_id"),
+						"owner_name": conn.get("owner_name"),
+						"enabled": bool(conn.get("is_enabled", True)),
+						"rights": conn.get("rights") or {},
+					}
+				)
 	except Exception:
 		items = []
 	return {"success": True, "items": items}
@@ -388,10 +466,15 @@ def list_business_connections(gateway: str | None = None) -> dict[str, Any]:
 
 
 def _own_bound_chat(gateway: str, user: str) -> set[str]:
-	rows = frappe.get_all(
-		"Telegram Admin Binding", filters={"gateway": gateway, "frappe_user": user, "is_active": 1},
-		fields=["chat_id"], limit_page_length=20,
-	) or []
+	rows = (
+		frappe.get_all(
+			"Telegram Admin Binding",
+			filters={"gateway": gateway, "frappe_user": user, "is_active": 1},
+			fields=["chat_id"],
+			limit_page_length=20,
+		)
+		or []
+	)
 	return {str(r["chat_id"]) for r in rows if r.get("chat_id")}
 
 
@@ -440,7 +523,9 @@ def _audit(gateway: str, user: str, chat: str, kind: str, result: str, detail: s
 
 		write_audit(
 			{"telegram_user_id": chat, "frappe_user": user, "gateway": gateway},
-			{"op": "send_panel", "kind": kind, "chat": chat}, result, detail=detail,
+			{"op": "send_panel", "kind": kind, "chat": chat},
+			result,
+			detail=detail,
 		)
 	except Exception:
 		frappe.logger("huf").warning("telegram send panel audit write failed")
@@ -448,7 +533,11 @@ def _audit(gateway: str, user: str, chat: str, kind: str, result: str, detail: s
 
 @frappe.whitelist(methods=["POST"])
 def send_message(
-	gateway: str | None = None, chat_id: Any = None, text: str = "", kind: str = "text", file_url: str | None = None,
+	gateway: str | None = None,
+	chat_id: Any = None,
+	text: str = "",
+	kind: str = "text",
+	file_url: str | None = None,
 ) -> dict[str, Any]:
 	"""Send from the panel to an approved contact or the caller's own bound chat only."""
 	row = _require_admin(gateway)
@@ -482,7 +571,11 @@ def send_message(
 		problem = validate_upload(kind, filename, content)
 		if problem:
 			return _error("invalid_file", problem)
-		media = (filename or "upload", content, mimetypes.guess_type(filename or "")[0] or "application/octet-stream")
+		media = (
+			filename or "upload",
+			content,
+			mimetypes.guess_type(filename or "")[0] or "application/octet-stream",
+		)
 	from huf.ai.gateway_adapters.telegram_client import TelegramApiError
 	from huf.ai.gateway_adapters.telegram_outbound import TelegramSender
 
@@ -503,7 +596,11 @@ def send_message(
 		_audit(row["name"], user, chat, kind, "failed", msg)
 		return _error("send_failed", msg)
 	_audit(row["name"], user, chat, kind, "ok", f"chars={len(text)}")
-	ids = [r.get("message_id") for r in (results if isinstance(results, list) else [results]) if isinstance(r, dict)]
+	ids = [
+		r.get("message_id")
+		for r in (results if isinstance(results, list) else [results])
+		if isinstance(r, dict)
+	]
 	return {"success": True, "message_ids": ids}
 
 
@@ -513,14 +610,27 @@ def list_send_targets(gateway: str | None = None) -> dict[str, Any]:
 	row = _require_admin(gateway)
 	if "success" in row:
 		return row
-	targets = [{"chat_id": c, "label": _("My bound chat"), "source": "binding"} for c in sorted(_own_bound_chat(row["name"], frappe.session.user))]
-	entries = frappe.get_all(
-		"Gateway Access Entry",
-		filters={"gateway": row["name"], "entry_type": "Sender", "state": "Approved"},
-		fields=["external_id", "display_label"], limit_page_length=200,
-	) or []
+	targets = [
+		{"chat_id": c, "label": _("My bound chat"), "source": "binding"}
+		for c in sorted(_own_bound_chat(row["name"], frappe.session.user))
+	]
+	entries = (
+		frappe.get_all(
+			"Gateway Access Entry",
+			filters={"gateway": row["name"], "entry_type": "Sender", "state": "Approved"},
+			fields=["external_id", "display_label"],
+			limit_page_length=200,
+		)
+		or []
+	)
 	seen = {t["chat_id"] for t in targets}
 	for e in entries:
 		if e["external_id"] and e["external_id"] not in seen:
-			targets.append({"chat_id": e["external_id"], "label": e.get("display_label") or e["external_id"], "source": "approved"})
+			targets.append(
+				{
+					"chat_id": e["external_id"],
+					"label": e.get("display_label") or e["external_id"],
+					"source": "approved",
+				}
+			)
 	return {"success": True, "items": targets}

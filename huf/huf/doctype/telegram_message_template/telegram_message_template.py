@@ -68,7 +68,9 @@ class TelegramMessageTemplate(Document):
 
 		media_type = self.media_type or "none"
 		if media_type != "none" and not self.media:
-			frappe.throw(_("Attach a file for the {0} media type, or set the media type to none.").format(media_type))
+			frappe.throw(
+				_("Attach a file for the {0} media type, or set the media type to none.").format(media_type)
+			)
 		if media_type == "none" and not (self.body or "").strip():
 			frappe.throw(_("Add message text or choose a media type and attach a file."))
 
@@ -80,13 +82,15 @@ class TelegramMessageTemplate(Document):
 		declared = {(row.variable or "").strip() for row in self.get("variables") or []}
 		for row in self.get("variables") or []:
 			if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", (row.variable or "").strip()):
-				frappe.throw(_("Variable {0} must use letters, digits and underscores only.").format(row.variable))
+				frappe.throw(
+					_("Variable {0} must use letters, digits and underscores only.").format(row.variable)
+				)
 		missing = [v for v in body_variables(self.body) if v not in declared]
 		if missing:
 			frappe.msgprint(
-				_("These variables are used in the text but not listed: {0}. They will be left empty.").format(
-					", ".join(missing)
-				),
+				_(
+					"These variables are used in the text but not listed: {0}. They will be left empty."
+				).format(", ".join(missing)),
 				indicator="orange",
 				alert=True,
 			)

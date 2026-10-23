@@ -21,9 +21,9 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime
 import time
 import unittest
+from datetime import datetime
 from types import SimpleNamespace
 from unittest import mock
 from urllib.parse import parse_qs, urlparse
@@ -36,11 +36,23 @@ from huf.ai import telegram_guard as tg
 from huf.ai import telegram_send_scope as tg_scope
 from huf.ai.gateway_adapters import (
 	provider_hooks,
-	telegram_buttons as tb,
+)
+from huf.ai.gateway_adapters import (
 	telegram_business as biz,
+)
+from huf.ai.gateway_adapters import (
 	telegram_business_agent as bagent,
+)
+from huf.ai.gateway_adapters import (
+	telegram_buttons as tb,
+)
+from huf.ai.gateway_adapters import (
 	telegram_ingest as ing,
+)
+from huf.ai.gateway_adapters import (
 	telegram_inline as inline,
+)
+from huf.ai.gateway_adapters import (
 	telegram_pipeline as tp,
 )
 from huf.ai.gateway_adapters.telegram import WEBHOOK_SECRET_HEADER, TelegramGatewayAdapter
@@ -51,9 +63,13 @@ from huf.ai.tests.telegram_fakes import SECRET, TOKEN, FakeBotApi
 from huf.ai.tests.test_telegram_e2e_admin import (  # noqa: F401  (base classes are not collected as tests)
 	ADMIN,
 	CHAT,
-	GW as ADMIN_GW,
 	TG,
 	TG2,
+)
+from huf.ai.tests.test_telegram_e2e_admin import (
+	GW as ADMIN_GW,
+)
+from huf.ai.tests.test_telegram_e2e_admin import (
 	E2EBase as AdminBase,
 )
 from huf.ai.tests.test_telegram_e2e_modes import FakeCache, init_data, load_all_hooks
@@ -116,10 +132,22 @@ class FakeDb:
 
 def make_gateway(**over):
 	base = dict(
-		name=GW_NAME, provider="Telegram", is_enabled=1, mention_required=0, typing_indicator=0,
-		direct_policy="Allow list", room_policy="Open", room_sender_policy="Open", execution_user="bot.user@example.com",
-		default_agent="Sec", telegram_business_policy="Observe", telegram_join_policy="Queue", telegram_guard_captcha=0,
-		telegram_welcome_template=None, pairing_ttl_minutes=60, pairing_pending_limit=5,
+		name=GW_NAME,
+		provider="Telegram",
+		is_enabled=1,
+		mention_required=0,
+		typing_indicator=0,
+		direct_policy="Allow list",
+		room_policy="Open",
+		room_sender_policy="Open",
+		execution_user="bot.user@example.com",
+		default_agent="Sec",
+		telegram_business_policy="Observe",
+		telegram_join_policy="Queue",
+		telegram_guard_captcha=0,
+		telegram_welcome_template=None,
+		pairing_ttl_minutes=60,
+		pairing_pending_limit=5,
 	)
 	base.update(over)
 	gw = SimpleNamespace(**base)
@@ -147,7 +175,9 @@ class WebhookHarness:
 		self.api = FakeBotApi()
 		self.adapter = TelegramGatewayAdapter(
 			{"token": TOKEN, "webhook_secret": SECRET},
-			http_post=self.api.http_post, http_get=self.api.http_get, download_attachments=False,
+			http_post=self.api.http_post,
+			http_get=self.api.http_get,
+			download_attachments=False,
 		)
 		self.gw = gw or make_gateway()
 		self.fcache = FakeCache()
@@ -172,7 +202,10 @@ class WebhookHarness:
 					return EventDoc(first, self.events)
 				if dt == "Gateway Access Entry":
 					self.created.append(dict(first))
-					return SimpleNamespace(name=f"GAE-{len(self.created)}", insert=lambda **k: SimpleNamespace(name=f"GAE-{len(self.created)}"))
+					return SimpleNamespace(
+						name=f"GAE-{len(self.created)}",
+						insert=lambda **k: SimpleNamespace(name=f"GAE-{len(self.created)}"),
+					)
 			if first == "Gateway" and len(args) > 1 and args[1] == self.gw.name:
 				return self.gw
 			if first == "Agent":
@@ -185,7 +218,9 @@ class WebhookHarness:
 		self.patch("frappe.cache", return_value=self.fcache)
 		self.patch("frappe.logger")
 		self.patch("frappe.set_user")
-		self.patch("frappe.utils.now_datetime", side_effect=datetime.now)  # no System Settings lookup on a site
+		self.patch(
+			"frappe.utils.now_datetime", side_effect=datetime.now
+		)  # no System Settings lookup on a site
 		self.enqueue = self.patch("frappe.enqueue", side_effect=lambda *a, **k: self.enqueued.append((a, k)))
 		self.patch("huf.ai.gateway_webhook.get_gateway_adapter", side_effect=lambda gw, name="": self.adapter)
 		self.patch("huf.ai.gateway_webhook._ingest_rate_gate")
@@ -232,7 +267,10 @@ class WebhookHarness:
 		if secret is not None:
 			headers[WEBHOOK_SECRET_HEADER] = secret
 		request = SimpleNamespace(
-			args={"gateway_name": gateway}, headers=headers, method=method, content_length=len(body),
+			args={"gateway_name": gateway},
+			headers=headers,
+			method=method,
+			content_length=len(body),
 			get_data=lambda *a, **k: body,
 		)
 		self._patch_obj(frappe, "request", request)
@@ -259,8 +297,11 @@ def _from(uid, first="Ann", is_bot=False, **extra):
 
 def private_msg(update_id, text="hello", uid=42, **extra):
 	message = {
-		"message_id": update_id, "from": _from(uid), "chat": {"id": uid, "first_name": "Ann", "type": "private"},
-		"date": int(time.time()), "text": text,
+		"message_id": update_id,
+		"from": _from(uid),
+		"chat": {"id": uid, "first_name": "Ann", "type": "private"},
+		"date": int(time.time()),
+		"text": text,
 	}
 	message.update(extra)
 	return {"update_id": update_id, "message": message}
@@ -268,8 +309,11 @@ def private_msg(update_id, text="hello", uid=42, **extra):
 
 def group_msg(update_id, text="@huf_bot status?", uid=42, chat_id=-1001234, **extra):
 	message = {
-		"message_id": update_id, "from": _from(uid), "chat": {"id": chat_id, "title": "Team", "type": "supergroup"},
-		"date": int(time.time()), "text": text,
+		"message_id": update_id,
+		"from": _from(uid),
+		"chat": {"id": chat_id, "title": "Team", "type": "supergroup"},
+		"date": int(time.time()),
+		"text": text,
 		"entities": [{"type": "mention", "offset": 0, "length": 8}],
 	}
 	message.update(extra)
@@ -277,35 +321,65 @@ def group_msg(update_id, text="@huf_bot status?", uid=42, chat_id=-1001234, **ex
 
 
 def inline_update(update_id, uid=42, query="weather"):
-	return {"update_id": update_id, "inline_query": {
-		"id": f"iq{update_id}", "from": _from(uid), "query": query, "offset": "", "chat_type": "sender",
-	}}
+	return {
+		"update_id": update_id,
+		"inline_query": {
+			"id": f"iq{update_id}",
+			"from": _from(uid),
+			"query": query,
+			"offset": "",
+			"chat_type": "sender",
+		},
+	}
 
 
 def callback_update(update_id, data, *, uid=42, chat_id=None, label="Approve", cq_id=None, message_id=55):
 	chat_id = uid if chat_id is None else chat_id
-	return {"update_id": update_id, "callback_query": {
-		"id": cq_id or f"cq{update_id}", "from": _from(uid), "chat_instance": "-1234567890", "data": data,
-		"message": {
-			"message_id": message_id, "date": int(time.time()), "chat": {"id": chat_id, "type": "private"},
-			"from": _from(999, "Huf", is_bot=True), "text": "Pick",
-			"reply_markup": {"inline_keyboard": [[{"text": label, "callback_data": data}]]},
+	return {
+		"update_id": update_id,
+		"callback_query": {
+			"id": cq_id or f"cq{update_id}",
+			"from": _from(uid),
+			"chat_instance": "-1234567890",
+			"data": data,
+			"message": {
+				"message_id": message_id,
+				"date": int(time.time()),
+				"chat": {"id": chat_id, "type": "private"},
+				"from": _from(999, "Huf", is_bot=True),
+				"text": "Pick",
+				"reply_markup": {"inline_keyboard": [[{"text": label, "callback_data": data}]]},
+			},
 		},
-	}}
+	}
 
 
 def membership_update(update_id, old, new, kind="my_chat_member", chat_id=-100123, subject=777, actor=42):
-	return {"update_id": update_id, kind: {
-		"chat": {"id": chat_id, "type": "supergroup", "title": "Club"}, "from": _from(actor), "date": int(time.time()),
-		"old_chat_member": {"status": old, "user": _from(subject, "Huf", is_bot=(kind == "my_chat_member"))},
-		"new_chat_member": {"status": new, "user": _from(subject, "Huf", is_bot=(kind == "my_chat_member"))},
-	}}
+	return {
+		"update_id": update_id,
+		kind: {
+			"chat": {"id": chat_id, "type": "supergroup", "title": "Club"},
+			"from": _from(actor),
+			"date": int(time.time()),
+			"old_chat_member": {
+				"status": old,
+				"user": _from(subject, "Huf", is_bot=(kind == "my_chat_member")),
+			},
+			"new_chat_member": {
+				"status": new,
+				"user": _from(subject, "Huf", is_bot=(kind == "my_chat_member")),
+			},
+		},
+	}
 
 
 def join_update(update_id, uid=42, query_id=""):
 	jr = {
-		"chat": {"id": -100123, "type": "supergroup", "title": "Club"}, "from": _from(uid, username="ann"),
-		"user_chat_id": uid, "date": int(time.time()), "bio": "hello",
+		"chat": {"id": -100123, "type": "supergroup", "title": "Club"},
+		"from": _from(uid, username="ann"),
+		"user_chat_id": uid,
+		"date": int(time.time()),
+		"bio": "hello",
 	}
 	if query_id:
 		jr["query_id"] = query_id
@@ -313,10 +387,16 @@ def join_update(update_id, uid=42, query_id=""):
 
 
 def guest_update(update_id, text="what is the price?", guest_id=55):
-	return {"update_id": update_id, "guest_message": {
-		"message_id": 3, "guest_query_id": f"gq{update_id}", "from": _from(guest_id, "Gus"),
-		"chat": {"id": -500, "type": "supergroup"}, "text": text,
-	}}
+	return {
+		"update_id": update_id,
+		"guest_message": {
+			"message_id": 3,
+			"guest_query_id": f"gq{update_id}",
+			"from": _from(guest_id, "Gus"),
+			"chat": {"id": -500, "type": "supergroup"},
+			"text": text,
+		},
+	}
 
 
 class SynthBase(WebhookHarness, unittest.TestCase):
@@ -341,7 +421,9 @@ class TestTransport(SynthBase):
 		self.assertEqual(len(self.queued_events()), 1)
 
 	def test_responses_never_echo_credentials(self):
-		blob = json.dumps(self.post(private_msg(160), secret="wrong").body) + json.dumps(self.post(private_msg(161)).body, default=str)
+		blob = json.dumps(self.post(private_msg(160), secret="wrong").body) + json.dumps(
+			self.post(private_msg(161)).body, default=str
+		)
 		self.assertNotIn(TOKEN, blob)
 		self.assertNotIn(SECRET, blob)
 
@@ -357,10 +439,14 @@ class TestTransport(SynthBase):
 		self.assertTrue(first.get("success") and not first.get("duplicate"))
 		self.assertTrue(second.get("duplicate"))
 		self.assertEqual(len(self.events), 1)
-		self.assertEqual(len([a for a, _k in self.enqueued if a[0] == "huf.ai.gateway_service.process_gateway_event"]), 1)
+		self.assertEqual(
+			len([a for a, _k in self.enqueued if a[0] == "huf.ai.gateway_service.process_gateway_event"]), 1
+		)
 
 	def test_duplicate_handler_update_answers_once(self):
-		self.gw.direct_policy = "Pairing"  # unpaired -> pair prompt; a Telegram redelivery must not answer twice
+		self.gw.direct_policy = (
+			"Pairing"  # unpaired -> pair prompt; a Telegram redelivery must not answer twice
+		)
 		self.has_entry.return_value = False
 		self.post(inline_update(210))
 		again = self.post(inline_update(210))
@@ -369,18 +455,27 @@ class TestTransport(SynthBase):
 
 	def test_edited_message_routes_as_its_own_event_with_the_edited_text(self):
 		self.post(private_msg(220, "hi"))
-		edited = {"update_id": 221, "edited_message": private_msg(0, "hi (edited)")["message"]
-			| {"message_id": 220, "edit_date": int(time.time())}}
+		edited = {
+			"update_id": 221,
+			"edited_message": private_msg(0, "hi (edited)")["message"]
+			| {"message_id": 220, "edit_date": int(time.time())},
+		}
 		res = self.post(edited)
 		self.assertTrue(res.get("success"))
 		self.assertEqual([e.message_text for e in self.events], ["hi", "hi (edited)"])
 		self.assertIn("edited_message", self.events[-1].raw_payload)
 
 	def test_channel_post_is_a_room_event_gated_by_room_policy(self):
-		payload = {"update_id": 230, "channel_post": {
-			"message_id": 7, "sender_chat": {"id": -1009999, "type": "channel", "title": "News"},
-			"chat": {"id": -1009999, "type": "channel", "title": "News"}, "date": int(time.time()), "text": "Breaking",
-		}}
+		payload = {
+			"update_id": 230,
+			"channel_post": {
+				"message_id": 7,
+				"sender_chat": {"id": -1009999, "type": "channel", "title": "News"},
+				"chat": {"id": -1009999, "type": "channel", "title": "News"},
+				"date": int(time.time()),
+				"text": "Breaking",
+			},
+		}
 		self.gw.room_policy = "Allow list"
 		self.has_entry.return_value = False
 		res = self.post(payload)
@@ -416,8 +511,15 @@ class TestInline(SynthBase):
 		self.assertEqual(payload["cache_time"], inline.DEFAULT_CACHE_TIME)
 
 	def test_chosen_inline_result_queues_one_feedback_job_and_never_a_gateway_event(self):
-		chosen = {"update_id": 302, "chosen_inline_result": {
-			"result_id": "ask-1", "from": _from(42), "query": "weather", "inline_message_id": "imid"}}
+		chosen = {
+			"update_id": 302,
+			"chosen_inline_result": {
+				"result_id": "ask-1",
+				"from": _from(42),
+				"query": "weather",
+				"inline_message_id": "imid",
+			},
+		}
 		res = self.post(chosen)
 		self.assertEqual((res.get("handled"), res.get("note")), ("chosen_inline_result", "agent run queued"))
 		jobs = [k for a, k in self.enqueued if a and a[0] == inline.JOB]
@@ -429,8 +531,12 @@ class TestInline(SynthBase):
 		self.assertEqual(self.api.calls, [])
 
 	def test_chosen_inline_result_without_message_id_or_ask_prefix_is_recorded_only(self):
-		for n, chosen in enumerate(({"result_id": "ask-1", "query": "weather"}, {"result_id": "pair", "query": "x",
-				"inline_message_id": "i"})):
+		for n, chosen in enumerate(
+			(
+				{"result_id": "ask-1", "query": "weather"},
+				{"result_id": "pair", "query": "x", "inline_message_id": "i"},
+			)
+		):
 			res = self.post({"update_id": 310 + n, "chosen_inline_result": {"from": _from(42), **chosen}})
 			self.assertEqual(res.body, {"success": True, "handled": "chosen_inline_result"})
 		self.assertEqual(self.enqueued, [])
@@ -440,12 +546,24 @@ class TestInline(SynthBase):
 		if feedback:
 			self.gw.telegram_inline_feedback_enabled = 1
 		self.post(inline_update(update_id, uid=uid))
-		kb = self.calls("answerInlineQuery")[-1]["payload"]["results"][0]["reply_markup"]["inline_keyboard"][0][0]
+		kb = self.calls("answerInlineQuery")[-1]["payload"]["results"][0]["reply_markup"]["inline_keyboard"][
+			0
+		][0]
 		return kb["text"], kb["callback_data"]
 
 	def _press(self, update_id, data, uid=42, imid="imid-1"):
-		return self.post({"update_id": update_id, "callback_query": {
-			"id": f"cq{update_id}", "from": _from(uid), "inline_message_id": imid, "chat_instance": "ci", "data": data}})
+		return self.post(
+			{
+				"update_id": update_id,
+				"callback_query": {
+					"id": f"cq{update_id}",
+					"from": _from(uid),
+					"inline_message_id": imid,
+					"chat_instance": "ci",
+					"data": data,
+				},
+			}
+		)
 
 	def _jobs(self):
 		return [k for a, k in self.enqueued if a and a[0] == inline.JOB]
@@ -468,16 +586,29 @@ class TestInline(SynthBase):
 
 	def test_press_after_chosen_inline_result_does_not_double_run(self):
 		_label, data = self._button()
-		self.post({"update_id": 324, "chosen_inline_result": {
-			"result_id": "ask-1", "from": _from(42), "query": "weather", "inline_message_id": "imid-1"}})
+		self.post(
+			{
+				"update_id": 324,
+				"chosen_inline_result": {
+					"result_id": "ask-1",
+					"from": _from(42),
+					"query": "weather",
+					"inline_message_id": "imid-1",
+				},
+			}
+		)
 		self.assertEqual(self._press(325, data).get("note"), "already started")
 		self.assertEqual(len(self._jobs()), 1)
 		self.assertTrue(inline.feedback_seen(self.gw.name))
 
 	def test_forged_unsigned_or_foreign_press_is_refused(self):
 		_label, data = self._button()
-		for n, (d, uid) in enumerate(((data[:-1] + ("A" if data[-1] != "A" else "B"), 42), ("inl:wait", 42), (data, 99))):
-			self.assertIn(self._press(330 + n, d, uid=uid).get("note"), ("bad signature", "expired or foreign"))
+		for n, (d, uid) in enumerate(
+			((data[:-1] + ("A" if data[-1] != "A" else "B"), 42), ("inl:wait", 42), (data, 99))
+		):
+			self.assertIn(
+				self._press(330 + n, d, uid=uid).get("note"), ("bad signature", "expired or foreign")
+			)
 		self.assertEqual(self._jobs(), [])
 
 
@@ -529,8 +660,12 @@ class TestAdminApproveFlow(WebhookHarness, AdminBase):
 		self.tool = tool
 		self.owner = True
 		for name, value in (
-			("_make_client", lambda token, *, timeout=30: TelegramBotClient(
-				token, http_post=self.api.http_post, http_get=self.api.http_get, sleep=lambda s: None)),
+			(
+				"_make_client",
+				lambda token, *, timeout=30: TelegramBotClient(
+					token, http_post=self.api.http_post, http_get=self.api.http_get, sleep=lambda s: None
+				),
+			),
 			("_token", lambda: TOKEN),
 			("_gateway_token", lambda gateway: TOKEN),
 			("_cache", lambda: self.cache),
@@ -546,8 +681,11 @@ class TestAdminApproveFlow(WebhookHarness, AdminBase):
 			p.start()
 			self.addCleanup(p.stop)
 		for name, value in (
-			("run_gateway", lambda: ADMIN_GW), ("effective_run_id", lambda: "run1"), ("current_chat", lambda r=None: CHAT),
-			("check_recipient", lambda *a, **k: None), ("claim_send", lambda *a, **k: None),
+			("run_gateway", lambda: ADMIN_GW),
+			("effective_run_id", lambda: "run1"),
+			("current_chat", lambda r=None: CHAT),
+			("check_recipient", lambda *a, **k: None),
+			("claim_send", lambda *a, **k: None),
 			("release_send", lambda *a, **k: None),
 		):
 			p = mock.patch.object(tool.scope, name, value)
@@ -563,13 +701,25 @@ class TestAdminApproveFlow(WebhookHarness, AdminBase):
 				return fakes.FakeResponse({"ok": True, "result": {"id": 999, "is_bot": True}})
 			if method == "getChatMember":
 				self.api.calls.append({"method": method, "payload": {}, "files": None, "url": url})
-				return fakes.FakeResponse({"ok": True, "result": {"status": "administrator", "can_delete_messages": True,
-					"can_restrict_members": True, "can_pin_messages": True, "can_change_info": True}})
+				return fakes.FakeResponse(
+					{
+						"ok": True,
+						"result": {
+							"status": "administrator",
+							"can_delete_messages": True,
+							"can_restrict_members": True,
+							"can_pin_messages": True,
+							"can_change_info": True,
+						},
+					}
+				)
 			return original(url, **kw)
 
 		self.api.http_post = http_post
 		self.adapter = TelegramGatewayAdapter(
-			{"token": TOKEN, "webhook_secret": SECRET}, http_post=http_post, http_get=self.api.http_get,
+			{"token": TOKEN, "webhook_secret": SECRET},
+			http_post=http_post,
+			http_get=self.api.http_get,
 			download_attachments=False,
 		)
 
@@ -579,8 +729,15 @@ class TestAdminApproveFlow(WebhookHarness, AdminBase):
 
 	def bind_admin(self, tg=TG, chat=CHAT, user=ADMIN, role="Admin"):
 		code = self.mint(user, role)
-		res = self.post(private_msg(500 + int(tg), f"/start {code}", uid=int(tg), entities=[
-			{"type": "bot_command", "offset": 0, "length": 6}]), gateway=ADMIN_GW)
+		res = self.post(
+			private_msg(
+				500 + int(tg),
+				f"/start {code}",
+				uid=int(tg),
+				entities=[{"type": "bot_command", "offset": 0, "length": 6}],
+			),
+			gateway=ADMIN_GW,
+		)
 		return res
 
 	def request_action(self):
@@ -597,7 +754,9 @@ class TestAdminApproveFlow(WebhookHarness, AdminBase):
 
 	def setUpRequest(self):
 		self.assertTrue(self.bind_admin().get("success"))
-		with mock.patch.object(self.tool, "ALWAYS_HUMAN_APPROVAL", self.tool.ALWAYS_HUMAN_APPROVAL | {"delete_message"}):
+		with mock.patch.object(
+			self.tool, "ALWAYS_HUMAN_APPROVAL", self.tool.ALWAYS_HUMAN_APPROVAL | {"delete_message"}
+		):
 			out = self.request_action()
 		return out
 
@@ -626,18 +785,26 @@ class TestAdminApproveFlow(WebhookHarness, AdminBase):
 		reject = self.buttons()["Reject"]
 		self.press(reject, update_id=9121)
 		self.assertEqual(self.calls("deleteMessage"), [])
-		self.press(self.buttons()["Approve"], update_id=9122)  # nonces are per-button: Approve after Reject still single use
+		self.press(
+			self.buttons()["Approve"], update_id=9122
+		)  # nonces are per-button: Approve after Reject still single use
 		self.assertLessEqual(len(self.calls("deleteMessage")), 1)
 
 	def test_agent_state_change_from_non_owner_chat_is_refused(self):
 		self.assertTrue(self.bind_admin().get("success"))
 		self.api.calls.clear()
 		self.owner = False
-		for action, kw in (("delete_message", {"message_id": 3}), ("ban", {"user_id": 5}), ("pin", {"message_id": 3})):
+		for action, kw in (
+			("delete_message", {"message_id": 3}),
+			("ban", {"user_id": 5}),
+			("pin", {"message_id": 3}),
+		):
 			out = json.loads(self.tool.handle_action(action=action, **kw))
 			self.assertEqual(out["error"], "owner_required", action)
 		self.assertEqual(self.calls("sendMessage"), [])
-		self.assertEqual(self.calls("deleteMessage") + self.calls("banChatMember") + self.calls("pinChatMessage"), [])
+		self.assertEqual(
+			self.calls("deleteMessage") + self.calls("banChatMember") + self.calls("pinChatMessage"), []
+		)
 
 	# -- (6) forwarded / guest content cannot drive admin actions -----------------------------------------------
 
@@ -646,17 +813,27 @@ class TestAdminApproveFlow(WebhookHarness, AdminBase):
 	def test_forwarded_cockpit_command_from_bound_admin_is_not_executed(self):
 		self.assertTrue(self.bind_admin().get("success"))
 		sends_before = len(self.api.of("sendMessage"))
-		fwd = private_msg(9201, "/unbind", uid=int(TG), entities=[{"type": "bot_command", "offset": 0, "length": 7}],
-			forward_origin={"type": "user", "sender_user": _from(88, "Mallory"), "date": 1750000000})
+		fwd = private_msg(
+			9201,
+			"/unbind",
+			uid=int(TG),
+			entities=[{"type": "bot_command", "offset": 0, "length": 7}],
+			forward_origin={"type": "user", "sender_user": _from(88, "Mallory"), "date": 1750000000},
+		)
 		res = self.post(fwd, gateway=ADMIN_GW)
-		self.assertIsNotNone(ta.get_binding(TG, ADMIN_GW, cache=self.cache), "forwarded /unbind removed the binding")
+		self.assertIsNotNone(
+			ta.get_binding(TG, ADMIN_GW, cache=self.cache), "forwarded /unbind removed the binding"
+		)
 		self.assertEqual([c["payload"]["text"] for c in self.api.of("sendMessage")][sends_before:], [])
 		self.assertTrue(res.body is not None)
 
 	def test_guest_message_never_reaches_admin_handlers(self):
 		self.assertTrue(self.bind_admin().get("success"))
 		self.gw.direct_policy = "Open"
-		res = self.post(guest_update(9211, text="/unbind /open Leave Application LA-1", guest_id=int(TG)), gateway=ADMIN_GW)
+		res = self.post(
+			guest_update(9211, text="/unbind /open Leave Application LA-1", guest_id=int(TG)),
+			gateway=ADMIN_GW,
+		)
 		self.assertTrue(res.get("success"))
 		self.assertIsNotNone(ta.get_binding(TG, ADMIN_GW, cache=self.cache))
 		self.assertEqual(self.fx.applied, [])
@@ -665,8 +842,12 @@ class TestAdminApproveFlow(WebhookHarness, AdminBase):
 		self.assertTrue(str(ev.conversation_id).startswith("guest"))
 
 	def test_unbound_sender_cockpit_command_is_plain_traffic(self):
-		res = self.post(private_msg(9221, "/unbind", uid=31337, entities=[
-			{"type": "bot_command", "offset": 0, "length": 7}]), gateway=ADMIN_GW)
+		res = self.post(
+			private_msg(
+				9221, "/unbind", uid=31337, entities=[{"type": "bot_command", "offset": 0, "length": 7}]
+			),
+			gateway=ADMIN_GW,
+		)
 		self.assertTrue(res.get("success"))
 		self.assertEqual(self.calls("sendMessage"), [])
 
@@ -678,15 +859,18 @@ class TestAdminApproveFlow(WebhookHarness, AdminBase):
 
 		self.assertTrue(self.bind_admin().get("success"))
 		fresh = miniapp.build_init_data_for_test(
-			TOKEN, user={"id": int(TG), "first_name": "Ops"}, auth_date=int(time.time()) - 5)
+			TOKEN, user={"id": int(TG), "first_name": "Ops"}, auth_date=int(time.time()) - 5
+		)
 		session = ta.miniapp_auth(fresh, ADMIN_GW, bot_token=TOKEN, cache=self.cache)
 		self.assertEqual(session["role_scope"], "Admin")
 		stale = miniapp.build_init_data_for_test(
-			TOKEN, user={"id": int(TG), "first_name": "Ops"}, auth_date=int(time.time()) - 7 * 3600)
+			TOKEN, user={"id": int(TG), "first_name": "Ops"}, auth_date=int(time.time()) - 7 * 3600
+		)
 		with self.assertRaises(ta.AdminError):
 			ta.miniapp_auth(stale, ADMIN_GW, bot_token=TOKEN, cache=self.cache)
 		forged = miniapp.build_init_data_for_test(
-			"999:other-bot-token", user={"id": int(TG)}, auth_date=int(time.time()))
+			"999:other-bot-token", user={"id": int(TG)}, auth_date=int(time.time())
+		)
 		with self.assertRaises(ta.AdminError):
 			ta.miniapp_auth(forged, ADMIN_GW, bot_token=TOKEN, cache=self.cache)
 		token = session["token"]
@@ -725,7 +909,9 @@ class TestRooms(SynthBase):
 		self.opt_in.assert_called_once()
 		rooms = self.pending()
 		self.assertEqual(len(rooms), 1)
-		self.assertEqual((rooms[0]["state"], rooms[0]["external_id"], rooms[0]["gateway"]), ("Pending", "-100123", GW_NAME))
+		self.assertEqual(
+			(rooms[0]["state"], rooms[0]["external_id"], rooms[0]["gateway"]), ("Pending", "-100123", GW_NAME)
+		)
 		self.assertEqual(self.api.calls, [])  # never talks to an unapproved room
 
 	def test_first_addressed_message_in_unknown_room_goes_pending_not_to_the_agent(self):
@@ -749,14 +935,24 @@ class TestRooms(SynthBase):
 		self.assertEqual(self.pending(), [])
 
 	def test_duplicate_reply_suppressed_only_when_a_tool_already_sent_to_the_chat(self):
-		event = SimpleNamespace(name="EV-1", sender_id="42", conversation_id="-1001234", db_set=lambda *a, **k: None)
+		event = SimpleNamespace(
+			name="EV-1", sender_id="42", conversation_id="-1001234", db_set=lambda *a, **k: None
+		)
 		sent = []
-		suppress = mock.patch.object(gs, "_suppress_reply", side_effect=lambda ev, run, note: {"suppressed": note})
-		attempt = mock.patch.object(gs, "_attempt_reply_parts", side_effect=lambda *a: sent.append(a) or {"status": "Succeeded"})
-		with suppress, attempt, \
-			mock.patch.object(gs, "_reply_finished"), mock.patch.object(gs, "is_opted_out", return_value=False), \
-			mock.patch.object(gs.provider_hooks, "get", return_value=None), \
-			mock.patch.object(tp, "reply_scope", return_value=None):
+		suppress = mock.patch.object(
+			gs, "_suppress_reply", side_effect=lambda ev, run, note: {"suppressed": note}
+		)
+		attempt = mock.patch.object(
+			gs, "_attempt_reply_parts", side_effect=lambda *a: sent.append(a) or {"status": "Succeeded"}
+		)
+		with (
+			suppress,
+			attempt,
+			mock.patch.object(gs, "_reply_finished"),
+			mock.patch.object(gs, "is_opted_out", return_value=False),
+			mock.patch.object(gs.provider_hooks, "get", return_value=None),
+			mock.patch.object(tp, "reply_scope", return_value=None),
+		):
 			with mock.patch.object(tg_scope, "current_chat_texts", return_value=["Done, pinned it."]):
 				out = gs._send_telegram_reply(event, self.gw, "run-1", "I pinned the message for you.")
 			self.assertEqual(out, {"suppressed": tp.DUPLICATE_NOTE})
@@ -781,9 +977,13 @@ class TestRooms(SynthBase):
 		self.patch("huf.ai.gateway_service._live_room_entry", return_value={"name": "GAE-old"})
 		real = {("Room", "-100123"): True}
 		self.has_entry.side_effect = lambda gw, kind, ext: real.get((kind, str(ext)), False)
-		old_doc = SimpleNamespace(state="Approved", display_label="Club", notes="", expires_at=None, approved_by="a@x.com")
+		old_doc = SimpleNamespace(
+			state="Approved", display_label="Club", notes="", expires_at=None, approved_by="a@x.com"
+		)
 		inner = self.fallback_get_doc
-		self.fallback_get_doc = lambda *a, **k: old_doc if a[:2] == ("Gateway Access Entry", "GAE-old") else inner(*a, **k)
+		self.fallback_get_doc = (
+			lambda *a, **k: old_doc if a[:2] == ("Gateway Access Entry", "GAE-old") else inner(*a, **k)
+		)
 		self.patch("huf.ai.gateway_service._save_entry")
 		self.assertTrue(groups.migrate_room(self.gw, "-100123", "-1001999888777"))
 		dropped.assert_called_once_with(self.gw, "-1001999888777")
@@ -798,14 +998,29 @@ class TestRooms(SynthBase):
 		real = {("Room", "-100123"): True}
 		self.has_entry.side_effect = lambda gw, kind, ext: real.get((kind, str(ext)), False)
 		self.patch("huf.ai.gateway_service._live_room_entry", return_value={"name": "GAE-old"})
-		old_doc = SimpleNamespace(db_set=lambda *a, **k: moves.append(("old", a)), state="Approved",
-			display_label="Club", notes="", expires_at=None, approved_by="a@x.com")
+		old_doc = SimpleNamespace(
+			db_set=lambda *a, **k: moves.append(("old", a)),
+			state="Approved",
+			display_label="Club",
+			notes="",
+			expires_at=None,
+			approved_by="a@x.com",
+		)
 		inner = self.fallback_get_doc
-		self.fallback_get_doc = lambda *a, **k: old_doc if a[:2] == ("Gateway Access Entry", "GAE-old") else inner(*a, **k)
+		self.fallback_get_doc = (
+			lambda *a, **k: old_doc if a[:2] == ("Gateway Access Entry", "GAE-old") else inner(*a, **k)
+		)
 		saved = self.patch("huf.ai.gateway_service._save_entry")
-		payload = {"update_id": 640, "message": {
-			"message_id": 1, "from": _from(777), "chat": {"id": -100123, "type": "group", "title": "Club"},
-			"date": int(time.time()), "migrate_to_chat_id": -1001999888777}}
+		payload = {
+			"update_id": 640,
+			"message": {
+				"message_id": 1,
+				"from": _from(777),
+				"chat": {"id": -100123, "type": "group", "title": "Club"},
+				"date": int(time.time()),
+				"migrate_to_chat_id": -1001999888777,
+			},
+		}
 		res = self.post(payload)
 		self.assertEqual(res.get("note"), "migrated", res.body)
 		new = [c for c in self.created if c.get("entry_type") == "Room"]
@@ -843,7 +1058,9 @@ class TestJoinAndWelcome(SynthBase):
 		self.assertEqual(res.get("decision"), "queue")
 		self.assertEqual(self.calls("approveChatJoinRequest"), [])
 		kwargs = [k for a, k in self.enqueued if a and a[0] == "huf.ai.telegram_guard.resolve_agent_join"][0]
-		out = tg.resolve_agent_join(kwargs["gateway_name"], kwargs["ctx"], runner=lambda g, p, c: '{"decision": "approve"}')
+		out = tg.resolve_agent_join(
+			kwargs["gateway_name"], kwargs["ctx"], runner=lambda g, p, c: '{"decision": "approve"}'
+		)
 		self.assertEqual(out, "queue")
 		self.assertEqual(self.calls("approveChatJoinRequest"), [])
 
@@ -851,8 +1068,10 @@ class TestJoinAndWelcome(SynthBase):
 		self.gate.telegram_guard_captcha = 1
 		self.patch("frappe.utils.get_url", return_value="https://huf.example.com")
 		self.patch("huf.ai.telegram_guard._bot_token", return_value=TOKEN)
-		self.patch("huf.ai.telegram_guard.make_question",
-			return_value={"kind": "math", "prompt": "What is 2 + 3?", "options": [], "answer": "5"})
+		self.patch(
+			"huf.ai.telegram_guard.make_question",
+			return_value={"kind": "math", "prompt": "What is 2 + 3?", "options": [], "answer": "5"},
+		)
 		res = self.post(join_update(720, query_id="q-guard"))
 		self.assertEqual(res.get("decision"), "defer")
 		web = self.api.last("sendChatJoinRequestWebApp")["payload"]
@@ -874,10 +1093,16 @@ class TestJoinAndWelcome(SynthBase):
 		self.gate.telegram_welcome_template = "Welcome"
 		sent = []
 		fake_mod = SimpleNamespace(send_template=lambda *a, **k: sent.append(a) or {})
-		with mock.patch.dict(sys.modules, {"huf.ai.telegram_templates": fake_mod}), \
-			mock.patch("huf.ai.telegram_templates", fake_mod, create=True):
+		with (
+			mock.patch.dict(sys.modules, {"huf.ai.telegram_templates": fake_mod}),
+			mock.patch("huf.ai.telegram_templates", fake_mod, create=True),
+		):
 			for n in range(tg.WELCOME_CHAT_CAP + 5):
-				self.post(membership_update(800 + n, "left", "member", kind="chat_member", subject=5000 + n, actor=9))
+				self.post(
+					membership_update(
+						800 + n, "left", "member", kind="chat_member", subject=5000 + n, actor=9
+					)
+				)
 		self.assertEqual(len(sent), tg.WELCOME_CHAT_CAP)
 
 	def test_chat_member_welcome_requires_admitted_room(self):
@@ -885,8 +1110,10 @@ class TestJoinAndWelcome(SynthBase):
 		self.gate.room_policy = "Disabled"
 		sent = []
 		fake_mod = SimpleNamespace(send_template=lambda *a, **k: sent.append(a) or {})
-		with mock.patch.dict(sys.modules, {"huf.ai.telegram_templates": fake_mod}), \
-			mock.patch("huf.ai.telegram_templates", fake_mod, create=True):
+		with (
+			mock.patch.dict(sys.modules, {"huf.ai.telegram_templates": fake_mod}),
+			mock.patch("huf.ai.telegram_templates", fake_mod, create=True),
+		):
 			self.post(membership_update(790, "left", "member", kind="chat_member", subject=5999, actor=9))
 		self.assertEqual(sent, [])
 
@@ -895,7 +1122,13 @@ class TestJoinAndWelcome(SynthBase):
 
 
 def connection_update(update_id, rights=None, enabled=True, conn_id="bc-1"):
-	conn = {"id": conn_id, "user": _from(OWNER, "Owner"), "user_chat_id": OWNER, "date": int(time.time()), "is_enabled": enabled}
+	conn = {
+		"id": conn_id,
+		"user": _from(OWNER, "Owner"),
+		"user_chat_id": OWNER,
+		"date": int(time.time()),
+		"is_enabled": enabled,
+	}
 	if rights is not None:
 		conn["rights"] = rights
 	return {"update_id": update_id, "business_connection": conn}
@@ -903,8 +1136,12 @@ def connection_update(update_id, rights=None, enabled=True, conn_id="bc-1"):
 
 def business_msg(update_id, text="Do you have stock?", conn_id="bc-1", **extra):
 	message = {
-		"message_id": 7, "business_connection_id": conn_id, "from": _from(CUST, "Cust"),
-		"chat": {"id": CUST, "first_name": "Cust", "type": "private"}, "date": int(time.time()), "text": text,
+		"message_id": 7,
+		"business_connection_id": conn_id,
+		"from": _from(CUST, "Cust"),
+		"chat": {"id": CUST, "first_name": "Cust", "type": "private"},
+		"date": int(time.time()),
+		"text": text,
 	}
 	message.update(extra)
 	return {"update_id": update_id, "business_message": message}
@@ -929,8 +1166,12 @@ class TestBusiness(SynthBase):
 		self.assertEqual(res.get("note"), "draft queued")
 		job = [(a, k) for a, k in self.enqueued if a and "run_business_job" in str(a[0])][0][1]
 		self.assertEqual(job["mode"], "draft")
-		with mock.patch.object(bagent, "_run_agent", return_value={"success": True, "response": "Yes, we have stock."}):
-			out = bagent.run_business_job("gw1", "draft", "bc-1", str(CUST), "7", "901", "Do you have stock?", "Cust")
+		with mock.patch.object(
+			bagent, "_run_agent", return_value={"success": True, "response": "Yes, we have stock."}
+		):
+			out = bagent.run_business_job(
+				"gw1", "draft", "bc-1", str(CUST), "7", "901", "Do you have stock?", "Cust"
+			)
 		self.assertEqual(out["result"], "draft")
 		sent = self.api.last("sendMessage")["payload"]
 		self.assertEqual(str(sent["chat_id"]), str(OWNER))
@@ -942,7 +1183,9 @@ class TestBusiness(SynthBase):
 		self.enqueued.clear()
 		res = self.post(business_msg(902))
 		self.assertEqual(res.get("note"), "auto-reply queued")
-		with mock.patch.object(bagent, "_run_agent", return_value={"success": True, "response": "Yes, we have stock."}):
+		with mock.patch.object(
+			bagent, "_run_agent", return_value={"success": True, "response": "Yes, we have stock."}
+		):
 			out = bagent.run_business_job("gw1", "reply", "bc-1", str(CUST), "7", "902", "hi", "Cust")
 		self.assertEqual(out["result"], "replied")
 		sent = self.api.last("sendMessage")["payload"]
@@ -958,8 +1201,10 @@ class TestBusiness(SynthBase):
 			return {"success": True, "response": "ok"}
 
 		ident = SimpleNamespace(authorized=True, reason="")
-		with mock.patch("huf.ai.agent_access.resolve_run_identity_and_authorize", return_value=ident), \
-			mock.patch.object(gs, "_run_agent_serialised", side_effect=serialised):
+		with (
+			mock.patch("huf.ai.agent_access.resolve_run_identity_and_authorize", return_value=ident),
+			mock.patch.object(gs, "_run_agent_serialised", side_effect=serialised),
+		):
 			out = bagent._run_agent(self.gw, "bc-1", str(CUST), "prompt", "idem")
 		self.assertEqual(seen["allowlist"], [])
 		self.assertTrue(out["success"])

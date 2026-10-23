@@ -25,8 +25,14 @@ GW = {"name": "TG-1", "provider": "Telegram"}
 
 def _entry(state="Pending", expires="2999-01-01 00:00:00"):
 	return frappe._dict(
-		name="GAE-1", gateway="TG-1", entry_type="Room", state=state, external_id="join:-100:42",
-		display_label="Join request: @ada -> Club", expires_at=expires, creation="2026-01-01 10:00:00",
+		name="GAE-1",
+		gateway="TG-1",
+		entry_type="Room",
+		state=state,
+		external_id="join:-100:42",
+		display_label="Join request: @ada -> Club",
+		expires_at=expires,
+		creation="2026-01-01 10:00:00",
 	)
 
 
@@ -65,12 +71,21 @@ class TestJoin(unittest.TestCase):
 
 	def test_parse(self):
 		item = g.parse_join_entry(dict(_entry()))
-		self.assertEqual((item["chat_id"], item["user_id"], item["chat_title"], item["user_name"]), ("-100", "42", "Club", "@ada"))
+		self.assertEqual(
+			(item["chat_id"], item["user_id"], item["chat_title"], item["user_name"]),
+			("-100", "42", "Club", "@ada"),
+		)
 		self.assertIsNone(g.parse_join_entry({"name": "x", "external_id": "-100"}))
 
 	def test_permission_denied(self):
 		with mock.patch.object(g, "_require_admin", side_effect=frappe.PermissionError):
-			for fn in (g.list_join_requests, g.decide_join_request, g.list_groups, g.get_group_settings, g.leave_group):
+			for fn in (
+				g.list_join_requests,
+				g.decide_join_request,
+				g.list_groups,
+				g.get_group_settings,
+				g.leave_group,
+			):
 				with self.assertRaises(frappe.PermissionError):
 					fn("TG-1")
 
@@ -93,7 +108,9 @@ class TestJoin(unittest.TestCase):
 		self.assertEqual(self.audit.call_args.args[4], "refused")
 
 	def test_missing_rights_is_clear_and_audited(self):
-		self.client.fail = TelegramApiError("approveChatJoinRequest", "Bad Request: not enough rights", error_code=400)
+		self.client.fail = TelegramApiError(
+			"approveChatJoinRequest", "Bad Request: not enough rights", error_code=400
+		)
 		res = self._decide(_entry(), "approve")
 		self.assertEqual(res["error"], "not_enough_rights")
 		self.assertIn("missing the right", res["message"])

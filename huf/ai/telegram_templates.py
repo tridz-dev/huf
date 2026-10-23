@@ -77,7 +77,17 @@ def _list_rows(gateway_name: str | None) -> list[dict]:
 
 	rows = frappe.get_all(
 		"Telegram Message Template",
-		fields=["name", "template_name", "gateway", "language", "parse_mode", "media_type", "description", "is_active", "last_used_at"],
+		fields=[
+			"name",
+			"template_name",
+			"gateway",
+			"language",
+			"parse_mode",
+			"media_type",
+			"description",
+			"is_active",
+			"last_used_at",
+		],
 		order_by="template_name asc",
 	)
 	return [r for r in rows if not r.get("gateway") or not gateway_name or r.get("gateway") == gateway_name]
@@ -86,7 +96,9 @@ def _list_rows(gateway_name: str | None) -> list[dict]:
 def _touch(name: str) -> None:
 	import frappe
 
-	frappe.db.set_value("Telegram Message Template", name, "last_used_at", frappe.utils.now_datetime(), update_modified=False)
+	frappe.db.set_value(
+		"Telegram Message Template", name, "last_used_at", frappe.utils.now_datetime(), update_modified=False
+	)
 
 
 def _file_bytes(file_url: str) -> tuple[str, bytes]:
@@ -166,7 +178,9 @@ def _media(template: dict, errors: list[str]) -> dict | None:
 	return {"type": mtype, "source": "file_id", "value": value}
 
 
-def _markup(raw: str, vals: dict[str, str], sign: Callable[[str], str] | None, missing: list[str], errors: list[str]) -> dict | None:
+def _markup(
+	raw: str, vals: dict[str, str], sign: Callable[[str], str] | None, missing: list[str], errors: list[str]
+) -> dict | None:
 	if not (raw or "").strip():
 		return None
 	filled = _substitute(raw, vals, _json_safe, missing)
@@ -187,7 +201,11 @@ def _markup(raw: str, vals: dict[str, str], sign: Callable[[str], str] | None, m
 
 
 def render_template(
-	name: str, variables: dict | None = None, gateway: Any = None, *, sign: Callable[[str], str] | None = None,
+	name: str,
+	variables: dict | None = None,
+	gateway: Any = None,
+	*,
+	sign: Callable[[str], str] | None = None,
 	strict: bool = False,
 ) -> RenderedTemplate:
 	"""Render without sending. Raises TemplateError if not found / inactive / wrong gateway, or (strict) on missing vars."""
@@ -213,7 +231,9 @@ def render_template(
 		errors.append(f"text is {len(text)} chars (limit {limit})")
 	if not text.strip() and not media:
 		errors.append("template renders empty")
-	return RenderedTemplate(text=text, parse_mode=mode, media=media, reply_markup=markup, missing=missing, errors=errors)
+	return RenderedTemplate(
+		text=text, parse_mode=mode, media=media, reply_markup=markup, missing=missing, errors=errors
+	)
 
 
 def list_templates(gateway: Any = None) -> list[dict]:
@@ -227,9 +247,14 @@ def preview_template(name: str, variables: dict | None = None, gateway: Any = No
 	Callback payloads are shown unsigned (placeholder)."""
 	r = render_template(name, variables, gateway, sign=lambda p: p)
 	return {
-		"template": name, "text": r.text, "parse_mode": r.parse_mode, "media": r.media,
-		"markup": r.reply_markup, "markup_json": json.dumps(r.reply_markup, sort_keys=True) if r.reply_markup else "",
-		"missing": r.missing, "errors": r.errors,
+		"template": name,
+		"text": r.text,
+		"parse_mode": r.parse_mode,
+		"media": r.media,
+		"markup": r.reply_markup,
+		"markup_json": json.dumps(r.reply_markup, sort_keys=True) if r.reply_markup else "",
+		"missing": r.missing,
+		"errors": r.errors,
 	}
 
 
@@ -241,7 +266,9 @@ def _build_sender(gateway: Any):
 
 
 def _ids(msgs: Any) -> list:
-	return [m.get("message_id") for m in msgs or [] if isinstance(m, dict) and m.get("message_id") is not None]
+	return [
+		m.get("message_id") for m in msgs or [] if isinstance(m, dict) and m.get("message_id") is not None
+	]
 
 
 def _send_text(sender: Any, chat_id: Any, text: str, mode: str, **kw: Any) -> list:
@@ -253,13 +280,26 @@ def _send_text(sender: Any, chat_id: Any, text: str, mode: str, **kw: Any) -> li
 		payload["parse_mode"] = mode
 	if not link_preview:
 		payload["link_preview_options"] = {"is_disabled": True}
-	plain = to_plain(text) if mode == MODE_MARKDOWN_V2 else re.sub(r"<[^>]+>", "", text) if mode == MODE_HTML else text
+	plain = (
+		to_plain(text)
+		if mode == MODE_MARKDOWN_V2
+		else re.sub(r"<[^>]+>", "", text)
+		if mode == MODE_HTML
+		else text
+	)
 	return [sender._call_with_fallback("sendMessage", payload, "text", plain)]
 
 
 def send_template(
-	gateway: Any, chat_id: Any, name: str, variables: dict | None = None, *, thread_id: Any = None,
-	reply_to: Any = None, sender: Any = None, sign: Callable[[str], str] | None = None,
+	gateway: Any,
+	chat_id: Any,
+	name: str,
+	variables: dict | None = None,
+	*,
+	thread_id: Any = None,
+	reply_to: Any = None,
+	sender: Any = None,
+	sign: Callable[[str], str] | None = None,
 	allow_missing: bool = False,
 ) -> dict:
 	"""Render and send. Returns ``{message_ids, template, missing}``.
@@ -289,18 +329,44 @@ def send_template(
 			fname, content = _file_bytes(value)
 			value = (fname, content)
 		inline = bool(text) and len(text) <= TELEGRAM_CAPTION_LIMIT and media["type"] not in _NO_CAPTION
-		extra = {"caption": text, **({"parse_mode": r.parse_mode} if r.parse_mode else {})} if inline else None
+		extra = (
+			{"caption": text, **({"parse_mode": r.parse_mode} if r.parse_mode else {})} if inline else None
+		)
 		msgs = sender.send_media(
-			media["type"], chat_id, value, reply_to=reply_to, extra=extra,
-			markup=r.reply_markup if (inline or not text) else None, **opts,
+			media["type"],
+			chat_id,
+			value,
+			reply_to=reply_to,
+			extra=extra,
+			markup=r.reply_markup if (inline or not text) else None,
+			**opts,
 		)
 		ids += _ids(msgs)
 		if text and not inline:
-			ids += _ids(_send_text(sender, chat_id, text, r.parse_mode, markup=r.reply_markup, link_preview=link_preview, **opts))
+			ids += _ids(
+				_send_text(
+					sender,
+					chat_id,
+					text,
+					r.parse_mode,
+					markup=r.reply_markup,
+					link_preview=link_preview,
+					**opts,
+				)
+			)
 	else:
-		ids += _ids(_send_text(
-			sender, chat_id, text, r.parse_mode, reply_to=reply_to, markup=r.reply_markup, link_preview=link_preview, **opts,
-		))
+		ids += _ids(
+			_send_text(
+				sender,
+				chat_id,
+				text,
+				r.parse_mode,
+				reply_to=reply_to,
+				markup=r.reply_markup,
+				link_preview=link_preview,
+				**opts,
+			)
+		)
 	try:
 		_touch(name)
 	except Exception:

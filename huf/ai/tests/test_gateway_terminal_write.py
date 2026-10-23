@@ -40,8 +40,11 @@ class TestTouchLastEvent(unittest.TestCase):
 
 	def test_persistent_deadlock_logs_warning_type_only(self):
 		logger = mock.Mock()
-		with _db(), _NOW, mock.patch("time.sleep"), mock.patch.object(
-			gw.frappe, "logger", return_value=logger
+		with (
+			_db(),
+			_NOW,
+			mock.patch("time.sleep"),
+			mock.patch.object(gw.frappe, "logger", return_value=logger),
 		):
 			db = frappe.db
 			db.get_value.return_value = None
@@ -63,12 +66,14 @@ class TestCommitOrder(unittest.TestCase):
 			_commit_unless_testing=lambda: order.append("commit"),
 		)
 		gateway = SimpleNamespace(name="GW", provider="Telegram")
-		with mock.patch.object(tp, "_svc", return_value=svc), mock.patch.object(
-			tp, "before_send", side_effect=lambda e, g, p: p
-		), mock.patch.object(
-			tp, "send_parts", return_value=SimpleNamespace(provider_message_id="m2")
-		), _db(), mock.patch(
-			"huf.ai.gateway_webhook.touch_last_event", side_effect=lambda g: order.append("touch")
+		with (
+			mock.patch.object(tp, "_svc", return_value=svc),
+			mock.patch.object(tp, "before_send", side_effect=lambda e, g, p: p),
+			mock.patch.object(tp, "send_parts", return_value=SimpleNamespace(provider_message_id="m2")),
+			_db(),
+			mock.patch(
+				"huf.ai.gateway_webhook.touch_last_event", side_effect=lambda g: order.append("touch")
+			),
 		):
 			frappe.db.get_value.return_value = "sent"
 			res = tp.attempt_parts(event, gateway, ["hi"], 1)
@@ -80,20 +85,33 @@ class TestRepair(unittest.TestCase):
 	def test_repair_restores_reply_message_id_and_status(self):
 		result = {"status": "Succeeded", "agent_run_id": "RUN", "provider_message_id": "tg-9"}
 		lost = {"status": "Running", "agent_run": None, "reply_message_id": None, "reply_status": None}
-		with _db(), mock.patch.object(gs.frappe, "log_error"), mock.patch.object(gs, "_commit_unless_testing"):
+		with (
+			_db(),
+			mock.patch.object(gs.frappe, "log_error"),
+			mock.patch.object(gs, "_commit_unless_testing"),
+		):
 			db = frappe.db
 			db.get_value.return_value = lost
 			gs._persist_terminal_state("E1", result)
 			db.set_value.assert_called_once_with(
 				"Gateway Event",
 				"E1",
-				{"status": "Succeeded", "agent_run": "RUN", "reply_message_id": "tg-9", "reply_status": "sent"},
+				{
+					"status": "Succeeded",
+					"agent_run": "RUN",
+					"reply_message_id": "tg-9",
+					"reply_status": "sent",
+				},
 			)
 
 	def test_no_repair_when_intact(self):
 		result = {"status": "Succeeded", "agent_run_id": "RUN", "provider_message_id": "tg-9"}
 		ok = {"status": "Succeeded", "agent_run": "RUN", "reply_message_id": "tg-9", "reply_status": "sent"}
-		with _db(), mock.patch.object(gs.frappe, "log_error") as le, mock.patch.object(gs, "_commit_unless_testing"):
+		with (
+			_db(),
+			mock.patch.object(gs.frappe, "log_error") as le,
+			mock.patch.object(gs, "_commit_unless_testing"),
+		):
 			db = frappe.db
 			db.get_value.return_value = ok
 			gs._persist_terminal_state("E1", result)

@@ -1,7 +1,7 @@
 """Focused tests for the Gateway Adapter runtime bridge."""
 
-from types import SimpleNamespace
 import unittest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from huf.ai import gateway_webhook

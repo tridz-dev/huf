@@ -5,7 +5,8 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
-from huf.ai.gateway_adapters import telegram_ingest, telegram_stream as ts
+from huf.ai.gateway_adapters import telegram_ingest
+from huf.ai.gateway_adapters import telegram_stream as ts
 from huf.ai.gateway_adapters.telegram_client import TelegramApiError, TelegramBotClient
 from huf.ai.gateway_adapters.telegram_outbound import TelegramSender
 from huf.ai.tests.telegram_fakes import TOKEN, FakeBotApi
@@ -81,7 +82,9 @@ class TestDraftUpdater(unittest.TestCase):
 		u, api, _ = updater(thread_id=9, keep_on_stop=True)
 		u.push("hi")
 		p = api.last("sendMessageDraft")["payload"]
-		self.assertEqual((p["chat_id"], p["message_thread_id"], p["can_stop"], p["keep_on_stop"]), (CHAT, 9, True, True))
+		self.assertEqual(
+			(p["chat_id"], p["message_thread_id"], p["can_stop"], p["keep_on_stop"]), (CHAT, 9, True, True)
+		)
 		self.assertNotIn("parse_mode", p)
 
 	def test_start_sends_empty_thinking(self):
@@ -157,7 +160,13 @@ def fake_stream(chunks, hook=None):
 	return factory
 
 
-COMPLETE = {"type": "complete", "response": "final answer", "full_response": "final answer", "success": True, "agent_run_id": "RUN-1"}
+COMPLETE = {
+	"type": "complete",
+	"response": "final answer",
+	"full_response": "final answer",
+	"success": True,
+	"agent_run_id": "RUN-1",
+}
 CHUNKS = [
 	{"type": "run_started", "agent_run_id": "RUN-1"},
 	{"type": "delta", "content": "hel", "full_response": "hel"},
@@ -172,8 +181,16 @@ class TestRunner(unittest.TestCase):
 		cache = cache or FakeCache()
 		clock = Clock()
 		r = ts.make_runner(
-			make_sender(api), CHAT, "EVT-1", "GW", thread_id=3, keep_on_stop=keep, cache=cache,
-			stream_factory=fake_stream(chunks, hook), clock=clock, min_interval=0,
+			make_sender(api),
+			CHAT,
+			"EVT-1",
+			"GW",
+			thread_id=3,
+			keep_on_stop=keep,
+			cache=cache,
+			stream_factory=fake_stream(chunks, hook),
+			clock=clock,
+			min_interval=0,
 		)
 		return r, api, cache
 
@@ -183,7 +200,9 @@ class TestRunner(unittest.TestCase):
 		self.assertEqual(result["response"], "final answer")
 		texts = [c["payload"]["text"] for c in api.of("sendMessageDraft")]
 		self.assertEqual(texts, ["", "hel", "hello"])
-		self.assertEqual({c["payload"]["draft_id"] for c in api.of("sendMessageDraft")}, {ts.draft_id_for("EVT-1")})
+		self.assertEqual(
+			{c["payload"]["draft_id"] for c in api.of("sendMessageDraft")}, {ts.draft_id_for("EVT-1")}
+		)
 		self.assertEqual(api.of("sendMessage"), [])  # final goes through the pipeline, not here
 		self.assertEqual(cache.get_value(ts._key("GW", CHAT)) in ({}, None), True)
 
@@ -207,7 +226,9 @@ class TestRunner(unittest.TestCase):
 		self.assertEqual(r(agent_name="a", prompt="p")["response"], "final answer")
 
 	def test_stream_error_chunk_marks_failure(self):
-		r, _, _ = self._runner([{"type": "run_started", "agent_run_id": "R"}, {"type": "error", "error": "boom"}])
+		r, _, _ = self._runner(
+			[{"type": "run_started", "agent_run_id": "R"}, {"type": "error", "error": "boom"}]
+		)
 		out = r(agent_name="a", prompt="p")
 		self.assertFalse(out["success"])
 		self.assertEqual(out["error"], "boom")
@@ -219,12 +240,16 @@ class TestRunner(unittest.TestCase):
 	def test_stop_delivers_nothing(self):
 		def hook(chunk):
 			if chunk.get("full_response") == "hel":
-				cache.set_value(ts._key("GW", CHAT), {**cache.get_value(ts._key("GW", CHAT)), "stopped": True})
+				cache.set_value(
+					ts._key("GW", CHAT), {**cache.get_value(ts._key("GW", CHAT)), "stopped": True}
+				)
 
 		cache = FakeCache()
 		r, api, _ = self._runner(
-			CHUNKS[:2] + [{"type": "delta", "full_response": "hello"}, {"type": "error", "error": "Cancelled by user"}],
-			cache=cache, hook=hook,
+			CHUNKS[:2]
+			+ [{"type": "delta", "full_response": "hello"}, {"type": "error", "error": "Cancelled by user"}],
+			cache=cache,
+			hook=hook,
 		)
 		out = r(agent_name="a", prompt="p")
 		self.assertEqual(out["response"], ts.NO_REPLY)
@@ -234,7 +259,9 @@ class TestRunner(unittest.TestCase):
 	def test_stop_keep_on_stop_returns_partial(self):
 		def hook(chunk):
 			if chunk.get("full_response") == "hel":
-				cache.set_value(ts._key("GW", CHAT), {**cache.get_value(ts._key("GW", CHAT)), "stopped": True})
+				cache.set_value(
+					ts._key("GW", CHAT), {**cache.get_value(ts._key("GW", CHAT)), "stopped": True}
+				)
 
 		cache = FakeCache()
 		r, _, _ = self._runner(
@@ -248,8 +275,12 @@ class TestRunner(unittest.TestCase):
 class TestStopHandler(unittest.TestCase):
 	def _parsed(self, draft_id=7):
 		return SimpleNamespace(
-			kind="unsupported", chat_id=str(CHAT),
-			raw={"update_id": 1, "stopped_message_generation": {"chat": {"id": CHAT, "type": "private"}, "draft_id": draft_id}},
+			kind="unsupported",
+			chat_id=str(CHAT),
+			raw={
+				"update_id": 1,
+				"stopped_message_generation": {"chat": {"id": CHAT, "type": "private"}, "draft_id": draft_id},
+			},
 		)
 
 	def test_stop_marks_state_and_cancels_run(self):

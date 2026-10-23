@@ -51,7 +51,12 @@ DRAFT_TTL = 24 * 3600
 OBS_MAX = 100
 TEXT_CAP = 500
 
-BUSINESS_KINDS = ("business_connection", "business_message", "edited_business_message", "deleted_business_messages")
+BUSINESS_KINDS = (
+	"business_connection",
+	"business_message",
+	"edited_business_message",
+	"deleted_business_messages",
+)
 
 
 # Returned by an async draft producer that enqueued its job: the draft will reach the owner later.
@@ -204,7 +209,7 @@ def record_observation(gateway_name: str, entry: dict) -> None:
 	if entry.get("text"):
 		entry["text"] = str(entry["text"])[:TEXT_CAP]
 	key = f"huf:tgbiz:obs:{gateway_name}"
-	items = (_get(key) or [])[-(OBS_MAX - 1):] + [entry]
+	items = (_get(key) or [])[-(OBS_MAX - 1) :] + [entry]
 	_put(key, items, CONN_TTL)
 	frappe.logger("huf").info(
 		f"Telegram business {gateway_name}: {entry.get('event')} conn={entry.get('connection_id')}"
@@ -280,7 +285,9 @@ def handle_business_message(gateway, adapter, parsed, request=None) -> dict:
 		policy = policy if policy == "ignore" else "observe"
 	if policy == "ignore":
 		return _ack("policy ignore", policy="ignore")
-	record_observation(gateway.name, {**base, "event": "edit" if edited else "message", "policy": policy, "note": reason})
+	record_observation(
+		gateway.name, {**base, "event": "edit" if edited else "message", "policy": policy, "note": reason}
+	)
 	if policy == "draft":
 		text = None
 		try:
@@ -290,11 +297,15 @@ def handle_business_message(gateway, adapter, parsed, request=None) -> dict:
 		if text is DRAFT_QUEUED:
 			return _ack("draft queued", policy="draft", draft_queued=True)
 		if text:
-			draft_id = deliver_draft(adapter, conn, parsed.chat_id, parsed.message_id, text, parsed.display_name)
+			draft_id = deliver_draft(
+				adapter, conn, parsed.chat_id, parsed.message_id, text, parsed.display_name
+			)
 			return _ack("draft sent to owner", policy="draft", draft_id=draft_id)
 		return _ack("no draft produced", policy="observe")
 	if policy == "reply":
-		return _ack("auto-reply requires the agent-run trigger (coordinator)", policy="reply", needs_agent_run=True)
+		return _ack(
+			"auto-reply requires the agent-run trigger (coordinator)", policy="reply", needs_agent_run=True
+		)
 	return _ack("observed", policy="observe")
 
 
@@ -395,11 +406,11 @@ def deliver_draft(adapter, conn: dict, chat_id: str, message_id: str, text: str,
 	owner_chat = conn["user_chat_id"]
 
 	def button(label: str, action: str):
-		return kb.callback_button(label, adapter.sign_callback_data(f"{CALLBACK_PREFIX}:{action}:{draft_id}", owner_chat))
+		return kb.callback_button(
+			label, adapter.sign_callback_data(f"{CALLBACK_PREFIX}:{action}:{draft_id}", owner_chat)
+		)
 
-	markup = kb.inline_keyboard(
-		[[button("Approve", "a"), button("Edit", "e"), button("Reject", "r")]]
-	)
+	markup = kb.inline_keyboard([[button("Approve", "a"), button("Edit", "e"), button("Reject", "r")]])
 	header = f"Draft reply to {who or chat_id}:\n\n"
 	sent = adapter.sender.send_text(owner_chat, header + text, markup=markup)
 	try:
@@ -525,7 +536,11 @@ def _draft_callback(adapter, parsed, payload: str) -> dict:
 	if str(parsed.sender_id) != draft["owner_id"]:
 		return {"result": "forbidden"}
 	if draft["status"] == "failed":
-		return {"result": "failed", "reason": "this draft failed and can't be retried", "toast": "This draft failed to send and can't be retried"}
+		return {
+			"result": "failed",
+			"reason": "this draft failed and can't be retried",
+			"toast": "This draft failed to send and can't be retried",
+		}
 	if draft["status"] not in ("pending", "editing"):
 		return {"result": "stale"}
 	if action == "r":
@@ -566,7 +581,11 @@ def _send_draft(adapter, draft: dict, text: str, restore: str = "pending", parse
 	_finish(draft, "sending")  # claim first: a double tap must not send twice
 	try:
 		reply_as_business(
-			draft["connection_id"], draft["chat_id"], text, sender=adapter.sender, reply_to=draft["message_id"]
+			draft["connection_id"],
+			draft["chat_id"],
+			text,
+			sender=adapter.sender,
+			reply_to=draft["message_id"],
 		)
 	except Exception as exc:
 		kind, reason = classify_send_error(exc)
@@ -578,8 +597,14 @@ def _send_draft(adapter, draft: dict, text: str, restore: str = "pending", parse
 		else:
 			_finish(draft, restore)
 			result = "blocked" if blocked else "retry"
-			note = "Send your replacement text again to retry." if restore == "editing" else "Tap Approve to retry."
-		_notify_owner(adapter, draft.get("owner_chat") or draft["owner_id"], f"Could not send: {reason}. {note}")
+			note = (
+				"Send your replacement text again to retry."
+				if restore == "editing"
+				else "Tap Approve to retry."
+			)
+		_notify_owner(
+			adapter, draft.get("owner_chat") or draft["owner_id"], f"Could not send: {reason}. {note}"
+		)
 		out = {"result": result, "reason": reason}
 		if blocked:
 			out["reason_code"] = exc.reason

@@ -26,8 +26,17 @@ MediaInput = Union[str, bytes, tuple]
 
 CHAT_ACTIONS = frozenset(
 	{
-		"typing", "upload_photo", "record_video", "upload_video", "record_voice", "upload_voice",
-		"upload_document", "choose_sticker", "find_location", "record_video_note", "upload_video_note",
+		"typing",
+		"upload_photo",
+		"record_video",
+		"upload_video",
+		"record_voice",
+		"upload_voice",
+		"upload_document",
+		"choose_sticker",
+		"find_location",
+		"record_video_note",
+		"upload_video_note",
 	}
 )
 
@@ -44,8 +53,15 @@ MEDIA_METHODS: dict[str, tuple[str, str]] = {
 	"sticker": ("sendSticker", "sticker"),
 }
 _NO_CAPTION = frozenset({"sticker", "video_note"})
-_DEFAULT_NAMES = {"photo": "photo.jpg", "voice": "voice.ogg", "audio": "audio.mp3", "video": "video.mp4",
-	"animation": "animation.mp4", "sticker": "sticker.webp", "video_note": "video_note.mp4"}
+_DEFAULT_NAMES = {
+	"photo": "photo.jpg",
+	"voice": "voice.ogg",
+	"audio": "audio.mp3",
+	"video": "video.mp4",
+	"animation": "animation.mp4",
+	"sticker": "sticker.webp",
+	"video_note": "video_note.mp4",
+}
 
 
 def _upload_part(kind: str, value: MediaInput) -> tuple[Any, tuple | None]:
@@ -65,7 +81,9 @@ def _upload_part(kind: str, value: MediaInput) -> tuple[Any, tuple | None]:
 class TelegramSender:
 	"""Outbound operations. ``parse_mode`` is the format applied to agent text ("" = send verbatim)."""
 
-	def __init__(self, client: TelegramBotClient, *, parse_mode: str = MODE_PLAIN, reply_style: str = "parameters") -> None:
+	def __init__(
+		self, client: TelegramBotClient, *, parse_mode: str = MODE_PLAIN, reply_style: str = "parameters"
+	) -> None:
 		if parse_mode not in (MODE_PLAIN, MODE_HTML, MODE_MARKDOWN_V2):
 			raise ValueError("parse_mode must be '', 'HTML' or 'MarkdownV2'")
 		if reply_style not in ("parameters", "legacy"):
@@ -77,8 +95,15 @@ class TelegramSender:
 	# -- helpers -------------------------------------------------------------------------------
 
 	def _common(
-		self, chat_id: Any, *, reply_to: Any = None, thread_id: Any = None, markup: Mapping[str, Any] | None = None,
-		silent: bool = False, protect: bool = False, effect_id: str | None = None,
+		self,
+		chat_id: Any,
+		*,
+		reply_to: Any = None,
+		thread_id: Any = None,
+		markup: Mapping[str, Any] | None = None,
+		silent: bool = False,
+		protect: bool = False,
+		effect_id: str | None = None,
 		ephemeral: Mapping[str, Any] | None = None,
 	) -> dict[str, Any]:
 		payload: dict[str, Any] = {"chat_id": chat_id}
@@ -124,9 +149,18 @@ class TelegramSender:
 	# -- text ----------------------------------------------------------------------------------
 
 	def send_text(
-		self, chat_id: Any, text: str, *, reply_to: Any = None, thread_id: Any = None,
-		markup: Mapping[str, Any] | None = None, silent: bool = False, protect: bool = False,
-		link_preview: bool = True, effect_id: str | None = None, ephemeral: dict | None = None,
+		self,
+		chat_id: Any,
+		text: str,
+		*,
+		reply_to: Any = None,
+		thread_id: Any = None,
+		markup: Mapping[str, Any] | None = None,
+		silent: bool = False,
+		protect: bool = False,
+		link_preview: bool = True,
+		effect_id: str | None = None,
+		ephemeral: dict | None = None,
 	) -> list[Mapping[str, Any]]:
 		"""Send ``text`` as one or more messages (<= 4096 chars each); returns the Message dicts."""
 		parts = render_parts(text, self.parse_mode)
@@ -136,9 +170,14 @@ class TelegramSender:
 		for i, part in enumerate(parts):
 			last = i == len(parts) - 1
 			payload = self._common(
-				chat_id, reply_to=reply_to if i == 0 else None, thread_id=thread_id,
-				markup=markup if last else None, silent=silent, protect=protect,
-				effect_id=effect_id if i == 0 else None, ephemeral=ephemeral,
+				chat_id,
+				reply_to=reply_to if i == 0 else None,
+				thread_id=thread_id,
+				markup=markup if last else None,
+				silent=silent,
+				protect=protect,
+				effect_id=effect_id if i == 0 else None,
+				ephemeral=ephemeral,
 			)
 			payload["text"] = part.text
 			if part.parse_mode:
@@ -149,8 +188,15 @@ class TelegramSender:
 		return results
 
 	def send_rich_message(
-		self, chat_id: Any, *, markdown: str | None = None, html: str | None = None, reply_to: Any = None,
-		thread_id: Any = None, markup: Mapping[str, Any] | None = None, silent: bool = False,
+		self,
+		chat_id: Any,
+		*,
+		markdown: str | None = None,
+		html: str | None = None,
+		reply_to: Any = None,
+		thread_id: Any = None,
+		markup: Mapping[str, Any] | None = None,
+		silent: bool = False,
 	) -> Mapping[str, Any]:
 		"""Bot API 10.1 ``sendRichMessage``: exactly one of ``markdown`` / ``html``."""
 		if (markdown is None) == (html is None):
@@ -160,8 +206,15 @@ class TelegramSender:
 		return self.client.call("sendRichMessage", payload)
 
 	def send_message_draft(
-		self, chat_id: Any, draft_id: int, text: str = "", *, thread_id: Any = None, parse_mode: str | None = None,
-		can_stop: bool = False, keep_on_stop: bool = False,
+		self,
+		chat_id: Any,
+		draft_id: int,
+		text: str = "",
+		*,
+		thread_id: Any = None,
+		parse_mode: str | None = None,
+		can_stop: bool = False,
+		keep_on_stop: bool = False,
 	) -> Any:
 		"""Streaming preview (private chats only; ephemeral ~30s). Empty ``text`` shows "Thinking...".
 		Finalize with ``send_text``. ``draft_id`` must be non-zero."""
@@ -179,15 +232,23 @@ class TelegramSender:
 		return self.client.call("sendMessageDraft", payload)
 
 	def send_rich_message_draft(
-		self, chat_id: Any, draft_id: int, *, markdown: str | None = None, html: str | None = None,
-		thread_id: Any = None, can_stop: bool = False, keep_on_stop: bool = False,
+		self,
+		chat_id: Any,
+		draft_id: int,
+		*,
+		markdown: str | None = None,
+		html: str | None = None,
+		thread_id: Any = None,
+		can_stop: bool = False,
+		keep_on_stop: bool = False,
 	) -> Any:
 		if not draft_id:
 			raise ValueError("draft_id must be non-zero")
 		if (markdown is None) == (html is None):
 			raise ValueError("Pass exactly one of markdown or html")
 		payload: dict[str, Any] = {
-			"chat_id": chat_id, "draft_id": int(draft_id),
+			"chat_id": chat_id,
+			"draft_id": int(draft_id),
 			"rich_message": {"markdown": markdown} if markdown is not None else {"html": html},
 		}
 		if thread_id not in (None, ""):
@@ -201,9 +262,19 @@ class TelegramSender:
 	# -- media ---------------------------------------------------------------------------------
 
 	def send_media(
-		self, kind: str, chat_id: Any, media: MediaInput, *, caption: str = "", reply_to: Any = None,
-		thread_id: Any = None, markup: Mapping[str, Any] | None = None, silent: bool = False,
-		protect: bool = False, extra: Mapping[str, Any] | None = None, ephemeral: dict | None = None,
+		self,
+		kind: str,
+		chat_id: Any,
+		media: MediaInput,
+		*,
+		caption: str = "",
+		reply_to: Any = None,
+		thread_id: Any = None,
+		markup: Mapping[str, Any] | None = None,
+		silent: bool = False,
+		protect: bool = False,
+		extra: Mapping[str, Any] | None = None,
+		ephemeral: dict | None = None,
 	) -> list[Mapping[str, Any]]:
 		"""Send one media item. A caption over 1024 chars is sent as a follow-up text message."""
 		if kind not in MEDIA_METHODS:
@@ -211,7 +282,12 @@ class TelegramSender:
 		method, field = MEDIA_METHODS[kind]
 		value, upload = _upload_part(kind, media)
 		payload = self._common(
-			chat_id, reply_to=reply_to, thread_id=thread_id, markup=markup, silent=silent, protect=protect,
+			chat_id,
+			reply_to=reply_to,
+			thread_id=thread_id,
+			markup=markup,
+			silent=silent,
+			protect=protect,
 			ephemeral=ephemeral,
 		)
 		files = None
@@ -265,7 +341,12 @@ class TelegramSender:
 		return self.send_media("sticker", chat_id, media, **kw)
 
 	def send_media_group(
-		self, chat_id: Any, items: Sequence[Mapping[str, Any]], *, reply_to: Any = None, thread_id: Any = None,
+		self,
+		chat_id: Any,
+		items: Sequence[Mapping[str, Any]],
+		*,
+		reply_to: Any = None,
+		thread_id: Any = None,
 		silent: bool = False,
 	) -> Sequence[Mapping[str, Any]]:
 		"""``items``: 2-10 dicts ``{"type": photo|video|audio|document, "media": MediaInput, "caption": str}``."""
@@ -293,16 +374,31 @@ class TelegramSender:
 		return self.client.call("sendMediaGroup", payload, files=files or None)
 
 	def send_location(
-		self, chat_id: Any, latitude: float, longitude: float, *, reply_to: Any = None, thread_id: Any = None,
-		markup: Mapping[str, Any] | None = None, silent: bool = False,
+		self,
+		chat_id: Any,
+		latitude: float,
+		longitude: float,
+		*,
+		reply_to: Any = None,
+		thread_id: Any = None,
+		markup: Mapping[str, Any] | None = None,
+		silent: bool = False,
 	) -> Mapping[str, Any]:
 		payload = self._common(chat_id, reply_to=reply_to, thread_id=thread_id, markup=markup, silent=silent)
 		payload.update({"latitude": latitude, "longitude": longitude})
 		return self.client.call("sendLocation", payload)
 
 	def send_contact(
-		self, chat_id: Any, phone_number: str, first_name: str, *, last_name: str = "", reply_to: Any = None,
-		thread_id: Any = None, markup: Mapping[str, Any] | None = None, silent: bool = False,
+		self,
+		chat_id: Any,
+		phone_number: str,
+		first_name: str,
+		*,
+		last_name: str = "",
+		reply_to: Any = None,
+		thread_id: Any = None,
+		markup: Mapping[str, Any] | None = None,
+		silent: bool = False,
 	) -> Mapping[str, Any]:
 		payload = self._common(chat_id, reply_to=reply_to, thread_id=thread_id, markup=markup, silent=silent)
 		payload.update({"phone_number": phone_number, "first_name": first_name})
@@ -332,7 +428,12 @@ class TelegramSender:
 		return self.client.call("sendChatAction", payload)
 
 	def answer_callback_query(
-		self, callback_query_id: str, text: str = "", *, show_alert: bool = False, url: str | None = None,
+		self,
+		callback_query_id: str,
+		text: str = "",
+		*,
+		show_alert: bool = False,
+		url: str | None = None,
 		cache_time: int | None = None,
 	) -> Any:
 		payload: dict[str, Any] = {"callback_query_id": callback_query_id}
@@ -349,7 +450,12 @@ class TelegramSender:
 	# -- edit / delete / pin -------------------------------------------------------------------
 
 	def edit_message_text(
-		self, chat_id: Any, message_id: Any, text: str, *, markup: Mapping[str, Any] | None = None,
+		self,
+		chat_id: Any,
+		message_id: Any,
+		text: str,
+		*,
+		markup: Mapping[str, Any] | None = None,
 		link_preview: bool = True,
 	) -> Mapping[str, Any] | None:
 		"""Edit in place (single message, <= 4096 chars). Returns ``None`` when nothing changed."""
@@ -396,7 +502,11 @@ class TelegramSender:
 		"""Replace the inline keyboard; ``None`` removes it."""
 		return self.client.call(
 			"editMessageReplyMarkup",
-			{"chat_id": chat_id, "message_id": int(message_id), "reply_markup": dict(markup or {"inline_keyboard": []})},
+			{
+				"chat_id": chat_id,
+				"message_id": int(message_id),
+				"reply_markup": dict(markup or {"inline_keyboard": []}),
+			},
 		)
 
 	def delete_message(self, chat_id: Any, message_id: Any) -> Any:

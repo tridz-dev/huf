@@ -18,21 +18,45 @@ if not hasattr(frappe.local, "flags"):
 if not hasattr(frappe.local, "session"):
 	frappe.local.session = frappe._dict(user="tester@example.com")
 
-GW = {"name": "TG-1", "provider": "Telegram", "is_enabled": 1, "integration_settings": "x", "last_event_at": None, "last_error": None}
+GW = {
+	"name": "TG-1",
+	"provider": "Telegram",
+	"is_enabled": 1,
+	"integration_settings": "x",
+	"last_event_at": None,
+	"last_error": None,
+}
 TOKEN = "123456789:" + "A" * 35
 
 
 def _event(i, update, **kw):
 	return {
-		"name": f"EV-{i:03d}", "creation": f"2026-01-01 10:{59 - i:02d}:00", "status": "Completed", "sender_id": "42",
-		"message_text": kw.get("text", "hi"), "reply_status": "", "reply_message_id": "", "delivery_error": kw.get("derr", ""),
-		"error_message": kw.get("err", ""), "agent_run": None, "target_agent": None,
-		"raw_payload": json.dumps(update), "conversation_id": "42",
+		"name": f"EV-{i:03d}",
+		"creation": f"2026-01-01 10:{59 - i:02d}:00",
+		"status": "Completed",
+		"sender_id": "42",
+		"message_text": kw.get("text", "hi"),
+		"reply_status": "",
+		"reply_message_id": "",
+		"delivery_error": kw.get("derr", ""),
+		"error_message": kw.get("err", ""),
+		"agent_run": None,
+		"target_agent": None,
+		"raw_payload": json.dumps(update),
+		"conversation_id": "42",
 	}
 
 
 def _msg(**extra):
-	return {"update_id": 1, "message": {"message_id": 1, "from": {"id": 42, "first_name": "Ada", "last_name": "L"}, "chat": {"id": 42}, **extra}}
+	return {
+		"update_id": 1,
+		"message": {
+			"message_id": 1,
+			"from": {"id": 42, "first_name": "Ada", "last_name": "L"},
+			"chat": {"id": 42},
+			**extra,
+		},
+	}
 
 
 class FakeSender:
@@ -75,8 +99,15 @@ class TestClassify(unittest.TestCase):
 
 class TestPermissions(unittest.TestCase):
 	def test_denied_for_non_admin(self):
-		with mock.patch("huf.ai.telegram_management._require_gateway_admin", side_effect=frappe.PermissionError):
-			for fn, args in ((m.list_messages, ()), (m.list_access, ()), (m.list_bindings, ()), (m.send_message, ("TG-1", "42", "x"))):
+		with mock.patch(
+			"huf.ai.telegram_management._require_gateway_admin", side_effect=frappe.PermissionError
+		):
+			for fn, args in (
+				(m.list_messages, ()),
+				(m.list_access, ()),
+				(m.list_bindings, ()),
+				(m.send_message, ("TG-1", "42", "x")),
+			):
 				with self.assertRaises(frappe.PermissionError):
 					fn(*(("TG-1",) + args[1:] if args else ("TG-1",)))
 
@@ -91,7 +122,9 @@ class TestMessages(unittest.TestCase):
 		self.addCleanup(p.stop)
 
 	def _run(self, events, **kw):
-		def get_all(doctype, filters=None, or_filters=None, fields=None, order_by=None, limit_page_length=None):
+		def get_all(
+			doctype, filters=None, or_filters=None, fields=None, order_by=None, limit_page_length=None
+		):
 			bound = next((f[3] for f in filters if f[1] == "creation"), None)
 			rows = [e for e in events if bound is None or e["creation"] <= bound]
 			return rows[:limit_page_length]
@@ -112,7 +145,11 @@ class TestMessages(unittest.TestCase):
 		self.assertIsNone(third["next_cursor"])
 
 	def test_kind_filter_and_redaction(self):
-		events = [_event(0, _msg(text="a"), err=f"x {TOKEN}"), _event(1, _msg(voice={"file_id": "v"})), _event(2, {"callback_query": {}})]
+		events = [
+			_event(0, _msg(text="a"), err=f"x {TOKEN}"),
+			_event(1, _msg(voice={"file_id": "v"})),
+			_event(2, {"callback_query": {}}),
+		]
 		res = self._run(events, filters={"kind": "voice"})
 		self.assertEqual([i["name"] for i in res["items"]], ["EV-001"])
 		allres = self._run(events)
@@ -120,7 +157,12 @@ class TestMessages(unittest.TestCase):
 		self.assertEqual(self._run(events, filters={"kind": "bogus"})["error"], "invalid_kind")
 
 	def test_get_message_other_gateway_hidden(self):
-		with mock.patch.object(frappe.local, "db", mock.MagicMock(**{"get_value.return_value": {**_event(0, _msg()), "gateway": "OTHER"}}), create=True):
+		with mock.patch.object(
+			frappe.local,
+			"db",
+			mock.MagicMock(**{"get_value.return_value": {**_event(0, _msg()), "gateway": "OTHER"}}),
+			create=True,
+		):
 			self.assertEqual(m.get_message("TG-1", "EV-000")["error"], "not_found")
 
 
@@ -187,12 +229,22 @@ class TestAccessBindings(unittest.TestCase):
 		self.addCleanup(p.stop)
 
 	def test_approve_other_gateway_entry_refused(self):
-		with mock.patch.object(frappe.local, "db", mock.MagicMock(**{"get_value.return_value": "OTHER"}), create=True), mock.patch("huf.ai.gateway_service.approve_gateway_pairing") as ap:
+		with (
+			mock.patch.object(
+				frappe.local, "db", mock.MagicMock(**{"get_value.return_value": "OTHER"}), create=True
+			),
+			mock.patch("huf.ai.gateway_service.approve_gateway_pairing") as ap,
+		):
 			self.assertEqual(m.approve_access("TG-1", "E-1")["error"], "not_found")
 			ap.assert_not_called()
 
 	def test_revoke_binding_scoped_to_gateway(self):
-		with mock.patch.object(frappe.local, "db", mock.MagicMock(**{"get_value.return_value": "OTHER"}), create=True), mock.patch("huf.ai.telegram_admin.revoke_binding") as rv:
+		with (
+			mock.patch.object(
+				frappe.local, "db", mock.MagicMock(**{"get_value.return_value": "OTHER"}), create=True
+			),
+			mock.patch("huf.ai.telegram_admin.revoke_binding") as rv,
+		):
 			self.assertEqual(m.revoke_binding("TG-1", "B-1")["error"], "not_found")
 			rv.assert_not_called()
 

@@ -30,7 +30,10 @@ class TestSenders(Base):
 		self.assertEqual(
 			call["payload"],
 			{
-				"chat_id": 5, "message_thread_id": 3, "text": "hi", "disable_notification": True,
+				"chat_id": 5,
+				"message_thread_id": 3,
+				"text": "hi",
+				"disable_notification": True,
 				"reply_parameters": {"message_id": 9, "allow_sending_without_reply": True},
 			},
 		)
@@ -64,8 +67,14 @@ class TestSenders(Base):
 
 	def test_every_media_method(self):
 		expected = {
-			"photo": "sendPhoto", "document": "sendDocument", "audio": "sendAudio", "voice": "sendVoice",
-			"video": "sendVideo", "animation": "sendAnimation", "sticker": "sendSticker", "video_note": "sendVideoNote",
+			"photo": "sendPhoto",
+			"document": "sendDocument",
+			"audio": "sendAudio",
+			"voice": "sendVoice",
+			"video": "sendVideo",
+			"animation": "sendAnimation",
+			"sticker": "sendSticker",
+			"video_note": "sendVideoNote",
 		}
 		for kind, method in expected.items():
 			with self.subTest(kind):
@@ -85,7 +94,9 @@ class TestSenders(Base):
 		self.assertNotIn("caption", self.api.last()["payload"])
 
 	def test_media_group_with_upload(self):
-		self.sender.send_media_group(5, [{"type": "photo", "media": "A", "caption": "one"}, {"type": "photo", "media": b"jpg"}])
+		self.sender.send_media_group(
+			5, [{"type": "photo", "media": "A", "caption": "one"}, {"type": "photo", "media": b"jpg"}]
+		)
 		call = self.api.last("sendMediaGroup")
 		media = json.loads(call["payload"]["media"])  # multipart: non-scalar fields are JSON strings
 		self.assertEqual(media[0], {"type": "photo", "media": "A", "caption": "one"})
@@ -112,7 +123,9 @@ class TestSenders(Base):
 
 	def test_chat_action(self):
 		self.sender.send_chat_action(5, "upload_photo", thread_id=2)
-		self.assertEqual(self.api.last()["payload"], {"chat_id": 5, "action": "upload_photo", "message_thread_id": 2})
+		self.assertEqual(
+			self.api.last()["payload"], {"chat_id": 5, "action": "upload_photo", "message_thread_id": 2}
+		)
 		with self.assertRaises(ValueError):
 			self.sender.send_chat_action(5, "dance")
 
@@ -180,7 +193,9 @@ class TestFormattedSend(Base):
 
 class TestClientErrors(Base):
 	def test_flood_control_retry_after_not_retried_by_default(self):
-		self.api.queue("sendMessage", FakeBotApi.error("Too Many Requests: retry after 7", 429, retry_after=7))
+		self.api.queue(
+			"sendMessage", FakeBotApi.error("Too Many Requests: retry after 7", 429, retry_after=7)
+		)
 		with self.assertRaises(TelegramApiError) as ctx:
 			self.client.call("sendMessage", {"chat_id": 1, "text": "x"})
 		err = ctx.exception
@@ -189,14 +204,18 @@ class TestClientErrors(Base):
 		self.assertFalse(err.blocked_by_user)
 
 	def test_flood_control_auto_retry_when_short(self):
-		client = TelegramBotClient(TOKEN, http_post=self.api.http_post, max_flood_retries=1, sleep=self.sleeps.append)
+		client = TelegramBotClient(
+			TOKEN, http_post=self.api.http_post, max_flood_retries=1, sleep=self.sleeps.append
+		)
 		self.api.queue("sendMessage", FakeBotApi.error("Too Many Requests", 429, retry_after=2))
 		client.call("sendMessage", {"chat_id": 1, "text": "x"})
 		self.assertEqual(self.sleeps, [2])
 		self.assertEqual(len(self.api.of("sendMessage")), 2)
 
 	def test_flood_control_not_auto_retried_when_long(self):
-		client = TelegramBotClient(TOKEN, http_post=self.api.http_post, max_flood_retries=1, sleep=self.sleeps.append)
+		client = TelegramBotClient(
+			TOKEN, http_post=self.api.http_post, max_flood_retries=1, sleep=self.sleeps.append
+		)
 		self.api.queue("sendMessage", FakeBotApi.error("Too Many Requests", 429, retry_after=60))
 		with self.assertRaises(TelegramApiError):
 			client.call("sendMessage", {"chat_id": 1, "text": "x"})
@@ -249,15 +268,27 @@ class TestClientErrors(Base):
 		self.client.set_webhook("https://h/x", secret_token="s", drop_pending_updates=True)
 		payload = self.api.last("setWebhook")["payload"]
 		self.assertEqual(payload["allowed_updates"], list(ALLOWED_UPDATES))
-		for needed in ("message", "edited_message", "callback_query", "message_reaction", "my_chat_member", "channel_post"):
+		for needed in (
+			"message",
+			"edited_message",
+			"callback_query",
+			"message_reaction",
+			"my_chat_member",
+			"channel_post",
+		):
 			self.assertIn(needed, payload["allowed_updates"])
 		self.assertTrue(payload["drop_pending_updates"])
 		self.assertEqual(self.client.get_webhook_info()["pending_update_count"], 0)
-		self.client.set_my_commands([("/Start", "Begin"), {"command": "help", "description": "Help"}], language_code="en")
+		self.client.set_my_commands(
+			[("/Start", "Begin"), {"command": "help", "description": "Help"}], language_code="en"
+		)
 		self.assertEqual(
 			self.api.last("setMyCommands")["payload"],
 			{
-				"commands": [{"command": "start", "description": "Begin"}, {"command": "help", "description": "Help"}],
+				"commands": [
+					{"command": "start", "description": "Begin"},
+					{"command": "help", "description": "Help"},
+				],
 				"language_code": "en",
 			},
 		)

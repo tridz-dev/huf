@@ -31,7 +31,11 @@ CUR = "-1001"  # chat of the current gateway conversation
 OTHER = "-2002"  # allowed only by Allow-list / Approved / Any number
 DENIED = "-3003"  # outside every allow-list
 ADMIN_BINDING = {
-	"name": "b1", "telegram_user_id": "900", "chat_id": "900", "gateway": "gw1", "role_scope": "Admin",
+	"name": "b1",
+	"telegram_user_id": "900",
+	"chat_id": "900",
+	"gateway": "gw1",
+	"role_scope": "Admin",
 	"frappe_user": "a@x.com",
 }
 SECRET = TOKEN.split(":", 1)[-1]
@@ -39,8 +43,12 @@ PHOTO = "https://cdn.test/a.jpg"
 TG_BASE = "https://api.telegram.org"
 FLAG_FOR_GROUP = adm.FLAGS
 ADMIN_RIGHTS = {
-	"can_restrict_members": True, "can_promote_members": True, "can_change_info": True,
-	"can_pin_messages": True, "can_delete_messages": True, "can_invite_users": True,
+	"can_restrict_members": True,
+	"can_promote_members": True,
+	"can_change_info": True,
+	"can_pin_messages": True,
+	"can_delete_messages": True,
+	"can_invite_users": True,
 }
 # scope name -> (chat that must be allowed, chat that must be refused, extra settings)
 SCOPE_MODES = {
@@ -64,7 +72,7 @@ TG_ARGS = {
 	"send_media_group": {"items": [{"type": "photo", "media": PHOTO}, {"type": "photo", "media": PHOTO}]},
 	"send_location": {"latitude": 1.0, "longitude": 2.0},
 	"send_contact": {"phone_number": "+100", "first_name": "A"},
-	"set_reaction": {"message_id": 3, "emoji": "\U0001F44D"},
+	"set_reaction": {"message_id": 3, "emoji": "\U0001f44d"},
 	"send_chat_action": {"chat_action": "typing"},
 	"edit_message_text": {"message_id": 3, "text": "x"},
 	"edit_message_caption": {"message_id": 3, "caption": "x"},
@@ -231,7 +239,8 @@ class Harness(unittest.TestCase):
 		from huf.ai.gateway_adapters import telegram_voice
 
 		patch.object(
-			telegram_voice, "speech_upload", return_value=("reply.ogg", b"OggS", "audio/ogg")).start()  # no TTS/ffmpeg
+			telegram_voice, "speech_upload", return_value=("reply.ogg", b"OggS", "audio/ogg")
+		).start()  # no TTS/ffmpeg
 
 		def make_client(token, *, timeout=30):
 			return TelegramBotClient(
@@ -261,8 +270,11 @@ class Harness(unittest.TestCase):
 		patch.object(adm, "_is_paired_admin", side_effect=lambda gw, uid: str(uid) == "777").start()
 		patch.object(scope, "run_gateway", side_effect=lambda: "gw1" if self.gw_on else "").start()
 		patch.object(
-			scope, "gateway_state",
-			side_effect=lambda: ("invalid", "") if self.gw_invalid else (("telegram", "gw1") if self.gw_on else ("none", "")),
+			scope,
+			"gateway_state",
+			side_effect=lambda: ("invalid", "")
+			if self.gw_invalid
+			else (("telegram", "gw1") if self.gw_on else ("none", "")),
 		).start()
 		patch.object(adm, "_admin_bindings", side_effect=lambda gw: list(self.admins)).start()
 		patch.object(adm, "_callback_signer", side_effect=lambda gw, chat: (lambda p: p + "|sig")).start()
@@ -279,9 +291,13 @@ class Harness(unittest.TestCase):
 		patch.object(tpl, "render_template", return_value={"text": "hi"}).start()
 		patch.object(tpl, "send_template", return_value={"message_id": 9}).start()
 		patch.object(
-			adm.biz, "get_connection",
+			adm.biz,
+			"get_connection",
 			return_value={
-				"id": "c", "gateway": "gw1", "rights": {"can_delete_sent_messages": True, "can_read_messages": True}, "is_enabled": True,
+				"id": "c",
+				"gateway": "gw1",
+				"rights": {"can_delete_sent_messages": True, "can_read_messages": True},
+				"is_enabled": True,
 			},
 		).start()
 
@@ -312,8 +328,13 @@ class Harness(unittest.TestCase):
 	def press_admin(self, label, tg_user="900"):
 		"""Press an approval button through the real admin callback handler (signature stub: ``|sig``)."""
 		parsed = SimpleNamespace(
-			kind="callback_query", callback_data=self.approval_buttons()[label], callback_query_id="cq",
-			chat_id=tg_user, chat_type="private", sender_id=tg_user, message_id=11,
+			kind="callback_query",
+			callback_data=self.approval_buttons()[label],
+			callback_query_id="cq",
+			chat_id=tg_user,
+			chat_type="private",
+			sender_id=tg_user,
+			message_id=11,
 		)
 		adapter = MagicMock()
 		adapter.verify_callback_data.side_effect = lambda raw, chat: raw.rsplit("|", 1)[0]
@@ -345,8 +366,15 @@ class TestRegistryParity(Harness):
 		self.assertEqual({a for a in adm.ACTIONS if a.startswith("get_")}, set(adm.ACTIONS) - STATE_CHANGING)
 
 	def test_state_changing_actions_are_not_in_the_plain_tool(self):
-		gone = {"pin_message", "unpin_message", "create_forum_topic", "edit_forum_topic", "close_forum_topic",
-			"reopen_forum_topic", "delete_forum_topic"}
+		gone = {
+			"pin_message",
+			"unpin_message",
+			"create_forum_topic",
+			"edit_forum_topic",
+			"close_forum_topic",
+			"reopen_forum_topic",
+			"delete_forum_topic",
+		}
 		self.assertFalse(gone & set(TG_ENUM))
 		for action in gone:
 			res = self.tg_call(action, chat_id=CUR, message_id=3, message_thread_id=5, name="n")
@@ -372,7 +400,9 @@ class TestEnvelope(Harness):
 
 	def test_admin_every_action_returns_standard_envelope(self):
 		self.gw_on = True
-		patch.object(adm, "ALWAYS_HUMAN_APPROVAL", frozenset(a for a, v in adm.ACTIONS.items() if v[2])).start()
+		patch.object(
+			adm, "ALWAYS_HUMAN_APPROVAL", frozenset(a for a, v in adm.ACTIONS.items() if v[2])
+		).start()
 		for action in ADMIN_ENUM:
 			with self.subTest(action=action):
 				res = self.adm_call(action, **ADMIN_ARGS[action])
@@ -457,7 +487,9 @@ class TestGatewayScopeMatrix(Harness):
 		"""A chat-scoped setMyCommands for a non-scoped chat should be refused before asking for approval."""
 		self.configure_scope("Current contact")
 		args = {
-			"commands": [{"command": "a", "description": "b"}], "command_scope": "chat", "chat_id": DENIED,
+			"commands": [{"command": "a", "description": "b"}],
+			"command_scope": "chat",
+			"chat_id": DENIED,
 		}
 		res = self.adm_call("set_my_commands", **args)
 		self.assertEqual(res.get("error"), "action_not_permitted", res)
@@ -493,7 +525,9 @@ class TestConfirmation(Harness):
 	def setUp(self):
 		super().setUp()
 		self.gw_on = True
-		patch.object(adm, "ALWAYS_HUMAN_APPROVAL", frozenset(a for a, v in adm.ACTIONS.items() if v[2])).start()
+		patch.object(
+			adm, "ALWAYS_HUMAN_APPROVAL", frozenset(a for a, v in adm.ACTIONS.items() if v[2])
+		).start()
 
 	def mutated(self):
 		return [c["method"] for c in self.api.calls if c["method"] in MUTATING.values()]
@@ -523,7 +557,9 @@ class TestConfirmation(Harness):
 		ack, _ = self.press_admin("Reject")
 		self.assertEqual(ack["note"], "cancelled")
 		self.assertEqual(self.mutated(), [])
-		self.assertEqual([k for k in self.cache.d if k.startswith("huf_tg_adm_pend:") and not k.endswith(":u")], [])
+		self.assertEqual(
+			[k for k in self.cache.d if k.startswith("huf_tg_adm_pend:") and not k.endswith(":u")], []
+		)
 		# the Approve button of the same request is dead once the request was resolved
 		ack, _ = self.press_admin("Approve")
 		self.assertEqual(self.mutated(), [], buttons)
@@ -561,8 +597,13 @@ class TestConfirmation(Harness):
 	def test_foreign_admin_of_other_gateway_cannot_approve(self):
 		self.adm_call("ban", user_id=5)
 		parsed = SimpleNamespace(
-			kind="callback_query", callback_data=self.approval_buttons()["Approve"], callback_query_id="cq",
-			chat_id="900", chat_type="private", sender_id="900", message_id=11,
+			kind="callback_query",
+			callback_data=self.approval_buttons()["Approve"],
+			callback_query_id="cq",
+			chat_id="900",
+			chat_type="private",
+			sender_id="900",
+			message_id=11,
 		)
 		adapter = MagicMock()
 		adapter.verify_callback_data.side_effect = lambda raw, chat: raw.rsplit("|", 1)[0]

@@ -67,8 +67,13 @@ class Decision:
 
 class LoopGuard:
 	def __init__(
-		self, cache: Any, *, max_hops: int = DEFAULT_MAX_HOPS, rate_cap: int = DEFAULT_RATE_CAP,
-		rate_window: int = DEFAULT_RATE_WINDOW, clock: Callable[[], float] = time.time,
+		self,
+		cache: Any,
+		*,
+		max_hops: int = DEFAULT_MAX_HOPS,
+		rate_cap: int = DEFAULT_RATE_CAP,
+		rate_window: int = DEFAULT_RATE_WINDOW,
+		clock: Callable[[], float] = time.time,
 	) -> None:
 		self.cache = cache
 		self.max_hops = max_hops
@@ -80,7 +85,8 @@ class LoopGuard:
 	def from_credentials(cls, cache: Any, credentials: Mapping[str, str] | None) -> LoopGuard:
 		c = credentials or {}
 		return cls(
-			cache, max_hops=_int(c.get("bot_max_hops"), DEFAULT_MAX_HOPS),
+			cache,
+			max_hops=_int(c.get("bot_max_hops"), DEFAULT_MAX_HOPS),
 			rate_cap=_int(c.get("bot_rate_cap"), DEFAULT_RATE_CAP),
 		)
 
@@ -99,8 +105,15 @@ class LoopGuard:
 		self._set(self._scope(gateway, chat_id, thread_id) + ":hops", 0)
 
 	def check_bot(
-		self, gateway: str, chat_id: Any, thread_id: Any, bot_id: str, *, own_id: str,
-		allowlist: frozenset[str], update_id: Any = None,
+		self,
+		gateway: str,
+		chat_id: Any,
+		thread_id: Any,
+		bot_id: str,
+		*,
+		own_id: str,
+		allowlist: frozenset[str],
+		update_id: Any = None,
 	) -> Decision:
 		"""Decide on a message from bot ``bot_id``. Idempotent per ``update_id`` (the registry may call twice)."""
 		seen_key = f"huf_tg_loop:{gateway}:seen:{update_id}" if update_id not in (None, "") else None

@@ -35,8 +35,17 @@ class MemCache:
 class Api(FakeBotApi):
 	def __init__(self):
 		super().__init__()
-		self.members = {BOT: {"status": "administrator", "can_restrict_members": True, "can_promote_members": True,
-			"can_change_info": True, "can_pin_messages": True, "can_delete_messages": True, "can_invite_users": True}}
+		self.members = {
+			BOT: {
+				"status": "administrator",
+				"can_restrict_members": True,
+				"can_promote_members": True,
+				"can_change_info": True,
+				"can_pin_messages": True,
+				"can_delete_messages": True,
+				"can_invite_users": True,
+			}
+		}
 
 	def http_post(self, url, *, json_data=None, data=None, files=None, timeout=None):
 		method = url.rsplit("/", 1)[-1]
@@ -63,7 +72,9 @@ class Base(unittest.TestCase):
 		self.addCleanup(patch.stopall)
 
 		def mk(token, *, timeout=30):
-			return TelegramBotClient(token, http_post=self.api.http_post, http_get=self.api.http_get, sleep=lambda s: None)
+			return TelegramBotClient(
+				token, http_post=self.api.http_post, http_get=self.api.http_get, sleep=lambda s: None
+			)
 
 		patch.object(tool, "_make_client", side_effect=mk).start()
 		patch.object(tool, "_token", return_value=TOKEN).start()
@@ -81,8 +92,16 @@ class Base(unittest.TestCase):
 		patch.object(tool.scope, "check_recipient", return_value=None).start()
 		patch.object(tool.scope, "claim_send", return_value=None).start()
 		patch.object(tool.scope, "release_send").start()
-		self.admins = [{"telegram_user_id": "900", "chat_id": "900", "gateway": "gw1", "role_scope": "Admin",
-			"frappe_user": "a@x.com", "name": "b1"}]
+		self.admins = [
+			{
+				"telegram_user_id": "900",
+				"chat_id": "900",
+				"gateway": "gw1",
+				"role_scope": "Admin",
+				"frappe_user": "a@x.com",
+				"name": "b1",
+			}
+		]
 		patch.object(tool, "_admin_bindings", side_effect=lambda gw: list(self.admins)).start()
 		patch.object(tool, "_callback_signer", side_effect=lambda gw, chat: (lambda p: p + "|sig")).start()
 
@@ -95,9 +114,15 @@ class Base(unittest.TestCase):
 
 class TestGates(Base):
 	def test_flag_off_refused(self):
-		for group, action in (("group", "ban"), ("profile", "set_my_name"), ("business", "get_business_connection")):
+		for group, action in (
+			("group", "ban"),
+			("profile", "set_my_name"),
+			("business", "get_business_connection"),
+		):
 			Base.flags = {"group": True, "profile": True, "business": True, group: False}
-			r = self.run_action(action, chat_id=CHAT, user_id=5, confirm=True, name="x", business_connection_id="c")
+			r = self.run_action(
+				action, chat_id=CHAT, user_id=5, confirm=True, name="x", business_connection_id="c"
+			)
 			self.assertEqual(r["error"], "action_not_permitted", action)
 		Base.flags = {"group": True, "profile": True, "business": True}
 		self.assertEqual(self.api.calls, [])
@@ -133,8 +158,13 @@ class TestConfirmation(Base):
 	def test_non_owner_refused_for_state_changes(self):
 		Base.owner = False
 		self.addCleanup(setattr, Base, "owner", True)
-		for action, kw in (("unban", {"user_id": 5}), ("set_chat_title", {"title": "x"}), ("pin", {"message_id": 3}),
-			("set_my_name", {"name": "x"}), ("create_invite_link", {})):
+		for action, kw in (
+			("unban", {"user_id": 5}),
+			("set_chat_title", {"title": "x"}),
+			("pin", {"message_id": 3}),
+			("set_my_name", {"name": "x"}),
+			("create_invite_link", {}),
+		):
 			r = self.run_action(action, confirm=True, **kw)
 			self.assertEqual(r["error"], "owner_required", action)
 			self.assertIn("bound admin", r["message"])
@@ -147,8 +177,13 @@ class TestConfirmation(Base):
 		self.assertTrue(self.run_action("get_admins")["success"])
 
 	def test_every_state_change_needs_human_approval(self):
-		self.assertEqual({a for a, v in tool.ACTIONS.items() if v[2]}, {a for a in tool.ACTIONS if not a.startswith("get_")})
-		self.assertEqual({a for a, v in tool.ACTIONS.items() if not v[2]}, {"get_admins", "get_business_connection"})
+		self.assertEqual(
+			{a for a, v in tool.ACTIONS.items() if v[2]},
+			{a for a in tool.ACTIONS if not a.startswith("get_")},
+		)
+		self.assertEqual(
+			{a for a, v in tool.ACTIONS.items() if not v[2]}, {"get_admins", "get_business_connection"}
+		)
 
 	def test_non_destructive_needs_nothing(self):
 		self.assertTrue(self.run_action("get_admins")["success"])
@@ -174,7 +209,10 @@ class TestCapsAndTargets(Base):
 		self.api.members[43] = {"status": "creator"}
 		for uid in (42, 43):
 			for action in ("ban", "restrict", "promote"):
-				self.assertEqual(self.run_action(action, user_id=uid, rights=["can_pin_messages"])["error"], "target_is_admin")
+				self.assertEqual(
+					self.run_action(action, user_id=uid, rights=["can_pin_messages"])["error"],
+					"target_is_admin",
+				)
 		self.assertEqual(self.run_action("demote", user_id=43)["error"], "target_is_admin")
 		self.assertEqual(self.api.of("banChatMember"), [])
 
@@ -191,6 +229,7 @@ class TestCapsAndTargets(Base):
 
 class TestPayloads(Base):
 	owner = True
+
 	def ok(self, action, **kw):
 		r = self.run_action(action, **kw)
 		self.assertTrue(r["success"], r)
@@ -224,9 +263,7 @@ class TestPayloads(Base):
 		self.assertTrue(p["can_pin_messages"] and p["can_delete_messages"])
 		self.assertFalse(p["can_promote_members"])
 		bad = dict(user_id=5, rights=["can_promote_members"])
-		self.assertEqual(
-			self.run_action("promote", confirm=True, **bad)["error"], "right_not_grantable"
-		)
+		self.assertEqual(self.run_action("promote", confirm=True, **bad)["error"], "right_not_grantable")
 
 	def test_chat_edits_and_pins(self):
 		self.ok("set_chat_title", title="T")
@@ -244,12 +281,17 @@ class TestPayloads(Base):
 
 	def test_invite_links(self):
 		self.ok("create_invite_link", name="n", member_limit=3)
-		self.assertEqual(self.payload("createChatInviteLink"), {"chat_id": -1001, "name": "n", "member_limit": 3})
+		self.assertEqual(
+			self.payload("createChatInviteLink"), {"chat_id": -1001, "name": "n", "member_limit": 3}
+		)
 		self.ok("revoke_invite_link", invite_link="https://t.me/+abc")
 		self.assertEqual(self.payload("revokeChatInviteLink")["invite_link"], "https://t.me/+abc")
 
 	def test_get_admins(self):
-		self.api.queue("getChatAdministrators", {"ok": True, "result": [{"status": "creator", "user": {"id": 1, "username": "o"}}]})
+		self.api.queue(
+			"getChatAdministrators",
+			{"ok": True, "result": [{"status": "creator", "user": {"id": 1, "username": "o"}}]},
+		)
 		r = self.ok("get_admins")
 		self.assertEqual(r["result"][0]["user_id"], 1)
 
@@ -259,6 +301,7 @@ class TestPayloads(Base):
 
 class TestProfile(Base):
 	owner = True
+
 	def test_profile_actions(self):
 		self.assertTrue(self.run_action("set_my_name", name="Bot", language_code="en")["success"])
 		self.assertEqual(self.payload("setMyName"), {"name": "Bot", "language_code": "en"})
@@ -268,12 +311,21 @@ class TestProfile(Base):
 		self.assertEqual(self.payload("setMyShortDescription"), {"short_description": "s"})
 		self.run_action("set_chat_menu_button", menu_button={"type": "commands"})
 		self.assertEqual(self.payload("setChatMenuButton"), {"menu_button": {"type": "commands"}})
-		self.assertEqual(self.run_action("set_chat_menu_button", menu_button={"type": "web_app", "text": "x", "web_app": {"url": "http://a"}})["error"], "invalid_argument")
+		self.assertEqual(
+			self.run_action(
+				"set_chat_menu_button",
+				menu_button={"type": "web_app", "text": "x", "web_app": {"url": "http://a"}},
+			)["error"],
+			"invalid_argument",
+		)
 
 	def test_set_my_commands_confirm_and_payload(self):
 		cmds = [{"command": "help", "description": "Help", "is_ephemeral": True}]
 		r = self.run_action(
-			"set_my_commands", commands=cmds, command_scope="all_private_chats", confirm=True,
+			"set_my_commands",
+			commands=cmds,
+			command_scope="all_private_chats",
+			confirm=True,
 		)
 		self.assertTrue(r["success"], r)
 		p = self.payload("setMyCommands")
@@ -282,20 +334,44 @@ class TestProfile(Base):
 
 	def test_bad_commands(self):
 		bad = [{"command": "Bad Name", "description": "x"}]
-		self.assertEqual(self.run_action("set_my_commands", commands=bad, confirm=True)["error"], "invalid_argument")
+		self.assertEqual(
+			self.run_action("set_my_commands", commands=bad, confirm=True)["error"], "invalid_argument"
+		)
 
 
 class TestBusiness(Base):
 	owner = True
+
 	def setUp(self):
 		super().setUp()
 		self.conns = {
-			"c1": {"id": "c1", "gateway": "gw1", "owner_id": "1", "owner_name": "O", "user_chat_id": "1",
-				"rights": {"can_reply": True, "can_read_messages": True, "can_delete_sent_messages": True}, "is_enabled": True},
-			"c2": {"id": "c2", "gateway": "other", "owner_id": "1", "owner_name": "O", "user_chat_id": "1",
-				"rights": {"can_reply": True}, "is_enabled": True},
-			"c3": {"id": "c3", "gateway": "gw1", "owner_id": "1", "owner_name": "O", "user_chat_id": "1",
-				"rights": {}, "is_enabled": True},
+			"c1": {
+				"id": "c1",
+				"gateway": "gw1",
+				"owner_id": "1",
+				"owner_name": "O",
+				"user_chat_id": "1",
+				"rights": {"can_reply": True, "can_read_messages": True, "can_delete_sent_messages": True},
+				"is_enabled": True,
+			},
+			"c2": {
+				"id": "c2",
+				"gateway": "other",
+				"owner_id": "1",
+				"owner_name": "O",
+				"user_chat_id": "1",
+				"rights": {"can_reply": True},
+				"is_enabled": True,
+			},
+			"c3": {
+				"id": "c3",
+				"gateway": "gw1",
+				"owner_id": "1",
+				"owner_name": "O",
+				"user_chat_id": "1",
+				"rights": {},
+				"is_enabled": True,
+			},
 		}
 		patch.object(biz, "get_connection", side_effect=lambda cid, *a, **k: self.conns.get(cid)).start()
 
@@ -310,26 +386,36 @@ class TestBusiness(Base):
 			self.assertEqual(r["error"], "unknown_connection")
 
 	def test_send_payload(self):
-		r = self.run_action("send_business_message", business_connection_id="c1", chat_id=5, text="hi", reply_to_message_id=2)
+		r = self.run_action(
+			"send_business_message", business_connection_id="c1", chat_id=5, text="hi", reply_to_message_id=2
+		)
 		self.assertTrue(r["success"], r)
 		p = self.payload("sendMessage")
 		self.assertEqual((p["business_connection_id"], p["chat_id"], p["text"]), ("c1", 5, "hi"))
 		self.assertEqual(p["reply_parameters"]["message_id"], 2)
 
 	def test_rights_enforced(self):
-		for action, kw in (("send_business_message", {"text": "x", "chat_id": 5}),
-			("read_business_message", {"chat_id": 5, "message_id": 1})):
+		for action, kw in (
+			("send_business_message", {"text": "x", "chat_id": 5}),
+			("read_business_message", {"chat_id": 5, "message_id": 1}),
+		):
 			r = self.run_action(action, business_connection_id="c3", **kw)
 			self.assertEqual(r["error"], "business_right_missing", action)
 		self.assertEqual(self.api.of("sendMessage"), [])
 
 	def test_read_and_delete(self):
-		self.assertTrue(self.run_action("read_business_message", business_connection_id="c1", chat_id=5, message_id=9)["success"])
+		self.assertTrue(
+			self.run_action("read_business_message", business_connection_id="c1", chat_id=5, message_id=9)[
+				"success"
+			]
+		)
 		self.assertEqual(self.payload("readBusinessMessage")["message_id"], 9)
 		args = dict(business_connection_id="c1", message_ids=[1, 2])
 		r = self.run_action("delete_business_messages", confirm=True, **args)
 		self.assertTrue(r["success"], r)
-		self.assertEqual(self.payload("deleteBusinessMessages"), {"business_connection_id": "c1", "message_ids": [1, 2]})
+		self.assertEqual(
+			self.payload("deleteBusinessMessages"), {"business_connection_id": "c1", "message_ids": [1, 2]}
+		)
 
 	def test_delete_all_needs_all_right(self):
 		args = dict(business_connection_id="c1", message_ids=[1], all_messages=True)
@@ -343,8 +429,17 @@ class TestBusinessScope(Base):
 
 	def setUp(self):
 		super().setUp()
-		self.conns = {"c1": {"id": "c1", "gateway": "gw1", "owner_id": "1", "owner_name": "O", "user_chat_id": "1",
-			"rights": {"can_reply": True, "can_read_messages": True, "can_delete_sent_messages": True}, "is_enabled": True}}
+		self.conns = {
+			"c1": {
+				"id": "c1",
+				"gateway": "gw1",
+				"owner_id": "1",
+				"owner_name": "O",
+				"user_chat_id": "1",
+				"rights": {"can_reply": True, "can_read_messages": True, "can_delete_sent_messages": True},
+				"is_enabled": True,
+			}
+		}
 		patch.object(biz, "get_connection", side_effect=lambda cid, *a, **k: self.conns.get(cid)).start()
 
 	def deny(self, message="nope"):
@@ -363,7 +458,11 @@ class TestBusinessScope(Base):
 		self.assertEqual(self.api.of("readBusinessMessage"), [])
 
 	def test_send_counted_and_cap_enforced(self):
-		self.assertTrue(self.run_action("send_business_message", business_connection_id="c1", chat_id=5, text="hi")["success"])
+		self.assertTrue(
+			self.run_action("send_business_message", business_connection_id="c1", chat_id=5, text="hi")[
+				"success"
+			]
+		)
 		tool.scope.claim_send.assert_called_with("gw1", "run1")
 		cap = json.dumps({"message": "cap"})
 		with patch.object(tool.scope, "claim_send", return_value=cap):
@@ -373,26 +472,43 @@ class TestBusinessScope(Base):
 
 	def test_failed_send_releases_claim(self):
 		self.api.queue("sendMessage", self.api.error("Bad Request: nope", 400))
-		self.assertFalse(self.run_action("send_business_message", business_connection_id="c1", chat_id=5, text="hi")["success"])
+		self.assertFalse(
+			self.run_action("send_business_message", business_connection_id="c1", chat_id=5, text="hi")[
+				"success"
+			]
+		)
 		tool.scope.release_send.assert_called_with("gw1", "run1")
 
 	def test_delete_all_messages_needs_any_number_scope(self):
 		self.conns["c1"]["rights"]["can_delete_all_messages"] = True
 		with patch.object(tool.scope, "settings", return_value={"scope": "Allow-list"}):
-			r = self.run_action("delete_business_messages", business_connection_id="c1", message_ids=[1],
-				all_messages=True, confirm=True)
+			r = self.run_action(
+				"delete_business_messages",
+				business_connection_id="c1",
+				message_ids=[1],
+				all_messages=True,
+				confirm=True,
+			)
 		self.assertEqual(r["error"], "recipient_not_permitted")
 		self.assertEqual(self.api.of("deleteBusinessMessages"), [])
 
 	def test_delete_checks_chat_scope(self):
 		with self.deny():
-			r = self.run_action("delete_business_messages", business_connection_id="c1", message_ids=[1],
-				chat_id=77, confirm=True)
+			r = self.run_action(
+				"delete_business_messages",
+				business_connection_id="c1",
+				message_ids=[1],
+				chat_id=77,
+				confirm=True,
+			)
 		self.assertEqual(r["error"], "recipient_not_permitted")
 
 	def test_unbound_connection_refused_for_every_gateway(self):
 		self.conns["c4"] = {**self.conns["c1"], "id": "c4", "gateway": ""}
-		for action, kw in (("get_business_connection", {}), ("send_business_message", {"chat_id": 5, "text": "x"})):
+		for action, kw in (
+			("get_business_connection", {}),
+			("send_business_message", {"chat_id": 5, "text": "x"}),
+		):
 			r = self.run_action(action, business_connection_id="c4", **kw)
 			self.assertEqual(r["error"], "unknown_connection", action)
 		self.assertEqual(self.api.of("sendMessage"), [])
@@ -402,7 +518,9 @@ class TestBusinessScope(Base):
 			r = self.run_action("set_chat_menu_button", chat_id=55, menu_button={"type": "default"})
 		self.assertEqual(r["error"], "action_not_permitted")
 		self.assertEqual(self.api.of("setChatMenuButton"), [])
-		self.assertTrue(self.run_action("set_chat_menu_button", chat_id=55, menu_button={"type": "default"})["success"])
+		self.assertTrue(
+			self.run_action("set_chat_menu_button", chat_id=55, menu_button={"type": "default"})["success"]
+		)
 
 
 class TestHumanApproval(Base):
@@ -443,8 +561,11 @@ class TestHumanApproval(Base):
 			# identical request while pending: no second approval
 			self.assertIn("already pending", self.run_action("pin", message_id=7)["message"])
 			self.assertEqual(len(self.api.of("sendMessage")), sends)
-			fp = next(k.split(":", 1)[1] for k in self.cache.d
-				if k.startswith("huf_tg_adm_pend:") and k.count(":") == 1)
+			fp = next(
+				k.split(":", 1)[1]
+				for k in self.cache.d
+				if k.startswith("huf_tg_adm_pend:") and k.count(":") == 1
+			)
 			self.assertTrue(self.ta.agent_action_take(fp, cache=self.cache))
 			self.assertFalse(self.ta.agent_action_pending(fp, cache=self.cache))
 			self.assertFalse(self.ta.agent_action_take(fp, cache=self.cache))  # exactly once
@@ -470,11 +591,25 @@ class TestHumanApproval(Base):
 		self.run_action("delete_message", message_id=3)
 		nonce = self.buttons()["Approve"].split("|")[0].split(":")[2]
 		action = self.ta.consume_nonce(nonce, "900", "900", cache=self.cache)
-		self.assertEqual((action["op"], action["action"], action["gateway"], action["chat"]), ("agent_action", "delete_message", "gw1", CHAT))
+		self.assertEqual(
+			(action["op"], action["action"], action["gateway"], action["chat"]),
+			("agent_action", "delete_message", "gw1", CHAT),
+		)
 		self.assertEqual(self.api.of("deleteMessage"), [])
-		binding = {"name": "b1", "telegram_user_id": "900", "frappe_user": "a@x.com", "gateway": "gw1", "role_scope": "Admin", "chat_id": "900"}
+		binding = {
+			"name": "b1",
+			"telegram_user_id": "900",
+			"frappe_user": "a@x.com",
+			"gateway": "gw1",
+			"role_scope": "Admin",
+			"chat_id": "900",
+		}
 		ctx = self.ta.Ctx(binding=binding, tg_user="900", chat_id="900", gateway="gw1", cache=self.cache)
-		with patch.object(self.ta, "write_audit") as audit, patch.object(self.ta, "_commit"), patch.object(tool, "_gateway_token", return_value=TOKEN):
+		with (
+			patch.object(self.ta, "write_audit") as audit,
+			patch.object(self.ta, "_commit"),
+			patch.object(tool, "_gateway_token", return_value=TOKEN),
+		):
 			self.ta.execute(ctx, action, nonce)
 			self.assertEqual(self.payload("deleteMessage")["message_id"], 3)
 			audit.assert_called()
@@ -489,7 +624,9 @@ class TestOwnerRank(unittest.TestCase):
 	def owner(self, role):
 		from types import SimpleNamespace
 
-		with patch.object(tool.frappe, "db", new=SimpleNamespace(get_value=lambda *a, **k: role), create=True):
+		with patch.object(
+			tool.frappe, "db", new=SimpleNamespace(get_value=lambda *a, **k: role), create=True
+		):
 			return tool._is_owner_run("gw1", "55")
 
 	def test_viewer_and_operator_chat_not_owner(self):
@@ -508,8 +645,13 @@ class TestOwnerGate(Base):
 	always_human = True
 
 	def test_owner_destructive_goes_through_signed_button_not_confirm(self):
-		for action, kw in (("ban", {"user_id": 5}), ("unban", {"user_id": 5}), ("demote", {"user_id": 5}),
-			("set_chat_title", {"title": "x"}), ("set_my_name", {"name": "x"})):
+		for action, kw in (
+			("ban", {"user_id": 5}),
+			("unban", {"user_id": 5}),
+			("demote", {"user_id": 5}),
+			("set_chat_title", {"title": "x"}),
+			("set_my_name", {"name": "x"}),
+		):
 			r = self.run_action(action, confirm=True, **kw)
 			self.assertEqual(r["status"], "pending_human_approval", action)
 		self.assertEqual(self.api.of("banChatMember"), [])
@@ -539,7 +681,9 @@ class TestApprovalOrdering(Base):
 
 		def spy(url, **kw):
 			if url.endswith("sendMessage"):
-				seen.append([k for k in self.cache.d if k.startswith("huf_tg_adm_pend:") and not k.endswith(":s")])
+				seen.append(
+					[k for k in self.cache.d if k.startswith("huf_tg_adm_pend:") and not k.endswith(":s")]
+				)
 			return orig(url, **kw)
 
 		self.api.http_post = spy

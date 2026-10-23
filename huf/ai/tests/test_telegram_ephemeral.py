@@ -20,8 +20,13 @@ class Client:
 
 
 def group(**extra):
-	msg = {"chat": {"id": -100, "type": "supergroup"}, "from": {"id": 42}, "text": "/help",
-		"ephemeral_message_id": 5, "receiver_user": {"id": 42}}
+	msg = {
+		"chat": {"id": -100, "type": "supergroup"},
+		"from": {"id": 42},
+		"text": "/help",
+		"ephemeral_message_id": 5,
+		"receiver_user": {"id": 42},
+	}
 	msg.update(extra)
 	return {"message": msg}
 
@@ -31,14 +36,29 @@ class TestEphemeral(unittest.TestCase):
 		self.assertTrue(te.is_ephemeral_command(group()))
 		self.assertFalse(te.is_ephemeral_command(group(ephemeral_message_id=None, receiver_user=None)))
 		self.assertFalse(te.is_ephemeral_command(None))
-		self.assertFalse(te.is_ephemeral_command({"message": {"chat": {"type": "private"},
-			"ephemeral_message_id": 1, "receiver_user": {"id": 1}}}))
+		self.assertFalse(
+			te.is_ephemeral_command(
+				{
+					"message": {
+						"chat": {"type": "private"},
+						"ephemeral_message_id": 1,
+						"receiver_user": {"id": 1},
+					}
+				}
+			)
+		)
 
 	def test_params(self):
-		self.assertEqual(te.ephemeral_params(group()), {
-			"ephemeral_message_parameters": {"receiver_user_id": 42},
-			"reply_parameters": {"ephemeral_message_id": 5}})
-		self.assertEqual(te.ephemeral_params({"message": {"chat": {"type": "private"}, "receiver_user": {"id": 1}}}), {})
+		self.assertEqual(
+			te.ephemeral_params(group()),
+			{
+				"ephemeral_message_parameters": {"receiver_user_id": 42},
+				"reply_parameters": {"ephemeral_message_id": 5},
+			},
+		)
+		self.assertEqual(
+			te.ephemeral_params({"message": {"chat": {"type": "private"}, "receiver_user": {"id": 1}}}), {}
+		)
 
 	def test_send_text_payload(self):
 		c = Client()
@@ -62,8 +82,13 @@ class TestEphemeral(unittest.TestCase):
 	def test_pipeline(self):
 		c = Client()
 		s = TelegramSender(c)
-		tp.send_parts_with(s, -100, ["a", "b"], reply_to="7", ephemeral=tp.ephemeral_for(
-			SimpleNamespace(raw_payload=group())))
+		tp.send_parts_with(
+			s,
+			-100,
+			["a", "b"],
+			reply_to="7",
+			ephemeral=tp.ephemeral_for(SimpleNamespace(raw_payload=group())),
+		)
 		self.assertTrue(all("ephemeral_message_parameters" in p for _m, p in c.calls))
 		self.assertIsNone(tp.ephemeral_for(SimpleNamespace(raw_payload={})))
 		c.calls.clear()

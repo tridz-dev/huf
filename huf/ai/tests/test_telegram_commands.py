@@ -11,9 +11,16 @@ from huf.ai.tests.telegram_fakes import SECRET, TOKEN, FakeBotApi
 
 class TestBuild(unittest.TestCase):
 	def test_valid_tuple_and_mapping(self):
-		out = tc.build_commands([("help", "Show help"), {"command": "me", "description": "Whisper", "is_ephemeral": True}])
-		self.assertEqual(out, [{"command": "help", "description": "Show help"},
-			{"command": "me", "description": "Whisper", "is_ephemeral": True}])
+		out = tc.build_commands(
+			[("help", "Show help"), {"command": "me", "description": "Whisper", "is_ephemeral": True}]
+		)
+		self.assertEqual(
+			out,
+			[
+				{"command": "help", "description": "Show help"},
+				{"command": "me", "description": "Whisper", "is_ephemeral": True},
+			],
+		)
 
 	def test_name_validation(self):
 		for bad in ("", "Help", "he-lp", "a" * 33, "/start"):
@@ -39,7 +46,10 @@ class TestBuild(unittest.TestCase):
 	def test_scopes(self):
 		self.assertEqual(tc.build_scope("all_group_chats"), {"type": "all_group_chats"})
 		self.assertEqual(tc.build_scope("chat", chat_id=-5), {"type": "chat", "chat_id": -5})
-		self.assertEqual(tc.build_scope("chat_member", chat_id=-5, user_id="7"), {"type": "chat_member", "chat_id": -5, "user_id": 7})
+		self.assertEqual(
+			tc.build_scope("chat_member", chat_id=-5, user_id="7"),
+			{"type": "chat_member", "chat_id": -5, "user_id": 7},
+		)
 		for s in ("all_private_chats", "all_chat_administrators", "default"):
 			self.assertEqual(tc.build_scope(s)["type"], s)
 		with self.assertRaises(ValueError):
@@ -61,12 +71,21 @@ class TestBuild(unittest.TestCase):
 class TestSend(unittest.TestCase):
 	def test_calls(self):
 		api = FakeBotApi()
-		client = TelegramGatewayAdapter({"token": TOKEN, "webhook_secret": SECRET}, http_post=api.http_post,
-			http_get=api.http_get, download_attachments=False).client
+		client = TelegramGatewayAdapter(
+			{"token": TOKEN, "webhook_secret": SECRET},
+			http_post=api.http_post,
+			http_get=api.http_get,
+			download_attachments=False,
+		).client
 		tc.set_commands(client, [("a", "d")], scope="chat", chat_id=-5, language_code="en")
-		self.assertEqual(api.last("setMyCommands")["payload"], {
-			"commands": [{"command": "a", "description": "d"}],
-			"scope": {"type": "chat", "chat_id": -5}, "language_code": "en"})
+		self.assertEqual(
+			api.last("setMyCommands")["payload"],
+			{
+				"commands": [{"command": "a", "description": "d"}],
+				"scope": {"type": "chat", "chat_id": -5},
+				"language_code": "en",
+			},
+		)
 		tc.delete_commands(client, scope="all_group_chats")
 		self.assertEqual(api.last("deleteMyCommands")["payload"], {"scope": {"type": "all_group_chats"}})
 		tc.get_commands(client)

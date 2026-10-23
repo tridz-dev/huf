@@ -14,9 +14,10 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from huf.ai import gateway_service, media_prep
-from huf.ai import whatsapp_voice_reply as wv
 from huf.ai import whatsapp_send_file as send_file
-from huf.ai.gateway_adapters import provider_hooks, telegram_voice as tv
+from huf.ai import whatsapp_voice_reply as wv
+from huf.ai.gateway_adapters import provider_hooks
+from huf.ai.gateway_adapters import telegram_voice as tv
 from huf.ai.gateway_adapters.telegram import TelegramGatewayAdapter
 from huf.ai.tests.telegram_fakes import SECRET, TOKEN, FakeBotApi
 
@@ -33,8 +34,16 @@ class FakeEvent(SimpleNamespace):
 
 def make_event(raw=VOICE_RAW, **kw):
 	values = dict(
-		name="EVT-1", sender_id="42", conversation_id="555", thread_id="7", reply_message_id="",
-		reply_status="", status="Running", raw_payload=raw, target_agent="Agent A", agent_run="RUN-1",
+		name="EVT-1",
+		sender_id="42",
+		conversation_id="555",
+		thread_id="7",
+		reply_message_id="",
+		reply_status="",
+		status="Running",
+		raw_payload=raw,
+		target_agent="Agent A",
+		agent_run="RUN-1",
 	)
 	values.update(kw)
 	return FakeEvent(**values)
@@ -48,8 +57,10 @@ class _Base(unittest.TestCase):
 	def setUp(self):
 		self.api = FakeBotApi()
 		self.adapter = TelegramGatewayAdapter(
-			{"token": TOKEN, "webhook_secret": SECRET}, http_post=self.api.http_post,
-			http_get=self.api.http_get, download_attachments=False,
+			{"token": TOKEN, "webhook_secret": SECRET},
+			http_post=self.api.http_post,
+			http_get=self.api.http_get,
+			download_attachments=False,
 		)
 		self.text_send = MagicMock(return_value={"status": "Succeeded", "event_name": "EVT-1"})
 		self.synth = MagicMock(return_value=b"mp3-bytes")
@@ -169,13 +180,21 @@ class TestInboundVoice(unittest.TestCase):
 			self.assertEqual(media_prep.classify_media(name), "audio")
 
 	def test_voice_note_transcribed_for_agent(self):
-		entries = [{"file_id": "FILE-1", "file_url": "/private/files/file_0.oga", "filename": "file_0.oga", "mime_type": ""}]
-		with patch.object(media_prep, "_transcribe_audio", return_value={"success": True, "transcript": "hello bot"}) as stt:
+		entries = [
+			{
+				"file_id": "FILE-1",
+				"file_url": "/private/files/file_0.oga",
+				"filename": "file_0.oga",
+				"mime_type": "",
+			}
+		]
+		with patch.object(
+			media_prep, "_transcribe_audio", return_value={"success": True, "transcript": "hello bot"}
+		) as stt:
 			prep = media_prep.prepare_media_for_agent(entries, "Agent A")
 		stt.assert_called_once_with("FILE-1", "Agent A")
 		self.assertIn("hello bot", prep.prefix)
 		self.assertTrue(prep.files[0]["is_audio"])
-
 
 
 _REAL_SYNTH = tv._synthesize
@@ -200,16 +219,20 @@ class TestOpusDirect(_Base):
 
 	def test_opus_direct_works_without_ffmpeg_installed(self):
 		self.synth.return_value = OGG_OPUS
-		with patch.object(tv, "_convert", _REAL_CONVERT), patch.object(send_file.shutil, "which", return_value=None):
+		with (
+			patch.object(tv, "_convert", _REAL_CONVERT),
+			patch.object(send_file.shutil, "which", return_value=None),
+		):
 			self.reply(make_event(), make_gateway("Voice only"))
 		self.assertEqual(len(self.api.of("sendVoice")), 1)
 		self.text_send.assert_not_called()
 
 	def test_non_ogg_bytes_fall_back_to_ffmpeg(self):
 		self.synth.return_value = b"ID3-mp3-bytes"
-		with patch.object(tv, "_convert", _REAL_CONVERT), patch.object(
-			send_file, "to_ogg_opus", return_value=OGG_OPUS
-		) as ffmpeg:
+		with (
+			patch.object(tv, "_convert", _REAL_CONVERT),
+			patch.object(send_file, "to_ogg_opus", return_value=OGG_OPUS) as ffmpeg,
+		):
 			self.reply(make_event(), make_gateway("Voice only"))
 		ffmpeg.assert_called_once_with(b"ID3-mp3-bytes")
 		self.assertEqual(self.api.last("sendVoice")["files"]["voice"][1], OGG_OPUS)
@@ -221,7 +244,10 @@ class TestOpusDirect(_Base):
 
 	def test_ffmpeg_missing_and_non_opus_falls_back_to_text(self):
 		self.synth.return_value = b"ID3-mp3-bytes"
-		with patch.object(tv, "_convert", _REAL_CONVERT), patch.object(send_file.shutil, "which", return_value=None):
+		with (
+			patch.object(tv, "_convert", _REAL_CONVERT),
+			patch.object(send_file.shutil, "which", return_value=None),
+		):
 			with patch("frappe.logger"):
 				result = self.reply(make_event(), make_gateway("Voice only"))
 		self.assertEqual(self.api.of("sendVoice"), [])

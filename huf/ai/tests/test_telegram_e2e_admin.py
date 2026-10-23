@@ -125,24 +125,53 @@ class FakeFrappe:
 			"Telegram Admin Binding": [],
 			"Telegram Admin Audit": [],
 			"Leave Application": [
-				{"name": "LA-1", "employee_name": "Ana Lee", "leave_type": "Annual", "hr_note": "x",
-				 "workflow_state": "Pending Approval", "docstatus": 0, "modified": NOW_DT},
-				{"name": "LA-2", "employee_name": "Ben Ortiz", "leave_type": "Sick",
-				 "workflow_state": "Pending Approval", "docstatus": 0, "modified": NOW_DT},
+				{
+					"name": "LA-1",
+					"employee_name": "Ana Lee",
+					"leave_type": "Annual",
+					"hr_note": "x",
+					"workflow_state": "Pending Approval",
+					"docstatus": 0,
+					"modified": NOW_DT,
+				},
+				{
+					"name": "LA-2",
+					"employee_name": "Ben Ortiz",
+					"leave_type": "Sick",
+					"workflow_state": "Pending Approval",
+					"docstatus": 0,
+					"modified": NOW_DT,
+				},
 			],
 			"Salary Slip": [{"name": "SS-1", "employee_name": "Ana Lee", "docstatus": 0, "modified": NOW_DT}],
 			"Workflow Action": [
-				{"name": "WA-1", "reference_doctype": "Leave Application", "reference_name": "LA-1",
-				 "workflow_state": "Pending Approval", "status": "Open", "creation": NOW_DT},
-				{"name": "WA-2", "reference_doctype": "Leave Application", "reference_name": "LA-2",
-				 "workflow_state": "Pending Approval", "status": "Open", "creation": NOW_DT},
+				{
+					"name": "WA-1",
+					"reference_doctype": "Leave Application",
+					"reference_name": "LA-1",
+					"workflow_state": "Pending Approval",
+					"status": "Open",
+					"creation": NOW_DT,
+				},
+				{
+					"name": "WA-2",
+					"reference_doctype": "Leave Application",
+					"reference_name": "LA-2",
+					"workflow_state": "Pending Approval",
+					"status": "Open",
+					"creation": NOW_DT,
+				},
 			],
 		}
 		self.doctypes = DOCTYPES
 		self.perms = {
-			(BOUND, "Leave Application"), (BOUND, "Workflow Action"),
-			(BOUND2, "Leave Application"), (BOUND2, "Workflow Action"),
-			(ADMIN, "Leave Application"), (ADMIN, "Workflow Action"), (ADMIN, "Telegram Admin Audit"),
+			(BOUND, "Leave Application"),
+			(BOUND, "Workflow Action"),
+			(BOUND2, "Leave Application"),
+			(BOUND2, "Workflow Action"),
+			(ADMIN, "Leave Application"),
+			(ADMIN, "Workflow Action"),
+			(ADMIN, "Telegram Admin Audit"),
 		}
 		self.gateway_admin = {ADMIN}
 		self.session = SimpleNamespace(user="Guest")
@@ -290,15 +319,30 @@ def _upd(text, tg=TG, chat=CHAT):
 	command = text[1:].split()[0] if text.startswith("/") else ""
 	payload = text.split(None, 1)[1] if command == "start" and " " in text else ""
 	return TelegramUpdate(
-		kind="message", update_id="1", raw={}, chat_id=chat, chat_type="private", sender_id=tg,
-		message_id="10", text=text, command=command, start_payload=payload,
+		kind="message",
+		update_id="1",
+		raw={},
+		chat_id=chat,
+		chat_type="private",
+		sender_id=tg,
+		message_id="10",
+		text=text,
+		command=command,
+		start_payload=payload,
 	)
 
 
 def _press(data, tg=TG, chat=CHAT):
 	return TelegramUpdate(
-		kind="callback_query", update_id="2", raw={}, chat_id=chat, chat_type="private", sender_id=tg,
-		message_id="11", callback_query_id="cq1", callback_data=data,
+		kind="callback_query",
+		update_id="2",
+		raw={},
+		chat_id=chat,
+		chat_type="private",
+		sender_id=tg,
+		message_id="11",
+		callback_query_id="cq1",
+		callback_data=data,
 	)
 
 

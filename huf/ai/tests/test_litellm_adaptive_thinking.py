@@ -47,7 +47,9 @@ class TestAdaptiveThinking(unittest.TestCase):
 	def _bad(self):
 		return BadRequestError(
 			message='"thinking.type.enabled" is not supported for this model. Use "thinking.type.adaptive"',
-			model="claude-x", llm_provider="anthropic", response=MagicMock(),
+			model="claude-x",
+			llm_provider="anthropic",
+			response=MagicMock(),
 		)
 
 	def test_retry_on_400(self):
@@ -60,8 +62,13 @@ class TestAdaptiveThinking(unittest.TestCase):
 			return "ok"
 
 		with patch.object(prov.litellm, "completion", side_effect=fake):
-			out = asyncio.run(prov._litellm_completion_with_retry(
-				model="anthropic/claude-x", thinking={"type": "enabled", "budget_tokens": 4096}, stream=True))
+			out = asyncio.run(
+				prov._litellm_completion_with_retry(
+					model="anthropic/claude-x",
+					thinking={"type": "enabled", "budget_tokens": 4096},
+					stream=True,
+				)
+			)
 		self.assertEqual(out, "ok")
 		self.assertEqual(len(calls), 2)
 		self.assertEqual(calls[1]["thinking"], {"type": "adaptive"})
@@ -77,7 +84,9 @@ class TestAdaptiveThinking(unittest.TestCase):
 	def test_streaming_and_nonstreaming_kwargs_pass_through(self):
 		for stream in (True, False):
 			with patch.object(prov.litellm, "completion", return_value="r") as m:
-				kw = dict(model="anthropic/claude-sonnet-5-5", stream=stream, **_kwargs("claude-sonnet-5-5", "auto"))
+				kw = dict(
+					model="anthropic/claude-sonnet-5-5", stream=stream, **_kwargs("claude-sonnet-5-5", "auto")
+				)
 				asyncio.run(prov._litellm_completion_with_retry(**kw))
 			sent = m.call_args.kwargs
 			self.assertEqual(sent["thinking"], {"type": "adaptive"})

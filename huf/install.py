@@ -8,6 +8,7 @@ Installation hooks for Huf app
 import json
 
 import frappe
+
 from huf.utils import is_frappe_16
 
 logger = frappe.logger("huf")
@@ -130,8 +131,9 @@ def after_install():
 	Checks if litellm is installed and provides helpful message if not.
 	"""
     try:
-        import litellm
         from importlib.metadata import version as get_installed_version
+
+        import litellm
 
         litellm_version = get_installed_version("litellm")
         compromised_versions = {"1.82.7", "1.82.8"}

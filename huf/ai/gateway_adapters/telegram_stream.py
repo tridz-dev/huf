@@ -116,8 +116,16 @@ class DraftUpdater:
 	"""
 
 	def __init__(
-		self, sender: Any, chat_id: Any, draft_id: int, *, thread_id: Any = None, can_stop: bool = True,
-		keep_on_stop: bool = False, min_interval: float = MIN_INTERVAL, clock: Callable[[], float] = time.monotonic,
+		self,
+		sender: Any,
+		chat_id: Any,
+		draft_id: int,
+		*,
+		thread_id: Any = None,
+		can_stop: bool = True,
+		keep_on_stop: bool = False,
+		min_interval: float = MIN_INTERVAL,
+		clock: Callable[[], float] = time.monotonic,
 	) -> None:
 		if not draft_id:
 			raise ValueError("draft_id must be non-zero")
@@ -166,7 +174,11 @@ class DraftUpdater:
 		self._last_sent_at = self._clock()
 		try:
 			self.sender.send_message_draft(
-				self.chat_id, self.draft_id, text, thread_id=self.thread_id, can_stop=self.can_stop,
+				self.chat_id,
+				self.draft_id,
+				text,
+				thread_id=self.thread_id,
+				can_stop=self.can_stop,
 				keep_on_stop=self.keep_on_stop,
 			)
 		except TelegramApiError as exc:
@@ -205,9 +217,22 @@ def _default_stream(**kwargs: Any):
 def _stream_kwargs(kwargs: dict) -> dict:
 	"""run_agent_sync kwargs -> run_agent_stream kwargs (stream has no ``now``)."""
 	allowed = {
-		"agent_name", "prompt", "provider", "model", "channel_id", "external_id", "conversation_id",
-		"prompt_template", "prompt_version", "parent_conversation_id", "invoked_by_agent",
-		"prompt_cache_options", "skip_user_message", "files", "project", "client_idempotency_key",
+		"agent_name",
+		"prompt",
+		"provider",
+		"model",
+		"channel_id",
+		"external_id",
+		"conversation_id",
+		"prompt_template",
+		"prompt_version",
+		"parent_conversation_id",
+		"invoked_by_agent",
+		"prompt_cache_options",
+		"skip_user_message",
+		"files",
+		"project",
+		"client_idempotency_key",
 	}
 	return {k: v for k, v in kwargs.items() if k in allowed}
 
@@ -241,8 +266,16 @@ def _consume(stream_factory: Callable[..., Any], kwargs: dict, on_chunk: Callabl
 
 
 def make_runner(
-	sender: Any, chat_id: Any, event_name: str, gateway_name: str, *, thread_id: Any = None, keep_on_stop: bool = False,
-	cache: Any = None, stream_factory: Callable[..., Any] = _default_stream, clock: Callable[[], float] = time.monotonic,
+	sender: Any,
+	chat_id: Any,
+	event_name: str,
+	gateway_name: str,
+	*,
+	thread_id: Any = None,
+	keep_on_stop: bool = False,
+	cache: Any = None,
+	stream_factory: Callable[..., Any] = _default_stream,
+	clock: Callable[[], float] = time.monotonic,
 	min_interval: float = MIN_INTERVAL,
 ) -> Callable[..., dict]:
 	"""A ``run_agent_sync``-compatible callable that streams the reply as drafts.
@@ -255,11 +288,20 @@ def make_runner(
 
 	def runner(**kwargs: Any) -> dict:
 		updater = DraftUpdater(
-			sender, chat_id, draft_id_for(event_name), thread_id=thread_id, keep_on_stop=keep_on_stop,
-			min_interval=min_interval, clock=clock,
+			sender,
+			chat_id,
+			draft_id_for(event_name),
+			thread_id=thread_id,
+			keep_on_stop=keep_on_stop,
+			min_interval=min_interval,
+			clock=clock,
 		)
 		state.update(
-			draft_id=updater.draft_id, event=event_name, keep_on_stop=keep_on_stop, stopped=False, run_id="",
+			draft_id=updater.draft_id,
+			event=event_name,
+			keep_on_stop=keep_on_stop,
+			stopped=False,
+			run_id="",
 			draft_text=False,
 		)
 		partial = {"text": ""}
@@ -290,7 +332,11 @@ def make_runner(
 			state.clear()
 			text = (final.get("response") if final.get("type") == "complete" else "") or partial["text"]
 			if keep_on_stop and str(text).strip():
-				return {"success": True, "response": str(text), "agent_run_id": final.get("agent_run_id") or snapshot.get("run_id")}
+				return {
+					"success": True,
+					"response": str(text),
+					"agent_run_id": final.get("agent_run_id") or snapshot.get("run_id"),
+				}
 			return {"success": True, "response": NO_REPLY, "agent_run_id": final.get("agent_run_id") or ""}
 		if not final:
 			return {"success": False, "error": "Agent stream ended without a result"}
@@ -311,7 +357,15 @@ def before_send(event: Any, gateway: Any, parts: list[str], cache: Any = None) -
 	return parts
 
 
-def handle_stopped(gateway: Any, adapter: Any, parsed: Any, request: Any = None, *, cache: Any = None, cancel: Callable[[str], Any] | None = None) -> dict | None:
+def handle_stopped(
+	gateway: Any,
+	adapter: Any,
+	parsed: Any,
+	request: Any = None,
+	*,
+	cache: Any = None,
+	cancel: Callable[[str], Any] | None = None,
+) -> dict | None:
 	"""``stopped_message_generation``: mark the stream stopped and cancel the agent run if known."""
 	raw = getattr(parsed, "raw", None) or {}
 	info = raw.get("stopped_message_generation")
@@ -343,4 +397,9 @@ def handle_stopped(gateway: Any, adapter: Any, parsed: Any, request: Any = None,
 				frappe.set_user(prior)
 		except Exception:
 			cancelled = False
-	return {"success": True, "ignored": "stopped_message_generation", "stopped": True, "run_cancelled": cancelled}
+	return {
+		"success": True,
+		"ignored": "stopped_message_generation",
+		"stopped": True,
+		"run_cancelled": cancelled,
+	}

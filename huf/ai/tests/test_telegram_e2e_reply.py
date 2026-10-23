@@ -18,15 +18,27 @@ import frappe
 
 from huf.ai import gateway_service
 from huf.ai import whatsapp_send_file as send_file
-from huf.ai.gateway_adapters import provider_hooks, telegram_buttons as tb, telegram_hooks  # noqa: F401
-from huf.ai.gateway_adapters import telegram_media_reply as mr, telegram_pipeline as tp, telegram_voice as tv
+from huf.ai.gateway_adapters import provider_hooks, telegram_hooks  # noqa: F401
+from huf.ai.gateway_adapters import telegram_buttons as tb
+from huf.ai.gateway_adapters import telegram_media_reply as mr
+from huf.ai.gateway_adapters import telegram_pipeline as tp
+from huf.ai.gateway_adapters import telegram_voice as tv
 from huf.ai.gateway_adapters.telegram import TelegramGatewayAdapter
 from huf.ai.tests.telegram_fakes import SECRET, TOKEN, FakeBotApi
 
 CHAT = 555
-VOICE_RAW = {"update_id": 1, "message": {"message_id": 77, "voice": {"file_id": "F1", "duration": 3},
-	"chat": {"id": CHAT, "type": "private"}}}
-TEXT_RAW = {"update_id": 1, "message": {"message_id": 77, "text": "hi", "chat": {"id": CHAT, "type": "private"}}}
+VOICE_RAW = {
+	"update_id": 1,
+	"message": {
+		"message_id": 77,
+		"voice": {"file_id": "F1", "duration": 3},
+		"chat": {"id": CHAT, "type": "private"},
+	},
+}
+TEXT_RAW = {
+	"update_id": 1,
+	"message": {"message_id": 77, "text": "hi", "chat": {"id": CHAT, "type": "private"}},
+}
 
 
 class FakeCache:
@@ -66,8 +78,13 @@ class FakeEvent:
 
 
 def make_gateway(voice_mode=""):
-	return SimpleNamespace(name="G1", provider="Telegram", voice_reply_mode=voice_mode, direct_policy="Open",
-		retry_max_attempts=4)
+	return SimpleNamespace(
+		name="G1",
+		provider="Telegram",
+		voice_reply_mode=voice_mode,
+		direct_policy="Open",
+		retry_max_attempts=4,
+	)
 
 
 def block(kind, obj) -> str:
@@ -90,8 +107,10 @@ class Base(unittest.TestCase):
 	def setUp(self):
 		self.api = FakeBotApi()
 		self.adapter = TelegramGatewayAdapter(
-			{"token": TOKEN, "webhook_secret": SECRET}, http_post=self.api.http_post,
-			http_get=self.api.http_get, download_attachments=False,
+			{"token": TOKEN, "webhook_secret": SECRET},
+			http_post=self.api.http_post,
+			http_get=self.api.http_get,
+			download_attachments=False,
 		)
 		self.cache = FakeCache()
 		self.svc = mock.MagicMock()
@@ -170,16 +189,31 @@ class TestPlainReply(Base):
 		self.assertEqual(result["status"], "Succeeded")
 
 	def test_i_forum_topic_reply_carries_message_thread_id(self):
-		raw = {"update_id": 1, "message": {"message_id": 77, "message_thread_id": 12, "is_topic_message": True,
-			"text": "hi", "chat": {"id": CHAT, "type": "supergroup"}}}
+		raw = {
+			"update_id": 1,
+			"message": {
+				"message_id": 77,
+				"message_thread_id": 12,
+				"is_topic_message": True,
+				"text": "hi",
+				"chat": {"id": CHAT, "type": "supergroup"},
+			},
+		}
 		self.reply(FakeEvent(raw=raw), "hello topic")
 		(sent,) = self.payloads("sendMessage")
 		self.assertEqual(sent["message_thread_id"], 12)
 		self.assertEqual(sent["reply_parameters"]["message_id"], 77)
 
 	def test_i_non_topic_supergroup_reply_has_no_thread(self):
-		raw = {"update_id": 1, "message": {"message_id": 77, "message_thread_id": 12, "text": "hi",
-			"chat": {"id": CHAT, "type": "supergroup"}}}
+		raw = {
+			"update_id": 1,
+			"message": {
+				"message_id": 77,
+				"message_thread_id": 12,
+				"text": "hi",
+				"chat": {"id": CHAT, "type": "supergroup"},
+			},
+		}
 		self.reply(FakeEvent(raw=raw), "hello group")
 		(sent,) = self.payloads("sendMessage")
 		self.assertNotIn("message_thread_id", sent)
@@ -190,17 +224,28 @@ class TestMediaBlock(Base):
 		text = "Report ready.\n" + media(
 			photo("P1", caption="chart"),
 			{"type": "document", "source": "file_id", "value": "D1"},
-			photo("P2"), photo("P3"), photo("P4"),
+			photo("P2"),
+			photo("P3"),
+			photo("P4"),
 			{"type": "voice", "source": "file_id", "value": "V1"},
 			{"type": "location", "latitude": 1.5, "longitude": 2.5},
 			{"type": "poll", "question": "Pick?", "options": ["a", "b"]},
 			{"type": "dice", "emoji": "🎲"},
 		)
 		self.reply(FakeEvent(), text)
-		self.assertEqual(self.methods(), [
-			"sendPhoto", "sendDocument", "sendMediaGroup", "sendVoice", "sendLocation", "sendPoll", "sendDice",
-			"sendMessage",
-		])
+		self.assertEqual(
+			self.methods(),
+			[
+				"sendPhoto",
+				"sendDocument",
+				"sendMediaGroup",
+				"sendVoice",
+				"sendLocation",
+				"sendPoll",
+				"sendDice",
+				"sendMessage",
+			],
+		)
 		first_photo = self.payloads("sendPhoto")[0]
 		self.assertEqual(first_photo["caption"], "chart")
 		self.assertEqual(first_photo["reply_parameters"]["message_id"], 77)
@@ -312,8 +357,11 @@ class TestOptOutAndBlocked(Base):
 
 class TestRetry(Base):
 	def test_g_flood_wait_retries_only_unsent_part_after_retry_after(self):
-		self.api.queue("sendMessage", {"ok": True, "result": {"message_id": 500}},
-			FakeBotApi.error("Too Many Requests: retry after 3", 429, retry_after=3))
+		self.api.queue(
+			"sendMessage",
+			{"ok": True, "result": {"message_id": 500}},
+			FakeBotApi.error("Too Many Requests: retry after 3", 429, retry_after=3),
+		)
 		event = FakeEvent()
 		text = "x" * 5000
 		result = self.reply(event, text)
@@ -352,8 +400,13 @@ class TestGuest(Base):
 		self.assertIsNotNone(provider_hooks.get("Telegram", "guest_reply"))
 		raw = {
 			"update_id": 9,
-			"guest_message": {"message_id": 5, "guest_query_id": "GQ1", "chat": {"id": CHAT, "type": "supergroup"},
-				"from": {"id": 42, "first_name": "Gus"}, "text": "hi there"},
+			"guest_message": {
+				"message_id": 5,
+				"guest_query_id": "GQ1",
+				"chat": {"id": CHAT, "type": "supergroup"},
+				"from": {"id": 42, "first_name": "Gus"},
+				"text": "hi there",
+			},
 			"telegram_meta": {"update_kind": "guest_message", "guest": True, "guest_query_id": "GQ1"},
 		}
 		event = FakeEvent(raw=raw, conversation_id="guest:555")
@@ -362,8 +415,9 @@ class TestGuest(Base):
 		payload = self.payloads("answerGuestQuery")[0]
 		self.assertEqual(payload["guest_query_id"], "GQ1")
 		self.assertIn("Hello guest", json.dumps(payload))
-		self.assertEqual(result, {"event_name": "EVT-1", "status": "Succeeded", "agent_run_id": "RUN-1",
-			"guest": True})
+		self.assertEqual(
+			result, {"event_name": "EVT-1", "status": "Succeeded", "agent_run_id": "RUN-1", "guest": True}
+		)
 
 
 if __name__ == "__main__":

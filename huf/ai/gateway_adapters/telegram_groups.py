@@ -113,8 +113,11 @@ def record_pending_join(gateway, ctx: dict) -> str:
 	existing = frappe.get_all(
 		"Gateway Access Entry",
 		filters={
-			"gateway": gateway.name, "entry_type": "Room", "provider": gateway.provider,
-			"external_id": external_id, "state": "Pending",
+			"gateway": gateway.name,
+			"entry_type": "Room",
+			"provider": gateway.provider,
+			"external_id": external_id,
+			"state": "Pending",
 		},
 		pluck="name",
 		limit_page_length=1,
@@ -124,11 +127,15 @@ def record_pending_join(gateway, ctx: dict) -> str:
 	limit = svc._int_setting(gateway, "pairing_pending_limit", svc.PAIRING_DEFAULT_PENDING_LIMIT)
 	if limit > 0:
 		pending = frappe.get_all(
-			"Gateway Access Entry", filters={"gateway": gateway.name, "state": "Pending"}, pluck="name",
+			"Gateway Access Entry",
+			filters={"gateway": gateway.name, "state": "Pending"},
+			pluck="name",
 			limit_page_length=limit,
 		)
 		if len(pending or []) >= limit:
-			frappe.logger("huf").warning(f"Telegram gateway {gateway.name}: pending join cap reached; not recorded")
+			frappe.logger("huf").warning(
+				f"Telegram gateway {gateway.name}: pending join cap reached; not recorded"
+			)
 			return ""
 	label = f"Join request: {ctx['user_name'] or ctx['user_id']} -> {ctx['chat_title'] or ctx['chat_id']}"
 	doc = frappe.get_doc(
@@ -157,7 +164,9 @@ def handle_join_request(gateway, adapter, parsed, request) -> dict | None:
 	from huf.ai import telegram_guard
 
 	if not telegram_guard.room_admitted(gateway, ctx["chat_id"]):  # no admission, no join handling
-		frappe.logger("huf").info(f"Telegram gateway {gateway.name}: join request for an unadmitted room ignored")
+		frappe.logger("huf").info(
+			f"Telegram gateway {gateway.name}: join request for an unadmitted room ignored"
+		)
 		return _ack("chat_join_request", "room not admitted", decision="ignore")
 	decision = decide(ctx)
 	client = adapter.client
@@ -176,12 +185,16 @@ def handle_join_request(gateway, adapter, parsed, request) -> dict | None:
 			admin.decline_join_request(client, ctx["chat_id"], ctx["user_id"])
 	except admin.AdminActionError as exc:
 		error = f"{exc.code}: {exc}"
-		frappe.logger("huf").warning(f"Telegram gateway {gateway.name}: join request {decision} failed ({exc.code})")
+		frappe.logger("huf").warning(
+			f"Telegram gateway {gateway.name}: join request {decision} failed ({exc.code})"
+		)
 	frappe.logger("huf").info(
 		f"Telegram gateway {gateway.name}: join request chat={ctx['chat_id']} user={ctx['user_id']} "
 		f"guard={bool(ctx['query_id'])} decision={decision}"
 	)
-	return _ack("chat_join_request", error or decision, decision=decision, **({"error": error} if error else {}))
+	return _ack(
+		"chat_join_request", error or decision, decision=decision, **({"error": error} if error else {})
+	)
 
 
 # -- membership --------------------------------------------------------------------------------
@@ -300,7 +313,9 @@ def handle_service_message(gateway, adapter, parsed, request) -> dict | None:
 		else:
 			new_id = parsed.chat_id
 		moved = migrate_room(gateway, str(old_id), str(new_id))
-		return _ack("migrate_chat", "migrated" if moved else "nothing to migrate", old=str(old_id), new=str(new_id))
+		return _ack(
+			"migrate_chat", "migrated" if moved else "nothing to migrate", old=str(old_id), new=str(new_id)
+		)
 	if message.get("new_chat_members"):
 		welcomed = 0
 		try:

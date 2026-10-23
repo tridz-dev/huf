@@ -3,20 +3,21 @@
 
 import unittest
 from types import SimpleNamespace
+
 from huf.ai.reasoning import (
-    ReasoningPolicy,
     ReasoningCapabilities,
+    ReasoningPolicy,
     ReasoningResolution,
+    build_reasoning_kwargs,
     detect_model_capabilities,
     resolve_reasoning,
-    build_reasoning_kwargs,
 )
 
 
 class TestReasoningLayer(unittest.TestCase):
 
     def test_adaptive_regex_matches_bedrock_and_vertex_ids(self):
-        from huf.ai.reasoning import requires_adaptive_thinking, rejects_sampling_params
+        from huf.ai.reasoning import rejects_sampling_params, requires_adaptive_thinking
 
         for name in (
             "claude-opus-5", "anthropic/claude-sonnet-5-20260101", "bedrock/us.anthropic.claude-opus-5-v1:0",

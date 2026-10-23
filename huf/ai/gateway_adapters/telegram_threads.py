@@ -84,7 +84,9 @@ def is_addressed_to_bot(message: Mapping[str, Any], bot_username: str, bot_id: A
 	bid = str(bot_id) if bot_id not in (None, "") else ""
 	replied = _map(msg.get("reply_to_message"))
 	rfrom = _map(replied.get("from"))
-	if rfrom and ((bid and str(rfrom.get("id")) == bid) or (uname and str(rfrom.get("username", "")).lower() == uname)):
+	if rfrom and (
+		(bid and str(rfrom.get("id")) == bid) or (uname and str(rfrom.get("username", "")).lower() == uname)
+	):
 		return True
 	for source, key in (("text", "entities"), ("caption", "caption_entities")):
 		text = str(msg.get(source) or "")
@@ -105,7 +107,9 @@ def is_addressed_to_bot(message: Mapping[str, Any], bot_username: str, bot_id: A
 	return False
 
 
-def create_topic_payload(chat_id: Any, name: str, *, icon_color: int | None = None, icon_custom_emoji_id: str | None = None) -> dict:
+def create_topic_payload(
+	chat_id: Any, name: str, *, icon_color: int | None = None, icon_custom_emoji_id: str | None = None
+) -> dict:
 	"""``createForumTopic`` payload (supergroups need can_manage_topics; private chats need topic mode)."""
 	name = str(name or "").strip()
 	if not 1 <= len(name) <= 128:

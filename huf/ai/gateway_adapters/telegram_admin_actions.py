@@ -63,7 +63,9 @@ JOIN_RESULTS = ("approve", "decline", "queue")
 
 
 class AdminActionError(ValueError):
-	def __init__(self, method: str, code: str, message: str, *, cause: TelegramApiError | None = None) -> None:
+	def __init__(
+		self, method: str, code: str, message: str, *, cause: TelegramApiError | None = None
+	) -> None:
 		self.method = method
 		self.code = code
 		self.cause = cause
@@ -72,11 +74,18 @@ class AdminActionError(ValueError):
 
 def classify_error(method: str, exc: TelegramApiError) -> AdminActionError:
 	d = (exc.description or "").lower()
-	if "not enough rights" in d or "chat_admin_required" in d or "need administrator rights" in d or (
-		"administrator rights" in d
-	) or "have no rights" in d:
-		code, msg = "not_enough_rights", (
-			f"The bot lacks the administrator right needed for {method}. Grant it in the chat's admin settings."
+	if (
+		"not enough rights" in d
+		or "chat_admin_required" in d
+		or "need administrator rights" in d
+		or ("administrator rights" in d)
+		or "have no rights" in d
+	):
+		code, msg = (
+			"not_enough_rights",
+			(
+				f"The bot lacks the administrator right needed for {method}. Grant it in the chat's admin settings."
+			),
 		)
 	elif "bot is not a member" in d or "bot was kicked" in d or "bot is not an administrator" in d:
 		code, msg = "not_admin", f"The bot is not an administrator of this chat ({method})."
@@ -84,13 +93,24 @@ def classify_error(method: str, exc: TelegramApiError) -> AdminActionError:
 		code, msg = "chat_not_found", f"Chat not found for {method}."
 	elif "user_not_participant" in d or "participant_id_invalid" in d or "user not found" in d:
 		code, msg = "user_not_in_chat", f"The user is not a member of this chat ({method})."
-	elif "can't remove chat owner" in d or "user is an administrator" in d or "can't restrict" in d or (
-		"can't demote" in d
-	) or "method is available for supergroup" in d:
-		code, msg = "cannot_target_admin", f"{method} cannot be applied to this user or chat type: {exc.description}"
+	elif (
+		"can't remove chat owner" in d
+		or "user is an administrator" in d
+		or "can't restrict" in d
+		or ("can't demote" in d)
+		or "method is available for supergroup" in d
+	):
+		code, msg = (
+			"cannot_target_admin",
+			f"{method} cannot be applied to this user or chat type: {exc.description}",
+		)
 	elif "hide_requester_missing" in d or "user_already_participant" in d or "join request" in d:
 		code, msg = "request_gone", "The join request was already handled or no longer exists."
-	elif "message to delete not found" in d or "message to pin not found" in d or "message can't be deleted" in d:
+	elif (
+		"message to delete not found" in d
+		or "message to pin not found" in d
+		or "message can't be deleted" in d
+	):
 		code, msg = "message_gone", f"The message is gone or cannot be changed ({method})."
 	elif exc.flood_control:
 		code, msg = "flood", f"Telegram rate limit hit on {method}; retry after {exc.retry_after or '?'}s."
@@ -131,7 +151,9 @@ def answer_join_request_query(client, query_id: str, result: str):
 	"""Guard mode: answerChatJoinRequestQuery (approve | decline | queue), within 10s of the update."""
 	if result not in JOIN_RESULTS:
 		raise ValueError(f"result must be one of {JOIN_RESULTS}")
-	return _call(client, "answerChatJoinRequestQuery", {"chat_join_request_query_id": str(query_id), "result": result})
+	return _call(
+		client, "answerChatJoinRequestQuery", {"chat_join_request_query_id": str(query_id), "result": result}
+	)
 
 
 def send_join_request_web_app(client, query_id: str, web_app_url: str):
@@ -139,7 +161,9 @@ def send_join_request_web_app(client, query_id: str, web_app_url: str):
 	if not str(web_app_url).startswith("https://"):
 		raise ValueError("web_app_url must be an HTTPS URL")
 	return _call(
-		client, "sendChatJoinRequestWebApp", {"chat_join_request_query_id": str(query_id), "web_app_url": web_app_url}
+		client,
+		"sendChatJoinRequestWebApp",
+		{"chat_join_request_query_id": str(query_id), "web_app_url": web_app_url},
 	)
 
 
@@ -157,7 +181,9 @@ def ban_member(client, chat_id, user_id, *, until_date: int | None = None, revok
 
 def unban_member(client, chat_id, user_id, *, only_if_banned: bool = True):
 	return _call(
-		client, "unbanChatMember", {"chat_id": _id(chat_id), "user_id": int(user_id), "only_if_banned": only_if_banned}
+		client,
+		"unbanChatMember",
+		{"chat_id": _id(chat_id), "user_id": int(user_id), "only_if_banned": only_if_banned},
 	)
 
 
@@ -168,7 +194,9 @@ def _flags(allowed: tuple[str, ...], values: Mapping[str, Any], what: str) -> di
 	return {k: bool(v) for k, v in values.items()}
 
 
-def restrict_member(client, chat_id, user_id, permissions: Mapping[str, bool], *, until_date: int | None = None):
+def restrict_member(
+	client, chat_id, user_id, permissions: Mapping[str, bool], *, until_date: int | None = None
+):
 	"""restrictChatMember with an explicit ChatPermissions set (omitted permissions are denied)."""
 	perms = {k: False for k in CHAT_PERMISSIONS}
 	perms.update(_flags(CHAT_PERMISSIONS, permissions, "permission"))
@@ -199,7 +227,9 @@ def promote_member(client, chat_id, user_id, rights: Mapping[str, bool]):
 
 def demote_member(client, chat_id, user_id):
 	return _call(
-		client, "promoteChatMember", {"chat_id": _id(chat_id), "user_id": int(user_id), **{k: False for k in ADMIN_RIGHTS}}
+		client,
+		"promoteChatMember",
+		{"chat_id": _id(chat_id), "user_id": int(user_id), **{k: False for k in ADMIN_RIGHTS}},
 	)
 
 

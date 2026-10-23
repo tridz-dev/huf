@@ -13,8 +13,13 @@ import re
 from typing import Any, Mapping, Sequence
 
 SCOPES = (
-	"default", "all_private_chats", "all_group_chats", "all_chat_administrators",
-	"chat", "chat_administrators", "chat_member",
+	"default",
+	"all_private_chats",
+	"all_group_chats",
+	"all_chat_administrators",
+	"chat",
+	"chat_administrators",
+	"chat_member",
 )
 MAX_COMMANDS = 100
 _NAME_RE = re.compile(r"^[a-z0-9_]{1,32}$")
@@ -65,7 +70,11 @@ def build_commands(commands: Sequence[Any]) -> list[dict[str, Any]]:
 
 
 def build_payload(
-	commands: Sequence[Any], *, scope: str = "default", chat_id: Any = None, user_id: Any = None,
+	commands: Sequence[Any],
+	*,
+	scope: str = "default",
+	chat_id: Any = None,
+	user_id: Any = None,
 	language_code: str | None = None,
 ) -> dict[str, Any]:
 	payload: dict[str, Any] = {"commands": build_commands(commands)}
@@ -91,9 +100,23 @@ def _target(scope: str, chat_id: Any, user_id: Any, language_code: str | None) -
 	return payload
 
 
-def delete_commands(client: Any, *, scope: str = "default", chat_id: Any = None, user_id: Any = None, language_code: str | None = None) -> Any:
+def delete_commands(
+	client: Any,
+	*,
+	scope: str = "default",
+	chat_id: Any = None,
+	user_id: Any = None,
+	language_code: str | None = None,
+) -> Any:
 	return client.call("deleteMyCommands", _target(scope, chat_id, user_id, language_code))
 
 
-def get_commands(client: Any, *, scope: str = "default", chat_id: Any = None, user_id: Any = None, language_code: str | None = None) -> Any:
+def get_commands(
+	client: Any,
+	*,
+	scope: str = "default",
+	chat_id: Any = None,
+	user_id: Any = None,
+	language_code: str | None = None,
+) -> Any:
 	return client.call("getMyCommands", _target(scope, chat_id, user_id, language_code))

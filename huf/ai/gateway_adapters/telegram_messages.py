@@ -48,7 +48,13 @@ def _load(c: Any, key: str) -> list:
 
 
 def record_sent(
-	gateway: str, chat_id: Any, event_name: str, message_ids: list, *, kind: str = "text", cache: Any = None,
+	gateway: str,
+	chat_id: Any,
+	event_name: str,
+	message_ids: list,
+	*,
+	kind: str = "text",
+	cache: Any = None,
 	text: str = "",
 ) -> None:
 	"""Remember ``message_ids`` (Telegram ints, in send order) sent for ``event_name``. Never raises."""

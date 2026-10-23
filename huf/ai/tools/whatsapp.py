@@ -58,7 +58,7 @@ written. The tool never switches the session user.
 import contextvars
 import json
 from contextlib import contextmanager
-from typing import Optional, Any
+from typing import Any, Optional
 
 import frappe
 import requests

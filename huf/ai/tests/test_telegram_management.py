@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import unittest
 
-from huf.ai.telegram_management import build_health, build_overview, credential_presence, _safe_text
+from huf.ai.telegram_management import _safe_text, build_health, build_overview, credential_presence
 
 GW = {"name": "TG-1", "is_enabled": 1, "last_event_at": "2026-01-01 10:00:00", "last_error": None}
 OK = {"token_present": True, "webhook_secret_present": True}
@@ -24,7 +24,10 @@ def _states(h):
 
 class TestTelegramManagement(unittest.TestCase):
 	def test_presence_masks_values(self):
-		self.assertEqual(credential_presence({"token": "123:abc", "webhook_secret": ""}), {"token_present": True, "webhook_secret_present": False})
+		self.assertEqual(
+			credential_presence({"token": "123:abc", "webhook_secret": ""}),
+			{"token_present": True, "webhook_secret_present": False},
+		)
 
 	def test_overview_has_no_secret_fields(self):
 		out = build_overview(GW, OK, {"id": 1}, "", "https://x/y")

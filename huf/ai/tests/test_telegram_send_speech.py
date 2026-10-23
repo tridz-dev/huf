@@ -26,7 +26,13 @@ class TestSendSpeech(Base):
 	def test_sends_voice_with_caption_reply_and_voice(self):
 		with patch.object(telegram_voice, "speech_upload", return_value=UPLOAD) as sp:
 			out = self.run_action(
-				action="send_speech", chat_id="9", text="hello there", voice="nova", caption="cap", reply_to_message_id=4)
+				action="send_speech",
+				chat_id="9",
+				text="hello there",
+				voice="nova",
+				caption="cap",
+				reply_to_message_id=4,
+			)
 		self.assertTrue(out["success"])
 		self.assertEqual(sp.call_args.args[1:], ("hello there", "nova"))
 		self.assertEqual(len(self.api.of("sendVoice")), 1)
@@ -53,9 +59,11 @@ class TestSendSpeech(Base):
 		self.assertIn("ffmpeg is not installed", out["error"])
 
 	def test_speech_upload_uses_agent_tts_and_voice(self):
-		with patch.object(telegram_voice, "frappe") as fr, \
-			patch.object(telegram_voice, "_conversation", return_value="CONV"), \
-			patch.object(telegram_voice, "_synthesize", return_value=OGG) as syn:
+		with (
+			patch.object(telegram_voice, "frappe") as fr,
+			patch.object(telegram_voice, "_conversation", return_value="CONV"),
+			patch.object(telegram_voice, "_synthesize", return_value=OGG) as syn,
+		):
 			fr.db.get_value.return_value = "Agent A"
 			name, data, mime = telegram_voice.speech_upload("RUN", "**hi**", "nova")
 		self.assertEqual(syn.call_args.args, ("Agent A", "hi", "CONV", "RUN"))

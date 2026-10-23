@@ -7,7 +7,9 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from huf.ai.gateway_adapters import GatewayInboundRequest, telegram_business as biz, telegram_ingest as ing
+from huf.ai.gateway_adapters import GatewayInboundRequest
+from huf.ai.gateway_adapters import telegram_business as biz
+from huf.ai.gateway_adapters import telegram_ingest as ing
 from huf.ai.gateway_adapters.telegram import WEBHOOK_SECRET_HEADER, TelegramGatewayAdapter
 from huf.ai.tests.telegram_fakes import SECRET, TOKEN, FakeBotApi, clear_update_dedup, isolate_update_dedup
 
@@ -28,22 +30,39 @@ class FakeCache:
 
 
 def connection(enabled=True, rights=None, cid="bc-1"):
-	conn = {"id": cid, "user": {"id": OWNER, "is_bot": False, "first_name": "Owner"}, "user_chat_id": OWNER,
-		"date": 1760000000, "is_enabled": enabled}
+	conn = {
+		"id": cid,
+		"user": {"id": OWNER, "is_bot": False, "first_name": "Owner"},
+		"user_chat_id": OWNER,
+		"date": 1760000000,
+		"is_enabled": enabled,
+	}
 	if rights is not None:
 		conn["rights"] = rights
 	return {"update_id": 1, "business_connection": conn}
 
 
 def message(kind="business_message", sender=CUST, extra=None, text="hello", cid="bc-1"):
-	msg = {"message_id": 7, "business_connection_id": cid, "from": {"id": sender, "is_bot": False, "first_name": "X"},
-		"chat": {"id": CUST, "type": "private"}, "date": 1760000000, "text": text}
+	msg = {
+		"message_id": 7,
+		"business_connection_id": cid,
+		"from": {"id": sender, "is_bot": False, "first_name": "X"},
+		"chat": {"id": CUST, "type": "private"},
+		"date": 1760000000,
+		"text": text,
+	}
 	msg.update(extra or {})
 	return {"update_id": 2, kind: msg}
 
 
-DELETED = {"update_id": 3, "deleted_business_messages": {"business_connection_id": "bc-1",
-	"chat": {"id": CUST, "type": "private"}, "message_ids": [7, 8]}}
+DELETED = {
+	"update_id": 3,
+	"deleted_business_messages": {
+		"business_connection_id": "bc-1",
+		"chat": {"id": CUST, "type": "private"},
+		"message_ids": [7, 8],
+	},
+}
 
 
 class Base(unittest.TestCase):
@@ -58,10 +77,15 @@ class Base(unittest.TestCase):
 		isolate_update_dedup(self)
 		self.api = FakeBotApi()
 		self.adapter = TelegramGatewayAdapter(
-			{"token": TOKEN, "webhook_secret": SECRET}, http_post=self.api.http_post, download_attachments=False
+			{"token": TOKEN, "webhook_secret": SECRET},
+			http_post=self.api.http_post,
+			download_attachments=False,
 		)
 		self.cache = FakeCache()
-		for p in (mock.patch.object(biz, "_cache", return_value=self.cache), mock.patch.object(biz.frappe, "logger")):
+		for p in (
+			mock.patch.object(biz, "_cache", return_value=self.cache),
+			mock.patch.object(biz.frappe, "logger"),
+		):
 			p.start()
 			self.addCleanup(p.stop)
 		self._saved = (biz._POLICY, biz._DRAFT_PRODUCER, list(biz._OBSERVERS))
@@ -94,7 +118,9 @@ class TestConnection(Base):
 		r = self.feed(connection(rights={"can_reply": True}))
 		self.assertTrue(r["enabled"])
 		c = biz.get_connection("bc-1")
-		self.assertEqual((c["owner_id"], c["user_chat_id"], c["rights"]), (str(OWNER), str(OWNER), {"can_reply": True}))
+		self.assertEqual(
+			(c["owner_id"], c["user_chat_id"], c["rights"]), (str(OWNER), str(OWNER), {"can_reply": True})
+		)
 
 	def test_disabled_and_missing_rights(self):
 		self.feed(connection(enabled=False))
@@ -103,7 +129,10 @@ class TestConnection(Base):
 		self.assertFalse(biz.can(biz.get_connection("bc-1"), "can_reply"))
 
 	def test_unknown_connection_refresh_via_api(self):
-		self.api.queue("getBusinessConnection", {"ok": True, "result": connection(rights={"can_reply": True})["business_connection"]})
+		self.api.queue(
+			"getBusinessConnection",
+			{"ok": True, "result": connection(rights={"can_reply": True})["business_connection"]},
+		)
 		self.assertEqual(biz.get_connection("bc-1", self.adapter)["owner_id"], str(OWNER))
 		self.assertEqual(self.api.last("getBusinessConnection")["payload"]["business_connection_id"], "bc-1")
 
@@ -204,7 +233,10 @@ class TestSend(Base):
 		self.assertEqual(p["reply_parameters"]["message_id"], 7)
 
 	def test_blocked_cases(self):
-		for conn, reason in ((connection(), "no_reply_right"), (connection(enabled=False, rights={"can_reply": True}), "connection_disabled")):
+		for conn, reason in (
+			(connection(), "no_reply_right"),
+			(connection(enabled=False, rights={"can_reply": True}), "connection_disabled"),
+		):
 			self.feed(conn)
 			with self.assertRaises(biz.BusinessReplyBlocked) as cm:
 				biz.reply_as_business("bc-1", CUST, "hi", sender=self.adapter.sender)
@@ -244,7 +276,10 @@ class TestDraft(Base):
 	def test_approve_sends_as_business_once(self):
 		self.assertEqual(self._cb("a")["result"], "approved")
 		sent = self.sends()[-1]["payload"]
-		self.assertEqual((sent["business_connection_id"], sent["chat_id"], sent["text"]), ("bc-1", str(CUST), "Sure, 3pm works."))
+		self.assertEqual(
+			(sent["business_connection_id"], sent["chat_id"], sent["text"]),
+			("bc-1", str(CUST), "Sure, 3pm works."),
+		)
 		n = len(self.sends())
 		self.assertEqual(self._cb("a")["result"], "stale")
 		self.assertEqual(len(self.sends()), n)
@@ -263,7 +298,9 @@ class TestDraft(Base):
 	def test_edit_then_submit(self):
 		self.assertEqual(self._cb("e")["result"], "editing")
 		self.assertEqual(biz.submit_edit(self.adapter, self.draft_id, CUST, "x")["result"], "forbidden")
-		self.assertEqual(biz.submit_edit(self.adapter, self.draft_id, OWNER, "4pm instead")["result"], "approved")
+		self.assertEqual(
+			biz.submit_edit(self.adapter, self.draft_id, OWNER, "4pm instead")["result"], "approved"
+		)
 		self.assertEqual(self.sends()[-1]["payload"]["text"], "4pm instead")
 
 	def test_approve_after_right_revoked_blocked(self):

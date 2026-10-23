@@ -59,7 +59,9 @@ class TestCallSiteDefaults(unittest.TestCase):
 	def test_hook_is_used_when_registered(self):
 		provider_hooks.register("Demo2", "media_save", lambda e, g: ["/files/a"])
 		try:
-			self.assertEqual(gateway_service._save_event_media(None, SimpleNamespace(provider="Demo2")), ["/files/a"])
+			self.assertEqual(
+				gateway_service._save_event_media(None, SimpleNamespace(provider="Demo2")), ["/files/a"]
+			)
 		finally:
 			provider_hooks._HOOKS.pop(("Demo2", "media_save"), None)
 
@@ -108,14 +110,36 @@ class TestGenericHooksRegistered(unittest.TestCase):
 	"""Every hook the generic gateway code calls unconditionally for a provider must be registered."""
 
 	WHATSAPP = (
-		"send_errors", "error_text", "normalize_sender", "consent_required", "linked_sender_ids",
-		"adapter_context", "extra_event_fields", "recover_reply_parts", "send_reply", "inbound_kind",
-		"media_save", "typing", "reply_target", "send_parts", "webhook_signals", "failed_status",
+		"send_errors",
+		"error_text",
+		"normalize_sender",
+		"consent_required",
+		"linked_sender_ids",
+		"adapter_context",
+		"extra_event_fields",
+		"recover_reply_parts",
+		"send_reply",
+		"inbound_kind",
+		"media_save",
+		"typing",
+		"reply_target",
+		"send_parts",
+		"webhook_signals",
+		"failed_status",
 		"mark_read_typing",
 	)
 	TELEGRAM = (
-		"error_text", "normalize_sender", "consent_required", "record_pending_room", "send_reply",
-		"inbound_kind", "media_save", "typing", "reply_finished", "attempt_reply_parts", "ingest_update",
+		"error_text",
+		"normalize_sender",
+		"consent_required",
+		"record_pending_room",
+		"send_reply",
+		"inbound_kind",
+		"media_save",
+		"typing",
+		"reply_finished",
+		"attempt_reply_parts",
+		"ingest_update",
 	)
 
 	def test_whatsapp_hooks(self):

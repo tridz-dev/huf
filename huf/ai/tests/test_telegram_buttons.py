@@ -35,30 +35,40 @@ class Base(unittest.TestCase):
 	def setUp(self):
 		self.api = FakeBotApi()
 		self.adapter = TelegramGatewayAdapter(
-			{"token": TOKEN, "webhook_secret": SECRET}, http_post=self.api.http_post,
-			http_get=self.api.http_get, download_attachments=False,
+			{"token": TOKEN, "webhook_secret": SECRET},
+			http_post=self.api.http_post,
+			http_get=self.api.http_get,
+			download_attachments=False,
 		)
 		self.cache = FakeCache()
 		self.sign = lambda p: self.adapter.sign_callback_data(p, CHAT)
 
 	def callback_update(self, data, cqid="cq1", date=1760000000, label="Approve", message_id=55):
-		return telegram_inbound.parse_update({
-			"update_id": 9,
-			"callback_query": {
-				"id": cqid, "from": {"id": CHAT, "is_bot": False, "first_name": "J"}, "data": data,
-				"message": {
-					"message_id": message_id, "date": date, "chat": {"id": CHAT, "type": "private"},
-					"reply_markup": {"inline_keyboard": [[{"text": label, "callback_data": data}]]},
+		return telegram_inbound.parse_update(
+			{
+				"update_id": 9,
+				"callback_query": {
+					"id": cqid,
+					"from": {"id": CHAT, "is_bot": False, "first_name": "J"},
+					"data": data,
+					"message": {
+						"message_id": message_id,
+						"date": date,
+						"chat": {"id": CHAT, "type": "private"},
+						"reply_markup": {"inline_keyboard": [[{"text": label, "callback_data": data}]]},
+					},
 				},
-			},
-		})
+			}
+		)
 
 	def press(self, spec, **kw):
 		markup = tb.build_markup(tb.validate(spec)[0], self.sign)
 		data = markup["inline_keyboard"][0][0]["callback_data"]
 		parsed = self.callback_update(data, **kw.pop("upd", {}))
 		payload = self.adapter.verify_callback_data(parsed.callback_data, parsed.chat_id)
-		return parsed, tb.handle_callback(parsed, payload, self.adapter.sender, "GW", cache=self.cache, now=NOW, **kw)
+		return parsed, tb.handle_callback(
+			parsed, payload, self.adapter.sender, "GW", cache=self.cache, now=NOW, **kw
+		)
 
 
 class TestParse(unittest.TestCase):
@@ -87,18 +97,32 @@ class TestParse(unittest.TestCase):
 		self.assertLessEqual(sum(len(r) for r in spec["rows"]), tb.MAX_BUTTONS)
 
 	def test_callback_id_size_and_kind_exclusivity(self):
-		spec, errors = tb.validate({"rows": [[
-			{"text": "long", "callback": "x" * (tb.MAX_ID_BYTES + 1)},
-			{"text": "both", "callback": "a", "url": "https://x.io"},
-			{"text": "ok", "callback": "x" * tb.MAX_ID_BYTES},
-		]]})
+		spec, errors = tb.validate(
+			{
+				"rows": [
+					[
+						{"text": "long", "callback": "x" * (tb.MAX_ID_BYTES + 1)},
+						{"text": "both", "callback": "a", "url": "https://x.io"},
+						{"text": "ok", "callback": "x" * tb.MAX_ID_BYTES},
+					]
+				]
+			}
+		)
 		self.assertEqual([b["text"] for b in spec["rows"][0]], ["ok"])
 		self.assertEqual(len(errors), 2)
 
 	def test_url_schemes(self):
-		spec, _ = tb.validate({"rows": [[
-			{"text": "bad", "url": "javascript:alert(1)"}, {"text": "wa", "web_app": "http://x.io"},
-			{"text": "good", "url": "https://x.io"}]]})
+		spec, _ = tb.validate(
+			{
+				"rows": [
+					[
+						{"text": "bad", "url": "javascript:alert(1)"},
+						{"text": "wa", "web_app": "http://x.io"},
+						{"text": "good", "url": "https://x.io"},
+					]
+				]
+			}
+		)
 		self.assertEqual([b["text"] for b in spec["rows"][0]], ["good"])
 
 	def test_empty_spec_rejected(self):
@@ -108,11 +132,21 @@ class TestParse(unittest.TestCase):
 
 class TestMarkup(Base):
 	def test_each_kind(self):
-		spec, _ = tb.validate({"rows": [[
-			{"text": "c", "callback": "go"}, {"text": "u", "url": "https://x.io"},
-			{"text": "w", "web_app": "https://x.io/app"}, {"text": "s", "switch_inline": "q"},
-			{"text": "s2", "switch_inline": "q", "current_chat": True},
-			{"text": "cp", "copy_text": "CODE"}, {"text": "l", "login_url": "https://x.io/login"}]]})
+		spec, _ = tb.validate(
+			{
+				"rows": [
+					[
+						{"text": "c", "callback": "go"},
+						{"text": "u", "url": "https://x.io"},
+						{"text": "w", "web_app": "https://x.io/app"},
+						{"text": "s", "switch_inline": "q"},
+						{"text": "s2", "switch_inline": "q", "current_chat": True},
+						{"text": "cp", "copy_text": "CODE"},
+						{"text": "l", "login_url": "https://x.io/login"},
+					]
+				]
+			}
+		)
 		row = tb.build_markup(spec, self.sign)["inline_keyboard"][0]
 		self.assertLessEqual(len(row[0]["callback_data"].encode()), 64)
 		self.assertEqual(row[1]["url"], "https://x.io")
@@ -123,25 +157,39 @@ class TestMarkup(Base):
 		self.assertEqual(row[6]["login_url"], {"url": "https://x.io/login"})
 
 	def test_max_id_signed_fits_64(self):
-		spec, _ = tb.validate({"rows": [[{"text": "m", "callback": "é" * (tb.MAX_ID_BYTES // 2)}]], "once": True, "edit": True})
-		self.assertLessEqual(len(tb.build_markup(spec, self.sign)["inline_keyboard"][0][0]["callback_data"].encode()), 64)
+		spec, _ = tb.validate(
+			{"rows": [[{"text": "m", "callback": "é" * (tb.MAX_ID_BYTES // 2)}]], "once": True, "edit": True}
+		)
+		self.assertLessEqual(
+			len(tb.build_markup(spec, self.sign)["inline_keyboard"][0][0]["callback_data"].encode()), 64
+		)
 
 	def test_reply_keyboard_and_remove(self):
-		spec, _ = tb.validate({"reply_keyboard": {"rows": [["A", {"text": "Me", "request_contact": True}]],
-			"one_time": True, "placeholder": "pick"}})
+		spec, _ = tb.validate(
+			{
+				"reply_keyboard": {
+					"rows": [["A", {"text": "Me", "request_contact": True}]],
+					"one_time": True,
+					"placeholder": "pick",
+				}
+			}
+		)
 		m = tb.build_markup(spec, self.sign)
 		self.assertTrue(m["one_time_keyboard"])
 		self.assertTrue(m["resize_keyboard"])
 		self.assertEqual(m["input_field_placeholder"], "pick")
 		self.assertEqual(m["keyboard"][0][1], {"text": "Me", "request_contact": True})
-		self.assertEqual(tb.build_markup(tb.validate({"remove_keyboard": True})[0], self.sign), {"remove_keyboard": True})
+		self.assertEqual(
+			tb.build_markup(tb.validate({"remove_keyboard": True})[0], self.sign), {"remove_keyboard": True}
+		)
 
 	def test_pipeline_end_to_end_markup_on_last_part(self):
-		long_text = ("para.\n\n" * 1200)
+		long_text = "para.\n\n" * 1200
 		spec = {"rows": [[{"text": "Yes", "callback": "y"}]]}
 		parts = tp.make_parts(long_text + block(spec))
 		self.assertTrue(all("telegram-buttons" not in p for p in parts))
 		import unittest.mock as m
+
 		event = SimpleNamespace(conversation_id=str(CHAT), name="EV1")
 		with m.patch.object(tb, "_cache", return_value=self.cache):
 			tp_parts = tp.make_parts(long_text + block(spec), tp.reply_scope(None, event))
@@ -157,7 +205,9 @@ class TestMarkup(Base):
 
 	def test_buttons_only_gets_placeholder(self):
 		with __import__("unittest.mock").mock.patch.object(tb, "_cache", return_value=self.cache):
-			self.assertEqual(tp.make_parts(block({"rows": [[{"text": "a", "callback": "a"}]]})), [tb.PLACEHOLDER_TEXT])
+			self.assertEqual(
+				tp.make_parts(block({"rows": [[{"text": "a", "callback": "a"}]]})), [tb.PLACEHOLDER_TEXT]
+			)
 
 
 class TestCallback(Base):
@@ -179,8 +229,12 @@ class TestCallback(Base):
 		spec = {**self.SPEC, "once": True}
 		parsed, d = self.press(spec)
 		self.assertEqual(d["action"], "ingest")
-		self.assertEqual([c["method"] for c in self.api.calls], ["answerCallbackQuery", "editMessageReplyMarkup"])
-		self.assertEqual(self.api.last("editMessageReplyMarkup")["payload"]["reply_markup"], {"inline_keyboard": []})
+		self.assertEqual(
+			[c["method"] for c in self.api.calls], ["answerCallbackQuery", "editMessageReplyMarkup"]
+		)
+		self.assertEqual(
+			self.api.last("editMessageReplyMarkup")["payload"]["reply_markup"], {"inline_keyboard": []}
+		)
 		parsed2 = self.callback_update(parsed.callback_data, cqid="cq2")
 		payload = self.adapter.verify_callback_data(parsed2.callback_data, parsed2.chat_id)
 		d2 = tb.handle_callback(parsed2, payload, self.adapter.sender, "GW", cache=self.cache, now=NOW)
@@ -195,13 +249,25 @@ class TestCallback(Base):
 		self.assertEqual(d2["action"], "ignore")  # still answered so the spinner stops
 
 	def test_stale_and_unknown_message_toast_no_run(self):
-		_, d = self.press(self.SPEC, upd={"date": 1760000000 - 49 * 3600}, now=None) if False else (None, None)
-		parsed = self.callback_update(self.sign(tb.encode_payload("x", once=False, edit=False)), date=1760000000 - 49 * 3600)
-		d = tb.handle_callback(parsed, self.adapter.verify_callback_data(parsed.callback_data, parsed.chat_id),
-			self.adapter.sender, "GW", cache=self.cache, now=NOW)
+		_, d = (
+			self.press(self.SPEC, upd={"date": 1760000000 - 49 * 3600}, now=None) if False else (None, None)
+		)
+		parsed = self.callback_update(
+			self.sign(tb.encode_payload("x", once=False, edit=False)), date=1760000000 - 49 * 3600
+		)
+		d = tb.handle_callback(
+			parsed,
+			self.adapter.verify_callback_data(parsed.callback_data, parsed.chat_id),
+			self.adapter.sender,
+			"GW",
+			cache=self.cache,
+			now=NOW,
+		)
 		self.assertEqual((d["action"], d["reason"]), ("ignore", "stale"))
 		self.assertEqual(self.api.calls[0]["payload"]["text"], tb.MSG_STALE)
-		parsed = self.callback_update(self.sign(tb.encode_payload("x", once=False, edit=False)), date=0, cqid="cq9")
+		parsed = self.callback_update(
+			self.sign(tb.encode_payload("x", once=False, edit=False)), date=0, cqid="cq9"
+		)
 		d = tb.handle_callback(parsed, "b:--:x", self.adapter.sender, "GW", cache=self.cache, now=NOW)
 		self.assertEqual(d["reason"], "stale")
 
@@ -226,7 +292,9 @@ class TestCallback(Base):
 
 class TestEdit(Base):
 	def event(self, edit_id):
-		return SimpleNamespace(conversation_id=str(CHAT), raw_payload={"telegram_meta": {"edit_message_id": edit_id}})
+		return SimpleNamespace(
+			conversation_id=str(CHAT), raw_payload={"telegram_meta": {"edit_message_id": edit_id}}
+		)
 
 	def test_edit_decision_flag(self):
 		_, d = self.press({**TestCallback.SPEC, "edit": True})
@@ -234,7 +302,9 @@ class TestEdit(Base):
 
 	def test_try_edit_edits_in_place(self):
 		sender = tp.build_sender(self.adapter)
-		res = tb.try_edit(sender, self.event("55"), ["Done"], {"inline_keyboard": [[{"text": "x", "url": "https://x.io"}]]})
+		res = tb.try_edit(
+			sender, self.event("55"), ["Done"], {"inline_keyboard": [[{"text": "x", "url": "https://x.io"}]]}
+		)
 		self.assertEqual(res.provider_message_id, "55")
 		call = self.api.last("editMessageText")["payload"]
 		self.assertEqual(call["message_id"], 55)

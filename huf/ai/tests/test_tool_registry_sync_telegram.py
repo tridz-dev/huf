@@ -1,9 +1,9 @@
 """Mock-level proof that sync_discovered_tools upserts the telegram registry blocks."""
 
 import unittest
+from unittest.mock import MagicMock, patch
 
 import frappe
-from unittest.mock import MagicMock, patch
 
 from huf.ai import tool_registry
 from huf.ai.tools._registry import ALL_INTEGRATION_TOOLS
@@ -33,9 +33,11 @@ def _run_sync(existing):
 	frappe_mock.get_all.side_effect = get_all
 	frappe_mock.db.exists.return_value = True
 	frappe.local.flags = frappe._dict(in_test=False)
-	with patch.object(tool_registry, "frappe", frappe_mock), patch.object(
-		tool_registry, "get_tools_by_app", return_value={"huf": tools}
-	), patch.object(tool_registry, "commit_if_background"):
+	with (
+		patch.object(tool_registry, "frappe", frappe_mock),
+		patch.object(tool_registry, "get_tools_by_app", return_value={"huf": tools}),
+		patch.object(tool_registry, "commit_if_background"),
+	):
 		result = tool_registry.sync_discovered_tools(use_cache=False)
 	return result, created, updated
 
@@ -55,7 +57,9 @@ class TestTelegramToolSync(unittest.TestCase):
 		self.assertEqual(payload["types"], "App Provided")
 		fields = {p["fieldname"] for p in payload["parameters"]}
 		self.assertIn("action", fields)
-		self.assertNotIn("confirmation_token", fields)  # removed: approval is a human press, never an agent argument
+		self.assertNotIn(
+			"confirmation_token", fields
+		)  # removed: approval is a human press, never an agent argument
 
 	def test_existing_telegram_row_is_refreshed(self):
 		_, _, updated = _run_sync(existing=["telegram", "telegram_admin"])

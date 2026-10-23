@@ -19,8 +19,12 @@ from types import SimpleNamespace
 from unittest import mock
 
 from huf.ai import gateway_service as gs
-from huf.ai.gateway_adapters import GatewayInboundRequest, telegram_ingest as ing
-from huf.ai.gateway_adapters import telegram_agent_context, telegram_hooks  # noqa: F401  (registers hooks)
+from huf.ai.gateway_adapters import (  # noqa: F401  (registers hooks)
+	GatewayInboundRequest,
+	telegram_agent_context,
+	telegram_hooks,
+)
+from huf.ai.gateway_adapters import telegram_ingest as ing
 from huf.ai.gateway_adapters import telegram_integration_hooks as integ
 from huf.ai.gateway_adapters.telegram import WEBHOOK_SECRET_HEADER, TelegramGatewayAdapter
 from huf.ai.gateway_adapters.telegram_inbound import parse_update, to_event
@@ -72,7 +76,11 @@ class RecordingLogger:
 
 
 GW = SimpleNamespace(
-	name="gw1", provider="Telegram", mention_required=0, typing_indicator=0, execution_user="bot",
+	name="gw1",
+	provider="Telegram",
+	mention_required=0,
+	typing_indicator=0,
+	execution_user="bot",
 	direct_policy="Allow list",
 )
 # Gateway docs expose .get(); the fake mirrors it
@@ -112,8 +120,11 @@ KIND_PAYLOADS = {
 	"photo": lambda: load_fixture("photo"),
 	"document": lambda: msg_with(
 		document={
-			"file_id": "D1", "file_unique_id": "du1", "file_name": "report.pdf",
-			"mime_type": "application/pdf", "file_size": 2048,
+			"file_id": "D1",
+			"file_unique_id": "du1",
+			"file_name": "report.pdf",
+			"mime_type": "application/pdf",
+			"file_size": 2048,
 		}
 	),
 	"voice": lambda: load_fixture("voice"),
@@ -249,19 +260,30 @@ class TestEveryKindAck(unittest.TestCase):
 					h.ingest.assert_called_once()
 					self.assertEqual(result["event_name"], "E1")
 					self.assertEqual(h.ingested_context()["kind"], ctx_kind)
-					self.assertEqual(h.ingested_context()["conversation_id"], event_of(build()).conversation_id)
+					self.assertEqual(
+						h.ingested_context()["conversation_id"], event_of(build()).conversation_id
+					)
 				else:
 					h.ingest.assert_not_called()
 					if ignored:
 						self.assertEqual(result["ignored"], ignored)
 
 	def test_block_change_kinds_never_ingest(self):
-		for name in ("my_chat_member_blocked", "my_chat_member_unblocked", "my_chat_member_group_added",
-			"my_chat_member_group_promoted", "my_chat_member_group_removed", "chat_member_joined"):
-			with self.subTest(kind=name), mock.patch("huf.ai.gateway_service._sender_is_known", return_value=False), \
-				mock.patch("huf.ai.gateway_service._record_opt_in"), \
-				mock.patch("huf.ai.gateway_service._record_opt_out"), \
-				mock.patch("huf.ai.gateway_adapters.telegram_groups.apply_membership_change"):
+		for name in (
+			"my_chat_member_blocked",
+			"my_chat_member_unblocked",
+			"my_chat_member_group_added",
+			"my_chat_member_group_promoted",
+			"my_chat_member_group_removed",
+			"chat_member_joined",
+		):
+			with (
+				self.subTest(kind=name),
+				mock.patch("huf.ai.gateway_service._sender_is_known", return_value=False),
+				mock.patch("huf.ai.gateway_service._record_opt_in"),
+				mock.patch("huf.ai.gateway_service._record_opt_out"),
+				mock.patch("huf.ai.gateway_adapters.telegram_groups.apply_membership_change"),
+			):
 				h = Harness()
 				result = h.handle(load_fixture(name))
 				self.assertIs(result["success"], True)
@@ -311,7 +333,6 @@ class TestTextSeenByAgent(unittest.TestCase):
 
 	def test_start_payload_text(self):
 		self.assertEqual(self._text("start_payload"), "/start pair_ABC123")
-
 
 
 class TestConversationKey(unittest.TestCase):
@@ -368,10 +389,15 @@ class TestNonMessageKindsDoNotRunAgent(unittest.TestCase):
 		ctx = h.ingested_context()
 		self.assertEqual(ctx["kind"], "reaction")
 		event = SimpleNamespace(
-			name="GEV-R", db_set=mock.Mock(), get=lambda k, d=None: None, raw_payload={},
+			name="GEV-R",
+			db_set=mock.Mock(),
+			get=lambda k, d=None: None,
+			raw_payload={},
 		)
-		with mock.patch.object(gs, "_record_event", return_value={"status": "Succeeded"}) as rec, \
-			mock.patch.object(gs.frappe, "get_doc") as get_doc:
+		with (
+			mock.patch.object(gs, "_record_event", return_value={"status": "Succeeded"}) as rec,
+			mock.patch.object(gs.frappe, "get_doc") as get_doc,
+		):
 			gs._continue_ingest(event, "gw1", "1", ctx, True)
 		rec.assert_called_once()
 		get_doc.assert_not_called()  # no Gateway lookup, consent, rate bucket or Agent run
@@ -394,7 +420,9 @@ class TestNonMessageKindsDoNotRunAgent(unittest.TestCase):
 
 	def test_business_message_with_no_handler_result_is_not_a_plain_message(self):
 		h = Harness()
-		with mock.patch("huf.ai.gateway_adapters.telegram_business.handle_business_message", return_value=None):
+		with mock.patch(
+			"huf.ai.gateway_adapters.telegram_business.handle_business_message", return_value=None
+		):
 			result = h.handle(load_fixture("business_message"))
 		self.assertIs(result["success"], True)
 		if h.ingest.called:
@@ -403,7 +431,9 @@ class TestNonMessageKindsDoNotRunAgent(unittest.TestCase):
 
 class TestDuplicateDelivery(unittest.TestCase):
 	def test_registered_handler_runs_once_per_update_id(self):
-		spy = mock.Mock(return_value={"success": True, "handled": True})  # a handler that answers short-circuits
+		spy = mock.Mock(
+			return_value={"success": True, "handled": True}
+		)  # a handler that answers short-circuits
 		h = Harness(duplicate_aware=True)
 		with mock.patch.dict(ing._UPDATE_HANDLERS, {"message": spy}):
 			first = h.handle(load_fixture("message_text"))
@@ -481,8 +511,10 @@ class TestSecretHygiene(unittest.TestCase):
 	def test_tampered_callback_and_block_logs_are_clean(self):
 		h = Harness()
 		h.handle(load_fixture("callback_query"))
-		with mock.patch("huf.ai.gateway_service._sender_is_known", return_value=True), \
-			mock.patch("huf.ai.gateway_service._record_opt_out"):
+		with (
+			mock.patch("huf.ai.gateway_service._sender_is_known", return_value=True),
+			mock.patch("huf.ai.gateway_service._record_opt_out"),
+		):
 			h.handle(load_fixture("my_chat_member_blocked"))
 		self._assert_clean(h.log)
 
@@ -490,9 +522,11 @@ class TestSecretHygiene(unittest.TestCase):
 		h = Harness()
 		leaky = RuntimeError(f"GET https://api.telegram.org/file/bot{TOKEN}/photos/p.jpg failed")
 		event = SimpleNamespace(name="GEV-M", raw_payload=load_fixture("photo"), get=lambda k, d=None: None)
-		with mock.patch.object(h.adapter.client, "download_file", side_effect=leaky), \
-			mock.patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=h.adapter), \
-			mock.patch("frappe.logger", return_value=h.log):
+		with (
+			mock.patch.object(h.adapter.client, "download_file", side_effect=leaky),
+			mock.patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=h.adapter),
+			mock.patch("frappe.logger", return_value=h.log),
+		):
 			self.assertEqual(ing.save_media(event, GW), [])
 		self._assert_clean(h.log)
 
@@ -552,8 +586,15 @@ class TestPromptAssembly(unittest.TestCase):
 	def _run(self, payload: dict, *, download=b"IMG", saved_url="/private/files/p.jpg", download_error=None):
 		event = self._event(payload)
 		gateway = SimpleNamespace(
-			name="gw1", provider="Telegram", is_enabled=1, execution_user="bot", mention_required=0,
-			typing_indicator=0, error_reply_text="", integration_settings="", retry_max_attempts=0,
+			name="gw1",
+			provider="Telegram",
+			is_enabled=1,
+			execution_user="bot",
+			mention_required=0,
+			typing_indicator=0,
+			error_reply_text="",
+			integration_settings="",
+			retry_max_attempts=0,
 			get=lambda k, d=None: getattr(gateway, k, d),
 		)
 		bot = FakeBotApi()
@@ -601,7 +642,12 @@ class TestPromptAssembly(unittest.TestCase):
 			mock.patch(
 				"huf.ai.media_prep.resolve_event_files",
 				return_value=[
-					{"file_id": "FILE-1", "file_url": saved_url, "filename": "p.jpg", "mime_type": "image/jpeg"}
+					{
+						"file_id": "FILE-1",
+						"file_url": saved_url,
+						"filename": "p.jpg",
+						"mime_type": "image/jpeg",
+					}
 				],
 			),
 			mock.patch.object(

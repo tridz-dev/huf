@@ -40,6 +40,7 @@ def nonce_chat(binding: dict) -> str:
 	"""Nonce binding scope: (gateway, telegram user) via the user arg, so ``miniapp:<gateway>``."""
 	return f"{MINIAPP_CHAT}:{binding['gateway']}"
 
+
 _SECRET_FIELD_RE = re.compile(
 	r"password|passwd|secret|token|key|otp|pairing_?code|hash|credential|signature|webhook", re.IGNORECASE
 )
@@ -283,7 +284,9 @@ def _masked_fields(doc: Any, meta: Any) -> set:
 	masked: set = set()
 	for df in meta.fields:
 		try:
-			denied = bool(getattr(df, "mask", None)) or not doc.has_permlevel_access_to(df.fieldname, df, "read")
+			denied = bool(getattr(df, "mask", None)) or not doc.has_permlevel_access_to(
+				df.fieldname, df, "read"
+			)
 		except Exception:
 			denied = True  # fail closed
 		if denied:

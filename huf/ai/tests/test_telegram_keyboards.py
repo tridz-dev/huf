@@ -44,10 +44,16 @@ class TestCallbackSigning(unittest.TestCase):
 
 class TestKeyboards(unittest.TestCase):
 	def test_inline_keyboard(self):
-		markup = kb.inline_keyboard([[kb.callback_button("Yes", "y|sig"), kb.url_button("Docs", "https://x")], []])
+		markup = kb.inline_keyboard(
+			[[kb.callback_button("Yes", "y|sig"), kb.url_button("Docs", "https://x")], []]
+		)
 		self.assertEqual(
 			markup,
-			{"inline_keyboard": [[{"text": "Yes", "callback_data": "y|sig"}, {"text": "Docs", "url": "https://x"}]]},
+			{
+				"inline_keyboard": [
+					[{"text": "Yes", "callback_data": "y|sig"}, {"text": "Docs", "url": "https://x"}]
+				]
+			},
 		)
 		self.assertEqual(kb.web_app_button("App", "https://a")["web_app"], {"url": "https://a"})
 
@@ -56,7 +62,9 @@ class TestKeyboards(unittest.TestCase):
 			kb.callback_button("x", "y" * 65)
 
 	def test_reply_keyboard(self):
-		markup = kb.reply_keyboard([["A", "B"], [{"text": "Share", "request_contact": True}]], one_time=True, placeholder="pick")
+		markup = kb.reply_keyboard(
+			[["A", "B"], [{"text": "Share", "request_contact": True}]], one_time=True, placeholder="pick"
+		)
 		self.assertEqual(markup["keyboard"][0], [{"text": "A"}, {"text": "B"}])
 		self.assertTrue(markup["one_time_keyboard"])
 		self.assertEqual(markup["input_field_placeholder"], "pick")

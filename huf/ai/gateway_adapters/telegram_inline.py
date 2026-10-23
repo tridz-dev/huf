@@ -95,7 +95,11 @@ def default_resolver(query: str, user_ctx: dict) -> list[dict]:
 	if callable(sign):
 		try:
 			data = sign(f"{GO_PREFIX}{digest}")
-			_cache_put(_query_key(user_ctx.get("gateway", ""), user_ctx.get("sender_id", ""), digest), query, QUERY_TTL)
+			_cache_put(
+				_query_key(user_ctx.get("gateway", ""), user_ctx.get("sender_id", ""), digest),
+				query,
+				QUERY_TTL,
+			)
 		except Exception:
 			data = WAIT_CALLBACK
 	label = WORKING_LABEL if user_ctx.get("feedback") else TAP_LABEL
@@ -129,9 +133,8 @@ def parse_inline_query(raw: Mapping[str, Any]) -> dict | None:
 	return {
 		"id": str(iq["id"]),
 		"sender_id": str(sender.get("id") or ""),
-		"display_name": " ".join(
-			p for p in (sender.get("first_name"), sender.get("last_name")) if p
-		) or str(sender.get("username") or ""),
+		"display_name": " ".join(p for p in (sender.get("first_name"), sender.get("last_name")) if p)
+		or str(sender.get("username") or ""),
 		"is_bot": bool(sender.get("is_bot")),
 		"query": str(iq.get("query") or "")[:MAX_QUERY_LEN],
 		"offset": str(iq.get("offset") or ""),
@@ -206,8 +209,13 @@ def collect_results(query: str, user_ctx: dict) -> list[dict]:
 	return results
 
 
-def build_answer(inline_query_id: str, results: list[dict], offset: int = 0, page_size: int = MAX_RESULTS,
-	cache_time: int = DEFAULT_CACHE_TIME) -> dict:
+def build_answer(
+	inline_query_id: str,
+	results: list[dict],
+	offset: int = 0,
+	page_size: int = MAX_RESULTS,
+	cache_time: int = DEFAULT_CACHE_TIME,
+) -> dict:
 	page_size = max(1, min(int(page_size), MAX_RESULTS))
 	page = results[offset : offset + page_size]
 	payload: dict[str, Any] = {
@@ -228,8 +236,12 @@ def build_pair_answer(inline_query_id: str) -> dict:
 	return {
 		"inline_query_id": inline_query_id,
 		"results": [
-			_article("pair", "Pair this bot", "Open a chat with this bot to pair your account.",
-				description="You are not paired yet")
+			_article(
+				"pair",
+				"Pair this bot",
+				"Open a chat with this bot to pair your account.",
+				description="You are not paired yet",
+			)
 		],
 		"cache_time": PAIR_CACHE_TIME,
 		"is_personal": True,
@@ -259,9 +271,14 @@ def handle_inline_query(gateway, adapter, parsed, request) -> dict | None:
 	elif not user:
 		payload = build_answer(q["id"], [])
 	else:
-		ctx = {"user": user, "sender_id": q["sender_id"], "chat_type": q["chat_type"], "gateway": gateway.name,
+		ctx = {
+			"user": user,
+			"sender_id": q["sender_id"],
+			"chat_type": q["chat_type"],
+			"gateway": gateway.name,
 			"feedback": feedback_known(gateway),
-			"sign": lambda payload: adapter.sign_callback_data(payload, CALLBACK_CONTEXT)}
+			"sign": lambda payload: adapter.sign_callback_data(payload, CALLBACK_CONTEXT),
+		}
 		payload = build_answer(q["id"], collect_results(q["query"], ctx), parse_offset(q["offset"]))
 	try:
 		adapter.client.call("answerInlineQuery", payload)
@@ -369,8 +386,13 @@ def start_run(gateway, adapter, sender_id: str, query: str, inline_message_id: s
 		_edit(adapter, inline_message_id, "You are sending too many requests. Please try again in a minute.")
 		return "rate limited"
 	frappe.enqueue(
-		JOB, queue="short", timeout=300, gateway_name=name, inline_message_id=inline_message_id,
-		sender_id=sender_id, query=query,
+		JOB,
+		queue="short",
+		timeout=300,
+		gateway_name=name,
+		inline_message_id=inline_message_id,
+		sender_id=sender_id,
+		query=query,
 	)
 	return "agent run queued"
 
@@ -403,7 +425,7 @@ def handle_inline_callback(gateway, adapter, parsed, request) -> dict | None:
 		_answer_cb(adapter, cq_id, "You can't use this.")
 		return {**done, "note": "not allowed"}
 	# The query was cached under the asking sender, so someone else pressing the button finds nothing.
-	query = _cache_get(_query_key(gateway.name, sender_id, payload[len(GO_PREFIX):]))
+	query = _cache_get(_query_key(gateway.name, sender_id, payload[len(GO_PREFIX) :]))
 	if not query:
 		_answer_cb(adapter, cq_id, "This request expired. Please ask again.")
 		return {**done, "note": "expired or foreign"}
@@ -481,7 +503,7 @@ def clean_answer(result) -> str:
 
 	for rx in (telegram_buttons._FENCE_RE, telegram_media_reply._FENCE_RE):
 		text = rx.sub("", text)
-	return re.sub(r"\n{3,}", "\n\n", text).strip()[:MAX_ANSWER * 2]
+	return re.sub(r"\n{3,}", "\n\n", text).strip()[: MAX_ANSWER * 2]
 
 
 def _edit(adapter, inline_message_id: str, markdown: str) -> bool:

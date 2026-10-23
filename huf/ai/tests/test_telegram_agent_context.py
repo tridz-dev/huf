@@ -5,8 +5,8 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
-from huf.ai.gateway_adapters import provider_hooks, telegram_agent_context as tac, telegram_buttons
-from huf.ai.gateway_adapters import telegram_buttons_hooks
+from huf.ai.gateway_adapters import provider_hooks, telegram_buttons, telegram_buttons_hooks
+from huf.ai.gateway_adapters import telegram_agent_context as tac
 
 SECRET = "123456:SECRET-TOKEN-XYZ"
 

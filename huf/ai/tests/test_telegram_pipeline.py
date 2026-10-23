@@ -48,8 +48,10 @@ class Base(unittest.TestCase):
 	def setUp(self):
 		self.api = FakeBotApi()
 		self.adapter = TelegramGatewayAdapter(
-			{"token": TOKEN, "webhook_secret": SECRET}, http_post=self.api.http_post,
-			http_get=self.api.http_get, download_attachments=False,
+			{"token": TOKEN, "webhook_secret": SECRET},
+			http_post=self.api.http_post,
+			http_get=self.api.http_get,
+			download_attachments=False,
 		)
 		self.sender = tp.build_sender(self.adapter)
 
@@ -110,14 +112,18 @@ class TestSend(Base):
 
 	def test_on_sent_records_ids(self):
 		cache = FakeCache()
-		self.send(["a", "b"], on_sent=lambda ids: telegram_messages.record_sent("GW", CHAT, "E", ids, cache=cache))
+		self.send(
+			["a", "b"], on_sent=lambda ids: telegram_messages.record_sent("GW", CHAT, "E", ids, cache=cache)
+		)
 		self.assertEqual(telegram_messages.sent_for_event("GW", "E", cache=cache), [101, 102])
 		self.assertEqual(telegram_messages.last_in_chat("GW", CHAT, cache=cache), 102)
 
 
 class TestClassify(unittest.TestCase):
 	def test_blocked_not_retryable(self):
-		c = tp.classify(TelegramApiError("sendMessage", "Forbidden: bot was blocked by the user", error_code=403))
+		c = tp.classify(
+			TelegramApiError("sendMessage", "Forbidden: bot was blocked by the user", error_code=403)
+		)
 		self.assertTrue(c["blocked"])
 		self.assertFalse(c["retryable"])
 
@@ -160,7 +166,8 @@ class TestFailureHandling(Base):
 
 	def test_flood_schedules_retry_with_remaining_and_delay(self):
 		exc = tp.TelegramPartsError(
-			TelegramApiError("sendMessage", "Too Many Requests", error_code=429, retry_after=3), [9], ["p2"])
+			TelegramApiError("sendMessage", "Too Many Requests", error_code=429, retry_after=3), [9], ["p2"]
+		)
 		out = tp.handle_failure(self.event, self.gw, exc, ["p1", "p2"], 1)
 		self.assertEqual(out["reply_status"], "retrying")
 		self.assertEqual(out["retry_in_seconds"], 4.0)
@@ -171,7 +178,10 @@ class TestFailureHandling(Base):
 
 	def test_blocked_dead_letters_and_marks_unsendable(self):
 		exc = tp.TelegramPartsError(
-			TelegramApiError("sendMessage", "Forbidden: bot was blocked by the user", error_code=403), [], ["p1"])
+			TelegramApiError("sendMessage", "Forbidden: bot was blocked by the user", error_code=403),
+			[],
+			["p1"],
+		)
 		out = tp.handle_failure(self.event, self.gw, exc, ["p1"], 1)
 		self.assertEqual(out["status"], "Failed")
 		self.assertEqual(out["error_code"], "blocked")
@@ -200,8 +210,10 @@ class TestMisc(Base):
 		self.assertEqual(tp.reply_target(FakeEvent()), (None, "77"))
 
 	def test_typing_best_effort(self):
-		with mock.patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=self.adapter), \
-				mock.patch("huf.ai.gateway_webhook.event_contact_name", return_value=""):
+		with (
+			mock.patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=self.adapter),
+			mock.patch("huf.ai.gateway_webhook.event_contact_name", return_value=""),
+		):
 			self.assertTrue(tp.send_typing(SimpleNamespace(provider="Telegram", name="G"), FakeEvent()))
 			self.assertEqual(self.api.last("sendChatAction")["payload"]["action"], "typing")
 			self.api.queue("sendChatAction", FakeBotApi.error("Forbidden: bot was blocked by the user", 403))
@@ -210,12 +222,21 @@ class TestMisc(Base):
 			self.assertFalse(tp.send_typing(SimpleNamespace(provider="Telegram", name="G"), FakeEvent()))
 
 	def test_hooks_registered(self):
-		for name in ("send_reply", "send_parts", "attempt_reply_parts", "send_errors", "error_text",
-				"reply_target", "recover_reply_parts"):
+		for name in (
+			"send_reply",
+			"send_parts",
+			"attempt_reply_parts",
+			"send_errors",
+			"error_text",
+			"reply_target",
+			"recover_reply_parts",
+		):
 			self.assertIsNotNone(provider_hooks.get("Telegram", name), name)
 		self.assertEqual(provider_hooks.call("Telegram", "recover_reply_parts", "hi"), ["hi"])
 		self.assertEqual(provider_hooks.call("Telegram", "recover_reply_parts", "   "), [])
-		exc = tp.TelegramPartsError(TelegramApiError("m", "Forbidden: bot was blocked by the user", error_code=403), [], [])
+		exc = tp.TelegramPartsError(
+			TelegramApiError("m", "Forbidden: bot was blocked by the user", error_code=403), [], []
+		)
 		self.assertIn("blocked", provider_hooks.call("Telegram", "error_text", exc))
 
 

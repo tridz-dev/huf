@@ -24,8 +24,13 @@ JOIN_PREFIX = "join:"
 JOIN_STATES = ("Pending", "Approved", "Revoked", "Expired")
 _LABEL_RE = re.compile(r"^Join request:\s*(?P<user>.*?)\s*->\s*(?P<chat>.*)$")
 _RIGHT_KEYS = (
-	"can_invite_users", "can_delete_messages", "can_restrict_members", "can_pin_messages",
-	"can_change_info", "can_promote_members", "can_manage_chat",
+	"can_invite_users",
+	"can_delete_messages",
+	"can_restrict_members",
+	"can_pin_messages",
+	"can_change_info",
+	"can_promote_members",
+	"can_manage_chat",
 )
 _FRIENDLY = {
 	"not_enough_rights": "The bot is missing the right to invite users in that group. Grant it in the group's admin settings.",
@@ -70,7 +75,10 @@ def _guard(row: dict[str, Any]) -> dict[str, Any]:
 	from huf.ai import telegram_guard
 
 	gw = frappe.get_doc("Gateway", row["name"])
-	return {"join_policy": telegram_guard.join_policy_of(gw), "captcha": bool(telegram_guard.captcha_enabled(gw))}
+	return {
+		"join_policy": telegram_guard.join_policy_of(gw),
+		"captcha": bool(telegram_guard.captcha_enabled(gw)),
+	}
 
 
 def _audit(gateway: str, op: str, chat: str, user: str, result: str, detail: str = "") -> None:
@@ -79,7 +87,9 @@ def _audit(gateway: str, op: str, chat: str, user: str, result: str, detail: str
 
 		write_audit(
 			{"telegram_user_id": user, "frappe_user": frappe.session.user, "gateway": gateway},
-			{"op": op, "chat_id": chat}, result, detail=detail,
+			{"op": op, "chat_id": chat},
+			result,
+			detail=detail,
 		)
 	except Exception:
 		frappe.logger("huf").warning("telegram groups audit write failed")
@@ -93,12 +103,17 @@ def list_join_requests(gateway: str | None = None, state: str = "Pending") -> di
 	if state and state not in JOIN_STATES:
 		return _error("bad_state", "Unknown state.")
 	filters: dict[str, Any] = {
-		"gateway": row["name"], "entry_type": "Room", "external_id": ["like", f"{JOIN_PREFIX}%"],
+		"gateway": row["name"],
+		"entry_type": "Room",
+		"external_id": ["like", f"{JOIN_PREFIX}%"],
 	}
 	if state:
 		filters["state"] = state
 	rows = frappe.get_all(
-		"Gateway Access Entry", filters=filters, order_by="creation desc", limit_page_length=200,
+		"Gateway Access Entry",
+		filters=filters,
+		order_by="creation desc",
+		limit_page_length=200,
 		fields=["name", "state", "external_id", "display_label", "expires_at", "creation"],
 	)
 	items = []
@@ -111,17 +126,36 @@ def list_join_requests(gateway: str | None = None, state: str = "Pending") -> di
 
 
 @frappe.whitelist(methods=["POST"])
-def decide_join_request(gateway: str | None = None, entry: str | None = None, decision: str | None = None) -> dict[str, Any]:
+def decide_join_request(
+	gateway: str | None = None, entry: str | None = None, decision: str | None = None
+) -> dict[str, Any]:
 	row = _require_admin(gateway)
 	if "success" in row:
 		return row
 	if decision not in ("approve", "decline"):
 		return _error("bad_decision", "Choose approve or decline.")
-	data = frappe.db.get_value(
-		"Gateway Access Entry", entry,
-		["name", "gateway", "entry_type", "state", "external_id", "display_label", "expires_at", "creation"], as_dict=True,
-	) if entry else None
-	item = parse_join_entry(data) if data and data.gateway == row["name"] and data.entry_type == "Room" else None
+	data = (
+		frappe.db.get_value(
+			"Gateway Access Entry",
+			entry,
+			[
+				"name",
+				"gateway",
+				"entry_type",
+				"state",
+				"external_id",
+				"display_label",
+				"expires_at",
+				"creation",
+			],
+			as_dict=True,
+		)
+		if entry
+		else None
+	)
+	item = (
+		parse_join_entry(data) if data and data.gateway == row["name"] and data.entry_type == "Room" else None
+	)
 	if not item:
 		return _error("not_found", "Join request not found.")
 	if data.state != "Pending":
@@ -158,16 +192,28 @@ def list_groups(gateway: str | None = None) -> dict[str, Any]:
 	rooms = frappe.get_all(
 		"Gateway Access Entry",
 		filters={"gateway": row["name"], "entry_type": "Room", "state": ["in", ["Approved", "Pending"]]},
-		fields=["external_id", "display_label", "state", "creation"], limit_page_length=500,
+		fields=["external_id", "display_label", "state", "creation"],
+		limit_page_length=500,
 	)
 	for r in rooms:
 		cid = str(r["external_id"] or "")
 		if cid and not cid.startswith(JOIN_PREFIX):
-			groups[cid] = {"chat_id": cid, "title": r.get("display_label") or "", "status": "member", "since": r.get("creation")}
+			groups[cid] = {
+				"chat_id": cid,
+				"title": r.get("display_label") or "",
+				"status": "member",
+				"since": r.get("creation"),
+			}
 	removed = frappe.get_all(
 		"Gateway Access Entry",
-		filters={"gateway": row["name"], "entry_type": "Sender", "state": "Opted out", "display_label": ["like", "Chat %"]},
-		fields=["external_id", "display_label", "modified"], limit_page_length=500,
+		filters={
+			"gateway": row["name"],
+			"entry_type": "Sender",
+			"state": "Opted out",
+			"display_label": ["like", "Chat %"],
+		},
+		fields=["external_id", "display_label", "modified"],
+		limit_page_length=500,
 	)
 	for r in removed:
 		cid = str(r["external_id"] or "")
@@ -176,7 +222,9 @@ def list_groups(gateway: str | None = None) -> dict[str, Any]:
 	items = sorted(groups.values(), key=lambda g: str(g.get("since") or ""), reverse=True)
 	out: dict[str, Any] = {"success": True, "items": items, "guard": _guard(row)}
 	if not items:
-		out["note"] = "No groups are recorded yet. Groups appear here after the bot is added to one and receives a message."
+		out["note"] = (
+			"No groups are recorded yet. Groups appear here after the bot is added to one and receives a message."
+		)
 	return out
 
 
@@ -214,7 +262,9 @@ def get_group_settings(gateway: str | None = None, chat_id: str | None = None) -
 		"admins": [
 			{
 				"user_id": str((a.get("user") or {}).get("id") or ""),
-				"name": (a.get("user") or {}).get("first_name") or (a.get("user") or {}).get("username") or "",
+				"name": (a.get("user") or {}).get("first_name")
+				or (a.get("user") or {}).get("username")
+				or "",
 				"is_bot": bool((a.get("user") or {}).get("is_bot")),
 				"status": a.get("status") or "",
 			}

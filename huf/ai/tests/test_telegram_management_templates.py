@@ -13,7 +13,6 @@ import frappe
 from huf.ai import telegram_management_templates as _m
 
 
-
 class _Unwrapped:
 	"""The module with whitelisted functions stripped of frappe's request-time type validation wrapper."""
 
@@ -36,6 +35,7 @@ def fake_frappe(**over):
 	for k, v in over.items():
 		setattr(f, k, v)
 	return f
+
 
 GOOD = {"template_name": "welcome", "parse_mode": "HTML", "body": "Hi {{name}}", "media_type": "none"}
 
@@ -89,17 +89,26 @@ class TestLocalRender(unittest.TestCase):
 
 class TestPermissions(unittest.TestCase):
 	def test_non_admin_denied_everywhere(self):
-		with mock.patch(f"{P}._can_manage_integrations", return_value=False), mock.patch(f"{P}._", lambda x: x):
+		with (
+			mock.patch(f"{P}._can_manage_integrations", return_value=False),
+			mock.patch(f"{P}._", lambda x: x),
+		):
 			for fn, args in [
-				(m.list_templates, ()), (m.get_template, ("a",)), (m.save_template, ({},)),
-				(m.delete_template, ("a",)), (m.preview_template, ("a",)),
+				(m.list_templates, ()),
+				(m.get_template, ("a",)),
+				(m.save_template, ({},)),
+				(m.delete_template, ("a",)),
+				(m.preview_template, ("a",)),
 				(m.send_test_template, ("G", "1", "a", {}, 1)),
 			]:
 				with self.assertRaises(frappe.PermissionError, msg=fn.__name__):
 					fn(*args)
 
 	def test_save_invalid_returns_problems_before_writing(self):
-		with mock.patch(f"{P}._can_manage_integrations", return_value=True), mock.patch(f"{P}.frappe", fake_frappe()) as fr:
+		with (
+			mock.patch(f"{P}._can_manage_integrations", return_value=True),
+			mock.patch(f"{P}.frappe", fake_frappe()) as fr,
+		):
 			gd = fr.get_doc
 			out = m.save_template({"template_name": ""})
 		self.assertEqual(out["error"], "invalid")
@@ -107,9 +116,11 @@ class TestPermissions(unittest.TestCase):
 		gd.assert_not_called()
 
 	def test_save_denied_without_doctype_permission(self):
-		with mock.patch(f"{P}._can_manage_integrations", return_value=True), mock.patch(
-			f"{P}.frappe", fake_frappe(has_permission=mock.Mock(return_value=False))
-		) as fr, mock.patch(f"{P}._", lambda x: x):
+		with (
+			mock.patch(f"{P}._can_manage_integrations", return_value=True),
+			mock.patch(f"{P}.frappe", fake_frappe(has_permission=mock.Mock(return_value=False))) as fr,
+			mock.patch(f"{P}._", lambda x: x),
+		):
 			gd = fr.get_doc
 			with self.assertRaises(frappe.PermissionError):
 				m.save_template(GOOD)
@@ -124,7 +135,8 @@ class TestSendTest(unittest.TestCase):
 			mock.patch(
 				f"{P}.frappe",
 				fake_frappe(
-					get_all=mock.Mock(return_value=list(entries)), session=mock.Mock(user=user),
+					get_all=mock.Mock(return_value=list(entries)),
+					session=mock.Mock(user=user),
 				),
 			),
 		]
@@ -141,12 +153,17 @@ class TestSendTest(unittest.TestCase):
 
 	def test_refuses_arbitrary_chat(self):
 		self.assertEqual(self.run_send(entries=[])["error"], "chat_not_allowed")
-		self.assertEqual(self.run_send(entries=[{"approved_by": "other@x.com", "notes": ""}])["error"], "chat_not_allowed")
+		self.assertEqual(
+			self.run_send(entries=[{"approved_by": "other@x.com", "notes": ""}])["error"], "chat_not_allowed"
+		)
 
 	def test_allows_own_paired_and_marked_test_chat(self):
 		fake = mock.Mock()
 		fake.send_template.return_value = {"message_ids": [1]}
-		with mock.patch.dict("sys.modules", {"huf.ai.telegram_templates": fake}), mock.patch("huf.ai.telegram_templates", fake, create=True):
+		with (
+			mock.patch.dict("sys.modules", {"huf.ai.telegram_templates": fake}),
+			mock.patch("huf.ai.telegram_templates", fake, create=True),
+		):
 			own = self.run_send(entries=[{"approved_by": "me@x.com", "notes": ""}])
 			marked = self.run_send(entries=[{"approved_by": "o@x.com", "notes": "Telegram-Test chat"}])
 		self.assertTrue(own["success"])

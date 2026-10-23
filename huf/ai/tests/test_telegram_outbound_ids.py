@@ -10,7 +10,9 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from huf.ai.gateway_adapters import telegram_agent_context as tac, telegram_messages as tm, telegram_pipeline as tp
+from huf.ai.gateway_adapters import telegram_agent_context as tac
+from huf.ai.gateway_adapters import telegram_messages as tm
+from huf.ai.gateway_adapters import telegram_pipeline as tp
 from huf.ai.tests.test_telegram_tools_more import Base, FakeCache
 from huf.ai.tools import telegram as tool
 
@@ -56,14 +58,20 @@ class TestPipeline(unittest.TestCase):
 				return [{"message_id": 11}]
 
 		seen = []
-		tp.send_parts_with(S(), "9", ["hello"], on_part=lambda ids, kind, text: seen.append((ids, kind, text)))
+		tp.send_parts_with(
+			S(), "9", ["hello"], on_part=lambda ids, kind, text: seen.append((ids, kind, text))
+		)
 		self.assertEqual(seen, [([11], "text", "hello")])
 
 
 class TestEventContextLine(unittest.TestCase):
 	def test_previous_message(self):
-		ev = SimpleNamespace(raw_payload={"message": {"message_id": 5, "chat": {"id": 9}}}, gateway="gw",
-			conversation_id="9", thread_id=None)
+		ev = SimpleNamespace(
+			raw_payload={"message": {"message_id": 5, "chat": {"id": 9}}},
+			gateway="gw",
+			conversation_id="9",
+			thread_id=None,
+		)
 		c = FakeCache()
 		with patch.object(tm, "_cache", return_value=c):
 			self.assertNotIn("previous", tac.event_context(ev))

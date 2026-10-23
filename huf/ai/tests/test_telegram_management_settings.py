@@ -7,7 +7,13 @@ from __future__ import annotations
 
 import unittest
 
-from huf.ai.telegram_management_settings import EDITABLE_FIELDS, FIELD_SPECS, build_settings, coerce_value, validate_updates
+from huf.ai.telegram_management_settings import (
+	EDITABLE_FIELDS,
+	FIELD_SPECS,
+	build_settings,
+	coerce_value,
+	validate_updates,
+)
 
 INFO = {n: {"options": list(s.get("options", []))} for n, s in FIELD_SPECS.items()}
 
@@ -24,7 +30,9 @@ class TestTelegramSettings(unittest.TestCase):
 
 	def test_missing_doctype_field_is_skipped(self):
 		info = {k: v for k, v in INFO.items() if k != "telegram_streaming"}
-		clean, skipped, errors = validate_updates({"telegram_streaming": True, "mention_required": False}, info)
+		clean, skipped, errors = validate_updates(
+			{"telegram_streaming": True, "mention_required": False}, info
+		)
 		self.assertEqual(clean, {"mention_required": 0})
 		self.assertEqual(skipped[0]["field"], "telegram_streaming")
 		self.assertEqual(errors, [])
@@ -65,8 +73,14 @@ class TestTelegramSettings(unittest.TestCase):
 class TestTelegramSettingsExtended(unittest.TestCase):
 	def test_new_fields_are_allow_listed(self):
 		for name in (
-			"telegram_guard_captcha", "telegram_guard_question_text", "telegram_welcome_cooldown_seconds",
-			"default_target_type", "default_agent", "default_flow", "execution_user", "error_reply_text",
+			"telegram_guard_captcha",
+			"telegram_guard_question_text",
+			"telegram_welcome_cooldown_seconds",
+			"default_target_type",
+			"default_agent",
+			"default_flow",
+			"execution_user",
+			"error_reply_text",
 		):
 			self.assertIn(name, FIELD_SPECS)
 		for bad in ("integration_settings", "bot_token", "webhook_secret", "is_enabled"):
@@ -120,8 +134,15 @@ class TestListGatewayUsersPermission(unittest.TestCase):
 		def fake_get_all(doctype, **kw):
 			if doctype == "Has Role":
 				return ["Administrator", "a@x.com", "a@x.com"]
-			return [{"name": "Administrator", "full_name": "Administrator"}, {"name": "a@x.com", "full_name": ""}]
+			return [
+				{"name": "Administrator", "full_name": "Administrator"},
+				{"name": "a@x.com", "full_name": ""},
+			]
 
-		with mock.patch.object(m, "_load_gateway", return_value={"name": "G"}), mock.patch.object(m.frappe, "get_all", fake_get_all), mock.patch.object(m, "_execution_roles", return_value=["Huf Gateway User"]):
+		with (
+			mock.patch.object(m, "_load_gateway", return_value={"name": "G"}),
+			mock.patch.object(m.frappe, "get_all", fake_get_all),
+			mock.patch.object(m, "_execution_roles", return_value=["Huf Gateway User"]),
+		):
 			out = _raw(m.list_gateway_users)("G")
 		self.assertEqual(out["users"], [{"name": "a@x.com", "full_name": "a@x.com"}])

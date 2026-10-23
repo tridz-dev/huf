@@ -8,15 +8,23 @@ from unittest import mock
 
 import frappe
 
-from huf.ai.gateway_adapters import telegram_business as biz, telegram_business_agent as agent, telegram_ingest as ing
+from huf.ai.gateway_adapters import telegram_business as biz
+from huf.ai.gateway_adapters import telegram_business_agent as agent
+from huf.ai.gateway_adapters import telegram_ingest as ing
 from huf.ai.tests import test_telegram_business as tb
 
 RIGHTS = {"can_reply": True}
 
 
 def gw(policy="Draft"):
-	return SimpleNamespace(name="gw1", provider="Telegram", mention_required=0, telegram_business_policy=policy,
-		default_agent="Sec", execution_user="sec@example.com")
+	return SimpleNamespace(
+		name="gw1",
+		provider="Telegram",
+		mention_required=0,
+		telegram_business_policy=policy,
+		default_agent="Sec",
+		execution_user="sec@example.com",
+	)
 
 
 class Base(tb.Base):
@@ -24,14 +32,18 @@ class Base(tb.Base):
 
 	def setUp(self):
 		super().setUp()
-		ing.register_update_handler("business_message", agent.chain_business_message(biz.handle_business_message))
+		ing.register_update_handler(
+			"business_message", agent.chain_business_message(biz.handle_business_message)
+		)
 		biz.register_business_policy(agent.policy)
 		biz.register_draft_producer(agent.draft_producer)
 		self._prev_guards = list(agent._REPLY_GUARDS)
 		agent._REPLY_GUARDS.clear()
 		self.addCleanup(lambda: agent._REPLY_GUARDS.__setitem__(slice(None), self._prev_guards))
-		for p in (mock.patch.object(frappe, "cache", return_value=self.cache),
-			mock.patch.object(agent.frappe, "logger")):
+		for p in (
+			mock.patch.object(frappe, "cache", return_value=self.cache),
+			mock.patch.object(agent.frappe, "logger"),
+		):
 			p.start()
 			self.addCleanup(p.stop)
 		self.enq = mock.patch.object(agent.frappe, "enqueue").start()
@@ -62,25 +74,40 @@ class Base(tb.Base):
 		kw.pop("queue"), kw.pop("timeout")
 		kw.update(over)
 		result = reply_result if reply_result is not None else {"success": True, "response": response}
-		with mock.patch.object(agent, "_load_gateway", return_value=self.gateway), \
-			mock.patch.object(agent, "_adapter", return_value=self.adapter), \
-			mock.patch.object(agent, "_run_agent", return_value=result) as run, \
-			mock.patch.object(agent, "_credential", return_value=getattr(self, "footer", "")):
+		with (
+			mock.patch.object(agent, "_load_gateway", return_value=self.gateway),
+			mock.patch.object(agent, "_adapter", return_value=self.adapter),
+			mock.patch.object(agent, "_run_agent", return_value=result) as run,
+			mock.patch.object(agent, "_credential", return_value=getattr(self, "footer", "")),
+		):
 			out = agent.run_business_job(**kw)
 		return out, run
 
 
 class TestPolicyMapping(Base):
 	def test_field_mapping(self):
-		for value, want in (("Ignore", "ignore"), ("Observe", "observe"), ("Draft", "draft"), ("Reply", "reply"),
-			(None, "observe"), ("", "observe"), ("bogus", "observe")):
+		for value, want in (
+			("Ignore", "ignore"),
+			("Observe", "observe"),
+			("Draft", "draft"),
+			("Reply", "reply"),
+			(None, "observe"),
+			("", "observe"),
+			("bogus", "observe"),
+		):
 			self.assertEqual(agent.configured_policy(gw(value)), want)
 		self.assertEqual(agent.configured_policy(SimpleNamespace(name="x")), "observe")
 
 	def test_reply_requires_can_reply(self):
 		conn = {"id": "bc-1", "is_enabled": True, "rights": {}}
-		ctx = biz.BusinessContext(gw("Reply"), None, SimpleNamespace(business_connection_id="bc-1", chat_id="1"),
-			conn, "business_message", "incoming")
+		ctx = biz.BusinessContext(
+			gw("Reply"),
+			None,
+			SimpleNamespace(business_connection_id="bc-1", chat_id="1"),
+			conn,
+			"business_message",
+			"incoming",
+		)
 		self.assertEqual(agent.policy(ctx), "observe")
 
 	def test_reply_guard_downgrades_to_draft(self):
@@ -152,8 +179,10 @@ class TestDraftFlow(Base):
 		self.feed(tb.message())
 		kw = {**self.job_kwargs()}
 		kw.pop("queue"), kw.pop("timeout")
-		with mock.patch.object(agent, "_load_gateway", return_value=self.gateway), \
-			mock.patch.object(agent, "_run_agent", side_effect=RuntimeError("boom")):
+		with (
+			mock.patch.object(agent, "_load_gateway", return_value=self.gateway),
+			mock.patch.object(agent, "_run_agent", side_effect=RuntimeError("boom")),
+		):
 			self.assertEqual(agent.run_business_job(**kw)["result"], "failed")
 
 	def test_approve_sends_as_business(self):
@@ -169,7 +198,9 @@ class TestDraftFlow(Base):
 		self.feed(tb.message())
 		draft_id = self.run_job("Sure")[0]["draft_id"]
 		parsed = SimpleNamespace(sender_id=str(tb.OWNER), chat_id=str(tb.OWNER))
-		self.assertEqual(biz.handle_draft_callback(self.adapter, parsed, f"bz:r:{draft_id}")["result"], "rejected")
+		self.assertEqual(
+			biz.handle_draft_callback(self.adapter, parsed, f"bz:r:{draft_id}")["result"], "rejected"
+		)
 		self.assertEqual(len(self.sends()), 1)
 
 	def test_edit_then_owner_text_routes_to_submit_edit(self):
@@ -187,8 +218,14 @@ class TestDraftFlow(Base):
 		self.assertIsNone(agent.handle_owner_message(self.gateway, self.adapter, self.owner_parsed("again")))
 
 	def owner_parsed(self, text, chat_type="private", sender=tb.OWNER, kind="message"):
-		return SimpleNamespace(kind=kind, chat_type=chat_type, sender_id=str(sender), chat_id=str(tb.OWNER),
-			text=text, is_bot=False)
+		return SimpleNamespace(
+			kind=kind,
+			chat_type=chat_type,
+			sender_id=str(sender),
+			chat_id=str(tb.OWNER),
+			text=text,
+			is_bot=False,
+		)
 
 	def test_owner_text_without_editing_draft_falls_through(self):
 		self.assertIsNone(agent.handle_owner_message(self.gateway, self.adapter, self.owner_parsed("hello")))
@@ -283,8 +320,14 @@ class TestDraftAckAndRecovery(Base):
 		parsed = SimpleNamespace(sender_id=str(tb.OWNER), chat_id=str(tb.OWNER))
 		cb(self.adapter, parsed, f"bz:e:{draft_id}")
 		self.api.queue("sendMessage", tb.FakeBotApi.error("Bad Gateway", 502))
-		owner = SimpleNamespace(kind="message", chat_type="private", sender_id=str(tb.OWNER),
-			chat_id=str(tb.OWNER), text="better", is_bot=False)
+		owner = SimpleNamespace(
+			kind="message",
+			chat_type="private",
+			sender_id=str(tb.OWNER),
+			chat_id=str(tb.OWNER),
+			text="better",
+			is_bot=False,
+		)
 		first = agent.handle_owner_message(self.gateway, self.adapter, owner)
 		self.assertEqual(first["result"], "retry")  # handled, not leaked to the assistant agent
 		self.assertEqual(biz.get_draft(draft_id)["status"], "editing")
@@ -314,9 +357,12 @@ class TestUntrustedRunHardening(unittest.TestCase):
 
 		gw_ = SimpleNamespace(name="gw", default_agent="Bot", execution_user="Administrator")
 		ident = SimpleNamespace(authorized=True)
-		with mock.patch("huf.ai.agent_access.resolve_run_identity_and_authorize", return_value=ident), \
-			mock.patch("huf.ai.gateway_service._run_agent_serialised", side_effect=serialised), \
-			mock.patch.object(frappe, "get_doc"), mock.patch.object(frappe, "set_user"):
+		with (
+			mock.patch("huf.ai.agent_access.resolve_run_identity_and_authorize", return_value=ident),
+			mock.patch("huf.ai.gateway_service._run_agent_serialised", side_effect=serialised),
+			mock.patch.object(frappe, "get_doc"),
+			mock.patch.object(frappe, "set_user"),
+		):
 			agent._run_agent(gw_, "c", "5", "p", "k")
 		self.assertEqual(seen["allow"], [])
 		self.assertIsNone(getattr(frappe.local, agent.TOOL_ALLOWLIST_ATTR, None))

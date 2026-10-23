@@ -76,9 +76,8 @@ def parse_guest_update(update: Mapping[str, Any]) -> dict | None:
 		"chat_id": str(chat["id"]),
 		"message_id": str(msg.get("message_id") or ""),
 		"text": str(msg.get("text") or msg.get("caption") or "")[:_MAX_TEXT],
-		"display_name": " ".join(
-			p for p in (sender.get("first_name"), sender.get("last_name")) if p
-		) or str(sender.get("username") or ""),
+		"display_name": " ".join(p for p in (sender.get("first_name"), sender.get("last_name")) if p)
+		or str(sender.get("username") or ""),
 	}
 
 

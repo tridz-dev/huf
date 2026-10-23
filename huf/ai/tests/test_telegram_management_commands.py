@@ -44,7 +44,13 @@ class FakeClient:
 
 class TestPure(unittest.TestCase):
 	def test_profile_get(self):
-		c = FakeClient({"getMyName": {"name": "N"}, "getMyDescription": {"description": "D"}, "getMyShortDescription": {"short_description": "S"}})
+		c = FakeClient(
+			{
+				"getMyName": {"name": "N"},
+				"getMyDescription": {"description": "D"},
+				"getMyShortDescription": {"short_description": "S"},
+			}
+		)
 		self.assertEqual(m.profile_get(c, "en"), {"name": "N", "description": "D", "short_description": "S"})
 		self.assertEqual(c.calls[0], ("getMyName", {"language_code": "en"}))
 
@@ -68,7 +74,9 @@ class TestPure(unittest.TestCase):
 
 	def test_menu_button(self):
 		self.assertEqual(m.menu_button_payload("commands"), {"type": "commands"})
-		self.assertEqual(m.menu_button_payload("web_app", "Open", "https://a.b/c")["web_app"], {"url": "https://a.b/c"})
+		self.assertEqual(
+			m.menu_button_payload("web_app", "Open", "https://a.b/c")["web_app"], {"url": "https://a.b/c"}
+		)
 		with self.assertRaises(ValueError):
 			m.menu_button_payload("web_app", "Open", "http://a.b")
 		with self.assertRaises(ValueError):
@@ -91,14 +99,22 @@ class TestWrappers(unittest.TestCase):
 		row = {"name": "G"}
 		creds = {"token": "1:SECRET", "webhook_secret": secret}
 		return mock.patch.multiple(
-			m, _load_gateway=lambda g: row, _credentials=lambda r: creds, _client=lambda c: client,
+			m,
+			_load_gateway=lambda g: row,
+			_credentials=lambda r: creds,
+			_client=lambda c: client,
 			_webhook_url=lambda n: "https://x/h",
 		)
 
 	def test_set_commands_validates_and_sends(self):
 		c = FakeClient()
 		with self._patch(c):
-			out = m.set_commands("G", "all_private_chats", "en", [{"command": "help", "description": "Help", "is_ephemeral": True}])
+			out = m.set_commands(
+				"G",
+				"all_private_chats",
+				"en",
+				[{"command": "help", "description": "Help", "is_ephemeral": True}],
+			)
 		self.assertTrue(out["success"])
 		method, payload = c.calls[0]
 		self.assertEqual(method, "setMyCommands")

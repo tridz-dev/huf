@@ -12,7 +12,9 @@ from huf.ai.reasoning import rejects_sampling_params
 
 
 def _bad(message):
-	return BadRequestError(message=message, model="claude-haiku-5-5", llm_provider="anthropic", response=MagicMock())
+	return BadRequestError(
+		message=message, model="claude-haiku-5-5", llm_provider="anthropic", response=MagicMock()
+	)
 
 
 class TestRejectsSamplingParams(unittest.TestCase):
@@ -44,7 +46,9 @@ class TestDropSamplingParams(unittest.TestCase):
 class TestSamplingRejectionMessage(unittest.TestCase):
 	def test_temperature_deprecated(self):
 		kw = {"temperature": 0.3, "top_p": 0.9}
-		self.assertEqual(prov._sampling_keys_rejected("`temperature` is deprecated for this model", kw), ["temperature"])
+		self.assertEqual(
+			prov._sampling_keys_rejected("`temperature` is deprecated for this model", kw), ["temperature"]
+		)
 
 	def test_top_p_not_supported(self):
 		kw = {"temperature": 0.3, "top_p": 0.9}
@@ -66,8 +70,11 @@ class TestSamplingRetry(unittest.TestCase):
 			return "ok"
 
 		with patch.object(prov.litellm, "completion", side_effect=fake):
-			out = asyncio.run(prov._litellm_completion_with_retry(
-				model="anthropic/claude-haiku-5-5", temperature=0.3, top_p=0.9, messages=[]))
+			out = asyncio.run(
+				prov._litellm_completion_with_retry(
+					model="anthropic/claude-haiku-5-5", temperature=0.3, top_p=0.9, messages=[]
+				)
+			)
 		self.assertEqual(out, "ok")
 		self.assertEqual(len(calls), 2)
 		self.assertIn("temperature", calls[0])
@@ -84,7 +91,9 @@ class TestSamplingRetry(unittest.TestCase):
 			return "ok"
 
 		with patch.object(prov.litellm, "completion", side_effect=fake):
-			asyncio.run(prov._litellm_completion_with_retry(model="x", temperature=0.3, top_p=0.9, messages=[]))
+			asyncio.run(
+				prov._litellm_completion_with_retry(model="x", temperature=0.3, top_p=0.9, messages=[])
+			)
 		self.assertEqual(len(calls), 2)
 		self.assertNotIn("top_p", calls[1])
 		self.assertEqual(calls[1]["temperature"], 0.3)
@@ -94,7 +103,6 @@ class TestSamplingRetry(unittest.TestCase):
 			with self.assertRaises(BadRequestError):
 				asyncio.run(prov._litellm_completion_with_retry(model="x", temperature=0.3, messages=[]))
 		self.assertEqual(m.call_count, 1)
-
 
 	def test_bad_request_retry_gets_transient_handling(self):
 		calls = []
@@ -108,8 +116,9 @@ class TestSamplingRetry(unittest.TestCase):
 			return "ok"
 
 		with patch.object(prov.litellm, "completion", side_effect=fake):
-			out = asyncio.run(prov._litellm_completion_with_retry(
-				model="x", top_p=0.9, messages=[], _huf_base_delay=0))
+			out = asyncio.run(
+				prov._litellm_completion_with_retry(model="x", top_p=0.9, messages=[], _huf_base_delay=0)
+			)
 		self.assertEqual(out, "ok")
 		self.assertEqual(len(calls), 3)
 		self.assertNotIn("top_p", calls[1])

@@ -29,7 +29,10 @@ class TestToolSignedCallbackInterop(unittest.TestCase):
 		payload = adapter.verify_callback_data(data, "42")
 		self.assertEqual(payload, "approve_42")
 		parsed = NS(
-			callback_query_id="cq1", chat_id="42", message_id=5, callback_data=data,
+			callback_query_id="cq1",
+			chat_id="42",
+			message_id=5,
+			callback_data=data,
 			raw={"callback_query": {"message": {"date": 100}}},
 		)
 		sender = _Sender()

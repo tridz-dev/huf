@@ -7,13 +7,24 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from huf.ai.gateway_adapters import GatewayInboundRequest, telegram_admin_actions as admin, telegram_groups as groups
+from huf.ai.gateway_adapters import GatewayInboundRequest
+from huf.ai.gateway_adapters import telegram_admin_actions as admin
+from huf.ai.gateway_adapters import telegram_groups as groups
 from huf.ai.gateway_adapters import telegram_ingest as ing
 from huf.ai.gateway_adapters.telegram import WEBHOOK_SECRET_HEADER, TelegramGatewayAdapter
 from huf.ai.gateway_adapters.telegram_client import TelegramBotClient
-from huf.ai.tests.telegram_fakes import SECRET, TOKEN, FakeBotApi, clear_update_dedup, isolate_update_dedup, load_fixture
+from huf.ai.tests.telegram_fakes import (
+	SECRET,
+	TOKEN,
+	FakeBotApi,
+	clear_update_dedup,
+	isolate_update_dedup,
+	load_fixture,
+)
 
-GW = SimpleNamespace(name="gw1", provider="Telegram", mention_required=0, room_policy="Open", get=lambda k, d=None: d)
+GW = SimpleNamespace(
+	name="gw1", provider="Telegram", mention_required=0, room_policy="Open", get=lambda k, d=None: d
+)
 
 
 def make():
@@ -52,7 +63,10 @@ class TestJoinRequests(unittest.TestCase):
 		self.assertEqual(fake.calls, [])  # no approve / decline / message
 
 	def test_custom_policy_approve_and_decline_payloads(self):
-		for decision, method in (("approve", "approveChatJoinRequest"), ("decline", "declineChatJoinRequest")):
+		for decision, method in (
+			("approve", "approveChatJoinRequest"),
+			("decline", "declineChatJoinRequest"),
+		):
 			fake, ad = make()
 			seen = []
 			groups.register_join_policy(lambda ctx, d=decision: (seen.append(ctx), d)[1])
@@ -80,7 +94,10 @@ class TestJoinRequests(unittest.TestCase):
 
 	def test_insufficient_rights_is_clear_and_acked(self):
 		fake, ad = make()
-		fake.queue("approveChatJoinRequest", fake.error("Bad Request: not enough rights to manage chat invite link", 400))
+		fake.queue(
+			"approveChatJoinRequest",
+			fake.error("Bad Request: not enough rights to manage chat invite link", 400),
+		)
 		groups.register_join_policy(lambda c: "approve")
 		res = deliver("chat_join_request", ad)
 		self.assertTrue(res["success"])
@@ -95,14 +112,18 @@ class TestJoinRequests(unittest.TestCase):
 		with mock.patch("frappe.get_all", return_value=["EXIST"]), mock.patch("frappe.get_doc") as gd:
 			self.assertEqual(groups.record_pending_join(GW, ctx), "EXIST")
 			gd.assert_not_called()
-		with mock.patch("frappe.get_all", return_value=[]), mock.patch(
-			"huf.ai.gateway_service._new_unique_pairing_code", return_value="PAIR-1"
-		), mock.patch("frappe.utils.now_datetime"), mock.patch("frappe.utils.add_to_date"), mock.patch(
-			"frappe.get_doc"
-		) as gd:
+		with (
+			mock.patch("frappe.get_all", return_value=[]),
+			mock.patch("huf.ai.gateway_service._new_unique_pairing_code", return_value="PAIR-1"),
+			mock.patch("frappe.utils.now_datetime"),
+			mock.patch("frappe.utils.add_to_date"),
+			mock.patch("frappe.get_doc") as gd,
+		):
 			groups.record_pending_join(GW, ctx)
 			doc = gd.call_args[0][0]
-		self.assertEqual((doc["entry_type"], doc["state"], doc["external_id"]), ("Room", "Pending", "join:-1001234:777"))
+		self.assertEqual(
+			(doc["entry_type"], doc["state"], doc["external_id"]), ("Room", "Pending", "join:-1001234:777")
+		)
 
 
 class TestMembership(unittest.TestCase):
@@ -112,9 +133,10 @@ class TestMembership(unittest.TestCase):
 		from huf.ai.gateway_adapters.telegram_inbound import parse_update
 
 		p = parse_update(load_fixture("my_chat_member_group_removed"))
-		with mock.patch("huf.ai.gateway_service._record_room_opt_out") as out, mock.patch(
-			"huf.ai.gateway_service._record_opt_out"
-		) as sender_out:
+		with (
+			mock.patch("huf.ai.gateway_service._record_room_opt_out") as out,
+			mock.patch("huf.ai.gateway_service._record_opt_out") as sender_out,
+		):
 			res = groups.handle_membership(GW, ad, p, None)
 		self.assertEqual(res["transition"], "removed")
 		out.assert_called_once_with(GW, "-1001234")
@@ -124,13 +146,18 @@ class TestMembership(unittest.TestCase):
 		from huf.ai.gateway_adapters.telegram_inbound import parse_update
 
 		with mock.patch("huf.ai.gateway_service._record_room_opt_in") as inn:
-			res = groups.handle_membership(GW, None, parse_update(load_fixture("my_chat_member_group_added")), None)
+			res = groups.handle_membership(
+				GW, None, parse_update(load_fixture("my_chat_member_group_added")), None
+			)
 		self.assertEqual(res["transition"], "added")
 		inn.assert_called_once_with(GW, "-1001234")
-		with mock.patch("huf.ai.gateway_service._record_opt_in") as inn, mock.patch(
-			"huf.ai.gateway_service._record_opt_out"
-		) as out:
-			res = groups.handle_membership(GW, None, parse_update(load_fixture("my_chat_member_group_promoted")), None)
+		with (
+			mock.patch("huf.ai.gateway_service._record_opt_in") as inn,
+			mock.patch("huf.ai.gateway_service._record_opt_out") as out,
+		):
+			res = groups.handle_membership(
+				GW, None, parse_update(load_fixture("my_chat_member_group_promoted")), None
+			)
 		self.assertEqual(res["transition"], "promoted")
 		inn.assert_not_called()
 		out.assert_not_called()
@@ -199,7 +226,9 @@ class TestAdminActions(unittest.TestCase):
 		p = self.fake.last("getChatAdministrators")["payload"]
 		self.assertEqual((p["chat_id"], p["return_bots"]), ("@grp", True))
 		admin.send_join_request_web_app(self.c, "q1", "https://x.example/app")
-		self.assertEqual(self.fake.last("sendChatJoinRequestWebApp")["payload"]["web_app_url"], "https://x.example/app")
+		self.assertEqual(
+			self.fake.last("sendChatJoinRequestWebApp")["payload"]["web_app_url"], "https://x.example/app"
+		)
 		with self.assertRaises(ValueError):
 			admin.send_join_request_web_app(self.c, "q1", "http://x")
 		with self.assertRaises(ValueError):
@@ -228,8 +257,17 @@ class TestAdminActions(unittest.TestCase):
 		with self.assertRaises(admin.AdminActionError) as cm:
 			admin.ban_member(TelegramBotClient(TOKEN, http_post=fake.http_post), -1, 2)
 		self.assertEqual(cm.exception.code, "flood")
-		self.assertIn("administrator right", str(admin.classify_error("x", __import__(
-			"huf.ai.gateway_adapters.telegram_client", fromlist=["x"]).TelegramApiError("x", "not enough rights"))))
+		self.assertIn(
+			"administrator right",
+			str(
+				admin.classify_error(
+					"x",
+					__import__("huf.ai.gateway_adapters.telegram_client", fromlist=["x"]).TelegramApiError(
+						"x", "not enough rights"
+					),
+				)
+			),
+		)
 
 
 class TestServiceMessages(unittest.TestCase):
@@ -245,7 +283,9 @@ class TestServiceMessages(unittest.TestCase):
 
 	def test_welcome_failure_still_acks(self):
 		with mock.patch("huf.ai.telegram_guard.welcome_new_members", side_effect=RuntimeError("x")):
-			ack = groups.handle_service_message(GW, None, self.parsed({"new_chat_members": [{"id": 1}]}), None)
+			ack = groups.handle_service_message(
+				GW, None, self.parsed({"new_chat_members": [{"id": 1}]}), None
+			)
 		self.assertEqual(ack["ignored"], "new_chat_members")
 
 	def test_left_member_recorded(self):
@@ -255,7 +295,9 @@ class TestServiceMessages(unittest.TestCase):
 	def test_other_messages_and_private_fall_through(self):
 		self.assertIsNone(groups.handle_service_message(GW, None, self.parsed({"text": "hi"}), None))
 		self.assertIsNone(
-			groups.handle_service_message(GW, None, self.parsed({"new_chat_members": [{"id": 1}]}, "private"), None)
+			groups.handle_service_message(
+				GW, None, self.parsed({"new_chat_members": [{"id": 1}]}, "private"), None
+			)
 		)
 
 

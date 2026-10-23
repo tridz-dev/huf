@@ -14,8 +14,17 @@ from huf.ai.tests.telegram_fakes import TOKEN, FakeBotApi
 
 
 def tpl(**kw):
-	base = {"template_name": "t", "is_active": 1, "parse_mode": "HTML", "body": "Hi {{name}}", "media_type": "none",
-		"media": "", "buttons_json": "", "variables": [], "gateway": ""}
+	base = {
+		"template_name": "t",
+		"is_active": 1,
+		"parse_mode": "HTML",
+		"body": "Hi {{name}}",
+		"media_type": "none",
+		"media": "",
+		"buttons_json": "",
+		"variables": [],
+		"gateway": "",
+	}
 	base.update(kw)
 	return base
 
@@ -23,7 +32,9 @@ def tpl(**kw):
 class Base(unittest.TestCase):
 	def setUp(self):
 		self.api = FakeBotApi()
-		client = TelegramBotClient(TOKEN, http_post=self.api.http_post, http_get=self.api.http_get, sleep=lambda s: None)
+		client = TelegramBotClient(
+			TOKEN, http_post=self.api.http_post, http_get=self.api.http_get, sleep=lambda s: None
+		)
 		self.sender = TelegramSender(client)
 		self.touched = []
 		self.data = {}
@@ -105,7 +116,10 @@ class TestRender(Base):
 
 	def test_media_sources(self):
 		self.put(media_type="photo", media="/files/a.jpg")
-		self.assertEqual(tt.render_template("t", {"name": "a"}).media, {"type": "photo", "source": "file_url", "value": "/files/a.jpg"})
+		self.assertEqual(
+			tt.render_template("t", {"name": "a"}).media,
+			{"type": "photo", "source": "file_url", "value": "/files/a.jpg"},
+		)
 		self.put(media_type="photo", media="https://x/y.jpg")
 		self.assertEqual(tt.render_template("t", {"name": "a"}).media["source"], "url")
 		self.put(media_type="voice", media="AgADfileid")
@@ -155,8 +169,12 @@ class TestSend(Base):
 		self.assertEqual(len(out["message_ids"]), 1)
 
 	def test_long_text_media_then_text_with_markup(self):
-		self.put(media_type="photo", media="https://x/y.jpg", body="y" * 1500,
-			buttons_json='{"rows": [[{"text": "S", "url": "https://x.io"}]]}')
+		self.put(
+			media_type="photo",
+			media="https://x/y.jpg",
+			body="y" * 1500,
+			buttons_json='{"rows": [[{"text": "S", "url": "https://x.io"}]]}',
+		)
 		tt.send_template(None, 5, "t", sender=self.sender)
 		photo = self.api.last("sendPhoto")["payload"]
 		self.assertNotIn("caption", photo)

@@ -25,25 +25,27 @@ from types import SimpleNamespace
 
 import frappe
 import litellm
-from litellm import InternalServerError, RateLimitError, APIError, BadRequestError, ContextWindowExceededError
+from litellm import APIError, BadRequestError, ContextWindowExceededError, InternalServerError, RateLimitError
 from litellm.utils import trim_messages
+
 from huf.ai import run_delivery
-from huf.ai.tool_serializer import serialize_tools
-from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
-from huf.ai.prompt_cache.capabilities import resolve_capabilities
-from huf.ai.transaction import transaction_checkpoint
-from huf.ai.cost_calculator import calculate_cost
 from huf.ai.conversation_manager import repair_message_sequence
-from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
+from huf.ai.cost_calculator import calculate_cost
+from huf.ai.prompt_cache.capabilities import resolve_capabilities
+from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 from huf.ai.reasoning import (
-    ReasoningPolicy,
-    ReasoningResolution,
-    detect_model_capabilities,
-    resolve_reasoning,
-    build_reasoning_kwargs,
-    rejects_sampling_params,
+	ReasoningPolicy,
+	ReasoningResolution,
+	build_reasoning_kwargs,
+	detect_model_capabilities,
+	rejects_sampling_params,
+	resolve_reasoning,
 )
-from huf.ai.run_budget import get_current_budget, RunBudgetExceeded
+from huf.ai.run_budget import RunBudgetExceeded, get_current_budget
+from huf.ai.tool_serializer import serialize_tools
+from huf.ai.transaction import transaction_checkpoint
+from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
+
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -2956,7 +2958,9 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     )
 
                                                 if message_name:
-                                                    from huf.ai.conversation_manager import update_tool_call_message
+                                                    from huf.ai.conversation_manager import (
+                                                    	update_tool_call_message,
+                                                    )
                                                     updated = update_tool_call_message(
                                                         message_name=message_name,
                                                         tool_call_id=call_id,

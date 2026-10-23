@@ -24,9 +24,9 @@ FLAG_PROFILE = "telegram_agent_allow_profile"
 VOICE_MODE_FIELD = "voice_reply_mode"
 
 MEDIA_TEXT = (
-	"Media: add a fenced ```telegram-media block with JSON {\"items\": [{\"type\": \"photo|video|audio|voice|"
-	"document|sticker|location|contact|venue|poll|dice\", \"source\": \"file_url|file_id|url|text\", "
-	"\"value\": \"...\", \"caption\": \"\"}]}; sent before the text; inbound reactions are recorded."
+	'Media: add a fenced ```telegram-media block with JSON {"items": [{"type": "photo|video|audio|voice|'
+	'document|sticker|location|contact|venue|poll|dice", "source": "file_url|file_id|url|text", '
+	'"value": "...", "caption": ""}]}; sent before the text; inbound reactions are recorded.'
 )
 TOOL_TEXT = (
 	"telegram tool: send_message/reply_to_message, set_reaction, edit_message_text, delete_message (ids from "
@@ -66,9 +66,7 @@ def _sections(gateway) -> list[str]:
 		if caps[key]:
 			sections.append(FLAG_TEXT[flag])
 	if caps["voice_reply"]:
-		sections.append(
-			f"Voice replies are on ({caps['voice_reply_mode']})."
-		)
+		sections.append(f"Voice replies are on ({caps['voice_reply_mode']}).")
 	return sections
 
 

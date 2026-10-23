@@ -10,8 +10,9 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from huf.ai.gateway_adapters import provider_hooks, telegram_ingest as ing, telegram_ingest_hooks
-from huf.ai.gateway_adapters import telegram_pipeline as tp, telegram_pipeline_hooks
+from huf.ai.gateway_adapters import provider_hooks, telegram_ingest_hooks, telegram_pipeline_hooks
+from huf.ai.gateway_adapters import telegram_ingest as ing
+from huf.ai.gateway_adapters import telegram_pipeline as tp
 from huf.ai.gateway_adapters.telegram_client import TelegramApiError
 
 

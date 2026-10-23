@@ -16,7 +16,6 @@ import frappe
 
 from huf.ai.gateway_adapters import telegram_commands as tc
 from huf.ai.gateway_adapters.telegram_client import ALLOWED_UPDATES, TelegramApiError
-from huf.ai.telegram_public_url import public_base_url
 from huf.ai.telegram_management import (
 	_client,
 	_credentials,
@@ -25,6 +24,7 @@ from huf.ai.telegram_management import (
 	_safe_text,
 	_webhook_url,
 )
+from huf.ai.telegram_public_url import public_base_url
 
 NAME_MAX = 64
 ABOUT_MAX = 120  # short description (profile page "About")
@@ -53,7 +53,9 @@ def profile_get(client: Any, language: str | None = None) -> dict[str, Any]:
 	}
 
 
-def validate_profile(name: str | None, description: str | None, short_description: str | None) -> dict[str, str]:
+def validate_profile(
+	name: str | None, description: str | None, short_description: str | None
+) -> dict[str, str]:
 	"""Fields to send (only those given), or ValueError on a limit violation."""
 	out: dict[str, str] = {}
 	for key, value, limit, label in (
@@ -74,7 +76,11 @@ def validate_profile(name: str | None, description: str | None, short_descriptio
 	return out
 
 
-_PROFILE_METHODS = {"name": "setMyName", "description": "setMyDescription", "short_description": "setMyShortDescription"}
+_PROFILE_METHODS = {
+	"name": "setMyName",
+	"description": "setMyDescription",
+	"short_description": "setMyShortDescription",
+}
 
 
 def profile_set(client: Any, fields: dict[str, str], language: str | None = None) -> list[str]:
@@ -119,7 +125,9 @@ def webhook_summary(client: Any, expected_url: str) -> dict[str, Any]:
 # -- wrappers -----------------------------------------------------------------------------------
 
 
-def _with_client(gateway: str | None, fn: Callable[[Any, dict[str, Any], dict[str, str]], dict[str, Any]]) -> dict[str, Any]:
+def _with_client(
+	gateway: str | None, fn: Callable[[Any, dict[str, Any], dict[str, str]], dict[str, Any]]
+) -> dict[str, Any]:
 	row = _load_gateway(gateway)
 	if "success" in row:
 		return row
@@ -139,13 +147,22 @@ def _with_client(gateway: str | None, fn: Callable[[Any, dict[str, Any], dict[st
 
 @frappe.whitelist()
 def get_bot_profile(gateway: str | None = None, language: str | None = None) -> dict[str, Any]:
-	return _with_client(gateway, lambda c, r, cr: {"profile": profile_get(c, language), "limits": {"name": NAME_MAX, "short_description": ABOUT_MAX, "description": DESCRIPTION_MAX}})
+	return _with_client(
+		gateway,
+		lambda c, r, cr: {
+			"profile": profile_get(c, language),
+			"limits": {"name": NAME_MAX, "short_description": ABOUT_MAX, "description": DESCRIPTION_MAX},
+		},
+	)
 
 
 @frappe.whitelist(methods=["POST"])
 def set_bot_profile(
-	gateway: str | None = None, name: str | None = None, description: str | None = None,
-	short_description: str | None = None, language: str | None = None,
+	gateway: str | None = None,
+	name: str | None = None,
+	description: str | None = None,
+	short_description: str | None = None,
+	language: str | None = None,
 ) -> dict[str, Any]:
 	def run(c, r, cr):
 		return {"updated": profile_set(c, validate_profile(name, description, short_description), language)}
@@ -154,11 +171,17 @@ def set_bot_profile(
 
 
 @frappe.whitelist()
-def get_commands(gateway: str | None = None, scope: str = "default", language: str | None = None) -> dict[str, Any]:
+def get_commands(
+	gateway: str | None = None, scope: str = "default", language: str | None = None
+) -> dict[str, Any]:
 	def run(c, r, cr):
 		if scope not in UI_SCOPES:
 			raise ValueError("Unknown command scope")
-		return {"scope": scope, "language": language or "", "commands": tc.get_commands(c, scope=scope, language_code=language or None) or []}
+		return {
+			"scope": scope,
+			"language": language or "",
+			"commands": tc.get_commands(c, scope=scope, language_code=language or None) or [],
+		}
 
 	return _with_client(gateway, run)
 
@@ -170,7 +193,9 @@ def _parse_commands(commands: Any) -> list[Any]:
 
 
 @frappe.whitelist(methods=["POST"])
-def set_commands(gateway: str | None = None, scope: str = "default", language: str | None = None, commands: Any = None) -> dict[str, Any]:
+def set_commands(
+	gateway: str | None = None, scope: str = "default", language: str | None = None, commands: Any = None
+) -> dict[str, Any]:
 	def run(c, r, cr):
 		if scope not in UI_SCOPES:
 			raise ValueError("Unknown command scope")
@@ -182,7 +207,9 @@ def set_commands(gateway: str | None = None, scope: str = "default", language: s
 
 
 @frappe.whitelist(methods=["POST"])
-def delete_commands(gateway: str | None = None, scope: str = "default", language: str | None = None) -> dict[str, Any]:
+def delete_commands(
+	gateway: str | None = None, scope: str = "default", language: str | None = None
+) -> dict[str, Any]:
 	def run(c, r, cr):
 		if scope not in UI_SCOPES:
 			raise ValueError("Unknown command scope")
@@ -194,11 +221,15 @@ def delete_commands(gateway: str | None = None, scope: str = "default", language
 
 @frappe.whitelist()
 def get_menu_button(gateway: str | None = None) -> dict[str, Any]:
-	return _with_client(gateway, lambda c, r, cr: {"menu_button": c.call("getChatMenuButton", {}) or {"type": "default"}})
+	return _with_client(
+		gateway, lambda c, r, cr: {"menu_button": c.call("getChatMenuButton", {}) or {"type": "default"}}
+	)
 
 
 @frappe.whitelist(methods=["POST"])
-def set_menu_button(gateway: str | None = None, type: str = "commands", text: str = "", url: str = "") -> dict[str, Any]:  # noqa: A002
+def set_menu_button(
+	gateway: str | None = None, type: str = "commands", text: str = "", url: str = ""
+) -> dict[str, Any]:  # noqa: A002
 	def run(c, r, cr):
 		button = menu_button_payload(type, text, url)
 		c.call("setChatMenuButton", {"menu_button": button})
@@ -218,11 +249,17 @@ def check_token(gateway: str | None = None) -> dict[str, Any]:
 	except Exception:
 		credentials = {}
 	if not credentials.get("token"):
-		return {"success": True, "check": {"valid": False, "reason": "No bot token is saved for this gateway."}}
+		return {
+			"success": True,
+			"check": {"valid": False, "reason": "No bot token is saved for this gateway."},
+		}
 	try:
 		return {"success": True, "check": token_summary(_client(credentials))}
 	except TelegramApiError as exc:
-		return {"success": True, "check": {"valid": False, "reason": _safe_text(exc.description, credentials)}}
+		return {
+			"success": True,
+			"check": {"valid": False, "reason": _safe_text(exc.description, credentials)},
+		}
 
 
 @frappe.whitelist()
@@ -231,27 +268,42 @@ def refresh_webhook_health(gateway: str | None = None) -> dict[str, Any]:
 
 
 @frappe.whitelist(methods=["POST"])
-def set_webhook_now(gateway: str | None = None, confirm: Any = 0, drop_pending_updates: Any = 0) -> dict[str, Any]:
+def set_webhook_now(
+	gateway: str | None = None, confirm: Any = 0, drop_pending_updates: Any = 0
+) -> dict[str, Any]:
 	"""Point this bot's webhook at this site. Takes over delivery for the bot, so ``confirm=1`` is required."""
 	if not _truthy(confirm):
-		return _error("confirm_required", "Setting the webhook takes over message delivery for this bot. Confirm to continue.")
+		return _error(
+			"confirm_required",
+			"Setting the webhook takes over message delivery for this bot. Confirm to continue.",
+		)
 
 	def run(c, r, cr):
 		secret = cr.get("webhook_secret")
 		if not secret:
 			raise ValueError("Add a webhook secret in Settings first.")
 		url = _webhook_url(r["name"])
-		c.set_webhook(url, secret_token=secret, allowed_updates=ALLOWED_UPDATES, drop_pending_updates=_truthy(drop_pending_updates))
+		c.set_webhook(
+			url,
+			secret_token=secret,
+			allowed_updates=ALLOWED_UPDATES,
+			drop_pending_updates=_truthy(drop_pending_updates),
+		)
 		return {"webhook": webhook_summary(c, url)}
 
 	return _with_client(gateway, run)
 
 
 @frappe.whitelist(methods=["POST"])
-def delete_webhook_now(gateway: str | None = None, confirm: Any = 0, drop_pending_updates: Any = 0) -> dict[str, Any]:
+def delete_webhook_now(
+	gateway: str | None = None, confirm: Any = 0, drop_pending_updates: Any = 0
+) -> dict[str, Any]:
 	"""Stop delivery to this site. Needs ``confirm=1``."""
 	if not _truthy(confirm):
-		return _error("confirm_required", "Deleting the webhook stops this bot receiving messages here. Confirm to continue.")
+		return _error(
+			"confirm_required",
+			"Deleting the webhook stops this bot receiving messages here. Confirm to continue.",
+		)
 
 	def run(c, r, cr):
 		c.delete_webhook(drop_pending_updates=_truthy(drop_pending_updates))
@@ -321,12 +373,14 @@ def _plan_commands(client: Any) -> list[dict[str, Any]]:
 	for scope in UI_SCOPES:
 		current = _current_commands(client, scope)
 		action = _scope_action(scope, current)
-		rows.append({
-			"scope": scope,
-			"current": current,
-			"recommended": RECOMMENDED_COMMANDS.get(scope, []),
-			"action": action,
-		})
+		rows.append(
+			{
+				"scope": scope,
+				"current": current,
+				"recommended": RECOMMENDED_COMMANDS.get(scope, []),
+				"action": action,
+			}
+		)
 	return rows
 
 
@@ -341,15 +395,21 @@ def plan_recommended_setup(client: Any, gateway: str, base_url: str) -> dict[str
 			"current": current_menu,
 			"recommended": {"type": "web_app", "text": MENU_BUTTON_TEXT, "web_app": {"url": url}},
 			"https_ok": https_ok,
-			"warning": "" if https_ok else "Telegram only opens web apps over https. This site's address is not https, so the menu button will be left as it is.",
+			"warning": ""
+			if https_ok
+			else "Telegram only opens web apps over https. This site's address is not https, so the menu button will be left as it is.",
 		},
 		"replaces_existing_commands": any(s["action"] != "keep" for s in scopes),
 	}
 
 
-def apply_plan(client: Any, gateway: str, base_url: str, include_menu_button: bool, replace_commands: bool) -> dict[str, Any]:
+def apply_plan(
+	client: Any, gateway: str, base_url: str, include_menu_button: bool, replace_commands: bool
+) -> dict[str, Any]:
 	if include_menu_button and not base_url.startswith("https://"):
-		raise ValueError("The menu button needs an https site address. This site is not served over https, so nothing was changed.")
+		raise ValueError(
+			"The menu button needs an https site address. This site is not served over https, so nothing was changed."
+		)
 	changed: dict[str, Any] = {"commands": [], "menu_button": None}
 	undo: dict[str, Any] = {"commands": [], "menu_button": None}
 	if replace_commands:
@@ -363,12 +423,14 @@ def apply_plan(client: Any, gateway: str, base_url: str, include_menu_button: bo
 				tc.delete_commands(client, scope=scope)
 			else:
 				tc.set_commands(client, RECOMMENDED_COMMANDS[scope], scope=scope)
-			changed["commands"].append({
-				"scope": scope,
-				"action": action,
-				"count": len(row["recommended"]),
-				"previous_count": len(row["current"]),
-			})
+			changed["commands"].append(
+				{
+					"scope": scope,
+					"action": action,
+					"count": len(row["recommended"]),
+					"previous_count": len(row["current"]),
+				}
+			)
 	if include_menu_button:
 		undo["menu_button"] = client.call("getChatMenuButton", {}) or {"type": "default"}
 		button = menu_button_payload("web_app", MENU_BUTTON_TEXT, mini_app_url(gateway, base_url))
@@ -383,7 +445,9 @@ def _audit_setup(gateway: str, result: str, detail: str) -> None:
 
 		write_audit(
 			{"telegram_user_id": "", "frappe_user": frappe.session.user, "gateway": gateway},
-			{"op": "apply_recommended_setup"}, result, detail=detail,
+			{"op": "apply_recommended_setup"},
+			result,
+			detail=detail,
 		)
 	except Exception:
 		frappe.logger("huf").warning("telegram recommended setup audit write failed")
@@ -392,19 +456,27 @@ def _audit_setup(gateway: str, result: str, detail: str) -> None:
 @frappe.whitelist()
 def recommended_setup(gateway: str | None = None) -> dict[str, Any]:
 	"""The planned changes with the bot's current values, without applying anything."""
-	return _with_client(gateway, lambda c, r, cr: {"plan": plan_recommended_setup(c, r["name"], public_base_url())})
+	return _with_client(
+		gateway, lambda c, r, cr: {"plan": plan_recommended_setup(c, r["name"], public_base_url())}
+	)
 
 
 @frappe.whitelist(methods=["POST"])
 def apply_recommended_setup(
-	gateway: str | None = None, confirm: Any = 0, include_menu_button: Any = True, replace_commands: Any = True,
+	gateway: str | None = None,
+	confirm: Any = 0,
+	include_menu_button: Any = True,
+	replace_commands: Any = True,
 ) -> dict[str, Any]:
 	"""Publish the recommended commands and Console menu button. Overwrites the bot's command list: ``confirm=1`` required."""
 	row = _load_gateway(gateway)  # permission first, so confirm_required never leaks to non-admins
 	if "success" in row:
 		return row
 	if not _truthy(confirm):
-		return _error("confirm_required", "This replaces the commands currently published for this bot. Confirm to continue.")
+		return _error(
+			"confirm_required",
+			"This replaces the commands currently published for this bot. Confirm to continue.",
+		)
 	menu, cmds = _truthy(include_menu_button), _truthy(replace_commands)
 	if not (menu or cmds):
 		return _error("invalid", "Nothing to apply.")

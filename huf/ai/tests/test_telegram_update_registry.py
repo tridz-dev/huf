@@ -63,7 +63,9 @@ class TestRawKeyDispatch(unittest.TestCase):
 		parsed.bot_unblocked = False
 		parsed.raw = {"update_id": 9, "stopped_message_generation": {"chat": {"id": 1}}}
 		adapter.parse_update.return_value = parsed
-		ing.register_update_handler("stopped_message_generation", lambda g, a, p, r: {"success": True, "stopped": 1})
+		ing.register_update_handler(
+			"stopped_message_generation", lambda g, a, p, r: {"success": True, "stopped": 1}
+		)
 		with patch.object(ing, "classify", return_value="other"):
 			self.assertEqual(ing.handle_update(MagicMock(), adapter, MagicMock())["stopped"], 1)
 
@@ -84,8 +86,9 @@ class TestDuplicateUpdates(unittest.TestCase):
 		gateway = MagicMock()
 		gateway.name = "GW"
 		try:
-			with patch.object(ing, "classify", return_value="other"), patch.object(
-				ing, "_first_delivery", side_effect=[True, False]
+			with (
+				patch.object(ing, "classify", return_value="other"),
+				patch.object(ing, "_first_delivery", side_effect=[True, False]),
 			):
 				first = ing.handle_update(gateway, adapter, MagicMock())
 				second = ing.handle_update(gateway, adapter, MagicMock())
@@ -116,9 +119,11 @@ class TestFailedHandlerReleasesClaim(unittest.TestCase):
 		gateway = MagicMock()
 		gateway.name = "GW"
 		try:
-			with patch.object(ing, "classify", return_value="other"), patch.object(
-				ing, "_first_delivery", return_value=True
-			), patch.object(ing, "_release_delivery") as release:
+			with (
+				patch.object(ing, "classify", return_value="other"),
+				patch.object(ing, "_first_delivery", return_value=True),
+				patch.object(ing, "_release_delivery") as release,
+			):
 				with self.assertRaises(RuntimeError):
 					ing.handle_update(gateway, adapter, MagicMock())
 		finally:

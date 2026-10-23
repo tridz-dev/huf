@@ -77,8 +77,14 @@ _CONTROL_KEYS = ("action", "confirm", "confirmation_token")
 # Restriction presets -> ChatPermissions (anything not listed stays allowed).
 _ALL_PERMS = set(aa.CHAT_PERMISSIONS)
 _MEDIA = {
-	"can_send_audios", "can_send_documents", "can_send_photos", "can_send_videos", "can_send_video_notes",
-	"can_send_voice_notes", "can_send_polls", "can_send_other_messages",
+	"can_send_audios",
+	"can_send_documents",
+	"can_send_photos",
+	"can_send_videos",
+	"can_send_video_notes",
+	"can_send_voice_notes",
+	"can_send_polls",
+	"can_send_other_messages",
 }
 PRESETS: dict[str, set[str]] = {
 	"mute": {"can_send_messages"} | _MEDIA,
@@ -160,7 +166,9 @@ def _is_paired_admin(gateway: str, user_id: Any) -> bool:
 	try:
 		return bool(
 			frappe.db.get_value(
-				"Telegram Admin Binding", {"gateway": gateway, "telegram_user_id": str(user_id), "is_active": 1}, "name"
+				"Telegram Admin Binding",
+				{"gateway": gateway, "telegram_user_id": str(user_id), "is_active": 1},
+				"name",
 			)
 		)
 	except Exception:
@@ -172,7 +180,9 @@ def _is_paired_admin(gateway: str, user_id: Any) -> bool:
 
 def _audit(gateway: str, action: str, args: dict, result: str, detail: str = "") -> None:
 	safe = {k: v for k, v in args.items() if k not in _CONTROL_KEYS}
-	logger.info(f"telegram_admin gateway={gateway} action={action} result={result} args={json.dumps(safe, default=str)[:500]}")
+	logger.info(
+		f"telegram_admin gateway={gateway} action={action} result={result} args={json.dumps(safe, default=str)[:500]}"
+	)
 	try:
 		if not frappe.db.exists("DocType", "Telegram Admin Audit"):
 			return
@@ -370,12 +380,17 @@ def _request_human_approval(pending: dict, client) -> dict:
 
 	gateway = pending["gateway"]
 	cache = _cache()
-	already = {"status": "pending_human_approval", "message": "An admin approval for this exact action is already pending."}
+	already = {
+		"status": "pending_human_approval",
+		"message": "An admin approval for this exact action is already pending.",
+	}
 	if ta.agent_action_pending(pending["fp"], cache=cache):
 		return already
 	targets = _admin_bindings(gateway)
 	if not targets:
-		raise Refused("no_admin_available", "No active Admin-scope Telegram binding to ask. Nothing was done.")
+		raise Refused(
+			"no_admin_available", "No active Admin-scope Telegram binding to ask. Nothing was done."
+		)
 	# Mark pending atomically BEFORE sending so a fast Approve is not 'expired' and a concurrent duplicate sends nothing.
 	if not ta.agent_action_begin(pending["fp"], cache=cache, ttl=APPROVAL_TTL):
 		return already
@@ -386,20 +401,45 @@ def _request_human_approval(pending: dict, client) -> dict:
 		sign = _callback_signer(gateway, chat_id)
 		if sign is None:
 			continue
-		rows = [[
-			kb.callback_button("Approve", sign(ta.callback_payload(
-				"c", ta.issue_nonce(binding["telegram_user_id"], chat_id, pending, cache=cache, ttl=APPROVAL_TTL)))),
-			kb.callback_button("Reject", sign(ta.callback_payload(
-				"x", ta.issue_nonce(binding["telegram_user_id"], chat_id, pending, cache=cache, ttl=APPROVAL_TTL)))),
-		]]
+		rows = [
+			[
+				kb.callback_button(
+					"Approve",
+					sign(
+						ta.callback_payload(
+							"c",
+							ta.issue_nonce(
+								binding["telegram_user_id"], chat_id, pending, cache=cache, ttl=APPROVAL_TTL
+							),
+						)
+					),
+				),
+				kb.callback_button(
+					"Reject",
+					sign(
+						ta.callback_payload(
+							"x",
+							ta.issue_nonce(
+								binding["telegram_user_id"], chat_id, pending, cache=cache, ttl=APPROVAL_TTL
+							),
+						)
+					),
+				),
+			]
+		]
 		try:
-			client.call("sendMessage", {"chat_id": aa._id(chat_id), "text": text[:4000], "reply_markup": kb.inline_keyboard(rows)})
+			client.call(
+				"sendMessage",
+				{"chat_id": aa._id(chat_id), "text": text[:4000], "reply_markup": kb.inline_keyboard(rows)},
+			)
 			delivered += 1
 		except Exception:
 			continue
 	if not delivered:
 		ta.agent_action_clear(pending["fp"], cache=cache)
-		raise Refused("no_admin_available", "Could not reach any admin to approve this action. Nothing was done.")
+		raise Refused(
+			"no_admin_available", "Could not reach any admin to approve this action. Nothing was done."
+		)
 	return {
 		"status": "pending_human_approval",
 		"message": f"A human admin must approve this in Telegram ({delivered} admin(s) asked, valid "
@@ -423,7 +463,9 @@ def execute_approved(pending: dict) -> str:
 	client = None
 	try:
 		if not _flag(gateway, group):
-			raise Refused("action_not_permitted", f"This gateway no longer allows agents to use {group} actions.")
+			raise Refused(
+				"action_not_permitted", f"This gateway no longer allows agents to use {group} actions."
+			)
 		token = _gateway_token(gateway)
 		if not token:
 			raise Refused("not_configured", "Telegram bot token not configured")
@@ -436,7 +478,9 @@ def execute_approved(pending: dict) -> str:
 			_connection(gateway, args)
 		_execute(name, args, client, gateway, chat)
 	except TelegramApiError as exc:
-		raise ta.AdminError(f"Telegram error: {client.redact(exc.description) if client else exc.description}") from None
+		raise ta.AdminError(
+			f"Telegram error: {client.redact(exc.description) if client else exc.description}"
+		) from None
 	except aa.AdminActionError as exc:
 		raise ta.AdminError(str(exc)) from None
 	except Refused as refusal:
@@ -464,7 +508,9 @@ def _check_bot_rights(client, chat: str, right: Optional[str], action: str) -> N
 	if status == "creator":
 		return
 	if status != "administrator":
-		raise Refused("bot_not_admin", f"The bot is not an administrator of chat {chat}, so {action} is not possible.")
+		raise Refused(
+			"bot_not_admin", f"The bot is not an administrator of chat {chat}, so {action} is not possible."
+		)
 	if right and not member.get(right):
 		raise Refused(
 			"bot_missing_right",
@@ -481,7 +527,9 @@ def _check_target(client, gateway: str, chat: str, user_id: int, action: str) ->
 	if member.get("status") in ("creator", "administrator"):
 		if action == "demote" and member.get("status") == "administrator":
 			return
-		raise Refused("target_is_admin", f"That user is an administrator or owner of the chat; {action} is refused.")
+		raise Refused(
+			"target_is_admin", f"That user is an administrator or owner of the chat; {action} is refused."
+		)
 
 
 def _int(args: dict, key: str, required: bool = True) -> Optional[int]:
@@ -517,7 +565,9 @@ def _permissions(args: dict) -> dict:
 		return {k: bool(v) for k, v in explicit.items()}
 	preset = str(args.get("preset") or "mute")
 	if preset not in PRESETS:
-		raise Refused("invalid_argument", f"preset must be one of {', '.join(sorted(PRESETS))} or pass permissions")
+		raise Refused(
+			"invalid_argument", f"preset must be one of {', '.join(sorted(PRESETS))} or pass permissions"
+		)
 	denied = PRESETS[preset]
 	return {k: (k not in denied) for k in aa.CHAT_PERMISSIONS}
 
@@ -535,7 +585,9 @@ def _rights(args: dict) -> dict:
 	if unknown:
 		raise Refused("invalid_argument", f"unknown admin right(s): {', '.join(unknown)}")
 	if "can_promote_members" in raw:
-		raise Refused("right_not_grantable", "Agents may not grant can_promote_members (privilege escalation).")
+		raise Refused(
+			"right_not_grantable", "Agents may not grant can_promote_members (privilege escalation)."
+		)
 	return {r: True for r in raw}
 
 
@@ -547,7 +599,9 @@ def _menu_button(args: dict) -> dict:
 		except ValueError:
 			raw = None
 	if not isinstance(raw, dict) or raw.get("type") not in ("commands", "default", "web_app"):
-		raise Refused("invalid_argument", "menu_button must be an object with type commands, default or web_app")
+		raise Refused(
+			"invalid_argument", "menu_button must be an object with type commands, default or web_app"
+		)
 	if raw["type"] == "web_app":
 		url = str(((raw.get("web_app") or {}).get("url")) or "")
 		if not url.startswith("https://") or not str(raw.get("text") or "").strip():
@@ -608,7 +662,13 @@ def _execute(action: str, args: dict, client, gateway: str, chat: str) -> Any:
 	if action in ("ban", "unban", "restrict", "unrestrict", "promote", "demote"):
 		uid = _int(args, "user_id")
 		if action == "ban":
-			return aa.ban_member(client, chat, uid, until_date=_until(args), revoke_messages=_truthy(args.get("revoke_messages")))
+			return aa.ban_member(
+				client,
+				chat,
+				uid,
+				until_date=_until(args),
+				revoke_messages=_truthy(args.get("revoke_messages")),
+			)
 		if action == "unban":
 			return aa.unban_member(client, chat, uid, only_if_banned=True)
 		if action == "restrict":
@@ -672,8 +732,12 @@ def _execute(action: str, args: dict, client, gateway: str, chat: str) -> Any:
 				commands = json.loads(commands)
 			except ValueError:
 				commands = None
-		kw = {"scope": str(args.get("command_scope") or "default"), "chat_id": args.get("chat_id"),
-			"user_id": args.get("user_id"), "language_code": args.get("language_code") or None}
+		kw = {
+			"scope": str(args.get("command_scope") or "default"),
+			"chat_id": args.get("chat_id"),
+			"user_id": args.get("user_id"),
+			"language_code": args.get("language_code") or None,
+		}
 		try:
 			return cmds.set_commands(client, commands or [], **kw)
 		except ValueError as exc:
@@ -681,10 +745,14 @@ def _execute(action: str, args: dict, client, gateway: str, chat: str) -> Any:
 	if action == "set_my_name":
 		return client.call("setMyName", {"name": _text(args, "name", 64, required=False), **_lang(args)})
 	if action == "set_my_description":
-		return client.call("setMyDescription", {"description": _text(args, "description", 512, required=False), **_lang(args)})
+		return client.call(
+			"setMyDescription",
+			{"description": _text(args, "description", 512, required=False), **_lang(args)},
+		)
 	if action == "set_my_short_description":
 		return client.call(
-			"setMyShortDescription", {"short_description": _text(args, "short_description", 120, required=False), **_lang(args)}
+			"setMyShortDescription",
+			{"short_description": _text(args, "short_description", 120, required=False), **_lang(args)},
 		)
 	if action == "set_chat_menu_button":
 		payload = {"menu_button": _menu_button(args)}
@@ -694,11 +762,15 @@ def _execute(action: str, args: dict, client, gateway: str, chat: str) -> Any:
 	cid = str(args.get("business_connection_id") or "")
 	if action == "get_business_connection":
 		conn = _connection(gateway, args)
-		return {k: conn.get(k) for k in ("id", "owner_id", "owner_name", "user_chat_id", "rights", "is_enabled")}
+		return {
+			k: conn.get(k) for k in ("id", "owner_id", "owner_name", "user_chat_id", "rights", "is_enabled")
+		}
 	try:
 		if action == "send_business_message":
 			text = _text(args, "text", 4096)
-			return biz.reply_as_business(cid, _int(args, "chat_id"), text, sender=client, reply_to=args.get("reply_to_message_id"))
+			return biz.reply_as_business(
+				cid, _int(args, "chat_id"), text, sender=client, reply_to=args.get("reply_to_message_id")
+			)
 		if action == "read_business_message":
 			return biz.mark_read(cid, _int(args, "chat_id"), _int(args, "message_id"), sender=client)
 		ids = args.get("message_ids")
@@ -706,7 +778,9 @@ def _execute(action: str, args: dict, client, gateway: str, chat: str) -> Any:
 			ids = [i for i in ids.replace(",", " ").split() if i]
 		if not isinstance(ids, list) or not ids:
 			raise Refused("invalid_argument", "message_ids must be a non-empty list")
-		return biz.delete_messages(cid, [int(i) for i in ids], sender=client, own_only=not _truthy(args.get("all_messages")))
+		return biz.delete_messages(
+			cid, [int(i) for i in ids], sender=client, own_only=not _truthy(args.get("all_messages"))
+		)
 	except biz.BusinessReplyBlocked as exc:
 		raise Refused("business_right_missing", str(exc), reason=exc.reason) from None
 	except (TypeError, ValueError) as exc:
@@ -719,7 +793,13 @@ def _execute(action: str, args: dict, client, gateway: str, chat: str) -> Any:
 def handle_action(action: str = "", **kwargs) -> str:
 	action = str(action or "").strip()
 	if action not in ACTIONS:
-		return _out({"success": False, "error": "unknown_action", "message": f"Unknown action. Use one of: {', '.join(ACTIONS)}"})
+		return _out(
+			{
+				"success": False,
+				"error": "unknown_action",
+				"message": f"Unknown action. Use one of: {', '.join(ACTIONS)}",
+			}
+		)
 	group, right, destructive, counted = ACTIONS[action]
 	gateway = scope.run_gateway()
 	run_id = scope.effective_run_id()
@@ -728,7 +808,10 @@ def handle_action(action: str = "", **kwargs) -> str:
 	send_claimed = False
 	try:
 		if not gateway:
-			raise Refused("action_not_permitted", "Telegram admin actions are only available inside a Telegram gateway conversation.")
+			raise Refused(
+				"action_not_permitted",
+				"Telegram admin actions are only available inside a Telegram gateway conversation.",
+			)
 		if not _flag(gateway, group):
 			raise Refused(
 				"action_not_permitted",
@@ -745,7 +828,11 @@ def handle_action(action: str = "", **kwargs) -> str:
 			if refusal:
 				raise Refused("action_not_permitted", json.loads(refusal)["message"])
 			args["chat_id"] = chat
-		if action == "set_my_commands" and str(args.get("command_scope") or "default") in ("chat", "chat_member", "chat_administrators"):
+		if action == "set_my_commands" and str(args.get("command_scope") or "default") in (
+			"chat",
+			"chat_member",
+			"chat_administrators",
+		):
 			target = scope.normalize_chat(args.get("chat_id"))
 			if not target:
 				raise Refused("invalid_argument", "chat_id is required for a chat-scoped command list")

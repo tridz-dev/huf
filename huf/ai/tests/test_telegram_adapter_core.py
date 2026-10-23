@@ -31,14 +31,30 @@ class TestAdapterCore(unittest.TestCase):
 	def test_capabilities(self):
 		caps = self.adapter.capabilities
 		self.assertTrue(caps.supports_media_reply)
-		for flag in ("supports_reactions", "supports_typing", "supports_buttons", "supports_edit", "supports_voice_reply"):
+		for flag in (
+			"supports_reactions",
+			"supports_typing",
+			"supports_buttons",
+			"supports_edit",
+			"supports_voice_reply",
+		):
 			self.assertTrue(getattr(caps, flag), flag)
 
 	def test_other_adapters_default_flags_false(self):
 		from huf.ai.gateway_adapters.types import GatewayCapabilities
 
 		caps = GatewayCapabilities(frozenset({"webhook"}))
-		self.assertFalse(any((caps.supports_reactions, caps.supports_typing, caps.supports_buttons, caps.supports_edit, caps.supports_voice_reply)))
+		self.assertFalse(
+			any(
+				(
+					caps.supports_reactions,
+					caps.supports_typing,
+					caps.supports_buttons,
+					caps.supports_edit,
+					caps.supports_voice_reply,
+				)
+			)
+		)
 
 	def test_callback_query_signed_round_trip(self):
 		update = load_fixture("callback_query")
@@ -51,7 +67,9 @@ class TestAdapterCore(unittest.TestCase):
 		with self.assertRaises(ValueError):
 			self.adapter.normalize_inbound(self.request(load_fixture("callback_query")))
 		update = load_fixture("callback_query")
-		update["callback_query"]["data"] = self.adapter.sign_callback_data("approve:42", chat_id="999")  # other chat
+		update["callback_query"]["data"] = self.adapter.sign_callback_data(
+			"approve:42", chat_id="999"
+		)  # other chat
 		with self.assertRaises(ValueError):
 			self.adapter.normalize_inbound(self.request(update))
 
@@ -73,7 +91,9 @@ class TestAdapterCore(unittest.TestCase):
 
 	def test_media_event_carries_attachment_without_download(self):
 		event = self.adapter.normalize_inbound(self.request(load_fixture("voice")))
-		self.assertEqual([(a.kind, a.file_id, a.file_doc) for a in event.attachments], [("voice", "voice-id", None)])
+		self.assertEqual(
+			[(a.kind, a.file_id, a.file_doc) for a in event.attachments], [("voice", "voice-id", None)]
+		)
 
 	def test_animation_not_duplicated_as_document(self):
 		event = self.adapter.normalize_inbound(self.request(load_fixture("animation")))
@@ -89,8 +109,12 @@ class TestAdapterCore(unittest.TestCase):
 
 	def test_send_reply_with_attachments(self):
 		reply = GatewayReply(
-			"999", "see this",
-			attachments=(GatewayAttachment(file_id="PH", kind="photo"), GatewayAttachment(url="https://x/a.pdf", kind="file")),
+			"999",
+			"see this",
+			attachments=(
+				GatewayAttachment(file_id="PH", kind="photo"),
+				GatewayAttachment(url="https://x/a.pdf", kind="file"),
+			),
 		)
 		self.adapter.send_reply(reply)
 		self.assertEqual([c["method"] for c in self.api.calls], ["sendPhoto", "sendDocument", "sendMessage"])

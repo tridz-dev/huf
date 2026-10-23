@@ -8,23 +8,37 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
-from huf.ai.gateway_adapters import provider_hooks, telegram_agent_context as tac, telegram_agent_context_hooks
+from huf.ai.gateway_adapters import provider_hooks, telegram_agent_context_hooks
+from huf.ai.gateway_adapters import telegram_agent_context as tac
 
 
 def ev(raw, **kw):
-	return SimpleNamespace(raw_payload=raw, conversation_id=kw.get("conversation_id", ""), thread_id=kw.get("thread_id"))
+	return SimpleNamespace(
+		raw_payload=raw, conversation_id=kw.get("conversation_id", ""), thread_id=kw.get("thread_id")
+	)
 
 
 class TestEventContext(unittest.TestCase):
 	def test_basic(self):
-		raw = {"message": {"message_id": 5, "chat": {"id": -100, "type": "group"},
-			"from": {"first_name": "Ann", "last_name": "<b>Lee]"}}}
+		raw = {
+			"message": {
+				"message_id": 5,
+				"chat": {"id": -100, "type": "group"},
+				"from": {"first_name": "Ann", "last_name": "<b>Lee]"},
+			}
+		}
 		line = tac.event_context(ev(raw))
 		self.assertEqual(line, "Current message: chat_id=-100, message_id=5, sender=Ann bLee")
 
 	def test_forum_thread(self):
-		raw = {"message": {"message_id": 5, "message_thread_id": 9, "is_topic_message": True,
-			"chat": {"id": -100, "type": "supergroup"}}}
+		raw = {
+			"message": {
+				"message_id": 5,
+				"message_thread_id": 9,
+				"is_topic_message": True,
+				"chat": {"id": -100, "type": "supergroup"},
+			}
+		}
 		self.assertIn("thread_id=9", tac.event_context(ev(raw)))
 
 	def test_fallback_to_event_fields(self):

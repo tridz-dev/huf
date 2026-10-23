@@ -6,7 +6,9 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from huf.ai.gateway_adapters import telegram_ingest as ing, telegram_loop_guard as lg, telegram_modes_hooks as mh
+from huf.ai.gateway_adapters import telegram_ingest as ing
+from huf.ai.gateway_adapters import telegram_loop_guard as lg
+from huf.ai.gateway_adapters import telegram_modes_hooks as mh
 
 
 class FakeCache:
@@ -100,7 +102,12 @@ class TestPrefilter(unittest.TestCase):
 
 	def parsed(self, msg, uid="u1", room=False):
 		return SimpleNamespace(
-			kind="message", raw={"message": msg}, chat_id="5", update_id=uid, is_room=room, is_channel=False,
+			kind="message",
+			raw={"message": msg},
+			chat_id="5",
+			update_id=uid,
+			is_room=room,
+			is_channel=False,
 		)
 
 	def run_filter(self, parsed, allow="9"):
@@ -122,8 +129,12 @@ class TestPrefilter(unittest.TestCase):
 
 	def test_group_not_addressed_dropped_when_mention_required(self):
 		self.gw.mention_required = 1
-		msg = {"from": {"id": 42}, "chat": {"id": 5, "type": "group"}, "text": "hi @other",
-			"entities": [{"type": "mention", "offset": 3, "length": 6}]}
+		msg = {
+			"from": {"id": 42},
+			"chat": {"id": 5, "type": "group"},
+			"text": "hi @other",
+			"entities": [{"type": "mention", "offset": 3, "length": 6}],
+		}
 		with mock.patch.object(mh, "_bot_username", return_value="huf_bot"):
 			self.assertIn("not addressed", self.run_filter(self.parsed(msg, room=True))["note"])
 			msg["text"] = "hi @huf_bot"

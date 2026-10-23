@@ -34,6 +34,7 @@ import re
 from typing import Any, Callable, Optional
 
 import frappe
+
 logger = frappe.logger("huf")
 
 from huf.ai import run_delivery
@@ -44,7 +45,6 @@ from huf.ai.gateway_adapters.telegram_client import ALLOWED_UPDATES, TelegramApi
 from huf.ai.gateway_adapters.telegram_keyboards import derive_callback_key, sign_callback
 from huf.ai.gateway_adapters.telegram_outbound import TelegramSender
 from huf.ai.tools.credentials import get_credential, update_last_error
-
 
 SERVICE_NAME = "telegram"
 

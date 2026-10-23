@@ -15,7 +15,7 @@ from typing import Any, Mapping, Sequence
 
 from huf.ai.gateway_adapters.telegram_client import TelegramBotClient
 
-DICE_EMOJI = ("\U0001F3B2", "\U0001F3AF", "\U0001F3C0", "⚽", "\U0001F3B3", "\U0001F3B0")
+DICE_EMOJI = ("\U0001f3b2", "\U0001f3af", "\U0001f3c0", "⚽", "\U0001f3b3", "\U0001f3b0")
 POLL_MIN_OPTIONS, POLL_MAX_OPTIONS = 2, 12
 POLL_QUESTION_MAX, POLL_OPTION_MAX, POLL_EXPLANATION_MAX = 300, 100, 200
 POLL_OPEN_PERIOD = (5, 2628000)
@@ -27,8 +27,14 @@ _PARSE_MODES = ("HTML", "MarkdownV2", "Markdown")
 
 
 def _opts(
-	payload: dict[str, Any], *, reply_to: Any = None, thread_id: Any = None, markup: Mapping[str, Any] | None = None,
-	silent: bool = False, protect: bool = False, effect_id: str | None = None,
+	payload: dict[str, Any],
+	*,
+	reply_to: Any = None,
+	thread_id: Any = None,
+	markup: Mapping[str, Any] | None = None,
+	silent: bool = False,
+	protect: bool = False,
+	effect_id: str | None = None,
 ) -> dict[str, Any]:
 	if thread_id not in (None, ""):
 		payload["message_thread_id"] = int(thread_id)
@@ -69,14 +75,25 @@ def _bounded(value: Any, label: str, maximum: int) -> str:
 
 
 def send_venue(
-	client: TelegramBotClient, chat_id: Any, latitude: float, longitude: float, title: str, address: str, *,
-	foursquare_id: str = "", google_place_id: str = "", **opts: Any,
+	client: TelegramBotClient,
+	chat_id: Any,
+	latitude: float,
+	longitude: float,
+	title: str,
+	address: str,
+	*,
+	foursquare_id: str = "",
+	google_place_id: str = "",
+	**opts: Any,
 ) -> Mapping[str, Any]:
 	if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
 		raise ValueError("latitude must be -90..90 and longitude -180..180")
 	payload = {
-		"chat_id": chat_id, "latitude": latitude, "longitude": longitude,
-		"title": _bounded(title, "title", 255), "address": _bounded(address, "address", 255),
+		"chat_id": chat_id,
+		"latitude": latitude,
+		"longitude": longitude,
+		"title": _bounded(title, "title", 255),
+		"address": _bounded(address, "address", 255),
 	}
 	if foursquare_id:
 		payload["foursquare_id"] = str(foursquare_id)
@@ -95,9 +112,17 @@ def send_dice(client: TelegramBotClient, chat_id: Any, emoji: str = "", **opts: 
 
 
 def build_poll(
-	question: Any, options: Any, *, is_anonymous: bool | None = None, poll_type: str = "regular",
-	allows_multiple_answers: bool = False, correct_option_id: Any = None, correct_option_ids: Any = None,
-	explanation: str = "", parse_mode: str | None = None, open_period: Any = None,
+	question: Any,
+	options: Any,
+	*,
+	is_anonymous: bool | None = None,
+	poll_type: str = "regular",
+	allows_multiple_answers: bool = False,
+	correct_option_id: Any = None,
+	correct_option_ids: Any = None,
+	explanation: str = "",
+	parse_mode: str | None = None,
+	open_period: Any = None,
 ) -> dict[str, Any]:
 	"""Validated sendPoll fields (without chat/common options)."""
 	items = _list(options, "options")
@@ -113,13 +138,17 @@ def build_poll(
 	if poll_type not in ("regular", "quiz"):
 		raise ValueError("type must be regular or quiz")
 	fields: dict[str, Any] = {
-		"question": _bounded(question, "question", POLL_QUESTION_MAX), "options": built, "type": poll_type,
+		"question": _bounded(question, "question", POLL_QUESTION_MAX),
+		"options": built,
+		"type": poll_type,
 	}
 	if is_anonymous is not None:
 		fields["is_anonymous"] = bool(is_anonymous)
 	if poll_type == "quiz":
-		ids = correct_option_ids if correct_option_ids not in (None, "", []) else (
-			[correct_option_id] if correct_option_id not in (None, "") else []
+		ids = (
+			correct_option_ids
+			if correct_option_ids not in (None, "", [])
+			else ([correct_option_id] if correct_option_id not in (None, "") else [])
 		)
 		try:
 			ids = sorted({int(i) for i in _list(ids, "correct_option_id")})
@@ -151,7 +180,9 @@ def build_poll(
 	return fields
 
 
-def send_poll(client: TelegramBotClient, chat_id: Any, poll: Mapping[str, Any], **opts: Any) -> Mapping[str, Any]:
+def send_poll(
+	client: TelegramBotClient, chat_id: Any, poll: Mapping[str, Any], **opts: Any
+) -> Mapping[str, Any]:
 	return client.call("sendPoll", _opts({"chat_id": chat_id, **poll}, **opts))
 
 
@@ -159,8 +190,14 @@ def stop_poll(client: TelegramBotClient, chat_id: Any, message_id: Any) -> Mappi
 	return client.call("stopPoll", {"chat_id": chat_id, "message_id": int(message_id)})
 
 
-def build_checklist(title: Any, tasks: Any, *, parse_mode: str | None = None, others_can_add: bool = False,
-	others_can_mark: bool = False) -> dict[str, Any]:
+def build_checklist(
+	title: Any,
+	tasks: Any,
+	*,
+	parse_mode: str | None = None,
+	others_can_add: bool = False,
+	others_can_mark: bool = False,
+) -> dict[str, Any]:
 	items = _list(tasks, "tasks")
 	if not 1 <= len(items) <= CHECKLIST_MAX_TASKS:
 		raise ValueError(f"a checklist needs 1-{CHECKLIST_MAX_TASKS} tasks")
@@ -182,23 +219,43 @@ def build_checklist(title: Any, tasks: Any, *, parse_mode: str | None = None, ot
 
 
 def send_checklist(
-	client: TelegramBotClient, chat_id: Any, business_connection_id: str, checklist: Mapping[str, Any], *,
-	reply_to: Any = None, markup: Mapping[str, Any] | None = None, silent: bool = False, protect: bool = False,
+	client: TelegramBotClient,
+	chat_id: Any,
+	business_connection_id: str,
+	checklist: Mapping[str, Any],
+	*,
+	reply_to: Any = None,
+	markup: Mapping[str, Any] | None = None,
+	silent: bool = False,
+	protect: bool = False,
 	effect_id: str | None = None,
 ) -> Mapping[str, Any]:
 	if not str(business_connection_id or "").strip():
-		raise ValueError("business_connection_id is required (sendChecklist works only for a connected business account)")
-	payload = {"business_connection_id": str(business_connection_id).strip(), "chat_id": chat_id,
-		"checklist": dict(checklist)}
-	return client.call("sendChecklist", _opts(payload, reply_to=reply_to, markup=markup, silent=silent,
-		protect=protect, effect_id=effect_id))
+		raise ValueError(
+			"business_connection_id is required (sendChecklist works only for a connected business account)"
+		)
+	payload = {
+		"business_connection_id": str(business_connection_id).strip(),
+		"chat_id": chat_id,
+		"checklist": dict(checklist),
+	}
+	return client.call(
+		"sendChecklist",
+		_opts(payload, reply_to=reply_to, markup=markup, silent=silent, protect=protect, effect_id=effect_id),
+	)
 
 
 # -- forum topics ------------------------------------------------------------------------------
 
 
-def create_forum_topic(client: TelegramBotClient, chat_id: Any, name: Any, *, icon_color: Any = None,
-	icon_custom_emoji_id: str = "") -> Mapping[str, Any]:
+def create_forum_topic(
+	client: TelegramBotClient,
+	chat_id: Any,
+	name: Any,
+	*,
+	icon_color: Any = None,
+	icon_custom_emoji_id: str = "",
+) -> Mapping[str, Any]:
 	payload: dict[str, Any] = {"chat_id": chat_id, "name": _bounded(name, "name", TOPIC_NAME_MAX)}
 	if icon_color not in (None, ""):
 		if int(icon_color) not in TOPIC_ICON_COLORS:
@@ -209,8 +266,14 @@ def create_forum_topic(client: TelegramBotClient, chat_id: Any, name: Any, *, ic
 	return client.call("createForumTopic", payload)
 
 
-def edit_forum_topic(client: TelegramBotClient, chat_id: Any, thread_id: Any, *, name: Any = "",
-	icon_custom_emoji_id: str | None = None) -> Mapping[str, Any]:
+def edit_forum_topic(
+	client: TelegramBotClient,
+	chat_id: Any,
+	thread_id: Any,
+	*,
+	name: Any = "",
+	icon_custom_emoji_id: str | None = None,
+) -> Mapping[str, Any]:
 	payload: dict[str, Any] = {"chat_id": chat_id, "message_thread_id": int(thread_id)}
 	if name:
 		payload["name"] = _bounded(name, "name", TOPIC_NAME_MAX)
@@ -250,7 +313,11 @@ _MEMBER_KEYS = ("status", "is_anonymous", "custom_title", "until_date", "is_memb
 
 def _public_user(user: Any) -> dict[str, Any]:
 	user = user if isinstance(user, Mapping) else {}
-	return {k: user.get(k) for k in ("id", "is_bot", "first_name", "last_name", "username") if user.get(k) is not None}
+	return {
+		k: user.get(k)
+		for k in ("id", "is_bot", "first_name", "last_name", "username")
+		if user.get(k) is not None
+	}
 
 
 def _public_member(member: Any) -> dict[str, Any]:

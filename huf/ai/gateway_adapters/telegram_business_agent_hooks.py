@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
-from huf.ai.gateway_adapters import telegram_business as biz, telegram_business_agent as agent, telegram_ingest as ing
+from huf.ai.gateway_adapters import telegram_business as biz
+from huf.ai.gateway_adapters import telegram_business_agent as agent
+from huf.ai.gateway_adapters import telegram_ingest as ing
 
 biz.register_business_policy(agent.policy)
 biz.register_draft_producer(agent.draft_producer)

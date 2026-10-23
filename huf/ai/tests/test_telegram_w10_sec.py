@@ -8,10 +8,14 @@ from unittest import mock
 
 import frappe
 
-from huf.ai import telegram_admin as ta, telegram_guard as g
-from huf.ai import telegram_management_commands as mc, telegram_management_settings as ms
-from huf.ai.gateway_adapters import telegram_buttons as tb, telegram_groups as groups
-from huf.ai.gateway_adapters import telegram_ingest as ing, telegram_media_reply as mr
+from huf.ai import telegram_admin as ta
+from huf.ai import telegram_guard as g
+from huf.ai import telegram_management_commands as mc
+from huf.ai import telegram_management_settings as ms
+from huf.ai.gateway_adapters import telegram_buttons as tb
+from huf.ai.gateway_adapters import telegram_groups as groups
+from huf.ai.gateway_adapters import telegram_ingest as ing
+from huf.ai.gateway_adapters import telegram_media_reply as mr
 from huf.ai.gateway_adapters.telegram_client import TelegramApiError, TelegramBotClient
 from huf.ai.gateway_adapters.telegram_inbound import parse_update
 from huf.ai.tests.telegram_fakes import TOKEN, FakeBotApi, FakeResponse
@@ -72,16 +76,25 @@ def _join_gw(**kw):
 
 
 def _join_update():
-	return {"update_id": 1, "chat_join_request": {
-		"chat": {"id": -100, "type": "supergroup", "title": "G"}, "from": {"id": 7, "first_name": "E"},
-		"user_chat_id": 7, "date": 1}}
+	return {
+		"update_id": 1,
+		"chat_join_request": {
+			"chat": {"id": -100, "type": "supergroup", "title": "G"},
+			"from": {"id": 7, "first_name": "E"},
+			"user_chat_id": 7,
+			"date": 1,
+		},
+	}
 
 
 class TestM2Admission(unittest.TestCase):
 	def test_join_request_ignored_for_unadmitted_room(self):
 		gate = _join_gw()
 		parsed = SimpleNamespace(raw=_join_update())
-		with mock.patch.object(groups, "decide") as decide, mock.patch.object(groups, "record_pending_join") as rec:
+		with (
+			mock.patch.object(groups, "decide") as decide,
+			mock.patch.object(groups, "record_pending_join") as rec,
+		):
 			res = groups.handle_join_request(gate, SimpleNamespace(client=None), parsed, None)
 		self.assertEqual(res["decision"], "ignore")
 		decide.assert_not_called()
@@ -90,8 +103,10 @@ class TestM2Admission(unittest.TestCase):
 	def test_pending_join_cap(self):
 		gate = _join_gw()
 		ctx = {"chat_id": "-100", "user_id": "7", "user_name": "e", "chat_title": "G", "user_chat_id": "7"}
-		with mock.patch.object(groups.frappe, "get_all", side_effect=[[], ["a", "b"]]), \
-			mock.patch.object(groups.frappe, "get_doc") as get_doc:
+		with (
+			mock.patch.object(groups.frappe, "get_all", side_effect=[[], ["a", "b"]]),
+			mock.patch.object(groups.frappe, "get_doc") as get_doc,
+		):
 			self.assertEqual(groups.record_pending_join(gate, ctx), "")
 		get_doc.assert_not_called()
 
@@ -99,8 +114,10 @@ class TestM2Admission(unittest.TestCase):
 		sent = []
 		fake_mod = SimpleNamespace(send_template=lambda *a, **k: sent.append(a) or {})
 		member = {"id": 7, "first_name": "E"}
-		with mock.patch.dict("sys.modules", {"huf.ai.telegram_templates": fake_mod}), \
-			mock.patch("huf.ai.telegram_templates", fake_mod, create=True):
+		with (
+			mock.patch.dict("sys.modules", {"huf.ai.telegram_templates": fake_mod}),
+			mock.patch("huf.ai.telegram_templates", fake_mod, create=True),
+		):
 			with Env():
 				closed = gw(telegram_welcome_template="Hi", room_policy="Disabled")
 				self.assertFalse(g._welcome_one(closed, "-100", "G", member, 100, 0))
@@ -111,8 +128,10 @@ class TestM2Admission(unittest.TestCase):
 	def test_welcome_per_chat_cap(self):
 		sent = []
 		fake_mod = SimpleNamespace(send_template=lambda *a, **k: sent.append(a) or {})
-		with mock.patch.dict("sys.modules", {"huf.ai.telegram_templates": fake_mod}), \
-			mock.patch("huf.ai.telegram_templates", fake_mod, create=True):
+		with (
+			mock.patch.dict("sys.modules", {"huf.ai.telegram_templates": fake_mod}),
+			mock.patch("huf.ai.telegram_templates", fake_mod, create=True),
+		):
 			with Env():
 				gate = gw(telegram_welcome_template="Hi", room_policy="Open")
 				for uid in range(1, g.WELCOME_CHAT_CAP + 10):
@@ -129,8 +148,16 @@ class TestM2Admission(unittest.TestCase):
 
 class TestM3PostOnly(unittest.TestCase):
 	def test_mutators_are_post_only(self):
-		for fn in (mc.set_bot_profile, mc.set_commands, mc.delete_commands, mc.set_menu_button, mc.set_webhook_now,
-			mc.delete_webhook_now, mc.apply_recommended_setup, ms.update_telegram_settings):
+		for fn in (
+			mc.set_bot_profile,
+			mc.set_commands,
+			mc.delete_commands,
+			mc.set_menu_button,
+			mc.set_webhook_now,
+			mc.delete_webhook_now,
+			mc.apply_recommended_setup,
+			ms.update_telegram_settings,
+		):
 			methods = frappe.allowed_http_methods_for_whitelisted_func.get(fn)
 			self.assertEqual(methods, ["POST"], fn.__name__)
 
@@ -138,8 +165,11 @@ class TestM3PostOnly(unittest.TestCase):
 class TestM4SpentQuery(unittest.TestCase):
 	def test_captcha_approve_uses_plain_method_not_spent_query(self):
 		with Env() as env:
-			nonce = g.issue_challenge("gw1", {**CTX, "query_id": "Q1", "user_id": "42"},
-				question={"kind": "math", "prompt": "1+1", "options": [], "answer": "2"})
+			nonce = g.issue_challenge(
+				"gw1",
+				{**CTX, "query_id": "Q1", "user_id": "42"},
+				question={"kind": "math", "prompt": "1+1", "options": [], "answer": "2"},
+			)
 			res = g.submit_answer("gw1", nonce, init_data(42), "2")
 		self.assertTrue(res["ok"])
 		self.assertEqual(len(env.fake.of("approveChatJoinRequest")), 1)
@@ -163,12 +193,23 @@ class TestS1AgentNeverApproves(unittest.TestCase):
 
 class TestS4AddressingFailsClosed(unittest.TestCase):
 	def test_exception_means_not_addressed(self):
-		parsed = parse_update({"update_id": 1, "message": {
-			"message_id": 1, "date": 1, "chat": {"id": -100, "type": "supergroup", "title": "G"},
-			"from": {"id": 4, "is_bot": False, "first_name": "A"}, "text": "@x hi",
-			"entities": [{"type": "mention", "offset": 0, "length": 2}]}})
+		parsed = parse_update(
+			{
+				"update_id": 1,
+				"message": {
+					"message_id": 1,
+					"date": 1,
+					"chat": {"id": -100, "type": "supergroup", "title": "G"},
+					"from": {"id": 4, "is_bot": False, "first_name": "A"},
+					"text": "@x hi",
+					"entities": [{"type": "mention", "offset": 0, "length": 2}],
+				},
+			}
+		)
 		gate = SimpleNamespace(name="gw1")
-		with mock.patch("huf.ai.gateway_adapters.telegram_modes_hooks._bot_username", side_effect=RuntimeError("x")):
+		with mock.patch(
+			"huf.ai.gateway_adapters.telegram_modes_hooks._bot_username", side_effect=RuntimeError("x")
+		):
 			out = ing._with_addressing(gate, SimpleNamespace(_token="1:x"), parsed)
 		self.assertFalse(out.mentioned)
 
@@ -176,8 +217,11 @@ class TestS4AddressingFailsClosed(unittest.TestCase):
 class TestS5(unittest.TestCase):
 	def test_download_file_checks_http_status(self):
 		api = FakeBotApi()
-		client = TelegramBotClient(TOKEN, http_post=api.http_post, http_get=lambda url, timeout=None: FakeResponse(
-			content=b"<html>nope</html>", status_code=404))
+		client = TelegramBotClient(
+			TOKEN,
+			http_post=api.http_post,
+			http_get=lambda url, timeout=None: FakeResponse(content=b"<html>nope</html>", status_code=404),
+		)
 		with self.assertRaises(TelegramApiError):
 			client.download_file("FID")
 
@@ -187,10 +231,16 @@ class TestS5(unittest.TestCase):
 
 	def test_guard_unknown_ip_uses_per_user_bucket(self):
 		keys = []
-		with Env() as env, mock.patch.object(g, "_client_ip", lambda: ""), \
-			mock.patch.object(g, "_rate_ok", lambda k: keys.append(k) or True):
-			nonce = g.issue_challenge("gw1", {**CTX, "user_id": "42"}, question={
-				"kind": "math", "prompt": "q", "options": [], "answer": "2"})
+		with (
+			Env() as env,
+			mock.patch.object(g, "_client_ip", lambda: ""),
+			mock.patch.object(g, "_rate_ok", lambda k: keys.append(k) or True),
+		):
+			nonce = g.issue_challenge(
+				"gw1",
+				{**CTX, "user_id": "42"},
+				question={"kind": "math", "prompt": "q", "options": [], "answer": "2"},
+			)
 			g.get_challenge("gw1", nonce, init_data(42))
 		self.assertEqual(keys, ["gc:nouip:42"])
 		self.assertIsNotNone(env)

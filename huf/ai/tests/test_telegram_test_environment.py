@@ -34,7 +34,8 @@ class TestUrls(unittest.TestCase):
 	def test_builders(self):
 		self.assertEqual(bot_api_url(TOKEN, "getMe"), f"https://api.telegram.org/bot{TOKEN}/getMe")
 		self.assertEqual(
-			bot_api_url(TOKEN, "getMe", test_environment=True), f"https://api.telegram.org/bot{TOKEN}/test/getMe"
+			bot_api_url(TOKEN, "getMe", test_environment=True),
+			f"https://api.telegram.org/bot{TOKEN}/test/getMe",
 		)
 		self.assertEqual(bot_file_url(TOKEN, "p/a.jpg"), f"https://api.telegram.org/file/bot{TOKEN}/p/a.jpg")
 		self.assertEqual(

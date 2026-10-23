@@ -27,11 +27,19 @@ FIELD_SPECS: dict[str, dict[str, Any]] = {
 	"preview_url": {"type": "select", "group": "replies", "options": ["Default (off)", "On", "Off"]},
 	"telegram_silent_replies": {"type": "check", "group": "replies"},
 	"telegram_protect_content": {"type": "check", "group": "replies"},
-	"voice_reply_mode": {"type": "select", "group": "replies", "options": ["Off", "Voice only", "Text and voice"]},
+	"voice_reply_mode": {
+		"type": "select",
+		"group": "replies",
+		"options": ["Off", "Voice only", "Text and voice"],
+	},
 	"typing_indicator": {"type": "check", "group": "replies"},
 	"retry_max_attempts": {"type": "int", "group": "replies", "min": 1, "max": 10},
 	# Access
-	"direct_policy": {"type": "select", "group": "access", "options": ["Disabled", "Pairing", "Allow list", "Open"]},
+	"direct_policy": {
+		"type": "select",
+		"group": "access",
+		"options": ["Disabled", "Pairing", "Allow list", "Open"],
+	},
 	"room_policy": {"type": "select", "group": "access", "options": ["Disabled", "Allow list", "Open"]},
 	"room_sender_policy": {"type": "select", "group": "access", "options": ["Allow list", "Open"]},
 	"mention_required": {"type": "check", "group": "access"},
@@ -55,7 +63,11 @@ FIELD_SPECS: dict[str, dict[str, Any]] = {
 	"telegram_agent_allow_business": {"type": "check", "group": "agent"},
 	"telegram_agent_allow_profile": {"type": "check", "group": "agent"},
 	# Modes
-	"telegram_business_policy": {"type": "select", "group": "modes", "options": ["Ignore", "Observe", "Draft", "Reply"]},
+	"telegram_business_policy": {
+		"type": "select",
+		"group": "modes",
+		"options": ["Ignore", "Observe", "Draft", "Reply"],
+	},
 	"telegram_join_policy": {"type": "select", "group": "modes", "options": ["Queue", "Decline", "Agent"]},
 	"telegram_inline_enabled": {"type": "check", "group": "modes"},
 	"telegram_inline_feedback_enabled": {"type": "check", "group": "modes"},
@@ -67,10 +79,30 @@ FIELD_SPECS: dict[str, dict[str, Any]] = {
 	"telegram_guard_captcha": {"type": "select", "group": "modes", "options": ["Off", "Arithmetic", "Emoji"]},
 	"telegram_guard_question_text": {"type": "text", "group": "modes", "max_len": 500},
 	# Routing and run identity
-	"default_target_type": {"type": "select", "group": "routing", "options": ["", "Agent", "Flow"], "allow_empty": True},
-	"default_agent": {"type": "link", "group": "routing", "doctype": "Agent", "missing": "That agent doesn't exist."},
-	"default_flow": {"type": "link", "group": "routing", "doctype": "Flow Definition", "missing": "That flow doesn't exist."},
-	"execution_user": {"type": "link", "group": "routing", "doctype": "User", "missing": "That user doesn't exist."},
+	"default_target_type": {
+		"type": "select",
+		"group": "routing",
+		"options": ["", "Agent", "Flow"],
+		"allow_empty": True,
+	},
+	"default_agent": {
+		"type": "link",
+		"group": "routing",
+		"doctype": "Agent",
+		"missing": "That agent doesn't exist.",
+	},
+	"default_flow": {
+		"type": "link",
+		"group": "routing",
+		"doctype": "Flow Definition",
+		"missing": "That flow doesn't exist.",
+	},
+	"execution_user": {
+		"type": "link",
+		"group": "routing",
+		"doctype": "User",
+		"missing": "That user doesn't exist.",
+	},
 	"error_reply_text": {"type": "text", "group": "replies", "max_len": 500},
 }
 
@@ -220,7 +252,11 @@ def list_gateway_users(gateway: str | None = None) -> dict[str, Any]:
 		)
 	return {
 		"success": True,
-		"users": [{"name": u["name"], "full_name": u.get("full_name") or u["name"]} for u in users if u["name"] != "Administrator"],
+		"users": [
+			{"name": u["name"], "full_name": u.get("full_name") or u["name"]}
+			for u in users
+			if u["name"] != "Administrator"
+		],
 	}
 
 
@@ -254,7 +290,12 @@ def update_telegram_settings(gateway: str | None = None, values: Any = None) -> 
 			errors.append({"field": name, "message": spec.get("missing", "That template doesn't exist.")})
 			clean.pop(name)
 	if errors:
-		return {"success": False, "error": "invalid", "message": _("Some settings are not valid."), "errors": errors}
+		return {
+			"success": False,
+			"error": "invalid",
+			"message": _("Some settings are not valid."),
+			"errors": errors,
+		}
 	if clean:
 		doc = frappe.get_doc("Gateway", row["name"])
 		doc.update(clean)

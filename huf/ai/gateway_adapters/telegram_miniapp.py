@@ -168,7 +168,9 @@ def build_init_data_for_test(
 ) -> str:
 	"""Generate a valid initData query string (tests / local dev only)."""
 	fields: dict[str, str] = {
-		"user": json.dumps(user or {"id": 12345, "first_name": "Test"}, separators=(",", ":"), ensure_ascii=False),
+		"user": json.dumps(
+			user or {"id": 12345, "first_name": "Test"}, separators=(",", ":"), ensure_ascii=False
+		),
 		"auth_date": str(int(time.time()) if auth_date is None else auth_date),
 	}
 	fields.update(extra or {})

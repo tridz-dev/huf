@@ -34,10 +34,14 @@ def _hook(**overrides):
 class TestTelegramHealth(unittest.TestCase):
 	def setUp(self):
 		self.api = FakeBotApi()
-		self.client = TelegramBotClient(TOKEN, http_post=self.api.http_post, http_get=self.api.http_get, sleep=lambda s: None)
+		self.client = TelegramBotClient(
+			TOKEN, http_post=self.api.http_post, http_get=self.api.http_get, sleep=lambda s: None
+		)
 
 	def test_check_bot_reports_identity_and_capability_flags(self):
-		self.api.queue("getMe", _me(can_join_groups=True, can_connect_to_business=True, has_topics_enabled=False))
+		self.api.queue(
+			"getMe", _me(can_join_groups=True, can_connect_to_business=True, has_topics_enabled=False)
+		)
 		info = check_bot(self.client)
 		self.assertEqual(info["id"], 42)
 		self.assertEqual(info["username"], "HufTestBot")
@@ -81,7 +85,9 @@ class TestTelegramHealth(unittest.TestCase):
 	def test_check_webhook_reports_last_error(self):
 		self.api.queue(
 			"getWebhookInfo",
-			_hook(last_error_date=1767225600, last_error_message="Wrong response from the webhook: 500 Internal"),
+			_hook(
+				last_error_date=1767225600, last_error_message="Wrong response from the webhook: 500 Internal"
+			),
 		)
 		info = check_webhook(self.client, EXPECTED_URL)
 		self.assertEqual(info["last_error_date"], 1767225600)
@@ -94,7 +100,14 @@ class TestTelegramHealth(unittest.TestCase):
 		self.assertTrue(all(c["ok"] for c in checks), checks)
 		self.assertEqual(
 			[c["id"] for c in checks],
-			["bot_reachable", "webhook_url", "webhook_error", "webhook_pending", "webhook_allowed_updates", "bot_identity"],
+			[
+				"bot_reachable",
+				"webhook_url",
+				"webhook_error",
+				"webhook_pending",
+				"webhook_allowed_updates",
+				"bot_identity",
+			],
 		)
 		for check in checks:
 			self.assertEqual(set(check), {"id", "label", "ok", "hint"})
@@ -134,7 +147,9 @@ class TestTelegramHealth(unittest.TestCase):
 
 	def test_readiness_reports_webhook_info_failure_and_stops(self):
 		self.api.queue("getMe", _me())
-		self.api.queue("getWebhookInfo", FakeBotApi.error("Too Many Requests: retry later", 429, retry_after=30))
+		self.api.queue(
+			"getWebhookInfo", FakeBotApi.error("Too Many Requests: retry later", 429, retry_after=30)
+		)
 		checks = readiness(self.client, EXPECTED_URL)
 		self.assertEqual([c["id"] for c in checks], ["bot_reachable", "webhook_info"])
 		self.assertFalse(checks[1]["ok"])

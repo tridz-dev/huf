@@ -2,10 +2,9 @@
 
 import json
 import unittest
-from unittest import mock
 from pathlib import Path
 from types import SimpleNamespace
-
+from unittest import mock
 
 GATEWAY_DIR = Path(__file__).resolve().parents[2] / "huf" / "doctype" / "gateway"
 NEW_FIELDS = {
@@ -54,7 +53,12 @@ class TestGatewayJson(unittest.TestCase):
 		self.assertEqual(f["telegram_default_template"]["options"], "Telegram Message Template")
 
 	def test_shared_fields_widened(self):
-		for name in ("preview_url", "agent_recipient_scope", "agent_send_cap_per_run", "agent_send_cap_per_day"):
+		for name in (
+			"preview_url",
+			"agent_recipient_scope",
+			"agent_send_cap_per_run",
+			"agent_send_cap_per_day",
+		):
 			self.assertIn("Telegram", self.fields[name]["depends_on"], name)
 		self.assertIn("Telegram", self.fields["agent_recipient_allowlist"]["depends_on"])
 
@@ -67,7 +71,10 @@ class TestTelegramValidation(unittest.TestCase):
 		base.update(kw)
 		doc = SimpleNamespace(**base)
 		doc.get = lambda k, d=None: getattr(doc, k, d)
-		with mock.patch("frappe.throw", side_effect=ValueError), mock.patch("frappe._", side_effect=lambda x: x):
+		with (
+			mock.patch("frappe.throw", side_effect=ValueError),
+			mock.patch("frappe._", side_effect=lambda x: x),
+		):
 			Gateway._validate_telegram_settings(doc)
 		return doc
 

@@ -94,8 +94,18 @@ class TestAuth(Base):
 
 	def test_token_endpoints_are_post_only(self):
 		allowed = getattr(frappe, "allowed_http_methods_for_whitelisted_func", {})
-		for fn in (api.me, api.config, api.search, api.get_doc_summary, api.approvals, api.act_prepare,
-			api.act_confirm, api.digest, api.audit, api.revoke_token):
+		for fn in (
+			api.me,
+			api.config,
+			api.search,
+			api.get_doc_summary,
+			api.approvals,
+			api.act_prepare,
+			api.act_confirm,
+			api.digest,
+			api.audit,
+			api.revoke_token,
+		):
 			self.assertEqual(list(allowed.get(fn, [])), ["POST"], fn.__name__)
 
 	def test_query_param_rejected_even_with_valid_header(self):
@@ -116,7 +126,9 @@ class TestAuth(Base):
 		res = self.call(api.config)
 		self.assertEqual(res["data"]["role_scope"], "Viewer")
 		self.assertFalse(res["data"]["features"]["act"])
-		self.assertErr(self.call(api.act_prepare, "Leave Application", "LA-1", "Approve"), "permission_denied")
+		self.assertErr(
+			self.call(api.act_prepare, "Leave Application", "LA-1", "Approve"), "permission_denied"
+		)
 
 	def test_token_for_other_binding_row_rejected(self):
 		self.bindings[(TG, GW)]["name"] = "bind-2"  # re-bound since token mint
@@ -147,9 +159,7 @@ class TestAuth(Base):
 
 class TestSearch(Base):
 	def _meta(self):
-		return SimpleNamespace(
-			title_field="customer_name", has_field=lambda f: True, istable=0, issingle=0
-		)
+		return SimpleNamespace(title_field="customer_name", has_field=lambda f: True, istable=0, issingle=0)
 
 	def test_search_runs_as_user_with_permission_checked_list(self):
 		import frappe
@@ -184,7 +194,10 @@ class TestSearch(Base):
 		def get_list(dt, **kw):
 			raise frappe.PermissionError("no read on Salary Slip: secret detail")
 
-		with patch.object(frappe, "get_meta", lambda dt: self._meta()), patch.object(frappe, "get_list", get_list):
+		with (
+			patch.object(frappe, "get_meta", lambda dt: self._meta()),
+			patch.object(frappe, "get_list", get_list),
+		):
 			res = self.call(api.search, "Salary Slip", "")
 		self.assertErr(res, "permission_denied")
 		self.assertEqual(res["error"]["message"], "You do not have permission for that.")
@@ -211,7 +224,13 @@ def _field(name, ftype="Data", permlevel=0, in_list=1, hidden=0, label=None):
 
 class TestSummary(Base):
 	def _doc(self, **values):
-		values = {"customer_name": "Acme", "api_secret": "S3CRET", "pw": "hunter2", "salary": "9999", **values}
+		values = {
+			"customer_name": "Acme",
+			"api_secret": "S3CRET",
+			"pw": "hunter2",
+			"salary": "9999",
+			**values,
+		}
 		doc = MagicMock()
 		doc.name = "C-1"
 		doc.docstatus = 0
@@ -256,10 +275,18 @@ class TestSummary(Base):
 		import frappe
 
 		meta = SimpleNamespace(
-			title_field=None, istable=0, issingle=0, is_submittable=0, get_workflow=lambda: None,
+			title_field=None,
+			istable=0,
+			issingle=0,
+			is_submittable=0,
+			get_workflow=lambda: None,
 			fields=[
-				_field("customer_name"), _field("pairing_code"), _field("sig_hash"), _field("access_key"),
-				_field("ssn_masked"), _field("territory"),
+				_field("customer_name"),
+				_field("pairing_code"),
+				_field("sig_hash"),
+				_field("access_key"),
+				_field("ssn_masked"),
+				_field("territory"),
 			],
 		)
 		meta.fields[4].mask = 1
@@ -284,7 +311,12 @@ class TestSummary(Base):
 
 		self.bindings[(TG, GW)]["role_scope"] = "Viewer"
 		meta = SimpleNamespace(
-			title_field=None, istable=0, issingle=0, is_submittable=0, get_workflow=lambda: None, fields=[_field("customer_name")]
+			title_field=None,
+			istable=0,
+			issingle=0,
+			is_submittable=0,
+			get_workflow=lambda: None,
+			fields=[_field("customer_name")],
 		)
 		with (
 			patch.object(frappe, "get_meta", lambda dt: meta),
@@ -302,7 +334,10 @@ class TestSummary(Base):
 		doc = self._doc()
 		doc.check_permission.side_effect = frappe.PermissionError("nope")
 		meta = SimpleNamespace(istable=0, issingle=0)
-		with patch.object(frappe, "get_meta", lambda dt: meta), patch.object(frappe, "get_doc", lambda dt, dn: doc):
+		with (
+			patch.object(frappe, "get_meta", lambda dt: meta),
+			patch.object(frappe, "get_doc", lambda dt, dn: doc),
+		):
 			res = self.call(api.get_doc_summary, "Customer", "C-1")
 		self.assertErr(res, "permission_denied")
 
@@ -331,14 +366,23 @@ class TestApprovalsDigest(Base):
 			res = self.call(api.approvals)
 		self.assertEqual(
 			res["data"]["items"],
-			[{"doctype": "Leave Application", "name": "LA-1", "state": "Pending", "actions": ["Approve", "Reject"]}],
+			[
+				{
+					"doctype": "Leave Application",
+					"name": "LA-1",
+					"state": "Pending",
+					"actions": ["Approve", "Reject"],
+				}
+			],
 		)
 
 	def test_digest(self):
 		data = {
 			"user": BOUND,
 			"actions_24h": 3,
-			"approvals": [{"reference_doctype": "Leave Application", "reference_name": "LA-1", "workflow_state": "P"}],
+			"approvals": [
+				{"reference_doctype": "Leave Application", "reference_name": "LA-1", "workflow_state": "P"}
+			],
 		}
 		seen = []
 		with patch.object(ta, "collect_digest", lambda b, **kw: seen.append(self.user[0]) or data):

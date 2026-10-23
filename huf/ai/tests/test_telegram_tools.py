@@ -26,7 +26,11 @@ class TestTelegramTools(unittest.TestCase):
 
 		def fake_make_client(token, *, timeout=30):
 			return TelegramBotClient(
-				token, http_post=self.api.http_post, http_get=self.api.http_get, timeout=timeout, sleep=lambda s: None
+				token,
+				http_post=self.api.http_post,
+				http_get=self.api.http_get,
+				timeout=timeout,
+				sleep=lambda s: None,
 			)
 
 		self.update_last_error = patch.object(tool, "update_last_error").start()
@@ -56,7 +60,9 @@ class TestTelegramTools(unittest.TestCase):
 		self.assertEqual(self.api.calls, [])
 
 	def test_send_photo_by_url_uses_reply_parameters(self):
-		result = self.run_action(action="send_photo", chat_id="999", photo="https://cdn.test/a.jpg", reply_to_message_id=3)
+		result = self.run_action(
+			action="send_photo", chat_id="999", photo="https://cdn.test/a.jpg", reply_to_message_id=3
+		)
 		self.assertTrue(result["success"])
 		payload = self.api.last("sendPhoto")["payload"]
 		self.assertEqual(payload["photo"], "https://cdn.test/a.jpg")

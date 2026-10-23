@@ -25,7 +25,11 @@ def agent_runner(event, gateway):
 		adapter = get_gateway_adapter(gateway, event_contact_name(event))
 		thread_id, _ = telegram_pipeline.reply_target(event)
 		return telegram_stream.make_runner(
-			telegram_pipeline.build_sender(adapter), event.conversation_id, event.name, gateway.name, thread_id=thread_id
+			telegram_pipeline.build_sender(adapter),
+			event.conversation_id,
+			event.name,
+			gateway.name,
+			thread_id=thread_id,
 		)
 	except Exception:
 		return None

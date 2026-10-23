@@ -20,11 +20,11 @@ from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.telegram_client import (
 	ALLOWED_UPDATES,
 	TELEGRAM_API_BASE,
-	truthy_flag,
 	TelegramApiError,
 	TelegramBotClient,
 	_requests_get,
 	_requests_post,
+	truthy_flag,
 )
 from huf.ai.gateway_adapters.telegram_format import MODE_PLAIN
 from huf.ai.gateway_adapters.telegram_inbound import TelegramUpdate, parse_update, to_event

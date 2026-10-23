@@ -18,7 +18,12 @@ from typing import Any
 import frappe
 from frappe import _
 
-from huf.ai.telegram_management import TELEGRAM_PROVIDER, _can_manage_integrations, _error, _require_gateway_admin
+from huf.ai.telegram_management import (
+	TELEGRAM_PROVIDER,
+	_can_manage_integrations,
+	_error,
+	_require_gateway_admin,
+)
 
 DOCTYPE = "Telegram Message Template"
 PARSE_MODES = ("Plain", "HTML", "MarkdownV2")
@@ -29,12 +34,28 @@ CAPTION_LIMIT = 1024
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _\-]{0,79}$")
 VAR_RE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 _FIELDS = [
-	"name", "template_name", "gateway", "language", "parse_mode", "media_type", "is_active",
-	"description", "last_used_at", "modified",
+	"name",
+	"template_name",
+	"gateway",
+	"language",
+	"parse_mode",
+	"media_type",
+	"is_active",
+	"description",
+	"last_used_at",
+	"modified",
 ]
 _SAVE_FIELDS = (
-	"template_name", "gateway", "language", "parse_mode", "body", "media_type", "media", "buttons_json",
-	"is_active", "description",
+	"template_name",
+	"gateway",
+	"language",
+	"parse_mode",
+	"body",
+	"media_type",
+	"media",
+	"buttons_json",
+	"is_active",
+	"description",
 )
 
 
@@ -78,7 +99,9 @@ def validate_values(values: dict[str, Any]) -> list[dict[str, str]]:
 	if not name:
 		out.append(_problem("template_name", "Give the template a name."))
 	elif not NAME_RE.match(name):
-		out.append(_problem("template_name", "Use letters, numbers, spaces, dashes and underscores (max 80)."))
+		out.append(
+			_problem("template_name", "Use letters, numbers, spaces, dashes and underscores (max 80).")
+		)
 	mode = values.get("parse_mode") or "HTML"
 	if mode not in PARSE_MODES:
 		out.append(_problem("parse_mode", "Parse mode must be Plain, HTML or MarkdownV2."))
@@ -94,7 +117,9 @@ def validate_values(values: dict[str, Any]) -> list[dict[str, str]]:
 	if len(body) > TEXT_LIMIT:
 		out.append(_problem("body", f"Telegram allows at most {TEXT_LIMIT} characters of text."))
 	elif has_media and len(body) > CAPTION_LIMIT:
-		out.append(_problem("body", f"With media the text is sent as a caption (max {CAPTION_LIMIT} characters)."))
+		out.append(
+			_problem("body", f"With media the text is sent as a caption (max {CAPTION_LIMIT} characters).")
+		)
 	buttons = values.get("buttons_json")
 	if buttons and str(buttons).strip():
 		from huf.ai.gateway_adapters import telegram_buttons
@@ -119,7 +144,11 @@ def _row(doc: Any) -> dict[str, Any]:
 	data = doc.as_dict() if hasattr(doc, "as_dict") else dict(doc)
 	out = {k: data.get(k) for k in (*_SAVE_FIELDS, "name", "last_used_at", "modified")}
 	out["variables"] = [
-		{"variable": v.get("variable"), "default_value": v.get("default_value") or "", "example": v.get("example") or ""}
+		{
+			"variable": v.get("variable"),
+			"default_value": v.get("default_value") or "",
+			"example": v.get("example") or "",
+		}
 		for v in data.get("variables") or []
 	]
 	return out
@@ -134,7 +163,12 @@ def list_templates(gateway: str | None = None) -> dict[str, Any]:
 	filters: dict[str, Any] = {}
 	or_filters = [{"gateway": gateway}, {"gateway": ["is", "not set"]}] if gateway else None
 	rows = frappe.get_all(
-		DOCTYPE, filters=filters, or_filters=or_filters, fields=_FIELDS, order_by="modified desc", limit_page_length=500,
+		DOCTYPE,
+		filters=filters,
+		or_filters=or_filters,
+		fields=_FIELDS,
+		order_by="modified desc",
+		limit_page_length=500,
 	)
 	return {"success": True, "templates": [dict(r) for r in rows or []]}
 
@@ -166,12 +200,20 @@ def save_template(values: Any = None, name: str | None = None) -> dict[str, Any]
 	if gateway:
 		_require_gateway_admin(gateway)
 		if not frappe.db.exists("Gateway", {"name": gateway, "provider": TELEGRAM_PROVIDER}):
-			return {"success": False, "error": "invalid", "problems": [_problem("gateway", "Choose a Telegram gateway.")]}
+			return {
+				"success": False,
+				"error": "invalid",
+				"problems": [_problem("gateway", "Choose a Telegram gateway.")],
+			}
 	payload = {k: data.get(k) for k in _SAVE_FIELDS if k in data}
 	if isinstance(payload.get("buttons_json"), (dict, list)):
 		payload["buttons_json"] = json.dumps(payload["buttons_json"])
 	payload["variables"] = [
-		{"variable": v["variable"].strip(), "default_value": v.get("default_value") or "", "example": v.get("example") or ""}
+		{
+			"variable": v["variable"].strip(),
+			"default_value": v.get("default_value") or "",
+			"example": v.get("example") or "",
+		}
 		for v in data.get("variables") or []
 	]
 	if name:
@@ -186,9 +228,18 @@ def save_template(values: Any = None, name: str | None = None) -> dict[str, Any]
 	try:
 		doc.save()
 	except frappe.DuplicateEntryError:
-		return {"success": False, "error": "invalid", "problems": [_problem("template_name", "A template with this name already exists.")]}
+		return {
+			"success": False,
+			"error": "invalid",
+			"problems": [_problem("template_name", "A template with this name already exists.")],
+		}
 	except frappe.ValidationError as exc:
-		return {"success": False, "error": "invalid", "message": str(exc), "problems": [_problem("form", str(exc))]}
+		return {
+			"success": False,
+			"error": "invalid",
+			"message": str(exc),
+			"problems": [_problem("form", str(exc))],
+		}
 	return {"success": True, "template": _row(doc)}
 
 
@@ -217,7 +268,9 @@ def _escape(mode: str, text: str) -> str:
 def local_render(values: dict[str, Any], variables: dict[str, Any] | None) -> dict[str, Any]:
 	"""Safe fallback renderer: substitutes escaped values; unknown variables are reported, never evaluated."""
 	mode = values.get("parse_mode") or "HTML"
-	defaults = {str(v.get("variable")): str(v.get("default_value") or "") for v in values.get("variables") or []}
+	defaults = {
+		str(v.get("variable")): str(v.get("default_value") or "") for v in values.get("variables") or []
+	}
 	given = {str(k): str(v) for k, v in (variables or {}).items() if v not in (None, "")}
 	missing: list[str] = []
 
@@ -237,18 +290,28 @@ def local_render(values: dict[str, Any], variables: dict[str, Any] | None) -> di
 	if buttons and str(buttons).strip():
 		from huf.ai.gateway_adapters import telegram_buttons
 
-		spec, errors = telegram_buttons.validate(VAR_RE.sub(lambda m: given.get(m.group(1)) or defaults.get(m.group(1)) or "x", buttons))
+		spec, errors = telegram_buttons.validate(
+			VAR_RE.sub(lambda m: given.get(m.group(1)) or defaults.get(m.group(1)) or "x", buttons)
+		)
 		if spec:
 			markup = telegram_buttons.build_markup(spec, lambda p: p)
 	media = None
 	if (values.get("media_type") or "none") != "none" and values.get("media"):
 		media = {"type": values["media_type"], "source": "file_url", "value": values["media"]}
-	return {"text": text, "parse_mode": "" if mode == "Plain" else mode, "media": media, "markup": markup,
-		"missing": missing, "errors": errors}
+	return {
+		"text": text,
+		"parse_mode": "" if mode == "Plain" else mode,
+		"media": media,
+		"markup": markup,
+		"missing": missing,
+		"errors": errors,
+	}
 
 
 @frappe.whitelist(methods=["POST"])
-def preview_template(name_or_values: Any = None, variables: Any = None, gateway: str | None = None) -> dict[str, Any]:
+def preview_template(
+	name_or_values: Any = None, variables: Any = None, gateway: str | None = None
+) -> dict[str, Any]:
 	"""No-send preview of a saved template (by name) or unsaved editor values (object)."""
 	_require_manager()
 	vars_ = _as_dict(variables) or {}
@@ -287,7 +350,11 @@ def is_allowed_test_chat(gateway: str, chat_id: str, user: str) -> bool:
 
 @frappe.whitelist(methods=["POST"])
 def send_test_template(
-	gateway: str | None = None, chat_id: str | None = None, name: str | None = None, variables: Any = None, confirm: Any = None
+	gateway: str | None = None,
+	chat_id: str | None = None,
+	name: str | None = None,
+	variables: Any = None,
+	confirm: Any = None,
 ) -> dict[str, Any]:
 	if not gateway:
 		return _error("gateway_required", "Choose a Telegram gateway.")
@@ -303,7 +370,9 @@ def send_test_template(
 	if not is_allowed_test_chat(gateway, chat, frappe.session.user):
 		return _error(
 			"chat_not_allowed",
-			"Test messages can only go to a chat you paired yourself, or one marked '" + TEST_CHAT_MARKER + "' in its access notes.",
+			"Test messages can only go to a chat you paired yourself, or one marked '"
+			+ TEST_CHAT_MARKER
+			+ "' in its access notes.",
 		)
 	if not name or not frappe.db.exists(DOCTYPE, name):
 		return _error("not_found", "Template not found.")

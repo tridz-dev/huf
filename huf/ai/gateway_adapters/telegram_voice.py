@@ -108,7 +108,8 @@ def send_voice_reply(event, gateway, response: str, *, quote: bool = True, once:
 	try:
 		if once and not _claim(event):
 			return None
-		from huf.ai.gateway_adapters import telegram_messages, telegram_pipeline as tp
+		from huf.ai.gateway_adapters import telegram_messages
+		from huf.ai.gateway_adapters import telegram_pipeline as tp
 
 		text = wv.plain_text(response)
 		run_id = getattr(event, "agent_run", None)
@@ -122,8 +123,10 @@ def send_voice_reply(event, gateway, response: str, *, quote: bool = True, once:
 		if not ogg or len(ogg) > MAX_UPLOAD_BYTES:
 			raise ValueError("the converted voice note is empty or over the 50MB Bot API limit")
 		msgs = adapter.sender.send_voice(
-			event.conversation_id, (OGG_FILENAME, ogg, send_file.OGG_OPUS_MIME),
-			reply_to=reply_to if quote else None, thread_id=thread_id,
+			event.conversation_id,
+			(OGG_FILENAME, ogg, send_file.OGG_OPUS_MIME),
+			reply_to=reply_to if quote else None,
+			thread_id=thread_id,
 		)
 		ids = [m.get("message_id") for m in msgs if isinstance(m, dict) and m.get("message_id") is not None]
 		if not ids:
@@ -133,7 +136,9 @@ def send_voice_reply(event, gateway, response: str, *, quote: bool = True, once:
 	except send_file.FileSendError as exc:
 		_warn(f"{exc.code}: {exc.message} (event {getattr(event, 'name', '')}); falling back to text")
 	except Exception as exc:
-		_warn(f"{type(exc).__name__}: {str(exc)[:200]} (event {getattr(event, 'name', '')}); falling back to text")
+		_warn(
+			f"{type(exc).__name__}: {str(exc)[:200]} (event {getattr(event, 'name', '')}); falling back to text"
+		)
 	return None
 
 

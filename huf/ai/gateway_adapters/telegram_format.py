@@ -24,6 +24,7 @@ MODE_HTML = "HTML"
 MODE_MARKDOWN_V2 = "MarkdownV2"
 MODE_PLAIN = ""
 
+
 def escape_html(text: str) -> str:
 	return html.escape(text, quote=False)
 
@@ -325,7 +326,11 @@ class _MarkdownV2Renderer(_Renderer):
 		return escape_markdown_v2("——————")
 
 
-_RENDERERS = {MODE_HTML: _HtmlRenderer(), MODE_MARKDOWN_V2: _MarkdownV2Renderer(), MODE_PLAIN: _PlainRenderer()}
+_RENDERERS = {
+	MODE_HTML: _HtmlRenderer(),
+	MODE_MARKDOWN_V2: _MarkdownV2Renderer(),
+	MODE_PLAIN: _PlainRenderer(),
+}
 
 
 def to_telegram_html(markdown: str) -> str:
@@ -437,7 +442,11 @@ def split_message(text: str, limit: int = TELEGRAM_TEXT_LIMIT) -> list[str]:
 			if cur:
 				parts.append(cur)
 				cur = ""
-			sub = _split_fence(body, limit) if is_fence and _FENCE.match(body.split("\n")[0]) else _split_lines(body, limit)
+			sub = (
+				_split_fence(body, limit)
+				if is_fence and _FENCE.match(body.split("\n")[0])
+				else _split_lines(body, limit)
+			)
 			parts.extend(sub[:-1])
 			cur = sub[-1] if sub else ""
 		elif not cur:
@@ -461,7 +470,9 @@ class RenderedPart:
 	plain: str
 
 
-def render_parts(markdown: str, mode: str = MODE_HTML, limit: int = TELEGRAM_TEXT_LIMIT) -> list[RenderedPart]:
+def render_parts(
+	markdown: str, mode: str = MODE_HTML, limit: int = TELEGRAM_TEXT_LIMIT
+) -> list[RenderedPart]:
 	"""Convert and split. ``mode`` "" means send the source text verbatim (no parse_mode)."""
 	if mode == MODE_PLAIN:
 		return [RenderedPart(p, "", p) for p in split_message(markdown, limit)]
@@ -475,7 +486,9 @@ def render_parts(markdown: str, mode: str = MODE_HTML, limit: int = TELEGRAM_TEX
 			continue
 		if len(rendered) > limit and len(src) > 32:
 			# Escaping/tags inflated the part: re-split the source smaller (preserves entity safety).
-			smaller = split_message(src, max(16, min(len(src) - 1, int(limit * len(src) / len(rendered)) - 8)))
+			smaller = split_message(
+				src, max(16, min(len(src) - 1, int(limit * len(src) / len(rendered)) - 8))
+			)
 			if len(smaller) > 1:
 				work = smaller + work
 				continue

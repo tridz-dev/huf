@@ -25,8 +25,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import logging
+import re
 import secrets
 import threading
 import time
@@ -187,7 +187,13 @@ def check_rate(key: str, limit: int, window: int, *, cache: Any = None, now: flo
 
 
 def issue_nonce(
-	tg_user: Any, chat_id: Any, action: dict, *, cache: Any = None, now: float | None = None, ttl: int | None = None
+	tg_user: Any,
+	chat_id: Any,
+	action: dict,
+	*,
+	cache: Any = None,
+	now: float | None = None,
+	ttl: int | None = None,
 ) -> str:
 	"""Single-use nonce for ``action`` bound to telegram user + chat + action hash (``NONCE_TTL``)."""
 	nonce = secrets.token_urlsafe(12)
@@ -444,7 +450,9 @@ def run_as(user: str):
 		except Exception as exc:
 			_log_restore_failure(user, previous)
 			if body_exc is not None:
-				logging.getLogger(__name__).error("telegram admin: body failed before restore failure: %r", body_exc)
+				logging.getLogger(__name__).error(
+					"telegram admin: body failed before restore failure: %r", body_exc
+				)
 			try:
 				_set_user("Guest")
 			except Exception:
@@ -616,6 +624,7 @@ def _resolve_doctype(text: str) -> tuple[str, str]:
 
 def _desk_url(dt: str, dn: str) -> str:
 	import frappe
+
 	from huf.ai.telegram_public_url import public_url as get_url
 
 	return get_url(f"/app/{frappe.scrub(dt).replace('_', '-')}/{dn}")
@@ -863,7 +872,9 @@ def describe(action: dict) -> str:
 		return "Unlink this Telegram account from your Frappe user"
 	if op == "agent_action":
 		bits = json.dumps(redact(action.get("args") or {}), default=str)[:300]
-		return f"Agent action '{action.get('action')}' in chat {action.get('chat') or '(bot-wide)'} with {bits}"
+		return (
+			f"Agent action '{action.get('action')}' in chat {action.get('chat') or '(bot-wide)'} with {bits}"
+		)
 	raise AdminError("Unknown action.")
 
 
@@ -988,7 +999,9 @@ def handle_message(
 		or getattr(parsed, "is_channel", False)
 		or getattr(parsed, "business_connection_id", "")
 		or getattr(parsed, "sender_business_bot", "")
-		or getattr(parsed, "forward_origin", None)  # a forwarded /command or bind code is content, not a command
+		or getattr(
+			parsed, "forward_origin", None
+		)  # a forwarded /command or bind code is content, not a command
 	):
 		return None
 	tg_user, chat_id = str(parsed.sender_id), str(parsed.chat_id)
@@ -1171,6 +1184,7 @@ def miniapp_launch_url(binding: dict) -> str:
 	"""HTTPS launch URL for the admin Mini App (no secrets in the URL; auth is initData only)."""
 	try:
 		import frappe
+
 		from huf.ai.telegram_public_url import public_url as get_url
 
 		base = (frappe.conf.get("huf_telegram_admin_miniapp_url") or get_url("/huf/telegram-admin")).strip()

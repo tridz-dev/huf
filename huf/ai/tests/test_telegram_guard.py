@@ -11,17 +11,34 @@ from types import SimpleNamespace
 from unittest import mock
 
 from huf.ai import telegram_guard as g
-from huf.ai.gateway_adapters import telegram_groups as groups, telegram_miniapp as mini
+from huf.ai.gateway_adapters import telegram_groups as groups
+from huf.ai.gateway_adapters import telegram_miniapp as mini
 from huf.ai.gateway_adapters.telegram_client import TelegramBotClient
 from huf.ai.telegram_admin import MemCache
 from huf.ai.tests.telegram_fakes import TOKEN, FakeBotApi
 
-CTX = {"gateway": "gw1", "chat_id": "-100", "user_id": "42", "query_id": "Q1", "chat_title": "Club",
-	"user_name": "@bob", "bio": "hi", "is_bot": False, "is_premium": False, "user_chat_id": "42"}
+CTX = {
+	"gateway": "gw1",
+	"chat_id": "-100",
+	"user_id": "42",
+	"query_id": "Q1",
+	"chat_title": "Club",
+	"user_name": "@bob",
+	"bio": "hi",
+	"is_bot": False,
+	"is_premium": False,
+	"user_chat_id": "42",
+}
 
 
 def gw(**kw):
-	base = dict(name="gw1", provider="Telegram", default_agent="agent1", telegram_join_policy="Queue", room_policy="Open")
+	base = dict(
+		name="gw1",
+		provider="Telegram",
+		default_agent="agent1",
+		telegram_join_policy="Queue",
+		room_policy="Open",
+	)
 	base.update(kw)
 	return SimpleNamespace(**base)
 
@@ -92,8 +109,17 @@ class TestAgentDecision(unittest.TestCase):
 		self.assertEqual(g.parse_agent_decision('```json\n{"decision":"Decline"}\n```'), ("decline", ""))
 
 	def test_parse_failures_queue(self):
-		for bad in ("", "approve", "{bad", '{"decision":"maybe"}', '["approve"]', None, 5,
-			'{"decision":"approve","extra":1}', 'Sure! {"decision":"approve"}'):
+		for bad in (
+			"",
+			"approve",
+			"{bad",
+			'{"decision":"maybe"}',
+			'["approve"]',
+			None,
+			5,
+			'{"decision":"approve","extra":1}',
+			'Sure! {"decision":"approve"}',
+		):
 			self.assertEqual(g.parse_agent_decision(bad)[0], "queue", bad)
 
 	def test_runner_error_and_timeout_queue(self):
@@ -121,7 +147,9 @@ class TestAgentDecision(unittest.TestCase):
 		with Env() as env:
 			out = g.resolve_agent_join("gw1", dict(CTX), runner=lambda *a: '{"decision":"decline"}')
 			self.assertEqual(out, "decline")
-			self.assertEqual(env.fake.last("declineChatJoinRequest")["payload"], {"chat_id": -100, "user_id": 42})
+			self.assertEqual(
+				env.fake.last("declineChatJoinRequest")["payload"], {"chat_id": -100, "user_id": 42}
+			)
 
 	def test_resolve_bad_json_makes_no_call(self):
 		with Env() as env:
@@ -133,13 +161,17 @@ class TestApplyDecision(unittest.TestCase):
 	def test_query_uses_answer_method(self):
 		with Env() as env:
 			self.assertEqual(g.apply_decision(env.gateway, CTX, "decline", "x"), "")
-			self.assertEqual(env.fake.last("answerChatJoinRequestQuery")["payload"],
-				{"chat_join_request_query_id": "Q1", "result": "decline"})
+			self.assertEqual(
+				env.fake.last("answerChatJoinRequestQuery")["payload"],
+				{"chat_join_request_query_id": "Q1", "result": "decline"},
+			)
 			g.audit_decision.assert_called()
 
 	def test_api_error_returned_not_raised(self):
 		with Env() as env:
-			env.fake.queue("approveChatJoinRequest", env.fake.error("Bad Request: HIDE_REQUESTER_MISSING", 400))
+			env.fake.queue(
+				"approveChatJoinRequest", env.fake.error("Bad Request: HIDE_REQUESTER_MISSING", 400)
+			)
 			err = g.apply_decision(env.gateway, {**CTX, "query_id": ""}, "approve", "x")
 			self.assertTrue(err)
 
@@ -165,7 +197,9 @@ class TestCaptcha(unittest.TestCase):
 	def test_correct_answer_approves_once_then_replay_fails(self):
 		res = g.submit_answer("gw1", self.nonce, init_data(), "9")
 		self.assertTrue(res["ok"])
-		self.assertEqual(self.env.fake.last("approveChatJoinRequest")["payload"], {"chat_id": -100, "user_id": 42})
+		self.assertEqual(
+			self.env.fake.last("approveChatJoinRequest")["payload"], {"chat_id": -100, "user_id": 42}
+		)
 		with self.assertRaises(g.GuardError):
 			g.submit_answer("gw1", self.nonce, init_data(), "9")
 		self.assertEqual(len(self.env.fake.of("approveChatJoinRequest")), 1)
@@ -184,7 +218,12 @@ class TestCaptcha(unittest.TestCase):
 
 	def test_bad_init_data(self):
 		good = init_data()
-		for bad in ("", "garbage", good[:-3] + "000", mini.build_init_data_for_test("1:other", user={"id": 42})):
+		for bad in (
+			"",
+			"garbage",
+			good[:-3] + "000",
+			mini.build_init_data_for_test("1:other", user={"id": 42}),
+		):
 			with self.assertRaises(g.GuardError):
 				g.submit_answer("gw1", self.nonce, bad, "9")
 		self.assertEqual(self.env.fake.calls, [])
@@ -220,7 +259,11 @@ class TestCaptcha(unittest.TestCase):
 
 	def test_captcha_launch_sends_web_app_and_defers(self):
 		gate = gw(telegram_guard_captcha=1)
-		with Env(gate) as env, mock.patch("huf.ai.telegram_public_url.configured_host", return_value=""), mock.patch("frappe.utils.get_url", return_value="https://huf.example.com"):
+		with (
+			Env(gate) as env,
+			mock.patch("huf.ai.telegram_public_url.configured_host", return_value=""),
+			mock.patch("frappe.utils.get_url", return_value="https://huf.example.com"),
+		):
 			self.assertEqual(g.gateway_policy(CTX), "defer")
 			payload = env.fake.last("sendChatJoinRequestWebApp")["payload"]
 		self.assertEqual(payload["chat_join_request_query_id"], "Q1")
@@ -228,20 +271,33 @@ class TestCaptcha(unittest.TestCase):
 		self.assertNotIn(TOKEN, payload["web_app_url"])
 
 	def test_captcha_launch_failure_queues(self):
-		with Env(gw(telegram_guard_captcha=1)) as env, mock.patch("huf.ai.telegram_public_url.configured_host", return_value=""), mock.patch("frappe.utils.get_url", return_value="http://x"):
+		with (
+			Env(gw(telegram_guard_captcha=1)) as env,
+			mock.patch("huf.ai.telegram_public_url.configured_host", return_value=""),
+			mock.patch("frappe.utils.get_url", return_value="http://x"),
+		):
 			self.assertEqual(g.gateway_policy(CTX), "queue")  # http URL rejected -> queue
 
 
 class TestWelcome(unittest.TestCase):
 	def parsed(self, chat_type="supergroup", bot=False):
-		raw = {"chat_member": {"chat": {"id": -100, "title": "Club"},
-			"new_chat_member": {"status": "member", "user": {"id": 7, "first_name": "@Eve", "is_bot": bot}}}}
+		raw = {
+			"chat_member": {
+				"chat": {"id": -100, "title": "Club"},
+				"new_chat_member": {
+					"status": "member",
+					"user": {"id": 7, "first_name": "@Eve", "is_bot": bot},
+				},
+			}
+		}
 		return SimpleNamespace(raw=raw, chat_id="-100", chat_type=chat_type)
 
 	def run_it(self, gateway, parsed, now, sent):
 		fake_mod = SimpleNamespace(send_template=lambda *a, **k: sent.append((a, k)) or {})
-		with mock.patch.dict("sys.modules", {"huf.ai.telegram_templates": fake_mod}), \
-			mock.patch("huf.ai.telegram_templates", fake_mod, create=True):
+		with (
+			mock.patch.dict("sys.modules", {"huf.ai.telegram_templates": fake_mod}),
+			mock.patch("huf.ai.telegram_templates", fake_mod, create=True),
+		):
 			return g.maybe_welcome(gateway, parsed, now=now)
 
 	def test_cooldown_and_no_mentions(self):
@@ -290,7 +346,9 @@ class TestGuardFields(unittest.TestCase):
 
 	def test_custom_prompt_in_challenge(self):
 		with Env():
-			nonce = g.issue_challenge("gw1", CTX, question=fixed_question(), custom_text="Prove you are human.")
+			nonce = g.issue_challenge(
+				"gw1", CTX, question=fixed_question(), custom_text="Prove you are human."
+			)
 			rec = g._cache().get_value(f"huf_tg_guard:{nonce}")
 		self.assertTrue(rec["prompt"].startswith("Prove you are human."))
 
@@ -308,8 +366,10 @@ class TestWelcomeServiceMessage(unittest.TestCase):
 
 	def run_it(self, fn, sent):
 		fake_mod = SimpleNamespace(send_template=lambda *a, **k: sent.append(a) or {})
-		with mock.patch.dict("sys.modules", {"huf.ai.telegram_templates": fake_mod}), \
-			mock.patch("huf.ai.telegram_templates", fake_mod, create=True):
+		with (
+			mock.patch.dict("sys.modules", {"huf.ai.telegram_templates": fake_mod}),
+			mock.patch("huf.ai.telegram_templates", fake_mod, create=True),
+		):
 			return fn()
 
 	def test_each_member_once_bots_skipped(self):
@@ -323,12 +383,21 @@ class TestWelcomeServiceMessage(unittest.TestCase):
 
 	def test_no_double_welcome_with_chat_member(self):
 		sent, gate = [], gw(telegram_welcome_template="Hi")
-		cm = SimpleNamespace(chat_id="-100", chat_type="supergroup", raw={"chat_member": {
-			"chat": {"id": -100, "title": "Club"},
-			"new_chat_member": {"status": "member", "user": {"id": 1, "first_name": "A"}}}})
+		cm = SimpleNamespace(
+			chat_id="-100",
+			chat_type="supergroup",
+			raw={
+				"chat_member": {
+					"chat": {"id": -100, "title": "Club"},
+					"new_chat_member": {"status": "member", "user": {"id": 1, "first_name": "A"}},
+				}
+			},
+		)
 		with Env(gate):
 			self.assertTrue(self.run_it(lambda: g.maybe_welcome(gate, cm, now=100), sent))
-			n = self.run_it(lambda: g.welcome_new_members(gate, self.msg([{"id": 1, "first_name": "A"}]), now=101), sent)
+			n = self.run_it(
+				lambda: g.welcome_new_members(gate, self.msg([{"id": 1, "first_name": "A"}]), now=101), sent
+			)
 		self.assertEqual(n, 0)
 		self.assertEqual(len(sent), 1)
 

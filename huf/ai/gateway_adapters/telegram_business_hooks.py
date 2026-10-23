@@ -5,7 +5,8 @@
 
 from __future__ import annotations
 
-from huf.ai.gateway_adapters import telegram_business as biz, telegram_ingest as ing
+from huf.ai.gateway_adapters import telegram_business as biz
+from huf.ai.gateway_adapters import telegram_ingest as ing
 
 ing.register_update_handler("business_connection", biz.handle_business_connection)
 ing.register_update_handler("business_message", biz.handle_business_message)

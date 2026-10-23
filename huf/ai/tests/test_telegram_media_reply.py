@@ -49,8 +49,12 @@ def url_ok(url):
 class Base(unittest.TestCase):
 	def setUp(self):
 		self.api = FakeBotApi()
-		self.adapter = TelegramGatewayAdapter({"token": TOKEN, "webhook_secret": SECRET}, http_post=self.api.http_post,
-			http_get=self.api.http_get, download_attachments=False)
+		self.adapter = TelegramGatewayAdapter(
+			{"token": TOKEN, "webhook_secret": SECRET},
+			http_post=self.api.http_post,
+			http_get=self.api.http_get,
+			download_attachments=False,
+		)
 		self.sender = self.adapter.sender
 
 	def send(self, items, **kw):
@@ -77,22 +81,39 @@ class TestParse(unittest.TestCase):
 		self.assertEqual(len(items[0]["caption"]), 1024)
 
 	def test_gif_alias_spoiler_and_caption_rules(self):
-		items, _ = mr.validate({"items": [{"type": "gif", "source": "url", "value": "https://a/b.gif", "has_spoiler": True},
-			{"type": "sticker", "source": "file_id", "value": "s", "caption": "ignored", "has_spoiler": True}]})
+		items, _ = mr.validate(
+			{
+				"items": [
+					{"type": "gif", "source": "url", "value": "https://a/b.gif", "has_spoiler": True},
+					{
+						"type": "sticker",
+						"source": "file_id",
+						"value": "s",
+						"caption": "ignored",
+						"has_spoiler": True,
+					},
+				]
+			}
+		)
 		self.assertEqual(items[0]["type"], "animation")
 		self.assertTrue(items[0]["has_spoiler"])
 		self.assertNotIn("caption", items[1])
 		self.assertNotIn("has_spoiler", items[1])
 
 	def test_text_types_validation(self):
-		items, errors = mr.validate({"items": [
-			{"type": "location", "source": "text", "latitude": 200, "longitude": 1},
-			{"type": "contact", "source": "text", "value": {"phone_number": "+1", "first_name": "A"}},
-			{"type": "venue", "source": "text", "latitude": 1, "longitude": 2, "title": "T"},
-			{"type": "poll", "source": "text", "question": "Q?", "options": ["a"]},
-			{"type": "poll", "source": "text", "question": "Q?", "options": ["a", "b"]},
-			{"type": "dice", "source": "text", "emoji": "x"},
-			{"type": "bogus", "source": "text"}]})
+		items, errors = mr.validate(
+			{
+				"items": [
+					{"type": "location", "source": "text", "latitude": 200, "longitude": 1},
+					{"type": "contact", "source": "text", "value": {"phone_number": "+1", "first_name": "A"}},
+					{"type": "venue", "source": "text", "latitude": 1, "longitude": 2, "title": "T"},
+					{"type": "poll", "source": "text", "question": "Q?", "options": ["a"]},
+					{"type": "poll", "source": "text", "question": "Q?", "options": ["a", "b"]},
+					{"type": "dice", "source": "text", "emoji": "x"},
+					{"type": "bogus", "source": "text"},
+				]
+			}
+		)
 		self.assertEqual([i["type"] for i in items], ["contact", "poll", "dice"])
 		self.assertEqual(items[2]["emoji"], "🎲")
 		self.assertEqual(len(errors), 4)
@@ -102,13 +123,20 @@ class TestSend(Base):
 	def test_single_photo_with_extras(self):
 		out = self.send([photo(caption="hi", has_spoiler=True)], thread_id=7, reply_to=5)
 		call = self.api.last("sendPhoto")["payload"]
-		self.assertEqual((call["photo"], call["caption"], call["has_spoiler"], call["message_thread_id"]), ("AgAC", "hi", True, 7))
+		self.assertEqual(
+			(call["photo"], call["caption"], call["has_spoiler"], call["message_thread_id"]),
+			("AgAC", "hi", True, 7),
+		)
 		self.assertEqual(call["reply_parameters"]["message_id"], 5)
 		self.assertEqual((len(out.sent_ids), out.errors), (1, []))
 
 	def test_file_url_uploads_bytes_and_permission_error(self):
-		out = self.send([{"type": "document", "source": "file_url", "value": "/private/files/a.pdf"},
-			{"type": "audio", "source": "file_url", "value": "/private/files/missing.png"}])
+		out = self.send(
+			[
+				{"type": "document", "source": "file_url", "value": "/private/files/a.pdf"},
+				{"type": "audio", "source": "file_url", "value": "/private/files/missing.png"},
+			]
+		)
 		self.assertEqual(len(self.api.of("sendDocument")), 1)
 		self.assertEqual(self.api.of("sendAudio"), [])
 		self.assertEqual(self.api.last("sendDocument")["files"]["document"][1], b"PNGDATA")
@@ -117,21 +145,32 @@ class TestSend(Base):
 
 	def test_size_cap_rejected(self):
 		big = lambda u: ("big.png", b"0" * (mr.MAX_PHOTO_BYTES + 1))  # noqa: E731
-		out = mr.send_media_items(self.sender, CHAT, [{"type": "photo", "source": "file_url", "value": "/f"}],
-			resolve_file=big, check_url=url_ok)
+		out = mr.send_media_items(
+			self.sender,
+			CHAT,
+			[{"type": "photo", "source": "file_url", "value": "/f"}],
+			resolve_file=big,
+			check_url=url_ok,
+		)
 		self.assertEqual(self.api.calls, [])
 		self.assertIn("limit", out.errors[0])
 
 	def test_url_ssrf_guard(self):
-		out = self.send([{"type": "photo", "source": "url", "value": "http://169.254.169.254/x.png"},
-			{"type": "photo", "source": "url", "value": "https://ok.example/x.png"}])
+		out = self.send(
+			[
+				{"type": "photo", "source": "url", "value": "http://169.254.169.254/x.png"},
+				{"type": "photo", "source": "url", "value": "https://ok.example/x.png"},
+			]
+		)
 		self.assertEqual(self.api.last("sendPhoto")["payload"]["photo"], "https://ok.example/x.png")
 		self.assertEqual(self.api.of("sendMediaGroup"), [])  # the rejected item is dropped, one photo left
 		self.assertEqual(len(self.api.of("sendPhoto")), 1)
 		self.assertIn("private address", out.errors[0])
 
 	def test_album_for_photos_and_videos(self):
-		out = self.send([photo("a", caption="one"), {"type": "video", "source": "file_id", "value": "b"}, photo("c")])
+		out = self.send(
+			[photo("a", caption="one"), {"type": "video", "source": "file_id", "value": "b"}, photo("c")]
+		)
 		self.assertEqual(len(self.api.of("sendMediaGroup")), 1)
 		media = self.api.last("sendMediaGroup")["payload"]["media"]
 		self.assertEqual([m["type"] for m in media], ["photo", "video", "photo"])
@@ -149,13 +188,28 @@ class TestSend(Base):
 		self.assertEqual(len(self.api.last("sendMediaGroup")["payload"]["media"]), 10)
 
 	def test_text_kinds(self):
-		self.send([
-			{"type": "location", "source": "text", "latitude": 1.5, "longitude": 2.5},
-			{"type": "venue", "source": "text", "latitude": 1, "longitude": 2, "title": "Cafe", "address": "Road"},
-			{"type": "contact", "source": "text", "phone_number": "+1", "first_name": "Al"},
-			{"type": "poll", "source": "text", "question": "Q?", "options": ["a", "b"], "is_anonymous": False},
-			{"type": "dice", "source": "text", "emoji": "🎯"},
-		])
+		self.send(
+			[
+				{"type": "location", "source": "text", "latitude": 1.5, "longitude": 2.5},
+				{
+					"type": "venue",
+					"source": "text",
+					"latitude": 1,
+					"longitude": 2,
+					"title": "Cafe",
+					"address": "Road",
+				},
+				{"type": "contact", "source": "text", "phone_number": "+1", "first_name": "Al"},
+				{
+					"type": "poll",
+					"source": "text",
+					"question": "Q?",
+					"options": ["a", "b"],
+					"is_anonymous": False,
+				},
+				{"type": "dice", "source": "text", "emoji": "🎯"},
+			]
+		)
 		self.assertEqual(self.api.last("sendLocation")["payload"]["latitude"], 1.5)
 		self.assertEqual(self.api.last("sendVenue")["payload"]["title"], "Cafe")
 		self.assertEqual(self.api.last("sendContact")["payload"]["first_name"], "Al")
@@ -209,7 +263,9 @@ class TestPipeline(Base):
 		self.assertEqual(len(self.api.of("sendPhoto")), 1)
 
 	def test_buttons_and_media_coexist(self):
-		buttons = "```telegram-buttons\n" + json.dumps({"rows": [[{"text": "Ok", "callback": "ok"}]]}) + "\n```"
+		buttons = (
+			"```telegram-buttons\n" + json.dumps({"rows": [[{"text": "Ok", "callback": "ok"}]]}) + "\n```"
+		)
 		parts = tp.make_parts("Pick.\n" + block(photo()) + "\n" + buttons)
 		self.assertEqual(parts, ["Pick."])
 		self.assertIsNotNone(mr.take_items(parts))
@@ -220,8 +276,15 @@ class TestPipeline(Base):
 
 class TestAdapterSendReply(Base):
 	def test_attachments_then_text_with_thread(self):
-		reply = GatewayReply(conversation_id=str(CHAT), text="caption text", thread_id="42", attachments=(
-			GatewayAttachment(file_id="F1", kind="photo"), GatewayAttachment(url="https://x/a.gif", mime_type="image/gif")))
+		reply = GatewayReply(
+			conversation_id=str(CHAT),
+			text="caption text",
+			thread_id="42",
+			attachments=(
+				GatewayAttachment(file_id="F1", kind="photo"),
+				GatewayAttachment(url="https://x/a.gif", mime_type="image/gif"),
+			),
+		)
 		out = self.adapter.send_reply(reply)
 		self.assertEqual([c["method"] for c in self.api.calls], ["sendPhoto", "sendAnimation", "sendMessage"])
 		self.assertEqual(self.api.last("sendAnimation")["payload"]["message_thread_id"], 42)
@@ -256,7 +319,10 @@ class TestFileAllowList(unittest.TestCase):
 		import frappe
 
 		d = MagicMock(is_private=1, attached_to_doctype=None, attached_to_name=None)
-		with patch.object(frappe, "db", MagicMock(**{"get_value.return_value": "F1"})), patch.object(frappe, "get_doc", return_value=d):
+		with (
+			patch.object(frappe, "db", MagicMock(**{"get_value.return_value": "F1"})),
+			patch.object(frappe, "get_doc", return_value=d),
+		):
 			with self.assertRaisesRegex(ValueError, "not allowed"):
 				mr.default_resolve_file("/private/files/secret.pdf", CHAT)
 		d.get_content.assert_not_called()

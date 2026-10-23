@@ -29,15 +29,23 @@ def _mutate(init_data, **changes):
 
 class TestMiniApp(unittest.TestCase):
 	def test_valid(self):
-		extra = {"start_param": "abc", "chat_type": "private", "chat_instance": "99", "query_id": "Q1",
-			"can_send_after": "10"}
+		extra = {
+			"start_param": "abc",
+			"chat_type": "private",
+			"chat_instance": "99",
+			"query_id": "Q1",
+			"can_send_after": "10",
+		}
 		u = m.validate_init_data(
 			_make(user={"id": 7, "username": "bob", "first_name": "Bob", "language_code": "en"}, extra=extra),
-			TOKEN, now=NOW,
+			TOKEN,
+			now=NOW,
 		)
 		self.assertEqual((u.user_id, u.username, u.first_name, u.language_code), (7, "bob", "Bob", "en"))
-		self.assertEqual((u.start_param, u.chat_type, u.chat_instance, u.query_id, u.can_send_after),
-			("abc", "private", "99", "Q1", 10))
+		self.assertEqual(
+			(u.start_param, u.chat_type, u.chat_instance, u.query_id, u.can_send_after),
+			("abc", "private", "99", "Q1", 10),
+		)
 
 	def test_tampered_hash(self):
 		bad = _mutate(_make(), hash="0" * 64)
@@ -84,16 +92,18 @@ class TestMiniApp(unittest.TestCase):
 			m.validate_init_data(_make() + "&auth_date=1", TOKEN, now=NOW)
 
 	def test_builders(self):
-		self.assertEqual(m.web_app_button("https://x.y/app", "Open"),
-			{"text": "Open", "web_app": {"url": "https://x.y/app"}})
+		self.assertEqual(
+			m.web_app_button("https://x.y/app", "Open"),
+			{"text": "Open", "web_app": {"url": "https://x.y/app"}},
+		)
 		p = m.menu_button_payload("https://x.y/app", "Open", chat_id=5)
 		self.assertEqual(p["menu_button"]["type"], "web_app")
 		self.assertEqual(p["chat_id"], 5)
 
 	def test_third_party_signature(self):
 		try:
-			from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 			from cryptography.hazmat.primitives import serialization
+			from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 		except ImportError:
 			self.skipTest("cryptography not installed")
 		key = Ed25519PrivateKey.generate()

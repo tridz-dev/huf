@@ -70,15 +70,30 @@ def readiness(client: TelegramBotClient, expected_url: str) -> list[dict[str, An
 		add("bot_reachable", "Bot token accepted (getMe)", False, f"getMe failed: {exc.description}")
 		bot = None
 	else:
-		add("bot_reachable", "Bot token accepted (getMe)", bot.get("id") is not None, "getMe returned no bot id")
+		add(
+			"bot_reachable",
+			"Bot token accepted (getMe)",
+			bot.get("id") is not None,
+			"getMe returned no bot id",
+		)
 
 	try:
 		hook = check_webhook(client, expected_url)
 	except TelegramApiError as exc:
-		add("webhook_info", "Webhook info readable (getWebhookInfo)", False, f"getWebhookInfo failed: {exc.description}")
+		add(
+			"webhook_info",
+			"Webhook info readable (getWebhookInfo)",
+			False,
+			f"getWebhookInfo failed: {exc.description}",
+		)
 		return checks
 
-	add("webhook_url", "Webhook URL points at this site", hook["url_matches"], "Run the webhook setup action for this site")
+	add(
+		"webhook_url",
+		"Webhook URL points at this site",
+		hook["url_matches"],
+		"Run the webhook setup action for this site",
+	)
 	add(
 		"webhook_error",
 		"No recent delivery error",

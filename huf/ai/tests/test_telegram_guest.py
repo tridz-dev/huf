@@ -91,7 +91,9 @@ class TestGuest(unittest.TestCase):
 			self.env.api.calls.clear()
 			self._run(policy=policy)
 			self.assertEqual(len(self.env.api.of("answerGuestQuery")), 1)
-			self.assertIn("owner", self.env.api.last()["payload"]["result"]["input_message_content"]["message_text"])
+			self.assertIn(
+				"owner", self.env.api.last()["payload"]["result"]["input_message_content"]["message_text"]
+			)
 		self.assertEqual(self.ingest_calls, [])
 		# second message from same guest: no further reply
 		self.env.api.calls.clear()

@@ -9,7 +9,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from huf.ai.gateway_adapters import telegram_ingest as ing, telegram_typing_metrics as tm
+from huf.ai.gateway_adapters import telegram_ingest as ing
+from huf.ai.gateway_adapters import telegram_typing_metrics as tm
 from huf.ai.gateway_adapters.telegram_client import TelegramApiError
 from huf.ai.tests.test_telegram_typing import FakeCache, event, gateway
 
@@ -44,7 +45,9 @@ class TestSuccessAndFailure(MetricsCase):
 
 	def test_failure_stores_type_name_only_never_message_text(self):
 		secret_text = "bot 123:ABC-secret rejected"
-		self.sender.send_chat_action.side_effect = TelegramApiError("sendChatAction", secret_text, error_code=500)
+		self.sender.send_chat_action.side_effect = TelegramApiError(
+			"sendChatAction", secret_text, error_code=500
+		)
 		self.assertFalse(ing.send_typing_for_event(event(), gateway(name="TG-1")))
 		data = self.read()
 		self.assertEqual(data["sent_count_24h"], 0)

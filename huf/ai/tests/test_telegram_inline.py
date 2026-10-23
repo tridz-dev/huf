@@ -90,7 +90,9 @@ class TestInline(Base):
 
 		def fn(query, ctx):
 			seen.update(ctx)
-			return [{"type": "article", "id": "x1", "title": "T", "input_message_content": {"message_text": "t"}}]
+			return [
+				{"type": "article", "id": "x1", "title": "T", "input_message_content": {"message_text": "t"}}
+			]
 
 		ti.register_resolver("mine", fn)
 		self.assertIn("mine", ti.resolver_names())
@@ -102,7 +104,10 @@ class TestInline(Base):
 		def boom(q, c):
 			raise RuntimeError("x")
 
-		dup = lambda q, c: [{"type": "article", "id": "d", "title": "a"}, {"type": "article", "id": "d", "title": "b"}]
+		dup = lambda q, c: [
+			{"type": "article", "id": "d", "title": "a"},
+			{"type": "article", "id": "d", "title": "b"},
+		]
 		ti.register_resolver("boom", boom)
 		ti.register_resolver("dup", dup)
 		out = ti.collect_results("q", {"user": "u@x.com"})
@@ -151,7 +156,9 @@ class TestInline(Base):
 		self.assertIsNone(ti.dispatch(gw(), self.adapter, parsed_for({"update_id": 1}), None))
 		patch.object(ti.frappe, "enqueue").start()
 		self.assertEqual(
-			ti.dispatch(gw(), self.adapter, parsed_for(load_fixture("chosen_inline_result")), None)["handled"],
+			ti.dispatch(gw(), self.adapter, parsed_for(load_fixture("chosen_inline_result")), None)[
+				"handled"
+			],
 			"chosen_inline_result",
 		)
 
@@ -165,7 +172,9 @@ class ChosenBase(Base):
 		fc.set_value.side_effect = lambda k, v, expires_in_sec=None: self.cache.__setitem__(k, v)
 		patch.object(ti.frappe, "cache", return_value=fc).start()
 		seen = set()
-		patch.object(ing, "_first_delivery", side_effect=lambda g, k: k not in seen and not seen.add(k)).start()
+		patch.object(
+			ing, "_first_delivery", side_effect=lambda g, k: k not in seen and not seen.add(k)
+		).start()
 		self.enq = patch.object(ti.frappe, "enqueue").start()
 		from huf.ai import telegram_admin as ta
 		from huf.ai.tests.telegram_fakes import isolate_admin_cache
@@ -179,7 +188,9 @@ class ChosenBase(Base):
 		return raw
 
 	def choose(self, raw=None, gateway=None):
-		return ti.handle_chosen_inline_result(gateway or gw(), self.adapter, parsed_for(raw or self.raw()), None)
+		return ti.handle_chosen_inline_result(
+			gateway or gw(), self.adapter, parsed_for(raw or self.raw()), None
+		)
 
 
 class TestChosenEnqueue(ChosenBase):
@@ -237,9 +248,11 @@ class TestInlineJob(ChosenBase):
 	def run_job(self, result=None, exc=None):
 		g = gw()
 		g.default_agent = "A"
-		with patch.object(ti, "_load_gateway", return_value=g), patch.object(
-			ti, "_adapter", return_value=self.adapter
-		), patch.object(ti, "_run_agent", side_effect=exc, return_value=result) as ra:
+		with (
+			patch.object(ti, "_load_gateway", return_value=g),
+			patch.object(ti, "_adapter", return_value=self.adapter),
+			patch.object(ti, "_run_agent", side_effect=exc, return_value=result) as ra,
+		):
 			out = ti.run_inline_job("GW", "imid-1", "111", "weekly report")
 		return out, ra
 
@@ -273,7 +286,10 @@ class TestInlineJob(ChosenBase):
 	def test_job_skips_when_disabled(self):
 		g = gw()
 		g.telegram_inline_enabled = 0
-		with patch.object(ti, "_load_gateway", return_value=g), patch.object(ti, "_adapter", return_value=self.adapter):
+		with (
+			patch.object(ti, "_load_gateway", return_value=g),
+			patch.object(ti, "_adapter", return_value=self.adapter),
+		):
 			out = ti.run_inline_job("GW", "imid-1", "111", "q")
 		self.assertEqual(out["result"], "skipped")
 
@@ -307,9 +323,11 @@ class TestHardening(unittest.TestCase):
 	def test_inline_run_scope_refuses_chat_actions(self):
 		from huf.ai.tools import telegram as tool
 
-		with patch.object(tool.scope, "run_gateway", return_value="GW"), \
-			patch.object(tool.scope, "effective_run_id", return_value="R"), \
-			patch.object(tool.scope, "is_inline_run", return_value=True):
+		with (
+			patch.object(tool.scope, "run_gateway", return_value="GW"),
+			patch.object(tool.scope, "effective_run_id", return_value="R"),
+			patch.object(tool.scope, "is_inline_run", return_value=True),
+		):
 			out = tool._scope_refusal("send_message", {"chat_id": "5", "text": "hi"})
 		self.assertIn("action_not_permitted", out)
 
@@ -318,11 +336,15 @@ class TestInlineFeedbackFallback(Base):
 	def test_default_result_button_label_and_signing(self):
 		sign = lambda p: f"{p}|sig"
 		with patch.object(ti, "_cache_put") as put:
-			off = ti.default_resolver("q", {"sign": sign, "gateway": "GW", "sender_id": "1", "feedback": False})
+			off = ti.default_resolver(
+				"q", {"sign": sign, "gateway": "GW", "sender_id": "1", "feedback": False}
+			)
 			on = ti.default_resolver("q", {"sign": sign, "gateway": "GW", "sender_id": "1", "feedback": True})
 		self.assertEqual(off[0]["reply_markup"]["inline_keyboard"][0][0]["text"], ti.TAP_LABEL)
 		self.assertEqual(on[0]["reply_markup"]["inline_keyboard"][0][0]["text"], ti.WORKING_LABEL)
-		self.assertTrue(off[0]["reply_markup"]["inline_keyboard"][0][0]["callback_data"].startswith(ti.GO_PREFIX))
+		self.assertTrue(
+			off[0]["reply_markup"]["inline_keyboard"][0][0]["callback_data"].startswith(ti.GO_PREFIX)
+		)
 		self.assertEqual(put.call_count, 2)
 
 	def test_feedback_known_flag_or_seen(self):

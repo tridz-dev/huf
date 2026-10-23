@@ -43,7 +43,16 @@ TEXT_TYPES = ("location", "contact", "venue", "poll", "dice")
 SOURCES = ("file_url", "file_id", "url", "text")
 _ALBUM_TYPES = ("photo", "video")
 _DICE_EMOJI = ("🎲", "🎯", "🏀", "⚽", "🎳", "🎰")
-_EXTRA_KEYS = ("title", "performer", "duration", "width", "height", "length", "filename", "supports_streaming")
+_EXTRA_KEYS = (
+	"title",
+	"performer",
+	"duration",
+	"width",
+	"height",
+	"length",
+	"filename",
+	"supports_streaming",
+)
 
 AGENT_INSTRUCTIONS = (
 	"To send media with your reply add a fenced block ```telegram-media with JSON "
@@ -107,7 +116,9 @@ def _text_item(kind: str, raw: dict, errors: list[str]) -> dict | None:
 		if not question or len(opts) < 2:
 			errors.append("poll: needs a question and 2-12 options")
 			return None
-		item.update(question=question[:300], options=opts, is_anonymous=f.get("is_anonymous", True) is not False)
+		item.update(
+			question=question[:300], options=opts, is_anonymous=f.get("is_anonymous", True) is not False
+		)
 		if f.get("poll_type") == "quiz" or f.get("quiz"):
 			cid = _int(f.get("correct_option_id"))
 			if cid is None or not 0 <= cid < len(opts):
@@ -252,7 +263,9 @@ def remember(visible: str, items: list[dict], *, cache: Any = None, scope: str =
 	if not items:
 		return visible
 	if not visible:
-		visible = MEDIA_ONLY_PREFIX + hashlib.sha1(json.dumps(items, sort_keys=True).encode()).hexdigest()[:10]
+		visible = (
+			MEDIA_ONLY_PREFIX + hashlib.sha1(json.dumps(items, sort_keys=True).encode()).hexdigest()[:10]
+		)
 	try:
 		from huf.ai.gateway_adapters.telegram_format import split_message
 
@@ -316,9 +329,7 @@ def default_resolve_file(file_url: str, chat_id: Any = None) -> tuple[str, bytes
 	doc = frappe.get_doc("File", name)
 	doc.check_permission("read")
 	if not _file_allowed_for_chat(doc, chat_id):
-		raise ValueError(
-			"file not allowed: agents may only send public files or files received in this chat"
-		)
+		raise ValueError("file not allowed: agents may only send public files or files received in this chat")
 	content = doc.get_content()
 	if isinstance(content, str):
 		content = content.encode("utf-8")
@@ -360,7 +371,13 @@ def _albums(items: list[dict]) -> list[list[dict]]:
 	for it in items:
 		kind = it["type"]
 		cat = "pv" if kind in _ALBUM_TYPES else kind if kind in ("audio", "document") else None
-		if cat and it["source"] != "text" and groups and groups[-1][0].get("_cat") == cat and len(groups[-1]) < 10:
+		if (
+			cat
+			and it["source"] != "text"
+			and groups
+			and groups[-1][0].get("_cat") == cat
+			and len(groups[-1]) < 10
+		):
 			groups[-1].append(it)
 		else:
 			groups.append([it])
@@ -380,12 +397,23 @@ def _send_one(sender: Any, chat_id: Any, item: dict, media: Any, thread_id: Any,
 		payload.update({k: item[k] for k in ("latitude", "longitude", "title", "address")})
 		return _ids(sender.client.call("sendVenue", payload))
 	if kind == "contact":
-		return _ids(sender.send_contact(chat_id, item["phone_number"], item["first_name"],
-			last_name=item.get("last_name", ""), reply_to=reply_to, thread_id=thread_id))
+		return _ids(
+			sender.send_contact(
+				chat_id,
+				item["phone_number"],
+				item["first_name"],
+				last_name=item.get("last_name", ""),
+				reply_to=reply_to,
+				thread_id=thread_id,
+			)
+		)
 	if kind == "poll":
 		payload = sender._common(chat_id, reply_to=reply_to, thread_id=thread_id)
-		payload.update(question=item["question"], options=[{"text": o} for o in item["options"]],
-			is_anonymous=item["is_anonymous"])
+		payload.update(
+			question=item["question"],
+			options=[{"text": o} for o in item["options"]],
+			is_anonymous=item["is_anonymous"],
+		)
 		if item.get("poll_type") == "quiz":
 			payload.update(type="quiz", correct_option_id=item["correct_option_id"])
 			if item.get("explanation"):
@@ -397,17 +425,35 @@ def _send_one(sender: Any, chat_id: Any, item: dict, media: Any, thread_id: Any,
 		payload = sender._common(chat_id, reply_to=reply_to, thread_id=thread_id)
 		payload["emoji"] = item["emoji"]
 		return _ids(sender.client.call("sendDice", payload))
-	extra = {k: item[k] for k in ("title", "performer", "duration", "width", "height", "length",
-		"supports_streaming") if k in item}
+	extra = {
+		k: item[k]
+		for k in ("title", "performer", "duration", "width", "height", "length", "supports_streaming")
+		if k in item
+	}
 	if item.get("has_spoiler"):
 		extra["has_spoiler"] = True
-	return _ids(sender.send_media(kind, chat_id, media, caption=item.get("caption", ""), reply_to=reply_to,
-		thread_id=thread_id, extra=extra or None))
+	return _ids(
+		sender.send_media(
+			kind,
+			chat_id,
+			media,
+			caption=item.get("caption", ""),
+			reply_to=reply_to,
+			thread_id=thread_id,
+			extra=extra or None,
+		)
+	)
 
 
 def send_media_items(
-	sender: Any, chat_id: Any, items: list[dict], thread_id: Any = None, reply_to: Any = None, *,
-	resolve_file: Callable | None = None, check_url: Callable | None = None,
+	sender: Any,
+	chat_id: Any,
+	items: list[dict],
+	thread_id: Any = None,
+	reply_to: Any = None,
+	*,
+	resolve_file: Callable | None = None,
+	check_url: Callable | None = None,
 ) -> SimpleNamespace:
 	"""Send ``items`` in order. Never raises: returns ``sent_ids`` and human-readable ``errors``."""
 	resolve_file = resolve_file or (lambda url: default_resolve_file(url, chat_id))
@@ -421,13 +467,19 @@ def send_media_items(
 		resolved: list[tuple[dict, Any]] = []
 		for it in group:  # one bad item must not sink the rest of the album
 			try:
-				resolved.append((it, _resolve(it, resolve_file, check_url) if it["source"] != "text" else None))
+				resolved.append(
+					(it, _resolve(it, resolve_file, check_url) if it["source"] != "text" else None)
+				)
 			except Exception as exc:
 				errors.append(f"{it['type']}: {_safe(exc)}")
 		try:
 			if len(resolved) >= 2:
-				entries = [{"type": it["type"], "media": m, "caption": it.get("caption", "")} for it, m in resolved]
-				sent.extend(_ids(sender.send_media_group(chat_id, entries, reply_to=target, thread_id=thread_id)))
+				entries = [
+					{"type": it["type"], "media": m, "caption": it.get("caption", "")} for it, m in resolved
+				]
+				sent.extend(
+					_ids(sender.send_media_group(chat_id, entries, reply_to=target, thread_id=thread_id))
+				)
 			elif resolved:
 				sent.extend(_send_one(sender, chat_id, resolved[0][0], resolved[0][1], thread_id, target))
 			first = first and not resolved

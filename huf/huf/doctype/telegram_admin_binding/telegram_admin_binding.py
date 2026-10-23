@@ -19,6 +19,8 @@ class TelegramAdminBinding(Document):
 		if not self.is_new():
 			before = self.get_doc_before_save()
 			if before and (before.telegram_user_id, before.frappe_user, before.gateway) != (
-				self.telegram_user_id, self.frappe_user, self.gateway
+				self.telegram_user_id,
+				self.frappe_user,
+				self.gateway,
 			):
 				frappe.throw(_("A binding's identity cannot be changed; unbind and bind again."))

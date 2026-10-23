@@ -45,8 +45,9 @@ class TestChatNormalisation(unittest.TestCase):
 
 class TestRecipientScope(unittest.TestCase):
 	def check(self, recipient, current="111", **over):
-		with patch.object(scope, "settings", return_value=conf(**over)), patch.object(
-			scope, "current_chat", return_value=current
+		with (
+			patch.object(scope, "settings", return_value=conf(**over)),
+			patch.object(scope, "current_chat", return_value=current),
 		):
 			return scope.check_recipient("GW", "RUN", recipient)
 
@@ -80,7 +81,11 @@ class TestRecipientScope(unittest.TestCase):
 		self.assertIsNotNone(self.check("../etc", scope="Any number"))
 
 	def test_unknown_scope_fails_closed(self):
-		with patch.object(scope.frappe, "db", SimpleNamespace(get_value=lambda *a, **k: {"agent_recipient_scope": "Everyone"})):
+		with patch.object(
+			scope.frappe,
+			"db",
+			SimpleNamespace(get_value=lambda *a, **k: {"agent_recipient_scope": "Everyone"}),
+		):
 			self.assertEqual(scope.settings("GW")["scope"], "Current contact")
 
 	def test_settings_error_fails_closed(self):
@@ -141,7 +146,9 @@ class TestCaps(unittest.TestCase):
 class TestGatewayState(unittest.TestCase):
 	def setUp(self):
 		self.addCleanup(patch.stopall)
-		self.flags = patch.object(scope.frappe, "flags", SimpleNamespace(huf_current_agent_run_id="R")).start()
+		self.flags = patch.object(
+			scope.frappe, "flags", SimpleNamespace(huf_current_agent_run_id="R")
+		).start()
 
 	def lookups(self, channel, gateway_row):
 		def get_value(doctype, name, fields=None, as_dict=False):
@@ -150,6 +157,7 @@ class TestGatewayState(unittest.TestCase):
 			if doctype == "Agent Conversation":
 				return channel
 			return gateway_row
+
 		return patch.object(scope.frappe, "db", SimpleNamespace(get_value=get_value)).start()
 
 	def test_no_run_is_none(self):
@@ -165,13 +173,18 @@ class TestGatewayState(unittest.TestCase):
 		self.assertEqual(scope.gateway_state(), ("telegram", "GW"))
 
 	def test_whatsapp_disabled_missing_are_invalid(self):
-		for row in ({"provider": "WhatsApp", "is_enabled": 1}, {"provider": "Telegram", "is_enabled": 0}, None):
+		for row in (
+			{"provider": "WhatsApp", "is_enabled": 1},
+			{"provider": "Telegram", "is_enabled": 0},
+			None,
+		):
 			self.lookups("gateway:GW", row)
 			self.assertEqual(scope.gateway_state()[0], "invalid")
 
 	def test_db_error_is_invalid(self):
 		def boom(*a, **k):
 			raise RuntimeError("db down")
+
 		patch.object(scope.frappe, "db", SimpleNamespace(get_value=boom)).start()
 		self.assertEqual(scope.gateway_state()[0], "invalid")
 		self.assertEqual(scope.run_gateway(), "")
@@ -182,6 +195,7 @@ class AtomicRedis:
 
 	def __init__(self):
 		import threading
+
 		self.d, self.lock = {}, threading.Lock()
 
 	def make_key(self, k):
@@ -208,12 +222,14 @@ class TestAtomicCaps(unittest.TestCase):
 
 	def hammer(self, cache, **over):
 		import threading
+
 		results = []
 		patch.object(scope, "_cache", return_value=cache).start()
 		patch.object(scope, "settings", return_value=conf(**over)).start()
 
 		def work():
 			results.append(scope.claim_send("GW", "RUN"))
+
 		threads = [threading.Thread(target=work) for _ in range(60)]
 		[t.start() for t in threads]
 		[t.join() for t in threads]
@@ -269,6 +285,7 @@ class PipeRedis(AtomicRedis):
 					else:
 						out.append(outer.incrby(op[1], op[2]))
 				return out
+
 		return P()
 
 
@@ -290,17 +307,20 @@ class TestAtomicTtl(unittest.TestCase):
 
 		def boom(k):
 			raise RuntimeError("redis gone")
+
 		c.ttl = boom
 		cache = FakeCache()
 		patch.object(scope, "_cache", return_value=c).start()
 		# day cap of 1 reached on 2nd claim path: force failure after the run counter was incremented
 		patch.object(scope, "settings", return_value=conf(per_run=5, per_day=1)).start()
 		orig = scope._incr
+
 		def flaky(cl, key):
 			state["n"] += 1
 			if state["n"] == 2:
 				raise RuntimeError("boom")
 			return orig(cl, key)
+
 		patch.object(scope, "_incr", side_effect=flaky).start()
 		scope.claim_send("GW", "RUN")  # falls back to list path
 		run_counter = [v for k, v in c.d.items() if "RUN" in k]

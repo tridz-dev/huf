@@ -15,6 +15,7 @@ from urllib.parse import quote
 
 import frappe
 from frappe import _
+
 from huf.ai.telegram_public_url import public_base_url
 
 ADMIN_ROLES = ("System Manager", "Huf Admin")
@@ -143,15 +144,26 @@ def build_overview(
 	}
 
 
-def _checklist(enabled: bool, presence: dict[str, bool], checks: dict[str, bool], has_events: bool) -> list[dict[str, str]]:
+def _checklist(
+	enabled: bool, presence: dict[str, bool], checks: dict[str, bool], has_events: bool
+) -> list[dict[str, str]]:
 	def state(done: bool, blocked: bool = False) -> str:
 		return "done" if done else ("blocked" if blocked else "todo")
 
 	token_ok = checks.get("bot_reachable", False)
 	return [
-		{"code": "bot_token", "state": state(presence["token_present"] and token_ok, presence["token_present"] and not token_ok and "bot_reachable" in checks)},
+		{
+			"code": "bot_token",
+			"state": state(
+				presence["token_present"] and token_ok,
+				presence["token_present"] and not token_ok and "bot_reachable" in checks,
+			),
+		},
 		{"code": "webhook_secret", "state": state(presence["webhook_secret_present"])},
-		{"code": "webhook", "state": state(checks.get("webhook_url", False) and checks.get("webhook_allowed_updates", False))},
+		{
+			"code": "webhook",
+			"state": state(checks.get("webhook_url", False) and checks.get("webhook_allowed_updates", False)),
+		},
 		{"code": "enabled", "state": state(enabled)},
 		{"code": "first_message", "state": state(has_events)},
 	]
@@ -304,7 +316,11 @@ def list_telegram_gateways() -> dict[str, Any]:
 	return {
 		"success": True,
 		"gateways": [
-			{"name": r["name"], "enabled": bool(r.get("is_enabled")), "has_events": bool(r.get("last_event_at"))}
+			{
+				"name": r["name"],
+				"enabled": bool(r.get("is_enabled")),
+				"has_events": bool(r.get("last_event_at")),
+			}
 			for r in rows or []
 		],
 	}

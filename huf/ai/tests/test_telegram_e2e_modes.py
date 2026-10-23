@@ -20,18 +20,35 @@ from types import SimpleNamespace
 from unittest import mock
 from urllib.parse import parse_qs, urlencode, urlparse
 
-from huf.ai import telegram_admin, telegram_guard as tg
+from huf.ai import telegram_admin
+from huf.ai import telegram_guard as tg
 from huf.ai.gateway_adapters import (
 	GatewayInboundRequest,
 	provider_hooks,
-	telegram_business as biz,
-	telegram_business_agent as agent,
-	telegram_guest as guest,
 	telegram_hooks,
+)
+from huf.ai.gateway_adapters import (
+	telegram_business as biz,
+)
+from huf.ai.gateway_adapters import (
+	telegram_business_agent as agent,
+)
+from huf.ai.gateway_adapters import (
+	telegram_guest as guest,
+)
+from huf.ai.gateway_adapters import (
 	telegram_ingest as ing,
+)
+from huf.ai.gateway_adapters import (
 	telegram_inline as inline,
+)
+from huf.ai.gateway_adapters import (
 	telegram_loop_guard as lg,
+)
+from huf.ai.gateway_adapters import (
 	telegram_modes_hooks as mh,
+)
+from huf.ai.gateway_adapters import (
 	telegram_stream as stream,
 )
 from huf.ai.gateway_adapters.telegram import WEBHOOK_SECRET_HEADER, TelegramGatewayAdapter
@@ -960,7 +977,9 @@ class TestHandlerChain(E2EBase):
 		self.patch("frappe.set_user")
 		self.patch(
 			"huf.ai.telegram_guard._load_gateway",
-			return_value=SimpleNamespace(name="gw1", provider=PROVIDER, telegram_join_policy="Decline", room_policy="Open"),
+			return_value=SimpleNamespace(
+				name="gw1", provider=PROVIDER, telegram_join_policy="Decline", room_policy="Open"
+			),
 		)
 		self.patch("huf.ai.telegram_guard._client_for", return_value=self.adapter.client)
 		self.gw.direct_policy = "Open"
@@ -995,7 +1014,9 @@ class TestHandlerChain(E2EBase):
 	def test_join_request_reaches_groups_handler_once_through_unsupported_chain(self):
 		self.patch(
 			"huf.ai.telegram_guard._load_gateway",
-			return_value=SimpleNamespace(name="gw1", provider=PROVIDER, telegram_join_policy="Decline", room_policy="Open"),
+			return_value=SimpleNamespace(
+				name="gw1", provider=PROVIDER, telegram_join_policy="Decline", room_policy="Open"
+			),
 		)
 		self.patch("huf.ai.telegram_guard._client_for", return_value=self.adapter.client)
 		result = self.send(join_update(9600, query_id="q-chain"))

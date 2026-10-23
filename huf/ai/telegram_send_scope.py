@@ -35,7 +35,12 @@ DEFAULT_SCOPE = SCOPES[0]
 DEFAULT_PER_RUN = 20
 DEFAULT_PER_DAY = 200
 DAY_SECONDS = 24 * 3600
-_FIELDS = ["agent_recipient_scope", "agent_recipient_allowlist", "agent_send_cap_per_run", "agent_send_cap_per_day"]
+_FIELDS = [
+	"agent_recipient_scope",
+	"agent_recipient_allowlist",
+	"agent_send_cap_per_run",
+	"agent_send_cap_per_day",
+]
 
 _trusted_gateway: contextvars.ContextVar = contextvars.ContextVar("huf_telegram_trusted_gateway", default="")
 _trusted_chat: contextvars.ContextVar = contextvars.ContextVar("huf_telegram_trusted_chat", default="")
@@ -77,11 +82,13 @@ def gateway_state() -> tuple[str, str]:
 				return ("none", "")
 			conversation = frappe.db.get_value("Agent Run", run_id, "conversation")
 			channel = (
-				str(frappe.db.get_value("Agent Conversation", conversation, "channel") or "") if conversation else ""
+				str(frappe.db.get_value("Agent Conversation", conversation, "channel") or "")
+				if conversation
+				else ""
 			)
 			if not channel.startswith("gateway:"):
 				return ("none", "")
-			name = channel[len("gateway:"):].strip()
+			name = channel[len("gateway:") :].strip()
 		row = frappe.db.get_value("Gateway", name, ["provider", "is_enabled"], as_dict=True) if name else None
 		if not row or row.get("provider") != PROVIDER or not row.get("is_enabled"):
 			return ("invalid", "")
@@ -154,7 +161,9 @@ def is_inline_run(run_id: Optional[str]) -> bool:
 		return False
 	try:
 		conversation = frappe.db.get_value("Agent Run", run_id, "conversation")
-		external = frappe.db.get_value("Agent Conversation", conversation, "external_id") if conversation else ""
+		external = (
+			frappe.db.get_value("Agent Conversation", conversation, "external_id") if conversation else ""
+		)
 		return str(external or "").startswith("inline:")
 	except Exception:
 		return False
@@ -169,7 +178,9 @@ def current_chat(run_id: Optional[str]) -> str:
 		return ""
 	try:
 		conversation = frappe.db.get_value("Agent Run", run_id, "conversation")
-		external = frappe.db.get_value("Agent Conversation", conversation, "external_id") if conversation else ""
+		external = (
+			frappe.db.get_value("Agent Conversation", conversation, "external_id") if conversation else ""
+		)
 		# A forum-topic conversation may carry "<chat>:<thread>"; the chat is the first segment.
 		return normalize_chat(str(external or "").split(":", 1)[0])
 	except Exception:
@@ -180,7 +191,11 @@ def _is_approved(gateway: str, chat: str) -> bool:
 	from huf.ai import gateway_service
 
 	try:
-		return bool(gateway_service._has_access_entry(SimpleNamespace(name=gateway, provider=PROVIDER), "Sender", chat))
+		return bool(
+			gateway_service._has_access_entry(
+				SimpleNamespace(name=gateway, provider=PROVIDER), "Sender", chat
+			)
+		)
 	except Exception:
 		return False
 
@@ -264,7 +279,9 @@ def _refuse_run(limit: int) -> str:
 	return _refusal(
 		"send_cap_exceeded",
 		f"This run has already sent its limit of {limit} Telegram messages. No more are sent in this run.",
-		cap="run", limit=limit, retry_after=None,
+		cap="run",
+		limit=limit,
+		retry_after=None,
 	)
 
 
@@ -272,7 +289,9 @@ def _refuse_day(limit: int, retry: int) -> str:
 	return _refusal(
 		"send_cap_exceeded",
 		f"This gateway reached its limit of {limit} agent Telegram messages in 24 hours. Try again later.",
-		cap="day", limit=limit, retry_after=max(1, min(retry, DAY_SECONDS)),
+		cap="day",
+		limit=limit,
+		retry_after=max(1, min(retry, DAY_SECONDS)),
 	)
 
 

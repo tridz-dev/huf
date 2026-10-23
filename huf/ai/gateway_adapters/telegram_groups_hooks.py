@@ -5,7 +5,8 @@
 
 from __future__ import annotations
 
-from huf.ai.gateway_adapters import telegram_groups as groups, telegram_ingest as ing
+from huf.ai.gateway_adapters import telegram_groups as groups
+from huf.ai.gateway_adapters import telegram_ingest as ing
 
 
 def _chained(fn, previous):

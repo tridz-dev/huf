@@ -25,7 +25,10 @@ class TestSttFilename(TestCase):
 
 			with patch("litellm.transcription", side_effect=fake):
 				out = audio_service._call_stt_provider(
-					provider_name=provider, normalized_model="gpt-4o-mini-transcribe", api_key="k", file_path=path
+					provider_name=provider,
+					normalized_model="gpt-4o-mini-transcribe",
+					api_key="k",
+					file_path=path,
 				)
 			with open(path, "rb") as f:
 				self.assertEqual(f.read(), data)
@@ -50,8 +53,9 @@ class TestMediaPrepLogging(TestCase):
 	def _prep(self, side_effect=None, ret=None):
 		entry = {"file_id": "F1", "file_url": "/x", "filename": "file_2.oga", "mime_type": "audio/ogg"}
 		logger = MagicMock()
-		with patch.object(media_prep, "_transcribe_audio", side_effect=side_effect, return_value=ret), patch(
-			"frappe.logger", return_value=logger
+		with (
+			patch.object(media_prep, "_transcribe_audio", side_effect=side_effect, return_value=ret),
+			patch("frappe.logger", return_value=logger),
 		):
 			prep = media_prep.prepare_media_for_agent([entry], "agent")
 		return prep, logger

@@ -19,7 +19,6 @@ from huf.ai.gateway_adapters import provider_hooks
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 from huf.ai.gateway_adapters.registered import get_adapter_class
 
-
 EXEMPT_AUTH_ROUTES: frozenset[str] = frozenset(
 	{
 		# Bot Framework (and every other native-adapter) webhook: Teams posts

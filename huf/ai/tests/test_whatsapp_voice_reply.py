@@ -194,6 +194,7 @@ class TestHelpers(unittest.TestCase):
 class TestGatewayValidation(unittest.TestCase):
 	def _validate(self, mode, provider="WhatsApp"):
 		import frappe
+
 		from huf.huf.doctype.gateway.gateway import Gateway
 
 		values = {"voice_reply_mode": mode}

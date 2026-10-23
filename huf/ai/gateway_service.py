@@ -27,7 +27,6 @@ from huf.ai import whatsapp_outbound_policy as policy
 from huf.ai.gateway_adapters import provider_hooks
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 
-
 MATCH_CONTEXT_KEY = {
     "Direct message": "conversation_id",
     "Room or channel": "conversation_id",
@@ -1507,8 +1506,8 @@ def _approve_gateway_pairing(code_or_entry_name: str, notes: str | None = None, 
 
     notification_status = "Not attempted"
     try:
-        from huf.ai.gateway_webhook import get_gateway_adapter
         from huf.ai.gateway_adapters.types import GatewayReply
+        from huf.ai.gateway_webhook import get_gateway_adapter
 
         gw_doc = frappe.get_doc("Gateway", entry.gateway)
         if gw_doc.integration_settings:
@@ -2993,8 +2992,8 @@ def test_gateway_send(gateway_name: str, test_recipient_id: str) -> dict:
 			}
 
 		# Get the adapter for this gateway
-		from huf.ai.gateway_webhook import get_gateway_adapter
 		from huf.ai.gateway_adapters.types import GatewayReply
+		from huf.ai.gateway_webhook import get_gateway_adapter
 
 		adapter = get_gateway_adapter(gateway)
 

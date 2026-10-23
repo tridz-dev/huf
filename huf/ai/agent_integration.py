@@ -1,47 +1,51 @@
 import asyncio
 import json
-import threading
 import random
+import threading
 import time
 from types import SimpleNamespace
-import litellm
-from litellm import token_counter
 
 import frappe
-from agents import OpenAIProvider,Agent, Runner, Tool, function_tool,ModelSettings
-from frappe.utils.background_jobs import enqueue
-from frappe.utils import now_datetime, add_to_date
-
+import litellm
+from agents import Agent, ModelSettings, OpenAIProvider, Runner, Tool, function_tool
 from frappe import _
-from .tool_functions import (
-	create_document,
-    get_document,
-	get_list,
-	update_document,
-    submit_document,
-    cancel_document,
-	delete_document,
+from frappe.rate_limiter import rate_limit
+from frappe.utils import add_to_date, now_datetime
+from frappe.utils.background_jobs import enqueue
+from litellm import token_counter
+
+from huf.ai import run_delivery
+from huf.ai.agent_access import (
+	TRIGGER_DIRECT_API,
+	assert_agent_access,
+	resolve_run_identity_and_authorize,
 )
+from huf.ai.agent_access import (
+	check_agent_access as _check_agent_access,
+)
+from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
+from huf.ai.model_metadata import resolve_model_context_window
+from huf.ai.providers.errors import ProviderError, classify_status, redact_text
+from huf.ai.providers.litellm import ProviderUnavailableError, _normalize_model_name
+from huf.ai.run_budget import RunBudget, RunBudgetExceeded, get_current_budget, set_current_budget
+from huf.ai.run_control import touch_run_alive
+from huf.ai.tool_serializer import serialize_tools
+from huf.ai.transaction import safe_commit, transaction_checkpoint
+from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
+from huf.permissions import has_capability
+
 from .conversation_manager import ConversationManager, safe_history_slice, safe_history_split
 from .run import RunProvider
-from huf.ai import run_delivery
-from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
-from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableError
-from huf.ai.providers.errors import ProviderError, classify_status, redact_text
-from huf.ai.transaction import safe_commit, transaction_checkpoint
-from huf.ai.run_control import touch_run_alive
-from huf.ai.agent_access import (
-    assert_agent_access,
-    check_agent_access as _check_agent_access,
-    resolve_run_identity_and_authorize,
-    TRIGGER_DIRECT_API,
+from .tool_functions import (
+	cancel_document,
+	create_document,
+	delete_document,
+	get_document,
+	get_list,
+	submit_document,
+	update_document,
 )
-from frappe.rate_limiter import rate_limit
-from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
-from huf.ai.model_metadata import resolve_model_context_window
-from huf.permissions import has_capability
-from huf.ai.tool_serializer import serialize_tools
-from huf.ai.run_budget import RunBudget, RunBudgetExceeded, get_current_budget, set_current_budget
+
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -273,13 +277,14 @@ class AgentManager:
 
         # Add knowledge_search tool and get_knowledge_sources tool if agent has knowledge
         try:
-            from huf.ai.knowledge.tool import (
-                create_knowledge_search_tool,
-                handle_knowledge_search,
-                create_get_knowledge_sources_tool,
-                handle_get_knowledge_sources
-            )
             from agents import function_tool
+
+            from huf.ai.knowledge.tool import (
+            	create_get_knowledge_sources_tool,
+            	create_knowledge_search_tool,
+            	handle_get_knowledge_sources,
+            	handle_knowledge_search,
+            )
 
             # 1. Knowledge Search Tool
             knowledge_tool_def = create_knowledge_search_tool(self.agent_doc.agent_name)
@@ -464,9 +469,9 @@ class AgentManager:
         # (System usage) to the system prompt.
         try:
             from huf.ai.skills.loader import (
-                get_skill_instructions,
-                get_optional_skills_preamble,
-                get_skill_prompts,
+            	get_optional_skills_preamble,
+            	get_skill_instructions,
+            	get_skill_prompts,
             )
 
             skill_instructions = get_skill_instructions(self.agent_doc.agent_name)
@@ -564,16 +569,16 @@ class AgentManager:
             from huf.ai.capabilities import capability_enabled
 
             if capability_enabled(self.agent_doc, self.effective_model, "rich_elements"):
-                from huf.ai.chart_artifact_instructions import (
-                    CHART_ARTIFACT_INSTRUCTIONS,
-                    CHART_ARTIFACT_INSTRUCTIONS_WITH_TOOL,
-                )
                 from huf.ai.artifact_instructions import (
-                    AI_ELEMENT_INSTRUCTIONS,
-                    MEDIA_ELEMENT_INSTRUCTIONS,
-                    MERMAID_ARTIFACT_INSTRUCTIONS,
-                    MERMAID_ARTIFACT_INSTRUCTIONS_WITH_TOOL,
-                    agent_has_media_tools,
+                	AI_ELEMENT_INSTRUCTIONS,
+                	MEDIA_ELEMENT_INSTRUCTIONS,
+                	MERMAID_ARTIFACT_INSTRUCTIONS,
+                	MERMAID_ARTIFACT_INSTRUCTIONS_WITH_TOOL,
+                	agent_has_media_tools,
+                )
+                from huf.ai.chart_artifact_instructions import (
+                	CHART_ARTIFACT_INSTRUCTIONS,
+                	CHART_ARTIFACT_INSTRUCTIONS_WITH_TOOL,
                 )
 
                 resolved_tool_names = {tool.name for tool in self.tools}
@@ -1035,6 +1040,7 @@ def _run_async_safely(coro):
     """
     import asyncio
     import concurrent.futures
+
     import frappe
 
     try:
@@ -2230,10 +2236,10 @@ def _execute_agent_run(
             enhanced_prompt = base_prompt
 
         from huf.ai.context_segments import (
-            compute_segment_tokens,
-            compute_prefix_breakpoints,
-            compute_tools_breakdown,
-            reconcile_composition,
+        	compute_prefix_breakpoints,
+        	compute_segment_tokens,
+        	compute_tools_breakdown,
+        	reconcile_composition,
         )
         segment_tokens = compute_segment_tokens(
             agent_doc, agent, resolved_model_name, resolved_provider, history, knowledge_context, prompt
@@ -3381,7 +3387,7 @@ def recover_stalled_agent_runs():
             if ttl and ttl > 0:
                 continue
             for run in conversation_runs:
-                from huf.ai.run_control import CANCELLED_BY_USER, is_run_cancelled, is_run_alive
+                from huf.ai.run_control import CANCELLED_BY_USER, is_run_alive, is_run_cancelled
                 if is_run_alive(run.name):
                     continue  # a live direct stream owns it
                 if is_run_cancelled(run.name):
@@ -3952,10 +3958,10 @@ async def _run_agent_stream_impl(
             enhanced_prompt = base_prompt
 
         from huf.ai.context_segments import (
-            compute_segment_tokens,
-            compute_prefix_breakpoints,
-            compute_tools_breakdown,
-            reconcile_composition,
+        	compute_prefix_breakpoints,
+        	compute_segment_tokens,
+        	compute_tools_breakdown,
+        	reconcile_composition,
         )
         segment_tokens = compute_segment_tokens(
             agent_doc, agent, resolved_model_name, resolved_provider, history, knowledge_context, prompt
@@ -4725,7 +4731,7 @@ def get_conversation_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
+	from huf.permissions import SYSTEM_MANAGER, has_capability
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
@@ -4744,7 +4750,7 @@ def get_message_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
+	from huf.permissions import SYSTEM_MANAGER, has_capability
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
@@ -4772,7 +4778,7 @@ def get_context_artifact_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
+	from huf.permissions import SYSTEM_MANAGER, has_capability
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
@@ -4793,7 +4799,7 @@ def get_run_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
+	from huf.permissions import SYSTEM_MANAGER, has_capability
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
@@ -4813,7 +4819,7 @@ def get_tool_call_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
+	from huf.permissions import SYSTEM_MANAGER, has_capability
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
@@ -4832,7 +4838,7 @@ def get_prompt_snapshot_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
+	from huf.permissions import SYSTEM_MANAGER, has_capability
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 

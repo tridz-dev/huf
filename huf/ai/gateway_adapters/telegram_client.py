@@ -35,6 +35,7 @@ def bot_file_url(token: str, file_path: str, *, test_environment: bool = False) 
 	segment = f"/{TEST_ENV_SEGMENT}" if test_environment else ""
 	return f"{TELEGRAM_API_BASE}/file/bot{token}{segment}/{file_path}"
 
+
 # Updates the gateway asks Telegram to deliver (setWebhook ``allowed_updates``).
 ALLOWED_UPDATES: tuple[str, ...] = (
 	"message",
@@ -105,7 +106,9 @@ class TelegramApiError(ValueError):
 	@property
 	def parse_error(self) -> bool:
 		d = self._lower
-		return "can't parse entities" in d or "can't find end of the entity" in d or "unsupported start tag" in d
+		return (
+			"can't parse entities" in d or "can't find end of the entity" in d or "unsupported start tag" in d
+		)
 
 	@property
 	def flood_control(self) -> bool:
@@ -124,8 +127,12 @@ class TelegramApiError(ValueError):
 
 
 def _requests_post(
-	url: str, *, json_data: Mapping[str, Any] | None = None, data: Mapping[str, Any] | None = None,
-	files: Mapping[str, Any] | None = None, timeout: int = 10,
+	url: str,
+	*,
+	json_data: Mapping[str, Any] | None = None,
+	data: Mapping[str, Any] | None = None,
+	files: Mapping[str, Any] | None = None,
+	timeout: int = 10,
 ) -> Any:
 	"""Lazily import requests so the SDK itself has no import-time dependency."""
 	import requests
@@ -232,7 +239,9 @@ class TelegramBotClient:
 				retry_after=_int_or_none(params.get("retry_after")),
 				migrate_to_chat_id=_int_or_none(params.get("migrate_to_chat_id")),
 			)
-		raise TelegramApiError(method, "non-JSON response from Telegram", error_code=status if isinstance(status, int) else None)
+		raise TelegramApiError(
+			method, "non-JSON response from Telegram", error_code=status if isinstance(status, int) else None
+		)
 
 	@staticmethod
 	def _body(response: Any) -> Any:
@@ -255,7 +264,9 @@ class TelegramBotClient:
 		try:
 			response = self._http_get(url, timeout=timeout)
 		except Exception as exc:
-			raise TelegramApiError("getFile", self.redact(f"download failed: {exc}"), error_code=599) from None
+			raise TelegramApiError(
+				"getFile", self.redact(f"download failed: {exc}"), error_code=599
+			) from None
 		status = getattr(response, "status_code", None)
 		if isinstance(status, int) and status >= 400:
 			raise TelegramApiError("getFile", f"download failed: HTTP {status}", error_code=status)

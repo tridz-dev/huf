@@ -61,24 +61,37 @@ class FakeBotApi:
 		return items[-1]
 
 	def http_post(
-		self, url: str, *, json_data: Mapping[str, Any] | None = None, data: Mapping[str, Any] | None = None,
-		files: Mapping[str, Any] | None = None, timeout: int | None = None,
+		self,
+		url: str,
+		*,
+		json_data: Mapping[str, Any] | None = None,
+		data: Mapping[str, Any] | None = None,
+		files: Mapping[str, Any] | None = None,
+		timeout: int | None = None,
 	) -> FakeResponse:
 		method = url.rsplit("/", 1)[-1]
 		payload = dict(json_data if json_data is not None else (data or {}))
-		self.calls.append({"method": method, "payload": payload, "files": dict(files) if files else None, "url": url})
+		self.calls.append(
+			{"method": method, "payload": payload, "files": dict(files) if files else None, "url": url}
+		)
 		queued = self._queues.get(method)
 		if queued:
 			body = queued.pop(0)
 			body = body(payload) if callable(body) else body
 			return FakeResponse(body, status_code=body.get("error_code", 200) if not body.get("ok") else 200)
 		if method == "getFile":
-			return FakeResponse({"ok": True, "result": {"file_id": payload.get("file_id"), "file_path": "photos/f.jpg"}})
+			return FakeResponse(
+				{"ok": True, "result": {"file_id": payload.get("file_id"), "file_path": "photos/f.jpg"}}
+			)
 		if method.startswith("send"):
 			self._next_id += 1
 			if method == "sendMediaGroup":
-				return FakeResponse({"ok": True, "result": [{"message_id": self._next_id}, {"message_id": self._next_id + 1}]})
-			return FakeResponse({"ok": True, "result": {"message_id": self._next_id, "chat": {"id": payload.get("chat_id")}}})
+				return FakeResponse(
+					{"ok": True, "result": [{"message_id": self._next_id}, {"message_id": self._next_id + 1}]}
+				)
+			return FakeResponse(
+				{"ok": True, "result": {"message_id": self._next_id, "chat": {"id": payload.get("chat_id")}}}
+			)
 		if method == "getWebhookInfo":
 			return FakeResponse({"ok": True, "result": {"url": "https://x/h", "pending_update_count": 0}})
 		return FakeResponse({"ok": True, "result": True})

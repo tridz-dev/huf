@@ -487,8 +487,14 @@ class TestDailyDigestGateways(unittest.TestCase):
 		import frappe
 
 		def binding(name, gw):
-			return frappe._dict(name=name, telegram_user_id="1", frappe_user="u@x.com", gateway=gw,
-				role_scope="Admin", chat_id="9")
+			return frappe._dict(
+				name=name,
+				telegram_user_id="1",
+				frappe_user="u@x.com",
+				gateway=gw,
+				role_scope="Admin",
+				chat_id="9",
+			)
 
 		rows = {
 			"on": {"is_enabled": 1, "provider": "Telegram"},
@@ -499,13 +505,26 @@ class TestDailyDigestGateways(unittest.TestCase):
 		adapter = SimpleNamespace(sender=sender)
 		import frappe
 
-		with patch.object(frappe, "get_all", return_value=[binding("b1", "on"), binding("b2", "off"), binding("b3", "wa"),
-				binding("b4", "gone")]), \
-			patch.object(frappe, "db", MagicMock(get_value=lambda dt, name, fields, as_dict=False: rows.get(name))), \
-			patch.object(frappe, "get_doc", return_value=MagicMock()), \
-			patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=adapter), \
-			patch.object(ta, "run_as", side_effect=lambda u: contextlib.nullcontext()), \
-			patch.object(ta, "collect_digest", return_value={}), patch.object(ta, "compose_digest", return_value="d"):
+		with (
+			patch.object(
+				frappe,
+				"get_all",
+				return_value=[
+					binding("b1", "on"),
+					binding("b2", "off"),
+					binding("b3", "wa"),
+					binding("b4", "gone"),
+				],
+			),
+			patch.object(
+				frappe, "db", MagicMock(get_value=lambda dt, name, fields, as_dict=False: rows.get(name))
+			),
+			patch.object(frappe, "get_doc", return_value=MagicMock()),
+			patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=adapter),
+			patch.object(ta, "run_as", side_effect=lambda u: contextlib.nullcontext()),
+			patch.object(ta, "collect_digest", return_value={}),
+			patch.object(ta, "compose_digest", return_value="d"),
+		):
 			out = ta.send_daily_digests()
 		self.assertEqual(out, {"sent": 1, "failed": 0})
 		self.assertEqual(sender.send_text.call_count, 1)
@@ -710,12 +729,20 @@ class TestAgentActionApproval(Base):
 	def setUp(self):
 		super().setUp()
 		self.bindings[(TG, GW)]["role_scope"] = "Admin"
-		self.action = {"op": "agent_action", "gateway": GW, "chat": "-100", "action": "ban",
-			"args": {"user_id": 5, "chat_id": "-100"}, "fp": "fp1"}
+		self.action = {
+			"op": "agent_action",
+			"gateway": GW,
+			"chat": "-100",
+			"action": "ban",
+			"args": {"user_id": 5, "chat_id": "-100"},
+			"fp": "fp1",
+		}
 		self.ran = []
 		from huf.ai.tools import telegram_admin_tools as tools
 
-		patch.object(tools, "execute_approved", side_effect=lambda a: self.ran.append(a) or "Done: ban").start()
+		patch.object(
+			tools, "execute_approved", side_effect=lambda a: self.ran.append(a) or "Done: ban"
+		).start()
 		self.addCleanup(patch.stopall)
 
 	def press(self, verb, **kw):
@@ -755,8 +782,15 @@ class TestAgentActionApproval(Base):
 	def test_foreign_user_cannot_use_nonce(self):
 		nonce = ta.issue_nonce(TG, CHAT, self.action, cache=self.cache, now=self.now, ttl=600)
 		ta.agent_action_mark_pending("fp1", cache=self.cache)
-		self.bindings[("888", GW)] = {**BINDING, "telegram_user_id": "888", "role_scope": "Admin", "chat_id": "888"}
-		self.handle_cb(self.adapter.sign_callback_data(ta.callback_payload("c", nonce), "888"), sender="888", chat="888")
+		self.bindings[("888", GW)] = {
+			**BINDING,
+			"telegram_user_id": "888",
+			"role_scope": "Admin",
+			"chat_id": "888",
+		}
+		self.handle_cb(
+			self.adapter.sign_callback_data(ta.callback_payload("c", nonce), "888"), sender="888", chat="888"
+		)
 		self.assertEqual(self.ran, [])
 
 	def test_nonce_single_use_and_ttl_10_minutes(self):

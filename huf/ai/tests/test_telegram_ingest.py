@@ -7,7 +7,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from huf.ai.gateway_adapters import GatewayInboundRequest, provider_hooks, telegram_ingest as ing
+from huf.ai.gateway_adapters import GatewayInboundRequest, provider_hooks
+from huf.ai.gateway_adapters import telegram_ingest as ing
 from huf.ai.gateway_adapters.telegram import WEBHOOK_SECRET_HEADER, TelegramGatewayAdapter
 from huf.ai.gateway_adapters.telegram_client import ALLOWED_UPDATES
 from huf.ai.gateway_adapters.telegram_inbound import parse_update
@@ -26,8 +27,9 @@ def req(payload):
 
 def run(payload, ad=None):
 	"""Run handle_update with ingest/touch patched; returns (result, ingest mock)."""
-	with mock.patch("huf.ai.gateway_service.ingest_gateway_event", return_value={"event_name": "E1"}) as ing_m, mock.patch(
-		"huf.ai.gateway_webhook.touch_last_event"
+	with (
+		mock.patch("huf.ai.gateway_service.ingest_gateway_event", return_value={"event_name": "E1"}) as ing_m,
+		mock.patch("huf.ai.gateway_webhook.touch_last_event"),
 	):
 		return ing.handle_update(GW, ad or adapter(), req(payload)), ing_m
 
@@ -43,10 +45,21 @@ class TestParsing(unittest.TestCase):
 
 	def test_allowed_updates(self):
 		for name in (
-			"message", "edited_message", "callback_query", "inline_query", "chosen_inline_result",
-			"chat_join_request", "chat_member", "my_chat_member", "message_reaction",
-			"message_reaction_count", "channel_post", "business_connection", "business_message",
-			"edited_business_message", "deleted_business_messages",
+			"message",
+			"edited_message",
+			"callback_query",
+			"inline_query",
+			"chosen_inline_result",
+			"chat_join_request",
+			"chat_member",
+			"my_chat_member",
+			"message_reaction",
+			"message_reaction_count",
+			"channel_post",
+			"business_connection",
+			"business_message",
+			"edited_business_message",
+			"deleted_business_messages",
 		):
 			self.assertIn(name, ALLOWED_UPDATES)
 
@@ -102,18 +115,20 @@ class TestHandleUpdate(unittest.TestCase):
 		self.assertEqual((meta["callback_query_id"], meta["callback_data"]), ("cbq-1", "approve:42"))
 
 	def test_blocked_marks_known_sender_unsendable(self):
-		with mock.patch("huf.ai.gateway_service._sender_is_known", return_value=True), mock.patch(
-			"huf.ai.gateway_service._record_opt_out"
-		) as out:
+		with (
+			mock.patch("huf.ai.gateway_service._sender_is_known", return_value=True),
+			mock.patch("huf.ai.gateway_service._record_opt_out") as out,
+		):
 			result, m = run(load_fixture("my_chat_member_blocked"))
 		out.assert_called_once()
 		self.assertEqual(result["ignored"], "bot_blocked")
 		m.assert_not_called()
 
 	def test_blocked_unknown_sender_stores_nothing(self):
-		with mock.patch("huf.ai.gateway_service._sender_is_known", return_value=False), mock.patch(
-			"huf.ai.gateway_service._record_opt_out"
-		) as out:
+		with (
+			mock.patch("huf.ai.gateway_service._sender_is_known", return_value=False),
+			mock.patch("huf.ai.gateway_service._record_opt_out") as out,
+		):
 			run(load_fixture("my_chat_member_blocked"))
 		out.assert_not_called()
 
@@ -136,7 +151,14 @@ class TestHandleUpdate(unittest.TestCase):
 
 class TestHooks(unittest.TestCase):
 	def test_registered(self):
-		for name in ("ingest_update", "inbound_kind", "media_save", "typing", "mark_read_typing", "extra_event_fields"):
+		for name in (
+			"ingest_update",
+			"inbound_kind",
+			"media_save",
+			"typing",
+			"mark_read_typing",
+			"extra_event_fields",
+		):
 			self.assertIsNotNone(provider_hooks.get("Telegram", name), name)
 		self.assertFalse(provider_hooks.get("Telegram", "consent_required")())
 
@@ -185,8 +207,10 @@ class TestFirstDeliveryFailOpenWarns(unittest.TestCase):
 		from unittest.mock import patch
 
 		ing._DEDUP_WARNED = False
-		with patch.object(ing.frappe, "cache", side_effect=RuntimeError("redis down")), \
-			patch.object(ing.frappe, "logger") as lg:
+		with (
+			patch.object(ing.frappe, "cache", side_effect=RuntimeError("redis down")),
+			patch.object(ing.frappe, "logger") as lg,
+		):
 			self.assertTrue(ing._first_delivery("GW", 1))
 			self.assertTrue(ing._first_delivery("GW", 2))
 		self.assertEqual(lg.return_value.warning.call_count, 1)

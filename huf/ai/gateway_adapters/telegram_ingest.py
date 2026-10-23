@@ -26,7 +26,12 @@ from huf.ai.gateway_adapters.telegram_inbound import TelegramUpdate, media_refs,
 MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
 
 _MEMBERSHIP = {"my_chat_member", "chat_member", "chat_join_request"}
-_BUSINESS = {"business_message", "edited_business_message", "deleted_business_messages", "business_connection"}
+_BUSINESS = {
+	"business_message",
+	"edited_business_message",
+	"deleted_business_messages",
+	"business_connection",
+}
 _MEDIA_TYPE = {
 	"photo": "image",
 	"document": "document",
@@ -108,12 +113,15 @@ def _with_addressing(gateway, adapter, parsed: TelegramUpdate) -> TelegramUpdate
 	if not isinstance(msg, dict):
 		return parsed
 	try:
-		from huf.ai.gateway_adapters import telegram_modes_hooks as mh, telegram_threads as th
+		from huf.ai.gateway_adapters import telegram_modes_hooks as mh
+		from huf.ai.gateway_adapters import telegram_threads as th
 
 		addressed = th.is_addressed_to_bot(msg, mh._bot_username(adapter, gateway), mh._own_id(adapter))
 	except Exception:
 		frappe.logger("huf").warning("Telegram addressing check failed", exc_info=True)
-		return replace(parsed, mentioned=False)  # fail closed: an unverifiable message is not addressed to the bot
+		return replace(
+			parsed, mentioned=False
+		)  # fail closed: an unverifiable message is not addressed to the bot
 	return replace(parsed, mentioned=addressed)
 
 
@@ -305,7 +313,8 @@ def _start_keepalive(gateway, sender, chat_id, thread) -> None:
 
 	The empty "Thinking" draft placeholder does not count: it is not a reliable visible indicator."""
 	try:
-		from huf.ai.gateway_adapters import telegram_stream as ts, telegram_typing_keepalive as ka
+		from huf.ai.gateway_adapters import telegram_stream as ts
+		from huf.ai.gateway_adapters import telegram_typing_keepalive as ka
 		from huf.ai.gateway_adapters import telegram_typing_metrics as tm
 
 		name = gateway.name

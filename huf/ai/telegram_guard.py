@@ -46,8 +46,16 @@ AGENT_JOIN_CAP = 30  # agent join-decision runs per gateway per AGENT_JOIN_WINDO
 AGENT_JOIN_WINDOW = 3600
 EMOJI_POOL = ("🐱", "🐶", "🦊", "🐸", "🐼", "🦁", "🐯", "🐵", "🐧", "🐙")
 EMOJI_NAMES = {
-	"🐱": "cat", "🐶": "dog", "🦊": "fox", "🐸": "frog", "🐼": "panda",
-	"🦁": "lion", "🐯": "tiger", "🐵": "monkey", "🐧": "penguin", "🐙": "octopus",
+	"🐱": "cat",
+	"🐶": "dog",
+	"🦊": "fox",
+	"🐸": "frog",
+	"🐼": "panda",
+	"🦁": "lion",
+	"🐯": "tiger",
+	"🐵": "monkey",
+	"🐧": "penguin",
+	"🐙": "octopus",
 }
 POLICIES = ("Queue", "Decline", "Agent")
 DECISIONS = ("approve", "decline", "queue")
@@ -181,9 +189,9 @@ def audit_decision(gateway_name: str, ctx: dict, decision: str, source: str, det
 				"telegram_user_id": str(ctx.get("user_id") or ""),
 				"gateway": gateway_name,
 				"action": f"join:{decision}"[:140],
-				"arguments_json": json.dumps(
-					{"chat_id": ctx.get("chat_id"), "source": source}, default=str
-				)[:2000],
+				"arguments_json": json.dumps({"chat_id": ctx.get("chat_id"), "source": source}, default=str)[
+					:2000
+				],
 				"result": decision,
 				"detail": str(detail)[:1000],
 				"ts": frappe.utils.now_datetime(),
@@ -322,7 +330,9 @@ def _run_agent(gateway, prompt: str, ctx: dict) -> Any:
 	return result.get("response") if isinstance(result, dict) else None
 
 
-def agent_decision(gateway, ctx: dict, answers: str = "", *, runner: Callable | None = None) -> tuple[str, str]:
+def agent_decision(
+	gateway, ctx: dict, answers: str = "", *, runner: Callable | None = None
+) -> tuple[str, str]:
 	"""Ask the gateway agent; any failure (no agent, error, timeout, bad JSON) -> queue."""
 	if not getattr(gateway, "default_agent", None):
 		return "queue", "no agent"
@@ -390,14 +400,24 @@ def make_question(rng: random.Random | None = None, custom: str = "") -> dict:
 	if custom == "emoji" or (not custom and rng.random() < 0.5):
 		picks = rng.sample(EMOJI_POOL, EMOJI_OPTIONS)
 		target = rng.choice(picks)
-		return {"kind": "emoji", "prompt": f"Tap the {EMOJI_NAMES[target]}", "options": picks, "answer": target}
+		return {
+			"kind": "emoji",
+			"prompt": f"Tap the {EMOJI_NAMES[target]}",
+			"options": picks,
+			"answer": target,
+		}
 	# Two-digit operands: 81 possible sums, still solvable by a person in seconds.
 	a, b = rng.randint(10, 99), rng.randint(10, 99)
 	return {"kind": "math", "prompt": f"What is {a} + {b}?", "options": [], "answer": str(a + b)}
 
 
 def issue_challenge(
-	gateway_name: str, ctx: dict, *, question: dict | None = None, now: float | None = None, custom_text: str = ""
+	gateway_name: str,
+	ctx: dict,
+	*,
+	question: dict | None = None,
+	now: float | None = None,
+	custom_text: str = "",
 ) -> str:
 	nonce = secrets.token_urlsafe(16)
 	q = question or make_question()
@@ -406,10 +426,19 @@ def issue_challenge(
 	_cache().set_value(
 		f"huf_tg_guard:{nonce}",
 		{
-			"g": gateway_name, "c": str(ctx["chat_id"]), "u": str(ctx["user_id"]), "q": str(ctx["query_id"]),
-			"t": str(ctx.get("chat_title") or ""), "n": str(ctx.get("user_name") or ""),
-			"kind": q["kind"], "prompt": prompt, "options": q["options"],
-			"h": _answer_hash(nonce, q["answer"]), "tries": 0, "iat": current, "exp": current + CHALLENGE_TTL,
+			"g": gateway_name,
+			"c": str(ctx["chat_id"]),
+			"u": str(ctx["user_id"]),
+			"q": str(ctx["query_id"]),
+			"t": str(ctx.get("chat_title") or ""),
+			"n": str(ctx.get("user_name") or ""),
+			"kind": q["kind"],
+			"prompt": prompt,
+			"options": q["options"],
+			"h": _answer_hash(nonce, q["answer"]),
+			"tries": 0,
+			"iat": current,
+			"exp": current + CHALLENGE_TTL,
 		},
 		expires_in_sec=CHALLENGE_TTL,
 	)
@@ -493,8 +522,13 @@ def submit_answer(
 	cache = _cache()
 	key = f"huf_tg_guard:{nonce}"
 	# The query was spent by sendChatJoinRequestWebApp: resolve with the plain approve/decline methods.
-	ctx = {"chat_id": rec["c"], "user_id": rec["u"], "query_id": "", "chat_title": rec["t"],
-		"user_name": rec["n"]}
+	ctx = {
+		"chat_id": rec["c"],
+		"user_id": rec["u"],
+		"query_id": "",
+		"chat_title": rec["t"],
+		"user_name": rec["n"],
+	}
 	issued = float(rec.get("iat") or float(rec.get("exp") or 0) - CHALLENGE_TTL)
 
 	def decline() -> dict:
@@ -512,7 +546,11 @@ def submit_answer(
 		cache.delete_value(key)
 		error = apply_decision(gateway, ctx, "approve", "captcha")
 		if error:
-			return {"ok": False, "done": True, "message": "Could not complete verification; an admin will review."}
+			return {
+				"ok": False,
+				"done": True,
+				"message": "Could not complete verification; an admin will review.",
+			}
 		return {"ok": True, "done": True, "message": "Verified. Welcome!"}
 	rec["tries"] = int(rec.get("tries") or 0) + 1
 	if rec["tries"] >= limit:
@@ -591,7 +629,9 @@ def maybe_welcome(gateway, parsed, *, now: float | None = None, cooldown: int | 
 		return False
 	update = parsed.raw.get("chat_member") or {}
 	member = (update.get("new_chat_member") or {}).get("user") or {}
-	return _welcome_one(gateway, parsed.chat_id, (update.get("chat") or {}).get("title", ""), member, now, cooldown)
+	return _welcome_one(
+		gateway, parsed.chat_id, (update.get("chat") or {}).get("title", ""), member, now, cooldown
+	)
 
 
 def welcome_new_members(gateway, parsed, *, now: float | None = None, cooldown: int | None = None) -> int:

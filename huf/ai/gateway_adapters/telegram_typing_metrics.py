@@ -11,10 +11,9 @@ only, never exposed), ``last_ok`` (bool), ``sent_count_24h`` (approximate; reset
 
 from __future__ import annotations
 
-from typing import Any
-
 import time
 from datetime import datetime
+from typing import Any
 
 import frappe
 

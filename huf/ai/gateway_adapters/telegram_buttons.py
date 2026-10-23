@@ -158,8 +158,12 @@ def validate(raw: Any) -> tuple[dict | None, list[str]]:
 				rows.append(cells)
 		if not rows:
 			return None, errors + ["reply_keyboard has no valid buttons"]
-		spec.update(rows=rows, one_time=bool(rk.get("one_time")), resize=rk.get("resize", True) is not False,
-			placeholder=str(rk.get("placeholder") or "")[:64])
+		spec.update(
+			rows=rows,
+			one_time=bool(rk.get("one_time")),
+			resize=rk.get("resize", True) is not False,
+			placeholder=str(rk.get("placeholder") or "")[:64],
+		)
 		return spec, errors
 	rows, total = [], 0
 	for row in raw["rows"][:MAX_ROWS] if isinstance(raw["rows"], list) else []:
@@ -189,7 +193,11 @@ def encode_payload(button_id: str, *, once: bool, edit: bool) -> str:
 
 def decode_payload(payload: str) -> dict | None:
 	"""``{"id", "once", "edit"}`` for our payloads, else ``None`` (foreign payload)."""
-	if not isinstance(payload, str) or not payload.startswith(PREFIX) or payload[2 + FLAGS_LEN : 3 + FLAGS_LEN] != ":":
+	if (
+		not isinstance(payload, str)
+		or not payload.startswith(PREFIX)
+		or payload[2 + FLAGS_LEN : 3 + FLAGS_LEN] != ":"
+	):
 		return None
 	flags = payload[2 : 2 + FLAGS_LEN]
 	return {"id": payload[3 + FLAGS_LEN :], "once": flags[0] == "o", "edit": flags[1] == "e"}
@@ -201,15 +209,23 @@ def build_markup(spec: dict, sign: Callable[[str], str]) -> dict:
 	if mode == "remove_keyboard":
 		return kb.remove_keyboard()
 	if mode == "reply_keyboard":
-		return kb.reply_keyboard(spec["rows"], resize=spec["resize"], one_time=spec["one_time"],
-			placeholder=spec["placeholder"] or None)
+		return kb.reply_keyboard(
+			spec["rows"],
+			resize=spec["resize"],
+			one_time=spec["one_time"],
+			placeholder=spec["placeholder"] or None,
+		)
 	rows = []
 	for row in spec["rows"]:
 		out = []
 		for b in row:
 			text = b["text"]
 			if "callback" in b:
-				out.append(kb.callback_button(text, sign(encode_payload(b["callback"], once=spec["once"], edit=spec["edit"]))))
+				out.append(
+					kb.callback_button(
+						text, sign(encode_payload(b["callback"], once=spec["once"], edit=spec["edit"]))
+					)
+				)
 			elif "url" in b:
 				out.append(kb.url_button(text, b["url"]))
 			elif "web_app" in b:
@@ -276,7 +292,9 @@ def remember_spec(visible: str, spec: dict, *, cache: Any = None, scope: str = "
 		from huf.ai.gateway_adapters.telegram_format import split_message
 
 		parts = split_message(visible) or [visible]
-		_cache(cache).set_value(f"huf_tg_btn:{_hash(scope + chr(0) + parts[-1])}", spec, expires_in_sec=TTL_SECONDS)
+		_cache(cache).set_value(
+			f"huf_tg_btn:{_hash(scope + chr(0) + parts[-1])}", spec, expires_in_sec=TTL_SECONDS
+		)
 	except Exception:
 		pass
 
@@ -305,12 +323,16 @@ def default_signer(event: Any, gateway: Any) -> Callable[[str], str]:
 	return lambda payload: adapter.sign_callback_data(payload, chat)
 
 
-def markup_for(event: Any, gateway: Any, response_text: str, *, signer: Any = None, cache: Any = None) -> dict | None:
+def markup_for(
+	event: Any, gateway: Any, response_text: str, *, signer: Any = None, cache: Any = None
+) -> dict | None:
 	"""``reply_markup_for`` implementation. Never raises: a button failure must not block the reply."""
 	try:
 		from huf.ai.gateway_adapters.telegram_media_reply import scope_key
 
-		scope = scope_key(getattr(gateway, "name", ""), getattr(event, "conversation_id", ""), getattr(event, "name", ""))
+		scope = scope_key(
+			getattr(gateway, "name", ""), getattr(event, "conversation_id", ""), getattr(event, "name", "")
+		)
 		spec = spec_for_text(response_text, cache=cache, scope=scope)
 		if spec is None:
 			return None
@@ -362,7 +384,13 @@ def callback_input_text(label: str, button_id: str) -> str:
 
 
 def handle_callback(
-	parsed: Any, payload: str | None, sender: Any, gateway_name: str, *, cache: Any = None, now: float | None = None,
+	parsed: Any,
+	payload: str | None,
+	sender: Any,
+	gateway_name: str,
+	*,
+	cache: Any = None,
+	now: float | None = None,
 ) -> dict:
 	"""Decide what to do with a callback_query. Answers the query FIRST.
 
@@ -390,7 +418,11 @@ def handle_callback(
 	if cqid and not _claim(c, f"huf_tg_cbq:{gateway_name}:{cqid}"):
 		return ignore("duplicate")
 	info = decode_payload(payload)
-	if info and info["once"] and not _claim(c, f"huf_tg_once:{gateway_name}:{parsed.chat_id}:{parsed.message_id}"):
+	if (
+		info
+		and info["once"]
+		and not _claim(c, f"huf_tg_once:{gateway_name}:{parsed.chat_id}:{parsed.message_id}")
+	):
 		return ignore("already_used", MSG_USED)
 	answer()
 	if info and info["once"] and parsed.message_id:
@@ -437,10 +469,15 @@ def try_edit(sender: Any, event: Any, parts: list[str], markup: dict | None) -> 
 		return None
 	try:
 		sender.edit_message_text(
-			event.conversation_id, target, parts[0], markup=markup if markup is not None else {"inline_keyboard": []}
+			event.conversation_id,
+			target,
+			parts[0],
+			markup=markup if markup is not None else {"inline_keyboard": []},
 		)
 	except Exception:
 		return None
 	from types import SimpleNamespace
 
-	return SimpleNamespace(provider_message_id=str(target), provider_response={"message_ids": [target], "edited": True})
+	return SimpleNamespace(
+		provider_message_id=str(target), provider_response={"message_ids": [target], "edited": True}
+	)
