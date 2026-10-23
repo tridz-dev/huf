@@ -1,5 +1,6 @@
 # Copyright (c) 2026, Huf and contributors
 # For license information, please see license.txt
+# ruff: noqa: I001  (import order is significant: hook registrations override earlier ones)
 
 """Registers the WP-8e ingest pre-filter (bot-to-bot loop guard + group addressing). Imported once from
 ``telegram_hooks``. The filter runs before the normal ingest and never calls the live API on the hot path

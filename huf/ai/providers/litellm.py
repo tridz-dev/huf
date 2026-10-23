@@ -2926,7 +2926,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     tc_doc.save(ignore_permissions=True)
                                                 else:
                                                     if not frappe.has_permission("Agent Tool Call", "write", doc=tc_doc):
-                                                        frappe.throw(_("Not permitted to update Agent Tool Call"), frappe.PermissionError)
+                                                        frappe.throw(frappe._("Not permitted to update Agent Tool Call"), frappe.PermissionError)
                                                     tc_doc.save()
 
                                                 # Find the Agent Message to update. Prefer the in-memory

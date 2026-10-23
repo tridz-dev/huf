@@ -1,5 +1,6 @@
 # Copyright (c) 2026, Huf and contributors
 # For license information, please see license.txt
+# ruff: noqa: I001  (import order is significant: hook registrations override earlier ones)
 
 """Wires Secretary-mode agent flow (WP-B). Imported once from ``telegram_hooks``."""
 

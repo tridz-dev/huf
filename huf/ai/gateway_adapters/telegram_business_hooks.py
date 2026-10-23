@@ -1,5 +1,6 @@
 # Copyright (c) 2026, Huf and contributors
 # For license information, please see license.txt
+# ruff: noqa: I001  (import order is significant: hook registrations override earlier ones)
 
 """Registers the Telegram Business update handlers (WP-8d). Imported once from ``telegram_hooks``."""
 
