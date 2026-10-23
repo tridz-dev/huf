@@ -32,7 +32,8 @@ IP_RATE_WINDOW = 60
 DEFAULT_SESSION_HOURS = 24
 MARKER_KEY = "tg_origin"
 MARKER_VERSION = 1
-PRIVILEGED_ROLE = "System Manager"
+PRIVILEGED_ROLES = frozenset({"System Manager", "Administrator"})
+MAX_SESSION_HOURS = 720
 ALWAYS_REFUSED_USERS = ("Administrator", "Guest")
 MAX_TARGET_LEN = 512
 
@@ -196,10 +197,17 @@ def _audit(binding: dict | None, tg_id: str, gateway: str, code: str, outcome: s
 
 
 def _effective_scheme() -> str:
-	fwd = (frappe.get_request_header("X-Forwarded-Proto") or "").split(",", 1)[0].strip().lower()
-	if fwd in ("http", "https"):
-		return fwd
-	return (getattr(getattr(frappe.local, "request", None), "scheme", "") or "http").lower()
+	"""``request.scheme`` is the only per-request signal: Frappe applies X-Forwarded-Proto itself (ProxyFix)
+	only when the bench runs with proxy handling, so a client-supplied header is never trusted here. Behind a
+	TLS-terminating proxy without that setting, the site's configured public URL (``host_name``) decides."""
+	scheme = (getattr(getattr(frappe.local, "request", None), "scheme", "") or "http").lower()
+	if scheme == "https":
+		return "https"
+	try:
+		host_name = str(frappe.conf.get("host_name") or "")
+	except Exception:
+		host_name = ""
+	return "https" if host_name.lower().startswith("https://") else "http"
 
 
 def _check_origin() -> None:
@@ -227,7 +235,7 @@ def _eligibility(binding: dict, gateway_doc: Any) -> None:
 		raise WebAccessDenied("user_disabled")
 	if row.user_type != "System User":
 		raise WebAccessDenied("user_type")
-	if PRIVILEGED_ROLE in frappe.get_roles(user) and not int(
+	if PRIVILEGED_ROLES & set(frappe.get_roles(user)) and not int(
 		gateway_doc.get("telegram_web_allow_privileged") or 0
 	):
 		raise WebAccessDenied("privileged_denied")
@@ -238,7 +246,7 @@ def _session_hours(gateway_doc: Any) -> int:
 		hours = int(gateway_doc.get("telegram_web_session_hours") or DEFAULT_SESSION_HOURS)
 	except (TypeError, ValueError):
 		hours = DEFAULT_SESSION_HOURS
-	return max(1, hours)
+	return min(MAX_SESSION_HOURS, max(1, hours))
 
 
 def _create_session(binding: dict, tg_id: str, gateway_doc: Any, hours: int) -> None:
@@ -257,8 +265,12 @@ def _create_session(binding: dict, tg_id: str, gateway_doc: Any, hours: int) -> 
 	session_obj = frappe.local.session_obj
 	session_obj.data.data[MARKER_KEY] = marker
 	session_obj.update(force=True)
-	# Re-issue the sid cookie: lifetime = session length, and Secure whenever the client connection is
-	# https (behind a proxy ``request.scheme`` can still say http, so honour X-Forwarded-Proto).
+	# Re-issue the sid cookie: lifetime = session length, and Secure whenever the connection is https
+	# (see ``_effective_scheme``).
+	#
+	# Known Frappe behaviour, kept on purpose: ``login_as`` -> ``make_session`` -> ``clear_active_sessions``
+	# signs the user out of their other sessions when ``deny_multiple_sessions`` is on (site config or System
+	# Settings). Skipping that for Telegram would bypass the site's single-session policy, so it is not changed.
 	frappe.local.cookie_manager.set_cookie(
 		"sid",
 		frappe.session.sid,

@@ -6,6 +6,7 @@
 import json
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from unittest import mock
 
 import frappe
 from frappe.auth import CookieManager
@@ -70,12 +71,13 @@ class TestTelegramWebAccessSite(IntegrationTestCase):
 
 	def test_session_cookie_marker_and_resume(self):
 		before = datetime.now(UTC)
-		sid = self._login({"X-Forwarded-Proto": "https"}, hours=2)
+		with mock.patch.dict(frappe.conf, {"host_name": "http://tg.test"}):
+			sid = self._login({"X-Forwarded-Proto": "https"}, hours=2)
 		self.assertEqual(frappe.session.user, EMAIL)
 		cookie = frappe.local.cookie_manager.cookies["sid"]
 		self.assertEqual(cookie["value"], sid)
 		self.assertTrue(cookie["httponly"])
-		self.assertTrue(cookie["secure"])  # request.scheme is http; X-Forwarded-Proto drives Secure
+		self.assertFalse(cookie["secure"])  # a client-supplied X-Forwarded-Proto is not trusted
 		self.assertEqual(cookie["max_age"], 7200)
 		row = _sessiondata(sid)
 		data = json.loads(row)
@@ -111,8 +113,14 @@ class TestTelegramWebAccessSite(IntegrationTestCase):
 			self.assertFalse(twa._existing_session_ok(self.binding, "9999", "gw-test"))
 
 	def test_plain_http_cookie_not_secure(self):
-		self._login()
+		with mock.patch.dict(frappe.conf, {"host_name": "http://tg.test"}):
+			self._login()
 		self.assertFalse(frappe.local.cookie_manager.cookies["sid"]["secure"])
+
+	def test_https_host_name_sets_secure(self):
+		with mock.patch.dict(frappe.conf, {"host_name": "https://tg.test"}):
+			self._login()
+		self.assertTrue(frappe.local.cookie_manager.cookies["sid"]["secure"])
 
 	def test_expired_session_end_rejected_on_resume(self):
 		sid = self._login()

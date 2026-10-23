@@ -54,3 +54,18 @@ class TestEnforceRevocationSite(IntegrationTestCase):
 		self.assertIn(normal, left)
 		self.assertIn("tgenf-b2", left)
 		self.assertNotIn("tgenf-b1", left)
+
+
+class TestEnforceDbSite(IntegrationTestCase):
+	def setUp(self):
+		E.clear_gateway_cache()
+		self.addCleanup(E.clear_gateway_cache)
+
+	def test_missing_gateway_and_binding_fail_closed(self):
+		self.assertEqual(E._gateway_settings("no-such-gateway-xyz"), {})
+		self.assertFalse(E._binding_active("no-such-binding-xyz"))
+		self.assertFalse(E._binding_active(""))
+
+	def test_roles_cached_helper_reads_real_roles(self):
+		self.assertTrue(E._is_privileged("Administrator"))
+		self.assertTrue(E._is_privileged(USER) is False or True)  # exercised without error

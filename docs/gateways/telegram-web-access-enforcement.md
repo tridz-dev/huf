@@ -5,16 +5,21 @@ Implemented in `huf/ai/telegram_web_access_enforce.py`; registered as a `before_
 
 ## Enforcement (sessions carrying `tg_origin`)
 
-Gateway settings are read from `tg_origin.gateway` (cached ~30 s). Anything not allowed gets HTTP 403, plain text
-`Not allowed in a Telegram session`.
+Gateway settings are read from `tg_origin.gateway` (cached ~30 s). Missing, unreadable or disabled gateway
+(`is_enabled` or `telegram_web_access_enabled` off) denies everything. The binding must still exist and be active
+(cached ~30 s) and the session user must not hold System Manager/Administrator unless the gateway override is on;
+in those cases the session is also deleted. A naive or unreadable `session_end` is a 403. Anything not allowed gets
+HTTP 403, plain text `Not allowed in a Telegram session`.
 
 - Navigation: GET/HEAD only, to the gateway's allowed path prefixes. Paths are percent-decoded (up to 3 rounds),
   lower-cased, slash-collapsed; traversal (`..`), backslashes and leftover encodings are rejected. Matching is on
   path-segment boundaries (`/app/sales-invoice` matches `/app/sales-invoice/X`, not `/app/sales-invoices`).
 - Always allowed: GET/HEAD `/assets/*`, `/files/*`; methods `frappe.ping`, `ping`, `logout`.
 - Writes off: `/api/method` only for the default read list plus the gateway's extra read methods (any HTTP verb);
-  `/api/resource` GET only; uploads denied.
-- Writes on: POST/PUT/DELETE to `/api/method` and `/api/resource` within normal Frappe permissions.
+  `/api/resource/<dt>` and `/api/resource/<dt>/<name>` (and `/api/v2/document/...` the same; `/api/v2/doctype/<dt>`)
+  GET only, exact shapes, no `run_method`/`cmd`/`method` parameter (Frappe would execute a document method on a
+  GET); uploads denied. `/api/v2/method/<doctype>/<method>` (document method call) is always denied.
+- Writes on (opt-in denylist): POST/PUT/DELETE to `/api/method`, `/api/resource` and `/api/v2/document` within normal Frappe permissions, except the always-blocked set below.
 - Always blocked (writes on or off): impersonate, `frappe.core.doctype.user*`, role/permission/system settings/server
   script/data import/system console/backups methods, any request touching the doctypes User, Role, Has Role, DocPerm,
   Custom DocPerm, User Permission, System Settings, Server Script, Client Script, Data Import, System Console, OAuth
@@ -31,4 +36,4 @@ dropped (`get_workspace_sidebar_items`, `get_notification_info_for_boot`).
 
 `revoke_binding_sessions(binding, user)` deletes only Sessions rows of the bound user whose data has
 `tg_origin.binding == binding`; the user's ordinary sessions are kept. Triggered by: binding `is_active` 1 -> 0,
-`role_scope` change (doc_events on update), binding deletion (`on_trash`), and the Telegram `/unbind` command.
+`role_scope`, `frappe_user`, `telegram_user_id` or `gateway` change (the previous user's sessions are found via the before-save doc), binding deletion (`on_trash`), and the Telegram `/unbind` command.
