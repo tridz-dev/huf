@@ -48,7 +48,6 @@ function createPlanRow(stepIndex: number): AgentOrchestrationPlanRow {
 }
 
 export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
-	const persistConversationEnabled = form.watch('persist_conversation')
 	const enableMultiRun = form.watch('enable_multi_run')
 	const defaultPlan = form.watch('default_plan') || []
 	const allowChat = form.watch('allow_chat')
@@ -123,10 +122,6 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 												toast.warning('Chat is not available for multi run agents right now.')
 												return
 											}
-											if (checked && !persistConversationEnabled) {
-												toast.warning('Turn on Persist History before enabling chat.')
-												return
-											}
 											field.onChange(checked)
 										}}
 									/>
@@ -150,12 +145,7 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 								<FormControl className="ml-1">
 									<Switch
 										checked={field.value}
-										onCheckedChange={(checked) => {
-											field.onChange(checked)
-											if (!checked) {
-												form.setValue('allow_chat', false, { shouldDirty: true })
-											}
-										}}
+										onCheckedChange={field.onChange}
 									/>
 								</FormControl>
 							</FormItem>
@@ -300,4 +290,3 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 		</>
 	)
 }
-
