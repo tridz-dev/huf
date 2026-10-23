@@ -93,7 +93,7 @@ class TestBuildInstructions(unittest.TestCase):
 
 class TestHookRegistration(unittest.TestCase):
 	def test_context_hook_overrides_buttons_hook(self):
-		from huf.ai.gateway_adapters import telegram_hooks  # noqa: F401  (import order registers hooks)
+		from huf.ai.gateway_adapters import telegram_hooks
 
 		fn = provider_hooks.get("Telegram", "agent_instructions")
 		self.assertIsNotNone(fn)

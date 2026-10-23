@@ -144,7 +144,7 @@ class TestSend(Base):
 		self.assertIn("not found", out.errors[0])
 
 	def test_size_cap_rejected(self):
-		big = lambda u: ("big.png", b"0" * (mr.MAX_PHOTO_BYTES + 1))  # noqa: E731
+		big = lambda u: ("big.png", b"0" * (mr.MAX_PHOTO_BYTES + 1))
 		out = mr.send_media_items(
 			self.sender,
 			CHAT,

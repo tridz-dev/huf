@@ -272,12 +272,12 @@ class Harness(unittest.TestCase):
 		patch.object(
 			scope,
 			"gateway_state",
-			side_effect=lambda: ("invalid", "")
-			if self.gw_invalid
-			else (("telegram", "gw1") if self.gw_on else ("none", "")),
+			side_effect=lambda: (
+				("invalid", "") if self.gw_invalid else (("telegram", "gw1") if self.gw_on else ("none", ""))
+			),
 		).start()
 		patch.object(adm, "_admin_bindings", side_effect=lambda gw: list(self.admins)).start()
-		patch.object(adm, "_callback_signer", side_effect=lambda gw, chat: (lambda p: p + "|sig")).start()
+		patch.object(adm, "_callback_signer", side_effect=lambda gw, chat: lambda p: p + "|sig").start()
 		patch.object(adm, "_gateway_token", return_value=TOKEN).start()
 		patch.object(scope, "effective_run_id", side_effect=lambda: self.run_id).start()
 		patch.object(scope, "current_chat", side_effect=lambda run_id: CUR).start()

@@ -56,8 +56,12 @@ def recover_reply_parts(response):
 
 # "typing" is NOT registered here: telegram_ingest_hooks owns it (imported later, so it wins).
 for _name, _fn in (
-	("send_reply", send_reply), ("send_parts", send_parts), ("attempt_reply_parts", attempt_reply_parts),
-	("send_errors", send_errors), ("error_text", error_text), ("reply_target", reply_target),
+	("send_reply", send_reply),
+	("send_parts", send_parts),
+	("attempt_reply_parts", attempt_reply_parts),
+	("send_errors", send_errors),
+	("error_text", error_text),
+	("reply_target", reply_target),
 	("recover_reply_parts", recover_reply_parts),
 ):
 	provider_hooks.register(PROVIDER, _name, _fn)

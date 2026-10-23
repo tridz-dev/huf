@@ -130,7 +130,7 @@ class TestGuest(unittest.TestCase):
 		self.assertIsNone(tg.reply_for_guest(self.env.client, "", "x"))
 
 	def test_hooks_registered(self):
-		import huf.ai.gateway_adapters.telegram_guest_hooks  # noqa: F401
+		import huf.ai.gateway_adapters.telegram_guest_hooks
 
 		self.assertIn("guest_message", ing._UPDATE_HANDLERS)
 		self.assertIn("unsupported", ing._UPDATE_HANDLERS)

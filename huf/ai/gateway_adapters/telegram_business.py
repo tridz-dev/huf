@@ -164,7 +164,7 @@ class BusinessContext:
 	extra: dict = field(default_factory=dict)
 
 
-_POLICY: Callable[[BusinessContext], str] = lambda ctx: DEFAULT_POLICY  # noqa: E731
+_POLICY: Callable[[BusinessContext], str] = lambda ctx: DEFAULT_POLICY
 _DRAFT_PRODUCER: Callable[[BusinessContext], str | None] | None = None
 _OBSERVERS: list[Callable[[dict], None]] = []
 

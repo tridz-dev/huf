@@ -109,7 +109,7 @@ class Base(unittest.TestCase):
 
 class TestConnection(Base):
 	def test_handlers_registered(self):
-		import huf.ai.gateway_adapters.telegram_hooks  # noqa: F401
+		import huf.ai.gateway_adapters.telegram_hooks
 
 		for k in biz.BUSINESS_KINDS:
 			self.assertIn(k, ing._UPDATE_HANDLERS)

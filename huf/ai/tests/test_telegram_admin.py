@@ -240,7 +240,7 @@ class TestRouting(Base):
 		self.assertIn("Admin scope required", self.sent_texts()[-1])
 
 	def test_registered_in_update_registry_and_chains(self):
-		import huf.ai.gateway_adapters.telegram_admin_hooks as hooks  # noqa: F401
+		import huf.ai.gateway_adapters.telegram_admin_hooks as hooks
 
 		self.assertIn("message", ing._UPDATE_HANDLERS)
 		self.assertIn("callback_query", ing._UPDATE_HANDLERS)
@@ -503,7 +503,6 @@ class TestDailyDigestGateways(unittest.TestCase):
 		}
 		sender = MagicMock()
 		adapter = SimpleNamespace(sender=sender)
-		import frappe
 
 		with (
 			patch.object(

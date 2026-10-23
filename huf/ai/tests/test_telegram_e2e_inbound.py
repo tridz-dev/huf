@@ -19,7 +19,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from huf.ai import gateway_service as gs
-from huf.ai.gateway_adapters import (  # noqa: F401  (registers hooks)
+from huf.ai.gateway_adapters import (
 	GatewayInboundRequest,
 	telegram_agent_context,
 	telegram_hooks,

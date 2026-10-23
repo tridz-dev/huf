@@ -777,7 +777,7 @@ class TestAtomicityUnderThreads(unittest.TestCase):
 			barrier.wait()
 			try:
 				out = fn()
-			except Exception as exc:  # noqa: BLE001 - captured for counting
+			except Exception as exc:
 				out = exc
 			with lock:
 				results.append(out)

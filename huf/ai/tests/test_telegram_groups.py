@@ -40,7 +40,7 @@ def req(payload):
 
 def deliver(fixture, adapter):
 	"""Route through telegram_ingest.handle_update (handlers registered by telegram_hooks import)."""
-	import huf.ai.gateway_adapters.telegram_hooks  # noqa: F401
+	import huf.ai.gateway_adapters.telegram_hooks
 
 	clear_update_dedup()  # the same fixture update_id may be delivered repeatedly within one test
 	return ing.handle_update(GW, adapter, req(load_fixture(fixture)))
@@ -129,7 +129,6 @@ class TestJoinRequests(unittest.TestCase):
 class TestMembership(unittest.TestCase):
 	def test_bot_removed_marks_chat_unsendable(self):
 		_, ad = make()
-		parsed = ing.parse_update if False else None
 		from huf.ai.gateway_adapters.telegram_inbound import parse_update
 
 		p = parse_update(load_fixture("my_chat_member_group_removed"))

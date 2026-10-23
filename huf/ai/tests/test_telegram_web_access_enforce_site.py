@@ -35,7 +35,6 @@ class TestEnforceRevocationSite(IntegrationTestCase):
 
 	def test_revoke_only_tg_sessions_of_binding(self):
 		from frappe.auth import LoginManager
-
 		from werkzeug.test import EnvironBuilder
 		from werkzeug.wrappers import Request
 

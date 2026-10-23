@@ -103,7 +103,7 @@ class Base(unittest.TestCase):
 			}
 		]
 		patch.object(tool, "_admin_bindings", side_effect=lambda gw: list(self.admins)).start()
-		patch.object(tool, "_callback_signer", side_effect=lambda gw, chat: (lambda p: p + "|sig")).start()
+		patch.object(tool, "_callback_signer", side_effect=lambda gw, chat: lambda p: p + "|sig").start()
 
 	def run_action(self, action, **kw):
 		return json.loads(tool.handle_action(action=action, **kw))

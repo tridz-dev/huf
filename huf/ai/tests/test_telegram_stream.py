@@ -319,7 +319,7 @@ class TestStopHandler(unittest.TestCase):
 		self.assertIsNone(ts.handle_stopped(SimpleNamespace(name="GW"), None, SimpleNamespace(raw={}), None))
 
 	def test_registered_with_ingest(self):
-		import huf.ai.gateway_adapters.telegram_stream_hooks  # noqa: F401
+		import huf.ai.gateway_adapters.telegram_stream_hooks
 
 		self.assertIn("stopped_message_generation", telegram_ingest._UPDATE_HANDLERS)
 		self.assertIn("unsupported", telegram_ingest._UPDATE_HANDLERS)

@@ -64,7 +64,7 @@ class TestM1ReplyCacheScope(unittest.TestCase):
 		gate = SimpleNamespace(name="gw")
 		spec = tb.validate(spec)[0]
 		tb.remember_spec("pick", spec, cache=cache, scope=mr.scope_key("gw", "A", "EV1"))
-		sign = lambda p: "c:" + p  # noqa: E731
+		sign = lambda p: "c:" + p
 		self.assertIsNotNone(tb.markup_for(ev_a, gate, "pick", signer=sign, cache=cache))
 		self.assertIsNone(tb.markup_for(ev_b, gate, "pick", signer=sign, cache=cache))
 

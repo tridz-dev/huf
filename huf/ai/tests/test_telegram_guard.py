@@ -206,7 +206,7 @@ class TestCaptcha(unittest.TestCase):
 		self.assertFalse(self.env.fake.of("answerChatJoinRequestQuery"))  # the query was spent by the web app
 
 	def test_wrong_answers_then_decline(self):
-		for i in range(g.MAX_ATTEMPTS - 1):
+		for _i in range(g.MAX_ATTEMPTS - 1):
 			res = g.submit_answer("gw1", self.nonce, init_data(), "1")
 			self.assertEqual((res["ok"], res["done"]), (False, False))
 		res = g.submit_answer("gw1", self.nonce, init_data(), "1")
@@ -272,7 +272,7 @@ class TestCaptcha(unittest.TestCase):
 
 	def test_captcha_launch_failure_queues(self):
 		with (
-			Env(gw(telegram_guard_captcha=1)) as env,
+			Env(gw(telegram_guard_captcha=1)),
 			mock.patch("huf.ai.telegram_public_url.configured_host", return_value=""),
 			mock.patch("frappe.utils.get_url", return_value="http://x"),
 		):

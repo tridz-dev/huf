@@ -229,7 +229,7 @@ def get_menu_button(gateway: str | None = None) -> dict[str, Any]:
 @frappe.whitelist(methods=["POST"])
 def set_menu_button(
 	gateway: str | None = None, type: str = "commands", text: str = "", url: str = ""
-) -> dict[str, Any]:  # noqa: A002
+) -> dict[str, Any]:
 	def run(c, r, cr):
 		button = menu_button_payload(type, text, url)
 		c.call("setChatMenuButton", {"menu_button": button})

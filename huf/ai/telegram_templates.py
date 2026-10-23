@@ -193,7 +193,7 @@ def _markup(
 		if needs:
 			errors.append("buttons: callback buttons need a signer (sign)")
 			return None
-		sign = lambda p: p  # noqa: E731 - unused without callbacks
+		sign = lambda p: p
 	return telegram_buttons.build_markup(spec, sign)
 
 

@@ -75,8 +75,13 @@ def prefilter(gateway, adapter, parsed, request) -> dict | None:
 	creds = _credentials(gateway)
 	guard = lg.LoopGuard.from_credentials(_cache(), creds)
 	decision = guard.check_bot(
-		gateway.name, chat_id, thread, bot_id, own_id=_own_id(adapter),
-		allowlist=lg.parse_allowlist(creds.get("bot_allowlist")), update_id=parsed.update_id,
+		gateway.name,
+		chat_id,
+		thread,
+		bot_id,
+		own_id=_own_id(adapter),
+		allowlist=lg.parse_allowlist(creds.get("bot_allowlist")),
+		update_id=parsed.update_id,
 	)
 	if decision.allow:
 		return None

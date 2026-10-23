@@ -104,13 +104,14 @@ class TestMigration(unittest.TestCase):
 		old_doc = SimpleNamespace(display_label="G", expires_at=None, approved_by="a@b.c", notes="")
 		created = []
 		fake_get_doc = mock.Mock(
-			side_effect=lambda *a: SimpleNamespace(insert=lambda **k: created.append(1))
-			if isinstance(a[0], dict)
-			else old_doc
+			side_effect=lambda *a: (
+				SimpleNamespace(insert=lambda **k: created.append(1)) if isinstance(a[0], dict) else old_doc
+			)
 		)
 		with (
 			mock.patch.object(svc, "_has_access_entry", side_effect=lambda g, t, i: approved.get(i, False)),
 			mock.patch.object(svc, "_live_room_entry", return_value={"name": "E1"}),
+			mock.patch.object(svc, "_drop_pending_room"),
 			mock.patch.object(svc, "_save_entry") as save,
 			mock.patch.object(groups.frappe, "get_doc", fake_get_doc),
 			mock.patch("frappe.utils.now_datetime", return_value="NOW"),
@@ -163,6 +164,7 @@ class TestRoomOptOut(unittest.TestCase):
 	def test_removal_marks_room_entry_not_sender(self):
 		with (
 			mock.patch.object(svc, "_live_room_entry", return_value={"name": "E1", "state": "Approved"}),
+			mock.patch.object(svc, "_drop_pending_room"),
 			mock.patch.object(svc, "_save_entry") as save,
 			mock.patch.object(svc.frappe, "get_doc") as gd,
 		):

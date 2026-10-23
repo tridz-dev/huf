@@ -149,7 +149,7 @@ class TestInline(Base):
 		self.adapter.client.call.assert_not_called()
 
 	def test_hooks_registered_and_dispatch_via_ingest(self):
-		import huf.ai.gateway_adapters.telegram_inline_hooks  # noqa: F401
+		import huf.ai.gateway_adapters.telegram_inline_hooks
 
 		for key in ("inline_query", "chosen_inline_result", "unsupported"):
 			self.assertIn(key, ing._UPDATE_HANDLERS)

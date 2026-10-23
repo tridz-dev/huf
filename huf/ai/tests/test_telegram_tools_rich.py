@@ -168,7 +168,7 @@ class TestMediaSources(Base):
 		self.assertEqual(self.api.calls, [])
 
 	def test_size_limits(self):
-		path = self._file_doc(10, mime="image/jpeg", name="p.jpg")
+		self._file_doc(10, mime="image/jpeg", name="p.jpg")
 		with (
 			patch.object(tool.frappe, "has_permission", return_value=True),
 			patch.object(tool.os.path, "getsize", return_value=tool.PHOTO_MAX_BYTES + 1),
@@ -352,7 +352,7 @@ class TestReplyMarkup(Base):
 
 	def test_callback_buttons_are_signed_in_gateway_runs(self):
 		key = b"k" * 32
-		sign = lambda p: f"{p}|sig"  # noqa: E731
+		sign = lambda p: f"{p}|sig"
 		out = extra.normalize_reply_markup(
 			{"inline_keyboard": [[{"text": "Yes", "callback": "ok:1"}]]}, sign=sign
 		)

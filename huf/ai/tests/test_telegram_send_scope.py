@@ -302,14 +302,13 @@ class TestAtomicTtl(unittest.TestCase):
 
 	def test_exception_after_incr_does_not_double_count(self):
 		c = PipeRedis()
-		real = c.ttl
 		state = {"n": 0}
 
 		def boom(k):
 			raise RuntimeError("redis gone")
 
 		c.ttl = boom
-		cache = FakeCache()
+		FakeCache()
 		patch.object(scope, "_cache", return_value=c).start()
 		# day cap of 1 reached on 2nd claim path: force failure after the run counter was incremented
 		patch.object(scope, "settings", return_value=conf(per_run=5, per_day=1)).start()

@@ -18,7 +18,7 @@ import frappe
 
 from huf.ai import gateway_service
 from huf.ai import whatsapp_send_file as send_file
-from huf.ai.gateway_adapters import provider_hooks, telegram_hooks  # noqa: F401
+from huf.ai.gateway_adapters import provider_hooks, telegram_hooks
 from huf.ai.gateway_adapters import telegram_buttons as tb
 from huf.ai.gateway_adapters import telegram_media_reply as mr
 from huf.ai.gateway_adapters import telegram_pipeline as tp

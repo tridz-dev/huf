@@ -60,7 +60,7 @@ from huf.ai.gateway_adapters.telegram_client import TelegramBotClient
 from huf.ai.gateway_webhook import handle_gateway_webhook
 from huf.ai.tests import telegram_fakes as fakes
 from huf.ai.tests.telegram_fakes import SECRET, TOKEN, FakeBotApi
-from huf.ai.tests.test_telegram_e2e_admin import (  # noqa: F401  (base classes are not collected as tests)
+from huf.ai.tests.test_telegram_e2e_admin import (
 	ADMIN,
 	CHAT,
 	TG,
@@ -675,7 +675,7 @@ class TestAdminApproveFlow(WebhookHarness, AdminBase):
 			("_is_owner_run", lambda gw, chat: self.owner),
 			("_is_paired_admin", lambda gw, uid: False),
 			("_admin_bindings", lambda gw: [self.binding_row()]),
-			("_callback_signer", lambda gw, chat: (lambda p: self.adapter.sign_callback_data(p, chat))),
+			("_callback_signer", lambda gw, chat: lambda p: self.adapter.sign_callback_data(p, chat)),
 		):
 			p = mock.patch.object(tool, name, value)
 			p.start()
@@ -981,8 +981,8 @@ class TestRooms(SynthBase):
 			state="Approved", display_label="Club", notes="", expires_at=None, approved_by="a@x.com"
 		)
 		inner = self.fallback_get_doc
-		self.fallback_get_doc = (
-			lambda *a, **k: old_doc if a[:2] == ("Gateway Access Entry", "GAE-old") else inner(*a, **k)
+		self.fallback_get_doc = lambda *a, **k: (
+			old_doc if a[:2] == ("Gateway Access Entry", "GAE-old") else inner(*a, **k)
 		)
 		self.patch("huf.ai.gateway_service._save_entry")
 		self.assertTrue(groups.migrate_room(self.gw, "-100123", "-1001999888777"))
@@ -1007,8 +1007,8 @@ class TestRooms(SynthBase):
 			approved_by="a@x.com",
 		)
 		inner = self.fallback_get_doc
-		self.fallback_get_doc = (
-			lambda *a, **k: old_doc if a[:2] == ("Gateway Access Entry", "GAE-old") else inner(*a, **k)
+		self.fallback_get_doc = lambda *a, **k: (
+			old_doc if a[:2] == ("Gateway Access Entry", "GAE-old") else inner(*a, **k)
 		)
 		saved = self.patch("huf.ai.gateway_service._save_entry")
 		payload = {

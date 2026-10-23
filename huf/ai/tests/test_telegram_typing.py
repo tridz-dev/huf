@@ -63,7 +63,7 @@ class TypingCase(unittest.TestCase):
 class TestHookSelection(unittest.TestCase):
 	def test_ingest_typing_is_the_active_hook_with_real_import_order(self):
 		# telegram_hooks imports pipeline hooks first, then ingest hooks; the later registration wins.
-		import huf.ai.gateway_adapters.telegram_hooks  # noqa: F401
+		import huf.ai.gateway_adapters.telegram_hooks
 
 		active = provider_hooks.get("Telegram", "typing")
 		self.assertIs(active, telegram_ingest_hooks.typing)
