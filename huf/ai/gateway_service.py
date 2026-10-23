@@ -1399,6 +1399,21 @@ def _record_pending_room(gateway, chat_id: str, label: str = "") -> str:
     return doc.name
 
 
+def _drop_pending_room(gateway, chat_id: str) -> int:
+	"""Delete Pending Room entries for ``chat_id`` (a duplicate once the room is approved/migrated). Returns count."""
+	names = frappe.get_all(
+		"Gateway Access Entry",
+		filters={
+			"gateway": gateway.name, "entry_type": "Room", "provider": gateway.provider, "state": "Pending",
+			"external_id": _normalize_sender_for_provider(gateway.provider, "Room", str(chat_id)),
+		},
+		pluck="name", limit_page_length=0,
+	)
+	for name in names or []:
+		frappe.delete_doc("Gateway Access Entry", name, ignore_permissions=True, force=True)
+	return len(names or [])
+
+
 def _find_pending_entry_by_code(pairing_code: str, gateway: str) -> str | None:
     """Constant-time-compare a candidate code against the Pending entries of ONE gateway."""
     pending = frappe.get_all(

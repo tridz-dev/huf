@@ -21,7 +21,7 @@ Actions:
 
 Rich actions (WP-4): send_voice, send_audio, send_video, send_animation, send_sticker, send_media_group,
 send_location, send_contact, set_reaction, send_chat_action, edit_message_caption,
-edit_message_reply_markup, pin_message, unpin_message, forward_message, copy_message,
+edit_message_reply_markup, forward_message, copy_message,
 answer_callback_query, plus a validated ``reply_markup`` on send_message/send_photo/send_document.
 
 Inside a run that belongs to a Telegram Gateway the recipient is the current chat by default and any
@@ -1233,6 +1233,8 @@ def handle_action(**kwargs) -> str:
         JSON string with success flag and Telegram API result.
     """
     action = (kwargs.get("action") or "").strip().lower()
+    if action in ADMIN_ONLY_ACTIONS:
+        return _admin_only_refusal(action)
 
     dispatch = {
         "send_message": _handle_send_message,
@@ -1405,6 +1407,25 @@ def _record_tool_send(gateway: str, chat, action: str, kwargs: dict, raw: str) -
         telegram_messages.record_outbound(gateway, scope.normalize_chat(chat), ids, kind=kind, text=text)
     except Exception:
         pass
+
+
+# Chat-state changes that affect other people. Never run from the plain tool (W18-GATE): pin/unpin go through
+# telegram_admin (owner-run + human Approve); forum-topic management has no gated equivalent and is a human task.
+ADMIN_ONLY_ACTIONS = {
+    "pin_message": "pin", "unpin_message": "unpin",
+    "create_forum_topic": None, "edit_forum_topic": None, "close_forum_topic": None,
+    "reopen_forum_topic": None, "delete_forum_topic": None,
+}
+
+
+def _admin_only_refusal(action: str) -> str:
+    equiv = ADMIN_ONLY_ACTIONS[action]
+    hint = (f"Use the telegram_admin tool (action '{equiv}'); it needs an owner-run and a human Approve press."
+            if equiv else "No agent tool offers this; ask a chat admin to do it in Telegram.")
+    return json.dumps({
+        "success": False, "error": "owner_required",
+        "message": f"{action} changes chat state and is not available in the telegram tool. {hint}",
+    })
 
 
 GATEWAY_BLOCKED_ACTIONS = frozenset({"set_webhook", "delete_webhook", "get_updates"})
