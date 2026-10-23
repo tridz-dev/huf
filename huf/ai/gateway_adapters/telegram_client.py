@@ -14,6 +14,26 @@ import time
 from typing import Any, Callable, Mapping
 
 TELEGRAM_API_BASE = "https://api.telegram.org"
+TEST_ENV_SEGMENT = "test"
+
+
+def truthy_flag(value: Any) -> bool:
+	"""Interpret a gateway/credential flag (``1``, ``"1"``, ``True``, ``"true"``) as a bool."""
+	if isinstance(value, str):
+		return value.strip().lower() in {"1", "true", "yes", "on"}
+	return bool(value)
+
+
+def bot_api_url(token: str, method: str, *, test_environment: bool = False) -> str:
+	"""The one Bot API URL builder. Telegram's test servers add a ``/test/`` segment after the token."""
+	segment = f"/{TEST_ENV_SEGMENT}" if test_environment else ""
+	return f"{TELEGRAM_API_BASE}/bot{token}{segment}/{method}"
+
+
+def bot_file_url(token: str, file_path: str, *, test_environment: bool = False) -> str:
+	"""The one file-download URL builder (``/file/bot<token>[/test]/<path>``)."""
+	segment = f"/{TEST_ENV_SEGMENT}" if test_environment else ""
+	return f"{TELEGRAM_API_BASE}/file/bot{token}{segment}/{file_path}"
 
 # Updates the gateway asks Telegram to deliver (setWebhook ``allowed_updates``).
 ALLOWED_UPDATES: tuple[str, ...] = (
@@ -134,10 +154,12 @@ class TelegramBotClient:
 		max_flood_retries: int = 0,
 		max_flood_wait: int = 5,
 		sleep: Callable[[float], None] = time.sleep,
+		test_environment: bool = False,
 	) -> None:
 		if not token:
 			raise ValueError("Telegram bot token is required")
 		self._token = token
+		self._test_environment = bool(test_environment)
 		self._http_post = http_post
 		self._http_get = http_get
 		self._timeout = timeout
@@ -149,7 +171,11 @@ class TelegramBotClient:
 		return redact_token(text, self._token)
 
 	def _url(self, method: str) -> str:
-		return f"{TELEGRAM_API_BASE}/bot{self._token}/{method}"
+		return bot_api_url(self._token, method, test_environment=self._test_environment)
+
+	@property
+	def test_environment(self) -> bool:
+		return self._test_environment
 
 	def call(
 		self,
@@ -225,7 +251,7 @@ class TelegramBotClient:
 		file_path = info.get("file_path")
 		if not file_path:
 			raise TelegramApiError("getFile", "no file_path in response")
-		url = f"{TELEGRAM_API_BASE}/file/bot{self._token}/{file_path}"
+		url = bot_file_url(self._token, file_path, test_environment=self._test_environment)
 		try:
 			response = self._http_get(url, timeout=timeout)
 		except Exception as exc:

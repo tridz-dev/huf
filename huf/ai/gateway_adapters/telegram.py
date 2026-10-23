@@ -20,6 +20,7 @@ from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.telegram_client import (
 	ALLOWED_UPDATES,
 	TELEGRAM_API_BASE,
+	truthy_flag,
 	TelegramApiError,
 	TelegramBotClient,
 	_requests_get,
@@ -118,6 +119,7 @@ class TelegramGatewayAdapter(GatewayAdapter):
 			http_post=lambda *a, **k: self._http_post(*a, **k),
 			http_get=lambda *a, **k: self._http_get(*a, **k),
 			max_flood_retries=max_flood_retries,
+			test_environment=truthy_flag(credentials.get("test_environment")),
 		)
 		self.sender = TelegramSender(self.client, parse_mode=parse_mode)
 

@@ -260,6 +260,7 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
 				optionLabels: { Queue: 'Hold for review', Decline: 'Decline', Agent: 'Let the agent decide' },
 			},
 			{ name: 'telegram_inline_enabled', label: 'Inline mode', kind: 'switch', help: 'People can use the bot from any chat by typing its name.' },
+			{ name: 'telegram_test_environment', label: 'Telegram test environment', kind: 'switch', help: 'Only for bots created on Telegram test servers.' },
 			{ name: 'telegram_streaming', label: 'Stream replies', kind: 'switch', help: 'Show the answer as it is written instead of all at once.' },
 			{ name: 'telegram_default_template', label: 'Default template', kind: 'template', help: 'Used when a send does not name a template.' },
 			{ name: 'telegram_welcome_template', label: 'Welcome template', kind: 'template', help: 'Sent when someone joins or starts the bot.' },

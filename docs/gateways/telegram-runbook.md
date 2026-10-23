@@ -628,6 +628,15 @@ Agent policy requires `default_agent` (`gateway.py`).
 - Audio is converted to Ogg/Opus with ffmpeg (`whatsapp_send_file.to_ogg_opus`). Missing ffmpeg or libopus, a
   failed TTS call or an empty result falls back to the text reply. A reply is never lost.
 
+## 17a. Test environment
+
+Telegram runs a separate test environment (test servers, test accounts, test bots). Turn on **Use Telegram test environment** on the Gateway (Settings, Modes) to point the whole gateway at it.
+
+- Bot API calls go to `https://api.telegram.org/bot<token>/test/<METHOD>` and file downloads to `/file/bot<token>/test/<path>`. This covers sending, getFile downloads, and webhook management (setWebhook, getWebhookInfo, deleteWebhook), the agent tools and the management cockpit. One helper (`bot_api_url` / `bot_file_url` in `telegram_client.py`) builds every URL.
+- Use only with a bot token created in the test environment (via @BotFather on a test account). A normal production token does not work there, and a test token does not work on production, so leave the flag off for normal bots.
+- Mini App `initData` validation is unchanged (same HMAC algorithm). In the test environment `initData` is signed with the test bot's token, so the Integration Settings token must be the test bot's token.
+- Tokens stay redacted in logs and errors; the `/test/` segment is not secret.
+
 ## 17. Known gaps
 
 Each item below was checked against the code. "Not wired" means nothing on the runtime path reads it.

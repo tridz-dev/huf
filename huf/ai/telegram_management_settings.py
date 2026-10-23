@@ -58,6 +58,7 @@ FIELD_SPECS: dict[str, dict[str, Any]] = {
 	"telegram_business_policy": {"type": "select", "group": "modes", "options": ["Ignore", "Observe", "Draft", "Reply"]},
 	"telegram_join_policy": {"type": "select", "group": "modes", "options": ["Queue", "Decline", "Agent"]},
 	"telegram_inline_enabled": {"type": "check", "group": "modes"},
+	"telegram_test_environment": {"type": "check", "group": "modes"},
 	"telegram_streaming": {"type": "check", "group": "modes"},
 	"telegram_default_template": {"type": "link", "group": "modes", "doctype": "Telegram Message Template"},
 	"telegram_welcome_template": {"type": "link", "group": "modes", "doctype": "Telegram Message Template"},
