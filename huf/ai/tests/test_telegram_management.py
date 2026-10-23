@@ -63,3 +63,28 @@ class TestTelegramManagement(unittest.TestCase):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class TestInlineFeedbackCheck(unittest.TestCase):
+	def _row(self, **kw):
+		return {**GW, "telegram_inline_enabled": 1, "telegram_inline_feedback_enabled": 0, **kw}
+
+	def _check(self, row, seen=False):
+		from unittest.mock import patch
+
+		with patch("huf.ai.gateway_adapters.telegram_inline.feedback_seen", return_value=seen):
+			h = build_health(row, OK, PASSING)
+		return h, next((c for c in h["checks"] if c["id"] == "inline_feedback"), None)
+
+	def test_warns_when_inline_on_and_feedback_unknown(self):
+		h, c = self._check(self._row())
+		self.assertFalse(c["ok"])
+		self.assertEqual(c["hint"], "In BotFather send /setinlinefeedback and choose Enabled")
+		self.assertEqual(h["health"], "healthy")  # warning only
+
+	def test_clears_with_flag_or_observation(self):
+		self.assertTrue(self._check(self._row(telegram_inline_feedback_enabled=1))[1]["ok"])
+		self.assertTrue(self._check(self._row(), seen=True)[1]["ok"])
+
+	def test_absent_when_inline_off(self):
+		self.assertIsNone(self._check(self._row(telegram_inline_enabled=0))[1])

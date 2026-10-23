@@ -312,3 +312,34 @@ class TestHardening(unittest.TestCase):
 			patch.object(tool.scope, "is_inline_run", return_value=True):
 			out = tool._scope_refusal("send_message", {"chat_id": "5", "text": "hi"})
 		self.assertIn("action_not_permitted", out)
+
+
+class TestInlineFeedbackFallback(Base):
+	def test_default_result_button_label_and_signing(self):
+		sign = lambda p: f"{p}|sig"
+		with patch.object(ti, "_cache_put") as put:
+			off = ti.default_resolver("q", {"sign": sign, "gateway": "GW", "sender_id": "1", "feedback": False})
+			on = ti.default_resolver("q", {"sign": sign, "gateway": "GW", "sender_id": "1", "feedback": True})
+		self.assertEqual(off[0]["reply_markup"]["inline_keyboard"][0][0]["text"], ti.TAP_LABEL)
+		self.assertEqual(on[0]["reply_markup"]["inline_keyboard"][0][0]["text"], ti.WORKING_LABEL)
+		self.assertTrue(off[0]["reply_markup"]["inline_keyboard"][0][0]["callback_data"].startswith(ti.GO_PREFIX))
+		self.assertEqual(put.call_count, 2)
+
+	def test_feedback_known_flag_or_seen(self):
+		with patch.object(ti, "_cache_get", return_value=None):
+			self.assertFalse(ti.feedback_known(gw()))
+			g = gw()
+			g.get = lambda k, d=None: 1 if k == "telegram_inline_feedback_enabled" else d
+			self.assertTrue(ti.feedback_known(g))
+		with patch.object(ti, "_cache_get", return_value=1):
+			self.assertTrue(ti.feedback_known(gw()))
+
+	def test_ordinary_callback_falls_through(self):
+		raw = {"callback_query": {"id": "1", "from": {"id": 1}, "message": {"message_id": 1}, "data": "x|y"}}
+		self.assertIsNone(ti.handle_inline_callback(gw(), self.adapter, parsed_for(raw), None))
+
+	def test_chosen_result_records_feedback_seen(self):
+		raw = load_fixture("chosen_inline_result")
+		with patch.object(ti, "_cache_put") as put, patch.object(ti, "start_run", return_value="x"):
+			ti.handle_chosen_inline_result(gw(), self.adapter, parsed_for(raw), None)
+		self.assertTrue(any(c.args[0].startswith("huf:tginl:fbseen:") for c in put.call_args_list))

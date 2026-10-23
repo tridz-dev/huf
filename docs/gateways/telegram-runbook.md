@@ -35,7 +35,7 @@ Compared with WhatsApp (`docs/gateways/whatsapp-runbook.md`). "Yes" means implem
 | Edit in place | Yes: `edit_message_text`, caption, reply markup; buttons with `"edit": true` | Partial | `supports_edit=True` |
 | Streaming replies | **Off by default**; private chats only; read from `frappe.conf.huf_telegram_streaming` only | No | `telegram_stream.py` `streaming_enabled`; gateway field `telegram_streaming` is **not read** (section 16) |
 | Inline mode (`@bot query`) | Resolver registry; default resolver returns article results | No | `telegram_inline.py`; gateway field `telegram_inline_enabled` is **not read** (section 17) |
-| Inline "Run" button | **not wired**: no handler exists for the `inl:run` callback prefix | No | `RUN_CALLBACK_PREFIX` in `telegram_inline.py`; nothing dispatches it |
+| Inline answer button | Signed `inl:go:<digest>` button on the placeholder; press starts the answer run when no `chosen_inline_result` arrived (idempotent per `inline_message_id`) | No | `handle_inline_callback` in `telegram_inline.py` |
 | Guest mode (`guest_message`) | Yes: `telegram_guest.py`, admitted to an agent by an Open policy | No | Limits in section 11 |
 | Groups: join requests and Guard | Yes: `chat_join_request` handling; join policy Queue, Decline or Agent (section 15); optional Guard Mini App | Group access n/a | `telegram_groups.py`, `telegram_guard.py`, `register_join_policy` |
 | Group addressing | Yes: groups need @mention, reply to bot, or `/cmd@bot`, when `mention_required` is set | n/a | `is_addressed_to_bot` in `telegram_threads.py` |
@@ -62,8 +62,11 @@ Compared with WhatsApp (`docs/gateways/whatsapp-runbook.md`). "Yes" means implem
      `business_*` updates arrive. The Secretary policy still decides what the bot does (section 14).
    - **Guest mode**: needed for `guest_message` updates. Without it, guest updates never arrive.
    - **Inline mode** (`/setinline`): needed for `@bot` inline queries.
-   - **Inline feedback** (`/setinlinefeedback`): not referenced anywhere in this repository. Optional, set in
-     BotFather only if you want Telegram's feedback events; no code path consumes them.
+   - **Inline feedback** (`/setinlinefeedback`, choose Enabled / 100%): needed for the inline answer to arrive by
+     itself. Without it Telegram never sends `chosen_inline_result`; the placeholder button then reads
+     "Tap to get the answer" and the user presses it to get the reply (see below). After enabling it, tick
+     **Inline feedback is on in BotFather** in Settings (or just use inline once: the first received
+     `chosen_inline_result` is remembered and clears the Overview "Inline feedback" warning).
 3. **Group privacy** (`/setprivacy`): with privacy ON (default) Telegram delivers to the bot only
    `/commands`, replies to the bot's own messages and, when the bot is a group admin, all messages. Plain
    `@mentions` of the bot are NOT delivered while privacy is on and the bot is not an admin. When you rely on
@@ -275,7 +278,7 @@ Residual risks (from the design doc, still open):
 | Pairing request pending, nothing happens after approval | Pairing creates a pending request; the triggering message never runs | Send a new message after approval. |
 | No pairing code reply | `pairing_reply_enabled` is off, or the policy is not Pairing | Check the gateway policy fields. |
 | Group message ignored | Bot not mentioned, not replied to, or group privacy blocks it | Mention `@<bot>` or reply to the bot; with Group Privacy ON mentions are not delivered, so disable privacy or make the bot admin. |
-| Inline "Run" button does nothing | Not wired: no handler for `inl:run` | Expected today. Do not promise it to users. |
+| Inline answer never replaces "Thinking..." | BotFather inline feedback is off, so no `chosen_inline_result` | Press the "Tap to get the answer" button, or send `/setinlinefeedback` to BotFather and choose Enabled. |
 | Inline results do not show | Inline mode off in BotFather, or the resolver returns nothing | Enable inline mode in BotFather; check the registered resolver. |
 | Save fails: `execution_user ... must have one of these roles: Huf Gateway User` | Run-as user lacks the role | Give the user the Huf Gateway User role, or pick another user. |
 | Business reply never sent | Policy is Observe (default), or Draft/Reply downgraded (no `can_reply`, guard blocked) | Expected unless the policy and connection rights are set (section 14). |

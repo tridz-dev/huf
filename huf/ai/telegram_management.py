@@ -27,6 +27,8 @@ _GATEWAY_FIELDS = [
 	"integration_settings",
 	"last_event_at",
 	"last_error",
+	"telegram_inline_enabled",
+	"telegram_inline_feedback_enabled",
 	"typing_indicator",
 ]
 
@@ -155,6 +157,27 @@ def _checklist(enabled: bool, presence: dict[str, bool], checks: dict[str, bool]
 	]
 
 
+INLINE_FEEDBACK_FIX = "In BotFather send /setinlinefeedback and choose Enabled"
+
+
+def inline_feedback_check(gateway: dict[str, Any]) -> dict[str, Any] | None:
+	"""Warn-level row; never changes the overall health. None when inline mode is off."""
+	if not int(gateway.get("telegram_inline_enabled", 1) or 0):
+		return None
+	from huf.ai.gateway_adapters import telegram_inline
+
+	ok = bool(int(gateway.get("telegram_inline_feedback_enabled") or 0)) or telegram_inline.feedback_seen(
+		gateway["name"]
+	)
+	return {
+		"id": "inline_feedback",
+		"label": "Inline feedback",
+		"ok": ok,
+		"hint": "" if ok else INLINE_FEEDBACK_FIX,
+		"level": "warn",
+	}
+
+
 def build_health(
 	gateway: dict[str, Any],
 	presence: dict[str, bool],
@@ -179,14 +202,18 @@ def build_health(
 		health = "not_set_up"
 	else:
 		health = "healthy"
+	checks = [
+		{"id": c["id"], "label": c["label"], "ok": bool(c["ok"]), "hint": c.get("hint") or ""}
+		for c in readiness_checks
+	]
+	inline_check = inline_feedback_check(gateway)
+	if inline_check:
+		checks.append(inline_check)
 	return {
 		"name": gateway["name"],
 		"enabled": enabled,
 		"health": health,
-		"checks": [
-			{"id": c["id"], "label": c["label"], "ok": bool(c["ok"]), "hint": c.get("hint") or ""}
-			for c in readiness_checks
-		],
+		"checks": checks,
 		"checklist": checklist,
 		"pending_update_count": pending_update_count,
 		"last_event_at": str(gateway["last_event_at"]) if gateway.get("last_event_at") else None,

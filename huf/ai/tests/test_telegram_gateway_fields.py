@@ -16,6 +16,7 @@ NEW_FIELDS = {
 	"telegram_business_policy": "Select",
 	"telegram_join_policy": "Select",
 	"telegram_inline_enabled": "Check",
+	"telegram_inline_feedback_enabled": "Check",
 	"telegram_test_environment": "Check",
 	"telegram_agent_allow_group_admin": "Check",
 	"telegram_agent_allow_business": "Check",
@@ -49,6 +50,7 @@ class TestGatewayJson(unittest.TestCase):
 		self.assertEqual(f["telegram_business_policy"]["default"], "Observe")
 		self.assertEqual(f["telegram_join_policy"]["default"], "Queue")
 		self.assertEqual(f["telegram_inline_enabled"]["default"], "1")
+		self.assertEqual(f["telegram_inline_feedback_enabled"]["default"], "0")
 		self.assertEqual(f["telegram_default_template"]["options"], "Telegram Message Template")
 
 	def test_shared_fields_widened(self):
