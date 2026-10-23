@@ -29,11 +29,20 @@ def _require(capability: str) -> None:
 
 
 @frappe.whitelist()
-def create_new_version(prompt_name, prompt_body, title=None, description=None):
+def create_new_version(
+	prompt_name,
+	prompt_body,
+	title=None,
+	description=None,
+	category=None,
+	visibility=None,
+	is_active=None,
+	tags=None,
+):
 	"""Create a new immutable version of an existing Agent Prompt.
 
-	The current prompt is marked as ``is_latest = 0`` and a new row is
-	inserted with an incremented version number.  All agents that are
+	The latest prompt in the lineage is marked as ``is_latest = 0`` and a
+	new row is inserted with the next version number.  All agents that are
 	**not** version-locked will automatically pick up the new version
 	because they link to the latest via ``agent_prompt``.
 
@@ -42,9 +51,11 @@ def create_new_version(prompt_name, prompt_body, title=None, description=None):
 		prompt_body: The updated prompt text for the new version.
 		title:       Optional new title (inherits from previous if omitted).
 		description: Optional new description.
+		category, visibility, is_active, tags:
+		             Optional metadata copied from the edited prompt.
 
 	Returns:
-		dict: ``{"name": "<new_prompt_name>", "version": <int>}``
+		dict: ``{"name": "<prompt_name>", "version": <int>, "created": <bool>}``
 
 	Requires: agent.create
 	"""
@@ -54,33 +65,52 @@ def create_new_version(prompt_name, prompt_body, title=None, description=None):
 	if current.is_system:
 		frappe.throw(_("System prompts cannot be versioned by users."))
 
-	new_version = cint(current.version) + 1
+	prompt_group = current.prompt_group or prompt_name
+	latest_name = current.name
+	latest_version = cint(current.version)
+	if current.prompt_group:
+		latest = frappe.get_all(
+			"Agent Prompt",
+			filters={"prompt_group": prompt_group},
+			fields=["name", "version"],
+			order_by="version desc",
+			limit=1,
+		)
+		if latest:
+			latest_name = latest[0].name
+			latest_version = cint(latest[0].version)
 
-	# Mark current as no longer latest
-	frappe.db.set_value("Agent Prompt", prompt_name, "is_latest", 0, update_modified=False)
+	latest_prompt = frappe.get_doc("Agent Prompt", latest_name)
+	if prompt_body == latest_prompt.prompt_body:
+		return {"name": latest_name, "version": latest_version, "created": False}
+
+	new_version = latest_version + 1
+
+	# Mark the previous latest version as no longer latest.
+	frappe.db.set_value("Agent Prompt", latest_name, "is_latest", 0, update_modified=False)
 
 	new_prompt = frappe.get_doc({
 		"doctype": "Agent Prompt",
-		"title": title or current.title,
-		"category": current.category,
-		"description": description or current.description,
+		"title": title or latest_prompt.title,
+		"category": category if category is not None else latest_prompt.category,
+		"description": description or latest_prompt.description,
 		"prompt_body": prompt_body,
-		"visibility": current.visibility,
-		"is_active": current.is_active,
+		"visibility": visibility or latest_prompt.visibility,
+		"is_active": cint(is_active) if is_active is not None else latest_prompt.is_active,
 		"is_system": 0,
-		"tags": current.tags,
+		"tags": tags if tags is not None else latest_prompt.tags,
 		"version": new_version,
 		"is_latest": 1,
-		"previous_version": prompt_name,
-		"forked_from": current.forked_from,
-		"prompt_group": current.prompt_group or prompt_name,
+		"previous_version": latest_name,
+		"forked_from": latest_prompt.forked_from,
+		"prompt_group": prompt_group,
 	})
 	new_prompt.insert()
 
 	# Update agents that point to the old version and are NOT locked
-	_update_agent_links(prompt_name, new_prompt.name, new_version)
+	_update_agent_links(latest_name, new_prompt.name, new_version)
 
-	return {"name": new_prompt.name, "version": new_version}
+	return {"name": new_prompt.name, "version": new_version, "created": True}
 
 
 def _update_agent_links(old_prompt_name, new_prompt_name, new_version):

@@ -25,9 +25,11 @@ import {
   forkAgentPrompt,
   getAgentPrompt,
   getAgentPromptUsageCount,
+  getAgentPromptVersionHistory,
   getAgentsUsingPrompt,
   updateAgentPrompt,
   type AgentPromptDoc,
+  type AgentPromptVersionHistoryEntry,
   type AgentPromptUsageAgent,
 } from '@/services/agentPromptApi';
 import { CategoryTab } from '@/components/category/CategoryTab';
@@ -89,6 +91,8 @@ export function AgentPromptFormPage() {
   const [saving, setSaving] = useState(false);
   const [usageCount, setUsageCount] = useState(0);
   const [usageAgents, setUsageAgents] = useState<AgentPromptUsageAgent[]>([]);
+  const [versionHistory, setVersionHistory] = useState<AgentPromptVersionHistoryEntry[]>([]);
+  const [savedPromptBody, setSavedPromptBody] = useState('');
   const [docMeta, setDocMeta] = useState<Pick<
     AgentPromptDoc,
     'name' | 'version' | 'is_latest' | 'previous_version' | 'category' | 'forked_from'
@@ -117,6 +121,8 @@ export function AgentPromptFormPage() {
 
   useEffect(() => {
     if (!id || isNew) {
+      setSavedPromptBody('');
+      setVersionHistory([]);
       const state = location.state as { 
         prefill?: Partial<AgentPromptFormValues>;
         previous_version?: string;
@@ -155,6 +161,7 @@ export function AgentPromptFormPage() {
         if (cancelled) return;
 
         form.reset(mapDocToFormValues(prompt));
+        setSavedPromptBody(prompt.prompt_body || '');
         setDocMeta({
           name: prompt.name,
           version: prompt.version,
@@ -170,6 +177,13 @@ export function AgentPromptFormPage() {
         if (cancelled) return;
         setUsageCount(count);
         setUsageAgents(agents);
+        try {
+          setVersionHistory(await getAgentPromptVersionHistory(prompt.name));
+        } catch (error) {
+          toast.error('Failed to load prompt version history', {
+            description: getFrappeErrorMessage(error),
+          });
+        }
       } catch (error) {
         toast.error('Failed to load Agent Prompt', {
           description: getFrappeErrorMessage(error),
@@ -308,15 +322,39 @@ export function AgentPromptFormPage() {
       }
 
       if (!id) return;
-      const updated = await updateAgentPrompt(id, payload);
-      form.reset(mapDocToFormValues(updated));
-      setDocMeta({
-        name: updated.name,
-        version: updated.version,
-        is_latest: updated.is_latest,
-        previous_version: updated.previous_version,
-      });
-      toast.success('Agent Prompt saved');
+      let savedName = id;
+      if (values.prompt_body !== savedPromptBody) {
+        const result = await createAgentPromptNewVersion(
+          id,
+          values.prompt_body,
+          values.title,
+          values.description,
+          {
+            category: selectedCategory?.name,
+            visibility: values.visibility,
+            is_active: values.is_active ? 1 : 0,
+            tags: values.tags || undefined,
+          }
+        );
+        savedName = result.name;
+        toast.success(
+          result.created === false
+            ? `Version ${result.version} already contains these changes`
+            : `Created version ${result.version}`
+        );
+      } else {
+        const updated = await updateAgentPrompt(id, payload);
+        savedName = updated.name;
+        form.reset(mapDocToFormValues(updated));
+        setSavedPromptBody(updated.prompt_body || '');
+        setDocMeta({
+          name: updated.name,
+          version: updated.version,
+          is_latest: updated.is_latest,
+          previous_version: updated.previous_version,
+        });
+        toast.success('Agent Prompt saved');
+      }
 
       const state = location.state as { returnTo?: string; selectedPromptField?: string } | null;
       const fallbackRaw = (() => {
@@ -335,7 +373,7 @@ export function AgentPromptFormPage() {
       if (returnTo && isInternalPath(returnTo)) {
         navigate(returnTo, {
           state: {
-            selectedPrompt: updated.name,
+            selectedPrompt: savedName,
             showTab: 'general',
             selectedPromptField,
           },
@@ -348,6 +386,9 @@ export function AgentPromptFormPage() {
           // ignore
         }
         return;
+      }
+      if (savedName !== id) {
+        navigate(`/prompts/${savedName}`, { replace: true });
       }
     } catch (error) {
       toast.error('Failed to save Agent Prompt', {
@@ -390,9 +431,19 @@ export function AgentPromptFormPage() {
         docMeta.name,
         currentValues.prompt_body,
         newVersionTitle?.trim() || currentValues.title,
-        newVersionDescription?.trim() || undefined
+        newVersionDescription?.trim() || undefined,
+        {
+          category: selectedCategory?.name,
+          visibility: currentValues.visibility,
+          is_active: currentValues.is_active ? 1 : 0,
+          tags: currentValues.tags || undefined,
+        }
       );
-      toast.success(`Created version ${result.version}`);
+      toast.success(
+        result.created === false
+          ? `Version ${result.version} already contains these changes`
+          : `Created version ${result.version}`
+      );
       setNewVersionDialogOpen(false);
       navigate(`/prompts/${result.name}`);
     } catch (error) {
@@ -677,24 +728,58 @@ export function AgentPromptFormPage() {
             </Card>
 
             {!isNew && docMeta ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Version info</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-wrap gap-2">
-                  <Badge variant="outline">Version {docMeta.version ?? 1}</Badge>
-                  {docMeta.is_latest === 1 ? <Badge>Latest</Badge> : <Badge variant="secondary">Historical</Badge>}
-                  {docMeta.previous_version ? (
-                    <Button
-                      variant="link"
-                      className="h-auto p-0"
-                      onClick={() => navigate(`/prompts/${docMeta.previous_version}`)}
-                    >
-                      Previous: {docMeta.previous_version}
-                    </Button>
-                  ) : null}
-                </CardContent>
-              </Card>
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Version info</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-wrap gap-2">
+                    <Badge variant="outline">Version {docMeta.version ?? 1}</Badge>
+                    {docMeta.is_latest === 1 ? (
+                      <Badge>Latest</Badge>
+                    ) : (
+                      <Badge variant="secondary">Historical</Badge>
+                    )}
+                    {docMeta.previous_version ? (
+                      <Button
+                        variant="link"
+                        className="h-auto p-0"
+                        onClick={() => navigate(`/prompts/${docMeta.previous_version}`)}
+                      >
+                        Previous: {docMeta.previous_version}
+                      </Button>
+                    ) : null}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Version history</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {versionHistory.length === 0 ? (
+                      <p className="text-sm text-steel-soft">No versions found.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {versionHistory.map((version) => (
+                          <Button
+                            key={version.name}
+                            type="button"
+                            variant="ghost"
+                            className="h-auto w-full justify-between border px-3 py-2"
+                            onClick={() => navigate(`/prompts/${version.name}`)}
+                          >
+                            <span className="flex items-center gap-3">
+                              <span>Version {version.version}</span>
+                              <span className="truncate text-muted-foreground">{version.title}</span>
+                            </span>
+                            {version.is_latest === 1 ? <Badge>Latest</Badge> : null}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
             ) : null}
           </form>
           <CategoryModal

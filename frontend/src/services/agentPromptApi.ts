@@ -190,13 +190,24 @@ export async function getAgentsUsingPrompt(name: string): Promise<AgentPromptUsa
 export interface AgentPromptVersionResult {
   name: string;
   version: number;
+  created?: boolean;
+}
+
+export interface AgentPromptVersionHistoryEntry {
+  name: string;
+  version: number;
+  title: string;
+  is_latest: 0 | 1;
+  modified: string;
+  owner: string;
 }
 
 export async function createAgentPromptNewVersion(
   promptName: string,
   promptBody: string,
   title?: string,
-  description?: string
+  description?: string,
+  metadata?: Pick<AgentPromptDoc, 'category' | 'visibility' | 'is_active' | 'tags'>
 ): Promise<AgentPromptVersionResult> {
   try {
     const response = await call.post('huf.ai.prompt_api.create_new_version', {
@@ -204,11 +215,27 @@ export async function createAgentPromptNewVersion(
       prompt_body: promptBody,
       title,
       description,
+      ...metadata,
     });
 
     return response?.message as AgentPromptVersionResult;
   } catch (error) {
     handleFrappeError(error);
+    throw error;
+  }
+}
+
+export async function getAgentPromptVersionHistory(
+  promptName: string
+): Promise<AgentPromptVersionHistoryEntry[]> {
+  try {
+    const response = await call.post('huf.ai.prompt_api.get_version_history', {
+      prompt_name: promptName,
+    });
+
+    return response?.message as AgentPromptVersionHistoryEntry[];
+  } catch (error) {
+    handleFrappeError(error, `Error fetching version history for ${promptName}`);
     throw error;
   }
 }
