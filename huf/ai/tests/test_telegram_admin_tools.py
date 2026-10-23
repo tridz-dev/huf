@@ -434,6 +434,26 @@ class TestHumanApproval(Base):
 		self.assertEqual(r["status"], "pending_human_approval")
 		self.assertEqual(self.api.of("banChatMember"), [])
 
+	def test_marker_cleared_after_approve_and_reject_so_repeat_starts_fresh(self):
+		for _round in ("approve", "reject"):  # both resolve through agent_action_take
+			r = self.run_action("pin", message_id=7)
+			self.assertEqual(r["status"], "pending_human_approval")
+			self.assertNotIn("already pending", r["message"])
+			sends = len(self.api.of("sendMessage"))
+			# identical request while pending: no second approval
+			self.assertIn("already pending", self.run_action("pin", message_id=7)["message"])
+			self.assertEqual(len(self.api.of("sendMessage")), sends)
+			fp = next(k.split(":", 1)[1] for k in self.cache.d
+				if k.startswith("huf_tg_adm_pend:") and k.count(":") == 1)
+			self.assertTrue(self.ta.agent_action_take(fp, cache=self.cache))
+			self.assertFalse(self.ta.agent_action_pending(fp, cache=self.cache))
+			self.assertFalse(self.ta.agent_action_take(fp, cache=self.cache))  # exactly once
+			# after resolution the identical request asks again
+			again = self.run_action("pin", message_id=7)
+			self.assertNotIn("already pending", again["message"])
+			self.assertEqual(len(self.api.of("sendMessage")), sends + 1)
+			self.ta.agent_action_take(fp, cache=self.cache)
+
 	def test_no_admin_binding_refuses(self):
 		self.admins = []
 		r = self.run_action("ban", user_id=5, confirm=True)

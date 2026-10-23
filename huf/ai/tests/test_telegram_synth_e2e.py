@@ -730,6 +730,25 @@ class TestRooms(SynthBase):
 		self.assertEqual(self.pending(), [])
 		self.assertEqual(self.events, [])
 
+	def test_migration_drops_pending_duplicate_for_new_chat(self):
+		from huf.ai.gateway_adapters import telegram_groups as groups
+
+		dropped = self.patch("huf.ai.gateway_service._drop_pending_room", return_value=1)
+		self.patch("huf.ai.gateway_service._live_room_entry", return_value={"name": "GAE-old"})
+		real = {("Room", "-100123"): True}
+		self.has_entry.side_effect = lambda gw, kind, ext: real.get((kind, str(ext)), False)
+		old_doc = SimpleNamespace(state="Approved", display_label="Club", notes="", expires_at=None, approved_by="a@x.com")
+		inner = self.fallback_get_doc
+		self.fallback_get_doc = lambda *a, **k: old_doc if a[:2] == ("Gateway Access Entry", "GAE-old") else inner(*a, **k)
+		self.patch("huf.ai.gateway_service._save_entry")
+		self.assertTrue(groups.migrate_room(self.gw, "-100123", "-1001999888777"))
+		dropped.assert_called_once_with(self.gw, "-1001999888777")
+		# new entry already approved (race the other way): still removes the Pending duplicate
+		dropped.reset_mock()
+		real[("Room", "-1001999888777")] = True
+		self.assertFalse(groups.migrate_room(self.gw, "-100123", "-1001999888777"))
+		dropped.assert_called_once_with(self.gw, "-1001999888777")
+
 	def test_migrate_to_chat_id_moves_the_approved_room(self):
 		moves = []
 		real = {("Room", "-100123"): True}

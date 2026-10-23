@@ -251,6 +251,7 @@ def migrate_room(gateway, old_id: str, new_id: str) -> bool:
 	if not old_id or not new_id or old_id == new_id:
 		return False
 	if svc._has_access_entry(gateway, "Room", new_id):
+		svc._drop_pending_room(gateway, new_id)
 		return False
 	if not svc._has_access_entry(gateway, "Room", old_id):
 		return False
@@ -271,6 +272,7 @@ def migrate_room(gateway, old_id: str, new_id: str) -> bool:
 			"notes": f"Migrated from chat {old_id} (basic group promoted to supergroup)",
 		}
 	).insert(ignore_permissions=True)
+	svc._drop_pending_room(gateway, new_id)  # a mention in the new chat may have raced the migration message
 	svc._save_entry(
 		old_doc,
 		{

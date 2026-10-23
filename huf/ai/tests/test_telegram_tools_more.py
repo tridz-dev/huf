@@ -211,39 +211,12 @@ class TestForumTopics(Base):
 		self.api.queue("getMe", {"ok": True, "result": {"id": 77, "is_bot": True}})
 		self.api.queue("getChatMember", {"ok": True, "result": {"status": "administrator", **rights}})
 
-	def test_create_edit_close_reopen_delete(self):
-		cases = [
-			("create_forum_topic", "createForumTopic", {"name": "Ops", "icon_color": 7322096}, {}),
-			("edit_forum_topic", "editForumTopic", {"message_thread_id": 5, "name": "New"}, {}),
-			("close_forum_topic", "closeForumTopic", {"message_thread_id": 5}, {}),
-			("reopen_forum_topic", "reopenForumTopic", {"message_thread_id": 5}, {}),
-			("delete_forum_topic", "deleteForumTopic", {"message_thread_id": 5}, {"can_delete_messages": True}),
-		]
-		for action, method, args, rights in cases:
-			self.admin(can_manage_topics=True, **rights)
-			r = self.run_action(action=action, chat_id="-100", **args)
-			self.assertTrue(r["success"], (action, r))
-			self.assertEqual(self.payload(method)["chat_id"], "-100")
-		self.assertEqual(self.payload("createForumTopic")["icon_color"], 7322096)
-		self.assertEqual(self.payload("editForumTopic")["message_thread_id"], 5)
-
-	def test_bot_rights_required(self):
-		self.admin(can_manage_topics=False)
-		r = self.run_action(action="close_forum_topic", chat_id="-100", message_thread_id=5)
-		self.assertIn("manage topics", r["error"])
-		self.assertEqual(self.api.of("closeForumTopic"), [])
-		self.admin(can_manage_topics=True)  # delete additionally needs can_delete_messages
-		r = self.run_action(action="delete_forum_topic", chat_id="-100", message_thread_id=5)
-		self.assertIn("delete messages", r["error"])
-		self.api.queue("getMe", {"ok": True, "result": {"id": 77}})
-		self.api.queue("getChatMember", {"ok": True, "result": {"status": "member"}})
-		r = self.run_action(action="create_forum_topic", chat_id="-100", name="x")
-		self.assertIn("not an administrator", r["error"])
-
-	def test_validation(self):
-		self.assertIn("message_thread_id", self.run_action(action="close_forum_topic", chat_id="-100")["error"])
-		self.admin(can_manage_topics=True)
-		self.assertIn("icon_color", self.run_action(action="create_forum_topic", chat_id="-100", name="x", icon_color=1)["error"])
+	def test_all_forum_topic_actions_refused_without_any_api_call(self):
+		for action in ("create_forum_topic", "edit_forum_topic", "close_forum_topic", "reopen_forum_topic",
+			"delete_forum_topic"):
+			r = self.run_action(action=action, chat_id="-100", message_thread_id=5, name="x")
+			self.assertEqual(r["error"], "owner_required", action)
+		self.assertEqual(self.api.calls, [])
 
 
 class TestReads(Base):
@@ -370,9 +343,7 @@ class TestGatewayScope(Base):
 			"send_video_note": {"video_note": FILE_ID}, "send_venue": {"latitude": 1, "longitude": 1, "title": "t", "address": "a"},
 			"send_dice": {}, "send_poll": {"question": "q", "options": ["a", "b"]}, "stop_poll": {"message_id": 1},
 			"send_checklist": {"business_connection_id": "b", "title": "t", "tasks": ["a"]},
-			"send_template": {"template_name": "x"}, "create_forum_topic": {"name": "n"},
-			"edit_forum_topic": {"message_thread_id": 1, "name": "n"}, "close_forum_topic": {"message_thread_id": 1},
-			"reopen_forum_topic": {"message_thread_id": 1}, "delete_forum_topic": {"message_thread_id": 1},
+			"send_template": {"template_name": "x"},
 			"get_chat_member": {"user_id": 1}, "get_chat_administrators": {}, "get_chat_member_count": {},
 			"list_messages": {},
 		}

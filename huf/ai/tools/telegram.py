@@ -21,7 +21,7 @@ Actions:
 
 Rich actions (WP-4): send_voice, send_audio, send_video, send_animation, send_sticker, send_media_group,
 send_location, send_contact, set_reaction, send_chat_action, edit_message_caption,
-edit_message_reply_markup, pin_message, unpin_message, forward_message, copy_message,
+edit_message_reply_markup, forward_message, copy_message,
 answer_callback_query, plus a validated ``reply_markup`` on send_message/send_photo/send_document.
 
 Inside a run that belongs to a Telegram Gateway the recipient is the current chat by default and any
@@ -1233,6 +1233,8 @@ def handle_action(**kwargs) -> str:
         JSON string with success flag and Telegram API result.
     """
     action = (kwargs.get("action") or "").strip().lower()
+    if action in ADMIN_ONLY_ACTIONS:
+        return _admin_only_refusal(action)
 
     dispatch = {
         "send_message": _handle_send_message,
@@ -1257,11 +1259,6 @@ def handle_action(**kwargs) -> str:
         "send_template": _handle_send_template,
         "list_templates": _handle_list_templates,
         "preview_template": _handle_preview_template,
-        "create_forum_topic": _handle_create_forum_topic,
-        "edit_forum_topic": _handle_edit_forum_topic,
-        "close_forum_topic": _handle_close_forum_topic,
-        "reopen_forum_topic": _handle_reopen_forum_topic,
-        "delete_forum_topic": _handle_delete_forum_topic,
         "get_chat_member": _handle_get_chat_member,
         "get_chat_administrators": _handle_get_chat_administrators,
         "get_chat_member_count": _handle_get_chat_member_count,
@@ -1274,8 +1271,6 @@ def handle_action(**kwargs) -> str:
         "edit_message_caption": _handle_edit_message_caption,
         "edit_message_reply_markup": _handle_edit_message_reply_markup,
         "delete_message": _handle_delete_message,
-        "pin_message": _handle_pin_message,
-        "unpin_message": _handle_unpin_message,
         "forward_message": _handle_forward_message,
         "copy_message": _handle_copy_message,
         "answer_callback_query": _handle_answer_callback_query,
@@ -1407,15 +1402,33 @@ def _record_tool_send(gateway: str, chat, action: str, kwargs: dict, raw: str) -
         pass
 
 
+# Chat-state changes that affect other people. Never run from the plain tool (W18-GATE): pin/unpin go through
+# telegram_admin (owner-run + human Approve); forum-topic management has no gated equivalent and is a human task.
+ADMIN_ONLY_ACTIONS = {
+    "pin_message": "pin", "unpin_message": "unpin",
+    "create_forum_topic": None, "edit_forum_topic": None, "close_forum_topic": None,
+    "reopen_forum_topic": None, "delete_forum_topic": None,
+}
+
+
+def _admin_only_refusal(action: str) -> str:
+    equiv = ADMIN_ONLY_ACTIONS[action]
+    hint = (f"Use the telegram_admin tool (action '{equiv}'); it needs an owner-run and a human Approve press."
+            if equiv else "No agent tool offers this; ask a chat admin to do it in Telegram.")
+    return json.dumps({
+        "success": False, "error": "owner_required",
+        "message": f"{action} changes chat state and is not available in the telegram tool. {hint}",
+    })
+
+
 GATEWAY_BLOCKED_ACTIONS = frozenset({"set_webhook", "delete_webhook", "get_updates"})
 # Actions that take a target chat (checked against the gateway scope).
 CHAT_ACTIONS = frozenset({
     "send_message", "reply_to_message", "send_photo", "send_document", "send_voice", "send_speech", "send_audio", "send_video",
     "send_animation", "send_sticker", "send_media_group", "send_location", "send_contact", "set_reaction",
     "send_chat_action", "edit_message_text", "edit_message_caption", "edit_message_reply_markup",
-    "delete_message", "pin_message", "unpin_message", "forward_message", "copy_message", "get_chat_info",
+    "delete_message", "forward_message", "copy_message", "get_chat_info",
     "send_video_note", "send_venue", "send_dice", "send_poll", "stop_poll", "send_checklist", "send_template",
-    "create_forum_topic", "edit_forum_topic", "close_forum_topic", "reopen_forum_topic", "delete_forum_topic",
     "get_chat_member", "get_chat_administrators", "get_chat_member_count", "list_messages",
 })
 # Actions that create a new message (counted against the per-run / per-day caps).

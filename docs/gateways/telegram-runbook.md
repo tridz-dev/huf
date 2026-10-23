@@ -333,13 +333,16 @@ Actions (dispatch order as in the table):
   Gap: image generation is provider-specific and is not part of the telegram tool. The `telegram-media` block has
   no speech item (it would need a format change); use the tool action.
 - **Templates**: `list_templates`, `preview_template` (no send), `send_template` (section 10).
-- **Forum topics**: `create_forum_topic`, `edit_forum_topic`, `close_forum_topic`, `reopen_forum_topic`,
-  `delete_forum_topic` (the bot needs manage-topics rights).
+- **Chat-state changes are not in the plain tool** (W18-GATE): `pin_message`, `unpin_message` and the forum-topic
+  actions (`create/edit/close/reopen/delete_forum_topic`) are removed from the schema and refuse with `owner_required`
+  if called. Pin/unpin go through `telegram_admin` (`pin`/`unpin`: owner-run in a paired Admin+ cockpit chat plus a
+  human Approve press, even for the bot's own messages). Forum topics have no agent tool; a chat admin does them.
+  `delete_message` and `edit_message_text` only act on the bot's own recorded messages inside a gateway run.
 - **Chat members**: `get_chat_member`, `get_chat_administrators`, `get_chat_member_count`, `get_chat_info`.
 - **Files and history**: `get_file` (saves to a private Frappe File, max 20 MB, returns `file_url`),
   `list_messages` (up to 50 recent logged messages), `get_account_info` (bot identity, modes, webhook health), `get_me`.
 - **Message control**: `set_reaction`, `send_chat_action`, `edit_message_text`, `edit_message_caption`,
-  `edit_message_reply_markup`, `delete_message`, `pin_message`, `unpin_message`, `forward_message`,
+  `edit_message_reply_markup`, `delete_message` (own messages), `forward_message`,
   `copy_message`, `answer_callback_query`.
 - **Gateway-blocked** (refused inside a gateway conversation): `get_updates`, `set_webhook`, `delete_webhook`.
   Use the Connection tab or the management functions instead.

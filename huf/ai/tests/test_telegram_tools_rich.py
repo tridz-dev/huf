@@ -221,15 +221,14 @@ class TestSimpleActions(Base):
 		)
 		self.assertIn("inline_keyboard", bad["error"])
 
-	def test_pin_unpin(self):
-		self.run_action(action="pin_message", chat_id="9", message_id=3)
-		self.assertTrue(self.payload("pinChatMessage")["disable_notification"])
-		self.run_action(action="pin_message", chat_id="9", message_id=3, notify=True)
-		self.assertFalse(self.payload("pinChatMessage")["disable_notification"])
-		self.run_action(action="unpin_message", chat_id="9", message_id=3)
-		self.assertEqual(self.payload("unpinChatMessage")["message_id"], 3)
-		self.run_action(action="unpin_message", chat_id="9")
-		self.assertNotIn("message_id", self.payload("unpinChatMessage"))
+	def test_pin_unpin_refused_and_never_call_telegram(self):
+		for action, kw in (("pin_message", {"message_id": 3}), ("pin_message", {"message_id": 3, "notify": True}),
+			("unpin_message", {"message_id": 3}), ("unpin_message", {})):
+			r = self.run_action(action=action, chat_id="9", **kw)
+			self.assertEqual(r["error"], "owner_required", action)
+			self.assertIn("telegram_admin", r["message"])
+		self.assertEqual(self.api.of("pinChatMessage"), [])
+		self.assertEqual(self.api.of("unpinChatMessage"), [])
 
 	def test_forward_and_copy(self):
 		self.run_action(action="forward_message", chat_id="9", from_chat_id="5", message_id=2, message_thread_id=1)
@@ -328,7 +327,7 @@ class TestGatewayRun(Base):
 		for action, extra_args in {
 			"send_message": {"text": "x"}, "send_photo": {"photo": FILE_ID}, "send_voice": {"voice": FILE_ID},
 			"send_location": {"latitude": 1, "longitude": 1}, "set_reaction": {"message_id": 1, "emoji": "x"},
-			"delete_message": {"message_id": 1}, "pin_message": {"message_id": 1}, "get_chat_info": {},
+			"delete_message": {"message_id": 1}, "get_chat_info": {},
 			"send_chat_action": {}, "edit_message_text": {"message_id": 1, "text": "x"},
 		}.items():
 			out = self.run_action(action=action, chat_id="999", **extra_args)
