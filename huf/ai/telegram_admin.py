@@ -988,6 +988,7 @@ def handle_message(
 		or getattr(parsed, "is_channel", False)
 		or getattr(parsed, "business_connection_id", "")
 		or getattr(parsed, "sender_business_bot", "")
+		or getattr(parsed, "forward_origin", None)  # a forwarded /command or bind code is content, not a command
 	):
 		return None
 	tg_user, chat_id = str(parsed.sender_id), str(parsed.chat_id)

@@ -599,7 +599,6 @@ class TestAdminApproveFlow(WebhookHarness, AdminBase):
 
 	# PRODUCTION BUG (W17-SYNTH): a message carrying forward_origin is still run as a cockpit command; the
 	# handler (telegram_admin.handle_message) should return None when parsed.forward_origin is set.
-	@unittest.expectedFailure
 	def test_forwarded_cockpit_command_from_bound_admin_is_not_executed(self):
 		self.assertTrue(self.bind_admin().get("success"))
 		sends_before = len(self.api.of("sendMessage"))
