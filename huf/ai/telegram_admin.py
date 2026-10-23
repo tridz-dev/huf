@@ -919,6 +919,9 @@ def execute(ctx: Ctx, action: dict, nonce: str, *, ip: str = "") -> str:
 			if action.get("binding") != ctx.binding["name"]:
 				raise AdminError(MSG_DENIED)
 			frappe.db.set_value("Telegram Admin Binding", ctx.binding["name"], "is_active", 0)
+			from huf.ai.telegram_web_access_enforce import revoke_binding_sessions
+
+			revoke_binding_sessions(ctx.binding["name"], ctx.binding.get("frappe_user"))
 			result_text = "Unbound. Bind again from Huf with a new code."
 		else:
 			raise AdminError("Unknown action.")
