@@ -25,6 +25,12 @@ NEW_FIELDS = {
 	"telegram_bot_rate_cap": "Int",
 	"telegram_default_template": "Link",
 	"telegram_welcome_template": "Link",
+	"telegram_web_access_enabled": "Check",
+	"telegram_web_allowed_paths": "Small Text",
+	"telegram_web_session_hours": "Int",
+	"telegram_web_allow_privileged": "Check",
+	"telegram_web_allow_writes": "Check",
+	"telegram_web_extra_read_methods": "Small Text",
 }
 
 
