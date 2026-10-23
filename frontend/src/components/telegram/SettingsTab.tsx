@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Textarea } from '@/components/ui/textarea';
 import { LoadError } from '@/components/whatsapp/BridgeUnavailable';
 import { getAvailableAgents } from '@/services/gatewayApi';
@@ -24,12 +26,18 @@ import {
 	activeWarning,
 	dirtyValues,
 	hasInvalidNumber,
+	hasWebAccessErrors,
+	webAccessErrors,
+	webHoursWarning,
 	isVisible,
 	SETTINGS_SECTIONS,
 	toDraft,
 	type FieldDef,
+	type SectionDef,
 	type SettingsDraft,
 } from './settingsModel';
+import { WebAccessLinkHelper } from './WebAccessLinkHelper';
+import { cn } from '@/lib/utils';
 import type { TelegramTabProps } from './tabTypes';
 
 interface PickerOption { value: string; label: string }
@@ -84,6 +92,10 @@ function Field({ field, value, saved, pickers, options, disabled, onChange }: Fi
 						onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
 					/>
 				);
+			case 'lines':
+				return (
+					<Textarea id={id} rows={3} placeholder={field.placeholder} value={String(value ?? '')} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
+				);
 			case 'text':
 				return (
 					<Textarea id={id} rows={2} value={String(value ?? '')} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
@@ -119,10 +131,119 @@ function Field({ field, value, saved, pickers, options, disabled, onChange }: Fi
 			<div className="space-y-0.5">
 				<Label htmlFor={id} className="text-sm text-ink">{field.label}</Label>
 				{field.help && <p className="text-xs text-steel">{field.help}</p>}
-				{warning && <p role="note" className="text-xs text-warning">{warning}</p>}
+				{warning && <p role="note" className={cn('text-xs', field.tone === 'danger' ? 'text-destructive' : 'text-warning')}>{warning}</p>}
 			</div>
 			{control}
 		</div>
+	);
+}
+
+interface WebAccessSectionProps {
+	section: SectionDef;
+	gateway: string;
+	draft: SettingsDraft;
+	saved: SettingsDraft;
+	unavailable: string[];
+	disabled: boolean;
+	onChange: (name: string, value: TelegramSettingValue) => void;
+}
+
+function WebAccessSection({ section, gateway, draft, saved, unavailable, disabled, onChange }: WebAccessSectionProps) {
+	const [advancedOpen, setAdvancedOpen] = useState(false);
+	const fields = section.fields.filter((f) => !unavailable.includes(f.name));
+	if (fields.length === 0) return null;
+	const has = (n: string) => fields.some((f) => f.name === n);
+	const def = (n: string) => fields.find((f) => f.name === n)!;
+	const errors = webAccessErrors(draft);
+	const enabled = draft.telegram_web_access_enabled === true;
+	const hoursWarning = webHoursWarning(draft.telegram_web_session_hours);
+	const checkbox = (n: string) => {
+		const f = def(n);
+		const warning = activeWarning(f, draft[n], saved[n]);
+		return (
+			<div className="flex items-start gap-3">
+				<Checkbox id={`tg-${n}`} checked={draft[n] === true} disabled={disabled} onCheckedChange={(c) => onChange(n, c === true)} className="mt-0.5" />
+				<div className="space-y-0.5">
+					<Label htmlFor={`tg-${n}`} className="text-sm text-ink">{f.label}</Label>
+					{f.help && <p className="text-xs text-steel">{f.help}</p>}
+					{warning && <p role="note" className={cn('text-xs', f.tone === 'danger' ? 'text-destructive' : 'text-warning')}>{warning}</p>}
+				</div>
+			</div>
+		);
+	};
+	const advanced = fields.filter((f) => f.advanced);
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle className="text-sm">{section.title}</CardTitle>
+				<CardDescription>{section.description}</CardDescription>
+			</CardHeader>
+			<CardContent className="space-y-4">
+				{has('telegram_web_access_enabled') && (
+					<div className="space-y-2">
+						<div className="flex items-center justify-between gap-4">
+							<Label htmlFor="tg-telegram_web_access_enabled" className="text-sm text-ink">{def('telegram_web_access_enabled').label}</Label>
+							<Switch id="tg-telegram_web_access_enabled" checked={enabled} disabled={disabled} onCheckedChange={(c) => onChange('telegram_web_access_enabled', c)} />
+						</div>
+						{enabled && (
+							<div role="note" className="rounded-md border border-destructive p-3 text-xs text-destructive">
+								{def('telegram_web_access_enabled').warning}
+							</div>
+						)}
+					</div>
+				)}
+				{has('telegram_web_allowed_paths') && (
+					<div className="space-y-1.5">
+						<Label htmlFor="tg-telegram_web_allowed_paths" className="text-sm text-ink">{def('telegram_web_allowed_paths').label}</Label>
+						<Textarea
+							id="tg-telegram_web_allowed_paths"
+							rows={3}
+							placeholder={def('telegram_web_allowed_paths').placeholder}
+							value={String(draft.telegram_web_allowed_paths ?? '')}
+							disabled={disabled}
+							onChange={(e) => onChange('telegram_web_allowed_paths', e.target.value)}
+						/>
+						<p className="text-xs text-steel">{def('telegram_web_allowed_paths').help}</p>
+						{errors.paths && <p role="alert" className="text-xs text-destructive">{errors.paths}</p>}
+					</div>
+				)}
+				{has('telegram_web_session_hours') && (
+					<div className="space-y-1.5">
+						<Label htmlFor="tg-telegram_web_session_hours" className="text-sm text-ink">{def('telegram_web_session_hours').label}</Label>
+						<Input
+							id="tg-telegram_web_session_hours"
+							type="number"
+							min={1}
+							className="w-full sm:w-40"
+							value={draft.telegram_web_session_hours === '' || draft.telegram_web_session_hours === undefined ? '' : String(draft.telegram_web_session_hours)}
+							disabled={disabled}
+							onChange={(e) => onChange('telegram_web_session_hours', e.target.value === '' ? '' : Number(e.target.value))}
+						/>
+						{hoursWarning && <p role="note" className="text-xs text-warning">{hoursWarning}</p>}
+						{errors.hours && <p role="alert" className="text-xs text-destructive">{errors.hours}</p>}
+					</div>
+				)}
+				{has('telegram_web_allow_privileged') && checkbox('telegram_web_allow_privileged')}
+				{has('telegram_web_allow_writes') && checkbox('telegram_web_allow_writes')}
+				{advanced.length > 0 && (
+					<Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+						<CollapsibleTrigger asChild>
+							<Button type="button" variant="ghost" size="sm">{advancedOpen ? 'Hide advanced' : 'Advanced'}</Button>
+						</CollapsibleTrigger>
+						<CollapsibleContent className="space-y-1.5 pt-2">
+							{advanced.map((f) => (
+								<div key={f.name} className="space-y-1.5">
+									<Label htmlFor={`tg-${f.name}`} className="text-sm text-ink">{f.label}</Label>
+									<Textarea id={`tg-${f.name}`} rows={3} value={String(draft[f.name] ?? '')} disabled={disabled} onChange={(e) => onChange(f.name, e.target.value)} />
+									{f.help && <p className="text-xs text-steel">{f.help}</p>}
+								</div>
+							))}
+						</CollapsibleContent>
+					</Collapsible>
+				)}
+				<WebAccessLinkHelper gateway={gateway} />
+			</CardContent>
+		</Card>
 	);
 }
 
@@ -176,7 +297,7 @@ export function SettingsTab({ gateway }: TelegramTabProps) {
 
 	const dirty = dirtyValues(saved, draft);
 	const dirtyCount = Object.keys(dirty).length;
-	const invalid = hasInvalidNumber(draft);
+	const invalid = hasInvalidNumber(draft) || hasWebAccessErrors(draft);
 
 	const onSave = async () => {
 		setSaving(true);
@@ -195,6 +316,20 @@ export function SettingsTab({ gateway }: TelegramTabProps) {
 	return (
 		<div className="space-y-4">
 			{SETTINGS_SECTIONS.map((section) => {
+				if (section.id === 'web') {
+					return (
+						<WebAccessSection
+							key={section.id}
+							section={section}
+							gateway={gateway}
+							draft={draft}
+							saved={saved}
+							unavailable={settings.unavailable}
+							disabled={saving}
+							onChange={(name, v) => setDraft((d) => ({ ...d, [name]: v }))}
+						/>
+					);
+				}
 				const fields = section.fields.filter((f) => !settings.unavailable.includes(f.name) && isVisible(f, draft));
 				if (fields.length === 0) return null;
 				return (

@@ -2,7 +2,7 @@ import type { TelegramSettings, TelegramSettingValue, TelegramSettingValues } fr
 
 /** Field layout, plain-language copy and dirty-tracking for the Telegram Settings tab. */
 
-export type FieldKind = 'select' | 'switch' | 'number' | 'text' | 'template' | 'agent' | 'flow' | 'user';
+export type FieldKind = 'select' | 'switch' | 'number' | 'text' | 'template' | 'agent' | 'flow' | 'user' | 'lines';
 
 export interface FieldDef {
 	name: string;
@@ -21,10 +21,15 @@ export interface FieldDef {
 	/** Show the warning once the value differs from the saved one. */
 	warnOnChange?: boolean;
 	min?: number;
+	/** Visual weight of the warning: amber (default) or red. */
+	tone?: 'danger';
+	/** Tucked behind an Advanced toggle. */
+	advanced?: boolean;
+	placeholder?: string;
 }
 
 export interface SectionDef {
-	id: 'replies' | 'routing' | 'access' | 'agent' | 'modes';
+	id: 'replies' | 'routing' | 'access' | 'agent' | 'modes' | 'web';
 	title: string;
 	description: string;
 	fields: FieldDef[];
@@ -288,6 +293,56 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
 			},
 		],
 	},
+	{
+		id: 'web',
+		title: 'Signed-in pages (Mini App)',
+		description: 'Let people open pages from your site inside Telegram, already signed in.',
+		fields: [
+			{
+				name: 'telegram_web_access_enabled',
+				label: 'Allow signed-in pages',
+				kind: 'switch',
+				warning:
+					'People who open these pages through Telegram are signed in without a password or second step. Telegram is trusted to identify them.',
+				tone: 'danger',
+			},
+			{
+				name: 'telegram_web_allowed_paths',
+				label: 'Pages people can open',
+				kind: 'lines',
+				help: 'One page address per line. Each starts with /.',
+				placeholder: '/app/query-report/Sales Register',
+			},
+			{
+				name: 'telegram_web_session_hours',
+				label: 'Stay signed in for (hours)',
+				kind: 'number',
+				min: 1,
+			},
+			{
+				name: 'telegram_web_allow_privileged',
+				label: 'Allow administrators (System Manager)',
+				kind: 'switch',
+				help: 'Let people with the System Manager role use these links.',
+				warning: 'Not recommended. Only turn this on for a local or test setup with no sensitive data.',
+				tone: 'danger',
+			},
+			{
+				name: 'telegram_web_allow_writes',
+				label: 'Allow changes (not just viewing)',
+				kind: 'switch',
+				help: 'Signed-in pages can save and edit, not only show data.',
+				warning: 'People opening these pages can change data, not just look at it.',
+			},
+			{
+				name: 'telegram_web_extra_read_methods',
+				label: 'Extra viewing actions',
+				kind: 'lines',
+				advanced: true,
+				help: 'One action per line. These are treated as viewing only, so they work even when changes are not allowed.',
+			},
+		],
+	},
 ];
 
 export type SettingsDraft = Record<string, TelegramSettingValue>;
@@ -345,4 +400,38 @@ export function activeWarning(
 	if (field.warnOnChange) return value !== saved ? field.warning : null;
 	if (field.kind === 'switch') return value === true ? field.warning : null;
 	return value === field.warnValue ? field.warning : null;
+}
+
+export const WEB_LONG_SESSION_HOURS = 24;
+export const WEB_LONG_SESSION_WARNING = 'Longer sessions stay open longer if a phone is lost.';
+
+/** Amber note shown under the hours field once it passes a day. */
+export function webHoursWarning(hours: TelegramSettingValue | undefined): string | null {
+	return typeof hours === 'number' && hours > WEB_LONG_SESSION_HOURS ? WEB_LONG_SESSION_WARNING : null;
+}
+
+export function parseLines(value: TelegramSettingValue | undefined): string[] {
+	return String(value ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
+}
+
+/** Problems that would make saving the signed-in pages settings pointless. Empty when fine or off. */
+export function webAccessErrors(draft: SettingsDraft): { paths?: string; hours?: string } {
+	if (draft.telegram_web_access_enabled !== true) return {};
+	const out: { paths?: string; hours?: string } = {};
+	const paths = parseLines(draft.telegram_web_allowed_paths);
+	if (paths.length === 0) out.paths = 'Add at least one page address.';
+	else if (paths.some((p) => !p.startsWith('/'))) out.paths = 'Each page address must start with /.';
+	const h = draft.telegram_web_session_hours;
+	if (typeof h !== 'number' || Number.isNaN(h) || h < 1) out.hours = 'Enter at least 1 hour.';
+	return out;
+}
+
+export function hasWebAccessErrors(draft: SettingsDraft): boolean {
+	return Object.keys(webAccessErrors(draft)).length > 0;
+}
+
+/** Ready-to-use Mini App link for a page. Same shape the server builds. */
+export function webAccessFallbackUrl(origin: string, gateway: string, to: string): string {
+	const base = `${origin.replace(/\/$/, '')}/tg_open?gw=${encodeURIComponent(gateway)}`;
+	return to ? `${base}&to=${encodeURIComponent(to)}` : base;
 }
