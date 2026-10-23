@@ -23,7 +23,18 @@ HTTP 403, plain text `Not allowed in a Telegram session`.
 - Always blocked (writes on or off): impersonate, `frappe.core.doctype.user*`, role/permission/system settings/server
   script/data import/system console/backups methods, any request touching the doctypes User, Role, Has Role, DocPerm,
   Custom DocPerm, User Permission, System Settings, Server Script, Client Script, Data Import, System Console, OAuth
-  and API key doctypes, Gateway, Telegram Admin Binding, and any request carrying `sid` in form_dict.
+  and API key doctypes, Role/Module Profile, Custom Role, User Type/Group, Webhook, Notification, Auto Email Report, Print Format, Custom Field, Property Setter, Customize Form, DocType, Report, Social Login Key, Connected App, Token Cache, Email Account/Domain, Access Log, Scheduled Job Type, Console Log, Deleted Document (one list: `BLOCKED_DOCTYPES`), Gateway, Telegram Admin Binding, and any request carrying `sid` in form_dict.
+
+`cmd`: Frappe runs `form_dict.cmd` (query string or body) on ANY path, ahead of path routing (`frappe/app.py`). The
+guard therefore resolves `cmd` first: it is honoured only on `/` or on `/api/method/<same method>`; any request carrying
+`cmd` on another path (resources, `/app`, `/files`, `/assets`) is denied, and a `cmd` that differs from the path method is denied.
+
+Reports: `query_report.run|get_script` (`report_name`) are allowed only when the Report exists and its (or its
+reference report's) `ref_doctype` is not blocked. Report code (Script/Query Reports) runs with the report's own
+permissions, as for any desk user with report access, so expose only trusted reports. The report page also loads its
+Report doc via `getdoc` (doctype Report), allowed under the same check; `Report` stays blocked under `/api/resource`.
+Calls made by the report page (verified from `query_report.js`/`model.js`): `getdoc` (Report), `getdoctype`
+(ref_doctype), `query_report.get_script`, `query_report.run`; plus `desk_page.getpage`/`client.get_value` elsewhere in desk.
 
 Default read methods (verified in the Frappe 16 bench): `frappe.desk.query_report.run|get_script`,
 `frappe.client.get|get_list|get_count|get_value`, `frappe.desk.reportview.get|get_count`,
