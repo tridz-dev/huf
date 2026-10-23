@@ -166,3 +166,21 @@ class TestRevoke(unittest.TestCase):
 			self.assertEqual(E.revoke_binding_sessions("B1", "u@x.com"), 1)
 		db.delete.assert_called_once_with("Sessions", {"sid": "s1"})
 		self.assertIn("like", db.sql.call_args[0][0])
+
+
+class TestSessionExpiry(unittest.TestCase):
+	def test_expired_session_end_is_denied_and_unreadable_fails_closed(self):
+		from types import SimpleNamespace
+		from unittest import mock
+
+		from huf.ai import telegram_web_access_enforce as enf
+
+		def run(end):
+			sess = {"data": {"tg_origin": {"gateway": "G"}, "session_end": end}}
+			with mock.patch.object(enf.frappe.local, "session", sess, create=True):
+				return enf._session_expired()
+
+		self.assertTrue(run("2020-01-01T00:00:00+00:00"))
+		self.assertFalse(run("2999-01-01T00:00:00+00:00"))
+		self.assertFalse(run(""))
+		self.assertTrue(run("not-a-date"))

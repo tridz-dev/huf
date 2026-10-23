@@ -179,6 +179,21 @@ def _current_marker():
 	return m if isinstance(m, dict) else None
 
 
+def _session_expired() -> bool:
+	"""Frappe checks ``session_end`` only when the session comes from the cache; a session reloaded from the
+	database after a cache miss would be accepted once more, so the Telegram guard checks it itself."""
+	from datetime import UTC, datetime
+
+	data = (getattr(frappe.local, "session", None) or {}).get("data") or {}
+	end = data.get("session_end") if hasattr(data, "get") else None
+	if not end:
+		return False
+	try:
+		return datetime.now(tz=UTC) > datetime.fromisoformat(str(end))
+	except ValueError:
+		return True  # unreadable expiry: fail closed
+
+
 def _gateway_settings(gateway: str) -> dict:
 	now = time.monotonic()
 	hit = _gateway_cache.get(gateway)
@@ -319,6 +334,8 @@ def enforce():
 	req = getattr(frappe.local, "request", None)
 	if req is None:
 		return
+	if _session_expired():
+		deny()
 	try:
 		settings = _gateway_settings(marker.get("gateway") or "")
 		ok = decide(marker, settings, req.method, req.path, frappe.local.form_dict)
