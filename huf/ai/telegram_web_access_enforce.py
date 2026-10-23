@@ -98,8 +98,33 @@ BLOCKED_DOCTYPES = frozenset(
 		"Session Default Settings",
 		"Telegram Admin Binding",
 		"Gateway",
+		"Role Profile",
+		"Custom Role",
+		"Module Profile",
+		"User Type",
+		"User Group",
+		"Webhook",
+		"Notification",
+		"Auto Email Report",
+		"Print Format",
+		"Custom Field",
+		"Property Setter",
+		"Customize Form",
+		"DocType",
+		"Report",
+		"Social Login Key",
+		"Connected App",
+		"Token Cache",
+		"Email Account",
+		"Email Domain",
+		"Access Log",
+		"Scheduled Job Type",
+		"Console Log",
+		"Deleted Document",
 	}
 )
+REPORT_METHODS = frozenset({"frappe.desk.query_report.run", "frappe.desk.query_report.get_script"})
+GETDOC_METHOD = "frappe.desk.form.load.getdoc"
 UPLOAD_METHODS = frozenset({"upload_file", "frappe.handler.upload_file"})
 WRITE_METHODS = frozenset({"POST", "PUT", "DELETE", "PATCH"})
 READ_HTTP = frozenset({"GET", "HEAD"})
@@ -301,6 +326,27 @@ def _doctypes_in(form_dict, *path_doctypes) -> set:
 _BLOCKED_DT_LOWER = frozenset(d.lower() for d in BLOCKED_DOCTYPES)
 
 
+def _report_ok(name) -> bool:
+	"""A Report may be run/opened only if it exists and neither it nor the report it derives from is on a
+	blocked doctype. Report code runs with the report's own permissions (see docs)."""
+	try:
+		for _i in range(4):
+			if not isinstance(name, str) or not name:
+				return False
+			row = frappe.db.get_value(
+				"Report", name, ["ref_doctype", "report_type", "reference_report"], as_dict=True
+			)
+			if not row or str(row.get("ref_doctype") or "").lower() in _BLOCKED_DT_LOWER:
+				return False
+			if row.get("report_type") == "Custom Report" and row.get("reference_report"):
+				name = row.get("reference_report")
+				continue
+			return True
+	except Exception:
+		pass
+	return False
+
+
 def _extra_methods(settings) -> set:
 	return {
 		m.strip() for m in (settings.get("telegram_web_extra_read_methods") or "").splitlines() if m.strip()
@@ -320,22 +366,38 @@ def decide(marker: dict, settings: dict, method: str, path: str, form_dict) -> b
 		return False  # missing/unreadable/disabled gateway: closed
 	allow_writes = bool(marker.get("allow_writes"))
 
-	if norm.startswith(ASSET_PREFIXES[0] + "/") or norm.startswith(ASSET_PREFIXES[1] + "/"):
-		return method in READ_HTTP
-
-	cmd = None
-	api_method = norm.startswith("/api/method/") or norm.startswith("/api/v2/method/")
-	if api_method:
-		# method names are case-sensitive; take them from the decoded raw path
-		raw = normalize_path_keep_case(path)
-		cmd = raw.split("/method/", 1)[1] if raw and "/method/" in raw else None
-		if cmd and "/" in cmd:
-			# /api/v2/method/<doctype>/<method> is a document method call; /api/method/a/b is not a thing
+	# Frappe runs ``form_dict.cmd`` (query string or body) on ANY path, before path routing, so it is
+	# resolved first and nothing (assets, resources, navigation) may return early ahead of it.
+	form_cmd = form_dict.get("cmd")
+	if form_cmd:
+		if not isinstance(form_cmd, str):
 			return False
-		cmd = cmd or None
-	if cmd is None and form_dict.get("cmd"):
-		cmd = form_dict.get("cmd") if isinstance(form_dict.get("cmd"), str) else ""
+		if norm == "/":
+			cmd = form_cmd
+		elif norm.startswith("/api/method/"):
+			raw = normalize_path_keep_case(path)
+			path_cmd = raw.split("/method/", 1)[1] if raw and "/method/" in raw else None
+			if path_cmd != form_cmd:
+				return False  # Frappe would run the ``cmd`` param, not the path method
+			cmd = form_cmd
+		else:
+			return False
 		api_method = True
+	else:
+		cmd = None
+		api_method = norm.startswith("/api/method/") or norm.startswith("/api/v2/method/")
+		if api_method:
+			# method names are case-sensitive; take them from the decoded raw path
+			raw = normalize_path_keep_case(path)
+			cmd = raw.split("/method/", 1)[1] if raw and "/method/" in raw else None
+			if cmd and "/" in cmd:
+				# /api/v2/method/<doctype>/<method> is a document method call; /api/method/a/b is not a thing
+				return False
+			cmd = cmd or None
+	if not api_method and (
+		norm.startswith(ASSET_PREFIXES[0] + "/") or norm.startswith(ASSET_PREFIXES[1] + "/")
+	):
+		return method in READ_HTTP
 	if api_method:
 		if not cmd:
 			return False
@@ -343,7 +405,15 @@ def decide(marker: dict, settings: dict, method: str, path: str, form_dict) -> b
 			return True
 		if any(cmd == b.rstrip(".") or cmd.startswith(b) for b in BLOCKED_METHOD_PREFIXES):
 			return False
-		if _doctypes_in(form_dict, norm) & _BLOCKED_DT_LOWER:
+		if cmd in REPORT_METHODS:
+			if not _report_ok(form_dict.get("report_name")):
+				return False
+		dts = _doctypes_in(form_dict, norm)
+		if cmd == GETDOC_METHOD and _doctypes_in(form_dict) == {"report"}:
+			# the report page loads its Report doc (desk query-report view); gate it like run/get_script
+			if not _report_ok(form_dict.get("name")):
+				return False
+		elif dts & _BLOCKED_DT_LOWER:
 			return False
 		if cmd in UPLOAD_METHODS:
 			return allow_writes and method == "POST"

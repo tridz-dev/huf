@@ -213,6 +213,9 @@ def _effective_scheme() -> str:
 def _check_origin() -> None:
 	origin = frappe.get_request_header("Origin")
 	if not origin:
+		# no Origin: only a browser-asserted same-origin fetch is acceptable
+		if (frappe.get_request_header("Sec-Fetch-Site") or "").lower() != "same-origin":
+			raise WebAccessDenied("origin_missing")
 		return
 	parsed = urlparse(origin)
 	host = (getattr(getattr(frappe.local, "request", None), "host", "") or "").lower()

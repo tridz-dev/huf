@@ -301,3 +301,28 @@ class TestUniformFailure(unittest.TestCase):
 		self.assertEqual(len(lines), 1)
 		self.assertRegex(lines[0], r"reason=replayed h=[0-9a-f]{12} tg=42 binding=B1")
 		self.assertNotIn("hash=", lines[0])
+
+
+class TestOriginRequired(unittest.TestCase):
+	def run_check(self, headers):
+		req = SimpleNamespace(host="site.example")
+		fk = SimpleNamespace(
+			get_request_header=lambda k: headers.get(k), local=SimpleNamespace(request=req), conf={}
+		)
+		with (
+			mock.patch.object(twa, "frappe", fk),
+			mock.patch.object(twa, "_effective_scheme", return_value="https"),
+		):
+			twa._check_origin()
+
+	def test_missing_origin_denied(self):
+		with self.assertRaises(twa.WebAccessDenied):
+			self.run_check({})
+		with self.assertRaises(twa.WebAccessDenied):
+			self.run_check({"Sec-Fetch-Site": "cross-site"})
+
+	def test_origin_or_same_origin_ok(self):
+		self.run_check({"Origin": "https://site.example"})
+		self.run_check({"Sec-Fetch-Site": "same-origin"})
+		with self.assertRaises(twa.WebAccessDenied):
+			self.run_check({"Origin": "https://evil.example"})

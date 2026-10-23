@@ -59,7 +59,10 @@ class TestPaths(unittest.TestCase):
 
 class TestMatrix(unittest.TestCase):
 	def test_writes_off(self):
-		self.assertTrue(d(M_OFF, "POST", "/api/method/frappe.desk.query_report.run"))
+		with mock.patch.object(E, "_report_ok", return_value=True):
+			self.assertTrue(
+				d(M_OFF, "POST", "/api/method/frappe.desk.query_report.run", {"report_name": "R"})
+			)
 		self.assertTrue(d(M_OFF, "POST", "/api/method/frappe.client.get_list"))
 		self.assertTrue(d(M_OFF, "POST", "/api/method/myapp.api.read_thing"))
 		self.assertFalse(d(M_OFF, "POST", "/api/method/frappe.client.set_value"))
@@ -350,3 +353,71 @@ class TestExpiryAndHours(unittest.TestCase):
 		self.assertEqual(scheme("http", fwd="https"), "http")  # spoofed header ignored
 		self.assertEqual(scheme("http", host_name="https://x.example"), "https")
 		self.assertEqual(scheme("http", host_name="http://x.example"), "http")
+
+
+class TestCmdBypassAndReports(unittest.TestCase):
+	def test_cmd_on_non_method_paths_denied(self):
+		fd = {"cmd": "frappe.ping"}
+		for method, path in (
+			("GET", "/api/resource/User"),
+			("GET", "/api/resource/ToDo/x"),
+			("POST", "/api/resource/Server%20Script"),
+			("GET", "/app/anything"),
+			("GET", "/private/files/x"),
+			("GET", "/files/a.png"),
+			("GET", "/assets/x.js"),
+			("GET", "/app/sales-invoice"),
+		):
+			for m in (M_OFF, M_ON):
+				self.assertFalse(d(m, method, path, fd), (method, path))
+		self.assertFalse(d(M_OFF, "GET", "/api/resource/ToDo/x", {"run_method": "m", "cmd": "frappe.ping"}))
+
+	def test_cmd_must_match_path_method(self):
+		self.assertTrue(d(M_OFF, "GET", "/api/method/frappe.ping", {"cmd": "frappe.ping"}))
+		self.assertFalse(d(M_ON, "POST", "/api/method/frappe.ping", {"cmd": "frappe.client.insert"}))
+		self.assertFalse(d(M_OFF, "GET", "/api/method/frappe.ping", {"cmd": ["x"]}))
+
+	def test_legit_cmd_cases(self):
+		self.assertTrue(d(M_OFF, "GET", "/api/method/frappe.ping"))
+		self.assertTrue(d(M_OFF, "GET", "/", {"cmd": "frappe.ping"}))
+		self.assertFalse(d(M_OFF, "POST", "/", {"cmd": "frappe.client.insert"}))
+		self.assertFalse(d(M_ON, "POST", "/", {"cmd": "frappe.core.doctype.user.user.impersonate"}))
+
+	def test_report_methods_gated(self):
+		with mock.patch.object(E, "_report_ok", side_effect=lambda n: n == "Good"):
+			for meth in ("frappe.desk.query_report.run", "frappe.desk.query_report.get_script"):
+				self.assertTrue(d(M_OFF, "GET", f"/api/method/{meth}", {"report_name": "Good"}))
+				self.assertFalse(d(M_OFF, "GET", f"/api/method/{meth}", {"report_name": "Bad"}))
+				self.assertFalse(d(M_OFF, "GET", f"/api/method/{meth}", {}))
+			fd = {"doctype": "Report", "name": "Good"}
+			self.assertTrue(d(M_OFF, "GET", "/api/method/frappe.desk.form.load.getdoc", fd))
+			self.assertFalse(
+				d(M_OFF, "GET", "/api/method/frappe.desk.form.load.getdoc", {**fd, "name": "Bad"})
+			)
+
+	def test_report_ok_lookup(self):
+		rows = {
+			"Ok": {"ref_doctype": "ToDo", "report_type": "Script Report"},
+			"Bad": {"ref_doctype": "User", "report_type": "Script Report"},
+			"Cust": {"ref_doctype": "ToDo", "report_type": "Custom Report", "reference_report": "Bad"},
+		}
+		with mock.patch.object(
+			E.frappe, "db", mock.Mock(get_value=lambda dt, n, f, as_dict=False: rows.get(n))
+		):
+			self.assertTrue(E._report_ok("Ok"))
+			self.assertFalse(E._report_ok("Bad"))
+			self.assertFalse(E._report_ok("Cust"))
+			self.assertFalse(E._report_ok("Missing"))
+
+	def test_report_not_reachable_as_resource(self):
+		self.assertFalse(d(M_OFF, "GET", "/api/resource/Report/x"))
+
+	def test_extended_blocked_list(self):
+		for dt in (
+			"Role Profile", "Custom Role", "Module Profile", "User Type", "User Group", "Webhook",
+			"Notification", "Print Format", "Custom Field", "Property Setter", "DocType", "Report",
+			"Email Account", "Access Log", "Scheduled Job Type", "Deleted Document", "Has Role",
+			"User Permission", "OAuth Client",
+		):  # fmt: skip
+			self.assertIn(dt, E.BLOCKED_DOCTYPES)
+			self.assertFalse(d(M_ON, "POST", f"/api/resource/{dt}", {}), dt)
