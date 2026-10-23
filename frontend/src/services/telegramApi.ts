@@ -17,6 +17,8 @@ export interface TelegramCheck {
 	label: string;
 	ok: boolean;
 	hint: string;
+	/** 'warn' rows are advice only: they never change the overall health. */
+	level?: 'warn' | 'error';
 }
 
 export interface TelegramBot {
@@ -154,7 +156,11 @@ const CHECK_COPY: Record<string, string> = {
 	webhook_pending: 'Messages are piling up and are not being picked up.',
 	webhook_allowed_updates: 'The connection is missing some message types. Set it up again.',
 	bot_identity: 'The bot has no username. Give it one in BotFather.',
+	inline_feedback: 'Turn on Inline Feedback for this bot in BotFather (send /setinlinefeedback and choose Enabled) so answers arrive automatically.',
 };
+
+/** Friendly names for checks whose backend label is technical. */
+export const CHECK_LABELS: Record<string, string> = { inline_feedback: 'Inline answers' };
 
 /** Plain-language reading of a failed check; never the raw API wording. */
 export function checkMessage(check: TelegramCheck): string {

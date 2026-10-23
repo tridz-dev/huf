@@ -72,7 +72,7 @@ export function HealthBanner({ health: h, loading, checking, onCheck, onTurnOn }
 		);
 	}
 
-	const firstFailed = h.checks.find((c) => !c.ok);
+	const firstFailed = h.checks.find((c) => !c.ok && c.level !== 'warn');
 	let variant: 'default' | 'warning' | 'destructive' = 'default';
 	let role: 'alert' | 'status' = 'status';
 	let title = BANNER_TITLE[h.health];

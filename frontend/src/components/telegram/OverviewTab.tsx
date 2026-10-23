@@ -1,6 +1,7 @@
 import { Skeleton } from '@/components/ui/skeleton';
 import type { TelegramHealth, TelegramOverview } from '@/services/telegramApi';
 import { CapabilitiesCard } from './CapabilitiesCard';
+import { ChecksList } from './ChecksList';
 import { HealthBanner } from './HealthBanner';
 import { SetupChecklist } from './SetupChecklist';
 
@@ -26,7 +27,10 @@ export function OverviewTab({ health, overview, loading, checking, onCheck, onTu
 				</div>
 			) : (
 				<div className="grid items-start gap-4 lg:grid-cols-2">
-					<SetupChecklist items={health.checklist} health={health.health} settingsHref={settingsHref} />
+					<div className="space-y-4">
+						<SetupChecklist items={health.checklist} health={health.health} settingsHref={settingsHref} />
+						<ChecksList checks={health.checks} />
+					</div>
 					<CapabilitiesCard bot={overview?.bot ?? null} error={overview?.bot_error} />
 				</div>
 			)}
