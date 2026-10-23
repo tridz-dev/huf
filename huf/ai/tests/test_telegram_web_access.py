@@ -217,6 +217,9 @@ class TestExchange(unittest.TestCase):
 		self.roles = ["Desk User", "System Manager"]
 		self.denied("privileged_denied")
 		self.claims.clear()
+		self.roles = ["Desk User", "Administrator"]
+		self.denied("privileged_denied")
+		self.claims.clear()
 		self.gw = gateway(telegram_web_allow_privileged=1)
 		self.assertTrue(self.run_ex()["ok"])
 

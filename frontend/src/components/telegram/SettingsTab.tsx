@@ -214,6 +214,7 @@ function WebAccessSection({ section, gateway, draft, saved, unavailable, disable
 							id="tg-telegram_web_session_hours"
 							type="number"
 							min={1}
+							max={720}
 							className="w-full sm:w-40"
 							value={draft.telegram_web_session_hours === '' || draft.telegram_web_session_hours === undefined ? '' : String(draft.telegram_web_session_hours)}
 							disabled={disabled}

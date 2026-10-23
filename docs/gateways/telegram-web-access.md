@@ -20,11 +20,15 @@ what a Telegram session may do afterwards is enforced separately (`telegram_web_
 5. Single use: the hash (and `query_id` when present) is claimed in the cache with `SET NX EX`; a second
    use fails.
 6. The active binding is looked up strictly by Telegram user id + gateway.
-7. Eligibility: never `Administrator`, `Guest`, disabled users or non System User types. Users with the
-   System Manager role are refused unless `telegram_web_allow_privileged` is on.
+7. Eligibility: never the `Administrator` user, `Guest`, disabled users or non System User types. Users
+   holding the `System Manager` or `Administrator` role are refused unless `telegram_web_allow_privileged`
+   is on. The same check is repeated (cached ~30 s) on every request, so a user who later gains one of
+   those roles loses the Telegram session.
 8. `LoginManager.login_as(user, session_end=now+hours, audit_user="telegram:<id>")` creates a normal
-   Frappe session. The `sid` is only ever set as an HttpOnly cookie (`Secure` when the client connection
-   is https, taken from `X-Forwarded-Proto` or the request scheme, `max_age` = session length). It is never
+   Frappe session. The `sid` is only ever set as an HttpOnly cookie (`Secure` when `request.scheme` is https
+   or the site's `host_name` starts with `https://`; a client-supplied `X-Forwarded-Proto` is never trusted
+   on its own, Frappe applies it only when the bench runs with proxy handling; `max_age` = session length,
+   capped at 720 hours). It is never
    in the URL, JSON or logs. The session data carries `tg_origin = {binding, gateway, tg_id, allow_writes,
    web_access_version: 1}`.
 9. A request that already carries a valid Telegram-origin session for the same user and gateway only gets
@@ -40,9 +44,9 @@ row (`web_login`).
 | --- | --- |
 | `telegram_web_access_enabled` | Master switch (default off). |
 | `telegram_web_allowed_paths` | One route prefix per line; `/` alone is not accepted. |
-| `telegram_web_session_hours` | Session length, default 24, minimum 1. |
-| `telegram_web_allow_privileged` | Lets System Manager users in. Unsafe: for local or non-sensitive environments only. |
-| `telegram_web_allow_writes` | Off = Telegram sessions are read-only (stored in the marker). |
+| `telegram_web_session_hours` | Session length, default 24, between 1 and 720 (validated on save, capped again at login). |
+| `telegram_web_allow_privileged` | Lets System Manager and Administrator role holders in. Unsafe: for local or non-sensitive environments only. |
+| `telegram_web_allow_writes` | Off (default) = read-only: no changes through the guard's allowed methods (viewing may still record view logs or prepared reports). On = a denylist: everything the user's Frappe permissions allow except the always-blocked set listed in the enforcement doc. Stored in the marker. |
 | `telegram_web_extra_read_methods` | Extra `/api/method` names allowed in read-only mode. |
 
 ## Policy: what `login_as` skips and runs
@@ -58,3 +62,31 @@ Helpers for other modules: `session_marker(session_data)`, `is_tg_session()`, `n
 Note: Frappe checks `session_end` only when a session is read from the cache; a session loaded from the
 database after a cache miss is accepted once and then expires on the next cached read. The enforcement
 hook should therefore compare `session_end` itself.
+
+## What the settings do and do not limit
+
+- `telegram_web_allowed_paths` limits page navigation only. API access (`/api/...`) covers whatever the
+  bound user's Frappe permissions allow, within the guard's rules (default read list, blocked methods and
+  doctypes). It is not a data-scope boundary.
+- Read-only means no changes through the guard's allowed methods. Reads can still write side effects such as
+  view logs or prepared-report results.
+- Writes-on is opt-in and a denylist, not an allowlist.
+- Realtime: the socket.io server authenticates a session by calling `frappe.realtime.get_user_info` over HTTP
+  with the sid cookie. That method is not in the default read list, so a Telegram session gets no realtime
+  connection unless it is added as an extra read method. Verified from the Frappe 16 source
+  (`realtime/middlewares/authenticate.js`); pages degrade to no live updates. Not exercised in a live browser.
+
+## Other sessions of the same user
+
+Opening a page through Telegram calls `LoginManager.login_as`, which runs Frappe's `clear_active_sessions`.
+When `deny_multiple_sessions` is on (site config or System Settings), this signs the person out of their other
+browser sessions (their ordinary session is evicted; this is Frappe's single-session policy applied to the
+new login). It does nothing when the setting is off. This is kept deliberately: bypassing it for Telegram
+would defeat the site's single-session policy. The settings UI says: "Opening a page through Telegram can
+sign this person out of their other browser session depending on the site's simultaneous-session setting."
+
+## Framing
+
+`/tg_open` refuses to run inside a frame (client-side check, which also blocks Telegram Web). No
+`frame-ancestors` / `X-Frame-Options` header is sent: Frappe www pages have no cheap per-page header hook
+and the guarantee would add little over the in-page check. No SRI on Telegram's script, since it changes.
