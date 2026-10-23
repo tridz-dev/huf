@@ -145,7 +145,7 @@ class TestSetUserRestoreGuards(IntegrationTestCase):
         frappe.session.user = user
 
     def test_agent_hooks_restores_user(self):
-        from huf.ai.agent_hooks import run_agent_for_doc
+        from huf.ai.agent.hooks import run_agent_for_doc
 
         original_user = "test@example.com"
         target_user = "trigger@example.com"
@@ -154,7 +154,7 @@ class TestSetUserRestoreGuards(IntegrationTestCase):
         try:
             with patch("frappe.set_user", side_effect=self._tracking_set_user) as mock_set_user:
                 # The initiating user must exist for identity resolution to switch to it.
-                with patch("frappe.db.exists", return_value=True), patch("huf.ai.agent_hooks.run_agent_sync"):
+                with patch("frappe.db.exists", return_value=True), patch("huf.ai.agent.hooks.run_agent_sync"):
                     run_agent_for_doc(
                         doc={"doctype": "Note", "name": "TEST-001"},
                         agent_name="test-agent",
@@ -296,7 +296,7 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
             pass
 
     def test_flow_webhook_rejects_invalid_key(self):
-        from huf.ai.flow_api import flow_webhook
+        from huf.ai.flow.api import flow_webhook
 
         defn_doc = SimpleNamespace(
             status="Active",
@@ -319,7 +319,7 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
 
     @unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
     def test_clean_flow_webhook_accepts_frappe_cloud_secret_header(self):
-        from huf.ai.flow_api import flow_webhook_clean
+        from huf.ai.flow.api import flow_webhook_clean
 
         definition_json = (
             '{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook",'
@@ -343,7 +343,7 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
                 with patch("frappe.db.exists", return_value=True):
                     with patch("frappe.get_doc", return_value=defn_doc):
                         with patch("frappe.set_user") as mock_set_user:
-                            with patch("huf.ai.flow_engine.create_flow_run", return_value=flow_run) as mock_create_run:
+                            with patch("huf.ai.flow.engine.create_flow_run", return_value=flow_run) as mock_create_run:
                                 with patch("frappe.enqueue") as mock_enqueue:
                                     result = flow_webhook_clean()
 
@@ -357,7 +357,7 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
             pass
 
     def test_clean_flow_webhook_rejects_ambiguous_key_without_flow_id(self):
-        from huf.ai.flow_api import flow_webhook_clean
+        from huf.ai.flow.api import flow_webhook_clean
 
         definition_json = (
             '{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook",'

@@ -18,8 +18,8 @@ from typing import Any
 
 import frappe
 
-from huf.ai import whatsapp_send_file as send_file
-from huf.ai import whatsapp_voice_reply as wv
+from huf.ai.whatsapp import send_file
+from huf.ai.whatsapp import voice_reply as wv
 
 VOICE_ONLY = wv.VOICE_ONLY
 TEXT_AND_VOICE = wv.TEXT_AND_VOICE

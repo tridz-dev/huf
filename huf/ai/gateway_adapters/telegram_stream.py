@@ -209,7 +209,7 @@ class DraftUpdater:
 
 
 def _default_stream(**kwargs: Any):
-	from huf.ai.agent_integration import run_agent_stream
+	from huf.ai.agent.integration import run_agent_stream
 
 	return run_agent_stream(**kwargs)
 

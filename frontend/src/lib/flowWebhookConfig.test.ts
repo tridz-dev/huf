@@ -12,7 +12,7 @@ describe('createWebhookTriggerDefaults', () => {
     const config = createWebhookTriggerDefaults('https://huf.test', () => 'k');
     expect(config).toEqual({
       type: 'webhook',
-      url: 'https://huf.test/api/method/huf.ai.flow_api.flow_webhook',
+      url: 'https://huf.test/api/method/huf.ai.flow.api.flow_webhook',
       auth: 'k',
       method: 'POST',
     });

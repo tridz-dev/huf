@@ -4,7 +4,7 @@ import asyncio
 import frappe
 from types import SimpleNamespace
 import anthropic
-from huf.ai.tool_serializer import serialize_tools
+from huf.ai.tools.serializer import serialize_tools
 from huf.ai.providers.errors import ProviderError
 
 class SimpleResult:

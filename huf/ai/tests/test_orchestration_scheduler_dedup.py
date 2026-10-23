@@ -35,8 +35,8 @@ if not _REAL_FRAPPE and "frappe.utils" not in sys.modules:
 	sys.modules["frappe.utils"] = utils_mock
 	sys.modules["frappe"].utils = utils_mock
 
-if not _REAL_FRAPPE and "huf.ai.agent_integration" not in sys.modules:
-	sys.modules["huf.ai.agent_integration"] = MagicMock()
+if not _REAL_FRAPPE and "huf.ai.agent.integration" not in sys.modules:
+	sys.modules["huf.ai.agent.integration"] = MagicMock()
 
 from huf.ai.orchestration import scheduler  # noqa: E402
 

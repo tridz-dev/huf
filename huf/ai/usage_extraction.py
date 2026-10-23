@@ -15,9 +15,9 @@ of sync with each other:
     into calculate_cost for the non-streaming completion path.
   - huf/ai/providers/litellm.py (~lines 995-1050) — accumulation of round
     usage into total_usage across multi-round tool-calling loops.
-  - huf/ai/agent_integration.py (~lines 1830-1880) — sync-path re-extraction
+  - huf/ai/agent/integration.py (~lines 1830-1880) — sync-path re-extraction
     of usage from the agent run result.
-  - huf/ai/agent_integration.py (~lines 2945-3000) — streaming-path
+  - huf/ai/agent/integration.py (~lines 2945-3000) — streaming-path
     re-extraction of usage from the agent run result.
 
 Notably, the sync site fell back to a dict's ``input_tokens`` key while the

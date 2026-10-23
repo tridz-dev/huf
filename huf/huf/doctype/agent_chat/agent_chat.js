@@ -15,7 +15,7 @@ function render_chat_ui(frm) {
         append_message(messagesEl, "user", frappe.session.user, `(voice message: ${filename})`, new Date());
 
         frappe.call({
-            method: "huf.ai.agent_chat.upload_audio_and_transcribe",
+            method: "huf.ai.agent.chat.upload_audio_and_transcribe",
             args: {
                 docname: frm.doc.name,
                 filename: filename,
@@ -53,7 +53,7 @@ function render_chat_ui(frm) {
 
 
         frappe.call({
-            method: "huf.ai.agent_chat.upload_file_and_process",
+            method: "huf.ai.agent.chat.upload_file_and_process",
             args: {
                 docname: frm.doc.name,
                 filename: filename,
@@ -292,7 +292,7 @@ function load_history(frm, messagesEl) {
     }
 
     frappe.call({
-        method: "huf.ai.agent_chat.get_history",
+        method: "huf.ai.agent.chat.get_history",
         args: { conversation_id: frm.doc.conversation },
         callback(r) {
             messagesEl.empty();

@@ -3,7 +3,7 @@
 
 """Unit tests for ``FlowDefinition._validate_definition_json`` (shared graph-IR migration).
 
-Frappe-free by design, mirroring ``huf/ai/tests/test_procedure_conversion.py``:
+Frappe-free by design, mirroring ``huf/ai/procedure/tests/test_procedure_conversion.py``:
 ``huf.huf.doctype.flow_definition.flow_definition`` imports ``frappe`` at module load
 time, and ``huf.ai.graph.validator`` (which it now delegates validation to) imports
 ``huf.ai.graph.permissions``, whose ``default_tool_classifier`` calls

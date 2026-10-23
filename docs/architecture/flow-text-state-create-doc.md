@@ -15,8 +15,8 @@ bool -> true/false, list/dict -> compact JSON. Rendered output <= 10,000 chars.
 **State** (`state.get` {key, default?} -> {found, value}; `state.set` {key, value, ttl_seconds?}; `state.delete` {key} -> {deleted}):
 stored in `Flow State` (flow_id, state_key, value_json, expires_at). Scoped to the running flow (no cross-flow access, config cannot name a flow).
 Default TTL 24h, max 30 days, value <= 16 KB, key <= 140 chars. Expired rows read as missing and are purged lazily and by the daily
-`huf.ai.flow_state.purge_expired`. Gateway-triggered runs carry `gateway`, `sender_id`, `conversation_id` (use `input.sender_id`).
-Doctype access: System Manager / Huf Manager only; flows reach it through `huf.ai.flow_state`.
+`huf.ai.flow.state.purge_expired`. Gateway-triggered runs carry `gateway`, `sender_id`, `conversation_id` (use `input.sender_id`).
+Doctype access: System Manager / Huf Manager only; flows reach it through `huf.ai.flow.state`.
 
 **doc.create** {doctype, fields} -> {doctype, name}: doctype must be in site config `huf_flow_create_doc_doctypes` (default `["ToDo"]`);
 inserts as the run's session user with normal permission checks (no `ignore_permissions`); scalar values for existing, writable,

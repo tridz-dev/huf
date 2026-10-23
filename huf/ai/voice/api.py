@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 import frappe
 from frappe import _
 
-from huf.ai.agent_access import assert_agent_access
+from huf.ai.agent.access import assert_agent_access
 from huf.ai.voice import get_engine, get_engine_class, supported_engines
 from huf.ai.voice.engines.base import VoiceEngine
 from huf.permissions import has_capability

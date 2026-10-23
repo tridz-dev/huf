@@ -21,7 +21,7 @@ per-block hits, and a wrong per-block guess is worse than an honest gap.
 Two distinct measurement points, not one:
 
   - `compute_segment_tokens()` is called ONCE, pre-call, from
-    agent_integration.py, before the LLM is invoked. It describes round 1's
+    agent/integration.py, before the LLM is invoked. It describes round 1's
     pre-call composition only: system, tools, knowledge, history, and the
     outgoing user message, as they exist before that first completion.
   - A single Agent Run can perform up to `max_turns` LLM completions. Every
@@ -44,7 +44,7 @@ from litellm import token_counter
 
 from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 from huf.ai.providers.litellm import _normalize_model_name, _resolve_cache_settings
-from huf.ai.tool_serializer import serialize_tools
+from huf.ai.tools.serializer import serialize_tools
 
 
 def _count(pricing_model, text):
@@ -126,7 +126,7 @@ def compute_tools_breakdown(pricing_model, tools, tool_sources):
         tool_sources: dict of {tool_name: source}, source one of
             user_configured | builtin_registry | internal_capability |
             knowledge | mcp. Built by AgentManager._setup_tools() in
-            agent_integration.py, which is the only place that still knows
+            agent/integration.py, which is the only place that still knows
             where each tool came from.
 
     Returns:

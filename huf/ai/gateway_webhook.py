@@ -640,9 +640,9 @@ def _apply_account_events(events, gateway_name: str) -> int:
 	"""account_update / user_preferences: applied to the receiving gateway only, no Gateway Event row (WP-11)."""
 	if not events:
 		return 0
-	from huf.ai import whatsapp_account_events
+	from huf.ai.whatsapp import account_events
 
-	return whatsapp_account_events.apply_account_events(events, gateway_name)
+	return account_events.apply_account_events(events, gateway_name)
 
 
 def _deferral_key(gateway_name: str, request) -> str:

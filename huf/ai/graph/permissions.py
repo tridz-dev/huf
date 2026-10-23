@@ -41,7 +41,7 @@ Any new code path that authorizes a tool.call node by reading ``permission_envel
 without going through ``authorize_tool_call`` (and therefore without a live
 ``frappe.has_permission`` call), is a defect, not an optimisation (T-14 warning, PLAN.md).
 
-This module builds on ``huf.ai.tool_registry.PermissionAwareToolRegistry`` -- its
+This module builds on ``huf.ai.tools.registry.PermissionAwareToolRegistry`` -- its
 ``TOOL_PERMISSIONS`` map and its per-tool gating classmethods (``_can_use_tool``,
 ``_allows_code_execution``, ``_allows_ssh_execution``, ``_allows_docker_execution``,
 ``_allows_ask_user``, ``_allows_document_artifact_tools``, the last two of which already
@@ -56,7 +56,7 @@ from typing import Callable, Iterable, Iterator
 
 import frappe
 
-from huf.ai.tool_registry import PermissionAwareToolRegistry
+from huf.ai.tools.registry import PermissionAwareToolRegistry
 
 TOOL_DOCTYPE = "Agent Tool Function"
 

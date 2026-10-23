@@ -102,7 +102,7 @@ export async function runAgentSync(params: RunAgentSyncParams): Promise<RunAgent
     if (params.now !== undefined) {
       payload.now = params.now;
     }
-    const result = await call.post('huf.ai.agent_integration.run_agent_sync', payload);
+    const result = await call.post('huf.ai.agent.integration.run_agent_sync', payload);
     const message = result?.message ?? result;
     return {
       success: message?.success !== false,

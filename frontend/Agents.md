@@ -846,11 +846,8 @@ dist/
 
 1. **Agents.md** (this file) - Complete platform documentation
 2. **README.md** - Quick start and project overview
-3. **docs/CONTRIBUTE.md** - Contributing guide & UI framework usage
-4. **docs/QUICK_START.md** - Quick reference for framework components
-5. **docs/DASHBOARD_FRAMEWORK.md** - Detailed framework documentation
-6. **docs/ARCHITECTURE.md** - Flow builder architecture details
-7. **docs/FEATURES.md** - Flow builder features and capabilities
+3. **docs/HUF_PERMISSIONS.md** - Huf roles and capabilities
+4. **docs/MEMORY_POLICY_CAPTURE_DELEGATION.md** - Memory policy capture delegation
 
 ---
 

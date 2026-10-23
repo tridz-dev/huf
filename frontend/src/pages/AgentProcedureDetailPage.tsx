@@ -20,7 +20,7 @@ import { formatTimeAgo } from '@/utils/time';
 /** System Manager maps to the "Huf Admin" Huf role server-side (see AgentsPage.tsx /
  * AgentFormPage.tsx for the same convention) -- Huf Admin and Huf Manager are both
  * eligible to approve/reject a write Procedure per
- * huf.ai.procedure_approval_api.APPROVAL_MANAGER_ROLES. */
+ * huf.ai.procedure.approval_api.APPROVAL_MANAGER_ROLES. */
 function canApproveProcedures(hufRole: string | null): boolean {
   return hufRole === 'Huf Admin' || hufRole === 'Huf Manager';
 }

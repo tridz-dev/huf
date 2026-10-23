@@ -23,7 +23,7 @@ from frappe import _
 from frappe.rate_limiter import rate_limit
 from frappe.utils import add_to_date, now_datetime
 
-from huf.ai import whatsapp_outbound_policy as policy
+from huf.ai.whatsapp import outbound_policy as policy
 from huf.ai.gateway_adapters import provider_hooks
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 
@@ -2363,7 +2363,7 @@ def _flow_trigger_payload(event, gateway, attachments: list[str]) -> dict:
 
 def _start_flow_for_event(event, gateway) -> dict:
     """Start the routed Flow once per event; a re-queued or redelivered event never starts a second run."""
-    from huf.ai.flow_engine import create_flow_run
+    from huf.ai.flow.engine import create_flow_run
 
     existing = frappe.db.get_value("Gateway Event", event.name, "flow_run", for_update=True)
     if existing:
@@ -2380,7 +2380,7 @@ def _start_flow_for_event(event, gateway) -> dict:
     )
     event.db_set({"flow_run": flow_run.name, "status": "Running"})
     frappe.enqueue(
-        "huf.ai.flow_engine.run_flow",
+        "huf.ai.flow.engine.run_flow",
         queue="default",
         timeout=300,
         flow_run_name=flow_run.name,
@@ -2468,7 +2468,7 @@ def _process_gateway_event(event_name: str) -> dict:
         # execution_user, NOT as Guest.
         #
         # It used to call assert_agent_access(agent_doc, user="Guest"), which
-        # short-circuits on `allow_guest` alone (agent_access.check_agent_access).
+        # short-circuits on `allow_guest` alone (agent/access.py check_agent_access).
         # That made Agent.allow_guest=1 the only way to put any Agent behind any
         # Gateway -- and because `Agent.allow_guest` is also the sole gate on the
         # unauthenticated `run_agent_sync` / `run_agent_sync_chat` endpoints, the
@@ -2491,8 +2491,8 @@ def _process_gateway_event(event_name: str) -> dict:
         # resolve_run_identity_and_authorize() helper alongside the other 3
         # "run an agent" trigger surfaces, but keeps its own rejection
         # reporting shape (a Gateway Event status/error_message, not a raised
-        # exception) -- see agent_access.RunIdentityResult's docstring.
-        from huf.ai.agent_access import TRIGGER_GATEWAY, resolve_run_identity_and_authorize
+        # exception) -- see agent/access.py RunIdentityResult's docstring.
+        from huf.ai.agent.access import TRIGGER_GATEWAY, resolve_run_identity_and_authorize
 
         agent_doc = frappe.get_doc("Agent", event.target_agent)
         identity = resolve_run_identity_and_authorize(
@@ -2508,7 +2508,7 @@ def _process_gateway_event(event_name: str) -> dict:
         frappe.set_user(gateway.execution_user)
         event.db_set("status", "Running")
         if event.target_type == "Agent":
-            from huf.ai.agent_integration import run_agent_sync
+            from huf.ai.agent.integration import run_agent_sync
             from huf.ai.gateway_webhook import send_gateway_reply
 
             attachment_note = _describe_attachments(event.raw_payload)
@@ -2741,7 +2741,7 @@ def _send_whatsapp_reply(event, gateway, agent_run_id, response: str) -> dict:
         event.db_set("agent_run", agent_run_id)
     if event.sender_id and is_opted_out(gateway, event.sender_id):
         return _suppress_reply(event, agent_run_id, "Recipient opted out: reply not sent")
-    from huf.ai import whatsapp_voice_reply as voice
+    from huf.ai.whatsapp import voice_reply as voice
 
     mode = voice.reply_mode(event, gateway, response)
     if mode == voice.VOICE_ONLY:
@@ -2782,7 +2782,7 @@ def _send_telegram_reply(event, gateway, agent_run_id, response: str) -> dict:
 
 
 def _send_voice_only(event, gateway, response: str) -> bool:
-    from huf.ai import whatsapp_voice_reply as voice
+    from huf.ai.whatsapp import voice_reply as voice
 
     _throttle_outbound_send(gateway.name, _outbound_rate_cap(gateway.provider))
     wamid = voice.send_voice_reply(event, gateway, response)

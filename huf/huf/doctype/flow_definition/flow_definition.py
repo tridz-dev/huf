@@ -60,7 +60,7 @@ class FlowDefinition(Document):
 		surfaced separately as ``stale`` on the trigger summary."""
 		if self.status == "Active":
 			return
-		from huf.ai.flow_api import _flow_automation_name
+		from huf.ai.flow.api import _flow_automation_name
 
 		automation = _flow_automation_name(self.flow_id)
 		if frappe.db.get_value("Automation", automation, "status") == "Active":
@@ -82,7 +82,7 @@ class FlowDefinition(Document):
 		Deliberately NOT the Phase 6 "Analyse Agent" UX (GOAL.md), which is a distinct,
 		explicit action surfaced to the user with a Test/Enable choice -- see PLAN.md
 		T-52. This is a narrower, save-triggered convenience on top of the same
-		conversion primitive (huf.ai.procedure_conversion / flow_api.convert_flow_to_procedure),
+		conversion primitive (huf.ai.procedure.conversion / flow_api.convert_flow_to_procedure),
 		and it inherits every one of that primitive's guarantees: the result is always
 		tier="Draft"/status="Draft" (I8 -- never auto-activated, never auto-bound to an
 		Agent), and a non-deterministic Flow (containing agent.run / router.llm /
@@ -99,7 +99,7 @@ class FlowDefinition(Document):
 			# via a checkbox a non-admin could have ticked before the flow was locked.
 			return
 
-		from huf.ai.flow_api import convert_flow_to_procedure
+		from huf.ai.flow.api import convert_flow_to_procedure
 
 		try:
 			result = convert_flow_to_procedure(self.flow_id)
@@ -138,9 +138,9 @@ class FlowDefinition(Document):
 	def _validate_definition_json(self):
 		"""Validate the flow definition JSON against the shared graph-IR schema.
 
-		This is deliberately the *same* gate ``huf.ai.procedure_conversion`` re-runs
+		This is deliberately the *same* gate ``huf.ai.procedure.conversion`` re-runs
 		before it will convert a Flow to a Procedure (see
-		``huf.ai.procedure_conversion.analyze_conversion``, step 1) -- a Flow that
+		``huf.ai.procedure.conversion.analyze_conversion``, step 1) -- a Flow that
 		saves here is now guaranteed to be schema-valid graph-IR, so conversion can
 		never reject a saved Flow purely for being a shape ``validate_flow_graph``
 		has never seen (the old bug: this validator used to accept a top-level

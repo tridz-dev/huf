@@ -24,7 +24,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from huf.ai.tests import _stub_env
+from huf.testing import _stub_env
 
 _stub_env.install()
 
@@ -82,7 +82,7 @@ class MediaHandlerGuardTests(unittest.TestCase):
         with patch.object(media.frappe, "get_doc", return_value=agent_doc) as mock_get_doc, \
                 patch.object(media.frappe, "session", SimpleNamespace(user="caller@example.com")), \
                 patch(
-                    "huf.ai.agent_access.assert_agent_access",
+                    "huf.ai.agent.access.assert_agent_access",
                     side_effect=_GuardFired,
                 ) as mock_assert:
             extra_mocks = []
@@ -143,7 +143,7 @@ class MediaHandlerGuardTests(unittest.TestCase):
         agent_doc = _make_agent_doc("agent-6")
         with patch.object(media.frappe, "get_doc", return_value=agent_doc), \
                 patch.object(media.frappe, "session", SimpleNamespace(user="caller@example.com")), \
-                patch("huf.ai.agent_access.assert_agent_access", return_value=None) as mock_assert:
+                patch("huf.ai.agent.access.assert_agent_access", return_value=None) as mock_assert:
             result = asyncio.run(
                 media.handle_generate_video(prompt="a cat", agent_name=None)
             )

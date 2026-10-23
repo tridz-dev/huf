@@ -358,7 +358,7 @@ class TestUntrustedRunHardening(unittest.TestCase):
 		gw_ = SimpleNamespace(name="gw", default_agent="Bot", execution_user="Administrator")
 		ident = SimpleNamespace(authorized=True)
 		with (
-			mock.patch("huf.ai.agent_access.resolve_run_identity_and_authorize", return_value=ident),
+			mock.patch("huf.ai.agent.access.resolve_run_identity_and_authorize", return_value=ident),
 			mock.patch("huf.ai.gateway_service._run_agent_serialised", side_effect=serialised),
 			mock.patch.object(frappe, "get_doc"),
 			mock.patch.object(frappe, "set_user"),

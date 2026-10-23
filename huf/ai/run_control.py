@@ -131,7 +131,7 @@ def cancel_agent_run(run_id: str):
 		# Not started yet: nothing polls the marker, so fail it now (guarded: only if still Queued).
 		# If the drainer just started it the guarded UPDATE changes nothing; fall to the marker path.
 		try:
-			from huf.ai.agent_integration import _guarded_fail_queued_run
+			from huf.ai.agent.integration import _guarded_fail_queued_run
 
 			if _guarded_fail_queued_run(run_id, CANCELLED_BY_USER):
 				# Also leave the marker so a pickup that already passed its pre-check still sees Stop.
@@ -166,7 +166,7 @@ def cancel_agent_run(run_id: str):
 		# A run created moments ago may simply not have started polling yet: marker only, the
 		# stream (or the sweeps) finalize it.
 		try:
-			from huf.ai.agent_integration import _guarded_fail_started_run
+			from huf.ai.agent.integration import _guarded_fail_started_run
 
 			if _guarded_fail_started_run(run_id, CANCELLED_BY_USER):
 				finalized = True
@@ -391,7 +391,7 @@ def _conversation_lock_live(conversation) -> bool:
 	if not conversation:
 		return False
 	try:
-		from huf.ai.agent_integration import _conversation_lock_key
+		from huf.ai.agent.integration import _conversation_lock_key
 
 		ttl = _cache().ttl(_conversation_lock_key(conversation))
 		return bool(ttl and ttl > 0)

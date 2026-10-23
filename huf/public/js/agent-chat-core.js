@@ -85,9 +85,9 @@
 
 		var endpoints = Object.assign(
 			{
-				createConversation: "huf.ai.agent_chat.create_conversation",
-				sendMessage: "huf.ai.agent_chat.send_message_to_conversation",
-				uploadAudio: "huf.ai.agent_chat.upload_audio_and_transcribe_web",
+				createConversation: "huf.ai.agent.chat.create_conversation",
+				sendMessage: "huf.ai.agent.chat.send_message_to_conversation",
+				uploadAudio: "huf.ai.agent.chat.upload_audio_and_transcribe_web",
 				listMessages: "/api/resource/Agent Message",
 			},
 			config.endpoints || {}

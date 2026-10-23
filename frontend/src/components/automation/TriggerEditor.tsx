@@ -49,7 +49,7 @@ export interface TriggerEditorProps {
   permissions: TriggerEditorPermissions;
 }
 
-const WEBHOOK_ENDPOINT_PATH = '/api/method/huf.ai.automation_webhook.handle_automation_webhook';
+const WEBHOOK_ENDPOINT_PATH = '/api/method/huf.ai.automation.webhook.handle_automation_webhook';
 
 /**
  * Editor for a single Automation Trigger's fields, keyed off `trigger_type`.

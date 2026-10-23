@@ -29,9 +29,9 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.agent_integration import run_agent_sync
+from huf.ai.agent.integration import run_agent_sync
 from huf.ai.chat_api import run_agent_sync_chat
-from huf.ai.tests.factories import make_agent, make_ai_provider_and_model
+from huf.testing.factories import make_agent, make_ai_provider_and_model
 
 PREFIX = "ST-R4.3-guest-safeguards"
 
@@ -118,7 +118,7 @@ class TestRunAgentSyncGuestSafeguards(IntegrationTestCase):
         # section explicitly allows.
         frappe.local.request = SimpleNamespace(method="POST")
         frappe.local.request_ip = "127.0.0.1"
-        frappe.form_dict["cmd"] = "huf.ai.agent_integration.run_agent_sync"
+        frappe.form_dict["cmd"] = "huf.ai.agent.integration.run_agent_sync"
         frappe.form_dict["agent_name"] = f"{PREFIX} does-not-exist-rl"
 
         frappe.set_user("Guest")

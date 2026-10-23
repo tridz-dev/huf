@@ -623,7 +623,7 @@ class TestPromptAssembly(unittest.TestCase):
 			mock.patch.object(gs.frappe, "get_doc", side_effect=fake_get_doc),
 			mock.patch.object(gs, "_process_time_block_reason", return_value=""),
 			mock.patch(
-				"huf.ai.agent_access.resolve_run_identity_and_authorize",
+				"huf.ai.agent.access.resolve_run_identity_and_authorize",
 				return_value=SimpleNamespace(authorized=True),
 			),
 			mock.patch.object(gs.frappe, "set_user"),
@@ -653,7 +653,7 @@ class TestPromptAssembly(unittest.TestCase):
 			mock.patch.object(
 				telegram_agent_context, "build_instructions", return_value="Telegram: keep replies short."
 			),
-			mock.patch.dict(sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=run)}),
+			mock.patch.dict(sys.modules, {"huf.ai.agent.integration": SimpleNamespace(run_agent_sync=run)}),
 		):
 			out = gs._process_gateway_event("GEV-TG")
 		self.log_error = log_error

@@ -14,8 +14,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from huf.ai import gateway_service, media_prep
-from huf.ai import whatsapp_send_file as send_file
-from huf.ai import whatsapp_voice_reply as wv
+from huf.ai.whatsapp import send_file
+from huf.ai.whatsapp import voice_reply as wv
 from huf.ai.gateway_adapters import provider_hooks
 from huf.ai.gateway_adapters import telegram_voice as tv
 from huf.ai.gateway_adapters.telegram import TelegramGatewayAdapter
@@ -74,6 +74,7 @@ class _Base(unittest.TestCase):
 			patch.object(gateway_service, "is_opted_out", return_value=False),
 			patch.object(gateway_service, "_attempt_reply_parts", self.text_send),
 			patch.object(gateway_service, "_throttle_outbound_send"),
+			patch.object(gateway_service, "_commit_unless_testing"),  # needs a bound frappe.flags
 			patch("huf.ai.gateway_webhook.touch_last_event"),
 			patch("huf.ai.gateway_adapters.telegram_messages.record_sent"),
 		):

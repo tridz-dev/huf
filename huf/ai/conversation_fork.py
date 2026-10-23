@@ -19,7 +19,7 @@ import frappe
 from frappe import _
 from frappe.utils import now
 
-from huf.ai.agent_integration import _run_async_safely
+from huf.ai.agent.integration import _run_async_safely
 from huf.ai.conversation_manager import ConversationManager
 from huf.ai.providers.litellm import get_simple_completion
 
@@ -78,7 +78,7 @@ def fork_conversation_impl(
 
     agent_doc = frappe.get_doc("Agent", agent_name)
 
-    from huf.ai.agent_access import assert_agent_access
+    from huf.ai.agent.access import assert_agent_access
 
     assert_agent_access(agent_doc, user=frappe.session.user)
 

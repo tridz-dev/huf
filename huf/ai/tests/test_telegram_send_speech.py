@@ -9,7 +9,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from huf.ai import whatsapp_send_file as send_file
+from huf.ai.whatsapp import send_file
 from huf.ai.gateway_adapters import telegram_voice
 from huf.ai.tests.test_telegram_tools_rich import Base
 from huf.ai.tools import telegram as tool
@@ -120,7 +120,7 @@ class TestRunCoroInRunningLoop(unittest.TestCase):
 	def test_runs_inside_a_running_event_loop(self):
 		import asyncio
 
-		from huf.ai import whatsapp_voice_reply as wv
+		from huf.ai.whatsapp import voice_reply as wv
 
 		async def inner():
 			return 7

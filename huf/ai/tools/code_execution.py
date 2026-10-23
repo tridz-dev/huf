@@ -47,7 +47,7 @@ def get_files_path(is_private: bool = True) -> str:
 
 from huf.ai.context_artifacts import create_context_artifact
 from huf.ai.http_handler import handle_http_request
-from huf.ai.tool_functions import get_report_result
+from huf.ai.tools.functions import get_report_result
 from huf.ai.tools.execution_sandbox import (
 	DEFAULT_MAX_OUTPUT_BYTES,
 	DEFAULT_WALL_TIME_S,
@@ -534,7 +534,7 @@ def run_python(
 	acting_user = frappe.session.user
 
 	# 2. Per-user capability (defense-in-depth; also enforced at tool-offer
-	#    time in ``tool_registry.PermissionAwareToolRegistry``).
+	#    time in ``huf.ai.tools.registry.PermissionAwareToolRegistry``).
 	if not has_capability(acting_user, "code_execution.run"):
 		frappe.throw(
 			"You do not have permission to run Python code.",

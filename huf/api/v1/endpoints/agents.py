@@ -2,14 +2,14 @@
 
 Exposes read-only, safe metadata about Agents the calling user is
 permitted to use. Permission filtering is delegated entirely to
-`huf.ai.agent_access.check_agent_access`, the single source of truth
+`huf.ai.agent.access.check_agent_access`, the single source of truth
 for "can user X access agent Y" - no authorization logic is duplicated
 here.
 """
 
 import frappe
 
-from huf.ai.agent_access import check_agent_access
+from huf.ai.agent.access import check_agent_access
 from huf.api.v1.context import RequestContext
 from huf.api.v1.errors import NotFoundError
 from huf.api.v1.scopes import require_agent_allowed, require_scope

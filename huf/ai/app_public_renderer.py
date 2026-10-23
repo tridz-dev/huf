@@ -1,12 +1,12 @@
 """Page renderer for public/guest access to a HUF App via its alias.
 
-Structural pattern mirrors huf.ai.agent_stream_renderer.AgentStreamRenderer
+Structural pattern mirrors huf.ai.agent.stream_renderer.AgentStreamRenderer
 (BaseRenderer subclass, can_render()/render() only, no __init__ override —
 the base class already wires self.path from the resolved endpoint).
 
 Route: `/huf/apps/<alias>` -> resolved to a `HUF App` with `is_public=1`,
 `enabled=1`, whose linked Agent also has `allow_guest=1` (checked via the
-shared huf.ai.agent_access.check_agent_access, exactly as run_agent_sync
+shared huf.ai.agent.access.check_agent_access, exactly as run_agent_sync
 already gates guest text-chat access, A.8/D.9). Both gates must pass.
 
 Anti-enumeration: "no such public app", "app exists but is disabled", and
@@ -25,7 +25,7 @@ import frappe
 from frappe.website.page_renderers.base_renderer import BaseRenderer
 from frappe.website.page_renderers.template_page import TemplatePage
 
-from huf.ai.agent_access import check_agent_access
+from huf.ai.agent.access import check_agent_access
 
 APP_ROUTE_PREFIX = "huf/apps/"
 

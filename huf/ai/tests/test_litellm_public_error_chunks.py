@@ -34,6 +34,7 @@ def _patches(api_key="test-key"):
         patch("huf.ai.providers.litellm.resolve_capabilities", return_value=Mock(min_cacheable_tokens=1)),
         patch("huf.ai.providers.litellm.model_supports_prompt_caching", return_value=True),
         patch("huf.ai.providers.litellm.serialize_tools", return_value=None),
+        patch("huf.ai.providers.litellm.run_delivery.current_run_delivered", return_value=False),
         patch("huf.ai.providers.litellm.repair_message_sequence", side_effect=lambda messages, conversation_name: messages),
         patch("huf.ai.providers.litellm.trim_messages", side_effect=lambda messages, model: messages),
         patch("huf.ai.providers.litellm._resolve_api_base", return_value=None),

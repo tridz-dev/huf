@@ -1202,7 +1202,7 @@ class TestBusiness(SynthBase):
 
 		ident = SimpleNamespace(authorized=True, reason="")
 		with (
-			mock.patch("huf.ai.agent_access.resolve_run_identity_and_authorize", return_value=ident),
+			mock.patch("huf.ai.agent.access.resolve_run_identity_and_authorize", return_value=ident),
 			mock.patch.object(gs, "_run_agent_serialised", side_effect=serialised),
 		):
 			out = bagent._run_agent(self.gw, "bc-1", str(CUST), "prompt", "idem")

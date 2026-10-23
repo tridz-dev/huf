@@ -63,7 +63,7 @@ def classify_media(filename: str, mime_type: str | None = None) -> str:
 
 def _ocr_document(file_id: str, agent_name: str) -> dict:
 	from huf.ai import sdk_tools
-	from huf.ai.agent_integration import _run_async_safely
+	from huf.ai.agent.integration import _run_async_safely
 
 	return _run_async_safely(
 		sdk_tools.handle_ocr_document(file_id=file_id, agent_name=agent_name, create_message=False)

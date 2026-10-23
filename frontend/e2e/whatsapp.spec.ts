@@ -3,11 +3,11 @@ import { goto, waitForContent, mockOfflineApis } from './helpers';
 
 /**
  * WhatsApp console (/whatsapp) against a fully mocked backend: no Frappe, no Meta.
- * Every call under huf.ai.whatsapp_management / huf.ai.gateway_service is answered here, and the
+ * Every call under huf.ai.whatsapp.management / huf.ai.gateway_service is answered here, and the
  * requests the UI makes are recorded so the specs can assert what would have been sent.
  */
 
-const MGMT = '**/api/method/huf.ai.whatsapp_management.';
+const MGMT = '**/api/method/huf.ai.whatsapp.management.';
 const SERVICE = '**/api/method/huf.ai.gateway_service.';
 
 const gateway = (name: string, over: Record<string, unknown> = {}) => ({

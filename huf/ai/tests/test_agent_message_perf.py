@@ -12,7 +12,7 @@ import time
 import frappe
 from frappe.tests import UnitTestCase
 
-from huf.ai.tests.factories import ensure_ai_model
+from huf.testing.factories import ensure_ai_model
 
 
 class TestAgentMessagePerf(UnitTestCase):

@@ -345,7 +345,7 @@ class ConversationManager:
     def create_new_conversation(self, title=None, project=None, host=None):
         """Always create a fresh conversation.
 
-        ``host`` (server-side callers only, see ``huf.ai.desktop_sessions``) is
+        ``host`` (server-side callers only, see ``huf.ai.desktop.sessions``) is
         ``{device_id, workspace_fingerprint, label}``: it makes the conversation desktop-hosted.
         """
         title = title or f"Conversation with {self.agent_name}"

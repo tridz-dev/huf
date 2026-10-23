@@ -335,7 +335,7 @@ class Gateway(Document):
 
     def _validate_agent_access(self):
         """Verify execution_user has access to the default_agent."""
-        from huf.ai.agent_access import check_agent_access
+        from huf.ai.agent.access import check_agent_access
 
         agent = frappe.get_doc("Agent", self.default_agent)
         if not check_agent_access(agent, self.execution_user, for_execution=True):
@@ -367,7 +367,7 @@ class Gateway(Document):
         """Warn (never block: the worker host may differ from this one) when ffmpeg/libopus is missing here."""
         if self.get("voice_reply_mode") not in ("Voice only", "Text and voice"):
             return
-        from huf.ai.whatsapp_send_file import ffmpeg_status
+        from huf.ai.whatsapp.send_file import ffmpeg_status
 
         status = ffmpeg_status()
         if not (status.get("available") and status.get("has_libopus")):
@@ -384,7 +384,7 @@ class Gateway(Document):
         """Agent send scope (WhatsApp): a known scope, a real allow-list when chosen, non-negative caps."""
         if self.provider != "WhatsApp":
             return
-        from huf.ai import whatsapp_send_scope as send_scope
+        from huf.ai.whatsapp import send_scope as send_scope
 
         scope = self.get("agent_recipient_scope") or send_scope.DEFAULT_SCOPE
         if scope not in send_scope.SCOPES:

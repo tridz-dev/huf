@@ -122,7 +122,7 @@ export interface BackendEdge {
 /** @deprecated Flow-level run settings no longer fit in the graph-IR document
  * (additionalProperties: false leaves no room for a `settings` key). Kept as the type
  * of `Flow.settings`, a frontend/local-only field the engine now defaults instead
- * (huf.ai.flow_engine.DEFAULT_MAX_HOPS, etc.) -- see flowSerializer.ts. */
+ * (huf.ai.flow.engine.DEFAULT_MAX_HOPS, etc.) -- see flowSerializer.ts. */
 export interface BackendSettings {
     mode?: 'normal' | 'agentic';
     max_hops?: number;
@@ -199,7 +199,7 @@ export async function getFlowDefinitions(): Promise<FlowDefinitionListItem[]> {
 /** Get a single flow definition with parsed graph JSON */
 export async function getFlowDefinition(flowId: string): Promise<FlowDefinitionDoc> {
     try {
-        const result = await call.get('huf.ai.flow_api.get_flow_definition', {
+        const result = await call.get('huf.ai.flow.api.get_flow_definition', {
             flow_id: flowId,
         });
         return result.message as FlowDefinitionDoc;
@@ -214,7 +214,7 @@ export async function saveFlowDefinition(
     definitionJson: BackendFlowGraph
 ): Promise<{ flow_id: string; version: number }> {
     try {
-        const result = await call.post('huf.ai.flow_api.save_flow_definition', {
+        const result = await call.post('huf.ai.flow.api.save_flow_definition', {
             flow_id: flowId,
             definition_json: JSON.stringify(definitionJson),
         });
@@ -286,7 +286,7 @@ export async function updateFlowAutoConvert(flowId: string, autoConvert: boolean
 /** Get node schemas from backend for dynamic UI construction */
 export async function getNodeSchemas(): Promise<Record<string, unknown>> {
     try {
-        const result = await call.get('huf.ai.flow_api.get_node_schemas');
+        const result = await call.get('huf.ai.flow.api.get_node_schemas');
         return result.message as Record<string, unknown>;
     } catch (error) {
         handleFrappeError(error, 'Error fetching node schemas');
@@ -302,7 +302,7 @@ export async function runFlow(
     mode?: string
 ): Promise<{ flow_run_id: string; status: string; current_node_id: string }> {
     try {
-        const result = await call.post('huf.ai.flow_api.run_flow', {
+        const result = await call.post('huf.ai.flow.api.run_flow', {
             flow_id: flowId,
             payload: payload ? JSON.stringify(payload) : undefined,
             mode,
@@ -316,7 +316,7 @@ export async function runFlow(
 /** Get flow run detail */
 export async function getFlowRun(flowRunId: string): Promise<FlowRunDetail> {
     try {
-        const result = await call.get('huf.ai.flow_api.get_flow_run', {
+        const result = await call.get('huf.ai.flow.api.get_flow_run', {
             flow_run_id: flowRunId,
         });
         return result.message as FlowRunDetail;
@@ -332,7 +332,7 @@ export async function listFlowRuns(
     limit?: number
 ): Promise<FlowRunSummary[]> {
     try {
-        const result = await call.get('huf.ai.flow_api.list_flow_runs', {
+        const result = await call.get('huf.ai.flow.api.list_flow_runs', {
             flow_id: flowId,
             status,
             limit: limit || 20,
@@ -349,7 +349,7 @@ export async function approveFlowRun(
     comment?: string
 ): Promise<{ flow_run_id: string; status: string; current_node_id: string }> {
     try {
-        const result = await call.post('huf.ai.flow_api.approve_flow_run', {
+        const result = await call.post('huf.ai.flow.api.approve_flow_run', {
             flow_run_id: flowRunId,
             comment,
         });
@@ -365,7 +365,7 @@ export async function rejectFlowRun(
     comment?: string
 ): Promise<{ flow_run_id: string; status: string; current_node_id: string }> {
     try {
-        const result = await call.post('huf.ai.flow_api.reject_flow_run', {
+        const result = await call.post('huf.ai.flow.api.reject_flow_run', {
             flow_run_id: flowRunId,
             comment,
         });
@@ -381,7 +381,7 @@ export async function resumeFlowRun(
     input?: Record<string, unknown>
 ): Promise<{ flow_run_id: string; status: string; current_node_id: string }> {
     try {
-        const result = await call.post('huf.ai.flow_api.resume_flow_run', {
+        const result = await call.post('huf.ai.flow.api.resume_flow_run', {
             flow_run_id: flowRunId,
             input: input ? JSON.stringify(input) : undefined,
         });
@@ -394,7 +394,7 @@ export async function resumeFlowRun(
 /** List flow runs waiting for human approval */
 export async function getPendingApprovals(): Promise<PendingApproval[]> {
     try {
-        const result = await call.get('huf.ai.flow_api.get_pending_approvals');
+        const result = await call.get('huf.ai.flow.api.get_pending_approvals');
         return result.message as PendingApproval[];
     } catch (error) {
         handleFrappeError(error, 'Error fetching pending approvals');
@@ -425,7 +425,7 @@ export interface FlowConversionResult extends FlowConversionAnalysis {
 /** Read-only preview: is this flow convertible, and what would it look like? Creates nothing. */
 export async function analyzeFlowConversion(flowId: string): Promise<FlowConversionAnalysis> {
     try {
-        const result = await call.get('huf.ai.flow_api.analyze_flow_conversion', {
+        const result = await call.get('huf.ai.flow.api.analyze_flow_conversion', {
             flow_id: flowId,
         });
         return result.message as FlowConversionAnalysis;
@@ -437,7 +437,7 @@ export async function analyzeFlowConversion(flowId: string): Promise<FlowConvers
 /** Convert a deterministic flow into a Draft procedure. Never activates it. */
 export async function convertFlowToProcedure(flowId: string): Promise<FlowConversionResult> {
     try {
-        const result = await call.post('huf.ai.flow_api.convert_flow_to_procedure', {
+        const result = await call.post('huf.ai.flow.api.convert_flow_to_procedure', {
             flow_id: flowId,
         });
         return result.message as FlowConversionResult;
@@ -452,7 +452,7 @@ export async function convertFlowToProcedure(flowId: string): Promise<FlowConver
  * procedure if needed; the returned summary says whether the Automation is actually Active. */
 export async function setFlowTrigger(args: SetFlowTriggerArgs): Promise<FlowTriggerSummary> {
     try {
-        const result = await call.post('huf.ai.flow_api.set_flow_trigger', { ...args });
+        const result = await call.post('huf.ai.flow.api.set_flow_trigger', { ...args });
         return result.message as FlowTriggerSummary;
     } catch (error) {
         handleFrappeError(error, `Error setting trigger for flow ${args.flow_id}`);
@@ -462,7 +462,7 @@ export async function setFlowTrigger(args: SetFlowTriggerArgs): Promise<FlowTrig
 /** The flow's current trigger summary, or null if it has none. */
 export async function getFlowTrigger(flowId: string): Promise<FlowTriggerSummary | null> {
     try {
-        const result = await call.get('huf.ai.flow_api.get_flow_trigger', { flow_id: flowId });
+        const result = await call.get('huf.ai.flow.api.get_flow_trigger', { flow_id: flowId });
         return (result.message as FlowTriggerSummary | null) ?? null;
     } catch (error) {
         handleFrappeError(error, `Error fetching trigger for flow ${flowId}`);
@@ -472,7 +472,7 @@ export async function getFlowTrigger(flowId: string): Promise<FlowTriggerSummary
 /** Remove the flow's trigger (the converted procedure is kept). */
 export async function clearFlowTrigger(flowId: string): Promise<void> {
     try {
-        await call.post('huf.ai.flow_api.clear_flow_trigger', { flow_id: flowId });
+        await call.post('huf.ai.flow.api.clear_flow_trigger', { flow_id: flowId });
     } catch (error) {
         handleFrappeError(error, `Error clearing trigger for flow ${flowId}`);
     }

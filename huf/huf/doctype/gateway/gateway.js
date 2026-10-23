@@ -8,7 +8,7 @@ frappe.ui.form.on("Gateway", {
         // frappe.boot.installed_apps is not a reliable signal here, so only show the
         // banner when the connector check explicitly reports it unavailable.
         frappe.call({
-            method: "huf.ai.whatsapp_management.get_setup_status",
+            method: "huf.ai.whatsapp.management.get_setup_status",
             callback: function(r) {
                 let msg = (r && r.message) || {};
                 if (msg.success !== false && msg.connector_available === false) {

@@ -1,6 +1,6 @@
 """Page renderer / router for the Huf public developer API (v1).
 
-Follows the same `BaseRenderer` pattern as `huf.ai.agent_stream_renderer
+Follows the same `BaseRenderer` pattern as `huf.ai.agent.stream_renderer
 .AgentStreamRenderer` so it plugs into Frappe's website routing via the
 `page_renderer` hook, rather than `frappe.whitelist`. This keeps the API
 on a clean `/huf/api/v1/<endpoint>` path (no `/api/method/...` prefix)

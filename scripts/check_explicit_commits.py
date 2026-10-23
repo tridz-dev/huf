@@ -26,7 +26,7 @@ ALLOWLIST_PATTERNS = [
     "huf/ai/knowledge/indexer.py",
     "huf/ai/orchestration/orchestrator.py",
     "huf/ai/orchestration/scheduler.py",
-    "huf/ai/agent_scheduler.py",
+    "huf/ai/agent/scheduler.py",
     "huf/ai/app_seeding/tests/test_seed_fk.py",
     "huf/ai/transaction.py",
 ]

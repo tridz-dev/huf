@@ -162,8 +162,8 @@ def _credential(gateway, key: str) -> str:
 
 
 def _run_agent(gateway, connection_id: str, chat_id: str, prompt: str, idem: str) -> dict:
-	from huf.ai.agent_access import TRIGGER_GATEWAY, resolve_run_identity_and_authorize
-	from huf.ai.agent_integration import run_agent_sync
+	from huf.ai.agent.access import TRIGGER_GATEWAY, resolve_run_identity_and_authorize
+	from huf.ai.agent.integration import run_agent_sync
 	from huf.ai.gateway_service import _run_agent_serialised
 
 	agent = gateway.default_agent

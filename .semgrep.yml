@@ -20,7 +20,7 @@ rules:
         - huf/ai/knowledge/indexer.py
         - huf/ai/orchestration/orchestrator.py
         - huf/ai/orchestration/scheduler.py
-        - huf/ai/agent_scheduler.py
+        - huf/ai/agent/scheduler.py
         # Test fixtures may need explicit commits.
         - huf/ai/app_seeding/tests/test_seed_fk.py
         # The centralized transaction wrapper itself is allowed to commit.
@@ -37,7 +37,7 @@ rules:
       logging cleanly, e.g. frappe.log_error(f"Some dynamic message: {e}", "Label").
       Use keyword arguments with a short static title instead:
       frappe.log_error(title="Short Static Label", message=f"...dynamic details...").
-      See huf/ai/agent_integration.py (commit 1a43e76c) for the corrected pattern.
+      See huf/ai/agent/integration.py (commit 1a43e76c) for the corrected pattern.
     pattern-either:
       - pattern: frappe.log_error(f"...", ...)
       - pattern: frappe.log_error(f"...")
@@ -50,7 +50,7 @@ rules:
     languages:
       - python
     message: >
-      Functions in huf/ai/tool_functions.py and huf/ai/test_tools.py are handlers
+      Functions in huf/ai/tools/functions.py and huf/testing/tool_testing.py are handlers
       that 'Agent Tool Function' records of type 'Custom Function' resolve via
       function_path and require to be @frappe.whitelist()-decorated (see
       AgentToolFunction.validate() in
@@ -69,6 +69,6 @@ rules:
       - pattern-not-regex: '^def _.*'
     paths:
       include:
-        - huf/ai/tool_functions.py
-        - huf/ai/test_tools.py
+        - huf/ai/tools/functions.py
+        - huf/testing/tool_testing.py
     severity: WARNING

@@ -16,8 +16,8 @@ from dataclasses import dataclass
 from typing import Any
 
 import frappe
-from huf.ai import whatsapp_account_events as account_events_mod
-from huf.ai import whatsapp_outbound_policy as policy
+from huf.ai.whatsapp import account_events as account_events_mod
+from huf.ai.whatsapp import outbound_policy as policy
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_calls as wc
 from huf.ai.gateway_adapters import whatsapp_errors as we

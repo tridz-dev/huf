@@ -3,7 +3,7 @@
 
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.agent_chat import render_markdown
+from huf.ai.agent.chat import render_markdown
 
 
 class TestAgentChat(IntegrationTestCase):

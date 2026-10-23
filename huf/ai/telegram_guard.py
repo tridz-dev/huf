@@ -318,7 +318,7 @@ def parse_agent_decision(text: Any) -> tuple[str, str]:
 
 
 def _run_agent(gateway, prompt: str, ctx: dict) -> Any:
-	from huf.ai.agent_integration import run_agent_sync
+	from huf.ai.agent.integration import run_agent_sync
 
 	result = run_agent_sync(
 		agent_name=gateway.default_agent,

@@ -10,7 +10,7 @@ never iterated at all.
 
 frappe.cache() is patched to a small hand-written fake implementing real
 set(nx=)/expire/delete semantics (not a MagicMock, per this track's test
-convention documented in huf.ai.tests.test_procedure_lock -- a MagicMock's
+convention documented in huf.ai.procedure.tests.test_procedure_lock -- a MagicMock's
 .set() is truthy by default regardless of nx, which would make the
 "second acquire fails" assertion meaningless).
 
@@ -21,7 +21,7 @@ Run with:
 import unittest
 from unittest.mock import MagicMock, patch
 
-from huf.ai.agent_integration import _conversation_lock_key
+from huf.ai.agent.integration import _conversation_lock_key
 from huf.api.v1.context import RequestContext
 from huf.api.v1.endpoints import responses_stream
 from huf.api.v1.errors import ConflictError
@@ -112,7 +112,7 @@ class TestStreamLockBase(unittest.TestCase):
 class TestLockAcquisition(TestStreamLockBase):
 	def test_lock_key_uses_conversation_name_string(self):
 		"""The lock key must be derived from _conversation_lock_key(name) --
-		a string -- matching the direct-path lock in agent_integration.py,
+		a string -- matching the direct-path lock in agent/integration.py,
 		so the two paths actually contend."""
 		fake_gen = _FakeAsyncGen([{"type": "complete", "full_response": "ok"}])
 		with patch.object(responses_stream, "run_agent_stream", lambda **kwargs: fake_gen):
@@ -152,7 +152,7 @@ class TestLockAcquisition(TestStreamLockBase):
 		self.assertEqual(ctx.exception.status_code, 409)
 		self.assertEqual(ctx.exception.code, "conflict")
 		# Retried up to _DIRECT_LOCK_ATTEMPTS times with backoff between attempts.
-		from huf.ai.agent_integration import _DIRECT_LOCK_ATTEMPTS
+		from huf.ai.agent.integration import _DIRECT_LOCK_ATTEMPTS
 
 		self.assertEqual(len(self.cache.set_calls), _DIRECT_LOCK_ATTEMPTS)
 		self.assertEqual(mock_time.sleep.call_count, _DIRECT_LOCK_ATTEMPTS - 1)

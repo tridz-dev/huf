@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import frappe
 
-from huf.ai import tool_registry
+from huf.ai.tools import registry as tool_registry
 from huf.ai.tools._registry import ALL_INTEGRATION_TOOLS
 
 
