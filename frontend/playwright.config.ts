@@ -4,6 +4,10 @@ import { defineConfig, devices } from '@playwright/test';
 // backend. Specs mock `/api/**` at the network layer (see e2e/helpers.ts).
 // Deployed specs under e2e/deployed/ are excluded — they run via
 // playwright.deployed.config.ts against a live site.
+// Local override: PW_PORT=<n> serves the e2e dev server on another port when 8080 is taken.
+const PORT = process.env.PW_PORT || '8080';
+const PORT_FLAGS = process.env.PW_PORT ? ` --port ${PORT} --strictPort` : '';
+
 export default defineConfig({
   testDir: './e2e',
   testMatch: /\.spec\.ts$/,
@@ -21,13 +25,18 @@ export default defineConfig({
   use: {
     // Trailing slash matters: specs navigate with paths relative to /huf/
     // (the React router basename), resolved by the goto() helper.
-    baseURL: 'http://localhost:8080/huf/',
+    baseURL: `http://localhost:${PORT}/huf/`,
     headless: true,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'chromium',
+      // Local override only: PW_CHANNEL=chrome drives the installed system Chrome
+      // instead of the downloaded Playwright chromium. Unset (CI default) = unchanged.
+      use: { ...devices['Desktop Chrome'], ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}) },
+    },
   ],
   webServer: {
     // vite.config.ts's `base` is '/assets/huf/frontend/' (the production
@@ -38,8 +47,8 @@ export default defineConfig({
     // base for e2e only, via CLI flag (same mechanism `yarn build` already
     // uses for its own base override), so the fresh server matches
     // `baseURL` below without touching vite.config.ts's default.
-    command: 'npm run dev -- --base=/huf/',
-    url: 'http://localhost:8080/huf/',
+    command: `npm run dev -- --base=/huf/${PORT_FLAGS}`,
+    url: `http://localhost:${PORT}/huf/`,
     reuseExistingServer: true,
     timeout: 120000,
   },
