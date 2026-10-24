@@ -3,6 +3,7 @@ import { StrictMode, type ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { ApiError } from '@/lib/api';
 import { ResourceCache } from '@/lib/resource-cache';
 import { useResource, useResourceMutation } from './useResource';
 import { ResourceBoundary } from '@/components/ui/resource-state';
@@ -37,6 +38,29 @@ describe('useResource', () => {
     });
     expect(result.current.data).toBe('ok');
     expect(result.current.error).toBeUndefined();
+  });
+
+  it('turns a Frappe-shaped error and a {success:false,error} envelope into ApiError in hook state', async () => {
+    const cache = new ResourceCache();
+    const frappe = renderHook(() =>
+      useResource(
+        'frappe',
+        async () => Promise.reject({ exc_type: 'ValidationError', _server_messages: JSON.stringify([JSON.stringify({ message: 'Name is required' })]) }),
+        { cache },
+      ),
+    );
+    await waitFor(() => expect(frappe.result.current.error).toBeDefined());
+    expect(frappe.result.current.error).toBeInstanceOf(ApiError);
+    expect(frappe.result.current.error?.code).toBe('ValidationError');
+    expect(frappe.result.current.error?.message).toBe('Name is required');
+
+    const envelope = renderHook(() =>
+      useResource('envelope', async () => Promise.reject({ success: false, error: 'agent_not_found', message: 'No such agent' }), { cache }),
+    );
+    await waitFor(() => expect(envelope.result.current.error).toBeDefined());
+    expect(envelope.result.current.error).toBeInstanceOf(ApiError);
+    expect(envelope.result.current.error?.code).toBe('agent_not_found');
+    expect(envelope.result.current.error?.message).toBe('No such agent');
   });
 
   it('calls onError once per error', async () => {

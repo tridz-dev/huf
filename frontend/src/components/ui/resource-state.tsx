@@ -19,6 +19,7 @@ import { AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { EmptyState, type EmptyStateProps } from '@/components/dashboard/views/EmptyState';
+import type { ApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 export { EmptyState };
@@ -35,7 +36,7 @@ export function LoadingState({ label = 'Loading', className }: { label?: string;
 export interface ErrorStateProps {
   title?: string;
   /** Error or message; the message is shown as plain text. */
-  error?: { message?: string } | string | null;
+  error?: Pick<ApiError, 'message'> | string | null;
   onRetry?: () => void;
   className?: string;
 }
@@ -68,7 +69,7 @@ export function ErrorState({
 
 export interface ResourceLike<T> {
   data: T | undefined;
-  error: { message?: string } | undefined;
+  error: Pick<ApiError, 'message'> | undefined;
   isLoading: boolean;
   refetch: () => Promise<unknown>;
 }
