@@ -421,3 +421,21 @@ class TestCmdBypassAndReports(unittest.TestCase):
 		):  # fmt: skip
 			self.assertIn(dt, E.BLOCKED_DOCTYPES)
 			self.assertFalse(d(M_ON, "POST", f"/api/resource/{dt}", {}), dt)
+
+
+class TestLaunchPageStaysReachable(unittest.TestCase):
+	def test_launch_page_and_exchange_are_always_allowed_for_a_live_session(self):
+		from huf.ai import telegram_web_access_enforce as enf
+
+		marker = {"gateway": "G", "tg_id": "1", "binding": "B", "allow_writes": False}
+		settings = {
+			"telegram_web_access_enabled": 1,
+			"is_enabled": 1,
+			"telegram_web_allowed_paths": "/app/query-report/ToDo",
+		}
+		self.assertTrue(enf.decide(marker, settings, "GET", "/tg_open", {"gw": "G", "to": "/app/x"}))
+		self.assertFalse(enf.decide(marker, settings, "POST", "/tg_open", {}))
+		self.assertFalse(enf.decide(marker, settings, "GET", "/tg_open", {"cmd": "frappe.client.insert"}))
+		self.assertTrue(
+			enf.decide(marker, settings, "POST", "/api/method/huf.ai.telegram_web_access.exchange", {})
+		)

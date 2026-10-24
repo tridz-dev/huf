@@ -28,7 +28,10 @@ PRIVILEGED_ROLES = frozenset({"System Manager", "Administrator"})
 METHOD_PARAMS = ("run_method", "cmd", "method")
 
 ASSET_PREFIXES = ("/assets", "/files")
-ALWAYS_ALLOWED_METHODS = frozenset({"frappe.ping", "ping", "logout", "web_logout"})
+LAUNCH_PATH = "/tg_open"  # the launch page must stay reachable: a tap with a live session reuses it
+ALWAYS_ALLOWED_METHODS = frozenset(
+	{"frappe.ping", "ping", "logout", "web_logout", "huf.ai.telegram_web_access.exchange"}
+)
 
 # Verified to exist in Frappe 16 (see docs); names that do not exist were dropped.
 DEFAULT_READ_METHODS = frozenset(
@@ -394,6 +397,8 @@ def decide(marker: dict, settings: dict, method: str, path: str, form_dict) -> b
 				# /api/v2/method/<doctype>/<method> is a document method call; /api/method/a/b is not a thing
 				return False
 			cmd = cmd or None
+	if not api_method and norm == LAUNCH_PATH:
+		return method in READ_HTTP and not cmd
 	if not api_method and (
 		norm.startswith(ASSET_PREFIXES[0] + "/") or norm.startswith(ASSET_PREFIXES[1] + "/")
 	):
