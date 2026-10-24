@@ -326,3 +326,20 @@ class TestOriginRequired(unittest.TestCase):
 		self.run_check({"Sec-Fetch-Site": "same-origin"})
 		with self.assertRaises(twa.WebAccessDenied):
 			self.run_check({"Origin": "https://evil.example"})
+
+
+class TestDeskRouteAliases(unittest.TestCase):
+	def test_app_and_desk_spellings_are_allowed_together(self):
+		from huf.ai import telegram_web_access as wa
+
+		gw = {"telegram_web_allowed_paths": "/app/query-report/ToDo\n/huf/reports"}
+		prefixes = wa.allowed_prefixes(gw)
+		self.assertIn("/app/query-report/ToDo", prefixes)
+		self.assertIn("/desk/query-report/ToDo", prefixes)
+		self.assertIn("/huf/reports", prefixes)
+		self.assertTrue(wa.target_allowed("/desk/query-report/ToDo", prefixes))
+		self.assertFalse(wa.target_allowed("/desk/user", prefixes))
+		self.assertFalse(wa.target_allowed("/desk/query-report/ToDoX", prefixes))
+		self.assertEqual(
+			wa.allowed_prefixes({"telegram_web_allowed_paths": "/desk/x"}), ["/desk/x", "/app/x"]
+		)

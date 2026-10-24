@@ -107,9 +107,19 @@ def allowed_prefixes(gateway_doc: Any) -> list[str]:
 		if not norm:
 			continue
 		norm = norm.rstrip("/")
-		if norm and norm not in out:
-			out.append(norm)
+		for variant in _desk_aliases(norm):
+			if variant and variant not in out:
+				out.append(variant)
 	return out
+
+
+def _desk_aliases(path: str) -> list[str]:
+	"""Frappe 16 serves the desk under ``/desk`` and redirects ``/app`` to it, so an allowed ``/app/x`` page is
+	also reachable as ``/desk/x`` (and the other way round); both spellings must be allowed together."""
+	for here, there in (("/app", "/desk"), ("/desk", "/app")):
+		if path == here or path.startswith(here + "/"):
+			return [path, there + path[len(here) :]]
+	return [path]
 
 
 def target_allowed(target: str, prefixes: list[str]) -> bool:
