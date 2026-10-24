@@ -7,6 +7,17 @@ from huf.ai.solutions import assignment, loader, routing
 _SET_BY = {"referral": "referral", "triage_answer": "triage"}
 
 
+_NEW_TYPES = ("Keyword", "Ad or link tag", "Catch-all")
+
+
+def _is_legacy(rule):
+	return rule.get("match_type") not in _NEW_TYPES and rule.get("target_type") != "Triage"
+
+
+def _inert(rule):
+	return {**rule, "match_type": "Keyword", "match_values": []}
+
+
 def route_for_event(
 	gateway,
 	contact,
@@ -16,8 +27,12 @@ def route_for_event(
 	now=None,
 	commit_pin=False,
 	include_inactive=False,
+	ignore_legacy=False,
 ):
 	"""Decide the route for one inbound message and return the RouteDecision dict.
+
+	With ignore_legacy=True, rules using the old match types are made inert so a
+	legacy_fallthrough does not repeat and the default/triage/unrouted steps run.
 
 	Read-only unless commit_pin is True; then a chosen solution is upserted as the pin and an
 	issued triage prompt is recorded as pending. Never commits the transaction itself.
@@ -28,6 +43,10 @@ def route_for_event(
 	"""
 	now = get_datetime(now) if now else now_datetime()
 	rules = loader.load_rules(gateway)
+	if ignore_legacy:
+		# The caller already ran the old resolver and it missed. Keep legacy rules in the list (they
+		# still feed the triage menu) but make them inert so routing continues to steps 7-9.
+		rules = [_inert(r) if _is_legacy(r) else r for r in rules]
 	settings = loader.load_gateway_settings(gateway)
 	names = {r["solution"] for r in rules if r.get("solution")}
 	pin = assignment.get_pin(gateway, contact, now=now)
