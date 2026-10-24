@@ -650,7 +650,15 @@ export interface DocTypeMetaResponse {
  */
 export async function getDocTypeMeta(doctypeName: string): Promise<DocTypeMetaResponse> {
   try {
-    return (await db.getDoc('DocType', doctypeName)) as DocTypeMetaResponse;
+    const response = await call.get<{ docs?: DocTypeMetaResponse[] }>(
+      'frappe.desk.form.load.getdoctype',
+      { doctype: doctypeName },
+    );
+    const meta = response.docs?.[0];
+    if (!meta) {
+      throw new Error(`No metadata returned for DocType ${doctypeName}`);
+    }
+    return meta;
   } catch (error) {
     handleFrappeError(error, `Error fetching DocType meta for ${doctypeName}`);
   }
