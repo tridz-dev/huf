@@ -40,12 +40,12 @@ export function TestChat({
   embedded = false,
   brand = 'Your business',
   solutionLabels,
-  draft,
+  draft: simDraft,
 }: TestChatProps) {
   const [localGateway, setLocalGateway] = useState(gateway ?? gateways[0]?.name ?? '');
   const active = gateway ?? localGateway;
   const current = gateways.find((g) => g.name === active);
-  const chat = useTestChat({ gateway: active, solutionLabels, draft });
+  const chat = useTestChat({ gateway: active, solutionLabels, draft: simDraft });
   const [draft, setDraft] = useState('');
   const [target, setTarget] = useState('');
   const scroller = useRef<HTMLDivElement>(null);
