@@ -365,12 +365,55 @@ def get_setup_status(gateway_name: str | None = None) -> dict[str, Any]:
 	}
 
 
+def _template_key(row: dict[str, Any]) -> tuple[str, str]:
+	return (str(row.get("actual_name") or row.get("template_name") or row.get("name") or ""), str(row.get("language_code") or ""))
+
+
+def _with_usage(account_name: str, templates: list[dict[str, Any]], solution: str | None) -> list[dict[str, Any]]:
+	"""Add used_by/shared/owner to each row (and apply the solution filter). Never fails the listing."""
+	try:
+		from huf.ai.solutions import template_usage
+
+		usage = template_usage.bulk_usage(account_name, [_template_key(t) for t in templates])
+	except Exception:
+		if solution:
+			return []
+		for t in templates:
+			t.update({"used_by": [], "shared": False, "owner": None})
+		return templates
+	out = []
+	for t in templates:
+		u = usage.get(_template_key(t)) or {"owner": None, "used_by": [], "shared": False}
+		t.update({"used_by": u["used_by"], "shared": u["shared"], "owner": u["owner"]})
+		if solution and not any(x["solution"] == solution for x in u["used_by"]):
+			continue
+		out.append(t)
+	return out
+
+
+def _shared_refusal(docname: str, acknowledge_shared: Any) -> dict[str, Any] | None:
+	"""``shared_template`` refusal when several solutions use the template and it was not acknowledged."""
+	from huf.ai.solutions import template_usage
+
+	identity = template_usage.template_identity(docname)
+	if not identity:
+		return None
+	return template_usage.guard_shared(identity[0], identity[1], identity[2], acknowledge_shared)
+
+
 @frappe.whitelist()
 @_bridge_guard
 def list_templates(
-	gateway_name: str | None = None, account: str | None = None, status: str | None = None
+	gateway_name: str | None = None,
+	account: str | None = None,
+	status: str | None = None,
+	solution: str | None = None,
 ) -> dict[str, Any]:
-	"""List one account's WhatsApp Templates (from ``gateway_name``'s account, or an account you may see)."""
+	"""List one account's WhatsApp Templates (from ``gateway_name``'s account, or an account you may see).
+
+	Rows gain ``used_by`` / ``shared`` / ``owner`` (Solutions that use the template); ``solution`` keeps only
+	that solution's templates. Usage is only read after the account passed the read check.
+	"""
 	if not bridge.is_available():
 		return {"success": False, "error": "bridge_unavailable"}
 	_has_doctype_permission("WhatsApp Templates", "read")
@@ -385,6 +428,7 @@ def list_templates(
 				template["buttons"] = buttons.get(template["name"], [])
 	except Exception:
 		pass  # buttons are informational for the send dialog; never fail the listing
+	templates = _with_usage(account_name, templates, solution)
 	business_id = ""
 	try:
 		acct = bridge.resolve_account(account_name)
@@ -441,8 +485,11 @@ def get_template(name: str | None = None) -> dict[str, Any]:
 
 @frappe.whitelist(methods=["POST"])
 @_bridge_guard
-def edit_template(name: str | None = None, payload: Any = None) -> dict[str, Any]:
-	"""Admin: edit a template on Meta (full components) under Meta's edit rules; it goes back to PENDING review."""
+def edit_template(name: str | None = None, payload: Any = None, acknowledge_shared: Any = 0) -> dict[str, Any]:
+	"""Admin: edit a template on Meta (full components) under Meta's edit rules; it goes back to PENDING review.
+
+	A template used by several solutions is refused with ``shared_template`` unless ``acknowledge_shared``.
+	"""
 	_require_admin()
 	if not bridge.is_available():
 		return {"success": False, "error": "bridge_unavailable"}
@@ -451,6 +498,9 @@ def edit_template(name: str | None = None, payload: Any = None) -> dict[str, Any
 	parsed = _parse_json_arg(payload, "payload")
 	if not isinstance(parsed, dict):
 		return {"success": False, "error": "invalid_payload", "message": "payload must be an object"}
+	refusal = _shared_refusal(str(name).strip(), acknowledge_shared)
+	if refusal:
+		return refusal
 	return bridge.edit_template(str(name).strip(), parsed)
 
 
@@ -526,14 +576,39 @@ def reject_template_draft(name: str | None = None, note: str | None = None) -> d
 
 
 @frappe.whitelist(methods=["POST"])
+def declare_template_usage(
+	account: str | None = None, template: str | None = None, language: str | None = None,
+	solution: str | None = None, owner: Any = 0,
+) -> dict[str, Any]:
+	"""Admin: declare that a solution uses (or, with ``owner``, owns) a template of an account."""
+	if not _can_manage_integrations():
+		raise frappe.PermissionError(_("Not permitted to manage integrations"))
+	resolved = _read_account(None, account)
+	if isinstance(resolved, dict):
+		return resolved
+	if not template or not str(template).strip():
+		return _error("invalid_name", "Template name is required.")
+	if not solution or not frappe.db.exists("Solution", solution):
+		return _error("not_found", "Solution not found.")
+	from huf.ai.solutions import template_usage
+
+	owner_flag = str(owner).strip().lower() in ("1", "true", "yes")
+	usage = template_usage.declare(resolved, str(template).strip(), language or "", solution, owner=owner_flag)
+	return {"success": True, "account": resolved, "template": str(template).strip(), "language": language or "", **usage}
+
+
+@frappe.whitelist(methods=["POST"])
 @_bridge_guard
-def delete_template(name: str | None = None) -> dict[str, Any]:
-	"""Admin: delete a WhatsApp Template by document name."""
+def delete_template(name: str | None = None, acknowledge_shared: Any = 0) -> dict[str, Any]:
+	"""Admin: delete a WhatsApp Template by document name (refused with ``shared_template`` when shared, unless acknowledged)."""
 	_require_admin()
 	if not bridge.is_available():
 		return {"success": False, "error": "bridge_unavailable"}
 	if not name or not str(name).strip():
 		return {"success": False, "error": "invalid_name", "message": "Template name is required."}
+	refusal = _shared_refusal(str(name).strip(), acknowledge_shared)
+	if refusal:
+		return refusal
 	return bridge.delete_template(name)
 
 
