@@ -368,11 +368,11 @@ def preview_values(
 
 def build_sender(gateway: Any) -> tuple[Any, Callable[[str], str]]:
 	"""``(TelegramSender, callback signer for chat)`` on the gateway's own credentials."""
-	from huf.ai.gateway_adapters.telegram_outbound import TelegramSender
+	from huf.ai.gateway_adapters.telegram_outbound import sender_for_gateway
 	from huf.ai.gateway_webhook import get_gateway_adapter
 
 	adapter = get_gateway_adapter(gateway)
-	return TelegramSender(adapter.client), adapter.sign_callback_data
+	return sender_for_gateway(adapter.client, gateway), adapter.sign_callback_data
 
 
 def _ids(msgs: Any) -> list:
@@ -430,12 +430,15 @@ def send_template(
 		raise TemplateError("; ".join(r.errors), r.missing)
 	if r.missing and not allow_missing:
 		raise TemplateError(f"Missing template variables: {', '.join(r.missing)}", r.missing)
+	from huf.ai.gateway_adapters.telegram_outbound import gateway_sender_options
+
+	gw = gateway_sender_options(gateway)  # the same settings the reply sender applies
 	opts = {
 		"thread_id": thread_id,
-		"silent": bool(silent or getattr(gateway, "telegram_silent_replies", 0)),
-		"protect": bool(protect or getattr(gateway, "telegram_protect_content", 0)),
+		"silent": bool(silent or gw["silent"]),
+		"protect": bool(protect or gw["protect"]),
 	}
-	link_preview = getattr(gateway, "preview_url", None) == "On"  # Default (off) and Off send no previews
+	link_preview = gw["link_previews"]  # Default (off) and Off send no previews
 	ids: list = []
 	text = r.text
 	media = r.media

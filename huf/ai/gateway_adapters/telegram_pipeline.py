@@ -22,7 +22,7 @@ from huf.ai.gateway_adapters import telegram_blocks as blocks
 from huf.ai.gateway_adapters import telegram_messages
 from huf.ai.gateway_adapters.telegram_client import TelegramApiError
 from huf.ai.gateway_adapters.telegram_format import MODE_HTML, split_message
-from huf.ai.gateway_adapters.telegram_outbound import TelegramSender
+from huf.ai.gateway_adapters.telegram_outbound import TelegramSender, sender_for_gateway
 
 BACKOFF_BASE_SECONDS = 5.0
 BACKOFF_MAX_SECONDS = 300.0
@@ -162,8 +162,11 @@ def backoff_seconds(cls: dict, attempt: int) -> float:
 	return exponential
 
 
-def build_sender(adapter: Any) -> TelegramSender:
-	return TelegramSender(adapter.client, parse_mode=MODE_HTML)
+def build_sender(adapter: Any, gateway: Any = None) -> TelegramSender:
+	"""Reply sender; with ``gateway`` it carries the gateway's format / silent / protect / preview settings."""
+	if gateway is None:
+		return TelegramSender(adapter.client, parse_mode=MODE_HTML)
+	return sender_for_gateway(adapter.client, gateway)
 
 
 def send_parts_with(
@@ -273,7 +276,7 @@ def send_parts(gateway: Any, event: Any, parts: list[str], quote: bool) -> Simpl
 	adapter = get_gateway_adapter(gateway, event_contact_name(event))
 	adapter.client.on_chat_migrated = lambda old, new: _persist_migration(gateway, old, new)
 	thread_id, reply_to = reply_target(event)
-	sender = build_sender(adapter)
+	sender = build_sender(adapter, gateway)
 	markup = reply_markup_for(event, gateway, "\n\n".join(parts))
 	from huf.ai.gateway_adapters import telegram_buttons
 

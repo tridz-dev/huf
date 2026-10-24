@@ -97,11 +97,44 @@ def _upload_part(kind: str, value: MediaInput) -> tuple[Any, tuple | None]:
 	raise ValueError("media must be a file_id/URL string, bytes, or (filename, bytes[, mime])")
 
 
+_GATEWAY_MODES = {"plain": MODE_PLAIN, "html": MODE_HTML, "markdownv2": MODE_MARKDOWN_V2}
+
+
+def gateway_sender_options(gateway: Any) -> dict[str, Any]:
+	"""TelegramSender kwargs from the Gateway's reply settings (the one place they are read).
+
+	``telegram_parse_mode`` Plain/HTML/MarkdownV2 (unset = HTML), ``telegram_silent_replies``,
+	``telegram_protect_content`` and ``preview_url`` (only "On" enables link previews)."""
+
+	def field(name: str) -> Any:
+		return gateway.get(name) if hasattr(gateway, "get") else getattr(gateway, name, None)
+
+	raw = str(field("telegram_parse_mode") or "HTML").strip().lower()
+	return {
+		"parse_mode": _GATEWAY_MODES.get(raw, MODE_HTML),
+		"silent": bool(int(field("telegram_silent_replies") or 0)),
+		"protect": bool(int(field("telegram_protect_content") or 0)),
+		"link_previews": field("preview_url") == "On",
+	}
+
+
+def sender_for_gateway(client: TelegramBotClient, gateway: Any, **overrides: Any) -> "TelegramSender":
+	"""A TelegramSender carrying the Gateway's reply settings (``overrides`` win, e.g. ``parse_mode``)."""
+	return TelegramSender(client, **{**gateway_sender_options(gateway), **overrides})
+
+
 class TelegramSender:
 	"""Outbound operations. ``parse_mode`` is the format applied to agent text ("" = send verbatim)."""
 
 	def __init__(
-		self, client: TelegramBotClient, *, parse_mode: str = MODE_PLAIN, reply_style: str = "parameters"
+		self,
+		client: TelegramBotClient,
+		*,
+		parse_mode: str = MODE_PLAIN,
+		reply_style: str = "parameters",
+		silent: bool = False,
+		protect: bool = False,
+		link_previews: bool = True,
 	) -> None:
 		if parse_mode not in (MODE_PLAIN, MODE_HTML, MODE_MARKDOWN_V2):
 			raise ValueError("parse_mode must be '', 'HTML' or 'MarkdownV2'")
@@ -110,6 +143,10 @@ class TelegramSender:
 		self.client = client
 		self.parse_mode = parse_mode
 		self.reply_style = reply_style
+		# Gateway-level reply options: per-call flags can only add to these, never switch them off.
+		self.silent = bool(silent)
+		self.protect = bool(protect)
+		self.link_previews = bool(link_previews)
 
 	# -- helpers -------------------------------------------------------------------------------
 
@@ -140,9 +177,9 @@ class TelegramSender:
 					payload["reply_parameters"] = {"message_id": mid, "allow_sending_without_reply": True}
 		if markup:
 			payload["reply_markup"] = dict(markup)
-		if silent:
+		if silent or self.silent:
 			payload["disable_notification"] = True
-		if protect:
+		if protect or self.protect:
 			payload["protect_content"] = True
 		if effect_id:
 			payload["message_effect_id"] = effect_id
@@ -201,7 +238,7 @@ class TelegramSender:
 			payload["text"] = part.text
 			if part.parse_mode:
 				payload["parse_mode"] = part.parse_mode
-			if not link_preview:
+			if not (link_preview and self.link_previews):
 				payload["link_preview_options"] = {"is_disabled": True}
 			try:
 				results.append(self._call_with_fallback("sendMessage", payload, "text", part.plain))
@@ -432,7 +469,14 @@ class TelegramSender:
 		sender = (
 			self
 			if mode == self.parse_mode
-			else TelegramSender(self.client, parse_mode=mode, reply_style=self.reply_style)
+			else TelegramSender(
+				self.client,
+				parse_mode=mode,
+				reply_style=self.reply_style,
+				silent=self.silent,
+				protect=self.protect,
+				link_previews=self.link_previews,
+			)
 		)
 		payload = self._common(chat_id, reply_to=reply_to, thread_id=thread_id, silent=silent, protect=protect)
 		media_json, files, follow_ups = [], {}, []
@@ -569,7 +613,7 @@ class TelegramSender:
 			payload["parse_mode"] = part.parse_mode
 		if markup is not None:
 			payload["reply_markup"] = dict(markup)
-		if not link_preview:
+		if not (link_preview and self.link_previews):
 			payload["link_preview_options"] = {"is_disabled": True}
 		try:
 			return self._call_with_fallback("editMessageText", payload, "text", part.plain)

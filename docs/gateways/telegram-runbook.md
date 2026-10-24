@@ -613,9 +613,9 @@ Telegram, except where noted). The Settings tab (section 12) edits the same fiel
 | `mention_required` | Groups need a mention, reply or command | on |
 | `execution_user` | Run-as user (needs Huf Gateway User) | none |
 | `default_agent` | Agent for default routing and for business and join decisions | none |
-| `telegram_parse_mode` | Text formatting: Plain, HTML, MarkdownV2 | HTML |
-| `telegram_silent_replies` | Send replies without notification | off |
-| `telegram_protect_content` | Protect content (no forwarding or saving) | off |
+| `telegram_parse_mode` | Text formatting of replies and templates: Plain, HTML, MarkdownV2 | HTML |
+| `telegram_silent_replies` | Send replies and template messages without notification | off |
+| `telegram_protect_content` | Protect content of replies and templates (no forwarding or saving) | off |
 | `preview_url` | Link previews: Default (off), On, Off. Only On shows previews | Default (off) |
 | `voice_reply_mode` | Voice notes: Off, Voice only, Text and voice | Off |
 | `typing_indicator` | Send typing action while the agent works | on |
@@ -772,11 +772,15 @@ Each item below was checked against the code. "Not wired" means nothing on the r
 
 1. **Inline wait button**: `WAIT_CALLBACK = "inl:wait"` is an inert fallback used only when no signer is available;
    pressing it does nothing. The signed `inl:go:` button (`GO_PREFIX`) is handled.
-2. **Inline mode** needs BotFather inline mode on; the Gateway field `telegram_inline_enabled` (default on) can switch it off here.
+2. **Inline mode** needs BotFather inline mode on; the Gateway field `telegram_inline_enabled` (default on) switches every inline handler off here (queries are acknowledged and not answered).
 3. **Consent (STOP/START)**: not implemented for Telegram (section 3).
 4. **Inline feedback** is a BotFather setting. The Gateway flag `telegram_inline_feedback_enabled` and an observed `chosen_inline_result` only feed the health row.
 5. **Admin action cap**: uses `agent_send_cap_per_run` (default 20), not a separate admin cap, and falls back to 5
    only when the field is 0. Intended or not, the cap is shared with sends.
+
+Resolved: the reply settings (`telegram_parse_mode`, `telegram_silent_replies`, `telegram_protect_content`, `preview_url`) apply to every
+normal reply, streamed reply and the agent `telegram` tool as well as templates, through one helper
+(`telegram_outbound.sender_for_gateway`). Per-call flags can only add to them.
 
 Resolved since older notes: the Secretary draft producer is registered (section 14), and inbound voice notes are
 transcribed through the provider-neutral media prep (section 1).
