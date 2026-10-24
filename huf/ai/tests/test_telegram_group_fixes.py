@@ -160,6 +160,56 @@ class TestMigration(unittest.TestCase):
 		self.assertIsNone(mh.prefilter(GW, AD, parsed, None))
 
 
+class TestSenderOptOutStored(unittest.TestCase):
+	"""Run the real ``_record_opt_out`` / ``_record_opt_in`` and assert what would be stored."""
+
+	def test_existing_entry_marked_opted_out_remembering_state(self):
+		with (
+			mock.patch.object(svc, "_live_sender_entry", return_value={"name": "E1", "state": "Approved"}),
+			mock.patch.object(svc, "_save_entry") as save,
+			mock.patch.object(svc.frappe, "get_doc") as gd,
+		):
+			svc._record_opt_out(GW, "42")
+		save.assert_called_once_with("E1", {"state": "Opted out", "previous_state": "Approved"})
+		gd.assert_not_called()
+
+	def test_unknown_sender_gets_opted_out_sender_entry(self):
+		with (
+			mock.patch.object(svc, "_live_sender_entry", return_value=None),
+			mock.patch.object(svc, "_save_entry") as save,
+			mock.patch.object(svc.frappe, "get_doc") as gd,
+		):
+			svc._record_opt_out(GW, "42", "Jane")
+		save.assert_not_called()
+		doc = gd.call_args.args[0]
+		self.assertEqual(
+			{k: doc[k] for k in ("doctype", "gateway", "entry_type", "state", "external_id", "display_label")},
+			{
+				"doctype": "Gateway Access Entry",
+				"gateway": GW.name,
+				"entry_type": "Sender",
+				"state": "Opted out",
+				"external_id": "42",
+				"display_label": "Jane",
+			},
+		)
+		gd.return_value.insert.assert_called_once_with(ignore_permissions=True)
+
+	def test_opt_in_restores_previous_state_else_expired(self):
+		for previous, restored in (("Approved", "Approved"), ("", "Expired")):
+			with (
+				self.subTest(previous=previous),
+				mock.patch.object(
+					svc,
+					"_live_sender_entry",
+					return_value={"name": "E1", "state": "Opted out", "previous_state": previous},
+				),
+				mock.patch.object(svc, "_save_entry") as save,
+			):
+				svc._record_opt_in(GW, "42")
+			save.assert_called_once_with("E1", {"state": restored, "previous_state": ""})
+
+
 class TestRoomOptOut(unittest.TestCase):
 	def test_removal_marks_room_entry_not_sender(self):
 		with (
