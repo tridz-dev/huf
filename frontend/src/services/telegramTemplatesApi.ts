@@ -11,8 +11,12 @@ export const MEDIA_TYPES = ['none', 'photo', 'video', 'animation', 'document', '
 export type MediaType = (typeof MEDIA_TYPES)[number];
 export const TEXT_LIMIT = 4096;
 export const CAPTION_LIMIT = 1024;
-export const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 _-]{0,79}$/;
-const VAR_RE = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;
+/** Same grammar as huf/ai/telegram_templates.py (TEMPLATE_NAME_RE, VAR_RE): names are lowercase slugs. */
+export const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,62}$/;
+export const NAME_HELP = 'Use lowercase letters, digits, dashes and underscores, starting with a letter or digit (max 63).';
+export const VAR_NAME = '[A-Za-z_][A-Za-z0-9_]*';
+/** `{{name}}` or `{{name|url}}` (the url filter percent-encodes the value). Group 1 = name, 2 = filter. */
+export const placeholderRe = () => new RegExp(`\\{\\{\\s*(${VAR_NAME})\\s*(?:\\|\\s*(url)\\s*)?\\}\\}`, 'g');
 
 export interface TemplateVariable {
 	variable: string;
@@ -58,6 +62,8 @@ export interface PreviewResult {
 	text: string;
 	parse_mode: string;
 	media: { type: string; source: string; value: string } | null;
+	/** Media and text go out as two messages. */
+	split?: boolean;
 	markup?: unknown;
 	missing: string[];
 	errors: string[];
@@ -67,7 +73,7 @@ export interface PreviewResult {
 export function detectVariables(...texts: (string | null | undefined)[]): string[] {
 	const seen: string[] = [];
 	for (const text of texts) {
-		for (const m of (text ?? '').matchAll(VAR_RE)) if (!seen.includes(m[1])) seen.push(m[1]);
+		for (const m of (text ?? '').matchAll(placeholderRe())) if (!seen.includes(m[1])) seen.push(m[1]);
 	}
 	return seen;
 }
@@ -132,14 +138,12 @@ export function validateDraft(d: TemplateDraft): FieldProblem[] {
 	const out: FieldProblem[] = [];
 	const name = d.template_name.trim();
 	if (!name) out.push({ field: 'template_name', message: 'Give the template a name.' });
-	else if (!NAME_RE.test(name)) out.push({ field: 'template_name', message: 'Use letters, numbers, spaces, dashes and underscores (max 80).' });
+	else if (!NAME_RE.test(name)) out.push({ field: 'template_name', message: NAME_HELP });
 	const withMedia = d.media_type !== 'none';
 	if (withMedia && !d.media.trim()) out.push({ field: 'media', message: 'Attach a file or enter a link for the media.' });
 	if (!withMedia && !d.body.trim()) out.push({ field: 'body', message: 'Write the message text.' });
-	const limit = withMedia && d.media_type !== 'sticker' ? CAPTION_LIMIT : TEXT_LIMIT;
-	if (d.body.length > limit) {
-		out.push({ field: 'body', message: withMedia ? `With media the text is a caption (max ${CAPTION_LIMIT} characters).` : `Telegram allows at most ${TEXT_LIMIT} characters.` });
-	}
+	// With media, text over the caption limit is sent as a second message, so only the text limit applies.
+	if (d.body.length > TEXT_LIMIT) out.push({ field: 'body', message: `Telegram allows at most ${TEXT_LIMIT} characters.` });
 	if (d.buttons_json.trim()) {
 		try {
 			const parsed = JSON.parse(d.buttons_json);
@@ -217,10 +221,10 @@ export async function sendTestTemplate(args: { gateway: string; chatId: string; 
 	return request('send_test_template', { gateway: args.gateway, chat_id: args.chatId.trim(), name: args.name, variables: args.variables, confirm: 1 }, 'post');
 }
 
-/** Upload a public file (Telegram fetches by URL or the server reads it) and return its server path. */
+/** Upload a private file: the server reads it and uploads the bytes to Telegram, so it never needs a public URL. */
 export async function uploadTemplateMedia(f: File): Promise<Result<{ fileUrl: string }>> {
 	try {
-		const res = await file.uploadFile(f, { isPrivate: false });
+		const res = await file.uploadFile(f, { isPrivate: true });
 		const data = (res as { data?: { message?: { file_url?: string }; file_url?: string } }).data;
 		const fileUrl = data?.message?.file_url || data?.file_url;
 		return fileUrl ? { ok: true, data: { fileUrl } } : { ok: false, error: 'The upload did not return a file.' };

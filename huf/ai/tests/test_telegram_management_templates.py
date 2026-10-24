@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 import unittest
 from unittest import mock
 
@@ -58,7 +59,8 @@ class TestValidate(unittest.TestCase):
 
 	def test_media_needs_file_and_caption_limit(self):
 		self.assertIn("media", self.fields(media_type="photo"))
-		self.assertIn("body", self.fields(media_type="photo", media="/f.png", body="x" * 1025))
+		# the sender splits media + long text into two messages, so a long body with media is fine
+		self.assertNotIn("body", self.fields(media_type="photo", media="/f.png", body="x" * 1025))
 		self.assertIn("body", self.fields(body="x" * 4097))
 
 	def test_buttons_validated_with_variables(self):
@@ -67,24 +69,69 @@ class TestValidate(unittest.TestCase):
 		self.assertIn("buttons_json", self.fields(buttons_json="{nope"))
 		self.assertIn("buttons_json", self.fields(buttons_json='{"rows": [[{"text": "A"}]]}'))
 
+	def test_name_matrix_matches_doctype_grammar(self):
+		for name, ok in [
+			("welcome", True), ("a-b_c1", True), ("My Tpl", False), ("Welcome", False),
+			("_x", False), ("a" * 64, False), ("bad/name", False),
+		]:  # fmt: skip
+			self.assertEqual("template_name" not in self.fields(template_name=name), ok, name)
+		self.assertIn("lowercase", m.validate_values({**GOOD, "template_name": "My Tpl"})[0]["message"])
+
+	def test_url_kind_buttons_accept_placeholders(self):
+		for key in ("web_app", "login_url", "url"):
+			raw = json.dumps({"rows": [[{"text": "Go", key: "{{url}}"}]]})
+			self.assertEqual(m.validate_values({**GOOD, "buttons_json": raw}), [], key)
+		self.assertIn(
+			"buttons_json",
+			self.fields(buttons_json='{"rows": [[{"text": "Go", "web_app": "http://insecure.io"}]]}'),
+		)
+
+	def test_unknown_placeholder_forms_rejected(self):
+		self.assertIn("body", self.fields(body="Hi {{user.name}}"))
+		self.assertIn("body", self.fields(body="Hi {{name|upper}}"))
+		self.assertNotIn("body", self.fields(body="Hi {{name|url}}"))
+
+	def test_variable_names_are_identifiers(self):
+		self.assertIn("variables.0", self.fields(variables=[{"variable": "a.b"}]))
+		self.assertIn("variables.0", self.fields(variables=[{"variable": "a-b"}]))
+
 	def test_duplicate_variable(self):
 		self.assertIn("variables.1", self.fields(variables=[{"variable": "a"}, {"variable": "a"}]))
 
 
-class TestDetect(unittest.TestCase):
-	def test_detect_order_unique(self):
-		self.assertEqual(m.detect_variables("{{a}} {{ b }} {{a}}", "{{c}}"), ["a", "b", "c"])
+class TestPreview(unittest.TestCase):
+	def run_preview(self, values, variables=None):
+		with mock.patch(f"{P}._can_manage_integrations", return_value=True):
+			return m.preview_template(values, variables or {})["preview"]
 
+	def test_unsaved_values_use_the_send_render_and_examples(self):
+		out = self.run_preview(
+			{**GOOD, "body": "<b>{{name}}</b> {{x}}", "variables": [{"variable": "x", "example": "ex"}]},
+			{"name": "<i>"},
+		)
+		self.assertEqual(out["text"], "<b>&lt;i&gt;</b> ex")
+		self.assertEqual(out["missing"], [])
+		self.assertFalse(out["split"])
 
-class TestLocalRender(unittest.TestCase):
-	def test_escapes_and_missing(self):
-		out = m.local_render({**GOOD, "body": "<b>{{name}}</b> {{x}}"}, {"name": "<i>"})
-		self.assertEqual(out["text"], "<b>&lt;i&gt;</b> {{x}}")
-		self.assertEqual(out["missing"], ["x"])
+	def test_missing_is_empty_and_default_used(self):
+		out = self.run_preview(
+			{
+				**GOOD,
+				"body": "Hi {{name}}{{y}}",
+				"variables": [{"variable": "name", "default_value": "friend"}],
+			}
+		)
+		self.assertEqual((out["text"], out["missing"]), ("Hi friend", ["y"]))
 
-	def test_default_used(self):
-		out = m.local_render({**GOOD, "variables": [{"variable": "name", "default_value": "friend"}]}, {})
-		self.assertEqual(out["text"], "Hi friend")
+	def test_long_text_with_media_previews_as_two_messages(self):
+		out = self.run_preview({**GOOD, "body": "x" * 1500, "media_type": "photo", "media": "/f.png"})
+		self.assertTrue(out["split"])
+		self.assertEqual(out["errors"], [])
+
+	def test_callback_buttons_preview_unsigned(self):
+		out = self.run_preview({**GOOD, "buttons_json": '{"rows": [[{"text": "Y", "callback": "yes"}]]}'})
+		self.assertEqual(out["errors"], [])
+		self.assertEqual(out["markup"]["inline_keyboard"][0][0]["text"], "Y")
 
 
 class TestPermissions(unittest.TestCase):
@@ -160,10 +207,7 @@ class TestSendTest(unittest.TestCase):
 	def test_allows_own_paired_and_marked_test_chat(self):
 		fake = mock.Mock()
 		fake.send_template.return_value = {"message_ids": [1]}
-		with (
-			mock.patch.dict("sys.modules", {"huf.ai.telegram_templates": fake}),
-			mock.patch("huf.ai.telegram_templates", fake, create=True),
-		):
+		with mock.patch(f"{P}.telegram_templates", fake):
 			own = self.run_send(entries=[{"approved_by": "me@x.com", "notes": ""}])
 			marked = self.run_send(entries=[{"approved_by": "o@x.com", "notes": "Telegram-Test chat"}])
 		self.assertTrue(own["success"])

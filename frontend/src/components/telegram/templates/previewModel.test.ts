@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/frappe-sdk', () => ({ call: { get: vi.fn(), post: vi.fn() }, file: { uploadFile: vi.fn() } }));
 import { emptyDraft } from '@/services/telegramTemplatesApi';
+import parityFixtures from './parity.fixtures.json';
 import {
 	buildBubble, buttonsToJson, parseButtons, parseMarkdownV2, parseTelegramHtml, substituteVariables, validateButtons,
 } from './previewModel';
@@ -46,9 +47,13 @@ describe('parseMarkdownV2', () => {
 });
 
 describe('substituteVariables', () => {
-	it('escapes by mode and reports missing', () => {
-		expect(substituteVariables('{{a}} {{b}}', { a: '<i>' }, 'HTML')).toEqual({ text: '&lt;i&gt; {{b}}', missing: ['b'] });
+	it('escapes by mode; a missing variable is empty and reported (as in a send)', () => {
+		expect(substituteVariables('{{a}} {{b}}', { a: '<i>' }, 'HTML')).toEqual({ text: '&lt;i&gt; ', missing: ['b'] });
 		expect(substituteVariables('{{a}}', { a: 'x.y' }, 'MarkdownV2').text).toBe('x\\.y');
+	});
+	it('quote-escapes values inside tags and url-encodes with the url filter', () => {
+		expect(substituteVariables('<a href="{{u}}">{{u}}</a>', { u: 'a" b' }, 'HTML').text).toBe('<a href="a&quot; b">a" b</a>');
+		expect(substituteVariables('?q={{q|url}} {{ q | url }}', { q: "a&b=c d!'" }, 'Plain').text).toBe('?q=a%26b%3Dc%20d%21%27 a%26b%3Dc%20d%21%27');
 	});
 });
 
@@ -78,6 +83,29 @@ describe('buildBubble', () => {
 		const b = buildBubble(d, {});
 		expect(b.missing).toEqual(['x']);
 		expect(b.nodes[1]).toEqual({ kind: 'bold', children: [t('Sam')] });
-		expect(buildBubble({ ...d, media_type: 'photo', media: '/f.png', body: 'x'.repeat(1025) }).overLimit).toBe(true);
+		expect(buildBubble({ ...d, body: 'x'.repeat(4097) }).overLimit).toBe(true);
 	});
+	it('measures the rendered text, not the template body', () => {
+		const d = { ...emptyDraft(), body: `{{v}}${'x'.repeat(4090)}`, variables: [{ variable: 'v', default_value: '', example: '' }] };
+		expect(buildBubble(d, { v: 'y'.repeat(20) }).overLimit).toBe(true);
+		expect(buildBubble(d, {}).overLimit).toBe(false);
+	});
+	it('long text with media is a second message, not an error', () => {
+		const long = { ...emptyDraft(), body: 'x'.repeat(1025), media_type: 'photo' as const, media: '/f.png' };
+		expect(buildBubble(long)).toMatchObject({ split: true, overLimit: false });
+		expect(buildBubble({ ...long, body: 'short' }).split).toBe(false);
+		expect(buildBubble({ ...long, media_type: 'sticker', body: 'hi' }).split).toBe(true);
+	});
+});
+
+// The same fixtures run against the backend render in huf/ai/tests/test_telegram_templates.py (TestParity).
+describe('preview/send parity fixtures', () => {
+	for (const f of parityFixtures) {
+		it(f.id, () => {
+			const t = f.template as Record<string, unknown>;
+			const draft = { ...emptyDraft(), ...t, variables: ((t.variables as { variable: string; default_value?: string }[]) ?? []).map((v) => ({ default_value: '', example: '', ...v })) };
+			const b = buildBubble(draft as never, f.values as Record<string, string>, false);
+			expect({ text: b.text, missing: b.missing, split: b.split }).toEqual({ text: f.text, missing: f.missing, split: f.split });
+		});
+	}
 });

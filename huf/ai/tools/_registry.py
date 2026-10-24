@@ -224,7 +224,7 @@ TELEGRAM_TOOLS = [
 			"send_dice (emoji: dice|dart|basketball|football|bowling|slot), "
 			"send_poll (question, options 2-12, is_anonymous, poll_type regular|quiz, correct_option_id 0-based, explanation, allows_multiple_answers, open_period 5+ seconds), stop_poll (message_id), "
 			"send_checklist (business_connection_id, title, tasks[]; needs business access enabled on the gateway), "
-			"send_template (template_name, variables) / list_templates / preview_template (template_name, variables), "
+			"send_template (template_name, variables, optional reply_to_message_id, message_thread_id, disable_notification, protect_content) / list_templates / preview_template (template_name, variables), "
 			"Chat-state changes (pinning, unpinning, forum topic management) are NOT in this tool: use telegram_admin (pin/unpin; owner-run + human Approve). "
 			"get_file (file_id: saves to a private Frappe File, max 20 MB, returns file_url), get_chat_member (user_id) / get_chat_administrators / get_chat_member_count, "
 			"list_messages (chat_id, limit<=50: recent logged messages), get_account_info (bot identity, modes, webhook health). "
@@ -308,7 +308,8 @@ TELEGRAM_TOOLS = [
 			_p("title", description="send_audio: track title; send_venue: venue name; send_checklist: checklist title."),
 			_p("tasks", type="array", description="send_checklist: 1-30 task strings."),
 			_p("template_name", description="send_template / preview_template: Telegram Message Template name."),
-			_p("variables", type="object", description="send_template / preview_template: {variable: value} for {{var}} placeholders."),
+			_p("variables", type="object", description="send_template / preview_template: {variable: value} for {{var}} placeholders. Blank values count as not given (the template's default is used)."),
+			_p("gateway", description="Telegram Gateway name for send_template / preview_template / list_templates / list_messages / get_account_info. Ignored inside a Telegram gateway conversation (the conversation's gateway is used). REQUIRED outside one, and only for gateways you are allowed to manage."),
 			_p("name", description="Forum topic name (create_forum_topic / edit_forum_topic)."),
 			_p("icon_color", type="integer", description="create_forum_topic icon color (7322096, 16766590, 13338331, 9367192, 16749490 or 16478047)."),
 			_p("icon_custom_emoji_id", description="Forum topic custom emoji id."),

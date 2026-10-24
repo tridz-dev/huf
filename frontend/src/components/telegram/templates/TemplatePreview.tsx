@@ -56,8 +56,14 @@ export interface TemplatePreviewProps {
 /** A message bubble the way it will look in Telegram: media header, formatted text, inline buttons. */
 export function TemplatePreview({ draft, values, className }: TemplatePreviewProps) {
 	const bubble = useMemo(() => buildBubble(draft, values), [draft, values]);
-	const empty = !bubble.media && !draft.body.trim() && bubble.rows.length === 0;
+	const empty = !bubble.media && !bubble.text && bubble.rows.length === 0;
 	const MediaIcon = bubble.media ? (MEDIA_ICON[bubble.media.type] ?? FileText) : null;
+	const textBlock = (bubble.text || !bubble.media) && (
+		<div className="px-3 py-2">
+			<div className="whitespace-pre-wrap break-words text-sm text-ink" data-testid="preview-body">{renderNodes(bubble.nodes)}</div>
+			<p className="text-right text-[11px] text-steel">12:00</p>
+		</div>
+	);
 	const showImage = bubble.media?.type === 'photo' && /^(https?:\/\/|\/)/.test(bubble.media.url);
 	return (
 		<div className={cn('rounded-md border border-line bg-paper-deep p-4', className)} style={WALLPAPER} aria-label="Message preview">
@@ -76,13 +82,13 @@ export function TemplatePreview({ draft, values, className }: TemplatePreviewPro
 								</div>
 							)
 						)}
-						{(draft.body.trim() || !bubble.media) && (
-							<div className="px-3 py-2">
-								<div className="whitespace-pre-wrap break-words text-sm text-ink" data-testid="preview-body">{renderNodes(bubble.nodes)}</div>
-								<p className="text-right text-[11px] text-steel">12:00</p>
-							</div>
-						)}
+						{!bubble.split && textBlock}
 					</div>
+					{bubble.split && (
+						<div className="mt-1 overflow-hidden rounded-lg rounded-tl-none border border-line bg-panel shadow-sm" data-testid="preview-text-message">
+							{textBlock}
+						</div>
+					)}
 					{bubble.rows.length > 0 && (
 						<div className="mt-1 space-y-1" data-testid="preview-buttons">
 							{bubble.rows.map((row, ri) => (
@@ -106,6 +112,7 @@ export function TemplatePreview({ draft, values, className }: TemplatePreviewPro
 				<p className="mt-2 text-xs text-steel">No sample for: {bubble.missing.map((m) => `{{${m}}}`).join(', ')}</p>
 			)}
 			{bubble.overLimit && <p className="mt-2 text-xs text-danger">The text is longer than Telegram allows.</p>}
+			{bubble.split && !bubble.overLimit && <p className="mt-2 text-xs text-steel">The text is too long for a caption, so it is sent as a second message.</p>}
 		</div>
 	);
 }

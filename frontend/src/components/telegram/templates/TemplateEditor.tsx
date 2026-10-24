@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-	CAPTION_LIMIT, MEDIA_TYPES, PARSE_MODES, TEXT_LIMIT, mediaTypeLabel, problemsByField, syncVariables, uploadTemplateMedia,
+	MEDIA_TYPES, PARSE_MODES, TEXT_LIMIT, mediaTypeLabel, problemsByField, syncVariables, uploadTemplateMedia,
 	validateDraft, type MediaType, type ParseMode, type TemplateDraft,
 } from '@/services/telegramTemplatesApi';
 import { ButtonsEditor } from './ButtonsEditor';
@@ -58,7 +58,7 @@ export function TemplateEditor({ draft, onChange, onSave, onCancel, saving, serv
 	const clientErrors = useMemo(() => problemsByField(validateDraft(draft)), [draft]);
 	const errors = { ...serverErrors, ...(touched ? clientErrors : {}) };
 	const hasMedia = draft.media_type !== 'none';
-	const limit = hasMedia && draft.media_type !== 'sticker' ? CAPTION_LIMIT : TEXT_LIMIT;
+	const limit = TEXT_LIMIT;
 
 	const patch = (p: Partial<TemplateDraft>) => {
 		const next = { ...draft, ...p };

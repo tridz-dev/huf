@@ -52,6 +52,8 @@ class Base(unittest.TestCase):
 		patch.object(tool, "_make_client", side_effect=fake_make_client).start()
 		patch.object(tool, "_get_token", return_value=TOKEN).start()
 		patch.object(tool.scope, "run_gateway", return_value="").start()
+		patch.object(tool.scope, "gateway_state", return_value=("none", "")).start()
+		patch("huf.ai.telegram_management._require_gateway_admin").start()  # operator may manage any gateway
 		patch.object(tool.scope, "effective_run_id", return_value="").start()
 		patch.object(tool.scope, "current_chat", return_value="").start()
 		patch.object(tool, "_idem_cache", return_value=self.cache).start()
@@ -210,59 +212,6 @@ class TestChecklist(Base):
 			self.run_action(
 				action="send_checklist", chat_id="9", business_connection_id="b", title="T", tasks=[]
 			)["error"],
-		)
-
-
-class TestTemplates(Base):
-	def setUp(self):
-		super().setUp()
-		self.tpl = MagicMock()
-		patch.object(tool, "_templates", return_value=self.tpl).start()
-
-	def test_list_and_preview(self):
-		self.tpl.list_templates.return_value = [{"template_name": "welcome"}]
-		self.tpl.render_template.return_value = SimpleNamespace(
-			text="Hi Bo", parse_mode="HTML", media=None, missing=[]
-		)
-		r = self.run_action(action="list_templates", gateway="gw")
-		self.assertEqual(r["results"], [{"template_name": "welcome"}])
-		self.tpl.list_templates.assert_called_with("gw")
-		r = self.run_action(
-			action="preview_template", template_name="welcome", variables='{"name": "Bo"}', gateway="gw"
-		)
-		self.assertEqual(r["results"]["text"], "Hi Bo")
-		self.tpl.render_template.assert_called_with("welcome", {"name": "Bo"}, "gw")
-
-	def test_send_template(self):
-		self.tpl.send_template.return_value = {"message_ids": [5]}
-		r = self.run_action(
-			action="send_template",
-			chat_id="9",
-			template_name="welcome",
-			variables={"name": "Bo"},
-			gateway="gw",
-			message_thread_id=3,
-		)
-		self.assertTrue(r["success"], r)
-		args, kw = self.tpl.send_template.call_args
-		self.assertEqual(args[:3], ("gw", "9", "welcome"))
-		self.assertEqual(args[3], {"name": "Bo"})
-		self.assertEqual(kw["thread_id"], 3)
-		self.assertIsNotNone(kw["sender"])
-
-	def test_errors(self):
-		self.assertIn(
-			"template_name", self.run_action(action="send_template", chat_id="9", gateway="gw")["error"]
-		)
-		self.assertIn(
-			"gateway", self.run_action(action="send_template", chat_id="9", template_name="x")["error"]
-		)
-		self.assertIn(
-			"JSON", self.run_action(action="preview_template", template_name="x", variables="{bad")["error"]
-		)
-		self.tpl.render_template.side_effect = RuntimeError("missing template")
-		self.assertIn(
-			"missing template", self.run_action(action="preview_template", template_name="x")["error"]
 		)
 
 
