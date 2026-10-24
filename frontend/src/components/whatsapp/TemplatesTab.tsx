@@ -14,11 +14,13 @@ import {
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { useSocket } from '@/contexts/SocketContext';
 import {
-  deleteTemplate, errorText, getTemplate, isBridgeUnavailable, listTemplateDrafts, listTemplates, syncTemplates,
+  SharedTemplateError, deleteTemplate, errorText, getTemplate, isBridgeUnavailable, listTemplateDrafts, listTemplates, syncTemplates,
   type TemplateDetail, type TemplateDraft, type WhatsAppTemplate,
 } from '@/services/whatsappApi';
 import { BridgeUnavailable, LoadError } from './BridgeUnavailable';
-import { CategoryChangeBadge, QualityBadge, StatusBadge } from './TemplateBadges';
+import { CategoryChangeBadge, QualityBadge, SharedPill, StatusBadge, UsedByChips } from './TemplateBadges';
+import { listSolutions } from '@/services/solutionsApi';
+import type { SolutionSummary } from '@/types/solutions';
 import { DraftsPanel } from './DraftsPanel';
 import { ManagerLink } from './ManagerLink';
 import { SendTemplateDialog } from './SendTemplateDialog';
@@ -27,13 +29,20 @@ import { TemplateDetailPane } from './TemplateDetailPane';
 import { fromTemplateDetail } from './template/payload';
 import { TemplateWizard, type WizardResult } from './TemplateWizard';
 import {
-  ALL_OPTION, OPEN_DRAFT_STATUSES, TEMPLATE_STATUSES, categoryLabel, filterTemplates, statusInfo, statusToastText, type TemplateFilters,
+  ALL_OPTION, OPEN_DRAFT_STATUSES, TEMPLATE_STATUSES, categoryLabel, filterTemplates, isSharedTemplate, statusInfo, statusToastText, type TemplateFilters,
 } from './templateModel';
 
 const STATUS_EVENT = 'whatsapp_template_status';
 
 
-export function TemplatesTab({ gateway }: { gateway?: string }) {
+interface TemplatesTabProps {
+  gateway?: string;
+  /** Show only this solution's templates and hide account-level actions (sync, manager link, drafts). */
+  scopeSolution?: string;
+}
+
+export function TemplatesTab({ gateway, scopeSolution }: TemplatesTabProps) {
+  const scoped = !!scopeSolution;
   const { hufRole } = usePermissions();
   const isAdmin = hufRole === 'Huf Admin';
   const socket = useSocket();
@@ -54,7 +63,8 @@ export function TemplatesTab({ gateway }: { gateway?: string }) {
   const [section, setSection] = useState('templates');
   const [selected, setSelected] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
-  const [filters, setFilters] = useState<TemplateFilters>({ search: '', status: ALL_OPTION, category: ALL_OPTION, language: ALL_OPTION });
+  const [filters, setFilters] = useState<TemplateFilters>({ search: '', status: ALL_OPTION, category: ALL_OPTION, language: ALL_OPTION, solution: ALL_OPTION });
+  const [solutions, setSolutions] = useState<SolutionSummary[]>([]);
   const [toDelete, setToDelete] = useState<WhatsAppTemplate | null>(null);
   const [toSend, setToSend] = useState<WhatsAppTemplate | null>(null);
 
@@ -72,7 +82,7 @@ export function TemplatesTab({ gateway }: { gateway?: string }) {
     }
     setLoading(true);
     setError('');
-    const res = await listTemplates(gateway);
+    const res = await listTemplates(gateway, undefined, scopeSolution);
     if (res.success) {
       setRows(res.templates);
       setManager({ url: res.manager_url ?? '', businessId: res.business_id ?? '' });
@@ -83,7 +93,14 @@ export function TemplatesTab({ gateway }: { gateway?: string }) {
       setError(errorText(res));
     }
     setLoading(false);
-  }, [gateway]);
+  }, [gateway, scopeSolution]);
+
+  useEffect(() => {
+    if (scoped) return;
+    let live = true;
+    listSolutions().then((list) => { if (live) setSolutions(list); }).catch(() => { /* filter stays hidden */ });
+    return () => { live = false; };
+  }, [scoped]);
 
   useEffect(() => {
     void load();
@@ -169,10 +186,18 @@ export function TemplatesTab({ gateway }: { gateway?: string }) {
     else toast.error(errorText(res));
   };
 
-  const confirmDelete = async () => {
-    if (!toDelete) return;
-    const res = await deleteTemplate(toDelete.name);
-    setToDelete(null);
+  const runDelete = async (row: WhatsAppTemplate, acknowledgeShared?: boolean) => {
+    let res;
+    try {
+      res = await deleteTemplate(row.name, acknowledgeShared);
+    } catch (err) {
+      if (err instanceof SharedTemplateError) {
+        toast.error('This template is now shared with another solution. Open it again to review.');
+        void load();
+        return;
+      }
+      throw err;
+    }
     if (res.success) {
       toast.success('Template deleted');
       setSelected('');
@@ -180,12 +205,19 @@ export function TemplatesTab({ gateway }: { gateway?: string }) {
     } else toast.error(errorText(res));
   };
 
+  const confirmDelete = async () => {
+    if (!toDelete) return;
+    const row = toDelete;
+    setToDelete(null);
+    await runDelete(row);
+  };
+
   const filtered = useMemo(() => filterTemplates(rows, filters), [rows, filters]);
   const languages = useMemo(() => [...new Set(rows.map((r) => r.language_code).filter((l): l is string => !!l))].sort(), [rows]);
   const current = rows.find((r) => r.name === selected) ?? filtered[0];
   const openDrafts = drafts.filter((d) => OPEN_DRAFT_STATUSES.includes(d.status)).length;
   const setFilter = (patch: Partial<TemplateFilters>) => setFilters((f) => ({ ...f, ...patch }));
-  const filtering = filters.search !== '' || filters.status !== ALL_OPTION || filters.category !== ALL_OPTION || filters.language !== ALL_OPTION;
+  const filtering = filters.search !== '' || filters.status !== ALL_OPTION || filters.category !== ALL_OPTION || filters.language !== ALL_OPTION || (!!filters.solution && filters.solution !== ALL_OPTION);
 
   if (unavailable) return <BridgeUnavailable />;
 
@@ -221,17 +253,21 @@ export function TemplatesTab({ gateway }: { gateway?: string }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <TabsList>
             <TabsTrigger value="templates">Templates</TabsTrigger>
-            <TabsTrigger value="drafts" className="gap-1.5">
-              Drafts awaiting approval
-              {openDrafts > 0 && <Badge variant="pill-warning" size="sm">{openDrafts}</Badge>}
-            </TabsTrigger>
+            {!scoped && (
+              <TabsTrigger value="drafts" className="gap-1.5">
+                Drafts awaiting approval
+                {openDrafts > 0 && <Badge variant="pill-warning" size="sm">{openDrafts}</Badge>}
+              </TabsTrigger>
+            )}
           </TabsList>
           <div className="flex flex-wrap items-center gap-2">
-            <ManagerLink url={manager.url} businessId={manager.businessId} />
-            <Button variant="outline" size="sm" onClick={sync} disabled={syncing || !gateway}>
-              {syncing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
-              Sync
-            </Button>
+            {!scoped && <ManagerLink url={manager.url} businessId={manager.businessId} />}
+            {!scoped && (
+              <Button variant="outline" size="sm" onClick={sync} disabled={syncing || !gateway}>
+                {syncing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
+                Sync
+              </Button>
+            )}
             <Button size="sm" onClick={() => openWizard({ new: '1' })}>
               <Plus className="mr-1.5 h-4 w-4" /> {isAdmin ? 'New template' : 'Request template'}
             </Button>
@@ -277,6 +313,15 @@ export function TemplatesTab({ gateway }: { gateway?: string }) {
                       <SelectItem value="UTILITY">Utility</SelectItem>
                     </SelectContent>
                   </Select>
+                  {!scoped && solutions.length > 0 && (
+                    <Select value={filters.solution ?? ALL_OPTION} onValueChange={(v) => setFilter({ solution: v })}>
+                      <SelectTrigger className="col-span-2" aria-label="Filter by solution"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ALL_OPTION}>Any solution</SelectItem>
+                        {solutions.map((s) => <SelectItem key={s.name} value={s.name}>{s.title}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Select value={filters.language} onValueChange={(v) => setFilter({ language: v })}>
                     <SelectTrigger className="col-span-2" aria-label="Filter by language"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -307,7 +352,9 @@ export function TemplatesTab({ gateway }: { gateway?: string }) {
                               <StatusBadge status={t.status} />
                               <QualityBadge score={t.quality_score} />
                               <CategoryChangeBadge pending={t.category_change_pending} to={t.correct_category} />
+                              <SharedPill shared={isSharedTemplate(t)} />
                             </span>
+                            <UsedByChips users={t.used_by} />
                           </button>
                         </li>
                       );
@@ -322,7 +369,11 @@ export function TemplatesTab({ gateway }: { gateway?: string }) {
                     refreshKey={refreshKey}
                     onSend={setToSend}
                     onEdit={(detail) => { setEditDetail(detail); openWizard({ edit: detail.name }); }}
-                    onDelete={setToDelete}
+                    onDelete={(r, ack) => (ack ? void runDelete(r, true) : setToDelete(r))}
+                    onCopy={(d, suggested) => {
+                      openWizard({ new: '1' });
+                      toast(`Create it as ${suggested} to keep ${d.template_name} unchanged.`);
+                    }}
                     onUnavailable={() => setUnavailable(true)}
                   />
                 ) : (

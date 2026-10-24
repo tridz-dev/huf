@@ -4,6 +4,12 @@ import userEvent from '@testing-library/user-event';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 
+// jsdom has no top layer; answering ':modal' directly keeps Radix Select opening fast.
+const originalMatches = Element.prototype.matches;
+Element.prototype.matches = function (this: Element, selector: string) {
+  return selector === ':modal' ? false : originalMatches.call(this, selector);
+};
+
 vi.mock('./TemplateSend', () => ({ TemplateSend: () => null }));
 vi.mock('./MessageDetailSheet', () => ({
   MessageDetailSheet: ({ item }: { item: { name: string } | null }) => (item ? <div>detail {item.name}</div> : null),
@@ -94,5 +100,31 @@ describe('MessageLogTab one-shot links', () => {
     row.focus();
     await userEvent.keyboard('{Enter}');
     expect(await screen.findByText('detail m1')).toBeInTheDocument();
+  });
+});
+
+describe('MessageLogTab solution column', () => {
+  it('shows a Solution column and passes the filter to the API', async () => {
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
+  Element.prototype.scrollIntoView = () => {};
+    vi.mocked(listMessageLogFilters).mockResolvedValue({ success: true, statuses: [], agents: [], templates: [], solutions: [{ name: 'S1', title: 'Orders' }] } as never);
+    vi.mocked(listMessageLog).mockResolvedValue({
+      success: true, items: [{ ...item('m1', null), solution: { name: 'S1', title: 'Orders' } }, { ...item('m2', null), solution: null }], next_cursor: null, has_more: false,
+    } as never);
+    open('/?tab=messages');
+    await screen.findByText('msg m1');
+    expect(screen.getByRole('columnheader', { name: 'Solution' })).toBeInTheDocument();
+    expect(screen.getByText('Orders')).toBeInTheDocument();
+    await userEvent.click(await screen.findByLabelText('Solution'));
+    await userEvent.click(await screen.findByText('Orders', { selector: '[role="option"] *, [role="option"]' }));
+    await waitFor(() => expect(vi.mocked(listMessageLog)).toHaveBeenLastCalledWith('GW-1', expect.objectContaining({ solution: 'S1' })));
+  });
+
+  it('hides the column when rows carry no solution field', async () => {
+    open('/?tab=messages');
+    await screen.findByText('msg m1');
+    expect(screen.queryByRole('columnheader', { name: 'Solution' })).toBeNull();
   });
 });
