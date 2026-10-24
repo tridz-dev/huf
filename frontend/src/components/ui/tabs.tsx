@@ -37,7 +37,7 @@ Tabs.displayName = TabsPrimitive.Root.displayName;
 type TabsVariant = 'underline' | 'pill';
 
 const TabsVariantContext = React.createContext<TabsVariant>('underline');
-const TabsSizeContext = React.createContext<'default' | 'compact'>('default');
+const TabsSizeContext = React.createContext<'default' | 'compact' | 'lg'>('default');
 
 // Reserve this much width for the "More" trigger itself when deciding how
 // many tabs fit — its own rendered width isn't known until it's shown, and
@@ -72,7 +72,8 @@ const tabsListVariants = cva('gap-0', {
     },
     size: {
       default: '',
-      compact: 'h-8',
+      compact: 'h-control-sm',
+      lg: 'h-control-lg',
     },
   },
   // Row-style underline bars space their labels with a 22px gap (spec §25).
@@ -110,13 +111,21 @@ const tabsTriggerVariants = cva(
         // shadow-sm/DEFAULT, both of which map to --shadow-flat: none) is
         // required for the active segment's "raised" lift to be visible at
         // all in the apple-quiet theme.
-        pill: 'flex-1 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md',
+        pill: 'flex-1 rounded-md px-3 text-xs font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md',
       },
       size: {
-        default: '',
-        compact: 'h-7',
+        default: 'h-control-md',
+        compact: 'h-control-sm',
+        lg: 'h-control-lg',
       },
     },
+    // Underline triggers take the Input height for their size. Pill triggers
+    // sit inside a p-1 track, so they are one step smaller (sm) to keep the
+    // whole segmented control on the md/lg token (30 + 2*4 = 38).
+    compoundVariants: [
+      { variant: 'pill', size: 'default', class: 'h-control-sm' },
+      { variant: 'pill', size: 'lg', class: 'h-control-md' },
+    ],
     defaultVariants: {
       variant: 'underline',
       size: 'default',

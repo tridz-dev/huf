@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
   // HUF: commit buttons stay ink black on hover, never violet — font-body
-  'inline-flex items-center justify-center whitespace-nowrap rounded text-sm font-body font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center whitespace-nowrap rounded font-body font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
@@ -14,7 +14,7 @@ const buttonVariants = cva(
         default:
           'bg-ink text-primary-foreground hover:bg-ink/90',
         display:
-          'bg-ink text-primary-foreground hover:bg-ink/90 font-display font-bold text-[13px]',
+          'bg-ink text-primary-foreground hover:bg-ink/90 font-display font-bold',
         destructive:
           'bg-destructive text-destructive-foreground hover:bg-destructive/90',
         'destructive-ghost':
@@ -27,11 +27,11 @@ const buttonVariants = cva(
         link: 'text-signal-ink underline-offset-4 hover:underline',
       },
       size: {
-        default: 'h-control-md px-control py-control-y',
-        sm: 'h-control-sm px-control-sm text-xs',
-        lg: 'h-control-lg px-control-lg',
-        icon: 'h-control-md w-control-md',
-        'icon-sm': 'h-control-sm w-control-sm',
+        default: 'h-control-md px-control py-control-y text-ui-text',
+        sm: 'h-control-sm px-control-sm text-micro',
+        lg: 'h-control-lg px-control-lg text-ui-text',
+        icon: 'h-control-md w-control-md text-ui-text',
+        'icon-sm': 'h-control-sm w-control-sm text-micro',
       },
     },
     defaultVariants: {
