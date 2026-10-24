@@ -413,6 +413,9 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		if bsuid:
 			raw["bsuid"] = bsuid  # kept next to the phone key for a later identity merge
 		referral = msg.get("referral") if isinstance(msg.get("referral"), dict) else {}
+		referral_tag = inbound.extract_referral_tag(msg, message_text)  # before the ad prefix is added
+		if referral_tag:
+			raw["referral_tag"] = referral_tag
 		if referral:
 			raw["referral"] = {
 				k: referral[k]
@@ -422,6 +425,9 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 			headline = inbound.cap(referral.get("headline"), 120)
 			if headline and kind == "message":
 				message_text = f"[Ad referral: {headline}] {message_text}"
+		button_payload = inbound.extract_button_payload(msg)
+		if button_payload:
+			raw["button_payload"] = button_payload
 		if kind == "reaction":
 			# Meta: a reaction is not a customer-service-window opener (UNVERIFIED in docs).
 			# bridge.window_state must skip rows whose raw_payload.kind == "reaction".
