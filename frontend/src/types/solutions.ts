@@ -175,7 +175,7 @@ export interface SolutionConversation {
 }
 
 export interface CreateEntryInput {
-  match_type: EntryMatchType;
+  match_type: EntryMatchType | 'Triage';
   match_values: string[];
   cap_per_day?: number;
 }
