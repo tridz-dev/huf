@@ -1,0 +1,39 @@
+[
+  {
+    "name": "file-size",
+    "script": "scripts/check_file_size.py",
+    "args": [],
+    "paths": [
+      "frontend/src/**",
+      "huf/**/*.py",
+      "scripts/baselines/file_size.json"
+    ]
+  },
+  {
+    "name": "api-calls",
+    "script": "scripts/check_api_calls.py",
+    "args": [],
+    "paths": [
+      "frontend/src/**",
+      "scripts/baselines/api_calls.json"
+    ]
+  },
+  {
+    "name": "ui-drift",
+    "script": "scripts/check_ui_drift.py",
+    "args": [],
+    "paths": [
+      "frontend/src/**",
+      "scripts/baselines/ui_drift.json"
+    ]
+  },
+  {
+    "name": "whitelist",
+    "script": "scripts/check_whitelist.py",
+    "args": [],
+    "paths": [
+      "huf/**/*.py",
+      "scripts/baselines/whitelist.json"
+    ]
+  }
+]

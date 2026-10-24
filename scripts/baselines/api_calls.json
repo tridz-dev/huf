@@ -1,0 +1,67 @@
+{
+  "components/RightSidebar.tsx": {
+    "urls": 1
+  },
+  "components/ai-elements/image.tsx": {
+    "fetch": 2
+  },
+  "components/ai-elements/prompt-input.tsx": {
+    "fetch": 1
+  },
+  "components/automation/TriggerEditor.tsx": {
+    "urls": 1
+  },
+  "components/data-table/DataRecordFormLayout.tsx": {
+    "fetch": 1,
+    "urls": 1
+  },
+  "components/modals/TriggerConfigModal.tsx": {
+    "urls": 1
+  },
+  "lib/apiSnippets.ts": {
+    "fetch": 2,
+    "urls": 1
+  },
+  "lib/csrfRetryInterceptor.test.ts": {
+    "urls": 1
+  },
+  "lib/csrfRetryInterceptor.ts": {
+    "urls": 1
+  },
+  "lib/flowWebhookConfig.test.ts": {
+    "urls": 1
+  },
+  "lib/flowWebhookConfig.ts": {
+    "urls": 1
+  },
+  "lib/sessionInvalidation.test.ts": {
+    "urls": 2
+  },
+  "lib/sessionInvalidation.ts": {
+    "urls": 1
+  },
+  "services/desktopHostApi.ts": {
+    "helpers": 1
+  },
+  "services/developerApi.ts": {
+    "helpers": 1
+  },
+  "services/whatsappApi.ts": {
+    "helpers": 2
+  },
+  "utils/gatewayWebhook.test.ts": {
+    "urls": 3
+  },
+  "utils/gatewayWebhook.ts": {
+    "urls": 2
+  },
+  "utils/jsxPreambleParser.test.ts": {
+    "fetch": 1
+  },
+  "utils/jsxPreviewParser.ts": {
+    "helpers": 1
+  },
+  "utils/messageContentParser.ts": {
+    "helpers": 1
+  }
+}

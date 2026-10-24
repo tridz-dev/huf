@@ -12,6 +12,7 @@ vi.mock('@/services/whatsappApi', async (orig) => ({
   sendReactionMessage: vi.fn(),
   sendInteractiveMessage: vi.fn(),
   sendMediaMessage: vi.fn(),
+  sendVoiceNote: vi.fn(),
   sendStickerMessage: vi.fn(),
   uploadPublicFile: vi.fn(),
 }));
@@ -79,13 +80,13 @@ describe('template form', () => {
 
 describe('location form', () => {
   it('rejects a missing or out-of-range position without sending', async () => {
-    const { setError, user } = setup('location');
+    const { user } = setup('location');
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(setError).toHaveBeenLastCalledWith(expect.objectContaining({ error: 'invalid_params', message: 'Enter a latitude and longitude' }));
+    expect(await screen.findAllByText('Enter a latitude and longitude')).toHaveLength(2);
     await user.type(screen.getByLabelText('Latitude'), '91');
     await user.type(screen.getByLabelText('Longitude'), '10');
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(setError).toHaveBeenLastCalledWith(expect.objectContaining({ message: expect.stringContaining('Latitude is between') }));
+    expect(await screen.findByText(/Latitude is between/)).toBeInTheDocument();
     expect(api.sendLocationMessage).not.toHaveBeenCalled();
   });
 
@@ -102,12 +103,12 @@ describe('location form', () => {
 
 describe('contact form', () => {
   it('needs a name and a phone or email', async () => {
-    const { setError, user } = setup('contact');
+    const { user } = setup('contact');
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(setError).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'Add the contact name' }));
+    expect(await screen.findByText('Add the contact name')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Contact name'), 'Ann');
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(setError).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'Add a phone number or an email' }));
+    expect(await screen.findByText('Add a phone number or an email')).toBeInTheDocument();
     expect(api.sendContactsMessage).not.toHaveBeenCalled();
   });
 
@@ -124,12 +125,12 @@ describe('contact form', () => {
 
 describe('reaction form', () => {
   it('needs a message id and, to add, an emoji', async () => {
-    const { setError, user } = setup('reaction');
+    const { user } = setup('reaction');
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(setError).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'Add the ID of the message to react to' }));
+    expect(await screen.findByText('Add the ID of the message to react to')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Message ID'), 'wamid.X');
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(setError).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'Add an emoji' }));
+    expect(await screen.findByText('Add an emoji')).toBeInTheDocument();
     expect(api.sendReactionMessage).not.toHaveBeenCalled();
   });
 
@@ -148,12 +149,12 @@ describe('reaction form', () => {
 
 describe('interactive forms', () => {
   it('reply buttons: validates then sends the buttons', async () => {
-    const { setError, user } = setup('buttons');
+    const { user } = setup('buttons');
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(setError).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'Add the message text' }));
+    expect(await screen.findByText('Add the message text')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Interactive message text'), 'Pick one');
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(setError).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'Every button needs a label' }));
+    expect(await screen.findByText('Every button needs a label')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Button 1 label'), 'Yes');
     await user.click(screen.getByRole('button', { name: 'Send' }));
     expect(api.sendInteractiveMessage).toHaveBeenCalledWith(
@@ -175,10 +176,10 @@ describe('interactive forms', () => {
   });
 
   it('list: needs a menu label and items, sends sections', async () => {
-    const { setError, user } = setup('list');
+    const { user } = setup('list');
     await user.type(screen.getByLabelText('Interactive message text'), 'Menu');
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(setError).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'Add the label for the list button' }));
+    expect(await screen.findByText('Add the label for the list button')).toBeInTheDocument();
     await user.type(screen.getByLabelText('List button label'), 'Choose');
     await user.type(screen.getByLabelText('Item 1 title'), 'Soup');
     await user.type(screen.getByLabelText('Item 1 description'), 'Hot');
@@ -193,12 +194,12 @@ describe('interactive forms', () => {
   });
 
   it('link button: requires an https link', async () => {
-    const { setError, user } = setup('cta_url');
+    const { user } = setup('cta_url');
     await user.type(screen.getByLabelText('Interactive message text'), 'Visit us');
     await user.type(screen.getByLabelText('Link button label'), 'Open');
     await user.type(screen.getByLabelText('Link address'), 'http://insecure.example');
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(setError).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'The link must start with https://' }));
+    expect(await screen.findByText('The link must start with https://')).toBeInTheDocument();
     expect(api.sendInteractiveMessage).not.toHaveBeenCalled();
     await user.clear(screen.getByLabelText('Link address'));
     await user.type(screen.getByLabelText('Link address'), 'https://example.com/x');
@@ -207,11 +208,82 @@ describe('interactive forms', () => {
   });
 });
 
+describe('send payloads (unchanged)', () => {
+  it('voice note: sends via sendVoiceNote, rejects non-ogg', async () => {
+    vi.mocked(api.sendVoiceNote).mockResolvedValue({ success: true });
+    const { user } = setup('audio');
+    await user.click(screen.getByLabelText('Send as voice note'));
+    await user.type(screen.getByLabelText('Media link'), 'https://example.com/a.mp3');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText(/must be an Ogg file/)).toBeInTheDocument();
+    expect(api.sendVoiceNote).not.toHaveBeenCalled();
+    await user.clear(screen.getByLabelText('Media link'));
+    await user.type(screen.getByLabelText('Media link'), 'https://example.com/a.ogg');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(api.sendVoiceNote).toHaveBeenCalledWith('GW-1', '+15551234567', { link: 'https://example.com/a.ogg', fileUrl: undefined });
+  });
+
+  it('document: passes the uploaded file name as filename', async () => {
+    vi.mocked(api.uploadPublicFile).mockResolvedValue({ fileUrl: '/files/r.pdf' });
+    const { user } = setup('document');
+    await user.upload(screen.getByLabelText('Media file'), new File(['x'], 'r.pdf', { type: 'application/pdf' }));
+    await screen.findByText('r.pdf');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(api.sendMediaMessage).toHaveBeenCalledWith('GW-1', '+15551234567', { kind: 'document', link: '', fileUrl: '/files/r.pdf', caption: '', filename: 'r.pdf' });
+  });
+
+  it('media: a non-https link shows a field error and does not send', async () => {
+    const { user } = setup('image');
+    await user.type(screen.getByLabelText('Media link'), 'http://example.com/a.png');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('The link must start with https://')).toBeInTheDocument();
+    expect(screen.getByLabelText('Media link')).toHaveAttribute('aria-invalid', 'true');
+    expect(api.sendMediaMessage).not.toHaveBeenCalled();
+  });
+
+  it('list: sends the full previous payload shape', async () => {
+    const { user } = setup('list');
+    await user.type(screen.getByLabelText('Header'), 'H');
+    await user.type(screen.getByLabelText('Interactive message text'), 'Menu');
+    await user.type(screen.getByLabelText('Footer'), 'F');
+    await user.type(screen.getByLabelText('List button label'), 'Choose');
+    await user.type(screen.getByLabelText('Item 1 title'), 'Soup');
+    await user.click(screen.getByRole('button', { name: /Add item/ }));
+    await user.type(screen.getByLabelText('Item 2 title'), 'Tea');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(api.sendInteractiveMessage).toHaveBeenCalledWith('GW-1', '+15551234567', {
+      kind: 'list', body: 'Menu', header: 'H', footer: 'F', buttonText: 'Choose', displayText: '', url: '',
+      buttons: [{ id: 'btn_1', title: '' }],
+      sections: [{ title: 'Options', rows: [{ id: 'row_1', title: 'Soup', description: undefined }, { id: 'row_2', title: 'Tea', description: undefined }] }],
+    });
+  });
+
+  it('reaction: keeps the message id after sending, clears the emoji', async () => {
+    const { user } = setup('reaction');
+    await user.type(screen.getByLabelText('Message ID'), 'wamid.X');
+    await user.type(screen.getByLabelText('Emoji'), '👍');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(screen.getByLabelText('Message ID')).toHaveValue('wamid.X');
+    expect(screen.getByLabelText('Emoji')).toHaveValue('');
+  });
+
+  it('errors clear once the form is fixed and resubmitted', async () => {
+    const { user } = setup('contact');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('Add the contact name')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Contact name'), 'Ann');
+    await user.type(screen.getByLabelText('Contact email'), 'a@b.co');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(screen.queryByText('Add the contact name')).toBeNull();
+    expect(api.sendContactsMessage).toHaveBeenCalled();
+  });
+});
+
 describe('media forms (non-voice)', () => {
   it('image: needs a link or file, then sends the link with the caption', async () => {
-    const { setError, user } = setup('image');
+    const { user } = setup('image');
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(setError).toHaveBeenCalledWith(expect.objectContaining({ error: 'invalid_params' }));
+    expect(await screen.findByText('Add a file or paste a public link')).toBeInTheDocument();
     expect(api.sendMediaMessage).not.toHaveBeenCalled();
     await user.type(screen.getByLabelText('Media link'), 'https://example.com/a.png');
     await user.type(screen.getByLabelText('Media caption'), 'Look');
@@ -220,9 +292,9 @@ describe('media forms (non-voice)', () => {
   });
 
   it('sticker: asks for a file or link', async () => {
-    const { setError, user } = setup('sticker');
+    const { user } = setup('sticker');
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(setError).toHaveBeenCalledWith(expect.objectContaining({ message: 'Add a file or paste a public link' }));
+    expect(await screen.findByText('Add a file or paste a public link')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Media link'), 'https://example.com/s.webp');
     await user.click(screen.getByRole('button', { name: 'Send' }));
     expect(api.sendStickerMessage).toHaveBeenCalledWith('GW-1', '+15551234567', { link: 'https://example.com/s.webp', fileUrl: undefined });

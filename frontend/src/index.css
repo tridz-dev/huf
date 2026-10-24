@@ -104,6 +104,13 @@
     --control-px-lg: 32px;
     --control-py: 8px;
 
+    /* Form field anatomy (ui/field.tsx, ui/form.tsx). Label slot, label-to-
+       control gap and the reserved helper/error line, shared by Field and
+       FormItem so RHF and non-RHF forms are identical. */
+    --field-label-h: 16px;
+    --field-gap: 6px;
+    --field-note-h: 16px;
+
     /* Chat shell (spec section 28) — chat runs one density step tighter than
        the rest of the system. These are chat-scoped on purpose: do not use
        them outside the chat page.
@@ -369,14 +376,10 @@
     --body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     --mono:    ui-monospace, 'SF Mono', Menlo, monospace;
 
-    /* Control sizing — kept in sync with the :root block above. */
-    --control-h-sm: 32px;
-    --control-h-md: 38px;
-    --control-h-lg: 44px;
-    --control-px: 16px;
-    --control-px-sm: 12px;
-    --control-px-lg: 32px;
-    --control-py: 8px;
+    /* Control sizing (--control-h-*, --control-px*, --control-py) and the
+       field tokens (--field-*) are intentionally NOT overridden here: they
+       inherit from :root (30/34/38) so every control is the same height in
+       both themes. */
   }
 
   @keyframes blink { 50% { opacity: .2; } }

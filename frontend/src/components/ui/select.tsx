@@ -29,7 +29,7 @@ interface SelectTriggerProps
    * were overriding the trigger's height, most with `h-7 text-xs` — a missing
    * size rather than ten separate corrections.
    */
-  size?: 'default' | 'sm';
+  size?: 'default' | 'sm' | 'lg';
 }
 
 const SelectTrigger = React.forwardRef<
@@ -42,7 +42,9 @@ const SelectTrigger = React.forwardRef<
       'flex w-full items-center justify-between whitespace-nowrap rounded border border-input bg-transparent ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:border-signal focus:ring-[3px] focus:ring-signal/[.14] disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
       size === 'sm'
         ? 'h-control-sm px-control-sm py-0 text-micro'
-        : 'h-control-md px-control py-control-y text-ui-text',
+        : size === 'lg'
+          ? 'h-control-lg px-control py-control-y text-ui-text'
+          : 'h-control-md px-control py-control-y text-ui-text',
       className
     )}
     {...props}
