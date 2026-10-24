@@ -12,6 +12,7 @@ from huf.ai import telegram_admin as ta
 from huf.ai import telegram_guard as g
 from huf.ai import telegram_management_commands as mc
 from huf.ai import telegram_management_settings as ms
+from huf.ai.gateway_adapters import telegram_blocks as blocks
 from huf.ai.gateway_adapters import telegram_buttons as tb
 from huf.ai.gateway_adapters import telegram_groups as groups
 from huf.ai.gateway_adapters import telegram_ingest as ing
@@ -41,8 +42,8 @@ class Cache:
 class TestM1ReplyCacheScope(unittest.TestCase):
 	def test_media_items_do_not_cross_chats(self):
 		cache = Cache()
-		a = mr.scope_key("gw", "chat-A", "EV-A")
-		b = mr.scope_key("gw", "chat-B", "EV-B")
+		a = blocks.scope_key("gw", "chat-A", "EV-A")
+		b = blocks.scope_key("gw", "chat-B", "EV-B")
 		mr.remember("same text", ITEM, cache=cache, scope=a)
 		self.assertEqual(mr.take_items(["same text"], cache=cache, scope=b), [])
 		self.assertEqual(mr.take_items(["same text"], cache=cache, scope=a), ITEM)
@@ -51,7 +52,7 @@ class TestM1ReplyCacheScope(unittest.TestCase):
 	def test_button_spec_does_not_cross_chats(self):
 		cache = Cache()
 		spec = {"rows": [[{"text": "Y", "callback": "y"}]]}
-		a, b = mr.scope_key("gw", "A", "EV1"), mr.scope_key("gw", "B", "EV2")
+		a, b = blocks.scope_key("gw", "A", "EV1"), blocks.scope_key("gw", "B", "EV2")
 		tb.remember_spec("pick one", spec, cache=cache, scope=a)
 		self.assertIsNone(tb.spec_for_text("pick one", cache=cache, scope=b))
 		self.assertEqual(tb.spec_for_text("pick one", cache=cache, scope=a), spec)
@@ -63,7 +64,7 @@ class TestM1ReplyCacheScope(unittest.TestCase):
 		ev_b = SimpleNamespace(conversation_id="B", name="EV2")
 		gate = SimpleNamespace(name="gw")
 		spec = tb.validate(spec)[0]
-		tb.remember_spec("pick", spec, cache=cache, scope=mr.scope_key("gw", "A", "EV1"))
+		tb.remember_spec("pick", spec, cache=cache, scope=blocks.scope_key("gw", "A", "EV1"))
 		sign = lambda p: "c:" + p
 		self.assertIsNotNone(tb.markup_for(ev_a, gate, "pick", signer=sign, cache=cache))
 		self.assertIsNone(tb.markup_for(ev_b, gate, "pick", signer=sign, cache=cache))

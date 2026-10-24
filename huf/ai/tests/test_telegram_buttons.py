@@ -26,6 +26,9 @@ class FakeCache:
 	def get_value(self, key):
 		return self.d.get(key)
 
+	def delete_value(self, key):
+		self.d.pop(key, None)
+
 
 def block(obj) -> str:
 	return "```telegram-buttons\n" + json.dumps(obj) + "\n```"
@@ -92,7 +95,7 @@ class TestParse(unittest.TestCase):
 	def test_limits(self):
 		many = [[{"text": str(i), "callback": f"c{i}"} for i in range(20)] for _ in range(15)]
 		spec, errors = tb.validate({"rows": many})
-		self.assertLessEqual(len(spec["rows"]), tb.MAX_ROWS)
+		self.assertTrue(any("Telegram allows" in e for e in errors))
 		self.assertLessEqual(max(len(r) for r in spec["rows"]), tb.MAX_PER_ROW)
 		self.assertLessEqual(sum(len(r) for r in spec["rows"]), tb.MAX_BUTTONS)
 
@@ -109,7 +112,7 @@ class TestParse(unittest.TestCase):
 			}
 		)
 		self.assertEqual([b["text"] for b in spec["rows"][0]], ["ok"])
-		self.assertEqual(len(errors), 2)
+		self.assertEqual(len([e for e in errors if "callback_data must be" in e or "exactly one" in e]), 2)
 
 	def test_url_schemes(self):
 		spec, _ = tb.validate(
@@ -332,7 +335,7 @@ class TestNativeUrlShapes(unittest.TestCase):
 			for value in ("https://x.example/p?a=1", {"url": "https://x.example/p?a=1"}):
 				spec, errors = tb.validate({"rows": [[{"text": "Open", kind: value}]]})
 				self.assertEqual(errors, [], (kind, value))
-				self.assertEqual(spec["rows"][0][0][kind], "https://x.example/p?a=1")
+				self.assertEqual(spec["rows"][0][0][kind], {"url": "https://x.example/p?a=1"})
 
 	def test_native_shape_without_https_url_is_still_refused(self):
 		from huf.ai.gateway_adapters import telegram_buttons as tb

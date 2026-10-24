@@ -159,9 +159,28 @@ The **Connection** tab (section 12) runs the same steps: token check, webhook ca
 
 ## 4. Agent reply blocks
 
-The agent's reply is parsed for three fenced blocks. Each block is removed from the visible text. The prompt
-text for all three is assembled in `telegram_agent_context.py` (`AGENT_INSTRUCTIONS` from the buttons and media
-modules), so the agent sees the current format.
+The agent's reply is parsed for two fenced blocks, `telegram-buttons` and `telegram-media`. Each block is
+removed from the visible text in every spelling the model may produce: backtick or `~~~` fences, a language tag
+(` ```json telegram-buttons`), any case, a single-line block, and an unclosed fence at the end of a truncated
+reply. A block inside a longer (four-backtick) fence, another code fence or an indented code sample is not live.
+JSON may carry trailing commas. The prompt text is assembled in `telegram_agent_context.py` (`AGENT_INSTRUCTIONS`
+from the buttons module, `MEDIA_TEXT`), and a test checks that it lists only fields the validators accept.
+
+The canonical shapes are Telegram's own Bot API field names. One normaliser per block
+(`telegram_buttons.validate`, `telegram_media_reply.validate`; shared fence and JSON handling in
+`telegram_blocks.py`) turns every accepted spelling into one internal form, so the template editor, the agent
+block and the markup builder use the same code.
+
+**Nothing is dropped silently.** Every validation problem (a rejected button, an ignored field, a truncation,
+an unknown type, an invalid JSON body) is:
+
+1. logged as a warning (`Telegram reply blocks: ...`, no secrets);
+2. noted on the Gateway Event in `delivery_error` (`Reply blocks: ...`);
+3. fed back to the agent: the next run in the same conversation gets one line in its channel note, "Your last
+   reply had invalid buttons/media: ... Valid: ...", once;
+4. if nothing else would be sent, the chat gets a short plain text naming the problem instead of nothing.
+
+A button keyboard that cannot be built (for example a signer failure) is reported the same way.
 
 ### 4.1 Buttons: ```telegram-buttons
 
@@ -169,42 +188,63 @@ Source: `huf/ai/gateway_adapters/telegram_buttons.py` (docstring and `AGENT_INST
 
 ````
 ```telegram-buttons
-{"rows": [[{"text": "Yes", "callback": "yes"}, {"text": "Site", "url": "https://..."}]], "edit": false, "once": true}
+{"inline_keyboard": [[{"text": "Yes", "callback_data": "yes"}, {"text": "Site", "url": "https://..."}]], "once": true}
 ```
 ````
 
-- Top-level keys: exactly one of `rows` (inline keyboard), `reply_keyboard` or `remove_keyboard: true`.
-  `edit: true` makes the agent's answer to a press edit the original message. `once: true` removes the
-  keyboard on the first press.
-- Button kinds (exactly one per button besides `text`): `callback` (id at most 46 bytes), `url`, `web_app`
-  (https), `switch_inline` (`"current_chat": true` for the same chat), `copy_text` (at most 256 chars),
-  `login_url` (https).
-- `reply_keyboard`: `{"rows": [["A", "B"]], "one_time": bool, "resize": bool, "placeholder": str}`; a cell may
-  be `{"text", "request_contact"|"request_location"}`.
-- Limits: 8 buttons per row, 10 rows, 40 buttons, button text at most 64 characters. Invalid buttons are
-  dropped; the block is always stripped. The keyboard goes on the last message part.
+- Top level, exactly one of: `inline_keyboard` (alias `rows`), `keyboard` (alias `reply_keyboard`) or
+  `remove_keyboard: true`; also accepted inside a `reply_markup` object or as a bare list of rows. `edit: true`
+  makes the agent's answer to a press edit the original message. `once: true` removes the keyboard on the first
+  press. Both are real booleans (`"false"` is false; garbage is reported). Several blocks: the last one is used
+  and the rest reported.
+- Inline button: `text` plus exactly one of `callback_data` (alias `callback`; at most 46 bytes once signed),
+  `url` (https, http or tg), `web_app` (`{"url"}` or a bare https string), `login_url` (`{"url", "forward_text",
+  "bot_username", "request_write_access"}` or a bare https string), `switch_inline_query`,
+  `switch_inline_query_current_chat` (alias `switch_inline`, as a string with `current_chat`, or as
+  `{"query", "current_chat"}`), `copy_text` (`{"text"}` or a bare string, at most 256 characters).
+- Reply keyboard: `keyboard` with `resize_keyboard`, `one_time_keyboard`, `input_field_placeholder` and
+  `is_persistent` (aliases `resize`, `one_time`, `placeholder`, `persistent`, also inside
+  `reply_keyboard: {"rows": ...}`). A cell is a string or `{"text", "request_contact" | "request_location" |
+  "request_poll" | "web_app" | "request_users" | "request_chat"}`.
+- Limits are Telegram's: 8 buttons per row, 100 buttons, callback data 64 bytes (46 for our id once the HMAC
+  signature and flags are added). There is no cap on button text. Extra rows, buttons or cells are dropped
+  and reported. The keyboard goes on the final real text part, never on a trailing "could not send" note.
 - Callback data is HMAC-signed and bound to the chat. A press reaches the agent as `[button: <text>]`.
 
 ### 4.2 Media: ```telegram-media
 
-Source: `huf/ai/gateway_adapters/telegram_media_reply.py` (docstring and `AGENT_INSTRUCTIONS`). Media is sent
-before the text. A media failure never loses the text; a short note is appended instead.
+Source: `huf/ai/gateway_adapters/telegram_media_reply.py` (docstring). Media is sent before the text. A media
+failure never loses the text; a short note is appended instead, and the failure is fed back to the agent too.
 
 ````
 ```telegram-media
-{"items": [{"type": "photo", "source": "file_url", "value": "/private/files/a.png",
-            "caption": "Chart", "has_spoiler": false},
-           {"type": "location", "source": "text", "latitude": 52.5, "longitude": 13.4}]}
+{"items": [{"type": "photo", "media": "https://example.com/a.png", "caption": "Chart", "has_spoiler": true},
+           {"type": "location", "latitude": 52.5, "longitude": 13.4}]}
 ```
 ````
 
-- File types: `photo`, `video`, `animation`, `audio`, `voice`, `document`, `sticker`, `video_note`.
-- Text-source types: `location`, `contact`, `venue`, `poll`, `dice`. Their fields sit at item level or in `value`.
-- Sources: `file_url` (a Frappe File, permission-checked as the gateway execution user), `file_id` (a Telegram
-  file id), `url` (public http(s), SSRF-guarded), `text` (for the text-source types only).
-- Limits: 10 items per reply; captions 1024 characters; upload 50 MB, photos 10 MB. Two to ten consecutive
-  photo or video items (or audio-only or document-only runs) go out as one album (`sendMediaGroup`).
-- Sticker and video note items take no caption.
+- Shapes: `{"items": [...]}`, a bare list, `{"media": [...]}` or a single top-level item. Several media blocks
+  are merged.
+- File types: `photo`, `video`, `animation`, `audio`, `voice`, `document`, `sticker`, `video_note` (aliases
+  `image`, `picture`, `gif`, `videonote`, `file`). Location: `media` or `value` (string), `url`, `file_id`,
+  `file_url`, or a field named like the type. `source` (`file_url`, `file_id`, `url`) is inferred when missing:
+  http(s) is a url, a path starting with `/` is a Frappe File (`file_url`, permission-checked as the gateway
+  execution user), a long bare token is a Telegram `file_id`; anything else is an error. Public `url`s are
+  SSRF-guarded.
+- Text types: `location` (`latitude`, `longitude`, `live_period`), `venue` (+ `title`, `address`), `contact`
+  (`phone_number`, `first_name`, `last_name`, `vcard`), `poll`, `dice` (`emoji`: dice, dart, basketball,
+  football, bowling or slots emoji; the variation selector is ignored). `quiz` is a poll: `type: "quiz"`,
+  `poll_type: "quiz"` or `quiz: true`, with `correct_option_id` (or `correct_option_ids`), `explanation` and
+  `open_period`; polls also take `is_anonymous` and `allows_multiple_answers`. Fields sit at item level or in
+  `value`.
+- Per item options: `disable_notification`, `protect_content`, `reply_to_message_id`, `message_thread_id`,
+  `message_effect_id` (short names `silent`, `protect`, `reply_to`, `thread_id`, `effect`), and for photo, video
+  and animation `has_spoiler` and `show_caption_above_media`. Sticker and video note items take no caption.
+- Limits: 10 items per reply (extra items are reported); poll question 300, option 100, 12 options; upload 50
+  MB, photos 10 MB. A caption over 1024 characters is not cut: the overflow is sent as a follow-up text. Two to
+  ten consecutive plain photo or video items (or audio-only or document-only runs) go out as one album
+  (`sendMediaGroup`); an item with its own options (spoiler, caption above, silent, ...) or a caption over 1024
+  is sent on its own so the option is not lost.
 
 ### 4.3 Inbound rich descriptions
 

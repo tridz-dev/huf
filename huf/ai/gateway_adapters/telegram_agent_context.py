@@ -14,9 +14,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from huf.ai.gateway_adapters import telegram_buttons
+from huf.ai.gateway_adapters import telegram_blocks, telegram_buttons
 
-MAX_CHARS = 1600  # static feature docs + this gateway's capability lines; per-message prompt cost
+MAX_CHARS = 2000  # static feature docs + this gateway's capability lines; per-message prompt cost
 
 FLAG_GROUP_ADMIN = "telegram_agent_allow_group_admin"
 FLAG_BUSINESS = "telegram_agent_allow_business"
@@ -24,16 +24,20 @@ FLAG_PROFILE = "telegram_agent_allow_profile"
 VOICE_MODE_FIELD = "voice_reply_mode"
 
 MEDIA_TEXT = (
-	'Media: add a fenced ```telegram-media block with JSON {"items": [{"type": "photo|video|audio|voice|'
-	'document|sticker|location|contact|venue|poll|dice", "source": "file_url|file_id|url|text", '
-	'"value": "...", "caption": ""}]}; sent before the text; inbound reactions are recorded.'
+	'Media: add a ```telegram-media block {"items":[...]} (max 10, sent before your text). File item: {"type":"photo|video|'
+	'animation|audio|voice|document|sticker|video_note","media":"<https url | file_id | /files/.. path>","caption":"",'
+	'"has_spoiler":true,"show_caption_above_media":true}; audio also title, performer, duration. Others: location{latitude,'
+	"longitude}, venue{+title,address}, contact{phone_number,first_name,last_name}, poll|quiz{question,options[],is_anonymous,"
+	"allows_multiple_answers,correct_option_id,explanation,open_period}, dice{emoji}. Any item: disable_notification, "
+	"protect_content, reply_to_message_id, message_thread_id. Invalid blocks are reported back to you."
 )
 TOOL_TEXT = (
 	"telegram tool: send_message/reply_to_message, set_reaction, edit_message_text, delete_message (ids from "
-	"'Current message'/list_messages); after a tool send here add no final text; list_templates/send_template, polls, topics, get_file; send_speech(text)=voice."
+	"'Current message'/list_messages); after a tool send here add no final text; list_templates/send_template, send_poll, get_file; "
+	"send_speech(text)=voice."
 )
 FLAG_TEXT = {
-	FLAG_GROUP_ADMIN: "telegram_admin tool: group moderation (requires confirm).",
+	FLAG_GROUP_ADMIN: "telegram_admin tool: group moderation; state changes need a bound admin chat + human Approve.",
 	FLAG_BUSINESS: "Secretary/business actions are allowed.",
 	FLAG_PROFILE: "Bot commands and profile can be changed.",
 }
@@ -114,6 +118,16 @@ def _id(value: Any) -> str:
 
 
 def event_context(event, gateway=None) -> str:
+	"""Channel note about the inbound event: ``Current message: chat_id=..., message_id=...`` plus, once, what
+	was wrong with the agent's previous reply blocks in this conversation. '' when there is nothing to say."""
+	line = _message_line(event, gateway)
+	gw = str(getattr(gateway, "name", "") or getattr(event, "gateway", "") or "")
+	chat = str(getattr(event, "conversation_id", "") or "")
+	feedback = telegram_blocks.feedback_line(gw, chat) if gw and chat else ""
+	return " ".join(p for p in (line, feedback) if p)
+
+
+def _message_line(event, gateway=None) -> str:
 	"""One-line ``Current message: chat_id=..., message_id=...`` for the inbound event, or '' when unknown."""
 	from huf.ai.gateway_adapters import telegram_pipeline
 

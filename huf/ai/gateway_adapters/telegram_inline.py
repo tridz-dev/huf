@@ -499,11 +499,9 @@ def clean_answer(result) -> str:
 	text = str(result.get("response") or "").strip()
 	if not text:
 		return ""
-	from huf.ai.gateway_adapters import telegram_buttons, telegram_media_reply
+	from huf.ai.gateway_adapters import telegram_blocks
 
-	for rx in (telegram_buttons._FENCE_RE, telegram_media_reply._FENCE_RE):
-		text = rx.sub("", text)
-	return re.sub(r"\n{3,}", "\n\n", text).strip()[: MAX_ANSWER * 2]
+	return telegram_blocks.strip(text)[: MAX_ANSWER * 2]
 
 
 def _edit(adapter, inline_message_id: str, markdown: str) -> bool:
