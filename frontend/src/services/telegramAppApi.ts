@@ -22,6 +22,7 @@ export interface TgMe {
   gateway: string;
   telegram_user_id: string | number;
 }
+export interface TgDoctypeChoice { name: string }
 export interface TgConfig {
   gateway: string;
   bot_name?: string;
@@ -30,8 +31,8 @@ export interface TgConfig {
   confirm_ttl?: number;
   limits?: { search_max?: number; audit_max?: number };
   features?: Partial<Record<'search' | 'approvals' | 'digest' | 'act' | 'audit' | 'audit_all', boolean>>;
-  /** Optional allow-listed DocTypes for the search picker, when the backend provides it. */
-  doctypes?: string[];
+  /** Record types the signed-in user may search (permission-filtered and capped by the server). */
+  doctypes: TgDoctypeChoice[];
 }
 export interface TgSearchItem { name: string; title?: string }
 export interface TgSearchResult { doctype: string; items: TgSearchItem[] }

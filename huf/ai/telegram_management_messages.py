@@ -41,6 +41,10 @@ _ALLOWED_MIME = {
 	"photo": ("image/jpeg", "image/png", "image/webp"),
 	"voice": ("audio/ogg", "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/opus"),
 }
+_TYPE_HELP = {
+	"photo": "A photo must be a JPG, PNG or WebP image.",
+	"voice": "A voice message must be an OGG, MP3 or M4A audio file.",
+}
 _DENIED_EXT = (".exe", ".bat", ".cmd", ".sh", ".js", ".msi", ".scr", ".com", ".vbs", ".ps1")
 _EVENT_FIELDS = [
 	"name",
@@ -503,7 +507,7 @@ def validate_upload(kind: str, filename: str, content: bytes) -> str:
 		return "This file type is not allowed."
 	mime = mimetypes.guess_type(name)[0] or ""
 	if kind in _ALLOWED_MIME and mime not in _ALLOWED_MIME[kind]:
-		return f"A {kind} must be one of: {', '.join(_ALLOWED_MIME[kind])}."
+		return _TYPE_HELP[kind]
 	return ""
 
 

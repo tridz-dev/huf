@@ -200,7 +200,7 @@ class TestSend(unittest.TestCase):
 	def test_upload_validation(self):
 		self.assertIn("larger", m.validate_upload("photo", "a.jpg", b"x" * (11 * 1024 * 1024)))
 		self.assertIn("not allowed", m.validate_upload("document", "run.exe", b"x"))
-		self.assertTrue(m.validate_upload("photo", "a.gif", b"x"))
+		self.assertEqual(m.validate_upload("photo", "a.gif", b"x"), "A photo must be a JPG, PNG or WebP image.")
 		self.assertEqual(m.validate_upload("photo", "a.png", b"x"), "")
 		self.assertEqual(m.validate_upload("voice", "a.ogg", b"x"), "")
 		self.assertTrue(m.validate_upload("document", "a.pdf", b""))

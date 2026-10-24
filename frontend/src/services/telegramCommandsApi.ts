@@ -134,6 +134,10 @@ export interface RecommendedPlan {
 	commands: { scope: CommandScope; current: BotCommand[]; recommended: BotCommand[]; action: CommandAction }[];
 	menu_button: { current: MenuButton; recommended: MenuButton; https_ok: boolean; warning: string };
 	replaces_existing_commands: boolean;
+	/** Things that can override the plan (for example language-specific lists); shown before applying. */
+	warnings: string[];
+	/** What this plan cannot see or change. */
+	limitation: string;
 }
 export interface RecommendedResult {
 	changed: { commands: { scope: CommandScope; action: CommandAction; count: number; previous_count: number }[]; menu_button: MenuButton | null };

@@ -7,6 +7,7 @@ import {
   type TgApprovalItem, type TgAudit, type TgConfig, type TgDigest, type TgDocSummary, type TgMe, type TgSearchItem,
 } from '@/services/telegramAppApi';
 import { ActionPanel } from './ActionPanel';
+import { DoctypePicker } from './DoctypePicker';
 import { doctypeChoices, formatFieldValue } from './model';
 
 export type DocRef = { doctype: string; name: string };
@@ -103,7 +104,7 @@ export function ApprovalsView({ open }: { open: (r: DocRef) => void }) {
 
 export function SearchView({ config, open }: { config: TgConfig | null; open: (r: DocRef) => void }) {
   const choices = doctypeChoices(config);
-  const [doctype, setDoctype] = useState(choices[0] ?? '');
+  const [doctype, setDoctype] = useState('');
   const [text, setText] = useState('');
   const [items, setItems] = useState<TgSearchItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -126,18 +127,7 @@ export function SearchView({ config, open }: { config: TgConfig | null; open: (r
   return (
     <div className="space-y-2">
       <h1 className="text-xl font-semibold">Search</h1>
-      {choices.length ? (
-        <select
-          aria-label="Type"
-          className="w-full rounded-md border bg-[var(--tg-section-bg)] p-2 text-sm"
-          value={doctype}
-          onChange={(e) => setDoctype(e.target.value)}
-        >
-          {choices.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-      ) : (
-        <Input aria-label="Type" placeholder="Type, for example Sales Order" value={doctype} onChange={(e) => setDoctype(e.target.value)} />
-      )}
+      <DoctypePicker choices={choices} value={doctype} onChange={setDoctype} />
       <Input
         aria-label="Search text"
         placeholder="Search"

@@ -108,13 +108,9 @@ export async function uploadPrivateFile(f: File): Promise<Result<{ fileUrl: stri
 // -- pure helpers ----------------------------------------------------------------------------------
 
 const MAX_BYTES: Record<Exclude<SendKind, 'text'>, number> = { photo: 10 * 1024 * 1024, document: 50 * 1024 * 1024, voice: 20 * 1024 * 1024 };
-const MIME: Partial<Record<SendKind, string[]>> = {
-	photo: ['image/jpeg', 'image/png', 'image/webp'],
-	voice: ['audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/opus'],
-};
 
-/** Client-side pre-check mirroring the server; returns an error text or ''. */
-export function validateSend(kind: SendKind, text: string, f: { size: number; type: string; name: string } | null): string {
+/** Client-side pre-check of text and size limits only; file types are decided by the server alone (it reports `invalid_file`). */
+export function validateSend(kind: SendKind, text: string, f: { size: number } | null): string {
 	if (kind === 'text') {
 		if (!text.trim()) return 'Write a message first.';
 		return text.length > 4096 ? 'Text is limited to 4096 characters.' : '';
@@ -123,8 +119,6 @@ export function validateSend(kind: SendKind, text: string, f: { size: number; ty
 	if (!f) return 'Attach a file.';
 	if (f.size === 0) return 'The file is empty.';
 	if (f.size > MAX_BYTES[kind]) return `The file is larger than ${MAX_BYTES[kind] / (1024 * 1024)} MB.`;
-	const allowed = MIME[kind];
-	if (allowed && !allowed.includes(f.type)) return `A ${kind} must be one of: ${allowed.join(', ')}.`;
 	return '';
 }
 

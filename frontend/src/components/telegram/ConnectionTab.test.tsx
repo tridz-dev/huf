@@ -38,17 +38,17 @@ describe('WebhookCard', () => {
 		render(<WebhookCard gateway="G" />);
 		expect(await screen.findByText('https://old/h')).toBeInTheDocument();
 		expect(screen.getByText('Waiting updates').parentElement).toHaveTextContent('4');
-		await userEvent.click(screen.getByRole('button', { name: 'Set webhook' }));
+		await userEvent.click(screen.getByRole('button', { name: 'Connect to Telegram' }));
 		expect(await screen.findByText('Take over this bot?')).toBeInTheDocument();
 		expect(api.setWebhookNow).not.toHaveBeenCalled();
-		await userEvent.click(screen.getAllByRole('button', { name: 'Set webhook' }).at(-1)!);
+		await userEvent.click(screen.getAllByRole('button', { name: 'Connect to Telegram' }).at(-1)!);
 		await waitFor(() => expect(api.setWebhookNow).toHaveBeenCalledWith('G', false));
 	});
 
 	it('cancel does nothing', async () => {
 		render(<WebhookCard gateway="G" />);
 		await screen.findByText('https://old/h');
-		await userEvent.click(screen.getByRole('button', { name: 'Set webhook' }));
+		await userEvent.click(screen.getByRole('button', { name: 'Connect to Telegram' }));
 		await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
 		expect(api.setWebhookNow).not.toHaveBeenCalled();
 	});

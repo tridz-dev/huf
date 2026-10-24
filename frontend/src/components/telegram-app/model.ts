@@ -1,7 +1,5 @@
 /** Pure helpers for the Telegram Mini App UI. */
-import type { TgConfig, TgDocField } from '@/services/telegramAppApi';
-
-export const FALLBACK_DOCTYPES: string[] = [];
+import { TelegramAppError, type TgConfig, type TgDocField } from '@/services/telegramAppApi';
 
 export function resolveGateway(search: string, startParam?: string | null): string {
   const gw = new URLSearchParams(search).get('gw');
@@ -13,7 +11,13 @@ export function canAct(cfg: TgConfig | null): boolean {
 }
 
 export function doctypeChoices(cfg: TgConfig | null): string[] {
-  return cfg?.doctypes?.length ? cfg.doctypes : FALLBACK_DOCTYPES;
+  return (cfg?.doctypes ?? []).map((d) => d.name);
+}
+
+/** Case-insensitive substring filter for the record-type picker. */
+export function filterChoices(choices: string[], query: string, max = 8): string[] {
+  const q = query.trim().toLowerCase();
+  return (q ? choices.filter((c) => c.toLowerCase().includes(q)) : choices).slice(0, max);
 }
 
 /** Render any field value as plain text (React escapes it; never HTML). */
@@ -51,4 +55,13 @@ export function themeVars(p: Record<string, string> | undefined): Record<string,
     if (typeof v === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(v)) out[css] = v;
   }
   return out;
+}
+
+/** The server answers every sign-in refusal the same way, so a refused first sign-in means this account is not linked. */
+export function signInFailure(e: unknown): { kind: 'error'; title: string; message: string } {
+  const title = 'Could not sign in';
+  if (e instanceof TelegramAppError && e.code === 'unauthorized') {
+    return { kind: 'error', title: 'Not linked yet', message: 'This Telegram account is not linked to Huf yet. Ask an admin to link it, then try again.' };
+  }
+  return { kind: 'error', title, message: e instanceof TelegramAppError ? e.message : 'Something went wrong. Try again.' };
 }

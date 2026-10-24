@@ -21,7 +21,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 	);
 }
 
-/** Where Telegram delivers this bot's messages. Setting or deleting the webhook needs an explicit confirmation. */
+/** Where Telegram delivers this bot's messages. Connecting or disconnecting needs an explicit confirmation. */
 export function WebhookCard({ gateway }: { gateway: string }) {
 	const [hook, setHook] = useState<WebhookSummary | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -49,7 +49,7 @@ export function WebhookCard({ gateway }: { gateway: string }) {
 		if (res.ok) {
 			setHook(res.data.webhook);
 			setError(null);
-			toast.success(action === 'set' ? 'Webhook set' : 'Webhook deleted');
+			toast.success(action === 'set' ? 'Connected to Telegram' : 'Disconnected from Telegram');
 		} else setError(res.error);
 		setDrop(false);
 	};
@@ -57,7 +57,7 @@ export function WebhookCard({ gateway }: { gateway: string }) {
 	return (
 		<Card>
 			<CardHeader>
-				<CardTitle className="text-base">Webhook</CardTitle>
+				<CardTitle className="text-base">Message delivery</CardTitle>
 				<CardDescription>The address Telegram sends this bot's messages to.</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-4">
@@ -80,8 +80,8 @@ export function WebhookCard({ gateway }: { gateway: string }) {
 					</>
 				)}
 				<div className="flex flex-wrap gap-2">
-					<Button onClick={() => setPending('set')} disabled={busy}>Set webhook</Button>
-					<Button variant="outline" onClick={() => setPending('delete')} disabled={busy || !hook?.url}>Delete webhook</Button>
+					<Button onClick={() => setPending('set')} disabled={busy}>Connect to Telegram</Button>
+					<Button variant="outline" onClick={() => setPending('delete')} disabled={busy || !hook?.url}>Disconnect</Button>
 					<Button variant="ghost" onClick={refresh} disabled={busy}>Refresh</Button>
 				</div>
 			</CardContent>
@@ -91,8 +91,8 @@ export function WebhookCard({ gateway }: { gateway: string }) {
 						<AlertDialogTitle>{pending === 'set' ? 'Take over this bot?' : 'Stop receiving messages here?'}</AlertDialogTitle>
 						<AlertDialogDescription>
 							{pending === 'set'
-								? 'Telegram delivers a bot\'s messages to one address only. Setting the webhook sends all of this bot\'s messages to this site and stops delivery anywhere else.'
-								: 'Telegram will stop sending this bot\'s messages to this site until you set the webhook again.'}
+								? 'Telegram delivers a bot\'s messages to one address only. Connecting sends all of this bot\'s messages to this site and stops delivery anywhere else.'
+								: 'Telegram will stop sending this bot\'s messages to this site until you connect again.'}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<div className="flex items-center gap-2">
@@ -101,7 +101,7 @@ export function WebhookCard({ gateway }: { gateway: string }) {
 					</div>
 					<AlertDialogFooter>
 						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction onClick={confirm}>{pending === 'set' ? 'Set webhook' : 'Delete webhook'}</AlertDialogAction>
+						<AlertDialogAction onClick={confirm}>{pending === 'set' ? 'Connect to Telegram' : 'Disconnect'}</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>

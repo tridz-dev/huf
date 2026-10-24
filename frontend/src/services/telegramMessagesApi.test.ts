@@ -46,7 +46,7 @@ describe('validateSend', () => {
 	it('checks files', () => {
 		expect(validateSend('photo', '', null)).toMatch(/Attach/);
 		expect(validateSend('photo', '', f(11 * 1024 * 1024, 'image/png'))).toMatch(/10 MB/);
-		expect(validateSend('photo', '', f(5, 'image/gif'))).toMatch(/must be/);
+		expect(validateSend('photo', '', f(5, 'image/gif'))).toBe('');
 		expect(validateSend('photo', '', f(5, 'image/png'))).toBe('');
 		expect(validateSend('document', '', f(5, 'application/pdf'))).toBe('');
 		expect(validateSend('voice', '', f(5, 'audio/ogg'))).toBe('');
