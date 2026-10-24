@@ -27,6 +27,8 @@ const plan = (https: boolean): api.RecommendedPlan => ({
 		warning: https ? '' : 'Telegram only opens web apps over https.',
 	},
 	replaces_existing_commands: true,
+	warnings: [],
+	limitation: 'Telegram prefers a list set for one chat or language.',
 });
 
 beforeEach(() => {
@@ -41,11 +43,11 @@ describe('RecommendedSetupCard', () => {
 		expect((await screen.findAllByText('Now: /initiate'))).toHaveLength(2);
 		expect(screen.getAllByText('New: /help /me')).toHaveLength(2);
 		expect(screen.getByText('Now: /eliminate')).toBeInTheDocument();
-		expect(screen.getByText('New: removed (the Commands list applies)')).toBeInTheDocument();
+		expect(screen.getByText('New: Cleared')).toBeInTheDocument();
 		await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
 		expect(api.applyRecommendedSetup).not.toHaveBeenCalled();
 		expect(screen.getByText(/replaces the commands currently published/)).toBeInTheDocument();
-		expect(screen.getByText(/private-chat and group-admin lists that differ are replaced too/)).toBeInTheDocument();
+		expect(screen.getByText(/lists for other chats that the plan does not define are cleared/)).toBeInTheDocument();
 		await userEvent.click(screen.getByRole('button', { name: 'Replace and apply' }));
 		await waitFor(() => expect(api.applyRecommendedSetup).toHaveBeenCalledWith('G', true, true));
 		expect(toast.success).toHaveBeenCalled();
@@ -67,5 +69,22 @@ describe('RecommendedSetupCard', () => {
 		await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
 		await userEvent.click(screen.getByRole('button', { name: 'Replace and apply' }));
 		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('boom'));
+	});
+
+	it('labels scopes by behaviour, shows warnings and the limitation', async () => {
+		const p = plan(true);
+		p.warnings = ['Language-specific lists exist: all_private_chats/de.'];
+		vi.mocked(api.getRecommendedSetup).mockResolvedValue({ ok: true, data: { plan: p } });
+		render(<RecommendedSetupCard gateway="G" />);
+		expect(await screen.findByText('Commands in private chats')).toBeInTheDocument();
+		expect(screen.getByText('Commands for group admins')).toBeInTheDocument();
+		expect(screen.getByRole('list', { name: 'Warnings' })).toHaveTextContent('Language-specific lists exist');
+		expect(screen.getByText('Telegram prefers a list set for one chat or language.')).toBeInTheDocument();
+	});
+
+	it('shows no warning list when there are none', async () => {
+		render(<RecommendedSetupCard gateway="G" />);
+		await screen.findByText('Commands in private chats');
+		expect(screen.queryByRole('list', { name: 'Warnings' })).toBeNull();
 	});
 });

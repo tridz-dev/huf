@@ -17,10 +17,10 @@ import { applyRecommendedSetup, getRecommendedSetup, type BotCommand, type Comma
 
 const names = (cmds: BotCommand[]) => (cmds.length ? cmds.map((c) => `/${c.command}`).join(' ') : 'none');
 const scopeLabel: Record<CommandScope, string> = {
-	default: 'Commands',
-	all_private_chats: 'Private chats',
-	all_group_chats: 'Group commands',
-	all_chat_administrators: 'Group admins',
+	default: 'Default commands',
+	all_private_chats: 'Commands in private chats',
+	all_group_chats: 'Commands in groups',
+	all_chat_administrators: 'Commands for group admins',
 };
 
 export function RecommendedSetupCard({ gateway, onApplied }: { gateway: string; onApplied?: () => void }) {
@@ -65,7 +65,7 @@ export function RecommendedSetupCard({ gateway, onApplied }: { gateway: string; 
 					<div key={c.scope} className="space-y-0.5">
 						<p className="font-medium text-ink">{scopeLabel[c.scope]}</p>
 						<p className="text-steel">Now: {names(c.current)}</p>
-						<p className="text-ink">{c.action === 'delete' ? 'New: removed (the Commands list applies)' : `New: ${names(c.recommended)}`}</p>
+						<p className="text-ink">{c.action === 'delete' ? 'New: Cleared' : `New: ${names(c.recommended)}`}</p>
 					</div>
 				))}
 				{menu && (
@@ -75,6 +75,12 @@ export function RecommendedSetupCard({ gateway, onApplied }: { gateway: string; 
 						<p className="text-ink">New: {menuLabel(menu.recommended)}</p>
 					</div>
 				)}
+				{plan && plan.warnings.length > 0 && (
+					<ul aria-label="Warnings" className="list-disc space-y-1 rounded-md border border-amber-300 bg-amber-50 p-3 pl-7 text-amber-800">
+						{plan.warnings.map((w) => <li key={w}>{w}</li>)}
+					</ul>
+				)}
+				{plan?.limitation && <p className="text-xs text-steel">{plan.limitation}</p>}
 				{menu && !menu.https_ok && <p role="alert" className="text-amber-600">{menu.warning}</p>}
 			</CardContent>
 			<CardFooter>
@@ -87,8 +93,8 @@ export function RecommendedSetupCard({ gateway, onApplied }: { gateway: string; 
 						<AlertDialogDescription>
 							This replaces the commands currently published for this bot
 							{menu?.https_ok ? ' and changes its menu button to Console' : ''}. Telegram uses the most specific list
-							it finds, so private-chat and group-admin lists that differ are replaced too, and a group-admin list the
-							plan does not define is removed. You can restore the old lists by hand from the editor below.
+							it finds, so private-chat lists that differ are replaced, and lists for other chats that the
+							plan does not define are cleared. You can restore the old lists by hand from the editor below.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
