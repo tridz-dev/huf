@@ -42,6 +42,9 @@ import { useUser } from '@/contexts/UserContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getProviderBrandIcon } from '@/components/common/BrandIcons';
 import { IntegrationSettingsProvider } from '@/contexts/IntegrationSettingsContext';
@@ -49,7 +52,6 @@ import { IntegrationSettingsListingPage } from './IntegrationSettingsListingPage
 import { IntegrationSettingsHeaderActions } from '@/components/integrations/IntegrationSettingsHeaderActions';
 import { getIntegrationSettings } from '@/services/integrationApi';
 import type { IntegrationSettingsDoc } from '@/types/integration.types';
-import { cn } from '@/lib/utils';
 import { formatTimeAgo } from '@/utils/time';
 import { gatewayErrorText } from '@/utils/gatewayErrorCopy';
 import { getGatewayReadiness } from '@/utils/gatewayReadiness';
@@ -278,7 +280,6 @@ export default function GatewaysPage() {
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 px-2.5 text-xs"
                 disabled={busy}
                 onClick={() => handleApproveEntry(entry)}
               >
@@ -287,7 +288,7 @@ export default function GatewaysPage() {
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 px-2.5 text-xs text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive"
                 disabled={busy}
                 onClick={() => handleRevokeEntry(entry)}
               >
@@ -416,40 +417,31 @@ export default function GatewaysPage() {
   }
 
   const tabBar = (
-    <div className="mb-6 flex items-center gap-1 border-b border-line">
-      {(
-        [
-          { key: 'gateways' as const, label: 'Gateways' },
-          { key: 'pending-access' as const, label: 'Pending access', badge: pendingEntries.length },
-          { key: 'credentials' as const, label: 'Channel credentials' },
-        ]
-      ).map((tab) => (
-        <Button
-          key={tab.key}
-          type="button"
-          variant="ghost"
-          onClick={() => setActiveTab(tab.key)}
-          className={cn(
-            'h-auto rounded-none px-3 pb-2.5 text-sm font-medium border-b-2 -mb-px transition-colors hover:bg-transparent',
-            activeTab === tab.key
-              ? 'border-primary text-ink'
-              : 'border-transparent text-steel hover:text-ink'
-          )}
-        >
-          <span className="flex items-center gap-1.5">
-            {tab.label}
-            {'badge' in tab && (tab.badge ?? 0) > 0 && (
-              <Badge
-                variant="destructive"
-                className="h-4 min-w-[16px] px-1 py-0 flex items-center justify-center"
-              >
-                {tab.badge! > 9 ? '9+' : tab.badge}
-              </Badge>
-            )}
-          </span>
-        </Button>
-      ))}
-    </div>
+    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(parseGatewaysTab(v))} className="mb-6">
+      <TabsList aria-label="Gateways sections">
+        {(
+          [
+            { value: 'gateways' as const, label: 'Gateways' },
+            { value: 'pending-access' as const, label: 'Pending access', badge: pendingEntries.length },
+            { value: 'credentials' as const, label: 'Channel credentials' },
+          ]
+        ).map((tab) => (
+          <TabsTrigger key={tab.value} value={tab.value}>
+            <span className="flex items-center gap-1.5">
+              {tab.label}
+              {'badge' in tab && (tab.badge ?? 0) > 0 && (
+                <Badge
+                  variant="destructive"
+                  className="h-4 min-w-[16px] px-1 py-0 flex items-center justify-center"
+                >
+                  {tab.badge! > 9 ? '9+' : tab.badge}
+                </Badge>
+              )}
+            </span>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 
   if (activeTab === 'credentials') {
@@ -504,7 +496,7 @@ export default function GatewaysPage() {
           </div>
           <label className="grid gap-1 text-xs font-medium text-ink">
             <Select value={pendingGatewayFilter} onValueChange={setPendingGatewayFilter}>
-              <SelectTrigger className="h-9 w-[220px] text-xs">
+              <SelectTrigger className="w-[220px] text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -728,8 +720,9 @@ export default function GatewaysPage() {
 
       {/* Native In-App Gateway Settings Modal / Drawer */}
       {editingGateway && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-xl rounded-2xl border border-line bg-panel p-6 shadow-xl space-y-6 max-h-[90vh] overflow-y-auto">
+        <Dialog open onOpenChange={(open) => !open && setEditingGateway(null)}>
+          <DialogContent className="block max-h-[90vh] overflow-y-auto sm:max-w-xl">
+            <div className="min-w-0 space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-line pb-4">
               <div className="flex items-center gap-3">
@@ -737,18 +730,10 @@ export default function GatewaysPage() {
                   {getProviderBrandIcon(editingGateway.provider, 24)}
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-ink">{editingGateway.gateway_name}</h3>
-                  <p className="text-xs text-steel">{providerNames[editingGateway.provider] || editingGateway.provider}</p>
+                  <DialogTitle className="text-base font-semibold text-ink">{editingGateway.gateway_name}</DialogTitle>
+                  <DialogDescription className="text-xs text-steel">{providerNames[editingGateway.provider] || editingGateway.provider}</DialogDescription>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setEditingGateway(null)}
-                className="h-auto w-auto rounded-lg p-1.5 text-steel hover:bg-paper hover:text-ink transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </Button>
             </div>
 
             {/* Form Fields */}
@@ -759,17 +744,13 @@ export default function GatewaysPage() {
                   <p className="text-xs font-medium text-ink">Gateway Status</p>
                   <p className="text-[11px] text-steel">Receive and process inbound messages from this channel</p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={Boolean(editingGateway.is_enabled)}
-                    onChange={(e) =>
-                      setEditingGateway({ ...editingGateway, is_enabled: e.target.checked ? 1 : 0 })
-                    }
-                  />
-                  <div className="w-9 h-5 bg-line peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-panel after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-panel after:border-line after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-good"></div>
-                </label>
+                <Switch
+                  aria-label="Gateway Status"
+                  checked={Boolean(editingGateway.is_enabled)}
+                  onCheckedChange={(checked) =>
+                    setEditingGateway({ ...editingGateway, is_enabled: checked ? 1 : 0 })
+                  }
+                />
               </div>
 
               {/* Run as user */}
@@ -959,8 +940,8 @@ export default function GatewaysPage() {
               {/* GW-18: room/group-chat admission policy */}
               <div className="grid gap-3 rounded-lg border border-line bg-paper p-4">
                 <p className="text-xs font-semibold text-ink">Group chats</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="grid gap-1 text-xs font-medium text-ink">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="grid min-w-0 gap-1 text-xs font-medium text-ink">
                     Room policy
                     <Select
                       value={editingGateway.room_policy || 'Allow list'}
@@ -968,7 +949,7 @@ export default function GatewaysPage() {
                         setEditingGateway({ ...editingGateway, room_policy: v as GatewayPolicy })
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full min-w-0">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -977,7 +958,7 @@ export default function GatewaysPage() {
                       </SelectContent>
                     </Select>
                   </label>
-                  <label className="grid gap-1 text-xs font-medium text-ink">
+                  <label className="grid min-w-0 gap-1 text-xs font-medium text-ink">
                     Sender policy within a room
                     <Select
                       value={editingGateway.room_sender_policy || 'Allow list'}
@@ -985,7 +966,7 @@ export default function GatewaysPage() {
                         setEditingGateway({ ...editingGateway, room_sender_policy: v as GatewayPolicy })
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full min-w-0">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1015,20 +996,13 @@ export default function GatewaysPage() {
                       <p className="text-xs font-medium text-ink">Require @mention in rooms</p>
                       <p className="text-[11px] text-steel">Only respond when explicitly mentioned</p>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="sr-only peer"
-                        checked={Boolean(editingGateway.mention_required)}
-                        onChange={(e) =>
-                          setEditingGateway({
-                            ...editingGateway,
-                            mention_required: e.target.checked ? 1 : 0,
-                          })
-                        }
-                      />
-                      <div className="w-9 h-5 bg-line peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-panel after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-panel after:border-line after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-good"></div>
-                    </label>
+                    <Switch
+                      aria-label="Require @mention in rooms"
+                      checked={Boolean(editingGateway.mention_required)}
+                      onCheckedChange={(checked) =>
+                        setEditingGateway({ ...editingGateway, mention_required: checked ? 1 : 0 })
+                      }
+                    />
                   </div>
                 </div>
               </div>
@@ -1070,23 +1044,23 @@ export default function GatewaysPage() {
               <Button
                 variant="destructive"
                 size="sm"
-                className="h-9 text-xs"
                 onClick={() => setDeleteConfirmName(editingGateway.name)}
               >
                 <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete Gateway
               </Button>
 
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" className="h-9 text-xs" onClick={() => setEditingGateway(null)}>
+                <Button variant="outline" size="sm" onClick={() => setEditingGateway(null)}>
                   Cancel
                 </Button>
-                <Button size="sm" className="h-9 text-xs" disabled={saving} onClick={handleSaveEditing}>
+                <Button size="sm" disabled={saving} onClick={handleSaveEditing}>
                   {saving ? 'Saving…' : 'Save Changes'}
                 </Button>
               </div>
             </div>
-          </div>
-        </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       <AlertDialog open={Boolean(deleteConfirmName)} onOpenChange={(open) => !open && setDeleteConfirmName(null)}>
