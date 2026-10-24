@@ -264,7 +264,7 @@ class TestClientErrors(Base):
 			client.call("getMe")
 		self.assertTrue(ctx.exception.retryable)
 
-	def test_webhook_and_commands(self):
+	def test_webhook_info_and_allowed_updates(self):
 		self.client.set_webhook("https://h/x", secret_token="s", drop_pending_updates=True)
 		payload = self.api.last("setWebhook")["payload"]
 		self.assertEqual(payload["allowed_updates"], list(ALLOWED_UPDATES))
@@ -279,19 +279,6 @@ class TestClientErrors(Base):
 			self.assertIn(needed, payload["allowed_updates"])
 		self.assertTrue(payload["drop_pending_updates"])
 		self.assertEqual(self.client.get_webhook_info()["pending_update_count"], 0)
-		self.client.set_my_commands(
-			[("/Start", "Begin"), {"command": "help", "description": "Help"}], language_code="en"
-		)
-		self.assertEqual(
-			self.api.last("setMyCommands")["payload"],
-			{
-				"commands": [
-					{"command": "start", "description": "Begin"},
-					{"command": "help", "description": "Help"},
-				],
-				"language_code": "en",
-			},
-		)
 
 	def test_download_file(self):
 		content, path = self.client.download_file("FID")

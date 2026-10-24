@@ -17,8 +17,27 @@ from huf.ai.gateway_adapters.telegram_format import (
 	MODE_MARKDOWN_V2,
 	MODE_PLAIN,
 	TELEGRAM_CAPTION_LIMIT,
+	TELEGRAM_TEXT_LIMIT,
 	render_parts,
 	to_plain,
+)
+
+# Upload limits (Bot API "Sending files"): photos 10 MB, every other file 50 MB (multipart upload).
+PHOTO_MAX_BYTES = 10 * 1024 * 1024
+UPLOAD_MAX_BYTES = 50 * 1024 * 1024
+# Photo-only extras that sendDocument rejects when a too-large photo falls back to a document.
+_PHOTO_ONLY_EXTRA = ("has_spoiler", "show_caption_above_media")
+# Per-item InputMedia fields an album item may carry besides type/media/caption.
+_ALBUM_ITEM_FIELDS = (
+	"has_spoiler",
+	"show_caption_above_media",
+	"duration",
+	"performer",
+	"title",
+	"width",
+	"height",
+	"supports_streaming",
+	"disable_content_type_detection",
 )
 
 # A media argument: file_id or https URL (str), raw bytes, or (filename, bytes[, mime_type]).
@@ -184,7 +203,32 @@ class TelegramSender:
 				payload["parse_mode"] = part.parse_mode
 			if not link_preview:
 				payload["link_preview_options"] = {"is_disabled": True}
-			results.append(self._call_with_fallback("sendMessage", payload, "text", part.plain))
+			try:
+				results.append(self._call_with_fallback("sendMessage", payload, "text", part.plain))
+			except TelegramApiError as exc:
+				if not exc.message_too_long or not part.source:
+					raise
+				results.extend(self._resend_smaller(payload, part))
+		return results
+
+	def _resend_smaller(self, payload: dict[str, Any], part: Any) -> list[Mapping[str, Any]]:
+		"""MESSAGE_TOO_LONG despite our own limit (Telegram counts differently than we do): re-split the part's
+		source at half the limit and send the pieces once. The reply quote/effect stay on the first piece and the
+		keyboard on the last; a second failure propagates."""
+		pieces = render_parts(part.source, self.parse_mode, TELEGRAM_TEXT_LIMIT // 2)
+		results = []
+		for i, piece in enumerate(pieces):
+			sub = dict(payload)
+			sub["text"] = piece.text
+			sub.pop("parse_mode", None)
+			if piece.parse_mode:
+				sub["parse_mode"] = piece.parse_mode
+			if i:
+				for key in ("reply_parameters", "reply_to_message_id", "message_effect_id"):
+					sub.pop(key, None)
+			if i < len(pieces) - 1:
+				sub.pop("reply_markup", None)
+			results.append(self._call_with_fallback("sendMessage", sub, "text", piece.plain))
 		return results
 
 	def send_rich_message(
@@ -279,8 +323,10 @@ class TelegramSender:
 		"""Send one media item. A caption over 1024 chars is sent as a follow-up text message."""
 		if kind not in MEDIA_METHODS:
 			raise ValueError(f"Unsupported media kind: {kind}")
-		method, field = MEDIA_METHODS[kind]
+		extra = dict(extra or {})
 		value, upload = _upload_part(kind, media)
+		kind, extra = self._fit_upload(kind, upload, extra)
+		method, field = MEDIA_METHODS[kind]
 		payload = self._common(
 			chat_id,
 			reply_to=reply_to,
@@ -304,20 +350,35 @@ class TelegramSender:
 					payload["parse_mode"] = cap_parts[0].parse_mode
 			else:
 				follow_up = caption
-		payload.update(extra or {})
+		payload.update(extra)
 		plain = to_plain(caption)[:TELEGRAM_CAPTION_LIMIT]
 		try:
 			result = self.client.call(method, payload, files=files)
 		except TelegramApiError as exc:
-			if not exc.parse_error or "parse_mode" not in payload:
+			if exc.caption_too_long and "caption" in payload:
+				retry = {k: v for k, v in payload.items() if k not in ("caption", "parse_mode")}
+				follow_up = caption
+			elif exc.parse_error and "parse_mode" in payload:
+				retry = {k: v for k, v in payload.items() if k != "parse_mode"}
+				retry["caption"] = plain
+			else:
 				raise
-			retry = {k: v for k, v in payload.items() if k != "parse_mode"}
-			retry["caption"] = plain
 			result = self.client.call(method, retry, files=files)
 		results = [result]
 		if follow_up:
 			results.extend(self.send_text(chat_id, follow_up, thread_id=thread_id, silent=silent))
 		return results
+
+	@staticmethod
+	def _fit_upload(kind: str, upload: tuple | None, extra: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+		"""Enforce the upload size limits. A photo over 10 MB is sent as a document instead (no photo-only
+		options); anything over 50 MB is refused with a clear message."""
+		size = len(upload[1]) if upload else 0
+		if size > UPLOAD_MAX_BYTES:
+			raise ValueError(f"File is {size // (1024 * 1024)} MB; Telegram bots can upload at most 50 MB")
+		if kind == "photo" and size > PHOTO_MAX_BYTES:
+			return "document", {k: v for k, v in extra.items() if k not in _PHOTO_ONLY_EXTRA}
+		return kind, extra
 
 	def send_photo(self, chat_id: Any, media: MediaInput, **kw: Any) -> list[Mapping[str, Any]]:
 		return self.send_media("photo", chat_id, media, **kw)
@@ -348,30 +409,63 @@ class TelegramSender:
 		reply_to: Any = None,
 		thread_id: Any = None,
 		silent: bool = False,
+		parse_mode: str | None = None,
+		reply_markup: Mapping[str, Any] | None = None,
 	) -> Sequence[Mapping[str, Any]]:
-		"""``items``: 2-10 dicts ``{"type": photo|video|audio|document, "media": MediaInput, "caption": str}``."""
+		"""``items``: 2-10 dicts ``{"type": photo|video|audio|document, "media": MediaInput, "caption": str}``
+		plus the per-item InputMedia options in ``_ALBUM_ITEM_FIELDS`` (``has_spoiler``, audio ``title`` /
+		``performer`` / ``duration``, ...). A caption over 1024 chars is not truncated: it goes out as a follow-up
+		text message after the album, like ``send_media``. ``parse_mode`` overrides the sender's format for
+		captions. ``reply_markup`` is refused: sendMediaGroup has no keyboard parameter.
+		"""
 		if not 2 <= len(items) <= 10:
 			raise ValueError("A media group needs 2-10 items")
+		if reply_markup:
+			raise ValueError(
+				"Telegram albums cannot carry a keyboard; send the buttons in a separate message"
+			)
+		mode = self.parse_mode if parse_mode is None else parse_mode
+		if mode not in (MODE_PLAIN, MODE_HTML, MODE_MARKDOWN_V2):
+			raise ValueError("parse_mode must be '', 'HTML' or 'MarkdownV2'")
+		sender = (
+			self
+			if mode == self.parse_mode
+			else TelegramSender(self.client, parse_mode=mode, reply_style=self.reply_style)
+		)
 		payload = self._common(chat_id, reply_to=reply_to, thread_id=thread_id, silent=silent)
-		media_json, files = [], {}
+		media_json, files, follow_ups = [], {}, []
 		for i, item in enumerate(items):
 			kind = item.get("type", "photo")
 			if kind not in ("photo", "video", "audio", "document"):
 				raise ValueError("media group items must be photo, video, audio or document")
 			value, upload = _upload_part(kind, item["media"])
 			if upload:
+				size = len(upload[1])
+				if size > UPLOAD_MAX_BYTES or (kind == "photo" and size > PHOTO_MAX_BYTES):
+					limit_mb = 10 if kind == "photo" else 50
+					raise ValueError(
+						f"Album item {i + 1} is over Telegram's {limit_mb} MB upload limit for a {kind}"
+					)
 				name = f"file{i}"
 				files[name] = upload
 				value = f"attach://{name}"
 			entry: dict[str, Any] = {"type": kind, "media": value}
-			if item.get("caption"):
-				part = render_parts(item["caption"], self.parse_mode, TELEGRAM_CAPTION_LIMIT)[0]
-				entry["caption"] = part.text
-				if part.parse_mode:
-					entry["parse_mode"] = part.parse_mode
+			entry.update({k: item[k] for k in _ALBUM_ITEM_FIELDS if item.get(k) not in (None, "")})
+			caption = item.get("caption")
+			if caption:
+				parts = render_parts(caption, mode, TELEGRAM_CAPTION_LIMIT)
+				if len(parts) == 1:
+					entry["caption"] = parts[0].text
+					if parts[0].parse_mode:
+						entry["parse_mode"] = parts[0].parse_mode
+				else:
+					follow_ups.append(caption)
 			media_json.append(entry)
 		payload["media"] = media_json
-		return self.client.call("sendMediaGroup", payload, files=files or None)
+		results = list(self.client.call("sendMediaGroup", payload, files=files or None) or [])
+		for text in follow_ups:
+			results.extend(sender.send_text(chat_id, text, thread_id=thread_id, silent=silent))
+		return results
 
 	def send_location(
 		self,
@@ -499,15 +593,20 @@ class TelegramSender:
 	def edit_message_reply_markup(
 		self, chat_id: Any, message_id: Any, markup: Mapping[str, Any] | None = None
 	) -> Any:
-		"""Replace the inline keyboard; ``None`` removes it."""
-		return self.client.call(
-			"editMessageReplyMarkup",
-			{
-				"chat_id": chat_id,
-				"message_id": int(message_id),
-				"reply_markup": dict(markup or {"inline_keyboard": []}),
-			},
-		)
+		"""Replace the inline keyboard; ``None`` removes it. Returns ``None`` when the keyboard was already that."""
+		try:
+			return self.client.call(
+				"editMessageReplyMarkup",
+				{
+					"chat_id": chat_id,
+					"message_id": int(message_id),
+					"reply_markup": dict(markup or {"inline_keyboard": []}),
+				},
+			)
+		except TelegramApiError as exc:
+			if exc.message_not_modified:
+				return None
+			raise
 
 	def delete_message(self, chat_id: Any, message_id: Any) -> Any:
 		return self.client.call("deleteMessage", {"chat_id": chat_id, "message_id": int(message_id)})

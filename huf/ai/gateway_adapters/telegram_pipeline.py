@@ -117,7 +117,12 @@ def ephemeral_for(event: Any) -> dict | None:
 
 
 def classify(exc: BaseException) -> dict:
-	"""Classify a send error: ``retryable``, ``delay`` (None = default backoff), ``blocked``, ``code``, ``operator_text``."""
+	"""Classify a send error.
+
+	Keys: ``retryable``; ``delay`` (None = default backoff, else the server-mandated wait); ``opt_out`` (``"user"`` =
+	the person is unreachable, ``"room"`` = the bot is no longer in that chat, ``None`` = no opt-out: rights, markup
+	and similar problems are configuration, not a recipient decision); ``code``; ``operator_text``.
+	"""
 	cause = exc.cause if isinstance(exc, TelegramPartsError) else exc
 	if isinstance(cause, TelegramApiError):
 		from huf.ai.gateway_adapters.telegram_hooks import error_text
@@ -125,14 +130,8 @@ def classify(exc: BaseException) -> dict:
 		out = {
 			"retryable": cause.retryable,
 			"delay": None,
-			"blocked": cause.blocked_by_user,
-			"code": "blocked"
-			if cause.blocked_by_user
-			else (
-				"chat_not_found"
-				if cause.chat_not_found
-				else ("rate_limited" if cause.flood_control else "telegram_error")
-			),
+			"opt_out": "user" if cause.blocked_by_user else ("room" if cause.room_removed else None),
+			"code": "blocked" if cause.blocked_by_user else cause.code,
 			"operator_text": error_text(cause),
 		}
 		if cause.flood_control and cause.retry_after:
@@ -142,16 +141,19 @@ def classify(exc: BaseException) -> dict:
 	return {
 		"retryable": transient,
 		"delay": None,
-		"blocked": False,
+		"opt_out": None,
 		"code": "network" if transient else "error",
 		"operator_text": str(cause) or "Telegram delivery failed",
 	}
 
 
 def backoff_seconds(cls: dict, attempt: int) -> float:
+	"""Wait before the next attempt: the capped exponential backoff, but never less than the server's
+	``retry_after`` (+1 s, already in ``delay``) even when that exceeds the cap."""
+	exponential = min(BACKOFF_BASE_SECONDS * (2 ** max(0, attempt - 1)), BACKOFF_MAX_SECONDS)
 	if cls.get("delay") is not None:
-		return min(float(cls["delay"]), BACKOFF_MAX_SECONDS)
-	return min(BACKOFF_BASE_SECONDS * (2 ** max(0, attempt - 1)), BACKOFF_MAX_SECONDS)
+		return max(exponential, float(cls["delay"]))
+	return exponential
 
 
 def build_sender(adapter: Any) -> TelegramSender:
@@ -259,6 +261,7 @@ def send_parts(gateway: Any, event: Any, parts: list[str], quote: bool) -> Simpl
 	from huf.ai.gateway_webhook import event_contact_name, get_gateway_adapter
 
 	adapter = get_gateway_adapter(gateway, event_contact_name(event))
+	adapter.client.on_chat_migrated = lambda old, new: _persist_migration(gateway, old, new)
 	thread_id, reply_to = reply_target(event)
 	sender = build_sender(adapter)
 	markup = reply_markup_for(event, gateway, "\n\n".join(parts))
@@ -288,6 +291,14 @@ def send_parts(gateway: Any, event: Any, parts: list[str], quote: bool) -> Simpl
 		ephemeral=ephemeral_for(event),
 		scope=reply_scope(gateway, event),
 	)
+
+
+def _persist_migration(gateway: Any, old_id: str, new_id: str) -> None:
+	"""Telegram answered a send with ``migrate_to_chat_id``: re-key the room (idempotent) through the same path as
+	the migrate service message."""
+	from huf.ai.gateway_adapters import telegram_groups
+
+	telegram_groups.migrate_room(gateway, old_id, new_id)
 
 
 def send_typing(gateway: Any, event: Any) -> bool:
@@ -344,12 +355,13 @@ def handle_failure(event: Any, gateway: Any, exc: BaseException, parts: list[str
 	operator_text = cls["operator_text"]
 	max_attempts = svc._reply_max_attempts(gateway)
 
-	if cls["blocked"]:
-		# The user blocked the bot: mark the sender unsendable (opt-out entry) and dead-letter, no retry.
+	if cls["opt_out"]:
+		# Dead-letter without retry. Only "the user blocked/deactivated" and "the bot was removed from this room"
+		# write an opt-out; a missing right is fixed by the operator and must not silence later replies.
 		try:
-			if str(event.conversation_id or "").startswith("-"):  # group/channel: the bot was removed
+			if cls["opt_out"] == "room" and str(event.conversation_id or "").startswith("-"):
 				svc._record_room_opt_out(gateway, event.conversation_id)
-			elif event.sender_id:
+			elif cls["opt_out"] == "user" and event.sender_id:
 				svc._record_opt_out(gateway, event.sender_id)
 		except Exception:
 			pass

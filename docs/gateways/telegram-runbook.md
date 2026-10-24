@@ -252,12 +252,39 @@ Residual risks (from the design doc, still open):
 
 - **Rate limits**: the adapter declares 30 messages per second (`max_outbound_messages_per_second`). Group
   and private limits from Telegram still apply.
-- **Flood control**: a `429` or `retry_after` is retryable. `TelegramBotClient.call` retries up to
-  `max_flood_retries` times when the wait is short (`max_flood_wait`). The send pipeline waits `retry_after + 1 s`
-  before the next attempt (`classify` in `telegram_pipeline.py`). Otherwise the default exponential backoff applies.
-- **Blocked bot**: a 403 "bot was blocked by the user" or "user is deactivated" is classified `blocked`. The reply
-  is not retried (full classification: see the error handling section), and the event note reads "Recipient blocked the bot: reply not sent".
-- **Chat not found**: classified `chat_not_found`; not retried.
+- **Flood control**: a `429` or `retry_after` is retryable. `TelegramBotClient.call` makes one short in-client retry
+  (`max_flood_retries=1`) when `retry_after <= max_flood_wait` (5 s). Longer waits go to the gateway re-enqueue,
+  which waits `max(exponential backoff, retry_after + 1 s)`; a `retry_after` above the 300 s backoff cap is honoured,
+  never retried early (`classify` / `backoff_seconds` in `telegram_pipeline.py`).
+- **Error classification** (`TelegramApiError.kind`, matched on the description, never on the bare 403):
+
+  | Description contains | Code | Opt-out written | Retried |
+  |---|---|---|---|
+  | `bot was blocked by the user`, `user is deactivated` | `blocked` | sender | no |
+  | `bot was kicked from the ...`, `bot is not a member of the ...`, `the group chat was deleted` | `room_removed` | room | no |
+  | `not enough rights`, `CHAT_ADMIN_REQUIRED`, `CHAT_WRITE_FORBIDDEN`, ... | `missing_rights` | none | no |
+  | `bot can't initiate conversation` | `cannot_initiate` | none | no |
+  | `chat not found` | `chat_not_found` | none | no |
+  | `BUTTON_URL_INVALID`, `WEB_APP_URL_INVALID`, `BUTTON_TYPE_INVALID`, `BOT_DOMAIN_INVALID`, `REPLY_MARKUP_TOO_LONG` | same name, lower case | none | no |
+  | `message to edit not found` | `message_to_edit_not_found` | none | no |
+  | any other 403/4xx | `telegram_error` | none | no |
+  | 5xx, network | `network` / `telegram_error` | none | yes |
+
+  A missing right is a configuration problem: the operator text reads "Grant the bot the needed right ...", the
+  event is dead-lettered, and later replies are not suppressed. Operator texts never contain the token.
+- **Group upgraded to supergroup**: a send answered with `migrate_to_chat_id` is retried once with the new id, and
+  the room entry is re-keyed through `telegram_groups.migrate_room` (the same path as the migrate service message;
+  idempotent). A second migration error in the same call is not followed.
+- **Length limits**: text 4096 and captions 1024 "characters after entities parsing". The docs do not name the
+  unit, so all limits are counted in UTF-16 code units (an astral emoji is 2). Splitting only cuts between grapheme
+  clusters (ZWJ sequences, variation selectors, skin tones, flags, combining marks stay whole). If Telegram still
+  answers `MESSAGE_TOO_LONG`, the part is re-split once at half the limit and resent. Album captions over 1024
+  go out as a follow-up text; albums cannot carry a keyboard (`sendMediaGroup` has no `reply_markup`).
+- **Upload limits**: a photo over 10 MB is sent as a document (photo-only options dropped); any upload over 50 MB
+  is refused before the call; an album photo over 10 MB is refused (documents cannot join a photo album).
+- **Ban/restrict end time** (`telegram_admin`): `until_date` must be at least 60 s and at most 366 days ahead and
+  `duration_minutes` at least 1; Telegram treats anything outside 30 s..366 days as permanent, so such values are
+  refused instead of silently becoming permanent.
 - **Opt-out**: there is no STOP/START handling for Telegram (section 3).
 - **Bot-to-bot loop guard** (`telegram_loop_guard.py`): bot messages are dropped unless the sender's numeric bot id is
   in the Gateway field `telegram_bot_allowlist` (ids, not usernames, because usernames can change). An allowed bot
@@ -291,7 +318,9 @@ Residual risks (from the design doc, still open):
 | Streaming not used | `telegram_streaming` is off on the Gateway, or the chat is a group | Expected (off by default; private chats only). Turn on **Stream replies** in the Settings tab (section 16). |
 | Voice reply sent as text | ffmpeg or libopus missing, reply over 1500 characters, or TTS model missing or on a provider without speech | Install ffmpeg with libopus on the worker host; set the agent's `tts_model` (section 16). |
 | Admin action refused `bot_not_admin` or `... lacks the 'can_...' right` | The bot is not an admin of the group, or lacks the right | Promote the bot in Telegram with the named right. |
-| `Recipient blocked the bot: reply not sent` | The user blocked the bot | No action; the user must unblock. |
+| `Recipient blocked the bot: reply not sent` | The user blocked the bot or deactivated the account | No action; the user must unblock. |
+| `... the bot lacks a required right in this chat. Grant the bot the needed right ...` | A 403/400 `not enough rights` | Give the bot the right in the chat settings; no opt-out was written, so replies resume. |
+| `... the bot was removed from this chat` | Bot kicked, left or chat deleted | Re-add the bot, then re-approve the room. |
 | `Flood control` in logs | Telegram rate limit (`retry_after`) | Retried automatically; if persistent, reduce burst traffic. |
 
 ## 8. Testing

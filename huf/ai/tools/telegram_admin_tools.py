@@ -639,11 +639,35 @@ def _int(args: dict, key: str, required: bool = True) -> Optional[int]:
 		raise Refused("invalid_argument", f"{key} must be an integer") from None
 
 
+# Telegram treats an until_date under 30 s or over 366 days from now as "forever", so a short or oversized value
+# would silently become a permanent ban/restriction. Refuse instead of letting that happen.
+_UNTIL_MIN_SECONDS = 60
+_UNTIL_MAX_SECONDS = 366 * 86400 - 60
+
+
 def _until(args: dict) -> Optional[int]:
+	now = int(time.time())
 	if args.get("until_date"):
-		return _int(args, "until_date")
-	minutes = _int(args, "duration_minutes", required=False)
-	return int(time.time()) + minutes * 60 if minutes else None
+		until = _int(args, "until_date")
+	else:
+		minutes = _int(args, "duration_minutes", required=False)
+		if minutes is None:
+			return None
+		if minutes < 1:
+			raise Refused("invalid_argument", "duration_minutes must be at least 1")
+		until = now + minutes * 60
+	if until < now + _UNTIL_MIN_SECONDS:
+		raise Refused(
+			"invalid_argument",
+			"The end time must be at least 60 seconds from now (Telegram treats anything shorter as permanent).",
+		)
+	if until > now + _UNTIL_MAX_SECONDS:
+		raise Refused(
+			"invalid_argument",
+			"The end time must be at most 366 days from now (Telegram treats anything longer as permanent); "
+			"omit it for a permanent action.",
+		)
+	return until
 
 
 def _permissions(args: dict) -> dict:

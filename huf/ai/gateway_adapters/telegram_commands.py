@@ -3,7 +3,7 @@
 
 """setMyCommands per scope/language (WP-8e, R9). Pure builders plus thin senders over ``TelegramBotClient``.
 
-Goes through ``client.call`` directly because ``TelegramBotClient.set_my_commands`` truncates names and has no
+The single validated path for command lists (the client has no ``set_my_commands`` of its own). Supports
 ``is_ephemeral`` (BotCommand.is_ephemeral: command replies are visible only to the sender and the bot).
 """
 
