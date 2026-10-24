@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
-import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
+import { Field as UiField, type FieldProps } from '@/components/ui/field';
 
 /** How a section reads and reveals errors; owned by the wizard. */
 export interface FieldApi {
@@ -9,38 +8,14 @@ export interface FieldApi {
   touch: (path: string) => void;
 }
 
-interface FieldProps {
-  id: string;
-  label: ReactNode;
-  error?: string;
-  hint?: ReactNode;
-  /** e.g. "12/60"; turns red past the limit. */
-  counter?: { length: number; max: number };
-  labelExtra?: ReactNode;
-  children: ReactNode;
-}
-
-/** Label, control and one reserved note line (hint or error) so errors never shift the layout. */
-export function Field({ id, label, error, hint, counter, labelExtra, children }: FieldProps) {
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <Label htmlFor={id}>{label}</Label>
-        {labelExtra}
-      </div>
-      {children}
-      <div className="flex min-h-4 justify-between gap-3 text-[11px]">
-        <p id={`${id}-note`} role={error ? 'alert' : undefined} className={error ? 'text-destructive' : 'text-steel'}>
-          {error ?? hint}
-        </p>
-        {counter && (
-          <span className={cn('shrink-0', counter.length > counter.max ? 'text-destructive' : 'text-steel')}>
-            {counter.length}/{counter.max}
-          </span>
-        )}
-      </div>
-    </div>
-  );
+/**
+ * The wizard Field is the shared ui/field primitive (label slot, reserved
+ * note row, aria wiring). The wizard always passes an explicit `id`, a
+ * `label` and renders its own control with that id, and always reserves the
+ * note line so errors never shift the layout.
+ */
+export function Field(props: FieldProps) {
+  return <UiField reserveNote {...props} />;
 }
 
 export function StepLayout({ children, aside }: { children: ReactNode; aside: ReactNode }) {
