@@ -7,8 +7,18 @@ class GatewayBinding(Document):
     """A deterministic route from a provider conversation scope to Huf work."""
 
     def validate(self):
-        if self.match_type != "Any conversation" and not self.match_value:
+        if self.match_type == "Catch-all":
+            pass
+        elif self.match_type in ("Keyword", "Ad or link tag"):
+            values = [v.strip() for v in (self.match_value or "").split(",") if v.strip()]
+            if not values:
+                frappe.throw(_("Provider value is required for this match type."))
+            # Keywords are stored comma-separated and normalised.
+            self.match_value = ", ".join(values)
+        elif self.match_type != "Any conversation" and not self.match_value:
             frappe.throw(_("Provider value is required for this match type."))
+        if self.target_type == "Triage":
+            return
         if self.target_type == "Agent" and not self.agent:
             frappe.throw(_("Choose an agent for an Agent route."))
         if self.target_type == "Flow" and not self.flow:
