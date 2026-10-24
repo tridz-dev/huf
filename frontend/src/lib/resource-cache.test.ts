@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ResourceCache, serializeKey } from './resource-cache';
+import { ApiError } from './api';
+
+// lib/api imports the shared frappe SDK, which needs a browser window.
+vi.mock('@/lib/frappe-sdk', () => ({ frappe: {} }));
+import { ResourceCache, isAbortError, serializeKey, toError } from './resource-cache';
 
 const deferred = <T,>() => {
   let resolve!: (v: T) => void;
@@ -55,10 +59,32 @@ describe('ResourceCache', () => {
   it('records errors and keeps previous data', async () => {
     const c = new ResourceCache();
     await c.fetch('k', async () => 1);
-    await expect(c.fetch('k', async () => Promise.reject({ message: 'boom', code: 'X' }), { force: true })).rejects.toThrow('boom');
+    await expect(
+      c.fetch('k', async () => Promise.reject({ error: { code: 'X', message: 'boom' } }), { force: true }),
+    ).rejects.toMatchObject({ name: 'ApiError', code: 'X', message: 'boom' });
     const s = c.get<number>('k');
     expect(s.data).toBe(1);
+    expect(s.error).toBeInstanceOf(ApiError);
     expect(s.error?.code).toBe('X');
+  });
+
+  it('never stores an aborted fetch as an error, even when the fetcher aborts itself', async () => {
+    const c = new ResourceCache();
+    const abort = Object.assign(new Error('gone'), { name: 'AbortError' });
+    await expect(c.fetch('k', async () => Promise.reject(abort), { force: true })).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    expect(c.get('k').error).toBeUndefined();
+    expect(c.get('k').isFetching).toBe(false);
+  });
+
+  it('toError normalises to ApiError and keeps abort detection', () => {
+    expect(toError(new ApiError({ code: 'x', message: 'm' }))).toBeInstanceOf(ApiError);
+    expect(toError('plain')).toMatchObject({ name: 'ApiError', code: 'error', message: 'plain' });
+    expect(isAbortError(toError(Object.assign(new Error('a'), { name: 'AbortError' })))).toBe(true);
+    expect(isAbortError(new ApiError({ code: 'aborted', message: 'c' }))).toBe(true);
+    expect(isAbortError(new ApiError({ code: 'network_error', message: 'n' }))).toBe(false);
+    expect(isAbortError(new Error('plain'))).toBe(false);
   });
 
   it('invalidates by exact key and by prefix, refetching subscribed entries', async () => {

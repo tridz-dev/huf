@@ -22,12 +22,14 @@
  * drafts, form state, or anything that is UI state rather than a copy of
  * server data. Those keep their own local state.
  *
- * Error type: until lib/api exports `ApiError`, fetchers may throw anything;
- * it is converted by `toError` (swap the body for `normalizeError` later).
+ * Error type: every error surfaced by the cache is an `ApiError` (lib/api).
+ * Fetchers may throw anything; `toError` normalises it via `normalizeError`.
+ * Aborts (AbortError or ApiError code 'aborted') are never stored as errors.
  */
+import { isApiError, normalizeError, type ApiError } from '@/lib/api';
 
 export type ResourceKey = readonly unknown[] | string;
-export type ResourceError = Error & { code?: string };
+export type ResourceError = ApiError;
 export type ResourceFetcher<T> = (ctx: { signal: AbortSignal }) => Promise<T>;
 
 export interface ResourceSnapshot<T = unknown> {
@@ -58,27 +60,19 @@ export interface ResourceCacheOptions {
   defaultTtlMs?: number;
 }
 
+/** Convert anything thrown into an ApiError. Delegates to lib/api `normalizeError`. */
 export function toError(value: unknown): ResourceError {
-  if (value instanceof Error) return value as ResourceError;
-  const err = new Error(
-    typeof value === 'string'
-      ? value
-      : value && typeof value === 'object' && typeof (value as { message?: unknown }).message === 'string'
-        ? (value as { message: string }).message
-        : 'Request failed',
-  ) as ResourceError;
-  if (value && typeof value === 'object' && typeof (value as { code?: unknown }).code === 'string') {
-    err.code = (value as { code: string }).code;
-  }
-  return err;
+  return normalizeError(value);
 }
 
+/** True for an aborted request: a native AbortError, or an ApiError with code 'aborted'. */
 export function isAbortError(e: unknown): boolean {
+  if (isApiError(e)) return e.code === 'aborted';
   return !!e && typeof e === 'object' && (e as { name?: string }).name === 'AbortError';
 }
 
-function abortError(): ResourceError {
-  const e = new Error('Aborted') as ResourceError;
+function abortError(): Error {
+  const e = new Error('Aborted');
   e.name = 'AbortError';
   return e;
 }
@@ -262,12 +256,20 @@ export class ResourceCache {
           }
           return data;
         } catch (err) {
+          // Aborts are never surfaced as errors, whoever aborted.
+          if (controller.signal.aborted || isAbortError(err)) {
+            if (e.inflight === created) {
+              e.inflight = undefined;
+              this.write(e, { isFetching: false });
+            }
+            throw abortError();
+          }
+          const error = toError(err);
           if (e.inflight === created) {
             e.inflight = undefined;
-            if (controller.signal.aborted) this.write(e, { isFetching: false });
-            else this.write(e, { error: toError(err), isFetching: false });
+            this.write(e, { error, isFetching: false });
           }
-          throw controller.signal.aborted ? abortError() : toError(err);
+          throw error;
         }
       })();
       // Unobserved rejections (background / all callers gone) must not surface.
