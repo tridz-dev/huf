@@ -35,13 +35,17 @@ class _Base(IntegrationTestCase):
 		name = f"r1c {self.suffix}"
 		frappe.get_doc(
 			{"doctype": "Gateway", "gateway_name": name, "provider": self.provider, "is_enabled": 0,
-			 "direct_policy": "Open"}
+			 "direct_policy": "Pairing"}
 		).insert(ignore_permissions=True)
 		values = {"is_enabled": 1, "execution_user": "Administrator", "integration_settings": "x",
-			"direct_policy": "Open", "room_policy": "Open", "room_sender_policy": "Open",
+			"direct_policy": "Allow list", "room_policy": "Open", "room_sender_policy": "Open",
 			"mention_required": 0}
 		values.update(kw)
 		frappe.db.set_value("Gateway", name, values)
+		for sender in ("u1", "u2", "legacy-user"):
+			frappe.get_doc({"doctype": "Gateway Access Entry", "gateway": name, "entry_type": "Sender",
+				"provider": self.provider, "external_id": sender, "state": "Approved"}).insert(
+				ignore_permissions=True)
 		return name
 
 	def ingest(self, text, sender="u1", conv=None, pid=None, raw=None, **ctx):
@@ -184,7 +188,6 @@ class TestConsentNeverPins(_Base):
 	provider = "WhatsApp"
 
 	def test_stop_does_not_create_pin(self):
-		frappe.db.set_value("Gateway", self.gw, {"direct_policy": "Open"})
 		self.sol("Front", "Catch-all", "", priority=1)
 		frappe.get_doc({"doctype": "Gateway Access Entry", "gateway": self.gw, "entry_type": "Sender",
 			"provider": "WhatsApp", "external_id": "555", "state": "Approved"}).insert(ignore_permissions=True)

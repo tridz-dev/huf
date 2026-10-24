@@ -26,6 +26,8 @@ from huf.ai.whatsapp import outbound_policy as policy
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 
 
+# Legacy match types only. "Keyword", "Ad or link tag" and "Catch-all" are evaluated in
+# huf.ai.solutions.routing (via solutions.service.route_for_event); do not duplicate them here.
 MATCH_CONTEXT_KEY = {
     "Direct message": "conversation_id",
     "Room or channel": "conversation_id",
@@ -1497,12 +1499,62 @@ def cleanup_stale_access_entries() -> dict:
     return {"expired": len(expired), "deleted": len(stale)}
 
 
-def resolve_gateway_route(gateway_name: str, context: dict[str, Any]) -> dict:
+_SOLUTION_MATCH_TYPES = ("Keyword", "Ad or link tag", "Catch-all")
+
+
+def _binding_uses_solutions(binding) -> bool:
+    return bool(
+        getattr(binding, "match_type", None) in _SOLUTION_MATCH_TYPES
+        or getattr(binding, "target_type", None) == "Triage"
+        or getattr(binding, "solution", None)
+    )
+
+
+def _solution_is_live(solution: str | None) -> bool:
+    if not solution:
+        return True
+    row = frappe.db.get_value("Solution", solution, ["status", "test_mode"], as_dict=True)
+    return bool(row and row.status == "Live" and not row.test_mode)
+
+
+def _route_from_decision(decision: dict) -> dict:
+    """Map a solutions RouteDecision to the dict _continue_ingest consumes."""
+    if decision.get("reason") == "triage_prompt":
+        return {
+            "status": "Triage",
+            "reason": "triage_prompt",
+            "reply_text": decision.get("reply_text"),
+            "solution": None,
+        }
+    target = _route_target(decision.get("target_type"), decision.get("agent"), decision.get("flow"))
+    if not target:
+        return {"status": "Unrouted", "reason": "No enabled route matches this message"}
+    return {
+        "status": "Queued",
+        "binding": decision.get("binding"),
+        **target,
+        "solution": decision.get("solution"),
+        "route_reason": decision.get("reason"),
+    }
+
+
+def resolve_gateway_route(
+    gateway_name: str,
+    context: dict[str, Any],
+    *,
+    referral_tag: str = "",
+    button_payload: str = "",
+    commit_pin: bool = False,
+) -> dict:
     """Resolve the first enabled binding by priority, then the default route.
 
     No fuzzy matching is permitted.  A missing target is an explicit Unrouted
     result, which allows a provider adapter to safely remain silent or return a
     fixed help response without invoking a model.
+
+    Gateways with any Keyword / Ad-tag / Catch-all / Triage / Solution-linked binding go through
+    huf.ai.solutions (A5 order); legacy match types are then resolved here, without pinning.
+    Other gateways behave exactly as before. ``commit_pin`` is True only on real ingest.
     """
     gateway = frappe.get_doc("Gateway", gateway_name)
     if not gateway.is_enabled:
@@ -1511,14 +1563,47 @@ def resolve_gateway_route(gateway_name: str, context: dict[str, Any]) -> dict:
     bindings = frappe.get_all(
         "Gateway Binding",
         filters={"gateway": gateway.name, "is_enabled": 1},
-        fields=["name", "priority", "match_type", "match_value", "target_type", "agent", "flow"],
+        fields=["name", "priority", "match_type", "match_value", "target_type", "agent", "flow", "solution"],
         order_by="priority asc, creation asc",
     )
+    uses_solutions = any(_binding_uses_solutions(b) for b in bindings)
+    contact = str(context.get("conversation_id") or context.get("sender_id") or "")
+    if uses_solutions and contact:
+        from huf.ai.solutions import service as solutions_service
+
+        def _decide(**extra):
+            return solutions_service.route_for_event(
+                gateway.name,
+                contact,
+                str(context.get("message_text") or ""),
+                referral_tag=referral_tag or "",
+                button_payload=button_payload or "",
+                commit_pin=commit_pin,
+                **extra,
+            )
+
+        decision = _decide()
+        if not decision.get("legacy_fallthrough"):
+            return _route_from_decision(decision)
+    else:
+        decision = None
+
     for binding in bindings:
         if _binding_matches(binding, context):
             target = _route_target(binding.target_type, binding.agent, binding.flow)
-            if target:
-                return {"status": "Queued", "binding": binding.name, **target}
+            if not target:
+                continue
+            bsol = getattr(binding, "solution", None)
+            if bsol and not _solution_is_live(bsol):
+                continue
+            route = {"status": "Queued", "binding": binding.name, **target}
+            if bsol:
+                route["solution"] = bsol
+            return route
+
+    if decision is not None:
+        # legacy rules missed: continue with default / triage / unrouted (steps 7-9)
+        return _route_from_decision(_decide(ignore_legacy=True))
 
     target = _route_target(gateway.default_target_type, gateway.default_agent, gateway.default_flow)
     if target:
@@ -1754,6 +1839,56 @@ def ingest_gateway_event(
     return _continue_ingest(event, gateway_name, provider_event_id, context, verified_sender)
 
 
+def _routing_inputs(event) -> tuple[str, str]:
+    """referral_tag / button_payload stored in raw_payload by the inbound parser (not in context)."""
+    raw = getattr(event, "raw_payload", None)
+    if isinstance(raw, (str, bytes)):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            raw = {}
+    if not isinstance(raw, dict):
+        return "", ""
+    return str(raw.get("referral_tag") or ""), str(raw.get("button_payload") or "")
+
+
+def _triage_cas(event_name: str) -> bool:
+    """Compare-and-set Received -> Recorded (error_message=triage_prompt) plus a once-per-event cache marker. True only for the winner."""
+    frappe.db.sql(
+        "UPDATE `tabGateway Event` SET status = %s, error_message = %s, modified = %s "
+        "WHERE name = %s AND status = %s",
+        ("Recorded", "triage_prompt", now_datetime(), event_name, "Received"),
+    )
+    if not frappe.db._cursor.rowcount:
+        return False
+    # retry_gateway_event resets a dead letter to Received, which would let the CAS win again;
+    # this once-per-event marker keeps the prompt at-most-once across that path too.
+    return bool(frappe.cache().set(f"huf_gw_triage_prompt:{event_name}", 1, ex=7 * 86400, nx=True))
+
+
+def _send_triage_prompt(event, gateway, context: dict[str, Any], route: dict) -> dict:
+    """Send the deterministic menu at most once per event.
+
+    The CAS runs BEFORE the send, so a replay, duplicate delivery, reaper or dead-letter retry sees
+    status != Received and never resends. Goes through the adapter inside _record_reply_sent, NOT
+    _send_plain_reply (which bypasses the opt-out check via _consent_send_scope).
+    """
+    result = {"event_name": event.name, "status": "Recorded", "reason": "triage_prompt"}
+    if not _triage_cas(event.name):
+        return result
+    sender = str(context.get("sender_id") or "")
+    try:
+        if sender and is_opted_out(gateway, sender):
+            return result
+        from huf.ai.gateway_webhook import send_gateway_reply
+
+        delivery = send_gateway_reply(gateway, event, route.get("reply_text") or "")
+        _record_reply_sent(event, getattr(delivery, "provider_message_id", None))
+    except Exception as exc:
+        frappe.logger("huf").warning(f"Triage prompt not delivered: {_redact_error_text(str(exc))}")
+    return result
+
+
 def _continue_ingest(
     event, gateway_name: str, provider_event_id: str, context: dict[str, Any], verified_sender: bool
 ) -> dict:
@@ -1801,20 +1936,26 @@ def _continue_ingest(
             )
         return _record_event(event, "unsupported_recorded: fixed reply, no run")
 
-    route = resolve_gateway_route(gateway_name, context)
+    referral_tag, button_payload = _routing_inputs(event)
+    route = resolve_gateway_route(
+        gateway_name, context, referral_tag=referral_tag, button_payload=button_payload, commit_pin=True
+    )
+    if route["status"] == "Triage":
+        return _send_triage_prompt(event, gateway, context, route)
     if route["status"] != "Queued":
         event.db_set({"status": route["status"], "error_message": route.get("reason", "")})
         return {"event_name": event.name, **route}
 
-    event.db_set(
-        {
-            "status": "Queued",
-            "binding": route.get("binding"),
-            "target_type": route["target_type"],
-            "target_agent": route.get("agent"),
-            "target_flow": route.get("flow"),
-        }
-    )
+    queued = {
+        "status": "Queued",
+        "binding": route.get("binding"),
+        "target_type": route["target_type"],
+        "target_agent": route.get("agent"),
+        "target_flow": route.get("flow"),
+    }
+    if route.get("solution"):
+        queued["solution"] = route["solution"]
+    event.db_set(queued)
     frappe.enqueue(
         "huf.ai.gateway_service.process_gateway_event",
         queue="default",
@@ -2817,7 +2958,14 @@ def preview_gateway_route(gateway_name: str, context: str | dict) -> dict:
         frappe.throw(_("Not permitted"), frappe.PermissionError)
     if isinstance(context, str):
         context = json.loads(context)
-    return resolve_gateway_route(gateway_name, context or {})
+    context = context or {}
+    return resolve_gateway_route(
+        gateway_name,
+        context,
+        referral_tag=str(context.get("referral_tag") or ""),
+        button_payload=str(context.get("button_payload") or ""),
+        commit_pin=False,
+    )
 
 
 # GW-15: the frontend readiness checklist (gatewayReadiness.ts) only checked 3
