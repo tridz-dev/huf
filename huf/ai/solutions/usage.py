@@ -26,16 +26,14 @@ def sends_24h_by_solution(gateway: str, now: Optional[datetime] = None) -> dict[
 		return {}
 	since = add_to_date(now or _now(), hours=-24)
 	until = now or _now()
-	rows = frappe.get_all(
+	solutions = frappe.get_all(
 		_KEY_DOCTYPE,
 		filters={"gateway": gateway, "status": ["in", ["Pending", "Sent"]], "claimed_at": ["between", [since, until]]},
-		fields=["solution", "count(name) as n"],
-		group_by="solution",
+		pluck="solution",
 	)
 	out: dict[str, int] = {}
-	for row in rows:
-		key = row.get("solution") or ""
-		out[key] = out.get(key, 0) + int(row.get("n") or 0)
+	for solution in solutions:
+		out[solution or ""] = out.get(solution or "", 0) + 1
 	return out
 
 

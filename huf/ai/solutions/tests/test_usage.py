@@ -25,7 +25,8 @@ class TestUsage(unittest.TestCase):
 		self.addCleanup(self._clean)
 
 	def _clean(self):
-		frappe.db.delete("WhatsApp Send Key", {"gateway": ["in", [GW, GW + "-2"]]})
+		for gateway in (GW, GW + "-2"):
+			frappe.db.delete("WhatsApp Send Key", {"gateway": gateway})
 		frappe.db.commit()
 
 	def test_grouping_and_unassigned_bucket(self):

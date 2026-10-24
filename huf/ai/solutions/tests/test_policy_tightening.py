@@ -121,7 +121,7 @@ class TestCheckCapsTightening(unittest.TestCase):
 			return scope.check_caps(GW, "RUN-X", solution=solution)
 
 	def test_solution_cap_exhausted_while_gateway_has_room(self):
-		self._claim("sol-a", 3)
+		self._claim("sol-a", 4)  # the 4th claim is the send being checked: over a cap of 3
 		self._claim("sol-b", 2)
 		out = json.loads(self._check([_binding(cap=3)], "sol-a"))
 		self.assertEqual(out["error"], "send_cap_exceeded")
@@ -130,7 +130,7 @@ class TestCheckCapsTightening(unittest.TestCase):
 		self.assertIsNone(self._check([_binding(cap=3)], "sol-b"))
 
 	def test_under_solution_cap_is_ok(self):
-		self._claim("sol-a", 2)
+		self._claim("sol-a", 3)
 		self.assertIsNone(self._check([_binding(cap=3)], "sol-a"))
 
 	def test_other_solutions_rows_do_not_count_toward_solution_cap(self):
