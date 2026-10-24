@@ -28,7 +28,8 @@ vi.mock('./TemplateWizard', () => ({
     wizard.props = props;
     return (
       <div>
-        <p>wizard {props.initial ? 'edit' : 'create'}</p>
+        <p>wizard {props.initial ? 'edit' : props.copyFrom ? 'copy' : 'create'}</p>
+        <button onClick={() => (props.onSharedConflict as (u: unknown[]) => void)?.([{ solution: 'S1', title: 'Orders' }])}>Trigger shared</button>
         <button onClick={() => (props.onCancel as () => void)()}>Cancel wizard</button>
         <button onClick={() => (props.onDone as (r: unknown) => void)({ kind: 'submitted', name: 'new_one' })}>Finish wizard</button>
       </div>
@@ -167,5 +168,27 @@ describe('TemplatesTab solutions', () => {
     expect(screen.queryByRole('combobox', { name: 'Filter by solution' })).toBeNull();
     expect(screen.queryByRole('tab', { name: /Drafts/ })).toBeNull();
     expect(listSolutions).not.toHaveBeenCalled();
+  });
+});
+
+describe('TemplatesTab wizard follow-ups', () => {
+  it('reopens the shared dialog on a conflict; Edit for everyone acknowledges the retry', async () => {
+    open('/?tab=templates&edit=tpl-1');
+    await screen.findByText('wizard edit');
+    expect(wizard.props?.acknowledgeShared).toBe(false);
+    await userEvent.click(screen.getByRole('button', { name: 'Trigger shared' }));
+    expect(await screen.findByText('This template is shared')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit for everyone' }));
+    await waitFor(() => expect(wizard.props?.acknowledgeShared).toBe(true));
+    expect(screen.getByText('wizard edit')).toBeInTheDocument();
+  });
+
+  it('Make a copy from the conflict dialog opens create mode with the source as copyFrom', async () => {
+    open('/?tab=templates&edit=tpl-1');
+    await screen.findByText('wizard edit');
+    await userEvent.click(screen.getByRole('button', { name: 'Trigger shared' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Make a copy' }));
+    await screen.findByText('wizard copy');
+    expect((wizard.props?.copyFrom as { name: string }).name).toBe('order_update');
   });
 });

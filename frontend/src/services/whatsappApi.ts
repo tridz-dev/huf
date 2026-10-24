@@ -496,7 +496,7 @@ export const editTemplate = (name: string, payload: EditTemplatePayload | Wizard
       {
         name,
         payload: JSON.stringify(payload),
-        ...(acknowledgeShared || ackedShared.has(name) ? { acknowledge_shared: true } : {}),
+        ...(acknowledgeShared ? { acknowledge_shared: true } : {}),
       },
       'post',
     ),
@@ -718,11 +718,6 @@ async function throwIfShared<T>(pending: Promise<WhatsAppResult<T>>): Promise<Wh
   }
   return res;
 }
-
-// Templates whose shared warning the user already accepted; the edit wizard submits later without the flag.
-const ackedShared = new Set<string>();
-export const acknowledgeSharedEdit = (name: string) => { ackedShared.add(name); };
-export const clearSharedEditAck = (name: string) => { ackedShared.delete(name); };
 
 export type MessageDirection = 'in' | 'out';
 export type MessageSentBy = 'agent' | 'template' | 'manual' | 'customer';
