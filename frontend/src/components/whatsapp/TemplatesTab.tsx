@@ -14,7 +14,7 @@ import {
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { useSocket } from '@/contexts/SocketContext';
 import {
-  SharedTemplateError, deleteTemplate, errorText, getTemplate, isBridgeUnavailable, listTemplateDrafts, listTemplates, syncTemplates,
+  SharedTemplateError, type TemplateUser, deleteTemplate, errorText, getTemplate, isBridgeUnavailable, listTemplateDrafts, listTemplates, syncTemplates,
   type TemplateDetail, type TemplateDraft, type WhatsAppTemplate,
 } from '@/services/whatsappApi';
 import { BridgeUnavailable, LoadError } from './BridgeUnavailable';
@@ -25,7 +25,9 @@ import { DraftsPanel } from './DraftsPanel';
 import { ManagerLink } from './ManagerLink';
 import { SendTemplateDialog } from './SendTemplateDialog';
 import { localeLabel } from './template/locales';
+import { SharedTemplateDialog } from './SharedTemplateDialog';
 import { TemplateDetailPane } from './TemplateDetailPane';
+import type { TemplateWizardDraft } from './template/draft';
 import { fromTemplateDetail } from './template/payload';
 import { TemplateWizard, type WizardResult } from './TemplateWizard';
 import {
@@ -59,6 +61,9 @@ export function TemplatesTab({ gateway, scopeSolution }: TemplatesTabProps) {
   const creating = params.get('new') === '1';
   const editName = params.get('edit') ?? '';
   const [editDetail, setEditDetail] = useState<TemplateDetail | null>(null);
+  const [editAck, setEditAck] = useState(false);
+  const [sharedConflict, setSharedConflict] = useState<TemplateUser[] | null>(null);
+  const [copyDraft, setCopyDraft] = useState<TemplateWizardDraft | null>(null);
   const [editError, setEditError] = useState('');
   const [section, setSection] = useState('templates');
   const [selected, setSelected] = useState('');
@@ -139,6 +144,9 @@ export function TemplatesTab({ gateway, scopeSolution }: TemplatesTabProps) {
     });
   }, [setParams]);
   const closeWizard = useCallback(() => {
+    setEditAck(false);
+    setSharedConflict(null);
+    setCopyDraft(null);
     setParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete('new');
@@ -226,7 +234,7 @@ export function TemplatesTab({ gateway, scopeSolution }: TemplatesTabProps) {
     return (
       <div className="space-y-4">
         {creating ? (
-          <TemplateWizard gatewayName={gateway ?? ''} isAdmin={isAdmin} onDone={onWizardDone} onCancel={closeWizard} />
+          <TemplateWizard gatewayName={gateway ?? ''} isAdmin={isAdmin} copyFrom={copyDraft ?? undefined} onDone={onWizardDone} onCancel={closeWizard} />
         ) : initial ? (
           <TemplateWizard
             key={initial.name}
@@ -235,6 +243,8 @@ export function TemplatesTab({ gateway, scopeSolution }: TemplatesTabProps) {
             initial={fromTemplateDetail(initial)}
             docName={initial.name}
             editsLeft={initial.edits_left}
+            acknowledgeShared={editAck}
+            onSharedConflict={setSharedConflict}
             onDone={onWizardDone}
             onCancel={closeWizard}
           />
@@ -243,6 +253,21 @@ export function TemplatesTab({ gateway, scopeSolution }: TemplatesTabProps) {
         ) : (
           <div className="flex items-center gap-2 text-xs text-steel"><Loader2 className="h-4 w-4 animate-spin" /> Loading template...</div>
         )}
+        <SharedTemplateDialog
+          open={sharedConflict !== null}
+          action="edit"
+          usedBy={sharedConflict ?? []}
+          onConfirm={() => { setEditAck(true); setSharedConflict(null); }}
+          onCopy={() => {
+            const source = initial;
+            setSharedConflict(null);
+            if (!source) return;
+            setEditAck(false);
+            setCopyDraft(fromTemplateDetail(source));
+            openWizard({ new: '1' });
+          }}
+          onCancel={() => setSharedConflict(null)}
+        />
       </div>
     );
   }
@@ -368,11 +393,11 @@ export function TemplatesTab({ gateway, scopeSolution }: TemplatesTabProps) {
                     row={current}
                     refreshKey={refreshKey}
                     onSend={setToSend}
-                    onEdit={(detail) => { setEditDetail(detail); openWizard({ edit: detail.name }); }}
+                    onEdit={(detail, ack) => { setEditDetail(detail); setEditAck(!!ack); openWizard({ edit: detail.name }); }}
                     onDelete={(r, ack) => (ack ? void runDelete(r, true) : setToDelete(r))}
-                    onCopy={(d, suggested) => {
+                    onCopy={(d) => {
+                      setCopyDraft(fromTemplateDetail(d));
                       openWizard({ new: '1' });
-                      toast(`Create it as ${suggested} to keep ${d.template_name} unchanged.`);
                     }}
                     onUnavailable={() => setUnavailable(true)}
                   />

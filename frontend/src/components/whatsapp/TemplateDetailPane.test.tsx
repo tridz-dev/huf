@@ -109,6 +109,7 @@ describe('TemplateDetailPane shared templates', () => {
     expect(screen.getByText(/Used by Orders and Customer care\. Editing resubmits it to Meta for all of them/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Edit for everyone' }));
     expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onEdit).toHaveBeenCalledWith(expect.anything(), true);
   });
 
   it('Make a copy suggests name_v2 and Cancel does nothing', async () => {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Pencil, Send, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { acknowledgeSharedEdit, clearSharedEditAck, errorText, getTemplate, isBridgeUnavailable, type TemplateDetail, type WhatsAppTemplate } from '@/services/whatsappApi';
+import { errorText, getTemplate, isBridgeUnavailable, type TemplateDetail, type WhatsAppTemplate } from '@/services/whatsappApi';
 import { LoadError } from './BridgeUnavailable';
 import { TemplatePreview } from './TemplatePreview';
 import { CategoryChangeBadge, QualityBadge, SharedPill, StatusBadge, UsedByChips } from './TemplateBadges';
@@ -20,7 +20,8 @@ interface Props {
   /** Bumped by the parent when the status changes elsewhere. */
   refreshKey: number;
   onSend: (row: WhatsAppTemplate) => void;
-  onEdit: (detail: TemplateDetail) => void;
+  /** `acknowledgeShared` is true once the user accepted the shared-template warning. */
+  onEdit: (detail: TemplateDetail, acknowledgeShared?: boolean) => void;
   /** `acknowledgeShared` is true once the user accepted the shared-template warning. */
   onDelete: (row: WhatsAppTemplate, acknowledgeShared?: boolean) => void;
   /** Open the create flow for a new version (`name_v2`) instead of changing the shared one. */
@@ -93,8 +94,7 @@ export function TemplateDetailPane({ row, refreshKey, onSend, onEdit, onDelete, 
     const action = sharedAction;
     setSharedAction(null);
     if (action === 'edit') {
-      acknowledgeSharedEdit(detail.name);
-      onEdit(detail);
+      onEdit(detail, true);
     } else if (action === 'delete') onDelete(row, true);
   };
 
@@ -216,7 +216,7 @@ export function TemplateDetailPane({ row, refreshKey, onSend, onEdit, onDelete, 
         action={sharedAction ?? 'edit'}
         usedBy={usedBy}
         onConfirm={confirmShared}
-        onCopy={() => { setSharedAction(null); clearSharedEditAck(detail.name); onCopy?.(detail, `${detail.template_name}_v2`); }}
+        onCopy={() => { setSharedAction(null); onCopy?.(detail, `${detail.template_name}_v2`); }}
         onCancel={() => setSharedAction(null)}
       />
     </div>
