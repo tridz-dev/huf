@@ -460,7 +460,7 @@ def decide(marker: dict, settings: dict, method: str, path: str, form_dict) -> b
 			# the report page loads its Report doc (desk query-report view); gate it like run/get_script
 			if not _report_ok(form_dict.get("name")):
 				return False
-		elif cmd == REPORTVIEW_LIST_METHOD and dts == {"report"}:
+		elif cmd == REPORTVIEW_LIST_METHOD and _doctypes_in(form_dict) == {"report"}:
 			# the report page asks which custom reports derive from the open report; only for an allowed one
 			if not _report_ok(_listing_reference_report(form_dict)):
 				return False
