@@ -13,8 +13,7 @@ Join policy (Gateway ``telegram_join_policy``: Queue | Decline | Agent, read wit
   ``approveChatJoinRequest`` / ``declineChatJoinRequest`` (the Bot API does not document whether those work
   after ``answerChatJoinRequestQuery(queue)``; failures are logged and the entry stays pending).
 
-Guard Mini App: when the Gateway enables the captcha (``telegram_guard_captcha`` field or site config
-``huf_telegram_guard_captcha``) and the request carries a ``query_id``, a single-use challenge is issued and
+Guard Mini App: when the Gateway enables the captcha (``telegram_guard_captcha`` field; no site-config override) and the request carries a ``query_id``, a single-use challenge is issued and
 shown with ``sendChatJoinRequestWebApp``; the page lives at ``/tg_guard``. The two guest endpoints here are
 authenticated ONLY by the initData HMAC (``telegram_miniapp.validate_init_data``), are rate limited, and the
 challenge nonce is bound to the join request (chat, user, query id). Success approves, wrong answers decline
@@ -94,23 +93,13 @@ def join_policy_of(gateway) -> str:
 
 
 def captcha_mode(gateway) -> str:
-	"""Off ("") | "math" | "emoji" | "random". The Gateway field wins; site config is the fallback."""
+	"""Off ("") | "math" | "emoji" | "random", from the Gateway field only (Off means off)."""
 	field = str(getattr(gateway, "telegram_guard_captcha", None) or "").strip().lower()
 	if field in ("arithmetic", "math"):
 		return "math"
 	if field == "emoji":
 		return "emoji"
-	if field not in ("", "off"):
-		return "random"
-	try:
-		import frappe
-
-		conf = frappe.conf.get("huf_telegram_guard_captcha")
-	except Exception:
-		return ""
-	if isinstance(conf, str) and conf.strip().lower() in ("arithmetic", "math", "emoji"):
-		return "emoji" if conf.strip().lower() == "emoji" else "math"
-	return "random" if conf and str(conf).strip().lower() not in ("0", "off", "false") else ""
+	return "random" if field not in ("", "off") else ""
 
 
 def captcha_enabled(gateway) -> bool:

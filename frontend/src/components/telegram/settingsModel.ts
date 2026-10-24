@@ -15,7 +15,7 @@ export interface FieldDef {
 	warning?: string;
 	warnValue?: string;
 	/** Only show when another field has one of these values. */
-	showWhen?: { field: string; equals?: string; notEquals?: string };
+	showWhen?: { field: string; equals?: string | boolean; notEquals?: string };
 	/** Select that may be left unset (stored as an empty string). */
 	allowEmpty?: boolean;
 	/** Show the warning once the value differs from the saved one. */
@@ -53,6 +53,7 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
 				name: 'preview_url',
 				label: 'Link previews',
 				kind: 'select',
+				help: 'Whether links in messages show a preview card. Off and the default send none.',
 				optionLabels: { 'Default (off)': 'Off (default)', On: 'On', Off: 'Off' },
 			},
 			{ name: 'telegram_silent_replies', label: 'Silent replies', kind: 'switch', help: 'Replies arrive without a notification sound.' },
@@ -75,7 +76,8 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
 				label: 'Send attempts',
 				kind: 'number',
 				min: 1,
-				help: 'How many times to try a reply that hits a temporary Telegram error.',
+				max: 10,
+				help: 'How many times to try a reply that hits a temporary Telegram error (1 to 10).',
 			},
 			{
 				name: 'error_reply_text',
@@ -185,10 +187,10 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
 				name: 'telegram_bot_allowlist',
 				label: 'Other bots allowed to talk to this bot',
 				kind: 'text',
-				help: 'Bot usernames, one per line or separated by commas. Leave empty to ignore other bots.',
+				help: 'Numeric bot IDs (not usernames, which can change), one per line or separated by commas. Leave empty to ignore other bots.',
 			},
-			{ name: 'telegram_bot_max_hops', label: 'Most bot-to-bot replies in a row', kind: 'number', min: 0, help: 'Stops two bots from answering each other forever.' },
-			{ name: 'telegram_bot_rate_cap', label: 'Most bot messages per minute', kind: 'number', min: 0, help: '0 means no limit.' },
+			{ name: 'telegram_bot_max_hops', label: 'Bot messages in a row', kind: 'number', min: 1, max: 20, help: 'Most consecutive messages from allowed bots in a chat before this bot stops answering. A message from a person resets the count.' },
+			{ name: 'telegram_bot_rate_cap', label: 'Bot messages per minute', kind: 'number', min: 1, max: 1000, help: 'Most messages accepted from one allowed bot in one chat per minute.' },
 		],
 	},
 	{
@@ -266,10 +268,9 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
 				optionLabels: { Queue: 'Hold for review', Decline: 'Decline', Agent: 'Let the agent decide' },
 			},
 			{ name: 'telegram_inline_enabled', label: 'Inline mode', kind: 'switch', help: 'People can use the bot from any chat by typing its name.' },
-			{ name: 'telegram_inline_feedback_enabled', label: 'Inline feedback is on in BotFather', kind: 'switch', help: 'Send /setinlinefeedback to BotFather and choose Enabled. Until then the inline answer button reads "Tap to get the answer".' },
+			{ name: 'telegram_inline_feedback_enabled', label: 'Inline feedback is on in BotFather', kind: 'switch', showWhen: { field: 'telegram_inline_enabled', equals: true }, help: 'Send /setinlinefeedback to BotFather and choose Enabled. Until then the inline answer button reads "Tap to get the answer".' },
 			{ name: 'telegram_test_environment', label: 'Telegram test environment', kind: 'switch', help: 'Only for bots created on Telegram test servers.' },
-			{ name: 'telegram_streaming', label: 'Stream replies', kind: 'switch', help: 'Show the answer as it is written instead of all at once.' },
-			{ name: 'telegram_default_template', label: 'Default template', kind: 'template', help: 'Used when a send does not name a template.' },
+			{ name: 'telegram_streaming', label: 'Stream replies', kind: 'switch', help: 'In private chats, show the answer as it is written instead of all at once. This switch alone decides.' },
 			{ name: 'telegram_welcome_template', label: 'Welcome template', kind: 'template', help: 'Sent when someone joins or starts the bot.' },
 			{
 				name: 'telegram_welcome_cooldown_seconds',
@@ -333,7 +334,7 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
 				name: 'telegram_web_allow_writes',
 				label: 'Allow changes (not just viewing)',
 				kind: 'switch',
-				help: 'Signed-in pages can save and edit, not only show data. Off means no changes through allowed methods (viewing may still log views). On blocks only a fixed list of sensitive areas such as users, roles and settings.',
+				help: 'Signed-in pages can save and edit, not only show data. Off means no changes through allowed methods (viewing may still log views). On blocks only a fixed list of sensitive areas such as users, roles and settings. Applies within 30 seconds, including to people already signed in.',
 				warning: 'People opening these pages can change data, not just look at it.',
 			},
 			{
@@ -377,7 +378,7 @@ export function hasInvalidNumber(draft: SettingsDraft): boolean {
 		for (const f of section.fields) {
 			if (f.kind !== 'number' || !(f.name in draft)) continue;
 			const v = draft[f.name];
-			if (typeof v !== 'number' || Number.isNaN(v) || v < (f.min ?? 0)) return true;
+			if (typeof v !== 'number' || Number.isNaN(v) || v < (f.min ?? 0) || (f.max !== undefined && v > f.max)) return true;
 		}
 	}
 	return false;

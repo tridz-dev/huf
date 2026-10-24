@@ -193,6 +193,7 @@ def _gateway_settings(gateway: str) -> dict:
 				"telegram_web_allowed_paths",
 				"telegram_web_extra_read_methods",
 				"telegram_web_allow_privileged",
+				"telegram_web_allow_writes",
 			],
 			as_dict=True,
 		)
@@ -336,7 +337,8 @@ def decide(marker: dict, settings: dict, method: str, path: str, form_dict) -> b
 		return False
 	if not settings or not settings.get("telegram_web_access_enabled") or not settings.get("is_enabled"):
 		return False  # missing/unreadable/disabled gateway: closed
-	allow_writes = bool(marker.get("allow_writes"))
+	# Live gateway value (cached ~30s), not a session-start snapshot: toggling applies to open sessions too.
+	allow_writes = bool(settings.get("telegram_web_allow_writes"))
 
 	# Frappe runs ``form_dict.cmd`` (query string or body) on ANY path, before path routing, so it is
 	# resolved first and nothing (assets, resources, navigation) may return early ahead of it.

@@ -23,7 +23,6 @@ NEW_FIELDS = {
 	"telegram_bot_allowlist": "Small Text",
 	"telegram_bot_max_hops": "Int",
 	"telegram_bot_rate_cap": "Int",
-	"telegram_default_template": "Link",
 	"telegram_welcome_template": "Link",
 	"telegram_web_access_enabled": "Check",
 	"telegram_web_allowed_paths": "Small Text",
@@ -56,7 +55,6 @@ class TestGatewayJson(unittest.TestCase):
 		self.assertEqual(f["telegram_join_policy"]["default"], "Queue")
 		self.assertEqual(f["telegram_inline_enabled"]["default"], "1")
 		self.assertEqual(f["telegram_inline_feedback_enabled"]["default"], "0")
-		self.assertEqual(f["telegram_default_template"]["options"], "Telegram Message Template")
 
 	def test_shared_fields_widened(self):
 		for name in (
@@ -101,6 +99,17 @@ class TestTelegramValidation(unittest.TestCase):
 		with self.assertRaises(ValueError):
 			self._run(telegram_bot_allowlist="123, @bot")
 
+	def test_bot_loop_limits_range(self):
+		for kw in (
+			{"telegram_bot_max_hops": 0},
+			{"telegram_bot_max_hops": 21},
+			{"telegram_bot_rate_cap": 0},
+			{"telegram_bot_rate_cap": 1001},
+		):
+			with self.assertRaises(ValueError, msg=str(kw)):
+				self._run(**kw)
+		self._run(telegram_bot_max_hops=3, telegram_bot_rate_cap=5)
+
 	def test_other_providers_untouched(self):
 		self._run(provider="WhatsApp", telegram_join_policy="Agent", telegram_bot_allowlist="x")
 
@@ -126,3 +135,28 @@ class TestGuardFieldValidation(unittest.TestCase):
 		self.assertEqual(fields["telegram_guard_captcha"]["options"], "Off\nArithmetic\nEmoji")
 		self.assertEqual(fields["telegram_welcome_cooldown_seconds"]["default"], "60")
 		self.assertEqual(fields["telegram_guard_question_text"]["fieldtype"], "Small Text")
+
+
+class TestPreviewUrlRuntime(unittest.TestCase):
+	"""``preview_url``: only "On" sends link previews; "Default (off)" and "Off" suppress them."""
+
+	def _link_options(self, value):
+		from huf.ai.tests.test_telegram_templates import Base
+
+		case = Base("setUp")
+		case.setUp()
+		try:
+			case.put()
+			gw = SimpleNamespace(name="g", preview_url=value)
+			from huf.ai import telegram_templates as tt
+
+			tt.send_template(gw, 5, "t", {"name": "A"}, sender=case.sender)
+			return case.api.last("sendMessage")["payload"].get("link_preview_options")
+		finally:
+			case.doCleanups()
+
+	def test_only_on_enables_previews(self):
+		self.assertIsNone(self._link_options("On"))
+		self.assertEqual(self._link_options("Off"), {"is_disabled": True})
+		self.assertEqual(self._link_options("Default (off)"), {"is_disabled": True})
+		self.assertEqual(self._link_options(None), {"is_disabled": True})

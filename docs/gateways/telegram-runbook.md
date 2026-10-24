@@ -33,7 +33,7 @@ Compared with WhatsApp (`docs/gateways/whatsapp-runbook.md`). "Yes" means implem
 | Typing indicator | Yes, `sendChatAction typing`, best effort | Yes | `send_typing` in `telegram_pipeline.py`; gateway field `typing_indicator` (default on) |
 | Inline buttons | Yes: callback, url, web_app, switch_inline, copy_text, login_url; reply keyboards | Yes | `telegram_buttons.py`, `telegram_keyboards.py` (section 4.1) |
 | Edit in place | Yes: `edit_message_text`, caption, reply markup; buttons with `"edit": true` | Partial | `supports_edit=True` |
-| Streaming replies | **Off by default**; private chats only; read from `frappe.conf.huf_telegram_streaming` only | No | `telegram_stream.py` `streaming_enabled`; gateway field `telegram_streaming` is **not read** (section 16) |
+| Streaming replies | **Off by default**; private chats only; controlled by the Gateway field `telegram_streaming` only | No | `telegram_stream.py` `streaming_enabled` (section 16) |
 | Inline mode (`@bot query`) | Resolver registry; default resolver returns article results | No | `telegram_inline.py`; gateway field `telegram_inline_enabled` is **not read** (section 17) |
 | Inline answer button | Signed `inl:go:<digest>` button on the placeholder; press starts the answer run when no `chosen_inline_result` arrived (idempotent per `inline_message_id`) | No | `handle_inline_callback` in `telegram_inline.py` |
 | Guest mode (`guest_message`) | Yes: `telegram_guest.py`, admitted to an agent by an Open policy | No | Limits in section 11 |
@@ -91,9 +91,6 @@ Store credentials in the gateway's integration settings, never in the Gateway re
 |---|---|---|---|
 | `token` | Yes | BotFather token; used for all Bot API calls | `telegram.py` credential schema |
 | `webhook_secret` | Yes | Sent as Telegram's `secret_token`; checked against the `X-Telegram-Bot-Api-Secret-Token` header | `telegram.py` (`WEBHOOK_SECRET_HEADER`) |
-| `bot_allowlist` | No | Comma-separated bot ids allowed to talk to this bot (bot-to-bot) | `telegram_loop_guard.parse_allowlist` |
-| `bot_max_hops` | No | Consecutive bot messages allowed in a chat or thread before cut-off; default 3 | `telegram_loop_guard.py` |
-| `bot_rate_cap` | No | Bot messages allowed per chat and bot per 60 s; default 5 | `telegram_loop_guard.py` |
 
 The cockpit reads `token` from the same integration settings (`telegram_admin.py`). Rotate `webhook_secret` by
 changing it in settings and calling `set_webhook` again (section 2.4).
@@ -256,10 +253,12 @@ Residual risks (from the design doc, still open):
   is not retried, and the event note reads "Recipient blocked the bot: reply not sent".
 - **Chat not found**: classified `chat_not_found`; not retried.
 - **Opt-out**: there is no STOP/START handling for Telegram (section 3).
-- **Bot-to-bot loop guard** (`telegram_loop_guard.py`): bot messages are dropped unless the sender id is in
-  `bot_allowlist`. An allowed bot is cut off after `bot_max_hops` consecutive bot messages in a chat or thread
-  (a human message resets it), and above `bot_rate_cap` per 60 s. Our own bot id is never admitted. State lives
-  in the Frappe cache, so counts are approximate. The caps come from Integration Settings (section 11).
+- **Bot-to-bot loop guard** (`telegram_loop_guard.py`): bot messages are dropped unless the sender's numeric bot id is
+  in the Gateway field `telegram_bot_allowlist` (ids, not usernames, because usernames can change). An allowed bot
+  is cut off after `telegram_bot_max_hops` consecutive bot messages in a chat or thread (a human message resets
+  it; default 3, 1 to 20), and above `telegram_bot_rate_cap` messages per minute per chat and bot (default 5,
+  1 to 1000). Our own bot id is never admitted. State lives in the Frappe cache, so counts are approximate. All
+  three values come from the Gateway; no Integration Settings or site config key overrides them.
 - **Logs and errors**: `TelegramBotClient.redact` removes the token and its secret half from error text and
   logs (`redact_token` in `telegram_client.py`). Do not add logging that echoes request URLs, which contain the
   token.
@@ -283,7 +282,7 @@ Residual risks (from the design doc, still open):
 | Save fails: `execution_user ... must have one of these roles: Huf Gateway User` | Run-as user lacks the role | Give the user the Huf Gateway User role, or pick another user. |
 | Business reply never sent | Policy is Observe (default), or Draft/Reply downgraded (no `can_reply`, guard blocked) | Expected unless the policy and connection rights are set (section 14). |
 | Business draft never reaches the owner | Owner chat not known, or the agent run failed | Check the Gateway's default agent and the `Telegram Admin Audit` / error log. |
-| Streaming not used | `huf_telegram_streaming` is unset in site config, or the chat is a group | Expected (off by default; private chats only). The gateway checkbox has no effect (section 16). |
+| Streaming not used | `telegram_streaming` is off on the Gateway, or the chat is a group | Expected (off by default; private chats only). Turn on **Stream replies** in the Settings tab (section 16). |
 | Voice reply sent as text | ffmpeg or libopus missing, reply over 1500 characters, or TTS model missing or on a provider without speech | Install ffmpeg with libopus on the worker host; set the agent's `tts_model` (section 16). |
 | Admin action refused `bot_not_admin` or `... lacks the 'can_...' right` | The bot is not an admin of the group, or lacks the right | Promote the bot in Telegram with the named right. |
 | `Recipient blocked the bot: reply not sent` | The user blocked the bot | No action; the user must unblock. |
@@ -477,9 +476,9 @@ UI: the **Templates** tab (section 12) lists templates and edits them (`Template
 permission and the integration manage right (`_require_manager`). A test send is allowed only to a chat that
 `is_allowed_test_chat` accepts for the signed-in user.
 
-Gateway fields `telegram_default_template` and `telegram_welcome_template` link to templates. The welcome
-template is used for welcome messages (`telegram_guard.py`). The default template field is **not read** by
-runtime code (section 17).
+The Gateway field `telegram_welcome_template` links to a template. The welcome
+template is used for welcome messages (`telegram_guard.py`). There is no default-template field: a send names
+its template.
 
 ## 11. Gateway Telegram fields
 
@@ -501,31 +500,26 @@ Telegram, except where noted). The Settings tab (section 12) edits the same fiel
 | `telegram_parse_mode` | Text formatting: Plain, HTML, MarkdownV2 | HTML |
 | `telegram_silent_replies` | Send replies without notification | off |
 | `telegram_protect_content` | Protect content (no forwarding or saving) | off |
-| `preview_url` | Link previews: Default (off), On, Off | Default (off) |
+| `preview_url` | Link previews: Default (off), On, Off. Only On shows previews | Default (off) |
 | `voice_reply_mode` | Voice notes: Off, Voice only, Text and voice | Off |
 | `typing_indicator` | Send typing action while the agent works | on |
-| `telegram_streaming` | Live reply streaming checkbox. **Not read at runtime** (section 16) | off |
+| `telegram_streaming` | Live reply streaming in private chats; the only switch (section 16) | off |
 | `telegram_inline_enabled` | Inline mode switch. **Not read at runtime** (section 17) | on |
 | `telegram_business_policy` | Business chats: Ignore, Observe, Draft, Reply | Observe |
 | `telegram_join_policy` | Group join requests: Queue, Decline, Agent | Queue |
 | `telegram_agent_allow_group_admin` | Agent may use group admin actions | off |
 | `telegram_agent_allow_profile` | Agent may edit the bot profile | off |
 | `telegram_agent_allow_business` | Agent may use the Business account | off |
-| `telegram_bot_allowlist` | Allowed bot ids (numeric, comma separated). Validated only; the loop guard reads the Integration Settings `bot_allowlist` | empty |
-| `telegram_bot_max_hops` | Stored, **not read** by the loop guard (it reads `bot_max_hops`) | 3 |
-| `telegram_bot_rate_cap` | Stored, **not read** by the loop guard (it reads `bot_rate_cap`, per 60 s) | 30 (labelled per hour) |
-| `telegram_default_template` | Default template. **Not read** at runtime | none |
+| `telegram_bot_allowlist` | Allowed bot ids (numeric only, comma or line separated); read by the loop guard | empty |
+| `telegram_bot_max_hops` | Consecutive bot messages allowed before cut-off, 1 to 20 | 3 |
+| `telegram_bot_rate_cap` | Messages accepted per minute from one allowed bot in one chat, 1 to 1000 | 5 |
 | `telegram_welcome_template` | Welcome template for new group members | none |
 | `agent_recipient_scope` | Who agents may message: Current contact, Allow-list, Approved contacts, Any number | Current contact |
-| `agent_recipient_allowlist` | Chat ids for Allow-list scope | empty |
+| `agent_recipient_allowlist` | Chat ids or @usernames for Allow-list scope | empty |
 | `agent_send_cap_per_run` | Agent sends per run (also the admin action cap, section 9.2) | 20 |
 | `agent_send_cap_per_day` | Agent sends per day | 200 |
 | `default_agent` | see above | none |
 | `integration_settings` | Credentials source (section 2.2) | none |
-
-Behaviour of the two loop-guard fields (`telegram_bot_max_hops`, `telegram_bot_rate_cap`) and of the
-allowlist: the runtime reads Integration Settings keys (`bot_max_hops`, `bot_rate_cap`, `bot_allowlist`). Set
-the caps there until the fields are wired.
 
 ## 12. Management UI
 
@@ -570,15 +564,15 @@ The **audit** read is restricted to System Manager and Huf Manager (`telegram_ad
 
 - Served by `huf/www/tg_guard.py`. Static shell; the question and the answer check run in `huf/ai/telegram_guard.py`.
 - It is used when the join policy is in use, a join request carries a `query_id`, and captcha is enabled. Enable it
-  with the site config key `huf_telegram_guard_captcha`. There is no `telegram_guard_captcha` field on the Gateway
-  (section 17).
+  with the Gateway field `telegram_guard_captcha` (Off, Arithmetic or Emoji). Off means off: no site config key
+  overrides it.
 - The bot sends the page with `sendChatJoinRequestWebApp`. The URL is `https://<host>/tg_guard?g=<gateway>&n=<nonce>`.
 - Each challenge is single use, expires after 600 s, and allows 3 attempts. Success approves the request, wrong
   answers decline it. Both guest endpoints are authenticated only by the initData HMAC and are rate limited.
 - Setup steps:
   1. Serve the site on HTTPS (Telegram Web Apps require it).
   2. Make the bot an admin of the group with `can_invite_users` (needed to approve or decline requests).
-  3. Set `telegram_join_policy` to Agent or Queue (section 15), and set `huf_telegram_guard_captcha` in site config.
+  3. Set `telegram_join_policy` to Agent or Queue (section 15), and set `telegram_guard_captcha` on the Gateway.
 
 ## 14. Secretary (business) mode
 
@@ -629,10 +623,8 @@ Agent policy requires `default_agent` (`gateway.py`).
 
 ### 16.1 Streaming
 
-- Today the only switch honoured at runtime is the site config key **`huf_telegram_streaming`**
-  (`telegram_stream.streaming_enabled` reads `frappe.conf`). It is off by default and applies only to private chats.
-- The Gateway checkbox `telegram_streaming` is saved and shown in the Settings tab, but no runtime code reads it.
-  Turning it on in the Gateway changes nothing. Use the site config key.
+- The only switch is the Gateway checkbox **`telegram_streaming`** (`telegram_stream.streaming_enabled`). It is off
+  by default and applies only to private chats. There is no site config override.
 - Streaming uses `sendMessageDraft` to animate a reply draft. A reply's updates share one draft id.
 
 ### 16.2 Voice replies
@@ -664,19 +656,11 @@ Each item below was checked against the code. "Not wired" means nothing on the r
 
 1. **Inline "Run" button**: `RUN_CALLBACK_PREFIX = "inl:run"` is defined in `telegram_inline.py`, but no handler
    dispatches it. Pressing it does nothing.
-2. **Gateway `telegram_streaming`**: saved, not read. Streaming follows `huf_telegram_streaming` only (section 16.1).
-3. **Gateway `telegram_inline_enabled`**: saved, not read by the inline handlers. Inline mode is governed by
+2. **Gateway `telegram_inline_enabled`**: saved, not read by the inline handlers. Inline mode is governed by
    BotFather and the resolver registry.
-4. **Gateway `telegram_bot_max_hops`, `telegram_bot_rate_cap`, `telegram_bot_allowlist`**: the loop guard reads
-   the Integration Settings keys `bot_max_hops`, `bot_rate_cap` and `bot_allowlist`. The gateway rate cap is
-   labelled "per hour" with default 30; the runtime cap is per 60 seconds with default 5. The allowlist field is
-   only validated and normalised.
-5. **Gateway `telegram_default_template`**: saved and shown, not read by runtime code. The welcome template is read.
-6. **Gateway `telegram_guard_captcha`**: no such field exists on the Gateway doctype. Captcha is enabled only by the
-   site config key `huf_telegram_guard_captcha`.
-7. **Consent (STOP/START)**: not implemented for Telegram (section 3).
-8. **Inline feedback**: no code path. BotFather setting only (section 2.1).
-9. **Admin action cap**: uses `agent_send_cap_per_run` (default 20), not a separate admin cap, and falls back to 5
+3. **Consent (STOP/START)**: not implemented for Telegram (section 3).
+4. **Inline feedback**: no code path. BotFather setting only (section 2.1).
+5. **Admin action cap**: uses `agent_send_cap_per_run` (default 20), not a separate admin cap, and falls back to 5
    only when the field is 0. Intended or not, the cap is shared with sends.
 
 Resolved since older notes: the Secretary draft producer is registered (section 14), and inbound voice notes are
@@ -699,10 +683,10 @@ assume the default settings unless a row says otherwise.
 | 8 | Admin bind | Create a binding code on the Admin bindings tab; send `/start <BIND-CODE>` privately; send `/me` | Binding created; `/me` shows the bound user and scope. The code cannot be reused. |
 | 9 | Admin action | Enable `telegram_agent_allow_group_admin`; ask the agent to ban a test user in a test group | Refused without the bot's ban right. With the right: from a group member or non-admin chat the call is refused with `owner_required`; from the paired Admin's private chat it returns `pending_human_approval`, and the ban runs only after the admin presses Approve, with an audit row. Chat admins are never ban targets. |
 | 10 | Join request | Join policy Queue: request to join a test group. Then switch to Agent | Queue: request stays pending for admins. Agent: request queued, then approved or declined by the agent decision. With a welcome template set, a joining member gets the welcome (60 s cooldown). |
-| 11 | Guard | Enable `huf_telegram_guard_captcha`, join a Guard group | The join request shows the Guard Mini App. A wrong answer three times declines; the right answer approves. |
+| 11 | Guard | Set `telegram_guard_captcha` to Arithmetic, join a Guard group | The join request shows the Guard Mini App. A wrong answer three times declines; the right answer approves. |
 | 12 | Business draft | Connect the business account with Business mode on; set policy Draft; send a message to the business account from another account | The owner's private chat gets a draft with Approve, Edit, Reject. Approve sends it as the owner. Nothing reaches the customer before approval. |
 | 13 | Business Observe | Default policy; message the business account | Message recorded in the Messages tab; no reply sent. |
-| 14 | Streaming | Set `huf_telegram_streaming`; private chat with a long reply | Reply animates as a draft. Setting the gateway checkbox alone does nothing (known gap 2). |
+| 14 | Streaming | Turn on `telegram_streaming`; private chat with a long reply | Reply animates as a draft. With the checkbox off the reply arrives in one piece. |
 | 15 | Webhook health | Connection tab, then Check | Webhook URL shown; `allowed_updates_ok` true; pending count 0 after traffic. |
 
 Record the Telegram message ids and Frappe Gateway Event rows for each check. Never record the bot token.

@@ -319,7 +319,7 @@ def send_template(
 		"silent": bool(getattr(gateway, "telegram_silent_replies", 0)),
 		"protect": bool(getattr(gateway, "telegram_protect_content", 0)),
 	}
-	link_preview = bool(getattr(gateway, "preview_url", 1)) if hasattr(gateway, "preview_url") else True
+	link_preview = getattr(gateway, "preview_url", None) == "On"  # Default (off) and Off send no previews
 	ids: list = []
 	text = r.text.strip()
 	media = r.media

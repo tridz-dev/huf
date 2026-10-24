@@ -15,12 +15,12 @@ PROVIDER = "Telegram"
 
 
 def agent_runner(event, gateway):
-	"""Streaming runner for private chats when ``huf_telegram_streaming`` is on; else None. Never raises."""
+	"""Streaming runner for private chats when the gateway enables ``telegram_streaming``; else None. Never raises."""
 	try:
 		from huf.ai.gateway_adapters import telegram_pipeline, telegram_stream
 		from huf.ai.gateway_webhook import event_contact_name, get_gateway_adapter
 
-		if not telegram_stream.streaming_enabled(telegram_stream.event_chat_type(event)):
+		if not telegram_stream.streaming_enabled(telegram_stream.event_chat_type(event), gateway):
 			return None
 		adapter = get_gateway_adapter(gateway, event_contact_name(event))
 		thread_id, _ = telegram_pipeline.reply_target(event)

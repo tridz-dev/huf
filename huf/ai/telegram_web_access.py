@@ -200,7 +200,6 @@ def _create_session(binding: dict, tg_id: str, gateway_doc: Any, hours: int) -> 
 		"binding": binding["name"],
 		"gateway": gateway_doc.name,
 		"tg_id": tg_id,
-		"allow_writes": int(gateway_doc.get("telegram_web_allow_writes") or 0),
 		"web_access_version": MARKER_VERSION,
 	}
 	end = (datetime.now(UTC) + timedelta(hours=hours)).isoformat()

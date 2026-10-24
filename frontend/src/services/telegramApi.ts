@@ -70,14 +70,24 @@ export interface TelegramGatewayOption {
 	has_events: boolean;
 }
 
-export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
+/** A server-side validation message tied to one field. */
+export interface FieldError { field: string; message: string }
 
-type Envelope = { success?: boolean; error?: string; message?: string };
+export type Result<T> = { ok: true; data: T } | { ok: false; error: string; fieldErrors?: FieldError[] };
+
+type Envelope = { success?: boolean; error?: string; message?: string; errors?: FieldError[] };
 
 /** Unwrap the `{message: body}` envelope and turn `success: false` into an error result. */
 export function unwrap<T>(res: unknown): Result<T> {
 	const body = ((res && typeof res === 'object' && 'message' in res ? (res as { message: unknown }).message : res) ?? {}) as T & Envelope;
-	if (body && body.success === false) return { ok: false, error: body.message || body.error || 'Request failed' };
+	if (body && body.success === false) {
+		const fieldErrors = Array.isArray(body.errors) ? body.errors.filter((e) => e && e.field && e.message) : [];
+		return {
+			ok: false,
+			error: body.message || body.error || 'Request failed',
+			...(fieldErrors.length ? { fieldErrors } : {}),
+		};
+	}
 	return { ok: true, data: body };
 }
 

@@ -22,6 +22,11 @@ class FakeCache:
 		return self.d.get(key)
 
 
+class Gw(SimpleNamespace):
+	def get(self, key, default=None):
+		return getattr(self, key, default)
+
+
 def guard(cache=None, **kw):
 	return lg.LoopGuard(cache or FakeCache(), clock=lambda: 1000.0, **kw)
 
@@ -32,7 +37,9 @@ def check(g, bot="9", n=None, own="1", allow=("9",), chat=5, thread=None):
 
 class TestGuard(unittest.TestCase):
 	def test_parse_allowlist(self):
-		self.assertEqual(lg.parse_allowlist(" 1, @2;3\n4 ,"), frozenset({"1", "2", "3", "4"}))
+		self.assertEqual(lg.parse_allowlist(" 1, 2;3\n4 ,"), frozenset({"1", "2", "3", "4"}))
+		# usernames can change, so only numeric ids are ever admitted
+		self.assertEqual(lg.parse_allowlist("@name, 5, name"), frozenset({"5"}))
 		self.assertEqual(lg.parse_allowlist(None), frozenset())
 
 	def test_sender_bot_id(self):
@@ -86,9 +93,26 @@ class TestGuard(unittest.TestCase):
 		self.assertFalse(check(g, n=2).allow)
 		self.assertFalse(check(g, n=2).allow)
 
-	def test_credentials_overrides(self):
-		g = lg.LoopGuard.from_credentials(FakeCache(), {"bot_max_hops": "5", "bot_rate_cap": "x"})
-		self.assertEqual((g.max_hops, g.rate_cap), (5, lg.DEFAULT_RATE_CAP))
+	def test_limits_come_from_gateway_fields(self):
+		gw = Gw(telegram_bot_max_hops=5, telegram_bot_rate_cap=9)
+		g = lg.LoopGuard.from_gateway(FakeCache(), gw)
+		self.assertEqual((g.max_hops, g.rate_cap), (5, 9))
+
+	def test_unset_or_invalid_limits_use_defaults(self):
+		for gw in (Gw(), Gw(telegram_bot_max_hops=0, telegram_bot_rate_cap="x")):
+			g = lg.LoopGuard.from_gateway(FakeCache(), gw)
+			self.assertEqual((g.max_hops, g.rate_cap), (lg.DEFAULT_MAX_HOPS, lg.DEFAULT_RATE_CAP))
+
+	def test_defaults_match_doctype_json(self):
+		import json
+		from pathlib import Path
+
+		fields = json.loads(
+			(Path(__file__).parents[2] / "huf" / "doctype" / "gateway" / "gateway.json").read_text()
+		)["fields"]
+		default = {f["fieldname"]: f.get("default") for f in fields}
+		self.assertEqual(int(default["telegram_bot_max_hops"]), lg.DEFAULT_MAX_HOPS)
+		self.assertEqual(int(default["telegram_bot_rate_cap"]), lg.DEFAULT_RATE_CAP)
 
 
 class TestPrefilter(unittest.TestCase):
@@ -97,7 +121,7 @@ class TestPrefilter(unittest.TestCase):
 		p = mock.patch.object(mh, "_cache", return_value=self.cache)
 		p.start()
 		self.addCleanup(p.stop)
-		self.gw = SimpleNamespace(name="gw", mention_required=0)
+		self.gw = Gw(name="gw", mention_required=0)
 		self.adapter = SimpleNamespace(_token="1:abc")
 
 	def parsed(self, msg, uid="u1", room=False):
@@ -111,8 +135,8 @@ class TestPrefilter(unittest.TestCase):
 		)
 
 	def run_filter(self, parsed, allow="9"):
-		with mock.patch.object(mh, "_credentials", return_value={"bot_allowlist": allow}):
-			return mh.prefilter(self.gw, self.adapter, parsed, None)
+		self.gw.telegram_bot_allowlist = allow
+		return mh.prefilter(self.gw, self.adapter, parsed, None)
 
 	def test_bot_dropped_unless_allowed(self):
 		msg = {"from": {"id": 9, "is_bot": True}, "chat": {"id": 5}}

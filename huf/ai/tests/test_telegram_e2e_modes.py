@@ -125,6 +125,11 @@ def init_data(user_id: int, token: str = TOKEN) -> str:
 	return urlencode(fields)
 
 
+class GatewayDouble(SimpleNamespace):
+	def get(self, key, default=None):
+		return getattr(self, key, default)
+
+
 class E2EBase(unittest.TestCase):
 	def setUp(self):
 		self.cache = FakeCache()
@@ -134,7 +139,7 @@ class E2EBase(unittest.TestCase):
 			http_post=self.api.http_post,
 			download_attachments=False,
 		)
-		self.gw = SimpleNamespace(
+		self.gw = GatewayDouble(
 			name="gw1",
 			provider=PROVIDER,
 			mention_required=0,
@@ -734,26 +739,24 @@ def bot_msg(update_id, bot=9, chat=-100, text="ping"):
 class TestBotLoopGuard(E2EBase):
 	def setUp(self):
 		super().setUp()
-		self.creds = {"bot_allowlist": "9", "bot_max_hops": "3"}
-		self.patch(
-			"huf.ai.gateway_adapters.telegram_modes_hooks._credentials", side_effect=lambda gw: self.creds
-		)
+		self.gw.telegram_bot_allowlist = "9"
+		self.gw.telegram_bot_max_hops = 3
 		self.patch("huf.ai.gateway_adapters.telegram_modes_hooks._bot_username", return_value="huf_bot")
-		self.clock_guard = lambda cache, creds: lg.LoopGuard(
-			cache, max_hops=int(creds.get("bot_max_hops", 3)), rate_cap=5, clock=lambda: 1000.0
+		self.clock_guard = lambda cache, gw: lg.LoopGuard(
+			cache, max_hops=int(gw.telegram_bot_max_hops), rate_cap=5, clock=lambda: 1000.0
 		)
 
 	def guard_with_clock(self):
-		return mock.patch.object(lg.LoopGuard, "from_credentials", side_effect=self.clock_guard)
+		return mock.patch.object(lg.LoopGuard, "from_gateway", side_effect=self.clock_guard)
 
 	def test_bot_not_in_allowlist_is_dropped_before_ingest(self):
-		self.creds["bot_allowlist"] = ""
+		self.gw.telegram_bot_allowlist = ""
 		result = self.send(bot_msg(4001))
 		self.assertIn("allow-list", result["note"])
 		self.ingest.assert_not_called()
 
 	def test_own_bot_message_is_dropped_even_if_allowlisted(self):
-		self.creds["bot_allowlist"] = TOKEN.split(":", 1)[0]
+		self.gw.telegram_bot_allowlist = TOKEN.split(":", 1)[0]
 		result = self.send(bot_msg(4002, bot=int(TOKEN.split(":", 1)[0])))
 		self.assertIn("own bot message", result["note"])
 		self.ingest.assert_not_called()
@@ -770,7 +773,7 @@ class TestBotLoopGuard(E2EBase):
 			self.ingest.assert_called_once()
 
 	def test_rate_cap_applies_per_chat_and_bot(self):
-		self.creds["bot_max_hops"] = "50"
+		self.gw.telegram_bot_max_hops = 50
 		with self.guard_with_clock():
 			results = [self.send(bot_msg(4300 + i)) for i in range(6)]
 		self.assertIn("rate cap", results[5]["note"])

@@ -45,6 +45,8 @@ type Pickers = Partial<Record<'template' | 'agent' | 'flow' | 'user', PickerOpti
 
 const NONE = '__none__';
 
+type FieldErrors = Record<string, string>;
+
 interface FieldProps {
 	field: FieldDef;
 	value: TelegramSettingValue | undefined;
@@ -52,10 +54,12 @@ interface FieldProps {
 	pickers: Pickers;
 	options: string[];
 	disabled: boolean;
+	/** Message from the server for this field after a failed save. */
+	error?: string;
 	onChange: (value: TelegramSettingValue) => void;
 }
 
-function Field({ field, value, saved, pickers, options, disabled, onChange }: FieldProps) {
+function Field({ field, value, saved, pickers, options, disabled, error, onChange }: FieldProps) {
 	const id = `tg-${field.name}`;
 	const warning = activeWarning(field, value, saved);
 	const control = (() => {
@@ -86,6 +90,7 @@ function Field({ field, value, saved, pickers, options, disabled, onChange }: Fi
 						id={id}
 						type="number"
 						min={field.min ?? 0}
+						max={field.max}
 						className="w-full sm:w-40"
 						value={value === '' || value === undefined ? '' : String(value)}
 						disabled={disabled}
@@ -132,6 +137,7 @@ function Field({ field, value, saved, pickers, options, disabled, onChange }: Fi
 				<Label htmlFor={id} className="text-sm text-ink">{field.label}</Label>
 				{field.help && <p className="text-xs text-steel">{field.help}</p>}
 				{warning && <p role="note" className={cn('text-xs', field.tone === 'danger' ? 'text-destructive' : 'text-warning')}>{warning}</p>}
+				{error && <p role="alert" className="text-xs text-destructive">{error}</p>}
 			</div>
 			{control}
 		</div>
@@ -145,10 +151,11 @@ interface WebAccessSectionProps {
 	saved: SettingsDraft;
 	unavailable: string[];
 	disabled: boolean;
+	fieldErrors: FieldErrors;
 	onChange: (name: string, value: TelegramSettingValue) => void;
 }
 
-function WebAccessSection({ section, gateway, draft, saved, unavailable, disabled, onChange }: WebAccessSectionProps) {
+function WebAccessSection({ section, gateway, draft, saved, unavailable, disabled, fieldErrors, onChange }: WebAccessSectionProps) {
 	const [advancedOpen, setAdvancedOpen] = useState(false);
 	const fields = section.fields.filter((f) => !unavailable.includes(f.name));
 	if (fields.length === 0) return null;
@@ -167,6 +174,7 @@ function WebAccessSection({ section, gateway, draft, saved, unavailable, disable
 					<Label htmlFor={`tg-${n}`} className="text-sm text-ink">{f.label}</Label>
 					{f.help && <p className="text-xs text-steel">{f.help}</p>}
 					{warning && <p role="note" className={cn('text-xs', f.tone === 'danger' ? 'text-destructive' : 'text-warning')}>{warning}</p>}
+					{fieldErrors[n] && <p role="alert" className="text-xs text-destructive">{fieldErrors[n]}</p>}
 				</div>
 			</div>
 		);
@@ -205,6 +213,7 @@ function WebAccessSection({ section, gateway, draft, saved, unavailable, disable
 						/>
 						<p className="text-xs text-steel">{def('telegram_web_allowed_paths').help}</p>
 						{errors.paths && <p role="alert" className="text-xs text-destructive">{errors.paths}</p>}
+						{fieldErrors.telegram_web_allowed_paths && <p role="alert" className="text-xs text-destructive">{fieldErrors.telegram_web_allowed_paths}</p>}
 					</div>
 				)}
 				{has('telegram_web_session_hours') && (
@@ -222,6 +231,7 @@ function WebAccessSection({ section, gateway, draft, saved, unavailable, disable
 						/>
 						{hoursWarning && <p role="note" className="text-xs text-warning">{hoursWarning}</p>}
 						{errors.hours && <p role="alert" className="text-xs text-destructive">{errors.hours}</p>}
+						{fieldErrors.telegram_web_session_hours && <p role="alert" className="text-xs text-destructive">{fieldErrors.telegram_web_session_hours}</p>}
 					</div>
 				)}
 				{has('telegram_web_allow_privileged') && checkbox('telegram_web_allow_privileged')}
@@ -237,6 +247,7 @@ function WebAccessSection({ section, gateway, draft, saved, unavailable, disable
 									<Label htmlFor={`tg-${f.name}`} className="text-sm text-ink">{f.label}</Label>
 									<Textarea id={`tg-${f.name}`} rows={3} value={String(draft[f.name] ?? '')} disabled={disabled} onChange={(e) => onChange(f.name, e.target.value)} />
 									{f.help && <p className="text-xs text-steel">{f.help}</p>}
+									{fieldErrors[f.name] && <p role="alert" className="text-xs text-destructive">{fieldErrors[f.name]}</p>}
 								</div>
 							))}
 						</CollapsibleContent>
@@ -257,6 +268,17 @@ export function SettingsTab({ gateway }: TelegramTabProps) {
 	const [saving, setSaving] = useState(false);
 	const [saveError, setSaveError] = useState('');
 	const [pickers, setPickers] = useState<Pickers>({});
+	const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+
+	const edit = useCallback((name: string, value: TelegramSettingValue) => {
+		setDraft((d) => ({ ...d, [name]: value }));
+		setFieldErrors((e) => {
+			if (!(name in e)) return e;
+			const rest = { ...e };
+			delete rest[name];
+			return rest;
+		});
+	}, []);
 
 	const apply = useCallback((s: TelegramSettings) => {
 		setSettings(s);
@@ -303,9 +325,11 @@ export function SettingsTab({ gateway }: TelegramTabProps) {
 	const onSave = async () => {
 		setSaving(true);
 		setSaveError('');
+		setFieldErrors({});
 		const res = await updateTelegramSettings(gateway, dirty);
 		setSaving(false);
 		if (!res.ok) {
+			setFieldErrors(Object.fromEntries((res.fieldErrors ?? []).map((e) => [e.field, e.message])));
 			setSaveError(res.error);
 			toast.error(res.error);
 			return;
@@ -327,7 +351,8 @@ export function SettingsTab({ gateway }: TelegramTabProps) {
 							saved={saved}
 							unavailable={settings.unavailable}
 							disabled={saving}
-							onChange={(name, v) => setDraft((d) => ({ ...d, [name]: v }))}
+							fieldErrors={fieldErrors}
+							onChange={edit}
 						/>
 					);
 				}
@@ -349,7 +374,8 @@ export function SettingsTab({ gateway }: TelegramTabProps) {
 									pickers={pickers}
 									options={settings.options[f.name] ?? []}
 									disabled={saving}
-									onChange={(v) => setDraft((d) => ({ ...d, [f.name]: v }))}
+									error={fieldErrors[f.name]}
+									onChange={(v) => edit(f.name, v)}
 								/>
 							))}
 						</CardContent>
@@ -359,7 +385,7 @@ export function SettingsTab({ gateway }: TelegramTabProps) {
 			{saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
 			<div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-line bg-background py-3">
 				{dirtyCount > 0 && <span className="mr-auto text-xs text-steel">{dirtyCount === 1 ? '1 unsaved change' : `${dirtyCount} unsaved changes`}</span>}
-				<Button variant="outline" disabled={dirtyCount === 0 || saving} onClick={() => setDraft(saved)}>
+				<Button variant="outline" disabled={dirtyCount === 0 || saving} onClick={() => { setDraft(saved); setFieldErrors({}); }}>
 					Discard
 				</Button>
 				<Button disabled={dirtyCount === 0 || invalid || saving} onClick={onSave}>

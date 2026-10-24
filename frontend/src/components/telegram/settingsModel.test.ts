@@ -28,4 +28,19 @@ describe('settingsModel', () => {
 		expect(hasInvalidNumber({ ...saved, telegram_welcome_cooldown_seconds: -1 })).toBe(true);
 		expect(hasInvalidNumber({ ...saved, telegram_welcome_cooldown_seconds: 0 })).toBe(false);
 	});
+
+	it('has no control without a runtime reader and one meaning for the bot loop limits', () => {
+		expect(all.some((x) => x.name === 'telegram_default_template')).toBe(false);
+		expect(f('telegram_bot_rate_cap')).toMatchObject({ label: 'Bot messages per minute', min: 1, max: 1000 });
+		expect(f('telegram_bot_max_hops')).toMatchObject({ min: 1, max: 20 });
+		expect(f('telegram_bot_allowlist').help).toMatch(/Numeric bot IDs/);
+		expect(hasInvalidNumber({ telegram_bot_max_hops: 21 })).toBe(true);
+		expect(hasInvalidNumber({ telegram_bot_max_hops: 0 })).toBe(true);
+		expect(hasInvalidNumber({ telegram_bot_max_hops: 3 })).toBe(false);
+	});
+
+	it('shows inline feedback only while inline mode is on', () => {
+		expect(isVisible(f('telegram_inline_feedback_enabled'), { telegram_inline_enabled: false })).toBe(false);
+		expect(isVisible(f('telegram_inline_feedback_enabled'), { telegram_inline_enabled: true })).toBe(true);
+	});
 });
