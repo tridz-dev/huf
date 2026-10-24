@@ -484,3 +484,39 @@ class TestDeskHousekeepingCalls(unittest.TestCase):
 				marker, settings, "GET", "/api/method/frappe.desk.reportview.get_list", {"doctype": "User"}
 			)
 		)
+
+
+class TestReportListingExemption(unittest.TestCase):
+	def test_reference_report_listing_follows_the_report_check_only(self):
+		from unittest import mock
+
+		from huf.ai import telegram_web_access_enforce as enf
+
+		marker = {"gateway": "G", "tg_id": "1", "binding": "B", "allow_writes": False}
+		settings = {
+			"telegram_web_access_enabled": 1,
+			"is_enabled": 1,
+			"telegram_web_allowed_paths": "/app/query-report/X",
+		}
+		path = "/api/method/frappe.desk.reportview.get_list"
+		form = {"doctype": "Report", "filters": '{"reference_report": "X"}'}
+		with mock.patch.object(enf, "_report_ok", return_value=True) as ok:
+			self.assertTrue(enf.decide(marker, settings, "GET", path, form))
+			ok.assert_called_with("X")
+			self.assertTrue(
+				enf.decide(
+					marker,
+					settings,
+					"GET",
+					path,
+					{"doctype": "Report", "filters": [["Report", "reference_report", "=", "X"]]},
+				)
+			)
+		with mock.patch.object(enf, "_report_ok", return_value=False):
+			self.assertFalse(enf.decide(marker, settings, "GET", path, form))
+		# listing reports without naming a reference report, or any other blocked doctype, stays denied
+		with mock.patch.object(enf, "_report_ok", return_value=False):
+			self.assertFalse(
+				enf.decide(marker, settings, "GET", path, {"doctype": "Report", "filters": "{}"})
+			)
+			self.assertFalse(enf.decide(marker, settings, "GET", path, {"doctype": "User"}))

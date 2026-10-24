@@ -139,6 +139,7 @@ BLOCKED_DOCTYPES = frozenset(
 )
 REPORT_METHODS = frozenset({"frappe.desk.query_report.run", "frappe.desk.query_report.get_script"})
 GETDOC_METHOD = "frappe.desk.form.load.getdoc"
+REPORTVIEW_LIST_METHOD = "frappe.desk.reportview.get_list"
 UPLOAD_METHODS = frozenset({"upload_file", "frappe.handler.upload_file"})
 WRITE_METHODS = frozenset({"POST", "PUT", "DELETE", "PATCH"})
 READ_HTTP = frozenset({"GET", "HEAD"})
@@ -371,6 +372,26 @@ def _report_ok(name) -> bool:
 	return False
 
 
+def _listing_reference_report(form_dict):
+	"""The ``reference_report`` a ``Report`` list call filters on (dict, JSON or [[dt, field, op, value]] form)."""
+	import json
+
+	flt = form_dict.get("filters")
+	if isinstance(flt, str):
+		try:
+			flt = json.loads(flt)
+		except ValueError:
+			return None
+	if isinstance(flt, dict):
+		value = flt.get("reference_report")
+		return value if isinstance(value, str) else None
+	if isinstance(flt, list):
+		for row in flt:
+			if isinstance(row, (list, tuple)) and "reference_report" in row[:2] and len(row) >= 3:
+				return row[-1] if isinstance(row[-1], str) else None
+	return None
+
+
 def _extra_methods(settings) -> set:
 	return {
 		m.strip() for m in (settings.get("telegram_web_extra_read_methods") or "").splitlines() if m.strip()
@@ -438,6 +459,10 @@ def decide(marker: dict, settings: dict, method: str, path: str, form_dict) -> b
 		if cmd == GETDOC_METHOD and _doctypes_in(form_dict) == {"report"}:
 			# the report page loads its Report doc (desk query-report view); gate it like run/get_script
 			if not _report_ok(form_dict.get("name")):
+				return False
+		elif cmd == REPORTVIEW_LIST_METHOD and dts == {"report"}:
+			# the report page asks which custom reports derive from the open report; only for an allowed one
+			if not _report_ok(_listing_reference_report(form_dict)):
 				return False
 		elif dts & _BLOCKED_DT_LOWER:
 			return False
