@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createSolution, getIntents, getNumberSummary, goLive, SolutionsApiError } from '@/services/solutionsApi';
 import { getGateways, type GatewayDoc } from '@/services/gatewayApi';
-import { getAgents } from '@/services/agentApi';
-import { getFlowDefinitions } from '@/services/flowApi';
+import { loadTargets, type TargetOption } from '../targets';
 import { errorText, listTemplates, type WhatsAppTemplate } from '@/services/whatsappApi';
 import type { Intent, NumberSummary, SolutionSummary } from '@/types/solutions';
 import {
@@ -19,11 +18,7 @@ import {
   type WizardState,
 } from './wizardModel';
 
-export interface TargetOption {
-  type: 'Agent' | 'Flow';
-  name: string;
-  label: string;
-}
+export type { TargetOption };
 
 export interface WizardParams {
   purpose?: string | null;
@@ -49,28 +44,16 @@ export function useWizardState(params: WizardParams = {}) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [ints, gws, agents, flows] = await Promise.all([
+      const [ints, gws, targetList] = await Promise.all([
         getIntents().catch(() => [] as Intent[]),
         getGateways().catch(() => [] as GatewayDoc[]),
-        getAgents().catch(() => []),
-        getFlowDefinitions().catch(() => []),
+        loadTargets(),
       ]);
       if (cancelled) return;
       const wa = gws.filter((g) => g.provider === 'WhatsApp');
       setIntents(ints);
       setGateways(wa);
-      const agentList = (Array.isArray(agents) ? agents : (agents as { agents?: unknown[] }).agents ?? []) as Array<{
-        name: string;
-        agent_name?: string;
-      }>;
-      setTargets([
-        ...agentList.map((a) => ({ type: 'Agent' as const, name: a.name, label: a.agent_name || a.name })),
-        ...(flows as Array<{ name: string; flow_name?: string }>).map((f) => ({
-          type: 'Flow' as const,
-          name: f.name,
-          label: f.flow_name || f.name,
-        })),
-      ]);
+      setTargets(targetList);
       setLoaded(true);
       wa.forEach((g) => {
         getNumberSummary(g.name)
@@ -139,7 +122,7 @@ export function useWizardState(params: WizardParams = {}) {
         }
         return next;
       }),
-    setExisting: (t: ExistingTarget) => patch({ existing: t }),
+    setExisting: (t: ExistingTarget | null) => patch({ existing: t }),
     setGateway: (gateway: string) => patch({ gateway, templates: [], draftTemplate: false }),
     addKeyword: (raw: string) => setState((s) => ({ ...s, keywords: addKeyword(s.keywords, raw) })),
     removeKeyword: (k: string) => setState((s) => ({ ...s, keywords: s.keywords.filter((x) => x !== k) })),
@@ -160,13 +143,13 @@ export function useWizardState(params: WizardParams = {}) {
   const payload = useMemo(() => buildPayload(state, intent), [state, intent]);
   const draft = useMemo(() => buildDraft(state, intent), [state, intent]);
 
-  /** createSolution, then goLive unless test mode. Returns the created solution or null on error. */
+  /** createSolution, then goLive unless test mode or no target. Returns the created solution or null on error. */
   const submit = useCallback(async (): Promise<SolutionSummary | null> => {
     setSubmitting(true);
     setError('');
     try {
       const created = await createSolution(payload);
-      if (!payload.test_mode) await goLive(created.name);
+      if (!payload.test_mode && payload.existing_target) await goLive(created.name);
       return created;
     } catch (e) {
       if (e instanceof SolutionsApiError) setError(describeError(e.code, e.message));

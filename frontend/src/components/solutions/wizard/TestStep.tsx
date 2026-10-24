@@ -25,6 +25,11 @@ export function TestStep({ wiz }: { wiz: WizardApi }) {
         draft={draft}
         solutionLabels={{ [draft.title]: draft.title }}
       />
+      {!state.existing && (
+        <p data-testid="no-target-note" className="rounded-md border border-line bg-paper-deep p-3 text-sm">
+          No agent or flow is chosen: it will be saved as paused until you choose one.
+        </p>
+      )}
       <label className="flex cursor-pointer items-start gap-2 text-sm">
         <input
           type="checkbox"

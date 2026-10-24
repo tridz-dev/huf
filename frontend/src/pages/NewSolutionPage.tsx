@@ -26,12 +26,15 @@ export default function NewSolutionPage() {
   const finish = async () => {
     const created = await wiz.submit();
     if (!created) return;
-    toast.success(
-      state.testMode
-        ? `${created.title || state.name.trim()} saved in test mode`
-        : `${created.title || state.name.trim()} is live`,
-    );
-    navigate(`/solutions/${encodeURIComponent(created.name)}`);
+    const title = created.title || state.name.trim();
+    const path = `/solutions/${encodeURIComponent(created.name)}`;
+    const message = !state.existing
+      ? `${title} saved as paused. Choose what answers to take it live.`
+      : state.testMode
+        ? `${title} saved in test mode`
+        : `${title} is live`;
+    toast.success(message, { action: { label: 'Open', onClick: () => navigate(path) } });
+    navigate(path);
   };
 
   return (

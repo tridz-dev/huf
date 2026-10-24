@@ -58,7 +58,6 @@ export function applyIntent(state: WizardState, intent: Intent): WizardState {
     ...state,
     mode: 'intent',
     intentId: intent.id,
-    existing: null,
     name: state.nameEdited ? state.name : intent.sample_name,
     keywords: [...intent.keywords],
     ref: intent.ref || '',
@@ -74,7 +73,6 @@ export function applyMode(state: WizardState, mode: 'existing' | 'blank'): Wizar
     ...state,
     mode,
     intentId: null,
-    existing: mode === 'existing' ? state.existing : null,
     name: state.nameEdited ? state.name : '',
     keywords: [],
     ref: '',
@@ -124,7 +122,7 @@ export function buildPayload(state: WizardState, intent: Intent | undefined): Cr
     test_mode: state.testMode,
   };
   if (state.mode === 'intent' && intent) payload.purpose = intent.id as SolutionPurpose;
-  if (state.mode === 'existing' && state.existing) payload.existing_target = state.existing;
+  if (state.existing) payload.existing_target = state.existing;
   if (state.draftTemplate) {
     payload.draft_template = {
       name: draftTemplateName(state.name),
