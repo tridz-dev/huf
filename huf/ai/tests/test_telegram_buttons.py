@@ -322,3 +322,22 @@ class TestEdit(Base):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class TestNativeUrlShapes(unittest.TestCase):
+	def test_web_app_and_login_url_accept_the_telegram_native_dict_shape(self):
+		from huf.ai.gateway_adapters import telegram_buttons as tb
+
+		for kind in ("web_app", "login_url"):
+			for value in ("https://x.example/p?a=1", {"url": "https://x.example/p?a=1"}):
+				spec, errors = tb.validate({"rows": [[{"text": "Open", kind: value}]]})
+				self.assertEqual(errors, [], (kind, value))
+				self.assertEqual(spec["rows"][0][0][kind], "https://x.example/p?a=1")
+
+	def test_native_shape_without_https_url_is_still_refused(self):
+		from huf.ai.gateway_adapters import telegram_buttons as tb
+
+		for bad in ({"url": "http://x.example"}, {"url": ""}, {"nope": 1}, {}):
+			spec, errors = tb.validate({"rows": [[{"text": "Open", "web_app": bad}]]})
+			self.assertIsNone(spec)
+			self.assertTrue(errors)

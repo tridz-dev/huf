@@ -62,7 +62,8 @@ MSG_USED = "Already used."
 AGENT_INSTRUCTIONS = (
 	"On Telegram you can attach buttons by adding a fenced block ```telegram-buttons with JSON: "
 	'{"rows": [[{"text": "Yes", "callback": "yes"}, {"text": "Site", "url": "https://..."}]], '
-	'"edit": false, "once": true}. Button kinds: callback (id <= 46 bytes), url, web_app, switch_inline, '
+	'"edit": false, "once": true}. Button kinds: callback (id <= 46 bytes), url, web_app (https url, or '
+	'{"url": "https://..."}), switch_inline, '
 	"copy_text, login_url. Alternatives: reply_keyboard {rows, one_time, resize, placeholder} or "
 	"remove_keyboard true. A press arrives as '[button: <text>]'. Max 8 buttons per row, 10 rows."
 )
@@ -102,6 +103,8 @@ def _button(raw: Any, errors: list[str]) -> dict | None:
 		errors.append(f"button {raw['text'][:20]!r} needs exactly one of {', '.join(_KINDS)}")
 		return None
 	kind, value = kinds[0], raw[kinds[0]]
+	if kind in ("web_app", "login_url") and isinstance(value, dict):
+		value = value.get("url")  # Telegram's own shape ``{"url": "https://..."}``; models write it naturally
 	text = raw["text"].strip()[:MAX_TEXT]
 	ok = {
 		"callback": _id_ok(value),
