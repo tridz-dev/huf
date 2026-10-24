@@ -38,8 +38,17 @@ class TestSolution(IntegrationTestCase):
             make_solution(primary_target_type="Flow")
 
     def test_blank_target_clears_links(self):
-        doc = make_solution(primary_agent="x", primary_flow="y")
+        doc = frappe.get_doc({"doctype": "Solution", "title": f"Sol {_hash()}",
+                              "primary_agent": "x", "primary_flow": "y"})
+        doc.validate()
         self.assertFalse(doc.primary_agent)
+        self.assertFalse(doc.primary_flow)
+
+    def test_target_type_clears_other_link(self):
+        doc = frappe.get_doc({"doctype": "Solution", "title": f"Sol {_hash()}",
+                              "primary_target_type": "Agent", "primary_agent": "x", "primary_flow": "y"})
+        doc.validate()
+        self.assertEqual(doc.primary_agent, "x")
         self.assertFalse(doc.primary_flow)
 
     def test_unique_title_and_strip(self):
