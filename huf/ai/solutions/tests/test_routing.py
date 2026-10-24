@@ -204,5 +204,69 @@ class TestRouting(unittest.TestCase):
 		self.assertEqual(before, RULES)
 
 
+def S2(title, ptype=None, agent=None, flow=None):
+	return {**S(title), "primary_target_type": ptype, "primary_agent": agent, "primary_flow": flow}
+
+
+class TestTriageOwner(unittest.TestCase):
+	"""A solution that owns the Triage entry must still answer its own pinned chats."""
+
+	def go(self, sols, rules, **kw):
+		return go(solutions=sols, rules=rules, **kw)
+
+	def owner_rules(self):
+		return [
+			R("tri", 1, "Catch-all", [], "cat", agent=None, target_type="Triage"),
+			R("kw", 2, "Keyword", ["menu"], "cat", agent=None, target_type="Flow", flow="fl-cat"),
+		]
+
+	def test_pin_routes_to_message_rule_not_triage(self):
+		rules = [
+			R("tri", 1, "Catch-all", [], "cat", agent=None, target_type="Triage"),
+			R("kw", 2, "Keyword", ["menu"], "cat", agent="ag-cat"),
+		]
+		d = self.go({"cat": S2("Catering")}, rules, text="hello", pin=pin("cat"))
+		self.assertEqual((d["reason"], d["binding"], d["target_type"], d["agent"]), ("pin", "kw", "Agent", "ag-cat"))
+
+	def test_pin_falls_back_to_primary_when_only_triage_rule(self):
+		rules = [R("tri", 1, "Catch-all", [], "cat", agent=None, target_type="Triage")]
+		d = self.go({"cat": S2("Catering", "Flow", flow="fl-p")}, rules, text="hello", pin=pin("cat"))
+		self.assertEqual((d["target_type"], d["flow"], d["binding"]), ("Flow", "fl-p", None))
+		self.assertIn("Answered by Catering's flow", texts(d))
+
+	def test_triage_answer_and_payload_use_primary(self):
+		rules = [
+			R("tri", 1, "Catch-all", [], "cat", agent=None, target_type="Triage"),
+			R("kw0", 2, "Keyword", ["zz"], "cat", agent=None),
+			R("kw", 3, "Keyword", ["x"], "ord", agent="ag-o"),
+		]
+		sols = {"cat": S2("Catering", "Agent", agent="ag-p"), "ord": S2("Orders")}
+		d = self.go(sols, rules, text="1", triage_pending_until=NOW + timedelta(minutes=5))
+		self.assertEqual((d["solution"], d["reason"], d["agent"], d["binding"]), ("cat", "triage_answer", "ag-p", None))
+		d = self.go(sols, rules, button_payload="sol:cat|x")
+		self.assertEqual((d["solution"], d["agent"]), ("cat", "ag-p"))
+
+	def test_ad_tag_rule_preferred_over_primary_never_triage(self):
+		rules = [
+			R("tri", 1, "Catch-all", [], "cat", agent=None, target_type="Triage"),
+			R("ad", 2, "Ad or link tag", ["t"], "cat", agent="ag-ad"),
+		]
+		d = self.go({"cat": S2("Catering", "Agent", agent="ag-p")}, rules, text="hi", pin=pin("cat"))
+		self.assertEqual((d["binding"], d["agent"]), ("ad", "ag-ad"))
+
+	def test_no_usable_rule_no_primary_is_unanswerable_with_trace(self):
+		rules = [R("tri", 1, "Catch-all", [], "cat", agent=None, target_type="Triage")]
+		d = self.go({"cat": S2("Catering")}, rules, text="hello", pin=pin("cat"))
+		self.assertIsNone(d["binding"])
+		self.assertFalse(d["agent"] or d["flow"])
+		self.assertTrue(any("no rule or primary" in t for t in texts(d)))
+
+	def test_brand_in_menu(self):
+		rules = [R("tri", 1, "Catch-all", [], "cat", agent=None, target_type="Triage"),
+			R("kw", 2, "Keyword", ["x"], "ord", agent="ag-o")]
+		d = self.go({"cat": S2("Catering", "Agent", agent="p"), "ord": S2("Orders")}, rules, text="zzz", brand="Harbor")
+		self.assertTrue(d["reply_text"].startswith("Hi, this is Harbor. Reply:"))
+
+
 if __name__ == "__main__":
 	unittest.main()

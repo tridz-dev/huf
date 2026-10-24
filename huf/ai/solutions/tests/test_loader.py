@@ -41,13 +41,22 @@ class TestLoader(IntegrationTestCase):
 		paused = make_solution(status="Paused")
 		test = make_solution(test_mode=1)
 		st = loader.load_solution_states([live.name, paused.name, test.name])
-		self.assertEqual(st[live.name], {"status": "Live", "test_mode": False, "title": "Live one"})
+		self.assertEqual(st[live.name], {
+			"status": "Live", "test_mode": False, "title": "Live one",
+			"primary_target_type": None, "primary_agent": None, "primary_flow": None,
+		})
 		self.assertEqual(st[paused.name]["status"], "Paused")
 		self.assertTrue(st[test.name]["test_mode"])
 		self.assertEqual(st[test.name]["status"], "Paused")
 		self.assertEqual(set(loader.load_solution_states([live.name])), {live.name})
 		self.assertEqual(loader.load_solution_states([]), {})
 		self.assertTrue({live.name, paused.name} <= set(loader.load_solution_states()))
+
+	def test_primary_target_and_brand(self):
+		sol = make_solution(primary_target_type="Agent", primary_agent=self.agent)
+		st = loader.load_solution_states([sol.name])[sol.name]
+		self.assertEqual((st["primary_target_type"], st["primary_agent"]), ("Agent", self.agent))
+		self.assertEqual(loader.gateway_brand(self.gw), frappe.db.get_value("Gateway", self.gw, "gateway_name"))
 
 	def test_gateway_settings_defaults(self):
 		s = loader.load_gateway_settings(self.gw)

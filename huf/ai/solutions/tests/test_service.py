@@ -104,3 +104,36 @@ class TestRouteForEvent(IntegrationTestCase):
 		self.assertEqual(a.get_pin(gw, "c9", now=self.now)["set_by"], "triage")
 		self.assertIsNone(a.get_triage_pending(gw, "c9", now=self.now))
 		self.assertEqual(frappe.db.count("Conversation Assignment", {"gateway": gw}), 1)
+
+
+class TestTriageOwner(IntegrationTestCase):
+	def setUp(self):
+		frappe.set_user("Administrator")
+		self.agent = make_agent()
+		self.gw = make_gateway().name
+		self.cat = make_solution(title="Catering desk", primary_target_type="Agent", primary_agent=self.agent).name
+		self.ord = make_solution(title="Orders desk").name
+		make_binding(self.gw, None, priority=1, match_type="Catch-all", target_type="Triage", solution=self.cat)
+		make_binding(self.gw, self.agent, priority=2, match_type="Keyword", match_value="cater", solution=self.cat)
+		make_binding(self.gw, self.agent, priority=3, match_type="Keyword", match_value="order", solution=self.ord)
+		self.now = now_datetime()
+
+	def tearDown(self):
+		frappe.db.rollback()
+
+	def test_menu_uses_gateway_name(self):
+		d = route_for_event(self.gw, "c9", "hello", now=self.now)
+		self.assertEqual(d["reason"], "triage_prompt")
+		self.assertTrue(d["reply_text"].startswith(f"Hi, this is {self.gw}. Reply:"))
+
+	def test_triage_answer_routes_owner_to_agent(self):
+		route_for_event(self.gw, "c9", "hello", now=self.now, commit_pin=True)
+		d = route_for_event(self.gw, "c9", "1", now=self.now, commit_pin=True)
+		self.assertEqual((d["solution"], d["reason"]), (self.cat, "triage_answer"))
+		self.assertEqual((d["target_type"], d["agent"]), ("Agent", self.agent))
+		self.assertNotEqual(frappe.db.get_value("Gateway Binding", d["binding"], "target_type"), "Triage")
+
+	def test_pinned_owner_routes_next_plain_message(self):
+		a.set_pin(self.gw, "c9", self.cat, "triage", ttl_hours=24, now=self.now)
+		d = route_for_event(self.gw, "c9", "thanks", now=self.now)
+		self.assertEqual((d["reason"], d["solution"], d["agent"]), ("pin", self.cat, self.agent))

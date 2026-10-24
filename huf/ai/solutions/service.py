@@ -68,6 +68,7 @@ def route_for_event(
 		gateway_default=settings["default"],
 		include_inactive=include_inactive,
 		pin_ttl_hours=settings["pin_ttl_hours"],
+		brand=loader.gateway_brand(gateway),
 	)
 
 	if commit_pin:

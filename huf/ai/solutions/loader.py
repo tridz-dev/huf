@@ -43,10 +43,27 @@ def load_solution_states(names=None):
 		if not names:
 			return {}
 		filters["name"] = ["in", names]
-	rows = frappe.get_all("Solution", filters=filters, fields=["name", "status", "test_mode", "title"])
+	rows = frappe.get_all("Solution", filters=filters, fields=[
+			"name", "status", "test_mode", "title",
+			"primary_target_type", "primary_agent", "primary_flow",
+		],
+	)
 	return {
-		r.name: {"status": r.status, "test_mode": bool(r.test_mode), "title": r.title} for r in rows
+		r.name: {
+			"status": r.status,
+			"test_mode": bool(r.test_mode),
+			"title": r.title,
+			"primary_target_type": r.primary_target_type,
+			"primary_agent": r.primary_agent,
+			"primary_flow": r.primary_flow,
+		}
+		for r in rows
 	}
+
+
+def gateway_brand(gateway):
+	"""Display name used in the triage menu."""
+	return frappe.db.get_value("Gateway", gateway, "gateway_name") or "us"
 
 
 def load_gateway_settings(gateway):
