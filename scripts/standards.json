@@ -1,0 +1,8 @@
+[
+  {
+    "name": "file-size",
+    "script": "scripts/check_file_size.py",
+    "args": [],
+    "paths": ["frontend/src/**", "huf/**/*.py", "scripts/baselines/file_size.json"]
+  }
+]
