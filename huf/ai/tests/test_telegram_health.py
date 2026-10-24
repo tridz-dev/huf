@@ -8,7 +8,13 @@ from __future__ import annotations
 import unittest
 
 from huf.ai.gateway_adapters.telegram_client import ALLOWED_UPDATES, TelegramBotClient
-from huf.ai.gateway_adapters.telegram_health import check_bot, check_webhook, readiness
+from huf.ai.gateway_adapters.telegram_health import (
+	capability_checks,
+	check_bot,
+	check_menu_button,
+	check_webhook,
+	readiness,
+)
 from huf.ai.tests.telegram_fakes import TOKEN, FakeBotApi
 
 EXPECTED_URL = "https://example.test/api/method/huf.ai.gateway_webhook.telegram"
@@ -127,12 +133,16 @@ class TestTelegramHealth(unittest.TestCase):
 		)
 		by_id = {c["id"]: c for c in readiness(self.client, EXPECTED_URL)}
 		self.assertFalse(by_id["webhook_url"]["ok"])
-		self.assertIn("webhook setup", by_id["webhook_url"]["hint"])
+		self.assertIn("Connect to Telegram", by_id["webhook_url"]["hint"])
 		self.assertFalse(by_id["webhook_error"]["ok"])
 		self.assertIn("Connection timed out", by_id["webhook_error"]["hint"])
 		self.assertFalse(by_id["webhook_pending"]["ok"])
 		self.assertIn("500", by_id["webhook_pending"]["hint"])
 		self.assertFalse(by_id["webhook_allowed_updates"]["ok"])
+		self.assertIn("chat_join_request", by_id["webhook_allowed_updates"]["hint"])
+		self.assertNotIn("types: message,", by_id["webhook_allowed_updates"]["hint"])
+		self.assertIn("Last error", by_id["webhook_pending"]["hint"])
+		self.assertIn("Connection timed out", by_id["webhook_pending"]["hint"])
 		self.assertTrue(by_id["bot_reachable"]["ok"])
 
 	def test_readiness_reports_getme_failure_without_raising(self):
@@ -170,3 +180,86 @@ class TestTelegramHealth(unittest.TestCase):
 		rendered = repr(readiness(self.client, EXPECTED_URL))
 		self.assertNotIn(TOKEN, rendered)
 		self.assertNotIn(TOKEN.split(":", 1)[1], rendered)
+
+
+ALL_FEATURES = {k: True for k in ("inline", "groups", "group_open", "business", "guest", "join_requests")}
+NO_FEATURES = {k: False for k in ALL_FEATURES}
+# row id -> (bot flag, feature key)
+ROWS = {
+	"inline_mode": ("supports_inline_queries", "inline"),
+	"group_privacy": ("can_read_all_group_messages", "group_open"),
+	"join_groups": ("can_join_groups", "groups"),
+	"business_mode": ("can_connect_to_business", "business"),
+	"guest_mode": ("supports_guest_queries", "guest"),
+	"join_requests": ("supports_join_request_queries", "join_requests"),
+}
+
+
+class TestCapabilityChecks(unittest.TestCase):
+	def test_flag_by_feature_matrix(self):
+		for row_id, (flag, feature) in ROWS.items():
+			for flag_on in (True, False):
+				for used in (True, False):
+					with self.subTest(row=row_id, flag=flag_on, used=used):
+						bot = {flag: flag_on}
+						features = {**NO_FEATURES, feature: used}
+						row = {r["id"]: r for r in capability_checks(bot, features)}[row_id]
+						want = "off" if not used else ("pass" if flag_on else "warn")
+						self.assertEqual(row["state"], want)
+						self.assertEqual(row["level"], "warn")
+						self.assertEqual(row["ok"], want != "warn")
+						self.assertEqual(bool(row["hint"]), want == "warn")
+
+	def test_hints_name_the_exact_fix(self):
+		rows = {r["id"]: r for r in capability_checks({}, ALL_FEATURES)}
+		self.assertIn("/setinline", rows["inline_mode"]["hint"])
+		self.assertIn("/setprivacy", rows["group_privacy"]["hint"])
+		self.assertIn("Disable", rows["group_privacy"]["hint"])
+		self.assertIn("/setjoingroups", rows["join_groups"]["hint"])
+		self.assertIn("Business Mode", rows["business_mode"]["hint"])
+		self.assertIn("Premium", rows["business_mode"]["hint"])
+
+	def test_no_rows_without_readable_bot(self):
+		self.assertEqual(capability_checks(None, ALL_FEATURES), [])
+
+	def test_mini_app_states(self):
+		def state(bot, menu, host="huf.example.com"):
+			return {r["id"]: r for r in capability_checks(bot, NO_FEATURES, menu, host)}["mini_app"]
+
+		self.assertEqual(state({}, {"type": "commands", "url": ""})["state"], "off")
+		self.assertEqual(state({}, None)["state"], "off")
+		self.assertEqual(
+			state({}, {"type": "web_app", "url": "https://huf.example.com/huf"})["state"], "pass"
+		)
+		bad = state({}, {"type": "web_app", "url": "https://other.example.com/x"})
+		self.assertEqual(bad["state"], "warn")
+		self.assertIn("other.example.com", bad["hint"])
+		self.assertEqual(state({"has_main_web_app": True}, None)["state"], "pass")
+
+	def test_check_bot_collects_new_flags(self):
+		api = FakeBotApi()
+		client = TelegramBotClient(
+			TOKEN, http_post=api.http_post, http_get=api.http_get, sleep=lambda s: None
+		)
+		api.queue(
+			"getMe",
+			_me(supports_inline_queries=True, can_read_all_group_messages=True, has_main_web_app=True),
+		)
+		info = check_bot(client)
+		self.assertTrue(info["supports_inline_queries"])
+		self.assertTrue(info["can_read_all_group_messages"])
+		self.assertTrue(info["has_main_web_app"])
+
+	def test_check_menu_button(self):
+		api = FakeBotApi()
+		client = TelegramBotClient(
+			TOKEN, http_post=api.http_post, http_get=api.http_get, sleep=lambda s: None
+		)
+		api.queue(
+			"getChatMenuButton",
+			{
+				"ok": True,
+				"result": {"type": "web_app", "text": "Open", "web_app": {"url": "https://a.test/x"}},
+			},
+		)
+		self.assertEqual(check_menu_button(client), {"type": "web_app", "url": "https://a.test/x"})

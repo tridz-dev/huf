@@ -12,10 +12,15 @@ export interface TelegramChecklistItem {
 	state: 'done' | 'todo' | 'blocked';
 }
 
+/** pass: fine. fail: breaks the connection (moves health). warn: an optional feature needs a fix. off: not in use. */
+export type TelegramCheckState = 'pass' | 'warn' | 'fail' | 'off';
+
 export interface TelegramCheck {
 	id: string;
 	label: string;
 	ok: boolean;
+	state: TelegramCheckState;
+	/** The exact fix; empty on pass and off rows. */
 	hint: string;
 }
 

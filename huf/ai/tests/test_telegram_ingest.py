@@ -54,7 +54,6 @@ class TestParsing(unittest.TestCase):
 			"chat_member",
 			"my_chat_member",
 			"message_reaction",
-			"message_reaction_count",
 			"channel_post",
 			"business_connection",
 			"business_message",
@@ -214,3 +213,37 @@ class TestFirstDeliveryFailOpenWarns(unittest.TestCase):
 			self.assertTrue(ing._first_delivery("GW", 1))
 			self.assertTrue(ing._first_delivery("GW", 2))
 		self.assertEqual(lg.return_value.warning.call_count, 1)
+
+
+class TestPoisonUpdate(unittest.TestCase):
+	"""A handler that always raises is retried a bounded number of times, then acked and logged."""
+
+	def setUp(self):
+		self.cache = {}
+		self.patches = [
+			mock.patch.object(ing, "_count_failure", side_effect=self._count),
+			mock.patch.object(ing, "_clear_failures", side_effect=lambda g, u: self.cache.pop(u, None)),
+			mock.patch.object(ing, "frappe"),
+		]
+		self.mocks = [p.start() for p in self.patches]
+		self.log_error = self.mocks[2].log_error
+		self.addCleanup(lambda: [p.stop() for p in self.patches])
+
+	def _count(self, gateway_name, update_id):
+		self.cache[update_id] = self.cache.get(update_id, 0) + 1
+		return self.cache[update_id]
+
+	def _run(self):
+		with mock.patch.object(ing, "_dispatch", side_effect=RuntimeError("boom")):
+			return ing.handle_update(GW, adapter(), req(load_fixture("message_text")))
+
+	def test_raises_until_limit_then_acks_and_logs(self):
+		for _ in range(ing.MAX_UPDATE_FAILURES - 1):
+			with self.assertRaises(RuntimeError):
+				self._run()
+		self.log_error.assert_not_called()
+		result = self._run()
+		self.assertTrue(result["success"])
+		self.assertIn("dropped", result["note"])
+		self.log_error.assert_called_once()
+		self.assertEqual(self.cache, {})  # counter cleared once dropped

@@ -7,9 +7,9 @@ import type { TelegramHealth } from '@/services/telegramApi';
 import { HealthBanner, typingLine } from './HealthBanner';
 
 const PASS = [
-	{ id: 'bot_reachable', label: 'x', ok: true, hint: '' },
-	{ id: 'webhook_url', label: 'x', ok: true, hint: '' },
-	{ id: 'webhook_error', label: 'x', ok: true, hint: '' },
+	{ id: 'bot_reachable', label: 'x', ok: true, state: 'pass' as const, hint: '' },
+	{ id: 'webhook_url', label: 'x', ok: true, state: 'pass' as const, hint: '' },
+	{ id: 'webhook_error', label: 'x', ok: true, state: 'pass' as const, hint: '' },
 ];
 
 function h(over: Partial<TelegramHealth> = {}): TelegramHealth {
@@ -34,7 +34,7 @@ describe('Telegram HealthBanner', () => {
 	});
 
 	it('degraded: alert with plain wording, never raw API text', () => {
-		const checks = [...PASS.slice(0, 1), { id: 'webhook_url', label: 'x', ok: false, hint: 'getWebhookInfo failed' }];
+		const checks = [...PASS.slice(0, 1), { id: 'webhook_url', label: 'x', ok: false, state: 'fail' as const, hint: 'getWebhookInfo failed' }];
 		render(<HealthBanner health={h({ health: 'degraded', checks })} onCheck={vi.fn()} />);
 		const alert = screen.getByRole('alert');
 		expect(alert).toHaveTextContent('Telegram is not sending messages to this site yet.');
@@ -42,7 +42,7 @@ describe('Telegram HealthBanner', () => {
 	});
 
 	it('blocked: rejected token pill', () => {
-		const checks = [{ id: 'bot_reachable', label: 'x', ok: false, hint: '' }];
+		const checks = [{ id: 'bot_reachable', label: 'x', ok: false, state: 'fail' as const, hint: '' }];
 		render(<HealthBanner health={h({ health: 'blocked', checks })} onCheck={vi.fn()} />);
 		expect(screen.getByRole('alert')).toHaveTextContent('Telegram accepts the bot token.');
 		expect(screen.getByText('Token rejected')).toBeInTheDocument();

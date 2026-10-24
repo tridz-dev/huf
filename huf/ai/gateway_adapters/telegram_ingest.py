@@ -169,14 +169,61 @@ def register_update_handler(key: str, fn) -> None:
 	_UPDATE_HANDLERS[key] = fn
 
 
-def handle_update(gateway, adapter, request) -> dict | None:
-	from huf.ai.gateway_service import ingest_gateway_event
-	from huf.ai.gateway_webhook import _event_context, touch_last_event
+# A handler that always raises would make Telegram redeliver the same update indefinitely. After this many
+# failures of one update id it is acked (with an Error Log entry) so the queue drains.
+MAX_UPDATE_FAILURES = 3
+_FAILURE_TTL = 86400
 
+
+def _failure_key(gateway_name: str, update_id: Any) -> str:
+	return f"huf_tg_fail:{gateway_name}:{update_id}"
+
+
+def _count_failure(gateway_name: str, update_id: Any) -> int:
+	"""Failures seen for this update id including this one (1 when the cache is unavailable: retry as before)."""
+	try:
+		cache = frappe.cache()
+		key = _failure_key(gateway_name, update_id)
+		count = int(cache.get_value(key) or 0) + 1
+		cache.set_value(key, count, expires_in_sec=_FAILURE_TTL)
+		return count
+	except Exception:
+		return 1
+
+
+def _clear_failures(gateway_name: str, update_id: Any) -> None:
+	try:
+		frappe.cache().delete_value(_failure_key(gateway_name, update_id))
+	except Exception:
+		pass
+
+
+def handle_update(gateway, adapter, request) -> dict | None:
 	try:
 		parsed = adapter.parse_update(request)
 	except ValueError:
 		return None
+	try:
+		return _dispatch(gateway, adapter, request, parsed)
+	except Exception:
+		if not parsed.update_id:
+			raise
+		count = _count_failure(gateway.name, parsed.update_id)
+		if count < MAX_UPDATE_FAILURES:
+			raise  # non-2xx: Telegram redelivers
+		frappe.db.rollback()  # acking must not commit the failed handler's partial writes
+		_clear_failures(gateway.name, parsed.update_id)
+		frappe.log_error(
+			title=f"Telegram update {parsed.update_id} dropped after {count} failures ({gateway.name})",
+			message=frappe.get_traceback(),
+		)
+		return _ack(parsed.kind, f"dropped after {count} failed attempts")
+
+
+def _dispatch(gateway, adapter, request, parsed: TelegramUpdate) -> dict | None:
+	from huf.ai.gateway_service import ingest_gateway_event
+	from huf.ai.gateway_webhook import _event_context, touch_last_event
+
 	category = classify(parsed)
 	if parsed.bot_blocked or parsed.bot_unblocked:
 		return _handle_block_change(gateway, parsed)
