@@ -1,44 +1,4 @@
 {
   "_comment": "Known remaining form-geometry failures. Entries may only be removed (MAX_ALLOWLIST in form-geometry.spec.ts is the ceiling; a stale entry fails the test).",
-  "entries": [
-    {
-      "route": "gw-edit-modal",
-      "viewports": [
-        1440,
-        1024
-      ],
-      "signature": "input:Pairing code lifetime (minutes) | toggle:Require @mention in rooms",
-      "rules": [
-        "top-offset"
-      ],
-      "owner": "Gateways/ChannelTab owner (WP4b/WP5 follow-up) plus owner decision on switch-vs-input rule",
-      "note": "Pairing-lifetime input and the mention switch tops differ by 2-4px; the switch is a 20px control centred in its card, so either wrap it in FieldAction or relax the rule for switches."
-    },
-    {
-      "route": "tg-channel",
-      "viewports": [
-        1440,
-        1024
-      ],
-      "signature": "input:Pairing code lifetime (minutes) | toggle:Require @mention in rooms",
-      "rules": [
-        "top-offset"
-      ],
-      "owner": "Gateways/ChannelTab owner (WP4b/WP5 follow-up) plus owner decision on switch-vs-input rule",
-      "note": "Pairing-lifetime input and the mention switch tops differ by 2-4px; the switch is a 20px control centred in its card, so either wrap it in FieldAction or relax the rule for switches."
-    },
-    {
-      "route": "wa-gw-channel",
-      "viewports": [
-        1440,
-        1024
-      ],
-      "signature": "input:Pairing code lifetime (minutes) | toggle:Require @mention in rooms",
-      "rules": [
-        "top-offset"
-      ],
-      "owner": "Gateways/ChannelTab owner (WP4b/WP5 follow-up) plus owner decision on switch-vs-input rule",
-      "note": "Pairing-lifetime input and the mention switch tops differ by 2-4px; the switch is a 20px control centred in its card, so either wrap it in FieldAction or relax the rule for switches."
-    }
-  ]
+  "entries": []
 }

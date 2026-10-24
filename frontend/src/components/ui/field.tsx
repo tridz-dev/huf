@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 export const FIELD_LABEL_SLOT =
   'flex h-[var(--field-label-h)] items-center mb-[var(--field-gap)]';
 export const FIELD_NOTE =
-  'min-h-[var(--field-note-h)] mt-[var(--field-gap)] text-micro';
+  'min-h-[var(--field-note-h)] mt-[var(--field-gap)] text-micro leading-4';
 
 export interface FieldControlProps {
   id: string;
