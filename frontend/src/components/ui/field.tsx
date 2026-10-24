@@ -78,7 +78,9 @@ export function Field({
   } else if (React.isValidElement<Record<string, unknown>>(children) && typeof children.type !== 'symbol') {
     const p = children.props;
     const inject: Record<string, unknown> = {};
-    if (p.id === undefined) inject.id = controlProps.id;
+    // Only auto-wire the id when the caller did not supply one; with an
+    // explicit id the caller owns which element carries it.
+    if (id === undefined && p.id === undefined) inject.id = controlProps.id;
     if (p['aria-describedby'] === undefined && controlProps['aria-describedby']) {
       inject['aria-describedby'] = controlProps['aria-describedby'];
     }
