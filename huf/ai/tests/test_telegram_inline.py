@@ -233,6 +233,18 @@ class TestChosenEnqueue(ChosenBase):
 		res, call = self.run_query(gateway=g)
 		self.assertIsNone(call)
 
+	def test_inline_off_answers_nothing_and_default_is_on(self):
+		for value in (0, "0"):
+			g = gw()
+			g.telegram_inline_enabled = value
+			res, call = self.run_query(gateway=g)
+			self.assertEqual(res, {"success": True, "ignored": "inline_query", "note": "inline mode disabled"})
+			self.assertIsNone(call)
+		unset = gw()  # field never set (older rows): default on
+		self.assertTrue(ti.inline_enabled(unset))
+		res, call = self.run_query(gateway=unset)
+		self.assertEqual(call.args[0], "answerInlineQuery")
+
 	def test_unpaired_runs_nothing(self):
 		self.admit.return_value = False
 		self.choose()

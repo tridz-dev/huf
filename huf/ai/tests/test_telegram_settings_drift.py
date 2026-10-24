@@ -29,6 +29,10 @@ NOT_IN_UI: dict[str, str] = {}
 GENERIC_READERS: dict[str, str] = {}
 
 
+# Reply settings that must be applied by the sender every normal reply goes through.
+REPLY_PATH_FIELDS = ("telegram_parse_mode", "telegram_silent_replies", "telegram_protect_content", "preview_url")
+
+
 def _telegram_fields() -> list[str]:
 	fields = json.loads(GATEWAY_JSON.read_text())["fields"]
 	return [
@@ -83,6 +87,16 @@ class TestGatewayTelegramDrift(unittest.TestCase):
 				continue
 			readers = [p.name for p, text in self.backend.items() if re.search(rf"\b{re.escape(name)}\b", text)]
 			self.assertTrue(readers, f"{name}: nothing in huf/ai reads it (dead control)")
+
+	def test_reply_settings_are_read_by_the_reply_sender(self):
+		"""The reply settings must be read where reply senders are built, not only by templates."""
+		outbound = (HUF_AI / "gateway_adapters" / "telegram_outbound.py").read_text()
+		for name in REPLY_PATH_FIELDS:
+			self.assertRegex(outbound, rf"\b{name}\b", f"{name}: not read by the reply sender (telegram_outbound)")
+
+	def test_inline_switch_is_read_by_the_inline_handler(self):
+		inline = (HUF_AI / "gateway_adapters" / "telegram_inline.py").read_text()
+		self.assertRegex(inline, r"\btelegram_inline_enabled\b")
 
 	def test_exemptions_are_real_fields(self):
 		doc_fields = {f["fieldname"] for f in json.loads(GATEWAY_JSON.read_text())["fields"]}

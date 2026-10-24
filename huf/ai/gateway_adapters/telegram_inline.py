@@ -291,7 +291,9 @@ def handle_inline_query(gateway, adapter, parsed, request) -> dict | None:
 
 
 def inline_enabled(gateway) -> bool:
-	return bool(getattr(gateway, "telegram_inline_enabled", 1))
+	"""The Gateway field gates every inline handler; an unset value means the default (on)."""
+	value = getattr(gateway, "telegram_inline_enabled", None)
+	return True if value is None else bool(int(value))
 
 
 def _cache_get(key: str):

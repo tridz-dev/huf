@@ -253,6 +253,19 @@ def _token_for_run() -> Optional[str]:
     return _get_token()
 
 
+def _sender_for_run(client) -> TelegramSender:
+    """Sender carrying the run gateway's reply settings (explicit tool flags only add to them)."""
+    gateway = scope.run_gateway()
+    if gateway:
+        try:
+            from huf.ai.gateway_adapters.telegram_outbound import sender_for_gateway
+
+            return sender_for_gateway(client, frappe.get_cached_doc("Gateway", gateway), parse_mode="")
+        except Exception:
+            pass
+    return TelegramSender(client)
+
+
 def _run_sender(label: str, fn: Callable[[TelegramSender], Any], *, upload: bool = False) -> str:
     """Run ``fn(sender)`` on a Bot API client; map failures to a redacted JSON error."""
     token = _token_for_run()
@@ -262,7 +275,7 @@ def _run_sender(label: str, fn: Callable[[TelegramSender], Any], *, upload: bool
         return _error(error_msg)
     client = _make_client(token, timeout=60 if upload else 30)
     try:
-        result = fn(TelegramSender(client))
+        result = fn(_sender_for_run(client))
     except TelegramApiError as exc:
         detail = f"error {exc.error_code}: {exc.description}" if exc.error_code is not None else exc.description
         error_msg = f"Telegram {label} {detail}"
