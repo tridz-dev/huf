@@ -47,6 +47,9 @@ class GatewayBinding(Document):
             frappe.throw(_("Provider value is required for this match type."))
         if self.target_type == "Triage":
             return
+        if self.solution and frappe.db.get_value("Solution", self.solution, "status") != "Live":
+            # A purpose never creates an agent, so a not-yet-live solution may have no target yet.
+            return
         if self.target_type == "Agent" and not self.agent:
             frappe.throw(_("Choose an agent for an Agent route."))
         if self.target_type == "Flow" and not self.flow:
