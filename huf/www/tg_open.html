@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
 <meta name="robots" content="noindex" />
 <meta name="referrer" content="no-referrer" />
+<meta name="csrf-token" content="{{ csrf_token or '' }}" />
 <title>Opening</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
@@ -36,6 +37,13 @@ body{font-family:system-ui,sans-serif;margin:0;padding:24px;padding-top:max(24px
   function safeRedirect(p) {
     return typeof p === "string" && p.charAt(0) === "/" && p.charAt(1) !== "/" && p.charAt(1) !== "\\" && !/[\r\n]/.test(p);
   }
+  function csrfHeaders() {
+    var h = {"Content-Type": "application/json", "Accept": "application/json"};
+    var m = document.querySelector('meta[name="csrf-token"]');
+    var t = m && m.getAttribute("content");
+    if (t) { h["X-Frappe-CSRF-Token"] = t; }
+    return h;
+  }
   function run() {
     if (!tg || !tg.initData) { show(NO_INIT, true, false); return; }
     var embedded = false;
@@ -44,7 +52,7 @@ body{font-family:system-ui,sans-serif;margin:0;padding:24px;padding-top:max(24px
     show("Signing you in...", false, false);
     fetch("/api/method/huf.ai.telegram_web_access.exchange", {
       method: "POST", credentials: "same-origin",
-      headers: {"Content-Type": "application/json", "Accept": "application/json"},
+      headers: csrfHeaders(),
       body: JSON.stringify({init_data: tg.initData, gateway: gw, to: to})
     }).then(function (r) {
       if (!r.ok) { throw new Error("denied"); }
