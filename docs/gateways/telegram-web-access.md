@@ -29,8 +29,8 @@ what a Telegram session may do afterwards is enforced separately (`telegram_web_
    or the site's `host_name` starts with `https://`; a client-supplied `X-Forwarded-Proto` is never trusted
    on its own, Frappe applies it only when the bench runs with proxy handling; `max_age` = session length,
    capped at 720 hours). It is never
-   in the URL, JSON or logs. The session data carries `tg_origin = {binding, gateway, tg_id, allow_writes,
-   web_access_version: 1}`.
+   in the URL, JSON or logs. The session data carries `tg_origin = {binding, gateway, tg_id,
+   web_access_version: 1}`. The write switch is not stored in it; the guard reads it live from the gateway.
 9. A request that already carries a valid Telegram-origin session for the same user and gateway only gets
    the redirect.
 
@@ -46,7 +46,7 @@ row (`web_login`).
 | `telegram_web_allowed_paths` | One route prefix per line; `/` alone is not accepted. |
 | `telegram_web_session_hours` | Session length, default 24, between 1 and 720 (validated on save, capped again at login). |
 | `telegram_web_allow_privileged` | Lets System Manager and Administrator role holders in. Unsafe: for local or non-sensitive environments only. |
-| `telegram_web_allow_writes` | Off (default) = read-only: no changes through the guard's allowed methods (viewing may still record view logs or prepared reports). On = a denylist: everything the user's Frappe permissions allow except the always-blocked set listed in the enforcement doc. Stored in the marker. |
+| `telegram_web_allow_writes` | Off (default) = read-only: no changes through the guard's allowed methods (viewing may still record view logs or prepared reports). On = a denylist: everything the user's Frappe permissions allow except the always-blocked set listed in the enforcement doc. Read live from the gateway (cached up to 30 seconds), so a change also applies to sessions that are already open. |
 | `telegram_web_extra_read_methods` | Extra `/api/method` names allowed in read-only mode. |
 
 ## Policy: what `login_as` skips and runs

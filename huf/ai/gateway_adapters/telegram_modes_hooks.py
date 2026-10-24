@@ -47,15 +47,6 @@ def _bot_username(adapter, gateway) -> str:
 		return ""
 
 
-def _credentials(gateway) -> dict:
-	try:
-		from huf.ai.gateway_webhook import _gateway_credentials
-
-		return _gateway_credentials(gateway)
-	except Exception:
-		return {}
-
-
 def prefilter(gateway, adapter, parsed, request) -> dict | None:
 	msg = _message(parsed)
 	if not msg:
@@ -66,21 +57,20 @@ def prefilter(gateway, adapter, parsed, request) -> dict | None:
 		return None  # supergroup migration service message: handled by telegram_groups
 	bot_id = lg.sender_bot_id(msg)
 	if bot_id is None:
-		if parsed.is_room and not parsed.is_channel and getattr(gateway, "mention_required", 0):
+		if parsed.is_room and not parsed.is_channel and gateway.get("mention_required"):
 			username = _bot_username(adapter, gateway)
 			if username and not th.is_addressed_to_bot(msg, username, _own_id(adapter)):
 				return ing._ack(parsed.kind, "group message not addressed to the bot")
 		lg.LoopGuard(_cache()).note_human(gateway.name, chat_id, thread)
 		return None
-	creds = _credentials(gateway)
-	guard = lg.LoopGuard.from_credentials(_cache(), creds)
+	guard = lg.LoopGuard.from_gateway(_cache(), gateway)
 	decision = guard.check_bot(
 		gateway.name,
 		chat_id,
 		thread,
 		bot_id,
 		own_id=_own_id(adapter),
-		allowlist=lg.parse_allowlist(creds.get("bot_allowlist")),
+		allowlist=lg.parse_allowlist(gateway.get("telegram_bot_allowlist")),
 		update_id=parsed.update_id,
 	)
 	if decision.allow:

@@ -99,6 +99,13 @@ class Gateway(Document):
                     )
                 )
             self.telegram_bot_allowlist = ", ".join(parts)
+        for fieldname, label, low, high in (
+            ("telegram_bot_max_hops", _("Bot messages in a row"), 1, 20),
+            ("telegram_bot_rate_cap", _("Bot messages per minute"), 1, 1000),
+        ):
+            value = self.get(fieldname)
+            if value is not None and not low <= int(value) <= high:
+                frappe.throw(_("{0} must be between {1} and {2}.").format(label, low, high))
 
     def _validate_whatsapp(self):
         """Derive ``phone_number_id`` and enforce the one-enabled-gateway-per-number rule.

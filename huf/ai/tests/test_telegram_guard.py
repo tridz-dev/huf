@@ -332,11 +332,13 @@ class TestGuardFields(unittest.TestCase):
 	def test_captcha_mode_field_and_off(self):
 		self.assertEqual(g.captcha_mode(gw(telegram_guard_captcha="Arithmetic")), "math")
 		self.assertEqual(g.captcha_mode(gw(telegram_guard_captcha="Emoji")), "emoji")
-		with mock.patch("frappe.conf", {}, create=True):
+		self.assertEqual(g.captcha_mode(gw(telegram_guard_captcha="Off")), "")
+		self.assertFalse(g.captcha_enabled(gw()))
+
+	def test_site_config_cannot_override_gateway_off(self):
+		with mock.patch("frappe.conf", {"huf_telegram_guard_captcha": 1}, create=True):
 			self.assertEqual(g.captcha_mode(gw(telegram_guard_captcha="Off")), "")
 			self.assertFalse(g.captcha_enabled(gw()))
-		with mock.patch("frappe.conf", {"huf_telegram_guard_captcha": 1}, create=True):
-			self.assertEqual(g.captcha_mode(gw(telegram_guard_captcha="Off")), "random")
 
 	def test_question_text_sanitised(self):
 		out = g.question_text_of(gw(telegram_guard_question_text="Hi <script>x</script>\n there"))

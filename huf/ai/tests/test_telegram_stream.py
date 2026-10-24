@@ -134,12 +134,31 @@ class TestDraftUpdater(unittest.TestCase):
 
 class TestEnabled(unittest.TestCase):
 	def test_private_only_and_flag(self):
-		on, off = {"huf_telegram_streaming": 1}, {}
+		on, off = {"telegram_streaming": 1}, {"telegram_streaming": 0}
+		self.assertFalse(ts.streaming_enabled("private", {}))
 		self.assertTrue(ts.streaming_enabled("private", on))
 		self.assertFalse(ts.streaming_enabled("group", on))
 		self.assertFalse(ts.streaming_enabled("supergroup", on))
 		self.assertFalse(ts.streaming_enabled("channel", on))
 		self.assertFalse(ts.streaming_enabled("private", off))
+
+	def test_hook_follows_the_gateway_switch_not_site_config(self):
+		from unittest import mock
+
+		import huf.ai.gateway_adapters.telegram_stream_hooks as hooks
+
+		event = SimpleNamespace(raw_payload={}, conversation_id="c", name="e")
+		for flag, expect_none in ((0, True), (1, False)):
+			gw = SimpleNamespace(name="gw", get=lambda k, d=None, f=flag: f if k == "telegram_streaming" else d)
+			with (
+				mock.patch("frappe.conf", {"huf_telegram_streaming": 1}, create=True),
+				mock.patch("huf.ai.gateway_webhook.get_gateway_adapter"),
+				mock.patch("huf.ai.gateway_webhook.event_contact_name"),
+				mock.patch("huf.ai.gateway_adapters.telegram_pipeline.reply_target", return_value=(None, None)),
+				mock.patch("huf.ai.gateway_adapters.telegram_pipeline.build_sender"),
+				mock.patch.object(ts, "make_runner", return_value="runner"),
+			):
+				self.assertEqual(hooks.agent_runner(event, gw) is None, expect_none)
 
 	def test_event_chat_type(self):
 		ev = SimpleNamespace(raw_payload={"telegram_meta": {"chat_type": "group"}})

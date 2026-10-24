@@ -15,7 +15,7 @@ Pieces:
   updater (needs the ``agent_runner`` provider hook call site in ``gateway_service``; see telegram_stream_hooks).
 - ``handle_stopped``: the ``stopped_message_generation`` update handler (cancels the run).
 
-Enabled by ``frappe.conf.huf_telegram_streaming`` (default off) and only for private chats; groups and
+Enabled by the Gateway ``telegram_streaming`` checkbox (default off) and only for private chats; groups and
 channels keep the typing action.
 """
 
@@ -34,15 +34,11 @@ STATE_TTL = 15 * 60
 NO_REPLY = "<NO_REPLY>"  # gateway_service.NO_REPLY_SENTINEL: the event is suppressed cleanly
 
 
-def streaming_enabled(chat_type: str | None, conf: Any = None) -> bool:
-	"""Private chats only (drafts are not supported elsewhere) and only when the flag is on."""
+def streaming_enabled(chat_type: str | None, gateway: Any) -> bool:
+	"""Private chats only (drafts are not supported elsewhere) and only when the Gateway checkbox is on."""
 	if (chat_type or "private") != "private":
 		return False
-	if conf is None:
-		import frappe
-
-		conf = frappe.conf
-	return bool(conf.get("huf_telegram_streaming"))
+	return bool(gateway.get("telegram_streaming"))
 
 
 def draft_id_for(event_name: str) -> int:

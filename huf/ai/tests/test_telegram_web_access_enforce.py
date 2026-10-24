@@ -5,8 +5,8 @@ from unittest import mock
 
 from huf.ai import telegram_web_access_enforce as E
 
-M_OFF = {"binding": "B1", "gateway": "G", "tg_id": 1, "allow_writes": False, "web_access_version": 1}
-M_ON = {**M_OFF, "allow_writes": True}
+M_OFF = {"binding": "B1", "gateway": "G", "tg_id": 1, "web_access_version": 1}
+M_ON = dict(M_OFF)  # distinct object: ``d`` turns the gateway-level write switch on for it
 S = {
 	"is_enabled": 1,
 	"telegram_web_access_enabled": 1,
@@ -16,7 +16,27 @@ S = {
 
 
 def d(m, method, path, fd=None, s=S):
+	if m is M_ON:
+		s = {**s, "telegram_web_allow_writes": 1}
 	return E.decide(m, s, method, path, fd or {})
+
+
+class TestWritesAreLive(unittest.TestCase):
+	def test_toggle_applies_to_the_same_open_session(self):
+		on, off = {**S, "telegram_web_allow_writes": 1}, {**S, "telegram_web_allow_writes": 0}
+		self.assertTrue(E.decide(M_OFF, on, "PUT", "/api/resource/ToDo/1", {}))
+		self.assertFalse(E.decide(M_OFF, off, "PUT", "/api/resource/ToDo/1", {}))
+
+	def test_session_marker_no_longer_carries_the_switch(self):
+		self.assertFalse(E.decide({**M_OFF, "allow_writes": True}, S, "PUT", "/api/resource/ToDo/1", {}))
+
+	def test_gateway_settings_fetch_includes_the_switch(self):
+		E.clear_gateway_cache()
+		with mock.patch.object(E, "frappe") as fr:
+			fr.db.get_value.return_value = {"telegram_web_allow_writes": 1}
+			E._gateway_settings("G")
+		self.assertIn("telegram_web_allow_writes", fr.db.get_value.call_args.args[2])
+		E.clear_gateway_cache()
 
 
 class TestPaths(unittest.TestCase):
@@ -427,7 +447,7 @@ class TestLaunchPageStaysReachable(unittest.TestCase):
 	def test_launch_page_and_exchange_are_always_allowed_for_a_live_session(self):
 		from huf.ai import telegram_web_access_enforce as enf
 
-		marker = {"gateway": "G", "tg_id": "1", "binding": "B", "allow_writes": False}
+		marker = {"gateway": "G", "tg_id": "1", "binding": "B"}
 		settings = {
 			"telegram_web_access_enabled": 1,
 			"is_enabled": 1,
@@ -445,7 +465,7 @@ class TestDeskAliasInGuard(unittest.TestCase):
 	def test_desk_spelling_of_an_allowed_app_page_is_navigable(self):
 		from huf.ai import telegram_web_access_enforce as enf
 
-		marker = {"gateway": "G", "tg_id": "1", "binding": "B", "allow_writes": False}
+		marker = {"gateway": "G", "tg_id": "1", "binding": "B"}
 		settings = {
 			"telegram_web_access_enabled": 1,
 			"is_enabled": 1,
@@ -461,7 +481,7 @@ class TestDeskHousekeepingCalls(unittest.TestCase):
 	def test_the_desk_shell_housekeeping_calls_are_allowed_but_other_writes_are_not(self):
 		from huf.ai import telegram_web_access_enforce as enf
 
-		marker = {"gateway": "G", "tg_id": "1", "binding": "B", "allow_writes": False}
+		marker = {"gateway": "G", "tg_id": "1", "binding": "B"}
 		settings = {
 			"telegram_web_access_enabled": 1,
 			"is_enabled": 1,
@@ -492,7 +512,7 @@ class TestReportListingExemption(unittest.TestCase):
 
 		from huf.ai import telegram_web_access_enforce as enf
 
-		marker = {"gateway": "G", "tg_id": "1", "binding": "B", "allow_writes": False}
+		marker = {"gateway": "G", "tg_id": "1", "binding": "B"}
 		settings = {
 			"telegram_web_access_enabled": 1,
 			"is_enabled": 1,

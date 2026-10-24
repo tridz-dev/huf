@@ -48,8 +48,8 @@ FIELD_SPECS: dict[str, dict[str, Any]] = {
 	"pairing_pending_limit": {"type": "int", "group": "access", "min": 0, "max": 10000},
 	"pairing_reply_daily_limit": {"type": "int", "group": "access", "min": 0, "max": 10000},
 	"telegram_bot_allowlist": {"type": "text", "group": "access", "max_len": 2000},
-	"telegram_bot_max_hops": {"type": "int", "group": "access", "min": 0, "max": 20},
-	"telegram_bot_rate_cap": {"type": "int", "group": "access", "min": 0, "max": 10000},
+	"telegram_bot_max_hops": {"type": "int", "group": "access", "min": 1, "max": 20},
+	"telegram_bot_rate_cap": {"type": "int", "group": "access", "min": 1, "max": 1000},
 	# Agent permissions
 	"agent_recipient_scope": {
 		"type": "select",
@@ -79,7 +79,6 @@ FIELD_SPECS: dict[str, dict[str, Any]] = {
 	"telegram_web_allow_writes": {"type": "check", "group": "web"},
 	"telegram_web_extra_read_methods": {"type": "text", "group": "web", "max_len": 2000},
 	"telegram_streaming": {"type": "check", "group": "modes"},
-	"telegram_default_template": {"type": "link", "group": "modes", "doctype": "Telegram Message Template"},
 	"telegram_welcome_template": {"type": "link", "group": "modes", "doctype": "Telegram Message Template"},
 	"telegram_welcome_cooldown_seconds": {"type": "int", "group": "modes", "min": 0, "max": 86400},
 	"telegram_guard_captcha": {"type": "select", "group": "modes", "options": ["Off", "Arithmetic", "Emoji"]},

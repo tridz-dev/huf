@@ -92,7 +92,6 @@ class TestTelegramWebAccessSite(IntegrationTestCase):
 				"binding": "B-TEST",
 				"gateway": "gw-test",
 				"tg_id": "4242",
-				"allow_writes": 1,
 				"web_access_version": 1,
 			},
 		)

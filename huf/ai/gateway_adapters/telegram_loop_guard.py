@@ -7,10 +7,10 @@ Telegram only lets bots see each other with "Bot-to-Bot Communication Mode" and 
 forever ("Loop Prevention Requirements": rate limit, max interaction depth, dedupe). Policy here:
 
 * messages from a bot (``from.is_bot``, ``via_bot`` or ``sender_business_bot``) are DROPPED unless the sender
-  bot id is in the per-gateway allow-list (Integration Settings credential key ``bot_allowlist``, comma
-  separated ids);
-* an allowed bot is still cut off after ``max_hops`` consecutive bot messages in a chat/thread (a human
-  message resets the counter) and above ``rate_cap`` messages per ``rate_window`` per chat+bot;
+  bot id is in the Gateway allow-list (``telegram_bot_allowlist``: numeric bot ids, comma or line separated;
+  ids are used because usernames can change);
+* an allowed bot is still cut off after ``telegram_bot_max_hops`` consecutive bot messages in a chat/thread
+  (a human message resets the counter) and above ``telegram_bot_rate_cap`` messages per minute per chat+bot;
 * our own bot id is never admitted.
 
 State lives in the Frappe cache (no doctype fields). Counters are read-modify-write, so concurrent workers can
@@ -30,11 +30,9 @@ _TTL = 3600
 
 
 def parse_allowlist(value: Any) -> frozenset[str]:
-	if isinstance(value, (list, tuple, set, frozenset)):
-		items = [str(v) for v in value]
-	else:
-		items = str(value or "").replace(";", ",").replace("\n", ",").split(",")
-	return frozenset(i.strip().lstrip("@") for i in items if i.strip())
+	"""Numeric bot ids from a comma or line separated string (the Gateway validator rejects anything else)."""
+	items = str(value or "").replace(";", ",").replace("\n", ",").split(",")
+	return frozenset(i.strip() for i in items if i.strip().isdigit())
 
 
 def _int(value: Any, default: int) -> int:
@@ -82,12 +80,12 @@ class LoopGuard:
 		self.clock = clock
 
 	@classmethod
-	def from_credentials(cls, cache: Any, credentials: Mapping[str, str] | None) -> LoopGuard:
-		c = credentials or {}
+	def from_gateway(cls, cache: Any, gateway: Any) -> LoopGuard:
+		"""Limits come from the Gateway fields (the doctype defaults apply when a value is unset or below 1)."""
 		return cls(
 			cache,
-			max_hops=_int(c.get("bot_max_hops"), DEFAULT_MAX_HOPS),
-			rate_cap=_int(c.get("bot_rate_cap"), DEFAULT_RATE_CAP),
+			max_hops=_int(gateway.get("telegram_bot_max_hops"), DEFAULT_MAX_HOPS),
+			rate_cap=_int(gateway.get("telegram_bot_rate_cap"), DEFAULT_RATE_CAP),
 		)
 
 	def _get(self, key: str) -> Any:

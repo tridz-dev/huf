@@ -70,7 +70,7 @@ describe('SettingsTab', () => {
 	it('lists real template, agent and user choices and saves only the picked field', async () => {
 		render(<SettingsTab {...props} />);
 		const tpl = (await screen.findByLabelText('Welcome template')) as HTMLSelectElement;
-		await waitFor(() => expect(screen.getAllByRole('option', { name: 'Hello' }).length).toBe(2));
+		await waitFor(() => expect(screen.getAllByRole('option', { name: 'Hello' }).length).toBe(1));
 		expect(screen.queryByRole('option', { name: 'Off' })).toBeNull();
 		expect(screen.queryByText('Templates coming soon')).toBeNull();
 		expect(screen.getByRole('option', { name: 'Sales' })).toBeInTheDocument();
@@ -110,5 +110,27 @@ describe('SettingsTab', () => {
 		vi.mocked(call.get).mockImplementation((async () => ({ message: { ...settings, values: { ...settings.values, telegram_guard_captcha: 'Emoji' } } })) as never);
 		render(<SettingsTab {...props} />);
 		expect(await screen.findByLabelText('Verification message')).toBeInTheDocument();
+	});
+
+	it('shows each server field error next to its field and clears it on edit', async () => {
+		vi.mocked(call.post).mockResolvedValue({
+			message: { success: false, error: 'invalid', message: 'Some settings are not valid.', errors: [{ field: 'retry_max_attempts', message: 'Must be between 1 and 10.' }] },
+		});
+		render(<SettingsTab {...props} />);
+		const attempts = await screen.findByLabelText('Send attempts');
+		fireEvent.change(attempts, { target: { value: '7' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+		expect(await screen.findByText('Must be between 1 and 10.')).toBeInTheDocument();
+		fireEvent.change(attempts, { target: { value: '5' } });
+		expect(screen.queryByText('Must be between 1 and 10.')).toBeNull();
+	});
+
+	it('hides the inline feedback switch unless inline mode is on', async () => {
+		vi.mocked(call.get).mockImplementation((async () => ({ message: { ...settings, values: { ...settings.values, telegram_inline_enabled: 0, telegram_inline_feedback_enabled: 0 } } })) as never);
+		render(<SettingsTab {...props} />);
+		await screen.findByLabelText('Inline mode');
+		expect(screen.queryByLabelText('Inline feedback is on in BotFather')).toBeNull();
+		fireEvent.click(screen.getByLabelText('Inline mode'));
+		expect(screen.getByLabelText('Inline feedback is on in BotFather')).toBeInTheDocument();
 	});
 });
