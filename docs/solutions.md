@@ -185,7 +185,7 @@ Example: a bakery number that takes orders and answers catering enquiries.
 
 1. Connect the number under WhatsApp. Check that its Overview shows a healthy token.
 2. Open Solutions and choose New solution.
-3. Step 1: name it "Order desk". Pick the purpose "Take orders". Under Runs on, choose the number. If you already have an agent or flow, choose "Use an agent or flow I already have" and pick it under "Answered by" (see [Known limits](#known-limits)).
+3. Step 1: name it "Order desk". Pick the purpose "Take orders". Under Runs on, choose the number. Under "Answered by", pick the agent or flow that should reply (you can also choose it later; until then the Solution stays Paused).
 4. Step 2: keep the suggested keywords (order, menu, cake) or change them. Add an ad tag if you run a Click-to-WhatsApp ad, using the ad id.
 5. Step 3: pick the suggested templates, reuse templates that already exist, or start a draft. Templates other Solutions use are marked Shared.
 6. Step 4: try messages in the test chat, for example "I want to order a cake". Then choose Go live.
@@ -203,5 +203,5 @@ Tip: if the two jobs share words, decide whether a pinned chat should stay put o
 - Messages routed by the number's default agent or flow, or by older routing rules, are not attributed to a Solution. They show no Solution in the log.
 - Flow runs are not stamped with the Solution; the Solution is recorded on the gateway event.
 - A template reply button only routes to a Solution if its payload has the form `sol:<solution>|<free text>`. Huf's template sender does not support quick-reply buttons yet, so it cannot add that payload; only payloads set elsewhere route this way.
-- In the creation wizard the answering agent or flow can be chosen only with "Use an agent or flow I already have". A Solution created from a purpose alone has no answering agent yet and stays Paused until one is set through the update API.
+- A Solution needs an answering agent or flow to go live. The wizard's "Answered by" picker is optional in every mode: a Solution saved without one stays Paused and shows a "Choose what answers" card on its page until you pick one.
 - The triage menu opens with "Hi, this is us." The wording is fixed.
