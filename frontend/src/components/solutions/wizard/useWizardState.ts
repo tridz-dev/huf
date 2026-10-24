@@ -76,10 +76,16 @@ export function useWizardState(params: WizardParams = {}) {
       if (gw) next = { ...next, gateway: gw };
       const intent = findIntent(intents, params.purpose ?? null);
       if (intent) next = applyIntent(next, intent);
-      else if (params.mode === 'existing' || params.mode === 'blank') next = applyMode(next, params.mode);
+      else if (params.mode === 'existing' || params.mode === 'blank') {
+        next = applyMode(next, params.mode);
+        // Same as the "Use an agent or flow I already have" button: pick the first target (keep a prior choice).
+        if (params.mode === 'existing' && !next.existing && targets[0]) {
+          next = { ...next, existing: { type: targets[0].type, name: targets[0].name } };
+        }
+      }
       return next;
     });
-  }, [loaded, gateways, intents, params.gateway, params.purpose, params.mode]);
+  }, [loaded, gateways, intents, targets, params.gateway, params.purpose, params.mode]);
 
   const intent = useMemo(() => findIntent(intents, state.intentId), [intents, state.intentId]);
 
