@@ -86,7 +86,18 @@ export const collectRows = (): MeasuredRow[] => {
     if (seen.has(key)) continue;
     seen.add(key);
     const items: RowItem[] = slots.map((s) => {
-      const r = s.c.getBoundingClientRect();
+      // An InputGroup draws its border on the wrapper, so the visible control is the group,
+      // not the borderless inner <input> (which is 2px shorter by design).
+      let box: Element = s.c.closest('[data-slot=input-group]') ?? s.c;
+      if (kind(s.c) === 'toggle') {
+        // A switch is shorter than a control by design: compare its control slot instead (the
+        // nearest ancestor inside the cell with a standard control height, e.g. the bordered
+        // switch card or the h-control-md wrapper), falling back to the switch itself.
+        for (let a: Element | null = s.c.parentElement; a && s.k.contains(a); a = a.parentElement) {
+          if ([30, 34, 38].includes(Math.round(a.getBoundingClientRect().height))) { box = a; break; }
+        }
+      }
+      const r = box.getBoundingClientRect();
       const reservedLabel = !!s.k.querySelector(':scope > [data-field-label][aria-hidden=true], [data-field-label][aria-hidden=true]');
       return {
         kind: kind(s.c),
@@ -141,6 +152,8 @@ export const expandLayout = (): string | number => {
   }
   let n = 0;
   for (const el of document.querySelectorAll<HTMLElement>('body *')) {
+    // Never rewrite a control's own height (an InputGroup with flex-1 would lose h-control-*).
+    if (el.matches('[data-slot=input-group], input, select, textarea, button, [role=combobox], [role=switch]')) continue;
     const cs = getComputedStyle(el);
     const clipped = /(auto|scroll|hidden)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 4;
     const fixedH = cs.height.endsWith('px') && String(el.className).match(/\b(h-screen|h-svh|h-dvh|h-full|min-h-0|max-h-|flex-1)\b/);
