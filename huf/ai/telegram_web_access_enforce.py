@@ -5,25 +5,30 @@
 docs/gateways/telegram-web-access-enforcement.md).
 
 ``enforce`` is a ``before_request`` hook. For a normal session it costs one dict lookup
-(``session.data.tg_origin``). It deliberately does not import ``telegram_web_access`` at module import
-time; the marker contract (``tg_origin``) and path helpers live here as small local copies behind ``_core()``.
+(``session.data.tg_origin``). It deliberately does not import ``telegram_web_access`` (the heavy exchange
+module); the marker key and path rules come from the pure ``telegram_web_access_paths`` module.
 """
 
 import json
 import time
-from urllib.parse import unquote
 
 import frappe
 
-MARKER_KEY = "tg_origin"
+from huf.ai.telegram_web_access_paths import (
+	MARKER_KEY,
+	PRIVILEGED_ROLES,
+	normalize_path,
+	normalize_path_keep_case,
+	parse_prefixes,
+	path_matches,
+)
+
 GATEWAY_DOCTYPE = "Gateway"
 DENIED_MESSAGE = "Not allowed in a Telegram session"
 _CACHE_TTL = 30
 _gateway_cache: dict = {}
 _binding_cache: dict = {}
 _roles_cache: dict = {}
-# Roles that are denied by default (kept in step with ``telegram_web_access.PRIVILEGED_ROLES``).
-PRIVILEGED_ROLES = frozenset({"System Manager", "Administrator"})
 # Request parameters that make Frappe run a (whitelisted) document method.
 METHOD_PARAMS = ("run_method", "cmd", "method")
 
@@ -143,84 +148,6 @@ REPORTVIEW_LIST_METHOD = "frappe.desk.reportview.get_list"
 UPLOAD_METHODS = frozenset({"upload_file", "frappe.handler.upload_file"})
 WRITE_METHODS = frozenset({"POST", "PUT", "DELETE", "PATCH"})
 READ_HTTP = frozenset({"GET", "HEAD"})
-
-
-# -- local copies of the core contract (replaced by telegram_web_access at merge via _core()) -------------
-
-
-def _core():
-	"""Single accessor for the marker/path helpers. Prefers W21's module, falls back to local copies."""
-	try:
-		from huf.ai import telegram_web_access as core
-
-		if all(hasattr(core, n) for n in ("session_marker", "normalize_target", "allowed_prefixes")):
-			return core
-	except Exception:
-		pass
-	return _LocalCore
-
-
-class _LocalCore:
-	@staticmethod
-	def session_marker(session_data):
-		marker = (session_data or {}).get(MARKER_KEY) if hasattr(session_data, "get") else None
-		return marker if isinstance(marker, dict) else None
-
-	@staticmethod
-	def normalize_target(path):
-		return normalize_path(path)
-
-	@staticmethod
-	def allowed_prefixes(gateway_doc):
-		return parse_prefixes(gateway_doc.get("telegram_web_allowed_paths"))
-
-
-def normalize_path(path) -> str | None:
-	"""Return a canonical lower-case absolute path, or None when the input is unsafe (traversal, odd encoding)."""
-	if not isinstance(path, str) or not path or "\x00" in path:
-		return None
-	p = path.split("?", 1)[0].split("#", 1)[0]
-	for _i in range(3):
-		d = unquote(p)
-		if d == p:
-			break
-		p = d
-	else:
-		return None
-	if "%" in p or "\\" in p or "\x00" in p:
-		return None
-	segs = []
-	for s in p.split("/"):
-		if s in ("", "."):
-			continue
-		if s == ".." or s != s.strip():
-			return None
-		segs.append(s.lower())
-	return "/" + "/".join(segs)
-
-
-def parse_prefixes(text) -> list[str]:
-	out = []
-	for line in (text or "").splitlines():
-		n = normalize_path(line.strip()) if line.strip() else None
-		if n and n != "/":
-			for variant in _desk_aliases(n):
-				if variant not in out:
-					out.append(variant)
-	return out
-
-
-def _desk_aliases(path: str) -> list[str]:
-	"""Frappe 16 serves the desk under ``/desk`` and redirects ``/app`` to it: allow both spellings."""
-	for here, there in (("/app", "/desk"), ("/desk", "/app")):
-		if path == here or path.startswith(here + "/"):
-			return [path, there + path[len(here) :]]
-	return [path]
-
-
-def path_allowed(path: str, prefixes) -> bool:
-	"""Segment-boundary prefix match on a normalized path."""
-	return any(path == p or path.startswith(p + "/") for p in prefixes)
 
 
 # -- marker / settings ---------------------------------------------------------------------------------
@@ -500,21 +427,7 @@ def decide(marker: dict, settings: dict, method: str, path: str, form_dict) -> b
 	# navigations
 	if method not in READ_HTTP:
 		return False
-	return path_allowed(norm, parse_prefixes(settings.get("telegram_web_allowed_paths")))
-
-
-def normalize_path_keep_case(path) -> str | None:
-	if not isinstance(path, str) or "\x00" in path:
-		return None
-	p = path.split("?", 1)[0]
-	for _i in range(3):
-		d = unquote(p)
-		if d == p:
-			break
-		p = d
-	if "%" in p or ".." in p.split("/") or "\\" in p:
-		return None
-	return "/" + "/".join(s for s in p.split("/") if s)
+	return path_matches(norm, parse_prefixes(settings.get("telegram_web_allowed_paths")))
 
 
 def enforce():
