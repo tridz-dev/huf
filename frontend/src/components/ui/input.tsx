@@ -11,7 +11,7 @@ export interface InputProps
    * `sm` is the dense data-table / inspector field, matching SelectTrigger's
    * `sm` so a row of mixed controls lines up.
    */
-  size?: 'default' | 'sm';
+  size?: 'default' | 'sm' | 'lg';
 }
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
@@ -23,7 +23,9 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           'flex w-full rounded border border-input bg-transparent transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-signal focus-visible:ring-[3px] focus-visible:ring-signal/[.14] disabled:cursor-not-allowed disabled:opacity-50',
           size === 'sm'
             ? 'h-control-sm px-control-sm py-0 text-micro'
-            : 'h-control-md px-control py-control-y text-ui-text',
+            : size === 'lg'
+              ? 'h-control-lg px-control py-control-y text-ui-text'
+              : 'h-control-md px-control py-control-y text-ui-text',
           className
         )}
         ref={ref}
