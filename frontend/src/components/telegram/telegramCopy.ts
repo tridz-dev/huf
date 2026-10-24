@@ -28,7 +28,7 @@ export function stepsLeft(left: number, total: number): string {
 
 export const CHECKLIST_COPY: Record<TelegramChecklistCode, { title: string; help: string; action: string }> = {
 	bot_token: { title: 'Add your bot token', help: 'Create a bot with BotFather in Telegram and paste its token.', action: 'Open BotFather' },
-	webhook_secret: { title: 'Add a webhook secret', help: 'A private phrase that proves messages really come from Telegram.', action: 'Add secret' },
+	webhook_secret: { title: 'Protect with a secret', help: 'A private phrase that proves messages really come from Telegram.', action: 'Add secret' },
 	webhook: { title: 'Connect Telegram to this site', help: 'Telegram needs to know where to send new messages.', action: 'Open settings' },
 	enabled: { title: 'Turn the bot on', help: 'Switch the gateway on so your agent starts answering.', action: 'Turn on' },
 	first_message: { title: 'Send a test message', help: 'Message your bot in Telegram to confirm it answers.', action: 'Open settings' },

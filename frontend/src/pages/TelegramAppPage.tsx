@@ -2,16 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { Toaster } from '@/components/ui/sonner';
 import { TelegramApp } from '@/components/telegram-app/TelegramApp';
 import { NotInTelegram } from '@/components/telegram-app/NotInTelegram';
-import { resolveGateway, themeVars } from '@/components/telegram-app/model';
+import { resolveGateway, signInFailure, themeVars } from '@/components/telegram-app/model';
 import { loadTelegramScript, MOCK_ENABLED, mockWebApp, type TgWebApp } from '@/components/telegram-app/telegramWebApp';
 import {
-  authenticate, getConfig, resetTelegramAppSession, TelegramAppError, type TgConfig,
+  authenticate, getConfig, resetTelegramAppSession, type TgConfig,
 } from '@/services/telegramAppApi';
 
 type State =
   | { kind: 'loading' }
   | { kind: 'no-telegram' }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; title: string; message: string }
   | { kind: 'signed-out' }
   | { kind: 'ready'; config: TgConfig | null; roleScope: string; gateway: string };
 
@@ -19,6 +19,7 @@ type State =
 export default function TelegramAppPage() {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [app, setApp] = useState<TgWebApp | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -29,17 +30,19 @@ export default function TelegramAppPage() {
       setApp(wa);
       try { wa.ready?.(); wa.expand?.(); } catch { /* optional */ }
       const gw = resolveGateway(window.location.search, wa.initDataUnsafe?.start_param);
-      if (!gw) { setState({ kind: 'error', message: 'No gateway was provided.' }); return; }
+      if (!gw) { setState({ kind: 'error', title: 'Could not sign in', message: 'No bot was specified. Reopen the app from your bot in Telegram.' }); return; }
       try {
         const auth = await authenticate(wa.initData, gw);
         const config = await getConfig().catch(() => null);
         if (alive) setState({ kind: 'ready', config, roleScope: auth.role_scope, gateway: auth.gateway });
       } catch (e) {
-        if (alive) setState({ kind: 'error', message: e instanceof TelegramAppError ? e.message : 'Could not sign in.' });
+        if (alive) setState(signInFailure(e));
       }
     })();
     return () => { alive = false; resetTelegramAppSession(); };
-  }, []);
+  }, [attempt]);
+
+  const retry = () => { setState({ kind: 'loading' }); setAttempt((n) => n + 1); };
 
   const style = useMemo(() => {
     const dark = app?.colorScheme === 'dark';
@@ -54,8 +57,8 @@ export default function TelegramAppPage() {
   let body;
   if (state.kind === 'loading') body = <p className="p-6 text-center text-sm">Loading...</p>;
   else if (state.kind === 'no-telegram') body = <NotInTelegram />;
-  else if (state.kind === 'signed-out') body = <NotInTelegram message="You are signed out. Reopen the app from Telegram." />;
-  else if (state.kind === 'error') body = <NotInTelegram title="Could not sign in" message={state.message} />;
+  else if (state.kind === 'signed-out') body = <NotInTelegram title="Session expired" message="Your session ended. Sign in again to continue." onRetry={retry} />;
+  else if (state.kind === 'error') body = <NotInTelegram title={state.title} message={state.message} onRetry={retry} />;
   else body = (
     <TelegramApp
       config={state.config}

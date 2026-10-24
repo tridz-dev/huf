@@ -27,6 +27,9 @@ BINDING = {
 }
 
 
+_REAL_DOCTYPE_CHOICES = api._doctype_choices
+
+
 class Base(unittest.TestCase):
 	def setUp(self):
 		self.cache = ta.MemCache()
@@ -39,6 +42,7 @@ class Base(unittest.TestCase):
 		self.audit = []
 		self.bindings = {(TG, GW): dict(BINDING)}
 		patches = [
+			patch.object(api, "_doctype_choices", lambda: []),
 			patch.object(ta, "_LOCAL", self.cache),
 			patch.object(ta, "_current_user", lambda: self.user[0]),
 			patch.object(ta, "_set_user", self._set_user),
@@ -556,6 +560,37 @@ class TestConfig(Base):
 		self.assertTrue(data["features"]["act"])
 		self.assertFalse(data["features"]["audit_all"])
 		self.assertEqual(data["confirm_ttl"], ta.NONCE_TTL)
+
+	def test_config_doctypes_filtered_by_permission_deny_and_cap(self):
+		import frappe
+
+		names = ["Customer", "User", "Gateway", "Salary Slip", "Item"]
+		db = MagicMock()
+		db.get_value.return_value = "My Bot"
+
+		def has_perm(dt, ptype="read", **kw):
+			return dt != "Salary Slip"
+
+		with (
+			patch.object(api, "_doctype_choices", _REAL_DOCTYPE_CHOICES),
+			patch.object(frappe, "db", db, create=True),
+			patch.object(frappe, "get_all", return_value=names) as get_all,
+			patch.object(frappe, "has_permission", has_perm),
+		):
+			res = self.call(api.config)
+		self.assertEqual(res["data"]["doctypes"], [{"name": "Customer"}, {"name": "Item"}])
+		flt = get_all.call_args.kwargs["filters"]
+		self.assertEqual((flt["istable"], flt["issingle"]), (0, 0))
+
+		many = [f"DT{i:04d}" for i in range(api.DOCTYPE_CHOICES_MAX + 50)]
+		with (
+			patch.object(api, "_doctype_choices", _REAL_DOCTYPE_CHOICES),
+			patch.object(frappe, "db", db, create=True),
+			patch.object(frappe, "get_all", return_value=many),
+			patch.object(frappe, "has_permission", lambda *a, **k: True),
+		):
+			res = self.call(api.config)
+		self.assertEqual(len(res["data"]["doctypes"]), api.DOCTYPE_CHOICES_MAX)
 
 
 if __name__ == "__main__":

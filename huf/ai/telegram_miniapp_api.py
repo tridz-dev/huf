@@ -30,6 +30,7 @@ API_RATE_WINDOW = 60
 IP_RATE_LIMIT = 120  # calls per IP per window (stops token guessing)
 SEARCH_DEFAULT = 10
 SEARCH_MAX = 25
+DOCTYPE_CHOICES_MAX = 200
 AUDIT_DEFAULT = 20
 AUDIT_MAX = 50
 SUMMARY_MAX_FIELDS = 12
@@ -224,6 +225,7 @@ def _h_config(binding: dict, session: dict) -> dict:
 		"session_ttl": ta.SESSION_TTL,
 		"confirm_ttl": ta.NONCE_TTL,
 		"limits": {"search_max": SEARCH_MAX, "audit_max": AUDIT_MAX},
+		"doctypes": _doctype_choices(),
 		"features": {
 			"search": True,
 			"approvals": True,
@@ -233,6 +235,31 @@ def _h_config(binding: dict, session: dict) -> dict:
 			"audit_all": _rank(binding) >= ta.ROLE_RANK["Admin"],
 		},
 	}
+
+
+def _doctype_choices() -> list[dict]:
+	"""Record types the bound user may read (searchable via the Mini App), capped; never denied/child/single types."""
+	import frappe
+
+	rows = frappe.get_all(
+		"DocType",
+		filters={"istable": 0, "issingle": 0, "is_virtual": 0},
+		pluck="name",
+		order_by="name asc",
+	)
+	out: list[dict] = []
+	for name in rows:
+		if name in ta.DENY_DOCTYPES:
+			continue
+		try:
+			allowed = frappe.has_permission(name, "read")
+		except Exception:
+			allowed = False
+		if allowed:
+			out.append({"name": name})
+			if len(out) >= DOCTYPE_CHOICES_MAX:
+				break
+	return out
 
 
 def _bot_name(gateway: str) -> str:
