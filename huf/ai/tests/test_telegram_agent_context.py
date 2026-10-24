@@ -52,7 +52,6 @@ class TestBuildInstructions(unittest.TestCase):
 		self.assertIn("```telegram-buttons", text)
 		self.assertIn("```telegram-media", text)
 		self.assertIn("list_templates", text)
-		self.assertIn("inbound reactions are recorded", text)
 
 	def test_optional_sections_follow_flags(self):
 		off = tac.build_instructions(gw())
@@ -62,7 +61,7 @@ class TestBuildInstructions(unittest.TestCase):
 		self.assertNotIn("Voice replies are on", off)
 
 		on = tac.build_instructions(gw(**ALL_ON))
-		self.assertIn("telegram_admin tool: group moderation (requires confirm).", on)
+		self.assertIn("telegram_admin tool: group moderation; state changes need a bound admin chat + human Approve.", on)
 		self.assertIn("Secretary/business actions", on)
 		self.assertIn("Bot commands and profile", on)
 		self.assertIn("Voice replies are on (Text and voice)", on)

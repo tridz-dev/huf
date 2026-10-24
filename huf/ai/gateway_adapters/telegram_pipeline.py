@@ -18,6 +18,7 @@ import time
 from types import SimpleNamespace
 from typing import Any
 
+from huf.ai.gateway_adapters import telegram_blocks as blocks
 from huf.ai.gateway_adapters import telegram_messages
 from huf.ai.gateway_adapters.telegram_client import TelegramApiError
 from huf.ai.gateway_adapters.telegram_format import MODE_HTML, split_message
@@ -59,32 +60,37 @@ def before_send(event: Any, gateway: Any, parts: list[str]) -> list[str]:
 
 
 def make_parts(response: str, scope: str = "") -> list[str]:
+	"""Split the agent reply into parts; strip and remember its ``telegram-media`` / ``telegram-buttons`` blocks.
+
+	Nothing is dropped silently: every block problem is recorded (operator log, Gateway Event note and the
+	agent's next-run feedback, see ``telegram_blocks.record``), and a reply that would otherwise be empty
+	becomes a short plain text naming the problem."""
 	from huf.ai.gateway_adapters import telegram_buttons
 	from huf.ai.gateway_adapters import telegram_media_reply as media_reply
 
-	response, media_items = media_reply.strip_reply(response)  # agent ```telegram-media``` block
-	response = telegram_buttons.prepare_reply(
-		response, scope=scope
-	)  # strips the button block, remembers its spec
-	response = media_reply.remember(response, media_items, scope=scope)
-	return split_message(response) or ([str(response)] if str(response or "").strip() else [])
+	visible, found = blocks.scan(response)
+	media_items, media_errors = media_reply.parse(found.get(blocks.MEDIA, []))
+	spec, button_errors = telegram_buttons.parse(found.get(blocks.BUTTONS, []))
+	errors = [f"media: {e}" for e in media_errors] + [f"buttons: {e}" for e in button_errors]
+	blocks.record(scope, errors)
+	if spec is not None:
+		visible = visible or telegram_buttons.PLACEHOLDER_TEXT
+		telegram_buttons.remember_spec(visible, spec, scope=scope)
+	if not (visible or media_items) and errors:
+		visible = blocks.problem_text(errors)
+	visible = media_reply.remember(visible, media_items, scope=scope)
+	return split_message(visible) or ([str(visible)] if str(visible or "").strip() else [])
 
 
 def reply_scope(gateway: Any, event: Any) -> str:
-	from huf.ai.gateway_adapters.telegram_media_reply import scope_key
-
-	return scope_key(
+	return blocks.scope_key(
 		getattr(gateway, "name", ""), getattr(event, "conversation_id", ""), getattr(event, "name", "")
 	)
 
 
 def spoken_text(response: str) -> str:
 	"""Reply text with the agent's ```telegram-media``` and ```telegram-buttons``` blocks removed (for TTS)."""
-	from huf.ai.gateway_adapters import telegram_buttons
-	from huf.ai.gateway_adapters import telegram_media_reply as media_reply
-
-	visible, _items = media_reply.strip_reply(response)
-	return telegram_buttons.extract(visible)[0]
+	return blocks.strip(response)
 
 
 def forum_thread_id(event: Any) -> str | None:
@@ -194,6 +200,9 @@ def send_parts_with(
 				provider_message_id=str(sent[0]) if sent else "", provider_response={"message_ids": sent}
 			)
 		reply_to = None if sent else reply_to
+	# the keyboard belongs on the final real text part, never on a trailing "could not send" note
+	real = [i for i, p in enumerate(parts) if not blocks.is_note(p)]
+	markup_at = real[-1] if real else len(parts) - 1
 	for i, part in enumerate(parts):
 		try:
 			msgs = sender.send_text(
@@ -201,7 +210,7 @@ def send_parts_with(
 				part,
 				reply_to=reply_to if i == 0 else None,
 				thread_id=thread_id,
-				markup=markup if i == len(parts) - 1 else None,
+				markup=markup if i == markup_at else None,
 				**({"ephemeral": ephemeral} if ephemeral else {}),
 			)
 		except Exception as exc:
@@ -235,6 +244,7 @@ def _send_media_first(
 	if on_sent and result.sent_ids:
 		on_sent(list(result.sent_ids))
 	if result.errors:
+		blocks.record(scope, [f"media not sent: {e}" for e in result.errors])
 		parts.append(media_reply.failure_note(result.errors))
 	return parts
 
@@ -272,9 +282,11 @@ def send_parts(gateway: Any, event: Any, parts: list[str], quote: bool) -> Simpl
 		if any(p.startswith("\u2063tg-media:") for p in parts)
 		else telegram_buttons.try_edit(sender, event, list(parts), markup)
 	)
+	scope = reply_scope(gateway, event)
 	if edited is not None:
+		blocks.attach_to_event(event, scope)
 		return edited
-	return send_parts_with(
+	delivery = send_parts_with(
 		sender,
 		event.conversation_id,
 		list(parts),
@@ -289,8 +301,10 @@ def send_parts(gateway: Any, event: Any, parts: list[str], quote: bool) -> Simpl
 		),
 		media=True,
 		ephemeral=ephemeral_for(event),
-		scope=reply_scope(gateway, event),
+		scope=scope,
 	)
+	blocks.attach_to_event(event, scope)  # block problems noted on the Gateway Event (delivery_error)
+	return delivery
 
 
 def _persist_migration(gateway: Any, old_id: str, new_id: str) -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import unittest
 
+from huf.ai.gateway_adapters import telegram_blocks as blocks
 from huf.ai.gateway_adapters import telegram_media_reply as mr
 from huf.ai.gateway_adapters import telegram_pipeline as tp
 from huf.ai.gateway_adapters.telegram import TelegramGatewayAdapter
@@ -76,9 +77,10 @@ class TestParse(unittest.TestCase):
 	def test_limits(self):
 		items, errors = mr.validate({"items": [photo(str(i)) for i in range(12)]})
 		self.assertEqual(len(items), 10)
-		self.assertTrue(any("too many" in e for e in errors))
+		self.assertTrue(any("the rest were dropped" in e for e in errors))
 		items, errors = mr.validate({"items": [photo(caption="x" * 2000)]})
-		self.assertEqual(len(items[0]["caption"]), 1024)
+		self.assertEqual(len(items[0]["caption"]), 2000)  # the sender sends the overflow as follow-up text
+		self.assertEqual(errors, [])
 
 	def test_gif_alias_spoiler_and_caption_rules(self):
 		items, _ = mr.validate(
@@ -114,9 +116,8 @@ class TestParse(unittest.TestCase):
 				]
 			}
 		)
-		self.assertEqual([i["type"] for i in items], ["contact", "poll", "dice"])
-		self.assertEqual(items[2]["emoji"], "🎲")
-		self.assertEqual(len(errors), 4)
+		self.assertEqual([i["type"] for i in items], ["contact", "poll"])
+		self.assertEqual(len(errors), 5)
 
 
 class TestSend(Base):
@@ -229,7 +230,7 @@ class TestSend(Base):
 class TestPipeline(Base):
 	def setUp(self):
 		super().setUp()
-		mr._LOCAL.d.clear()
+		blocks._LOCAL.d.clear()
 
 	def test_make_parts_strips_and_media_goes_first(self):
 		parts = tp.make_parts("Report ready.\n" + block(photo(caption="chart")))
