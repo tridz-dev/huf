@@ -1224,7 +1224,15 @@ def handle_action(**kwargs) -> str:
         return _error(f"Unknown action '{action}'. Valid actions: {valid}")
 
     try:
-        spec.validate(action, {k: v for k, v in kwargs.items() if k != "action"})
+        # The runtime may pass the conversation's gateway to any action; only some declare it for the model.
+        spec.validate(
+            action,
+            {
+                k: v
+                for k, v in kwargs.items()
+                if k != "action" and not (k == "gateway" and "gateway" not in spec.ACTION_ARGS[action])
+            },
+        )
     except spec.ArgumentRefusal as exc:
         return json.dumps({"success": False, "error": exc.code, "message": exc.message, **exc.extra})
 

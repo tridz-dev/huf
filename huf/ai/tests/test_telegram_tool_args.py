@@ -71,6 +71,7 @@ def _dispatch_actions() -> set[str]:
 
 
 _READERS = (
+	"_template_gateway",
 	"_resolve_chat_id",
 	"_chat_or_error",
 	"_common_kw",

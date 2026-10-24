@@ -24,7 +24,7 @@ from huf.ai.tools.action_args import ActionTable, ArgumentRefusal
 PARSE_MODES = ("Markdown", "HTML", "MarkdownV2")
 # What Bot API sendVoice accepts; used by the registry text and by the Frappe File check in the handler.
 VOICE_FORMATS = "OGG/Opus, MP3 or M4A"
-INTERNAL_ARGS = ("gateway", "conversation_id", "agent_run_id", "agent_name", "call_id")
+INTERNAL_ARGS = ("conversation_id", "agent_run_id", "agent_name", "call_id")
 
 _SOURCE = "Telegram file_id, public https URL, or Frappe File name/file_url"
 

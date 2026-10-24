@@ -118,6 +118,9 @@ class FakeMeta:
 class FakeFrappe:
 	"""In-memory tables + per-user read permissions + a two-step workflow. Patched into ``frappe``."""
 
+	def sql(self, *a, **k):  # Sessions lookup of revoke_binding_sessions: no web sessions in this fake
+		return []
+
 	def __init__(self):
 		self.tables = {
 			"Gateway": [{"name": GW, "provider": "Telegram", "gateway_name": "Huf Ops Bot"}],

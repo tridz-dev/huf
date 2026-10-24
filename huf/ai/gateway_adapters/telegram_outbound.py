@@ -428,7 +428,12 @@ class TelegramSender:
 			raise ValueError(
 				"Telegram albums cannot carry a keyboard; send the buttons in a separate message"
 			)
-		sender = self
+		mode = self.parse_mode if parse_mode is None else parse_mode
+		sender = (
+			self
+			if mode == self.parse_mode
+			else TelegramSender(self.client, parse_mode=mode, reply_style=self.reply_style)
+		)
 		payload = self._common(chat_id, reply_to=reply_to, thread_id=thread_id, silent=silent, protect=protect)
 		media_json, files, follow_ups = [], {}, []
 		for i, item in enumerate(items):
@@ -455,7 +460,7 @@ class TelegramSender:
 				entry["caption"] = caption
 				entry["parse_mode"] = parse_mode
 			elif caption:
-				parts = render_parts(caption, self.parse_mode, TELEGRAM_CAPTION_LIMIT)
+				parts = render_parts(caption, mode, TELEGRAM_CAPTION_LIMIT)
 				if len(parts) == 1:
 					entry["caption"] = parts[0].text
 					if parts[0].parse_mode:
