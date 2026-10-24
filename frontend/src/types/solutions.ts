@@ -126,6 +126,19 @@ export interface RouteDecision {
   reply_text: string | null;
 }
 
+/** Unsaved wizard rules injected as a virtual live solution (simulate_route addendum 2). */
+export interface SimulateDraft {
+  title: string;
+  gateway: string;
+  intent?: string;
+  inbound: boolean;
+  entries: Array<{
+    match_type: 'Keyword' | 'Ad or link tag' | 'Catch-all' | 'Triage';
+    match_values: string[];
+  }>;
+  catch_all?: boolean;
+}
+
 export interface SimulateRequest {
   gateway: string;
   text: string;
@@ -135,6 +148,7 @@ export interface SimulateRequest {
     triage_pending?: boolean;
   };
   keyword_beats_pin?: boolean;
+  draft?: SimulateDraft;
 }
 
 export type IntentEntryKind = 'keywords' | 'catchall' | 'allowlist' | 'none';

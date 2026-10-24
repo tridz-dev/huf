@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { simulateRoute } from '@/services/solutionsApi';
-import type { RouteDecision, SimulateRequest } from '@/types/solutions';
+import type { RouteDecision, SimulateDraft, SimulateRequest } from '@/types/solutions';
 
 export type TraceLine = { k: 'win' | 'skip' | 'info'; t: string };
 
@@ -20,6 +20,8 @@ export interface ChatPin {
 interface Options {
   gateway: string;
   solutionLabels?: Record<string, string>;
+  /** Unsaved rules sent as SimulateRequest.draft on every call. */
+  draft?: SimulateDraft;
 }
 
 const DEFAULT_PIN_HOURS = 24;
@@ -35,7 +37,7 @@ function hoursFromExpiry(expiresAt: string | undefined): number {
  * Simulation-only chat state. Every send calls simulate_route; nothing real is
  * sent and no agent is run. The pin is held locally and fed back each call.
  */
-export function useTestChat({ gateway, solutionLabels }: Options) {
+export function useTestChat({ gateway, solutionLabels, draft }: Options) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [trace, setTrace] = useState<TraceLine[]>([]);
   const [pin, setPin] = useState<ChatPin | null>(null);
@@ -72,6 +74,7 @@ export function useTestChat({ gateway, solutionLabels }: Options) {
         keyword_beats_pin: keywordBeatsPin,
       };
       if (ref) request.ref = ref;
+      if (draft) request.draft = draft;
       try {
         const d: RouteDecision = await simulateRoute(request);
         setTrace(d.trace ?? []);
@@ -95,7 +98,7 @@ export function useTestChat({ gateway, solutionLabels }: Options) {
         setLoading(false);
       }
     },
-    [gateway, keywordBeatsPin, labelOf, loading, pin, push, triagePending],
+    [draft, gateway, keywordBeatsPin, labelOf, loading, pin, push, triagePending],
   );
 
   const expire = useCallback(() => {

@@ -134,4 +134,13 @@ describe('TestChat', () => {
     expect(screen.getByText(/No pin yet/)).toBeInTheDocument();
     expect(screen.queryByText('Keyword cake matched')).toBeNull();
   });
+
+  it('sends the draft on every simulate call', async () => {
+    mock.mockResolvedValue(decision());
+    const draft = { title: 'New', gateway: 'gw1', inbound: true, entries: [{ match_type: 'Keyword' as const, match_values: ['cake'] }] };
+    render(<TestChat gateways={gateways} draft={draft} solutionLabels={labels} />);
+    await say('cake');
+    await waitFor(() => expect(mock).toHaveBeenCalledTimes(1));
+    expect(mock.mock.calls[0][0].draft).toEqual(draft);
+  });
 });
