@@ -7,23 +7,21 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
-SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
+from huf.ai.telegram_templates import (
+	TEMPLATE_NAME_HELP,
+	TEMPLATE_NAME_RE,
+	VAR_NAME_RE,
+	button_problems,
+	detect_variables,
+	placeholder_problems,
+)
+
 LANG_RE = re.compile(r"^[a-z]{2,3}([-_][A-Za-z0-9]{2,8})*$")
-VAR_RE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 TAG_RE = re.compile(r"<(/?)([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*>")
 HTML_TAGS = {
 	"b", "strong", "i", "em", "u", "ins", "s", "strike", "del", "a", "code", "pre",
 	"span", "tg-spoiler", "tg-emoji", "blockquote",
 }  # fmt: skip
-
-
-def body_variables(body: str) -> list[str]:
-	"""Distinct {{variable}} names in first-seen order."""
-	seen: list[str] = []
-	for name in VAR_RE.findall(body or ""):
-		if name not in seen:
-			seen.append(name)
-	return seen
 
 
 def html_problems(body: str) -> list[str]:
@@ -46,24 +44,11 @@ def html_problems(body: str) -> list[str]:
 	return problems
 
 
-def buttons_errors(raw: str) -> list[str]:
-	"""Errors for a buttons JSON string, using the telegram-buttons validator."""
-	from huf.ai.gateway_adapters import telegram_buttons
-
-	_spec, errors = telegram_buttons.validate(raw)
-	return list(errors or [])
-
-
 class TelegramMessageTemplate(Document):
 	def validate(self):
 		name = (self.template_name or "").strip()
-		if not SLUG_RE.match(name):
-			frappe.throw(
-				_(
-					"Template name must be lowercase letters, digits, dashes or underscores, "
-					"start with a letter or digit, and be at most 63 characters."
-				)
-			)
+		if not TEMPLATE_NAME_RE.match(name):
+			frappe.throw(_(TEMPLATE_NAME_HELP))
 		self.template_name = name
 
 		media_type = self.media_type or "none"
@@ -81,11 +66,11 @@ class TelegramMessageTemplate(Document):
 
 		declared = {(row.variable or "").strip() for row in self.get("variables") or []}
 		for row in self.get("variables") or []:
-			if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", (row.variable or "").strip()):
+			if not VAR_NAME_RE.fullmatch((row.variable or "").strip()):
 				frappe.throw(
 					_("Variable {0} must use letters, digits and underscores only.").format(row.variable)
 				)
-		missing = [v for v in body_variables(self.body) if v not in declared]
+		missing = [v for v in detect_variables(self.body, self.buttons_json) if v not in declared]
 		if missing:
 			frappe.msgprint(
 				_(
@@ -100,7 +85,11 @@ class TelegramMessageTemplate(Document):
 			if problems:
 				frappe.throw("<br>".join(problems))
 
+		bad = placeholder_problems(self.body, self.buttons_json)
+		if bad:
+			frappe.throw("<br>".join(bad))
+
 		if (self.buttons_json or "").strip():
-			errors = buttons_errors(self.buttons_json)
+			errors = button_problems(self.buttons_json)
 			if errors:
 				frappe.throw(_("Buttons are not valid: {0}").format("; ".join(errors)))

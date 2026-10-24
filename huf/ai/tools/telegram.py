@@ -896,27 +896,52 @@ def _variables(kwargs: dict) -> dict:
 
 
 def _template_gateway(kwargs: dict) -> Optional[str]:
-    return scope.run_gateway() or str(kwargs.get("gateway") or "").strip() or None
+    """The Telegram gateway an action works on, or None.
+
+    Inside a gateway run it is the run's own gateway and a model-supplied ``gateway`` is never used.
+    Outside one the (declared, required) ``gateway`` argument is honoured only for an operator who may
+    manage that gateway (integration managers or Gateway write permission); anyone else gets None."""
+    name = scope.run_gateway()
+    if name:
+        return name
+    if scope.gateway_state()[0] != "none":
+        return None
+    named = str(kwargs.get("gateway") or "").strip()
+    if not named:
+        return None
+    try:
+        from huf.ai.telegram_management import _require_gateway_admin
+
+        _require_gateway_admin(named)
+    except frappe.PermissionError:
+        return None
+    return named
+
+
+def _template_gateway_doc(kwargs: dict):
+    """``(Gateway document, None)`` for the action's gateway, or ``(None, error JSON)``."""
+    name = _template_gateway(kwargs)
+    if not name:
+        return None, _error(
+            "gateway is required outside a Telegram gateway conversation (and you must be allowed to manage it)"
+        )
+    row = frappe.db.get_value("Gateway", name, ["provider", "is_enabled"], as_dict=True)
+    if not row or row.get("provider") != scope.PROVIDER or not row.get("is_enabled"):
+        return None, _error(f"'{name}' is not an enabled Telegram gateway")
+    return frappe.get_doc("Gateway", name), None
 
 
 def _template_name(kwargs: dict):
-    name = str(kwargs.get("template_name") or kwargs.get("name") or "").strip()
+    name = str(kwargs.get("template_name") or "").strip()
     return name, (None if name else _error("template_name is required"))
 
 
-def _plain(value):
-    if isinstance(value, dict):
-        return value
-    if hasattr(value, "_asdict"):
-        return dict(value._asdict())
-    if hasattr(value, "__dict__"):
-        return {k: v for k, v in vars(value).items() if not k.startswith("_")}
-    return value
-
-
 def _handle_list_templates(**kwargs) -> str:
+    gateway, err = _template_gateway_doc(kwargs)
+    if err:
+        return err
     try:
-        return _ok(_templates().list_templates(_template_gateway(kwargs)))
+        return _ok(_templates().list_templates(gateway))
     except Exception as exc:
         return _error(f"Could not list templates: {exc}")
 
@@ -925,11 +950,13 @@ def _handle_preview_template(**kwargs) -> str:
     name, err = _template_name(kwargs)
     if err:
         return err
+    gateway, err = _template_gateway_doc(kwargs)
+    if err:
+        return err
     try:
-        rendered = _templates().render_template(name, _variables(kwargs), _template_gateway(kwargs))
+        return _ok(_templates().preview_template(name, _variables(kwargs), gateway))
     except Exception as exc:
         return _error(f"Could not render template: {exc}")
-    return _ok(_plain(rendered))
 
 
 def _handle_send_template(**kwargs) -> str:
@@ -939,26 +966,30 @@ def _handle_send_template(**kwargs) -> str:
     name, err = _template_name(kwargs)
     if err:
         return err
-    gateway = _template_gateway(kwargs)
-    if not gateway:
-        return _error("gateway is required outside a Telegram gateway conversation")
-    token = _token_for_run()
-    if not token:
-        update_last_error(SERVICE_NAME, "Telegram bot token not configured")
-        return _error("Telegram bot token not configured")
-    client = _make_client(token)
-    thread = kwargs.get("message_thread_id")
-    reply = kwargs.get("reply_to_message_id")
+    gateway, err = _template_gateway_doc(kwargs)
+    if err:
+        return err
+    sender = None
     try:
+        sender, signer = _templates().build_sender(gateway)
+        thread = kwargs.get("message_thread_id")
+        reply = kwargs.get("reply_to_message_id")
         result = _templates().send_template(
-            gateway, chat_id, name, _variables(kwargs) or None, thread_id=_coerce_int(thread) if thread else None,
-            reply_to=_coerce_int(reply) if reply else None, sender=TelegramSender(client),
+            gateway, chat_id, name, _variables(kwargs) or None,
+            thread_id=_coerce_int(thread) if thread else None,
+            reply_to=_coerce_int(reply) if reply else None,
+            silent=_truthy(kwargs.get("disable_notification")),
+            protect=_truthy(kwargs.get("protect_content")),
+            sender=sender,
+            sign=lambda payload: signer(payload, chat_id),
         )
     except TelegramApiError as exc:
-        return _error(f"Telegram sendTemplate {client.redact(exc.description)}")
+        redact = sender.client.redact if sender else str
+        return _error(f"Telegram sendTemplate {redact(exc.description)}")
     except Exception as exc:
-        return _error(f"Could not send template: {client.redact(exc)}")
-    return _ok(_plain(result))
+        redact = sender.client.redact if sender else str
+        return _error(f"Could not send template: {redact(exc)}")
+    return _ok(result)
 
 
 # -- read-only chat info ----------------------------------------------------------------------------

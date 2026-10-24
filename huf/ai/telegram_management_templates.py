@@ -4,8 +4,8 @@
 """Telegram Message Template management API (gateway admins only).
 
 CRUD for the ``Telegram Message Template`` doctype, a no-send preview, and a guarded test send.
-Rendering/sending is owned by ``huf.ai.telegram_templates`` (lazy import); a small local renderer is
-used only when that module is absent. A test send is refused unless the destination chat is one the
+Rendering/sending is owned by ``huf.ai.telegram_templates``: previews (saved or unsaved) and sends use
+its single render implementation. A test send is refused unless the destination chat is one the
 caller paired/approved themselves, or one explicitly marked as a test chat on a Gateway Access Entry.
 """
 
@@ -18,6 +18,7 @@ from typing import Any
 import frappe
 from frappe import _
 
+from huf.ai import telegram_templates
 from huf.ai.telegram_management import (
 	TELEGRAM_PROVIDER,
 	_can_manage_integrations,
@@ -29,10 +30,7 @@ DOCTYPE = "Telegram Message Template"
 PARSE_MODES = ("Plain", "HTML", "MarkdownV2")
 MEDIA_TYPES = ("none", "photo", "video", "animation", "document", "audio", "voice", "sticker")
 TEST_CHAT_MARKER = "telegram-test"
-TEXT_LIMIT = 4096
-CAPTION_LIMIT = 1024
-NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _\-]{0,79}$")
-VAR_RE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
+TEXT_LIMIT = telegram_templates.TELEGRAM_TEXT_LIMIT
 _FIELDS = [
 	"name",
 	"template_name",
@@ -78,16 +76,6 @@ def _as_dict(raw: Any) -> dict[str, Any] | None:
 	return raw if isinstance(raw, dict) else None
 
 
-def detect_variables(*texts: str) -> list[str]:
-	"""Variable names used in the given texts, in first-seen order."""
-	seen: list[str] = []
-	for text in texts:
-		for m in VAR_RE.finditer(text or ""):
-			if m.group(1) not in seen:
-				seen.append(m.group(1))
-	return seen
-
-
 def _problem(field: str, message: str) -> dict[str, str]:
 	return {"field": field, "message": message}
 
@@ -98,10 +86,8 @@ def validate_values(values: dict[str, Any]) -> list[dict[str, str]]:
 	name = str(values.get("template_name") or "").strip()
 	if not name:
 		out.append(_problem("template_name", "Give the template a name."))
-	elif not NAME_RE.match(name):
-		out.append(
-			_problem("template_name", "Use letters, numbers, spaces, dashes and underscores (max 80).")
-		)
+	elif not telegram_templates.TEMPLATE_NAME_RE.match(name):
+		out.append(_problem("template_name", telegram_templates.TEMPLATE_NAME_HELP))
 	mode = values.get("parse_mode") or "HTML"
 	if mode not in PARSE_MODES:
 		out.append(_problem("parse_mode", "Parse mode must be Plain, HTML or MarkdownV2."))
@@ -109,30 +95,25 @@ def validate_values(values: dict[str, Any]) -> list[dict[str, str]]:
 	if media_type not in MEDIA_TYPES:
 		out.append(_problem("media_type", "Unknown media type."))
 	body = str(values.get("body") or "")
-	has_media = media_type not in ("none", "sticker") and media_type in MEDIA_TYPES
 	if media_type != "none" and media_type in MEDIA_TYPES and not values.get("media"):
 		out.append(_problem("media", "Attach a file or enter a link for the media."))
 	if not body.strip() and media_type in ("none", ""):
 		out.append(_problem("body", "Write the message text."))
 	if len(body) > TEXT_LIMIT:
 		out.append(_problem("body", f"Telegram allows at most {TEXT_LIMIT} characters of text."))
-	elif has_media and len(body) > CAPTION_LIMIT:
-		out.append(
-			_problem("body", f"With media the text is sent as a caption (max {CAPTION_LIMIT} characters).")
-		)
 	buttons = values.get("buttons_json")
-	if buttons and str(buttons).strip():
-		from huf.ai.gateway_adapters import telegram_buttons
-
-		# Variables inside button values are substituted at send time, so validate with placeholders swapped.
-		probe = VAR_RE.sub("x", buttons if isinstance(buttons, str) else json.dumps(buttons))
-		spec, errors = telegram_buttons.validate(probe)
-		if spec is None or errors:
-			out.append(_problem("buttons_json", "; ".join(errors) or "Invalid buttons."))
+	buttons_text = "" if buttons is None else buttons if isinstance(buttons, str) else json.dumps(buttons)
+	bad = telegram_templates.placeholder_problems(body, buttons_text)
+	if bad:
+		out.append(_problem("body", "; ".join(bad)))
+	if buttons_text.strip():
+		errors = telegram_templates.button_problems(buttons_text)
+		if errors:
+			out.append(_problem("buttons_json", "; ".join(errors)))
 	seen: set[str] = set()
 	for i, row in enumerate(values.get("variables") or []):
 		var = str((row or {}).get("variable") or "").strip()
-		if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", var):
+		if not telegram_templates.VAR_NAME_RE.fullmatch(var):
 			out.append(_problem(f"variables.{i}", "Variable names use letters, numbers and underscores."))
 		elif var in seen:
 			out.append(_problem(f"variables.{i}", f"Variable {var} is listed twice."))
@@ -259,76 +240,38 @@ def delete_template(name: str | None = None) -> dict[str, Any]:
 # -- preview ---------------------------------------------------------------------------------------
 
 
-def _escape(mode: str, text: str) -> str:
-	from huf.ai.gateway_adapters.telegram_format import escape_html, escape_markdown_v2
-
-	return escape_html(text) if mode == "HTML" else escape_markdown_v2(text) if mode == "MarkdownV2" else text
-
-
-def local_render(values: dict[str, Any], variables: dict[str, Any] | None) -> dict[str, Any]:
-	"""Safe fallback renderer: substitutes escaped values; unknown variables are reported, never evaluated."""
-	mode = values.get("parse_mode") or "HTML"
-	defaults = {
-		str(v.get("variable")): str(v.get("default_value") or "") for v in values.get("variables") or []
-	}
-	given = {str(k): str(v) for k, v in (variables or {}).items() if v not in (None, "")}
-	missing: list[str] = []
-
-	def sub(match: re.Match) -> str:
-		key = match.group(1)
-		val = given.get(key) or defaults.get(key)
-		if not val:
-			if key not in missing:
-				missing.append(key)
-			return match.group(0)
-		return _escape(mode, val)
-
-	text = VAR_RE.sub(sub, str(values.get("body") or ""))
-	markup = None
-	errors: list[str] = []
-	buttons = values.get("buttons_json")
-	if buttons and str(buttons).strip():
-		from huf.ai.gateway_adapters import telegram_buttons
-
-		spec, errors = telegram_buttons.validate(
-			VAR_RE.sub(lambda m: given.get(m.group(1)) or defaults.get(m.group(1)) or "x", buttons)
-		)
-		if spec:
-			markup = telegram_buttons.build_markup(spec, lambda p: p)
-	media = None
-	if (values.get("media_type") or "none") != "none" and values.get("media"):
-		media = {"type": values["media_type"], "source": "file_url", "value": values["media"]}
-	return {
-		"text": text,
-		"parse_mode": "" if mode == "Plain" else mode,
-		"media": media,
-		"markup": markup,
-		"missing": missing,
-		"errors": errors,
-	}
+def _gateway_doc(name: str | None):
+	"""The Telegram Gateway document (parse mode and link-preview settings apply to renders), or None."""
+	if not name or not frappe.db.exists("Gateway", {"name": name, "provider": TELEGRAM_PROVIDER}):
+		return None
+	return frappe.get_doc("Gateway", name)
 
 
 @frappe.whitelist(methods=["POST"])
 def preview_template(
 	name_or_values: Any = None, variables: Any = None, gateway: str | None = None
 ) -> dict[str, Any]:
-	"""No-send preview of a saved template (by name) or unsaved editor values (object)."""
+	"""No-send preview of a saved template (by name) or unsaved editor values (object). Same render as a
+	send; blanks fall back to each variable's example."""
 	_require_manager()
 	vars_ = _as_dict(variables) or {}
 	values = _as_dict(name_or_values)
+	if gateway:
+		_require_gateway_admin(gateway)
 	if values is None:
 		name = str(name_or_values or "")
 		if not name or not frappe.db.exists(DOCTYPE, name):
 			return _error("not_found", "Template not found.")
-		_require_doctype("read", frappe.get_doc(DOCTYPE, name))
-		try:
-			from huf.ai import telegram_templates
-		except ImportError:
-			telegram_templates = None
-		if telegram_templates is not None:
-			return {"success": True, "preview": telegram_templates.preview_template(name, vars_, gateway)}
-		values = _row(frappe.get_doc(DOCTYPE, name))
-	return {"success": True, "preview": local_render(values, vars_)}
+		doc = frappe.get_doc(DOCTYPE, name)
+		_require_doctype("read", doc)
+		if doc.get("gateway"):
+			_require_gateway_admin(doc.gateway)
+		values = _row(doc)
+		gateway = gateway or doc.get("gateway")
+	return {
+		"success": True,
+		"preview": telegram_templates.preview_values(values, vars_, _gateway_doc(gateway)),
+	}
 
 
 # -- test send -------------------------------------------------------------------------------------
@@ -377,10 +320,6 @@ def send_test_template(
 	if not name or not frappe.db.exists(DOCTYPE, name):
 		return _error("not_found", "Template not found.")
 	_require_doctype("read", frappe.get_doc(DOCTYPE, name))
-	try:
-		from huf.ai import telegram_templates
-	except ImportError:
-		return _error("unavailable", "Template sending is not available on this site yet.")
 	try:
 		result = telegram_templates.send_template(
 			frappe.get_doc("Gateway", gateway), chat, name, _as_dict(variables) or {}

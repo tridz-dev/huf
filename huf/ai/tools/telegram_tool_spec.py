@@ -24,7 +24,7 @@ from huf.ai.tools.action_args import ActionTable, ArgumentRefusal
 PARSE_MODES = ("Markdown", "HTML", "MarkdownV2")
 # What Bot API sendVoice accepts; used by the registry text and by the Frappe File check in the handler.
 VOICE_FORMATS = "OGG/Opus, MP3 or M4A"
-INTERNAL_ARGS = ("gateway", "conversation_id", "agent_run_id", "agent_name", "call_id")
+INTERNAL_ARGS = ("conversation_id", "agent_run_id", "agent_name", "call_id")
 
 _SOURCE = "Telegram file_id, public https URL, or Frappe File name/file_url"
 
@@ -143,6 +143,11 @@ ARG_TYPES: dict[str, tuple[str, str]] = {
 	"tasks": ("array", "send_checklist: 1-30 task strings."),
 	"others_can_add_tasks": ("boolean", "send_checklist: let other users add tasks."),
 	"others_can_mark_tasks_as_done": ("boolean", "send_checklist: let other users mark tasks done."),
+	"gateway": (
+		"string",
+		"Telegram Gateway name. Ignored inside a Telegram gateway conversation (that conversation's gateway is "
+		"used). Required outside one, and only for gateways you are allowed to manage.",
+	),
 	"template_name": ("string", "Telegram Message Template name."),
 	"variables": ("object", "{variable: value} for the template's {{var}} placeholders."),
 	"file_id": ("string", "get_file: Telegram file_id to download (up to 20 MB)."),
@@ -277,16 +282,24 @@ ACTION_ARGS: dict[str, dict[str, bool]] = {
 	),
 	"send_template": _spec(
 		"template_name",
-		optional=("variables", "reply_to_message_id", "message_thread_id", "idempotency_key"),
+		optional=(
+			"variables",
+			"gateway",
+			"reply_to_message_id",
+			"message_thread_id",
+			"disable_notification",
+			"protect_content",
+			"idempotency_key",
+		),
 	),
-	"list_templates": _spec(target=False),
-	"preview_template": _spec("template_name", optional=("variables",), target=False),
+	"list_templates": _spec(optional=("gateway",), target=False),
+	"preview_template": _spec("template_name", optional=("variables", "gateway"), target=False),
 	"get_file": _spec("file_id", target=False),
 	"get_chat_member": _spec("user_id"),
 	"get_chat_administrators": _spec(),
 	"get_chat_member_count": _spec(),
-	"list_messages": _spec(optional=("limit",)),
-	"get_account_info": _spec(target=False),
+	"list_messages": _spec(optional=("limit", "gateway")),
+	"get_account_info": _spec(optional=("gateway",), target=False),
 }
 
 TABLE = ActionTable(ARG_TYPES, ACTION_ARGS, internal=INTERNAL_ARGS, enums=ENUMS)

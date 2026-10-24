@@ -531,39 +531,59 @@ Fields:
 
 | Field | Meaning |
 |---|---|
-| `template_name` | Required name. Agents and the API refer to templates by this name. |
+| `template_name` | Required name, lowercase slug `^[a-z0-9][a-z0-9_-]{0,62}$` (one rule for the doctype, the API, the UI and agents). Agents and the API refer to templates by this name. |
 | `gateway` | Optional Gateway link. Empty means global. A template bound to one gateway refuses other gateways. |
 | `is_active` | Inactive templates cannot be sent or listed. Default on. |
 | `language`, `description` | Free text for the author. |
 | `parse_mode` (Text formatting) | Plain, HTML (default) or MarkdownV2. |
-| `body` (Message text) | The text. `{{variable}}` placeholders. |
+| `body` (Message text) | The text, up to 4096 characters. `{{variable}}` placeholders. With media a body over 1024 characters is allowed: it is sent as a second message. |
 | `variables` (child `Telegram Template Variable`) | `variable`, `default_value`, `example`. Defaults fill placeholders when the caller omits them. |
 | `media_type` | none (default), photo, video, animation, document, audio, voice or sticker. |
 | `media` | Attach a Frappe File. Private files are read only if the current session user can read them. |
 | `buttons_json` | Buttons in the same schema as the `telegram-buttons` block (section 4.1). |
 | `last_used_at` | Set on each successful send. |
 
-Rendering rules:
+Rendering rules (ONE implementation, `telegram_templates.render_values`, used by send, the agent preview and the
+management preview; the UI preview mirrors it and `parity.fixtures.json` is run by both pytest and vitest):
 
-- `{{name}}` is replaced by the caller's variables, then by the template's variable defaults. Unknown variables
-  are reported in `missing` and replaced by an empty string. They raise an error only in strict mode.
+- Placeholders are `{{name}}` or `{{name|url}}`. Variable names are `[A-Za-z_][A-Za-z0-9_]*` everywhere (render,
+  doctype, API, UI). Anything else in braces (`{{a.b}}`, `{{x|upper}}`) is rejected on save.
+- `{{name}}` is replaced by the caller's variables, then by the template's variable defaults. A blank caller value
+  counts as not given. Unknown variables are reported in `missing` and replaced by an empty string; they raise an
+  error only in strict mode. Editor previews also fall back to the variable's `example`; a send and the agent
+  `preview_template` do not, so `missing` there predicts what a send would refuse.
 - Substituted values are escaped for the template's parse mode (HTML or MarkdownV2), so a value such as `<b>`
-  cannot inject markup. Variables inside `buttons_json` are substituted JSON-safely.
-- Errors that block sending: text over the Telegram limit, a button problem, media type not supported, or an
-  empty result with no media.
-- Sending: a media template sends the media with the text as caption when the text fits the caption limit
-  (sticker and video note take no caption); otherwise media first and text after. Buttons ride on the last
-  message. The gateway's silent and protect-content settings apply. `send_template` refuses when variables are
-  missing unless `allow_missing` is set.
+  cannot inject markup. A value placed inside an HTML tag (`<a href="{{u}}">`) is also quote-escaped, so it cannot
+  break out of the attribute. Variables inside `buttons_json` are substituted JSON-safely.
+- URL values: `{{q|url}}` percent-encodes the value (use it for query values such as `?q={{q|url}}`, in a body
+  link or a button url). A plain `{{u}}` is the raw value, which is what a whole-URL variable needs
+  (`"web_app": "{{u}}"`). The send-time button validation stays strict (a web_app / login_url must resolve to https).
+- Save-time button validation substitutes `https://a.co/x` for every placeholder, so `{{var}}` is accepted in url,
+  web_app, login_url and callback values; the real values are validated again at send time.
+- Errors that block sending: text over 4096 characters (measured on the rendered text), a button problem, media
+  type not supported, or an empty result with no media.
+- Sending: a media template sends the media with the text as caption when the rendered text fits the caption limit
+  (sticker and video note take no caption); otherwise media first and text after (the previews show this as two
+  messages). Buttons ride on the last message. The gateway's silent, protect-content, link-preview and default
+  parse-mode settings apply (the real Gateway document is used); the agent's `disable_notification` /
+  `protect_content` can only add to them. `send_template` refuses when variables are missing unless
+  `allow_missing` is set. Callback buttons are signed for the target chat.
+- Template media is uploaded as a private file: the server reads the file and uploads the bytes to Telegram, so
+  no public URL is needed. A pasted https link is passed to Telegram as a URL.
 - The template layer does not check who may message a chat. Callers (agent tool, UI) must already have passed
   the recipient-scope checks.
 
 Agent actions (section 9.1):
 
-- `list_templates`: active templates usable on the run's gateway.
+- Gateway: inside a Telegram gateway conversation the run's own gateway is used and a model-supplied `gateway`
+  is ignored. Outside one, `gateway` is required (declared in the schema) and is honoured only for someone who may
+  manage that gateway (integration manage right or Gateway write permission); a disabled or non-Telegram gateway
+  is refused. The same rule serves `list_messages` and `get_account_info` (`_template_gateway`).
+- `list_templates`: active templates usable on the gateway.
 - `preview_template` (`template_name`, `variables`): renders without sending and returns text, parse mode,
-  media, buttons and `missing`/`errors`.
-- `send_template` (`template_name`, `variables`): renders and sends. Counts against send caps.
+  media, `split`, buttons (callback ids unsigned) and `missing`/`errors`.
+- `send_template` (`template_name`, `variables`, optional `reply_to_message_id`, `message_thread_id`,
+  `disable_notification`, `protect_content`): renders and sends. Counts against send caps.
 
 UI: the **Templates** tab (section 12) lists templates and edits them (`TemplateEditor`, `VariablesTable`,
 `ButtonsEditor`), previews them (`TemplatePreview`) and sends a test (`SendTestDialog`). Endpoints in

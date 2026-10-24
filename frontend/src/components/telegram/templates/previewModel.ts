@@ -1,4 +1,4 @@
-import { detectVariables, type ParseMode, type TemplateDraft } from '@/services/telegramTemplatesApi';
+import { CAPTION_LIMIT, TEXT_LIMIT, detectVariables, placeholderRe, type ParseMode, type TemplateDraft } from '@/services/telegramTemplatesApi';
 
 /** Formatting model for the Telegram-bubble preview. Pure: no React, no network. */
 
@@ -152,25 +152,38 @@ export function parseFormatted(src: string, mode: ParseMode): FormatNode[] {
 }
 
 const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// Inside a tag (an attribute value) quotes must be escaped too, like Python's html.escape(quote=True).
+const escapeHtmlAttr = (s: string) => escapeHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
 const escapeMd = (s: string) => s.replace(/([_*[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+// Python's urllib.parse.quote(value, safe=""): encodeURIComponent also keeps !'()*
+const urlEncode = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+const inHtmlTag = (src: string, pos: number) => src.lastIndexOf('<', pos - 1) > src.lastIndexOf('>', pos - 1);
 
-/** Substitute {{var}} with an (escaped) value; variables without a value are listed in `missing`. */
+/**
+ * Mirror of telegram_templates._substitute (the backend render is the source of truth; the shared
+ * parity.fixtures.json keeps the two identical). `{{var}}` -> escaped value, `{{var|url}}` -> percent-encoded
+ * value; a variable without a value becomes '' and is listed in `missing`.
+ */
 export function substituteVariables(src: string, values: Record<string, string>, mode: ParseMode): { text: string; missing: string[] } {
 	const missing: string[] = [];
 	const esc = mode === 'HTML' ? escapeHtml : mode === 'MarkdownV2' ? escapeMd : (s: string) => s;
-	const text = src.replace(/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g, (whole, name: string) => {
-		const v = values[name];
-		if (v) return esc(v);
-		if (!missing.includes(name)) missing.push(name);
-		return whole;
+	const text = src.replace(placeholderRe(), (_whole, name: string, filter: string | undefined, offset: number) => {
+		const raw = values[name];
+		if (!raw) {
+			if (!missing.includes(name)) missing.push(name);
+			return '';
+		}
+		const v = filter === 'url' ? urlEncode(raw) : raw;
+		return mode === 'HTML' && inHtmlTag(src, offset) ? escapeHtmlAttr(v) : esc(v);
 	});
 	return { text, missing };
 }
 
-/** Preview values: typed sample, else the variable's default, else its example. */
-export function sampleValues(draft: Pick<TemplateDraft, 'variables'>, typed: Record<string, string>): Record<string, string> {
+/** Values the preview substitutes: typed, else the variable's default, else (editor previews) its example. */
+export function sampleValues(draft: Pick<TemplateDraft, 'variables'>, typed: Record<string, string>, examples = true): Record<string, string> {
 	const out: Record<string, string> = {};
-	for (const v of draft.variables) out[v.variable] = typed[v.variable] || v.default_value || v.example || '';
+	for (const v of draft.variables) out[v.variable] = typed[v.variable] || v.default_value || (examples ? v.example : '') || '';
+	for (const [k, v] of Object.entries(typed)) if (v) out[k] = v;
 	return out;
 }
 
@@ -244,23 +257,31 @@ export function validateButtons(model: ButtonsModel): string[] {
 
 export interface BubbleModel {
 	media: { type: string; url: string } | null;
+	/** The rendered message text (what Telegram receives). */
+	text: string;
 	nodes: FormatNode[];
 	rows: { text: string; kind: ButtonKind }[][];
 	missing: string[];
+	/** Media and text are two messages (text over the caption limit, or a media kind without captions). */
+	split: boolean;
 	overLimit: boolean;
 }
 
-export function buildBubble(draft: TemplateDraft, typed: Record<string, string> = {}): BubbleModel {
-	const values = sampleValues(draft, typed);
-	const { text, missing } = substituteVariables(draft.body, values, draft.parse_mode);
+/** Same rules as telegram_templates.render_values; `examples: false` is exactly what a send would use. */
+export function buildBubble(draft: TemplateDraft, typed: Record<string, string> = {}, examples = true): BubbleModel {
+	const values = sampleValues(draft, typed, examples);
+	const rendered = substituteVariables(draft.body, values, draft.parse_mode);
+	const text = rendered.text.trim();
 	const buttons = parseButtons(draft.buttons_json);
 	const mediaOn = draft.media_type !== 'none' && Boolean(draft.media.trim());
-	const limit = mediaOn && draft.media_type !== 'sticker' ? 1024 : 4096;
+	const inline = mediaOn && text !== '' && text.length <= CAPTION_LIMIT && draft.media_type !== 'sticker';
 	return {
 		media: mediaOn ? { type: draft.media_type, url: draft.media.trim() } : null,
+		text,
 		nodes: parseFormatted(text, draft.parse_mode),
 		rows: (buttons?.rows ?? []).filter((r) => r.length).map((r) => r.map((b) => ({ text: substituteVariables(b.text, values, 'Plain').text, kind: b.kind }))),
-		missing: [...new Set([...missing, ...detectVariables(draft.buttons_json).filter((v) => !values[v])])],
-		overLimit: draft.body.length > limit,
+		missing: [...new Set([...rendered.missing, ...detectVariables(draft.buttons_json).filter((v) => !values[v])])],
+		split: mediaOn && text !== '' && !inline,
+		overLimit: text.length > TEXT_LIMIT,
 	};
 }

@@ -46,6 +46,12 @@ describe('TemplatePreview', () => {
 		expect(screen.queryByRole('button', { name: /hidden text/i })).toBeNull();
 	});
 
+	it('shows long text with media as a second message', () => {
+		render(<TemplatePreview draft={draft({ body: 'x'.repeat(1100), media_type: 'photo', media: 'https://x.io/a.jpg' })} />);
+		expect(screen.getByTestId('preview-text-message')).toBeTruthy();
+		expect(screen.getByText(/sent as a second message/)).toBeTruthy();
+	});
+
 	it('warns about missing samples and over-long text', () => {
 		render(<TemplatePreview draft={draft({ body: `{{z}} ${'x'.repeat(4100)}` })} />);
 		expect(screen.getByText(/No sample for/).textContent).toContain('{{z}}');

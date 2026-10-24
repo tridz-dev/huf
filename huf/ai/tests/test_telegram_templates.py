@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -11,6 +12,13 @@ from huf.ai import telegram_templates as tt
 from huf.ai.gateway_adapters.telegram_client import TelegramBotClient
 from huf.ai.gateway_adapters.telegram_outbound import TelegramSender
 from huf.ai.tests.telegram_fakes import TOKEN, FakeBotApi
+
+FIXTURES = json.loads(
+	(
+		Path(__file__).resolve().parents[3]
+		/ "frontend/src/components/telegram/templates/parity.fixtures.json"
+	).read_text()
+)
 
 
 def tpl(**kw):
@@ -60,7 +68,7 @@ class TestRender(Base):
 	def test_missing_reported_not_raised_strict_raises(self):
 		self.put(body="a {{x}} b {{y}} {{x}}")
 		r = tt.render_template("t", {})
-		self.assertEqual((r.text, r.missing), ("a  b  ", ["x", "y"]))
+		self.assertEqual((r.text, r.missing), ("a  b", ["x", "y"]))
 		with self.assertRaises(tt.TemplateError) as cm:
 			tt.render_template("t", {}, strict=True)
 		self.assertEqual(cm.exception.missing, ["x", "y"])
@@ -128,6 +136,96 @@ class TestRender(Base):
 		self.assertTrue(tt.render_template("t", {"name": "a"}).errors)
 
 
+class TestParity(Base):
+	"""Shared fixtures: previewModel.test.ts runs the SAME cases against the frontend preview."""
+
+	def test_fixtures(self):
+		for case in FIXTURES:
+			with self.subTest(case["id"]):
+				self.data["t"] = tpl(**case["template"])
+				r = tt.render_template("t", case["values"])
+				self.assertEqual((r.text, r.missing, r.split), (case["text"], case["missing"], case["split"]))
+
+	def test_preview_and_send_use_the_same_render(self):
+		self.put(
+			body='<a href="{{u}}">{{n}}</a>', buttons_json='{"rows": [[{"text": "Go", "url": "{{u}}"}]]}'
+		)
+		vals = {"u": "https://x.io/a?b=1", "n": "<Ann>"}
+		preview = tt.preview_template("t", vals)
+		tt.send_template(None, 5, "t", vals, sender=self.sender, sign=lambda p: p)
+		sent = self.api.last("sendMessage")["payload"]
+		self.assertEqual(sent["text"], preview["text"])
+		self.assertEqual(json.dumps(sent["reply_markup"], sort_keys=True), preview["markup_json"])
+
+	def test_examples_fill_preview_only_when_asked(self):
+		self.put(body="{{n}}", variables=[{"variable": "n", "example": "Sample"}])
+		self.assertEqual(tt.preview_template("t", {})["missing"], ["n"])
+		out = tt.preview_template("t", {}, examples=True)
+		self.assertEqual((out["text"], out["missing"]), ("Sample", []))
+
+	def test_unsaved_values_preview_matches_saved(self):
+		self.put(body="Hi {{name}}", variables=[{"variable": "name", "example": "Ann"}])
+		self.assertEqual(
+			tt.preview_values(self.data["t"], {}),
+			tt.preview_template("t", {}, examples=True) | {"template": ""},
+		)
+
+
+class TestSubstitutionSafety(Base):
+	CASES = [
+		# (body, value, expected text)
+		('<a href="{{v}}">x</a>', 'a" onclick="z', '<a href="a&quot; onclick=&quot;z">x</a>'),
+		("{{v}}", 'a" b', 'a" b'),
+		('<a href="?q={{v|url}}">x</a>', "a&b=c", '<a href="?q=a%26b%3Dc">x</a>'),
+		("{{ v | url }}", "ü/ ", "%C3%BC%2F%20"),
+	]
+
+	def test_table(self):
+		for body, value, want in self.CASES:
+			with self.subTest(body=body):
+				self.put(body=body)
+				self.assertEqual(tt.render_template("t", {"v": value}).text, want)
+
+	def test_button_url_values(self):
+		self.put(buttons_json='{"rows": [[{"text": "Go", "url": "https://x.io/?q={{q|url}}&k={{k}}"}]]}')
+		r = tt.render_template("t", {"q": "a&b=c", "k": "1"})
+		self.assertEqual(r.errors, [])
+		self.assertEqual(
+			r.reply_markup,
+			{"inline_keyboard": [[{"text": "Go", "url": "https://x.io/?q=a%26b%3Dc&k=1"}]]},
+		)
+
+	def test_whole_url_variable_in_web_app_and_strict_send_validation(self):
+		self.put(buttons_json='{"rows": [[{"text": "App", "web_app": "{{u}}"}]]}')
+		ok = tt.render_template("t", {"u": "https://app.io/x"})
+		self.assertEqual(ok.reply_markup["inline_keyboard"][0][0]["web_app"], {"url": "https://app.io/x"})
+		bad = tt.render_template("t", {"u": "http://insecure"})
+		self.assertTrue(bad.errors)
+		self.assertTrue(tt.render_template("t", {}).errors)
+
+	def test_variable_grammar_is_identifiers_only(self):
+		self.put(body="{{a.b}} {{a-b}} {{ok_1}}")
+		r = tt.render_template("t", {"ok_1": "v"})
+		self.assertEqual((r.text, r.missing), ("{{a.b}} {{a-b}} v", []))
+		self.assertEqual(len(tt.placeholder_problems("{{a.b}} {{a-b}} {{ok}} {{x|zip}}")), 3)
+
+	def test_name_grammar(self):
+		for good in ("a", "welcome_1-a", "0x" * 31 + "a"):
+			self.assertTrue(tt.TEMPLATE_NAME_RE.match(good), good)
+		for bad in ("My Tpl", "Welcome", "_a", "a" * 64, ""):
+			self.assertFalse(tt.TEMPLATE_NAME_RE.match(bad), bad)
+
+	def test_button_problems_probe(self):
+		for raw in (
+			'{"rows": [[{"text": "A", "web_app": "{{u}}"}]]}',
+			'{"rows": [[{"text": "A", "login_url": "{{u|url}}"}]]}',
+			'{"rows": [[{"text": "{{t}}", "callback": "go_{{id}}"}]]}',
+		):
+			self.assertEqual(tt.button_problems(raw), [], raw)
+		self.assertTrue(tt.button_problems('{"rows": [[{"text": "A", "web_app": "http://x"}]]}'))
+		self.assertTrue(tt.button_problems("{}"))
+
+
 class TestPreviewList(Base):
 	def test_preview(self):
 		self.put(buttons_json='{"rows": [[{"text": "Yes", "callback": "yes"}]]}')
@@ -144,6 +242,46 @@ class TestPreviewList(Base):
 
 
 class TestSend(Base):
+	def test_gateway_settings_apply_with_full_payload(self):
+		gw = SimpleNamespace(
+			name="g",
+			telegram_silent_replies=1,
+			telegram_protect_content=1,
+			preview_url=0,
+			telegram_parse_mode="HTML",
+		)
+		self.put(body='See <a href="{{u}}">here</a>')
+		tt.send_template(gw, 5, "t", {"u": "https://x.io"}, sender=self.sender)
+		self.assertEqual(
+			self.api.last("sendMessage")["payload"],
+			{
+				"chat_id": 5,
+				"text": 'See <a href="https://x.io">here</a>',
+				"parse_mode": "HTML",
+				"disable_notification": True,
+				"protect_content": True,
+				"link_preview_options": {"is_disabled": True},
+			},
+		)
+
+	def test_explicit_silent_protect_only_add(self):
+		gw = SimpleNamespace(name="g", telegram_silent_replies=0, telegram_protect_content=1)
+		self.put()
+		tt.send_template(gw, 5, "t", {"name": "A"}, sender=self.sender, silent=True, protect=False)
+		call = self.api.last("sendMessage")["payload"]
+		self.assertTrue(call["disable_notification"] and call["protect_content"])
+
+	def test_default_sender_signs_callbacks_for_the_chat(self):
+		self.put(buttons_json='{"rows": [[{"text": "Y", "callback": "yes"}]]}')
+		adapter = mock.Mock(client=self.sender.client)
+		adapter.sign_callback_data.side_effect = lambda p, chat: f"S{chat}|{p}"
+		with mock.patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=adapter):
+			tt.send_template(SimpleNamespace(name="g"), 5, "t", {"name": "A"})
+		data = self.api.last("sendMessage")["payload"]["reply_markup"]["inline_keyboard"][0][0][
+			"callback_data"
+		]
+		self.assertTrue(data.startswith("S5|"), data)
+
 	def test_text_only_with_markup_and_options(self):
 		self.put(buttons_json='{"rows": [[{"text": "S", "url": "https://x.io"}]]}')
 		gw = SimpleNamespace(name="g", telegram_silent_replies=1, telegram_protect_content=1)

@@ -40,10 +40,19 @@ describe('validateDraft', () => {
 	it('requires name and body', () => {
 		expect(fields(validateDraft(emptyDraft()))).toEqual(['template_name', 'body']);
 	});
-	it('media needs a file; caption limit; bad json', () => {
+	it('media needs a file; bad json; long text is fine with media (sent as a second message)', () => {
 		const d = { ...emptyDraft(), template_name: 'a', body: 'x'.repeat(1025), media_type: 'photo' as const, buttons_json: '[1]' };
-		expect(fields(validateDraft(d))).toEqual(['media', 'body', 'buttons_json']);
-		expect(validateDraft({ ...d, media: '/f.png', body: 'ok', buttons_json: '' })).toEqual([]);
+		expect(fields(validateDraft(d))).toEqual(['media', 'buttons_json']);
+		expect(validateDraft({ ...d, media: '/f.png', buttons_json: '' })).toEqual([]);
+		expect(fields(validateDraft({ ...d, media: '/f.png', buttons_json: '', body: 'x'.repeat(4097) }))).toEqual(['body']);
+	});
+	it('template names are lowercase slugs, like the doctype', () => {
+		const ok = (name: string) => !fields(validateDraft({ ...emptyDraft(), template_name: name, body: 'x' })).includes('template_name');
+		expect(['welcome', 'a-b_c1', '0x'].map(ok)).toEqual([true, true, true]);
+		expect(['My Tpl', 'Welcome', '_a', 'a'.repeat(64)].map(ok)).toEqual([false, false, false, false]);
+	});
+	it('detects the url filter and rejects dotted names', () => {
+		expect(detectVariables('{{ q | url }} {{a.b}}')).toEqual(['q']);
 	});
 	it('problemsByField collapses variables.N', () => {
 		expect(problemsByField([{ field: 'variables.2', message: 'm' }, { field: 'body', message: 'b' }])).toEqual({ variables: 'm', body: 'b' });
@@ -81,6 +90,8 @@ describe('api calls', () => {
 	it('upload returns the file url', async () => {
 		vi.mocked(file.uploadFile).mockResolvedValue({ data: { message: { file_url: '/files/a.png' } } } as never);
 		expect(await uploadTemplateMedia(new File(['x'], 'a.png'))).toEqual({ ok: true, data: { fileUrl: '/files/a.png' } });
+		// the server uploads the bytes to Telegram itself, so template media stays private
+		expect(vi.mocked(file.uploadFile).mock.calls[0][1]).toEqual({ isPrivate: true });
 	});
 });
 

@@ -289,7 +289,9 @@ class Harness(unittest.TestCase):
 		patch.object(tg.frappe, "get_list", return_value=[]).start()
 		patch.object(tg.frappe, "has_permission", return_value=True).start()
 		patch.object(tpl, "list_templates", return_value=[]).start()
-		patch.object(tpl, "render_template", return_value={"text": "hi"}).start()
+		patch.object(tpl, "preview_template", return_value={"text": "hi"}).start()
+		patch.object(tpl, "build_sender", return_value=(MagicMock(), lambda p, c: p)).start()
+		patch.object(tg, "_template_gateway_doc", return_value=(MagicMock(name="gw1"), None)).start()
 		patch.object(tpl, "send_template", return_value={"message_id": 9}).start()
 		patch.object(
 			adm.biz,

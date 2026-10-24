@@ -6,11 +6,17 @@
 Backed by the ``Telegram Message Template`` doctype; ALL doctype access is behind ``_load`` /
 ``_list_rows`` / ``_touch`` / ``_file_bytes`` so tests mock them.
 
-Rendering: ``{{var}}`` placeholders are replaced by caller variables, then the template's variable
-defaults. Unknown variables are reported in ``missing`` (replaced by an empty string) and never raise
-unless ``strict=True``. The body is trusted author content already written in the template's parse
-mode; substituted VALUES are escaped for that mode (HTML / MarkdownV2) so a value such as ``<b>``
-cannot inject markup. Variables inside ``buttons_json`` are substituted JSON-safely (no markup escape).
+Rendering is ONE implementation (``render_values``) shared by send, the agent preview and the
+management preview, so what a user previews is what is sent. ``{{var}}`` placeholders are replaced by
+caller variables, then the template's variable defaults (a blank caller value counts as unset; previews
+may also fall back to the variable's ``example``). Variable names are ``[A-Za-z_][A-Za-z0-9_]*``.
+Unknown variables are reported in ``missing`` (replaced by an empty string) and never raise unless
+``strict=True``. The body is trusted author content already written in the template's parse mode;
+substituted VALUES are escaped for that mode (HTML / MarkdownV2) so a value such as ``<b>`` cannot
+inject markup, and a value inside an HTML tag (``<a href="{{u}}">``) is also quote-escaped so it cannot
+break out of the attribute. ``{{var|url}}`` percent-encodes the value for use inside a URL (query values
+in a body link or a button url); a plain ``{{var}}`` is the raw value, which is what a whole-URL variable
+needs. Variables inside ``buttons_json`` are substituted JSON-safely (no markup escape).
 
 Permission model: this module does NOT check who may message ``chat_id``. The caller (agent tool / UI
 endpoint) must already have passed the recipient-scope checks (agent_recipient_scope, allowlist, send
@@ -22,7 +28,9 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from html import escape as _html_attr_escape
 from typing import Any, Callable
+from urllib.parse import quote
 
 from huf.ai.gateway_adapters import telegram_buttons
 from huf.ai.gateway_adapters.telegram_format import (
@@ -36,7 +44,17 @@ from huf.ai.gateway_adapters.telegram_format import (
 	to_plain,
 )
 
-_VAR = re.compile(r"\{\{\s*([A-Za-z_][\w.\-]*)\s*\}\}")
+# One grammar for template names, variable names and placeholders: the doctype, the management API,
+# the frontend (mirrored in telegramTemplatesApi.ts / previewModel.ts) and the renderer all use these.
+TEMPLATE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
+TEMPLATE_NAME_HELP = (
+	"Use lowercase letters, digits, dashes and underscores, starting with a letter or digit (max 63)."
+)
+VAR_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+VAR_RE = re.compile(r"\{\{\s*(" + VAR_NAME_RE.pattern + r")\s*(?:\|\s*(url)\s*)?\}\}")
+_ANY_PLACEHOLDER = re.compile(r"\{\{[^{}]*\}\}")
+# Save-time stand-in for every placeholder in buttons_json: valid for every button kind (https URL).
+BUTTON_PROBE = "https://a.co/x"
 _MODES = {"": MODE_PLAIN, "plain": MODE_PLAIN, "html": MODE_HTML, "markdownv2": MODE_MARKDOWN_V2}
 _NO_CAPTION = frozenset({"sticker", "video_note"})
 MEDIA_TYPES = frozenset({"photo", "video", "animation", "document", "audio", "voice", "sticker"})
@@ -56,8 +74,14 @@ class RenderedTemplate:
 	parse_mode: str
 	media: dict | None = None  # {"type", "source": file_url|url|file_id, "value"}
 	reply_markup: dict | None = None
+	caption_inline: bool = False  # text rides as the media caption (one message) instead of a 2nd message
 	missing: list[str] = field(default_factory=list)
 	errors: list[str] = field(default_factory=list)  # length / button / media problems (send refuses)
+
+	@property
+	def split(self) -> bool:
+		"""Media and text go out as two messages (text too long for a caption, or a caption-less media kind)."""
+		return bool(self.media and self.text and not self.caption_inline)
 
 
 # -- doctype access (mock these) --------------------------------------------------------------
@@ -126,7 +150,7 @@ def _gname(gateway: Any) -> str | None:
 def _mode(template: dict, gateway: Any) -> str:
 	raw = (template.get("parse_mode") or "").strip()
 	if not raw:
-		raw = getattr(gateway, "telegram_parse_mode", None) or "HTML" if gateway is not None else "HTML"
+		raw = getattr(gateway, "telegram_parse_mode", None) or "HTML"
 	mode = _MODES.get(raw.strip().lower())
 	return MODE_HTML if mode is None else mode
 
@@ -135,32 +159,76 @@ def _escaper(mode: str) -> Callable[[str], str]:
 	return {MODE_HTML: escape_html, MODE_MARKDOWN_V2: escape_markdown_v2}.get(mode, lambda s: s)
 
 
-def _values(template: dict, variables: dict | None) -> dict[str, str]:
+def _values(template: dict, variables: dict | None, examples: bool = False) -> dict[str, str]:
+	"""Caller value, else the variable's default, else (previews only) its example. Blank means unset."""
 	vals: dict[str, str] = {}
-	for row in template.get("variables") or []:
-		key = (row.get("variable") or "").strip()
-		if key and row.get("default_value") not in (None, ""):
-			vals[key] = str(row["default_value"])
+	for column in ("example", "default_value") if examples else ("default_value",):
+		for row in template.get("variables") or []:
+			key = (row.get("variable") or "").strip()
+			if key and row.get(column) not in (None, ""):
+				vals[key] = str(row[column])
 	for k, v in (variables or {}).items():
-		if v is not None:
+		if v not in (None, ""):
 			vals[str(k)] = str(v)
 	return vals
 
 
-def _substitute(src: str, vals: dict[str, str], conv: Callable[[str], str], missing: list[str]) -> str:
+def _in_html_tag(src: str, pos: int) -> bool:
+	return src.rfind("<", 0, pos) > src.rfind(">", 0, pos)
+
+
+def _substitute(
+	src: str,
+	vals: dict[str, str],
+	convert: Callable[[str], str],
+	missing: list[str],
+	*,
+	attr_aware: bool = False,
+) -> str:
 	def repl(m: re.Match) -> str:
-		key = m.group(1)
+		key, filt = m.group(1), m.group(2)
 		if key not in vals:
 			if key not in missing:
 				missing.append(key)
 			return ""
-		return conv(vals[key])
+		value = quote(vals[key], safe="") if filt == "url" else vals[key]
+		if attr_aware and _in_html_tag(m.string, m.start()):
+			return _html_attr_escape(value, quote=True)
+		return convert(value)
 
-	return _VAR.sub(repl, src or "")
+	return VAR_RE.sub(repl, src or "")
 
 
 def _json_safe(s: str) -> str:
 	return json.dumps(s)[1:-1]
+
+
+def detect_variables(*texts: str) -> list[str]:
+	"""Variable names used in the given texts, in first-seen order."""
+	seen: list[str] = []
+	for text in texts:
+		for m in VAR_RE.finditer(text or ""):
+			if m.group(1) not in seen:
+				seen.append(m.group(1))
+	return seen
+
+
+def placeholder_problems(*texts: str) -> list[str]:
+	"""``{{...}}`` groups that are not a valid placeholder (they would be sent literally)."""
+	bad: list[str] = []
+	for text in texts:
+		for m in _ANY_PLACEHOLDER.finditer(text or ""):
+			if not VAR_RE.fullmatch(m.group(0)) and m.group(0) not in bad:
+				bad.append(m.group(0))
+	return [f"{b} is not a valid placeholder (use {{{{name}}}} or {{{{name|url}}}})" for b in bad]
+
+
+def button_problems(raw: Any) -> list[str]:
+	"""Save-time check of a buttons JSON string: placeholders become a valid https URL, so
+	``{"web_app": "{{url}}"}`` passes. The send-time render validates the real values strictly."""
+	text = raw if isinstance(raw, str) else json.dumps(raw)
+	spec, errors = telegram_buttons.validate(VAR_RE.sub(BUTTON_PROBE, text))
+	return list(errors) or ([] if spec else ["no valid buttons"])
 
 
 def _media(template: dict, errors: list[str]) -> dict | None:
@@ -200,6 +268,42 @@ def _markup(
 # -- public API -------------------------------------------------------------------------------
 
 
+def render_values(
+	template: dict,
+	variables: dict | None = None,
+	gateway: Any = None,
+	*,
+	sign: Callable[[str], str] | None = None,
+	examples: bool = False,
+) -> RenderedTemplate:
+	"""THE render: a template as a plain dict (saved row or unsaved editor values) -> what will be sent.
+
+	Pure (no doctype access). ``examples=True`` (previews) falls back to each variable's example."""
+	mode = _mode(template, gateway)
+	vals = _values(template, variables, examples)
+	missing: list[str] = []
+	errors: list[str] = []
+	text = _substitute(
+		template.get("body") or "", vals, _escaper(mode), missing, attr_aware=mode == MODE_HTML
+	).strip()
+	media = _media(template, errors)
+	markup = _markup(template.get("buttons_json") or "", vals, sign, missing, errors)
+	inline = bool(media and text and len(text) <= TELEGRAM_CAPTION_LIMIT and media["type"] not in _NO_CAPTION)
+	if len(text) > TELEGRAM_TEXT_LIMIT:
+		errors.append(f"text is {len(text)} chars (limit {TELEGRAM_TEXT_LIMIT})")
+	if not text and not media:
+		errors.append("template renders empty")
+	return RenderedTemplate(
+		text=text,
+		parse_mode=mode,
+		media=media,
+		reply_markup=markup,
+		caption_inline=inline,
+		missing=missing,
+		errors=errors,
+	)
+
+
 def render_template(
 	name: str,
 	variables: dict | None = None,
@@ -207,8 +311,10 @@ def render_template(
 	*,
 	sign: Callable[[str], str] | None = None,
 	strict: bool = False,
+	examples: bool = False,
 ) -> RenderedTemplate:
-	"""Render without sending. Raises TemplateError if not found / inactive / wrong gateway, or (strict) on missing vars."""
+	"""Render a saved template without sending. Raises TemplateError if not found / inactive / wrong
+	gateway, or (strict) on missing variables."""
 	template = _load(name)
 	if not template:
 		raise TemplateError(f"Telegram template not found: {name}")
@@ -217,23 +323,10 @@ def render_template(
 	gname = _gname(gateway)
 	if template.get("gateway") and gname and template["gateway"] != gname:
 		raise TemplateError(f"Template {name} belongs to gateway {template['gateway']}")
-	mode = _mode(template, gateway)
-	vals = _values(template, variables)
-	missing: list[str] = []
-	errors: list[str] = []
-	text = _substitute(template.get("body") or "", vals, _escaper(mode), missing)
-	media = _media(template, errors)
-	markup = _markup(template.get("buttons_json") or "", vals, sign, missing, errors)
-	if strict and missing:
-		raise TemplateError(f"Missing template variables: {', '.join(missing)}", missing)
-	limit = TELEGRAM_TEXT_LIMIT
-	if len(text) > limit:
-		errors.append(f"text is {len(text)} chars (limit {limit})")
-	if not text.strip() and not media:
-		errors.append("template renders empty")
-	return RenderedTemplate(
-		text=text, parse_mode=mode, media=media, reply_markup=markup, missing=missing, errors=errors
-	)
+	r = render_values(template, variables, gateway, sign=sign, examples=examples)
+	if strict and r.missing:
+		raise TemplateError(f"Missing template variables: {', '.join(r.missing)}", r.missing)
+	return r
 
 
 def list_templates(gateway: Any = None) -> list[dict]:
@@ -241,16 +334,14 @@ def list_templates(gateway: Any = None) -> list[dict]:
 	return [r for r in _list_rows(_gname(gateway)) if r.get("is_active", 1)]
 
 
-def preview_template(name: str, variables: dict | None = None, gateway: Any = None) -> dict:
-	"""No send. ``{text, parse_mode, media, markup, markup_json, missing, errors}`` for the UI.
-
-	Callback payloads are shown unsigned (placeholder)."""
-	r = render_template(name, variables, gateway, sign=lambda p: p)
+def preview_payload(r: RenderedTemplate, name: str = "") -> dict:
+	"""The preview shape shared by the agent action and the management endpoint."""
 	return {
 		"template": name,
 		"text": r.text,
 		"parse_mode": r.parse_mode,
 		"media": r.media,
+		"split": r.split,
 		"markup": r.reply_markup,
 		"markup_json": json.dumps(r.reply_markup, sort_keys=True) if r.reply_markup else "",
 		"missing": r.missing,
@@ -258,11 +349,30 @@ def preview_template(name: str, variables: dict | None = None, gateway: Any = No
 	}
 
 
-def _build_sender(gateway: Any):
+def preview_template(
+	name: str, variables: dict | None = None, gateway: Any = None, *, examples: bool = False
+) -> dict:
+	"""No send. Callback payloads are shown unsigned (placeholder). ``examples`` (the editor UI) fills
+	blanks with each variable's example; without it ``missing`` predicts exactly what a send would refuse."""
+	return preview_payload(
+		render_template(name, variables, gateway, sign=lambda p: p, examples=examples), name
+	)
+
+
+def preview_values(
+	values: dict, variables: dict | None = None, gateway: Any = None, *, examples: bool = True
+) -> dict:
+	"""Preview of unsaved editor values: the same render as a saved template."""
+	return preview_payload(render_values(values, variables, gateway, sign=lambda p: p, examples=examples))
+
+
+def build_sender(gateway: Any) -> tuple[Any, Callable[[str], str]]:
+	"""``(TelegramSender, callback signer for chat)`` on the gateway's own credentials."""
 	from huf.ai.gateway_adapters.telegram_outbound import TelegramSender
 	from huf.ai.gateway_webhook import get_gateway_adapter
 
-	return TelegramSender(get_gateway_adapter(gateway).client)
+	adapter = get_gateway_adapter(gateway)
+	return TelegramSender(adapter.client), adapter.sign_callback_data
 
 
 def _ids(msgs: Any) -> list:
@@ -298,39 +408,45 @@ def send_template(
 	*,
 	thread_id: Any = None,
 	reply_to: Any = None,
+	silent: bool = False,
+	protect: bool = False,
 	sender: Any = None,
 	sign: Callable[[str], str] | None = None,
 	allow_missing: bool = False,
 ) -> dict:
 	"""Render and send. Returns ``{message_ids, template, missing}``.
 
+	``gateway`` is the Gateway document (its silent / protect-content / link-preview / parse-mode
+	settings apply; ``silent`` / ``protect`` can only add to them). Without ``sender`` the gateway's own
+	bot is used and callback buttons are signed for ``chat_id``.
 	Refuses (TemplateError) on render errors, and on missing variables unless ``allow_missing``.
-	Media + caption when text <= 1024 (and the media kind takes captions); otherwise media then text.
-	The keyboard rides on the last message. Honours gateway telegram_silent_replies /
-	telegram_protect_content / preview_url when present."""
+	Media + caption when the render says ``caption_inline``; otherwise media then text.
+	The keyboard rides on the last message."""
+	if sender is None:
+		sender, signer = build_sender(gateway)
+		sign = sign or (lambda payload: signer(payload, chat_id))
 	r = render_template(name, variables, gateway, sign=sign)
 	if r.errors:
 		raise TemplateError("; ".join(r.errors), r.missing)
 	if r.missing and not allow_missing:
 		raise TemplateError(f"Missing template variables: {', '.join(r.missing)}", r.missing)
-	sender = sender or _build_sender(gateway)
 	opts = {
 		"thread_id": thread_id,
-		"silent": bool(getattr(gateway, "telegram_silent_replies", 0)),
-		"protect": bool(getattr(gateway, "telegram_protect_content", 0)),
+		"silent": bool(silent or getattr(gateway, "telegram_silent_replies", 0)),
+		"protect": bool(protect or getattr(gateway, "telegram_protect_content", 0)),
 	}
 	link_preview = getattr(gateway, "preview_url", None) == "On"  # Default (off) and Off send no previews
 	ids: list = []
-	text = r.text.strip()
+	text = r.text
 	media = r.media
 	if media:
 		value: Any = media["value"]
 		if media["source"] == "file_url":
-			fname, content = _file_bytes(value)
-			value = (fname, content)
-		inline = bool(text) and len(text) <= TELEGRAM_CAPTION_LIMIT and media["type"] not in _NO_CAPTION
+			value = _file_bytes(value)
 		extra = (
-			{"caption": text, **({"parse_mode": r.parse_mode} if r.parse_mode else {})} if inline else None
+			{"caption": text, **({"parse_mode": r.parse_mode} if r.parse_mode else {})}
+			if r.caption_inline
+			else None
 		)
 		msgs = sender.send_media(
 			media["type"],
@@ -338,11 +454,11 @@ def send_template(
 			value,
 			reply_to=reply_to,
 			extra=extra,
-			markup=r.reply_markup if (inline or not text) else None,
+			markup=r.reply_markup if (r.caption_inline or not text) else None,
 			**opts,
 		)
 		ids += _ids(msgs)
-		if text and not inline:
+		if r.split:
 			ids += _ids(
 				_send_text(
 					sender,
