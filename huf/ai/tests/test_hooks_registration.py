@@ -30,6 +30,9 @@ class TestHooksRegistration(IntegrationTestCase):
 			"Integration Settings",
 			"Integration Service",
 			"Integration Credential",
+			"Solution",
+			"Conversation Assignment",
+			"Template Usage",
 		]
 
 		for doctype in expected_doctypes:
@@ -65,6 +68,9 @@ class TestHooksRegistration(IntegrationTestCase):
 			"Integration Settings",
 			"Integration Service",
 			"Integration Credential",
+			"Solution",
+			"Conversation Assignment",
+			"Template Usage",
 		]
 
 		for doctype in expected_doctypes:
