@@ -60,6 +60,12 @@ class TestTelegramToolSync(unittest.TestCase):
 		self.assertNotIn(
 			"confirmation_token", fields
 		)  # removed: approval is a human press, never an agent argument
+		self.assertNotIn("confirm", fields)
+		from huf.ai.tools import telegram_admin_spec as spec
+
+		declared = {n for a in spec.ACTION_ARGS.values() for n in a}
+		self.assertEqual(fields, declared | {"action"})  # the synced rows carry every action's arguments
+		self.assertIn("short_description", fields)
 
 	def test_existing_telegram_row_is_refreshed(self):
 		_, _, updated = _run_sync(existing=["telegram", "telegram_admin"])

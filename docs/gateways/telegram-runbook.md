@@ -385,8 +385,23 @@ Actions:
 - **Business** (`telegram_agent_allow_business`): `get_business_connection`, `send_business_message`,
   `read_business_message`, `delete_business_messages`.
 
+Arguments (one declaration, `huf/ai/tools/telegram_admin_spec.py`): each action lists the argument names it reads and
+which are required (`ACTION_ARGS`); the registry parameter list, the tool description, the validation and the approval
+card are all generated from that table, so they cannot drift. Validation runs first, before any gate, cap or approval
+request, so a bad call never reaches a human and nothing is sent to the Bot API. Unknown argument names are refused
+with `invalid_argument`, naming the valid arguments (for example `unknown argument 'text' for set_my_short_description;
+use 'short_description'`); a missing required argument and a value of the wrong type are refused the same way. For
+`set_my_name`, `set_my_description`, `set_my_short_description` and `set_chat_description` the value must be present:
+an explicit empty string is the only way to clear, a missing key never clears. To add an action, add it to `ACTIONS`
+and to `ACTION_ARGS` (and `ARG_TYPES` for a new argument); `test_telegram_admin_args` fails if the dispatcher reads an
+argument the table does not declare.
+
+The approval card states the action in words with the real values (`Set the bot short description to "Huf test bot"`,
+`Ban user 5 for 10 minutes`), then `Action: <name> | chat <id> | bot-wide`; user, chat and message ids always show.
+
 Safety layers, in order:
 
+0. Argument validation (above).
 1. Scope: the target chat must be in the gateway's send scope.
 2. Bot rights: `getChatMember(bot)` must show the admin right the action needs (for example
    `can_restrict_members` for ban and restrict, `can_promote_members` for promote, `can_delete_messages`,
@@ -399,8 +414,8 @@ Safety layers, in order:
    or higher. Any other run (a group member, forwarded or pasted content, a Viewer/Operator chat) is refused with
    `owner_required` and the agent is told to ask a bound admin. For an owner run the call returns
    `pending_human_approval` and sends signed Approve / Reject buttons to the active Admin bindings; the action runs
-   only when an admin presses Approve (single-use nonce, valid 5 minutes, bound to the arguments). `confirm`
-   and `confirmation_token` arguments from the agent are ignored and never count as approval. Bot-wide profile
+   only when an admin presses Approve (single-use nonce, valid 5 minutes, bound to the arguments). There is no
+   `confirm` argument: `confirm` and `confirmation_token` are refused as unknown arguments and never count as approval. Bot-wide profile
    actions (`set_my_*`, `set_chat_menu_button`) follow the same rule, so they are only reachable from an owner run.
    With no active Admin binding to ask, the call is refused with `no_admin_available` and nothing is done.
 5. Cap: counted actions are capped per run (atomic counter). The limit is the gateway's `agent_send_cap_per_run`

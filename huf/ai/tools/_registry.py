@@ -9,10 +9,11 @@ Each entry is a dict with:
   - parameters: list of parameter definitions
 """
 
+from huf.ai.tools import telegram_admin_spec
 
 # Array parameters whose elements are objects (the doctype row has no item-type field, so the schema
 # builders look the fieldname up here instead of declaring every array as an array of strings).
-OBJECT_ARRAY_PARAMS = frozenset({"edits", "nodes", "edges", "data", "questions"})
+OBJECT_ARRAY_PARAMS = frozenset({"edits", "nodes", "edges", "data", "questions", "commands"})
 
 
 def is_registry_function_path(function_path):
@@ -295,6 +296,11 @@ TELEGRAM_TOOLS = [
 			_p("is_anonymous", type="boolean", description="send_poll: anonymous votes (default true)."),
 			_p("poll_type", description="send_poll: regular (default) or quiz."),
 			_p("correct_option_id", type="integer", description="send_poll quiz: 0-based index of the correct option."),
+			_p("correct_option_ids", type="array", description="send_poll quiz with several correct answers: 0-based option indexes."),
+			_p("foursquare_id", description="send_venue: Foursquare id of the venue."),
+			_p("google_place_id", description="send_venue: Google Places id of the venue."),
+			_p("others_can_add_tasks", type="boolean", description="send_checklist: let other users add tasks."),
+			_p("others_can_mark_tasks_as_done", type="boolean", description="send_checklist: let other users mark tasks done."),
 			_p("explanation", description="send_poll quiz: shown after a wrong answer (max 200 chars)."),
 			_p("allows_multiple_answers", type="boolean", description="send_poll: allow several answers."),
 			_p("open_period", type="integer", description="send_poll: seconds the poll stays open (5-2628000)."),
@@ -2246,37 +2252,21 @@ TELEGRAM_ADMIN_TOOLS = [
 			"The bot must be an admin with the needed right in the target chat (chat_id defaults to the current chat). "
 			"EVERY state change (all actions except get_admins and get_business_connection) is accepted only from a bound "
 			"admin's private cockpit chat and returns pending_human_approval: it runs only after a human Admin presses "
-			"Approve in Telegram (confirm/confirmation_token from the agent are ignored; do not retry). From any other "
+			"Approve in Telegram (there is no confirm argument: passing confirm or confirmation_token is refused; do not retry). From any other "
 			"chat it is refused with owner_required: ask a bound admin instead. Business actions and set_chat_menu_button "
 			"with a chat_id obey the gateway recipient scope and send "
-			"caps. Never targets paired admins; ban/restrict/promote never target chat admins. Capped per run. GROUP: ban/unban (user_id, until_date|duration_minutes, revoke_messages), "
-			"restrict (user_id, preset mute|no_media|no_links|read_only|no_invites_or_pins or permissions, duration_minutes), "
-			"unrestrict, promote (user_id, rights list), demote, set_chat_title (title), set_chat_description (description), "
-			"pin/unpin (message_id), delete_message (message_id), approve_join_request/decline_join_request (user_id), "
-			"create_invite_link (name, expire_date, member_limit, creates_join_request), revoke_invite_link (invite_link), "
-			"get_admins. PROFILE: set_my_commands (commands [{command, description, is_ephemeral}], command_scope, language_code), "
-			"set_my_name (name), set_my_description (description), set_my_short_description (short_description), "
-			"set_chat_menu_button (menu_button {type commands|default|web_app}). BUSINESS (business_connection_id required): "
-			"get_business_connection, send_business_message (chat_id, text), read_business_message (chat_id, message_id), "
-			"delete_business_messages (message_ids)."
+			"caps. Never targets paired admins; ban/restrict/promote never target chat admins. Capped per run. "
+			"Group actions: ban..get_admins; profile: set_my_*; business: *_business_*. "
+			"Pass ONLY the arguments listed for the action (? = optional); anything else is refused before any approval is "
+			"requested, and a required argument that is missing is refused. For set_my_name / set_my_description / "
+			"set_my_short_description the value argument must be present: an explicit empty string is the only way to clear, "
+			"a missing argument never clears. Arguments per action: "
+			+ telegram_admin_spec.usage_summary()
+			+ "."
 		),
 		"function_path": "huf.ai.tools.telegram_admin_tools.handle_action",
 		"category": "Communication Tools",
-		"parameters": [
-			_action("|".join([
-				"ban", "unban", "restrict", "unrestrict", "promote", "demote", "set_chat_title", "set_chat_description",
-				"pin", "unpin", "delete_message", "approve_join_request", "decline_join_request", "create_invite_link",
-				"revoke_invite_link", "get_admins", "set_my_commands", "set_my_name", "set_my_description",
-				"set_my_short_description", "set_chat_menu_button", "get_business_connection", "send_business_message",
-				"read_business_message", "delete_business_messages",
-			])),
-			_p("chat_id", description="Target chat (numeric or @username); defaults to the current chat."),
-			_p("user_id", type="integer", description="Target Telegram user id."),
-			_p("message_id", type="integer", description="Target message id."),
-			_p("confirm", type="boolean", description="Ignored (kept for compatibility): approval is always a human pressing Approve in Telegram."),
-			_p("business_connection_id", description="Business connection id (business actions)."),
-			_p("text", description="Message text (send_business_message)."),
-		],
+		"parameters": telegram_admin_spec.registry_parameters(_p),
 	},
 ]
 
