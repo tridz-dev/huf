@@ -10,7 +10,7 @@ what a Telegram session may do afterwards is enforced separately (`telegram_web_
 `POST /api/method/huf.ai.telegram_web_access.exchange` with `init_data`, `gateway`, optional `to`
 (JSON or form).
 
-1. Rate limit per IP, then per Telegram user (10/min). `Origin` must equal the site origin (or, if absent, `Sec-Fetch-Site: same-origin`); the launch page's fetch always sends `Origin`.
+1. Rate limit per IP (30/min), then per Telegram user (10/min). `Origin` must equal the site origin (or, if absent, `Sec-Fetch-Site: same-origin`); the launch page's fetch always sends `Origin`.
 2. Gateway must be an enabled Telegram gateway with `telegram_web_access_enabled`.
 3. `to` is normalized and must equal or sit under an allowed prefix (path-segment boundary). Empty `to`
    goes to the first allowed prefix. Rejected: `//`, backslash, schemes, `@`, control characters, `..`

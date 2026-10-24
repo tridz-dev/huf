@@ -1291,6 +1291,9 @@ def revoke_binding(name: str) -> dict:
 	if not owner or (owner != user and not is_gateway_admin(user)):
 		frappe.throw(_("Not permitted."), frappe.PermissionError)
 	frappe.db.set_value("Telegram Admin Binding", name, "is_active", 0)
+	from huf.ai.telegram_web_access_enforce import revoke_binding_sessions
+
+	revoke_binding_sessions(name, owner)
 	binding = {
 		"telegram_user_id": frappe.db.get_value("Telegram Admin Binding", name, "telegram_user_id"),
 		"frappe_user": owner,
