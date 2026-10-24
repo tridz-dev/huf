@@ -4,8 +4,6 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { toast } from 'sonner';
 import {
   AlertTriangle,
-  Check,
-  Copy,
   KeyRound,
   Link2,
   MessageSquare,
@@ -43,6 +41,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Field, FieldAction, FieldRow } from '@/components/ui/field';
+import { CopyField } from '@/components/ui/copy-field';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -150,7 +150,6 @@ export default function GatewaysPage() {
   // Edit / Modal State
   const [editingGateway, setEditingGateway] = useState<GatewayDoc | null>(null);
   const [saving, setSaving] = useState(false);
-  const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [deleteConfirmName, setDeleteConfirmName] = useState<string | null>(null);
   const [deletingGateway, setDeletingGateway] = useState(false);
 
@@ -410,11 +409,6 @@ export default function GatewaysPage() {
     return getGatewayWebhookUrl(gwName, provider);
   }
 
-  function handleCopyWebhook(gwName: string, provider?: string) {
-    navigator.clipboard.writeText(getGatewayWebhookUrl(gwName, provider));
-    setCopiedWebhook(true);
-    setTimeout(() => setCopiedWebhook(false), 2000);
-  }
 
   const tabBar = (
     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(parseGatewaysTab(v))} className="mb-6">
@@ -466,25 +460,28 @@ export default function GatewaysPage() {
         {tabBar}
 
         <form
-          className="mb-6 grid gap-3 rounded-xl border border-line bg-panel p-5 shadow-xs sm:grid-cols-[1fr_auto] sm:items-end"
+          className="mb-6 rounded-xl border border-line bg-panel p-5 shadow-xs"
           onSubmit={handleApproveByCode}
         >
-          <label className="grid gap-1.5 text-xs font-medium text-ink">
-            Approve by pairing code
-            <Input
-              className="h-10 font-mono text-sm uppercase"
-              value={approveCodeInput}
-              onChange={(e) => setApproveCodeInput(e.target.value)}
-              placeholder="PAIR-XXXX"
-            />
-            <span className="text-[11px] font-normal text-steel">
-              Paste the code the sender shared with you to approve them without finding their row below.
-            </span>
-          </label>
-          <Button type="submit" disabled={approvingCode || !approveCodeInput.trim()} className="h-10">
-            <KeyRound className="mr-1.5 h-4 w-4" />
-            {approvingCode ? 'Approving…' : 'Approve code'}
-          </Button>
+          <FieldRow cols={1} className="sm:grid-cols-[1fr_auto]">
+            <Field
+              label="Approve by pairing code"
+              hint="Paste the code the sender shared with you to approve them without finding their row below."
+            >
+              <Input
+                className="font-mono uppercase"
+                value={approveCodeInput}
+                onChange={(e) => setApproveCodeInput(e.target.value)}
+                placeholder="PAIR-XXXX"
+              />
+            </Field>
+            <FieldAction reserveNote>
+              <Button type="submit" disabled={approvingCode || !approveCodeInput.trim()}>
+                <KeyRound className="mr-1.5 h-4 w-4" />
+                {approvingCode ? 'Approving…' : 'Approve code'}
+              </Button>
+            </FieldAction>
+          </FieldRow>
         </form>
 
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -494,9 +491,9 @@ export default function GatewaysPage() {
               Senders who messaged a gateway with a Pairing policy wait here until approved.
             </p>
           </div>
-          <label className="grid gap-1 text-xs font-medium text-ink">
+          <Field className="w-[220px]">
             <Select value={pendingGatewayFilter} onValueChange={setPendingGatewayFilter}>
-              <SelectTrigger className="w-[220px] text-xs">
+              <SelectTrigger aria-label="Filter by gateway">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -508,7 +505,7 @@ export default function GatewaysPage() {
                 ))}
               </SelectContent>
             </Select>
-          </label>
+          </Field>
         </div>
 
         <DataListView
@@ -574,39 +571,42 @@ export default function GatewaysPage() {
       {/* Quick Add Form */}
       {showSetup && (
         <form
-          className="mb-6 grid gap-4 rounded-xl border border-primary/30 bg-panel p-5 shadow-sm md:grid-cols-[1fr_240px_auto] md:items-end"
+          className="mb-6 rounded-xl border border-primary/30 bg-panel p-5 shadow-sm"
           onSubmit={handleCreateGateway}
         >
-          <label className="grid gap-1.5 text-xs font-medium text-ink">
-            Gateway name
-            <Input
-              className="h-10 text-sm"
-              value={gatewayName}
-              onChange={(e) => setGatewayName(e.target.value)}
-              placeholder="e.g. Support Inbox on WhatsApp"
-              required
-            />
-          </label>
+          <FieldRow cols={1} className="md:grid-cols-[1fr_240px_auto]">
+            <Field label="Gateway name">
+              <Input
+                value={gatewayName}
+                onChange={(e) => setGatewayName(e.target.value)}
+                placeholder="e.g. Support Inbox on WhatsApp"
+                required
+              />
+            </Field>
 
-          <label className="grid gap-1.5 text-xs font-medium text-ink">
-            Channel provider
-            <Select value={provider} onValueChange={(v) => setProvider(v as GatewayProvider)}>
-              <SelectTrigger className="h-10 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CREATABLE_PROVIDERS.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {p}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
+            <Field label="Channel provider">
+              {({ id }) => (
+                <Select value={provider} onValueChange={(v) => setProvider(v as GatewayProvider)}>
+                  <SelectTrigger id={id}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CREATABLE_PROVIDERS.map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {p}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </Field>
 
-          <Button type="submit" disabled={creating} className="h-10">
-            {creating ? 'Creating…' : 'Create & Configure'}
-          </Button>
+            <FieldAction>
+              <Button type="submit" disabled={creating}>
+                {creating ? 'Creating…' : 'Create & Configure'}
+              </Button>
+            </FieldAction>
+          </FieldRow>
         </form>
       )}
 
@@ -739,36 +739,35 @@ export default function GatewaysPage() {
             {/* Form Fields */}
             <div className="space-y-4">
               {/* Enabled Toggle */}
-              <div className="flex items-center justify-between rounded-lg border border-line bg-paper p-3.5">
-                <div>
-                  <p className="text-xs font-medium text-ink">Gateway Status</p>
-                  <p className="text-[11px] text-steel">Receive and process inbound messages from this channel</p>
-                </div>
-                <Switch
-                  aria-label="Gateway Status"
-                  checked={Boolean(editingGateway.is_enabled)}
-                  onCheckedChange={(checked) =>
-                    setEditingGateway({ ...editingGateway, is_enabled: checked ? 1 : 0 })
-                  }
-                />
-              </div>
+              <Field label="Gateway Status">
+                {({ id }) => (
+                  <div className="flex min-h-control-md items-center justify-between rounded-lg border border-line bg-paper px-3.5 py-2">
+                    <p className="text-micro text-steel">Receive and process inbound messages from this channel</p>
+                    <Switch
+                      id={id}
+                      aria-label="Gateway Status"
+                      checked={Boolean(editingGateway.is_enabled)}
+                      onCheckedChange={(checked) =>
+                        setEditingGateway({ ...editingGateway, is_enabled: checked ? 1 : 0 })
+                      }
+                    />
+                  </div>
+                )}
+              </Field>
 
               {/* Run as user */}
-              <label className="grid gap-1 text-xs font-medium text-ink">
-                Run as user
+              <Field
+                label="Run as user"
+                hint="Least-privileged user this gateway runs Agents/Flows as. Required while enabled — never use Administrator."
+              >
                 <Input
-                  className="h-9 text-xs"
                   value={editingGateway.execution_user || ''}
                   onChange={(e) =>
                     setEditingGateway({ ...editingGateway, execution_user: e.target.value })
                   }
                   placeholder="e.g. gateway-service@yourcompany.com"
                 />
-                <span className="text-[11px] font-normal text-steel">
-                  Least-privileged user this gateway runs Agents/Flows as. Required while
-                  enabled — never use Administrator.
-                </span>
-              </label>
+              </Field>
 
               {/* Connected Integration (credentials) — shown for every provider, since
                   every messaging channel needs credentials before it can be enabled. */}
@@ -776,212 +775,218 @@ export default function GatewaysPage() {
                 const requiredService = providerToServiceId(editingGateway.provider);
                 const matches = integrationSettings.filter((s) => s.service === requiredService);
                 return (
-                  <label className="grid gap-1 text-xs font-medium text-ink">
-                    Connected integration
-                    {matches.length > 0 ? (
-                      <Select
-                        value={editingGateway.integration_settings || '__none'}
-                        onValueChange={(v) =>
-                          setEditingGateway({
-                            ...editingGateway,
-                            integration_settings: v === '__none' ? '' : v,
-                          })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none">Choose credentials…</SelectItem>
-                          {matches.map((s) => (
-                            <SelectItem key={s.name} value={s.name}>
-                              {s.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <div className="rounded-lg border border-dashed border-line bg-paper p-3 text-[11px] text-steel">
-                        No {editingGateway.provider} credentials connected yet.{' '}
-                        <Button
-                          type="button"
-                          variant="link"
-                          className="h-auto p-0 font-medium text-primary hover:underline"
-                          onClick={() => setActiveTab('credentials')}
+                  <Field
+                    label="Connected integration"
+                    hint={`${editingGateway.provider} needs a connected integration before it can be enabled.`}
+                  >
+                    {({ id }) =>
+                      matches.length > 0 ? (
+                        <Select
+                          value={editingGateway.integration_settings || '__none'}
+                          onValueChange={(v) =>
+                            setEditingGateway({
+                              ...editingGateway,
+                              integration_settings: v === '__none' ? '' : v,
+                            })
+                          }
                         >
-                          Add one in Channel credentials
-                        </Button>
-                        .
-                      </div>
-                    )}
-                    <span className="text-[11px] font-normal text-steel">
-                      {editingGateway.provider} needs a connected integration before it can be enabled.
-                    </span>
-                  </label>
+                          <SelectTrigger id={id}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">Choose credentials…</SelectItem>
+                            {matches.map((s) => (
+                              <SelectItem key={s.name} value={s.name}>
+                                {s.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div
+                          id={id}
+                          className="rounded-lg border border-dashed border-line bg-paper p-3 text-micro text-steel"
+                        >
+                          No {editingGateway.provider} credentials connected yet.{' '}
+                          <Button
+                            type="button"
+                            variant="link"
+                            className="h-auto p-0 font-medium text-primary hover:underline"
+                            onClick={() => setActiveTab('credentials')}
+                          >
+                            Add one in Channel credentials
+                          </Button>
+                          .
+                        </div>
+                      )
+                    }
+                  </Field>
                 );
               })()}
 
               {/* Description */}
-              <label className="grid gap-1 text-xs font-medium text-ink">
-                Description
+              <Field label="Description">
                 <Input
-                  className="h-9 text-xs"
                   value={editingGateway.description || ''}
                   onChange={(e) => setEditingGateway({ ...editingGateway, description: e.target.value })}
                   placeholder="e.g. Primary WhatsApp channel for sales inquiries"
                 />
-              </label>
+              </Field>
 
               {/* Routing Target */}
               <div className="grid gap-3 rounded-lg border border-line bg-paper p-4">
                 <p className="text-xs font-semibold text-ink">AI Routing Target</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="grid gap-1 text-xs font-medium text-ink">
-                    Target type
-                    <Select
-                      value={editingGateway.default_target_type || '__none'}
-                      onValueChange={(v) =>
-                        setEditingGateway({
-                          ...editingGateway,
-                          default_target_type: (v === '__none' ? '' : v) as any,
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none">None (disabled)</SelectItem>
-                        <SelectItem value="Agent">Agent</SelectItem>
-                        <SelectItem value="Flow">Flow</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </label>
-
-                  {editingGateway.default_target_type === 'Agent' && (
-                    <label className="grid gap-1 text-xs font-medium text-ink">
-                      Select agent
+                <FieldRow cols={2}>
+                  <Field label="Target type">
+                    {({ id }) => (
                       <Select
-                        value={editingGateway.default_agent || '__none'}
+                        value={editingGateway.default_target_type || '__none'}
                         onValueChange={(v) =>
                           setEditingGateway({
                             ...editingGateway,
-                            default_agent: v === '__none' ? '' : v,
+                            default_target_type: (v === '__none' ? '' : v) as any,
                           })
                         }
                       >
-                        <SelectTrigger>
+                        <SelectTrigger id={id}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__none">Choose agent…</SelectItem>
-                          {agents.map((a) => (
-                            <SelectItem key={a.name} value={a.name}>
-                              {a.agent_name}
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="__none">None (disabled)</SelectItem>
+                          <SelectItem value="Agent">Agent</SelectItem>
+                          <SelectItem value="Flow">Flow</SelectItem>
                         </SelectContent>
                       </Select>
-                    </label>
+                    )}
+                  </Field>
+
+                  {editingGateway.default_target_type === 'Agent' && (
+                    <Field label="Select agent">
+                      {({ id }) => (
+                        <Select
+                          value={editingGateway.default_agent || '__none'}
+                          onValueChange={(v) =>
+                            setEditingGateway({
+                              ...editingGateway,
+                              default_agent: v === '__none' ? '' : v,
+                            })
+                          }
+                        >
+                          <SelectTrigger id={id}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">Choose agent…</SelectItem>
+                            {agents.map((a) => (
+                              <SelectItem key={a.name} value={a.name}>
+                                {a.agent_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </Field>
                   )}
 
                   {editingGateway.default_target_type === 'Flow' && (
-                    <label className="grid gap-1 text-xs font-medium text-ink">
-                      Select flow
-                      <Select
-                        value={editingGateway.default_flow || '__none'}
-                        onValueChange={(v) =>
-                          setEditingGateway({
-                            ...editingGateway,
-                            default_flow: v === '__none' ? '' : v,
-                          })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none">Choose flow…</SelectItem>
-                          {flows.map((f) => (
-                            <SelectItem key={f.name} value={f.name}>
-                              {f.title}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </label>
+                    <Field label="Select flow">
+                      {({ id }) => (
+                        <Select
+                          value={editingGateway.default_flow || '__none'}
+                          onValueChange={(v) =>
+                            setEditingGateway({
+                              ...editingGateway,
+                              default_flow: v === '__none' ? '' : v,
+                            })
+                          }
+                        >
+                          <SelectTrigger id={id}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">Choose flow…</SelectItem>
+                            {flows.map((f) => (
+                              <SelectItem key={f.name} value={f.name}>
+                                {f.title}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </Field>
                   )}
-                </div>
+                </FieldRow>
               </div>
 
               {/* Direct Access Policy */}
-              <label className="grid gap-1 text-xs font-medium text-ink">
-                Direct message security policy
-                <Select
-                  value={editingGateway.direct_policy || 'Allow list'}
-                  onValueChange={(v) =>
-                    setEditingGateway({
-                      ...editingGateway,
-                      direct_policy: v as GatewayPolicy,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Allow list">Allow list — Require approved Gateway Access Entry</SelectItem>
-                    <SelectItem value="Pairing">Pairing — require pairing request approval</SelectItem>
-                    <SelectItem value="Disabled">Disabled — reject direct messages</SelectItem>
-                  </SelectContent>
-                </Select>
-              </label>
+              <Field label="Direct message security policy">
+                {({ id }) => (
+                  <Select
+                    value={editingGateway.direct_policy || 'Allow list'}
+                    onValueChange={(v) =>
+                      setEditingGateway({
+                        ...editingGateway,
+                        direct_policy: v as GatewayPolicy,
+                      })
+                    }
+                  >
+                    <SelectTrigger id={id}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Allow list">Allow list — Require approved Gateway Access Entry</SelectItem>
+                      <SelectItem value="Pairing">Pairing — require pairing request approval</SelectItem>
+                      <SelectItem value="Disabled">Disabled — reject direct messages</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </Field>
 
               {/* GW-18: room/group-chat admission policy */}
               <div className="grid gap-3 rounded-lg border border-line bg-paper p-4">
                 <p className="text-xs font-semibold text-ink">Group chats</p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <label className="grid min-w-0 gap-1 text-xs font-medium text-ink">
-                    Room policy
-                    <Select
-                      value={editingGateway.room_policy || 'Allow list'}
-                      onValueChange={(v) =>
-                        setEditingGateway({ ...editingGateway, room_policy: v as GatewayPolicy })
-                      }
-                    >
-                      <SelectTrigger className="w-full min-w-0">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Allow list">Allow list — require an approved room</SelectItem>
-                        <SelectItem value="Disabled">Disabled — reject room messages</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label className="grid min-w-0 gap-1 text-xs font-medium text-ink">
-                    Sender policy within a room
-                    <Select
-                      value={editingGateway.room_sender_policy || 'Allow list'}
-                      onValueChange={(v) =>
-                        setEditingGateway({ ...editingGateway, room_sender_policy: v as GatewayPolicy })
-                      }
-                    >
-                      <SelectTrigger className="w-full min-w-0">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Allow list">Allow list — require an approved sender</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </label>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="grid gap-1 text-xs font-medium text-ink">
-                    Pairing code lifetime (minutes)
+                <FieldRow cols={1} className="sm:grid-cols-2">
+                  <Field label="Room policy">
+                    {({ id }) => (
+                      <Select
+                        value={editingGateway.room_policy || 'Allow list'}
+                        onValueChange={(v) =>
+                          setEditingGateway({ ...editingGateway, room_policy: v as GatewayPolicy })
+                        }
+                      >
+                        <SelectTrigger id={id} className="min-w-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Allow list">Allow list — require an approved room</SelectItem>
+                          <SelectItem value="Disabled">Disabled — reject room messages</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </Field>
+                  <Field label="Sender policy within a room">
+                    {({ id }) => (
+                      <Select
+                        value={editingGateway.room_sender_policy || 'Allow list'}
+                        onValueChange={(v) =>
+                          setEditingGateway({ ...editingGateway, room_sender_policy: v as GatewayPolicy })
+                        }
+                      >
+                        <SelectTrigger id={id} className="min-w-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Allow list">Allow list — require an approved sender</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </Field>
+                </FieldRow>
+                <FieldRow cols={2}>
+                  <Field label="Pairing code lifetime (minutes)">
                     <Input
                       type="number"
                       min={1}
-                      className="h-9 text-xs"
                       value={editingGateway.pairing_ttl_minutes ?? 60}
                       onChange={(e) =>
                         setEditingGateway({
@@ -990,52 +995,33 @@ export default function GatewaysPage() {
                         })
                       }
                     />
-                  </label>
-                  <div className="flex items-end justify-between rounded-lg border border-line bg-panel p-3">
-                    <div>
-                      <p className="text-xs font-medium text-ink">Require @mention in rooms</p>
-                      <p className="text-[11px] text-steel">Only respond when explicitly mentioned</p>
+                  </Field>
+                  <FieldAction>
+                    <div className="flex h-control-md items-center justify-between gap-2 rounded-lg border border-line bg-panel px-3">
+                      <p className="truncate text-micro text-ink" title="Only respond when explicitly mentioned">
+                        Require @mention in rooms
+                      </p>
+                      <Switch
+                        aria-label="Require @mention in rooms"
+                        checked={Boolean(editingGateway.mention_required)}
+                        onCheckedChange={(checked) =>
+                          setEditingGateway({ ...editingGateway, mention_required: checked ? 1 : 0 })
+                        }
+                      />
                     </div>
-                    <Switch
-                      aria-label="Require @mention in rooms"
-                      checked={Boolean(editingGateway.mention_required)}
-                      onCheckedChange={(checked) =>
-                        setEditingGateway({ ...editingGateway, mention_required: checked ? 1 : 0 })
-                      }
-                    />
-                  </div>
-                </div>
+                  </FieldAction>
+                </FieldRow>
               </div>
 
               {/* Webhook Configuration Section */}
               <div className="rounded-lg border border-line bg-paper p-4 space-y-2">
-                <p className="text-xs font-semibold text-ink">Live Inbound Webhook Endpoint</p>
-                <p className="text-[11px] text-steel">
+                <p className="text-micro text-steel">
                   Copy and paste this Webhook URL into Meta Developer Console or your channel configuration:
                 </p>
-                <div className="flex items-center gap-2">
-                  <Input
-                    readOnly
-                    className="h-8 flex-1 font-mono text-[11px] text-steel selection:bg-primary/20"
-                    value={getWebhookUrl(editingGateway.name, editingGateway.provider)}
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 px-2.5 text-xs"
-                    onClick={() => handleCopyWebhook(editingGateway.name, editingGateway.provider)}
-                  >
-                    {copiedWebhook ? (
-                      <>
-                        <Check className="mr-1 h-3.5 w-3.5 text-good" /> Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="mr-1 h-3.5 w-3.5" /> Copy
-                      </>
-                    )}
-                  </Button>
-                </div>
+                <CopyField
+                  label="Live Inbound Webhook Endpoint"
+                  value={getWebhookUrl(editingGateway.name, editingGateway.provider)}
+                />
               </div>
             </div>
 
