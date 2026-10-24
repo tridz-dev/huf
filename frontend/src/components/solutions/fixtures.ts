@@ -9,7 +9,7 @@ export function makeOverview(over: Partial<SolutionOverview> = {}): SolutionOver
     health: { state: 'ok', gateway: 'gw1', quality: null, blame: null },
     reach: { contacts_7d: 30, new_7d: 5 },
     activity: [{ ts: '2026-10-24T10:00:00Z', kind: 'chat', text: 'New order chat' }],
-    cost: { sends_24h: 40, cap_share: 0.4, ceiling: 100 },
+    cost: { sends_24h: 40, cap_share: 40, ceiling: 100 },
     limits: { per_day: null, scope: 'Any number' },
     ...over,
   };

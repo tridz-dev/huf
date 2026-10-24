@@ -7,7 +7,7 @@ import { makeEntry, makeOverview } from '@/components/solutions/fixtures';
 
 const api = vi.hoisted(() => ({
   getSolutionOverview: vi.fn(), listSolutions: vi.fn(), listEntryPoints: vi.fn(), listSolutionConversations: vi.fn(),
-  pauseSolution: vi.fn(), resumeSolution: vi.fn(), goLive: vi.fn(), saveEntryPoint: vi.fn(), deleteEntryPoint: vi.fn(),
+  updateSolution: vi.fn(), pauseSolution: vi.fn(), resumeSolution: vi.fn(), goLive: vi.fn(), saveEntryPoint: vi.fn(), deleteEntryPoint: vi.fn(),
 }));
 vi.mock('@/services/solutionsApi', async (orig) => ({ ...(await orig<object>()), ...api }));
 const seen = vi.hoisted(() => ({ templates: [] as Array<Record<string, unknown>>, chat: [] as Array<Record<string, unknown>> }));
@@ -17,6 +17,8 @@ vi.mock('@/components/whatsapp/TemplatesTab', () => ({
 vi.mock('@/components/solutions/TestChat', () => ({
   TestChat: (p: Record<string, unknown>) => { seen.chat.push(p); return <div>test chat</div>; },
 }));
+vi.mock('@/services/agentApi', () => ({ getAgents: vi.fn().mockResolvedValue([{ name: 'ag1', agent_name: 'Care agent' }]) }));
+vi.mock('@/services/flowApi', () => ({ getFlowDefinitions: vi.fn().mockResolvedValue([{ name: 'fl1', flow_name: 'Quote flow' }]) }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { SolutionsApiError } from '@/services/solutionsApi';
@@ -72,6 +74,41 @@ describe('SolutionDetailPage', () => {
     renderAt('/solutions/orders');
     expect(await screen.findByText('No limit set')).toBeInTheDocument();
     expect(screen.queryByRole('meter')).toBeNull();
+  });
+
+  it('shows cap_share on a 0-100 scale', async () => {
+    api.getSolutionOverview.mockResolvedValue(makeOverview({ cost: { sends_24h: 3, cap_share: 1, ceiling: 100 } }));
+    renderAt('/solutions/orders');
+    expect(await screen.findByText('1%')).toBeInTheDocument();
+  });
+
+  it('without a target shows Choose what answers and saves via updateSolution', async () => {
+    api.getSolutionOverview.mockResolvedValue(makeOverview({ status: 'Paused', primary: null }));
+    api.updateSolution.mockResolvedValue({});
+    renderAt('/solutions/orders');
+    expect(await screen.findByText('Choose what answers')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull();
+    await screen.findByText('Quote flow (flow)');
+    fireEvent.change(screen.getByLabelText('Answered by'), { target: { value: 'Flow:fl1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(api.updateSolution).toHaveBeenCalledWith('orders', { primary_target_type: 'Flow', primary_flow: 'fl1' }));
+    await waitFor(() => expect(api.getSolutionOverview).toHaveBeenCalledTimes(2));
+  });
+
+  it('with a target offers Change and saves an agent', async () => {
+    api.updateSolution.mockResolvedValue({});
+    renderAt('/solutions/orders');
+    fireEvent.click(await screen.findByRole('button', { name: 'Change' }));
+    await screen.findByText('Care agent (agent)');
+    fireEvent.change(screen.getByLabelText('Answered by'), { target: { value: 'Agent:ag1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(api.updateSolution).toHaveBeenCalledWith('orders', { primary_target_type: 'Agent', primary_agent: 'ag1' }));
+  });
+
+  it('a paused test-mode solution with a target shows Go live', async () => {
+    api.getSolutionOverview.mockResolvedValue(makeOverview({ status: 'Paused', test_mode: true }));
+    renderAt('/solutions/orders');
+    expect(await screen.findByRole('button', { name: 'Go live' })).toBeInTheDocument();
   });
 
   it('links a flow target to the flows route', async () => {

@@ -227,10 +227,12 @@ def create_solution(payload):
 		raise _Err("invalid_payload", "gateway is required.")
 	_gateway_check(gateway)
 	target = None
-	if mode == "existing":
-		et = p.get("existing_target")
+	et = p.get("existing_target")
+	if mode == "existing" and not isinstance(et, dict):
+		raise _Err("invalid_payload", "existing_target is required for mode existing.")
+	if et is not None and et != "":
 		if not isinstance(et, dict):
-			raise _Err("invalid_payload", "existing_target is required for mode existing.")
+			raise _Err("invalid_payload", "existing_target must be an object.")
 		target = _target(et.get("type"), et.get("name"))
 	inbound = bool(p.get("inbound", True))
 	entries = [_clean_entry(e) for e in (p.get("entries") or [])] if inbound else []

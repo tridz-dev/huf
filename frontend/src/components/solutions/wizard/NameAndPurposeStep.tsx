@@ -115,32 +115,34 @@ export function NameAndPurposeStep({ wiz }: { wiz: WizardApi }) {
             No purpose, start blank
           </Button>
         </div>
-        {state.mode === 'existing' && (
-          <div className="flex items-center gap-2">
-            <label htmlFor="wizard-existing" className="text-sm text-steel">
-              Answered by
-            </label>
-            <select
-              id="wizard-existing"
-              className={nativeSelect}
-              value={selectedKey}
-              onChange={(e) => {
-                const [type, ...rest] = e.target.value.split(':');
-                actions.setExisting({ type: type as 'Agent' | 'Flow', name: rest.join(':') });
-              }}
-            >
-              {targets.length === 0 && <option value="">No agents or flows yet</option>}
-              {targets.map((t) => (
-                <option key={`${t.type}:${t.name}`} value={`${t.type}:${t.name}`}>
-                  {t.label} ({t.type.toLowerCase()})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
         <p className="text-xs text-steel">
           A purpose only suggests entry points, templates and settings. It never creates an agent for you.
         </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <label htmlFor="wizard-existing" className="text-sm font-medium">
+          Answered by {state.mode !== 'existing' && <span className="font-normal text-steel">(optional)</span>}
+        </label>
+        <select
+          id="wizard-existing"
+          className={nativeSelect}
+          value={selectedKey}
+          onChange={(e) => {
+            if (!e.target.value) return actions.setExisting(null);
+            const [type, ...rest] = e.target.value.split(':');
+            actions.setExisting({ type: type as 'Agent' | 'Flow', name: rest.join(':') });
+          }}
+        >
+          {state.mode !== 'existing' && <option value="">Choose later</option>}
+          {targets.length === 0 && state.mode === 'existing' && <option value="">No agents or flows yet</option>}
+          {targets.map((t) => (
+            <option key={`${t.type}:${t.name}`} value={`${t.type}:${t.name}`}>
+              {t.label} ({t.type.toLowerCase()})
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-steel">The agent or flow that replies. Without one, the {labels.solutionLower} is saved as paused.</p>
       </div>
 
       <div className="space-y-2">

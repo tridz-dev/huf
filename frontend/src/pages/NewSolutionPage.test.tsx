@@ -174,6 +174,45 @@ describe('NewSolutionPage', () => {
     expect(p).not.toHaveProperty('existing_target');
   });
 
+  it('answered by is optional in intent mode and sent as existing_target when chosen', async () => {
+    await ready();
+    fireEvent.click(screen.getByText('Take orders'));
+    fireEvent.change(screen.getByLabelText(/Answered by/), { target: { value: 'Agent:ag1' } });
+    next(); next(); next();
+    expect(screen.queryByTestId('no-target-note')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Go live' }));
+    await screen.findByTestId('where');
+    expect(api.createSolution.mock.calls[0][0].existing_target).toEqual({ type: 'Agent', name: 'ag1' });
+    expect(api.createSolution.mock.calls[0][0].mode).toBe('intent');
+    expect(api.goLive).toHaveBeenCalledWith('sol-1');
+  });
+
+  it('blank mode keeps a chosen target', async () => {
+    await ready();
+    fireEvent.click(screen.getByText('No purpose, start blank'));
+    fireEvent.change(screen.getByLabelText(/Answered by/), { target: { value: 'Flow:fl1' } });
+    fireEvent.change(name(), { target: { value: 'Plain' } });
+    next(); next(); next();
+    fireEvent.click(screen.getByRole('button', { name: 'Go live' }));
+    await screen.findByTestId('where');
+    expect(api.createSolution.mock.calls[0][0].existing_target).toEqual({ type: 'Flow', name: 'fl1' });
+  });
+
+  it('without a target the last step explains, saves paused and never calls go_live', async () => {
+    await ready();
+    fireEvent.click(screen.getByText('Take orders'));
+    next(); next(); next();
+    expect(screen.getByTestId('no-target-note')).toHaveTextContent('No agent or flow is chosen: it will be saved as paused until you choose one');
+    const go = screen.getByRole('button', { name: 'Go live' });
+    expect(go).toBeEnabled();
+    fireEvent.click(go);
+    await screen.findByTestId('where');
+    expect(api.createSolution.mock.calls[0][0]).not.toHaveProperty('existing_target');
+    expect(api.goLive).not.toHaveBeenCalled();
+    expect(api.toast.mock.calls[0][0]).toMatch(/saved as paused/);
+    expect(api.toast.mock.calls[0][1].action.label).toBe('Open');
+  });
+
   it('query params preselect purpose and gateway', async () => {
     renderAt('/solutions/new?purpose=orders&gateway=gw2');
     await screen.findByText('Take orders');
@@ -215,6 +254,7 @@ describe('NewSolutionPage', () => {
   it('go live calls create, then go_live, then navigates with a toast', async () => {
     await ready();
     fireEvent.click(screen.getByText('Take orders'));
+    fireEvent.change(screen.getByLabelText(/Answered by/), { target: { value: 'Agent:ag1' } });
     next(); next(); next();
     fireEvent.click(screen.getByRole('button', { name: 'Go live' }));
     await screen.findByTestId('where');
