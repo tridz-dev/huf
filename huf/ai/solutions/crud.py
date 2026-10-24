@@ -373,3 +373,7 @@ def delete_entry_point(name):
 		raise _Err("invalid_payload", "A live solution needs at least one entry point. Pause it first.")
 	frappe.delete_doc("Gateway Binding", name, ignore_permissions=True)
 	return {"deleted": name}
+
+
+# The frontend contract serves reassign_conversation from this module; the implementation lives in handoff.py.
+from huf.ai.solutions.handoff import reassign_conversation  # noqa: E402,F401
