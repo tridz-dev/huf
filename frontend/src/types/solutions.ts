@@ -194,7 +194,12 @@ export interface CreateSolutionPayload {
 }
 
 export type UpdateSolutionFields = Partial<
-  Pick<SolutionSummary, 'title' | 'purpose' | 'description'> & { test_mode: boolean }
+  Pick<SolutionSummary, 'title' | 'purpose' | 'description'> & {
+    test_mode: boolean;
+    primary_target_type: 'Agent' | 'Flow';
+    primary_agent: string;
+    primary_flow: string;
+  }
 >;
 
 export type SaveEntryPointPayload = Partial<EntryPoint>;

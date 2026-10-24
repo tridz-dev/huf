@@ -12,6 +12,7 @@ import { goLive, pauseSolution, resumeSolution } from '@/services/solutionsApi';
 import type { SolutionOverview } from '@/types/solutions';
 import { SolutionHealthBand } from './SolutionHealthBand';
 import { labels, purposeLabel } from './labels';
+import { SolutionAnsweredByPicker } from './SolutionAnsweredByPicker';
 
 interface SolutionOverviewTabProps {
   overview: SolutionOverview;
@@ -43,11 +44,13 @@ export function targetPath(type: 'Agent' | 'Flow', name: string): string {
 export function SolutionOverviewTab({ overview, solutionLabels, checking, onCheck, onChanged, onManageEntryPoints }: SolutionOverviewTabProps) {
   const [busy, setBusy] = useState(false);
   const [confirmLive, setConfirmLive] = useState(false);
+  const [changing, setChanging] = useState(false);
   const live = overview.status === 'Live';
   const { reach, cost, primary } = overview;
   const ceiling = cost.ceiling;
   const usedPct = ceiling ? Math.min(100, Math.round((cost.sends_24h / ceiling) * 100)) : null;
-  const sharePct = Math.round(cost.cap_share * (cost.cap_share <= 1 ? 100 : 1));
+  // cap_share is on a 0-100 scale (same as usage_pct) and null when there is nothing to share.
+  const sharePct = Math.round(cost.cap_share ?? 0);
 
   const run = async (fn: () => Promise<unknown>, done: string) => {
     setBusy(true);
@@ -144,24 +147,41 @@ export function SolutionOverviewTab({ overview, solutionLabels, checking, onChec
           ) : null}
         </Card>
 
-        <Card className="p-4">
-          <CardTitle>{primary?.type === 'Flow' ? 'Flow' : 'Agent'}</CardTitle>
-          {primary ? (
-            <Link to={targetPath(primary.type, primary.name)} className="text-sm font-medium text-ink underline">
-              {primary.label || primary.name}
-            </Link>
+        <Card className={primary ? 'p-4' : 'border-ink p-4 lg:col-span-2'}>
+          <CardTitle>{primary ? (primary.type === 'Flow' ? 'Flow' : 'Agent') : 'Choose what answers'}</CardTitle>
+          {primary && !changing ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <Link to={targetPath(primary.type, primary.name)} className="text-sm font-medium text-ink underline">
+                {primary.label || primary.name}
+              </Link>
+              <Button variant="outline" size="sm" onClick={() => setChanging(true)}>Change</Button>
+            </div>
           ) : (
-            <p className="text-sm text-steel">Not set. Each entry point picks its own agent or flow.</p>
+            <div className="space-y-2">
+              {!primary ? (
+                <p className="text-sm text-steel">
+                  No agent or flow answers yet, so this {labels.solutionLower} stays paused. Choose one to continue.
+                </p>
+              ) : null}
+              <SolutionAnsweredByPicker
+                solution={overview.name}
+                current={primary}
+                onSaved={() => { setChanging(false); onChanged(); }}
+                onCancel={primary ? () => setChanging(false) : undefined}
+              />
+            </div>
           )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            {overview.test_mode ? (
-              <Button size="sm" disabled={busy} onClick={() => setConfirmLive(true)}>Go live</Button>
-            ) : live ? (
-              <Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => pauseSolution(overview.name), `${overview.title} paused.`)}>Pause</Button>
-            ) : (
-              <Button size="sm" disabled={busy} onClick={() => run(() => resumeSolution(overview.name), `${overview.title} resumed.`)}>Resume</Button>
-            )}
-          </div>
+          {primary ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {overview.test_mode ? (
+                <Button size="sm" disabled={busy} onClick={() => setConfirmLive(true)}>Go live</Button>
+              ) : live ? (
+                <Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => pauseSolution(overview.name), `${overview.title} paused.`)}>Pause</Button>
+              ) : (
+                <Button size="sm" disabled={busy} onClick={() => run(() => resumeSolution(overview.name), `${overview.title} resumed.`)}>Resume</Button>
+              )}
+            </div>
+          ) : null}
         </Card>
       </div>
 
