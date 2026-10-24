@@ -26,5 +26,14 @@
       "frontend/src/**",
       "scripts/baselines/ui_drift.json"
     ]
+  },
+  {
+    "name": "whitelist",
+    "script": "scripts/check_whitelist.py",
+    "args": [],
+    "paths": [
+      "huf/**/*.py",
+      "scripts/baselines/whitelist.json"
+    ]
   }
 ]
