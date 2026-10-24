@@ -100,14 +100,16 @@ def paginate(
 		doctype = query.pop("doctype")
 		filters = query.get("filters")
 		items = frappe.get_list(doctype, limit_start=start, limit_page_length=limit, **query)
-		counted = frappe.get_list(
-			doctype,
-			filters=filters,
-			or_filters=query.get("or_filters"),
-			fields=["count(name) as total"],
-			order_by=None,
+		# Permission-aware total: names only, so no wide rows are loaded.
+		total = len(
+			frappe.get_list(
+				doctype,
+				filters=filters,
+				or_filters=query.get("or_filters"),
+				pluck="name",
+				limit_page_length=0,
+			)
 		)
-		total = int(counted[0]["total"]) if counted else 0
 	else:
 		rows = rows_or_query if isinstance(rows_or_query, (list, tuple)) else list(rows_or_query)
 		total = len(rows)
