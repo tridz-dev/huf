@@ -409,14 +409,18 @@ class TelegramSender:
 		reply_to: Any = None,
 		thread_id: Any = None,
 		silent: bool = False,
+		protect: bool = False,
 		parse_mode: str | None = None,
 		reply_markup: Mapping[str, Any] | None = None,
 	) -> Sequence[Mapping[str, Any]]:
 		"""``items``: 2-10 dicts ``{"type": photo|video|audio|document, "media": MediaInput, "caption": str}``
 		plus the per-item InputMedia options in ``_ALBUM_ITEM_FIELDS`` (``has_spoiler``, audio ``title`` /
-		``performer`` / ``duration``, ...). A caption over 1024 chars is not truncated: it goes out as a follow-up
-		text message after the album, like ``send_media``. ``parse_mode`` overrides the sender's format for
-		captions. ``reply_markup`` is refused: sendMediaGroup has no keyboard parameter.
+		``performer`` / ``duration``, ...).
+
+		``parse_mode`` set: captions are already formatted in that mode and are sent verbatim with it (a caption
+		over 1024 chars is refused). Unset: captions are rendered in the sender's format, and a caption over 1024
+		chars goes out as a follow-up text message after the album, like ``send_media``. ``reply_markup`` is
+		refused: sendMediaGroup has no keyboard parameter.
 		"""
 		if not 2 <= len(items) <= 10:
 			raise ValueError("A media group needs 2-10 items")
@@ -424,15 +428,8 @@ class TelegramSender:
 			raise ValueError(
 				"Telegram albums cannot carry a keyboard; send the buttons in a separate message"
 			)
-		mode = self.parse_mode if parse_mode is None else parse_mode
-		if mode not in (MODE_PLAIN, MODE_HTML, MODE_MARKDOWN_V2):
-			raise ValueError("parse_mode must be '', 'HTML' or 'MarkdownV2'")
-		sender = (
-			self
-			if mode == self.parse_mode
-			else TelegramSender(self.client, parse_mode=mode, reply_style=self.reply_style)
-		)
-		payload = self._common(chat_id, reply_to=reply_to, thread_id=thread_id, silent=silent)
+		sender = self
+		payload = self._common(chat_id, reply_to=reply_to, thread_id=thread_id, silent=silent, protect=protect)
 		media_json, files, follow_ups = [], {}, []
 		for i, item in enumerate(items):
 			kind = item.get("type", "photo")
@@ -452,8 +449,13 @@ class TelegramSender:
 			entry: dict[str, Any] = {"type": kind, "media": value}
 			entry.update({k: item[k] for k in _ALBUM_ITEM_FIELDS if item.get(k) not in (None, "")})
 			caption = item.get("caption")
-			if caption:
-				parts = render_parts(caption, mode, TELEGRAM_CAPTION_LIMIT)
+			if caption and parse_mode:
+				if len(caption) > TELEGRAM_CAPTION_LIMIT:
+					raise ValueError(f"A caption must fit in {TELEGRAM_CAPTION_LIMIT} characters")
+				entry["caption"] = caption
+				entry["parse_mode"] = parse_mode
+			elif caption:
+				parts = render_parts(caption, self.parse_mode, TELEGRAM_CAPTION_LIMIT)
 				if len(parts) == 1:
 					entry["caption"] = parts[0].text
 					if parts[0].parse_mode:

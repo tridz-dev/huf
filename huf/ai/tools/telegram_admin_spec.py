@@ -9,13 +9,13 @@ Every action lists the argument names it reads and whether each is required. The
 An action can only read an argument that is declared here; anything else is refused with the valid names,
 and a missing required argument is refused instead of silently defaulting to an empty value.
 
-Plain data and stdlib only: the registry imports this module without touching Frappe.
+The mechanics (schema rows, usage text, validation) are shared in ``action_args.ActionTable``. Plain data and
+stdlib only: the registry imports this module without touching Frappe.
 """
 
 from __future__ import annotations
 
-import json
-from typing import Any
+from huf.ai.tools.action_args import ActionTable, ArgumentRefusal
 
 # name -> (JSON type, description). ``chat`` accepts an integer or a numeric/@username string.
 ARG_TYPES: dict[str, tuple[str, str]] = {
@@ -141,122 +141,20 @@ ACTION_ARGS: dict[str, dict[str, bool]] = {
 	},
 }
 
-_GENERIC_VALUE_NAMES = frozenset({"text", "value", "content", "message", "body", "string"})
+TABLE = ActionTable(ARG_TYPES, ACTION_ARGS, text_lists=("rights", "message_ids"))
 
 # Short, per-action usage line for the tool description (generated, so it cannot drift).
-CHOICES = "|".join(ACTION_ARGS)
-
-
-def usage(action: str) -> str:
-	spec = ACTION_ARGS[action]
-	return f"{action}({', '.join(k if req else k + '?' for k, req in spec.items())})"
-
-
-def usage_summary() -> str:
-	return "; ".join(usage(a) for a in ACTION_ARGS)
-
-
-def registry_parameters(p) -> list[dict]:
-	"""Registry parameter rows (``p`` is the registry's ``_p`` row builder) generated from the table."""
-	rows = [
-		p(
-			"action",
-			required=True,
-			description=f"Action to perform. One of: {CHOICES}",
-		)
-	]
-	names: list[str] = []
-	for spec in ACTION_ARGS.values():
-		for n in spec:
-			if n not in names:
-				names.append(n)
-	for name in names:
-		kind, desc = ARG_TYPES[name]
-		used = [a for a, s in ACTION_ARGS.items() if name in s]
-		req = [a for a in used if ACTION_ARGS[a][name]]
-		note = f" Used by: {', '.join(used)}."
-		if req:
-			note += f" Required for: {', '.join(req)}."
-		rows.append(p(name, type="string" if kind == "chat" else kind, description=desc + note))
-	return rows
-
-
-def _bad(action: str, name: str, expect: str):
-	from huf.ai.tools.telegram_admin_tools import Refused
-
-	return Refused(
-		"invalid_argument",
-		f"argument '{name}' for {action} must be {expect}",
-		valid_arguments=list(ACTION_ARGS[action]),
-	)
-
-
-def _coerce(action: str, name: str, value: Any) -> Any:
-	kind = ARG_TYPES[name][0]
-	if kind == "chat":
-		if isinstance(value, bool) or not isinstance(value, (int, str)):
-			raise _bad(action, name, "a numeric chat id or @username")
-	elif kind == "integer":
-		if isinstance(value, bool) or not (
-			isinstance(value, int) or (isinstance(value, str) and value.strip().lstrip("-").isdigit())
-		):
-			raise _bad(action, name, "an integer")
-	elif kind == "boolean":
-		if not (
-			isinstance(value, bool)
-			or str(value).strip().lower() in ("true", "false", "1", "0", "yes", "no", "on", "off")
-		):
-			raise _bad(action, name, "true or false")
-	elif kind == "string":
-		if not isinstance(value, str):
-			raise _bad(action, name, "a string")
-	elif kind in ("array", "object"):
-		want = list if kind == "array" else dict
-		if isinstance(value, str):
-			try:
-				parsed = json.loads(value)
-			except ValueError:
-				parsed = None
-			ok = isinstance(parsed, want) or (
-				kind == "array" and name in ("rights", "message_ids") and value.strip()
-			)
-			if not ok:
-				raise _bad(action, name, f"a {kind} (or its JSON text)")
-		elif not isinstance(value, want):
-			raise _bad(action, name, f"a {kind}")
-	return value
+CHOICES = TABLE.choices
+usage = TABLE.usage
+usage_summary = TABLE.usage_summary
+registry_parameters = TABLE.registry_parameters
 
 
 def validate(action: str, args: dict) -> dict:
 	"""Return ``args`` after checking names, presence and types against the table; raise ``Refused`` otherwise."""
 	from huf.ai.tools.telegram_admin_tools import Refused
 
-	spec = ACTION_ARGS[action]
-	valid = list(spec)
-	unknown = [k for k in args if k not in spec]
-	if unknown:
-		hints = []
-		for k in unknown:
-			near = [a for a in spec if k in a or a in k]
-			if not near and k in _GENERIC_VALUE_NAMES:
-				near = [a for a, req in spec.items() if req and ARG_TYPES[a][0] == "string"][:1]
-			hints.append(f"unknown argument '{k}' for {action}" + (f"; use '{near[0]}'" if near else ""))
-		raise Refused(
-			"invalid_argument",
-			"; ".join(hints) + f". Valid arguments for {action}: {', '.join(valid) or '(none)'}.",
-			unknown_arguments=unknown,
-			valid_arguments=valid,
-		)
-	missing = [k for k, req in spec.items() if req and args.get(k) is None]
-	if missing:
-		raise Refused(
-			"invalid_argument",
-			f"missing required argument(s) for {action}: {', '.join(missing)}. "
-			f"Valid arguments for {action}: {', '.join(valid)}.",
-			missing_arguments=missing,
-			valid_arguments=valid,
-		)
-	for k, v in args.items():
-		if v is not None:
-			_coerce(action, k, v)
-	return args
+	try:
+		return TABLE.validate(action, args)  # type: ignore[return-value]
+	except ArgumentRefusal as exc:
+		raise Refused(exc.code, exc.message, **exc.extra) from None

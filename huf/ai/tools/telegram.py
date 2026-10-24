@@ -6,23 +6,10 @@ Single consolidated tool that performs all Telegram Bot API actions via an
 and supports Frappe File uploads, public URLs, and Telegram file_ids for
 media messages.
 
-Actions:
-    send_message        Send a text message
-    reply_to_message    Reply to a specific message (send_message + reply_to_message_id)
-    send_photo          Send a photo (URL, file_id, or Frappe File)
-    send_document       Send a document (URL, file_id, or Frappe File)
-    edit_message_text   Edit a previously sent text message
-    delete_message      Delete a message
-    get_updates         Fetch recent incoming updates/messages
-    get_chat_info       Get information about a chat
-    get_me              Get information about the bot
-    set_webhook         Set a webhook URL for the bot
-    delete_webhook      Remove the bot webhook
-
-Rich actions (WP-4): send_voice, send_audio, send_video, send_animation, send_sticker, send_media_group,
-send_location, send_contact, set_reaction, send_chat_action, edit_message_caption,
-edit_message_reply_markup, forward_message, copy_message,
-answer_callback_query, plus a validated ``reply_markup`` on send_message/send_photo/send_document.
+The actions and the arguments each one accepts are declared once in
+``huf.ai.tools.telegram_tool_spec``; that table generates the registry schema
+and the strict argument validation done by ``handle_action``. The dispatch
+table in ``handle_action`` is the list of handlers.
 
 Inside a run that belongs to a Telegram Gateway the recipient is the current chat by default and any
 other chat is checked against the gateway's send scope and caps (``huf.ai.telegram_send_scope``).
@@ -44,6 +31,7 @@ from huf.ai.gateway_adapters import telegram_senders_more as more
 from huf.ai.gateway_adapters.telegram_client import ALLOWED_UPDATES, TelegramApiError, TelegramBotClient
 from huf.ai.gateway_adapters.telegram_keyboards import derive_callback_key, sign_callback
 from huf.ai.gateway_adapters.telegram_outbound import TelegramSender
+from huf.ai.tools import telegram_tool_spec as spec
 from huf.ai.tools.credentials import get_credential, update_last_error
 
 SERVICE_NAME = "telegram"
@@ -143,18 +131,22 @@ def _api_request(method: str, payload: dict, files: Optional[dict] = None, token
     return json.dumps({"success": True, "results": result}, default=str)
 
 
-def _coerce_int(value, default: int = 0) -> int:
+def _coerce_int(value, default: Optional[int] = None) -> int:
+    """``int(value)``. Without a ``default`` a non-numeric value raises ``ValueError`` (it is never sent as 0)."""
     try:
         return int(value)
     except (TypeError, ValueError):
+        if default is None:
+            raise ValueError(f"expected an integer, got {value!r}") from None
         return default
 
 
+CAPTION_MAX_CHARS = 1024
 PHOTO_MAX_BYTES = 10 * 1024 * 1024
 FILE_MAX_BYTES = 50 * 1024 * 1024
 _FILE_ID_RE = re.compile(r"[A-Za-z0-9_-]{20,}")
 _VOICE_MIMES = ("audio/ogg", "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/m4a")
-_PARSE_MODES = ("Markdown", "HTML", "MarkdownV2")
+_PARSE_MODES = spec.PARSE_MODES
 
 
 def _size_limit(kind: str) -> int:
@@ -204,7 +196,7 @@ def _resolve_media(kind: str, source) -> Any:
             raise ValueError(f"File is {_mb(size)}; Telegram allows at most {_mb(limit)} for a {kind}")
         mime = file_doc.content_type or "application/octet-stream"
         if kind == "voice" and mime not in _VOICE_MIMES:
-            raise ValueError("A voice message must be OGG/Opus (audio/ogg), MP3 or M4A; use send_audio or send_document")
+            raise ValueError(f"A voice message must be {spec.VOICE_FORMATS}; use send_audio or send_document")
         with open(path, "rb") as fh:
             return (os.path.basename(path), fh.read(), mime)
     if _FILE_ID_RE.fullmatch(source):
@@ -321,9 +313,9 @@ def _build_message_payload(kwargs: dict) -> tuple:
     if not chat_id:
         return _error("chat_id or recipient_name is required"), None
 
-    text = kwargs.get("text") or kwargs.get("message")
+    text = kwargs.get("text")
     if not text:
-        return _error("text (or message) is required"), None
+        return _error("text is required"), None
 
     payload = {"chat_id": chat_id, "text": text}
     parse_mode = _parse_mode(kwargs)
@@ -375,13 +367,14 @@ def _handle_reply_to_message(**kwargs) -> str:
     return _handle_send_message(**kwargs)
 
 
-def _send_media_action(kind: str, kwargs: dict, source_keys: tuple) -> str:
+def _send_media_action(kind: str, kwargs: dict) -> str:
+    """Send one media message; the source is the argument named like the kind (``photo``, ``voice``, ...)."""
     chat_id, err = _chat_or_error(kwargs)
     if err:
         return err
-    source = next((kwargs.get(k) for k in source_keys if kwargs.get(k)), None)
+    source = kwargs.get(kind)
     if not source:
-        return _error(f"{source_keys[0]} (or file/file_url) is required")
+        return _error(f"{kind} is required")
     try:
         media = _resolve_media(kind, source)
         kw = _common_kw(kwargs, chat_id)
@@ -392,15 +385,15 @@ def _send_media_action(kind: str, kwargs: dict, source_keys: tuple) -> str:
     extra_fields = {}
     if _parse_mode(kwargs) and kw.get("caption"):
         extra_fields["parse_mode"] = _parse_mode(kwargs)
+    # Only the arguments declared for this kind can be present (telegram_tool_spec), so no per-kind gating here.
     for key in ("duration", "width", "height", "length"):
         if kwargs.get(key):
             extra_fields[key] = _coerce_int(kwargs[key])
-    if kind == "video" and _truthy(kwargs.get("supports_streaming")):
-        extra_fields["supports_streaming"] = True
-    if kind in ("photo", "video", "animation") and _truthy(kwargs.get("has_spoiler")):
-        extra_fields["has_spoiler"] = True
+    for key in ("supports_streaming", "has_spoiler"):
+        if _truthy(kwargs.get(key)):
+            extra_fields[key] = True
     for key in ("title", "performer"):
-        if kind == "audio" and kwargs.get(key):
+        if kwargs.get(key):
             extra_fields[key] = str(kwargs[key])
     if kwargs.get("message_effect_id"):
         extra_fields["message_effect_id"] = str(kwargs["message_effect_id"])
@@ -413,16 +406,16 @@ def _send_media_action(kind: str, kwargs: dict, source_keys: tuple) -> str:
 
 def _handle_send_photo(**kwargs) -> str:
     """Send a photo. Accepts URL (SSRF-guarded), Telegram file_id, or Frappe File (<= 10 MB)."""
-    return _send_media_action("photo", kwargs, ("photo", "file", "file_url"))
+    return _send_media_action("photo", kwargs)
 
 
 def _handle_send_document(**kwargs) -> str:
     """Send a document. Accepts URL (SSRF-guarded), Telegram file_id, or Frappe File (<= 50 MB)."""
-    return _send_media_action("document", kwargs, ("document", "file", "file_url"))
+    return _send_media_action("document", kwargs)
 
 
 def _handle_send_voice(**kwargs) -> str:
-    return _send_media_action("voice", kwargs, ("voice", "audio", "file", "file_url"))
+    return _send_media_action("voice", kwargs)
 
 
 MAX_SPEECH_CHARS = 2000
@@ -433,7 +426,7 @@ def _handle_send_speech(**kwargs) -> str:
     chat_id, err = _chat_or_error(kwargs)
     if err:
         return err
-    text = str(kwargs.get("text") or kwargs.get("message") or "").strip()
+    text = str(kwargs.get("text") or "").strip()
     if not text:
         return _error("text is required for send_speech")
     if len(text) > MAX_SPEECH_CHARS:
@@ -458,23 +451,23 @@ def _handle_send_speech(**kwargs) -> str:
 
 
 def _handle_send_audio(**kwargs) -> str:
-    return _send_media_action("audio", kwargs, ("audio", "file", "file_url"))
+    return _send_media_action("audio", kwargs)
 
 
 def _handle_send_video(**kwargs) -> str:
-    return _send_media_action("video", kwargs, ("video", "file", "file_url"))
+    return _send_media_action("video", kwargs)
 
 
 def _handle_send_animation(**kwargs) -> str:
-    return _send_media_action("animation", kwargs, ("animation", "file", "file_url"))
+    return _send_media_action("animation", kwargs)
 
 
 def _handle_send_video_note(**kwargs) -> str:
-    return _send_media_action("video_note", kwargs, ("video_note", "video", "file", "file_url"))
+    return _send_media_action("video_note", kwargs)
 
 
 def _handle_send_sticker(**kwargs) -> str:
-    return _send_media_action("sticker", kwargs, ("sticker", "file", "file_url"))
+    return _send_media_action("sticker", kwargs)
 
 
 def _handle_send_media_group(**kwargs) -> str:
@@ -496,9 +489,9 @@ def _handle_send_media_group(**kwargs) -> str:
             if kind not in ("photo", "video", "audio", "document"):
                 return _error("item type must be photo, video, audio or document")
             built.append({"type": kind, "media": _resolve_media(kind, item["media"]), "caption": item.get("caption") or ""})
-        kw = _common_kw({k: v for k, v in kwargs.items() if k != "reply_markup"}, chat_id)
-        kw.pop("markup", None)
-        kw.pop("protect", None)
+        # sendMediaGroup has no reply_markup (telegram_tool_spec does not declare it); parse_mode applies to the captions.
+        kw = _common_kw(kwargs, chat_id)
+        kw["parse_mode"] = _parse_mode(kwargs)
     except ValueError as exc:
         return _error(str(exc))
     return _run_sender(
@@ -521,7 +514,6 @@ def _handle_send_location(**kwargs) -> str:
         kw = _common_kw(kwargs, chat_id)
     except ValueError as exc:
         return _error(str(exc))
-    kw.pop("protect", None)
     return _run_sender("sendLocation", lambda sender: sender.send_location(chat_id, lat, lon, **kw))
 
 
@@ -537,7 +529,6 @@ def _handle_send_contact(**kwargs) -> str:
         kw = _common_kw(kwargs, chat_id)
     except ValueError as exc:
         return _error(str(exc))
-    kw.pop("protect", None)
     last = str(kwargs.get("last_name") or "")
     return _run_sender("sendContact", lambda sender: sender.send_contact(chat_id, phone, first, last_name=last, **kw))
 
@@ -555,7 +546,12 @@ def _handle_set_reaction(**kwargs) -> str:
     chat_id, message_id, err = _need_message(kwargs)
     if err:
         return err
-    emoji = None if _truthy(kwargs.get("remove")) else (str(kwargs.get("emoji") or "").strip() or None)
+    emoji = str(kwargs.get("emoji") or "").strip() or None
+    remove = _truthy(kwargs.get("remove"))
+    if emoji and remove:
+        return _error("pass either emoji or remove=true, not both")
+    if not emoji and not remove:
+        return _error("set_reaction needs an emoji, or remove=true to clear the reaction")
     return _run_sender(
         "setMessageReaction", lambda s: s.set_reaction(chat_id, message_id, emoji, big=_truthy(kwargs.get("big")))
     )
@@ -572,20 +568,44 @@ def _handle_send_chat_action(**kwargs) -> str:
     )
 
 
+def _inline_markup(kwargs: dict, chat_id):
+    """``(markup, None)`` for an edit: only an inline keyboard can be set on an existing message."""
+    try:
+        markup = _markup(kwargs, chat_id)
+    except ValueError as exc:
+        return None, _error(str(exc))
+    if markup and "inline_keyboard" not in markup:
+        return None, _error("only an inline_keyboard can be edited onto an existing message")
+    return markup, None
+
+
+def _edit_payload(kwargs: dict, chat_id, message_id: int, field: str, value: str):
+    """Payload of editMessageText / editMessageCaption: the Bot API drops the buttons unless reply_markup is sent."""
+    markup, err = _inline_markup(kwargs, chat_id)
+    if err:
+        return None, err
+    payload = {"chat_id": chat_id, "message_id": message_id, field: value}
+    if _parse_mode(kwargs):
+        payload["parse_mode"] = _parse_mode(kwargs)
+    if markup:
+        payload["reply_markup"] = markup
+    return payload, None
+
+
 def _handle_edit_message_caption(**kwargs) -> str:
+    """Edit a media caption; pass reply_markup again to keep (or replace) the inline buttons."""
     chat_id, message_id, err = _need_message(kwargs)
     if err:
         return err
     caption = kwargs.get("caption")
     if not caption:
         return _error("caption is required")
-    try:
-        markup = _markup(kwargs, chat_id)
-    except ValueError as exc:
-        return _error(str(exc))
-    return _run_sender(
-        "editMessageCaption", lambda s: s.edit_message_caption(chat_id, message_id, str(caption), markup=markup)
-    )
+    if len(str(caption)) > CAPTION_MAX_CHARS:
+        return _error(f"caption is {len(str(caption))} characters; Telegram allows at most {CAPTION_MAX_CHARS}")
+    payload, err = _edit_payload(kwargs, chat_id, message_id, "caption", str(caption))
+    if err:
+        return err
+    return _api_request("editMessageCaption", payload)
 
 
 def _handle_edit_message_reply_markup(**kwargs) -> str:
@@ -593,29 +613,10 @@ def _handle_edit_message_reply_markup(**kwargs) -> str:
     chat_id, message_id, err = _need_message(kwargs)
     if err:
         return err
-    try:
-        markup = _markup(kwargs, chat_id)
-    except ValueError as exc:
-        return _error(str(exc))
-    if markup and "inline_keyboard" not in markup:
-        return _error("only an inline_keyboard can be edited onto an existing message")
+    markup, err = _inline_markup(kwargs, chat_id)
+    if err:
+        return err
     return _run_sender("editMessageReplyMarkup", lambda s: s.edit_message_reply_markup(chat_id, message_id, markup))
-
-
-def _handle_pin_message(**kwargs) -> str:
-    chat_id, message_id, err = _need_message(kwargs)
-    if err:
-        return err
-    silent = not _truthy(kwargs.get("notify"))
-    return _run_sender("pinChatMessage", lambda s: s.pin_message(chat_id, message_id, silent=silent))
-
-
-def _handle_unpin_message(**kwargs) -> str:
-    chat_id, err = _chat_or_error(kwargs)
-    if err:
-        return err
-    mid = _coerce_int(kwargs["message_id"]) if kwargs.get("message_id") else None
-    return _run_sender("unpinChatMessage", lambda s: s.unpin_message(chat_id, mid))
 
 
 def _handle_forward_message(**kwargs) -> str:
@@ -670,56 +671,34 @@ def _handle_answer_callback_query(**kwargs) -> str:
 
 
 def _handle_edit_message_text(**kwargs) -> str:
-    """Edit the text of a previously sent message."""
-    chat_id = _resolve_chat_id(kwargs)
-    message_id = kwargs.get("message_id")
-    if not chat_id:
-        return _error("chat_id or recipient_name is required")
-    if not message_id:
-        return _error("message_id is required")
-
-    text = kwargs.get("text") or kwargs.get("message")
+    """Edit the text of a previously sent message; pass reply_markup again to keep (or replace) the buttons."""
+    chat_id, message_id, err = _need_message(kwargs)
+    if err:
+        return err
+    text = kwargs.get("text")
     if not text:
-        return _error("text (or message) is required")
-
-    payload = {
-        "chat_id": chat_id,
-        "message_id": _coerce_int(message_id),
-        "text": text,
-    }
-
-    parse_mode = kwargs.get("parse_mode")
-    if parse_mode in ("Markdown", "HTML", "MarkdownV2"):
-        payload["parse_mode"] = parse_mode
-
+        return _error("text is required")
+    payload, err = _edit_payload(kwargs, chat_id, message_id, "text", text)
+    if err:
+        return err
     return _api_request("editMessageText", payload)
 
 
 def _handle_delete_message(**kwargs) -> str:
     """Delete a message from a chat."""
-    chat_id = _resolve_chat_id(kwargs)
-    message_id = kwargs.get("message_id")
-    if not chat_id:
-        return _error("chat_id or recipient_name is required")
-    if not message_id:
-        return _error("message_id is required")
-
-    payload = {
-        "chat_id": chat_id,
-        "message_id": _coerce_int(message_id),
-    }
-    return _api_request("deleteMessage", payload)
+    chat_id, message_id, err = _need_message(kwargs)
+    if err:
+        return err
+    return _api_request("deleteMessage", {"chat_id": chat_id, "message_id": message_id})
 
 
 def _handle_get_updates(**kwargs) -> str:
     """Fetch recent updates/messages received by the bot."""
     payload = {}
-    offset = kwargs.get("offset")
-    if offset:
-        payload["offset"] = _coerce_int(offset)
-    limit = kwargs.get("limit")
-    if limit:
-        payload["limit"] = min(_coerce_int(limit, 100), 100)
+    if kwargs.get("offset") is not None:  # 0 is a valid offset
+        payload["offset"] = _coerce_int(kwargs["offset"])
+    if kwargs.get("limit") is not None:
+        payload["limit"] = max(1, min(_coerce_int(kwargs["limit"]), 100))
     return _api_request("getUpdates", payload)
 
 
@@ -813,14 +792,6 @@ def _run_client(label: str, fn: Callable[[TelegramBotClient], Any]) -> str:
     return _run_sender(label, lambda sender: fn(sender.client))
 
 
-def _need_thread(kwargs: dict):
-    chat_id, err = _chat_or_error(kwargs)
-    thread = kwargs.get("message_thread_id")
-    if not err and not thread:
-        err = _error("message_thread_id (the forum topic id) is required")
-    return chat_id, (_coerce_int(thread) if thread else None), err
-
-
 def _handle_send_venue(**kwargs) -> str:
     chat_id, err = _chat_or_error(kwargs)
     if err:
@@ -895,7 +866,6 @@ def _handle_send_checklist(**kwargs) -> str:
         kw = _more_kw(kwargs, chat_id)
     except (ValueError, TypeError) as exc:
         return _error(str(exc))
-    kw.pop("thread_id", None)
     return _run_client(
         "sendChecklist",
         lambda c: more.send_checklist(c, chat_id, str(kwargs.get("business_connection_id") or ""), checklist, **kw),
@@ -991,63 +961,6 @@ def _handle_send_template(**kwargs) -> str:
     return _ok(_plain(result))
 
 
-# -- forum topics ---------------------------------------------------------------------------------
-
-
-def _topic_action(
-        label: str, kwargs: dict, call: Callable[[TelegramBotClient, Any, Any], Any], *, deleting=False, needs_thread=True
-) -> str:
-    if needs_thread:
-        chat_id, thread, err = _need_thread(kwargs)
-    else:
-        (chat_id, err), thread = _chat_or_error(kwargs), None
-    if err:
-        return err
-
-    def run(client: TelegramBotClient):
-        reason = more.bot_can_manage_topics(client, chat_id, deleting=deleting)
-        if reason:
-            raise ValueError(f"Cannot manage forum topics: {reason}.")
-        return call(client, chat_id, thread)
-
-    return _run_client(label, run)
-
-
-def _handle_create_forum_topic(**kwargs) -> str:
-    return _topic_action(
-        "createForumTopic", kwargs,
-        lambda c, chat, _t: more.create_forum_topic(
-            c, chat, kwargs.get("name"), icon_color=kwargs.get("icon_color"),
-            icon_custom_emoji_id=str(kwargs.get("icon_custom_emoji_id") or ""),
-        ),
-        needs_thread=False,
-    )
-
-
-def _handle_edit_forum_topic(**kwargs) -> str:
-    icon = kwargs.get("icon_custom_emoji_id")
-    return _topic_action(
-        "editForumTopic", kwargs,
-        lambda c, chat, t: more.edit_forum_topic(
-            c, chat, t, name=kwargs.get("name") or "", icon_custom_emoji_id=None if icon is None else str(icon)
-        ),
-    )
-
-
-def _handle_close_forum_topic(**kwargs) -> str:
-    return _topic_action("closeForumTopic", kwargs, lambda c, chat, t: more.topic_call(c, "closeForumTopic", chat, t))
-
-
-def _handle_reopen_forum_topic(**kwargs) -> str:
-    return _topic_action("reopenForumTopic", kwargs, lambda c, chat, t: more.topic_call(c, "reopenForumTopic", chat, t))
-
-
-def _handle_delete_forum_topic(**kwargs) -> str:
-    return _topic_action(
-        "deleteForumTopic", kwargs, lambda c, chat, t: more.topic_call(c, "deleteForumTopic", chat, t), deleting=True
-    )
-
-
 # -- read-only chat info ----------------------------------------------------------------------------
 
 
@@ -1086,7 +999,7 @@ def _handle_get_file(**kwargs) -> str:
     def run(sender: TelegramSender):
         client = sender.client
         info = client.call("getFile", {"file_id": file_id}) or {}
-        size = _coerce_int(info.get("file_size"))
+        size = _coerce_int(info.get("file_size"), 0)
         if size > more.MAX_GET_FILE_BYTES:
             raise ValueError(f"File is {_mb(size)}; the Bot API allows downloads up to {_mb(more.MAX_GET_FILE_BYTES)}")
         content, file_path = client.download_file(file_id)
@@ -1211,26 +1124,19 @@ def _handle_get_account_info(**kwargs) -> str:
 
 def handle_action(**kwargs) -> str:
     """
-    Dispatch Telegram actions.
+    Dispatch a Telegram action.
 
-    Args:
-        action (str): The action to perform.
-        chat_id (str|int): Target Telegram chat/channel ID.
-        recipient_name (str): Optional named recipient from Integration Settings.
-        text / message (str): Message text.
-        parse_mode (str): "Markdown" (default), "HTML", "MarkdownV2", or omitted.
-        reply_to_message_id (int): Message ID to reply to.
-        photo / file / file_url (str): Media source for send_photo.
-        document / file / file_url (str): Document source for send_document.
-        caption (str): Caption for media messages.
-        message_id (int): Message ID for edit/delete.
-        url (str): Webhook URL for set_webhook.
-        secret_token (str): Secret token for webhook.
-        offset / limit (int): Pagination for get_updates.
-        disable_notification (bool): Send silently.
+    The arguments each action accepts are declared once in ``telegram_tool_spec`` (it also generates the
+    registry schema). An unknown argument, a missing required argument or a wrongly typed value is refused
+    with ``invalid_argument`` BEFORE any scope check or Bot API call. Run-context arguments injected by the
+    harness (``conversation_id``, ``agent_run_id``, ``agent_name``, ``call_id``) and ``gateway`` are internal
+    and always accepted.
+
+    ``parse_mode`` (Markdown, HTML or MarkdownV2) says how the caller's own text is already formatted; it is
+    sent as is. Omitted means plain text.
 
     Returns:
-        JSON string with success flag and Telegram API result.
+        JSON string ``{"success": true, "results": ...}`` or ``{"success": false, "error": ...}``.
     """
     action = (kwargs.get("action") or "").strip().lower()
     if action in ADMIN_ONLY_ACTIONS:
@@ -1285,6 +1191,11 @@ def handle_action(**kwargs) -> str:
     if not handler:
         valid = ", ".join(sorted(dispatch.keys()))
         return _error(f"Unknown action '{action}'. Valid actions: {valid}")
+
+    try:
+        spec.validate(action, {k: v for k, v in kwargs.items() if k != "action"})
+    except spec.ArgumentRefusal as exc:
+        return json.dumps({"success": False, "error": exc.code, "message": exc.message, **exc.extra})
 
     key = _idempotency_key(action, kwargs)
     if isinstance(key, tuple):  # (error JSON,)
@@ -1350,7 +1261,6 @@ def _scoped_dispatch(action: str, handler: Callable[..., str], kwargs: dict) -> 
         return handler(**kwargs)  # not inside a gateway run: explicit chat ids / Integration Settings recipients
 
     # Inside a Telegram gateway run the model is not trusted (checked above); pin the target chat.
-    kwargs.pop("gateway_name", None)
     if action in CHAT_ACTIONS:
         run_id = scope.effective_run_id()
         kwargs["chat_id"] = _resolve_chat_id(kwargs) or scope.current_chat(run_id)
@@ -1370,7 +1280,7 @@ def _scoped_dispatch(action: str, handler: Callable[..., str], kwargs: dict) -> 
                 if action in SEND_ACTIONS and scope.normalize_chat(kwargs["chat_id"]) == scope.current_chat(run_id):
                     run_delivery.mark(run_id)
                     scope.note_current_chat_text(
-                        gateway, run_id, kwargs.get("text") or kwargs.get("message") or kwargs.get("caption") or f"[{action}]")
+                        gateway, run_id, kwargs.get("text") or kwargs.get("caption") or f"[{action}]")
                 _record_tool_send(gateway, kwargs["chat_id"], action, kwargs, raw)
             return raw
     return handler(**kwargs)
@@ -1395,15 +1305,15 @@ def _record_tool_send(gateway: str, chat, action: str, kwargs: dict, raw: str) -
         from huf.ai.gateway_adapters import telegram_messages
 
         ids = _message_ids(json.loads(raw).get("results"))
-        text = kwargs.get("text") or kwargs.get("message") or kwargs.get("caption") or ""
+        text = kwargs.get("text") or kwargs.get("caption") or ""
         kind = "text" if action in ("send_message", "reply_to_message") else action.replace("send_", "")
         telegram_messages.record_outbound(gateway, scope.normalize_chat(chat), ids, kind=kind, text=text)
     except Exception:
         pass
 
 
-# Chat-state changes that affect other people. Never run from the plain tool (W18-GATE): pin/unpin go through
-# telegram_admin (owner-run + human Approve); forum-topic management has no gated equivalent and is a human task.
+# Chat-state changes that are not tool actions (W18-GATE): pin/unpin go through telegram_admin (owner-run + human
+# Approve); forum-topic management has no gated equivalent and is a human task.
 ADMIN_ONLY_ACTIONS = {
     "pin_message": "pin", "unpin_message": "unpin",
     "create_forum_topic": None, "edit_forum_topic": None, "close_forum_topic": None,
@@ -1413,30 +1323,21 @@ ADMIN_ONLY_ACTIONS = {
 
 def _admin_only_refusal(action: str) -> str:
     equiv = ADMIN_ONLY_ACTIONS[action]
-    hint = (f"Use the telegram_admin tool (action '{equiv}'); it needs an owner-run and a human Approve press."
-            if equiv else "No agent tool offers this; ask a chat admin to do it in Telegram.")
-    return json.dumps({
-        "success": False, "error": "owner_required",
-        "message": f"{action} changes chat state and is not available in the telegram tool. {hint}",
-    })
+    if equiv:
+        hint = (
+            f"If the telegram_admin tool is enabled for you, use its '{equiv}' action (it needs an owner-run chat and a "
+            f"human Approve press); otherwise ask a chat admin to {equiv} the message in Telegram."
+        )
+    else:
+        hint = "No agent tool offers forum topic management; ask a chat admin to do it in Telegram."
+    return _refused("unsupported_action", f"{action} is not an action of the telegram tool. {hint}")
 
 
 GATEWAY_BLOCKED_ACTIONS = frozenset({"set_webhook", "delete_webhook", "get_updates"})
-# Actions that take a target chat (checked against the gateway scope).
-CHAT_ACTIONS = frozenset({
-    "send_message", "reply_to_message", "send_photo", "send_document", "send_voice", "send_speech", "send_audio", "send_video",
-    "send_animation", "send_sticker", "send_media_group", "send_location", "send_contact", "set_reaction",
-    "send_chat_action", "edit_message_text", "edit_message_caption", "edit_message_reply_markup",
-    "delete_message", "forward_message", "copy_message", "get_chat_info",
-    "send_video_note", "send_venue", "send_dice", "send_poll", "stop_poll", "send_checklist", "send_template",
-    "get_chat_member", "get_chat_administrators", "get_chat_member_count", "list_messages",
-})
-# Actions that create a new message (counted against the per-run / per-day caps).
-SEND_ACTIONS = frozenset({
-    "send_message", "reply_to_message", "send_photo", "send_document", "send_voice", "send_speech", "send_audio", "send_video",
-    "send_animation", "send_sticker", "send_media_group", "send_location", "send_contact", "forward_message",
-    "copy_message", "send_video_note", "send_venue", "send_dice", "send_poll", "send_checklist", "send_template",
-})
+# Actions that take a target chat (checked against the gateway scope) and actions that create a new message
+# (counted against the per-run / per-day caps); both derive from the argument table.
+CHAT_ACTIONS = spec.CHAT_ACTIONS
+SEND_ACTIONS = spec.SEND_ACTIONS
 # Extra gateway-flag gates: sendChecklist acts as the connected business account owner.
 GATEWAY_FLAG_GATES = {"send_checklist": ("telegram_agent_allow_business", "business account")}
 
@@ -1506,16 +1407,3 @@ def _succeeded(raw: str) -> bool:
         return bool(json.loads(raw).get("success"))
     except Exception:
         return False
-
-
-# ---------------------------------------------------------------------------
-# Backward-compatible wrapper for the old single-action function path.
-# ---------------------------------------------------------------------------
-
-
-def handle_send_message(**kwargs) -> str:
-    """Backward-compatible wrapper around telegram action."""
-    kwargs["action"] = "send_message"
-    if "message" in kwargs and "text" not in kwargs:
-        kwargs["text"] = kwargs["message"]
-    return handle_action(**kwargs)
