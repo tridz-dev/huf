@@ -105,6 +105,9 @@ const IntegrationServiceFormPageWrapper = lazy(
 );
 const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
+const SolutionsPage = lazy(() => import('./pages/SolutionsPage'));
+const NewSolutionPage = lazy(() => import('./pages/NewSolutionPage'));
+const SolutionDetailPage = lazy(() => import('./pages/SolutionDetailPage'));
 const WhatsAppManagePage = lazy(() => import('./pages/WhatsAppManagePage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 const GeneralSettingsPage = lazy(() => import('./pages/GeneralSettingsPage'));
@@ -790,6 +793,42 @@ function AppShell() {
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <GatewaysPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/solutions"
+            element={
+              <ProtectedRoute requiredCapability="system.integrations.manage">
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <SolutionsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/solutions/new"
+            element={
+              <ProtectedRoute requiredCapability="system.integrations.manage">
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <NewSolutionPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/solutions/:name"
+            element={
+              <ProtectedRoute requiredCapability="system.integrations.manage">
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <SolutionDetailPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
