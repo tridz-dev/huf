@@ -48,6 +48,17 @@ class TestTelegramToolSync(unittest.TestCase):
 		self.assertEqual(by_name["telegram_admin"]["service"], "telegram")
 		self.assertEqual(by_name["telegram"]["service"], "telegram")
 
+	def test_telegram_rows_are_the_argument_table(self):
+		from huf.ai.tools import telegram_tool_spec as spec
+
+		_, _, updated = _run_sync(existing=["telegram", "telegram_admin"])
+		(doc,) = [d for n, d in updated if n == "telegram"]
+		fields = [p["fieldname"] for p in doc.update.call_args[0][0]["parameters"]]
+		declared = {n for a in spec.ACTION_ARGS.values() for n in a}
+		self.assertEqual(set(fields), declared | {"action"})
+		self.assertEqual(len(fields), len(set(fields)))
+		self.assertFalse(set(spec.INTERNAL_ARGS) & set(fields))
+
 	def test_new_admin_entry_is_created(self):
 		result, created, updated = _run_sync(existing=["telegram"])
 		self.assertEqual(result["error_count"], 0, result["errors"])

@@ -91,7 +91,7 @@ class TestToolAllowList(Base):
 
 	def test_edit_delete_refused_for_unknown_ids(self):
 		for act in ("edit_message_text", "delete_message"):
-			r = self.run_action(action=act, message_id=5, text="x")
+			r = self.run_action(action=act, message_id=5, **({"text": "x"} if act == "edit_message_text" else {}))
 			self.assertEqual(r["error"], "action_not_permitted", r)
 		self.assertEqual(self.api.calls, [])
 

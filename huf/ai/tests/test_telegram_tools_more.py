@@ -98,8 +98,9 @@ class TestNewSends(Base):
 		self.assertEqual(p["reply_parameters"]["message_id"], 7)
 
 	def test_venue_validation(self):
-		self.assertIn(
-			"required", self.run_action(action="send_venue", chat_id="9", latitude=1, longitude=2)["error"]
+		self.assertEqual(
+			self.run_action(action="send_venue", chat_id="9", latitude=1, longitude=2)["missing_arguments"],
+			["title", "address"],
 		)
 		self.assertIn(
 			"-90",
@@ -181,7 +182,7 @@ class TestPoll(Base):
 	def test_stop_poll(self):
 		self.assertTrue(self.run_action(action="stop_poll", chat_id="9", message_id=12)["success"])
 		self.assertEqual(self.payload("stopPoll")["message_id"], 12)
-		self.assertIn("message_id", self.run_action(action="stop_poll", chat_id="9")["error"])
+		self.assertEqual(self.run_action(action="stop_poll", chat_id="9")["missing_arguments"], ["message_id"])
 
 
 class TestChecklist(Base):
@@ -201,9 +202,9 @@ class TestChecklist(Base):
 		self.assertTrue(p["checklist"]["others_can_mark_tasks_as_done"])
 
 	def test_requires_connection_and_tasks(self):
-		self.assertIn(
-			"business_connection_id",
-			self.run_action(action="send_checklist", chat_id="9", title="T", tasks=["a"])["error"],
+		self.assertEqual(
+			self.run_action(action="send_checklist", chat_id="9", title="T", tasks=["a"])["missing_arguments"],
+			["business_connection_id"],
 		)
 		self.assertIn(
 			"tasks",
@@ -251,15 +252,16 @@ class TestTemplates(Base):
 		self.assertIsNotNone(kw["sender"])
 
 	def test_errors(self):
-		self.assertIn(
-			"template_name", self.run_action(action="send_template", chat_id="9", gateway="gw")["error"]
+		self.assertEqual(
+			self.run_action(action="send_template", chat_id="9", gateway="gw")["missing_arguments"],
+			["template_name"],
 		)
 		self.assertIn(
 			"gateway", self.run_action(action="send_template", chat_id="9", template_name="x")["error"]
 		)
-		self.assertIn(
-			"JSON", self.run_action(action="preview_template", template_name="x", variables="{bad")["error"]
-		)
+		bad = self.run_action(action="preview_template", template_name="x", variables="{bad")
+		self.assertEqual(bad["error"], "invalid_argument")
+		self.assertIn("'variables'", bad["message"])
 		self.tpl.render_template.side_effect = RuntimeError("missing template")
 		self.assertIn(
 			"missing template", self.run_action(action="preview_template", template_name="x")["error"]
@@ -280,7 +282,8 @@ class TestForumTopics(Base):
 			"delete_forum_topic",
 		):
 			r = self.run_action(action=action, chat_id="-100", message_thread_id=5, name="x")
-			self.assertEqual(r["error"], "owner_required", action)
+			self.assertEqual(r["error"], "unsupported_action", action)
+			self.assertIn("ask a chat admin", r["message"])
 		self.assertEqual(self.api.calls, [])
 
 
@@ -303,7 +306,9 @@ class TestReads(Base):
 		self.assertEqual(res["status"], "administrator")
 		self.assertEqual(res["rights"], ["can_delete_messages"])
 		self.assertNotIn("language_code", res["user"])
-		self.assertIn("user_id", self.run_action(action="get_chat_member", chat_id="-100")["error"])
+		self.assertEqual(
+			self.run_action(action="get_chat_member", chat_id="-100")["missing_arguments"], ["user_id"]
+		)
 
 	def test_admins_and_count(self):
 		self.api.queue(
@@ -413,9 +418,10 @@ class TestIdempotency(Base):
 		self.assertEqual(self.api.calls, [])
 
 	def test_ignored_for_reads(self):
-		self.run_action(action="get_me", idempotency_key="k")
-		self.run_action(action="get_me", idempotency_key="k")
-		self.assertEqual(len(self.api.of("getMe")), 2)
+		for _ in range(2):
+			r = self.run_action(action="get_me", idempotency_key="k")
+			self.assertEqual(r["error"], "invalid_argument")  # only sends take a key
+		self.assertEqual(self.api.of("getMe"), [])
 
 
 class TestGatewayScope(Base):

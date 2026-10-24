@@ -88,7 +88,7 @@ class TestMediaActions(Base):
 		self.assertEqual((p["title"], p["performer"]), ("T", "P"))
 
 	def test_missing_source_and_chat(self):
-		self.assertIn("required", self.run_action(action="send_voice", chat_id="9")["error"])
+		self.assertEqual(self.run_action(action="send_voice", chat_id="9")["missing_arguments"], ["voice"])
 		self.assertIn("chat_id", self.run_action(action="send_voice", voice=FILE_ID)["error"])
 		self.assertEqual(self.api.calls, [])
 
@@ -264,8 +264,9 @@ class TestSimpleActions(Base):
 			("unpin_message", {}),
 		):
 			r = self.run_action(action=action, chat_id="9", **kw)
-			self.assertEqual(r["error"], "owner_required", action)
+			self.assertEqual(r["error"], "unsupported_action", action)
 			self.assertIn("telegram_admin", r["message"])
+			self.assertIn("ask a chat admin", r["message"])
 		self.assertEqual(self.api.of("pinChatMessage"), [])
 		self.assertEqual(self.api.of("unpinChatMessage"), [])
 
@@ -415,10 +416,16 @@ class TestGatewayRun(Base):
 			self.run_action(action="send_message", chat_id="5", text="x")["error"], "recipient_not_permitted"
 		)
 
-	def test_gateway_name_arg_ignored_and_webhook_actions_blocked(self):
-		for action in ("set_webhook", "delete_webhook", "get_updates"):
-			out = self.run_action(action=action, url="https://x.test")
+	def test_webhook_actions_blocked(self):
+		for action, kw in (("set_webhook", {"url": "https://x.test"}), ("delete_webhook", {}), ("get_updates", {})):
+			out = self.run_action(action=action, **kw)
 			self.assertEqual(out["error"], "action_not_permitted")
+		self.assertEqual(self.api.calls, [])
+
+	def test_gateway_name_is_not_an_argument(self):
+		out = self.run_action(action="send_message", text="x", gateway_name="other")
+		self.assertEqual(out["error"], "invalid_argument")
+		self.assertEqual(out["unknown_arguments"], ["gateway_name"])
 		self.assertEqual(self.api.calls, [])
 
 	def test_cap_refusal_sends_nothing(self):

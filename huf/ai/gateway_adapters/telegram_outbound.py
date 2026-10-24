@@ -348,11 +348,16 @@ class TelegramSender:
 		reply_to: Any = None,
 		thread_id: Any = None,
 		silent: bool = False,
+		protect: bool = False,
+		parse_mode: str | None = None,
 	) -> Sequence[Mapping[str, Any]]:
-		"""``items``: 2-10 dicts ``{"type": photo|video|audio|document, "media": MediaInput, "caption": str}``."""
+		"""``items``: 2-10 dicts ``{"type": photo|video|audio|document, "media": MediaInput, "caption": str}``.
+
+		``parse_mode`` set: captions are already formatted in that mode and are sent verbatim with it.
+		"""
 		if not 2 <= len(items) <= 10:
 			raise ValueError("A media group needs 2-10 items")
-		payload = self._common(chat_id, reply_to=reply_to, thread_id=thread_id, silent=silent)
+		payload = self._common(chat_id, reply_to=reply_to, thread_id=thread_id, silent=silent, protect=protect)
 		media_json, files = [], {}
 		for i, item in enumerate(items):
 			kind = item.get("type", "photo")
@@ -364,7 +369,12 @@ class TelegramSender:
 				files[name] = upload
 				value = f"attach://{name}"
 			entry: dict[str, Any] = {"type": kind, "media": value}
-			if item.get("caption"):
+			if item.get("caption") and parse_mode:
+				if len(item["caption"]) > TELEGRAM_CAPTION_LIMIT:
+					raise ValueError(f"A caption must fit in {TELEGRAM_CAPTION_LIMIT} characters")
+				entry["caption"] = item["caption"]
+				entry["parse_mode"] = parse_mode
+			elif item.get("caption"):
 				part = render_parts(item["caption"], self.parse_mode, TELEGRAM_CAPTION_LIMIT)[0]
 				entry["caption"] = part.text
 				if part.parse_mode:

@@ -56,7 +56,8 @@ class TestTelegramTools(unittest.TestCase):
 	def test_reply_to_message_requires_reply_id(self):
 		result = self.run_action(action="reply_to_message", chat_id="999", text="hi")
 		self.assertFalse(result["success"])
-		self.assertIn("reply_to_message_id is required", result["error"])
+		self.assertEqual(result["error"], "invalid_argument")
+		self.assertEqual(result["missing_arguments"], ["reply_to_message_id"])
 		self.assertEqual(self.api.calls, [])
 
 	def test_send_photo_by_url_uses_reply_parameters(self):

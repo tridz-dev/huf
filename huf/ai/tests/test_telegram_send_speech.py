@@ -39,7 +39,8 @@ class TestSendSpeech(Base):
 		self.assertEqual(self.payload("sendVoice")["caption"], "cap")
 
 	def test_requires_text_and_caps_length(self):
-		self.assertIn("text is required", self.run_action(action="send_speech", chat_id="9")["error"])
+		self.assertEqual(self.run_action(action="send_speech", chat_id="9")["missing_arguments"], ["text"])
+		self.assertIn("text is required", self.run_action(action="send_speech", chat_id="9", text=" ")["error"])
 		out = self.run_action(action="send_speech", chat_id="9", text="x" * (tool.MAX_SPEECH_CHARS + 1))
 		self.assertIn("at most", out["error"])
 		self.assertEqual(self.api.calls, [])

@@ -25,6 +25,7 @@ from huf.ai.tests.telegram_fakes import TOKEN, FakeBotApi, FakeResponse
 from huf.ai.tools import _registry
 from huf.ai.tools import telegram as tg
 from huf.ai.tools import telegram_admin_tools as adm
+from huf.ai.tools import telegram_tool_spec as tg_spec
 
 BOT = 999
 CUR = "-1001"  # chat of the current gateway conversation
@@ -302,6 +303,8 @@ class Harness(unittest.TestCase):
 		).start()
 
 	def tg_call(self, action, **kwargs):
+		if action in tg_spec.ACTION_ARGS and "chat_id" not in tg_spec.ACTION_ARGS[action]:
+			kwargs.pop("chat_id", None)  # the harness always names the current chat; not every action takes one
 		return json.loads(tg.handle_action(action=action, **kwargs))
 
 	def adm_call(self, action, **kwargs):
@@ -378,7 +381,7 @@ class TestRegistryParity(Harness):
 		self.assertFalse(gone & set(TG_ENUM))
 		for action in gone:
 			res = self.tg_call(action, chat_id=CUR, message_id=3, message_thread_id=5, name="n")
-			self.assertEqual(res["error"], "owner_required", action)
+			self.assertEqual(res["error"], "unsupported_action", action)
 
 	def test_unknown_actions_are_refused(self):
 		self.assertIn("Unknown action", self.tg_call("nuke")["error"])
@@ -676,10 +679,10 @@ class TestIdempotency(Harness):
 		self.assertTrue(self.tg_call("send_message", chat_id=CUR, text="hi", idempotency_key="k2")["success"])
 		self.assertEqual(len(self.sent("sendMessage")), 2)
 
-	def test_non_send_action_ignores_key(self):
-		self.tg_call("get_me", idempotency_key="k3")
-		self.tg_call("get_me", idempotency_key="k3")
-		self.assertEqual(len(self.sent("getMe")), 2)
+	def test_non_send_action_refuses_key(self):
+		for _ in range(2):
+			self.assertEqual(self.tg_call("get_me", idempotency_key="k3")["error"], "invalid_argument")
+		self.assertEqual(self.sent("getMe"), [])
 
 
 class TestCaps(Harness):

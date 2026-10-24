@@ -266,22 +266,3 @@ class TestApprovalCard(Gated):
 				text = self.card(action, **args)
 				self.assertNotIn(" with {", text)  # no raw JSON dump
 				self.assertNotEqual(text.splitlines()[1].split(":")[0], "")
-
-
-class TestPlainTelegramToolSchema(unittest.TestCase):
-	"""The plain ``telegram`` tool: every argument its handlers read is declared in the registry schema."""
-
-	INTERNAL = {"action", "gateway", "gateway_name"}  # set by the gateway layer, never by the model
-
-	def test_every_read_argument_is_declared(self):
-		from pathlib import Path
-
-		from huf.ai.tools import telegram as tg
-
-		src = Path(tg.__file__).read_text(encoding="utf-8")
-		read = set(re.findall(r'kwargs(?:\.get|\.pop)?\(\s*"(\w+)"', src))
-		read |= set(re.findall(r'kwargs\["(\w+)"\]', src))
-		read |= set(re.findall(r'"(\w+)" in kwargs', src))
-		(entry,) = [t for t in _registry.TELEGRAM_TOOLS if t["tool_name"] == "telegram"]
-		declared = {p["fieldname"] for p in entry["parameters"]}
-		self.assertEqual(read - declared - self.INTERNAL, set())

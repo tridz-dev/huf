@@ -320,7 +320,17 @@ Repo guardrail before any commit: `python3 scripts/check_repo_layout.py`.
 ### 9.1 `telegram` (send, read and chat actions)
 
 Registry entry: `TELEGRAM_TOOLS` in `huf/ai/tools/_registry.py`. Dispatch table: `handle_action` in
-`huf/ai/tools/telegram.py`. The module docstring lists only an older subset; the dispatch table is authoritative.
+`huf/ai/tools/telegram.py`.
+
+Arguments (one declaration, `huf/ai/tools/telegram_tool_spec.py`): each action lists the argument names it reads and
+whether each is required. That table generates the registry schema (types, "used by" and "required for" notes), the
+usage line per action in the tool description, and the validation that `handle_action` runs BEFORE any scope check,
+send cap or Bot API call: an unknown argument, a missing required argument or a wrongly typed value (for example a
+non-numeric `message_id`) is refused with `invalid_argument`, naming the valid arguments. The shared mechanics live in
+`huf/ai/tools/action_args.py` (also used by `telegram_admin_spec.py`). Harness-injected run context
+(`conversation_id`, `agent_run_id`, `agent_name`, `call_id`) and `gateway` are internal: accepted, never in the
+model-visible schema. A new argument is added in the table only; the drift test fails if a handler reads one the
+table does not declare.
 
 Actions (dispatch order as in the table):
 
@@ -337,16 +347,19 @@ Actions (dispatch order as in the table):
   no speech item (it would need a format change); use the tool action.
 - **Templates**: `list_templates`, `preview_template` (no send), `send_template` (section 10).
 - **Chat-state changes are not in the plain tool** (W18-GATE): `pin_message`, `unpin_message` and the forum-topic
-  actions (`create/edit/close/reopen/delete_forum_topic`) are removed from the schema and refuse with `owner_required`
-  if called. Pin/unpin go through `telegram_admin` (`pin`/`unpin`: owner-run in a paired Admin+ cockpit chat plus a
+  actions (`create/edit/close/reopen/delete_forum_topic`) are removed from the schema and refuse with
+  `unsupported_action` if called (the message says what to do instead). Pin/unpin go through `telegram_admin` (`pin`/`unpin`: owner-run in a paired Admin+ cockpit chat plus a
   human Approve press, even for the bot's own messages). Forum topics have no agent tool; a chat admin does them.
   `delete_message` and `edit_message_text` only act on the bot's own recorded messages inside a gateway run.
 - **Chat members**: `get_chat_member`, `get_chat_administrators`, `get_chat_member_count`, `get_chat_info`.
 - **Files and history**: `get_file` (saves to a private Frappe File, max 20 MB, returns `file_url`),
   `list_messages` (up to 50 recent logged messages), `get_account_info` (bot identity, modes, webhook health), `get_me`.
-- **Message control**: `set_reaction`, `send_chat_action`, `edit_message_text`, `edit_message_caption`,
-  `edit_message_reply_markup`, `delete_message` (own messages), `forward_message`,
-  `copy_message`, `answer_callback_query`.
+- **Message control**: `set_reaction` (needs `emoji`, or `remove=true` to clear; never clears by omission),
+  `send_chat_action`, `edit_message_text`, `edit_message_caption`, `edit_message_reply_markup`, `delete_message` (own
+  messages), `forward_message`, `copy_message`, `answer_callback_query`. The Bot API drops the inline buttons of an
+  edited message unless `reply_markup` (inline keyboard only) is passed again: pass it to keep or replace the
+  buttons, omit it to remove them. `edit_message_text` and `edit_message_caption` take `parse_mode`.
+- **Updates**: `get_updates` takes `offset` (0 is valid) and `limit` (1 to 100).
 - **Gateway-blocked** (refused inside a gateway conversation): `get_updates`, `set_webhook`, `delete_webhook`.
   Use the Connection tab or the management functions instead.
 
@@ -355,10 +368,18 @@ Common rules:
 - Inside a gateway conversation `chat_id` defaults to the current chat. Any other chat is checked against the
   gateway's recipient scope (`agent_recipient_scope`, `agent_recipient_allowlist`). Send actions count against
   `agent_send_cap_per_run` and `agent_send_cap_per_day`.
-- Send actions also accept `disable_notification`, `protect_content`, `message_effect_id` and `idempotency_key`
-  (a repeated key in the same run and chat returns the first result; 24 h cache).
+- Send actions also accept `idempotency_key` (a repeated key in the same run and chat returns the first result; 24 h
+  cache) and, where the Bot API supports them for that message type, `disable_notification`, `protect_content`
+  and `message_effect_id`. Only the arguments listed for the action are accepted (for example `send_media_group`
+  has no `reply_markup`; `width`/`height` belong to `send_video` and `send_animation`).
+- `parse_mode` (`Markdown`, `HTML`, `MarkdownV2`) says how YOUR text, caption or poll explanation is already
+  formatted; it is sent as is. Omitted means plain text. The tool does not default to Markdown.
+- Each media action takes its own source argument (`photo`, `document`, `voice`, `audio`, `video`, `animation`,
+  `sticker`, `video_note`); there is no generic `file` or `file_url`. `send_voice` accepts OGG/Opus, MP3 or M4A.
 - Media sources: Telegram `file_id`, public https URL, or a Frappe File name or `file_url` (max 50 MB; photos 10 MB).
 - `reply_markup` is a JSON object with one of: `inline_keyboard`, `keyboard`, `remove_keyboard`, `force_reply`.
+  Every action that lists it accepts `{text, callback}` buttons, which are signed server-side and only work inside a
+  gateway conversation (outside one, use `{text, url}` buttons).
 - Outside a gateway, the tool uses explicit `chat_id` values or Integration Settings recipients.
 
 ### 9.2 `telegram_admin` (gated)
