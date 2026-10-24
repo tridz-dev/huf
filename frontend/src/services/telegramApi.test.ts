@@ -72,7 +72,7 @@ describe('model helpers', () => {
 	it('labels, progress and check copy', () => {
 		expect(telegramHealthLabel('not_set_up')).toBe('Not set up yet');
 		expect(checklistProgress([{ code: 'bot_token', state: 'done' }, { code: 'enabled', state: 'todo' }])).toEqual({ done: 1, total: 2 });
-		expect(checkMessage({ id: 'webhook_url', label: '', ok: false, hint: 'getWebhookInfo failed' })).not.toMatch(/getWebhookInfo/);
-		expect(checkMessage({ id: 'unknown', label: '', ok: false, hint: '' })).toBe('Something needs your attention.');
+		expect(checkMessage({ id: 'webhook_url', label: '', ok: false, state: 'fail', hint: 'getWebhookInfo failed' })).not.toMatch(/getWebhookInfo/);
+		expect(checkMessage({ id: 'unknown', label: '', ok: false, state: 'fail', hint: '' })).toBe('Something needs your attention.');
 	});
 });

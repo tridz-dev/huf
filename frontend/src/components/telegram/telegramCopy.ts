@@ -41,3 +41,6 @@ export const CHECK_PILLS = {
 	connected: 'Connected',
 	receiving: 'Receiving',
 } as const;
+
+export const CHECKS_HEADING = 'Checks';
+export const CHECK_STATE_LABEL = { pass: 'Passed', warn: 'Needs a fix', fail: 'Failing', off: 'Not in use' } as const;

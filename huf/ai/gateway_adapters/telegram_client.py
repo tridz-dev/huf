@@ -36,7 +36,9 @@ def bot_file_url(token: str, file_path: str, *, test_environment: bool = False) 
 	return f"{TELEGRAM_API_BASE}/file/bot{token}{segment}/{file_path}"
 
 
-# Updates the gateway asks Telegram to deliver (setWebhook ``allowed_updates``).
+# Updates the gateway asks Telegram to deliver (setWebhook ``allowed_updates``). ``message_reaction_count``
+# (anonymous reaction totals) is deliberately absent: nothing consumes it. A webhook registered while it was
+# subscribed may still deliver it; ingest acks it.
 ALLOWED_UPDATES: tuple[str, ...] = (
 	"message",
 	"edited_message",
@@ -47,7 +49,6 @@ ALLOWED_UPDATES: tuple[str, ...] = (
 	"chat_member",
 	"my_chat_member",
 	"message_reaction",
-	"message_reaction_count",
 	"channel_post",
 	"business_connection",
 	"business_message",

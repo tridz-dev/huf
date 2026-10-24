@@ -31,6 +31,13 @@ _GATEWAY_FIELDS = [
 	"telegram_inline_enabled",
 	"telegram_inline_feedback_enabled",
 	"typing_indicator",
+	"room_policy",
+	"mention_required",
+	"direct_policy",
+	"telegram_business_policy",
+	"telegram_agent_allow_business",
+	"telegram_join_policy",
+	"telegram_guard_captcha",
 ]
 
 CAPABILITY_FLAGS = (
@@ -113,6 +120,12 @@ def credential_presence(credentials: dict[str, str]) -> dict[str, bool]:
 	}
 
 
+def _site_host() -> str:
+	from urllib.parse import urlparse
+
+	return (urlparse(frappe.utils.get_url()).hostname or "").lower()
+
+
 def _safe_text(value: Any, credentials: dict[str, str]) -> str:
 	"""Error text with any credential value scrubbed (defence in depth; the client already redacts)."""
 	text = str(value or "")
@@ -172,10 +185,25 @@ def _checklist(
 INLINE_FEEDBACK_FIX = "In BotFather send /setinlinefeedback and choose Enabled"
 
 
-def inline_feedback_check(gateway: dict[str, Any]) -> dict[str, Any] | None:
-	"""Warn-level row; never changes the overall health. None when inline mode is off."""
-	if not int(gateway.get("telegram_inline_enabled", 1) or 0):
-		return None
+def feature_flags(gateway: dict[str, Any]) -> dict[str, bool]:
+	"""Which optional Telegram features this gateway's settings use (decides which bot checks matter)."""
+	groups = (gateway.get("room_policy") or "Disabled") != "Disabled"
+	return {
+		"inline": bool(int(gateway.get("telegram_inline_enabled", 1) or 0)),
+		"groups": groups,
+		"group_open": groups and not int(gateway.get("mention_required") or 0),
+		"business": (gateway.get("telegram_business_policy") or "Ignore") != "Ignore"
+		or bool(int(gateway.get("telegram_agent_allow_business") or 0)),
+		"guest": gateway.get("direct_policy") == "Open",
+		"join_requests": gateway.get("telegram_join_policy") == "Agent"
+		or (gateway.get("telegram_guard_captcha") or "Off") != "Off",
+	}
+
+
+def inline_feedback_check(gateway: dict[str, Any]) -> dict[str, Any]:
+	"""Warn-level row; never changes the overall health. State ``off`` when inline mode is off."""
+	if not feature_flags(gateway)["inline"]:
+		return {"id": "inline_feedback", "label": "Inline feedback", "ok": True, "state": "off", "hint": "", "level": "warn"}
 	from huf.ai.gateway_adapters import telegram_inline
 
 	ok = bool(int(gateway.get("telegram_inline_feedback_enabled") or 0)) or telegram_inline.feedback_seen(
@@ -185,6 +213,7 @@ def inline_feedback_check(gateway: dict[str, Any]) -> dict[str, Any] | None:
 		"id": "inline_feedback",
 		"label": "Inline feedback",
 		"ok": ok,
+		"state": "pass" if ok else "warn",
 		"hint": "" if ok else INLINE_FEEDBACK_FIX,
 		"level": "warn",
 	}
@@ -195,8 +224,17 @@ def build_health(
 	presence: dict[str, bool],
 	readiness_checks: list[dict[str, Any]],
 	pending_update_count: int | None = None,
+	bot: dict[str, Any] | None = None,
+	menu: dict[str, Any] | None = None,
+	site_host: str = "",
 ) -> dict[str, Any]:
-	"""Health state, checklist and the raw readiness checks (hints are operator text, token-free)."""
+	"""Health state, checklist and every check with its state (pass / fail / warn / off).
+
+	Only the readiness checks can fail and move ``health``; optional-feature rows are warn-level at worst.
+	Hints are operator text, token-free.
+	"""
+	from huf.ai.gateway_adapters.telegram_health import capability_checks
+
 	by_id = {c["id"]: bool(c["ok"]) for c in readiness_checks}
 	enabled = bool(gateway.get("is_enabled"))
 	has_events = bool(gateway.get("last_event_at"))
@@ -215,12 +253,18 @@ def build_health(
 	else:
 		health = "healthy"
 	checks = [
-		{"id": c["id"], "label": c["label"], "ok": bool(c["ok"]), "hint": c.get("hint") or ""}
+		{
+			"id": c["id"],
+			"label": c["label"],
+			"ok": bool(c["ok"]),
+			"state": "pass" if c["ok"] else "fail",
+			"hint": c.get("hint") or "",
+		}
 		for c in readiness_checks
 	]
-	inline_check = inline_feedback_check(gateway)
-	if inline_check:
-		checks.append(inline_check)
+	checks.append(inline_feedback_check(gateway))
+	if bot is not None:
+		checks.extend(capability_checks(bot, feature_flags(gateway), menu, site_host))
 	return {
 		"name": gateway["name"],
 		"enabled": enabled,
@@ -285,19 +329,24 @@ def get_telegram_health(gateway: str | None = None) -> dict[str, Any]:
 	presence = credential_presence(credentials)
 	checks: list[dict[str, Any]] = []
 	pending: int | None = None
+	bot: dict[str, Any] | None = None
+	menu: dict[str, Any] | None = None
 	if presence["token_present"]:
-		from huf.ai.gateway_adapters.telegram_health import check_webhook, readiness
+		from huf.ai.gateway_adapters.telegram_health import check_menu_button, probe, readiness_from
 
 		client = _client(credentials)
-		url = _webhook_url(row["name"])
-		checks = readiness(client, url)
-		try:
-			pending = check_webhook(client, url)["pending_update_count"]
-		except Exception:
-			pending = None
+		found = probe(client, _webhook_url(row["name"]))
+		checks = readiness_from(found)
+		bot = found["bot"]
+		pending = found["hook"]["pending_update_count"] if found["hook"] else None
+		if bot is not None:
+			try:
+				menu = check_menu_button(client)
+			except Exception:
+				menu = None
 	for c in checks:
 		c["hint"] = _safe_text(c.get("hint"), credentials)
-	payload = build_health(row, presence, checks, pending)
+	payload = build_health(row, presence, checks, pending, bot, menu, _site_host())
 	payload["typing"] = build_typing(row)
 	return {"success": True, "gateway": payload}
 

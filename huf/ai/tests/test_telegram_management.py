@@ -89,5 +89,49 @@ class TestInlineFeedbackCheck(unittest.TestCase):
 		self.assertTrue(self._check(self._row(telegram_inline_feedback_enabled=1))[1]["ok"])
 		self.assertTrue(self._check(self._row(), seen=True)[1]["ok"])
 
-	def test_absent_when_inline_off(self):
-		self.assertIsNone(self._check(self._row(telegram_inline_enabled=0))[1])
+	def test_off_when_inline_off(self):
+		c = self._check(self._row(telegram_inline_enabled=0))[1]
+		self.assertEqual((c["state"], c["ok"], c["hint"]), ("off", True, ""))
+
+
+class TestFeatureRows(unittest.TestCase):
+	def _states(self, row, bot):
+		from unittest.mock import patch
+
+		with patch("huf.ai.gateway_adapters.telegram_inline.feedback_seen", return_value=False):
+			h = build_health({**GW, **row}, OK, PASSING, None, bot, None, "huf.example.com")
+		return h, {c["id"]: c["state"] for c in h["checks"]}
+
+	def test_warn_rows_never_degrade_health(self):
+		row = {"telegram_inline_enabled": 1, "room_policy": "Open", "mention_required": 0}
+		h, states = self._states(row, {})
+		self.assertEqual(states["inline_mode"], "warn")
+		self.assertEqual(states["group_privacy"], "warn")
+		self.assertEqual(states["join_groups"], "warn")
+		self.assertEqual(h["health"], "healthy")
+		self.assertTrue(all(c["state"] in ("pass", "warn", "off") for c in h["checks"]))
+
+	def test_feature_flags_from_settings(self):
+		from huf.ai.telegram_management import feature_flags
+
+		off = feature_flags({"room_policy": "Disabled", "telegram_inline_enabled": 0})
+		self.assertFalse(any(off.values()))
+		on = feature_flags(
+			{
+				"room_policy": "Open",
+				"mention_required": 0,
+				"direct_policy": "Open",
+				"telegram_business_policy": "Draft",
+				"telegram_join_policy": "Agent",
+			}
+		)
+		self.assertTrue(all(on.values()))
+		self.assertFalse(feature_flags({"room_policy": "Open", "mention_required": 1})["group_open"])
+		self.assertTrue(feature_flags({"telegram_guard_captcha": "Emoji"})["join_requests"])
+		self.assertTrue(feature_flags({"telegram_agent_allow_business": 1})["business"])
+
+	def test_failed_readiness_still_degrades(self):
+		bad = [{"id": "webhook_url", "label": "x", "ok": False, "hint": "h"}]
+		h = build_health(GW, OK, bad)
+		self.assertEqual(h["health"], "degraded")
+		self.assertEqual(next(c for c in h["checks"] if c["id"] == "webhook_url")["state"], "fail")
