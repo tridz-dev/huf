@@ -330,7 +330,7 @@ def decide(marker: dict, settings: dict, method: str, path: str, form_dict) -> b
 	"""True if the request is allowed. ``path`` is the raw request path."""
 	method = (method or "GET").upper()
 	form_dict = form_dict or {}
-	if "sid" in form_dict:
+	if "sid" in form_dict:  # Frappe pops it before the hook runs; enforce() checks the raw request (below)
 		return False
 	norm = normalize_path(path)
 	if norm is None:
@@ -432,6 +432,23 @@ def decide(marker: dict, settings: dict, method: str, path: str, form_dict) -> b
 	return path_matches(norm, parse_prefixes(settings.get("telegram_web_allowed_paths")))
 
 
+def raw_request_has_sid(req) -> bool:
+	"""True if the raw request carries a ``sid`` in the query string, form body or JSON body.
+
+	Frappe's ``Session.__init__`` pops ``sid`` from ``form_dict`` (preferring it over the cookie) before any
+	``before_request`` hook runs, so ``form_dict`` can no longer show it; the werkzeug request still can.
+	"""
+	try:
+		if "sid" in req.args or "sid" in req.form:
+			return True
+		if req.mimetype == "application/json":
+			body = req.get_json(silent=True)
+			return isinstance(body, dict) and "sid" in body
+	except Exception:
+		return True  # unreadable request: closed
+	return False
+
+
 def enforce():
 	"""``before_request`` hook. No-op for sessions without a ``tg_origin`` marker."""
 	marker = _current_marker()
@@ -441,7 +458,7 @@ def enforce():
 	if req is None:
 		return
 	try:
-		if _session_expired():
+		if _session_expired() or raw_request_has_sid(req):
 			deny()
 		settings = _gateway_settings(marker.get("gateway") or "")
 		ok = _session_still_valid(marker, settings) and decide(

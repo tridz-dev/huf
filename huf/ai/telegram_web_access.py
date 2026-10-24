@@ -247,7 +247,7 @@ def _fail() -> None:
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
 @rate_limit(limit=IP_RATE_LIMIT, seconds=IP_RATE_WINDOW)
-def exchange(init_data: str, gateway: str, to: str = "") -> dict:
+def exchange(init_data: str = "", gateway: str = "", to: str = "") -> dict:
 	"""Sign the Telegram user in as their bound Frappe user and return ``{ok, redirect}``."""
 	digest, gw_name, ctx = _digest(init_data), str(gateway or ""), {}
 	try:

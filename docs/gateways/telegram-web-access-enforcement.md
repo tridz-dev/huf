@@ -14,16 +14,16 @@ HTTP 403, plain text `Not allowed in a Telegram session`.
 - Navigation: GET/HEAD only, to the gateway's allowed path prefixes. Paths are percent-decoded (up to 3 rounds),
   lower-cased, slash-collapsed; traversal (`..`), backslashes and leftover encodings are rejected. Matching is on
   path-segment boundaries (`/app/sales-invoice` matches `/app/sales-invoice/X`, not `/app/sales-invoices`).
-- Always allowed: GET/HEAD `/assets/*`, `/files/*`; methods `frappe.ping`, `ping`, `logout`.
+- Always allowed: GET/HEAD `/assets/*`; methods `frappe.desk.doctype.route_history.route_history.deferred_insert`, `frappe.ping`, `huf.ai.telegram_web_access.exchange`, `logout`, `ping`, `web_logout` (`ALWAYS_ALLOWED_METHODS`). `/files/*` is allowed too (public files), see "Files" below.
 - Writes off: `/api/method` only for the default read list plus the gateway's extra read methods (any HTTP verb);
   `/api/resource/<dt>` and `/api/resource/<dt>/<name>` (and `/api/v2/document/...` the same; `/api/v2/doctype/<dt>`)
   GET only, exact shapes, no `run_method`/`cmd`/`method` parameter (Frappe would execute a document method on a
   GET); uploads denied. `/api/v2/method/<doctype>/<method>` (document method call) is always denied.
 - Writes on (opt-in denylist): POST/PUT/DELETE to `/api/method`, `/api/resource` and `/api/v2/document` within normal Frappe permissions, except the always-blocked set below.
-- Always blocked (writes on or off): impersonate, `frappe.core.doctype.user*`, role/permission/system settings/server
-  script/data import/system console/backups methods, any request touching the doctypes User, Role, Has Role, DocPerm,
-  Custom DocPerm, User Permission, System Settings, Server Script, Client Script, Data Import, System Console, OAuth
-  and API key doctypes, Role/Module Profile, Custom Role, User Type/Group, Webhook, Notification, Auto Email Report, Print Format, Custom Field, Property Setter, Customize Form, DocType, Report, Social Login Key, Connected App, Token Cache, Email Account/Domain, Access Log, Scheduled Job Type, Console Log, Deleted Document (one list: `BLOCKED_DOCTYPES`), Gateway, Telegram Admin Binding, and any request carrying `sid` in form_dict.
+- Always blocked (writes on or off), and any request carrying a `sid` (see "Session id in a request"):
+  - method prefixes (`BLOCKED_METHOD_PREFIXES`): `frappe.commands.`, `frappe.core.doctype.custom_docperm.`, `frappe.core.doctype.data_import.`, `frappe.core.doctype.docperm.`, `frappe.core.doctype.has_role.`, `frappe.core.doctype.role.`, `frappe.core.doctype.rq_job.`, `frappe.core.doctype.server_script.`, `frappe.core.doctype.system_settings.`, `frappe.core.doctype.user.`, `frappe.core.doctype.user.user.impersonate`, `frappe.core.doctype.user_permission.`, `frappe.core.page.permission_manager.`, `frappe.desk.doctype.system_console.`, `frappe.desk.page.backups.`, `frappe.installer.`, `frappe.integrations.oauth2.`, `frappe.permissions.`, `frappe.sessions.`, `frappe.utils.bench_manager.`, `frappe.utils.password.`, `frappe.www.login.`
+  - any request touching these doctypes (`BLOCKED_DOCTYPES`): `API Key`, `Access Log`, `Auto Email Report`, `Client Script`, `Connected App`, `Console Log`, `Custom DocPerm`, `Custom Field`, `Custom Role`, `Customize Form`, `Data Import`, `Deleted Document`, `DocPerm`, `DocType`, `Email Account`, `Email Domain`, `Gateway`, `Has Role`, `Module Profile`, `Notification`, `OAuth Bearer Token`, `OAuth Client`, `Print Format`, `Property Setter`, `Report`, `Role`, `Role Permission for Page and Report`, `Role Profile`, `Scheduled Job Type`, `Server Script`, `Session Default Settings`, `Social Login Key`, `System Console`, `System Settings`, `Telegram Admin Binding`, `Token Cache`, `User`, `User Group`, `User Permission`, `User Type`, `Webhook`
+  A test fails when these lists drift from the constants.
 
 `cmd`: Frappe runs `form_dict.cmd` (query string or body) on ANY path, ahead of path routing (`frappe/app.py`). The
 guard therefore resolves `cmd` first: it is honoured only on `/` or on `/api/method/<same method>`; any request carrying
@@ -62,3 +62,31 @@ error popups:
 
 For pages the owner builds, a plain `www` page that renders its data server-side avoids the desk entirely and is the
 recommended shape for Telegram.
+
+## Session id in a request
+
+A `sid` in the query string, form body or JSON body is denied (403) for Telegram sessions. Frappe's
+`Session.__init__` pops `sid` from `form_dict` (and prefers it over the cookie) before any `before_request` hook
+runs, so the guard checks the raw werkzeug request (`request.args`, `request.form`, JSON body) instead.
+A `sid` smuggled onto a request that carries no Telegram session is not the guard's concern; it only ever
+resolves a session the caller already holds the id of.
+
+## Responses and failure behaviour
+
+- Revoked or logged-out sessions: the Sessions row is gone, so the request is no longer a Telegram session and
+  Frappe answers with its own guest response (401 `SessionExpired` for API calls, 301 to `/login` for pages), not
+  the guard's 403. `revoke_binding` (Desk/command) and binding deactivate/trash all delete the binding's Sessions
+  rows immediately via `revoke_binding_sessions`.
+- Exchange endpoint: every failure, including missing or non-string `init_data`/`gateway`, is the same uniform
+  403 `Not authorized`. The exchange is a guest request, so the JSON failure body carries no `exc` traceback in
+  production. Frappe adds the traceback only for a dev server (`DEV_SERVER` environment, i.e. `bench serve` in
+  development) or, with System Settings `allow_error_traceback`, for system users; a guest is never one of them.
+  `GET` on the endpoint is rejected by Frappe's method check as `Not permitted` (a different message, still 403).
+
+## Files
+
+`/files/*` (GET/HEAD) passes the guard like `/assets/*`: those are public files, public by design (a missing
+one is Frappe's own NotFound). Private files are served from `/private/files/*`, which is neither an asset prefix
+nor in any allowed path, so the guard answers 403 for it and for traversal variants such as
+`/files/../private/files/x` or `/private/files/../../sites/...`. Do not add `/private/files` to a gateway's
+allowed paths. Tests: `test_telegram_web_access_guard_site`.

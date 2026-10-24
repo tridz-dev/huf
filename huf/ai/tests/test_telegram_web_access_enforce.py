@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Huf and contributors
 import json
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from huf.ai import telegram_web_access_enforce as E
@@ -540,3 +541,35 @@ class TestReportListingExemption(unittest.TestCase):
 				enf.decide(marker, settings, "GET", path, {"doctype": "Report", "filters": "{}"})
 			)
 			self.assertFalse(enf.decide(marker, settings, "GET", path, {"doctype": "User"}))
+
+
+class _Req:
+	def __init__(self, args=None, form=None, body=None):
+		self.args, self.form, self._body = args or {}, form or {}, body
+		self.mimetype = "application/json" if body is not None else "application/x-www-form-urlencoded"
+
+	def get_json(self, silent=False):
+		return self._body
+
+
+class TestRawSid(unittest.TestCase):
+	def test_sid_in_any_raw_location(self):
+		self.assertTrue(E.raw_request_has_sid(_Req(args={"sid": "x"})))
+		self.assertTrue(E.raw_request_has_sid(_Req(form={"sid": "x"})))
+		self.assertTrue(E.raw_request_has_sid(_Req(body={"sid": "x"})))
+		self.assertFalse(E.raw_request_has_sid(_Req(args={"a": 1}, form={"b": 2})))
+		self.assertFalse(E.raw_request_has_sid(_Req(body={"a": 1})))
+		self.assertFalse(E.raw_request_has_sid(_Req(body=[1, 2])))
+
+	def test_unreadable_request_fails_closed(self):
+		self.assertTrue(E.raw_request_has_sid(object()))
+
+
+class TestDocsMatchConstants(unittest.TestCase):
+	"""The enforcement doc lists the always-allowed/blocked sets; they must not drift from the constants."""
+
+	def test_lists_documented(self):
+		doc = (Path(__file__).parents[3] / "docs/gateways/telegram-web-access-enforcement.md").read_text()
+		for const in (E.ALWAYS_ALLOWED_METHODS, E.BLOCKED_METHOD_PREFIXES, E.BLOCKED_DOCTYPES):
+			missing = [x for x in const if f"`{x}`" not in doc]
+			self.assertEqual(missing, [])

@@ -2,6 +2,7 @@
 """Site test: revocation only removes the tg-origin sessions of one binding (real Sessions rows)."""
 
 import json
+from unittest import mock
 
 import frappe
 from frappe.tests import IntegrationTestCase
@@ -54,6 +55,21 @@ class TestEnforceRevocationSite(IntegrationTestCase):
 		self.assertIn(normal, left)
 		self.assertIn("tgenf-b2", left)
 		self.assertNotIn("tgenf-b1", left)
+
+	def test_revoke_binding_deletes_its_sessions(self):
+		from huf.ai import telegram_admin
+
+		_mk_session("tgenf-r1", USER, {"tg_origin": {"binding": "BR", "gateway": "G"}})
+		with (
+			mock.patch.object(frappe.db, "get_value", side_effect=lambda dt, n, f=None, **k: USER),
+			mock.patch.object(frappe.db, "set_value"),
+			mock.patch.object(telegram_admin, "write_audit"),
+			mock.patch("huf.permissions.is_gateway_admin", return_value=True),
+		):
+			frappe.set_user(USER)
+			telegram_admin.revoke_binding("BR")
+		frappe.set_user("Administrator")
+		self.assertFalse(frappe.db.sql("select sid from `tabSessions` where sid='tgenf-r1'"))
 
 
 class TestEnforceDbSite(IntegrationTestCase):
