@@ -205,7 +205,7 @@ class TestRoomOptOut(unittest.TestCase):
 			mock.patch.object(
 				tp,
 				"classify",
-				return_value={"blocked": True, "retryable": False, "operator_text": "blocked", "code": "x"},
+				return_value={"opt_out": "room", "retryable": False, "operator_text": "removed", "code": "x"},
 			),
 			mock.patch.object(svc, "_reply_max_attempts", return_value=3),
 			mock.patch.object(svc, "_redact_error_text", return_value="e"),

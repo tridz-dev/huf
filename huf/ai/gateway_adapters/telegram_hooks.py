@@ -19,13 +19,7 @@ def error_text(exc: BaseException) -> str:
 	from huf.ai.gateway_adapters.telegram_client import TelegramApiError
 
 	if isinstance(exc, TelegramApiError):
-		if exc.blocked_by_user:
-			return "Telegram delivery failed: the user blocked the bot"
-		if exc.chat_not_found:
-			return "Telegram delivery failed: chat not found"
-		if exc.flood_control:
-			return "Telegram delivery failed: rate limited"
-		return f"Telegram delivery failed: {exc.description}"
+		return exc.operator_message
 	return str(exc) or "Telegram delivery failed"
 
 

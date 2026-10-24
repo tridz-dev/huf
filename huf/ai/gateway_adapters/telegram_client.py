@@ -69,6 +69,76 @@ def redact_token(text: Any, token: str) -> str:
 	return value
 
 
+# Bot API error descriptions -> a stable ``kind``. First match wins; descriptions are matched lower-cased.
+# Only the user-blocked/deactivated kinds mean "this person is unreachable"; only the room kinds mean "the bot is
+# no longer in that chat". Everything about rights or markup is a configuration problem and never an opt-out.
+_ERROR_KINDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+	("blocked", ("bot was blocked by the user",)),
+	("user_deactivated", ("user is deactivated",)),
+	(
+		"room_removed",
+		(
+			"bot was kicked from the",
+			"bot is not a member of the",
+			"the group chat was deleted",
+		),
+	),
+	("cannot_initiate", ("bot can't initiate conversation", "bot can't send messages to bots")),
+	(
+		"missing_rights",
+		(
+			"not enough rights",
+			"have no rights to",
+			"chat_write_forbidden",
+			"chat_send_plain_forbidden",
+			"chat_send_media_forbidden",
+			"chat_admin_required",
+			"need administrator rights",
+			"rights to send",
+		),
+	),
+	("chat_not_found", ("chat not found", "peer_id_invalid", "chat_id is empty")),
+	("button_url_invalid", ("button_url_invalid",)),
+	("web_app_url_invalid", ("web_app_url_invalid",)),
+	("button_type_invalid", ("button_type_invalid",)),
+	("bot_domain_invalid", ("bot_domain_invalid",)),
+	("reply_markup_too_long", ("reply_markup_too_long",)),
+	("message_to_edit_not_found", ("message to edit not found",)),
+	("message_too_long", ("message is too long", "message_too_long")),
+	("caption_too_long", ("message caption is too long", "media_caption_too_long")),
+	("parse_error", ("can't parse entities", "can't find end of the entity", "unsupported start tag")),
+	("message_not_modified", ("message is not modified",)),
+)
+
+_OPERATOR_TEXT = {
+	"blocked": "the user blocked the bot",
+	"user_deactivated": "the user's account is deactivated",
+	"room_removed": "the bot was removed from this chat (or the chat was deleted)",
+	"cannot_initiate": "the bot cannot start this conversation; the user has to message the bot first",
+	"missing_rights": (
+		"the bot lacks a required right in this chat. Grant the bot the needed right "
+		"(for example Post Messages, Send Media or admin rights) in the chat's administrator settings"
+	),
+	"chat_not_found": "chat not found",
+	"button_url_invalid": "Telegram rejected a button URL (BUTTON_URL_INVALID); use a full https:// or tg:// URL",
+	"web_app_url_invalid": "Telegram rejected a Web App URL (WEB_APP_URL_INVALID); it must be an https:// URL",
+	"button_type_invalid": (
+		"Telegram does not allow this button type in this chat (BUTTON_TYPE_INVALID); "
+		"use callback or url buttons here"
+	),
+	"bot_domain_invalid": (
+		"the login URL domain is not linked to the bot (BOT_DOMAIN_INVALID); set it with /setdomain in BotFather"
+	),
+	"reply_markup_too_long": (
+		"the keyboard is too large (REPLY_MARKUP_TOO_LONG); use fewer buttons and callback data under 64 bytes"
+	),
+	"message_to_edit_not_found": "the message to edit no longer exists (deleted or too old)",
+	"message_too_long": "the message is longer than Telegram allows (MESSAGE_TOO_LONG)",
+	"caption_too_long": "the caption is longer than Telegram allows (1024 characters)",
+	"rate_limited": "rate limited",
+}
+
+
 class TelegramApiError(ValueError):
 	"""A failed Bot API call, classified. Subclasses ValueError for adapter-contract compatibility."""
 
@@ -93,22 +163,37 @@ class TelegramApiError(ValueError):
 		return (self.description or "").lower()
 
 	@property
-	def blocked_by_user(self) -> bool:
-		"""The user blocked the bot / deactivated / the bot was kicked: the chat is unsendable."""
+	def kind(self) -> str | None:
+		"""Stable classification of the description (``None`` = unclassified). Flood control is ``rate_limited``."""
 		d = self._lower
-		return self.error_code == 403 or "bot was blocked by the user" in d or "user is deactivated" in d
+		for kind, needles in _ERROR_KINDS:
+			if any(n in d for n in needles):
+				return kind
+		if self.retry_after is not None or self.error_code == 429:
+			return "rate_limited"
+		return None
+
+	@property
+	def blocked_by_user(self) -> bool:
+		"""The user blocked the bot or deactivated their account: that person is unsendable."""
+		return self.kind in ("blocked", "user_deactivated")
+
+	@property
+	def room_removed(self) -> bool:
+		"""The bot was kicked from / is not a member of the group or channel, or the group was deleted."""
+		return self.kind == "room_removed"
+
+	@property
+	def missing_rights(self) -> bool:
+		return self.kind == "missing_rights"
 
 	@property
 	def chat_not_found(self) -> bool:
-		d = self._lower
-		return "chat not found" in d or "peer_id_invalid" in d or "chat_id is empty" in d
+		return self.kind == "chat_not_found"
 
 	@property
 	def parse_error(self) -> bool:
-		d = self._lower
-		return (
-			"can't parse entities" in d or "can't find end of the entity" in d or "unsupported start tag" in d
-		)
+		return self.kind == "parse_error"
 
 	@property
 	def flood_control(self) -> bool:
@@ -116,14 +201,37 @@ class TelegramApiError(ValueError):
 
 	@property
 	def message_not_modified(self) -> bool:
-		return "message is not modified" in self._lower
+		return self.kind == "message_not_modified"
+
+	@property
+	def message_too_long(self) -> bool:
+		return self.kind == "message_too_long"
+
+	@property
+	def caption_too_long(self) -> bool:
+		return self.kind == "caption_too_long"
+
+	@property
+	def code(self) -> str:
+		"""Operator-facing error code (stable string)."""
+		return "rate_limited" if self.flood_control else (self.kind or "telegram_error")
+
+	@property
+	def operator_message(self) -> str:
+		"""Actionable, token-free text for the operator (descriptions are redacted when the error is built)."""
+		text = _OPERATOR_TEXT.get(self.code)
+		return (
+			f"Telegram delivery failed: {text}" if text else f"Telegram delivery failed: {self.description}"
+		)
 
 	@property
 	def retryable(self) -> bool:
-		"""Safe to retry later: flood control and 5xx. Blocked, not-found and parse errors are not."""
-		if self.blocked_by_user or self.chat_not_found or self.parse_error:
+		"""Safe to retry later: flood control and 5xx. Every classified permanent failure is not."""
+		if self.flood_control:
+			return True
+		if self.kind is not None:
 			return False
-		return self.flood_control or (self.error_code is not None and self.error_code >= 500)
+		return self.error_code is not None and self.error_code >= 500
 
 
 def _requests_post(
@@ -158,8 +266,9 @@ class TelegramBotClient:
 		http_post: Callable[..., Any] = _requests_post,
 		http_get: Callable[..., Any] = _requests_get,
 		timeout: int = 10,
-		max_flood_retries: int = 0,
+		max_flood_retries: int = 1,
 		max_flood_wait: int = 5,
+		on_chat_migrated: Callable[[str, str], None] | None = None,
 		sleep: Callable[[float], None] = time.sleep,
 		test_environment: bool = False,
 	) -> None:
@@ -173,6 +282,8 @@ class TelegramBotClient:
 		self._max_flood_retries = max_flood_retries
 		self._max_flood_wait = max_flood_wait
 		self._sleep = sleep
+		# Called as ``(old_chat_id, new_chat_id)`` when Telegram reports a group became a supergroup.
+		self.on_chat_migrated = on_chat_migrated
 
 	def redact(self, text: Any) -> str:
 		return redact_token(text, self._token)
@@ -194,22 +305,42 @@ class TelegramBotClient:
 		"""Call a Bot API method and return ``result``. Raises ``TelegramApiError`` on failure.
 
 		With ``files`` the request is multipart; non-scalar payload values are JSON-encoded.
-		On flood control, retries up to ``max_flood_retries`` times when ``retry_after`` is short.
+		Flood control: one short in-client retry (``retry_after <= max_flood_wait``); longer waits are left to the
+		caller's scheduled retry. Group -> supergroup migration: retried once with the new ``chat_id`` after
+		``on_chat_migrated(old, new)`` has been told (so the caller can re-key its state).
 		"""
-		attempt = 0
+		payload = dict(payload or {})
+		flood_attempts = 0
+		migrated = False
 		while True:
 			try:
-				return self._call_once(method, payload or {}, files)
+				return self._call_once(method, payload, files)
 			except TelegramApiError as exc:
 				if (
 					exc.retry_after is not None
-					and attempt < self._max_flood_retries
+					and flood_attempts < self._max_flood_retries
 					and exc.retry_after <= self._max_flood_wait
 				):
-					attempt += 1
+					flood_attempts += 1
 					self._sleep(exc.retry_after)
 					continue
+				new_id = exc.migrate_to_chat_id
+				if new_id is not None and not migrated and payload.get("chat_id") is not None:
+					old_id = payload["chat_id"]
+					if str(old_id) != str(new_id):
+						migrated = True
+						self._notify_migrated(old_id, new_id)
+						payload["chat_id"] = new_id
+						continue
 				raise
+
+	def _notify_migrated(self, old_id: Any, new_id: Any) -> None:
+		if not self.on_chat_migrated:
+			return
+		try:
+			self.on_chat_migrated(str(old_id), str(new_id))
+		except Exception:  # persisting the migration must never block the delivery itself
+			pass
 
 	def _call_once(self, method: str, payload: Mapping[str, Any], files: Mapping[str, Any] | None) -> Any:
 		try:
@@ -304,25 +435,6 @@ class TelegramBotClient:
 
 	def delete_webhook(self, *, drop_pending_updates: bool = False) -> Any:
 		return self.call("deleteWebhook", {"drop_pending_updates": drop_pending_updates})
-
-	def set_my_commands(
-		self,
-		commands: list[tuple[str, str]] | list[Mapping[str, str]],
-		*,
-		scope: Mapping[str, Any] | None = None,
-		language_code: str | None = None,
-	) -> Any:
-		"""``commands`` is ``[(command, description), ...]``; 1-32 chars lowercase / 1-256 description."""
-		items = []
-		for c in commands:
-			cmd, desc = (c["command"], c["description"]) if isinstance(c, Mapping) else c
-			items.append({"command": str(cmd).lstrip("/").lower()[:32], "description": str(desc)[:256]})
-		payload: dict[str, Any] = {"commands": items}
-		if scope:
-			payload["scope"] = dict(scope)
-		if language_code:
-			payload["language_code"] = language_code
-		return self.call("setMyCommands", payload)
 
 
 def _int_or_none(value: Any) -> int | None:

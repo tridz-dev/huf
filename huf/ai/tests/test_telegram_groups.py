@@ -254,7 +254,7 @@ class TestAdminActions(unittest.TestCase):
 		fake = FakeBotApi()
 		fake.queue("banChatMember", fake.error("Too Many Requests", 429, retry_after=3))
 		with self.assertRaises(admin.AdminActionError) as cm:
-			admin.ban_member(TelegramBotClient(TOKEN, http_post=fake.http_post), -1, 2)
+			admin.ban_member(TelegramBotClient(TOKEN, http_post=fake.http_post, max_flood_retries=0), -1, 2)
 		self.assertEqual(cm.exception.code, "flood")
 		self.assertIn(
 			"administrator right",

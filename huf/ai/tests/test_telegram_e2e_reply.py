@@ -360,13 +360,13 @@ class TestRetry(Base):
 		self.api.queue(
 			"sendMessage",
 			{"ok": True, "result": {"message_id": 500}},
-			FakeBotApi.error("Too Many Requests: retry after 3", 429, retry_after=3),
+			FakeBotApi.error("Too Many Requests: retry after 30", 429, retry_after=30),  # > inline wait: rescheduled
 		)
 		event = FakeEvent()
 		text = "x" * 5000
 		result = self.reply(event, text)
 		self.assertEqual(result["reply_status"], "retrying")
-		self.assertEqual(result["retry_in_seconds"], 4.0)
+		self.assertEqual(result["retry_in_seconds"], 31.0)
 		self.assertEqual(event.reply_message_id, "500")
 		kw = self.enqueue.call_args.kwargs
 		self.assertEqual(kw["parts_remaining"], ["x" * 904])

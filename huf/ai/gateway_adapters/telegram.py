@@ -101,7 +101,7 @@ class TelegramGatewayAdapter(GatewayAdapter):
 		http_get: Callable[..., Any] = _requests_get,
 		download_attachments: bool = True,
 		parse_mode: str = MODE_PLAIN,
-		max_flood_retries: int = 0,
+		max_flood_retries: int = 1,
 	) -> None:
 		missing = self.credential_schema.missing_required(credentials)
 		if missing:

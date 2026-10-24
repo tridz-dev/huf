@@ -14,15 +14,50 @@ from __future__ import annotations
 
 import html
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any, Union
 
+# Bot API: text is 1-4096 and captions 0-1024 "characters after entities parsing". The docs never say which unit,
+# while entity offsets/lengths are UTF-16 code units, so every limit here is counted in UTF-16 code units: that is
+# >= the code point count, so an astral emoji (2 units) can never push a part over the real limit.
 TELEGRAM_TEXT_LIMIT = 4096
 TELEGRAM_CAPTION_LIMIT = 1024
 
 MODE_HTML = "HTML"
 MODE_MARKDOWN_V2 = "MarkdownV2"
 MODE_PLAIN = ""
+
+
+def text_len(s: str) -> int:
+	"""Length in UTF-16 code units (the unit Telegram uses for entities and, conservatively, for limits)."""
+	return len(s) if s.isascii() else len(s.encode("utf-16-le")) // 2
+
+
+def _extends_cluster(prev: str, ch: str) -> bool:
+	"""True when ``ch`` must stay glued to ``prev`` (combining mark, variation selector, ZWJ sequence, skin tone,
+	keycap, tag character, or the second regional indicator of a flag)."""
+	o = ord(ch)
+	if prev == "\u200d" or ch == "\u200d":
+		return True
+	if 0xFE00 <= o <= 0xFE0F or 0xE0100 <= o <= 0xE01EF or 0xE0020 <= o <= 0xE007F or 0x1F3FB <= o <= 0x1F3FF:
+		return True
+	return unicodedata.category(ch) in ("Mn", "Me", "Mc")
+
+
+def clusters(s: str) -> list[str]:
+	"""Approximate grapheme clusters without dependencies (enough to never split emoji sequences or accents)."""
+	out: list[str] = []
+	ri_open = False  # an unpaired regional indicator is waiting for its partner
+	for ch in s:
+		is_ri = 0x1F1E6 <= ord(ch) <= 0x1F1FF
+		if out and (_extends_cluster(out[-1][-1], ch) or (is_ri and ri_open)):
+			out[-1] += ch
+			ri_open = False
+			continue
+		out.append(ch)
+		ri_open = is_ri
+	return out
 
 
 def escape_html(text: str) -> str:
@@ -349,14 +384,29 @@ def to_plain(markdown: str) -> str:
 
 
 def _hard_cut(s: str, limit: int) -> list[str]:
-	return [s[i : i + limit] for i in range(0, len(s), limit)]
+	"""Cut into chunks of at most ``limit`` UTF-16 units, only between grapheme clusters (a cluster longer than
+	the limit is emitted alone)."""
+	if text_len(s) <= limit:
+		return [s] if s else []
+	out: list[str] = []
+	cur, cur_len = "", 0
+	for cluster in clusters(s):
+		n = text_len(cluster)
+		if cur and cur_len + n > limit:
+			out.append(cur)
+			cur, cur_len = "", 0
+		cur += cluster
+		cur_len += n
+	if cur:
+		out.append(cur)
+	return out
 
 
 def _pack(pieces: list[str], sep: str, limit: int, deeper) -> list[str]:
 	out: list[str] = []
 	cur = ""
 	for p in pieces:
-		if len(p) > limit:
+		if text_len(p) > limit:
 			if cur:
 				out.append(cur)
 				cur = ""
@@ -365,7 +415,7 @@ def _pack(pieces: list[str], sep: str, limit: int, deeper) -> list[str]:
 			cur = sub[-1] if sub else ""
 		elif not cur:
 			cur = p
-		elif len(cur) + len(sep) + len(p) <= limit:
+		elif text_len(cur) + text_len(sep) + text_len(p) <= limit:
 			cur += sep + p
 		else:
 			out.append(cur)
@@ -389,7 +439,7 @@ def _split_fence(block: str, limit: int) -> list[str]:
 	head = lines[0]
 	closing = lines[-1] if len(lines) > 1 and _FENCE.match(lines[-1]) else "```"
 	body = lines[1:-1] if len(lines) > 1 and _FENCE.match(lines[-1]) else lines[1:]
-	room = max(1, limit - len(head) - len(closing) - 2)
+	room = max(1, limit - text_len(head) - text_len(closing) - 2)
 	chunks = _pack(body, "\n", room, _hard_cut)
 	return [f"{head}\n{c}\n{closing}" for c in chunks] or [block]
 
@@ -433,12 +483,12 @@ def split_message(text: str, limit: int = TELEGRAM_TEXT_LIMIT) -> list[str]:
 	limit = max(1, int(limit))
 	if not src.strip():
 		return []
-	if len(src) <= limit:
+	if text_len(src) <= limit:
 		return [src]
 	parts: list[str] = []
 	cur = ""
 	for body, is_fence in _units(src):
-		if len(body) > limit:
+		if text_len(body) > limit:
 			if cur:
 				parts.append(cur)
 				cur = ""
@@ -451,7 +501,7 @@ def split_message(text: str, limit: int = TELEGRAM_TEXT_LIMIT) -> list[str]:
 			cur = sub[-1] if sub else ""
 		elif not cur:
 			cur = body
-		elif len(cur) + 2 + len(body) <= limit:
+		elif text_len(cur) + 2 + text_len(body) <= limit:
 			cur += "\n\n" + body
 		else:
 			parts.append(cur)
@@ -468,6 +518,9 @@ class RenderedPart:
 	text: str
 	parse_mode: str
 	plain: str
+	source: str = (
+		""  # the markdown chunk this part was rendered from (to re-split it smaller on MESSAGE_TOO_LONG)
+	)
 
 
 def render_parts(
@@ -475,7 +528,7 @@ def render_parts(
 ) -> list[RenderedPart]:
 	"""Convert and split. ``mode`` "" means send the source text verbatim (no parse_mode)."""
 	if mode == MODE_PLAIN:
-		return [RenderedPart(p, "", p) for p in split_message(markdown, limit)]
+		return [RenderedPart(p, "", p, p) for p in split_message(markdown, limit)]
 	renderer = _RENDERERS[mode]
 	out: list[RenderedPart] = []
 	work = split_message(markdown, limit)
@@ -484,20 +537,22 @@ def render_parts(
 		rendered = renderer.render(src)
 		if not rendered:
 			continue
-		if len(rendered) > limit and len(src) > 32:
+		rendered_len, src_len = text_len(rendered), text_len(src)
+		if rendered_len > limit and src_len > 32:
 			# Escaping/tags inflated the part: re-split the source smaller (preserves entity safety).
-			smaller = split_message(
-				src, max(16, min(len(src) - 1, int(limit * len(src) / len(rendered)) - 8))
-			)
+			smaller = split_message(src, max(16, min(src_len - 1, int(limit * src_len / rendered_len) - 8)))
 			if len(smaller) > 1:
 				work = smaller + work
 				continue
-		if len(rendered) > limit:
-			out.extend(RenderedPart(c, "", c) for c in _hard_cut(to_plain(src), limit))
+		if rendered_len > limit:
+			out.extend(RenderedPart(c, "", c, c) for c in _hard_cut(to_plain(src), limit))
 			continue
-		out.append(RenderedPart(rendered, mode, _fit_plain(to_plain(src), limit)))
+		out.append(RenderedPart(rendered, mode, _fit_plain(to_plain(src), limit), src))
 	return out
 
 
 def _fit_plain(plain: str, limit: int) -> str:
-	return plain if len(plain) <= limit else plain[: limit - 1] + "…"
+	if text_len(plain) <= limit:
+		return plain
+	head = _hard_cut(plain, limit - 1)
+	return (head[0] if head else "") + "…"

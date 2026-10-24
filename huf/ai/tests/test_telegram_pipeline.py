@@ -124,7 +124,7 @@ class TestClassify(unittest.TestCase):
 		c = tp.classify(
 			TelegramApiError("sendMessage", "Forbidden: bot was blocked by the user", error_code=403)
 		)
-		self.assertTrue(c["blocked"])
+		self.assertEqual(c["opt_out"], "user")
 		self.assertFalse(c["retryable"])
 
 	def test_chat_not_found_not_retryable(self):
@@ -170,7 +170,7 @@ class TestFailureHandling(Base):
 		)
 		out = tp.handle_failure(self.event, self.gw, exc, ["p1", "p2"], 1)
 		self.assertEqual(out["reply_status"], "retrying")
-		self.assertEqual(out["retry_in_seconds"], 4.0)
+		self.assertEqual(out["retry_in_seconds"], 5.0)  # max(backoff 5s, retry_after 3 + 1)
 		kw = self.enqueue.call_args.kwargs
 		self.assertEqual(kw["parts_remaining"], ["p2"])
 		self.assertEqual(kw["attempt"], 2)
