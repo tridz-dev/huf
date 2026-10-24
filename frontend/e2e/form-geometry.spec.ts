@@ -22,7 +22,7 @@ import { findViolations, measurePage } from './helpers/formGeometryMeasure';
  */
 
 /** Ratchet: lower this when allowlist entries are removed; never raise it. */
-const MAX_ALLOWLIST = 7;
+const MAX_ALLOWLIST = 3;
 
 interface AllowEntry {
   route: string;

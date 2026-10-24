@@ -2,51 +2,6 @@
   "_comment": "Known remaining form-geometry failures. Entries may only be removed (MAX_ALLOWLIST in form-geometry.spec.ts is the ceiling; a stale entry fails the test).",
   "entries": [
     {
-      "route": "gw-credentials",
-      "viewports": [
-        1440,
-        1024
-      ],
-      "signature": "input:Search channels... | select:Category: Category",
-      "rules": [
-        "top-offset",
-        "bottom-offset",
-        "height"
-      ],
-      "owner": "FilterBar owner (WP6/9 follow-up, components/dashboard/filters/FilterBar.tsx)",
-      "note": "Search input renders 36px, Category select 34px: input is 3px lower/2px taller. Make the InputGroup use h-control-md."
-    },
-    {
-      "route": "int-list",
-      "viewports": [
-        1440,
-        1024
-      ],
-      "signature": "input:Search integrations... | select:Category: Category",
-      "rules": [
-        "top-offset",
-        "bottom-offset",
-        "height"
-      ],
-      "owner": "FilterBar owner (WP6/9 follow-up, components/dashboard/filters/FilterBar.tsx)",
-      "note": "Search input renders 36px, Category select 34px: input is 3px lower/2px taller. Make the InputGroup use h-control-md."
-    },
-    {
-      "route": "int-services",
-      "viewports": [
-        1440,
-        1024
-      ],
-      "signature": "input:Search services... | select:Category: Category",
-      "rules": [
-        "top-offset",
-        "bottom-offset",
-        "height"
-      ],
-      "owner": "FilterBar owner (WP6/9 follow-up, components/dashboard/filters/FilterBar.tsx)",
-      "note": "Search input renders 36px, Category select 34px: input is 3px lower/2px taller. Make the InputGroup use h-control-md."
-    },
-    {
       "route": "gw-edit-modal",
       "viewports": [
         1440,
@@ -84,20 +39,6 @@
       ],
       "owner": "Gateways/ChannelTab owner (WP4b/WP5 follow-up) plus owner decision on switch-vs-input rule",
       "note": "Pairing-lifetime input and the mention switch tops differ by 2-4px; the switch is a 20px control centred in its card, so either wrap it in FieldAction or relax the rule for switches."
-    },
-    {
-      "route": "wa-messages-send",
-      "viewports": [
-        1440,
-        1024
-      ],
-      "signature": "input:+15551234567 | select:Message type",
-      "rules": [
-        "top-offset",
-        "bottom-offset"
-      ],
-      "owner": "WP7 owner (whatsapp/SendPanel + SendForms; blocked on the Solutions PR)",
-      "note": "Phone input is 28px lower than the Message type select: one has a label row, the other does not. SendTypePicker needs a Field label/reserveLabel."
     }
   ]
 }

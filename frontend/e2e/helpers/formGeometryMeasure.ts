@@ -86,7 +86,9 @@ export const collectRows = (): MeasuredRow[] => {
     if (seen.has(key)) continue;
     seen.add(key);
     const items: RowItem[] = slots.map((s) => {
-      const r = s.c.getBoundingClientRect();
+      // An InputGroup draws its border on the wrapper, so the visible control is the group,
+      // not the borderless inner <input> (which is 2px shorter by design).
+      const r = (s.c.closest('[data-slot=input-group]') ?? s.c).getBoundingClientRect();
       const reservedLabel = !!s.k.querySelector(':scope > [data-field-label][aria-hidden=true], [data-field-label][aria-hidden=true]');
       return {
         kind: kind(s.c),
@@ -141,6 +143,8 @@ export const expandLayout = (): string | number => {
   }
   let n = 0;
   for (const el of document.querySelectorAll<HTMLElement>('body *')) {
+    // Never rewrite a control's own height (an InputGroup with flex-1 would lose h-control-*).
+    if (el.matches('[data-slot=input-group], input, select, textarea, button, [role=combobox], [role=switch]')) continue;
     const cs = getComputedStyle(el);
     const clipped = /(auto|scroll|hidden)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 4;
     const fixedH = cs.height.endsWith('px') && String(el.className).match(/\b(h-screen|h-svh|h-dvh|h-full|min-h-0|max-h-|flex-1)\b/);
