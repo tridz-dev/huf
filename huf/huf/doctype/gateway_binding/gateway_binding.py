@@ -2,11 +2,39 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
+from huf.ai.solutions.ceiling import ceiling_for_gateway
+
+_SCOPE_OVERRIDE = {"Only approved contacts": "Approved contacts", "Allow list": "Allow-list"}
+
+
+def _gateway_scope(gateway):
+    from huf.ai.whatsapp import send_scope
+
+    value = frappe.db.get_value("Gateway", gateway, "agent_recipient_scope") if gateway else None
+    return value if value in send_scope.SCOPES else send_scope.DEFAULT_SCOPE
+
 
 class GatewayBinding(Document):
     """A deterministic route from a provider conversation scope to Huf work."""
 
+    def _validate_policy_overrides(self):
+        """Overrides may only tighten the gateway: cap within the ceiling, scope no wider than the gateway's."""
+        cap = self.get("cap_per_day")
+        if cap:
+            if int(cap) < 0:
+                frappe.throw("cap_exceeds_ceiling: " + _("Cap per day must be 0 or more."))
+            ceiling, _source = ceiling_for_gateway(self.gateway)
+            if ceiling is not None and int(cap) > ceiling:
+                frappe.throw("cap_exceeds_ceiling: " + _("Cap per day {0} is above this number's limit of {1}.").format(cap, ceiling))
+        override = _SCOPE_OVERRIDE.get(self.get("scope_override") or "")
+        if override:
+            from huf.ai.whatsapp import send_scope
+
+            if send_scope.SCOPES.index(override) > send_scope.SCOPES.index(_gateway_scope(self.gateway)):
+                frappe.throw("scope_loosening: " + _("The recipient scope can only be narrower than the gateway's ({0}).").format(_gateway_scope(self.gateway)))
+
     def validate(self):
+        self._validate_policy_overrides()
         if self.match_type == "Catch-all":
             pass
         elif self.match_type in ("Keyword", "Ad or link tag"):
