@@ -24,7 +24,7 @@ from huf.ai.telegram_management import (
 	_safe_text,
 	_webhook_url,
 )
-from huf.ai.telegram_public_url import public_base_url
+from huf.ai.telegram_public_url import mini_app_url, public_base_url
 
 NAME_MAX = 64
 ABOUT_MAX = 120  # short description (profile page "About")
@@ -314,39 +314,36 @@ def delete_webhook_now(
 
 # -- recommended setup ---------------------------------------------------------------------------
 
-MINI_APP_PATH = "/huf/tg-app"
 MENU_BUTTON_TEXT = "Console"
 PRIVATE_COMMANDS: list[dict[str, str]] = [
-	{"command": "start", "description": "Link this chat to your account"},
-	{"command": "help", "description": "Show what you can do here"},
-	{"command": "me", "description": "Show who you are linked as"},
-	{"command": "find", "description": "Search your records"},
-	{"command": "open", "description": "Open a record"},
-	{"command": "approvals", "description": "Review items waiting for you"},
-	{"command": "digest", "description": "Get a summary of recent activity"},
-	{"command": "audit", "description": "Review recent cockpit actions"},
-	{"command": "unbind", "description": "Unlink this chat from your account"},
+	{"command": "start", "description": "Link your account with a code from Huf, or say hello"},
+	{"command": "help", "description": "Show what you can do here (linked accounts)"},
+	{"command": "me", "description": "Show who you are linked as (linked accounts)"},
+	{"command": "find", "description": "Search your records (linked accounts)"},
+	{"command": "open", "description": "Open a record (linked accounts)"},
+	{"command": "approvals", "description": "Review items waiting for you (linked accounts)"},
+	{"command": "digest", "description": "Get a summary of recent activity (linked accounts)"},
+	{"command": "audit", "description": "Review recent cockpit actions (admins)"},
+	{"command": "unbind", "description": "Unlink this chat from your account (linked accounts)"},
 ]
-# Telegram answers from the MOST SPECIFIC scope that has a list, so default-only writes are invisible
-# to private chats and group admins. Every UI scope is therefore planned explicitly.
+# Telegram answers from the MOST SPECIFIC scope that has a list, falling back to ``default``. The cockpit
+# commands only work in private chats (``telegram_admin.handle_message`` ignores every other chat type) and the
+# gateway handles no slash commands in groups, so the cockpit list belongs to ``all_private_chats`` only and
+# every other UI scope is cleared (a list there, or in ``default``, would advertise commands that do nothing).
 RECOMMENDED_COMMANDS: dict[str, list[dict[str, str]]] = {
-	"default": PRIVATE_COMMANDS,
+	"default": [],
 	"all_private_chats": PRIVATE_COMMANDS,
-	"all_group_chats": [
-		{"command": "help", "description": "Show what you can do here"},
-		{"command": "me", "description": "Show who you are linked as"},
-	],
+	"all_group_chats": [],
+	"all_chat_administrators": [],
 }
-# Scopes always written by apply (they carry the plan even when identical to the current list).
-ALWAYS_SET_SCOPES = ("default", "all_group_chats")
-# Scopes the plan defines nothing for: a stale list there would hide the default list, so it is deleted.
-CLEARED_SCOPES = ("all_chat_administrators",)
-
-
-def mini_app_url(gateway: str, base_url: str) -> str:
-	from urllib.parse import quote
-
-	return f"{base_url.rstrip('/')}{MINI_APP_PATH}?gw={quote(gateway, safe='')}"
+# Scopes the plan defines nothing for: a list there would be advertised, so it is deleted.
+CLEARED_SCOPES = ("default", "all_group_chats", "all_chat_administrators")
+# Limits of this plan, shown to the owner: Telegram prefers chat-specific lists and language-specific lists over
+# every scope above, and the Bot API cannot enumerate them. Only the languages listed in ``_plan_languages`` are probed.
+OVERRIDE_LIMITATION = (
+	"Telegram prefers a command list set for one specific chat or one language over the lists above, and the Bot "
+	"API cannot list those. Only the owner's language and the site language are checked."
+)
 
 
 def _current_commands(client: Any, scope: str) -> list[dict[str, Any]]:
@@ -360,12 +357,10 @@ def _same_list(current: list[dict[str, Any]], recommended: list[dict[str, str]])
 
 
 def _scope_action(scope: str, current: list[dict[str, Any]]) -> str:
-	"""set | delete | keep. Unlisted scopes are only touched when they hold a stale list."""
+	"""set | delete | keep. Scopes the plan defines no list for are deleted only when they hold one."""
 	if scope in CLEARED_SCOPES:
 		return "delete" if current else "keep"
-	if scope in ALWAYS_SET_SCOPES:
-		return "set"
-	return "set" if current and not _same_list(current, RECOMMENDED_COMMANDS[scope]) else "keep"
+	return "keep" if _same_list(current, RECOMMENDED_COMMANDS[scope]) else "set"
 
 
 def _plan_commands(client: Any) -> list[dict[str, Any]]:
@@ -384,6 +379,42 @@ def _plan_commands(client: Any) -> list[dict[str, Any]]:
 	return rows
 
 
+def _plan_languages() -> list[str]:
+	"""Two-letter codes of the owner's and the site's language (the only ones that can be probed)."""
+	langs: list[str] = []
+	try:
+		raw = [
+			frappe.db.get_value("User", frappe.session.user, "language"),
+			frappe.db.get_single_value("System Settings", "language"),
+		]
+	except Exception:
+		raw = []
+	for value in raw:
+		code = str(value or "").replace("_", "-").split("-")[0].lower()
+		if len(code) == 2 and code not in langs:
+			langs.append(code)
+	return langs
+
+
+def override_warnings(client: Any) -> list[str]:
+	"""Language-scoped lists found for the owner/site language: they override every list this plan writes."""
+	found = []
+	for lang in _plan_languages():
+		for scope in UI_SCOPES:
+			try:
+				current = tc.get_commands(client, scope=scope, language_code=lang) or []
+			except Exception:
+				continue
+			if current:
+				found.append(f"{scope}/{lang}")
+	if not found:
+		return []
+	return [
+		"These language-specific command lists exist and override the recommended lists for people using that "
+		f"language: {', '.join(found)}. This plan does not change them; delete them in the Commands tab if unwanted."
+	]
+
+
 def plan_recommended_setup(client: Any, gateway: str, base_url: str) -> dict[str, Any]:
 	https_ok = base_url.startswith("https://")
 	url = mini_app_url(gateway, base_url)
@@ -399,6 +430,8 @@ def plan_recommended_setup(client: Any, gateway: str, base_url: str) -> dict[str
 			if https_ok
 			else "Telegram only opens web apps over https. This site's address is not https, so the menu button will be left as it is.",
 		},
+		"warnings": override_warnings(client),
+		"limitation": OVERRIDE_LIMITATION,
 		"replaces_existing_commands": any(s["action"] != "keep" for s in scopes),
 	}
 

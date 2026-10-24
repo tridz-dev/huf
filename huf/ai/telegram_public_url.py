@@ -35,3 +35,14 @@ def public_url(path: str = "") -> str:
 	if path and not path.startswith("/"):
 		path = "/" + path
 	return public_base_url() + path
+
+
+MINI_APP_PATH = "/huf/tg-app"  # the one frontend route that serves the Mini App (frontend router)
+
+
+def mini_app_url(gateway: str, base_url: str | None = None) -> str:
+	"""Mini App launch URL ``<base>/huf/tg-app?gw=<gateway>``; used by /me and the Console menu button."""
+	from urllib.parse import quote
+
+	base = (base_url if base_url is not None else public_base_url()).rstrip("/")
+	return f"{base}{MINI_APP_PATH}?gw={quote(str(gateway or ''), safe='')}"

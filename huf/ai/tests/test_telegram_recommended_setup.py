@@ -52,7 +52,7 @@ class TestPlan(Base):
 	def test_plan_content_no_writes(self):
 		out, c = self.run_plan()
 		plan = out["plan"]
-		names = [x["command"] for x in plan["commands"][0]["recommended"]]
+		names = [x["command"] for x in plan["commands"][1]["recommended"]]
 		self.assertEqual(
 			names, ["start", "help", "me", "find", "open", "approvals", "digest", "audit", "unbind"]
 		)
@@ -61,7 +61,10 @@ class TestPlan(Base):
 			[x["scope"] for x in plan["commands"]],
 			["default", "all_private_chats", "all_group_chats", "all_chat_administrators"],
 		)
-		self.assertEqual({x["scope"]: x["action"] for x in plan["commands"]}["all_group_chats"], "set")
+		by = {x["scope"]: x for x in plan["commands"]}
+		self.assertEqual(by["all_private_chats"]["action"], "set")
+		for scope in ("default", "all_group_chats", "all_chat_administrators"):
+			self.assertEqual((by[scope]["action"], by[scope]["recommended"]), ("delete", []))
 		rec = plan["menu_button"]["recommended"]
 		self.assertEqual(rec["text"], "Console")
 		self.assertEqual(rec["web_app"]["url"], "https://site.example/huf/tg-app?gw=G")
@@ -106,15 +109,13 @@ class TestApply(Base):
 		out, mocks = self.apply(c, confirm=1)
 		self.assertTrue(out["success"])
 		sets = [(mm, p) for mm, p in c.calls if mm.startswith("set")]
-		self.assertEqual(
-			[p.get("scope", {"type": "default"})["type"] for mm, p in sets[:3]],
-			["default", "all_private_chats", "all_group_chats"],
-		)
+		self.assertEqual([_scope_of(p) for mm, p in sets[:1]], ["all_private_chats"])
 		self.assertEqual(sets[0][0], "setMyCommands")
 		self.assertEqual(len(sets[0][1]["commands"]), 9)
-		self.assertTrue([1 for mm, p in c.calls if mm == "deleteMyCommands"])
+		deleted = {_scope_of(p) for mm, p in c.calls if mm == "deleteMyCommands"}
+		self.assertEqual(deleted, {"default", "all_group_chats", "all_chat_administrators"})
 		self.assertEqual(
-			sets[3],
+			sets[1],
 			(
 				"setChatMenuButton",
 				{
@@ -126,6 +127,7 @@ class TestApply(Base):
 				},
 			),
 		)
+		self.assertEqual(out["previous"]["commands"][0]["scope"], "default")
 		self.assertEqual(out["previous"]["commands"][0]["commands"][0]["command"], "initiate")
 		self.assertEqual(out["previous"]["menu_button"], {"type": "commands"})
 		mocks["_audit_setup"].assert_called_once()
@@ -216,14 +218,14 @@ class TestStaleScopes(Base):
 			(by["all_chat_administrators"]["action"], by["all_chat_administrators"]["recommended"]),
 			("delete", []),
 		)
-		self.assertEqual(by["all_group_chats"]["action"], "set")
+		self.assertEqual(by["all_group_chats"]["action"], "keep")
 		self.assertTrue(out["plan"]["replaces_existing_commands"])
 
 	def test_unchanged_scopes_not_touched(self):
 		out, c, _ = self.apply({"all_private_chats": PLAN_PRIVATE})
 		touched = {_scope_of(p) for mm, p in c.calls if mm == "setMyCommands"}
-		self.assertEqual(touched, {"default", "all_group_chats"})
-		self.assertFalse([1 for mm, _ in c.calls if mm == "deleteMyCommands"])
+		self.assertEqual(touched, set())
+		self.assertFalse([1 for mm, _ in c.calls if mm in ("deleteMyCommands", "setMyCommands")])
 		by = {
 			x["scope"]: x["action"]
 			for x in m.plan_recommended_setup(
@@ -232,13 +234,55 @@ class TestStaleScopes(Base):
 		}
 		self.assertEqual(by["all_private_chats"], "keep")
 		self.assertEqual(by["all_chat_administrators"], "keep")
+		self.assertEqual(by["default"], "keep")
+
+	def test_group_and_default_scopes_advertise_nothing(self):
+		for scope in ("default", "all_group_chats", "all_chat_administrators"):
+			self.assertEqual(m.RECOMMENDED_COMMANDS[scope], [])
+
+	def test_private_descriptions_state_who_can_use_them(self):
+		by = {c["command"]: c["description"] for c in m.PRIVATE_COMMANDS}
+		self.assertIn("(admins)", by["audit"])
+		for name in ("help", "me", "find", "open", "approvals", "digest", "unbind"):
+			self.assertIn("(linked accounts)", by[name])
+		self.assertIn("code", by["start"])
+		self.assertTrue(all(1 <= len(d) <= 256 for d in by.values()))
+
+	def test_language_scoped_lists_warn_in_plan(self):
+		class LangClient(ScopedClient):
+			def call(self, method, payload=None, **kw):
+				if method == "getMyCommands" and (payload or {}).get("language_code") == "de":
+					self.calls.append((method, dict(payload)))
+					return list(STALE)
+				return super().call(method, payload, **kw)
+
+		c = LangClient({})
+		p1, p2 = self.patch(c)
+		with p1, p2, mock.patch.object(m, "_plan_languages", lambda: ["de", "en"]):
+			plan = m.recommended_setup("G")["plan"]
+		self.assertEqual(len(plan["warnings"]), 1)
+		self.assertIn("all_private_chats/de", plan["warnings"][0])
+		self.assertNotIn("/en", plan["warnings"][0])
+		self.assertIn("specific chat", plan["limitation"])
+
+	def test_no_language_lists_no_warning(self):
+		c = ScopedClient({})
+		p1, p2 = self.patch(c)
+		with p1, p2, mock.patch.object(m, "_plan_languages", lambda: ["en"]):
+			self.assertEqual(m.recommended_setup("G")["plan"]["warnings"], [])
+
+	def test_menu_url_and_me_url_share_one_builder(self):
+		from huf.ai import telegram_public_url as pu
+
+		self.assertEqual(pu.mini_app_url("G", "https://s/"), "https://s/huf/tg-app?gw=G")
+		self.assertEqual(pu.mini_app_url("a b", "https://s"), "https://s/huf/tg-app?gw=a%20b")
 
 	def test_audit_in_private_list(self):
 		names = [c["command"] for c in m.RECOMMENDED_COMMANDS["all_private_chats"]]
 		self.assertEqual(
 			names, ["start", "help", "me", "find", "open", "approvals", "digest", "audit", "unbind"]
 		)
-		self.assertEqual(m.RECOMMENDED_COMMANDS["default"], m.RECOMMENDED_COMMANDS["all_private_chats"])
+		self.assertEqual(m.RECOMMENDED_COMMANDS["default"], [])
 		self.assertLessEqual(len(names), 100)
 
 	def test_https_rule_still_blocks_stale_scope_changes(self):
