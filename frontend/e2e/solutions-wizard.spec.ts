@@ -275,13 +275,10 @@ test.describe('New solution wizard', () => {
     await expect(page.getByLabel('Name')).toHaveValue('Walk-in orders');
   });
 
-  test('"existing" mode: choosing an agent explicitly lets you continue', async ({ page }) => {
+  test('"existing" mode: preselected agent goes live with existing_target', async ({ page }) => {
     const calls = await setup(page);
     await goto(page, '/solutions/new?mode=existing');
     await page.getByLabel('Name').fill('Existing agent line');
-    // Pick a different target and back: see the fixme below for why the preselected one is not enough.
-    await page.getByLabel('Answered by').selectOption({ label: 'Care flow (flow)' });
-    await page.getByLabel('Answered by').selectOption({ label: 'Order agent (agent)' });
     await next(page);
     await next(page);
     await next(page);
@@ -293,10 +290,7 @@ test.describe('New solution wizard', () => {
     expect(callsOf(calls, 'go_live')).toHaveLength(1);
   });
 
-  // PRODUCT BUG (see progress/E2E.md, bug 1): /solutions/new?mode=existing (the empty-state link
-  // "I already have an agent or flow") shows the first agent in "Answered by" but holds no target in
-  // state, so Continue stays disabled; picking the shown option fires no change event.
-  test.fixme('"existing" mode: the agent shown as chosen is really chosen', async ({ page }) => {
+  test('"existing" mode: the agent shown as chosen is really chosen', async ({ page }) => {
     await setup(page);
     await goto(page, '/solutions/new?mode=existing');
     await expect(page.getByLabel('Answered by')).toHaveValue('Agent:order-agent');

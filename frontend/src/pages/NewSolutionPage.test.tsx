@@ -226,6 +226,18 @@ describe('NewSolutionPage', () => {
     expect(await screen.findByLabelText('Answered by')).toBeInTheDocument();
   });
 
+  it('query mode=existing really selects the first target (payload carries it, Continue enabled)', async () => {
+    renderAt('/solutions/new?mode=existing');
+    await waitFor(() => expect((screen.getByLabelText('Answered by') as HTMLSelectElement).value).toBe('Agent:ag1'));
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    fireEvent.change(name(), { target: { value: 'Quotes' } });
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+    next(); next(); next();
+    fireEvent.click(screen.getByRole('button', { name: 'Go live' }));
+    await waitFor(() => expect(api.createSolution).toHaveBeenCalled());
+    expect(api.createSolution.mock.calls[0][0]).toMatchObject({ mode: 'existing', existing_target: { type: 'Agent', name: 'ag1' } });
+  });
+
   it('full payload for an intent, with draft template; test step passes draft to TestChat', async () => {
     await ready();
     fireEvent.click(screen.getByText('Take orders'));
