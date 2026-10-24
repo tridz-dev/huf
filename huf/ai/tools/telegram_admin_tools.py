@@ -34,6 +34,7 @@ from huf.ai.gateway_adapters import telegram_admin_actions as aa
 from huf.ai.gateway_adapters import telegram_business as biz
 from huf.ai.gateway_adapters import telegram_commands as cmds
 from huf.ai.gateway_adapters.telegram_client import TelegramApiError, TelegramBotClient
+from huf.ai.tools import telegram_admin_spec as spec_table
 
 FLAGS = {
 	"group": "telegram_agent_allow_group_admin",
@@ -68,6 +69,8 @@ ACTIONS: dict[str, tuple[str, Optional[str], bool, bool]] = {
 	"read_business_message": ("business", None, True, True),
 	"delete_business_messages": ("business", None, True, True),
 }
+if set(ACTIONS) != set(spec_table.ACTION_ARGS):  # one declaration per action, no drift
+	raise RuntimeError("telegram_admin ACTIONS and telegram_admin_spec.ACTION_ARGS differ")
 CHAT_ACTIONS = {a for a, v in ACTIONS.items() if v[0] == "group"}
 TARGET_ACTIONS = {"ban", "restrict", "promote", "demote"}  # user_id must not be an admin / paired admin
 DEFAULT_CAP = 5
@@ -287,9 +290,105 @@ def _confirm_key(token: str) -> str:
 	return f"huf_tg_admin_confirm:{token}"
 
 
+def _q(value: Any, limit: int = 200) -> str:
+	text = str(value if value is not None else "")
+	return json.dumps(text if len(text) <= limit else text[:limit] + "...", ensure_ascii=False)
+
+
+def _who(args: dict) -> str:
+	return f"user {args.get('user_id')}"
+
+
+def _duration(args: dict) -> str:
+	if args.get("until_date"):
+		return f" until unix time {args['until_date']}"
+	if args.get("duration_minutes"):
+		return f" for {args['duration_minutes']} minutes"
+	return ""
+
+
+def _listing(value: Any) -> str:
+	if isinstance(value, str):
+		try:
+			value = json.loads(value)
+		except ValueError:
+			return value
+	if isinstance(value, dict):
+		return ", ".join(f"{k}={'yes' if v else 'no'}" if isinstance(v, bool) else f"{k}={v}" for k, v in value.items())
+	if isinstance(value, list):
+		return ", ".join(str(v.get("command") if isinstance(v, dict) and v.get("command") else v) for v in value)
+	return str(value)
+
+
+_DESCRIBE = {
+	"ban": lambda a: f"Ban {_who(a)}{_duration(a)}" + (" and delete their messages" if _truthy(a.get("revoke_messages")) else ""),
+	"unban": lambda a: f"Unban {_who(a)}",
+	"restrict": lambda a: f"Restrict {_who(a)}{_duration(a)}: "
+	+ (f"permissions {_listing(a['permissions'])}" if a.get("permissions") else f"preset {a.get('preset') or 'mute'}"),
+	"unrestrict": lambda a: f"Lift all restrictions of {_who(a)}",
+	"promote": lambda a: f"Promote {_who(a)} to admin with rights: {_listing(a.get('rights'))}",
+	"demote": lambda a: f"Remove admin rights from {_who(a)}",
+	"set_chat_title": lambda a: f"Set chat title to {_q(a.get('title'), 128)}",
+	"set_chat_description": lambda a: f"Set chat description to {_q(a.get('description'), 255)}"
+	if a.get("description")
+	else "Clear the chat description",
+	"pin": lambda a: f"Pin message {a.get('message_id')}" + (" (notify members)" if _truthy(a.get("notify")) else " silently"),
+	"unpin": lambda a: f"Unpin message {a['message_id']}" if a.get("message_id") else "Unpin the latest pinned message",
+	"delete_message": lambda a: f"Delete message {a.get('message_id')}",
+	"approve_join_request": lambda a: f"Approve the join request of {_who(a)}",
+	"decline_join_request": lambda a: f"Decline the join request of {_who(a)}",
+	"create_invite_link": lambda a: "Create an invite link"
+	+ "".join(
+		f", {label} {a[key]}"
+		for key, label in (("name", "named"), ("expire_date", "expiring at unix time"), ("member_limit", "limited to"))
+		if a.get(key)
+	)
+	+ (", requiring join approval" if _truthy(a.get("creates_join_request")) else ""),
+	"revoke_invite_link": lambda a: f"Revoke invite link {_q(a.get('invite_link'))}",
+	"set_my_commands": lambda a: f"Set the bot command list ({a.get('command_scope') or 'default'} scope"
+	+ (f", language {a['language_code']}" if a.get("language_code") else "")
+	+ f") to: {_listing(a.get('commands')) or '(empty: clears it)'}",
+	"set_my_name": lambda a: f"Set the bot name to {_q(a.get('name'), 64)}" + _for_lang(a)
+	if a.get("name")
+	else "Clear the bot name" + _for_lang(a),
+	"set_my_description": lambda a: f"Set the bot description to {_q(a.get('description'), 512)}" + _for_lang(a)
+	if a.get("description")
+	else "Clear the bot description" + _for_lang(a),
+	"set_my_short_description": lambda a: f"Set the bot short description to {_q(a.get('short_description'), 120)}"
+	+ _for_lang(a)
+	if a.get("short_description")
+	else "Clear the bot short description" + _for_lang(a),
+	"set_chat_menu_button": lambda a: f"Set the menu button to {_listing(a.get('menu_button'))}"
+	+ (f" for chat {a['chat_id']}" if a.get("chat_id") not in (None, "") else " (bot default)"),
+	"send_business_message": lambda a: f"Send as the business account to chat {a.get('chat_id')}: {_q(a.get('text'), 300)}"
+	+ (f" (reply to {a['reply_to_message_id']})" if a.get("reply_to_message_id") else ""),
+	"read_business_message": lambda a: f"Mark message {a.get('message_id')} in chat {a.get('chat_id')} as read (business)",
+	"delete_business_messages": lambda a: f"Delete business messages {_listing(a.get('message_ids'))}"
+	+ (" including other people's" if _truthy(a.get("all_messages")) else " (own only)"),
+}
+
+
+def _for_lang(a: dict) -> str:
+	return f" (language {a['language_code']})" if a.get("language_code") else ""
+
+
+def describe_action(action: str, args: dict, chat: str) -> str:
+	"""Readable one-liner of what an agent action will do, for the approval card (ids always shown)."""
+	body = {k: v for k, v in args.items() if k not in _CONTROL_KEYS}
+	render = _DESCRIBE.get(action)
+	try:
+		what = render(body) if render else f"Run {action}"
+	except Exception:
+		what = f"Run {action}"
+	where = f"chat {chat}" if chat else "bot-wide"
+	extra = ""
+	if body.get("business_connection_id"):
+		extra = f" [business connection {body['business_connection_id']}]"
+	return f"{what}\nAction: {action} | {where}{extra}"
+
+
 def _describe(action: str, args: dict, chat: str) -> str:
-	bits = {k: v for k, v in args.items() if k not in _CONTROL_KEYS and v not in (None, "")}
-	return f"{action} in chat {chat or '(bot-wide)'} with {json.dumps(bits, default=str)[:300]}"
+	return describe_action(action, args, chat)
 
 
 def _truthy(value: Any) -> bool:
@@ -817,6 +916,7 @@ def handle_action(action: str = "", **kwargs) -> str:
 				"action_not_permitted",
 				f"This gateway does not allow agents to use {group} actions ({FLAGS[group]} is off).",
 			)
+		spec_table.validate(action, args)
 		if destructive:
 			_require_owner(gateway)
 		chat = ""

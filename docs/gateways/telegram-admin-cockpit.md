@@ -82,7 +82,7 @@ only read/report/export to System Manager and read/report to Huf Manager.
 
 The `telegram_admin` agent tool reuses the same signed-button approval. Every state change (anything except the
 read-only `get_*` actions) is accepted only from a paired Admin+ owner chat and still needs a human to press
-the signed Approve button; a `confirm=true` argument from the agent is ignored. Requests from any other chat are
+the signed Approve button; there is no `confirm` argument (it is refused as unknown). Arguments are validated against one per-action table before any approval is requested, and the approval card shows the action in words with its real values (see runbook 9.2). Requests from any other chat are
 refused with `owner_required`. Executed and refused calls (including `owner_required` and `no_admin_available`)
 write `Telegram Admin Audit` rows.
 

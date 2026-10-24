@@ -871,9 +871,10 @@ def describe(action: dict) -> str:
 	if op == "unbind":
 		return "Unlink this Telegram account from your Frappe user"
 	if op == "agent_action":
-		bits = json.dumps(redact(action.get("args") or {}), default=str)[:300]
-		return (
-			f"Agent action '{action.get('action')}' in chat {action.get('chat') or '(bot-wide)'} with {bits}"
+		from huf.ai.tools import telegram_admin_tools
+
+		return telegram_admin_tools.describe_action(
+			str(action.get("action") or ""), redact(action.get("args") or {}), str(action.get("chat") or "")
 		)
 	raise AdminError("Unknown action.")
 

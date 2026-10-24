@@ -297,8 +297,8 @@ def _common_kw(kwargs: dict, chat_id) -> dict:
     kw: dict = {}
     if kwargs.get("reply_to_message_id"):
         kw["reply_to"] = _coerce_int(kwargs["reply_to_message_id"])
-    if kwargs.get("message_thread_id") or kwargs.get("thread_id"):
-        kw["thread_id"] = _coerce_int(kwargs.get("message_thread_id") or kwargs.get("thread_id"))
+    if kwargs.get("message_thread_id"):
+        kw["thread_id"] = _coerce_int(kwargs.get("message_thread_id"))
     if _truthy(kwargs.get("disable_notification")):
         kw["silent"] = True
     if _truthy(kwargs.get("protect_content")):
@@ -342,7 +342,7 @@ def _build_message_payload(kwargs: dict) -> tuple:
     if reply_to_message_id:
         _apply_reply(payload, reply_to_message_id)
 
-    thread = kwargs.get("message_thread_id") or kwargs.get("thread_id")
+    thread = kwargs.get("message_thread_id")
     if thread:
         payload["message_thread_id"] = _coerce_int(thread)
     try:
@@ -529,8 +529,8 @@ def _handle_send_contact(**kwargs) -> str:
     chat_id, err = _chat_or_error(kwargs)
     if err:
         return err
-    phone = str(kwargs.get("phone_number") or kwargs.get("contact_phone") or "").strip()
-    first = str(kwargs.get("first_name") or kwargs.get("contact_name") or "").strip()
+    phone = str(kwargs.get("phone_number") or "").strip()
+    first = str(kwargs.get("first_name") or "").strip()
     if not phone or not first:
         return _error("phone_number and first_name are required")
     try:
@@ -566,7 +566,7 @@ def _handle_send_chat_action(**kwargs) -> str:
     if err:
         return err
     chat_action = str(kwargs.get("chat_action") or "typing")
-    thread = kwargs.get("message_thread_id") or kwargs.get("thread_id")
+    thread = kwargs.get("message_thread_id")
     return _run_sender(
         "sendChatAction", lambda s: s.send_chat_action(chat_id, chat_action, thread_id=_coerce_int(thread) if thread else None)
     )
@@ -634,7 +634,7 @@ def _forward_or_copy(mode: str, kwargs: dict) -> str:
     if not from_chat or not kwargs.get("message_id"):
         return _error("from_chat_id and message_id are required")
     message_id = _coerce_int(kwargs["message_id"])
-    thread = kwargs.get("message_thread_id") or kwargs.get("thread_id")
+    thread = kwargs.get("message_thread_id")
     common = {
         "thread_id": _coerce_int(thread) if thread else None,
         "silent": _truthy(kwargs.get("disable_notification")),
@@ -815,7 +815,7 @@ def _run_client(label: str, fn: Callable[[TelegramBotClient], Any]) -> str:
 
 def _need_thread(kwargs: dict):
     chat_id, err = _chat_or_error(kwargs)
-    thread = kwargs.get("message_thread_id") or kwargs.get("thread_id")
+    thread = kwargs.get("message_thread_id")
     if not err and not thread:
         err = _error("message_thread_id (the forum topic id) is required")
     return chat_id, (_coerce_int(thread) if thread else None), err
@@ -858,11 +858,11 @@ def _handle_send_poll(**kwargs) -> str:
     if err:
         return err
     try:
-        anon = kwargs.get("is_anonymous", kwargs.get("anonymous"))
+        anon = kwargs.get("is_anonymous")
         poll = more.build_poll(
             kwargs.get("question"), kwargs.get("options"),
             is_anonymous=None if anon is None else _truthy(anon),
-            poll_type=str(kwargs.get("poll_type") or ("quiz" if _truthy(kwargs.get("quiz")) else "regular")),
+            poll_type=str(kwargs.get("poll_type") or "regular"),
             allows_multiple_answers=_truthy(kwargs.get("allows_multiple_answers")),
             correct_option_id=kwargs.get("correct_option_id"), correct_option_ids=kwargs.get("correct_option_ids"),
             explanation=str(kwargs.get("explanation") or ""), parse_mode=_parse_mode(kwargs),
@@ -977,7 +977,7 @@ def _handle_send_template(**kwargs) -> str:
         update_last_error(SERVICE_NAME, "Telegram bot token not configured")
         return _error("Telegram bot token not configured")
     client = _make_client(token)
-    thread = kwargs.get("message_thread_id") or kwargs.get("thread_id")
+    thread = kwargs.get("message_thread_id")
     reply = kwargs.get("reply_to_message_id")
     try:
         result = _templates().send_template(

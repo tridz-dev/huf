@@ -564,17 +564,18 @@ class TestConfirmation(Harness):
 		ack, _ = self.press_admin("Approve")
 		self.assertEqual(self.mutated(), [], buttons)
 
-	def test_agent_supplied_confirm_and_token_are_ignored(self):
+	def test_agent_supplied_confirm_and_token_are_refused(self):
 		for extra in ({"confirm": True}, {"confirm": True, "confirmation_token": "whatever"}):
 			with self.subTest(extra=extra):
 				self.cache.d.clear()
 				res = self.adm_call("ban", user_id=5, **extra)
-				self.assertEqual(res["status"], "pending_human_approval", res)
+				self.assertEqual(res["error"], "invalid_argument", res)
 				self.assertEqual(self.mutated(), [])
+				self.assertEqual(self.sent("sendMessage"), [])
 
 	def test_duplicate_pending_request_is_not_resent(self):
 		self.adm_call("ban", user_id=5)
-		again = self.adm_call("ban", user_id=5, confirm=True)
+		again = self.adm_call("ban", user_id=5)
 		self.assertEqual(again["status"], "pending_human_approval")
 		self.assertEqual(len(self.sent("sendMessage")), 1)
 
@@ -582,7 +583,7 @@ class TestConfirmation(Harness):
 		self.admins = []
 		for action in MUTATING:
 			with self.subTest(action=action):
-				res = self.adm_call(action, confirm=True, **ADMIN_ARGS[action])
+				res = self.adm_call(action, **ADMIN_ARGS[action])
 				self.assertFalse(res["success"], res)
 				self.assertEqual(res["error"], "no_admin_available")
 		self.assertEqual(self.sent("sendMessage"), [])
@@ -624,7 +625,7 @@ class TestConfirmation(Harness):
 				continue
 			with self.subTest(action=action):
 				self.api.calls.clear()
-				res = self.adm_call(action, confirm=True, **ADMIN_ARGS[action])
+				res = self.adm_call(action, **ADMIN_ARGS[action])
 				self.assertEqual(res["error"], "owner_required", res)
 				self.assertIn("bound admin", res["message"])
 				self.assertEqual(self.mutated(), [])
@@ -718,20 +719,20 @@ class TestCaps(Harness):
 		self.gw_on = True
 		self.owner = True
 		self.cap = 2
-		results = [self.adm_call("ban", user_id=5, confirm=True) for _ in range(3)]
+		results = [self.adm_call("ban", user_id=5) for _ in range(3)]
 		self.assertTrue(results[0]["success"] and results[1]["success"])
 		self.assertEqual(results[2]["error"], "admin_cap_exceeded")
 		for _ in range(5):
 			self.assertTrue(self.adm_call("get_admins")["success"])
-		self.assertEqual(self.adm_call("ban", user_id=5, confirm=True)["error"], "admin_cap_exceeded")
+		self.assertEqual(self.adm_call("ban", user_id=5)["error"], "admin_cap_exceeded")
 
 	def test_admin_failed_action_releases_its_slot(self):
 		self.gw_on = True
 		self.owner = True
 		self.cap = 1
 		self.api.queue("banChatMember", FakeBotApi.error("Bad Request: user is an administrator", 400))
-		self.assertFalse(self.adm_call("ban", user_id=5, confirm=True)["success"])
-		self.assertTrue(self.adm_call("ban", user_id=5, confirm=True)["success"])
+		self.assertFalse(self.adm_call("ban", user_id=5)["success"])
+		self.assertTrue(self.adm_call("ban", user_id=5)["success"])
 
 
 class TestInvalidGatewayRefusal(Harness):
@@ -795,7 +796,7 @@ class TestTokenNeverLeaks(Harness):
 			self._leaky(variant)
 			for action in ADMIN_ENUM:
 				with self.subTest(variant=variant, action=action):
-					raw = adm.handle_action(action=action, confirm=True, **ADMIN_ARGS[action])
+					raw = adm.handle_action(action=action, **ADMIN_ARGS[action])
 					self.assertNotIn(TOKEN, raw)
 					self.assertNotIn(SECRET, raw)
 			self.api.fail_with = self.api.raise_with = None
