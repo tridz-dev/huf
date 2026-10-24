@@ -1426,6 +1426,23 @@ def _with_desktop_status(result, status):
     return result
 
 
+def _effective_solution(solution):
+    """Honour ``solution`` only for server-side callers.
+
+    ``run_agent_sync`` is whitelisted (and open to guests), so a ``solution`` supplied as an HTTP
+    parameter must never stamp runs or conversations: usage, caps and blame depend on that stamp.
+    Internal callers pass it as a keyword and it is absent from ``frappe.form_dict``.
+    """
+    if not solution:
+        return None
+    form = getattr(frappe, "form_dict", None) or {}
+    if "solution" in form:
+        return None
+    if not frappe.db.exists("Solution", solution):
+        return None
+    return solution
+
+
 @frappe.whitelist(allow_guest=True)
 @rate_limit(key="agent_name", limit=20, seconds=60, ip_based=True)
 def run_agent_sync(
@@ -1553,8 +1570,7 @@ def run_agent_sync(
         provider=provider,
     )
 
-    if solution and not frappe.db.exists("Solution", solution):
-        solution = None
+    solution = _effective_solution(solution)
     stamp_kwargs = {"solution": solution} if solution else {}
 
     conv_manager = ConversationManager(
