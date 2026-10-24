@@ -131,7 +131,9 @@ def setup_gateway(
 	gw_doc.save(ignore_permissions=True)
 
 	# 4. Generate webhook URL
-	host_url = frappe.utils.get_url()
+	from huf.ai.telegram_public_url import public_base_url
+
+	host_url = public_base_url() if provider == "Telegram" else frappe.utils.get_url()
 	webhook_url = f"{host_url.rstrip('/')}/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway_name={frappe.utils.quoted(gateway_name)}"
 
 	# 5. Provider-specific auto-registration (e.g. Telegram setWebhook)
@@ -140,8 +142,12 @@ def setup_gateway(
 		try:
 			import requests
 
+			from huf.ai.gateway_adapters.telegram_client import bot_api_url
+
 			res = requests.post(
-				f"https://api.telegram.org/bot{credentials['token']}/setWebhook",
+				bot_api_url(
+					credentials["token"], "setWebhook", test_environment=bool(gw_doc.get("telegram_test_environment"))
+				),
 				json={"url": webhook_url},
 				timeout=10,
 			)

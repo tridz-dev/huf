@@ -205,40 +205,113 @@ TELEGRAM_TOOLS = [
 	{
 		"tool_name": "telegram",
 		"description": (
-			"Manage a Telegram bot. Actions: send_message (chat_id or recipient_name, text/message, parse_mode), "
-			"reply_to_message (chat_id or recipient_name, text/message, reply_to_message_id), "
-			"send_photo (chat_id or recipient_name, photo/file/file_url, caption), "
-			"send_document (chat_id or recipient_name, document/file/file_url, caption), "
-			"edit_message_text (chat_id or recipient_name, message_id, text/message), "
-			"delete_message (chat_id or recipient_name, message_id), "
-			"get_updates (offset, limit), get_chat_info (chat_id or recipient_name), get_me, "
-			"set_webhook (url, secret_token), delete_webhook. "
+			"Manage a Telegram bot. In a Telegram gateway conversation chat_id is optional and defaults to the current chat "
+			"(other chats are refused unless the gateway allows them; sends are capped per run and per day). Actions: "
+			"send_message (text/message, parse_mode, reply_markup), reply_to_message (text, reply_to_message_id), "
+			"send_photo / send_document (photo|document|file|file_url, caption, reply_markup), "
+			"send_voice (OGG/Opus voice note from an existing file), send_speech (text, optional voice, caption, reply_to_message_id: synthesizes speech with the agent's TTS model and sends a voice note; max 2000 chars; errors if no TTS is configured, then send text), send_audio (audio, title, performer), send_video (video, supports_streaming), "
+			"send_animation (GIF/MP4), send_sticker, "
+			"send_media_group (items: 2-10 of {type photo|video|audio|document, media, caption}), "
+			"send_location (latitude, longitude), send_contact (phone_number, first_name, last_name), "
+			"set_reaction (message_id, emoji; remove=true clears), "
+			"send_chat_action (chat_action: typing|upload_photo|record_voice|upload_document|...), "
+			"edit_message_text (message_id, text), edit_message_caption (message_id, caption), "
+			"edit_message_reply_markup (message_id, reply_markup; omit to remove the keyboard), delete_message (message_id), "
+			"forward_message / copy_message (from_chat_id, message_id), "
+			"answer_callback_query (callback_query_id, text, show_alert), get_chat_info, get_me, "
+			"send_video_note (video_note: round video, length, duration), send_venue (latitude, longitude, title, address), "
+			"send_dice (emoji: dice|dart|basketball|football|bowling|slot), "
+			"send_poll (question, options 2-12, is_anonymous, poll_type regular|quiz, correct_option_id 0-based, explanation, allows_multiple_answers, open_period 5+ seconds), stop_poll (message_id), "
+			"send_checklist (business_connection_id, title, tasks[]; needs business access enabled on the gateway), "
+			"send_template (template_name, variables) / list_templates / preview_template (template_name, variables), "
+			"Chat-state changes (pinning, unpinning, forum topic management) are NOT in this tool: use telegram_admin (pin/unpin; owner-run + human Approve). "
+			"get_file (file_id: saves to a private Frappe File, max 20 MB, returns file_url), get_chat_member (user_id) / get_chat_administrators / get_chat_member_count, "
+			"list_messages (chat_id, limit<=50: recent logged messages), get_account_info (bot identity, modes, webhook health). "
+			"Send actions also take disable_notification, protect_content, message_effect_id and idempotency_key (a repeated key in the same run and chat returns the first result instead of sending again). "
+			"get_updates, set_webhook (url, secret_token), delete_webhook (not available inside gateway conversations). "
+			"Media sources: Telegram file_id, public https URL, or a Frappe File name/file_url (max 50 MB, photos 10 MB). "
+			"reply_markup is a JSON object with one of: inline_keyboard [[{text, url}|{text, callback}]], keyboard [[\"text\"]], "
+			"remove_keyboard, force_reply. "
 			"Use get_integration_recipient to resolve a human name to a Telegram chat ID."
 		),
 		"function_path": "huf.ai.tools.telegram.handle_action",
 		"category": "Communication Tools",
 		"parameters": [
 			_action(
-				"send_message|reply_to_message|send_photo|send_document|"
-				"edit_message_text|delete_message|get_updates|get_chat_info|get_me|set_webhook|delete_webhook"
+				"send_message|reply_to_message|send_photo|send_document|send_voice|send_speech|send_audio|send_video|send_animation|"
+				"send_sticker|send_media_group|send_location|send_contact|set_reaction|send_chat_action|edit_message_text|"
+				"edit_message_caption|edit_message_reply_markup|delete_message|forward_message|"
+				"copy_message|answer_callback_query|get_updates|get_chat_info|get_me|set_webhook|delete_webhook|"
+				"send_video_note|send_venue|send_dice|send_poll|stop_poll|send_checklist|send_template|list_templates|"
+				"preview_template|"
+				"get_file|get_chat_member|get_chat_administrators|get_chat_member_count|list_messages|get_account_info"
 			),
-			_p("chat_id", description="Telegram chat/channel ID (numeric or @username). Alternative to recipient_name."),
+			_p("chat_id", description="Telegram chat/channel ID (numeric or @username). Optional in a gateway conversation (defaults to the current chat). Alternative to recipient_name."),
 			_p("recipient_name", description="Human-friendly recipient name from Integration Settings (alternative to chat_id)."),
 			_p("message", description="Message text (alias for text)."),
-			_p("text", description="Message or edited text."),
+			_p("text", description="Message or edited text; also the callback answer text. For send_speech: the text to speak (required, max 2000 characters)."),
 			_p("photo", description="Photo source: Telegram file_id, public URL, or Frappe File docname/file_url."),
 			_p("document", description="Document source: Telegram file_id, public URL, or Frappe File docname/file_url."),
-			_p("file", description="Generic file source alias for photo/document."),
-			_p("file_url", description="Public file URL alias for photo/document."),
-			_p("caption", description="Caption for photo/document messages."),
+			_p("voice", description="send_voice source (OGG/Opus, MP3 or M4A): file_id, public URL, or Frappe File. For send_speech: optional TTS voice name (e.g. alloy); defaults to the agent's tts_voice."),
+			_p("audio", description="send_audio source: file_id, public URL, or Frappe File."),
+			_p("video", description="send_video source: file_id, public URL, or Frappe File."),
+			_p("animation", description="send_animation source: file_id, public URL, or Frappe File."),
+			_p("sticker", description="send_sticker source: file_id, public URL, or Frappe File (WEBP/TGS/WEBM)."),
+			_p("file", description="Generic file source alias for any media action."),
+			_p("file_url", description="Public file URL or Frappe file_url alias for any media action."),
+			_p("caption", description="Caption for media messages, copy_message or edit_message_caption (max 1024 characters)."),
+			_p("items", type="array", description="send_media_group: 2-10 objects {type: photo|video|audio|document, media: source, caption}."),
+			_p("performer", description="send_audio: performer."),
+			_p("supports_streaming", type="boolean", description="send_video: video suits streaming."),
+			_p("has_spoiler", type="boolean", description="Hide photo/video/animation behind a spoiler."),
+			_p("latitude", type="number", description="send_location latitude (-90..90)."),
+			_p("longitude", type="number", description="send_location longitude (-180..180)."),
+			_p("phone_number", description="send_contact phone number."),
+			_p("first_name", description="send_contact first name."),
+			_p("last_name", description="send_contact last name."),
+			_p("emoji", description="set_reaction: one emoji (Telegram's allowed reaction set); send_dice: dice, dart, basketball, football, bowling or slot emoji."),
+			_p("remove", type="boolean", description="set_reaction: true removes the reaction."),
+			_p("big", type="boolean", description="set_reaction: use the big reaction animation."),
+			_p("chat_action", description="send_chat_action: typing, upload_photo, record_video, upload_video, record_voice, upload_voice, upload_document, choose_sticker, find_location."),
+			_p("reply_markup", type="object", description="Keyboard: {inline_keyboard: [[{text, url}|{text, callback}]]} or {keyboard: [[\"text\"]], one_time_keyboard} or {remove_keyboard: true} or {force_reply: true}. Callback buttons are signed server-side."),
 			_p("parse_mode", description="Text formatting: Markdown, HTML, or MarkdownV2."),
 			_p("reply_to_message_id", type="integer", description="Message ID to reply to."),
-			_p("message_id", type="integer", description="Message ID to edit or delete."),
+			_p("message_thread_id", type="integer", description="Forum topic id to send into."),
+			_p("message_id", type="integer", description="Message ID to edit, delete, react to, pin, forward or copy."),
+			_p("from_chat_id", description="forward_message / copy_message: source chat (must also be an allowed recipient)."),
+			_p("callback_query_id", description="answer_callback_query: id of the callback query to answer."),
+			_p("show_alert", type="boolean", description="answer_callback_query: show a modal alert instead of a toast."),
+			_p("notify", type="boolean", description="pin_message: notify members (default silent)."),
 			_p("url", description="Webhook URL for set_webhook."),
 			_p("secret_token", description="Secret token for webhook verification."),
 			_p("offset", type="integer", description="Update offset for get_updates."),
 			_p("limit", type="integer", description="Max updates for get_updates (max 100)."),
+			_p("video_note", description="send_video_note source: file_id or Frappe File (square MP4, <= 1 min)."),
+			_p("length", type="integer", description="send_video_note: diameter in pixels."),
+			_p("duration", type="integer", description="Media duration in seconds."),
+			_p("address", description="send_venue: street address."),
+			_p("question", description="send_poll: question (1-300 chars)."),
+			_p("options", type="array", description="send_poll: 2-12 answer option strings (1-100 chars each)."),
+			_p("is_anonymous", type="boolean", description="send_poll: anonymous votes (default true)."),
+			_p("poll_type", description="send_poll: regular (default) or quiz."),
+			_p("correct_option_id", type="integer", description="send_poll quiz: 0-based index of the correct option."),
+			_p("explanation", description="send_poll quiz: shown after a wrong answer (max 200 chars)."),
+			_p("allows_multiple_answers", type="boolean", description="send_poll: allow several answers."),
+			_p("open_period", type="integer", description="send_poll: seconds the poll stays open (5-2628000)."),
+			_p("business_connection_id", description="send_checklist: connected business account id."),
+			_p("title", description="send_audio: track title; send_venue: venue name; send_checklist: checklist title."),
+			_p("tasks", type="array", description="send_checklist: 1-30 task strings."),
+			_p("template_name", description="send_template / preview_template: Telegram Message Template name."),
+			_p("variables", type="object", description="send_template / preview_template: {variable: value} for {{var}} placeholders."),
+			_p("name", description="Forum topic name (create_forum_topic / edit_forum_topic)."),
+			_p("icon_color", type="integer", description="create_forum_topic icon color (7322096, 16766590, 13338331, 9367192, 16749490 or 16478047)."),
+			_p("icon_custom_emoji_id", description="Forum topic custom emoji id."),
+			_p("file_id", description="get_file: Telegram file_id to download (<= 20 MB)."),
+			_p("user_id", type="integer", description="get_chat_member: Telegram user id."),
+			_p("message_effect_id", description="Message effect id for send actions (private chats)."),
+			_p("idempotency_key", description="Optional unique key per intended send; a duplicate in the same run and chat returns the first result without resending."),
 			_p("disable_notification", type="boolean", description="Send message silently."),
+			_p("protect_content", type="boolean", description="Prevent forwarding/saving of the sent message."),
 		],
 	},
 ]
@@ -2164,6 +2237,49 @@ FRAPPE_CLOUD_TOOLS = [
 	},
 ]
 
+TELEGRAM_ADMIN_TOOLS = [
+	{
+		"tool_name": "telegram_admin",
+		"description": (
+			"Telegram group administration, bot profile and secretary (business) actions. Only inside a Telegram gateway "
+			"conversation and only the groups the gateway admin enabled; otherwise refused with action_not_permitted. "
+			"The bot must be an admin with the needed right in the target chat (chat_id defaults to the current chat). "
+			"EVERY state change (all actions except get_admins and get_business_connection) is accepted only from a bound "
+			"admin's private cockpit chat and returns pending_human_approval: it runs only after a human Admin presses "
+			"Approve in Telegram (confirm/confirmation_token from the agent are ignored; do not retry). From any other "
+			"chat it is refused with owner_required: ask a bound admin instead. Business actions and set_chat_menu_button "
+			"with a chat_id obey the gateway recipient scope and send "
+			"caps. Never targets paired admins; ban/restrict/promote never target chat admins. Capped per run. GROUP: ban/unban (user_id, until_date|duration_minutes, revoke_messages), "
+			"restrict (user_id, preset mute|no_media|no_links|read_only|no_invites_or_pins or permissions, duration_minutes), "
+			"unrestrict, promote (user_id, rights list), demote, set_chat_title (title), set_chat_description (description), "
+			"pin/unpin (message_id), delete_message (message_id), approve_join_request/decline_join_request (user_id), "
+			"create_invite_link (name, expire_date, member_limit, creates_join_request), revoke_invite_link (invite_link), "
+			"get_admins. PROFILE: set_my_commands (commands [{command, description, is_ephemeral}], command_scope, language_code), "
+			"set_my_name (name), set_my_description (description), set_my_short_description (short_description), "
+			"set_chat_menu_button (menu_button {type commands|default|web_app}). BUSINESS (business_connection_id required): "
+			"get_business_connection, send_business_message (chat_id, text), read_business_message (chat_id, message_id), "
+			"delete_business_messages (message_ids)."
+		),
+		"function_path": "huf.ai.tools.telegram_admin_tools.handle_action",
+		"category": "Communication Tools",
+		"parameters": [
+			_action("|".join([
+				"ban", "unban", "restrict", "unrestrict", "promote", "demote", "set_chat_title", "set_chat_description",
+				"pin", "unpin", "delete_message", "approve_join_request", "decline_join_request", "create_invite_link",
+				"revoke_invite_link", "get_admins", "set_my_commands", "set_my_name", "set_my_description",
+				"set_my_short_description", "set_chat_menu_button", "get_business_connection", "send_business_message",
+				"read_business_message", "delete_business_messages",
+			])),
+			_p("chat_id", description="Target chat (numeric or @username); defaults to the current chat."),
+			_p("user_id", type="integer", description="Target Telegram user id."),
+			_p("message_id", type="integer", description="Target message id."),
+			_p("confirm", type="boolean", description="Ignored (kept for compatibility): approval is always a human pressing Approve in Telegram."),
+			_p("business_connection_id", description="Business connection id (business actions)."),
+			_p("text", description="Message text (send_business_message)."),
+		],
+	},
+]
+
 def _with_service(tools: list[dict], service: str) -> list[dict]:
 	"""Stamp the owning Integration Service key onto each tool definition.
 
@@ -2172,6 +2288,12 @@ def _with_service(tools: list[dict], service: str) -> list[dict]:
 	key must match an `Integration Service` docname, because that link is what
 	lets the UI tell a user which account a tool needs before they attach it.
 	An entry that already names a service keeps its own value.
+
+	`service` is catalog metadata only (UI hint, `integration_utils` lookups): it
+	does NOT gate which agents can use the tool. App Provided rows are fully
+	owned by the migrate sync (`sync_discovered_tools`), which upserts every
+	field. Per-conversation gating (e.g. `telegram_admin` only inside a Telegram
+	gateway chat with admin-enabled groups) is enforced by the tool handler.
 	"""
 	return [{**tool, "service": tool.get("service") or service} for tool in tools]
 
@@ -2798,6 +2920,7 @@ ALL_INTEGRATION_TOOLS = (
 	+ _with_service(SLACK_TOOLS, "slack")
 	+ _with_service(GOOGLE_CHAT_TOOLS, "google_chat")
 	+ _with_service(TELEGRAM_TOOLS, "telegram")
+	+ _with_service(TELEGRAM_ADMIN_TOOLS, "telegram")
 	+ _with_service(WHATSAPP_TOOLS, "whatsapp")
 	+ _with_service(MESSENGER_TOOLS, "messenger")
 	+ _with_service(GITHUB_TOOLS, "github")

@@ -25,23 +25,27 @@ from types import SimpleNamespace
 
 import frappe
 import litellm
-from litellm import InternalServerError, RateLimitError, APIError, BadRequestError, ContextWindowExceededError
+from litellm import APIError, BadRequestError, ContextWindowExceededError, InternalServerError, RateLimitError
 from litellm.utils import trim_messages
-from huf.ai.tools.serializer import serialize_tools
-from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
-from huf.ai.prompt_cache.capabilities import resolve_capabilities
-from huf.ai.transaction import transaction_checkpoint
-from huf.ai.cost_calculator import calculate_cost
+
+from huf.ai import run_delivery
 from huf.ai.conversation_manager import repair_message_sequence
-from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
+from huf.ai.cost_calculator import calculate_cost
+from huf.ai.prompt_cache.capabilities import resolve_capabilities
+from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 from huf.ai.reasoning import (
-    ReasoningPolicy,
-    ReasoningResolution,
-    detect_model_capabilities,
-    resolve_reasoning,
-    build_reasoning_kwargs,
+	ReasoningPolicy,
+	ReasoningResolution,
+	build_reasoning_kwargs,
+	detect_model_capabilities,
+	rejects_sampling_params,
+	resolve_reasoning,
 )
-from huf.ai.run_budget import get_current_budget, RunBudgetExceeded
+from huf.ai.run_budget import RunBudgetExceeded, get_current_budget
+from huf.ai.tools.serializer import serialize_tools
+from huf.ai.transaction import transaction_checkpoint
+from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
+
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -80,6 +84,23 @@ class SimpleResult:
         self.usage = usage or {}
         self.new_items = new_items or []
         self.cost = cost
+
+
+def _empty_response_message(normalized_model: str) -> str:
+    """Error text for an empty completion; only blames the Ollama endpoint for Ollama models."""
+    if str(normalized_model).startswith("ollama/"):
+        return (
+            f"Model '{normalized_model}' returned an empty response. "
+            "Reasoning models such as gpt-oss require the Ollama chat "
+            "endpoint. Use the 'ollama_chat/' model prefix (e.g. "
+            "'ollama_chat/gpt-oss:20b') or select a provider whose brand "
+            "is 'Ollama' so Huf normalizes the prefix automatically."
+        )
+    return (
+        f"Model '{normalized_model}' returned an empty response. "
+        "Verify the model is available, the provider is reachable, and "
+        "the request is supported by this model."
+    )
 
 
 class ProviderUnavailableError(Exception):
@@ -239,6 +260,28 @@ def _is_transient_litellm_error(exc: Exception) -> bool:
     return False
 
 
+SAMPLING_PARAM_KEYS = ("temperature", "top_p", "top_k")
+
+
+def _drop_sampling_params_if_rejected(completion_kwargs: dict, model_name: str) -> None:
+    """Remove sampling params from kwargs for models that reject them (Claude 5.x)."""
+    if rejects_sampling_params(model_name):
+        for key in SAMPLING_PARAM_KEYS:
+            completion_kwargs.pop(key, None)
+
+
+def _sampling_keys_rejected(err_msg: str, completion_kwargs: dict) -> list[str]:
+    """Sampling keys the provider rejected, judged from a BadRequestError message."""
+    msg = (err_msg or "").lower()
+    rejected = []
+    if "temperature" in completion_kwargs and "temperature" in msg and "deprecated" in msg:
+        rejected.append("temperature")
+    for key in ("top_p", "top_k"):
+        if key in completion_kwargs and key in msg and "not supported" in msg:
+            rejected.append(key)
+    return rejected
+
+
 async def _litellm_completion_with_retry(**completion_kwargs):
     """Call litellm.completion with transient-error retries and backoff."""
     max_retries = completion_kwargs.pop("_huf_max_retries", 2)
@@ -248,6 +291,34 @@ async def _litellm_completion_with_retry(**completion_kwargs):
     for attempt in range(max_retries + 1):
         try:
             return await asyncio.to_thread(litellm.completion, **completion_kwargs)
+        except BadRequestError as exc:
+            # Safety net: model rejects thinking.type=enabled -> retry once with adaptive.
+            thinking = completion_kwargs.get("thinking")
+            if (
+                "thinking.type.enabled" in str(exc)
+                and isinstance(thinking, dict)
+                and thinking.get("type") == "enabled"
+            ):
+                logger.warning("Model requires adaptive thinking; retrying with thinking.type=adaptive")
+                completion_kwargs = dict(completion_kwargs)
+                completion_kwargs["thinking"] = {"type": "adaptive"}
+                completion_kwargs.setdefault("output_config", {"effort": "medium"})
+                # Re-enter the retry loop (kwargs changed, so this BadRequest cannot recur) so a transient
+                # failure of the retried call gets the same transient handling as the first attempt.
+                return await _litellm_completion_with_retry(
+                    **completion_kwargs, _huf_max_retries=max_retries, _huf_base_delay=base_delay
+                )
+            # Safety net: model rejects sampling params -> retry once without them.
+            rejected = _sampling_keys_rejected(str(exc), completion_kwargs)
+            if rejected:
+                logger.warning(f"Model rejected sampling params {rejected}; retrying without them")
+                completion_kwargs = dict(completion_kwargs)
+                for key in rejected:
+                    completion_kwargs.pop(key, None)
+                return await _litellm_completion_with_retry(
+                    **completion_kwargs, _huf_max_retries=max_retries, _huf_base_delay=base_delay
+                )
+            raise
         except Exception as exc:
             # Broad catch so _is_transient_litellm_error can classify and retry only known transient failures.
             last_exc = exc
@@ -1584,7 +1655,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             # first discovers and caches this.
             temperature_cache_key = _site_scoped_key(f"litellm_temperature_unsupported:{normalized_model}")
             top_p_cache_key = _site_scoped_key(f"litellm_top_p_unsupported:{normalized_model}")
-            if temperature is not None:
+            if temperature is not None and not rejects_sampling_params(normalized_model):
                 _temp_unsupported = _l1_get(temperature_cache_key)
                 if _temp_unsupported is None:
                     _temp_unsupported = frappe.cache().get_value(temperature_cache_key)
@@ -1625,7 +1696,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 completion_kwargs["cached_content"] = gemini_cached_content
 
             # Only add top_p if explicitly configured and not overridden by temperature
-            if top_p is not None:
+            if top_p is not None and not rejects_sampling_params(normalized_model):
                 _tp_unsupported = _l1_get(top_p_cache_key)
                 if _tp_unsupported is None:
                     _tp_unsupported = frappe.cache().get_value(top_p_cache_key)
@@ -1853,9 +1924,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
                 _raise_provider_unavailable(raw_msg, normalized_model)
 
-            # Empty-response guard: reasoning models (e.g. gpt-oss) on the 'ollama/'
-            # endpoint can return empty content with no tool calls. Retry the completion
-            # once; if still empty, fail loudly instead of storing an empty reply.
+            # Empty-response guard. Retry the completion once. A model that already ran tools
+            # this run may legitimately end with no text (the tool delivered the reply, e.g. a
+            # Telegram send), so that is a success with an empty final answer. Only an empty
+            # first answer is an error.
             for _empty_check in range(2):
                 _choice = response.choices[0].message
                 if getattr(_choice, "tool_calls", None) or (_choice.content or "").strip():
@@ -1866,12 +1938,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         title="LiteLLM Empty Response"
                     )
                     response = await _litellm_completion_with_retry(**completion_kwargs)
+                elif run_delivery.current_run_delivered():
+                    break
                 else:
-                    raw_msg = (
-                        f"Model '{normalized_model}' returned an empty response. "
-                        "Known issue with reasoning models (e.g. gpt-oss) on the 'ollama/' "
-                        "endpoint — use the 'ollama_chat/' prefix or check the model."
-                    )
+                    raw_msg = _empty_response_message(normalized_model)
                     raise ProviderUnavailableError(raw_msg, log_message=raw_msg)
 
             # Extract response
@@ -2079,6 +2149,7 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
         if api_base:
             completion_kwargs["api_base"] = api_base
         
+        _drop_sampling_params_if_rejected(completion_kwargs, normalized_model)
         _setup_api_key(provider_name, api_key, completion_kwargs)
         
         try:
@@ -2133,6 +2204,7 @@ async def get_simple_completion_with_usage(
         if api_base:
             completion_kwargs["api_base"] = api_base
 
+        _drop_sampling_params_if_rejected(completion_kwargs, normalized_model)
         _setup_api_key(provider_name, api_key, completion_kwargs)
 
         try:
@@ -2424,7 +2496,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         # and caches this. Mirrors run()'s equivalent block.
         temperature_cache_key = _site_scoped_key(f"litellm_temperature_unsupported:{normalized_model}")
         top_p_cache_key = _site_scoped_key(f"litellm_top_p_unsupported:{normalized_model}")
-        if temperature is not None:
+        if temperature is not None and not rejects_sampling_params(normalized_model):
             _temp_unsupported = _l1_get(temperature_cache_key)
             if _temp_unsupported is None:
                 _temp_unsupported = frappe.cache().get_value(temperature_cache_key)
@@ -2455,7 +2527,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         completion_kwargs["messages"] = messages
 
         # Only add top_p if explicitly configured and not overridden by temperature
-        if top_p is not None:
+        if top_p is not None and not rejects_sampling_params(normalized_model):
             _tp_unsupported = _l1_get(top_p_cache_key)
             if _tp_unsupported is None:
                 _tp_unsupported = frappe.cache().get_value(top_p_cache_key)
@@ -2854,7 +2926,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     tc_doc.save(ignore_permissions=True)
                                                 else:
                                                     if not frappe.has_permission("Agent Tool Call", "write", doc=tc_doc):
-                                                        frappe.throw(_("Not permitted to update Agent Tool Call"), frappe.PermissionError)
+                                                        frappe.throw(frappe._("Not permitted to update Agent Tool Call"), frappe.PermissionError)
                                                     tc_doc.save()
 
                                                 # Find the Agent Message to update. Prefer the in-memory
@@ -2886,7 +2958,9 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     )
 
                                                 if message_name:
-                                                    from huf.ai.conversation_manager import update_tool_call_message
+                                                    from huf.ai.conversation_manager import (
+                                                    	update_tool_call_message,
+                                                    )
                                                     updated = update_tool_call_message(
                                                         message_name=message_name,
                                                         tool_call_id=call_id,
@@ -3034,21 +3108,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         _finalize_usage_totals(stream_total_usage)
 
         # Never report an empty response as a successful completion.
-        if not full_response.strip() and not had_tool_calls:
-            if normalized_model.startswith("ollama/"):
-                msg = (
-                    f"Model '{normalized_model}' returned an empty response. "
-                    "Reasoning models such as gpt-oss require the Ollama chat "
-                    "endpoint. Use the 'ollama_chat/' model prefix (e.g. "
-                    "'ollama_chat/gpt-oss:20b') or select a provider whose brand "
-                    "is 'Ollama' so Huf normalizes the prefix automatically."
-                )
-            else:
-                msg = (
-                    f"Model '{normalized_model}' returned an empty response. "
-                    "Verify the model is loaded, the provider is reachable, and "
-                    "the request is supported by this model."
-                )
+        if not full_response.strip() and not run_delivery.current_run_delivered():
+            msg = _empty_response_message(normalized_model)
             frappe.log_error(message=msg, title="LiteLLM Empty Response")
             yield {"type": "error", "error": msg, "public": True}
             return

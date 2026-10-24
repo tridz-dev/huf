@@ -268,6 +268,10 @@ doc_events = {
     "User": {
         "on_update": "huf.huf.doctype.huf_user_role.huf_user_role.sync_from_frappe_user",
     },
+    "Telegram Admin Binding": {
+        "on_update": "huf.ai.telegram_web_access_enforce.on_binding_update",
+        "on_trash": "huf.ai.telegram_web_access_enforce.on_binding_trash",
+    },
     "Agent Trigger": {
         "after_insert": ["huf.ai.agent.hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
         "on_update": ["huf.ai.agent.hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
@@ -325,6 +329,7 @@ scheduler_events = {
     ],
     "daily": [
         "huf.ai.knowledge.maintenance.cleanup_orphaned_files",
+        "huf.ai.telegram_admin.send_daily_digests",
         "huf.ai.knowledge.maintenance.optimize_indexes",
         # P2-10: Proactively mark expired Memory Records (past effective_until) as Expired
         "huf.ai.memory_tools.expire_stale_memory_records",
@@ -395,7 +400,7 @@ scheduler_events = {
 
 # Request Events
 # ----------------
-# before_request = ["huf.utils.before_request"]
+before_request = ["huf.ai.telegram_web_access_enforce.enforce"]
 # after_request = ["huf.utils.after_request"]
 
 # Job Events

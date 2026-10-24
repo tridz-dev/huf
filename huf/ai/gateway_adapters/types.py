@@ -51,6 +51,12 @@ class GatewayCapabilities:
 	supports_thread_reply: bool = False
 	supports_media_reply: bool = False
 	max_outbound_messages_per_second: float | None = None
+	# Optional richer outbound features; False unless an adapter explicitly implements them.
+	supports_reactions: bool = False
+	supports_typing: bool = False
+	supports_buttons: bool = False
+	supports_edit: bool = False
+	supports_voice_reply: bool = False
 
 	def __post_init__(self) -> None:
 		if not self.ingress_transports:

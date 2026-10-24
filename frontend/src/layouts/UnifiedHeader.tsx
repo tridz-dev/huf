@@ -106,6 +106,7 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
     if (path.startsWith('/integrations')) return 'Integrations';
     if (path.startsWith('/gateways')) return 'Gateways';
     if (path.startsWith('/whatsapp')) return 'WhatsApp';
+    if (path.startsWith('/telegram')) return 'Telegram';
     if (path.startsWith('/settings')) return 'Settings';
     if (path.startsWith('/playground')) return 'Playground';
     if (path.startsWith('/console')) return 'Playground';

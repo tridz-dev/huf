@@ -1,10 +1,18 @@
 """Focused tests for the Gateway Adapter runtime bridge."""
 
-from types import SimpleNamespace
 import unittest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from huf.ai import gateway_webhook
+
+
+def setUpModule():
+	# No site in unit runs: whitelisted wrappers consult frappe.local.flags.
+	import frappe
+
+	if not getattr(frappe.local, "flags", None):
+		frappe.local.flags = frappe._dict()
 
 
 class TestGatewayWebhook(unittest.TestCase):
@@ -166,7 +174,7 @@ class TestGatewayWebhookRateGateAndReply(unittest.TestCase):
     @patch("huf.ai.gateway_webhook.get_gateway_adapter")
     def test_send_gateway_reply_other_providers_keep_thread_semantics(self, mock_adapter):
         event = SimpleNamespace(conversation_id="c", thread_id="t-9", provider_event_id="evt-1")
-        gateway_webhook.send_gateway_reply(SimpleNamespace(provider="Telegram"), event, "hello")
+        gateway_webhook.send_gateway_reply(SimpleNamespace(provider="Slack"), event, "hello")
         reply = mock_adapter.return_value.send_reply.call_args.args[0]
         assert reply.thread_id == "t-9"
         assert reply.reply_to_provider_message_id == "t-9"
