@@ -115,7 +115,24 @@ def record_template_outreach(gateway: str, recipient: Any) -> None:
 		frappe.log_error(title="WhatsApp template outreach marker not recorded")
 
 
-def note_template_sent(account: str, recipient: Any, gateway: str | None = None) -> None:
-	"""After a successful template send: mark the contact as reached on each applicable gateway."""
+def note_template_sent(
+	account: str,
+	recipient: Any,
+	gateway: str | None = None,
+	template: str | None = None,
+	language: str | None = None,
+	solution: str | None = None,
+) -> None:
+	"""After a successful template send: mark the contact as reached on each applicable gateway.
+
+	With ``template`` (and a ``solution``) the usage is also recorded for Solutions; that part never fails a send.
+	"""
 	for name in [gateway] if gateway else gateways_for_account(account):
 		record_template_outreach(name, recipient)
+	if template and solution:
+		try:
+			from huf.ai.solutions import template_usage
+
+			template_usage.record_observed(account, template, language, solution)
+		except Exception:
+			frappe.log_error(title="Template usage not recorded")
