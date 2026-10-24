@@ -58,9 +58,10 @@ admission and routing to the configured agent. The cockpit does not run agents.
 | `/approvals` | Open `Workflow Action` rows visible to the user, with up to 5 rows of the first two transitions |
 | `/digest` | Pending approvals plus cockpit actions in the last 24 h |
 | `/audit` | Last 10 audit rows (Admin) |
-| `/help`, `/unbind` | Help text; two-step unbind |
+| `/help` | Help text for the caller's scope (`/audit` shown to Admins only; Viewers are told approvals need Operator) |
+| `/unbind` | Two-step unbind |
 
-Only these slash commands, `/start BIND-...`, and `adm:` callbacks are intercepted. Anything else returns
+Group chats are never intercepted, so no cockpit command is published for groups. Only these slash commands, `/start BIND-...`, and `adm:` callbacks are intercepted. Anything else returns
 `None` from the registry handler, so the existing pipeline handles it. If an unbound user sends `/help`,
 it also falls through, so the cockpit is invisible to them.
 
@@ -88,26 +89,22 @@ write `Telegram Admin Audit` rows.
 
 ## Mini App launch contract
 
-- Launch URL: `miniapp_launch_url(binding)` returns `site_config.huf_telegram_admin_miniapp_url` or
-  `<site>/huf/telegram-admin`, plus `?gw=<gateway>`. It is https only and carries no secrets.
+- Launch URL: `miniapp_launch_url(binding)` returns `telegram_public_url.mini_app_url(gateway)`, i.e.
+  `<public base>/huf/tg-app?gw=<gateway>` (the same builder and `MINI_APP_PATH` the Console menu button uses). It is https only and carries no secrets.
 - Auth: the Mini App POSTs `Telegram.WebApp.initData` to
   `/api/method/huf.ai.telegram_admin.telegram_miniapp_auth` with `init_data` and `gateway` (guest allowed).
   The server validates the HMAC with the gateway bot token (`telegram_miniapp.validate_init_data`, max
   age 10 min) and requires an active binding for `(user.id, gateway)`. It returns
   `{token, expires_in: 900, role_scope, gateway}`. Every failure returns the same generic
   `AuthenticationError`.
-- Use: future Mini App endpoints accept `Authorization: Bearer <token>`, call `resolve_session_token`
+- Use: Mini App endpoints read the token from the `X-Huf-Tg-Token` header only (a `Bearer ` prefix is tolerated; `Authorization` is not read), call `resolve_session_token`
   (which re-checks the binding), and execute inside `run_as(session["frappe_user"])`. They follow the same
   confirm/audit rules for writes. The Mini App UI is out of scope here.
 
 ## Daily digest
 
 `send_daily_digests()` sends each active binding with a known chat id its digest, computed as that user.
-Registration is pending. Add this to `huf/hooks.py`:
-
-```python
-scheduler_events = {"daily": [..., "huf.ai.telegram_admin.send_daily_digests"]}
-```
+It is registered in the `daily` scheduler events in `huf/hooks.py`.
 
 ## Residual risks
 

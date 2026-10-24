@@ -404,6 +404,23 @@ class TestConfirmFlow(Base):
 		self.assertEqual(self.handle_cb(confirm, sender="888")["note"], "nonce_rejected")
 		self.assertEqual(self.audit, [])
 
+	def _answers(self):
+		return [c.args[1] for c in self.adapter.sender.answer_callback_query.call_args_list]
+
+	def test_expired_confirm_button_wording(self):
+		confirm, _cancel = self._confirm_buttons()
+		self.now += ta.NONCE_TTL + 1
+		self.handle_cb(confirm)
+		self.assertEqual(self._answers()[-1], ta.MSG_EXPIRED)
+		self.assertNotIn("confirmation", ta.MSG_EXPIRED)
+
+	def test_expired_list_button_wording(self):
+		data = self._propose_button()
+		self.now += ta.NONCE_TTL + 1
+		self.handle_cb(data)
+		self.assertEqual(self._answers()[-1], ta.MSG_EXPIRED_LIST)
+		self.assertIn("command again", ta.MSG_EXPIRED_LIST)
+
 	def test_cancel_burns_nonce_without_executing(self):
 		confirm, cancel = self._confirm_buttons()
 		self.assertEqual(self.handle_cb(cancel)["note"], "cancelled")
@@ -722,6 +739,37 @@ class TestPrivateOnly(Base):
 		self.adapter.sender.send_text.assert_not_called()
 
 
+class TestHelpPerRank(Base):
+	def help_for(self, rank):
+		return ta.help_text({"role_scope": rank})
+
+	def test_viewer_sees_no_audit_and_is_told_approvals_need_operator(self):
+		text = self.help_for("Viewer")
+		self.assertNotIn("/audit", text)
+		self.assertIn("/approvals", text)
+		self.assertIn("needs Operator", text)
+
+	def test_operator_sees_no_audit_and_can_act(self):
+		text = self.help_for("Operator")
+		self.assertNotIn("/audit", text)
+		self.assertIn("approve or reject", text.lower())
+
+	def test_admin_sees_audit(self):
+		self.assertIn("/audit", self.help_for("Admin"))
+
+	def test_help_lists_exactly_the_commands_the_rank_can_run(self):
+		for rank in ta.ROLE_RANK:
+			shown = {n for n, _ in ta.HELP_LINES if f"/{n} " in self.help_for(rank) + " "}
+			allowed = {
+				n for n, (mr, _) in ta.COMMANDS.items() if n != "help" and ta.ROLE_RANK[rank] >= ta.ROLE_RANK[mr]
+			}
+			self.assertEqual(shown, allowed, rank)
+
+	def test_group_chat_commands_not_intercepted(self):
+		res = self.handle_msg(_msg("/help", command="help", chat_type="group"))
+		self.assertIsNone(res)
+
+
 class TestAgentActionApproval(Base):
 	"""Op ``agent_action``: a destructive agent request executes only from an Admin's own button press."""
 
@@ -767,6 +815,19 @@ class TestAgentActionApproval(Base):
 		nonce = ta.issue_nonce(TG, CHAT, self.action, cache=self.cache, now=self.now, ttl=600)
 		self.handle_cb(self.adapter.sign_callback_data(ta.callback_payload("c", nonce), CHAT))
 		self.assertEqual(self.ran, [])
+
+	def test_operator_reject_clears_pending_and_audits(self):
+		self.bindings[(TG, GW)]["role_scope"] = "Operator"
+		self.press("x")
+		self.assertEqual(self.ran, [])
+		self.assertFalse(ta.agent_action_pending("fp1", cache=self.cache))
+		self.assertEqual(self.audit[-1]["result"], "rejected")
+
+	def test_reject_of_other_gateway_action_does_not_touch_state(self):
+		self.action["gateway"] = "other-gw"
+		self.press("x")
+		self.assertTrue(ta.agent_action_pending("fp1", cache=self.cache))
+		self.assertEqual(self.audit, [])
 
 	def test_operator_scope_cannot_approve(self):
 		self.bindings[(TG, GW)]["role_scope"] = "Operator"

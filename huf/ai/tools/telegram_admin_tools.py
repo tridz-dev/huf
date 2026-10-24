@@ -10,8 +10,9 @@ and gated per action group by a flag on the run's own Gateway (read server-side,
 A run that is not inside an enabled Telegram gateway is always refused. Safety layers, in order:
 scope (chat must be in the gateway's send scope), bot rights (getChatMember(bot) must show the needed admin
 right), target protection (chat admins and the gateway's paired admins are never ban/restrict/demote targets,
-and nobody can be given ``can_promote_members``), ``confirm=true`` for destructive actions in the owner's cockpit chat, and HUMAN approval (signed Approve/Reject
-buttons sent to the gateway's Admin cockpit bindings) for every other run, a per-run cap and an audit entry per executed action.
+and nobody can be given ``can_promote_members``), HUMAN approval (signed Approve/Reject buttons sent to the
+gateway's Admin cockpit bindings, valid 10 minutes) for every state-changing action in every run, owner chat included
+(there is no ``confirm`` argument), a per-run cap and an audit entry per executed action.
 
 Bot API verified against https://core.telegram.org/bots/api (Bot API 10.3).
 """
@@ -74,7 +75,6 @@ if set(ACTIONS) != set(spec_table.ACTION_ARGS):  # one declaration per action, n
 CHAT_ACTIONS = {a for a, v in ACTIONS.items() if v[0] == "group"}
 TARGET_ACTIONS = {"ban", "restrict", "promote", "demote"}  # user_id must not be an admin / paired admin
 DEFAULT_CAP = 5
-CONFIRM_TTL = 300
 _CONTROL_KEYS = ("action", "confirm", "confirmation_token")
 
 # Restriction presets -> ChatPermissions (anything not listed stays allowed).
@@ -284,10 +284,6 @@ def _fingerprint(action: str, args: dict, gateway: str, chat: str) -> str:
 	body = {k: v for k, v in args.items() if k not in _CONTROL_KEYS}
 	raw = json.dumps({"a": action, "g": gateway, "c": chat, "args": body}, sort_keys=True, default=str)
 	return hashlib.sha256(raw.encode()).hexdigest()
-
-
-def _confirm_key(token: str) -> str:
-	return f"huf_tg_admin_confirm:{token}"
 
 
 def _q(value: Any, limit: int = 200) -> str:

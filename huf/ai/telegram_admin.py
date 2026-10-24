@@ -12,7 +12,7 @@ Design: ``docs/gateways/telegram-admin-cockpit.md``. Summary of the security con
   never Administrator/Guest, never ``ignore_permissions``. ``role_scope`` only narrows what the cockpit
   offers; it never grants a Frappe permission.
 - State changes are two-step: the first message shows what will happen with signed Confirm/Cancel buttons
-  carrying a single-use nonce (5 min TTL, bound to telegram user + chat + action hash); the confirm press
+  carrying a single-use nonce (5 min TTL, bound to telegram user + chat + action hash; approval cards for agent actions live 10 min); the confirm press
   executes and writes an append-only ``Telegram Admin Audit`` row.
 - Only private chats, only slash commands and ``adm:`` callbacks are intercepted (update-handler registry);
   everything else (free text) falls through to the normal gateway agent routing.
@@ -72,7 +72,8 @@ DENY_DOCTYPES = frozenset(
 _SECRET_KEY_RE = re.compile(r"pass|token|secret|key|otp|pin|auth|cookie", re.IGNORECASE)
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O/1/I
 MSG_DENIED = "Not authorised."
-MSG_EXPIRED = "This confirmation has expired or was already used."
+MSG_EXPIRED = "This request has expired or was already answered."  # Confirm / Cancel / Approve / Reject presses
+MSG_EXPIRED_LIST = "This button has expired. Send the command again."  # list buttons that open a confirmation
 
 
 class AdminError(Exception):
@@ -632,21 +633,32 @@ def _desk_url(dt: str, dn: str) -> str:
 
 # -- commands ----------------------------------------------------------------------------------
 
-HELP = (
-	"Admin cockpit\n"
-	"/me - who you are bound as\n"
-	"/find <doctype> <text> - search records you can read\n"
-	"/open <doctype> <name> - summary of one record\n"
-	"/approvals - workflow items waiting for you\n"
-	"/digest - today's summary\n"
-	"/audit - recent cockpit actions (Admin scope)\n"
-	"/unbind - unlink this Telegram account\n"
-	"Anything else you type goes to your assistant agent."
+HELP_LINES = (
+	("me", "/me - who you are bound as"),
+	("find", "/find <doctype> <text> - search records you can read"),
+	("open", "/open <doctype> <name> - summary of one record"),
+	("approvals", "/approvals - workflow items waiting for you"),
+	("digest", "/digest - today's summary"),
+	("audit", "/audit - recent cockpit actions"),
+	("unbind", "/unbind - unlink this Telegram account"),
 )
 
 
+def help_text(binding: dict) -> str:
+	"""Help for the caller's rank: only commands they may run, and what the rank can do with approvals."""
+	rank = _rank(binding)
+	lines = ["Admin cockpit"]
+	lines += [text for name, text in HELP_LINES if rank >= ROLE_RANK[COMMANDS[name][0]]]
+	if rank >= ROLE_RANK["Operator"]:
+		lines.append("Approve or reject workflow items with the buttons under /approvals.")
+	else:
+		lines.append("Your scope is Viewer: you can read, but acting on approvals needs Operator or Admin.")
+	lines.append("Anything else you type goes to your assistant agent.")
+	return "\n".join(lines)
+
+
 def cmd_help(ctx: Ctx, args: str) -> Reply:
-	return Reply(HELP)
+	return Reply(help_text(ctx.binding))
 
 
 def cmd_me(ctx: Ctx, args: str) -> Reply:
@@ -1156,7 +1168,7 @@ def handle_callback(
 	try:
 		action = consume_nonce(nonce, tg_user, chat_id, cache=cache, now=now)
 	except AdminError as exc:
-		answer(str(exc))
+		answer(MSG_EXPIRED_LIST if verb == "p" and str(exc) == MSG_EXPIRED else str(exc))
 		return _ack("nonce_rejected")
 	answer()
 	message_id = parsed.message_id
@@ -1166,7 +1178,8 @@ def handle_callback(
 			return _ack("proposed")
 		if verb == "x":
 			text = "Cancelled."
-			if action.get("op") == "agent_action" and _rank(binding) >= ROLE_RANK["Admin"]:
+			# Whoever was asked may reject (rejecting grants nothing); clear the pending marker and audit it.
+			if action.get("op") == "agent_action" and action.get("gateway") == binding.get("gateway"):
 				if agent_action_take(action.get("fp") or "", cache=cache):
 					write_audit(binding, action, "rejected", nonce=nonce)
 					_commit()
@@ -1185,21 +1198,14 @@ def handle_callback(
 
 
 def miniapp_launch_url(binding: dict) -> str:
-	"""HTTPS launch URL for the admin Mini App (no secrets in the URL; auth is initData only)."""
+	"""HTTPS launch URL for the Mini App (no secrets in the URL; auth is initData only); "" when not https."""
 	try:
-		import frappe
+		from huf.ai.telegram_public_url import mini_app_url
 
-		from huf.ai.telegram_public_url import public_url as get_url
-
-		base = (frappe.conf.get("huf_telegram_admin_miniapp_url") or get_url("/huf/telegram-admin")).strip()
+		url = mini_app_url(str(binding.get("gateway") or ""))
 	except Exception:
 		return ""
-	if not base.startswith("https://"):
-		return ""  # Telegram only opens https web apps
-	sep = "&" if "?" in base else "?"
-	from urllib.parse import quote
-
-	return f"{base}{sep}gw={quote(str(binding.get('gateway') or ''), safe='')}"
+	return url if url.startswith("https://") else ""  # Telegram only opens https web apps
 
 
 def _client_ip() -> str:

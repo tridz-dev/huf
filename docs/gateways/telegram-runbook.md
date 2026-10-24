@@ -34,7 +34,7 @@ Compared with WhatsApp (`docs/gateways/whatsapp-runbook.md`). "Yes" means implem
 | Inline buttons | Yes: callback, url, web_app, switch_inline, copy_text, login_url; reply keyboards | Yes | `telegram_buttons.py`, `telegram_keyboards.py` (section 4.1) |
 | Edit in place | Yes: `edit_message_text`, caption, reply markup; buttons with `"edit": true` | Partial | `supports_edit=True` |
 | Streaming replies | **Off by default**; private chats only; controlled by the Gateway field `telegram_streaming` only | No | `telegram_stream.py` `streaming_enabled` (section 16) |
-| Inline mode (`@bot query`) | Resolver registry; default resolver returns article results | No | `telegram_inline.py`; gateway field `telegram_inline_enabled` is **not read** (section 17) |
+| Inline mode (`@bot query`) | Resolver registry; default resolver returns article results | No | `telegram_inline.py`; gateway field `telegram_inline_enabled` (default on) switches the inline handlers off and is read by the health check; `telegram_inline_feedback_enabled` feeds the inline-feedback health row |
 | Inline answer button | Signed `inl:go:<digest>` button on the placeholder; press starts the answer run when no `chosen_inline_result` arrived (idempotent per `inline_message_id`) | No | `handle_inline_callback` in `telegram_inline.py` |
 | Guest mode (`guest_message`) | Yes: `telegram_guest.py`, admitted to an agent by an Open policy | No | Limits in section 11 |
 | Groups: join requests and Guard | Yes: `chat_join_request` handling; join policy Queue, Decline or Agent (section 15); optional Guard Mini App | Group access n/a | `telegram_groups.py`, `telegram_guard.py`, `register_join_policy` |
@@ -78,6 +78,11 @@ Compared with WhatsApp (`docs/gateways/whatsapp-runbook.md`). "Yes" means implem
 4. **Commands** (`/setcommands`): optional. The gateway publishes commands through `setMyCommands` via
    `telegram_commands.set_commands` (scopes `default`, `all_private_chats`, `all_group_chats`, and others;
    max 100 commands, names `a-z 0-9 _` up to 32 characters, descriptions 1 to 256 characters).
+   The Commands & profile tab's recommended setup lists the cockpit commands for `all_private_chats` only (they work
+   in private chats, for linked accounts; `/audit` for admins) and clears `default`, `all_group_chats` and
+   `all_chat_administrators`, because the gateway handles no slash commands in groups. Telegram prefers a list set
+   for one specific chat or one language over every scope; the Bot API cannot list those, so the plan probes only
+   the owner's and the site's language (`warnings` in the plan) and never edits them. Delete such lists in the Commands tab.
 5. **Mini App and menu button**: the cockpit Mini App (section 13.1) is opened from a `web_app` menu button.
    The gateway can set it through the **Commands & profile** tab (`menu_button_payload`, type `web_app`, with
    the Mini App URL `https://<host>/huf/tg-app`). The exact BotFather screens for a Mini App are Telegram's
@@ -226,9 +231,10 @@ Full design, threat model and command table: `docs/gateways/telegram-admin-cockp
    `<BIND-CODE>` in the form `BIND-XXXXXXXXXX`. Guest and Administrator cannot bind.
 2. In a private chat with the bot, `/start <BIND-CODE>` (or the deep link) creates a
    `Telegram Admin Binding`. The code is single use, expires in 10 minutes and is stored hashed.
-3. Commands (private chats only): `/me`, `/find`, `/open`, `/approvals`, `/digest`, `/audit` (Admin scope),
-   `/help`, `/unbind` (confirmed). Scopes are Viewer, Operator and Admin.
-4. Writes follow confirm and audit: button press, then a confirm message with a 5 minute nonce, then the
+3. Commands (private chats only, linked accounts only): `/me`, `/find`, `/open`, `/approvals`, `/digest`, `/audit` (Admin scope),
+   `/help`, `/unbind` (confirmed). Scopes are Viewer, Operator and Admin. `/help` lists only what the caller's scope may run.
+   Viewers read; Operators and Admins act on approvals. Anyone sent an agent approval card may press Reject, which clears it and is audited.
+4. Writes follow confirm and audit: button press, then a confirm message with a 5 minute nonce (agent approval cards: 10 minutes), then the
    action runs as the bound user with `apply_workflow`, and a `Telegram Admin Audit` row is written.
 5. The daily digest is wired: `send_daily_digests` is in the daily scheduler in `huf/hooks.py`.
 6. Revoke a binding with `/unbind` or `revoke_binding(name)`. A binding does not add the user to the gateway
@@ -250,7 +256,7 @@ Residual risks (from the design doc, still open):
   `max_flood_retries` times when the wait is short (`max_flood_wait`). The send pipeline waits `retry_after + 1 s`
   before the next attempt (`classify` in `telegram_pipeline.py`). Otherwise the default exponential backoff applies.
 - **Blocked bot**: a 403 "bot was blocked by the user" or "user is deactivated" is classified `blocked`. The reply
-  is not retried, and the event note reads "Recipient blocked the bot: reply not sent".
+  is not retried (full classification: see the error handling section), and the event note reads "Recipient blocked the bot: reply not sent".
 - **Chat not found**: classified `chat_not_found`; not retried.
 - **Opt-out**: there is no STOP/START handling for Telegram (section 3).
 - **Bot-to-bot loop guard** (`telegram_loop_guard.py`): bot messages are dropped unless the sender's numeric bot id is
@@ -567,7 +573,7 @@ The **audit** read is restricted to System Manager and Huf Manager (`telegram_ad
   with the Gateway field `telegram_guard_captcha` (Off, Arithmetic or Emoji). Off means off: no site config key
   overrides it.
 - The bot sends the page with `sendChatJoinRequestWebApp`. The URL is `https://<host>/tg_guard?g=<gateway>&n=<nonce>`.
-- Each challenge is single use, expires after 600 s, and allows 3 attempts. Success approves the request, wrong
+- Each challenge is single use, expires after 600 s, and allows 3 attempts (arithmetic) or 2 attempts (emoji). Success approves the request, wrong
   answers decline it. Both guest endpoints are authenticated only by the initData HMAC and are rate limited.
 - Setup steps:
   1. Serve the site on HTTPS (Telegram Web Apps require it).
@@ -654,12 +660,11 @@ Telegram runs a separate test environment (test servers, test accounts, test bot
 
 Each item below was checked against the code. "Not wired" means nothing on the runtime path reads it.
 
-1. **Inline "Run" button**: `RUN_CALLBACK_PREFIX = "inl:run"` is defined in `telegram_inline.py`, but no handler
-   dispatches it. Pressing it does nothing.
-2. **Gateway `telegram_inline_enabled`**: saved, not read by the inline handlers. Inline mode is governed by
-   BotFather and the resolver registry.
+1. **Inline wait button**: `WAIT_CALLBACK = "inl:wait"` is an inert fallback used only when no signer is available;
+   pressing it does nothing. The signed `inl:go:` button (`GO_PREFIX`) is handled.
+2. **Inline mode** needs BotFather inline mode on; the Gateway field `telegram_inline_enabled` (default on) can switch it off here.
 3. **Consent (STOP/START)**: not implemented for Telegram (section 3).
-4. **Inline feedback**: no code path. BotFather setting only (section 2.1).
+4. **Inline feedback** is a BotFather setting. The Gateway flag `telegram_inline_feedback_enabled` and an observed `chosen_inline_result` only feed the health row.
 5. **Admin action cap**: uses `agent_send_cap_per_run` (default 20), not a separate admin cap, and falls back to 5
    only when the field is 0. Intended or not, the cap is shared with sends.
 
@@ -679,11 +684,11 @@ assume the default settings unless a row says otherwise.
 | 4 | Media block | Ask for a photo from a Frappe File with a `telegram-media` block | Photo arrives before the text. Caption at most 1024 characters. Block not visible in text. |
 | 5 | Voice | Set `voice_reply_mode` to Voice only, agent `tts_model` on OpenAI; send a voice note | Reply is a voice note. Without ffmpeg/libopus or with an Anthropic-only agent, a text reply arrives instead. |
 | 6 | Template | Create a template with a `{{name}}` variable; ask the agent to `preview_template`, then `send_template` | Preview shows the substituted text. Send delivers it with its buttons. Missing variable blocks the send unless `allow_missing`. |
-| 7 | Inline | Type `@<bot> query` in another chat | Article results appear when inline mode is on in BotFather. Tapping "Run" does nothing (known gap 1). |
+| 7 | Inline | Type `@<bot> query` in another chat | Article results appear when inline mode is on in BotFather. Tapping the answer button starts the run. |
 | 8 | Admin bind | Create a binding code on the Admin bindings tab; send `/start <BIND-CODE>` privately; send `/me` | Binding created; `/me` shows the bound user and scope. The code cannot be reused. |
 | 9 | Admin action | Enable `telegram_agent_allow_group_admin`; ask the agent to ban a test user in a test group | Refused without the bot's ban right. With the right: from a group member or non-admin chat the call is refused with `owner_required`; from the paired Admin's private chat it returns `pending_human_approval`, and the ban runs only after the admin presses Approve, with an audit row. Chat admins are never ban targets. |
 | 10 | Join request | Join policy Queue: request to join a test group. Then switch to Agent | Queue: request stays pending for admins. Agent: request queued, then approved or declined by the agent decision. With a welcome template set, a joining member gets the welcome (60 s cooldown). |
-| 11 | Guard | Set `telegram_guard_captcha` to Arithmetic, join a Guard group | The join request shows the Guard Mini App. A wrong answer three times declines; the right answer approves. |
+| 11 | Guard | Set `telegram_guard_captcha`, join a Guard group | The join request shows the Guard Mini App. Too many wrong answers (3 arithmetic, 2 emoji) decline; the right answer approves. |
 | 12 | Business draft | Connect the business account with Business mode on; set policy Draft; send a message to the business account from another account | The owner's private chat gets a draft with Approve, Edit, Reject. Approve sends it as the owner. Nothing reaches the customer before approval. |
 | 13 | Business Observe | Default policy; message the business account | Message recorded in the Messages tab; no reply sent. |
 | 14 | Streaming | Turn on `telegram_streaming`; private chat with a long reply | Reply animates as a draft. With the checkbox off the reply arrives in one piece. |
