@@ -1,9 +1,15 @@
+import { useEffect, useState } from 'react';
+
 import { Skeleton } from '@/components/ui/skeleton';
 import type { GatewayHealthStatus } from '@/services/whatsappHealthApi';
+import { getNumberSummary } from '@/services/solutionsApi';
+import type { NumberSummary } from '@/types/solutions';
 import { ActivityCard } from './ActivityCard';
 import { ConnectionCard } from './ConnectionCard';
 import { HealthBanner } from './HealthBanner';
+import { RoutingOrderCard } from './RoutingOrderCard';
 import { SetupChecklist } from './SetupChecklist';
+import { SolutionsOnNumberCard } from './SolutionsOnNumberCard';
 import { TokenCard } from './TokenCard';
 
 export interface OverviewTabProps {
@@ -19,9 +25,26 @@ export interface OverviewTabProps {
 }
 
 export function OverviewTab({ gateway, loading, checking, onCheck, onTurnOn, settingsHref, failedEventHref }: OverviewTabProps) {
+	const gatewayName = gateway?.name;
+	const [numberSummary, setNumberSummary] = useState<NumberSummary | null>(null);
+	// Solutions data is additive: a failed summary hides its cards and the blame line, nothing else.
+	useEffect(() => {
+		setNumberSummary(null);
+		if (!gatewayName) return;
+		let cancelled = false;
+		getNumberSummary(gatewayName)
+			.then((s) => {
+				if (!cancelled) setNumberSummary(s);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [gatewayName]);
+
 	return (
 		<div className="space-y-4">
-			<HealthBanner gateway={gateway} loading={loading} checking={checking} onCheck={onCheck} onTurnOn={onTurnOn} />
+			<HealthBanner gateway={gateway} loading={loading} checking={checking} onCheck={onCheck} onTurnOn={onTurnOn} numberSummary={numberSummary} />
 			{loading || !gateway ? (
 				<div className="grid gap-4 lg:grid-cols-2" aria-hidden>
 					<Skeleton className="h-64" />
@@ -51,6 +74,12 @@ export function OverviewTab({ gateway, loading, checking, onCheck, onTurnOn, set
 						failedEventHref={failedEventHref}
 					/>
 					</div>
+					{numberSummary ? (
+						<div className="grid items-start gap-4 lg:grid-cols-2">
+							<SolutionsOnNumberCard gateway={gateway.name} summary={numberSummary} />
+							<RoutingOrderCard summary={numberSummary} />
+						</div>
+					) : null}
 				</>
 			)}
 		</div>
