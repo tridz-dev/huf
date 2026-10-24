@@ -646,6 +646,9 @@ class TestMakePartsFeedback(unittest.TestCase):
 		blocks._LOCAL.d.clear()
 		self.event = SimpleNamespace(conversation_id=str(CHAT), name="EV1", gateway="GW")
 		self.scope = tp.reply_scope(GW, self.event)
+		# On a site the cache is real Redis: drop errors left by earlier tests/runs for this scope.
+		blocks.take_errors(self.scope)
+		blocks._pop(f"huf_tg_blkfb:{blocks.digest(blocks._conversation_of(self.scope))}", None)
 
 	def media(self, obj):
 		return "```telegram-media\n" + (obj if isinstance(obj, str) else json.dumps(obj)) + "\n```"
