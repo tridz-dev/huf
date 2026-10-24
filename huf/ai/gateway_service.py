@@ -2539,6 +2539,7 @@ def _process_gateway_event(event_name: str) -> dict:
                 now=True,
                 client_idempotency_key=f"gateway-event:{event.name}",
                 files=media_files or None,
+                **({"solution": event.solution} if getattr(event, "solution", None) else {}),
             )
             failure = _agent_run_failure(result)
             if failure:

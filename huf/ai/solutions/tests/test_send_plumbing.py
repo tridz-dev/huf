@@ -99,7 +99,7 @@ class TestSendTemplatePlumbing(_Base):
 
 	def test_adapter_passes_run_and_solution(self):
 		adapter = wa_adapter.WhatsAppGatewayAdapter(
-			{"phone_number_id": "1", "access_token": "t", "webhook_verify_token": "v"},
+			{"phone_number_id": "1", "access_token": "t", "webhook_verify_token": "v", "app_secret": "s"},
 			gateway_context={"gateway_name": self.gw, "whatsapp_account": "acct-r2"},
 		)
 		with patch.object(adapter, "_bridge_mode", return_value=True), patch.object(adapter, "_guard"), \

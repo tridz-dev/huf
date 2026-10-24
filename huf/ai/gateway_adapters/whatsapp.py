@@ -206,6 +206,9 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 			else None
 		)
 		self._contact_name = str(ctx.get("contact_name") or "").strip()
+		# Optional: attribute template sends (e.g. the fallback template) to a run / solution for usage tracking.
+		self._run_id = str(ctx.get("run_id") or "").strip()
+		self._solution = str(ctx.get("solution") or "").strip()
 		self._preview_url = str(ctx.get("preview_url") or "").strip().lower() == "on"
 
 	# ------------------------------------------------------------------ ingress
@@ -773,8 +776,13 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		trusted: bool = False,
 		header_params: list | tuple | dict | None = None,
 		button_params: list | tuple | None = None,
+		run_id: str | None = None,
+		solution: str | None = None,
 	) -> OutboundDelivery:
 		"""Send an approved template (always allowed, window-independent).
+
+		``run_id`` / ``solution`` (optional; default to the adapter context) attribute the send to a Solution
+		for template usage tracking.
 
 		``body_params``: an ordered list, or (NAMED templates) ``{name: value}`` / ``[{name, value}]``; named
 		values are sent with ``parameter_name``. ``header_params``: a text variable string, a ``{"type", "link"}``
@@ -788,10 +796,15 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		header_arg: Any = header_params if isinstance(header_params, dict) else list(header_params or [])
 		self._guard(to)
 		if self._bridge_mode():
+			usage: dict[str, Any] = {}
+			if run_id or self._run_id:
+				usage["run_id"] = run_id or self._run_id
+			if solution or self._solution:
+				usage["solution"] = solution or self._solution
 			result = bridge.send_template(
 				self._account, to, template_name, params, header_params=header_arg,
 				trusted=trusted, language_code=language_code, button_params=list(button_params or []),
-				gateway_name=self._gateway_name or None,
+				gateway_name=self._gateway_name or None, **usage,
 			)
 			return _delivery_from_bridge(result)
 		components, errors = direct_send_components(params, header_arg, list(button_params or []))

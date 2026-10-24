@@ -341,8 +341,26 @@ class ConversationManager:
         else:
             self.session_id = f"{channel}:{frappe.session.user}"
 
-    def create_new_conversation(self, title=None, project=None, host=None):
+    def _stamp_solution(self, solution=None):
+        """The solution to stamp on a new conversation: the explicit one, else (``gateway:<name>`` channels)
+        the chat's current assignment. Never raises; None when unknown."""
+        if solution:
+            return solution
+        channel = str(self.channel or "")
+        if not (channel.startswith("gateway:") and self.external_id):
+            return None
+        try:
+            from huf.ai.solutions import assignment
+
+            return assignment.current_solution(channel.split(":", 1)[1], self.external_id)
+        except Exception:
+            return None
+
+    def create_new_conversation(self, title=None, project=None, host=None, solution=None):
         """Always create a fresh conversation.
+
+        ``solution`` (optional) stamps ``Agent Conversation.solution``; when omitted on a ``gateway:<name>``
+        channel the chat's current assignment is used. Lookup keys are never affected.
 
         ``host`` (server-side callers only, see ``huf.ai.desktop.sessions``) is
         ``{device_id, workspace_fingerprint, label}``: it makes the conversation desktop-hosted.
@@ -361,6 +379,9 @@ class ConversationManager:
             "model": frappe.db.get_value("Agent", self.agent_name, "model"),
             "project": project
         })
+        stamped = self._stamp_solution(solution)
+        if stamped:
+            conv.solution = stamped
         if host:
             conv.update({
                 "execution_host": "desktop",
@@ -377,13 +398,13 @@ class ConversationManager:
         conv.insert()
         return conv
 
-    def get_or_create_conversation(self, title=None, conversation_id=None, project=None):
+    def get_or_create_conversation(self, title=None, conversation_id=None, project=None, solution=None):
         """Get active conversation or create new one.
 
         ``project`` only takes effect when a brand-new Agent Conversation is
         created here; an existing conversation (found by ``conversation_id``
         or by the active session lookup) keeps whatever project it already
-        has.
+        has. ``solution`` stamps only a conversation created here (see ``create_new_conversation``).
         """
         if conversation_id:
             # An explicit conversation_id is authoritative: a missing id and an
@@ -438,6 +459,9 @@ class ConversationManager:
             "model": frappe.db.get_value("Agent", self.agent_name, "model"),
             "project": project
         })
+        stamped = self._stamp_solution(solution)
+        if stamped:
+            conv.solution = stamped
         if not frappe.has_permission("Agent Conversation", "create"):
             frappe.throw(
                 _("Not permitted to create Agent Conversation"),

@@ -1170,7 +1170,7 @@ def _log_gateway(gateway_name: str | None) -> dict[str, Any]:
 
 def _event_view(event: dict[str, Any] | None, direction: str) -> dict[str, Any]:
 	if not event:
-		return {"agent": None, "agent_run": None, "event": None, "status": None, "error": None}
+		return {"agent": None, "agent_run": None, "event": None, "status": None, "error": None, "solution": None}
 	if direction == "out":
 		return {
 			"agent": event.get("target_agent"),
@@ -1178,6 +1178,7 @@ def _event_view(event: dict[str, Any] | None, direction: str) -> dict[str, Any]:
 			"event": event["name"],
 			"status": event.get("reply_status") or None,
 			"error": event.get("delivery_error") or None,
+			"solution": event.get("solution") or None,
 		}
 	return {
 		"agent": event.get("target_agent"),
@@ -1185,7 +1186,42 @@ def _event_view(event: dict[str, Any] | None, direction: str) -> dict[str, Any]:
 		"event": event["name"],
 		"status": event.get("status") or None,
 		"error": event.get("error_message") or None,
+		"solution": event.get("solution") or None,
 	}
+
+
+def _solution_refs(names) -> dict[str, dict[str, str]]:
+	"""{solution name: {"name", "title"}} for the given names (unknown names are left out)."""
+	names = sorted({n for n in names if n})
+	if not names:
+		return {}
+	rows = frappe.get_all("Solution", filters={"name": ["in", names]}, fields=["name", "title"])
+	return {r["name"]: {"name": r["name"], "title": r.get("title") or r["name"]} for r in rows}
+
+
+def _run_solutions(run_ids) -> dict[str, str]:
+	run_ids = sorted({r for r in run_ids if r})
+	if not run_ids:
+		return {}
+	rows = frappe.get_all("Agent Run", filters={"name": ["in", run_ids]}, fields=["name", "solution"])
+	return {r["name"]: r["solution"] for r in rows if r.get("solution")}
+
+
+def _solution_filter_ids(column, gateway: str, solution: str):
+	"""Subquery of ``column`` (an event id column) for events of ``gateway`` that belong to ``solution``,
+	directly (Gateway Event.solution) or through their Agent Run."""
+	from frappe.query_builder import Criterion
+
+	ev = frappe.qb.DocType("Gateway Event")
+	run = frappe.qb.DocType("Agent Run")
+	runs = frappe.qb.from_(run).select(run.name).where(run.solution == solution)
+	return (
+		frappe.qb.from_(ev)
+		.select(column)
+		.where(ev.gateway == gateway)
+		.where(Criterion.any([ev.solution == solution, ev.agent_run.isin(runs)]))
+		.where(column.isnotnull())
+	)
 
 
 def _bridge_log(ctx: dict[str, Any], f: dict[str, Any], cursor, limit: int) -> dict[str, Any]:
@@ -1236,6 +1272,21 @@ def _bridge_log(ctx: dict[str, Any], f: dict[str, Any], cursor, limit: int) -> d
 				]
 			)
 		)
+	if f.get("solution"):
+		sk = frappe.qb.DocType("WhatsApp Send Key")
+		by_key = (
+			frappe.qb.from_(sk).select(sk.message_id).where(sk.gateway == gateway)
+			.where(sk.solution == f["solution"]).where(sk.message_id.isnotnull())
+		)
+		query = query.where(
+			Criterion.any(
+				[
+					msg.message_id.isin(by_key),
+					msg.message_id.isin(_solution_filter_ids(ev.provider_event_id, gateway, f["solution"])),
+					msg.message_id.isin(_solution_filter_ids(ev.reply_message_id, gateway, f["solution"])),
+				]
+			)
+		)
 	if f["phone"]:
 		p = f["phone"]
 		if len(p) >= _MIN_PHONE_DIGITS:
@@ -1268,7 +1319,7 @@ def _bridge_log(ctx: dict[str, Any], f: dict[str, Any], cursor, limit: int) -> d
 			frappe.qb.from_(ev)
 			.select(
 				ev.name, ev.provider_event_id, ev.reply_message_id, ev.target_agent, ev.agent_run,
-				ev.status, ev.error_message, ev.reply_status, ev.delivery_error,
+				ev.status, ev.error_message, ev.reply_status, ev.delivery_error, ev.solution,
 			)
 			.where(ev.gateway == gateway)
 			.where(Criterion.any([ev.provider_event_id.isin(ids), ev.reply_message_id.isin(ids)]))
@@ -1280,10 +1331,27 @@ def _bridge_log(ctx: dict[str, Any], f: dict[str, Any], cursor, limit: int) -> d
 			if e.get("provider_event_id"):
 				events[("in", e["provider_event_id"])] = e
 
+	key_solution: dict[str, str] = {}
+	if ids:
+		for k in frappe.get_all(
+			"WhatsApp Send Key", filters={"gateway": gateway, "message_id": ["in", ids]},
+			fields=["message_id", "solution", "agent_run"],
+		):
+			if k.get("solution"):
+				key_solution[k["message_id"]] = k["solution"]
+	run_solution = _run_solutions(e.get("agent_run") for e in events.values())
+	solution_refs = _solution_refs(
+		list(key_solution.values()) + list(run_solution.values()) + [e.get("solution") for e in events.values()]
+	)
+
 	items = []
 	for r in rows:
 		direction = "in" if r.get("type") == "Incoming" else "out"
 		view = _event_view(events.get((direction, r.get("message_id"))), direction)
+		sol_name = None
+		if direction == "out":
+			sol_name = key_solution.get(r.get("message_id")) or run_solution.get(view["agent_run"])
+		sol_name = sol_name or view["solution"] or run_solution.get(view["agent_run"])
 		if direction == "in":
 			sent_by = "customer"
 			phone = bridge.normalize_phone(r.get("from"))
@@ -1308,6 +1376,7 @@ def _bridge_log(ctx: dict[str, Any], f: dict[str, Any], cursor, limit: int) -> d
 				"agent_run": view["agent_run"],
 				"event": view["event"],
 				"sent_by": sent_by,
+				"solution": solution_refs.get(sol_name),
 			}
 		)
 	next_cursor = _encode_cursor(rows[-1]["creation"], rows[-1]["name"]) if has_more and rows else None
@@ -1326,6 +1395,7 @@ def _event_rows(e: dict[str, Any], gateway: str) -> list[dict[str, Any]]:
 		"profile_name": None,
 		"content_type": "text",
 		"template": None,
+		"_solution": e.get("solution") or None,
 	}
 	phone = bridge.normalize_phone(e.get("sender_id"))
 	if e.get("reply_message_id"):
@@ -1393,7 +1463,7 @@ def _direct_log(ctx: dict[str, Any], f: dict[str, Any], cursor, limit: int) -> d
 			.select(
 				ev.name, ev.creation, ev.provider_event_id, ev.sender_id, ev.message_text, ev.status,
 				ev.error_message, ev.target_agent, ev.agent_run, ev.reply_message_id, ev.reply_status,
-				ev.delivery_error,
+				ev.delivery_error, ev.solution,
 			)
 			.where(ev.gateway == gateway)
 			.orderby(ev.creation, order=Order.desc)
@@ -1404,6 +1474,16 @@ def _direct_log(ctx: dict[str, Any], f: dict[str, Any], cursor, limit: int) -> d
 			q = q.where(ev.reply_message_id.isnotnull()).where(ev.reply_message_id != "")
 		if f["agent"]:
 			q = q.where(ev.target_agent == f["agent"])
+		if f.get("solution"):
+			_run = frappe.qb.DocType("Agent Run")
+			q = q.where(
+				Criterion.any(
+					[
+						ev.solution == f["solution"],
+						ev.agent_run.isin(frappe.qb.from_(_run).select(_run.name).where(_run.solution == f["solution"])),
+					]
+				)
+			)
 		if f["phone"]:
 			q = q.where(ev.sender_id.like(_like(f["phone"])))
 		if f["q"]:
@@ -1433,7 +1513,13 @@ def _direct_log(ctx: dict[str, Any], f: dict[str, Any], cursor, limit: int) -> d
 	has_more = len(matched) > limit
 	page = matched[:limit]
 	next_cursor = _encode_cursor(page[-1]["creation"], page[-1]["_key"]) if has_more and page else None
-	items = [{k: v for k, v in r.items() if k != "_key"} for r in page]
+	run_solution = _run_solutions(r.get("agent_run") for r in page)
+	refs = _solution_refs([r.get("_solution") for r in page] + list(run_solution.values()))
+	items = []
+	for r in page:
+		item = {k: v for k, v in r.items() if k not in ("_key", "_solution")}
+		item["solution"] = refs.get(r.get("_solution") or run_solution.get(r.get("agent_run")))
+		items.append(item)
 	return {"success": True, "items": items, "next_cursor": next_cursor, "has_more": has_more}
 
 
@@ -1450,8 +1536,12 @@ def list_message_log(
 	date_to: str | None = None,
 	cursor: str | None = None,
 	limit: int = 50,
+	solution: str | None = None,
 ) -> dict[str, Any]:
 	"""Gateway-scoped WhatsApp message log (newest first, keyset paginated).
+
+	Each row carries ``solution`` (``{name, title}`` or None), derived from Huf-owned rows only (WhatsApp
+	Send Key, Gateway Event, Agent Run); ``solution`` filters to one solution's messages.
 
 	Bridge mode reads ``WhatsApp Message`` for the gateway's account and joins Gateway Events;
 	without frappe_whatsapp the log is built from Gateway Events alone.
@@ -1472,6 +1562,7 @@ def list_message_log(
 			"template": (template or "").strip() or None,
 			"phone": digits or None,
 			"q": (q or "").strip() or None,
+			"solution": (solution or "").strip() or None,
 			"start": start,
 			"end": end,
 		}
@@ -1481,6 +1572,19 @@ def list_message_log(
 		return exc.payload
 	except BridgeError as exc:
 		return dict(exc.payload, success=False)
+
+
+def _gateway_solutions(gateway: str) -> list[dict[str, str]]:
+	"""Solutions seen on this gateway: routed events, send keys and bindings (sorted by title)."""
+	names: set[str] = set()
+	for doctype, field in (("Gateway Event", "solution"), ("WhatsApp Send Key", "solution"), ("Gateway Binding", "solution")):
+		names.update(
+			n for n in frappe.get_all(
+				doctype, filters={"gateway": gateway, field: ["is", "set"]}, pluck=field, distinct=True,
+				limit_page_length=_LOG_FILTER_LIMIT,
+			) if n
+		)
+	return sorted(_solution_refs(names).values(), key=lambda r: (r["title"].lower(), r["name"]))
 
 
 @frappe.whitelist()
@@ -1510,6 +1614,7 @@ def list_message_log_filters(gateway_name: str | None = None) -> dict[str, Any]:
 	return {
 		"success": True,
 		"agents": [{"name": a, "title": a} for a in agents],
+		"solutions": _gateway_solutions(gateway),
 		"templates": templates,
 		"statuses": sorted(statuses)[:_LOG_FILTER_LIMIT],
 		"directions": list(_DIRECTIONS),
