@@ -12,16 +12,22 @@ What the session may then do is enforced elsewhere (``telegram_web_access_enforc
 from __future__ import annotations
 
 import hashlib
-import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import urlparse
 
 import frappe
 from frappe import _
 from frappe.rate_limiter import rate_limit
 
 from huf.ai.telegram_admin import _claim, _client_ip, check_rate, get_binding, write_audit
+from huf.ai.telegram_web_access_paths import (
+	MARKER_KEY,
+	PRIVILEGED_ROLES,
+	normalize_target,
+	parse_prefixes,
+	target_allowed,
+)
 
 MAX_AGE_SECONDS = 120
 REPLAY_TTL = MAX_AGE_SECONDS + 60  # max age + future skew
@@ -30,14 +36,9 @@ USER_RATE_WINDOW = 60
 IP_RATE_LIMIT = 30
 IP_RATE_WINDOW = 60
 DEFAULT_SESSION_HOURS = 24
-MARKER_KEY = "tg_origin"
 MARKER_VERSION = 1
-PRIVILEGED_ROLES = frozenset({"System Manager", "Administrator"})
 MAX_SESSION_HOURS = 720
 ALWAYS_REFUSED_USERS = ("Administrator", "Guest")
-MAX_TARGET_LEN = 512
-
-_CONTROL = re.compile("[\x00-\x1f\x7f-\x9f\u2028\u2029]")
 
 
 class WebAccessDenied(Exception):
@@ -51,80 +52,10 @@ class WebAccessDenied(Exception):
 # -- target validation -------------------------------------------------------------------------
 
 
-def _decoded_variants(text: str) -> list[str]:
-	out, cur = [text], text
-	for _i in range(3):
-		nxt = unquote(cur)
-		if nxt == cur:
-			return out
-		out.append(nxt)
-		cur = nxt
-	out.append("%")  # still encoded after 3 rounds: treat as hostile
-	return out
-
-
-def _path_ok(path: str) -> bool:
-	for variant in _decoded_variants(path):
-		if variant == "%" or _CONTROL.search(variant):
-			return False
-		if "\\" in variant or "@" in variant or "//" in variant or "://" in variant:
-			return False
-		if not variant.startswith("/"):
-			return False
-		if any(seg in ("..", ".") for seg in variant.split("/")):
-			return False
-	return True
-
-
-def normalize_target(path: Any) -> str | None:
-	"""Return a safe relative path (optional ``?query``) or None. Fragment is dropped."""
-	if not isinstance(path, str) or not path or len(path) > MAX_TARGET_LEN:
-		return None
-	text = path.split("#", 1)[0]
-	base, sep, query = text.partition("?")
-	if not base.startswith("/") or not _path_ok(base):
-		return None
-	if sep:
-		for variant in _decoded_variants(query):
-			if variant == "%" or _CONTROL.search(variant) or "\\" in variant:
-				return None
-	return base + (sep + query if sep else "")
-
-
-def _split_path(target: str) -> str:
-	return target.split("?", 1)[0]
-
-
 def allowed_prefixes(gateway_doc: Any) -> list[str]:
 	"""Normalized, de-duplicated route prefixes from ``telegram_web_allowed_paths`` ("/" is not allowed)."""
-	raw = str((gateway_doc.get("telegram_web_allowed_paths") if gateway_doc is not None else "") or "")
-	out: list[str] = []
-	for line in raw.splitlines():
-		line = line.strip()
-		if not line or "?" in line:
-			continue
-		norm = normalize_target(line)
-		if not norm:
-			continue
-		norm = norm.rstrip("/")
-		for variant in _desk_aliases(norm):
-			if variant and variant not in out:
-				out.append(variant)
-	return out
-
-
-def _desk_aliases(path: str) -> list[str]:
-	"""Frappe 16 serves the desk under ``/desk`` and redirects ``/app`` to it, so an allowed ``/app/x`` page is
-	also reachable as ``/desk/x`` (and the other way round); both spellings must be allowed together."""
-	for here, there in (("/app", "/desk"), ("/desk", "/app")):
-		if path == here or path.startswith(here + "/"):
-			return [path, there + path[len(here) :]]
-	return [path]
-
-
-def target_allowed(target: str, prefixes: list[str]) -> bool:
-	path = _split_path(target)
-	return any(path == p or path.startswith(p + "/") for p in prefixes)
+	raw = gateway_doc.get("telegram_web_allowed_paths") if gateway_doc is not None else ""
+	return parse_prefixes(raw, keep_case=True)
 
 
 def resolve_target(to: Any, gateway_doc: Any) -> str:
