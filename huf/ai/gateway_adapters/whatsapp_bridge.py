@@ -920,8 +920,12 @@ def send_template(
 	button_params: list | None = None,
 	http_post: Callable[..., Any] | None = None,
 	gateway_name: str | None = None,
+	run_id: str | None = None,
+	solution: str | None = None,
 ) -> dict[str, Any]:
 	"""Send an approved template.
+
+	``run_id`` / ``solution`` (optional) attribute the send to a Solution for template usage tracking.
 
 	Goes through :mod:`huf.ai.whatsapp.outbound_policy` first: a STOPped contact, a BSUID recipient, a
 	template that is not APPROVED and marketing to a contact who stopped marketing are refused with a
@@ -1022,7 +1026,7 @@ def send_template(
 			elif hp.get("type") in ("image", "video", "document"):
 				mirror["attach"] = (hp.get(hp["type"]) or {}).get("link")
 		result = _mirror_template_send(acct, docname, to, wamid, mirror, trusted)
-		policy.note_template_sent(account_name, to, gateway_name)
+		policy.note_template_sent(account_name, to, gateway_name, *_usage_args(tpl, template_name, language_code, run_id, solution))
 		return result
 
 	values: dict[str, Any] = {
@@ -1048,8 +1052,24 @@ def send_template(
 		raise
 	except Exception as exc:
 		raise BridgeError(_err("send_failed", message=_redact(exc))) from exc
-	policy.note_template_sent(account_name, to, gateway_name)
+	policy.note_template_sent(account_name, to, gateway_name, *_usage_args(tpl, template_name, language_code, run_id, solution))
 	return _readback(doc)
+
+
+def _usage_args(
+	tpl: dict[str, Any] | None, template_name: str, language_code: str | None, run_id: str | None, solution: str | None
+) -> tuple[str | None, str | None, str | None]:
+	"""``(Meta template name, language, solution)`` for template usage; the solution comes from the Agent Run when not given."""
+	try:
+		sol = solution
+		if not sol and run_id:
+			from huf.ai.solutions.template_usage import solution_for_run
+
+			sol = solution_for_run(run_id)
+		name = (tpl or {}).get("actual_name") or (tpl or {}).get("template_name") or template_name
+		return name, (tpl or {}).get("language_code") or language_code, sol or None
+	except Exception:
+		return None, None, None
 
 
 def _has_dynamic_url(tpl: dict[str, Any]) -> bool:

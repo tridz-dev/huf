@@ -13,6 +13,7 @@ import { BreadcrumbItem as BreadcrumbItemType } from './UnifiedLayout';
 import { ApprovalsBell } from '../components/ApprovalsBell';
 import { ExecutionApprovalsBell } from '../components/ExecutionApprovalsBell';
 import { usePermissions } from '../contexts/PermissionsContext';
+import { SOLUTIONS_WORD } from '../components/solutions/labels';
 
 interface UnifiedHeaderProps {
   actions?: ReactNode;
@@ -104,6 +105,7 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
     if (path.startsWith('/providers')) return 'AI providers & models';
     if (path.startsWith('/integration-services')) return 'Integration catalog';
     if (path.startsWith('/integrations')) return 'Integrations';
+    if (path.startsWith('/solutions')) return SOLUTIONS_WORD;
     if (path.startsWith('/gateways')) return 'Gateways';
     if (path.startsWith('/whatsapp')) return 'WhatsApp';
     if (path.startsWith('/settings')) return 'Settings';

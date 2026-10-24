@@ -327,6 +327,16 @@ def _mark_outreach(gateway_name: str, kwargs: dict, raw: str) -> None:
 		frappe.log_error(title="WhatsApp outreach marker not recorded")
 
 
+def _run_solution(run_id: Optional[str]) -> Optional[str]:
+	"""The solution the current Agent Run belongs to (None for a trusted flow run or when unknown)."""
+	if not run_id:
+		return None
+	try:
+		return frappe.db.get_value("Agent Run", run_id, "solution") or None
+	except Exception:
+		return None
+
+
 def _scope_refusal(kwargs: dict, gateway_name: str) -> Optional[str]:
 	"""Recipient scope (WP-10): default recipient is the run's conversation contact; wider scope is gateway config.
 
@@ -344,7 +354,9 @@ def _scope_refusal(kwargs: dict, gateway_name: str) -> Optional[str]:
 	recipient = _recipient(kwargs)
 	if not recipient:
 		return None  # the send itself reports the missing recipient
-	return send_scope.check_recipient(gateway_name, run_id, recipient, contact=_trusted_contact.get())
+	solution = _run_solution(run_id)
+	extra = {"solution": solution} if solution else {}
+	return send_scope.check_recipient(gateway_name, run_id, recipient, contact=_trusted_contact.get(), **extra)
 
 
 def _idempotent_send(action: str, kwargs: dict, gateway_name: str) -> str:
@@ -370,7 +382,8 @@ def _capped_dispatch(action: str, kwargs: dict, gateway_name: str, run_id: Optio
 	"""Run the send unless it would exceed the gateway's per-run / per-day cap (checked after the claim)."""
 	from huf.ai.whatsapp import send_scope as send_scope
 
-	refusal = send_scope.check_caps(gateway_name, run_id)
+	solution = _run_solution(run_id)
+	refusal = send_scope.check_caps(gateway_name, run_id, **({"solution": solution} if solution else {}))
 	if refusal:
 		return refusal
 	return _dispatch(action, kwargs)
@@ -857,6 +870,9 @@ def _send_template(kwargs: dict) -> str:
 				extra["button_params"] = button_params
 			if kwargs.get("language_code"):
 				extra["language_code"] = language_code
+			run_id = _effective_run_id()
+			if run_id:
+				extra["run_id"] = run_id
 			res = bridge.send_template(acct["name"], recipient, template_name, _body_values(parameters), **extra)
 		except bridge.BridgeError as e:
 			return json.dumps(e.payload, default=str)

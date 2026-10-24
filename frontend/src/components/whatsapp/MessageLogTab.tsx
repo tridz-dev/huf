@@ -125,6 +125,8 @@ export function MessageLogTab({ gateway, bridgeAvailable }: { gateway?: string; 
 
   const agentTitle = (name: string | null) => options?.agents.find((a) => a.name === name)?.title;
   const active = activeFilterCount(filters);
+  // Older servers send no solution field at all; hide the column then.
+  const showSolution = items.some((m) => m.solution !== undefined);
   const opt = (values: string[] | undefined) => (values ?? []).map((v) => ({ value: v, label: cap(v) }));
 
   return (
@@ -153,6 +155,10 @@ export function MessageLogTab({ gateway, bridgeAvailable }: { gateway?: string; 
           options={(options?.agents ?? []).map((a) => ({ value: a.name, label: a.title || a.name }))} />
         <FilterSelect label="Template" allLabel="All templates" value={filters.template} onChange={(v) => update({ template: v })}
           options={(options?.templates ?? []).map((t) => ({ value: t, label: t }))} />
+        {(options?.solutions?.length ?? 0) > 0 && (
+          <FilterSelect label="Solution" allLabel="Any solution" value={filters.solution} onChange={(v) => update({ solution: v })}
+            options={(options?.solutions ?? []).map((x) => ({ value: x.name, label: x.title || x.name }))} />
+        )}
         <Input value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} placeholder="Number" className="w-36 font-mono" aria-label="Contact number" />
         <label className="flex items-center gap-1.5 text-xs text-steel">
           From
@@ -190,6 +196,7 @@ export function MessageLogTab({ gateway, bridgeAvailable }: { gateway?: string; 
                 <TableHead>Message</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="min-w-32">Agent</TableHead>
+                {showSolution && <TableHead>Solution</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -238,6 +245,11 @@ export function MessageLogTab({ gateway, bridgeAvailable }: { gateway?: string; 
                         <span className="block truncate text-steel" title={sentByLabel(m.sent_by, title ?? m.agent)}>{sentByLabel(m.sent_by, title ?? m.agent)}</span>
                       )}
                     </TableCell>
+                    {showSolution && (
+                      <TableCell className="text-xs">
+                        {m.solution ? <Badge variant="chip" size="sm">{m.solution.title || m.solution.name}</Badge> : <span className="text-steel">-</span>}
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}

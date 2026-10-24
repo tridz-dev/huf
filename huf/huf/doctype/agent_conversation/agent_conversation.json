@@ -37,7 +37,8 @@
   "host_device_id",
   "column_break_host",
   "host_workspace_fingerprint",
-  "host_label"
+  "host_label",
+  "solution"
  ],
  "fields": [
   {
@@ -273,6 +274,13 @@
    "fieldname": "host_label",
    "fieldtype": "Data",
    "label": "Host Label",
+   "read_only": 1
+  },
+  {
+   "fieldname": "solution",
+   "fieldtype": "Link",
+   "label": "Solution",
+   "options": "Solution",
    "read_only": 1
   }
  ],

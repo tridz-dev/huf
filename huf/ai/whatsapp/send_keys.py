@@ -75,16 +75,30 @@ def derive_key(gateway: str, run_id: str | None, call_id: str | None, action: st
 def _claim(gateway: str, key: str, action: str = "", run: str = "", recipient: str = "") -> bool:
 	"""Insert the Pending claim and commit it. False when a live claim already exists."""
 	_drop_if_expired(key)
+	values = {
+		"doctype": DOCTYPE, "key_hash": key, "gateway": gateway, "action": action, "status": "Pending",
+		"agent_run": run or "", "recipient": recipient or "",
+		"claimed_at": now_datetime(), "expires_at": add_to_date(now_datetime(), minutes=PENDING_TTL_MINUTES),
+	}
+	solution = _run_solution(run)
+	if solution:
+		values["solution"] = solution
 	try:
-		frappe.get_doc({
-			"doctype": DOCTYPE, "key_hash": key, "gateway": gateway, "action": action, "status": "Pending",
-			"agent_run": run or "", "recipient": recipient or "",
-			"claimed_at": now_datetime(), "expires_at": add_to_date(now_datetime(), minutes=PENDING_TTL_MINUTES),
-		}).insert(ignore_permissions=True)
+		frappe.get_doc(values).insert(ignore_permissions=True)
 	except frappe.DuplicateEntryError:
 		return False
 	frappe.db.commit()
 	return True
+
+
+def _run_solution(run: str) -> str | None:
+	"""The solution the Agent Run belongs to (stamped on the claim so caps and usage can count by solution)."""
+	if not run:
+		return None
+	try:
+		return frappe.db.get_value("Agent Run", run, "solution") or None
+	except Exception:
+		return None
 
 
 def _drop_if_expired(key: str) -> None:

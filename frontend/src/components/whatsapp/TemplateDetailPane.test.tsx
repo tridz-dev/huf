@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 vi.mock('@/services/whatsappApi', async (orig) => ({ ...(await orig<typeof import('@/services/whatsappApi')>()), getTemplate: vi.fn() }));
 import { getTemplate } from '@/services/whatsappApi';
@@ -76,5 +77,56 @@ describe('TemplateDetailPane', () => {
     render(pane());
     expect(await screen.findByText(/won't let this template be edited right now/)).toBeInTheDocument();
     expect(screen.getByText(/Try again after/)).toBeInTheDocument();
+  });
+});
+
+describe('TemplateDetailPane shared templates', () => {
+  const sharedRow = {
+    name: 'tpl-1',
+    shared: true,
+    used_by: [{ solution: 'S1', title: 'Orders' }, { solution: 'S2', title: 'Customer care' }],
+  } as never;
+  const setup = () => {
+    const onEdit = vi.fn();
+    const onDelete = vi.fn();
+    const onCopy = vi.fn();
+    render(<TemplateDetailPane row={sharedRow} refreshKey={0} onSend={vi.fn()} onEdit={onEdit} onDelete={onDelete} onCopy={onCopy} onUnavailable={vi.fn()} />);
+    return { onEdit, onDelete, onCopy };
+  };
+
+  it('shows the Used by block and Shared pill', async () => {
+    setup();
+    expect(await screen.findByText('Shared')).toBeInTheDocument();
+    expect(screen.getByText('Orders')).toBeInTheDocument();
+    expect(screen.getByText(/Meta keeps one copy/)).toBeInTheDocument();
+  });
+
+  it('Edit opens the shared dialog; Edit for everyone continues', async () => {
+    const { onEdit } = setup();
+    await userEvent.click(await screen.findByRole('button', { name: /Edit and resubmit/ }));
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(screen.getByText('This template is shared')).toBeInTheDocument();
+    expect(screen.getByText(/Used by Orders and Customer care\. Editing resubmits it to Meta for all of them/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit for everyone' }));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onEdit).toHaveBeenCalledWith(expect.anything(), true);
+  });
+
+  it('Make a copy suggests name_v2 and Cancel does nothing', async () => {
+    const { onEdit, onCopy } = setup();
+    await userEvent.click(await screen.findByRole('button', { name: /Edit and resubmit/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Make a copy' }));
+    expect(onCopy).toHaveBeenCalledWith(expect.anything(), 'order_update_v2');
+    await userEvent.click(screen.getByRole('button', { name: /Edit and resubmit/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it('Delete on a shared template asks first and then deletes acknowledged', async () => {
+    const { onDelete } = setup();
+    await userEvent.click(await screen.findByRole('button', { name: /Delete/ }));
+    expect(onDelete).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Delete for everyone' }));
+    expect(onDelete).toHaveBeenCalledWith(sharedRow, true);
   });
 });
