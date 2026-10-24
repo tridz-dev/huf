@@ -181,7 +181,7 @@ class TestRouting(unittest.TestCase):
 	def test_pin_refreshed_and_ttl(self):
 		d = go(text="cake")
 		self.assertEqual(d["pin"], {"solution": "orders", "expires_at": NOW + timedelta(hours=24)})
-		d = go(text="cake", pin_ttl_hours=2) if False else decide_route(
+		d = decide_route(
 			text="cake", referral_tag=None, button_payload=None, now=NOW, rules=RULES, pin=None,
 			triage_pending_until=None, solutions=SOLS, keyword_beats_pin=False, gateway_default=None, pin_ttl_hours=2,
 		)
