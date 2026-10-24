@@ -46,6 +46,9 @@
   "services/developerApi.ts": {
     "helpers": 1
   },
+  "services/solutionsApi.ts": {
+    "helpers": 2
+  },
   "services/whatsappApi.ts": {
     "helpers": 2
   },

@@ -408,6 +408,40 @@
       "inline_style": 1,
       "raw_element": 1
     },
+    "components/solutions/EntryPointSheet.tsx": {
+      "raw_element": 9
+    },
+    "components/solutions/PurposeFilter.tsx": {
+      "fixed_height": 1
+    },
+    "components/solutions/SolutionAnsweredByPicker.tsx": {
+      "raw_element": 2
+    },
+    "components/solutions/SolutionCard.tsx": {
+      "text_px": 1
+    },
+    "components/solutions/SolutionConversationsTab.tsx": {
+      "raw_element": 2
+    },
+    "components/solutions/SolutionOverviewTab.tsx": {
+      "inline_style": 1
+    },
+    "components/solutions/SolutionTemplatesTab.tsx": {
+      "raw_element": 2
+    },
+    "components/solutions/TestChat.tsx": {
+      "raw_element": 6,
+      "text_px": 1
+    },
+    "components/solutions/wizard/EntryPointsStep.tsx": {
+      "raw_element": 2
+    },
+    "components/solutions/wizard/NameAndPurposeStep.tsx": {
+      "raw_element": 3
+    },
+    "components/solutions/wizard/TestStep.tsx": {
+      "raw_element": 2
+    },
     "components/tools/HttpHeaderCard.tsx": {
       "fixed_height": 1
     },
@@ -455,6 +489,9 @@
     "components/ui/progress.tsx": {
       "inline_style": 1
     },
+    "components/ui/resource-state.tsx": {
+      "text_px": 3
+    },
     "components/ui/shortcut-key.tsx": {
       "text_px": 1
     },
@@ -492,6 +529,9 @@
     "components/whatsapp/SendPanel.tsx": {
       "text_px": 1
     },
+    "components/whatsapp/TemplateBadges.tsx": {
+      "text_px": 1
+    },
     "components/whatsapp/TemplateDetailPane.tsx": {
       "text_px": 3
     },
@@ -523,6 +563,9 @@
     },
     "components/whatsapp/TemplatesTab.tsx": {
       "text_px": 1
+    },
+    "components/whatsapp/overview/SolutionsOnNumberCard.tsx": {
+      "inline_style": 1
     },
     "layouts/UnifiedHeader.tsx": {
       "text_px": 2
@@ -629,11 +672,11 @@
     }
   },
   "totals": {
-    "fixed_height": 113,
+    "fixed_height": 114,
     "hex_colour": 84,
-    "inline_style": 46,
-    "raw_element": 40,
-    "text_px": 380
+    "inline_style": 48,
+    "raw_element": 68,
+    "text_px": 386
   },
   "version": 1
 }
