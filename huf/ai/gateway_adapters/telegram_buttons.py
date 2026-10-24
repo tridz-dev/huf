@@ -15,8 +15,10 @@ Top level keys (exactly one of ``rows`` / ``reply_keyboard`` / ``remove_keyboard
 
 - ``rows``: inline keyboard, list of rows of buttons. Each button has ``text`` and exactly one of
   ``callback`` (id <= 46 bytes; the next agent input becomes ``[button: <text>]``), ``url``,
-  ``web_app`` (https url), ``switch_inline`` (query; ``"current_chat": true`` for the same chat),
-  ``copy_text`` (<= 256 chars), ``login_url`` (https url).
+  ``web_app`` (``{"url": "https://..."}``, Telegram's own shape), ``switch_inline`` (query;
+  ``"current_chat": true`` for the same chat), ``copy_text`` (<= 256 chars), ``login_url``
+  (``{"url": "https://..."}``). Message templates store the same two kinds as a bare https string; the
+  validator accepts both and normalises to one internal form.
 - ``edit``: true = the agent's answer to a button press edits the original message in place.
 - ``once``: true = the keyboard is removed on the first press (double taps are ignored).
 - ``reply_keyboard``: ``{"rows": [["A", "B"], ["C"]], "one_time": bool, "resize": bool,
@@ -62,9 +64,8 @@ MSG_USED = "Already used."
 AGENT_INSTRUCTIONS = (
 	"On Telegram you can attach buttons by adding a fenced block ```telegram-buttons with JSON: "
 	'{"rows": [[{"text": "Yes", "callback": "yes"}, {"text": "Site", "url": "https://..."}]], '
-	'"edit": false, "once": true}. Button kinds: callback (id <= 46 bytes), url, web_app (https url, or '
-	'{"url": "https://..."}), switch_inline, '
-	"copy_text, login_url. Alternatives: reply_keyboard {rows, one_time, resize, placeholder} or "
+	'"edit": false, "once": true}. Button kinds: callback (id <= 46 bytes), url, web_app {"url": https}, '
+	"switch_inline, copy_text, login_url {\"url\": https}. Alternatives: reply_keyboard {rows, one_time, resize, placeholder} or "
 	"remove_keyboard true. A press arrives as '[button: <text>]'. Max 8 buttons per row, 10 rows."
 )
 

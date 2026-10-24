@@ -74,7 +74,7 @@ class TestBuildInstructions(unittest.TestCase):
 
 	def test_length_cap_with_everything_on(self):
 		text = tac.build_instructions(gw(**ALL_ON))
-		self.assertLessEqual(len(text), 1200)
+		self.assertLessEqual(len(text), tac.MAX_CHARS)
 		self.assertIn("```telegram-buttons", text)
 
 	def test_no_secrets_in_text(self):
@@ -85,7 +85,7 @@ class TestBuildInstructions(unittest.TestCase):
 	def test_none_gateway_still_works(self):
 		text = tac.build_instructions(None)
 		self.assertIn("```telegram-buttons", text)
-		self.assertLessEqual(len(text), 1200)
+		self.assertLessEqual(len(text), tac.MAX_CHARS)
 
 	def test_buttons_wording_reused(self):
 		self.assertIn(telegram_buttons.AGENT_INSTRUCTIONS, tac.build_instructions(gw()))
@@ -140,3 +140,36 @@ class TestInstructionsWording(unittest.TestCase):
 		self.assertLessEqual(len(text), tac.MAX_CHARS)
 		self.assertIn("telegram_admin", text)
 		self.assertNotIn("telegram_admin", tac.build_instructions(gw()))
+
+
+class TestCapabilityLinesAreNeverDropped(unittest.TestCase):
+	def test_all_capability_lines_survive_with_every_flag_on(self):
+		from types import SimpleNamespace
+
+		from huf.ai.gateway_adapters import telegram_agent_context as ctx
+
+		gw = SimpleNamespace(
+			telegram_agent_allow_group_admin=1,
+			telegram_agent_allow_business=1,
+			telegram_agent_allow_profile=1,
+			voice_reply_mode="Text and voice",
+		)
+		out = ctx.build_instructions(gw)
+		self.assertLessEqual(len(out), ctx.MAX_CHARS)
+		for needle in (
+			"telegram_admin tool",
+			"Secretary/business",
+			"profile can be changed",
+			"Voice replies are on (Text and voice)",
+		):
+			self.assertIn(needle, out)
+		self.assertIn("telegram-buttons", out)
+
+	def test_static_text_alone_fits_the_budget(self):
+		from types import SimpleNamespace
+
+		from huf.ai.gateway_adapters import telegram_agent_context as ctx
+
+		out = ctx.build_instructions(SimpleNamespace())
+		for section in ctx._static_sections():
+			self.assertIn(section, out)

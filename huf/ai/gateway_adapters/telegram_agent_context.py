@@ -16,7 +16,7 @@ from typing import Any
 
 from huf.ai.gateway_adapters import telegram_buttons
 
-MAX_CHARS = 1200
+MAX_CHARS = 1600  # static feature docs + this gateway's capability lines; per-message prompt cost
 
 FLAG_GROUP_ADMIN = "telegram_agent_allow_group_admin"
 FLAG_BUSINESS = "telegram_agent_allow_business"
@@ -58,27 +58,45 @@ def capabilities(gateway) -> dict:
 	}
 
 
-def _sections(gateway) -> list[str]:
+def _static_sections() -> list[str]:
+	return [telegram_buttons.AGENT_INSTRUCTIONS, MEDIA_TEXT, TOOL_TEXT]
+
+
+def _capability_sections(gateway) -> list[str]:
+	"""What THIS gateway allows (flags, voice mode). Short and decision-relevant, so never dropped."""
 	caps = capabilities(gateway)
-	sections = [telegram_buttons.AGENT_INSTRUCTIONS, MEDIA_TEXT, TOOL_TEXT]
-	for flag in (FLAG_GROUP_ADMIN, FLAG_BUSINESS, FLAG_PROFILE):
-		key = {FLAG_GROUP_ADMIN: "group_admin", FLAG_BUSINESS: "business", FLAG_PROFILE: "profile"}[flag]
-		if caps[key]:
-			sections.append(FLAG_TEXT[flag])
+	out = [
+		FLAG_TEXT[flag]
+		for flag, key in (
+			(FLAG_GROUP_ADMIN, "group_admin"),
+			(FLAG_BUSINESS, "business"),
+			(FLAG_PROFILE, "profile"),
+		)
+		if caps[key]
+	]
 	if caps["voice_reply"]:
-		sections.append(f"Voice replies are on ({caps['voice_reply_mode']}).")
-	return sections
+		out.append(f"Voice replies are on ({caps['voice_reply_mode']}).")
+	return out
+
+
+def _sections(gateway) -> list[str]:
+	return _static_sections() + _capability_sections(gateway)
 
 
 def build_instructions(gateway) -> str:
-	"""Channel note for the agent prompt. Sections are added whole while the result stays within MAX_CHARS."""
+	"""Channel note for the agent prompt, within MAX_CHARS.
+
+	Capability lines are reserved first and always kept; static sections are added whole while they fit in
+	what is left, so a growing feature description can never push out what this gateway actually allows."""
+	capability = _capability_sections(gateway)
+	budget = MAX_CHARS - sum(len(c) + 1 for c in capability)
 	out = ""
-	for section in _sections(gateway):
+	for section in _static_sections():
 		candidate = f"{out} {section}" if out else section
-		if len(candidate) > MAX_CHARS:
+		if len(candidate) > budget:
 			break
 		out = candidate
-	return out
+	return " ".join([p for p in [out, *capability] if p])
 
 
 _MESSAGE_KEYS = ("message", "edited_message", "business_message", "channel_post")
