@@ -35,5 +35,15 @@
       "huf/**/*.py",
       "scripts/baselines/whitelist.json"
     ]
+  },
+  {
+    "name": "core-boundary",
+    "script": "scripts/check_core_boundary.py",
+    "args": [],
+    "paths": [
+      "frontend/src/**",
+      "huf/**/*.py",
+      "scripts/baselines/core_boundary.json"
+    ]
   }
 ]

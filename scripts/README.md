@@ -23,6 +23,12 @@ Guard tests: `python3 -m unittest discover -s scripts/tests` (also run by the St
   - a directory with more than 15 source files fails if it is new or grew past its baseline
   - files over 300 lines only warn (`-v` lists them)
   - `--list` prints offenders, largest first
+- `check_core_boundary.py` (`core-boundary`): core code (everything outside the WhatsApp and
+  Solutions packages, their doctypes, `gateway_adapters/whatsapp*`, their pages/components and
+  tests) may not add imports of, or dotted-path references to, WhatsApp or Solutions modules.
+  Lazy imports inside functions count. Known edges are baselined and may only disappear; new
+  core calls go through a gateway adapter capability or the frontend feature registry.
+  `--list` prints the current edges.
 - `check_repo_layout.py`: keeps workspace/agent files out of the repo (own workflow).
 - Other guards (UI drift, API calls, whitelist) register themselves in `standards.json`.
 
