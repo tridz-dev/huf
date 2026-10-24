@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import type { SimulateDraft } from '@/types/solutions';
 import { TraceList } from './TraceList';
 import { useTestChat } from './useTestChat';
 
@@ -23,6 +24,8 @@ export interface TestChatProps {
   embedded?: boolean;
   brand?: string;
   solutionLabels?: Record<string, string>;
+  /** Unsaved wizard rules; sent as SimulateRequest.draft on every simulate call. */
+  draft?: SimulateDraft;
 }
 
 const nativeSelect =
@@ -37,11 +40,12 @@ export function TestChat({
   embedded = false,
   brand = 'Your business',
   solutionLabels,
+  draft: simDraft,
 }: TestChatProps) {
   const [localGateway, setLocalGateway] = useState(gateway ?? gateways[0]?.name ?? '');
   const active = gateway ?? localGateway;
   const current = gateways.find((g) => g.name === active);
-  const chat = useTestChat({ gateway: active, solutionLabels });
+  const chat = useTestChat({ gateway: active, solutionLabels, draft: simDraft });
   const [draft, setDraft] = useState('');
   const [target, setTarget] = useState('');
   const scroller = useRef<HTMLDivElement>(null);
