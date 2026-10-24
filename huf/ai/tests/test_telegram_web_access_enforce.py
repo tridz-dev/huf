@@ -455,3 +455,32 @@ class TestDeskAliasInGuard(unittest.TestCase):
 		self.assertTrue(enf.decide(marker, settings, "GET", "/app/query-report/ToDo", {}))
 		self.assertFalse(enf.decide(marker, settings, "GET", "/desk/user", {}))
 		self.assertFalse(enf.decide(marker, settings, "GET", "/desk/query-report/ToDoX", {}))
+
+
+class TestDeskHousekeepingCalls(unittest.TestCase):
+	def test_the_desk_shell_housekeeping_calls_are_allowed_but_other_writes_are_not(self):
+		from huf.ai import telegram_web_access_enforce as enf
+
+		marker = {"gateway": "G", "tg_id": "1", "binding": "B", "allow_writes": False}
+		settings = {
+			"telegram_web_access_enabled": 1,
+			"is_enabled": 1,
+			"telegram_web_allowed_paths": "/app/query-report/X",
+		}
+		allowed = [
+			("POST", "frappe.desk.doctype.route_history.route_history.deferred_insert"),
+			("GET", "frappe.desk.doctype.notification_log.notification_log.get_notification_logs"),
+			(
+				"POST",
+				"frappe.core.doctype.session_default_settings.session_default_settings.get_session_default_values",
+			),
+			("GET", "frappe.desk.reportview.get_list"),
+		]
+		for method, name in allowed:
+			self.assertTrue(enf.decide(marker, settings, method, "/api/method/" + name, {}), name)
+		self.assertFalse(enf.decide(marker, settings, "POST", "/api/method/frappe.client.insert", {}))
+		self.assertFalse(
+			enf.decide(
+				marker, settings, "GET", "/api/method/frappe.desk.reportview.get_list", {"doctype": "User"}
+			)
+		)

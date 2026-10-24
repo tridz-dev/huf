@@ -48,3 +48,17 @@ dropped (`get_workspace_sidebar_items`, `get_notification_info_for_boot`).
 `revoke_binding_sessions(binding, user)` deletes only Sessions rows of the bound user whose data has
 `tg_origin.binding == binding`; the user's ordinary sessions are kept. Triggered by: binding `is_active` 1 -> 0,
 `role_scope`, `frappe_user`, `telegram_user_id` or `gateway` change (the previous user's sessions are found via the before-save doc), binding deletion (`on_trash`), and the Telegram `/unbind` command.
+
+## Desk housekeeping calls
+
+Opening a report on the desk (`/app/...`, which Frappe 16 redirects to `/desk/...`; both spellings of an allowed
+page are accepted) makes a few calls of its own. They are allowed in read-only sessions so the page loads without
+error popups:
+
+- `frappe.desk.doctype.route_history.route_history.deferred_insert` records the user's own navigation history.
+  It is the one write a read-only Telegram session may do.
+- `get_notification_logs`, `get_session_default_values` and `frappe.desk.reportview.get_list` only read, and
+  `get_list` still goes through the blocked-document-type check.
+
+For pages the owner builds, a plain `www` page that renders its data server-side avoids the desk entirely and is the
+recommended shape for Telegram.

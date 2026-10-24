@@ -30,7 +30,15 @@ METHOD_PARAMS = ("run_method", "cmd", "method")
 ASSET_PREFIXES = ("/assets", "/files")
 LAUNCH_PATH = "/tg_open"  # the launch page must stay reachable: a tap with a live session reuses it
 ALWAYS_ALLOWED_METHODS = frozenset(
-	{"frappe.ping", "ping", "logout", "web_logout", "huf.ai.telegram_web_access.exchange"}
+	{
+		"frappe.ping",
+		"ping",
+		"logout",
+		"web_logout",
+		"huf.ai.telegram_web_access.exchange",
+		# the desk shell records the user's own navigation history; the one write a read-only session allows
+		"frappe.desk.doctype.route_history.route_history.deferred_insert",
+	}
 )
 
 # Verified to exist in Frappe 16 (see docs); names that do not exist were dropped.
@@ -44,6 +52,9 @@ DEFAULT_READ_METHODS = frozenset(
 		"frappe.client.get_value",
 		"frappe.desk.reportview.get",
 		"frappe.desk.reportview.get_count",
+		"frappe.desk.reportview.get_list",
+		"frappe.desk.doctype.notification_log.notification_log.get_notification_logs",
+		"frappe.core.doctype.session_default_settings.session_default_settings.get_session_default_values",
 		"frappe.desk.form.load.getdoc",
 		"frappe.desk.form.load.getdoctype",
 		"frappe.desk.form.load.get_docinfo",
