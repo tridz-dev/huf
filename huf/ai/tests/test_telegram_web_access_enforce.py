@@ -331,8 +331,8 @@ class TestBindingUpdate(unittest.TestCase):
 		self.assertIn(mock.call("B1", "old@x.com"), rv.call_args_list)
 
 	def test_tg_id_and_gateway_change_revoke(self):
-		self._run(telegram_user_id="2").assert_called()
-		self._run(gateway="G2").assert_called()
+		self.assertIn(mock.call("B1", "old@x.com"), self._run(telegram_user_id="2").call_args_list)
+		self.assertIn(mock.call("B1", "old@x.com"), self._run(gateway="G2").call_args_list)
 
 
 class TestExpiryAndHours(unittest.TestCase):

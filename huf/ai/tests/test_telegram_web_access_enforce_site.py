@@ -84,4 +84,9 @@ class TestEnforceDbSite(IntegrationTestCase):
 
 	def test_roles_cached_helper_reads_real_roles(self):
 		self.assertTrue(E._is_privileged("Administrator"))
-		self.assertTrue(E._is_privileged(USER) is False or True)  # exercised without error
+		self.assertFalse(E._is_privileged("Guest"))  # real roles: Guest holds neither privileged role
+		self.assertIn("Guest", frappe.get_roles("Guest"))
+		self.assertFalse(E.PRIVILEGED_ROLES & set(frappe.get_roles("Guest")))
+		with mock.patch.object(E.frappe, "get_roles", side_effect=RuntimeError("db down")):
+			E.clear_gateway_cache()
+			self.assertTrue(E._is_privileged("Guest"))  # cannot tell -> fail closed

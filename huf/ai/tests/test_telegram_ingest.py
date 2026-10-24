@@ -120,6 +120,7 @@ class TestHandleUpdate(unittest.TestCase):
 		):
 			result, m = run(load_fixture("my_chat_member_blocked"))
 		out.assert_called_once()
+		self.assertEqual(out.call_args.args[:2], (GW, "111"))  # the blocking user's id, not the bot's or chat's
 		self.assertEqual(result["ignored"], "bot_blocked")
 		m.assert_not_called()
 
@@ -136,6 +137,7 @@ class TestHandleUpdate(unittest.TestCase):
 		with mock.patch("huf.ai.gateway_service._record_opt_in") as inn:
 			result, _ = run(payload)
 		inn.assert_called_once()
+		self.assertEqual(inn.call_args.args[:2], (GW, "111"))
 		self.assertEqual(result["ignored"], "bot_unblocked")
 
 	def test_start_payload_reaches_event(self):

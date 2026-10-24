@@ -436,10 +436,10 @@ class TestAlbums(SenderBase):
 class TestUploadLimits(SenderBase):
 	def test_big_photo_falls_back_to_document(self):
 		data = b"0" * (PHOTO_MAX_BYTES + 1)
-		self.sender.send_photo(5, ("p.jpg", data), caption="c", extra={"has_spoiler": True, "foo": 1})
+		self.sender.send_photo(5, ("p.jpg", data), caption="c", extra={"has_spoiler": True, "protect_content": True})
 		call = self.api.last()
 		self.assertEqual(call["method"], "sendDocument")
-		self.assertEqual(call["payload"], {"chat_id": 5, "caption": "c", "foo": 1})
+		self.assertEqual(call["payload"], {"chat_id": 5, "caption": "c", "protect_content": True})
 		self.assertEqual(list(call["files"]), ["document"])
 
 	def test_photo_at_limit_stays_photo(self):
