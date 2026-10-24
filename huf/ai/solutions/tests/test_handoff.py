@@ -3,7 +3,7 @@ from frappe.tests import IntegrationTestCase
 from frappe.utils import now_datetime
 
 from huf.ai.solutions import assignment, handoff
-from huf.ai.solutions.tests._fixtures import make_agent, make_gateway, make_solution
+from huf.ai.solutions.tests._fixtures import make_agent, make_binding, make_gateway, make_solution
 
 
 def make_flow_solution():
@@ -52,6 +52,7 @@ class TestHandoff(IntegrationTestCase):
 		self.gw = make_gateway(pin_ttl_hours=5).name
 		self.src = _agent_solution()
 		self.dst = _agent_solution()
+		make_binding(self.gw, solution=self.dst.name, match_type="Catch-all", agent=make_agent())
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
@@ -91,6 +92,7 @@ class TestHandoff(IntegrationTestCase):
 
 	def test_note_skipped_without_target_agent(self):
 		flow_target = make_solution()  # no primary agent
+		make_binding(self.gw, solution=flow_target.name, match_type="Catch-all", agent=make_agent())
 		assignment.set_pin(self.gw, "c1", self.src.name, "rule")
 		_seed_source(self.src, self.gw, "c1", ["hello"])
 		out = handoff.reassign(self.gw, "c1", flow_target.name, note_messages=3)
@@ -100,6 +102,7 @@ class TestHandoff(IntegrationTestCase):
 
 	def test_flow_target_changes_assignment_only(self):
 		flow = make_flow_solution()
+		make_binding(self.gw, solution=flow.name, match_type="Catch-all", agent=make_agent())
 		out = handoff.reassign(self.gw, "c1", flow.name, note_messages=2)
 		self.assertEqual(assignment.current_solution(self.gw, "c1"), flow.name)
 		self.assertFalse(out["note_added"])
@@ -129,3 +132,27 @@ class TestHandoff(IntegrationTestCase):
 		out = handoff.reassign_conversation(self.gw, "c1", self.dst.name, "0")
 		self.assertNotIn("error", out)
 		self.assertEqual(out["pin"]["solution"], self.dst.name)
+
+	def test_target_on_other_gateway_rejected(self):
+		other = make_gateway().name
+		far = _agent_solution()
+		make_binding(other, solution=far.name, match_type="Catch-all", agent=make_agent())
+		with self.assertRaises(handoff.HandoffError) as cm:
+			handoff.reassign(self.gw, "c1", far.name)
+		self.assertEqual(cm.exception.code, "not_on_gateway")
+		out = handoff.reassign_conversation(self.gw, "c1", far.name)
+		self.assertEqual(out["error"]["code"], "not_on_gateway")
+		self.assertNotIn(far.name, out["error"]["message"])
+		self.assertIsNone(assignment.get_pin(self.gw, "c1"))
+
+	def test_disabled_binding_rejected(self):
+		off = _agent_solution()
+		make_binding(self.gw, solution=off.name, is_enabled=0, match_type="Catch-all", agent=make_agent())
+		with self.assertRaises(handoff.HandoffError) as cm:
+			handoff.reassign(self.gw, "c1", off.name)
+		self.assertEqual(cm.exception.code, "not_on_gateway")
+
+	def test_target_on_same_gateway_accepted(self):
+		out = handoff.reassign_conversation(self.gw, "c1", self.dst.name)
+		self.assertNotIn("error", out)
+		self.assertEqual(assignment.current_solution(self.gw, "c1"), self.dst.name)

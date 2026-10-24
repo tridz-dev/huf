@@ -44,6 +44,14 @@ def _target_row(solution):
 	return row
 
 
+def _require_on_gateway(gateway, solution):
+	"""The target must have an enabled binding on this chat's gateway (never re-pin across gateways)."""
+	if not frappe.db.exists(
+		"Gateway Binding", {"gateway": gateway, "solution": solution, "is_enabled": 1}
+	):
+		raise HandoffError("not_on_gateway", _("Target solution is not available on this gateway"))
+
+
 def _primary_agent(solution):
 	if not solution:
 		return None
@@ -125,6 +133,7 @@ def reassign(gateway, space_key, solution, note_messages=0, set_by="handoff", ac
 	if not frappe.db.exists("Gateway", gateway):
 		raise HandoffError("not_found", _("Gateway not found"))
 	target = _target_row(solution)
+	_require_on_gateway(gateway, target.name)
 	count = max(0, min(cint(note_messages), MAX_NOTE_MESSAGES))
 	previous = assignment.current_solution(gateway, space_key)
 	ttl = loader.load_gateway_settings(gateway)["pin_ttl_hours"]

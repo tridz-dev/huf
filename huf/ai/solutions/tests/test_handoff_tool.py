@@ -5,7 +5,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.solutions import assignment
-from huf.ai.solutions.tests._fixtures import make_agent, make_gateway, make_solution
+from huf.ai.solutions.tests._fixtures import make_agent, make_binding, make_gateway, make_solution
 from huf.ai.tools import handoff as tool
 from huf.ai.tools._registry import ALL_INTEGRATION_TOOLS
 
@@ -39,6 +39,7 @@ class TestHandoffTool(IntegrationTestCase):
 		self.gw = make_gateway().name
 		self.src = make_solution(primary_target_type="Agent", primary_agent=make_agent())
 		self.dst = make_solution(primary_target_type="Agent", primary_agent=make_agent())
+		make_binding(self.gw, solution=self.dst.name, match_type="Catch-all", agent=make_agent())
 		self.addCleanup(setattr, frappe.flags, "huf_current_agent_run_id", None)
 
 	def tearDown(self):
@@ -102,6 +103,34 @@ class TestHandoffTool(IntegrationTestCase):
 
 	def test_flow_target_assignment_only(self):
 		flow = make_flow_solution()
+		make_binding(self.gw, solution=flow.name, match_type="Catch-all", agent=make_agent())
 		conv = self._conversation(f"gateway:{self.gw}", "chat-9")
 		self.assertTrue(self._call(conv, solution=flow.name)["success"])
 		self.assertEqual(assignment.current_solution(self.gw, "chat-9"), flow.name)
+
+	def test_target_on_other_gateway_rejected(self):
+		other = make_gateway().name
+		far = make_solution(primary_target_type="Agent", primary_agent=make_agent())
+		make_binding(other, solution=far.name, match_type="Catch-all", agent=make_agent())
+		conv = self._conversation(f"gateway:{self.gw}", "chat-9")
+		out = self._call(conv, solution=far.name)
+		self.assertEqual(out["error"], "not_on_gateway")
+		self.assertNotIn(far.title, json.dumps(out))
+		self.assertIsNone(assignment.get_pin(self.gw, "chat-9"))
+
+	def test_pin_key_follows_router_conversation_id(self):
+		frappe.get_doc(
+			{
+				"doctype": "Gateway Event",
+				"gateway": self.gw,
+				"idempotency_key": f"pk-{self.gw}",
+				"status": "Recorded",
+				"sender_id": "sender-1",
+				"conversation_id": "conv-1",
+				"thread_id": "thread-1",
+			}
+		).insert(ignore_permissions=True, ignore_links=True)
+		conv = self._conversation(f"gateway:{self.gw}", "thread-1")
+		self.assertTrue(self._call(conv, solution=self.dst.name)["success"])
+		self.assertEqual(assignment.current_solution(self.gw, "conv-1"), self.dst.name)
+		self.assertIsNone(assignment.get_pin(self.gw, "thread-1"))

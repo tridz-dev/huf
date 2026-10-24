@@ -37,7 +37,25 @@ def _run_chat():
 	name = channel[len("gateway:"):].strip()
 	if not name or not frappe.db.exists("Gateway", name):
 		return "", ""
-	return name, external
+	return name, _pin_key(name, external)
+
+
+def _pin_key(gateway, external):
+	"""The router pins on ``conversation_id or sender_id``; the conversation external_id may be a thread id."""
+	try:
+		rows = frappe.get_all(
+			"Gateway Event",
+			filters={"gateway": gateway},
+			or_filters={"thread_id": external, "conversation_id": external, "sender_id": external},
+			fields=["conversation_id", "sender_id"],
+			order_by="creation desc",
+			limit=1,
+		)
+	except Exception:
+		rows = []
+	if rows:
+		return str(rows[0].get("conversation_id") or rows[0].get("sender_id") or external)
+	return external
 
 
 def _resolve_solution(value):
