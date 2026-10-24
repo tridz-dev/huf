@@ -192,8 +192,18 @@ def parse_prefixes(text) -> list[str]:
 	for line in (text or "").splitlines():
 		n = normalize_path(line.strip()) if line.strip() else None
 		if n and n != "/":
-			out.append(n)
+			for variant in _desk_aliases(n):
+				if variant not in out:
+					out.append(variant)
 	return out
+
+
+def _desk_aliases(path: str) -> list[str]:
+	"""Frappe 16 serves the desk under ``/desk`` and redirects ``/app`` to it: allow both spellings."""
+	for here, there in (("/app", "/desk"), ("/desk", "/app")):
+		if path == here or path.startswith(here + "/"):
+			return [path, there + path[len(here) :]]
+	return [path]
 
 
 def path_allowed(path: str, prefixes) -> bool:

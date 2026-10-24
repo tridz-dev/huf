@@ -439,3 +439,19 @@ class TestLaunchPageStaysReachable(unittest.TestCase):
 		self.assertTrue(
 			enf.decide(marker, settings, "POST", "/api/method/huf.ai.telegram_web_access.exchange", {})
 		)
+
+
+class TestDeskAliasInGuard(unittest.TestCase):
+	def test_desk_spelling_of_an_allowed_app_page_is_navigable(self):
+		from huf.ai import telegram_web_access_enforce as enf
+
+		marker = {"gateway": "G", "tg_id": "1", "binding": "B", "allow_writes": False}
+		settings = {
+			"telegram_web_access_enabled": 1,
+			"is_enabled": 1,
+			"telegram_web_allowed_paths": "/app/query-report/ToDo",
+		}
+		self.assertTrue(enf.decide(marker, settings, "GET", "/desk/query-report/ToDo", {}))
+		self.assertTrue(enf.decide(marker, settings, "GET", "/app/query-report/ToDo", {}))
+		self.assertFalse(enf.decide(marker, settings, "GET", "/desk/user", {}))
+		self.assertFalse(enf.decide(marker, settings, "GET", "/desk/query-report/ToDoX", {}))
