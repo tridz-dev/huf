@@ -59,10 +59,28 @@ def decide_route(
 	# a rule is usable when its solution (if any) is live
 	usable = [r for r in enabled if not r.get("solution") or live(r["solution"])]
 
-	def first_rule_for(sol):
-		mine = [r for r in usable if r.get("solution") == sol]
-		# prefer a message rule over an ad-tag rule as the binding for pinned/payload routes
-		return next((r for r in mine if r.get("match_type") != REFERRAL), mine[0] if mine else None)
+	def _answers(r):
+		return r.get("target_type") != TRIAGE and bool(r.get("agent") or r.get("flow"))
+
+	def target_for(sol):
+		"""Answering target for a pin / triage answer / button payload: never a Triage rule.
+		Prefer a message rule, then an ad-tag rule, then the solution's primary target."""
+		mine = [r for r in usable if r.get("solution") == sol and _answers(r)]
+		rule = next((r for r in mine if r.get("match_type") != REFERRAL), mine[0] if mine else None)
+		if rule:
+			return _target(rule)
+		st = solutions.get(sol) or {}
+		ptype = st.get("primary_target_type")
+		agent = st.get("primary_agent") if ptype == "Agent" else None
+		flow = st.get("primary_flow") if ptype == "Flow" else None
+		if agent or flow:
+			kind = "flow" if flow else "agent"
+			trace.append({"k": "info", "t": f"Answered by {title(sol)}'s {kind}"})
+			return {"target_type": ptype, "agent": agent, "flow": flow, "binding": None}
+		trace.append(
+			{"k": "skip", "t": f"{title(sol)} has no rule or primary agent/flow that can answer"}
+		)
+		return {"target_type": None, "agent": None, "flow": None, "binding": None}
 
 	def decision(reason, solution=None, rule=None, reply_text=None, pending=None, legacy=False, target=None):
 		tgt = target if target is not None else _target(rule)
@@ -119,7 +137,7 @@ def decide_route(
 		sol = str(button_payload)[4:].split("|", 1)[0].strip()
 		if live(sol):
 			trace.append({"k": "win", "t": f"Template reply payload → {title(sol)}"})
-			return decision("referral", sol, first_rule_for(sol))
+			return decision("referral", sol, target=target_for(sol))
 		trace.append({"k": "skip", "t": "Template reply payload points at a solution that is not live"})
 
 	# 2. pending triage answer
@@ -128,7 +146,7 @@ def decide_route(
 		answer = parse_triage_answer(text, options)
 		if answer:
 			trace.append({"k": "win", "t": f'Menu answer "{low}" → {title(answer)}'})
-			return decision("triage_answer", answer, first_rule_for(answer))
+			return decision("triage_answer", answer, target=target_for(answer))
 		trace.append({"k": "info", "t": "Menu is open but the message is not a valid answer"})
 
 	# keyword candidate (needed for steps 3 and 4)
@@ -158,7 +176,7 @@ def decide_route(
 			trace.append({"k": "win", "t": f"Pinned to {title(pin_sol)} ({left}h left). Pinned chat wins."})
 		else:
 			trace.append({"k": "win", "t": f"Pinned to {title(pin_sol)} ({left}h left)"})
-		return decision("pin", pin_sol, first_rule_for(pin_sol))
+		return decision("pin", pin_sol, target=target_for(pin_sol))
 
 	# 4. keyword
 	if kw_hit:

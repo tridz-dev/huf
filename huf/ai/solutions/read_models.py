@@ -586,6 +586,7 @@ def simulate_route(request):
 		gateway_default=settings["default"],
 		include_inactive=True,
 		pin_ttl_hours=settings["pin_ttl_hours"],
+		brand=loader.gateway_brand(gateway),
 	)
 	return {
 		k: decision.get(k)

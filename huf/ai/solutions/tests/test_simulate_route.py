@@ -152,3 +152,16 @@ class TestSimulateRoute(ReadModelCase):
 		self.sim("cake", draft=self._draft(catch_all=True))
 		self.assertEqual(self._counts(), before)
 		self.assertFalse(frappe.db.exists("Solution", {"title": "Draft desk"}))
+
+
+class TestSimulateTriageOwner(ReadModelCase):
+	def test_pinned_triage_owner_resolves_real_target_and_brand(self):
+		gw = make_gateway().name
+		sol = make_solution(title="Catering desk", primary_target_type="Agent", primary_agent=self.agent).name
+		make_binding(gw, None, priority=1, match_type="Catch-all", target_type="Triage", solution=sol)
+		d = rm.simulate_route({"gateway": gw, "text": "thanks", "state": {"pin": {"solution": sol, "hours_left": 5}}})
+		self.assertEqual((d["reason"], d["target_type"], d["agent"], d["binding"]), ("pin", "Agent", self.agent, None))
+		other = make_solution(title="Other desk").name
+		make_binding(gw, self.agent, priority=2, match_type="Keyword", match_value="zzz", solution=other)
+		m = rm.simulate_route({"gateway": gw, "text": "hello", "state": {}})
+		self.assertTrue(m["reply_text"].startswith(f"Hi, this is {gw}. Reply:"))
