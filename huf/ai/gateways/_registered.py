@@ -9,4 +9,5 @@ MODULES = (
 	"huf.ai.gateways.privacy",
 	"huf.ai.gateways.teams_tenant",
 	"huf.ai.gateways.teams_refs",
+	"huf.ai.gateways.teams_identity",
 )

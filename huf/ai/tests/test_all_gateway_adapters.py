@@ -304,28 +304,22 @@ class TestAllGatewayAdapters(unittest.TestCase):
 			adapter.send_reply(reply)
 
 	def test_teams_adapter(self):
-		mock_post = MagicMock()
-		mock_post.return_value.json.return_value = {"id": "act_999"}
-
-		adapter = TeamsGatewayAdapter(
-			{"app_id": "appid", "app_password": "apppass", "tenant_id": "tenant"},
-			http_post=mock_post,
-		)
+		# Full Teams behaviour (JWT verification, typed normalization, outbox sends) is covered by
+		# test_teams_adapter_v2.py; this is a smoke check that the registry-built adapter normalizes.
+		adapter = TeamsGatewayAdapter({"app_id": "appid", "app_password": "apppass", "tenant_id": "tenant"})
 
 		req = GatewayInboundRequest(
-			body=b'{"id": "act_1", "from": {"id": "user1"}, "conversation": {"id": "conv1"}, "text": "Hi Teams"}',
+			body=(
+				b'{"type": "message", "id": "act_1", "from": {"id": "user1", "aadObjectId": "aad1"}, '
+				b'"conversation": {"id": "conv1", "conversationType": "personal", "tenantId": "tenant"}, '
+				b'"recipient": {"id": "28:appid"}, "serviceUrl": "https://smba.trafficmanager.net/amer/", '
+				b'"channelData": {"tenant": {"id": "tenant"}}, "text": "Hi Teams"}'
+			),
 			headers={"Authorization": "Bearer token"},
 			query={},
 			method="POST",
 		)
 
 		event = adapter.normalize_inbound(req)
-		self.assertEqual(event.sender_id, "user1")
+		self.assertEqual(event.sender_id, "aad1")
 		self.assertEqual(event.message_text, "Hi Teams")
-
-		reply = GatewayReply(
-			conversation_id="conv1",
-			text="Teams Reply",
-		)
-		delivery = adapter.send_reply(reply)
-		self.assertEqual(delivery.provider_message_id, "act_999")

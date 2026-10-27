@@ -97,7 +97,9 @@ def env(monkeypatch):
 		st.calls.append((doctype + ":count", {"filters": filters}))
 		return st.linked
 
-	frappe.db = SimpleNamespace(exists=lambda dt, n=None: n == "gw1", count=count)
+	monkeypatch.setattr(
+		frappe, "db", SimpleNamespace(exists=lambda dt, n=None: n == "gw1", count=count), raising=False
+	)
 	monkeypatch.setattr(frappe, "get_all", get_all)
 
 	def get_doc(dt, name=None):

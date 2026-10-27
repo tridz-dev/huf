@@ -78,7 +78,7 @@ def env(monkeypatch):
 			return name in st.gateways
 		return name in st.rows
 
-	frappe.db = SimpleNamespace(get_value=get_value, exists=exists)
+	monkeypatch.setattr(frappe, "db", SimpleNamespace(get_value=get_value, exists=exists), raising=False)
 
 	class Doc:
 		def __init__(self, data):
