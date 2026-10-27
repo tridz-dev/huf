@@ -12,6 +12,7 @@ from typing import Any
 import frappe
 from frappe import _
 
+from huf.ai.api_support import require_permission
 from huf.ai.gateways.slack_api import SlackApiError
 
 BINDING_DOCTYPE = "Gateway Binding"
@@ -35,6 +36,15 @@ _SCOPE_HINTS = {
 # ---- permission / loading helpers ------------------------------------------
 def _is_system_manager() -> bool:
 	return "System Manager" in (frappe.get_roles() or [])
+
+
+def _require_gateway_access(gateway: str, ptype: str) -> None:
+	"""Raise PermissionError unless the caller is a System Manager or has `ptype` on the Gateway."""
+	require_permission(
+		lambda: bool(gateway) and isinstance(gateway, str)
+		and (_is_system_manager() or frappe.has_permission("Gateway", ptype, doc=gateway)),
+		"Not permitted",
+	)
 
 
 def _load_gateway(gateway: str, ptype: str):
@@ -133,7 +143,7 @@ def list_bindings(gateway: str) -> list[dict]:
 	return _ordered_bindings(gateway)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_binding(gateway: str, binding: dict | str) -> dict:
 	"""Create (no ``name``) or update (``name`` of a binding on this gateway) a rule."""
 	gw = _load_gateway(gateway, "write")
@@ -156,7 +166,7 @@ def save_binding(gateway: str, binding: dict | str) -> dict:
 	return {field: doc.get(field) for field in BINDING_FIELDS}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete_binding(name: str) -> dict:
 	gateway = frappe.db.get_value(BINDING_DOCTYPE, name, "gateway") if name else None
 	if not gateway:
@@ -166,7 +176,7 @@ def delete_binding(name: str) -> dict:
 	return {"deleted": name}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def reorder_bindings(gateway: str, ordered_names: list | str) -> list[dict]:
 	"""Rewrite priorities 1..n in the given order. All-or-nothing."""
 	_load_gateway(gateway, "write")
@@ -268,6 +278,7 @@ def _search(gateway: str, query, cursor, kind: str, fetch, key: str, normalize, 
 
 @frappe.whitelist()
 def list_slack_channels(gateway: str, query: str | None = None, cursor: str | None = None) -> dict:
+	_require_gateway_access(gateway, "read")
 	return _search(
 		gateway, query, cursor, "channels",
 		lambda api, c: api.conversations_list("public_channel,private_channel", cursor=c, limit=SLACK_PAGE_LIMIT),
@@ -277,6 +288,7 @@ def list_slack_channels(gateway: str, query: str | None = None, cursor: str | No
 
 @frappe.whitelist()
 def list_slack_users(gateway: str, query: str | None = None, cursor: str | None = None) -> dict:
+	_require_gateway_access(gateway, "read")
 	return _search(
 		gateway, query, cursor, "users",
 		lambda api, c: api.users_list(cursor=c, limit=SLACK_PAGE_LIMIT),

@@ -11,26 +11,21 @@ Registered hooks (provider ``slack``, at import time):
 - ``on_run_success``: record the requester on the Agent Run / Flow Run.
 
 Rules: identity is keyed on (team_id, user_id), never on email. Never returns Guest.
-Auto-map is OFF unless the Integration Settings credential ``auto_link_by_email`` is "1";
-it needs the Slack scope ``users:read.email`` (add it to the app manifest) and only maps
-a human member of the gateway's own workspace (not a bot, deleted, guest or Slack Connect
-user) to exactly one enabled Frappe user with that email.
+Auto-map is OFF unless the Integration Settings credential ``auto_link_by_email`` is "1"
+(scope ``users:read.email``); it maps only a human member of the gateway's own workspace to
+exactly one enabled Frappe user with that email.
 
-Self-link token: stateless HMAC-SHA256 over a JSON payload using the site's
-``encryption_key`` (never leaves the server, nothing to store for verification), plus a
-random nonce kept in the cache for 15 minutes so the token is one-time. Nothing secret or
-personal (no email) is in the URL. Confirmation is POST-only and requires a logged-in
-non-Guest user; ``preview_self_link`` (GET) only shows what would be linked, so a link
-clicked by mistake never links anything.
+Self-link token: stateless HMAC-SHA256 over a JSON payload keyed with the site's
+``encryption_key``, plus a cache nonce (15 minutes) that makes it one-time; no secret or
+personal data is in the URL. Confirmation is POST-only for a logged-in non-Guest user;
+``preview_self_link`` (GET) only shows what would be linked.
 
-Two-way proof: confirming on the web only creates a ``Pending`` link and DMs the Slack
-user being linked (``identity_confirm``). Only that same Slack user clicking "Yes, link it"
-flips it to ``Linked``; Pending links never resolve to a user. The token is delivered
-privately (ephemeral/DM, see ``reliability``), never to the channel.
+Two-way proof: confirming on the web creates a ``Pending`` link and DMs the Slack user
+(``identity_confirm``); only that user clicking "Yes, link it" makes it ``Linked``. Pending
+links never resolve to a user. The token is delivered privately, never to the channel.
 
-Concurrency: the nonce is consumed with an atomic cache claim and the Linked-row creation
-is serialised by a short per-(gateway, team, person) cache lock plus a re-check. A DB unique
-index on (gateway, team_id, external_id) for Linked rows is a bench follow-up.
+Concurrency: the nonce is consumed with an atomic cache claim and Linked-row creation is
+serialised by a short per-(gateway, team, person) lock plus a re-check.
 """
 
 from __future__ import annotations
@@ -229,10 +224,7 @@ def _cache():
 
 
 def create_self_link_token(gateway: str, team_id: str, external_id: str, label: str | None = None) -> str:
-	"""Internal helper (not whitelisted): signed, 15-minute, one-time token.
-
-	``label`` is an optional display name of the Slack person, shown on the confirm page.
-	"""
+	"""Internal helper: signed, 15-minute, one-time token (``label`` = display name for the confirm page)."""
 	nonce = frappe.generate_hash(length=20)
 	payload = {"g": gateway, "t": team_id, "x": external_id, "e": int(time.time()) + TOKEN_TTL_SECONDS, "n": nonce}
 	if label:
@@ -314,11 +306,7 @@ def preview_self_link(token: str) -> dict:
 
 @frappe.whitelist(methods=["POST"])
 def confirm_self_link(token: str) -> dict:
-	"""Start linking the logged-in (non-Guest) user to the Slack identity in a one-time token.
-
-	Creates the link as ``Pending`` and asks the Slack user (by DM) to confirm; nothing
-	resolves to this Huf user until that Slack user clicks "Yes, link it".
-	"""
+	"""Create a ``Pending`` link and DM the Slack user; it resolves only once they click "Yes, link it"."""
 	user = _require_login()
 	data = _verify_token(token)
 	if not _claim(_USED_PREFIX + str(data["n"]), TOKEN_TTL_SECONDS + 60):
@@ -449,11 +437,7 @@ def resolve_run_user(gateway, event):
 
 
 def resolve_conversation_key(gateway, event):
-	"""``{team or gateway}:{channel}:{thread_ts or sender}``.
-
-	Threaded replies share one conversation per thread; un-threaded channel messages and DMs
-	are per sender, so users never see each other's context.
-	"""
+	"""``{team or gateway}:{channel}:{thread_ts or sender}``: per thread, else per sender (no shared context)."""
 	inner = _slack_event(event)
 	channel = str(getattr(event, "conversation_id", "") or inner.get("channel") or "")
 	thread_ts = str(inner.get("thread_ts") or "")

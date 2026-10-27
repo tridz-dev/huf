@@ -229,7 +229,7 @@ def _run_checks(gateway) -> list[dict]:
 	return checks
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def verify_slack_setup(gateway_name: str) -> list[dict]:
 	gateway = _check_permission(gateway_name)
 	checks = _run_checks(gateway)

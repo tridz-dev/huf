@@ -365,8 +365,8 @@ export function BindingsPanel({ gateway }: ProviderPanelProps) {
           {rules.map((rule, index) => (
             <li key={rule.name} className="flex items-center gap-2 p-2">
               <div className="flex flex-col">
-                <Button size="icon" variant="ghost" className="h-6 w-6" aria-label="Move up" disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp className="h-3 w-3" /></Button>
-                <Button size="icon" variant="ghost" className="h-6 w-6" aria-label="Move down" disabled={index === rules.length - 1} onClick={() => move(index, 1)}><ArrowDown className="h-3 w-3" /></Button>
+                <Button size="icon-sm" variant="ghost" aria-label="Move up" disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp className="h-3 w-3" /></Button>
+                <Button size="icon-sm" variant="ghost" aria-label="Move down" disabled={index === rules.length - 1} onClick={() => move(index, 1)}><ArrowDown className="h-3 w-3" /></Button>
               </div>
               <p className="flex-1 text-sm">
                 {describeRule(
