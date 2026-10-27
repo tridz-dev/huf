@@ -697,3 +697,112 @@ def test_teams_actions_has_no_slack_imports():
 def test_modules_compile():
 	for f in ("teams_actions.py", "teams_cards.py"):
 		py_compile.compile(f"huf/ai/gateways/{f}", doraise=True)
+
+
+# --- gateway_webhook response override (unit, with fakes) -----------------------------------
+
+
+class FakeResponse:
+	def __init__(self, body, status=200, mimetype="text/plain"):
+		self.body, self.status, self.mimetype = body, status, mimetype
+
+
+@pytest.fixture
+def wh(monkeypatch):
+	rl = ModuleType("frappe.rate_limiter")
+	rl.rate_limit = lambda **kw: (lambda fn: fn)
+	monkeypatch.setitem(sys.modules, "frappe.rate_limiter", rl)
+	monkeypatch.delitem(sys.modules, "huf.ai.gateway_webhook", raising=False)
+	gw = importlib.import_module("huf.ai.gateway_webhook")
+	monkeypatch.delitem(sys.modules, "huf.ai.gateway_webhook", raising=False)
+	local = SimpleNamespace(response=SimpleNamespace(http_status_code=200))
+	fake_frappe = SimpleNamespace(
+		request=SimpleNamespace(args={"gateway_name": "gw1"}),
+		local=local,
+		get_doc=lambda dt, n: SimpleNamespace(name=n, is_enabled=1),
+		DoesNotExistError=KeyError,
+	)
+	calls = []
+	adapter = SimpleNamespace(
+		verify_inbound=lambda r: True,
+		normalize_inbound=lambda r: SimpleNamespace(
+			provider_event_id="e1", raw_payload={}, sender_id="s", conversation_id="c", message_text="",
+			thread_id=None, is_room=False, mentioned=True, display_name="", attachments=()),
+	)
+	service = ModuleType("huf.ai.gateway_service")
+	state = SimpleNamespace(local=local, calls=calls, hook=None, verified=True)
+
+	def ingest(*a, **k):
+		calls.append(a)
+		if state.hook:
+			state.hook()
+		return {"filtered": True}
+
+	service.ingest_gateway_event = ingest
+	wz = ModuleType("werkzeug")
+	wzw = ModuleType("werkzeug.wrappers")
+	wzw.Response = FakeResponse
+	monkeypatch.setitem(sys.modules, "huf.ai.gateway_service", service)
+	monkeypatch.setitem(sys.modules, "werkzeug", wz)
+	monkeypatch.setitem(sys.modules, "werkzeug.wrappers", wzw)
+	monkeypatch.setattr(gw, "frappe", fake_frappe)
+	monkeypatch.setattr(gw, "get_gateway_adapter", lambda g: adapter)
+	monkeypatch.setattr(gw, "_inbound_request", lambda: SimpleNamespace(method="POST"))
+	adapter.verify_inbound = lambda r: state.verified
+	state.gw = gw
+	return state
+
+
+def test_webhook_override_returned_as_response(wh):
+	override = {"status": 200, "body": json.dumps({"statusCode": 200}), "content_type": "application/json"}
+	wh.hook = lambda: setattr(wh.local, "gateway_response_override", override)
+	out = wh.gw.handle_gateway_webhook()
+	assert isinstance(out, FakeResponse) and out.status == 200 and out.mimetype == "application/json"
+	assert json.loads(out.body) == {"statusCode": 200}
+	assert wh.local.gateway_response_override is None
+
+
+def test_webhook_override_dict_body_serialised(wh):
+	wh.hook = lambda: setattr(wh.local, "gateway_response_override",
+		{"status": 201, "body": {"a": 1}, "content_type": "application/json"})
+	out = wh.gw.handle_gateway_webhook()
+	assert out.status == 201 and json.loads(out.body) == {"a": 1}
+
+
+def test_webhook_without_override_unchanged(wh):
+	assert wh.gw.handle_gateway_webhook() == {"success": True, "filtered": True}
+
+
+def test_webhook_stale_override_cleared_before_ingest(wh):
+	wh.local.gateway_response_override = {"status": 200, "body": "stale", "content_type": "text/plain"}
+	assert wh.gw.handle_gateway_webhook() == {"success": True, "filtered": True}
+
+
+def test_webhook_malformed_override_ignored(wh):
+	wh.hook = lambda: setattr(wh.local, "gateway_response_override", {"status": 200, "body": 42})
+	assert wh.gw.handle_gateway_webhook() == {"success": True, "filtered": True}
+
+
+def test_webhook_non_dict_override_ignored(wh):
+	wh.hook = lambda: setattr(wh.local, "gateway_response_override", "x")
+	assert wh.gw.handle_gateway_webhook() == {"success": True, "filtered": True}
+
+
+def test_webhook_override_not_honoured_when_verification_fails(wh):
+	wh.verified = False
+	wh.local.gateway_response_override = {"status": 200, "body": "x", "content_type": "text/plain"}
+	out = wh.gw.handle_gateway_webhook()
+	assert out == {"success": False, "error": "Provider verification failed"}
+	assert wh.local.response.http_status_code == 401 and wh.calls == []
+
+
+def test_end_to_end_handler_sets_override_through_webhook(wh, env):
+	def run_handler():
+		env.local = wh.local
+		env.ta.frappe.local = wh.local
+		env.ta.pre_ingest_card_action(GW, {"raw_payload": activity()})
+
+	wh.hook = run_handler
+	out = wh.gw.handle_gateway_webhook()
+	b = json.loads(out.body)
+	assert b["statusCode"] == 200 and b["type"] == cards.CARD_CONTENT_TYPE
