@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import frappe
 
-from huf.ai.whatsapp import management as mgmt
+from huf.ai.whatsapp.broadcast import api as mgmt
 
 GW = "GW-RESTGUARD-TEST"
 B, R = "WhatsApp Broadcast", "WhatsApp Broadcast Recipient"

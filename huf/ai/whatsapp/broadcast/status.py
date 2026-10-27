@@ -175,7 +175,7 @@ def _record_marketing_stop(row: dict) -> None:
 
 def _pause(broadcast: str, reason: str) -> None:
 	try:
-		from huf.ai.whatsapp import broadcast_runner  # written by another work package
+		from huf.ai.whatsapp.broadcast import runner as broadcast_runner  # written by another work package
 
 		broadcast_runner.pause(broadcast, reason)
 	except Exception:
@@ -208,3 +208,56 @@ def apply_user_stop(gateway: str, recipient: str) -> int:
 	for broadcast in touched:
 		_recount(broadcast)
 	return skipped
+
+
+# --------------------------------------------------------------------------- hooks called from shared modules
+# Each never raises: a broadcast problem must not break webhook ingest or the STOP reply.
+
+
+def apply_from_webhook(status: dict, gateway: str | None = None) -> None:
+	"""Mirror one Meta ``statuses[]`` entry onto its recipient row."""
+	try:
+		apply_status(
+			status.get("id"),
+			str(status.get("status") or "").lower(),
+			status.get("timestamp"),
+			status.get("errors") if isinstance(status.get("errors"), list) else None,
+			status.get("biz_opaque_callback_data"),
+			gateway=gateway or "",
+		)
+	except Exception:
+		frappe.log_error(title="WhatsApp broadcast status failed", message=frappe.get_traceback())
+
+
+def on_stop_keyword(gateway: str, sender_id: str) -> None:
+	"""A STOP keyword skips the contact's queued/deferred rows."""
+	try:
+		apply_user_stop(gateway, sender_id)
+	except Exception:
+		frappe.log_error(title="WhatsApp broadcast STOP-keyword skip failed", message=frappe.get_traceback())
+
+
+_PAUSE_TEMPLATE_STATUSES = ("PAUSED", "DISABLED", "REJECTED")
+
+
+def template_pause_reason(update: dict[str, Any]) -> str:
+	"""Reason to pause broadcasts for this template webhook, or "" when it is harmless."""
+	if "new_quality_score" in update or update.get("kind") == "quality":
+		return "quality_red" if str(update.get("new_quality_score") or "").upper() == "RED" else ""
+	if "new_category" in update or update.get("kind") == "category":
+		return "category_marketing" if str(update.get("new_category") or "").upper() == "MARKETING" else ""
+	status = str(update.get("event") or update.get("status") or "").upper()
+	return status.lower() if status in _PAUSE_TEMPLATE_STATUSES else ""
+
+
+def pause_on_template_update(update: dict[str, Any], account: str | None = None) -> None:
+	"""Pause Running broadcasts of a template that was paused/disabled/rejected, turned RED or became MARKETING."""
+	try:
+		reason = template_pause_reason(update)
+		name = str(update.get("message_template_name") or update.get("name") or "").strip()
+		if reason and name:
+			from huf.ai.whatsapp.broadcast import runner
+
+			runner.pause_for_template(account or "", name, reason)
+	except Exception:
+		frappe.logger("huf").warning("WhatsApp broadcast template pause failed", exc_info=True)

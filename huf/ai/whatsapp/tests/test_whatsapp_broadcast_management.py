@@ -13,7 +13,8 @@ if isinstance(frappe, MagicMock):
 	frappe.whitelist = lambda *args, **kwargs: (lambda fn: fn)
 	frappe.PermissionError = PermissionError
 
-from huf.ai.whatsapp import management as mgmt  # noqa: E402
+from huf.ai.whatsapp.broadcast import api as mgmt
+from huf.ai.whatsapp.broadcast import api_read as mgmt_read  # noqa: E402
 
 GW = "GW-1"
 BC = "BCAST-00001"
@@ -29,6 +30,8 @@ class _Base(unittest.TestCase):
 	def setUp(self):
 		p = patch("huf.ai.whatsapp.management.frappe")
 		self.frappe = p.start()
+		patch("huf.ai.whatsapp.broadcast.api.frappe", self.frappe).start()
+		patch("huf.ai.whatsapp.broadcast.api_read.frappe", self.frappe).start()
 		self.addCleanup(patch.stopall)
 		self.frappe.PermissionError = PermissionError
 		self.frappe.db.exists.return_value = True
@@ -41,7 +44,7 @@ class _Base(unittest.TestCase):
 		self.recips = MagicMock()
 		patch.dict(
 			sys.modules,
-			{"huf.ai.whatsapp.broadcast_runner": self.runner, "huf.ai.whatsapp.broadcast_recipients": self.recips},
+			{"huf.ai.whatsapp.broadcast.runner": self.runner, "huf.ai.whatsapp.broadcast.recipients": self.recips},
 		).start()
 		patch.object(mgmt, "_broadcast_row", side_effect=lambda b: self.row).start()
 		self.row = _row()
@@ -77,11 +80,11 @@ class TestPermissions(_Base):
 	def test_get_denied_without_gateway_read(self):
 		self._deny()
 		with self.assertRaises(PermissionError):
-			mgmt.get_broadcast(BC)
+			mgmt_read.get_broadcast(BC)
 
 	def test_list_requires_gateway_for_non_admin(self):
 		self._deny()
-		self.assertEqual(mgmt.list_broadcasts()["error"], "gateway_required")
+		self.assertEqual(mgmt_read.list_broadcasts()["error"], "gateway_required")
 
 
 class TestStart(_Base):
@@ -122,7 +125,7 @@ class TestAttest(_Base):
 
 class TestCreate(_Base):
 	def _create(self, status):
-		patch.object(mgmt, "_send_authority", return_value=None).start()
+		patch.object(mgmt, "_require_send_authority", return_value=None).start()
 		patch.object(mgmt, "_gateway_whatsapp_account", return_value="ACC-1").start()
 		patch.object(mgmt.bridge, "_template_docname", return_value="t-en").start()
 		self.frappe.db.get_value.return_value = {
@@ -137,7 +140,7 @@ class TestCreate(_Base):
 		self.frappe.get_doc.assert_not_called()
 
 	def test_foreign_account_template_refused(self):
-		patch.object(mgmt, "_send_authority", return_value=None).start()
+		patch.object(mgmt, "_require_send_authority", return_value=None).start()
 		patch.object(mgmt, "_gateway_whatsapp_account", return_value="ACC-1").start()
 		patch.object(mgmt.bridge, "_template_docname", return_value="t-en").start()
 		self.frappe.db.get_value.return_value = {"name": "t-en", "whatsapp_account": "ACC-2", "status": "APPROVED"}
@@ -158,7 +161,7 @@ class TestCreate(_Base):
 
 class TestKillSwitchAndRunner(_Base):
 	def test_pause_all_audits_each_running_broadcast(self):
-		patch.object(mgmt, "_send_authority", return_value=None).start()
+		patch.object(mgmt, "_require_send_authority", return_value=None).start()
 		self.frappe.get_all.return_value = ["B1", "B2"]
 		res = mgmt.pause_all_broadcasts(GW)
 		self.runner.pause_all.assert_called_once_with(GW, "kill_switch")

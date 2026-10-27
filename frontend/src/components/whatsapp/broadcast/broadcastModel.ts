@@ -1,4 +1,4 @@
-import type { Broadcast, BroadcastStatus } from '@/services/whatsappApi';
+import type { Broadcast, BroadcastStatus } from './broadcastApi';
 
 export const ACTIVE_STATUSES: BroadcastStatus[] = ['Running', 'Queued'];
 export const POLL_MS = 5000;

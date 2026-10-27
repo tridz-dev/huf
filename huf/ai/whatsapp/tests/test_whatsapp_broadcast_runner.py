@@ -14,7 +14,8 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.utils import add_to_date, now_datetime
 
-from huf.ai.whatsapp import broadcast_runner as runner
+from huf.ai.whatsapp.broadcast import runner as runner
+from huf.ai.whatsapp.broadcast import stale
 
 GW = "GW-RUNNER-TEST"
 GW2 = "GW-RUNNER-TEST-2"
@@ -336,7 +337,7 @@ class TestResumeStale(_Base):
 		old = self.row(b, "15557770001", "sending")
 		new = self.row(b, "15557770002", "sending")
 		frappe.db.set_value(R, old, "modified", add_to_date(now_datetime(), minutes=-30), update_modified=False)
-		res = runner.resume_stale()
+		res = stale.resume_stale()
 		self.assertEqual(self.row_status(old), "unknown")
 		self.assertEqual(self.row_status(new), "sending")
 		self.assertEqual(res["stale_to_unknown"], 1)
@@ -347,23 +348,23 @@ class TestResumeStale(_Base):
 		old = self.row(b, "15557770003", "sending")
 		frappe.db.set_value(R, old, "modified", add_to_date(now_datetime(), minutes=-30), update_modified=False)
 		send = self.fake_send()
-		runner.resume_stale()
+		stale.resume_stale()
 		runner.tick(b)
 		send.assert_not_called()
 
 	def test_running_without_live_tick_is_re_enqueued(self):
 		b = self.make(status="Running")
-		self.assertIn(b, runner.resume_stale()["revived"])
+		self.assertIn(b, stale.resume_stale()["revived"])
 		self.enqueue.assert_called_with(b)
 
 	def test_running_with_live_tick_not_re_enqueued(self):
 		b = self.make(status="Running")
 		frappe.cache().set(runner._lock_key(b), 1, ex=60)
 		self.addCleanup(frappe.cache().delete, runner._lock_key(b))
-		self.assertNotIn(b, runner.resume_stale()["revived"])
+		self.assertNotIn(b, stale.resume_stale()["revived"])
 
 	def test_finished_running_broadcast_is_completed(self):
 		b = self.make(n=0, status="Running")
 		self.row(b, "15557770004", "sent")
-		runner.resume_stale()
+		stale.resume_stale()
 		self.assertEqual(self.st(b, "status"), "Completed")

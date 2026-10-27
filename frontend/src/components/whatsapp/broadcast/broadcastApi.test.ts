@@ -1,15 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/frappe-sdk', () => ({ call: { get: vi.fn(), post: vi.fn() }, file: { uploadFile: vi.fn() } }));
+vi.mock('@/lib/api', async (orig) => {
+  const real = await orig<typeof import('@/lib/api')>();
+  return {
+    ...real,
+    // same contract as the real client: unwrap the envelope, throw ApiError for a failure body
+    apiCall: async (m: string, a: Record<string, unknown>, o?: { verb?: string }) => {
+      const r = (o?.verb === 'GET' ? await call.get(m, a) : await call.post(m, a)) as { message: { success?: boolean; error?: string; message?: string } };
+      if (r.message?.success === false) throw new real.ApiError({ code: r.message.error ?? 'error', message: r.message.message ?? 'Request failed.' });
+      return r.message;
+    },
+  };
+});
 import { call } from '@/lib/frappe-sdk';
-import {
-  addBroadcastRecipients, attestBroadcastConsent, getBroadcastTemplateParams, cancelBroadcast, createBroadcast, getBroadcast, listBroadcastRecipients,
-  adaptBroadcast, adaptPreview, adaptAddResult, listBroadcasts, pauseAllBroadcasts, pauseBroadcast, previewBroadcast, resumeBroadcast, startBroadcast,
-} from './whatsappApi';
+import { addBroadcastRecipients, attestBroadcastConsent, getBroadcastTemplateParams, cancelBroadcast, createBroadcast, getBroadcast, listBroadcastRecipients, adaptBroadcast, adaptPreview, adaptAddResult, listBroadcasts, pauseAllBroadcasts, pauseBroadcast, previewBroadcast, resumeBroadcast, startBroadcast } from './broadcastApi';
 
 const get = vi.mocked(call.get);
 const post = vi.mocked(call.post);
-const M = 'huf.ai.whatsapp.management';
+const M = 'huf.ai.whatsapp.broadcast.api';
+const R = 'huf.ai.whatsapp.broadcast.api_read';
 beforeEach(() => { vi.clearAllMocks(); get.mockResolvedValue({ message: { success: true } }); post.mockResolvedValue({ message: { success: true } }); });
 
 describe('broadcast service', () => {
@@ -31,10 +41,10 @@ describe('broadcast service', () => {
   it('gets read calls', async () => {
     get.mockResolvedValue({ message: { success: true, broadcast: { name: 'B' }, broadcasts: [], recipients: [], limits: {} } });
     await previewBroadcast('B'); await getBroadcast('B'); await listBroadcasts({ gateway: 'G' }); await listBroadcastRecipients('B', { status: 'failed' });
-    expect(get).toHaveBeenCalledWith(`${M}.preview_broadcast`, { broadcast: 'B' });
-    expect(get).toHaveBeenCalledWith(`${M}.get_broadcast`, { broadcast: 'B' });
-    expect(get).toHaveBeenCalledWith(`${M}.list_broadcasts`, { gateway: 'G' });
-    expect(get).toHaveBeenCalledWith(`${M}.list_broadcast_recipients`, { broadcast: 'B', status: 'failed' });
+    expect(post).toHaveBeenCalledWith(`${M}.preview_broadcast`, { broadcast: 'B' });
+    expect(get).toHaveBeenCalledWith(`${R}.get_broadcast`, { broadcast: 'B' });
+    expect(get).toHaveBeenCalledWith(`${R}.list_broadcasts`, { gateway: 'G' });
+    expect(get).toHaveBeenCalledWith(`${R}.list_broadcast_recipients`, { broadcast: 'B', status: 'failed' });
   });
   it('turns server errors into error results', async () => {
     post.mockResolvedValue({ message: { success: false, error: 'count_mismatch' } });
@@ -92,7 +102,7 @@ describe('broadcast response adapters', () => {
     expect(adaptPreview({}).blocking).toEqual([]);
   });
   it('previewBroadcast wraps the adapted preview', async () => {
-    get.mockResolvedValueOnce({ message: { success: true, queued: 3, limits: { recipients: 3, blocking: [] }, cost: null } });
+    post.mockResolvedValueOnce({ message: { success: true, queued: 3, limits: { recipients: 3, blocking: [] }, cost: null } });
     const r = await previewBroadcast('B');
     expect(r.success && r.preview.queued).toBe(3);
   });
@@ -112,7 +122,7 @@ describe('broadcast response adapters', () => {
   it('getBroadcastTemplateParams gets and normalises', async () => {
     get.mockResolvedValueOnce({ message: { success: true, parameter_format: 'NAMED', body: [{ name: 'first_name' }], header: null } });
     const r = await getBroadcastTemplateParams('G', 'T');
-    expect(get).toHaveBeenLastCalledWith(`${M}.get_broadcast_template_params`, { gateway: 'G', template: 'T' });
+    expect(get).toHaveBeenLastCalledWith(`${R}.get_broadcast_template_params`, { gateway: 'G', template: 'T' });
     expect(r.success && [r.parameter_format, r.body, r.buttons]).toEqual(['NAMED', [{ name: 'first_name' }], []]);
   });
 });

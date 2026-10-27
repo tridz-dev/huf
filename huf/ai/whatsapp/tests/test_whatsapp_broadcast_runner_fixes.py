@@ -10,7 +10,8 @@ from unittest.mock import patch
 import frappe
 from frappe.utils import add_to_date, now_datetime
 
-from huf.ai.whatsapp import broadcast_runner as runner
+from huf.ai.whatsapp.broadcast import runner as runner
+from huf.ai.whatsapp.broadcast import stale
 from huf.ai.whatsapp.tests.test_whatsapp_broadcast_runner import GW, USER, B, R, _Base, _preview
 
 
@@ -248,5 +249,5 @@ class TestFixes(_Base):
 		frappe.db.set_value(B, b, "sent", 42)
 		frappe.db.commit()
 		frappe.cache().delete(runner._lock_key(b))
-		runner.resume_stale()
+		stale.resume_stale()
 		self.assertEqual(self.st(b, "sent"), 1)

@@ -13,7 +13,7 @@ from unittest.mock import patch
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
-RUNNER = "huf.ai.whatsapp.broadcast_runner.pause_for_template"
+RUNNER = "huf.ai.whatsapp.broadcast.runner.pause_for_template"
 
 
 def value(name, **over):

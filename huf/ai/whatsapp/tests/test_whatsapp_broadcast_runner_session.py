@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import frappe
 
-from huf.ai.whatsapp import broadcast_runner as runner
+from huf.ai.whatsapp.broadcast import runner as runner
 from huf.ai.whatsapp.tests.test_whatsapp_broadcast_runner import _Base
 
 

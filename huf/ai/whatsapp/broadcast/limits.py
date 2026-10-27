@@ -203,7 +203,7 @@ def _used_24h(gateway: str) -> int:
 
 def _loads(value: Any) -> Any:
 	"""Same decoding as broadcast_send._json (JSON string -> value, blank -> None)."""
-	from huf.ai.whatsapp.broadcast_send import _json
+	from huf.ai.whatsapp.broadcast.send import _json
 
 	return _json(value)
 
@@ -339,7 +339,7 @@ def _check_params(b: dict[str, Any], broadcast: str, blocking: list[str], warnin
 	req = template_requirements(b.get("template") or "")
 	if not req:
 		return
-	from huf.ai.whatsapp.broadcast_send import _merge_params
+	from huf.ai.whatsapp.broadcast.send import _merge_params
 
 	n_missing = n_extra = n_invalid = 0
 	missing: list[str] = []

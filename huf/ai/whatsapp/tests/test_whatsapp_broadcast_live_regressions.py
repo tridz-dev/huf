@@ -12,8 +12,8 @@ from unittest.mock import MagicMock, patch
 import frappe
 
 from huf.ai.whatsapp import account_events as ae
-from huf.ai.whatsapp import broadcast_send as bs
-from huf.ai.whatsapp import management as mgmt
+from huf.ai.whatsapp.broadcast import send as bs
+from huf.ai.whatsapp.broadcast import api as mgmt
 
 GW = "GW-LIVEREG-TEST"
 B, R = "WhatsApp Broadcast", "WhatsApp Broadcast Recipient"
@@ -122,11 +122,11 @@ class TestDeadlocks(unittest.TestCase):
 
 	def _call(self, side_effect):
 		row = {"status": "Draft", "consent_attested": 0}
-		with patch.object(mgmt, "_broadcast_for_write", return_value=row), \
+		with patch.object(mgmt, "_require_broadcast_write", return_value=row), \
 			patch.object(mgmt, "_broadcast_audit"), \
 			patch.object(mgmt.time, "sleep") as sl, \
 			patch.object(frappe.db, "rollback") as rb, \
-			patch("huf.ai.whatsapp.broadcast_recipients.prepare", side_effect=side_effect) as prep:
+			patch("huf.ai.whatsapp.broadcast.recipients.prepare", side_effect=side_effect) as prep:
 			out = mgmt.add_broadcast_recipients.__wrapped__("B", ["919000000001"]) if hasattr(
 				mgmt.add_broadcast_recipients, "__wrapped__") else mgmt.add_broadcast_recipients("B", ["919000000001"])
 		return out, prep, sl, rb

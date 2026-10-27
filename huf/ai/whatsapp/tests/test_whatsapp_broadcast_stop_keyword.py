@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from huf.ai import gateway_service as gs
-from huf.ai.whatsapp import broadcast_status as bs
+from huf.ai.whatsapp.broadcast import status as bs
 
 
 def _gw(provider, name="GW-1"):

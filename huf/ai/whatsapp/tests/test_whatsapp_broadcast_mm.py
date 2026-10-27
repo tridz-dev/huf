@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from huf.ai.gateway_adapters import whatsapp_bridge as wb
-from huf.ai.whatsapp import broadcast_send as bs
+from huf.ai.whatsapp.broadcast import send as bs
 from huf.ai.whatsapp.tests.test_whatsapp_broadcast_send import ROW, _Base
 
 ACCT = {"url": "https://graph.facebook.com", "version": "v21.0", "phone_id": "123", "token": "t"}

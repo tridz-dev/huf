@@ -14,8 +14,9 @@ if isinstance(frappe, MagicMock):
 	frappe.whitelist = lambda *args, **kwargs: (lambda fn: fn)
 	frappe.PermissionError = PermissionError
 
-from huf.ai.whatsapp import broadcast_recipients as br  # noqa: E402
-from huf.ai.whatsapp import management as mgmt  # noqa: E402
+from huf.ai.whatsapp.broadcast import recipients as br  # noqa: E402
+from huf.ai.whatsapp.broadcast import api as mgmt
+from huf.ai.whatsapp.broadcast import api_read as mgmt_read  # noqa: E402
 from huf.huf.doctype.whatsapp_broadcast import whatsapp_broadcast as wb  # noqa: E402
 
 BC = "BCAST-00001"
@@ -62,6 +63,8 @@ class _Base(unittest.TestCase):
 	def setUp(self):
 		p = patch("huf.ai.whatsapp.management.frappe")
 		self.frappe = p.start()
+		patch("huf.ai.whatsapp.broadcast.api.frappe", self.frappe).start()
+		patch("huf.ai.whatsapp.broadcast.api_read.frappe", self.frappe).start()
 		self.addCleanup(patch.stopall)
 		self.frappe.PermissionError = PermissionError
 		self.frappe.db.exists.return_value = True
@@ -75,7 +78,7 @@ class _Base(unittest.TestCase):
 		self.recips = MagicMock()
 		self.runner = MagicMock()
 		self.runner.start.return_value = {}
-		patch.dict(sys.modules, {"huf.ai.whatsapp.broadcast_recipients": br, "huf.ai.whatsapp.broadcast_runner": self.runner}).start()
+		patch.dict(sys.modules, {"huf.ai.whatsapp.broadcast.recipients": br, "huf.ai.whatsapp.broadcast.runner": self.runner}).start()
 
 
 class TestIntakeLimits(_Base):
@@ -88,7 +91,7 @@ class TestIntakeLimits(_Base):
 		self.assertEqual(res["error"], "too_many_recipients")
 
 	def test_create_max_recipients_ceiling(self):
-		patch.object(mgmt, "_send_authority", return_value=None).start()
+		patch.object(mgmt, "_require_send_authority", return_value=None).start()
 		patch.object(mgmt, "_gateway_whatsapp_account", return_value="ACC").start()
 		patch.object(mgmt.bridge, "_template_docname", return_value="t-en").start()
 		self.frappe.db.get_value.return_value = {"name": "t-en", "whatsapp_account": "ACC", "status": "APPROVED", "category": "UTILITY"}
@@ -96,7 +99,7 @@ class TestIntakeLimits(_Base):
 		self.assertEqual(res["error"], "invalid_max_recipients")
 
 	def test_create_inserts_with_ignore_permissions_and_sets_flag(self):
-		patch.object(mgmt, "_send_authority", return_value=None).start()
+		patch.object(mgmt, "_require_send_authority", return_value=None).start()
 		patch.object(mgmt, "_gateway_whatsapp_account", return_value="ACC").start()
 		patch.object(mgmt.bridge, "_template_docname", return_value="t-en").start()
 		self.frappe.db.get_value.return_value = {"name": "t-en", "whatsapp_account": "ACC", "status": "APPROVED", "category": "UTILITY"}
@@ -128,8 +131,8 @@ class TestStartAndPreview(_Base):
 		limits = MagicMock()
 		limits.preview.return_value = {}
 		self.frappe.db.count.return_value = int(token)
-		with patch.dict(sys.modules, {"huf.ai.whatsapp.broadcast_cost": cost, "huf.ai.whatsapp.broadcast_limits": limits}), \
-			patch("huf.ai.whatsapp.broadcast_cost", cost, create=True), patch("huf.ai.whatsapp.broadcast_limits", limits, create=True):
+		with patch.dict(sys.modules, {"huf.ai.whatsapp.broadcast.cost": cost, "huf.ai.whatsapp.broadcast.limits": limits}), \
+			patch("huf.ai.whatsapp.broadcast.cost", cost, create=True), patch("huf.ai.whatsapp.broadcast.limits", limits, create=True):
 			return mgmt.preview_broadcast(BC)
 
 	def test_confirm_required_reflects_count_and_persists_estimate(self):
@@ -147,8 +150,10 @@ class TestMasking(_Base):
 	def _list(self, write):
 		patch.object(mgmt, "_gateway_write_allowed", return_value=write).start()
 		patch.object(mgmt, "_gateway_read_allowed", return_value=True).start()
+		patch.object(mgmt_read, "_gateway_write_allowed", return_value=write).start()
+		patch.object(mgmt_read, "_gateway_read_allowed", return_value=True).start()
 		self.frappe.get_all.return_value = [{"name": f"{BC}-15550001111", "recipient": "15550001111", "error_message": "to 15550001111 failed"}]
-		return mgmt.list_broadcast_recipients(BC)["recipients"][0]
+		return mgmt_read.list_broadcast_recipients(BC)["recipients"][0]
 
 	def test_read_only_user_gets_masked_numbers(self):
 		r = self._list(False)

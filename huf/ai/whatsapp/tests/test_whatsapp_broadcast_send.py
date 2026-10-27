@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch
 
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_errors as errors
-from huf.ai.whatsapp import broadcast_send as bs
+from huf.ai.whatsapp.broadcast import send as bs
 from huf.ai.whatsapp import outbound_policy as policy
 
 ROW = "BCAST-00001-15550001111"

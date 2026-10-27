@@ -12,8 +12,8 @@ from frappe.tests.utils import FrappeTestCase
 
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.whatsapp import account_events
-from huf.ai.whatsapp import broadcast_send as send
-from huf.ai.whatsapp import broadcast_status as bs
+from huf.ai.whatsapp.broadcast import send as send
+from huf.ai.whatsapp.broadcast import status as bs
 from huf.ai.whatsapp import outbound_policy as policy
 
 BC = "WhatsApp Broadcast"

@@ -18,6 +18,7 @@ from frappe.rate_limiter import rate_limit
 from huf.ai.gateway_adapters import provider_hooks
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 from huf.ai.gateway_adapters.registered import get_adapter_class
+from huf.ai.whatsapp.broadcast import status as broadcast_status
 
 EXEMPT_AUTH_ROUTES: frozenset[str] = frozenset(
 	{
@@ -385,23 +386,6 @@ def _record_failed_status_whatsapp(gateway_name: str, status: dict) -> None:
 		frappe.log_error(title="WhatsApp delivery failed", message=text)
 	except Exception:
 		pass
-
-
-def _apply_broadcast_status(status: dict, gateway_name: str | None = None) -> None:
-	"""Mirror a Meta status onto a WhatsApp Broadcast Recipient row. Never raises."""
-	try:
-		from huf.ai.whatsapp import broadcast_status
-
-		broadcast_status.apply_status(
-			status.get("id"),
-			str(status.get("status") or "").lower(),
-			status.get("timestamp"),
-			status.get("errors") if isinstance(status.get("errors"), list) else None,
-			status.get("biz_opaque_callback_data"),
-			gateway=gateway_name or "",
-		)
-	except Exception:
-		frappe.log_error(title="WhatsApp broadcast status failed", message=frappe.get_traceback())
 
 
 _REPLY_STATUSES = frozenset({"sent", "delivered", "read", "played", "failed"})
@@ -788,7 +772,7 @@ def _handle_batched_payload(gateway, adapter, request) -> dict:
 	if not deferred:
 		for status in parsed.statuses:
 			_update_reply_status(gateway.name, status)
-			_apply_broadcast_status(status, gateway.name)
+			broadcast_status.apply_from_webhook(status, gateway.name)
 			if str(status.get("status") or "").lower() == "failed":
 				_record_failed_status(gateway.name, status, getattr(gateway, "provider", None))
 		routed_updates = [update for update in parsed.template_updates if _record_template_update(update, gateway.name)]

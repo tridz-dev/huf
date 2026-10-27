@@ -8,7 +8,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
-from huf.ai.whatsapp import broadcast_send as bs
+from huf.ai.whatsapp.broadcast import send as bs
 from huf.ai.whatsapp import account_events
 from huf.ai.whatsapp.tests.test_whatsapp_broadcast_send import BC, ROW, _Base
 

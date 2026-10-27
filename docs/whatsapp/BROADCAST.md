@@ -4,7 +4,7 @@ A WhatsApp Broadcast sends one approved template to a bounded, pre-approved list
 
 This document describes the code as it is. Statements that depend on Meta behaviour that was not confirmed are listed in [section 11](#11-unverified-meta-facts). The live check plan is in [broadcast-live-verification.md](broadcast-live-verification.md). The operator summary is in the [gateway runbook](../gateways/whatsapp-runbook.md#10-broadcasts).
 
-Code: `huf/ai/whatsapp/broadcast_recipients.py` (intake), `broadcast_send.py` (one recipient), `broadcast_runner.py` (lifecycle and pacing), `broadcast_status.py` (Meta statuses and stops), `broadcast_limits.py` (limit and preview), `broadcast_cost.py` (estimate), `management.py` (API), doctypes `WhatsApp Broadcast` and `WhatsApp Broadcast Recipient`.
+Code: `huf/ai/whatsapp/broadcast/` (`recipients.py` intake, `send.py` one recipient, `runner.py` lifecycle and pacing, `status.py` Meta statuses and stops, `limits.py` limit and preview, `cost.py` estimate, `api.py` whitelisted API), doctypes `WhatsApp Broadcast` and `WhatsApp Broadcast Recipient`.
 
 ## 1. Scope
 
@@ -190,7 +190,7 @@ Webhook handling: `sent`, `delivered`, `read`, `played` move a row forward. `fai
 
 ## 8. Costs
 
-The estimate comes from `huf/ai/whatsapp/broadcast_rates.json`. Today every rate in that file is `null` and `rates_verified` is `false`, because the official per-country rate card was not retrievable. As a result:
+The estimate comes from `huf/ai/whatsapp/broadcast/rates.json`. Today every rate in that file is `null` and `rates_verified` is `false`, because the official per-country rate card was not retrievable. As a result:
 
 - `cost.total` is `null` and each market has a `rate_unavailable:<category>:<market>` warning. The wizard shows "unavailable".
 - Recipients whose country code is not in the file are counted under `UNKNOWN` with a `market_unknown:<n>_recipients` warning.

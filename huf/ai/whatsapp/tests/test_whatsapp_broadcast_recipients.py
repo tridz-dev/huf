@@ -6,7 +6,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from huf.ai.whatsapp import broadcast_recipients as br
+from huf.ai.whatsapp.broadcast import recipients as br
 
 BC = "BCAST-00001"
 GW = "GW-BCAST"

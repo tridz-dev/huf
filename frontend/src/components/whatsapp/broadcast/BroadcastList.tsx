@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { errorText, listBroadcasts, type Broadcast } from '@/services/whatsappApi';
+import { errorText } from '@/services/whatsappApi';
+import { listBroadcasts, type Broadcast } from './broadcastApi';
 import { LoadError } from '../BridgeUnavailable';
 
 export function BroadcastList({ gateway, onOpen, onNew, refreshKey = 0 }: {

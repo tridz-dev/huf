@@ -6,19 +6,37 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/services/whatsappApi', async (orig) => ({
   ...(await orig<typeof import('@/services/whatsappApi')>()),
-  listTemplates: vi.fn(), createBroadcast: vi.fn(), addBroadcastRecipients: vi.fn(), attestBroadcastConsent: vi.fn(),
+  listTemplates: vi.fn(),
+}));
+vi.mock('./broadcastApi', async (orig) => ({
+  ...(await orig<typeof import('./broadcastApi')>()),
+  createBroadcast: vi.fn(), addBroadcastRecipients: vi.fn(), attestBroadcastConsent: vi.fn(),
   previewBroadcast: vi.fn(), getBroadcastTemplateParams: vi.fn(), startBroadcast: vi.fn(), pauseBroadcast: vi.fn(), resumeBroadcast: vi.fn(), cancelBroadcast: vi.fn(),
   pauseAllBroadcasts: vi.fn(), listBroadcasts: vi.fn(), getBroadcast: vi.fn(), listBroadcastRecipients: vi.fn(),
   removeBroadcastRecipient: vi.fn(), deleteBroadcast: vi.fn(),
 }));
-import * as api from '@/services/whatsappApi';
+import * as templatesApi from '@/services/whatsappApi';
+import * as broadcastApi from './broadcastApi';
 import { BroadcastTab } from './BroadcastTab';
 import { BroadcastList } from './BroadcastList';
 import { BroadcastWizard } from './BroadcastWizard';
 import { BroadcastDetail } from './BroadcastDetail';
 import { buildHeaderButtonParams } from './BroadcastWizard';
 
-const m = vi.mocked(api, true);
+// jsdom has no top layer; answering ':modal' directly keeps Radix Select opening fast.
+const originalMatches = Element.prototype.matches;
+Element.prototype.matches = function (this: Element, selector: string) {
+  return selector === ':modal' ? false : originalMatches.call(this, selector);
+};
+Object.assign(Element.prototype, {
+  hasPointerCapture: () => false, setPointerCapture: () => {}, releasePointerCapture: () => {}, scrollIntoView: () => {},
+});
+/** Radix Select: open the combobox by its label, then click the option. */
+const pick = async (user: ReturnType<typeof userEvent.setup> | typeof userEvent, label: string, option: string | RegExp) => {
+  await user.click(await screen.findByRole('combobox', { name: label }));
+  await user.click(await screen.findByRole('option', { name: option }));
+};
+const m = vi.mocked({ ...templatesApi, ...broadcastApi }, true);
 const bc = (o: object = {}) => ({
   name: 'BCAST-1', title: 'Promo', status: 'Running', gateway: 'G', total: 10, queued: 4, sending: 0, sent: 3, delivered: 2, read: 0,
   failed: 1, deferred: 0, unknown: 0, skipped: 0, template_name: 'promo', ...o,
@@ -68,7 +86,7 @@ describe('BroadcastDetail', () => {
   it('filters recipients by status', async () => {
     render(<BroadcastDetail name="BCAST-1" onBack={vi.fn()} />);
     await screen.findByText('131026');
-    await userEvent.selectOptions(screen.getByLabelText('Status'), 'failed');
+    await pick(userEvent, 'Status', 'failed');
     await waitFor(() => expect(m.listBroadcastRecipients).toHaveBeenLastCalledWith('BCAST-1', { status: 'failed', limit: 100 }));
   });
   it('polls every 5s while running, not when completed', async () => {
@@ -134,7 +152,7 @@ describe('BroadcastWizard', () => {
   });
 
   async function toPreview(user: ReturnType<typeof userEvent.setup>) {
-    await user.selectOptions(await screen.findByLabelText('Approved template'), 'T1');
+    await pick(user, 'Approved template', /promo/);
     expect(screen.getByText(/billed per delivered message/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.type(screen.getByLabelText(/Recipients/), '1555000111{enter}1555000222');
@@ -154,8 +172,8 @@ describe('BroadcastWizard', () => {
 
   it('lists only approved templates', async () => {
     render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
-    const sel = await screen.findByLabelText('Approved template');
-    await waitFor(() => expect(sel.querySelectorAll('option').length).toBe(2));
+    await userEvent.click(await screen.findByRole('combobox', { name: 'Approved template' }));
+    await waitFor(() => expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['promo (en)']));
   });
 
   it('walks to a typed-count confirmed start', async () => {
@@ -181,13 +199,12 @@ describe('BroadcastWizard', () => {
   it('shows send-via only for MARKETING and sends the choice', async () => {
     const user = userEvent.setup();
     render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
-    const sel = await screen.findByLabelText('Approved template');
-    expect(screen.queryByLabelText('Send via')).not.toBeInTheDocument();
-    await user.selectOptions(sel, 'T1');
-    const via = screen.getByLabelText('Send via') as HTMLSelectElement;
-    expect(via.value).toBe('messages');
+    await screen.findByRole('combobox', { name: 'Approved template' });
+    expect(screen.queryByRole('combobox', { name: 'Send via' })).not.toBeInTheDocument();
+    await pick(user, 'Approved template', /promo/);
+    expect(await screen.findByRole('combobox', { name: 'Send via' })).toHaveTextContent('Cloud API (messages)');
     expect(screen.getByText(/falls back to the Cloud API/)).toBeInTheDocument();
-    await user.selectOptions(via, 'marketing_messages');
+    await pick(user, 'Send via', /Marketing Messages API/);
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.type(screen.getByLabelText(/Recipients/), '1555000111');
     await user.click(screen.getByRole('button', { name: 'Add recipients' }));
@@ -219,7 +236,7 @@ describe('BroadcastWizard', () => {
       m.getBroadcastTemplateParams.mockResolvedValue(ok(named));
       const user = userEvent.setup();
       render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
-      await user.selectOptions(await screen.findByLabelText('Approved template'), 'T1');
+      await pick(user, 'Approved template', /promo/);
       const f = await screen.findByLabelText('Default value for {{first_name}}');
       expect(f).toHaveAttribute('placeholder', 'Ada');
       await user.type(f, 'friend');
@@ -239,7 +256,7 @@ describe('BroadcastWizard', () => {
       m.getBroadcastTemplateParams.mockResolvedValue(ok({ parameter_format: 'POSITIONAL', body: [{ index: 1 }, { index: 2 }], header: null, buttons: [] }));
       const user = userEvent.setup();
       render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
-      await user.selectOptions(await screen.findByLabelText('Approved template'), 'T1');
+      await pick(user, 'Approved template', /promo/);
       await user.type(await screen.findByLabelText('Default value for {{2}}'), 'two');
       await user.click(screen.getByRole('button', { name: 'Next' }));
       await user.type(screen.getByLabelText(/Recipients/), '1555000111,a,b');
@@ -258,7 +275,7 @@ describe('BroadcastWizard', () => {
       m.addBroadcastRecipients.mockResolvedValue(ok({ added: 1, skipped: [], invalid: [], skippedTotal: 0, invalidTotal: 0 }));
       const user = userEvent.setup();
       render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
-      await user.selectOptions(await screen.findByLabelText('Approved template'), 'T1');
+      await pick(user, 'Approved template', /promo/);
       const header = await screen.findByLabelText(/Header image link/);
       expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
       await user.type(header, 'https://x.test/a.png');
@@ -279,7 +296,7 @@ describe('BroadcastWizard', () => {
       const onClose = vi.fn();
       const user = userEvent.setup();
       render(<BroadcastWizard gateway="G" onClose={onClose} onStarted={vi.fn()} />);
-      await user.selectOptions(await screen.findByLabelText('Approved template'), 'T1');
+      await pick(user, 'Approved template', /promo/);
       await user.click(await screen.findByRole('button', { name: 'Next' }));
       await user.type(screen.getByLabelText(/Recipients/), '1555000111');
       await user.click(screen.getByRole('button', { name: 'Add recipients' }));

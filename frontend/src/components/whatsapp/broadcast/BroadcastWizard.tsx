@@ -5,10 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  addBroadcastRecipients, attestBroadcastConsent, createBroadcast, deleteBroadcast, errorText, getBroadcastTemplateParams, listTemplates, previewBroadcast, startBroadcast,
-  type AddRecipientsResult, type BroadcastPreview, type BroadcastRecipientInput, type BroadcastTemplateParams, type BroadcastTemplateVariable, type BroadcastSendVia, type WhatsAppTemplate,
-} from '@/services/whatsappApi';
+import { Field } from '@/components/ui/field';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { errorText, listTemplates, type WhatsAppTemplate } from '@/services/whatsappApi';
+import { addBroadcastRecipients, attestBroadcastConsent, createBroadcast, deleteBroadcast, getBroadcastTemplateParams, previewBroadcast, startBroadcast, type AddRecipientsResult, type BroadcastPreview, type BroadcastRecipientInput, type BroadcastTemplateParams, type BroadcastTemplateVariable, type BroadcastSendVia } from './broadcastApi';
 
 const varKey = (v: BroadcastTemplateVariable, i: number) => (v.name ?? String(v.index ?? i + 1));
 
@@ -198,13 +198,18 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
             <Label htmlFor="bc-title">Title</Label>
             <Input id="bc-title" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="bc-template">Approved template</Label>
-            <select id="bc-template" className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={tplName} onChange={(e) => { setTplName(e.target.value); setSendVia('messages'); }}>
-              <option value="">{templates ? 'Choose a template' : 'Loading...'}</option>
-              {(templates ?? []).map((t) => <option key={t.name} value={t.name}>{t.template_name} ({t.language_code})</option>)}
-            </select>
-          </div>
+          <Field label="Approved template" id="bc-template">
+            {(p) => (
+              <Select value={tplName || undefined} onValueChange={(v) => { setTplName(v); setSendVia('messages'); }}>
+                <SelectTrigger {...p} className="w-full" aria-label="Approved template">
+                  <SelectValue placeholder={templates ? 'Choose a template' : 'Loading...'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(templates ?? []).map((t) => <SelectItem key={t.name} value={t.name}>{t.template_name} ({t.language_code})</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+          </Field>
           {tpl ? (
             <p className="text-sm text-steel">
               Category: <strong>{tpl.category ?? 'unknown'}</strong>.
@@ -241,16 +246,21 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
             </div>
           ))}
           {isMarketing ? (
-            <div className="space-y-1">
-              <Label htmlFor="bc-send-via">Send via</Label>
-              <select id="bc-send-via" className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={sendVia} onChange={(e) => setSendVia(e.target.value as BroadcastSendVia)}>
-                <option value="messages">Cloud API (messages)</option>
-                <option value="marketing_messages">Marketing Messages API (marketing_messages)</option>
-              </select>
-              <p className="text-xs text-steel">
-                The Marketing Messages API uses a separate endpoint and falls back to the Cloud API if the account is not onboarded. Cloud API marketing sends are sunset in 2027.
-              </p>
-            </div>
+            <Field
+              label="Send via"
+              id="bc-send-via"
+              hint="The Marketing Messages API uses a separate endpoint and falls back to the Cloud API if the account is not onboarded. Cloud API marketing sends are sunset in 2027."
+            >
+              {(p) => (
+                <Select value={sendVia} onValueChange={(v) => setSendVia(v as BroadcastSendVia)}>
+                  <SelectTrigger {...p} className="w-full" aria-label="Send via"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="messages">Cloud API (messages)</SelectItem>
+                    <SelectItem value="marketing_messages">Marketing Messages API (marketing_messages)</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            </Field>
           ) : null}
         </div>
       )}

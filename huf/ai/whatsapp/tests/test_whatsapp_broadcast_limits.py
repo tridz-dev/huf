@@ -8,7 +8,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock, patch
 
-from huf.ai.whatsapp import broadcast_limits as bl
+from huf.ai.whatsapp.broadcast import limits as bl
 from huf.ai.whatsapp import token_check as tc
 
 _REAL_REQUIREMENTS = bl.template_requirements

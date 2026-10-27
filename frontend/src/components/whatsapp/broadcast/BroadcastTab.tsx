@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { errorText, pauseAllBroadcasts } from '@/services/whatsappApi';
+import { errorText } from '@/services/whatsappApi';
+import { pauseAllBroadcasts } from './broadcastApi';
 import { BridgeUnavailable } from '../BridgeUnavailable';
 import { BroadcastDetail } from './BroadcastDetail';
 import { BroadcastList } from './BroadcastList';

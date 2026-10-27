@@ -16,7 +16,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from huf.ai.whatsapp import broadcast_status as bs
+from huf.ai.whatsapp.broadcast import status as bs
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 GW = "GW-1"
@@ -158,7 +158,7 @@ class TestApplyStatus(Base):
 	def test_failed_135000_pauses_broadcast(self):
 		self.db.add("R1", status="sent", wamid="w1")
 		runner = MagicMock()
-		with patch.dict("sys.modules", {"huf.ai.whatsapp.broadcast_runner": runner}), patch("huf.ai.whatsapp.broadcast_runner", runner, create=True):
+		with patch.dict("sys.modules", {"huf.ai.whatsapp.broadcast.runner": runner}), patch("huf.ai.whatsapp.broadcast.runner", runner, create=True):
 			self.assertTrue(bs.apply_status("w1", "failed", 1, [{"code": 135000, "title": "Generic"}], None))
 		runner.pause.assert_called_once()
 		self.assertEqual(runner.pause.call_args[0][0], "BC-1")
@@ -167,7 +167,7 @@ class TestApplyStatus(Base):
 		self.db.add("R1", status="sent", wamid="w1")
 		runner = MagicMock()
 		runner.pause.side_effect = RuntimeError("boom")
-		with patch.dict("sys.modules", {"huf.ai.whatsapp.broadcast_runner": runner}), patch("huf.ai.whatsapp.broadcast_runner", runner, create=True):
+		with patch.dict("sys.modules", {"huf.ai.whatsapp.broadcast.runner": runner}), patch("huf.ai.whatsapp.broadcast.runner", runner, create=True):
 			self.assertTrue(bs.apply_status("w1", "failed", 1, [{"code": 135000}], None))
 		self.frappe.log_error.assert_called_once()
 
@@ -223,17 +223,13 @@ class TestApplyUserStop(Base):
 
 class TestHooks(unittest.TestCase):
 	def test_webhook_hook_swallows_errors(self):
-		from huf.ai import gateway_webhook as gw
-
-		with patch.object(bs, "apply_status", side_effect=RuntimeError("x")), patch.object(gw.frappe, "log_error") as log:
-			gw._apply_broadcast_status({"id": "w", "status": "sent"})
+		with patch.object(bs, "apply_status", side_effect=RuntimeError("x")), patch.object(bs.frappe, "log_error") as log:
+			bs.apply_from_webhook({"id": "w", "status": "sent"})
 		log.assert_called_once()
 
 	def test_webhook_hook_passes_opaque_data(self):
-		from huf.ai import gateway_webhook as gw
-
 		with patch.object(bs, "apply_status") as apply:
-			gw._apply_broadcast_status({"id": "w", "status": "Failed", "timestamp": "5", "errors": [{"code": 1}], "biz_opaque_callback_data": "R9"}, "GW-1")
+			bs.apply_from_webhook({"id": "w", "status": "Failed", "timestamp": "5", "errors": [{"code": 1}], "biz_opaque_callback_data": "R9"}, "GW-1")
 		apply.assert_called_once_with("w", "failed", "5", [{"code": 1}], "R9", gateway="GW-1")
 
 	def test_user_preferences_stop_calls_hook_and_swallows_errors(self):

@@ -24,7 +24,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_to_date, now_datetime
 
-from huf.ai.whatsapp import broadcast_limits, broadcast_send
+from huf.ai.whatsapp.broadcast import limits as broadcast_limits, send as broadcast_send
 
 BROADCAST = "WhatsApp Broadcast"
 RECIPIENT = "WhatsApp Broadcast Recipient"
@@ -117,7 +117,7 @@ def _enqueue_tick(broadcast: str, *, continuation: bool = False, user: str | Non
 	if user:
 		kwargs["user"] = user
 	frappe.enqueue(
-		"huf.ai.whatsapp.broadcast_runner.tick",
+		"huf.ai.whatsapp.broadcast.runner.tick",
 		queue=QUEUE,
 		timeout=TICK_TIMEOUT,
 		job_id=job_id,
@@ -484,40 +484,3 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 		return {"result": "continued", "sent": sent_total, "outcomes": outcomes}
 	# Only future-deferred (or in-flight sending) rows: no busy loop; the cron revives us.
 	return {"result": "idle", "sent": sent_total, "outcomes": outcomes, "remaining": remaining}
-
-
-# --------------------------------------------------------------------------- cron
-
-
-def resume_stale() -> dict:
-	"""Cron */5: stale ``sending`` -> ``unknown`` (never resent); revive Running broadcasts w/o a tick."""
-	cutoff = add_to_date(now_datetime(), minutes=-STALE_SENDING_MINUTES)
-	stale = frappe.db.sql(
-		f"select name, broadcast from `tab{RECIPIENT}` where status='sending' and modified < %s",
-		cutoff,
-	)
-	touched: set[str] = set()
-	for name, bcast in stale:
-		frappe.db.sql(
-			f"update `tab{RECIPIENT}` set status='unknown', error_message=%s "
-			"where name=%s and status='sending'",
-			("stale_sending: outcome unknown, not resent", name),
-		)
-		touched.add(bcast)
-	for bcast in touched:
-		if frappe.db.exists(BROADCAST, bcast):
-			frappe.get_doc(BROADCAST, bcast).recount()
-	if stale:
-		frappe.db.commit()
-
-	revived = []
-	cache = frappe.cache()
-	for bcast in frappe.get_all(BROADCAST, filters={"status": "Running"}, pluck="name"):
-		if cache.get(_lock_key(bcast)):
-			continue
-		frappe.get_doc(BROADCAST, bcast).recount(commit=True)
-		if _complete_if_done(bcast):
-			continue
-		_enqueue_tick(bcast)
-		revived.append(bcast)
-	return {"stale_to_unknown": len(stale), "revived": revived}

@@ -234,7 +234,7 @@ def _insert_consent(gateway: str, sender: str, category: str, value: str, detail
 def _skip_broadcast_rows(gateway: str, sender: str) -> None:
 	"""A marketing stop skips that contact's pending broadcast rows. Never raises."""
 	try:
-		from huf.ai.whatsapp import broadcast_status
+		from huf.ai.whatsapp.broadcast import status as broadcast_status
 
 		broadcast_status.apply_user_stop(gateway, sender)
 	except Exception:

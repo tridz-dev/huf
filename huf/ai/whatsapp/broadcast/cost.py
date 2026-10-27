@@ -3,7 +3,7 @@
 
 """WP-12: cost estimate for a WhatsApp Broadcast before it is started.
 
-The estimate is computed from the rate card in ``broadcast_rates.json``
+The estimate is computed from the rate card in ``rates.json``
 (source URL and retrieval date are stored there). Recipients are bucketed by
 market, derived from the E.164 dialling code. Unknown markets, unknown
 categories and null rates produce warnings and a null total.
@@ -19,7 +19,7 @@ from typing import Any
 
 import frappe
 
-RATES_PATH = os.path.join(os.path.dirname(__file__), "broadcast_rates.json")
+RATES_PATH = os.path.join(os.path.dirname(__file__), "rates.json")
 
 # Recipient statuses that are still going to be sent (or retried).
 PENDING_STATUSES = ("queued", "deferred")

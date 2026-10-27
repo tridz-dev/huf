@@ -980,17 +980,10 @@ def _record_opt_out(gateway, sender_id: str, display_name: str | None = None) ->
             }
         ).insert(ignore_permissions=True)
     if gateway.provider == "WhatsApp":
-        _skip_whatsapp_broadcast_rows(gateway.name, sender_id)
+        from huf.ai.whatsapp.broadcast.status import on_stop_keyword
 
+        on_stop_keyword(gateway.name, sender_id)
 
-def _skip_whatsapp_broadcast_rows(gateway_name: str, sender_id: str) -> None:
-    """WhatsApp only: a STOP skips the contact's queued/deferred broadcast rows. Never raises."""
-    try:
-        from huf.ai.whatsapp import broadcast_status
-
-        broadcast_status.apply_user_stop(gateway_name, sender_id)
-    except Exception:
-        frappe.log_error(title="WhatsApp broadcast STOP-keyword skip failed", message=frappe.get_traceback())
 
 
 def _live_room_entry(gateway, chat_id: str) -> dict | None:

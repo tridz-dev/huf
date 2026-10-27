@@ -13,8 +13,8 @@ import frappe
 
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_template_guard as guard
-from huf.ai.whatsapp import broadcast_limits as bl
-from huf.ai.whatsapp import management as mgmt
+from huf.ai.whatsapp.broadcast import limits as bl
+from huf.ai.whatsapp.broadcast import api_read as mgmt
 
 NAMED_TPL = {
 	"template": "Hi {{first_name}}, welcome!", "header_type": "", "header": "", "sample": "",

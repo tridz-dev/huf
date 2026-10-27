@@ -362,8 +362,7 @@ scheduler_events = {
             "huf.ai.agent.run_analytics.refresh_rollups",
             # Safety net: fail runs orphaned in 'Started' (stale > huf_stale_run_minutes (15) / huf_stale_run_minutes_background (60, non-stream)).
             "huf.ai.run_control.sweep_stale_runs",
-            # WhatsApp Broadcast: stale 'sending' rows -> 'unknown'; revive Running broadcasts with no live tick.
-            "huf.ai.whatsapp.broadcast_runner.resume_stale",
+            "huf.ai.whatsapp.broadcast.stale.resume_stale",
         ],
         "*/15 * * * *": [
             "huf.ai.batch_poll.poll_pending_batch_jobs",

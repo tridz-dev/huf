@@ -4,15 +4,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Field } from '@/components/ui/field';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import {
-  cancelBroadcast, deleteBroadcast, errorText, getBroadcast, listBroadcastRecipients, pauseBroadcast, removeBroadcastRecipient, resumeBroadcast,
-  type Broadcast, type BroadcastRecipient, type WhatsAppResult,
-} from '@/services/whatsappApi';
+import { errorText, type WhatsAppResult } from '@/services/whatsappApi';
+import { cancelBroadcast, deleteBroadcast, getBroadcast, listBroadcastRecipients, pauseBroadcast, removeBroadcastRecipient, resumeBroadcast, type Broadcast, type BroadcastRecipient } from './broadcastApi';
 import { LoadError } from '../BridgeUnavailable';
 import { COUNT_KEYS, isActive, POLL_MS, progressPercent } from './broadcastModel';
 
 const PAGE = 100;
+const ALL = 'all';
 const STATUS_FILTERS = ['', ...COUNT_KEYS] as const;
 
 export function BroadcastDetail({ name, onBack }: { name: string; onBack: () => void }) {
@@ -136,17 +137,16 @@ export function BroadcastDetail({ name, onBack }: { name: string; onBack: () => 
         </div>
       ) : null}
 
-      <div className="flex items-center gap-2">
-        <label htmlFor="broadcast-status-filter" className="text-sm text-steel">Status</label>
-        <select
-          id="broadcast-status-filter"
-          className="h-9 rounded-md border bg-background px-2 text-sm"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        >
-          {STATUS_FILTERS.map((s) => <option key={s} value={s}>{s || 'All'}</option>)}
-        </select>
-      </div>
+      <Field label="Status" id="broadcast-status-filter" className="max-w-48">
+        {(p) => (
+          <Select value={filter || ALL} onValueChange={(v) => setFilter(v === ALL ? '' : v)}>
+            <SelectTrigger {...p} aria-label="Status"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {STATUS_FILTERS.map((st) => <SelectItem key={st || ALL} value={st || ALL}>{st || 'All'}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
+      </Field>
       <Table aria-label="Recipients">
         <TableHeader>
           <TableRow><TableHead>Recipient</TableHead><TableHead>Status</TableHead><TableHead>Error code</TableHead><TableHead>Detail</TableHead>{b.status === 'Draft' ? <TableHead><span className="sr-only">Actions</span></TableHead> : null}</TableRow>

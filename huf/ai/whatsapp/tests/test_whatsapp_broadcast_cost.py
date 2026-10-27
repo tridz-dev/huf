@@ -8,9 +8,9 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from huf.ai.whatsapp import broadcast_cost as cost
+from huf.ai.whatsapp.broadcast import cost as cost
 
-MOD = "huf.ai.whatsapp.broadcast_cost"
+MOD = "huf.ai.whatsapp.broadcast.cost"
 
 
 def _rows(*numbers, status="queued"):

@@ -11,7 +11,7 @@ from __future__ import annotations
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from huf.ai.whatsapp import broadcast_status as bs
+from huf.ai.whatsapp.broadcast import status as bs
 
 BC = "WhatsApp Broadcast"
 RC = "WhatsApp Broadcast Recipient"
