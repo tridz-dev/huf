@@ -79,3 +79,7 @@ def ingest_update(gateway, adapter, request) -> Any:
 
 provider_hooks.register(PROVIDER, "ingest_update", ingest_update)
 provider_hooks.register(PROVIDER, "readiness_checks", readiness.readiness_checks)
+
+from huf.ai.teams import client as _client
+
+_client.register_hooks(provider_hooks, PROVIDER)

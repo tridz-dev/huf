@@ -791,6 +791,7 @@ class TestGatewayEventFailureHandling(unittest.TestCase):
     @patch("huf.ai.gateway_service.frappe")
     def test_real_teams_adapter_raising_on_missing_id_fails_the_event(self, mock_frappe):
         from huf.ai.gateway_adapters.teams import TeamsGatewayAdapter
+        from huf.ai.teams.client import TeamsTransientError
 
         # frappe.ValidationError must be a real exception class for the
         # `except frappe.ValidationError` clause inside process_gateway_event
@@ -799,13 +800,15 @@ class TestGatewayEventFailureHandling(unittest.TestCase):
         mock_frappe.ValidationError = frappe.ValidationError
         mock_frappe.get_traceback.return_value = (
             "Traceback (most recent call last):\n"
-            "ValueError: Microsoft Teams message delivery failed: {}"
+            "TeamsTransientError: Microsoft Teams send failed after 3 attempts (HTTP 502)"
         )
 
-        mock_post = MagicMock()
-        mock_post.return_value.json.return_value = {}  # no "id" in the response
+        def transport(method, url, **kw):  # retries exhausted (transient): the event fails and re-raises
+            if "/oauth2/" in url:
+                return 200, {}, {"access_token": "tok", "expires_in": 3600}
+            return 502, {}, {}
         real_adapter = TeamsGatewayAdapter(
-            {"app_id": "appid", "app_password": "apppass", "tenant_id": "tenant-1"}, http_post=mock_post
+            {"app_id": "appid", "app_password": "apppass", "tenant_id": "tenant-1"}, transport=transport
         )
 
         event = MagicMock(
@@ -826,10 +829,13 @@ class TestGatewayEventFailureHandling(unittest.TestCase):
         mock_frappe.get_doc.side_effect = [event, configured_gateway, target_agent_doc]
         mock_run = MagicMock(return_value={"agent_run_id": "AR-002", "response": "Hello back"})
 
-        with patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=real_adapter), patch.dict(
+        reference = {"serviceUrl": "https://smba.trafficmanager.net/amer"}
+        with patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=real_adapter), patch(
+            "huf.ai.teams.refs.get_reference", return_value=reference
+        ), patch("huf.ai.teams.client._sleep"), patch.dict(
             sys.modules, {"huf.ai.agent.integration": SimpleNamespace(run_agent_sync=mock_run)}
         ):
-            with self.assertRaises(ValueError):
+            with self.assertRaises(TeamsTransientError):
                 gateway_service.process_gateway_event(event.name)
 
         mock_frappe.db.rollback.assert_called_once()
@@ -841,7 +847,7 @@ class TestGatewayEventFailureHandling(unittest.TestCase):
         ]
         assert failed_calls, "event.db_set was never called with status=Failed"
         error_message = failed_calls[-1].args[0]["error_message"]
-        assert "Microsoft Teams message delivery failed" in error_message
+        assert "Microsoft Teams send failed after 3 attempts" in error_message
 
         # The Failed db_set must be the *last* status write, applied after
         # the rollback discarded any earlier partial state from this run.

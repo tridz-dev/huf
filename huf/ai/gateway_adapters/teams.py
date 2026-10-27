@@ -6,7 +6,8 @@ bots, user-assigned managed identity (MSI) and sovereign clouds are out of scope
 
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping
+from typing import Any
+from collections.abc import Callable, Mapping
 
 from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.types import (
@@ -18,11 +19,10 @@ from huf.ai.gateway_adapters.types import (
 	NormalizedGatewayEvent,
 	OutboundDelivery,
 )
-from huf.ai.teams.http import _requests_post
 
 
 class TeamsGatewayAdapter(GatewayAdapter):
-	"""Handle Microsoft Teams Bot Framework activities, replies, and Adaptive Cards."""
+	"""Handle Microsoft Teams Bot Framework activities and replies."""
 
 	# NOTE: must equal provider_to_service_id("Microsoft Teams") == "microsoft_teams"
 	# (see huf.ai.gateway_adapters.provider_ids).
@@ -56,7 +56,8 @@ class TeamsGatewayAdapter(GatewayAdapter):
 		self,
 		credentials: Mapping[str, str],
 		*,
-		http_post: Callable[..., Any] = _requests_post,
+		gateway_context: Mapping[str, Any] | None = None,
+		transport: Callable[..., Any] | None = None,
 	) -> None:
 		missing = self.credential_schema.missing_required(credentials)
 		if missing:
@@ -65,7 +66,8 @@ class TeamsGatewayAdapter(GatewayAdapter):
 		self._app_password = credentials["app_password"]
 		self._tenant_id = credentials["tenant_id"]
 		self._allowed_tenant_ids = str(credentials.get("allowed_tenant_ids") or "")
-		self._http_post = http_post
+		self._gateway_name = str((gateway_context or {}).get("gateway_name") or "")
+		self._transport = transport
 
 	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
 		from huf.ai.teams import auth
@@ -80,12 +82,9 @@ class TeamsGatewayAdapter(GatewayAdapter):
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:
 		from huf.ai.teams import client
 
-		return client.send_reply(reply, self._credentials(), self._http_post)
-
-	def send_adaptive_card(self, conversation_id: str, card_content: dict[str, Any]) -> OutboundDelivery:
-		from huf.ai.teams import client
-
-		return client.send_adaptive_card(conversation_id, card_content, self._http_post)
+		return client.send_reply(
+			reply, self._credentials(), gateway_name=self._gateway_name, transport=self._transport
+		)
 
 	def _credentials(self) -> dict[str, str]:
 		return {
