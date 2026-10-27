@@ -3,6 +3,8 @@ import {
   base64ToBlob,
   base64ToBytes,
   deriveStepStates,
+  endpointFromChecks,
+  isRateLimitError,
   isGuid,
   isTeamsService,
   mapManifestError,
@@ -53,7 +55,7 @@ describe('deriveStepStates', () => {
       { id: 'teams-first-message', done: false },
     ]);
     expect(s.credentials).toBe('done');
-    expect(s.endpoint).toBe('todo');
+    expect(s.endpoint).toBe('manual'); // cannot be verified from Huf
     expect(s['first-message']).toBe('todo');
     expect(s['create-bot']).toBe('manual');
     expect(s.sideload).toBe('manual');
@@ -108,5 +110,28 @@ describe('misc', () => {
     const r = normalizeVerifyResult({ ok: true, message: 'm', steps: [{ id: 'token', label: 'Token', ok: true }, { id: 'x', ok: 0, detail: 'bad' }] });
     expect(r.steps[0].detail).toBeNull();
     expect(r.steps[1]).toEqual({ id: 'x', label: 'x', ok: false, detail: 'bad' });
+  });
+});
+
+describe('isRateLimitError', () => {
+  it('detects 429 / TooManyRequests / moments ago', () => {
+    expect(isRateLimitError({ httpStatus: 429 })).toBe(true);
+    expect(isRateLimitError({ response: { status: 429 } })).toBe(true);
+    expect(isRateLimitError({ exc_type: 'TooManyRequestsError' })).toBe(true);
+    expect(isRateLimitError({ _server_messages: '["{\\"message\\": \\"run moments ago\\"}"]' })).toBe(true);
+    expect(isRateLimitError(new Error('Verify connection was run moments ago'))).toBe(true);
+  });
+  it('ignores other errors', () => {
+    expect(isRateLimitError(new Error('nope'))).toBe(false);
+    expect(isRateLimitError(null)).toBe(false);
+    expect(isRateLimitError({ status: 500 })).toBe(false);
+  });
+});
+
+describe('endpointFromChecks', () => {
+  it('extracts only absolute URLs', () => {
+    expect(endpointFromChecks([{ id: 'teams-messaging-endpoint', done: false, hint: 'Paste https://a.b/x?gateway_name=G as the Messaging endpoint of' }])).toBe('https://a.b/x?gateway_name=G');
+    expect(endpointFromChecks([{ id: 'teams-messaging-endpoint', done: false, hint: 'Paste /api/x as the Messaging endpoint' }])).toBeNull();
+    expect(endpointFromChecks(undefined)).toBeNull();
   });
 });

@@ -57,9 +57,10 @@ export function CredentialsTab({ form, schema, isNew }: CredentialsTabProps) {
                 />
               </FormControl>
               {item.description && <FormDescription>{item.description}</FormDescription>}
-              {teams && teamsCredentialHint(item.key, field.value) && (
-                <p className="text-xs text-warning">{teamsCredentialHint(item.key, field.value)} The server validates the final value.</p>
-              )}
+              {teams && (() => {
+                const hint = teamsCredentialHint(item.key, field.value);
+                return hint ? <p className="text-xs text-warning">{hint} The server validates the final value.</p> : null;
+              })()}
               <FormMessage />
             </FormItem>
           )}
