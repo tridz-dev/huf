@@ -28,7 +28,9 @@ def _load():
 	fake.register_action_handler = lambda k, fn: REGISTERED.__setitem__(k, fn)
 	sys.modules[si_name] = fake
 	try:
-		from huf.ai.gateways import slack_shortcuts as mod
+		import importlib
+
+		mod = importlib.import_module(name)
 	finally:
 		sys.modules.pop(si_name, None)
 		sys.modules.pop(name, None)
