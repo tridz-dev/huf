@@ -54,18 +54,24 @@ def handle_slack_event():
 
     event = payload.get("event") or {}
     if event.get("type") in ("message", "app_mention") and not event.get("bot_id"):
+        channel = str(event.get("channel") or "")
+        ts = str(event.get("ts") or "")
+        # Provider event id is channel:ts of the message itself. Slack sends both a
+        # `message` and an `app_mention` event for one mention; both share this id.
+        provider_event_id = f"{channel}:{ts}"
         context = {
             "sender_id": str(event.get("user") or ""),
-            "conversation_id": str(event.get("channel") or ""),
-            "thread_id": str(event.get("thread_ts") or event.get("ts") or ""),
+            "conversation_id": channel,
+            # thread_id = thread_ts for replies, else the message's own ts (it roots a thread).
+            "thread_id": str(event.get("thread_ts") or ts),
             "message_text": str(event.get("text") or ""),
-            "is_room": str(event.get("channel") or "").startswith("C"),
+            "is_room": channel.startswith("C"),
             "mentioned": "<@" in str(event.get("text") or ""),
         }
-        
+
         ingest_gateway_event(
             gateway.name,
-            str(event.get("client_msg_id") or event.get("ts")),
+            provider_event_id,
             context,
             verified_sender=True,  # Signature was verified above before JSON parsing
             raw_payload=payload,

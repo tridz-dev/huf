@@ -315,7 +315,7 @@ class TestSlackEventsHandler(unittest.TestCase):
 		self.ingest.assert_called_once()
 		args, kwargs = self.ingest.call_args
 		self.assertEqual(args[0], GATEWAY)
-		self.assertEqual(args[1], "cmid-42")
+		self.assertEqual(args[1], "C0123456:1700000000.000100")
 		context = args[2]
 		self.assertEqual(context["sender_id"], "U_SENDER")
 		self.assertEqual(context["conversation_id"], "C0123456")
@@ -340,12 +340,12 @@ class TestSlackEventsHandler(unittest.TestCase):
 		context = self.ingest.call_args.args[2]
 		self.assertEqual(context["thread_id"], "1700000000.000100")
 
-	def test_event_id_falls_back_to_ts_without_client_msg_id(self):
+	def test_event_id_is_channel_ts_regardless_of_client_msg_id(self):
 		payload = message_event(ts="1700000000.000500")
 		del payload["event"]["client_msg_id"]
 		self._call(payload)
 
-		self.assertEqual(self.ingest.call_args.args[1], "1700000000.000500")
+		self.assertEqual(self.ingest.call_args.args[1], "C0123456:1700000000.000500")
 
 	def test_bot_authored_message_is_ignored(self):
 		result = self._call(message_event(bot_id="B_OTHER_BOT"))
@@ -369,7 +369,7 @@ class TestSlackEventsHandler(unittest.TestCase):
 		self.assertEqual(result, {"ok": True})
 		self.ingest.assert_called_once()
 		args, kwargs = self.ingest.call_args
-		self.assertEqual(args[1], "1700000100.000200")
+		self.assertEqual(args[1], "C0555:1700000100.000200")
 		self.assertIs(args[2]["mentioned"], True)
 		self.assertIs(args[2]["is_room"], True)
 		self.assertEqual(args[2]["sender_id"], "U_SENDER")
@@ -388,6 +388,21 @@ class TestSlackEventsHandler(unittest.TestCase):
 		self._call(payload)
 
 		self.ingest.assert_not_called()
+
+	# -- S3b semantics ---------------------------------------------------------
+
+	def test_message_and_app_mention_dedupe_to_same_event_id_both_orders(self):
+		msg = message_event(channel="C9", ts="1700000200.000300", text="<@U_BOT> hi")
+		men = {"type": "event_callback", "event": {
+			"type": "app_mention", "channel": "C9", "user": "U_SENDER",
+			"text": "<@U_BOT> hi", "ts": "1700000200.000300"}}
+		self._call(msg)
+		self._call(men)
+		self.ingest.reset_mock()
+		self._call(men)
+		self._call(msg)
+		ids = [c.args[1] for c in self.ingest.call_args_list]
+		self.assertEqual(ids, ["C9:1700000200.000300"] * 2)
 
 
 if __name__ == "__main__":
