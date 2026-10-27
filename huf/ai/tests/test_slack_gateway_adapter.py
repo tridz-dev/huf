@@ -5,8 +5,9 @@ from __future__ import annotations
 import unittest
 
 from huf.ai.gateway_adapters import GatewayReply
+from huf.ai.gateway_adapters.registered import get_adapter_class
 from huf.ai.gateway_adapters.slack import SlackGatewayAdapter
-from huf.ai.gateway_adapters.types import OutboundDelivery
+from huf.ai.gateway_adapters.types import GatewayInboundRequest, OutboundDelivery
 
 
 class FakeResponse:
@@ -104,6 +105,19 @@ class TestSlackGatewayAdapter(unittest.TestCase):
 		self.response = FakeResponse(["not", "a", "mapping"])
 		with self.assertRaisesRegex(ValueError, "Unknown Slack API error"):
 			self.adapter.send_reply(GatewayReply("C123", "hi"))
+
+	def test_verify_inbound_is_not_implemented(self):
+		request = GatewayInboundRequest(b"{}", headers={})
+		with self.assertRaises(NotImplementedError):
+			self.adapter.verify_inbound(request)
+
+	def test_normalize_inbound_is_not_implemented(self):
+		request = GatewayInboundRequest(b"{}", headers={})
+		with self.assertRaises(NotImplementedError):
+			self.adapter.normalize_inbound(request)
+
+	def test_registry_resolves_slack_provider(self):
+		self.assertIs(get_adapter_class("slack"), SlackGatewayAdapter)
 
 
 if __name__ == "__main__":
