@@ -11,6 +11,8 @@ from unittest.mock import MagicMock, patch
 from huf.ai.whatsapp import broadcast_limits as bl
 from huf.ai.whatsapp import token_check as tc
 
+_REAL_REQUIREMENTS = bl.template_requirements
+
 TOKEN = "EAAB-test-token-not-real"
 PREVIEW_OK = {"gateway": "GW-1", "template": "tpl-1", "consent_attested": 1}
 TPL_OK = {"status": "APPROVED", "category": "UTILITY"}
@@ -128,6 +130,8 @@ class _PreviewBase(unittest.TestCase):
 	def setUp(self):
 		self.counts = {"queued": 10, "skipped": 2}
 		self.queued_numbers = ["447700900123"] * 10
+		self.requirements = None
+		self.queued_params = [(None, 10)]
 		self.patches = [
 			patch.object(bl, "_broadcast_row", return_value=dict(PREVIEW_OK)),
 			patch.object(bl, "_template_row", return_value=dict(TPL_OK)),
@@ -136,6 +140,8 @@ class _PreviewBase(unittest.TestCase):
 			patch.object(bl, "_running_others", return_value=[]),
 			patch.object(bl, "_used_24h", return_value=0),
 			patch.object(bl, "get_messaging_limit", return_value=dict(LIMIT_OK)),
+			patch.object(bl, "template_requirements", side_effect=lambda _t: self.requirements),
+			patch.object(bl, "_queued_params", side_effect=lambda _b: list(self.queued_params)),
 		]
 		for p in self.patches:
 			p.start()
@@ -225,3 +231,26 @@ class TestPreview(_PreviewBase):
 		with patch.object(bl, "_recipient_counts", side_effect=RuntimeError("db down")):
 			out = self._preview()
 		self.assertEqual(out["blocking"], ["preview_failed"])
+
+
+class TestPreviewTemplateParams(_PreviewBase):
+	def _named(self):
+		from huf.ai.gateway_adapters import whatsapp_bridge as bridge
+		from huf.ai.gateway_adapters import whatsapp_template_guard as guard
+
+		tpl = {"template": "Hi {{first_name}}", "header_type": "", "header": "", "sample": "", "buttons": [],
+			"parameter_format": "NAMED", "header_format": "", "whatsapp_account": "A"}
+		with patch.object(bridge, "_template_row", return_value=tpl), patch.object(guard, "get_extra", return_value={}):
+			return _REAL_REQUIREMENTS("t")
+
+	def test_missing_named_value_blocks(self):
+		self.requirements = self._named()
+		out = self._preview()
+		self.assertIn("10 recipients are missing values for template variables: first_name", out["blocking"])
+
+	def test_default_params_clear_block(self):
+		self.requirements = self._named()
+		row = dict(PREVIEW_OK, body_params='{"first_name": "Friend"}')
+		with patch.object(bl, "_broadcast_row", return_value=row):
+			out = self._preview()
+		self.assertEqual(out["blocking"], [])

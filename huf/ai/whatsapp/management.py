@@ -2180,6 +2180,39 @@ def list_broadcasts(gateway: str | None = None, status: str | None = None, limit
 
 @frappe.whitelist()
 @_bridge_guard
+def get_broadcast_template_params(gateway: str | None = None, template: str | None = None) -> dict[str, Any]:
+	"""What a broadcast of ``template`` needs per recipient (body / header / button parameters). Read-only.
+
+	``{success, template, parameter_format: NAMED|POSITIONAL, body: [{name|index, sample}],
+	header: {type, required, name|index?, sample?}|None, buttons: [{index, sub_type, required, label}]}``.
+	"""
+	if not gateway or not frappe.db.exists("Gateway", gateway):
+		return _error("not_found", "Gateway not found.")
+	if not _gateway_read_allowed(gateway):
+		raise frappe.PermissionError(_("Not permitted to read this Gateway"))
+	account = _gateway_whatsapp_account(gateway)
+	if not account:
+		return _error("no_account", "This gateway is not linked to a WhatsApp Account.")
+	if not template or not _TEMPLATE_RECORD_RE.match(str(template).strip()):
+		return _error("invalid_name", "Template must be the Meta name or '<name>-<language_code>'.")
+	from huf.ai.whatsapp import broadcast_limits
+
+	docname = bridge._template_docname(account, str(template).strip(), None)
+	req = broadcast_limits.template_requirements(docname)
+	if not req or (req["tpl"].get("whatsapp_account") or "") != account:
+		return _error("template_not_found", "Template not found on this gateway's WhatsApp account.")
+	return {
+		"success": True,
+		"template": docname,
+		"parameter_format": req["parameter_format"],
+		"body": req["body"],
+		"header": req["header"],
+		"buttons": req["buttons"],
+	}
+
+
+@frappe.whitelist()
+@_bridge_guard
 def get_broadcast(broadcast: str | None = None) -> dict[str, Any]:
 	"""One broadcast with its status counters."""
 	row = _broadcast_for_read(broadcast)
