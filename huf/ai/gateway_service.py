@@ -619,8 +619,11 @@ PAIRING_DEFAULT_PENDING_LIMIT = 50
 PENDING_ROOM_LIMIT = 20  # max pending Room entries per gateway (separate from Sender pairing)
 PAIRING_DEFAULT_REPLY_DAILY_LIMIT = 20
 PAIRING_MAX_REQUESTS_PER_SENDER_PER_DAY = 3
+# A sender whose access was removed or whose request was declined may ask again after this long.
+ACCESS_REREQUEST_COOLDOWN_HOURS = 24
 
-# Access entry states that stop a sender from being admitted or re-paired.
+# Access entry states that stop a sender from being admitted. Blocked and Opted out are never re-paired;
+# Revoked (access removed or request declined) may ask again after ACCESS_REREQUEST_COOLDOWN_HOURS.
 ENTRY_STATE_BLOCKED = "Blocked"
 ENTRY_STATE_REVOKED = "Revoked"
 ENTRY_STATE_OPTED_OUT = "Opted out"
@@ -1100,7 +1103,7 @@ def _handle_consent_event(event, gateway, context: dict[str, Any]) -> dict | Non
             return _reject_event(event, "Sender opted back in (START); no agent run")
         return _reject_event(event, "Sender has opted out")
 
-    if state in (ENTRY_STATE_BLOCKED, ENTRY_STATE_REVOKED):
+    if state == ENTRY_STATE_BLOCKED:
         return None  # admission rejects these silently
 
     if _text_matches_keywords(gateway, text, "opt_out_keywords", DEFAULT_OPT_OUT_KEYWORDS):
@@ -1140,6 +1143,26 @@ def _process_time_block_reason(gateway, event) -> str:
 
 
 # -- pairing --------------------------------------------------------------------
+
+
+def _rerequest_cooling_down(gateway, sender_id: str) -> bool:
+    """True while a Revoked entry of this sender is younger than ACCESS_REREQUEST_COOLDOWN_HOURS."""
+    since = add_to_date(now_datetime(), hours=-ACCESS_REREQUEST_COOLDOWN_HOURS)
+    return bool(
+        frappe.get_all(
+            "Gateway Access Entry",
+            filters={
+                "gateway": gateway.name,
+                "entry_type": "Sender",
+                "provider": gateway.provider,
+                "external_id": ["in", _linked_sender_ids(gateway.name, gateway.provider, sender_id)],
+                "state": ENTRY_STATE_REVOKED,
+                "revoked_at": [">", since],
+            },
+            pluck="name",
+            limit_page_length=1,
+        )
+    )
 
 
 def _int_setting(gateway, fieldname: str, default: int) -> int:
@@ -1347,10 +1370,13 @@ def _admission(gateway, context: dict[str, Any]) -> tuple[bool, str]:
     if not is_room:
         policy = gateway.direct_policy or "Allow list"
         if policy == "Pairing":
-            # Revoked/Blocked/Opted-out senders are never re-paired and get no reply.
+            # Blocked and Opted-out senders are never re-paired and get no reply. A sender whose access
+            # was removed (or whose request was declined) is a stranger again once the cooldown passes.
             blocked = _sender_negative_state(gateway, sender_id)
-            if blocked:
+            if blocked in (ENTRY_STATE_BLOCKED, ENTRY_STATE_OPTED_OUT):
                 return False, f"Sender is blocked ({blocked})"
+            if blocked == ENTRY_STATE_REVOKED and _rerequest_cooling_down(gateway, sender_id):
+                return False, "Sender's access was removed or declined recently; they can ask again later"
             if _has_access_entry(gateway, "Sender", sender_id):
                 return True, ""
             display_name = str(context.get("display_name") or "") or None
@@ -1529,6 +1555,20 @@ def _approve_gateway_pairing(code_or_entry_name: str, notes: str | None = None, 
         updates["notes"] = notes
     _save_entry(entry, updates)
 
+    notification_status = _send_welcome(entry)
+
+    return {
+        "name": entry.name,
+        "state": "Approved",
+        "gateway": entry.gateway,
+        "provider": entry.provider,
+        "external_id": entry.external_id,
+        "notification_status": notification_status,
+    }
+
+
+def _send_welcome(entry) -> str:
+    """Tell an approved sender they can talk to the assistant. Best effort; returns what happened."""
     notification_status = "Not attempted"
     try:
         from huf.ai.gateway_adapters.types import GatewayReply
@@ -1574,14 +1614,7 @@ def _approve_gateway_pairing(code_or_entry_name: str, notes: str | None = None, 
             _redact_error_text(f"{exc}\n{frappe.get_traceback()}"),
         )
 
-    return {
-        "name": entry.name,
-        "state": "Approved",
-        "gateway": entry.gateway,
-        "provider": entry.provider,
-        "external_id": entry.external_id,
-        "notification_status": notification_status,
-    }
+    return notification_status
 
 
 @frappe.whitelist(methods=["POST"])
@@ -1621,9 +1654,10 @@ def list_gateway_access_entries(gateway: str | None = None, state: str = "Pendin
 
 @frappe.whitelist(methods=["POST"])
 def revoke_gateway_access_entry(entry_name: str) -> dict:
-    """Revoke an entry, pending or previously approved, denying it going forward.
+    """Remove access (approved entry) or decline a request (pending entry).
 
-    A revoked sender is blocked: it never gets a new pairing request or run.
+    The sender stops being admitted at once and may ask again (a new pairing request) after
+    ACCESS_REREQUEST_COOLDOWN_HOURS; use ``block_gateway_access_entry`` to keep them out for good.
     Revoke never weakens a negative consent state: ``Opted out`` and ``Blocked``
     entries keep their state (only ``revoked_at``/``revoked_by`` are recorded,
     and an opted-out sender who later sends START lands on ``Revoked``).
@@ -1637,6 +1671,115 @@ def revoke_gateway_access_entry(entry_name: str) -> dict:
         updates["state"] = ENTRY_STATE_REVOKED
     _save_entry(entry, updates)
     return {"name": entry.name, "state": entry.state}
+
+
+@frappe.whitelist(methods=["POST"])
+def block_gateway_access_entry(entry_name: str) -> dict:
+    """Block a sender (or room) for good: silently ignored and never paired again until unblocked.
+
+    An opted-out entry stays opted out (consent is the person's to change); it lands on ``Blocked``
+    if they later send START.
+    """
+    _require_gateway_admin()
+    entry = frappe.get_doc("Gateway Access Entry", entry_name)
+    updates: dict[str, Any] = {"revoked_at": now_datetime(), "revoked_by": frappe.session.user}
+    if entry.state == ENTRY_STATE_OPTED_OUT:
+        updates["previous_state"] = ENTRY_STATE_BLOCKED
+    else:
+        updates["state"] = ENTRY_STATE_BLOCKED
+    _save_entry(entry, updates)
+    return {"name": entry.name, "state": entry.state}
+
+
+@frappe.whitelist(methods=["POST"])
+def unblock_gateway_access_entry(entry_name: str) -> dict:
+    """Lift a block. The sender is not approved; they can ask for access again straight away."""
+    _require_gateway_admin()
+    entry = frappe.get_doc("Gateway Access Entry", entry_name)
+    if entry.state != ENTRY_STATE_BLOCKED:
+        frappe.throw(_("Only blocked entries can be unblocked."))
+    # Revoked without revoked_at: not admitted, and no re-request cooldown.
+    _save_entry(entry, {"state": ENTRY_STATE_REVOKED, "revoked_at": None, "revoked_by": None})
+    return {"name": entry.name, "state": entry.state}
+
+
+@frappe.whitelist(methods=["POST"])
+def restore_gateway_access_entry(entry_name: str) -> dict:
+    """Give a removed or declined sender access again, without a new pairing request."""
+    _require_gateway_admin()
+    entry = frappe.get_doc("Gateway Access Entry", entry_name)
+    if entry.state != ENTRY_STATE_REVOKED:
+        frappe.throw(_("Only removed or declined entries can be restored."))
+    _save_entry(
+        entry,
+        {
+            "state": "Approved",
+            "approved_by": frappe.session.user,
+            "approved_at": now_datetime(),
+            "expires_at": None,
+            "revoked_at": None,
+            "revoked_by": None,
+        },
+    )
+    return {"name": entry.name, "state": "Approved", "notification_status": _send_welcome(entry)}
+
+
+@frappe.whitelist(methods=["POST"])
+def add_gateway_access_entry(
+    gateway: str, external_id: str, display_label: str | None = None, entry_type: str = "Sender"
+) -> dict:
+    """Approve a number (or room) by hand, e.g. for the Allow list policy. Sends no message.
+
+    An existing pending or removed entry for the same id is approved in place; a blocked or opted-out
+    one is refused (unblock first; opting back in is the person's choice).
+    """
+    _require_gateway_admin()
+    if entry_type not in ("Sender", "Room"):
+        frappe.throw(_("Choose Sender or Room."))
+    gw = frappe.get_doc("Gateway", gateway)
+    external_id = _normalize_sender_for_provider(gw.provider, entry_type, str(external_id or "").strip())
+    if not external_id:
+        frappe.throw(_("Enter a phone number or ID."))
+    label = (display_label or "").strip() or f"{entry_type} {external_id}"
+    existing = frappe.get_all(
+        "Gateway Access Entry",
+        filters={
+            "gateway": gw.name, "entry_type": entry_type, "provider": gw.provider, "external_id": external_id,
+            "state": ["in", list(_LIVE_ENTRY_STATES)],
+        },
+        fields=["name", "state"],
+        order_by="modified desc",
+    )
+    states = {row.state for row in existing}
+    if "Approved" in states:
+        frappe.throw(_("{0} already has access.").format(external_id))
+    if ENTRY_STATE_BLOCKED in states:
+        frappe.throw(_("{0} is blocked. Unblock it first.").format(external_id))
+    if ENTRY_STATE_OPTED_OUT in states:
+        frappe.throw(_("{0} opted out. They can opt back in by sending START.").format(external_id))
+    approved = {
+        "state": "Approved",
+        "approved_by": frappe.session.user,
+        "approved_at": now_datetime(),
+        "expires_at": None,
+        "revoked_at": None,
+        "revoked_by": None,
+        "display_label": label,
+    }
+    if existing:
+        entry = _save_entry(existing[0].name, approved)
+    else:
+        entry = frappe.get_doc(
+            {
+                "doctype": "Gateway Access Entry",
+                "gateway": gw.name,
+                "entry_type": entry_type,
+                "provider": gw.provider,
+                "external_id": external_id,
+                **approved,
+            }
+        ).insert(ignore_permissions=True)
+    return {"name": entry.name, "state": "Approved", "external_id": external_id}
 
 
 def cleanup_stale_access_entries() -> dict:
