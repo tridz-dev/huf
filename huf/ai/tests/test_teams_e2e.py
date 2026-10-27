@@ -170,7 +170,7 @@ class TestTeamsE2E(IntegrationTestCase):
 			"a:1QxCcZ3gA-personal-fixture",
 			tf.CHANNEL_CONVERSATION_BASE,
 		):
-			frappe.cache.delete_value(refs._cache_key(tf.BOT_APP_ID, conversation_id))
+			frappe.cache.delete_value(refs._cache_key(self.name, tf.BOT_APP_ID, conversation_id))
 		frappe.db.rollback()
 		for doctype, filters in (
 			("Gateway Event", {"gateway": self.name}),
