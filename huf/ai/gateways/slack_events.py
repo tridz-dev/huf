@@ -74,7 +74,7 @@ def handle_slack_event():
             # thread_id = thread_ts for replies, else the message's own ts (it roots a thread).
             "thread_id": str(event.get("thread_ts") or ts),
             "message_text": str(event.get("text") or ""),
-            "is_room": channel.startswith("C"),
+            "is_room": _is_room(event, channel),
             "mentioned": "<@" in str(event.get("text") or ""),
         }
 
@@ -87,6 +87,18 @@ def handle_slack_event():
         )
 
     return {"ok": True}
+
+
+def _is_room(event: dict, channel: str) -> bool:
+    """True for public/private channels and group DMs (mpim); False for 1:1 DMs.
+
+    Prefers event["channel_type"] (channel/group/mpim/im); falls back to the id
+    prefix (C/G rooms, D DM).
+    """
+    channel_type = event.get("channel_type")
+    if channel_type:
+        return channel_type in ("channel", "group", "mpim")
+    return channel.startswith(("C", "G"))
 
 
 def _verify_slack_signature(gateway_name: str, body: bytes, headers: dict) -> str | None:

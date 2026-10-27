@@ -414,6 +414,22 @@ class TestSlackEventsHandler(unittest.TestCase):
 			self._call(message_event(subtype=subtype))
 			self.ingest.assert_not_called()
 
+	def test_is_room_by_prefix_and_channel_type(self):
+		cases = [
+			({"channel": "C1"}, True),
+			({"channel": "G1"}, True),
+			({"channel": "G1", "channel_type": "mpim"}, True),
+			({"channel": "C1", "channel_type": "channel"}, True),
+			({"channel": "G1", "channel_type": "group"}, True),
+			({"channel": "D1"}, False),
+			({"channel": "D1", "channel_type": "im"}, False),
+			({"channel": "G1", "channel_type": "im"}, False),
+		]
+		for overrides, expected in cases:
+			self.ingest.reset_mock()
+			self._call(message_event(**overrides))
+			self.assertIs(self.ingest.call_args.args[2]["is_room"], expected, overrides)
+
 
 if __name__ == "__main__":
 	unittest.main()
