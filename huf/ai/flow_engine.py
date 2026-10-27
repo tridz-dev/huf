@@ -1131,6 +1131,13 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 	commit_if_background()
 
 	_send_approval_notifications(flow_run, node, config, waiting_data)
+	# db_set does not fire doc events: offer Slack approval cards to linked approvers.
+	try:
+		from huf.ai.gateways.approvals import notify_flow_run_approvers
+
+		notify_flow_run_approvers(flow_run)
+	except Exception:
+		pass
 
 	return {"status": "waiting_approval"}
 

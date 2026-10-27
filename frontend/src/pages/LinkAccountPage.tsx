@@ -96,10 +96,19 @@ export function LinkAccountPage() {
           <CardContent>
             <Alert>
               <CheckCircle2 className="h-4 w-4" />
-              <AlertTitle>Account linked</AlertTitle>
+              <AlertTitle>{app === 'Slack' ? 'Check Slack to finish' : 'Account connected'}</AlertTitle>
               <AlertDescription>
-                Your {app} account is now connected to {hufAccount}. You can close this page and go back to
-                {app}.
+                {app === 'Slack' ? (
+                  <>
+                    We sent a confirmation message to that Slack user. The link to {hufAccount} only becomes active
+                    after they choose "Yes, link it" in Slack. You can close this page.
+                  </>
+                ) : (
+                  <>
+                    Your {app} account is now connected to {hufAccount}. You can close this page and go back to
+                    {app}.
+                  </>
+                )}
               </AlertDescription>
             </Alert>
           </CardContent>
@@ -109,10 +118,25 @@ export function LinkAccountPage() {
           <>
             <CardContent className="space-y-4">
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-                <dt className="text-muted-foreground">{person}</dt>
-                <dd className="font-medium break-all">{preview.person_label}</dd>
-                <dt className="text-muted-foreground">{orgLabel}</dt>
-                <dd className="font-medium break-all">{preview.workspace_label}</dd>
+                {app === 'Slack' ? (
+                  <>
+                    <dt className="text-muted-foreground">Slack user ID</dt>
+                    <dd className="font-medium break-all">{preview.external_id}</dd>
+                    <dt className="text-muted-foreground">Slack workspace</dt>
+                    <dd className="font-medium break-all">
+                      {preview.team_id} ({preview.workspace_label})
+                    </dd>
+                    <dt className="text-muted-foreground">Display name (set by that person)</dt>
+                    <dd className="text-muted-foreground break-all">{preview.slack_label}</dd>
+                  </>
+                ) : (
+                  <>
+                    <dt className="text-muted-foreground">{person}</dt>
+                    <dd className="font-medium break-all">{preview.person_label}</dd>
+                    <dt className="text-muted-foreground">{orgLabel}</dt>
+                    <dd className="font-medium break-all">{preview.workspace_label}</dd>
+                  </>
+                )}
                 <dt className="text-muted-foreground">Huf account</dt>
                 <dd className="font-medium break-all">
                   {hufAccount}
@@ -120,7 +144,9 @@ export function LinkAccountPage() {
                 </dd>
               </dl>
               <p className="text-sm text-muted-foreground">
-                Once linked, anything this {app} account asks Huf to do will run with your Huf permissions.
+                {app === 'Slack'
+                  ? `Slack user ${preview.external_id} will act as YOU in Huf: anything that Slack account asks Huf to do will run with your Huf permissions. The display name above is chosen by that person and proves nothing.`
+                  : `Once linked, anything this ${app} account asks Huf to do will run with your Huf permissions.`}
               </p>
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />

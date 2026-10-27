@@ -66,6 +66,9 @@ SENSITIVE_PAYLOAD_KEYS = {
 }
 
 
+IDENTITY_REQUIRED_PROVIDERS = frozenset({"slack", "microsoft teams"})
+
+
 def _idempotency_key(gateway_name: str, provider_event_id: str) -> str:
     value = f"{gateway_name}:{provider_event_id}".encode()
     return hashlib.sha256(value).hexdigest()
@@ -701,7 +704,15 @@ def process_gateway_event(event_name: str) -> dict:
     gw_hooks.register_all()
     kind = "flow" if event.target_type == "Flow" else "agent"
     try:
-        run_user = gw_hooks.call_first(gw_hooks.RESOLVE_RUN_USER, gateway, event) or gateway.execution_user
+        if str(getattr(gateway, "provider", "") or "").lower() in IDENTITY_REQUIRED_PROVIDERS and not (
+            gw_hooks.has_handler(gw_hooks.RESOLVE_RUN_USER, gateway)
+        ):
+            # Fail closed: never fall back to the shared service user when identity is missing.
+            raise gw_hooks.GatewayHookDenied(gw_hooks.STRICT_DENIED_REASON)
+        run_user = (
+            gw_hooks.call_first(gw_hooks.RESOLVE_RUN_USER, gateway, event, strict=True)
+            or gateway.execution_user
+        )
     except gw_hooks.GatewayHookDenied as denied:
         _reject_event(gateway, event, "Rejected", denied.reason)
         return {"event_name": event.name, "status": "Rejected"}

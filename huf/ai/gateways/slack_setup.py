@@ -66,6 +66,14 @@ def _build_manifest(gateway) -> dict:
 				"messages_tab_read_only_enabled": False,
 			},
 			"bot_user": {"display_name": display, "always_online": False},
+			"shortcuts": [
+				{
+					"name": "Ask Huf about this message",
+					"type": "message",
+					"callback_id": "huf_ask_message",
+					"description": "Ask Huf to act on this message",
+				}
+			],
 		},
 		"oauth_config": {"scopes": {"bot": list(slack_api.REQUIRED_BOT_SCOPES)}},
 		"settings": {

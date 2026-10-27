@@ -244,6 +244,9 @@ doc_events = {
     "Flow Run": {
         "on_update": "huf.ai.gateways.flow_reply.on_flow_run_update",
     },
+    "Agent Execution Approval": {
+        "after_insert": "huf.ai.gateways.approvals.on_approval_inserted",
+    },
     "Agent Trigger": {
         "after_insert": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
         "on_update": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
@@ -429,6 +432,7 @@ huf_tools = [
     "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS",
     "huf.ai.tools.gateway_reply.GATEWAY_REPLY_TOOLS",
     "huf.ai.tools.gateway_send.GATEWAY_SEND_TOOLS",
+    "huf.ai.tools.gateway_handoff.GATEWAY_HANDOFF_TOOLS",
 ]
 
 # Knowledge Backends Hook

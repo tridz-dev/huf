@@ -61,6 +61,8 @@ class GatewayHookDenied(Exception):
 _HANDLERS: dict[str, list[tuple[int, int, str | None, Callable]]] = {}
 _SEQ = 0
 _REGISTERED = False
+_FAILURES: list[str] = []
+STRICT_DENIED_REASON = "Identity checking is unavailable"
 
 
 def register(hook: str, fn: Callable, *, provider: str | None = None, priority: int = 100) -> None:
@@ -75,19 +77,42 @@ def clear() -> None:
 	"""Remove all handlers and reset register_all (tests)."""
 	global _REGISTERED
 	_HANDLERS.clear()
+	_FAILURES.clear()
 	_REGISTERED = False
 
 
 def register_all() -> None:
-	"""Import every module listed in ``_registered.MODULES`` once."""
+	"""Import every module listed in ``_registered.MODULES`` once.
+
+	Each module is imported in its own try/except so one broken module cannot prevent the
+	others (notably identity) from registering. The flag is set only after the loop; failed
+	module names (no tracebacks, no secrets) are exposed by :func:`registration_failures`.
+	"""
 	global _REGISTERED
 	if _REGISTERED:
 		return
-	_REGISTERED = True
 	from huf.ai.gateways import _registered
 
+	_FAILURES.clear()
 	for name in _registered.MODULES:
-		importlib.import_module(name)
+		try:
+			importlib.import_module(name)
+		except Exception:
+			_FAILURES.append(name)
+			try:
+				frappe.log_error(frappe.get_traceback(), f"Gateway hook module failed to import: {name}"[:140])
+			except Exception:
+				pass
+	_REGISTERED = True
+
+
+def registration_failures() -> list[str]:
+	return list(_FAILURES)
+
+
+def has_handler(hook: str, gateway) -> bool:
+	"""True when at least one handler is registered for ``hook`` that applies to ``gateway``."""
+	return bool(_matching(hook, (gateway,)))
 
 
 def _provider_of(args: tuple) -> str | None:
@@ -103,7 +128,7 @@ def _matching(hook: str, args: tuple) -> list[Callable]:
 	return [fn for _p, _s, prov, fn in list(_HANDLERS.get(hook, ())) if prov is None or prov == provider]
 
 
-def _invoke(hook: str, fn: Callable, args: tuple, kw: dict) -> tuple[bool, Any]:
+def _invoke(hook: str, fn: Callable, args: tuple, kw: dict, strict: bool = False) -> tuple[bool, Any]:
 	try:
 		return True, fn(*args, **kw)
 	except GatewayHookDenied:
@@ -113,6 +138,9 @@ def _invoke(hook: str, fn: Callable, args: tuple, kw: dict) -> tuple[bool, Any]:
 			frappe.log_error(frappe.get_traceback(), f"Gateway hook failed: {hook}"[:140])
 		except Exception:
 			pass
+		if strict:
+			# Generic, admin-only reason (no USER_VISIBLE_PREFIX): never leak internals.
+			raise GatewayHookDenied(STRICT_DENIED_REASON)
 		return False, None
 
 
@@ -125,9 +153,11 @@ def call_all(hook: str, *args, **kw) -> list:
 	return results
 
 
-def call_first(hook: str, *args, **kw):
+def call_first(hook: str, *args, strict: bool = False, **kw):
+	"""First non-None handler result. ``strict``: a handler exception denies the event
+	(``GatewayHookDenied``) instead of being skipped (fail closed, used for identity)."""
 	for fn in _matching(hook, args):
-		ok, value = _invoke(hook, fn, args, kw)
+		ok, value = _invoke(hook, fn, args, kw, strict)
 		if ok and value is not None:
 			return value
 	return None

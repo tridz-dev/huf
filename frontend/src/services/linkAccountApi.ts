@@ -38,6 +38,7 @@ export function providerName(provider: LinkProvider): string {
 
 export interface SelfLinkResult {
   linked: boolean;
+  pending?: boolean;
   user: string;
 }
 

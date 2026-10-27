@@ -22,6 +22,15 @@ random nonce kept in the cache for 15 minutes so the token is one-time. Nothing 
 personal (no email) is in the URL. Confirmation is POST-only and requires a logged-in
 non-Guest user; ``preview_self_link`` (GET) only shows what would be linked, so a link
 clicked by mistake never links anything.
+
+Two-way proof: confirming on the web only creates a ``Pending`` link and DMs the Slack
+user being linked (``identity_confirm``). Only that same Slack user clicking "Yes, link it"
+flips it to ``Linked``; Pending links never resolve to a user. The token is delivered
+privately (ephemeral/DM, see ``reliability``), never to the channel.
+
+Concurrency: the nonce is consumed with an atomic cache claim and the Linked-row creation
+is serialised by a short per-(gateway, team, person) cache lock plus a re-check. A DB unique
+index on (gateway, team_id, external_id) for Linked rows is a bench follow-up.
 """
 
 from __future__ import annotations
@@ -47,6 +56,12 @@ _PROMPT_PREFIX = "huf_identity_link_prompt:"
 PROMPT_THROTTLE_SECONDS = 2 * 60
 _LABEL_MAX = 80
 _UNSAFE_USERS = ("Guest", "Administrator")
+_ADMIN_SOURCES = ("Admin",)  # the only link source that may resolve to Administrator
+# Only a System Manager may link an identity to Administrator or to a user holding one of these.
+PRIVILEGED_ROLES = ("System Manager",)
+_USED_PREFIX = "huf_identity_link_used:"
+_LOCK_PREFIX = "huf_identity_link_lock:"
+_LOCK_TTL = 30
 
 
 # --------------------------------------------------------------------------- helpers
@@ -80,6 +95,46 @@ def _find_link(gateway_name: str, team_id: str, external_id: str):
 	)
 
 
+def _has_revoked(gateway_name: str, team_id: str, external_id: str) -> bool:
+	return bool(
+		frappe.db.get_value(
+			DOCTYPE,
+			{"gateway": gateway_name, "team_id": team_id, "external_id": external_id, "state": "Revoked"},
+			"name",
+		)
+	)
+
+
+def _claim(key: str, ttl: int) -> bool:
+	"""Atomically claim ``key`` (SET NX); False if already claimed. Same approach as gateway_send."""
+	cache = _cache()
+	try:
+		return bool(cache.set(cache.make_key(key), 1, nx=True, ex=ttl))
+	except (AttributeError, TypeError):
+		if cache.get_value(key):
+			return False
+		cache.set_value(key, 1, expires_in_sec=ttl)
+		return True
+
+
+def _release(key: str) -> None:
+	try:
+		_cache().delete_value(key)
+	except Exception:
+		pass
+
+
+def key_lock(gateway_name: str, team_id: str, external_id: str) -> str | None:
+	"""Take the short per-person lock; returns the lock key or None if someone else holds it."""
+	key = f"{_LOCK_PREFIX}{gateway_name}:{team_id}:{external_id}"
+	return key if _claim(key, _LOCK_TTL) else None
+
+
+def release_key_lock(key: str | None) -> None:
+	if key:
+		_release(key)
+
+
 def _user_enabled(user: str) -> bool:
 	return bool(user) and bool(frappe.db.get_value("User", user, "enabled"))
 
@@ -88,12 +143,12 @@ def _usable(user: str, source: str | None = None) -> bool:
 	"""A user a run may execute as: enabled, never Guest; Administrator only via admin link."""
 	if not user or user == "Guest" or not _user_enabled(user):
 		return False
-	if user == "Administrator" and source != "Admin":
+	if user == "Administrator" and source not in _ADMIN_SOURCES:
 		return False
 	return True
 
 
-def _create_link(gateway, team_id, external_id, user, source, label=None, linked_by=None):
+def _create_link(gateway, team_id, external_id, user, source, label=None, linked_by=None, state="Linked"):
 	doc = frappe.get_doc(
 		{
 			"doctype": DOCTYPE,
@@ -102,10 +157,10 @@ def _create_link(gateway, team_id, external_id, user, source, label=None, linked
 			"team_id": team_id,
 			"external_id": external_id,
 			"user": user,
-			"state": "Linked",
+			"state": state,
 			"source": source,
 			"display_label": label,
-			"linked_at": frappe.utils.now(),
+			"linked_at": frappe.utils.now() if state == "Linked" else None,
 			"linked_by": linked_by,
 		}
 	)
@@ -117,6 +172,8 @@ def _create_link(gateway, team_id, external_id, user, source, label=None, linked
 def _auto_map(gateway, team_id: str, sender: str) -> str | None:
 	if get_gateway_credential(gateway, "auto_link_by_email") != "1":
 		return None
+	if _has_revoked(gateway.name, team_id, sender):
+		return None  # an admin revoked this person: only an explicit re-link may restore it
 	from huf.ai.gateways.slack_api import inspect_token
 
 	api = get_slack_api(gateway)
@@ -134,7 +191,15 @@ def _auto_map(gateway, team_id: str, sender: str) -> str | None:
 	users = frappe.get_all("User", filters={"email": email, "enabled": 1}, pluck="name", limit=2)
 	if len(users) != 1 or not _usable(users[0], "Auto email"):
 		return None
-	_create_link(gateway, team_id, sender, users[0], "Auto email")
+	lock = key_lock(gateway.name, team_id, sender)
+	if not lock:
+		return None
+	try:
+		if _find_link(gateway.name, team_id, sender):
+			return None
+		_create_link(gateway, team_id, sender, users[0], "Auto email")
+	finally:
+		release_key_lock(lock)
 	return users[0]
 
 
@@ -249,17 +314,41 @@ def preview_self_link(token: str) -> dict:
 
 @frappe.whitelist(methods=["POST"])
 def confirm_self_link(token: str) -> dict:
-	"""Link the logged-in (non-Guest) user to the Slack identity in a valid one-time token."""
+	"""Start linking the logged-in (non-Guest) user to the Slack identity in a one-time token.
+
+	Creates the link as ``Pending`` and asks the Slack user (by DM) to confirm; nothing
+	resolves to this Huf user until that Slack user clicks "Yes, link it".
+	"""
 	user = _require_login()
 	data = _verify_token(token)
+	if not _claim(_USED_PREFIX + str(data["n"]), TOKEN_TTL_SECONDS + 60):
+		frappe.throw(_("This link is invalid or has expired. Ask the bot for a new one in Slack."), frappe.PermissionError)
 	_cache().delete_value(_NONCE_PREFIX + str(data["n"]))
 	gateway = frappe.get_doc("Gateway", data["g"])
-	existing = _find_link(gateway.name, data["t"], data["x"])
-	if existing and existing.user != user:
-		frappe.throw(_("This Slack account is already linked to another user."), frappe.PermissionError)
-	if not existing:
-		_create_link(gateway, data["t"], data["x"], user, "Self link", linked_by=user)
-	return {"linked": True, "user": user}
+	lock = key_lock(gateway.name, data["t"], data["x"])
+	if not lock:
+		frappe.throw(_("Another link attempt is in progress. Try again in a moment."), frappe.PermissionError)
+	try:
+		existing = _find_link(gateway.name, data["t"], data["x"])
+		if existing and existing.user != user:
+			frappe.throw(_("This Slack account is already linked to another user."), frappe.PermissionError)
+		if existing:
+			return {"linked": True, "pending": False, "user": user}
+		doc = _create_link(gateway, data["t"], data["x"], user, "Self link", linked_by=user, state="Pending")
+	finally:
+		release_key_lock(lock)
+	from huf.ai.gateways import identity_confirm
+
+	try:
+		identity_confirm.send_confirmation(gateway, doc.name, data["t"], data["x"], user)
+	except Exception:
+		frappe.db.set_value(DOCTYPE, doc.name, "state", "Revoked")
+		try:
+			frappe.log_error(frappe.get_traceback(), "Gateway identity: link confirmation DM failed"[:140])
+		except Exception:
+			pass
+		frappe.throw(_("Could not send the confirmation message in Slack. Ask the bot for a new link."))
+	return {"linked": False, "pending": True, "user": user}
 
 
 # --------------------------------------------------------------------------- admin APIs
@@ -288,6 +377,21 @@ def list_identity_links(gateway: str) -> list:
 	)
 
 
+def _is_privileged_user(user: str) -> bool:
+	if user == "Administrator":
+		return True
+	roles = set(frappe.get_roles(user) or [])
+	return bool(roles & set(PRIVILEGED_ROLES))
+
+
+def _require_can_assign(user: str) -> None:
+	"""Only a System Manager may map an identity to Administrator or a privileged user."""
+	if "System Manager" in (frappe.get_roles() or []):
+		return
+	if _is_privileged_user(user):
+		frappe.throw(_("Only a System Manager can link a person to a privileged user."), frappe.PermissionError)
+
+
 @frappe.whitelist(methods=["POST"])
 def link_identity(gateway: str, team_id: str, external_id: str, user: str) -> dict:
 	_require_admin(gateway)
@@ -295,9 +399,11 @@ def link_identity(gateway: str, team_id: str, external_id: str, user: str) -> di
 		frappe.throw(_("Workspace and person IDs are required."))
 	if user == "Guest" or not _user_enabled(user):
 		frappe.throw(_("Choose an enabled, non-Guest user."))
+	_require_can_assign(user)
 	gw = frappe.get_doc("Gateway", gateway)
 	existing = _find_link(gateway, team_id, external_id)
 	if existing:
+		_require_can_assign(existing.user)  # cannot take over a privileged user's link either
 		frappe.db.set_value(DOCTYPE, existing.name, {"user": user, "source": "Admin", "linked_by": frappe.session.user})
 		return {"name": existing.name, "user": user}
 	doc = _create_link(gw, team_id, external_id, user, "Admin", linked_by=frappe.session.user)
@@ -394,3 +500,11 @@ def on_run_success(gateway, event, kind, response):
 gw_hooks.register(gw_hooks.RESOLVE_RUN_USER, resolve_run_user, provider="slack")
 gw_hooks.register(gw_hooks.RESOLVE_CONVERSATION_KEY, resolve_conversation_key, provider="slack")
 gw_hooks.register(gw_hooks.ON_RUN_SUCCESS, on_run_success, provider="slack")
+
+try:  # registers the "idlink:" button handler; a failure only leaves links Pending (fail closed)
+	from huf.ai.gateways import identity_confirm  # noqa: F401
+except Exception:
+	try:
+		frappe.log_error(frappe.get_traceback(), "Gateway identity: confirm handler not loaded"[:140])
+	except Exception:
+		pass

@@ -27,6 +27,7 @@
   "required_permission",
   "is_read_only",
   "allowed_for_guest",
+  "requires_confirmation",
   "parameters_section",
   "parameters",
   "params",
@@ -94,6 +95,13 @@
    "fieldname": "allowed_for_guest",
    "fieldtype": "Check",
    "label": "Allowed for Guest"
+  },
+  {
+   "default": "0",
+   "description": "If checked, a gateway-originated run cannot execute this tool without an explicit confirmation",
+   "fieldname": "requires_confirmation",
+   "fieldtype": "Check",
+   "label": "Requires Confirmation"
   },
   {
    "fieldname": "parameters_section",
