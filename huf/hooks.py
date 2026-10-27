@@ -272,7 +272,11 @@ doc_events = {
         "on_trash": "huf.ai.gateway_adapters.whatsapp_template_guard.guard_template_write",
     },
     "User": {
-        "on_update": "huf.huf.doctype.huf_user_role.huf_user_role.sync_from_frappe_user",
+        # sync first: it reads the roles on the saved doc, which the default grant writes behind its back
+        "on_update": [
+            "huf.huf.doctype.huf_user_role.huf_user_role.sync_from_frappe_user",
+            "huf.huf.doctype.huf_user_role.huf_user_role.grant_default_huf_roles",
+        ],
     },
     "Telegram Admin Binding": {
         "on_update": "huf.ai.telegram_web_access_enforce.on_binding_update",

@@ -306,6 +306,7 @@ def _gateway_status(gateway: dict[str, Any], connector_available: bool | None = 
 		"phone_number_id": gateway.get("phone_number_id") or "",
 		"account_phone_mismatch": mismatch,
 		"webhook_url": _webhook_url(gateway["name"]),
+		"integration_settings": gateway.get("integration_settings") or "",
 	}
 	payload.update(
 		health.build_health(

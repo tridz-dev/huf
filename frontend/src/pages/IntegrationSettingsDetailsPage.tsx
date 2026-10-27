@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { IntegrationHeader } from '@/components/integrations/IntegrationHeader';
 import { AddIntegrationToAgentModal } from '@/components/integrations/AddIntegrationToAgentModal';
+import { ConnectChannelAgentModal } from '@/components/integrations/ConnectChannelAgentModal';
 import { GeneralTab } from '@/components/integrations/GeneralTab';
 import { CredentialsTab } from '@/components/integrations/CredentialsTab';
 import { RecipientsTab } from '@/components/integrations/RecipientsTab';
@@ -69,6 +70,8 @@ export function IntegrationSettingsDetailsPage({
   const [deleting, setDeleting] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [addToAgentOpen, setAddToAgentOpen] = useState(false);
+  // Bumped after an agent is connected so the Channel tab reloads its gateway.
+  const [channelVersion, setChannelVersion] = useState(0);
   const [credentialSchema, setCredentialSchema] = useState<CredentialSchemaItem[]>([]);
   const [serviceCategory, setServiceCategory] = useState<string>('');
   const [serviceSurface, setServiceSurface] = useState<string>('');
@@ -379,6 +382,8 @@ export function IntegrationSettingsDetailsPage({
 
   const displayService = watchService || initialService;
   const showGatewayHint = surface === 'Integration' && !isNew && serviceSurface === 'Gateway';
+  // Messaging channels connect an agent as the one that answers; other integrations attach tools.
+  const isChannel = serviceSurface === 'Gateway' && Boolean(settingId) && !isNew;
   const tabCols = validTabs.length;
 
   return (
@@ -405,7 +410,7 @@ export function IntegrationSettingsDetailsPage({
               type="button"
             >
               <Bot className="w-4 h-4 mr-2" />
-              Add to Agent
+              {isChannel ? 'Connect agent' : 'Add to Agent'}
             </Button>
           )}
         </IntegrationHeader>
@@ -451,7 +456,11 @@ export function IntegrationSettingsDetailsPage({
 
               {'channel' in tabConfig && (
                 <TabsContent value="channel" className="space-y-4">
-                  <ChannelTab settingId={settingId && !isNew ? settingId : undefined} isNew={isNew} />
+                  <ChannelTab
+                    key={channelVersion}
+                    settingId={settingId && !isNew ? settingId : undefined}
+                    isNew={isNew}
+                  />
                 </TabsContent>
               )}
             </Tabs>
@@ -481,12 +490,21 @@ export function IntegrationSettingsDetailsPage({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AddIntegrationToAgentModal
-        open={addToAgentOpen}
-        onOpenChange={setAddToAgentOpen}
-        service={displayService}
-        integrationName={settingId && !isNew ? settingId : undefined}
-      />
+      {isChannel && settingId ? (
+        <ConnectChannelAgentModal
+          open={addToAgentOpen}
+          onOpenChange={setAddToAgentOpen}
+          integrationName={settingId}
+          onConnected={() => setChannelVersion((v) => v + 1)}
+        />
+      ) : (
+        <AddIntegrationToAgentModal
+          open={addToAgentOpen}
+          onOpenChange={setAddToAgentOpen}
+          service={displayService}
+          integrationName={settingId && !isNew ? settingId : undefined}
+        />
+      )}
     </div>
   );
 }

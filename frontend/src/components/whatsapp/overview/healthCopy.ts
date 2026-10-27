@@ -38,6 +38,7 @@ export const REASON_FALLBACK: Record<string, string> = {
 	recent_error: 'The last message ran into an error.',
 	fallback_template_unavailable: 'Replies after 24 hours will fail until the fallback template is approved.',
 	voice_reply_ffmpeg_missing: 'Voice replies are on but ffmpeg is missing, so replies go out as text.',
+	senders_waiting: "People are waiting for approval. Your agent won't reply to them until you approve them.",
 	no_events_yet:
 		"Meta hasn't sent us anything yet. Check the callback URL and that the messages field is subscribed.",
 };
@@ -68,7 +69,7 @@ export const CHECKLIST_COPY: Record<ChecklistCode, { title: string; help: string
 	},
 	credentials: {
 		title: 'Add your credentials',
-		help: 'Paste the access token and phone number ID from Meta.',
+		help: 'Paste the phone number ID, business account ID, app ID, access token and app secret from Meta.',
 		action: 'Add credentials',
 	},
 	webhook: {
@@ -90,6 +91,11 @@ export const CHECKLIST_COPY: Record<ChecklistCode, { title: string; help: string
 		title: 'Turn the number on',
 		help: 'Switch this number on so your agent starts replying.',
 		action: 'Turn on',
+	},
+	approve_sender: {
+		title: 'Approve your first sender',
+		help: "New people get a pairing code. Your agent replies once you approve them.",
+		action: 'Review requests',
 	},
 	test_message: {
 		title: 'Send a test message',

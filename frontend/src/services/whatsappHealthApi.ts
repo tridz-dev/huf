@@ -25,6 +25,7 @@ export type ChecklistCode =
 	| 'subscribed'
 	| 'app_secret'
 	| 'enabled'
+	| 'approve_sender'
 	| 'test_message';
 
 export interface ChecklistItem {
@@ -88,6 +89,8 @@ export interface GatewayHealthStatus {
 	phone_number_id: string | null;
 	account_phone_mismatch: boolean;
 	webhook_url: string;
+	/** The channel credential this gateway uses ('' when none is connected). */
+	integration_settings?: string;
 	health: HealthState;
 	reasons: HealthReason[];
 	next_step: NextStep | null;
