@@ -32,7 +32,10 @@ from huf.ai.gateways.teams_contract import BOT_TOKEN_SCOPE, BOT_TOKEN_URL_TEMPLA
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_HOST_SUFFIXES = (".botframework.com", ".trafficmanager.net", ".teams.microsoft.com")
+# ``trafficmanager.net`` is a shared Azure suffix anyone can register under: allow ONLY the Bot
+# Connector's exact host (regions are path segments, e.g. /amer/, /emea/), never the suffix.
+ALLOWED_HOSTS = ("smba.trafficmanager.net",)
+ALLOWED_HOST_SUFFIXES = (".botframework.com", ".teams.microsoft.com")
 TOKEN_CACHE_PREFIX = "teams:token:"
 TOKEN_EXPIRY_MARGIN = 300
 MAX_RETRY_AFTER = 86400
@@ -99,7 +102,7 @@ def validate_service_url(url: str) -> str:
 		raise bad()
 	except ValueError:
 		pass
-	if not host.endswith(ALLOWED_HOST_SUFFIXES):
+	if host not in ALLOWED_HOSTS and not host.endswith(ALLOWED_HOST_SUFFIXES):
 		raise bad()
 	segments = []
 	for seg in parts.path.split("/"):

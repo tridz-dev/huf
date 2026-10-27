@@ -155,14 +155,26 @@ def get_personal_reference(gateway: str, tenant_id: str, user_aad_id: str) -> di
 # --- hooks -------------------------------------------------------------------------------
 
 _TenantCheck = Callable[[Any, str], bool]
-_tenant_allowed: _TenantCheck = lambda gateway, tenant_id: True  # noqa: E731
+
+
+def _default_tenant_allowed(gateway, tenant_id) -> bool:
+	"""Defence in depth: the real allowlist (lazy import). Fails CLOSED if unavailable."""
+	try:
+		from huf.ai.gateways import teams_tenant
+
+		return bool(teams_tenant.is_tenant_allowed(gateway, tenant_id))
+	except Exception:
+		return False
+
+
+_tenant_allowed: _TenantCheck = _default_tenant_allowed
 
 
 def set_tenant_allowed_check(fn: _TenantCheck | None) -> None:
-	"""Inject the allowlist check ``(gateway, tenant_id) -> bool`` (default: allow all).
-	The coordinator wires T5's allowlist here; None restores the default."""
+	"""Inject the allowlist check ``(gateway, tenant_id) -> bool`` (tests). None restores the
+	production default, ``teams_tenant.is_tenant_allowed`` (fail closed)."""
 	global _tenant_allowed
-	_tenant_allowed = fn or (lambda gateway, tenant_id: True)
+	_tenant_allowed = fn or _default_tenant_allowed
 
 
 def _as_activity(value: Any) -> dict:
@@ -219,6 +231,11 @@ def _pre_ingest_install(gateway, context) -> bool:
 			upsert_reference(name, meta, installed=True)
 		elif kind == tc.TeamsActivityKind.UNINSTALL.value:
 			mark_uninstalled(name, meta)
+	else:
+		try:  # keep the dropped install event as Rejected so admins can see it
+			frappe.flags.gateway_filter_reason = tc.REASON_TENANT_NOT_ALLOWED
+		except Exception:
+			pass
 	return False  # install_event: never routed to an agent
 
 

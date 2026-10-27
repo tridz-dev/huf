@@ -43,6 +43,7 @@ MSG_FAILED = "Sorry, that approval could not be recorded."
 MSG_DECIDED = "This approval was already decided."
 MSG_EXPIRED = "This approval has expired."
 MSG_NOT_PENDING = "This approval is no longer pending."
+MSG_DUPLICATE = "That click was already received."
 
 
 def _log(title) -> None:
@@ -131,7 +132,7 @@ def _queue_one(gateway, doc, user, title, facts, ttl) -> bool:
 		"tenant_id": tenant,
 	}
 	idem = "teams-approval-" + hashlib.sha256(f"{gateway}|{session}".encode()).hexdigest()[:32]
-	teams_outbox.enqueue(gateway, snapshot, "card", {"activity": activity}, idem)
+	teams_outbox.enqueue(gateway, snapshot, "card", {"activity": activity, "action_session": session}, idem)
 	frappe.cache().set_value(key, 1, expires_in_sec=NOTIFIED_TTL)
 	return True
 
@@ -296,12 +297,85 @@ def _gateway_name(gateway) -> str:
 	return _s(name)
 
 
-def _handle(gateway, activity: dict) -> dict:
+def duplicate_card_response(gateway, activity: dict) -> dict:
+	"""Invoke body for a redelivered card click (the event id was already ingested).
+
+	Read-only: never consumes a session or decides anything. A decided/expired session answers
+	with the same notice card the first delivery would get; anything else with a neutral message.
+	Also stored as the response override so ``handle_gateway_webhook`` returns it.
+	"""
+	try:
+		body = _duplicate_body(gateway, activity)
+	except Exception:
+		_log("Teams duplicate card action failed")
+		body = _refuse(MSG_FAILED)
+	_set_response(body)
+	return body
+
+
+def _duplicate_body(gateway, activity: dict) -> dict:
+	meta = teams_refs.parse_meta(activity)
+	if not _tenant_ok(gateway, meta.tenant_id):
+		return _refuse(MSG_UNAVAILABLE)
 	verb, session_name = _action_parts(activity)
 	if verb not in cards.VERBS or not session_name:
 		return _refuse(MSG_UNAVAILABLE)
+	session = _load_session(session_name)
+	if (not session or session.get("gateway") != _gateway_name(gateway)
+			or _s(session.get("tenant_id")) != meta.tenant_id
+			or _s(session.get("conversation_id")) != teams_refs._base_conversation_id(meta.conversation_id)):
+		return _refuse(MSG_UNAVAILABLE)
+	state = session.get("state")
+	if state == "Decided":
+		return _replace(MSG_DECIDED)
+	if state == "Expired":
+		return _replace(MSG_EXPIRED)
+	return _refuse(MSG_DUPLICATE)
+
+
+def _tenant_ok(gateway, tenant_id) -> bool:
+	"""``teams_tenant.is_tenant_allowed``; fails closed when it is missing or raises."""
+	try:
+		from huf.ai.gateways import teams_tenant
+
+		return bool(tenant_id) and bool(teams_tenant.is_tenant_allowed(gateway, tenant_id))
+	except Exception:
+		return False
+
+
+_KIND_HANDLERS: dict = {}
+
+
+def register_action_handler(kind: str, fn) -> None:
+	"""``fn(gateway_name, session_name, session, meta, verb) -> invoke body`` for a session kind
+	whose clicker need not be a linked Huf user (e.g. ``idlink``). The handler must verify the
+	principal itself and consume the session; the generic binding checks run first."""
+	_KIND_HANDLERS[kind] = fn
+
+
+def _handle_registered(fn, gw: str, session_name: str, session: dict, meta, verb: str) -> dict:
+	if (session.get("gateway") != gw or _s(session.get("tenant_id")) != meta.tenant_id
+			or _s(session.get("conversation_id")) != teams_refs._base_conversation_id(meta.conversation_id)):
+		return _refuse(MSG_UNAVAILABLE)
+	state = session.get("state")
+	if state == "Decided":
+		return _replace(MSG_DECIDED)
+	if state != "Open":
+		return _replace(MSG_EXPIRED)
+	return fn(gw, session_name, session, meta, verb)
+
+
+def _handle(gateway, activity: dict) -> dict:
 	meta = teams_refs.parse_meta(activity)
+	if not _tenant_ok(gateway, meta.tenant_id):  # defence in depth: never act for a foreign tenant
+		return _refuse(MSG_UNAVAILABLE)
+	verb, session_name = _action_parts(activity)
+	if verb not in cards.VERBS or not session_name:
+		return _refuse(MSG_UNAVAILABLE)
 	gw = _gateway_name(gateway)
+	peek = _load_session(session_name)
+	if peek and peek.get("kind") in _KIND_HANDLERS:
+		return _handle_registered(_KIND_HANDLERS[peek["kind"]], gw, session_name, peek, meta, verb)
 	clicker = teams_identity.resolve_user(gw, meta.tenant_id, meta.user_aad_id) if (
 		meta.tenant_id and meta.user_aad_id) else None
 	if not clicker:
@@ -407,3 +481,9 @@ def register() -> None:
 
 
 register()
+
+
+try:  # registers the "idlink" handler (explicit register() runs at its import)
+	from huf.ai.gateways import teams_identity_confirm  # noqa: F401
+except Exception:  # pragma: no cover - a failure leaves links Pending (fail closed)
+	pass

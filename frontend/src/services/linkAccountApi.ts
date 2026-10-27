@@ -8,6 +8,10 @@ export interface SelfLinkPreview {
   user: string;
   slack_label?: string;
   person_label: string;
+  /** Teams only: the Microsoft tenant GUID (show prominently). */
+  tenant_id?: string;
+  /** Teams only: sender-chosen display name; attacker-controlled, secondary text only. */
+  display_label_untrusted?: string;
   workspace_label: string;
 }
 

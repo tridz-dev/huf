@@ -79,7 +79,7 @@ def db(monkeypatch):
 	fr = SimpleNamespace(db=fake, get_all=fake.get_all, get_doc=get_doc, DuplicateEntryError=DupError)
 	monkeypatch.setattr(refs, "frappe", fr)
 	monkeypatch.setattr(refs, "now_datetime", now)
-	refs.set_tenant_allowed_check(None)
+	refs.set_tenant_allowed_check(lambda gw, tenant: tenant == TENANT)
 	yield fake
 	refs.set_tenant_allowed_check(None)
 
@@ -328,3 +328,42 @@ def test_doctype_json_sanity():
 	by = {f["fieldname"]: f for f in d["fields"]}
 	assert by["gateway"]["fieldtype"] == "Link" and by["installed"]["fieldtype"] == "Check"
 	assert by["conversation_type"]["options"].split("\n") == ["personal", "channel", "groupChat"]
+
+
+# --- T16: production default is the real allowlist, fail closed --------------------------
+
+
+def test_default_tenant_check_is_teams_tenant_and_fails_closed(db, monkeypatch):
+	import importlib
+
+	refs.set_tenant_allowed_check(None)  # production default
+	assert refs._tenant_allowed is refs._default_tenant_allowed
+	tt = importlib.import_module("huf.ai.gateways.teams_tenant")
+	monkeypatch.setattr(tt, "is_tenant_allowed", lambda gw, t: t == TENANT)
+	act = load("installation_add")
+	assert refs._pre_ingest_install(GW, {"raw_payload": act}) is False
+	assert len(db.rows) == 1
+	foreign = load("installation_add")
+	foreign["channelData"]["tenant"]["id"] = "foreign"
+	foreign["conversation"]["tenantId"] = "foreign"
+	foreign["conversation"]["id"] = "19:other@thread.tacv2"
+	assert refs._pre_ingest_install(GW, {"raw_payload": foreign}) is False
+	assert len(db.rows) == 1  # no row, no state change for a foreign tenant
+	monkeypatch.setattr(tt, "is_tenant_allowed", lambda gw, t: 1 / 0)
+	again = load("installation_add")
+	again["conversation"]["id"] = "19:third@thread.tacv2"
+	refs._pre_ingest_install(GW, {"raw_payload": again})
+	assert len(db.rows) == 1  # exception => fail closed
+
+
+def test_foreign_conversation_update_and_uninstall_change_nothing(db):
+	for fixture in ("conversation_update", "installation_remove"):
+		try:
+			act = load(fixture)
+		except FileNotFoundError:
+			continue
+		act["channelData"]["tenant"]["id"] = "foreign"
+		act["conversation"]["tenantId"] = "foreign"
+		before = dict(db.rows)
+		assert refs._pre_ingest_install(GW, {"raw_payload": act}) is False
+		assert db.rows == before

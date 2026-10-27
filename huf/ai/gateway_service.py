@@ -615,9 +615,10 @@ def ingest_gateway_event(
     # record why in ``frappe.flags.gateway_filter_reason``; the event is then kept as Rejected.
     frappe.flags.gateway_filter_reason = None
     _filter_reason = None
-    if gw_hooks.call_all(
+    # call_filters stops at the first False and treats a raising filter as False (fail closed).
+    if not gw_hooks.call_filters(
         gw_hooks.PRE_INGEST_FILTER, _hook_gateway, {**context, "raw_payload": raw_payload}
-    ).count(False):
+    ):
         _filter_reason = frappe.flags.gateway_filter_reason
         frappe.flags.gateway_filter_reason = None
         if not isinstance(_filter_reason, str) or not _filter_reason:

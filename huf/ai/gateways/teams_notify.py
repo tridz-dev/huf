@@ -213,6 +213,9 @@ def send_teams_notification(
 			cache_key = DEDUPE_PREFIX + key
 			if _cache().get_value(cache_key):
 				return {"success": True, "outbox": None, "deduped": True}
+			# Best effort: get-then-set on the cache is not atomic, so two concurrent identical calls
+			# can both pass. Delivery stays idempotent through the outbox key; a cache outage only
+			# loses the dedupe window, never a notification.
 			hours = max(float(dedupe_hours or 24), 0.01)
 			_cache().set_value(cache_key, 1, expires_in_sec=int(hours * 3600))
 			claim = cache_key

@@ -182,7 +182,20 @@ def _gateway_credentials(gateway) -> dict[str, str]:
 
 def get_gateway_adapter(gateway):
 	"""Instantiate the configured adapter without exposing stored credentials."""
-	return _adapter_class_for_provider(gateway.provider)(_gateway_credentials(gateway))
+	cls = _adapter_class_for_provider(gateway.provider)
+	credentials = _gateway_credentials(gateway)
+	if _accepts_gateway_name(cls):  # e.g. Teams: outbound routing is scoped to this gateway
+		return cls(credentials, gateway_name=gateway.name)
+	return cls(credentials)
+
+
+def _accepts_gateway_name(cls) -> bool:
+	import inspect
+
+	try:
+		return "gateway_name" in inspect.signature(cls.__init__).parameters
+	except (TypeError, ValueError):
+		return False
 
 
 def _inbound_request():
@@ -270,7 +283,30 @@ def handle_gateway_webhook() -> dict | None:
 	override = _take_response_override()
 	if override is not None:
 		return override
+	if isinstance(result, dict) and result.get("duplicate"):
+		duplicate = _duplicate_invoke_response(gateway, event)
+		if duplicate is not None:
+			return duplicate
 	return {"success": True, **result}
+
+
+def _duplicate_invoke_response(gateway, event):
+	"""A redelivered Teams card click still needs a proper invoke response body, not our JSON.
+
+	Ingest short-circuits duplicates before any filter runs, so no hook set an override. The
+	adapter-tagged ``huf_kind`` identifies the activity; the Teams handler answers read-only.
+	"""
+	raw = getattr(event, "raw_payload", None)
+	if not isinstance(raw, dict) or raw.get("huf_kind") != "card_action":
+		return None
+	try:
+		from huf.ai.gateways import teams_actions
+
+		frappe.local.gateway_response_override = None
+		teams_actions.duplicate_card_response(gateway, raw)
+		return _take_response_override()
+	except Exception:
+		return None
 
 
 def _take_response_override():
