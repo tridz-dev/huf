@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
 import {
   Form,
@@ -47,7 +48,6 @@ import type { AgentPromptDoc } from '@/services/agentPromptApi';
 import type { MCPServerDoc } from '@/services/mcpApi';
 
 const skillFormSchema = z.object({
-  skill_name: z.string().min(1, 'Skill name is required'),
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
   skill_category: z.string().optional(),
@@ -71,7 +71,6 @@ function normalizeFlag(value: boolean | number | undefined): 0 | 1 {
 
 function mapDocToFormValues(doc: Partial<SkillDoc>): SkillFormValues {
   return {
-    skill_name: doc.skill_name || '',
     title: doc.title || '',
     description: doc.description || '',
     skill_category: doc.skill_category || '',
@@ -96,7 +95,6 @@ function mapFormToPayload(
   mcpServers: SkillMcpServer[]
 ): Partial<SkillDoc> {
   return {
-    skill_name: values.skill_name,
     title: values.title,
     description: values.description || '',
     skill_category: values.skill_category || undefined,
@@ -146,7 +144,6 @@ export function SkillFormPage() {
       general: {
         label: 'General',
         fields: [
-          'skill_name',
           'title',
           'description',
           'skill_category',
@@ -327,7 +324,14 @@ export function SkillFormPage() {
       try {
         const payload = mapFormToPayload(values, tools, knowledge, prompts, mcpServers);
         if (isNew) {
-          const created = await createSkill(payload);
+          const skillNamePrefix = values.title
+            .trim()
+            .replace(/[^a-zA-Z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .toLowerCase()
+            .slice(0, 100);
+          const skillName = `${skillNamePrefix || 'skill'}_${nanoid(10)}`;
+          const created = await createSkill({ ...payload, skill_name: skillName });
           toast.success('Skill created');
           navigate(`/skills/${created.name}`);
         } else if (id) {
@@ -425,7 +429,7 @@ export function SkillFormPage() {
             <Sparkles className="w-6 h-6 text-muted-foreground" />
             <div>
               <h1 className="font-display text-title text-ink">{isNew ? 'New Skill' : form.watch('title') || 'Skill'}</h1>
-              <p className="text-sm text-muted-foreground">{isNew ? 'Create a reusable skill bundle' : form.watch('skill_name')}</p>
+              <p className="text-sm text-muted-foreground">{isNew ? 'Create a reusable skill bundle' : id}</p>
             </div>
             <Badge variant={watchStatus === 'Active' ? 'default' : 'secondary'}>{watchStatus}</Badge>
           </div>
@@ -437,7 +441,7 @@ export function SkillFormPage() {
               </Button>
             )}
             {!isNew && (
-              <Button variant="outline" size="sm" onClick={() => exportSkillAsHuf(form.getValues('skill_name'))}>
+              <Button variant="outline" size="sm" onClick={() => exportSkillAsHuf(id || '')}>
                 <Download className="w-4 h-4 mr-2" />
                 Download .huf
               </Button>
@@ -469,20 +473,6 @@ export function SkillFormPage() {
                     <CardDescription>Basic skill configuration</CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-4 sm:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="skill_name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Skill name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="my-skill" {...field} disabled={!isNew} />
-                          </FormControl>
-                          <FormDescription>Unique machine identifier</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                     <FormField
                       control={form.control}
                       name="title"
