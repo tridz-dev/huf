@@ -572,6 +572,14 @@ def resolve_gateway_route(gateway_name: str, context: dict[str, Any]) -> dict:
     return {"status": "Unrouted", "reason": "No enabled route matches this message"}
 
 
+def _reject_event(gateway, event, status: str, reason: str) -> None:
+    """Mark an event Rejected/Unrouted and fire ``on_event_rejected``."""
+    from huf.ai.gateways import hooks as gw_hooks
+
+    event.db_set({"status": status, "error_message": reason})
+    gw_hooks.call_all(gw_hooks.ON_EVENT_REJECTED, gateway, event, status, reason)
+
+
 def ingest_gateway_event(
     gateway_name: str,
     provider_event_id: str,
@@ -626,21 +634,21 @@ def ingest_gateway_event(
     gw_hooks.call_all(gw_hooks.ON_EVENT_RECEIVED, _hook_gateway, event)
 
     if not verified_sender:
-        event.db_set({"status": "Rejected", "error_message": "Provider did not verify sender"})
+        _reject_event(_hook_gateway, event, "Rejected", "Provider did not verify sender")
         return {"event_name": event.name, "status": "Rejected"}
 
     gateway = frappe.get_doc("Gateway", gateway_name)
     if not gateway.is_enabled:
-        event.db_set({"status": "Rejected", "error_message": "Gateway is disabled"})
+        _reject_event(gateway, event, "Rejected", "Gateway is disabled")
         return {"event_name": event.name, "status": "Rejected"}
     admitted, reason = _admission(gateway, context)
     if not admitted:
-        event.db_set({"status": "Rejected", "error_message": reason})
+        _reject_event(gateway, event, "Rejected", reason)
         return {"event_name": event.name, "status": "Rejected"}
 
     route = resolve_gateway_route(gateway_name, context)
     if route["status"] != "Queued":
-        event.db_set({"status": route["status"], "error_message": route.get("reason", "")})
+        _reject_event(gateway, event, route["status"], route.get("reason", ""))
         return {"event_name": event.name, **route}
 
     event.db_set(
@@ -670,7 +678,7 @@ def process_gateway_event(event_name: str) -> dict:
 
     gateway = frappe.get_doc("Gateway", event.gateway)
     if not gateway.is_enabled or not gateway.execution_user:
-        event.db_set({"status": "Rejected", "error_message": "Gateway is disabled or has no Run as user"})
+        _reject_event(gateway, event, "Rejected", "Gateway is disabled or has no Run as user")
         return {"event_name": event.name, "status": "Rejected"}
 
     from huf.ai.gateways import hooks as gw_hooks
@@ -680,7 +688,7 @@ def process_gateway_event(event_name: str) -> dict:
     try:
         run_user = gw_hooks.call_first(gw_hooks.RESOLVE_RUN_USER, gateway, event) or gateway.execution_user
     except gw_hooks.GatewayHookDenied as denied:
-        event.db_set({"status": "Rejected", "error_message": denied.reason})
+        _reject_event(gateway, event, "Rejected", denied.reason)
         return {"event_name": event.name, "status": "Rejected"}
 
     if event.target_type == "Agent":
@@ -721,7 +729,7 @@ def process_gateway_event(event_name: str) -> dict:
             {"execution_user": run_user, "target_agent": event.target_agent},
         )
         if not identity.authorized:
-            event.db_set({"status": "Rejected", "error_message": identity.reason})
+            _reject_event(gateway, event, "Rejected", identity.reason)
             return {"event_name": event.name, "status": "Rejected"}
 
     try:

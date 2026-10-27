@@ -18,6 +18,9 @@ Hook names and signatures (``kind`` is ``"agent"`` or ``"flow"``):
 - ``on_run_start(gateway, event, kind)``
 - ``on_run_success(gateway, event, kind, response)``
 - ``on_run_failure(gateway, event, kind, error)``
+- ``on_event_rejected(gateway, event, status, reason)``: fired whenever an event is
+  marked ``Rejected`` or ``Unrouted`` (admission, route, disabled gateway, hook denial,
+  access gate). Lets reliability code tell the sender why nothing ran.
 
 A handler raising ``GatewayHookDenied`` aborts the dispatch (the caller marks
 the event Rejected with ``.reason``). Any other exception is logged and the
@@ -40,6 +43,7 @@ RESOLVE_REPLY_TARGET = "resolve_reply_target"
 ON_RUN_START = "on_run_start"
 ON_RUN_SUCCESS = "on_run_success"
 ON_RUN_FAILURE = "on_run_failure"
+ON_EVENT_REJECTED = "on_event_rejected"
 
 
 class GatewayHookDenied(Exception):

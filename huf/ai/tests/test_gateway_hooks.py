@@ -92,3 +92,11 @@ def test_register_all_idempotent(monkeypatch):
 	hooks.register_all()
 	hooks.register_all()
 	assert calls == ["fake_w0_mod"]
+
+
+def test_event_rejected_hook_dispatches():
+	hooks.clear()
+	seen = []
+	hooks.register(hooks.ON_EVENT_REJECTED, lambda gw, ev, status, reason: seen.append((status, reason)))
+	hooks.call_all(hooks.ON_EVENT_REJECTED, object(), object(), "Rejected", "why")
+	assert seen == [("Rejected", "why")]
