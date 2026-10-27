@@ -56,6 +56,9 @@ def ingest_update(gateway, adapter, request) -> Any:
 	except ValueError:
 		logger.warning("Teams activity ignored: invalid payload")
 		return _ignored("invalid")
+	if not activity_mod.is_teams_channel(activity):
+		logger.warning("Teams activity ignored: channelId is not msteams")
+		return _ignored("channel")
 
 	if str(activity.get("type") or "").lower() == "message":
 		outcome = activity_mod.build_event(activity, credentials)
