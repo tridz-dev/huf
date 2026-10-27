@@ -475,7 +475,7 @@ fixtures = [
 to_sync_tools = "huf.ai.tools.registry.sync_discovered_tools"
 
 # Register integration tools from _registry
-huf_tools = "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS"
+huf_tools = ["huf.ai.tools._registry.ALL_INTEGRATION_TOOLS", "huf.ai.teams.tools.TEAMS_TOOLS"]
 
 # Knowledge Backends Hook
 # -----------------------

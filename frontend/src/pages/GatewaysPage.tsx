@@ -92,7 +92,7 @@ const providerNames: Record<GatewayProvider, string> = {
   Slack: 'Slack Workspace',
   Email: 'Shared Email Inbox',
   'Google Chat': 'Google Workspace Chat',
-  'Microsoft Teams': 'MS Teams Channel',
+  'Microsoft Teams': 'Microsoft Teams',
 };
 
 const uiProviders: GatewayProvider[] = [

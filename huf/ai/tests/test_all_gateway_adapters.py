@@ -304,16 +304,26 @@ class TestAllGatewayAdapters(unittest.TestCase):
 			adapter.send_reply(reply)
 
 	def test_teams_adapter(self):
-		mock_post = MagicMock()
-		mock_post.return_value.json.return_value = {"id": "act_999"}
+		def transport(method, url, **kw):
+			if "/oauth2/" in url:
+				return 200, {}, {"access_token": "tok", "expires_in": 3600}
+			return 200, {}, {"id": "act_999"}
 
 		adapter = TeamsGatewayAdapter(
-			{"app_id": "appid", "app_password": "apppass"},
-			http_post=mock_post,
+			{"app_id": "appid", "app_password": "apppass", "tenant_id": "tenant-1"},
+			transport=transport,
 		)
 
+		activity = {
+			"type": "message",
+			"id": "act_1",
+			"from": {"id": "user1"},
+			"conversation": {"id": "conv1", "conversationType": "personal", "tenantId": "tenant-1"},
+			"channelData": {"tenant": {"id": "tenant-1"}},
+			"text": "Hi Teams",
+		}
 		req = GatewayInboundRequest(
-			body=b'{"id": "act_1", "from": {"id": "user1"}, "conversation": {"id": "conv1"}, "text": "Hi Teams"}',
+			body=json.dumps(activity).encode(),
 			headers={"Authorization": "Bearer token"},
 			query={},
 			method="POST",
@@ -327,5 +337,7 @@ class TestAllGatewayAdapters(unittest.TestCase):
 			conversation_id="conv1",
 			text="Teams Reply",
 		)
-		delivery = adapter.send_reply(reply)
+		reference = {"serviceUrl": "https://smba.trafficmanager.net/amer", "bot_id": "28:appid"}
+		with patch("huf.ai.teams.refs.get_reference", return_value=reference):
+			delivery = adapter.send_reply(reply)
 		self.assertEqual(delivery.provider_message_id, "act_999")

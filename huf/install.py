@@ -1151,14 +1151,10 @@ def _adapter_required_credentials(provider_id, extra_fields=None):
 	from huf.ai.gateway_adapters.registered import get_adapter_class
 
 	adapter_cls = get_adapter_class(provider_id)
-	fields = []
-	for f in adapter_cls.credential_schema.fields:
-		item = {"key": f.key, "label": f.label, "required": f.required}
-		if not f.secret:
-			item["secret"] = False
-		if f.description:
-			item["description"] = f.description
-		fields.append(item)
+	fields = [
+		{"key": f.key, "label": f.label, "required": f.required, "secret": f.secret, "description": f.description}
+		for f in adapter_cls.credential_schema.fields
+	]
 	fields.extend(extra_fields or [])
 	return fields
 

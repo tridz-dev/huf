@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import type { CredentialSchemaItem } from '@/types/integration.types';
+import { isTeamsService, teamsCredentialHint } from './teams/teamsOnboarding';
 import type { IntegrationFormValues } from './types';
 
 interface CredentialsTabProps {
@@ -18,6 +19,8 @@ interface CredentialsTabProps {
 }
 
 export function CredentialsTab({ form, schema, isNew }: CredentialsTabProps) {
+  const teams = isTeamsService(form.watch('service'));
+
   if (schema.length === 0) {
     return (
       <div className="rounded-lg border p-6 text-sm text-muted-foreground">
@@ -54,6 +57,10 @@ export function CredentialsTab({ form, schema, isNew }: CredentialsTabProps) {
                 />
               </FormControl>
               {item.description && <FormDescription>{item.description}</FormDescription>}
+              {teams && (() => {
+                const hint = teamsCredentialHint(item.key, field.value);
+                return hint ? <p className="text-xs text-warning">{hint} The server validates the final value.</p> : null;
+              })()}
               <FormMessage />
             </FormItem>
           )}

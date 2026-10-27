@@ -3318,13 +3318,11 @@ def test_gateway_send(gateway_name: str, test_recipient_id: str) -> dict:
 				"provider_response": None,
 			}
 
-		# Get the adapter for this gateway
 		from huf.ai.gateway_adapters.types import GatewayReply
 		from huf.ai.gateway_webhook import get_gateway_adapter
 
 		adapter = get_gateway_adapter(gateway)
 
-		# Send a test message
 		test_message = "Test message from Huf. If you see this, the connection is working."
 		reply = GatewayReply(
 			conversation_id=test_recipient_id,
@@ -3358,6 +3356,7 @@ def test_gateway_send(gateway_name: str, test_recipient_id: str) -> dict:
 		}
 	except Exception as exc:
 		error_msg = _redact_error_text(str(exc))
+		frappe.log_error(error_msg, "Gateway test send failed")
 		return {
 			"success": False,
 			"message": f"Failed to send test message: {error_msg}",
@@ -3502,6 +3501,7 @@ def preview_gateway_readiness(gateway_name: str) -> dict:
     )
 
     ordered = [results[check_id] for check_id, _label in GATEWAY_READINESS_CHECKS]
+    ordered += provider_hooks.readiness_checks(gateway)
     blocking = [c for c in ordered if not c["done"]]
     return {"ready": len(blocking) == 0, "blocking_count": len(blocking), "checks": ordered}
 

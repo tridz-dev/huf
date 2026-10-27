@@ -48,6 +48,8 @@ import { getIntegrationSetting, setupTelegramWebhook } from '@/services/integrat
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { TEAMS_PROVIDER, teamsTestSendNote } from './teams/teamsOnboarding';
+import { TeamsSetupGuide } from './teams/TeamsSetupGuide';
 import { call } from '@/lib/frappe-sdk';
 
 interface ChannelTabProps {
@@ -339,6 +341,8 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
       </Alert>
       )}
 
+      {gateway.provider === TEAMS_PROVIDER && <TeamsSetupGuide gatewayName={gateway.name} checks={serverReadiness?.checks} unavailable={!readinessLoading && !serverReadiness} enabled={Boolean(gateway.is_enabled)} />}
+
       <div className="flex items-center justify-between rounded-lg border p-4">
         <div className="space-y-0.5">
           <p className="text-sm font-medium">Channel enabled</p>
@@ -609,9 +613,9 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
       <div className="space-y-2 rounded-lg border p-4">
         <p className="text-sm font-medium">Test message</p>
         <p className="text-xs text-muted-foreground">
-          {gateway.provider === 'WhatsApp'
+          {teamsTestSendNote(gateway.provider) ?? (gateway.provider === 'WhatsApp'
             ? "Send a test to your own phone. If that number hasn't messaged this channel in the last 24 hours, WhatsApp only allows a template, so the fallback template (or Meta's hello_world) is sent instead."
-            : 'Send a test message to check that this channel can deliver messages.'}
+            : 'Send a test message to check that this channel can deliver messages.')}
         </p>
         <FieldRow className="grid-cols-[1fr_auto]">
           <Field label={gateway.provider === 'WhatsApp' ? 'Phone number' : 'Recipient ID'} size="sm">
