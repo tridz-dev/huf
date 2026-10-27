@@ -30,11 +30,26 @@ ALLOW = "Allow list"
 DENY = "Deny list"
 
 SLACK_READ_TOOLS = frozenset({"slack_get_channel_history", "slack_search_messages"})
-SLACK_SEND_TOOLS = frozenset({"slack_send_message", "slack_send_thread_reply"})
+# Outbound tools that can carry data out of the run. ``gateway_send`` (any recipient) and
+# ``gateway_handoff`` (pings chosen assignees) are cross-target by nature; ``gateway_reply``
+# always answers the originating conversation (see ORIGIN_ONLY_SEND_TOOLS).
+SLACK_SEND_TOOLS = frozenset(
+	{
+		"slack_send_message",
+		"slack_send_thread_reply",
+		"gateway_send",
+		"gateway_reply",
+		"gateway_handoff",
+	}
+)
+ORIGIN_ONLY_SEND_TOOLS = frozenset({"gateway_reply"})
 
 _CTX_PREFIX = "huf_a8_ctx:"
 _READ_PREFIX = "huf_a8_slack_read:"
 _TTL = 6 * 3600
+# A "not a gateway run" answer may be wrong right after the run starts (row not visible yet),
+# so it is only cached briefly.
+_NEGATIVE_TTL = 60
 
 _CONFIRMER = None
 
@@ -93,7 +108,7 @@ def resolve_gateway_context(agent_run_id) -> dict | None:
 		)
 		if row:
 			ctx = {"gateway": _get(row, "gateway"), "channel": _get(row, "conversation_id"), "event": _get(row, "name")}
-	cache.set_value(key, json.dumps(ctx) if ctx else "-", expires_in_sec=_TTL)
+	cache.set_value(key, json.dumps(ctx) if ctx else "-", expires_in_sec=_TTL if ctx else _NEGATIVE_TTL)
 	return ctx
 
 
@@ -155,7 +170,9 @@ def check_tool_call(tool_name, args, agent_run_id, requires_confirmation=False) 
 	try:
 		ctx = resolve_gateway_context(agent_run_id)
 	except Exception:
-		# Cannot identify the run: treat as a non-gateway run (behaviour unchanged).
+		# A run id exists but the lookup failed: we cannot rule out a gateway run, fail closed.
+		if agent_run_id:
+			return _denied("Tool call blocked: the gateway tool policy could not be evaluated.")
 		return None
 	if not ctx:
 		return None
@@ -165,7 +182,11 @@ def check_tool_call(tool_name, args, agent_run_id, requires_confirmation=False) 
 		if not is_tool_allowed(gateway, event, tool_name):
 			return _denied(f"Tool '{tool_name}' is not allowed by this gateway's tool policy.")
 		names = _name_variants(tool_name)
-		if names & SLACK_SEND_TOOLS and _cache().get_value(f"{_READ_PREFIX}{agent_run_id}"):
+		if (
+			names & SLACK_SEND_TOOLS
+			and not names & ORIGIN_ONLY_SEND_TOOLS
+			and _cache().get_value(f"{_READ_PREFIX}{agent_run_id}")
+		):
 			target = _channel_arg(args)
 			if not target or target != str(channel or ""):
 				policy = get_policy(gateway, channel)

@@ -63,6 +63,8 @@ class FakeCache:
 
 	def set_value(self, k, v, expires_in_sec=None):
 		self.d[k] = v
+		self.ttl = getattr(self, "ttl", {})
+		self.ttl[k] = expires_in_sec
 
 
 class FakeDb:
@@ -122,9 +124,54 @@ def test_context_resolved_and_cached(fk):
 	assert fk.db.calls == n
 
 
-def test_context_error_means_unchanged(fk, monkeypatch):
+def test_context_error_with_run_id_fails_closed(fk, monkeypatch):
 	monkeypatch.setattr(tp, "resolve_gateway_context", lambda r: (_ for _ in ()).throw(RuntimeError("x")))
-	assert tp.check_tool_call("t", {}, RUN, True) is None
+	assert denied(tp.check_tool_call("t", {}, RUN, True))
+	assert denied(tp.check_tool_call("t", {}, RUN, False))
+
+
+def test_context_error_without_run_id_unchanged(fk, monkeypatch):
+	monkeypatch.setattr(tp, "resolve_gateway_context", lambda r: (_ for _ in ()).throw(RuntimeError("x")))
+	assert tp.check_tool_call("t", {}, None, True) is None
+
+
+def test_db_lookup_exception_fails_closed(fk, monkeypatch):
+	monkeypatch.setattr(fk.db, "get_value", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("db down")))
+	assert denied(tp.check_tool_call("t", {}, "RUN-NEW", False))
+
+
+def test_negative_cache_ttl_is_short(fk):
+	assert tp.resolve_gateway_context("RUN-X") is None
+	assert fk.cache_obj.ttl["huf_a8_ctx:RUN-X"] <= 60
+	tp.resolve_gateway_context(RUN)
+	assert fk.cache_obj.ttl["huf_a8_ctx:" + RUN] > 60
+
+
+# ---------------------------------------------------------------- S8: new outbound tools
+def test_new_outbound_tools_listed():
+	assert {"gateway_send", "gateway_reply", "gateway_handoff"} <= tp.SLACK_SEND_TOOLS
+
+
+def test_read_then_gateway_send_refused(fk):
+	tp.note_tool_executed("slack_get_channel_history", RUN)
+	out = tp.check_tool_call("gateway_send", {"recipient": "user:bob", "text": "x"}, RUN)
+	assert denied(out) and json.loads(out)["reason"] == "exfiltration_guard"
+
+
+def test_read_then_gateway_handoff_refused(fk):
+	tp.note_tool_executed("slack_search_messages", RUN)
+	assert denied(tp.check_tool_call("gateway_handoff", {"summary": "x"}, RUN))
+
+
+def test_read_then_gateway_reply_to_origin_allowed(fk):
+	tp.note_tool_executed("slack_search_messages", RUN)
+	assert tp.check_tool_call("gateway_reply", {"text": "x"}, RUN) is None
+
+
+def test_gateway_send_allowed_by_cross_channel_policy(fk):
+	fk.policies = [pol(mode=tp.DENY, tools="", cross=1)]
+	tp.note_tool_executed("slack_search_messages", RUN)
+	assert tp.check_tool_call("gateway_send", {"recipient": "user:bob"}, RUN) is None
 
 
 # ---------------------------------------------------------------- confirmation flag
