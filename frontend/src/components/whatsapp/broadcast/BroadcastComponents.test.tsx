@@ -44,6 +44,15 @@ describe('BroadcastList', () => {
   });
 });
 
+describe('BroadcastDetail send_via', () => {
+  it('shows the send path badge', async () => {
+    m.getBroadcast.mockResolvedValue(ok({ broadcast: bc({ send_via: 'marketing_messages' }) }));
+    m.listBroadcastRecipients.mockResolvedValue(ok({ recipients: [] }));
+    render(<BroadcastDetail name="BCAST-1" onBack={vi.fn()} />);
+    expect(await screen.findByText('Marketing Messages API')).toBeInTheDocument();
+  });
+});
+
 describe('BroadcastDetail', () => {
   it('shows counts, error codes and pauses', async () => {
     m.pauseBroadcast.mockResolvedValue(ok({}));
@@ -162,6 +171,32 @@ describe('BroadcastWizard', () => {
     await user.click(start);
     expect(m.startBroadcast).toHaveBeenCalledWith('BCAST-9', '2');
     expect(onStarted).toHaveBeenCalledWith('BCAST-9');
+  });
+
+  it('shows send-via only for MARKETING and sends the choice', async () => {
+    const user = userEvent.setup();
+    render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
+    const sel = await screen.findByLabelText('Approved template');
+    expect(screen.queryByLabelText('Send via')).not.toBeInTheDocument();
+    await user.selectOptions(sel, 'T1');
+    const via = screen.getByLabelText('Send via') as HTMLSelectElement;
+    expect(via.value).toBe('messages');
+    expect(screen.getByText(/falls back to the Cloud API/)).toBeInTheDocument();
+    await user.selectOptions(via, 'marketing_messages');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.type(screen.getByLabelText(/Recipients/), '1555000111');
+    await user.click(screen.getByRole('button', { name: 'Add recipients' }));
+    await screen.findByText(/recipients added/);
+    expect(m.createBroadcast).toHaveBeenCalledWith(expect.objectContaining({ send_via: 'marketing_messages' }));
+  });
+
+  it('renders preview warnings (e.g. +1 numbers) in a prominent alert', async () => {
+    m.previewBroadcast.mockResolvedValue(ok({ preview: preview({ warnings: ['+1 (US) numbers are excluded for MARKETING'] }) }));
+    const user = userEvent.setup();
+    render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
+    await toPreview(user);
+    const w = await screen.findByText(/US\) numbers are excluded/);
+    expect(w.closest('[role="alert"]')).not.toBeNull();
   });
 
   it('blocking items disable proceeding', async () => {

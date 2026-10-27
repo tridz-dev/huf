@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   addBroadcastRecipients, attestBroadcastConsent, createBroadcast, errorText, listTemplates, previewBroadcast, startBroadcast,
-  type AddRecipientsResult, type BroadcastPreview, type WhatsAppTemplate,
+  type AddRecipientsResult, type BroadcastPreview, type BroadcastSendVia, type WhatsAppTemplate,
 } from '@/services/whatsappApi';
 
 const STEPS = ['Template', 'Recipients', 'Consent', 'Preview', 'Confirm'] as const;
@@ -17,6 +17,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   const [templates, setTemplates] = useState<WhatsAppTemplate[] | null>(null);
   const [tplName, setTplName] = useState('');
   const [title, setTitle] = useState('');
+  const [sendVia, setSendVia] = useState<BroadcastSendVia>('messages');
   const [text, setText] = useState('');
   const [csv, setCsv] = useState<string | null>(null);
   const [result, setResult] = useState<AddRecipientsResult | null>(null);
@@ -37,13 +38,14 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   }, [gateway]);
 
   const tpl = templates?.find((t) => t.name === tplName);
+  const isMarketing = (tpl?.category ?? '').toUpperCase() === 'MARKETING';
   const fail = (res: Parameters<typeof errorText>[0]) => { setErr(errorText(res)); setBusy(false); return false; };
 
   const submitRecipients = async (): Promise<boolean> => {
     setBusy(true); setErr('');
     let id = broadcast;
     if (!id) {
-      const c = await createBroadcast({ gateway, template: tplName, title: title.trim() || `Broadcast ${tpl?.template_name ?? tplName}`, language_code: tpl?.language_code });
+      const c = await createBroadcast({ gateway, template: tplName, title: title.trim() || `Broadcast ${tpl?.template_name ?? tplName}`, language_code: tpl?.language_code, send_via: isMarketing ? sendVia : 'messages' });
       if (!c.success) return fail(c);
       id = c.broadcast;
       setBroadcast(id);
@@ -116,7 +118,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
           </div>
           <div className="space-y-1">
             <Label htmlFor="bc-template">Approved template</Label>
-            <select id="bc-template" className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={tplName} onChange={(e) => setTplName(e.target.value)}>
+            <select id="bc-template" className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={tplName} onChange={(e) => { setTplName(e.target.value); setSendVia('messages'); }}>
               <option value="">{templates ? 'Choose a template' : 'Loading...'}</option>
               {(templates ?? []).map((t) => <option key={t.name} value={t.name}>{t.template_name} ({t.language_code})</option>)}
             </select>
@@ -128,6 +130,18 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
                 ? ' Marketing messages are billed per delivered message and are limited to contacts who opted in to marketing.'
                 : ''}
             </p>
+          ) : null}
+          {isMarketing ? (
+            <div className="space-y-1">
+              <Label htmlFor="bc-send-via">Send via</Label>
+              <select id="bc-send-via" className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={sendVia} onChange={(e) => setSendVia(e.target.value as BroadcastSendVia)}>
+                <option value="messages">Cloud API (messages)</option>
+                <option value="marketing_messages">Marketing Messages API (marketing_messages)</option>
+              </select>
+              <p className="text-xs text-steel">
+                The Marketing Messages API uses a separate endpoint and falls back to the Cloud API if the account is not onboarded. Cloud API marketing sends are sunset in 2027.
+              </p>
+            </div>
           ) : null}
         </div>
       )}
@@ -175,7 +189,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
 
       {step === 3 && preview && (
         <div className="space-y-2 text-sm">
-          <p>Recipients: <strong>{preview.recipients}</strong> ({preview.queued} will send, {preview.skipped} skipped). Category: {preview.category ?? 'unknown'}.</p>
+          <p>Recipients: <strong>{preview.recipients}</strong> ({preview.queued} will send, {preview.skipped} skipped). Category: {preview.category ?? 'unknown'}.{isMarketing ? ` Sending via ${sendVia === 'marketing_messages' ? 'Marketing Messages API' : 'Cloud API'}.` : ''}</p>
           <p>
             Messaging limit: {preview.within_limit === null ? 'unknown' : preview.within_limit ? 'within limit' : 'over limit'}
             {preview.remaining_24h !== null ? ` (${preview.remaining_24h} remaining in 24h)` : ''}.
@@ -188,7 +202,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
             <ul className="list-disc pl-5 text-xs text-steel">{preview.cost.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
           ) : null}
           {preview.warnings.length ? (
-            <div role="status"><p className="font-medium">Warnings</p><ul className="list-disc pl-5">{preview.warnings.map((w) => <li key={w}>{w}</li>)}</ul></div>
+            <div role="alert" className="rounded-md border border-amber-500 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950 dark:text-amber-100"><p className="font-medium">Warnings</p><ul className="list-disc pl-5">{preview.warnings.map((w) => <li key={w}>{w}</li>)}</ul></div>
           ) : null}
           {blocking.length ? (
             <div role="alert" className="text-destructive"><p className="font-medium">Cannot start</p><ul className="list-disc pl-5">{blocking.map((w) => <li key={w}>{w}</li>)}</ul></div>

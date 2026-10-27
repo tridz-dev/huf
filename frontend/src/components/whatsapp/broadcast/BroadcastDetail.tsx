@@ -62,6 +62,7 @@ export function BroadcastDetail({ name, onBack }: { name: string; onBack: () => 
         <Button variant="ghost" size="sm" onClick={onBack}>Back to broadcasts</Button>
         <h2 className="text-base font-semibold text-ink">{b.title || b.name}</h2>
         <Badge variant="outline">{b.status}</Badge>
+        {b.send_via === 'marketing_messages' ? <Badge variant="secondary">Marketing Messages API</Badge> : <Badge variant="outline">Cloud API</Badge>}
         {b.pause_reason ? <span className="text-xs text-steel">Paused: {b.pause_reason}</span> : null}
       </div>
       {error ? <LoadError message={error} onRetry={load} /> : null}

@@ -74,6 +74,13 @@ describe('broadcast response adapters', () => {
     expect(r.success && r.broadcast).toBe('BC-1');
     expect(post).toHaveBeenLastCalledWith(`${M}.create_broadcast`, expect.objectContaining({ body_params: '["a"]' }));
   });
+  it('create passes send_via; adaptBroadcast defaults and keeps it', async () => {
+    post.mockResolvedValueOnce({ message: { success: true, broadcast: 'BC-1', status: 'Draft' } });
+    await createBroadcast({ gateway: 'G', template: 'T', title: 'x', send_via: 'marketing_messages' });
+    expect(post).toHaveBeenLastCalledWith(`${M}.create_broadcast`, expect.objectContaining({ send_via: 'marketing_messages' }));
+    expect(adaptBroadcast({ name: 'x' }).send_via).toBe('messages');
+    expect(adaptBroadcast({ name: 'x', send_via: 'marketing_messages' }).send_via).toBe('marketing_messages');
+  });
   it('adaptPreview pulls limits, queued and cost', () => {
     const p = adaptPreview({
       status: 'Draft', consent_attested: 1, confirm_required: true, queued: 4,
