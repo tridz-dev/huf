@@ -48,11 +48,7 @@ class Base(unittest.TestCase):
 		return act.normalize(req(activity), {**CREDS, **(creds or {})})
 
 	def saved(self, conversation_id):
-		return (
-			refs.get_reference.__wrapped__
-			if False
-			else self.cache.get_value(refs._cache_key(tf.BOT_APP_ID, conversation_id))
-		)
+		return self.cache.get_value(refs._cache_key(tf.BOT_APP_ID, conversation_id))
 
 
 class TestIngestHook(Base):
