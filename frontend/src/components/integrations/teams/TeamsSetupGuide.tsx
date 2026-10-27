@@ -3,7 +3,7 @@ import { CheckCircle2, ChevronDown, Circle, CircleDashed } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { CopyField } from '@/components/ui/copy-field';
 import { getGatewayWebhookUrl } from '@/utils/gatewayWebhook';
-import { TEAMS_PERMISSION_NOTES, TEAMS_PROVIDER, TEAMS_READINESS_UNAVAILABLE, TEAMS_STEPS, deriveStepStates, endpointFromChecks, type ReadinessCheckLike, type StepState } from './teamsOnboarding';
+import { TEAMS_DISABLED_NOTE, TEAMS_PERMISSION_NOTES, TEAMS_PROVIDER, TEAMS_PUBLIC_HTTPS_WARNING, TEAMS_UNSAVED_REASON, TEAMS_READINESS_UNAVAILABLE, TEAMS_STEPS, deriveStepStates, endpointFromChecks, endpointNeedsPublicHttps, type ReadinessCheckLike, type StepState } from './teamsOnboarding';
 import { TeamsManifestDownload } from './TeamsManifestDownload';
 import { TeamsVerifyConnection } from './TeamsVerifyConnection';
 
@@ -12,6 +12,8 @@ interface TeamsSetupGuideProps {
   checks?: ReadinessCheckLike[] | null;
   /** True when the readiness fetch failed (not merely still loading). */
   unavailable?: boolean;
+  /** False when the gateway is saved but disabled (undefined = enabled). */
+  enabled?: boolean;
 }
 
 const STATE_LABEL: Record<StepState, string> = { done: 'Done', todo: 'Not done', manual: 'Check manually' };
@@ -24,9 +26,11 @@ function StateIcon({ state }: { state: StepState }) {
   return <CircleDashed className={`${cls} text-muted-foreground`} role="img" aria-label={label} />;
 }
 
-export function TeamsSetupGuide({ gatewayName, checks, unavailable }: TeamsSetupGuideProps) {
+export function TeamsSetupGuide({ gatewayName, checks, unavailable, enabled }: TeamsSetupGuideProps) {
   const [open, setOpen] = useState(true);
   const states = deriveStepStates(checks);
+  const unsaved = !gatewayName?.trim();
+  const disabledReason = unsaved ? TEAMS_UNSAVED_REASON : undefined;
   // Prefer the backend public URL (carried by the readiness hint); the browser origin may differ behind a proxy.
   const endpoint = endpointFromChecks(checks) ?? getGatewayWebhookUrl(gatewayName, TEAMS_PROVIDER);
 
@@ -37,6 +41,7 @@ export function TeamsSetupGuide({ gatewayName, checks, unavailable }: TeamsSetup
         <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-3 space-y-4">
+        {!unsaved && enabled === false && <p className="text-xs text-warning" role="status">{TEAMS_DISABLED_NOTE}</p>}
         {unavailable && <p className="text-xs text-muted-foreground" role="status">{TEAMS_READINESS_UNAVAILABLE}</p>}
         <ol className="space-y-3">
           {TEAMS_STEPS.map((step, i) => (
@@ -47,8 +52,9 @@ export function TeamsSetupGuide({ gatewayName, checks, unavailable }: TeamsSetup
                   {i + 1}. {step.title}
                 </p>
                 <p className="text-xs text-muted-foreground">{step.body}</p>
+                {step.id === 'endpoint' && endpointNeedsPublicHttps(checks) && <p className="text-xs text-warning" role="alert">{TEAMS_PUBLIC_HTTPS_WARNING}</p>}
                 {step.id === 'endpoint' && <CopyField label="Messaging endpoint" value={endpoint} />}
-                {step.id === 'package' && <TeamsManifestDownload gatewayName={gatewayName} />}
+                {step.id === 'package' && <TeamsManifestDownload gatewayName={gatewayName} disabledReason={disabledReason} />}
               </div>
             </li>
           ))}
@@ -59,7 +65,7 @@ export function TeamsSetupGuide({ gatewayName, checks, unavailable }: TeamsSetup
           <p className="text-xs text-muted-foreground">
             Checks credentials, token request, endpoint and stored conversation without sending a message.
           </p>
-          <TeamsVerifyConnection gatewayName={gatewayName} />
+          <TeamsVerifyConnection gatewayName={gatewayName} disabledReason={disabledReason} />
         </div>
 
         <div className="space-y-1 border-t pt-3">

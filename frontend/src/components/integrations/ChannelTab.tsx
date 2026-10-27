@@ -318,7 +318,7 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
       </Alert>
       )}
 
-      {gateway.provider === TEAMS_PROVIDER && <TeamsSetupGuide gatewayName={gateway.name} checks={serverReadiness?.checks} unavailable={!readinessLoading && !serverReadiness} />}
+      {gateway.provider === TEAMS_PROVIDER && <TeamsSetupGuide gatewayName={gateway.name} checks={serverReadiness?.checks} unavailable={!readinessLoading && !serverReadiness} enabled={Boolean(gateway.is_enabled)} />}
 
       <div className="flex items-center justify-between rounded-lg border p-4">
         <div className="space-y-0.5">

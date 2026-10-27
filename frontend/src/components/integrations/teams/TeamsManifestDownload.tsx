@@ -4,9 +4,9 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { generateTeamsAppManifest } from './teamsApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
-import { TEAMS_PACKAGE_DECODE_ERROR, TEAMS_REVOKE_DELAY_MS, base64ToBlob, mapManifestError } from './teamsOnboarding';
+import { TEAMS_FORBIDDEN_NOTICE, TEAMS_PACKAGE_DECODE_ERROR, isForbiddenError, TEAMS_REVOKE_DELAY_MS, base64ToBlob, mapManifestError } from './teamsOnboarding';
 
-export function TeamsManifestDownload({ gatewayName }: { gatewayName: string }) {
+export function TeamsManifestDownload({ gatewayName, disabledReason }: { gatewayName: string; disabledReason?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,7 +15,7 @@ export function TeamsManifestDownload({ gatewayName }: { gatewayName: string }) 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   const download = async () => {
-    if (inFlight.current) return;
+    if (inFlight.current || disabledReason) return;
     inFlight.current = true;
     setBusy(true);
     setError(null);
@@ -38,7 +38,7 @@ export function TeamsManifestDownload({ gatewayName }: { gatewayName: string }) 
       timers.current.push(setTimeout(() => URL.revokeObjectURL(url), TEAMS_REVOKE_DELAY_MS));
       toast.success('Teams app package downloaded');
     } catch (e) {
-      const msg = mapManifestError(getFrappeErrorMessage(e));
+      const msg = isForbiddenError(e) ? TEAMS_FORBIDDEN_NOTICE : mapManifestError(getFrappeErrorMessage(e));
       setError(msg);
       toast.error(msg);
     } finally {
@@ -49,10 +49,11 @@ export function TeamsManifestDownload({ gatewayName }: { gatewayName: string }) 
 
   return (
     <div className="space-y-2">
-      <Button type="button" variant="outline" size="sm" onClick={download} disabled={busy}>
+      <Button type="button" variant="outline" size="sm" onClick={download} disabled={busy || Boolean(disabledReason)}>
         {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />}
         Download Teams app package
       </Button>
+      {disabledReason && <p className="text-xs text-muted-foreground">{disabledReason}</p>}
       {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
     </div>
   );

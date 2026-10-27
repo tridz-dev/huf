@@ -12,6 +12,10 @@ import {
   TEAMS_REVOKE_DELAY_MS,
   TEAMS_VERIFY_COOLDOWN_MS,
   TEAMS_STEPS,
+  TEAMS_DISABLED_NOTE,
+  TEAMS_FORBIDDEN_NOTICE,
+  TEAMS_PUBLIC_HTTPS_WARNING,
+  TEAMS_UNSAVED_REASON,
 } from './teamsOnboarding';
 
 const api = vi.hoisted(() => ({ manifest: vi.fn(), verify: vi.fn() }));
@@ -177,10 +181,74 @@ describe('TeamsSetupGuide', () => {
     expect(screen.getByLabelText('failed')).toBeTruthy();
   });
 
-  it('shows the site-config keys when the manifest endpoint rejects', async () => {
+  it('shows the server message when the manifest endpoint rejects', async () => {
     api.manifest.mockRejectedValue(new Error('Set site config key teams_app_terms_url to generate the Teams app package.'));
     render(<TeamsSetupGuide gatewayName="GW-1" checks={[]} />);
     fireEvent.click(screen.getByRole('button', { name: /Download Teams app package/ }));
     await waitFor(() => expect(screen.getByText(/teams_app_terms_url/)).toBeTruthy());
+  });
+
+  it('uses the structured endpoint_url and warns when a public https URL is required', () => {
+    render(
+      <TeamsSetupGuide
+        gatewayName="GW"
+        checks={[{ id: 'teams-messaging-endpoint', done: false, hint: 'Must be a public https URL', endpoint_url: 'https://s.example/h?gateway_name=GW' }]}
+      />,
+    );
+    expect((screen.getByDisplayValue(/s\.example/) as HTMLInputElement).value).toBe('https://s.example/h?gateway_name=GW');
+    expect(screen.getByText(TEAMS_PUBLIC_HTTPS_WARNING)).toBeTruthy();
+  });
+
+  it('shows no public https warning when the endpoint check is done', () => {
+    render(<TeamsSetupGuide gatewayName="GW" checks={[{ id: 'teams-messaging-endpoint', done: true, hint: 'public https' }]} />);
+    expect(screen.queryByText(TEAMS_PUBLIC_HTTPS_WARNING)).toBeNull();
+  });
+
+  it('renders extra verify steps generically: ok informational steps are not red, text is not HTML', async () => {
+    api.verify.mockResolvedValue({
+      ok: true,
+      message: 'ok',
+      steps: [
+        { id: 'reference', label: 'Reference', ok: true, detail: null },
+        { id: 'drops', label: '<b>Dropped</b> activities', ok: true, detail: '3 dropped in the last 24h <img src=x>' },
+      ],
+    });
+    const { container } = render(<TeamsSetupGuide gatewayName="GW" checks={[]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Verify connection' }));
+    await screen.findByText(/3 dropped in the last 24h/);
+    expect(screen.getAllByLabelText('passed')).toHaveLength(2);
+    expect(screen.queryByLabelText('failed')).toBeNull();
+    expect(screen.getByText('<b>Dropped</b> activities')).toBeTruthy();
+    expect(container.querySelector('b')).toBeNull();
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  describe('gateway states', () => {
+    it('unsaved gateway disables verify and download with an explanation', () => {
+      render(<TeamsSetupGuide gatewayName="" checks={[]} />);
+      expect((verifyBtn() as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole('button', { name: /Download Teams app package/ }) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getAllByText(TEAMS_UNSAVED_REASON).length).toBe(2);
+      fireEvent.click(verifyBtn());
+      expect(api.verify).not.toHaveBeenCalled();
+    });
+
+    it('disabled gateway shows a note, enabled or unknown does not', () => {
+      const { unmount } = render(<TeamsSetupGuide gatewayName="GW" checks={[]} enabled={false} />);
+      expect(screen.getByText(TEAMS_DISABLED_NOTE)).toBeTruthy();
+      unmount();
+      render(<TeamsSetupGuide gatewayName="GW" checks={[]} />);
+      expect(screen.queryByText(TEAMS_DISABLED_NOTE)).toBeNull();
+    });
+
+    it('403 on verify and on download gives the read-only message', async () => {
+      api.verify.mockRejectedValue({ httpStatus: 403, message: 'Not permitted' });
+      api.manifest.mockRejectedValue({ httpStatus: 403, message: 'Not permitted' });
+      render(<TeamsSetupGuide gatewayName="GW" checks={[]} />);
+      fireEvent.click(verifyBtn());
+      await screen.findAllByText(TEAMS_FORBIDDEN_NOTICE);
+      fireEvent.click(screen.getByRole('button', { name: /Download Teams app package/ }));
+      await waitFor(() => expect(screen.getAllByText(TEAMS_FORBIDDEN_NOTICE).length).toBe(2));
+    });
   });
 });

@@ -5,9 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { verifyTeamsConnection } from './teamsApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
-import { TEAMS_RATE_LIMIT_NOTICE, TEAMS_VERIFY_COOLDOWN_MS, isRateLimitError, type VerifyResult } from './teamsOnboarding';
+import { TEAMS_RATE_LIMIT_NOTICE, TEAMS_VERIFY_COOLDOWN_MS, TEAMS_FORBIDDEN_NOTICE, isForbiddenError, isRateLimitError, type VerifyResult } from './teamsOnboarding';
 
-export function TeamsVerifyConnection({ gatewayName }: { gatewayName: string }) {
+export function TeamsVerifyConnection({ gatewayName, disabledReason }: { gatewayName: string; disabledReason?: string }) {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<VerifyResult | null>(null);
 
@@ -24,7 +24,7 @@ export function TeamsVerifyConnection({ gatewayName }: { gatewayName: string }) 
   };
 
   const run = async () => {
-    if (inFlight.current) return;
+    if (inFlight.current || disabledReason) return;
     inFlight.current = true;
     setNotice(null);
     setRunning(true);
@@ -38,6 +38,11 @@ export function TeamsVerifyConnection({ gatewayName }: { gatewayName: string }) 
         // Keep the previous result; the server throttles to one run per few seconds.
         setNotice(TEAMS_RATE_LIMIT_NOTICE);
         toast.info(TEAMS_RATE_LIMIT_NOTICE);
+        return;
+      }
+      if (isForbiddenError(e)) {
+        setNotice(TEAMS_FORBIDDEN_NOTICE);
+        toast.error(TEAMS_FORBIDDEN_NOTICE);
         return;
       }
       const message = getFrappeErrorMessage(e) || 'Failed to verify the Teams connection';
@@ -54,12 +59,13 @@ export function TeamsVerifyConnection({ gatewayName }: { gatewayName: string }) 
     <div className="space-y-2">
       <div aria-live="polite" className="space-y-2">
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" variant="outline" size="sm" onClick={run} disabled={running || cooling}>
+        <Button type="button" variant="outline" size="sm" onClick={run} disabled={running || cooling || Boolean(disabledReason)}>
           {running && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
           {running ? 'Verifying...' : 'Verify connection'}
         </Button>
         {result && <Badge variant={result.ok ? 'success' : 'destructive'}>{result.ok ? 'Verified' : 'Failed'}</Badge>}
       </div>
+      {disabledReason && <p className="text-xs text-muted-foreground">{disabledReason}</p>}
       {notice && <p className="text-xs text-muted-foreground" role="status">{notice}</p>}
       {result && result.message && <p className="text-xs text-muted-foreground">{result.message}</p>}
       {result && result.steps.length > 0 && (

@@ -47,6 +47,8 @@ export interface ReadinessCheckLike {
   label?: string;
   done: boolean;
   hint?: string | null;
+  /** Structured messaging endpoint URL (teams-messaging-endpoint item); preferred over parsing the hint. */
+  endpoint_url?: string | null;
 }
 
 export type StepState = 'done' | 'todo' | 'manual';
@@ -117,9 +119,38 @@ export const TEAMS_ENDPOINT_CHECK_ID = 'teams-messaging-endpoint';
  * ("Paste <url> as the Messaging endpoint ..."). Null unless it is absolute.
  */
 export function endpointFromChecks(checks: ReadinessCheckLike[] | null | undefined): string | null {
-  const hint = (checks ?? []).find((c) => c.id === TEAMS_ENDPOINT_CHECK_ID)?.hint ?? '';
+  const item = (checks ?? []).find((c) => c.id === TEAMS_ENDPOINT_CHECK_ID);
+  const structured = typeof item?.endpoint_url === 'string' ? item.endpoint_url.trim() : '';
+  if (/^https?:\/\/\S+$/i.test(structured)) return structured;
+  const hint = item?.hint ?? '';
   const m = /Paste (https?:\/\/\S+) as the Messaging endpoint/.exec(hint);
   return m ? m[1] : null;
+}
+
+/** True when the endpoint check is not done and its hint says the URL must be public https. */
+export function endpointNeedsPublicHttps(checks: ReadinessCheckLike[] | null | undefined): boolean {
+  const item = (checks ?? []).find((c) => c.id === TEAMS_ENDPOINT_CHECK_ID);
+  return Boolean(item && !item.done && /public\s+https/i.test(item.hint ?? ''));
+}
+
+export const TEAMS_PUBLIC_HTTPS_WARNING =
+  'Azure only accepts a public https messaging endpoint. Set a public https site URL (host_name) before pasting it into Azure.';
+export const TEAMS_UNSAVED_REASON = 'Save the gateway first: these actions need a saved gateway.';
+export const TEAMS_DISABLED_NOTE = 'This gateway is disabled, so the bot will not answer messages until you enable it.';
+export const TEAMS_FORBIDDEN_NOTICE = 'You only have read-only access to this gateway. Ask a Gateway administrator to do this.';
+
+/** True when an API error is a permission denial (HTTP 403 / PermissionError). */
+export function isForbiddenError(e: unknown): boolean {
+  const err = e as Record<string, unknown> | null | undefined;
+  if (!err || typeof err !== 'object') return false;
+  const resp = err.response as Record<string, unknown> | undefined;
+  const status = err.httpStatus ?? err.status ?? err.statusCode ?? resp?.status;
+  if (Number(status) === 403) return true;
+  const hay = [err.exc_type, err.exception, (err.originalError as Record<string, unknown> | undefined)?.exc_type]
+    .filter((v) => v != null)
+    .map((v) => String(typeof v === 'string' ? v : JSON.stringify(v)))
+    .join(' ');
+  return /PermissionError/i.test(hay);
 }
 
 export const TEAMS_PERMISSION_NOTES: string[] = [
@@ -150,25 +181,12 @@ export function isRateLimitError(e: unknown): boolean {
   return /TooManyRequests|moments ago/i.test(hay);
 }
 
-export const TEAMS_SITE_CONFIG_KEYS = [
-  'teams_app_developer_name',
-  'teams_app_website_url',
-  'teams_app_privacy_url',
-  'teams_app_terms_url',
-] as const;
-
 /**
- * Map a backend error from the manifest endpoint to a friendly message. When the
- * server complains about missing site-config keys, name the keys to set.
+ * Map a backend error from the manifest endpoint to a friendly message. The site-config keys are optional
+ * overrides now; the server message (e.g. "set a public https site URL") is already actionable, so show it.
  */
 export function mapManifestError(message: string | null | undefined): string {
-  const raw = (message ?? '').trim();
-  const mentioned = TEAMS_SITE_CONFIG_KEYS.filter((k) => raw.includes(k));
-  if (mentioned.length > 0 || /site config key/i.test(raw)) {
-    const keys = mentioned.length > 0 ? mentioned : TEAMS_SITE_CONFIG_KEYS;
-    return `Cannot build the app package yet. Set ${keys.join(', ')} in the site config (site_config.json), then try again.`;
-  }
-  return raw || 'Failed to generate the Teams app package.';
+  return (message ?? '').trim() || 'Failed to generate the Teams app package.';
 }
 
 /** Decode base64 into bytes using atob, falling back to Buffer (Node). */
