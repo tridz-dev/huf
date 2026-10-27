@@ -11,7 +11,9 @@ Code: `huf/ai/whatsapp/broadcast/` (`recipients.py` intake, `send.py` one recipi
 In scope:
 
 - One template per broadcast. One request per recipient (`type: template`). Meta offers no multi-recipient send.
-- Per-recipient parameters, merged over the broadcast defaults per part (`body`, `header`, `button`).
+- Per-recipient parameters, merged over the broadcast defaults per part (`body`, `header`, `button`). The wizard collects body variables, a header value (text, or an https link for an image, video or document header) and url / copy-code button values; templates with a location header cannot be broadcast from the wizard (use the API).
+- A Draft can be edited until it starts: remove one recipient, or delete the whole Draft. Closing the wizard before starting discards its Draft. Template values are fixed once recipients are added.
+- An expired or invalid access token (Meta error 190 / 102) pauses the broadcast with `pause_reason=meta_error_190` and keeps every row sendable; fix the token and resume.
 - Recipients from a list of numbers or a CSV text.
 - Preview and a typed-count confirmation before start.
 - Pause, resume, cancel, and a gateway-wide kill switch.
@@ -200,14 +202,16 @@ The estimate covers `queued` and `deferred` rows. It is never an invoice; Meta b
 
 ## 9. API reference
 
-All methods are in `huf/ai/whatsapp/management.py`, whitelisted, behind the bridge guard. Failures from a guarded call return `{"success": false, "error": <code>, "message": ...}`; a missing permission raises a permission error. Write methods need write permission on the broadcast's Gateway (or the integrations-manage capability). Read methods need read permission. Every mutating call writes an audit log line (`huf.whatsapp.broadcast`) and a comment on the broadcast. POST methods are rate limited per user: 60 calls per 60 s, except `start_broadcast` and `pause_all_broadcasts` (30 per 60 s).
+Write methods are in `huf/ai/whatsapp/broadcast/api.py` (`huf.ai.whatsapp.broadcast.api.<method>`); read methods (`list_broadcasts`, `get_broadcast`, `get_broadcast_template_params`, `list_broadcast_recipients`) are in `broadcast/api_read.py`. All are whitelisted, behind the bridge guard. Failures from a guarded call return `{"success": false, "error": <code>, "message": ...}`; a missing permission raises a permission error. Write methods need write permission on the broadcast's Gateway (or the integrations-manage capability). Read methods need read permission. Every mutating call writes an audit log line (`huf.whatsapp.broadcast`) and a comment on the broadcast. POST methods are rate limited per user: 60 calls per 60 s, except `start_broadcast` and `pause_all_broadcasts` (30 per 60 s).
 
 | Method | Needs | Parameters | Returns | Error codes |
 |---|---|---|---|---|
 | `create_broadcast` | write | `gateway`, `template` (name or `<name>-<lang>`), `title`, `language_code`, `body_params`, `header_params`, `button_params`, `consent_source`, `max_recipients` (1 to 10000), `mps`, `send_via` (`messages` or `marketing_messages`) | `success`, `broadcast`, `status` (`Draft`), `category` | `invalid_gateway`, `not_found`, `no_account`, `invalid_name`, `invalid_title`, `template_not_found`, `template_not_approved`, `invalid_send_via`, `mm_requires_marketing_template`, `invalid_max_recipients`, `invalid_params` |
 | `add_broadcast_recipients` | write (Draft only; resets attestation) | `broadcast`, `recipients` (list of numbers or `{recipient, params, consent_source, consent_at}`), `csv_text` | `success`, `added`, `skipped`, `skipped_total`, `invalid`, `invalid_total` | `not_found`, `not_draft`, `csv_too_large`, `too_many_recipients`, `invalid_params`, `no_recipients` |
 | `attest_broadcast_consent` | write | `broadcast`, `consent_source` | `success`, `broadcast`, `consent_attested`, `consent_source` | `not_found`, `invalid_state`, `consent_source_required` |
-| `preview_broadcast` | write | `broadcast` | `success`, `broadcast`, `status`, `consent_attested`, `limits`, `cost`, `confirm_required`, `queued` | `not_found` |
+| `remove_broadcast_recipient` | write (Draft only; resets attestation) | `broadcast`, `recipient` (number or row name) | `success`, `broadcast`, `removed`, `queued` | `not_draft`, `invalid_recipient`, `not_found` |
+| `delete_broadcast` | write (Draft only) | `broadcast` | `success`, `broadcast`, `deleted` | `not_draft`, `not_deletable` |
+| `preview_broadcast` (POST: it stores the cost estimate) | write | `broadcast` | `success`, `broadcast`, `status`, `consent_attested`, `limits`, `cost`, `confirm_required`, `queued` | `not_found` |
 | `start_broadcast` | write (Draft only) | `broadcast`, `confirm_count` | `success`, `broadcast`, `status` (`Running`), `queued` | `not_found`, `consent_not_attested`, `no_recipients`, `confirm_mismatch`; runner refusals are raised as validation errors with a message (`Broadcast blocked: ...`, `Another broadcast (...) is already running on this Gateway`, wrong state, no consent, no queued recipients) |
 | `pause_broadcast` | write | `broadcast` | `success`, `broadcast`, `status` | `not_found` |
 | `resume_broadcast` | write (Paused only) | `broadcast` | `success`, `broadcast`, `status`, `queued` | `not_found`; same runner refusals as start |
