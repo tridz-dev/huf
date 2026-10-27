@@ -315,14 +315,14 @@ class TestSlackEventsHandler(unittest.TestCase):
 		self.ingest.assert_called_once()
 		args, kwargs = self.ingest.call_args
 		self.assertEqual(args[0], GATEWAY)
-		self.assertEqual(args[1], "cmid-42")
+		self.assertEqual(args[1], "C0123456:1700000000.000100")
 		context = args[2]
 		self.assertEqual(context["sender_id"], "U_SENDER")
 		self.assertEqual(context["conversation_id"], "C0123456")
 		self.assertEqual(context["thread_id"], "1699999999.000001")
 		self.assertEqual(context["message_text"], "ping <@U_BOT> please")
 		self.assertIs(context["is_room"], True)
-		self.assertIs(context["mentioned"], True)
+		self.assertIs(context["mentioned"], False)  # bot id unknown (no authorizations)
 		self.assertIs(kwargs["verified_sender"], True)
 		self.assertEqual(kwargs["raw_payload"], payload)
 
@@ -340,12 +340,12 @@ class TestSlackEventsHandler(unittest.TestCase):
 		context = self.ingest.call_args.args[2]
 		self.assertEqual(context["thread_id"], "1700000000.000100")
 
-	def test_event_id_falls_back_to_ts_without_client_msg_id(self):
+	def test_event_id_is_channel_ts_regardless_of_client_msg_id(self):
 		payload = message_event(ts="1700000000.000500")
 		del payload["event"]["client_msg_id"]
 		self._call(payload)
 
-		self.assertEqual(self.ingest.call_args.args[1], "1700000000.000500")
+		self.assertEqual(self.ingest.call_args.args[1], "C0123456:1700000000.000500")
 
 	def test_bot_authored_message_is_ignored(self):
 		result = self._call(message_event(bot_id="B_OTHER_BOT"))
@@ -369,7 +369,7 @@ class TestSlackEventsHandler(unittest.TestCase):
 		self.assertEqual(result, {"ok": True})
 		self.ingest.assert_called_once()
 		args, kwargs = self.ingest.call_args
-		self.assertEqual(args[1], "1700000100.000200")
+		self.assertEqual(args[1], "C0555:1700000100.000200")
 		self.assertIs(args[2]["mentioned"], True)
 		self.assertIs(args[2]["is_room"], True)
 		self.assertEqual(args[2]["sender_id"], "U_SENDER")
@@ -388,6 +388,83 @@ class TestSlackEventsHandler(unittest.TestCase):
 		self._call(payload)
 
 		self.ingest.assert_not_called()
+
+	# -- S3b semantics ---------------------------------------------------------
+
+	def test_message_and_app_mention_dedupe_to_same_event_id_both_orders(self):
+		msg = message_event(channel="C9", ts="1700000200.000300", text="<@U_BOT> hi")
+		men = {"type": "event_callback", "event": {
+			"type": "app_mention", "channel": "C9", "user": "U_SENDER",
+			"text": "<@U_BOT> hi", "ts": "1700000200.000300"}}
+		self._call(msg)
+		self._call(men)
+		self.ingest.reset_mock()
+		self._call(men)
+		self._call(msg)
+		ids = [c.args[1] for c in self.ingest.call_args_list]
+		self.assertEqual(ids, ["C9:1700000200.000300"] * 2)
+
+	def test_subtype_allow_list(self):
+		for subtype in ("thread_broadcast", "file_share"):
+			self.ingest.reset_mock()
+			self._call(message_event(subtype=subtype))
+			self.ingest.assert_called_once()
+		for subtype in ("message_changed", "message_deleted", "bot_message", "channel_join"):
+			self.ingest.reset_mock()
+			self._call(message_event(subtype=subtype))
+			self.ingest.assert_not_called()
+
+	def test_is_room_by_prefix_and_channel_type(self):
+		cases = [
+			({"channel": "C1"}, True),
+			({"channel": "G1"}, True),
+			({"channel": "G1", "channel_type": "mpim"}, True),
+			({"channel": "C1", "channel_type": "channel"}, True),
+			({"channel": "G1", "channel_type": "group"}, True),
+			({"channel": "D1"}, False),
+			({"channel": "D1", "channel_type": "im"}, False),
+			({"channel": "G1", "channel_type": "im"}, False),
+		]
+		for overrides, expected in cases:
+			self.ingest.reset_mock()
+			self._call(message_event(**overrides))
+			self.assertIs(self.ingest.call_args.args[2]["is_room"], expected, overrides)
+
+	def test_mentioned_and_text_strip_with_known_bot_id(self):
+		payload = message_event(text="<@U_BOT>  do it <@U_BOT> now")
+		payload["authorizations"] = [{"user_id": "U_BOT"}]
+		self._call(payload)
+		context = self.ingest.call_args.args[2]
+		self.assertIs(context["mentioned"], True)
+		self.assertEqual(context["message_text"], "do it now")
+
+	def test_other_user_mention_is_not_mentioned_and_text_kept(self):
+		payload = message_event(text="hey <@U123> look")
+		payload["authorizations"] = [{"user_id": "U_BOT"}]
+		self._call(payload)
+		context = self.ingest.call_args.args[2]
+		self.assertIs(context["mentioned"], False)
+		self.assertEqual(context["message_text"], "hey <@U123> look")
+
+	def test_unknown_bot_id_message_not_mentioned_text_unchanged(self):
+		self._call(message_event(text="<@U_BOT> hi"))
+		context = self.ingest.call_args.args[2]
+		self.assertIs(context["mentioned"], False)
+		self.assertEqual(context["message_text"], "<@U_BOT> hi")
+
+	def test_app_mention_without_authorizations_is_mentioned_text_unchanged(self):
+		payload = {"type": "event_callback", "event": {
+			"type": "app_mention", "channel": "C1", "user": "U1", "text": "<@U_BOT> hi", "ts": "1.1"}}
+		self._call(payload)
+		context = self.ingest.call_args.args[2]
+		self.assertIs(context["mentioned"], True)
+		self.assertEqual(context["message_text"], "<@U_BOT> hi")
+
+	def test_app_mention_strips_bot_token_when_known(self):
+		payload = {"type": "event_callback", "authorizations": [{"user_id": "U_BOT"}], "event": {
+			"type": "app_mention", "channel": "C1", "user": "U1", "text": "<@U_BOT> hi", "ts": "1.1"}}
+		self._call(payload)
+		self.assertEqual(self.ingest.call_args.args[2]["message_text"], "hi")
 
 
 if __name__ == "__main__":
