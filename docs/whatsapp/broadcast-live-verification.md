@@ -37,7 +37,7 @@ Each scenario lists the setup, the steps, what to expect, and the evidence to ke
 ### S2. Intake filters and start guard
 
 - Setup: one allow-listed number with a STOP recorded in Gateway Consent, one duplicate, one invalid number.
-- Expect: the STOP row is stored `skipped` with reason `opted_out`; the duplicate is reported in `skipped` with reason `duplicate` and not stored; the invalid number is reported in `invalid` and not stored. Start with a wrong `confirm_count` returns `confirm_mismatch`. Start before attestation returns `consent_not_attested`.
+- Expect: the STOP row is stored `skipped` with reason `opted_out`; the duplicate is reported in `skipped` with reason `duplicate` and not stored; the invalid number is reported in `invalid` and not stored. Start with a wrong `confirm_count` returns `confirm_mismatch`. Start before attestation returns `consent_not_attested`. Adding recipients after attestation clears the attestation (attest again before start); adding to a non-Draft broadcast returns `not_draft`; `start_broadcast` on a `Paused` broadcast is refused (use `resume_broadcast`).
 - Optional (marketing template): a number beginning with `1` and 11 digits is stored `skipped` with reason `us_plus_one_marketing`.
 - Evidence: the add-recipients response, the recipient table, the refusal responses.
 
@@ -86,7 +86,7 @@ Each scenario lists the setup, the steps, what to expect, and the evidence to ke
 ### S9. Unknown row handling
 
 - Setup: simulate an ambiguous network error after the request (test environment only, with a forced timeout in the send path).
-- Expect: the row is `unknown`. Recovery does not resend it. A later `delivered` or `read` webhook for it updates it; a `sent` webhook does not.
+- Expect: the row is `unknown`. Recovery does not resend it. A later `sent`, `delivered` or `read` webhook for it moves it forward (`sent` resolves `unknown`).
 - Evidence: row state, Meta message log showing at most one send for that recipient.
 
 ### S10. Cancel
@@ -95,11 +95,11 @@ Each scenario lists the setup, the steps, what to expect, and the evidence to ke
 - Expect: cancel sets `Cancelled` and moves `queued` and `deferred` rows to `skipped` with reason `cancelled`. Rows already `sent` are unchanged.
 - Evidence: counts before and after.
 
-### S11. Retry cap and 24-hour deferral (test environment only)
+### S11. Retry cap and 131049 terminal skip (test environment only)
 
 - Setup: a forced retryable error (for example a stubbed 130429 response) on one row.
-- Expect: the row is `deferred` with growing delays (about 2, 4, 8, 16 s) and is `failed` after the fifth POST attempt (`attempts = 5`). A stubbed 131049 gives `deferred` with `next_attempt_at` about 24 hours ahead.
-- Evidence: row `attempts`, `next_attempt_at`, error fields.
+- Expect: the row is `deferred` with growing delays (about 2, 4, 8, 16 s) and is `failed` after the fifth POST attempt (`attempts = 5`). A stubbed 131049 (send response) gives `skipped` with `skip_reason` `per_user_marketing_limit` and `error_code` 131049; it is never claimed again and the broadcast can complete. `deferred` is still used for retryable errors (above) and gateway disconnect.
+- Evidence: row `attempts`, `next_attempt_at`, `skip_reason`, error fields.
 
 ### S12. Marketing stop
 
@@ -118,7 +118,8 @@ Status webhooks are replayed against the test gateway's webhook endpoint to chec
   2. Replay the same fixture again. Expect no second change (the rank cannot rise).
   3. Replay a `delivered` after a `read` for the same wamid. Expect the row to stay `read`.
   4. Replay `failed` for a row already `delivered`. Expect no change.
-  5. Replay `broadcast_status_failed_131050.json`. Expect only that row to become `failed`; the webhook does not skip other rows and does not record a marketing stop.
+  5. Replay `broadcast_status_failed_131050.json`. Expect that row to become `failed` and a marketing stop to be recorded for the contact, which skips the contact's other `queued`/`deferred` rows in `Queued`, `Running` or `Paused` broadcasts of the gateway (`opted_out`).
+  5a. Replay `broadcast_status_failed_131049.json`. Expect that row to become `skipped` (`per_user_marketing_limit`, `error_code` 131049), never resent.
   6. Replay with a bad signature. Expect rejection and a `signature_failed` marker in the health data.
 - Replay is done only against the test gateway, with test rows. It must not run against the production webhook URL.
 - Evidence: the HTTP status for each replay, the row state before and after, and the gateway event rows.

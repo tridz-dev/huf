@@ -29,8 +29,8 @@ Not implemented:
 
 A broadcast may only reach people who opted in.
 
-- Before start an operator must attest the opt-in with `attest_broadcast_consent`. It stores `consent_source` (required, non-empty), `consent_attested_by`, `consent_attested_at`, `consent_attested`. Start is refused until it is set. Attestation is allowed in `Draft` and `Paused`.
-- The consent fields, `gateway`, `template` and `whatsapp_account` can only be written through the broadcast API. Generic REST or `set_value` writes to them are rejected by the doctype.
+- Before start an operator must attest the opt-in with `attest_broadcast_consent`. It stores `consent_source` (required, non-empty), `consent_attested_by`, `consent_attested_at`, `consent_attested`. Start is refused until it is set. Attestation is allowed in `Draft` and `Paused`. `add_broadcast_recipients` (Draft only) resets the attestation (`consent_attested` 0, by/at/source cleared), so the operator must attest again after every change to the list.
+- Writes to a Broadcast through generic REST, the desk form or `doc.save` are rejected unless they go through the broadcast API. Guarded fields: the consent fields, `gateway`, `template`, `whatsapp_account`, `status`, `started_by`, `started_at`, `finished_at`, `pause_reason`, `max_recipients`, `send_via`, `mps`, `total` and every status counter. A new Broadcast created outside the API may only carry the doctype defaults. Recipient rows cannot be created or changed outside the API either (the doctype `validate` throws), and the Recipient permissions are read-only for System Manager and Huf Admin. The runner and webhook code write through raw SQL or `frappe.db.set_value`, which skip `validate`.
 - A recipient row may carry `consent_source` and `consent_at`. They are stored for audit and do not replace the attestation.
 
 Intake (`add_broadcast_recipients`, only while the broadcast is `Draft`) processes each row in this order:
@@ -61,16 +61,16 @@ queued ──claim──> sending ──> sent ──> delivered ──> read
   ^                  │         │
   │                  ├──> failed            (failed never overwrites delivered or read)
   │                  ├──> deferred ──(next_attempt_at)──> sending
-  │                  ├──> unknown           (never resent automatically)
-  │                  └──> skipped
+  │                  ├──> unknown           (never resent automatically; a later sent/delivered/read webhook advances it)
+  │                  └──> skipped           (also 131049, terminal)
   └── queued/deferred rows may also become skipped (STOP, marketing stop, cancel)
 ```
 
 - **Claim.** The sender moves a row to `sending` with `UPDATE ... SET status='sending', attempts=attempts+1 WHERE name=? AND status IN ('queued','deferred') AND attempts < 5` and commits before calling Meta. If it matches no row, another worker owns it (`lost_claim`). A `queued` or `deferred` row that already has 5 attempts cannot be claimed; the sender marks it `failed` with "Gave up after the maximum number of attempts."
 - **Release.** If, after the claim, the broadcast is not `Running`, nothing was posted and the row is handed back to the status it had before (a `deferred` row keeps its `next_attempt_at`) and the attempt is given back. If the broadcast is `Cancelled` the row becomes `skipped` with reason `cancelled`.
-- **Rank.** Webhooks only move a row forward. Ranks: `queued`/`deferred` 0, `sending` 1, `sent`/`unknown` 2, `failed` 2.5, `delivered` 3, `read` 4. An update with a rank that is not higher is ignored, so replays and out-of-order webhooks are no-ops. A `skipped` row is never changed by a webhook. Meta `played` is stored as `read`.
-- **Webhook match.** A status is matched to a row by `wamid`, else by `biz_opaque_callback_data` (the row name), and only if the row's broadcast belongs to the gateway that received the webhook. A `wamid` is written onto a row that lacks one.
-- **Unknown.** After the request was attempted, an outcome with no Meta error code (timeout, dropped connection, unreadable response, missing message id, or the result could not be written) is `unknown`. Rows left in `sending` for more than 10 minutes (by `modified`) are moved to `unknown` by `resume_stale` (cron `*/5 * * * *`). `unknown` is never sent again automatically. A later `delivered`, `read` or `failed` webhook can still advance it; a `sent` webhook cannot (same rank).
+- **Rank.** Webhooks only move a row forward. Ranks: `queued`/`deferred` 0, `sending` 1, `unknown` 1.5, `sent` 2, `failed` 2.5, `delivered` 3, `read` 4. An update with a rank that is not higher is ignored, so replays and out-of-order webhooks are no-ops. A `skipped` row is never changed by a webhook. Meta `played` is stored as `read`.
+- **Webhook match.** A status is matched to a row by `wamid`, else by `biz_opaque_callback_data` (the row name), and only if the row's broadcast belongs to the gateway that received the webhook. A `wamid` is written onto a row that lacks one. A webhook can arrive while the runner has not yet written its result (row still `sending`); the webhook advances the row, and the runner's later write then only persists `wamid`, `message_status` and `sent_at` without touching `status` (`_persist_send_result`), so the held ratio is not under-counted.
+- **Unknown.** After the request was attempted, an outcome with no Meta error code (timeout, dropped connection, unreadable response, missing message id, or the result could not be written) is `unknown`. Rows left in `sending` for more than 10 minutes (by `modified`) are moved to `unknown` by `resume_stale` (cron `*/5 * * * *`). `unknown` is never sent again automatically. A later `sent`, `delivered`, `read` or `failed` webhook advances it (`unknown` ranks below `sent`).
 - **Counters.** `total`, `queued`, `sending`, `sent`, `delivered`, `read`, `failed`, `deferred`, `unknown`, `skipped` on the broadcast. Webhooks move them by atomic deltas. `recount()` recomputes them from the rows (the rows are the source of truth). It runs after each intake call, after each chunk and at the end of a tick, at completion, on cancel, in `resume_stale` for stale rows and for every Running broadcast.
 
 No WhatsApp Send Key rows are written by a broadcast.
@@ -97,12 +97,12 @@ Broadcast `status`: `Draft`, `Queued`, `Running`, `Paused`, `Completed`, `Cancel
 | Action | Allowed from | Result |
 |---|---|---|
 | Create | none | `Draft`. Category, template name and account are snapshotted. |
-| Add recipients | `Draft` | Rows added as `queued` or `skipped`. |
+| Add recipients | `Draft` only (`not_draft` otherwise) | Rows added as `queued` or `skipped`. Resets the consent attestation. |
 | Attest consent | `Draft`, `Paused` | Records the attestation. |
 | Preview | any | Computes limits and cost, stores `cost_estimate` on the broadcast. No sends. |
-| Start | `Draft`, `Paused` | Checks below, then `Running`, `started_by`, `started_at`, first tick enqueued. |
+| Start | `Draft` only | Checks below, then `Running`, `started_by`, `started_at`, first tick enqueued. |
 | Pause | `Running` | `Paused`, `pause_reason` set (truncated to 140 characters). A pause on another state does nothing and returns success. |
-| Resume | `Paused` | Same checks as start. The resumer becomes the runner identity. |
+| Resume | `Paused` | Same checks as start. Records `resumed_by: <user>` as a comment; the resumer becomes the runner identity (ticks run as the resumer). `started_by` is kept. |
 | Cancel | any state except `Completed`, `Cancelled` | `Cancelled`, `finished_at` set. `queued` and `deferred` rows become `skipped` with reason `cancelled`. `sending` rows finish. |
 | Complete | `Running` | Set by the runner when no `queued`, `deferred` or `sending` row remains; `finished_at` set. |
 
@@ -114,6 +114,8 @@ Start and resume are refused (an exception with a message) unless all of these h
 - preview has no `blocking` entry: the template exists and is `APPROVED`, consent attested, no other broadcast `Running` on the gateway, number quality is not RED, and, when the tier is known, queued recipients fit in the remaining 24-hour budget (section 6);
 - at least one `queued` or `deferred` row exists;
 - no other broadcast is `Running` on the same gateway (re-checked under a lock on the Gateway row).
+
+Start on a `Paused` broadcast is refused ("it can only be started from Draft"); a Paused broadcast goes through `resume_broadcast`, so the person who resumes is authorised and recorded. The write-permission check runs as the caller through `_acting_as`, a context manager that switches user only when the caller differs from the session user, and afterwards restores `session.user`, `sid`, `data` (CSRF token) and the swapped request locals (`form_dict`, cache, role permissions and others) that `frappe.set_user` resets. This is meant to keep the operator's session valid after `start_broadcast`/`resume_broadcast`; it is covered by unit tests only, not by a test through a real HTTP request.
 
 `start_broadcast` additionally requires `confirm_count` to equal the number of `queued` plus `deferred` rows. Start does not read gateway health; only a disconnected connection stops sends (section 9).
 
@@ -155,17 +157,17 @@ Classification uses `whatsapp_errors`. A send that gets no Meta error code is `u
 | `mm_requires_marketing_template` | `failed` | Continues |
 | Other refusal before the POST | `failed` | Continues |
 | No Meta error code after the POST (timeout, connection error, HTTP 5xx or 429 without a Meta error code, unparseable response) | `unknown` | Continues |
-| 131049 per-user marketing limit | `deferred`, due 24 h later | Continues |
+| 131049 per-user marketing limit (send response) | `skipped`, `skip_reason` `per_user_marketing_limit`, `error_code` 131049 kept; never auto-resent | Continues |
 | 130429 throughput, 131056 pair limit | `deferred`, retryable | Continues |
 | 131057 account maintenance, 131016, 1, 2 (server); 4, 17, 32, 613, 80007 (API rate limits) | `deferred`, retryable | Continues |
-| 131050 user stopped marketing | `failed`; a marketing stop is recorded, which skips the contact's other pending rows | Continues |
+| 131050 user stopped marketing (send response) | `failed`; a marketing stop is recorded, which skips the contact's other pending rows | Continues |
 | 131026, 131047, 131048, 132000, 132001, 132005, 132007, 132012, and any code not listed above (including 131062, which has no table entry; the HTTP status is not used to classify a coded error) | `failed`, `error_code` stored | Continues |
 | 132015 template paused, 132016 template disabled, 135000, 131042 | `failed`, `error_code` stored | Pauses (`meta_error_<code>`) |
 
 Retry rules:
 
-- A retryable error is retried until the row has made 5 POST attempts (`attempts` counts claims); the fifth failure is `failed`. 131049 is deferred each time without that check, and the next claim after the fifth attempt marks the row `failed` ("Gave up ...").
-- Backoff after attempt n: 2, 4, 8, 16 s (doubling, capped at 16 s, +/-20% jitter); 131056 is a fixed 6 s; 60 s if no backoff is available. 131049 is 86400 s. Gateway disconnected is 300 s.
+- A retryable error is retried until the row has made 5 POST attempts (`attempts` counts claims); the fifth failure is `failed`. 131049 is not retryable: it is a terminal skip.
+- Backoff after attempt n: 2, 4, 8, 16 s (doubling, capped at 16 s, +/-20% jitter); 131056 is a fixed 6 s; 60 s if no backoff is available. Gateway disconnected is 300 s.
 - There is no per-recipient retry. A `failed` row is a permanent Meta verdict, and `unknown` may already have been delivered. To reach the contacts again, create a new, separately attested broadcast.
 
 Pause rules (the runner stops sending, rows stay as they are; resume is manual):
@@ -184,7 +186,7 @@ Pause rules (the runner stops sending, rows stay as they are; resume is manual):
 
 Template webhooks pause Running broadcasts on the same WhatsApp account whose `template_name` matches.
 
-Webhook handling: `sent`, `delivered`, `read`, `played` move a row forward. `failed` stores the first error's code and message, unless the row is `delivered`/`read`. A webhook handler failure never breaks webhook ingest. A status `failed` with 131050 only marks that row; the marketing stop is recorded by the send-time path. The `user_preferences` event (marketing stop) and a STOP keyword both skip the contact's `queued` and `deferred` rows (reason `opted_out`) in broadcasts of that gateway in `Queued`, `Running` or `Paused` state; `Draft` rows are re-checked at send time instead.
+Webhook handling: `sent`, `delivered`, `read`, `played` move a row forward. `failed` stores the first error's code and message, unless the row is `delivered`/`read`. A webhook handler failure never breaks webhook ingest. A status `failed` with 131050 marks that row `failed` and records a marketing stop (the same consent record as the send path), which skips the contact's other pending rows. A status `failed` with 131049 turns the row into `skipped` (`per_user_marketing_limit`, `error_code` kept, `failed_at` not set) unless it is already `delivered`/`read`; it is never resent. A `sent` webhook resolves an `unknown` row. The `user_preferences` event (marketing stop) and a STOP keyword both skip the contact's `queued` and `deferred` rows (reason `opted_out`) in broadcasts of that gateway in `Queued`, `Running` or `Paused` state; `Draft` rows are re-checked at send time instead.
 
 ## 8. Costs
 
@@ -203,12 +205,12 @@ All methods are in `huf/ai/whatsapp/management.py`, whitelisted, behind the brid
 | Method | Needs | Parameters | Returns | Error codes |
 |---|---|---|---|---|
 | `create_broadcast` | write | `gateway`, `template` (name or `<name>-<lang>`), `title`, `language_code`, `body_params`, `header_params`, `button_params`, `consent_source`, `max_recipients` (1 to 10000), `mps`, `send_via` (`messages` or `marketing_messages`) | `success`, `broadcast`, `status` (`Draft`), `category` | `invalid_gateway`, `not_found`, `no_account`, `invalid_name`, `invalid_title`, `template_not_found`, `template_not_approved`, `invalid_send_via`, `mm_requires_marketing_template`, `invalid_max_recipients`, `invalid_params` |
-| `add_broadcast_recipients` | write | `broadcast`, `recipients` (list of numbers or `{recipient, params, consent_source, consent_at}`), `csv_text` | `success`, `added`, `skipped`, `skipped_total`, `invalid`, `invalid_total` | `not_found`, `not_draft`, `csv_too_large`, `too_many_recipients`, `invalid_params`, `no_recipients` |
+| `add_broadcast_recipients` | write (Draft only; resets attestation) | `broadcast`, `recipients` (list of numbers or `{recipient, params, consent_source, consent_at}`), `csv_text` | `success`, `added`, `skipped`, `skipped_total`, `invalid`, `invalid_total` | `not_found`, `not_draft`, `csv_too_large`, `too_many_recipients`, `invalid_params`, `no_recipients` |
 | `attest_broadcast_consent` | write | `broadcast`, `consent_source` | `success`, `broadcast`, `consent_attested`, `consent_source` | `not_found`, `invalid_state`, `consent_source_required` |
 | `preview_broadcast` | write | `broadcast` | `success`, `broadcast`, `status`, `consent_attested`, `limits`, `cost`, `confirm_required`, `queued` | `not_found` |
-| `start_broadcast` | write | `broadcast`, `confirm_count` | `success`, `broadcast`, `status` (`Running`), `queued` | `not_found`, `consent_not_attested`, `no_recipients`, `confirm_mismatch`; runner refusals are raised as validation errors with a message (`Broadcast blocked: ...`, `Another broadcast (...) is already running on this Gateway`, wrong state, no consent, no queued recipients) |
+| `start_broadcast` | write (Draft only) | `broadcast`, `confirm_count` | `success`, `broadcast`, `status` (`Running`), `queued` | `not_found`, `consent_not_attested`, `no_recipients`, `confirm_mismatch`; runner refusals are raised as validation errors with a message (`Broadcast blocked: ...`, `Another broadcast (...) is already running on this Gateway`, wrong state, no consent, no queued recipients) |
 | `pause_broadcast` | write | `broadcast` | `success`, `broadcast`, `status` | `not_found` |
-| `resume_broadcast` | write | `broadcast` | `success`, `broadcast`, `status`, `queued` | `not_found`; same runner refusals as start |
+| `resume_broadcast` | write (Paused only) | `broadcast` | `success`, `broadcast`, `status`, `queued` | `not_found`; same runner refusals as start |
 | `cancel_broadcast` | write | `broadcast` | `success`, `broadcast`, `status` | `not_found`; raises if already `Completed` or `Cancelled` |
 | `pause_all_broadcasts` | write | `gateway` | `success`, `gateway`, `paused` (names of broadcasts that were Running) | `invalid_gateway`, `not_found` |
 | `list_broadcasts` | read | `gateway` (required unless admin), `status`, `limit` (default 50, max 200), `offset` | `success`, `broadcasts` (each with `counts` object, parsed params, ISO times) | `not_found`, `gateway_required` |
@@ -225,7 +227,7 @@ The Meta endpoints used: `POST /<PHONE_NUMBER_ID>/messages` or `/marketing_messa
 
 - Huf does not send `product_policy` or `message_activity_sharing`; the account default applies.
 - Status webhooks may report a different pricing category for these sends. Huf does not use it.
-- Onboarding to the Marketing Messages API and the dates after which Cloud API marketing sends stop are Meta facts that were not confirmed here (section 11). Whether the 131049 limit behaves the same on this path is not known; the same deferral applies.
+- Onboarding to the Marketing Messages API and the dates after which Cloud API marketing sends stop are Meta facts that were not confirmed here (section 11). Whether the 131049 limit behaves the same on this path is not known; the same terminal skip applies.
 
 ## 11. Unverified Meta facts
 
@@ -243,10 +245,21 @@ The code works without these, but they should be confirmed against Meta before r
 
 ## 12. Known limits
 
+### Known issues / open items
+
+- **Bridge loses the message id on an exception after the POST (M6).** In `whatsapp_bridge.send_template`, bookkeeping after the Graph POST (`policy.note_template_sent`) can raise. The runner then marks the row `unknown` and the wamid is not stored; recovery depends on Meta echoing `biz_opaque_callback_data` in the status webhook. Not fixed. A `BridgeError` raised after the POST would mark an accepted message `failed`. Not verified in this pass.
+- **`biz_opaque_callback_data` placement unverified.** Top-level placement on the send body, the length limit and the echo in `statuses[]` were not confirmed against Meta (section 11). Confirm on the test number before relying on row-name matching.
+- **Resolution of `unknown` is webhook-only.** There is no action. A late `sent`/`delivered`/`read` webhook resolves the row; if none arrives it stays `unknown`.
+- **Sent/held race.** If a `sent` webhook beats the runner's write, the row status is correct and `message_status` is persisted afterwards without a status condition. Rows whose result cannot be written at all stay `unknown`. The race is covered by unit tests; no live check exists.
+- **Cancel/pause race.** A send that already read the broadcast as Running just before a cancel still posts (milliseconds; "in-flight finish").
+- **Fixtures.** The 135000/131049/131050 webhook fixtures are Huf-authored, not captured from Meta.
+- **`_acting_as` through a real request** is not covered by an automated test (section 4).
+
+
 - **US `+1` filter also skips Canada.** The rule is any 11-digit number starting with `1`, for MARKETING templates only.
 - **No per-recipient retry.** `failed`, `skipped` and `unknown` rows are not resent by any action.
-- **`unknown` rows are never auto-resent.** A `sent` webhook does not change them.
-- **STOP keyword, `user_preferences` marketing stop and send-time 131050 all skip the contact's `queued` and `deferred` rows** in other unfinished broadcasts of the gateway. A status-webhook 131050 only fails that row.
+- **`unknown` rows are never auto-resent.** A `sent`, `delivered` or `read` webhook moves them forward.
+- **STOP keyword, `user_preferences` marketing stop and send-time 131050 all skip the contact's `queued` and `deferred` rows** in other unfinished broadcasts of the gateway. A 131050 arriving by status webhook also records the marketing stop and skips them.
 - **A template that is paused, disabled, rejected, quality RED, or whose category changes to MARKETING pauses running broadcasts** that use it, until someone resumes. Resume re-runs the start checks.
 - **One Running broadcast per gateway.**
 - **135000 pauses conservatively** (section 11).
@@ -261,6 +274,7 @@ The code works without these, but they should be confirmed against Meta before r
 - **Kill switch.** `pause_all_broadcasts(gateway)` (the "Stop all broadcasts" button in the broadcast tab) pauses every Running broadcast on the gateway with reason `kill_switch`. A tick stops before its next send. Rows in `sending` at that moment finish. Resume is manual per broadcast.
 - **Recount.** Counters are reconciled automatically (section 3). To force it for one broadcast, run `frappe.get_doc("WhatsApp Broadcast", name).recount(commit=True)` in a bench console on the site. Counters can differ from the rows only briefly, while webhooks apply deltas.
 - **Resolving an `unknown` row.** There is no action for it. Look up the recipient in WhatsApp Manager's message log or the business inbox. If the message was delivered, a later `delivered` or `read` webhook matched by `wamid` or row name updates the row. If not delivered, leave it; do not resend inside this broadcast. To message the contact again, include them in a new broadcast.
+- **131049 is final for the broadcast.** The row is `skipped` and the broadcast can complete; there is no 24-hour deferral. Include the contact in a new broadcast later if appropriate.
 - **Stuck broadcast.** If a Running broadcast does not progress, wait for the `*/5` cron (`resume_stale`) which also turns stale `sending` rows into `unknown` and revives the tick. If it is `Paused`, read `pause_reason`, fix the cause, then resume.
 - **Audit.** Each mutating call leaves a comment on the broadcast; resume leaves `resumed_by: <user>`.
 - **After a pause for 132015, 132016, 135000, 131042.** Check the template and account notices in WhatsApp Manager before resuming.
