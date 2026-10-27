@@ -48,7 +48,7 @@ class FakeAdapter:
 		self.uploads, self.sends = [], []
 
 	def upload_media(self, content, mime, filename="", kind=None, voice=False):
-		self.uploads.append({"content": content, "mime": mime, "kind": kind, "voice": voice})
+		self.uploads.append({"content": content, "mime": mime, "filename": filename, "kind": kind, "voice": voice})
 		return "media-1"
 
 	def send_media(self, to, kind, **kw):
@@ -66,6 +66,7 @@ class _Base(unittest.TestCase):
 			patch.object(voice, "_adapter", return_value=self.adapter),
 			patch.object(voice, "_synthesize", self.synth),
 			patch.object(voice, "_convert", self.convert),
+			patch.object(send_file, "ffmpeg_can_make_opus", return_value=True),
 			patch.object(voice, "_claim", return_value=True),
 			patch.object(voice, "_conversation", return_value="CONV-1"),
 			patch.object(gateway_service, "is_opted_out", return_value=False),
@@ -117,13 +118,51 @@ class TestVoiceReply(_Base):
 			self.text_send.assert_called_once()
 		self.assertEqual(self.adapter.sends, [])
 
-	def test_ffmpeg_missing_falls_back_to_text(self):
-		self.convert.side_effect = send_file.FileSendError("ffmpeg_unavailable", "no ffmpeg")
-		with patch("frappe.logger") as logger:
+	def test_no_ffmpeg_and_provider_opus_sends_a_voice_note_without_converting(self):
+		self.synth.return_value = b"OggS" + b"\x00" * 22 + b"OpusHead" + bytes([1, 1]) + b"\x00" * 20
+		with patch.object(send_file, "ffmpeg_can_make_opus", return_value=False):
+			self.reply(make_event(), make_gateway("Voice only"))
+		self.convert.assert_not_called()
+		self.assertTrue(self.adapter.sends[0]["voice"])
+		self.assertEqual(self.adapter.uploads[0]["mime"], send_file.OGG_OPUS_MIME)
+		self.text_send.assert_not_called()
+		self.assertEqual(self.synth.call_args.kwargs["response_format"], "opus")  # asks for Opus first
+
+	def test_no_ffmpeg_and_mp3_goes_as_an_ordinary_audio_message(self):
+		self.synth.return_value = b"ID3\x04\x00" + b"\x00" * 30
+		with patch.object(send_file, "ffmpeg_can_make_opus", return_value=False):
+			self.reply(make_event(), make_gateway("Voice only"))
+		self.convert.assert_not_called()
+		send = self.adapter.sends[0]
+		self.assertFalse(send["voice"])
+		self.assertEqual(self.adapter.uploads[0]["mime"], "audio/mpeg")
+		self.assertEqual(self.adapter.uploads[0]["filename"], "reply.mp3")
+		self.text_send.assert_not_called()
+
+	def test_no_ffmpeg_and_unsendable_audio_falls_back_to_text(self):
+		self.synth.return_value = b"RIFF\x00\x00\x00\x00WAVEfmt " + b"\x00" * 20  # e.g. Gemini WAV
+		with patch.object(send_file, "ffmpeg_can_make_opus", return_value=False), patch("frappe.logger") as logger:
 			self.reply(make_event(), make_gateway("Voice only"))
 		self.text_send.assert_called_once()
 		self.assertEqual(self.adapter.sends, [])
 		self.assertTrue(logger.return_value.warning.called)
+
+	def test_failed_conversion_never_breaks_the_reply(self):
+		self.synth.return_value = b"ID3\x04\x00" + b"\x00" * 30
+		self.convert.side_effect = send_file.FileSendError("audio_conversion_failed", "bad audio")
+		self.reply(make_event(), make_gateway("Voice only"))  # ffmpeg present but broken: plain audio instead
+		self.assertFalse(self.adapter.sends[0]["voice"])
+		self.convert.side_effect = OSError("exec format error")
+		self.adapter.sends.clear()
+		self.reply(make_event(), make_gateway("Voice only"))
+		self.assertFalse(self.adapter.sends[0]["voice"])
+
+	def test_opus_request_refused_retries_as_mp3(self):
+		self.synth.side_effect = [ValueError("response_format not supported"), b"ID3\x04\x00" + b"\x00" * 30]
+		with patch.object(send_file, "ffmpeg_can_make_opus", return_value=False):
+			self.reply(make_event(), make_gateway("Voice only"))
+		self.assertEqual([c.kwargs.get("response_format", "mp3") for c in self.synth.call_args_list], ["opus", "mp3"])
+		self.assertFalse(self.adapter.sends[0]["voice"])
 
 	def test_tts_failure_falls_back_to_text(self):
 		self.synth.side_effect = ValueError("no tts model")
@@ -200,7 +239,7 @@ class TestGatewayValidation(unittest.TestCase):
 
 		values = {"voice_reply_mode": mode}
 		fake = SimpleNamespace(
-			get=lambda k, d=None: values.get(k, d), provider=provider, _warn_voice_ffmpeg=lambda: None
+			get=lambda k, d=None: values.get(k, d), provider=provider
 		)
 		return frappe, lambda: Gateway._validate_reply_settings(fake)
 

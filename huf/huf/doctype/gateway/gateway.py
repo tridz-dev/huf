@@ -380,26 +380,8 @@ class Gateway(Document):
             "Telegram",
         ):
             frappe.throw(_("Voice note replies are only available for WhatsApp and Telegram gateways."))
-        self._warn_voice_ffmpeg()
         if self.get("preview_url") not in (None, "", "Default (off)", "On", "Off"):
             frappe.throw(_("Link previews must be Default (off), On or Off."))
-
-    def _warn_voice_ffmpeg(self):
-        """Warn (never block: the worker host may differ from this one) when ffmpeg/libopus is missing here."""
-        if self.get("voice_reply_mode") not in ("Voice only", "Text and voice"):
-            return
-        from huf.ai.whatsapp.send_file import ffmpeg_status
-
-        status = ffmpeg_status()
-        if not (status.get("available") and status.get("has_libopus")):
-            frappe.msgprint(
-                _(
-                    "Voice replies need ffmpeg with Opus support, and it was not found on this server. "
-                    "Install it on every worker host, or replies will be sent as text."
-                ),
-                indicator="orange",
-                alert=True,
-            )
 
     def _validate_send_scope(self):
         """Agent send scope (WhatsApp): a known scope, a real allow-list when chosen, non-negative caps."""
