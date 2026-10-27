@@ -594,6 +594,13 @@ def ingest_gateway_event(
     if existing:
         return {"duplicate": True, "event_name": existing}
 
+    from huf.ai.gateways import hooks as gw_hooks
+
+    gw_hooks.register_all()
+    _hook_gateway = frappe.get_doc("Gateway", gateway_name)
+    if gw_hooks.call_all(gw_hooks.PRE_INGEST_FILTER, _hook_gateway, context).count(False):
+        return {"filtered": True}
+
     event = frappe.get_doc(
         {
             "doctype": "Gateway Event",
@@ -615,6 +622,8 @@ def ingest_gateway_event(
     except frappe.DuplicateEntryError:
         existing = frappe.db.get_value("Gateway Event", {"idempotency_key": key}, "name")
         return {"duplicate": True, "event_name": existing}
+
+    gw_hooks.call_all(gw_hooks.ON_EVENT_RECEIVED, _hook_gateway, event)
 
     if not verified_sender:
         event.db_set({"status": "Rejected", "error_message": "Provider did not verify sender"})
@@ -664,6 +673,16 @@ def process_gateway_event(event_name: str) -> dict:
         event.db_set({"status": "Rejected", "error_message": "Gateway is disabled or has no Run as user"})
         return {"event_name": event.name, "status": "Rejected"}
 
+    from huf.ai.gateways import hooks as gw_hooks
+
+    gw_hooks.register_all()
+    kind = "flow" if event.target_type == "Flow" else "agent"
+    try:
+        run_user = gw_hooks.call_first(gw_hooks.RESOLVE_RUN_USER, gateway, event) or gateway.execution_user
+    except gw_hooks.GatewayHookDenied as denied:
+        event.db_set({"status": "Rejected", "error_message": denied.reason})
+        return {"event_name": event.name, "status": "Rejected"}
+
     if event.target_type == "Agent":
         # GW-08: this pre-gate authorizes the run as the Gateway's configured
         # execution_user, NOT as Guest.
@@ -699,34 +718,41 @@ def process_gateway_event(event_name: str) -> dict:
         identity = resolve_run_identity_and_authorize(
             agent_doc,
             TRIGGER_GATEWAY,
-            {"execution_user": gateway.execution_user, "target_agent": event.target_agent},
+            {"execution_user": run_user, "target_agent": event.target_agent},
         )
         if not identity.authorized:
             event.db_set({"status": "Rejected", "error_message": identity.reason})
             return {"event_name": event.name, "status": "Rejected"}
 
     try:
-        frappe.set_user(gateway.execution_user)
+        frappe.set_user(run_user)
         event.db_set("status", "Running")
+        gw_hooks.call_all(gw_hooks.ON_RUN_START, gateway, event, kind)
         if event.target_type == "Agent":
             from huf.ai.agent_integration import run_agent_sync
             from huf.ai.gateway_webhook import send_gateway_reply
 
             attachment_note = _describe_attachments(event.raw_payload)
             prompt = f"{attachment_note}\n{event.message_text}" if attachment_note else event.message_text
+            prompt = gw_hooks.call_chain(gw_hooks.BUILD_PROMPT, prompt, gateway, event)
 
             result = run_agent_sync(
                 agent_name=event.target_agent,
                 prompt=prompt,
                 channel_id=f"gateway:{gateway.name}",
-                external_id=event.thread_id or event.conversation_id or event.sender_id,
+                external_id=gw_hooks.call_first(gw_hooks.RESOLVE_CONVERSATION_KEY, gateway, event)
+                or event.thread_id or event.conversation_id or event.sender_id,
                 now=True,
+                client_idempotency_key=f"gw:{event.name}",
             )
             response = result.get("response") if isinstance(result, dict) else None
             if not response or not str(response).strip():
                 raise frappe.ValidationError(_("Gateway agent run completed without a text response."))
             try:
                 _throttle_outbound_send(gateway.name, _outbound_rate_cap(gateway.provider))
+                _reply_target = gw_hooks.call_first(gw_hooks.RESOLVE_REPLY_TARGET, gateway, event, str(response))
+                if _reply_target:
+                    event.conversation_id = str(_reply_target)
                 delivery = send_gateway_reply(gateway, event, str(response))
                 provider_message_id = delivery.provider_message_id
             except frappe.ValidationError as exc:
@@ -736,6 +762,7 @@ def process_gateway_event(event_name: str) -> dict:
                     raise
 
             event.db_set({"agent_run": result.get("agent_run_id"), "status": "Succeeded"})
+            gw_hooks.call_all(gw_hooks.ON_RUN_SUCCESS, gateway, event, kind, response)
             return {
                 "event_name": event.name,
                 "status": "Succeeded",
@@ -762,10 +789,11 @@ def process_gateway_event(event_name: str) -> dict:
                 flow_run_name=flow_run.name,
                 enqueue_after_commit=True,
             )
+            gw_hooks.call_all(gw_hooks.ON_RUN_SUCCESS, gateway, event, kind, flow_run)
             return {"event_name": event.name, "status": "Queued", "flow_run_id": flow_run.name}
 
         raise frappe.ValidationError(_("Gateway event has no valid target."))
-    except Exception:
+    except Exception as run_error:
         message = _redact_error_text(frappe.get_traceback())
         # GW-06: a failure here (e.g. send_gateway_reply raising after a
         # successful agent run) can leave uncommitted state from this request
@@ -778,6 +806,7 @@ def process_gateway_event(event_name: str) -> dict:
         event.db_set({"status": "Failed", "error_message": message[-500:]})
         frappe.db.commit()
         frappe.log_error(message, "Gateway event failed")
+        gw_hooks.call_all(gw_hooks.ON_RUN_FAILURE, gateway, event, kind, run_error)
         raise
 
 
