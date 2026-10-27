@@ -1986,7 +1986,22 @@ def add_broadcast_recipients(broadcast: str | None = None, recipients: Any = Non
 	if len(items) > br.MAX_ROWS_PER_REQUEST:
 		return _error("too_many_recipients", f"At most {br.MAX_ROWS_PER_REQUEST} recipients per request.")
 	rows = [{"recipient": str(i)} if not isinstance(i, dict) else i for i in items]
-	result = br.prepare(broadcast, rows)
+	prev = frappe.flags.get("in_broadcast_api")
+	frappe.flags.in_broadcast_api = True  # recipient rows are insert-guarded; prepare() is the only writer
+	try:
+		result = br.prepare(broadcast, rows)
+	finally:
+		frappe.flags.in_broadcast_api = prev
+	if row.get("consent_attested"):
+		# the attestation covered a different list; the owner must re-attest
+		frappe.flags.in_broadcast_api = True
+		try:
+			frappe.db.set_value(_BROADCAST, broadcast, {
+				"consent_attested": 0, "consent_attested_by": None, "consent_attested_at": None,
+			})
+		finally:
+			frappe.flags.in_broadcast_api = prev
+		frappe.get_doc(_BROADCAST, broadcast).add_comment("Info", "attestation reset: recipients changed")
 	_broadcast_audit(
 		broadcast, "recipients_added",
 		added=result.get("added"), skipped=result.get("skipped_total"), invalid=result.get("invalid_total"),

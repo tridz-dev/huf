@@ -65,7 +65,11 @@ class _Base(unittest.TestCase):
 
 	def row(self, bcast, num, status="queued", **over):
 		d = frappe.get_doc({"doctype": R, "broadcast": bcast, "recipient": num, "status": status, **over})
-		d.insert(ignore_permissions=True, ignore_links=True, ignore_mandatory=True)
+		prev, frappe.flags.in_broadcast_api = frappe.flags.get("in_broadcast_api"), True  # stands in for prepare()
+		try:
+			d.insert(ignore_permissions=True, ignore_links=True, ignore_mandatory=True)
+		finally:
+			frappe.flags.in_broadcast_api = prev
 		return d.name
 
 	def st(self, name, field="status"):

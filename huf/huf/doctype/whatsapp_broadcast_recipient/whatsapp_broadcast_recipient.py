@@ -16,4 +16,7 @@ class WhatsAppBroadcastRecipient(Document):
 		self.name = f"{self.broadcast}-{self.recipient}"[:140]
 
 	def validate(self):
+		"""Rows are created and changed only by the broadcast API/runner (``prepare`` runs with the flag set)."""
+		if not getattr(frappe.flags, "in_broadcast_api", False):
+			frappe.throw("Recipients can only be changed through the broadcast API.", frappe.PermissionError)
 		self.opaque_ref = self.name or f"{self.broadcast}-{self.recipient}"[:140]
