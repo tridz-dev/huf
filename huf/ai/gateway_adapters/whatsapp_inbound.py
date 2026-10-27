@@ -10,6 +10,7 @@ frappe_whatsapp mirror (``whatsapp_bridge.record_incoming``) so both agree.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 MAX_CONTACTS = 5
@@ -157,6 +158,51 @@ def render_interactive(interactive: Any) -> str:
 		)
 		return f"[Product: {label}]" if label else "[Product]"
 	return "[interactive message]"
+
+
+_REF_RE = re.compile(r"(?<![A-Za-z0-9_-])ref:([A-Za-z0-9_-]{1,64})", re.IGNORECASE)
+
+
+def extract_referral_tag(message: dict, text: str) -> str:
+	"""Routing tag for an inbound message, or "".
+
+	Convention: the Click-to-WhatsApp ad id (``referral.source_id``) wins; otherwise the
+	first ``ref:<tag>`` token in the text (case-insensitive, tag chars ``[A-Za-z0-9_-]``,
+	1-64 long). ``#tag`` is not a tag. The token is left in the text.
+	"""
+	referral = _dict(_dict(message).get("referral"))
+	source_id = str(referral.get("source_id") or "").strip()
+	if source_id:
+		return source_id
+	match = _REF_RE.search(text or "")
+	return match.group(1) if match else ""
+
+
+def extract_button_payload(msg: Any) -> str:
+	"""Structured payload of a template quick-reply button or an interactive button/list reply."""
+	msg = _dict(msg)
+	if msg.get("type") == "button":
+		return str(_dict(msg.get("button")).get("payload") or "")
+	if msg.get("type") == "interactive":
+		interactive = _dict(msg.get("interactive"))
+		for key in ("button_reply", "list_reply"):
+			if key in interactive:
+				return str(_dict(interactive[key]).get("id") or "")
+	return ""
+
+
+def parse_button_payload(raw: str) -> dict | None:
+	"""Parse ``sol:<solution>|<free>`` into ``{"solution", "free"}``; None for any other format.
+
+	Only the first ``|`` splits; ``free`` may be empty or contain further ``|``.
+	"""
+	if not isinstance(raw, str) or not raw.startswith("sol:"):
+		return None
+	solution, _, free = raw[4:].partition("|")
+	solution = solution.strip()
+	if not solution:
+		return None
+	return {"solution": solution, "free": free}
 
 
 def render_system(system: Any) -> str:

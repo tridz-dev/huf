@@ -43,6 +43,8 @@ export interface ComboboxProps {
   onSearchChange?: (search: string) => void;
   shouldFilter?: boolean;
   className?: string;
+  /** Trigger height token: sm/default/lg = 30/34/38px, same as Input. */
+  size?: 'default' | 'sm' | 'lg';
   /** Optional controlled open state. Uncontrolled when omitted. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -62,6 +64,7 @@ export function Combobox({
   onSearchChange,
   shouldFilter,
   className,
+  size = 'default',
   open: openProp,
   onOpenChange,
 }: ComboboxProps) {
@@ -83,9 +86,10 @@ export function Combobox({
         <Button
           id={id}
           variant="outline"
+          size={size}
           role="combobox"
           aria-expanded={open}
-          className={cn('h-9 w-full justify-between bg-transparent px-3 py-2 font-normal', className)}
+          className={cn('w-full justify-between bg-transparent font-normal', className)}
           disabled={disabled}
         >
           {selectedOption ? (

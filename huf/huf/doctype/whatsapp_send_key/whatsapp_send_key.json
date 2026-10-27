@@ -4,7 +4,7 @@
  "creation": "2026-10-22 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
- "field_order": ["key_hash", "gateway", "agent_run", "recipient", "action", "status", "message_id", "claimed_at", "expires_at", "result"],
+ "field_order": ["key_hash", "gateway", "agent_run", "recipient", "action", "status", "message_id", "claimed_at", "expires_at", "result", "solution"],
  "fields": [
   {"description":"sha256 of gateway + idempotency material; the unique claim.","fieldname":"key_hash","fieldtype":"Data","label":"Key","length":64,"read_only":1,"reqd":1,"unique":1},
   {"fieldname":"gateway","fieldtype":"Data","in_list_view":1,"label":"Gateway","length":140,"read_only":1,"search_index":1},
@@ -15,7 +15,8 @@
   {"fieldname":"message_id","fieldtype":"Data","in_list_view":1,"label":"WhatsApp message id","length":255,"read_only":1},
   {"fieldname":"claimed_at","fieldtype":"Datetime","label":"Claimed at","read_only":1},
   {"fieldname":"expires_at","fieldtype":"Datetime","label":"Expires at","read_only":1,"search_index":1},
-  {"fieldname":"result","fieldtype":"Long Text","label":"Original tool result","read_only":1}
+  {"fieldname":"result","fieldtype":"Long Text","label":"Original tool result","read_only":1},
+  {"fieldname":"solution","fieldtype":"Link","label":"Solution","options":"Solution","read_only":1}
  ],
  "in_create": 1,
  "module": "Huf",

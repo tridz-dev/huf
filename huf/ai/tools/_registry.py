@@ -75,6 +75,24 @@ RECIPIENT_TOOLS = [
 	},
 ]
 
+HANDOFF_TOOLS = [
+	{
+		"tool_name": "handoff_to_solution",
+		"description": (
+			"Hand the current gateway chat over to another Live solution. From the next message on, the contact is "
+			"served by that solution. Sends no message itself; tell the contact what is happening in your own reply. "
+			"Only works inside a gateway conversation. Arguments: solution (the solution name or title), "
+			"reason (optional, short)."
+		),
+		"function_path": "huf.ai.tools.handoff.handle_handoff_to_solution",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("solution", required=True, description="Name or title of the Live solution to hand this chat to"),
+			_p("reason", description="Optional short reason for the handoff"),
+		],
+	},
+]
+
 SLACK_TOOLS = [
 	{
 		"tool_name": "slack_send_message",
@@ -2796,6 +2814,7 @@ LAZY_DISCOVERY_TOOLS = [
 ALL_INTEGRATION_TOOLS = (
 	# Platform capabilities — no external account to connect.
 	RECIPIENT_TOOLS
+	+ HANDOFF_TOOLS
 	+ CRM_TOOLS
 	+ HELPDESK_TOOLS
 	+ RAVEN_TOOLS

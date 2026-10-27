@@ -1,0 +1,32 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-10-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["title", "purpose", "status", "test_mode", "description", "solution_owner", "section_target", "primary_target_type", "primary_agent", "primary_flow"],
+ "fields": [
+  {"fieldname":"title","fieldtype":"Data","in_list_view":1,"in_standard_filter":1,"label":"Title","reqd":1,"unique":1},
+  {"default":"custom","fieldname":"purpose","fieldtype":"Select","in_list_view":1,"in_standard_filter":1,"label":"Purpose","options":"answer\norders\nsupport\nbookings\nupdates\nteam\ncustom"},
+  {"default":"Paused","fieldname":"status","fieldtype":"Select","in_list_view":1,"in_standard_filter":1,"label":"Status","options":"Live\nPaused"},
+  {"default":"0","description":"A test-mode solution is always kept Paused.","fieldname":"test_mode","fieldtype":"Check","label":"Test mode"},
+  {"fieldname":"description","fieldtype":"Small Text","label":"Description"},
+  {"fieldname":"solution_owner","fieldtype":"Link","label":"Owner","options":"User"},
+  {"fieldname":"section_target","fieldtype":"Section Break","label":"Primary target"},
+  {"fieldname":"primary_target_type","fieldtype":"Select","label":"Primary target","options":"\nAgent\nFlow"},
+  {"depends_on":"eval:doc.primary_target_type == 'Agent'","fieldname":"primary_agent","fieldtype":"Link","label":"Agent","options":"Agent"},
+  {"depends_on":"eval:doc.primary_target_type == 'Flow'","fieldname":"primary_flow","fieldtype":"Link","label":"Flow","options":"Flow Definition"}
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "Huf",
+ "name": "Solution",
+ "owner": "Administrator",
+ "permissions": [{"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1}],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+}

@@ -3,14 +3,8 @@ import type { UseFormReturn } from 'react-hook-form';
 import { useFieldArray } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { FormField } from '@/components/ui/form';
+import { Field, FieldAction, FieldRow } from '@/components/ui/field';
 import type { IntegrationFormValues } from './types';
 
 interface RecipientsTabProps {
@@ -52,65 +46,66 @@ export function RecipientsTab({ form }: RecipientsTabProps) {
       ) : (
         <div className="space-y-4">
           {fields.map((field, index) => (
-            <div key={field.id} className="grid gap-4 rounded-lg border p-4 md:grid-cols-[1fr_1fr_1fr_auto]">
+            <FieldRow
+              key={field.id}
+              cols={1}
+              className="items-start rounded-lg border p-4 md:grid-cols-[1fr_1fr_1fr_auto]"
+            >
               <FormField
                 control={form.control}
                 name={`recipients.${index}.recipient_name`}
-                render={({ field: f }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input {...f} placeholder="e.g. Sales Alerts" />
-                    </FormControl>
-                    <FormDescription>
-                      A human-friendly label for this recipient (e.g. John Doe, Sales Alerts, Engineering Team)
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
+                render={({ field: f, fieldState }) => (
+                  <Field
+                    label="Name"
+                    hint="A human-friendly label for this recipient (e.g. John Doe, Sales Alerts, Engineering Team)"
+                    error={fieldState.error?.message}
+                    reserveNote
+                  >
+                    <Input {...f} placeholder="e.g. Sales Alerts" />
+                  </Field>
                 )}
               />
               <FormField
                 control={form.control}
                 name={`recipients.${index}.recipient_id`}
-                render={({ field: f }) => (
-                  <FormItem>
-                    <FormLabel>Recipient ID</FormLabel>
-                    <FormControl>
-                      <Input {...f} placeholder="Service-specific ID" />
-                    </FormControl>
-                    <FormDescription>
-                      Service-specific ID: Telegram Chat ID, Slack User/Channel ID, Discord Channel ID, email address, etc.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
+                render={({ field: f, fieldState }) => (
+                  <Field
+                    label="Recipient ID"
+                    hint="Service-specific ID: Telegram Chat ID, Slack User/Channel ID, Discord Channel ID, email address, etc."
+                    error={fieldState.error?.message}
+                    reserveNote
+                  >
+                    <Input {...f} placeholder="Service-specific ID" />
+                  </Field>
                 )}
               />
               <FormField
                 control={form.control}
                 name={`recipients.${index}.user`}
-                render={({ field: f }) => (
-                  <FormItem>
-                    <FormLabel>User (optional)</FormLabel>
-                    <FormControl>
-                      <Input {...f} placeholder="Frappe user email" />
-                    </FormControl>
-                    <FormDescription>Optionally link to a Frappe User account</FormDescription>
-                    <FormMessage />
-                  </FormItem>
+                render={({ field: f, fieldState }) => (
+                  <Field
+                    label="User (optional)"
+                    hint="Optionally link to a Frappe User account"
+                    error={fieldState.error?.message}
+                    reserveNote
+                  >
+                    <Input {...f} placeholder="Frappe user email" />
+                  </Field>
                 )}
               />
-              <div className="flex items-end">
+              <FieldAction reserveNote>
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
+                  aria-label="Remove recipient"
                   onClick={() => remove(index)}
                   className="text-destructive hover:text-destructive"
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
-              </div>
-            </div>
+              </FieldAction>
+            </FieldRow>
           ))}
         </div>
       )}

@@ -20,6 +20,7 @@
   "run_immediately",
   "top_p",
   "disabled",
+  "solution",
   "reasoning_section",
   "reasoning_mode",
   "reasoning_effort",
@@ -1215,6 +1216,13 @@
    "fieldname": "allow_remote_desktop",
    "fieldtype": "Check",
    "label": "Allow Remote Desktop Control"
+  },
+  {
+   "fieldname": "solution",
+   "fieldtype": "Link",
+   "label": "Solution",
+   "options": "Solution",
+   "description": "Solution this agent belongs to."
   }
  ],
  "grid_page_length": 50,

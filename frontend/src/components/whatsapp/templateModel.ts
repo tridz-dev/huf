@@ -163,6 +163,8 @@ export interface TemplateFilters {
   status: string;
   category: string;
   language: string;
+  /** Solution name to match against `used_by`; unset or ALL_OPTION = any. */
+  solution?: string;
 }
 
 export const ALL_OPTION = '__all__';
@@ -173,6 +175,7 @@ export function filterTemplates(rows: readonly WhatsAppTemplate[], f: TemplateFi
     if (f.status !== ALL_OPTION && (t.status || '').toUpperCase() !== f.status) return false;
     if (f.category !== ALL_OPTION && (t.category || '').toUpperCase() !== f.category) return false;
     if (f.language !== ALL_OPTION && t.language_code !== f.language) return false;
+    if (f.solution && f.solution !== ALL_OPTION && !(t.used_by ?? []).some((u) => u.solution === f.solution)) return false;
     if (!q) return true;
     return `${t.template_name || t.name} ${t.template ?? ''}`.toLowerCase().includes(q);
   });
@@ -226,4 +229,16 @@ export function statusToastText(template: string, status?: string): { text: stri
 export function categoryLabel(category?: string | null): string {
   const c = (category || '').trim();
   return c ? c.charAt(0).toUpperCase() + c.slice(1).toLowerCase() : '';
+}
+
+/** Shared when the server says so, or when more than one solution uses it. */
+export function isSharedTemplate(t: Pick<WhatsAppTemplate, 'shared' | 'used_by'>): boolean {
+  return t.shared ?? (t.used_by?.length ?? 0) > 1;
+}
+
+/** "Orders and Customer care" / "A, B and C". */
+export function joinTitles(users: readonly { title: string; solution: string }[]): string {
+  const names = users.map((u) => u.title || u.solution);
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }

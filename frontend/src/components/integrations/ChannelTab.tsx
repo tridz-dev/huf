@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Check, Copy, RefreshCw, ShieldCheck, Trash2, Send, Loader2 } from 'lucide-react';
+import { AlertTriangle, RefreshCw, ShieldCheck, Trash2, Send, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -15,6 +15,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Field, FieldRow, FieldAction } from '@/components/ui/field';
+import { CopyField } from '@/components/ui/copy-field';
 import {
   Select,
   SelectContent,
@@ -56,7 +58,6 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
   const [gateway, setGateway] = useState<GatewayDoc | null>(null);
   const [agents, setAgents] = useState<{ name: string; agent_name: string }[]>([]);
   const [flows, setFlows] = useState<{ name: string; title: string }[]>([]);
-  const [copied, setCopied] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [serverReadiness, setReadiness] = useState<GatewayReadinessPreview | null>(null);
@@ -184,14 +185,6 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
     }
   };
 
-  const handleCopyWebhook = () => {
-    if (!gateway) return;
-    navigator.clipboard.writeText(getGatewayWebhookUrl(gateway.name, gateway.provider));
-    setCopied(true);
-    toast.success('Webhook URL copied');
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const handleDeleteGateway = async () => {
     if (!gateway) return;
     setDeleting(true);
@@ -282,13 +275,23 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
   // never shows nothing.
   const localReadiness = getGatewayReadiness(gateway);
   const ready = serverReadiness ? serverReadiness.ready : localReadiness.ready;
-  const blockingCount = serverReadiness ? serverReadiness.blocking_count : localReadiness.blockingCount;
+  const rawBlockingCount = serverReadiness ? serverReadiness.blocking_count : localReadiness.blockingCount;
+  // The count can be missing if the server payload shape drifts; derive it from
+  // the checks, and hide the banner rather than print "undefined".
+  const blockingCount: number | undefined =
+    typeof rawBlockingCount === 'number' && Number.isFinite(rawBlockingCount)
+      ? rawBlockingCount
+      : serverReadiness && Array.isArray(serverReadiness.checks)
+        ? serverReadiness.checks.filter((item) => !item.done).length
+        : undefined;
+  const showReadinessBanner = ready || typeof blockingCount === 'number';
   const outstandingItems = serverReadiness
-    ? serverReadiness.checks.filter((item) => !item.done)
+    ? (serverReadiness.checks ?? []).filter((item) => !item.done)
     : localReadiness.items.filter((item) => !item.done && item.id !== 'receiving-traffic');
 
   return (
     <div className="space-y-6 rounded-lg border p-6">
+      {showReadinessBanner && (
       <Alert variant={ready ? 'success' : 'warning'}>
         {ready ? (
           <ShieldCheck className="h-4 w-4" />
@@ -315,6 +318,7 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
           </AlertDescription>
         )}
       </Alert>
+      )}
 
       <div className="flex items-center justify-between rounded-lg border p-4">
         <div className="space-y-0.5">
@@ -329,24 +333,22 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
         />
       </div>
 
-      <div className="space-y-1">
-        <label className="text-sm font-medium">Run as user</label>
+      <Field
+        label="Run as user"
+        hint="Least-privileged user this channel runs agents and flows as. Required while enabled — never use an administrator account."
+      >
         <Input
           value={gateway.execution_user || ''}
           onChange={(e) => handleFieldChange({ execution_user: e.target.value })}
           placeholder="e.g. gateway-service@yourcompany.com"
         />
-        <p className="text-xs text-muted-foreground">
-          Least-privileged user this channel runs agents and flows as. Required while enabled —
-          never use an administrator account.
-        </p>
-      </div>
+      </Field>
 
       <div className="grid gap-3 rounded-lg border p-4">
         <p className="text-sm font-medium">Routing target</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Target type</label>
+        <FieldRow cols={2}>
+          <Field label="Target type" size="sm">
+            {(fp) => (
             <Select
               value={gateway.default_target_type || '__none'}
               onValueChange={(v) =>
@@ -355,7 +357,7 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
                 })
               }
             >
-              <SelectTrigger>
+              <SelectTrigger {...fp}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -364,16 +366,17 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
                 <SelectItem value="Flow">Flow</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+            )}
+          </Field>
 
           {gateway.default_target_type === 'Agent' && (
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Agent</label>
+            <Field label="Agent" size="sm">
+              {(fp) => (
               <Select
                 value={gateway.default_agent || '__none'}
                 onValueChange={(v) => handleFieldChange({ default_agent: v === '__none' ? '' : v })}
               >
-                <SelectTrigger>
+                <SelectTrigger {...fp}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -385,17 +388,18 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+              )}
+            </Field>
           )}
 
           {gateway.default_target_type === 'Flow' && (
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Flow</label>
+            <Field label="Flow" size="sm">
+              {(fp) => (
               <Select
                 value={gateway.default_flow || '__none'}
                 onValueChange={(v) => handleFieldChange({ default_flow: v === '__none' ? '' : v })}
               >
-                <SelectTrigger>
+                <SelectTrigger {...fp}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -407,18 +411,19 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+              )}
+            </Field>
           )}
-        </div>
+        </FieldRow>
       </div>
 
-      <div className="space-y-1">
-        <label className="text-sm font-medium">Direct message policy</label>
+      <Field label="Direct message policy">
+        {(fp) => (
         <Select
           value={gateway.direct_policy || 'Pairing'}
           onValueChange={(v) => handleFieldChange({ direct_policy: v as GatewayPolicy })}
         >
-          <SelectTrigger>
+          <SelectTrigger {...fp}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -427,7 +432,8 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
             <SelectItem value="Disabled">Disabled — reject direct messages</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+        )}
+      </Field>
 
       {/* GW-18: room/group-chat admission policy. These fields already exist on
           the Gateway doctype and were being fetched, but had no editor here. */}
@@ -437,40 +443,41 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
           Controls how this channel admits messages from rooms, channels, or group chats
           (as opposed to one-on-one direct messages, which use the policy above).
         </p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Room policy</label>
-            <Select
-              value={gateway.room_policy || 'Allow list'}
-              onValueChange={(v) => handleFieldChange({ room_policy: v as GatewayPolicy })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Allow list">Allow list — require an approved room</SelectItem>
-                <SelectItem value="Disabled">Disabled — reject room messages</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Sender policy within a room</label>
-            <Select
-              value={gateway.room_sender_policy || 'Allow list'}
-              onValueChange={(v) => handleFieldChange({ room_sender_policy: v as GatewayPolicy })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Allow list">Allow list — require an approved sender</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Pairing code lifetime (minutes)</label>
+        <FieldRow cols={2}>
+          <Field label="Room policy" size="sm">
+            {(fp) => (
+              <Select
+                value={gateway.room_policy || 'Allow list'}
+                onValueChange={(v) => handleFieldChange({ room_policy: v as GatewayPolicy })}
+              >
+                <SelectTrigger {...fp}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Allow list">Allow list — require an approved room</SelectItem>
+                  <SelectItem value="Disabled">Disabled — reject room messages</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          </Field>
+          <Field label="Sender policy within a room" size="sm">
+            {(fp) => (
+              <Select
+                value={gateway.room_sender_policy || 'Allow list'}
+                onValueChange={(v) => handleFieldChange({ room_sender_policy: v as GatewayPolicy })}
+              >
+                <SelectTrigger {...fp}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Allow list">Allow list — require an approved sender</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          </Field>
+        </FieldRow>
+        <FieldRow cols={2}>
+          <Field label="Pairing code lifetime (minutes)" size="sm" reserveNote>
             <Input
               type="number"
               min={1}
@@ -479,20 +486,22 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
                 handleFieldChange({ pairing_ttl_minutes: e.target.value ? Number(e.target.value) : undefined })
               }
             />
-          </div>
-          <div className="flex items-end justify-between rounded-lg border p-3">
-            <div className="space-y-0.5">
-              <p className="text-xs font-medium">Require @mention in rooms</p>
-              <p className="text-[11px] text-muted-foreground">
-                Only respond when the bot is explicitly mentioned
-              </p>
+          </Field>
+          <Field
+            label="Require @mention in rooms"
+            size="sm"
+            hint="Only respond when the bot is explicitly mentioned"
+            id="channel-mention-required"
+          >
+            <div className="flex h-control-md items-center">
+              <Switch
+                id="channel-mention-required"
+                checked={Boolean(gateway.mention_required)}
+                onCheckedChange={(checked) => handleFieldChange({ mention_required: checked ? 1 : 0 })}
+              />
             </div>
-            <Switch
-              checked={Boolean(gateway.mention_required)}
-              onCheckedChange={(checked) => handleFieldChange({ mention_required: checked ? 1 : 0 })}
-            />
-          </div>
-        </div>
+          </Field>
+        </FieldRow>
       </div>
 
       <div className="space-y-2 rounded-lg border p-4">
@@ -500,33 +509,34 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
         <p className="text-xs text-muted-foreground">
           Send a test message to verify your channel configuration and credentials are working.
         </p>
-        <div className="flex items-end gap-2">
-          <div className="flex-1">
+        <FieldRow className="grid-cols-[1fr_auto]">
+          <Field label="Test recipient ID" size="sm">
             <Input
               placeholder="Enter test recipient ID (e.g., user ID, chat ID, phone)"
               value={testRecipientId}
               onChange={(e) => setTestRecipientId(e.target.value)}
               disabled={testSending}
             />
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={handleTestSend}
-            disabled={testSending || !testRecipientId.trim() || !gateway.is_enabled}
-          >
-            {testSending ? (
-              <>
-                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> Sending
-              </>
-            ) : (
-              <>
-                <Send className="mr-1 h-3.5 w-3.5" /> Send
-              </>
-            )}
-          </Button>
-        </div>
+          </Field>
+          <FieldAction>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleTestSend}
+              disabled={testSending || !testRecipientId.trim() || !gateway.is_enabled}
+            >
+              {testSending ? (
+                <>
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> Sending
+                </>
+              ) : (
+                <>
+                  <Send className="mr-1 h-3.5 w-3.5" /> Send
+                </>
+              )}
+            </Button>
+          </FieldAction>
+        </FieldRow>
         {testResult && (
           <div
             className={`rounded text-xs p-2 ${
@@ -546,20 +556,7 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
           Paste this URL into the channel provider&apos;s configuration (e.g. Meta Developer
           Console).
         </p>
-        <div className="flex items-center gap-2">
-          <Input readOnly className="font-mono text-xs" value={getGatewayWebhookUrl(gateway.name, gateway.provider)} />
-          <Button type="button" size="sm" variant="outline" onClick={handleCopyWebhook}>
-            {copied ? (
-              <>
-                <Check className="mr-1 h-3.5 w-3.5" /> Copied
-              </>
-            ) : (
-              <>
-                <Copy className="mr-1 h-3.5 w-3.5" /> Copy
-              </>
-            )}
-          </Button>
-        </div>
+        <CopyField label="Webhook URL" value={getGatewayWebhookUrl(gateway.name, gateway.provider)} />
 
         {gateway.provider === 'Telegram' && (
           <div className="mt-3 space-y-2 border-t pt-3">

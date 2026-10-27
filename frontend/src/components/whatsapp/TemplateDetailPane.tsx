@@ -5,22 +5,27 @@ import { Button } from '@/components/ui/button';
 import { errorText, getTemplate, isBridgeUnavailable, type TemplateDetail, type WhatsAppTemplate } from '@/services/whatsappApi';
 import { LoadError } from './BridgeUnavailable';
 import { TemplatePreview } from './TemplatePreview';
-import { CategoryChangeBadge, QualityBadge, StatusBadge } from './TemplateBadges';
+import { CategoryChangeBadge, QualityBadge, SharedPill, StatusBadge, UsedByChips } from './TemplateBadges';
+import { SharedTemplateDialog, type SharedAction } from './SharedTemplateDialog';
 import { ManagerLink } from './ManagerLink';
 import { fromTemplateDetail } from './template/payload';
 import { ttlLabel } from './TemplateWizard/draftActions';
 import { draftToPreviewModel } from './TemplateWizard/previewModel';
 import { localeLabel } from './template/locales';
 import { TimeStamp } from './TimeStamp';
-import { parseServerTime, rejectionCopy, statusInfo } from './templateModel';
+import { isSharedTemplate, parseServerTime, rejectionCopy, statusInfo } from './templateModel';
 
 interface Props {
   row: WhatsAppTemplate;
   /** Bumped by the parent when the status changes elsewhere. */
   refreshKey: number;
   onSend: (row: WhatsAppTemplate) => void;
-  onEdit: (detail: TemplateDetail) => void;
-  onDelete: (row: WhatsAppTemplate) => void;
+  /** `acknowledgeShared` is true once the user accepted the shared-template warning. */
+  onEdit: (detail: TemplateDetail, acknowledgeShared?: boolean) => void;
+  /** `acknowledgeShared` is true once the user accepted the shared-template warning. */
+  onDelete: (row: WhatsAppTemplate, acknowledgeShared?: boolean) => void;
+  /** Open the create flow for a new version (`name_v2`) instead of changing the shared one. */
+  onCopy?: (detail: TemplateDetail, suggestedName: string) => void;
   onUnavailable: () => void;
 }
 
@@ -37,7 +42,8 @@ function headerLabel(detail: TemplateDetail): string {
   return format ? (HEADER_LABEL[format] ?? format) : 'None';
 }
 
-export function TemplateDetailPane({ row, refreshKey, onSend, onEdit, onDelete, onUnavailable }: Props) {
+export function TemplateDetailPane({ row, refreshKey, onSend, onEdit, onDelete, onCopy, onUnavailable }: Props) {
+  const [sharedAction, setSharedAction] = useState<SharedAction | null>(null);
   const [detail, setDetail] = useState<TemplateDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -74,6 +80,23 @@ export function TemplateDetailPane({ row, refreshKey, onSend, onEdit, onDelete, 
     .filter(([, value]) => value)
     .map(([key, value]) => ({ key, value, label: key.startsWith('header.') ? `Header {{${key.slice(7)}}}` : `{{${key}}}` }));
   const nextEdit = parseServerTime(detail.next_edit_at);
+  const usedBy = row.used_by ?? [];
+  const shared = isSharedTemplate(row);
+  const startEdit = () => {
+    if (shared) setSharedAction('edit');
+    else onEdit(detail);
+  };
+  const startDelete = () => {
+    if (shared) setSharedAction('delete');
+    else onDelete(row);
+  };
+  const confirmShared = () => {
+    const action = sharedAction;
+    setSharedAction(null);
+    if (action === 'edit') {
+      onEdit(detail, true);
+    } else if (action === 'delete') onDelete(row, true);
+  };
 
   return (
     <div className="space-y-5">
@@ -84,6 +107,7 @@ export function TemplateDetailPane({ row, refreshKey, onSend, onEdit, onDelete, 
             <StatusBadge status={detail.status} />
             <QualityBadge score={detail.state.quality_score} />
             <CategoryChangeBadge pending={detail.category_change_pending} to={detail.correct_category} />
+            <SharedPill shared={shared} />
           </div>
         </div>
         <ManagerLink url={detail.manager_url} businessId={detail.business_id} showId={false} />
@@ -123,6 +147,13 @@ export function TemplateDetailPane({ row, refreshKey, onSend, onEdit, onDelete, 
             </section>
           )}
 
+          {usedBy.length > 0 && (
+            <section className="space-y-1.5 text-xs" aria-label="Used by">
+              <UsedByChips users={usedBy} />
+              {shared && <p className="text-steel">Meta keeps one copy of this template for the whole account.</p>}
+            </section>
+          )}
+
           <dl className="grid grid-cols-[110px_1fr] gap-y-1.5 text-xs">
             <dt className="text-steel">Category</dt><dd className="text-ink">{categoryLabel(detail.category)}</dd>
             <dt className="text-steel">Language</dt><dd className="text-ink">{localeLabel(detail.language_code)}</dd>
@@ -154,10 +185,10 @@ export function TemplateDetailPane({ row, refreshKey, onSend, onEdit, onDelete, 
               <Button size="sm" onClick={() => onSend(row)} disabled={detail.status !== 'APPROVED'}>
                 <Send className="mr-1.5 h-4 w-4" /> Send
               </Button>
-              <Button size="sm" variant="outline" onClick={() => onEdit(detail)} disabled={!detail.editable}>
+              <Button size="sm" variant="outline" onClick={startEdit} disabled={!detail.editable}>
                 <Pencil className="mr-1.5 h-4 w-4" /> Edit and resubmit
               </Button>
-              <Button size="sm" variant="outline" onClick={() => onDelete(row)}>
+              <Button size="sm" variant="outline" onClick={startDelete}>
                 <Trash2 className="mr-1.5 h-4 w-4" /> Delete
               </Button>
             </div>
@@ -180,6 +211,14 @@ export function TemplateDetailPane({ row, refreshKey, onSend, onEdit, onDelete, 
         </div>
         <TemplatePreview model={previewModel} />
       </div>
+      <SharedTemplateDialog
+        open={sharedAction !== null}
+        action={sharedAction ?? 'edit'}
+        usedBy={usedBy}
+        onConfirm={confirmShared}
+        onCopy={() => { setSharedAction(null); onCopy?.(detail, `${detail.template_name}_v2`); }}
+        onCancel={() => setSharedAction(null)}
+      />
     </div>
   );
 }

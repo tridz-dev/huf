@@ -1,5 +1,7 @@
 import { AlertTriangle, CheckCircle2, Loader2, PowerOff, RefreshCw, XCircle } from 'lucide-react';
 
+import { Link } from 'react-router-dom';
+
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,6 +19,7 @@ import {
 	NO_MESSAGES_YET,
 	reasonMessage,
 } from './healthCopy';
+import type { NumberSummary } from '@/types/solutions';
 import { ActionLink } from './SetupChecklist';
 
 export interface HealthBannerProps {
@@ -28,6 +31,8 @@ export interface HealthBannerProps {
 	onCheck: () => void;
 	/** Shown on the disabled state; omit to hide the button. */
 	onTurnOn?: () => void;
+	/** Per-number solutions data; supplies the quality rating and the sends blame line. */
+	numberSummary?: NumberSummary | null;
 }
 
 interface Check {
@@ -61,7 +66,14 @@ function buildChecks(g: GatewayHealthStatus): Check[] {
 	return checks;
 }
 
-export function HealthBanner({ gateway, loading, checking, onCheck, onTurnOn }: HealthBannerProps) {
+const GOOD_RATING = /^(high|green)$/i;
+
+/** Quality text only when Meta reported it; 'unknown' shows nothing. */
+function qualityRating(s: NumberSummary | null | undefined): string | null {
+	return s && s.quality.source === 'meta' && s.quality.rating ? s.quality.rating : null;
+}
+
+export function HealthBanner({ gateway, loading, checking, onCheck, onTurnOn, numberSummary }: HealthBannerProps) {
 	if (loading || !gateway) {
 		return (
 			<div className="space-y-3" aria-busy="true" aria-label="Loading health">
@@ -118,6 +130,28 @@ export function HealthBanner({ gateway, loading, checking, onCheck, onTurnOn }: 
 			break;
 	}
 
+	const rating = qualityRating(numberSummary);
+	const qualityBad = rating != null && !GOOD_RATING.test(rating);
+	const blame = numberSummary?.blame;
+	const showBlame = !!blame && (health === 'degraded' || health === 'blocked' || qualityBad);
+	if (qualityBad && health === 'healthy') {
+		variant = 'warning';
+		role = 'alert';
+		icon = <AlertTriangle className="h-4 w-4" aria-hidden />;
+	}
+	const blameTitle = blame ? (numberSummary?.solutions.find((x) => x.name === blame.solution)?.title ?? blame.solution) : '';
+	const qualityText = qualityBad && rating ? `Quality is ${rating.toLowerCase()}.` : null;
+	const blameLine =
+		showBlame && blame ? (
+			<>
+				Most of today's sends came from{' '}
+				<Link className="underline" to={`/solutions/${encodeURIComponent(blame.solution)}`}>
+					{blameTitle}
+				</Link>{' '}
+				({Math.round(blame.share_pct)}% of sends in the last 24 hours).
+			</>
+		) : null;
+
 	const lastMessage = gateway.last_event_at ? <>Last message <TimeStamp value={gateway.last_event_at} /></> : NO_MESSAGES_YET;
 	const checked = gateway.token_check?.checked_at ? <>Checked <TimeWhen value={gateway.token_check.checked_at} /></> : null;
 
@@ -129,6 +163,11 @@ export function HealthBanner({ gateway, loading, checking, onCheck, onTurnOn }: 
 					<div className="min-w-0">
 						<AlertTitle className="mb-0 leading-snug">{title}</AlertTitle>
 						{detail ? <AlertDescription className="mt-1">{detail}</AlertDescription> : null}
+						{qualityText || blameLine ? (
+							<AlertDescription className="mt-1">
+								{qualityText} {blameLine}
+							</AlertDescription>
+						) : null}
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
 						{action}

@@ -89,6 +89,15 @@ export interface WhatsAppTemplate {
   correct_category?: string;
   category_change_pending?: boolean;
   last_meta_update?: string | null;
+  /** Solutions using this template (absent on servers without Solutions). */
+  used_by?: TemplateUser[];
+  shared?: boolean;
+  owner?: TemplateUser | null;
+}
+
+export interface TemplateUser {
+  solution: string;
+  title: string;
 }
 
 export interface NamedSample {
@@ -471,20 +480,26 @@ export const getSetupStatus = (gatewayName?: string) =>
 
 // Every list/send/manage call names the Gateway it acts for: the server derives the WhatsApp
 // account from that Gateway and never lists or sends across accounts.
-export const listTemplates = (gatewayName: string, status?: string) =>
+export const listTemplates = (gatewayName: string, status?: string, solution?: string) =>
   invoke<{ templates: WhatsAppTemplate[]; manager_url?: string; business_id?: string }>(
     'list_templates',
-    { gateway_name: gatewayName, status },
+    { gateway_name: gatewayName, status, ...(solution ? { solution } : {}) },
     'get',
   );
 
 export const getTemplate = (name: string) => invoke<TemplateDetail>('get_template', { name }, 'get');
 
-export const editTemplate = (name: string, payload: EditTemplatePayload | WizardEditPayload) =>
-  invoke<{ name: string; status?: string; edits_left?: number | null }>(
-    'edit_template',
-    { name, payload: JSON.stringify(payload) },
-    'post',
+export const editTemplate = (name: string, payload: EditTemplatePayload | WizardEditPayload, acknowledgeShared?: boolean) =>
+  throwIfShared(
+    invoke<{ name: string; status?: string; edits_left?: number | null }>(
+      'edit_template',
+      {
+        name,
+        payload: JSON.stringify(payload),
+        ...(acknowledgeShared ? { acknowledge_shared: true } : {}),
+      },
+      'post',
+    ),
   );
 
 export const listTemplateDrafts = (gatewayName: string, status?: string) =>
@@ -514,7 +529,10 @@ export const createTemplate = (gatewayName: string, payload: TemplatePayload | W
     'post',
   );
 
-export const deleteTemplate = (name: string) => invoke<Record<string, unknown>>('delete_template', { name }, 'post');
+export const deleteTemplate = (name: string, acknowledgeShared?: boolean) =>
+  throwIfShared(
+    invoke<Record<string, unknown>>('delete_template', { name, ...(acknowledgeShared ? { acknowledge_shared: true } : {}) }, 'post'),
+  );
 
 export const syncTemplates = (gatewayName: string) =>
   invoke<Record<string, unknown>>('sync_templates', { gateway_name: gatewayName }, 'post');
@@ -684,6 +702,23 @@ export async function uploadPublicFile(f: File): Promise<{ fileUrl: string } | W
   }
 }
 
+/** Thrown by editTemplate/deleteTemplate when other solutions use the template and the change was not acknowledged. */
+export class SharedTemplateError extends Error {
+  readonly code = 'shared_template';
+  constructor(public readonly usedBy: TemplateUser[], message?: string) {
+    super(message || 'This template is shared.');
+    this.name = 'SharedTemplateError';
+  }
+}
+
+async function throwIfShared<T>(pending: Promise<WhatsAppResult<T>>): Promise<WhatsAppResult<T>> {
+  const res = await pending;
+  if (!res.success && res.error === 'shared_template') {
+    throw new SharedTemplateError((res as { used_by?: TemplateUser[] }).used_by ?? [], res.message);
+  }
+  return res;
+}
+
 export type MessageDirection = 'in' | 'out';
 export type MessageSentBy = 'agent' | 'template' | 'manual' | 'customer';
 
@@ -704,6 +739,8 @@ export interface MessageLogItem {
   agent_run: string | null;
   event: string | null;
   sent_by: MessageSentBy | null;
+  /** Absent when the server has no Solutions support. */
+  solution?: { name: string; title: string } | null;
 }
 
 export interface MessageLogQuery {
@@ -711,6 +748,7 @@ export interface MessageLogQuery {
   status?: string;
   agent?: string;
   template?: string;
+  solution?: string;
   phone?: string;
   q?: string;
   date_from?: string;
@@ -724,6 +762,7 @@ export interface MessageLogFilterOptions {
   templates: string[];
   statuses: string[];
   directions: string[];
+  solutions?: { name: string; title: string }[];
 }
 
 export const listMessageLog = (gatewayName: string, query: MessageLogQuery = {}) =>

@@ -1,5 +1,6 @@
 import * as React from "react"
-import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Layers, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, MessageCircle, Send, Keyboard, SlidersHorizontal, type LucideIcon } from "lucide-react"
+import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Layers, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, MessageCircle, Send, Keyboard, SlidersHorizontal, Boxes, type LucideIcon } from "lucide-react"
+import { SOLUTIONS_WORD } from "@/components/solutions/labels"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -53,6 +54,12 @@ export const useNavItems = [
     url: "/chat",
     icon: MessageSquare,
     capability: "chat.use",
+  },
+  {
+    title: SOLUTIONS_WORD,
+    url: "/solutions",
+    icon: Boxes,
+    capability: "system.integrations.manage",
   },
 ]
 

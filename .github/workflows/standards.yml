@@ -1,0 +1,25 @@
+name: Standards
+
+on:
+  pull_request:
+  push:
+    branches: [develop, pre-develop]
+
+permissions:
+  contents: read
+
+jobs:
+  standards:
+    name: Standards · guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pytest
+        run: python3 -m pip install pytest
+      - name: Guard script tests
+        run: python3 -m pytest scripts/tests -q
+      - name: Run standards guards
+        run: python3 scripts/run_standards.py
