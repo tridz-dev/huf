@@ -406,7 +406,7 @@ def is_pause_signal(code: Any) -> bool:
 
 
 def should_defer_24h(code: Any) -> bool:
-	"""True for 131049 (per-user marketing limit): reschedule at least 24h later, never retry sooner."""
+	"""True for 131049 (per-user marketing limit): never retry sooner than 24h. Broadcasts treat it as terminal (skipped) rather than rescheduling."""
 	return _code_of(code) == 131049
 
 
