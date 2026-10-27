@@ -77,6 +77,9 @@ const MeetingRecorderPage = lazy(() => import('./pages/MeetingRecorderPage'));
 const MeetingDetailPageWrapper = lazy(() => import('./pages/MeetingDetailPageWrapper'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
 const KnowledgeSourceFormPageWrapper = lazy(() => import('./pages/KnowledgeSourceFormPageWrapper'));
+const LinkAccountPage = lazy(() =>
+  import('./pages/LinkAccountPage').then((m) => ({ default: m.LinkAccountPage }))
+);
 const MemoryPage = lazy(() => import('./pages/MemoryPage'));
 const MemoryPolicyFormPageWrapper = lazy(() => import('./pages/MemoryPolicyFormPageWrapper'));
 const SkillsPage = lazy(() => import('./pages/SkillsPage'));
@@ -897,6 +900,18 @@ function AppShell() {
                 <Suspense fallback={<PageLoader />}>
                   <ArtifactViewPage />
                 </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/link-account"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <LinkAccountPage />
+                  </Suspense>
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />
