@@ -1,0 +1,111 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-10-27 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "gateway",
+  "provider",
+  "team_id",
+  "external_id",
+  "user",
+  "state",
+  "source",
+  "display_label",
+  "linked_at",
+  "linked_by",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "gateway",
+   "fieldtype": "Link",
+   "label": "Gateway",
+   "options": "Gateway",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Data",
+   "label": "Provider",
+   "read_only": 1
+  },
+  {
+   "fieldname": "team_id",
+   "fieldtype": "Data",
+   "label": "Workspace (team) ID",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "external_id",
+   "fieldtype": "Data",
+   "label": "Provider user ID",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "Huf user",
+   "options": "User",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Select",
+   "label": "State",
+   "options": "Pending\nLinked\nRevoked",
+   "default": "Linked",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "label": "Source",
+   "options": "Auto email\nAdmin\nSelf link",
+   "reqd": 1
+  },
+  {
+   "fieldname": "display_label",
+   "fieldtype": "Data",
+   "label": "Display label"
+  },
+  {
+   "fieldname": "linked_at",
+   "fieldtype": "Datetime",
+   "label": "Linked at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "linked_by",
+   "fieldtype": "Link",
+   "label": "Linked by",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "module": "Huf",
+ "name": "Gateway Identity Link",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}
