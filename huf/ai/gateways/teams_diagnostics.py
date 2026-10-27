@@ -216,6 +216,15 @@ def _check_links(ctx) -> list[dict]:
 	return [_check("linked_users", PASS, _("Linked users"), str(ctx["linked"]))]
 
 
+def _check_direct_policy(ctx) -> list[dict]:
+	if ctx.get("direct_policy") == "Open":
+		return [_check("direct_policy", PASS, _("Access policy"),
+			_("Anyone who messages the bot privately is asked to connect their account first; nothing runs until they do."))]
+	return [_check("direct_policy", WARN, _("Access policy"),
+		_("Direct messages are not open, so people who have not been approved cannot reach the connect prompt."),
+		_("Set the access policy to Open so people can connect their own account, or add each person to the access list first."))]
+
+
 def _check_package(ctx) -> list[dict]:
 	version = teams_tenant.get_settings(ctx["name"]).get("app_package_version") or ""
 	if not version:
@@ -238,7 +247,7 @@ _CHECKS = (
 	("messaging_endpoint", _check_endpoint), ("allowed_tenants", _check_tenants),
 	("last_inbound", _check_last_inbound), ("rejections_24h", _check_rejections),
 	("conversation_references", _check_references), ("outbox", _check_outbox),
-	("linked_users", _check_links), ("app_package", _check_package),
+	("linked_users", _check_links), ("direct_policy", _check_direct_policy), ("app_package", _check_package),
 	("private_send_ready", _check_private_send),
 )
 
@@ -258,7 +267,7 @@ def _run_checks(ctx: dict) -> list[dict]:
 @frappe.whitelist()
 def teams_diagnose(gateway_name: str) -> dict:
 	gateway = _gateway_for(gateway_name)
-	ctx = {"name": gateway_name, "creds": {}}
+	ctx = {"name": gateway_name, "creds": {}, "direct_policy": getattr(gateway, "direct_policy", None)}
 	try:
 		ctx["creds"] = _creds(gateway)
 	except Exception:
@@ -272,7 +281,7 @@ def teams_diagnose(gateway_name: str) -> dict:
 def teams_support_bundle(gateway_name: str) -> dict:
 	"""Redacted, JSON-able bundle: versions, counts, timestamps, error codes. No content."""
 	gateway = _gateway_for(gateway_name)
-	ctx = {"name": gateway_name, "creds": {}}
+	ctx = {"name": gateway_name, "creds": {}, "direct_policy": getattr(gateway, "direct_policy", None)}
 	try:
 		ctx["creds"] = _creds(gateway)
 	except Exception:

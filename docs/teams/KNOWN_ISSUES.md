@@ -3,19 +3,20 @@
 An honest list, checked against the code on `wp/teams-t15` merged with `feat/teams-p0` after the
 Opus review fixes. "Product decision pending" means the owner has not decided.
 
-## 1. Design gap D1: unlinked people are rejected before they can link
+## 1. Design gap D1 (resolved): unlinked people were rejected before they could link
 
-- New gateways default `direct_policy` to `Allow list`, and admission runs **before** identity. An
-  unlinked person who is not on the access list gets a Rejected Gateway Event "Sender is not
-  approved for this gateway" and never sees the connect/link prompt. This applies to Slack and Teams.
-  Bench E2E S1a shows it; S1b shows that with an access entry the person gets the connect prompt
-  (and no agent run, no fallback to the Run as user).
-- `Gateway.validate` blocks `direct_policy = Open` ("Public direct-message gateways are not available in this release").
-- Workaround today: add Gateway Access Entries for the pilot people, or use Pairing. The commands
-  `help`, `connect`, `status`, `disconnect` are answered before admission and work regardless.
-- Recommended product change (pending owner decision, not implemented): for identity-required
-  providers (Slack, Microsoft Teams) allow `Open` in `Gateway.validate`, since the identity link is
-  the authorization, recommend it in the setup wizards and add a diagnostics check.
+- Resolved. `Gateway.validate` now allows `direct_policy = Open` for Slack and Microsoft Teams only
+  (case-insensitive provider match). For every other provider `Open` is still rejected with
+  "Public direct-message gateways are not available in this release". Room policies are unchanged.
+- With `Open`, an unlinked person is not rejected: they get a private connect prompt, nothing runs, and
+  there is no fallback to the Run as user. The identity link is the authorization, so pre-approval
+  through the access list is not required for these two providers.
+- New Slack and Teams gateways default to `Open` in the UI; setup checks (`direct_policy` in Slack
+  verify and Teams diagnostics) and the Event diagnosis recommend it.
+- Still true: with `Allow list` or `Pairing`, admission runs before identity, so an unlinked person who
+  is not approved gets "Sender is not approved for this gateway" (bench E2E S1a). With `Open` and no
+  access entry the person gets the connect prompt (S1c). `Open` is refused for other providers (S1d).
+  The commands `help`, `connect`, `status`, `disconnect` are answered before admission either way.
 
 ## 2. Wording and diagnostics issues in the product
 

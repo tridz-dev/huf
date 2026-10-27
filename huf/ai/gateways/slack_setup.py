@@ -113,6 +113,23 @@ def _check(id_, ok, title, detail, fix="", informational=False):
 	return row
 
 
+def _direct_policy_check(gateway) -> dict:
+	try:
+		is_open = getattr(gateway, "direct_policy", None) == "Open"
+	except Exception:
+		is_open = False
+	row = _check(
+		"direct_policy", is_open, "People can connect their own account",
+		"Anyone who messages the bot privately is asked to connect their account first; nothing runs until they do."
+		if is_open else "Direct messages are not open, so people who have not been approved cannot reach the connect prompt.",
+		"" if is_open else
+		"Set the access policy to Open so people can connect their own account, or add each person to the access list first.",
+		informational=True,  # a recommendation: never blocks "ready"
+	)
+	row["status"] = "pass" if is_open else "warn"
+	return row
+
+
 def _run_checks(gateway) -> list[dict]:
 	checks: list[dict] = []
 	token = get_gateway_credential(gateway, "token")
@@ -187,6 +204,8 @@ def _run_checks(gateway) -> list[dict]:
 			"then check again here."
 		),
 	))
+
+	checks.append(_direct_policy_check(gateway))
 
 	checks.append(_check(
 		"slack_connect", True, "Shared channels (Slack Connect)",
