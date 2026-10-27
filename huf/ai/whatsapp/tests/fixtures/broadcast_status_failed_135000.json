@@ -1,0 +1,39 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550783881",
+              "phone_number_id": "106540352242922"
+            },
+            "statuses": [
+              {
+                "id": "wamid.HBgMOTE5ODc2NTQzMjEwFQIAERgUM0VGNzJGMDIzRjgyMEMxRjkyBcastAA",
+                "status": "failed",
+                "timestamp": "1792000100",
+                "recipient_id": "919876543210",
+                "errors": [
+                  {
+                    "code": 135000,
+                    "title": "Portfolio pacing",
+                    "message": "Message dropped by portfolio pacing",
+                    "error_data": {
+                      "details": "Held message dropped under portfolio pacing."
+                    }
+                  }
+                ],
+                "biz_opaque_callback_data": "bcast-0001-r0001"
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}
