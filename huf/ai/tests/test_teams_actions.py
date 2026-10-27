@@ -836,3 +836,80 @@ def test_real_tenant_ok_fails_closed(env, monkeypatch):
 
 	monkeypatch.setattr(teams_tenant, "is_tenant_allowed", boom)
 	assert ta._tenant_ok(GW, TENANT) is False
+
+
+# --- T16: duplicate / redelivered card click gets a proper invoke body -------------------------
+
+
+def _dup_setup(env, wh, monkeypatch, raw, result=None):
+	wh.gw.frappe.local = env.local
+	env.local.response = SimpleNamespace(http_status_code=200)
+	adapter = wh.gw.get_gateway_adapter(None)
+	ev = adapter.normalize_inbound(None)
+	ev.raw_payload = raw
+	adapter.normalize_inbound = lambda r: ev
+	monkeypatch.setattr(sys.modules["huf.ai.gateway_service"], "ingest_gateway_event", lambda *a, **k: result or {
+		"duplicate": True, "event_name": "EVT-0"})
+	monkeypatch.setattr(env.ta.teams_identity, "resolve_user", lambda *a: "ada@x.com")
+
+
+def test_duplicate_click_decided_session_returns_decided_card(env, wh, monkeypatch):
+	env.sessions["tas-1"]["state"] = "Decided"
+	_dup_setup(env, wh, monkeypatch, activity())
+	out = wh.gw.handle_gateway_webhook()
+	assert isinstance(out, FakeResponse) and out.status == 200
+	b = json.loads(out.body)
+	assert b["statusCode"] == 200
+	assert MSG_in(b, env.ta.MSG_DECIDED)
+	assert env.calls == []  # nothing decided by a duplicate
+
+
+def test_duplicate_click_open_session_is_not_decided_and_gets_message(env, wh, monkeypatch):
+	_dup_setup(env, wh, monkeypatch, activity())
+	out = wh.gw.handle_gateway_webhook()
+	assert json.loads(out.body)["statusCode"] == 200
+	assert env.calls == [] and env.sessions["tas-1"]["state"] == "Open"
+	assert MSG_in(json.loads(out.body), env.ta.MSG_DUPLICATE)
+
+
+def test_duplicate_click_foreign_tenant_refused(env, wh, monkeypatch):
+	foreign = "00000000-0000-0000-0000-00000000ffff"
+	env.sessions["tas-1"]["state"] = "Decided"
+	_dup_setup(env, wh, monkeypatch, activity(tenant=foreign))
+	out = wh.gw.handle_gateway_webhook()
+	assert MSG_in(json.loads(out.body), env.ta.MSG_UNAVAILABLE)
+
+
+def test_duplicate_non_card_event_keeps_generic_json(env, wh, monkeypatch):
+	_dup_setup(env, wh, monkeypatch, {"type": "message", "huf_kind": "message"})
+	assert wh.gw.handle_gateway_webhook() == {"success": True, "duplicate": True, "event_name": "EVT-0"}
+
+
+def MSG_in(body, text):  # noqa: N802
+	return text in json.dumps(body)
+
+
+def test_webhook_adapter_built_with_gateway_name(monkeypatch):
+	rl = ModuleType("frappe.rate_limiter")
+	rl.rate_limit = lambda **kw: (lambda fn: fn)
+	monkeypatch.setitem(sys.modules, "frappe.rate_limiter", rl)
+	monkeypatch.delitem(sys.modules, "huf.ai.gateway_webhook", raising=False)
+	gw = importlib.import_module("huf.ai.gateway_webhook")
+	monkeypatch.delitem(sys.modules, "huf.ai.gateway_webhook", raising=False)
+	built = []
+
+	class WithName:
+		def __init__(self, credentials, *, gateway_name=None):
+			built.append(("with", credentials, gateway_name))
+
+	class Plain:
+		def __init__(self, credentials):
+			built.append(("plain", credentials))
+
+	monkeypatch.setattr(gw, "_gateway_credentials", lambda g: {"k": "v"})
+	g = SimpleNamespace(name="gw-7", provider="X")
+	monkeypatch.setattr(gw, "_adapter_class_for_provider", lambda p: WithName)
+	gw.get_gateway_adapter(g)
+	monkeypatch.setattr(gw, "_adapter_class_for_provider", lambda p: Plain)
+	gw.get_gateway_adapter(g)
+	assert built == [("with", {"k": "v"}, "gw-7"), ("plain", {"k": "v"})]

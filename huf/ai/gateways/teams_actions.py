@@ -43,6 +43,7 @@ MSG_FAILED = "Sorry, that approval could not be recorded."
 MSG_DECIDED = "This approval was already decided."
 MSG_EXPIRED = "This approval has expired."
 MSG_NOT_PENDING = "This approval is no longer pending."
+MSG_DUPLICATE = "That click was already received."
 
 
 def _log(title) -> None:
@@ -294,6 +295,42 @@ def _gateway_name(gateway) -> str:
 	if name is None and isinstance(gateway, dict):
 		name = gateway.get("name")
 	return _s(name)
+
+
+def duplicate_card_response(gateway, activity: dict) -> dict:
+	"""Invoke body for a redelivered card click (the event id was already ingested).
+
+	Read-only: never consumes a session or decides anything. A decided/expired session answers
+	with the same notice card the first delivery would get; anything else with a neutral message.
+	Also stored as the response override so ``handle_gateway_webhook`` returns it.
+	"""
+	try:
+		body = _duplicate_body(gateway, activity)
+	except Exception:
+		_log("Teams duplicate card action failed")
+		body = _refuse(MSG_FAILED)
+	_set_response(body)
+	return body
+
+
+def _duplicate_body(gateway, activity: dict) -> dict:
+	meta = teams_refs.parse_meta(activity)
+	if not _tenant_ok(gateway, meta.tenant_id):
+		return _refuse(MSG_UNAVAILABLE)
+	verb, session_name = _action_parts(activity)
+	if verb not in cards.VERBS or not session_name:
+		return _refuse(MSG_UNAVAILABLE)
+	session = _load_session(session_name)
+	if (not session or session.get("gateway") != _gateway_name(gateway)
+			or _s(session.get("tenant_id")) != meta.tenant_id
+			or _s(session.get("conversation_id")) != teams_refs._base_conversation_id(meta.conversation_id)):
+		return _refuse(MSG_UNAVAILABLE)
+	state = session.get("state")
+	if state == "Decided":
+		return _replace(MSG_DECIDED)
+	if state == "Expired":
+		return _replace(MSG_EXPIRED)
+	return _refuse(MSG_DUPLICATE)
 
 
 def _tenant_ok(gateway, tenant_id) -> bool:
