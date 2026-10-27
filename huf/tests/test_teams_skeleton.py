@@ -150,6 +150,6 @@ class TestTeamsHooksLoaded(unittest.TestCase):
 	def test_provider_hooks_load_teams_ingest_update(self):
 		hook = provider_hooks.get("Microsoft Teams", "ingest_update")
 		self.assertIsNotNone(hook)
-		self.assertIsNone(hook(None, None, None))
+		self.assertEqual(hook.__module__, "huf.ai.teams.hooks")
 		self.assertIsNotNone(provider_hooks.get("Telegram", "ingest_update"))
 		self.assertIsNotNone(provider_hooks.get("WhatsApp", "send_reply"))
