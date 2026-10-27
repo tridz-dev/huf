@@ -1,18 +1,17 @@
 import asyncio
 import json
-import threading
 import random
+import threading
 import time
 from types import SimpleNamespace
-import litellm
-from litellm import token_counter
 
 import frappe
-from agents import OpenAIProvider,Agent, Runner, Tool, function_tool,ModelSettings
-from frappe.utils.background_jobs import enqueue
-from frappe.utils import now_datetime, add_to_date
-
+import litellm
+from litellm import token_counter
+from agents import Agent, ModelSettings, OpenAIProvider, Runner, Tool, function_tool
 from frappe import _
+from frappe.utils import add_to_date, now_datetime
+from huf.ai import run_delivery
 from huf.ai.tools.functions import (
 	create_document,
     get_document,
@@ -272,13 +271,14 @@ class AgentManager:
 
         # Add knowledge_search tool and get_knowledge_sources tool if agent has knowledge
         try:
-            from huf.ai.knowledge.tool import (
-                create_knowledge_search_tool,
-                handle_knowledge_search,
-                create_get_knowledge_sources_tool,
-                handle_get_knowledge_sources
-            )
             from agents import function_tool
+
+            from huf.ai.knowledge.tool import (
+            	create_get_knowledge_sources_tool,
+            	create_knowledge_search_tool,
+            	handle_get_knowledge_sources,
+            	handle_knowledge_search,
+            )
 
             # 1. Knowledge Search Tool
             knowledge_tool_def = create_knowledge_search_tool(self.agent_doc.agent_name)
@@ -308,6 +308,14 @@ class AgentManager:
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load knowledge tools: {e!s}")
             self.tool_setup_warnings.append(f"knowledge tools: {e!s}")
+
+        # A caller handling untrusted content (Telegram secretary runs) restricts the run to an explicit
+        # allow-list of tool names; an empty list means no tools at all.
+        allowed = getattr(frappe.local, "huf_run_tool_allowlist", None)
+        if allowed is not None:
+            allowed = set(allowed)
+            self.tools = [t for t in self.tools if getattr(t, "name", None) in allowed]
+            self.tool_sources = {k: v for k, v in self.tool_sources.items() if k in allowed}
 
     def _setup_client(self):
         """Configure OpenAI provider from the AI Provider doc"""
@@ -455,9 +463,9 @@ class AgentManager:
         # (System usage) to the system prompt.
         try:
             from huf.ai.skills.loader import (
-                get_skill_instructions,
-                get_optional_skills_preamble,
-                get_skill_prompts,
+            	get_optional_skills_preamble,
+            	get_skill_instructions,
+            	get_skill_prompts,
             )
 
             skill_instructions = get_skill_instructions(self.agent_doc.agent_name)
@@ -555,16 +563,16 @@ class AgentManager:
             from huf.ai.capabilities import capability_enabled
 
             if capability_enabled(self.agent_doc, self.effective_model, "rich_elements"):
-                from huf.ai.chart_artifact_instructions import (
-                    CHART_ARTIFACT_INSTRUCTIONS,
-                    CHART_ARTIFACT_INSTRUCTIONS_WITH_TOOL,
-                )
                 from huf.ai.artifact_instructions import (
-                    AI_ELEMENT_INSTRUCTIONS,
-                    MEDIA_ELEMENT_INSTRUCTIONS,
-                    MERMAID_ARTIFACT_INSTRUCTIONS,
-                    MERMAID_ARTIFACT_INSTRUCTIONS_WITH_TOOL,
-                    agent_has_media_tools,
+                	AI_ELEMENT_INSTRUCTIONS,
+                	MEDIA_ELEMENT_INSTRUCTIONS,
+                	MERMAID_ARTIFACT_INSTRUCTIONS,
+                	MERMAID_ARTIFACT_INSTRUCTIONS_WITH_TOOL,
+                	agent_has_media_tools,
+                )
+                from huf.ai.chart_artifact_instructions import (
+                	CHART_ARTIFACT_INSTRUCTIONS,
+                	CHART_ARTIFACT_INSTRUCTIONS_WITH_TOOL,
                 )
 
                 resolved_tool_names = {tool.name for tool in self.tools}
@@ -1026,6 +1034,7 @@ def _run_async_safely(coro):
     """
     import asyncio
     import concurrent.futures
+
     import frappe
 
     try:
@@ -2250,10 +2259,10 @@ def _execute_agent_run(
             enhanced_prompt = base_prompt
 
         from huf.ai.context_segments import (
-            compute_segment_tokens,
-            compute_prefix_breakpoints,
-            compute_tools_breakdown,
-            reconcile_composition,
+        	compute_prefix_breakpoints,
+        	compute_segment_tokens,
+        	compute_tools_breakdown,
+        	reconcile_composition,
         )
         segment_tokens = compute_segment_tokens(
             agent_doc, agent, resolved_model_name, resolved_provider, history, knowledge_context, prompt
@@ -2775,6 +2784,8 @@ def _execute_agent_run(
         return {
             "success": True,
             "response": final_output,
+            "tool_calls_made": len(tool_call_message_map),
+            "delivered_reply": run_delivery.delivered(run_doc.name),
             "client_side_tool_calls": client_side_tool_calls,
             "structured": structured,
             "provider": resolved_provider,
@@ -3399,7 +3410,7 @@ def recover_stalled_agent_runs():
             if ttl and ttl > 0:
                 continue
             for run in conversation_runs:
-                from huf.ai.run_control import CANCELLED_BY_USER, is_run_cancelled, is_run_alive
+                from huf.ai.run_control import CANCELLED_BY_USER, is_run_alive, is_run_cancelled
                 if is_run_alive(run.name):
                     continue  # a live direct stream owns it
                 if is_run_cancelled(run.name):
@@ -3970,10 +3981,10 @@ async def _run_agent_stream_impl(
             enhanced_prompt = base_prompt
 
         from huf.ai.context_segments import (
-            compute_segment_tokens,
-            compute_prefix_breakpoints,
-            compute_tools_breakdown,
-            reconcile_composition,
+        	compute_prefix_breakpoints,
+        	compute_segment_tokens,
+        	compute_tools_breakdown,
+        	reconcile_composition,
         )
         segment_tokens = compute_segment_tokens(
             agent_doc, agent, resolved_model_name, resolved_provider, history, knowledge_context, prompt
@@ -4112,14 +4123,14 @@ async def _run_agent_stream_impl(
                 elif chunk_type == "complete":
                     full_response = chunk.get("full_response", full_response)
 
-                    if not (full_response or "").strip() and not tool_call_message_map:
+                    if not (full_response or "").strip() and not run_delivery.delivered(run_doc.name):
                         # Empty completion with no tool calls — the provider
                         # failed to generate content (known with reasoning
                         # models on the 'ollama/' endpoint). Never store an
                         # empty assistant message; fail the run and emit an
                         # error frame instead of a success-looking complete.
                         error_msg = _(
-                            "The provider returned an empty response. For reasoning models on Ollama, use the 'ollama_chat/' model prefix."
+                            "The model returned an empty response. Check that the model is available and supports this request."
                         )
                         frappe.log_error(
                             title="Huf Provider",
@@ -4421,6 +4432,8 @@ async def _run_agent_stream_impl(
                     chunk["conversation_id"] = conversation.name
                     chunk["response"] = full_response
                     chunk["success"] = True
+                    chunk["tool_calls_made"] = len(tool_call_message_map)
+                    chunk["delivered_reply"] = run_delivery.delivered(run_doc.name)
                     chunk["agent_run_id"] = run_doc.name
                     chunk["agent_message_id"] = final_message.name
                     chunk["session_id"] = conv_manager.session_id
@@ -4741,7 +4754,7 @@ def get_conversation_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
+	from huf.permissions import SYSTEM_MANAGER, has_capability
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
@@ -4760,7 +4773,7 @@ def get_message_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
+	from huf.permissions import SYSTEM_MANAGER, has_capability
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
@@ -4788,7 +4801,7 @@ def get_context_artifact_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
+	from huf.permissions import SYSTEM_MANAGER, has_capability
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
@@ -4809,7 +4822,7 @@ def get_run_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
+	from huf.permissions import SYSTEM_MANAGER, has_capability
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
@@ -4829,7 +4842,7 @@ def get_tool_call_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
+	from huf.permissions import SYSTEM_MANAGER, has_capability
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
@@ -4848,7 +4861,7 @@ def get_prompt_snapshot_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
+	from huf.permissions import SYSTEM_MANAGER, has_capability
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 

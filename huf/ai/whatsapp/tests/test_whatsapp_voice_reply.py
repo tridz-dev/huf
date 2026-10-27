@@ -70,6 +70,7 @@ class _Base(unittest.TestCase):
 			patch.object(voice, "_conversation", return_value="CONV-1"),
 			patch.object(gateway_service, "is_opted_out", return_value=False),
 			patch.object(gateway_service, "_attempt_reply_parts", self.text_send),
+			patch.object(gateway_service, "_commit_unless_testing"),  # needs a bound frappe.flags
 			patch("huf.ai.gateway_webhook.touch_last_event"),
 		]
 		for p in patches:
@@ -194,6 +195,7 @@ class TestHelpers(unittest.TestCase):
 class TestGatewayValidation(unittest.TestCase):
 	def _validate(self, mode, provider="WhatsApp"):
 		import frappe
+
 		from huf.huf.doctype.gateway.gateway import Gateway
 
 		values = {"voice_reply_mode": mode}
@@ -213,6 +215,11 @@ class TestGatewayValidation(unittest.TestCase):
 			run()
 
 	def test_non_whatsapp_rejected(self):
-		frappe, run = self._validate("Voice only", provider="Telegram")
+		frappe, run = self._validate("Voice only", provider="Slack")
 		with self.assertRaises(frappe.ValidationError):
+			run()
+
+	def test_telegram_voice_mode_accepted(self):
+		for mode in ("Voice only", "Text and voice"):
+			_, run = self._validate(mode, provider="Telegram")
 			run()

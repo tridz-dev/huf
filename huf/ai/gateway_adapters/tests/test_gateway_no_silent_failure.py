@@ -2,9 +2,18 @@
 
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 from unittest.mock import MagicMock, patch
 
 from huf.ai import gateway_service as gs
+
+
+def setUpModule():
+	# No site in unit runs: whitelisted wrappers consult frappe.local.flags.
+	import frappe
+
+	if not getattr(frappe.local, "flags", None):
+		frappe.local.flags = frappe._dict()
 
 
 def _gw(**kw):
@@ -104,8 +113,8 @@ class TestPaths(unittest.TestCase):
 	def test_busy_exhausted_sends_fallback(self):
 		event = _event()
 		with (
-			patch.object(gs.frappe.cache, "get_value", return_value=gs._REQUEUE_MAX),
-			patch.object(gs.frappe.db, "rollback"),
+			patch.object(gs.frappe, "cache", MagicMock(get_value=MagicMock(return_value=gs._REQUEUE_MAX)), create=True),
+			patch.object(gs.frappe, "db", MagicMock(), create=True),
 			patch.object(gs, "_commit_unless_testing"),
 			patch.object(gs, "_send_fallback_once") as fb,
 			patch.object(gs.frappe, "get_doc", return_value=_gw()),
@@ -117,17 +126,17 @@ class TestPaths(unittest.TestCase):
 	def test_exception_path_sends_fallback_and_reraises(self):
 		event = _event(status="Queued", gateway="GW", target_type="Agent", target_agent="A", message_text="hi", thread_id="")
 		gw = _gw(is_enabled=1, execution_user="bot")
+		docs = {"Gateway Event": event, "Gateway": gw, "Agent": MagicMock(owner="bot")}
 		with (
-			patch.object(gs.frappe, "get_doc", side_effect=[event, gw, MagicMock(owner="bot"), gw]),
+			patch.object(gs.frappe, "get_doc", side_effect=lambda dt, *a, **k: docs[dt]),
 			patch.object(gs, "_process_time_block_reason", return_value=""),
 			patch.object(gs, "_is_reaction_event", return_value=False),
 			patch("huf.ai.agent.access.resolve_run_identity_and_authorize", return_value=SimpleNamespace(authorized=True)),
 			patch.object(gs.frappe, "set_user"),
 			patch.object(gs, "_describe_attachments", return_value=""),
-			patch.object(gs, "_save_whatsapp_media", return_value=[]),
+			patch.object(gs, "_save_event_media", return_value=[]),
 			patch.object(gs, "_maybe_mark_read_typing", side_effect=RuntimeError("kaboom")),
-			patch.object(gs.frappe.db, "rollback"),
-			patch.object(gs.frappe.db, "commit"),
+			patch.object(gs.frappe, "db", MagicMock(), create=True),
 			patch.object(gs.frappe, "log_error"),
 			patch.object(gs, "_send_fallback_once") as fb,
 		):
@@ -159,3 +168,32 @@ class TestBusyArithmetic(unittest.TestCase):
 		# A second message must survive a 30-minute run before being failed.
 		self.assertGreaterEqual(gs._REQUEUE_MAX * gs._CONVERSATION_LOCK_WAIT, 30 * 60)
 		self.assertGreaterEqual(gs._REQUEUE_TTL, gs._REQUEUE_MAX * (gs._CONVERSATION_LOCK_WAIT + 10))
+
+
+class TestEmptyReplyAfterToolDelivery(unittest.TestCase):
+	def test_empty_text_after_delivering_tool_is_not_a_failure(self):
+		self.assertIsNone(gs._agent_run_failure({"success": True, "response": "", "tool_calls_made": 1, "delivered_reply": True}))
+
+	def test_empty_text_after_read_only_tool_is_a_failure(self):
+		self.assertIsNotNone(gs._agent_run_failure({"success": True, "response": "", "tool_calls_made": 2}))
+		self.assertIsNotNone(gs._agent_run_failure(
+			{"success": True, "response": "", "tool_calls_made": 2, "delivered_reply": False}))
+
+	def test_empty_text_without_tool_calls_is_still_a_failure(self):
+		self.assertIsNotNone(gs._agent_run_failure({"success": True, "response": "", "tool_calls_made": 0}))
+		self.assertIsNotNone(gs._agent_run_failure({"success": True, "response": "  "}))
+
+
+class TestRunDeliveryFlag(unittest.TestCase):
+	def test_flag_roundtrip_and_isolation(self):
+		from huf.ai import run_delivery as rd
+
+		store = {}
+		cache = mock.Mock(set_value=lambda k, v, expires_in_sec=None: store.__setitem__(k, v),
+			get_value=lambda k: store.get(k))
+		with mock.patch.object(rd.frappe, "cache", return_value=cache):
+			self.assertFalse(rd.delivered("RUN-1"))
+			rd.mark("RUN-1")
+			self.assertTrue(rd.delivered("RUN-1"))
+			self.assertFalse(rd.delivered("RUN-2"))
+			self.assertFalse(rd.delivered(""))

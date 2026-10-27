@@ -442,6 +442,34 @@
     "components/solutions/wizard/TestStep.tsx": {
       "raw_element": 2
     },
+    "components/telegram/AccessTab.tsx": {
+      "text_px": 1
+    },
+    "components/telegram/CommandsTab.tsx": {
+      "raw_element": 2
+    },
+    "components/telegram/MessageDetailSheet.tsx": {
+      "text_px": 1
+    },
+    "components/telegram/MessagesTab.tsx": {
+      "text_px": 1
+    },
+    "components/telegram/SettingsTab.tsx": {
+      "raw_element": 1
+    },
+    "components/telegram/templates/ButtonsEditor.tsx": {
+      "raw_element": 2
+    },
+    "components/telegram/templates/SendTestDialog.tsx": {
+      "raw_element": 1
+    },
+    "components/telegram/templates/TemplateEditor.tsx": {
+      "fixed_height": 1,
+      "raw_element": 2
+    },
+    "components/telegram/templates/TemplatePreview.tsx": {
+      "text_px": 1
+    },
     "components/tools/HttpHeaderCard.tsx": {
       "fixed_height": 1
     },
@@ -655,6 +683,9 @@
       "fixed_height": 1,
       "text_px": 10
     },
+    "pages/TelegramAppPage.tsx": {
+      "hex_colour": 14
+    },
     "pages/UsersPage.tsx": {
       "fixed_height": 1,
       "hex_colour": 16,
@@ -672,11 +703,11 @@
     }
   },
   "totals": {
-    "fixed_height": 114,
-    "hex_colour": 84,
+    "fixed_height": 115,
+    "hex_colour": 98,
     "inline_style": 48,
-    "raw_element": 68,
-    "text_px": 386
+    "raw_element": 76,
+    "text_px": 390
   },
   "version": 1
 }

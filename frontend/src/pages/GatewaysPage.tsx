@@ -674,6 +674,15 @@ export default function GatewaysPage() {
                       },
                     ]
                   : []),
+                ...(gateway.provider === 'Telegram'
+                  ? [
+                      {
+                        icon: MessageSquare,
+                        label: 'Manage Telegram',
+                        onClick: () => navigate(`/telegram?gateway=${encodeURIComponent(gateway.name)}`),
+                      },
+                    ]
+                  : []),
                 {
                   icon: Settings,
                   label: 'Configure gateway',

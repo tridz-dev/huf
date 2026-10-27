@@ -16,6 +16,10 @@ class Gateway(Document):
     """
 
     def validate(self):
+        hours = self.get("telegram_web_session_hours")
+        if hours is not None and hours != 0 and not 1 <= int(hours) <= 720:
+            frappe.throw(_("Telegram session length must be between 1 and 720 hours."))
+
         if self.is_enabled and not self.execution_user:
             frappe.throw(_("Enabled gateways need a Run as user. Use a least-privileged service user."))
 
@@ -49,6 +53,7 @@ class Gateway(Document):
         self._validate_consent_settings()
         self._validate_reply_settings()
         self._validate_send_scope()
+        self._validate_telegram_settings()
 
         # ST-04.4: Validate required credentials are set
         if self.is_enabled and self.provider:
@@ -61,6 +66,46 @@ class Gateway(Document):
         # ST-04.4: Verify execution_user has access to default_agent if set
         if self.is_enabled and self.execution_user and self.default_agent:
             self._validate_agent_access()
+
+    def _validate_telegram_settings(self):
+        """Telegram-only checks; other providers are untouched."""
+        if self.provider != "Telegram":
+            return
+        if self.get("telegram_join_policy") == "Agent" and not self.default_agent:
+            frappe.throw(_("Group join requests handled by an agent need a default agent. Choose one first."))
+        if self.get("telegram_business_policy") in ("Draft", "Reply") and not (
+            (self.default_target_type == "Agent" and self.default_agent)
+            or (self.default_target_type == "Flow" and self.default_flow)
+        ):
+            frappe.throw(
+                _("Business chats set to {0} need a default agent or flow to write the replies.").format(
+                    self.telegram_business_policy
+                )
+            )
+        cooldown = self.get("telegram_welcome_cooldown_seconds")
+        if cooldown not in (None, "") and int(cooldown) < 0:
+            frappe.throw(_("Welcome cooldown cannot be negative."))
+        captcha = self.get("telegram_guard_captcha") or "Off"
+        if captcha != "Off" and (self.get("telegram_join_policy") or "Queue") == "Decline":
+            frappe.throw(_("Join verification cannot be used while group join requests are set to Decline."))
+        raw = (self.get("telegram_bot_allowlist") or "").strip()
+        if raw:
+            parts = [p.strip() for p in raw.replace("\n", ",").split(",") if p.strip()]
+            bad = [p for p in parts if not p.isdigit()]
+            if bad:
+                frappe.throw(
+                    _("Allowed bots must be numeric Telegram bot IDs separated by commas. Not valid: {0}").format(
+                        ", ".join(bad[:5])
+                    )
+                )
+            self.telegram_bot_allowlist = ", ".join(parts)
+        for fieldname, label, low, high in (
+            ("telegram_bot_max_hops", _("Bot messages in a row"), 1, 20),
+            ("telegram_bot_rate_cap", _("Bot messages per minute"), 1, 1000),
+        ):
+            value = self.get(fieldname)
+            if value is not None and not low <= int(value) <= high:
+                frappe.throw(_("{0} must be between {1} and {2}.").format(label, low, high))
 
     def _validate_whatsapp(self):
         """Derive ``phone_number_id`` and enforce the one-enabled-gateway-per-number rule.
@@ -320,8 +365,11 @@ class Gateway(Document):
             frappe.throw(_("Error reply text must be 1000 characters or fewer."))
         if self.get("voice_reply_mode") not in (None, "", "Off", "Voice only", "Text and voice"):
             frappe.throw(_("Voice note replies must be Off, Voice only or Text and voice."))
-        if self.get("voice_reply_mode") in ("Voice only", "Text and voice") and self.provider != "WhatsApp":
-            frappe.throw(_("Voice note replies are only available for WhatsApp gateways."))
+        if self.get("voice_reply_mode") in ("Voice only", "Text and voice") and self.provider not in (
+            "WhatsApp",
+            "Telegram",
+        ):
+            frappe.throw(_("Voice note replies are only available for WhatsApp and Telegram gateways."))
         self._warn_voice_ffmpeg()
         if self.get("preview_url") not in (None, "", "Default (off)", "On", "Off"):
             frappe.throw(_("Link previews must be Default (off), On or Off."))

@@ -49,6 +49,9 @@
   "services/solutionsApi.ts": {
     "helpers": 2
   },
+  "services/telegramApi.ts": {
+    "helpers": 1
+  },
   "services/whatsappApi.ts": {
     "helpers": 2
   },

@@ -109,6 +109,7 @@ const SolutionsPage = lazy(() => import('./pages/SolutionsPage'));
 const NewSolutionPage = lazy(() => import('./pages/NewSolutionPage'));
 const SolutionDetailPage = lazy(() => import('./pages/SolutionDetailPage'));
 const WhatsAppManagePage = lazy(() => import('./pages/WhatsAppManagePage'));
+const TelegramManagePage = lazy(() => import('./pages/TelegramManagePage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 const GeneralSettingsPage = lazy(() => import('./pages/GeneralSettingsPage'));
 const DeveloperSettingsPage = lazy(() => import('./pages/DeveloperSettingsPage'));
@@ -121,6 +122,7 @@ import {
   checkStreamingAvailable,
   setStreamingAvailable,
 } from './services/streamChatApi';
+const TelegramAppPage = lazy(() => import('./pages/TelegramAppPage'));
 const MembersPage = lazy(() => import('./pages/MembersPage'));
 const HufRoleFormPage = lazy(() => import('./pages/HufRoleFormPage'));
 
@@ -847,6 +849,18 @@ function AppShell() {
             }
           />
           <Route
+            path="/telegram"
+            element={
+              <ProtectedRoute requiredCapability="system.integrations.manage">
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <TelegramManagePage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/gateways/:settingId"
             element={
               <ProtectedRoute requiredCapability="system.integrations.manage">
@@ -1002,7 +1016,18 @@ function AppShell() {
 }
 
 const router = createBrowserRouter(
-  [{ path: '*', element: <AppShell />, errorElement: <RouteErrorBoundary /> }],
+  [
+    {
+      path: 'tg-app',
+      element: (
+        <Suspense fallback={null}>
+          <TelegramAppPage />
+        </Suspense>
+      ),
+      errorElement: <RouteErrorBoundary />,
+    },
+    { path: '*', element: <AppShell />, errorElement: <RouteErrorBoundary /> },
+  ],
   { basename: '/huf' },
 );
 

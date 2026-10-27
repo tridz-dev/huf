@@ -8,6 +8,7 @@ Installation hooks for Huf app
 import json
 
 import frappe
+
 from huf.utils import is_frappe_16
 
 logger = frappe.logger("huf")
@@ -130,8 +131,9 @@ def after_install():
 	Checks if litellm is installed and provides helpful message if not.
 	"""
     try:
-        import litellm
         from importlib.metadata import version as get_installed_version
+
+        import litellm
 
         litellm_version = get_installed_version("litellm")
         compromised_versions = {"1.82.7", "1.82.8"}
@@ -199,6 +201,13 @@ def after_migrate():
 		logger.info(
 			f"Synced tools after migrate: {result.get('total_tools', 0)} tools from {len(result.get('synced_apps', []))} apps"
 		)
+		if result.get("error_count"):
+			# A tool that fails import/validation is silently skipped by the sync,
+			# so a new registry block (e.g. telegram_admin) would just not appear.
+			frappe.log_error(
+				title="Tool sync after migrate had errors",
+				message="\n".join(result.get("errors", [])),
+			)
 	except Exception as e:
 		logger.warning(f"Failed to sync tools after migrate: {e!s}")
 

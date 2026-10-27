@@ -1,0 +1,31 @@
+{
+  "update_id": 1031,
+  "message": {
+    "message_id": 10,
+    "from": {
+      "id": 111,
+      "is_bot": false,
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "chat": {
+      "id": 111,
+      "type": "private",
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "date": 1760000000,
+    "text": "check this out",
+    "forward_origin": {
+      "type": "channel",
+      "chat": {
+        "id": -100777,
+        "type": "channel",
+        "title": "Huf News"
+      },
+      "message_id": 5,
+      "author_signature": "Admin",
+      "date": 1750000000
+    }
+  }
+}

@@ -9,10 +9,11 @@ Each entry is a dict with:
   - parameters: list of parameter definitions
 """
 
+from huf.ai.tools import telegram_admin_spec, telegram_tool_spec
 
 # Array parameters whose elements are objects (the doctype row has no item-type field, so the schema
 # builders look the fieldname up here instead of declaring every array as an array of strings).
-OBJECT_ARRAY_PARAMS = frozenset({"edits", "nodes", "edges", "data", "questions"})
+OBJECT_ARRAY_PARAMS = frozenset({"edits", "nodes", "edges", "data", "questions", "commands"})
 
 
 def is_registry_function_path(function_path):
@@ -223,41 +224,28 @@ TELEGRAM_TOOLS = [
 	{
 		"tool_name": "telegram",
 		"description": (
-			"Manage a Telegram bot. Actions: send_message (chat_id or recipient_name, text/message, parse_mode), "
-			"reply_to_message (chat_id or recipient_name, text/message, reply_to_message_id), "
-			"send_photo (chat_id or recipient_name, photo/file/file_url, caption), "
-			"send_document (chat_id or recipient_name, document/file/file_url, caption), "
-			"edit_message_text (chat_id or recipient_name, message_id, text/message), "
-			"delete_message (chat_id or recipient_name, message_id), "
-			"get_updates (offset, limit), get_chat_info (chat_id or recipient_name), get_me, "
-			"set_webhook (url, secret_token), delete_webhook. "
-			"Use get_integration_recipient to resolve a human name to a Telegram chat ID."
+			"Manage a Telegram bot: send text, media, polls and other messages, edit or delete them, react, read chat "
+			"info, files and recent messages. In a Telegram gateway conversation chat_id is optional and defaults to the "
+			"current chat (other chats are refused unless the gateway allows them; sends are capped per run and per day; "
+			"get_updates, set_webhook and delete_webhook are not available). "
+			"Chat-state changes (pinning, unpinning, forum topic management) are NOT in this tool: use telegram_admin "
+			"pin/unpin (owner-run + human Approve) or ask a chat admin. "
+			"Pass ONLY the arguments listed for the action (? = optional); an unknown argument, a missing required "
+			"argument or a wrongly typed value is refused with invalid_argument (naming the valid arguments) before "
+			"anything is sent. "
+			"Media sources: Telegram file_id, public https URL, or a Frappe File name/file_url (max 50 MB, photos 10 MB). "
+			"send_speech synthesizes speech with the agent's TTS model and sends a voice note (errors if no TTS is "
+			"configured; then send text). "
+			"set_reaction needs emoji, or remove=true to clear. "
+			"Editing a message removes its buttons unless reply_markup is passed again. "
+			"send_checklist needs business access enabled on the gateway. "
+			"get_file saves to a private Frappe File (max 20 MB) and returns file_url. "
+			"Use get_integration_recipient to resolve a human name to a Telegram chat ID. "
+			"Arguments per action: " + telegram_tool_spec.usage_summary() + "."
 		),
 		"function_path": "huf.ai.tools.telegram.handle_action",
 		"category": "Communication Tools",
-		"parameters": [
-			_action(
-				"send_message|reply_to_message|send_photo|send_document|"
-				"edit_message_text|delete_message|get_updates|get_chat_info|get_me|set_webhook|delete_webhook"
-			),
-			_p("chat_id", description="Telegram chat/channel ID (numeric or @username). Alternative to recipient_name."),
-			_p("recipient_name", description="Human-friendly recipient name from Integration Settings (alternative to chat_id)."),
-			_p("message", description="Message text (alias for text)."),
-			_p("text", description="Message or edited text."),
-			_p("photo", description="Photo source: Telegram file_id, public URL, or Frappe File docname/file_url."),
-			_p("document", description="Document source: Telegram file_id, public URL, or Frappe File docname/file_url."),
-			_p("file", description="Generic file source alias for photo/document."),
-			_p("file_url", description="Public file URL alias for photo/document."),
-			_p("caption", description="Caption for photo/document messages."),
-			_p("parse_mode", description="Text formatting: Markdown, HTML, or MarkdownV2."),
-			_p("reply_to_message_id", type="integer", description="Message ID to reply to."),
-			_p("message_id", type="integer", description="Message ID to edit or delete."),
-			_p("url", description="Webhook URL for set_webhook."),
-			_p("secret_token", description="Secret token for webhook verification."),
-			_p("offset", type="integer", description="Update offset for get_updates."),
-			_p("limit", type="integer", description="Max updates for get_updates (max 100)."),
-			_p("disable_notification", type="boolean", description="Send message silently."),
-		],
+		"parameters": telegram_tool_spec.registry_parameters(_p),
 	},
 ]
 
@@ -2182,6 +2170,33 @@ FRAPPE_CLOUD_TOOLS = [
 	},
 ]
 
+TELEGRAM_ADMIN_TOOLS = [
+	{
+		"tool_name": "telegram_admin",
+		"description": (
+			"Telegram group administration, bot profile and secretary (business) actions. Only inside a Telegram gateway "
+			"conversation and only the groups the gateway admin enabled; otherwise refused with action_not_permitted. "
+			"The bot must be an admin with the needed right in the target chat (chat_id defaults to the current chat). "
+			"EVERY state change (all actions except get_admins and get_business_connection) is accepted only from a bound "
+			"admin's private cockpit chat and returns pending_human_approval: it runs only after a human Admin presses "
+			"Approve in Telegram (there is no confirm argument: passing confirm or confirmation_token is refused; do not retry). From any other "
+			"chat it is refused with owner_required: ask a bound admin instead. Business actions and set_chat_menu_button "
+			"with a chat_id obey the gateway recipient scope and send "
+			"caps. Never targets paired admins; ban/restrict/promote never target chat admins. Capped per run. "
+			"Group actions: ban..get_admins; profile: set_my_*; business: *_business_*. "
+			"Pass ONLY the arguments listed for the action (? = optional); anything else is refused before any approval is "
+			"requested, and a required argument that is missing is refused. For set_my_name / set_my_description / "
+			"set_my_short_description the value argument must be present: an explicit empty string is the only way to clear, "
+			"a missing argument never clears. Arguments per action: "
+			+ telegram_admin_spec.usage_summary()
+			+ "."
+		),
+		"function_path": "huf.ai.tools.telegram_admin_tools.handle_action",
+		"category": "Communication Tools",
+		"parameters": telegram_admin_spec.registry_parameters(_p),
+	},
+]
+
 def _with_service(tools: list[dict], service: str) -> list[dict]:
 	"""Stamp the owning Integration Service key onto each tool definition.
 
@@ -2190,6 +2205,12 @@ def _with_service(tools: list[dict], service: str) -> list[dict]:
 	key must match an `Integration Service` docname, because that link is what
 	lets the UI tell a user which account a tool needs before they attach it.
 	An entry that already names a service keeps its own value.
+
+	`service` is catalog metadata only (UI hint, `integration_utils` lookups): it
+	does NOT gate which agents can use the tool. App Provided rows are fully
+	owned by the migrate sync (`sync_discovered_tools`), which upserts every
+	field. Per-conversation gating (e.g. `telegram_admin` only inside a Telegram
+	gateway chat with admin-enabled groups) is enforced by the tool handler.
 	"""
 	return [{**tool, "service": tool.get("service") or service} for tool in tools]
 
@@ -2817,6 +2838,7 @@ ALL_INTEGRATION_TOOLS = (
 	+ _with_service(SLACK_TOOLS, "slack")
 	+ _with_service(GOOGLE_CHAT_TOOLS, "google_chat")
 	+ _with_service(TELEGRAM_TOOLS, "telegram")
+	+ _with_service(TELEGRAM_ADMIN_TOOLS, "telegram")
 	+ _with_service(WHATSAPP_TOOLS, "whatsapp")
 	+ _with_service(MESSENGER_TOOLS, "messenger")
 	+ _with_service(GITHUB_TOOLS, "github")
