@@ -224,7 +224,7 @@ def test_ask_policy_message_is_user_visible_with_link(monkeypatch):
 	with pytest.raises(gw_hooks.GatewayHookDenied) as exc:
 		identity.resolve_run_user(gw(), ev())
 	r = exc.value.reason
-	assert r.startswith(HOOK_REASON_PREFIX) and "https://huf.test/slack-link?token=" in r
+	assert r.startswith(HOOK_REASON_PREFIX) and "https://huf.test/huf/link-account?token=" in r
 	assert "@" not in r.split("token=")[1]
 
 
@@ -425,3 +425,57 @@ def test_new_fields_present():
 	idl = fields(JSONS[0])
 	assert idl["state"]["options"] == "Pending\nLinked\nRevoked"
 	assert idl["source"]["options"] == "Auto email\nAdmin\nSelf link"
+
+
+# ---- A1b: URL, throttle, preview labels ----------------------------------------
+def _ask(monkeypatch, event=None):
+	monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
+	monkeypatch.setattr(identity, "get_gateway_credential", lambda g, k: "")
+	with pytest.raises(gw_hooks.GatewayHookDenied) as exc:
+		identity.resolve_run_user(gw(), event or ev())
+	return exc.value.reason
+
+
+def test_self_link_url_format():
+	assert identity.self_link_url("abc.def") == "https://huf.test/huf/link-account?token=abc.def"
+
+
+def test_prompt_throttle_reuses_token_within_window(monkeypatch, env):
+	first = _ask(monkeypatch)
+	second = _ask(monkeypatch)
+	assert first == second
+	assert len([k for k in env.cache.d if k.startswith(identity._NONCE_PREFIX)]) == 1
+
+
+def test_prompt_throttle_mints_new_after_ttl(monkeypatch, env):
+	first = _ask(monkeypatch)
+	for k in [k for k in env.cache.d if k.startswith(identity._PROMPT_PREFIX)]:
+		env.cache.delete_value(k)  # TTL elapsed
+	second = _ask(monkeypatch)
+	assert first != second
+
+
+def test_prompt_throttle_is_per_sender(monkeypatch):
+	assert _ask(monkeypatch, ev(sender="U1")) != _ask(monkeypatch, ev(sender="U2"))
+
+
+def test_prompt_mints_new_if_cached_token_was_used(monkeypatch, env):
+	first = _ask(monkeypatch)
+	for k in [k for k in env.cache.d if k.startswith(identity._NONCE_PREFIX)]:
+		env.cache.delete_value(k)
+	assert _ask(monkeypatch) != first
+
+
+def test_preview_includes_labels(monkeypatch):
+	tok = identity.create_self_link_token("GW-1", "T1", "U1", "Sam Rivera")
+	out = identity.preview_self_link(tok)
+	assert out["slack_label"] == "Sam Rivera" and out["workspace_label"] == "GW-1"
+
+
+def test_preview_label_falls_back_to_id_and_event_label_used(monkeypatch):
+	out = identity.preview_self_link(identity.create_self_link_token("GW-1", "T1", "U1"))
+	assert out["slack_label"] == "U1"
+	e = ev(payload={"event": {"channel": "C1", "user_profile": {"display_name": "sam"}}})
+	reason = _ask(monkeypatch, e)
+	tok = reason.split("token=")[1]
+	assert identity.preview_self_link(tok)["slack_label"] == "sam"

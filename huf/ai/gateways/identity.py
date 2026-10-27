@@ -43,6 +43,9 @@ TOKEN_TTL_SECONDS = 15 * 60
 POLICY_ASK = "Ask to link account"
 POLICY_SERVICE = "Use service user"
 _NONCE_PREFIX = "huf_identity_link_nonce:"
+_PROMPT_PREFIX = "huf_identity_link_prompt:"
+PROMPT_THROTTLE_SECONDS = 2 * 60
+_LABEL_MAX = 80
 _UNSAFE_USERS = ("Guest", "Administrator")
 
 
@@ -160,15 +163,16 @@ def _cache():
 	return cache() if callable(cache) and not hasattr(cache, "get_value") else cache
 
 
-def create_self_link_token(gateway: str, team_id: str, external_id: str) -> str:
-	"""Internal helper (not whitelisted): signed, 15-minute, one-time token."""
+def create_self_link_token(gateway: str, team_id: str, external_id: str, label: str | None = None) -> str:
+	"""Internal helper (not whitelisted): signed, 15-minute, one-time token.
+
+	``label`` is an optional display name of the Slack person, shown on the confirm page.
+	"""
 	nonce = frappe.generate_hash(length=20)
-	body = _b64(
-		json.dumps(
-			{"g": gateway, "t": team_id, "x": external_id, "e": int(time.time()) + TOKEN_TTL_SECONDS, "n": nonce},
-			separators=(",", ":"),
-		).encode()
-	)
+	payload = {"g": gateway, "t": team_id, "x": external_id, "e": int(time.time()) + TOKEN_TTL_SECONDS, "n": nonce}
+	if label:
+		payload["l"] = str(label)[:_LABEL_MAX]
+	body = _b64(json.dumps(payload, separators=(",", ":")).encode())
 	_cache().set_value(_NONCE_PREFIX + nonce, 1, expires_in_sec=TOKEN_TTL_SECONDS)
 	return f"{body}.{_sign(body)}"
 
@@ -200,7 +204,32 @@ def _require_login() -> str:
 
 
 def self_link_url(token: str) -> str:
-	return f"{frappe.utils.get_url()}/slack-link?token={token}"
+	return f"{frappe.utils.get_url()}/huf/link-account?token={token}"
+
+
+def _sender_label(event) -> str | None:
+	"""Display name of the sender if the event already carries it (no Slack API call)."""
+	profile = _slack_event(event).get("user_profile")
+	if isinstance(profile, dict):
+		return profile.get("display_name") or profile.get("real_name") or profile.get("name") or None
+	return None
+
+
+def _prompt_token(gateway: str, team_id: str, sender: str, label: str | None) -> str:
+	"""At most one fresh token per sender per 2 minutes; within the window reuse the last one."""
+	key = f"{_PROMPT_PREFIX}{gateway}:{team_id}:{sender}"
+	cache = _cache()
+	cached = cache.get_value(key)
+	if cached:
+		cached = cached.decode() if isinstance(cached, bytes) else str(cached)
+		try:
+			_verify_token(cached)
+			return cached
+		except Exception:
+			pass
+	token = create_self_link_token(gateway, team_id, sender, label)
+	cache.set_value(key, token, expires_in_sec=PROMPT_THROTTLE_SECONDS)
+	return token
 
 
 @frappe.whitelist(methods=["GET"])
@@ -208,7 +237,14 @@ def preview_self_link(token: str) -> dict:
 	"""Show which Slack person would be linked to the logged-in user. Changes nothing."""
 	user = _require_login()
 	data = _verify_token(token)
-	return {"gateway": data["g"], "team_id": data["t"], "external_id": data["x"], "user": user}
+	return {
+		"gateway": data["g"],
+		"team_id": data["t"],
+		"external_id": data["x"],
+		"user": user,
+		"slack_label": data.get("l") or data["x"],
+		"workspace_label": data["g"],
+	}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -298,7 +334,7 @@ def resolve_run_user(gateway, event):
 	policy = getattr(gateway, "unmapped_policy", None) or POLICY_ASK
 	if policy == POLICY_SERVICE:
 		return None
-	token = create_self_link_token(gateway.name, team_id, sender)
+	token = _prompt_token(gateway.name, team_id, sender, _sender_label(event))
 	raise gw_hooks.GatewayHookDenied(
 		gw_hooks.USER_VISIBLE_PREFIX
 		+ "I don't know which Huf account is yours yet. Open this link (while logged in to Huf) "
