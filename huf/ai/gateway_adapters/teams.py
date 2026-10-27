@@ -6,8 +6,8 @@ bots, user-assigned managed identity (MSI) and sovereign clouds are out of scope
 
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Callable, Mapping
+from typing import Any
 
 from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.types import (

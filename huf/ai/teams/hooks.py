@@ -13,6 +13,7 @@ from typing import Any
 
 from huf.ai.gateway_adapters import provider_hooks
 from huf.ai.teams import activity as activity_mod
+from huf.ai.teams import client as _client
 from huf.ai.teams import readiness, refs
 
 PROVIDER = "Microsoft Teams"
@@ -79,7 +80,5 @@ def ingest_update(gateway, adapter, request) -> Any:
 
 provider_hooks.register(PROVIDER, "ingest_update", ingest_update)
 provider_hooks.register(PROVIDER, "readiness_checks", readiness.readiness_checks)
-
-from huf.ai.teams import client as _client
 
 _client.register_hooks(provider_hooks, PROVIDER)
