@@ -2621,8 +2621,42 @@ def record_template_state(
 		return None
 
 
+_PAUSE_TEMPLATE_STATUSES = ("PAUSED", "DISABLED", "REJECTED")
+
+
+def _template_pause_reason(update: dict[str, Any]) -> str:
+	"""Reason to pause broadcasts for this template webhook, or "" when it is harmless."""
+	if "new_quality_score" in update or update.get("kind") == "quality":
+		return "quality_red" if str(update.get("new_quality_score") or "").upper() == "RED" else ""
+	if "new_category" in update or update.get("kind") == "category":
+		return "category_marketing" if str(update.get("new_category") or "").upper() == "MARKETING" else ""
+	status = str(update.get("event") or update.get("status") or "").upper()
+	return status.lower() if status in _PAUSE_TEMPLATE_STATUSES else ""
+
+
 def record_template_webhook(update: dict[str, Any], account: str | None = None) -> str | None:
-	"""State update from a parsed ``message_template_*`` webhook change (see gateway_webhook)."""
+	"""State update from a parsed ``message_template_*`` webhook change (see gateway_webhook).
+
+	After the state is stored, pauses Running broadcasts that use the template when it was
+	paused/disabled/rejected, its quality turned RED or its category flipped to MARKETING.
+	"""
+	result = _record_template_webhook(update, account)
+	try:
+		reason = _template_pause_reason(update)
+		name = str(update.get("message_template_name") or update.get("name") or "").strip()
+		if reason and name:
+			from huf.ai.whatsapp import broadcast_runner
+
+			broadcast_runner.pause_for_template(account or "", name, reason)
+	except Exception:
+		try:
+			frappe.logger("huf").warning("WhatsApp broadcast template pause failed", exc_info=True)
+		except Exception:
+			pass
+	return result
+
+
+def _record_template_webhook(update: dict[str, Any], account: str | None = None) -> str | None:
 	try:
 		kind = update.get("kind") or (
 			"quality" if "new_quality_score" in update else "category" if "new_category" in update else "status"
