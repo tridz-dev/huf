@@ -95,6 +95,8 @@ def _load_broadcast(name: str) -> dict[str, Any] | None:
 def _write(name: str, **fields: Any) -> bool:
 	"""Update a row that this call owns (status still ``sending``) and commit. False when the row had already left
 	``sending`` (a fast webhook moved it), in which case nothing was written."""
+	if "error_code" in fields and fields["error_code"] is None:
+		fields["error_code"] = 0  # Int column is NOT NULL: 0 means "no error"
 	sets = ", ".join(f"`{k}`=%s" for k in fields)
 	frappe.db.sql(
 		f"update `tab{RECIPIENT}` set {sets}, modified=%s where name=%s and status='sending'",

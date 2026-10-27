@@ -132,7 +132,7 @@ def apply_status(
 	limited = False
 	if new == "failed":
 		code, message = _first_error(errors)
-		values.update({"error_code": code, "error_message": message})
+		values.update({"error_code": int(code or 0), "error_message": message})  # Int column is NOT NULL
 		if code == PER_USER_LIMIT_CODE:
 			# terminal, never resent: the message was not delivered (failed never overwrites delivered/read)
 			limited = True

@@ -123,6 +123,22 @@ class TestSemantics(FrappeTestCase):
 		self._send("ZZFIXG-R1", post)
 		self.assertEqual(self._get("ZZFIXG-R1", "wamid", "status").wamid, "wamid.first")
 
+	# live-test regression: a successful send must be recorded as `sent` on the real DB. error_code is an Int NOT NULL
+	# column, so writing None used to raise 1048 and every successful send ended up `unknown`.
+	def test_successful_send_is_recorded_as_sent_with_real_columns(self):
+		self._row("ZZFIXG-R1", "queued")
+		out = self._send("ZZFIXG-R1", lambda *a, **k: {"wamid": "wamid.ok", "message_status": "accepted"})
+		self.assertEqual(out, "sent")
+		r = self._get("ZZFIXG-R1", "status", "wamid", "message_status", "sent_at", "error_code")
+		self.assertEqual((r.status, r.wamid, r.message_status, r.error_code), ("sent", "wamid.ok", "accepted", 0))
+		self.assertIsNotNone(r.sent_at)
+
+	def test_failed_status_without_an_error_code_does_not_violate_not_null(self):
+		self._row("ZZFIXG-R1", "sent", wamid="wamid.nc")
+		self.assertTrue(bs.apply_status("wamid.nc", "failed", 5, [{"title": "no code"}], None, gateway="GW-G"))
+		r = self._get("ZZFIXG-R1", "status", "error_code")
+		self.assertEqual((r.status, r.error_code), ("failed", 0))
+
 	# unknown -> sent
 	def test_sent_webhook_resolves_unknown_without_enabling_resend(self):
 		self._row("ZZFIXG-R1", "unknown", wamid="wamid.u")
