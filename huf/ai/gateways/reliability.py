@@ -7,7 +7,6 @@ coordinator). Nothing here may ever raise into, or alter, a run.
 from __future__ import annotations
 
 import re
-import time
 from types import SimpleNamespace
 
 import frappe
