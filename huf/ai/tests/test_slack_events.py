@@ -404,6 +404,16 @@ class TestSlackEventsHandler(unittest.TestCase):
 		ids = [c.args[1] for c in self.ingest.call_args_list]
 		self.assertEqual(ids, ["C9:1700000200.000300"] * 2)
 
+	def test_subtype_allow_list(self):
+		for subtype in ("thread_broadcast", "file_share"):
+			self.ingest.reset_mock()
+			self._call(message_event(subtype=subtype))
+			self.ingest.assert_called_once()
+		for subtype in ("message_changed", "message_deleted", "bot_message", "channel_join"):
+			self.ingest.reset_mock()
+			self._call(message_event(subtype=subtype))
+			self.ingest.assert_not_called()
+
 
 if __name__ == "__main__":
 	unittest.main()

@@ -20,6 +20,11 @@ _REASON_STATUS = {
 }
 
 
+# Only plain (subtype absent), thread_broadcast and file_share messages are processed;
+# message_changed/message_deleted/bot_message/joins etc. are ignored.
+_ALLOWED_SUBTYPES = (None, "thread_broadcast", "file_share")
+
+
 @frappe.whitelist(allow_guest=True, methods=["POST"])
 @rate_limit(limit=100, seconds=60)
 def handle_slack_event():
@@ -53,7 +58,11 @@ def handle_slack_event():
     gateway = frappe.get_doc("Gateway", gateway_name)
 
     event = payload.get("event") or {}
-    if event.get("type") in ("message", "app_mention") and not event.get("bot_id"):
+    if (
+        event.get("type") in ("message", "app_mention")
+        and not event.get("bot_id")
+        and event.get("subtype") in _ALLOWED_SUBTYPES
+    ):
         channel = str(event.get("channel") or "")
         ts = str(event.get("ts") or "")
         # Provider event id is channel:ts of the message itself. Slack sends both a
