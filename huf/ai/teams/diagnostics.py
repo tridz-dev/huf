@@ -118,8 +118,8 @@ def verify_teams_connection(gateway_name: str) -> dict:
 	"""Verify the Teams bot credentials of a Microsoft Teams Gateway.
 
 	Returns ``{ok, steps: [{id, label, ok, detail}], message}`` with steps ``credentials``, ``token``,
-	``token_claims``, ``endpoint`` and ``reference`` in that order. ``ok`` covers the first three; the last
-	two are informational. Needs write permission because it sends authentication traffic to Microsoft.
+	``token_claims``, ``endpoint``, ``reference`` and ``drops`` in that order. ``ok`` covers the first three;
+	the rest are informational (``drops`` is always ok and summarises recently dropped activities). Needs write permission because it sends authentication traffic to Microsoft.
 	"""
 	frappe.has_permission("Gateway", "write", gateway_name, throw=True)
 	gateway = frappe.get_doc("Gateway", gateway_name)
@@ -162,6 +162,11 @@ def verify_teams_connection(gateway_name: str) -> dict:
 			readiness._check_first_message(gateway, None),
 			"A conversation reference is stored; the bot can reply.",
 		)
+	)
+
+	drops = readiness.drops_summary(gateway.name)
+	steps.append(
+		_step("drops", "Dropped activities", True, drops or "No dropped activities in the last 24 hours.")
 	)
 
 	ok = all(s["ok"] for s in steps[:3])

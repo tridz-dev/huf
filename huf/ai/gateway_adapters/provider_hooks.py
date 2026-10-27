@@ -103,8 +103,9 @@ def readiness_checks(gateway: Any) -> list[dict]:
 		except Exception:
 			adapter = None
 		items = list(hook(gateway, adapter) or [])
-		return [
+		return [  # extra provider keys (e.g. ``endpoint_url``) pass through; the four core keys are normalised
 			{
+				**i,
 				"id": str(i["id"]),
 				"label": str(i.get("label") or i["id"]),
 				"done": bool(i.get("done")),

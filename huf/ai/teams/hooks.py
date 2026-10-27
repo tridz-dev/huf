@@ -20,7 +20,12 @@ PROVIDER = "Microsoft Teams"
 logger = logging.getLogger("huf.teams.hooks")
 
 
-def _ignored(kind: str) -> dict[str, Any]:
+_VISIBLE_DROPS = frozenset({"tenant", "service_url", "channel", "invalid"})
+
+
+def _ignored(kind: str, gateway=None) -> dict[str, Any]:
+	if kind in _VISIBLE_DROPS:
+		readiness.record_drop(str(getattr(gateway, "name", "") or readiness.AUTH_BUCKET), kind)
 	return {"success": True, "ignored": kind}
 
 
@@ -55,29 +60,29 @@ def ingest_update(gateway, adapter, request) -> Any:
 		activity = activity_mod.load_activity(request)
 	except ValueError:
 		logger.warning("Teams activity ignored: invalid payload")
-		return _ignored("invalid")
+		return _ignored("invalid", gateway)
 	if not activity_mod.is_teams_channel(activity):
 		logger.warning("Teams activity ignored: channelId is not msteams")
-		return _ignored("channel")
+		return _ignored("channel", gateway)
 
 	if str(activity.get("type") or "").lower() == "message":
 		outcome = activity_mod.build_event(activity, credentials)
 		if isinstance(outcome, str):
 			logger.info("Teams message ignored: %s", outcome)
 			if outcome == "empty" and not _save_reference(gateway, credentials, activity):
-				return _ignored("service_url")
-			return _ignored(outcome)
+				return _ignored("service_url", gateway)
+			return _ignored(outcome, gateway)
 		if not _save_reference(gateway, credentials, activity):
-			return _ignored("service_url")
+			return _ignored("service_url", gateway)
 		return None
 
 	kind = activity_mod.ignore_kind(activity)
 	if activity_mod.bot_added(activity):
 		if not activity_mod.tenant_allowed(activity, credentials):
 			logger.info("Teams %s ignored: tenant not allowed", kind)
-			return _ignored("tenant")
+			return _ignored("tenant", gateway)
 		if not _save_reference(gateway, credentials, activity):
-			return _ignored("service_url")
+			return _ignored("service_url", gateway)
 	return _ignored(kind)
 
 
