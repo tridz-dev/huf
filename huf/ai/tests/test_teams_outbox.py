@@ -298,6 +298,10 @@ def test_deliver_skips_non_pending(store):
 
 def test_default_sender_fails_closed_without_teams_api(store, monkeypatch):
 	monkeypatch.setitem(sys.modules, "huf.ai.gateways.teams_api", None)
+	import huf.ai.gateways as _pkg
+
+	# `from pkg import mod` prefers a cached package attribute over sys.modules.
+	monkeypatch.delattr(_pkg, "teams_api", raising=False)
 	n = mk(store)
 	assert ob.deliver(n, now=NOW) == "Pending" or store.rows[n]["status"] in ("Pending", "Failed")
 	assert "teams_api" in store.rows[n]["last_error"]
