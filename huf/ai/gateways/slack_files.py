@@ -61,7 +61,12 @@ def sanitize_filename(name: Any, fallback: str = "slack-file") -> str:
     return text or fallback
 
 
+_MIME_RE = re.compile(r"^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$")
+
+
 def _mime_allowed(mime: str) -> bool:
+    if not _MIME_RE.match(mime):
+        return False
     return mime in ALLOWED_MIMES or mime.startswith(ALLOWED_MIME_PREFIXES)
 
 
