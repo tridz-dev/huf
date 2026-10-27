@@ -20,8 +20,29 @@ class AgentTrigger(Document):
 			frappe.throw(_("Reference Doctype and Doc Event are required for Doc Event triggers."))
 		if self.trigger_type == "Schedule" and not self.scheduled_interval:
 			frappe.throw(_("Scheduled Interval is required for Schedule triggers."))
+		if self.trigger_type == "Webhook":
+			self.validate_webhook()
 
-	
+	def validate_webhook(self):
+		if not self.webhook_slug or not self.webhook_key:
+			frappe.throw(_("Webhook Slug and Webhook Key are required for Webhook triggers."))
+
+		# Slug must be unique across enabled Webhook triggers so the guest
+		# endpoint can resolve a request to exactly one trigger.
+		filters = {
+			"trigger_type": "Webhook",
+			"webhook_slug": self.webhook_slug,
+			"disabled": 0,
+			"name": ["!=", self.name],
+		}
+		if not self.disabled and frappe.db.exists("Agent Trigger", filters):
+			frappe.throw(
+				_("Webhook Slug '{0}' is already used by another enabled Webhook trigger.").format(
+					self.webhook_slug
+				)
+			)
+
+
 
 	def validate_condition(self):
 		if not self.condition:
