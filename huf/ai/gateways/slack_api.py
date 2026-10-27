@@ -162,6 +162,16 @@ class SlackApi:
 		limit: int = 200) -> dict:
 		return self.call("conversations.list", types=types, cursor=cursor, limit=limit)
 
+	def users_lookup_by_email(self, email: str) -> str | None:
+		"""Return the Slack user id for an email, or None when no such user exists."""
+		try:
+			body = self.call("users.lookupByEmail", email=email)
+		except SlackApiError as e:
+			if e.error_code == "users_not_found":
+				return None
+			raise
+		return (body.get("user") or {}).get("id")
+
 	def conversations_open(self, users: list[str]) -> str:
 		body = self.call("conversations.open", users=",".join(users))
 		return (body.get("channel") or {}).get("id")
