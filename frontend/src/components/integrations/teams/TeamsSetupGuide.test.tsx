@@ -57,11 +57,11 @@ describe('TeamsSetupGuide', () => {
   });
 
   it('prefers the backend public URL from the readiness hint, falling back to the generic URL', () => {
-    const hint = 'Paste https://pub.example.com/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway_name=GW as the Messaging endpoint of your Azure Bot (HTTPS).';
+    const hint = 'Paste https://pub.example.com/hook?gateway_name=GW as the Messaging endpoint of your Azure Bot (HTTPS).';
     const { unmount } = render(<TeamsSetupGuide gatewayName="GW" checks={[{ id: 'teams-messaging-endpoint', done: false, hint }]} />);
-    expect((screen.getByDisplayValue(/pub\.example\.com/) as HTMLInputElement).value).toMatch(/^https:\/\/pub\.example\.com\/api\/method/);
+    expect((screen.getByDisplayValue(/pub\.example\.com/) as HTMLInputElement).value).toBe('https://pub.example.com/hook?gateway_name=GW');
     unmount();
-    render(<TeamsSetupGuide gatewayName="GW" checks={[{ id: 'teams-messaging-endpoint', done: false, hint: 'Paste /api/x as the Messaging endpoint' }]} />);
+    render(<TeamsSetupGuide gatewayName="GW" checks={[{ id: 'teams-messaging-endpoint', done: false, hint: 'Paste /relative as the Messaging endpoint' }]} />);
     expect(screen.getByDisplayValue(/handle_gateway_webhook\?gateway_name=GW$/)).toBeTruthy();
   });
 
