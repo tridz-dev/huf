@@ -58,6 +58,11 @@ SENSITIVE_PAYLOAD_KEYS = {
     # Google Chat (huf/ai/gateway_adapters/google_chat.py): G1/G6 credential
     # schema -- service_account_key is a full service-account private key.
     "service_account_key",
+    # Slack file objects: private URLs are only fetchable with the bot token
+    # and permalinks identify workspace content.
+    "url_private",
+    "url_private_download",
+    "permalink",
 }
 
 
@@ -230,6 +235,20 @@ def _describe_attachments(raw_payload: Any) -> str:
     # Twilio-style SMS/MMS form payload (persisted as a flat dict of params).
     if raw_payload.get("NumMedia") not in (None, "0", 0):
         kinds.append("mms")
+
+    # Slack Events API: file_share message events carry event.files[].
+    slack_event = raw_payload.get("event")
+    if isinstance(slack_event, dict) and isinstance(slack_event.get("files"), list):
+        for slack_file in slack_event["files"]:
+            if not isinstance(slack_file, dict):
+                continue
+            mime = str(slack_file.get("mimetype") or slack_file.get("filetype") or "").lower()
+            for prefix in ("image", "video", "audio"):
+                if mime.startswith(prefix):
+                    kinds.append(prefix)
+                    break
+            else:
+                kinds.append("file")
 
     if not kinds:
         return ""
