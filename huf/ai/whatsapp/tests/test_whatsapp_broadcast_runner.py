@@ -302,7 +302,9 @@ class TestTick(_Base):
 		runner.tick(b)
 		waits = [c.args[0] for c in self.sleep.call_args_list if c.args and c.args[0] > 0]
 		self.assertTrue(waits)
-		self.assertTrue(all(w <= 1.0 / (1000 // 4) for w in waits))  # paced at mps//4, not mps
+		mps = int(frappe.db.get_value("WhatsApp Broadcast", b, "mps") or 20)
+		# throttled: every pause is longer than the unthrottled 1/mps spacing
+		self.assertTrue(all(w > 1.0 / mps for w in waits))
 
 	def test_held_ratio_below_sample_does_not_throttle(self):
 		b = self.running(n=1)
