@@ -30,6 +30,7 @@ from huf.ai.whatsapp.management import (
 	_iso,
 )
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
+from huf.ai.whatsapp.broadcast import params as broadcast_params
 
 
 # --- Broadcast (WP-7) ----------------------------------------------------------------------------
@@ -186,6 +187,9 @@ def create_broadcast(
 		body = _json_param(body_params, "body_params")
 		header = _json_param(header_params, "header_params")
 		buttons = _json_param(button_params, "button_params")
+		problem = broadcast_params.header_error(header) or broadcast_params.button_error(buttons)
+		if problem:
+			return _error("invalid_params", problem)
 		cap = int(max_recipients) if max_recipients not in (None, "") else None
 		if cap is not None and not 1 <= cap <= br.MAX_RECIPIENTS_CEILING:
 			return _error("invalid_max_recipients", f"max_recipients must be between 1 and {br.MAX_RECIPIENTS_CEILING}.")

@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { act, render, screen, waitFor } from '@testing-library/react';
 
+const socketRef: { current: unknown } = { current: null };
+vi.mock('@/contexts/SocketContext', () => ({ useSocket: () => socketRef.current }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/services/whatsappApi', async (orig) => ({
   ...(await orig<typeof import('@/services/whatsappApi')>()),
@@ -21,7 +23,7 @@ import { BroadcastTab } from './BroadcastTab';
 import { BroadcastList } from './BroadcastList';
 import { BroadcastWizard } from './BroadcastWizard';
 import { BroadcastDetail } from './BroadcastDetail';
-import { buildHeaderButtonParams } from './BroadcastWizard';
+import { buildHeaderButtonParams, hasHeaderRow, locationValid } from './BroadcastWizard';
 
 // jsdom has no top layer; answering ':modal' directly keeps Radix Select opening fast.
 const originalMatches = Element.prototype.matches;
@@ -385,6 +387,93 @@ describe('BroadcastWizard once recipients are added', () => {
     await user.click(screen.getByRole('button', { name: 'Add recipients' }));
     await user.click(await screen.findByRole('button', { name: 'Continue' }));
     expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled();
+  });
+});
+
+describe('location header', () => {
+  const tpl = { parameter_format: 'POSITIONAL', body: [], header: { type: 'LOCATION', required: true }, buttons: [] } as never;
+  const loc = { latitude: '12.97', longitude: '77.59', name: ' HQ ', address: '' };
+  it('builds a location header and validates ranges', () => {
+    expect(buildHeaderButtonParams(tpl, '', {}, loc)).toEqual({ header_params: [{ type: 'location', latitude: 12.97, longitude: 77.59, name: 'HQ' }] });
+    expect(buildHeaderButtonParams(tpl, '', {}, { ...loc, latitude: '' })).toEqual({});
+    expect(locationValid(loc)).toBe(true);
+    expect(locationValid({ ...loc, latitude: '91' })).toBe(false);
+    expect(locationValid({ ...loc, longitude: '-181' })).toBe(false);
+    expect(locationValid({ ...loc, longitude: 'abc' })).toBe(false);
+  });
+  it('blocks Next until the location is valid, then sends it', async () => {
+    m.getBroadcastTemplateParams.mockResolvedValue(ok({ parameter_format: 'POSITIONAL', body: [], header: { type: 'LOCATION', required: true }, buttons: [] }));
+    m.createBroadcast.mockResolvedValue(ok({ broadcast: 'BCAST-9' }));
+    m.addBroadcastRecipients.mockResolvedValue(ok({ added: 1, skipped: [], invalid: [], skippedTotal: 0, invalidTotal: 0 }));
+    const user = userEvent.setup();
+    render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
+    await pick(user, 'Approved template', /promo/);
+    const lat = await screen.findByLabelText('Latitude');
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+    await user.type(lat, '95');
+    expect(screen.getByText('Enter a number between -90 and 90')).toBeInTheDocument();
+    await user.clear(lat); await user.type(lat, '12.5');
+    await user.type(screen.getByLabelText('Longitude'), '77.5');
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.type(screen.getByLabelText(/Recipients/), '1555000111');
+    await user.click(screen.getByRole('button', { name: 'Add recipients' }));
+    await waitFor(() => expect(m.createBroadcast).toHaveBeenCalledWith(expect.objectContaining({ header_params: [{ type: 'location', latitude: 12.5, longitude: 77.5 }] })));
+  });
+});
+
+describe('per-recipient header-row CSV', () => {
+  it('detects a pasted header line', () => {
+    expect(hasHeaderRow('phone,header,button_url_0\n1555,https://x.test/a.png,summer')).toBe(true);
+    expect(hasHeaderRow('  Recipient;x')).toBe(true);
+    expect(hasHeaderRow('1555000111,Bob')).toBe(false);
+  });
+  it('sends a pasted CSV with a header line as csv_text', async () => {
+    m.getBroadcastTemplateParams.mockResolvedValue(ok({ parameter_format: 'POSITIONAL', body: [], header: null, buttons: [] }));
+    m.createBroadcast.mockResolvedValue(ok({ broadcast: 'BCAST-9' }));
+    m.addBroadcastRecipients.mockResolvedValue(ok({ added: 1, skipped: [], invalid: [], skippedTotal: 0, invalidTotal: 0 }));
+    const user = userEvent.setup();
+    render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
+    await pick(user, 'Approved template', /promo/);
+    await user.click(await screen.findByRole('button', { name: 'Next' }));
+    await user.click(screen.getByLabelText(/Recipients/));
+    await user.paste('phone,header\n1555000111,https://x.test/a.png');
+    await user.click(screen.getByRole('button', { name: 'Add recipients' }));
+    await waitFor(() => expect(m.addBroadcastRecipients).toHaveBeenCalledWith('BCAST-9', { csvText: 'phone,header\n1555000111,https://x.test/a.png' }));
+  });
+});
+
+describe('BroadcastDetail realtime', () => {
+  type Handler = (d: unknown) => void;
+  const fakeSocket = (connected: boolean) => {
+    const handlers = new Map<string, Handler[]>();
+    return {
+      connected, emit: vi.fn(),
+      on: (e: string, h: Handler) => handlers.set(e, [...(handlers.get(e) ?? []), h]),
+      off: (e: string, h: Handler) => handlers.set(e, (handlers.get(e) ?? []).filter((x) => x !== h)),
+      fire: (e: string, d?: unknown) => (handlers.get(e) ?? []).forEach((h) => h(d)),
+    };
+  };
+  afterEach(() => { socketRef.current = null; });
+  it('shows Polling without a socket', async () => {
+    render(<BroadcastDetail name="BCAST-1" onBack={vi.fn()} />);
+    expect(await screen.findByText('Polling')).toBeInTheDocument();
+  });
+  it('shows Live, subscribes to the document room and applies pushed counts', async () => {
+    const sock = fakeSocket(true);
+    socketRef.current = sock;
+    render(<BroadcastDetail name="BCAST-1" onBack={vi.fn()} />);
+    expect(await screen.findByText('Live')).toBeInTheDocument();
+    expect(sock.emit).toHaveBeenCalledWith('doc_subscribe', 'WhatsApp Broadcast', 'BCAST-1');
+    expect(screen.getByTestId('count-sent')).toHaveTextContent('3');
+    act(() => sock.fire('wa_broadcast_progress', { broadcast: 'BCAST-1', status: 'Running', sent: 7, total: 10, queued: 0, sending: 0, delivered: 2, read: 0, failed: 1, deferred: 0, unknown: 0, skipped: 0 }));
+    await waitFor(() => expect(screen.getByTestId('count-sent')).toHaveTextContent('7'));
+    const before = m.listBroadcastRecipients.mock.calls.length;
+    act(() => sock.fire('wa_broadcast_progress', { broadcast: 'OTHER', sent: 99 }));
+    expect(screen.getByTestId('count-sent')).toHaveTextContent('7');
+    act(() => sock.fire('disconnect'));
+    expect(await screen.findByText('Polling')).toBeInTheDocument();
+    await waitFor(() => expect(m.listBroadcastRecipients.mock.calls.length).toBeGreaterThan(before), { timeout: 4000 }); // rows re-read after the push
   });
 });
 

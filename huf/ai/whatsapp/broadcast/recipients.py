@@ -15,9 +15,12 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 from typing import Any
 
 import frappe
+
+from huf.ai.whatsapp.broadcast import params as broadcast_params
 
 RECIPIENT_DOCTYPE = "WhatsApp Broadcast Recipient"
 DEFAULT_MAX_RECIPIENTS = 1000
@@ -136,6 +139,10 @@ def prepare(broadcast: str, rows: list[dict]) -> dict:
 		if recipient is None:
 			invalid.append({"recipient": raw, "reason": "invalid_number"})
 			continue
+		problem = broadcast_params.params_error(row.get("params"))
+		if problem:
+			invalid.append({"recipient": raw, "reason": f"invalid_params: {problem}"})
+			continue
 
 		name = _row_name(broadcast, recipient)
 		if name in seen:
@@ -188,10 +195,14 @@ def parse_csv(text: str) -> list[dict]:
 
 	The recipient column is the first header matching a known phone header (``phone``, ``recipient``,
 	``phone_number``, ``mobile``, ``wa_id``, ``whatsapp``, ``number``; case, spaces and dashes ignored).
-	A leading UTF-8 BOM is stripped. Every other column becomes ``params["body"]`` in column order.
-	Blank lines are skipped. Raises ValueError when no phone header is present.
+	A leading UTF-8 BOM is stripped. Named columns set per-recipient header and button values:
+	``header`` (text, or an https link for a media header), ``header_lat`` / ``header_lng`` /
+	``header_name`` / ``header_address`` (location header), ``button_url_<n>`` (link suffix) and
+	``button_code_<n>`` (copy code) where ``n`` is the button index from 0. Every other column becomes
+	``params["body"]`` in column order. An empty cell uses the broadcast default. Blank lines are skipped.
+	Raises ValueError when no phone header is present.
 	"""
-	text = (text or "").lstrip("﻿")
+	text = (text or "").lstrip("\ufeff")
 	reader = csv.reader(io.StringIO(text))
 	header = None
 	for cells in reader:
@@ -205,12 +216,38 @@ def parse_csv(text: str) -> list[dict]:
 	phone_idx = next((i for i, k in enumerate(keys) if k in PHONE_HEADERS), None)
 	if phone_idx is None:
 		raise ValueError("CSV needs a 'phone' or 'recipient' column")
-	body_idx = [i for i in range(len(header)) if i != phone_idx]
+	named = {i: k for i, k in enumerate(keys) if k in _HEADER_COLUMNS or _BUTTON_COLUMN.match(k)}
+	body_idx = [i for i in range(len(header)) if i != phone_idx and i not in named]
 
 	out: list[dict] = []
 	for cells in reader:
 		if not any(c.strip() for c in cells):
 			continue
 		padded = cells + [""] * (len(header) - len(cells))
-		out.append({"recipient": padded[phone_idx].strip(), "params": {"body": [padded[i] for i in body_idx]}})
+		params: dict[str, Any] = {"body": [padded[i] for i in body_idx]}
+		_apply_named_columns(params, {k: padded[i].strip() for i, k in named.items() if padded[i].strip()})
+		out.append({"recipient": padded[phone_idx].strip(), "params": params})
 	return out
+
+
+_HEADER_COLUMNS = {"header", "header_lat", "header_lng", "header_name", "header_address"}
+_BUTTON_COLUMN = re.compile(r"^button_(url|code)_(\d)$")
+
+
+def _apply_named_columns(params: dict[str, Any], values: dict[str, str]) -> None:
+	if any(k in values for k in ("header_lat", "header_lng")):
+		params["header"] = [{
+			"type": "location", "latitude": values.get("header_lat"), "longitude": values.get("header_lng"),
+			**{k: values[f"header_{k}"] for k in ("name", "address") if f"header_{k}" in values},
+		}]
+	elif "header" in values:
+		params["header"] = [values["header"]]
+	buttons = []
+	for key, value in sorted(values.items()):
+		m = _BUTTON_COLUMN.match(key)
+		if m:
+			kind, index = m.groups()
+			buttons.append({"index": int(index), "sub_type": "url", "text": value} if kind == "url"
+				else {"index": int(index), "sub_type": "copy_code", "code": value})
+	if buttons:
+		params["button"] = sorted(buttons, key=lambda b: b["index"])

@@ -22,9 +22,9 @@ from contextlib import contextmanager
 
 import frappe
 from frappe import _
-from frappe.utils import add_to_date, now_datetime
+from frappe.utils import now_datetime
 
-from huf.ai.whatsapp.broadcast import limits as broadcast_limits, send as broadcast_send
+from huf.ai.whatsapp.broadcast import limits as broadcast_limits, progress, send as broadcast_send
 
 BROADCAST = "WhatsApp Broadcast"
 RECIPIENT = "WhatsApp Broadcast Recipient"
@@ -147,6 +147,7 @@ def _runner_user(broadcast: str, started_by: str | None) -> str | None:
 
 def _log_event(event: str, broadcast: str, **extra) -> None:
 	frappe.logger("huf.whatsapp.broadcast").info({"event": event, "broadcast": broadcast, **extra})
+	progress.publish(broadcast, force=True)  # every lifecycle change reaches open pages at once
 
 
 # --------------------------------------------------------------------------- lifecycle

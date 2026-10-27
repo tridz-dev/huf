@@ -155,6 +155,9 @@ def apply_status(
 		_record_marketing_stop(row)
 	if new == "failed" and code in PAUSE_ON_FAILURE_CODES:
 		_pause(row["broadcast"], f"WhatsApp error {code} (messages dropped by pacing)")
+	from huf.ai.whatsapp.broadcast import progress
+
+	progress.publish(row["broadcast"])
 	return True
 
 

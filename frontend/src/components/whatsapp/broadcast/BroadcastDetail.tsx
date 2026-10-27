@@ -11,6 +11,9 @@ import { errorText, type WhatsAppResult } from '@/services/whatsappApi';
 import { cancelBroadcast, deleteBroadcast, getBroadcast, listBroadcastRecipients, pauseBroadcast, removeBroadcastRecipient, resumeBroadcast, type Broadcast, type BroadcastRecipient } from './broadcastApi';
 import { LoadError } from '../BridgeUnavailable';
 import { COUNT_KEYS, isActive, POLL_MS, progressPercent } from './broadcastModel';
+import { useBroadcastRealtime, type BroadcastProgress } from './useBroadcastRealtime';
+
+const RECONCILE_MS = 30000;
 
 const PAGE = 100;
 const ALL = 'all';
@@ -43,11 +46,20 @@ export function BroadcastDetail({ name, onBack }: { name: string; onBack: () => 
 
   useEffect(() => { void load(); }, [load, filter, limit]);
   const active = b ? isActive(b.status) : false;
+  const rowsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onProgress = useCallback((p: BroadcastProgress) => {
+    setB((prev) => (prev && prev.name === p.broadcast ? { ...prev, ...p, name: prev.name } as Broadcast : prev));
+    // counters come with the event; the recipient table is re-read shortly after (at most every 2s)
+    if (!rowsTimer.current) rowsTimer.current = setTimeout(() => { rowsTimer.current = null; void load(); }, 2000);
+  }, [load]);
+  useEffect(() => () => { if (rowsTimer.current) clearTimeout(rowsTimer.current); }, []);
+  const { live } = useBroadcastRealtime(name, onProgress);
+  // Polling stays as the fallback: every 5s without the socket, a 30s reconcile while it is live.
   useEffect(() => {
     if (!active) return;
-    const id = setInterval(() => void load(), POLL_MS);
+    const id = setInterval(() => void load(), live ? RECONCILE_MS : POLL_MS);
     return () => clearInterval(id);
-  }, [active, load]);
+  }, [active, live, load]);
 
   const act = async (fn: (n: string) => Promise<WhatsAppResult<unknown>>, done: string) => {
     setBusy(true);
@@ -87,6 +99,12 @@ export function BroadcastDetail({ name, onBack }: { name: string; onBack: () => 
         <Badge variant="outline">{b.status}</Badge>
         {b.send_via === 'marketing_messages' ? <Badge variant="secondary">Marketing Messages API</Badge> : <Badge variant="outline">Cloud API</Badge>}
         {b.pause_reason ? <span className="text-xs text-steel">Paused: {b.pause_reason}</span> : null}
+        {active ? (
+          <span className="ml-auto flex items-center gap-1 text-xs text-steel" role="status" aria-label={live ? 'Live updates' : 'Updating by polling'}>
+            <span aria-hidden className={`inline-block size-2 rounded-full ${live ? 'bg-green-500' : 'bg-muted-foreground'}`} />
+            {live ? 'Live' : 'Polling'}
+          </span>
+        ) : null}
       </div>
       {error ? <LoadError message={error} onRetry={load} /> : null}
 

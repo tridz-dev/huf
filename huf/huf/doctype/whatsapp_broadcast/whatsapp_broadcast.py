@@ -72,4 +72,7 @@ class WhatsAppBroadcast(Document):
 			frappe.db.set_value(self.doctype, self.name, k, v, update_modified=False)
 		if commit:
 			frappe.db.commit()
+		from huf.ai.whatsapp.broadcast import progress
+
+		progress.publish(self.name)
 		return counts

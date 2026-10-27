@@ -716,11 +716,7 @@ def _graph_err(error: str, resp_or_exc: Any, **extra: Any) -> dict[str, Any]:
 def _graph_post(
 	acct: dict[str, Any], data: dict[str, Any], http_post: Callable[..., Any] | None = None, marketing_api: bool = False
 ) -> dict[str, Any]:
-	"""POST a ``/messages`` body (``/marketing_messages`` when ``marketing_api``: Meta Marketing Messages API, same payload); returns ``{"wamid", "message_status"}`` or raises BridgeError.
-
-	``message_status`` is ``messages[0].message_status`` (``accepted`` | ``held_for_quality_assessment``;
-	Meta sends it for template messages only), else None.
-	"""
+	"""POST to ``/messages`` (``/marketing_messages`` if ``marketing_api``); returns ``{"wamid", "message_status"}`` or raises BridgeError."""
 	from huf.ai.whatsapp import account_events as _ae
 
 	if (refusal := _ae.send_refusal(acct.get("phone_id"))):
@@ -757,7 +753,7 @@ OPAQUE_REF_MAX = 256
 
 
 def _clean_opaque_ref(ref: Any) -> str | None:
-	"""``biz_opaque_callback_data`` value: stringified, stripped, truncated to 256 chars (Meta allows 512); None if empty."""
+	"""``biz_opaque_callback_data``: stripped, at most 256 chars; None if empty."""
 	if ref is None:
 		return None
 	text = str(ref).strip()[:OPAQUE_REF_MAX]
@@ -951,12 +947,8 @@ def send_template(
 	opaque_ref: str | None = None,
 	marketing_api: bool = False,
 ) -> dict[str, Any]:
-	"""Send an approved template. ``marketing_api=True`` (requires ``force_graph``) posts to the Marketing Messages API endpoint.
-
-	``force_graph=True`` always posts to Graph (never the positional frappe_whatsapp path), returns
-	``wamid`` and ``message_status`` (``accepted`` | ``held_for_quality_assessment`` | None) and, with
-	``opaque_ref``, sets top-level ``biz_opaque_callback_data`` (truncated to 256 chars) so status
-	webhooks echo it. Graph sends without ``force_graph`` return ``message_status`` None.
+	"""Send an approved template. ``force_graph`` always posts to Graph (returns ``wamid`` and ``message_status``),
+	``opaque_ref`` is echoed on status webhooks, ``marketing_api`` uses the Marketing Messages endpoint.
 
 	``run_id`` / ``solution`` (optional) attribute the send to a Solution for template usage tracking.
 

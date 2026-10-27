@@ -162,3 +162,9 @@ These are not done by the operator running the plan:
 - Changing gateway permissions or the webhook subscription.
 - Enabling any production gateway for broadcasts.
 - Deciding whether a run may use marketing templates to real recipients.
+
+## Appendix: live UI with realtime and real webhooks (dev setup)
+
+- **Realtime through a dev server.** socket.io must be reachable on the dev server's own port: proxy `/socket.io` (websocket) to the bench's socket.io port, send `X-Frappe-Site-Name: <site>` and `Host: <site>`, and rewrite `Origin` to `http://<site>` (socketio.js requires Origin's host to equal Host's host). In developer mode the realtime server authenticates by calling `http://<site>:<webserver_port>`, so that name must resolve inside the container (a one-line `dns.lookup` preload for that host when it is a `*.localhost` name). Inject `socketio_port` = the dev server port into the page boot.
+- **Real status webhooks.** Meta sends them to the phone number's override (`GET /<PHONE_ID>?fields=webhook_configuration`). To point it at the broadcast bench: expose the bench with a tunnel that sends `Host: <site>`, set the Gateway's `app_secret` to the Meta app secret (signatures are verified; never disable that), then POST `webhook_configuration.override_callback_uri` + `verify_token` to the phone number. Record the previous value first and restore it afterwards.
+

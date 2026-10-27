@@ -29,6 +29,7 @@ import frappe
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.gateway_adapters import whatsapp_errors as errors
+from huf.ai.whatsapp.broadcast import params as broadcast_params
 
 RECIPIENT = "WhatsApp Broadcast Recipient"
 BROADCAST = "WhatsApp Broadcast"
@@ -164,6 +165,8 @@ def _merge_params(broadcast: dict[str, Any], row: dict[str, Any]) -> tuple[Any, 
 			out.append(default)
 		elif isinstance(default, dict) and isinstance(mine, dict):
 			out.append({**default, **mine})
+		elif part == "button":
+			out.append(broadcast_params.merge_buttons(default, mine))
 		else:
 			out.append(mine)
 	return tuple(out)

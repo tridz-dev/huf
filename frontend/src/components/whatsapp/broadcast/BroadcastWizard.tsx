@@ -27,13 +27,27 @@ export function parseRecipientLines(lines: string[], named: boolean, vars: Broad
   });
 }
 
+export interface LocationValue { latitude: string; longitude: string; name: string; address: string }
+const EMPTY_LOCATION: LocationValue = { latitude: '', longitude: '', name: '', address: '' };
+
+const inRange = (v: string, max: number) => v.trim() !== '' && Number.isFinite(Number(v)) && Math.abs(Number(v)) <= max;
+/** Latitude -90..90 and longitude -180..180 are both required for a location header. */
+export const locationValid = (l: LocationValue) => inRange(l.latitude, 90) && inRange(l.longitude, 180);
+
 /** Header / button parameters the operator filled in, in the shape `create_broadcast` takes (undefined when none). */
 export function buildHeaderButtonParams(
-  tpl: BroadcastTemplateParams | null, headerValue: string, buttonValues: Record<number, string>,
+  tpl: BroadcastTemplateParams | null, headerValue: string, buttonValues: Record<number, string>, location: LocationValue = EMPTY_LOCATION,
 ): { header_params?: unknown; button_params?: unknown } {
   const out: { header_params?: unknown; button_params?: unknown } = {};
   const h = headerValue.trim();
-  if (tpl?.header && h && tpl.header.type !== 'LOCATION') out.header_params = [h];
+  if (tpl?.header && tpl.header.type === 'LOCATION') {
+    if (locationValid(location)) {
+      out.header_params = [{
+        type: 'location', latitude: Number(location.latitude), longitude: Number(location.longitude),
+        ...(location.name.trim() ? { name: location.name.trim() } : {}), ...(location.address.trim() ? { address: location.address.trim() } : {}),
+      }];
+    }
+  } else if (tpl?.header && h) out.header_params = [h];
   const buttons = (tpl?.buttons ?? [])
     .filter((b) => b.sub_type !== 'quick_reply' && (buttonValues[b.index] ?? '').trim() !== '')
     .map((b) => (b.sub_type === 'copy_code'
@@ -42,6 +56,9 @@ export function buildHeaderButtonParams(
   if (buttons.length) out.button_params = buttons;
   return out;
 }
+
+/** A pasted list whose first line is a header (`phone,...`) is sent as CSV, so per-recipient header and button columns work. */
+export const hasHeaderRow = (text: string) => /^(phone|recipient)\b/i.test(text.trim());
 
 const STEPS = ['Template', 'Recipients', 'Consent', 'Preview', 'Confirm'] as const;
 
@@ -66,6 +83,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   const [defaults, setDefaults] = useState<Record<string, string>>({});
   const [headerValue, setHeaderValue] = useState('');
   const [buttonValues, setButtonValues] = useState<Record<number, string>>({});
+  const [location, setLocation] = useState<LocationValue>(EMPTY_LOCATION);
   const started = useRef(false);
 
   useEffect(() => {
@@ -76,7 +94,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   }, [gateway]);
 
   useEffect(() => {
-    setTplParams(null); setDefaults({}); setHeaderValue(''); setButtonValues({});
+    setTplParams(null); setDefaults({}); setHeaderValue(''); setButtonValues({}); setLocation(EMPTY_LOCATION);
     if (!tplName) return;
     let live = true;
     void getBroadcastTemplateParams(gateway, tplName).then((res) => {
@@ -93,8 +111,12 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   const headerType = (header?.type ?? '').toUpperCase();
   const locationHeader = headerType === 'LOCATION';
   const headerIsMedia = !!header && headerType !== 'TEXT';
+  const extraColumns = [
+    ...(header ? (locationHeader ? ['header_lat', 'header_lng'] : ['header']) : []),
+    ...urlButtons.map((b) => (b.sub_type === 'copy_code' ? `button_code_${b.index}` : `button_url_${b.index}`)),
+  ];
   const paramsReady =
-    (!header || !header.required || locationHeader || headerValue.trim() !== '') &&
+    (!header || !header.required || (locationHeader ? locationValid(location) : headerValue.trim() !== '')) &&
     urlButtons.every((b) => !b.required || (buttonValues[b.index] ?? '').trim() !== '');
 
   const buildBodyParams = (): Record<string, string> | string[] | undefined => {
@@ -115,13 +137,13 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
     setBusy(true); setErr('');
     let id = broadcast;
     if (!id) {
-      const c = await createBroadcast({ gateway, template: tplName, title: title.trim() || `Broadcast ${tpl?.template_name ?? tplName}`, language_code: tpl?.language_code, send_via: isMarketing ? sendVia : 'messages', body_params: buildBodyParams(), ...buildHeaderButtonParams(tplParams, headerValue, buttonValues) });
+      const c = await createBroadcast({ gateway, template: tplName, title: title.trim() || `Broadcast ${tpl?.template_name ?? tplName}`, language_code: tpl?.language_code, send_via: isMarketing ? sendVia : 'messages', body_params: buildBodyParams(), ...buildHeaderButtonParams(tplParams, headerValue, buttonValues, location) });
       if (!c.success) return fail(c);
       id = c.broadcast;
       setBroadcast(id);
     }
     const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-    const res = await addBroadcastRecipients(id, csv !== null ? { csvText: csv } : { recipients: parseRecipientLines(lines, named, vars) });
+    const res = await addBroadcastRecipients(id, csv !== null ? { csvText: csv } : hasHeaderRow(text) ? { csvText: text } : { recipients: parseRecipientLines(lines, named, vars) });
     if (!res.success) return fail(res);
     setResult(res);
     setBusy(false);
@@ -170,7 +192,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   const blocking = preview?.blocking ?? [];
   const expected = preview ? String(preview.queued) : '';
   const canNext = [
-    !!tpl && paramsReady && !locationHeader,
+    !!tpl && paramsReady,
     (csv !== null || text.trim().length > 0) && !busy,
     consent && source.trim().length > 0 && !busy,
   ][step];
@@ -238,7 +260,25 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
               <Input id="bc-header" value={headerValue} placeholder={headerIsMedia ? 'https://example.com/file' : (header.sample ?? '')} onChange={(e) => setHeaderValue(e.target.value)} />
             </div>
           ) : null}
-          {locationHeader ? <p role="note" className="text-xs text-steel">Templates with a location header cannot be broadcast from here yet.</p> : null}
+          {locationHeader ? (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">Header location (the same place for every recipient unless a column says otherwise)</legend>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Latitude" id="bc-loc-lat" hint="-90 to 90" error={location.latitude && !inRange(location.latitude, 90) ? 'Enter a number between -90 and 90' : undefined}>
+                  {(p) => <Input {...p} inputMode="decimal" value={location.latitude} onChange={(e) => setLocation((l) => ({ ...l, latitude: e.target.value }))} />}
+                </Field>
+                <Field label="Longitude" id="bc-loc-lng" hint="-180 to 180" error={location.longitude && !inRange(location.longitude, 180) ? 'Enter a number between -180 and 180' : undefined}>
+                  {(p) => <Input {...p} inputMode="decimal" value={location.longitude} onChange={(e) => setLocation((l) => ({ ...l, longitude: e.target.value }))} />}
+                </Field>
+                <Field label="Place name (optional)" id="bc-loc-name">
+                  {(p) => <Input {...p} maxLength={1000} value={location.name} onChange={(e) => setLocation((l) => ({ ...l, name: e.target.value }))} />}
+                </Field>
+                <Field label="Address (optional)" id="bc-loc-address">
+                  {(p) => <Input {...p} maxLength={1000} value={location.address} onChange={(e) => setLocation((l) => ({ ...l, address: e.target.value }))} />}
+                </Field>
+              </div>
+            </fieldset>
+          ) : null}
           {urlButtons.map((b) => (
             <div key={b.index} className="space-y-1">
               <Label htmlFor={`bc-btn-${b.index}`}>{b.sub_type === 'copy_code' ? 'Coupon code' : 'Link suffix'} for button {b.label ? `"${b.label}"` : b.index + 1}{b.required ? '' : ' (optional)'}</Label>
@@ -274,6 +314,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
               {vars.length > 0
                 ? `Columns: phone, ${vars.map((v, i) => varKey(v, i)).join(', ')} (comma or tab separated). Missing values use the defaults from step 1.`
                 : 'Columns: phone.'}
+              {extraColumns.length ? ` For per-recipient values, start with a header line such as phone,${extraColumns.join(',')}; an empty cell uses the default.` : ''}
             </p>
           </div>
           <div className="space-y-1">
