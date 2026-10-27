@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getGatewayReadiness } from './gatewayReadiness';
 import type { GatewayDoc } from '@/services/gatewayApi';
 import type { SlackSetupStatus } from '@/services/slackSetupApi';
+import type { TeamsCheckStatus, TeamsDiagnosis } from '@/services/teamsApi';
 
 describe('gatewayReadiness', () => {
   it('returns ready=true and blockingCount=0 for fully configured gateway', () => {
@@ -161,6 +162,47 @@ describe('gatewayReadiness', () => {
       const wa = { ...base, provider: 'WhatsApp' } as GatewayDoc;
       const result = getGatewayReadiness(wa, { slackSetup: okStatus });
       expect(result.items.some((i) => i.id.startsWith('slack-'))).toBe(false);
+    });
+  });
+
+  describe('Microsoft Teams', () => {
+    const teams = {
+      provider: 'Microsoft Teams',
+      integration_settings: 'i',
+      default_target_type: 'agent',
+      is_enabled: 1,
+    } as unknown as GatewayDoc;
+    const diag = (statuses: Record<string, TeamsCheckStatus>): TeamsDiagnosis => ({
+      gateway: 'g',
+      summary: { pass: 0, warn: 0, fail: 0, info: 0 },
+      checks: Object.entries(statuses).map(([id, status]) => ({ id, status, title: id, detail: '', how_to_fix: '' })),
+    });
+
+    it('lists Teams items as not done before any check without blocking', () => {
+      const result = getGatewayReadiness(teams);
+      expect(result.items.find((i) => i.id === 'teams-token')?.done).toBe(false);
+      expect(result.ready).toBe(true);
+    });
+
+    it('is ready when credentials and token pass, inbound is informational', () => {
+      const result = getGatewayReadiness(teams, {
+        teamsDiagnosis: diag({ credentials_present: 'pass', token_acquisition: 'pass', last_inbound: 'warn' }),
+      });
+      expect(result.ready).toBe(true);
+      expect(result.items.find((i) => i.id === 'teams-last-inbound')?.done).toBe(false);
+    });
+
+    it('blocks when the token check fails', () => {
+      const result = getGatewayReadiness(teams, {
+        teamsDiagnosis: diag({ credentials_present: 'pass', token_acquisition: 'fail' }),
+      });
+      expect(result.ready).toBe(false);
+      expect(result.blockingCount).toBe(1);
+    });
+
+    it('does not add Teams items to other providers', () => {
+      const slack = { ...teams, provider: 'Slack' } as GatewayDoc;
+      expect(getGatewayReadiness(slack).items.some((i) => i.id.startsWith('teams-'))).toBe(false);
     });
   });
 });
