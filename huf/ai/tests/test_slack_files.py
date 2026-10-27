@@ -156,3 +156,40 @@ def test_save_failure_returns_none():
     env.save = lambda *a, **k: (_ for _ in ()).throw(RuntimeError(TOKEN))
     out, _ = run({}, env)
     assert out is None
+
+
+@pytest.mark.parametrize("url", [
+    "https://files.slack.com:8443/x", "https://user@files.slack.com/x", "https://user:pw@files.slack.com/x",
+    "https://:pw@files.slack.com/x",
+])
+def test_port_and_userinfo_rejected(url):
+    out, env = run({"url_private_download": url})
+    assert out is None and env.calls == []
+
+
+def test_explicit_443_allowed():
+    out, env = run({"url_private_download": "https://files.slack.com:443/x.pdf"})
+    assert out and env.calls
+
+
+def test_total_deadline_enforced_in_stream(monkeypatch):
+    clock = iter([0, 1, 2, 31, 32, 33, 34])
+    monkeypatch.setattr(sf.time, "monotonic", lambda: next(clock))
+    out, env = run({}, Env(Resp(chunks=[b"a", b"b", b"c", b"d"])))
+    assert out is None and env.saved == []
+
+
+@pytest.mark.parametrize("ctype", ["application/octet-stream", "", None])
+def test_octet_stream_falls_back_to_file_mimetype(ctype):
+    resp = Resp(ctype=ctype or "")
+    if ctype is None:
+        resp.headers = {}
+    out, _ = run({"mimetype": "application/pdf"}, Env(resp))
+    assert out and out["mime_type"] == "application/pdf"
+
+
+def test_octet_stream_with_disallowed_declared_mime_rejected():
+    out, _ = run({"mimetype": "application/zip"}, Env(Resp(ctype="application/octet-stream")))
+    assert out is None
+    out, _ = run({}, Env(Resp(ctype="application/octet-stream")))
+    assert out is None

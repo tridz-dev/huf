@@ -10,7 +10,7 @@ decision.
 Security rules: only ``https://files.slack.com`` (hostname matched exactly
 after URL parsing); redirects are never followed (a redirect would forward
 the Authorization header elsewhere); a hard 20 MB byte cap is enforced while
-streaming regardless of the declared size; HTML responses (Slack's login page
+streaming regardless of the declared size, as is a 30 s total deadline; HTML responses (Slack's login page
 for a missing scope) and non-allow-listed mime types are rejected; and the
 bot token never appears in logs or exception text.
 """
@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 from typing import Any, Callable
 from urllib.parse import urlparse
 
@@ -29,6 +30,7 @@ MAX_FILE_BYTES = 20 * 1024 * 1024
 ALLOWED_HOST = "files.slack.com"
 CONNECT_TIMEOUT = 5
 READ_TIMEOUT = 20
+TOTAL_TIMEOUT = 30
 MAX_FILENAME_LEN = 120
 
 ALLOWED_MIME_PREFIXES = ("image/", "audio/", "video/")
@@ -75,7 +77,13 @@ def _url_allowed(url: Any) -> bool:
         return False
     try:
         parsed = urlparse(url)
-        return parsed.scheme == "https" and parsed.hostname == ALLOWED_HOST
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname == ALLOWED_HOST
+            and parsed.port in (None, 443)
+            and parsed.username is None
+            and parsed.password is None
+        )
     except Exception:
         return False
 
@@ -118,6 +126,7 @@ def download_slack_file(
             logger.warning("slack file %s skipped: url not allowed", file_id)
             return None
 
+        deadline = time.monotonic() + TOTAL_TIMEOUT
         response = http_get(
             url,
             headers={"Authorization": f"Bearer {bot_token}"},
@@ -136,7 +145,7 @@ def download_slack_file(
         if mime == "text/html":
             logger.warning("slack file %s rejected: html response (missing files:read?)", file_id)
             return None
-        if not mime:
+        if not mime or mime == "application/octet-stream":
             mime = str(file_info.get("mimetype") or "").split(";", 1)[0].strip().lower()
         if not _mime_allowed(mime):
             logger.warning("slack file %s rejected: mime not allowed", file_id)
@@ -145,6 +154,9 @@ def download_slack_file(
         chunks: list[bytes] = []
         total = 0
         for chunk in response.iter_content(chunk_size=64 * 1024):
+            if time.monotonic() > deadline:
+                logger.warning("slack file %s aborted: total time exceeded", file_id)
+                return None
             if not chunk:
                 continue
             total += len(chunk)
