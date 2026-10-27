@@ -182,3 +182,63 @@ def test_other_provider_keeps_fallback_without_handler(monkeypatch):
 	out, rejected, seen = _run(monkeypatch, "Telegram")
 	assert rejected == []
 	assert seen["user"] == "svc@x"
+
+
+# ---- privacy fail-closed target vs. the real adapter's send path (S8 fix 9) ----
+def _real_adapter_send(target, posted):
+	"""Drive the REAL Slack adapter's send_reply with a fake HTTP layer that behaves like Slack:
+	channel ids (C/G/D) and user ids (U/W) are accepted, anything else is channel_not_found."""
+	# Load the real adapter package (the module fixture stubs it); restore everything after.
+	saved = {k: v for k, v in sys.modules.items() if k.startswith("huf.ai.gateway_adapters")}
+	for k in saved:
+		sys.modules.pop(k)
+	import os
+
+	shim = types.ModuleType("huf.ai.gateway_adapters")  # skip the package __init__ (heavy imports)
+	shim.__path__ = [os.path.join(os.path.dirname(__file__), "..", "gateway_adapters")]
+	sys.modules["huf.ai.gateway_adapters"] = shim
+	try:
+		adapter_mod = importlib.import_module("huf.ai.gateway_adapters.slack")
+		types_mod = importlib.import_module("huf.ai.gateway_adapters.types")
+	finally:
+		for k in [k for k in sys.modules if k.startswith("huf.ai.gateway_adapters")]:
+			sys.modules.pop(k)
+		sys.modules.update(saved)
+		pkg = sys.modules.get("huf.ai")
+		if pkg is not None and hasattr(pkg, "gateway_adapters"):
+			delattr(pkg, "gateway_adapters")
+
+	def http_post(url, *, headers, json_data, timeout):
+		posted.append(dict(json_data))
+		ok = str(json_data["channel"])[:1] in "CGDUW" and json_data["channel"].isalnum()
+		return {"ok": True, "ts": "1.2"} if ok else {"ok": False, "error": "channel_not_found"}
+
+	adapter = adapter_mod.SlackGatewayAdapter({"token": "xoxb-test"}, http_post=http_post)
+	reply = types_mod.GatewayReply(conversation_id=target, text="private answer", thread_id=None)
+	return adapter.send_reply(reply)
+
+
+def test_privacy_fail_closed_target_never_reaches_origin_channel(monkeypatch):
+	"""Residual risk (documented): a bare ``U...`` id works with chat.postMessage only when the
+	app's Messages tab is enabled (the generated manifest enables it). If Slack ever rejected
+	it, the adapter raises and the event is marked Failed; it still never posts to the channel."""
+	privacy = importlib.import_module("huf.ai.gateways.privacy")
+	api = SimpleNamespace(
+		conversations_open=MagicMock(side_effect=RuntimeError("missing_scope")),
+		post_message=MagicMock(),
+	)
+	monkeypatch.setattr(privacy, "get_slack_api", lambda g, **k: api)
+	for sender, expect_ok in (("U1", True), ("", False)):
+		event = SimpleNamespace(conversation_id="C1", thread_id="111.2", sender_id=sender)
+		target = privacy.resolve_reply_target(
+			SimpleNamespace(provider="Slack", private_reply_policy="Always private"), event, "private answer"
+		)
+		assert target and target != "C1" and not target.startswith("C")
+		posted = []
+		if expect_ok:
+			assert _real_adapter_send(target, posted).provider_message_id == "1.2"
+		else:
+			with pytest.raises(ValueError):
+				_real_adapter_send(target, posted)
+		assert all(p["channel"] != "C1" for p in posted)
+		assert event.thread_id is None  # no channel thread is addressed either
