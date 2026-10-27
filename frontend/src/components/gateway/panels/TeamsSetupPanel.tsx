@@ -18,8 +18,10 @@ import {
   saveTeamsAllowedTenants,
   saveTeamsPackageVersion,
   type TeamsDiagnosis,
+  type TeamsSettings,
 } from '@/services/gateways/teamsApi';
 import { registerProviderPanel, type ProviderPanelProps } from './index';
+import { TeamsBotSettings } from './TeamsBotSettings';
 import { TeamsCheckRow, TeamsStatusChips } from './TeamsDiagnosticsPanel';
 
 const ENTRA_URL = 'https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade';
@@ -39,6 +41,7 @@ export function TeamsSetupPanel({ gateway }: ProviderPanelProps) {
   const [savingTenants, setSavingTenants] = useState(false);
   const [tenantError, setTenantError] = useState<string | null>(null);
 
+  const [loadedSettings, setLoadedSettings] = useState<TeamsSettings | null>(null);
   const [version, setVersion] = useState(DEFAULT_PACKAGE_VERSION);
 
   const [watching, setWatching] = useState(false);
@@ -61,6 +64,7 @@ export function TeamsSetupPanel({ gateway }: ProviderPanelProps) {
     setSettingsError(null);
     try {
       const settings = await getTeamsSettings(gateway.name);
+      setLoadedSettings(settings);
       setTenantText((settings.allowed_tenant_list ?? []).join('\n'));
       if (settings.app_package_version) setVersion(settings.app_package_version);
     } catch (e) {
@@ -236,6 +240,8 @@ export function TeamsSetupPanel({ gateway }: ProviderPanelProps) {
         </Button>
         {tenantError && <p className="text-sm text-destructive">{tenantError}</p>}
       </section>
+
+      <TeamsBotSettings gateway={gateway.name} settings={loadedSettings} disabled={settingsLoading} />
 
       <section className="space-y-2" aria-labelledby="teams-step-5">
         <p id="teams-step-5" className="text-sm font-medium">5. Download the Teams app package</p>

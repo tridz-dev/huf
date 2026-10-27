@@ -550,3 +550,21 @@ def test_default_lookup_requires_gateway_and_scopes_query(monkeypatch):
 	assert seen == []
 	assert teams_mod._default_reference_lookup(CHANNEL, "gw1", APP)["name"] == "R"
 	assert seen[0]["filters"]["gateway"] == "gw1"
+
+
+def test_direct_send_without_activity_id_raises(monkeypatch):
+	adapter = TeamsGatewayAdapter(
+		{"app_id": "a", "app_password": "p", "tenant_id": "t"},
+		direct=True,
+		gateway_name="G",
+		reference_lookup=lambda *_: {
+			"name": "ref",
+			"service_url": "https://smba.trafficmanager.net/emea/",
+			"tenant_id": "t",
+			"conversation_type": "personal",
+		},
+	)
+	monkeypatch.setattr(teams_api, "make_token_provider", lambda *a, **k: object())
+	monkeypatch.setattr(teams_api, "post_activity", lambda *a, **k: {})
+	with pytest.raises(ValueError, match="Microsoft Teams message delivery failed: {}"):
+		adapter._dispatch("reply", {"type": "message"}, adapter._resolve("conv1"), "key")

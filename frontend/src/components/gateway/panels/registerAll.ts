@@ -2,6 +2,7 @@
 // calls registerProviderPanel() when imported.
 import './BindingsPanel';
 import './HealthPanel';
+import './SlackPeoplePanel';
 import './SlackSetupPanel';
 import './TeamsDiagnosticsPanel';
 import './TeamsPeoplePanel';

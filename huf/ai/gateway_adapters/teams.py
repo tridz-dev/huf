@@ -293,7 +293,7 @@ class TeamsGatewayAdapter(GatewayAdapter):
 			)
 			pid = _s(body.get("id")) if isinstance(body, Mapping) else ""
 			if not pid:
-				raise ValueError(f"Microsoft Teams message delivery failed: {body!r}")
+				raise ValueError(f"Microsoft Teams message delivery failed: {body!r:.200}")
 			return OutboundDelivery(pid, provider_response=dict(body))
 
 		outbox = self._outbox

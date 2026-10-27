@@ -27,6 +27,8 @@ import { getGatewayReadiness } from '@/utils/gatewayReadiness';
 import { getIntegrationSetting, setupTelegramWebhook } from '@/services/integrationApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { DeleteGatewayDialog } from './channel/DeleteGatewayDialog';
+import { ConnectionStatus } from './channel/ConnectionStatus';
+import { SlackPolicySection, slackSaveFields } from './channel/SlackPolicySection';
 import { DirectPolicySection } from './channel/DirectPolicySection';
 import { RoomPolicySection } from './channel/RoomPolicySection';
 import { RoutingTargetSection } from './channel/RoutingTargetSection';
@@ -166,6 +168,7 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
         default_target_type: gateway.default_target_type,
         default_agent: gateway.default_agent || '',
         default_flow: gateway.default_flow || '',
+        ...slackSaveFields(gateway),
         ...(gateway.provider === 'WhatsApp'
           ? Object.fromEntries(WHATSAPP_GATEWAY_FIELDS.map((field) => [field, gateway[field] ?? null]))
           : {}),
@@ -303,9 +306,13 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
         />
       </Field>
 
+      <ConnectionStatus gateway={gateway} />
+
       <RoutingTargetSection gateway={gateway} agents={agents} flows={flows} onChange={handleFieldChange} />
 
       <DirectPolicySection gateway={gateway} onChange={handleFieldChange} />
+
+      <SlackPolicySection gateway={gateway} onChange={handleFieldChange} />
 
       {/* GW-18: room/group-chat admission policy. These fields already exist on
           the Gateway doctype and were being fetched, but had no editor here.
