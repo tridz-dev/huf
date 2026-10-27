@@ -156,6 +156,12 @@ HUF_ROLE_FRAPPE_ROLE_MAP: dict[str, str] = {
 	"Huf Gateway User": "Huf Gateway User",
 }
 
+# Every Frappe System User gets these by default (see huf_user_role.ensure_default_huf_roles):
+# the Huf role they start with, and the gateway role so they can be a channel's Run as user.
+# Nobody is ever given Huf Admin (which is Frappe's System Manager) automatically.
+DEFAULT_SYSTEM_USER_HUF_ROLE = "Huf Manager"
+GATEWAY_FRAPPE_ROLE = "Huf Gateway User"
+
 # Standard Frappe role constants.
 # Prefer these over string literals so renames/customizations are localized.
 SYSTEM_MANAGER = "System Manager"

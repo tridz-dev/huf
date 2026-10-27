@@ -217,14 +217,14 @@ export default function GatewaysPage() {
   }
 
   async function handleRevokeEntry(entry: GatewayAccessEntry) {
-    if (!confirm(`Revoke the pairing request from ${entry.display_label || entry.external_id}?`)) return;
+    if (!confirm(`Decline the request from ${entry.display_label || entry.external_id}? They can ask again after a day.`)) return;
     setRowActionName(entry.name);
     try {
       await revokeGatewayAccessEntry(entry.name);
-      toast.success('Access request revoked.');
+      toast.success('Request declined.');
       setPendingEntries((prev) => prev.filter((e) => e.name !== entry.name));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not revoke this request.');
+      toast.error(err instanceof Error ? err.message : 'Could not decline this request.');
     } finally {
       setRowActionName(null);
     }
@@ -291,7 +291,7 @@ export default function GatewaysPage() {
                 disabled={busy}
                 onClick={() => handleRevokeEntry(entry)}
               >
-                <Trash2 className="mr-1 h-3.5 w-3.5" /> Revoke
+                <Trash2 className="mr-1 h-3.5 w-3.5" /> Decline
               </Button>
             </div>
           );

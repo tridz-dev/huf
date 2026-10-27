@@ -120,6 +120,14 @@ class Gateway(Document):
             return
         credentials = self._load_integration_credentials()
         self.phone_number_id = str(credentials.get("phone_number_id") or "").strip()
+        if not self.whatsapp_business_account_id:
+            self.whatsapp_business_account_id = str(credentials.get("business_account_id") or "").strip()
+        if not (self.get("whatsapp_account") or "").strip() and self.phone_number_id:
+            # Saving the credential created (or found) the account for this number: link it here too,
+            # so a gateway connected to an existing credential never needs a manual link.
+            from huf.ai.whatsapp.credential_sync import account_for_phone
+
+            self.whatsapp_account = account_for_phone(self.phone_number_id)
         if not self.is_enabled:
             return
 
@@ -268,9 +276,11 @@ class Gateway(Document):
         # Load credentials from Integration Settings
         credentials = self._load_integration_credentials()
 
-        # Check each required field in the adapter's credential_schema
+        # Check each required field in the adapter's credential_schema. Adapters that declare
+        # runtime_credentials only need those to carry traffic (the rest is enforced on the credential).
+        runtime = getattr(adapter_cls, "runtime_credentials", None)
         for field in adapter_cls.credential_schema.fields:
-            if not field.required:
+            if not field.required or (runtime is not None and field.key not in runtime):
                 continue
 
             key = field.key

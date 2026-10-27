@@ -10,6 +10,7 @@ import {
   getIntegrationServices,
 } from '@/services/integrationApi';
 import { AddIntegrationToAgentModal } from '@/components/integrations/AddIntegrationToAgentModal';
+import { ConnectChannelAgentModal } from '@/components/integrations/ConnectChannelAgentModal';
 import { ServiceCatalogModal } from '@/components/integrations/ServiceCatalogModal';
 import { ServiceToolCount } from '@/components/integrations/ServiceToolCount';
 import type { IntegrationSettingsDoc, IntegrationServiceDoc } from '@/types/integration.types';
@@ -219,7 +220,7 @@ export function IntegrationSettingsListingPage({
               actions={[
                 {
                   icon: Bot,
-                  label: 'Add to Agent',
+                  label: serviceSurfaceMap?.get(setting.service.toLowerCase()) === 'Gateway' ? 'Connect agent' : 'Add to Agent',
                   onClick: () => {
                     setSelectedSetting(setting);
                     setAddToAgentOpen(true);
@@ -258,15 +259,26 @@ export function IntegrationSettingsListingPage({
         </div>
       )}
 
-      <AddIntegrationToAgentModal
-        open={addToAgentOpen}
-        onOpenChange={(open) => {
-          setAddToAgentOpen(open);
-          if (!open) setSelectedSetting(null);
-        }}
-        service={selectedSetting?.service || ''}
-        integrationName={selectedSetting?.name}
-      />
+      {selectedSetting && serviceSurfaceMap?.get(selectedSetting.service.toLowerCase()) === 'Gateway' ? (
+        <ConnectChannelAgentModal
+          open={addToAgentOpen}
+          onOpenChange={(open) => {
+            setAddToAgentOpen(open);
+            if (!open) setSelectedSetting(null);
+          }}
+          integrationName={selectedSetting.name}
+        />
+      ) : (
+        <AddIntegrationToAgentModal
+          open={addToAgentOpen}
+          onOpenChange={(open) => {
+            setAddToAgentOpen(open);
+            if (!open) setSelectedSetting(null);
+          }}
+          service={selectedSetting?.service || ''}
+          integrationName={selectedSetting?.name}
+        />
+      )}
     </PageFrame>
   );
 }
