@@ -21,6 +21,11 @@ import frappe
 
 RECIPIENT_DOCTYPE = "WhatsApp Broadcast Recipient"
 DEFAULT_MAX_RECIPIENTS = 1000
+MAX_RECIPIENTS_CEILING = 10000  # highest max_recipients a broadcast may be given
+MAX_ROWS_PER_BROADCAST = 50000  # hard ceiling on stored rows (skipped rows count)
+MAX_ROWS_PER_REQUEST = 10000  # recipients accepted in one add call
+MAX_CSV_BYTES = 2 * 1024 * 1024
+RETURNED_LIST_LIMIT = 200  # skipped/invalid entries echoed back; totals are always exact
 MIN_DIGITS = 8
 MAX_DIGITS = 15  # E.164 upper bound
 PHONE_HEADERS = {"phone", "recipient", "phone_number", "phone number", "mobile", "wa_id", "whatsapp", "number"}
@@ -61,6 +66,10 @@ def _existing_names(broadcast: str) -> set[str]:
 
 def _active_count(broadcast: str) -> int:
 	return frappe.db.count(RECIPIENT_DOCTYPE, {"broadcast": broadcast, "status": ["!=", "skipped"]})
+
+
+def _total_count(broadcast: str) -> int:
+	return int(frappe.db.count(RECIPIENT_DOCTYPE, {"broadcast": broadcast}) or 0)
 
 
 def _insert_row(
@@ -112,9 +121,10 @@ def prepare(broadcast: str, rows: list[dict]) -> dict:
 	"""
 	doc = _load_broadcast(broadcast)
 	is_marketing = str(doc.category or "").upper() == "MARKETING"
-	cap = int(doc.max_recipients or DEFAULT_MAX_RECIPIENTS)
+	cap = min(int(doc.max_recipients or DEFAULT_MAX_RECIPIENTS), MAX_RECIPIENTS_CEILING)
 	seen = _existing_names(broadcast)
 	active = _active_count(broadcast)
+	total = _total_count(broadcast)
 
 	added = 0
 	skipped: list[dict[str, Any]] = []
@@ -133,15 +143,20 @@ def prepare(broadcast: str, rows: list[dict]) -> dict:
 			continue
 		seen.add(name)
 
+		if active >= cap:
+			# Checked BEFORE policy-skipped rows are stored, so they cannot bypass the cap.
+			# Not stored: a later run with a higher max_recipients can still add this contact.
+			skipped.append({"recipient": recipient, "reason": "max_recipients"})
+			continue
+		if total >= MAX_ROWS_PER_BROADCAST:
+			skipped.append({"recipient": recipient, "reason": "row_ceiling"})
+			continue
+
 		reason = _policy_reason(doc.gateway, recipient, is_marketing)
 		if reason is not None:
 			_insert_row(broadcast, recipient, "skipped", reason, None, None, None)
+			total += 1
 			skipped.append({"recipient": recipient, "reason": reason})
-			continue
-
-		if active >= cap:
-			# Not stored: a later run with a higher max_recipients can still add this contact.
-			skipped.append({"recipient": recipient, "reason": "max_recipients"})
 			continue
 
 		params = row.get("params") if isinstance(row.get("params"), dict) else None
@@ -155,10 +170,17 @@ def prepare(broadcast: str, rows: list[dict]) -> dict:
 			row.get("consent_at") or None,
 		)
 		active += 1
+		total += 1
 		added += 1
 
 	doc.recount()
-	return {"added": added, "skipped": skipped, "invalid": invalid}
+	return {
+		"added": added,
+		"skipped": skipped[:RETURNED_LIST_LIMIT],
+		"skipped_total": len(skipped),
+		"invalid": invalid[:RETURNED_LIST_LIMIT],
+		"invalid_total": len(invalid),
+	}
 
 
 def parse_csv(text: str) -> list[dict]:

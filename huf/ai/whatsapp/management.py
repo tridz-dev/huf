@@ -1792,7 +1792,7 @@ _BROADCAST_COUNT_FIELDS = (
 _BROADCAST_FIELDS = (
 	"name", "title", "status", "pause_reason", "gateway", "whatsapp_account", "template", "template_name",
 	"language_code", "category", "body_params", "header_params", "button_params", "consent_source",
-	"consent_attested", "consent_attested_by", "consent_attested_at", "max_recipients", "mps",
+	"consent_attested", "consent_attested_by", "consent_attested_at", "max_recipients", "mps", "send_via",
 	"started_by", "started_at", "finished_at", "creation", "modified", *_BROADCAST_COUNT_FIELDS,
 )
 
@@ -1852,7 +1852,20 @@ def _broadcast_view(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _queued_count(broadcast: str) -> int:
-	return int(frappe.db.count(_BROADCAST_RECIPIENT, {"broadcast": broadcast, "status": "queued"}) or 0)
+	"""Recipients still to send (queued + deferred): same set as broadcast_cost.confirm_token and the runner."""
+	return int(frappe.db.count(_BROADCAST_RECIPIENT, {"broadcast": broadcast, "status": ["in", ["queued", "deferred"]]}) or 0)
+
+
+def _mask_phone(value: Any) -> Any:
+	text = str(value or "")
+	return ("*" * max(len(text) - 4, 0) + text[-4:]) if text else value
+
+
+_LONG_DIGITS_RE = re.compile(r"\d{7,}")
+
+
+def _mask_digits(text: Any) -> Any:
+	return _LONG_DIGITS_RE.sub(lambda m: _mask_phone(m.group(0)), text) if isinstance(text, str) else text
 
 
 def _json_param(value: Any, label: str) -> Any:
@@ -1890,6 +1903,8 @@ def create_broadcast(
 		return _error("invalid_name", "Template must be the Meta name or '<name>-<language_code>'.")
 	if not title or not str(title).strip():
 		return _error("invalid_title", "A title is required.")
+	from huf.ai.whatsapp import broadcast_recipients as br
+
 	docname = bridge._template_docname(account, str(template).strip(), language_code or None)
 	tpl = None
 	if docname and frappe.db.exists("WhatsApp Templates", docname):
@@ -1913,9 +1928,12 @@ def create_broadcast(
 		header = _json_param(header_params, "header_params")
 		buttons = _json_param(button_params, "button_params")
 		cap = int(max_recipients) if max_recipients not in (None, "") else None
+		if cap is not None and not 1 <= cap <= br.MAX_RECIPIENTS_CEILING:
+			return _error("invalid_max_recipients", f"max_recipients must be between 1 and {br.MAX_RECIPIENTS_CEILING}.")
 		rate = int(mps) if mps not in (None, "") else None
 	except (TypeError, ValueError) as exc:
 		return _error("invalid_params", str(exc))
+	frappe.flags.in_broadcast_api = True
 	doc = frappe.get_doc(
 		{
 			"doctype": _BROADCAST,
@@ -1936,7 +1954,7 @@ def create_broadcast(
 			"mps": rate,
 			"send_via": send_via,
 		}
-	).insert()
+	).insert(ignore_permissions=True)  # authority was proven by _send_authority above
 	_broadcast_audit(doc.name, "created", gateway=gateway, template=tpl.get("name"), category=tpl.get("category"))
 	return {"success": True, "broadcast": doc.name, "status": "Draft", "category": tpl.get("category")}
 
@@ -1953,19 +1971,25 @@ def add_broadcast_recipients(broadcast: str | None = None, recipients: Any = Non
 		return _error("not_draft", "Recipients can only be added while the broadcast is a Draft.")
 	from huf.ai.whatsapp import broadcast_recipients as br
 
+	if csv_text and len(str(csv_text).encode("utf-8")) > br.MAX_CSV_BYTES:
+		return _error("csv_too_large", f"csv_text is limited to {br.MAX_CSV_BYTES // (1024 * 1024)} MB.")
 	try:
 		items = _parse_json_arg(recipients, "recipients") or []
+		if isinstance(items, list) and len(items) > br.MAX_ROWS_PER_REQUEST:
+			return _error("too_many_recipients", f"At most {br.MAX_ROWS_PER_REQUEST} recipients per request.")
 		if csv_text and str(csv_text).strip():
 			items = list(items) + list(br.parse_csv(str(csv_text)))
 	except ValueError as exc:
 		return _error("invalid_params", str(exc))
 	if not isinstance(items, list) or not items:
 		return _error("no_recipients", "Provide recipients or csv_text.")
+	if len(items) > br.MAX_ROWS_PER_REQUEST:
+		return _error("too_many_recipients", f"At most {br.MAX_ROWS_PER_REQUEST} recipients per request.")
 	rows = [{"recipient": str(i)} if not isinstance(i, dict) else i for i in items]
 	result = br.prepare(broadcast, rows)
 	_broadcast_audit(
 		broadcast, "recipients_added",
-		added=result.get("added"), skipped=len(result.get("skipped") or []), invalid=len(result.get("invalid") or []),
+		added=result.get("added"), skipped=result.get("skipped_total"), invalid=result.get("invalid_total"),
 	)
 	return {"success": True, **result}
 
@@ -1984,6 +2008,7 @@ def attest_broadcast_consent(broadcast: str | None = None, consent_source: str |
 	if not source:
 		return _error("consent_source_required", "State where the recipients' opt-in was collected.")
 	now = frappe.utils.now_datetime()
+	frappe.flags.in_broadcast_api = True
 	frappe.db.set_value(
 		_BROADCAST,
 		broadcast,
@@ -2010,6 +2035,7 @@ def preview_broadcast(broadcast: str | None = None) -> dict[str, Any]:
 	limits = broadcast_limits.preview(broadcast)
 	cost = broadcast_cost.estimate(broadcast)
 	token = broadcast_cost.confirm_token(broadcast)
+	frappe.db.set_value(_BROADCAST, broadcast, "cost_estimate", json.dumps(cost, default=str), update_modified=False)
 	return {
 		"success": True,
 		"broadcast": broadcast,
@@ -2017,7 +2043,7 @@ def preview_broadcast(broadcast: str | None = None) -> dict[str, Any]:
 		"consent_attested": bool(row.get("consent_attested")),
 		"limits": limits,
 		"cost": cost,
-		"confirm_required": bool(token),
+		"confirm_required": int(token or 0) > 0,
 		"queued": _queued_count(broadcast),
 	}
 
@@ -2148,10 +2174,17 @@ def list_broadcast_recipients(broadcast: str | None = None, status: str | None =
 		skip = max(0, int(offset))
 	except (TypeError, ValueError):
 		skip = 0
+	masked = not _gateway_write_allowed(row.get("gateway"))
 	rows = frappe.get_all(
 		_BROADCAST_RECIPIENT, filters=filters,
 		fields=["name", "recipient", "status", "skip_reason", "wamid", "message_status", "attempts", "next_attempt_at",
 			"error_code", "error_message", "sent_at", "delivered_at", "read_at", "failed_at"],
 		order_by="creation asc", limit_start=skip, limit_page_length=_clamp_limit(limit),
 	)
-	return {"success": True, "recipients": [dict(r, **{k: _iso(r.get(k)) for k in ("next_attempt_at", "sent_at", "delivered_at", "read_at", "failed_at")}) for r in rows or []]}
+	out = [dict(r, **{k: _iso(r.get(k)) for k in ("next_attempt_at", "sent_at", "delivered_at", "read_at", "failed_at")}) for r in rows or []]
+	if masked:  # read-only Gateway users must not see the full phone list (L5)
+		for r in out:
+			r["recipient"] = _mask_phone(r.get("recipient"))
+			r["error_message"] = _mask_digits(r.get("error_message"))
+			r["name"] = _mask_digits(r.get("name"))
+	return {"success": True, "recipients": out}

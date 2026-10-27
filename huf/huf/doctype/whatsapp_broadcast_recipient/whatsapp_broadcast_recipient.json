@@ -34,7 +34,8 @@
    "options": "WhatsApp Broadcast",
    "reqd": 1,
    "in_list_view": 1,
-   "search_index": 1
+   "search_index": 1,
+   "set_only_once": 1
   },
   {
    "fieldname": "recipient",
@@ -43,7 +44,8 @@
    "length": 40,
    "reqd": 1,
    "in_list_view": 1,
-   "description": "Digits-only E.164 phone, or BSUID."
+   "description": "Digits-only E.164 phone, or BSUID.",
+   "set_only_once": 1
   },
   {
    "fieldname": "status",
@@ -53,19 +55,22 @@
    "default": "queued",
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "search_index": 1
+   "search_index": 1,
+   "read_only": 1
   },
   {
    "fieldname": "skip_reason",
    "fieldtype": "Data",
    "label": "Skip reason",
-   "length": 140
+   "length": 140,
+   "read_only": 1
   },
   {
    "fieldname": "params",
    "fieldtype": "JSON",
    "label": "Per-recipient params",
-   "description": "Overrides Broadcast default params: {body:[...]|{...}, header:..., buttons:[...]}"
+   "description": "Overrides Broadcast default params: {body:[...]|{...}, header:..., buttons:[...]}",
+   "read_only": 1
   },
   {
    "fieldname": "section_send",
@@ -77,14 +82,16 @@
    "fieldtype": "Data",
    "label": "Message ID (wamid)",
    "length": 200,
-   "search_index": 1
+   "search_index": 1,
+   "read_only": 1
   },
   {
    "fieldname": "message_status",
    "fieldtype": "Data",
    "label": "Send message_status",
    "length": 40,
-   "description": "accepted | held_for_quality_assessment"
+   "description": "accepted | held_for_quality_assessment",
+   "read_only": 1
   },
   {
    "fieldname": "opaque_ref",
@@ -98,23 +105,27 @@
    "fieldname": "attempts",
    "fieldtype": "Int",
    "label": "Attempts",
-   "default": "0"
+   "default": "0",
+   "read_only": 1
   },
   {
    "fieldname": "next_attempt_at",
    "fieldtype": "Datetime",
    "label": "Next attempt at",
-   "search_index": 1
+   "search_index": 1,
+   "read_only": 1
   },
   {
    "fieldname": "error_code",
    "fieldtype": "Int",
-   "label": "Error code"
+   "label": "Error code",
+   "read_only": 1
   },
   {
    "fieldname": "error_message",
    "fieldtype": "Small Text",
-   "label": "Error message"
+   "label": "Error message",
+   "read_only": 1
   },
   {
    "fieldname": "section_consent",
@@ -125,12 +136,14 @@
    "fieldname": "consent_source",
    "fieldtype": "Data",
    "label": "Opt-in source",
-   "length": 200
+   "length": 200,
+   "read_only": 1
   },
   {
    "fieldname": "consent_at",
    "fieldtype": "Datetime",
-   "label": "Opted in at"
+   "label": "Opted in at",
+   "read_only": 1
   },
   {
    "fieldname": "section_times",
@@ -140,22 +153,26 @@
   {
    "fieldname": "sent_at",
    "fieldtype": "Datetime",
-   "label": "Sent at"
+   "label": "Sent at",
+   "read_only": 1
   },
   {
    "fieldname": "delivered_at",
    "fieldtype": "Datetime",
-   "label": "Delivered at"
+   "label": "Delivered at",
+   "read_only": 1
   },
   {
    "fieldname": "read_at",
    "fieldtype": "Datetime",
-   "label": "Read at"
+   "label": "Read at",
+   "read_only": 1
   },
   {
    "fieldname": "failed_at",
    "fieldtype": "Datetime",
-   "label": "Failed at"
+   "label": "Failed at",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
