@@ -66,7 +66,9 @@ import frappe  # noqa: E402  (MagicMock stub)
 # `slack_events` imports `ingest_gateway_event` from gateway_service, which pulls
 # in the whole gateway adapter stack (and optional deps such as cryptography).
 # The handler is tested in isolation, so stand that module in before import.
+_installed_gateway_service_stub = False
 if "huf.ai.gateway_service" not in sys.modules:
+	_installed_gateway_service_stub = True
 	_gateway_service = types.ModuleType("huf.ai.gateway_service")
 	_gateway_service.ingest_gateway_event = MagicMock(name="ingest_gateway_event")
 	sys.modules["huf.ai.gateway_service"] = _gateway_service
@@ -81,6 +83,10 @@ try:
 	from huf.ai.gateways import slack_events  # noqa: E402
 finally:
 	frappe.whitelist = _original_whitelist
+	# Don't leave the stub behind: it would hide the real module from other test files
+	# in the same process. slack_events keeps its own reference to the stubbed function.
+	if _installed_gateway_service_stub:
+		sys.modules.pop("huf.ai.gateway_service", None)
 
 SECRET = "test-signing-secret"
 NOW = 1_700_000_000
