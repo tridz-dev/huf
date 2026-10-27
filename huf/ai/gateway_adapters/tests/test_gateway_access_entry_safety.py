@@ -120,13 +120,21 @@ class TestAdminAuthority(_Fixture, IntegrationTestCase):
 
 
 class TestMasking(_Fixture, IntegrationTestCase):
-	def test_list_never_returns_a_full_pairing_code(self):
+	def test_admin_list_shows_the_full_code_to_compare_with_the_sender(self):
 		a = self.make_gateway("A")
 		self.make_entry(a, "111", code="PAIR-ABCD2345")
 		rows = gsvc.list_gateway_access_entries(gateway=a)
 		self.assertEqual(len(rows), 1)
-		self.assertRegex(rows[0]["pairing_code"], MASKED)
-		self.assertNotIn("ABCD2345", str(rows))
+		self.assertEqual(rows[0]["pairing_code"], "PAIR-ABCD2345")
+
+	def test_event_row_keeps_the_code_masked(self):
+		a = self.make_gateway("A")
+		result = self.ingest(a, "15551239876", "hello")
+		error = frappe.db.get_value("Gateway Event", result["event_name"], "error_message")
+		code = frappe.db.get_value("Gateway Access Entry", {"gateway": a, "external_id": "15551239876"}, "pairing_code")
+		self.assertTrue(code)
+		self.assertNotIn(code, error)
+		self.assertRegex(error.rsplit(" ", 1)[-1], MASKED)
 
 
 class TestPairingCaps(_Fixture, IntegrationTestCase):

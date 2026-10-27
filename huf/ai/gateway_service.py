@@ -1595,8 +1595,9 @@ def approve_gateway_access_entry(entry_name: str) -> dict:
 def list_gateway_access_entries(gateway: str | None = None, state: str = "Pending") -> list[dict]:
     """List Gateway Access Entries, defaulting to the pending-approval queue.
 
-    Admin-only. Pairing codes are masked: approve by entry name from this list,
-    or by the full code the sender received.
+    Admin-only. Pairing codes are returned in full so the admin can check the code a sender
+    reads out against the request (the admin can approve any entry anyway). They stay masked on
+    Gateway Event rows and in the agent pairing tools, where they could reach the sender.
     """
     _require_gateway_admin()
     filters: dict[str, Any] = {}
@@ -1615,9 +1616,6 @@ def list_gateway_access_entries(gateway: str | None = None, state: str = "Pendin
         order_by="creation desc",
         limit_page_length=0,
     )
-    for row in rows:
-        if row.get("pairing_code"):
-            row["pairing_code"] = _mask_code(row["pairing_code"])
     return rows
 
 
