@@ -296,11 +296,23 @@ def _gateway_name(gateway) -> str:
 	return _s(name)
 
 
+def _tenant_ok(gateway, tenant_id) -> bool:
+	"""``teams_tenant.is_tenant_allowed``; fails closed when it is missing or raises."""
+	try:
+		from huf.ai.gateways import teams_tenant
+
+		return bool(tenant_id) and bool(teams_tenant.is_tenant_allowed(gateway, tenant_id))
+	except Exception:
+		return False
+
+
 def _handle(gateway, activity: dict) -> dict:
+	meta = teams_refs.parse_meta(activity)
+	if not _tenant_ok(gateway, meta.tenant_id):  # defence in depth: never act for a foreign tenant
+		return _refuse(MSG_UNAVAILABLE)
 	verb, session_name = _action_parts(activity)
 	if verb not in cards.VERBS or not session_name:
 		return _refuse(MSG_UNAVAILABLE)
-	meta = teams_refs.parse_meta(activity)
 	gw = _gateway_name(gateway)
 	clicker = teams_identity.resolve_user(gw, meta.tenant_id, meta.user_aad_id) if (
 		meta.tenant_id and meta.user_aad_id) else None

@@ -210,11 +210,7 @@ def pre_ingest_commands(gateway, context) -> bool:
 			frappe.log_error(frappe.get_traceback(), "Teams help command failed"[:140])
 		except Exception:
 			pass
-	try:
-		frappe.flags.gateway_filter_reason = None  # a command is not a rejection
-	except Exception:
-		pass
-	return False
+	return False  # commands only run when every earlier filter passed (call_filters stops at False)
 
 
 def register() -> None:
