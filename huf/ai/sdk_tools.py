@@ -249,6 +249,7 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
                     tool_type=function_doc.types,
                     allowed_for_guest=bool(function_doc.allowed_for_guest),
                     blocking=is_blocking,
+                    requires_confirmation=bool(getattr(function_doc, "requires_confirmation", 0)),
                 )
 
                 if tool:
@@ -461,6 +462,7 @@ def create_function_tool(
     tool_type: str = None,
     allowed_for_guest: bool = False,
     blocking: bool = False,
+    requires_confirmation: bool = False,
 ) -> FunctionTool:
     """
     Create a FunctionTool for Huf Tool functions
@@ -513,6 +515,15 @@ def create_function_tool(
 
                 if "ignore_permissions" in args_dict:
                     del args_dict["ignore_permissions"]
+
+                # Gateway tool policy / confirm gate (no-op outside gateway runs).
+                from huf.ai.gateways import tool_policy as _tool_policy
+
+                # Run id comes from the trusted run context, never from LLM-supplied args.
+                _gate_run_id = _frappe_run_context_dict(ctx).get("agent_run_id")
+                _gate = _tool_policy.check_tool_call(name, args_dict, _gate_run_id, requires_confirmation)
+                if _gate is not None:
+                    return _gate
 
                 if allowed_for_guest and frappe.session.user == "Guest":
                     if tool_type in _GUEST_DOCTYPE_PINNED_TYPES and not _extra_args.get("reference_doctype"):
@@ -573,6 +584,8 @@ def create_function_tool(
 
                 if hasattr(result, "as_dict") and callable(getattr(result, "as_dict", None)):
                     result = result.as_dict()
+
+                _tool_policy.note_tool_executed(name, _gate_run_id)
 
                 return json.dumps(result, default=str) if isinstance(result, (dict, list)) else str(result)
 
