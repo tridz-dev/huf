@@ -417,3 +417,175 @@ class TestForcedRefreshAbuse(TeamsAuthBase):
 				t.join(10)
 		self.assertEqual(len(calls), 1)
 		self.assertEqual(results, [True] * 4)
+
+
+GUID_URL = f"https://smba.trafficmanager.net/amer/{tf.TENANT_ID}/"
+ENTRA_V2 = f"https://login.microsoftonline.com/{tf.TENANT_ID}/v2.0"
+ENTRA_V1 = f"https://sts.windows.net/{tf.TENANT_ID}/"
+
+
+class TestRegionTenantServiceUrl(TeamsAuthBase):
+	"""TFIX-D C1: serviceUrl with /<region>/<tenant-guid>/ in body and claim; GUID case may differ."""
+
+	def test_region_guid_claim_and_body_match(self):
+		activity = tf.personal_message(service_url=GUID_URL)
+		self.assertTrue(self.verify(tf.make_bot_token(activity), activity=activity))
+
+	def test_guid_case_and_trailing_slash_differences_match(self):
+		activity = tf.personal_message(service_url=GUID_URL.rstrip("/"))
+		token = tf.make_bot_token(activity, service_url=GUID_URL.upper().replace("HTTPS://", "https://"))
+		self.assertTrue(self.verify(token, activity=activity))
+
+	def test_other_tenant_guid_still_mismatch(self):
+		activity = tf.personal_message(service_url=GUID_URL)
+		token = tf.make_bot_token(activity, service_url=GUID_URL.replace(tf.TENANT_ID, tf.OTHER_TENANT_ID))
+		self.assertFalse(self.verify(token, activity=activity))
+
+
+class TestJunkKidNoFetch(TeamsAuthBase):
+	"""Mutation guard: pre-checks run before any key lookup, so junk tokens cause ZERO network requests."""
+
+	def test_junk_kid_tokens_never_touch_jwks(self):
+		for token in (
+			tf.make_bot_token(self.activity, kid="junk-kid", audience="someone-else"),
+			tf.make_bot_token(self.activity, kid="junk-kid", issuer="https://evil.example"),
+			tf.make_bot_token(self.activity, kid="junk-kid", exp_delta=-3600),
+			tf.make_bot_token(
+				self.activity, kid="junk-kid", service_url="https://smba.trafficmanager.net/x/"
+			),
+			tf.make_bot_token(self.activity, kid="bad kid\n"),
+			tf.make_bot_token(self.activity, kid="k" * 200),
+		):
+			self.assertFalse(self.verify(token))
+		self.assertEqual(self.svc.requests(), [])
+
+
+class TestRejectionVisibility(TeamsAuthBase):
+	"""TFIX-D H1a/H3: one structured shape line on iss/aud rejection; counted in the global auth bucket."""
+
+	def setUp(self):
+		super().setUp()
+		import frappe
+
+		from huf.ai.teams import readiness
+
+		self.readiness = readiness
+		frappe.cache.delete_value(readiness.DROPS_PREFIX + readiness.AUTH_BUCKET)
+		self.addCleanup(frappe.cache.delete_value, readiness.DROPS_PREFIX + readiness.AUTH_BUCKET)
+
+	def test_shape_line_has_no_ids_or_token(self):
+		token = tf.make_bot_token(
+			self.activity,
+			issuer=ENTRA_V2,
+			extra_claims={"tid": tf.TENANT_ID, "ver": "2.0", "azp": tf.BOT_APP_ID},
+		)
+		with self.assertLogs("huf.teams.auth", level="WARNING") as logs:
+			self.assertFalse(self.verify(token))
+		text = "\n".join(logs.output)
+		self.assertIn(
+			"reason=pre_iss iss_kind=entra_v2 iss_tenant_match=True aud_is_app_id=True ver=2.0", text
+		)
+		self.assertIn("azp_is_app_id=True", text)
+		self.assertIn("serviceurl_claim=serviceUrl", text)
+		for leak in (tf.BOT_APP_ID, tf.TENANT_ID, token, token.split(".")[1]):
+			self.assertNotIn(leak, text)
+		self.assertEqual(sum("token shape" in line for line in logs.output), 1)
+
+	def test_wrong_audience_logged_as_bool(self):
+		with self.assertLogs("huf.teams.auth", level="WARNING") as logs:
+			self.verify(tf.wrong_audience_token(self.activity))
+		self.assertIn("reason=pre_aud iss_kind=botframework", "\n".join(logs.output))
+		self.assertIn("aud_is_app_id=False", "\n".join(logs.output))
+
+	def test_rejections_counted_in_auth_bucket(self):
+		self.verify(tf.wrong_audience_token(self.activity))
+		self.verify(tf.wrong_audience_token(self.activity))
+		self.verify(headers={})
+		counts, last = self.readiness.recent_drops(self.readiness.AUTH_BUCKET)
+		self.assertEqual(counts, {"auth:pre_aud": 2, "auth:bad_authorization_header": 1})
+		self.assertIsNotNone(last)
+
+
+class TestEntraOptIn(TeamsAuthBase):
+	"""TFIX-D H1b: tenant-pinned Entra issuers behind site config ``teams_accept_entra_tokens``."""
+
+	def setUp(self):
+		super().setUp()
+		import frappe
+
+		auth._set_test_entra_jwks_url(self.svc.jwks_url)
+		self.addCleanup(auth._set_test_entra_jwks_url, None)
+		self.conf = frappe.conf
+		self.flag(False)
+
+	def flag(self, on):
+		p = mock.patch.dict(self.conf, {auth.ENTRA_FLAG: 1 if on else 0})
+		p.start()
+		self.addCleanup(p.stop)
+
+	def entra(self, issuer=ENTRA_V2, tid=tf.TENANT_ID, **kw):
+		extra = {"tid": tid, "ver": "2.0" if "v2.0" in issuer else "1.0", "azp": tf.BOT_APP_ID}
+		extra.update(kw.pop("extra_claims", {}))
+		return tf.make_bot_token(self.activity, issuer=issuer, extra_claims=extra, **kw)
+
+	def test_flag_off_rejects_without_fetch(self):
+		self.assertFalse(self.verify(self.entra()))
+		self.assertFalse(self.verify(self.entra(ENTRA_V1)))
+		self.assertEqual(self.svc.requests(), [])
+
+	def test_flag_on_accepts_v1_and_v2(self):
+		self.flag(True)
+		self.assertTrue(self.verify(self.entra()))
+		self.assertTrue(self.verify(self.entra(ENTRA_V1)))
+		self.assertEqual(self.svc.requests("openid"), [])  # Entra JWKS fetched directly (pinned URL)
+		self.assertEqual(self.jwks_fetches(), 1)
+
+	def test_flag_on_without_service_url_claim_ok_but_mismatch_rejected(self):
+		self.flag(True)
+		now = int(time.time())
+		claims = {"iss": ENTRA_V2, "aud": tf.BOT_APP_ID, "tid": tf.TENANT_ID, "exp": now + 600, "nbf": now}
+		token = pyjwt.encode(claims, self.key.private_pem, algorithm="RS256", headers={"kid": self.key.kid})
+		self.assertTrue(self.verify(token))
+		self.assertFalse(self.verify(self.entra(service_url="https://smba.trafficmanager.net/evil/")))
+
+	def test_flag_on_rejects_wrong_tid_aud_issuer_signature_channel(self):
+		self.flag(True)
+		cases = {
+			"tid": self.entra(tid=tf.OTHER_TENANT_ID),
+			"no_tid": self.entra(tid=""),
+			"issuer_other_tenant": self.entra(ENTRA_V2.replace(tf.TENANT_ID, tf.OTHER_TENANT_ID)),
+			"issuer_common": self.entra("https://login.microsoftonline.com/common/v2.0"),
+			"issuer_lookalike": self.entra(ENTRA_V2 + "/"),
+			"aud": self.entra(audience="00000000-0000-4000-8000-0000000000ff"),
+			"expired": self.entra(exp_delta=-3600),
+			"forged": self.entra(key=tf.generate_keypair(kid=tf.DEFAULT_KID)),
+		}
+		for name, token in cases.items():
+			with self.subTest(name):
+				self.assertFalse(self.verify(token))
+		webchat = dict(self.activity, channelId="webchat")
+		self.assertFalse(self.verify(self.entra(), activity=webchat))
+
+	def test_flag_on_needs_guid_tenant(self):
+		self.flag(True)
+		creds = {**CREDS, "tenant_id": "not-a-guid"}
+		self.assertFalse(auth.verify_request(self.request(self.entra()), creds))
+
+	def test_bot_framework_path_unchanged_with_flag_on(self):
+		self.flag(True)
+		self.assertTrue(self.verify(self.token()))
+		self.assertFalse(self.verify(tf.wrong_issuer_token(self.activity)))
+		self.assertEqual(len(self.svc.requests("openid")), 1)
+
+	def test_production_entra_url_strict(self):
+		auth._set_test_entra_jwks_url(None)
+		url = auth.ENTRA_JWKS_URL.format(tenant=tf.TENANT_ID)
+		self.assertTrue(auth._url_ok(url, auth.ENTRA_HOST, False))
+		for bad in (
+			url.replace("https", "http"),
+			url.replace(auth.ENTRA_HOST, "login.microsoftonline.com.evil.example"),
+			url.replace(auth.ENTRA_HOST, "login.botframework.com"),
+		):
+			with self.subTest(bad):
+				self.assertFalse(auth._url_ok(bad, auth.ENTRA_HOST, False))
+		self.assertFalse(auth._url_ok(url, auth.BOT_FRAMEWORK_HOST, False))

@@ -10,12 +10,12 @@ from unittest.mock import patch
 
 import frappe
 
-from huf.ai.teams import client, diagnostics
+from huf.ai.teams import client, diagnostics, readiness
 from huf.tests import teams_fixtures as tf
 
 SECRET = "s3cr3t-app-password-value"  # noqa: S105
 GW = "Teams Verify GW"
-ORDER = ["credentials", "token", "token_claims", "endpoint", "reference"]
+ORDER = ["credentials", "token", "token_claims", "endpoint", "reference", "drops"]
 
 
 def _jwt(**claims) -> str:
@@ -49,6 +49,11 @@ class TestVerifyTeamsConnection(unittest.TestCase):
 		p = patch.object(client, "_AUTHORITY_BASE", self.svc.base_url)
 		p.start()
 		self.addCleanup(p.stop)
+		p = patch.object(readiness, "_public_base_url", return_value="https://huf.example.com")
+		p.start()
+		self.addCleanup(p.stop)
+		frappe.cache.delete_value(readiness.DROPS_PREFIX + GW)
+		frappe.cache.delete_value(readiness.DROPS_PREFIX + readiness.AUTH_BUCKET)
 		self.clear()
 		self.addCleanup(self.clear)
 
@@ -94,9 +99,16 @@ class TestVerifyTeamsConnection(unittest.TestCase):
 		result = self.run_verify()
 		self.assertFalse(result["ok"])
 		self.assertFalse(self.by_id(result)["token"]["ok"])
-		self.assertEqual(client._tokens.get(
-			(tf.TENANT_ID, tf.BOT_APP_ID, client._secret_hash(tf.TENANT_ID, tf.BOT_APP_ID, "another-gateway-secret")))[0],
-			GOOD_JWT)  # the other gateway's token was not purged
+		self.assertEqual(
+			client._tokens.get(
+				(
+					tf.TENANT_ID,
+					tf.BOT_APP_ID,
+					client._secret_hash(tf.TENANT_ID, tf.BOT_APP_ID, "another-gateway-secret"),
+				)
+			)[0],
+			GOOD_JWT,
+		)  # the other gateway's token was not purged
 
 	def test_happy_path(self):
 		self.script_token({"access_token": GOOD_JWT, "expires_in": 3600, "token_type": "Bearer"})
@@ -250,7 +262,24 @@ class TestVerifyTeamsConnection(unittest.TestCase):
 	def test_is_whitelisted_post(self):
 		self.assertIn(diagnostics.verify_teams_connection, frappe.whitelisted)
 
+	def test_drops_step_is_informational_and_summarises(self):
+		self.script_token({"access_token": GOOD_JWT, "expires_in": 3600})
+		result = self.run_verify()
+		self.assertEqual(self.by_id(result)["drops"]["detail"], "No dropped activities in the last 24 hours.")
+		readiness.record_drop(GW, "tenant")
+		readiness.record_drop(readiness.AUTH_BUCKET, "auth:pre_iss")
+		self.addCleanup(frappe.cache.delete_value, readiness.DROPS_PREFIX + GW)
+		self.addCleanup(frappe.cache.delete_value, readiness.DROPS_PREFIX + readiness.AUTH_BUCKET)
+		self.script_token({"access_token": GOOD_JWT, "expires_in": 3600})
+		result = self.run_verify()
+		self.assert_shape(result)
+		drops = self.by_id(result)["drops"]
+		self.assertTrue(drops["ok"])
+		self.assertTrue(result["ok"])
+		self.assertIn("1 tenant", drops["detail"])
+		self.assertIn("auth:pre_iss", drops["detail"])
+		self.assertEqual(result["steps"][-1]["id"], "drops")
+
 
 if __name__ == "__main__":
 	unittest.main()
-

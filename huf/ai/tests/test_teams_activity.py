@@ -38,6 +38,9 @@ class Base(unittest.TestCase):
 		p = patch.object(refs.frappe, "cache", self.cache)
 		p.start()
 		self.addCleanup(p.stop)
+		p = patch.object(hooks.readiness, "record_drop")
+		self.record_drop = p.start()
+		self.addCleanup(p.stop)
 		self.adapter = TeamsGatewayAdapter(CREDS)
 
 	def ingest(self, activity, creds=None):
@@ -116,7 +119,9 @@ class TestIngestHook(Base):
 	def test_channel_thread_reference_keyed_by_base_conversation(self):
 		activity = tf.channel_mention_message()
 		self.ingest(activity)
-		self.assertIn(refs._cache_key(GATEWAY.name, tf.BOT_APP_ID, tf.CHANNEL_CONVERSATION_BASE), self.cache.store)
+		self.assertIn(
+			refs._cache_key(GATEWAY.name, tf.BOT_APP_ID, tf.CHANNEL_CONVERSATION_BASE), self.cache.store
+		)
 		self.assertEqual(len(self.cache.store), 1)
 
 	def test_invalid_service_url_ignored_nothing_saved(self):
@@ -388,3 +393,41 @@ class TestPromptLabelSanitising(Base):
 		self.assertNotIn("\n", att.filename)
 		self.assertLessEqual(len(att.filename), act.MAX_ATTACHMENT_NAME)
 		self.assertNotIn("\n", att.url)
+
+
+class TestDropVisibility(Base):
+	"""TFIX-D H3: silent drops are recorded per gateway (reason code only)."""
+
+	def drops(self):
+		return [c.args for c in self.record_drop.call_args_list]
+
+	def test_visible_kinds_recorded_with_gateway(self):
+		self.ingest(tf.message_from_other_tenant(), {"allowed_tenant_ids": tf.TENANT_ID})
+		bad = tf.personal_message(service_url="https://evil.example/amer/")
+		self.ingest(bad)
+		webchat = tf.personal_message()
+		webchat["channelId"] = "webchat"
+		self.ingest(webchat)
+		self.ingest(b"junk")
+		self.assertEqual(
+			self.drops(),
+			[
+				("gw-teams", "tenant"),
+				("gw-teams", "service_url"),
+				("gw-teams", "channel"),
+				("gw-teams", "invalid"),
+			],
+		)
+
+	def test_benign_ignores_not_recorded(self):
+		self.ingest(tf.typing_activity())
+		self.ingest(tf.message_reaction())
+		self.assertIsNone(self.ingest(tf.personal_message()))
+		self.assertEqual(self.drops(), [])
+
+	def test_region_tenant_service_url_is_stored_not_dropped(self):
+		url = f"https://smba.trafficmanager.net/amer/{tf.TENANT_ID.upper()}/"
+		self.assertIsNone(self.ingest(tf.personal_message(service_url=url)))
+		self.assertEqual(self.drops(), [])
+		saved = self.saved(tf.personal_message()["conversation"]["id"])
+		self.assertEqual(saved["serviceUrl"], f"https://smba.trafficmanager.net/amer/{tf.TENANT_ID}")

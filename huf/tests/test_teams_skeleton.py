@@ -224,3 +224,58 @@ class TestReferenceGatewayScope(unittest.TestCase):
 		with self.assertRaises(ValueError):
 			refs.save_reference("", "app-1", "19:abc", self._ref("amer"))
 		self.assertIsNone(refs.get_reference("", "app-1", "19:abc"))
+
+
+GUID = "72f988bf-86f1-41af-91ab-2d7cd011db47"
+
+
+class TestServiceUrlRegionTenant(unittest.TestCase):
+	"""TFIX-D C1: real tenants send https://smba.trafficmanager.net/<region>/<tenant-guid>/."""
+
+	def test_accepts_region_and_region_guid(self):
+		base = "https://smba.trafficmanager.net"
+		cases = {
+			f"{base}/amer": f"{base}/amer",
+			f"{base}/amer/{GUID}": f"{base}/amer/{GUID}",
+			f"{base}/amer/{GUID}/": f"{base}/amer/{GUID}",
+			f"{base}/emea/{GUID.upper()}/": f"{base}/emea/{GUID}",
+			f"{base}/teams/{GUID}/": f"{base}/teams/{GUID}",
+			f"{base}/apac/{GUID}": f"{base}/apac/{GUID}",
+			f"{base}/in/{GUID}/": f"{base}/in/{GUID}",
+		}
+		for url, expected in cases.items():
+			with self.subTest(url=url):
+				self.assertEqual(refs.validate_service_url(url), expected)
+
+	def test_rejects_other_shapes(self):
+		base = "https://smba.trafficmanager.net"
+		for url in (
+			f"{base}/amer/{GUID}/v3",
+			f"{base}/amer/{GUID}/x/",
+			f"{base}/amer/not-a-guid/",
+			f"{base}/amer/{GUID[:-1]}/",
+			f"{base}/amer/{GUID}0/",
+			f"{base}/{GUID}/amer/",
+			f"{base}/amer/../{GUID}/",
+			f"{base}/amer/./{GUID}",
+			f"{base}/amer%2F{GUID}/",
+			f"{base}/amer%252F{GUID}/",
+			f"{base}/amer//{GUID}/",
+			f"{base}/amer/{GUID}//",
+			f"{base}/amer/{GUID}/?x=1",
+			f"{base}/amer/{GUID}/#frag",
+			f"https://evil.trafficmanager.net/amer/{GUID}/",
+		):
+			with self.subTest(url=url), self.assertRaises(ValueError):
+				refs.validate_service_url(url)
+
+	def test_round_trip_save_get(self):
+		cache = _FakeCache()
+		with patch.object(refs.frappe, "cache", cache):
+			ref = {
+				"serviceUrl": f"https://smba.trafficmanager.net/amer/{GUID.upper()}/",
+				"channelId": "msteams",
+			}
+			refs.save_reference("gw", "app-1", "19:abc", ref)
+			got = refs.get_reference("gw", "app-1", "19:abc")
+		self.assertEqual(got["serviceUrl"], f"https://smba.trafficmanager.net/amer/{GUID}")

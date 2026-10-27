@@ -9,8 +9,10 @@ The cache key is ``sha256(gateway_name NUL app_id NUL conversation_id)`` so two 
 never share or overwrite references; the app password is never involved.
 
 Allowed serviceUrl hosts (outbound requests to it carry the bot bearer token): ONLY
-``smba.trafficmanager.net`` with an optional single lowercase path segment (``/amer/``, ``/emea/``,
-``/teams/`` ...). Microsoft documents the public Teams service URLs as ``https://smba.trafficmanager.net/<x>/``
+``smba.trafficmanager.net`` with an optional region segment (``/amer/``, ``/emea/``, ``/teams/`` ...)
+optionally followed by ONE tenant GUID segment (``/amer/<tenant-guid>/``, as seen on real tenants), with
+an optional trailing slash. Host and path are lowercased; anything else (extra/empty/dot segments,
+percent-encoding, query, fragment) is rejected. Microsoft documents the public Teams service URLs as ``https://smba.trafficmanager.net/<x>/``
 (learn.microsoft.com/microsoftteams/platform/bots/how-to/conversations/send-proactive-messages). The former
 ``*.trafficmanager.net`` wildcard let any Azure customer register a host, and ``*.botframework.com`` covers
 non-Teams channels (Direct Line, Web Chat, token/login/api/state) with no Teams documentation behind it, so both
@@ -32,7 +34,8 @@ import frappe
 # serviceUrl comes from the (verified, but still attacker-influenceable) inbound payload and is later used
 # as an outbound request target carrying a bearer token, so only Bot Connector hosts are acceptable.
 ALLOWED_SERVICE_HOSTS = ("smba.trafficmanager.net",)
-_PATH_RE = re.compile(r"/[a-z0-9-]+/?")
+_GUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+_PATH_RE = re.compile(rf"/[a-z0-9-]+(?:/{_GUID})?/?")  # matched against the LOWERCASED path
 
 REFERENCE_TTL_SECONDS = 90 * 24 * 3600
 _CACHE_PREFIX = "huf_teams_ref:"
@@ -81,7 +84,7 @@ def validate_service_url(url: Any) -> str:
 		raise ValueError("Teams serviceUrl host is not an allowed Bot Connector host")
 	path = parts.path.lower()
 	if path not in ("", "/") and not _PATH_RE.fullmatch(path):
-		raise ValueError("Teams serviceUrl path must be empty or a single region segment")
+		raise ValueError("Teams serviceUrl path must be empty, /<region> or /<region>/<tenant-guid>")
 	return f"https://{host}{path}".rstrip("/")
 
 

@@ -29,7 +29,10 @@ is kept (up to 7 days) when a refresh fails. An unknown ``kid`` triggers at most
 outside the module lock behind a single-flight guard: one thread fetches, others keep verifying with cached
 keys (stale ones during a TTL refresh) or wait at most ``FETCH_WAIT_SECONDS``. With no cached keys and a failing JWKS/OpenID endpoint the request is rejected.
 
-Log lines carry reason codes only; tokens, headers and bodies are never logged.
+Log lines carry reason codes only; tokens, headers and bodies are never logged. Every rejection is counted
+(reason code only) in the global ``auth`` bucket of ``readiness.record_drop``. Issuer/audience pre-check
+rejections also log one token-shape line, and tenant-pinned Entra issuers are OPT-IN (UNVERIFIED, default
+off): both live in ``huf.ai.teams.auth_entra``.
 """
 
 from __future__ import annotations
@@ -44,17 +47,27 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from huf.ai.gateway_adapters.types import GatewayInboundRequest
+from huf.ai.teams.auth_entra import (  # noqa: F401 (re-exported for callers/tests)
+	ENTRA_FLAG,
+	ENTRA_HOST,
+	ENTRA_ISSUERS,
+	ENTRA_JWKS_URL,
+	_entra_cache_key,
+	_entra_issuers,
+	_entra_jwks_url,
+	_entra_source,
+	_entra_states,
+	_fetch_entra_keys,
+	_log_claim_shape,
+	_set_test_entra_jwks_url,
+	_tenant,
+)
 
 logger = logging.getLogger("huf.teams.auth")
 
 BOT_FRAMEWORK_OPENID_URL = "https://login.botframework.com/v1/.well-known/openidconfiguration"
 BOT_FRAMEWORK_HOST = "login.botframework.com"
 BOT_FRAMEWORK_ISSUER = "https://api.botframework.com"
-
-# TODO(entra): tenant-specific Entra issuers (https://sts.windows.net/{tenant}/,
-# https://login.microsoftonline.com/{tenant}/v2.0) with Entra JWKS are NOT accepted yet. When real-tenant
-# behaviour is confirmed, extend ``_allowed_issuers`` (only place that decides) behind an explicit flag.
-
 CLOCK_SKEW_SECONDS = 300
 KEY_TTL_SECONDS = 24 * 3600
 STALE_KEY_MAX_SECONDS = 7 * 24 * 3600
@@ -76,13 +89,18 @@ _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 _test_openid_url: str | None = None
 
 _lock = threading.RLock()
+# "inflight" holds a threading.Event while one thread fetches (single-flight).
 _state: dict[str, Any] = {
 	"keys": None,
 	"fetched_at": 0.0,
 	"last_forced": 0.0,
 	"last_failure": 0.0,
-	"inflight": None,  # threading.Event while one thread fetches (single-flight)
+	"inflight": None,
 }
+
+
+def _new_state() -> dict[str, Any]:
+	return {"keys": None, "fetched_at": 0.0, "last_forced": 0.0, "last_failure": 0.0, "inflight": None}
 
 
 class _FetchError(Exception):
@@ -105,13 +123,17 @@ def _set_test_openid_url(url: str | None) -> None:
 
 
 def _reset_cache() -> None:
-	"""Drop process and shared cache for the active OpenID URL (tests)."""
+	"""Drop process and shared caches for the active OpenID URL and all Entra tenants (tests)."""
 	with _lock:
-		_state.update(keys=None, fetched_at=0.0, last_forced=0.0, last_failure=0.0, inflight=None)
+		_state.update(_new_state())
+		tenants = list(_entra_states)
+		_entra_states.clear()
 	try:
 		import frappe
 
 		frappe.cache.delete_value(_cache_key())
+		for tenant in tenants:
+			frappe.cache.delete_value(_entra_cache_key(tenant))
 	except Exception:  # noqa: BLE001, S110
 		pass
 
@@ -129,21 +151,22 @@ def _cache_key() -> str:
 # -- fetching ----------------------------------------------------------------------------------------
 
 
-def _url_ok(url: str) -> bool:
+def _url_ok(url: str, prod_host: str = BOT_FRAMEWORK_HOST, test_mode: bool | None = None) -> bool:
 	parts = urlsplit(url)
 	host = (parts.hostname or "").lower()
-	if _test_openid_url:
+	if test_mode if test_mode is not None else bool(_test_openid_url):
 		return parts.scheme in ("http", "https") and host in _LOOPBACK_HOSTS
-	return parts.scheme == "https" and host == BOT_FRAMEWORK_HOST and parts.port in (None, 443)
+	return parts.scheme == "https" and host == prod_host and parts.port in (None, 443)
 
 
-def _get_json(url: str) -> Any:
-	if not _url_ok(url):
+def _get_json(url: str, prod_host: str = BOT_FRAMEWORK_HOST, test_mode: bool | None = None) -> Any:
+	test_mode = test_mode if test_mode is not None else bool(_test_openid_url)
+	if not _url_ok(url, prod_host, test_mode):
 		raise _FetchError("url_rejected")
 	import requests
 
 	session = requests.Session()
-	session.trust_env = not _test_openid_url  # tests must never be routed via env proxies
+	session.trust_env = not test_mode  # tests must never be routed via env proxies
 	try:
 		resp = session.get(url, timeout=HTTP_TIMEOUT_SECONDS, allow_redirects=False, stream=True)
 		try:
@@ -173,7 +196,10 @@ def _fetch_keys() -> dict[str, dict[str, Any]]:
 	jwks_uri = config.get("jwks_uri") if isinstance(config, dict) else None
 	if not isinstance(jwks_uri, str):
 		raise _FetchError("no_jwks_uri")
-	jwks = _get_json(jwks_uri)
+	return _parse_jwks(_get_json(jwks_uri))
+
+
+def _parse_jwks(jwks: Any) -> dict[str, dict[str, Any]]:
 	entries = jwks.get("keys") if isinstance(jwks, dict) else None
 	if not isinstance(entries, list):
 		raise _FetchError("bad_jwks")
@@ -186,34 +212,41 @@ def _fetch_keys() -> dict[str, dict[str, Any]]:
 	return keys
 
 
-def _load_shared_cache() -> None:
+def _bf_source() -> dict[str, Any]:
+	# ``_fetch_keys`` is looked up at call time so tests can patch it.
+	return {"state": _state, "cache_key": _cache_key(), "fetch": lambda: _fetch_keys()}
+
+
+def _load_shared_cache(src: dict[str, Any]) -> None:
 	try:
 		import frappe
 
-		cached = frappe.cache.get_value(_cache_key())
+		cached = frappe.cache.get_value(src["cache_key"])
 	except Exception:  # noqa: BLE001
 		return
 	if isinstance(cached, dict) and isinstance(cached.get("keys"), dict):
-		_state["keys"] = cached["keys"]
-		_state["fetched_at"] = float(cached.get("fetched_at") or 0)
+		src["state"]["keys"] = cached["keys"]
+		src["state"]["fetched_at"] = float(cached.get("fetched_at") or 0)
 
 
-def _store_shared(keys: dict[str, dict[str, Any]], now: float) -> None:
+def _store_shared(src: dict[str, Any], keys: dict[str, dict[str, Any]], now: float) -> None:
 	try:
 		import frappe
 
 		frappe.cache.set_value(
-			_cache_key(), {"keys": keys, "fetched_at": now}, expires_in_sec=STALE_KEY_MAX_SECONDS
+			src["cache_key"], {"keys": keys, "fetched_at": now}, expires_in_sec=STALE_KEY_MAX_SECONDS
 		)
 	except Exception:  # noqa: BLE001, S110
 		pass
 
 
-def _refresh(now: float) -> bool:
+def _refresh(now: float, src: dict[str, Any] | None = None) -> bool:
 	"""Single-flight JWKS fetch WITHOUT holding ``_lock`` during network I/O.
 
 	The first caller fetches; concurrent callers wait (bounded) for its result. False on failure/backoff.
 	"""
+	src = src or _bf_source()
+	_state = src["state"]
 	with _lock:
 		if now - _state["last_failure"] < FAILURE_BACKOFF_SECONDS:
 			return False
@@ -226,7 +259,7 @@ def _refresh(now: float) -> bool:
 		return event.wait(FETCH_WAIT_SECONDS) and bool(getattr(event, "ok", False))
 	keys: dict[str, dict[str, Any]] | None = None
 	try:
-		keys = _fetch_keys()
+		keys = src["fetch"]()
 	except _FetchError as exc:
 		logger.warning(
 			"Teams JWKS refresh failed (%s); %s",
@@ -245,26 +278,28 @@ def _refresh(now: float) -> bool:
 		event.set()
 	if keys is None:
 		return False
-	_store_shared(keys, now)
+	_store_shared(src, keys, now)
 	return True
 
 
-def _snapshot(now: float) -> tuple[dict[str, dict[str, Any]] | None, float]:
+def _snapshot(now: float, src: dict[str, Any]) -> tuple[dict[str, dict[str, Any]] | None, float]:
 	with _lock:
-		if _state["keys"] is None:
-			_load_shared_cache()
-		return _state["keys"], now - _state["fetched_at"]
+		if src["state"]["keys"] is None:
+			_load_shared_cache(src)
+		return src["state"]["keys"], now - src["state"]["fetched_at"]
 
 
-def _get_key(kid: str) -> dict[str, Any] | None:
+def _get_key(kid: str, src: dict[str, Any] | None = None) -> dict[str, Any] | None:
 	"""Return the JWK for ``kid`` or None. Applies the cache/refetch policy (never fetches under ``_lock``)."""
+	src = src or _bf_source()
+	_state = src["state"]
 	now = time.time()
-	keys, age = _snapshot(now)
+	keys, age = _snapshot(now, src)
 	if keys is None or age >= KEY_TTL_SECONDS:
 		usable_stale = keys is not None and age < STALE_KEY_MAX_SECONDS
 		if not (usable_stale and _state["inflight"] is not None):  # someone else refreshing: use stale keys
-			_refresh(now)
-			keys, age = _snapshot(now)
+			_refresh(now, src)
+			keys, age = _snapshot(now, src)
 	if keys is None or age >= STALE_KEY_MAX_SECONDS:
 		return None
 	if kid in keys:
@@ -274,7 +309,7 @@ def _get_key(kid: str) -> dict[str, Any] | None:
 		if now - _state["last_forced"] < MIN_FORCED_REFRESH_SECONDS:
 			return None
 		_state["last_forced"] = now
-	if _refresh(now):
+	if _refresh(now, src):
 		return (_state["keys"] or {}).get(kid)
 	return None
 
@@ -283,8 +318,8 @@ def _get_key(kid: str) -> dict[str, Any] | None:
 
 
 def _allowed_issuers(credentials: Mapping[str, str]) -> tuple[str, ...]:
-	# TODO(entra): add tenant-specific issuers here behind an explicit flag (see module header).
-	return (BOT_FRAMEWORK_ISSUER,)
+	"""The only place that decides accepted issuers: Bot Framework, plus tenant-pinned Entra when opted in."""
+	return (BOT_FRAMEWORK_ISSUER, *_entra_issuers(credentials))
 
 
 def _normalize_service_url(value: Any) -> str:
@@ -294,7 +329,8 @@ def _normalize_service_url(value: Any) -> str:
 	if not parts.scheme or not parts.hostname:
 		return ""
 	port = f":{parts.port}" if parts.port else ""
-	return f"{parts.scheme.lower()}://{parts.hostname.lower()}{port}{parts.path.rstrip('/')}"
+	# Path lowercased like refs.validate_service_url (region / tenant GUID segments are case-insensitive).
+	return f"{parts.scheme.lower()}://{parts.hostname.lower()}{port}{parts.path.rstrip('/').lower()}"
 
 
 def _service_url_claim(claims: Mapping[str, Any]) -> Any:
@@ -311,7 +347,9 @@ def _wall_clock() -> float:
 	return datetime.now(UTC).timestamp()
 
 
-def _precheck(token: str, app_id: str, issuers: tuple[str, ...], body_service_url: str) -> str | None:
+def _precheck(
+	token: str, app_id: str, issuers: tuple[str, ...], body_service_url: str, tenant: str = ""
+) -> str | None:
 	"""Cheap UNVERIFIED claim checks run before any key lookup/refetch. Returns a reason code or None.
 
 	Not a security decision on its own (the signature is checked afterwards); it only stops junk tokens
@@ -327,14 +365,23 @@ def _precheck(token: str, app_id: str, issuers: tuple[str, ...], body_service_ur
 		return "malformed_token"
 	aud = claims.get("aud")
 	auds = aud if isinstance(aud, list) else [aud]
+	reason = None
 	if app_id not in auds:
-		return "pre_aud"
-	if claims.get("iss") not in issuers:
-		return "pre_iss"
+		reason = "pre_aud"
+	elif claims.get("iss") not in issuers:
+		reason = "pre_iss"
+	elif claims.get("iss") != BOT_FRAMEWORK_ISSUER and str(claims.get("tid") or "").lower() != tenant:
+		reason = "pre_tid"
+	if reason:
+		_log_claim_shape(reason, claims, app_id, tenant)
+		return reason
 	exp = claims.get("exp")
 	if not isinstance(exp, int | float) or exp + CLOCK_SKEW_SECONDS < _wall_clock():
 		return "pre_exp"
-	if _normalize_service_url(_service_url_claim(claims)) != body_service_url:
+	claim = _service_url_claim(claims)
+	if claims.get("iss") != BOT_FRAMEWORK_ISSUER and claim is None:
+		return None  # Entra tokens may not carry the claim; the check applies only when present
+	if _normalize_service_url(claim) != body_service_url:
 		return "service_url_mismatch"
 	return None
 
@@ -348,6 +395,12 @@ def _header(request: GatewayInboundRequest, name: str) -> str:
 
 def _reject(reason: str) -> bool:
 	logger.warning("Teams inbound auth rejected: %s", reason)
+	try:
+		from huf.ai.teams import readiness
+
+		readiness.record_drop(readiness.AUTH_BUCKET, f"auth:{reason}")
+	except Exception:  # noqa: BLE001, S110
+		pass  # visibility only; must never change the decision
 	return False
 
 
@@ -398,11 +451,15 @@ def _verify(request: GatewayInboundRequest, credentials: Mapping[str, str]) -> b
 		return _reject("bad_alg_or_kid")
 
 	issuers = _allowed_issuers(credentials)
-	reason = _precheck(token, app_id, issuers, body_service_url)
+	tenant = _tenant(credentials)
+	reason = _precheck(token, app_id, issuers, body_service_url, tenant)
 	if reason:
 		return _reject(reason)
 
-	jwk = _get_key(kid)
+	entra = pyjwt.decode(token, options={"verify_signature": False}).get("iss") != BOT_FRAMEWORK_ISSUER
+	if entra:
+		issuers = _entra_issuers(credentials)
+	jwk = _get_key(kid, _entra_source(tenant) if entra else None)
 	if jwk is None:
 		return _reject("key_unavailable")
 
@@ -420,8 +477,13 @@ def _verify(request: GatewayInboundRequest, credentials: Mapping[str, str]) -> b
 	except pyjwt.PyJWTError as exc:
 		return _reject(f"jwt:{type(exc).__name__}")
 
-	if _normalize_service_url(_service_url_claim(claims)) != body_service_url:
+	claim = _service_url_claim(claims)
+	if not (entra and claim is None) and _normalize_service_url(claim) != body_service_url:
 		return _reject("service_url_mismatch")
+	if entra:
+		if str(claims.get("tid") or "").lower() != tenant:
+			return _reject("tid_mismatch")
+		return True  # Entra keys carry no endorsements; the channelId pin above applies instead
 
 	endorsements = jwk.get("endorsements")
 	if not isinstance(endorsements, list) or channel_id.strip().lower() not in {

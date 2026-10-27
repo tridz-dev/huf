@@ -29,7 +29,7 @@ from werkzeug.test import EnvironBuilder
 
 from huf.ai import gateway_webhook
 from huf.ai.gateway_service import preview_gateway_readiness, process_gateway_event
-from huf.ai.teams import auth, client, diagnostics, refs
+from huf.ai.teams import auth, client, diagnostics, readiness, refs
 from huf.tests import teams_fixtures as tf
 
 GATEWAY_ROLE = "Huf Gateway User"
@@ -69,6 +69,11 @@ class TestTeamsE2E(IntegrationTestCase):
 		self._stack.enter_context(patch.object(client, "_AUTHORITY_BASE", self.svc.base_url))
 		self._stack.enter_context(_test_only_allow_loopback_service_url(self.svc.base_url))
 		self.service_url = self.svc.connector_url
+		# TFIX-D: the bench base URL is http://<x>.local (flagged non-public); drops are global for auth.
+		self._stack.enter_context(
+			patch.object(readiness, "_public_base_url", return_value="https://huf.example.com")
+		)
+		frappe.cache.delete_value(readiness.DROPS_PREFIX + readiness.AUTH_BUCKET)
 
 		self.enqueued = []
 		self._stack.enter_context(patch.object(frappe, "enqueue", side_effect=self._capture_enqueue))
@@ -418,6 +423,7 @@ class TestTeamsE2E(IntegrationTestCase):
 				"teams-first-message": False,
 				"teams-mention-policy": True,
 				"teams-allowed-tenants": True,
+				"teams-recent-drops": True,
 			},
 		)
 		# A conversationUpdate stores a reference but is not a verified inbound message.
@@ -451,7 +457,7 @@ class TestTeamsE2E(IntegrationTestCase):
 		self.assertTrue(result["ok"], result)
 		self.assertEqual(
 			[s["id"] for s in result["steps"]],
-			["credentials", "token", "token_claims", "endpoint", "reference"],
+			["credentials", "token", "token_claims", "endpoint", "reference", "drops"],
 		)
 		self.assertTrue(all(s["ok"] for s in result["steps"][:4]), result)
 		self.assertFalse(result["steps"][4]["ok"])  # nobody has messaged the bot yet

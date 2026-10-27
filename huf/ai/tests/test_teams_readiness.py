@@ -4,6 +4,8 @@
 """WP-T6b: Teams readiness checks (offline)."""
 
 import json
+
+import frappe
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -36,6 +38,13 @@ def _by_id(items):
 
 
 class TestTeamsReadiness(IntegrationTestCase):
+	def setUp(self):
+		p = patch.object(readiness, "_public_base_url", return_value="https://huf.example.com")
+		p.start()
+		self.addCleanup(p.stop)
+		for bucket in ("GW-1", readiness.AUTH_BUCKET):
+			frappe.cache.delete_value(readiness.DROPS_PREFIX + bucket)
+
 	def _run(self, gw, adapter, events=True):
 		with patch("huf.ai.teams.readiness.frappe.get_all", return_value=[{"name": "E"}] if events else []):
 			return _by_id(readiness.readiness_checks(gw, adapter))
@@ -44,7 +53,14 @@ class TestTeamsReadiness(IntegrationTestCase):
 		items = readiness.readiness_checks(_gw(), _adapter())
 		self.assertEqual(
 			[i["id"] for i in items],
-			["teams-credentials", "teams-messaging-endpoint", "teams-first-message", "teams-mention-policy", "teams-allowed-tenants"],
+			[
+				"teams-credentials",
+				"teams-messaging-endpoint",
+				"teams-first-message",
+				"teams-mention-policy",
+				"teams-allowed-tenants",
+				"teams-recent-drops",
+			],
 		)
 
 	def test_all_green(self):
@@ -72,7 +88,9 @@ class TestTeamsReadiness(IntegrationTestCase):
 	def test_endpoint_hint_has_exact_path_and_enabled_flag(self):
 		item = self._run(_gw(is_enabled=0), _adapter())["teams-messaging-endpoint"]
 		self.assertFalse(item["done"])
-		self.assertIn("/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway_name=GW-1", item["hint"])
+		self.assertIn(
+			"/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway_name=GW-1", item["hint"]
+		)
 		self.assertTrue(self._run(_gw(is_enabled=1), _adapter())["teams-messaging-endpoint"]["done"])
 
 	def test_first_message(self):
@@ -99,7 +117,7 @@ class TestTeamsReadiness(IntegrationTestCase):
 		with patch("huf.ai.teams.readiness.frappe.get_all", side_effect=RuntimeError("db down")):
 			items = _by_id(readiness.readiness_checks(_gw(), _adapter()))
 		self.assertFalse(items["teams-first-message"]["done"])
-		self.assertEqual(len(items), 5)
+		self.assertEqual(len(items), 6)
 
 	def test_secrets_never_in_output(self):
 		for adapter, stored in ((_adapter(), None), (None, {"app_id": APP, "app_password": SECRET})):
@@ -111,3 +129,110 @@ class TestTeamsReadiness(IntegrationTestCase):
 		for provider in ("WhatsApp", "Telegram", "Slack"):
 			self.assertIsNone(provider_hooks.get(provider, "readiness_checks"), provider)
 			self.assertEqual(provider_hooks.readiness_checks(SimpleNamespace(provider=provider)), [])
+
+
+class TestEndpointUrlAndPublicHost(IntegrationTestCase):
+	"""TFIX-D M4a: structured ``endpoint_url``; non-public / non-https base flagged."""
+
+	def item(self, base, enabled=1):
+		with (
+			patch.object(readiness, "_public_base_url", return_value=base),
+			patch("huf.ai.teams.readiness.frappe.get_all", return_value=[]),
+		):
+			return _by_id(readiness.readiness_checks(_gw(is_enabled=enabled), _adapter()))[
+				"teams-messaging-endpoint"
+			]
+
+	def test_endpoint_url_is_structured_and_absolute(self):
+		item = self.item("https://huf.example.com")
+		self.assertTrue(item["done"])
+		self.assertEqual(
+			item["endpoint_url"],
+			"https://huf.example.com/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway_name=GW-1",
+		)
+		self.assertEqual(
+			self.item("https://huf.example.com", enabled=0)["endpoint_url"], item["endpoint_url"]
+		)
+
+	def test_non_public_bases_flagged(self):
+		for base, host in (
+			("http://huf.example.com", "huf.example.com"),
+			("https://localhost:8000", "localhost"),
+			("https://127.0.0.1", "127.0.0.1"),
+			("http://teams-int.local:8140", "teams-int.local"),
+			("https://site.localhost", "site.localhost"),
+			("https://10.0.0.5", "10.0.0.5"),
+			("https://[::1]:8443", "::1"),
+			("", "<none>"),
+		):
+			with self.subTest(base=base):
+				item = self.item(base)
+				self.assertFalse(item["done"])
+				self.assertIn(
+					f"Messaging endpoint must be a public https URL (current: {host})", item["hint"]
+				)
+				self.assertIn("host_name", item["hint"])
+
+	def test_endpoint_url_survives_provider_hooks(self):
+		gw = _gw()
+		with (
+			patch.object(readiness, "_public_base_url", return_value="https://huf.example.com"),
+			patch("huf.ai.teams.readiness.frappe.get_all", return_value=[]),
+			patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=_adapter()),
+		):
+			items = _by_id(provider_hooks.readiness_checks(gw))
+		self.assertTrue(
+			items["teams-messaging-endpoint"]["endpoint_url"].startswith("https://huf.example.com/")
+		)
+		self.assertEqual(set(items["teams-credentials"]), {"id", "label", "done", "hint"})
+
+
+class TestRecentDrops(IntegrationTestCase):
+	"""TFIX-D H3: rolling drop record per gateway + global auth bucket."""
+
+	def setUp(self):
+		for bucket in ("GW-1", "GW-2", readiness.AUTH_BUCKET):
+			frappe.cache.delete_value(readiness.DROPS_PREFIX + bucket)
+			self.addCleanup(frappe.cache.delete_value, readiness.DROPS_PREFIX + bucket)
+
+	def item(self, name="GW-1"):
+		with patch.object(readiness, "_public_base_url", return_value="https://huf.example.com"):
+			return _by_id(readiness.readiness_checks(_gw(name=name), _adapter()))["teams-recent-drops"]
+
+	def test_no_drops_is_done(self):
+		item = self.item()
+		self.assertTrue(item["done"])
+		self.assertIsNone(item["hint"])
+
+	def test_drops_summarised_per_gateway_plus_auth(self):
+		for kind in ("tenant", "tenant", "service_url"):
+			readiness.record_drop("GW-1", kind)
+		readiness.record_drop("GW-2", "channel")
+		readiness.record_drop(readiness.AUTH_BUCKET, "auth:pre_iss")
+		item = self.item()
+		self.assertFalse(item["done"])
+		self.assertIn(
+			"Recent dropped activities: 1 service_url, 2 tenant, 1 auth:pre_iss (all Teams gateways)",
+			item["hint"],
+		)
+		self.assertIn("(last: ", item["hint"])
+		self.assertIn("see docs troubleshooting", item["hint"])
+		self.assertNotIn("channel", item["hint"])  # other gateway's drops are not shown here
+
+	def test_record_is_bounded_and_ages_out(self):
+		for i in range(30):
+			readiness.record_drop("GW-1", "tenant")
+		record = frappe.cache.get_value(readiness.DROPS_PREFIX + "GW-1")
+		self.assertEqual(len(record["entries"]), readiness.DROPS_KEEP)
+		self.assertEqual(record["counts"], {"tenant": 30})
+		self.assertEqual(set(record["entries"][0]), {"ts", "kind"})
+		later = readiness._now() + readiness.DROPS_WINDOW_SECONDS + 10
+		with patch.object(readiness, "_now", return_value=later):
+			self.assertTrue(self.item()["done"])
+			readiness.record_drop("GW-1", "channel")
+			counts, _last = readiness.recent_drops("GW-1")
+		self.assertEqual(counts, {"channel": 1})  # window reset
+
+	def test_record_drop_never_raises(self):
+		with patch.object(readiness.frappe.cache, "get_value", side_effect=RuntimeError("redis down")):
+			readiness.record_drop("GW-1", "tenant")
