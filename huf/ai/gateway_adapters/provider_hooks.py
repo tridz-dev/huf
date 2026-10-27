@@ -43,6 +43,10 @@ Hook signatures (``gateway`` / ``event`` are Gateway / Gateway Event documents):
   keepalive. Called guarded, never raises. WhatsApp does not register it.
 - ``ingest_update(adapter, request, gateway) -> response | None``: handle a verified webhook update before
   ``normalize_inbound``; a non-None return is the HTTP response (non-message updates, drops) (WP-1c).
+- ``readiness_checks(gateway, adapter) -> list[dict]``: extra provider readiness items for
+  ``preview_gateway_readiness``, each ``{id, label, done, hint}``; appended after the core checks and counted in
+  ``blocking_count`` / ``ready``. ``adapter`` is None when it cannot be built yet. Use ``readiness_checks(gateway)``
+  below to dispatch (never raises; a hook failure becomes one failing ``provider-checks`` item).
 """
 
 from __future__ import annotations
@@ -84,3 +88,32 @@ def call(provider: str | None, hook_name: str, *a: Any, **kw: Any) -> Any:
 	if fn is None:
 		raise LookupError(f"No '{hook_name}' hook registered for provider '{provider}'")
 	return fn(*a, **kw)
+
+
+def readiness_checks(gateway: Any) -> list[dict]:
+	"""Run the provider's optional ``readiness_checks`` hook; ``[]`` when unregistered."""
+	hook = get(getattr(gateway, "provider", None), "readiness_checks")
+	if hook is None:
+		return []
+	try:
+		try:
+			from huf.ai.gateway_webhook import get_gateway_adapter
+
+			adapter = get_gateway_adapter(gateway)
+		except Exception:
+			adapter = None
+		items = list(hook(gateway, adapter) or [])
+		return [
+			{
+				"id": str(i["id"]),
+				"label": str(i.get("label") or i["id"]),
+				"done": bool(i.get("done")),
+				"hint": None if i.get("done") else (i.get("hint") or "Not ready"),
+			}
+			for i in items
+		]
+	except Exception as exc:
+		from huf.ai.gateway_service import _redact_error_text
+
+		hint = _redact_error_text(str(exc)) or "Provider readiness checks failed"
+		return [{"id": "provider-checks", "label": "Provider readiness checks", "done": False, "hint": hint}]
