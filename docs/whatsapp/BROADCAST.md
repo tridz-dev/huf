@@ -246,3 +246,18 @@ These are verified against the raw Meta pages before the live verification run. 
 - Status webhook: <https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/status>
 - Pricing: <https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing>
 - Error codes: <https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes>
+
+## Marketing Messages API (send_via)
+
+A broadcast has a `send_via` field: `messages` (default, `POST /{phone-number-id}/messages`) or `marketing_messages` (`POST /{phone-number-id}/marketing_messages`, the Meta Marketing Messages API, "MM API"). Payload, components and response shape (`messages[0].id`, `message_status`) are the same, so the rest of the broadcast pipeline is unchanged.
+
+When to use it:
+- Marketing templates only. A `marketing_messages` broadcast with a non-MARKETING template is refused (`mm_requires_marketing_template`, at create and again per recipient as `failed`).
+- Meta states the Cloud API stops supporting marketing messages on 2027-10-13 and that new accounts are blocked from Cloud API marketing from 2027-04-13 (per the track research; the send page itself does not state these dates, so re-verify). Accounts onboarded after the April date must use `marketing_messages`.
+- It also is the only path with a custom marketing template TTL (12h to 30d; Cloud API marketing is fixed at 30 days). TTL is set on the template, not per send.
+
+Requirements and caveats:
+- The business must have completed MM API onboarding (terms accepted, Pixel or Conversions API for measurement). Huf sends the default `product_policy` (`CLOUD_API_FALLBACK`): if onboarding is incomplete Meta falls back to the Cloud API `/messages` behaviour. Huf does not send `product_policy: STRICT` or `message_activity_sharing` (account default applies).
+- Status webhooks may report `marketing_lite` (sent via MM API) or `marketing` (fell back).
+- It is not documented whether the per-user marketing limit (131049) behaves identically on MM API. **Unverified**; the existing 131049 deferral applies unchanged.
+- `create_broadcast(..., send_via="marketing_messages")` sets it; it is not exposed in the UI yet.

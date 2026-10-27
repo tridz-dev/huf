@@ -15,6 +15,7 @@
   "template_name",
   "language_code",
   "category",
+  "send_via",
   "section_params",
   "body_params",
   "header_params",
@@ -117,6 +118,14 @@
    "length": 40,
    "read_only": 1,
    "description": "MARKETING | UTILITY | AUTHENTICATION, snapshot at create/start."
+  },
+  {
+   "fieldname": "send_via",
+   "fieldtype": "Select",
+   "label": "Send via",
+   "options": "messages\nmarketing_messages",
+   "default": "messages",
+   "description": "marketing_messages = Meta Marketing Messages API (MARKETING templates only; needs MM API onboarding)."
   },
   {
    "fieldname": "section_params",

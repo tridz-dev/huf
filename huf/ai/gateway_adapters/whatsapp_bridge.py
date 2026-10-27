@@ -713,8 +713,10 @@ def _graph_err(error: str, resp_or_exc: Any, **extra: Any) -> dict[str, Any]:
 	)
 
 
-def _graph_post(acct: dict[str, Any], data: dict[str, Any], http_post: Callable[..., Any] | None = None) -> dict[str, Any]:
-	"""POST a ``/messages`` body; returns ``{"wamid", "message_status"}`` or raises BridgeError.
+def _graph_post(
+	acct: dict[str, Any], data: dict[str, Any], http_post: Callable[..., Any] | None = None, marketing_api: bool = False
+) -> dict[str, Any]:
+	"""POST a ``/messages`` body (``/marketing_messages`` when ``marketing_api``: Meta Marketing Messages API, same payload); returns ``{"wamid", "message_status"}`` or raises BridgeError.
 
 	``message_status`` is ``messages[0].message_status`` (``accepted`` | ``held_for_quality_assessment``;
 	Meta sends it for template messages only), else None.
@@ -724,7 +726,7 @@ def _graph_post(acct: dict[str, Any], data: dict[str, Any], http_post: Callable[
 	if (refusal := _ae.send_refusal(acct.get("phone_id"))):
 		raise BridgeError(refusal)
 	http_post = http_post or _default_post
-	url = f"{acct['url']}/{acct['version']}/{acct['phone_id']}/messages"
+	url = f"{acct['url']}/{acct['version']}/{acct['phone_id']}/{'marketing_messages' if marketing_api else 'messages'}"
 	try:
 		resp = http_post(
 			url,
@@ -947,8 +949,9 @@ def send_template(
 	solution: str | None = None,
 	force_graph: bool = False,
 	opaque_ref: str | None = None,
+	marketing_api: bool = False,
 ) -> dict[str, Any]:
-	"""Send an approved template.
+	"""Send an approved template. ``marketing_api=True`` (requires ``force_graph``) posts to the Marketing Messages API endpoint.
 
 	``force_graph=True`` always posts to Graph (never the positional frappe_whatsapp path), returns
 	``wamid`` and ``message_status`` (``accepted`` | ``held_for_quality_assessment`` | None) and, with
@@ -1025,6 +1028,8 @@ def send_template(
 	else:
 		body_map = {str(i + 1): p for i, p in enumerate(params)}
 
+	if marketing_api and not force_graph:
+		raise BridgeError(_err("invalid_request", message="marketing_api requires force_graph."))
 	if force_graph or named or any(c.get("type") in ("header", "button") for c in components) or (tpl and _has_dynamic_url(tpl)):
 		if not _may_bypass(trusted) and not frappe.has_permission("WhatsApp Message", "create"):
 			raise frappe.PermissionError("Not permitted to send WhatsApp messages")
@@ -1044,7 +1049,7 @@ def send_template(
 		if (ref := _clean_opaque_ref(opaque_ref)):
 			payload["biz_opaque_callback_data"] = ref
 		if force_graph:
-			posted = _graph_post(acct, payload, http_post)
+			posted = _graph_post(acct, payload, http_post, marketing_api=marketing_api)
 		else:
 			posted = {"wamid": _graph_post_message(acct, payload, http_post), "message_status": None}
 		wamid = posted["wamid"]
