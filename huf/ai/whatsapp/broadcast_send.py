@@ -48,13 +48,18 @@ _STARTED = ("sending", "sent", "delivered", "read", "unknown", "failed")
 
 def _claim(name: str) -> bool:
 	"""Atomically queued|deferred -> sending (attempts+1), committed before returning. True when we own it."""
-	frappe.db.sql(
-		f"update `tab{RECIPIENT}` set status='sending', attempts=ifnull(attempts,0)+1, modified=%s "
-		"where name=%s and status in ('queued','deferred') and ifnull(attempts,0) < %s",
-		(now_datetime(), name, MAX_ATTEMPTS),
-	)
-	owned = frappe.db.sql("select row_count()")[0][0] == 1
-	frappe.db.commit()
+	try:
+		frappe.db.sql(
+			f"update `tab{RECIPIENT}` set status='sending', attempts=ifnull(attempts,0)+1, modified=%s "
+			"where name=%s and status in ('queued','deferred') and ifnull(attempts,0) < %s",
+			(now_datetime(), name, MAX_ATTEMPTS),
+		)
+		owned = frappe.db.sql("select row_count()")[0][0] == 1
+		frappe.db.commit()
+	except frappe.QueryDeadlockError:
+		# MariaDB 1213/1020: the claim did not commit, so we do not own the row and must not POST
+		frappe.db.rollback()
+		return False
 	return owned
 
 

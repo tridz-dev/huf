@@ -19,7 +19,9 @@ import base64
 import functools
 import json
 import mimetypes
+import random
 import re
+import time
 from datetime import timedelta
 from typing import Any
 from urllib.parse import quote
@@ -1783,6 +1785,7 @@ def send_call_permission_request(
 # problem) and ``unknown`` rows may already have been delivered, so re-sending either risks a duplicate or a
 # repeat spam signal. A second attempt is a new, separately attested broadcast to a corrected list.
 
+_PREPARE_RETRIES = 3
 _BROADCAST = "WhatsApp Broadcast"
 _BROADCAST_RECIPIENT = "WhatsApp Broadcast Recipient"
 _BROADCAST_LOG = "huf.whatsapp.broadcast"
@@ -1988,10 +1991,20 @@ def add_broadcast_recipients(broadcast: str | None = None, recipients: Any = Non
 	rows = [{"recipient": str(i)} if not isinstance(i, dict) else i for i in items]
 	prev = frappe.flags.get("in_broadcast_api")
 	frappe.flags.in_broadcast_api = True  # recipient rows are insert-guarded; prepare() is the only writer
+	result = None
 	try:
-		result = br.prepare(broadcast, rows)
+		for attempt in range(_PREPARE_RETRIES):
+			try:
+				result = br.prepare(broadcast, rows)
+				break
+			except frappe.QueryDeadlockError:
+				frappe.db.rollback()  # the whole prepare is idempotent (duplicates are skipped), so redo it
+				if attempt < _PREPARE_RETRIES - 1:
+					time.sleep(random.uniform(0.05, 0.25))
 	finally:
 		frappe.flags.in_broadcast_api = prev
+	if result is None:
+		return _error("busy_retry", "Another request is updating this broadcast; retry in a moment.")
 	if row.get("consent_attested"):
 		# the attestation covered a different list; the owner must re-attest
 		frappe.flags.in_broadcast_api = True

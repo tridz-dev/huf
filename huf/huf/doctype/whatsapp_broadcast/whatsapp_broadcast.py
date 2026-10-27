@@ -40,6 +40,24 @@ class WhatsAppBroadcast(Document):
 			if self.has_value_changed(field):
 				frappe.throw(f"{field} can only be changed through the broadcast API.", frappe.PermissionError)
 
+	def on_trash(self):
+		"""Only a Draft with no started rows can be deleted; its queued rows go with it."""
+		if self.status != "Draft":
+			frappe.throw("Only a Draft broadcast can be deleted.", frappe.PermissionError)
+		started = frappe.db.count(
+			"WhatsApp Broadcast Recipient",
+			{"broadcast": self.name, "status": ["not in", ["queued", "deferred", "skipped"]]},
+		)
+		if started:
+			frappe.throw("This broadcast has sent rows and cannot be deleted.", frappe.PermissionError)
+		prev = frappe.flags.get("in_broadcast_api")
+		frappe.flags.in_broadcast_api = True
+		try:
+			for name in frappe.get_all("WhatsApp Broadcast Recipient", filters={"broadcast": self.name}, pluck="name"):
+				frappe.delete_doc("WhatsApp Broadcast Recipient", name, force=True, ignore_permissions=True)
+		finally:
+			frappe.flags.in_broadcast_api = prev
+
 	def recount(self, commit: bool = False) -> dict[str, int]:
 		"""Recompute the counter fields from recipient rows (source of truth) and save them."""
 		rows = frappe.db.sql(
