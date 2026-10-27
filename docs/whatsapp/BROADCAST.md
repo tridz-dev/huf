@@ -1,263 +1,276 @@
 # WhatsApp Broadcast
 
-A WhatsApp Broadcast sends one approved template message to a bounded, pre-approved list of recipients through the Meta WhatsApp Cloud API. It is an automation tool. It is not a campaign platform, a CRM, or an inbox: there is no audience builder, no scheduling calendar, no A/B testing, and no replies are handled by the broadcast (replies arrive through the normal inbound flow).
+A WhatsApp Broadcast sends one approved template to a bounded, pre-approved list of recipients through the Meta WhatsApp Cloud API. It is an automation tool. It is not a campaign platform, a CRM, or an inbox: there is no audience builder, no scheduling, no A/B testing, and replies are not handled by the broadcast (they arrive through the normal inbound flow).
 
-Status of this document: it describes the design in the WhatsApp Broadcast track contract. Parts that depend on Meta behaviour that could not be confirmed from the official pages are marked **unverified**. See the live verification plan in [broadcast-live-verification.md](broadcast-live-verification.md).
+This document describes the code as it is. Statements that depend on Meta behaviour that was not confirmed are listed in [section 11](#11-unverified-meta-facts). The live check plan is in [broadcast-live-verification.md](broadcast-live-verification.md). The operator summary is in the [gateway runbook](../gateways/whatsapp-runbook.md#10-broadcasts).
+
+Code: `huf/ai/whatsapp/broadcast_recipients.py` (intake), `broadcast_send.py` (one recipient), `broadcast_runner.py` (lifecycle and pacing), `broadcast_status.py` (Meta statuses and stops), `broadcast_limits.py` (limit and preview), `broadcast_cost.py` (estimate), `management.py` (API), doctypes `WhatsApp Broadcast` and `WhatsApp Broadcast Recipient`.
 
 ## 1. Scope
 
 In scope:
 
-- One template per broadcast, one `POST /<PHONE_NUMBER_ID>/messages` request per recipient (`type: template`). Meta offers no multi-recipient broadcast endpoint.
-- Per-recipient parameters, merged over the broadcast defaults.
-- Recipients from pasted numbers or a CSV file.
-- Preview (recipient count, skipped rows, template status, 24-hour budget, estimated cost) and a typed-count confirmation before start.
+- One template per broadcast. One request per recipient (`type: template`). Meta offers no multi-recipient send.
+- Per-recipient parameters, merged over the broadcast defaults per part (`body`, `header`, `button`).
+- Recipients from a list of numbers or a CSV text.
+- Preview and a typed-count confirmation before start.
 - Pause, resume, cancel, and a gateway-wide kill switch.
-- Status tracking from Meta status webhooks (`sent`, `delivered`, `read`, `failed`).
+- Delivery tracking from Meta status webhooks.
+- Two send paths, chosen by `send_via`: `messages` (`POST /<PHONE_NUMBER_ID>/messages`, default) and `marketing_messages` (`POST /<PHONE_NUMBER_ID>/marketing_messages`, MARKETING templates only; section 10).
 
-Out of scope for v1:
+Not implemented:
 
-- The Marketing Messages API (`/marketing_messages`). Marketing templates still go through `/messages` in v1. This path is a later optional package and is required before 2027-04-13 for marketing sends from accounts created after that date (see section 11).
-- Retrying failed rows. There is no action to resend rows that ended `failed`, `skipped`, or `unknown`.
-- Sending to WhatsApp groups (not supported in Huf, see the [WhatsApp README](README.md)).
-- Free-form messages. Broadcasts send templates only, so the 24-hour conversation window does not apply.
+- Retry of failed rows. There is no endpoint (`retry_failed_broadcast_recipients` does not exist, by design; section 7).
+- Scheduling a start time.
+- Groups and free-form messages. Broadcasts send templates only.
+- Cost in the preview while no rates are filled in (section 8).
 
-## 2. Consent and opt-in
+## 2. Consent and recipient intake
 
-A broadcast may only reach people who have opted in to receive messages from the business.
+A broadcast may only reach people who opted in.
 
-- Before start, an operator must attest the opt-in for the list. The attestation records the opt-in source (`consent_source`), the user who attested (`consent_attested_by`), and the time (`consent_attested_at`). Start is refused until `consent_attested` is set.
-- Each recipient row can carry its own `consent_source` and `consent_at`. These are stored for audit. They do not replace the attestation.
-- Before a recipient is queued, the broadcast checks Huf's opt-out data: a STOP from the contact (`is_opted_out`, see the [runbook](../gateways/whatsapp-runbook.md#6-stop--start-opt-out)) and a marketing stop from Meta's `user_preferences` webhook (`is_marketing_allowed`). A contact that matches is recorded as `skipped` with a reason and is never sent to.
-- Before each send, the same opt-out check runs again. A contact that opted out after the list was built is marked `skipped`.
-- For marketing templates, US `+1` numbers are filtered out during preview because WhatsApp does not currently deliver marketing templates to them. The filter is counted in the preview.
-- Numbers are normalised to digits-only E.164. Invalid numbers are reported as `invalid` and not added. Duplicates are removed.
+- Before start an operator must attest the opt-in with `attest_broadcast_consent`. It stores `consent_source` (required, non-empty), `consent_attested_by`, `consent_attested_at`, `consent_attested`. Start is refused until it is set. Attestation is allowed in `Draft` and `Paused`.
+- The consent fields, `gateway`, `template` and `whatsapp_account` can only be written through the broadcast API. Generic REST or `set_value` writes to them are rejected by the doctype.
+- A recipient row may carry `consent_source` and `consent_at`. They are stored for audit and do not replace the attestation.
+
+Intake (`add_broadcast_recipients`, only while the broadcast is `Draft`) processes each row in this order:
+
+1. The number is normalised to digits-only E.164. It must have 8 to 15 digits. A BSUID is kept verbatim. Anything else goes to `invalid` (reason `invalid_number`) and is not stored.
+2. A recipient already in this broadcast is reported in `skipped` with reason `duplicate` and not stored.
+3. If the count of non-skipped rows has reached the cap, the row is reported as `skipped` with reason `max_recipients` and not stored. The cap is `max_recipients` (default 1000, at most 10000; the doctype default is 1000).
+4. If the broadcast already stores 50000 rows (skipped rows count), the row is reported as `skipped` with reason `row_ceiling` and not stored.
+5. Policy check. A matching row is stored with status `skipped` and `skip_reason`:
+   - `bsuid_recipient`: a BSUID cannot be a recipient, send to the phone number.
+   - `opted_out`: the contact sent STOP (`gateway_service.is_opted_out`).
+   - `marketing_opted_out`: MARKETING template only; the contact stopped marketing (`account_events.is_marketing_allowed`).
+   - `us_plus_one_marketing`: MARKETING template only; the number has 11 digits and starts with `1`. This also matches Canada and other NANP numbers (section 12).
+6. Otherwise the row is stored as `queued`.
+
+Limits per call: at most 10000 recipients per request (`too_many_recipients`), CSV text at most 2 MB (`csv_too_large`). The counters are recomputed at the end of every intake call. `skipped` and `invalid` in the response are capped at 200 entries each; `skipped_total` and `invalid_total` are exact.
+
+CSV: the first header cell matching `phone`, `recipient`, `phone_number`, `mobile`, `wa_id`, `whatsapp` or `number` (case, spaces and dashes ignored) is the recipient column. All other columns become `params.body`, in column order. A leading BOM is stripped. Blank lines are skipped. A CSV without such a header is `invalid_params`.
+
+Before each send the STOP check, the BSUID check, and, for a MARKETING template, the marketing preference are checked again (section 4). A contact that opted out after intake is marked `skipped`.
 
 ## 3. Recipient state machine
 
-Each recipient is one `WhatsApp Broadcast Recipient` row. Its `status` field holds the state.
+Each recipient is one `WhatsApp Broadcast Recipient` row (name `<broadcast>-<recipient>`, also used as the `opaque_ref`). The `status` field holds the state.
 
 ```
 queued ──claim──> sending ──> sent ──> delivered ──> read
-  ^  |               │         │
-  │  │               ├──> failed            (failed never overwrites delivered or read)
-  │  │               ├──> deferred ──(next_attempt_at)──> sending
-  │  │               └──> unknown          (never resent automatically)
-  │  └──> skipped                          (opt-out, consent, cap, or cancel)
-  └──────── deferred rows wait here until due
+  ^                  │         │
+  │                  ├──> failed            (failed never overwrites delivered or read)
+  │                  ├──> deferred ──(next_attempt_at)──> sending
+  │                  ├──> unknown           (never resent automatically)
+  │                  └──> skipped
+  └── queued/deferred rows may also become skipped (STOP, marketing stop, cancel)
 ```
 
-Rules:
+- **Claim.** The sender moves a row to `sending` with `UPDATE ... SET status='sending', attempts=attempts+1 WHERE name=? AND status IN ('queued','deferred') AND attempts < 5` and commits before calling Meta. If it matches no row, another worker owns it (`lost_claim`). A `queued` or `deferred` row that already has 5 attempts cannot be claimed; the sender marks it `failed` with "Gave up after the maximum number of attempts."
+- **Release.** If, after the claim, the broadcast is not `Running`, nothing was posted and the row is handed back to the status it had before (a `deferred` row keeps its `next_attempt_at`) and the attempt is given back. If the broadcast is `Cancelled` the row becomes `skipped` with reason `cancelled`.
+- **Rank.** Webhooks only move a row forward. Ranks: `queued`/`deferred` 0, `sending` 1, `sent`/`unknown` 2, `failed` 2.5, `delivered` 3, `read` 4. An update with a rank that is not higher is ignored, so replays and out-of-order webhooks are no-ops. A `skipped` row is never changed by a webhook. Meta `played` is stored as `read`.
+- **Webhook match.** A status is matched to a row by `wamid`, else by `biz_opaque_callback_data` (the row name), and only if the row's broadcast belongs to the gateway that received the webhook. A `wamid` is written onto a row that lacks one.
+- **Unknown.** After the request was attempted, an outcome with no Meta error code (timeout, dropped connection, unreadable response, missing message id, or the result could not be written) is `unknown`. Rows left in `sending` for more than 10 minutes (by `modified`) are moved to `unknown` by `resume_stale` (cron `*/5 * * * *`). `unknown` is never sent again automatically. A later `delivered`, `read` or `failed` webhook can still advance it; a `sent` webhook cannot (same rank).
+- **Counters.** `total`, `queued`, `sending`, `sent`, `delivered`, `read`, `failed`, `deferred`, `unknown`, `skipped` on the broadcast. Webhooks move them by atomic deltas. `recount()` recomputes them from the rows (the rows are the source of truth). It runs after each intake call, after each chunk and at the end of a tick, at completion, on cancel, in `resume_stale` for stale rows and for every Running broadcast.
 
-- **Claim.** A worker moves a row to `sending` with a conditional update (`WHERE status IN ('queued','deferred')`) and commits before it calls Meta. If the update matches no row, another worker owns it and the worker does nothing.
-- **Rank.** Status only moves forward. Ranks: `queued` and `deferred` 0, `sending` 1, `sent` and `unknown` 2, `delivered` 3, `read` 4. A webhook for an earlier state never moves a row back.
-- **Unknown.** If the process crashes or times out after the request was sent but before the message id was stored, the row becomes `unknown`. Rows left in `sending` for more than 10 minutes are moved to `unknown` by the periodic recovery job. `unknown` is never sent again automatically, because the message may already have been delivered.
-- **Failed.** A row becomes `failed` for a permanent Meta error, or after 5 failed attempts on a retryable error.
-- **Skipped.** Opt-out, consent change, the per-broadcast cap, or cancellation. The reason is stored in `skip_reason`.
-- **Wamid.** On a successful send, the message id (`wamid`), `message_status` (`accepted` or `held_for_quality_assessment`), and `sent_at` are stored. Status webhooks are matched to a row by `wamid`, or by `opaque_ref` (the recipient row name) when the `wamid` is not found.
-- **Counters.** The counts on the broadcast (`queued`, `sending`, `sent`, `delivered`, `read`, `failed`, `deferred`, `unknown`, `skipped`) are recomputed from the recipient rows. The rows are the source of truth.
+No WhatsApp Send Key rows are written by a broadcast.
 
-No WhatsApp Send Key rows are written by a broadcast. Send keys expire after 15 minutes or 24 hours and count toward the agent per-day cap, so the broadcast uses its own state machine as its duplicate guard.
+## 4. Sending one recipient
 
-## 4. Broadcast lifecycle
+Order of checks in `send_one`:
 
-Broadcast `status`: `Draft`, `Queued`, `Running`, `Paused`, `Completed`, `Cancelled`, `Failed`.
+1. Claim (above).
+2. Broadcast must be `Running`, else release.
+3. Per-broadcast cap: if rows already started (`sending`, `sent`, `delivered`, `read`, `unknown`, `failed`), including this one, exceed `max_recipients`, the row becomes `skipped` with reason `max_recipients`.
+4. STOP and BSUID check. A refusal makes the row `skipped` with the refusal code (`opted_out`, `bsuid_recipient`).
+5. The template row must exist with a readable status and category. Otherwise the row is `failed` ("template_missing") and the broadcast pauses with reason `template_missing`.
+6. `send_via=marketing_messages` with a non-MARKETING template: row `failed` (`mm_requires_marketing_template`).
+7. The bridge send (`force_graph=True`, `biz_opaque_callback_data` = row name, truncated to 256 characters). Inside it, before the POST: a disconnected gateway is refused; the template must belong to the account; the template must be `APPROVED` (else `template_not_approved`); for a MARKETING template the marketing preference is checked (`marketing_opted_out`).
+8. Success stores `wamid`, `message_status` (`accepted`, `held_for_quality_assessment`, or empty), `sent_at`, and status `sent`.
+
+The runner acts as a user who holds write permission on the Gateway (section 5).
+
+## 5. Lifecycle, runner and pacing
+
+Broadcast `status`: `Draft`, `Queued`, `Running`, `Paused`, `Completed`, `Cancelled`, `Failed`. `Queued` and `Failed` exist in the doctype but no code sets them.
 
 | Action | Allowed from | Result |
 |---|---|---|
-| Create | none | `Draft`. Template, defaults, caps, and gateway are set. |
-| Add recipients | `Draft` | Rows are added as `queued` or `skipped`. |
-| Attest consent | `Draft` | Records the opt-in attestation. |
-| Preview | any | Read only. Returns counts, limits, warnings, blocking reasons, and cost. |
-| Start | `Draft`, `Paused` | Checks the rules below, sets `Running`, records `started_by` and `started_at`, and starts the runner. |
-| Pause | `Running` | `Paused` with a reason. Queued rows wait. |
-| Resume | `Paused` | `Running` again. Checks run again. |
-| Cancel | `Draft`, `Running`, `Paused` | `Cancelled`. Queued rows become `skipped` with reason `cancelled`. Rows already sent are not changed. |
-| Complete | `Running` | Set when no queued or deferred rows remain. `finished_at` is set. |
+| Create | none | `Draft`. Category, template name and account are snapshotted. |
+| Add recipients | `Draft` | Rows added as `queued` or `skipped`. |
+| Attest consent | `Draft`, `Paused` | Records the attestation. |
+| Preview | any | Computes limits and cost, stores `cost_estimate` on the broadcast. No sends. |
+| Start | `Draft`, `Paused` | Checks below, then `Running`, `started_by`, `started_at`, first tick enqueued. |
+| Pause | `Running` | `Paused`, `pause_reason` set (truncated to 140 characters). A pause on another state does nothing and returns success. |
+| Resume | `Paused` | Same checks as start. The resumer becomes the runner identity. |
+| Cancel | any state except `Completed`, `Cancelled` | `Cancelled`, `finished_at` set. `queued` and `deferred` rows become `skipped` with reason `cancelled`. `sending` rows finish. |
+| Complete | `Running` | Set by the runner when no `queued`, `deferred` or `sending` row remains; `finished_at` set. |
 
-Start is refused unless all of these hold:
+Start and resume are refused (an exception with a message) unless all of these hold:
 
-- the template is `APPROVED` at start time (checked again, not only at draft time);
-- consent is attested;
-- the preview has no blocking reasons;
-- the typed confirmation equals the number of queued recipients (`confirm_count`);
-- no other broadcast is `Running` on the same gateway (one active broadcast per gateway).
+- the status is allowed (above);
+- consent is attested and the broadcast has a gateway;
+- the caller is an enabled user with write permission on the Gateway;
+- preview has no `blocking` entry: the template exists and is `APPROVED`, consent attested, no other broadcast `Running` on the gateway, number quality is not RED, and, when the tier is known, queued recipients fit in the remaining 24-hour budget (section 6);
+- at least one `queued` or `deferred` row exists;
+- no other broadcast is `Running` on the same gateway (re-checked under a lock on the Gateway row).
 
-The runner sends as the user who started the broadcast. Write permission on the gateway is checked at start and again on each tick. If that permission is removed, the broadcast pauses.
+`start_broadcast` additionally requires `confirm_count` to equal the number of `queued` plus `deferred` rows. Start does not read gateway health; only a disconnected connection stops sends (section 9).
 
-## 5. Limits, pacing, and pause rules
+### Runner
 
-### Limits
-
-- **Per-broadcast cap.** `max_recipients` on the broadcast. Rows beyond the cap are not sent. The cap is enforced by the sender, not only by the preview.
-- **Portfolio budget.** Meta limits the number of unique users a business portfolio can message outside a service window in a rolling 24 hours (tiers 250, 2,000, 10,000, 100,000, unlimited). The preview reads the current tier from `whatsapp_business_manager_messaging_limit`. The remaining budget is the tier minus unique recipients already started by any broadcast on the gateway in the last 24 hours. If the tier cannot be read, the value is unknown and the preview warns.
-- **Per-user marketing limit.** Meta can withhold marketing templates to a user who receives too many. This is handled per recipient (error 131049, section 6).
+- One live tick per broadcast, enforced by a cache lock (`huf:<site>:wa_broadcast_tick:<broadcast>`, a random token, TTL 600 s, refreshed at least every 30 s, every 20 sends and after each chunk; a tick that loses the lock exits). Job ids are site-scoped. Queue `long`, job timeout 1800 s.
+- A tick works for 240 s. If `queued` rows remain it re-enqueues itself. If only future `deferred` rows (or in-flight `sending` rows) remain, the tick ends as `idle`; the `*/5` cron `resume_stale` revives a Running broadcast with no live lock (also when due `deferred` rows remain after a tick). Revival may take up to about 5 minutes.
+- The runner acts as the latest resumer (recorded as a `resumed_by:` comment) or, if none, `started_by`. Write permission on the Gateway is re-checked on every chunk and at least every 50 sends; a disabled user or lost permission pauses the broadcast with reason `permission_lost`.
+- Status is re-read before every send, so a pause or cancel stops the tick within one send.
 
 ### Pacing
 
-- `mps` (messages per second) on the broadcast sets the send rate. It is capped by the phone number's throughput (default 80 mps, see [Meta throughput](#14-meta-references)) and by the throughput reported by Meta when it can be read.
-- The first batch is a ramp of 20 messages. Later batches grow.
-- Sends are paced in chunks. The runner re-queues itself after each chunk, so a restart resumes from the rows still `queued`.
-- **Held ratio.** When more than 30% of recent sends return `message_status = held_for_quality_assessment`, the runner slows down. Held messages are a Meta signal that the template is under quality assessment.
+- Rate is `min(mps, throughput)` messages per second. `mps` on the broadcast defaults to 10 (doctype default; code fallback 20 if empty). `throughput` is the value read from Meta when it is an integer or a dict with an integer `mps`; otherwise 80.
+- Batch size: 20 for the first batch of a tick; afterwards the number of rows already processed in this tick, at least 20 and at most 200.
+- Held ratio: over the last 50 rows with a `sent_at`, if at least 10 exist and more than 30% have `message_status = held_for_quality_assessment`, the rate becomes a quarter of the rate (minimum 1 per second) and batches are halved.
 
-### Pause signals
+## 6. Limits and preview
 
-The runner pauses the broadcast (with the reason stored in `pause_reason`) when any of these happens:
+`preview_broadcast` returns `limits` (from `broadcast_limits.preview`), `cost`, `confirm_required`, `queued`.
 
-| Signal | Source | Action |
+- **Messaging limit.** Read with `GET /<PHONE_NUMBER_ID>?fields=whatsapp_business_manager_messaging_limit,quality_rating,throughput`, cached for 10 minutes. A failure leaves all values unknown and never raises. Tier mapping in code: `TIER_250` 250, `TIER_1K` 1000, `TIER_2K` 2000, `TIER_10K` 10000, `TIER_100K` 100000, `TIER_UNLIMITED` no limit. Only `TIER_250` is confirmed against Meta's page; the other spellings are not (section 11).
+- **24-hour budget.** `remaining_24h` = tier maximum minus distinct recipients with a `sent`, `delivered`, `read` or `unknown` row sent in the last 24 hours, or a `sending` row modified in the last 24 hours, across all broadcasts on the gateway. `failed`, `deferred` and `skipped` rows do not use budget. If `queued` rows exceed it, preview blocks with `recipients_exceed_24h_budget:<queued>><remaining>`. If the tier is unknown, preview only warns ("Messaging limit is unknown") and `max_recipients` is the only ceiling. Unlimited tier: `within_limit` true.
+- **Quality.** `RED` blocks start (`quality_red`). `YELLOW` warns. Any other value is unknown.
+- **Template.** A missing template blocks (`template_not_found`), a non-`APPROVED` one blocks (`template_not_approved:<STATUS>`).
+- `queued`, `skipped` and `recipients` in the preview are row counts by status (`queued` counts only `queued`; the endpoint's own `queued` and the confirm count also include `deferred`).
+
+Blocking reasons: `broadcast_not_found`, `template_not_found`, `template_not_approved:<status>`, `consent_not_attested`, `another_broadcast_running:<names>`, `quality_red`, `recipients_exceed_24h_budget:<n>><m>`, `preview_failed`. Warnings: US `+1` queued recipients (redundant for a MARKETING broadcast, since intake already skips them), quality YELLOW, messaging limit unknown.
+
+## 7. Errors, pause signals and retries
+
+Classification uses `whatsapp_errors`. A send that gets no Meta error code is `unknown` (section 3). A refused send raised before the POST has no Meta code and is handled as shown in the first rows.
+
+| Situation | Row outcome | Broadcast |
 |---|---|---|
-| Error 132015 | Send response or status | Pause. The template was paused or dropped by template pacing. |
-| Error 135000 | Status | Pause. Portfolio pacing dropped held messages. |
-| Template paused, rejected, or disabled | Template webhook (`message_template_status_update`) | Pause for that template. |
-| Gateway write permission removed | Each tick | Pause. |
-| Gateway kill switch | `pause_all_broadcasts(gateway)` | Pause every running broadcast on the gateway. |
-| Gateway disconnected | Connection state | Refused at send time, see the [runbook](../gateways/whatsapp-runbook.md#3-health-states). |
+| `opted_out`, `marketing_opted_out`, `bsuid_recipient` | `skipped` (reason) | Continues |
+| `gateway_disconnected` | `deferred` 300 s | Pauses (`gateway_disconnected`) |
+| `template_not_approved` | `failed` | Pauses (`template_not_approved`) |
+| Template missing or unreadable | `failed` | Pauses (`template_missing`) |
+| `mm_requires_marketing_template` | `failed` | Continues |
+| Other refusal before the POST | `failed` | Continues |
+| No Meta error code after the POST (timeout, connection error, HTTP 5xx or 429 without a Meta error code, unparseable response) | `unknown` | Continues |
+| 131049 per-user marketing limit | `deferred`, due 24 h later | Continues |
+| 130429 throughput, 131056 pair limit | `deferred`, retryable | Continues |
+| 131057 account maintenance, 131016, 1, 2 (server); 4, 17, 32, 613, 80007 (API rate limits) | `deferred`, retryable | Continues |
+| 131050 user stopped marketing | `failed`; a marketing stop is recorded, which skips the contact's other pending rows | Continues |
+| 131026, 131047, 131048, 132000, 132001, 132005, 132007, 132012, and any code not listed above (including 131062, which has no table entry; the HTTP status is not used to classify a coded error) | `failed`, `error_code` stored | Continues |
+| 132015 template paused, 132016 template disabled, 135000, 131042 | `failed`, `error_code` stored | Pauses (`meta_error_<code>`) |
 
-A paused broadcast does not resend anything. Resume is a manual action.
+Retry rules:
 
-## 6. Error handling
+- A retryable error is retried until the row has made 5 POST attempts (`attempts` counts claims); the fifth failure is `failed`. 131049 is deferred each time without that check, and the next claim after the fifth attempt marks the row `failed` ("Gave up ...").
+- Backoff after attempt n: 2, 4, 8, 16 s (doubling, capped at 16 s, +/-20% jitter); 131056 is a fixed 6 s; 60 s if no backoff is available. 131049 is 86400 s. Gateway disconnected is 300 s.
+- There is no per-recipient retry. A `failed` row is a permanent Meta verdict, and `unknown` may already have been delivered. To reach the contacts again, create a new, separately attested broadcast.
 
-Classification uses `whatsapp_errors` (`huf/ai/gateway_adapters/whatsapp_errors.py`). Rows that get no response, or an ambiguous network error after the request was sent, go to `unknown`, not to a retry.
+Pause rules (the runner stops sending, rows stay as they are; resume is manual):
 
-| Code | Meaning | Row outcome | Broadcast |
-|---|---|---|---|
-| 130429 | Throughput limit | `deferred` with backoff, `attempts + 1` | Continues, slower |
-| 131056 | Pair limit (too many messages to one user) | `deferred` with per-recipient backoff | Continues |
-| 131057 | Number unavailable during throughput upgrade | `deferred` with a short wait | Continues |
-| 5xx | Meta server error | `deferred` with backoff | Continues |
-| 131049 | Withheld for ecosystem health (per-user marketing limit) | `deferred`, next attempt at least 24 hours later | Continues |
-| 131050 | Recipient opted out of marketing | `failed`; a marketing stop is recorded for the contact | Continues |
-| 131026 | Undeliverable (no WhatsApp, old app) | `failed` | Continues |
-| 131048 | Sending restricted on the number | `failed` | Continues. Check quality in WhatsApp Manager. |
-| 132012 | Template parameter mismatch | `failed` | Continues. Fix the payload. |
-| 132016 | Template permanently disabled | `failed` | Pauses |
-| 132015 | Template paused or dropped by pacing | row not sent | Pauses |
-| 135000 | Held message dropped under portfolio pacing | `failed` | Pauses |
-| 131042 | Payment or billing problem | `failed` | Pauses |
-| 131062 | BSUID recipient not supported for this message | `failed` | Continues |
-| Other permanent | Not retryable | `failed` | Continues |
-| Timeout or ambiguous after request | Unknown whether Meta accepted it | `unknown` | Continues. Never resent automatically. |
-
-Retryable rows are retried up to 5 attempts, then `failed`. Backoff is taken from `whatsapp_errors.backoff_seconds`.
-
-Status webhooks for a broadcast row:
-
-- `sent`, `delivered`, `read` move the row forward (monotonic).
-- `failed` moves a row to `failed` with the error code and message stored, unless it is already `delivered` or `read`.
-- A repeated `(wamid, status)` pair is ignored.
-- A failed webhook handler never breaks webhook ingest.
-- A user-stop error from a status (131050) also marks that contact's queued and deferred rows in running broadcasts as `skipped` with reason `opted_out`.
-
-## 7. Costs
-
-Meta charges per delivered marketing message, by recipient country calling code. Utility and authentication rates have volume tiers; marketing does not.
-
-- The preview shows an estimate in USD built from a rate card file, `huf/ai/whatsapp/broadcast_rates.json`. The file records its source URL and the date it was taken.
-- A country missing from the rate card has `rate: null`. The estimated total becomes unknown and the preview warns.
-- The estimate is not an invoice. Meta's pricing page and the WhatsApp Manager billing view are the source of truth.
-- Start requires the operator to type the recipient count. The count must match the queued recipients exactly. This is a guard against starting a list that was changed after the preview.
-
-## 8. API reference
-
-All endpoints are whitelisted methods in `huf/ai/whatsapp/management.py`. Each one is guarded by the bridge guard and by gateway write permission (`_gateway_write_allowed`). Every mutating call writes an audit log entry (`huf.whatsapp.broadcast` logger) and a comment on the broadcast.
-
-| Method | Purpose | Key arguments |
+| Signal | Source | Reason stored |
 |---|---|---|
-| `create_broadcast` | Create a draft | `gateway`, `template`, `title`, `language_code`, `body_params`, `header_params`, `button_params`, `consent_source`, `max_recipients`, `mps` |
-| `add_broadcast_recipients` | Add recipients from a list or CSV | `broadcast`, `recipients`, `csv_text` |
-| `attest_broadcast_consent` | Record the opt-in attestation | `broadcast`, `consent_source` |
-| `preview_broadcast` | Counts, limits, warnings, blocking reasons, cost | `broadcast` |
-| `start_broadcast` | Start the run | `broadcast`, `confirm_count` |
-| `pause_broadcast` | Pause | `broadcast` |
-| `resume_broadcast` | Resume | `broadcast` |
-| `cancel_broadcast` | Cancel | `broadcast` |
-| `pause_all_broadcasts` | Kill switch for a gateway | `gateway` |
-| `list_broadcasts` | List | `gateway`, `status`, `limit`, `offset` |
-| `get_broadcast` | Detail with counts | `broadcast` |
-| `list_broadcast_recipients` | Recipient rows | `broadcast`, `status`, `limit`, `offset` |
+| `pause_broadcast` | operator | `manual` |
+| `pause_all_broadcasts` | operator | `kill_switch` |
+| Send response 132015, 132016, 135000, 131042 | send | `meta_error_<code>` |
+| Status webhook `failed` with code 135000 on a row that advances | webhook | `WhatsApp error 135000 (messages dropped by pacing)` |
+| Template webhook: status `PAUSED`, `DISABLED`, `REJECTED` | `message_template_status_update` | `template:paused`, `template:disabled`, `template:rejected` |
+| Template quality turns `RED` | `message_template_quality_update` | `template:quality_red` |
+| Template category changes to `MARKETING` | `template_category_update` | `template:category_marketing` |
+| Gateway disconnected, template not approved or missing at send | send | see table above |
+| Write permission lost | each chunk, every 50 sends | `permission_lost` |
 
-There is no endpoint to retry failed rows. To send again to those contacts, create a new broadcast with a new list. Rows already `sent`, `delivered`, or `read` are not sent again by any action.
+Template webhooks pause Running broadcasts on the same WhatsApp account whose `template_name` matches.
 
-The Meta endpoints used are:
+Webhook handling: `sent`, `delivered`, `read`, `played` move a row forward. `failed` stores the first error's code and message, unless the row is `delivered`/`read`. A webhook handler failure never breaks webhook ingest. A status `failed` with 131050 only marks that row; the marketing stop is recorded by the send-time path. The `user_preferences` event (marketing stop) and a STOP keyword both skip the contact's `queued` and `deferred` rows (reason `opted_out`) in broadcasts of that gateway in `Queued`, `Running` or `Paused` state; `Draft` rows are re-checked at send time instead.
 
-- `POST /<PHONE_NUMBER_ID>/messages` (template send, per recipient), with `biz_opaque_callback_data` set to the recipient row name. Meta's size limit and placement for this field are unverified; the row name is well under 256 characters.
-- `GET /<PHONE_NUMBER_ID>?fields=whatsapp_business_manager_messaging_limit,quality_rating,throughput` (limits, read-only, cached for 10 minutes; a failure leaves the values unknown and does not raise).
-- Template status read before start and in preview.
+## 8. Costs
 
-Webhook fields used: `messages` (statuses), `message_template_status_update`, `message_template_quality_update`, `user_preferences`.
+The estimate comes from `huf/ai/whatsapp/broadcast_rates.json`. Today every rate in that file is `null` and `rates_verified` is `false`, because the official per-country rate card was not retrievable. As a result:
 
-## 9. Operational runbook
+- `cost.total` is `null` and each market has a `rate_unavailable:<category>:<market>` warning. The wizard shows "unavailable".
+- Recipients whose country code is not in the file are counted under `UNKNOWN` with a `market_unknown:<n>_recipients` warning.
+- The estimate becomes a number only after rates are filled in from Meta's official rate card and the file's source and date are updated.
 
-Full gateway runbook: [whatsapp-runbook.md](../gateways/whatsapp-runbook.md#10-broadcasts).
+The estimate covers `queued` and `deferred` rows. It is never an invoice; Meta billing is the source of truth. The typed-count confirmation is a separate guard against starting a list that changed after the preview.
 
-Typical sequence:
+## 9. API reference
 
-1. Confirm the gateway health is `healthy` or `degraded` with no blocking reasons.
-2. Check the template in WhatsApp Manager: `APPROVED`, and note its category.
-3. Create the draft, add recipients, attest consent with a source.
-4. Preview. Read the warnings, the remaining 24-hour budget, the skipped reasons, and the cost estimate.
-5. Start with the typed count.
-6. Watch the counts. Pause if `failed` or `deferred` rises quickly, or if held ratio rises.
-7. Check the audit comments on the broadcast after the run.
+All methods are in `huf/ai/whatsapp/management.py`, whitelisted, behind the bridge guard. Failures from a guarded call return `{"success": false, "error": <code>, "message": ...}`; a missing permission raises a permission error. Write methods need write permission on the broadcast's Gateway (or the integrations-manage capability). Read methods need read permission. Every mutating call writes an audit log line (`huf.whatsapp.broadcast`) and a comment on the broadcast. POST methods are rate limited per user: 60 calls per 60 s, except `start_broadcast` and `pause_all_broadcasts` (30 per 60 s).
 
-Kill switch: `pause_all_broadcasts(gateway)` pauses every running broadcast on the gateway. Use it first when a template or number is in trouble, then investigate.
+| Method | Needs | Parameters | Returns | Error codes |
+|---|---|---|---|---|
+| `create_broadcast` | write | `gateway`, `template` (name or `<name>-<lang>`), `title`, `language_code`, `body_params`, `header_params`, `button_params`, `consent_source`, `max_recipients` (1 to 10000), `mps`, `send_via` (`messages` or `marketing_messages`) | `success`, `broadcast`, `status` (`Draft`), `category` | `invalid_gateway`, `not_found`, `no_account`, `invalid_name`, `invalid_title`, `template_not_found`, `template_not_approved`, `invalid_send_via`, `mm_requires_marketing_template`, `invalid_max_recipients`, `invalid_params` |
+| `add_broadcast_recipients` | write | `broadcast`, `recipients` (list of numbers or `{recipient, params, consent_source, consent_at}`), `csv_text` | `success`, `added`, `skipped`, `skipped_total`, `invalid`, `invalid_total` | `not_found`, `not_draft`, `csv_too_large`, `too_many_recipients`, `invalid_params`, `no_recipients` |
+| `attest_broadcast_consent` | write | `broadcast`, `consent_source` | `success`, `broadcast`, `consent_attested`, `consent_source` | `not_found`, `invalid_state`, `consent_source_required` |
+| `preview_broadcast` | write | `broadcast` | `success`, `broadcast`, `status`, `consent_attested`, `limits`, `cost`, `confirm_required`, `queued` | `not_found` |
+| `start_broadcast` | write | `broadcast`, `confirm_count` | `success`, `broadcast`, `status` (`Running`), `queued` | `not_found`, `consent_not_attested`, `no_recipients`, `confirm_mismatch`; runner refusals are raised as validation errors with a message (`Broadcast blocked: ...`, `Another broadcast (...) is already running on this Gateway`, wrong state, no consent, no queued recipients) |
+| `pause_broadcast` | write | `broadcast` | `success`, `broadcast`, `status` | `not_found` |
+| `resume_broadcast` | write | `broadcast` | `success`, `broadcast`, `status`, `queued` | `not_found`; same runner refusals as start |
+| `cancel_broadcast` | write | `broadcast` | `success`, `broadcast`, `status` | `not_found`; raises if already `Completed` or `Cancelled` |
+| `pause_all_broadcasts` | write | `gateway` | `success`, `gateway`, `paused` (names of broadcasts that were Running) | `invalid_gateway`, `not_found` |
+| `list_broadcasts` | read | `gateway` (required unless admin), `status`, `limit` (default 50, max 200), `offset` | `success`, `broadcasts` (each with `counts` object, parsed params, ISO times) | `not_found`, `gateway_required` |
+| `get_broadcast` | read | `broadcast` | `success`, `broadcast` | `not_found` |
+| `list_broadcast_recipients` | read | `broadcast`, `status`, `limit` (default 100, max 200), `offset` | `success`, `recipients` (`name`, `recipient`, `status`, `skip_reason`, `wamid`, `message_status`, `attempts`, `next_attempt_at`, `error_code`, `error_message`, `sent_at`, `delivered_at`, `read_at`, `failed_at`) | `not_found` |
 
-## 10. Known limits
+A caller with read but not write permission sees recipient numbers masked to the last four digits, and digit runs of seven or more are masked in `name` and `error_message`.
 
-- **No retry of failed rows.** `failed`, `skipped`, and `deferred` rows that never sent are not resent by a later action. Create a new broadcast for those contacts if they should receive the message.
-- **Unknown rows are never resent automatically.** An `unknown` row may have been delivered. Check the recipient in the business inbox or the WhatsApp Manager message log before deciding anything.
-- **No automatic 24-hour retry for 131049 beyond one deferral.** A deferred row becomes due at least 24 hours later and is then sent once more under the normal retry limit.
-- **Portfolio budget is a read.** The tier comes from a Meta read that can fail. When it is unknown, the preview warns and the start guard relies on the per-broadcast cap.
-- **Held messages are not a delivery signal.** `held_for_quality_assessment` means Meta accepted the request but is holding it. Its final result comes from the status webhooks.
-- **Pair limit numbers are unverified.** The 1-message-per-6-seconds figure comes from an older Meta page. Treat 131056 as per-recipient backoff only.
-- **Marketing Messages API not used.** Custom TTL and marketing product-policy options are not available on the `/messages` path.
-- **Rate card may be stale.** The cost estimate is only as current as `broadcast_rates.json`.
-- **No inbox.** Replies are handled by the normal inbound flow, not by the broadcast.
+The Meta endpoints used: `POST /<PHONE_NUMBER_ID>/messages` or `/marketing_messages` (per recipient, with `biz_opaque_callback_data`), and `GET /<PHONE_NUMBER_ID>?fields=whatsapp_business_manager_messaging_limit,quality_rating,throughput`. Webhook fields consumed: `messages` (statuses), `message_template_status_update`, `message_template_quality_update`, `template_category_update`, `user_preferences`.
 
-## 11. Meta changes that affect this design
+## 10. Marketing Messages API (`send_via`)
 
-- Marketing messages on the Cloud API are scheduled to stop on 2027-10-13. New accounts are blocked from marketing on the Cloud API from 2027-04-13. The Marketing Messages API is required for marketing sends after those dates. This is tracked as the optional package WP-10.
-- Template TTL is set on the template, not on the send payload. The marketing TTL option requires the Marketing Messages API.
-- Business-scoped user IDs (BSUIDs) may appear instead of phone numbers in webhooks. Recipients are keyed by phone number and by BSUID where Meta provides one.
+`send_via=marketing_messages` posts the same payload to `/marketing_messages`. It is refused for a non-MARKETING template at create (`mm_requires_marketing_template`) and per recipient (row `failed`). The wizard offers the choice for MARKETING templates.
 
-## 12. Open questions
+- Huf does not send `product_policy` or `message_activity_sharing`; the account default applies.
+- Status webhooks may report a different pricing category for these sends. Huf does not use it.
+- Onboarding to the Marketing Messages API and the dates after which Cloud API marketing sends stop are Meta facts that were not confirmed here (section 11). Whether the 131049 limit behaves the same on this path is not known; the same deferral applies.
 
-- Exact placement and size limit of `biz_opaque_callback_data` in the send body (search snippet says 512 characters; the design uses 256 for safety).
-- Whether the per-user marketing limit applies identically to the Marketing Messages API.
-- Current US `+1` marketing block effective date.
-- Downgrade rules for messaging tiers.
-- Current pair-limit numbers.
+## 11. Unverified Meta facts
 
-These are verified against the raw Meta pages before the live verification run. See `research/META_BROADCAST_API.md` in the track.
+The code works without these, but they should be confirmed against Meta before relying on them:
 
-## 13. Glossary
+- Placement and size of `biz_opaque_callback_data` on the send body (top level, truncated to 256 characters in code; Meta may allow 512) and that status webhooks echo it. Rows are also matched by `wamid`.
+- Tier enum spellings other than `TIER_250` (`TIER_1K`, `TIER_2K`, `TIER_10K`, `TIER_100K`, `TIER_UNLIMITED`) and the downgrade rules.
+- The shape of the `throughput` field. Only an integer or an integer `mps` key is read.
+- Error 135000. Meta's error-code page describes it as a generic invalid-parameter error. Huf treats it as a pause signal (portfolio pacing drop) conservatively, so an unrelated 135000 also pauses.
+- Pair-limit numbers (the 6 s delay for 131056) and per-user marketing limit behaviour (131049) on either send path.
+- That WhatsApp does not deliver marketing templates to US `+1` numbers, and since when.
+- The 2027-04-13 and 2027-10-13 dates for Cloud API marketing messages, taken from track research and not stated on the send-messages page.
+- Meta rate cards (not used; section 8).
+- `quality_rating` values beyond `GREEN` (`YELLOW`, `RED` are assumed).
 
-- **Template**: a Meta-approved message with placeholders. Must be `APPROVED` to send.
-- **Held for quality assessment**: a send accepted by Meta but held while the template is assessed.
-- **Opt-in attestation**: the operator's record that the recipients opted in to the business's messages, and how.
-- **Wamid**: WhatsApp message id returned by the send call and echoed in status webhooks.
+## 12. Known limits
+
+- **US `+1` filter also skips Canada.** The rule is any 11-digit number starting with `1`, for MARKETING templates only.
+- **No per-recipient retry.** `failed`, `skipped` and `unknown` rows are not resent by any action.
+- **`unknown` rows are never auto-resent.** A `sent` webhook does not change them.
+- **STOP keyword, `user_preferences` marketing stop and send-time 131050 all skip the contact's `queued` and `deferred` rows** in other unfinished broadcasts of the gateway. A status-webhook 131050 only fails that row.
+- **A template that is paused, disabled, rejected, quality RED, or whose category changes to MARKETING pauses running broadcasts** that use it, until someone resumes. Resume re-runs the start checks.
+- **One Running broadcast per gateway.**
+- **135000 pauses conservatively** (section 11).
+- **Tier unknown means no budget check.**
+- **Idle revival delay.** A broadcast with only future `deferred` rows is revived by the cron, up to about 5 minutes late.
+- **Held messages are not a delivery signal.** `held_for_quality_assessment` means Meta accepted the request but holds it; the final result arrives by webhook.
+- **Cost estimate is unavailable** until rates are filled in.
+- **No inbox, no scheduling.**
+
+## 13. Operations
+
+- **Kill switch.** `pause_all_broadcasts(gateway)` (the "Stop all broadcasts" button in the broadcast tab) pauses every Running broadcast on the gateway with reason `kill_switch`. A tick stops before its next send. Rows in `sending` at that moment finish. Resume is manual per broadcast.
+- **Recount.** Counters are reconciled automatically (section 3). To force it for one broadcast, run `frappe.get_doc("WhatsApp Broadcast", name).recount(commit=True)` in a bench console on the site. Counters can differ from the rows only briefly, while webhooks apply deltas.
+- **Resolving an `unknown` row.** There is no action for it. Look up the recipient in WhatsApp Manager's message log or the business inbox. If the message was delivered, a later `delivered` or `read` webhook matched by `wamid` or row name updates the row. If not delivered, leave it; do not resend inside this broadcast. To message the contact again, include them in a new broadcast.
+- **Stuck broadcast.** If a Running broadcast does not progress, wait for the `*/5` cron (`resume_stale`) which also turns stale `sending` rows into `unknown` and revives the tick. If it is `Paused`, read `pause_reason`, fix the cause, then resume.
+- **Audit.** Each mutating call leaves a comment on the broadcast; resume leaves `resumed_by: <user>`.
+- **After a pause for 132015, 132016, 135000, 131042.** Check the template and account notices in WhatsApp Manager before resuming.
 
 ## 14. Meta references
 
 - Send messages: <https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages>
 - Messaging limits: <https://developers.facebook.com/documentation/business-messaging/whatsapp/messaging-limits>
 - Throughput: <https://developers.facebook.com/documentation/business-messaging/whatsapp/throughput>
-- Template pacing and portfolio pacing: <https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-pacing>
+- Template pacing: <https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-pacing>
 - Status webhook: <https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/status>
 - Pricing: <https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing>
 - Error codes: <https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes>
-
-## Marketing Messages API (send_via)
-
-A broadcast has a `send_via` field: `messages` (default, `POST /{phone-number-id}/messages`) or `marketing_messages` (`POST /{phone-number-id}/marketing_messages`, the Meta Marketing Messages API, "MM API"). Payload, components and response shape (`messages[0].id`, `message_status`) are the same, so the rest of the broadcast pipeline is unchanged.
-
-When to use it:
-- Marketing templates only. A `marketing_messages` broadcast with a non-MARKETING template is refused (`mm_requires_marketing_template`, at create and again per recipient as `failed`).
-- Meta states the Cloud API stops supporting marketing messages on 2027-10-13 and that new accounts are blocked from Cloud API marketing from 2027-04-13 (per the track research; the send page itself does not state these dates, so re-verify). Accounts onboarded after the April date must use `marketing_messages`.
-- It also is the only path with a custom marketing template TTL (12h to 30d; Cloud API marketing is fixed at 30 days). TTL is set on the template, not per send.
-
-Requirements and caveats:
-- The business must have completed MM API onboarding (terms accepted, Pixel or Conversions API for measurement). Huf sends the default `product_policy` (`CLOUD_API_FALLBACK`): if onboarding is incomplete Meta falls back to the Cloud API `/messages` behaviour. Huf does not send `product_policy: STRICT` or `message_activity_sharing` (account default applies).
-- Status webhooks may report `marketing_lite` (sent via MM API) or `marketing` (fell back).
-- It is not documented whether the per-user marketing limit (131049) behaves identically on MM API. **Unverified**; the existing 131049 deferral applies unchanged.
-- `create_broadcast(..., send_via="marketing_messages")` sets it; it is not exposed in the UI yet.

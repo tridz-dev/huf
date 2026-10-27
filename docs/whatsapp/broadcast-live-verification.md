@@ -1,27 +1,27 @@
 # WhatsApp Broadcast: live verification plan
 
-Plan for checking the broadcast feature on a real WhatsApp Business number before it is used for anything else. Read [BROADCAST.md](BROADCAST.md) first. This document is a plan. The scenarios below have not been run yet.
+Plan for checking the broadcast feature on a real WhatsApp Business number before it is used for anything else. Read [BROADCAST.md](BROADCAST.md) first; it describes what each scenario should observe. This document is a plan. The scenarios have not been run yet.
 
 ## 1. Rules for the run
 
 - **Test number only.** Use a Meta test or sandbox number on a non-production gateway. Do not use the production number that serves customers.
 - **Allow-listed recipients only.** Recipients are the operator's own numbers, listed in advance in the run notes, each of which has opted in. No other number may be added, including by CSV.
-- **No real customer data.** Recipient rows and parameters use the test names only.
-- **Approved template.** Use a test template that is `APPROVED` in WhatsApp Manager. Note its category (utility for most scenarios; marketing only for the marketing-specific checks, and only to allow-listed numbers that are not US `+1`, because US `+1` marketing is not delivered).
-- **Owner-only steps.** Anything that changes account settings, creates standing rules, accepts Meta terms, or enables Marketing Messages API is done by the account owner, not by the operator running this plan.
+- **No real customer data.** Recipient rows and parameters use test names only.
+- **Approved template.** Use a test template that is `APPROVED` in WhatsApp Manager. Note its category. Use a utility template for most scenarios. Use a marketing template only for the marketing checks, and only to allow-listed numbers that do not start with `+1` (those are skipped for marketing, see BROADCAST.md section 12).
+- **Owner-only steps.** Anything that changes account settings, creates standing rules, accepts Meta terms, enables the Marketing Messages API, or edits a template's status in WhatsApp Manager is done by the account owner, not by the operator running this plan.
 - **No credentials in evidence.** Do not paste tokens, App Secrets, or phone-number IDs into screenshots or logs. Redact the `Authorization` header and the `phone_number_id` before saving.
 
 ## 2. Environment preconditions
 
 | Check | Expected |
 |---|---|
-| Gateway health | `healthy` or `degraded` with no blocking reasons |
-| Connection state | `Connected` |
+| Gateway health | `healthy` or `degraded` with no blocking reasons (an operator check; broadcast start does not read it) |
+| Connection state | `Connected`. A disconnected gateway makes sends defer and pauses the broadcast. |
 | Token check (`check_token` with `force`) | Valid, no `access_token_invalid` |
-| Webhook subscription | `messages` and `message_template_status_update` subscribed |
-| Messaging limit | Readable via `broadcast_limits`, or the preview warns it is unknown (record which) |
+| Webhook subscription | `messages`, `message_template_status_update` and `user_preferences` subscribed (S2 and S6 need them) |
+| Messaging limit | Readable (tier shown in preview), or the preview warns that it is unknown (record which) |
 | One active broadcast | No other broadcast `Running` on the gateway |
-| Kill switch | Tested first, see scenario S7 |
+| Kill switch | Tested first, see S7 |
 
 ## 3. Scenarios
 
@@ -34,76 +34,93 @@ Each scenario lists the setup, the steps, what to expect, and the evidence to ke
 - Expect: 3 rows reach `sent`, then `delivered` and `read` as the handsets report. Counters match the rows. `finished_at` is set.
 - Evidence: broadcast detail screenshot, recipient table export, Meta message log entries for the three wamids.
 
-### S2. Preview blocks and warnings
+### S2. Intake filters and start guard
 
-- Setup: one allow-listed recipient that has a STOP recorded in Gateway Consent, one duplicate, one invalid number.
-- Expect: the STOP row is `skipped` with reason `opted_out`; the duplicate is removed; the invalid number is reported as `invalid`. Start with the wrong `confirm_count` is refused.
-- Evidence: preview JSON, refusal message.
+- Setup: one allow-listed number with a STOP recorded in Gateway Consent, one duplicate, one invalid number.
+- Expect: the STOP row is stored `skipped` with reason `opted_out`; the duplicate is reported in `skipped` with reason `duplicate` and not stored; the invalid number is reported in `invalid` and not stored. Start with a wrong `confirm_count` returns `confirm_mismatch`. Start before attestation returns `consent_not_attested`.
+- Optional (marketing template): a number beginning with `1` and 11 digits is stored `skipped` with reason `us_plus_one_marketing`.
+- Evidence: the add-recipients response, the recipient table, the refusal responses.
 
 ### S3. Template not approved
 
-- Setup: a template that is `PENDING` or `REJECTED` (use an existing one on the test account).
-- Expect: preview shows it in `blocking`; start is refused. No row is sent.
+- Setup: create the draft and add recipients while the template is `APPROVED` (creating a draft with any other status is refused with `template_not_approved`). Then the account owner changes the template to a non-approved status in WhatsApp Manager.
+- Steps: run preview, then try to start.
+- Expect: preview `blocking` contains `template_not_approved:<STATUS>`; start is refused with `Broadcast blocked: ...`. No row is sent.
 - Evidence: preview JSON, refusal message, Meta message log showing no new sends.
 
 ### S4. Held message
 
 - Setup: a template that is new or recently paused, so Meta may hold messages for quality assessment.
 - Steps: start a small broadcast and record `message_status` for each send response.
-- Expect: rows show `message_status = held_for_quality_assessment` where Meta returns it. Held ratio above 30% slows the runner. Replay of the held status webhook (fixture `broadcast_status_held.json`) moves a row to `sent` and then no further, since the fixture is a `sent` status for a held message.
-- Evidence: send response fields for each row, runner log lines showing throttling.
+- Expect: rows show `message_status = held_for_quality_assessment` where Meta returns it. When at least 10 of the last 50 sent rows exist and more than 30% are held, the runner drops to a quarter of the rate and halves batches (visible in the pace of sends).
+- Webhook replay: a replay of the fixture `broadcast_status_held.json` is a `sent` status. Run it against a row that is `queued`, `deferred` or `sending`; it moves the row to `sent` and no further. Against a row that is already `sent` or beyond it changes nothing. The fixture carries no held information; it only exercises the status path.
+- Evidence: send response fields for each row, runner log lines.
 
 ### S5. Failed send, permanent error
 
-- Setup: one recipient with a number not on WhatsApp (test number from Meta docs that fails), in the allow-list for this scenario only.
-- Expect: row becomes `failed` with the error code stored. No retry.
-- Evidence: row with `error_code`, `error_message`, `failed_at`.
+- Setup: one recipient with a number not on WhatsApp (a test number from Meta docs that fails), in the allow-list for this scenario only.
+- Expect: row becomes `failed` with `error_code`, `error_message` and `failed_at`. No retry.
+- Evidence: the row.
 
 ### S6. Pause signals
 
-- Setup: a test template; a signed replay of a `failed` status with code 135000 (`broadcast_status_failed_135000.json`) for an in-flight wamid.
-- Expect: broadcast moves to `Paused` with reason naming 135000. Queued rows remain `queued`. No new sends until resume.
-- Evidence: broadcast `pause_reason`, audit comment, runner log.
+- Setup: a running test broadcast with queued rows and a signed replay of `broadcast_status_failed_135000.json` for an in-flight row (see section 4 for editing the wamid and `biz_opaque_callback_data`).
+- Expect: the row becomes `failed` with code 135000 and the broadcast moves to `Paused` with `pause_reason` "WhatsApp error 135000 (messages dropped by pacing)". Queued rows stay `queued`. No new sends until resume.
+- Also check, with the account owner: pausing or disabling the test template in WhatsApp Manager (or a replayed `message_template_status_update` for it) pauses a Running broadcast that uses it, with reason `template:paused` or `template:disabled`.
+- Evidence: `pause_reason`, audit comment, runner log.
 
 ### S7. Kill switch
 
 - Setup: a running broadcast with queued rows.
 - Steps: call `pause_all_broadcasts(gateway)`.
-- Expect: the running broadcast pauses. Confirm no POST to `/messages` for queued rows after the pause (check the Meta message log timestamps and the runner log).
+- Expect: the running broadcast pauses with reason `kill_switch`. Confirm no POST to `/messages` for queued rows after the pause (Meta message log timestamps and the runner log). Rows that were `sending` at that moment may still finish.
 - Evidence: audit comment, log lines, timestamps.
 
-### S8. Restart and claim safety
+### S8. Worker restart and claim safety
 
-- Setup: a running broadcast with at least 10 queued rows, paced slowly.
-- Steps: restart the worker during the run. Then start the runner again through resume.
-- Expect: every row sent once. No `wamid` appears twice in the Meta message log for the same recipient. A row stuck in `sending` for more than 10 minutes becomes `unknown` and is not resent.
+- Setup: a running broadcast with at least 10 queued rows, paced slowly (low `mps`).
+- Steps: restart the worker during the run. Do not call resume (resume only works from `Paused`). Wait up to 5 minutes; the `*/5` cron (`resume_stale`) revives a Running broadcast that has no live tick. If the broadcast was `Paused`, use resume instead.
+- Expect: every row is sent once. No recipient receives two messages and no `wamid` repeats in the Meta message log. A row left in `sending` for more than 10 minutes becomes `unknown` and is not resent.
 - Evidence: Meta message log for the test number, recipient table, `unknown` rows if any.
 
 ### S9. Unknown row handling
 
 - Setup: simulate an ambiguous network error after the request (test environment only, with a forced timeout in the send path).
-- Expect: row is `unknown`. Recovery does not resend it.
-- Evidence: row state history, Meta message log showing at most one send for that recipient.
+- Expect: the row is `unknown`. Recovery does not resend it. A later `delivered` or `read` webhook for it updates it; a `sent` webhook does not.
+- Evidence: row state, Meta message log showing at most one send for that recipient.
 
 ### S10. Cancel
 
 - Setup: a paused broadcast with queued rows.
-- Expect: cancel moves queued rows to `skipped` with reason `cancelled`. Already `sent` rows are unchanged.
+- Expect: cancel sets `Cancelled` and moves `queued` and `deferred` rows to `skipped` with reason `cancelled`. Rows already `sent` are unchanged.
 - Evidence: counts before and after.
+
+### S11. Retry cap and 24-hour deferral (test environment only)
+
+- Setup: a forced retryable error (for example a stubbed 130429 response) on one row.
+- Expect: the row is `deferred` with growing delays (about 2, 4, 8, 16 s) and is `failed` after the fifth POST attempt (`attempts = 5`). A stubbed 131049 gives `deferred` with `next_attempt_at` about 24 hours ahead.
+- Evidence: row `attempts`, `next_attempt_at`, error fields.
+
+### S12. Marketing stop
+
+- Setup: a `Paused` broadcast with an allow-listed contact queued, and a second `Draft` broadcast with the same contact queued. Replay a `user_preferences` marketing-stop event for the contact (needs the `user_preferences` subscription), or send STOP from the contact's handset.
+- Expect: the contact's `queued` and `deferred` rows in `Queued`, `Running` or `Paused` broadcasts become `skipped` with reason `opted_out`. A row in a `Draft` broadcast is not changed by the event; it is skipped at send time instead (`marketing_opted_out` for a MARKETING template).
+- Evidence: recipient rows before and after.
 
 ## 4. Signed webhook replay plan
 
-Status webhooks are replayed against the test gateway's webhook endpoint to check ingest, monotonic status, and dedupe without waiting for Meta.
+Status webhooks are replayed against the test gateway's webhook endpoint to check ingest, monotonic status, and no-op replays without waiting for Meta.
 
-- Source fixtures: `huf/ai/whatsapp/tests/fixtures/broadcast_status_held.json`, `broadcast_status_failed_135000.json`, `broadcast_status_failed_131049.json`, `broadcast_status_failed_131050.json`. Copies of `status_sent.json`, `status_failed.json`, and so on are used for the other statuses.
-- Signing: the body is signed with the gateway's App Secret using the same method as Meta (`X-Hub-Signature-256`). The App Secret is read from the gateway in the operator's shell, never written to a file in the repo.
+- Source fixtures: `huf/ai/whatsapp/tests/fixtures/broadcast_status_held.json`, `broadcast_status_failed_135000.json`, `broadcast_status_failed_131049.json`, `broadcast_status_failed_131050.json`; plain `status_sent.json`, `status_delivered.json`, `status_read.json`, `status_failed.json` for the rest. The fixtures contain a placeholder `wamid` and `biz_opaque_callback_data` (`bcast-0001-r0001`). Edit the copy so that it holds the `wamid` or the recipient row name of a real test row on the target gateway (matching is scoped to broadcasts of the receiving gateway); the `metadata.phone_number_id` must be the test gateway's.
+- Signing: the body is signed with the gateway's App Secret as `X-Hub-Signature-256: sha256=<hex HMAC-SHA256>`. Read the App Secret in the operator's shell; never write it to a file in the repo.
 - Steps:
-  1. Replay each fixture once. Expect the matching row to update.
-  2. Replay the same fixture again. Expect no second change (dedupe on `(wamid, status)`).
+  1. Replay each fixture once against a row in an earlier state. Expect the row to update.
+  2. Replay the same fixture again. Expect no second change (the rank cannot rise).
   3. Replay a `delivered` after a `read` for the same wamid. Expect the row to stay `read`.
   4. Replay `failed` for a row already `delivered`. Expect no change.
-  5. Replay with a bad signature. Expect rejection and a `signature_failed` marker.
-- Replay is done only against the test gateway. Replayed payloads use test wamids from the fixtures, not real ones. The replay must not run against the production webhook URL.
+  5. Replay `broadcast_status_failed_131050.json`. Expect only that row to become `failed`; the webhook does not skip other rows and does not record a marketing stop.
+  6. Replay with a bad signature. Expect rejection and a `signature_failed` marker in the health data.
+- Replay is done only against the test gateway, with test rows. It must not run against the production webhook URL.
 - Evidence: the HTTP status for each replay, the row state before and after, and the gateway event rows.
 
 ## 5. Evidence to capture
@@ -114,7 +131,7 @@ For each scenario:
 - Broadcast name and template name.
 - The row states before and after, as a table.
 - Meta message log entries for the test number (phone numbers masked).
-- Log lines from the runner for the scenario window.
+- Log lines from the runner (`huf.whatsapp.broadcast` logger) for the scenario window.
 - Screenshots of the broadcast detail, with secrets and numbers masked.
 - Any deviation from the expected result, with the cause if known.
 
@@ -128,8 +145,9 @@ Run after the last scenario, or immediately if a scenario causes unexpected send
 - [ ] Cancel any draft or paused broadcast left from the run.
 - [ ] Remove the test recipients from any list used outside this run.
 - [ ] Confirm the feature flag or permission used to open the broadcast tab is back to its previous setting (owner-only).
-- [ ] Confirm the scheduler job `resume_stale` has no running broadcasts to re-enqueue.
+- [ ] Confirm no broadcast is `Running`, so the `resume_stale` cron has nothing to revive.
 - [ ] Remove the test gateway's webhook subscription to `user_preferences` if it was added for the run (owner-only).
+- [ ] Restore any template status changed for S3 or S6 (owner-only).
 - [ ] Rotate the test App Secret if it was displayed during the run.
 - [ ] Confirm the production gateway was not touched: no broadcast rows reference it.
 - [ ] Record the revert time and who ran it in the evidence folder.
@@ -139,7 +157,7 @@ Run after the last scenario, or immediately if a scenario causes unexpected send
 These are not done by the operator running the plan:
 
 - Accepting Meta terms, including the Marketing Messages API terms.
-- Changing the template category or the messaging-limit tier.
+- Changing the template category, template status or the messaging-limit tier.
 - Changing gateway permissions or the webhook subscription.
 - Enabling any production gateway for broadcasts.
 - Deciding whether a run may use marketing templates to real recipients.
