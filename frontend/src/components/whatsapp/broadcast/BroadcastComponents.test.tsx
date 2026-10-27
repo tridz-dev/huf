@@ -125,7 +125,7 @@ describe('BroadcastWizard', () => {
       { name: 'T2', template_name: 'draft', category: 'UTILITY', language_code: 'en', status: 'PENDING' },
     ] }));
     m.createBroadcast.mockResolvedValue(ok({ broadcast: 'BCAST-9', status: 'Draft', category: 'MARKETING' }));
-    m.addBroadcastRecipients.mockResolvedValue(ok({ added: 2, skipped: [{ recipient: '1555', reason: 'opted_out' }], invalid: [{ recipient: 'abc', reason: 'invalid_number' }] }));
+    m.addBroadcastRecipients.mockResolvedValue(ok({ added: 2, skipped: [{ recipient: '1555', reason: 'opted_out' }], invalid: [{ recipient: 'abc', reason: 'invalid_number' }], skippedTotal: 700, invalidTotal: 1 }));
     m.attestBroadcastConsent.mockResolvedValue(ok({}));
     m.startBroadcast.mockResolvedValue(ok({}));
   });
@@ -139,6 +139,8 @@ describe('BroadcastWizard', () => {
     expect(await screen.findByText(/recipients added/)).toBeInTheDocument();
     expect(screen.getByText(/abc: invalid_number/)).toBeInTheDocument();
     expect(screen.getByText(/opted_out/)).toBeInTheDocument();
+    expect(screen.getByText(/700 skipped \(showing 1\)/)).toBeInTheDocument();
+    expect(screen.getByText(/1 invalid:/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     const next = screen.getByRole('button', { name: 'Next' });
     expect(next).toBeDisabled();

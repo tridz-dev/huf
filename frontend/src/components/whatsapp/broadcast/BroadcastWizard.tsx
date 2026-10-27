@@ -160,12 +160,12 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
           {result ? (
             <div role="status" className="rounded-md border p-3 text-sm">
               <p><strong>{result.added}</strong> recipients added.</p>
-              {result.invalid.length ? (
-                <div><p>{result.invalid.length} invalid:</p>
+              {result.invalidTotal ? (
+                <div><p>{result.invalidTotal} invalid{result.invalidTotal > result.invalid.length ? ` (showing ${result.invalid.length})` : ''}:</p>
                   <ul className="list-disc pl-5">{result.invalid.map((x, i) => <li key={i}>{x.recipient ?? ''}{x.reason ? `: ${x.reason}` : ''}</li>)}</ul></div>
               ) : null}
-              {result.skipped.length ? (
-                <div><p>{result.skipped.length} skipped:</p>
+              {result.skippedTotal ? (
+                <div><p>{result.skippedTotal} skipped{result.skippedTotal > result.skipped.length ? ` (showing ${result.skipped.length})` : ''}:</p>
                   <ul className="list-disc pl-5">{result.skipped.map((x, i) => <li key={i}>{x.recipient}: {x.reason}</li>)}</ul></div>
               ) : null}
               {result.added === 0 ? <p className="text-destructive">No valid recipients. Fix the list and try again.</p> : null}

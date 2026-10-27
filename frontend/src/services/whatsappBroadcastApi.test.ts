@@ -98,7 +98,11 @@ describe('broadcast response adapters', () => {
   });
   it('adaptAddResult keeps skipped/invalid objects and tolerates strings', () => {
     expect(adaptAddResult({ added: 1, skipped: [{ recipient: '1', reason: 'duplicate' }], invalid: [{ recipient: 'x', reason: 'invalid_number' }, 'y'] }))
-      .toEqual({ added: 1, skipped: [{ recipient: '1', reason: 'duplicate' }], invalid: [{ recipient: 'x', reason: 'invalid_number' }, { recipient: 'y' }] });
+      .toEqual({ added: 1, skipped: [{ recipient: '1', reason: 'duplicate' }], invalid: [{ recipient: 'x', reason: 'invalid_number' }, { recipient: 'y' }], skippedTotal: 1, invalidTotal: 2 });
+  });
+  it('adaptAddResult prefers server totals over truncated lists', () => {
+    const r = adaptAddResult({ added: 0, skipped: [{ recipient: '1', reason: 'duplicate' }], invalid: [], skipped_total: 700, invalid_total: 12 });
+    expect([r.skippedTotal, r.invalidTotal, r.skipped.length]).toEqual([700, 12, 1]);
   });
   it('encodes recipients as a JSON string', async () => {
     post.mockResolvedValueOnce({ message: { success: true, added: 1, skipped: [], invalid: [] } });

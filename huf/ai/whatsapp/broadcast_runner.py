@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from contextlib import contextmanager
 
 import frappe
 from frappe import _
@@ -73,16 +74,39 @@ def _gateway_write_ok(gateway: str) -> bool:
 		return bool(frappe.has_permission("Gateway", "write", doc=gateway))
 
 
+_SWAPPED_LOCALS = (
+	"cache", "form_dict", "jenv_restricted", "jenv_unrestricted", "role_permissions", "new_doc_templates", "user_perms",
+)
+
+
+@contextmanager
+def _acting_as(user: str):
+	"""Run as ``user`` and restore the full prior identity afterwards.
+
+	frappe.set_user (v16) also resets session.sid/session.data (csrf token), form_dict and the
+	request cache, so a plain set_user(previous) cannot undo it. Same user: no-op."""
+	session = frappe.local.session
+	if user == session.user:
+		yield
+		return
+	saved_session = (session.user, session.get("sid"), session.get("data"))
+	saved_locals = {k: getattr(frappe.local, k, None) for k in _SWAPPED_LOCALS}
+	try:
+		frappe.set_user(user)
+		yield
+	finally:
+		session = frappe.local.session
+		session.user, session.sid, session.data = saved_session
+		for k, v in saved_locals.items():
+			setattr(frappe.local, k, v)
+
+
 def _user_can_write(user: str, gateway: str) -> bool:
 	"""True when ``user`` is enabled and holds Gateway write. A disabled user has no authority."""
 	if not user or not frappe.db.get_value("User", user, "enabled"):
 		return False
-	previous = frappe.session.user
-	try:
-		frappe.set_user(user)
+	with _acting_as(user):
 		return _gateway_write_ok(gateway)
-	finally:
-		frappe.set_user(previous)
 
 
 def _enqueue_tick(broadcast: str, *, continuation: bool = False, user: str | None = None) -> None:
@@ -198,8 +222,8 @@ def _begin(
 
 
 def start(broadcast: str, user: str | None = None) -> dict:
-	"""Validate and start a Draft/Paused broadcast, then enqueue its first tick."""
-	return _begin(broadcast, user, allowed_from=("Draft", "Paused"))
+	"""Validate and start a Draft broadcast (Paused goes through resume() so the resumer is authorized and recorded), then enqueue its first tick."""
+	return _begin(broadcast, user, allowed_from=("Draft",))
 
 
 def resume(broadcast: str) -> dict:
@@ -370,7 +394,8 @@ def tick(broadcast: str, user: str | None = None) -> dict:
 		return _tick_locked(broadcast, key, token, user)
 	finally:
 		_release(key, token)
-		frappe.set_user(previous_user)
+		if frappe.session.user != previous_user:
+			frappe.set_user(previous_user)
 
 
 def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None) -> dict:
@@ -382,7 +407,8 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 	if not user or not _user_can_write(user, doc.gateway):
 		pause(broadcast, "permission_lost")
 		return {"result": "paused", "reason": "permission_lost"}
-	frappe.set_user(user)
+	if user != frappe.session.user:
+		frappe.set_user(user)
 	frappe.flags.broadcast_pause = None
 
 	deadline = time.monotonic() + TICK_BUDGET_SECONDS
