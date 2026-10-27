@@ -13,7 +13,7 @@ import frappe
 from huf.ai.teams import client, diagnostics
 from huf.tests import teams_fixtures as tf
 
-SECRET = "s3cr3t-app-password-value"
+SECRET = "s3cr3t-app-password-value"  # noqa: S105
 GW = "Teams Verify GW"
 ORDER = ["credentials", "token", "token_claims", "endpoint", "reference"]
 
@@ -188,7 +188,7 @@ class TestVerifyTeamsConnection(unittest.TestCase):
 
 	def test_timeout_maps_to_unreachable(self):
 		def boom(*a, **k):
-			raise TimeoutError(f"timed out talking to {SECRET}")
+			raise TimeoutError(f"timed out talking to {SECRET}")  # noqa: TRY003
 
 		with patch.object(client, "_requests_transport", boom):
 			result = self.run_verify()

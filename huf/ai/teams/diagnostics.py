@@ -67,7 +67,7 @@ def _jwt_claims(token: str) -> dict[str, Any] | None:
 	try:
 		payload = token.split(".")[1]
 		claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
-	except Exception:
+	except Exception:  # noqa: BLE001
 		return None
 	return claims if isinstance(claims, dict) else None
 
@@ -135,7 +135,7 @@ def verify_teams_connection(gateway_name: str) -> dict:
 		try:
 			client.clear_token_cache(creds["tenant_id"], creds["app_id"])
 			token = client.get_token(creds)
-		except Exception as exc:
+		except Exception as exc:  # noqa: BLE001
 			# Type and AADSTS code only: exception text is never logged.
 			code = _AADSTS_RE.search(str(exc))
 			logger.warning(
