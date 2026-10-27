@@ -159,6 +159,17 @@ Admission:
 - With `Allow list`, a direct message is denied unless an approved **Gateway Access Entry** matches the sender. The sender's `external_id` is stored digits-only (see section 8).
 - With `Pairing`, an unknown sender creates a pending pairing request and gets a reply with their pairing code (`pairing_reply_enabled`, on by default, capped by `pairing_reply_daily_limit`). The triggering message is not executed. If replies were off when the request was created, the code is sent with the sender's next message once they are turned on. Approving the request sends the sender a welcome message.
 
+Managing people (the People list on the channel's Channel tab, or the Access tab in the WhatsApp console):
+
+| Action | Effect |
+|---|---|
+| Decline (waiting) / Remove access (approved) | Entry becomes `Revoked`. The agent stops replying at once. After 24 hours (`ACCESS_REREQUEST_COOLDOWN_HOURS`) their next message starts a new pairing request. |
+| Restore access (removed) | Approved again directly, with the welcome message. |
+| Block | Entry becomes `Blocked`: ignored silently and never paired again. Never overrides an opt-out (it lands on `Blocked` if they later send START). |
+| Unblock | Back to removed with no cooldown, so they can ask again straight away. |
+| Add number | Approves a number by hand without messaging it. This is how people get in under the `Allow list` policy. |
+| Opted out | Read-only. Only the person can undo it, by sending START. |
+
 ### 3.3 Register the callback in Meta
 
 In the Meta app, under WhatsApp > Configuration > Webhooks:
