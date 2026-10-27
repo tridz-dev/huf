@@ -96,6 +96,11 @@ class TestSlackGatewayAdapter(unittest.TestCase):
 		with self.assertRaisesRegex(HttpError, "500"):
 			self.adapter.send_reply(GatewayReply("C123", "hi"))
 
+	def test_ok_true_without_ts_raises(self):
+		self.response = FakeResponse({"ok": True, "channel": "C123"})
+		with self.assertRaisesRegex(ValueError, "ts"):
+			self.adapter.send_reply(GatewayReply("C123", "hi"))
+
 	def test_ok_false_raises_with_slack_error(self):
 		self.response = FakeResponse({"ok": False, "error": "channel_not_found"})
 		with self.assertRaisesRegex(ValueError, "channel_not_found"):

@@ -7,6 +7,19 @@ import time
 from frappe.rate_limiter import rate_limit
 from huf.ai.gateway_service import ingest_gateway_event
 
+# Verification failure reason -> HTTP status.
+_REASON_STATUS = {
+    "unknown_gateway": 404,
+    "gateway_disabled": 403,
+    "wrong_provider": 403,
+    "missing_headers": 401,
+    "invalid_timestamp": 401,
+    "stale_timestamp": 401,
+    "missing_secret": 401,
+    "bad_signature": 401,
+}
+
+
 @frappe.whitelist(allow_guest=True, methods=["POST"])
 @rate_limit(limit=100, seconds=60)
 def handle_slack_event():
@@ -14,24 +27,30 @@ def handle_slack_event():
     body = frappe.request.get_data(as_text=False)  # Get raw bytes for signature verification
 
     # Verify Slack signature before parsing JSON
-    if not _verify_slack_signature(gateway_name, body, frappe.request.headers):
-        frappe.throw("Unauthorized: Invalid Slack signature", frappe.PermissionError)
+    reason = _verify_slack_signature(gateway_name, body, frappe.request.headers)
+    if reason:
+        frappe.local.response.http_status_code = _REASON_STATUS[reason]
+        return {"ok": False, "error": reason}
 
     # Now safe to parse JSON
-    payload = json.loads(body.decode("utf-8") if isinstance(body, bytes) else body)
+    try:
+        payload = json.loads(body.decode("utf-8") if isinstance(body, bytes) else body)
+    except (ValueError, UnicodeDecodeError):
+        payload = None
+    if not isinstance(payload, dict):
+        frappe.local.response.http_status_code = 400
+        return {"ok": False, "error": "malformed_payload"}
 
     if payload.get("type") == "url_verification":
         from werkzeug.wrappers import Response
         return Response(json.dumps({"challenge": payload.get("challenge")}), status=200, mimetype="application/json")
 
-    if not gateway_name or not frappe.db.exists("Gateway", gateway_name):
-        frappe.log_error("Slack Debug - Early Return", f"Unknown gateway: '{gateway_name}'")
-        return {"error": "Unknown gateway"}
+    # Slack retries unacknowledged deliveries; acknowledge without re-ingesting.
+    if frappe.request.headers.get("X-Slack-Retry-Num"):
+        return {"ok": True}
 
+    # Gateway existence/enabled/provider were already enforced by signature verification.
     gateway = frappe.get_doc("Gateway", gateway_name)
-    if gateway.provider != "Slack" or not gateway.is_enabled:
-        frappe.log_error("Slack Debug - Early Return", f"Gateway inactive or wrong provider. Provider: {gateway.provider}, Enabled: {gateway.is_enabled}")
-        return {"error": "Gateway is inactive"}
 
     event = payload.get("event") or {}
     if event.get("type") in ("message", "app_mention") and not event.get("bot_id"):
@@ -51,13 +70,11 @@ def handle_slack_event():
             verified_sender=True,  # Signature was verified above before JSON parsing
             raw_payload=payload,
         )
-    else:
-        frappe.log_error("Slack Debug - Event Ignored", f"Event Type: {event.get('type')}, Bot ID: {event.get('bot_id')}")
-        
+
     return {"ok": True}
 
 
-def _verify_slack_signature(gateway_name: str, body: bytes, headers: dict) -> bool:
+def _verify_slack_signature(gateway_name: str, body: bytes, headers: dict) -> str | None:
     """Verify Slack HMAC-SHA256 v0 signature with ±5 minute replay window.
 
     Per Slack's Events API documentation, signatures are computed as:
@@ -69,7 +86,8 @@ def _verify_slack_signature(gateway_name: str, body: bytes, headers: dict) -> bo
         headers: Request headers dict
 
     Returns:
-        True if signature is valid and timestamp is within ±5 minutes, False otherwise.
+        None if the signature is valid and the timestamp is within ±5 minutes,
+        otherwise a failure reason key from _REASON_STATUS.
     """
     # Extract signature and timestamp headers
     sig_header = headers.get("X-Slack-Signature", "").strip()
@@ -77,49 +95,31 @@ def _verify_slack_signature(gateway_name: str, body: bytes, headers: dict) -> bo
 
     # Fail closed: both headers must be present
     if not sig_header or not ts_header:
-        frappe.log_error(
-            "Slack Signature Verification Failed",
-            f"Missing signature or timestamp header for gateway {gateway_name}",
-        )
-        return False
+        return "missing_headers"
 
     # Verify timestamp is within ±5 minutes (300 seconds) to prevent replay attacks
     try:
         ts = int(ts_header)
     except (ValueError, TypeError):
-        frappe.log_error(
-            "Slack Signature Verification Failed",
-            f"Invalid timestamp format: {ts_header}",
-        )
-        return False
+        return "invalid_timestamp"
 
     current_time = int(time.time())
     if abs(current_time - ts) > 300:
-        frappe.log_error(
-            "Slack Signature Verification Failed",
-            f"Timestamp replay attack detected: {abs(current_time - ts)} seconds old",
-        )
-        return False
+        return "stale_timestamp"
 
     # Look up the Gateway's signing_secret from Integration Settings
     if not gateway_name or not frappe.db.exists("Gateway", gateway_name):
-        frappe.log_error(
-            "Slack Signature Verification Failed",
-            f"Unknown gateway: {gateway_name}",
-        )
-        return False
+        return "unknown_gateway"
 
     try:
         gateway = frappe.get_doc("Gateway", gateway_name)
     except frappe.DoesNotExistError:
-        return False
+        return "unknown_gateway"
 
-    if gateway.provider != "Slack" or not gateway.is_enabled:
-        frappe.log_error(
-            "Slack Signature Verification Failed",
-            f"Gateway is not a Slack gateway or not enabled: {gateway_name}",
-        )
-        return False
+    if gateway.provider != "Slack":
+        return "wrong_provider"
+    if not gateway.is_enabled:
+        return "gateway_disabled"
 
     # Get signing_secret from Integration Settings credentials
     try:
@@ -130,18 +130,10 @@ def _verify_slack_signature(gateway_name: str, body: bytes, headers: dict) -> bo
                 signing_secret = row.get_password("value") or ""
                 break
     except (frappe.DoesNotExistError, AttributeError):
-        frappe.log_error(
-            "Slack Signature Verification Failed",
-            f"Could not retrieve signing_secret for gateway {gateway_name}",
-        )
-        return False
+        return "missing_secret"
 
     if not signing_secret:
-        frappe.log_error(
-            "Slack Signature Verification Failed",
-            f"signing_secret not configured for gateway {gateway_name}",
-        )
-        return False
+        return "missing_secret"
 
     # Compute expected signature: v0=sha256(v0:<timestamp>:<raw_body>, signing_secret)
     sig_base_string = f"v0:{ts_header}:".encode() + body
@@ -153,10 +145,6 @@ def _verify_slack_signature(gateway_name: str, body: bytes, headers: dict) -> bo
 
     # Compare using constant-time comparison to prevent timing attacks
     if not hmac.compare_digest(sig_header, expected_sig):
-        frappe.log_error(
-            "Slack Signature Verification Failed",
-            f"Signature mismatch for gateway {gateway_name}",
-        )
-        return False
+        return "bad_signature"
 
-    return True
+    return None
