@@ -245,7 +245,10 @@ doc_events = {
         "on_update": "huf.ai.gateways.flow_reply.on_flow_run_update",
     },
     "Agent Execution Approval": {
-        "after_insert": "huf.ai.gateways.approvals.on_approval_inserted",
+        "after_insert": [
+            "huf.ai.gateways.approvals.on_approval_inserted",
+            "huf.ai.gateways.teams_actions.on_approval_inserted",
+        ],
     },
     "Agent Trigger": {
         "after_insert": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
