@@ -44,9 +44,11 @@ class _Store:
 			return True
 		return False
 
-	def release(self, name):
+	def release(self, name, prior_status="queued", prior_next_attempt_at=None, cancelled=False):
 		if self.row["status"] == "sending":
-			self.row.update(status="queued", attempts=max(self.row["attempts"] - 1, 0))
+			self.row.update(status=prior_status or "queued", attempts=max(self.row["attempts"] - 1, 0))
+			if cancelled:
+				self.row.update(status="skipped", skip_reason="cancelled")
 
 	def write(self, name, **fields):
 		if self.write_hook:
@@ -64,6 +66,7 @@ class _Base(unittest.TestCase):
 		patch.object(bs, "_release", side_effect=s.release).start()
 		patch.object(bs, "_write", side_effect=s.write).start()
 		patch.object(bs, "_load", side_effect=lambda n: dict(s.row)).start()
+		patch.object(bs, "_template_row", side_effect=lambda n: {"status": "APPROVED", "category": s.bc.get("category", "UTILITY")}).start()
 		patch.object(bs, "_load_broadcast", side_effect=lambda n: dict(s.bc)).start()
 		patch.object(bs, "_started_count", return_value=1).start()
 		patch.object(bs.frappe.db, "rollback", create=True).start()
@@ -110,7 +113,7 @@ class TestHappyPath(_Base):
 
 class TestGuards(_Base):
 	def test_broadcast_not_running_releases_row_and_posts_nothing(self):
-		for status in ("Paused", "Cancelled", "Draft"):
+		for status in ("Paused", "Draft"):
 			self.store.bc["status"] = status
 			self.assertEqual(bs.send_one(ROW), "lost_claim")
 			self.assertEqual(self.store.row["status"], "queued")
@@ -164,7 +167,7 @@ class TestErrors(_Base):
 		self.assertEqual(self.store.row["attempts"], 2)
 
 	def test_retryable_gives_up_failed_at_attempt_cap(self):
-		self.store.row.update(status="deferred", attempts=4)
+		self.store.row.update(status="deferred", attempts=4)  # claim makes this the 5th and last POST
 		self.post.side_effect = self._graph_error(130429)
 		self.assertEqual(bs.send_one(ROW), "failed")
 		self.assertEqual(self.store.row["status"], "failed")

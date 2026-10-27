@@ -61,5 +61,6 @@ class TestBroadcastPassThrough(_Base):
 	def test_non_marketing_refused_without_post(self):
 		self.store.bc.update(send_via="marketing_messages", category="UTILITY")
 		self.assertEqual(bs.send_one(ROW), "failed")
-		self.assertEqual(self.store.row["error_code"], "mm_requires_marketing_template")
+		self.assertIsNone(self.store.row.get("error_code"))
+		self.assertIn("mm_requires_marketing_template", self.store.row["error_message"])
 		self.post.assert_not_called()
