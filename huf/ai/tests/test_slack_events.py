@@ -286,7 +286,7 @@ class TestSlackEventsHandler(unittest.TestCase):
 		self._call(body, headers=headers)
 		frappe.log_error.assert_not_called()
 
-	def test_retry_delivery_returns_200_without_ingest(self):
+	def test_retry_delivery_is_ingested_and_relies_on_idempotency(self):
 		body = json.dumps(message_event()).encode()
 		headers = signed_headers(body)
 		headers["X-Slack-Retry-Num"] = "1"
@@ -294,7 +294,44 @@ class TestSlackEventsHandler(unittest.TestCase):
 		result = self._call(body, headers=headers)
 		self.assertEqual(result, {"ok": True})
 		self.assertIsNone(frappe.local.response.http_status_code)
+		self.ingest.assert_called_once()
+		self.assertEqual(self.ingest.call_args[0][1], "C0123456:1700000000.000100")
+
+	def test_non_ascii_signature_is_bad_signature_not_500(self):
+		body = b"{}"
+		headers = {"X-Slack-Signature": "v0=\u00e9\u4e2d", "X-Slack-Request-Timestamp": str(NOW)}
+		self.assertEqual(slack_events._verify_slack_signature(GATEWAY, body, headers), "bad_signature")
+		self._assert_rejected(body, headers=headers)
+
+	def test_unknown_bot_room_message_with_mention_is_ignored(self):
+		self._call(message_event(text="hey <@U_BOT> hi"))
 		self.ingest.assert_not_called()
+
+	def test_unknown_bot_app_mention_is_ingested_mentioned(self):
+		payload = message_event(text="hey <@U_BOT> hi")
+		payload["event"]["type"] = "app_mention"
+		self._call(payload)
+		self.ingest.assert_called_once()
+		self.assertIs(self.ingest.call_args[0][2]["mentioned"], True)
+
+	def test_unknown_bot_mention_pair_either_order_stores_mentioned(self):
+		msg = message_event(text="hey <@U_BOT> hi")
+		mention = message_event(text="hey <@U_BOT> hi")
+		mention["event"]["type"] = "app_mention"
+		for order in ((msg, mention), (mention, msg)):
+			self.ingest.reset_mock()
+			for p in order:
+				self._call(p)
+			self.assertEqual(self.ingest.call_count, 1)
+			self.assertIs(self.ingest.call_args[0][2]["mentioned"], True)
+
+	def test_unknown_bot_dm_message_with_mention_still_ingested(self):
+		self._call(message_event(channel="D0123456", channel_type="im", text="<@U_X> hi"))
+		self.ingest.assert_called_once()
+
+	def test_unknown_bot_room_message_without_mention_still_ingested(self):
+		self._call(message_event())
+		self.ingest.assert_called_once()
 
 	# -- url_verification ------------------------------------------------------
 
@@ -316,6 +353,7 @@ class TestSlackEventsHandler(unittest.TestCase):
 			thread_ts="1699999999.000001",
 			client_msg_id="cmid-42",
 		)
+		payload["authorizations"] = [{"user_id": "U_OTHER"}]
 		self._call(payload)
 
 		self.ingest.assert_called_once()
@@ -399,7 +437,8 @@ class TestSlackEventsHandler(unittest.TestCase):
 
 	def test_message_and_app_mention_dedupe_to_same_event_id_both_orders(self):
 		msg = message_event(channel="C9", ts="1700000200.000300", text="<@U_BOT> hi")
-		men = {"type": "event_callback", "event": {
+		msg["authorizations"] = [{"user_id": "U_BOT"}]
+		men = {"type": "event_callback", "authorizations": [{"user_id": "U_BOT"}], "event": {
 			"type": "app_mention", "channel": "C9", "user": "U_SENDER",
 			"text": "<@U_BOT> hi", "ts": "1700000200.000300"}}
 		self._call(msg)
@@ -452,8 +491,8 @@ class TestSlackEventsHandler(unittest.TestCase):
 		self.assertIs(context["mentioned"], False)
 		self.assertEqual(context["message_text"], "hey <@U123> look")
 
-	def test_unknown_bot_id_message_not_mentioned_text_unchanged(self):
-		self._call(message_event(text="<@U_BOT> hi"))
+	def test_unknown_bot_id_dm_message_not_mentioned_text_unchanged(self):
+		self._call(message_event(channel="D1", channel_type="im", text="<@U_BOT> hi"))
 		context = self.ingest.call_args.args[2]
 		self.assertIs(context["mentioned"], False)
 		self.assertEqual(context["message_text"], "<@U_BOT> hi")

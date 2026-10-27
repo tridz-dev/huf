@@ -51,9 +51,8 @@ def handle_slack_event():
         from werkzeug.wrappers import Response
         return Response(json.dumps({"challenge": payload.get("challenge")}), status=200, mimetype="application/json")
 
-    # Slack retries unacknowledged deliveries; acknowledge without re-ingesting.
-    if frappe.request.headers.get("X-Slack-Retry-Num"):
-        return {"ok": True}
+    # Slack retries go through normal processing: a retry may be the first delivery that
+    # actually succeeds, and ingest_gateway_event dedupes on the provider event id.
 
     # Gateway existence/enabled/provider were already enforced by signature verification.
     gateway = frappe.get_doc("Gateway", gateway_name)
@@ -75,6 +74,12 @@ def handle_slack_event():
         if authorizations and isinstance(authorizations[0], dict):
             bot_id = str(authorizations[0].get("user_id") or "")
         mention_token = f"<@{bot_id}>" if bot_id else ""
+        is_room = _is_room(event, channel)
+        if event.get("type") == "message" and not bot_id and is_room and "<@" in text:
+            # Bot id unknown: we cannot tell whether this message mentions us. Slack also
+            # sends an app_mention for it with the same dedupe id, which carries the
+            # mention flag; storing this one first would make that one a duplicate.
+            return {"ok": True}
         mentioned = event.get("type") == "app_mention" or bool(mention_token and mention_token in text)
         if mention_token:
             # Strip the bot mention (and following whitespace); unknown bot id => text untouched.
@@ -85,7 +90,7 @@ def handle_slack_event():
             # thread_id = thread_ts for replies, else the message's own ts (it roots a thread).
             "thread_id": str(event.get("thread_ts") or ts),
             "message_text": text,
-            "is_room": _is_room(event, channel),
+            "is_room": is_room,
             "mentioned": mentioned,
         }
 
@@ -182,7 +187,7 @@ def _verify_slack_signature(gateway_name: str, body: bytes, headers: dict) -> st
     ).hexdigest()
 
     # Compare using constant-time comparison to prevent timing attacks
-    if not hmac.compare_digest(sig_header, expected_sig):
+    if not hmac.compare_digest(sig_header.encode("utf-8", "replace"), expected_sig.encode("utf-8", "replace")):
         return "bad_signature"
 
     return None
