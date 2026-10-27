@@ -86,7 +86,8 @@ def is_transient(exc: BaseException) -> bool:
 		return True
 	status = _status_of(exc)
 	if status is not None:
-		return status == 429 or 500 <= status < 600
+		# status 0 is how teams_api reports transport failures (no HTTP response); 408 is a request timeout.
+		return status in (0, 408, 429) or 500 <= status < 600
 	if isinstance(exc, (ValueError, TypeError, KeyError, PermissionError, NotImplementedError)):
 		return False
 	return True

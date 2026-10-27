@@ -493,3 +493,17 @@ def test_record_card_activity_failure_does_not_fail_delivery(store, real_sender,
 	monkeypatch.setattr(teams_actions, "record_card_activity", boom)
 	n = mk(store, kind="card", payload={"activity": {"type": "message"}, "action_session": "tas-7"})
 	assert ob.deliver(n, now=NOW, http=real_sender.http) == "Sent"
+
+
+def test_transport_failure_status_zero_is_transient():
+	class _Err(Exception):
+		def __init__(self, status):
+			super().__init__("x")
+			self.status = status
+
+	assert ob.is_transient(_Err(0)) is True  # transport failure: retry
+	assert ob.is_transient(_Err(408)) is True
+	assert ob.is_transient(_Err(429)) is True
+	assert ob.is_transient(_Err(503)) is True
+	assert ob.is_transient(_Err(400)) is False
+	assert ob.is_transient(_Err(401)) is False
