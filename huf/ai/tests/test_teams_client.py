@@ -32,8 +32,8 @@ class _Base(unittest.TestCase):
 		for p in patches:
 			p.start()
 			self.addCleanup(p.stop)
-		client.clear_token_cache(tf.TENANT_ID, tf.BOT_APP_ID)
-		self.addCleanup(client.clear_token_cache, tf.TENANT_ID, tf.BOT_APP_ID)
+		client.clear_token_cache(tf.TENANT_ID, tf.BOT_APP_ID, SECRET)
+		self.addCleanup(client.clear_token_cache, tf.TENANT_ID, tf.BOT_APP_ID, SECRET)
 		self.urls: list[str] = []
 		self.seed(CONV)
 
@@ -82,7 +82,7 @@ class TestSend(_Base):
 		self.assertTrue(req.has_authorization)
 		self.assertEqual(req.body["type"], "message")
 		self.assertEqual(req.body["text"], "**hi**")
-		self.assertEqual(req.body["textFormat"], "markdown")
+		self.assertEqual(req.body["textFormat"], "extendedmarkdown")
 		self.assertEqual(req.body["from"], {"id": tf.BOT_ID})
 		self.assertEqual(req.body["conversation"], {"id": CONV})
 		self.assertNotIn("replyToId", req.body)
@@ -167,7 +167,7 @@ class TestToken(_Base):
 		self.assert_no_secrets(msg)
 
 	def test_redis_cache_key_has_no_secret(self):
-		key = client._token_cache_key(tf.TENANT_ID, tf.BOT_APP_ID)
+		key = client._token_cache_key(tf.TENANT_ID, tf.BOT_APP_ID, client._secret_hash(tf.TENANT_ID, tf.BOT_APP_ID, SECRET))
 		self.assertNotIn(SECRET, key)
 		self.assertNotIn(tf.BOT_APP_ID, key)
 
@@ -263,8 +263,9 @@ class TestSsrf(_Base):
 
 
 class TestSplit(_Base):
+	@patch.object(client, "TARGET_BYTES", 30_000)
 	def test_large_text_split_on_paragraphs_in_order(self):
-		paras = [f"P{i:03d} " + ("x" * 4000) for i in range(30)]  # ~240 KB UTF-16
+		paras = [f"P{i:03d} " + ("x" * 2000) for i in range(20)]  # ~80 KB UTF-16, under the 40 KB text cap
 		delivery = self.send("\n\n".join(paras))
 		reqs = self.svc.requests("connector")
 		self.assertGreater(len(reqs), 1)
@@ -280,7 +281,7 @@ class TestSplit(_Base):
 		self.assertEqual(delivery.provider_message_id, delivery.provider_response["activity_ids"][0])
 
 	def test_single_huge_paragraph_hard_split(self):
-		text = "y" * 100_000  # one 200 KB UTF-16 paragraph, no separators
+		text = "y" * 40_000  # one 80 KB UTF-16 paragraph, no separators
 		self.send(text)
 		reqs = self.svc.requests("connector")
 		self.assertEqual("".join(r.body["text"] for r in reqs), text)
@@ -295,7 +296,7 @@ class TestSplit(_Base):
 		self.assertEqual(len(cm.exception.delivered_ids), 1)
 
 	def test_split_text_sentence_boundaries(self):
-		chunks = client.split_text("One. Two. Three.", lambda c: len(c) <= 9)
+		chunks = client.split_text("One. Two. Three.", 9, len)
 		self.assertEqual(chunks, ["One. Two.", "Three."])
 
 
@@ -327,3 +328,123 @@ class TestAdapterWiring(_Base):
 		with patch("huf.ai.teams.auth.verify_request", return_value=True):
 			assert_adapter_conforms(adapter, request, GatewayReply(conversation_id=CONV, text="ok"))
 
+
+
+import threading  # noqa: E402
+
+
+class TestHardening(_Base):
+	def test_text_over_40kb_is_truncated_with_marker(self):
+		self.send("a" * 100_000)
+		texts = [r.body["text"] for r in self.svc.requests("connector")]
+		total = "".join(texts)
+		self.assertLessEqual(len(total.encode()), client.MAX_TEXT_BYTES)
+		self.assertTrue(total.endswith("(truncated)"))
+
+	def test_multibyte_truncation_keeps_valid_text(self):
+		self.send("é" * 50_000)
+		total = "".join(r.body["text"] for r in self.svc.requests("connector"))
+		self.assertLessEqual(len(total.encode()), client.MAX_TEXT_BYTES)
+		self.assertTrue(total.endswith("(truncated)"))
+
+	def test_chunk_count_capped(self):
+		with patch.object(client, "TARGET_BYTES", 3000):
+			self.send("\n\n".join("p" * 1000 for _ in range(30)))
+		reqs = self.svc.requests("connector")
+		self.assertEqual(len(reqs), client.MAX_CHUNKS)
+		self.assertTrue(reqs[-1].body["text"].endswith("(truncated)"))
+
+	def test_split_text_is_linear(self):
+		measured = [0]
+
+		def cost(piece):
+			measured[0] += len(piece)
+			return len(piece)
+
+		text = "\n".join(f"line {i} " + "w" * 20 for i in range(1500))  # ~40 KB, 1500 pieces
+		chunks = client.split_text(text, 400, cost)
+		self.assertGreater(len(chunks), 50)
+		# Each piece is measured a bounded number of times (quadratic re-measuring would be ~100x).
+		self.assertLess(measured[0], 8 * len(text))
+
+	def test_retry_total_budget(self):
+		clock = [0.0]
+		self.svc.script("connector", *[{"status": 429, "headers": {"Retry-After": "20"}, "body": {}}] * 3)
+
+		def advancing(method, url, **kw):
+			if "oauth2" not in url:
+				clock[0] += 15.0
+			return self.transport(method, url, **kw)
+
+		with patch.object(client, "_clock", lambda: clock[0]):
+			with self.assertRaises(client.TeamsTransientError) as cm:
+				client.send_reply(
+					GatewayReply(conversation_id=CONV, text="x"), CREDS, gateway_name="Teams GW", transport=advancing
+				)
+		self.assertIn("budget", str(cm.exception))
+		self.assertEqual(self.sleeps, [20.0])  # second wait (20 s) would pass the 45 s budget
+
+
+class _FakeAAD:
+	"""Token endpoint double that accepts exactly one secret per (tenant, app)."""
+
+	def __init__(self, good: dict[str, str]):
+		self.good = good  # secret -> token
+		self.calls = 0
+
+	def __call__(self, method, url, **kw):
+		self.calls += 1
+		secret = kw["data"]["client_secret"]
+		if secret in self.good:
+			return 200, {}, {"access_token": self.good[secret], "expires_in": 3600}
+		return 401, {}, {"error": "invalid_client"}
+
+
+class TestTokenCacheIsolation(unittest.TestCase):
+	A = {"app_id": tf.BOT_APP_ID, "tenant_id": tf.TENANT_ID, "app_password": "secret-A"}
+	B = {"app_id": tf.BOT_APP_ID, "tenant_id": tf.TENANT_ID, "app_password": "secret-B-wrong"}
+	C = {"app_id": tf.BOT_APP_ID, "tenant_id": tf.TENANT_ID, "app_password": "secret-C"}
+
+	def setUp(self):
+		for c in (self.A, self.B, self.C):
+			client.clear_token_cache(c["tenant_id"], c["app_id"], c["app_password"])
+			self.addCleanup(client.clear_token_cache, c["tenant_id"], c["app_id"], c["app_password"])
+
+	def test_wrong_secret_cannot_reuse_another_gateways_token(self):
+		aad = _FakeAAD({"secret-A": "tok-A"})
+		self.assertEqual(client.get_token(self.A, aad), "tok-A")
+		with self.assertRaises(client.TeamsAuthError):
+			client.get_token(self.B, aad)
+		self.assertEqual(aad.calls, 2)  # B really went to the token endpoint
+
+	def test_same_app_different_secrets_get_separate_tokens(self):
+		aad = _FakeAAD({"secret-A": "tok-A", "secret-C": "tok-C"})
+		self.assertEqual(client.get_token(self.A, aad), "tok-A")
+		self.assertEqual(client.get_token(self.C, aad), "tok-C")
+		self.assertEqual(client.get_token(self.A, aad), "tok-A")
+		self.assertEqual(aad.calls, 2)
+
+	def test_clear_only_purges_that_credential_tuple(self):
+		aad = _FakeAAD({"secret-A": "tok-A", "secret-C": "tok-C"})
+		client.get_token(self.A, aad)
+		client.get_token(self.C, aad)
+		client.clear_token_cache(tf.TENANT_ID, tf.BOT_APP_ID, "secret-A")
+		self.assertEqual(client.get_token(self.C, aad), "tok-C")
+		self.assertEqual(aad.calls, 2)  # C still cached
+		client.get_token(self.A, aad)
+		self.assertEqual(aad.calls, 3)  # A was purged
+
+	def test_cache_key_has_no_secret(self):
+		h = client._secret_hash(tf.TENANT_ID, tf.BOT_APP_ID, "secret-A")
+		self.assertNotIn("secret-A", client._token_cache_key(tf.TENANT_ID, tf.BOT_APP_ID, h))
+		self.assertEqual(len(h), 64)
+
+
+class TestSecretAndManifestless(unittest.TestCase):
+	def test_split_budget_matches_activity_size(self):
+		base = {"type": "message", "textFormat": client.TEXT_FORMAT, "from": {"id": "x"}, "conversation": {"id": "c"}}
+		text = 'a"b\\c\n\U0001F600' * 3
+		self.assertEqual(
+			client.activity_size({**base, "text": text}),
+			client.activity_size({**base, "text": ""}) + client.text_cost(text),
+		)

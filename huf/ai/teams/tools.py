@@ -15,6 +15,7 @@ hook path bypasses ``_registry._with_service``.
 from __future__ import annotations
 
 import json
+import threading
 from typing import Any
 
 import frappe
@@ -27,11 +28,13 @@ SERVICE = "microsoft_teams"
 PROVIDER = "Microsoft Teams"
 ACTIONS = ("send_message", "list_recent_conversations", "get_account_info")
 MAX_SENDS_PER_RUN = 5
+MAX_FAILED_PER_RUN = 3
 MAX_TEXT_CHARS = 8000
 LIST_DEFAULT_LIMIT = 10
 LIST_MAX_LIMIT = 25
 _CAP_TTL = 24 * 3600
 _CAP_PREFIX = "huf_teams_tool_sends:"
+_FAIL_PREFIX = "huf_teams_tool_fails:"
 # Keys the model must never control or supply (tool args are persisted in Agent Tool Call).
 _BOUND_KWARGS = (
 	"gateway_name", "gateway", "app_id", "app_password", "tenant_id", "tenant", "credentials",
@@ -111,18 +114,85 @@ def _has_gateway_reference(gateway_name: str, app_id: str, conversation_id: str)
 	return bool(refs.get_reference(gateway_name, app_id, base))
 
 
-def _sent_count(run_id: str) -> int:
-	try:
-		return int(frappe.cache.get_value(_CAP_PREFIX + run_id) or 0)
-	except Exception:
-		return 0
+_local_counts: dict[str, int] = {}
+_local_lock = threading.Lock()
 
 
-def _bump_sent(run_id: str) -> None:
+def _atomic_cache() -> Any:
+	"""The Redis-backed cache when it exposes atomic counters, else None."""
 	try:
-		frappe.cache.set_value(_CAP_PREFIX + run_id, _sent_count(run_id) + 1, expires_in_sec=_CAP_TTL)
+		c = frappe.cache
+		if getattr(c, "make_key", None) and all(hasattr(c, n) for n in ("incrby", "decrby", "expire")):
+			return c
 	except Exception:
 		pass
+	return None
+
+
+def _incr(key: str, delta: int = 1) -> int:
+	"""Atomic INCR/DECR with a TTL always set. Falls back to a process-local locked counter (fail closed
+	within one worker) when no atomic Redis client is available."""
+	c = _atomic_cache()
+	if c is not None:
+		try:
+			rkey = c.make_key(key)
+			pipe = c.pipeline(transaction=True)
+			pipe.set(rkey, 0, nx=True, ex=_CAP_TTL)
+			pipe.incrby(rkey, delta)
+			return int(pipe.execute()[-1])
+		except Exception:
+			pass
+	with _local_lock:
+		_local_counts[key] = _local_counts.get(key, 0) + delta
+		return _local_counts[key]
+
+
+def _count(key: str) -> int:
+	c = _atomic_cache()
+	if c is not None:
+		try:
+			return int(c.get(c.make_key(key)) or 0)
+		except Exception:
+			pass
+	with _local_lock:
+		return _local_counts.get(key, 0)
+
+
+def _sent_count(run_id: str) -> int:
+	return _count(_CAP_PREFIX + run_id)
+
+
+def _failed_count(run_id: str) -> int:
+	return _count(_FAIL_PREFIX + run_id)
+
+
+def _reserve_send(run_id: str) -> str | None:
+	"""Atomically reserve one send slot BEFORE sending. Returns a refusal JSON, or None when reserved.
+	A reserved slot is never released: failed attempts count too, so a looping model cannot retry forever."""
+	if _failed_count(run_id) >= MAX_FAILED_PER_RUN:
+		return _refused("too_many_failures", f"This run already had {MAX_FAILED_PER_RUN} failed Teams sends; no more attempts")
+	if _incr(_CAP_PREFIX + run_id) > MAX_SENDS_PER_RUN:
+		_incr(_CAP_PREFIX + run_id, -1)  # keep the counter at the cap rather than drifting upward
+		return _refused("send_cap_reached", f"This run already sent {MAX_SENDS_PER_RUN} Teams messages (the per-run limit)")
+	return None
+
+
+def _cross_conversation_allowed(gateway_name: str) -> bool:
+	"""Messaging/listing conversations other than the current one.
+
+	No existing Gateway field can carry an opt-in for Teams (``agent_recipient_scope`` is WhatsApp/Telegram
+	only and DocType changes are out of scope), so this needs Gateway WRITE permission for the actual human
+	session user. Runs execute as the gateway execution user / Administrator / Guest, which says nothing about
+	a human, so those fail closed (cross-conversation disabled)."""
+	try:
+		user = str(frappe.session.user or "")
+		if user in ("", "Guest", "Administrator"):
+			return False
+		if user == str(frappe.db.get_value("Gateway", gateway_name, "execution_user") or ""):
+			return False
+		return bool(frappe.has_permission("Gateway", "write", doc=gateway_name, user=user))
+	except Exception:
+		return False
 
 
 def _authorize_read(gateway_name: str) -> str | None:
@@ -155,6 +225,13 @@ def _send_message(gateway_name: str, kwargs: dict) -> str:
 			"no_conversation",
 			"No Teams conversation is associated with this run; pass a conversation_id from list_recent_conversations",
 		)
+	current = _current_conversation(gateway_name)
+	if explicit and _base(explicit) != _base(current) and not _cross_conversation_allowed(gateway_name):
+		return _refused(
+			"cross_conversation_not_allowed",
+			"Agents may only message the conversation they are in; messaging other conversations needs a "
+			"human Gateway administrator",
+		)
 	if not _has_gateway_reference(gateway_name, creds["app_id"], target):
 		return _refused(
 			"no_conversation_reference",
@@ -162,30 +239,32 @@ def _send_message(gateway_name: str, kwargs: dict) -> str:
 			"the user must message the bot first",
 		)
 	run_id = _run_id()
-	if run_id and _sent_count(run_id) >= MAX_SENDS_PER_RUN:
-		return _refused("send_cap_reached", f"This run already sent {MAX_SENDS_PER_RUN} Teams messages (the per-run limit)")
+	if run_id:
+		refusal = _reserve_send(run_id)
+		if refusal:
+			return refusal
 	try:
 		delivery = client.send_reply(
 			GatewayReply(conversation_id=target, text=text), creds, gateway_name=gateway_name, transport=_transport
 		)
 	except client.TeamsSendError as exc:
+		if run_id:
+			_incr(_FAIL_PREFIX + run_id)
 		return _refused("send_failed", client.error_text(exc))
-	if run_id:
-		_bump_sent(run_id)
 	return _ok({"activity_id": delivery.provider_message_id, "conversation_id": target})
 
 
-def _conversation_type(payload: Any) -> tuple[str, str]:
+def _conversation_type(payload: Any) -> str:
 	if isinstance(payload, str):
 		try:
 			payload = json.loads(payload)
 		except ValueError:
-			return "unknown", ""
+			return "unknown"
 	conv = payload.get("conversation") if isinstance(payload, dict) else None
 	if not isinstance(conv, dict):
-		return "unknown", ""
+		return "unknown"
 	kind = str(conv.get("conversationType") or ("groupChat" if conv.get("isGroup") else "unknown"))
-	return kind, str(conv.get("name") or "")
+	return kind  # the stored conversation name is attacker-controlled text and is never returned
 
 
 def _list_recent(gateway_name: str, kwargs: dict) -> str:
@@ -201,16 +280,23 @@ def _list_recent(gateway_name: str, kwargs: dict) -> str:
 		order_by="received_at desc, creation desc",
 		limit_page_length=limit * 10,
 	)
+	allowed = _cross_conversation_allowed(gateway_name)
+	current = _base(_current_conversation(gateway_name))
 	seen: dict[str, dict] = {}
 	for row in rows:
 		base = _base(row.get("conversation_id"))
 		if not base or base in seen:
 			continue
-		kind, name = _conversation_type(row.get("raw_payload"))
-		seen[base] = {"conversation_id": base, "type": kind, "last_seen": row.get("received_at"), "name": name}
+		if not allowed and base != current:
+			continue
+		seen[base] = {
+			"conversation_id": base,
+			"type": _conversation_type(row.get("raw_payload")),
+			"last_seen": row.get("received_at"),
+		}
 		if len(seen) >= limit:
 			break
-	return _ok({"conversations": list(seen.values()), "count": len(seen)})
+	return _ok({"conversations": list(seen.values()), "count": len(seen), "scope": "all" if allowed else "current"})
 
 
 def _account_info(gateway_name: str) -> str:
@@ -253,9 +339,9 @@ TEAMS_TOOLS = [
 		"description": (
 			"Send Microsoft Teams messages through the Teams bot gateway this conversation belongs to (it cannot be chosen). "
 			"Actions: send_message (text; sends to the Teams conversation you are in by default; optional conversation_id "
-			"must be one returned by list_recent_conversations; Teams only allows messages to conversations the bot has "
+			"needs a human Gateway administrator, otherwise only the current conversation is allowed; Teams only allows messages to conversations the bot has "
 			f"already seen; max {MAX_TEXT_CHARS} characters and {MAX_SENDS_PER_RUN} messages per run), "
-			"list_recent_conversations (limit; conversation ids, type and last seen for this gateway), "
+			"list_recent_conversations (limit; the current conversation, or all for this gateway when permitted), "
 			"get_account_info (bot name, app id, tenant id, enabled state; never secrets)."
 		),
 		"function_path": "huf.ai.teams.tools.handle_action",
@@ -265,7 +351,7 @@ TEAMS_TOOLS = [
 			_action("|".join(ACTIONS)),
 			_p("text", description="Message text for send_message (Markdown). Alias: message."),
 			_p("message", description="Alias for 'text'."),
-			_p("conversation_id", description="Optional send_message target; must come from list_recent_conversations. Omit to reply in the current conversation."),
+			_p("conversation_id", description="Optional send_message target other than the current conversation (refused unless permitted). Omit to reply in the current conversation."),
 			_p("limit", type="integer", description=f"list_recent_conversations: max rows (default {LIST_DEFAULT_LIMIT}, at most {LIST_MAX_LIMIT})."),
 		],
 	},

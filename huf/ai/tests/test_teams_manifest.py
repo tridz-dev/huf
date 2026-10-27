@@ -177,3 +177,15 @@ class TestEndpoint(unittest.TestCase):
 				mock.patch.object(frappe, "conf", self._conf()):
 			with self.assertRaises(frappe.ValidationError):
 				tm.generate_teams_app_manifest("GW-1")
+
+
+class TestSchemaPairing(unittest.TestCase):
+	def test_schema_url_embeds_manifest_version(self):
+		self.assertIn(f"/teams/v{tm.MANIFEST_VERSION}/", tm.MANIFEST_SCHEMA_URL)
+		m = tm.build_manifest(APP_ID, **_kwargs())
+		self.assertIn(f"/teams/v{m['manifestVersion']}/MicrosoftTeams.schema.json", m["$schema"])
+
+	def test_developer_name_capped_at_32(self):
+		tm.build_manifest(APP_ID, **_kwargs(developer_name="d" * 32))
+		with self.assertRaises(Exception):
+			tm.build_manifest(APP_ID, **_kwargs(developer_name="d" * 33))

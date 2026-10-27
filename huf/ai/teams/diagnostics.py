@@ -133,7 +133,7 @@ def verify_teams_connection(gateway_name: str) -> dict:
 	claims_step = _step("token_claims", "Token matches app and tenant", False, _SKIPPED)
 	if steps[0]["ok"]:
 		try:
-			client.clear_token_cache(creds["tenant_id"], creds["app_id"])
+			client.clear_token_cache(creds["tenant_id"], creds["app_id"], creds.get("app_password", ""))
 			token = client.get_token(creds)
 		except Exception as exc:  # noqa: BLE001
 			# Type and AADSTS code only: exception text is never logged.

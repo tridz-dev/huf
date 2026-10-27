@@ -39,13 +39,24 @@ _BACKOFF_BASE = 1.0
 _BACKOFF_CAP = 20.0
 _RETRY_STATUSES = frozenset({429, 412, 502, 504})
 _TOKEN_SKEW = 300
+# Per-send limits. Agent replies are TRUNCATED (with a marker) rather than rejected: a long answer
+# that is cut short is friendlier than one that is lost. Chunks are capped as a second guard.
+MAX_TEXT_BYTES = 40 * 1024
+MAX_CHUNKS = 8
+TRUNCATION_MARKER = "\n\n… (truncated)"
+# Wall-clock budget for ALL retries of one send. Retry-After sleeps (each capped at _BACKOFF_CAP) BLOCK
+# the calling worker, so the whole send gives up (transient error) once the budget would be exceeded.
+_RETRY_BUDGET_SECONDS = 45.0
+# Documented by Microsoft for LLM output: fenced code, tables, task lists (rendering UNVERIFIED on a real tenant).
+TEXT_FORMAT = "extendedmarkdown"
 TARGET_BYTES = 80 * 1024
 HARD_LIMIT_BYTES = 100 * 1024
 _TOKEN_CACHE_PREFIX = "huf_teams_token:"
 
 _now: Callable[[], float] = time.time
 _sleep: Callable[[float], None] = time.sleep
-_tokens: dict[tuple[str, str], tuple[str, float]] = {}
+_clock: Callable[[], float] = time.monotonic
+_tokens: dict[tuple[str, str, str], tuple[str, float]] = {}
 _tokens_lock = threading.Lock()
 
 
@@ -150,8 +161,13 @@ def _safe_code(body: Any) -> str:
 # -- token -----------------------------------------------------------------------------------------------
 
 
-def _token_cache_key(tenant_id: str, app_id: str) -> str:
-	return _TOKEN_CACHE_PREFIX + hashlib.sha256(f"{tenant_id}\x00{app_id}".encode()).hexdigest()
+def _secret_hash(tenant_id: str, app_id: str, secret: str) -> str:
+	"""sha256(tenant NUL app_id NUL secret): identifies a credential tuple without ever holding the secret."""
+	return hashlib.sha256(f"{tenant_id}\x00{app_id}\x00{secret}".encode()).hexdigest()
+
+
+def _token_cache_key(tenant_id: str, app_id: str, secret_hash: str) -> str:
+	return _TOKEN_CACHE_PREFIX + secret_hash
 
 
 def _redis() -> Any:
@@ -163,16 +179,24 @@ def _redis() -> Any:
 		return None
 
 
-def clear_token_cache(tenant_id: str | None = None, app_id: str | None = None) -> None:
-	"""Drop cached tokens for one (tenant, app) or, with no arguments, every in-process one."""
+def clear_token_cache(tenant_id: str | None = None, app_id: str | None = None, secret: str | None = None) -> None:
+	"""Drop cached tokens for ONE credential tuple (tenant, app, secret), never other gateways' tokens.
+
+	Without ``secret`` every in-process entry for that (tenant, app) is dropped; with no arguments, all
+	in-process entries."""
 	with _tokens_lock:
-		keys = [(tenant_id, app_id or "")] if tenant_id is not None else list(_tokens)
+		if tenant_id is not None and secret is not None:
+			keys = [(tenant_id, app_id or "", _secret_hash(tenant_id, app_id or "", secret))]
+		elif tenant_id is not None:
+			keys = [k for k in _tokens if k[0] == tenant_id and k[1] == (app_id or "")]
+		else:
+			keys = list(_tokens)
 		for key in keys:
 			_tokens.pop(key, None)
 	cache = _redis()
-	for tenant, app in keys:
+	for key in keys:
 		try:
-			cache.delete_value(_token_cache_key(tenant, app))
+			cache.delete_value(_token_cache_key(*key))
 		except Exception:
 			pass
 
@@ -180,7 +204,8 @@ def clear_token_cache(tenant_id: str | None = None, app_id: str | None = None) -
 def get_token(credentials: Mapping[str, str], transport: Transport | None = None) -> str:
 	"""Bot Framework access token (client_credentials, tenant authority), cached until exp - 5 min."""
 	transport = transport or _requests_transport
-	key = (str(credentials["tenant_id"]), str(credentials["app_id"]))
+	tenant, app = str(credentials["tenant_id"]), str(credentials["app_id"])
+	key = (tenant, app, _secret_hash(tenant, app, str(credentials["app_password"])))
 	now = _now()
 	with _tokens_lock:
 		hit = _tokens.get(key)
@@ -196,7 +221,7 @@ def get_token(credentials: Mapping[str, str], transport: Transport | None = None
 			_tokens[key] = (stored["t"], float(stored["exp"]))
 		return stored["t"]
 
-	url = f"{_AUTHORITY_BASE}/{quote(key[0], safe='')}/oauth2/v2.0/token"
+	url = f"{_AUTHORITY_BASE}/{quote(tenant, safe='')}/oauth2/v2.0/token"
 	status, _headers, body = _call(
 		transport,
 		"POST",
@@ -204,7 +229,7 @@ def get_token(credentials: Mapping[str, str], transport: Transport | None = None
 		headers={"Content-Type": "application/x-www-form-urlencoded"},
 		data={
 			"grant_type": "client_credentials",
-			"client_id": key[1],
+			"client_id": app,
 			"client_secret": credentials["app_password"],
 			"scope": _SCOPE,
 		},
@@ -245,48 +270,66 @@ def activity_size(activity: Mapping[str, Any]) -> int:
 _SEPARATORS = (r"\n[ \t]*\n", r"\n", r"(?<=[.!?])\s+")
 
 
-def split_text(text: str, fits: Callable[[str], bool], level: int = 0) -> list[str]:
-	"""Ordered chunks that each ``fits``: paragraphs first, then lines, sentences, then characters."""
-	if fits(text):
+def text_cost(piece: str) -> int:
+	"""UTF-16 bytes ``piece`` adds to a serialized activity (JSON-escaped); additive over concatenation."""
+	return len(json.dumps(piece, ensure_ascii=False)[1:-1].encode("utf-16-le"))
+
+
+def split_text(text: str, budget: int, cost: Callable[[str], int] = text_cost, level: int = 0) -> list[str]:
+	"""Ordered chunks whose summed ``cost`` is <= ``budget``: paragraphs first, then lines, sentences, then
+	characters. Linear time: each piece is measured once and sizes are accumulated incrementally."""
+	if cost(text) <= budget:
 		return [text] if text.strip() else []
 	if level >= len(_SEPARATORS):
-		return _hard_split(text, fits)
+		return _hard_split(text, budget, cost)
 	pieces = re.split(f"({_SEPARATORS[level]})", text)
 	out: list[str] = []
-	current = ""
+	current: list[str] = []
+	size = 0
 	for i in range(0, len(pieces), 2):
 		piece = pieces[i]
-		candidate = current + pieces[i - 1] + piece if current else piece
-		if fits(candidate):
-			current = candidate
+		sep = pieces[i - 1] if current else ""
+		extra = cost(sep) + cost(piece)
+		if current and size + extra <= budget:
+			current += [sep, piece]
+			size += extra
 			continue
-		if current.strip():
-			out.append(current.strip())
-		if fits(piece):
-			current = piece
+		joined = "".join(current).strip()
+		if joined:
+			out.append(joined)
+		current, size = [], 0
+		piece_cost = cost(piece)
+		if piece_cost <= budget:
+			current, size = [piece], piece_cost
 		else:
-			out.extend(split_text(piece, fits, level + 1))
-			current = ""
-	if current.strip():
-		out.append(current.strip())
+			out.extend(split_text(piece, budget, cost, level + 1))
+	joined = "".join(current).strip()
+	if joined:
+		out.append(joined)
 	return out
 
 
-def _hard_split(text: str, fits: Callable[[str], bool]) -> list[str]:
+def _hard_split(text: str, budget: int, cost: Callable[[str], int]) -> list[str]:
 	out: list[str] = []
-	while text:
-		lo, hi = 1, len(text)
-		while lo < hi:
-			mid = (lo + hi + 1) // 2
-			if fits(text[:mid]):
-				lo = mid
-			else:
-				hi = mid - 1
-		if not fits(text[:lo]):
+	start, size = 0, 0
+	for i, ch in enumerate(text):
+		c = cost(ch)
+		if c > budget:
 			raise TeamsPermanentError("Microsoft Teams message envelope exceeds the size limit")
-		out.append(text[:lo])
-		text = text[lo:]
+		if size + c > budget:
+			out.append(text[start:i])
+			start, size = i, 0
+		size += c
+	out.append(text[start:])
 	return [c for c in out if c.strip()]
+
+
+def _limit_text(text: str) -> str:
+	"""Cap one send at MAX_TEXT_BYTES of UTF-8, cutting on a character boundary and appending a marker."""
+	if len(text.encode("utf-8")) <= MAX_TEXT_BYTES:
+		return text
+	keep = MAX_TEXT_BYTES - len(TRUNCATION_MARKER.encode("utf-8"))
+	return text.encode("utf-8")[:keep].decode("utf-8", errors="ignore").rstrip() + TRUNCATION_MARKER
 
 
 # -- send ------------------------------------------------------------------------------------------------
@@ -307,7 +350,11 @@ def _retry_delay(attempt: int, headers: Mapping[str, str]) -> float:
 
 
 def _post_activity(
-	url: str, activity: dict[str, Any], credentials: Mapping[str, str], transport: Transport
+	url: str,
+	activity: dict[str, Any],
+	credentials: Mapping[str, str],
+	transport: Transport,
+	deadline: float | None = None,
 ) -> str:
 	refreshed = False
 	attempt = 0
@@ -332,14 +379,21 @@ def _post_activity(
 			# A cached token may be stale (secret rotated): drop it and retry exactly once.
 			refreshed = True
 			attempt -= 1
-			clear_token_cache(str(credentials["tenant_id"]), str(credentials["app_id"]))
+			clear_token_cache(
+				str(credentials["tenant_id"]), str(credentials["app_id"]), str(credentials["app_password"])
+			)
 			continue
 		if status in _RETRY_STATUSES:
 			if attempt >= _MAX_ATTEMPTS:
 				raise TeamsTransientError(
 					f"Microsoft Teams send failed after {attempt} attempts (HTTP {status})", status=status
 				)
-			_sleep(_retry_delay(attempt, headers))
+			delay = _retry_delay(attempt, headers)
+			if deadline is not None and _clock() + delay > deadline:
+				raise TeamsTransientError(
+					f"Microsoft Teams send gave up: retry time budget exhausted (HTTP {status})", status=status
+				)
+			_sleep(delay)  # blocks this worker for up to _BACKOFF_CAP seconds
 			continue
 		hint = ""
 		if status in (401, 403):
@@ -381,7 +435,7 @@ def send_reply(
 	url = f"{service_url}/v3/conversations/{quote(conversation_id, safe='')}/activities"
 	base: dict[str, Any] = {
 		"type": "message",
-		"textFormat": "markdown",
+		"textFormat": TEXT_FORMAT,
 		"from": {"id": reference.get("bot_id") or f"28:{app_id}"},
 		"conversation": {"id": conversation_id},
 	}
@@ -389,16 +443,20 @@ def send_reply(
 		url += f"/{quote(str(reply.reply_to_provider_message_id), safe='')}"
 		base["replyToId"] = str(reply.reply_to_provider_message_id)
 
-	chunks = split_text(reply.text, lambda c: activity_size({**base, "text": c}) <= TARGET_BYTES) or [
-		reply.text
-	]
+	text = _limit_text(reply.text)
+	budget = TARGET_BYTES - activity_size({**base, "text": ""})
+	chunks = split_text(text, budget) or [text]
+	if len(chunks) > MAX_CHUNKS:
+		chunks = chunks[:MAX_CHUNKS]
+		chunks[-1] = chunks[-1].rstrip() + TRUNCATION_MARKER
+	deadline = _clock() + _RETRY_BUDGET_SECONDS
 	delivered: list[str] = []
 	for chunk in chunks:
 		activity = {**base, "text": chunk}
 		if activity_size(activity) > HARD_LIMIT_BYTES:
 			raise TeamsPermanentError("Microsoft Teams message exceeds the 100 KB limit")
 		try:
-			delivered.append(_post_activity(url, activity, credentials, transport))
+			delivered.append(_post_activity(url, activity, credentials, transport, deadline))
 		except TeamsSendError as exc:
 			if delivered:
 				# Retrying the whole reply would duplicate the parts the user already sees.

@@ -54,7 +54,7 @@ class TestVerifyTeamsConnection(unittest.TestCase):
 
 	def clear(self):
 		frappe.cache.delete_value(diagnostics._RATE_PREFIX + GW)
-		client.clear_token_cache(tf.TENANT_ID, tf.BOT_APP_ID)
+		client.clear_token_cache(tf.TENANT_ID, tf.BOT_APP_ID, SECRET)
 
 	def run_verify(self):
 		self.clear_rate()
@@ -84,6 +84,19 @@ class TestVerifyTeamsConnection(unittest.TestCase):
 		blob = json.dumps(result)
 		for bad in (SECRET, GOOD_JWT, "raw-claim-value", "access_token", *extra):
 			self.assertNotIn(bad, blob)
+
+	def test_wrong_secret_fails_even_if_other_gateway_cached_good_token(self):
+		other = {"app_id": tf.BOT_APP_ID, "tenant_id": tf.TENANT_ID, "app_password": "another-gateway-secret"}
+		self.addCleanup(client.clear_token_cache, tf.TENANT_ID, tf.BOT_APP_ID, "another-gateway-secret")
+		self.script_token({"access_token": GOOD_JWT, "expires_in": 3600})
+		client.get_token(other)  # another gateway with the same app id cached a good token
+		self.script_token({"error": "invalid_client", "error_description": "AADSTS7000215 bad"}, status=401)
+		result = self.run_verify()
+		self.assertFalse(result["ok"])
+		self.assertFalse(self.by_id(result)["token"]["ok"])
+		self.assertEqual(client._tokens.get(
+			(tf.TENANT_ID, tf.BOT_APP_ID, client._secret_hash(tf.TENANT_ID, tf.BOT_APP_ID, "another-gateway-secret")))[0],
+			GOOD_JWT)  # the other gateway's token was not purged
 
 	def test_happy_path(self):
 		self.script_token({"access_token": GOOD_JWT, "expires_in": 3600, "token_type": "Bearer"})
@@ -240,3 +253,4 @@ class TestVerifyTeamsConnection(unittest.TestCase):
 
 if __name__ == "__main__":
 	unittest.main()
+
