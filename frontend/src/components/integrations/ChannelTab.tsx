@@ -34,6 +34,7 @@ import {
   type GatewayPolicy,
   type GatewayReadinessPreview,
 } from '@/services/gatewayApi';
+import { ProviderPanels } from '@/components/gateway/ProviderPanels';
 import { getGatewayReadiness } from '@/utils/gatewayReadiness';
 import { getGatewayWebhookUrl } from '@/utils/gatewayWebhook';
 import { getIntegrationSetting, setupTelegramWebhook } from '@/services/integrationApi';
@@ -602,6 +603,8 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
           </div>
         )}
       </div>
+
+      <ProviderPanels gateway={gateway} />
 
       <div className="flex items-center justify-between">
         <Button
