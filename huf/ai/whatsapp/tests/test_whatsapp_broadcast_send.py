@@ -6,7 +6,7 @@
 The recipient/broadcast rows live in an in-memory store that mimics the conditional-UPDATE semantics of the
 real helpers (``_claim`` / ``_write`` / ``_release``), so these tests need no database rows. The Graph POST
 is ``bridge.send_template`` mocked. ``whatsapp_errors.is_pause_signal`` / ``should_defer_24h`` come from WP-3;
-if absent in the tree they are supplied here (``create=True``).
+the real implementations from whatsapp_errors are used.
 """
 
 from __future__ import annotations
