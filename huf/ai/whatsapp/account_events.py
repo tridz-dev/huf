@@ -228,6 +228,16 @@ def _insert_consent(gateway: str, sender: str, category: str, value: str, detail
 	return True
 
 
+def _skip_broadcast_rows(gateway: str, sender: str) -> None:
+	"""A marketing stop skips that contact's pending broadcast rows. Never raises."""
+	try:
+		from huf.ai.whatsapp import broadcast_status
+
+		broadcast_status.apply_user_stop(gateway, sender)
+	except Exception:
+		frappe.log_error(title="WhatsApp broadcast user-stop failed", message=frappe.get_traceback())
+
+
 def record_user_preferences(gateway: str, items: Any) -> int:
 	"""Append a consent row per identifier (wa_id and user_id) of each marketing stop/resume item; returns rows added."""
 	count = 0
@@ -239,6 +249,8 @@ def record_user_preferences(gateway: str, items: Any) -> int:
 			if sender:
 				if _insert_consent(gateway, sender, MARKETING, item["value"], str(item.get("detail") or ""), item.get("timestamp")):
 					count += 1
+				if item["value"] == "stop":
+					_skip_broadcast_rows(gateway, sender)
 	return count
 
 
