@@ -68,14 +68,13 @@ export const TEAMS_STEPS: TeamsStep[] = [
   {
     id: 'credentials',
     title: 'Copy App ID, client secret value and Tenant ID',
-    body: 'Paste them into this gateway\'s credentials. Use the secret value (shown once), not the secret ID.',
+    body: 'Paste them into this gateway\'s credentials. Use the secret value (shown once in Azure), not the secret ID. The app password is write-only: Huf never shows it again after saving.',
     checkId: 'teams-credentials',
   },
   {
     id: 'endpoint',
     title: 'Paste the messaging endpoint into Azure',
-    body: 'In the Azure Bot Configuration, set Messaging endpoint to the URL below. It must be HTTPS and publicly reachable.',
-    checkId: 'teams-messaging-endpoint',
+    body: 'In the Azure Bot Configuration, set Messaging endpoint to the URL below. It must be HTTPS and publicly reachable. Huf cannot check what is set in Azure, so confirm it manually.',
   },
   {
     id: 'channel',
@@ -108,6 +107,47 @@ export function deriveStepStates(checks: ReadinessCheckLike[] | null | undefined
     out[step.id] = check ? (check.done ? 'done' : 'todo') : 'manual';
   }
   return out;
+}
+
+/** Readiness check that carries the backend-built messaging endpoint URL in its hint. */
+export const TEAMS_ENDPOINT_CHECK_ID = 'teams-messaging-endpoint';
+
+/**
+ * Extract the backend public messaging-endpoint URL from the readiness hint
+ * ("Paste <url> as the Messaging endpoint ..."). Null unless it is absolute.
+ */
+export function endpointFromChecks(checks: ReadinessCheckLike[] | null | undefined): string | null {
+  const hint = (checks ?? []).find((c) => c.id === TEAMS_ENDPOINT_CHECK_ID)?.hint ?? '';
+  const m = /Paste (https?:\/\/\S+) as the Messaging endpoint/.exec(hint);
+  return m ? m[1] : null;
+}
+
+export const TEAMS_PERMISSION_NOTES: string[] = [
+  'In personal chats the bot receives every message sent to it.',
+  'In group chats and channels the bot only receives messages that @mention it, unless the app has resource-specific consent (RSC) for that scope.',
+  'No Microsoft Graph admin consent is required for plain bot messaging (verify in your tenant).',
+  'Uploading a custom app needs the custom app upload policy, or a Teams admin to upload it (verify in your tenant).',
+  'Teams test send needs a conversation: message the bot first.',
+];
+
+export const TEAMS_RATE_LIMIT_NOTICE = 'Verify connection was run moments ago. Wait a few seconds and try again.';
+export const TEAMS_VERIFY_COOLDOWN_MS = 5000;
+export const TEAMS_REVOKE_DELAY_MS = 1000;
+export const TEAMS_PACKAGE_DECODE_ERROR = 'The Teams app package could not be read. Try downloading it again.';
+export const TEAMS_READINESS_UNAVAILABLE = 'Could not load setup status. Steps are shown as "Check manually".';
+
+/** True when an API error is the backend rate limit (HTTP 429 / TooManyRequestsError). */
+export function isRateLimitError(e: unknown): boolean {
+  const err = e as Record<string, unknown> | null | undefined;
+  if (!err || typeof err !== 'object') return false;
+  const resp = err.response as Record<string, unknown> | undefined;
+  const status = err.httpStatus ?? err.status ?? err.statusCode ?? resp?.status;
+  if (Number(status) === 429) return true;
+  const hay = [err.exc_type, err.exception, err.message, (err.originalError as Record<string, unknown> | undefined)?.exc_type, err._server_messages]
+    .filter((v) => v != null)
+    .map((v) => (typeof v === 'string' ? v : JSON.stringify(v)))
+    .join(' ');
+  return /TooManyRequests|moments ago/i.test(hay);
 }
 
 export const TEAMS_SITE_CONFIG_KEYS = [

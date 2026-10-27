@@ -49,6 +49,7 @@ async function renderTab() {
 
 beforeEach(() => {
   api.preview.mockReset();
+  api.gateway.provider = 'Telegram';
   api.preview.mockResolvedValue({ ready: true, blocking_count: 0, checks: [] });
 });
 
@@ -111,5 +112,27 @@ describe('ChannelTab readiness banner', () => {
     await waitFor(() => expect(container.textContent).not.toMatch(/left before this channel/));
     expect(container.textContent).not.toMatch(/undefined/);
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('ChannelTab Teams gating', () => {
+  it('renders the setup guide only for Microsoft Teams', async () => {
+    await renderTab();
+    expect(screen.queryByText('Microsoft Teams setup guide')).toBeNull();
+    expect(screen.queryByText(/Teams test send needs a conversation/)).toBeNull();
+  });
+
+  it('renders the guide and test-send note for Microsoft Teams', async () => {
+    api.gateway.provider = 'Microsoft Teams';
+    await renderTab();
+    expect(await screen.findByText('Microsoft Teams setup guide')).toBeInTheDocument();
+    expect(screen.getAllByText(/Teams test send needs a conversation/).length).toBeGreaterThan(0);
+  });
+
+  it('shows a subtle note when readiness cannot be loaded', async () => {
+    api.gateway.provider = 'Microsoft Teams';
+    api.preview.mockRejectedValue(new Error('boom'));
+    await renderTab();
+    expect(await screen.findByText(/Could not load setup status/)).toBeInTheDocument();
   });
 });
