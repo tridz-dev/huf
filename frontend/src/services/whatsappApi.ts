@@ -952,6 +952,25 @@ export const createBroadcast = (input: CreateBroadcastInput) =>
     'post',
   );
 
+export interface BroadcastTemplateVariable { name?: string; index?: number; sample?: string }
+export interface BroadcastTemplateParams {
+  parameter_format: 'NAMED' | 'POSITIONAL';
+  body: BroadcastTemplateVariable[];
+  header: Record<string, unknown> | null;
+  buttons: unknown[];
+}
+
+export const getBroadcastTemplateParams = (gateway: string, template: string) =>
+  mapOk(
+    invoke<Partial<BroadcastTemplateParams>>('get_broadcast_template_params', { gateway, template }, 'get'),
+    (r): BroadcastTemplateParams => ({
+      parameter_format: r.parameter_format === 'NAMED' ? 'NAMED' : 'POSITIONAL',
+      body: Array.isArray(r.body) ? r.body : [],
+      header: r.header ?? null,
+      buttons: Array.isArray(r.buttons) ? r.buttons : [],
+    }),
+  );
+
 export const addBroadcastRecipients = (broadcast: string, opts: { recipients?: BroadcastRecipientInput[]; csvText?: string }) =>
   mapOk(
     invoke<AddRecipientsResult>(

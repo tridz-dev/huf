@@ -6,9 +6,26 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-  addBroadcastRecipients, attestBroadcastConsent, createBroadcast, errorText, listTemplates, previewBroadcast, startBroadcast,
-  type AddRecipientsResult, type BroadcastPreview, type BroadcastSendVia, type WhatsAppTemplate,
+  addBroadcastRecipients, attestBroadcastConsent, createBroadcast, errorText, getBroadcastTemplateParams, listTemplates, previewBroadcast, startBroadcast,
+  type AddRecipientsResult, type BroadcastPreview, type BroadcastRecipientInput, type BroadcastTemplateParams, type BroadcastTemplateVariable, type BroadcastSendVia, type WhatsAppTemplate,
 } from '@/services/whatsappApi';
+
+const varKey = (v: BroadcastTemplateVariable, i: number) => (v.name ?? String(v.index ?? i + 1));
+
+/** Lines are `phone` or `phone,v1,v2` (comma or tab). Values map to template variables in order. */
+export function parseRecipientLines(lines: string[], named: boolean, vars: BroadcastTemplateVariable[]): BroadcastRecipientInput[] {
+  return lines.map((line) => {
+    const [recipient, ...cells] = line.split(/[,\t]/).map((c) => c.trim());
+    const vals = cells.slice(0, vars.length);
+    if (!vals.some((c) => c !== '')) return { recipient };
+    if (named) {
+      const body: Record<string, string> = {};
+      vals.forEach((v, i) => { if (v !== '') body[vars[i].name ?? String(i + 1)] = v; });
+      return { recipient, params: { body } };
+    }
+    return { recipient, params: { body: vals } };
+  });
+}
 
 const STEPS = ['Template', 'Recipients', 'Consent', 'Preview', 'Confirm'] as const;
 
@@ -29,6 +46,8 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   const [reviewing, setReviewing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [tplParams, setTplParams] = useState<BroadcastTemplateParams | null>(null);
+  const [defaults, setDefaults] = useState<Record<string, string>>({});
 
   useEffect(() => {
     void listTemplates(gateway, 'APPROVED').then((res) => {
@@ -36,6 +55,31 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
       else { setTemplates([]); setErr(errorText(res)); }
     });
   }, [gateway]);
+
+  useEffect(() => {
+    setTplParams(null); setDefaults({});
+    if (!tplName) return;
+    let live = true;
+    void getBroadcastTemplateParams(gateway, tplName).then((res) => {
+      if (!live) return;
+      if (res.success) setTplParams(res); else setErr(errorText(res));
+    });
+    return () => { live = false; };
+  }, [gateway, tplName]);
+
+  const vars = tplParams?.body ?? [];
+  const named = tplParams?.parameter_format === 'NAMED';
+  const hasHeaderButtons = !!tplParams && (!!tplParams.header || tplParams.buttons.length > 0);
+
+  const buildBodyParams = (): Record<string, string> | string[] | undefined => {
+    if (!vars.some((v, i) => (defaults[varKey(v, i)] ?? '').trim() !== '')) return undefined;
+    if (named) {
+      const o: Record<string, string> = {};
+      vars.forEach((v, i) => { const x = (defaults[varKey(v, i)] ?? '').trim(); if (x) o[v.name ?? String(i + 1)] = x; });
+      return o;
+    }
+    return vars.map((v, i) => (defaults[varKey(v, i)] ?? '').trim());
+  };
 
   const tpl = templates?.find((t) => t.name === tplName);
   const isMarketing = (tpl?.category ?? '').toUpperCase() === 'MARKETING';
@@ -45,13 +89,13 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
     setBusy(true); setErr('');
     let id = broadcast;
     if (!id) {
-      const c = await createBroadcast({ gateway, template: tplName, title: title.trim() || `Broadcast ${tpl?.template_name ?? tplName}`, language_code: tpl?.language_code, send_via: isMarketing ? sendVia : 'messages' });
+      const c = await createBroadcast({ gateway, template: tplName, title: title.trim() || `Broadcast ${tpl?.template_name ?? tplName}`, language_code: tpl?.language_code, send_via: isMarketing ? sendVia : 'messages', body_params: buildBodyParams() });
       if (!c.success) return fail(c);
       id = c.broadcast;
       setBroadcast(id);
     }
     const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-    const res = await addBroadcastRecipients(id, csv !== null ? { csvText: csv } : { recipients: lines.map((recipient) => ({ recipient })) });
+    const res = await addBroadcastRecipients(id, csv !== null ? { csvText: csv } : { recipients: parseRecipientLines(lines, named, vars) });
     if (!res.success) return fail(res);
     setResult(res);
     setBusy(false);
@@ -131,6 +175,21 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
                 : ''}
             </p>
           ) : null}
+          {vars.length > 0 ? (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">Template variables (defaults for every recipient)</legend>
+              {vars.map((v, i) => {
+                const k = varKey(v, i);
+                return (
+                  <div key={k} className="space-y-1">
+                    <Label htmlFor={`bc-var-${k}`}>Default value for {`{{${k}}}`}</Label>
+                    <Input id={`bc-var-${k}`} value={defaults[k] ?? ''} placeholder={v.sample ?? ''} onChange={(e) => setDefaults((d) => ({ ...d, [k]: e.target.value }))} />
+                  </div>
+                );
+              })}
+            </fieldset>
+          ) : null}
+          {hasHeaderButtons ? <p role="note" className="text-xs text-steel">Header/button variables are not supported in the UI yet.</p> : null}
           {isMarketing ? (
             <div className="space-y-1">
               <Label htmlFor="bc-send-via">Send via</Label>
@@ -151,6 +210,11 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
           <div className="space-y-1">
             <Label htmlFor="bc-recipients">Recipients (one phone number per line)</Label>
             <Textarea id="bc-recipients" rows={8} value={text} disabled={reviewing || csv !== null} onChange={(e) => setText(e.target.value)} placeholder="+14155550101" />
+            <p className="text-xs text-steel">
+              {vars.length > 0
+                ? `Columns: phone, ${vars.map((v, i) => varKey(v, i)).join(', ')} (comma or tab separated). Missing values use the defaults from step 1.`
+                : 'Columns: phone.'}
+            </p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="bc-csv">Or upload a CSV (header: phone)</Label>
