@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  DialogScrollBody,
   DialogScrollContent,
   DialogScrollFooter,
   DialogScrollHeader,
@@ -222,7 +223,7 @@ export function AddIntegrationToAgentModal({
           </DialogDescription>
         </DialogScrollHeader>
 
-        <div className="space-y-6 px-6 py-2">
+        <DialogScrollBody className="space-y-6 py-2">
           {/* Tools selection */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -337,7 +338,7 @@ export function AddIntegrationToAgentModal({
               </div>
             )}
           </div>
-        </div>
+        </DialogScrollBody>
 
         <DialogScrollFooter className="items-center justify-between sm:justify-between">
           <div className="text-sm text-steel-soft">
