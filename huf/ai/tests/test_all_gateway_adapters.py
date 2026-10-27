@@ -312,16 +312,22 @@ class TestAllGatewayAdapters(unittest.TestCase):
 			http_post=mock_post,
 		)
 
+		activity = {
+			"type": "message",
+			"id": "act_1",
+			"from": {"id": "user1"},
+			"conversation": {"id": "conv1", "conversationType": "personal", "tenantId": "tenant-1"},
+			"channelData": {"tenant": {"id": "tenant-1"}},
+			"text": "Hi Teams",
+		}
 		req = GatewayInboundRequest(
-			body=b'{"id": "act_1", "from": {"id": "user1"}, "conversation": {"id": "conv1"}, "text": "Hi Teams"}',
+			body=json.dumps(activity).encode(),
 			headers={"Authorization": "Bearer token"},
 			query={},
 			method="POST",
 		)
 
-		# Real JWT validation is covered by test_teams_auth; this test is about normalisation + send.
-		with patch("huf.ai.teams.auth.verify_request", return_value=True):
-			event = adapter.normalize_inbound(req)
+		event = adapter.normalize_inbound(req)
 		self.assertEqual(event.sender_id, "user1")
 		self.assertEqual(event.message_text, "Hi Teams")
 
