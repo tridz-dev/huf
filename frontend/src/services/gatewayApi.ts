@@ -37,6 +37,56 @@ export interface GatewayDoc {
   default_flow?: string;
   last_event_at?: string;
   last_error?: string;
+  // Access (Pairing)
+  pairing_reply_enabled?: 0 | 1;
+  pairing_pending_limit?: number;
+  pairing_reply_daily_limit?: number;
+  // WhatsApp only
+  phone_number_id?: string;
+  whatsapp_account?: string;
+  whatsapp_business_account_id?: string;
+  inbound_sender_limit?: number;
+  opt_out_keywords?: string;
+  opt_in_keywords?: string;
+  opt_out_reply_text?: string;
+  fallback_template?: string;
+  fallback_template_language?: string;
+  fallback_template_params?: string;
+  preview_url?: 'Default (off)' | 'On' | 'Off';
+  voice_reply_mode?: 'Off' | 'Voice only' | 'Text and voice';
+  typing_indicator?: 0 | 1;
+  error_reply_text?: string;
+  retry_max_attempts?: number;
+  agent_allow_proactive?: 0 | 1;
+  agent_allow_template_management?: 0 | 1;
+  agent_auto_submit_templates?: 0 | 1;
+  agent_recipient_scope?: 'Current contact' | 'Allow-list' | 'Approved contacts' | 'Any number';
+  agent_recipient_allowlist?: string;
+  agent_send_cap_per_run?: number;
+  agent_send_cap_per_day?: number;
+  calling_enabled?: 0 | 1;
+  call_greeting_audio?: string;
+  call_reply_audio?: string;
+  call_closing_audio?: string;
+  call_max_seconds?: number;
+  pin_ttl_hours?: number;
+  keyword_beats_pin?: 0 | 1;
+}
+
+/** Every editable WhatsApp-only Gateway field, saved together from the Channel tab. */
+export const WHATSAPP_GATEWAY_FIELDS = [
+  'inbound_sender_limit', 'opt_out_keywords', 'opt_in_keywords', 'opt_out_reply_text',
+  'fallback_template', 'fallback_template_language', 'fallback_template_params',
+  'preview_url', 'voice_reply_mode', 'typing_indicator', 'error_reply_text', 'retry_max_attempts',
+  'agent_allow_proactive', 'agent_allow_template_management', 'agent_auto_submit_templates',
+  'agent_recipient_scope', 'agent_recipient_allowlist', 'agent_send_cap_per_run', 'agent_send_cap_per_day',
+  'calling_enabled', 'call_greeting_audio', 'call_reply_audio', 'call_closing_audio', 'call_max_seconds',
+  'pin_ttl_hours', 'keyword_beats_pin',
+] as const satisfies readonly (keyof GatewayDoc)[];
+
+/** The full Gateway record (every field), for editors that show more than the list columns. */
+export async function getGateway(name: string): Promise<GatewayDoc> {
+  return (await db.getDoc(doctype.Gateway, name)) as GatewayDoc;
 }
 
 export async function getGateways(): Promise<GatewayDoc[]> {
