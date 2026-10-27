@@ -175,11 +175,12 @@ def ensure_default_huf_roles(
 	- Everyone gets the ``Huf Gateway User`` role on top, so they can be a channel's Run as user.
 
 	Never downgrades or replaces a Huf role an admin assigned, never touches a user whose Huf access
-	was switched off (disabled Huf User Role), and never grants Huf Admin / System Manager. The Has Role
+	was switched off (disabled Huf User Role), and never grants Huf Admin / System Manager (Administrator
+	already is Huf Admin, so it only gains the gateway role). The Has Role
 	rows are written directly so this can run from the User's own on_update without re-saving it; with
 	``user_doc`` they are also added to that doc, so a later save of the same form keeps them.
 	"""
-	if user in ("Administrator", "Guest"):
+	if user == "Guest":
 		return False
 	# Test fixtures build users with exact roles (often deliberately without Huf access); tests that cover
 	# the default grant opt in.

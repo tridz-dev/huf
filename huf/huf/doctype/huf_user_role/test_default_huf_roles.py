@@ -109,3 +109,13 @@ class TestDefaultHufRoles(unittest.TestCase):
 		grant_default_roles_to_system_users()
 		self.assertTrue({"Huf Manager", "Huf Gateway User"} <= self._roles(user.name))
 		self.assertFalse(ensure_default_huf_roles(user.name))  # nothing left to grant
+
+	def test_administrator_gets_the_gateway_role_only(self):
+		had = "Huf Gateway User" in self._roles("Administrator")
+		ensure_default_huf_roles("Administrator")
+		roles = self._roles("Administrator")
+		self.assertIn("Huf Gateway User", roles)
+		self.assertNotIn("Huf Manager", roles)
+		self.assertEqual(get_user_huf_role("Administrator"), "Huf Admin")
+		if not had:
+			frappe.db.delete("Has Role", {"parent": "Administrator", "role": "Huf Gateway User"})
