@@ -35,7 +35,7 @@ class TestGatewayTestSend(IntegrationTestCase):
 			adapter.send_reply.return_value = OutboundDelivery(provider_message_id=receipt)
 			result = self._run(provider, adapter)
 			self.assertTrue(result["success"], (provider, result))
-			self.assertEqual(json.loads(result["provider_response"]), {"provider_message_id": receipt})
+			self.assertEqual(json.loads(result["provider_response"]), {"delivery_id": receipt})
 			self.assertEqual(adapter.send_reply.call_args.args[0].conversation_id, "recipient-1")
 
 	def test_adapter_error_is_surfaced_and_redacted(self):
