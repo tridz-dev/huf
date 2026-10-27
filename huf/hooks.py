@@ -241,6 +241,9 @@ doc_events = {
     "User": {
         "on_update": "huf.huf.doctype.huf_user_role.huf_user_role.sync_from_frappe_user",
     },
+    "Flow Run": {
+        "on_update": "huf.ai.gateways.flow_reply.on_flow_run_update",
+    },
     "Agent Trigger": {
         "after_insert": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
         "on_update": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
@@ -421,7 +424,10 @@ fixtures = [
 to_sync_tools = "huf.ai.tool_registry.sync_discovered_tools"
 
 # Register integration tools from _registry
-huf_tools = "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS"
+huf_tools = [
+    "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS",
+    "huf.ai.tools.gateway_reply.GATEWAY_REPLY_TOOLS",
+]
 
 # Knowledge Backends Hook
 # -----------------------
