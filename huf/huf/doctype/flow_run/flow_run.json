@@ -32,7 +32,10 @@
   "timing_tab",
   "started_at",
   "column_break_tm1",
-  "completed_at"
+  "completed_at",
+  "gateway_event",
+  "requester_external_id",
+  "requester_user"
  ],
  "fields": [
   {
@@ -204,6 +207,26 @@
    "fieldname": "completed_at",
    "fieldtype": "Datetime",
    "label": "Completed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gateway_event",
+   "fieldtype": "Link",
+   "label": "Gateway Event",
+   "options": "Gateway Event",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requester_external_id",
+   "fieldtype": "Data",
+   "label": "Requester external ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requester_user",
+   "fieldtype": "Link",
+   "label": "Requester user",
+   "options": "User",
    "read_only": 1
   }
  ],
