@@ -183,6 +183,10 @@ def send_one(recipient_name: str) -> str:
 
 	body, header, button = _merge_params(bc, row)
 	opaque = row.get("opaque_ref") or recipient_name
+	use_mm = (bc.get("send_via") or "messages") == "marketing_messages"
+	if use_mm and str(bc.get("category") or "").upper() != "MARKETING":
+		_write(recipient_name, status="failed", failed_at=now_datetime(), error_code="mm_requires_marketing_template", error_message="Marketing Messages API sends need a MARKETING template.")
+		return "failed"
 
 	from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 
@@ -200,6 +204,7 @@ def send_one(recipient_name: str) -> str:
 			gateway_name=bc.get("gateway"),
 			force_graph=True,
 			opaque_ref=opaque,
+			marketing_api=use_mm,
 		)
 	except bridge.BridgeError as exc:
 		return _after_bridge_error(recipient_name, int(row.get("attempts") or 0) + 1, exc.payload or {})

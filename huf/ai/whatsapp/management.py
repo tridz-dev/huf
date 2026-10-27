@@ -1874,6 +1874,7 @@ def create_broadcast(
 	consent_source: str | None = None,
 	max_recipients: Any = None,
 	mps: Any = None,
+	send_via: str | None = None,
 ) -> dict[str, Any]:
 	"""Create a Draft broadcast on a Gateway. The template must be an APPROVED template of the Gateway's own account.
 
@@ -1902,6 +1903,11 @@ def create_broadcast(
 		return _error("template_not_found", "Template not found on this gateway's WhatsApp account.")
 	if str(tpl.get("status") or "").upper() != "APPROVED":
 		return _error("template_not_approved", f"Template status is {tpl.get('status') or 'unknown'}; only APPROVED templates can be broadcast.")
+	send_via = (send_via or "messages").strip()
+	if send_via not in ("messages", "marketing_messages"):
+		return _error("invalid_send_via", "send_via must be 'messages' or 'marketing_messages'.")
+	if send_via == "marketing_messages" and str(tpl.get("category") or "").upper() != "MARKETING":
+		return _error("mm_requires_marketing_template", "The Marketing Messages API only accepts MARKETING templates.")
 	try:
 		body = _json_param(body_params, "body_params")
 		header = _json_param(header_params, "header_params")
@@ -1928,6 +1934,7 @@ def create_broadcast(
 			"consent_attested": 0,
 			"max_recipients": cap,
 			"mps": rate,
+			"send_via": send_via,
 		}
 	).insert()
 	_broadcast_audit(doc.name, "created", gateway=gateway, template=tpl.get("name"), category=tpl.get("category"))
