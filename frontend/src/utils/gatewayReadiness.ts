@@ -1,5 +1,6 @@
 import type { GatewayDoc } from '@/services/gatewayApi';
 import type { SlackSetupStatus } from '@/services/slackSetupApi';
+import type { TeamsDiagnosis } from '@/services/teamsApi';
 
 export type ReadinessItem = { id: string; label: string; done: boolean; hint?: string };
 export type GatewayReadiness = { ready: boolean; items: ReadinessItem[]; blockingCount: number };
@@ -12,6 +13,8 @@ const BLOCKING_ITEM_IDS = new Set(['credentials', 'route-target', 'enabled']);
 export interface GatewayReadinessOptions {
   /** Cached Slack setup check result. Undefined means "not loaded / never checked". */
   slackSetup?: SlackSetupStatus | null;
+  /** Latest Teams connection check. Undefined means "not loaded / never checked". */
+  teamsDiagnosis?: TeamsDiagnosis | null;
 }
 
 function getSlackItems(status: SlackSetupStatus | null | undefined): ReadinessItem[] {
@@ -31,6 +34,30 @@ function getSlackItems(status: SlackSetupStatus | null | undefined): ReadinessIt
       label: 'Slack confirmed the events address',
       done: urlDone,
       hint: 'In Slack, click Save Request URL under Event Subscriptions',
+    },
+  ];
+}
+
+function getTeamsItems(diagnosis: TeamsDiagnosis | null | undefined): ReadinessItem[] {
+  const passed = (id: string) => diagnosis?.checks.find((c) => c.id === id)?.status === 'pass';
+  return [
+    {
+      id: 'teams-credentials',
+      label: 'App ID, secret and directory ID entered',
+      done: passed('credentials_present'),
+      hint: 'Enter the app ID, secret and directory (tenant) ID in the Credentials tab',
+    },
+    {
+      id: 'teams-token',
+      label: 'Microsoft accepted the sign-in',
+      done: passed('token_acquisition'),
+      hint: 'Run the Teams check in the setup guide and fix what it lists',
+    },
+    {
+      id: 'teams-last-inbound',
+      label: 'A Teams message reached Huf',
+      done: passed('last_inbound'),
+      hint: 'Say "help" to the bot in a personal chat in Teams',
     },
   ];
 }
@@ -71,6 +98,14 @@ export function getGatewayReadiness(gateway: GatewayDoc, options: GatewayReadine
     if (options.slackSetup) {
       blockingIds.add('slack-connection');
       blockingIds.add('slack-request-url');
+    }
+  }
+
+  if (gateway.provider === 'Microsoft Teams') {
+    items.splice(3, 0, ...getTeamsItems(options.teamsDiagnosis));
+    if (options.teamsDiagnosis) {
+      blockingIds.add('teams-credentials');
+      blockingIds.add('teams-token');
     }
   }
 
