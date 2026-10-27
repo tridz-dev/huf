@@ -269,16 +269,83 @@ def handle_gateway_webhook() -> dict | None:
 	return {"success": True, **result}
 
 
-def send_gateway_reply(gateway, event, text: str):
-	"""Deliver one completed Agent response through the same verified gateway."""
+SEND_MAX_ATTEMPTS = 3
+SEND_BACKOFF_BASE = 1.0
+SEND_MAX_DELAY = 30.0
+_TRANSIENT_CODES = frozenset(
+	{"ratelimited", "rate_limited", "internal_error", "service_unavailable", "fatal_error",
+		"request_timeout", "timeout"}
+)
+
+
+def _http_status_of(exc) -> int | None:
+	status = getattr(exc, "status", None)
+	if not isinstance(status, int) or status <= 0:
+		resp = getattr(exc, "response", None)
+		status = getattr(resp, "status_code", None) if resp is not None else None
+	return status if isinstance(status, int) else None
+
+
+def _is_transient_send_error(exc: BaseException) -> bool:
+	"""True only for retryable delivery failures (429/5xx/timeouts/transport); never auth/channel errors."""
+	if isinstance(exc, (TimeoutError, ConnectionError)):
+		return True
+	name = type(exc).__name__
+	if name in ("Timeout", "ReadTimeout", "ConnectTimeout", "ConnectionError"):
+		return True
+	status = _http_status_of(exc)
+	if status is not None and (status == 429 or 500 <= status < 600):
+		return True
+	code = str(getattr(exc, "error_code", "") or "").lower()
+	if code.startswith("transport_error") or code in _TRANSIENT_CODES:
+		return True
+	if not code and isinstance(exc, ValueError):
+		# Slack adapter raises ValueError("Slack chat.postMessage failed: <code>")
+		tail = str(exc).rsplit(":", 1)[-1].strip().lower()
+		return tail in _TRANSIENT_CODES
+	return False
+
+
+def _send_retry_delay(exc: BaseException, attempt: int) -> float:
+	hint = getattr(exc, "retry_after", None)
+	if hint is None:
+		headers = getattr(getattr(exc, "response", None), "headers", None) or {}
+		try:
+			hint = headers.get("Retry-After")
+		except Exception:
+			hint = None
+	try:
+		delay = float(hint) if hint is not None else SEND_BACKOFF_BASE * (2 ** (attempt - 1))
+	except (TypeError, ValueError):
+		delay = SEND_BACKOFF_BASE * (2 ** (attempt - 1))
+	return max(0.0, min(delay, SEND_MAX_DELAY))
+
+
+def send_gateway_reply(gateway, event, text: str, *, sleep=None, max_attempts: int = SEND_MAX_ATTEMPTS):
+	"""Deliver one completed Agent response through the same verified gateway.
+
+	Transient failures (429/5xx/timeouts) are retried with exponential backoff up to
+	``max_attempts``; permanent errors raise immediately. Once the adapter returns a
+	receipt nothing is re-sent. Returns the adapter's delivery receipt.
+	"""
+	import time
+
 	from huf.ai.gateway_adapters.types import GatewayReply
 
+	sleep = sleep or time.sleep
 	adapter = get_gateway_adapter(gateway)
-	return adapter.send_reply(
-		GatewayReply(
-			conversation_id=event.conversation_id,
-			text=text,
-			thread_id=event.thread_id or None,
-			reply_to_provider_message_id=event.thread_id or None,
-		)
+	reply = GatewayReply(
+		conversation_id=event.conversation_id,
+		text=text,
+		thread_id=event.thread_id or None,
+		reply_to_provider_message_id=event.thread_id or None,
 	)
+	attempt = 0
+	while True:
+		attempt += 1
+		try:
+			return adapter.send_reply(reply)
+		except Exception as exc:
+			if attempt >= max(1, max_attempts) or not _is_transient_send_error(exc):
+				raise
+			sleep(_send_retry_delay(exc, attempt))
