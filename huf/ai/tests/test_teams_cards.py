@@ -8,7 +8,7 @@ _stub_env.install()
 
 import pytest  # noqa: E402
 
-from huf.ai.gateways import teams_cards as c  # noqa: E402
+from huf.ai.gateways.teams.messaging import cards as c  # noqa: E402
 
 SECRETISH = ("password", "secret", "token", "role", "price", "@", "api_key", "credential")
 TYPES_ALLOWED = {"AdaptiveCard", "TextBlock", "FactSet", "Action.Execute"}

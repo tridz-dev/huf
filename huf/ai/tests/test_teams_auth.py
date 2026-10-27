@@ -12,8 +12,8 @@ import pytest  # noqa: E402
 import teams_jwt_fixtures as fx  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
 
-from huf.ai.gateways import teams_auth  # noqa: E402
-from huf.ai.gateways import teams_contract as tc  # noqa: E402
+from huf.ai.gateways.teams import auth as teams_auth  # noqa: E402
+from huf.ai.gateways.teams import contract as tc  # noqa: E402
 
 T = fx.FIXED_NOW
 URL = fx.DEFAULT_SERVICE_URL

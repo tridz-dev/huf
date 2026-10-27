@@ -1,7 +1,7 @@
 import frappe
 from frappe.model.document import Document
 
-from huf.ai.gateways.teams_refs import reference_name
+from huf.ai.gateways.teams.refs import reference_name
 
 
 class TeamsConversationReference(Document):

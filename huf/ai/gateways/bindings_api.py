@@ -13,7 +13,7 @@ import frappe
 from frappe import _
 
 from huf.ai.api_support import require_permission
-from huf.ai.gateways.slack_api import SlackApiError
+from huf.ai.gateways.slack.api import SlackApiError
 
 BINDING_DOCTYPE = "Gateway Binding"
 MATCH_TYPES = ("Any conversation", "Direct message", "Room or channel", "Thread", "Sender")
@@ -214,7 +214,7 @@ def _slack_api(gateway: str):
 	if gw.provider != "Slack":
 		return None, {"supported": False, "items": [], "next_cursor": None,
 			"error": _("Pickers are only available for Slack gateways.")}
-	from huf.ai.gateways.slack_context import get_slack_api
+	from huf.ai.gateways.slack.context import get_slack_api
 
 	try:
 		return get_slack_api(gw), None

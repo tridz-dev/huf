@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from huf.ai.gateways import slack_files as sf
+from huf.ai.gateways.slack import files as sf
 
 TOKEN = "xoxb-SECRET-TOKEN-123"
 GOOD = "https://files.slack.com/files-pri/T1-F1/doc.pdf"

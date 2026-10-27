@@ -17,8 +17,8 @@ _stub_env.install()
 import pytest  # noqa: E402
 
 from huf.ai.gateways import hooks  # noqa: E402
-from huf.ai.gateways import teams_cards as cards  # noqa: E402
-from huf.ai.gateways import teams_contract as tc  # noqa: E402
+from huf.ai.gateways.teams.messaging import cards  # noqa: E402
+from huf.ai.gateways.teams import contract as tc  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures" / "teams"
 TENANT = "00000000-0000-0000-0000-00000000aaaa"
@@ -37,12 +37,12 @@ PermissionError_ = type("PermissionError", (Exception,), {})
 
 
 def fresh_module():
-	sys.modules.pop("huf.ai.gateways.teams_actions", None)
+	sys.modules.pop("huf.ai.gateways.teams.actions", None)
 	pkg = sys.modules.get("huf.ai.gateways")
 	if pkg is not None and hasattr(pkg, "teams_actions"):
 		delattr(pkg, "teams_actions")
 	hooks.clear()
-	return importlib.import_module("huf.ai.gateways.teams_actions")
+	return importlib.import_module("huf.ai.gateways.teams.actions")
 
 
 class Sess:
@@ -641,7 +641,7 @@ def test_notify_skips_non_pending(env, monkeypatch):
 def test_on_approval_inserted_enqueues_after_commit(env):
 	env.ta.on_approval_inserted(SimpleNamespace(name="AP-1"))
 	args, kw = env.enqueued[0]
-	assert args[0].endswith("teams_actions.notify_approvers_job")
+	assert args[0].endswith("teams.actions.notify_approvers_job")
 	assert kw["approval_name"] == "AP-1" and kw["enqueue_after_commit"] is True
 
 
@@ -688,16 +688,16 @@ def test_hooks_py_doc_events_is_list_with_both_handlers():
 	entry = value["Agent Execution Approval"]["after_insert"]
 	assert isinstance(entry, list)
 	assert "huf.ai.gateways.approvals.on_approval_inserted" in entry
-	assert "huf.ai.gateways.teams_actions.on_approval_inserted" in entry
+	assert "huf.ai.gateways.teams.actions.on_approval_inserted" in entry
 
 
 def test_teams_actions_has_no_slack_imports():
-	src = Path("huf/ai/gateways/teams_actions.py").read_text()
+	src = Path("huf/ai/gateways/teams/actions.py").read_text()
 	assert "slack" not in src.lower().replace("slack's", "")
 
 
 def test_modules_compile():
-	for f in ("teams_actions.py", "teams_cards.py"):
+	for f in ("teams/actions.py", "teams/messaging/cards.py"):
 		py_compile.compile(f"huf/ai/gateways/{f}", doraise=True)
 
 
@@ -826,7 +826,7 @@ def test_card_action_foreign_tenant_changes_nothing(env):
 def test_real_tenant_ok_fails_closed(env, monkeypatch):
 	ta = env.ta
 	monkeypatch.undo()  # drop the harness stub for _tenant_ok
-	teams_tenant = importlib.import_module("huf.ai.gateways.teams_tenant")
+	teams_tenant = importlib.import_module("huf.ai.gateways.teams.tenant")
 	monkeypatch.setattr(teams_tenant, "is_tenant_allowed", lambda gw, t: t == TENANT)
 	assert ta._tenant_ok(GW, TENANT) is True
 	assert ta._tenant_ok(GW, "other") is False

@@ -1,4 +1,4 @@
-"""Tests for Slack identity mapping (huf.ai.gateways.identity) and its doctype JSON."""
+"""Tests for Slack identity mapping (huf.ai.gateways.slack.identity) and its doctype JSON."""
 
 import json
 import pathlib
@@ -23,7 +23,7 @@ _saved_handlers = {k: list(v) for k, v in gw_hooks._HANDLERS.items()}
 _orig_whitelist = frappe.whitelist
 frappe.whitelist = lambda *a, **k: (lambda f: f)
 try:
-	from huf.ai.gateways import identity  # noqa: E402
+	from huf.ai.gateways.slack import identity  # noqa: E402
 finally:
 	frappe.whitelist = _orig_whitelist
 	gw_hooks._HANDLERS.clear()
@@ -158,7 +158,7 @@ def _auto_setup(monkeypatch, info=None, users=("bob@x.com",), flag="1", workspac
 	monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
 	monkeypatch.setattr(identity, "get_gateway_credential", lambda g, k: flag)
 	monkeypatch.setattr(identity, "get_slack_api", lambda g: api)
-	monkeypatch.setattr("huf.ai.gateways.slack_api.inspect_token", lambda a: {"team_id": workspace})
+	monkeypatch.setattr("huf.ai.gateways.slack.api.inspect_token", lambda a: {"team_id": workspace})
 	monkeypatch.setattr(frappe, "get_all", lambda *a, **k: list(users), raising=False)
 	monkeypatch.setattr(identity, "_create_link", lambda *a, **k: created.append(a))
 	monkeypatch.setattr(identity, "_has_revoked", lambda g, t, e: False)
@@ -242,9 +242,9 @@ def fake_confirm(monkeypatch, send):
 
 	import huf.ai.gateways as pkg
 
-	mod = _t.ModuleType("huf.ai.gateways.identity_confirm")
+	mod = _t.ModuleType("huf.ai.gateways.slack.identity_confirm")
 	mod.send_confirmation = send
-	monkeypatch.setitem(sys.modules, "huf.ai.gateways.identity_confirm", mod)
+	monkeypatch.setitem(sys.modules, "huf.ai.gateways.slack.identity_confirm", mod)
 	monkeypatch.setattr(pkg, "identity_confirm", mod, raising=False)
 
 

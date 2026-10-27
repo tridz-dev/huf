@@ -17,7 +17,7 @@ import frappe  # noqa: E402
 if isinstance(frappe.whitelist, MagicMock) or not hasattr(frappe.whitelist, "__code__"):
 	frappe.whitelist = lambda *a, **k: (lambda fn: fn)
 
-from huf.ai.gateways import teams_manifest as tm  # noqa: E402
+from huf.ai.gateways.teams import manifest as tm  # noqa: E402
 
 APP = "11111111-2222-3333-4444-555555555555"
 BOT = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"

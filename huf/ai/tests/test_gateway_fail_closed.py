@@ -222,7 +222,7 @@ def test_privacy_fail_closed_target_never_reaches_origin_channel(monkeypatch):
 	"""Residual risk (documented): a bare ``U...`` id works with chat.postMessage only when the
 	app's Messages tab is enabled (the generated manifest enables it). If Slack ever rejected
 	it, the adapter raises and the event is marked Failed; it still never posts to the channel."""
-	privacy = importlib.import_module("huf.ai.gateways.privacy")
+	privacy = importlib.import_module("huf.ai.gateways.slack.privacy")
 	api = SimpleNamespace(
 		conversations_open=MagicMock(side_effect=RuntimeError("missing_scope")),
 		post_message=MagicMock(),

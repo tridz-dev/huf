@@ -10,8 +10,8 @@ _stub_env.install()
 
 import pytest  # noqa: E402
 
-from huf.ai.gateways import teams_api as api  # noqa: E402
-from huf.ai.gateways.teams_contract import BOT_TOKEN_SCOPE  # noqa: E402
+from huf.ai.gateways.teams import api  # noqa: E402
+from huf.ai.gateways.teams.contract import BOT_TOKEN_SCOPE  # noqa: E402
 
 SECRET = "s3cr3t-client-secret"
 TOKEN = "tok-abc-123-SENSITIVE"

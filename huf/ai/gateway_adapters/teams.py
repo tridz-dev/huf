@@ -28,7 +28,7 @@ from huf.ai.gateway_adapters.types import (
 	NormalizedGatewayEvent,
 	OutboundDelivery,
 )
-from huf.ai.gateways import teams_contract as tc
+from huf.ai.gateways.teams import contract as tc
 
 CARD_CONTENT_TYPE = "application/vnd.microsoft.card.adaptive"
 ROOM_TYPES = ("channel", "groupChat")
@@ -51,7 +51,7 @@ def _default_reference_lookup(conversation_id: str, gateway: str | None, app_id:
 	"""Reference lookup, always scoped to one gateway (never matches across gateways)."""
 	import frappe
 
-	from huf.ai.gateways import teams_refs
+	from huf.ai.gateways.teams import refs as teams_refs
 
 	if not gateway:
 		return None  # fail closed: an unscoped lookup could cross-route between gateways
@@ -135,7 +135,7 @@ class TeamsGatewayAdapter(GatewayAdapter):
 	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
 		"""True only when the bearer JWT validates for this bot; fails closed, never raises."""
 		try:
-			from huf.ai.gateways import teams_auth
+			from huf.ai.gateways.teams import auth as teams_auth
 
 			headers = {str(k).lower(): v for k, v in (request.headers or {}).items()}
 			auth_header = str(headers.get("authorization") or "").strip()
@@ -165,7 +165,7 @@ class TeamsGatewayAdapter(GatewayAdapter):
 			raise ValueError("Invalid Teams Activity JSON payload")
 		activity.pop("huf_kind", None)  # never trust a sender-supplied tag
 
-		from huf.ai.gateways import teams_refs
+		from huf.ai.gateways.teams import refs as teams_refs
 
 		meta = teams_refs.parse_meta(activity)
 		kind = self._kind(activity, teams_refs)
@@ -251,7 +251,7 @@ class TeamsGatewayAdapter(GatewayAdapter):
 
 	def _resolve(self, conversation_id: str, thread_id: str | None = None) -> dict:
 		"""Reference-backed routing: service_url (validated), tenant, thread-aware conversation id."""
-		from huf.ai.gateways import teams_api
+		from huf.ai.gateways.teams import api as teams_api
 
 		row = self._reference_lookup(conversation_id, self._gateway_name, self._app_id)
 		if not row:
@@ -270,7 +270,7 @@ class TeamsGatewayAdapter(GatewayAdapter):
 		}
 
 	def _dispatch(self, kind: str, activity: dict, snapshot: dict, key: str) -> OutboundDelivery:
-		from huf.ai.gateways import teams_api
+		from huf.ai.gateways.teams import api as teams_api
 
 		if self._direct:
 			provider = teams_api.make_token_provider(
@@ -298,7 +298,7 @@ class TeamsGatewayAdapter(GatewayAdapter):
 
 		outbox = self._outbox
 		if outbox is None:
-			from huf.ai.gateways import teams_outbox as outbox
+			from huf.ai.gateways.teams import outbox
 		name = outbox.enqueue(snapshot.get("gateway"), snapshot, kind, {"activity": activity}, key)
 		return OutboundDelivery(f"outbox:{name}", accepted=True)
 

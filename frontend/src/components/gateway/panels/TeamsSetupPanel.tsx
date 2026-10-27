@@ -18,7 +18,7 @@ import {
   saveTeamsAllowedTenants,
   saveTeamsPackageVersion,
   type TeamsDiagnosis,
-} from '@/services/teamsApi';
+} from '@/services/gateways/teamsApi';
 import { registerProviderPanel, type ProviderPanelProps } from './index';
 import { TeamsCheckRow, TeamsStatusChips } from './TeamsDiagnosticsPanel';
 

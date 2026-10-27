@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { getGatewayReadiness } from './gatewayReadiness';
 import type { GatewayDoc } from '@/services/gatewayApi';
-import type { SlackSetupStatus } from '@/services/slackSetupApi';
-import type { TeamsCheckStatus, TeamsDiagnosis } from '@/services/teamsApi';
+import type { SlackSetupStatus } from '@/services/gateways/slackSetupApi';
+import type { TeamsCheckStatus, TeamsDiagnosis } from '@/services/gateways/teamsApi';
 
 describe('gatewayReadiness', () => {
   it('returns ready=true and blockingCount=0 for fully configured gateway', () => {

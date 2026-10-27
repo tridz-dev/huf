@@ -1,4 +1,4 @@
-"""Tests for Teams identity linking (huf.ai.gateways.teams_identity)."""
+"""Tests for Teams identity linking (huf.ai.gateways.teams.identity)."""
 
 import sys
 import time
@@ -14,7 +14,7 @@ import frappe  # noqa: E402
 import pytest  # noqa: E402
 
 from huf.ai.gateways import hooks as gw_hooks  # noqa: E402
-from huf.ai.gateways import teams_contract as tc  # noqa: E402
+from huf.ai.gateways.teams import contract as tc  # noqa: E402
 
 _saved = {k: list(v) for k, v in gw_hooks._HANDLERS.items()}
 _orig_whitelist = frappe.whitelist
@@ -31,7 +31,7 @@ def _wl(*a, **k):
 
 frappe.whitelist = _wl
 try:
-	from huf.ai.gateways import teams_identity as ti  # noqa: E402
+	from huf.ai.gateways.teams import identity as ti  # noqa: E402
 finally:
 	frappe.whitelist = _orig_whitelist
 	_registered_handlers = {k: list(v) for k, v in gw_hooks._HANDLERS.items()}
@@ -94,7 +94,7 @@ class Store:
 		self.states = []
 		self.confirmations = []
 		monkeypatch.setattr(ti, "_supersede_pending", lambda *a: None)
-		from huf.ai.gateways import teams_identity_confirm as tic
+		from huf.ai.gateways.teams import identity_confirm as tic
 
 		monkeypatch.setattr(tic, "send_confirmation", lambda *a: self.confirmations.append(a) or "S1")
 		monkeypatch.setattr(ti, "_find_link", self.find)
@@ -356,7 +356,7 @@ def test_confirm_idempotent_same_user(store):
 
 
 def test_confirm_revokes_pending_when_card_cannot_be_sent(store, monkeypatch):
-	from huf.ai.gateways import teams_identity_confirm as tic
+	from huf.ai.gateways.teams import identity_confirm as tic
 
 	def boom(*a):
 		raise tic.ConfirmationUnavailable("no personal chat")

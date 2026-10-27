@@ -14,7 +14,7 @@ import json
 
 import frappe
 
-from huf.ai.gateways import blocks as bk
+from huf.ai.gateways.slack import blocks as bk
 from huf.ai.gateways import slack_interactivity as si
 
 KIND_PREFIX = "approval:"
@@ -96,8 +96,8 @@ def _notify(kind, name, users, title, details, ttl) -> int:
 
 
 def _notify_one(gateway, kind, name, user, title, details, ttl) -> bool:
-	from huf.ai.gateways import recipients
-	from huf.ai.gateways.slack_context import get_slack_api
+	from huf.ai.gateways.slack import recipients
+	from huf.ai.gateways.slack.context import get_slack_api
 
 	key = f"{NOTIFIED_PREFIX}{gateway}:{kind}:{name}:{user}"
 	if frappe.cache().get_value(key):

@@ -45,6 +45,7 @@ from frappe.desk.doctype.notification_log.notification_log import enqueue_create
 from frappe.desk.doctype.notification_settings.notification_settings import is_email_notifications_enabled
 
 from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
+from huf.ai.gateways.slack import flow_hooks
 from huf.ai.graph.permissions import envelope_declares
 from huf.ai.flow.eval import safe_eval_expression
 from huf.ai.flow.orchestrator import (
@@ -1259,16 +1260,8 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 
 	flow_run.db_set({"status": "Waiting Approval", "waiting": json.dumps(waiting_data)})
 	commit_if_background()
-
 	_send_approval_notifications(flow_run, node, config, waiting_data)
-	# db_set does not fire doc events: offer Slack approval cards to linked approvers.
-	try:
-		from huf.ai.gateways.approvals import notify_flow_run_approvers
-
-		notify_flow_run_approvers(flow_run)
-	except Exception:
-		pass
-
+	flow_hooks.notify_approvers(flow_run)
 	return {"status": "waiting_approval"}
 
 
@@ -2365,7 +2358,6 @@ def _sync_gateway_event(flow_run, status: str, reply_text: str | None = None, er
 	if getattr(flow_run, "trigger_type", None) != "Gateway":
 		return
 	from huf.ai.gateway_service import finish_flow_event
-
 	finish_flow_event(flow_run.name, status, reply_text, error)
 	commit_if_background()
 
@@ -2383,13 +2375,7 @@ def _fail_flow_run(flow_run, error_msg: str):
 	commit_if_background()
 	_sync_gateway_event(flow_run, "Failed", error=error_msg)
 	_publish_flow_event(flow_run, "flow_failed", {"error": error_msg})
-	# db_set does not fire doc events, so tell gateway-originated senders explicitly.
-	try:
-		from huf.ai.gateways.flow_reply import notify_flow_failure
-
-		notify_flow_failure(flow_run.name)
-	except Exception:
-		pass
+	flow_hooks.notify_failure(flow_run.name)
 
 
 # ---------------------------------------------------------------------------

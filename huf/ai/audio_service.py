@@ -387,9 +387,7 @@ def resolve_stt_config(agent_name: str = None, model: str = None) -> dict:
             stt_provider_name = model_doc[0].provider
         elif "/" in model:
             provider_slug = model.split("/")[0]
-            # AI Provider has no slug field: match the provider brand (litellm prefix aliases included).
-            brand = {"gemini": "google", "vertex_ai": "google-vertex"}.get(provider_slug, provider_slug)
-            provs = frappe.get_all("AI Provider", filters={"provider_brand": brand}, fields=["name"])
+            provs = frappe.get_all("AI Provider", filters={"provider_brand": {"gemini": "google", "vertex_ai": "google-vertex"}.get(provider_slug, provider_slug)}, fields=["name"])
             if provs:
                 stt_provider_name = provs[0].name
 

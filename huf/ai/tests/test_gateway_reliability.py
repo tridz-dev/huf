@@ -10,7 +10,7 @@ _stub_env.install()
 import pytest  # noqa: E402
 
 from huf.ai.gateways import hooks, reliability  # noqa: E402
-from huf.ai.gateways.slack_api import SlackApiError  # noqa: E402
+from huf.ai.gateways.slack.api import SlackApiError  # noqa: E402
 
 
 gateway_webhook = None
@@ -100,7 +100,7 @@ def env(monkeypatch):
 
 	import importlib
 
-	ctx = importlib.import_module("huf.ai.gateways.slack_context")
+	ctx = importlib.import_module("huf.ai.gateways.slack.context")
 	monkeypatch.setattr(ctx, "get_slack_api", lambda g, **k: FakeApi())
 	return SimpleNamespace(cache=cache, sent=sent, public=public)
 
@@ -138,7 +138,7 @@ def test_failure_notice_at_most_once(env):
 def test_failure_notice_never_raises_on_send_error(monkeypatch, env):
 	import importlib
 
-	ctx = importlib.import_module("huf.ai.gateways.slack_context")
+	ctx = importlib.import_module("huf.ai.gateways.slack.context")
 	monkeypatch.setattr(ctx, "get_slack_api", MagicMock(side_effect=RuntimeError("boom")))
 	reliability.on_run_failure(GW, ev(), "agent", RuntimeError("x"))
 
@@ -164,7 +164,7 @@ def _api_fixture(monkeypatch, eph_fails=False, dm_fails=False):
 		def post_message(self, channel, text=None, blocks=None, thread_ts=None, unfurl=False):
 			calls.dm.append((channel, text))
 
-	ctx = importlib.import_module("huf.ai.gateways.slack_context")
+	ctx = importlib.import_module("huf.ai.gateways.slack.context")
 	monkeypatch.setattr(ctx, "get_slack_api", lambda g, **k: Api())
 	return calls
 
@@ -240,7 +240,7 @@ def test_rejected_empty_visible_reason_ignored(env):
 @pytest.fixture
 def api(monkeypatch):
 	a = MagicMock()
-	import huf.ai.gateways.slack_context as sc
+	import huf.ai.gateways.slack.context as sc
 
 	monkeypatch.setattr(sc, "get_slack_api", lambda gateway, **k: a)
 	return a
@@ -271,7 +271,7 @@ def test_reaction_errors_swallowed(api):
 
 
 def test_reaction_no_token_swallowed(monkeypatch):
-	import huf.ai.gateways.slack_context as sc
+	import huf.ai.gateways.slack.context as sc
 
 	monkeypatch.setattr(sc, "get_slack_api", MagicMock(side_effect=ValueError("no token")))
 	reliability.slack_on_run_start(GW, ev(), "agent")

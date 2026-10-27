@@ -105,7 +105,7 @@ def test_admission_still_admits_open(heavy):
 
 
 def test_slack_direct_policy_check():
-	slack_setup = importlib.import_module("huf.ai.gateways.slack_setup")
+	slack_setup = importlib.import_module("huf.ai.gateways.slack.setup")
 	ok = slack_setup._direct_policy_check(SimpleNamespace(direct_policy="Open"))
 	assert ok["id"] == "direct_policy" and ok["status"] == "pass" and ok["ok"] and ok["informational"]
 	warn = slack_setup._direct_policy_check(SimpleNamespace(direct_policy="Allow list"))
@@ -122,7 +122,7 @@ def test_slack_direct_policy_check():
 
 def test_teams_direct_policy_check(monkeypatch):
 	monkeypatch.setattr(frappe, "_", lambda s, *a: s, raising=False)
-	td = importlib.import_module("huf.ai.gateways.teams_diagnostics")
+	td = importlib.import_module("huf.ai.gateways.teams.diagnostics")
 	ok = td._check_direct_policy({"direct_policy": "Open"})[0]
 	assert ok["id"] == "direct_policy" and ok["status"] == td.PASS
 	warn = td._check_direct_policy({})[0]

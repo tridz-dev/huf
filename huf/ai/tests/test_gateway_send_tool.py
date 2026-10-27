@@ -3,9 +3,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from huf.ai.gateways import recipients as rcp
-from huf.ai.tools import gateway_send as tool
-from huf.ai.gateways.slack_api import SlackApiError
+from huf.ai.gateways.slack import recipients as rcp
+from huf.ai.tools.gateways import send as tool
+from huf.ai.gateways.slack.api import SlackApiError
 
 
 class FakeCache:
@@ -332,5 +332,5 @@ def test_rate_spacing_between_sends(w):
 def test_tool_registered_in_hooks():
 	import pathlib
 	src = (pathlib.Path(__file__).parents[2] / "hooks.py").read_text()
-	assert "huf.ai.tools.gateway_send.GATEWAY_SEND_TOOLS" in src
-	assert tool.GATEWAY_SEND_TOOLS[0]["function_path"] == "huf.ai.tools.gateway_send.handle_gateway_send"
+	assert "huf.ai.tools.gateways.send.GATEWAY_SEND_TOOLS" in src
+	assert tool.GATEWAY_SEND_TOOLS[0]["function_path"] == "huf.ai.tools.gateways.send.handle_gateway_send"

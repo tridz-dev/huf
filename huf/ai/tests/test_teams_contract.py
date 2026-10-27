@@ -13,7 +13,7 @@ import pytest  # noqa: E402
 import teams_jwt_fixtures as fx  # noqa: E402
 
 from huf.ai.gateway_adapters.teams import TeamsGatewayAdapter  # noqa: E402
-from huf.ai.gateways import teams_contract as tc  # noqa: E402
+from huf.ai.gateways.teams import contract as tc  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures" / "teams"
 

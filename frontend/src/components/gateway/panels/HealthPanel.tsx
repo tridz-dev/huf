@@ -24,7 +24,7 @@ import {
   type DiagnosisCheck,
   type GatewayHealth,
   type StatusTone,
-} from '@/services/gatewayHealthApi';
+} from '@/services/gateways/gatewayHealthApi';
 import type { GatewayProvider } from '@/services/gatewayApi';
 import { formatTimeAgo } from '@/utils/time';
 import { cn } from '@/lib/utils';

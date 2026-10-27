@@ -14,7 +14,7 @@ import {
   revokeTeamsLink,
   isGuid,
   type TeamsLink,
-} from '@/services/teamsApi';
+} from '@/services/gateways/teamsApi';
 import { registerProviderPanel, type ProviderPanelProps } from './index';
 
 export function TeamsPeoplePanel({ gateway }: ProviderPanelProps) {

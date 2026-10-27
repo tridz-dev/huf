@@ -12,9 +12,9 @@ _stub_env.install()
 import pytest  # noqa: E402
 
 from huf.ai.gateways import hooks  # noqa: E402
-from huf.ai.gateways import teams_contract as tc  # noqa: E402
-from huf.ai.gateways import teams_refs as refs  # noqa: E402
-from huf.ai.gateways.teams_refs import reference_name  # noqa: E402
+from huf.ai.gateways.teams import contract as tc  # noqa: E402
+from huf.ai.gateways.teams import refs  # noqa: E402
+from huf.ai.gateways.teams.refs import reference_name  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures" / "teams"
 DOCTYPE_JSON = (
@@ -338,7 +338,7 @@ def test_default_tenant_check_is_teams_tenant_and_fails_closed(db, monkeypatch):
 
 	refs.set_tenant_allowed_check(None)  # production default
 	assert refs._tenant_allowed is refs._default_tenant_allowed
-	tt = importlib.import_module("huf.ai.gateways.teams_tenant")
+	tt = importlib.import_module("huf.ai.gateways.teams.tenant")
 	monkeypatch.setattr(tt, "is_tenant_allowed", lambda gw, t: t == TENANT)
 	act = load("installation_add")
 	assert refs._pre_ingest_install(GW, {"raw_payload": act}) is False

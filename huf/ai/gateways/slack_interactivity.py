@@ -17,7 +17,7 @@ from urllib.parse import parse_qs
 import frappe
 from frappe.rate_limiter import rate_limit
 
-from huf.ai.gateways import blocks as bk
+from huf.ai.gateways.slack import blocks as bk
 
 DOCTYPE = "Gateway Action Session"
 DEFAULT_TTL_SECONDS = 3600
@@ -239,7 +239,7 @@ def _parse_payload(body):
 
 # --------------------------------------------------------------------------- processing
 def _identity(gateway, payload):
-	from huf.ai.gateways import identity
+	from huf.ai.gateways.slack import identity
 
 	user = payload.get("user") or {}
 	team = (payload.get("team") or {}).get("id") or user.get("team_id") or ""
@@ -262,7 +262,7 @@ def _where(payload):
 def _tell(gateway, payload, slack_user, text):
 	"""Ephemeral note to the clicker via the bot API (never response_url)."""
 	try:
-		from huf.ai.gateways.slack_context import get_slack_api
+		from huf.ai.gateways.slack.context import get_slack_api
 
 		api = get_slack_api(gateway)
 		channel, _ts = _where(payload)
@@ -350,7 +350,7 @@ def _update_message(gateway, channel, ts, out: dict) -> None:
 	text = str(out.get("text") or "Done.")
 	blocks = out.get("blocks") or bk.status_line(text).blocks
 	try:
-		from huf.ai.gateways.slack_context import get_slack_api
+		from huf.ai.gateways.slack.context import get_slack_api
 
 		get_slack_api(gateway).update_message(channel, ts, text=text, blocks=blocks)
 	except Exception:

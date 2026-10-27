@@ -1,4 +1,4 @@
-"""Unit tests for Block Kit builders (huf/ai/gateways/blocks.py) and the adapter blocks passthrough."""
+"""Unit tests for Block Kit builders (huf/ai/gateways/slack/blocks.py) and the adapter blocks passthrough."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import _stub_env  # noqa: E402
 _stub_env.install()
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
-from huf.ai.gateways import blocks as bk  # noqa: E402
+from huf.ai.gateways.slack import blocks as bk  # noqa: E402
 
 
 class TestBlocks(unittest.TestCase):

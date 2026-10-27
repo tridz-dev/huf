@@ -1,4 +1,4 @@
-"""Unit tests for huf/ai/gateways/teams_diagnostics.py (frappe is a MagicMock stub)."""
+"""Unit tests for huf/ai/gateways/teams/diagnostics.py (frappe is a MagicMock stub)."""
 
 from __future__ import annotations
 
@@ -17,15 +17,16 @@ import pytest  # noqa: E402
 
 _original_whitelist = frappe.whitelist
 frappe.whitelist = lambda *a, **k: (lambda fn: fn)
-for _m in ("huf.ai.gateways.teams_diagnostics", "huf.ai.gateways.teams_tenant"):
+for _m in ("huf.ai.gateways.teams.diagnostics", "huf.ai.gateways.teams.tenant"):
 	sys.modules.pop(_m, None)
 try:
-	from huf.ai.gateways import teams_diagnostics as td  # noqa: E402
+	from huf.ai.gateways.teams import diagnostics as td  # noqa: E402
 finally:
 	frappe.whitelist = _original_whitelist
 
-from huf.ai.gateways import teams_api, teams_tenant  # noqa: E402
-from huf.ai.gateways import teams_contract as tc  # noqa: E402
+from huf.ai.gateways.teams import api as teams_api  # noqa: E402
+from huf.ai.gateways.teams import tenant as teams_tenant  # noqa: E402
+from huf.ai.gateways.teams import contract as tc  # noqa: E402
 
 CANARY_SECRET = "CANARY-APP-SECRET-9f3a"
 CANARY_TOKEN = "CANARYTOKEN123456"

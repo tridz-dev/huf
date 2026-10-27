@@ -11,7 +11,7 @@ _stub_env.install()
 
 import pytest  # noqa: E402
 
-from huf.ai.gateways import teams_outbox as ob  # noqa: E402
+from huf.ai.gateways.teams import outbox as ob  # noqa: E402
 
 NOW = datetime(2026, 10, 27, 12, 0, 0)
 SNAP = {"conversation_ref": "ref1", "conversation_id": "19:abc", "service_url": "https://smba.trafficmanager.net/x/", "tenant_id": "t1"}
@@ -120,7 +120,7 @@ def test_enqueue_triggers_delivery_after_commit(store, monkeypatch):
 
 	monkeypatch.setattr(ob, "_enqueue_job", fake_enqueue)
 	n = mk(store)
-	assert captured["method"] == "huf.ai.gateways.teams_outbox.deliver" and captured["name"] == n
+	assert captured["method"] == "huf.ai.gateways.teams.outbox.deliver" and captured["name"] == n
 
 
 def test_enqueue_job_uses_enqueue_after_commit(monkeypatch):
@@ -297,11 +297,11 @@ def test_deliver_skips_non_pending(store):
 
 
 def test_default_sender_fails_closed_without_teams_api(store, monkeypatch):
-	monkeypatch.setitem(sys.modules, "huf.ai.gateways.teams_api", None)
-	import huf.ai.gateways as _pkg
+	monkeypatch.setitem(sys.modules, "huf.ai.gateways.teams.api", None)
+	import huf.ai.gateways.teams as _pkg
 
 	# `from pkg import mod` prefers a cached package attribute over sys.modules.
-	monkeypatch.delattr(_pkg, "teams_api", raising=False)
+	monkeypatch.delattr(_pkg, "api", raising=False)
 	n = mk(store)
 	assert ob.deliver(n, now=NOW) == "Pending" or store.rows[n]["status"] in ("Pending", "Failed")
 	assert "teams_api" in store.rows[n]["last_error"]
@@ -342,7 +342,7 @@ def test_scheduler_line_in_hooks_static():
 	for node in tree.body:
 		if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "scheduler_events":
 			ev = ast.literal_eval(node.value)
-			assert "huf.ai.gateways.teams_outbox.retry_due" in ev["cron"]["*/1 * * * *"]
+			assert "huf.ai.gateways.teams.outbox.retry_due" in ev["cron"]["*/1 * * * *"]
 			return
 	pytest.fail("scheduler_events not found")
 
@@ -406,7 +406,8 @@ class _Cache:
 
 @pytest.fixture
 def real_sender(store, monkeypatch):
-	from huf.ai.gateways import teams_api, teams_tenant
+	from huf.ai.gateways.teams import api as teams_api
+	from huf.ai.gateways.teams import tenant as teams_tenant
 
 	creds = {"app_id": "app-1", "app_password": "s3cret-pw", "tenant_id": "tenant-guid"}
 	state = type("St", (), {"creds": creds, "http": _Http(), "gw_docs": []})
@@ -469,7 +470,7 @@ def test_default_sender_no_gateway_is_permanent_failure(store, real_sender):
 
 
 def test_card_delivery_records_activity_id_on_session(store, real_sender, monkeypatch):
-	from huf.ai.gateways import teams_actions
+	from huf.ai.gateways.teams import actions as teams_actions
 
 	got = []
 	monkeypatch.setattr(teams_actions, "record_card_activity", lambda s, a: got.append((s, a)))
@@ -485,7 +486,7 @@ def test_card_delivery_records_activity_id_on_session(store, real_sender, monkey
 
 
 def test_record_card_activity_failure_does_not_fail_delivery(store, real_sender, monkeypatch):
-	from huf.ai.gateways import teams_actions
+	from huf.ai.gateways.teams import actions as teams_actions
 
 	def boom(s, a):
 		raise RuntimeError("db down")

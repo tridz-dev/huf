@@ -11,6 +11,7 @@ from frappe import _
 
 from huf.ai.conversation_data_tools import *
 from huf.ai.conversation_data_tools import _load_state
+from huf.ai.gateways.slack.flow_hooks import tool_executed, tool_gate
 from huf.ai.handlers.agent_runner import *
 
 # Re-export handler functions so existing function_path strings and imports keep working.
@@ -914,13 +915,11 @@ def create_function_tool(
 
     if not function:
         return None
-
     try:
         _extra_args = extra_args or {}
         _function = function
 
         async def on_invoke_tool(ctx=None, args_json: str = None) -> str:
-
             # Permission check before execution
             if tool_type:
                 perm_check = _check_tool_permission(tool_type, allowed_for_guest=allowed_for_guest)
@@ -933,7 +932,6 @@ def create_function_tool(
                     ctx = None
 
                 args_dict = json.loads(args_json or "{}")
-
                 _merge_run_context(args_dict, ctx)
                 if pin_run_context:
                     # N7: one nonce per SDK invocation, so a provider reusing a tool_call_id
@@ -961,17 +959,9 @@ def create_function_tool(
                         args_dict.get("_dx_user"),
                     )
 
-                if "ignore_permissions" in args_dict:
-                    del args_dict["ignore_permissions"]
-
-                # Gateway tool policy / confirm gate (no-op outside gateway runs).
-                from huf.ai.gateways import tool_policy as _tool_policy
-
-                # Run id comes from the trusted run context, never from LLM-supplied args.
-                _gate_run_id = _frappe_run_context_dict(ctx).get("agent_run_id")
-                _gate = _tool_policy.check_tool_call(name, args_dict, _gate_run_id, requires_confirmation)
-                if _gate is not None:
-                    return _gate
+                args_dict.pop("ignore_permissions", None)
+                if (_gate := tool_gate(name, args_dict, _frappe_run_context_dict(ctx), requires_confirmation)) is not None:
+                    return _gate  # gateway tool policy / confirm gate
 
                 if allowed_for_guest and frappe.session.user == "Guest":
                     if tool_type in _GUEST_DOCTYPE_PINNED_TYPES and not _extra_args.get("reference_doctype"):
@@ -1033,16 +1023,13 @@ def create_function_tool(
                         result = await asyncio.to_thread(_function, **call_kwargs)
                 else:
                     result = _function(**call_kwargs)
-
                 # Handle async functions
                 if asyncio.iscoroutine(result):
                     result = await result
 
                 if hasattr(result, "as_dict") and callable(getattr(result, "as_dict", None)):
                     result = result.as_dict()
-
-                _tool_policy.note_tool_executed(name, _gate_run_id)
-
+                tool_executed(name, _frappe_run_context_dict(ctx))
                 return json.dumps(result, default=str) if isinstance(result, (dict, list)) else str(result)
 
             except Exception as e:

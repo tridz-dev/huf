@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from huf.ai.gateways import flow_reply
-from huf.ai.tools import gateway_reply as tool
+from huf.ai.tools.gateways import reply as tool
 
 
 class FakeCache:
@@ -195,4 +195,4 @@ def test_doc_event_never_raises(world):
 def test_hooks_registered():
 	src = open("huf/hooks.py").read()
 	assert "huf.ai.gateways.flow_reply.on_flow_run_update" in src
-	assert "huf.ai.tools.gateway_reply.GATEWAY_REPLY_TOOLS" in src
+	assert "huf.ai.tools.gateways.reply.GATEWAY_REPLY_TOOLS" in src

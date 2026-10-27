@@ -288,7 +288,7 @@ doc_events = {
     "Agent Execution Approval": {
         "after_insert": [
             "huf.ai.gateways.approvals.on_approval_inserted",
-            "huf.ai.gateways.teams_actions.on_approval_inserted",
+            "huf.ai.gateways.teams.actions.on_approval_inserted",
         ],
     },
     "Agent Trigger": {
@@ -363,7 +363,7 @@ scheduler_events = {
         "*/1 * * * *": [
             "huf.ai.orchestration.scheduler.process_orchestrations",
             "huf.ai.agent.integration.recover_stalled_agent_runs",
-            "huf.ai.gateways.teams_outbox.retry_due",
+            "huf.ai.gateways.teams.outbox.retry_due",
         ],
         "*/10 * * * *": [
             "huf.ai.gateway_service.reap_stuck_gateway_events",
@@ -487,9 +487,9 @@ to_sync_tools = "huf.ai.tools.registry.sync_discovered_tools"
 # Register integration tools from _registry
 huf_tools = [
     "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS",
-    "huf.ai.tools.gateway_reply.GATEWAY_REPLY_TOOLS",
-    "huf.ai.tools.gateway_send.GATEWAY_SEND_TOOLS",
-    "huf.ai.tools.gateway_handoff.GATEWAY_HANDOFF_TOOLS",
+    "huf.ai.tools.gateways.reply.GATEWAY_REPLY_TOOLS",
+    "huf.ai.tools.gateways.send.GATEWAY_SEND_TOOLS",
+    "huf.ai.tools.gateways.handoff.GATEWAY_HANDOFF_TOOLS",
 ]
 
 # Knowledge Backends Hook

@@ -1,7 +1,7 @@
 # Microsoft Teams gateway: routes, configuration and environment (slice 1)
 
 Verified from the code on branch `wp/teams-t15` (from `feat/teams-p0`). Contract version
-`teams-p0/1` (`huf/ai/gateways/teams_contract.py`).
+`teams-p0/1` (`huf/ai/gateways/teams/contract.py`).
 
 ## 1. HTTP routes
 
@@ -60,9 +60,9 @@ creates a one-to-one chat with the known service URL. It never creates group cha
 
 | Hook | Entry | Behaviour |
 |---|---|---|
-| `scheduler_events["cron"]["*/1 * * * *"]` | `huf.ai.gateways.teams_outbox.retry_due` | Enqueues delivery for up to 50 `Pending` outbox rows whose `next_attempt_at` has passed |
+| `scheduler_events["cron"]["*/1 * * * *"]` | `huf.ai.gateways.teams.outbox.retry_due` | Enqueues delivery for up to 50 `Pending` outbox rows whose `next_attempt_at` has passed |
 | `scheduler_events["daily"]` | `huf.ai.gateway_service.purge_old_rejected_gateway_events` | Generic: deletes `Rejected` Gateway Events older than 30 days. Only Rejected rows |
-| `doc_events["Agent Execution Approval"]["after_insert"]` | `huf.ai.gateways.teams_actions.on_approval_inserted` | Enqueues `notify_approvers_job` after commit; sends approval cards to approvers who have a linked identity and an installed personal chat (alongside the existing generic handler) |
+| `doc_events["Agent Execution Approval"]["after_insert"]` | `huf.ai.gateways.teams.actions.on_approval_inserted` | Enqueues `notify_approvers_job` after commit; sends approval cards to approvers who have a linked identity and an installed personal chat (alongside the existing generic handler) |
 | `auth_hooks` | `gateway_webhook.exempt_gateway_webhook_auth` | See section 1 |
 
 Gateway hooks registered for provider `microsoft teams` (modules listed in

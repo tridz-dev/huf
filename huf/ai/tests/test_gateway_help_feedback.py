@@ -105,7 +105,7 @@ def env(monkeypatch):
 	monkeypatch.setattr(frappe, "get_traceback", lambda: "tb", raising=False)
 	monkeypatch.setattr(frappe, "session", SimpleNamespace(user="Administrator"), raising=False)
 	monkeypatch.setattr(frappe, "has_permission", lambda *a, **k: True, raising=False)
-	monkeypatch.setattr("huf.ai.gateways.slack_context.get_slack_api", lambda g, **k: api)
+	monkeypatch.setattr("huf.ai.gateways.slack.context.get_slack_api", lambda g, **k: api)
 	db.api = api
 	db.cache = cache
 	return db
@@ -189,7 +189,7 @@ def test_no_token_passes_through(env, monkeypatch):
 	def boom(g, **k):
 		raise ValueError("no token")
 
-	monkeypatch.setattr("huf.ai.gateways.slack_context.get_slack_api", boom)
+	monkeypatch.setattr("huf.ai.gateways.slack.context.get_slack_api", boom)
 	assert hf.pre_ingest_filter(gw(), ctx()) is True
 
 
@@ -404,7 +404,7 @@ def rx(monkeypatch):
 	monkeypatch.setattr(hf, "_message_for_run", lambda run: "MSG1")
 	import importlib
 
-	ctx = importlib.import_module("huf.ai.gateways.slack_context")
+	ctx = importlib.import_module("huf.ai.gateways.slack.context")
 	monkeypatch.setattr(ctx, "get_slack_api", lambda g, **k: SimpleNamespace(post_ephemeral=lambda *a, **kw: state.told.append(kw.get("text"))))
 	return state
 

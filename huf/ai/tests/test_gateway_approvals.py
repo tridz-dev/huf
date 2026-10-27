@@ -58,7 +58,7 @@ def _load_isolated():
 
 
 ap, si = _load_isolated()
-from huf.ai.gateways import blocks as bk  # noqa: E402
+from huf.ai.gateways.slack import blocks as bk  # noqa: E402
 
 
 class PermissionError_(Exception):
@@ -152,9 +152,9 @@ class Base(unittest.TestCase):
 		self.patches = [
 			patch.object(ap, "frappe", self.fake),
 			patch.object(si, "create_action_session", fake_session),
-			patch("huf.ai.gateways.recipients.slack_id_for_user",
+			patch("huf.ai.gateways.slack.recipients.slack_id_for_user",
 				lambda gw, user: w.links.get((gw, user))),
-			patch("huf.ai.gateways.slack_context.get_slack_api", lambda gw: Api()),
+			patch("huf.ai.gateways.slack.context.get_slack_api", lambda gw: Api()),
 		]
 		for p in self.patches:
 			p.start()

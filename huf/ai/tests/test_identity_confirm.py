@@ -1,4 +1,4 @@
-"""Two-way Slack confirmation of self-links (huf.ai.gateways.identity_confirm)."""
+"""Two-way Slack confirmation of self-links (huf.ai.gateways.slack.identity_confirm)."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 import frappe  # noqa: E402
 import pytest  # noqa: E402
 
-TARGETS = ("huf.ai.gateways.slack_interactivity", "huf.ai.gateways.identity_confirm", "huf.ai.gateways.identity")
+TARGETS = ("huf.ai.gateways.slack_interactivity", "huf.ai.gateways.slack.identity_confirm", "huf.ai.gateways.slack.identity")
 
 
 def _load_isolated():
@@ -38,9 +38,9 @@ def _load_isolated():
 	orig = frappe.whitelist
 	frappe.whitelist = lambda *a, **k: (lambda fn: fn)
 	try:
-		ic = importlib.import_module("huf.ai.gateways.identity_confirm")
+		ic = importlib.import_module("huf.ai.gateways.slack.identity_confirm")
 		si = importlib.import_module("huf.ai.gateways.slack_interactivity")
-		ident = importlib.import_module("huf.ai.gateways.identity")
+		ident = importlib.import_module("huf.ai.gateways.slack.identity")
 	finally:
 		frappe.whitelist = orig
 		for name in stubs:

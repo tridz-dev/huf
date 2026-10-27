@@ -23,7 +23,7 @@ _stub_env.install()
 import pytest  # noqa: E402
 
 from huf.ai.gateways import hooks  # noqa: E402
-from huf.ai.gateways import teams_cards as cards  # noqa: E402
+from huf.ai.gateways.teams.messaging import cards  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures" / "teams"
 TENANT = "00000000-0000-0000-0000-00000000aaaa"
@@ -140,15 +140,15 @@ class _Throw(Exception):
 def w(monkeypatch):
 	import frappe as real_frappe
 
-	for name in ("teams_actions", "teams_identity_confirm"):
-		sys.modules.pop(f"huf.ai.gateways.{name}", None)
-		pkg = sys.modules.get("huf.ai.gateways")
+	for name in ("actions", "identity_confirm"):
+		sys.modules.pop(f"huf.ai.gateways.teams.{name}", None)
+		pkg = sys.modules.get("huf.ai.gateways.teams")
 		if pkg is not None and hasattr(pkg, name):
 			delattr(pkg, name)
 	hooks.clear()
-	ta = importlib.import_module("huf.ai.gateways.teams_actions")
-	tic = importlib.import_module("huf.ai.gateways.teams_identity_confirm")
-	ti = importlib.import_module("huf.ai.gateways.teams_identity")
+	ta = importlib.import_module("huf.ai.gateways.teams.actions")
+	tic = importlib.import_module("huf.ai.gateways.teams.identity_confirm")
+	ti = importlib.import_module("huf.ai.gateways.teams.identity")
 	world = World()
 	world.ta, world.tic, world.ti = ta, tic, ti
 	counter = iter(range(1000))
@@ -287,7 +287,7 @@ def test_new_attempt_supersedes_older_pending(w):
 
 def test_handler_registered_explicitly_and_only_for_idlink(w):
 	assert w.ta._KIND_HANDLERS.get("idlink") is w.tic.handle_click
-	src = Path("huf/ai/gateways/teams_identity_confirm.py").read_text()
+	src = Path("huf/ai/gateways/teams/identity_confirm.py").read_text()
 	tree = ast.parse(src)
 	calls = [n for n in tree.body if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)]
 	assert any(getattr(c.value.func, "id", "") == "register" for c in calls)  # register() at import

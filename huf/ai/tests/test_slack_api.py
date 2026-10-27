@@ -2,8 +2,8 @@ import logging
 
 import pytest
 
-from huf.ai.gateways import slack_api as sa
-from huf.ai.gateways.slack_api import SlackApi, SlackApiError
+from huf.ai.gateways.slack import api as sa
+from huf.ai.gateways.slack.api import SlackApi, SlackApiError
 
 TOKEN = "xoxb-SECRET-TOKEN-123"
 

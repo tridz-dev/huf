@@ -16,7 +16,7 @@ import re
 
 import frappe
 
-from huf.ai.gateways import blocks as bk
+from huf.ai.gateways.slack import blocks as bk
 from huf.ai.gateways import hooks as gw_hooks
 from huf.ai.gateways import slack_interactivity as ia
 
@@ -164,7 +164,7 @@ def pre_ingest_filter(gateway, context) -> bool:
 		channel = str(context.get("conversation_id") or "")
 		if not channel:
 			return True
-		from huf.ai.gateways.slack_context import get_slack_api
+		from huf.ai.gateways.slack.context import get_slack_api
 
 		try:
 			api = get_slack_api(gateway)
@@ -195,7 +195,7 @@ def on_run_success(gateway, event, kind, response) -> None:
 		sender = str(getattr(event, "sender_id", "") or "")
 		if not run or not channel or not sender:
 			return
-		from huf.ai.gateways.slack_context import get_slack_api
+		from huf.ai.gateways.slack.context import get_slack_api
 
 		api = get_slack_api(gateway)
 		session = ia.create_action_session(
@@ -312,7 +312,7 @@ def handle_reaction(gateway, payload) -> bool:
 			frappe.set_user(previous)
 		frappe.cache().set_value(key, 1, expires_in_sec=24 * 3600)
 		try:
-			from huf.ai.gateways.slack_context import get_slack_api
+			from huf.ai.gateways.slack.context import get_slack_api
 
 			get_slack_api(gateway).post_ephemeral(channel, reactor, text=MSG_THANKS)
 		except Exception:

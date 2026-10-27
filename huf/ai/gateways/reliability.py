@@ -66,7 +66,7 @@ def _send_private_slack(gateway, event, text: str) -> None:
 	channel = getattr(event, "conversation_id", None)
 	if not sender:
 		return
-	from huf.ai.gateways.slack_context import get_slack_api
+	from huf.ai.gateways.slack.context import get_slack_api
 
 	api = get_slack_api(gateway)
 	if channel:
@@ -149,7 +149,7 @@ def _react(gateway, event, add: bool) -> None:
 		ref = parse_slack_message_ref(getattr(event, "provider_event_id", None))
 		if not ref:
 			return
-		from huf.ai.gateways.slack_context import get_slack_api
+		from huf.ai.gateways.slack.context import get_slack_api
 
 		api = get_slack_api(gateway)
 		(api.add_reaction if add else api.remove_reaction)(ref[0], ref[1], ACK_REACTION)

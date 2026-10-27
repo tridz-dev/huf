@@ -243,10 +243,10 @@ class TestTeamsFilterComposition:
 		self.tokens = []
 		self.outbox = []
 		self.pm = pytest.MonkeyPatch()
-		self.tt = importlib.import_module("huf.ai.gateways.teams_tenant")
-		self.th = importlib.import_module("huf.ai.gateways.teams_help")
-		self.ta = importlib.import_module("huf.ai.gateways.teams_actions")
-		self.tr = importlib.import_module("huf.ai.gateways.teams_refs")
+		self.tt = importlib.import_module("huf.ai.gateways.teams.tenant")
+		self.th = importlib.import_module("huf.ai.gateways.teams.messaging.help")
+		self.ta = importlib.import_module("huf.ai.gateways.teams.actions")
+		self.tr = importlib.import_module("huf.ai.gateways.teams.refs")
 		hooks.clear()
 		hooks.register(hooks.ON_EVENT_REJECTED, lambda *a: self.rejected.append(a))
 		for mod in (self.tt, self.th, self.ta, self.tr):

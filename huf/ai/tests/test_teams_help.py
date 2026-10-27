@@ -13,7 +13,7 @@ _stub_env.install()
 import pytest  # noqa: E402
 
 from huf.ai.gateways import hooks  # noqa: E402
-from huf.ai.gateways import teams_contract as tc  # noqa: E402
+from huf.ai.gateways.teams import contract as tc  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures" / "teams"
 TENANT = "00000000-0000-0000-0000-00000000aaaa"
@@ -28,12 +28,12 @@ def load(name):
 
 def fresh_module():
 	"""Import teams_help after clearing stale hooks and package attributes."""
-	sys.modules.pop("huf.ai.gateways.teams_help", None)
+	sys.modules.pop("huf.ai.gateways.teams.messaging.help", None)
 	pkg = sys.modules.get("huf.ai.gateways")
 	if pkg is not None and hasattr(pkg, "teams_help"):
 		delattr(pkg, "teams_help")
 	hooks.clear()
-	return importlib.import_module("huf.ai.gateways.teams_help")
+	return importlib.import_module("huf.ai.gateways.teams.messaging.help")
 
 
 class FakeFrappe:

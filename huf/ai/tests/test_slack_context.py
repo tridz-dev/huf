@@ -10,7 +10,7 @@ _stub_env.install()
 import frappe  # noqa: E402
 import pytest  # noqa: E402
 
-from huf.ai.gateways import slack_context  # noqa: E402
+from huf.ai.gateways.slack import context as slack_context  # noqa: E402
 
 
 class Row:

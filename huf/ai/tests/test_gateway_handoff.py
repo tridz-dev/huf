@@ -5,10 +5,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from huf.ai.gateways import recipients as rcp
-from huf.ai.tools import gateway_handoff as tool
-from huf.ai.tools import gateway_reply as reply_tool
-from huf.ai.tools import gateway_send as send_tool
+from huf.ai.gateways.slack import recipients as rcp
+from huf.ai.tools.gateways import handoff as tool
+from huf.ai.tools.gateways import reply as reply_tool
+from huf.ai.tools.gateways import send as send_tool
 
 
 class PermErr(Exception):
@@ -126,7 +126,7 @@ def run(**kw):
 def test_tool_definition():
 	t = tool.GATEWAY_HANDOFF_TOOLS[0]
 	assert t["tool_name"] == "gateway_handoff"
-	assert t["function_path"] == "huf.ai.tools.gateway_handoff.handle_gateway_handoff"
+	assert t["function_path"] == "huf.ai.tools.gateways.handoff.handle_gateway_handoff"
 
 
 def test_user_assignee_creates_todo(world):

@@ -1,6 +1,6 @@
 import type { GatewayDoc } from '@/services/gatewayApi';
-import type { SlackSetupStatus } from '@/services/slackSetupApi';
-import type { TeamsDiagnosis } from '@/services/teamsApi';
+import type { SlackSetupStatus } from '@/services/gateways/slackSetupApi';
+import type { TeamsDiagnosis } from '@/services/gateways/teamsApi';
 
 export type ReadinessItem = { id: string; label: string; done: boolean; hint?: string };
 export type GatewayReadiness = { ready: boolean; items: ReadinessItem[]; blockingCount: number };

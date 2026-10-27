@@ -21,7 +21,7 @@ REGISTERED = {}
 
 
 def _load():
-	name = "huf.ai.gateways.slack_shortcuts"
+	name = "huf.ai.gateways.slack.shortcuts"
 	si_name = "huf.ai.gateways.slack_interactivity"
 	old = {n: sys.modules.pop(n, None) for n in (name, si_name)}
 	pkg = sys.modules.get("huf.ai.gateways")
@@ -206,7 +206,7 @@ def test_missing_message_ts_does_nothing(env):
 
 # ---- manifest ----------------------------------------------------------
 def test_manifest_has_shortcut_and_previous_keys(monkeypatch):
-	from huf.ai.gateways import slack_setup
+	from huf.ai.gateways.slack import setup as slack_setup
 
 	monkeypatch.setattr(slack_setup, "_site_url", lambda: "https://huf.example.com")
 	m = slack_setup._build_manifest(SimpleNamespace(name="g", gateway_name="G"))

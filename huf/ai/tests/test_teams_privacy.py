@@ -32,12 +32,12 @@ def load(name):
 
 
 def import_fresh():
-	for mod in ("huf.ai.gateways.teams_privacy",):
+	for mod in ("huf.ai.gateways.teams.messaging.privacy",):
 		sys.modules.pop(mod, None)
 	pkg = sys.modules.get("huf.ai.gateways")
 	if pkg is not None and hasattr(pkg, "teams_privacy"):
 		delattr(pkg, "teams_privacy")
-	return importlib.import_module("huf.ai.gateways.teams_privacy")
+	return importlib.import_module("huf.ai.gateways.teams.messaging.privacy")
 
 
 tp = import_fresh()

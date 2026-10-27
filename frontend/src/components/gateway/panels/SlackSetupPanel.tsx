@@ -10,7 +10,7 @@ import {
   sendSlackTestMessage,
   verifySlackSetup,
   type SlackSetupCheck,
-} from '@/services/slackSetupApi';
+} from '@/services/gateways/slackSetupApi';
 import { registerProviderPanel, type ProviderPanelProps } from './index';
 
 const CREATE_APP_URL = 'https://api.slack.com/apps?new_app=1';

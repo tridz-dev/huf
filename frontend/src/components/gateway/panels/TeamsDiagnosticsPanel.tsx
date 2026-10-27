@@ -14,7 +14,7 @@ import {
   type TeamsCheck,
   type TeamsCheckStatus,
   type TeamsDiagnosis,
-} from '@/services/teamsApi';
+} from '@/services/gateways/teamsApi';
 import { registerProviderPanel, type ProviderPanelProps } from './index';
 
 const STATUS_STYLE: Record<TeamsCheckStatus, { icon: typeof CheckCircle2; text: string; chip: string; label: string }> = {

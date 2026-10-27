@@ -23,7 +23,7 @@ try:
 finally:
 	frappe.whitelist = _original_whitelist
 
-from huf.ai.gateways.slack_api import SlackApiError  # noqa: E402
+from huf.ai.gateways.slack.api import SlackApiError  # noqa: E402
 
 TOKEN = "xoxb-SECRET-TOKEN-999"
 
@@ -262,7 +262,7 @@ class FakeApi:
 
 
 def use_api(monkeypatch, api):
-	import huf.ai.gateways.slack_context as sc
+	import huf.ai.gateways.slack.context as sc
 
 	monkeypatch.setattr(sc, "get_slack_api", lambda gw: api)
 
@@ -335,7 +335,7 @@ def test_generic_slack_error_is_plain(monkeypatch):
 
 
 def test_no_token_configured(monkeypatch):
-	import huf.ai.gateways.slack_context as sc
+	import huf.ai.gateways.slack.context as sc
 
 	def boom(gw):
 		raise ValueError("Slack gateway has no bot token configured")

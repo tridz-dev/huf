@@ -10,7 +10,7 @@ import importlib  # noqa: E402
 
 import pytest  # noqa: E402
 
-sa = importlib.import_module("huf.ai.gateways.slack_attachments")
+sa = importlib.import_module("huf.ai.gateways.slack.attachments")
 
 
 def ev(files):

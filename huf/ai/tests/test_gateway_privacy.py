@@ -1,4 +1,4 @@
-"""Tests for private-by-default Slack replies (huf.ai.gateways.privacy)."""
+"""Tests for private-by-default Slack replies (huf.ai.gateways.slack.privacy)."""
 
 import json
 import pathlib
@@ -16,7 +16,7 @@ from huf.ai.gateways import hooks as gw_hooks  # noqa: E402
 
 _saved = {k: list(v) for k, v in gw_hooks._HANDLERS.items()}
 try:
-	from huf.ai.gateways import privacy  # noqa: E402
+	from huf.ai.gateways.slack import privacy  # noqa: E402
 finally:
 	gw_hooks._HANDLERS.clear()
 	gw_hooks._HANDLERS.update(_saved)

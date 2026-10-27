@@ -50,7 +50,7 @@ import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { call } from '@/lib/frappe-sdk';
-import { OPEN_POLICY_HELPER_TEXT, directPolicyOptions } from '@/utils/directPolicy';
+import { OPEN_POLICY_HELPER_TEXT, directPolicyOptions } from '@/components/gateway/directPolicy';
 
 interface ChannelTabProps {
   /** Name of the Integration Settings record this channel's credentials live on. */

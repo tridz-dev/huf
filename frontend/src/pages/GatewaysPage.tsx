@@ -55,11 +55,8 @@ import type { IntegrationSettingsDoc } from '@/types/integration.types';
 import { formatTimeAgo } from '@/utils/time';
 import { gatewayErrorText } from '@/utils/gatewayErrorCopy';
 import { getGatewayReadiness } from '@/utils/gatewayReadiness';
-import {
-  OPEN_POLICY_HELPER_TEXT,
-  defaultDirectPolicy,
-  directPolicyOptions,
-} from '@/utils/directPolicy';
+import { defaultDirectPolicy } from '@/components/gateway/directPolicy';
+import { DirectPolicyField } from '@/components/gateway/DirectPolicyField';
 import { getGatewayWebhookUrl } from '@/utils/gatewayWebhook';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import {
@@ -88,13 +85,6 @@ const DEFAULT_GATEWAYS_TAB: GatewaysTab = 'gateways';
 function parseGatewaysTab(value: string | null): GatewaysTab {
   return GATEWAYS_TABS.includes(value as GatewaysTab) ? (value as GatewaysTab) : DEFAULT_GATEWAYS_TAB;
 }
-
-const DIRECT_POLICY_LABELS: Record<GatewayPolicy, string> = {
-  Open: 'Open — people connect their own account first',
-  'Allow list': 'Allow list — Require approved Gateway Access Entry',
-  Pairing: 'Pairing — require pairing request approval',
-  Disabled: 'Disabled — reject direct messages',
-};
 
 const providerNames: Record<GatewayProvider, string> = {
   WhatsApp: 'WhatsApp Business Number',
@@ -940,33 +930,11 @@ export default function GatewaysPage() {
               </div>
 
               {/* Direct Access Policy */}
-              <Field label="Direct message security policy">
-                {({ id }) => (
-                  <Select
-                    value={editingGateway.direct_policy || 'Allow list'}
-                    onValueChange={(v) =>
-                      setEditingGateway({
-                        ...editingGateway,
-                        direct_policy: v as GatewayPolicy,
-                      })
-                    }
-                  >
-                    <SelectTrigger id={id}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {directPolicyOptions(editingGateway.provider).map((value) => (
-                        <SelectItem key={value} value={value}>
-                          {DIRECT_POLICY_LABELS[value]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </Field>
-              {directPolicyOptions(editingGateway.provider).includes('Open') && (
-                <p className="text-xs text-steel">{OPEN_POLICY_HELPER_TEXT}</p>
-              )}
+              <DirectPolicyField
+                provider={editingGateway.provider}
+                value={editingGateway.direct_policy}
+                onChange={(direct_policy) => setEditingGateway({ ...editingGateway, direct_policy })}
+              />
 
               {/* GW-18: room/group-chat admission policy */}
               <div className="grid gap-3 rounded-lg border border-line bg-paper p-4">

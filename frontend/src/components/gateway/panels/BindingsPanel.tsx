@@ -55,7 +55,7 @@ import {
   type GatewayBinding,
   type PickerItem,
   type RoutePreview,
-} from '@/services/gatewayBindingsApi';
+} from '@/services/gateways/gatewayBindingsApi';
 import { registerProviderPanel, type ProviderPanelProps } from './index';
 
 const PROVIDERS: GatewayProvider[] = [

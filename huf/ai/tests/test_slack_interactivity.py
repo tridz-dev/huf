@@ -198,7 +198,8 @@ class Base(unittest.TestCase):
 		self.f = FakeFrappe(self.gw)
 		self.api = MagicMock()
 		self.linked = {("T1", "U1"): "alice@x.com", ("T1", "U2"): "bob@x.com"}
-		from huf.ai.gateways import identity, slack_context
+		from huf.ai.gateways.slack import identity
+		from huf.ai.gateways.slack import context as slack_context
 
 		def find(gw, team, ext):
 			u = self.linked.get((team, ext))

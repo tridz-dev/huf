@@ -1,4 +1,4 @@
-"""Tests for proactive Teams notifications (huf.ai.gateways.teams_notify)."""
+"""Tests for proactive Teams notifications (huf.ai.gateways.teams.messaging.notify)."""
 
 import importlib
 import json
@@ -17,8 +17,8 @@ import pytest  # noqa: E402
 _orig_whitelist = frappe.whitelist
 frappe.whitelist = lambda *a, **k: (lambda f: f)
 try:
-	sys.modules.pop("huf.ai.gateways.teams_notify", None)
-	tn = importlib.import_module("huf.ai.gateways.teams_notify")
+	sys.modules.pop("huf.ai.gateways.teams.messaging.notify", None)
+	tn = importlib.import_module("huf.ai.gateways.teams.messaging.notify")
 finally:
 	frappe.whitelist = _orig_whitelist
 

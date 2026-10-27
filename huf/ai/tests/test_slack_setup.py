@@ -11,15 +11,15 @@ _stub_env.install()
 import frappe  # noqa: E402
 import pytest  # noqa: E402
 
-from huf.ai.gateways import slack_api  # noqa: E402
+from huf.ai.gateways.slack import api as slack_api  # noqa: E402
 
 # Under the stub, @frappe.whitelist() is a MagicMock call that would replace the endpoints;
 # import with an identity decorator, then restore the shared stub attribute.
 _original_whitelist = frappe.whitelist
 frappe.whitelist = lambda *a, **k: (lambda fn: fn)
-sys.modules.pop("huf.ai.gateways.slack_setup", None)
+sys.modules.pop("huf.ai.gateways.slack.setup", None)
 try:
-	from huf.ai.gateways import slack_setup  # noqa: E402
+	from huf.ai.gateways.slack import setup as slack_setup  # noqa: E402
 finally:
 	frappe.whitelist = _original_whitelist
 

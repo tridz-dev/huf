@@ -1,4 +1,4 @@
-"""Unit tests for huf/ai/gateways/teams_tenant.py (frappe is a MagicMock stub)."""
+"""Unit tests for huf/ai/gateways/teams/tenant.py (frappe is a MagicMock stub)."""
 
 from __future__ import annotations
 
@@ -18,14 +18,14 @@ import pytest  # noqa: E402
 
 _original_whitelist = frappe.whitelist
 frappe.whitelist = lambda *a, **k: (lambda fn: fn)
-sys.modules.pop("huf.ai.gateways.teams_tenant", None)
+sys.modules.pop("huf.ai.gateways.teams.tenant", None)
 try:
-	from huf.ai.gateways import teams_tenant as tt  # noqa: E402
+	from huf.ai.gateways.teams import tenant as tt  # noqa: E402
 finally:
 	frappe.whitelist = _original_whitelist
 
 from huf.ai.gateways import hooks  # noqa: E402
-from huf.ai.gateways import teams_contract as tc  # noqa: E402
+from huf.ai.gateways.teams import contract as tc  # noqa: E402
 
 HOME = "11111111-1111-4111-8111-111111111111"
 OTHER = "22222222-2222-4222-8222-222222222222"

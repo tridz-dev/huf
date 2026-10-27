@@ -8,7 +8,7 @@ _stub_env.install()
 
 import pytest  # noqa: E402
 
-from huf.ai.gateways.slack_api import SlackApi, SlackApiError  # noqa: E402
+from huf.ai.gateways.slack.api import SlackApi, SlackApiError  # noqa: E402
 
 
 def _api(body):

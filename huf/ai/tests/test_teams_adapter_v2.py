@@ -21,7 +21,8 @@ from huf.ai.gateway_adapters.types import (  # noqa: E402
 	GatewayReply,
 	NormalizedGatewayEvent,
 )
-from huf.ai.gateways import teams_api, teams_auth  # noqa: E402
+from huf.ai.gateways.teams import api as teams_api  # noqa: E402
+from huf.ai.gateways.teams import auth as teams_auth  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures" / "teams"
 APP = jf.DEFAULT_APP_ID
