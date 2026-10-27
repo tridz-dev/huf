@@ -825,7 +825,21 @@ export interface BroadcastRecipient {
   failed_at?: string | null;
 }
 
+export interface BroadcastCost {
+  currency: string;
+  total: number | null;
+  by_country: Record<string, { count: number; rate: number | null; subtotal: number | null }>;
+  category?: string | null;
+  basis?: string;
+  rates_verified?: boolean;
+  warnings?: string[];
+  disclaimer?: string;
+}
+
+/** UI view of preview_broadcast. `queued` is the integer the operator must type to confirm. */
 export interface BroadcastPreview {
+  status?: string;
+  consent_attested: boolean;
   recipients: number;
   queued: number;
   skipped: number;
@@ -835,14 +849,8 @@ export interface BroadcastPreview {
   remaining_24h: number | null;
   warnings: string[];
   blocking: string[];
-  cost?: {
-    currency: string;
-    total: number | null;
-    by_country: Record<string, { count: number; rate: number | null; subtotal: number | null }>;
-    basis?: string;
-    disclaimer?: string;
-  } | null;
-  confirm_token?: string | null;
+  cost: BroadcastCost | null;
+  confirm_required: boolean;
 }
 
 export interface BroadcastRecipientInput {
@@ -855,7 +863,7 @@ export interface BroadcastRecipientInput {
 export interface AddRecipientsResult {
   added: number;
   skipped: { recipient: string; reason: string }[];
-  invalid: (string | { recipient?: string; reason?: string })[];
+  invalid: { recipient?: string; reason?: string }[];
 }
 
 export interface CreateBroadcastInput {
@@ -871,8 +879,57 @@ export interface CreateBroadcastInput {
   mps?: number;
 }
 
+// ---- Broadcast response adapters (backend shapes -> UI shapes) -------------
+
+const COUNT_FIELDS = ['total', 'queued', 'sending', 'sent', 'delivered', 'read', 'failed', 'deferred', 'unknown', 'skipped'] as const;
+
+/** Backend `_broadcast_view` (counts nested under `counts`) -> flat UI `Broadcast`. */
+export function adaptBroadcast(view: Record<string, unknown>): Broadcast {
+  const { counts, ...doc } = view as { counts?: Record<string, number> } & Record<string, unknown>;
+  const flat: Record<string, unknown> = { ...doc };
+  for (const k of COUNT_FIELDS) flat[k] = Number(counts?.[k] ?? 0);
+  return flat as unknown as Broadcast;
+}
+
+/** Backend `preview_broadcast` payload -> UI `BroadcastPreview`. */
+export function adaptPreview(r: Record<string, any>): BroadcastPreview {
+  const l = r.limits ?? {};
+  return {
+    status: r.status,
+    consent_attested: !!r.consent_attested,
+    recipients: Number(l.recipients ?? 0),
+    queued: Number(r.queued ?? 0),
+    skipped: Number(l.skipped ?? 0),
+    category: l.category ?? null,
+    template_status: l.template_status ?? null,
+    within_limit: l.within_limit ?? null,
+    remaining_24h: l.remaining_24h ?? null,
+    warnings: Array.isArray(l.warnings) ? l.warnings : [],
+    blocking: Array.isArray(l.blocking) ? l.blocking : [],
+    cost: r.cost ?? null,
+    confirm_required: !!r.confirm_required,
+  };
+}
+
+/** `invalid` entries are `{recipient, reason}`; tolerate bare strings. */
+export function adaptAddResult(r: { added?: number; skipped?: unknown[]; invalid?: unknown[] }): AddRecipientsResult {
+  const norm = (x: unknown) => (typeof x === 'string' ? { recipient: x } : (x as { recipient?: string; reason?: string }));
+  return {
+    added: Number(r.added ?? 0),
+    skipped: (r.skipped ?? []).map((x) => ({ recipient: '', reason: '', ...norm(x) })),
+    invalid: (r.invalid ?? []).map(norm),
+  };
+}
+
+async function mapOk<T, U>(p: Promise<WhatsAppResult<T>>, f: (v: T) => U): Promise<WhatsAppResult<U>> {
+  const res = await p;
+  return res.success ? ({ ...f(res as T), success: true } as WhatsAppResult<U>) : res;
+}
+
+type Mutated = { broadcast?: string; status?: string };
+
 export const createBroadcast = (input: CreateBroadcastInput) =>
-  invoke<{ broadcast: Broadcast | string }>(
+  invoke<{ broadcast: string; status: string; category?: string | null }>(
     'create_broadcast',
     {
       ...input,
@@ -884,34 +941,41 @@ export const createBroadcast = (input: CreateBroadcastInput) =>
   );
 
 export const addBroadcastRecipients = (broadcast: string, opts: { recipients?: BroadcastRecipientInput[]; csvText?: string }) =>
-  invoke<AddRecipientsResult>(
-    'add_broadcast_recipients',
-    {
-      broadcast,
-      ...(opts.recipients ? { recipients: JSON.stringify(opts.recipients) } : {}),
-      ...(opts.csvText !== undefined ? { csv_text: opts.csvText } : {}),
-    },
-    'post',
+  mapOk(
+    invoke<AddRecipientsResult>(
+      'add_broadcast_recipients',
+      {
+        broadcast,
+        ...(opts.recipients ? { recipients: JSON.stringify(opts.recipients) } : {}),
+        ...(opts.csvText !== undefined ? { csv_text: opts.csvText } : {}),
+      },
+      'post',
+    ),
+    adaptAddResult,
   );
 
 export const attestBroadcastConsent = (broadcast: string, consentSource: string) =>
-  invoke<{ broadcast?: Broadcast }>('attest_broadcast_consent', { broadcast, consent_source: consentSource }, 'post');
+  invoke<{ broadcast?: string; consent_attested?: boolean; consent_source?: string }>(
+    'attest_broadcast_consent', { broadcast, consent_source: consentSource }, 'post');
 
 export const previewBroadcast = (broadcast: string) =>
-  invoke<{ preview: BroadcastPreview } & Partial<BroadcastPreview>>('preview_broadcast', { broadcast }, 'get');
+  mapOk(invoke<Record<string, any>>('preview_broadcast', { broadcast }, 'get'), (r) => ({ preview: adaptPreview(r) }));
 
 export const startBroadcast = (broadcast: string, confirmCount: string | number) =>
-  invoke<{ broadcast?: Broadcast }>('start_broadcast', { broadcast, confirm_count: String(confirmCount) }, 'post');
+  invoke<Mutated & { queued?: number }>('start_broadcast', { broadcast, confirm_count: String(confirmCount) }, 'post');
 
-export const pauseBroadcast = (broadcast: string) => invoke<{ broadcast?: Broadcast }>('pause_broadcast', { broadcast }, 'post');
-export const resumeBroadcast = (broadcast: string) => invoke<{ broadcast?: Broadcast }>('resume_broadcast', { broadcast }, 'post');
-export const cancelBroadcast = (broadcast: string) => invoke<{ broadcast?: Broadcast }>('cancel_broadcast', { broadcast }, 'post');
-export const pauseAllBroadcasts = (gateway: string) => invoke<{ paused?: number }>('pause_all_broadcasts', { gateway }, 'post');
+export const pauseBroadcast = (broadcast: string) => invoke<Mutated>('pause_broadcast', { broadcast }, 'post');
+export const resumeBroadcast = (broadcast: string) => invoke<Mutated>('resume_broadcast', { broadcast }, 'post');
+export const cancelBroadcast = (broadcast: string) => invoke<Mutated>('cancel_broadcast', { broadcast }, 'post');
+export const pauseAllBroadcasts = (gateway: string) => invoke<{ gateway?: string; paused?: string[] }>('pause_all_broadcasts', { gateway }, 'post');
 
 export const listBroadcasts = (opts: { gateway?: string; status?: string; limit?: number; offset?: number } = {}) =>
-  invoke<{ items: Broadcast[]; total?: number }>('list_broadcasts', opts, 'get');
+  mapOk(invoke<{ broadcasts: Record<string, unknown>[] }>('list_broadcasts', opts, 'get'),
+    (r) => ({ broadcasts: (r.broadcasts ?? []).map(adaptBroadcast) }));
 
-export const getBroadcast = (broadcast: string) => invoke<{ broadcast: Broadcast }>('get_broadcast', { broadcast }, 'get');
+export const getBroadcast = (broadcast: string) =>
+  mapOk(invoke<{ broadcast: Record<string, unknown> }>('get_broadcast', { broadcast }, 'get'),
+    (r) => ({ broadcast: adaptBroadcast(r.broadcast) }));
 
 export const listBroadcastRecipients = (broadcast: string, opts: { status?: string; limit?: number; offset?: number } = {}) =>
-  invoke<{ items: BroadcastRecipient[]; total?: number }>('list_broadcast_recipients', { broadcast, ...opts }, 'get');
+  invoke<{ recipients: BroadcastRecipient[] }>('list_broadcast_recipients', { broadcast, ...opts }, 'get');
