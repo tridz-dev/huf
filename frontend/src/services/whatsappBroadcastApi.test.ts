@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/frappe-sdk', () => ({ call: { get: vi.fn(), post: vi.fn() }, file: { uploadFile: vi.fn() } }));
 import { call } from '@/lib/frappe-sdk';
 import {
-  addBroadcastRecipients, attestBroadcastConsent, cancelBroadcast, createBroadcast, getBroadcast, listBroadcastRecipients,
+  addBroadcastRecipients, attestBroadcastConsent, getBroadcastTemplateParams, cancelBroadcast, createBroadcast, getBroadcast, listBroadcastRecipients,
   adaptBroadcast, adaptPreview, adaptAddResult, listBroadcasts, pauseAllBroadcasts, pauseBroadcast, previewBroadcast, resumeBroadcast, startBroadcast,
 } from './whatsappApi';
 
@@ -108,5 +108,11 @@ describe('broadcast response adapters', () => {
     post.mockResolvedValueOnce({ message: { success: true, added: 1, skipped: [], invalid: [] } });
     await addBroadcastRecipients('B', { recipients: [{ recipient: '1' }] });
     expect(post).toHaveBeenLastCalledWith(`${M}.add_broadcast_recipients`, { broadcast: 'B', recipients: '[{"recipient":"1"}]' });
+  });
+  it('getBroadcastTemplateParams gets and normalises', async () => {
+    get.mockResolvedValueOnce({ message: { success: true, parameter_format: 'NAMED', body: [{ name: 'first_name' }], header: null } });
+    const r = await getBroadcastTemplateParams('G', 'T');
+    expect(get).toHaveBeenLastCalledWith(`${M}.get_broadcast_template_params`, { gateway: 'G', template: 'T' });
+    expect(r.success && [r.parameter_format, r.body, r.buttons]).toEqual(['NAMED', [{ name: 'first_name' }], []]);
   });
 });

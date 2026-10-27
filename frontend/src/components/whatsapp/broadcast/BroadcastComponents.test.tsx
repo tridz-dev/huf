@@ -7,7 +7,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/services/whatsappApi', async (orig) => ({
   ...(await orig<typeof import('@/services/whatsappApi')>()),
   listTemplates: vi.fn(), createBroadcast: vi.fn(), addBroadcastRecipients: vi.fn(), attestBroadcastConsent: vi.fn(),
-  previewBroadcast: vi.fn(), startBroadcast: vi.fn(), pauseBroadcast: vi.fn(), resumeBroadcast: vi.fn(), cancelBroadcast: vi.fn(),
+  previewBroadcast: vi.fn(), getBroadcastTemplateParams: vi.fn(), startBroadcast: vi.fn(), pauseBroadcast: vi.fn(), resumeBroadcast: vi.fn(), cancelBroadcast: vi.fn(),
   pauseAllBroadcasts: vi.fn(), listBroadcasts: vi.fn(), getBroadcast: vi.fn(), listBroadcastRecipients: vi.fn(),
 }));
 import * as api from '@/services/whatsappApi';
@@ -128,6 +128,7 @@ describe('BroadcastWizard', () => {
     m.addBroadcastRecipients.mockResolvedValue(ok({ added: 2, skipped: [{ recipient: '1555', reason: 'opted_out' }], invalid: [{ recipient: 'abc', reason: 'invalid_number' }], skippedTotal: 700, invalidTotal: 1 }));
     m.attestBroadcastConsent.mockResolvedValue(ok({}));
     m.startBroadcast.mockResolvedValue(ok({}));
+    m.getBroadcastTemplateParams.mockResolvedValue(ok({ parameter_format: 'POSITIONAL', body: [], header: null, buttons: [] }));
   });
 
   async function toPreview(user: ReturnType<typeof userEvent.setup>) {
@@ -208,5 +209,59 @@ describe('BroadcastWizard', () => {
     await toPreview(user);
     expect(await screen.findByText('Template is paused')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+  });
+
+  describe('template variables', () => {
+    const named = { parameter_format: 'NAMED', body: [{ name: 'first_name', sample: 'Ada' }, { name: 'city' }], header: null, buttons: [] };
+    it('collects NAMED defaults, passes them as a dict, and maps per-recipient values', async () => {
+      m.getBroadcastTemplateParams.mockResolvedValue(ok(named));
+      const user = userEvent.setup();
+      render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
+      await user.selectOptions(await screen.findByLabelText('Approved template'), 'T1');
+      const f = await screen.findByLabelText('Default value for {{first_name}}');
+      expect(f).toHaveAttribute('placeholder', 'Ada');
+      await user.type(f, 'friend');
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+      expect(screen.getByText(/Columns: phone, first_name, city/)).toBeInTheDocument();
+      await user.type(screen.getByLabelText(/Recipients/), '1555000111,Bob,Paris{enter}1555000222\t Eve{enter}1555000333');
+      await user.click(screen.getByRole('button', { name: 'Add recipients' }));
+      await screen.findByText(/recipients added/);
+      expect(m.createBroadcast).toHaveBeenCalledWith(expect.objectContaining({ body_params: { first_name: 'friend' } }));
+      expect(m.addBroadcastRecipients).toHaveBeenCalledWith('BCAST-9', { recipients: [
+        { recipient: '1555000111', params: { body: { first_name: 'Bob', city: 'Paris' } } },
+        { recipient: '1555000222', params: { body: { first_name: 'Eve' } } },
+        { recipient: '1555000333' },
+      ] });
+    });
+    it('passes an ordered list for POSITIONAL templates', async () => {
+      m.getBroadcastTemplateParams.mockResolvedValue(ok({ parameter_format: 'POSITIONAL', body: [{ index: 1 }, { index: 2 }], header: null, buttons: [] }));
+      const user = userEvent.setup();
+      render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
+      await user.selectOptions(await screen.findByLabelText('Approved template'), 'T1');
+      await user.type(await screen.findByLabelText('Default value for {{2}}'), 'two');
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+      await user.type(screen.getByLabelText(/Recipients/), '1555000111,a,b');
+      await user.click(screen.getByRole('button', { name: 'Add recipients' }));
+      await screen.findByText(/recipients added/);
+      expect(m.createBroadcast).toHaveBeenCalledWith(expect.objectContaining({ body_params: ['', 'two'] }));
+      expect(m.addBroadcastRecipients).toHaveBeenCalledWith('BCAST-9', { recipients: [{ recipient: '1555000111', params: { body: ['a', 'b'] } }] });
+    });
+    it('notes unsupported header/button variables without blocking', async () => {
+      m.getBroadcastTemplateParams.mockResolvedValue(ok({ ...named, header: { format: 'TEXT' } }));
+      const user = userEvent.setup();
+      render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
+      await user.selectOptions(await screen.findByLabelText('Approved template'), 'T1');
+      expect(await screen.findByText(/Header\/button variables are not supported in the UI yet/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+    });
+    it('blocking message about missing variables disables Start', async () => {
+      m.previewBroadcast.mockResolvedValue(ok({ preview: preview({ blocking: ['2 recipient(s) are missing values for: first_name'] }) }));
+      const user = userEvent.setup();
+      render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
+      await toPreview(user);
+      expect(await screen.findByText(/missing values for: first_name/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+      expect(m.startBroadcast).not.toHaveBeenCalled();
+    });
   });
 });
