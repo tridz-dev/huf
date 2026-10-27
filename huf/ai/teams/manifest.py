@@ -96,7 +96,8 @@ def build_manifest(
 			{
 				"botId": app_id,
 				"scopes": list(SCOPES),
-				"supportsFiles": True,
+				# False: no consent-card/upload flow exists. Files users send arrive via attachments regardless.
+				"supportsFiles": False,
 				"isNotificationOnly": False,
 			}
 		],
@@ -150,19 +151,72 @@ def build_app_package(manifest: dict) -> bytes:
 	return buf.getvalue()
 
 
-def _site_setting(key: str) -> str:
-	value = frappe.conf.get(key) or ""
-	if not value:
-		frappe.throw(_("Set site config key {0} to generate the Teams app package.").format(key))
-	return str(value)
+def _conf_override(key: str) -> str:
+	return str(frappe.conf.get(key) or "").strip()
+
+
+def _is_public_https(url: str) -> bool:
+	"""True for an https URL whose host is not loopback / private / .local / .localhost / bare."""
+	import ipaddress
+	from urllib.parse import urlparse
+
+	try:
+		parsed = urlparse(url)
+		host = (parsed.hostname or "").lower()
+	except ValueError:
+		return False
+	if parsed.scheme != "https" or not host:
+		return False
+	if host == "localhost" or host.endswith((".localhost", ".local", ".internal", ".test", ".invalid")):
+		return False
+	try:
+		ip = ipaddress.ip_address(host)
+	except ValueError:
+		return "." in host
+	return ip.is_global
+
+
+def _website_url() -> str:
+	override = _conf_override("teams_app_website_url")
+	if override:
+		return override
+	from huf.ai.telegram_public_url import public_base_url
+
+	base = str(public_base_url() or "").rstrip("/")
+	if not _is_public_https(base):
+		frappe.throw(
+			_(
+				"The site URL ({0}) is not a public https URL, which Teams requires. Set a public https site URL "
+				"(host_name) or provide the site config key teams_app_website_url."
+			).format(base or _("not set"))
+		)
+	return base
+
+
+def _developer_name() -> str:
+	"""Optional override ``teams_app_developer_name``; else the System Settings app name, else the site host."""
+	name = _conf_override("teams_app_developer_name")
+	if not name:
+		try:
+			name = str(frappe.get_system_settings("app_name") or "").strip()
+		except Exception:
+			name = ""
+	if not name:
+		from urllib.parse import urlparse
+
+		name = urlparse(_website_url()).hostname or "Huf"
+	return name[: LIMITS["developer_name"]]
 
 
 @frappe.whitelist(methods=["GET"])
 def generate_teams_app_manifest(gateway_name: str) -> dict:
 	"""Return the Teams app manifest and zip (base64) for a Microsoft Teams Gateway.
 
-	Developer and legal URLs come from site config keys ``teams_app_developer_name``,
-	``teams_app_website_url``, ``teams_app_privacy_url``, ``teams_app_terms_url``.
+	Developer name and URLs have defaults and the site config keys ``teams_app_developer_name``,
+	``teams_app_website_url``, ``teams_app_privacy_url``, ``teams_app_terms_url`` are OPTIONAL overrides.
+	Defaults: developer name = System Settings app name (<= 32 chars); website = the public https site URL;
+	privacy and terms = the website URL. NOTE: owners should override privacy/terms with real policy pages
+	before any Teams store submission; sideloading works with the defaults.
 	Returns {manifest, filename, content_base64}. Never returns credentials.
 	"""
 	frappe.has_permission("Gateway", "read", gateway_name, throw=True)
@@ -177,15 +231,16 @@ def generate_teams_app_manifest(gateway_name: str) -> dict:
 
 	bot_name = (gateway.gateway_name or "").strip()[: LIMITS["name_short"]] or "Huf"
 	description = (gateway.description or "").strip() or f"{bot_name} assistant for Microsoft Teams."
+	website_url = _website_url()
 	manifest = build_manifest(
 		app_id,
 		bot_name=bot_name,
 		short_description=description[: LIMITS["description_short"]],
 		full_description=description[: LIMITS["description_full"]],
-		developer_name=_site_setting("teams_app_developer_name"),
-		website_url=_site_setting("teams_app_website_url"),
-		privacy_url=_site_setting("teams_app_privacy_url"),
-		terms_url=_site_setting("teams_app_terms_url"),
+		developer_name=_developer_name(),
+		website_url=website_url,
+		privacy_url=_conf_override("teams_app_privacy_url") or website_url,
+		terms_url=_conf_override("teams_app_terms_url") or website_url,
 		version="1.0.0",
 	)
 	package = build_app_package(manifest)

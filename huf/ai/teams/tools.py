@@ -27,6 +27,7 @@ from huf.ai.tools._registry import _action, _p
 SERVICE = "microsoft_teams"
 PROVIDER = "Microsoft Teams"
 ACTIONS = ("send_message", "list_recent_conversations", "get_account_info")
+CROSS_CONVERSATION_FLAG = "teams_tool_allow_cross_conversation"
 MAX_SENDS_PER_RUN = 5
 MAX_FAILED_PER_RUN = 3
 MAX_TEXT_CHARS = 8000
@@ -180,11 +181,19 @@ def _reserve_send(run_id: str) -> str | None:
 def _cross_conversation_allowed(gateway_name: str) -> bool:
 	"""Messaging/listing conversations other than the current one.
 
+	DEFAULT OFF: requires the site-config flag ``teams_tool_allow_cross_conversation`` (administrator only,
+	prompt injection could otherwise broadcast) AND the permission check below.
+
 	No existing Gateway field can carry an opt-in for Teams (``agent_recipient_scope`` is WhatsApp/Telegram
 	only and DocType changes are out of scope), so this needs Gateway WRITE permission for the actual human
 	session user. Runs execute as the gateway execution user / Administrator / Guest, which says nothing about
 	a human, so those fail closed (cross-conversation disabled)."""
 	try:
+		flag = frappe.conf.get(CROSS_CONVERSATION_FLAG)
+		if isinstance(flag, str):
+			flag = flag.strip().lower() in ("1", "true", "yes", "on")
+		if not flag:
+			return False
 		user = str(frappe.session.user or "")
 		if user in ("", "Guest", "Administrator"):
 			return False
@@ -229,8 +238,8 @@ def _send_message(gateway_name: str, kwargs: dict) -> str:
 	if explicit and _base(explicit) != _base(current) and not _cross_conversation_allowed(gateway_name):
 		return _refused(
 			"cross_conversation_not_allowed",
-			"Agents may only message the conversation they are in; messaging other conversations needs a "
-			"human Gateway administrator",
+			"Agents may only message the conversation they are in. An administrator can enable other "
+			f"conversations with `bench set-config {CROSS_CONVERSATION_FLAG} 1` (and the user needs Gateway write access)",
 		)
 	if not _has_gateway_reference(gateway_name, creds["app_id"], target):
 		return _refused(
@@ -301,13 +310,26 @@ def _list_recent(gateway_name: str, kwargs: dict) -> str:
 
 def _account_info(gateway_name: str) -> str:
 	creds = _credentials(gateway_name)
-	return _ok({
+	data = {
 		"bot_name": frappe.db.get_value("Gateway", gateway_name, "gateway_name") or gateway_name,
-		"app_id": creds.get("app_id", ""),
-		"tenant_id": creds.get("tenant_id", ""),
 		"enabled": bool(frappe.db.get_value("Gateway", gateway_name, "is_enabled")),
 		"credentials_configured": bool(creds.get("app_id") and creds.get("app_password") and creds.get("tenant_id")),
-	})
+	}
+	if not _in_gateway_run():  # desk run (read permission already checked): IDs only, never to Teams end users
+		data["app_id"] = creds.get("app_id", "")
+		data["tenant_id"] = creds.get("tenant_id", "")
+	return _ok(data)
+
+
+def _in_gateway_run() -> bool:
+	"""True when the current run's conversation channel is ``gateway:<name>`` (a Teams end user is the audience)."""
+	try:
+		run_id = _run_id()
+		conversation = frappe.db.get_value("Agent Run", run_id, "conversation") if run_id else None
+		channel = str(frappe.db.get_value("Agent Conversation", conversation, "channel") or "") if conversation else ""
+		return channel.startswith("gateway:")
+	except Exception:
+		return True  # fail closed: treat as an end-user run
 
 
 def handle_action(action: str = "", **kwargs: Any) -> str:
@@ -339,10 +361,10 @@ TEAMS_TOOLS = [
 		"description": (
 			"Send Microsoft Teams messages through the Teams bot gateway this conversation belongs to (it cannot be chosen). "
 			"Actions: send_message (text; sends to the Teams conversation you are in by default; optional conversation_id "
-			"needs a human Gateway administrator, otherwise only the current conversation is allowed; Teams only allows messages to conversations the bot has "
+			"is disabled unless an administrator enabled it, otherwise only the current conversation is allowed; Teams only allows messages to conversations the bot has "
 			f"already seen; max {MAX_TEXT_CHARS} characters and {MAX_SENDS_PER_RUN} messages per run), "
 			"list_recent_conversations (limit; the current conversation, or all for this gateway when permitted), "
-			"get_account_info (bot name, app id, tenant id, enabled state; never secrets)."
+			"get_account_info (bot name, enabled state; app/tenant ids only outside Teams chats; never secrets)."
 		),
 		"function_path": "huf.ai.teams.tools.handle_action",
 		"category": "Communication Tools",

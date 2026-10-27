@@ -46,7 +46,7 @@ class TestManifestShape(unittest.TestCase):
 		bot = m["bots"][0]
 		self.assertEqual(bot["botId"], APP_ID)
 		self.assertEqual(bot["scopes"], ["personal", "team", "groupChat"])
-		self.assertIs(bot["supportsFiles"], True)
+		self.assertIs(bot["supportsFiles"], False)
 		self.assertIs(bot["isNotificationOnly"], False)
 		self.assertEqual(m["icons"], {"outline": "outline.png", "color": "color.png"})
 		self.assertEqual(m["name"]["short"], "Huf Support")
@@ -177,6 +177,52 @@ class TestEndpoint(unittest.TestCase):
 				mock.patch.object(frappe, "conf", self._conf()):
 			with self.assertRaises(frappe.ValidationError):
 				tm.generate_teams_app_manifest("GW-1")
+
+
+class TestOptionalSiteConfig(unittest.TestCase):
+	"""The four teams_app_* keys are optional overrides; defaults come from the public https site URL."""
+
+	def _run(self, conf=None, base="https://acme.example.com", app_name="Acme Corp"):
+		gw = TestEndpoint()._gateway()
+		with mock.patch.object(frappe, "has_permission", return_value=True), \
+				mock.patch.object(frappe, "get_doc", return_value=gw), \
+				mock.patch.object(frappe, "conf", conf or {}), \
+				mock.patch.object(frappe, "get_system_settings", return_value=app_name, create=True), \
+				mock.patch("huf.ai.telegram_public_url.public_base_url", return_value=base):
+			return tm.generate_teams_app_manifest("GW-1")["manifest"]
+
+	def test_no_keys_needed_when_public_https(self):
+		dev = self._run()["developer"]
+		self.assertEqual(dev["name"], "Acme Corp")
+		self.assertEqual(dev["websiteUrl"], "https://acme.example.com")
+		self.assertEqual(dev["privacyUrl"], "https://acme.example.com")
+		self.assertEqual(dev["termsOfUseUrl"], "https://acme.example.com")
+
+	def test_non_public_urls_error_clearly(self):
+		for base in ("http://acme.example.com", "https://localhost", "https://127.0.0.1", "https://10.0.0.5",
+				"https://box.local", "http://localhost:8000", ""):
+			with self.assertRaises(frappe.ValidationError, msg=base) as cm:
+				self._run(base=base)
+			self.assertIn("teams_app_website_url", str(cm.exception))
+
+	def test_non_public_ok_with_website_override(self):
+		m = self._run(conf={"teams_app_website_url": "https://huf.example"}, base="http://localhost:8000")
+		self.assertEqual(m["developer"]["websiteUrl"], "https://huf.example")
+		self.assertEqual(m["developer"]["privacyUrl"], "https://huf.example")
+
+	def test_overrides_win(self):
+		conf = {"teams_app_developer_name": "Huf Labs", "teams_app_website_url": "https://w.example",
+			"teams_app_privacy_url": "https://w.example/p", "teams_app_terms_url": "https://w.example/t"}
+		dev = self._run(conf=conf)["developer"]
+		self.assertEqual((dev["name"], dev["websiteUrl"], dev["privacyUrl"], dev["termsOfUseUrl"]),
+			("Huf Labs", "https://w.example", "https://w.example/p", "https://w.example/t"))
+
+	def test_developer_name_truncated_to_32(self):
+		self.assertEqual(len(self._run(app_name="N" * 80)["developer"]["name"]), 32)
+		self.assertEqual(len(self._run(conf={"teams_app_developer_name": "x" * 50})["developer"]["name"]), 32)
+
+	def test_developer_name_falls_back_to_host(self):
+		self.assertEqual(self._run(app_name="")["developer"]["name"], "acme.example.com")
 
 
 class TestSchemaPairing(unittest.TestCase):

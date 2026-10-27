@@ -4,6 +4,8 @@ import {
   base64ToBytes,
   deriveStepStates,
   endpointFromChecks,
+  endpointNeedsPublicHttps,
+  isForbiddenError,
   isRateLimitError,
   isGuid,
   isTeamsService,
@@ -63,20 +65,13 @@ describe('deriveStepStates', () => {
 });
 
 describe('mapManifestError', () => {
-  it('names the missing site config keys', () => {
-    const m = mapManifestError('Set site config key teams_app_privacy_url to generate the Teams app package.');
-    expect(m).toContain('teams_app_privacy_url');
-    expect(m).not.toContain('teams_app_website_url');
+  it('passes the actionable server message through', () => {
+    const m = 'The site URL (http://localhost) is not a public https URL. Set a public https site URL (host_name) or provide the site config key teams_app_website_url.';
+    expect(mapManifestError(`  ${m} `)).toBe(m);
   });
-  it('lists all keys for a generic site-config error', () => {
-    const m = mapManifestError('Set site config key to generate');
-    for (const k of ['teams_app_developer_name', 'teams_app_website_url', 'teams_app_privacy_url', 'teams_app_terms_url']) {
-      expect(m).toContain(k);
-    }
-  });
-  it('passes other errors through with a fallback', () => {
-    expect(mapManifestError('Connect Microsoft App ID credentials first')).toBe('Connect Microsoft App ID credentials first');
-    expect(mapManifestError('')).toMatch(/Failed/);
+  it('has a fallback', () => {
+    expect(mapManifestError('')).toBe('Failed to generate the Teams app package.');
+    expect(mapManifestError(null)).toBe('Failed to generate the Teams app package.');
   });
 });
 
@@ -133,5 +128,32 @@ describe('endpointFromChecks', () => {
     expect(endpointFromChecks([{ id: 'teams-messaging-endpoint', done: false, hint: 'Paste https://a.b/x?gateway_name=G as the Messaging endpoint of' }])).toBe('https://a.b/x?gateway_name=G');
     expect(endpointFromChecks([{ id: 'teams-messaging-endpoint', done: false, hint: 'Paste /api/x as the Messaging endpoint' }])).toBeNull();
     expect(endpointFromChecks(undefined)).toBeNull();
+  });
+});
+
+describe('structured endpoint_url', () => {
+  const hint = 'Paste https://hint.example/x as the Messaging endpoint';
+  it('prefers endpoint_url over the hint', () => {
+    expect(endpointFromChecks([{ id: 'teams-messaging-endpoint', done: false, hint, endpoint_url: 'https://struct.example/h?gateway_name=G' }])).toBe('https://struct.example/h?gateway_name=G');
+  });
+  it('falls back to the hint when endpoint_url is missing or not absolute', () => {
+    expect(endpointFromChecks([{ id: 'teams-messaging-endpoint', done: false, hint }])).toBe('https://hint.example/x');
+    expect(endpointFromChecks([{ id: 'teams-messaging-endpoint', done: false, hint, endpoint_url: '/relative' }])).toBe('https://hint.example/x');
+    expect(endpointFromChecks([{ id: 'teams-messaging-endpoint', done: false, endpoint_url: null }])).toBeNull();
+  });
+});
+
+describe('endpointNeedsPublicHttps / isForbiddenError', () => {
+  it('only when not done and hint says public https', () => {
+    expect(endpointNeedsPublicHttps([{ id: 'teams-messaging-endpoint', done: false, hint: 'It must be a public https URL' }])).toBe(true);
+    expect(endpointNeedsPublicHttps([{ id: 'teams-messaging-endpoint', done: true, hint: 'public https' }])).toBe(false);
+    expect(endpointNeedsPublicHttps([{ id: 'teams-messaging-endpoint', done: false, hint: 'Paste it' }])).toBe(false);
+    expect(endpointNeedsPublicHttps(undefined)).toBe(false);
+  });
+  it('detects 403 and PermissionError', () => {
+    expect(isForbiddenError({ httpStatus: 403 })).toBe(true);
+    expect(isForbiddenError({ exc_type: 'PermissionError' })).toBe(true);
+    expect(isForbiddenError({ httpStatus: 500 })).toBe(false);
+    expect(isForbiddenError(null)).toBe(false);
   });
 });
