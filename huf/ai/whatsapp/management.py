@@ -1772,3 +1772,379 @@ def send_call_permission_request(
 	if gated:
 		return gated
 	return {"success": True, "result": graph.send_permission_request(phone, text or "")}
+
+
+# --- Broadcast (WP-7) ----------------------------------------------------------------------------
+# Thin API over broadcast_recipients / broadcast_limits / broadcast_cost / broadcast_runner. Those
+# modules are imported lazily inside each function so that a problem there never breaks this module.
+#
+# Per-recipient retry of failed rows is deliberately NOT offered (no ``retry_failed_broadcast_recipients``):
+# a ``failed`` row is a permanent Meta verdict (invalid number, user stopped marketing, template or quality
+# problem) and ``unknown`` rows may already have been delivered, so re-sending either risks a duplicate or a
+# repeat spam signal. A second attempt is a new, separately attested broadcast to a corrected list.
+
+_BROADCAST = "WhatsApp Broadcast"
+_BROADCAST_RECIPIENT = "WhatsApp Broadcast Recipient"
+_BROADCAST_LOG = "huf.whatsapp.broadcast"
+_BROADCAST_COUNT_FIELDS = (
+	"total", "queued", "sending", "sent", "delivered", "read", "failed", "deferred", "unknown", "skipped",
+)
+_BROADCAST_FIELDS = (
+	"name", "title", "status", "pause_reason", "gateway", "whatsapp_account", "template", "template_name",
+	"language_code", "category", "body_params", "header_params", "button_params", "consent_source",
+	"consent_attested", "consent_attested_by", "consent_attested_at", "max_recipients", "mps",
+	"started_by", "started_at", "finished_at", "creation", "modified", *_BROADCAST_COUNT_FIELDS,
+)
+
+
+def _broadcast_row(broadcast: Any) -> dict[str, Any] | dict[str, str]:
+	"""The Broadcast's fields as a dict, or an error dict when it does not exist."""
+	if not broadcast or not frappe.db.exists(_BROADCAST, broadcast):
+		return _error("not_found", "Broadcast not found.")
+	return frappe.db.get_value(_BROADCAST, broadcast, list(_BROADCAST_FIELDS), as_dict=True) or _error(
+		"not_found", "Broadcast not found."
+	)
+
+
+def _broadcast_for_write(broadcast: Any) -> dict[str, Any]:
+	"""Broadcast row after proving WRITE authority on ITS gateway (never trust a caller-supplied gateway)."""
+	row = _broadcast_row(broadcast)
+	if row.get("error"):
+		return row
+	if not _gateway_write_allowed(row.get("gateway")):
+		raise frappe.PermissionError(_("Not permitted to manage broadcasts on this Gateway"))
+	return row
+
+
+def _broadcast_for_read(broadcast: Any) -> dict[str, Any]:
+	row = _broadcast_row(broadcast)
+	if row.get("error"):
+		return row
+	if not _gateway_read_allowed(row.get("gateway")):
+		raise frappe.PermissionError(_("Not permitted to read broadcasts on this Gateway"))
+	return row
+
+
+def _broadcast_audit(broadcast: str, action: str, **details: Any) -> None:
+	"""Audit every mutation: structured log line plus a Comment on the Broadcast."""
+	user = getattr(frappe.session, "user", None)
+	extra = ", ".join(f"{k}={v}" for k, v in details.items() if v not in (None, ""))
+	frappe.logger(_BROADCAST_LOG).info(f"broadcast={broadcast} action={action} user={user} {extra}".strip())
+	try:
+		frappe.get_doc(_BROADCAST, broadcast).add_comment("Info", f"{action} by {user}" + (f": {extra}" if extra else ""))
+	except Exception:
+		frappe.logger(_BROADCAST_LOG).warning(f"broadcast={broadcast} action={action}: audit comment failed")
+
+
+def _broadcast_view(row: dict[str, Any]) -> dict[str, Any]:
+	out = {k: row.get(k) for k in _BROADCAST_FIELDS if k not in _BROADCAST_COUNT_FIELDS}
+	out["counts"] = {k: int(row.get(k) or 0) for k in _BROADCAST_COUNT_FIELDS}
+	for key in ("body_params", "header_params", "button_params"):
+		value = out.get(key)
+		if isinstance(value, str) and value:
+			try:
+				out[key] = json.loads(value)
+			except ValueError:
+				pass
+	for key in ("creation", "modified", "started_at", "finished_at", "consent_attested_at"):
+		out[key] = _iso(out.get(key))
+	return out
+
+
+def _queued_count(broadcast: str) -> int:
+	return int(frappe.db.count(_BROADCAST_RECIPIENT, {"broadcast": broadcast, "status": "queued"}) or 0)
+
+
+def _json_param(value: Any, label: str) -> Any:
+	parsed = _parse_json_arg(value, label)
+	return parsed if parsed not in ("", None) else None
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=60, seconds=60)
+@_bridge_guard
+def create_broadcast(
+	gateway: str | None = None,
+	template: str | None = None,
+	title: str | None = None,
+	language_code: str | None = None,
+	body_params: Any = None,
+	header_params: Any = None,
+	button_params: Any = None,
+	consent_source: str | None = None,
+	max_recipients: Any = None,
+	mps: Any = None,
+) -> dict[str, Any]:
+	"""Create a Draft broadcast on a Gateway. The template must be an APPROVED template of the Gateway's own account.
+
+	Category, template name and account are snapshotted here; ``start`` re-checks them. Needs write authority on the Gateway.
+	"""
+	refused = _send_authority(gateway)
+	if refused:
+		return refused
+	account = _gateway_whatsapp_account(gateway)
+	if not account:
+		return _error("no_account", "This gateway is not linked to a WhatsApp Account.")
+	if not template or not _TEMPLATE_RECORD_RE.match(str(template).strip()):
+		return _error("invalid_name", "Template must be the Meta name or '<name>-<language_code>'.")
+	if not title or not str(title).strip():
+		return _error("invalid_title", "A title is required.")
+	docname = bridge._template_docname(account, str(template).strip(), language_code or None)
+	tpl = None
+	if docname and frappe.db.exists("WhatsApp Templates", docname):
+		tpl = frappe.db.get_value(
+			"WhatsApp Templates",
+			docname,
+			["name", "whatsapp_account", "status", "category", "actual_name", "template_name", "language_code"],
+			as_dict=True,
+		)
+	if not tpl or tpl.get("whatsapp_account") != account:
+		return _error("template_not_found", "Template not found on this gateway's WhatsApp account.")
+	if str(tpl.get("status") or "").upper() != "APPROVED":
+		return _error("template_not_approved", f"Template status is {tpl.get('status') or 'unknown'}; only APPROVED templates can be broadcast.")
+	try:
+		body = _json_param(body_params, "body_params")
+		header = _json_param(header_params, "header_params")
+		buttons = _json_param(button_params, "button_params")
+		cap = int(max_recipients) if max_recipients not in (None, "") else None
+		rate = int(mps) if mps not in (None, "") else None
+	except (TypeError, ValueError) as exc:
+		return _error("invalid_params", str(exc))
+	doc = frappe.get_doc(
+		{
+			"doctype": _BROADCAST,
+			"title": str(title).strip(),
+			"status": "Draft",
+			"gateway": gateway,
+			"whatsapp_account": account,
+			"template": tpl.get("name"),
+			"template_name": tpl.get("actual_name") or tpl.get("template_name") or tpl.get("name"),
+			"language_code": language_code or tpl.get("language_code"),
+			"category": tpl.get("category"),
+			"body_params": json.dumps(body) if body is not None else None,
+			"header_params": json.dumps(header) if header is not None else None,
+			"button_params": json.dumps(buttons) if buttons is not None else None,
+			"consent_source": (consent_source or "").strip() or None,
+			"consent_attested": 0,
+			"max_recipients": cap,
+			"mps": rate,
+		}
+	).insert()
+	_broadcast_audit(doc.name, "created", gateway=gateway, template=tpl.get("name"), category=tpl.get("category"))
+	return {"success": True, "broadcast": doc.name, "status": "Draft", "category": tpl.get("category")}
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=60, seconds=60)
+@_bridge_guard
+def add_broadcast_recipients(broadcast: str | None = None, recipients: Any = None, csv_text: str | None = None) -> dict[str, Any]:
+	"""Add recipients to a Draft broadcast, from a list (``["+1555..", {"recipient":..,"params":..}]``) or CSV text."""
+	row = _broadcast_for_write(broadcast)
+	if row.get("error"):
+		return row
+	if row.get("status") != "Draft":
+		return _error("not_draft", "Recipients can only be added while the broadcast is a Draft.")
+	from huf.ai.whatsapp import broadcast_recipients as br
+
+	try:
+		items = _parse_json_arg(recipients, "recipients") or []
+		if csv_text and str(csv_text).strip():
+			items = list(items) + list(br.parse_csv(str(csv_text)))
+	except ValueError as exc:
+		return _error("invalid_params", str(exc))
+	if not isinstance(items, list) or not items:
+		return _error("no_recipients", "Provide recipients or csv_text.")
+	rows = [{"recipient": str(i)} if not isinstance(i, dict) else i for i in items]
+	result = br.prepare(broadcast, rows)
+	_broadcast_audit(
+		broadcast, "recipients_added",
+		added=result.get("added"), skipped=len(result.get("skipped") or []), invalid=len(result.get("invalid") or []),
+	)
+	return {"success": True, **result}
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=60, seconds=60)
+@_bridge_guard
+def attest_broadcast_consent(broadcast: str | None = None, consent_source: str | None = None) -> dict[str, Any]:
+	"""Record that the caller attests recipients opted in to this kind of message (source of the opt-in is required)."""
+	row = _broadcast_for_write(broadcast)
+	if row.get("error"):
+		return row
+	if row.get("status") not in ("Draft", "Paused"):
+		return _error("invalid_state", "Consent can only be attested on a Draft or Paused broadcast.")
+	source = (consent_source or "").strip()
+	if not source:
+		return _error("consent_source_required", "State where the recipients' opt-in was collected.")
+	now = frappe.utils.now_datetime()
+	frappe.db.set_value(
+		_BROADCAST,
+		broadcast,
+		{
+			"consent_attested": 1,
+			"consent_attested_by": frappe.session.user,
+			"consent_attested_at": now,
+			"consent_source": source,
+		},
+	)
+	_broadcast_audit(broadcast, "consent_attested", consent_source=source)
+	return {"success": True, "broadcast": broadcast, "consent_attested": True, "consent_source": source}
+
+
+@frappe.whitelist()
+@_bridge_guard
+def preview_broadcast(broadcast: str | None = None) -> dict[str, Any]:
+	"""Pre-flight: limits and warnings, cost estimate and the count the operator must type to start. Read-only."""
+	row = _broadcast_for_write(broadcast)  # preview feeds the start decision, so it needs write authority too
+	if row.get("error"):
+		return row
+	from huf.ai.whatsapp import broadcast_cost, broadcast_limits
+
+	limits = broadcast_limits.preview(broadcast)
+	cost = broadcast_cost.estimate(broadcast)
+	token = broadcast_cost.confirm_token(broadcast)
+	return {
+		"success": True,
+		"broadcast": broadcast,
+		"status": row.get("status"),
+		"consent_attested": bool(row.get("consent_attested")),
+		"limits": limits,
+		"cost": cost,
+		"confirm_required": bool(token),
+		"queued": _queued_count(broadcast),
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=30, seconds=60)
+@_bridge_guard
+def start_broadcast(broadcast: str | None = None, confirm_count: Any = None) -> dict[str, Any]:
+	"""Start (or restart a Draft) broadcast. Requires attested consent and the typed count to equal the queued recipients."""
+	row = _broadcast_for_write(broadcast)
+	if row.get("error"):
+		return row
+	if not row.get("consent_attested"):
+		return _error("consent_not_attested", "Attest that recipients opted in before starting.")
+	queued = _queued_count(broadcast)
+	if queued <= 0:
+		return _error("no_recipients", "There are no queued recipients.")
+	if str(confirm_count if confirm_count is not None else "").strip() != str(queued):
+		return _error("confirm_mismatch", f"Type the number of queued recipients ({queued}) to confirm.")
+	from huf.ai.whatsapp import broadcast_runner
+
+	result = broadcast_runner.start(broadcast, user=frappe.session.user)
+	_broadcast_audit(broadcast, "started", queued=queued)
+	return {"success": True, "broadcast": broadcast, "queued": queued, **(result if isinstance(result, dict) else {})}
+
+
+def _runner_action(broadcast: str | None, action: str, **kwargs: Any) -> dict[str, Any]:
+	row = _broadcast_for_write(broadcast)
+	if row.get("error"):
+		return row
+	from huf.ai.whatsapp import broadcast_runner
+
+	result = getattr(broadcast_runner, action)(broadcast, **kwargs)
+	_broadcast_audit(broadcast, action, **kwargs)
+	status = frappe.db.get_value(_BROADCAST, broadcast, "status")
+	return {"success": True, "broadcast": broadcast, "status": status, **(result if isinstance(result, dict) else {})}
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=60, seconds=60)
+@_bridge_guard
+def pause_broadcast(broadcast: str | None = None) -> dict[str, Any]:
+	"""Pause a running broadcast; queued rows stay queued."""
+	return _runner_action(broadcast, "pause", reason="manual")
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=60, seconds=60)
+@_bridge_guard
+def resume_broadcast(broadcast: str | None = None) -> dict[str, Any]:
+	"""Resume a paused broadcast."""
+	return _runner_action(broadcast, "resume")
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=60, seconds=60)
+@_bridge_guard
+def cancel_broadcast(broadcast: str | None = None) -> dict[str, Any]:
+	"""Cancel a broadcast: queued rows become skipped (cancelled); already sent messages are unaffected."""
+	return _runner_action(broadcast, "cancel")
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=30, seconds=60)
+@_bridge_guard
+def pause_all_broadcasts(gateway: str | None = None) -> dict[str, Any]:
+	"""Kill switch: pause every running broadcast of a Gateway."""
+	refused = _send_authority(gateway)
+	if refused:
+		return refused
+	running = frappe.get_all(_BROADCAST, filters={"gateway": gateway, "status": "Running"}, pluck="name") or []
+	from huf.ai.whatsapp import broadcast_runner
+
+	result = broadcast_runner.pause_all(gateway, "kill_switch")
+	for name in running:
+		_broadcast_audit(name, "pause_all", gateway=gateway)
+	frappe.logger(_BROADCAST_LOG).info(f"gateway={gateway} action=pause_all user={frappe.session.user} paused={len(running)}")
+	return {"success": True, "gateway": gateway, "paused": running, **(result if isinstance(result, dict) else {})}
+
+
+@frappe.whitelist()
+@_bridge_guard
+def list_broadcasts(gateway: str | None = None, status: str | None = None, limit: Any = 50, offset: Any = 0) -> dict[str, Any]:
+	"""List broadcasts (newest first) with counts. A non-admin must name a Gateway they can read."""
+	filters: dict[str, Any] = {}
+	if gateway:
+		if not frappe.db.exists("Gateway", gateway):
+			return _error("not_found", "Gateway not found.")
+		if not _gateway_read_allowed(gateway):
+			raise frappe.PermissionError(_("Not permitted to read this Gateway"))
+		filters["gateway"] = gateway
+	elif not _can_manage_integrations():
+		return _gateway_required()
+	if status:
+		filters["status"] = status
+	try:
+		skip = max(0, int(offset))
+	except (TypeError, ValueError):
+		skip = 0
+	rows = frappe.get_all(
+		_BROADCAST, filters=filters, fields=list(_BROADCAST_FIELDS), order_by="creation desc",
+		limit_start=skip, limit_page_length=_clamp_limit(limit),
+	)
+	return {"success": True, "broadcasts": [_broadcast_view(r) for r in rows or []]}
+
+
+@frappe.whitelist()
+@_bridge_guard
+def get_broadcast(broadcast: str | None = None) -> dict[str, Any]:
+	"""One broadcast with its status counters."""
+	row = _broadcast_for_read(broadcast)
+	if row.get("error"):
+		return row
+	return {"success": True, "broadcast": _broadcast_view(row)}
+
+
+@frappe.whitelist()
+@_bridge_guard
+def list_broadcast_recipients(broadcast: str | None = None, status: str | None = None, limit: Any = 100, offset: Any = 0) -> dict[str, Any]:
+	"""Recipient rows of a broadcast, optionally filtered by status."""
+	row = _broadcast_for_read(broadcast)
+	if row.get("error"):
+		return row
+	filters: dict[str, Any] = {"broadcast": broadcast}
+	if status:
+		filters["status"] = status
+	try:
+		skip = max(0, int(offset))
+	except (TypeError, ValueError):
+		skip = 0
+	rows = frappe.get_all(
+		_BROADCAST_RECIPIENT, filters=filters,
+		fields=["name", "recipient", "status", "skip_reason", "wamid", "message_status", "attempts", "next_attempt_at",
+			"error_code", "error_message", "sent_at", "delivered_at", "read_at", "failed_at"],
+		order_by="creation asc", limit_start=skip, limit_page_length=_clamp_limit(limit),
+	)
+	return {"success": True, "recipients": [dict(r, **{k: _iso(r.get(k)) for k in ("next_attempt_at", "sent_at", "delivered_at", "read_at", "failed_at")}) for r in rows or []]}
