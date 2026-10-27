@@ -95,12 +95,34 @@ class TestSend(_Base):
 		self.assert_no_secrets(delivery.provider_response)
 
 	def test_thread_reply_path(self):
-		self.seed(CHANNEL_CONV)
+		self.seed(CHANNEL_CONV.partition(";")[0])
 		self.send("in thread", conversation_id=CHANNEL_CONV, reply_to="1700000000123")
 		[req] = self.svc.requests("connector")
 		self.assertTrue(req.path.endswith("/activities/1700000000123"))
-		self.assertIn("%3Bmessageid%3D", req.path)
+		self.assertNotIn("%3Bmessageid%3D", req.path)  # explicit replyToId form posts to the base id
 		self.assertEqual(req.body["replyToId"], "1700000000123")
+
+	def test_channel_thread_via_reply_target_hook(self):
+		base = "19:chan@thread.tacv2"
+		self.seed(base)
+		hook = provider_hooks.get("Microsoft Teams", "reply_target")
+		thread_id, reply_to = hook(type("E", (), {"thread_id": "1700000000000"})())
+		self.assertEqual((thread_id, reply_to), ("1700000000000", None))
+		self.assertEqual(hook(type("E", (), {"thread_id": None})()), (None, None))
+		client.send_reply(
+			GatewayReply(
+				conversation_id=base, text="t", thread_id=thread_id, reply_to_provider_message_id=reply_to
+			),
+			CREDS,
+			gateway_name="Teams GW",
+			transport=self.transport,
+		)
+		[req] = self.svc.requests("connector")
+		self.assertEqual(
+			req.path, "/v3/conversations/19%3Achan%40thread.tacv2%3Bmessageid%3D1700000000000/activities"
+		)
+		self.assertEqual(req.body["conversation"], {"id": f"{base};messageid=1700000000000"})
+		self.assertNotIn("replyToId", req.body)
 
 	def test_missing_reference_is_actionable(self):
 		with self.assertRaises(client.TeamsPermanentError) as cm:
@@ -217,15 +239,21 @@ class TestSsrf(_Base):
 	def test_bad_service_urls_rejected_before_any_request(self):
 		for bad in ("http://smba.trafficmanager.net/amer", "https://evil.example.com/", "https://10.0.0.1/"):
 			with self.subTest(bad=bad):
-				conv = f"a:conv-{abs(hash(bad))}"
-				refs.frappe.cache.set_value(
-					refs._cache_key(tf.BOT_APP_ID, conv), {"serviceUrl": bad, "conversation_id": conv}
-				)
-				with patch.object(refs, "_from_gateway_event", return_value={"serviceUrl": bad}):
+				with patch.object(refs, "get_reference", return_value={"serviceUrl": bad}):
 					with self.assertRaises(client.TeamsPermanentError):
-						self.send(conversation_id=conv)
+						self.send()
 		self.assertEqual(self.svc.requests(), [])
 		self.assertEqual(self.urls, [])
+
+	def test_poisoned_cache_entry_is_not_used(self):
+		refs.frappe.cache.set_value(
+			refs._cache_key(tf.BOT_APP_ID, "a:poison"), {"serviceUrl": "https://evil.example.com"}
+		)
+		with patch.object(refs, "_from_gateway_event", return_value=None):
+			with self.assertRaises(client.TeamsPermanentError) as cm:
+				self.send(conversation_id="a:poison")
+		self.assertIn("must message the bot first", str(cm.exception))
+		self.assertEqual(self.svc.requests(), [])
 
 	def test_validate_called_on_every_send(self):
 		with patch.object(refs, "validate_service_url", wraps=refs.validate_service_url) as v:

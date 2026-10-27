@@ -89,6 +89,13 @@ def register_hooks(provider_hooks: Any, provider: str) -> None:
 	)
 	provider_hooks.register(provider, "send_errors", send_errors)
 	provider_hooks.register(provider, "error_text", error_text)
+	provider_hooks.register(provider, "reply_target", reply_target)
+
+
+def reply_target(event: Any) -> tuple[str | None, str | None]:
+	"""Channel threads: ``thread_id`` is the root message id (set inbound only for channels); the reply goes to
+	``<base conversation id>;messageid=<root>`` (R4: posting to that id lands in the thread). No replyToId."""
+	return (str(getattr(event, "thread_id", "") or "") or None, None)
 
 
 # -- transport -------------------------------------------------------------------------------------------
@@ -356,7 +363,8 @@ def send_reply(
 	"""Send ``reply.text`` via the conversation's stored reference; large text becomes several messages."""
 	transport = transport or _requests_transport
 	app_id = str(credentials["app_id"])
-	reference = refs.get_reference(gateway_name, app_id, reply.conversation_id)
+	# References are stored under the base id (channel threads share their channel's reference).
+	reference = refs.get_reference(gateway_name, app_id, reply.conversation_id.partition(";messageid=")[0])
 	if not reference:
 		raise TeamsPermanentError(
 			"No Microsoft Teams conversation reference is stored for this conversation: the user must "
@@ -367,7 +375,9 @@ def send_reply(
 	except ValueError as exc:
 		raise TeamsPermanentError(f"Stored Teams reference rejected: {exc}") from None
 
-	conversation_id = reply.conversation_id
+	conversation_id = reply.conversation_id.partition(";messageid=")[0]
+	if reply.thread_id:
+		conversation_id = f"{conversation_id};messageid={reply.thread_id}"
 	url = f"{service_url}/v3/conversations/{quote(conversation_id, safe='')}/activities"
 	base: dict[str, Any] = {
 		"type": "message",
