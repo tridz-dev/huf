@@ -57,18 +57,34 @@ def _claim(name: str) -> bool:
 	return owned
 
 
-def _release(name: str) -> None:
-	"""sending -> queued, giving back the attempt. Only used before the POST was attempted."""
-	frappe.db.sql(
-		f"update `tab{RECIPIENT}` set status='queued', attempts=greatest(ifnull(attempts,0)-1,0) "
-		"where name=%s and status='sending'",
-		(name,),
-	)
+def _release(name: str, prior_status: str = "queued", prior_next_attempt_at: Any = None, cancelled: bool = False) -> None:
+	"""sending -> the status it had before the claim (queued stays queued, deferred stays deferred with its
+	``next_attempt_at``), giving back the attempt. A cancelled broadcast ends the row as skipped/cancelled instead.
+	Only used before the POST was attempted."""
+	if cancelled:
+		frappe.db.sql(
+			f"update `tab{RECIPIENT}` set status='skipped', skip_reason='cancelled', "
+			"attempts=greatest(ifnull(attempts,0)-1,0) where name=%s and status='sending'",
+			(name,),
+		)
+	else:
+		status = prior_status if prior_status in ("queued", "deferred") else "queued"
+		frappe.db.sql(
+			f"update `tab{RECIPIENT}` set status=%s, next_attempt_at=%s, attempts=greatest(ifnull(attempts,0)-1,0) "
+			"where name=%s and status='sending'",
+			(status, prior_next_attempt_at, name),
+		)
 	frappe.db.commit()
 
 
 def _load(name: str) -> dict[str, Any] | None:
 	return frappe.db.get_value(RECIPIENT, name, "*", as_dict=True)
+
+
+def _template_row(template: str | None) -> dict[str, Any] | None:
+	if not template:
+		return None
+	return frappe.db.get_value("WhatsApp Templates", template, ["status", "category"], as_dict=True)
 
 
 def _load_broadcast(name: str) -> dict[str, Any] | None:
@@ -142,6 +158,7 @@ def _later(seconds: float):
 
 def send_one(recipient_name: str) -> str:
 	"""Send the broadcast template to one recipient row. Returns one of :data:`OUTCOMES`."""
+	before = _load(recipient_name) or {}
 	if not _claim(recipient_name):
 		row = _load(recipient_name)
 		if row and row.get("status") in ("queued", "deferred") and int(row.get("attempts") or 0) >= MAX_ATTEMPTS:
@@ -162,7 +179,12 @@ def send_one(recipient_name: str) -> str:
 
 	# kill switch: only a Running broadcast sends; nothing was posted, so hand the row back
 	if bc.get("status") != "Running":
-		_release(recipient_name)
+		_release(
+			recipient_name,
+			before.get("status") or "queued",
+			before.get("next_attempt_at"),
+			cancelled=bc.get("status") == "Cancelled",
+		)
 		return "lost_claim"
 
 	# per-broadcast cap (rows already started, excluding this one)
@@ -184,8 +206,18 @@ def send_one(recipient_name: str) -> str:
 	body, header, button = _merge_params(bc, row)
 	opaque = row.get("opaque_ref") or recipient_name
 	use_mm = (bc.get("send_via") or "messages") == "marketing_messages"
-	if use_mm and str(bc.get("category") or "").upper() != "MARKETING":
-		_write(recipient_name, status="failed", failed_at=now_datetime(), error_code="mm_requires_marketing_template", error_message="Marketing Messages API sends need a MARKETING template.")
+	# fail closed: the template row must still exist with a readable status and category (bridge policy is a
+	# no-op for a missing template)
+	try:
+		tpl = _template_row(bc.get("template"))
+	except Exception:
+		tpl = None
+	if not tpl or not tpl.get("status") or not tpl.get("category"):
+		frappe.flags.broadcast_pause = "template_missing"
+		_write(recipient_name, status="failed", failed_at=now_datetime(), error_message="template_missing: the template is missing or its status/category cannot be read.")
+		return "failed"
+	if use_mm and str(tpl.get("category") or "").upper() != "MARKETING":
+		_write(recipient_name, status="failed", failed_at=now_datetime(), error_message="mm_requires_marketing_template: Marketing Messages API sends need a MARKETING template.")
 		return "failed"
 
 	from huf.ai.gateway_adapters import whatsapp_bridge as bridge
@@ -207,7 +239,7 @@ def send_one(recipient_name: str) -> str:
 			marketing_api=use_mm,
 		)
 	except bridge.BridgeError as exc:
-		return _after_bridge_error(recipient_name, int(row.get("attempts") or 0) + 1, exc.payload or {})
+		return _after_bridge_error(recipient_name, int(row.get("attempts") or 0), exc.payload or {}, bc.get("gateway"), to)
 	except Exception as exc:  # timeout / driver error / anything after the POST was attempted: ambiguous
 		return _mark_unknown(recipient_name, f"Outcome unknown: {type(exc).__name__}")
 
@@ -242,7 +274,8 @@ def _mark_unknown(name: str, message: str, wamid: str | None = None) -> str:
 	return "unknown"
 
 
-def _after_bridge_error(name: str, attempts: int, payload: dict[str, Any]) -> str:
+def _after_bridge_error(name: str, attempts: int, payload: dict[str, Any], gateway: str | None = None, to: str | None = None) -> str:
+	"""``attempts`` is the count INCLUDING this attempt: ``_claim`` is the only place that increments it."""
 	code = str(payload.get("error") or "")
 	graph_code = payload.get("graph_code")
 	message = str(payload.get("message") or code or "Send failed.")[:500]
@@ -271,6 +304,16 @@ def _after_bridge_error(name: str, attempts: int, payload: dict[str, Any]) -> st
 	if errors.should_defer_24h(ecode):
 		_write(name, status="deferred", next_attempt_at=_later(DEFER_24H_SECONDS), **common)
 		return "deferred"
+
+	if errors.is_marketing_stop(ecode) and gateway and to:
+		try:
+			from huf.ai.whatsapp import account_events
+
+			account_events.record_user_preferences(
+				gateway, [{"category": account_events.MARKETING, "value": "stop", "wa_id": to, "detail": "131050"}]
+			)
+		except Exception:
+			frappe.log_error(title="WhatsApp broadcast marketing-stop consent failed", message=frappe.get_traceback())
 
 	if errors.is_pause_signal(ecode):
 		frappe.flags.broadcast_pause = f"meta_error_{ecode}"
