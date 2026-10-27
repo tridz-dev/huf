@@ -52,7 +52,12 @@ class _Base(unittest.TestCase):
 		doc = frappe.get_doc({"doctype": B, "title": "t", "gateway": gateway, "status": status,
 							  "consent_attested": attested, "template": "tpl", "template_name": "tpl",
 							  "whatsapp_account": "ACC", "started_by": USER if status != "Draft" else None, **over})
-		doc.insert(ignore_permissions=True, ignore_links=True, ignore_mandatory=True)
+		# fixtures stand in for the broadcast API, which is the only path allowed to set consent
+		prev, frappe.flags.in_broadcast_api = frappe.flags.get("in_broadcast_api"), True
+		try:
+			doc.insert(ignore_permissions=True, ignore_links=True, ignore_mandatory=True)
+		finally:
+			frappe.flags.in_broadcast_api = prev
 		for i in range(n):
 			self.row(doc.name, f"1555000{i:04d}")
 		frappe.db.commit()
