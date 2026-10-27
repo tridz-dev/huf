@@ -25,7 +25,7 @@ import { SettingsTab } from '@/components/whatsapp/overview/SettingsTab';
 const TABS = ['overview', 'messages', 'templates', 'access', 'settings'] as const;
 type TabName = (typeof TABS)[number];
 
-/** In-app checklist anchors: Settings sections, or the Messages tab for the test message. */
+/** In-app checklist anchors: Settings sections, the Access tab, or the Messages tab for the test message. */
 const SETTINGS_ANCHORS = new Set(['credentials', 'app-secret', 'enabled']);
 
 const asTab = (v: string | null): TabName => (TABS.find((t) => t === v) ?? 'overview');
@@ -137,7 +137,12 @@ export default function WhatsAppManagePage() {
   const health: GatewayHealthStatus | null = detail?.gateway
     ? withTokenVerdict({ ...detail.gateway, token_check: tokenCheck?.gateway === gateway ? tokenCheck.result : detail.gateway.token_check })
     : null;
-  const settingsHref = gateway ? `/app/gateway/${encodeURIComponent(gateway)}` : '';
+  // Edit links open the channel's own page in Huf; the desk form is only a fallback without credentials.
+  const settingsHref = health?.integration_settings
+    ? `/huf/gateways/${encodeURIComponent(health.integration_settings)}#channel`
+    : gateway
+      ? `/app/gateway/${encodeURIComponent(gateway)}`
+      : '';
   const connectorAvailable = summary?.connector_available ?? true;
 
   // Checklist and next-step links like "#credentials" jump to the matching tab and section.
@@ -147,6 +152,7 @@ export default function WhatsAppManagePage() {
     if (!link || !id || link.pathname !== window.location.pathname || link.target === '_blank') return;
     if (SETTINGS_ANCHORS.has(id)) update({ tab: 'settings' });
     else if (id === 'test-message') update({ tab: 'messages', send: true });
+    else if (id === 'access') update({ tab: 'access' });
     else return;
     e.preventDefault();
     if (SETTINGS_ANCHORS.has(id)) setAnchor(id);

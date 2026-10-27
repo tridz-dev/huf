@@ -51,7 +51,7 @@ _BAD_TEMPLATE_STATES = frozenset({"REJECTED", "PAUSED", "DISABLED"})
 _REPLIED = ("sent", "delivered", "read")
 _SECRET_RE = re.compile(r"(?i)((?:access_)?token=)[^&\s\"'<>]+|EAA[A-Za-z0-9]{12,}")
 _MAX_EVENTS = 5000
-_AFTER_APP_SECRET = frozenset({"configure_webhook", "subscribe_messages", "send_test_message"})
+_AFTER_APP_SECRET = frozenset({"configure_webhook", "subscribe_messages", "approve_sender", "send_test_message"})
 
 # next-step priority, then (code, label, action anchor)
 _STEPS = (
@@ -61,6 +61,7 @@ _STEPS = (
 	("enabled", "enable_gateway", "Turn the gateway on", "#enabled"),
 	("webhook", "configure_webhook", "Set the callback URL in Meta", None),
 	("subscribed", "subscribe_messages", "Subscribe to the messages field in Meta", None),
+	("approve_sender", "approve_sender", "Approve the people waiting to talk to your agent", "#access"),
 	("test_message", "send_test_message", "Send a test message to this number", "#test-message"),
 )
 
@@ -131,6 +132,9 @@ def evaluate(facts: dict[str, Any], now: datetime | None = None) -> dict[str, An
 	agent_failed = int((facts.get("events_24h") or {}).get("agent_failed") or 0)
 	failed = max(int((facts.get("events_24h") or {}).get("failed") or 0) - agent_failed, 0)
 	replied = bool(facts.get("replied_ever"))
+	pending_senders = int(facts.get("pending_senders") or 0)
+	approved_senders = int(facts.get("approved_senders") or 0)
+	pairing = facts.get("direct_policy") == "Pairing"
 	never_seen = not last_event_at and events_ever == 0
 	sig_at = facts.get("signature_failure_at")
 	verify_ok_at = facts.get("verify_ok_at")
@@ -242,6 +246,16 @@ def evaluate(facts: dict[str, Any], now: datetime | None = None) -> dict[str, An
 	elif conn_state == "Degraded":
 		reasons.append(_reason("gateway_degraded", "warning", conn_reason or "Meta restricted this WhatsApp account. Sends are allowed but may fail."))
 
+	if pending_senders and pairing:
+		reasons.append(
+			_reason(
+				"senders_waiting",
+				"warning",
+				f"{pending_senders} {'person is' if pending_senders == 1 else 'people are'} waiting for approval. "
+				"Your agent won't reply to them until you approve them.",
+			)
+		)
+
 	configured_nothing = not (facts.get("has_integration") or token or phone or verify or secret)
 	errors = [r for r in reasons if r["severity"] == "error"]
 	warnings = [r for r in reasons if r["severity"] == "warning" and r["code"] != "no_events_yet"]
@@ -266,6 +280,10 @@ def evaluate(facts: dict[str, Any], now: datetime | None = None) -> dict[str, An
 		"subscribed": "done" if events_ever else ("blocked" if not verify else "todo"),
 		"app_secret": "done" if secret else "todo",
 		"enabled": "done" if enabled else "todo",
+		# Pairing: nobody reaches the agent until an admin approves them, so this is a real setup step.
+		"approve_sender": "done"
+		if (approved_senders or replied or not pairing)
+		else ("todo" if pending_senders else "blocked"),
 		"test_message": "done" if replied else ("todo" if credentials_ok and enabled else "blocked"),
 	}
 	checklist_urls = {
@@ -275,11 +293,14 @@ def evaluate(facts: dict[str, Any], now: datetime | None = None) -> dict[str, An
 		"subscribed": None,
 		"app_secret": "#app-secret",
 		"enabled": "#enabled",
+		"approve_sender": "#access",
 		"test_message": "#test-message",
 	}
 	checklist = [
 		{"code": code, "state": steps_state[code], "action_url": checklist_urls[code]}
-		for code in ("meta_app", "credentials", "webhook", "subscribed", "app_secret", "enabled", "test_message")
+		for code in (
+			"meta_app", "credentials", "webhook", "subscribed", "app_secret", "enabled", "approve_sender", "test_message"
+		)
 	]
 
 	next_step = None
@@ -294,6 +315,12 @@ def evaluate(facts: dict[str, Any], now: datetime | None = None) -> dict[str, An
 				break
 	if sig_failed and not mismatch and (next_step is None or next_step["code"] in _AFTER_APP_SECRET):
 		next_step = {"code": "fix_app_secret", "label": "Check the app secret", "action_url": "#app-secret"}
+	if pending_senders and pairing and next_step is not None and next_step["code"] in ("approve_sender", "send_test_message"):
+		next_step = {
+			"code": "approve_sender",
+			"label": f"Approve the {pending_senders} {'person' if pending_senders == 1 else 'people'} waiting to talk to your agent",
+			"action_url": "#access",
+		}
 	if health == "not_set_up" and not errors and never_seen and credentials_ok and secret and enabled:
 		next_step = {"code": "send_test_message", "label": "Send a test message to this number", "action_url": "#test-message"}
 	return {"health": health, "reasons": reasons, "next_step": next_step, "checklist": checklist}
@@ -466,6 +493,17 @@ def _cached_token_check(gateway_name: str) -> dict[str, Any] | None:
 	return None
 
 
+def read_sender_counts(gateway_name: str) -> dict[str, int]:
+	"""Pending and approved direct-message senders (pairing requests) of one gateway."""
+	base = {"gateway": gateway_name, "entry_type": "Sender"}
+	now = frappe.utils.now_datetime()
+	pending = frappe.db.count(
+		"Gateway Access Entry", {**base, "state": "Pending", "expires_at": [">=", now]}
+	) + frappe.db.count("Gateway Access Entry", {**base, "state": "Pending", "expires_at": ["is", "not set"]})
+	approved = frappe.db.count("Gateway Access Entry", {**base, "state": "Approved"})
+	return {"pending_senders": int(pending or 0), "approved_senders": int(approved or 0)}
+
+
 def build_health(
 	gateway: dict[str, Any],
 	presence: dict[str, bool],
@@ -519,6 +557,8 @@ def build_health(
 		"execution_unauthorized": events.get("execution_unauthorized", 0),
 		"fallback_template_approved": tpl["approved"],
 		"fallback_template_status": tpl["status"],
+		"direct_policy": gateway.get("direct_policy") or "",
+		**read_sender_counts(name),
 	}
 	mode = gateway.get("voice_reply_mode")
 	if mode is None:
