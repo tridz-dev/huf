@@ -81,39 +81,63 @@ class TestFfmpegStatus(unittest.TestCase):
 		self.assertTrue(all("timeout" in kw for _, kw in calls))
 
 
-class TestHealthReason(unittest.TestCase):
+class TestNoFfmpegWarning(unittest.TestCase):
+	"""ffmpeg is optional: no health reason, no save-time alert (Frappe Cloud has no ffmpeg)."""
+
 	def codes(self, **over):
 		return [r["code"] for r in wh.evaluate(facts(**over), NOW)["reasons"]]
 
-	def test_warning_when_missing(self):
-		out = wh.evaluate(facts(voice_reply_mode="Voice only", ffmpeg_status={"available": False, "has_libopus": False}), NOW)
-		r = [x for x in out["reasons"] if x["code"] == "voice_reply_ffmpeg_missing"]
-		self.assertEqual(len(r), 1)
-		self.assertEqual(r[0]["severity"], "warning")
+	def test_missing_ffmpeg_never_degrades_the_gateway(self):
+		codes = self.codes(
+			voice_reply_mode="Voice only", ffmpeg_status={"available": False, "has_libopus": False}
+		)
+		self.assertNotIn("voice_reply_ffmpeg_missing", codes)
+		self.assertEqual(codes, [])
 
-	def test_warning_when_no_libopus(self):
-		self.assertIn("voice_reply_ffmpeg_missing", self.codes(voice_reply_mode="Text and voice", ffmpeg_status={"available": True, "has_libopus": False}))
+	def test_health_facts_do_not_probe_ffmpeg(self):
+		import inspect
 
-	def test_none_when_off_or_ok(self):
-		self.assertNotIn("voice_reply_ffmpeg_missing", self.codes(voice_reply_mode="Off", ffmpeg_status={"available": False}))
-		self.assertNotIn("voice_reply_ffmpeg_missing", self.codes(voice_reply_mode="Voice only", ffmpeg_status={"available": True, "has_libopus": True}))
-		self.assertNotIn("voice_reply_ffmpeg_missing", self.codes())
+		self.assertNotIn("ffmpeg", inspect.getsource(wh))
 
-
-class TestGatewayWarning(unittest.TestCase):
-	def run_validate(self, mode, status):
+	def test_gateway_has_no_save_time_ffmpeg_alert(self):
 		from huf.huf.doctype.gateway.gateway import Gateway
-		doc = MagicMock()
-		doc.get = lambda k, d=None: {"voice_reply_mode": mode, "provider": "WhatsApp"}.get(k, d)
-		doc.provider = "WhatsApp"
-		with patch("huf.ai.whatsapp.send_file.ffmpeg_status", return_value=status), patch.object(frappe, "msgprint") as mp:
-			Gateway._warn_voice_ffmpeg(doc)
-		return mp
 
-	def test_warns(self):
-		mp = self.run_validate("Voice only", {"available": False, "has_libopus": False})
-		self.assertEqual(mp.call_count, 1)
+		self.assertFalse(hasattr(Gateway, "_warn_voice_ffmpeg"))
 
-	def test_silent(self):
-		self.assertEqual(self.run_validate("Off", {"available": False}).call_count, 0)
-		self.assertEqual(self.run_validate("Voice only", {"available": True, "has_libopus": True}).call_count, 0)
+
+class TestOptionalHelpers(unittest.TestCase):
+	def setUp(self):
+		sf._ffmpeg_cache_clear()
+
+	def test_can_make_opus_false_without_ffmpeg_and_never_raises(self):
+		with patch.object(sf.shutil, "which", return_value=None):
+			self.assertFalse(sf.ffmpeg_can_make_opus())
+		with patch.object(sf, "ffmpeg_status", side_effect=RuntimeError("boom")):
+			self.assertFalse(sf.ffmpeg_can_make_opus())
+
+	def test_can_make_opus_true_with_libopus(self):
+		with patch.object(sf.shutil, "which", return_value="/usr/bin/ffmpeg"), patch.object(sf.subprocess, "run", fake_run()):
+			self.assertTrue(sf.ffmpeg_can_make_opus())
+
+
+def ogg_opus(channels=1):
+	return b"OggS" + b"\x00" * 22 + b"OpusHead" + bytes([1, channels]) + b"\x00" * 20
+
+
+class TestAudioSniffing(unittest.TestCase):
+	def test_voice_ready_is_mono_ogg_opus_only(self):
+		self.assertTrue(sf.is_voice_ready(ogg_opus(1)))
+		self.assertFalse(sf.is_voice_ready(ogg_opus(2)))
+		self.assertFalse(sf.is_voice_ready(b"OggS" + b"\x00" * 40))  # Ogg Vorbis, not Opus
+		self.assertFalse(sf.is_voice_ready(b"ID3\x03" + b"\x00" * 20))
+		self.assertEqual(sf.ogg_opus_channels(ogg_opus(2)), 2)
+		self.assertIsNone(sf.ogg_opus_channels(b"RIFF"))
+
+	def test_sniff_audio_mime(self):
+		self.assertEqual(sf.sniff_audio_mime(b"ID3\x04\x00" + b"\x00" * 10), "audio/mpeg")
+		self.assertEqual(sf.sniff_audio_mime(b"\xff\xfb\x90\x00" + b"\x00" * 10), "audio/mpeg")  # MP3 frame
+		self.assertEqual(sf.sniff_audio_mime(b"\xff\xf1\x50\x80" + b"\x00" * 10), "audio/aac")  # ADTS
+		self.assertEqual(sf.sniff_audio_mime(b"#!AMR\n" + b"\x00" * 10), "audio/amr")
+		self.assertEqual(sf.sniff_audio_mime(b"\x00\x00\x00\x20ftypM4A " + b"\x00" * 10), "audio/mp4")
+		self.assertEqual(sf.sniff_audio_mime(b"RIFF\x00\x00\x00\x00WAVEfmt "), "")  # WAV is not a WhatsApp audio type
+		self.assertEqual(sf.sniff_audio_mime(b""), "")

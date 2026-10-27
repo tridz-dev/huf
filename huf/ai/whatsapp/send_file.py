@@ -137,6 +137,47 @@ def is_ogg_opus(content: bytes) -> bool:
 	return content[:4] == b"OggS" and b"OpusHead" in content[:256]
 
 
+def ogg_opus_channels(content: bytes) -> int | None:
+	"""Channel count from the OpusHead packet of an Ogg/Opus stream (``None`` if it is not one)."""
+	if not is_ogg_opus(content):
+		return None
+	at = content.find(b"OpusHead", 0, 256)
+	return content[at + 9] if len(content) > at + 9 else None
+
+
+def is_voice_ready(content: bytes) -> bool:
+	"""Mono Ogg/Opus: what WhatsApp plays as a voice note, with no conversion and no ffmpeg."""
+	return ogg_opus_channels(content) == 1
+
+
+# WhatsApp audio types that can be sent as an ordinary audio message (not a voice note).
+AUDIO_ATTACHMENT_EXT = {"audio/mpeg": "mp3", "audio/aac": "aac", "audio/mp4": "m4a", "audio/amr": "amr"}
+
+
+def sniff_audio_mime(content: bytes) -> str:
+	"""Audio type from the bytes (``""`` when unknown): providers rarely return a usable mime type."""
+	head = content[:12]
+	if head[:3] == b"ID3":
+		return "audio/mpeg"
+	if len(head) >= 2 and head[0] == 0xFF and head[1] & 0xE0 == 0xE0:
+		return "audio/aac" if head[1] & 0x06 == 0 else "audio/mpeg"  # layer bits 00 = ADTS (AAC)
+	if head[:5] == b"#!AMR":
+		return "audio/amr"
+	if head[4:8] == b"ftyp":
+		return "audio/mp4"
+	return ""
+
+
+def ffmpeg_can_make_opus() -> bool:
+	"""ffmpeg with libopus is present on this host. Optional: nothing requires it, it only widens what can be sent
+	as a voice note. Never raises."""
+	try:
+		status = ffmpeg_status()
+		return bool(status.get("available") and status.get("has_libopus"))
+	except Exception:
+		return False
+
+
 def _ffmpeg_cache_clear() -> None:
 	_status_cache.update({"at": 0.0, "value": None})
 
