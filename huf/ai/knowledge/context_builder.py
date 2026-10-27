@@ -47,11 +47,19 @@ def build_knowledge_context(
 		max_chunks = source_config["max_chunks"]
 		
 		try:
+			# Honour the RUNNING user's permissions (same check as the tool path in
+			# retriever.knowledge_search); never read on behalf of the agent owner.
+			if not frappe.has_permission("Knowledge Source", "read", source_name):
+				frappe.logger("huf").debug(
+					f"Knowledge injection skipped: user {frappe.session.user} lacks read on {source_name}"
+				)
+				continue
+
 			results = knowledge_search(
 				query=user_query,
 				knowledge_source=source_name,
 				top_k=max_chunks,
-				ignore_permissions=True,  # Agent has explicit knowledge linkage
+				ignore_permissions=False,
 			)
 			
 			if results:
