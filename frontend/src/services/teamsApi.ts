@@ -44,6 +44,10 @@ const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export const DEFAULT_PACKAGE_VERSION = '1.0.0';
 const VERSION_RE = /^\d+\.\d+\.\d+$/;
 
+export function errorText(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export function isGuid(value: string): boolean {
   return GUID_RE.test(value.trim().toLowerCase());
 }

@@ -3,5 +3,8 @@
 import './BindingsPanel';
 import './HealthPanel';
 import './SlackSetupPanel';
+import './TeamsDiagnosticsPanel';
+import './TeamsPeoplePanel';
+import './TeamsSetupPanel';
 
 export {};

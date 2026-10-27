@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/frappe-sdk', () => ({ call: { get: vi.fn(), post: vi.fn() } }));
+vi.mock('@/lib/frappe-error', () => ({ handleFrappeError: vi.fn() }));
+
 import {
   buildLinkParams,
   buildPackageDownloadUrl,
