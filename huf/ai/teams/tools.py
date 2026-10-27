@@ -126,13 +126,11 @@ def _bump_sent(run_id: str) -> None:
 
 
 def _authorize_read(gateway_name: str) -> str | None:
-	"""Read actions need Gateway read (or integration-admin) authority, as the WhatsApp tool does."""
+	"""Read actions need real Gateway read authority (sends are authorised by the run's own gateway)."""
 	try:
-		from huf.ai.whatsapp import management as mgmt
-
-		allowed = mgmt._gateway_read_allowed(gateway_name)
-	except Exception:
 		allowed = bool(frappe.has_permission("Gateway", "read", doc=gateway_name))
+	except Exception:
+		allowed = False
 	if allowed:
 		return None
 	return _refused("permission_denied", "Not permitted to use Microsoft Teams through this Gateway")
