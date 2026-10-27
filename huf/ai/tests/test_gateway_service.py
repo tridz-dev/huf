@@ -784,7 +784,7 @@ class TestGatewayEventFailureHandling(unittest.TestCase):
         mock_post = MagicMock()
         mock_post.return_value.json.return_value = {}  # no "id" in the response
         real_adapter = TeamsGatewayAdapter(
-            {"app_id": "appid", "app_password": "apppass"}, http_post=mock_post
+            {"app_id": "appid", "app_password": "apppass", "tenant_id": "tenant"}, http_post=mock_post
         )
 
         event = MagicMock(
