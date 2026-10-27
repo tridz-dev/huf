@@ -58,6 +58,10 @@ def register_action_handler(kind_prefix: str, fn) -> None:
 
 
 def get_action_handler(kind: str):
+	# Handler modules register at import time; make sure the module list is loaded in this process.
+	from huf.ai.gateways import hooks as gw_hooks
+
+	gw_hooks.register_all()
 	matches = [p for p in _HANDLERS if str(kind or "").startswith(p)]
 	return _HANDLERS[max(matches, key=len)] if matches else None
 
