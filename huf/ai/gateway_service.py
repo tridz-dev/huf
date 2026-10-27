@@ -21,6 +21,7 @@ from frappe.rate_limiter import rate_limit
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
+from huf.ai.gateways.identity_policy import IDENTITY_REQUIRED_PROVIDERS, is_identity_required  # noqa: F401
 
 
 MATCH_CONTEXT_KEY = {
@@ -66,7 +67,6 @@ SENSITIVE_PAYLOAD_KEYS = {
 }
 
 
-IDENTITY_REQUIRED_PROVIDERS = frozenset({"slack", "microsoft teams"})
 
 
 def _idempotency_key(gateway_name: str, provider_event_id: str) -> str:
@@ -705,7 +705,7 @@ def process_gateway_event(event_name: str) -> dict:
     gw_hooks.register_all()
     kind = "flow" if event.target_type == "Flow" else "agent"
     try:
-        if str(getattr(gateway, "provider", "") or "").lower() in IDENTITY_REQUIRED_PROVIDERS and not (
+        if is_identity_required(getattr(gateway, "provider", "")) and not (
             gw_hooks.has_handler(gw_hooks.RESOLVE_RUN_USER, gateway)
         ):
             # Fail closed: never fall back to the shared service user when identity is missing.

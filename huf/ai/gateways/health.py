@@ -21,6 +21,7 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from huf.ai.gateways import hooks
+from huf.ai.gateways.identity_policy import is_identity_required
 
 LAST_EVENT_THROTTLE_SECONDS = 5
 LAST_ERROR_MAX_CHARS = 300
@@ -292,6 +293,13 @@ def _admission_check(gs, gateway, context: dict[str, Any]) -> dict:
 			else:
 				bad = "This person is not on the approved list for direct messages."
 				fix = "Add this person to the approved list for this channel."
+				if is_identity_required(getattr(gateway, "provider", "")):
+					fix = (
+						"Set the access policy to Open so this person can connect their own account "
+						"(nothing runs until they do), or add them to the approved list."
+					)
+		elif policy == "Open":
+			ok, bad, fix = True, "", ""
 		else:
 			ok = False
 			bad = f"Direct messages are set to '{policy}', which does not let this person in."
