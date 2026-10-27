@@ -10,4 +10,5 @@ MODULES = (
 	"huf.ai.gateways.teams_tenant",
 	"huf.ai.gateways.teams_refs",
 	"huf.ai.gateways.teams_identity",
+	"huf.ai.gateways.teams_help",
 )
