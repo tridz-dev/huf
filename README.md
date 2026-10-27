@@ -138,7 +138,7 @@ Organize AI capabilities into modular, reusable packages:
 
 Connect your agents to inbound and outbound communication channels:
 
-- **Supported Channels** — Gmail / Email, Telegram, Slack, WhatsApp, and custom HTTP Webhooks
+- **Supported Channels** — Gmail / Email, Telegram, Slack, WhatsApp, Microsoft Teams, and custom HTTP Webhooks
 - **Access & Binding Rules** — Control which users or external senders can invoke specific agents or flows
 
 #### Telegram
@@ -157,7 +157,8 @@ Connect your agents to inbound and outbound communication channels:
 
 #### Microsoft Teams
 
-- Bot Framework gateway (single-tenant) for personal, group chat and channel conversations, with mention-gated channel replies
+- Bot Framework gateway (single-tenant) for personal, group chat and channel conversations, with mention-gated channel replies, signed-JWT verification, tenant and service-URL allow-lists, a downloadable Teams app package, a Verify connection check and a `microsoft_teams` agent tool
+- Not supported: sovereign clouds, managed-identity/multi-tenant bots, file upload, Adaptive Cards
 - Setup, Azure Bot steps, troubleshooting and known limitations: `docs/gateways/teams.md`
 
 ### Knowledge Grounding
