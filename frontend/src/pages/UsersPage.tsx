@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { UserPlus, ChevronDown, Users, MoreVertical, Power } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { cn, settleAll } from '@/lib/utils';
 import {
   getUsers,
   getHufRoles,
@@ -11,7 +11,6 @@ import {
   type HufUser,
   type HufRole,
 } from '@/services/permissionsApi';
-import { settleAll } from '@/lib/settleAll';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

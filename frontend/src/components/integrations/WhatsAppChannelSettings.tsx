@@ -93,7 +93,7 @@ function AudioField({
     <Field label={label} hint={hint} size="sm">
       <div className="flex items-center gap-2">
         <Input value={value || ''} readOnly placeholder="No audio yet" className="min-w-0 flex-1 text-xs" />
-        <input
+        <Input
           ref={input}
           type="file"
           accept="audio/ogg,audio/opus,.ogg,.opus"

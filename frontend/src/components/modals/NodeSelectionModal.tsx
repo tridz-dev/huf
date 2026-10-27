@@ -62,7 +62,6 @@ interface NodeSelectionModalProps {
    */
   actionCategory?: ActionOption['category'] | null;
 }
-
 const iconMap: Record<string, LucideIcon> = {
   Webhook,
   Clock,

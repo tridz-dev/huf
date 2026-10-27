@@ -42,7 +42,6 @@ interface ToolParameter {
   required?: boolean;
   description?: string;
 }
-
 interface ToolDetails {
   parameters?: ToolParameter[];
   /** Present only when the tool came from list_flow_tools() (built-in or MCP). */

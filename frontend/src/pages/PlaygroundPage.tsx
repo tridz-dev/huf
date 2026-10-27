@@ -19,7 +19,7 @@ import {
 } from '@/components/playground';
 import { getAgents } from '@/services/agentApi';
 import { getProviders } from '@/services/providerApi';
-import { settleAll } from '@/lib/settleAll';
+import { settleAll } from '@/lib/utils';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import type { AgentDoc, AIProvider } from '@/types/agent.types';
 import type { AgentPromptDoc } from '@/services/agentPromptApi';

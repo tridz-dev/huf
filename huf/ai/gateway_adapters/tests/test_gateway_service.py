@@ -804,8 +804,13 @@ class TestGatewayEventFailureHandling(unittest.TestCase):
 
         mock_post = MagicMock()
         mock_post.return_value.json.return_value = {}  # no "id" in the response
+        # Delivery is outbox-backed, so a direct send is the only path that can
+        # see a response body; simulate that path raising on the missing id.
         real_adapter = TeamsGatewayAdapter(
             {"app_id": "appid", "app_password": "apppass", "tenant_id": "tenant"}, http_post=mock_post
+        )
+        real_adapter.send_reply = MagicMock(
+            side_effect=ValueError("Microsoft Teams message delivery failed: {}")
         )
 
         event = MagicMock(
@@ -826,7 +831,11 @@ class TestGatewayEventFailureHandling(unittest.TestCase):
         mock_frappe.get_doc.side_effect = [event, configured_gateway, target_agent_doc]
         mock_run = MagicMock(return_value={"agent_run_id": "AR-002", "response": "Hello back"})
 
-        with patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=real_adapter), patch.dict(
+        # Teams identity is fail-closed (no tenant/AAD id on this bare event); this
+        # scenario is about delivery failure handling, so resolve the run user.
+        with patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=real_adapter), patch(
+            "huf.ai.gateways.hooks.call_first", return_value=None
+        ), patch.dict(
             sys.modules, {"huf.ai.agent.integration": SimpleNamespace(run_agent_sync=mock_run)}
         ):
             with self.assertRaises(ValueError):
