@@ -13,11 +13,14 @@
   "section_break_identity",
   "description",
   "executor_section",
+  "target_type",
+  "procedure",
   "agent",
   "model_override",
   "column_break_executor",
   "project",
   "run_as_user",
+  "run_as_set_by",
   "work_section",
   "instruction",
   "input_template",
@@ -82,12 +85,30 @@
    "label": "Executor"
   },
   {
+   "default": "Agent",
+   "fieldname": "target_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Target Type",
+   "options": "Agent\nAgent Procedure"
+  },
+  {
+   "depends_on": "eval: doc.target_type == \"Agent Procedure\"",
+   "description": "The pinned Agent Procedure version this automation runs. Must be Testing or Active before the automation can be Active.",
+   "fieldname": "procedure",
+   "fieldtype": "Link",
+   "label": "Procedure",
+   "mandatory_depends_on": "eval: doc.target_type == \"Agent Procedure\"",
+   "options": "Agent Procedure"
+  },
+  {
    "fieldname": "agent",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Agent",
    "options": "Agent",
-   "reqd": 1
+   "mandatory_depends_on": "eval: doc.target_type != \"Agent Procedure\"",
+   "depends_on": "eval: doc.target_type != \"Agent Procedure\""
   },
   {
    "description": "Optional AI Model to use for this automation instead of the Agent's default model.",
@@ -115,6 +136,15 @@
    "options": "User"
   },
   {
+   "description": "User who last set Run As User. Fire-time impersonation is authorised against this user, not the owner.",
+   "fieldname": "run_as_set_by",
+   "fieldtype": "Link",
+   "label": "Run As Set By",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
    "fieldname": "work_section",
    "fieldtype": "Section Break",
    "label": "Work"
@@ -124,7 +154,8 @@
    "fieldtype": "Long Text",
    "ignore_xss_filter": 1,
    "label": "Instruction",
-   "reqd": 1
+   "mandatory_depends_on": "eval: doc.target_type != \"Agent Procedure\"",
+   "depends_on": "eval: doc.target_type != \"Agent Procedure\""
   },
   {
    "description": "Optional template used to build the instruction/input sent to the agent at run time.",

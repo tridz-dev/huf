@@ -1,0 +1,20 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "value": {
+            "event": "APPROVED",
+            "message_template_id": 1234567890123456,
+            "message_template_name": "leave_approved",
+            "message_template_language": "en_US",
+            "reason": "NONE"
+          },
+          "field": "message_template_status_update"
+        }
+      ]
+    }
+  ]
+}

@@ -91,8 +91,12 @@ export function MultiSelectCombobox({
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-          <Command>
+        <PopoverContent
+          className="flex max-h-[var(--radix-popover-content-available-height)] w-[var(--radix-popover-trigger-width)] flex-col overflow-hidden p-0"
+          align="start"
+          collisionPadding={8}
+        >
+          <Command className="min-h-0 flex-1">
             <div className="flex items-center justify-between border-b px-3 py-2">
               <span className="text-xs font-medium text-muted-foreground">Select options</span>
               <Button
@@ -110,7 +114,7 @@ export function MultiSelectCombobox({
               placeholder={searchPlaceholder}
               {...(onSearchChange ? { value: searchValue, onValueChange: onSearchChange } : {})}
             />
-            <CommandList className="max-h-[min(50vh,280px)]">
+            <CommandList className="min-h-0 max-h-[min(50vh,280px)] flex-1">
               <CommandEmpty>{emptyText}</CommandEmpty>
               <CommandGroup>
                 {options.map((option) => {

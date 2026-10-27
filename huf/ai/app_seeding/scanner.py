@@ -32,6 +32,48 @@ def find_seed_dirs() -> dict:
             )
     return result
 
+def find_www_template_dir(app_name: str, template_name: str) -> Path | None:
+    """
+    Resolve a provider app's own per-app ``www/`` portal template directory,
+    analogous to ``find_seed_dirs()`` above -- same two-location precedent
+    (package root first, then app repo root), same "huf is never modified"
+    contract: the template lives entirely under the *provider* app's own
+    source tree, never under the shared ``huf/www/``.
+
+    ``template_name`` is the manifest's ``www_template`` value (already
+    validated by apps_loader to match the app_id slug shape, so it is always
+    a single path segment -- no traversal risk).
+
+    Checked in this order:
+    1. ``apps/<app_name>/<app_name>/www/<template_name>/`` (package root --
+       preferred; this is also where a colocated ``index.py`` with
+       ``get_context`` can be imported as ``<app_name>.www.<template_name>.index``,
+       the same way ``huf.www.huf`` backs ``huf/www/huf.html``).
+    2. ``apps/<app_name>/www/<template_name>/`` (app repo root).
+
+    Returns the resolved ``Path`` if it exists and is a directory containing
+    an ``index.html``, else ``None``. Never raises -- a missing/misconfigured
+    template is a validation-time or render-time concern for the caller, not
+    a scanner-level error.
+    """
+    try:
+        app_path = Path(frappe.get_app_path(app_name))
+    except Exception:
+        return None
+
+    candidates = (
+        app_path / "www" / template_name,
+        app_path.parent / "www" / template_name,
+    )
+    for candidate in candidates:
+        try:
+            if candidate.is_dir() and (candidate / "index.html").is_file():
+                return candidate
+        except Exception:
+            continue
+    return None
+
+
 def get_seed_files(huf_dir: Path, type_folder: str) -> list:
     """
     Returns a list of Path objects for all .json files in a specific type folder.

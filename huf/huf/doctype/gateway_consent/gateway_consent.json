@@ -1,0 +1,24 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-10-22 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["gateway", "sender_id", "category", "value", "source", "detail", "changed_at", "meta_timestamp"],
+ "fields": [
+  {"fieldname":"gateway","fieldtype":"Link","in_list_view":1,"label":"Gateway","options":"Gateway","reqd":1,"read_only":1,"search_index":1},
+  {"fieldname":"sender_id","fieldtype":"Data","in_list_view":1,"label":"Sender (wa_id or user id)","length":255,"reqd":1,"read_only":1,"search_index":1},
+  {"fieldname":"category","fieldtype":"Select","in_list_view":1,"label":"Category","options":"marketing_messages\ntemplate_outreach","reqd":1,"read_only":1},
+  {"fieldname":"value","fieldtype":"Select","in_list_view":1,"label":"Value","options":"stop\nresume","reqd":1,"read_only":1},
+  {"fieldname":"source","fieldtype":"Data","label":"Source","read_only":1,"default":"user_preferences"},
+  {"fieldname":"detail","fieldtype":"Small Text","label":"Detail","read_only":1},
+  {"fieldname":"changed_at","fieldtype":"Datetime","label":"Changed at","read_only":1},
+  {"description":"Meta event time (epoch seconds); orders preferences and dedupes redeliveries.","fieldname":"meta_timestamp","fieldtype":"Int","label":"Meta timestamp","read_only":1,"search_index":1}
+ ],
+ "in_create": 1,
+ "module": "Huf",
+ "name": "Gateway Consent",
+ "permissions": [{"read": 1, "role": "System Manager"}],
+ "sort_field": "creation",
+ "sort_order": "DESC"
+}

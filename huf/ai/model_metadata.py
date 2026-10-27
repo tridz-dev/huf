@@ -1,8 +1,8 @@
 """Shared model-metadata resolution — currently just the context window.
 
-Used by both the read-side context API (``agent_run_context_api.py``, for
+Used by both the read-side context API (``agent/run_context_api.py``, for
 runs that predate the ``model_context_window`` snapshot column or whose
-snapshot is unset) and the write-side run persistence (``agent_integration.py``,
+snapshot is unset) and the write-side run persistence (``agent/integration.py``,
 to snapshot the window at call time so later AI Model edits cannot rewrite
 history).
 """

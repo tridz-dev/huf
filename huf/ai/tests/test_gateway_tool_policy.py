@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()
@@ -34,12 +34,12 @@ def _load_sdk_tools():
 	so nothing leaks into other test modules."""
 	heavy = [
 		"huf.ai.conversation_data_tools", "huf.ai.handlers.agent_runner", "huf.ai.handlers.crud",
-		"huf.ai.handlers.media", "huf.ai.tool_invocation", "huf.ai.tool_registry", "huf.ai.tool_types",
+		"huf.ai.handlers.media", "huf.ai.tools.invocation", "huf.ai.tools.registry", "huf.ai.tools.types",
 		"huf.ai.tools.perplexity",
 	]
 	mods = {n: MagicMock() for n in heavy}
-	mods["huf.ai.tool_types"]._GUEST_DOCTYPE_PINNED_TYPES = set()
-	mods["huf.ai.tool_types"]._GUEST_REPORT_PINNED_TYPES = set()
+	mods["huf.ai.tools.types"]._GUEST_DOCTYPE_PINNED_TYPES = set()
+	mods["huf.ai.tools.types"]._GUEST_REPORT_PINNED_TYPES = set()
 	agents = types.ModuleType("agents")
 	agents.FunctionTool = _FunctionTool
 	mods["agents"] = agents

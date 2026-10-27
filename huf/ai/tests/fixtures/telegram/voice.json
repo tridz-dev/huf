@@ -1,0 +1,25 @@
+{
+  "update_id": 1019,
+  "message": {
+    "message_id": 10,
+    "from": {
+      "id": 111,
+      "is_bot": false,
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "chat": {
+      "id": 111,
+      "type": "private",
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "date": 1760000000,
+    "voice": {
+      "file_id": "voice-id",
+      "file_unique_id": "v",
+      "duration": 3,
+      "mime_type": "audio/ogg"
+    }
+  }
+}

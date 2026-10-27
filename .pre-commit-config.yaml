@@ -72,6 +72,20 @@ repos:
         files: '^huf/.*\.py$'
         pass_filenames: true
 
+      - id: check-repo-layout
+        name: Keep workspace/agent working files out of the repo
+        entry: python3 scripts/check_repo_layout.py
+        language: system
+        always_run: true
+        pass_filenames: false
+
+      - id: standards
+        name: Standards guards (file size, UI drift, API calls, whitelist)
+        entry: python3 scripts/run_standards.py
+        language: system
+        always_run: true
+        pass_filenames: false
+
 ci:
     autoupdate_schedule: weekly
     skip: []

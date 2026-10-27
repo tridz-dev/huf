@@ -1,6 +1,7 @@
 import { Fragment, ReactNode, useState } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import {
   Select,
   SelectContent,
@@ -33,11 +34,11 @@ interface FilterBarProps {
 }
 
 /**
- * Each filter — the search box, each dropdown — is its own distinct 30px
- * / 8px-radius bordered chip, not a shared box divided by internal
- * hairlines. Chips sit side by side with a gap between them.
+ * Each filter (the search box, each dropdown) is its own bordered chip at the
+ * standard small control height (--control-h-sm), not a shared box divided by
+ * internal hairlines. Chips sit side by side with a gap between them.
  */
-const CHIP_HEIGHT = 'h-[30px]';
+const CHIP_HEIGHT = 'h-control-sm';
 const chipShellClass = `flex ${CHIP_HEIGHT} items-center gap-2 rounded-lg border border-line bg-panel px-3`;
 
 /** Select trigger restyled as its own chip rather than a flush strip cell. */
@@ -52,11 +53,13 @@ function searchInputCell(
   trailing?: ReactNode
 ) {
   return (
-    <div className={`${chipShellClass} flex-1`}>
-      <Search className="h-3.5 w-3.5 shrink-0 text-steel-soft" />
-      <input
+    <InputGroup size="sm" className="flex-1 rounded-lg border-line bg-panel shadow-none">
+      <InputGroupAddon align="inline-start" className="py-0">
+        <Search className="h-3.5 w-3.5 shrink-0 text-steel-soft" />
+      </InputGroupAddon>
+      <InputGroupInput
         placeholder={searchPlaceholder}
-        className="w-full bg-transparent font-body text-[13px] text-ink outline-none placeholder:text-steel-soft"
+        className="text-ui-text text-ink placeholder:text-steel-soft"
         value={searchValue}
         onChange={(e) => onSearchChange(e.target.value)}
         onKeyDown={(e) => {
@@ -64,8 +67,12 @@ function searchInputCell(
         }}
         autoFocus={autoFocus}
       />
-      {trailing}
-    </div>
+      {trailing && (
+        <InputGroupAddon align="inline-end" className="py-0">
+          {trailing}
+        </InputGroupAddon>
+      )}
+    </InputGroup>
   );
 }
 

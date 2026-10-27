@@ -6,7 +6,7 @@ Canonical backend audio service for Huf.
 
 Single home for audio upload guardrails, STT configuration resolution,
 audio transcription, and audio user-message creation. Chat endpoints
-(``huf.ai.agent_chat``), the ``transcribe_audio`` agent tool
+(``huf.ai.agent.chat``), the ``transcribe_audio`` agent tool
 (``huf.ai.sdk_tools.handle_transcribe_audio``), and the public audio API
 (``huf.ai.audio_api``) are thin wrappers around these functions.
 
@@ -306,27 +306,37 @@ def import_local_audio(
     )
 
 
+# Provider -> default STT model. Every value whose provider is seeded must
+# resolve to a Transcription model in huf.ai.model_catalogue (enforced by
+# huf/ai/tests/test_model_catalogue_refresh.py). Google uses the
+# gemini-flash-latest alias because HUF transcribes Gemini audio through a
+# multimodal completion (MULTIMODAL_STT_PROVIDERS).
+DEFAULT_STT_MODELS = {
+    "openai": "gpt-transcribe",
+    "azure": "whisper-1",  # Azure deployments are customer-named; not catalogue-seeded
+    "groq": "groq/whisper-large-v3-turbo",
+    "mistral": "mistral/voxtral-mini-latest",
+    "elevenlabs": "elevenlabs/scribe_v2",
+    "deepgram": "deepgram/nova-3",
+    "google": "gemini/gemini-flash-latest",
+    "gemini": "gemini/gemini-flash-latest",
+    "vertex_ai": "gemini/gemini-flash-latest",
+}
+
+
 def _get_default_stt_model(provider_name: str) -> str:
     """
     Get default STT model for a provider.
     """
-    defaults = {
-        "openai": "whisper-1",
-        "azure": "whisper-1",
-        "groq": "groq/whisper-large-v3",
-        "deepgram": "deepgram/nova-2",
-        # Multimodal providers transcribe via completion with audio input
-        "google": "gemini/gemini-3.8-flash",
-        "gemini": "gemini/gemini-3.8-flash",
-        "vertex_ai": "gemini/gemini-3.8-flash",
-    }
-    return defaults.get(provider_name.lower())
+    return DEFAULT_STT_MODELS.get(provider_name.lower())
 
 
 def _find_transcription_model(provider: str) -> str:
     """
     Prefer an AI Model record flagged with the ``Transcription`` modality
-    for the given provider over the hardcoded provider default map.
+    for the given provider over the hardcoded provider default map. When the
+    provider's default STT model is among them it wins, so the choice does not
+    depend on which row was modified last.
     """
     try:
         models = frappe.get_all(
@@ -334,12 +344,19 @@ def _find_transcription_model(provider: str) -> str:
             filters={"provider": provider, "modalities": ["like", "%Transcription%"]},
             fields=["model_name"],
             order_by="modified desc",
-            limit=1,
         )
     except frappe.DoesNotExistError:
         return None
 
-    return models[0].model_name if models else None
+    models = [m.model_name for m in models]
+    if not models:
+        return None
+    default = _get_default_stt_model(provider or "") or ""
+    bare_default = default.split("/", 1)[1] if default.startswith("gemini/") else default
+    for candidate in (default, bare_default):
+        if candidate and candidate in models:
+            return candidate
+    return models[0]
 
 
 def resolve_stt_config(agent_name: str = None, model: str = None) -> dict:
@@ -597,6 +614,29 @@ def transcribe_audio_file(
         return {"success": False, "error": str(e)}
 
 
+# Container extensions STT providers (OpenAI: flac, mp3, mp4, mpeg, mpga,
+# m4a, ogg, wav, webm) reject although the bytes are a supported container.
+# Ogg/Opus voice notes (Telegram ``.oga``) are plain Ogg, so only the upload
+# name changes; the bytes are never transcoded.
+_STT_EXTENSION_ALIASES = {"oga": "ogg", "opus": "ogg"}
+_STT_EXTENSION_MIME = {
+    "ogg": "audio/ogg", "mp3": "audio/mpeg", "m4a": "audio/mp4",
+    "mp4": "audio/mp4", "wav": "audio/wav", "webm": "audio/webm",
+    "flac": "audio/flac",
+}
+
+
+def _stt_upload_name(file_path: str) -> tuple[str, str | None]:
+    """Return (upload filename, mime) with provider-rejected extensions normalised."""
+    base = os.path.basename(file_path)
+    stem, _, ext = base.rpartition(".")
+    ext = ext.lower()
+    if not stem:
+        return base, None
+    ext = _STT_EXTENSION_ALIASES.get(ext, ext)
+    return f"{stem}.{ext}", _STT_EXTENSION_MIME.get(ext)
+
+
 def _call_stt_provider(
     *,
     provider_name: str,
@@ -629,6 +669,7 @@ def _call_stt_provider(
 
         base64_audio = base64.b64encode(audio_data).decode("utf-8")
         audio_format = _get_file_extension(file_path) or "mp3"
+        audio_format = _STT_EXTENSION_ALIASES.get(audio_format, audio_format)
         if audio_format == "m4a":
             audio_format = "mp4"
 
@@ -664,7 +705,11 @@ def _call_stt_provider(
         transcription_params["language"] = language
 
     with open(file_path, "rb") as audio_file:
-        transcription_params["file"] = audio_file
+        upload_name, upload_mime = _stt_upload_name(file_path)
+        if upload_mime:
+            transcription_params["file"] = (upload_name, audio_file, upload_mime)
+        else:
+            transcription_params["file"] = audio_file
         try:
             response = litellm.transcription(**transcription_params)
         except Exception as e:

@@ -17,7 +17,7 @@ import types
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()
@@ -93,7 +93,7 @@ class TestSlackIngestIntegration:
 	def setup_method(self):
 		self.stored = {}  # idempotency_key -> name
 		self.admitted = []  # contexts of events that were actually stored
-		gateway = SimpleNamespace(name=GATEWAY, is_enabled=1)
+		gateway = SimpleNamespace(name=GATEWAY, is_enabled=1, provider="Slack")
 
 		def get_value(doctype, filters, field=None, *a, **k):
 			return self.stored.get(filters["idempotency_key"])

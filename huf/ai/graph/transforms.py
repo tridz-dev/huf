@@ -5,8 +5,9 @@ importable/runnable as a bare script or under plain ``pytest``/``unittest``, wit
 ``huf.ai.tools.execution_sandbox`` (the other frappe-free module in this codebase).
 
 Contract (see ``$TRACK/spec/graph-ir.md`` section 5 and ``spec/graph-ir.schema.json``'s
-``$defs/TransformOp``): there are **exactly eleven** transform operations. This module implements
-exactly those eleven, dispatched by name from a static dict (``REGISTRY``) -- not an expression
+``$defs/TransformOp``): there are the eleven data transform operations plus nine text operations
+(lower, upper, trim, replace, contains, starts_with, split_first, regex_extract, concat). This module implements
+exactly those, dispatched by name from a static dict (``REGISTRY``) -- not an expression
 language, not a general-purpose eval loop. The complete operation set is knowable by reading
 ``REGISTRY`` once; nothing here can add an operation at runtime (I3).
 
@@ -19,7 +20,7 @@ instead of a list, or a required key is absent from ``config.input`` entirely), 
 violation, not an ordinary-data edge case -- it is reported as a typed :class:`TransformError` in the
 returned :class:`TransformResult` (``ok=False``) so the calling node FAILS instead of silently
 succeeding with a wrong answer. This is the fix for the documented anti-pattern in
-``huf/ai/flow_engine.py``'s ``_exec_transform`` (:1065), which swallows per-transformation errors into
+``huf/ai/flow/engine.py``'s ``_exec_transform`` (:1065), which swallows per-transformation errors into
 a result *string* and still reports success.
 
 Determinism (I nothing-new, just good practice + explicit test requirement): every op produces the
@@ -36,6 +37,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -107,7 +109,7 @@ ERR_UNKNOWN_OP = "unknown_op"
 # graph-ir.md section 4.1 defines the general reference grammar (root + "." segment | "[" int "]").
 # Transform "key"/"field" values are always relative to a single row (no root token), so this is a
 # narrower, purely-local variant: a dotted/bracketed path evaluated against one dict, total, missing
-# keys/out-of-range indices resolve to None rather than raising. This mirrors flow_eval.py's dict
+# keys/out-of-range indices resolve to None rather than raising. This mirrors flow/eval.py's dict
 # subscript behaviour, extended to list indices, but does NOT implement the full reference/expression
 # grammar owned by T-13 (huf/ai/graph/expressions.py) -- only what row-key resolution needs.
 # --------------------------------------------------------------------------------------------------
@@ -600,6 +602,197 @@ def op_coalesce(input: dict, limits: Limits) -> TransformResult:
 
 
 # --------------------------------------------------------------------------------------------------
+# Text ops (deterministic string handling for Flow branching / replies)
+#
+# All take ``text`` (string; null -> "", numbers/bools are stringified; anything else is a typed
+# failure) and are bounded by MAX_TEXT_CHARS. No arbitrary code: ``regex_extract`` accepts only a
+# conservative regex subset (see ``_check_safe_pattern``) because Python's ``re`` has no timeout.
+# --------------------------------------------------------------------------------------------------
+
+MAX_TEXT_CHARS = 10_000
+MAX_PATTERN_CHARS = 200
+
+
+def _text_arg(input: dict, key: str, op: str, *, required: bool = True):
+	"""Return (str, None) or (None, TransformResult failure)."""
+
+	if key not in input:
+		if required:
+			return None, TransformResult.failure(ERR_BAD_INPUT, f"{op} requires {key}: string", op)
+		return "", None
+	v = input[key]
+	if v is None:
+		v = ""
+	elif isinstance(v, bool):
+		v = "true" if v else "false"
+	elif isinstance(v, (int, float)):
+		v = str(v)
+	elif not isinstance(v, str):
+		return None, TransformResult.failure(ERR_BAD_INPUT, f"{op}: {key} must be a string, number or null", op)
+	if len(v) > MAX_TEXT_CHARS:
+		return None, TransformResult.failure(
+			ERR_OUTPUT_LIMIT_EXCEEDED, f"{op}: {key} exceeds {MAX_TEXT_CHARS} characters", op
+		)
+	return v, None
+
+
+def _simple_text_op(op: str, fn: Callable[[str], str]):
+	def _op(input: dict, limits: Limits) -> TransformResult:
+		text, err = _text_arg(input, "text", op)
+		if err:
+			return err
+		return TransformResult.success(fn(text))
+
+	_op.__name__ = f"op_{op}"
+	return _op
+
+
+op_lower = _simple_text_op("lower", str.lower)
+op_upper = _simple_text_op("upper", str.upper)
+op_trim = _simple_text_op("trim", str.strip)
+
+
+def op_replace(input: dict, limits: Limits) -> TransformResult:
+	"""text, find (non-empty), with, count? (int >= 0, default all) -> string."""
+
+	text, err = _text_arg(input, "text", "replace")
+	if err:
+		return err
+	find, err = _text_arg(input, "find", "replace")
+	if err:
+		return err
+	repl, err = _text_arg(input, "with", "replace", required=False)
+	if err:
+		return err
+	count = input.get("count")
+	if find == "" or (count is not None and (not isinstance(count, int) or isinstance(count, bool) or count < 0)):
+		return TransformResult.failure(
+			ERR_BAD_INPUT, "replace requires a non-empty find and count: int >= 0", "replace"
+		)
+	out = text.replace(find, repl, -1 if count is None else count)
+	if len(out) > MAX_TEXT_CHARS:
+		return TransformResult.failure(ERR_OUTPUT_LIMIT_EXCEEDED, "replace: output too long", "replace")
+	return TransformResult.success(out)
+
+
+def _fold(v: str, ignore_case: Any) -> str:
+	return v.casefold() if ignore_case is True else v
+
+
+def op_contains(input: dict, limits: Limits) -> TransformResult:
+	"""text, needle, ignore_case? -> bool. Empty needle is always contained."""
+
+	text, err = _text_arg(input, "text", "contains")
+	if err:
+		return err
+	needle, err = _text_arg(input, "needle", "contains")
+	if err:
+		return err
+	ic = input.get("ignore_case")
+	return TransformResult.success(_fold(needle, ic) in _fold(text, ic))
+
+
+def op_starts_with(input: dict, limits: Limits) -> TransformResult:
+	"""text, prefix, ignore_case? -> bool."""
+
+	text, err = _text_arg(input, "text", "starts_with")
+	if err:
+		return err
+	prefix, err = _text_arg(input, "prefix", "starts_with")
+	if err:
+		return err
+	ic = input.get("ignore_case")
+	return TransformResult.success(_fold(text, ic).startswith(_fold(prefix, ic)))
+
+
+def op_split_first(input: dict, limits: Limits) -> TransformResult:
+	"""text, separator? (default: any whitespace, leading whitespace ignored) -> first part."""
+
+	text, err = _text_arg(input, "text", "split_first")
+	if err:
+		return err
+	sep = input.get("separator")
+	if sep is None:
+		parts = text.split(None, 1)
+		return TransformResult.success(parts[0] if parts else "")
+	if not isinstance(sep, str) or sep == "":
+		return TransformResult.failure(ERR_BAD_INPUT, "split_first: separator must be a non-empty string", "split_first")
+	return TransformResult.success(text.split(sep, 1)[0])
+
+
+_BACKREF_RE = re.compile(r"\\[1-9]|\\k<|\\g<")
+_QUANTIFIED_GROUP_RE = re.compile(r"\)\s*(?:[*+]|\{)")
+
+
+def _check_safe_pattern(pattern: str) -> str | None:
+	"""Return a reason string if ``pattern`` is outside the allowed subset, else None.
+
+	Disallowed: over-long patterns, lookaround / named / conditional groups (only plain ``(...)`` and
+	``(?:...)``), backreferences, and any quantified group (the catastrophic-backtracking shape).
+	"""
+
+	if not pattern or len(pattern) > MAX_PATTERN_CHARS:
+		return f"pattern must be 1-{MAX_PATTERN_CHARS} characters"
+	if "(?" in pattern.replace("(?:", ""):
+		return "only plain and (?:...) groups are allowed"
+	if _BACKREF_RE.search(pattern):
+		return "backreferences are not allowed"
+	if _QUANTIFIED_GROUP_RE.search(pattern):
+		return "quantified groups are not allowed"
+	return None
+
+
+def op_regex_extract(input: dict, limits: Limits) -> TransformResult:
+	"""text, pattern, group? (default 0), default? (default null) -> first match string, or default."""
+
+	text, err = _text_arg(input, "text", "regex_extract")
+	if err:
+		return err
+	pattern = input.get("pattern")
+	group = input.get("group", 0)
+	if not isinstance(pattern, str) or not isinstance(group, int) or isinstance(group, bool) or group < 0:
+		return TransformResult.failure(
+			ERR_BAD_INPUT, "regex_extract requires pattern: string and group: int >= 0", "regex_extract"
+		)
+	reason = _check_safe_pattern(pattern)
+	if reason:
+		return TransformResult.failure(ERR_BAD_INPUT, f"regex_extract: {reason}", "regex_extract")
+	try:
+		rx = re.compile(pattern)
+	except re.error as exc:
+		return TransformResult.failure(ERR_BAD_INPUT, f"regex_extract: invalid pattern ({exc})", "regex_extract")
+	if group > rx.groups:
+		return TransformResult.failure(
+			ERR_BAD_INPUT, f"regex_extract: pattern has {rx.groups} groups, asked for {group}", "regex_extract"
+		)
+	m = rx.search(text)
+	if m is None or m.group(group) is None:
+		return TransformResult.success(input.get("default"))
+	return TransformResult.success(m.group(group))
+
+
+def op_concat(input: dict, limits: Limits) -> TransformResult:
+	"""parts: list<scalar>, separator? -> string. null parts are skipped as ""."""
+
+	parts = input.get("parts")
+	sep, err = _text_arg(input, "separator", "concat", required=False)
+	if err:
+		return err
+	if not isinstance(parts, list) or len(parts) > limits.max_rows:
+		return TransformResult.failure(ERR_BAD_INPUT, "concat requires parts: list", "concat")
+	strs = []
+	for p in parts:
+		s, err = _text_arg({"p": p}, "p", "concat")
+		if err:
+			return err
+		strs.append(s)
+	out = sep.join(strs)
+	if len(out) > MAX_TEXT_CHARS:
+		return TransformResult.failure(ERR_OUTPUT_LIMIT_EXCEEDED, "concat: output too long", "concat")
+	return TransformResult.success(out)
+
+
+# --------------------------------------------------------------------------------------------------
 # Registry (I3: the static, complete, invocable operation set)
 # --------------------------------------------------------------------------------------------------
 
@@ -615,6 +808,15 @@ REGISTRY: dict[str, Callable[[dict, Limits], TransformResult]] = {
 	"batch": op_batch,
 	"distinct": op_distinct,
 	"coalesce": op_coalesce,
+	"lower": op_lower,
+	"upper": op_upper,
+	"trim": op_trim,
+	"replace": op_replace,
+	"contains": op_contains,
+	"starts_with": op_starts_with,
+	"split_first": op_split_first,
+	"regex_extract": op_regex_extract,
+	"concat": op_concat,
 }
 
 

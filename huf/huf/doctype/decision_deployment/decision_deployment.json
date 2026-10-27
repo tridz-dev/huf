@@ -1,0 +1,225 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:deployment_key",
+ "creation": "2026-09-23 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "deployment_key",
+  "deployment_name",
+  "decision_model",
+  "provider",
+  "provider_model_id",
+  "enabled",
+  "is_default_for_model",
+  "priority",
+  "supports_select",
+  "supports_judge",
+  "supports_score",
+  "supports_parallel_questions",
+  "supports_probabilities",
+  "supports_confidence",
+  "input_modalities",
+  "context_limit_override",
+  "state_limit_override",
+  "pricing_override",
+  "input_price_per_million",
+  "output_price_per_million",
+  "provider_rate_limits_json",
+  "provider_metadata_json",
+  "health_status",
+  "last_healthcheck"
+ ],
+ "fields": [
+  {
+   "fieldname": "deployment_key",
+   "fieldtype": "Data",
+   "label": "Deployment Key",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "deployment_name",
+   "fieldtype": "Data",
+   "label": "Deployment Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "decision_model",
+   "fieldtype": "Link",
+   "label": "Canonical Decision Model",
+   "options": "Decision Model",
+   "reqd": 1
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Link",
+   "label": "Decision Provider",
+   "options": "Decision Provider",
+   "reqd": 1
+  },
+  {
+   "fieldname": "provider_model_id",
+   "fieldtype": "Data",
+   "label": "Provider Model ID",
+   "reqd": 1
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1"
+  },
+  {
+   "fieldname": "is_default_for_model",
+   "fieldtype": "Check",
+   "label": "Default for Model",
+   "default": "0"
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "label": "Priority",
+   "default": "100",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "supports_select",
+   "fieldtype": "Check",
+   "label": "Supports Select",
+   "default": "1"
+  },
+  {
+   "fieldname": "supports_judge",
+   "fieldtype": "Check",
+   "label": "Supports Judge",
+   "default": "1"
+  },
+  {
+   "fieldname": "supports_score",
+   "fieldtype": "Check",
+   "label": "Supports Score",
+   "default": "1"
+  },
+  {
+   "fieldname": "supports_parallel_questions",
+   "fieldtype": "Check",
+   "label": "Supports Parallel Questions",
+   "default": "1"
+  },
+  {
+   "fieldname": "supports_probabilities",
+   "fieldtype": "Check",
+   "label": "Supports Probabilities",
+   "default": "0"
+  },
+  {
+   "fieldname": "supports_confidence",
+   "fieldtype": "Check",
+   "label": "Supports Confidence",
+   "default": "0"
+  },
+  {
+   "fieldname": "input_modalities",
+   "fieldtype": "Data",
+   "label": "Input Modalities",
+   "description": "JSON array of modality keys."
+  },
+  {
+   "fieldname": "context_limit_override",
+   "fieldtype": "Int",
+   "label": "Context Limit Override",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "state_limit_override",
+   "fieldtype": "Int",
+   "label": "State Limit Override",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "pricing_override",
+   "fieldtype": "Code",
+   "label": "Pricing Override",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "input_price_per_million",
+   "fieldtype": "Float",
+   "label": "Input Price / Million",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "output_price_per_million",
+   "fieldtype": "Float",
+   "label": "Output Price / Million",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "provider_rate_limits_json",
+   "fieldtype": "Code",
+   "label": "Provider Rate Limits",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "provider_metadata_json",
+   "fieldtype": "Code",
+   "label": "Provider Metadata",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "health_status",
+   "fieldtype": "Data",
+   "label": "Health Status"
+  },
+  {
+   "fieldname": "last_healthcheck",
+   "fieldtype": "Data",
+   "label": "Last Healthcheck"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Decision Deployment",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "print": 1,
+   "email": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "Huf Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "print": 1,
+   "email": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "Huf User",
+   "read": 1,
+   "select": 1,
+   "print": 1,
+   "export": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

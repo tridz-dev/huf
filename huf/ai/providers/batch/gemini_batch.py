@@ -154,7 +154,7 @@ def _messages_to_contents(messages: list[dict]) -> list[dict]:
 	`contents: [{"role": "user"|"model", "parts": [{"text": ...}]}]` (see
 	huf/ai/providers/google.py, which builds this shape inline for realtime
 	calls; there is no shared translation helper elsewhere in this repo, e.g.
-	sdk_tools.py/tool_serializer.py, to reuse -- confirmed by search). "system"
+	sdk_tools.py/huf/ai/tools/serializer.py, to reuse -- confirmed by search). "system"
 	messages are folded into the first user turn's text since Phase 1 scope is
 	single-request scheduled batches (a single prompt), not multi-turn
 	conversations or tool use -- this is a deliberate simplification, not a
@@ -181,8 +181,8 @@ def _build_batch_requests(requests: list[dict]) -> tuple[list[dict], str]:
 
 	Every request in a single Gemini batch job targets the same `model` (it's
 	part of the URL path, not the per-request body) -- this repo's Phase 1
-	scope only ever submits single-request batches (see agent_scheduler.py /
-	automation_scheduler.py's `_submit_batch_job_for_*` callers), so using the
+	scope only ever submits single-request batches (see agent/scheduler.py /
+	automation/scheduler.py's `_submit_batch_job_for_*` callers), so using the
 	first request's model for the whole batch is safe today; a future
 	multi-request batch spanning models would need per-model batches instead.
 	"""
@@ -214,8 +214,8 @@ def _build_batch_requests(requests: list[dict]) -> tuple[list[dict], str]:
 async def submit_batch(agent, requests: list[dict]) -> dict:
 	"""Create a Gemini batch job via the direct REST API.
 
-	Inline-only for Phase 1 scope: every caller today (agent_scheduler.py /
-	automation_scheduler.py's scheduled-trigger batch jobs) submits exactly one
+	Inline-only for Phase 1 scope: every caller today (agent/scheduler.py /
+	automation/scheduler.py's scheduled-trigger batch jobs) submits exactly one
 	request per batch, far under Gemini's <20MB inline request-list cap, so
 	the file-upload path (`client.files.upload` + a JSONL `input_config.
 	file_name` reference, for up to 2GB/file) is unused complexity for now --

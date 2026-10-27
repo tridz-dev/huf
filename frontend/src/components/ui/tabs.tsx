@@ -37,11 +37,13 @@ Tabs.displayName = TabsPrimitive.Root.displayName;
 type TabsVariant = 'underline' | 'pill';
 
 const TabsVariantContext = React.createContext<TabsVariant>('underline');
-const TabsSizeContext = React.createContext<'default' | 'compact'>('default');
+const TabsSizeContext = React.createContext<'default' | 'compact' | 'lg'>('default');
 
-// Beyond this many triggers, layout="overflow" collapses the rest into a
-// "More" dropdown instead of letting the tab bar scroll or wrap.
-const OVERFLOW_VISIBLE_COUNT = 6;
+// Reserve this much width for the "More" trigger itself when deciding how
+// many tabs fit — its own rendered width isn't known until it's shown, and
+// showing/hiding it to remeasure would flash. ~72px covers "More" + chevron
+// + the row's 22px gap at the underline variant's font size.
+const OVERFLOW_MORE_TRIGGER_WIDTH = 72;
 
 const tabsListVariants = cva('gap-0', {
   variants: {
@@ -70,7 +72,8 @@ const tabsListVariants = cva('gap-0', {
     },
     size: {
       default: '',
-      compact: 'h-8',
+      compact: 'h-control-sm',
+      lg: 'h-control-lg',
     },
   },
   // Row-style underline bars space their labels with a 22px gap (spec §25).
@@ -108,13 +111,21 @@ const tabsTriggerVariants = cva(
         // shadow-sm/DEFAULT, both of which map to --shadow-flat: none) is
         // required for the active segment's "raised" lift to be visible at
         // all in the apple-quiet theme.
-        pill: 'flex-1 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md',
+        pill: 'flex-1 rounded-md px-3 text-xs font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md',
       },
       size: {
-        default: '',
-        compact: 'h-7',
+        default: 'h-control-md',
+        compact: 'h-control-sm',
+        lg: 'h-control-lg',
       },
     },
+    // Underline triggers take the Input height for their size. Pill triggers
+    // sit inside a p-1 track, so they are one step smaller (sm) to keep the
+    // whole segmented control on the md/lg token (30 + 2*4 = 38).
+    compoundVariants: [
+      { variant: 'pill', size: 'default', class: 'h-control-sm' },
+      { variant: 'pill', size: 'lg', class: 'h-control-md' },
+    ],
     defaultVariants: {
       variant: 'underline',
       size: 'default',
@@ -137,22 +148,26 @@ interface TabsListProps
  * swapped in for the last inline slot (which drops into overflow instead) —
  * so the user never has to open the menu to see which tab they're on.
  */
-function partitionOverflowTriggers(children: React.ReactNode, activeValue: string | undefined) {
+function partitionOverflowTriggers(
+  children: React.ReactNode,
+  activeValue: string | undefined,
+  visibleCount: number,
+) {
   const items = React.Children.toArray(children).filter(React.isValidElement) as React.ReactElement<{
     value?: string;
     disabled?: boolean;
     children?: React.ReactNode;
   }>[];
 
-  if (items.length <= OVERFLOW_VISIBLE_COUNT) {
+  if (items.length <= visibleCount) {
     return { visible: items, overflow: [] as typeof items };
   }
 
-  let visible = items.slice(0, OVERFLOW_VISIBLE_COUNT);
-  let overflow = items.slice(OVERFLOW_VISIBLE_COUNT);
+  let visible = items.slice(0, visibleCount);
+  let overflow = items.slice(visibleCount);
 
   const activeOverflowIndex = overflow.findIndex((item) => item.props.value === activeValue);
-  if (activeOverflowIndex !== -1) {
+  if (activeOverflowIndex !== -1 && visible.length > 0) {
     const activeItem = overflow[activeOverflowIndex];
     const displaced = visible[visible.length - 1];
     visible = [...visible.slice(0, -1), activeItem];
@@ -166,6 +181,69 @@ function partitionOverflowTriggers(children: React.ReactNode, activeValue: strin
   return { visible, overflow };
 }
 
+/**
+ * Measures how many of `items` fit in `containerWidth` (px), using a hidden
+ * offscreen clone of each trigger's label rendered with the real trigger
+ * classes so its width reflects actual font metrics. Recomputed whenever the
+ * container resizes (ResizeObserver) or the item set changes.
+ *
+ * Falls back to showing everything until the first measurement lands, so
+ * server-rendered/pre-hydration markup isn't empty.
+ */
+function useOverflowFit(
+  items: React.ReactElement<{ children?: React.ReactNode }>[],
+  hasOverflowCandidate: boolean,
+) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const measureRef = React.useRef<HTMLDivElement>(null);
+  const [visibleCount, setVisibleCount] = React.useState(items.length);
+
+  const labels = items.map((item) => item.props.children);
+  const labelsKey = labels.join('\u0000');
+
+  React.useLayoutEffect(() => {
+    if (!hasOverflowCandidate) {
+      setVisibleCount(items.length);
+      return;
+    }
+
+    const recompute = () => {
+      const container = containerRef.current;
+      const measure = measureRef.current;
+      if (!container || !measure) return;
+
+      const containerWidth = container.clientWidth;
+      const gap = 22; // matches the underline layout="overflow" gap-[22px]
+      const widths = Array.from(measure.children).map((el) => (el as HTMLElement).offsetWidth);
+
+      let used = 0;
+      let count = 0;
+      for (let i = 0; i < widths.length; i += 1) {
+        const next = used + widths[i] + (count > 0 ? gap : 0);
+        const budget =
+          i === widths.length - 1
+            ? containerWidth
+            : containerWidth - OVERFLOW_MORE_TRIGGER_WIDTH;
+        if (next > budget && count > 0) break;
+        used = next;
+        count += 1;
+      }
+      setVisibleCount(Math.max(count, 1));
+    };
+
+    recompute();
+
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(recompute);
+    observer.observe(container);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasOverflowCandidate, labelsKey]);
+
+  return { containerRef, measureRef, visibleCount };
+}
+
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
   TabsListProps
@@ -173,15 +251,52 @@ const TabsList = React.forwardRef<
   const { value: activeValue, onValueChange } = React.useContext(TabsActiveContext);
   const isOverflow = layout === 'overflow';
 
+  const allItems = React.Children.toArray(children).filter(React.isValidElement) as React.ReactElement<{
+    value?: string;
+    disabled?: boolean;
+    children?: React.ReactNode;
+  }>[];
+
+  const { containerRef, measureRef, visibleCount } = useOverflowFit(allItems, isOverflow);
+
   const { visible, overflow } = isOverflow
-    ? partitionOverflowTriggers(children, activeValue)
+    ? partitionOverflowTriggers(children, activeValue, visibleCount)
     : { visible: null, overflow: [] as ReturnType<typeof partitionOverflowTriggers>['overflow'] };
+
+  const setRefs = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      if (typeof ref === 'function') ref(node as unknown as HTMLDivElement);
+      else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    },
+    [containerRef, ref],
+  );
 
   return (
     <TabsVariantContext.Provider value={variant ?? 'underline'}>
       <TabsSizeContext.Provider value={size ?? 'default'}>
+        {isOverflow && (
+          // Offscreen clone of every trigger label, rendered with the same
+          // trigger classes, purely so useOverflowFit can read real widths
+          // without flashing visible content. Never interactive.
+          <div
+            ref={measureRef}
+            aria-hidden="true"
+            className={cn(tabsListVariants({ variant, layout: 'inline', size }))}
+            style={{ position: 'fixed', top: -9999, left: -9999, visibility: 'hidden', pointerEvents: 'none' }}
+          >
+            {allItems.map((item) => (
+              <span
+                key={item.props.value}
+                className={cn(tabsTriggerVariants({ variant: variant ?? 'underline', size: size ?? 'default' }))}
+              >
+                {item.props.children}
+              </span>
+            ))}
+          </div>
+        )}
         <TabsPrimitive.List
-          ref={ref}
+          ref={setRefs}
           style={
             layout === 'grid' && cols
               ? { ...style, gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }
@@ -198,10 +313,13 @@ const TabsList = React.forwardRef<
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="inline-flex shrink-0 items-center whitespace-nowrap px-4 py-2 font-body text-[13px] font-medium text-steel-soft transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className={cn(
+                        tabsTriggerVariants({ variant: variant ?? 'underline', size: size ?? 'default' }),
+                        'shrink-0 gap-1 text-steel-soft',
+                      )}
                     >
                       More
-                      <ChevronDown className="ml-1 size-[13px]" aria-hidden="true" />
+                      <ChevronDown className="size-[13px]" aria-hidden="true" />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">

@@ -23,7 +23,7 @@ export async function getExecutionAnalytics(
   params?: GetExecutionAnalyticsParams
 ): Promise<ExecutionAnalyticsResponse | null> {
   try {
-    const result = await call.get('huf.ai.agent_run_analytics_api.get_execution_analytics', {
+    const result = await call.get('huf.ai.agent.run_analytics_api.get_execution_analytics', {
       granularity: params?.granularity ?? 'hour',
       ...(params?.fromDate ? { from_date: params.fromDate } : {}),
       ...(params?.toDate ? { to_date: params.toDate } : {}),

@@ -8,7 +8,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()

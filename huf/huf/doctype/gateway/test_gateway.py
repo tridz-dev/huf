@@ -146,3 +146,64 @@ class TestGatewayReadiness(IntegrationTestCase):
 		self.assertTrue(checks["route-target"]["done"])
 		self.assertTrue(checks["route-target-concrete"]["done"])
 		self.assertTrue(checks["credentials"]["done"])
+
+
+class TestFallbackTemplateValidation(IntegrationTestCase):
+	"""The fallback template is sent without values, so it must be variable-free."""
+
+	def _gw(self, template="fallback", account="ACC", provider="WhatsApp"):
+		from types import SimpleNamespace
+
+		from huf.huf.doctype.gateway.gateway import Gateway
+
+		values = {
+			"provider": provider,
+			"fallback_template": template,
+			"whatsapp_account": account,
+			"fallback_template_language": "en_US",
+		}
+		doc = SimpleNamespace(**values, get=lambda k, d=None, _v=values: _v.get(k, d))
+		return doc, lambda: Gateway._validate_fallback_template(doc)
+
+	def _check(self, row, available=True, found=True, **kw):
+		from unittest.mock import patch
+
+		from huf.ai.gateway_adapters import whatsapp_bridge as bridge
+
+		_, run = self._gw(**kw)
+		with patch.object(bridge, "is_available", return_value=available), patch.object(
+			bridge, "_template_docname", return_value="fallback-en_US"
+		), patch.object(bridge, "_template_row", return_value=row if found else None):
+			run()
+
+	@staticmethod
+	def _row(**over):
+		row = {"template": "Hello, we'll get back to you.", "header": "", "header_type": "", "buttons": [],
+			"whatsapp_account": "ACC", "header_format": ""}
+		row.update(over)
+		return row
+
+	def test_plain_template_passes(self):
+		self._check(self._row())
+
+	def test_body_variables_allowed_header_and_url_variables_rejected(self):
+		self._check(self._row(template="Hi {{1}}"))  # WP-6 (C-011): body variables are filled at send time
+		self._check(self._row(template="Hi {{name}}"))
+		for over in (
+			{"header": "Order {{1}}", "header_type": "TEXT"},
+			{"buttons": [{"button_type": "Visit Website", "website_url": "https://x.test/{{1}}"}]},
+			{"header_type": "IMAGE"},
+		):
+			with self.assertRaises(frappe.ValidationError, msg=str(over)) as ctx:
+				self._check(self._row(**over))
+			self.assertIn("can't have a media", str(ctx.exception))
+
+	def test_skips_silently_when_unverifiable(self):
+		self._check(self._row(template="Hi {{1}}"), available=False)  # no connector
+		self._check(self._row(template="Hi {{1}}"), found=False)  # template not synced yet
+		self._check(self._row(template="Hi {{1}}"), account="")  # no account to scope by
+		self._check(self._row(template="Hi {{1}}"), template="")  # no fallback set
+		self._check(self._row(template="Hi {{1}}"), provider="Slack")
+
+	def test_other_accounts_template_is_ignored(self):
+		self._check(self._row(template="Hi {{1}}", whatsapp_account="OTHER"))

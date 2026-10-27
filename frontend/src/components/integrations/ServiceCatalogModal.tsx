@@ -19,6 +19,7 @@ import type { IntegrationServiceDoc } from '@/types/integration.types';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { toast } from 'sonner';
 import { getServiceIdentity } from '@/data/serviceIdentity';
+import { getNewSettingRoute } from '@/utils/integrationRoutes';
 
 interface ServiceCatalogModalProps {
   open: boolean;
@@ -58,15 +59,10 @@ export function ServiceCatalogModal({
     const query = search.trim().toLowerCase();
     return services.filter((service) => {
       const isGateway = (service.surface || 'Integration') === 'Gateway';
-      // GW-24: the Gateways page's "Channel credentials" catalog (kind='channels')
-      // and the Integrations page's "Add Integration" catalog (kind='integrations')
-      // used to be filtered so strictly by surface that the 6+ Communication-category
-      // Gateway services (WhatsApp, Slack, Telegram, ...) were entirely invisible
-      // from the generic Integrations catalog -- searching "Slack" there found
-      // nothing, with no indication a Gateway surface existed for it. The generic
-      // catalog now also lists Gateway-surface services; handleSelect below routes
-      // each one to its correct entry point (Gateway vs Integration) regardless of
-      // which catalog it was found in.
+      // The Integrations catalog (kind='integrations') also lists Gateway-surface
+      // services (WhatsApp, Slack, Telegram, ...) so they stay searchable there;
+      // the Gateways page's "Channel credentials" catalog (kind='channels') lists
+      // only Gateway-surface services.
       const matchesKind = kind === 'channels' ? isGateway : true;
       const matchesCategory = category === 'all' || service.category === category;
       const matchesSearch =
@@ -82,13 +78,9 @@ export function ServiceCatalogModal({
     onOpenChange(false);
     setSearch('');
     setCategory('all');
-    const service = services.find((s) => s.service_name === serviceName);
-    const isGateway = (service?.surface || 'Integration') === 'Gateway';
-    // Route by the service's own surface, not by which catalog it was found
-    // in -- a Communication service found via the generic "Add Integration"
-    // catalog still needs to be configured as a Gateway.
-    const base = isGateway ? '/gateways' : '/integrations';
-    navigate(`${base}/new?service=${encodeURIComponent(serviceName)}`);
+    // Route by entry point (kind), not by the service's surface, so a flow
+    // started from Integrations stays under /integrations.
+    navigate(getNewSettingRoute(kind, serviceName));
   };
 
   return (
@@ -157,7 +149,7 @@ export function ServiceCatalogModal({
                     </CardHeader>
                     <CardContent className="space-y-2">
                       {kind === 'integrations' && isGatewayService && (
-                        <p className="text-xs text-primary">Configured as a channel gateway</p>
+                        <p className="text-xs text-primary">Can also receive messages once a gateway is added</p>
                       )}
                       {credSchema.length > 0 && (
                         <p className="text-xs text-muted-foreground">

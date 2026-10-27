@@ -78,6 +78,11 @@ export function PermissionsProvider({ children }: PermissionsProviderProps) {
 // Hook
 // ---------------------------------------------------------------------------
 
+/** True for Huf Admins; false for everyone else, and outside a provider (so it is safe in tests and shared components). */
+export function useIsHufAdmin(): boolean {
+  return useContext(PermissionsContext)?.hufRole === 'Huf Admin';
+}
+
 export function usePermissions(): PermissionsContextType {
   const ctx = useContext(PermissionsContext);
   if (!ctx) {

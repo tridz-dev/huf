@@ -7,7 +7,7 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()
@@ -168,7 +168,7 @@ def test_target_validation():
 def test_agent_access_for_run_as_user(env, monkeypatch):
 	env.gw.execution_user = "bot@x.com"
 	mod = SimpleNamespace(check_agent_access=lambda agent, user, for_execution: False)
-	monkeypatch.setitem(sys.modules, "huf.ai.agent_access", mod)
+	monkeypatch.setitem(sys.modules, "huf.ai.agent.access", mod)
 	with pytest.raises(ValErr):
 		ba.validate_binding_payload(good(), env.gw)
 	mod.check_agent_access = lambda agent, user, for_execution: True

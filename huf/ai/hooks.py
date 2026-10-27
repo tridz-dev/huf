@@ -18,7 +18,7 @@ def has_permission_agent_run(doc, ptype=None, user=None):
 		user: User to check (default: frappe.session.user)
 
 	Returns:
-		bool or None: True to allow, False to deny, None to let Frappe decide
+		bool: False denies. True means "not restricted by this hook" (role permissions still apply; hooks cannot grant)
 	"""
 	from huf.ai.record_access import user_can_read_run
 
@@ -35,7 +35,7 @@ def has_permission_agent_run(doc, ptype=None, user=None):
 		if "System Manager" in frappe.get_roles(user):
 			return True
 		return doc.owner == user
-	return True  # no objection (Frappe 16 treats None as deny)
+	return True  # Not restricted here; Frappe 16 treats falsy (incl. None) as DENY
 
 
 def has_permission_agent_message(doc, ptype=None, user=None):
@@ -47,7 +47,7 @@ def has_permission_agent_message(doc, ptype=None, user=None):
 		user: User to check (default: frappe.session.user)
 
 	Returns:
-		bool or None: True to allow, False to deny, None to let Frappe decide
+		bool: False denies. True means "not restricted by this hook" (role permissions still apply; hooks cannot grant)
 	"""
 	from huf.ai.record_access import user_can_read_message
 
@@ -66,7 +66,7 @@ def has_permission_agent_message(doc, ptype=None, user=None):
 			return True
 		conv_owner = frappe.db.get_value("Agent Conversation", doc.conversation, "owner")
 		return conv_owner == user
-	return True  # no objection (Frappe 16 treats None as deny)
+	return True  # Not restricted here; Frappe 16 treats falsy (incl. None) as DENY
 
 
 def has_permission_agent_conversation(doc, ptype=None, user=None):
@@ -78,7 +78,7 @@ def has_permission_agent_conversation(doc, ptype=None, user=None):
 		user: User to check (default: frappe.session.user)
 
 	Returns:
-		bool or None: True to allow, False to deny, None to let Frappe decide
+		bool: False denies. True means "not restricted by this hook" (role permissions still apply; hooks cannot grant)
 	"""
 	from huf.ai.record_access import user_can_read_conversation
 
@@ -95,7 +95,7 @@ def has_permission_agent_conversation(doc, ptype=None, user=None):
 		if "System Manager" in frappe.get_roles(user):
 			return True
 		return doc.owner == user
-	return True  # no objection (Frappe 16 treats None as deny)
+	return True  # Not restricted here; Frappe 16 treats falsy (incl. None) as DENY
 
 
 def has_permission_agent_tool_call(doc, ptype=None, user=None):
@@ -107,7 +107,7 @@ def has_permission_agent_tool_call(doc, ptype=None, user=None):
 		user: User to check (default: frappe.session.user)
 
 	Returns:
-		bool or None: True to allow, False to deny, None to let Frappe decide
+		bool: False denies. True means "not restricted by this hook" (role permissions still apply; hooks cannot grant)
 	"""
 	from huf.ai.record_access import user_can_read_tool_call
 
@@ -126,7 +126,7 @@ def has_permission_agent_tool_call(doc, ptype=None, user=None):
 			return True
 		run_owner = frappe.db.get_value("Agent Run", doc.agent_run, "owner")
 		return run_owner == user
-	return True  # no objection (Frappe 16 treats None as deny)
+	return True  # Not restricted here; Frappe 16 treats falsy (incl. None) as DENY
 
 
 def has_permission_agent_context_artifact(doc, ptype=None, user=None):
@@ -138,7 +138,7 @@ def has_permission_agent_context_artifact(doc, ptype=None, user=None):
 		user: User to check (default: frappe.session.user)
 
 	Returns:
-		bool or None: True to allow, False to deny, None to let Frappe decide
+		bool: False denies. True means "not restricted by this hook" (role permissions still apply; hooks cannot grant)
 	"""
 	from huf.ai.record_access import user_can_read_context_artifact
 
@@ -157,4 +157,4 @@ def has_permission_agent_context_artifact(doc, ptype=None, user=None):
 			return True
 		conv_owner = frappe.db.get_value("Agent Conversation", doc.conversation, "owner")
 		return conv_owner == user
-	return True  # no objection (Frappe 16 treats None as deny)
+	return True  # Not restricted here; Frappe 16 treats falsy (incl. None) as DENY

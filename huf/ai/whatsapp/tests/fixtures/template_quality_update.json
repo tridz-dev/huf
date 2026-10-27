@@ -1,0 +1,20 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "value": {
+            "previous_quality_score": "GREEN",
+            "new_quality_score": "RED",
+            "message_template_id": 1234567890123456,
+            "message_template_name": "leave_approved",
+            "message_template_language": "en_US"
+          },
+          "field": "message_template_quality_update"
+        }
+      ]
+    }
+  ]
+}

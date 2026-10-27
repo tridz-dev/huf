@@ -1,9 +1,19 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { AlertCircle, Zap, Webhook, Clock, Database, Mail, Trash2, Loader2, CheckCircle2, XCircle, type LucideIcon } from 'lucide-react';
+import { AlertCircle, Zap, Webhook, Clock, Database, Mail, CircleDashed, Trash2, Loader2, CheckCircle2, XCircle, type LucideIcon } from 'lucide-react';
 import { FlowNodeData } from '../../types/flow.types';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/alert-dialog';
 import { useFlowContext } from '../../contexts/FlowContext';
 import { NODE_CARD_BASE, NODE_HANDLE, NODE_ICON_WELL, getExecutionStatusClasses } from './nodeStyles';
 import { cn } from '@/lib/utils';
@@ -13,6 +23,7 @@ const iconMap: Record<string, LucideIcon> = {
   Clock,
   Database,
   Mail,
+  CircleDashed,
   Zap
 };
 
@@ -20,10 +31,22 @@ type TriggerNodeProps = NodeProps<FlowNodeData>;
 
 export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
   const { deleteNode } = useFlowContext();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const Icon = data.icon && iconMap[data.icon] ? iconMap[data.icon] : Zap;
   const statusClasses = getExecutionStatusClasses(data.status, selected, {
     unconfigured: !data.configured,
   });
+
+  // A trigger only becomes `configured` after the user saves it in the trigger
+  // modal, so the flag is a trustworthy signal here (unlike for actions).
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (data.configured) {
+      setShowDeleteConfirm(true);
+    } else {
+      deleteNode(id);
+    }
+  };
 
   return (
     <div className="relative">
@@ -33,10 +56,7 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
             variant="ghost"
             size="icon"
             className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            onClick={(e) => {
-              e.stopPropagation();
-              deleteNode(id);
-            }}
+            onClick={handleDeleteClick}
             title="Delete node"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -87,6 +107,30 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
         position={Position.Bottom}
         className={NODE_HANDLE}
       />
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{data.label}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This trigger is configured. Deleting it will permanently remove its settings and any
+              edges connected to it. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                deleteNode(id);
+                setShowDeleteConfirm(false);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 });

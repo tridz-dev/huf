@@ -12,7 +12,7 @@
  *   serialize time, and reconstructs it from those pointers at deserialize time. See
  *   huf/huf/doctype/flow_definition/flow_definition.py's `_validate_definition_json`
  *   for the server-side gate this shape now has to satisfy, and
- *   Tracks/safwan-erooth.DeterministicAgent/spec/graph-ir.md for the shape itself.
+ *   the DeterministicAgent workspace track for the shape itself.
  */
 
 import type { Flow, FlowNode, FlowEdge, FlowNodeData, FlowStatus } from '@/types/flow.types';
@@ -56,7 +56,7 @@ export function defaultContract(): BackendContract {
  * checks the *shape* of `fingerprint` (64 lowercase hex chars, graph-ir.md section 7) --
  * it does not itself recompute and compare it against the graph's canonical form, so a
  * stable placeholder is schema-valid. A real content-addressed fingerprint (matching
- * `huf.ai.procedure_versioning.compute_fingerprint`'s algorithm) is intentionally left
+ * `huf.ai.procedure.versioning.compute_fingerprint`'s algorithm) is intentionally left
  * as backend-computed, not duplicated in the frontend.
  */
 function placeholderFingerprint(seed: string): string {
@@ -149,6 +149,8 @@ function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNodeType {
         const triggerType = node.data?.triggerConfig?.type;
         if (triggerType === 'schedule') return 'trigger.schedule';
         if (triggerType === 'doc-event') return 'trigger.doc-event';
+        // No trigger type chosen yet (fresh flow): never invent a webhook.
+        if (!triggerType) return 'trigger.unset';
         return 'trigger.webhook';
     }
 
@@ -163,6 +165,12 @@ function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNodeType {
         case 'http-request': return 'http_request';
         case 'transform': return 'transform';
         case 'loop': return 'loop';
+        case 'state-get': return 'state.get';
+        case 'state-set': return 'state.set';
+        case 'state-delete': return 'state.delete';
+        case 'doc-create': return 'doc.create';
+        // A backend node type this UI cannot edit: write back its original type.
+        case 'unknown': return (node.data.actionConfig as { backend_type: string }).backend_type as BackendNodeType;
         default: return 'tool.call'; // fallback for unmapped action types
     }
 }
@@ -184,8 +192,12 @@ function extractNodeConfig(
 
     if (data?.triggerConfig && data.triggerConfig.type) {
         config = omitType(data.triggerConfig) as Record<string, unknown>;
+        // graph_ir.schema.json forbids extra keys on these two nodes; drop anything else.
+        const allowed = backendType === 'trigger.schedule' ? ['cron'] : backendType === 'trigger.doc-event' ? ['doctype', 'event'] : null;
+        if (allowed) config = Object.fromEntries(Object.entries(config).filter(([k]) => allowed.includes(k)));
     } else if (data?.actionConfig && data.actionConfig.type) {
         config = omitType(data.actionConfig) as Record<string, unknown>;
+        if (data.actionConfig.type === 'unknown') delete config.backend_type;
     }
 
     // Self-routing node types fold their outgoing edges into their own config, per the
@@ -237,7 +249,7 @@ export function deserializeFlow(
         // The graph-IR carries no per-graph `version`/`settings` any more -- version
         // lives on the Flow Definition doctype record, and run settings (mode,
         // max_hops, conversation_mode) are now engine-side defaults
-        // (huf.ai.flow_engine.DEFAULT_MAX_HOPS et al.) rather than authored per-Flow.
+        // (huf.ai.flow.engine.DEFAULT_MAX_HOPS et al.) rather than authored per-Flow.
         version: 1,
     };
 }
@@ -262,6 +274,37 @@ function mapBackendNodeTypeToFrontend(
     return 'action';
 }
 
+/**
+ * Config keys that must be non-blank for a node to count as configured.
+ * Mirrors the required string fields in graph_ir.schema.json (and the backend
+ * activation rules in flow_definition/activation_rules.py).
+ */
+const REQUIRED_CONFIG_KEYS: Partial<Record<string, string[]>> = {
+    'trigger.webhook': ['method'],
+    'trigger.schedule': ['cron'],
+    'trigger.doc-event': ['doctype', 'event'],
+    'agent.run': ['agent', 'prompt'],
+    'tool.call': ['tool_id'],
+    'router.llm': ['prompt'],
+    'human.approval': ['message'],
+    'condition': ['expression'],
+    'state.get': ['key'],
+    'state.set': ['key'],
+    'state.delete': ['key'],
+    'doc.create': ['doctype'],
+    'transform': ['op'],
+};
+
+/** Computed from the real stored config, so the "unconfigured" warning survives reload. */
+export function isBackendNodeConfigured(node: BackendNode): boolean {
+    if (node.type === 'trigger.unset') return false;
+    const config = (node.config ?? {}) as Record<string, unknown>;
+    return (REQUIRED_CONFIG_KEYS[node.type] ?? []).every((key) => {
+        const v = config[key];
+        return v != null && !(typeof v === 'string' && v.trim() === '');
+    });
+}
+
 function buildNodeData(node: BackendNode): FlowNodeData {
     const frontendType = mapBackendNodeTypeToFrontend(node.type);
 
@@ -269,10 +312,13 @@ function buildNodeData(node: BackendNode): FlowNodeData {
         label: node._label || getDefaultLabel(node.type),
         nodeType: frontendType as FlowNodeData['nodeType'],
         icon: node._icon || getDefaultIcon(node.type),
-        configured: true,
+        configured: isBackendNodeConfigured(node),
     };
 
-    if (frontendType === 'trigger') {
+    if (node.type === 'trigger.unset') {
+        base.description = 'Select a trigger';
+        base.triggerConfig = { type: undefined };
+    } else if (frontendType === 'trigger') {
         const triggerType =
             node.type === 'trigger.schedule'
                 ? ('schedule' as const)
@@ -286,6 +332,7 @@ function buildNodeData(node: BackendNode): FlowNodeData {
     } else if (frontendType === 'action') {
         base.actionConfig = {
             type: mapBackendActionType(node.type),
+            ...(mapBackendActionType(node.type) === 'unknown' ? { backend_type: node.type } : {}),
             ...node.config,
         } as FlowNodeData['actionConfig'];
     }
@@ -298,6 +345,7 @@ function getDefaultLabel(backendType: string): string {
         'trigger.webhook': 'Webhook trigger',
         'trigger.schedule': 'Schedule trigger',
         'trigger.doc-event': 'Document event trigger',
+        'trigger.unset': 'Select trigger',
         'agent.run': 'Run agent',
         'tool.call': 'Call tool',
         'router.llm': 'LLM router',
@@ -306,6 +354,10 @@ function getDefaultLabel(backendType: string): string {
         'http_request': 'HTTP request',
         'transform': 'Transform data',
         'loop': 'Loop',
+        'state.get': 'Get state',
+        'state.set': 'Set state',
+        'state.delete': 'Delete state',
+        'doc.create': 'Create document',
         'output': 'End',
     };
     return labels[backendType] || backendType;
@@ -316,6 +368,7 @@ function getDefaultIcon(backendType: string): string {
         'trigger.webhook': 'Webhook',
         'trigger.schedule': 'Clock',
         'trigger.doc-event': 'Database',
+        'trigger.unset': 'CircleDashed',
         'agent.run': 'Bot',
         'tool.call': 'Play',
         'router.llm': 'GitBranch',
@@ -324,6 +377,10 @@ function getDefaultIcon(backendType: string): string {
         'http_request': 'Globe',
         'transform': 'Repeat',
         'loop': 'RotateCw',
+        'state.get': 'Database',
+        'state.set': 'Save',
+        'state.delete': 'Trash2',
+        'doc.create': 'FilePlus',
         'output': 'CheckCircle2',
     };
     return icons[backendType] || 'Play';
@@ -339,8 +396,13 @@ function mapBackendActionType(backendType: string): string {
         'http_request': 'http-request',
         'transform': 'transform',
         'loop': 'loop',
+        'state.get': 'state-get',
+        'state.set': 'state-set',
+        'state.delete': 'state-delete',
+        'doc.create': 'doc-create',
     };
-    return map[backendType] || 'tool-call';
+    // Never coerce an unrecognised type into a tool call (that would silently rewrite it on save).
+    return map[backendType] || 'unknown';
 }
 
 export function mapBackendStatusToFrontend(status: string): FlowStatus {

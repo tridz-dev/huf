@@ -162,7 +162,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-18 07:05:00.000000",
+ "modified": "2026-10-21 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Tool Call",
@@ -202,6 +202,13 @@
    "report": 0,
    "role": "Huf User",
    "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "if_owner": 1,
+   "read": 1,
+   "role": "Huf Gateway User",
    "write": 1
   }
  ],

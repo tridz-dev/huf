@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { getConversationMessages, createAgentRunFeedback, getConversation, type ChatMessage } from "@/services/chatApi";
+import { getConversationMessages, createAgentRunFeedback, getConversation, hostFromConversation, type ChatMessage } from "@/services/chatApi";
 import { cn } from "@/lib/utils";
 
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
@@ -75,6 +75,9 @@ export function ChatMessageList({
     const [isTransitioningToNewConversation, setIsTransitioningToNewConversation] = useState(false);
     const [conversationTitle, setConversationTitle] = useState<string | null>(null);
     const [runSucceeded, setRunSucceeded] = useState(false);
+    // Device id when this conversation is hosted on a desktop (ChatInput uses it to keep such
+    // turns on the request/response path).
+    const [hostedDeviceId, setHostedDeviceId] = useState<string | null>(null);
 
     const {
         agentName,
@@ -95,6 +98,7 @@ export function ChatMessageList({
         if (!chatId) {
             setConversationTitle(null);
             setRunSucceeded(false);
+            setHostedDeviceId(null);
             return;
         }
 
@@ -104,11 +108,13 @@ export function ChatMessageList({
             .then((conversation) => {
                 if (!cancelled) {
                     setConversationTitle(conversation?.title ?? null);
+                    setHostedDeviceId(conversation ? (hostFromConversation(conversation)?.deviceId ?? null) : null);
                 }
             })
             .catch(() => {
                 if (!cancelled) {
                     setConversationTitle(null);
+                    setHostedDeviceId(null);
                 }
             });
 
@@ -492,6 +498,7 @@ export function ChatMessageList({
                 maxUploadSizeMb={maxUploadSizeMb}
                 runImmediately={runImmediately}
                 artifactPaneOpen={artifactPaneOpen}
+                hostedDeviceId={hostedDeviceId}
             />
             </div>
         </div>

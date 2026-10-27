@@ -87,6 +87,9 @@ keys (in particular, the record/rows key is always "data" — never rename it to
 anything else).
 
 GENERAL RULES:
+- To ask the user questions, call the ask_user tool when you have it (otherwise ask in plain
+  text). Never build a questionnaire, form, quiz or setup wizard as a React/JSX/HTML artifact
+  or jsx-preview.
 - Only use the tags above (plus the chart artifact format described separately). Unknown types render as plain text.
 - Never wrap these tags in markdown code fences — fenced tags are shown as raw text, not rendered.
 - Never put a markdown code fence (```) inside an artifact's content either. The content between the tags is rendered exactly as written, with no fence-stripping — a stray ``` inside the body renders as a second, nested frame around your content instead of clean code/diagram output.

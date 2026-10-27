@@ -11,6 +11,7 @@
   "flow_name",
   "column_break_gen1",
   "status",
+  "solution",
   "version",
   "schema_version",
   "definition_section",
@@ -142,6 +143,12 @@
    "fieldtype": "Small Text",
    "label": "Conversion Note",
    "read_only": 1
+  },
+  {
+   "fieldname": "solution",
+   "fieldtype": "Link",
+   "label": "Solution",
+   "options": "Solution"
   }
  ],
  "index_web_pages_for_search": 1,

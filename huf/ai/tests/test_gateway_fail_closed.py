@@ -6,7 +6,7 @@ import types
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-sys.path.insert(0, "huf/ai/tests")
+sys.path.insert(0, "huf/testing")
 import _stub_env  # noqa: E402
 
 _stub_env.install()

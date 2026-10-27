@@ -125,9 +125,9 @@ export function HealthPanel({ gateway }: ProviderPanelProps) {
       </div>
 
       {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <p role="status" className="text-sm text-destructive">
+          {error}
+        </p>
       )}
 
       {loading && !health && <Skeleton className="h-32 w-full" />}

@@ -1,0 +1,54 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550783881",
+              "phone_number_id": "106540352242922"
+            },
+            "contacts": [
+              {
+                "profile": {
+                  "name": "Ravi Kumar"
+                },
+                "wa_id": "919876543210"
+              }
+            ],
+            "messages": [
+              {
+                "from": "919876543210",
+                "id": "wamid.HBgMOTE5ODc2NTQzMjEwFQIAEhgUM0E1NTQ2RTE2QjdBOEFBQzAzMTMA",
+                "timestamp": "1792000000",
+                "type": "order",
+                "order": {
+                  "catalog_id": "CAT123",
+                  "text": "Please deliver after 5pm",
+                  "product_items": [
+                    {
+                      "product_retailer_id": "SKU-1",
+                      "quantity": 2,
+                      "item_price": 30,
+                      "currency": "USD"
+                    },
+                    {
+                      "product_retailer_id": "SKU-2",
+                      "quantity": 1,
+                      "item_price": 7.99,
+                      "currency": "USD"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}

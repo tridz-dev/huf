@@ -1,0 +1,139 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-10-05 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "title",
+  "parent_document",
+  "sort_order",
+  "cb1",
+  "summary",
+  "keywords",
+  "sb_body",
+  "body_markdown",
+  "body_html",
+  "sb_source",
+  "source_artifact",
+  "source_conversation",
+  "created_by_agent"
+ ],
+ "fields": [
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "parent_document",
+   "fieldtype": "Link",
+   "label": "Parent Document",
+   "options": "HUF Document",
+   "in_standard_filter": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "label": "Sort Order"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break",
+   "label": null
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "Small Text",
+   "label": "Summary"
+  },
+  {
+   "fieldname": "keywords",
+   "fieldtype": "Small Text",
+   "label": "Keywords",
+   "description": "Comma separated"
+  },
+  {
+   "fieldname": "sb_body",
+   "fieldtype": "Section Break",
+   "label": "Body"
+  },
+  {
+   "fieldname": "body_markdown",
+   "fieldtype": "Long Text",
+   "label": "Body (Markdown)"
+  },
+  {
+   "fieldname": "body_html",
+   "fieldtype": "Long Text",
+   "label": "Body (HTML cache)",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "sb_source",
+   "fieldtype": "Section Break",
+   "label": "Source"
+  },
+  {
+   "fieldname": "source_artifact",
+   "fieldtype": "Link",
+   "label": "Source Artifact",
+   "options": "Artifact",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "source_conversation",
+   "fieldtype": "Link",
+   "label": "Source Conversation",
+   "options": "Agent Conversation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "created_by_agent",
+   "fieldtype": "Link",
+   "label": "Created By Agent",
+   "options": "Agent",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-05 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "HUF Document",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "share": 1,
+   "if_owner": 1,
+   "role": "All"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+}

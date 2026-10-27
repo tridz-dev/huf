@@ -6,7 +6,7 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-sys.path.insert(0, "huf/ai/tests")
+sys.path.insert(0, "huf/testing")
 import _stub_env  # noqa: E402
 
 _stub_env.install()
@@ -158,7 +158,7 @@ def test_works_when_unlinked_and_starts_no_run(env, monkeypatch):
 	agent(env, "Sales")
 	monkeypatch.setattr(hf, "_linked_user", lambda g, s: None)
 	started = MagicMock()
-	monkeypatch.setitem(sys.modules, "huf.ai.agent_integration", SimpleNamespace(run_agent_sync=started))
+	monkeypatch.setitem(sys.modules, "huf.ai.agent.integration", SimpleNamespace(run_agent_sync=started))
 	assert hf.pre_ingest_filter(gw(), ctx()) is False
 	started.assert_not_called()
 	assert "Sales" in env.api.post_message.call_args.kwargs["text"]

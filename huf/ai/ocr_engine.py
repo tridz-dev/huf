@@ -247,11 +247,11 @@ def _default_model(provider_name: str, strategy: str) -> str | None:
     if strategy == "vision":
         return {
             "mistral": "mistral/mistral-small-latest",
-            "openai": "gpt-4o",
-            "google": "gemini/gemini-2.5-flash",
-            "gemini": "gemini/gemini-2.5-flash",
-            "vertex_ai": "vertex_ai/gemini-2.5-flash",
-            "anthropic": "claude-3-5-sonnet-20241022",
+            "openai": "gpt-5.4-mini",
+            "google": "gemini/gemini-flash-latest",
+            "gemini": "gemini/gemini-flash-latest",
+            "vertex_ai": "vertex_ai/gemini-3.8-flash",
+            "anthropic": "claude-haiku-5-5",
         }.get(provider)
 
     return None
@@ -509,10 +509,16 @@ async def extract_document(
 
     This is the main entry point used by handle_ocr_document in sdk_tools.py.
     """
-    provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
-    api_key = provider_doc.get_password("api_key")
-    if not api_key:
-        return ExtractionResult(success=False, error="API key not configured for provider")
+    # An explicit model that is a known AI Model uses ITS provider's key and
+    # LiteLLM normalisation, not the agent's chat provider.
+    from huf.ai.handlers.media import _resolve_model_provider
+
+    try:
+        provider_link, provider_doc, api_key, resolved_model = _resolve_model_provider(
+            model or "", agent_doc.provider, "OCR"
+        )
+    except ValueError as exc:
+        return ExtractionResult(success=False, error=str(exc))
 
     # Resolve file
     try:
@@ -580,7 +586,7 @@ async def extract_document(
     strategy = _determine_strategy(mime_type, ext, provider_name)
 
     # Resolve model
-    ocr_model = model
+    ocr_model = resolved_model if model else None
     if not ocr_model:
         ocr_model = _default_model(provider_name, strategy)
     if not ocr_model and strategy in {"ocr", "vision"}:
@@ -610,14 +616,14 @@ async def extract_document(
 
     # Strategy: OCR endpoint
     elif strategy == "ocr":
-        normalized_model = _normalize_model_name(ocr_model, agent_doc.provider)
+        normalized_model = _normalize_model_name(ocr_model, provider_link)
         result = await _process_with_ocr_endpoint(
             file_path, normalized_model, api_key, mime_type, pages, include_images
         )
 
     # Strategy: vision model
     elif strategy == "vision":
-        normalized_model = _normalize_model_name(ocr_model, agent_doc.provider)
+        normalized_model = _normalize_model_name(ocr_model, provider_link)
         result = await _process_with_vision_model(file_path, normalized_model, api_key, mime_type, file_name)
 
     else:
@@ -646,7 +652,7 @@ async def extract_document(
                 f"Local extraction failed for '{file_name}'; falling back to vision model.",
                 "OCR Fallback",
             )
-            vision_model = _normalize_model_name(_default_model(provider_name, "vision"), agent_doc.provider)
+            vision_model = _normalize_model_name(_default_model(provider_name, "vision"), provider_link)
             result = await _process_with_vision_model(file_path, vision_model, api_key, mime_type, file_name)
 
     # Enrich result with file metadata

@@ -105,7 +105,7 @@ export async function getGatewayHealth(gatewayName: string): Promise<GatewayHeal
     const result = await call.get('huf.ai.gateways.health.get_gateway_health', {
       gateway_name: gatewayName,
     });
-    return result.message as GatewayHealth;
+    return result?.message as GatewayHealth;
   } catch (error) {
     handleFrappeError(error, 'Error loading gateway activity');
   }
@@ -116,7 +116,7 @@ export async function diagnoseGatewayEvent(eventName: string): Promise<Diagnosis
     const result = await call.get('huf.ai.gateways.health.diagnose_event', {
       event_name: eventName,
     });
-    return (result.message as DiagnosisCheck[]) || [];
+    return (result?.message as DiagnosisCheck[]) || [];
   } catch (error) {
     handleFrappeError(error, 'Error checking this message');
   }

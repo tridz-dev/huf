@@ -97,7 +97,7 @@ class TestFlowDefinitionAutoConvert(UnitTestCase):
 
 	def test_checkbox_off_never_calls_conversion(self):
 		with patch.object(fd_module, "commit_if_background"):
-			with patch("huf.ai.flow_api.convert_flow_to_procedure") as mock_convert:
+			with patch("huf.ai.flow.api.convert_flow_to_procedure") as mock_convert:
 				self._make_flow("test-auto-convert-off", auto_convert=0)
 				mock_convert.assert_not_called()
 
@@ -109,7 +109,7 @@ class TestFlowDefinitionAutoConvert(UnitTestCase):
 		the checkbox is a best-effort convenience, not a save-time gate.
 		"""
 		with patch.object(fd_module, "commit_if_background"):
-			with patch("huf.ai.flow_api.convert_flow_to_procedure") as mock_convert:
+			with patch("huf.ai.flow.api.convert_flow_to_procedure") as mock_convert:
 				mock_convert.return_value = {
 					"convertible": False,
 					"reason": "Not convertible: contains an agent.run node.",
@@ -122,7 +122,7 @@ class TestFlowDefinitionAutoConvert(UnitTestCase):
 
 	def test_checkbox_on_convertible_flow_records_procedure_and_note(self):
 		with patch.object(fd_module, "commit_if_background"):
-			with patch("huf.ai.flow_api.convert_flow_to_procedure") as mock_convert:
+			with patch("huf.ai.flow.api.convert_flow_to_procedure") as mock_convert:
 				mock_convert.return_value = {
 					"convertible": True,
 					"name": "demo-procedure-v1",
@@ -141,7 +141,7 @@ class TestFlowDefinitionAutoConvert(UnitTestCase):
 		"""A conversion-side exception must never fail the Flow's own save (I9-style: this
 		convenience must never break the thing it is attached to)."""
 		with patch.object(fd_module, "commit_if_background"):
-			with patch("huf.ai.flow_api.convert_flow_to_procedure", side_effect=RuntimeError("boom")):
+			with patch("huf.ai.flow.api.convert_flow_to_procedure", side_effect=RuntimeError("boom")):
 				doc = self._make_flow("test-auto-convert-exception", auto_convert=1)
 				doc.reload()
 				self.assertIn("Not converted", doc.get("conversion_note"))
@@ -151,7 +151,7 @@ class TestFlowDefinitionAutoConvert(UnitTestCase):
 		"""D12: a locked/system flow must not spawn procedures from a checkbox a
 		non-admin could have ticked before the flow was locked."""
 		with patch.object(fd_module, "commit_if_background"):
-			with patch("huf.ai.flow_api.convert_flow_to_procedure") as mock_convert:
+			with patch("huf.ai.flow.api.convert_flow_to_procedure") as mock_convert:
 				mock_convert.return_value = {"convertible": False, "reason": "n/a"}
 				# insert() itself fires on_update once, while is_system is still 0 --
 				# that first call is expected and asserted on before flipping the flag.

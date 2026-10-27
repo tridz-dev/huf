@@ -97,12 +97,12 @@ class FlowService {
       nodes: [
         {
           id: 'empty_trigger',
-          type: 'trigger.webhook',
-          config: { method: 'POST' },
+          type: 'trigger.unset',
+          config: {},
           next: null,
           _position: { x: 250, y: 100 },
           _label: 'Select trigger',
-          _icon: 'Webhook',
+          _icon: 'CircleDashed',
         },
       ],
       contract: defaultContract(),
@@ -124,7 +124,7 @@ class FlowService {
           data: {
             label: 'Select trigger',
             nodeType: 'trigger',
-            description: 'Empty Trigger',
+            description: 'Select a trigger',
             configured: false,
           },
         },

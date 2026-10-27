@@ -24,7 +24,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from huf.ai.tests import _stub_env
+from huf.testing import _stub_env
 
 _stub_env.install()
 
@@ -42,7 +42,18 @@ if not hasattr(frappe, "_") or not callable(getattr(frappe, "_", None)):
 # an awaitable at all.
 if not isinstance(getattr(frappe, "whitelist", None), type(lambda: None)):
     frappe.whitelist = lambda *a, **kw: (lambda f: f)
-if "frappe.utils.file_manager" not in sys.modules:
+def _file_manager_missing():
+    # With a real frappe the module is importable even if not loaded yet; stubbing it
+    # would then replace it process-wide (bench run-tests shares one process).
+    import importlib.util
+
+    try:
+        return importlib.util.find_spec("frappe.utils.file_manager") is None
+    except Exception:
+        return True
+
+
+if "frappe.utils.file_manager" not in sys.modules and _file_manager_missing():
     file_manager_module = type(sys)("frappe.utils.file_manager")
     file_manager_module.save_file = MagicMock(name="save_file")
     sys.modules["frappe.utils.file_manager"] = file_manager_module
@@ -71,7 +82,7 @@ class MediaHandlerGuardTests(unittest.TestCase):
         with patch.object(media.frappe, "get_doc", return_value=agent_doc) as mock_get_doc, \
                 patch.object(media.frappe, "session", SimpleNamespace(user="caller@example.com")), \
                 patch(
-                    "huf.ai.agent_access.assert_agent_access",
+                    "huf.ai.agent.access.assert_agent_access",
                     side_effect=_GuardFired,
                 ) as mock_assert:
             extra_mocks = []
@@ -132,7 +143,7 @@ class MediaHandlerGuardTests(unittest.TestCase):
         agent_doc = _make_agent_doc("agent-6")
         with patch.object(media.frappe, "get_doc", return_value=agent_doc), \
                 patch.object(media.frappe, "session", SimpleNamespace(user="caller@example.com")), \
-                patch("huf.ai.agent_access.assert_agent_access", return_value=None) as mock_assert:
+                patch("huf.ai.agent.access.assert_agent_access", return_value=None) as mock_assert:
             result = asyncio.run(
                 media.handle_generate_video(prompt="a cat", agent_name=None)
             )

@@ -1,7 +1,7 @@
 """Shared graph execution core for the Procedure and Flow profiles.
 
 This module is the T-22 seam: one executor, two runtimes. ``FlowRuntime``
-(``huf/ai/flow_engine.py``) and ``ProcedureRuntime`` (T-23) are adapters over
+(``huf/ai/flow/engine.py``) and ``ProcedureRuntime`` (T-23) are adapters over
 ``GraphExecutor``; the executor itself knows nothing about Flow Run documents,
 Frappe, or persistence.
 
@@ -35,6 +35,8 @@ import json
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
+
+from huf.ai.graph.templates import render_template
 
 __all__ = [
 	"ExecutionPolicy",
@@ -307,12 +309,22 @@ class GraphContext:
 
 		This is the *only* way a node config pulls a value from elsewhere in
 		the graph. The four divergent ``{{...}}`` string-interpolation
-		implementations this replaces are described in GT-04; nothing here
-		does string templating.
+		implementations this replaces are described in GT-04; string templating is the explicit
+		``{"$template": ..., "vars": {...}}`` form (see ``templates.py``).
 		"""
 		if isinstance(value, Mapping):
 			if set(value.keys()) == {"$from"} and isinstance(value["$from"], str):
 				return self.resolve_reference(value["$from"])
+			keys = set(value.keys())
+			if (
+				isinstance(value.get("$template"), str)
+				and keys <= {"$template", "vars"}
+				and isinstance(value.get("vars", {}), Mapping)
+			):
+				# String templating: {"$template": "x #{n}", "vars": {"n": {"$from": ...}}}.
+				# See huf.ai.graph.templates for escaping / missing-variable behaviour.
+				resolved = {k: self.resolve(v) for k, v in (value.get("vars") or {}).items()}
+				return render_template(value["$template"], resolved)
 			return {key: self.resolve(item) for key, item in value.items()}
 		if isinstance(value, list):
 			return [self.resolve(item) for item in value]

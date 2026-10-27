@@ -194,7 +194,7 @@ export function SelectMCPServersModal({
                 <>{filteredServers.length} server{filteredServers.length !== 1 ? 's' : ''} available</>
               )}
             </div>
-            {onCreateNew && (
+            {onCreateNew && allServers.length > 0 && (
               <Button
                 variant="link"
                 className="h-auto p-0 self-start"

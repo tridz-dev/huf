@@ -8,6 +8,7 @@ from frappe.utils import now_datetime
 from huf.ai import system_records
 from huf.ai.graph.validator import FLOW_NODE_TYPES, validate_flow_graph
 from huf.ai.transaction import commit_if_background
+from huf.huf.doctype.flow_definition.activation_rules import collect_activation_problems
 
 # Flow Definition fields that stay editable on a system-owned flow. Every
 # other field is locked for non-System-Managers by system_records'
@@ -37,7 +38,9 @@ ALLOWED_NODE_TYPES = FLOW_NODE_TYPES
 
 class FlowDefinition(Document):
 	def validate(self):
-		self._validate_definition_json()
+		defn = self._validate_definition_json()
+		self._validate_activation(defn)
+		self._validate_gateway_authority(defn)
 		self.updated_by = frappe.session.user
 		self.updated_at = now_datetime()
 		system_records.guard_flag_tamper(self)
@@ -48,7 +51,21 @@ class FlowDefinition(Document):
 			self.version = (self.version or 0) + 1
 
 	def on_update(self):
+		self._pause_flow_trigger_if_inactive()
 		self._maybe_convert_to_procedure()
+
+	def _pause_flow_trigger_if_inactive(self):
+		"""A Flow that is no longer Active must not keep firing through its schedule /
+		doc-event trigger Automation (set_flow_trigger): pause it. Graph edits are
+		surfaced separately as ``stale`` on the trigger summary."""
+		if self.status == "Active":
+			return
+		from huf.ai.flow.api import _flow_automation_name
+
+		automation = _flow_automation_name(self.flow_id)
+		if frappe.db.get_value("Automation", automation, "status") == "Active":
+			frappe.db.set_value("Automation", automation, "status", "Paused")
+			frappe.cache().delete_key("huf:doc_event_automation_triggers")
 
 	def on_trash(self):
 		system_records.guard_delete(self)
@@ -65,7 +82,7 @@ class FlowDefinition(Document):
 		Deliberately NOT the Phase 6 "Analyse Agent" UX (GOAL.md), which is a distinct,
 		explicit action surfaced to the user with a Test/Enable choice -- see PLAN.md
 		T-52. This is a narrower, save-triggered convenience on top of the same
-		conversion primitive (huf.ai.procedure_conversion / flow_api.convert_flow_to_procedure),
+		conversion primitive (huf.ai.procedure.conversion / flow_api.convert_flow_to_procedure),
 		and it inherits every one of that primitive's guarantees: the result is always
 		tier="Draft"/status="Draft" (I8 -- never auto-activated, never auto-bound to an
 		Agent), and a non-deterministic Flow (containing agent.run / router.llm /
@@ -82,7 +99,7 @@ class FlowDefinition(Document):
 			# via a checkbox a non-admin could have ticked before the flow was locked.
 			return
 
-		from huf.ai.flow_api import convert_flow_to_procedure
+		from huf.ai.flow.api import convert_flow_to_procedure
 
 		try:
 			result = convert_flow_to_procedure(self.flow_id)
@@ -121,9 +138,9 @@ class FlowDefinition(Document):
 	def _validate_definition_json(self):
 		"""Validate the flow definition JSON against the shared graph-IR schema.
 
-		This is deliberately the *same* gate ``huf.ai.procedure_conversion`` re-runs
+		This is deliberately the *same* gate ``huf.ai.procedure.conversion`` re-runs
 		before it will convert a Flow to a Procedure (see
-		``huf.ai.procedure_conversion.analyze_conversion``, step 1) -- a Flow that
+		``huf.ai.procedure.conversion.analyze_conversion``, step 1) -- a Flow that
 		saves here is now guaranteed to be schema-valid graph-IR, so conversion can
 		never reject a saved Flow purely for being a shape ``validate_flow_graph``
 		has never seen (the old bug: this validator used to accept a top-level
@@ -151,3 +168,29 @@ class FlowDefinition(Document):
 		# schema_version is a schema-validated const ("1.0.0") at this point; store it
 		# verbatim rather than re-deriving or defaulting it.
 		self.schema_version = defn.get("schema_version")
+		return defn
+
+	def _validate_gateway_authority(self, defn: dict):
+		"""A node may bind a WhatsApp gateway (``config.gateway``) only if the saving user can write to it."""
+		for node in (defn.get("nodes") or []) if isinstance(defn, dict) else []:
+			config = node.get("config") if isinstance(node, dict) else None
+			gateway = str((config or {}).get("gateway") or "").strip() if isinstance(config, dict) else ""
+			if not gateway or str(node.get("type")) != "tool.call":
+				continue
+			if not frappe.db.exists("Gateway", gateway) or not frappe.has_permission("Gateway", "write", doc=gateway):
+				frappe.throw(
+					_("Node {0}: you need write access to Gateway {1} to bind it.").format(node.get("id"), gateway),
+					frappe.PermissionError,
+				)
+
+	def _validate_activation(self, defn: dict):
+		"""Active flows must be runnable: Draft/Archived saves stay permissive. Reports
+		every problem in a single message rather than failing on the first."""
+		if self.status != "Active":
+			return
+		problems = collect_activation_problems(defn)
+		if problems:
+			frappe.throw(
+				_("Flow cannot be Active: {0}").format("; ".join(problems)),
+				title=_("Flow is not ready to activate"),
+			)

@@ -33,6 +33,8 @@ committed a write, duplicating it. The two builders below are not interchangeabl
 :func:`build_fallback` picks between them based on ``outcome.status`` alone -- never on a
 heuristic guess.
 
+Design background: https://doi.org/10.5281/zenodo.22945662
+
 Budgets (I7): :func:`build_mid_run_fallback` always routes ``intermediate_outputs``
 through ``huf.ai.output_budget.enforce_output_budget`` with a ``spill`` callback that
 never raises (this module must never fail the Agent, I9) and never returns the raw

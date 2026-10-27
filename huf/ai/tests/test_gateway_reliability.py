@@ -2,7 +2,7 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-sys.path.insert(0, "huf/ai/tests")
+sys.path.insert(0, "huf/testing")
 import _stub_env  # noqa: E402
 
 _stub_env.install()
@@ -37,8 +37,15 @@ def _heavy_modules():
 		m.__dict__.update(attrs)
 		return m
 
-	pkg = mod("huf.ai.gateway_adapters")
+	class _Pkg(types.ModuleType):
+		def __getattr__(self, name):  # upstream imports provider_hooks etc. from this package
+			if name.startswith("__"):
+				raise AttributeError(name)
+			return __import__("unittest.mock").mock.MagicMock()
+
+	pkg = _Pkg("huf.ai.gateway_adapters")
 	pkg.__path__ = []
+	pkg.provider_hooks = types.SimpleNamespace(get=lambda *a, **k: None)  # no provider-specific reply target
 	stubs = {
 		"frappe.rate_limiter": mod("frappe.rate_limiter", rate_limit=lambda **k: (lambda f: f)),
 		"huf.ai.gateway_adapters": pkg,
@@ -301,7 +308,7 @@ class Adapter:
 @pytest.fixture
 def send(monkeypatch):
 	def run(adapter, **kw):
-		monkeypatch.setattr(gateway_webhook, "get_gateway_adapter", lambda g: adapter)
+		monkeypatch.setattr(gateway_webhook, "get_gateway_adapter", lambda g, *a, **k: adapter)
 		sleeps = []
 		e = SimpleNamespace(conversation_id="C1", thread_id="")
 		try:
@@ -403,8 +410,8 @@ def test_run_idempotency_key_format_documented():
 	if gateway_service is None:
 		pytest.skip("gateway_service not importable in stub env")
 
-	src = inspect.getsource(gateway_service.process_gateway_event)
-	assert 'client_idempotency_key=f"gw:{event.name}"' in src
+	src = inspect.getsource(gateway_service)
+	assert 'client_idempotency_key=f"gateway-event:{event.name}"' in src
 
 
 def test_unapproved_room_gets_one_private_hint_per_channel(env):
@@ -429,3 +436,19 @@ def test_unapproved_room_hint_is_posted_top_level_for_top_level_message(env):
 	reliability.on_event_rejected(GW, ev(thread_id="222.3", provider_event_id="C1:222.3"), "Rejected",
 		reliability.ROOM_NOT_APPROVED_REASON)
 	assert env.sent and env.sent[0][1] in (None, "")
+
+
+def test_replayed_event_runs_pre_ingest_filters_and_is_rejected(monkeypatch):
+	"""Reaper / dead-letter replay (filters_checked=False) must not bypass the tenant filter."""
+	if gateway_service is None:
+		pytest.skip("gateway_service not importable in stub env")
+	rejected = []
+	gw = SimpleNamespace(name="gw1", provider="Microsoft Teams", is_enabled=1)
+	monkeypatch.setattr(gateway_service.frappe, "get_doc", lambda *a, **k: gw, raising=False)
+	monkeypatch.setattr(gateway_service.frappe, "flags", SimpleNamespace(gateway_filter_reason=None), raising=False)
+	monkeypatch.setattr(hooks, "register_all", lambda: None)
+	monkeypatch.setattr(hooks, "call_filters", lambda hook, g, ctx: False)
+	monkeypatch.setattr(gateway_service, "_reject_gateway_event", lambda g, e, s, r: rejected.append((s, r)))
+	event = SimpleNamespace(name="GE-9", raw_payload='{"channelData": {"tenant": {"id": "x"}}}')
+	out = gateway_service._continue_ingest(event, "gw1", "pid", {"kind": "message"}, True)
+	assert out["status"] == "Rejected" and rejected == [("Rejected", "Dropped by an ingest filter")]

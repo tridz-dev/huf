@@ -221,7 +221,6 @@ export function SkillsPage() {
                 onClick: () => navigate(`/skills/${skill.name}`),
               },
             ]}
-            menuIcon={Settings}
             menuActions={[
               {
                 icon: skill.status === 'Disabled' ? CheckCircle2 : Ban,

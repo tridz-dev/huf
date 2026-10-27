@@ -113,7 +113,7 @@ def _check_agent_access(agent: str, gateway) -> None:
 	run_as = getattr(gateway, "execution_user", None) if gateway is not None else None
 	if not run_as:
 		return
-	from huf.ai.agent_access import check_agent_access
+	from huf.ai.agent.access import check_agent_access
 
 	if not check_agent_access(frappe.get_doc("Agent", agent), run_as, for_execution=True):
 		frappe.throw(_("The gateway's run-as user cannot use that agent."), frappe.ValidationError)

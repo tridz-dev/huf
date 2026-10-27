@@ -1,0 +1,70 @@
+{
+  "name": "mixed_success",
+  "http_status": 200,
+  "request": {
+    "model": "jev-1.13-free",
+    "state": "The order arrived late, one item is damaged, and the customer says this is the third failed delivery this month.",
+    "questions": {
+      "is_urgent": {
+        "type": "noul",
+        "instructions": "Does this require urgent attention?"
+      },
+      "department": {
+        "type": "choice",
+        "instructions": "Which team should handle this request?",
+        "criteria": {
+          "returns": "Refunds, exchanges, or damaged items",
+          "shipping": "Delivery delays or lost packages",
+          "billing": "Charges, invoices, or payment problems"
+        }
+      },
+      "frustration": {
+        "type": "score",
+        "instructions": "How frustrated is the customer?",
+        "criteria": [
+          "Calm",
+          "Frustrated",
+          "Very angry"
+        ]
+      }
+    }
+  },
+  "response": {
+    "model": "jev-1.13-free",
+    "answers": {
+      "is_urgent": {
+        "type": "noul",
+        "noul": 0.94
+      },
+      "department": {
+        "type": "choice",
+        "choice": "shipping",
+        "confidence": 0.35,
+        "probabilities": {
+          "returns": 0.43,
+          "billing": 0,
+          "shipping": 0.57
+        }
+      },
+      "frustration": {
+        "type": "score",
+        "score": 1.78,
+        "confidence": 0.67,
+        "legend": {
+          "0": "Calm",
+          "1": "Frustrated",
+          "2": "Very angry"
+        },
+        "probabilities": {
+          "0": 0,
+          "1": 0.22,
+          "2": 0.78
+        }
+      }
+    },
+    "usage": {
+      "input_tokens": 414,
+      "output_tokens": 73
+    }
+  }
+}

@@ -20,21 +20,23 @@ interface UseChatListOptions {
    * Changing this value resets pagination and reloads from the first page.
    */
   project?: string;
+  /** When set, scopes the chat list to conversations belonging to this agent. */
+  agent?: string;
 }
 
 export function useChatList(options: UseChatListOptions = {}) {
-  const { refreshKey, refreshOnRouteChange = false, enabled = true, project } = options;
+  const { refreshKey, refreshOnRouteChange = false, enabled = true, project, agent } = options;
   const location = useLocation();
 
-  // Memoized so identity only changes when project actually changes -
+  // Memoized so identity only changes when the active scope actually changes -
   // useInfiniteScroll resets pagination whenever initialParams changes.
   const initialParams = useMemo(
     () => ({
       filters: (project
-        ? [["channel", "=", "Chat"], ["project", "=", project]]
-        : [["channel", "=", "Chat"]]) as ConversationListParams['filters'],
+        ? [["channel", "=", "Chat"], ["project", "=", project], ...(agent ? [["agent", "=", agent]] : [])]
+        : [["channel", "=", "Chat"], ...(agent ? [["agent", "=", agent]] : [])]) as ConversationListParams['filters'],
     }),
-    [project]
+    [agent, project]
   );
 
   const {

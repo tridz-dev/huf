@@ -1,7 +1,7 @@
 import sys
 from types import SimpleNamespace
 
-sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__)))
+sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()

@@ -34,3 +34,9 @@ huf.patches.v1.disable_gateway_without_credentials
 huf.patches.v1.log_run_immediately_agents
 huf.patches.v1.add_run_budget_fields
 huf.patches.v1.resync_integration_service_credentials
+huf.patches.v1.add_huf_document_fulltext
+huf.patches.v1.delete_legacy_flow_schedule_jobs
+huf.patches.v1.gate_existing_mcp_write_tools
+huf.patches.v1.refresh_model_catalogue
+
+huf.patches.v1.rewrite_moved_module_paths

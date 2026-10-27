@@ -58,6 +58,34 @@ export const actionOptions: ActionOption[] = [
     category: 'transform'
   },
   {
+    id: 'state-get',
+    name: 'Get state',
+    description: 'Read a saved value by key (per flow)',
+    icon: 'Database',
+    category: 'transform'
+  },
+  {
+    id: 'state-set',
+    name: 'Set state',
+    description: 'Save a value by key, with optional TTL',
+    icon: 'Save',
+    category: 'transform'
+  },
+  {
+    id: 'state-delete',
+    name: 'Delete state',
+    description: 'Remove a saved value by key',
+    icon: 'Trash2',
+    category: 'transform'
+  },
+  {
+    id: 'doc-create',
+    name: 'Create document',
+    description: 'Insert a document of an allowed DocType',
+    icon: 'FilePlus',
+    category: 'transform'
+  },
+  {
     id: 'code',
     name: 'Execute code',
     description: 'Run custom code snippet',

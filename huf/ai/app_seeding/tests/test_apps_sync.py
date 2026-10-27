@@ -263,7 +263,7 @@ class TestAppsSync(unittest.TestCase):
 		original_find_seed_dirs = apps_loader.find_seed_dirs
 		original_get_installed_apps = frappe.get_installed_apps
 		apps_loader.find_seed_dirs = lambda: {self.test_app: self.huf_dir}
-		frappe.get_installed_apps = lambda: original_get_installed_apps() + [self.test_app]
+		frappe.get_installed_apps = lambda: [*original_get_installed_apps(), self.test_app]
 		try:
 			summary = sync_huf_apps()
 			self.assertEqual(summary["invalid"], 0, f"Unexpected errors: {summary['errors']}")
@@ -392,6 +392,55 @@ class TestAppsSync(unittest.TestCase):
 		self.assertNotEqual(doc.manifest_hash, hash_before, "manifest_hash must still update")
 
 	# ------------------------------------------------------------------
+	# delivery (Phase 4: portal / desk / spa-deep-link)
+	# ------------------------------------------------------------------
+
+	def test_delivery_defaults_to_spa_deep_link(self):
+		"""A manifest that omits `delivery` normalizes to today's only
+		behavior (SPA launcher tile), so existing manifests keep working
+		unchanged."""
+		normalized, error = validate_manifest(self._valid_manifest(self._app_id("deliverydefault")))
+		self.assertIsNone(error)
+		self.assertEqual(normalized["delivery"], "spa-deep-link")
+
+	def test_delivery_accepts_declared_modes(self):
+		for mode in ("portal", "desk", "spa-deep-link"):
+			normalized, error = validate_manifest(
+				self._valid_manifest(self._app_id(f"delivery-{mode}"), delivery=mode)
+			)
+			self.assertIsNone(error, f"delivery={mode!r} should validate")
+			self.assertEqual(normalized["delivery"], mode)
+
+	def test_delivery_rejects_unknown_mode(self):
+		normalized, error = validate_manifest(
+			self._valid_manifest(self._app_id("deliverybad"), delivery="carrier-pigeon")
+		)
+		self.assertIsNone(normalized)
+		self.assertIn("delivery", error)
+
+	def test_delivery_applied_and_updated_on_sync(self):
+		"""Unlike `enabled`/`alias`/`is_public`/`agent`, `delivery` has no
+		manual-override carve-out -- it is a declarative manifest property,
+		not something a System Manager is expected to hand-edit -- so it
+		must apply on every sync, not just the initial insert."""
+		app_id = self._app_id("deliveryupdate")
+		ok, error = upsert_huf_app(
+			self._valid_manifest(app_id, delivery="spa-deep-link"),
+			self.test_app,
+			"huf/apps/delivery_update.app.json",
+		)
+		self.assertTrue(ok, error)
+		self.assertEqual(frappe.db.get_value("HUF App", app_id, "delivery"), "spa-deep-link")
+
+		ok, error = upsert_huf_app(
+			self._valid_manifest(app_id, delivery="desk"),
+			self.test_app,
+			"huf/apps/delivery_update.app.json",
+		)
+		self.assertTrue(ok, error)
+		self.assertEqual(frappe.db.get_value("HUF App", app_id, "delivery"), "desk")
+
+	# ------------------------------------------------------------------
 	# Category conventions
 	# ------------------------------------------------------------------
 
@@ -409,7 +458,7 @@ class TestAppsSync(unittest.TestCase):
 		original_find_seed_dirs = apps_loader.find_seed_dirs
 		original_get_installed_apps = frappe.get_installed_apps
 		apps_loader.find_seed_dirs = lambda: {self.test_app: self.huf_dir}
-		frappe.get_installed_apps = lambda: original_get_installed_apps() + [self.test_app]
+		frappe.get_installed_apps = lambda: [*original_get_installed_apps(), self.test_app]
 		try:
 			summary = sync_huf_apps()
 		finally:
@@ -443,6 +492,256 @@ class TestAppsSync(unittest.TestCase):
 		doc = frappe.get_doc("HUF App", app_id)
 		self.assertEqual(doc.sync_status, "Invalid")
 		self.assertIn("category", doc.sync_error)
+
+	# ------------------------------------------------------------------
+	# alias / is_public / agent (Phase 1: guest portal fields)
+	# ------------------------------------------------------------------
+
+	def _make_test_agent(self, name):
+		"""Create a minimal Agent doc for agent-link validation tests."""
+		if frappe.db.exists("Agent", name):
+			return name
+		doc = frappe.get_doc(
+			{
+				"doctype": "Agent",
+				"agent_name": name,
+				"instructions": "You are a test agent used by test_apps_sync.py.",
+			}
+		)
+		doc.insert(ignore_permissions=True)
+		return doc.name
+
+	def test_alias_is_public_agent_normalized(self):
+		"""A manifest declaring alias/is_public/agent validates and normalizes
+		them onto the record, same as any other field."""
+		agent_name = self._make_test_agent(f"tapps-agent-{self.suffix}")
+		app_id = self._app_id("guestportal")
+		manifest = self._valid_manifest(
+			app_id, alias=f"alias-{self.suffix}", is_public=True, agent=agent_name
+		)
+
+		normalized, error = validate_manifest(manifest)
+
+		self.assertIsNone(error)
+		self.assertEqual(normalized["alias"], f"alias-{self.suffix}")
+		self.assertEqual(normalized["is_public"], 1)
+		self.assertEqual(normalized["agent"], agent_name)
+
+	def test_invalid_alias_rejected(self):
+		"""alias must match the same slug shape as app_id."""
+		normalized, error = validate_manifest(self._valid_manifest("tapps_x", alias="Not A Valid Alias!"))
+		self.assertIsNone(normalized)
+		self.assertIn("alias", error)
+
+	def test_is_public_must_be_boolean(self):
+		normalized, error = validate_manifest(self._valid_manifest("tapps_x", is_public="yes"))
+		self.assertIsNone(normalized)
+		self.assertIn("is_public", error)
+
+	def test_nonexistent_agent_rejected(self):
+		"""agent must resolve to an existing Agent doc."""
+		normalized, error = validate_manifest(self._valid_manifest("tapps_x", agent="no-such-agent-doc"))
+		self.assertIsNone(normalized)
+		self.assertIn("agent", error)
+
+	def test_alias_is_public_agent_applied_on_initial_insert(self):
+		"""The manifest's alias/is_public/agent apply when a record is first
+		created -- same first-insert semantics as `enabled`."""
+		agent_name = self._make_test_agent(f"tapps-agent2-{self.suffix}")
+		app_id = self._app_id("insertguest")
+		alias = f"insertguest-{self.suffix}"
+		ok, error = upsert_huf_app(
+			self._valid_manifest(app_id, alias=alias, is_public=True, agent=agent_name),
+			self.test_app,
+			"huf/apps/insertguest.app.json",
+		)
+		self.assertTrue(ok, error)
+		doc = frappe.get_doc("HUF App", app_id)
+		self.assertEqual(doc.alias, alias)
+		self.assertEqual(doc.is_public, 1)
+		self.assertEqual(doc.agent, agent_name)
+
+	def test_manual_override_survives_resync_for_guest_fields(self):
+		"""Re-syncing never overwrites an admin's manual alias/is_public/agent
+		edit -- same manual-disable-wins carve-out `enabled` already has."""
+		agent_name = self._make_test_agent(f"tapps-agent3-{self.suffix}")
+		other_agent_name = self._make_test_agent(f"tapps-agent3b-{self.suffix}")
+		app_id = self._app_id("manualguest")
+		alias = f"manualguest-{self.suffix}"
+		ok, error = upsert_huf_app(
+			self._valid_manifest(app_id, alias=alias, is_public=True, agent=agent_name),
+			self.test_app,
+			"huf/apps/manualguest.app.json",
+		)
+		self.assertTrue(ok, error)
+
+		# Administrator manually flips is_public off and repoints the agent.
+		frappe.db.set_value("HUF App", app_id, "is_public", 0)
+		frappe.db.set_value("HUF App", app_id, "agent", other_agent_name)
+
+		# Re-sync with a manifest that (again) asks for is_public=True and the
+		# original agent, plus an unrelated title change.
+		ok, error = upsert_huf_app(
+			self._valid_manifest(
+				app_id,
+				alias=alias,
+				is_public=True,
+				agent=agent_name,
+				title="Renamed Guest App",
+			),
+			self.test_app,
+			"huf/apps/manualguest.app.json",
+		)
+		self.assertTrue(ok, error)
+
+		doc = frappe.get_doc("HUF App", app_id)
+		self.assertEqual(doc.is_public, 0, "Manual is_public override must survive re-sync")
+		self.assertEqual(doc.agent, other_agent_name, "Manual agent override must survive re-sync")
+		self.assertEqual(doc.title, "Renamed Guest App", "Other manifest changes still apply")
+
+	def test_duplicate_alias_rejected_without_overwriting(self):
+		"""Two different app_ids declaring the same alias: the first
+		registration keeps the alias, the second is rejected and logged."""
+		alias = f"dupalias-{self.suffix}"
+		first_id = self._app_id("aliasfirst")
+		second_id = self._app_id("aliassecond")
+
+		ok, error = upsert_huf_app(
+			self._valid_manifest(first_id, alias=alias, title="First"),
+			self.test_app,
+			"huf/apps/aliasfirst.app.json",
+		)
+		self.assertTrue(ok, error)
+
+		ok, error = upsert_huf_app(
+			self._valid_manifest(second_id, alias=alias, title="Second"),
+			self.test_app_b,
+			"huf/apps/aliassecond.app.json",
+		)
+		self.assertFalse(ok, "Duplicate alias must be rejected")
+		self.assertIn("Duplicate alias", error)
+
+		first_doc = frappe.get_doc("HUF App", first_id)
+		self.assertEqual(first_doc.alias, alias, "First registration keeps the alias")
+		self.assertEqual(first_doc.title, "First", "First registration is untouched")
+		self.assertFalse(
+			frappe.db.exists("HUF App", second_id),
+			"Rejected manifest with a brand-new app_id is not inserted at all",
+		)
+
+	# ------------------------------------------------------------------
+	# route reservation / uniqueness (Phase 2: per-app www/ template registry)
+	# ------------------------------------------------------------------
+
+	def test_reserved_route_prefix_rejected(self):
+		"""A manifest may not claim a route under HUF's own reserved
+		prefixes (/huf, /mcp-oauth-callback, /api)."""
+		for bad_route in ("/huf", "/huf/apps/whatever", "/mcp-oauth-callback", "/api/v1/foo"):
+			normalized, error = validate_manifest(self._valid_manifest("tapps_x", route=bad_route))
+			self.assertIsNone(normalized, f"{bad_route} should have been rejected")
+			self.assertIn("reserved", error)
+
+	def test_duplicate_route_rejected_without_overwriting(self):
+		"""Two different app_ids declaring the same route: the first
+		registration keeps it, the second is rejected and logged -- same
+		first-registration-wins pattern as app_id/alias."""
+		route = f"/dup-route-{self.suffix}"
+		first_id = self._app_id("routefirst")
+		second_id = self._app_id("routesecond")
+
+		ok, error = upsert_huf_app(
+			self._valid_manifest(first_id, route=route, title="First"),
+			self.test_app,
+			"huf/apps/routefirst.app.json",
+		)
+		self.assertTrue(ok, error)
+
+		ok, error = upsert_huf_app(
+			self._valid_manifest(second_id, route=route, title="Second"),
+			self.test_app_b,
+			"huf/apps/routesecond.app.json",
+		)
+		self.assertFalse(ok, "Duplicate route must be rejected")
+		self.assertIn("Duplicate route", error)
+
+		first_doc = frappe.get_doc("HUF App", first_id)
+		self.assertEqual(first_doc.route, route, "First registration keeps the route")
+		self.assertFalse(
+			frappe.db.exists("HUF App", second_id),
+			"Rejected manifest with a brand-new app_id is not inserted at all",
+		)
+
+	# ------------------------------------------------------------------
+	# www_template (Phase 2: per-app www/ template registry)
+	# ------------------------------------------------------------------
+
+	def test_invalid_www_template_shape_rejected(self):
+		"""www_template must match the same bare-directory-name slug shape
+		as app_id/alias -- no paths, no traversal."""
+		for bad in ("../escape", "has/slash", "Has Spaces", "UpperCase"):
+			normalized, error = validate_manifest(self._valid_manifest("tapps_x", www_template=bad))
+			self.assertIsNone(normalized, f"{bad!r} should have been rejected")
+			self.assertIn("www_template", error)
+
+	def test_www_template_normalized_when_shape_valid(self):
+		normalized, error = validate_manifest(
+			self._valid_manifest("tapps_x", www_template="my-template")
+		)
+		self.assertIsNone(error)
+		self.assertEqual(normalized["www_template"], "my-template")
+
+	def test_www_template_missing_on_disk_rejected(self):
+		"""Shape-valid www_template that doesn't resolve to a real directory
+		(scanner.find_www_template_dir) is rejected at upsert time, recorded
+		Invalid, same split as exposed_tables (shape vs. live-site checks)."""
+		app_id = self._app_id("missingtemplate")
+		original = apps_loader.find_www_template_dir
+		apps_loader.find_www_template_dir = lambda app_name, name: None
+		try:
+			ok, error = upsert_huf_app(
+				self._valid_manifest(app_id, www_template="does-not-exist"),
+				self.test_app,
+				"huf/apps/missingtemplate.app.json",
+			)
+		finally:
+			apps_loader.find_www_template_dir = original
+
+		self.assertFalse(ok)
+		self.assertIn("www_template", error)
+		doc = frappe.get_doc("HUF App", app_id)
+		self.assertEqual(doc.sync_status, "Invalid")
+
+	def test_www_template_applied_on_initial_insert_and_survives_manual_override(self):
+		"""www_template follows the same first-insert-only / manual-override-
+		wins carve-out as alias/is_public/agent."""
+		app_id = self._app_id("templateguest")
+		original = apps_loader.find_www_template_dir
+		apps_loader.find_www_template_dir = lambda app_name, name: "/fake/path"
+		try:
+			ok, error = upsert_huf_app(
+				self._valid_manifest(app_id, www_template="portal-tpl"),
+				self.test_app,
+				"huf/apps/templateguest.app.json",
+			)
+			self.assertTrue(ok, error)
+			doc = frappe.get_doc("HUF App", app_id)
+			self.assertEqual(doc.www_template, "portal-tpl")
+
+			# Administrator manually clears it (e.g. rolling back a broken
+			# portal page) -- re-sync must not silently restore it.
+			frappe.db.set_value("HUF App", app_id, "www_template", "")
+
+			ok, error = upsert_huf_app(
+				self._valid_manifest(app_id, www_template="portal-tpl", title="Renamed"),
+				self.test_app,
+				"huf/apps/templateguest.app.json",
+			)
+			self.assertTrue(ok, error)
+			doc = frappe.get_doc("HUF App", app_id)
+			self.assertEqual(doc.www_template, "", "Manual clear must survive re-sync")
+			self.assertEqual(doc.title, "Renamed", "Other manifest changes still apply")
+		finally:
+			apps_loader.find_www_template_dir = original
 
 	# ------------------------------------------------------------------
 	# exposed_tables

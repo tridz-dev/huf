@@ -1,7 +1,8 @@
 import json, requests, asyncio, random
 from types import SimpleNamespace
 import frappe
-from huf.ai.tool_serializer import serialize_tools
+from huf.ai.tools.serializer import serialize_tools
+from huf.ai.providers.errors import ProviderError
 
 class SimpleResult:
     def __init__(self, final_output, usage=None, new_items=None):
@@ -65,7 +66,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             )
             data = response.json()
         except requests.exceptions.RequestException as e:
-            return SimpleResult(f"API Error: {e}", total_usage, all_new_items)
+            resp = getattr(e, "response", None)
+            if resp is not None:
+                raise ProviderError.from_http(resp.status_code, getattr(resp, "text", ""), "OpenRouter") from None
+            raise ProviderError.from_exception(e, "OpenRouter") from None
 
         try:
             choice = data["choices"][0]["message"]
@@ -117,6 +121,11 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             messages.extend(tool_results_for_api)
 
         except (KeyError, IndexError, TypeError) as e:
-            return SimpleResult(str(data.get("error", {}).get("message", e)), total_usage, all_new_items)
+            err = data.get("error") if isinstance(data, dict) else None
+            raise ProviderError.from_http(
+                (err or {}).get("code") if isinstance(err, dict) and str((err or {}).get("code", "")).isdigit() else None,
+                str((err or {}).get("message", e)) if isinstance(err, dict) else str(e),
+                "OpenRouter",
+            ) from None
 
     return SimpleResult("Agent stopped after max rounds of tool calls.", total_usage, all_new_items)

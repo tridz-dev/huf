@@ -4,34 +4,47 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import add_to_date, now_datetime
+from frappe.utils import now_datetime
 
 
 class AutomationTrigger(Document):
 	def validate(self):
 		self._validate_system_agent_lock()
+		self._validate_cron()
 		self._set_initial_next_execution()
+
+	def _validate_cron(self):
+		if self.trigger_type != "Schedule" or self.schedule_type != "Cron":
+			return
+		from croniter import croniter
+
+		if not self.cron_expression or not croniter.is_valid(self.cron_expression):
+			frappe.throw(_("Invalid cron expression: {0}").format(self.cron_expression or ""))
 
 	def _set_initial_next_execution(self):
 		"""Schedule-type triggers are only ever picked up by
-		automation_scheduler.run_due_automations() via a
+		automation.scheduler.run_due_automations() via a
 		``next_execution <= now`` filter, which excludes NULL in SQL. A
 		freshly created (or re-enabled) Schedule trigger with no
 		next_execution yet would therefore never fire -- compute an initial
 		one here, the same way the scheduler advances it after each run.
+
+		Also recomputed whenever the schedule definition (type, cron, interval)
+		changes, otherwise an edited cron would keep firing on the old cadence
+		until the stale next_execution elapsed. Cron expressions are evaluated in
+		the system time zone (``now_datetime()``), not a per-trigger time zone.
 		"""
-		if self.trigger_type != "Schedule" or self.next_execution:
+		if self.trigger_type != "Schedule":
 			return
-		interval = self.interval_count or 1
-		si = (self.scheduled_interval or "").lower()
-		self.next_execution = add_to_date(
-			now_datetime(),
-			hours=interval if si == "hourly" else 0,
-			days=interval if si == "daily" else 0,
-			weeks=interval if si == "weekly" else 0,
-			months=interval if si == "monthly" else 0,
-			years=interval if si == "yearly" else 0,
+		schedule_changed = not self.is_new() and any(
+			self.has_value_changed(f)
+			for f in ("schedule_type", "cron_expression", "scheduled_interval", "interval_count")
 		)
+		if self.next_execution and not schedule_changed:
+			return
+		from huf.ai.automation.scheduler import compute_next_execution
+
+		self.next_execution = compute_next_execution(self.as_dict(), now_datetime())
 
 	def _validate_system_agent_lock(self):
 		"""Same guard as Automation._validate_system_agent_lock(), applied

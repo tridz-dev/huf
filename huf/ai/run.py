@@ -77,12 +77,16 @@ class RunProvider:
             raise
 
         except Exception as e:
-            # Generic error from LiteLLM: log it, but allow fallback to custom provider
+            # A LiteLLM/provider failure (404 retired model, 429 spend cap, 401, 5xx, timeout)
+            # must surface as a failure. It must never be masked by re-calling a legacy
+            # provider module and storing whatever that returns as a successful reply.
+            # The legacy path below is reserved for the case where LiteLLM cannot be used
+            # at all (the ImportError branch above), never for API errors.
             frappe.log_error(
                 frappe.get_traceback(),
                 f"LiteLLM Provider Error: {provider}",
             )
-            original_exception = e
+            raise
 
         # 2. For other providers, try to load custom provider module
         # This allows for future custom providers or gradual migration
@@ -127,7 +131,7 @@ class RunProvider:
         function does not execute any of its body and does not need `await` --
         it synchronously returns an async-generator object, with all real work
         deferred until the caller does `async for chunk in stream`. The one
-        caller (`huf/ai/agent_integration.py`, `stream = RunProvider.run_stream(...)`
+        caller (`huf/ai/agent/integration.py`, `stream = RunProvider.run_stream(...)`
         followed by `async for` over it) already consumes it that way, so no
         change is needed here.
         """

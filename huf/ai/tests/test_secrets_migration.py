@@ -8,7 +8,7 @@ Covers:
 - Automation Trigger.webhook_key and .secret can be read via get_password()
 - Agent Tool Function.http_headers[].value can be read via get_password()
 - MCP Server Header.header_value can be read via get_password()
-- automation_api.py field-listing endpoint does not return plaintext for
+- automation/api.py field-listing endpoint does not return plaintext for
   low-privilege users (Huf Viewer, Huf User)
 
 Run with: bench --site <site> run-tests --app huf --module huf.ai.tests.test_secrets_migration
@@ -19,6 +19,8 @@ from unittest.mock import patch, MagicMock
 import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils.password import set_encrypted_password
+
+from huf.testing.factories import ensure_ai_model
 
 
 class TestSecretsPasswordFields(IntegrationTestCase):
@@ -188,7 +190,7 @@ class TestSecretsPasswordFields(IntegrationTestCase):
         self.assertEqual(trigger.get_password("webhook_key"), test_key)
 
     def test_automation_trigger_field_list_no_plaintext_export(self):
-        """Test that automation_api.py does not return plaintext webhook_key to low-privilege users."""
+        """Test that automation/api.py does not return plaintext webhook_key to low-privilege users."""
         # This test verifies the masking guarantee any field-listing endpoint
         # relies on: once a real secret has been assigned and saved, the
         # in-memory/DB plaintext column is the dummy mask, never the secret,
@@ -235,6 +237,7 @@ class TestSecretsPasswordFields(IntegrationTestCase):
 
     def _create_agent_if_missing(self):
         """Helper: create a minimal Agent for testing (Link target of Automation.agent)."""
+        ensure_ai_model("gpt-4", "OpenAI")
         if not frappe.db.exists("Agent", "Test Agent"):
             frappe.get_doc({
                 "doctype": "Agent",

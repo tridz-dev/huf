@@ -51,7 +51,9 @@ export function FlowCanvas({
     selectedNodeId,
     setSelectedNode,
     setSelectedEdge,
-    saveState
+    saveState,
+    undo,
+    canUndo
   } = useFlowContext();
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
   const [nodes, setNodes] = useState<Node<FlowNodeData>[]>([]);
@@ -88,6 +90,28 @@ export function FlowCanvas({
       });
     }
   }, [activeFlow?.id, activeFlow?.version, activeFlow?.nodes.length, activeFlow?.edges.length]); // Re-sync on ID/version change OR structural changes (add/delete)
+
+  // Keyboard undo (Cmd/Ctrl+Z). Scoped to node deletion for now (see
+  // FlowContext.undo). The "Undo" action on the delete toast is the primary,
+  // discoverable path; this is the shortcut on top of it. Skipped while focus is in
+  // a text field so it doesn't fight the input's own native undo.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isUndoCombo = (e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z';
+      if (!isUndoCombo) return;
+
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable;
+      if (isEditable || !canUndo) return;
+
+      e.preventDefault();
+      undo();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, canUndo]);
 
   // Persistent "was this saved as a Procedure?" indicator -- the save-time toast is
   // one-shot, so without this a user who saved with the checkbox on and then closed
@@ -318,6 +342,10 @@ export function FlowCanvas({
             router: 'GitBranch',
             loop: 'RotateCw',
             'human.approval': 'UserCheck',
+            'state-get': 'Database',
+            'state-set': 'Save',
+            'state-delete': 'Trash2',
+            'doc-create': 'FilePlus',
             code: 'Code',
             email: 'Mail',
             webhook: 'Webhook',
@@ -332,6 +360,10 @@ export function FlowCanvas({
             router: 'Router',
             loop: 'Loop',
             'human.approval': 'Human in loop',
+            'state-get': 'Get state',
+            'state-set': 'Set state',
+            'state-delete': 'Delete state',
+            'doc-create': 'Create document',
             code: 'Execute code',
             email: 'Send email',
             file: 'File operations',

@@ -2,14 +2,14 @@
 
 Thin wrappers around the existing conversation machinery in
 `huf.ai.conversation_manager.ConversationManager` and
-`huf.ai.agent_chat.get_history` - ownership checks and history retrieval
+`huf.ai.agent.chat.get_history` - ownership checks and history retrieval
 are delegated entirely to that existing code, not reimplemented here.
 """
 
 import frappe
 
-from huf.ai.agent_access import assert_agent_access
-from huf.ai.agent_chat import get_history
+from huf.ai.agent.access import assert_agent_access
+from huf.ai.agent.chat import get_history
 from huf.ai.conversation_manager import ConversationManager
 from huf.api.v1.context import RequestContext
 from huf.api.v1.errors import NotFoundError
@@ -18,20 +18,28 @@ from huf.api.v1.scopes import require_agent_allowed, require_scope
 
 def _to_public_shape(conv_doc) -> dict:
 	"""Build the public, stable shape for a single Agent Conversation."""
-	return {
+	shape = {
 		"id": conv_doc.name,
 		"agent_id": conv_doc.agent,
 		"title": conv_doc.title,
 		"created_at": conv_doc.created_at,
 		"status": conv_doc.status,
 	}
+	if getattr(conv_doc, "execution_host", None) == "desktop":
+		# Only a public device id and label; never anything a client could use as a credential.
+		shape["host"] = {
+			"type": "desktop",
+			"device_id": conv_doc.host_device_id,
+			"label": conv_doc.host_label,
+		}
+	return shape
 
 
 def _owns_conversation(conv_doc, user: str) -> bool:
 	"""Whether `user` is the owner of `conv_doc` (or a System Manager).
 
-	Mirrors `huf.ai.agent_chat._assert_owns_conversation` / the ownership
-	check in `huf.ai.agent_chat.get_history`, but returns a bool instead of
+	Mirrors `huf.ai.agent.chat._assert_owns_conversation` / the ownership
+	check in `huf.ai.agent.chat.get_history`, but returns a bool instead of
 	raising so callers can convert a failure into `NotFoundError` (no
 	existence leak) rather than a `PermissionError`.
 	"""
@@ -72,7 +80,16 @@ def handle_create_conversation(context: RequestContext, agent_id: str, title: st
 MAX_PAGE_LENGTH = 50
 
 # Fields fetched directly via `frappe.get_all` - exactly what `_to_public_shape` uses.
-_CONVERSATION_LIST_FIELDS = ["name", "agent", "title", "created_at", "status"]
+_CONVERSATION_LIST_FIELDS = [
+	"name",
+	"agent",
+	"title",
+	"created_at",
+	"status",
+	"execution_host",
+	"host_device_id",
+	"host_label",
+]
 
 
 def handle_list_conversations(context: RequestContext, agent_id: str = None) -> dict:

@@ -237,7 +237,7 @@ for (const file of walk(SRC)) {
   const rel = relative(ROOT, file);
   // These legitimately carry their own palettes.
   // MeetingRecordingPlayer's caption bar is a fixed bg-black/85 scrim (see
-  // Tracks/safwan-erooth.NightModeAudit) — deliberately theme-independent,
+  // the NightModeAudit workspace track) — deliberately theme-independent,
   // like a video subtitle bar, so its bright amber icon is a fixed accent
   // by design, not a token bypass.
   // UsersPage's role badges are an 8-hue categorical palette with no

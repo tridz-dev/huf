@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite the paper below."
+type: software
+title: "HUF"
+url: "https://github.com/tridz-dev/huf"
+license: MIT
+preferred-citation:
+  type: article
+  title: "Don't Retry Blind: Recovering from Partial Side Effects in Agent Procedures"
+  authors:
+    - family-names: Erooth
+      given-names: Safwan
+      affiliation: "Tridz Technologies Pvt Ltd, Bengaluru, India"
+      email: safwan@tridz.com
+  date-released: 2026-08-25
+  doi: 10.5281/zenodo.22945662
+  url: "https://doi.org/10.5281/zenodo.22945662"
+  license: CC-BY-4.0

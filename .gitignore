@@ -37,3 +37,12 @@ dist/
 
 # Frappe
 *.jsonc
+
+# Workspace / agent working files never belong in this repo (see scripts/check_repo_layout.py)
+/Tracks/
+/gap2/
+/tools/
+/progress/
+SWARM_STATE*.md
+OPUS_REVIEW*.md
+live.env

@@ -40,19 +40,37 @@ Run standalone (no bench) from the repo root:
 """
 
 import asyncio
+import contextlib
 import inspect
 import pathlib
 import sys
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()
 
 import huf.ai.run as run_module  # noqa: E402
 from huf.ai.run import RunProvider  # noqa: E402
+
+
+@contextlib.contextmanager
+def _litellm_module(fake):
+    """Make ``from huf.ai.providers import litellm`` resolve to ``fake``.
+
+    Patching only ``sys.modules`` is not enough once the real submodule has been imported
+    anywhere in the process: the import then resolves the attribute on the package, so the
+    stub is ignored and the real provider runs.
+    """
+    import huf.ai.providers as providers_pkg
+
+    with patch.dict(sys.modules, {"huf.ai.providers.litellm": fake}), patch.object(
+        providers_pkg, "litellm", fake, create=True
+    ):
+        yield
+
 
 
 class _BoomFromInsideLLMCall(Exception):
@@ -82,13 +100,12 @@ class TestRunProviderCatchesRealLLMFailures(unittest.IsolatedAsyncioTestCase):
     """The key regression test: proves the except block (and therefore the
     fallback branch) is reachable from a real in-coroutine litellm failure."""
 
-    async def test_exception_inside_litellm_coroutine_reaches_fallback(self):
+    async def test_litellm_failure_propagates_and_never_reaches_legacy_fallback(self):
+        """FIX-E: an API failure from inside the litellm coroutine must surface
+        as the same exception; the legacy provider module must NOT be called
+        (it used to return error text that was stored as a successful reply)."""
+
         async def raising_litellm_run(agent, prompt, provider, model, context=None):
-            # Exception raised from *inside* the coroutine body -- this is
-            # what a real network/provider failure looks like. Before the
-            # fix, RunProvider.run() never actually awaited this coroutine
-            # itself (the caller did, after RunProvider.run() had already
-            # returned), so this could never be caught here.
             raise _BoomFromInsideLLMCall("simulated real LLM call failure")
 
         fake_litellm_module = MagicMock()
@@ -98,7 +115,7 @@ class TestRunProviderCatchesRealLLMFailures(unittest.IsolatedAsyncioTestCase):
 
         async def fallback_run(agent, prompt, provider, model, context=None):
             fallback_called["value"] = True
-            raise RuntimeError("fallback module also fails, for this test")
+            return MagicMock(final_output="Gemini API Error: 429")
 
         fake_fallback_module = MagicMock()
         fake_fallback_module.run = fallback_run
@@ -106,67 +123,34 @@ class TestRunProviderCatchesRealLLMFailures(unittest.IsolatedAsyncioTestCase):
         real_get_module = run_module.frappe.get_module
 
         def fake_get_module(module_path):
-            if module_path == "huf.ai.providers.litellm":
-                return fake_litellm_module
             if module_path == "huf.ai.providers.myprovider":
                 return fake_fallback_module
-            # Delegate anything else (e.g. frappe's own translation machinery
-            # resolving app paths) to the real implementation instead of
-            # blindly raising -- an unconditional ImportError here leaks into
-            # unrelated frappe internals that also call frappe.get_module.
             return real_get_module(module_path)
 
-        with patch.dict(
-            sys.modules,
-            {"huf.ai.providers.litellm": fake_litellm_module},
-        ), patch.object(run_module.frappe, "get_module", side_effect=fake_get_module), \
+        with _litellm_module(fake_litellm_module), patch.object(run_module.frappe, "get_module", side_effect=fake_get_module), \
            patch.object(run_module.frappe, "log_error", MagicMock()):
 
             agent = MagicMock()
             with self.assertRaises(_BoomFromInsideLLMCall):
                 await RunProvider.run(agent, "prompt", "MyProvider", "some-model", context=None)
 
-        self.assertTrue(
-            fallback_called["value"],
-            "The custom-provider fallback branch was not reached -- the "
-            "except block did not catch the real litellm-coroutine failure, "
-            "meaning the dead-code bug (ST-R5.9) is still present.",
-        )
+        self.assertFalse(fallback_called["value"], "legacy fallback must not mask a LiteLLM failure")
 
-    async def test_no_fallback_module_still_propagates_original_exception(self):
+    async def test_provider_unavailable_error_is_not_swallowed(self):
+        from huf.ai.providers.errors import ProviderError
+
         async def raising_litellm_run(agent, prompt, provider, model, context=None):
-            raise _BoomFromInsideLLMCall("simulated real LLM call failure")
+            raise ProviderError("quota_exceeded", status_code=429, detail="429 spend cap")
 
         fake_litellm_module = MagicMock()
         fake_litellm_module.run = raising_litellm_run
-
-        real_get_module = run_module.frappe.get_module
-
-        def fake_get_module(module_path):
-            if module_path == "huf.ai.providers.litellm":
-                return fake_litellm_module
-            if module_path == "huf.ai.providers.nosuchprovider":
-                raise ImportError(module_path)
-            # Delegate anything else to the real implementation so frappe's
-            # own translation machinery (invoked by `_()` inside the
-            # not-found branch) keeps working instead of raising here.
-            return real_get_module(module_path)
-
-        with patch.dict(
-            sys.modules,
-            {"huf.ai.providers.litellm": fake_litellm_module},
-        ), patch.object(run_module.frappe, "get_module", side_effect=fake_get_module), \
-           patch.object(run_module.frappe, "log_error", MagicMock()), \
-           patch.object(run_module.frappe, "throw", side_effect=lambda msg: (_ for _ in ()).throw(RuntimeError(str(msg)))):
-
-            agent = MagicMock()
-            # frappe.throw is patched to actually raise (mirroring real Frappe
-            # behavior; the bare MagicMock frappe stub does not raise on its
-            # own). Reaching this call at all proves the "provider module not
-            # found" fallback path was taken -- which only happens because the
-            # except block already caught the real litellm exception.
-            with self.assertRaises(RuntimeError):
-                await RunProvider.run(agent, "prompt", "NoSuchProvider", "some-model", context=None)
+        with _litellm_module(fake_litellm_module), \
+             patch.object(run_module.frappe, "log_error", MagicMock()), \
+             patch.object(run_module.frappe, "get_module", MagicMock()) as get_module_mock:
+            with self.assertRaises(ProviderError) as ctx:
+                await RunProvider.run(MagicMock(), "prompt", "Google", "gemini-x", context=None)
+        self.assertEqual(ctx.exception.kind, "quota_exceeded")
+        get_module_mock.assert_not_called()
 
     async def test_successful_litellm_call_never_touches_fallback(self):
         """Sanity check: the happy path is unaffected by the fix."""
@@ -177,7 +161,7 @@ class TestRunProviderCatchesRealLLMFailures(unittest.IsolatedAsyncioTestCase):
         fake_litellm_module = MagicMock()
         fake_litellm_module.run = ok_litellm_run
 
-        with patch.dict(sys.modules, {"huf.ai.providers.litellm": fake_litellm_module}), \
+        with _litellm_module(fake_litellm_module), \
              patch.object(run_module.frappe, "get_module", MagicMock()) as get_module_mock:
 
             agent = MagicMock()

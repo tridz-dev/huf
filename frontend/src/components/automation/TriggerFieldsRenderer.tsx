@@ -73,7 +73,12 @@ function TriggerField({
   const stringValue = typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 
   if (config.type === 'select' && config.field === 'reference_doctype') {
-    const options = docTypes.map((dt) => ({ value: dt.name, label: dt.name }));
+    const options = docTypes.some((dt) => dt.name === stringValue)
+      ? docTypes.map((dt) => ({ value: dt.name, label: dt.name }))
+      : [
+          ...(stringValue ? [{ value: stringValue, label: stringValue }] : []),
+          ...docTypes.map((dt) => ({ value: dt.name, label: dt.name })),
+        ];
     return (
       <div className="space-y-1.5">
         <Label>{config.label}</Label>

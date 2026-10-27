@@ -1,12 +1,12 @@
 """Page renderer for public/guest access to a HUF App via its alias.
 
-Structural pattern mirrors huf.ai.agent_stream_renderer.AgentStreamRenderer
+Structural pattern mirrors huf.ai.agent.stream_renderer.AgentStreamRenderer
 (BaseRenderer subclass, can_render()/render() only, no __init__ override —
 the base class already wires self.path from the resolved endpoint).
 
 Route: `/huf/apps/<alias>` -> resolved to a `HUF App` with `is_public=1`,
 `enabled=1`, whose linked Agent also has `allow_guest=1` (checked via the
-shared huf.ai.agent_access.check_agent_access, exactly as run_agent_sync
+shared huf.ai.agent.access.check_agent_access, exactly as run_agent_sync
 already gates guest text-chat access, A.8/D.9). Both gates must pass.
 
 Anti-enumeration: "no such public app", "app exists but is disabled", and
@@ -25,7 +25,7 @@ import frappe
 from frappe.website.page_renderers.base_renderer import BaseRenderer
 from frappe.website.page_renderers.template_page import TemplatePage
 
-from huf.ai.agent_access import check_agent_access
+from huf.ai.agent.access import check_agent_access
 
 APP_ROUTE_PREFIX = "huf/apps/"
 
@@ -81,4 +81,23 @@ class HufAppPublicRenderer(BaseRenderer):
 		# Both gates passed — serve the same SPA shell `/huf` serves,
 		# reusing www/huf.py:get_context's existing Guest-branching boot
 		# logic rather than reimplementing it.
-		return TemplatePage("huf", self.http_status_code).render()
+		#
+		# TemplatePage.set_template_path() (called from __init__) only sets
+		# self.app_path/self.template_path etc. when it actually finds
+		# huf/www/huf.html on disk (e.g. the frontend build hasn't been run
+		# yet, so huf.html -- generated at build time by
+		# frontend/scripts/copy-html-entry.mjs -- doesn't exist). Calling
+		# .render() unconditionally in that state raises AttributeError deep
+		# inside set_pymodule() instead of a clean 404. PathResolver's normal
+		# flow always guards this with can_render() first; do the same here
+		# so a missing/unbuilt shell degrades to the same PageDoesNotExistError
+		# every other rejection in this method already produces, rather than
+		# a 500.
+		template_page = TemplatePage("huf", self.http_status_code)
+		if not template_page.can_render():
+			frappe.log_error(
+				title="HUF App Public Renderer",
+				message="huf/www/huf.html not found -- has `bench build --app huf` been run?",
+			)
+			raise frappe.PageDoesNotExistError
+		return template_page.render()

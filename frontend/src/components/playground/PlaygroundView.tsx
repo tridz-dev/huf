@@ -1,5 +1,6 @@
 import type { AgentDoc, AIProvider } from '@/types/agent.types';
 import { ConfigStrip } from './ConfigStrip';
+import { DecisionRuntimePreview } from './DecisionRuntimePreview';
 import { PromptPanel } from './PromptPanel';
 import { ResponsePanel } from './ResponsePanel';
 import { RunLedger, type RunLedgerProps } from './RunLedger';
@@ -28,6 +29,7 @@ export function PlaygroundView({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto">
       <div className="px-5 pt-[18px]">
+        <DecisionRuntimePreview />
         <ConfigStrip agents={agents} providers={providers} config={config} onChange={onConfigChange} />
       </div>
 

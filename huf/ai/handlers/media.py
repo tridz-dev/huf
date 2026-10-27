@@ -23,16 +23,65 @@ def _get_default_image_model(provider_name: str) -> str:
         str: Default image model name, or None if not supported
     """
     defaults = {
-        "openai": "dall-e-3",
-        "azure": "dall-e-3",  # Azure uses same models with azure/ prefix
-        "openrouter": "dall-e-3",  # OpenRouter can route to OpenAI models
-        "google": "google/gemini-2.5-flash-image",
+        "openai": "gpt-image-2",
+        "azure": "gpt-image-2",  # Azure uses same models with azure/ prefix
+        "openrouter": "google/gemini-3.1-flash-image",
+        "google": "gemini/gemini-3.1-flash-image",
         "vertex_ai": "vertex_ai/imagegeneration@006",
         "bedrock": "bedrock/stability.stable-diffusion-xl-v0",
         "recraft": "recraft/recraftv3",
     }
 
     return defaults.get(provider_name.lower())
+
+
+def _resolve_image_config(agent_doc) -> dict:
+    """Resolve image model, API key and LiteLLM name for image generation.
+
+    An explicit ``image_generation_model`` (AI Model link) uses that model's own
+    provider for the API key and name normalisation. Otherwise falls back to the
+    agent's provider default.
+
+    Raises:
+        ValueError: no model determinable, or the chosen provider has no API key.
+    """
+    from huf.ai.providers.litellm import _normalize_model_name
+
+    model_link = getattr(agent_doc, "image_generation_model", None)
+    if model_link:
+        model_doc = frappe.get_doc("AI Model", model_link)
+        if not model_doc.provider:
+            raise ValueError(
+                f"Image model '{model_link}' has no provider linked. "
+                "Please set a provider on the AI Model document."
+            )
+        provider_link = model_doc.provider
+        image_model = model_doc.model_name
+    else:
+        provider_link = agent_doc.provider
+        image_model = None
+
+    provider_doc = frappe.get_doc("AI Provider", provider_link)
+    if not image_model:
+        image_model = _get_default_image_model(provider_doc.provider_name.lower())
+        if not image_model:
+            raise ValueError(
+                f"Image generation not supported for provider '{provider_doc.provider_name}'. "
+                "Please configure an image_generation_model in agent settings."
+            )
+
+    api_key = provider_doc.get_password("api_key")
+    if not api_key:
+        raise ValueError(
+            f"API key is not configured for image provider '{provider_doc.provider_name}'. "
+            "Please add the API key to that AI Provider document."
+        )
+
+    return {
+        "model": _normalize_model_name(image_model, provider_link),
+        "api_key": api_key,
+        "provider_name": provider_doc.provider_name.lower(),
+    }
 
 
 @frappe.whitelist()
@@ -72,7 +121,7 @@ async def handle_generate_image(
     # It only takes effect if a future refactor converts this handler to a
     # sync wrapper (see ST-R4.2, Audit F-33, review item 21). Tracked as an
     # OPEN finding, not closed, until that refactor lands.
-    from huf.ai.agent_access import assert_agent_access
+    from huf.ai.agent.access import assert_agent_access
     agent_doc = frappe.get_doc("Agent", agent_name)
     assert_agent_access(agent_doc, frappe.session.user, for_execution=True)
 
@@ -82,33 +131,12 @@ async def handle_generate_image(
             return {"success": False, "error": "Agent name not found in context"}
 
         agent_doc = frappe.get_doc("Agent", agent_name)
-        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
-        api_key = provider_doc.get_password("api_key")
-
-        if not api_key:
-            return {"success": False, "error": "API key not configured for provider"}
-
-        # Determine image generation model
-        image_model = None
-
-        if hasattr(agent_doc, "image_generation_model") and agent_doc.image_generation_model:
-            # Use explicitly configured image model
-            model_doc = frappe.get_doc("AI Model", agent_doc.image_generation_model)
-            image_model = model_doc.model_name
-        else:
-            # Auto-detect suitable image model based on provider
-            provider_name = provider_doc.provider_name.lower()
-            image_model = _get_default_image_model(provider_name)
-
-        if not image_model:
-            return {
-                "success": False,
-                "error": f"Image generation not supported for provider '{provider_doc.provider_name}'. Please configure an image_generation_model in agent settings."
-            }
-
-        # Normalize to LiteLLM format
-        from huf.ai.providers.litellm import _normalize_model_name
-        normalized_model = _normalize_model_name(image_model, agent_doc.provider)
+        try:
+            image_cfg = _resolve_image_config(agent_doc)
+        except ValueError as exc:
+            return {"success": False, "error": str(exc)}
+        normalized_model = image_cfg["model"]
+        api_key = image_cfg["api_key"]
 
         # Call LiteLLM image generation
         import litellm
@@ -373,7 +401,7 @@ async def handle_ocr_document(
     # It only takes effect if a future refactor converts this handler to a
     # sync wrapper (see ST-R4.2, Audit F-33, review item 21). Tracked as an
     # OPEN finding, not closed, until that refactor lands.
-    from huf.ai.agent_access import assert_agent_access
+    from huf.ai.agent.access import assert_agent_access
     agent_doc = frappe.get_doc("Agent", agent_name)
     assert_agent_access(agent_doc, frappe.session.user, for_execution=True)
 
@@ -432,17 +460,118 @@ def _get_default_tts_model(provider_name: str) -> str:
         str: Default TTS model name, or None if not supported
     """
     defaults = {
-        "openai": "tts-1",
-        "azure": "tts-1",
-        "google": "gemini/gemini-2.5-flash-preview-tts",
-        "gemini": "gemini/gemini-2.5-flash-preview-tts",
-        "vertex_ai": "vertex_ai/gemini-2.5-flash-preview-tts",
-        "elevenlabs": "elevenlabs/eleven_multilingual_v2",
+        "openai": "gpt-4o-mini-tts",
+        "azure": "gpt-4o-mini-tts",
+        "google": "gemini/gemini-3.8-flash-tts",
+        "gemini": "gemini/gemini-3.8-flash-tts",
+        "vertex_ai": "vertex_ai/gemini-3.8-flash-tts",
+        "elevenlabs": "elevenlabs/eleven_flash_v2_5",
         "aws": "aws/polly",
         "minimax": "minimax/speech-01",
     }
 
     return defaults.get(provider_name.lower())
+
+
+def _lookup_ai_model(model_ref: str):
+    """Return the AI Model doc for ``model_ref`` (doc name, or model_name), else None."""
+    if not model_ref:
+        return None
+    try:
+        return frappe.get_doc("AI Model", model_ref)
+    except frappe.DoesNotExistError:
+        pass
+    except KeyError:
+        return None
+    name = frappe.db.get_value("AI Model", {"model_name": model_ref}, "name")
+    return frappe.get_doc("AI Model", name) if name else None
+
+
+def _resolve_model_provider(model_ref: str, fallback_provider: str, kind: str):
+    """
+    Resolve ``(provider_link, provider_doc, api_key, model_name)`` for a model.
+
+    The AI Model's own provider supplies the API key and LiteLLM normalisation;
+    ``fallback_provider`` (the agent's) is used only when the model is not a
+    known AI Model.
+
+    Raises:
+        ValueError: the chosen provider has no API key (error names that provider).
+    """
+    model_doc = _lookup_ai_model(model_ref)
+    if model_doc is not None:
+        if not model_doc.provider:
+            raise ValueError(
+                f"{kind} model '{model_ref}' has no provider linked. "
+                "Please set a provider on the AI Model document."
+            )
+        provider_link = model_doc.provider
+        model_name = model_doc.model_name
+    else:
+        provider_link = fallback_provider
+        model_name = model_ref
+    provider_doc = frappe.get_doc("AI Provider", provider_link)
+    api_key = provider_doc.get_password("api_key")
+    if not api_key:
+        raise ValueError(
+            f"API key is not configured for {kind} provider "
+            f"'{provider_doc.provider_name}'. Please add it to the AI Provider document."
+        )
+    return provider_link, provider_doc, api_key, model_name
+
+
+def _pcm16_to_wav(pcm: bytes, sample_rate: int = 24000, channels: int = 1) -> bytes:
+    """Wrap raw PCM16 (Gemini TTS output) in a WAV container."""
+    import struct
+
+    if pcm[:4] == b"RIFF":
+        return pcm
+    header = struct.pack(
+        "<4sI4s4sIHHIIHH4sI",
+        b"RIFF", 36 + len(pcm), b"WAVE", b"fmt ", 16, 1, channels,
+        sample_rate, sample_rate * channels * 2, channels * 2, 16, b"data", len(pcm),
+    )
+    return header + pcm
+
+
+_GEMINI_VOICES = {
+    "zephyr", "puck", "charon", "kore", "fenrir", "leda", "orus", "aoede",
+    "callirrhoe", "autonoe", "enceladus", "iapetus", "umbriel", "algieba",
+    "despina", "erinome", "algenib", "rasalgethi", "laomedeia", "achernar",
+    "alnilam", "schedar", "gacrux", "pulcherrima", "achird", "zubenelgenubi",
+    "vindemiatrix", "sadachbia", "sadaltager", "sulafat",
+}
+
+
+def _gemini_voice(voice: str | None) -> str:
+    """Valid Gemini prebuilt voice; OpenAI-style names (alloy...) map to Kore."""
+    if voice and voice.lower() in _GEMINI_VOICES:
+        return voice.capitalize()
+    return "Kore"
+
+
+def _gemini_tts_completion(model: str, text: str, voice: str, api_key: str) -> bytes:
+    """
+    Gemini TTS via LiteLLM completion(modalities=["audio"], format pcm16 — the only
+    format LiteLLM accepts for Gemini TTS).
+
+    litellm.speech() routes gemini/* through a bridge that drops ``api_key``
+    (falling back to process env), so the key is passed explicitly here. The
+    response audio is base64 raw PCM16 @ 24kHz, returned as WAV bytes.
+    """
+    import litellm
+
+    response = litellm.completion(
+        model=model,
+        messages=[{"role": "user", "content": text}],
+        modalities=["audio"],
+        audio={"voice": _gemini_voice(voice), "format": "pcm16"},
+        api_key=api_key,
+    )
+    audio = response.choices[0].message.audio
+    if audio is None or not getattr(audio, "data", None):
+        raise ValueError("Gemini TTS response contained no audio data")
+    return _pcm16_to_wav(base64.b64decode(audio.data))
 
 
 def _resolve_tts_config(
@@ -486,18 +615,14 @@ def _resolve_tts_config(
     from huf.ai.providers.litellm import _normalize_model_name
 
     if tool_model:
-        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
-        api_key = provider_doc.get_password("api_key")
-        if not api_key:
-            raise ValueError(
-                f"API key is not configured for provider "
-                f"'{provider_doc.provider_name}'. Please add it to the AI Provider document."
-            )
+        provider_link, provider_doc, api_key, model_name = _resolve_model_provider(
+            tool_model, agent_doc.provider, "TTS"
+        )
         provider_name = provider_doc.provider_name.lower()
         voice = tool_voice or _get_default_voice(provider_name)
         if voice and provider_name == "openai":
             voice = voice.lower()
-        normalized = _normalize_model_name(tool_model, agent_doc.provider)
+        normalized = _normalize_model_name(model_name, provider_link)
         return {
             "tts_model":     normalized,
             "voice":         voice,
@@ -630,7 +755,7 @@ async def handle_generate_audio(
     Args:
         input: Text to convert to speech (required)
         voice: Voice to use (e.g., "alloy", "echo", "fable", "onyx", "nova", "shimmer")
-        model: Optional model name (e.g., "tts-1", "tts-1-hd", "gemini-2.5-flash-preview-tts")
+        model: Optional model name (e.g., "gpt-4o-mini-tts", "gemini-3.8-flash-tts")
         speed: Speech speed from 0.25 to 4.0 (default: 1.0)
         response_format: Audio format (mp3, opus, aac, flac, wav, pcm)
         agent_name: Automatically passed from context
@@ -660,7 +785,7 @@ async def handle_generate_audio(
     # It only takes effect if a future refactor converts this handler to a
     # sync wrapper (see ST-R4.2, Audit F-33, review item 21). Tracked as an
     # OPEN finding, not closed, until that refactor lands.
-    from huf.ai.agent_access import assert_agent_access
+    from huf.ai.agent.access import assert_agent_access
     _guard_agent_doc = frappe.get_doc("Agent", agent_name)
     assert_agent_access(_guard_agent_doc, frappe.session.user, for_execution=True)
 
@@ -687,28 +812,28 @@ async def handle_generate_audio(
 
         import litellm
 
-        speech_params: dict = {
-            "model": normalized_model,
-            "input": input,
-            "voice": voice,
-        }
+        if normalized_model.startswith("gemini/"):
+            # Gemini TTS returns PCM16; deliver as WAV regardless of the
+            # requested response_format (mp3 etc. is not produced).
+            response_format = "wav"
+            audio_bytes = await asyncio.to_thread(
+                _gemini_tts_completion, normalized_model, input, voice, api_key
+            )
+        else:
+            speech_params: dict = {
+                "model": normalized_model,
+                "input": input,
+                "voice": voice,
+                "api_key": api_key,
+            }
+            if speed != 1.0:
+                speech_params["speed"] = speed
+            if response_format != "mp3":
+                speech_params["response_format"] = response_format
 
-        speech_params["api_key"] = api_key
-
-        if speed != 1.0:
-            speech_params["speed"] = speed
-        if response_format != "mp3":
-            speech_params["response_format"] = response_format
-
-        # Call LiteLLM speech (returns HttpxBinaryResponseContent)
-        response = await asyncio.to_thread(
-            litellm.speech,
-            **speech_params
-        )
-
-        # Get audio content from response
-        # LiteLLM speech() returns HttpxBinaryResponseContent
-        audio_bytes = response.content
+            # LiteLLM speech returns HttpxBinaryResponseContent
+            response = await asyncio.to_thread(litellm.speech, **speech_params)
+            audio_bytes = response.content
 
         # Get conversation_index for message ordering
         conversation_index = None
@@ -899,7 +1024,7 @@ async def handle_transcribe_audio(
         file_path: Absolute server path inside an allowed audio import
                directory (alternative to file_id/file_url)
         language: Optional language code (e.g., "en", "es", "fr") - ISO 639-1 format
-        model: Optional model name (e.g., "whisper-1", "whisper-large-v3")
+        model: Optional model name (e.g., "gpt-transcribe", "groq/whisper-large-v3-turbo")
                If not provided, defaults based on provider
         agent_name: Automatically passed from context
         conversation_id: Present for context but ignored; this tool does
@@ -923,7 +1048,7 @@ async def handle_transcribe_audio(
     # It only takes effect if a future refactor converts this handler to a
     # sync wrapper (see ST-R4.2, Audit F-33, review item 21). Tracked as an
     # OPEN finding, not closed, until that refactor lands.
-    from huf.ai.agent_access import assert_agent_access
+    from huf.ai.agent.access import assert_agent_access
     agent_doc = frappe.get_doc("Agent", agent_name)
     assert_agent_access(agent_doc, frappe.session.user, for_execution=True)
 
@@ -974,7 +1099,7 @@ async def handle_generate_video(
     """
     Generate a video using the agent's configured provider and video generation model.
 
-    STATUS (honest scoping, see docs/hub-orchestrator-unified-builder-plan.md
+    STATUS (honest scoping, see the hub-orchestrator unified builder plan (archived in the workspace)
     section A.4 and Phase 10): as of litellm==1.95.0 (the version pinned/
     installed for this app) there is NO generic ``litellm.video_generation``
     (or equivalent) call, unlike ``litellm.image_generation``. Video
@@ -1008,7 +1133,7 @@ async def handle_generate_video(
     # It only takes effect if a future refactor converts this handler to a
     # sync wrapper (see ST-R4.2, Audit F-33, review item 21). Tracked as an
     # OPEN finding, not closed, until that refactor lands.
-    from huf.ai.agent_access import assert_agent_access
+    from huf.ai.agent.access import assert_agent_access
     _guard_agent_doc = frappe.get_doc("Agent", agent_name)
     assert_agent_access(_guard_agent_doc, frappe.session.user, for_execution=True)
 
@@ -1017,30 +1142,24 @@ async def handle_generate_video(
             return {"success": False, "error": "Agent name not found in context"}
 
         agent_doc = frappe.get_doc("Agent", agent_name)
-        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
-        api_key = provider_doc.get_password("api_key")
-
-        if not api_key:
-            return {"success": False, "error": "API key not configured for provider"}
-
-        # Determine video generation model.
-        #
-        # NOTE: Agent DocType does not (yet) have a dedicated
-        # video-generation-model field analogous to `image_generation_model`
-        # / `tts_model`. Until that field exists, we can only resolve a
-        # video model if the caller explicitly passes `model=` in kwargs and
-        # that AI Model has "Video" in its modalities; there is no
-        # auto-detection fallback the way `handle_generate_image` has for
-        # image models, because no per-provider default video model mapping
-        # has been established here.
+        # Determine video generation model (see note below: no dedicated
+        # Agent field yet, so the caller must pass model=<AI Model>).
         video_model = None
         explicit_model = kwargs.get("model")
+        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
 
         if explicit_model:
             model_doc = frappe.get_doc("AI Model", explicit_model)
             modalities = (model_doc.get("modalities") or "").split("\n")
             if "Video" in modalities:
                 video_model = model_doc.model_name
+                # The video model's own provider owns the API key.
+                try:
+                    _link, provider_doc, _key, _name = _resolve_model_provider(
+                        explicit_model, agent_doc.provider, "video"
+                    )
+                except ValueError as exc:
+                    return {"success": False, "error": str(exc)}
 
         if not video_model:
             return {
@@ -1069,7 +1188,7 @@ async def handle_generate_video(
             "implemented for any provider. An AI Model with 'Video' "
             f"modality ('{video_model}') was resolved, but no provider "
             "API integration exists to actually generate the video. "
-            "See docs/hub-orchestrator-unified-builder-plan.md Phase 10."
+            "See the hub-orchestrator unified builder plan (archived in the workspace) Phase 10."
         )
 
     except NotImplementedError as e:

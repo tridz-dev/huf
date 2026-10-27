@@ -4,7 +4,8 @@ import asyncio
 import frappe
 from types import SimpleNamespace
 import anthropic
-from huf.ai.tool_serializer import serialize_tools
+from huf.ai.tools.serializer import serialize_tools
+from huf.ai.providers.errors import ProviderError
 
 class SimpleResult:
     def __init__(self, final_output, usage=None, new_items=None):
@@ -96,7 +97,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             try:
                 response = await client.messages.create(**params)
             except Exception as e:
-                return SimpleResult(f"Anthropic API Error: {str(e)}", total_usage, all_new_items)
+                raise ProviderError.from_exception(e, "Anthropic") from None
 
             total_usage["input_tokens"] += response.usage.input_tokens
             total_usage["output_tokens"] += response.usage.output_tokens
@@ -170,6 +171,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
         return SimpleResult("Agent stopped after max rounds of tool calls.", total_usage, all_new_items)
 
+    except ProviderError as e:
+        frappe.log_error(title="Anthropic Provider", message=f"Anthropic Provider Error: {e.log_message}")
+        raise
     except Exception as e:
-        frappe.log_error(title="Anthropic Provider", message=f"Anthropic Provider Error: {str(e)}")
-        return SimpleResult(f"Anthropic API Error: {str(e)}")
+        err = ProviderError.from_exception(e, "Anthropic")
+        frappe.log_error(title="Anthropic Provider", message=f"Anthropic Provider Error: {err.log_message}")
+        raise err from None

@@ -46,6 +46,7 @@ import { ProviderBrandSelect } from '@/components/providers/ProviderBrandSelect'
 import { ProviderBrandIcon } from '@/components/providers/ProviderBrandIcon';
 import { suggestBrandFromProviderName, resolveProviderBrand } from '@/utils/providerBrands';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
+import { AiProvidersHeaderActions } from '@/components/AiProvidersHeaderActions';
 
 interface AiProvidersPageProps {
   addProviderKey?: number;
@@ -453,6 +454,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
   return (
     <PageFrame
       title="AI providers"
+      actions={<AiProvidersHeaderActions />}
       filters={
         <FilterBar
           searchPlaceholder="Search providers..."

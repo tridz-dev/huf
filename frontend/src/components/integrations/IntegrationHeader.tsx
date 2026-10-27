@@ -10,6 +10,8 @@ interface IntegrationHeaderProps {
   isActive: boolean;
   isDefault: boolean;
   isNew: boolean;
+  /** Noun used in the new-record title. */
+  noun?: string;
   showSaveButton: boolean;
   saving: boolean;
   deleting?: boolean;
@@ -24,6 +26,7 @@ export function IntegrationHeader({
   isActive,
   isDefault,
   isNew,
+  noun = 'Integration',
   showSaveButton,
   saving,
   deleting = false,
@@ -36,7 +39,7 @@ export function IntegrationHeader({
       <div className="flex-1 space-y-2">
         <div className="flex items-center gap-3 flex-wrap">
           <h1 className="font-display text-title text-ink capitalize">
-            {isNew ? `New ${service.replace(/_/g, ' ')} Integration` : title}
+            {isNew ? `New ${service.replace(/_/g, ' ')} ${noun}` : title}
           </h1>
           {!isNew && (
             <>

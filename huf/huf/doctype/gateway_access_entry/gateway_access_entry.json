@@ -11,11 +11,14 @@
   "external_id",
   "pairing_code",
   "state",
+  "previous_state",
   "expires_at",
+  "pairing_sent_at",
   "display_label",
   "approved_by",
   "approved_at",
   "revoked_at",
+  "revoked_by",
   "notes"
  ],
  "fields": [
@@ -54,7 +57,8 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Pairing Code",
-   "unique": 0
+   "unique": 0,
+   "description": "PAIR-XXXXXXXX. Unique among Pending entries of the same gateway."
   },
   {
    "default": "Pending",
@@ -62,7 +66,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "State",
-   "options": "Pending\nApproved\nRevoked",
+   "options": "Pending\nApproved\nRevoked\nBlocked\nOpted out\nExpired",
    "reqd": 1
   },
   {
@@ -95,9 +99,29 @@
    "read_only": 1
   },
   {
+   "fieldname": "revoked_by",
+   "fieldtype": "Link",
+   "label": "Revoked by",
+   "options": "User",
+   "read_only": 1
+  },
+  {
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes"
+  },
+  {
+   "fieldname": "previous_state",
+   "fieldtype": "Data",
+   "label": "State before opt-out",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "pairing_sent_at",
+   "fieldtype": "Datetime",
+   "label": "Pairing message sent at",
+   "read_only": 1
   }
  ],
  "module": "Huf",

@@ -1,0 +1,126 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:model_key",
+ "creation": "2026-09-23 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "model_key",
+  "model_name",
+  "family",
+  "canonical_version",
+  "display_name",
+  "enabled",
+  "capabilities_json",
+  "context_limit",
+  "state_limit",
+  "metadata_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "model_key",
+   "fieldtype": "Data",
+   "label": "Model Key",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "model_name",
+   "fieldtype": "Data",
+   "label": "Model Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "family",
+   "fieldtype": "Link",
+   "label": "Family",
+   "options": "Decision Model Family",
+   "reqd": 1
+  },
+  {
+   "fieldname": "canonical_version",
+   "fieldtype": "Data",
+   "label": "Canonical Version",
+   "reqd": 1
+  },
+  {
+   "fieldname": "display_name",
+   "fieldtype": "Data",
+   "label": "Display Name"
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1"
+  },
+  {
+   "fieldname": "capabilities_json",
+   "fieldtype": "Code",
+   "label": "Capabilities",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "context_limit",
+   "fieldtype": "Int",
+   "label": "Context Limit",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "state_limit",
+   "fieldtype": "Int",
+   "label": "State Limit",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "metadata_json",
+   "fieldtype": "Code",
+   "label": "Metadata",
+   "options": "JSON"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Decision Model",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "print": 1,
+   "email": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "Huf Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "print": 1,
+   "email": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "Huf User",
+   "read": 1,
+   "select": 1,
+   "print": 1,
+   "export": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

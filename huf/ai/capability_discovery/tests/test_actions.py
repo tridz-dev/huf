@@ -46,7 +46,13 @@ class TestCapabilityActions(IntegrationTestCase):
             "params": json.dumps({"type": "object", "properties": {}}),
         }
         fields.update(overrides)
-        doc = frappe.get_doc(fields).insert(ignore_permissions=True)
+        # App Provided rows are only accepted for paths a huf_tools hook declares; the
+        # fixture path is synthetic, so declare it for the duration of the insert.
+        with patch(
+            "huf.huf.doctype.agent_tool_function.agent_tool_function.get_hook_declared_function_paths",
+            return_value={fields["function_path"]},
+        ):
+            doc = frappe.get_doc(fields).insert(ignore_permissions=True)
         self._tool_names.append(doc.name)
         return doc
 
@@ -170,7 +176,7 @@ class TestZeroConfigDiscovery(IntegrationTestCase):
         # to prove huf.ai.capability_discovery.api.search_app_actions has NO huf_tools declaration
         # (i.e. declared_actions_for_app / huf_tools scanning alone would never surface it),
         # so its presence below proves the new zero-config discovery path is doing real work.
-        from huf.ai.tool_registry import _normalize_hook_tools
+        from huf.ai.tools.registry import _normalize_hook_tools
 
         declared_paths = set()
         for hook_entry in frappe.get_hooks("huf_tools", app_name=REAL_APP) or []:

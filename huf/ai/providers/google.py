@@ -1,4 +1,5 @@
 import requests
+from huf.ai.providers.errors import ProviderError
 import json
 import frappe
 import asyncio
@@ -93,13 +94,14 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         for round_num in range(MAX_ROUNDS):
             payload["contents"] = current_contents
             
-            response = requests.post(url, headers=headers, json=payload)
+            try:
+                response = requests.post(url, headers=headers, json=payload, timeout=120)
+            except requests.exceptions.Timeout as e:
+                raise ProviderError("timeout", detail=f"Gemini request timed out: {e}")
+            except requests.exceptions.RequestException as e:
+                raise ProviderError("server_error", detail=f"Gemini request failed: {type(e).__name__}")
             if response.status_code != 200:
-                return SimpleResult(
-                    f"Gemini API Error: {response.status_code} {response.reason}. {response.text}",
-                    total_usage,
-                    all_new_items
-                )
+                raise ProviderError.from_http(response.status_code, response.text, "Gemini")
 
             data = response.json()
             
@@ -108,22 +110,14 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             total_usage["output_tokens"] += usage_info.get("candidatesTokenCount", 0)
 
             if "candidates" not in data or not data["candidates"]:
-                return SimpleResult(
-                    "No response generated from Gemini",
-                    total_usage,
-                    all_new_items
-                )
+                raise ProviderError("unknown", detail="Gemini returned no candidates")
 
             candidate = data["candidates"][0]
             content = candidate.get("content", {})
             parts = content.get("parts", [])
 
             if not parts:
-                return SimpleResult(
-                    "Empty response from Gemini",
-                    total_usage,
-                    all_new_items
-                )
+                raise ProviderError("unknown", detail="Gemini returned an empty response")
 
             function_calls = []
             text_response = ""
@@ -204,6 +198,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
         return SimpleResult(text_response, total_usage, all_new_items)
 
+    except ProviderError as e:
+        frappe.log_error(title="Gemini Provider", message=f"Gemini Provider Error: {e.log_message}")
+        raise
     except Exception as e:
-        frappe.log_error(title="Gemini Provider", message=f"Gemini Provider Error: {str(e)}")
-        return SimpleResult(f"Gemini API Error: {str(e)}")
+        err = ProviderError.from_exception(e, "Gemini")
+        frappe.log_error(title="Gemini Provider", message=f"Gemini Provider Error: {err.log_message}")
+        raise err from None

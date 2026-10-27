@@ -57,9 +57,10 @@ class TestTelegramGatewayAdapter(unittest.TestCase):
 		self.assertFalse(self.adapter.verify_inbound(self.request(self.message_payload(), secret="wrong")))
 		self.assertFalse(self.adapter.verify_inbound(self.request(self.message_payload(), secret=None)))
 
-	def test_verification_accepts_when_no_secret_configured(self):
-		open_adapter = TelegramGatewayAdapter({"token": "123:ABC"}, http_post=self._post)
-		self.assertTrue(open_adapter.verify_inbound(self.request(self.message_payload(), secret=None)))
+	def test_missing_webhook_secret_raises(self):
+		# webhook_secret is mandatory (fail closed): no "open" adapter can be built.
+		with self.assertRaisesRegex(ValueError, "webhook_secret"):
+			TelegramGatewayAdapter({"token": "123:ABC"}, http_post=self._post)
 
 	def test_missing_required_token_raises(self):
 		with self.assertRaisesRegex(ValueError, "token"):
@@ -131,7 +132,11 @@ class TestTelegramGatewayAdapter(unittest.TestCase):
 		self.assertEqual(delivery.provider_message_id, "42")
 		self.assertEqual(self.calls, [{
 			"url": "https://api.telegram.org/bot123:ABC/sendMessage",
-			"json_data": {"chat_id": "999", "text": "hi there", "reply_to_message_id": 10},
+			"json_data": {
+				"chat_id": "999",
+				"text": "hi there",
+				"reply_parameters": {"message_id": 10, "allow_sending_without_reply": True},
+			},
 			"timeout": 10,
 		}])
 

@@ -1,0 +1,63 @@
+{
+ "actions": [],
+ "creation": "2026-10-22 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "flow_id",
+  "state_key",
+  "expires_at",
+  "value_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "flow_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Flow",
+   "length": 140,
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "state_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Key",
+   "length": 140,
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "expires_at",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Expires At",
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "value_json",
+   "fieldtype": "Long Text",
+   "label": "Value (JSON)",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-22 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Flow State",
+ "naming_rule": "By script",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "delete": 1, "read": 1, "report": 1, "role": "System Manager", "write": 1},
+  {"create": 1, "delete": 1, "read": 1, "report": 1, "role": "Huf Manager", "write": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

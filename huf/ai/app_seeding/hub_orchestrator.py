@@ -20,6 +20,8 @@ from pathlib import Path
 
 import frappe
 
+from huf.ai.model_catalogue import RETIRED
+
 logger = frappe.logger("huf")
 
 HUB_AGENT_NAME = "Hub Orchestrator"
@@ -28,24 +30,19 @@ SEED_FILE = "hub-orchestrator.json"
 # Ordered chat-model preferences; the first one present in AI Model for the
 # chosen provider wins. Falls back to the provider's first non-specialized model.
 PREFERRED_MODELS = [
+    "gemini-flash-lite-latest",
+    "gemini-flash-latest",
     "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
-    "gemini-3.5-flash",
-    "gpt-4o-mini",
-    "claude-haiku-4.5",
-    "claude-sonnet-4.5",
-    "openai/gpt-4o-mini",
-    "google/gemini-3.5-flash",
+    "gpt-5.4-mini",
+    "claude-haiku-5-5",
+    "~google/gemini-flash-latest",
+    "~openai/gpt-mini-latest",
     "sonar",
     "command-a-03-2025",
 ]
 
-DEPRECATED_MODELS = {
-    "gemini-2.5-flash",
-    "google/gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "google/gemini-2.5-flash-lite-preview-06-17",
-}
+# Retired models are never auto-selected (single source: the catalogue).
+DEPRECATED_MODELS = frozenset(RETIRED)
 
 # Model names matching these are not chat models; never auto-select them.
 _NON_CHAT_MARKERS = ("embedding", "whisper", "dall-e", "gpt-image", "tts", "image", "alternate")
@@ -66,6 +63,8 @@ BUILDER_TOOL_NAMES = (
     "list_provider_options",
     "ask_user",
     "list_agents",
+    "find_existing_agents",
+    "discover_site_capabilities",
     "get_agent",
     "list_apps",
     "get_app",
@@ -76,6 +75,7 @@ BUILDER_TOOL_NAMES = (
     "list_app_components",
     "render_app_component",
     "resolve_recent_resource",
+    "erpnext_list_reports",
 )
 
 
@@ -169,11 +169,11 @@ def _default_model_for_provider(provider_name):
 def _fallback_provider_model():
     """
     Provider/model to store when nothing has a key yet. Mirrors the
-    demo-assistant convention (OpenAI + gpt-4o-mini) so the record passes
+    demo-assistant convention (OpenAI + gpt-5.4-mini) so the record passes
     Link and mandatory validation while staying disabled.
     """
-    if frappe.db.exists("AI Provider", "OpenAI") and frappe.db.exists("AI Model", "gpt-4o-mini"):
-        return "OpenAI", "gpt-4o-mini"
+    if frappe.db.exists("AI Provider", "OpenAI") and frappe.db.exists("AI Model", "gpt-5.4-mini"):
+        return "OpenAI", "gpt-5.4-mini"
     providers = frappe.get_all("AI Provider", pluck="name", order_by="creation asc", limit=1)
     if providers:
         model = _default_model_for_provider(providers[0])
@@ -199,6 +199,7 @@ def create_hub_orchestrator_agent() -> bool:
     if frappe.db.exists("Agent", HUB_AGENT_NAME):
         provision_hub_orchestrator()
         ensure_hub_orchestrator_tools()
+        ensure_hub_orchestrator_instructions()
         return False
 
     seed = _load_seed_data()
@@ -232,6 +233,29 @@ def create_hub_orchestrator_agent() -> bool:
     with _seeding_flag():
         doc.insert(ignore_permissions=True)
     logger.info(f"Hub Orchestrator agent seeded (disabled={doc.disabled}).")
+    return True
+
+
+INSTRUCTIONS_MARKER = "0. TRIAGE"
+
+
+def ensure_hub_orchestrator_instructions() -> bool:
+    """Push the seeded instructions onto an existing Hub Orchestrator.
+
+    The generic provisioning never re-reads the seed file, so already-installed
+    sites would keep the pre-triage prompt. The agent is a locked system record,
+    so it is refreshed only while it lacks the current marker; idempotent.
+    """
+    if not frappe.db.exists("Agent", HUB_AGENT_NAME):
+        return False
+    current = frappe.db.get_value("Agent", HUB_AGENT_NAME, "instructions") or ""
+    if INSTRUCTIONS_MARKER in current:
+        return False
+    seeded = _load_seed_data().get("instructions")
+    if not seeded or seeded == current:
+        return False
+    frappe.db.set_value("Agent", HUB_AGENT_NAME, "instructions", seeded)
+    logger.info("Hub Orchestrator instructions refreshed from seed.")
     return True
 
 

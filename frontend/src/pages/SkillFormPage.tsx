@@ -35,6 +35,7 @@ import { getKnowledgeSources } from '@/services/knowledgeApi';
 import { getAgentPrompts } from '@/services/agentPromptApi';
 import { getMCPServers } from '@/services/mcpApi';
 import { getCategories, type CategoryDoc } from '@/services/categoryApi';
+import { Label } from '@/components/ui/label';
 import { CategoryTab } from '@/components/category/CategoryTab';
 import { CategoryModal } from '@/components/category/CategoryModal';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
@@ -496,6 +497,7 @@ export function SkillFormPage() {
                       )}
                     />
                     <CategoryTab
+                      itemLabel="skill"
                       selectedCategory={selectedCategory}
                       onAddCategory={() => {
                         setEditingCategory(null);
@@ -703,8 +705,12 @@ export function SkillFormPage() {
                       className="flex items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50"
                     >
                       <div className="min-w-0 space-y-1">
-                        <p className="font-medium text-sm">{tool.tool_name || tool.tool}</p>
-                        {tool.description && <p className="text-xs text-muted-foreground line-clamp-2">{tool.description}</p>}
+                        <p className="font-medium text-sm">{tool.tool_name || toolOptions.find((o) => o.name === tool.tool)?.tool_name || tool.tool}</p>
+                        {(tool.description || toolOptions.find((o) => o.name === tool.tool)?.description) && (
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            {tool.description || toolOptions.find((o) => o.name === tool.tool)?.description}
+                          </p>
+                        )}
                       </div>
                       <Button variant="ghost" size="sm" onClick={() => removeTool(index)} type="button">
                         <Trash2 className="w-4 h-4" />
@@ -731,35 +737,45 @@ export function SkillFormPage() {
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="font-medium text-sm">{ks.source_name || ks.knowledge_source}</p>
-                          <p className="text-xs text-muted-foreground">{ks.knowledge_source}</p>
+                          <p className="font-medium text-sm">
+                            {ks.source_name || knowledgeOptions.find((o) => o.name === ks.knowledge_source)?.source_name || ks.knowledge_source}
+                          </p>
                         </div>
                         <Button variant="ghost" size="sm" onClick={() => removeKnowledge(index)} type="button">
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                       <div className="grid grid-cols-3 gap-3">
-                        <Select value={ks.mode} onValueChange={(v) => updateKnowledge(index, { mode: v as SkillKnowledge['mode'] })}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Mandatory">Mandatory</SelectItem>
-                            <SelectItem value="Optional">Optional</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="number"
-                          placeholder="e.g. 5"
-                          value={ks.max_chunks ?? 5}
-                          onChange={(e) => updateKnowledge(index, { max_chunks: Number(e.target.value) })}
-                        />
-                        <Input
-                          type="number"
-                          placeholder="e.g. 2000"
-                          value={ks.token_budget ?? 2000}
-                          onChange={(e) => updateKnowledge(index, { token_budget: Number(e.target.value) })}
-                        />
+                        <div className="space-y-1.5">
+                          <Label>Mode</Label>
+                          <Select value={ks.mode} onValueChange={(v) => updateKnowledge(index, { mode: v as SkillKnowledge['mode'] })}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Mandatory">Mandatory</SelectItem>
+                              <SelectItem value="Optional">Optional</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Max chunks</Label>
+                          <Input
+                            type="number"
+                            placeholder="e.g. 5"
+                            value={ks.max_chunks ?? 5}
+                            onChange={(e) => updateKnowledge(index, { max_chunks: Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Token budget</Label>
+                          <Input
+                            type="number"
+                            placeholder="e.g. 2000"
+                            value={ks.token_budget ?? 2000}
+                            onChange={(e) => updateKnowledge(index, { token_budget: Number(e.target.value) })}
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -783,8 +799,9 @@ export function SkillFormPage() {
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="font-medium text-sm">{prompt.title || prompt.prompt}</p>
-                          <p className="text-xs text-muted-foreground">{prompt.prompt}</p>
+                          <p className="font-medium text-sm">
+                            {prompt.title || promptOptions.find((o) => o.name === prompt.prompt)?.title || prompt.prompt}
+                          </p>
                         </div>
                         <Button variant="ghost" size="sm" onClick={() => removePrompt(index)} type="button">
                           <Trash2 className="w-4 h-4" />
@@ -820,10 +837,9 @@ export function SkillFormPage() {
                       className="flex items-center justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50"
                     >
                       <div className="min-w-0 space-y-1">
-                        <p className="font-medium text-sm">{server.server_name || server.mcp_server}</p>
-                        {server.mcp_server !== (server.server_name || '') && (
-                          <p className="text-xs text-muted-foreground">{server.mcp_server}</p>
-                        )}
+                        <p className="font-medium text-sm">
+                          {server.server_name || mcpOptions.find((o) => o.name === server.mcp_server)?.server_name || server.mcp_server}
+                        </p>
                       </div>
                       <Button variant="ghost" size="sm" onClick={() => removeMcpServer(index)} type="button">
                         <Trash2 className="w-4 h-4" />
@@ -835,6 +851,7 @@ export function SkillFormPage() {
             </Tabs>
           </form>
           <CategoryModal
+            categoryType="skill"
             open={categoryModalOpen}
             onOpenChange={(open) => {
               setCategoryModalOpen(open);

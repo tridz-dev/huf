@@ -158,6 +158,16 @@ export async function listMeetings(params: ListMeetingsParams = {}): Promise<Lis
   }
 }
 
+export async function getMeetingStatusCounts(): Promise<Record<string, number>> {
+  try {
+    const response = await call.post(`${API_PREFIX}.get_meeting_status_counts`);
+    return response.message.counts as Record<string, number>;
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}
+
 export interface RetryChunkTranscriptionResult {
   chunk_name: string;
   upload_status: string;

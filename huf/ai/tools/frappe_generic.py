@@ -23,7 +23,7 @@ import json
 
 import frappe
 from frappe.model import default_fields
-from huf.ai.tool_doctype_guard import _check_doctype_allowed, _DENYLISTED_DOCTYPES, _DENYLISTED_PREFIXES
+from huf.ai.tools.doctype_guard import _check_doctype_allowed, _DENYLISTED_DOCTYPES, _DENYLISTED_PREFIXES
 
 logger = frappe.logger("huf")
 

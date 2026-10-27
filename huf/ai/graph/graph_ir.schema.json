@@ -38,6 +38,26 @@
         }
       }
     },
+    "Template": {
+      "description": "String templating: {name} placeholders are replaced from vars ({{ and }} are literal braces). An undeclared placeholder fails the node; a null var renders as the empty string.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "$template"
+      ],
+      "properties": {
+        "$template": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "vars": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Value"
+          }
+        }
+      }
+    },
     "Literal": {
       "description": "A JSON literal: string, number, boolean, or null. Not an array or object -- those are composed explicitly where allowed (see Value).",
       "type": [
@@ -52,6 +72,9 @@
       "anyOf": [
         {
           "$ref": "#/$defs/Reference"
+        },
+        {
+          "$ref": "#/$defs/Template"
         },
         {
           "$ref": "#/$defs/Literal"
@@ -265,7 +288,16 @@
         "lookup",
         "batch",
         "distinct",
-        "coalesce"
+        "coalesce",
+        "lower",
+        "upper",
+        "trim",
+        "replace",
+        "contains",
+        "starts_with",
+        "split_first",
+        "regex_extract",
+        "concat"
       ]
     },
     "NodeCommon": {
@@ -339,6 +371,13 @@
                 "timeout_ms": {
                   "type": "integer",
                   "minimum": 1
+                },
+                "recovery": {
+                  "type": "string",
+                  "enum": ["retry", "resume", "abort", "compensate"]
+                },
+                "approved": {
+                  "type": "boolean"
                 }
               }
             }
@@ -804,6 +843,24 @@
         }
       ]
     },
+    "TriggerUnsetNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "trigger.unset"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
     "TriggerScheduleNode": {
       "allOf": [
         {
@@ -898,6 +955,9 @@
           "$ref": "#/$defs/RouterLlmNode"
         },
         {
+          "$ref": "#/$defs/RouterDecisionNode"
+        },
+        {
           "$ref": "#/$defs/HumanApprovalNode"
         },
         {
@@ -908,6 +968,21 @@
         },
         {
           "$ref": "#/$defs/TriggerDocEventNode"
+        },
+        {
+          "$ref": "#/$defs/TriggerUnsetNode"
+        },
+        {
+          "$ref": "#/$defs/StateGetNode"
+        },
+        {
+          "$ref": "#/$defs/StateSetNode"
+        },
+        {
+          "$ref": "#/$defs/StateDeleteNode"
+        },
+        {
+          "$ref": "#/$defs/DocCreateNode"
         }
       ]
     },
@@ -997,6 +1072,196 @@
           "$ref": "#/$defs/Contract"
         }
       }
+    },
+    "RouterDecisionNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "not": {
+            "required": [
+              "next"
+            ]
+          },
+          "properties": {
+            "type": {
+              "const": "router.decision"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "policy",
+                "options",
+                "default"
+              ],
+              "properties": {
+                "options": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "label",
+                      "node_id"
+                    ],
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "node_id": {
+                        "$ref": "#/$defs/NodeId"
+                      }
+                    }
+                  }
+                },
+                "default": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "policy": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "StateGetNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "state.get"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "key"
+              ],
+              "properties": {
+                "key": {
+                  "$ref": "#/$defs/Value"
+                },
+                "default": {
+                  "$ref": "#/$defs/Value"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "StateSetNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "state.set"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "key",
+                "value"
+              ],
+              "properties": {
+                "key": {
+                  "$ref": "#/$defs/Value"
+                },
+                "value": {
+                  "$ref": "#/$defs/Value"
+                },
+                "ttl_seconds": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2592000
+                    },
+                    {
+                      "$ref": "#/$defs/Value"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "StateDeleteNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "state.delete"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "key"
+              ],
+              "properties": {
+                "key": {
+                  "$ref": "#/$defs/Value"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "DocCreateNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "doc.create"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "doctype",
+                "fields"
+              ],
+              "properties": {
+                "doctype": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Literal doctype; must be in the site allow-list (site config huf_flow_create_doc_doctypes, default [\"ToDo\"])."
+                },
+                "fields": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

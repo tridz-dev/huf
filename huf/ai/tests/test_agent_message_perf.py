@@ -12,6 +12,8 @@ import time
 import frappe
 from frappe.tests import UnitTestCase
 
+from huf.testing.factories import ensure_ai_model
+
 
 class TestAgentMessagePerf(UnitTestCase):
     """Performance tests for Agent Message queries (requires ST-10.1 index)."""
@@ -19,6 +21,7 @@ class TestAgentMessagePerf(UnitTestCase):
     def setUp(self):
         """Create test conversations and messages."""
         super().setUp()
+        ensure_ai_model("gpt-4", "OpenAI")
         self.agent_doc = frappe.new_doc("Agent")
         # Agent autonames off `agent_name` (field:agent_name), not the
         # reserved `name` key -- setting `.name` directly leaves agent_name

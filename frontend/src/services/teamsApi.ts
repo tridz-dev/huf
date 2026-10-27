@@ -93,7 +93,7 @@ export function findCheck(diagnosis: TeamsDiagnosis | null, id: string): TeamsCh
 export async function diagnoseTeams(gatewayName: string): Promise<TeamsDiagnosis> {
   try {
     const result = await call.post(`${DIAG}.teams_diagnose`, { gateway_name: gatewayName });
-    return result.message as TeamsDiagnosis;
+    return result?.message as TeamsDiagnosis;
   } catch (error) {
     handleFrappeError(error, 'Error checking the Teams connection');
   }
@@ -102,7 +102,7 @@ export async function diagnoseTeams(gatewayName: string): Promise<TeamsDiagnosis
 export async function getTeamsSupportBundle(gatewayName: string): Promise<Record<string, unknown>> {
   try {
     const result = await call.post(`${DIAG}.teams_support_bundle`, { gateway_name: gatewayName });
-    return result.message as Record<string, unknown>;
+    return result?.message as Record<string, unknown>;
   } catch (error) {
     handleFrappeError(error, 'Error preparing the support bundle');
   }
@@ -111,7 +111,7 @@ export async function getTeamsSupportBundle(gatewayName: string): Promise<Record
 export async function getTeamsSettings(gatewayName: string): Promise<TeamsSettings> {
   try {
     const result = await call.get(`${TENANT}.get_teams_settings`, { gateway: gatewayName });
-    return result.message as TeamsSettings;
+    return result?.message as TeamsSettings;
   } catch (error) {
     handleFrappeError(error, 'Error loading the Teams settings');
   }
@@ -123,7 +123,7 @@ export async function saveTeamsAllowedTenants(gatewayName: string, tenants: stri
       gateway: gatewayName,
       allowed_tenants: tenants.join('\n'),
     });
-    return result.message as TeamsSettings;
+    return result?.message as TeamsSettings;
   } catch (error) {
     handleFrappeError(error, 'Error saving the allowed organisations');
   }
@@ -143,7 +143,7 @@ export async function saveTeamsPackageVersion(gatewayName: string, version: stri
 export async function listTeamsLinks(gatewayName: string): Promise<TeamsLink[]> {
   try {
     const result = await call.get(`${IDENTITY}.list_teams_links`, { gateway: gatewayName });
-    return (result.message as TeamsLink[]) || [];
+    return (result?.message as TeamsLink[]) || [];
   } catch (error) {
     handleFrappeError(error, 'Error loading linked people');
   }

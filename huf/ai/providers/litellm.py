@@ -25,23 +25,27 @@ from types import SimpleNamespace
 
 import frappe
 import litellm
-from litellm import InternalServerError, RateLimitError, APIError, BadRequestError, ContextWindowExceededError
+from litellm import APIError, BadRequestError, ContextWindowExceededError, InternalServerError, RateLimitError
 from litellm.utils import trim_messages
-from huf.ai.tool_serializer import serialize_tools
-from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
-from huf.ai.prompt_cache.capabilities import resolve_capabilities
-from huf.ai.transaction import transaction_checkpoint
-from huf.ai.cost_calculator import calculate_cost
+
+from huf.ai import run_delivery
 from huf.ai.conversation_manager import repair_message_sequence
-from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
+from huf.ai.cost_calculator import calculate_cost
+from huf.ai.prompt_cache.capabilities import resolve_capabilities
+from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 from huf.ai.reasoning import (
-    ReasoningPolicy,
-    ReasoningResolution,
-    detect_model_capabilities,
-    resolve_reasoning,
-    build_reasoning_kwargs,
+	ReasoningPolicy,
+	ReasoningResolution,
+	build_reasoning_kwargs,
+	detect_model_capabilities,
+	rejects_sampling_params,
+	resolve_reasoning,
 )
-from huf.ai.run_budget import get_current_budget, RunBudgetExceeded
+from huf.ai.run_budget import RunBudgetExceeded, get_current_budget
+from huf.ai.tools.serializer import serialize_tools
+from huf.ai.transaction import transaction_checkpoint
+from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
+
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -82,14 +86,45 @@ class SimpleResult:
         self.cost = cost
 
 
+def _empty_response_message(normalized_model: str) -> str:
+    """Error text for an empty completion; only blames the Ollama endpoint for Ollama models."""
+    if str(normalized_model).startswith("ollama/"):
+        return (
+            f"Model '{normalized_model}' returned an empty response. "
+            "Reasoning models such as gpt-oss require the Ollama chat "
+            "endpoint. Use the 'ollama_chat/' model prefix (e.g. "
+            "'ollama_chat/gpt-oss:20b') or select a provider whose brand "
+            "is 'Ollama' so Huf normalizes the prefix automatically."
+        )
+    return (
+        f"Model '{normalized_model}' returned an empty response. "
+        "Verify the model is available, the provider is reachable, and "
+        "the request is supported by this model."
+    )
+
+
 class ProviderUnavailableError(Exception):
     """Raised when the LLM provider cannot serve this request (conn refused, model missing,
-    bad model prefix, auth). Distinct from content-level errors."""
+    bad model prefix, auth). Distinct from content-level errors.
 
-    def __init__(self, public_message: str, *, log_message: str | None = None):
-        super().__init__(public_message)
-        self.public_message = public_message
+    ``public_message`` is sent to clients: it must be curated text written in huf code, NEVER raw
+    exception or provider text (put that in ``log_message``). It is capped at 300 characters.
+    """
+
+    def __init__(self, public_message: str, *, log_message: str | None = None,
+                 kind: str | None = None, status_code=None):
+        public_message = public_message if isinstance(public_message, str) else str(public_message or "")
+        self.public_message = (
+            public_message if len(public_message) <= 300 else public_message[:299].rstrip() + "\u2026"
+        )
+        # str(e)/args carry only the capped, curated text; full detail lives in log_message.
+        super().__init__(self.public_message)
         self.log_message = log_message or public_message
+        self.status_code = status_code
+        if kind is None:
+            from huf.ai.providers.errors import classify_text
+            kind = classify_text(f"{self.log_message} {public_message}")
+        self.kind = kind
 
 
 def _sanitize_provider_error_message(raw_message: str, normalized_model: str | None = None) -> str:
@@ -225,6 +260,28 @@ def _is_transient_litellm_error(exc: Exception) -> bool:
     return False
 
 
+SAMPLING_PARAM_KEYS = ("temperature", "top_p", "top_k")
+
+
+def _drop_sampling_params_if_rejected(completion_kwargs: dict, model_name: str) -> None:
+    """Remove sampling params from kwargs for models that reject them (Claude 5.x)."""
+    if rejects_sampling_params(model_name):
+        for key in SAMPLING_PARAM_KEYS:
+            completion_kwargs.pop(key, None)
+
+
+def _sampling_keys_rejected(err_msg: str, completion_kwargs: dict) -> list[str]:
+    """Sampling keys the provider rejected, judged from a BadRequestError message."""
+    msg = (err_msg or "").lower()
+    rejected = []
+    if "temperature" in completion_kwargs and "temperature" in msg and "deprecated" in msg:
+        rejected.append("temperature")
+    for key in ("top_p", "top_k"):
+        if key in completion_kwargs and key in msg and "not supported" in msg:
+            rejected.append(key)
+    return rejected
+
+
 async def _litellm_completion_with_retry(**completion_kwargs):
     """Call litellm.completion with transient-error retries and backoff."""
     max_retries = completion_kwargs.pop("_huf_max_retries", 2)
@@ -234,6 +291,34 @@ async def _litellm_completion_with_retry(**completion_kwargs):
     for attempt in range(max_retries + 1):
         try:
             return await asyncio.to_thread(litellm.completion, **completion_kwargs)
+        except BadRequestError as exc:
+            # Safety net: model rejects thinking.type=enabled -> retry once with adaptive.
+            thinking = completion_kwargs.get("thinking")
+            if (
+                "thinking.type.enabled" in str(exc)
+                and isinstance(thinking, dict)
+                and thinking.get("type") == "enabled"
+            ):
+                logger.warning("Model requires adaptive thinking; retrying with thinking.type=adaptive")
+                completion_kwargs = dict(completion_kwargs)
+                completion_kwargs["thinking"] = {"type": "adaptive"}
+                completion_kwargs.setdefault("output_config", {"effort": "medium"})
+                # Re-enter the retry loop (kwargs changed, so this BadRequest cannot recur) so a transient
+                # failure of the retried call gets the same transient handling as the first attempt.
+                return await _litellm_completion_with_retry(
+                    **completion_kwargs, _huf_max_retries=max_retries, _huf_base_delay=base_delay
+                )
+            # Safety net: model rejects sampling params -> retry once without them.
+            rejected = _sampling_keys_rejected(str(exc), completion_kwargs)
+            if rejected:
+                logger.warning(f"Model rejected sampling params {rejected}; retrying without them")
+                completion_kwargs = dict(completion_kwargs)
+                for key in rejected:
+                    completion_kwargs.pop(key, None)
+                return await _litellm_completion_with_retry(
+                    **completion_kwargs, _huf_max_retries=max_retries, _huf_base_delay=base_delay
+                )
+            raise
         except Exception as exc:
             # Broad catch so _is_transient_litellm_error can classify and retry only known transient failures.
             last_exc = exc
@@ -791,7 +876,150 @@ async def _execute_tool_call(tool, args_json, context=None, tool_call_id=None):
             tool_arguments=args_str,
         )
 
-    return await tool.on_invoke_tool(invoke_ctx, args_str)
+    run_id = context.get("agent_run_id") if isinstance(context, dict) else None
+    if not run_id:
+        return await tool.on_invoke_tool(invoke_ctx, args_str)
+    from huf.ai.run_control import keep_run_alive
+
+    # Long tools (desktop commands, approval waits) must not let the run's live marker expire.
+    async with keep_run_alive(run_id, interval=20):
+        return await tool.on_invoke_tool(invoke_ctx, args_str)
+
+
+
+def _tool_result_failed(result_content):
+    """True when a tool result is an error, so clients show a failed row, not a completed one.
+
+    Covers the desktop executor's ``{"ok": False, "error": {code, message}}`` shape, a bare
+    ``{"error": ...}`` dict and the "Error executing tool" string the loop synthesises.
+    """
+    if isinstance(result_content, str):
+        text = result_content.lstrip()
+        if text.startswith("{"):
+            try:
+                parsed = json.loads(text)
+            except Exception:
+                parsed = None
+            return _tool_result_failed(parsed) if isinstance(parsed, dict) else False
+        return text.startswith("Error executing tool ")
+    if isinstance(result_content, dict):
+        if result_content.get("ok") is False or result_content.get("success") is False:
+            return True
+        if str(result_content.get("status") or "").lower() in ("error", "failed"):
+            return True
+        err = result_content.get("error")
+        if isinstance(err, (dict, list)):
+            return bool(err) and result_content.get("ok") is not True
+        if err and result_content.get("ok") is not True:
+            # A bare string "error" is failure only without any success marker (else a warning-like field).
+            return not (result_content.get("success") is True or str(result_content.get("status") or "").lower() in ("ok", "success", "completed"))
+        return False
+    return False
+
+
+def _tool_result_error_text(result_content):
+    if isinstance(result_content, str):
+        try:
+            parsed = json.loads(result_content)
+        except Exception:
+            return result_content[:500]
+        return _tool_result_error_text(parsed) if isinstance(parsed, dict) else result_content[:500]
+    if isinstance(result_content, dict):
+        err = result_content.get("error")
+        if isinstance(err, dict):
+            return str(err.get("message") or err.get("code") or "Tool call failed")[:500]
+        if err:
+            return str(err)[:500]
+    return "Tool call failed"
+
+
+def _publish_stream_tool_outcome(context, tool_call, tool_name, result_content, message_name, user=None, checkpoint=True):
+    """Publish ``tool_call_completed`` / ``tool_call_failed`` for one streamed tool call.
+
+    Keyed by the LLM-issued id, the same one ``tool_call_started`` used, and published even when the
+    Agent Tool Call audit row could not be found or saved (otherwise the row would stay "Running").
+    """
+    published = False
+    failed = _tool_result_failed(result_content)
+    tool_result_for_socket = (
+        result_content
+        if isinstance(result_content, (dict, list))
+        else {"output": str(result_content)[:140000]}
+    )
+    frappe.publish_realtime(
+        event=f'conversation:{context.get("conversation_id")}',
+        message={
+            "type": "tool_call_failed" if failed else "tool_call_completed",
+            "conversation_id": context.get("conversation_id"),
+            "agent_run_id": context.get("agent_run_id"),
+            "message_id": message_name,
+            "tool_call_id": tool_call["id"],
+            "call_id": tool_call["id"],
+            "tool_name": tool_name,
+            "tool_status": "Failed" if failed else "Completed",
+            "status": "Failed" if failed else "Completed",
+            "error": _tool_result_error_text(result_content) if failed else None,
+            "tool_result": None if failed else tool_result_for_socket,
+            "result": json.dumps(tool_result_for_socket) if isinstance(tool_result_for_socket, (dict, list)) else str(result_content)[:1000],
+        },
+        user=user or frappe.session.user,
+        after_commit=False,
+    )
+    published = True
+    try:
+        if getattr(frappe.local, "_realtime_log", None) is None:
+            frappe.local._realtime_log = []
+        if checkpoint:
+            transaction_checkpoint(reason="agent_streaming_progress")
+    except Exception:
+        # The outcome already went out: never let callers' error handlers publish a duplicate.
+        frappe.logger("huf").warning("tool outcome checkpoint failed after publish")
+
+TOOL_NOT_AVAILABLE_MESSAGE = "Tool not available in this session (desktop not connected)"
+
+
+def _tool_not_available_result(tool_name):
+    """Tool result handed back to the model when it calls a tool outside the offered set."""
+    desktop = str(tool_name or "").startswith("desktop_")
+    return {
+        "ok": False,
+        "error": {
+            "code": "tool_not_available",
+            "message": TOOL_NOT_AVAILABLE_MESSAGE
+            if desktop
+            else f"Tool '{tool_name}' is not available in this session",
+        },
+    }
+
+
+def _finalize_unavailable_tool_call(context, tool_call, tool_name):
+    """Fail the Queued Agent Tool Call row of an unknown tool immediately and tell the client.
+
+    Returns the tool result for the model. Never raises.
+    """
+    result = _tool_not_available_result(tool_name)
+    if not (isinstance(context, dict) and context.get("conversation_id")):
+        return result
+    call_id = tool_call.get("id")
+    message_name = None
+    try:
+        row = frappe.db.get_value(
+            "Agent Tool Call", {"conversation": context.get("conversation_id"), "call_id": call_id}, "name"
+        )
+        if row:
+            frappe.db.set_value(
+                "Agent Tool Call", row,
+                {"status": "Failed", "error_message": result["error"]["message"]},
+                update_modified=True,
+            )
+            message_name = frappe.db.get_value("Agent Message", {"tool_call": row}, "name")
+    except Exception:
+        frappe.logger("huf").warning(f"could not fail unavailable tool call {call_id}")
+    try:
+        _publish_stream_tool_outcome(context, tool_call, tool_name, result, message_name)
+    except Exception:
+        frappe.logger("huf").warning(f"could not publish unavailable tool outcome {call_id}")
+    return result
 
 
 def _find_tool(agent, tool_name):
@@ -1141,18 +1369,18 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
     # Deterministic HUF Test Provider routing. Checked first, before any
     # frappe.get_doc/network/LLM-SDK code below, so it is reached on the
     # exact same code path (this coroutine, once awaited by the real caller
-    # in `agent_integration.py`) a real provider would take - not via the
+    # in `agent/integration.py`) a real provider would take - not via the
     # `RunProvider.run()` custom-provider fallback branch in `huf/ai/run.py`,
     # which can only ever trigger on a synchronous failure to *construct*
     # this coroutine (this function is `async def`, so a real litellm
     # execution failure happens only when the caller awaits the returned
     # coroutine, after `RunProvider.run()` has already returned - see
-    # `huf/ai/providers/test_provider.py`'s module docstring for the full
-    # analysis). See `huf/ai/providers/test_provider.py` for scenario docs.
+    # `huf/ai/providers/stub_provider.py`'s module docstring for the full
+    # analysis). See `huf/ai/providers/stub_provider.py` for scenario docs.
     if provider and provider.lower() == "test_provider":
-        from huf.ai.providers import test_provider as _test_provider
+        from huf.ai.providers import stub_provider as _stub_provider
 
-        return await _test_provider.run(agent, enhanced_prompt, provider, model, context=context)
+        return await _stub_provider.run(agent, enhanced_prompt, provider, model, context=context)
 
     try:
         # Configure LiteLLM to drop unsupported params (for models like gpt-5 that only support temperature=1)
@@ -1427,7 +1655,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             # first discovers and caches this.
             temperature_cache_key = _site_scoped_key(f"litellm_temperature_unsupported:{normalized_model}")
             top_p_cache_key = _site_scoped_key(f"litellm_top_p_unsupported:{normalized_model}")
-            if temperature is not None:
+            if temperature is not None and not rejects_sampling_params(normalized_model):
                 _temp_unsupported = _l1_get(temperature_cache_key)
                 if _temp_unsupported is None:
                     _temp_unsupported = frappe.cache().get_value(temperature_cache_key)
@@ -1468,7 +1696,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 completion_kwargs["cached_content"] = gemini_cached_content
 
             # Only add top_p if explicitly configured and not overridden by temperature
-            if top_p is not None:
+            if top_p is not None and not rejects_sampling_params(normalized_model):
                 _tp_unsupported = _l1_get(top_p_cache_key)
                 if _tp_unsupported is None:
                     _tp_unsupported = frappe.cache().get_value(top_p_cache_key)
@@ -1696,9 +1924,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
                 _raise_provider_unavailable(raw_msg, normalized_model)
 
-            # Empty-response guard: reasoning models (e.g. gpt-oss) on the 'ollama/'
-            # endpoint can return empty content with no tool calls. Retry the completion
-            # once; if still empty, fail loudly instead of storing an empty reply.
+            # Empty-response guard. Retry the completion once. A model that already ran tools
+            # this run may legitimately end with no text (the tool delivered the reply, e.g. a
+            # Telegram send), so that is a success with an empty final answer. Only an empty
+            # first answer is an error.
             for _empty_check in range(2):
                 _choice = response.choices[0].message
                 if getattr(_choice, "tool_calls", None) or (_choice.content or "").strip():
@@ -1709,12 +1938,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         title="LiteLLM Empty Response"
                     )
                     response = await _litellm_completion_with_retry(**completion_kwargs)
+                elif run_delivery.current_run_delivered():
+                    break
                 else:
-                    raw_msg = (
-                        f"Model '{normalized_model}' returned an empty response. "
-                        "Known issue with reasoning models (e.g. gpt-oss) on the 'ollama/' "
-                        "endpoint — use the 'ollama_chat/' prefix or check the model."
-                    )
+                    raw_msg = _empty_response_message(normalized_model)
                     raise ProviderUnavailableError(raw_msg, log_message=raw_msg)
 
             # Extract response
@@ -1846,7 +2073,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         )
                         result_content = f"Error executing tool {tool_name}: {str(e)}"
                 else:
-                    result_content = f"Tool '{tool_name}' not found."
+                    result_content = _tool_not_available_result(tool_name)
 
                 all_new_items.append(
                     SimpleNamespace(
@@ -1922,6 +2149,7 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
         if api_base:
             completion_kwargs["api_base"] = api_base
         
+        _drop_sampling_params_if_rejected(completion_kwargs, normalized_model)
         _setup_api_key(provider_name, api_key, completion_kwargs)
         
         try:
@@ -1976,6 +2204,7 @@ async def get_simple_completion_with_usage(
         if api_base:
             completion_kwargs["api_base"] = api_base
 
+        _drop_sampling_params_if_rejected(completion_kwargs, normalized_model)
         _setup_api_key(provider_name, api_key, completion_kwargs)
 
         try:
@@ -2037,16 +2266,16 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
     """
     # Deterministic HUF Test Provider routing, mirroring the early check in
     # `run()` above (see that check's comment and
-    # `huf/ai/providers/test_provider.py`'s module docstring for the full
+    # `huf/ai/providers/stub_provider.py`'s module docstring for the full
     # analysis of why this must happen before any real work below). Since
     # this function is an async generator (contains `yield`), we cannot
     # `return await` a delegate call the way `run()` does - instead we
-    # delegate to `test_provider.run_stream()` (itself an async generator)
+    # delegate to `stub_provider.run_stream()` (itself an async generator)
     # and re-yield every chunk it produces, then return.
     if provider and provider.lower() == "test_provider":
-        from huf.ai.providers import test_provider as _test_provider
+        from huf.ai.providers import stub_provider as _stub_provider
 
-        async for _chunk in _test_provider.run_stream(
+        async for _chunk in _stub_provider.run_stream(
             agent, enhanced_prompt, provider, model, context=context
         ):
             yield _chunk
@@ -2071,7 +2300,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         api_key = _resolve_api_key(provider_doc)
 
         if not api_key:
-            yield {"type": "error", "error": "API key not configured in AI Provider."}
+            yield {"type": "error", "error": "API key not configured in AI Provider.", "public": True}
             return
 
         normalized_model = _normalize_model_name(model, provider, brand=provider_doc.get("provider_brand"))
@@ -2267,7 +2496,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         # and caches this. Mirrors run()'s equivalent block.
         temperature_cache_key = _site_scoped_key(f"litellm_temperature_unsupported:{normalized_model}")
         top_p_cache_key = _site_scoped_key(f"litellm_top_p_unsupported:{normalized_model}")
-        if temperature is not None:
+        if temperature is not None and not rejects_sampling_params(normalized_model):
             _temp_unsupported = _l1_get(temperature_cache_key)
             if _temp_unsupported is None:
                 _temp_unsupported = frappe.cache().get_value(temperature_cache_key)
@@ -2298,7 +2527,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         completion_kwargs["messages"] = messages
 
         # Only add top_p if explicitly configured and not overridden by temperature
-        if top_p is not None:
+        if top_p is not None and not rejects_sampling_params(normalized_model):
             _tp_unsupported = _l1_get(top_p_cache_key)
             if _tp_unsupported is None:
                 _tp_unsupported = frappe.cache().get_value(top_p_cache_key)
@@ -2619,7 +2848,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                     message=f"Tool-call loop detected for model '{normalized_model}'",
                                     title="LiteLLM Tool Loop"
                                 )
-                                yield {"type": "error", "error": msg}
+                                yield {"type": "error", "error": msg, "public": True}
                                 return
 
                             for tool_call in tool_calls_list:
@@ -2674,6 +2903,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                         conv_id = context.get("conversation_id")
                                         call_id = tool_call.get("id")
                                         agent_run_id = context.get("agent_run_id")
+                                        message_name = None
+                                        outcome_published = False
                                         try:
                                             tool_call_doc = frappe.db.get_value("Agent Tool Call", {
                                                 "conversation": conv_id,
@@ -2695,7 +2926,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     tc_doc.save(ignore_permissions=True)
                                                 else:
                                                     if not frappe.has_permission("Agent Tool Call", "write", doc=tc_doc):
-                                                        frappe.throw(_("Not permitted to update Agent Tool Call"), frappe.PermissionError)
+                                                        frappe.throw(frappe._("Not permitted to update Agent Tool Call"), frappe.PermissionError)
                                                     tc_doc.save()
 
                                                 # Find the Agent Message to update. Prefer the in-memory
@@ -2727,7 +2958,9 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     )
 
                                                 if message_name:
-                                                    from huf.ai.conversation_manager import update_tool_call_message
+                                                    from huf.ai.conversation_manager import (
+                                                    	update_tool_call_message,
+                                                    )
                                                     updated = update_tool_call_message(
                                                         message_name=message_name,
                                                         tool_call_id=call_id,
@@ -2747,38 +2980,21 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                         message=f"No Agent Message found for tool call call_id={call_id}, tool_call_doc={tool_call_doc}",
                                                     )
 
-                                                tool_result_for_socket = (
-                                                    result_content
-                                                    if isinstance(result_content, (dict, list))
-                                                    else {"output": str(result_content)[:140000]}
-                                                )
-                                                frappe.publish_realtime(
-                                                    event=f'conversation:{context.get("conversation_id")}',
-                                                    message={
-                                                        "type": "tool_call_completed",
-                                                        "conversation_id": context.get("conversation_id"),
-                                                        "agent_run_id": context.get("agent_run_id"),
-                                                        "message_id": message_name,
-                                                        "tool_call_id": tool_call["id"],
-                                                        "tool_name": tool_name,
-                                                        "tool_status": "Completed",
-                                                        "status": "Completed",
-                                                        "tool_result": tool_result_for_socket,
-                                                        "result": json.dumps(tool_result_for_socket) if isinstance(tool_result_for_socket, (dict, list)) else str(result_content)[:1000],
-                                                    },
-                                                    user=frappe.session.user,
-                                                    after_commit=False
-                                                )
-                                                if getattr(frappe.local, "_realtime_log", None) is None:
-                                                    frappe.local._realtime_log = []
-                                                transaction_checkpoint(reason="agent_streaming_progress")
+                                            _publish_stream_tool_outcome(context, tool_call, tool_name, result_content, message_name)
+                                            outcome_published = True
                                         except Exception as e:
                                             frappe.log_error(
                                                 message=f"Error updating tool call result for call_id={call_id}: {e}\n\n{frappe.get_traceback()}",
                                                 title="Tool Call Message Update"
                                             )
+                                            # The audit/message update failed: the client must still hear the call ended.
+                                            if not outcome_published:
+                                                try:
+                                                    _publish_stream_tool_outcome(context, tool_call, tool_name, result_content, None)
+                                                except Exception:
+                                                    pass
                                 else:
-                                    result_content = f"Tool '{tool_name}' not found."
+                                    result_content = _finalize_unavailable_tool_call(context, tool_call, tool_name)
 
                                 tool_results.append(
                                     {
@@ -2853,19 +3069,19 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
 
             except InternalServerError as e:
                 raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model), "public": True}
                 return
             except RateLimitError as e:
                 raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model), "public": True}
                 return
             except ContextWindowExceededError as e:
                 raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model), "public": True}
                 return
             except APIError as e:
                 raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model), "public": True}
                 return
             except Exception as e:
                 frappe.log_error(
@@ -2873,7 +3089,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                     title="LiteLLM Streaming"
                 )
                 raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model), "public": True}
                 return
             finally:
                 # Restore the environment variable to its pre-request state, preventing
@@ -2892,23 +3108,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         _finalize_usage_totals(stream_total_usage)
 
         # Never report an empty response as a successful completion.
-        if not full_response.strip() and not had_tool_calls:
-            if normalized_model.startswith("ollama/"):
-                msg = (
-                    f"Model '{normalized_model}' returned an empty response. "
-                    "Reasoning models such as gpt-oss require the Ollama chat "
-                    "endpoint. Use the 'ollama_chat/' model prefix (e.g. "
-                    "'ollama_chat/gpt-oss:20b') or select a provider whose brand "
-                    "is 'Ollama' so Huf normalizes the prefix automatically."
-                )
-            else:
-                msg = (
-                    f"Model '{normalized_model}' returned an empty response. "
-                    "Verify the model is loaded, the provider is reachable, and "
-                    "the request is supported by this model."
-                )
+        if not full_response.strip() and not run_delivery.current_run_delivered():
+            msg = _empty_response_message(normalized_model)
             frappe.log_error(message=msg, title="LiteLLM Empty Response")
-            yield {"type": "error", "error": msg}
+            yield {"type": "error", "error": msg, "public": True}
             return
 
         yield {

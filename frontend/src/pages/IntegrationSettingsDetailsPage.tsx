@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { IntegrationHeader } from '@/components/integrations/IntegrationHeader';
 import { AddIntegrationToAgentModal } from '@/components/integrations/AddIntegrationToAgentModal';
+import { ConnectChannelAgentModal } from '@/components/integrations/ConnectChannelAgentModal';
 import { GeneralTab } from '@/components/integrations/GeneralTab';
 import { CredentialsTab } from '@/components/integrations/CredentialsTab';
 import { RecipientsTab } from '@/components/integrations/RecipientsTab';
@@ -61,14 +62,19 @@ export function IntegrationSettingsDetailsPage({
   const isNew = settingId === 'new';
   const initialService = searchParams.get('service') || '';
   const listRoute = surface === 'Gateway' ? '/gateways' : '/integrations';
+  const noun = surface === 'Gateway' ? 'channel' : 'integration';
+  const nounTitle = surface === 'Gateway' ? 'Channel' : 'Integration';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [addToAgentOpen, setAddToAgentOpen] = useState(false);
+  // Bumped after an agent is connected so the Channel tab reloads its gateway.
+  const [channelVersion, setChannelVersion] = useState(0);
   const [credentialSchema, setCredentialSchema] = useState<CredentialSchemaItem[]>([]);
   const [serviceCategory, setServiceCategory] = useState<string>('');
+  const [serviceSurface, setServiceSurface] = useState<string>('');
   const [docMeta, setDocMeta] = useState({
     lastUsed: undefined as string | undefined,
     lastError: undefined as string | undefined,
@@ -188,6 +194,7 @@ export function IntegrationSettingsDetailsPage({
       const serviceDoc = await getIntegrationService(serviceName);
       setCredentialSchema(parseRequiredCredentials(serviceDoc.required_credentials));
       setServiceCategory(serviceDoc.category || '');
+      setServiceSurface(serviceDoc.surface || 'Integration');
     } catch (error) {
       toast.error(getFrappeErrorMessage(error) || 'Failed to load service schema');
     }
@@ -246,10 +253,10 @@ export function IntegrationSettingsDetailsPage({
         return schemaPromise;
       })
       .catch((error) => {
-        toast.error(getFrappeErrorMessage(error) || 'Failed to load integration');
+        toast.error(getFrappeErrorMessage(error) || `Failed to load ${noun}`);
       })
       .finally(() => setLoading(false));
-  }, [isNew, initialService, settingId, form, navigate, loadServiceSchema, listRoute]);
+  }, [isNew, initialService, settingId, form, navigate, loadServiceSchema, listRoute, noun]);
 
   const validateCredentials = (
     values: IntegrationFormValues,
@@ -308,11 +315,11 @@ export function IntegrationSettingsDetailsPage({
 
       if (isNew) {
         const created = await createIntegrationSetting(payload);
-        toast.success('Integration created successfully');
+        toast.success(`${nounTitle} created successfully`);
         navigate(`${listRoute}/${encodeURIComponent(created.name)}`, { replace: true });
       } else if (settingId) {
         const updated = await updateIntegrationSetting(settingId, payload);
-        toast.success('Integration updated successfully');
+        toast.success(`${nounTitle} updated successfully`);
 
         const credValues: Record<string, string> = {};
         for (const item of credentialSchema) {
@@ -330,11 +337,11 @@ export function IntegrationSettingsDetailsPage({
         });
       }
     } catch (error) {
-      toast.error(getFrappeErrorMessage(error) || 'Failed to save integration');
+      toast.error(getFrappeErrorMessage(error) || `Failed to save ${noun}`);
     } finally {
       setSaving(false);
     }
-  }, [credentialSchema, form, isNew, navigate, settingId, listRoute]);
+  }, [credentialSchema, form, isNew, navigate, settingId, listRoute, noun, nounTitle]);
 
   const handleFormSubmit = useMemo(
     () => createFormSubmitHandler(form, activeTab, tabFieldMapping, tabLabels, onSubmit),
@@ -355,10 +362,10 @@ export function IntegrationSettingsDetailsPage({
     setDeleting(true);
     try {
       await deleteIntegrationSetting(settingId);
-      toast.success('Integration deleted');
+      toast.success(`${nounTitle} deleted`);
       navigate(listRoute);
     } catch (error) {
-      toast.error(getFrappeErrorMessage(error) || 'Failed to delete integration');
+      toast.error(getFrappeErrorMessage(error) || `Failed to delete ${noun}`);
     } finally {
       setDeleting(false);
       setDeleteDialogOpen(false);
@@ -368,12 +375,15 @@ export function IntegrationSettingsDetailsPage({
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="font-body text-steel-soft">Loading integration...</div>
+        <div className="font-body text-steel-soft">Loading {noun}...</div>
       </div>
     );
   }
 
   const displayService = watchService || initialService;
+  const showGatewayHint = surface === 'Integration' && !isNew && serviceSurface === 'Gateway';
+  // Messaging channels connect an agent as the one that answers; other integrations attach tools.
+  const isChannel = serviceSurface === 'Gateway' && Boolean(settingId) && !isNew;
   const tabCols = validTabs.length;
 
   return (
@@ -385,6 +395,7 @@ export function IntegrationSettingsDetailsPage({
           isActive={watchIsActive}
           isDefault={watchIsDefault}
           isNew={isNew}
+          noun={nounTitle}
           showSaveButton={showSaveButton}
           saving={saving}
           deleting={deleting}
@@ -399,10 +410,21 @@ export function IntegrationSettingsDetailsPage({
               type="button"
             >
               <Bot className="w-4 h-4 mr-2" />
-              Add to Agent
+              {isChannel ? 'Connect agent' : 'Add to Agent'}
             </Button>
           )}
         </IntegrationHeader>
+
+        {showGatewayHint && (
+          <div className="flex flex-col gap-2 rounded-md border bg-muted/40 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              To receive messages from this channel, add a gateway and link these credentials to it.
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={() => navigate('/gateways')}>
+              Go to Gateways
+            </Button>
+          </div>
+        )}
 
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
@@ -434,7 +456,11 @@ export function IntegrationSettingsDetailsPage({
 
               {'channel' in tabConfig && (
                 <TabsContent value="channel" className="space-y-4">
-                  <ChannelTab settingId={settingId && !isNew ? settingId : undefined} isNew={isNew} />
+                  <ChannelTab
+                    key={channelVersion}
+                    settingId={settingId && !isNew ? settingId : undefined}
+                    isNew={isNew}
+                  />
                 </TabsContent>
               )}
             </Tabs>
@@ -445,10 +471,10 @@ export function IntegrationSettingsDetailsPage({
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete integration?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {noun}?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently remove &quot;{settingId}&quot; and its stored credentials.
-              Agents using this integration may fail until a replacement is configured.
+              Agents using this {noun} may fail until a replacement is configured.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -464,12 +490,21 @@ export function IntegrationSettingsDetailsPage({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AddIntegrationToAgentModal
-        open={addToAgentOpen}
-        onOpenChange={setAddToAgentOpen}
-        service={displayService}
-        integrationName={settingId && !isNew ? settingId : undefined}
-      />
+      {isChannel && settingId ? (
+        <ConnectChannelAgentModal
+          open={addToAgentOpen}
+          onOpenChange={setAddToAgentOpen}
+          integrationName={settingId}
+          onConnected={() => setChannelVersion((v) => v + 1)}
+        />
+      ) : (
+        <AddIntegrationToAgentModal
+          open={addToAgentOpen}
+          onOpenChange={setAddToAgentOpen}
+          service={displayService}
+          integrationName={settingId && !isNew ? settingId : undefined}
+        />
+      )}
     </div>
   );
 }

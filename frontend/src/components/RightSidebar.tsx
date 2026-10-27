@@ -1,11 +1,15 @@
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
-import { X, Settings, Edit, Trash2, Clock } from 'lucide-react';
+import { X, Settings, Edit, Trash2 } from 'lucide-react';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { buildBranchOptionLabels, findUpstreamNodeIds } from '@/lib/flowBranchTargets';
+import { isInvalidJsonString } from '@/lib/flowHttpJson';
 import { Label } from './ui/label';
+import { FlowValueInput } from './FlowValueInput';
+import { TRANSFORM_OPS, getTransformOp } from '@/lib/flowTransformOps';
 import { Combobox } from './ui/combobox';
 import { Checkbox } from './ui/checkbox';
 import { linkRoutes } from '@/lib/link-routes';
@@ -22,48 +26,14 @@ import {
 } from './ui/alert-dialog';
 import { useFlowContext } from '../contexts/FlowContext';
 import { NodeSelectionModal } from './modals/NodeSelectionModal';
-import { ScheduleIntervalType, DocEventType, ScheduleTriggerConfig } from '../types/flow.types';
+import { FlowTriggerPanel } from './FlowTriggerPanel';
+import { syncedTriggerConfig } from '../lib/flowTrigger';
+import type { FlowNodeData } from '../types/flow.types';
 import { getAgents, getDocTypes, getRoles } from '../services/agentApi';
 import { getToolFunctions, getToolFunction, getFlowTools, type FlowTool } from '../services/toolApi';
 import { VariablePicker } from './ui/VariablePicker';
 import { JsonSchemaForm } from './JsonSchemaForm';
-
-/**
- * Computes a human-readable summary of a schedule trigger's cadence, e.g.
- * "Runs every 5 minutes". Only handles the simple interval case (every N
- * minutes/hours/days) since that can be described with plain arithmetic; the
- * custom-cron case is intentionally left unhandled (returns null) because
- * there's no cron-parsing library in this project to describe it reliably —
- * showing a wrong or placeholder value would be worse than showing nothing.
- *
- * This deliberately does NOT claim to be an exact "next run" time: the
- * backend does not expose a real next-execution timestamp to the frontend
- * (no such field exists on ScheduleTriggerConfig or node data), so there is
- * no honest way to compute when the schedule actually last fired or its real
- * anchor point. Presenting "now + interval" as the next run time would be
- * misleading, not just approximate — it would always read "in N minutes"
- * regardless of the schedule's true state.
- */
-function computeScheduleNextRun(config: ScheduleTriggerConfig): string | null {
-  if (config.intervalType === 'custom') {
-    return null;
-  }
-
-  const unitLabels: Record<'minutes' | 'hours' | 'days', string> = {
-    minutes: 'minute',
-    hours: 'hour',
-    days: 'day',
-  };
-  const unitLabel = unitLabels[config.intervalType as 'minutes' | 'hours' | 'days'];
-  if (!unitLabel) {
-    return null;
-  }
-
-  const interval = config.interval && config.interval > 0 ? config.interval : 1;
-  const pluralizedUnit = interval === 1 ? unitLabel : `${unitLabel}s`;
-
-  return `Runs every ${interval} ${pluralizedUnit}`;
-}
+import { copyText } from '@/lib/clipboard';
 
 interface ToolParameter {
   fieldname: string;
@@ -85,7 +55,7 @@ interface RightSidebarProps {
 }
 
 export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps) {
-  const { activeFlow, selectedNodeId, selectedEdgeId, updateNode, deleteNode, updateEdges } = useFlowContext();
+  const { activeFlow, hasUnsavedChanges, selectedNodeId, selectedEdgeId, updateNode, deleteNode, updateEdges } = useFlowContext();
   const selectedNode = activeFlow?.nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = activeFlow?.edges.find((e) => e.id === selectedEdgeId);
   const [isChangingTrigger, setIsChangingTrigger] = useState(false);
@@ -266,7 +236,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
     const config = selectedNode.data.triggerConfig;
 
     if (config.type === 'webhook') {
-      const webhookUrl = `${window.location.origin}/api/method/huf.ai.flow_api.flow_webhook?flow_id=${activeFlow?.id || '{flow_id}'}&webhook_key=${config.auth || '{key}'}`;
+      const webhookUrl = `${window.location.origin}/api/method/huf.ai.flow.api.flow_webhook?flow_id=${activeFlow?.id || '{flow_id}'}&webhook_key=${config.auth || '{key}'}`;
 
       return (
         <div className="space-y-3">
@@ -281,9 +251,9 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => {
-                  navigator.clipboard.writeText(webhookUrl);
-                  toast.success('Webhook URL copied to clipboard');
+                onClick={async () => {
+                  if (await copyText(webhookUrl)) toast.success('Webhook URL copied to clipboard');
+                  else toast.error("Couldn't copy. Select the text and copy it yourself.");
                 }}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></svg>
@@ -320,100 +290,24 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
       );
     }
 
-    if (config.type === 'schedule') {
-      const scheduleTypeSelect = (
-        <Select
-          value={config.intervalType}
-          onValueChange={(value) => handleUpdateTriggerConfig('intervalType', value as ScheduleIntervalType)}
-        >
-          <SelectTrigger id="interval-type">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="minutes">Minutes</SelectItem>
-            <SelectItem value="hours">Hours</SelectItem>
-            <SelectItem value="days">Days</SelectItem>
-            <SelectItem value="custom">Custom (cron)</SelectItem>
-          </SelectContent>
-        </Select>
-      );
-
+    if (config.type === 'schedule' || config.type === 'doc-event') {
       return (
-        <>
-          {config.intervalType !== 'custom' ? (
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label htmlFor="interval">Every</Label>
-                <Input
-                  id="interval"
-                  type="number"
-                  min="1"
-                  value={config.interval || 1}
-                  onChange={(e) => handleUpdateTriggerConfig('interval', parseInt(e.target.value))}
-                />
-              </div>
-              <div>
-                <Label htmlFor="interval-type">Unit</Label>
-                {scheduleTypeSelect}
-              </div>
-            </div>
-          ) : (
-            <div>
-              <Label htmlFor="interval-type">Schedule type</Label>
-              {scheduleTypeSelect}
-            </div>
-          )}
-          {config.intervalType === 'custom' && (
-            <div>
-              <Label htmlFor="cron">Cron expression</Label>
-              <Input
-                id="cron"
-                value={config.cronExpression || ''}
-                onChange={(e) => handleUpdateTriggerConfig('cronExpression', e.target.value)}
-                placeholder="0 */6 * * *"
-              />
-            </div>
-          )}
-        </>
-      );
-    }
-
-    if (config.type === 'doc-event') {
-      return (
-        <>
-          <div>
-            <Label htmlFor="doctype">Document type</Label>
-            <Combobox
-                        id="doctype"
-              options={docTypes}
-              value={config.doctype || ''}
-              onValueChange={(v) => handleUpdateTriggerConfig('doctype', v)}
-              placeholder={loadingDocTypes ? 'Loading...' : 'Select DocType...'}
-              disabled={loadingDocTypes}
-              searchPlaceholder="Search DocType..."
-              emptyText="No DocType found."
-            />
-          </div>
-          <div>
-            <Label htmlFor="event">Event type</Label>
-            <Select
-              value={config.event}
-              onValueChange={(value) => handleUpdateTriggerConfig('event', value as DocEventType)}
-            >
-              <SelectTrigger id="event">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="save">Save</SelectItem>
-                <SelectItem value="update">Update</SelectItem>
-                <SelectItem value="delete">Delete</SelectItem>
-                <SelectItem value="before-save">Before save</SelectItem>
-                <SelectItem value="before-update">Before update</SelectItem>
-                <SelectItem value="before-delete">Before delete</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </>
+        <FlowTriggerPanel
+          kind={config.type}
+          flowId={activeFlow?.id}
+          hasUnsavedChanges={hasUnsavedChanges}
+          docTypes={docTypes}
+          loadingDocTypes={loadingDocTypes}
+          onSynced={(mirror) => {
+            // Keep the node's real config (cron / doctype+event) equal to the saved trigger.
+            if (!selectedNodeId || !selectedNode) return;
+            const next = syncedTriggerConfig(config.type as 'schedule' | 'doc-event', config as unknown as Record<string, unknown>, mirror);
+            if (!next) return;
+            updateNode(selectedNodeId, {
+              data: { ...selectedNode.data, configured: mirror != null, triggerConfig: next as FlowNodeData['triggerConfig'] }
+            });
+          }}
+        />
       );
     }
 
@@ -446,11 +340,6 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
   };
 
   const isSheet = variant === 'sheet';
-
-  const scheduleNextRun =
-    selectedNode?.data.nodeType === 'trigger' && selectedNode.data.triggerConfig?.type === 'schedule'
-      ? computeScheduleNextRun(selectedNode.data.triggerConfig as ScheduleTriggerConfig)
-      : null;
 
   return (
     <div
@@ -695,6 +584,10 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 const otherNodes = (activeFlow?.nodes || []).filter((n) => n.id !== selectedNodeId);
                 const currentValue = value || '';
                 const isMissing = currentValue && !otherNodes.some((n) => n.id === currentValue);
+                // Upstream targets stay selectable (a deliberate loop is legitimate in a
+                // loop node) but are marked, so a cycle is never offered silently.
+                const upstreamIds = findUpstreamNodeIds(activeFlow?.edges || [], selectedNodeId);
+                const optionLabels = buildBranchOptionLabels(otherNodes, upstreamIds);
                 return (
                   <Select value={currentValue} onValueChange={onChange}>
                     <SelectTrigger id={id}>
@@ -708,7 +601,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       )}
                       {otherNodes.map((n) => (
                         <SelectItem key={n.id} value={n.id}>
-                          {n.data.label || n.id}
+                          {optionLabels.get(n.id)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1200,6 +1093,11 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                         }}
                         placeholder='{"Authorization": "Bearer {{token}}"}'
                       />
+                      {isInvalidJsonString(config.headers) && (
+                        <p className="text-[10px] text-destructive mt-1">
+                          Not valid JSON — saved as plain text.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="http-body" size="sm">Body</Label>
@@ -1218,6 +1116,11 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                         }}
                         placeholder='{"key": "{{context.value}}"}'
                       />
+                      {isInvalidJsonString(config.body) && (
+                        <p className="text-[10px] text-destructive mt-1">
+                          Not valid JSON — saved as plain text.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="http-timeout" size="sm">Timeout (seconds)</Label>
@@ -1244,91 +1147,169 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               }
 
               if (config.type === 'transform') {
-                const transformations = config.transformations || [];
+                const opSpec = getTransformOp(config.op);
+                const input = config.input ?? {};
                 return (
                   <div className="space-y-3">
                     <Label weight="semibold" className="mb-2 block">Transform data configuration</Label>
-                    <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
-                      Map, copy, or template data between context variables.
+                    <div>
+                      <Label htmlFor="transform-op" size="sm">Operation</Label>
+                      <Select
+                        value={config.op || ''}
+                        onValueChange={(v) => {
+                          handleUpdateActionConfigMany({ op: v, input: {} });
+                        }}
+                      >
+                        <SelectTrigger id="transform-op" size="sm">
+                          <SelectValue placeholder="Select operation" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TRANSFORM_OPS.map((o) => (
+                            <SelectItem key={o.name} value={o.name}>
+                              {o.label} ({o.name})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    {transformations.map((t, i: number) => (
+                    {opSpec?.params.map((param) => (
+                      <FlowValueInput
+                        key={`${opSpec.name}-${param}`}
+                        id={`transform-in-${param}`}
+                        label={param}
+                        optional={opSpec.optional?.includes(param)}
+                        value={input[param]}
+                        onChange={(v) => handleUpdateActionConfig('input', { ...input, [param]: v })}
+                      />
+                    ))}
+                  </div>
+                );
+              }
+
+              if (config.type === 'state-get' || config.type === 'state-set' || config.type === 'state-delete') {
+                return (
+                  <div className="space-y-3">
+                    <Label weight="semibold" className="mb-2 block">
+                      {config.type === 'state-get' ? 'Get state' : config.type === 'state-set' ? 'Set state' : 'Delete state'}
+                    </Label>
+                    <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md">
+                      State is scoped to this flow. Use a template to key by sender, e.g. cart:{'{sender}'}.
+                    </div>
+                    <FlowValueInput
+                      id="state-key"
+                      label="Key"
+                      value={config.key}
+                      onChange={(v) => handleUpdateActionConfig('key', v)}
+                    />
+                    {config.type === 'state-get' && (
+                      <FlowValueInput
+                        id="state-default"
+                        label="Default"
+                        optional
+                        value={config.default}
+                        onChange={(v) => handleUpdateActionConfig('default', v)}
+                      />
+                    )}
+                    {config.type === 'state-set' && (
+                      <>
+                        <FlowValueInput
+                          id="state-value"
+                          label="Value"
+                          value={config.value}
+                          onChange={(v) => handleUpdateActionConfig('value', v)}
+                        />
+                        <div>
+                          <Label htmlFor="state-ttl" size="sm">TTL seconds (optional, max 2592000)</Label>
+                          <Input
+                            id="state-ttl"
+                            type="number"
+                            min={1}
+                            max={2592000}
+                            value={typeof config.ttl_seconds === 'number' ? config.ttl_seconds : ''}
+                            onChange={(e) =>
+                              handleUpdateActionConfig('ttl_seconds', e.target.value === '' ? undefined : parseInt(e.target.value))
+                            }
+                            placeholder="default 86400"
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              }
+
+              if (config.type === 'doc-create') {
+                const fields = config.fields ?? {};
+                const entries = Object.entries(fields);
+                return (
+                  <div className="space-y-3">
+                    <Label weight="semibold" className="mb-2 block">Create document</Label>
+                    <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md">
+                      The DocType must be in the site allow-list (huf_flow_create_doc_doctypes).
+                    </div>
+                    <div>
+                      <Label htmlFor="doc-create-doctype" size="sm">DocType</Label>
+                      <Input
+                        id="doc-create-doctype"
+                        value={config.doctype || ''}
+                        onChange={(e) => handleUpdateActionConfig('doctype', e.target.value)}
+                        placeholder="e.g., ToDo"
+                      />
+                    </div>
+                    {entries.map(([name, val], i) => (
                       <div key={i} className="p-3 bg-muted/20 border rounded-md space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs font-medium">Transformation #{i + 1}</span>
+                        <div className="flex items-end gap-2">
+                          <div className="flex-1">
+                            <Label htmlFor={`doc-field-${i}-name`} size="sm">Field name</Label>
+                            <Input
+                              id={`doc-field-${i}-name`}
+                              value={name}
+                              onChange={(e) => {
+                                const next = Object.fromEntries(
+                                  entries.map(([k, v], j) => (j === i ? [e.target.value, v] : [k, v]))
+                                );
+                                handleUpdateActionConfig('fields', next);
+                              }}
+                            />
+                          </div>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-6 px-2 text-destructive"
-                            onClick={() => {
-                              const updated = [...transformations];
-                              updated.splice(i, 1);
-                              handleUpdateActionConfig('transformations', updated);
-                            }}
+                            className="h-8 px-2 text-destructive"
+                            onClick={() =>
+                              handleUpdateActionConfig('fields', Object.fromEntries(entries.filter((_, j) => j !== i)))
+                            }
                           >
                             ×
                           </Button>
                         </div>
-                        <div>
-                          <Label size="sm">Source field</Label>
-                          <Input
-                            value={t.source_field || ''}
-                            onChange={(e) => {
-                              const updated = [...transformations];
-                              updated[i] = { ...t, source_field: e.target.value };
-                              handleUpdateActionConfig('transformations', updated);
-                            }}
-                            placeholder="e.g., api_response.data"
-                            size="sm"
-                          />
-                        </div>
-                        <div>
-                          <Label size="sm">Target field</Label>
-                          <Input
-                            value={t.target_field || ''}
-                            onChange={(e) => {
-                              const updated = [...transformations];
-                              updated[i] = { ...t, target_field: e.target.value };
-                              handleUpdateActionConfig('transformations', updated);
-                            }}
-                            placeholder="e.g., processed_data"
-                            size="sm"
-                          />
-                        </div>
-                        <div>
-                          <Label size="sm">Operation</Label>
-                          <Select
-                            value={t.operation || 'copy'}
-                            onValueChange={(v) => {
-                              const updated = [...transformations];
-                              updated[i] = { ...t, operation: v as 'copy' | 'map' | 'template' };
-                              handleUpdateActionConfig('transformations', updated);
-                            }}
-                          >
-                            <SelectTrigger size="sm">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="copy">Copy</SelectItem>
-                              <SelectItem value="map">Map</SelectItem>
-                              <SelectItem value="template">Template</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        <FlowValueInput
+                          id={`doc-field-${i}-value`}
+                          label="Value"
+                          value={val}
+                          onChange={(v) =>
+                            handleUpdateActionConfig('fields', Object.fromEntries(entries.map(([k, o], j) => (j === i ? [k, v] : [k, o]))))
+                          }
+                        />
                       </div>
                     ))}
                     <Button
                       variant="outline"
                       size="sm"
                       className="w-full"
-                      onClick={() => {
-                        handleUpdateActionConfig('transformations', [
-                          ...transformations,
-                          { source_field: '', target_field: '', operation: 'copy' }
-                        ]);
-                      }}
+                      onClick={() => handleUpdateActionConfig('fields', { ...fields, [`field_${entries.length + 1}`]: '' })}
                     >
-                      + Add Transformation
+                      + Add field
                     </Button>
+                  </div>
+                );
+              }
+
+              if (config.type === 'unknown') {
+                return (
+                  <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md">
+                    Node type <span className="font-mono">{config.backend_type}</span> has no editor in this
+                    builder. It is kept as-is and saved unchanged.
                   </div>
                 );
               }
@@ -1408,17 +1389,6 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
           </>
         ) : null}
       </div>
-
-      {scheduleNextRun ? (
-        <div className="border-t border-border p-3 bg-card flex items-center gap-2">
-          <div className="flex items-center gap-1.5 min-w-0 rounded-md bg-paper px-2 py-1">
-            <Clock className="w-3 h-3 text-muted-foreground shrink-0" />
-            <span className="text-[12px] leading-none text-muted-foreground truncate">
-              {scheduleNextRun}
-            </span>
-          </div>
-        </div>
-      ) : null}
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>

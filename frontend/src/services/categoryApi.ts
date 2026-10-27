@@ -73,9 +73,12 @@ export async function getSummaryPromptCategories(
   return getCategories(params, 'summary');
 }
 
-export async function getCategory(name: string): Promise<CategoryDoc> {
+export async function getCategory(
+  name: string,
+  category_type: CategoryType = 'prompt'
+): Promise<CategoryDoc> {
   try {
-    const response = await db.getDoc(doctype['Agent Prompt Category'], name);
+    const response = await db.getDoc(getCategoryDoctype(category_type), name);
     return response as CategoryDoc;
   } catch (error) {
     handleFrappeError(error);

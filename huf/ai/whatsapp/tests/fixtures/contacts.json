@@ -1,0 +1,62 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550783881",
+              "phone_number_id": "106540352242922"
+            },
+            "contacts": [
+              {
+                "profile": {
+                  "name": "Ravi Kumar"
+                },
+                "wa_id": "919876543210"
+              }
+            ],
+            "messages": [
+              {
+                "from": "919876543210",
+                "id": "wamid.HBgMOTE5ODc2NTQzMjEwFQIAEhgUM0E1NTQ2RTE2QjdBOEFBQzAzMTMA",
+                "timestamp": "1792000000",
+                "type": "contacts",
+                "contacts": [
+                  {
+                    "name": {
+                      "formatted_name": "Barbara J. Johnson",
+                      "first_name": "Barbara",
+                      "last_name": "Johnson"
+                    },
+                    "phones": [
+                      {
+                        "phone": "+1 (415) 555-0829",
+                        "wa_id": "14155550829",
+                        "type": "CELL"
+                      },
+                      {
+                        "phone": "+1 650 555 0100",
+                        "type": "WORK"
+                      }
+                    ]
+                  },
+                  {
+                    "name": {
+                      "formatted_name": "Zoë 山田"
+                    },
+                    "phones": []
+                  }
+                ]
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}

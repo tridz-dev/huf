@@ -1,5 +1,6 @@
 import * as React from "react"
-import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Layers, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, Keyboard, SlidersHorizontal, type LucideIcon } from "lucide-react"
+import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Layers, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, MessageCircle, Send, Keyboard, SlidersHorizontal, Boxes, type LucideIcon } from "lucide-react"
+import { SOLUTIONS_WORD } from "@/components/solutions/labels"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -53,6 +54,12 @@ export const useNavItems = [
     url: "/chat",
     icon: MessageSquare,
     capability: "chat.use",
+  },
+  {
+    title: SOLUTIONS_WORD,
+    url: "/solutions",
+    icon: Boxes,
+    capability: "system.integrations.manage",
   },
 ]
 
@@ -164,6 +171,8 @@ export const settingsNavGroups: Array<{ label?: string; items: Array<{ title: st
       { title: "AI providers & models", url: "/providers", icon: Layers, capability: "system.providers.manage" },
       { title: "MCP servers", url: "/mcp", icon: Server, capability: "system.mcp.manage" },
       { title: "Gateways", url: "/gateways", icon: GlobeLock, capability: "system.integrations.manage" },
+      { title: "WhatsApp", url: "/whatsapp", icon: MessageCircle, capability: "system.integrations.manage" },
+      { title: "Telegram", url: "/telegram", icon: Send, capability: "system.integrations.manage" },
       { title: "Integrations", url: "/integrations", icon: Link2, capability: "system.integrations.manage" },
       { title: "Code execution", url: "/execution-profiles", icon: SquareChevronRight, capability: "agent.use" },
       { title: "SSH connections", url: "/ssh-connections", icon: ChevronsLeftRightEllipsis, capability: "agent.use" },

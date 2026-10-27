@@ -17,7 +17,7 @@ from huf.ai.gateways.slack_files import download_slack_file
 MAX_FILES = 5
 MAX_INLINE_BYTES = 16 * 1024
 MAX_TRANSCRIPT_CHARS = 4000
-DEFAULT_STT_MODEL = "gemini/gemini-3.8-flash"  # override with site config huf_slack_stt_model
+DEFAULT_STT_MODEL = "gemini/gemini-flash-latest"  # override with site config huf_slack_stt_model
 TEXT_MIMES = ("text/plain", "text/csv")
 
 

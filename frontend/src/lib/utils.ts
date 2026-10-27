@@ -15,6 +15,12 @@ import { extendTailwindMerge } from 'tailwind-merge';
 const cnMerge = extendTailwindMerge({
   extend: {
     classGroups: {
+      // Custom font-size utilities from tailwind.config.js `fontSize`. Without
+      // these, tailwind-merge reads `text-micro` as a text COLOUR and drops it
+      // when a real colour class (text-steel) follows, or vice versa.
+      'font-size': [
+        { text: ['display', 'title', 'subtitle', 'micro', 'body-text', 'ui-text', 'meta', 'eyebrow'] },
+      ],
       // Each classGroup entry must mirror tailwind-merge's own default-config
       // shape: `<groupId>: [{ <groupId>: [suffixes...] }]`. The inner object
       // key is what actually gets walked into the class-name trie (`h-` +

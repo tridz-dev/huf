@@ -14,7 +14,7 @@ import {
 /**
  * Is a run failure legible to the user? We build a flow that DEFINITELY
  * fails at runtime (a condition node whose true_node names a nonexistent
- * node id — engine-rejected at huf/ai/flow_engine.py:276-279 with
+ * node id — engine-rejected at huf/ai/flow/engine.py:276-279 with
  * "Node 'X' not found in definition"), run it, and check every place the
  * error could plausibly surface: the run history sheet, the run detail
  * sheet (FlowRunViewer.tsx), and any toast.
@@ -92,7 +92,7 @@ test.describe.serial('run failure legibility (run-errors)', () => {
     expect(savedDefn.definition_json.nodes[0].config?.true_node).toBe('does-not-exist');
 
     // 3. Run it via the API (engine runs synchronously — see
-    //    huf/ai/flow_api.py run_flow(): "Run synchronously for now").
+    //    huf/ai/flow/api.py run_flow(): "Run synchronously for now").
     const runResult = await runFlowApi(api, flowId);
     expect(runResult.status).toBe('Failed');
 
@@ -196,7 +196,7 @@ test.describe.serial('run failure legibility (run-errors)', () => {
     await expect(page.getByText(/failed to run flow/i)).toHaveCount(0);
 
     // Ground truth: the run this success toast was celebrating actually failed.
-    const runs = await api.get('/api/method/huf.ai.flow_api.list_flow_runs', {
+    const runs = await api.get('/api/method/huf.ai.flow.api.list_flow_runs', {
       params: { flow_id: flowId },
     });
     const runsJson = await runs.json();

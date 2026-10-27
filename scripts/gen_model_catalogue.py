@@ -5,10 +5,12 @@ Usage:
     python scripts/gen_model_catalogue.py [--as-of YYYY-MM-DD] [--out PATH]
 
 The output module exposes:
-    MODELS      -- list[dict]: curated AI Model seed records
-    DEPRECATED  -- tuple[str]: model_name values that should be deleted on
-                   migrate (curated candidates that have since been
-                   deprecated upstream per LiteLLM's deprecation_date).
+    MODELS   -- list[dict]: curated AI Model seed records (LiteLLM-backed
+                candidates + EXTRA_MODELS), aliases flagged is_latest_alias.
+    RETIRED  -- dict[str, tuple[str, str]]: confirmed-retired model_name ->
+                (provider, replacement), applied by the refresh patch.
+
+Candidates past their LiteLLM deprecation_date are left out of MODELS.
 
 Determinism: given the same installed litellm version and the same --as-of
 date, this script produces a byte-identical output file. It never calls
@@ -20,14 +22,12 @@ from __future__ import annotations
 
 import argparse
 import datetime
-import sys
 from pathlib import Path
 
 try:
     import litellm
-except ImportError:  # pragma: no cover
-    print("litellm is required to run this generator", file=sys.stderr)
-    raise
+except ImportError:  # pragma: no cover -- only needed without --model-cost-json
+    litellm = None
 
 # --------------------------------------------------------------------------
 # Allowed modality vocabulary (must match huf/huf/doctype/ai_model/ai_model.json
@@ -134,200 +134,149 @@ SKIPPED_PROVIDERS_NO_RECORD = {
 # are automatically moved to DEPRECATED instead of MODELS -- see build().
 # --------------------------------------------------------------------------
 CANDIDATES: dict[str, list[str]] = {
+    # Sources (retrieved 2026-10-22): developers.openai.com/api/docs/models,
+    # /models/all, /deprecations. Deprecated names are not seeded.
     "OpenAI": [
-        # Chat / reasoning flagships
-        "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+        # Chat / reasoning
+        "gpt-6.1-sol", "gpt-6-sol", "gpt-6-astra", "gpt-6-luna",
+        "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-cyber",
         "gpt-5.5", "gpt-5.5-pro",
         "gpt-5.4", "gpt-5.4-pro", "gpt-5.4-mini", "gpt-5.4-nano",
         "gpt-5.3-codex",
         "gpt-5.2", "gpt-5.2-pro",
         "gpt-5.1",
         "gpt-5", "gpt-5-mini", "gpt-5-nano",
+        # Latest-tracking alias ("not recommended for API use" per OpenAI,
+        # but it is the one moving chat alias OpenAI still serves).
         "chat-latest",
-        "gpt-5.3-chat-latest", "gpt-5.2-chat-latest",
-        "gpt-4.1", "gpt-4.1-mini",
-        "gpt-4o", "gpt-4o-mini",
-        "o3", "o4-mini",
         # Text-to-Speech
-        "gpt-4o-mini-tts", "tts-1", "tts-1-hd",
+        "gpt-4o-mini-tts",
         # Transcription
-        "whisper-1", "gpt-4o-transcribe", "gpt-4o-mini-transcribe",
-        "gpt-transcribe", "gpt-live-transcribe", "gpt-realtime-whisper",
+        # gpt-live-transcribe / gpt-realtime-whisper are Realtime-API only and
+        # cannot serve litellm.transcription, so they are not seeded.
+        "gpt-transcribe",
+        "gpt-4o-mini-transcribe",
         # Image
-        "gpt-image-2", "gpt-image-1", "gpt-image-1-mini", "chatgpt-image-latest",
+        "gpt-image-2.5-sunburst", "gpt-image-2.5-flare", "gpt-image-2",
         # Embeddings
         "text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002",
-        "gpt-5.6",
-        "gpt-5.6-cyber",
-        "daybreak-blue-latest",
-        "daybreak-red-latest",
     ],
+    # Sources: platform.claude.com/docs/en/about-claude/models/overview and
+    # /model-deprecations. Anthropic publishes NO "-latest" aliases; undated
+    # IDs from 4.6 onward are fixed snapshots.
     "Anthropic": [
-        "claude-opus-5",
+        "claude-fable-5-1",
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
+        "claude-haiku-5-5",
+        "claude-mythos-5-1",
         "claude-mythos-5",
         "claude-fable-5",
+        "claude-opus-5",
+        "claude-sonnet-5",
         "claude-opus-4-8",
         "claude-opus-4-7",
         "claude-opus-4-6",
         "claude-opus-4-5",
         "claude-sonnet-4-6",
-        "claude-sonnet-4-5",
         "claude-haiku-4-5",
-        "claude-sonnet-5",
-        "claude-mythos-preview",
     ],
+    # Sources: ai.google.dev/gemini-api/docs/models, /deprecations (updated
+    # 2026-10-20), /changelog. Gemini 2.5 is closed to new users since
+    # 2026-09-18 -> not seeded.
     "Google": [
+        # Latest-tracking aliases (preferred defaults)
+        "gemini-flash-latest",
+        "gemini-pro-latest",
+        "gemini-flash-lite-latest",
+        # Pinned chat models
+        "gemini/gemini-4-argon",
+        "gemini/gemini-3.8-flash",
         "gemini/gemini-3.6-flash",
-        "gemini/gemini-3.5-flash",
         "gemini/gemini-3.5-flash-lite",
-        "gemini/gemini-3.1-flash-lite",
         "gemini/gemini-3.1-pro-preview",
         "gemini/gemini-3-flash-preview",
-        "gemini/gemini-3.7-flash",
-        "gemini/gemini-2.5-pro",
-        "gemini/gemini-2.5-flash",
-        "gemini/gemini-2.5-flash-lite",
         "gemini/gemma-3-27b-it",
-        "gemini-pro-latest",
-        "gemini-flash-latest",
-        "gemini-flash-lite-latest",
         # Image
+        "gemini/gemini-nano-banana-2.1",
         "gemini/gemini-3-pro-image",
         "gemini/gemini-3.1-flash-image",
         "gemini/gemini-3.1-flash-lite-image",
-        "gemini/gemini-2.5-flash-image",
         # Text-to-Speech
-        "gemini/gemini-3.1-flash-tts-preview",
-        "gemini/gemini-2.5-flash-preview-tts",
-        # Transcription
-        "gemini/gemini-3.5-transcribe",
+        "gemini/gemini-3.8-flash-tts",
+        "gemini/gemini-3.8-flash-lite-tts",
         # Embeddings
-        "gemini/gemini-embedding-001",
         "gemini/gemini-embedding-2",
+        # Transcription: HUF transcribes Gemini audio through a multimodal
+        # completion (audio_service.MULTIMODAL_STT_PROVIDERS), so the
+        # Transcription-capable Google model is the gemini-flash-latest alias
+        # (see MODALITY_OVERRIDES). gemini-3.5-transcribe is a real model but
+        # is not served through generateContent, which is why it returned an
+        # empty transcript on the bench -- it is intentionally not seeded.
     ],
-    "OpenRouter": [
-        "openrouter/anthropic/claude-opus-5",
-        "openrouter/anthropic/claude-opus-4.6",
-        "openrouter/anthropic/claude-sonnet-4.6",
-        "openrouter/anthropic/claude-sonnet-4.5",
-        "openrouter/anthropic/claude-haiku-4.5",
-        "openrouter/google/gemini-3-pro-preview",
-        "openrouter/google/gemini-3-flash-preview",
-        "openrouter/google/gemini-3.1-pro-preview",
-        "openrouter/google/gemini-3.1-flash-lite",
-        "openrouter/openai/gpt-5.2",
-        "openrouter/openai/gpt-5.2-pro",
-        "openrouter/openai/gpt-5.1-codex-max",
-        "openrouter/openai/gpt-oss-120b",
-        "openrouter/openai/gpt-oss-20b",
-        "openrouter/deepseek/deepseek-v4-pro",
-        "openrouter/deepseek/deepseek-v3.2",
-        "openrouter/deepseek/deepseek-chat-v3.1",
-        "openrouter/moonshotai/kimi-k2.5",
-        "openrouter/minimax/minimax-m2.5",
-        "openrouter/minimax/minimax-m2.1",
-        "openrouter/z-ai/glm-5.1",
-        "openrouter/z-ai/glm-4.7",
-        "openrouter/mistralai/mistral-large-2512",
-        "openrouter/mistralai/devstral-2512",
-        "openrouter/qwen/qwen3.6-plus",
-        "openrouter/qwen/qwen3.5-flash-02-23",
-        "openrouter/qwen/qwen3-coder-plus",
-        "openrouter/qwen/qwen3-coder",
-        "openrouter/xiaomi/mimo-v2.5",
-        "openrouter/openrouter/auto",
-        "openrouter/openrouter/free",
-        "openrouter/google/gemini-2.5-pro",
-        "openrouter/google/gemini-2.5-flash",
-        "openrouter/openai/gpt-5",
-        "openrouter/openai/gpt-5-mini",
-        "openrouter/openai/gpt-5-nano",
-        "openrouter/openai/gpt-5-codex",
-        "openrouter/openai/gpt-4.1",
-        "openrouter/openai/gpt-4.1-mini",
-        "openrouter/openai/gpt-4.1-nano",
-        "openrouter/anthropic/claude-opus-4.7",
-        "openrouter/anthropic/claude-opus-4.5",
-        "openrouter/x-ai/grok-4",
-        "openrouter/z-ai/glm-5",
-        "openrouter/xiaomi/mimo-v2.5-pro",
-    ],
+    # OpenRouter is curated from the live https://openrouter.ai/api/v1/models
+    # list in EXTRA_MODELS below (LiteLLM's table lags OpenRouter badly).
+    "OpenRouter": [],
+    # Sources: api-docs.deepseek.com/quick_start/pricing, /news/news261017.
+    # deepseek-chat / deepseek-reasoner were deprecated 2026-07-24;
+    # deepseek-flash is the moving Flash name (V4.1-Flash-1017 today).
     "DeepSeek": [
-        "deepseek-chat",
-        "deepseek-reasoner",
-        "deepseek/deepseek-r1",
-        "deepseek/deepseek-v3.2",
-        "deepseek-v4-flash",
-        "deepseek-v4-flash-vision-exp",
+        "deepseek-flash",
         "deepseek-v4-pro",
     ],
+    # Source: platform.kimi.ai/docs/pricing/chat (IDs cross-checked against
+    # LiteLLM). kimi-latest, kimi-k2-thinking*, kimi-k2.5 and moonshot-v1-*
+    # are discontinued.
     "Moonshot": [
         "moonshot/kimi-k3",
+        "moonshot/kimi-k2.7-code",
         "moonshot/kimi-k2.6",
-        "moonshot/kimi-k2.5",
-        "moonshot/kimi-k2-thinking",
-        "moonshot/kimi-k2-thinking-turbo",
-        "moonshot/kimi-latest",
-        "moonshot/kimi-latest-128k",
-        "moonshot/moonshot-v1-128k",
-        "moonshot/moonshot-v1-128k-vision-preview",
-        "moonshot/moonshot-v1-32k",
-        "moonshot/moonshot-v1-8k",
-        "moonshot/moonshot-v1-auto",
-        "moonshot/moonshot-v1-32k-vision-preview",
-        "moonshot/moonshot-v1-8k-vision-preview",
     ],
+    # Sources: console.groq.com/docs/models, /docs/deprecations.
     "Groq": [
-        "groq/llama-3.3-70b-versatile",
-        "groq/llama-3.1-8b-instant",
-        "groq/meta-llama/llama-4-maverick-17b-128e-instruct",
-        "groq/meta-llama/llama-4-scout-17b-16e-instruct",
         "groq/openai/gpt-oss-120b",
         "groq/openai/gpt-oss-20b",
-        "groq/qwen/qwen3.6-27b",
-        "groq/qwen/qwen3-32b",
+        "groq/qwen/qwen3.8-27b",
         "groq/whisper-large-v3",
         "groq/whisper-large-v3-turbo",
-        "groq/playai-tts",
+        "groq/canopylabs/orpheus-v1-english",
+        "groq/canopylabs/orpheus-arabic-saudi",
     ],
+    # Sources: docs.cohere.com/docs/models, /docs/deprecations.
     "Cohere": [
+        "command-a-plus-05-2026",
         "command-a-03-2025",
         "command-r-08-2024",
         "command-r-plus-08-2024",
         "command-r7b-12-2024",
+        "cohere/embed-v5.0-pro",
+        "cohere/embed-v5.0-fast",
         "cohere/embed-v4.0",
         "embed-english-v3.0",
         "embed-multilingual-v3.0",
         "embed-english-light-v3.0",
         "embed-multilingual-light-v3.0",
     ],
+    # Source: docs.perplexity.ai/getting-started/models -- only `sonar` is
+    # still listed; the sonar-pro / sonar-reasoning* / sonar-deep-research
+    # Chat Completions models are gone.
     "Perplexity": [
         "perplexity/sonar",
-        "perplexity/sonar-pro",
-        "perplexity/sonar-reasoning",
-        "perplexity/sonar-reasoning-pro",
-        "perplexity/sonar-deep-research",
     ],
+    # Source: elevenlabs.io/docs/models. eleven_turbo_v2_5 and scribe_v1 are
+    # deprecated; eleven_flash_v2_5 lives in EXTRA_MODELS
+    # because LiteLLM has no entry for it.
     "ElevenLabs": [
-        "elevenlabs/eleven_multilingual_v2",
         "elevenlabs/eleven_v3",
-        "elevenlabs/scribe_v1",
-        "elevenlabs/scribe_v1_experimental",
+        "elevenlabs/eleven_multilingual_v2",
+        "elevenlabs/scribe_v2",
     ],
-    "Huggingface": [
-        # litellm.model_cost carries zero "huggingface" litellm_provider
-        # entries in this litellm version -- nothing to curate. See report.
-    ],
-    # AWS Bedrock: keys as they appear (unprefixed) under litellm_provider
-    # "bedrock"/"bedrock_converse". Canonical (non-region-prefixed,
-    # non-commitment) keys only -- litellm.model_cost carries dozens of
-    # region-duplicated ("ap-northeast-1/...", "eu...", "apac...") and
-    # reserved-capacity ("1-month-commitment/...") duplicates of the same
-    # models, which are excluded here. STRIP_PREFIX is "" and ADD_PREFIX
-    # bakes "bedrock/" back onto the stored model_name (see STRIP_PREFIX
-    # comment above) so LiteLLM routing is unaffected by the missing
-    # provider_prefix_map entry.
+    "Huggingface": [],
+    # Source: docs.aws.amazon.com/bedrock/latest/userguide/model-lifecycle-legacy.html
     "AWS Bedrock": [
+        "anthropic.claude-opus-5-5",
+        "anthropic.claude-sonnet-5-5",
+        "anthropic.claude-haiku-5-5",
         "anthropic.claude-opus-5",
         "anthropic.claude-sonnet-5",
         "anthropic.claude-fable-5",
@@ -341,92 +290,297 @@ CANDIDATES: dict[str, list[str]] = {
         "amazon.nova-lite-v1:0",
         "amazon.nova-micro-v1:0",
         "amazon.titan-embed-text-v2:0",
-        "amazon.titan-image-generator-v2:0",
     ],
-    # Vertex AI (Google): candidates are drawn only from litellm_provider
-    # "vertex_ai" keys that already carry the "vertex_ai/" prefix baked into
-    # the litellm.model_cost key itself (as opposed to the parallel
-    # "vertex_ai-language-models" group, whose keys are bare and would need
-    # a second, inconsistent prefixing rule) -- keeps STRIP_PREFIX/ADD_PREFIX
-    # simple and the stored model_name identical to the litellm key.
-    # Audio (chirp), OCR, vector-store, and xai-via-vertex duplicate entries
-    # are excluded (no clean modality mapping / already covered by xAI direct).
+    # Vertex model-versions page could not be fully read (see notes); IDs are
+    # the Gemini API equivalents that LiteLLM lists under vertex_ai/.
     "Vertex AI": [
-        "vertex_ai/gemini-3-pro-preview",
-        "vertex_ai/gemini-3-flash-preview",
+        "vertex_ai/gemini-4-argon",
+        "vertex_ai/gemini-3.8-flash",
         "vertex_ai/gemini-3.1-pro-preview",
-        "vertex_ai/gemini-3.5-flash",
-        "vertex_ai/gemini-3.6-flash",
-        "vertex_ai/gemini-3.7-flash",
+        "vertex_ai/gemini-3-flash-preview",
+        "vertex_ai/gemini-3.8-flash-tts",
+        "vertex_ai/gemini-3.8-flash-lite-tts",
         "vertex_ai/gemini-embedding-2",
-        "vertex_ai/xai/grok-4.1-fast-reasoning",
-        "vertex_ai/xai/grok-4.1-fast-non-reasoning",
+        "vertex_ai/xai/grok-4.7",
+        "vertex_ai/xai/grok-4.6",
+        "vertex_ai/xai/grok-4.3",
         "vertex_ai/xai/grok-4.20-reasoning",
         "vertex_ai/xai/grok-4.20-non-reasoning",
     ],
+    # Source: docs.mistral.ai/getting-started/models/models_overview/ (current
+    # families) + LiteLLM for the API IDs. Mistral's "-latest" aliases are the
+    # recommended entry points.
     "Mistral": [
         "mistral/mistral-large-latest",
         "mistral/mistral-medium-latest",
         "mistral/mistral-small-latest",
+        "mistral/ministral-14b-latest",
         "mistral/ministral-8b-latest",
         "mistral/ministral-3b-latest",
         "mistral/codestral-latest",
-        "mistral/devstral-latest",
-        "mistral/magistral-medium-latest",
-        "mistral/mistral-embed",
+        "mistral/voxtral-mini-latest",
+        "mistral/voxtral-mini-tts-latest",
+        "mistral/mistral-large-4",
         "mistral/mistral-large-3",
-        "mistral/mistral-medium-3",
         "mistral/mistral-medium-3-5",
-        "mistral/devstral-small-latest",
-        "mistral/devstral-medium-latest",
-        "mistral/pixtral-large-latest",
-        "mistral/magistral-small-latest",
-        "mistral/ministral-14b-latest",
-        "mistral/codestral-mamba-latest",
-        "mistral/zai-glm-5-2",
+        "mistral/zai-glm-5-3",
+        "mistral/mistral-embed",
+        "mistral/codestral-embed",
     ],
+    # Sources: docs.x.ai/docs/models, /docs/migration/may-15-retirement.
     "xAI": [
+        "xai/grok-4.7",
         "xai/grok-4.6",
         "xai/grok-4.5",
-        "xai/grok-4.3",
-        "xai/grok-4-1-fast",
-        "xai/grok-3-mini-latest",
-        "xai/grok-3-fast-latest",
-        "xai/grok-4.3-latest",
         "xai/grok-4.5-latest",
+        "xai/grok-4.3",
+        "xai/grok-4.3-latest",
         "xai/grok-4.20-0309-reasoning",
         "xai/grok-4.20-0309-non-reasoning",
         "xai/grok-build-0.1",
-        "xai/grok-3-mini-fast-latest",
+        "xai/grok-build-latest",
+        "xai/grok-imagine-image-2.0",
     ],
-    # Alibaba: HUF has a single "Alibaba" AI Provider (provider_brand
-    # "dashscope") covering Qwen/DashScope -- litellm.model_cost has no
-    # separate "alibaba" litellm_provider group, only "dashscope".
+    # Source: alibabacloud.com/help/en/model-studio/models (+ /model-depreciation).
     "Alibaba": [
-        "dashscope/qwen3-max",
-        "dashscope/qwen3.7-max",
         "dashscope/qwen3.8-max",
+        "dashscope/qwen3.8-flash",
+        "dashscope/qwen3.8-omni-flash",
+        "dashscope/qwen3.7-max",
+        "dashscope/qwen3.7-plus",
+        "dashscope/qwen3.5-plus",
         "dashscope/qwen-plus-latest",
-        "dashscope/qwen-turbo-latest",
-        "dashscope/qwen3-coder-plus",
-        "dashscope/qwen3-vl-plus",
-        "dashscope/qwen-image-3.0",
-        "dashscope/qwen-image-3.0-pro",
-        "dashscope/qwen-max",
         "dashscope/qwen-flash",
         "dashscope/qwen-coder",
-        "dashscope/qwen3.5-plus",
-        "dashscope/qwen3.7-plus",
+        "dashscope/qwen3-coder-plus",
         "dashscope/qwen3-coder-flash",
+        "dashscope/qwen3-vl-plus",
         "dashscope/qwen3-vl-235b-a22b-instruct",
         "dashscope/qwen3-vl-235b-a22b-thinking",
         "dashscope/qwen3-vl-32b-instruct",
         "dashscope/qwen3-next-80b-a3b-instruct",
         "dashscope/qwen3-next-80b-a3b-thinking",
+        "dashscope/qwen-image-3.0",
+        "dashscope/qwen-image-3.0-pro",
         "dashscope/glm-5.1",
         "dashscope/glm-5.2",
         "dashscope/qwq-plus",
     ],
+}
+
+# --------------------------------------------------------------------------
+# Stored model_names that track the provider's newest model rather than a
+# pinned snapshot. Emitted as is_latest_alias=1 on the AI Model record.
+# --------------------------------------------------------------------------
+ALIASES: set[str] = {
+    # OpenAI
+    "chat-latest",
+    # Google
+    "gemini-flash-latest", "gemini-pro-latest", "gemini-flash-lite-latest",
+    # DeepSeek: the un-versioned Flash name is re-pointed on every release.
+    "deepseek-flash",
+    # Mistral
+    "mistral-large-latest", "mistral-medium-latest", "mistral-small-latest",
+    "ministral-14b-latest", "ministral-8b-latest", "ministral-3b-latest",
+    "codestral-latest", "voxtral-mini-latest", "voxtral-mini-tts-latest",
+    # xAI
+    "grok-4.5-latest", "grok-4.3-latest", "grok-build-latest",
+    # Alibaba
+    "qwen-plus-latest",
+    # OpenRouter (live list, "~" prefix = latest-tracking router alias)
+    "~google/gemini-flash-latest", "~google/gemini-pro-latest",
+    "~anthropic/claude-opus-latest", "~anthropic/claude-sonnet-latest",
+    "~anthropic/claude-haiku-latest", "~anthropic/claude-fable-latest",
+    "~openai/gpt-sol-latest", "~openai/gpt-luna-latest", "~openai/gpt-terra-latest",
+    "~openai/gpt-astra-latest", "~openai/gpt-mini-latest", "openai/gpt-chat-latest",
+    "~x-ai/grok-latest", "~moonshotai/kimi-latest", "~z-ai/glm-latest",
+    "~deepseek/deepseek-flash-latest", "~deepseek/deepseek-pro-latest",
+    "openrouter/auto",
+}
+
+# Modalities LiteLLM's "mode" cannot express. Gemini chat models accept audio
+# and HUF's Google STT path is a multimodal completion, so the Flash alias is
+# the provider's Transcription model.
+MODALITY_OVERRIDES: dict[str, str] = {
+    "gemini-flash-latest": "Text,Vision,Transcription",
+}
+
+# --------------------------------------------------------------------------
+# Models LiteLLM has no (or no usable) entry for, written out in full. This
+# replaces the hand list that used to live in huf/install.py so that this
+# generator is the single source of truth for the seeded catalogue.
+# OpenRouter slugs and context lengths are taken from the live
+# https://openrouter.ai/api/v1/models list (retrieved 2026-10-22).
+# --------------------------------------------------------------------------
+def _e(model_name, provider, modalities, context_window=None, max_output_tokens=None, reasoning=False):
+    entry = {"model_name": model_name, "provider": provider, "modalities": modalities}
+    if context_window:
+        entry["context_window"] = context_window
+    if max_output_tokens:
+        entry["max_output_tokens"] = max_output_tokens
+    if reasoning:
+        entry["supports_reasoning"] = True
+    return entry
+
+
+_TV = "Text,Vision"
+EXTRA_MODELS: list[dict] = [
+    _e("gpt-oss-20b", "OpenAI", "Text", 131072),
+    _e("gpt-oss-120b", "OpenAI", "Text", 131072),
+    _e("eleven_flash_v2_5", "ElevenLabs", "Text-to-Speech"),
+    _e("huggingface/meta-llama/Llama-3.2-3B-Instruct", "Huggingface", "Text"),
+    # OpenRouter -- latest-tracking aliases
+    _e("~google/gemini-flash-latest", "OpenRouter", _TV, 1048576),
+    _e("~google/gemini-pro-latest", "OpenRouter", _TV, 1048576),
+    _e("~anthropic/claude-opus-latest", "OpenRouter", _TV, 1000000),
+    _e("~anthropic/claude-sonnet-latest", "OpenRouter", _TV, 1000000),
+    _e("~anthropic/claude-haiku-latest", "OpenRouter", _TV, 1000000),
+    _e("~anthropic/claude-fable-latest", "OpenRouter", _TV, 1000000),
+    _e("~openai/gpt-sol-latest", "OpenRouter", _TV, 1050000),
+    _e("~openai/gpt-luna-latest", "OpenRouter", _TV, 1050000),
+    _e("~openai/gpt-terra-latest", "OpenRouter", _TV, 1050000),
+    _e("~openai/gpt-astra-latest", "OpenRouter", _TV, 1050000),
+    _e("~openai/gpt-mini-latest", "OpenRouter", _TV, 400000),
+    _e("openai/gpt-chat-latest", "OpenRouter", _TV, 400000),
+    _e("~x-ai/grok-latest", "OpenRouter", _TV, 500000),
+    _e("~moonshotai/kimi-latest", "OpenRouter", _TV, 1048576),
+    _e("~z-ai/glm-latest", "OpenRouter", "Text", 1048576),
+    _e("~deepseek/deepseek-flash-latest", "OpenRouter", "Text", 1048576),
+    _e("~deepseek/deepseek-pro-latest", "OpenRouter", "Text", 1048576),
+    _e("openrouter/auto", "OpenRouter", _TV, 2000000),
+    _e("openrouter/free", "OpenRouter", _TV, 200000),
+    # OpenRouter -- pinned
+    _e("anthropic/claude-opus-5.5", "OpenRouter", _TV, 1000000),
+    _e("anthropic/claude-sonnet-5.5", "OpenRouter", _TV, 1000000),
+    _e("anthropic/claude-haiku-5.5", "OpenRouter", _TV, 1000000),
+    _e("anthropic/claude-opus-5", "OpenRouter", _TV, 1000000),
+    _e("anthropic/claude-sonnet-5", "OpenRouter", _TV, 1000000),
+    _e("anthropic/claude-opus-4.8", "OpenRouter", _TV, 1000000),
+    _e("anthropic/claude-sonnet-4.6", "OpenRouter", _TV, 1000000),
+    _e("anthropic/claude-haiku-4.5", "OpenRouter", _TV, 200000),
+    _e("google/gemini-4-argon", "OpenRouter", _TV, 1048576),
+    _e("google/gemini-3.8-flash", "OpenRouter", _TV, 1048576),
+    _e("google/gemini-3.6-flash", "OpenRouter", _TV, 1048576),
+    _e("google/gemini-3.5-flash-lite", "OpenRouter", _TV, 1048576),
+    _e("google/gemini-3.1-pro-preview", "OpenRouter", _TV, 1048576),
+    _e("google/gemini-3-flash-preview", "OpenRouter", _TV, 1048576),
+    _e("google/gemini-3.1-flash-image", "OpenRouter", "Image"),
+    _e("google/gemini-3-pro-image", "OpenRouter", "Image"),
+    _e("google/gemma-4-31b-it", "OpenRouter", _TV, 262144),
+    _e("google/gemma-4-26b-a4b-it", "OpenRouter", _TV, 262144),
+    _e("google/gemma-4-31b-it:free", "OpenRouter", _TV, 262144),
+    _e("google/gemma-4-26b-a4b-it:free", "OpenRouter", _TV, 262144),
+    _e("google/gemma-3-27b-it", "OpenRouter", _TV, 131072),
+    _e("openai/gpt-6.1-sol", "OpenRouter", _TV, 1050000),
+    _e("openai/gpt-6-astra", "OpenRouter", _TV, 1050000),
+    _e("openai/gpt-6-luna", "OpenRouter", _TV, 1050000),
+    _e("openai/gpt-5.6-sol", "OpenRouter", _TV, 1050000),
+    _e("openai/gpt-5.6-terra", "OpenRouter", _TV, 1050000),
+    _e("openai/gpt-5.6-luna", "OpenRouter", _TV, 1050000),
+    _e("openai/gpt-5.5", "OpenRouter", _TV, 1050000),
+    _e("openai/gpt-5.5-pro", "OpenRouter", _TV, 1050000),
+    _e("openai/gpt-5.4", "OpenRouter", _TV, 1050000),
+    _e("openai/gpt-5.4-pro", "OpenRouter", _TV, 1050000),
+    _e("openai/gpt-5.4-mini", "OpenRouter", _TV, 400000),
+    _e("openai/gpt-5.4-nano", "OpenRouter", _TV, 400000),
+    _e("openai/gpt-5.3-codex", "OpenRouter", _TV, 400000),
+    _e("openai/gpt-5.1", "OpenRouter", _TV, 400000),
+    _e("openai/gpt-5", "OpenRouter", _TV, 400000),
+    _e("openai/gpt-5-mini", "OpenRouter", _TV, 400000),
+    _e("openai/gpt-5-nano", "OpenRouter", _TV, 400000),
+    _e("openai/gpt-oss-120b", "OpenRouter", "Text", 131072),
+    _e("openai/gpt-oss-20b", "OpenRouter", "Text", 131072),
+    _e("deepseek/deepseek-v4-pro", "OpenRouter", "Text", 1048576),
+    _e("moonshotai/kimi-k3", "OpenRouter", _TV, 1048576),
+    _e("moonshotai/kimi-k2.6", "OpenRouter", _TV, 262144),
+    _e("minimax/minimax-m3", "OpenRouter", _TV, 1048576),
+    _e("minimax/minimax-m2.7", "OpenRouter", "Text", 204800),
+    _e("minimax/minimax-m2", "OpenRouter", "Text", 204800),
+    _e("z-ai/glm-5.3", "OpenRouter", "Text", 1048576),
+    _e("z-ai/glm-5.2", "OpenRouter", "Text", 1048576),
+    _e("x-ai/grok-4.7", "OpenRouter", _TV, 500000),
+    _e("qwen/qwen3.7-max", "OpenRouter", "Text", 1000000),
+    _e("qwen/qwen3.6-plus", "OpenRouter", _TV, 1000000),
+    _e("qwen/qwen3-coder", "OpenRouter", "Text", 262144),
+    _e("qwen/qwen3-vl-235b-a22b-instruct", "OpenRouter", _TV, 262144),
+    _e("mistralai/mistral-large-2512", "OpenRouter", _TV, 262144),
+    _e("xiaomi/mimo-v2.5", "OpenRouter", _TV, 1050000),
+    _e("xiaomi/mimo-v2.5-pro", "OpenRouter", "Text", 1050000),
+    _e("microsoft/phi-4", "OpenRouter", "Text", 16384),
+    _e("nvidia/nemotron-3-super-120b-a12b:free", "OpenRouter", "Text", 262144),
+    _e("nvidia/nemotron-3-ultra-550b-a55b:free", "OpenRouter", "Text", 1000000),
+    _e("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "OpenRouter", _TV, 256000),
+    _e("nvidia/nemotron-3.5-content-safety:free", "OpenRouter", _TV, 128000),
+    _e("cohere/north-mini-code:free", "OpenRouter", "Text", 256000),
+    _e("poolside/laguna-xs-2.1:free", "OpenRouter", "Text", 262144),
+    _e("poolside/laguna-s-2.1:free", "OpenRouter", "Text", 262144),
+]
+
+# --------------------------------------------------------------------------
+# Models CONFIRMED gone as of 2026-10-22, as model_name -> (provider,
+# replacement). huf.patches.v1.refresh_model_catalogue repoints configuration
+# rows to the replacement (same provider) and deletes the old row once nothing
+# references it. Only shutdowns confirmed by the provider (or IDs absent from
+# a provider's live list / never valid) belong here; merely deprecated or
+# unverified models are simply no longer seeded and are left alone on sites.
+# --------------------------------------------------------------------------
+RETIRED: dict[str, tuple[str, str]] = {
+    # Google -- Gemini 2.5 closed to new users 2026-09-18 (API returns 404
+    # "no longer available to new users"); text-embedding-004 shut 2026-01-14.
+    # ai.google.dev/gemini-api/docs/deprecations
+    "gemini-2.5-pro": ("Google", "gemini-pro-latest"),
+    "gemini-2.5-flash": ("Google", "gemini-flash-latest"),
+    "gemini-2.5-flash-lite": ("Google", "gemini-flash-lite-latest"),
+    "text-embedding-004": ("Google", "gemini-embedding-2"),
+    # OpenAI -- shut down 2026-08-10 / 2026-05-12.
+    # developers.openai.com/api/docs/deprecations
+    "gpt-5.2-chat-latest": ("OpenAI", "chat-latest"),
+    "gpt-5.3-chat-latest": ("OpenAI", "chat-latest"),
+    "dall-e-2": ("OpenAI", "gpt-image-2"),
+    "dall-e-3": ("OpenAI", "gpt-image-2"),
+    # Anthropic -- dotted IDs from the old hand list were never valid
+    # (Anthropic IDs use dashes); platform.claude.com models overview.
+    "claude-opus-4.8": ("Anthropic", "claude-opus-4-8"),
+    "claude-haiku-4.5": ("Anthropic", "claude-haiku-4-5"),
+    # Groq -- shut down 2025-12-31 .. 2026-09-14. console.groq.com/docs/deprecations
+    "groq/llama-3.3-70b-versatile": ("Groq", "groq/openai/gpt-oss-120b"),
+    "groq/llama-3.1-8b-instant": ("Groq", "groq/openai/gpt-oss-20b"),
+    "groq/meta-llama/llama-4-maverick-17b-128e-instruct": ("Groq", "groq/openai/gpt-oss-120b"),
+    "groq/meta-llama/llama-4-scout-17b-16e-instruct": ("Groq", "groq/openai/gpt-oss-120b"),
+    "groq/qwen/qwen3-32b": ("Groq", "groq/openai/gpt-oss-120b"),
+    "groq/qwen/qwen3.6-27b": ("Groq", "groq/qwen/qwen3.8-27b"),
+    "groq/playai-tts": ("Groq", "groq/canopylabs/orpheus-v1-english"),
+    # Mistral -- whole families retired (open-codestral-mamba 2025-06-06,
+    # pixtral-large 2026-05-31, all magistral/devstral by 2026-07-31,
+    # mistral-medium-2505 2026-08-31). docs.mistral.ai models overview.
+    "codestral-mamba-latest": ("Mistral", "codestral-latest"),
+    "pixtral-large-latest": ("Mistral", "mistral-medium-latest"),
+    "magistral-medium-latest": ("Mistral", "mistral-medium-latest"),
+    "magistral-small-latest": ("Mistral", "mistral-small-latest"),
+    "devstral-latest": ("Mistral", "mistral-medium-latest"),
+    "devstral-medium-latest": ("Mistral", "mistral-medium-latest"),
+    "devstral-small-latest": ("Mistral", "mistral-small-latest"),
+    "mistral-medium-3": ("Mistral", "mistral-medium-latest"),
+    # xAI -- grok-4-1-fast-* retired 2026-05-15 (redirected to grok-4.3).
+    # docs.x.ai/docs/migration/may-15-retirement
+    "grok-4-1-fast": ("xAI", "grok-4.3"),
+    # OpenRouter -- slugs absent from the live /api/v1/models list (2026-10-22).
+    "google/gemini-2.5-flash-lite-preview-06-17": ("OpenRouter", "~google/gemini-flash-latest"),
+    "google/gemini-3-pro-preview": ("OpenRouter", "google/gemini-3.1-pro-preview"),
+    "openai/chat-latest": ("OpenRouter", "openai/gpt-chat-latest"),
+    "openai/gpt-5.3-chat-latest": ("OpenRouter", "openai/gpt-chat-latest"),
+    "openai/gpt-5.2-chat-latest": ("OpenRouter", "openai/gpt-chat-latest"),
+    "openai/gpt-5-codex": ("OpenRouter", "openai/gpt-5.3-codex"),
+    "openai/gpt-oss-20b:free": ("OpenRouter", "openai/gpt-oss-20b"),
+    "x-ai/grok-4": ("OpenRouter", "~x-ai/grok-latest"),
+    "moonshotai/kimi-k2.7": ("OpenRouter", "~moonshotai/kimi-latest"),
+    "qwen/qwen3-coder-plus": ("OpenRouter", "qwen/qwen3-coder"),
+    "nvidia/nemotron-3-nano-30b-a3b:free": ("OpenRouter", "nvidia/nemotron-3-super-120b-a12b:free"),
+    "nvidia/nemotron-nano-12b-v2-vl:free": ("OpenRouter", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"),
+    "nvidia/nemotron-nano-9b-v2:free": ("OpenRouter", "nvidia/nemotron-3-super-120b-a12b:free"),
+    "poolside/laguna-m.1:free": ("OpenRouter", "poolside/laguna-s-2.1:free"),
+    "inclusionai/ling-3.0-flash:free": ("OpenRouter", "openrouter/free"),
+    "tencent/hy3:free": ("OpenRouter", "openrouter/free"),
 }
 
 
@@ -482,14 +636,14 @@ def _positive_int(value) -> int | None:
     return ivalue if ivalue > 0 else None
 
 
-def build(as_of: datetime.date, model_cost: dict) -> tuple[list[dict], list[str], dict]:
-    """Returns (models, deprecated_names, stats).
+def build(as_of: datetime.date, model_cost: dict) -> tuple[list[dict], dict]:
+    """Returns (models, stats). Candidates past their LiteLLM deprecation_date
+    (relative to ``as_of``) are skipped and counted in stats.
 
     stats: {"per_provider": {provider: count}, "excluded_deprecated": int,
             "missing_keys": {provider: [keys not found in model_cost]}}
     """
     models: dict[str, dict] = {}  # model_name -> entry (dedupe)
-    deprecated: set[str] = set()
     per_provider_count: dict[str, int] = {}
     missing_keys: dict[str, list[str]] = {}
     excluded_deprecated = 0
@@ -507,7 +661,6 @@ def build(as_of: datetime.date, model_cost: dict) -> tuple[list[dict], list[str]
             dep_date = parse_date(entry.get("deprecation_date"))
 
             if dep_date is not None and dep_date < as_of:
-                deprecated.add(model_name)
                 excluded_deprecated += 1
                 continue
 
@@ -532,61 +685,82 @@ def build(as_of: datetime.date, model_cost: dict) -> tuple[list[dict], list[str]
             if entry.get("supports_reasoning") is True:
                 record["supports_reasoning"] = True
 
-            if model_name in models and models[model_name] != record:
-                # Two candidate keys collapsed to the same stored
-                # model_name (e.g. an aliased/unprefixed litellm entry
-                # duplicating a prefixed one). Keep the first, deterministic
-                # by candidate list order.
+            if model_name in models:
+                # Two candidate keys collapsed to the same stored model_name.
+                # Keep the first, deterministic by candidate list order.
                 continue
 
             models[model_name] = record
             per_provider_count[provider] += 1
 
-    # A name cannot be both current and deprecated.
-    deprecated -= set(models.keys())
+    for extra in EXTRA_MODELS:
+        if extra["model_name"] in models:
+            raise SystemExit(f"EXTRA_MODELS entry duplicates a LiteLLM candidate: {extra['model_name']}")
+        models[extra["model_name"]] = dict(extra)
+        per_provider_count[extra["provider"]] = per_provider_count.get(extra["provider"], 0) + 1
+
+    for name, mods in MODALITY_OVERRIDES.items():
+        if name in models:
+            models[name]["modalities"] = mods
+
+    for name in ALIASES:
+        if name not in models:
+            raise SystemExit(f"ALIASES names a model that is not seeded: {name}")
+        models[name]["is_latest_alias"] = True
+
+    for old, (provider, new) in RETIRED.items():
+        if old in models:
+            raise SystemExit(f"RETIRED model is still seeded: {old}")
+        if new not in models:
+            raise SystemExit(f"RETIRED[{old!r}] -> {new!r} is not a seeded model")
+        if models[new]["provider"] != provider:
+            raise SystemExit(f"RETIRED[{old!r}] crosses providers ({provider} -> {models[new]['provider']})")
 
     sorted_models = sorted(models.values(), key=lambda m: (m["provider"], m["model_name"]))
-    sorted_deprecated = sorted(deprecated)
 
     stats = {
         "per_provider": per_provider_count,
         "excluded_deprecated": excluded_deprecated,
         "missing_keys": missing_keys,
     }
-    return sorted_models, sorted_deprecated, stats
+    return sorted_models, stats
 
 
-def render(models: list[dict], deprecated: list[str], as_of: datetime.date, litellm_version: str) -> str:
+_FIELD_ORDER = ("modalities", "context_window", "max_output_tokens", "supports_reasoning", "is_latest_alias")
+
+
+def render(models: list[dict], as_of: datetime.date, litellm_version: str) -> str:
     lines = []
     lines.append('"""Auto-generated AI Model catalogue. DO NOT EDIT BY HAND.')
     lines.append("")
-    lines.append(f"Generated by: scripts/gen_model_catalogue.py")
-    lines.append(f"litellm version: {litellm_version}")
+    lines.append("Single source of truth for the seeded AI Model catalogue: consumed by")
+    lines.append("huf/install.py::create_demo_ai_models (after_migrate upsert) and")
+    lines.append("huf.patches.v1.refresh_model_catalogue (retire + repoint).")
+    lines.append("")
+    lines.append("Generated by: scripts/gen_model_catalogue.py")
+    lines.append(f"litellm model table: {litellm_version}")
     lines.append(f"--as-of date: {as_of.isoformat()}")
-    lines.append(f"Entry count: {len(models)} models, {len(deprecated)} deprecated")
+    lines.append(f"Entry count: {len(models)} models")
     lines.append("")
     lines.append("Regenerate with:")
-    lines.append("    python scripts/gen_model_catalogue.py --as-of " + as_of.isoformat())
+    lines.append("    python scripts/gen_model_catalogue.py --as-of " + as_of.isoformat()
+                 + " [--model-cost-json model_prices_and_context_window.json]")
     lines.append('"""')
     lines.append("")
     lines.append("MODELS = [")
     for m in models:
         parts = [f'"model_name": {m["model_name"]!r}', f'"provider": {m["provider"]!r}']
-        if "modalities" in m:
-            parts.append(f'"modalities": {m["modalities"]!r}')
-        if "context_window" in m:
-            parts.append(f'"context_window": {m["context_window"]!r}')
-        if "max_output_tokens" in m:
-            parts.append(f'"max_output_tokens": {m["max_output_tokens"]!r}')
-        if "supports_reasoning" in m:
-            parts.append(f'"supports_reasoning": {m["supports_reasoning"]!r}')
+        for field in _FIELD_ORDER:
+            if field in m:
+                parts.append(f'"{field}": {m[field]!r}')
         lines.append("    {" + ", ".join(parts) + "},")
     lines.append("]")
     lines.append("")
-    lines.append("DEPRECATED = (")
-    for name in deprecated:
-        lines.append(f"    {name!r},")
-    lines.append(")")
+    lines.append("# Confirmed-retired model_name -> (provider, replacement model_name).")
+    lines.append("RETIRED = {")
+    for name in sorted(RETIRED):
+        lines.append(f"    {name!r}: {RETIRED[name]!r},")
+    lines.append("}")
     lines.append("")
     return "\n".join(lines)
 
@@ -606,6 +780,13 @@ def main() -> int:
         help="Output path for the generated module (default: huf/ai/model_catalogue.py "
              "relative to the repo root inferred from this script's location).",
     )
+    parser.add_argument(
+        "--model-cost-json",
+        default=None,
+        help="Path to LiteLLM's model_prices_and_context_window.json to use instead of "
+             "the installed litellm package's bundled table (lets the catalogue track "
+             "upstream without upgrading litellm).",
+    )
     args = parser.parse_args()
 
     as_of = datetime.date.fromisoformat(args.as_of)
@@ -617,17 +798,24 @@ def main() -> int:
     except Exception:
         pass
 
-    model_cost = litellm.model_cost
+    if args.model_cost_json:
+        import json
 
-    models, deprecated, stats = build(as_of, model_cost)
+        model_cost = json.loads(Path(args.model_cost_json).read_text())
+        model_cost.pop("sample_spec", None)
+        litellm_version = f"{Path(args.model_cost_json).name} (BerriAI/litellm main)"
+    else:
+        model_cost = litellm.model_cost
+
+    models, stats = build(as_of, model_cost)
 
     out_path = Path(args.out) if args.out else (
         Path(__file__).resolve().parent.parent / "huf" / "ai" / "model_catalogue.py"
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(render(models, deprecated, as_of, litellm_version))
+    out_path.write_text(render(models, as_of, litellm_version))
 
-    print(f"Wrote {out_path} ({len(models)} models, {len(deprecated)} deprecated)")
+    print(f"Wrote {out_path} ({len(models)} models)")
     print(f"litellm version: {litellm_version}")
     print(f"as-of: {as_of.isoformat()}")
     print("Per-provider counts:")

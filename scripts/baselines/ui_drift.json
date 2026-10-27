@@ -1,0 +1,713 @@
+{
+  "files": {
+    "components/FlowCanvas.tsx": {
+      "fixed_height": 3,
+      "inline_style": 1
+    },
+    "components/FlowValueInput.tsx": {
+      "text_px": 2
+    },
+    "components/FlowsHeaderActions.tsx": {
+      "fixed_height": 2,
+      "text_px": 5
+    },
+    "components/FlowsSidebarContent.tsx": {
+      "fixed_height": 2
+    },
+    "components/IconRail.tsx": {
+      "inline_style": 1
+    },
+    "components/JsonSchemaForm.tsx": {
+      "fixed_height": 6,
+      "inline_style": 1,
+      "raw_element": 1,
+      "text_px": 9
+    },
+    "components/ProposeProcedureDialog.tsx": {
+      "fixed_height": 1,
+      "raw_element": 1,
+      "text_px": 1
+    },
+    "components/RightSidebar.tsx": {
+      "fixed_height": 1,
+      "inline_style": 1,
+      "text_px": 10
+    },
+    "components/agent/AdvancedTab.tsx": {
+      "hex_colour": 2,
+      "raw_element": 1
+    },
+    "components/agent/AutomationsTab.tsx": {
+      "text_px": 1
+    },
+    "components/agent/DefaultPlanTable.tsx": {
+      "fixed_height": 2
+    },
+    "components/agent/KnowledgeTab.tsx": {
+      "text_px": 1
+    },
+    "components/agent/ProcedureBindingsTab.tsx": {
+      "text_px": 2
+    },
+    "components/agent/PromptLibraryTabs.tsx": {
+      "text_px": 1
+    },
+    "components/agent/SkillsTab.tsx": {
+      "text_px": 1
+    },
+    "components/agent/ToolsTab.tsx": {
+      "fixed_height": 1,
+      "text_px": 1
+    },
+    "components/agent/VoiceTab.tsx": {
+      "raw_element": 5
+    },
+    "components/ai-elements/connection.tsx": {
+      "hex_colour": 1
+    },
+    "components/ai-elements/context.tsx": {
+      "inline_style": 2
+    },
+    "components/ai-elements/edge.tsx": {
+      "inline_style": 1
+    },
+    "components/ai-elements/loader.tsx": {
+      "inline_style": 1
+    },
+    "components/ai-elements/message.tsx": {
+      "text_px": 1
+    },
+    "components/ai-elements/prompt-input.tsx": {
+      "raw_element": 1
+    },
+    "components/ai-elements/speech-input.tsx": {
+      "inline_style": 1,
+      "text_px": 1
+    },
+    "components/ai-elements/tool.tsx": {
+      "text_px": 16
+    },
+    "components/ai-elements/web-preview.tsx": {
+      "fixed_height": 2
+    },
+    "components/app-sidebar-header.tsx": {
+      "text_px": 1
+    },
+    "components/batchJobs/BatchJobDetailDialog.tsx": {
+      "text_px": 7
+    },
+    "components/capabilities/ActionDetail.tsx": {
+      "text_px": 3
+    },
+    "components/capabilities/AppPicker.tsx": {
+      "text_px": 1
+    },
+    "components/capabilities/CapabilityCard.tsx": {
+      "text_px": 1
+    },
+    "components/category/CategoryModal.tsx": {
+      "hex_colour": 8,
+      "inline_style": 2,
+      "raw_element": 1,
+      "text_px": 1
+    },
+    "components/category/CategoryTab.tsx": {
+      "fixed_height": 2,
+      "hex_colour": 1,
+      "inline_style": 2,
+      "text_px": 1
+    },
+    "components/category/SummaryPromptCategoriesModal.tsx": {
+      "fixed_height": 1,
+      "hex_colour": 5,
+      "inline_style": 1
+    },
+    "components/chat-only/ChatHeader.tsx": {
+      "fixed_height": 1
+    },
+    "components/chat/ArtifactsPanel.tsx": {
+      "text_px": 3
+    },
+    "components/chat/ChatAvatar.tsx": {
+      "text_px": 2
+    },
+    "components/chat/ChatErrorCard.tsx": {
+      "fixed_height": 1
+    },
+    "components/chat/ChatInput.tsx": {
+      "inline_style": 1,
+      "raw_element": 2,
+      "text_px": 4
+    },
+    "components/chat/ChatMessage.tsx": {
+      "text_px": 3
+    },
+    "components/chat/ChatWindowHeader.tsx": {
+      "fixed_height": 7,
+      "inline_style": 1,
+      "raw_element": 1,
+      "text_px": 15
+    },
+    "components/chat/ConversationTitle.tsx": {
+      "raw_element": 1
+    },
+    "components/chat/DocumentPreview.tsx": {
+      "inline_style": 1
+    },
+    "components/chat/EmptyChatState.tsx": {
+      "text_px": 5
+    },
+    "components/chat/OutputsCard.tsx": {
+      "text_px": 2
+    },
+    "components/chat/VoiceCallOverlay.tsx": {
+      "inline_style": 1
+    },
+    "components/chat/analytics/ContextGrowthChart.tsx": {
+      "text_px": 1
+    },
+    "components/chat/analytics/ConversationAnalyticsPane.tsx": {
+      "inline_style": 1,
+      "text_px": 15
+    },
+    "components/chat/analytics/RightPaneTabStrip.tsx": {
+      "inline_style": 1,
+      "text_px": 1
+    },
+    "components/chat/artifacts/ArtifactPreviewPane.tsx": {
+      "inline_style": 1,
+      "text_px": 3
+    },
+    "components/chat/desktop/DesktopHostBadge.tsx": {
+      "text_px": 1
+    },
+    "components/chat/desktop/DesktopPermissionModeControl.tsx": {
+      "fixed_height": 1,
+      "text_px": 3
+    },
+    "components/chat/desktop/DesktopRunBanner.tsx": {
+      "fixed_height": 3,
+      "text_px": 1
+    },
+    "components/chat/frappe-views/FrappeFormView.tsx": {
+      "fixed_height": 1,
+      "text_px": 2
+    },
+    "components/chat/frappe-views/FrappeListView.tsx": {
+      "fixed_height": 3,
+      "text_px": 2
+    },
+    "components/chat/frappe-views/FrappeReportView.tsx": {
+      "fixed_height": 1,
+      "text_px": 4
+    },
+    "components/chat/projects/MoveToProjectDialog.tsx": {
+      "text_px": 3
+    },
+    "components/chat/projects/ProjectHeader.tsx": {
+      "text_px": 2
+    },
+    "components/chat/projects/ProjectList.tsx": {
+      "text_px": 3
+    },
+    "components/chat/rail/ChatRailFooter.tsx": {
+      "text_px": 2
+    },
+    "components/chat/rail/ChatRailHistory.tsx": {
+      "text_px": 5
+    },
+    "components/chat/rail/ChatRailNav.tsx": {
+      "text_px": 3
+    },
+    "components/chat/rail/ChatShellFrame.tsx": {
+      "fixed_height": 1
+    },
+    "components/common/BrandIcons.tsx": {
+      "hex_colour": 18
+    },
+    "components/common/ExperimentalBadge.tsx": {
+      "text_px": 2
+    },
+    "components/dashboard/DataListView.tsx": {
+      "fixed_height": 1
+    },
+    "components/dashboard/cards/ItemCard.tsx": {
+      "fixed_height": 2,
+      "inline_style": 1,
+      "text_px": 2
+    },
+    "components/dashboard/cards/MetricGauge.tsx": {
+      "text_px": 3
+    },
+    "components/dashboard/layouts/PageSection.tsx": {
+      "text_px": 2
+    },
+    "components/dashboard/ledger/LedgerSection.tsx": {
+      "text_px": 5
+    },
+    "components/dashboard/views/ActiveAgentsTab.tsx": {
+      "text_px": 2
+    },
+    "components/dashboard/views/ActiveFlowsTab.tsx": {
+      "text_px": 2
+    },
+    "components/dashboard/views/EmptyState.tsx": {
+      "text_px": 7
+    },
+    "components/dashboard/views/RecentExecutionsTab.tsx": {
+      "text_px": 2
+    },
+    "components/data-table/AppTablesSection.tsx": {
+      "text_px": 2
+    },
+    "components/data-table/BulkImportModal.tsx": {
+      "raw_element": 1
+    },
+    "components/data-table/DataRecordForm.tsx": {
+      "inline_style": 1
+    },
+    "components/data-table/DataRecordFormLayout.tsx": {
+      "fixed_height": 1,
+      "raw_element": 1,
+      "text_px": 1
+    },
+    "components/data-table/DataRecordList.tsx": {
+      "fixed_height": 3,
+      "inline_style": 1
+    },
+    "components/data-table/DeleteTableDialog.tsx": {
+      "fixed_height": 1
+    },
+    "components/data-table/FieldCard.tsx": {
+      "fixed_height": 2,
+      "text_px": 1
+    },
+    "components/data-table/FieldConfigPanel.tsx": {
+      "fixed_height": 4,
+      "text_px": 2
+    },
+    "components/data-table/FieldTypeSelector.tsx": {
+      "fixed_height": 1
+    },
+    "components/data-table/LinkFieldInput.tsx": {
+      "fixed_height": 1
+    },
+    "components/data-table/TableAgentAccessModal.tsx": {
+      "raw_element": 1
+    },
+    "components/data-table/TableSettingsPanel.tsx": {
+      "fixed_height": 5,
+      "text_px": 1
+    },
+    "components/edges/InsertableEdge.tsx": {
+      "inline_style": 1
+    },
+    "components/execution-profile/ExecutionProfilePermissionCard.tsx": {
+      "fixed_height": 1
+    },
+    "components/executions/ExecutionAnalyticsDashboard.tsx": {
+      "text_px": 2
+    },
+    "components/executions/RunFeedbackActions.tsx": {
+      "fixed_height": 2
+    },
+    "components/hub/AutoGrowTextarea.tsx": {
+      "raw_element": 1
+    },
+    "components/hub/HubAskUser.tsx": {
+      "text_px": 2
+    },
+    "components/hub/HubConversationView.tsx": {
+      "text_px": 1
+    },
+    "components/hub/HubRecentChats.tsx": {
+      "text_px": 1
+    },
+    "components/hub/SlashCommandMenu.tsx": {
+      "inline_style": 2,
+      "text_px": 1
+    },
+    "components/integration-services/CredentialSchemaCard.tsx": {
+      "fixed_height": 1
+    },
+    "components/integrations/AddIntegrationToAgentModal.tsx": {
+      "raw_element": 2
+    },
+    "components/knowledge/GeneralTab.tsx": {
+      "raw_element": 1
+    },
+    "components/meetings/MeetingChatPanel.tsx": {
+      "text_px": 1
+    },
+    "components/meetings/MeetingStatusSummary.tsx": {
+      "text_px": 1
+    },
+    "components/meetings/MeetingSummaryPanel.tsx": {
+      "text_px": 1
+    },
+    "components/meetings/PostMeetingContextPanel.tsx": {
+      "text_px": 1
+    },
+    "components/meetings/RecordingStatusPill.tsx": {
+      "text_px": 4
+    },
+    "components/memory/MemoryCard.tsx": {
+      "fixed_height": 1
+    },
+    "components/modals/NodeSelectionModal.tsx": {
+      "inline_style": 1,
+      "text_px": 1
+    },
+    "components/nav-user.tsx": {
+      "inline_style": 1,
+      "text_px": 2
+    },
+    "components/nodes/ActionNode.tsx": {
+      "fixed_height": 1
+    },
+    "components/nodes/EndNode.tsx": {
+      "fixed_height": 1
+    },
+    "components/nodes/TriggerNode.tsx": {
+      "fixed_height": 1,
+      "text_px": 1
+    },
+    "components/playground/CompareView.tsx": {
+      "raw_element": 1,
+      "text_px": 1
+    },
+    "components/playground/ConfigStrip.tsx": {
+      "raw_element": 2
+    },
+    "components/playground/DecisionRuntimePreview.tsx": {
+      "text_px": 4
+    },
+    "components/playground/PromptPanel.tsx": {
+      "text_px": 2
+    },
+    "components/playground/ResponsePanel.tsx": {
+      "text_px": 2
+    },
+    "components/playground/RunLedger.tsx": {
+      "text_px": 1
+    },
+    "components/playground/SaveTemplateDialog.tsx": {
+      "raw_element": 4
+    },
+    "components/playground/TraceRail.tsx": {
+      "text_px": 1
+    },
+    "components/settings/AddOnsTab.tsx": {
+      "text_px": 4
+    },
+    "components/settings/FeatureCard.tsx": {
+      "text_px": 3
+    },
+    "components/settings/GeneralSettingsTab.tsx": {
+      "hex_colour": 16,
+      "inline_style": 1,
+      "raw_element": 1
+    },
+    "components/solutions/EntryPointSheet.tsx": {
+      "raw_element": 9
+    },
+    "components/solutions/PurposeFilter.tsx": {
+      "fixed_height": 1
+    },
+    "components/solutions/SolutionAnsweredByPicker.tsx": {
+      "raw_element": 2
+    },
+    "components/solutions/SolutionCard.tsx": {
+      "text_px": 1
+    },
+    "components/solutions/SolutionConversationsTab.tsx": {
+      "raw_element": 2
+    },
+    "components/solutions/SolutionOverviewTab.tsx": {
+      "inline_style": 1
+    },
+    "components/solutions/SolutionTemplatesTab.tsx": {
+      "raw_element": 2
+    },
+    "components/solutions/TestChat.tsx": {
+      "raw_element": 6,
+      "text_px": 1
+    },
+    "components/solutions/wizard/EntryPointsStep.tsx": {
+      "raw_element": 2
+    },
+    "components/solutions/wizard/NameAndPurposeStep.tsx": {
+      "raw_element": 3
+    },
+    "components/solutions/wizard/TestStep.tsx": {
+      "raw_element": 2
+    },
+    "components/telegram/AccessTab.tsx": {
+      "text_px": 1
+    },
+    "components/telegram/CommandsTab.tsx": {
+      "raw_element": 2
+    },
+    "components/telegram/MessageDetailSheet.tsx": {
+      "text_px": 1
+    },
+    "components/telegram/MessagesTab.tsx": {
+      "text_px": 1
+    },
+    "components/telegram/SettingsTab.tsx": {
+      "raw_element": 1
+    },
+    "components/telegram/templates/ButtonsEditor.tsx": {
+      "raw_element": 2
+    },
+    "components/telegram/templates/SendTestDialog.tsx": {
+      "raw_element": 1
+    },
+    "components/telegram/templates/TemplateEditor.tsx": {
+      "fixed_height": 1,
+      "raw_element": 2
+    },
+    "components/telegram/templates/TemplatePreview.tsx": {
+      "text_px": 1
+    },
+    "components/tools/HttpHeaderCard.tsx": {
+      "fixed_height": 1
+    },
+    "components/tools/ParameterCard.tsx": {
+      "fixed_height": 1
+    },
+    "components/tools/SelectToolsModal.tsx": {
+      "fixed_height": 1,
+      "text_px": 2
+    },
+    "components/tools/ToolCard.tsx": {
+      "text_px": 3
+    },
+    "components/ui/VariablePicker.tsx": {
+      "fixed_height": 1,
+      "text_px": 1
+    },
+    "components/ui/badge.tsx": {
+      "text_px": 5
+    },
+    "components/ui/breadcrumb.tsx": {
+      "text_px": 2
+    },
+    "components/ui/carousel.tsx": {
+      "fixed_height": 2
+    },
+    "components/ui/chart.tsx": {
+      "hex_colour": 5,
+      "inline_style": 1
+    },
+    "components/ui/context-bar.tsx": {
+      "inline_style": 5,
+      "text_px": 2
+    },
+    "components/ui/json-viewer.tsx": {
+      "fixed_height": 1
+    },
+    "components/ui/jsx-preview.tsx": {
+      "hex_colour": 12,
+      "inline_style": 1
+    },
+    "components/ui/multi-select-combobox.tsx": {
+      "fixed_height": 1
+    },
+    "components/ui/progress.tsx": {
+      "inline_style": 1
+    },
+    "components/ui/resource-state.tsx": {
+      "text_px": 3
+    },
+    "components/ui/shortcut-key.tsx": {
+      "text_px": 1
+    },
+    "components/ui/sidebar.tsx": {
+      "fixed_height": 2,
+      "inline_style": 2
+    },
+    "components/ui/tabs.tsx": {
+      "inline_style": 1,
+      "text_px": 1
+    },
+    "components/whatsapp/AccessTab.tsx": {
+      "text_px": 1
+    },
+    "components/whatsapp/BridgeUnavailable.tsx": {
+      "text_px": 1
+    },
+    "components/whatsapp/DraftsPanel.tsx": {
+      "text_px": 1
+    },
+    "components/whatsapp/ManagerLink.tsx": {
+      "fixed_height": 1,
+      "text_px": 1
+    },
+    "components/whatsapp/MessageDetailSheet.tsx": {
+      "text_px": 1
+    },
+    "components/whatsapp/MessageLogTab.tsx": {
+      "raw_element": 2,
+      "text_px": 1
+    },
+    "components/whatsapp/SendForms.tsx": {
+      "raw_element": 4
+    },
+    "components/whatsapp/SendPanel.tsx": {
+      "text_px": 1
+    },
+    "components/whatsapp/TemplateBadges.tsx": {
+      "text_px": 1
+    },
+    "components/whatsapp/TemplateDetailPane.tsx": {
+      "text_px": 3
+    },
+    "components/whatsapp/TemplatePreview.tsx": {
+      "text_px": 1
+    },
+    "components/whatsapp/TemplateWizard/BodySection.tsx": {
+      "fixed_height": 2
+    },
+    "components/whatsapp/TemplateWizard/ButtonsSection.tsx": {
+      "fixed_height": 3,
+      "text_px": 3
+    },
+    "components/whatsapp/TemplateWizard/FailureAlert.tsx": {
+      "text_px": 1
+    },
+    "components/whatsapp/TemplateWizard/HeaderSection.tsx": {
+      "raw_element": 1
+    },
+    "components/whatsapp/TemplateWizard/SetupSection.tsx": {
+      "fixed_height": 1,
+      "text_px": 1
+    },
+    "components/whatsapp/TemplateWizard/TypeStep.tsx": {
+      "raw_element": 1
+    },
+    "components/whatsapp/TemplateWizard/WriteStep.tsx": {
+      "text_px": 2
+    },
+    "components/whatsapp/TemplatesTab.tsx": {
+      "text_px": 1
+    },
+    "components/whatsapp/overview/SolutionsOnNumberCard.tsx": {
+      "inline_style": 1
+    },
+    "layouts/UnifiedHeader.tsx": {
+      "text_px": 2
+    },
+    "pages/AgentPromptFormPage.tsx": {
+      "fixed_height": 1
+    },
+    "pages/AgentPromptsPage.tsx": {
+      "fixed_height": 2
+    },
+    "pages/AgentRunDetailPage.tsx": {
+      "fixed_height": 4,
+      "text_px": 8
+    },
+    "pages/AgentSummaryPromptFormPage.tsx": {
+      "fixed_height": 1
+    },
+    "pages/AgentSummaryPromptsPage.tsx": {
+      "fixed_height": 2
+    },
+    "pages/AiProvidersPage.tsx": {
+      "text_px": 5
+    },
+    "pages/AnalyticsEntityDetailPage.tsx": {
+      "text_px": 5
+    },
+    "pages/AnalyticsPage.tsx": {
+      "fixed_height": 3,
+      "inline_style": 1,
+      "text_px": 17
+    },
+    "pages/AppsPage.tsx": {
+      "fixed_height": 3
+    },
+    "pages/ArtifactViewPage.tsx": {
+      "inline_style": 1
+    },
+    "pages/BatchJobsPage.tsx": {
+      "text_px": 6
+    },
+    "pages/DataRecordViewPage.tsx": {
+      "inline_style": 1
+    },
+    "pages/DataTableViewPage.tsx": {
+      "fixed_height": 1
+    },
+    "pages/ExecutionProfileFormPage.tsx": {
+      "text_px": 2
+    },
+    "pages/ExecutionProfilesPage.tsx": {
+      "fixed_height": 1,
+      "text_px": 8
+    },
+    "pages/Executions.tsx": {
+      "fixed_height": 4,
+      "text_px": 11
+    },
+    "pages/GatewaysPage.tsx": {
+      "text_px": 2
+    },
+    "pages/GeneralSettingsPage.tsx": {
+      "inline_style": 1
+    },
+    "pages/HomePage.tsx": {
+      "text_px": 2
+    },
+    "pages/HubSimplePage.tsx": {
+      "inline_style": 1
+    },
+    "pages/HufRoleFormPage.tsx": {
+      "text_px": 2
+    },
+    "pages/NetworkAccessPoliciesPage.tsx": {
+      "fixed_height": 1,
+      "text_px": 4
+    },
+    "pages/NetworkAccessPolicyFormPage.tsx": {
+      "text_px": 2
+    },
+    "pages/RolesPage.tsx": {
+      "text_px": 7
+    },
+    "pages/SSHConnectionFormPage.tsx": {
+      "text_px": 12
+    },
+    "pages/SSHConnectionsPage.tsx": {
+      "fixed_height": 1,
+      "text_px": 10
+    },
+    "pages/TelegramAppPage.tsx": {
+      "hex_colour": 14
+    },
+    "pages/UsersPage.tsx": {
+      "fixed_height": 1,
+      "hex_colour": 16,
+      "raw_element": 3,
+      "text_px": 7
+    },
+    "pages/automation/AutomationFormPage.tsx": {
+      "text_px": 2
+    },
+    "pages/chat/ChatProjectPage.tsx": {
+      "text_px": 5
+    },
+    "pages/chat/ChatProjectsPage.tsx": {
+      "text_px": 2
+    }
+  },
+  "totals": {
+    "fixed_height": 115,
+    "hex_colour": 98,
+    "inline_style": 48,
+    "raw_element": 76,
+    "text_px": 390
+  },
+  "version": 1
+}

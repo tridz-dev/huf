@@ -1,0 +1,1 @@
+{"object":"whatsapp_business_account","entry":[{"id":"102290129340398","changes":[{"field":"account_update","value":{"event":"ACCOUNT_RESTRICTION","restriction_info":[{"restriction_type":"RESTRICTED_ADD_PHONE_NUMBER_ACTION","expiration":"2026-11-01T00:00:00Z"}]}}]}]}

@@ -34,16 +34,20 @@ import {
   UserCheck,
   Wrench,
   Globe,
+  Save,
+  Trash2,
+  FilePlus,
   type LucideIcon
 } from 'lucide-react';
 import { triggerOptions } from '../../data/triggers';
 import { actionOptions } from '../../data/actions';
-import { TriggerConfig, ActionConfig, ScheduleIntervalType, DocEventType, AppTriggerIntegration } from '../../types/flow.types';
+import { TriggerConfig, ActionConfig, AppTriggerIntegration } from '../../types/flow.types';
 import type { ActionOption } from '../../types/modal.types';
 import { getAgents, getDocTypes } from '../../services/agentApi';
 import type { AgentDoc } from '../../types/agent.types';
-import { Combobox } from '../ui/combobox';
 import { toast } from 'sonner';
+import { createWebhookTriggerDefaults } from '../../lib/flowWebhookConfig';
+import { copyText } from '@/lib/clipboard';
 
 interface NodeSelectionModalProps {
   open: boolean;
@@ -75,7 +79,10 @@ const iconMap: Record<string, LucideIcon> = {
   UserCheck,
   Bot,
   Wrench,
-  Globe
+  Globe,
+  Save,
+  Trash2,
+  FilePlus
 };
 
 type MainTab = 'triggers' | 'actions';
@@ -184,23 +191,15 @@ export function NodeSelectionModal({
   const handleSelectTrigger = (triggerId: string) => {
     setSelectedItem(triggerId);
     if (triggerId === 'webhook') {
-      setTriggerConfig({
-        type: 'webhook',
-        url: `${window.location.origin}/api/method/huf.ai.flow_api.flow_webhook`,
-        apiKey: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join(''),
-        method: 'POST'
-      });
+      // Canonical key name is `auth`: RightSidebar reads and writes it there.
+      setTriggerConfig(createWebhookTriggerDefaults(window.location.origin));
     } else if (triggerId === 'schedule') {
       setTriggerConfig({
-        type: 'schedule',
-        intervalType: 'hours',
-        interval: 1
+        type: 'schedule'
       });
     } else if (triggerId === 'doc-event') {
       setTriggerConfig({
-        type: 'doc-event',
-        doctype: '',
-        event: 'save'
+        type: 'doc-event'
       });
     } else if (triggerId.includes('gmail') || triggerId.includes('slack')) {
       setTriggerConfig({
@@ -232,7 +231,15 @@ export function NodeSelectionModal({
     } else if (actionId === 'http-request') {
       config = { type: 'http-request', url: '', method: 'GET', timeout: 30 };
     } else if (actionId === 'transform') {
-      config = { type: 'transform', transformations: [] };
+      config = { type: 'transform', op: 'lower', input: {} };
+    } else if (actionId === 'state-get') {
+      config = { type: 'state-get', key: '' };
+    } else if (actionId === 'state-set') {
+      config = { type: 'state-set', key: '', value: '' };
+    } else if (actionId === 'state-delete') {
+      config = { type: 'state-delete', key: '' };
+    } else if (actionId === 'doc-create') {
+      config = { type: 'doc-create', doctype: '', fields: {} };
     } else if (actionId === 'email') {
       config = { type: 'tool-call', tool_name: 'gmail_send_email', args: {}, output: { save_result_to_context: '' } };
     } else if (actionId === 'slack') {
@@ -271,9 +278,9 @@ export function NodeSelectionModal({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  navigator.clipboard.writeText(config.url || '');
-                  toast.success('Copied to clipboard');
+                onClick={async () => {
+                  if (await copyText(config.url || '')) toast.success('Copied to clipboard');
+                  else toast.error("Couldn't copy. Select the text and copy it yourself.");
                 }}
               >
                 Copy
@@ -304,8 +311,8 @@ export function NodeSelectionModal({
             <Label htmlFor="api-key">Security — API key (optional)</Label>
             <Input
               id="api-key"
-              value={config.apiKey || ''}
-              onChange={(e) => setTriggerConfig({ ...config, apiKey: e.target.value })}
+              value={config.auth || ''}
+              onChange={(e) => setTriggerConfig({ ...config, auth: e.target.value })}
               placeholder="Enter API key to require X-API-Key header"
             />
           </div>
@@ -340,101 +347,12 @@ export function NodeSelectionModal({
       );
     }
 
-    if (config.type === 'schedule') {
+    if (config.type === 'schedule' || config.type === 'doc-event') {
       return (
-        <div className="space-y-4 mt-4">
-          <div>
-            <Label htmlFor="interval-type">Schedule type</Label>
-            <Select
-              value={config.intervalType}
-              onValueChange={(value) =>
-                setTriggerConfig({ ...config, intervalType: value as ScheduleIntervalType })
-              }
-            >
-              <SelectTrigger id="interval-type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="minutes">Minutes</SelectItem>
-                <SelectItem value="hours">Hours</SelectItem>
-                <SelectItem value="days">Days</SelectItem>
-                <SelectItem value="custom">Custom (cron)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {config.intervalType !== 'custom' && (
-            <div>
-              <Label htmlFor="interval">Interval</Label>
-              <Input
-                id="interval"
-                type="number"
-                min="1"
-                value={config.interval || 1}
-                onChange={(e) =>
-                  setTriggerConfig({ ...config, interval: parseInt(e.target.value) })
-                }
-              />
-            </div>
-          )}
-          {config.intervalType === 'custom' && (
-            <div>
-              <Label htmlFor="cron">Cron expression</Label>
-              <Input
-                id="cron"
-                value={config.cronExpression || ''}
-                onChange={(e) =>
-                  setTriggerConfig({ ...config, cronExpression: e.target.value })
-                }
-                placeholder="0 */6 * * *"
-              />
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (config.type === 'doc-event') {
-      const comboboxOptions = docTypes.map((dt) => ({
-        value: dt.name,
-        label: dt.name,
-      }));
-
-      return (
-        <div className="space-y-4 mt-4">
-          <div>
-            <Label htmlFor="doctype">Document type</Label>
-            <Combobox
-              options={comboboxOptions}
-              value={config.doctype || ''}
-              onValueChange={(value) => setTriggerConfig({ ...config, doctype: value })}
-              placeholder={loadingDocTypes ? 'Loading...' : 'Select DocType...'}
-              disabled={loadingDocTypes}
-              searchPlaceholder="Search DocType..."
-              emptyText="No DocType found."
-            />
-          </div>
-          <div>
-            <Label htmlFor="event">Event type</Label>
-            <Select
-              value={config.event}
-              onValueChange={(value) =>
-                setTriggerConfig({ ...config, event: value as DocEventType })
-              }
-            >
-              <SelectTrigger id="event">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="save">Save</SelectItem>
-                <SelectItem value="update">Update</SelectItem>
-                <SelectItem value="delete">Delete</SelectItem>
-                <SelectItem value="before-save">Before save</SelectItem>
-                <SelectItem value="before-update">Before update</SelectItem>
-                <SelectItem value="before-delete">Before delete</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Add the node, then set the {config.type === 'schedule' ? 'schedule' : 'document event'} in the
+          sidebar. It is saved as an Automation on the flow's Procedure once the flow is saved.
+        </p>
       );
     }
 
@@ -713,7 +631,7 @@ export function NodeSelectionModal({
             {renderActionCategory('AI & Agents', agentActions)}
             {renderActionCategory('Tools', toolActions)}
             {renderActionCategory('Control Flow', controlActions)}
-            {renderActionCategory('Transform', transformActions)}
+            {renderActionCategory('Transform & State', transformActions)}
             {renderActionCategory('Utilities', utilityActions)}
             {renderActionCategory('Integrations', integrationActions)}
           </TabsContent>

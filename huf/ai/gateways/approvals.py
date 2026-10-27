@@ -199,7 +199,7 @@ def _decision_fn(kind, choice):
 		from huf.huf.doctype.agent_execution_approval import agent_execution_approval as mod
 
 		return mod.approve_execution if choice == "approve" else mod.reject_execution
-	from huf.ai import flow_api
+	from huf.ai.flow import api as flow_api
 
 	return flow_api.approve_flow_run if choice == "approve" else flow_api.reject_flow_run
 

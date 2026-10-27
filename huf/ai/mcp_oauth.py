@@ -15,7 +15,9 @@ import hashlib
 import json
 import os
 import secrets
+import time
 import urllib.parse
+import uuid
 from datetime import timedelta
 from typing import Optional
 
@@ -258,13 +260,57 @@ def get_valid_access_token(server_name: str) -> str:
     return access_token
 
 
+_REFRESH_LOCK_TTL_SECONDS = 60
+_REFRESH_LOCK_WAIT_SECONDS = 30
+_REFRESH_LOCK_POLL_SECONDS = 0.25
+
+
+def _refresh_lock_key(server_name: str) -> str:
+    return f"mcp_oauth_refresh:{getattr(frappe.local, 'site', '')}:{server_name}"
+
+
 def refresh_oauth_token(server_name: str) -> str:
     """
     Use the stored refresh_token to get a new access token.
     Updates the stored tokens on success.
     Sets oauth_status = "Token Expired" on failure.
     Returns the new access token string.
+
+    Serialized per MCP Server: refresh tokens may be single-use (rotated), so two
+    concurrent refreshes would invalidate each other. A caller that had to wait for
+    the lock and finds the access token already replaced reuses it instead of
+    refreshing again.
     """
+    lock_key = _refresh_lock_key(server_name)
+    lock_value = uuid.uuid4().hex
+    # The token the caller saw fail; a waiter that finds it replaced reuses the new one.
+    token_before = _read_access_token(server_name)
+
+    deadline = time.monotonic() + _REFRESH_LOCK_WAIT_SECONDS
+    while not frappe.cache().set(lock_key, lock_value, ex=_REFRESH_LOCK_TTL_SECONDS, nx=True):
+        if time.monotonic() >= deadline:
+            raise ValueError(f"Timed out waiting for another token refresh of MCP Server '{server_name}'.")
+        time.sleep(_REFRESH_LOCK_POLL_SECONDS)
+
+    try:
+        token_now = _read_access_token(server_name)
+        if token_now and token_now != token_before:
+            return token_now
+        return _refresh_oauth_token_unlocked(server_name)
+    finally:
+        # Only release a lock we still own: after TTL expiry another caller may hold it.
+        if frappe.cache().get(lock_key) in (lock_value, lock_value.encode()):
+            frappe.cache().delete(lock_key)
+
+
+def _read_access_token(server_name: str):
+    try:
+        return frappe.get_doc("MCP Server", server_name).get_password("oauth_access_token")
+    except Exception:  # boundary: token read is advisory for the lock fast-path
+        return None
+
+
+def _refresh_oauth_token_unlocked(server_name: str) -> str:
     server = frappe.get_doc("MCP Server", server_name)
     config = _get_effective_oauth_config(server)
 

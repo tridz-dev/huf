@@ -121,6 +121,7 @@
 		</div>
 	</div>
 
+	<script src="/assets/huf/js/agent-chat-core.js"></script>
 	<script>
 		if (!window.csrf_token) {
 			const cookie = document.cookie.split(";").find(c => c.trim().startsWith("csrf_token="));
@@ -147,7 +148,6 @@
 		const recordingTimerEl = document.getElementById("recording-timer");
 		const waveformCanvas = document.getElementById("waveform-canvas");
 
-		let conversationId = null;
 		let isRecording = false;
 		let recordingSeconds = 0;
 		let recordingInterval = null;
@@ -159,8 +159,27 @@
 		let animationFrame = null;
 
 		const messages = [];
-		let isSending = false;
 		const seenAgentAudioIds = new Set();
+
+		// Transport/streaming lives in the shared core; this page only owns
+		// presentation (bubbles, audio players, mic/waveform recording UI).
+		const chat = HufAgentChatCore.mount({
+			agent: agentName,
+			csrfToken: window.csrf_token,
+			onMessage: function (message) {
+				messages.push(message);
+				renderMessages();
+				if (message.role === "assistant" && message.audioUrl) {
+					requestAnimationFrame(() => {
+						const players = messagesContainer.querySelectorAll('audio[data-role="assistant"]');
+						const last = players[players.length - 1];
+						if (last) last.play().catch(() => {});
+					});
+				}
+			},
+			onLoading: setLoading,
+			onError: showError,
+		});
 
 		function showError(msg) {
 			errorText.textContent = msg;
@@ -173,12 +192,6 @@
 			const mins = Math.floor(seconds / 60);
 			const secs = Math.floor(seconds % 60);
 			return mins + ":" + (secs < 10 ? "0" : "") + secs;
-		}
-
-		function getCsrfToken() {
-			if (window.csrf_token) return window.csrf_token;
-			const cookie = document.cookie.split(";").find(c => c.trim().startsWith("csrf_token="));
-			return cookie ? decodeURIComponent(cookie.split("=")[1]) : "";
 		}
 
 		function scrollToBottom() {
@@ -303,7 +316,6 @@
 		}
 
 		function setLoading(loading) {
-			isSending = loading;
 			const indicator = document.getElementById("loading-indicator");
 			if (indicator) indicator.classList.toggle("hidden", !loading);
 			textInput.disabled = loading;
@@ -391,113 +403,7 @@
 
 		function handleRecordingStop() {
 			const blob = new Blob(audioChunks, { type: "audio/webm" });
-			if (blob.size > 0) sendAudioMessage(blob);
-		}
-
-		async function callMethod(method, args) {
-			const res = await fetch("/api/method/" + method, {
-				method: "POST",
-				headers: { "Content-Type": "application/json", "X-Frappe-CSRF-Token": getCsrfToken() },
-				body: JSON.stringify(args || {}),
-			});
-			if (!res.ok) throw new Error((await res.text()) || "Request failed");
-			return (await res.json()).message;
-		}
-
-		async function ensureConversation() {
-			if (conversationId) return conversationId;
-			const payload = await callMethod("huf.ai.agent_chat.create_conversation", { agent: agentName, channel: "Chat" });
-			conversationId = payload.conversation_id;
-			return conversationId;
-		}
-
-		async function refreshHistory() {
-			if (!conversationId) return;
-			try {
-				const params = new URLSearchParams({
-					fields: JSON.stringify(["name", "conversation", "role", "kind", "is_agent_message", "generated_audio", "voice_message", "creation"]),
-					filters: JSON.stringify([["Agent Message", "conversation", "=", conversationId], ["Agent Message", "kind", "=", "Audio"], ["Agent Message", "is_agent_message", "=", 1]]),
-					order_by: "creation desc",
-					limit_page_length: "5",
-				});
-				const res = await fetch(`/api/resource/Agent%20Message?${params}`, {
-					method: "GET",
-					headers: { "X-Frappe-CSRF-Token": getCsrfToken() },
-				});
-				if (!res.ok) throw new Error("Failed to load history");
-				const data = await res.json();
-				const docs = Array.isArray(data.data) ? data.data : [];
-				docs.slice().reverse().forEach(m => {
-					if (seenAgentAudioIds.has(m.name)) return;
-					const audioUrl = m.voice_message || m.generated_audio || null;
-					if (!audioUrl) return;
-					seenAgentAudioIds.add(m.name);
-					messages.push({
-						role: "assistant",
-						audioUrl,
-						timeLabel: new Date(m.creation).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-					});
-				});
-				renderMessages();
-				const players = messagesContainer.querySelectorAll('audio[data-role="assistant"]');
-				const last = players[players.length - 1];
-				if (last) last.play().catch(() => {});
-			} catch (e) {
-				showError("Failed to load history");
-			}
-		}
-
-		async function sendAudioMessage(blob) {
-			try {
-				setLoading(true);
-				messages.push({
-					role: "user",
-					audioUrl: URL.createObjectURL(blob),
-					timeLabel: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-				});
-				renderMessages();
-
-				const convId = await ensureConversation();
-				const reader = new FileReader();
-				reader.onload = async function (evt) {
-					try {
-						const dataUrl = evt.target?.result;
-						if (!dataUrl || typeof dataUrl !== "string") throw new Error("Failed to read audio");
-						const result = await callMethod("huf.ai.agent_chat.upload_audio_and_transcribe_web", {
-							filename: "recording_" + Date.now() + ".webm",
-							b64data: dataUrl,
-							agent: agentName,
-							conversation: convId,
-						});
-						if (!result?.success) throw new Error(result?.error || "Transcription failed");
-						if (!conversationId && result.conversation_id) conversationId = result.conversation_id;
-						setTimeout(refreshHistory, 2000);
-					} catch (e) {
-						showError("Failed to send audio");
-					} finally {
-						setLoading(false);
-					}
-				};
-				reader.readAsDataURL(blob);
-			} catch (e) {
-				showError("Failed to send audio");
-				setLoading(false);
-			}
-		}
-
-		async function sendTextMessage(text) {
-			if (!text.trim()) return;
-			try {
-				setLoading(true);
-				const convId = await ensureConversation();
-				await callMethod("huf.ai.agent_chat.send_message_to_conversation", { conversation: convId, message: text });
-				textInput.value = "";
-				setTimeout(refreshHistory, 2000);
-			} catch (e) {
-				showError("Failed to send message");
-			} finally {
-				setLoading(false);
-			}
+			if (blob.size > 0) chat.sendAudio(blob).catch(() => {});
 		}
 
 		micButton.addEventListener("click", () => { if (!isRecording) startRecording(); });
@@ -505,11 +411,14 @@
 		chatForm.addEventListener("submit", e => {
 			e.preventDefault();
 			if (isRecording) { stopRecording(); return; }
-			sendTextMessage(textInput.value);
+			const text = textInput.value;
+			textInput.value = "";
+			chat.sendText(text).catch(() => {});
 		});
 		resetButton.addEventListener("click", () => {
-			conversationId = null;
+			chat.reset();
 			messages.length = 0;
+			seenAgentAudioIds.clear();
 			renderMessages();
 		});
 	</script>

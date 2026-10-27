@@ -9,6 +9,13 @@ app_license = "agpl"
 source_link = "https://github.com/tridz-dev/huf.git"
 app_logo_url="/assets/huf/Images/huf.png"
 app_url="/huf"
+
+# Decision Runtime backend adapters are declared by installed apps. Runtime
+# configuration stores only these stable adapter IDs, never import paths.
+huf_decision_backends = {
+    "fake": "huf.ai.decision.backends.fake.FakeDecisionBackend",
+}
+
 # Apps
 # ------------------
 
@@ -87,9 +94,17 @@ website_route_rules = [
 
 # Register custom page renderer for SSE streaming and docs
 page_renderer = [
-    "huf.ai.agent_stream_renderer.AgentStreamRenderer",
+    "huf.ai.agent.stream_renderer.AgentStreamRenderer",
     "huf.ai.app_public_renderer.HufAppPublicRenderer",
     "huf.api.v1.router.ApiV1Router",
+    # Per-app www/ template registry (Phase 2, HufAppDeskPortalDelivery):
+    # matches a provider app's declared `route` against the HUF App registry
+    # rather than a static website_route_rules entry, so it must be tried
+    # before Frappe's built-in TemplatePage/StaticPage/etc (which would
+    # otherwise 404 first since no template exists under huf/www/ for these
+    # routes). Ordered last among HUF's own renderers since it's the most
+    # general (any route, not a fixed prefix like /huf/apps/... above).
+    "huf.ai.app_portal_renderer.HufAppPortalRenderer",
 ]
 
 
@@ -137,7 +152,7 @@ after_migrate = [
 
 # before_uninstall = "huf.uninstall.before_uninstall"
 after_uninstall = [
-    "huf.ai.tool_registry.sync_app_tools",
+    "huf.ai.tools.registry.sync_app_tools",
     "huf.ai.skills.hooks.sync_app_skills",
 ]
 
@@ -172,14 +187,13 @@ after_app_uninstall = "huf.ai.app_seeding.apps_loader.on_app_uninstalled"
 # }
 permission_query_conditions = {
     "Agent": "huf.huf.doctype.agent.agent.get_permission_query_conditions",
-    "Agent Conversation": "huf.ai.agent_integration.get_conversation_permission_conditions",
-    "Agent Message": "huf.ai.agent_integration.get_message_permission_conditions",
-    "Agent Run": "huf.ai.agent_integration.get_run_permission_conditions",
-    "Agent Context Artifact": "huf.ai.agent_integration.get_context_artifact_permission_conditions",
-    "Agent Tool Call": "huf.ai.agent_integration.get_tool_call_permission_conditions",
-    "Agent Run Prompt Snapshot": "huf.ai.agent_integration.get_prompt_snapshot_permission_conditions",
+    "Agent Conversation": "huf.ai.agent.integration.get_conversation_permission_conditions",
+    "Agent Message": "huf.ai.agent.integration.get_message_permission_conditions",
+    "Agent Run": "huf.ai.agent.integration.get_run_permission_conditions",
+    "Agent Context Artifact": "huf.ai.agent.integration.get_context_artifact_permission_conditions",
+    "Agent Tool Call": "huf.ai.agent.integration.get_tool_call_permission_conditions",
+    "Agent Run Prompt Snapshot": "huf.ai.agent.integration.get_prompt_snapshot_permission_conditions",
     "Huf API Key": "huf.huf.doctype.huf_api_key.huf_api_key.get_api_key_permission_conditions",
-    "Agent Procedure Run": "huf.ai.agent_integration.get_procedure_run_permission_conditions",
     "Flow Definition": "huf.huf.doctype.flow_definition.flow_definition.get_permission_query_conditions",
     "Agent Procedure": "huf.huf.doctype.agent_procedure.agent_procedure.get_permission_query_conditions",
     "Agent Procedure Binding": "huf.huf.doctype.agent_procedure_binding.agent_procedure_binding.get_permission_query_conditions",
@@ -192,6 +206,11 @@ permission_query_conditions = {
     "Integration Settings": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
     "Integration Service": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
     "Integration Credential": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Solution": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Conversation Assignment": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Template Usage": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "HUF Document": "huf.huf.doctype.huf_document.huf_document.get_permission_query_conditions",
+    "HUF Document Comment": "huf.huf.doctype.huf_document_comment.huf_document_comment.get_permission_query_conditions",
 }
 
 has_permission = {
@@ -207,15 +226,23 @@ has_permission = {
 	"Integration Settings": "huf.ai.gateway_webhook.has_permission_gateway_family",
 	"Integration Service": "huf.ai.gateway_webhook.has_permission_gateway_family",
 	"Integration Credential": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"Solution": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"Conversation Assignment": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"Template Usage": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"HUF Document": "huf.huf.doctype.huf_document.huf_document.has_permission",
+	"HUF Document Comment": "huf.huf.doctype.huf_document_comment.huf_document_comment.has_permission",
 }
 
 # DocType Class
 # ---------------
 # Override standard doctype classes
 
-# override_doctype_class = {
-# 	"ToDo": "custom_app.overrides.CustomToDo"
-# }
+# Huf-owned WhatsApp templates must not be re-pushed or deleted on Meta by a Desk save/delete
+# (frappe_whatsapp's controller runs before doc_events hooks). Resolves lazily, and only when that
+# doctype exists, so sites without the optional connector app are unaffected.
+override_doctype_class = {
+	"WhatsApp Templates": "huf.ai.gateway_adapters.whatsapp_template_guard.GuardedWhatsAppTemplates",
+}
 
 # Document Events
 # ---------------
@@ -223,23 +250,37 @@ has_permission = {
 
 doc_events = {
     "*": {
-        "validate": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "before_insert": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "after_insert": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "before_save": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "after_save": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "before_submit": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "after_submit": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "before_cancel": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "on_submit": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "on_update": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "before_rename": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "after_rename": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "on_trash": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
-        "after_delete": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+        "validate": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_insert": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_insert": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_save": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_save": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_submit": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_submit": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_cancel": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "on_submit": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "on_update": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_rename": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_rename": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "on_trash": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_delete": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+    },
+    "WhatsApp Templates": {
+        "before_validate": "huf.ai.gateway_adapters.whatsapp_template_guard.guard_template_write",
+        "validate": "huf.ai.gateway_adapters.whatsapp_template_guard.guard_template_write",
+        "before_save": "huf.ai.gateway_adapters.whatsapp_template_guard.guard_template_write",
+        "on_trash": "huf.ai.gateway_adapters.whatsapp_template_guard.guard_template_write",
     },
     "User": {
-        "on_update": "huf.huf.doctype.huf_user_role.huf_user_role.sync_from_frappe_user",
+        # sync first: it reads the roles on the saved doc, which the default grant writes behind its back
+        "on_update": [
+            "huf.huf.doctype.huf_user_role.huf_user_role.sync_from_frappe_user",
+            "huf.huf.doctype.huf_user_role.huf_user_role.grant_default_huf_roles",
+        ],
+    },
+    "Telegram Admin Binding": {
+        "on_update": "huf.ai.telegram_web_access_enforce.on_binding_update",
+        "on_trash": "huf.ai.telegram_web_access_enforce.on_binding_trash",
     },
     "Flow Run": {
         "on_update": "huf.ai.gateways.flow_reply.on_flow_run_update",
@@ -251,14 +292,14 @@ doc_events = {
         ],
     },
     "Agent Trigger": {
-        "after_insert": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
-        "on_update": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
-        "on_trash": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
+        "after_insert": ["huf.ai.agent.hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
+        "on_update": ["huf.ai.agent.hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
+        "on_trash": ["huf.ai.agent.hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
     },
     "Automation Trigger": {
-        "after_insert": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
-        "on_update": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
-        "on_trash": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
+        "after_insert": "huf.ai.automation.hooks.clear_doc_event_automation_cache",
+        "on_update": "huf.ai.automation.hooks.clear_doc_event_automation_cache",
+        "on_trash": "huf.ai.automation.hooks.clear_doc_event_automation_cache",
     },
     "AI Provider": {
         "on_update": "huf.ai.app_seeding.hub_orchestrator.on_ai_provider_update",
@@ -302,29 +343,42 @@ doc_events = {
 # }
 scheduler_events = {
     "all": [
-        "huf.ai.agent_scheduler.run_scheduled_agents",
-        "huf.ai.automation_scheduler.run_due_automations"
+        "huf.ai.agent.scheduler.run_scheduled_agents",
+        "huf.ai.automation.scheduler.run_due_automations"
     ],
     "daily": [
         "huf.ai.knowledge.maintenance.cleanup_orphaned_files",
+        "huf.ai.telegram_admin.send_daily_digests",
         "huf.ai.knowledge.maintenance.optimize_indexes",
         # P2-10: Proactively mark expired Memory Records (past effective_until) as Expired
         "huf.ai.memory_tools.expire_stale_memory_records",
-        "huf.ai.agent_chat.purge_trashed_conversations",
+        "huf.ai.agent.chat.purge_trashed_conversations",
         "huf.ai.context_artifacts.purge_expired_context_artifacts",
         "huf.ai.gateway_service.purge_old_rejected_gateway_events",
+        "huf.ai.gateway_service.cleanup_stale_access_entries",
+        "huf.ai.flow.state.purge_expired",
+        "huf.ai.whatsapp.send_keys.purge_expired",
     ],
     "cron": {
         "*/1 * * * *": [
             "huf.ai.orchestration.scheduler.process_orchestrations",
-            "huf.ai.agent_integration.recover_stalled_agent_runs",
+            "huf.ai.agent.integration.recover_stalled_agent_runs",
             "huf.ai.gateways.teams_outbox.retry_due",
         ],
+        "*/10 * * * *": [
+            "huf.ai.gateway_service.reap_stuck_gateway_events",
+        ],
         "*/5 * * * *": [
-            "huf.ai.agent_run_analytics.refresh_rollups",
+            "huf.ai.agent.run_analytics.refresh_rollups",
+            # Safety net: fail runs orphaned in 'Started' (stale > huf_stale_run_minutes (15) / huf_stale_run_minutes_background (60, non-stream)).
+            "huf.ai.run_control.sweep_stale_runs",
         ],
         "*/15 * * * *": [
             "huf.ai.batch_poll.poll_pending_batch_jobs",
+        ],
+        "*/30 * * * *": [
+            # Fail runs left 'Queued' longer than huf_stale_queued_hours (24) with no live drain lock.
+            "huf.ai.run_control.sweep_dead_queued_runs",
         ]
     },
     "hourly": [
@@ -366,7 +420,7 @@ scheduler_events = {
 
 # Request Events
 # ----------------
-# before_request = ["huf.utils.before_request"]
+before_request = ["huf.ai.telegram_web_access_enforce.enforce"]
 # after_request = ["huf.utils.after_request"]
 
 # Job Events
@@ -427,8 +481,8 @@ fixtures = [
 # Integration Tools Hook
 # ----------------------
 # Register all external integration tools (Slack, GitHub, etc.)
-# The tool_registry.sync_discovered_tools() function reads this hook
-to_sync_tools = "huf.ai.tool_registry.sync_discovered_tools"
+# The huf.ai.tools.registry.sync_discovered_tools() function reads this hook
+to_sync_tools = "huf.ai.tools.registry.sync_discovered_tools"
 
 # Register integration tools from _registry
 huf_tools = [
@@ -456,3 +510,12 @@ huf_knowledge_backends = {
 # in a later phase, so this starts empty.
 
 huf_voice_engines = {}
+
+# PR3 Jev semantic adapter; provider transport is injected by deployment resolution.
+huf_decision_backends.update({
+    "jev_system_one": "huf.ai.decision.backends.jev.JevSystemOneBackend",
+    "structured_llm": "huf.ai.decision.backends.structured.StructuredLLMBackend",
+    "local_rules": "huf.ai.decision.backends.local.LocalRulesBackend",
+    "classifier": "huf.ai.decision.backends.classifier.ClassifierBackend",
+    "similarity": "huf.ai.decision.backends.similarity.SimilarityBackend",
+})

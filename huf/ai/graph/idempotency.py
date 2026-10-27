@@ -21,8 +21,8 @@ This module is deliberately a thin, frappe-light layer:
   (mirrors ``huf.ai.graph.transforms`` / ``huf.ai.graph.expressions``).
 * :func:`reserve_idempotency_key` / :func:`release_idempotency_key` are the only frappe-
   touching functions, and they touch nothing but ``frappe.cache()`` -- the same
-  "cache set nx/ex" convention already used by ``huf.ai.procedure_lock`` (GT-08) and
-  ``huf.ai.agent_integration``'s queue lock. This is a *defense-in-depth* dedup layer,
+  "cache set nx/ex" convention already used by ``huf.ai.procedure.lock`` (GT-08) and
+  ``huf.ai.agent.integration``'s queue lock. This is a *defense-in-depth* dedup layer,
   never the primary idempotency guard: the primary guard for benchmark-3-shaped
   Procedures is the graph's own read-before-write (an ``existing_followup_check``
   ``tool.call`` feeding a ``condition`` node) -- see
@@ -165,7 +165,7 @@ def reserve_idempotency_key(idempotency_key: str, *, window_seconds: int = DEDUP
 	holds (or recently held and is still within the window) the same key -- the caller
 	must treat this as a duplicate invocation and must NOT perform the write.
 
-	Mirrors ``huf.ai.procedure_lock.acquire_run_lock``'s ``cache().set(..., nx=True)``
+	Mirrors ``huf.ai.procedure.lock.acquire_run_lock``'s ``cache().set(..., nx=True)``
 	convention exactly -- same primitive, different key namespace and a much longer TTL
 	(a run lock is per-advance-step; a dedup reservation must outlive one worker's crash
 	and a retry dispatched by a different worker).

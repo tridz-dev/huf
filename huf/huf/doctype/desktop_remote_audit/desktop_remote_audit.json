@@ -1,0 +1,110 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-09-30 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "user",
+  "device_id",
+  "action",
+  "outcome",
+  "origin",
+  "conversation",
+  "agent",
+  "detail",
+  "ip_address"
+ ],
+ "fields": [
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "User",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "device_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Device ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "action",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Action",
+   "read_only": 1
+  },
+  {
+   "fieldname": "outcome",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Outcome",
+   "read_only": 1
+  },
+  {
+   "fieldname": "origin",
+   "fieldtype": "Data",
+   "label": "Origin",
+   "read_only": 1
+  },
+  {
+   "fieldname": "conversation",
+   "fieldtype": "Data",
+   "label": "Conversation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Data",
+   "label": "Agent",
+   "read_only": 1
+  },
+  {
+   "fieldname": "detail",
+   "fieldtype": "Small Text",
+   "label": "Detail",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ip_address",
+   "fieldtype": "Data",
+   "label": "IP address",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-30 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Desktop Remote Audit",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager"
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

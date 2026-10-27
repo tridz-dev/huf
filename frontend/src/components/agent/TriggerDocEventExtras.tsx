@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Combobox } from '@/components/ui/combobox';
 import { Plus, Trash2 } from 'lucide-react';
 import { getDocTypeMeta } from '@/services/agentApi';
 
@@ -29,6 +30,7 @@ const STANDARD_FIELDS = ['name', 'owner', 'creation', 'modified', 'docstatus'];
 
 export function TriggerDocEventExtras({ control }: TriggerDocEventExtrasProps) {
   const referenceDoctype = useWatch({ control, name: 'reference_doctype' });
+  const promptField = useWatch({ control, name: 'prompt_field' });
   const fileAttachments = useWatch({ control, name: 'file_attachments' }) || [];
   const [promptFieldOptions, setPromptFieldOptions] = useState<string[]>([]);
   const [childTableOptions, setChildTableOptions] = useState<string[]>([]);
@@ -72,8 +74,13 @@ export function TriggerDocEventExtras({ control }: TriggerDocEventExtrasProps) {
   }, [referenceDoctype]);
 
   const promptOptions = useMemo(
-    () => promptFieldOptions.map((fieldname) => ({ value: fieldname, label: fieldname })),
-    [promptFieldOptions],
+    () => {
+      const options = promptFieldOptions.map((fieldname) => ({ value: fieldname, label: fieldname }));
+      return promptField && !promptFieldOptions.includes(promptField)
+        ? [{ value: promptField, label: promptField }, ...options]
+        : options;
+    },
+    [promptField, promptFieldOptions],
   );
 
   return (
@@ -84,24 +91,18 @@ export function TriggerDocEventExtras({ control }: TriggerDocEventExtrasProps) {
         render={({ field }) => (
           <FormItem>
             <FormLabel>Prompt field</FormLabel>
-            <Select
-              onValueChange={field.onChange}
-              value={field.value || ''}
-              disabled={!referenceDoctype}
-            >
-              <FormControl>
-                <SelectTrigger>
-                  <SelectValue placeholder={referenceDoctype ? 'Select field' : 'Select DocType first'} />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                {promptOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <FormControl>
+              <Combobox
+                options={promptOptions}
+                value={field.value || ''}
+                onValueChange={field.onChange}
+                placeholder={referenceDoctype ? 'Select field' : 'Select DocType first'}
+                searchPlaceholder="Search fields..."
+                emptyText="No field found."
+                shouldFilter
+                disabled={!referenceDoctype}
+              />
+            </FormControl>
             <FormDescription>
               Enter the fieldname from the Reference DocType that contains the user&apos;s instructions.
             </FormDescription>

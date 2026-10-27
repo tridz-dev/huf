@@ -15,7 +15,7 @@ huf.ai.graph.procedure_binding re-checks both again at exposure time, fail close
   I8 -- No automatic activation of write Procedures. A binding may only ever point at a
   Procedure version with is_read_only=1, OR a write Procedure (is_read_only=0) whose
   approval_status is "Approved" through the manual gate in
-  huf.ai.procedure_approval_api (request_procedure_approval / approve_procedure --
+  huf.ai.procedure.approval_api (request_procedure_approval / approve_procedure --
   System Manager / Huf Manager only). There is no other bypass: an unapproved write
   Procedure still cannot be bound.
 
@@ -42,7 +42,7 @@ def get_permission_query_conditions(user=None):
 	"""Restrict Agent Procedure Binding list/read to bindings the user owns,
 	unless the user has agent.view_all capability.
 
-	Fix for the same defect pattern as F-02 (see huf.ai.agent_integration
+	Fix for the same defect pattern as F-02 (see huf.ai.agent.integration
 	.get_run_permission_conditions, the reference implementation this mirrors):
 	Huf User / Huf Manager hold create+write on this DocType but there was no
 	if_owner restriction and no permission_query_conditions hook, so any
@@ -89,7 +89,7 @@ class AgentProcedureBinding(Document):
 	def _guard_read_only(self, procedure):
 		"""I8: bind/enable is allowed when EITHER the Procedure is read-only, OR it is a
 		write Procedure that has cleared the manual approval gate
-		(huf.ai.procedure_approval_api.approve_procedure). The read-only-only path is the
+		(huf.ai.procedure.approval_api.approve_procedure). The read-only-only path is the
 		default and is preserved unchanged above; the approved-write path is an explicit
 		additional allowance, not a replacement for it.
 		"""
@@ -103,7 +103,7 @@ class AgentProcedureBinding(Document):
 			_(
 				"Agent Procedure {0} is not read-only (I8) and has not been approved for "
 				"binding. Read-only Procedures may be bound directly; a write Procedure must "
-				"first go through huf.ai.procedure_approval_api (request review, then have a "
+				"first go through huf.ai.procedure.approval_api (request review, then have a "
 				"System Manager or Huf Manager approve it) before it can be bound."
 			).format(self.procedure),
 			title=_("Write Procedure Cannot Be Bound"),

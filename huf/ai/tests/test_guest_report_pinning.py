@@ -37,7 +37,8 @@ except ImportError:
 import frappe  # noqa: E402
 
 # Stub agents SDK (same pattern as test_test_tools.py)
-if "agents" not in sys.modules:
+import importlib.util as _ilu
+if "agents" not in sys.modules and _ilu.find_spec("agents") is None:
 	class _FakeFunctionTool:
 		def __init__(self, name, description, params_json_schema, on_invoke_tool, strict_json_schema=False):
 			self.name = name
@@ -50,8 +51,8 @@ if "agents" not in sys.modules:
 	agents_mock.FunctionTool = _FakeFunctionTool
 	sys.modules["agents"] = agents_mock
 
-from huf.ai.tool_types import _GUEST_REPORT_PINNED_TYPES  # noqa: E402
-from huf.ai.tool_invocation import build_extra_args, invoke_tool, RunContext, resolve_tool_doc  # noqa: E402
+from huf.ai.tools.types import _GUEST_REPORT_PINNED_TYPES  # noqa: E402
+from huf.ai.tools.invocation import build_extra_args, invoke_tool, RunContext, resolve_tool_doc  # noqa: E402
 from huf.ai.sdk_tools import create_function_tool, get_function_from_name  # noqa: E402
 
 
@@ -132,7 +133,7 @@ class TestBuildExtraArgsForReportPinning(unittest.TestCase):
 class TestReportNameOverride(unittest.TestCase):
 	"""Test that report_name is overridden with reference_report when pinned."""
 
-	@patch("huf.ai.tool_invocation.frappe")
+	@patch("huf.ai.tools.invocation.frappe")
 	def test_report_name_override_with_pinned_report(self, mock_frappe):
 		"""When reference_report is set, args_dict['report_name'] should be overridden."""
 		# Note: this test is an async simulation; in real usage invoke_tool is async.
@@ -157,8 +158,8 @@ class TestReportNameOverride(unittest.TestCase):
 class TestGuestDenialWithoutPin(unittest.TestCase):
 	"""Test that guest access is denied for unpinned Get Report Result tools."""
 
-	@patch("huf.ai.tool_invocation.frappe")
-	@patch("huf.ai.tool_invocation.get_function_from_name")
+	@patch("huf.ai.tools.invocation.frappe")
+	@patch("huf.ai.tools.invocation.get_function_from_name")
 	async def test_invoke_tool_denies_guest_without_reference_report(self, mock_get_fn, mock_frappe):
 		"""Guest without reference_report should get denied."""
 		mock_frappe.session.user = "Guest"
@@ -212,8 +213,8 @@ class TestNonGuestUnaffected(unittest.TestCase):
 	LLM-supplied ``report_name``, unmodified.
 	"""
 
-	@patch("huf.ai.tool_invocation.get_function_from_name")
-	@patch("huf.ai.tool_invocation.frappe")
+	@patch("huf.ai.tools.invocation.get_function_from_name")
+	@patch("huf.ai.tools.invocation.frappe")
 	def test_non_guest_uses_llm_supplied_report_name(self, mock_frappe, mock_get_fn):
 		"""Non-guest: report_name from args_dict is honored, not overridden."""
 		mock_frappe.session.user = "user@example.com"

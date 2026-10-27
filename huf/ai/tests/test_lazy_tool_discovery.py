@@ -107,7 +107,7 @@ class TestLazyToolDiscovery(unittest.TestCase):
 				"description": description,
 				"tool_type": self._make_tool_type(),
 				"types": "App Provided",
-				"function_path": "huf.ai.tools.code_execution.run_python",
+				"function_path": "huf.ai.tools.recipient.handle_get_recipient",
 				"service": service,
 				"provider_app": provider_app,
 				"params": json.dumps(params) if params is not None else None,
@@ -303,3 +303,13 @@ class TestLazyToolDiscovery(unittest.TestCase):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class TestArrayItemsSchema(unittest.TestCase):
+	def test_object_arrays_declare_object_items(self):
+		from huf.ai.tools._registry import array_items_schema
+
+		for name in ("edits", "nodes", "edges", "data", "questions"):
+			self.assertEqual(array_items_schema(name), {"type": "object"}, name)
+		for name in ("fields", "tool_names", "series_keys", "colors"):
+			self.assertEqual(array_items_schema(name), {"type": "string"}, name)

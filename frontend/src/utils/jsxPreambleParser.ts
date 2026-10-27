@@ -77,7 +77,7 @@ export function splitPreambleAndJsx(source: string): { preamble: string; jsx: st
  * Parse preamble declarations and return bindings plus the JSX body.
  * On failure, returns the original source as JSX with empty bindings.
  */
-export function extractJsxAndBindings(source: string): JsxPreambleResult {
+function extractJsxAndBindingsRaw(source: string): JsxPreambleResult {
 	const warnings: string[] = [];
 	const { preamble, jsx } = splitPreambleAndJsx(source);
 
@@ -293,4 +293,100 @@ function evaluateExpression(
 		default:
 			throw new Error(`Unsupported expression type: ${node.type}`);
 	}
+}
+
+/**
+ * react-jsx-parser cannot evaluate a JSXEmptyExpression, which is what a comment-only brace group is:
+ * `{/* note *\/}` or `{ // note \n }`. Models write these all the time in dashboards. Remove brace groups
+ * that contain only comments. Groups without a comment (`{}` in `style={{}}`) are left alone on purpose.
+ */
+const WS_RE = /\s/;
+const isWs = (c: string): boolean => WS_RE.test(c);
+
+/** Memoised search results so repeated `{/*` / `{//` groups never rescan the same text. */
+interface ScanCache {
+	noBlockClose: boolean;
+	blockFrom: number;
+	blockAt: number;
+	noNewline: boolean;
+	nlFrom: number;
+	nlAt: number;
+}
+
+function findBlockClose(jsx: string, from: number, c: ScanCache): number {
+	if (c.noBlockClose) return -1;
+	// A previous search from blockFrom found the first `*/` at blockAt; it is also the first one from `from`.
+	if (c.blockAt >= from && c.blockFrom <= from) return c.blockAt;
+	const close = jsx.indexOf('*/', from);
+	if (close === -1) {
+		c.noBlockClose = true;
+		return -1;
+	}
+	c.blockFrom = from;
+	c.blockAt = close;
+	return close;
+}
+
+function findNewline(jsx: string, from: number, c: ScanCache): number {
+	if (c.noNewline) return -1;
+	if (c.nlAt >= from && c.nlFrom <= from) return c.nlAt;
+	const eol = jsx.indexOf('\n', from);
+	if (eol === -1) {
+		c.noNewline = true;
+		return -1;
+	}
+	c.nlFrom = from;
+	c.nlAt = eol;
+	return eol;
+}
+
+/** End index (exclusive) of a comment-only `{ ... }` group starting at `start`, or -1 if it is not one. */
+function commentOnlyGroupEnd(jsx: string, start: number, cache: ScanCache): number {
+	const n = jsx.length;
+	let i = start + 1;
+	let sawComment = false;
+	for (;;) {
+		while (i < n && isWs(jsx[i])) i++;
+		if (jsx.startsWith('/*', i)) {
+			const close = findBlockClose(jsx, i + 2, cache);
+			if (close === -1) return -1;
+			i = close + 2;
+			sawComment = true;
+		} else if (jsx.startsWith('//', i)) {
+			const eol = findNewline(jsx, i + 2, cache);
+			i = eol === -1 ? n : eol;
+			sawComment = true;
+		} else {
+			return sawComment && jsx[i] === '}' ? i + 1 : -1;
+		}
+	}
+}
+
+/**
+ * react-jsx-parser cannot evaluate a JSXEmptyExpression, which is what a comment-only brace group is:
+ * `{/* note *\/}` or `{ // note \n }`. Models write these all the time in dashboards. Remove brace groups
+ * that contain only comments. Groups without a comment (`{}` in `style={{}}`) are left alone on purpose.
+ * Implemented as a linear scanner (not a regex) so adversarial input cannot trigger catastrophic backtracking.
+ */
+export function stripJsxComments(jsx: string): string {
+	const cache: ScanCache = { noBlockClose: false, blockFrom: 0, blockAt: -1, noNewline: false, nlFrom: 0, nlAt: -1 };
+	let out = '';
+	let last = 0;
+	let i = jsx.indexOf('{');
+	while (i !== -1) {
+		const end = commentOnlyGroupEnd(jsx, i, cache);
+		if (end === -1) {
+			i = jsx.indexOf('{', i + 1);
+		} else {
+			out += jsx.slice(last, i);
+			last = end;
+			i = jsx.indexOf('{', end);
+		}
+	}
+	return out + jsx.slice(last);
+}
+
+export function extractJsxAndBindings(source: string): JsxPreambleResult {
+	const result = extractJsxAndBindingsRaw(source);
+	return { ...result, jsx: stripJsxComments(result.jsx) };
 }

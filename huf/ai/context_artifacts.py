@@ -9,7 +9,7 @@ Artifact`` was the code-execution write-back in
 and reads from a filesystem path. The ``JSON`` and ``Text`` values the
 ``artifact_type`` enum declares were never produced by anything, and nothing
 ever told the model an artifact existed (see GT-06 in
-``Tracks/safwan-erooth.DeterministicAgent/PLAN.md``).
+``the DeterministicAgent workspace track``).
 
 :func:`create_context_artifact` is the one place that should insert an
 ``Agent Context Artifact`` from now on: it is usable from any tool or budget
@@ -434,7 +434,7 @@ def delete_conversation_artifacts(conversation: str) -> int:
 	Frappe's ``delete_doc`` runs *before* its own link-existence check -- so
 	this must not rely on the conversation link still being readable
 	anywhere else. It is a targeted cascade, not the app's generic
-	``_orphan_conversation_links`` sweep (``huf/ai/agent_chat.py``), which
+	``_orphan_conversation_links`` sweep (``huf/ai/agent/chat.py``), which
 	explicitly skips this doctype for that reason (see the comment there).
 
 	Also removes the on-disk ``code_execution/<key>`` shared directory for

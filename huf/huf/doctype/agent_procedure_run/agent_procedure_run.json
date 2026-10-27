@@ -11,6 +11,8 @@
   "column_break_gen1",
   "status",
   "agent_run",
+  "automation",
+  "automation_trigger",
   "pinned_definition_tab",
   "pinned_fingerprint",
   "pinned_definition_json",
@@ -77,6 +79,22 @@
    "in_standard_filter": 1,
    "label": "Agent Run",
    "options": "Agent Run",
+   "read_only": 1
+  },
+  {
+   "description": "Set when this run was started by an Automation.",
+   "fieldname": "automation",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Automation",
+   "options": "Automation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "automation_trigger",
+   "fieldtype": "Link",
+   "label": "Automation Trigger",
+   "options": "Automation Trigger",
    "read_only": 1
   },
   {

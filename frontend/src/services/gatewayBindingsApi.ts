@@ -138,7 +138,7 @@ export function describeRule(
 export async function listBindings(gateway: string): Promise<GatewayBinding[]> {
   try {
     const res = await call.post(`${API}.list_bindings`, { gateway });
-    return (res.message as GatewayBinding[]) ?? [];
+    return (res?.message as GatewayBinding[]) ?? [];
   } catch (error) {
     handleFrappeError(error, 'Error loading routing rules');
   }
@@ -147,7 +147,7 @@ export async function listBindings(gateway: string): Promise<GatewayBinding[]> {
 export async function saveBinding(gateway: string, binding: SaveBindingInput): Promise<GatewayBinding> {
   try {
     const res = await call.post(`${API}.save_binding`, { gateway, binding });
-    return res.message as GatewayBinding;
+    return res?.message as GatewayBinding;
   } catch (error) {
     handleFrappeError(error, 'Error saving routing rule');
   }
@@ -164,7 +164,7 @@ export async function deleteBinding(name: string): Promise<void> {
 export async function reorderBindings(gateway: string, orderedNames: string[]): Promise<GatewayBinding[]> {
   try {
     const res = await call.post(`${API}.reorder_bindings`, { gateway, ordered_names: orderedNames });
-    return (res.message as GatewayBinding[]) ?? [];
+    return (res?.message as GatewayBinding[]) ?? [];
   } catch (error) {
     handleFrappeError(error, 'Error reordering routing rules');
   }
@@ -173,7 +173,7 @@ export async function reorderBindings(gateway: string, orderedNames: string[]): 
 export async function testRoute(gateway: string, sample: RouteSample): Promise<RoutePreview> {
   try {
     const res = await call.post(`${API}.test_route`, { gateway, sample });
-    return res.message as RoutePreview;
+    return res?.message as RoutePreview;
   } catch (error) {
     handleFrappeError(error, 'Error testing routing');
   }
@@ -182,7 +182,7 @@ export async function testRoute(gateway: string, sample: RouteSample): Promise<R
 async function pick(method: string, gateway: string, query?: string, cursor?: string): Promise<PickerResult> {
   try {
     const res = await call.post(`${API}.${method}`, { gateway, query, cursor });
-    return res.message as PickerResult;
+    return res?.message as PickerResult;
   } catch (error) {
     handleFrappeError(error, 'Error loading Slack list');
   }

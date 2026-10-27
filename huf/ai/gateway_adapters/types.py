@@ -51,6 +51,12 @@ class GatewayCapabilities:
 	supports_thread_reply: bool = False
 	supports_media_reply: bool = False
 	max_outbound_messages_per_second: float | None = None
+	# Optional richer outbound features; False unless an adapter explicitly implements them.
+	supports_reactions: bool = False
+	supports_typing: bool = False
+	supports_buttons: bool = False
+	supports_edit: bool = False
+	supports_voice_reply: bool = False
 
 	def __post_init__(self) -> None:
 		if not self.ingress_transports:
@@ -119,6 +125,11 @@ class NormalizedGatewayEvent:
 	# tuple so adapters that don't populate it need no changes; populated on
 	# a best-effort basis per provider payload shape (see GW-30/GW-31).
 	attachments: Sequence[GatewayAttachment] = field(default_factory=tuple)
+	# "message" for ordinary user content. "reaction" events are recorded but must
+	# not start an agent run (see gateway_service.process_gateway_event).
+	kind: str = "message"
+	reaction_emoji: str = ""  # empty on a removed reaction
+	reaction_to: str = ""  # provider id of the message reacted to
 
 	def __post_init__(self) -> None:
 		for name in ("provider_event_id", "sender_id", "conversation_id"):

@@ -140,6 +140,10 @@ DEFAULT_ROLE_CAPABILITIES: dict[str, list[str]] = {
 		"chat.view_own",
 		"data.records.view_own",
 	],
+	# Least-privilege service role for gateway execution users. Deliberately
+	# NOT a superset of Huf User: no agent.create, no developer.keys.manage,
+	# no ssh.run, no code_execution.run. It only lets the user run agents.
+	"Huf Gateway User": ["agent.use"],
 }
 
 # Which Frappe Role backs each Huf Role.
@@ -149,7 +153,14 @@ HUF_ROLE_FRAPPE_ROLE_MAP: dict[str, str] = {
 	"Huf Manager": "Huf Manager",
 	"Huf User": "Huf User",
 	"Huf Viewer": "Huf Viewer",
+	"Huf Gateway User": "Huf Gateway User",
 }
+
+# Every Frappe System User gets these by default (see huf_user_role.ensure_default_huf_roles):
+# the Huf role they start with, and the gateway role so they can be a channel's Run as user.
+# Nobody is ever given Huf Admin (which is Frappe's System Manager) automatically.
+DEFAULT_SYSTEM_USER_HUF_ROLE = "Huf Manager"
+GATEWAY_FRAPPE_ROLE = "Huf Gateway User"
 
 # Standard Frappe role constants.
 # Prefer these over string literals so renames/customizations are localized.
@@ -206,6 +217,10 @@ def get_user_huf_role(user: str | None = None) -> str | None:
 		return "Huf User"
 	if "Huf Viewer" in user_roles:
 		return "Huf Viewer"
+	# Resolved last: a user with any higher Huf role keeps that role; the
+	# gateway role never adds anything on top of it.
+	if "Huf Gateway User" in user_roles:
+		return "Huf Gateway User"
 
 	return None
 
@@ -259,6 +274,22 @@ def has_capability(user: str | None, capability: str) -> bool:
 	if not user:
 		user = frappe.session.user
 	return capability in get_user_capabilities(user)
+
+
+def is_gateway_admin(user: str | None = None) -> bool:
+	"""
+	Single authority for Gateway access-entry administration (list, approve, revoke).
+
+	True for Administrator, System Manager, any user whose Huf Role is
+	``Huf Admin`` and anyone holding ``system.integrations.manage``.
+	"""
+	if not user:
+		user = frappe.session.user
+	if user == ADMINISTRATOR or _is_system_manager(user):
+		return True
+	if get_user_huf_role(user) == "Huf Admin":
+		return True
+	return has_capability(user, "system.integrations.manage")
 
 
 # ---------------------------------------------------------------------------

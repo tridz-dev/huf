@@ -26,7 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Trash2, RefreshCw, FileText, Link, Type, Loader2, Upload, X, AlertCircle, Info } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, FileText, Link, Type, Loader2, Upload, X, AlertCircle, Info, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { knowledgeInputTypes } from '@/data/knowledge';
@@ -528,6 +528,25 @@ export function KnowledgeInputsModal({
                       </div>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
+                      {input.input_type !== 'Text' && (
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const resourceUrl = input.input_type === 'File' ? input.file : input.url;
+                            if (resourceUrl?.trim()) {
+                              window.open(resourceUrl.trim(), '_blank', 'noopener,noreferrer');
+                            }
+                          }}
+                          title="View"
+                          aria-label="View"
+                          disabled={!(input.input_type === 'File' ? input.file : input.url)?.trim()}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span className="ml-1">View</span>
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon-sm"

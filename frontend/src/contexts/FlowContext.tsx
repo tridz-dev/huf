@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useMemo, u
 import { toast } from 'sonner';
 import { Flow, FlowMetadata, FlowNode, FlowEdge } from '../types/flow.types';
 import { flowService } from '../services/flowService';
+import { popSnapshot, pushSnapshot } from '../lib/flowUndoStack';
 
 export type SaveState = 'saved' | 'saving' | 'unsaved' | 'error';
 
@@ -29,6 +30,8 @@ interface FlowContextType {
   updateNode: (nodeId: string, updates: Partial<FlowNode>) => void;
   deleteNode: (nodeId: string) => void;
   addEdge: (edge: FlowEdge) => void;
+  undo: () => void;
+  canUndo: boolean;
   saveFlow: () => Promise<void>;
   refreshFlows: () => Promise<void>;
 }
@@ -67,6 +70,16 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   // Ref to track last synced flow to prevent circular updates
   const lastSyncedFlowRef = useRef<Flow | null>(null);
   const activeFlowRef = useRef<Flow | null>(activeFlow);
+
+  // Undo history for node deletion. Full nodes+edges snapshots are taken before
+  // each delete and replayed verbatim on undo, so a restored node can never come
+  // back with dangling edges. Session-local only: cleared on flow switch and
+  // discarded on reload (not persisted undo).
+  // The stack lives in a ref so push/pop are plain synchronous mutations (no side
+  // effects inside state updaters); the state counter only drives canUndo.
+  const UNDO_STACK_LIMIT = 20;
+  const undoStackRef = useRef<{ nodes: FlowNode[]; edges: FlowEdge[] }[]>([]);
+  const [undoDepth, setUndoDepth] = useState(0);
 
   // Sync ref with state
   useEffect(() => {
@@ -236,6 +249,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   const setActiveFlow = useCallback((flowId: string) => {
     setActiveFlowId(flowId);
     setSelectedNodeId(null);
+    undoStackRef.current = [];
+    setUndoDepth(0);
   }, []);
 
 
@@ -380,15 +395,43 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     markUnsaved();
   }, [activeFlowId, markUnsaved]);
 
-  const deleteNode = useCallback((nodeId: string) => {
+  // Restore a prior nodes+edges snapshot. Goes through the same context-level
+  // update as other structural mutations, so FlowCanvas's resync effect (keyed on
+  // node/edge counts) cancels any in-flight debounced push before re-syncing.
+  const restoreSnapshot = useCallback((snapshot: { nodes: FlowNode[]; edges: FlowEdge[] }) => {
     if (!activeFlowId) return;
     setActiveFlowState(prev => {
       if (!prev) return prev;
-      const updatedNodes = prev.nodes.filter(n => n.id !== nodeId);
-      const updatedEdges = prev.edges.filter(
-        e => e.source !== nodeId && e.target !== nodeId
-      );
-      const updated = { ...prev, nodes: updatedNodes, edges: updatedEdges };
+      const updated = { ...prev, nodes: snapshot.nodes, edges: snapshot.edges };
+      lastSyncedFlowRef.current = updated;
+      return updated;
+    });
+    flowService.updateNodesAndEdges(activeFlowId, snapshot.nodes, snapshot.edges);
+    markUnsaved();
+  }, [activeFlowId, markUnsaved]);
+
+  const undo = useCallback(() => {
+    const { snapshot, rest } = popSnapshot(undoStackRef.current);
+    if (!snapshot) return;
+    undoStackRef.current = rest;
+    setUndoDepth(undoStackRef.current.length);
+    restoreSnapshot(snapshot);
+  }, [restoreSnapshot]);
+
+  const deleteNode = useCallback((nodeId: string) => {
+    if (!activeFlowId) return;
+    const prev = activeFlowRef.current;
+    if (!prev) return;
+    const deletedNode = prev.nodes.find(n => n.id === nodeId);
+    undoStackRef.current = pushSnapshot(undoStackRef.current, { nodes: prev.nodes, edges: prev.edges }, UNDO_STACK_LIMIT);
+    setUndoDepth(undoStackRef.current.length);
+    const updatedNodes = prev.nodes.filter(n => n.id !== nodeId);
+    const updatedEdges = prev.edges.filter(
+      e => e.source !== nodeId && e.target !== nodeId
+    );
+    setActiveFlowState(current => {
+      if (!current) return current;
+      const updated = { ...current, nodes: updatedNodes, edges: updatedEdges };
       lastSyncedFlowRef.current = updated;
       return updated;
     });
@@ -397,7 +440,15 @@ export function FlowProvider({ children }: { children: ReactNode }) {
       setSelectedNodeId(null);
     }
     markUnsaved();
-  }, [activeFlowId, selectedNodeId, markUnsaved]);
+    const label = (deletedNode?.data as { label?: string } | undefined)?.label;
+    toast('Node deleted', {
+      description: label ? `"${label}" was removed from the flow.` : undefined,
+      action: {
+        label: 'Undo',
+        onClick: () => undo(),
+      },
+    });
+  }, [activeFlowId, selectedNodeId, markUnsaved, undo]);
 
   const handleSetSelectedNode = useCallback((nodeId: string | null) => {
     setSelectedNodeId(nodeId);
@@ -445,6 +496,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNode,
     deleteNode,
     addEdge,
+    undo,
+    canUndo: undoDepth > 0,
     saveFlow,
     refreshFlows,
   }), [
@@ -471,6 +524,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNode,
     deleteNode,
     addEdge,
+    undo,
+    undoDepth,
     saveFlow,
     refreshFlows,
   ]);

@@ -327,7 +327,7 @@ A single DocType providing a real-time chat interface for conversational agents.
 -   Real-time chat UI with markdown rendering
 -   Message history display
 -   Only available for agents with `allow_chat` enabled
--   Server Actions: `huf.ai.agent_chat.get_agent_chat_messages`, `huf.ai.agent_chat.send_agent_chat_message`
+-   Server Actions: `huf.ai.agent.chat.get_agent_chat_messages`, `huf.ai.agent.chat.send_agent_chat_message`
 
 #### 10. Agent Trigger
 
@@ -1080,7 +1080,7 @@ This enables fully cross-provider TTS: an agent using `OpenAI / gpt-4o` for conv
 
 The primary logic is located in the `huf/ai` directory.
 
-#### `agent_integration.py`
+#### `agent/integration.py`
 
 This file contains the main logic for creating and running agents.
 
@@ -1127,7 +1127,7 @@ This file acts as a bridge between Huf's `Agent Tool Function` DocType and the `
 -   **Method: `handle_get_list`, `handle_create_document`, etc.**
     -   These are the actual functions that get executed when a standard DocType tool is called. They contain the logic to interact with the Frappe database (e.g., `frappe.get_list`, `frappe.get_doc`) and format the response in a way the AI can understand.
 
-#### `tool_functions.py`
+#### `tools/functions.py`
 
 This file contains the low-level functions that directly perform Frappe database operations.
 
@@ -1154,7 +1154,7 @@ This file implements the OpenRouter provider with custom retry logic and enhance
     -   **API Key Management**: Retrieves API key from `AI Provider` DocType using secure password field.
     -   **Multi-turn Tool Calling**: Supports multiple rounds of tool calling in a single agent run (up to 10 rounds).
     -   **Retry Logic**: Implements exponential backoff for rate limit (429) errors with up to 5 retries.
-    -   **Tool Serialization**: Uses `tool_serializer.serialize_tools()` for provider-agnostic tool format.
+    -   **Tool Serialization**: Uses `huf/ai/tools/serializer.py` `serialize_tools()` for provider-agnostic tool format.
     -   **Usage Tracking**: Accumulates token usage across multiple rounds of tool calling.
 -   **Function: `_post_with_retry(url, headers, payload, max_retries=5)`**
     -   Handles HTTP POST requests with automatic retry for rate limiting.
@@ -1201,7 +1201,7 @@ This file implements the unified LiteLLM provider that handles all LLM interacti
     -   Finds a tool by name in the agent's tools list using generator expression.
     -   Returns the first matching tool or `None` if not found.
 
-#### `agent_chat.py`
+#### `agent/chat.py`
 
 This file provides the backend API for the Agent Chat interface.
 
@@ -1213,7 +1213,7 @@ This file provides the backend API for the Agent Chat interface.
     -   Calls the agent and returns the response.
     -   Manages chat-specific conversation persistence and message formatting.
 
-#### `agent_hooks.py`
+#### `agent/hooks.py`
 
 This file handles document event-based agent triggering.
 
@@ -1239,7 +1239,7 @@ This file handles document event-based agent triggering.
     -   Constructs a prompt that includes the event name and document identifiers.
     -   Calls `run_agent_sync()` with appropriate `channel_id` and `external_id` parameters for conversation management.
 
-#### `agent_scheduler.py`
+#### `agent/scheduler.py`
 
 This file handles scheduled agent execution based on `Agent Trigger` configurations.
 
@@ -1253,7 +1253,7 @@ This file handles scheduled agent execution based on `Agent Trigger` configurati
     -   Error handling with logging for failed executions.
     -   Commits database changes after each successful execution.
 
-#### `agent_stream_renderer.py`
+#### `agent/stream_renderer.py`
 
 This file provides Server-Sent Events (SSE) streaming for real-time agent responses.
 
@@ -1293,7 +1293,7 @@ This file provides OpenAI Whisper integration for audio transcription.
     -   **Security**: Validates OpenAI API key configuration before processing.
     -   **Cleanup**: Automatically removes temporary files after transcription.
 
-#### `tool_registry.py`
+#### `tools/registry.py`
 
 This file provides automatic tool discovery and synchronization from app hooks.
 
@@ -1314,7 +1314,7 @@ This file provides automatic tool discovery and synchronization from app hooks.
 -   **Caching System**: Uses `Agent Settings` singleton to store last sync timestamps.
 -   **Sync Logic**: Only syncs when apps have been modified since last sync.
 
-#### `tool_serializer.py`
+#### `tools/serializer.py`
 
 This file provides provider-agnostic tool serialization for multi-provider AI agents.
 
@@ -1405,7 +1405,7 @@ Ingestion is a background process that converts raw inputs into indexed SQLite c
 -   **Query Processing**: Sanitizes input queries to prevent SQL injection and FTS syntax errors.
 -   **Multi-Source Search**: Aggregates results from multiple Knowledge Sources, sorting globally by score.
 
-#### 4. Agent Integration (`agent_integration.py` & `context_builder.py`)
+#### 4. Agent Integration (`agent/integration.py` & `context_builder.py`)
 
 Knowledge is injected into the agent execution loop in `run_agent_sync`:
 
@@ -1617,7 +1617,7 @@ The Huf system includes Server-Sent Events (SSE) streaming capabilities for real
 
 ### SSE Implementation
 
-#### Agent Stream Renderer (`huf/ai/agent_stream_renderer.py`)
+#### Agent Stream Renderer (`huf/ai/agent/stream_renderer.py`)
 
 -   **Class: `AgentStreamRenderer(BaseRenderer)`**
     -   Custom page renderer that handles SSE streaming for agents
@@ -1769,7 +1769,7 @@ Each registered tool must include:
 
 ### Synchronization Process
 
-#### Automatic Sync (`tool_registry.py`)
+#### Automatic Sync (`tools/registry.py`)
 
 -   **Trigger**: Sync occurs when apps are modified or on system startup
 -   **Cache Management**: Uses `Agent Settings` singleton to track last sync times
@@ -2132,26 +2132,26 @@ Edges are sorted by priority (descending); first match wins.
 
 | Module | Purpose |
 |:-------|:--------|
-| `huf/ai/flow_engine.py` | Core engine: load, validate, execute, edge evaluation |
-| `huf/ai/flow_api.py` | Whitelisted API endpoints for UI and triggers |
-| `huf/ai/flow_eval.py` | Safe AST-based expression evaluator |
-| `huf/ai/flow_tool_executor.py` | Deterministic tool execution |
-| `huf/ai/flow_orchestrator.py` | Prompt construction and JSON parsing for router/orchestrator |
-| `huf/ai/flow_tools.py` | Tool definitions for the huf_tools hook |
+| `huf/ai/flow/engine.py` | Core engine: load, validate, execute, edge evaluation |
+| `huf/ai/flow/api.py` | Whitelisted API endpoints for UI and triggers |
+| `huf/ai/flow/eval.py` | Safe AST-based expression evaluator |
+| `huf/ai/flow/tool_executor.py` | Deterministic tool execution |
+| `huf/ai/flow/orchestrator.py` | Prompt construction and JSON parsing for router/orchestrator |
+| `huf/ai/flow/tools.py` | Tool definitions for the huf_tools hook |
 
 ### Whitelisted APIs
 
 | Method | Purpose |
 |:-------|:--------|
-| `huf.ai.flow_api.get_flow_definition` | Get flow definition |
-| `huf.ai.flow_api.save_flow_definition` | Save/update flow definition |
-| `huf.ai.flow_api.run_flow` | Start a flow run |
-| `huf.ai.flow_api.get_flow_run` | Get flow run status |
-| `huf.ai.flow_api.list_flow_runs` | List flow runs |
-| `huf.ai.flow_api.resume_flow_run` | Resume waiting flow |
-| `huf.ai.flow_api.approve_flow_run` | Approve a flow |
-| `huf.ai.flow_api.reject_flow_run` | Reject a flow |
-| `huf.ai.flow_api.flow_webhook` | Webhook trigger (allow_guest) |
+| `huf.ai.flow.api.get_flow_definition` | Get flow definition |
+| `huf.ai.flow.api.save_flow_definition` | Save/update flow definition |
+| `huf.ai.flow.api.run_flow` | Start a flow run |
+| `huf.ai.flow.api.get_flow_run` | Get flow run status |
+| `huf.ai.flow.api.list_flow_runs` | List flow runs |
+| `huf.ai.flow.api.resume_flow_run` | Resume waiting flow |
+| `huf.ai.flow.api.approve_flow_run` | Approve a flow |
+| `huf.ai.flow.api.reject_flow_run` | Reject a flow |
+| `huf.ai.flow.api.flow_webhook` | Webhook trigger (allow_guest) |
 
 ### Agent Tools
 
@@ -2180,7 +2180,9 @@ HUF implements a capability-based Role-Based Access Control (RBAC) layer on top 
   - `Huf Manager`: Full edit access to agents, tools, knowledge, and flows.
   - `Huf User`: Access to use agents, chat, knowledge, tools, and flows.
   - `Huf Viewer`: Read-only access to agents and own chats.
-- **Frappe Role Mapping**: Under the hood, Huf Roles map 1-to-1 with Frappe Roles (`System Manager`, `Huf Manager`, `Huf User`, `Huf Viewer`).
+  - `Huf Gateway User`: Service role for a channel's Run as user; can only use agents.
+- **Frappe Role Mapping**: Under the hood, Huf Roles map 1-to-1 with Frappe Roles (`System Manager`, `Huf Manager`, `Huf User`, `Huf Viewer`, `Huf Gateway User`). A user has one Huf role; `Huf Gateway User` is the exception and is held alongside it.
+- **Defaults**: Every enabled Frappe System User gets `Huf Manager` (when they have no Huf role yet) plus `Huf Gateway User`, on user save and as a backfill on migrate (`huf_user_role.ensure_default_huf_roles`). An assigned role is never replaced, a disabled Huf User Role is never re-enabled, Administrator (already Huf Admin) only gains `Huf Gateway User`, and nobody is made `Huf Admin` (Frappe `System Manager`) automatically. Unit tests opt in with `frappe.flags.huf_default_roles_in_test`.
 - **Enforcement**:
   - Verification is done by checking capabilities using `huf.permissions.has_capability(user, capability)`.
   - Frontend checks permissions on load by querying `/api/method/huf.permissions.get_me`.
@@ -2235,7 +2237,6 @@ The Gateways feature (channel inbound adapters) is merged into `develop` but is 
 user-ready. The UI navigation and Flow Run trigger are temporarily disabled while the
 provider adapters and connection forms are finished. See:
 
-- `docs/gateway-todo.md` — detailed shame list and restoration checklist.
 - `#473-followup` comments in `frontend/src/services/gatewayApi.ts`,
   `frontend/src/pages/GatewaysPage.tsx`, `frontend/src/components/app-sidebar.tsx`,
   `frontend/src/App.tsx`, `huf/huf/doctype/flow_run/flow_run.json`, and

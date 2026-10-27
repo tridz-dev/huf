@@ -11,7 +11,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()
@@ -363,7 +363,7 @@ class TestClick(Base):
 		real = self._real_decision_fn
 		with patch.dict(sys.modules, {
 			"huf.huf.doctype.agent_execution_approval.agent_execution_approval": ex,
-			"huf.ai.flow_api": fl}):
+			"huf.ai.flow.api": fl}):
 			self.assertEqual(real("approval:execution", "approve")(), "ea")
 			self.assertEqual(real("approval:execution", "reject")(), "er")
 			self.assertEqual(real("approval:flow", "approve")(), "fa")

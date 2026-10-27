@@ -1,0 +1,130 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:version_key",
+ "creation": "2026-09-23 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "version_key",
+  "policy",
+  "version_number",
+  "status",
+  "definition_json",
+  "schema_version",
+  "fingerprint",
+  "default_model",
+  "published_at",
+  "metadata_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "version_key",
+   "fieldtype": "Data",
+   "label": "Version Key",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "policy",
+   "fieldtype": "Link",
+   "label": "Policy",
+   "options": "Decision Policy",
+   "reqd": 1
+  },
+  {
+   "fieldname": "version_number",
+   "fieldtype": "Int",
+   "label": "Version Number",
+   "reqd": 1,
+   "non_negative": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nPublished\nRetired",
+   "default": "Draft",
+   "reqd": 1
+  },
+  {
+   "fieldname": "definition_json",
+   "fieldtype": "Code",
+   "label": "Definition Json",
+   "options": "JSON",
+   "reqd": 1
+  },
+  {
+   "fieldname": "schema_version",
+   "fieldtype": "Data",
+   "label": "Schema Version",
+   "reqd": 1
+  },
+  {
+   "fieldname": "fingerprint",
+   "fieldtype": "Data",
+   "label": "Fingerprint",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_model",
+   "fieldtype": "Link",
+   "label": "Default Model",
+   "options": "Decision Model"
+  },
+  {
+   "fieldname": "published_at",
+   "fieldtype": "Datetime",
+   "label": "Published At"
+  },
+  {
+   "fieldname": "metadata_json",
+   "fieldtype": "Code",
+   "label": "Metadata Json",
+   "options": "JSON"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Decision Policy Version",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "print": 1,
+   "email": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "Huf Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "print": 1,
+   "email": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "Huf User",
+   "read": 1,
+   "select": 1,
+   "print": 1,
+   "export": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

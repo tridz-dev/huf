@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
-sys.path.insert(0, "huf/ai/tests")
+sys.path.insert(0, "huf/testing")
 import _stub_env  # noqa: E402
 
 _stub_env.install()
@@ -720,8 +720,9 @@ def wh(monkeypatch):
 	local = SimpleNamespace(response=SimpleNamespace(http_status_code=200))
 	fake_frappe = SimpleNamespace(
 		request=SimpleNamespace(args={"gateway_name": "gw1"}),
+		form_dict={},
 		local=local,
-		get_doc=lambda dt, n: SimpleNamespace(name=n, is_enabled=1),
+		get_doc=lambda dt, n: SimpleNamespace(name=n, is_enabled=1, provider="Microsoft Teams"),
 		DoesNotExistError=KeyError,
 	)
 	calls = []

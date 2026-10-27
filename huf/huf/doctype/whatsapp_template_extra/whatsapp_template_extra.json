@@ -1,0 +1,36 @@
+{
+ "actions": [],
+ "autoname": "field:state_key",
+ "creation": "2026-10-14 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["state_key", "whatsapp_account", "template", "template_id", "created_via", "last_synced_at", "section_meta", "parameter_format", "header_format", "ttl_seconds", "named_samples", "components_json"],
+ "fields": [
+  {"description":"<WhatsApp Account>::<template document name>: extras belong to exactly one account.","fieldname":"state_key","fieldtype":"Data","label":"Extra key","length":140,"read_only":1,"reqd":1,"unique":1},
+  {"fieldname":"whatsapp_account","fieldtype":"Data","in_list_view":1,"label":"WhatsApp Account","length":140,"read_only":1,"search_index":1},
+  {"fieldname":"template","fieldtype":"Data","in_list_view":1,"label":"Template","length":140,"read_only":1,"reqd":1,"search_index":1},
+  {"fieldname":"template_id","fieldtype":"Data","in_list_view":1,"label":"Meta template ID","length":140,"read_only":1},
+  {"fieldname":"created_via","fieldtype":"Select","in_list_view":1,"label":"Created via","options":"\nHuf\nMeta sync","read_only":1},
+  {"fieldname":"last_synced_at","fieldtype":"Datetime","label":"Last synced at","read_only":1},
+  {"fieldname":"section_meta","fieldtype":"Section Break","label":"Meta-side fields"},
+  {"fieldname":"parameter_format","fieldtype":"Select","label":"Parameter format","options":"\nPOSITIONAL\nNAMED","read_only":1},
+  {"description":"Full Meta header format (TEXT, IMAGE, VIDEO, DOCUMENT, LOCATION).","fieldname":"header_format","fieldtype":"Data","label":"Header format","length":40,"read_only":1},
+  {"fieldname":"ttl_seconds","fieldtype":"Int","label":"Message TTL (seconds)","read_only":1},
+  {"fieldname":"named_samples","fieldtype":"JSON","label":"Named samples","read_only":1},
+  {"description":"The exact Meta components Huf sent / last synced.","fieldname":"components_json","fieldtype":"JSON","label":"Meta components","read_only":1}
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "Huf",
+ "name": "WhatsApp Template Extra",
+ "owner": "Administrator",
+ "permissions": [
+  {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1},
+  {"create":1,"delete":1,"read":1,"report":1,"role":"Huf Admin","write":1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

@@ -25,6 +25,10 @@ import {
   Route,
   GitCommitHorizontal,
   Globe,
+  Database,
+  Save,
+  Trash2,
+  FilePlus,
   type LucideIcon
 } from "lucide-react";
 import { actionOptions } from "../../data/actions";
@@ -52,7 +56,11 @@ const iconMap: Record<string, LucideIcon> = {
   Wrench,
   Route,
   GitCommitHorizontal,
-  Globe
+  Globe,
+  Database,
+  Save,
+  Trash2,
+  FilePlus
 };
 
 export function ActionSelectionModal({
@@ -77,7 +85,19 @@ export function ActionSelectionModal({
     // Map frontend action IDs to backend-compatible ActionConfig types
     switch (actionId) {
       case "transform":
-        config = { type: "transform", transformations: [] };
+        config = { type: "transform", op: "lower", input: {} };
+        break;
+      case "state-get":
+        config = { type: "state-get", key: "" };
+        break;
+      case "state-set":
+        config = { type: "state-set", key: "", value: "" };
+        break;
+      case "state-delete":
+        config = { type: "state-delete", key: "" };
+        break;
+      case "doc-create":
+        config = { type: "doc-create", doctype: "", fields: {} };
         break;
       case "router":
         config = { type: "router" };
@@ -102,7 +122,7 @@ export function ActionSelectionModal({
         break;
       default:
         // Fallback for any other actions - use transform as default
-        config = { type: "transform", transformations: [] };
+        config = { type: "transform", op: "lower", input: {} };
     }
 
     onSelect(actionId, config);

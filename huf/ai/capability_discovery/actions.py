@@ -67,7 +67,7 @@ def declared_actions_for_app(app_name):
     """Return capability descriptors for App-Provided Agent Tool Function records.
 
     These are tools already synced from `app_name`'s `huf_tools` hook entries via
-    huf.ai.tool_registry.sync_discovered_tools (types == "App Provided").
+    huf.ai.tools.registry.sync_discovered_tools (types == "App Provided").
     """
     if not app_name:
         return []
@@ -106,12 +106,12 @@ def declared_actions_for_app(app_name):
 def _iter_declared_function_paths(app_name):
     """Yield distinct dotted function paths declared by `app_name`'s huf_tools hook.
 
-    This reuses the same hook-scanning surface as huf.ai.tool_registry (the only
+    This reuses the same hook-scanning surface as huf.ai.tools.registry (the only
     safe, existing app-scoped enumeration of functions in this codebase) rather than
     walking the filesystem. It intentionally does not attempt to discover whitelisted
     functions that are not referenced by a huf_tools entry.
     """
-    from huf.ai.tool_registry import _normalize_hook_tools
+    from huf.ai.tools.registry import _normalize_hook_tools
 
     if app_name not in frappe.get_installed_apps():
         return

@@ -37,24 +37,28 @@ class TestCommitIfBackground(IntegrationTestCase):
     def test_no_commit_inside_request(self):
         from huf.ai.transaction import commit_if_background
 
-        setattr(frappe.local, "request", frappe._dict(method="GET"))
+        # Never delattr frappe.local.request: once deleted, later assignments no longer
+        # reach the frappe.request proxy and every following webhook test sees no request.
+        previous = getattr(frappe.local, "request", None)
+        frappe.local.request = frappe._dict(method="GET")
         try:
             with patch("huf.ai.transaction.safe_commit") as mock_commit:
                 commit_if_background()
                 mock_commit.assert_not_called()
         finally:
-            if hasattr(frappe.local, "request"):
-                delattr(frappe.local, "request")
+            frappe.local.request = previous
 
     def test_commit_outside_request(self):
         from huf.ai.transaction import commit_if_background
 
-        if hasattr(frappe.local, "request"):
-            delattr(frappe.local, "request")
-
-        with patch("huf.ai.transaction.safe_commit") as mock_commit:
-            commit_if_background()
-            mock_commit.assert_called_once()
+        previous = getattr(frappe.local, "request", None)
+        frappe.local.request = None
+        try:
+            with patch("huf.ai.transaction.safe_commit") as mock_commit:
+                commit_if_background()
+                mock_commit.assert_called_once()
+        finally:
+            frappe.local.request = previous
 
 
 class TestAudioServiceCommitGating(IntegrationTestCase):
@@ -63,7 +67,9 @@ class TestAudioServiceCommitGating(IntegrationTestCase):
     def test_create_audio_user_message_uses_commit_if_background(self):
         from huf.ai import audio_service
 
-        setattr(frappe.local, "request", frappe._dict(method="POST"))
+        _previous_request = getattr(frappe.local, "request", None)
+
+        frappe.local.request = frappe._dict(method="POST")
         try:
             file_doc = MagicMock(file_url="/files/audio.mp3")
             agent_doc = MagicMock(provider="openai", model="whisper-1")
@@ -95,8 +101,7 @@ class TestAudioServiceCommitGating(IntegrationTestCase):
                                 )
                 mock_commit.assert_called_once()
         finally:
-            if hasattr(frappe.local, "request"):
-                delattr(frappe.local, "request")
+            frappe.local.request = _previous_request
 
 
 class TestOrchestratorCommitGating(IntegrationTestCase):
@@ -118,7 +123,9 @@ class TestOrchestratorCommitGating(IntegrationTestCase):
         orch.agent_orchestration_plan = []
         orch.name = "ORCH-0001"
 
-        setattr(frappe.local, "request", frappe._dict(method="POST"))
+        _previous_request = getattr(frappe.local, "request", None)
+
+        frappe.local.request = frappe._dict(method="POST")
         try:
             with patch("frappe.get_doc", return_value=agent_doc):
                 with patch("frappe.new_doc", return_value=orch):
@@ -127,8 +134,7 @@ class TestOrchestratorCommitGating(IntegrationTestCase):
                             create_orchestration("test-agent", "hello")
                         mock_commit.assert_called_once()
         finally:
-            if hasattr(frappe.local, "request"):
-                delattr(frappe.local, "request")
+            frappe.local.request = _previous_request
 
 
 class TestSetUserRestoreGuards(IntegrationTestCase):
@@ -139,7 +145,7 @@ class TestSetUserRestoreGuards(IntegrationTestCase):
         frappe.session.user = user
 
     def test_agent_hooks_restores_user(self):
-        from huf.ai.agent_hooks import run_agent_for_doc
+        from huf.ai.agent.hooks import run_agent_for_doc
 
         original_user = "test@example.com"
         target_user = "trigger@example.com"
@@ -147,7 +153,8 @@ class TestSetUserRestoreGuards(IntegrationTestCase):
         frappe.session.user = original_user
         try:
             with patch("frappe.set_user", side_effect=self._tracking_set_user) as mock_set_user:
-                with patch("huf.ai.agent_hooks.run_agent_sync"):
+                # The initiating user must exist for identity resolution to switch to it.
+                with patch("frappe.db.exists", return_value=True), patch("huf.ai.agent.hooks.run_agent_sync"):
                     run_agent_for_doc(
                         doc={"doctype": "Note", "name": "TEST-001"},
                         agent_name="test-agent",
@@ -238,7 +245,15 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
         )
 
         mock_request = frappe._dict(args={"doc": "BOT-001"}, headers={}, get_data=lambda **kw: b"{}")
-        frappe.request = mock_request
+        # patch.object restores the original frappe.request proxy; assigning None would leave every later
+        # test (and the webhook tests) without a request binding.
+        _request_patch = patch.object(frappe, "request", mock_request)
+        _request_patch.start()
+        self.addCleanup(_request_patch.stop)
+        # @rate_limit needs a client identity; outside a real HTTP request there is none.
+        had_ip = hasattr(frappe.local, "request_ip")
+        original_ip = getattr(frappe.local, "request_ip", None)
+        frappe.local.request_ip = "127.0.0.1"
         try:
             with patch("frappe.db.exists", return_value=True):
                 with patch("frappe.get_doc", return_value=settings):
@@ -247,7 +262,11 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
             self.assertFalse(result.get("success"))
             self.assertIn("secret", result.get("error", "").lower())
         finally:
-            frappe.request = None
+            pass
+            if had_ip:
+                frappe.local.request_ip = original_ip
+            else:
+                frappe.local.request_ip = None
 
     @unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
     def test_elevenlabs_webhook_rejects_invalid_signature(self):
@@ -263,17 +282,21 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
             get_data=lambda **kw: b'{"type":"post_call_transcription"}',
             headers={"elevenlabs-signature": "invalid"},
         )
-        frappe.request = mock_request
+        # patch.object restores the original frappe.request proxy; assigning None would leave every later
+        # test (and the webhook tests) without a request binding.
+        _request_patch = patch.object(frappe, "request", mock_request)
+        _request_patch.start()
+        self.addCleanup(_request_patch.stop)
         try:
             with patch("frappe.get_single", return_value=settings):
                 result = handle_elevenlabs_webhook()
 
             self.assertEqual(result.get("status"), "forbidden")
         finally:
-            frappe.request = None
+            pass
 
     def test_flow_webhook_rejects_invalid_key(self):
-        from huf.ai.flow_api import flow_webhook
+        from huf.ai.flow.api import flow_webhook
 
         defn_doc = SimpleNamespace(
             status="Active",
@@ -281,18 +304,22 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
         )
 
         mock_request = frappe._dict(args={"webhook_key": "wrong-key"}, get_data=lambda **kw: b"{}")
-        frappe.request = mock_request
+        # patch.object restores the original frappe.request proxy; assigning None would leave every later
+        # test (and the webhook tests) without a request binding.
+        _request_patch = patch.object(frappe, "request", mock_request)
+        _request_patch.start()
+        self.addCleanup(_request_patch.stop)
         try:
             with patch("frappe.db.exists", return_value=True):
                 with patch("frappe.get_doc", return_value=defn_doc):
                     with self.assertRaises(frappe.AuthenticationError):
                         flow_webhook("flow-1", webhook_key="wrong-key")
         finally:
-            frappe.request = None
+            pass
 
     @unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
     def test_clean_flow_webhook_accepts_frappe_cloud_secret_header(self):
-        from huf.ai.flow_api import flow_webhook_clean
+        from huf.ai.flow.api import flow_webhook_clean
 
         definition_json = (
             '{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook",'
@@ -306,13 +333,17 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
             headers={"X-Webhook-Secret": "correct-key"},
             get_data=lambda **kw: b'{"event":"Site Status Update","site":"demo.frappe.cloud"}',
         )
-        frappe.request = mock_request
+        # patch.object restores the original frappe.request proxy; assigning None would leave every later
+        # test (and the webhook tests) without a request binding.
+        _request_patch = patch.object(frappe, "request", mock_request)
+        _request_patch.start()
+        self.addCleanup(_request_patch.stop)
         try:
             with patch("frappe.get_all", return_value=[{"name": "flow-1", "definition_json": definition_json}]):
                 with patch("frappe.db.exists", return_value=True):
                     with patch("frappe.get_doc", return_value=defn_doc):
                         with patch("frappe.set_user") as mock_set_user:
-                            with patch("huf.ai.flow_engine.create_flow_run", return_value=flow_run) as mock_create_run:
+                            with patch("huf.ai.flow.engine.create_flow_run", return_value=flow_run) as mock_create_run:
                                 with patch("frappe.enqueue") as mock_enqueue:
                                     result = flow_webhook_clean()
 
@@ -323,10 +354,10 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
             self.assertEqual(mock_create_run.call_args.kwargs["payload"]["event"], "Site Status Update")
             mock_enqueue.assert_called_once()
         finally:
-            frappe.request = None
+            pass
 
     def test_clean_flow_webhook_rejects_ambiguous_key_without_flow_id(self):
-        from huf.ai.flow_api import flow_webhook_clean
+        from huf.ai.flow.api import flow_webhook_clean
 
         definition_json = (
             '{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook",'
@@ -338,7 +369,11 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
             headers={"X-Webhook-Secret": "shared-key"},
             get_data=lambda **kw: b"{}",
         )
-        frappe.request = mock_request
+        # patch.object restores the original frappe.request proxy; assigning None would leave every later
+        # test (and the webhook tests) without a request binding.
+        _request_patch = patch.object(frappe, "request", mock_request)
+        _request_patch.start()
+        self.addCleanup(_request_patch.stop)
         try:
             with patch(
                 "frappe.get_all",
@@ -350,4 +385,4 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
                 with self.assertRaises(Exception):
                     flow_webhook_clean()
         finally:
-            frappe.request = None
+            pass
