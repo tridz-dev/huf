@@ -161,6 +161,7 @@ def _auto_setup(monkeypatch, info=None, users=("bob@x.com",), flag="1", workspac
 	monkeypatch.setattr("huf.ai.gateways.slack_api.inspect_token", lambda a: {"team_id": workspace})
 	monkeypatch.setattr(frappe, "get_all", lambda *a, **k: list(users), raising=False)
 	monkeypatch.setattr(identity, "_create_link", lambda *a, **k: created.append(a))
+	monkeypatch.setattr(identity, "_has_revoked", lambda g, t, e: False)
 	return created
 
 
@@ -235,6 +236,18 @@ def test_service_user_policy_returns_none(monkeypatch):
 
 
 # ---- self-link token ----------------------------------------------------------
+def fake_confirm(monkeypatch, send):
+	"""Temporarily install a fake identity_confirm (no sys.modules / package attribute leaks)."""
+	import types as _t
+
+	import huf.ai.gateways as pkg
+
+	mod = _t.ModuleType("huf.ai.gateways.identity_confirm")
+	mod.send_confirmation = send
+	monkeypatch.setitem(sys.modules, "huf.ai.gateways.identity_confirm", mod)
+	monkeypatch.setattr(pkg, "identity_confirm", mod, raising=False)
+
+
 def test_token_roundtrip_and_confirm(monkeypatch, env):
 	created = []
 	monkeypatch.setattr(identity, "_create_link", lambda *a, **k: created.append(a))
@@ -242,12 +255,18 @@ def test_token_roundtrip_and_confirm(monkeypatch, env):
 	monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
 	tok = identity.create_self_link_token("GW-1", "T1", "U1")
 	assert identity.preview_self_link(tok)["external_id"] == "U1"
-	assert identity.confirm_self_link(tok) == {"linked": True, "user": "alice@x.com"}
-	assert created[0][2:5] == ("U1", "alice@x.com", "Self link")
+	sent = []
+	fake_confirm(monkeypatch, lambda *a: sent.append(a))
+	monkeypatch.setattr(identity, "_create_link", lambda *a, **k: created.append((a, k)) or SimpleNamespace(name="L5"))
+	assert identity.confirm_self_link(tok) == {"linked": False, "pending": True, "user": "alice@x.com"}
+	args, kw = created[0]
+	assert args[2:5] == ("U1", "alice@x.com", "Self link") and kw["state"] == "Pending"
+	assert sent[0][1:] == ("L5", "T1", "U1", "alice@x.com")
 
 
 def test_token_replay_rejected(monkeypatch):
-	monkeypatch.setattr(identity, "_create_link", lambda *a, **k: None)
+	fake_confirm(monkeypatch, lambda *a: None)
+	monkeypatch.setattr(identity, "_create_link", lambda *a, **k: SimpleNamespace(name="L5"))
 	monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
 	monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
 	tok = identity.create_self_link_token("GW-1", "T1", "U1")
@@ -479,3 +498,124 @@ def test_preview_label_falls_back_to_id_and_event_label_used(monkeypatch):
 	reason = _ask(monkeypatch, e)
 	tok = reason.split("token=")[1]
 	assert identity.preview_self_link(tok)["slack_label"] == "sam"
+
+
+# ---- S8 hardening ---------------------------------------------------------------
+def test_auto_map_skips_revoked_identity(monkeypatch):
+	created = _auto_setup(monkeypatch)
+	monkeypatch.setattr(identity, "_has_revoked", lambda g, t, e: True)
+	with pytest.raises(gw_hooks.GatewayHookDenied):
+		identity.resolve_run_user(gw(), ev())
+	assert not created
+
+
+def test_pending_link_does_not_resolve(monkeypatch):
+	# _find_link only matches state Linked
+	seen = {}
+	monkeypatch.setattr(frappe.db, "get_value", lambda dt, filters, *a, **k: seen.update(f=filters))
+	assert identity._find_link("GW-1", "T1", "U1") is None
+	assert seen["f"]["state"] == "Linked"
+
+
+def test_service_policy_none_only_after_handler_ran(monkeypatch):
+	monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
+	monkeypatch.setattr(identity, "get_gateway_credential", lambda g, k: "")
+	monkeypatch.setattr(identity, "_has_revoked", lambda g, t, e: False)
+	assert identity.resolve_run_user(gw("Use service user"), ev()) is None
+
+
+def test_auto_map_error_propagates_not_swallowed(monkeypatch):
+	_auto_setup(monkeypatch)
+	monkeypatch.setattr(identity, "get_slack_api", lambda g: (_ for _ in ()).throw(RuntimeError("down")))
+	with pytest.raises(RuntimeError):
+		identity.resolve_run_user(gw(), ev())
+
+
+def test_nonce_consumed_once_even_if_cache_gate_passes_twice(monkeypatch):
+	"""Atomic claim: a second confirm with the same token fails even if the nonce key is still there."""
+	fake_confirm(monkeypatch, lambda *a: None)
+	monkeypatch.setattr(identity, "_create_link", lambda *a, **k: SimpleNamespace(name="L5"))
+	monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
+	monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+	tok = identity.create_self_link_token("GW-1", "T1", "U1")
+	real_delete = identity._cache().delete_value
+	identity._cache().delete_value = lambda k: None  # simulate the lost-delete race
+	try:
+		identity.confirm_self_link(tok)
+		with pytest.raises(Perm):
+			identity.confirm_self_link(tok)
+	finally:
+		identity._cache().delete_value = real_delete
+
+
+def test_concurrent_confirm_blocked_by_key_lock(monkeypatch):
+	fake_confirm(monkeypatch, lambda *a: None)
+	created = []
+	monkeypatch.setattr(identity, "_create_link", lambda *a, **k: created.append(a) or SimpleNamespace(name="L5"))
+	monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
+	monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+	tok = identity.create_self_link_token("GW-1", "T1", "U1")
+	held = identity.key_lock("GW-1", "T1", "U1")
+	assert held
+	with pytest.raises(Perm):
+		identity.confirm_self_link(tok)
+	assert not created
+	identity.release_key_lock(held)
+
+
+def test_confirm_dm_failure_revokes_pending(monkeypatch):
+	def boom(*a):
+		raise RuntimeError("no im:write")
+
+	fake_confirm(monkeypatch, boom)
+	monkeypatch.setattr(identity, "_create_link", lambda *a, **k: SimpleNamespace(name="L5"))
+	monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
+	monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+	monkeypatch.setattr(frappe, "log_error", lambda *a, **k: None, raising=False)
+	monkeypatch.setattr(frappe, "get_traceback", lambda: "tb", raising=False)
+	tok = identity.create_self_link_token("GW-1", "T1", "U1")
+	with pytest.raises(Exception):
+		identity.confirm_self_link(tok)
+	frappe.db.set_value.assert_called_with(identity.DOCTYPE, "L5", "state", "Revoked")
+
+
+@pytest.mark.parametrize("target,roles", [("Administrator", []), ("boss@x.com", ["System Manager"])])
+def test_gateway_writer_cannot_link_privileged_user(monkeypatch, target, roles):
+	monkeypatch.setattr(frappe, "get_roles", lambda user=None: roles if user else ["Huf Manager"])
+	monkeypatch.setattr(frappe, "has_permission", lambda *a, **k: True, raising=False)
+	monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
+	monkeypatch.setattr(identity, "_create_link", lambda *a, **k: pytest.fail("must not link"))
+	monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+	with pytest.raises(Perm):
+		identity.link_identity("GW-1", "T1", "U1", target)
+
+
+def test_gateway_writer_cannot_take_over_privileged_existing_link(monkeypatch):
+	monkeypatch.setattr(frappe, "get_roles", lambda user=None: ["System Manager"] if user else ["Huf Manager"])
+	monkeypatch.setattr(frappe, "has_permission", lambda *a, **k: True, raising=False)
+	monkeypatch.setattr(identity, "_find_link", lambda g, t, e: SimpleNamespace(name="L1", user="bob@x.com"))
+	monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+	with pytest.raises(Perm):
+		identity.link_identity("GW-1", "T1", "U1", "carol@x.com")
+
+
+def test_gateway_writer_can_link_ordinary_user(monkeypatch):
+	monkeypatch.setattr(frappe, "get_roles", lambda user=None: ["Huf User"] if user else ["Huf Manager"])
+	monkeypatch.setattr(frappe, "has_permission", lambda *a, **k: True, raising=False)
+	monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
+	monkeypatch.setattr(identity, "_create_link", lambda *a, **k: SimpleNamespace(name="L9"))
+	monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+	assert identity.link_identity("GW-1", "T1", "U1", "bob@x.com")["user"] == "bob@x.com"
+
+
+def test_system_manager_can_link_administrator(monkeypatch):
+	monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
+	monkeypatch.setattr(identity, "_create_link", lambda *a, **k: SimpleNamespace(name="L9"))
+	monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+	assert identity.link_identity("GW-1", "T1", "U1", "Administrator")["user"] == "Administrator"
+
+
+@pytest.mark.parametrize("source", ["Self link", "Auto email", None])
+def test_usable_rejects_administrator_for_non_admin_sources(source):
+	assert identity._usable("Administrator", source) is False
+	assert identity._usable("Administrator", "Admin") is True

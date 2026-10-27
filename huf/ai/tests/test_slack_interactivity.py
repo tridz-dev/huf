@@ -325,6 +325,25 @@ class TestFlow(Base):
 		self.assertEqual(self.f.db.sessions[s]["state"], "Pending")
 		self.api.update_message.assert_not_called()
 
+	def test_actor_optional_handler_runs_for_unlinked_clicker(self):
+		opt = MagicMock(return_value={"text": "Linked."})
+		si.register_action_handler("optkind:", opt, requires_actor=False)
+		self.addCleanup(si._ACTOR_OPTIONAL.discard, "optkind:")
+		s = self.make(kind="optkind:x", intended_slack_user="UX")
+		self.run_endpoint(form(click(s, user="UX")))
+		opt.assert_called_once()
+		self.assertIsNone(opt.call_args.args[2])
+		self.assertEqual(self.f.db.sessions[s]["state"], "Consumed")
+
+	def test_actor_optional_still_checks_intended_slack_user(self):
+		opt = MagicMock(return_value={"text": "Linked."})
+		si.register_action_handler("optkind:", opt, requires_actor=False)
+		self.addCleanup(si._ACTOR_OPTIONAL.discard, "optkind:")
+		s = self.make(kind="optkind:x", intended_slack_user="UX")
+		self.run_endpoint(form(click(s, user="UY")))
+		opt.assert_not_called()
+		self.assertEqual(self.f.db.sessions[s]["state"], "Pending")
+
 	def test_wrong_clicker_by_user(self):
 		s = self.make(intended_user="alice@x.com")
 		self.run_endpoint(form(click(s, user="U2")))

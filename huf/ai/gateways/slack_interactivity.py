@@ -45,16 +45,27 @@ MSG_UNSUPPORTED = "Sorry, that action is not supported yet."
 MSG_FAILED = "Sorry, something went wrong handling that action."
 
 _HANDLERS: dict[str, object] = {}
+# Prefixes whose handler runs for a clicker who has NO linked Huf user (e.g. the identity-link
+# confirmation itself). Their handlers get ``actor_user=None`` and must verify the Slack user.
+_ACTOR_OPTIONAL: set[str] = set()
 
 
 # --------------------------------------------------------------------------- registry
-def register_action_handler(kind_prefix: str, fn) -> None:
+def register_action_handler(kind_prefix: str, fn, *, requires_actor: bool = True) -> None:
 	"""Register ``fn(gateway, session, actor_user, payload) -> dict`` for session kinds
 	starting with ``kind_prefix``. Result keys: ``text`` (status text), ``blocks`` (optional
-	replacement blocks). The longest matching prefix wins; re-registering replaces."""
+	replacement blocks). The longest matching prefix wins; re-registering replaces.
+	``requires_actor=False`` lets clickers without a linked Huf user through (handler gets
+	``actor_user=None``)."""
 	if not kind_prefix or not callable(fn):
 		raise ValueError("kind_prefix and a callable handler are required")
 	_HANDLERS[kind_prefix] = fn
+	(_ACTOR_OPTIONAL.discard if requires_actor else _ACTOR_OPTIONAL.add)(kind_prefix)
+
+
+def _actor_optional(kind: str) -> bool:
+	matches = [p for p in _HANDLERS if str(kind or "").startswith(p)]
+	return bool(matches) and max(matches, key=len) in _ACTOR_OPTIONAL
 
 
 def get_action_handler(kind: str):
@@ -292,10 +303,11 @@ def _process_block_actions(gateway, payload):
 	session_name, choice = bk.parse_action_id(first.get("action_id"))
 	if not name or session_name != name:
 		return _tell(gateway, payload, slack_user, MSG_UNKNOWN)
-	if not actor:
-		return _tell(gateway, payload, slack_user, MSG_LINK_FIRST)
-
 	session = _load_session(name)
+	if not actor:
+		get_action_handler(session.kind if session else "")  # make sure handler modules are loaded
+		if not (session and slack_user and _actor_optional(session.kind)):
+			return _tell(gateway, payload, slack_user, MSG_LINK_FIRST)
 	if not session or session.gateway != gateway.name:
 		return _tell(gateway, payload, slack_user, MSG_UNKNOWN)
 	channel, ts = _where(payload)
@@ -310,7 +322,8 @@ def _process_block_actions(gateway, payload):
 	if not fn:
 		return _tell(gateway, payload, slack_user, MSG_UNSUPPORTED)
 
-	result = consume_action_session(name, actor)
+	consumer = actor or f"slack:{slack_user}"
+	result = consume_action_session(name, consumer)
 	if not result["ok"]:
 		return _tell(gateway, payload, slack_user, result["message"])
 
@@ -324,7 +337,7 @@ def _process_block_actions(gateway, payload):
 		except Exception:
 			pass
 		try:
-			release_action_session(name, actor, result.get("consumed_at"))
+			release_action_session(name, consumer, result.get("consumed_at"))
 		except Exception:
 			frappe.log_error(title="Slack action session release failed")
 		out = {"text": MSG_FAILED}
