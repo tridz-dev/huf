@@ -1,0 +1,40 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-10-27 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "gateway",
+  "kind",
+  "state",
+  "expires_at",
+  "intended_user",
+  "intended_slack_user",
+  "channel",
+  "message_ts",
+  "payload",
+  "consumed_by",
+  "consumed_at"
+ ],
+ "fields": [
+  {"fieldname": "gateway", "fieldtype": "Link", "label": "Gateway", "options": "Gateway", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "kind", "fieldtype": "Data", "label": "Kind", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "state", "fieldtype": "Select", "label": "State", "options": "Pending\nConsumed\nExpired\nCancelled", "default": "Pending", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "expires_at", "fieldtype": "Datetime", "label": "Expires at", "reqd": 1},
+  {"fieldname": "intended_user", "fieldtype": "Link", "label": "Intended user", "options": "User"},
+  {"fieldname": "intended_slack_user", "fieldtype": "Data", "label": "Intended Slack user"},
+  {"fieldname": "channel", "fieldtype": "Data", "label": "Channel"},
+  {"fieldname": "message_ts", "fieldtype": "Data", "label": "Message ts"},
+  {"fieldname": "payload", "fieldtype": "JSON", "label": "Payload"},
+  {"fieldname": "consumed_by", "fieldtype": "Link", "label": "Consumed by", "options": "User", "read_only": 1},
+  {"fieldname": "consumed_at", "fieldtype": "Datetime", "label": "Consumed at", "read_only": 1}
+ ],
+ "module": "Huf",
+ "name": "Gateway Action Session",
+ "permissions": [
+  {"create": 1, "delete": 1, "read": 1, "role": "System Manager", "write": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}
