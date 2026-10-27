@@ -136,7 +136,8 @@ def is_tool_allowed(gateway, event, tool_name) -> bool:
 	policy = get_policy(gateway, _get(event, "conversation_id") if event is not None else None)
 	if not policy:
 		return True
-	listed = bool(_name_variants(tool_name) & policy["tools"])
+	listed_names = set().union(*(_name_variants(t) for t in policy["tools"])) if policy["tools"] else set()
+	listed = bool(_name_variants(tool_name) & listed_names)
 	return listed if policy["mode"] == ALLOW else not listed
 
 
