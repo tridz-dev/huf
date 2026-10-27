@@ -2105,6 +2105,13 @@ def _fail_flow_run(flow_run, error_msg: str):
 	flow_run.db_set({"status": "Failed", "last_error": error_msg, "completed_at": now_datetime()})
 	commit_if_background()
 	_publish_flow_event(flow_run, "flow_failed", {"error": error_msg})
+	# db_set does not fire doc events, so tell gateway-originated senders explicitly.
+	try:
+		from huf.ai.gateways.flow_reply import notify_flow_failure
+
+		notify_flow_failure(flow_run.name)
+	except Exception:
+		pass
 
 
 # ---------------------------------------------------------------------------
