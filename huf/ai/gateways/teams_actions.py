@@ -343,6 +343,28 @@ def _tenant_ok(gateway, tenant_id) -> bool:
 		return False
 
 
+_KIND_HANDLERS: dict = {}
+
+
+def register_action_handler(kind: str, fn) -> None:
+	"""``fn(gateway_name, session_name, session, meta, verb) -> invoke body`` for a session kind
+	whose clicker need not be a linked Huf user (e.g. ``idlink``). The handler must verify the
+	principal itself and consume the session; the generic binding checks run first."""
+	_KIND_HANDLERS[kind] = fn
+
+
+def _handle_registered(fn, gw: str, session_name: str, session: dict, meta, verb: str) -> dict:
+	if (session.get("gateway") != gw or _s(session.get("tenant_id")) != meta.tenant_id
+			or _s(session.get("conversation_id")) != teams_refs._base_conversation_id(meta.conversation_id)):
+		return _refuse(MSG_UNAVAILABLE)
+	state = session.get("state")
+	if state == "Decided":
+		return _replace(MSG_DECIDED)
+	if state != "Open":
+		return _replace(MSG_EXPIRED)
+	return fn(gw, session_name, session, meta, verb)
+
+
 def _handle(gateway, activity: dict) -> dict:
 	meta = teams_refs.parse_meta(activity)
 	if not _tenant_ok(gateway, meta.tenant_id):  # defence in depth: never act for a foreign tenant
@@ -351,6 +373,9 @@ def _handle(gateway, activity: dict) -> dict:
 	if verb not in cards.VERBS or not session_name:
 		return _refuse(MSG_UNAVAILABLE)
 	gw = _gateway_name(gateway)
+	peek = _load_session(session_name)
+	if peek and peek.get("kind") in _KIND_HANDLERS:
+		return _handle_registered(_KIND_HANDLERS[peek["kind"]], gw, session_name, peek, meta, verb)
 	clicker = teams_identity.resolve_user(gw, meta.tenant_id, meta.user_aad_id) if (
 		meta.tenant_id and meta.user_aad_id) else None
 	if not clicker:
@@ -456,3 +481,9 @@ def register() -> None:
 
 
 register()
+
+
+try:  # registers the "idlink" handler (explicit register() runs at its import)
+	from huf.ai.gateways import teams_identity_confirm  # noqa: F401
+except Exception:  # pragma: no cover - a failure leaves links Pending (fail closed)
+	pass
