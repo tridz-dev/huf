@@ -89,7 +89,7 @@ def validate_service_url(url: str) -> str:
 	if port not in (None, 443):
 		raise bad()
 	host = parts.hostname or ""
-	if parts.netloc.endswith(":") or host != host.lower() and not host.isascii():
+	if parts.netloc.endswith(":") or not host.isascii():
 		raise bad()
 	host = host.lower()
 	if host.endswith(".") or not _HOST_RE.match(host):
