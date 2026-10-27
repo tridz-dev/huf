@@ -159,12 +159,40 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 	provider_id = "whatsapp"
 	credential_schema = GatewayCredentialSchema(
 		(
-			GatewayCredentialField("phone_number_id", "Phone Number ID", secret=False),
-			GatewayCredentialField("access_token", "Meta Permanent/System Access Token"),
-			GatewayCredentialField("webhook_verify_token", "Webhook Verify Token"),
-			GatewayCredentialField("app_secret", "Meta App Secret (for HMAC signature verification)", required=True),
+			GatewayCredentialField(
+				"phone_number_id", "Phone Number ID", secret=False,
+				description="Meta app > WhatsApp > API setup, under the phone number.",
+			),
+			GatewayCredentialField(
+				"business_account_id", "WhatsApp Business Account ID", secret=False,
+				description="Meta app > WhatsApp > API setup, next to the phone number ID.",
+			),
+			GatewayCredentialField(
+				"app_id", "Meta App ID", secret=False,
+				description="Meta app dashboard > App settings > Basic.",
+			),
+			GatewayCredentialField(
+				"access_token", "Permanent Access Token",
+				description="A system user token from Meta Business settings, with WhatsApp messaging and management access.",
+			),
+			GatewayCredentialField(
+				"app_secret", "Meta App Secret",
+				description="Meta app dashboard > App settings > Basic. Used to confirm messages really come from Meta.",
+			),
+			GatewayCredentialField(
+				"webhook_verify_token", "Webhook Verify Token",
+				description="Any phrase you choose. Paste the same phrase into Meta when you add the webhook URL.",
+			),
+			GatewayCredentialField(
+				"graph_api_version", "Graph API Version", required=False, secret=False,
+				description=f"Optional. Defaults to {bridge.GRAPH_DEFAULT_VERSION}.",
+			),
 		)
 	)
+	# Needed to receive and send. The rest of the schema is required when the credential is saved
+	# (it feeds templates, account linking and webhook subscription) but older gateways created
+	# before those fields existed must keep running.
+	runtime_credentials = ("phone_number_id", "access_token", "webhook_verify_token", "app_secret")
 	capabilities = GatewayCapabilities(
 		frozenset({"webhook"}),
 		supports_text_reply=True,
@@ -180,7 +208,7 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		http_post: Callable[..., Any] = _requests_post,
 		gateway_context: Mapping[str, Any] | None = None,
 	) -> None:
-		missing = self.credential_schema.missing_required(credentials)
+		missing = [key for key in self.runtime_credentials if not str(credentials.get(key) or "").strip()]
 		if missing:
 			raise ValueError(f"WhatsApp adapter is missing required credentials: {', '.join(missing)}")
 		self._phone_number_id = str(credentials["phone_number_id"]).strip()
