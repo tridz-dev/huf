@@ -9,7 +9,6 @@ import {
   addBroadcastRecipients, attestBroadcastConsent, createBroadcast, errorText, listTemplates, previewBroadcast, startBroadcast,
   type AddRecipientsResult, type BroadcastPreview, type WhatsAppTemplate,
 } from '@/services/whatsappApi';
-import { unwrapPreview } from './broadcastModel';
 
 const STEPS = ['Template', 'Recipients', 'Consent', 'Preview', 'Confirm'] as const;
 
@@ -46,8 +45,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
     if (!id) {
       const c = await createBroadcast({ gateway, template: tplName, title: title.trim() || `Broadcast ${tpl?.template_name ?? tplName}`, language_code: tpl?.language_code });
       if (!c.success) return fail(c);
-      const b = c.broadcast;
-      id = typeof b === 'string' ? b : b.name;
+      id = c.broadcast;
       setBroadcast(id);
     }
     const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
@@ -65,7 +63,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
     if (!a.success) return fail(a);
     const p = await previewBroadcast(broadcast);
     if (!p.success) return fail(p);
-    setPreview(unwrapPreview(p as never));
+    setPreview(p.preview);
     setBusy(false);
     return true;
   };
@@ -86,7 +84,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   };
 
   const blocking = preview?.blocking ?? [];
-  const expected = preview?.confirm_token ?? String(preview?.queued ?? '');
+  const expected = preview ? String(preview.queued) : '';
   const canNext = [
     !!tpl,
     (csv !== null || text.trim().length > 0) && !busy,
@@ -150,7 +148,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
               <p><strong>{result.added}</strong> recipients added.</p>
               {result.invalid.length ? (
                 <div><p>{result.invalid.length} invalid:</p>
-                  <ul className="list-disc pl-5">{result.invalid.map((x, i) => <li key={i}>{typeof x === 'string' ? x : `${x.recipient ?? ''} ${x.reason ?? ''}`}</li>)}</ul></div>
+                  <ul className="list-disc pl-5">{result.invalid.map((x, i) => <li key={i}>{x.recipient ?? ''}{x.reason ? `: ${x.reason}` : ''}</li>)}</ul></div>
               ) : null}
               {result.skipped.length ? (
                 <div><p>{result.skipped.length} skipped:</p>
@@ -183,9 +181,12 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
             {preview.remaining_24h !== null ? ` (${preview.remaining_24h} remaining in 24h)` : ''}.
           </p>
           <p>
-            Estimated cost: {preview.cost?.total != null ? `${preview.cost.currency} ${preview.cost.total.toFixed(2)}` : 'unavailable'}.
+            Estimated cost: {preview.cost?.total != null ? `${preview.cost.currency} ${preview.cost.total.toFixed(2)}` : 'unavailable (no verified rate for some recipients)'}.
             {preview.cost?.disclaimer ? <span className="text-xs text-steel"> {preview.cost.disclaimer}</span> : null}
           </p>
+          {preview.cost?.warnings?.length ? (
+            <ul className="list-disc pl-5 text-xs text-steel">{preview.cost.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+          ) : null}
           {preview.warnings.length ? (
             <div role="status"><p className="font-medium">Warnings</p><ul className="list-disc pl-5">{preview.warnings.map((w) => <li key={w}>{w}</li>)}</ul></div>
           ) : null}

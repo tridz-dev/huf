@@ -1,13 +1,7 @@
-import type { Broadcast, BroadcastPreview, BroadcastStatus } from '@/services/whatsappApi';
+import type { Broadcast, BroadcastStatus } from '@/services/whatsappApi';
 
 export const ACTIVE_STATUSES: BroadcastStatus[] = ['Running', 'Queued'];
 export const POLL_MS = 5000;
-
-export const unwrapBroadcast = (r: { broadcast?: unknown } & Record<string, unknown>): Broadcast =>
-  ((r.broadcast && typeof r.broadcast === 'object' ? r.broadcast : r) as unknown) as Broadcast;
-
-export const unwrapPreview = (r: { preview?: BroadcastPreview } & Partial<BroadcastPreview>): BroadcastPreview =>
-  (r.preview ?? r) as BroadcastPreview;
 
 export function progressPercent(b: Broadcast): number {
   if (!b.total) return 0;

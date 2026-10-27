@@ -10,7 +10,7 @@ import {
   type Broadcast, type BroadcastRecipient, type WhatsAppResult,
 } from '@/services/whatsappApi';
 import { LoadError } from '../BridgeUnavailable';
-import { COUNT_KEYS, isActive, POLL_MS, progressPercent, unwrapBroadcast } from './broadcastModel';
+import { COUNT_KEYS, isActive, POLL_MS, progressPercent } from './broadcastModel';
 
 const STATUS_FILTERS = ['', ...COUNT_KEYS] as const;
 
@@ -31,8 +31,8 @@ export function BroadcastDetail({ name, onBack }: { name: string; onBack: () => 
     ]);
     if (!bRes.success) { setError(errorText(bRes)); return; }
     setError('');
-    setB(unwrapBroadcast(bRes as never));
-    if (rRes.success) setRows(rRes.items ?? []);
+    setB(bRes.broadcast);
+    if (rRes.success) setRows(rRes.recipients ?? []);
   }, [name]);
 
   useEffect(() => { void load(); }, [load, filter]);

@@ -14,7 +14,7 @@ export function BroadcastList({ gateway, onOpen, onNew, refreshKey = 0 }: {
   const load = useCallback(async () => {
     setError('');
     const res = await listBroadcasts({ gateway, limit: 50 });
-    if (res.success) setItems(res.items ?? []);
+    if (res.success) setItems(res.broadcasts ?? []);
     else setError(errorText(res));
   }, [gateway]);
   useEffect(() => { setItems(null); void load(); }, [load, refreshKey]);

@@ -25,9 +25,9 @@ const ok = <T,>(v: T) => ({ success: true, ...v }) as never;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  m.listBroadcasts.mockResolvedValue(ok({ items: [bc()] }));
+  m.listBroadcasts.mockResolvedValue(ok({ broadcasts: [bc()] }));
   m.getBroadcast.mockResolvedValue(ok({ broadcast: bc() }));
-  m.listBroadcastRecipients.mockResolvedValue(ok({ items: [{ name: 'r1', recipient: '15550001', status: 'failed', error_code: 131026, error_message: 'undeliverable' }] }));
+  m.listBroadcastRecipients.mockResolvedValue(ok({ recipients: [{ name: 'r1', recipient: '15550001', status: 'failed', error_code: 131026, error_message: 'undeliverable' }] }));
 });
 
 describe('BroadcastList', () => {
@@ -38,7 +38,7 @@ describe('BroadcastList', () => {
     expect(onOpen).toHaveBeenCalledWith('BCAST-1');
   });
   it('shows empty state', async () => {
-    m.listBroadcasts.mockResolvedValue(ok({ items: [] }));
+    m.listBroadcasts.mockResolvedValue(ok({ broadcasts: [] }));
     render(<BroadcastList gateway="G" onOpen={vi.fn()} onNew={vi.fn()} />);
     expect(await screen.findByText(/No broadcasts yet/)).toBeInTheDocument();
   });
@@ -109,14 +109,14 @@ describe('BroadcastTab kill switch', () => {
 });
 
 describe('BroadcastWizard', () => {
-  const preview = (o: object = {}) => ({ recipients: 2, queued: 2, skipped: 0, category: 'MARKETING', within_limit: true, remaining_24h: 100, warnings: ['w1'], blocking: [], cost: { currency: 'USD', total: 0.1, by_country: {} }, confirm_token: '2', ...o });
+  const preview = (o: object = {}) => ({ recipients: 2, queued: 2, skipped: 0, category: 'MARKETING', within_limit: true, remaining_24h: 100, warnings: ['w1'], blocking: [], cost: { currency: 'USD', total: 0.1, by_country: {} }, confirm_required: true, consent_attested: true, ...o });
   beforeEach(() => {
     m.listTemplates.mockResolvedValue(ok({ templates: [
       { name: 'T1', template_name: 'promo', category: 'MARKETING', language_code: 'en', status: 'APPROVED' },
       { name: 'T2', template_name: 'draft', category: 'UTILITY', language_code: 'en', status: 'PENDING' },
     ] }));
-    m.createBroadcast.mockResolvedValue(ok({ broadcast: { name: 'BCAST-9' } }));
-    m.addBroadcastRecipients.mockResolvedValue(ok({ added: 2, skipped: [{ recipient: '1555', reason: 'opted_out' }], invalid: ['abc'] }));
+    m.createBroadcast.mockResolvedValue(ok({ broadcast: 'BCAST-9', status: 'Draft', category: 'MARKETING' }));
+    m.addBroadcastRecipients.mockResolvedValue(ok({ added: 2, skipped: [{ recipient: '1555', reason: 'opted_out' }], invalid: [{ recipient: 'abc', reason: 'invalid_number' }] }));
     m.attestBroadcastConsent.mockResolvedValue(ok({}));
     m.startBroadcast.mockResolvedValue(ok({}));
   });
@@ -128,7 +128,7 @@ describe('BroadcastWizard', () => {
     await user.type(screen.getByLabelText(/Recipients/), '1555000111{enter}1555000222');
     await user.click(screen.getByRole('button', { name: 'Add recipients' }));
     expect(await screen.findByText(/recipients added/)).toBeInTheDocument();
-    expect(screen.getByText('abc')).toBeInTheDocument();
+    expect(screen.getByText(/abc: invalid_number/)).toBeInTheDocument();
     expect(screen.getByText(/opted_out/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     const next = screen.getByRole('button', { name: 'Next' });
