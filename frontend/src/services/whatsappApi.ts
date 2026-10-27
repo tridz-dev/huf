@@ -867,6 +867,9 @@ export interface AddRecipientsResult {
   added: number;
   skipped: { recipient: string; reason: string }[];
   invalid: { recipient?: string; reason?: string }[];
+  /** True totals; `skipped`/`invalid` lists are truncated server-side. */
+  skippedTotal: number;
+  invalidTotal: number;
 }
 
 export interface CreateBroadcastInput {
@@ -917,12 +920,16 @@ export function adaptPreview(r: Record<string, any>): BroadcastPreview {
 }
 
 /** `invalid` entries are `{recipient, reason}`; tolerate bare strings. */
-export function adaptAddResult(r: { added?: number; skipped?: unknown[]; invalid?: unknown[] }): AddRecipientsResult {
+export function adaptAddResult(r: { added?: number; skipped?: unknown[]; invalid?: unknown[]; skipped_total?: number; invalid_total?: number }): AddRecipientsResult {
   const norm = (x: unknown) => (typeof x === 'string' ? { recipient: x } : (x as { recipient?: string; reason?: string }));
+  const skipped = (r.skipped ?? []).map((x) => ({ recipient: '', reason: '', ...norm(x) }));
+  const invalid = (r.invalid ?? []).map(norm);
   return {
     added: Number(r.added ?? 0),
-    skipped: (r.skipped ?? []).map((x) => ({ recipient: '', reason: '', ...norm(x) })),
-    invalid: (r.invalid ?? []).map(norm),
+    skipped,
+    invalid,
+    skippedTotal: Math.max(Number(r.skipped_total ?? 0) || 0, skipped.length),
+    invalidTotal: Math.max(Number(r.invalid_total ?? 0) || 0, invalid.length),
   };
 }
 
