@@ -10,7 +10,9 @@ import { useUser } from '@/contexts/UserContext';
 import {
   confirmSelfLink,
   describeLinkError,
+  parseLinkProvider,
   parseLinkToken,
+  providerName,
   previewSelfLink,
   type SelfLinkPreview,
 } from '@/services/linkAccountApi';
@@ -21,17 +23,21 @@ export function LinkAccountPage() {
   const { search } = useLocation();
   const { user } = useUser();
   const token = useMemo(() => parseLinkToken(search), [search]);
+  const provider = useMemo(() => parseLinkProvider(search), [search]);
+  const app = providerName(provider);
+  const person = provider === 'teams' ? 'Teams person' : 'Slack person';
+  const orgLabel = provider === 'teams' ? 'Organisation (tenant)' : 'Workspace';
   const [status, setStatus] = useState<Status>(token ? 'loading' : 'error');
   const [preview, setPreview] = useState<SelfLinkPreview | null>(null);
   const [error, setError] = useState<string | null>(
-    token ? null : 'This link is missing or incomplete. Ask Huf for a new one in Slack.',
+    token ? null : `This link is missing or incomplete. Ask Huf for a new one in ${app}.`,
   );
   const [acknowledged, setAcknowledged] = useState(false);
 
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    previewSelfLink(token)
+    previewSelfLink(token, provider)
       .then((result) => {
         if (cancelled) return;
         setPreview(result);
@@ -39,22 +45,22 @@ export function LinkAccountPage() {
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(describeLinkError(err));
+        setError(describeLinkError(err, provider));
         setStatus('error');
       });
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, provider]);
 
   const handleConfirm = async () => {
     if (!token || !acknowledged) return;
     setStatus('confirming');
     try {
-      await confirmSelfLink(token);
+      await confirmSelfLink(token, provider);
       setStatus('done');
     } catch (err) {
-      setError(describeLinkError(err));
+      setError(describeLinkError(err, provider));
       setStatus('error');
     }
   };
@@ -66,8 +72,8 @@ export function LinkAccountPage() {
     <div className="flex min-h-full items-center justify-center p-4">
       <Card className="w-full max-w-lg">
         <CardHeader>
-          <CardTitle>Connect this Slack account to your Huf account</CardTitle>
-          <CardDescription>Linking lets Huf know which Huf user is behind your Slack messages.</CardDescription>
+          <CardTitle>Connect this {app} account to your Huf account</CardTitle>
+          <CardDescription>Linking lets Huf know which Huf user is behind your {app} messages.</CardDescription>
         </CardHeader>
 
         {status === 'loading' && (
@@ -92,8 +98,8 @@ export function LinkAccountPage() {
               <CheckCircle2 className="h-4 w-4" />
               <AlertTitle>Account linked</AlertTitle>
               <AlertDescription>
-                Your Slack account is now connected to {hufAccount}. You can close this page and go back to
-                Slack.
+                Your {app} account is now connected to {hufAccount}. You can close this page and go back to
+                {app}.
               </AlertDescription>
             </Alert>
           </CardContent>
@@ -103,9 +109,9 @@ export function LinkAccountPage() {
           <>
             <CardContent className="space-y-4">
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-                <dt className="text-muted-foreground">Slack person</dt>
-                <dd className="font-medium break-all">{preview.slack_label}</dd>
-                <dt className="text-muted-foreground">Workspace</dt>
+                <dt className="text-muted-foreground">{person}</dt>
+                <dd className="font-medium break-all">{preview.person_label}</dd>
+                <dt className="text-muted-foreground">{orgLabel}</dt>
                 <dd className="font-medium break-all">{preview.workspace_label}</dd>
                 <dt className="text-muted-foreground">Huf account</dt>
                 <dd className="font-medium break-all">
@@ -114,13 +120,13 @@ export function LinkAccountPage() {
                 </dd>
               </dl>
               <p className="text-sm text-muted-foreground">
-                Once linked, anything this Slack account asks Huf to do will run with your Huf permissions.
+                Once linked, anything this {app} account asks Huf to do will run with your Huf permissions.
               </p>
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Check before you continue</AlertTitle>
                 <AlertDescription>
-                  Only continue if you asked Huf for this link from your own Slack account. If someone else sent
+                  Only continue if you asked Huf for this link from your own {app} account. If someone else sent
                   it to you, close this page.
                 </AlertDescription>
               </Alert>
@@ -132,7 +138,7 @@ export function LinkAccountPage() {
                   disabled={status === 'confirming'}
                 />
                 <Label htmlFor="link-account-ack" className="text-sm font-normal leading-snug">
-                  I asked for this link from my own Slack account, and I want to connect it to my Huf account.
+                  I asked for this link from my own {app} account, and I want to connect it to my Huf account.
                 </Label>
               </div>
             </CardContent>
