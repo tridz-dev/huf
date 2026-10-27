@@ -109,7 +109,7 @@ def consume_action_session(name: str, actor_user: str) -> dict:
 		("Consumed", actor_user, now, name, now),
 	)
 	if _rowcount() == 1:
-		return {"ok": True}
+		return {"ok": True, "consumed_at": now}
 	state = frappe.db.get_value(DOCTYPE, name, "state")
 	if state is None:
 		return {"ok": False, "reason": "unknown", "message": MSG_UNKNOWN}
@@ -123,6 +123,23 @@ def consume_action_session(name: str, actor_user: str) -> dict:
 			(name,),
 		)
 	return {"ok": False, "reason": "expired", "message": MSG_EXPIRED}
+
+
+def release_action_session(name: str, actor_user: str, consumed_at=None) -> bool:
+	"""Re-open a session this request consumed (state back to Pending) so the click is not lost.
+
+	Only touches a row that is still Consumed by ``actor_user`` (and, when given, at exactly
+	``consumed_at``, the value returned by :func:`consume_action_session`). Returns True if
+	a row was re-opened.
+	"""
+	sql = ("UPDATE `tabGateway Action Session` SET state='Pending', consumed_by=NULL, consumed_at=NULL "
+		"WHERE name=%s AND state='Consumed' AND consumed_by=%s")
+	params = [name, actor_user]
+	if consumed_at:
+		sql += " AND consumed_at=%s"
+		params.append(consumed_at)
+	frappe.db.sql(sql, tuple(params))
+	return _rowcount() == 1
 
 
 def _load_session(name: str):
@@ -302,6 +319,14 @@ def _process_block_actions(gateway, payload):
 		out = fn(gateway, session, actor, payload) or {}
 	except Exception:
 		frappe.log_error(title="Slack action handler failed")
+		try:
+			frappe.db.rollback()
+		except Exception:
+			pass
+		try:
+			release_action_session(name, actor, result.get("consumed_at"))
+		except Exception:
+			frappe.log_error(title="Slack action session release failed")
 		out = {"text": MSG_FAILED}
 	_update_message(gateway, channel, ts, out)
 
