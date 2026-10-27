@@ -713,8 +713,12 @@ def _graph_err(error: str, resp_or_exc: Any, **extra: Any) -> dict[str, Any]:
 	)
 
 
-def _graph_post_message(acct: dict[str, Any], data: dict[str, Any], http_post: Callable[..., Any] | None = None) -> str:
-	"""POST a ``/messages`` body with the account credentials; returns the wamid or raises BridgeError."""
+def _graph_post(acct: dict[str, Any], data: dict[str, Any], http_post: Callable[..., Any] | None = None) -> dict[str, Any]:
+	"""POST a ``/messages`` body; returns ``{"wamid", "message_status"}`` or raises BridgeError.
+
+	``message_status`` is ``messages[0].message_status`` (``accepted`` | ``held_for_quality_assessment``;
+	Meta sends it for template messages only), else None.
+	"""
 	from huf.ai.whatsapp import account_events as _ae
 
 	if (refusal := _ae.send_refusal(acct.get("phone_id"))):
@@ -734,9 +738,28 @@ def _graph_post_message(acct: dict[str, Any], data: dict[str, Any], http_post: C
 	if isinstance(status, int) and status >= 400:
 		raise BridgeError({**_graph_err("send_failed", resp), "message": graph_error_message(resp)})
 	try:
-		return str(resp.json()["messages"][0]["id"])
+		first = resp.json()["messages"][0]
+		wamid = str(first["id"])
 	except Exception as exc:
 		raise BridgeError(_err("send_failed", message="Unexpected response from WhatsApp.")) from exc
+	ms = first.get("message_status") if isinstance(first, dict) else None
+	return {"wamid": wamid, "message_status": str(ms) if ms else None}
+
+
+def _graph_post_message(acct: dict[str, Any], data: dict[str, Any], http_post: Callable[..., Any] | None = None) -> str:
+	"""POST a ``/messages`` body with the account credentials; returns the wamid or raises BridgeError."""
+	return _graph_post(acct, data, http_post)["wamid"]
+
+
+OPAQUE_REF_MAX = 256
+
+
+def _clean_opaque_ref(ref: Any) -> str | None:
+	"""``biz_opaque_callback_data`` value: stringified, stripped, truncated to 256 chars (Meta allows 512); None if empty."""
+	if ref is None:
+		return None
+	text = str(ref).strip()[:OPAQUE_REF_MAX]
+	return text or None
 
 
 def _template_row(docname: str) -> dict[str, Any] | None:
@@ -922,8 +945,15 @@ def send_template(
 	gateway_name: str | None = None,
 	run_id: str | None = None,
 	solution: str | None = None,
+	force_graph: bool = False,
+	opaque_ref: str | None = None,
 ) -> dict[str, Any]:
 	"""Send an approved template.
+
+	``force_graph=True`` always posts to Graph (never the positional frappe_whatsapp path), returns
+	``wamid`` and ``message_status`` (``accepted`` | ``held_for_quality_assessment`` | None) and, with
+	``opaque_ref``, sets top-level ``biz_opaque_callback_data`` (truncated to 256 chars) so status
+	webhooks echo it. Graph sends without ``force_graph`` return ``message_status`` None.
 
 	``run_id`` / ``solution`` (optional) attribute the send to a Solution for template usage tracking.
 
@@ -995,7 +1025,7 @@ def send_template(
 	else:
 		body_map = {str(i + 1): p for i, p in enumerate(params)}
 
-	if named or any(c.get("type") in ("header", "button") for c in components) or (tpl and _has_dynamic_url(tpl)):
+	if force_graph or named or any(c.get("type") in ("header", "button") for c in components) or (tpl and _has_dynamic_url(tpl)):
 		if not _may_bypass(trusted) and not frappe.has_permission("WhatsApp Message", "create"):
 			raise frappe.PermissionError("Not permitted to send WhatsApp messages")
 		template_payload: dict[str, Any] = {
@@ -1004,17 +1034,20 @@ def send_template(
 		}
 		if components:
 			template_payload["components"] = components
-		wamid = _graph_post_message(
-			acct,
-			{
-				"messaging_product": "whatsapp",
-				"recipient_type": "individual",
-				"to": normalize_phone(to),
-				"type": "template",
-				"template": template_payload,
-			},
-			http_post,
-		)
+		payload: dict[str, Any] = {
+			"messaging_product": "whatsapp",
+			"recipient_type": "individual",
+			"to": normalize_phone(to),
+			"type": "template",
+			"template": template_payload,
+		}
+		if (ref := _clean_opaque_ref(opaque_ref)):
+			payload["biz_opaque_callback_data"] = ref
+		if force_graph:
+			posted = _graph_post(acct, payload, http_post)
+		else:
+			posted = {"wamid": _graph_post_message(acct, payload, http_post), "message_status": None}
+		wamid = posted["wamid"]
 		mirror: dict[str, Any] = {"template_parameters": ",".join(params)}
 		if body_map:
 			mirror["body_param"] = json.dumps(body_map)
@@ -1026,6 +1059,8 @@ def send_template(
 			elif hp.get("type") in ("image", "video", "document"):
 				mirror["attach"] = (hp.get(hp["type"]) or {}).get("link")
 		result = _mirror_template_send(acct, docname, to, wamid, mirror, trusted)
+		result["wamid"] = wamid
+		result["message_status"] = posted["message_status"]
 		policy.note_template_sent(account_name, to, gateway_name, *_usage_args(tpl, template_name, language_code, run_id, solution))
 		return result
 
