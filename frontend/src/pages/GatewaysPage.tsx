@@ -51,6 +51,11 @@ import type { IntegrationSettingsDoc } from '@/types/integration.types';
 import { cn } from '@/lib/utils';
 import { formatTimeAgo } from '@/utils/time';
 import { getGatewayReadiness } from '@/utils/gatewayReadiness';
+import {
+  OPEN_POLICY_HELPER_TEXT,
+  defaultDirectPolicy,
+  directPolicyOptions,
+} from '@/utils/directPolicy';
 import { getGatewayWebhookUrl } from '@/utils/gatewayWebhook';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import {
@@ -79,6 +84,13 @@ const DEFAULT_GATEWAYS_TAB: GatewaysTab = 'gateways';
 function parseGatewaysTab(value: string | null): GatewaysTab {
   return GATEWAYS_TABS.includes(value as GatewaysTab) ? (value as GatewaysTab) : DEFAULT_GATEWAYS_TAB;
 }
+
+const DIRECT_POLICY_LABELS: Record<GatewayPolicy, string> = {
+  Open: 'Open — people connect their own account first',
+  'Allow list': 'Allow list — Require approved Gateway Access Entry',
+  Pairing: 'Pairing — require pairing request approval',
+  Disabled: 'Disabled — reject direct messages',
+};
 
 const providerNames: Record<GatewayProvider, string> = {
   WhatsApp: 'WhatsApp Business Number',
@@ -341,7 +353,7 @@ export default function GatewaysPage() {
         // permanently empty Pending access tab. 'Pairing' is safe and self-explaining out of
         // the box: the sender gets a code, the admin gets a request to approve. This also
         // matches setup_gateway()'s own default on the backend.
-        direct_policy: 'Pairing',
+        direct_policy: defaultDirectPolicy(provider),
         execution_user: user?.name,
       })) as GatewayDoc;
       setGateways((current) => [created, ...current]);
@@ -937,11 +949,16 @@ export default function GatewaysPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Allow list">Allow list — Require approved Gateway Access Entry</SelectItem>
-                    <SelectItem value="Pairing">Pairing — require pairing request approval</SelectItem>
-                    <SelectItem value="Disabled">Disabled — reject direct messages</SelectItem>
+                    {directPolicyOptions(editingGateway.provider).map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {DIRECT_POLICY_LABELS[value]}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                {directPolicyOptions(editingGateway.provider).includes('Open') && (
+                  <span className="text-xs font-normal text-steel">{OPEN_POLICY_HELPER_TEXT}</span>
+                )}
               </label>
 
               {/* GW-18: room/group-chat admission policy */}

@@ -42,6 +42,7 @@ import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { call } from '@/lib/frappe-sdk';
+import { OPEN_POLICY_HELPER_TEXT, directPolicyOptions } from '@/utils/directPolicy';
 
 interface ChannelTabProps {
   /** Name of the Integration Settings record this channel's credentials live on. */
@@ -423,11 +424,17 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            {directPolicyOptions(gateway.provider).includes('Open') && (
+              <SelectItem value="Open">Open — people connect their own account first</SelectItem>
+            )}
             <SelectItem value="Allow list">Allow list — require an approved contact</SelectItem>
             <SelectItem value="Pairing">Pairing — require approval for new senders</SelectItem>
             <SelectItem value="Disabled">Disabled — reject direct messages</SelectItem>
           </SelectContent>
         </Select>
+        {directPolicyOptions(gateway.provider).includes('Open') && (
+          <p className="text-xs text-muted-foreground">{OPEN_POLICY_HELPER_TEXT}</p>
+        )}
       </div>
 
       {/* GW-18: room/group-chat admission policy. These fields already exist on
