@@ -244,13 +244,9 @@ def test_filter_malformed_payload_rejected():
 
 # ---- hook registration ---------------------------------------------------------
 def test_hook_registered_for_provider_and_priority():
+	hooks.clear()
+	tt.register()
 	entries = [h for h in hooks._HANDLERS.get(hooks.PRE_INGEST_FILTER, []) if h[3] is tt.pre_ingest_filter]
-	if not entries:  # other tests may have cleared the registry; re-import registers again
-		import importlib
-
-		frappe.whitelist = lambda *a, **k: (lambda fn: fn)
-		importlib.reload(tt)
-		entries = [h for h in hooks._HANDLERS.get(hooks.PRE_INGEST_FILTER, []) if h[3] is tt.pre_ingest_filter]
 	assert len(entries) >= 1
 	prio, _seq, prov, _fn = entries[-1]
 	assert prio == tc.HOOK_PRIORITY_TENANT == 20

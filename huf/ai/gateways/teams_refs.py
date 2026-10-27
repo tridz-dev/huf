@@ -232,6 +232,11 @@ def _on_event_received(gateway, event) -> None:
 	upsert_reference(getattr(gateway, "name", None), meta, installed=True)
 
 
-hooks.register(hooks.PRE_INGEST_FILTER, _pre_ingest_install, provider=HOOK_PROVIDER,
-	priority=tc.HOOK_PRIORITY_INSTALL)
-hooks.register(hooks.ON_EVENT_RECEIVED, _on_event_received, provider=HOOK_PROVIDER)
+def register() -> None:
+	hooks.register(
+		hooks.PRE_INGEST_FILTER, _pre_ingest_install, provider=HOOK_PROVIDER, priority=tc.HOOK_PRIORITY_INSTALL
+	)
+	hooks.register(hooks.ON_EVENT_RECEIVED, _on_event_received, provider=HOOK_PROVIDER)
+
+
+register()

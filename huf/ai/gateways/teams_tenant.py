@@ -165,12 +165,16 @@ def pre_ingest_filter(gateway, context) -> bool:
 	return False
 
 
-hooks.register(
-	hooks.PRE_INGEST_FILTER,
-	pre_ingest_filter,
-	provider=PROVIDER_LABEL,
-	priority=HOOK_PRIORITY_TENANT,
-)
+def register() -> None:
+	hooks.register(
+		hooks.PRE_INGEST_FILTER,
+		pre_ingest_filter,
+		provider=PROVIDER_LABEL,
+		priority=HOOK_PRIORITY_TENANT,
+	)
+
+
+register()
 
 
 # ---- whitelisted API ----------------------------------------------------------
