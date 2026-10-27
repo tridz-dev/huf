@@ -204,10 +204,10 @@ def recent_drops(bucket: str) -> tuple[dict[str, int], float | None]:
 	return dict(record.get("counts") or {}), last
 
 
-def drops_summary(gateway_name: str) -> str | None:
-	"""Human summary of recent drops for this gateway plus the global auth bucket, or None."""
+def drops_summary(gateway_name: str, *, include_auth: bool = True) -> str | None:
+	"""Human summary of recent drops for this gateway (plus the global auth bucket when asked), or None."""
 	counts, last = recent_drops(gateway_name)
-	auth_counts, auth_last = recent_drops(AUTH_BUCKET)
+	auth_counts, auth_last = recent_drops(AUTH_BUCKET) if include_auth else ({}, None)
 	if not counts and not auth_counts:
 		return None
 	parts = [f"{n} {kind}" for kind, n in sorted(counts.items())]
@@ -217,7 +217,9 @@ def drops_summary(gateway_name: str) -> str | None:
 
 
 def _check_drops(gateway) -> dict[str, Any]:
-	summary = drops_summary(str(getattr(gateway, "name", "") or ""))
+	# Auth rejections live in a global bucket that internet scanners/forged requests can fill; they are shown
+	# in the Verify connection `drops` step, not here, so they cannot make every gateway "not ready".
+	summary = drops_summary(str(getattr(gateway, "name", "") or ""), include_auth=False)
 	return _item("teams-recent-drops", "Recent dropped activities", summary is None, summary)
 
 

@@ -204,20 +204,28 @@ class TestRecentDrops(IntegrationTestCase):
 		self.assertTrue(item["done"])
 		self.assertIsNone(item["hint"])
 
-	def test_drops_summarised_per_gateway_plus_auth(self):
+	def test_readiness_counts_only_gateway_attributable_drops(self):
 		for kind in ("tenant", "tenant", "service_url"):
 			readiness.record_drop("GW-1", kind)
 		readiness.record_drop("GW-2", "channel")
 		readiness.record_drop(readiness.AUTH_BUCKET, "auth:pre_iss")
 		item = self.item()
 		self.assertFalse(item["done"])
-		self.assertIn(
-			"Recent dropped activities: 1 service_url, 2 tenant, 1 auth:pre_iss (all Teams gateways)",
-			item["hint"],
-		)
+		self.assertIn("Recent dropped activities: 1 service_url, 2 tenant", item["hint"])
+		self.assertNotIn("auth:", item["hint"])  # global auth bucket is not shown in readiness
 		self.assertIn("(last: ", item["hint"])
 		self.assertIn("see docs troubleshooting", item["hint"])
 		self.assertNotIn("channel", item["hint"])  # other gateway's drops are not shown here
+
+	def test_auth_rejections_alone_never_make_readiness_red(self):
+		# Internet scanners / forged requests fill the global auth bucket; that must not block "ready".
+		for _ in range(50):
+			readiness.record_drop(readiness.AUTH_BUCKET, "auth:bad_signature")
+		item = self.item()
+		self.assertTrue(item["done"])
+		self.assertIsNone(item["hint"])
+		# ...but the Verify connection summary (include_auth default) still reports them
+		self.assertIn("auth:bad_signature (all Teams gateways)", readiness.drops_summary("GW-1"))
 
 	def test_record_is_bounded_and_ages_out(self):
 		for i in range(30):
