@@ -132,3 +132,22 @@ Gateway field **Voice note replies** (`voice_reply_mode`): `Off` (default), `Voi
 3. Check `connection_state` and its reason.
 4. Review Failed events; replay dead letters with `retry_gateway_event` only after the cause is fixed.
 5. If events sit in Queued, Received or Running, confirm the reaper cron is running.
+
+## 10. Broadcasts
+
+Full design, API and limits: [WhatsApp Broadcast](../whatsapp/BROADCAST.md). Management methods are in `huf/ai/whatsapp/management.py`.
+
+- A broadcast sends one approved template to a bounded list, one request per recipient, through `POST /<PHONE_NUMBER_ID>/messages` (or `/marketing_messages` when `send_via=marketing_messages`, MARKETING templates only). It is automation only: no inbox, no scheduling.
+- Start is for `Draft` broadcasts only; a `Paused` one is resumed with `resume_broadcast` (records `resumed_by`; ticks run as the resumer). Adding recipients is Draft-only and resets the consent attestation, so attest again before start. Broadcast and Recipient rows cannot be changed through REST or the desk form, only through the broadcast API (Recipient permissions are read-only).
+- Start (and resume) needs: an `APPROVED` template, attested opt-in consent, no blocking preview reason (including number quality RED, or queued recipients above the remaining 24-hour budget when the tier is known), at least one queued recipient, no other Running broadcast on the gateway, write permission on the Gateway, and the typed recipient count. Start does not check gateway health.
+- Recipient limits: `max_recipients` default 1000, at most 10000; 10000 recipients per request; CSV at most 2 MB; 50000 stored rows per broadcast.
+- Recipient states: `queued`, `sending`, `sent`, `delivered`, `read`, `failed`, `deferred`, `unknown`, `skipped`. A row in `sending` for more than 10 minutes becomes `unknown` (cron `*/5 * * * *`, `resume_stale`, which also revives a Running broadcast that has no live tick).
+- `unknown` rows are never resent. Check them in WhatsApp Manager's message log. A later `delivered`, `read` or `failed` webhook updates them.
+- Failed rows are not retried by any action. A retryable error is retried until the row has made 5 attempts. To reach the same contacts again, create a new broadcast.
+- Skipped at intake or send: STOP (`opted_out`), marketing stop (`marketing_opted_out`), BSUID (`bsuid_recipient`), US/Canada `+1` numbers for MARKETING templates (`us_plus_one_marketing`), over the cap (`max_recipients`), cancelled (`cancelled`). A STOP keyword, a marketing stop from `user_preferences`, or a 131050 (on a send or in a status webhook) also skips that contact's queued and deferred rows in unfinished broadcasts. A 131049 (per-user marketing limit) is a terminal skip (`skipped`, reason `per_user_marketing_limit`); it is never resent. `deferred` is used for retryable errors and gateway disconnect only. A `sent` webhook resolves an `unknown` row.
+- The runner pauses (resume is manual) on: send errors 132015, 132016, 135000, 131042; a status webhook with 135000; a template webhook that marks the template paused, disabled or rejected, turns its quality RED or changes its category to MARKETING; gateway disconnected; template not approved or missing at send time; loss of the runner user's Gateway write permission; and the manual and kill-switch pauses. The reason is in `pause_reason`. 135000 is treated as a pause signal conservatively.
+- Kill switch: `pause_all_broadcasts(gateway)` (the "Stop all broadcasts" button) pauses every running broadcast on the gateway with reason `kill_switch`. Use it first when a template or number is in trouble.
+- Counters self-correct (after each chunk, at completion, every 5 minutes for Running broadcasts). To force a recount: `frappe.get_doc("WhatsApp Broadcast", name).recount(commit=True)` in a bench console.
+- Messaging limit: the preview reads `whatsapp_business_manager_messaging_limit`. If it is unknown the preview warns and `max_recipients` is the only ceiling.
+- Costs: the preview shows cost as unavailable (`cost.total` null) until rates are filled in `huf/ai/whatsapp/broadcast/rates.json` from Meta's official rate card. Check Meta billing for real charges.
+- Live verification is described in [broadcast-live-verification.md](../whatsapp/broadcast-live-verification.md). Run it only against allow-listed test recipients.

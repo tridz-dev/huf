@@ -18,6 +18,7 @@ from frappe.rate_limiter import rate_limit
 from huf.ai.gateway_adapters import provider_hooks
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 from huf.ai.gateway_adapters.registered import get_adapter_class
+from huf.ai.whatsapp.broadcast import status as broadcast_status
 
 EXEMPT_AUTH_ROUTES: frozenset[str] = frozenset(
 	{
@@ -771,6 +772,7 @@ def _handle_batched_payload(gateway, adapter, request) -> dict:
 	if not deferred:
 		for status in parsed.statuses:
 			_update_reply_status(gateway.name, status)
+			broadcast_status.apply_from_webhook(status, gateway.name)
 			if str(status.get("status") or "").lower() == "failed":
 				_record_failed_status(gateway.name, status, getattr(gateway, "provider", None))
 		routed_updates = [update for update in parsed.template_updates if _record_template_update(update, gateway.name)]

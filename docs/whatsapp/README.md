@@ -41,3 +41,7 @@ Notes:
 - The guide describes the behaviour of the `pre-develop` branch as of October 2026. Every concrete claim was checked against the code (see the file map in the appendix).
 - The screenshots are of the real Huf console run against mocked data for a fictional bakery (fictional `+1 555 01xx` numbers). Where no screenshot exists, the guide draws a labelled illustration.
 - The guide is generated (HTML rendered to PDF with weasyprint); its source and build script are kept in the workspace track `RepoStructure/ongoing3/build`, not in this repository.
+
+## Broadcasts
+
+See [WhatsApp Broadcast](BROADCAST.md) for one-template bounded sends to opted-in recipients: state machine, limits and pacing, error handling, costs, and the runbook for the kill switch.

@@ -1,0 +1,202 @@
+{
+ "actions": [],
+ "creation": "2026-10-27 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "broadcast",
+  "recipient",
+  "status",
+  "skip_reason",
+  "params",
+  "section_send",
+  "wamid",
+  "message_status",
+  "opaque_ref",
+  "attempts",
+  "next_attempt_at",
+  "error_code",
+  "error_message",
+  "section_consent",
+  "consent_source",
+  "consent_at",
+  "section_times",
+  "sent_at",
+  "delivered_at",
+  "read_at",
+  "failed_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "broadcast",
+   "fieldtype": "Link",
+   "label": "Broadcast",
+   "options": "WhatsApp Broadcast",
+   "reqd": 1,
+   "in_list_view": 1,
+   "search_index": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "recipient",
+   "fieldtype": "Data",
+   "label": "Recipient",
+   "length": 40,
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "Digits-only E.164 phone, or BSUID.",
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "queued\nsending\nsent\ndelivered\nread\nfailed\ndeferred\nunknown\nskipped",
+   "default": "queued",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "skip_reason",
+   "fieldtype": "Data",
+   "label": "Skip reason",
+   "length": 140,
+   "read_only": 1
+  },
+  {
+   "fieldname": "params",
+   "fieldtype": "JSON",
+   "label": "Per-recipient params",
+   "description": "Overrides Broadcast default params: {body:[...]|{...}, header:..., buttons:[...]}",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_send",
+   "fieldtype": "Section Break",
+   "label": "Send"
+  },
+  {
+   "fieldname": "wamid",
+   "fieldtype": "Data",
+   "label": "Message ID (wamid)",
+   "length": 200,
+   "search_index": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "message_status",
+   "fieldtype": "Data",
+   "label": "Send message_status",
+   "length": 40,
+   "description": "accepted | held_for_quality_assessment",
+   "read_only": 1
+  },
+  {
+   "fieldname": "opaque_ref",
+   "fieldtype": "Data",
+   "label": "Opaque ref",
+   "length": 140,
+   "read_only": 1,
+   "description": "Echoed by Meta in biz_opaque_callback_data; equals the document name."
+  },
+  {
+   "fieldname": "attempts",
+   "fieldtype": "Int",
+   "label": "Attempts",
+   "default": "0",
+   "read_only": 1
+  },
+  {
+   "fieldname": "next_attempt_at",
+   "fieldtype": "Datetime",
+   "label": "Next attempt at",
+   "search_index": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_code",
+   "fieldtype": "Int",
+   "label": "Error code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error message",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_consent",
+   "fieldtype": "Section Break",
+   "label": "Consent"
+  },
+  {
+   "fieldname": "consent_source",
+   "fieldtype": "Data",
+   "label": "Opt-in source",
+   "length": 200,
+   "read_only": 1
+  },
+  {
+   "fieldname": "consent_at",
+   "fieldtype": "Datetime",
+   "label": "Opted in at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_times",
+   "fieldtype": "Section Break",
+   "label": "Timeline"
+  },
+  {
+   "fieldname": "sent_at",
+   "fieldtype": "Datetime",
+   "label": "Sent at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "delivered_at",
+   "fieldtype": "Datetime",
+   "label": "Delivered at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "read_at",
+   "fieldtype": "Datetime",
+   "label": "Read at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "failed_at",
+   "fieldtype": "Datetime",
+   "label": "Failed at",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "Huf",
+ "name": "WhatsApp Broadcast Recipient",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "role": "System Manager"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Huf Admin"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0,
+ "naming_rule": "By script"
+}

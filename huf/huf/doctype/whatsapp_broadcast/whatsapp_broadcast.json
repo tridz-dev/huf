@@ -1,0 +1,342 @@
+{
+ "actions": [],
+ "autoname": "BCAST-.#####",
+ "creation": "2026-10-27 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "title",
+  "status",
+  "pause_reason",
+  "section_target",
+  "gateway",
+  "whatsapp_account",
+  "template",
+  "template_name",
+  "language_code",
+  "category",
+  "send_via",
+  "section_params",
+  "body_params",
+  "header_params",
+  "button_params",
+  "section_consent",
+  "consent_source",
+  "consent_attested",
+  "consent_attested_by",
+  "consent_attested_at",
+  "section_limits",
+  "max_recipients",
+  "mps",
+  "cost_estimate",
+  "section_run",
+  "started_by",
+  "started_at",
+  "finished_at",
+  "section_counts",
+  "total",
+  "queued",
+  "sending",
+  "sent",
+  "delivered",
+  "read",
+  "failed",
+  "deferred",
+  "unknown",
+  "skipped"
+ ],
+ "fields": [
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "in_list_view": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nQueued\nRunning\nPaused\nCompleted\nCancelled\nFailed",
+   "default": "Draft",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "pause_reason",
+   "fieldtype": "Data",
+   "label": "Pause reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_target",
+   "fieldtype": "Section Break",
+   "label": "Target"
+  },
+  {
+   "fieldname": "gateway",
+   "fieldtype": "Link",
+   "label": "Gateway",
+   "options": "Gateway",
+   "reqd": 1,
+   "in_list_view": 1,
+   "search_index": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "whatsapp_account",
+   "fieldtype": "Data",
+   "label": "WhatsApp Account",
+   "length": 140,
+   "read_only": 1
+  },
+  {
+   "fieldname": "template",
+   "fieldtype": "Data",
+   "label": "Template document",
+   "length": 140,
+   "reqd": 1,
+   "description": "WhatsApp Templates document name.",
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "template_name",
+   "fieldtype": "Data",
+   "label": "Template name",
+   "length": 140,
+   "read_only": 1
+  },
+  {
+   "fieldname": "language_code",
+   "fieldtype": "Data",
+   "label": "Language",
+   "length": 20
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Data",
+   "label": "Template category",
+   "length": 40,
+   "read_only": 1,
+   "description": "MARKETING | UTILITY | AUTHENTICATION, snapshot at create/start."
+  },
+  {
+   "fieldname": "send_via",
+   "fieldtype": "Select",
+   "label": "Send via",
+   "options": "messages\nmarketing_messages",
+   "default": "messages",
+   "description": "marketing_messages = Meta Marketing Messages API (MARKETING templates only; needs MM API onboarding).",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_params",
+   "fieldtype": "Section Break",
+   "label": "Default parameters"
+  },
+  {
+   "fieldname": "body_params",
+   "fieldtype": "JSON",
+   "label": "Default body params"
+  },
+  {
+   "fieldname": "header_params",
+   "fieldtype": "JSON",
+   "label": "Default header params"
+  },
+  {
+   "fieldname": "button_params",
+   "fieldtype": "JSON",
+   "label": "Default button params"
+  },
+  {
+   "fieldname": "section_consent",
+   "fieldtype": "Section Break",
+   "label": "Consent"
+  },
+  {
+   "fieldname": "consent_source",
+   "fieldtype": "Data",
+   "label": "Opt-in source",
+   "length": 200,
+   "description": "Where recipients opted in (form, checkout, ...)."
+  },
+  {
+   "fieldname": "consent_attested",
+   "fieldtype": "Check",
+   "label": "Opt-in attested",
+   "read_only": 1
+  },
+  {
+   "fieldname": "consent_attested_by",
+   "fieldtype": "Link",
+   "label": "Attested by",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "consent_attested_at",
+   "fieldtype": "Datetime",
+   "label": "Attested at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_limits",
+   "fieldtype": "Section Break",
+   "label": "Limits"
+  },
+  {
+   "fieldname": "max_recipients",
+   "fieldtype": "Int",
+   "label": "Max recipients",
+   "default": "1000",
+   "read_only": 1
+  },
+  {
+   "fieldname": "mps",
+   "fieldtype": "Int",
+   "label": "Messages per second",
+   "default": "10",
+   "description": "Pacing target, capped by the number's throughput."
+  },
+  {
+   "fieldname": "cost_estimate",
+   "fieldtype": "JSON",
+   "label": "Cost estimate",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_run",
+   "fieldtype": "Section Break",
+   "label": "Run"
+  },
+  {
+   "fieldname": "started_by",
+   "fieldtype": "Link",
+   "label": "Started by",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "finished_at",
+   "fieldtype": "Datetime",
+   "label": "Finished at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_counts",
+   "fieldtype": "Section Break",
+   "label": "Counts"
+  },
+  {
+   "fieldname": "total",
+   "fieldtype": "Int",
+   "label": "Total",
+   "read_only": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "queued",
+   "fieldtype": "Int",
+   "label": "Queued",
+   "read_only": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "sending",
+   "fieldtype": "Int",
+   "label": "Sending",
+   "read_only": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "sent",
+   "fieldtype": "Int",
+   "label": "Sent",
+   "read_only": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "delivered",
+   "fieldtype": "Int",
+   "label": "Delivered",
+   "read_only": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "read",
+   "fieldtype": "Int",
+   "label": "Read",
+   "read_only": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "failed",
+   "fieldtype": "Int",
+   "label": "Failed",
+   "read_only": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "deferred",
+   "fieldtype": "Int",
+   "label": "Deferred",
+   "read_only": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "unknown",
+   "fieldtype": "Int",
+   "label": "Unknown",
+   "read_only": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "skipped",
+   "fieldtype": "Int",
+   "label": "Skipped",
+   "read_only": 1,
+   "default": "0"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "Huf",
+ "name": "WhatsApp Broadcast",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Admin",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+}
