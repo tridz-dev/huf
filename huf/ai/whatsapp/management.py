@@ -2022,6 +2022,70 @@ def add_broadcast_recipients(broadcast: str | None = None, recipients: Any = Non
 	return {"success": True, **result}
 
 
+def _reset_attestation(broadcast: str, why: str) -> None:
+	"""The attestation covered a different recipient list; the owner must attest again."""
+	prev = frappe.flags.get("in_broadcast_api")
+	frappe.flags.in_broadcast_api = True
+	try:
+		frappe.db.set_value(_BROADCAST, broadcast, {
+			"consent_attested": 0, "consent_attested_by": None, "consent_attested_at": None,
+		})
+	finally:
+		frappe.flags.in_broadcast_api = prev
+	frappe.get_doc(_BROADCAST, broadcast).add_comment("Info", f"attestation reset: {why}")
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=120, seconds=60)
+@_bridge_guard
+def remove_broadcast_recipient(broadcast: str | None = None, recipient: str | None = None) -> dict[str, Any]:
+	"""Remove one recipient (by number or row name) from a Draft broadcast. Started rows are the send record and stay."""
+	row = _broadcast_for_write(broadcast)
+	if row.get("error"):
+		return row
+	if row.get("status") != "Draft":
+		return _error("not_draft", "Recipients can only be removed while the broadcast is a Draft.")
+	if not recipient or not str(recipient).strip():
+		return _error("invalid_recipient", "Name the recipient to remove.")
+	from huf.ai.whatsapp import broadcast_recipients as br
+
+	key = str(recipient).strip()
+	normalized = br.normalize_recipient(key)
+	candidates = ([f"{broadcast}-{normalized}"] if normalized else []) + [f"{broadcast}-{key}", key]
+	name = next((c for c in candidates if frappe.db.exists(_BROADCAST_RECIPIENT, {"name": c, "broadcast": broadcast})), None)
+	if not name:
+		return _error("not_found", "That recipient is not on this broadcast.")
+	prev = frappe.flags.get("in_broadcast_api")
+	frappe.flags.in_broadcast_api = True
+	try:
+		frappe.delete_doc(_BROADCAST_RECIPIENT, name, force=True, ignore_permissions=True)
+	finally:
+		frappe.flags.in_broadcast_api = prev
+	frappe.get_doc(_BROADCAST, broadcast).recount()
+	if row.get("consent_attested"):
+		_reset_attestation(broadcast, "recipients changed")
+	_broadcast_audit(broadcast, "recipient_removed", recipient=_mask_phone(key))
+	return {"success": True, "broadcast": broadcast, "removed": 1, "queued": _queued_count(broadcast)}
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=30, seconds=60)
+@_bridge_guard
+def delete_broadcast(broadcast: str | None = None) -> dict[str, Any]:
+	"""Delete a Draft broadcast and its recipient rows. Anything that ever started is kept as the send record."""
+	row = _broadcast_for_write(broadcast)
+	if row.get("error"):
+		return row
+	if row.get("status") != "Draft":
+		return _error("not_draft", "Only a Draft broadcast can be deleted. Cancel a running one instead.")
+	_broadcast_audit(broadcast, "deleted")  # the Comment goes with the doc; the log line stays
+	try:
+		frappe.delete_doc(_BROADCAST, broadcast, ignore_permissions=True)
+	except frappe.PermissionError as exc:
+		return _error("not_deletable", str(exc))
+	return {"success": True, "broadcast": broadcast, "deleted": True}
+
+
 @frappe.whitelist(methods=["POST"])
 @rate_limit(limit=60, seconds=60)
 @_bridge_guard

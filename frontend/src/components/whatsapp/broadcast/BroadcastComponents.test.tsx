@@ -9,12 +9,14 @@ vi.mock('@/services/whatsappApi', async (orig) => ({
   listTemplates: vi.fn(), createBroadcast: vi.fn(), addBroadcastRecipients: vi.fn(), attestBroadcastConsent: vi.fn(),
   previewBroadcast: vi.fn(), getBroadcastTemplateParams: vi.fn(), startBroadcast: vi.fn(), pauseBroadcast: vi.fn(), resumeBroadcast: vi.fn(), cancelBroadcast: vi.fn(),
   pauseAllBroadcasts: vi.fn(), listBroadcasts: vi.fn(), getBroadcast: vi.fn(), listBroadcastRecipients: vi.fn(),
+  removeBroadcastRecipient: vi.fn(), deleteBroadcast: vi.fn(),
 }));
 import * as api from '@/services/whatsappApi';
 import { BroadcastTab } from './BroadcastTab';
 import { BroadcastList } from './BroadcastList';
 import { BroadcastWizard } from './BroadcastWizard';
 import { BroadcastDetail } from './BroadcastDetail';
+import { buildHeaderButtonParams } from './BroadcastWizard';
 
 const m = vi.mocked(api, true);
 const bc = (o: object = {}) => ({
@@ -246,13 +248,44 @@ describe('BroadcastWizard', () => {
       expect(m.createBroadcast).toHaveBeenCalledWith(expect.objectContaining({ body_params: ['', 'two'] }));
       expect(m.addBroadcastRecipients).toHaveBeenCalledWith('BCAST-9', { recipients: [{ recipient: '1555000111', params: { body: ['a', 'b'] } }] });
     });
-    it('notes unsupported header/button variables without blocking', async () => {
-      m.getBroadcastTemplateParams.mockResolvedValue(ok({ ...named, header: { format: 'TEXT' } }));
+    it('collects required header and button values and sends them', async () => {
+      m.getBroadcastTemplateParams.mockResolvedValue(ok({
+        ...named,
+        header: { type: 'IMAGE', required: true },
+        buttons: [{ index: 0, sub_type: 'url', required: true, label: 'Shop' }],
+      }));
+      m.createBroadcast.mockResolvedValue(ok({ broadcast: 'BCAST-9' }));
+      m.addBroadcastRecipients.mockResolvedValue(ok({ added: 1, skipped: [], invalid: [], skippedTotal: 0, invalidTotal: 0 }));
       const user = userEvent.setup();
       render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
       await user.selectOptions(await screen.findByLabelText('Approved template'), 'T1');
-      expect(await screen.findByText(/Header\/button variables are not supported in the UI yet/)).toBeInTheDocument();
+      const header = await screen.findByLabelText(/Header image link/);
+      expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+      await user.type(header, 'https://x.test/a.png');
+      expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+      await user.type(screen.getByLabelText(/Link suffix for button "Shop"/), 'summer');
       expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+      await user.type(screen.getByLabelText(/Recipients/), '1555000111');
+      await user.click(screen.getByRole('button', { name: 'Add recipients' }));
+      await waitFor(() => expect(m.createBroadcast).toHaveBeenCalledWith(expect.objectContaining({
+        header_params: ['https://x.test/a.png'], button_params: [{ index: 0, sub_type: 'url', text: 'summer' }],
+      })));
+    });
+    it('discards the draft when the wizard is closed before starting', async () => {
+      m.createBroadcast.mockResolvedValue(ok({ broadcast: 'BCAST-9' }));
+      m.addBroadcastRecipients.mockResolvedValue(ok({ added: 1, skipped: [], invalid: [], skippedTotal: 0, invalidTotal: 0 }));
+      m.deleteBroadcast.mockResolvedValue(ok({ deleted: true }));
+      const onClose = vi.fn();
+      const user = userEvent.setup();
+      render(<BroadcastWizard gateway="G" onClose={onClose} onStarted={vi.fn()} />);
+      await user.selectOptions(await screen.findByLabelText('Approved template'), 'T1');
+      await user.click(await screen.findByRole('button', { name: 'Next' }));
+      await user.type(screen.getByLabelText(/Recipients/), '1555000111');
+      await user.click(screen.getByRole('button', { name: 'Add recipients' }));
+      await user.click(await screen.findByRole('button', { name: 'Discard draft' }));
+      await waitFor(() => expect(m.deleteBroadcast).toHaveBeenCalledWith('BCAST-9'));
+      expect(onClose).toHaveBeenCalled();
     });
     it('blocking message about missing variables disables Start', async () => {
       m.previewBroadcast.mockResolvedValue(ok({ preview: preview({ blocking: ['2 recipient(s) are missing values for: first_name'] }) }));
@@ -263,5 +296,62 @@ describe('BroadcastWizard', () => {
       expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
       expect(m.startBroadcast).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('BroadcastDetail draft management', () => {
+  const draft = () => m.getBroadcast.mockResolvedValue(ok({ broadcast: bc({ status: 'Draft', sent: 0, delivered: 0, failed: 0 }) }));
+  it('removes one recipient from a draft', async () => {
+    draft();
+    m.removeBroadcastRecipient.mockResolvedValue(ok({ removed: 1 }));
+    render(<BroadcastDetail name="BCAST-1" onBack={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove 15550001' }));
+    expect(m.removeBroadcastRecipient).toHaveBeenCalledWith('BCAST-1', '15550001');
+  });
+  it('does not offer remove or delete once started', async () => {
+    render(<BroadcastDetail name="BCAST-1" onBack={vi.fn()} />);
+    await screen.findByText('131026');
+    expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete draft' })).toBeNull();
+  });
+  it('asks before deleting a draft, then goes back', async () => {
+    draft();
+    m.deleteBroadcast.mockResolvedValue(ok({ deleted: true }));
+    const onBack = vi.fn();
+    render(<BroadcastDetail name="BCAST-1" onBack={onBack} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete draft' }));
+    expect(m.deleteBroadcast).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, delete draft' }));
+    expect(m.deleteBroadcast).toHaveBeenCalledWith('BCAST-1');
+    await waitFor(() => expect(onBack).toHaveBeenCalled());
+  });
+  it('shows more recipients when the page is full', async () => {
+    const many = Array.from({ length: 100 }, (_, i) => ({ name: `r${i}`, recipient: `1555${i}`, status: 'sent' }));
+    m.listBroadcastRecipients.mockResolvedValue(ok({ recipients: many }));
+    render(<BroadcastDetail name="BCAST-1" onBack={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Show more' }));
+    await waitFor(() => expect(m.listBroadcastRecipients).toHaveBeenLastCalledWith('BCAST-1', { status: undefined, limit: 200 }));
+  });
+});
+
+describe('buildHeaderButtonParams', () => {
+  const tpl = {
+    parameter_format: 'POSITIONAL', body: [],
+    header: { type: 'IMAGE', required: true },
+    buttons: [
+      { index: 0, sub_type: 'url', required: true, label: 'Shop' },
+      { index: 1, sub_type: 'copy_code', required: true, label: 'Code' },
+      { index: 2, sub_type: 'quick_reply', required: false, label: 'Stop' },
+    ],
+  } as never;
+  it('builds header and button params in the backend shape', () => {
+    expect(buildHeaderButtonParams(tpl, ' https://x.test/a.png ', { 0: 'summer', 1: 'SAVE10', 2: 'x' })).toEqual({
+      header_params: ['https://x.test/a.png'],
+      button_params: [{ index: 0, sub_type: 'url', text: 'summer' }, { index: 1, sub_type: 'copy_code', code: 'SAVE10' }],
+    });
+  });
+  it('returns nothing when nothing was filled', () => {
+    expect(buildHeaderButtonParams(tpl, '', {})).toEqual({});
+    expect(buildHeaderButtonParams(null, 'x', {})).toEqual({});
   });
 });

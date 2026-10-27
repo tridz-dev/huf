@@ -64,6 +64,8 @@ class TestPermissions(_Base):
 			lambda: mgmt.cancel_broadcast(BC),
 			lambda: mgmt.add_broadcast_recipients(BC, ["15551230000"]),
 			lambda: mgmt.pause_all_broadcasts(GW),
+			lambda: mgmt.remove_broadcast_recipient(BC, "15551230000"),
+			lambda: mgmt.delete_broadcast(BC),
 			lambda: mgmt.create_broadcast(GW, "t", "x"),
 		]
 		for call in calls:
@@ -167,3 +169,44 @@ class TestKillSwitchAndRunner(_Base):
 		self.assertTrue(mgmt.cancel_broadcast(BC)["success"])
 		self.runner.cancel.assert_called_once_with(BC)
 		self.doc.add_comment.assert_called_once()
+
+
+class TestRemoveRecipientAndDelete(_Base):
+	def test_remove_requires_draft(self):
+		self.row = _row(status="Running")
+		self.assertEqual(mgmt.remove_broadcast_recipient(BC, "15551230000")["error"], "not_draft")
+		self.frappe.delete_doc.assert_not_called()
+
+	def test_remove_unknown_recipient(self):
+		self.recips.normalize_recipient.return_value = "15551230000"
+		self.frappe.db.exists.side_effect = lambda dt, *a, **k: dt != mgmt._BROADCAST_RECIPIENT
+		self.assertEqual(mgmt.remove_broadcast_recipient(BC, "15551230000")["error"], "not_found")
+		self.frappe.delete_doc.assert_not_called()
+
+	def test_remove_deletes_row_recounts_and_resets_attestation(self):
+		self.row = _row(consent_attested=1)
+		self.recips.normalize_recipient.return_value = "15551230000"
+		self.frappe.flags.get.return_value = None
+		res = mgmt.remove_broadcast_recipient(BC, "+1 555 123 0000")
+		self.assertTrue(res["success"])
+		self.frappe.delete_doc.assert_called_once_with(
+			mgmt._BROADCAST_RECIPIENT, f"{BC}-15551230000", force=True, ignore_permissions=True
+		)
+		self.doc.recount.assert_called_once()
+		self.frappe.db.set_value.assert_called()  # attestation reset
+		comments = " ".join(str(c) for c in self.doc.add_comment.call_args_list)
+		self.assertIn("attestation reset", comments)
+
+	def test_delete_requires_draft(self):
+		self.row = _row(status="Completed")
+		self.assertEqual(mgmt.delete_broadcast(BC)["error"], "not_draft")
+		self.frappe.delete_doc.assert_not_called()
+
+	def test_delete_draft(self):
+		res = mgmt.delete_broadcast(BC)
+		self.assertTrue(res["deleted"])
+		self.frappe.delete_doc.assert_called_once_with(mgmt._BROADCAST, BC, ignore_permissions=True)
+
+	def test_delete_refused_by_doctype_guard(self):
+		self.frappe.delete_doc.side_effect = PermissionError("has sent rows")
+		self.assertEqual(mgmt.delete_broadcast(BC)["error"], "not_deletable")

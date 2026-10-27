@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-  addBroadcastRecipients, attestBroadcastConsent, createBroadcast, errorText, getBroadcastTemplateParams, listTemplates, previewBroadcast, startBroadcast,
+  addBroadcastRecipients, attestBroadcastConsent, createBroadcast, deleteBroadcast, errorText, getBroadcastTemplateParams, listTemplates, previewBroadcast, startBroadcast,
   type AddRecipientsResult, type BroadcastPreview, type BroadcastRecipientInput, type BroadcastTemplateParams, type BroadcastTemplateVariable, type BroadcastSendVia, type WhatsAppTemplate,
 } from '@/services/whatsappApi';
 
@@ -25,6 +25,22 @@ export function parseRecipientLines(lines: string[], named: boolean, vars: Broad
     }
     return { recipient, params: { body: vals } };
   });
+}
+
+/** Header / button parameters the operator filled in, in the shape `create_broadcast` takes (undefined when none). */
+export function buildHeaderButtonParams(
+  tpl: BroadcastTemplateParams | null, headerValue: string, buttonValues: Record<number, string>,
+): { header_params?: unknown; button_params?: unknown } {
+  const out: { header_params?: unknown; button_params?: unknown } = {};
+  const h = headerValue.trim();
+  if (tpl?.header && h && tpl.header.type !== 'LOCATION') out.header_params = [h];
+  const buttons = (tpl?.buttons ?? [])
+    .filter((b) => b.sub_type !== 'quick_reply' && (buttonValues[b.index] ?? '').trim() !== '')
+    .map((b) => (b.sub_type === 'copy_code'
+      ? { index: b.index, sub_type: 'copy_code', code: buttonValues[b.index].trim() }
+      : { index: b.index, sub_type: 'url', text: buttonValues[b.index].trim() }));
+  if (buttons.length) out.button_params = buttons;
+  return out;
 }
 
 const STEPS = ['Template', 'Recipients', 'Consent', 'Preview', 'Confirm'] as const;
@@ -48,6 +64,9 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   const [err, setErr] = useState('');
   const [tplParams, setTplParams] = useState<BroadcastTemplateParams | null>(null);
   const [defaults, setDefaults] = useState<Record<string, string>>({});
+  const [headerValue, setHeaderValue] = useState('');
+  const [buttonValues, setButtonValues] = useState<Record<number, string>>({});
+  const started = useRef(false);
 
   useEffect(() => {
     void listTemplates(gateway, 'APPROVED').then((res) => {
@@ -57,7 +76,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   }, [gateway]);
 
   useEffect(() => {
-    setTplParams(null); setDefaults({});
+    setTplParams(null); setDefaults({}); setHeaderValue(''); setButtonValues({});
     if (!tplName) return;
     let live = true;
     void getBroadcastTemplateParams(gateway, tplName).then((res) => {
@@ -69,7 +88,14 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
 
   const vars = tplParams?.body ?? [];
   const named = tplParams?.parameter_format === 'NAMED';
-  const hasHeaderButtons = !!tplParams && (!!tplParams.header || tplParams.buttons.length > 0);
+  const header = tplParams?.header ?? null;
+  const urlButtons = (tplParams?.buttons ?? []).filter((b) => b.sub_type !== 'quick_reply');
+  const headerType = (header?.type ?? '').toUpperCase();
+  const locationHeader = headerType === 'LOCATION';
+  const headerIsMedia = !!header && headerType !== 'TEXT';
+  const paramsReady =
+    (!header || !header.required || locationHeader || headerValue.trim() !== '') &&
+    urlButtons.every((b) => !b.required || (buttonValues[b.index] ?? '').trim() !== '');
 
   const buildBodyParams = (): Record<string, string> | string[] | undefined => {
     if (!vars.some((v, i) => (defaults[varKey(v, i)] ?? '').trim() !== '')) return undefined;
@@ -89,7 +115,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
     setBusy(true); setErr('');
     let id = broadcast;
     if (!id) {
-      const c = await createBroadcast({ gateway, template: tplName, title: title.trim() || `Broadcast ${tpl?.template_name ?? tplName}`, language_code: tpl?.language_code, send_via: isMarketing ? sendVia : 'messages', body_params: buildBodyParams() });
+      const c = await createBroadcast({ gateway, template: tplName, title: title.trim() || `Broadcast ${tpl?.template_name ?? tplName}`, language_code: tpl?.language_code, send_via: isMarketing ? sendVia : 'messages', body_params: buildBodyParams(), ...buildHeaderButtonParams(tplParams, headerValue, buttonValues) });
       if (!c.success) return fail(c);
       id = c.broadcast;
       setBroadcast(id);
@@ -119,8 +145,20 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
     const res = await startBroadcast(broadcast, typed.trim());
     setBusy(false);
     if (!res.success) { setErr(errorText(res)); return; }
+    started.current = true;
     toast.success('Broadcast started');
     onStarted(broadcast);
+  };
+
+  /** Closing before the start must not leave an orphan Draft behind. */
+  const close = async () => {
+    if (broadcast && !started.current) {
+      setBusy(true);
+      const res = await deleteBroadcast(broadcast);
+      setBusy(false);
+      if (!res.success) { toast.error(errorText(res)); return; }
+    }
+    onClose();
   };
 
   const onFile = async (f: File | undefined) => {
@@ -132,7 +170,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   const blocking = preview?.blocking ?? [];
   const expected = preview ? String(preview.queued) : '';
   const canNext = [
-    !!tpl,
+    !!tpl && paramsReady && !locationHeader,
     (csv !== null || text.trim().length > 0) && !busy,
     consent && source.trim().length > 0 && !busy,
   ][step];
@@ -147,7 +185,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
     <section aria-label="New broadcast" className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-ink">New broadcast</h2>
-        <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
+        <Button variant="ghost" size="sm" disabled={busy} onClick={() => void close()}>{broadcast ? 'Discard draft' : 'Close'}</Button>
       </div>
       <ol className="flex flex-wrap gap-2 text-xs text-steel" aria-label="Steps">
         {STEPS.map((s, i) => <li key={s} aria-current={step === i ? 'step' : undefined} className={step === i ? 'font-semibold text-ink' : ''}>{i + 1}. {s}</li>)}
@@ -189,7 +227,19 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
               })}
             </fieldset>
           ) : null}
-          {hasHeaderButtons ? <p role="note" className="text-xs text-steel">Header/button variables are not supported in the UI yet.</p> : null}
+          {header && !locationHeader ? (
+            <div className="space-y-1">
+              <Label htmlFor="bc-header">{headerIsMedia ? `Header ${headerType.toLowerCase()} link (https)` : 'Header text value'}{header.required ? '' : ' (optional)'}</Label>
+              <Input id="bc-header" value={headerValue} placeholder={headerIsMedia ? 'https://example.com/file' : (header.sample ?? '')} onChange={(e) => setHeaderValue(e.target.value)} />
+            </div>
+          ) : null}
+          {locationHeader ? <p role="note" className="text-xs text-steel">Templates with a location header cannot be broadcast from here yet.</p> : null}
+          {urlButtons.map((b) => (
+            <div key={b.index} className="space-y-1">
+              <Label htmlFor={`bc-btn-${b.index}`}>{b.sub_type === 'copy_code' ? 'Coupon code' : 'Link suffix'} for button {b.label ? `"${b.label}"` : b.index + 1}{b.required ? '' : ' (optional)'}</Label>
+              <Input id={`bc-btn-${b.index}`} value={buttonValues[b.index] ?? ''} maxLength={b.sub_type === 'copy_code' ? 15 : 200} onChange={(e) => setButtonValues((v) => ({ ...v, [b.index]: e.target.value }))} />
+            </div>
+          ))}
           {isMarketing ? (
             <div className="space-y-1">
               <Label htmlFor="bc-send-via">Send via</Label>

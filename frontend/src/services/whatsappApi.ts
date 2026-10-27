@@ -956,9 +956,11 @@ export interface BroadcastTemplateVariable { name?: string; index?: number; samp
 export interface BroadcastTemplateParams {
   parameter_format: 'NAMED' | 'POSITIONAL';
   body: BroadcastTemplateVariable[];
-  header: Record<string, unknown> | null;
-  buttons: unknown[];
+  header: BroadcastTemplateHeader | null;
+  buttons: BroadcastTemplateButton[];
 }
+export interface BroadcastTemplateHeader { type: string; required: boolean; name?: string; index?: number; sample?: string | null }
+export interface BroadcastTemplateButton { index: number; sub_type: 'url' | 'copy_code' | 'quick_reply'; required: boolean; label?: string | null }
 
 export const getBroadcastTemplateParams = (gateway: string, template: string) =>
   mapOk(
@@ -998,6 +1000,10 @@ export const startBroadcast = (broadcast: string, confirmCount: string | number)
 export const pauseBroadcast = (broadcast: string) => invoke<Mutated>('pause_broadcast', { broadcast }, 'post');
 export const resumeBroadcast = (broadcast: string) => invoke<Mutated>('resume_broadcast', { broadcast }, 'post');
 export const cancelBroadcast = (broadcast: string) => invoke<Mutated>('cancel_broadcast', { broadcast }, 'post');
+export const removeBroadcastRecipient = (broadcast: string, recipient: string) =>
+  invoke<{ broadcast?: string; removed?: number; queued?: number }>('remove_broadcast_recipient', { broadcast, recipient }, 'post');
+export const deleteBroadcast = (broadcast: string) =>
+  invoke<{ broadcast?: string; deleted?: boolean }>('delete_broadcast', { broadcast }, 'post');
 export const pauseAllBroadcasts = (gateway: string) => invoke<{ gateway?: string; paused?: string[] }>('pause_all_broadcasts', { gateway }, 'post');
 
 export const listBroadcasts = (opts: { gateway?: string; status?: string; limit?: number; offset?: number } = {}) =>
