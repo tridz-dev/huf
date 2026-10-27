@@ -45,6 +45,10 @@ ON_RUN_SUCCESS = "on_run_success"
 ON_RUN_FAILURE = "on_run_failure"
 ON_EVENT_REJECTED = "on_event_rejected"
 
+# Reasons (GatewayHookDenied.reason / rejection reasons) that start with this prefix are
+# safe to show to the end user in the chat; everything else is admin-only.
+USER_VISIBLE_PREFIX = "[user] "
+
 
 class GatewayHookDenied(Exception):
 	"""Raised by a handler to refuse the event; ``reason`` is user-visible."""

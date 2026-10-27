@@ -1,5 +1,6 @@
 import type { GatewayDoc } from '@/services/gatewayApi';
 import { getProviderPanels } from './panels';
+import './panels/registerAll';
 
 interface ProviderPanelsProps {
   gateway: GatewayDoc;
