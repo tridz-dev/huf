@@ -1,4 +1,8 @@
-"""Microsoft Teams Gateway Adapter: thin delegates to :mod:`huf.ai.teams`."""
+"""Microsoft Teams Gateway Adapter: thin delegates to :mod:`huf.ai.teams`.
+
+Supports single-tenant Azure bot registrations only (app_id + client secret + tenant_id). MultiTenant
+bots, user-assigned managed identity (MSI) and sovereign clouds are out of scope.
+"""
 
 from __future__ import annotations
 
@@ -25,8 +29,21 @@ class TeamsGatewayAdapter(GatewayAdapter):
 	provider_id = "microsoft_teams"
 	credential_schema = GatewayCredentialSchema(
 		(
-			GatewayCredentialField("app_id", "Microsoft App ID"),
+			GatewayCredentialField("app_id", "Microsoft App ID", secret=False),
 			GatewayCredentialField("app_password", "Microsoft App Secret / Password"),
+			GatewayCredentialField(
+				"tenant_id",
+				"Microsoft Entra Tenant ID",
+				secret=False,
+				description="Directory (tenant) ID of the single-tenant bot registration.",
+			),
+			GatewayCredentialField(
+				"allowed_tenant_ids",
+				"Allowed Tenant IDs",
+				required=False,
+				secret=False,
+				description="Optional comma-separated tenant IDs allowed to message the bot.",
+			),
 		)
 	)
 	capabilities = GatewayCapabilities(
@@ -46,6 +63,8 @@ class TeamsGatewayAdapter(GatewayAdapter):
 			raise ValueError(f"Microsoft Teams adapter is missing required credentials: {', '.join(missing)}")
 		self._app_id = credentials["app_id"]
 		self._app_password = credentials["app_password"]
+		self._tenant_id = credentials["tenant_id"]
+		self._allowed_tenant_ids = str(credentials.get("allowed_tenant_ids") or "")
 		self._http_post = http_post
 
 	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
@@ -69,4 +88,9 @@ class TeamsGatewayAdapter(GatewayAdapter):
 		return client.send_adaptive_card(conversation_id, card_content, self._http_post)
 
 	def _credentials(self) -> dict[str, str]:
-		return {"app_id": self._app_id, "app_password": self._app_password}
+		return {
+			"app_id": self._app_id,
+			"app_password": self._app_password,
+			"tenant_id": self._tenant_id,
+			"allowed_tenant_ids": self._allowed_tenant_ids,
+		}

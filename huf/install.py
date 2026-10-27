@@ -1147,7 +1147,7 @@ def _adapter_required_credentials(provider_id, extra_fields=None):
 
 	adapter_cls = get_adapter_class(provider_id)
 	fields = [
-		{"key": f.key, "label": f.label, "required": f.required}
+		{"key": f.key, "label": f.label, "required": f.required, "secret": f.secret, "description": f.description}
 		for f in adapter_cls.credential_schema.fields
 	]
 	fields.extend(extra_fields or [])
