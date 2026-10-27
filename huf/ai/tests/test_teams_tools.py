@@ -195,8 +195,26 @@ class TestReadActions(_Base):
 			_call(action="list_recent_conversations", limit=9999)
 		self.assertLessEqual(ga.call_args.kwargs["limit_page_length"], tools.LIST_MAX_LIMIT * 10)
 
+	def test_account_info_hides_ids_in_gateway_runs(self):
+		with patch.object(tools.frappe.db, "get_value", side_effect=lambda dt, n, f: 1 if f == "is_enabled" else "Teams Bot"), \
+			patch.object(tools, "_in_gateway_run", return_value=True):
+			out = _call(action="get_account_info")
+		self.assertEqual(set(out["data"]), {"bot_name", "enabled", "credentials_configured"})
+		self.assertNotIn(tf.BOT_APP_ID, json.dumps(out))
+		self.assertNotIn(tf.TENANT_ID, json.dumps(out))
+
+	def test_in_gateway_run_detects_channel(self):
+		def gv(dt, name, field=None):
+			return {"Agent Run": "CONV", "Agent Conversation": "gateway:GW"}[dt]
+
+		with patch.object(tools.frappe.db, "get_value", side_effect=gv):
+			self.assertTrue(tools._in_gateway_run())
+		with patch.object(tools.frappe.db, "get_value", side_effect=lambda dt, n, f: "CONV" if dt == "Agent Run" else "desk"):
+			self.assertFalse(tools._in_gateway_run())
+
 	def test_account_info_has_no_secrets(self):
-		with patch.object(tools.frappe.db, "get_value", side_effect=lambda dt, n, f: 1 if f == "is_enabled" else "Teams Bot"):
+		with patch.object(tools.frappe.db, "get_value", side_effect=lambda dt, n, f: 1 if f == "is_enabled" else "Teams Bot"), \
+			patch.object(tools, "_in_gateway_run", return_value=False):
 			out = _call(action="get_account_info")
 		blob = json.dumps(out)
 		self.assertEqual(out["data"]["app_id"], tf.BOT_APP_ID)
@@ -280,10 +298,11 @@ class TestCrossConversation(_Base):
 		self.assertEqual(out["data"]["count"], 2)
 		self.assertNotIn("IGNORE PREVIOUS", json.dumps(out))
 
-	def _allowed(self, user, execution_user="exec@x", write=True):
+	def _allowed(self, user, execution_user="exec@x", write=True, flag=True):
 		from types import SimpleNamespace
 
 		with patch.object(tools.frappe, "session", SimpleNamespace(user=user)), \
+			patch.object(tools.frappe, "conf", {tools.CROSS_CONVERSATION_FLAG: flag} if flag is not None else {}), \
 			patch.object(tools.frappe.db, "get_value", return_value=execution_user), \
 			patch.object(tools.frappe, "has_permission", return_value=write):
 			return tools._cross_conversation_allowed(GW)
@@ -294,6 +313,18 @@ class TestCrossConversation(_Base):
 		self.assertFalse(self._allowed("exec@x"))
 		self.assertFalse(self._allowed("human@x", write=False))
 		self.assertTrue(self._allowed("human@x"))
+
+	def test_flag_default_off_even_for_permitted_human(self):
+		self.assertFalse(self._allowed("human@x", flag=None))
+		self.assertFalse(self._allowed("human@x", flag=False))
+		self.assertFalse(self._allowed("human@x", flag="0"))
+		self.assertTrue(self._allowed("human@x", flag="true"))
+
+	def test_refusal_tells_admin_how_to_enable(self):
+		with patch.object(tools, "_cross_conversation_allowed", return_value=False):
+			out = _call(action="send_message", text="x", conversation_id="19:other@thread.v2")
+		self.assertEqual(out["error"], "cross_conversation_not_allowed")
+		self.assertIn("teams_tool_allow_cross_conversation", out["message"])
 
 
 class TestAtomicCap(_Base):

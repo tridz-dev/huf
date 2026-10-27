@@ -90,10 +90,12 @@ The app password is stored as a secret. Huf never returns it to the browser or w
 
 1. On the Gateway page, use **Download Teams app package** to get the generated app package (manifest and icons).
    The manifest `botId` must equal the App ID. Manifest version 1.29 with the matching `$schema`.
-   The package needs these site config keys (all required): `teams_app_developer_name` (at most 32 characters),
-   `teams_app_website_url`, `teams_app_privacy_url`, `teams_app_terms_url` (https URLs). If one is missing the download fails
-   with "Set site config key teams_app_developer_name to generate the Teams app package." (naming the missing key).
-   Set them with `bench --site <site> set-config <key> <value>`.
+   The site config keys `teams_app_developer_name` (at most 32 characters), `teams_app_website_url`, `teams_app_privacy_url`
+   and `teams_app_terms_url` are optional overrides. Defaults: developer name from System Settings app name, website from the
+   public https site URL, privacy and terms pointing at the website. If the site URL is not a public https URL the download
+   fails and asks you to set `host_name` or `teams_app_website_url`. Override privacy and terms with real policy pages before
+   any store submission. The bot manifest sets `supportsFiles` to false (no file upload flow).
+   Set overrides with `bench --site <site> set-config <key> <value>`.
 2. Install it in Teams (verify in your tenant):
    - Personal sideload: Apps, Manage your apps, Upload a custom app. Needs the custom app upload policy.
    - Organisation: Teams admin center, Manage apps, Upload new app, then approve it for the org catalog if
