@@ -130,15 +130,33 @@ class TestMasking(_Fixture, IntegrationTestCase):
 
 
 class TestPairingCaps(_Fixture, IntegrationTestCase):
-	def test_reply_flag_defaults_off(self):
+	def test_reply_flag_defaults_on(self):
+		# A new sender must learn their pairing code without the admin finding a hidden switch first.
 		field = frappe.get_meta("Gateway").get_field("pairing_reply_enabled")
-		self.assertEqual(str(field.default), "0")
+		self.assertEqual(str(field.default), "1")
 		self.assertFalse(bool(getattr(SimpleNamespace(), "pairing_reply_enabled", 0)))
 
 	def test_flag_off_creates_entry_but_sends_nothing(self):
 		a = self.make_gateway("A", pairing_reply_enabled=0)
 		self.assertTrue(gsvc._create_pairing_request(self.gw(a), "15551230001"))
 		self.assertEqual(self.sent_texts(), [])
+
+	def test_code_unsent_while_replies_were_off_is_sent_once_turned_on(self):
+		a = self.make_gateway("A", pairing_reply_enabled=0)
+		code = gsvc._create_pairing_request(self.gw(a), "15551230001")
+		self.assertEqual(self.sent_texts(), [])
+
+		frappe.db.set_value("Gateway", a, "pairing_reply_enabled", 1)
+		self.assertEqual(gsvc._create_pairing_request(self.gw(a), "15551230001"), code)
+		texts = self.sent_texts()
+		self.assertEqual(len(texts), 1)
+		self.assertIn(code, texts[0])
+		entry = frappe.db.get_value("Gateway Access Entry", {"gateway": a, "external_id": "15551230001"}, "pairing_sent_at")
+		self.assertIsNotNone(entry)
+
+		# delivered once: the next message from the same sender does not resend it
+		gsvc._create_pairing_request(self.gw(a), "15551230001")
+		self.assertEqual(len(self.sent_texts()), 1)
 
 	def test_pending_cap_per_gateway(self):
 		a = self.make_gateway("A", pairing_pending_limit=2)

@@ -21,7 +21,7 @@ from typing import Any
 import frappe
 from frappe import _
 from frappe.rate_limiter import rate_limit
-from frappe.utils import add_to_date, now_datetime
+from frappe.utils import add_to_date, get_datetime, now_datetime
 
 from huf.ai.whatsapp import outbound_policy as policy
 from huf.ai.gateway_adapters import provider_hooks
@@ -1192,6 +1192,55 @@ def _pairing_reply_budget_left(gateway) -> bool:
     return _bump_counter(_counter_key("pairing_reply", gateway.name, day), 90000) <= limit
 
 
+def _pairing_reply_allowed(gateway) -> bool:
+    """True when the gateway replies to unknown senders and today's reply budget is not spent."""
+    return bool(getattr(gateway, "pairing_reply_enabled", 0)) and _pairing_reply_budget_left(gateway)
+
+
+def _send_pairing_code(gateway, pairing_code: str, target_conv: str, expires_at=None) -> None:
+    """Best-effort: tell the sender their pairing code. Never raises."""
+    if not gateway.integration_settings:
+        return
+    minutes = int(gateway.pairing_ttl_minutes or 60)
+    try:
+        if expires_at:
+            minutes = max(1, int((get_datetime(expires_at) - now_datetime()).total_seconds() // 60))
+    except Exception:
+        pass  # keep the configured lifetime
+    try:
+        from huf.ai.gateway_adapters.types import GatewayReply
+
+        if provider_hooks.get(gateway.provider, "adapter_context") is not None:
+            # Needs gateway_context so the adapter can apply the 24h
+            # window check and the fallback template (A7).
+            from huf.ai.gateway_webhook import get_gateway_adapter
+
+            adapter = get_gateway_adapter(gateway)
+        else:
+            int_doc = frappe.get_doc("Integration Settings", gateway.integration_settings)
+            creds = {}
+            for row in getattr(int_doc, "credentials", []):
+                creds[row.key] = row.get_password("value") if hasattr(row, "get_password") else row.value
+
+            from huf.ai.gateway_webhook import _adapter_class_for_provider
+
+            adapter_cls = _adapter_class_for_provider(gateway.provider)
+            adapter = adapter_cls(creds)
+        reply_msg = (
+            f"🔒 Access approval required.\n\n"
+            f"Your pairing code is: `{pairing_code}`\n\n"
+            f"Please share this code with the bot administrator to get approved. "
+            f"It expires in {minutes} minutes."
+        )
+        adapter.send_reply(GatewayReply(conversation_id=target_conv, text=reply_msg))
+    except _whatsapp_send_errors(gateway.provider) as exc:
+        frappe.logger("huf").warning(
+            f"Pairing code message not delivered (window closed or bridge error): {_whatsapp_error_text(exc)}"
+        )
+    except Exception as exc:
+        frappe.logger("huf").warning(f"Failed to send pairing code message: {_redact_error_text(str(exc))}")
+
+
 def _create_pairing_request(
     gateway, sender_id: str, conversation_id: str | None = None, display_name: str | None = None
 ) -> str:
@@ -1213,14 +1262,20 @@ def _create_pairing_request(
             "external_id": str(sender_id),
             "state": "Pending",
         },
-        fields=["name", "pairing_code", "expires_at"],
+        fields=["name", "pairing_code", "expires_at", "pairing_sent_at"],
         limit_page_length=0,
     )
     for row in existing or []:
         if row.get("expires_at") and row.get("expires_at") < now:
             _save_entry(row["name"], {"state": ENTRY_STATE_EXPIRED})
             continue
-        return row.get("pairing_code") or ""
+        code = row.get("pairing_code") or ""
+        # A request created while pairing replies were off never reached the sender: deliver it now
+        # (once) instead of leaving the sender unanswered until the entry expires.
+        if code and not row.get("pairing_sent_at") and _pairing_reply_allowed(gateway):
+            frappe.db.set_value("Gateway Access Entry", row["name"], "pairing_sent_at", now, update_modified=False)
+            _send_pairing_code(gateway, code, conversation_id or sender_id, row.get("expires_at"))
+        return code
 
     recent = frappe.get_all(
         "Gateway Access Entry",
@@ -1243,8 +1298,8 @@ def _create_pairing_request(
         return ""
 
     pairing_code = _new_unique_pairing_code(gateway.name)
-    # Replies to unknown numbers are opt-in (default OFF) and capped per day.
-    reply_enabled = bool(getattr(gateway, "pairing_reply_enabled", 0)) and _pairing_reply_budget_left(gateway)
+    # Replies to unknown senders are a per-gateway setting and capped per day.
+    reply_enabled = _pairing_reply_allowed(gateway)
     ttl_minutes = int(gateway.pairing_ttl_minutes or 60)
     doc = frappe.get_doc(
         {
@@ -1262,40 +1317,7 @@ def _create_pairing_request(
     ).insert(ignore_permissions=True)
 
     if reply_enabled:
-        try:
-            if gateway.integration_settings:
-                from huf.ai.gateway_adapters.types import GatewayReply
-
-                if provider_hooks.get(gateway.provider, "adapter_context") is not None:
-                    # Needs gateway_context so the adapter can apply the 24h
-                    # window check and the fallback template (A7).
-                    from huf.ai.gateway_webhook import get_gateway_adapter
-
-                    adapter = get_gateway_adapter(gateway)
-                else:
-                    int_doc = frappe.get_doc("Integration Settings", gateway.integration_settings)
-                    creds = {}
-                    for row in getattr(int_doc, "credentials", []):
-                        creds[row.key] = row.get_password("value") if hasattr(row, "get_password") else row.value
-
-                    from huf.ai.gateway_webhook import _adapter_class_for_provider
-
-                    adapter_cls = _adapter_class_for_provider(gateway.provider)
-                    adapter = adapter_cls(creds)
-                target_conv = conversation_id or sender_id
-                reply_msg = (
-                    f"🔒 Access approval required.\n\n"
-                    f"Your pairing code is: `{pairing_code}`\n\n"
-                    f"Please share this code with the bot administrator to get approved. "
-                    f"It expires in {ttl_minutes} minutes."
-                )
-                adapter.send_reply(GatewayReply(conversation_id=target_conv, text=reply_msg))
-        except _whatsapp_send_errors(gateway.provider) as exc:
-            frappe.logger("huf").warning(
-                f"Pairing code message not delivered (window closed or bridge error): {_whatsapp_error_text(exc)}"
-            )
-        except Exception as exc:
-            frappe.logger("huf").warning(f"Failed to send pairing code message: {_redact_error_text(str(exc))}")
+        _send_pairing_code(gateway, pairing_code, conversation_id or sender_id, doc.expires_at)
 
     return pairing_code
 
