@@ -57,7 +57,7 @@ CSV: the first header cell matching `phone`, `recipient`, `phone_number`, `mobil
 
 Before each send the STOP check, the BSUID check, and, for a MARKETING template, the marketing preference are checked again (section 4). A contact that opted out after intake is marked `skipped`.
 
-> **Who can be messaged.** A broadcast sends to the recipients its operator listed (after the opt-out, marketing-preference and +1 filters in this section). It does **not** apply the gateway's agent recipient allowlist (`agent_recipient_scope` / `agent_recipient_allowlist`), which only limits what an *agent* may send. Check the list before you start; the typed-count confirmation is the last guard. Whether a gateway-level allowlist should also bind broadcasts is tracked as a follow-up.
+> **Who can be messaged.** A broadcast sends to the recipients its operator listed (after the opt-out, marketing-preference and +1 filters in this section). It does **not** apply the gateway's agent recipient allowlist (`agent_recipient_scope` / `agent_recipient_allowlist`), which only limits what an *agent* may send. Broadcasts follow Meta's rules only (opt-in, STOP, per-user marketing limits, messaging tier); Huf adds no recipient allowlist. Check the list before you start; the typed-count confirmation is the last guard.
 
 ## 3. Recipient state machine
 

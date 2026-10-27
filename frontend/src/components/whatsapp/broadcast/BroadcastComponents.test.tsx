@@ -306,14 +306,6 @@ describe('BroadcastWizard', () => {
       await waitFor(() => expect(m.deleteBroadcast).toHaveBeenCalledWith('BCAST-9'));
       expect(onClose).toHaveBeenCalled();
     });
-    it('tells the operator that the agent allowlist does not limit a broadcast', async () => {
-      m.previewBroadcast.mockResolvedValue(ok({ preview: preview() }));
-      const user = userEvent.setup();
-      render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
-      await toPreview(user);
-      await user.click(screen.getByRole('button', { name: 'Next' }));
-      expect(await screen.findByText(/whatever this gateway's agent recipient allowlist says/)).toBeInTheDocument();
-    });
     it('blocking message about missing variables disables Start', async () => {
       m.previewBroadcast.mockResolvedValue(ok({ preview: preview({ blocking: ['2 recipient(s) are missing values for: first_name'] }) }));
       const user = userEvent.setup();
