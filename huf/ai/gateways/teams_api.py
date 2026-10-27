@@ -349,5 +349,6 @@ def create_personal_conversation(
 		"tenantId": tenant_id,
 		"channelData": {"tenant": {"id": tenant_id}},
 	}
-	body = _require_id(_request("POST", f"{base}/v3/conversations", token, payload, http=http, now=now, sleep=sleep))
+	url = f"{base}/v3/conversations"
+	body = _require_id(_request("POST", url, token, payload, http=http, now=now, sleep=sleep))
 	return body["id"]
