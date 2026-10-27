@@ -1,0 +1,112 @@
+{
+ "actions": [],
+ "creation": "2026-10-27 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "gateway",
+  "tenant_id",
+  "conversation_id",
+  "conversation_type",
+  "installed",
+  "last_seen_at",
+  "section_routing",
+  "service_url",
+  "team_id",
+  "channel_id",
+  "user_aad_id",
+  "bot_id"
+ ],
+ "fields": [
+  {
+   "fieldname": "gateway",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Gateway",
+   "options": "Gateway",
+   "reqd": 1
+  },
+  {
+   "fieldname": "tenant_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tenant ID",
+   "reqd": 1
+  },
+  {
+   "fieldname": "conversation_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Conversation ID",
+   "length": 255,
+   "reqd": 1
+  },
+  {
+   "fieldname": "conversation_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Conversation type",
+   "options": "personal\nchannel\ngroupChat",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "installed",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Installed"
+  },
+  {
+   "fieldname": "last_seen_at",
+   "fieldtype": "Datetime",
+   "label": "Last seen at"
+  },
+  {
+   "fieldname": "section_routing",
+   "fieldtype": "Section Break",
+   "label": "Routing"
+  },
+  {
+   "fieldname": "service_url",
+   "fieldtype": "Data",
+   "label": "Service URL",
+   "length": 255
+  },
+  {
+   "fieldname": "team_id",
+   "fieldtype": "Data",
+   "label": "Team ID",
+   "length": 255
+  },
+  {
+   "fieldname": "channel_id",
+   "fieldtype": "Data",
+   "label": "Channel ID",
+   "length": 255
+  },
+  {
+   "fieldname": "user_aad_id",
+   "fieldtype": "Data",
+   "label": "User AAD object ID"
+  },
+  {
+   "fieldname": "bot_id",
+   "fieldtype": "Data",
+   "label": "Bot ID"
+  }
+ ],
+ "module": "Huf",
+ "name": "Teams Conversation Reference",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
