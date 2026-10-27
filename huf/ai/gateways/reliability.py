@@ -34,7 +34,37 @@ def _claim(kind: str, event_name: str) -> bool:
 		return False
 
 
+def _send_private_slack(gateway, event, text: str) -> None:
+	"""Slack notices go only to the sender: ephemeral in the same channel/thread, else a DM.
+
+	If neither works nothing is sent: a notice (it may carry a one-time link) must never land
+	in the channel or thread where others can read it.
+	"""
+	sender = str(getattr(event, "sender_id", "") or "")
+	channel = getattr(event, "conversation_id", None)
+	if not sender:
+		return
+	from huf.ai.gateways.slack_context import get_slack_api
+
+	api = get_slack_api(gateway)
+	if channel:
+		try:
+			api.post_ephemeral(channel, sender, text=text, thread_ts=getattr(event, "thread_id", None) or None)
+			return
+		except Exception:
+			pass
+	try:
+		dm = api.conversations_open([sender])
+		if dm:
+			api.post_message(dm, text=text)
+	except Exception:
+		pass
+
+
 def _send_notice(gateway, event, text: str) -> None:
+	if str(getattr(gateway, "provider", "") or "").lower() == "slack":
+		_send_private_slack(gateway, event, text)
+		return
 	from huf.ai.gateway_webhook import send_gateway_reply
 
 	target = SimpleNamespace(

@@ -87,6 +87,14 @@ class FakeDb:
 			if ok:
 				s.update(state=state, consumed_by=by, consumed_at=at)
 			self._cursor.rowcount = 1 if ok else 0
+		elif q.startswith("UPDATE `tabGateway Action Session` SET state='Pending'"):
+			name, by = params[0], params[1]
+			s = self.sessions.get(name)
+			ok = bool(s and s["state"] == "Consumed" and s.get("consumed_by") == by
+				and (len(params) < 3 or s.get("consumed_at") == params[2]))
+			if ok:
+				s.update(state="Pending", consumed_by=None, consumed_at=None)
+			self._cursor.rowcount = 1 if ok else 0
 		elif q.startswith("UPDATE `tabGateway Action Session` SET state='Expired'"):
 			s = self.sessions.get(params[0])
 			ok = bool(s and s["state"] == "Pending")
@@ -317,6 +325,25 @@ class TestFlow(Base):
 		self.assertEqual(self.f.db.sessions[s]["state"], "Pending")
 		self.api.update_message.assert_not_called()
 
+	def test_actor_optional_handler_runs_for_unlinked_clicker(self):
+		opt = MagicMock(return_value={"text": "Linked."})
+		si.register_action_handler("optkind:", opt, requires_actor=False)
+		self.addCleanup(si._ACTOR_OPTIONAL.discard, "optkind:")
+		s = self.make(kind="optkind:x", intended_slack_user="UX")
+		self.run_endpoint(form(click(s, user="UX")))
+		opt.assert_called_once()
+		self.assertIsNone(opt.call_args.args[2])
+		self.assertEqual(self.f.db.sessions[s]["state"], "Consumed")
+
+	def test_actor_optional_still_checks_intended_slack_user(self):
+		opt = MagicMock(return_value={"text": "Linked."})
+		si.register_action_handler("optkind:", opt, requires_actor=False)
+		self.addCleanup(si._ACTOR_OPTIONAL.discard, "optkind:")
+		s = self.make(kind="optkind:x", intended_slack_user="UX")
+		self.run_endpoint(form(click(s, user="UY")))
+		opt.assert_not_called()
+		self.assertEqual(self.f.db.sessions[s]["state"], "Pending")
+
 	def test_wrong_clicker_by_user(self):
 		s = self.make(intended_user="alice@x.com")
 		self.run_endpoint(form(click(s, user="U2")))
@@ -398,6 +425,26 @@ class TestFlow(Base):
 		self.assertEqual(self.run_endpoint(form(click(s))), {})
 		self.assertEqual(self.api.update_message.call_args.kwargs["text"], si.MSG_FAILED)
 		self.assertNotIn("secret detail", repr(self.f.logged))
+
+	def test_handler_exception_reopens_session_for_retry(self):
+		self.handler.side_effect = RuntimeError("boom")
+		s = self.make()
+		self.run_endpoint(form(click(s)))
+		self.assertEqual(self.f.db.sessions[s]["state"], "Pending")
+		self.assertIsNone(self.f.db.sessions[s]["consumed_by"])
+		self.handler.side_effect = None
+		self.handler.return_value = {"text": "ok"}
+		self.f.cache.d.clear()  # the Slack-side retry is a new click
+		self.run_endpoint(form(click(s)))
+		self.assertEqual(self.f.db.sessions[s]["state"], "Consumed")
+
+	def test_release_only_when_consumed_by_this_request(self):
+		s = self.make()
+		first = si.consume_action_session(s, "a")
+		self.assertFalse(si.release_action_session(s, "b"))
+		self.assertFalse(si.release_action_session(s, "a", "other-time"))
+		self.assertTrue(si.release_action_session(s, "a", first["consumed_at"]))
+		self.assertEqual(self.f.db.sessions[s]["state"], "Pending")
 
 	def test_response_url_never_used(self):
 		with patch("urllib.request.urlopen") as uo:

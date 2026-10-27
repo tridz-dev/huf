@@ -12,6 +12,7 @@ export interface SelfLinkPreview {
 
 export interface SelfLinkResult {
   linked: boolean;
+  pending?: boolean;
   user: string;
 }
 

@@ -83,15 +83,24 @@ def env(monkeypatch):
 	cache = FakeCache()
 	monkeypatch.setattr(reliability.frappe, "cache", lambda: cache, raising=False)
 	sent = []
+	public = []
 	gw = gateway_webhook
-	monkeypatch.setattr(
-		gw, "send_gateway_reply", lambda g, e, t, **k: sent.append((e.conversation_id, e.thread_id, t)),
-	)
-	return SimpleNamespace(cache=cache, sent=sent)
+	monkeypatch.setattr(gw, "send_gateway_reply", lambda g, e, t, **k: public.append(t))
+
+	class FakeApi:
+		def post_ephemeral(self, channel, user, text=None, blocks=None, thread_ts=None):
+			sent.append((channel, thread_ts, text))
+
+	import importlib
+
+	ctx = importlib.import_module("huf.ai.gateways.slack_context")
+	monkeypatch.setattr(ctx, "get_slack_api", lambda g, **k: FakeApi())
+	return SimpleNamespace(cache=cache, sent=sent, public=public)
 
 
 def ev(name="GE-1", **kw):
-	d = dict(name=name, conversation_id="C1", thread_id="111.1", provider_event_id="C1:222.3")
+	d = dict(name=name, conversation_id="C1", thread_id="111.1", provider_event_id="C1:222.3",
+		sender_id="U1")
 	d.update(kw)
 	return SimpleNamespace(**d)
 
@@ -120,9 +129,64 @@ def test_failure_notice_at_most_once(env):
 
 
 def test_failure_notice_never_raises_on_send_error(monkeypatch, env):
-	gw = gateway_webhook
-	monkeypatch.setattr(gw, "send_gateway_reply", MagicMock(side_effect=RuntimeError("boom")))
+	import importlib
+
+	ctx = importlib.import_module("huf.ai.gateways.slack_context")
+	monkeypatch.setattr(ctx, "get_slack_api", MagicMock(side_effect=RuntimeError("boom")))
 	reliability.on_run_failure(GW, ev(), "agent", RuntimeError("x"))
+
+
+# ---- S8: Slack notices are private (never the channel/thread) ----
+def _api_fixture(monkeypatch, eph_fails=False, dm_fails=False):
+	import importlib
+
+	calls = SimpleNamespace(eph=[], dm=[], opened=[])
+
+	class Api:
+		def post_ephemeral(self, channel, user, text=None, blocks=None, thread_ts=None):
+			if eph_fails:
+				raise RuntimeError("cant_post")
+			calls.eph.append((channel, user, thread_ts, text))
+
+		def conversations_open(self, users):
+			calls.opened.append(users)
+			if dm_fails:
+				raise RuntimeError("no im:write")
+			return "D9"
+
+		def post_message(self, channel, text=None, blocks=None, thread_ts=None, unfurl=False):
+			calls.dm.append((channel, text))
+
+	ctx = importlib.import_module("huf.ai.gateways.slack_context")
+	monkeypatch.setattr(ctx, "get_slack_api", lambda g, **k: Api())
+	return calls
+
+
+def test_slack_notice_is_ephemeral_to_sender_in_thread(env, monkeypatch):
+	calls = _api_fixture(monkeypatch)
+	reliability.on_event_rejected(GW, ev(), "Rejected", hooks.USER_VISIBLE_PREFIX + "link: https://x/y")
+	assert calls.eph == [("C1", "U1", "111.1", "link: https://x/y")]
+	assert calls.dm == [] and env.public == []
+
+
+def test_slack_notice_falls_back_to_dm(env, monkeypatch):
+	calls = _api_fixture(monkeypatch, eph_fails=True)
+	reliability.on_event_rejected(GW, ev(), "Rejected", hooks.USER_VISIBLE_PREFIX + "secret link")
+	assert calls.opened == [["U1"]] and calls.dm == [("D9", "secret link")]
+	assert env.public == []
+
+
+def test_slack_notice_nothing_public_when_both_fail(env, monkeypatch):
+	_api_fixture(monkeypatch, eph_fails=True, dm_fails=True)
+	reliability.on_event_rejected(GW, ev(), "Rejected", hooks.USER_VISIBLE_PREFIX + "secret link")
+	assert env.public == []
+
+
+def test_non_slack_provider_keeps_reply_path(env):
+	reliability.on_event_rejected(
+		SimpleNamespace(provider="Telegram"), ev(), "Rejected", hooks.USER_VISIBLE_PREFIX + "hello"
+	)
+	assert env.public == ["hello"] and env.sent == []
 
 
 def test_failure_notice_never_raises_on_cache_error(monkeypatch, env):
