@@ -15,6 +15,7 @@ from __future__ import annotations
 import frappe
 
 from huf.ai.gateways import blocks as bk
+from huf.ai.gateways import identity
 from huf.ai.gateways import slack_interactivity as si
 
 KIND = "idlink:"
@@ -75,8 +76,6 @@ def _flip(link_name: str, slack_user: str, team_id: str, gateway_name: str, appr
 	if not approve:
 		frappe.db.set_value(DOCTYPE, link_name, "state", "Revoked")
 		return True
-	from huf.ai.gateways import identity
-
 	lock = identity.key_lock(gateway_name, row.team_id, row.external_id)
 	if not lock:
 		return False
