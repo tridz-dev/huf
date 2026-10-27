@@ -81,7 +81,8 @@
    "options": "Gateway",
    "reqd": 1,
    "in_list_view": 1,
-   "search_index": 1
+   "search_index": 1,
+   "set_only_once": 1
   },
   {
    "fieldname": "whatsapp_account",
@@ -96,7 +97,8 @@
    "label": "Template document",
    "length": 140,
    "reqd": 1,
-   "description": "WhatsApp Templates document name."
+   "description": "WhatsApp Templates document name.",
+   "set_only_once": 1
   },
   {
    "fieldname": "template_name",
@@ -125,7 +127,8 @@
    "label": "Send via",
    "options": "messages\nmarketing_messages",
    "default": "messages",
-   "description": "marketing_messages = Meta Marketing Messages API (MARKETING templates only; needs MM API onboarding)."
+   "description": "marketing_messages = Meta Marketing Messages API (MARKETING templates only; needs MM API onboarding).",
+   "read_only": 1
   },
   {
    "fieldname": "section_params",
@@ -162,7 +165,8 @@
   {
    "fieldname": "consent_attested",
    "fieldtype": "Check",
-   "label": "Opt-in attested"
+   "label": "Opt-in attested",
+   "read_only": 1
   },
   {
    "fieldname": "consent_attested_by",
@@ -186,7 +190,8 @@
    "fieldname": "max_recipients",
    "fieldtype": "Int",
    "label": "Max recipients",
-   "default": "1000"
+   "default": "1000",
+   "read_only": 1
   },
   {
    "fieldname": "mps",
