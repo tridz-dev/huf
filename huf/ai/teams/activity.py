@@ -2,7 +2,12 @@
 
 Verification (JWT) always happens before this module runs (``verify_inbound`` precedes both the
 ``ingest_update`` hook and ``normalize_inbound`` in the webhook flow), so nothing here authenticates.
-Tenant admission and activity-type filtering do live here.
+Tenant admission, channel pinning (``channelId`` must be ``msteams``: defence in depth on top of
+``auth._verify``) and activity-type filtering do live here.
+
+Untrusted short strings that reach the agent prompt (sender display name, attachment names and URLs, via the
+core ``_describe_attachments``) are sanitised here at the source: control/format characters and newlines are
+replaced by spaces and lengths are capped, so they cannot break the prompt structure.
 """
 
 from __future__ import annotations
@@ -11,6 +16,7 @@ import hashlib
 import json
 import logging
 import mimetypes
+import unicodedata
 from collections.abc import Mapping
 from html.parser import HTMLParser
 from typing import Any
@@ -34,6 +40,10 @@ _KNOWN_KINDS = frozenset(
 		"messagedelete",
 	}
 )
+TEAMS_CHANNEL_ID = "msteams"
+MAX_DISPLAY_NAME = 80
+MAX_ATTACHMENT_NAME = 120
+MAX_ATTACHMENT_URL = 2048
 _CONVERSATION_TYPES = {"personal": False, "groupchat": True, "channel": True}
 
 
@@ -59,6 +69,20 @@ def _tenant_of(activity: Mapping[str, Any]) -> str:
 	conversation = activity.get("conversation") or {}
 	tenant = (channel_data.get("tenant") or {}).get("id") if isinstance(channel_data, dict) else None
 	return str(tenant or (conversation.get("tenantId") if isinstance(conversation, dict) else "") or "")
+
+
+def is_teams_channel(activity: Mapping[str, Any]) -> bool:
+	"""True only for ``channelId == "msteams"`` (case-insensitive). Web Chat/Direct Line/Emulator are rejected."""
+	channel_id = activity.get("channelId")
+	return isinstance(channel_id, str) and channel_id.strip().lower() == TEAMS_CHANNEL_ID
+
+
+def clean_label(value: Any, limit: int) -> str:
+	"""Single-line, control-free, length-capped text for prompt-bound labels (names, URLs)."""
+	text = "".join(
+		" " if unicodedata.category(ch)[0] in ("C", "Z") and ch != " " else ch for ch in str(value or "")
+	)
+	return " ".join(text.split())[:limit]
 
 
 def tenant_allowed(activity: Mapping[str, Any], credentials: Mapping[str, str]) -> bool:
@@ -166,7 +190,7 @@ def _attachments(activity: Mapping[str, Any]) -> tuple[list[GatewayAttachment], 
 			if extracted:
 				html_texts.append(extracted)
 			continue
-		name = str(attachment.get("name") or "")
+		name = clean_label(attachment.get("name"), MAX_ATTACHMENT_NAME)
 		if content_type == FILE_DOWNLOAD_INFO:
 			info = content if isinstance(content, dict) else {}
 			url = info.get("downloadUrl") or attachment.get("contentUrl")
@@ -177,14 +201,22 @@ def _attachments(activity: Mapping[str, Any]) -> tuple[list[GatewayAttachment], 
 			if url:
 				files.append(
 					GatewayAttachment(
-						mime_type=mime or "application/octet-stream", filename=name, url=str(url), kind="file"
+						mime_type=mime or "application/octet-stream",
+						filename=name,
+						url=clean_label(url, MAX_ATTACHMENT_URL),
+						kind="file",
 					)
 				)
 			continue
 		content_url = attachment.get("contentUrl")
 		if content_url:
 			files.append(
-				GatewayAttachment(mime_type=content_type, filename=name, url=str(content_url), kind="file")
+				GatewayAttachment(
+					mime_type=clean_label(content_type, MAX_ATTACHMENT_NAME),
+					filename=name,
+					url=clean_label(content_url, MAX_ATTACHMENT_URL),
+					kind="file",
+				)
 			)
 	return files, html_texts
 
@@ -208,6 +240,8 @@ def _event_id(activity: Mapping[str, Any], text: str) -> str:
 
 def build_event(activity: dict[str, Any], credentials: Mapping[str, str]) -> NormalizedGatewayEvent | str:
 	"""Event for a message activity, or a short ignore kind string (never raises ``ValueError``)."""
+	if not is_teams_channel(activity):
+		return "channel"
 	if str(activity.get("type") or "").lower() != "message":
 		return ignore_kind(activity)
 	if not tenant_allowed(activity, credentials):
@@ -249,7 +283,7 @@ def build_event(activity: dict[str, Any], credentials: Mapping[str, str]) -> Nor
 		is_room=is_room,
 		mentioned=mentioned or not is_room,
 		raw_payload=activity,
-		display_name=str(from_account.get("name") or ""),
+		display_name=clean_label(from_account.get("name"), MAX_DISPLAY_NAME),
 		attachments=tuple(files),
 	)
 

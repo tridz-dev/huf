@@ -62,9 +62,9 @@ class TestServiceUrl(unittest.TestCase):
 			"https://smba.trafficmanager.net/amer/",
 			"https://smba.trafficmanager.net/emea",
 			"https://smba.trafficmanager.net:443/amer",
-			"https://api.botframework.com",
-			"https://eu.botframework.com/x",
-			"https://foo.trafficmanager.net/a",
+			"https://smba.trafficmanager.net/teams/",
+			"https://smba.trafficmanager.net",
+			"https://SMBA.TrafficManager.NET/AMER/",
 		):
 			self.assertTrue(refs.validate_service_url(url).startswith("https://"), url)
 		self.assertEqual(
@@ -88,6 +88,34 @@ class TestServiceUrl(unittest.TestCase):
 			"",
 			None,
 			"https://smba.trafficmanager.net\\@evil.com/",
+			# S2: wildcard / non-Teams Bot Framework hosts
+			"https://evil.trafficmanager.net/amer/",
+			"https://foo.trafficmanager.net/a",
+			"https://directline.botframework.com/",
+			"https://webchat.botframework.com/",
+			"https://token.botframework.com/",
+			"https://login.botframework.com/",
+			"https://api.botframework.com",
+			"https://state.botframework.com/",
+			"https://eu.botframework.com/x",
+			# S2: path restrictions
+			"https://smba.trafficmanager.net/amer/v3",
+			"https://smba.trafficmanager.net/amer/../evil",
+			"https://smba.trafficmanager.net/../amer",
+			"https://smba.trafficmanager.net/./amer",
+			"https://smba.trafficmanager.net/amer%2Fevil",
+			"https://smba.trafficmanager.net/amer%252Fevil",
+			"https://smba.trafficmanager.net//amer",
+			"https://smba.trafficmanager.net/am_er/",
+			# S2: host tricks
+			"https://smba.trafficmanager.net:444/amer",
+			"https://u@smba.trafficmanager.net/amer",
+			"https://[2001:db8::1]/amer",
+			"https://0x7f000001/amer",
+			"https://smba.trafficmanager.net./amer",
+			"https://smba.trafficmanager.n\u0435t/amer",
+			"https://xn--smba-trafficmanager.net/amer",
+			"https://smba.trafficmanager.net.evil.com/amer",
 		):
 			with self.assertRaises(ValueError, msg=repr(url)):
 				refs.validate_service_url(url)
@@ -153,3 +181,46 @@ class TestTeamsHooksLoaded(unittest.TestCase):
 		self.assertEqual(hook.__module__, "huf.ai.teams.hooks")
 		self.assertIsNotNone(provider_hooks.get("Telegram", "ingest_update"))
 		self.assertIsNotNone(provider_hooks.get("WhatsApp", "send_reply"))
+
+
+class TestReferenceGatewayScope(unittest.TestCase):
+	"""S8a: references are scoped per Gateway even when two Gateways share an app id."""
+
+	def setUp(self):
+		self.cache = _FakeCache()
+		p = patch.object(refs.frappe, "cache", self.cache)
+		p.start()
+		self.addCleanup(p.stop)
+
+	def _ref(self, region):
+		return {
+			"serviceUrl": f"https://smba.trafficmanager.net/{region}/",
+			"conversation_id": "19:abc",
+			"channelId": "msteams",
+		}
+
+	def test_two_gateways_same_app_id_do_not_share(self):
+		refs.save_reference("gw-a", "app-1", "19:abc", self._ref("amer"))
+		refs.save_reference("gw-b", "app-1", "19:abc", self._ref("emea"))
+		self.assertEqual(
+			refs.get_reference("gw-a", "app-1", "19:abc")["serviceUrl"],
+			"https://smba.trafficmanager.net/amer",
+		)
+		self.assertEqual(
+			refs.get_reference("gw-b", "app-1", "19:abc")["serviceUrl"],
+			"https://smba.trafficmanager.net/emea",
+		)
+		self.assertNotEqual(
+			refs._cache_key("gw-a", "app-1", "19:abc"), refs._cache_key("gw-b", "app-1", "19:abc")
+		)
+
+	def test_other_gateway_cache_miss_falls_back_to_own_events_only(self):
+		refs.save_reference("gw-a", "app-1", "19:abc", self._ref("amer"))
+		with patch.object(refs.frappe, "get_all", return_value=[]) as ga:
+			self.assertIsNone(refs.get_reference("gw-b", "app-1", "19:abc"))
+		self.assertEqual(ga.call_args.kwargs["filters"]["gateway"], "gw-b")
+
+	def test_blank_gateway_name_rejected(self):
+		with self.assertRaises(ValueError):
+			refs.save_reference("", "app-1", "19:abc", self._ref("amer"))
+		self.assertIsNone(refs.get_reference("", "app-1", "19:abc"))

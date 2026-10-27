@@ -5,7 +5,17 @@ regional and arrives only on inbound activities. The reference is therefore stor
 TTL) when a *verified* activity is received, and recovered from the latest verified Gateway Event
 ``raw_payload`` for the conversation when the cache has been evicted.
 
-The cache key is derived from ``sha256(app_id NUL conversation_id)``; the app password is never involved.
+The cache key is ``sha256(gateway_name NUL app_id NUL conversation_id)`` so two Gateways sharing an app id
+never share or overwrite references; the app password is never involved.
+
+Allowed serviceUrl hosts (outbound requests to it carry the bot bearer token): ONLY
+``smba.trafficmanager.net`` with an optional single lowercase path segment (``/amer/``, ``/emea/``,
+``/teams/`` ...). Microsoft documents the public Teams service URLs as ``https://smba.trafficmanager.net/<x>/``
+(learn.microsoft.com/microsoftteams/platform/bots/how-to/conversations/send-proactive-messages). The former
+``*.trafficmanager.net`` wildcard let any Azure customer register a host, and ``*.botframework.com`` covers
+non-Teams channels (Direct Line, Web Chat, token/login/api/state) with no Teams documentation behind it, so both
+are gone. Sovereign clouds (GCC ``smba.infra.gcc.teams.microsoft.com``, GCC High/DoD ``*.teams.microsoft.us``)
+are NOT supported yet.
 """
 
 from __future__ import annotations
@@ -13,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import json
+import re
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -20,7 +31,8 @@ import frappe
 
 # serviceUrl comes from the (verified, but still attacker-influenceable) inbound payload and is later used
 # as an outbound request target carrying a bearer token, so only Bot Connector hosts are acceptable.
-ALLOWED_SERVICE_HOSTS = ("smba.trafficmanager.net", "*.botframework.com", "*.trafficmanager.net")
+ALLOWED_SERVICE_HOSTS = ("smba.trafficmanager.net",)
+_PATH_RE = re.compile(r"/[a-z0-9-]+/?")
 
 REFERENCE_TTL_SECONDS = 90 * 24 * 3600
 _CACHE_PREFIX = "huf_teams_ref:"
@@ -28,14 +40,7 @@ _REFERENCE_KEYS = ("serviceUrl", "conversation_id", "bot_id", "tenant_id", "chan
 
 
 def _host_allowed(host: str) -> bool:
-	for pattern in ALLOWED_SERVICE_HOSTS:
-		if pattern.startswith("*."):
-			suffix = pattern[1:]  # ".botframework.com"
-			if host.endswith(suffix) and len(host) > len(suffix):
-				return True
-		elif host == pattern:
-			return True
-	return False
+	return host in ALLOWED_SERVICE_HOSTS
 
 
 def validate_service_url(url: Any) -> str:
@@ -61,6 +66,8 @@ def validate_service_url(url: Any) -> str:
 		raise ValueError("Teams serviceUrl must use port 443")
 	if parts.query or parts.fragment:
 		raise ValueError("Teams serviceUrl must not have a query or fragment")
+	if not url.isascii():
+		raise ValueError("Teams serviceUrl must be ASCII")
 	host = (parts.hostname or "").lower()
 	if not host:
 		raise ValueError("Teams serviceUrl has no host")
@@ -72,7 +79,10 @@ def validate_service_url(url: Any) -> str:
 		raise ValueError("Teams serviceUrl must not be an IP address")
 	if not _host_allowed(host):
 		raise ValueError("Teams serviceUrl host is not an allowed Bot Connector host")
-	return f"https://{host}{parts.path}".rstrip("/")
+	path = parts.path.lower()
+	if path not in ("", "/") and not _PATH_RE.fullmatch(path):
+		raise ValueError("Teams serviceUrl path must be empty or a single region segment")
+	return f"https://{host}{path}".rstrip("/")
 
 
 def reference_from_activity(activity: dict[str, Any]) -> dict[str, str]:
@@ -90,8 +100,8 @@ def reference_from_activity(activity: dict[str, Any]) -> dict[str, str]:
 	}
 
 
-def _cache_key(app_id: str, conversation_id: str) -> str:
-	digest = hashlib.sha256(f"{app_id}\x00{conversation_id}".encode()).hexdigest()
+def _cache_key(gateway_name: str, app_id: str, conversation_id: str) -> str:
+	digest = hashlib.sha256(f"{gateway_name}\x00{app_id}\x00{conversation_id}".encode()).hexdigest()
 	return _CACHE_PREFIX + digest
 
 
@@ -103,10 +113,12 @@ def _clean(reference: dict[str, Any]) -> dict[str, str]:
 
 def save_reference(gateway_name: str, app_id: str, conversation_id: str, reference: dict[str, Any]) -> None:
 	"""Validate and cache the reference. Raises ``ValueError`` on a bad serviceUrl (nothing stored)."""
-	if not conversation_id:
-		raise ValueError("Teams conversation id is required")
+	if not conversation_id or not gateway_name:
+		raise ValueError("Teams gateway name and conversation id are required")
 	cleaned = _clean(reference)
-	frappe.cache.set_value(_cache_key(app_id, conversation_id), cleaned, expires_in_sec=REFERENCE_TTL_SECONDS)
+	frappe.cache.set_value(
+		_cache_key(gateway_name, app_id, conversation_id), cleaned, expires_in_sec=REFERENCE_TTL_SECONDS
+	)
 
 
 def _from_gateway_event(gateway_name: str, conversation_id: str) -> dict[str, str] | None:
@@ -138,9 +150,9 @@ def _from_gateway_event(gateway_name: str, conversation_id: str) -> dict[str, st
 
 def get_reference(gateway_name: str, app_id: str, conversation_id: str) -> dict[str, str] | None:
 	"""Cached reference, else rebuilt from the latest verified Gateway Event (and re-cached)."""
-	if not conversation_id:
+	if not conversation_id or not gateway_name:
 		return None
-	cached = frappe.cache.get_value(_cache_key(app_id, conversation_id))
+	cached = frappe.cache.get_value(_cache_key(gateway_name, app_id, conversation_id))
 	if isinstance(cached, dict) and cached.get("serviceUrl"):
 		try:
 			return _clean(cached)
