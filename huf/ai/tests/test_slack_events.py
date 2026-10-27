@@ -181,9 +181,11 @@ class TestSlackEventsHandler(unittest.TestCase):
 		with patch.object(frappe, "request", request):
 			return slack_events.handle_slack_event()
 
-	def _assert_rejected(self, payload, headers=None, gateway_name=GATEWAY, sign_it=True):
-		with self.assertRaises(FakePermissionError):
-			self._call(payload, headers, gateway_name, sign_it)
+	def _assert_rejected(self, payload, headers=None, gateway_name=GATEWAY, sign_it=True, status=401):
+		frappe.local.response.http_status_code = None
+		result = self._call(payload, headers, gateway_name, sign_it)
+		self.assertEqual(frappe.local.response.http_status_code, status)
+		self.assertIs(result["ok"], False)
 		self.ingest.assert_not_called()
 
 	# -- signature / admission -------------------------------------------------
@@ -228,22 +230,23 @@ class TestSlackEventsHandler(unittest.TestCase):
 		tampered = json.dumps(message_event(text="tampered")).encode()
 		self._assert_rejected(tampered, headers=signed_headers(body))
 
-	def test_unknown_gateway_is_rejected_before_dispatch(self):
-		# Signature verification looks the gateway up first, so an unknown name
-		# fails as an admission error rather than reaching the "Unknown gateway"
-		# branch in handle_slack_event.
+	def test_unknown_gateway_is_404(self):
 		body = json.dumps(message_event()).encode()
-		self._assert_rejected(body, headers=signed_headers(body), gateway_name="does-not-exist")
+		self._assert_rejected(body, headers=signed_headers(body), gateway_name="does-not-exist", status=404)
+
+	def test_missing_gateway_name_is_404(self):
+		body = json.dumps(message_event()).encode()
+		self._assert_rejected(body, headers=signed_headers(body), gateway_name=None, status=404)
 
 	def test_non_slack_gateway_is_rejected(self):
 		self.gateway.provider = "Telegram"
 		body = json.dumps(message_event()).encode()
-		self._assert_rejected(body, headers=signed_headers(body))
+		self._assert_rejected(body, headers=signed_headers(body), status=403)
 
 	def test_disabled_gateway_is_rejected(self):
 		self.gateway.is_enabled = 0
 		body = json.dumps(message_event()).encode()
-		self._assert_rejected(body, headers=signed_headers(body))
+		self._assert_rejected(body, headers=signed_headers(body), status=403)
 
 	def test_missing_signing_secret_is_rejected(self):
 		self.settings.credentials = [SimpleNamespace(key="bot_token", get_password=lambda f: "xoxb-1")]
@@ -254,6 +257,38 @@ class TestSlackEventsHandler(unittest.TestCase):
 		self.settings.credentials = [SimpleNamespace(key="signing_secret", get_password=lambda f: "")]
 		body = json.dumps(message_event()).encode()
 		self._assert_rejected(body, headers=signed_headers(body))
+
+	def test_malformed_json_is_400(self):
+		body = b"{not json"
+		self._assert_rejected(body, headers=signed_headers(body), status=400)
+
+	def test_non_dict_json_is_400(self):
+		for raw in (b"[1, 2]", b'"str"', b"null", b"42"):
+			self._assert_rejected(raw, headers=signed_headers(raw), status=400)
+
+	def test_verify_returns_reason_strings(self):
+		body = b"{}"
+		verify = slack_events._verify_slack_signature
+		self.assertIsNone(verify(GATEWAY, body, signed_headers(body)))
+		self.assertEqual(verify(GATEWAY, body, {}), "missing_headers")
+		self.assertEqual(verify(GATEWAY, body, signed_headers(body, NOW - 301)), "stale_timestamp")
+		self.assertEqual(verify(GATEWAY, body, signed_headers(body, secret="x")), "bad_signature")
+
+	def test_rejection_does_not_log_header_values(self):
+		body = b"{}"
+		headers = {"X-Slack-Signature": "v0=secretish", "X-Slack-Request-Timestamp": "garbage-ts"}
+		self._call(body, headers=headers)
+		frappe.log_error.assert_not_called()
+
+	def test_retry_delivery_returns_200_without_ingest(self):
+		body = json.dumps(message_event()).encode()
+		headers = signed_headers(body)
+		headers["X-Slack-Retry-Num"] = "1"
+		frappe.local.response.http_status_code = None
+		result = self._call(body, headers=headers)
+		self.assertEqual(result, {"ok": True})
+		self.assertIsNone(frappe.local.response.http_status_code)
+		self.ingest.assert_not_called()
 
 	# -- url_verification ------------------------------------------------------
 

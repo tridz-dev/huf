@@ -96,4 +96,8 @@ class SlackGatewayAdapter(GatewayAdapter):
             error_msg = data.get("error") if isinstance(data, Mapping) else "Unknown Slack API error"
             raise ValueError(f"Slack chat.postMessage failed: {error_msg}")
 
-        return OutboundDelivery(str(data.get("ts")), provider_response=data)
+        ts = data.get("ts")
+        if not ts:
+            raise ValueError("Slack chat.postMessage returned ok without a ts")
+
+        return OutboundDelivery(str(ts), provider_response=data)
