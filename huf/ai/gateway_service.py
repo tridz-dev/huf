@@ -3123,6 +3123,27 @@ def retry_gateway_reply(event_name: str, parts_remaining: list[str], attempt: in
         frappe.cache().delete(claim_key)
 
 
+WHATSAPP_TEST_TEMPLATE = "hello_world"
+
+
+def _whatsapp_test_send(adapter, gateway, reply) -> tuple[Any, str]:
+	"""Send a WhatsApp test: free text inside the 24h window, else a template.
+
+	Returns ``(delivery, sent_as)`` where ``sent_as`` is ``"message"`` or the template name. Outside the
+	window the Gateway's fallback template is used when set, otherwise Meta's ``hello_world`` sample
+	template, which every new WhatsApp Business Account starts with.
+	"""
+	from huf.ai.gateway_adapters import whatsapp_bridge as bridge
+
+	if bridge.window_state(gateway.name, reply.conversation_id).get("open"):
+		return adapter.send_reply(reply), "message"
+	fallback = str(getattr(gateway, "fallback_template", "") or "").strip()
+	if fallback:
+		return adapter.send_reply(reply), fallback
+	delivery = adapter.send_template(reply.conversation_id, WHATSAPP_TEST_TEMPLATE, "en_US", trusted=True)
+	return delivery, WHATSAPP_TEST_TEMPLATE
+
+
 @frappe.whitelist(methods=["POST"])
 def test_gateway_send(gateway_name: str, test_recipient_id: str) -> dict:
 	"""Send a test message through a gateway to verify credentials and connectivity.
@@ -3169,12 +3190,22 @@ def test_gateway_send(gateway_name: str, test_recipient_id: str) -> dict:
 			text=test_message,
 		)
 
-		delivery = adapter.send_reply(reply)
+		sent_as = "message"
+		if gateway.provider == "WhatsApp":
+			delivery, sent_as = _whatsapp_test_send(adapter, gateway, reply)
+		else:
+			delivery = adapter.send_reply(reply)
 
+		message = f"Test message sent successfully to {test_recipient_id}"
+		if sent_as != "message":
+			message = (
+				f"Test template '{sent_as}' sent to {test_recipient_id}. This number has not messaged you "
+				"in the last 24 hours, so WhatsApp only allows an approved template."
+			)
 		return {
 			"success": True,
-			"message": f"Test message sent successfully to {test_recipient_id}",
-			"provider_response": json.dumps({"delivery_id": delivery.delivery_id}) if delivery else None,
+			"message": message,
+			"provider_response": json.dumps({"delivery_id": delivery.provider_message_id}) if delivery else None,
 		}
 
 	except _whatsapp_send_errors(gateway.provider if gateway is not None else None) as exc:

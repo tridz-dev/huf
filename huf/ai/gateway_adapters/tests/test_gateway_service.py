@@ -12,7 +12,7 @@ from frappe.tests import IntegrationTestCase
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai import gateway_service
-from huf.ai.gateway_adapters.types import GatewayReply
+from huf.ai.gateway_adapters.types import GatewayReply, OutboundDelivery
 
 
 def gateway(**overrides):
@@ -1209,18 +1209,56 @@ class TestWhatsAppGatewayService(unittest.TestCase):
         text = gateway_service._whatsapp_error_text(WhatsAppWindowClosed("window closed"))
         assert "window closed" in text
 
+    def _test_send(self, mock_frappe, adapter, *, window_open=False, **gateway_fields):
+        mock_frappe.has_permission.return_value = True
+        mock_frappe.get_doc.return_value = SimpleNamespace(
+            name="WA", is_enabled=1, provider="WhatsApp", integration_settings="IS-1", **gateway_fields
+        )
+        with (
+            patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=adapter),
+            patch(
+                "huf.ai.gateway_adapters.whatsapp_bridge.window_state", return_value={"open": window_open}
+            ),
+        ):
+            return gateway_service.test_gateway_send("WA", "1234567890")
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_test_send_inside_window_sends_text(self, mock_frappe):
+        adapter = MagicMock()
+        adapter.send_reply.return_value = OutboundDelivery(provider_message_id="wamid.1")
+        result = self._test_send(mock_frappe, adapter, window_open=True)
+        assert result["success"] is True
+        adapter.send_reply.assert_called_once()
+        adapter.send_template.assert_not_called()
+        assert "wamid.1" in result["provider_response"]
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_test_send_outside_window_uses_hello_world_template(self, mock_frappe):
+        """A fresh number has no open window: the test must still reach the phone."""
+        adapter = MagicMock()
+        adapter.send_template.return_value = OutboundDelivery(provider_message_id="wamid.2")
+        result = self._test_send(mock_frappe, adapter)
+        assert result["success"] is True
+        adapter.send_reply.assert_not_called()
+        assert adapter.send_template.call_args.args[:3] == ("1234567890", "hello_world", "en_US")
+        assert "hello_world" in result["message"]
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_test_send_outside_window_prefers_fallback_template(self, mock_frappe):
+        adapter = MagicMock()
+        adapter.send_reply.return_value = OutboundDelivery(provider_message_id="wamid.3")
+        result = self._test_send(mock_frappe, adapter, fallback_template="order_update")
+        assert result["success"] is True
+        adapter.send_template.assert_not_called()
+        assert "order_update" in result["message"]
+
     @patch("huf.ai.gateway_service.frappe")
     def test_test_send_reports_window_closed_explicitly(self, mock_frappe):
         from huf.ai.gateway_adapters.whatsapp import WhatsAppWindowClosed
 
-        mock_frappe.has_permission.return_value = True
-        mock_frappe.get_doc.return_value = SimpleNamespace(
-            is_enabled=1, provider="WhatsApp", integration_settings="IS-1"
-        )
         adapter = MagicMock()
         adapter.send_reply.side_effect = WhatsAppWindowClosed("window closed for 1234567890")
-        with patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=adapter):
-            result = gateway_service.test_gateway_send("WA", "1234567890")
+        result = self._test_send(mock_frappe, adapter, fallback_template="order_update")
         assert result["success"] is False
         assert "window closed" in result["message"]
 
