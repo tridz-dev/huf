@@ -173,8 +173,8 @@ def test_verify_all_ok(env):
 	env.cache.d[slack_setup.URL_VERIFIED_KEY.format(GW)] = "2026-01-01T00:00:00+00:00"
 	checks = slack_setup.verify_slack_setup(GW)
 	assert all(c["ok"] for c in checks if not c.get("informational"))
-	by_id = {c["id"]: c for c in checks}
-	assert by_id["direct_policy"]["status"] == "warn" and by_id["direct_policy"]["informational"]
+	got = {c["id"]: c for c in checks}
+	assert got["direct_policy"]["status"] == "warn" and got["direct_policy"]["informational"]
 	assert set(by_id(checks)) == {"token_present", "token_kind", "auth_test", "scopes",
 		"signing_secret", "request_url", "slack_connect", "direct_policy"}
 	assert "Acme" in by_id(checks)["auth_test"]["detail"]
