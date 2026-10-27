@@ -259,6 +259,7 @@ def handle_gateway_webhook() -> dict | None:
 		return {"success": False, "error": "Provider verification failed"}
 
 	event = adapter.normalize_inbound(request)
+	frappe.local.gateway_response_override = None  # never inherit a stale override
 	result = ingest_gateway_event(
 		gateway.name,
 		event.provider_event_id,
@@ -266,7 +267,38 @@ def handle_gateway_webhook() -> dict | None:
 		verified_sender=True,
 		raw_payload=dict(event.raw_payload),
 	)
+	override = _take_response_override()
+	if override is not None:
+		return override
 	return {"success": True, **result}
+
+
+def _take_response_override():
+	"""Raw HTTP response a pre-ingest hook asked for (Teams invoke needs a synchronous body).
+
+	A hook stores ``frappe.local.gateway_response_override = {"status": int, "body": str|dict,
+	"content_type": str}`` AFTER the adapter verified the request. Returns a werkzeug Response
+	(returned directly, as slack_events does) or None. Malformed values are ignored.
+	"""
+	override = getattr(frappe.local, "gateway_response_override", None)
+	if not isinstance(override, dict):
+		return None
+	frappe.local.gateway_response_override = None
+	body = override.get("body")
+	if isinstance(body, (dict, list)):
+		import json
+
+		body = json.dumps(body)
+	if not isinstance(body, str):
+		return None
+	status = override.get("status")
+	from werkzeug.wrappers import Response
+
+	return Response(
+		body,
+		status=status if isinstance(status, int) else 200,
+		mimetype=str(override.get("content_type") or "application/json"),
+	)
 
 
 SEND_MAX_ATTEMPTS = 3
