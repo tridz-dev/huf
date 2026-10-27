@@ -189,6 +189,17 @@ def build_reply(gateway, command: str, activity: dict, meta) -> str:
 	return _status_text(gw, user)
 
 
+def _remember_personal_chat(gw: str, meta) -> None:
+	"""Commands are answered before the event is stored, so ON_EVENT_RECEIVED never records this
+	chat. The link confirmation card needs the personal-chat reference: keep it (the tenant was
+	already allowed by the earlier filters). Best effort."""
+	try:
+		if meta.tenant_id and meta.conversation_id and meta.user_aad_id:
+			teams_refs.upsert_reference(gw, meta, installed=True)
+	except Exception:
+		pass
+
+
 def pre_ingest_commands(gateway, context) -> bool:
 	"""True passes the event on; a recognised command is answered here and returns False."""
 	command = parse_command(context.get("message_text") if isinstance(context, dict) else None)
@@ -199,6 +210,8 @@ def pre_ingest_commands(gateway, context) -> bool:
 		meta = teams_refs.parse_meta(activity)
 		gw = _gateway_name(gateway)
 		snapshot = _snapshot(gw, meta)  # hostile/missing serviceUrl => nothing is sent
+		if command == "connect" and _is_personal(meta) and not _is_guest(activity):
+			_remember_personal_chat(gw, meta)
 		text = build_reply(gateway, command, activity, meta)
 		reply = {"type": "message", "text": text, "textFormat": "markdown"}
 		if _s(activity.get("id")):

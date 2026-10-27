@@ -276,10 +276,17 @@ def _default_sender(
 	service_url, conv = snapshot.get("service_url"), snapshot.get("conversation_id")
 	if kind == "card_update":
 		res = teams_api.update_activity(
-			service_url, conv, payload.get("activity_id"), payload.get("activity", payload), token=token, http=http
+			service_url,
+			conv,
+			payload.get("activity_id"),
+			payload.get("activity", payload),
+			token=token,
+			http=http,
 		)
 	else:
-		res = teams_api.post_activity(service_url, conv, payload.get("activity", payload), token=token, http=http)
+		res = teams_api.post_activity(
+			service_url, conv, payload.get("activity", payload), token=token, http=http
+		)
 	pid = res.get("id") if isinstance(res, Mapping) else res
 	return str(pid or "")
 

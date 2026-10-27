@@ -69,7 +69,8 @@ def send_confirmation(gateway_name: str, link_name: str, tenant_id: str, aad_id:
 	from huf.ai.gateways import teams_actions
 
 	ref = teams_refs.get_personal_reference(gateway_name, tenant_id, aad_id)
-	if not (ref and ref.get("conversation_id") and ref.get("service_url")) or ref.get("tenant_id") != tenant_id:
+	has_target = bool(ref and ref.get("conversation_id") and ref.get("service_url"))
+	if not has_target or ref.get("tenant_id") != tenant_id:
 		raise ConfirmationUnavailable("no installed personal chat for this Teams user")
 	session = teams_actions.create_action_session(
 		gateway_name,
@@ -137,7 +138,9 @@ def handle_click(gateway_name: str, session_name: str, session: dict, meta, verb
 	except ValueError:
 		payload = {}
 	link_name = _s((payload or {}).get("link")) if isinstance(payload, dict) else ""
-	row = frappe.db.get_value(DOCTYPE, link_name, ["external_id", "team_id", "user"], as_dict=True) if link_name else None
+	row = None
+	if link_name:
+		row = frappe.db.get_value(DOCTYPE, link_name, ["external_id", "team_id", "user"], as_dict=True)
 	# Only the very (tenant, aad) being linked may answer; anyone else changes nothing.
 	if (
 		not row

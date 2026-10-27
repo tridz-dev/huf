@@ -16,6 +16,10 @@ a conversation id with no stored reference: the adapter's ``send_reply`` then fa
 is never posted to the channel.
 """
 
+# T16 review note: nothing in this module posts account-linking text or URLs. Links are only
+# ever delivered by teams_help (personal chat) and the identity denial in teams_identity (which
+# refuses to mint a token outside a personal chat); the public-notice path here is not used for them.
+
 from __future__ import annotations
 
 import json

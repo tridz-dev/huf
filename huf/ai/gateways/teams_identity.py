@@ -252,7 +252,9 @@ def confirm_teams_link(token: str) -> dict:
 			frappe.PermissionError,
 		)
 	_supersede_pending(gateway, tenant, aad)
-	doc = _create_link(gateway, tenant, aad, user, "Self link", label=data.get("l"), linked_by=user, state="Pending")
+	doc = _create_link(
+		gateway, tenant, aad, user, "Self link", label=data.get("l"), linked_by=user, state="Pending"
+	)
 	try:
 		from huf.ai.gateways import teams_identity_confirm
 
