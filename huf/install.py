@@ -1026,6 +1026,11 @@ def create_huf_roles():
 	#    don't already have a Huf User Role record.
 	_migrate_existing_system_managers()
 
+	# 6. Every System User gets Huf's default roles (Huf Manager + Huf Gateway User), never a downgrade.
+	from huf.huf.doctype.huf_user_role.huf_user_role import grant_default_roles_to_system_users
+
+	grant_default_roles_to_system_users()
+
 	frappe.db.commit()
 
 
