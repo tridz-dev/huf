@@ -290,7 +290,7 @@ def teams_support_bundle(gateway_name: str) -> dict:
 		"contract_version": tc.CONTRACT_VERSION,
 		"app_package_version": settings.get("app_package_version") or "",
 		"allowed_tenant_count": len(teams_tenant.parse_tenant_text(settings.get("allowed_tenants"))),
-		"credentials_present": {k: bool(ctx["creds"].get(k)) for k in REQUIRED_CREDS},
+		"fields_configured": [k.replace("app_password", "app_secret") for k in REQUIRED_CREDS if ctx["creds"].get(k)],
 		"checks": checks,
 		"rejections_24h": ctx.get("rejections", {}),
 		"conversation_references": ctx.get("references", {}),
