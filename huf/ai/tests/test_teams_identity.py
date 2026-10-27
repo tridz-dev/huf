@@ -345,11 +345,30 @@ def test_confirm_idempotent_same_user(store):
 	assert not store.created
 
 
+def _whitelist_methods():
+	"""Read the @frappe.whitelist(methods=[...]) decorators from source (import-order independent)."""
+	import ast
+	import inspect
+
+	tree = ast.parse(inspect.getsource(ti))
+	found = {}
+	for node in tree.body:
+		if not isinstance(node, ast.FunctionDef):
+			continue
+		for dec in node.decorator_list:
+			if isinstance(dec, ast.Call) and getattr(dec.func, "attr", "") == "whitelist":
+				for kw in dec.keywords:
+					if kw.arg == "methods":
+						found[node.name] = ast.literal_eval(kw.value)
+	return found
+
+
 def test_post_only_decorators():
-	assert WL["confirm_teams_link"] == ["POST"]
-	assert WL["link_teams_user"] == ["POST"]
-	assert WL["revoke_teams_link"] == ["POST"]
-	assert WL["preview_teams_link"] == ["GET"]
+	wl = _whitelist_methods()
+	assert wl["confirm_teams_link"] == ["POST"]
+	assert wl["link_teams_user"] == ["POST"]
+	assert wl["revoke_teams_link"] == ["POST"]
+	assert wl["preview_teams_link"] == ["GET"]
 
 
 # ---- admin --------------------------------------------------------------------

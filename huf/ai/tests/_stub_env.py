@@ -78,6 +78,17 @@ def install():
             frappe.__path__ = []  # makes `frappe` importable as a package
             sys.modules["frappe"] = frappe
         frappe = sys.modules["frappe"]
+        # `@frappe.whitelist` / `@frappe.whitelist(...)` must return the real function: a bare
+        # MagicMock decorator replaces every whitelisted API with a mock for modules imported
+        # before a test patches it, which made suites depend on import order.
+        if isinstance(frappe, MagicMock) and "_huf_identity_whitelist" not in frappe.__dict__:
+            def _whitelist(*args, **kwargs):
+                if len(args) == 1 and callable(args[0]) and not kwargs:
+                    return args[0]
+                return lambda fn: fn
+
+            frappe.whitelist = _whitelist
+            frappe.__dict__["_huf_identity_whitelist"] = True
         # `frappe.as_json` is used by huf.ai.context_segments to serialize tool
         # calls before token-counting them. A bare MagicMock return value has no
         # real length/content, which silently zeroes out any test relying on the
