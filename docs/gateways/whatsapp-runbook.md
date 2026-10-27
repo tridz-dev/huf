@@ -132,3 +132,18 @@ Gateway field **Voice note replies** (`voice_reply_mode`): `Off` (default), `Voi
 3. Check `connection_state` and its reason.
 4. Review Failed events; replay dead letters with `retry_gateway_event` only after the cause is fixed.
 5. If events sit in Queued, Received or Running, confirm the reaper cron is running.
+
+## 10. Broadcasts
+
+Full design and API: [WhatsApp Broadcast](../whatsapp/BROADCAST.md). Management methods are in `huf/ai/whatsapp/management.py`.
+
+- A broadcast sends one approved template to a bounded list through `POST /<PHONE_NUMBER_ID>/messages`, one request per recipient. It is automation only: no inbox, no scheduling.
+- One broadcast can run per gateway at a time. Start needs an `APPROVED` template, attested opt-in consent, no blocking preview reasons, and the typed recipient count.
+- Recipient states: `queued`, `sending`, `sent`, `delivered`, `read`, `failed`, `deferred`, `unknown`, `skipped`. A row in `sending` for more than 10 minutes becomes `unknown` (recovery job, `*/5 * * * *`).
+- `unknown` rows are never resent automatically. Check them in WhatsApp Manager before anything else.
+- Failed rows are not retried by any action. To reach the same contacts again, create a new broadcast.
+- The runner pauses on 132015, 135000, a template paused, rejected or disabled, or a removed gateway write permission. Resume is manual.
+- Kill switch: `pause_all_broadcasts(gateway)` pauses every running broadcast on the gateway. Use it first when a template or number is in trouble.
+- Check the messaging limit (`whatsapp_business_manager_messaging_limit`) in the preview. If it is unknown, the preview warns and the per-broadcast cap is the only ceiling.
+- Costs in the preview come from `huf/ai/whatsapp/broadcast_rates.json`. Treat them as an estimate and check Meta billing.
+- Live verification is described in [broadcast-live-verification.md](../whatsapp/broadcast-live-verification.md). Run it only against allow-listed test recipients.
