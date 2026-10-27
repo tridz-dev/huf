@@ -45,6 +45,12 @@ class TeamsGatewayAdapter(GatewayAdapter):
 		(
 			GatewayCredentialField("app_id", "Microsoft App ID"),
 			GatewayCredentialField("app_password", "Microsoft App Secret / Password"),
+			GatewayCredentialField(
+				"tenant_id",
+				"Directory (tenant) ID",
+				secret=False,
+				description="The Microsoft Entra directory (tenant) ID of the bot's app registration.",
+			),
 		)
 	)
 	capabilities = GatewayCapabilities(
@@ -58,6 +64,9 @@ class TeamsGatewayAdapter(GatewayAdapter):
 		credentials: Mapping[str, str],
 		*,
 		http_post: Callable[..., Any] = _requests_post,
+		jwks_fetcher: Callable[..., Any] | None = None,
+		token_fetcher: Callable[..., Any] | None = None,
+		now: Callable[[], float] | None = None,
 	) -> None:
 		# Every other gateway adapter (WhatsApp, Telegram, Messenger,
 		# Instagram, Slack) raises here when required credentials are
@@ -72,6 +81,11 @@ class TeamsGatewayAdapter(GatewayAdapter):
 		self._app_id = credentials["app_id"]
 		self._app_password = credentials["app_password"]
 		self._http_post = http_post
+		self._tenant_id = credentials["tenant_id"]
+		# Injected seams for later work packages (see teams_contract.py).
+		self._jwks_fetcher = jwks_fetcher
+		self._token_fetcher = token_fetcher
+		self._now = now
 
 	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
 		"""Verify Authorization header with Bearer token.

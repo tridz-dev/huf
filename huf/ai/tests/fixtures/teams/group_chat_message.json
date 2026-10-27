@@ -1,0 +1,41 @@
+{
+  "type": "message",
+  "id": "1700000000201",
+  "timestamp": "2026-01-01T10:00:00.0000000Z",
+  "localTimestamp": "2026-01-01T10:00:00.0000000+00:00",
+  "serviceUrl": "https://smba.trafficmanager.net/amer/",
+  "channelId": "msteams",
+  "from": {
+    "id": "29:1fakeuser",
+    "name": "Ada Example",
+    "aadObjectId": "00000000-0000-0000-0000-0000000000u1"
+  },
+  "conversation": {
+    "conversationType": "groupChat",
+    "tenantId": "00000000-0000-0000-0000-00000000aaaa",
+    "id": "19:fakegroup@unq.gbl.spaces",
+    "isGroup": true
+  },
+  "recipient": {
+    "id": "28:00000000-0000-0000-0000-0000000000b1",
+    "name": "Huf Bot"
+  },
+  "textFormat": "plain",
+  "locale": "en-US",
+  "text": "<at>Huf Bot</at> status",
+  "channelData": {
+    "tenant": {
+      "id": "00000000-0000-0000-0000-00000000aaaa"
+    }
+  },
+  "entities": [
+    {
+      "type": "mention",
+      "text": "<at>Huf Bot</at>",
+      "mentioned": {
+        "id": "28:00000000-0000-0000-0000-0000000000b1",
+        "name": "Huf Bot"
+      }
+    }
+  ]
+}
