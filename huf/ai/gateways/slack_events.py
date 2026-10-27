@@ -49,9 +49,10 @@ def handle_slack_event():
 
     if payload.get("type") == "url_verification":
         # Signature already verified: remember that Slack accepted this Request URL (setup wizard).
+        from datetime import datetime, timezone
         frappe.cache().set_value(
             f"huf_slack_url_verified:{gateway_name}",
-            __import__("datetime").datetime.utcnow().isoformat() + "Z",
+            datetime.now(timezone.utc).isoformat(),
             expires_in_sec=60 * 60 * 24 * 365,
         )
         from werkzeug.wrappers import Response
