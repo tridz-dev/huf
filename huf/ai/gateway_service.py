@@ -608,8 +608,17 @@ def ingest_gateway_event(
 
     gw_hooks.register_all()
     _hook_gateway = frappe.get_doc("Gateway", gateway_name)
-    if gw_hooks.call_all(gw_hooks.PRE_INGEST_FILTER, _hook_gateway, context).count(False):
-        return {"filtered": True}
+    # Filters see the provider payload too (tenant ids etc.). A filter that drops an event may
+    # record why in ``frappe.flags.gateway_filter_reason``; the event is then kept as Rejected.
+    frappe.flags.gateway_filter_reason = None
+    _filter_reason = None
+    if gw_hooks.call_all(
+        gw_hooks.PRE_INGEST_FILTER, _hook_gateway, {**context, "raw_payload": raw_payload}
+    ).count(False):
+        _filter_reason = frappe.flags.gateway_filter_reason
+        frappe.flags.gateway_filter_reason = None
+        if not isinstance(_filter_reason, str) or not _filter_reason:
+            return {"filtered": True}
 
     event = frappe.get_doc(
         {
@@ -632,6 +641,10 @@ def ingest_gateway_event(
     except frappe.DuplicateEntryError:
         existing = frappe.db.get_value("Gateway Event", {"idempotency_key": key}, "name")
         return {"duplicate": True, "event_name": existing}
+
+    if _filter_reason:
+        _reject_event(_hook_gateway, event, "Rejected", _filter_reason)
+        return {"event_name": event.name, "status": "Rejected"}
 
     gw_hooks.call_all(gw_hooks.ON_EVENT_RECEIVED, _hook_gateway, event)
 
