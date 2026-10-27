@@ -42,6 +42,8 @@ import { getIntegrationSetting, setupTelegramWebhook } from '@/services/integrat
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { TEAMS_PROVIDER, teamsTestSendNote } from './teams/teamsOnboarding';
+import { TeamsSetupGuide } from './teams/TeamsSetupGuide';
 import { call } from '@/lib/frappe-sdk';
 
 interface ChannelTabProps {
@@ -62,12 +64,8 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
   const [deleting, setDeleting] = useState(false);
   const [serverReadiness, setReadiness] = useState<GatewayReadinessPreview | null>(null);
   const [readinessLoading, setReadinessLoading] = useState(false);
-  // CL-04: Telegram used to have its own separate tab (TelegramTab.tsx) duplicating
-  // most of this tab with different field names (telegram_agent instead of
-  // default_agent/default_flow) and its own webhook flow. That tab is now removed;
-  // its one genuinely provider-specific piece -- the "Setup Webhook" convenience
-  // button, which calls Telegram's setWebhook via the Integration Settings record --
-  // lives here instead, gated on provider === 'Telegram'.
+  // CL-04: the former TelegramTab is folded in here; its "Setup Webhook" button
+  // (Telegram setWebhook via Integration Settings) lives below, gated on provider.
   const [telegramWebhook, setTelegramWebhook] = useState<{
     url?: string;
     status?: string;
@@ -320,6 +318,8 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
       </Alert>
       )}
 
+      {gateway.provider === TEAMS_PROVIDER && <TeamsSetupGuide gatewayName={gateway.name} checks={serverReadiness?.checks} />}
+
       <div className="flex items-center justify-between rounded-lg border p-4">
         <div className="space-y-0.5">
           <p className="text-sm font-medium">Channel enabled</p>
@@ -507,7 +507,7 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
       <div className="space-y-2 rounded-lg border p-4">
         <p className="text-sm font-medium">Test message</p>
         <p className="text-xs text-muted-foreground">
-          Send a test message to verify your channel configuration and credentials are working.
+          {teamsTestSendNote(gateway.provider) ?? 'Send a test message to verify your channel configuration and credentials are working.'}
         </p>
         <FieldRow className="grid-cols-[1fr_auto]">
           <Field label="Test recipient ID" size="sm">
