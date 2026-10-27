@@ -26,9 +26,10 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
-import { Plus, Trash2, Server, BookOpen, ScrollText, Plug, Save, Sparkles, Download } from 'lucide-react';
+import { Plus, Trash2, Server, BookOpen, ScrollText, Plug, Save, Sparkles, Download, ChevronDown } from 'lucide-react';
 import { getSkill, createSkill, updateSkill, exportSkillAsHuf } from '@/services/skillApi';
 import { getToolFunctions } from '@/services/toolApi';
 import { getKnowledgeSources } from '@/services/knowledgeApi';
@@ -64,6 +65,18 @@ const skillFormSchema = z.object({
 });
 
 type SkillFormValues = z.infer<typeof skillFormSchema>;
+
+const advancedFieldNames = [
+  'skill_category',
+  'version',
+  'author',
+  'provider_app',
+  'source_url',
+  'source_path',
+  'source_ref',
+  'auto_load',
+  'description',
+] as const satisfies readonly (keyof SkillFormValues)[];
 
 function normalizeFlag(value: boolean | number | undefined): 0 | 1 {
   return value === true || value === 1 ? 1 : 0;
@@ -215,6 +228,7 @@ export function SkillFormPage() {
   const [editingCategory, setEditingCategory] = useState<CategoryDoc | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryDoc | null>(null);
   const [allCategories, setAllCategories] = useState<CategoryDoc[]>([]);
+  const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
 
   const [tools, setTools] = useState<SkillTool[]>([]);
   const [initialTools, setInitialTools] = useState<SkillTool[]>([]);
@@ -236,7 +250,17 @@ export function SkillFormPage() {
   });
 
   const watchStatus = form.watch('status');
+  const watchSourceType = form.watch('source_type');
+  const hasAdvancedErrors = advancedFieldNames.some((fieldName) =>
+    Boolean(form.formState.errors[fieldName])
+  );
   const isDirty = form.formState.isDirty;
+
+  useEffect(() => {
+    if (watchSourceType === 'App Provided' || hasAdvancedErrors) {
+      setAdvancedSettingsOpen(true);
+    }
+  }, [watchSourceType, hasAdvancedErrors]);
 
   const childTablesChanged = useMemo(() => {
     if (isNew) {
@@ -278,7 +302,11 @@ export function SkillFormPage() {
     async (name: string) => {
       try {
         const doc = await getSkill(name);
-        form.reset(mapDocToFormValues(doc));
+        const formValues = mapDocToFormValues(doc);
+        form.reset(formValues);
+        setAdvancedSettingsOpen(
+          advancedFieldNames.some((fieldName) => Boolean(formValues[fieldName]))
+        );
         setTools(doc.skill_tools || []);
         setInitialTools(doc.skill_tools || []);
         setKnowledge(doc.skill_knowledge || []);
@@ -424,8 +452,12 @@ export function SkillFormPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <Sparkles className="w-6 h-6 text-muted-foreground" />
             <div>
-              <h1 className="font-display text-title text-ink">{isNew ? 'New Skill' : form.watch('title') || 'Skill'}</h1>
-              <p className="text-sm text-muted-foreground">{isNew ? 'Create a reusable skill bundle' : form.watch('skill_name')}</p>
+              <h1 className="font-display text-title text-ink">
+                {isNew ? 'New Skill' : form.watch('title') || 'Skill'}
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {isNew ? 'Create a reusable skill bundle' : form.watch('skill_name')}
+              </p>
             </div>
             <Badge variant={watchStatus === 'Active' ? 'default' : 'secondary'}>{watchStatus}</Badge>
           </div>
@@ -437,7 +469,11 @@ export function SkillFormPage() {
               </Button>
             )}
             {!isNew && (
-              <Button variant="outline" size="sm" onClick={() => exportSkillAsHuf(form.getValues('skill_name'))}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => exportSkillAsHuf(form.getValues('skill_name'))}
+              >
                 <Download className="w-4 h-4 mr-2" />
                 Download .huf
               </Button>
@@ -496,21 +532,6 @@ export function SkillFormPage() {
                         </FormItem>
                       )}
                     />
-                    <CategoryTab
-                      itemLabel="skill"
-                      selectedCategory={selectedCategory}
-                      onAddCategory={() => {
-                        setEditingCategory(null);
-                        setCategoryModalOpen(true);
-                      }}
-                      onRemoveCategory={() =>
-                        setSelectedCategory(null)
-                      }
-                      onEditCategory={(category) => {
-                        setEditingCategory(category);
-                        setCategoryModalOpen(true);
-                      }}
-                    />
                     <FormField
                       control={form.control}
                       name="status"
@@ -530,32 +551,6 @@ export function SkillFormPage() {
                               <SelectItem value="Disabled">Disabled</SelectItem>
                             </SelectContent>
                           </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="version"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Version</FormLabel>
-                          <FormControl>
-                            <Input placeholder="1.0.0" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="author"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Author</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Author or organization" {...field} />
-                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -585,91 +580,6 @@ export function SkillFormPage() {
                     />
                     <FormField
                       control={form.control}
-                      name="provider_app"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Provider app</FormLabel>
-                          <FormControl>
-                            <Input placeholder="huf" {...field} />
-                          </FormControl>
-                          <FormDescription>Required for App Provided skills</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="source_url"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Source URL</FormLabel>
-                          <FormControl>
-                            <Input placeholder="https://github.com/org/repo" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="source_path"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Source path</FormLabel>
-                          <FormControl>
-                            <Input placeholder="skills" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="source_ref"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Source ref</FormLabel>
-                          <FormControl>
-                            <Input placeholder="main" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="auto_load"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Auto load</FormLabel>
-                            <FormDescription>Load this skill automatically when attached</FormDescription>
-                          </div>
-                          <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem className="sm:col-span-2">
-                          <FormLabel>Description</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Short description shown in the UI and to agents"
-                              className="min-h-[80px] resize-y"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
                       name="instructions"
                       render={({ field }) => (
                         <FormItem className="sm:col-span-2">
@@ -687,6 +597,149 @@ export function SkillFormPage() {
                     />
                   </CardContent>
                 </Card>
+                <Collapsible open={advancedSettingsOpen} onOpenChange={setAdvancedSettingsOpen}>
+                  <Card>
+                    <CollapsibleTrigger asChild>
+                      <CardHeader className="cursor-pointer select-none">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <CardTitle>Advanced settings</CardTitle>
+                            <CardDescription>Optional settings you rarely need to change</CardDescription>
+                          </div>
+                          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
+                        </div>
+                      </CardHeader>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <CardContent className="grid gap-4 sm:grid-cols-2">
+                        <CategoryTab
+                          itemLabel="skill"
+                          selectedCategory={selectedCategory}
+                          onAddCategory={() => {
+                            setEditingCategory(null);
+                            setCategoryModalOpen(true);
+                          }}
+                          onRemoveCategory={() => setSelectedCategory(null)}
+                          onEditCategory={(category) => {
+                            setEditingCategory(category);
+                            setCategoryModalOpen(true);
+                          }}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="version"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Version</FormLabel>
+                              <FormControl>
+                                <Input placeholder="1.0.0" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="author"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Author</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Author or organization" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="provider_app"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Provider app</FormLabel>
+                              <FormControl>
+                                <Input placeholder="huf" {...field} />
+                              </FormControl>
+                              <FormDescription>Required for App Provided skills</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="source_url"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Source URL</FormLabel>
+                              <FormControl>
+                                <Input placeholder="https://github.com/org/repo" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="source_path"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Source path</FormLabel>
+                              <FormControl>
+                                <Input placeholder="skills" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="source_ref"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Source ref</FormLabel>
+                              <FormControl>
+                                <Input placeholder="main" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="auto_load"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                              <div className="space-y-0.5">
+                                <FormLabel className="text-base">Auto load</FormLabel>
+                                <FormDescription>Load this skill automatically when attached</FormDescription>
+                              </div>
+                              <FormControl>
+                                <Switch checked={field.value} onCheckedChange={field.onChange} />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="description"
+                          render={({ field }) => (
+                            <FormItem className="sm:col-span-2">
+                              <FormLabel>Description</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="Short description shown in the UI and to agents"
+                                  className="min-h-[80px] resize-y"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Card>
+                </Collapsible>
               </TabsContent>
 
               <TabsContent value="tools" className="space-y-4">
@@ -696,7 +749,11 @@ export function SkillFormPage() {
                   icon={Server}
                   emptyText="No tools linked yet."
                   addLabel="Add Tool"
-                  options={toolOptions.map((t) => ({ value: t.name, label: t.tool_name || t.name, subtitle: t.description }))}
+                  options={toolOptions.map((t) => ({
+                    value: t.name,
+                    label: t.tool_name || t.name,
+                    subtitle: t.description,
+                  }))}
                   onAdd={addTool}
                 >
                   {tools.map((tool, index) => (
@@ -705,7 +762,11 @@ export function SkillFormPage() {
                       className="flex items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50"
                     >
                       <div className="min-w-0 space-y-1">
-                        <p className="font-medium text-sm">{tool.tool_name || toolOptions.find((o) => o.name === tool.tool)?.tool_name || tool.tool}</p>
+                        <p className="font-medium text-sm">
+                          {tool.tool_name ||
+                            toolOptions.find((o) => o.name === tool.tool)?.tool_name ||
+                            tool.tool}
+                        </p>
                         {(tool.description || toolOptions.find((o) => o.name === tool.tool)?.description) && (
                           <p className="text-xs text-muted-foreground line-clamp-2">
                             {tool.description || toolOptions.find((o) => o.name === tool.tool)?.description}
@@ -727,7 +788,11 @@ export function SkillFormPage() {
                   icon={BookOpen}
                   emptyText="No knowledge sources linked yet."
                   addLabel="Add Knowledge"
-                  options={knowledgeOptions.map((k) => ({ value: k.name, label: k.source_name || k.name, subtitle: k.description || '' }))}
+                  options={knowledgeOptions.map((k) => ({
+                    value: k.name,
+                    label: k.source_name || k.name,
+                    subtitle: k.description || '',
+                  }))}
                   onAdd={addKnowledge}
                 >
                   {knowledge.map((ks, index) => (
@@ -738,17 +803,29 @@ export function SkillFormPage() {
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <p className="font-medium text-sm">
-                            {ks.source_name || knowledgeOptions.find((o) => o.name === ks.knowledge_source)?.source_name || ks.knowledge_source}
+                            {ks.source_name ||
+                              knowledgeOptions.find((o) => o.name === ks.knowledge_source)?.source_name ||
+                              ks.knowledge_source}
                           </p>
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => removeKnowledge(index)} type="button">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeKnowledge(index)}
+                          type="button"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                       <div className="grid grid-cols-3 gap-3">
                         <div className="space-y-1.5">
                           <Label>Mode</Label>
-                          <Select value={ks.mode} onValueChange={(v) => updateKnowledge(index, { mode: v as SkillKnowledge['mode'] })}>
+                          <Select
+                            value={ks.mode}
+                            onValueChange={(v) =>
+                              updateKnowledge(index, { mode: v as SkillKnowledge['mode'] })
+                            }
+                          >
                             <SelectTrigger>
                               <SelectValue />
                             </SelectTrigger>
@@ -789,7 +866,11 @@ export function SkillFormPage() {
                   icon={ScrollText}
                   emptyText="No prompts linked yet."
                   addLabel="Add Prompt"
-                  options={promptOptions.map((p) => ({ value: p.name, label: p.title || p.name, subtitle: p.description || '' }))}
+                  options={promptOptions.map((p) => ({
+                    value: p.name,
+                    label: p.title || p.name,
+                    subtitle: p.description || '',
+                  }))}
                   onAdd={addPrompt}
                 >
                   {prompts.map((prompt, index) => (
@@ -800,14 +881,19 @@ export function SkillFormPage() {
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <p className="font-medium text-sm">
-                            {prompt.title || promptOptions.find((o) => o.name === prompt.prompt)?.title || prompt.prompt}
+                            {prompt.title ||
+                              promptOptions.find((o) => o.name === prompt.prompt)?.title ||
+                              prompt.prompt}
                           </p>
                         </div>
                         <Button variant="ghost" size="sm" onClick={() => removePrompt(index)} type="button">
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
-                      <Select value={prompt.usage} onValueChange={(v) => updatePrompt(index, { usage: v as SkillPrompt['usage'] })}>
+                      <Select
+                        value={prompt.usage}
+                        onValueChange={(v) => updatePrompt(index, { usage: v as SkillPrompt['usage'] })}
+                      >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -828,7 +914,11 @@ export function SkillFormPage() {
                   icon={Plug}
                   emptyText="No MCP servers linked yet."
                   addLabel="Add MCP Server"
-                  options={mcpOptions.map((s) => ({ value: s.name, label: s.server_name || s.name, subtitle: s.description || '' }))}
+                  options={mcpOptions.map((s) => ({
+                    value: s.name,
+                    label: s.server_name || s.name,
+                    subtitle: s.description || '',
+                  }))}
                   onAdd={addMcpServer}
                 >
                   {mcpServers.map((server, index) => (
@@ -838,7 +928,9 @@ export function SkillFormPage() {
                     >
                       <div className="min-w-0 space-y-1">
                         <p className="font-medium text-sm">
-                          {server.server_name || mcpOptions.find((o) => o.name === server.mcp_server)?.server_name || server.mcp_server}
+                          {server.server_name ||
+                            mcpOptions.find((o) => o.name === server.mcp_server)?.server_name ||
+                            server.mcp_server}
                         </p>
                       </div>
                       <Button variant="ghost" size="sm" onClick={() => removeMcpServer(index)} type="button">
