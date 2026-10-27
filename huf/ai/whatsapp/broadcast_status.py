@@ -3,7 +3,7 @@
 
 """WhatsApp Broadcast: apply Meta delivery statuses and user stops to Broadcast Recipient rows.
 
-Rows only ever move forward in rank (queued/deferred 0 < sending 1 < sent/unknown 2 < failed < delivered 3
+Rows only ever move forward in rank (queued/deferred 0 < sending 1 < unknown 1.5 < sent 2 < failed < delivered 3
 < read 4). ``failed`` never overwrites delivered/read, and a replayed (wamid, status) is a no-op because it
 cannot raise the rank, so Meta's retries and out-of-order deliveries are safe. Callers wrap these in
 try/except; a failure here must never break webhook ingest.
@@ -20,11 +20,14 @@ RECIPIENT = "WhatsApp Broadcast Recipient"
 BROADCAST = "WhatsApp Broadcast"
 _COUNTED = frozenset(("queued", "sending", "sent", "delivered", "read", "failed", "deferred", "unknown", "skipped"))
 PAUSE_ON_FAILURE_CODES = frozenset({135000})
+MARKETING_STOP_CODE = 131050
+PER_USER_LIMIT_CODE = 131049
+PER_USER_LIMIT_REASON = "per_user_marketing_limit"
 # A stopped contact must not be messaged by a broadcast that has not finished.
 _LIVE_BROADCAST = ("Queued", "Running", "Paused")
 
 # status -> (rank, column holding its timestamp)
-_RANK = {"queued": 0, "deferred": 0, "sending": 1, "sent": 2, "unknown": 2, "failed": 2.5, "delivered": 3, "read": 4}
+_RANK = {"queued": 0, "deferred": 0, "sending": 1, "unknown": 1.5, "sent": 2, "failed": 2.5, "delivered": 3, "read": 4}
 _META = {"sent": ("sent", "sent_at"), "delivered": ("delivered", "delivered_at"), "read": ("read", "read_at"), "played": ("read", "read_at"), "failed": ("failed", "failed_at")}
 
 
@@ -59,7 +62,7 @@ def _gateway_ok(row: dict, gateway: str | None) -> bool:
 
 
 def _find_row(wamid: str | None, opaque_ref: str | None, gateway: str | None = None) -> dict | None:
-	fields = ["name", "broadcast", "status", "wamid"]
+	fields = ["name", "broadcast", "status", "wamid", "recipient"]
 	if wamid:
 		rows = frappe.get_all(RECIPIENT, filters={"wamid": wamid}, fields=fields, limit_page_length=1)
 		if rows and _gateway_ok(rows[0], gateway):
@@ -126,9 +129,16 @@ def apply_status(
 
 	values: dict[str, Any] = {"status": new, time_col: _when(timestamp)}
 	code = None
+	limited = False
 	if new == "failed":
 		code, message = _first_error(errors)
 		values.update({"error_code": code, "error_message": message})
+		if code == PER_USER_LIMIT_CODE:
+			# terminal, never resent: the message was not delivered (failed never overwrites delivered/read)
+			limited = True
+			new = "skipped"
+			values.pop("failed_at", None)
+			values.update({"status": "skipped", "skip_reason": PER_USER_LIMIT_REASON})
 	if not row.get("wamid") and wamid:
 		values["wamid"] = wamid
 	# Conditional UPDATE: a concurrent webhook that already advanced the row wins.
@@ -141,9 +151,26 @@ def apply_status(
 			return False
 		current = cur
 	_bump(row["broadcast"], current, new)
+	if code == MARKETING_STOP_CODE and (new == "failed" or limited):
+		_record_marketing_stop(row)
 	if new == "failed" and code in PAUSE_ON_FAILURE_CODES:
 		_pause(row["broadcast"], f"WhatsApp error {code} (messages dropped by pacing)")
 	return True
+
+
+def _record_marketing_stop(row: dict) -> None:
+	"""131050 (user stopped marketing): same consent record the send path writes; it also skips the contact's other
+	pending rows in live broadcasts via ``apply_user_stop``. Never raises."""
+	try:
+		from huf.ai.whatsapp import account_events
+
+		gateway = frappe.db.get_value(BROADCAST, row["broadcast"], "gateway")
+		if gateway and row.get("recipient"):
+			account_events.record_user_preferences(
+				gateway, [{"category": account_events.MARKETING, "value": "stop", "wa_id": row["recipient"], "detail": "131050"}]
+			)
+	except Exception:
+		frappe.log_error(title="WhatsApp broadcast marketing-stop consent failed", message=frappe.get_traceback())
 
 
 def _pause(broadcast: str, reason: str) -> None:

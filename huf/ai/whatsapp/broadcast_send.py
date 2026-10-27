@@ -33,7 +33,8 @@ from huf.ai.gateway_adapters import whatsapp_errors as errors
 RECIPIENT = "WhatsApp Broadcast Recipient"
 BROADCAST = "WhatsApp Broadcast"
 MAX_ATTEMPTS = 5
-DEFER_24H_SECONDS = 86400
+PER_USER_LIMIT_CODE = 131049
+PER_USER_LIMIT_REASON = "per_user_marketing_limit"
 GATEWAY_DOWN_DEFER_SECONDS = 300
 
 OUTCOMES = ("sent", "failed", "deferred", "unknown", "skipped", "lost_claim")
@@ -91,12 +92,30 @@ def _load_broadcast(name: str) -> dict[str, Any] | None:
 	return frappe.db.get_value(BROADCAST, name, "*", as_dict=True)
 
 
-def _write(name: str, **fields: Any) -> None:
-	"""Update a row that this call owns (status still ``sending``) and commit."""
+def _write(name: str, **fields: Any) -> bool:
+	"""Update a row that this call owns (status still ``sending``) and commit. False when the row had already left
+	``sending`` (a fast webhook moved it), in which case nothing was written."""
 	sets = ", ".join(f"`{k}`=%s" for k in fields)
 	frappe.db.sql(
 		f"update `tab{RECIPIENT}` set {sets}, modified=%s where name=%s and status='sending'",
 		(*fields.values(), now_datetime(), name),
+	)
+	owned = frappe.db.sql("select row_count()")[0][0] == 1
+	frappe.db.commit()
+	return owned
+
+
+def _persist_send_result(name: str, wamid: str, message_status: str | None) -> None:
+	"""A webhook moved the row out of ``sending`` before our write: keep its (later) status, but still record the
+	wamid / message_status / sent_at we know. Never touches ``status``."""
+	frappe.db.sql(
+		f"update `tab{RECIPIENT}` set wamid=%s, modified=%s where name=%s and (wamid is null or wamid='')",
+		(wamid, now_datetime(), name),
+	)
+	frappe.db.sql(
+		f"update `tab{RECIPIENT}` set message_status=%s, sent_at=ifnull(sent_at, %s), modified=%s "
+		"where name=%s and status not in ('queued','deferred','sending','skipped') and (wamid=%s)",
+		(message_status, now_datetime(), now_datetime(), name, wamid),
 	)
 	frappe.db.commit()
 
@@ -246,16 +265,19 @@ def send_one(recipient_name: str) -> str:
 	wamid = str((result or {}).get("wamid") or (result or {}).get("message_id") or "")
 	if not wamid:
 		return _mark_unknown(recipient_name, "Sent but no message id was returned.")
+	message_status = (result or {}).get("message_status") or None
 	try:
-		_write(
+		owned = _write(
 			recipient_name,
 			status="sent",
 			wamid=wamid,
-			message_status=(result or {}).get("message_status") or None,
+			message_status=message_status,
 			sent_at=now_datetime(),
 			error_code=None,
 			error_message=None,
 		)
+		if not owned:
+			_persist_send_result(recipient_name, wamid, message_status)
 	except Exception:
 		# the message is out; never leave the row claimable. Roll back and force unknown (+wamid) once more.
 		return _mark_unknown(recipient_name, "Sent, but the result could not be recorded.", wamid=wamid)
@@ -301,9 +323,10 @@ def _after_bridge_error(name: str, attempts: int, payload: dict[str, Any], gatew
 	ecode = cls.get("code")
 	common = {"error_code": ecode, "error_message": message}
 
-	if errors.should_defer_24h(ecode):
-		_write(name, status="deferred", next_attempt_at=_later(DEFER_24H_SECONDS), **common)
-		return "deferred"
+	if ecode == PER_USER_LIMIT_CODE:
+		# terminal for this broadcast: never auto-resend (Meta: wait 24h; retrying sooner gets the same error)
+		_write(name, status="skipped", skip_reason=PER_USER_LIMIT_REASON, **common)
+		return "skipped"
 
 	if errors.is_marketing_stop(ecode) and gateway and to:
 		try:

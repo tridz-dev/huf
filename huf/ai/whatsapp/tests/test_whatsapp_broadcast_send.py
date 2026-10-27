@@ -55,6 +55,8 @@ class _Store:
 			self.write_hook(fields)
 		if self.row["status"] == "sending":
 			self.row.update(fields)
+			return True
+		return False
 
 
 class _Base(unittest.TestCase):
@@ -146,13 +148,15 @@ class TestGuards(_Base):
 
 
 class TestErrors(_Base):
-	def test_131049_defers_24h_no_retry_count_burn_beyond_attempt(self):
+	def test_131049_is_terminal_skipped_not_deferred(self):
 		self.post.side_effect = self._graph_error(131049)
-		with patch.object(bs, "_later", side_effect=lambda s: ("later", s)):
-			self.assertEqual(bs.send_one(ROW), "deferred")
-		self.assertEqual(self.store.row["status"], "deferred")
-		self.assertEqual(self.store.row["next_attempt_at"], ("later", 86400))
+		self.assertEqual(bs.send_one(ROW), "skipped")
+		self.assertEqual(self.store.row["status"], "skipped")
+		self.assertEqual(self.store.row["skip_reason"], "per_user_marketing_limit")
 		self.assertEqual(self.store.row["error_code"], 131049)
+		self.assertNotIn("next_attempt_at", self.store.row)
+		self.assertEqual(bs.send_one(ROW), "lost_claim")
+		self.assertEqual(self.post.call_count, 1)
 
 	def test_retryable_defers_with_backoff_and_counts_attempt(self):
 		self.post.side_effect = self._graph_error(130429)
