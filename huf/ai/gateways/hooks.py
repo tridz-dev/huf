@@ -63,6 +63,7 @@ _SEQ = 0
 _REGISTERED = False
 _FAILURES: list[str] = []
 STRICT_DENIED_REASON = "Identity checking is unavailable"
+FILTER_ERROR_REASON = "filter_error"
 
 
 def register(hook: str, fn: Callable, *, provider: str | None = None, priority: int = 100) -> None:
@@ -151,6 +152,27 @@ def call_all(hook: str, *args, **kw) -> list:
 		if ok:
 			results.append(value)
 	return results
+
+
+def call_filters(hook: str, *args, **kw) -> bool:
+	"""Run ``hook`` filters in priority order; True only when every handler passes.
+
+	Evaluation STOPS at the first falsy-``False`` result, so later filters (commands, card
+	actions) never run for an event an earlier filter (tenant allowlist) rejected, and they
+	cannot clear its reason. A handler that raises is treated as False (fail closed): it is
+	logged (traceback only, no payload) and, when no handler set one,
+	``frappe.flags.gateway_filter_reason`` becomes the generic ``filter_error``.
+	``GatewayHookDenied`` still propagates to the caller.
+	"""
+	for fn in _matching(hook, args):
+		ok, value = _invoke(hook, fn, args, kw)
+		if not ok:
+			if not getattr(frappe.flags, "gateway_filter_reason", None):
+				frappe.flags.gateway_filter_reason = FILTER_ERROR_REASON
+			return False
+		if value is False:
+			return False
+	return True
 
 
 def call_first(hook: str, *args, strict: bool = False, **kw):

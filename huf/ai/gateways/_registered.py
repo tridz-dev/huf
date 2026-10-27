@@ -16,4 +16,5 @@ MODULES = (
 	"huf.ai.gateways.teams_help",
 	"huf.ai.gateways.teams_privacy",
 	"huf.ai.gateways.teams_actions",
+	"huf.ai.gateways.teams_identity_confirm",
 )

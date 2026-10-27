@@ -14,6 +14,7 @@ import hashlib
 import json
 import re
 import time
+import uuid
 from typing import Any, Callable, Mapping
 
 from huf.ai.gateway_adapters.adapter import GatewayAdapter
@@ -47,25 +48,21 @@ def _default_fetch_json(url: str) -> Mapping[str, Any]:
 
 
 def _default_reference_lookup(conversation_id: str, gateway: str | None, app_id: str) -> dict | None:
+	"""Reference lookup, always scoped to one gateway (never matches across gateways)."""
 	import frappe
 
 	from huf.ai.gateways import teams_refs
 
-	filters: dict[str, Any] = {"conversation_id": conversation_id.split(_THREAD_MARK, 1)[0]}
-	if gateway:
-		filters["gateway"] = gateway
+	if not gateway:
+		return None  # fail closed: an unscoped lookup could cross-route between gateways
 	rows = frappe.get_all(
 		teams_refs.DOCTYPE,
-		filters=filters,
+		filters={"conversation_id": conversation_id.split(_THREAD_MARK, 1)[0], "gateway": gateway},
 		fields=["*"],
 		order_by="last_seen_at desc",
-		limit=10,
+		limit=1,
 	)
-	for row in rows:
-		bot_id = str(row.get("bot_id") or "")
-		if gateway or not bot_id or bot_id.endswith(app_id):
-			return row
-	return None
+	return rows[0] if rows else None
 
 
 def _s(value: Any) -> str:
@@ -126,6 +123,9 @@ class TeamsGatewayAdapter(GatewayAdapter):
 		self._direct = direct
 		self._reference_lookup = reference_lookup or _default_reference_lookup
 		self._outbox = outbox
+		# id(reply) -> (reply, nonce): a retry of the SAME GatewayReply object (send loop) keeps
+		# its key and is deduped by the outbox; any other send gets a fresh nonce.
+		self._reply_nonces: dict[int, tuple[Any, str]] = {}
 
 	def __repr__(self) -> str:
 		return f"TeamsGatewayAdapter(app_id={self._app_id!r}, direct={self._direct})"
@@ -307,20 +307,31 @@ class TeamsGatewayAdapter(GatewayAdapter):
 		raw = "\x1f".join(str(p) for p in parts)
 		return f"{prefix}:{hashlib.sha256(raw.encode('utf-8')).hexdigest()[:32]}"
 
+	def _reply_key(self, reply: GatewayReply, snapshot: dict) -> str:
+		"""Unique per outbound event.
+
+		A true inbound activity id (``reply_to_provider_message_id`` that is not just the thread
+		root) gives a key derived from that id + the text hash, so a retry of the same event is
+		deduped. Anything else (personal chats, thread roots, ad-hoc sends) gets a per-call nonce:
+		identical text is NOT deduped; a retry of the same ``reply`` object reuses its nonce.
+		"""
+		text_hash = hashlib.sha256((reply.text or "").encode("utf-8")).hexdigest()[:16]
+		event_id = reply.reply_to_provider_message_id
+		if event_id and event_id != reply.thread_id:
+			return self._key("reply", snapshot.get("gateway"), snapshot["conversation_id"], event_id, text_hash)
+		cached = self._reply_nonces.get(id(reply))
+		if cached is None or cached[0] is not reply:
+			cached = (reply, uuid.uuid4().hex)
+			self._reply_nonces[id(reply)] = cached
+		return self._key("reply", snapshot.get("gateway"), snapshot["conversation_id"], cached[1], text_hash)
+
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:
 		"""Send a text reply via the outbox (or directly when ``direct=True``)."""
 		snapshot = self._resolve(reply.conversation_id, reply.thread_id)
 		activity: dict[str, Any] = {"type": "message", "text": reply.text, "textFormat": "markdown"}
 		if reply.reply_to_provider_message_id:
 			activity["replyToId"] = reply.reply_to_provider_message_id
-		key = self._key(
-			"reply",
-			snapshot.get("gateway"),
-			snapshot["conversation_id"],
-			reply.reply_to_provider_message_id or "",
-			reply.text,
-		)
-		return self._dispatch("reply", activity, snapshot, key)
+		return self._dispatch("reply", activity, snapshot, self._reply_key(reply, snapshot))
 
 	def send_adaptive_card(
 		self,

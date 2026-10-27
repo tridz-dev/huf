@@ -74,7 +74,7 @@ def _user_link_in_tenant(gateway: str, tenant_id: str, user: str):
 	)
 
 
-def _create_link(gateway: str, tenant_id, aad_id, user, source, label=None, linked_by=None):
+def _create_link(gateway: str, tenant_id, aad_id, user, source, label=None, linked_by=None, state="Linked"):
 	doc = frappe.get_doc(
 		{
 			"doctype": DOCTYPE,
@@ -83,10 +83,10 @@ def _create_link(gateway: str, tenant_id, aad_id, user, source, label=None, link
 			"team_id": tenant_id,
 			"external_id": aad_id,
 			"user": user,
-			"state": "Linked",
+			"state": state,
 			"source": source,
 			"display_label": label,
-			"linked_at": frappe.utils.now(),
+			"linked_at": frappe.utils.now() if state == "Linked" else None,
 			"linked_by": linked_by,
 		}
 	)
@@ -188,22 +188,54 @@ def _prompt_token(gateway: str, tenant_id: str, aad_id: str, label: str | None) 
 
 @frappe.whitelist(methods=["GET"])
 def preview_teams_link(token: str) -> dict:
-	"""Show which Teams person would be linked to the logged-in user. Changes nothing."""
+	"""Show which Teams person would be linked to the logged-in user. Changes nothing.
+
+	``tenant_id`` (the Microsoft tenant GUID) is the field to show prominently.
+	``display_label_untrusted`` is the sender-chosen Teams display name: attacker-controlled, so
+	only ever secondary text. ``person_label`` is kept for compatibility (same value).
+	"""
 	user = _require_login()
 	data = _verify_token(token)
+	label = data.get("l") or ""
 	return {
 		"gateway": data["g"],
 		"team_id": data["t"],
+		"tenant_id": data["t"],
 		"external_id": data["x"],
 		"user": user,
-		"person_label": data.get("l") or data["x"],
+		"person_label": label or data["x"],
+		"display_label_untrusted": label,
 		"workspace_label": data["t"],
 	}
 
 
+def _huf_name(user: str) -> str:
+	try:
+		return str(frappe.db.get_value("User", user, "full_name") or user)
+	except Exception:
+		return user
+
+
+def _supersede_pending(gateway: str, tenant_id: str, aad_id: str) -> None:
+	"""Only the newest self-link attempt for a Teams person stays Pending."""
+	rows = frappe.get_all(
+		DOCTYPE,
+		filters={"gateway": gateway, "team_id": tenant_id, "external_id": aad_id, "state": "Pending"},
+		pluck="name",
+	)
+	for name in rows or []:
+		frappe.db.set_value(DOCTYPE, name, "state", "Revoked")
+
+
 @frappe.whitelist(methods=["POST"])
 def confirm_teams_link(token: str) -> dict:
-	"""Link the logged-in (non-Guest) user to the Teams identity in a valid one-time token."""
+	"""Start linking the logged-in (non-Guest) user to the Teams identity in a valid one-time token.
+
+	Two-way proof: the link is created as ``Pending`` and the Teams person is asked, in their
+	personal chat, to confirm ("Did you just connect your Teams account to Huf user <name>?").
+	Only that same (tenant, aadObjectId) clicking Yes flips it to ``Linked``. If the question
+	cannot be sent the pending row is revoked (fail closed). Pending rows never resolve a user.
+	"""
 	user = _require_login()
 	data = _verify_token(token)
 	gateway, tenant, aad = data["g"], data["t"], data["x"]
@@ -212,15 +244,32 @@ def confirm_teams_link(token: str) -> dict:
 	if existing and existing.user != user:
 		frappe.throw(_("This Teams account is already linked to another user."), frappe.PermissionError)
 	if existing:
-		return {"linked": True, "user": user}
+		return {"linked": True, "pending": False, "user": user}
 	mine = _user_link_in_tenant(gateway, tenant, user)
 	if mine and mine.external_id != aad:
 		frappe.throw(
 			_("Your Huf account is already linked to another Teams account in this organisation."),
 			frappe.PermissionError,
 		)
-	_create_link(gateway, tenant, aad, user, "Self link", label=data.get("l"), linked_by=user)
-	return {"linked": True, "user": user}
+	_supersede_pending(gateway, tenant, aad)
+	doc = _create_link(
+		gateway, tenant, aad, user, "Self link", label=data.get("l"), linked_by=user, state="Pending"
+	)
+	try:
+		from huf.ai.gateways import teams_identity_confirm
+
+		teams_identity_confirm.send_confirmation(gateway, doc.name, tenant, aad, user)
+	except Exception:
+		frappe.db.set_value(DOCTYPE, doc.name, "state", "Revoked")
+		try:
+			frappe.log_error(frappe.get_traceback(), "Teams identity: link confirmation failed"[:140])
+		except Exception:
+			pass
+		frappe.throw(
+			_("Could not send the confirmation message in Teams. Ask the bot for a new link."),
+			frappe.ValidationError,
+		)
+	return {"linked": False, "pending": True, "user": user}
 
 
 # --------------------------------------------------------------------------- admin APIs
@@ -297,10 +346,35 @@ def _activity(event) -> dict:
 
 
 def _is_guest(activity: dict) -> bool:
+	"""Guest / external / unverifiable sender. Conservative: any doubt means "not linkable".
+
+	``from.userType`` is usually absent on message activities, so also deny when
+	``from.aadObjectId`` is missing or any tenant claim on the activity (channelData tenant,
+	conversation tenantId, ``from.tenantId`` / ``from.properties.tenantId|homeTenantId``) is
+	not the conversation's tenant: a B2B guest's home tenant differs from the host tenant.
+	TODO(roster): a guest of the HOST tenant carries the host tenant id and no userType, so it
+	still looks like a member here; the follow-up is a ``teams.getMember`` roster check
+	(TeamsChannelAccount.userRole/tenantId). Graph is deliberately not called from this module.
+	"""
 	sender = activity.get("from") if isinstance(activity.get("from"), dict) else {}
 	props = sender.get("properties") if isinstance(sender.get("properties"), dict) else {}
 	kind = sender.get("userType") or props.get("userType") or sender.get("role") or ""
-	return str(kind).lower() in ("guest", "external")
+	if str(kind).lower() in ("guest", "external"):
+		return True
+	if not str(sender.get("aadObjectId") or "").strip():
+		return True
+	channel_data = activity.get("channelData") if isinstance(activity.get("channelData"), dict) else {}
+	conv = activity.get("conversation") if isinstance(activity.get("conversation"), dict) else {}
+	tenant = channel_data.get("tenant") if isinstance(channel_data.get("tenant"), dict) else {}
+	claims = [
+		tenant.get("id"),
+		conv.get("tenantId"),
+		sender.get("tenantId"),
+		props.get("tenantId"),
+		props.get("homeTenantId"),
+	]
+	seen = {str(c).strip().lower() for c in claims if c}
+	return len(seen) > 1
 
 
 def _label(activity: dict) -> str | None:
@@ -323,6 +397,12 @@ def resolve_run_user(gateway, event):
 			return link.user
 		raise gw_hooks.GatewayHookDenied(
 			gw_hooks.USER_VISIBLE_PREFIX + "Your linked Huf account is disabled. Please contact an administrator."
+		)
+	if meta.conversation_type != "personal":
+		# Never mint a token or post a link where other people can see/click it.
+		raise gw_hooks.GatewayHookDenied(
+			gw_hooks.USER_VISIBLE_PREFIX
+			+ "Connect your Huf account to use this bot. Open a personal chat with me and send connect."
 		)
 	token = _prompt_token(gateway.name, meta.tenant_id, meta.user_aad_id, _label(activity))
 	raise gw_hooks.GatewayHookDenied(
@@ -368,3 +448,9 @@ def on_run_success(gateway, event, kind, response):
 
 gw_hooks.register(gw_hooks.RESOLVE_RUN_USER, resolve_run_user, provider=HOOK_PROVIDER)
 gw_hooks.register(gw_hooks.ON_RUN_SUCCESS, on_run_success, provider=HOOK_PROVIDER)
+
+
+try:  # registers the "idlink" card handler; a failure only leaves links Pending (fail closed)
+	from huf.ai.gateways import teams_identity_confirm  # noqa: F401
+except Exception:  # pragma: no cover
+	pass

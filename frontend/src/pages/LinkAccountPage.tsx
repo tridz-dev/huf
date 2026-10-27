@@ -25,8 +25,6 @@ export function LinkAccountPage() {
   const token = useMemo(() => parseLinkToken(search), [search]);
   const provider = useMemo(() => parseLinkProvider(search), [search]);
   const app = providerName(provider);
-  const person = provider === 'teams' ? 'Teams person' : 'Slack person';
-  const orgLabel = provider === 'teams' ? 'Organisation (tenant)' : 'Workspace';
   const [status, setStatus] = useState<Status>(token ? 'loading' : 'error');
   const [preview, setPreview] = useState<SelfLinkPreview | null>(null);
   const [error, setError] = useState<string | null>(
@@ -96,7 +94,7 @@ export function LinkAccountPage() {
           <CardContent>
             <Alert>
               <CheckCircle2 className="h-4 w-4" />
-              <AlertTitle>{app === 'Slack' ? 'Check Slack to finish' : 'Account connected'}</AlertTitle>
+              <AlertTitle>{`Check ${app} to finish`}</AlertTitle>
               <AlertDescription>
                 {app === 'Slack' ? (
                   <>
@@ -105,8 +103,8 @@ export function LinkAccountPage() {
                   </>
                 ) : (
                   <>
-                    Your {app} account is now connected to {hufAccount}. You can close this page and go back to
-                    {app}.
+                    We sent a confirmation card to that Teams person in their personal chat with Huf. The link to{' '}
+                    {hufAccount} only becomes active after they choose "Yes" in Teams. You can close this page.
                   </>
                 )}
               </AlertDescription>
@@ -131,10 +129,16 @@ export function LinkAccountPage() {
                   </>
                 ) : (
                   <>
-                    <dt className="text-muted-foreground">{person}</dt>
-                    <dd className="font-medium break-all">{preview.person_label}</dd>
-                    <dt className="text-muted-foreground">{orgLabel}</dt>
-                    <dd className="font-medium break-all">{preview.workspace_label}</dd>
+                    <dt className="text-muted-foreground">Microsoft tenant ID</dt>
+                    <dd className="font-mono text-base font-semibold break-all">
+                      {preview.tenant_id ?? preview.team_id}
+                    </dd>
+                    <dt className="text-muted-foreground">Teams user ID</dt>
+                    <dd className="font-medium break-all">{preview.external_id}</dd>
+                    <dt className="text-muted-foreground">Display name (set by that person)</dt>
+                    <dd className="text-muted-foreground break-all">
+                      {preview.display_label_untrusted ?? preview.person_label}
+                    </dd>
                   </>
                 )}
                 <dt className="text-muted-foreground">Huf account</dt>
@@ -146,7 +150,7 @@ export function LinkAccountPage() {
               <p className="text-sm text-muted-foreground">
                 {app === 'Slack'
                   ? `Slack user ${preview.external_id} will act as YOU in Huf: anything that Slack account asks Huf to do will run with your Huf permissions. The display name above is chosen by that person and proves nothing.`
-                  : `Once linked, anything this ${app} account asks Huf to do will run with your Huf permissions.`}
+                  : `Teams user ${preview.external_id} in tenant ${preview.tenant_id ?? preview.team_id} will act as YOU in Huf: anything that Teams account asks Huf to do will run with your Huf permissions. The display name above is chosen by that person and proves nothing.`}
               </p>
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />

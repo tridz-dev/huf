@@ -363,3 +363,147 @@ def test_doctype_json_field_order_sane():
 	assert f["status"]["options"].split("\n") == ["Pending", "Sent", "Failed", "Dead"]
 	assert f["kind"]["options"].split("\n") == ["reply", "card", "card_update", "proactive"]
 	assert [p["role"] for p in d["permissions"]] == ["System Manager"]
+
+
+# ---------------------------------------------------- T16: default sender really delivers
+
+
+class _Resp:
+	def __init__(self, status=200, body=None):
+		self.status_code, self._b, self.headers = status, body, {}
+
+	def json(self):
+		return self._b
+
+
+class _Http:
+	"""Token endpoint + Bot Connector in one fake HTTP layer."""
+
+	def __init__(self, post_status=200):
+		self.calls = []
+		self.post_status = post_status
+
+	def __call__(self, method, url, *, headers, json=None, data=None, timeout=10):
+		self.calls.append({"method": method, "url": url, "headers": headers, "json": json, "data": data})
+		if "login.microsoftonline.com" in url:
+			return _Resp(200, {"access_token": "TKN-1", "expires_in": 3600})
+		return _Resp(self.post_status, {"id": "act-9"})
+
+
+class _Cache:
+	def __init__(self):
+		self.d = {}
+
+	def get_value(self, k):
+		return self.d.get(k)
+
+	def set_value(self, k, v, expires_in_sec=None):
+		self.d[k] = v
+
+	def delete_value(self, k):
+		self.d.pop(k, None)
+
+
+@pytest.fixture
+def real_sender(store, monkeypatch):
+	from huf.ai.gateways import teams_api, teams_tenant
+
+	creds = {"app_id": "app-1", "app_password": "s3cret-pw", "tenant_id": "tenant-guid"}
+	state = type("St", (), {"creds": creds, "http": _Http(), "gw_docs": []})
+	monkeypatch.setattr(teams_api, "_cache", lambda: _Cache())
+	monkeypatch.setattr(
+		ob.frappe, "get_doc", lambda dt, name=None: state.gw_docs.append((dt, name)) or type("G", (), {"name": name})(),
+		raising=False,
+	)
+	monkeypatch.setattr(teams_tenant, "get_gateway_credential", lambda gw, key: state.creds.get(key, ""))
+	state.api = teams_api
+	return state
+
+
+def test_default_sender_delivers_with_token_provider_and_auth_header(store, real_sender):
+	seen = {}
+	orig = real_sender.api.post_activity
+
+	def spy(*a, **kw):
+		seen["token"] = kw.get("token")
+		return orig(*a, **kw)
+
+	real_sender.api.post_activity = spy
+	try:
+		n = mk(store, payload={"activity": {"type": "message", "text": "hi"}})
+		assert ob.deliver(n, now=NOW, http=real_sender.http) == "Sent"
+	finally:
+		real_sender.api.post_activity = orig
+	assert callable(seen["token"])
+	assert store.rows[n]["provider_message_id"] == "act-9" and not store.rows[n].get("last_error")
+	post = [c for c in real_sender.http.calls if "/v3/conversations/" in c["url"]][0]
+	assert post["headers"]["Authorization"] == "Bearer TKN-1"
+	assert post["json"] == {"type": "message", "text": "hi"}
+	tok = [c for c in real_sender.http.calls if "login.microsoftonline.com" in c["url"]][0]
+	assert "tenant-guid" in tok["url"] and tok["data"]["client_id"] == "app-1"
+	assert real_sender.gw_docs == [("Gateway", "gw")]
+
+
+def test_default_sender_card_update_passes_token(store, real_sender):
+	n = mk(store, kind="card_update", payload={"activity_id": "A1", "activity": {"type": "message"}})
+	assert ob.deliver(n, now=NOW, http=real_sender.http) == "Sent"
+	put = [c for c in real_sender.http.calls if c["method"] == "PUT"][0]
+	assert put["url"].endswith("/activities/A1") and put["headers"]["Authorization"] == "Bearer TKN-1"
+
+
+@pytest.mark.parametrize("drop", ["app_id", "app_password", "tenant_id"])
+def test_default_sender_fails_closed_without_credentials(store, real_sender, drop):
+	real_sender.creds = {k: v for k, v in real_sender.creds.items() if k != drop}
+	n = mk(store)
+	assert ob.deliver(n, now=NOW, http=real_sender.http) == "Failed"
+	err = store.rows[n]["last_error"]
+	assert drop in err and "s3cret-pw" not in err
+	assert real_sender.http.calls == []  # no token request, no post
+
+
+def test_default_sender_no_gateway_is_permanent_failure(store, real_sender):
+	n = mk(store)
+	store.rows[n]["gateway"] = None
+	assert ob.deliver(n, now=NOW, http=real_sender.http) == "Failed"
+	assert real_sender.http.calls == []
+
+
+def test_card_delivery_records_activity_id_on_session(store, real_sender, monkeypatch):
+	from huf.ai.gateways import teams_actions
+
+	got = []
+	monkeypatch.setattr(teams_actions, "record_card_activity", lambda s, a: got.append((s, a)))
+	n = mk(store, kind="card", payload={"activity": {"type": "message"}, "action_session": "tas-7"})
+	assert ob.deliver(n, now=NOW, http=real_sender.http) == "Sent"
+	assert got == [("tas-7", "act-9")]
+	got.clear()
+	n2 = mk(store, key="k2", kind="card", payload={"activity": {"type": "message"}})
+	ob.deliver(n2, now=NOW, http=real_sender.http)
+	n3 = mk(store, key="k3", kind="reply", payload={"activity": {"type": "message"}, "action_session": "x"})
+	ob.deliver(n3, now=NOW, http=real_sender.http)
+	assert got == []  # no session / not a card: nothing recorded
+
+
+def test_record_card_activity_failure_does_not_fail_delivery(store, real_sender, monkeypatch):
+	from huf.ai.gateways import teams_actions
+
+	def boom(s, a):
+		raise RuntimeError("db down")
+
+	monkeypatch.setattr(teams_actions, "record_card_activity", boom)
+	n = mk(store, kind="card", payload={"activity": {"type": "message"}, "action_session": "tas-7"})
+	assert ob.deliver(n, now=NOW, http=real_sender.http) == "Sent"
+
+
+def test_transport_failure_status_zero_is_transient():
+	class _Err(Exception):
+		def __init__(self, status):
+			super().__init__("x")
+			self.status = status
+
+	assert ob.is_transient(_Err(0)) is True  # transport failure: retry
+	assert ob.is_transient(_Err(408)) is True
+	assert ob.is_transient(_Err(429)) is True
+	assert ob.is_transient(_Err(503)) is True
+	assert ob.is_transient(_Err(400)) is False
+	assert ob.is_transient(_Err(401)) is False

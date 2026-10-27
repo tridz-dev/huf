@@ -489,3 +489,62 @@ def test_conformance_helper():
 		ad, req(_activity(), tok), GatewayReply(conversation_id=CHANNEL, text="ok")
 	)
 	assert ev.raw_payload["huf_kind"] == "message"
+
+
+# ---- T16: reply idempotency keys, gateway-scoped lookup -------------------------------------
+
+
+def _send(ad, ob, **kw):
+	ad.send_reply(GatewayReply(conversation_id=CHANNEL, text=kw.pop("text", "Done."), **kw))
+	return ob.calls[-1][4]
+
+
+def test_identical_text_in_personal_chat_is_not_deduped():
+	ob = FakeOutbox()
+	ad = make(outbox=ob, reference_lookup=lookup_for(ref_row()), gateway_name="gw1")
+	assert _send(ad, ob) != _send(ad, ob)
+	# a different adapter instance (a later send) is also distinct
+	ad2 = make(outbox=ob, reference_lookup=lookup_for(ref_row()), gateway_name="gw1")
+	assert _send(ad2, ob) not in {ob.calls[0][4], ob.calls[1][4]}
+
+
+def test_retry_of_same_reply_object_keeps_key():
+	ob = FakeOutbox()
+	ad = make(outbox=ob, reference_lookup=lookup_for(ref_row()), gateway_name="gw1")
+	reply = GatewayReply(conversation_id=CHANNEL, text="Done.")
+	ad.send_reply(reply)
+	ad.send_reply(reply)
+	assert ob.calls[0][4] == ob.calls[1][4]
+
+
+def test_event_id_derived_key_dedupes_true_retries_only():
+	ob = FakeOutbox()
+	ad = make(outbox=ob, reference_lookup=lookup_for(ref_row()), gateway_name="gw1")
+	a = _send(ad, ob, reply_to_provider_message_id="act-1")
+	b = _send(ad, ob, reply_to_provider_message_id="act-1")
+	c = _send(ad, ob, reply_to_provider_message_id="act-2")
+	d = _send(ad, ob, reply_to_provider_message_id="act-1", text="Other")
+	assert a == b and len({a, c, d}) == 3
+
+
+def test_thread_root_as_reply_to_is_not_an_event_id():
+	ob = FakeOutbox()
+	ad = make(outbox=ob, reference_lookup=lookup_for(ref_row()), gateway_name="gw1")
+	k1 = _send(ad, ob, thread_id="root-1", reply_to_provider_message_id="root-1")
+	k2 = _send(ad, ob, thread_id="root-1", reply_to_provider_message_id="root-1")
+	assert k1 != k2
+
+
+def test_default_lookup_requires_gateway_and_scopes_query(monkeypatch):
+	import sys
+	import types
+
+	from huf.ai.gateway_adapters import teams as teams_mod
+
+	seen = []
+	fr = types.SimpleNamespace(get_all=lambda dt, **kw: seen.append(kw) or [{"name": "R", "gateway": "gw1"}])
+	monkeypatch.setitem(sys.modules, "frappe", fr)
+	assert teams_mod._default_reference_lookup(CHANNEL, None, APP) is None  # no gateway: fail closed
+	assert seen == []
+	assert teams_mod._default_reference_lookup(CHANNEL, "gw1", APP)["name"] == "R"
+	assert seen[0]["filters"]["gateway"] == "gw1"

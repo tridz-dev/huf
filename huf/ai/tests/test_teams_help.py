@@ -349,9 +349,10 @@ def test_idempotency_key_stable_and_distinct(env):
 	assert keys[0].startswith("teams_help:")
 
 
-def test_filter_reason_reset_to_none(env):
+def test_command_never_touches_filter_reason(env):
+	env.fake.flags.gateway_filter_reason = "tenant_not_allowed"
 	run(env, "personal_message", "help")
-	assert env.fake.flags.gateway_filter_reason is None
+	assert env.fake.flags.gateway_filter_reason == "tenant_not_allowed"
 
 
 def test_internal_error_sends_nothing_but_drops(env, monkeypatch):
@@ -398,3 +399,24 @@ def test_connect_link_is_only_link_material(env):
 	run(env, "personal_message", "connect")
 	blob = json.dumps(env.sent[-1][3])
 	assert blob.count("token=") == 1 and AAD not in blob and TENANT not in blob
+
+
+# --- T16: connect remembers the personal chat (needed for the confirmation card) -------------
+
+
+def test_connect_in_personal_chat_remembers_reference(env, monkeypatch):
+	calls = []
+	monkeypatch.setattr(env.h.teams_refs, "upsert_reference", lambda gw, meta, installed=True: calls.append((gw, meta)))
+	env.links.clear()
+	run(env, "personal_message", "connect")
+	assert len(calls) == 1 and calls[0][0] == "gw1" and calls[0][1].conversation_type == "personal"
+
+
+@pytest.mark.parametrize("fixture", ["channel_mention", "group_chat_message"])
+def test_connect_in_room_remembers_nothing_and_mints_no_token(env, monkeypatch, fixture):
+	calls = []
+	monkeypatch.setattr(env.h.teams_refs, "upsert_reference", lambda *a, **k: calls.append(a))
+	env.links.clear()
+	run(env, fixture, "connect")
+	assert calls == [] and env.tokens == []
+	assert "personal chat" in reply_text(env) and "http" not in reply_text(env)

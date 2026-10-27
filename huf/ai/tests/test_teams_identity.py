@@ -91,6 +91,12 @@ class Store:
 		self.rows = {}
 		self.created = []
 		self.revoked = []
+		self.states = []
+		self.confirmations = []
+		monkeypatch.setattr(ti, "_supersede_pending", lambda *a: None)
+		from huf.ai.gateways import teams_identity_confirm as tic
+
+		monkeypatch.setattr(tic, "send_confirmation", lambda *a: self.confirmations.append(a) or "S1")
 		monkeypatch.setattr(ti, "_find_link", self.find)
 		monkeypatch.setattr(ti, "_user_link_in_tenant", self.by_user)
 		monkeypatch.setattr(ti, "_create_link", self.create)
@@ -108,9 +114,11 @@ class Store:
 	def by_user(self, g, t, user):
 		return next((r for (gg, tt, _e), r in self.rows.items() if gg == g and tt == t and r.user == user), None)
 
-	def create(self, gateway, tenant, aad, user, source, label=None, linked_by=None):
+	def create(self, gateway, tenant, aad, user, source, label=None, linked_by=None, state="Linked"):
 		self.created.append((gateway, tenant, aad, user, source, label, linked_by))
-		self.add(user, source, gateway, tenant, aad)
+		self.states.append(state)
+		if state == "Linked":  # a Pending row never resolves a user
+			self.add(user, source, gateway, tenant, aad)
 		return SimpleNamespace(name="NEW")
 
 
@@ -282,7 +290,7 @@ def test_token_tamper():
 
 def test_token_replay_rejected(store):
 	tok = ti.create_link_token("GW-1", TENANT, AAD)
-	assert ti.confirm_teams_link(tok)["linked"] is True
+	assert ti.confirm_teams_link(tok)["pending"] is True
 	with pytest.raises(Perm):
 		ti.confirm_teams_link(tok)
 
@@ -316,8 +324,10 @@ def test_confirm_requires_real_user(store, monkeypatch, user):
 
 def test_confirm_creates_self_link(store):
 	tok = ti.create_link_token("GW-1", TENANT, AAD, "Ada")
-	assert ti.confirm_teams_link(tok) == {"linked": True, "user": "alice@x.com"}
+	assert ti.confirm_teams_link(tok) == {"linked": False, "pending": True, "user": "alice@x.com"}
 	assert store.created == [("GW-1", TENANT, AAD, "alice@x.com", "Self link", "Ada", "alice@x.com")]
+	assert store.states == ["Pending"] and store.confirmations == [("GW-1", "NEW", TENANT, AAD, "alice@x.com")]
+	assert ti.resolve_user("GW-1", TENANT, AAD) is None  # Pending never resolves a user
 
 
 def test_confirm_refuses_identity_linked_to_other_user(store):
@@ -336,13 +346,72 @@ def test_confirm_refuses_user_linked_to_other_aad_same_tenant(store):
 
 def test_confirm_same_user_other_tenant_ok(store):
 	store.add(tenant="other-tenant", aad="44444444-4444-4444-4444-444444444444")
-	assert ti.confirm_teams_link(ti.create_link_token("GW-1", TENANT, AAD))["linked"]
+	assert ti.confirm_teams_link(ti.create_link_token("GW-1", TENANT, AAD))["pending"]
 
 
 def test_confirm_idempotent_same_user(store):
 	store.add()
 	assert ti.confirm_teams_link(ti.create_link_token("GW-1", TENANT, AAD))["linked"]
-	assert not store.created
+	assert not store.created and not store.confirmations
+
+
+def test_confirm_revokes_pending_when_card_cannot_be_sent(store, monkeypatch):
+	from huf.ai.gateways import teams_identity_confirm as tic
+
+	def boom(*a):
+		raise tic.ConfirmationUnavailable("no personal chat")
+
+	monkeypatch.setattr(tic, "send_confirmation", boom)
+	with pytest.raises(Exception):
+		ti.confirm_teams_link(ti.create_link_token("GW-1", TENANT, AAD))
+	assert store.revoked and store.revoked[-1][0] == "NEW" and store.revoked[-1][1][:2] == ("state", "Revoked")
+	assert ti.resolve_user("GW-1", TENANT, AAD) is None
+
+
+def test_preview_shows_tenant_guid_and_untrusted_label(store):
+	out = ti.preview_teams_link(ti.create_link_token("GW-1", TENANT, AAD, "Totally The CEO"))
+	assert out["tenant_id"] == TENANT and out["display_label_untrusted"] == "Totally The CEO"
+	assert out["person_label"] == "Totally The CEO"
+
+
+# ---- room denial / guest detection (T16) -------------------------------------
+def room_ev(ctype="channel"):
+	e = ev()
+	e.raw_payload["conversation"]["conversationType"] = ctype
+	return e
+
+
+@pytest.mark.parametrize("ctype", ["channel", "groupChat"])
+def test_room_denial_has_no_url_and_mints_no_token(store, ctype):
+	reason = denied(room_ev(ctype))
+	assert reason.startswith(PREFIX) and "personal chat" in reason and "connect" in reason
+	assert "http" not in reason and "token" not in reason
+	assert not [k for k in ti._cache().d if k.startswith((ti._NONCE_PREFIX, ti._PROMPT_PREFIX))]
+
+
+def test_personal_denial_still_has_link(store):
+	assert "link-account" in denied(room_ev("personal"))
+
+
+def test_home_tenant_mismatch_is_guest(store):
+	e = ev(from_extra={"tenantId": "99999999-9999-9999-9999-999999999999"})
+	reason = denied(e)
+	assert "not supported" in reason and "token=" not in reason
+
+
+def test_conversation_vs_channeldata_tenant_mismatch_is_guest(store):
+	e = ev()
+	e.raw_payload["channelData"]["tenant"]["id"] = "99999999-9999-9999-9999-999999999999"
+	assert "not supported" in denied(e)
+
+
+def test_matching_tenant_claims_not_guest(store):
+	e = ev(from_extra={"tenantId": TENANT.upper()})
+	assert "link-account" in denied(e)
+
+
+def test_is_guest_missing_aad_object_id():
+	assert ti._is_guest({"from": {"id": "29:x"}, "conversation": {"tenantId": TENANT}}) is True
 
 
 def _whitelist_methods():
