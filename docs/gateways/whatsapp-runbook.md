@@ -116,13 +116,13 @@ Handled at ingest by `_handle_consent_event` (`huf/ai/gateway_service.py`). What
 
 Gateway field **Voice note replies** (`voice_reply_mode`): `Off` (default), `Voice only` or `Text and voice`. It applies only when the customer's message was a voice note (audio with `voice: true`); anything else is answered with text as usual.
 
-- Needs `ffmpeg` on the server (converts the speech to Ogg/Opus mono). Install it on every worker host (`apt install ffmpeg`); it must include the `libopus` encoder (`ffmpeg -encoders | grep libopus`).
-- To check: the gateway health shows the warning `voice_reply_ffmpeg_missing` ("ffmpeg is missing, so replies go out as text") when voice replies are on and this host lacks ffmpeg or libopus. Saving the gateway shows the same warning. The check runs on the site host, so also verify on each worker host.
+- Nothing has to be installed on the server. Huf asks the speech provider for Opus; mono Ogg/Opus audio is sent as a voice note exactly as received. If a provider returns something else, Huf converts it only when this host happens to have ffmpeg with Opus; otherwise MP3, AAC, M4A or AMR is sent as an ordinary audio message (it plays, but without the voice-note look), and any other format (for example the WAV that Gemini returns) is sent as text.
+- There is no health warning for this and saving the gateway shows no alert. The kind of audio actually sent is not user-visible; check the WhatsApp chat.
 - The speech comes from the agent's own TTS model and voice (Agent `tts_model` / `tts_voice`) using that model's provider key.
 - Replies longer than 1500 characters (markdown removed) are sent as text only.
 - The usual gates apply: STOP opt-out, the 24-hour window (closed window: the text fallback path, including the fallback template), BSUID refusal.
 - `Voice only`: one voice note replaces the text. `Text and voice`: the text goes first, then the voice note (skipped if the text is still being retried).
-- Any failure (ffmpeg missing, no TTS model, provider error, send refused) is logged as a warning ("WhatsApp voice reply: ...") and the reply is sent as text. The reply is never lost.
+- Any failure (no TTS model, provider error, unsupported audio format, send refused) is logged as a warning ("WhatsApp voice reply: ...") and the reply is sent as text. The reply is never lost.
 - A replayed or retried event never sends a second voice note.
 
 ## 9. Triage order

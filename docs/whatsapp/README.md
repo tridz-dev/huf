@@ -7,7 +7,7 @@ What it covers:
 - **Connecting a number:** setup, credentials, token health, webhooks, several numbers on one site.
 - **Who can talk to your agent:** allow list, pairing approvals, opt-out, run-as user.
 - **Everything customers can send:** text, voice notes, images, documents, location, contacts, buttons and lists, reactions, edits, ad referrals.
-- **Voice and audio in depth:** speech-to-text for voice notes, voice replies (Off / Voice only / Text and voice), the ffmpeg and Opus requirements.
+- **Voice and audio in depth:** speech-to-text for voice notes, voice replies (Off / Voice only / Text and voice) and how the audio format is handled without ffmpeg.
 - **Outbound:** formatting, media, interactive messages, templates (wizard, categories, guard, lifecycle), the 24-hour window and outbound policy, idempotent sends.
 - **Operating it:** message log and delivery states, drafts, health, the agent tool, flows, reliability and security.
 - **Eight use cases:** order-taking, appointments and reminders, support triage with pairing approval, an internal ops bot, field reporting, lead qualification, collections reminders, a voice-first customer.

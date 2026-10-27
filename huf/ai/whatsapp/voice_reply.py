@@ -4,10 +4,12 @@
 """Voice note replies for WhatsApp gateways (MM-E): voice in -> transcript -> agent -> voice note out.
 
 When the inbound message is a voice note and the Gateway's ``voice_reply_mode`` asks for it, the agent's
-text reply is turned into speech (the agent's own TTS model and provider key), converted to Ogg/Opus
-(ffmpeg) and sent as a voice note through the adapter, which applies the 24h window and the outbound
-policy (STOP / BSUID). Every failure returns ``None``/``False`` after a logged warning so the caller
-falls back to the normal text reply: a reply is never lost.
+text reply is turned into speech (the agent's own TTS model and provider key) and sent through the adapter,
+which applies the 24h window and the outbound policy (STOP / BSUID). Nothing here needs ffmpeg: the provider is
+asked for Opus and mono Ogg/Opus is sent as a voice note as it is; ffmpeg (if the host happens to have it) only
+converts other audio; otherwise MP3/AAC/M4A/AMR goes as an ordinary audio message and anything else falls back to
+text. Every failure returns ``None``/``False`` after a logged warning so the caller falls back to the normal
+text reply: a reply is never lost.
 
 Idempotency: a voice-only reply records ``reply_message_id`` (the caller skips the send when it is set);
 a companion voice note (text and voice) is claimed once per event, so a replay cannot send it twice.
@@ -125,6 +127,40 @@ def _convert(content: bytes) -> bytes:
 	return send_file.to_ogg_opus(content)
 
 
+def prepare_audio(content: bytes) -> dict[str, Any]:
+	"""``{content, mime, filename, voice}`` for the synthesized audio, without requiring ffmpeg.
+
+	1. mono Ogg/Opus: a voice note as it is; 2. other audio and ffmpeg with Opus on this host: converted to a voice
+	note (a failed conversion is logged and the next rule applies); 3. MP3/AAC/M4A/AMR: an ordinary audio message;
+	4. anything else: ``FileSendError`` (the caller replies with text).
+	"""
+	if send_file.is_voice_ready(content):
+		return {"content": content, "mime": send_file.OGG_OPUS_MIME, "filename": "reply.ogg", "voice": True}
+	if send_file.ffmpeg_can_make_opus():
+		try:
+			return {"content": _convert(content), "mime": send_file.OGG_OPUS_MIME, "filename": "reply.ogg", "voice": True}
+		except send_file.FileSendError as exc:
+			_warn(f"conversion to a voice note failed ({exc.code}); trying a plain audio message")
+		except Exception as exc:
+			_warn(f"conversion to a voice note failed ({type(exc).__name__}); trying a plain audio message")
+	mime = send_file.sniff_audio_mime(content)
+	ext = send_file.AUDIO_ATTACHMENT_EXT.get(mime)
+	if not ext:
+		raise send_file.FileSendError("audio_format_unsupported", "The speech audio is not in a format WhatsApp can send.")
+	return {"content": content, "mime": mime, "filename": f"reply.{ext}", "voice": False}
+
+
+def synthesize_for_whatsapp(
+	agent_name: str, text: str, conversation_id: str | None, run_id: str | None
+) -> bytes:
+	"""Speech audio, asking the provider for Opus first (no conversion needed) and for MP3 if it refuses."""
+	try:
+		return _synthesize(agent_name, text, conversation_id, run_id, response_format="opus")
+	except Exception as exc:
+		_warn(f"text to speech as opus failed ({type(exc).__name__}: {str(exc)[:120]}); retrying as mp3")
+	return _synthesize(agent_name, text, conversation_id, run_id)
+
+
 def _conversation(run_id: str | None) -> str | None:
 	if not run_id:
 		return None
@@ -144,13 +180,15 @@ def send_voice_reply(event, gateway, response: str, *, quote: bool = True, once:
 		conversation = _conversation(getattr(event, "agent_run", None))
 		if not conversation:
 			raise ValueError("the agent run has no conversation to attach the audio to")
-		audio = _synthesize(event.target_agent, text, conversation, getattr(event, "agent_run", None))
-		ogg = _convert(audio)
+		audio = synthesize_for_whatsapp(event.target_agent, text, conversation, getattr(event, "agent_run", None))
+		prepared = prepare_audio(audio)
 		adapter = _adapter(gateway, event)
-		media_id = adapter.upload_media(ogg, send_file.OGG_OPUS_MIME, "reply.ogg", "audio", True)
+		media_id = adapter.upload_media(
+			prepared["content"], prepared["mime"], prepared["filename"], "audio", prepared["voice"]
+		)
 		delivery = adapter.send_media(
 			event.conversation_id, "audio", media_id=media_id,
-			reply_to=(event.provider_event_id or None) if quote else None, trusted=True, voice=True,
+			reply_to=(event.provider_event_id or None) if quote else None, trusted=True, voice=prepared["voice"],
 		)
 		return str(delivery.provider_message_id or "") or None
 	except send_file.FileSendError as exc:

@@ -453,7 +453,7 @@ def _handle_send_speech(**kwargs) -> str:
     except Exception as exc:
         detail = getattr(exc, "message", None) or str(exc)
         return _error(
-            f"send_speech failed: {str(detail)[:300]} (is a TTS model configured on the agent, and ffmpeg installed?). "
+            f"send_speech failed: {str(detail)[:300]} (is a text-to-speech model configured on the agent?). "
             "Send the text as a normal message instead."
         )
     if kwargs.get("caption"):
