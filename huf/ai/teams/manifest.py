@@ -18,18 +18,17 @@ import zlib
 import frappe
 from frappe import _
 
-# UNVERIFIED: learn.microsoft.com root schema page does not state the $schema literal.
-# Kept as a single constant so it can be corrected in one place.
-MANIFEST_SCHEMA_URL = "https://developer.microsoft.com/json-schemas/teams/v1.25/MicrosoftTeams.schema.json"
-# UNVERIFIED: the fetched page shows "devPreview" for the preview section; "1.30" is the
-# R4 recon value (m365-app-1.30) and is not confirmed by the page.
-MANIFEST_VERSION = "1.30"
+# ONE pair: $schema and manifestVersion must name the same version. 1.29 is the latest GA version
+# (learn.microsoft.com manifest-schema, "All generally available versions"); 1.30 is listed only under
+# "What's new" (not GA), so it is deliberately not used.
+MANIFEST_VERSION = "1.29"
+MANIFEST_SCHEMA_URL = f"https://developer.microsoft.com/json-schemas/teams/v{MANIFEST_VERSION}/MicrosoftTeams.schema.json"
 
 PROVIDER = "Microsoft Teams"
 SCOPES = ("personal", "team", "groupChat")
 ACCENT_COLOR = "#4F46E5"
 
-LIMITS = {"name_short": 30, "name_full": 100, "description_short": 80, "description_full": 4000}
+LIMITS = {"developer_name": 32, "name_short": 30, "name_full": 100, "description_short": 80, "description_full": 4000}
 GUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
@@ -71,7 +70,7 @@ def build_manifest(
 	_check_len("Bot name", bot_name, LIMITS["name_short"])
 	_check_len("Short description", short_description, LIMITS["description_short"])
 	_check_len("Full description", full_description, LIMITS["description_full"])
-	_check_len("Developer name", developer_name, 100)
+	_check_len("Developer name", developer_name, LIMITS["developer_name"])
 	_check_https("Website URL", website_url)
 	_check_https("Privacy URL", privacy_url)
 	_check_https("Terms URL", terms_url)
