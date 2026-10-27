@@ -89,6 +89,43 @@ export async function getGateway(name: string): Promise<GatewayDoc> {
   return (await db.getDoc(doctype.Gateway, name)) as GatewayDoc;
 }
 
+export interface ChannelAgentConnection {
+  service: string;
+  provider: string | null;
+  gateways: Pick<GatewayDoc, 'name' | 'is_enabled' | 'default_target_type' | 'default_agent' | 'default_flow'>[];
+}
+
+export interface ConnectAgentResult {
+  gateway: string;
+  created: boolean;
+  enabled: boolean;
+  enable_error: string;
+  previous_agent: string | null;
+  tools_added: number;
+}
+
+/** Which gateways use a channel credential and the agent each one answers with. */
+export async function getChannelAgentConnection(integrationSettings: string): Promise<ChannelAgentConnection> {
+  const result = await call.get('huf.ai.gateway_service.get_channel_agent_connection', {
+    integration_settings: integrationSettings,
+  });
+  return result.message as ChannelAgentConnection;
+}
+
+/** Make an agent answer a channel: sets the gateway's default agent (creating the gateway if needed). */
+export async function connectAgentToChannel(params: {
+  integrationSettings: string;
+  agent: string;
+  gatewayName?: string;
+}): Promise<ConnectAgentResult> {
+  const result = await call.post('huf.ai.gateway_service.connect_agent_to_channel', {
+    integration_settings: params.integrationSettings,
+    agent: params.agent,
+    gateway_name: params.gatewayName,
+  });
+  return result.message as ConnectAgentResult;
+}
+
 export async function getGateways(): Promise<GatewayDoc[]> {
   return (await db.getDocList(doctype.Gateway, {
     fields: [
