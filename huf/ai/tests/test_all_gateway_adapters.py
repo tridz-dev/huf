@@ -319,7 +319,9 @@ class TestAllGatewayAdapters(unittest.TestCase):
 			method="POST",
 		)
 
-		event = adapter.normalize_inbound(req)
+		# Real JWT validation is covered by test_teams_auth; this test is about normalisation + send.
+		with patch("huf.ai.teams.auth.verify_request", return_value=True):
+			event = adapter.normalize_inbound(req)
 		self.assertEqual(event.sender_id, "user1")
 		self.assertEqual(event.message_text, "Hi Teams")
 
