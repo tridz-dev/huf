@@ -8,9 +8,8 @@ chat or logs.
 Scope: single-tenant bots only. Managed identity (UserAssignedMSI), multi-tenant bots and sovereign
 clouds (GCC, GCC High, DoD, 21Vianet) are not supported.
 
-Status note: parts of this guide describe work that is still in progress on the Teams integration
-track. Items marked **(planned)** are not available in every build yet. Items marked **(verify in your tenant)**
-rely on Microsoft admin flows that Huf has not tested against a live tenant.
+Items marked **(verify in your tenant)** rely on Microsoft admin flows or Teams client behaviour that Huf has not tested
+against a live tenant (the automated tests use signed fixtures and fake Bot Framework endpoints).
 
 ## 1. What the integration does
 
@@ -22,8 +21,9 @@ rely on Microsoft admin flows that Huf has not tested against a live tenant.
   before the agent sees it. Other mentions are kept.
 - Threads: channel replies stay in the thread of the inbound message (`;messageid=` in the conversation id).
 - Replies: sent from the stored conversation reference, using the service URL Teams sent with that conversation.
-- Files: inbound file downloads in personal chat. Outbound file upload uses a consent card in personal chat only (see section 9).
-- Adaptive Cards: not yet supported (see section 10).
+- Files: inbound file attachments are recorded as metadata plus the Teams `downloadUrl`; Huf does not download them. Outbound file consent/upload is not implemented (section 9).
+- Adaptive Cards: not supported.
+- Agent tool: agents can send Teams messages with the `microsoft_teams` tool (section 10).
 
 ## 2. Prerequisites
 
@@ -73,16 +73,27 @@ https://<site>/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway_
    - **App password**: the client secret value. The field is write-only. Leave it blank later to keep the stored value.
    - **Tenant ID** (required): the tenant from section 3. Huf rejects a missing tenant ID.
    - **Allowed tenant IDs** (optional): extra tenants whose activities may reach this Gateway. Leave empty to accept only the tenant ID above.
-     (planned: the tenant ID and optional allow-list fields are being added to the credential schema.)
+     An activity from any other tenant is acknowledged with HTTP 200 `{"ignored":"tenant"}` and gets no reply.
 3. Paste the webhook URL from section 4 into the Azure Bot messaging endpoint, if you have not done so.
-4. Enable the Gateway. A new Gateway starts disabled. The readiness checklist shows what is still missing.
+4. Enable the Gateway. A new Gateway starts disabled. The readiness checklist shows what is still missing:
+   `teams-credentials`, `teams-messaging-endpoint`, `teams-first-message` (done only when a stored, verified Gateway Event with a
+   conversation exists; install events alone do not count), `teams-mention-policy` and `teams-allowed-tenants`.
+5. Use **Verify connection** (needs Gateway write permission; rate limited to once per 5 seconds per Gateway, a faster click shows
+   "Verify connection was run moments ago"). Steps `credentials`, `token` and `token_claims` pass or fail (app id and tenant in the
+   token must match the Gateway). `endpoint` and `reference` are informational. Common token errors:
+   `AADSTS7000215` invalid secret (use the secret **value**, not the secret ID), `AADSTS7000222` expired secret,
+   `AADSTS700016` app not found in the tenant, `AADSTS90002` tenant not found.
 
 The app password is stored as a secret. Huf never returns it to the browser or writes it to logs.
 
 ## 6. Install the app in Teams
 
-1. On the Gateway page, use **Download Teams app package** (planned) to get the generated app package (manifest and icons).
-   The manifest `botId` must equal the App ID.
+1. On the Gateway page, use **Download Teams app package** to get the generated app package (manifest and icons).
+   The manifest `botId` must equal the App ID. Manifest version 1.29 with the matching `$schema`.
+   The package needs these site config keys (all required): `teams_app_developer_name` (at most 32 characters),
+   `teams_app_website_url`, `teams_app_privacy_url`, `teams_app_terms_url` (https URLs). If one is missing the download fails
+   with "Set site config key teams_app_developer_name to generate the Teams app package." (naming the missing key).
+   Set them with `bench --site <site> set-config <key> <value>`.
 2. Install it in Teams (verify in your tenant):
    - Personal sideload: Apps, Manage your apps, Upload a custom app. Needs the custom app upload policy.
    - Organisation: Teams admin center, Manage apps, Upload new app, then approve it for the org catalog if
@@ -99,14 +110,16 @@ conversation reference when it accepts the first verified inbound activity.
 
 - In a personal chat, send any message to the bot first.
 - In a group chat or channel, @mention the bot first.
-- Replies and the Gateway test message use the stored reference. Until one exists, the test message
-  has no recipient to send to.
+- Replies and the Gateway test message use the stored reference. The test-send recipient is a
+  conversation id that has a stored reference; until one exists there is nothing to send to.
+  Adding the bot to a chat or team also stores a reference.
 
 Proactive messages before the first inbound message are not supported.
 
 ## 8. Channels and mentions
 
-- In a channel or group chat, the bot replies only to messages that @mention it.
+- In a channel or group chat, the bot sees only messages that @mention it (the Gateway rejects unmentioned ones when mention-required is set). In personal chats it sees every message.
+- A gated channel message still stores a verified Gateway Event, so it counts for the `teams-first-message` readiness check even though the agent did not run.
 - If you need the bot to see all messages, the tenant must grant RSC consent, and the app manifest must request it
   (verify in your tenant; the exact permission names are in Microsoft's "enable receive all chat messages" guide).
 - Private channels: the bot cannot post in them.
@@ -114,40 +127,51 @@ Proactive messages before the first inbound message are not supported.
 
 ## 9. Files
 
-- Inbound (personal chat): Huf receives the file download info from Teams and fetches the file with a short-lived URL.
-  The manifest must set `supportsFiles`.
-- Outbound (personal chat only): Huf sends a file consent card. After the user accepts, Huf uploads the bytes to the URL Teams gives.
-- Group chats and channels: files are shared as Graph or SharePoint links only. Huf does not upload there.
-- Files are not available in GCC High, DoD or 21Vianet tenants.
+- Inbound: for `file.download.info` attachments Huf stores the `downloadUrl` as attachment metadata. It does **not** download the file.
+- Outbound file consent and upload: **not implemented**. Group chat and channel files are not handled either.
 
-## 10. Limits
+## 10. Limits, retries and the agent tool
 
 | Limit | Value | Source |
 |---|---|---|
-| Message size | Huf splits outgoing text at about 80 KB on paragraph boundaries. Teams rejects messages above about 100 KB with HTTP 413. | Microsoft message-format guidance; Huf split (planned) |
-| Send rate per bot per thread | About 7/s, 8 per 2 s, 60 per 30 s, 1800 per hour | Microsoft rate-limit guidance (values may change) |
-| Send rate per app per tenant | About 50 requests/s | Microsoft rate-limit guidance |
-| Mention tags | 2 messages per 5 s per thread | Microsoft rate-limit guidance |
-| Retries | 429 (honours Retry-After), 412, 502 and 504: up to 3 retries with jitter | Huf client (planned) |
+| Agent reply size | Replies over 40 KB (UTF-8) are truncated with a "… (truncated)" marker. At most 8 chunks, ~80 KB target per part (paragraph, line, sentence, then hard split); a part over 100 KB is never sent (Teams returns 413). Text format `extendedmarkdown`. | `huf/ai/teams/client.py` |
+| Retries | Statuses 429, 412, 502, 504 and network errors: 3 attempts in total (2 retries). `Retry-After` is honoured, capped at 20 s; otherwise exponential backoff with jitter. 45 s wall budget per send, then it fails as transient. A 401/403 from the connector refreshes the bot token once and retries. | `client.py` |
+| Send rate per bot per thread | About 7/s, 8 per 2 s, 60 per 30 s, 1800 per hour | Microsoft guidance (verify in your tenant) |
+| Send rate per app per tenant | About 50 requests/s | Microsoft guidance (verify in your tenant) |
+| Mention tags | 2 messages per 5 s per thread | Microsoft guidance (verify in your tenant) |
 
-Huf does not send Adaptive Cards yet, so the card-size limit does not apply.
+Huf does not send Adaptive Cards. `extendedmarkdown` rendering (code fences, tables) and `;messageid=` channel threading are
+**(verify in your tenant)**.
+
+If a long reply is split and a later part fails, the error is permanent (no retry) so the user does not see duplicated parts.
+
+### Agent tool `microsoft_teams`
+
+Actions: `send_message`, `list_recent_conversations`, `get_account_info`. It works only inside a run started by this Gateway.
+- By default it acts on the **current conversation** only.
+- Cross-conversation send/list needs Gateway **write** permission for the actual session user; it is refused for Guest,
+  Administrator and the Gateway execution user, so normal agent runs cannot message other conversations.
+- Per run: 5 sends and 3 failed sends at most. Text up to 8000 characters. Conversation display names are not returned.
+- The recipient must have a stored conversation reference.
 
 ## 11. Security
 
-- **Inbound verification.** Every inbound activity needs an `Authorization: Bearer` JWT. Huf checks:
-  RS256 signature from the Bot Framework JWKS, issuer `https://api.botframework.com`, audience equal to the App ID,
-  expiry with 5 minutes of clock skew, the `serviceUrl` claim equal to the activity's `serviceUrl`, and the
-  `msteams` channel endorsement (missing endorsement returns 403). An unknown key ID triggers one refetch.
-  If the JWKS is unavailable and nothing is cached, Huf fails closed (401). (planned: the current
-  adapter does not yet validate the full JWT.)
-- **Tenant allow-list.** Activities are checked against the tenant ID in `channelData.tenant.id` and the allow-list in section 5.
-- **Service URL allow-list.** Only HTTPS hosts are used: `smba.trafficmanager.net`, `*.botframework.com` and `*.trafficmanager.net`.
-  Huf rejects IP literals, URLs with user info and redirects. The check runs when a reference is saved and again before every send.
-  (planned.)
-- **Secrets.** The app password and tokens are masked in logs and API responses. Huf never shows the stored secret, and
-  the token cache is keyed by a hash of the App ID, not the secret.
-- **Outgoing webhooks are not used.** The older Teams "Outgoing Webhook" route and its HMAC key are being removed (planned).
-  Teams should be set up only with the Bot Framework messaging endpoint in section 4.
+- **Inbound verification.** Every inbound activity needs an `Authorization: Bearer` JWT. Huf checks RS256 signature from the
+  Bot Framework JWKS, issuer `https://api.botframework.com`, audience equal to the App ID, expiry with 5 minutes of skew,
+  the `serviceUrl` claim equal to the activity's `serviceUrl`, and that the signing key endorses the channel. The activity
+  `channelId` must be `msteams`. Unknown key IDs trigger a limited refetch. If JWKS is unavailable and nothing is cached, Huf
+  fails closed. Any verification failure returns **HTTP 401** with no side effects (the Microsoft spec suggests 403 for a missing
+  endorsement; Huf does not implement that). Non-Teams channels (Web Chat, Direct Line) are rejected.
+- **Replay caveat.** The token is not bound to the request body (protocol-inherent). A captured token can be replayed with a different
+  body until it expires (about an hour).
+- **Tenant allow-list.** `channelData.tenant.id` must equal the Tenant ID or an allowed tenant ID. Otherwise HTTP 200 `{"ignored":"tenant"}`, no reply.
+- **Service URL allow-list.** Only `https://smba.trafficmanager.net/<region>/` is accepted (no IP literals, user info, ports,
+  redirects). Checked when a reference is saved and before every send. GCC (`smba.infra.gcc.teams.microsoft.com`) and GCC High / DoD
+  (`smba.infra.gov.teams.microsoft.us`, `smba.infra.dod.teams.microsoft.us`) hosts are **not supported** yet.
+- **Secrets.** The app password is write-only and never logged. The token cache key includes a hash of the secret.
+- **Conversation references** are scoped per Gateway.
+- **Legacy Outgoing Webhook.** A route for the old Teams Outgoing Webhook still exists in this build
+  (`huf/ai/tools/teams_webhook.py`) but is unsupported and being removed. Use only the Bot Framework endpoint from section 4.
 
 ## 12. Troubleshooting
 
@@ -155,24 +179,23 @@ Huf does not send Adaptive Cards yet, so the card-size limit does not apply.
 |---|---|---|
 | 401 on every inbound activity | App ID does not match the token audience. The manifest `botId` or the Gateway App ID differs from the Azure Bot. | Make the three IDs identical (section 6). |
 | 401 with "signature" or "unknown key" | JWKS not reachable, or clock skew over 5 minutes. | Check outbound HTTPS from the server and the server clock. |
-| 401 on serviceUrl | The `serviceUrl` claim does not match the activity, or the host is not on the allow-list. | Check that the Azure Bot endpoint is the Teams channel endpoint. Do not add custom proxies. |
-| 403 from inbound | Missing `msteams` channel endorsement, or the activity's tenant is not allowed. | Enable the Teams channel on the Azure Bot. Check the tenant ID and allowed tenant IDs. |
-| Token request fails (401 from login) | Wrong tenant ID, wrong or expired client secret (ID used instead of value), or app type mismatch. | Confirm the Tenant ID, create a new secret value, and update the App password. |
+| 401 on serviceUrl or channel | The `serviceUrl` claim does not match the activity, or the activity came from Web Chat / Direct Line instead of Teams. | Test from Teams, not Web Chat. Do not add custom proxies. |
+| 200 but no reply | Tenant not allowed (`ignored: tenant`), service URL not on the allow-list (`ignored: service_url`), or unmentioned channel message. | Check Tenant ID / allowed tenant IDs; @mention the bot. |
+| Token request fails (AADSTS code in the error) | Wrong tenant ID, wrong or expired client secret (ID used instead of value), or app type mismatch. | Confirm the Tenant ID, create a new secret value, and update the App password. |
 | Bot does not reply in a channel | Not @mentioned, or RSC not granted. | @mention the bot, or grant RSC consent. |
 | Bot does not reply in a 1:1 chat | No stored conversation reference yet. | Send a first message to the bot (section 7). |
 | Reply fails with 403 MessageWritesBlocked | The user blocked or uninstalled the bot. | Ask the user to reinstall or unblock it. |
 | Reply fails with 404 | Stale service URL or conversation ID. | Send a new message to the bot so a fresh reference is stored. |
-| Message rejected with 413 | Message above about 100 KB. | Shorten the reply. Huf splits long text (planned). |
+| Message rejected with 413 | Message above about 100 KB. | Huf truncates and splits long replies; a single part over 100 KB fails. |
 | Reply fails with 429, 412, 502 or 504 | Rate limit or transient Microsoft error. | Retries run automatically. Reduce burst traffic if it persists. |
 | No messages arrive after a secret change | Teams caches the registration for several minutes. | Wait, then re-test. |
 
 ## 13. Known limitations
 
-- No managed identity (UserAssignedMSI) bots.
-- No multi-tenant bots.
-- No sovereign clouds (GCC, GCC High, DoD, 21Vianet).
-- No proactive messaging before the user's first message. No creating new chats or channels.
-- No Adaptive Cards yet.
-- Files: personal chat only for outbound upload (section 9).
-- Live Azure tenant tests are not part of the automated test suite. Tests use recorded fixtures and fake
-  Bot Framework endpoints.
+- No managed identity (UserAssignedMSI) bots; no multi-tenant bots.
+- No sovereign clouds (GCC, GCC High, DoD, 21Vianet); their service URLs are rejected.
+- No file upload or consent flow; inbound files are not downloaded.
+- No typing indicator. No Adaptive Cards.
+- No proactive messaging before the user's first message; no creating new chats or channels.
+- Gated (unmentioned) channel messages still count as the "first message" for readiness.
+- Live Azure tenant tests are not part of the automated suite.
