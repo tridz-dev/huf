@@ -10,7 +10,7 @@ Mark portal navigation steps **verify against current Microsoft documentation** 
 
 - A Microsoft 365 test tenant (the "home" tenant) with at least: admin A, ordinary users U1 and U2,
   and a guest user G (external or B2B guest). Optionally a second tenant T2 with user X.
-- A Huf site on public HTTPS, Gateway with `direct_policy` = Open for the pilot (ADMIN_SETUP.md 3.3),
+- A Huf site on public HTTPS, Gateway with Gateway Access Entries for U1, U2 and G (`direct_policy` `Open` cannot be saved; ADMIN_SETUP.md 3.3),
   default agent that answers simple text, and one agent that uses a tool that touches records.
 - Huf users H1 (for U1) and H2 (for U2); H2 is an approver role member for execution approvals.
 - A team with a standard channel and a group chat containing U1 and U2.
@@ -34,13 +34,14 @@ time of test, bot/app version. Do not capture the client secret or the Bearer to
 
 | # | Action | Expected |
 |---|---|---|
-| I1 | U1 sends `connect`; open link logged in as H1; confirm | Page shows U1 and tenant; success; `status` shows H1 |
+| I1 | U1 sends `connect`; open link logged in as H1; confirm | Page shows tenant GUID, U1's id and the display name as untrusted; the page says a confirmation was sent; `status` still says not connected. A card "Did you just connect...?" arrives in U1's personal chat; U1 clicks Yes; the card is replaced and `status` shows H1 |
+| I1b | Repeat I1 but click No (or let it expire after 15 min) | Link Revoked/never active; `status` not connected |
 | I2 | Re-open the same link | Error "invalid or has expired" (single use) |
 | I3 | Wait 10+ minutes on a fresh link, then confirm | Same error |
-| I4 | Generate a link for U1 (do not confirm). Log in to Huf as H2 and confirm it | By design the token names the Teams person (U1) and the confirming Huf user becomes the linked user. Expected: H2 is linked to U1's Teams identity (U1 then runs as H2). Record this; it is residual risk R1 in SECURITY_AND_DATA.md. A Teams person already linked is not replaced |
+| I4 | Generate a link for U1. Log in to Huf as H2 and confirm it | The link is Pending and the card goes to U1, naming H2. U1 should click No; verify nothing is linked. Record what U1 sees; residual risk R1 in SECURITY_AND_DATA.md. A Teams person already linked is not replaced |
 | I5 | U1 asks a question before linking | Connect instructions, no agent run |
 | I6 | G (guest) messages the bot | "Guest and external Microsoft accounts are not supported" (if Teams provides the guest marker; record the real payload field) |
-| I7 | `connect` sent in a channel and group chat | "Open a personal chat with me and send connect.", no link posted |
+| I7 | `connect` sent in a channel and group chat; also an unlinked ordinary @mention question in a channel | "Open a personal chat with me and send connect.", no link posted in either case |
 | I8 | U1 `disconnect`; then ask a question | Confirmation text; next question gets connect instructions; link row `Revoked` |
 | I9 | Admin revokes via Teams people; disable H1 in Huf | Next message: "Your linked Huf account is disabled..." for the disabled case; no agent run |
 
@@ -52,7 +53,7 @@ time of test, bot/app version. Do not capture the client secret or the Bearer to
 | T2 | POST with a random `Bearer abc` | 401 |
 | T3 | POST with a valid-format token from another app (wrong audience) if obtainable | 401 |
 | T4 | Genuine activity but `serviceUrl` edited in body (replay) | 401 (`service_url_mismatch`) |
-| T5 | Remove U1's tenant from allowed list and set a different GUID in `allowed_tenants`; U1 sends a message | Event Rejected `tenant_not_allowed`; no reply; restore the list |
+| T5 | Remove U1's tenant from allowed list and set a different GUID in `allowed_tenants`; U1 sends a message, then `help`, then clicks an old card | Each: Event Rejected `tenant_not_allowed`; no reply; restore the list |
 | T6 | (Optional) T2/X tries to install or message the bot | Not able to use it (single-tenant); record how Teams/Entra behave |
 | T7 | Rotate the client secret in Entra, update Huf, restart workers | `token_acquisition` pass again; queued messages deliver |
 | T8 | Use a wrong secret | `token_acquisition` fail with "Microsoft rejected the app password" |
@@ -88,12 +89,12 @@ time of test, bot/app version. Do not capture the client secret or the Bearer to
 ## 6. Negative/edge checks to record
 
 Mention rendering (`<at>` removed from agent input), very long reply (Teams message size), Markdown
-rendering, behaviour with `direct_policy` at its default (expect Rejected "Sender is not approved"),
+rendering, behaviour with `direct_policy` at its default and no access entry (expect Rejected "Sender is not approved", no connect prompt: KNOWN_ISSUES.md D1),
 bot behaviour in a private or shared channel (unsupported: just record).
 
 ## 7. Sign-off
 
-Pass criteria: S1-S5, I1-I3, I5, I7-I8, T1-T5, C1-C3, C5, C8, A1-A3 pass; I4, I6, C6, C10, T6, A7 results
+Pass criteria: S1-S5, I1, I1b, I1-I3, I5, I7-I8, T1-T5, C1-C3, C5, C8, A1-A3 pass; I4, I6, C6, C10, T6, A7 results
 recorded and reviewed against SECURITY_AND_DATA.md. File issues for every deviation.
 
 ## 8. Rollback and teardown

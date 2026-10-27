@@ -11,9 +11,18 @@ The bot does not know which Huf account is yours until you connect it once.
 2. The bot replies with a link. Open it in a browser while logged in to Huf with **your own**
    account. The link works once and expires after 10 minutes. It is not sent again if you ask
    twice within 2 minutes; the same link is repeated.
-3. The page shows the Teams person and organisation and the Huf account you are logged in as.
-   Tick the acknowledgement and confirm. Then go back to Teams.
-4. Send `status` to check.
+3. The page shows the Microsoft organisation (tenant GUID), the Teams user id and the Huf account
+   you are logged in as. The Teams display name is shown only as secondary text, marked as chosen
+   by the other person; it proves nothing. Tick the acknowledgement and confirm.
+4. Confirming does **not** connect you yet. The link is created as Pending and Huf sends a card to
+   that Teams person's **personal chat** with the bot: "Did you just connect your Teams account to
+   Huf user <name>?" with **Yes, connect it** and **No**. Only the same Teams person clicking Yes
+   activates the link (the card is valid for 15 minutes). No revokes it. If you did not ask for
+   this, click No or ignore it.
+5. Send `status` to check.
+
+If Huf cannot send the card (the bot is not installed in that person's personal chat), the pending
+link is revoked and the page shows an error; install the app, then send `connect` again.
 
 If you are not connected and ask a normal question, the bot answers with the same connect
 instructions instead of running anything. From then on your requests run as **your** Huf user,
@@ -26,6 +35,9 @@ Things that stop a connection:
 - One Teams account can be linked to only one Huf user, and one Huf user to only one Teams account
   per organisation. The page tells you if it is already linked elsewhere.
 - Expired or already-used links show an error; send `connect` again.
+- Never open a connect link someone else sent you: opening and confirming it only starts a link, and the
+  Yes/No card goes to the Teams person named on the page, but check that organisation and user id are yours.
+- Guest accounts, and activities with no Entra object id or inconsistent tenant claims, are refused.
 - If your Huf account is disabled, the bot says so and asks you to contact an administrator.
 
 An administrator can also link you from the Teams people panel; you then do not need `connect`.
@@ -43,7 +55,8 @@ instantly and do not use an agent.
 | `disconnect` | any chat | Disconnects your Huf account from Teams |
 
 In a channel or group chat, `connect` and `status` do not do their job; the bot tells you to open a
-personal chat and send the word there. Links are never posted in channels.
+personal chat and send the word there. Links are never posted in channels or group chats. If you are
+not connected and ask a question in a room, the bot tells you to open a personal chat and send `connect`.
 
 You can also type the commands from the app's command list in Teams (help, connect, status,
 disconnect). Other text-based preferences (quiet hours, opt-out) do not exist yet.
@@ -85,7 +98,7 @@ your personal chat with **Approve** and **Reject**.
 - The card shows only kind, capability, reference and expiry.
 - Your click is checked against **your** Teams identity and your Huf permissions, not who the card was
   sent to. If you are not allowed, you see a refusal and nothing changes.
-- The first valid decision wins. A second click shows "already decided". After expiry you see
+- The first valid decision wins. A redelivered click on a decided or expired card gets the same "already decided"/"expired" answer. A second click shows "already decided". After expiry you see
   "This approval has expired."
 - If you have no connected identity or no personal chat, no card is sent; decide in the Huf web app.
 - After a decision the card is replaced with "Approved/Rejected by <name>".

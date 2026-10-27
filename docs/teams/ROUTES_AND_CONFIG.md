@@ -8,7 +8,7 @@ Verified from the code on branch `wp/teams-t15` (from `feat/teams-p0`). Contract
 | Route | Method | Auth | Purpose |
 |---|---|---|---|
 | `/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway_name=<name>` | POST (GET accepted) | Guest allowed; the Bot Framework bearer JWT is verified in `TeamsGatewayAdapter.verify_inbound` | Bot Framework messaging endpoint. 400 missing `gateway_name`, 404 unknown gateway, 403 disabled, 401 failed verification. Rate limit 100 requests / 60 s per `gateway_name` |
-| `/huf/link-account?p=teams&token=<token>` | browser (SPA page) | Huf login required | Self-link confirmation page. `p=teams` selects Teams wording. Calls `preview_teams_link` (GET) then `confirm_teams_link` (POST) |
+| `/huf/link-account?p=teams&token=<token>` | browser (SPA page) | Huf login required | Self-link confirmation page. `p=teams` selects Teams wording. Calls `preview_teams_link` (GET) then `confirm_teams_link` (POST), which creates a **Pending** link and queues a Yes/No card to the person's personal chat |
 | `/api/method/huf.ai.tools.teams_webhook.handle_teams_outgoing_webhook` | POST | HMAC, verified inside the handler | Legacy Teams Outgoing Webhook. Not part of this work, not extended; public channels only |
 
 The webhook route is on `EXEMPT_AUTH_ROUTES`. An `auth_hooks` entry (`exempt_gateway_webhook_auth`)
@@ -39,8 +39,8 @@ All are under `huf.ai.gateways.<module>.<function>`. "SM" = System Manager role.
 |---|---|---|
 | `teams_tenant.get_teams_settings(gateway)` | GET/POST | SM, or read on the Gateway |
 | `teams_tenant.save_teams_settings(gateway, allowed_tenants, bot_handle, app_package_version, private_output_policy, help_text_override)` | POST | SM, or write on the Gateway. Only provided fields change. Invalid GUID or unknown policy raises ValidationError |
-| `teams_identity.preview_teams_link(token)` | GET | Logged-in, enabled, non-Guest, non-Administrator user. Changes nothing |
-| `teams_identity.confirm_teams_link(token)` | POST | Same as above; token must verify and be unused |
+| `teams_identity.preview_teams_link(token)` | GET | Logged-in, enabled, non-Guest, non-Administrator user. Changes nothing. Returns `tenant_id` (show prominently), `external_id`, and `display_label_untrusted` (Teams display name, attacker-controllable; `person_label` is the same value kept for compatibility) |
+| `teams_identity.confirm_teams_link(token)` | POST | Same as above; token must verify and be unused. Returns `{linked: false, pending: true}` after queuing the Teams confirmation card; if the card cannot be queued the Pending row is revoked and a ValidationError is raised. A newer attempt for the same Teams person supersedes older Pending rows |
 | `teams_identity.list_teams_links(gateway)` | GET/POST | SM, or write on the Gateway. Up to 500 rows |
 | `teams_identity.link_teams_user(gateway, tenant_id, aad_object_id, user)` | POST | SM, or write on the Gateway. User must be enabled and not Guest |
 | `teams_identity.revoke_teams_link(name)` | POST | SM, or write on the link's Gateway |
@@ -68,9 +68,20 @@ creates a one-to-one chat with the known service URL. It never creates group cha
 Gateway hooks registered for provider `microsoft teams` (modules listed in
 `huf/ai/gateways/_registered.py`), in `pre_ingest_filter` order: 10 install/uninstall
 (`teams_refs`), 20 tenant allowlist (`teams_tenant`), 30 card actions (`teams_actions`),
-40 commands (`teams_help`). Also: `on_event_received` (reference upsert), `resolve_run_user` and
+40 commands (`teams_help`). Card actions of kind `idlink` (link confirmation, `teams_identity_confirm`) go through the card-action filter and its handler registry.
+
+Filter semantics (`hooks.call_filters`, used by `gateway_service.ingest`): filters run in ascending
+priority and evaluation **stops at the first filter that returns False**, so later filters (card
+actions, commands) never run for an event an earlier one rejected and cannot clear its reason. A
+filter that raises is treated as False (fail closed) and the reason becomes `filter_error` unless the
+filter set one. When a filter sets `frappe.flags.gateway_filter_reason` the event is stored as a
+Gateway Event with status Rejected and that reason (`tenant_not_allowed`, `filter_error`); with no
+reason (commands, installs of allowed tenants) the ingest returns `{"filtered": true}` and no event is
+created. Duplicate activity ids short-circuit before any filter runs. Also: `on_event_received` (reference upsert), `resolve_run_user` and
 `on_run_success` (`teams_identity`), `resolve_conversation_key` and `resolve_reply_target`
-(`teams_privacy`).
+(`teams_privacy`). The Teams adapter is built with the gateway name (`gateway_webhook` passes it
+when the adapter constructor accepts it), so conversation-reference lookups and outbox keys are
+scoped to that gateway.
 
 ## 4. Configuration
 
@@ -105,7 +116,7 @@ user; private routing uses `private_output_policy`).
   the user to open a private chat and send "hi".
 
 ### Constants (code, not settings)
-Token TTL for link 10 min; connect-prompt throttle 2 min; inbound clock skew 300 s; outbox attempts 6,
+Token TTL for link 10 min; connect-prompt throttle 2 min; link confirmation card session 15 min; inbound clock skew 300 s; outbox attempts 6,
 backoff 30 s, 2 min, 10 min, 30 min, 2 h (a valid `Retry-After` overrides, capped 6 h); claim lease 300 s;
 approval card TTL = approval expiry, else 24 h; `status` shows the last 5 runs.
 
@@ -127,7 +138,7 @@ approval card TTL = approval expiry, else 24 h; `status` shows the last 5 runs.
 - Outbound HTTPS only, no redirects followed, timeouts 5 s (metadata) / 10 s (connector):
   - `https://login.botframework.com/v1/.well-known/openidconfiguration` and the `jwks_uri` it returns (https required).
   - `https://login.microsoftonline.com/<tenant>/v2.0/.well-known/openid-configuration` (Entra-issued tokens) and `https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token` (scope `https://api.botframework.com/.default`).
-  - The activity `serviceUrl`, e.g. `https://smba.trafficmanager.net/<region>/`. Allowed host suffixes: `.botframework.com`, `.trafficmanager.net`, `.teams.microsoft.com`; https, port 443 only; IPs and encoded paths rejected.
+  - The activity `serviceUrl`, e.g. `https://smba.trafficmanager.net/<region>/`. serviceUrl allowlist: exactly `smba.trafficmanager.net`, or any host ending `.botframework.com` or `.teams.microsoft.com` (other `*.trafficmanager.net` hosts are refused); https, port 443 only; IPs and encoded paths rejected.
 - Inbound: Microsoft must reach the public HTTPS endpoint. Site `encryption_key` must exist (it signs link tokens).
 - Commercial global cloud only; national clouds are not supported.
 
@@ -146,4 +157,18 @@ System Manager. `Gateway`, `Gateway Event` and `Integration Settings` are System
 | Event Rejected `tenant_not_allowed` | `allowed_tenants` / home tenant |
 | Rejected "Sender is not approved" | `direct_policy` / Access Entries (ADMIN_SETUP.md 3.3) |
 | User asked to connect every time | no Linked row; check "Teams people" |
-| Answers never arrive | `outbox` check: Pending (workers/scheduler), Failed (permanent 4xx), Dead (6 attempts exhausted) |
+| Event Rejected `filter_error` | A Teams filter raised; the event is rejected (fail closed). Check the Error Log |
+| Answers never arrive | `outbox` check: Pending (workers/scheduler; also transient failures incl. transport errors/timeouts waiting for backoff), Failed (permanent 4xx; not retried), Dead (6 attempts exhausted) |
+| Link stays Pending | The person has not clicked Yes in their personal chat (15 min), or the card was not delivered; send `connect` again |
+
+Outbox delivery (`teams_outbox`): the default sender builds a bot token provider from the row's
+gateway credentials and posts with `Authorization: Bearer`. Transient failures (HTTP 0 transport
+errors, 408, 429, 5xx, timeouts) go back to Pending with backoff up to 6 attempts, then Dead; other
+errors mark the row Failed. A POST that succeeded but timed out may be retried, so a duplicate message is
+possible (the Bot Connector has no idempotency key).
+Reply idempotency: the key uses the inbound activity id plus text hash when the reply targets a real
+inbound activity; otherwise (personal chats, ad-hoc sends) each reply gets its own nonce, so identical
+text sent twice is delivered twice and only a retry of the same reply object is deduped. Delivered card
+activity ids are stored on the Teams Action Session (`card_activity_id`) when the outbox payload names the
+session. A redelivered card click returns a read-only invoke body (decided/expired/neutral message)
+instead of the generic JSON.

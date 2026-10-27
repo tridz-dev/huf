@@ -29,7 +29,7 @@ Official documentation (from SPEC section 25):
    drained by the `short` queue workers (message handling uses the `default` queue) and a once-a-minute scheduler job (ROUTES_AND_CONFIG.md).
 4. The Python package `PyJWT>=2.8.0` installed (declared in `pyproject.toml`).
 5. Outbound HTTPS from the Huf server to `login.botframework.com`, `login.microsoftonline.com`
-   and the Bot Connector host Teams sends in each activity (`smba.trafficmanager.net`).
+   and the Bot Connector host Teams sends in each activity (allowed: exactly `smba.trafficmanager.net`, `*.botframework.com`, `*.teams.microsoft.com`).
 6. A Huf user with the System Manager role (or write permission on the Gateway) to do the setup.
 7. An agent (or flow) to answer, and a Gateway "Run as user" (`execution_user`). Huf requires
    this field to be set even though Teams people run as their own linked Huf user.
@@ -64,8 +64,11 @@ Official documentation (from SPEC section 25):
    object id. With the defaults a person who is not on an allow list gets a Rejected event
    ("Sender is not approved for this gateway") for ordinary messages. The four commands
    (`help`, `connect`, `status`, `disconnect`) are answered before admission, so they work
-   regardless. For a pilot, set `direct_policy` to `Open` or create Gateway Access Entries.
-   **This interaction is not described in the spec or plan; confirm it on the bench.**
+   regardless. **`Open` cannot be saved today:** `Gateway.validate` throws "Public direct-message
+   gateways are not available in this release" for `direct_policy = Open`. For a pilot create Gateway
+   Access Entries for the pilot people (or use Pairing). Because admission runs before identity, an
+   unlinked person who is not on the list is told "not approved" and never sees the connect prompt
+   (KNOWN_ISSUES.md D1).
 4. Enable the Gateway (`is_enabled`). A disabled gateway returns HTTP 403 to Microsoft.
 
 Fields `unmapped_policy` ("When a person is not linked") and `private_reply_policy` exist on the
@@ -108,7 +111,9 @@ define `verify_url`; the Teams adapter does not), so use Teams or the Azure "Tes
 Teams Gateway Settings `allowed_tenants`: one Entra tenant GUID per line (commas and semicolons also
 accepted). Leave empty to allow **only the home tenant** (the `tenant_id` credential). A non-GUID
 entry is rejected on save. Events whose tenant is missing, unparseable or not allowed are dropped
-with reason `tenant_not_allowed`. Because slice 1 supports a single-tenant bot only, entries other
+with reason `tenant_not_allowed`. The check covers ordinary messages, commands (`help`, `connect`,
+`status`, `disconnect`), install/uninstall events and card actions. A rejected event is kept as a
+Gateway Event with status Rejected and the reason, and nothing is sent back to that tenant. Because slice 1 supports a single-tenant bot only, entries other
 than the home tenant are not expected to work; see UNSUPPORTED.md (multi-tenant).
 
 ## 6. App package: download and upload
@@ -136,11 +141,13 @@ than the home tenant are not expected to work; see UNSUPPORTED.md (multi-tenant)
 1. Install the app for a small test group first (admin policy or personal upload).
 2. Each pilot user opens a personal chat with the bot and sends `help`. Expected: a reply with the
    first-contact text and "Send connect to link your account." Note: the four commands are answered
-   by a filter before a Gateway Event row is created, so `help` does **not** make the wizard's
-   `last_inbound` line turn green (it reads Gateway Event rows). The wizard text that says to send
-   "help" for that purpose does not match the code. To see `last_inbound`, send an ordinary
-   non-command message (for example "hello"); it creates a Gateway Event even if admission later rejects it.
-3. The user sends `connect`, opens the link while logged in to Huf, and confirms (USER_HELP.md).
+   by a filter before a Gateway Event row is created, so `help` does **not** change `last_inbound`
+   (it reads Gateway Event rows), and wizard step 7 wording that suggests `help` is wrong (KNOWN_ISSUES.md).
+   To see `last_inbound`, send an ordinary non-command message (for example "hello"); it creates a
+   Gateway Event even if admission later rejects it.
+3. The user sends `connect`, opens the link while logged in to Huf, and confirms (USER_HELP.md). The
+   link then stays Pending until the person clicks **Yes** on the confirmation card Huf sends to their
+   personal chat; only then is it Linked. An admin link from "Teams people" skips the card.
    Alternatively an admin links a person in "Teams people" by tenant GUID, Entra object id and Huf user.
 4. In the diagnostics panel `conversation_references` shows an installed personal conversation once Teams
    has sent an install event or the user has sent an ordinary message (commands alone do not create the
