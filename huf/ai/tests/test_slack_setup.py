@@ -176,7 +176,7 @@ def test_verify_all_ok(env):
 	by_id = {c["id"]: c for c in checks}
 	assert by_id["direct_policy"]["status"] == "warn" and by_id["direct_policy"]["informational"]
 	assert set(by_id(checks)) == {"token_present", "token_kind", "auth_test", "scopes",
-		"signing_secret", "request_url", "slack_connect"}
+		"signing_secret", "request_url", "slack_connect", "direct_policy"}
 	assert "Acme" in by_id(checks)["auth_test"]["detail"]
 
 
