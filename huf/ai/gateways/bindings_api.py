@@ -54,7 +54,12 @@ def _clean(value: Any) -> str:
 
 
 def _parse(value: Any) -> Any:
-	return json.loads(value) if isinstance(value, str) else value
+	if not isinstance(value, str):
+		return value
+	try:
+		return json.loads(value)
+	except ValueError:
+		return None
 
 
 # ---- validation ------------------------------------------------------------
