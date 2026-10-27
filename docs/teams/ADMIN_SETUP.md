@@ -58,17 +58,17 @@ Official documentation (from SPEC section 25):
 
    The adapter refuses to start if any is missing. Credentials are never shown again after saving.
 2. Set the Gateway "Run as user", a default route (default agent or flow) or a Gateway Binding.
-3. Admission policies. The generic Gateway policies still apply to Teams: `direct_policy`
-   (default `Allow list`), `room_policy` (default `Allow list`), `room_sender_policy` (default
-   `Allow list`) and `mention_required` (default on). The sender id Huf checks is the person's Entra
-   object id. With the defaults a person who is not on an allow list gets a Rejected event
-   ("Sender is not approved for this gateway") for ordinary messages. The four commands
-   (`help`, `connect`, `status`, `disconnect`) are answered before admission, so they work
-   regardless. **`Open` cannot be saved today:** `Gateway.validate` throws "Public direct-message
-   gateways are not available in this release" for `direct_policy = Open`. For a pilot create Gateway
-   Access Entries for the pilot people (or use Pairing). Because admission runs before identity, an
-   unlinked person who is not on the list is told "not approved" and never sees the connect prompt
-   (KNOWN_ISSUES.md D1).
+3. Admission policies. Set the Gateway **access policy (`direct_policy`) to `Open`**. This is allowed
+   for Microsoft Teams (and Slack) only, and is the recommended setting: anyone who messages the bot
+   privately is asked to connect their Huf account first, and nothing runs until they do, so no access
+   list entries are needed. New Teams gateways created in the UI start on `Open`. Diagnostics shows an
+   Access policy check that warns when it is not `Open`. The other generic policies still apply:
+   `room_policy` (default `Allow list`), `room_sender_policy` (default `Allow list`) and
+   `mention_required` (default on); `Open` does not apply to rooms. The sender id Huf checks is the
+   person's Entra object id. If you choose `Allow list` or `Pairing` instead, a person who is not
+   approved gets a Rejected event ("Sender is not approved for this gateway") and never sees the
+   connect prompt (KNOWN_ISSUES.md D1). The four commands (`help`, `connect`, `status`, `disconnect`)
+   are answered before admission, so they work regardless.
 4. Enable the Gateway (`is_enabled`). A disabled gateway returns HTTP 403 to Microsoft.
 
 Fields `unmapped_policy` ("When a person is not linked") and `private_reply_policy` exist on the
