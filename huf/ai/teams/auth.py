@@ -29,21 +29,10 @@ is kept (up to 7 days) when a refresh fails. An unknown ``kid`` triggers at most
 outside the module lock behind a single-flight guard: one thread fetches, others keep verifying with cached
 keys (stale ones during a TTL refresh) or wait at most ``FETCH_WAIT_SECONDS``. With no cached keys and a failing JWKS/OpenID endpoint the request is rejected.
 
-Log lines carry reason codes only; tokens, headers and bodies are never logged. A rejection at the
-issuer/audience pre-check additionally logs ONE structured diagnostic line built from the UNVERIFIED
-token: issuer kind (botframework/entra_v1/entra_v2/other), ``ver``, and booleans (aud/azp/appid equal the
-app id, tid equals the tenant id), plus the spelling of the serviceUrl claim. Never raw ids or the token.
-Every rejection is also counted (reason code only) in the global ``auth`` bucket of the Teams drop record
-(``readiness.record_drop``) so operators see silent 401s in readiness / Verify connection.
-
-OPT-IN Entra issuers (UNVERIFIED against a real tenant): Microsoft's newer SDKs also accept Entra-issued
-inbound tokens. With site config ``teams_accept_entra_tokens = 1`` (default off) a token whose ``iss`` is
-``https://login.microsoftonline.com/<tenant_id>/v2.0`` or ``https://sts.windows.net/<tenant_id>/`` (the
-Gateway's configured ``tenant_id``, a GUID) is accepted when it is signed by a key from the tenant-pinned
-Entra JWKS ``https://login.microsoftonline.com/<tenant_id>/discovery/v2.0/keys`` (https, that host only,
-same size/redirect/timeout limits, cache, single-flight and pre-check structure as the Bot Framework
-JWKS), ``aud`` == app id, ``tid`` == tenant id, and all other checks pass (channel pin, serviceUrl claim
-when present, exp/nbf). Entra keys carry no channel ``endorsements``; the channelId pin applies instead.
+Log lines carry reason codes only; tokens, headers and bodies are never logged. Every rejection is counted
+(reason code only) in the global ``auth`` bucket of ``readiness.record_drop``. Issuer/audience pre-check
+rejections also log one token-shape line, and tenant-pinned Entra issuers are OPT-IN (UNVERIFIED, default
+off): both live in ``huf.ai.teams.auth_entra``.
 """
 
 from __future__ import annotations
@@ -58,18 +47,27 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from huf.ai.gateway_adapters.types import GatewayInboundRequest
+from huf.ai.teams.auth_entra import (  # noqa: F401 (re-exported for callers/tests)
+	ENTRA_FLAG,
+	ENTRA_HOST,
+	ENTRA_ISSUERS,
+	ENTRA_JWKS_URL,
+	_entra_cache_key,
+	_entra_issuers,
+	_entra_jwks_url,
+	_entra_source,
+	_entra_states,
+	_fetch_entra_keys,
+	_log_claim_shape,
+	_set_test_entra_jwks_url,
+	_tenant,
+)
 
 logger = logging.getLogger("huf.teams.auth")
 
 BOT_FRAMEWORK_OPENID_URL = "https://login.botframework.com/v1/.well-known/openidconfiguration"
 BOT_FRAMEWORK_HOST = "login.botframework.com"
 BOT_FRAMEWORK_ISSUER = "https://api.botframework.com"
-ENTRA_HOST = "login.microsoftonline.com"
-ENTRA_JWKS_URL = "https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys"
-ENTRA_ISSUERS = ("https://login.microsoftonline.com/{tenant}/v2.0", "https://sts.windows.net/{tenant}/")
-ENTRA_FLAG = "teams_accept_entra_tokens"
-_GUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
-
 CLOCK_SKEW_SECONDS = 300
 KEY_TTL_SECONDS = 24 * 3600
 STALE_KEY_MAX_SECONDS = 7 * 24 * 3600
@@ -87,23 +85,18 @@ _CACHE_KEY_PREFIX = "huf:teams:botframework_jwks:"
 
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
-# Test hooks. Only set by ``_set_test_openid_url`` / ``_set_test_entra_jwks_url`` (called from tests);
-# nothing reads request data into them.
+# Test hook. Only set by ``_set_test_openid_url`` (called from tests); nothing reads request data into it.
 _test_openid_url: str | None = None
-_test_entra_jwks_url: str | None = None  # may contain ``{tenant}``
 
 _lock = threading.RLock()
+# "inflight" holds a threading.Event while one thread fetches (single-flight).
 _state: dict[str, Any] = {
 	"keys": None,
 	"fetched_at": 0.0,
 	"last_forced": 0.0,
 	"last_failure": 0.0,
-	"inflight": None,  # threading.Event while one thread fetches (single-flight)
+	"inflight": None,
 }
-
-
-# One key source per tenant for the opt-in Entra path; same state shape as ``_state``.
-_entra_states: dict[str, dict[str, Any]] = {}
 
 
 def _new_state() -> dict[str, Any]:
@@ -126,19 +119,6 @@ def _set_test_openid_url(url: str | None) -> None:
 			raise ValueError("test OpenID URL must be a loopback address")  # noqa: TRY003
 	with _lock:
 		_test_openid_url = url
-		_reset_cache()
-
-
-def _set_test_entra_jwks_url(url: str | None) -> None:
-	"""TEST ONLY: loopback Entra JWKS URL (``{tenant}`` placeholder allowed). ``None`` restores production."""
-	global _test_entra_jwks_url
-	if url is not None:
-		parts = urlsplit(url.replace("{tenant}", "t"))
-		if parts.scheme not in ("http", "https") or (parts.hostname or "") not in _LOOPBACK_HOSTS:
-			raise ValueError("test Entra JWKS URL must be a loopback address")  # noqa: TRY003
-	with _lock:
-		_reset_cache()  # drops shared entries under the OLD url, then under the new one
-		_test_entra_jwks_url = url
 		_reset_cache()
 
 
@@ -219,15 +199,6 @@ def _fetch_keys() -> dict[str, dict[str, Any]]:
 	return _parse_jwks(_get_json(jwks_uri))
 
 
-def _entra_jwks_url(tenant: str) -> str:
-	return (_test_entra_jwks_url or ENTRA_JWKS_URL).replace("{tenant}", tenant)
-
-
-def _fetch_entra_keys(tenant: str) -> dict[str, dict[str, Any]]:
-	"""Tenant-pinned Entra JWKS (no discovery hop: the URL is fixed and pinned to ``ENTRA_HOST``)."""
-	return _parse_jwks(_get_json(_entra_jwks_url(tenant), ENTRA_HOST, bool(_test_entra_jwks_url)))
-
-
 def _parse_jwks(jwks: Any) -> dict[str, dict[str, Any]]:
 	entries = jwks.get("keys") if isinstance(jwks, dict) else None
 	if not isinstance(entries, list):
@@ -244,18 +215,6 @@ def _parse_jwks(jwks: Any) -> dict[str, dict[str, Any]]:
 def _bf_source() -> dict[str, Any]:
 	# ``_fetch_keys`` is looked up at call time so tests can patch it.
 	return {"state": _state, "cache_key": _cache_key(), "fetch": lambda: _fetch_keys()}
-
-
-def _entra_cache_key(tenant: str) -> str:
-	import hashlib
-
-	return _CACHE_KEY_PREFIX + "entra:" + hashlib.sha256(_entra_jwks_url(tenant).encode()).hexdigest()[:16]
-
-
-def _entra_source(tenant: str) -> dict[str, Any]:
-	with _lock:
-		state = _entra_states.setdefault(tenant, _new_state())
-	return {"state": state, "cache_key": _entra_cache_key(tenant), "fetch": lambda: _fetch_entra_keys(tenant)}
 
 
 def _load_shared_cache(src: dict[str, Any]) -> None:
@@ -358,27 +317,6 @@ def _get_key(kid: str, src: dict[str, Any] | None = None) -> dict[str, Any] | No
 # -- validation --------------------------------------------------------------------------------------
 
 
-def _entra_enabled() -> bool:
-	try:
-		import frappe
-
-		return bool(frappe.conf.get(ENTRA_FLAG))
-	except Exception:  # noqa: BLE001
-		return False
-
-
-def _tenant(credentials: Mapping[str, str]) -> str:
-	tenant = str((credentials or {}).get("tenant_id") or "").strip().lower()
-	return tenant if _GUID_RE.fullmatch(tenant) else ""
-
-
-def _entra_issuers(credentials: Mapping[str, str]) -> tuple[str, ...]:
-	tenant = _tenant(credentials)
-	if not tenant or not _entra_enabled():
-		return ()
-	return tuple(i.format(tenant=tenant) for i in ENTRA_ISSUERS)
-
-
 def _allowed_issuers(credentials: Mapping[str, str]) -> tuple[str, ...]:
 	"""The only place that decides accepted issuers: Bot Framework, plus tenant-pinned Entra when opted in."""
 	return (BOT_FRAMEWORK_ISSUER, *_entra_issuers(credentials))
@@ -407,41 +345,6 @@ def _wall_clock() -> float:
 	from datetime import UTC, datetime
 
 	return datetime.now(UTC).timestamp()
-
-
-def _issuer_kind(iss: Any) -> str:
-	if iss == BOT_FRAMEWORK_ISSUER:
-		return "botframework"
-	if isinstance(iss, str) and iss.startswith("https://sts.windows.net/"):
-		return "entra_v1"
-	if isinstance(iss, str) and iss.startswith("https://login.microsoftonline.com/"):
-		return "entra_v2"
-	return "other"
-
-
-def _log_claim_shape(reason: str, claims: Mapping[str, Any], app_id: str, tenant: str) -> None:
-	"""ONE structured line describing the UNVERIFIED token shape. Booleans and enums only, never ids."""
-	aud = claims.get("aud")
-	auds = aud if isinstance(aud, list) else [aud]
-	iss = claims.get("iss")
-	claim_names = [k for k in claims if isinstance(k, str) and k.lower() == "serviceurl"]
-	ver = claims.get("ver")
-	logger.warning(
-		"Teams inbound token shape: reason=%s iss_kind=%s iss_tenant_match=%s aud_is_app_id=%s ver=%s "
-		"azp_is_app_id=%s appid_is_app_id=%s tid_is_tenant=%s serviceurl_claim=%s entra_enabled=%s",
-		reason,
-		_issuer_kind(iss),
-		bool(tenant) and isinstance(iss, str) and tenant in iss.lower(),
-		app_id in auds,
-		ver if ver in ("1.0", "2.0") else ("absent" if ver is None else "other"),
-		claims.get("azp") == app_id,
-		claims.get("appid") == app_id,
-		bool(tenant) and str(claims.get("tid") or "").lower() == tenant,
-		claim_names[0]
-		if len(claim_names) == 1 and claim_names[0] in ("serviceUrl", "serviceurl")
-		else ("absent" if not claim_names else "other"),
-		_entra_enabled(),
-	)
 
 
 def _precheck(
