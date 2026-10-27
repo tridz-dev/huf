@@ -155,6 +155,11 @@ Connect your agents to inbound and outbound communication channels:
 - Setup, troubleshooting, known gaps and a live test checklist: `docs/gateways/telegram-runbook.md`; cockpit design: `docs/gateways/telegram-admin-cockpit.md`
 - **Event-Driven Messaging** — Inbound messages trigger agent runs; responses route back to the original channel automatically
 
+#### Microsoft Teams
+
+- Bot Framework gateway (single-tenant) for personal, group chat and channel conversations, with mention-gated channel replies
+- Setup, Azure Bot steps, troubleshooting and known limitations: `docs/gateways/teams.md`
+
 ### Knowledge Grounding
 
 Ground AI responses in real business knowledge and structured databases:
