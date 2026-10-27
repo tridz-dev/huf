@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Check, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import type { CreatedApiKey } from '@/services/developerApi';
+import { copyText } from '@/lib/clipboard';
 
 interface ApiKeyCreatedDialogProps {
   apiKey: CreatedApiKey | null;
@@ -18,10 +19,7 @@ export function ApiKeyCreatedDialog({ apiKey, onClose }: ApiKeyCreatedDialogProp
       return;
     }
     try {
-      if (!navigator?.clipboard) {
-        throw new Error('Clipboard API not available');
-      }
-      await navigator.clipboard.writeText(apiKey.raw_secret);
+      if (!(await copyText(apiKey.raw_secret))) throw new Error('Copy failed');
       setCopied(true);
       toast.success('Key copied to clipboard');
     } catch (error) {

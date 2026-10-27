@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, Copy, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { copyText } from '@/lib/clipboard';
 
 /** Opens WhatsApp Manager's template page; the account ID is shown because the link cannot jump to it directly. */
 export function ManagerLink({ url, businessId, showId = true }: { url?: string; businessId?: string; showId?: boolean }) {
@@ -8,13 +9,9 @@ export function ManagerLink({ url, businessId, showId = true }: { url?: string; 
   if (!url) return null;
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(businessId ?? '');
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setCopied(false);
-    }
+    if (!(await copyText(businessId ?? ''))) return;
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
   return (

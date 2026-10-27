@@ -34,6 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { copyText } from '@/lib/clipboard';
 
 /** One row of the Overview / Tokens & Cost definition list. */
 function DefinitionRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
@@ -97,7 +98,7 @@ function CopyableTextPanel({
   const handleCopy = async () => {
     if (!content) return;
     try {
-      await navigator.clipboard.writeText(content);
+      if (!(await copyText(content))) throw new Error('Copy failed');
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch (error) {
