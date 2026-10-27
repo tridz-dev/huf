@@ -774,3 +774,144 @@ export const listMessageLog = (gatewayName: string, query: MessageLogQuery = {})
 
 export const listMessageLogFilters = (gatewayName: string) =>
   invoke<MessageLogFilterOptions>('list_message_log_filters', { gateway_name: gatewayName }, 'get');
+
+// ---- Broadcast ------------------------------------------------------------
+
+export type BroadcastStatus = 'Draft' | 'Queued' | 'Running' | 'Paused' | 'Completed' | 'Cancelled' | 'Failed';
+export type BroadcastRecipientStatus =
+  'queued' | 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | 'deferred' | 'unknown' | 'skipped';
+
+export interface Broadcast {
+  name: string;
+  title: string;
+  status: BroadcastStatus;
+  pause_reason?: string | null;
+  gateway: string;
+  template?: string;
+  template_name?: string;
+  language_code?: string;
+  category?: string;
+  consent_source?: string | null;
+  consent_attested?: number;
+  max_recipients?: number | null;
+  mps?: number | null;
+  started_by?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  creation?: string;
+  total: number;
+  queued: number;
+  sending: number;
+  sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+  deferred: number;
+  unknown: number;
+  skipped: number;
+}
+
+export interface BroadcastRecipient {
+  name: string;
+  recipient: string;
+  status: BroadcastRecipientStatus;
+  skip_reason?: string | null;
+  error_code?: number | null;
+  error_message?: string | null;
+  attempts?: number;
+  sent_at?: string | null;
+  delivered_at?: string | null;
+  read_at?: string | null;
+  failed_at?: string | null;
+}
+
+export interface BroadcastPreview {
+  recipients: number;
+  queued: number;
+  skipped: number;
+  category?: string | null;
+  template_status?: string | null;
+  within_limit: boolean | null;
+  remaining_24h: number | null;
+  warnings: string[];
+  blocking: string[];
+  cost?: {
+    currency: string;
+    total: number | null;
+    by_country: Record<string, { count: number; rate: number | null; subtotal: number | null }>;
+    basis?: string;
+    disclaimer?: string;
+  } | null;
+  confirm_token?: string | null;
+}
+
+export interface BroadcastRecipientInput {
+  recipient: string;
+  params?: Record<string, unknown>;
+  consent_source?: string;
+  consent_at?: string;
+}
+
+export interface AddRecipientsResult {
+  added: number;
+  skipped: { recipient: string; reason: string }[];
+  invalid: (string | { recipient?: string; reason?: string })[];
+}
+
+export interface CreateBroadcastInput {
+  gateway: string;
+  template: string;
+  title: string;
+  language_code?: string;
+  body_params?: unknown;
+  header_params?: unknown;
+  button_params?: unknown;
+  consent_source?: string;
+  max_recipients?: number;
+  mps?: number;
+}
+
+export const createBroadcast = (input: CreateBroadcastInput) =>
+  invoke<{ broadcast: Broadcast | string }>(
+    'create_broadcast',
+    {
+      ...input,
+      body_params: input.body_params === undefined ? undefined : JSON.stringify(input.body_params),
+      header_params: input.header_params === undefined ? undefined : JSON.stringify(input.header_params),
+      button_params: input.button_params === undefined ? undefined : JSON.stringify(input.button_params),
+    },
+    'post',
+  );
+
+export const addBroadcastRecipients = (broadcast: string, opts: { recipients?: BroadcastRecipientInput[]; csvText?: string }) =>
+  invoke<AddRecipientsResult>(
+    'add_broadcast_recipients',
+    {
+      broadcast,
+      ...(opts.recipients ? { recipients: JSON.stringify(opts.recipients) } : {}),
+      ...(opts.csvText !== undefined ? { csv_text: opts.csvText } : {}),
+    },
+    'post',
+  );
+
+export const attestBroadcastConsent = (broadcast: string, consentSource: string) =>
+  invoke<{ broadcast?: Broadcast }>('attest_broadcast_consent', { broadcast, consent_source: consentSource }, 'post');
+
+export const previewBroadcast = (broadcast: string) =>
+  invoke<{ preview: BroadcastPreview } & Partial<BroadcastPreview>>('preview_broadcast', { broadcast }, 'get');
+
+export const startBroadcast = (broadcast: string, confirmCount: string | number) =>
+  invoke<{ broadcast?: Broadcast }>('start_broadcast', { broadcast, confirm_count: String(confirmCount) }, 'post');
+
+export const pauseBroadcast = (broadcast: string) => invoke<{ broadcast?: Broadcast }>('pause_broadcast', { broadcast }, 'post');
+export const resumeBroadcast = (broadcast: string) => invoke<{ broadcast?: Broadcast }>('resume_broadcast', { broadcast }, 'post');
+export const cancelBroadcast = (broadcast: string) => invoke<{ broadcast?: Broadcast }>('cancel_broadcast', { broadcast }, 'post');
+export const pauseAllBroadcasts = (gateway: string) => invoke<{ paused?: number }>('pause_all_broadcasts', { gateway }, 'post');
+
+export const listBroadcasts = (opts: { gateway?: string; status?: string; limit?: number; offset?: number } = {}) =>
+  invoke<{ items: Broadcast[]; total?: number }>('list_broadcasts', opts, 'get');
+
+export const getBroadcast = (broadcast: string) => invoke<{ broadcast: Broadcast }>('get_broadcast', { broadcast }, 'get');
+
+export const listBroadcastRecipients = (broadcast: string, opts: { status?: string; limit?: number; offset?: number } = {}) =>
+  invoke<{ items: BroadcastRecipient[]; total?: number }>('list_broadcast_recipients', { broadcast, ...opts }, 'get');
