@@ -36,6 +36,7 @@ MAX_ATTEMPTS = 5
 PER_USER_LIMIT_CODE = 131049
 PER_USER_LIMIT_REASON = "per_user_marketing_limit"
 GATEWAY_DOWN_DEFER_SECONDS = 300
+AUTH_DEFER_SECONDS = 300
 
 OUTCOMES = ("sent", "failed", "deferred", "unknown", "skipped", "lost_claim")
 # pre-POST refusals (policy / validation) from the bridge that mean "do not message this contact"
@@ -344,6 +345,15 @@ def _after_bridge_error(name: str, attempts: int, payload: dict[str, Any], gatew
 			)
 		except Exception:
 			frappe.log_error(title="WhatsApp broadcast marketing-stop consent failed", message=frappe.get_traceback())
+
+	if cls.get("kind") == "auth":
+		# an expired/invalid token fails every recipient the same way: pause, and keep the row sendable after the
+		# token is fixed (the attempt did not reach the recipient, so it does not count)
+		frappe.flags.broadcast_pause = f"meta_error_{ecode or 190}"
+		_write(
+			name, status="deferred", attempts=max(attempts - 1, 0), next_attempt_at=_later(AUTH_DEFER_SECONDS), **common
+		)
+		return "deferred"
 
 	if errors.is_pause_signal(ecode):
 		frappe.flags.broadcast_pause = f"meta_error_{ecode}"

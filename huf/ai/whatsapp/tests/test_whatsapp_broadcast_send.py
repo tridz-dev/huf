@@ -188,6 +188,18 @@ class TestErrors(_Base):
 		self.assertEqual(bs.send_one(ROW), "failed")
 		self.assertEqual(bs.frappe.flags.broadcast_pause, "meta_error_135000")
 
+	def test_expired_token_pauses_and_keeps_the_row_sendable(self):
+		self.post.side_effect = self._graph_error(190, "Authentication Error")
+		with patch.object(bs, "_later", side_effect=lambda s: ("later", s)):
+			self.assertEqual(bs.send_one(ROW), "deferred")
+		r = self.store.row
+		self.assertEqual((r["status"], r["error_code"]), ("deferred", 190))
+		self.assertEqual(r["attempts"], 0)  # the attempt never reached the recipient
+		self.assertEqual(bs.frappe.flags.broadcast_pause, "meta_error_190")
+		# after the token is fixed the same row sends
+		self.post.side_effect = None
+		self.assertEqual(bs.send_one(ROW), "sent")
+
 	def test_policy_refusal_before_post_fails_not_unknown(self):
 		self.post.side_effect = bridge.BridgeError({"success": False, "error": "validation_failed", "message": "bad"})
 		self.assertEqual(bs.send_one(ROW), "failed")
