@@ -770,6 +770,12 @@ def process_gateway_event(event_name: str) -> dict:
             attachment_note = _describe_attachments(event.raw_payload)
             prompt = f"{attachment_note}\n{event.message_text}" if attachment_note else event.message_text
             prompt = gw_hooks.call_chain(gw_hooks.BUILD_PROMPT, prompt, gateway, event)
+            run_files = None
+            provided = gw_hooks.call_first(gw_hooks.BUILD_FILES, gateway, event)
+            if isinstance(provided, dict):
+                if provided.get("note"):
+                    prompt = f"{provided['note']}\n{prompt}"
+                run_files = provided.get("files") or None
 
             result = run_agent_sync(
                 agent_name=event.target_agent,
@@ -779,6 +785,7 @@ def process_gateway_event(event_name: str) -> dict:
                 or event.thread_id or event.conversation_id or event.sender_id,
                 now=True,
                 client_idempotency_key=f"gw:{event.name}",
+                files=run_files,
             )
             response = result.get("response") if isinstance(result, dict) else None
             if not response or not str(response).strip():

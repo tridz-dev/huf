@@ -12,6 +12,8 @@ Hook names and signatures (``kind`` is ``"agent"`` or ``"flow"``):
 - ``resolve_run_user(gateway, event) -> user | None``
 - ``resolve_conversation_key(gateway, event) -> str | None``
 - ``build_prompt(gateway, event, text) -> text`` (chain)
+- ``build_files(gateway, event) -> {"note": str, "files": [file dict]} | None``: optional; called with
+  ``call_first``. ``note`` is prepended to the prompt; ``files`` go to the agent run (images are shown to the model).
 - ``resolve_reply_target(gateway, event, reply_text) -> str | None``: optional;
   called with ``call_first``. A returned string replaces the conversation id
   the reply is sent to (applied in memory on the event only, not persisted).
@@ -39,6 +41,7 @@ PRE_INGEST_FILTER = "pre_ingest_filter"
 RESOLVE_RUN_USER = "resolve_run_user"
 RESOLVE_CONVERSATION_KEY = "resolve_conversation_key"
 BUILD_PROMPT = "build_prompt"
+BUILD_FILES = "build_files"
 RESOLVE_REPLY_TARGET = "resolve_reply_target"
 ON_RUN_START = "on_run_start"
 ON_RUN_SUCCESS = "on_run_success"
