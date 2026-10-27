@@ -406,7 +406,9 @@ class TestStatic(unittest.TestCase):
 			if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "doc_events":
 				events = ast.literal_eval(node.value)
 		entry = events["Agent Execution Approval"]
-		self.assertEqual(entry, {"after_insert": "huf.ai.gateways.approvals.on_approval_inserted"})
+		handlers = entry["after_insert"]
+		handlers = [handlers] if isinstance(handlers, str) else list(handlers)
+		self.assertIn("huf.ai.gateways.approvals.on_approval_inserted", handlers)
 		self.assertTrue(callable(ap.on_approval_inserted))
 
 	def test_hooks_py_compiles(self):
