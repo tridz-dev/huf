@@ -4,12 +4,13 @@ replaced only while the module is imported, then removed (no leaked stubs)."""
 from __future__ import annotations
 
 import json
+import pathlib
 import sys
 import types
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-sys.path.insert(0, "huf/testing")
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()

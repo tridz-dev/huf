@@ -1,12 +1,13 @@
 """Fail-closed identity (S8 fix 1) and tool-gate fail-closed (fix 5)."""
 
 import importlib
+import pathlib
 import sys
 import types
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-sys.path.insert(0, "huf/testing")
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()

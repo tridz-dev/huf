@@ -381,6 +381,9 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
 
       {step === 4 && preview && (
         <div className="space-y-2">
+          <p role="note" className="text-xs text-steel">
+            This sends to everyone on the list, whatever this gateway's agent recipient allowlist says. The allowlist only limits what an agent may send.
+          </p>
           <Label htmlFor="bc-confirm">Type {expected} to confirm sending to {expected} recipients</Label>
           <Input id="bc-confirm" inputMode="numeric" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
         </div>
