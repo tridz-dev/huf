@@ -247,7 +247,7 @@ class TestSsrf(_Base):
 
 	def test_poisoned_cache_entry_is_not_used(self):
 		refs.frappe.cache.set_value(
-			refs._cache_key(tf.BOT_APP_ID, "a:poison"), {"serviceUrl": "https://evil.example.com"}
+			refs._cache_key("Teams GW", tf.BOT_APP_ID, "a:poison"), {"serviceUrl": "https://evil.example.com"}
 		)
 		with patch.object(refs, "_from_gateway_event", return_value=None):
 			with self.assertRaises(client.TeamsPermanentError) as cm:
