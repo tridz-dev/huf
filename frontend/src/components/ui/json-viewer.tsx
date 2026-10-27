@@ -3,6 +3,7 @@ import { CodeBlock } from '../ai-elements/code-block';
 import { Button } from './button';
 import { Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { copyText } from '@/lib/clipboard';
 
 interface JsonViewerProps {
   value: string | object;
@@ -33,7 +34,7 @@ export function JsonViewer({ value, className, showCopyButton = true }: JsonView
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(jsonString);
+      if (!(await copyText(jsonString))) throw new Error('Copy failed');
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {

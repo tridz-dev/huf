@@ -82,7 +82,7 @@ bench get-app https://github.com/shridarpatil/frappe_whatsapp
 bench --site <site> install-app frappe_whatsapp
 ```
 
-Then create a **WhatsApp Account** in Frappe Desk. The code reads these fields:
+You don't create the **WhatsApp Account** yourself. Saving the WhatsApp credential (3.1) creates it, or updates the one with the same `phone_id`, and links it to every gateway that uses the credential. A gateway connected to an existing credential later is linked on save too. The account is a copy of the credential: edit the credential, not the account. The code reads these fields:
 
 | Field | Used for |
 |---|---|
@@ -91,8 +91,11 @@ Then create a **WhatsApp Account** in Frappe Desk. The code reads these fields:
 | `business_id` | Template list and sync |
 | `url` | Graph base URL (defaults to `https://graph.facebook.com`) |
 | `version` | Graph API version (defaults to `v25.0`) |
+| `app_id` | Meta app links in the console |
 | `is_default_outgoing` | **Ignored by Huf's gateway, webhook and management code.** Only the non-gateway agent tool uses it (when it is called without `gateway_name`) |
 | `status` | Used only by that same non-gateway tool fallback (first account with status `Active`) |
+
+The generated account is never marked as frappe_whatsapp's default incoming or outgoing account and never gets a webhook verify token, so frappe_whatsapp's own webhook can't pass Meta's verification in place of Huf's.
 
 Huf never guesses an account for a gateway. Every gateway-side action (inbound mirroring, replies, template sync and updates, message and template listings) resolves the account through the Gateway's `whatsapp_account`; with none linked, the gateway runs in direct mode and mirroring is skipped (logged). frappe_whatsapp's own *default outgoing* and *Active* flags are therefore irrelevant to Huf, whatever they are set to.
 
@@ -104,9 +107,12 @@ Open Manage WhatsApp and pick a gateway at the top right. The page has four tabs
 
 - **Overview** (default): a health banner (working, needs attention, blocked, not set up, turned off) with a "Check now" button that refreshes the status and checks the access token with Meta, the setup checklist, the callback URL and verify token details, and the last 24 hours of activity.
 - **Messages** and **Templates**: the message log and template management. They need the optional WhatsApp Business connector app; without it these two tabs say so and everything else keeps working.
-- **Settings**: credentials status and the token check, reply rules (fallback template and who can message), the linked WhatsApp account, and an "Edit in gateway settings" link to the Gateway form.
+- **Access**: people waiting for approval, approved people and revoked people.
+- **Settings**: credentials status and the token check, reply rules (fallback template and who can message), the linked WhatsApp account, and an "Edit in gateway settings" link to the channel's page in Huf (Gateways > the channel > Channel tab).
 
-Checklist steps that point at credentials, the app secret or the on/off switch jump to the matching Settings section.
+Checklist steps that point at credentials, the app secret or the on/off switch jump to the matching Settings section. "Approve your first sender" jumps to the Access tab.
+
+Every WhatsApp gateway setting can be edited on the channel's **Channel** tab: who can message (pairing reply, limits and the people list), opt-out keywords and limits, replies (typing, voice notes, link previews, error text, retries, fallback template), what the agent may send, calls and solutions routing. **Connect agent** on the channel page picks the agent that answers the channel, creating the gateway when there is none.
 
 ---
 
@@ -114,16 +120,21 @@ Checklist steps that point at credentials, the app secret or the on/off switch j
 
 ### 3.1 Integration Settings (credentials)
 
-Create an **Integration Settings** record for service `whatsapp` and add these credential rows (key, value):
+Add a WhatsApp channel under Gateways > Channel credentials (an **Integration Settings** record for service `whatsapp`) with these credentials:
 
 | Key | Required | Notes |
 |---|---|---|
 | `phone_number_id` | Yes | Not secret. Meta Phone Number ID |
+| `business_account_id` | Yes | Not secret. WhatsApp Business Account (WABA) ID |
+| `app_id` | Yes | Not secret. Meta App ID |
 | `access_token` | Yes | Permanent system-user token. Stored as Password |
-| `webhook_verify_token` | Yes | Must match the verify token entered in Meta |
 | `app_secret` | Yes | Meta App Secret. Without it, every POST delivery is rejected |
+| `webhook_verify_token` | Yes | Any phrase. Must match the verify token entered in Meta |
+| `graph_api_version` | No | Defaults to `v25.0` |
 
-The adapter refuses to start without `phone_number_id`, `access_token`, `webhook_verify_token` and `app_secret`.
+On save Huf checks the values with Meta: the token is valid, the phone number exists and the token can use it, the token can manage the business account, and the phone number belongs to it. A wrong value refuses the save with the reason; Meta being unreachable only warns. Then it creates or updates the WhatsApp Account (when `frappe_whatsapp` is installed), copies the phone number ID and business account ID onto the gateways using the credential, subscribes the app to the business account's webhooks (`POST /{waba}/subscribed_apps`) and syncs templates in the background.
+
+The adapter itself only needs `phone_number_id`, `access_token`, `webhook_verify_token` and `app_secret`, so credentials saved before the other keys existed keep receiving and sending; the missing keys are asked for the next time the credential is saved.
 
 Agent privilege flags are Check fields on the Gateway itself (not credential rows); see section 6.
 
@@ -136,7 +147,7 @@ Create a **Gateway**:
 | Channel (`provider`) | `WhatsApp` |
 | Connected integration (`integration_settings`) | The Integration Settings record from 3.1 |
 | Phone number ID (`phone_number_id`) | Read-only and indexed. Derived on save from the `phone_number_id` credential of the connected integration. See [Multiple WhatsApp gateways](#multiple-whatsapp-gateways) |
-| WhatsApp Account (`whatsapp_account`) | Optional. Name of a frappe_whatsapp WhatsApp Account. Setting it enables bridge mode when the app is installed. Its `phone_id` must equal this gateway's phone number ID |
+| WhatsApp Account (`whatsapp_account`) | Set automatically from the credential when `frappe_whatsapp` is installed (bridge mode). Its `phone_id` must equal this gateway's phone number ID |
 | Fallback template (`fallback_template`) | Optional. Name of an approved template with no variables. Used when a reply is due and the 24h window is closed |
 | Fallback template language (`fallback_template_language`) | Language code of that template. Defaults to `en_US` |
 | Run as user (`execution_user`) | Least-privileged Huf user. Never `Administrator` |
@@ -146,7 +157,18 @@ Create a **Gateway**:
 Admission:
 
 - With `Allow list`, a direct message is denied unless an approved **Gateway Access Entry** matches the sender. The sender's `external_id` is stored digits-only (see section 8).
-- With `Pairing`, an unknown sender creates a pending pairing request. The triggering message is not executed.
+- With `Pairing`, an unknown sender creates a pending pairing request and gets a reply with their pairing code (`pairing_reply_enabled`, on by default, capped by `pairing_reply_daily_limit`). The triggering message is not executed. If replies were off when the request was created, the code is sent with the sender's next message once they are turned on. Approving the request sends the sender a welcome message.
+
+Managing people (the People list on the channel's Channel tab, or the Access tab in the WhatsApp console):
+
+| Action | Effect |
+|---|---|
+| Decline (waiting) / Remove access (approved) | Entry becomes `Revoked`. The agent stops replying at once. After 24 hours (`ACCESS_REREQUEST_COOLDOWN_HOURS`) their next message starts a new pairing request. |
+| Restore access (removed) | Approved again directly, with the welcome message. |
+| Block | Entry becomes `Blocked`: ignored silently and never paired again. Never overrides an opt-out (it lands on `Blocked` if they later send START). |
+| Unblock | Back to removed with no cooldown, so they can ask again straight away. |
+| Add number | Approves a number by hand without messaging it. This is how people get in under the `Allow list` policy. |
+| Opted out | Read-only. Only the person can undo it, by sending START. |
 
 ### 3.3 Register the callback in Meta
 
@@ -192,11 +214,14 @@ Call `huf.ai.whatsapp.management.get_setup_status` (System Manager or Huf Admin)
 
 A healthy gateway has an empty `failing_checks` list. Send a test message from Meta or from a WhatsApp phone to the business number. Confirm a Gateway Event and an agent run appear.
 
+The **Test message** box on the Channel tab sends to a phone number with country code. Inside the 24-hour window it sends plain text; outside it (always, on a fresh setup) it sends the gateway's fallback template, or Meta's `hello_world` sample template when none is set.
+
 ### 3.5 Troubleshooting
 
 | What you see | Meaning | Fix |
 |---|---|---|
 | Health reason `signature_failed` ("Meta is calling us, but the signature check failed. Check the app secret."), next step `fix_app_secret` | Meta reached the callback URL, but the `X-Hub-Signature-256` check failed (or the GET verify token did not match). Almost always a wrong or stale App Secret. | Copy the App Secret again from the Meta app (App settings, Basic) into the Integration Settings credential `app_secret`. The error clears when the next valid event arrives, or after 24 hours. |
+| Health reason `senders_waiting`, checklist step "Approve your first sender" | Messages arrive but come from people nobody has approved yet (Pairing). The agent does not run for them. | Approve them on the Access tab or the channel's Channel tab. |
 | Health reason `no_events_yet` ("Meta hasn't sent us anything yet") | Meta has not called the callback URL, or the `messages` field is not subscribed. | Check the callback URL and the subscription in Meta. If Meta's "Verify and save" succeeded, the checklist step "webhook" is already done. |
 
 How the signature signal works: when a WhatsApp webhook call fails the signature (POST) or the verify-token check (GET), Huf stores one timestamp on the Gateway (`last_signature_failure_at`) and nothing else: no headers, body, token or secret. A successful GET verification stores `last_verify_ok_at`. Each is written at most once a minute per gateway, so unauthenticated traffic cannot cause a write storm. The failure counts only for 24 hours and only while no valid event has arrived after it. Trade-off: because the callback is unauthenticated, anyone who knows the URL can make the gateway show "blocked" by sending a bad signature; it clears with the next valid message and never affects message handling.

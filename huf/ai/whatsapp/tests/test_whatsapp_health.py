@@ -144,10 +144,26 @@ class TestEvaluate(unittest.TestCase):
 		self.assertEqual(r["next_step"]["code"], "send_test_message")
 		self.assertEqual(
 			[c["code"] for c in r["checklist"]],
-			["meta_app", "credentials", "webhook", "subscribed", "app_secret", "enabled", "test_message"],
+			["meta_app", "credentials", "webhook", "subscribed", "app_secret", "enabled", "approve_sender", "test_message"],
 		)
 		blocked = wh.evaluate(facts(access_token_present=False, replied_ever=False), NOW)
 		self.assertEqual(states(blocked)["test_message"], "blocked")
+
+	def test_pairing_senders_waiting_is_the_next_step(self):
+		r = wh.evaluate(facts(replied_ever=False, direct_policy="Pairing", pending_senders=2), NOW)
+		self.assertEqual(states(r)["approve_sender"], "todo")
+		self.assertEqual(r["next_step"]["code"], "approve_sender")
+		self.assertIn("2 people", r["next_step"]["label"])
+		self.assertEqual(r["next_step"]["action_url"], "#access")
+		self.assertIn("senders_waiting", codes(r))
+
+	def test_approve_step_done_once_someone_is_approved_or_pairing_is_off(self):
+		approved = wh.evaluate(facts(replied_ever=False, direct_policy="Pairing", approved_senders=1), NOW)
+		self.assertEqual(states(approved)["approve_sender"], "done")
+		allow_list = wh.evaluate(facts(replied_ever=False, direct_policy="Allow list"), NOW)
+		self.assertEqual(states(allow_list)["approve_sender"], "done")
+		waiting = wh.evaluate(facts(replied_ever=False, events_ever=0, direct_policy="Pairing"), NOW)
+		self.assertEqual(states(waiting)["approve_sender"], "blocked")
 
 
 class TestEventCounts(unittest.TestCase):

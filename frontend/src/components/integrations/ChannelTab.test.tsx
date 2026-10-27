@@ -17,7 +17,9 @@ const api = vi.hoisted(() => ({
   default_agent: 'A1',
   execution_user: 'svc@x.test',
   mention_required: 0,
+  direct_policy: 'Pairing',
   pairing_ttl_minutes: 60,
+  pairing_reply_enabled: 1,
 },
 }));
 
@@ -27,8 +29,18 @@ vi.mock('@/services/integrationApi', () => ({
   getIntegrationSetting: vi.fn().mockResolvedValue({}),
   setupTelegramWebhook: vi.fn(),
 }));
+vi.mock('@/services/gatewayAccessApi', () => ({
+  listGatewayAccessEntries: vi.fn().mockResolvedValue([]),
+  approveGatewayPairing: vi.fn(),
+  revokeGatewayAccessEntry: vi.fn(),
+}));
+vi.mock('@/services/whatsappHealthApi', () => ({
+  getSetupStatus: vi.fn().mockResolvedValue({ ok: true, data: { success: true, connector_available: true } }),
+}));
 vi.mock('@/services/gatewayApi', () => ({
+  WHATSAPP_GATEWAY_FIELDS: [],
   getGateways: vi.fn().mockResolvedValue([api.gateway]),
+  getGateway: vi.fn().mockImplementation(async () => api.gateway),
   getAvailableAgents: vi.fn().mockResolvedValue([{ name: 'A1', agent_name: 'Agent one' }]),
   getAvailableFlows: vi.fn().mockResolvedValue([]),
   getGatewayReadinessPreview: (...a: unknown[]) => api.preview(...a),
@@ -62,19 +74,20 @@ describe('ChannelTab structure', () => {
     );
     expect(raw).toHaveLength(0);
     expect(screen.getByLabelText('Run as user')).toBeInTheDocument();
-    expect(screen.getByLabelText('Pairing code lifetime (minutes)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Code lifetime (minutes)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Send them their pairing code')).toHaveAttribute('role', 'switch');
     expect(screen.getByLabelText('Require @mention in rooms')).toHaveAttribute('role', 'switch');
     expect(screen.getByLabelText('Webhook URL')).toHaveAttribute('readonly');
   });
 
-  it('puts the pairing and mention fields, and the test row, in FieldRows', async () => {
+  it('puts the pairing limits, the mention field and the test row in FieldRows', async () => {
     const { container } = await renderTab();
     const rows = Array.from(container.querySelectorAll('[data-field-row]'));
-    const pairing = screen.getByLabelText('Pairing code lifetime (minutes)');
-    const mention = screen.getByLabelText('Require @mention in rooms');
-    const row = rows.find((r) => r.contains(pairing));
+    const lifetime = screen.getByLabelText('Code lifetime (minutes)');
+    const row = rows.find((r) => r.contains(lifetime));
     expect(row).toBeTruthy();
-    expect(row!.contains(mention)).toBe(true);
+    expect(row!.contains(screen.getByLabelText('Codes sent per day'))).toBe(true);
+    expect(rows.some((r) => r.contains(screen.getByLabelText('Require @mention in rooms')))).toBe(true);
     const send = screen.getByRole('button', { name: /send/i });
     const testRow = rows.find((r) => r.contains(send))!;
     expect(testRow.querySelectorAll('[data-field-label][aria-hidden="true"]')).toHaveLength(1);
@@ -84,6 +97,24 @@ describe('ChannelTab structure', () => {
     const { container } = await renderTab();
     for (const el of container.querySelectorAll('input, button[role="combobox"]')) {
       expect(el.className).not.toMatch(/(^|\s)h-\d/);
+    }
+  });
+});
+
+describe('ChannelTab new senders', () => {
+  it('lists the people waiting for approval when pairing is on', async () => {
+    await renderTab();
+    expect(await screen.findByText('No one is waiting for approval.')).toBeInTheDocument();
+  });
+
+  it('hides pairing settings when direct messages use an allow list', async () => {
+    const previous = api.gateway.direct_policy;
+    api.gateway.direct_policy = 'Allow list';
+    try {
+      await renderTab();
+      expect(screen.queryByLabelText('Code lifetime (minutes)')).toBeNull();
+    } finally {
+      api.gateway.direct_policy = previous;
     }
   });
 });

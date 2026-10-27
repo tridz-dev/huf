@@ -47,6 +47,7 @@ import { getAgents, getDocTypes } from '../../services/agentApi';
 import type { AgentDoc } from '../../types/agent.types';
 import { toast } from 'sonner';
 import { createWebhookTriggerDefaults } from '../../lib/flowWebhookConfig';
+import { copyText } from '@/lib/clipboard';
 
 interface NodeSelectionModalProps {
   open: boolean;
@@ -277,9 +278,9 @@ export function NodeSelectionModal({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  navigator.clipboard.writeText(config.url || '');
-                  toast.success('Copied to clipboard');
+                onClick={async () => {
+                  if (await copyText(config.url || '')) toast.success('Copied to clipboard');
+                  else toast.error("Couldn't copy. Select the text and copy it yourself.");
                 }}
               >
                 Copy

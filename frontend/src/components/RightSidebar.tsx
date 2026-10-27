@@ -33,6 +33,7 @@ import { getAgents, getDocTypes, getRoles } from '../services/agentApi';
 import { getToolFunctions, getToolFunction, getFlowTools, type FlowTool } from '../services/toolApi';
 import { VariablePicker } from './ui/VariablePicker';
 import { JsonSchemaForm } from './JsonSchemaForm';
+import { copyText } from '@/lib/clipboard';
 
 interface ToolParameter {
   fieldname: string;
@@ -250,9 +251,9 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => {
-                  navigator.clipboard.writeText(webhookUrl);
-                  toast.success('Webhook URL copied to clipboard');
+                onClick={async () => {
+                  if (await copyText(webhookUrl)) toast.success('Webhook URL copied to clipboard');
+                  else toast.error("Couldn't copy. Select the text and copy it yourself.");
                 }}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></svg>

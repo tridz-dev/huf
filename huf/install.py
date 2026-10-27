@@ -1026,6 +1026,11 @@ def create_huf_roles():
 	#    don't already have a Huf User Role record.
 	_migrate_existing_system_managers()
 
+	# 6. Every System User gets Huf's default roles (Huf Manager + Huf Gateway User), never a downgrade.
+	from huf.huf.doctype.huf_user_role.huf_user_role import grant_default_roles_to_system_users
+
+	grant_default_roles_to_system_users()
+
 	frappe.db.commit()
 
 
@@ -1146,10 +1151,14 @@ def _adapter_required_credentials(provider_id, extra_fields=None):
 	from huf.ai.gateway_adapters.registered import get_adapter_class
 
 	adapter_cls = get_adapter_class(provider_id)
-	fields = [
-		{"key": f.key, "label": f.label, "required": f.required, "secret": f.secret, "description": f.description}
-		for f in adapter_cls.credential_schema.fields
-	]
+	fields = []
+	for f in adapter_cls.credential_schema.fields:
+		item = {"key": f.key, "label": f.label, "required": f.required}
+		if not f.secret:
+			item["secret"] = False
+		if f.description:
+			item["description"] = f.description
+		fields.append(item)
 	fields.extend(extra_fields or [])
 	return fields
 

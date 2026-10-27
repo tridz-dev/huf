@@ -29,13 +29,19 @@ import {
   deleteGateway,
   getAvailableAgents,
   getAvailableFlows,
+  getGateway,
   getGateways,
   getGatewayReadinessPreview,
   updateGateway,
   type GatewayDoc,
   type GatewayPolicy,
   type GatewayReadinessPreview,
+  WHATSAPP_GATEWAY_FIELDS,
 } from '@/services/gatewayApi';
+import { AccessTab } from '@/components/whatsapp/AccessTab';
+import { CONNECTOR_NEEDED } from '@/components/whatsapp/BridgeUnavailable';
+import { getSetupStatus } from '@/services/whatsappHealthApi';
+import { WhatsAppChannelSettings } from './WhatsAppChannelSettings';
 import { getGatewayReadiness } from '@/utils/gatewayReadiness';
 import { getGatewayWebhookUrl } from '@/utils/gatewayWebhook';
 import { getIntegrationSetting, setupTelegramWebhook } from '@/services/integrationApi';
@@ -64,8 +70,14 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
   const [deleting, setDeleting] = useState(false);
   const [serverReadiness, setReadiness] = useState<GatewayReadinessPreview | null>(null);
   const [readinessLoading, setReadinessLoading] = useState(false);
-  // CL-04: the former TelegramTab is folded in here; its "Setup Webhook" button
-  // (Telegram setWebhook via Integration Settings) lives below, gated on provider.
+  // WhatsApp: whether the WhatsApp connector app (templates, message history) is installed.
+  const [connectorAvailable, setConnectorAvailable] = useState<boolean | null>(null);
+  // CL-04: Telegram used to have its own separate tab (TelegramTab.tsx) duplicating
+  // most of this tab with different field names (telegram_agent instead of
+  // default_agent/default_flow) and its own webhook flow. That tab is now removed;
+  // its one genuinely provider-specific piece -- the "Setup Webhook" convenience
+  // button, which calls Telegram's setWebhook via the Integration Settings record --
+  // lives here instead, gated on provider === 'Telegram'.
   const [telegramWebhook, setTelegramWebhook] = useState<{
     url?: string;
     status?: string;
@@ -86,7 +98,12 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
         getAvailableFlows(),
       ]);
       const linked = gateways.find((g) => g.integration_settings === settingId) || null;
-      setGateway(linked);
+      // The list only carries summary columns; the editor needs every field.
+      setGateway(linked ? await getGateway(linked.name) : null);
+      if (linked?.provider === 'WhatsApp') {
+        const status = await getSetupStatus();
+        setConnectorAvailable(status.ok ? status.data.connector_available : null);
+      }
       setAgents(agentList);
       setFlows(flowList);
 
@@ -169,9 +186,15 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
         room_sender_policy: gateway.room_sender_policy,
         mention_required: gateway.mention_required,
         pairing_ttl_minutes: gateway.pairing_ttl_minutes,
+        pairing_reply_enabled: gateway.pairing_reply_enabled,
+        pairing_pending_limit: gateway.pairing_pending_limit,
+        pairing_reply_daily_limit: gateway.pairing_reply_daily_limit,
         default_target_type: gateway.default_target_type,
         default_agent: gateway.default_agent || '',
         default_flow: gateway.default_flow || '',
+        ...(gateway.provider === 'WhatsApp'
+          ? Object.fromEntries(WHATSAPP_GATEWAY_FIELDS.map((field) => [field, gateway[field] ?? null]))
+          : {}),
       });
       setGateway((prev) => (prev ? { ...prev, ...updated } : updated));
       loadReadiness(updated.name);
@@ -222,7 +245,7 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
       });
 
       if (result.success) {
-        toast.success('Test message sent successfully');
+        toast.success(result.message || 'Test message sent');
       } else {
         toast.error(result.message);
       }
@@ -260,8 +283,8 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
         <h3 className="text-sm font-medium">No gateway configured yet</h3>
         <p className="text-sm text-muted-foreground">
           This channel isn&apos;t connected to a gateway yet, so it can&apos;t receive incoming
-          messages. Create a gateway for this channel from the Gateways page and connect it to
-          these credentials.
+          messages. Use Connect agent above to pick the agent that answers it, and a gateway is
+          created for you.
         </p>
       </div>
     );
@@ -435,8 +458,76 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
         )}
       </Field>
 
+      {gateway.direct_policy === 'Pairing' && (
+        <div className="grid gap-3 rounded-lg border p-4">
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium">New senders</p>
+            <p className="text-xs text-muted-foreground">
+              Someone who isn&apos;t approved yet gets a pairing code and waits below until you approve them.
+            </p>
+          </div>
+          <Field
+            label="Send them their pairing code"
+            hint="Without it, new senders get no reply at all until you approve them."
+            size="sm"
+            id="channel-pairing-reply"
+          >
+            <div className="flex h-control-md items-center">
+              <Switch
+                id="channel-pairing-reply"
+                checked={Boolean(gateway.pairing_reply_enabled)}
+                onCheckedChange={(checked) => handleFieldChange({ pairing_reply_enabled: checked ? 1 : 0 })}
+              />
+            </div>
+          </Field>
+          <FieldRow cols={3}>
+            <Field label="Code lifetime (minutes)" size="sm">
+              <Input
+                type="number"
+                min={1}
+                value={gateway.pairing_ttl_minutes ?? 60}
+                onChange={(e) =>
+                  handleFieldChange({ pairing_ttl_minutes: e.target.value ? Number(e.target.value) : undefined })
+                }
+              />
+            </Field>
+            <Field label="Codes sent per day" hint="0 sends none." size="sm">
+              <Input
+                type="number"
+                min={0}
+                value={gateway.pairing_reply_daily_limit ?? 20}
+                onChange={(e) =>
+                  handleFieldChange({
+                    pairing_reply_daily_limit: e.target.value ? Number(e.target.value) : undefined,
+                  })
+                }
+              />
+            </Field>
+            <Field label="Most people waiting" hint="0 means no limit." size="sm">
+              <Input
+                type="number"
+                min={0}
+                value={gateway.pairing_pending_limit ?? 50}
+                onChange={(e) =>
+                  handleFieldChange({ pairing_pending_limit: e.target.value ? Number(e.target.value) : undefined })
+                }
+              />
+            </Field>
+          </FieldRow>
+        </div>
+      )}
+
+      {gateway.direct_policy !== 'Disabled' && (
+        <div className="space-y-3 rounded-lg border p-4">
+          <p className="text-sm font-medium">People</p>
+          <AccessTab gateway={gateway.name} />
+        </div>
+      )}
+
       {/* GW-18: room/group-chat admission policy. These fields already exist on
-          the Gateway doctype and were being fetched, but had no editor here. */}
+          the Gateway doctype and were being fetched, but had no editor here.
+          WhatsApp has no rooms, so the block is hidden there. */}
+      {gateway.provider !== 'WhatsApp' && (
       <div className="grid gap-3 rounded-lg border p-4">
         <p className="text-sm font-medium">Room &amp; group chat admission</p>
         <p className="text-xs text-muted-foreground">
@@ -477,16 +568,6 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
           </Field>
         </FieldRow>
         <FieldRow cols={2}>
-          <Field label="Pairing code lifetime (minutes)" size="sm" reserveNote>
-            <Input
-              type="number"
-              min={1}
-              value={gateway.pairing_ttl_minutes ?? 60}
-              onChange={(e) =>
-                handleFieldChange({ pairing_ttl_minutes: e.target.value ? Number(e.target.value) : undefined })
-              }
-            />
-          </Field>
           <Field
             label="Require @mention in rooms"
             size="sm"
@@ -503,16 +584,47 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
           </Field>
         </FieldRow>
       </div>
+      )}
+
+      {gateway.provider === 'WhatsApp' && (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-4 text-xs text-muted-foreground">
+            <span>
+              {gateway.whatsapp_account ? (
+                <>
+                  Templates and message history use the WhatsApp account{' '}
+                  <span className="font-medium text-foreground">{gateway.whatsapp_account}</span>, kept in step
+                  with this channel&apos;s credentials.
+                </>
+              ) : connectorAvailable === false ? (
+                `${CONNECTOR_NEEDED}. Replies, voice notes and the agent work without it.`
+              ) : (
+                'Save the credentials to link this number to its WhatsApp account for templates and message history.'
+              )}
+            </span>
+            <Button type="button" variant="outline" size="sm" onClick={() => navigate(`/whatsapp?gateway=${encodeURIComponent(gateway.name)}`)}>
+              Open WhatsApp console
+            </Button>
+          </div>
+          <WhatsAppChannelSettings gateway={gateway} onChange={handleFieldChange} />
+        </>
+      )}
 
       <div className="space-y-2 rounded-lg border p-4">
         <p className="text-sm font-medium">Test message</p>
         <p className="text-xs text-muted-foreground">
-          {teamsTestSendNote(gateway.provider) ?? 'Send a test message to verify your channel configuration and credentials are working.'}
+          {teamsTestSendNote(gateway.provider) ?? (gateway.provider === 'WhatsApp'
+            ? "Send a test to your own phone. If that number hasn't messaged this channel in the last 24 hours, WhatsApp only allows a template, so the fallback template (or Meta's hello_world) is sent instead."
+            : 'Send a test message to check that this channel can deliver messages.')}
         </p>
         <FieldRow className="grid-cols-[1fr_auto]">
-          <Field label="Test recipient ID" size="sm">
+          <Field label={gateway.provider === 'WhatsApp' ? 'Phone number' : 'Recipient ID'} size="sm">
             <Input
-              placeholder="Enter test recipient ID (e.g., user ID, chat ID, phone)"
+              placeholder={
+                gateway.provider === 'WhatsApp'
+                  ? 'With country code, e.g. 919876543210'
+                  : 'User, chat or channel ID'
+              }
               value={testRecipientId}
               onChange={(e) => setTestRecipientId(e.target.value)}
               disabled={testSending}
@@ -553,10 +665,17 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
       <div className="space-y-2 rounded-lg border p-4">
         <p className="text-sm font-medium">Inbound webhook URL</p>
         <p className="text-xs text-muted-foreground">
-          Paste this URL into the channel provider&apos;s configuration (e.g. Meta Developer
-          Console).
+          {gateway.provider === 'WhatsApp'
+            ? 'In your Meta app, open WhatsApp > Configuration, paste this as the callback URL with your verify token, then subscribe to the messages field.'
+            : "Paste this URL into the channel provider's webhook settings."}
         </p>
         <CopyField label="Webhook URL" value={getGatewayWebhookUrl(gateway.name, gateway.provider)} />
+        {gateway.provider === 'WhatsApp' && (
+          <p className="text-xs text-muted-foreground">
+            Use this URL, not the one from the WhatsApp connector app. Meta sends each app&apos;s messages to one
+            URL, and only this one reaches your agent. Message history and templates still fill in.
+          </p>
+        )}
 
         {gateway.provider === 'Telegram' && (
           <div className="mt-3 space-y-2 border-t pt-3">

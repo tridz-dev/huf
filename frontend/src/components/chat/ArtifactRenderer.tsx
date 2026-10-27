@@ -45,6 +45,7 @@ import { FrappeFormView } from '@/components/chat/frappe-views/FrappeFormView';
 import { FrappeReportView } from '@/components/chat/frappe-views/FrappeReportView';
 import type { FrappeViewPayload } from '@/types/artifact.types';
 import { TableIcon } from 'lucide-react';
+import { copyText } from '@/lib/clipboard';
 
 /** Ids minted by the client-side parser for transient, unsaved artifacts. */
 const TRANSIENT_ARTIFACT_ID = /^artifact-\d+-\d+$/;
@@ -169,7 +170,7 @@ export function ArtifactRenderer({
 
 	const handleCopy = useCallback(async () => {
 		try {
-			await navigator.clipboard.writeText(artifact.content);
+			if (!(await copyText(artifact.content))) throw new Error('Copy failed');
 			setIsCopied(true);
 			setTimeout(() => setIsCopied(false), 2000);
 		} catch (error) {

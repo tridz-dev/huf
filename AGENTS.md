@@ -2180,7 +2180,9 @@ HUF implements a capability-based Role-Based Access Control (RBAC) layer on top 
   - `Huf Manager`: Full edit access to agents, tools, knowledge, and flows.
   - `Huf User`: Access to use agents, chat, knowledge, tools, and flows.
   - `Huf Viewer`: Read-only access to agents and own chats.
-- **Frappe Role Mapping**: Under the hood, Huf Roles map 1-to-1 with Frappe Roles (`System Manager`, `Huf Manager`, `Huf User`, `Huf Viewer`).
+  - `Huf Gateway User`: Service role for a channel's Run as user; can only use agents.
+- **Frappe Role Mapping**: Under the hood, Huf Roles map 1-to-1 with Frappe Roles (`System Manager`, `Huf Manager`, `Huf User`, `Huf Viewer`, `Huf Gateway User`). A user has one Huf role; `Huf Gateway User` is the exception and is held alongside it.
+- **Defaults**: Every enabled Frappe System User gets `Huf Manager` (when they have no Huf role yet) plus `Huf Gateway User`, on user save and as a backfill on migrate (`huf_user_role.ensure_default_huf_roles`). An assigned role is never replaced, a disabled Huf User Role is never re-enabled, Administrator (already Huf Admin) only gains `Huf Gateway User`, and nobody is made `Huf Admin` (Frappe `System Manager`) automatically. Unit tests opt in with `frappe.flags.huf_default_roles_in_test`.
 - **Enforcement**:
   - Verification is done by checking capabilities using `huf.permissions.has_capability(user, capability)`.
   - Frontend checks permissions on load by querying `/api/method/huf.permissions.get_me`.
