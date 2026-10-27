@@ -7,16 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { Form } from '@/components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { DeleteSettingDialog } from './integration-settings/DeleteSettingDialog';
 import { IntegrationHeader } from '@/components/integrations/IntegrationHeader';
 import { AddIntegrationToAgentModal } from '@/components/integrations/AddIntegrationToAgentModal';
 import { ConnectChannelAgentModal } from '@/components/integrations/ConnectChannelAgentModal';
@@ -468,27 +459,14 @@ export function IntegrationSettingsDetailsPage({
         </Form>
       </div>
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {noun}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove &quot;{settingId}&quot; and its stored credentials.
-              Agents using this {noun} may fail until a replacement is configured.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleting ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteSettingDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        noun={noun}
+        settingId={settingId}
+        deleting={deleting}
+        onConfirm={handleDelete}
+      />
 
       {isChannel && settingId ? (
         <ConnectChannelAgentModal

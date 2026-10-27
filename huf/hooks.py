@@ -282,6 +282,15 @@ doc_events = {
         "on_update": "huf.ai.telegram_web_access_enforce.on_binding_update",
         "on_trash": "huf.ai.telegram_web_access_enforce.on_binding_trash",
     },
+    "Flow Run": {
+        "on_update": "huf.ai.gateways.flow_reply.on_flow_run_update",
+    },
+    "Agent Execution Approval": {
+        "after_insert": [
+            "huf.ai.gateways.approvals.on_approval_inserted",
+            "huf.ai.gateways.teams.actions.on_approval_inserted",
+        ],
+    },
     "Agent Trigger": {
         "after_insert": ["huf.ai.agent.hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
         "on_update": ["huf.ai.agent.hooks.clear_doc_event_agents_cache", "huf.ai.automation.hooks.clear_doc_event_automation_cache"],
@@ -315,23 +324,6 @@ doc_events = {
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"huf.tasks.all"
-# 	],
-# 	"daily": [
-# 		"huf.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"huf.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"huf.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"huf.tasks.monthly"
-# 	],
-# }
 scheduler_events = {
     "all": [
         "huf.ai.agent.scheduler.run_scheduled_agents",
@@ -354,6 +346,7 @@ scheduler_events = {
         "*/1 * * * *": [
             "huf.ai.orchestration.scheduler.process_orchestrations",
             "huf.ai.agent.integration.recover_stalled_agent_runs",
+            "huf.ai.gateways.teams.outbox.retry_due",
         ],
         "*/10 * * * *": [
             "huf.ai.gateway_service.reap_stuck_gateway_events",
@@ -385,24 +378,6 @@ scheduler_events = {
 
 # before_tests = "huf.install.before_tests"
 
-# Overriding Methods
-# ------------------------------
-#
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "huf.event.get_events"
-# }
-#
-# each overriding function accepts a `data` argument;
-# generated from the base implementation of the doctype dashboard,
-# along with any modifications made in other Frappe apps
-# override_doctype_dashboards = {
-# 	"Task": "huf.task.get_dashboard_data"
-# }
-
-# exempt linked doctypes from being automatically cancelled
-#
-# auto_cancel_exempted_doctypes = ["Auto Repeat"]
-
 # Ignore links to specified DocTypes when deleting documents
 # -----------------------------------------------------------
 
@@ -420,27 +395,6 @@ before_request = ["huf.ai.telegram_web_access_enforce.enforce"]
 
 # User Data Protection
 # --------------------
-
-# user_data_fields = [
-# 	{
-# 		"doctype": "{doctype_1}",
-# 		"filter_by": "{filter_by}",
-# 		"redact_fields": ["{field_1}", "{field_2}"],
-# 		"partial": 1,
-# 	},
-# 	{
-# 		"doctype": "{doctype_2}",
-# 		"filter_by": "{filter_by}",
-# 		"partial": 1,
-# 	},
-# 	{
-# 		"doctype": "{doctype_3}",
-# 		"strict": False,
-# 	},
-# 	{
-# 		"doctype": "{doctype_4}"
-# 	}
-# ]
 
 # Authentication and authorization
 # --------------------------------
@@ -475,7 +429,12 @@ fixtures = [
 to_sync_tools = "huf.ai.tools.registry.sync_discovered_tools"
 
 # Register integration tools from _registry
-huf_tools = "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS"
+huf_tools = [
+    "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS",
+    "huf.ai.tools.gateways.reply.GATEWAY_REPLY_TOOLS",
+    "huf.ai.tools.gateways.send.GATEWAY_SEND_TOOLS",
+    "huf.ai.tools.gateways.handoff.GATEWAY_HANDOFF_TOOLS",
+]
 
 # Knowledge Backends Hook
 # -----------------------

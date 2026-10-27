@@ -55,6 +55,8 @@ import type { IntegrationSettingsDoc } from '@/types/integration.types';
 import { formatTimeAgo } from '@/utils/time';
 import { gatewayErrorText } from '@/utils/gatewayErrorCopy';
 import { getGatewayReadiness } from '@/utils/gatewayReadiness';
+import { defaultDirectPolicy } from '@/components/gateway/directPolicy';
+import { DirectPolicyField } from '@/components/gateway/DirectPolicyField';
 import { getGatewayWebhookUrl } from '@/utils/gatewayWebhook';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import {
@@ -343,7 +345,7 @@ export default function GatewaysPage() {
         // permanently empty Pending access tab. 'Pairing' is safe and self-explaining out of
         // the box: the sender gets a code, the admin gets a request to approve. This also
         // matches setup_gateway()'s own default on the backend.
-        direct_policy: 'Pairing',
+        direct_policy: defaultDirectPolicy(provider),
         execution_user: user?.name,
       })) as GatewayDoc;
       setGateways((current) => [created, ...current]);
@@ -928,28 +930,11 @@ export default function GatewaysPage() {
               </div>
 
               {/* Direct Access Policy */}
-              <Field label="Direct message security policy">
-                {({ id }) => (
-                  <Select
-                    value={editingGateway.direct_policy || 'Allow list'}
-                    onValueChange={(v) =>
-                      setEditingGateway({
-                        ...editingGateway,
-                        direct_policy: v as GatewayPolicy,
-                      })
-                    }
-                  >
-                    <SelectTrigger id={id}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Allow list">Allow list — Require approved Gateway Access Entry</SelectItem>
-                      <SelectItem value="Pairing">Pairing — require pairing request approval</SelectItem>
-                      <SelectItem value="Disabled">Disabled — reject direct messages</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              </Field>
+              <DirectPolicyField
+                provider={editingGateway.provider}
+                value={editingGateway.direct_policy}
+                onChange={(direct_policy) => setEditingGateway({ ...editingGateway, direct_policy })}
+              />
 
               {/* GW-18: room/group-chat admission policy */}
               <div className="grid gap-3 rounded-lg border border-line bg-paper p-4">

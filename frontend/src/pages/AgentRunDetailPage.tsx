@@ -35,7 +35,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { copyText } from '@/lib/clipboard';
-
 /** One row of the Overview / Tokens & Cost definition list. */
 function DefinitionRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (

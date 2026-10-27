@@ -255,9 +255,9 @@ export function AccessTab({ gateway }: { gateway: string }) {
                   <TableCell className="font-mono text-xs">{e.pairing_code || ''}</TableCell>
                   <TableCell>
                     <Badge variant={STATE_BADGE[e.state] ?? 'pill-neutral'}>{STATE_LABEL[e.state] ?? e.state}</Badge>
-                    {e.state === 'Approved' && e.approved_by && <div className="text-[11px] text-steel">by {e.approved_by}</div>}
+                    {e.state === 'Approved' && e.approved_by && <div className="text-micro text-steel">by {e.approved_by}</div>}
                     {(e.state === 'Revoked' || e.state === 'Blocked') && e.revoked_by && (
-                      <div className="text-[11px] text-steel">by {e.revoked_by}</div>
+                      <div className="text-micro text-steel">by {e.revoked_by}</div>
                     )}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-xs text-steel"><TimeStamp value={e.creation} /></TableCell>

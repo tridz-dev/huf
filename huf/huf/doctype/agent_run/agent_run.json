@@ -67,6 +67,10 @@
   "reference_name",
   "automation",
   "automation_trigger",
+  "gateway",
+  "gateway_event",
+  "requester_external_id",
+  "requester_user",
   "solution"
  ],
  "fields": [
@@ -478,6 +482,33 @@
   {
    "fieldname": "column_break_hbrm",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "gateway",
+   "fieldtype": "Link",
+   "label": "Gateway",
+   "options": "Gateway",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gateway_event",
+   "fieldtype": "Link",
+   "label": "Gateway Event",
+   "options": "Gateway Event",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requester_external_id",
+   "fieldtype": "Data",
+   "label": "Requester external ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requester_user",
+   "fieldtype": "Link",
+   "label": "Requester user",
+   "options": "User",
+   "read_only": 1
   },
   {
    "fieldname": "solution",

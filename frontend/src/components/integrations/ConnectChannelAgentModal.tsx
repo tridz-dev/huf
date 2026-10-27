@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog-scroll';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { getAgents } from '@/services/agentApi';
 import {
@@ -156,10 +157,10 @@ export function ConnectChannelAgentModal({
               className="gap-0 divide-y divide-border rounded-md border border-border"
             >
               {filtered.map((agent) => (
-                <label
+                <Label
                   key={agent.name}
                   className={cn(
-                    'flex cursor-pointer items-start gap-3 p-3 transition-colors hover:bg-muted/50',
+                    'flex cursor-pointer items-start gap-3 p-3 font-normal leading-normal transition-colors hover:bg-muted/50',
                     selected === agent.name && 'bg-muted/50',
                   )}
                 >
@@ -171,7 +172,7 @@ export function ConnectChannelAgentModal({
                     )}
                   </div>
                   {agent.name === currentAgent && <span className="text-xs text-steel">Current</span>}
-                </label>
+                </Label>
               ))}
             </RadioGroup>
           )}

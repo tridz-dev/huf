@@ -6,6 +6,7 @@ from frappe.model.document import Document
 
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 from huf.ai.gateway_adapters.registered import get_adapter_class
+from huf.ai.gateways.identity_policy import is_identity_required
 
 
 class Gateway(Document):
@@ -27,7 +28,7 @@ class Gateway(Document):
             frappe.throw(_("Choose a default agent or clear the default route."))
         if self.default_target_type == "Flow" and not self.default_flow:
             frappe.throw(_("Choose a default flow or clear the default route."))
-        if self.direct_policy == "Open":
+        if self.direct_policy == "Open" and not is_identity_required(self.provider):
             frappe.throw(_("Public direct-message gateways are not available in this release."))
 
         # Every provider gets the same "linked Integration Settings must match

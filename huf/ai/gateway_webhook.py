@@ -203,14 +203,14 @@ def _fallback_params(gateway, contact_name: str):
 	return None
 
 
+from huf.ai.gateways.teams.webhook import SEND_MAX_ATTEMPTS, SEND_MAX_DELAY, adapter_kwargs, finish_response, send_with_retry  # noqa: E402,F401
+
+
 def get_gateway_adapter(gateway, contact_name: str = ""):
 	"""Instantiate the configured adapter without exposing stored credentials."""
 	adapter_class = _adapter_class_for_provider(gateway.provider)
 	credentials = _gateway_credentials(gateway)
-	context_hook = provider_hooks.get(gateway.provider, "adapter_context")
-	if context_hook is not None:
-		return adapter_class(credentials, gateway_context=context_hook(gateway, contact_name))
-	return adapter_class(credentials)
+	return adapter_class(credentials, **adapter_kwargs(adapter_class, gateway, contact_name, provider_hooks))
 
 
 def _inbound_request():
@@ -898,6 +898,7 @@ def handle_gateway_webhook() -> dict | None:
 			return handled
 
 	event = adapter.normalize_inbound(request)
+	frappe.local.gateway_response_override = None  # never inherit a stale override
 	result = ingest_gateway_event(
 		gateway.name,
 		event.provider_event_id,
@@ -905,6 +906,9 @@ def handle_gateway_webhook() -> dict | None:
 		verified_sender=True,
 		raw_payload=dict(event.raw_payload),
 	)
+	response = finish_response(frappe, gateway, event, result)
+	if response is not None:
+		return response
 	if not result.get("duplicate"):
 		touch_last_event(gateway)
 	return {"success": True, **result}
@@ -921,8 +925,8 @@ def event_contact_name(event) -> str:
 	return str(raw.get("contact_name") or "").strip() if isinstance(raw, dict) else ""
 
 
-def send_gateway_reply(gateway, event, text: str):
-	"""Deliver one completed Agent response through the same verified gateway."""
+def send_gateway_reply(gateway, event, text: str, *, sleep=None, max_attempts: int = SEND_MAX_ATTEMPTS):
+	"""Deliver one completed Agent response through the same verified gateway (transient errors retried)."""
 	from huf.ai.gateway_adapters.types import GatewayReply
 
 	adapter = get_gateway_adapter(gateway, event_contact_name(event))
@@ -932,14 +936,8 @@ def send_gateway_reply(gateway, event, text: str):
 	else:
 		thread_id = event.thread_id or None
 		reply_to = event.thread_id or None
-	return adapter.send_reply(
-		GatewayReply(
-			conversation_id=event.conversation_id,
-			text=text,
-			thread_id=thread_id,
-			reply_to_provider_message_id=reply_to,
-		)
-	)
+	reply = GatewayReply(event.conversation_id, text, thread_id, reply_to)
+	return send_with_retry(adapter, reply, sleep, max_attempts)
 
 
 def send_gateway_parts(gateway, event, parts: list[str], *, quote: bool = True):

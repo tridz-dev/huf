@@ -150,6 +150,7 @@ class GatewayReply:
 	# this field entirely; it defaults to empty so no existing caller needs
 	# changes.
 	attachments: Sequence[GatewayAttachment] = field(default_factory=tuple)
+	blocks: tuple | list | None = None
 
 	def __post_init__(self) -> None:
 		if not self.conversation_id.strip():

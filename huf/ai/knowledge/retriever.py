@@ -8,6 +8,18 @@ from .backends import get_backend, ChunkResult
 from .indexer import _build_backend_config
 
 
+def _chunk_ref(result) -> str | None:
+	"""Citation reference: explicit ref, else a url/ref-like metadata key."""
+	ref = getattr(result, "ref", None)
+	if ref:
+		return ref
+	meta = getattr(result, "metadata", None) or {}
+	for key in ("ref", "source_url", "url", "reference"):
+		if meta.get(key):
+			return str(meta[key])
+	return None
+
+
 def get_search_diagnostics(source_names: List[str]) -> List[Dict[str, Any]]:
 	"""
 	Return diagnostic info for why sources were skipped during search.
@@ -112,6 +124,7 @@ def knowledge_search(
 					"chunk_id": result.chunk_id,
 					"source": source_name,
 					"metadata": result.metadata,
+					"ref": _chunk_ref(result),
 				})
 				
 		except (frappe.DoesNotExistError, frappe.ValidationError):

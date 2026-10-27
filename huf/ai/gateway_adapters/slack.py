@@ -78,6 +78,10 @@ class SlackGatewayAdapter(GatewayAdapter):
             "mrkdwn": True
         }
         
+        if reply.blocks:
+            # `text` stays as the notification/accessibility fallback.
+            payload["blocks"] = list(reply.blocks)
+
         if reply.thread_id or reply.reply_to_provider_message_id:
             payload["thread_ts"] = reply.thread_id or reply.reply_to_provider_message_id
 
@@ -96,4 +100,8 @@ class SlackGatewayAdapter(GatewayAdapter):
             error_msg = data.get("error") if isinstance(data, Mapping) else "Unknown Slack API error"
             raise ValueError(f"Slack chat.postMessage failed: {error_msg}")
 
-        return OutboundDelivery(str(data.get("ts")), provider_response=data)
+        ts = data.get("ts")
+        if not ts:
+            raise ValueError("Slack chat.postMessage returned ok without a ts")
+
+        return OutboundDelivery(str(ts), provider_response=data)

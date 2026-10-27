@@ -36,7 +36,7 @@ import {
 } from '@/services/providerApi';
 
 import type { AIProvider, AIModel } from '@/types/agent.types';
-import { settleAll } from '@/lib/settleAll';
+import { settleAll } from '@/lib/utils';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 
 export { AgentSettingsTab };

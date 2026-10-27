@@ -19,6 +19,7 @@ import { AgentSummaryPromptsHeaderActions } from './components/AgentSummaryPromp
 import { ExecutionProfilesHeaderActions } from './components/ExecutionProfilesHeaderActions';
 import { SSHConnectionsHeaderActions } from './components/SSHConnectionsHeaderActions';
 import { PageLoader } from './components/PageLoader';
+import { LinkAccountRoute } from './components/gateway/gatewayRoutes';
 import { DataHeaderActions } from './components/DataHeaderActions';
 import { MeetingsHeaderActions } from './components/meetings/MeetingsHeaderActions';
 import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
@@ -94,9 +95,7 @@ const IntegrationSettingsListingPageWrapper = lazy(
 const IntegrationSettingsDetailsPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsDetailsPageWrapper'),
 );
-const GatewayDetailsPageWrapper = lazy(
-  () => import('./pages/GatewayDetailsPageWrapper'),
-);
+const GatewayDetailsPageWrapper = lazy(() => import('./pages/GatewayDetailsPageWrapper'));
 const IntegrationServicesListingPageWrapper = lazy(
   () => import('./pages/IntegrationServicesListingPageWrapper'),
 );
@@ -966,6 +965,7 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
+          <Route path="/link-account" element={<LinkAccountRoute />} />
           <Route
             path="/members"
             element={

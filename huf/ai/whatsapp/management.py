@@ -40,8 +40,7 @@ WHATSAPP_PROVIDER = "WhatsApp"
 _TEMPLATE_NAME_RE = re.compile(r"^[a-z0-9_]+$")
 # Sends also accept the full record name "<name>-<language_code>" (e.g. huf_x-en_US).
 _TEMPLATE_RECORD_RE = re.compile(r"^[A-Za-z0-9_]+(-[A-Za-z0-9_]+)?$")
-_MIN_PHONE_DIGITS = 7
-_MAX_PHONE_DIGITS = 15
+_MIN_PHONE_DIGITS, _MAX_PHONE_DIGITS = 7, 15
 _MAX_LIMIT = 200
 
 

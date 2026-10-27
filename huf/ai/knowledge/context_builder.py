@@ -47,11 +47,19 @@ def build_knowledge_context(
 		max_chunks = source_config["max_chunks"]
 		
 		try:
+			# Honour the RUNNING user's permissions (same check as the tool path in
+			# retriever.knowledge_search); never read on behalf of the agent owner.
+			if not frappe.has_permission("Knowledge Source", "read", source_name):
+				frappe.logger("huf").debug(
+					f"Knowledge injection skipped: user {frappe.session.user} lacks read on {source_name}"
+				)
+				continue
+
 			results = knowledge_search(
 				query=user_query,
 				knowledge_source=source_name,
 				top_k=max_chunks,
-				ignore_permissions=True,  # Agent has explicit knowledge linkage
+				ignore_permissions=False,
 			)
 			
 			if results:
@@ -69,7 +77,9 @@ def build_knowledge_context(
 		}
 	
 	# Build context text with source attribution
-	context_parts = ["## Relevant Knowledge\n"]
+	from huf.ai.gateways.safety import CITATION_RULE, untrusted_preamble, wrap_untrusted
+
+	context_parts = ["## Relevant Knowledge\n", untrusted_preamble() + " " + CITATION_RULE + "\n\n"]
 	chunks_used = []
 	estimated_tokens = 0
 	
@@ -80,8 +90,14 @@ def build_knowledge_context(
 		if estimated_tokens + chunk_tokens > max_tokens:
 			break
 		
-		context_parts.append(f"### {chunk.get('title', 'Source')}\n")
-		context_parts.append(chunk["text"])
+		context_parts.append(
+			wrap_untrusted(
+				chunk["text"],
+				chunk.get("source"),
+				title=chunk.get("title") or "Source",
+				ref=chunk.get("ref"),
+			)
+		)
 		context_parts.append("\n\n")
 		
 		chunks_used.append({

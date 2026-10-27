@@ -19,7 +19,7 @@ import type { AgentRunDoc } from '../services/agentRunApi';
 import { getAgents } from '../services/agentApi';
 import { getProviders } from '../services/providerApi';
 import type { AgentDoc, AIProvider } from '../types/agent.types';
-import { settleAll } from '../lib/settleAll';
+import { settleAll } from '@/lib/utils';
 
 interface DashboardMetrics {
   totalRuns: number;
