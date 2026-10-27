@@ -310,6 +310,8 @@ def _normalize_sender_for_provider(provider: str | None, entry_type: str, extern
     return hook(entry_type, external_id) if hook is not None else str(external_id)
 
 
+# Names re-imported below from huf.ai.gateway_core.* stay importable here on purpose: tests and callers
+# patch/read them as ``huf.ai.gateway_service.<name>``. Do not prune the noqa re-exports.
 from huf.ai.gateway_core.media import _MEDIA_SAFE_NAME, _MIME_EXTENSIONS, _media_file_name  # noqa: F401
 
 def _save_event_media(event, gateway) -> list[str]:

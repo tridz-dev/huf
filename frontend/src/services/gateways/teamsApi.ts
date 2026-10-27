@@ -21,6 +21,17 @@ export interface TeamsSettings {
   allowed_tenants: string;
   allowed_tenant_list: string[];
   app_package_version?: string;
+  bot_handle?: string;
+  private_output_policy?: TeamsPrivateOutputPolicy;
+  help_text_override?: string;
+}
+
+export type TeamsPrivateOutputPolicy = 'Always private' | 'Private when records touched' | 'Channel';
+
+export interface TeamsBotSettingsInput {
+  bot_handle: string;
+  private_output_policy: TeamsPrivateOutputPolicy;
+  help_text_override: string;
 }
 
 export interface TeamsLink {
@@ -176,5 +187,19 @@ export async function revokeTeamsLink(name: string): Promise<void> {
     await call.post(`${IDENTITY}.revoke_teams_link`, { name });
   } catch (error) {
     handleFrappeError(error, 'Error removing the link');
+  }
+}
+
+export async function saveTeamsBotSettings(gatewayName: string, values: TeamsBotSettingsInput): Promise<TeamsSettings> {
+  try {
+    const result = await call.post(`${TENANT}.save_teams_settings`, {
+      gateway: gatewayName,
+      bot_handle: values.bot_handle.trim(),
+      private_output_policy: values.private_output_policy,
+      help_text_override: values.help_text_override.trim(),
+    });
+    return result?.message as TeamsSettings;
+  } catch (error) {
+    handleFrappeError(error, 'Error saving the bot settings');
   }
 }

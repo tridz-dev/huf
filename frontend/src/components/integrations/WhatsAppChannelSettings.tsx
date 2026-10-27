@@ -366,6 +366,15 @@ export function WhatsAppChannelSettings({ gateway, onChange }: WhatsAppChannelSe
         )}
       </Section>
 
+      <Section title="Business account" description="Used when no WhatsApp Account is linked, so Meta account updates can set the connection state.">
+        <Field label="WhatsApp Business Account ID" size="sm">
+          <Input
+            value={gateway.whatsapp_business_account_id ?? ''}
+            onChange={(e) => onChange({ whatsapp_business_account_id: e.target.value })}
+          />
+        </Field>
+      </Section>
+
       <Section title="Solutions routing" description="How long a conversation stays with the solution it was routed to.">
         <Field label="Keep a conversation with its solution for (hours)" size="sm">
           <Input

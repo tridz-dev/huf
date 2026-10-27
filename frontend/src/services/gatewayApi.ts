@@ -37,6 +37,12 @@ export interface GatewayDoc {
   default_flow?: string;
   last_event_at?: string;
   last_error?: string;
+  connection_state?: 'Connected' | 'Degraded' | 'Disconnected';
+  connection_reason?: string;
+  // Slack only
+  unmapped_policy?: 'Ask to link account' | 'Use service user';
+  private_reply_policy?: 'Reply where asked' | 'Private when marked sensitive' | 'Always private';
+  show_feedback_buttons?: 0 | 1;
   // Access (Pairing)
   pairing_reply_enabled?: 0 | 1;
   pairing_pending_limit?: number;
@@ -81,7 +87,7 @@ export const WHATSAPP_GATEWAY_FIELDS = [
   'agent_allow_proactive', 'agent_allow_template_management', 'agent_auto_submit_templates',
   'agent_recipient_scope', 'agent_recipient_allowlist', 'agent_send_cap_per_run', 'agent_send_cap_per_day',
   'calling_enabled', 'call_greeting_audio', 'call_reply_audio', 'call_closing_audio', 'call_max_seconds',
-  'pin_ttl_hours', 'keyword_beats_pin',
+  'pin_ttl_hours', 'keyword_beats_pin', 'whatsapp_business_account_id',
 ] as const satisfies readonly (keyof GatewayDoc)[];
 
 /** The full Gateway record (every field), for editors that show more than the list columns. */
@@ -133,6 +139,7 @@ export async function getGateways(): Promise<GatewayDoc[]> {
       'direct_policy', 'room_policy', 'room_sender_policy',
       'mention_required', 'pairing_ttl_minutes', 'description',
       'default_target_type', 'default_agent', 'default_flow', 'last_event_at', 'last_error',
+      'connection_state', 'connection_reason',
     ],
     orderBy: { field: 'modified', order: 'desc' },
     limit: 100,

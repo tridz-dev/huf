@@ -79,6 +79,10 @@ Plans, findings, progress notes, logs, and spike or probe scripts never go in th
 
 Use conventional commit style (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`). Attribution lines are not needed.
 
+## 7. UI parity
+
+Any capability a feature claims a user can do (settings, fields, actions, admin flows) must be doable from the React UI in `frontend/`, not only from the Frappe desk form or the REST/API. Exemptions go in `scripts/baselines/ui_parity_exemptions.json` with a reason, are reviewed in PR, and are never added just to silence the guard. The `ui-parity` standards guard (`python3 scripts/run_standards.py`) enforces this. PRs tick the UI parity checklist item and attach UI evidence (see `.github/pull_request_template.md`).
+
 ## Sources
 
 - `.github/workflows/server-tests.yml`: `bench --site test_site run-tests --app huf`

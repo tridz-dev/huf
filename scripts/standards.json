@@ -35,5 +35,16 @@
       "huf/**/*.py",
       "scripts/baselines/whitelist.json"
     ]
+  },
+  {
+    "name": "ui-parity",
+    "script": "scripts/check_ui_parity.py",
+    "args": [],
+    "paths": [
+      "frontend/src/**",
+      "huf/huf/doctype/**",
+      "huf/ai/gateways/**",
+      "scripts/baselines/ui_parity_exemptions.json"
+    ]
   }
 ]

@@ -1,0 +1,22 @@
+{
+  "huf.ai.gateways.discord.handle_interaction": {
+    "reason": "Inbound Discord interactions webhook, called by Discord with signature verification; no UI caller possible.",
+    "kind": "webhook",
+    "owner": "gateways"
+  },
+  "huf.ai.gateways.slack_events.handle_slack_event": {
+    "reason": "Inbound Slack Events API webhook, called by Slack with signed requests; no UI caller possible.",
+    "kind": "webhook",
+    "owner": "gateways"
+  },
+  "huf.ai.gateways.slack_interactivity.handle_slack_interaction": {
+    "reason": "Inbound Slack interactivity webhook (buttons/modals/shortcuts), called by Slack; no UI caller possible.",
+    "kind": "webhook",
+    "owner": "gateways"
+  },
+  "huf.ai.gateways.teams.messaging.notify.send_teams_notification": {
+    "reason": "Server-to-server notification API invoked by flows/agents/integrations (programmatic send), not a user-configured setting; the UI configures the gateway that it uses.",
+    "kind": "system",
+    "owner": "gateways"
+  }
+}
