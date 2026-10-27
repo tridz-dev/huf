@@ -66,9 +66,9 @@ def _load() -> None:
 	# Set first so a hook module that calls ``get`` while importing cannot recurse.
 	_loaded = True
 	# WhatsApp first and each provider isolated: a broken Telegram module must never unregister WhatsApp.
-	for module in ("whatsapp_hooks", "telegram_hooks"):
+	for module in ("gateway_adapters.whatsapp_hooks", "gateway_adapters.telegram_hooks", "teams.hooks"):
 		try:
-			importlib.import_module(f"huf.ai.gateway_adapters.{module}")
+			importlib.import_module(f"huf.ai.{module}")
 		except Exception:
 			logging.getLogger("huf").exception("Gateway provider hooks failed to load: %s", module)
 

@@ -308,7 +308,7 @@ class TestAllGatewayAdapters(unittest.TestCase):
 		mock_post.return_value.json.return_value = {"id": "act_999"}
 
 		adapter = TeamsGatewayAdapter(
-			{"app_id": "appid", "app_password": "apppass"},
+			{"app_id": "appid", "app_password": "apppass", "tenant_id": "tenant-1"},
 			http_post=mock_post,
 		)
 
