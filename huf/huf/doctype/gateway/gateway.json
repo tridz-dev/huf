@@ -5,7 +5,7 @@
  "creation": "2026-07-26 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
- "field_order": ["gateway_name", "provider", "is_enabled", "integration_settings", "execution_user", "unmapped_policy", "description", "section_admission", "direct_policy", "room_policy", "room_sender_policy", "mention_required", "pairing_ttl_minutes", "pairing_reply_enabled", "section_default_route", "default_target_type", "default_agent", "default_flow", "section_status", "last_event_at", "last_error"],
+ "field_order": ["gateway_name", "provider", "is_enabled", "integration_settings", "execution_user", "unmapped_policy", "private_reply_policy", "description", "section_admission", "direct_policy", "room_policy", "room_sender_policy", "mention_required", "pairing_ttl_minutes", "pairing_reply_enabled", "section_default_route", "default_target_type", "default_agent", "default_flow", "section_status", "last_event_at", "last_error"],
  "fields": [
   {"fieldname":"gateway_name","fieldtype":"Data","in_list_view":1,"label":"Gateway name","reqd":1,"unique":1},
   {"fieldname":"provider","fieldtype":"Select","in_list_view":1,"label":"Channel","options":"WhatsApp\nMessenger\nInstagram\nTelegram\nSlack\nEmail\nGoogle Chat\nMicrosoft Teams","reqd":1},
@@ -27,6 +27,7 @@
   {"fieldname":"section_status","fieldtype":"Section Break","label":"Activity"},
   {"fieldname":"last_event_at","fieldtype":"Datetime","label":"Last event","read_only":1},
   {"default":"Ask to link account","description":"What happens when a Slack person has not been linked to a Huf user. \"Ask to link account\" replies with a one-time link so they can connect their account. \"Use service user\" runs them as the gateway's Run as user.","fieldname":"unmapped_policy","fieldtype":"Select","label":"When a person is not linked","options":"Ask to link account\nUse service user"},
+  {"default":"Reply where asked","description":"Where Slack answers go when someone asks in a channel. \"Reply where asked\" answers in the same place. \"Private when marked sensitive\" sends answers the agent marked sensitive as a direct message to the asker. \"Always private\" sends every channel answer as a direct message. Direct messages are unaffected. Needs the im:write Slack permission.","fieldname":"private_reply_policy","fieldtype":"Select","label":"Where to send answers","options":"Reply where asked\nPrivate when marked sensitive\nAlways private"},
   {"fieldname":"last_error","fieldtype":"Small Text","label":"Last error","read_only":1}
  ],
  "grid_page_length": 50,
