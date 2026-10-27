@@ -78,6 +78,10 @@ class SlackGatewayAdapter(GatewayAdapter):
             "mrkdwn": True
         }
         
+        if reply.blocks:
+            # `text` stays as the notification/accessibility fallback.
+            payload["blocks"] = list(reply.blocks)
+
         if reply.thread_id or reply.reply_to_provider_message_id:
             payload["thread_ts"] = reply.thread_id or reply.reply_to_provider_message_id
 
