@@ -781,6 +781,8 @@ export type BroadcastStatus = 'Draft' | 'Queued' | 'Running' | 'Paused' | 'Compl
 export type BroadcastRecipientStatus =
   'queued' | 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | 'deferred' | 'unknown' | 'skipped';
 
+export type BroadcastSendVia = 'messages' | 'marketing_messages';
+
 export interface Broadcast {
   name: string;
   title: string;
@@ -791,6 +793,7 @@ export interface Broadcast {
   template_name?: string;
   language_code?: string;
   category?: string;
+  send_via?: BroadcastSendVia;
   consent_source?: string | null;
   consent_attested?: number;
   max_recipients?: number | null;
@@ -871,6 +874,7 @@ export interface CreateBroadcastInput {
   template: string;
   title: string;
   language_code?: string;
+  send_via?: BroadcastSendVia;
   body_params?: unknown;
   header_params?: unknown;
   button_params?: unknown;
@@ -887,6 +891,7 @@ const COUNT_FIELDS = ['total', 'queued', 'sending', 'sent', 'delivered', 'read',
 export function adaptBroadcast(view: Record<string, unknown>): Broadcast {
   const { counts, ...doc } = view as { counts?: Record<string, number> } & Record<string, unknown>;
   const flat: Record<string, unknown> = { ...doc };
+  flat.send_via = doc.send_via === 'marketing_messages' ? 'marketing_messages' : 'messages';
   for (const k of COUNT_FIELDS) flat[k] = Number(counts?.[k] ?? 0);
   return flat as unknown as Broadcast;
 }
