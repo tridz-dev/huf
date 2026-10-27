@@ -378,3 +378,10 @@ def test_scoped_stubs_do_not_leak(env, monkeypatch):
 		_post(m, {"type": "url_verification", "challenge": "abc"})
 	assert {k: sys.modules.get(k) for k in keys} == before
 	assert frappe.whitelist is whitelist
+
+
+def test_request_url_counts_as_confirmed_once_an_event_arrived(env, monkeypatch):
+	import datetime
+
+	monkeypatch.setattr(slack_setup.frappe.db, "get_value", lambda *a, **k: datetime.datetime(2026, 1, 1), raising=False)
+	assert by_id(slack_setup.verify_slack_setup(GW))["request_url"]["ok"]

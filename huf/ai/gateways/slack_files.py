@@ -145,7 +145,7 @@ def download_slack_file(
         if mime == "text/html":
             logger.warning("slack file %s rejected: html response (missing files:read?)", file_id)
             return None
-        if not mime or mime == "application/octet-stream":
+        if not mime or mime in ("application/octet-stream", "application/force-download"):
             mime = str(file_info.get("mimetype") or "").split(";", 1)[0].strip().lower()
         if not _mime_allowed(mime):
             logger.warning("slack file %s rejected: mime not allowed", file_id)

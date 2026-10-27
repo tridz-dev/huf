@@ -65,6 +65,8 @@ class State:
 
 
 def _plain(f):
+	if isinstance(f, dict):  # Frappe 16 aggregate syntax: {"COUNT": "name", "as": "n"}
+		return f.get("as") or next(iter(f))
 	return f.split(" as ")[-1].strip() if " as " in f else f
 
 

@@ -382,3 +382,14 @@ def test_diagnose_output_has_no_secrets(monkeypatch, env):
 	_setup_diag(monkeypatch, event_over={"error_message": "failed token=supersecret99 xoxb-111-222-333"})
 	text = repr(health.diagnose_event("GEV-1"))
 	assert "supersecret99" not in text and "xoxb-111" not in text
+
+
+def test_user_visible_rejection_not_stored_as_admin_error(monkeypatch):
+	import importlib
+
+	health = importlib.import_module("huf.ai.gateways.health")
+	hooks_mod = importlib.import_module("huf.ai.gateways.hooks")
+	seen = {}
+	monkeypatch.setattr(health, "_write_error", lambda gw, tag, ev, reason: seen.update(tag=tag, reason=reason))
+	health._on_event_rejected(object(), object(), "Rejected", hooks_mod.USER_VISIBLE_PREFIX + "Open https://x/link?token=SECRET")
+	assert "SECRET" not in seen["reason"] and seen["reason"] == health.USER_NOTICE_SUMMARY

@@ -164,7 +164,7 @@ def _check_rejections(ctx) -> list[dict]:
 	since = frappe.utils.now_datetime() - timedelta(hours=EVENT_WINDOW_HOURS)
 	rows = frappe.get_all("Gateway Event",
 		filters={"gateway": ctx["name"], "status": "Rejected", "received_at": (">=", since)},
-		fields=["error_message", "count(name) as n"], group_by="error_message",
+		fields=["error_message", {"COUNT": "name", "as": "n"}], group_by="error_message",
 		order_by="n desc", limit_page_length=GROUP_LIMIT)
 	counts = {_clip(r.get("error_message") or "unknown", 80): int(r.get("n") or 0) for r in rows}
 	ctx["rejections"] = counts
@@ -178,7 +178,7 @@ def _check_rejections(ctx) -> list[dict]:
 
 def _check_references(ctx) -> list[dict]:
 	rows = frappe.get_all("Teams Conversation Reference",
-		filters={"gateway": ctx["name"], "installed": 1}, fields=["conversation_type", "count(name) as n"],
+		filters={"gateway": ctx["name"], "installed": 1}, fields=["conversation_type", {"COUNT": "name", "as": "n"}],
 		group_by="conversation_type", limit_page_length=GROUP_LIMIT)
 	counts = {r.get("conversation_type") or "unknown": int(r.get("n") or 0) for r in rows}
 	ctx["references"] = counts
@@ -191,7 +191,7 @@ def _check_references(ctx) -> list[dict]:
 
 def _check_outbox(ctx) -> list[dict]:
 	rows = frappe.get_all("Teams Outbound Message", filters={"gateway": ctx["name"]},
-		fields=["status", "count(name) as n"], group_by="status", limit_page_length=GROUP_LIMIT)
+		fields=["status", {"COUNT": "name", "as": "n"}], group_by="status", limit_page_length=GROUP_LIMIT)
 	counts = {r.get("status"): int(r.get("n") or 0) for r in rows}
 	ctx["outbox"] = counts
 	dead = frappe.get_all("Teams Outbound Message", filters={"gateway": ctx["name"], "status": "Dead"},

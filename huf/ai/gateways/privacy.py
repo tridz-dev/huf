@@ -139,7 +139,8 @@ def resolve_reply_target(gateway, event, reply_text):
 def reply_ephemeral(gateway, event, text: str):
 	"""Post a message only the asker can see, in the originating channel/thread."""
 	return get_slack_api(gateway).post_ephemeral(
-		event.conversation_id, event.sender_id, text, thread_ts=event.thread_id or None
+		event.conversation_id, event.sender_id, text,
+		thread_ts=None if str(event.conversation_id or "").startswith("D") else (event.thread_id or None),
 	)
 
 

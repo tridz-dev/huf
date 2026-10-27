@@ -13,7 +13,11 @@ from huf.ai.gateways.slack_api import SlackApi
 
 def get_gateway_credential(gateway, key: str) -> str:
 	"""Return a credential value from the gateway's linked Integration Settings ("" if absent)."""
-	name = getattr(gateway, "integration_settings", None)
+	if isinstance(gateway, str):
+		# Callers such as the approvals notifier hold only the gateway name.
+		name = frappe.db.get_value("Gateway", gateway, "integration_settings")
+	else:
+		name = getattr(gateway, "integration_settings", None)
 	if not name:
 		return ""
 	settings = frappe.get_doc("Integration Settings", name)

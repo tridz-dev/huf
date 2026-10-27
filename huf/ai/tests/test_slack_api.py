@@ -268,7 +268,7 @@ def test_missing_scopes_custom_and_all_granted():
 
 
 def test_required_scopes_contents():
-	assert len(sa.REQUIRED_BOT_SCOPES) == 13
+	assert len(sa.REQUIRED_BOT_SCOPES) == 15
 	assert "users:read.email" in sa.REQUIRED_BOT_SCOPES
 
 

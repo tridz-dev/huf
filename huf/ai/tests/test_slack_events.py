@@ -514,3 +514,12 @@ class TestSlackEventsHandler(unittest.TestCase):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+def test_normalize_slack_text_keeps_links_and_labels():
+	from huf.ai.gateways.slack_events import normalize_slack_text as n
+
+	assert n("see <https://x.io|the site> and <https://example.com>") == "see the site (https://x.io) and https://example.com"
+	assert n("<mailto:a@b.co|a@b.co> <#C1|general> <@U1> <!here> a &lt;b&gt; &amp; c") == "a@b.co #general <@U1> @here a &lt;b&gt; & c"
+	assert n("plain 🎉 :tada:") == "plain 🎉 :tada:"
+	assert n("") == "" and n(None) == ""

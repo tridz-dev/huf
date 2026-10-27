@@ -193,3 +193,22 @@ def test_octet_stream_with_disallowed_declared_mime_rejected():
     assert out is None
     out, _ = run({}, Env(Resp(ctype="application/octet-stream")))
     assert out is None
+
+
+def test_force_download_content_type_falls_back_to_declared_mime():
+	class Resp:
+		status_code = 200
+		headers = {"Content-Type": "application/force-download"}
+
+		def iter_content(self, chunk_size=0):
+			yield b"hello"
+
+		def close(self):
+			pass
+
+	saved = []
+	out = sf.download_slack_file(
+		{"id": "F1", "name": "n.txt", "mimetype": "text/plain", "size": 5,
+			"url_private_download": "https://files.slack.com/files-pri/T-F/n.txt"},
+		"xoxb-t", http_get=lambda *a, **k: Resp(), save_file=lambda n, c, is_private=True: saved.append(n) or "FILE-1")
+	assert out and out["mime_type"] == "text/plain" and saved == ["n.txt"]

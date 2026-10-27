@@ -18,6 +18,10 @@ ACK_REACTION = "hourglass_flowing_sand"
 _TS_RE = re.compile(r"^\d+\.\d+$")
 
 FAILURE_TEXT = "Sorry, something went wrong while handling your message. Reference: {ref}"
+ROOM_NOT_APPROVED_REASON = "Room or sender is not approved for this gateway"
+ROOM_NOT_APPROVED_TEXT = (
+	"I'm not enabled in this channel yet. Ask a Huf admin to approve this channel (and you) for this gateway."
+)
 UNROUTED_TEXT = "I'm not set up to handle this here. Reference: {ref}"
 
 
@@ -32,6 +36,24 @@ def _claim(kind: str, event_name: str) -> bool:
 		return True
 	except Exception:
 		return False
+
+
+def _notice_thread(channel, thread_ts, message_ts=None):
+	"""A top-level message's own ts is its "thread": an ephemeral posted there is hidden in a thread view.
+
+	Direct messages (channel ids starting with D) and replies to a top-level message get the notice at
+	top level instead; only a notice for a message inside a real thread stays in that thread.
+	"""
+	if str(channel or "").startswith("D"):
+		return None
+	if thread_ts and message_ts and str(thread_ts) == str(message_ts):
+		return None
+	return thread_ts or None
+
+
+def _event_message_ts(event):
+	ref = parse_slack_message_ref(getattr(event, "provider_event_id", None))
+	return ref[1] if ref else None
 
 
 def _send_private_slack(gateway, event, text: str) -> None:
@@ -49,7 +71,10 @@ def _send_private_slack(gateway, event, text: str) -> None:
 	api = get_slack_api(gateway)
 	if channel:
 		try:
-			api.post_ephemeral(channel, sender, text=text, thread_ts=getattr(event, "thread_id", None) or None)
+			api.post_ephemeral(
+				channel, sender, text=text,
+				thread_ts=_notice_thread(channel, getattr(event, "thread_id", None), _event_message_ts(event)),
+			)
 			return
 		except Exception:
 			pass
@@ -97,6 +122,16 @@ def on_event_rejected(gateway, event, status, reason) -> None:
 		text = reason[len(hooks.USER_VISIBLE_PREFIX):].strip()
 		if text:
 			_notify("rejected", gateway, event, text)
+	elif (
+		status == "Rejected"
+		and reason == ROOM_NOT_APPROVED_REASON
+		and str(getattr(gateway, "provider", "") or "").lower() == "slack"
+		and str(getattr(event, "conversation_id", "") or "")[:1] in ("C", "G")
+	):
+		# Once per channel per day, privately to the sender, so a first @mention is not met with silence.
+		_notify("room_unapproved", gateway, SimpleNamespace(name=str(event.conversation_id), sender_id=event.sender_id,
+			conversation_id=event.conversation_id, thread_id=getattr(event, "thread_id", None),
+			provider_event_id=getattr(event, "provider_event_id", None)), ROOM_NOT_APPROVED_TEXT)
 	elif status == "Unrouted":
 		_notify("rejected", gateway, event, UNROUTED_TEXT.format(ref=getattr(event, "name", "")))
 

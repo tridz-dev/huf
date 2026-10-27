@@ -211,7 +211,7 @@ def test_manifest_has_shortcut_and_previous_keys(monkeypatch):
 	monkeypatch.setattr(slack_setup, "_site_url", lambda: "https://huf.example.com")
 	m = slack_setup._build_manifest(SimpleNamespace(name="g", gateway_name="G"))
 	sh = m["features"]["shortcuts"]
-	assert {"name": "Ask Huf about this message", "type": "message",
+	assert {"name": "Ask Huf about this", "type": "message",
 		"callback_id": "huf_ask_message", "description": sh[0]["description"]} == sh[0]
 	assert sh[0]["description"]
 	assert {"app_home", "bot_user"} <= set(m["features"])

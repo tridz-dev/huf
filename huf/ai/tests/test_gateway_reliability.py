@@ -405,3 +405,27 @@ def test_run_idempotency_key_format_documented():
 
 	src = inspect.getsource(gateway_service.process_gateway_event)
 	assert 'client_idempotency_key=f"gw:{event.name}"' in src
+
+
+def test_unapproved_room_gets_one_private_hint_per_channel(env):
+	reason = reliability.ROOM_NOT_APPROVED_REASON
+	reliability.on_event_rejected(GW, ev("GE-1"), "Rejected", reason)
+	reliability.on_event_rejected(GW, ev("GE-2"), "Rejected", reason)
+	assert len(env.sent) == 1 and "admin" in env.sent[0][2].lower()
+
+
+def test_unapproved_direct_message_stays_silent(env):
+	reliability.on_event_rejected(GW, ev(conversation_id="D1"), "Rejected", reliability.ROOM_NOT_APPROVED_REASON)
+	assert env.sent == []
+
+
+def test_notice_thread_rules():
+	assert reliability._notice_thread("D1", "1.1", "1.1") is None
+	assert reliability._notice_thread("C1", "1.1", "1.1") is None  # top-level message: own ts is not a real thread
+	assert reliability._notice_thread("C1", "1.1", "2.2") == "1.1"  # reply inside a real thread
+
+
+def test_unapproved_room_hint_is_posted_top_level_for_top_level_message(env):
+	reliability.on_event_rejected(GW, ev(thread_id="222.3", provider_event_id="C1:222.3"), "Rejected",
+		reliability.ROOM_NOT_APPROVED_REASON)
+	assert env.sent and env.sent[0][1] in (None, "")

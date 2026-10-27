@@ -35,6 +35,8 @@ REQUIRED_BOT_SCOPES = [
 	"channels:read",
 	"groups:read",
 	"mpim:read",
+	"commands",
+	"files:read",
 ]
 
 
@@ -154,6 +156,10 @@ class SlackApi:
 		if email:
 			out["profile"] = {"email": email}
 		return out
+
+	def files_info(self, file_id: str) -> dict:
+		"""File metadata including the private download URL (needs ``files:read``)."""
+		return (self.call("files.info", file=file_id) or {}).get("file") or {}
 
 	def users_list(self, cursor: str | None = None, limit: int = 200) -> dict:
 		return self.call("users.list", cursor=cursor, limit=limit)

@@ -35,7 +35,7 @@ def has_permission_agent_run(doc, ptype=None, user=None):
 		if "System Manager" in frappe.get_roles(user):
 			return True
 		return doc.owner == user
-	return None  # Let framework decide for other ptypes
+	return True  # no objection (Frappe 16 treats None as deny)
 
 
 def has_permission_agent_message(doc, ptype=None, user=None):
@@ -66,7 +66,7 @@ def has_permission_agent_message(doc, ptype=None, user=None):
 			return True
 		conv_owner = frappe.db.get_value("Agent Conversation", doc.conversation, "owner")
 		return conv_owner == user
-	return None  # Let framework decide for other ptypes
+	return True  # no objection (Frappe 16 treats None as deny)
 
 
 def has_permission_agent_conversation(doc, ptype=None, user=None):
@@ -95,7 +95,7 @@ def has_permission_agent_conversation(doc, ptype=None, user=None):
 		if "System Manager" in frappe.get_roles(user):
 			return True
 		return doc.owner == user
-	return None  # Let framework decide for other ptypes
+	return True  # no objection (Frappe 16 treats None as deny)
 
 
 def has_permission_agent_tool_call(doc, ptype=None, user=None):
@@ -126,7 +126,7 @@ def has_permission_agent_tool_call(doc, ptype=None, user=None):
 			return True
 		run_owner = frappe.db.get_value("Agent Run", doc.agent_run, "owner")
 		return run_owner == user
-	return None  # Let framework decide for other ptypes
+	return True  # no objection (Frappe 16 treats None as deny)
 
 
 def has_permission_agent_context_artifact(doc, ptype=None, user=None):
@@ -157,4 +157,4 @@ def has_permission_agent_context_artifact(doc, ptype=None, user=None):
 			return True
 		conv_owner = frappe.db.get_value("Agent Conversation", doc.conversation, "owner")
 		return conv_owner == user
-	return None  # Let framework decide for other ptypes
+	return True  # no objection (Frappe 16 treats None as deny)

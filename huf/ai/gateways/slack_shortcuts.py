@@ -1,4 +1,4 @@
-"""Slack message shortcut: "Ask Huf about this message" (act on an existing message).
+"""Slack message shortcut: "Ask Huf about this" (act on an existing message).
 
 Slack POSTs a signed ``message_action`` payload to the interactivity endpoint; B1 routes it
 to the handler registered under ``message_action:huf_ask_message`` as
@@ -19,7 +19,7 @@ from huf.ai.gateways import slack_interactivity as _si
 
 CALLBACK_ID = "huf_ask_message"
 HANDLER_KEY = f"message_action:{CALLBACK_ID}"
-SHORTCUT_NAME = "Ask Huf about this message"
+SHORTCUT_NAME = "Ask Huf about this"
 SHORTCUT_DESCRIPTION = "Ask Huf to act on this message"
 
 MSG_ON_IT = "On it — I'll reply in the thread."
@@ -110,6 +110,7 @@ def handle_ask_message(gateway, session, actor_user, payload) -> dict:
 		"type": "message_action",
 		"callback_id": CALLBACK_ID,
 		"team": team,
+		"team_id": team,
 		"channel": channel,
 		"message_ts": ts,
 		"user": slack_user,

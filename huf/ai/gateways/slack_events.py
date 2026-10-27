@@ -91,6 +91,7 @@ def handle_slack_event():
         if mention_token:
             # Strip the bot mention (and following whitespace); unknown bot id => text untouched.
             text = re.sub(re.escape(mention_token) + r"\s*", "", text)
+        text = normalize_slack_text(text)
         context = {
             "sender_id": str(event.get("user") or ""),
             "conversation_id": channel,
@@ -110,6 +111,35 @@ def handle_slack_event():
         )
 
     return {"ok": True}
+
+
+_SLACK_TOKEN_RE = re.compile(r"<([^<>\s|][^<>|]*)(?:\|([^<>]*))?>")
+
+
+def normalize_slack_text(text: str) -> str:
+    """Turn Slack's markup into plain text so Frappe's HTML sanitizer cannot eat it.
+
+    ``<https://x|label>`` -> ``label (https://x)``, ``<https://x>`` -> ``https://x``,
+    ``<mailto:a@b|a@b>`` -> ``a@b``, ``<#C1|general>`` -> ``#general``, ``<!here>`` -> ``@here``; ``&amp;`` is decoded; ``&lt;``/``&gt;`` stay encoded.
+    """
+
+    def _sub(match: "re.Match") -> str:
+        target, label = match.group(1), match.group(2)
+        if target.startswith("@"):
+            return match.group(0)  # user mentions stay as Slack sends them
+        if target.startswith("#"):
+            return f"#{label}" if label else target
+        if target.startswith("!"):
+            return "@" + (label or target[1:].split("^", 1)[0])
+        if target.startswith("mailto:"):
+            return label or target[len("mailto:"):]
+        if label and label != target:
+            return f"{label} ({target})"
+        return target
+
+    out = _SLACK_TOKEN_RE.sub(_sub, text or "")
+    # Typed angle brackets arrive as &lt; / &gt;: keep them encoded so the HTML sanitizer cannot treat them as tags.
+    return out.replace("&amp;", "&")
 
 
 def _is_room(event: dict, channel: str) -> bool:

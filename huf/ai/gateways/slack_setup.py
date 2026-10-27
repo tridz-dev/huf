@@ -68,7 +68,7 @@ def _build_manifest(gateway) -> dict:
 			"bot_user": {"display_name": display, "always_online": False},
 			"shortcuts": [
 				{
-					"name": "Ask Huf about this message",
+					"name": "Ask Huf about this",
 					"type": "message",
 					"callback_id": "huf_ask_message",
 					"description": "Ask Huf to act on this message",
@@ -104,6 +104,20 @@ def _quote(value: str) -> str:
 def get_slack_manifest(gateway_name: str) -> dict:
 	gateway = _check_permission(gateway_name)
 	return _build_manifest(gateway)
+
+
+def _request_url_confirmed(gateway_name: str) -> bool:
+	"""Slack confirmed the URL (cache flag), or has already delivered a signed event.
+
+	The cache flag disappears on a clear-cache or deploy; any received event proves the URL works.
+	"""
+	if frappe.cache().get_value(URL_VERIFIED_KEY.format(gateway_name)):
+		return True
+	try:
+		last = frappe.db.get_value("Gateway", gateway_name, "last_event_at")
+		return isinstance(last, (str, datetime)) and bool(last)
+	except Exception:
+		return False
 
 
 def _check(id_, ok, title, detail, fix="", informational=False):
@@ -195,7 +209,7 @@ def _run_checks(gateway) -> list[dict]:
 		"" if secret else "Copy the Signing Secret from Basic Information in Slack into the Credentials tab.",
 	))
 
-	verified = frappe.cache().get_value(URL_VERIFIED_KEY.format(gateway.name))
+	verified = _request_url_confirmed(gateway.name)
 	checks.append(_check(
 		"request_url", bool(verified), "Slack confirmed the Request URL",
 		"Slack has confirmed the events address." if verified else "Slack has not confirmed the events address yet.",
@@ -237,7 +251,7 @@ def get_slack_setup_status(gateway_name: str) -> dict:
 		"verified": bool(cached.get("all_ok")),
 		"checked_at": cached.get("checked_at"),
 		"checks": cached.get("checks") or [],
-		"request_url_verified": bool(frappe.cache().get_value(URL_VERIFIED_KEY.format(gateway_name))),
+		"request_url_verified": _request_url_confirmed(gateway_name),
 	}
 
 

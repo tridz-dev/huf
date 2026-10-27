@@ -108,8 +108,18 @@ def _on_run_failure(gateway, event, kind, error) -> None:
 	_write_error(gateway, _TAG_RUN_FAILED, event, error)
 
 
+USER_NOTICE_SUMMARY = "Sender was sent a private notice (for example to connect their account)"
+
+
+def _admin_text(reason):
+	"""Text addressed to the sender (and any link in it) is summarised for admins."""
+	text = str(reason or "")
+	return USER_NOTICE_SUMMARY if text.startswith(hooks.USER_VISIBLE_PREFIX) else text
+
+
 def _on_event_rejected(gateway, event, status, reason) -> None:
-	_write_error(gateway, str(status or "rejected").lower(), event, reason or "No reason recorded")
+	# The text may be addressed to the sender and carry a one-time link: never show it as an admin error.
+	_write_error(gateway, str(status or "rejected").lower(), event, _admin_text(reason) or "No reason recorded")
 
 
 def _on_run_success(gateway, event, kind, response) -> None:
@@ -157,7 +167,7 @@ def _counts_since(gateway_name: str, since: datetime) -> dict[str, int]:
 	rows = frappe.get_all(
 		"Gateway Event",
 		filters={"gateway": gateway_name, "received_at": [">=", since]},
-		fields=["status", "count(name) as count"],
+		fields=["status", {"COUNT": "name", "as": "count"}],
 		group_by="status",
 		limit_page_length=50,
 	)
@@ -225,7 +235,7 @@ def get_gateway_health(gateway_name: str) -> dict:
 			"received_at": str(e["received_at"]) if e.get("received_at") else None,
 			"sender": e.get("sender_id") or "",
 			"conversation": e.get("conversation_id") or "",
-			"error_message": _clip(redact(e.get("error_message")), EVENT_ERROR_MAX_CHARS),
+			"error_message": _clip(redact(_admin_text(e.get("error_message"))), EVENT_ERROR_MAX_CHARS),
 			"agent_run": e.get("agent_run"),
 			"flow_run": e.get("flow_run"),
 			"target": e.get("target_agent") or e.get("target_flow") or "",
@@ -373,7 +383,7 @@ def diagnose_event(event_name: str) -> list[dict]:
 	if event.status in ("Rejected", "Unrouted", "Failed") and event.error_message:
 		results.append(_check(
 			"Recorded result", False, "",
-			f"The event was recorded as {event.status}: {_clip(redact(event.error_message), EVENT_ERROR_MAX_CHARS)}",
+			f"The event was recorded as {event.status}: {_clip(redact(_admin_text(event.error_message)), EVENT_ERROR_MAX_CHARS)}",
 			"Fix the issue above, then send a new message.",
 		))
 	return results
