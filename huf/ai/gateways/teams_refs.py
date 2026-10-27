@@ -231,6 +231,11 @@ def _pre_ingest_install(gateway, context) -> bool:
 			upsert_reference(name, meta, installed=True)
 		elif kind == tc.TeamsActivityKind.UNINSTALL.value:
 			mark_uninstalled(name, meta)
+	else:
+		try:  # keep the dropped install event as Rejected so admins can see it
+			frappe.flags.gateway_filter_reason = tc.REASON_TENANT_NOT_ALLOWED
+		except Exception:
+			pass
 	return False  # install_event: never routed to an agent
 
 

@@ -131,7 +131,7 @@ def _queue_one(gateway, doc, user, title, facts, ttl) -> bool:
 		"tenant_id": tenant,
 	}
 	idem = "teams-approval-" + hashlib.sha256(f"{gateway}|{session}".encode()).hexdigest()[:32]
-	teams_outbox.enqueue(gateway, snapshot, "card", {"activity": activity}, idem)
+	teams_outbox.enqueue(gateway, snapshot, "card", {"activity": activity, "action_session": session}, idem)
 	frappe.cache().set_value(key, 1, expires_in_sec=NOTIFIED_TTL)
 	return True
 

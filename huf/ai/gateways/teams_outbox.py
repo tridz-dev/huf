@@ -229,18 +229,57 @@ def _schedule_delivery(name: str) -> None:
 			pass
 
 
-def _default_sender(kind: str, snapshot: Mapping[str, Any], payload: Mapping[str, Any]) -> str:
+class MissingCredentialsError(ValueError):
+	"""The gateway has no usable Teams credentials. Permanent (not retried); secret-free."""
+
+
+def _gateway_creds(gateway_name: str | None) -> dict:
+	"""app_id / app_password / tenant_id from the Integration Settings linked to the gateway."""
+	if not gateway_name:
+		raise MissingCredentialsError("Teams outbox row has no gateway; cannot obtain credentials")
+	try:
+		from huf.ai.gateways import teams_tenant
+
+		gateway = frappe.get_doc("Gateway", gateway_name)
+		creds = {key: teams_tenant.get_gateway_credential(gateway, key) for key in CRED_KEYS}
+	except MissingCredentialsError:
+		raise
+	except Exception as exc:
+		raise MissingCredentialsError(
+			f"Teams credentials for gateway {gateway_name!r} could not be loaded ({type(exc).__name__})"
+		) from None
+	missing = [k for k in CRED_KEYS if not creds.get(k)]
+	if missing:
+		raise MissingCredentialsError(
+			f"Teams credentials for gateway {gateway_name!r} are incomplete: missing {', '.join(missing)}"
+		)
+	return creds
+
+
+CRED_KEYS = ("app_id", "app_password", "tenant_id")
+
+
+def _default_sender(
+	kind: str,
+	snapshot: Mapping[str, Any],
+	payload: Mapping[str, Any],
+	*,
+	http: Callable | None = None,
+) -> str:
 	try:
 		from huf.ai.gateways import teams_api  # type: ignore
-	except Exception as exc:  # fail closed until T2 lands
+	except Exception as exc:  # fail closed
 		raise NotImplementedError("teams_api is not available; cannot deliver Teams message") from exc
+	gateway_name = snapshot.get("gateway")
+	creds = _gateway_creds(gateway_name)
+	token = teams_api.make_token_provider(creds, gateway_name=gateway_name, http=http)
 	service_url, conv = snapshot.get("service_url"), snapshot.get("conversation_id")
 	if kind == "card_update":
 		res = teams_api.update_activity(
-			service_url, conv, payload.get("activity_id"), payload.get("activity", payload)
+			service_url, conv, payload.get("activity_id"), payload.get("activity", payload), token=token, http=http
 		)
 	else:
-		res = teams_api.post_activity(service_url, conv, payload.get("activity", payload))
+		res = teams_api.post_activity(service_url, conv, payload.get("activity", payload), token=token, http=http)
 	pid = res.get("id") if isinstance(res, Mapping) else res
 	return str(pid or "")
 
@@ -251,6 +290,7 @@ def deliver(
 	sender: Callable[[str, Mapping[str, Any], Mapping[str, Any]], str] | None = None,
 	now: datetime | None = None,
 	sleep: Callable[[float], None] | None = None,
+	http: Callable | None = None,
 ) -> str:
 	"""Attempt delivery of one row. Returns the resulting status (or "Skipped" if not claimed)."""
 	now = now or _now()
@@ -270,9 +310,14 @@ def deliver(
 	}
 	attempts = int(row.get("attempts") or 0) + 1
 	try:
-		pid = (sender or _default_sender)(row.get("kind"), snapshot, payload)
+		if sender is not None:
+			pid = sender(row.get("kind"), snapshot, payload)
+		else:
+			pid = _default_sender(row.get("kind"), snapshot, payload, http=http)
 	except Exception as exc:
 		return _record_failure(name, exc, attempts, now)
+	if row.get("kind") == "card":
+		_record_card_activity(payload, pid)
 	_update(
 		name,
 		{
@@ -284,6 +329,22 @@ def deliver(
 		},
 	)
 	return "Sent"
+
+
+def _record_card_activity(payload: Mapping[str, Any], activity_id: Any) -> None:
+	"""Remember the delivered card's activity id on its Teams Action Session (best effort)."""
+	session = payload.get("action_session") if isinstance(payload, Mapping) else None
+	if not (session and activity_id):
+		return
+	try:
+		from huf.ai.gateways import teams_actions
+
+		teams_actions.record_card_activity(str(session), str(activity_id))
+	except Exception:
+		try:
+			frappe.log_error(title="Teams outbox: recording card activity id failed")
+		except Exception:
+			pass
 
 
 def _record_failure(name: str, exc: BaseException, attempts: int, now: datetime) -> str:

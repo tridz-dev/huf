@@ -186,6 +186,8 @@ def env(monkeypatch):
 	)
 	monkeypatch.setattr(ta, "frappe", fake)
 	monkeypatch.setattr(ta.teams_identity, "resolve_user", lambda gw, t, a: w.links.get((t, a)))
+	w.allowed_tenants = {TENANT}
+	monkeypatch.setattr(ta, "_tenant_ok", lambda gw, t: t in w.allowed_tenants)
 
 	def approve(name, comment=None):
 		w.users_during.append(w.user)
@@ -806,3 +808,31 @@ def test_end_to_end_handler_sets_override_through_webhook(wh, env):
 	out = wh.gw.handle_gateway_webhook()
 	b = json.loads(out.body)
 	assert b["statusCode"] == 200 and b["type"] == cards.CARD_CONTENT_TYPE
+
+
+# --- T16: defence in depth, tenant verified by the handler itself ----------------------------
+
+
+def test_card_action_foreign_tenant_changes_nothing(env):
+	foreign = "00000000-0000-0000-0000-00000000ffff"
+	env.links[(foreign, AAD)] = "ada@x.com"  # even a (hypothetical) link must not help
+	res, ov = click(env, activity(tenant=foreign))
+	assert res is False
+	assert env.calls == [] and env.sessions["tas-1"]["state"] == "Open"
+	assert env.approvals["AP-1"].status == "Pending"
+
+
+def test_real_tenant_ok_fails_closed(env, monkeypatch):
+	ta = env.ta
+	monkeypatch.undo()  # drop the harness stub for _tenant_ok
+	teams_tenant = importlib.import_module("huf.ai.gateways.teams_tenant")
+	monkeypatch.setattr(teams_tenant, "is_tenant_allowed", lambda gw, t: t == TENANT)
+	assert ta._tenant_ok(GW, TENANT) is True
+	assert ta._tenant_ok(GW, "other") is False
+	assert ta._tenant_ok(GW, "") is False
+
+	def boom(gw, t):
+		raise RuntimeError("settings down")
+
+	monkeypatch.setattr(teams_tenant, "is_tenant_allowed", boom)
+	assert ta._tenant_ok(GW, TENANT) is False

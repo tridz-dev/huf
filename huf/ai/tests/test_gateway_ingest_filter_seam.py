@@ -14,6 +14,8 @@ import types
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _stub_env  # noqa: E402
 
@@ -209,3 +211,122 @@ class TestIngestFilterSeam:
 		res = self._ingest("dup")
 		assert res == {"duplicate": True, "event_name": first["event_name"]}
 		assert len(calls) == 1
+
+
+# --- T16: REAL composition (ingest -> call_filters -> real Teams filters) ---------------------
+
+import copy  # noqa: E402
+import json  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+_TEAMS_FIX = Path(__file__).parent / "fixtures" / "teams"
+_HOME = "00000000-0000-0000-0000-00000000aaaa"
+_FOREIGN = "00000000-0000-0000-0000-00000000ffff"
+
+
+def _teams_activity(text, tenant=_HOME, fixture="personal_message", kind="message"):
+	act = json.loads((_TEAMS_FIX / f"{fixture}.json").read_text())
+	act["text"] = text
+	act["channelData"]["tenant"]["id"] = tenant
+	act["conversation"]["tenantId"] = tenant
+	act["huf_kind"] = kind
+	return act
+
+
+class TestTeamsFilterComposition:
+	_ingest = TestIngestFilterSeam._ingest
+
+	def setup_method(self):
+		TestIngestFilterSeam.setup_method(self)
+		self.gateway.provider = "Microsoft Teams"
+		self.order = []
+		self.tokens = []
+		self.outbox = []
+		self.pm = pytest.MonkeyPatch()
+		self.tt = importlib.import_module("huf.ai.gateways.teams_tenant")
+		self.th = importlib.import_module("huf.ai.gateways.teams_help")
+		self.ta = importlib.import_module("huf.ai.gateways.teams_actions")
+		self.tr = importlib.import_module("huf.ai.gateways.teams_refs")
+		hooks.clear()
+		hooks.register(hooks.ON_EVENT_REJECTED, lambda *a: self.rejected.append(a))
+		for mod in (self.tt, self.th, self.ta, self.tr):
+			mod.register()
+		self.pm.setattr(self.tt, "get_allowed_tenants", lambda gw: [_HOME])
+		self.pm.setattr(self.th.teams_outbox, "enqueue", lambda *a, **k: self.outbox.append(a) or "n1")
+		self.pm.setattr(self.th.teams_identity, "_prompt_token", lambda *a: self.tokens.append(a) or "TOK")
+		self.pm.setattr(self.th.teams_identity, "resolve_user", lambda *a: None)
+		self.pm.setattr(self.th.teams_identity, "link_url", lambda t: "https://huf.test/link?token=" + t)
+		self.pm.setattr(self.tr, "upsert_reference", lambda *a, **k: self.order.append("upsert"))
+		self.pm.setattr(self.ta, "_handle", lambda *a, **k: self.order.append("card") or {})
+		self.pm.setattr(self.ta.frappe, "local", SimpleNamespace(), raising=False)
+
+	def teardown_method(self):
+		self.pm.undo()
+		TestIngestFilterSeam.teardown_method(self)
+
+	def _teams(self, eid, text, **kw):
+		raw = _teams_activity(text, **kw)
+		return gs.ingest_gateway_event(
+			GATEWAY, eid, {**CTX, "message_text": text}, verified_sender=True, raw_payload=raw
+		)
+
+	@pytest.mark.parametrize("text", ["connect", "help", "status"])
+	def test_foreign_tenant_command_gets_no_reply_no_token_and_is_rejected(self, text):
+		res = self._teams("x-" + text, text, tenant=_FOREIGN)
+		assert res == {"event_name": "EVT-1", "status": "Rejected"}
+		assert self.outbox == [] and self.tokens == []
+		assert self.events[0].db_set.call_args[0][0] == {
+			"status": "Rejected", "error_message": "tenant_not_allowed"}
+		assert self.rejected[0][3] == "tenant_not_allowed"
+
+	def test_allowed_tenant_command_still_answered(self):
+		self.pm.setattr(self.th, "_snapshot", lambda gw, meta: {"service_url": "https://x"})
+		res = self._teams("ok1", "help")
+		assert res == {"filtered": True}  # command handled: dropped from routing
+		assert len(self.outbox) == 1
+
+	def test_foreign_tenant_card_action_never_reaches_handler(self):
+		res = self._teams("c1", "", tenant=_FOREIGN, fixture="invoke_card_action", kind="card_action")
+		assert res["status"] == "Rejected"
+		assert "card" not in self.order
+
+	def test_foreign_tenant_install_creates_nothing(self):
+		res = self._teams("i1", "", tenant=_FOREIGN, fixture="installation_add", kind="install")
+		assert res["status"] == "Rejected" and "upsert" not in self.order
+
+	def test_stop_at_first_false_call_order(self):
+		seen = []
+		hooks.clear()
+		hooks.register(hooks.PRE_INGEST_FILTER, lambda g, c: seen.append("a") or True, priority=10)
+		hooks.register(hooks.PRE_INGEST_FILTER, lambda g, c: seen.append("b") or False, priority=20)
+		hooks.register(hooks.PRE_INGEST_FILTER, lambda g, c: seen.append("c") or True, priority=30)
+		assert self._ingest("o1") == {"filtered": True}
+		assert seen == ["a", "b"]
+
+	def test_raising_filter_drops_event_fail_closed(self):
+		def boom(g, c):
+			raise RuntimeError("settings down secret=abc")
+
+		hooks.clear()
+		hooks.register(hooks.ON_EVENT_REJECTED, lambda *a: self.rejected.append(a))
+		later = []
+		hooks.register(hooks.PRE_INGEST_FILTER, boom, priority=10)
+		hooks.register(hooks.PRE_INGEST_FILTER, lambda g, c: later.append(1) or True, priority=20)
+		res = self._ingest("r1")
+		assert res["status"] == "Rejected" and later == []
+		assert self.rejected[0][3] == "filter_error"
+		assert admitted_none(self)
+
+	def test_raising_filter_keeps_specific_reason(self):
+		def flt(g, c):
+			frappe.flags.gateway_filter_reason = "specific"
+			raise RuntimeError("x")
+
+		hooks.clear()
+		hooks.register(hooks.PRE_INGEST_FILTER, flt)
+		assert self._ingest("r2")["status"] == "Rejected"
+		assert self.events[0].db_set.call_args[0][0]["error_message"] == "specific"
+
+
+def admitted_none(case):
+	return case.admitted == [] and case.routed == []

@@ -340,6 +340,8 @@ def test_ssrf_normalises_path():
 
 
 HOSTILE = [
+	"https://evil.trafficmanager.net/emea",
+	"https://smba2.trafficmanager.net/",
 	"http://smba.trafficmanager.net/emea",
 	"ftp://smba.trafficmanager.net/",
 	"https://evil-botframework.com/",

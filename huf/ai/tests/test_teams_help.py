@@ -349,9 +349,10 @@ def test_idempotency_key_stable_and_distinct(env):
 	assert keys[0].startswith("teams_help:")
 
 
-def test_filter_reason_reset_to_none(env):
+def test_command_never_touches_filter_reason(env):
+	env.fake.flags.gateway_filter_reason = "tenant_not_allowed"
 	run(env, "personal_message", "help")
-	assert env.fake.flags.gateway_filter_reason is None
+	assert env.fake.flags.gateway_filter_reason == "tenant_not_allowed"
 
 
 def test_internal_error_sends_nothing_but_drops(env, monkeypatch):
