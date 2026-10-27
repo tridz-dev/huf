@@ -415,6 +415,7 @@ class TestFlow(Base):
 		self.assertIsNone(self.f.db.sessions[s]["consumed_by"])
 		self.handler.side_effect = None
 		self.handler.return_value = {"text": "ok"}
+		self.f.cache.d.clear()  # the Slack-side retry is a new click
 		self.run_endpoint(form(click(s)))
 		self.assertEqual(self.f.db.sessions[s]["state"], "Consumed")
 
