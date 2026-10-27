@@ -63,15 +63,33 @@ def wrap_block(items: list[str], tag: str = UNTRUSTED_TAG + "s") -> str:
 	return f"<{tag}>\n" + "\n".join(items) + f"\n</{tag}>"
 
 
+def _is_direct(event, conv, sender) -> bool:
+	"""Direct message: provider channel_type 'im', a Slack 'D...' channel id, or conversation == sender."""
+	payload = getattr(event, "raw_payload", None)
+	if isinstance(payload, str):
+		try:
+			import json
+
+			payload = json.loads(payload)
+		except ValueError:
+			payload = None
+	inner = payload.get("event") if isinstance(payload, dict) else None
+	if isinstance(inner, dict) and inner.get("channel_type") == "im":
+		return True
+	if conv and str(conv).startswith("D") and str(conv)[1:].isalnum() and len(str(conv)) > 8:
+		return True
+	return bool(conv and sender and str(conv) == str(sender))
+
+
 def channel_kind(event) -> str:
 	"""DM / thread / room derived only from event fields."""
 	thread = getattr(event, "thread_id", None)
 	conv = getattr(event, "conversation_id", None)
 	sender = getattr(event, "sender_id", None)
+	if _is_direct(event, conv, sender):
+		return "DM"
 	if thread:
 		return "thread"
-	if conv and sender and str(conv) == str(sender):
-		return "DM"
 	if conv:
 		return "room"
 	return "unknown"
@@ -88,4 +106,8 @@ def _build_prompt(gateway, event, text):
 	return f"{build_header(event)}\n{text}"
 
 
-hooks.register(hooks.BUILD_PROMPT, _build_prompt, priority=50)
+def register() -> None:
+	hooks.register(hooks.BUILD_PROMPT, _build_prompt, priority=50)
+
+
+register()

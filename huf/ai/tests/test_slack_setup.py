@@ -117,7 +117,7 @@ def test_manifest_url_encodes_gateway_name(env):
 def test_manifest_interactivity_and_flags(env):
 	s = slack_setup.get_slack_manifest(GW)["settings"]
 	assert s["interactivity"]["is_enabled"] is True
-	assert s["interactivity"]["request_url"].endswith("slack_interactivity.handle_slack_interaction")
+	assert s["interactivity"]["request_url"].endswith("slack_interactivity.handle_slack_interaction?gateway_name=slack-main")
 	assert s["org_deploy_enabled"] is False
 	assert s["socket_mode_enabled"] is False
 

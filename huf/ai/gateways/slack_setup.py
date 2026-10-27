@@ -77,7 +77,7 @@ def _build_manifest(gateway) -> dict:
 			# calls it once buttons are used.
 			"interactivity": {
 				"is_enabled": True,
-				"request_url": f"{base}{INTERACTIVITY_PATH}",
+				"request_url": f"{base}{INTERACTIVITY_PATH}?gateway_name={_quote(name)}",
 			},
 			"org_deploy_enabled": False,
 			"socket_mode_enabled": False,

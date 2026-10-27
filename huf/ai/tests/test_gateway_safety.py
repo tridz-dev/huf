@@ -90,6 +90,8 @@ def test_header_escapes_sender():
 
 
 def test_handler_registered_for_all_providers():
+	hooks.clear()
+	safety.register()
 	assert any(h[3] is safety._build_prompt and h[2] is None for h in hooks._HANDLERS.get("build_prompt", []))
 
 

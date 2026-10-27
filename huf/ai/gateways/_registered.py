@@ -5,4 +5,6 @@ MODULES = (
 	"huf.ai.gateways.reliability",
 	"huf.ai.gateways.identity",
 	"huf.ai.gateways.safety",
+	"huf.ai.gateways.health",
+	"huf.ai.gateways.privacy",
 )

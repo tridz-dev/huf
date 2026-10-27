@@ -381,6 +381,8 @@ def _admission(gateway, context: dict[str, Any]) -> tuple[bool, str]:
                 gateway, sender_id, conversation_id=conversation_id, display_name=display_name
             )
             return False, f"Sender pairing approval is required. Pairing code: {code}"
+        if policy == "Open":
+            return True, ""
         return (policy == "Allow list" and _has_access_entry(gateway, "Sender", sender_id), "Sender is not approved for this gateway")
 
     room_ok = _policy_admits(gateway.room_policy, gateway, "Room", conversation_id)
