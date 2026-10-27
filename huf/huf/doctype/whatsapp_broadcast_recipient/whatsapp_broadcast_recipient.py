@@ -20,3 +20,11 @@ class WhatsAppBroadcastRecipient(Document):
 		if not getattr(frappe.flags, "in_broadcast_api", False):
 			frappe.throw("Recipients can only be changed through the broadcast API.", frappe.PermissionError)
 		self.opaque_ref = self.name or f"{self.broadcast}-{self.recipient}"[:140]
+
+	def on_trash(self):
+		"""Rows are the duplicate-send/audit record: deletable only through the broadcast API, and only while Draft."""
+		if not getattr(frappe.flags, "in_broadcast_api", False):
+			frappe.throw("Recipients can only be deleted through the broadcast API.", frappe.PermissionError)
+		status = frappe.db.get_value("WhatsApp Broadcast", self.broadcast, "status")
+		if status and status != "Draft":
+			frappe.throw("Recipients can only be deleted while the broadcast is a Draft.", frappe.PermissionError)

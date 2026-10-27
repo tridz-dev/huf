@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import time
+
 import frappe
 
 CONNECTED, DEGRADED, DISCONNECTED = "Connected", "Degraded", "Disconnected"
@@ -221,8 +223,9 @@ def _insert_consent(gateway: str, sender: str, category: str, value: str, detail
 			"value": value,
 			"detail": (detail or "")[:500],
 			"changed_at": frappe.utils.now_datetime(),
-			# Meta's event time orders rows; a missing one falls back to receipt time
-			"meta_timestamp": meta_ts or int(frappe.utils.now_datetime().timestamp()),
+			# Meta's event time (UTC epoch) orders rows; a missing one falls back to receipt time as a UTC epoch
+			# (now_datetime() is naive site-tz, so its .timestamp() would be skewed by the site offset)
+			"meta_timestamp": meta_ts or int(time.time()),
 		}
 	).insert(ignore_permissions=True)
 	return True
