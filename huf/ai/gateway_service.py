@@ -773,6 +773,10 @@ def process_gateway_event(event_name: str) -> dict:
                 raise frappe.ValidationError(_("Gateway agent run completed without a text response."))
             try:
                 _throttle_outbound_send(gateway.name, _outbound_rate_cap(gateway.provider))
+                # Reply-target hooks classify the answer by the run's tool calls: expose the run id on the
+                # in-memory event (it is persisted just after the reply is sent).
+                if isinstance(result, dict) and result.get("agent_run_id"):
+                    event.agent_run = result.get("agent_run_id")
                 _reply_target = gw_hooks.call_first(gw_hooks.RESOLVE_REPLY_TARGET, gateway, event, str(response))
                 if _reply_target:
                     event.conversation_id = str(_reply_target)

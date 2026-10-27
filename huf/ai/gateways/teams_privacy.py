@@ -170,7 +170,10 @@ def needs_private_reply(gateway, event) -> bool:
 		return True
 	if policy == CHANNEL:
 		return False
-	return run_touched_records(getattr(event, "agent_run", None))  # default policy
+	run = getattr(event, "agent_run", None)
+	if not run:
+		return True  # fail closed: without the run we cannot prove no records were touched
+	return run_touched_records(run)  # default policy
 
 
 # ---- redirect ----------------------------------------------------------------------------
