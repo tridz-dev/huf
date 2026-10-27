@@ -22,7 +22,7 @@ from huf.ai.gateway_adapters.types import (
 
 
 class TeamsGatewayAdapter(GatewayAdapter):
-	"""Handle Microsoft Teams Bot Framework activities, and replies."""
+	"""Handle Microsoft Teams Bot Framework activities and replies."""
 
 	# NOTE: must equal provider_to_service_id("Microsoft Teams") == "microsoft_teams"
 	# (see huf.ai.gateway_adapters.provider_ids).
