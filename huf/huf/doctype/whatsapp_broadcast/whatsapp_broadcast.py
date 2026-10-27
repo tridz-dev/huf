@@ -6,23 +6,35 @@ COUNTED = ("queued", "sending", "sent", "delivered", "read", "failed", "deferred
 GUARDED_FIELDS = (
 	"consent_attested", "consent_attested_by", "consent_attested_at", "consent_source",
 	"gateway", "template", "whatsapp_account",
+	"status", "started_by", "started_at", "finished_at", "pause_reason",
+	"max_recipients", "send_via", "mps",
+	*COUNTED, "total",
 )
+# Values a brand-new row may carry without the broadcast API (the doctype defaults).
+NEW_ROW_DEFAULTS = {"status": "Draft", "send_via": "messages", "max_recipients": 1000, "mps": 10}
 
 
 class WhatsAppBroadcast(Document):
 	"""A one-template-to-many send. Per-recipient state lives in WhatsApp Broadcast Recipient."""
 
 	def validate(self):
-		"""Reject consent/gateway/template writes that bypass the management API (generic REST, set_value).
+		"""Reject writes to gated fields that bypass the management API (generic REST, doc.save).
 
 		The management layer sets ``frappe.flags.in_broadcast_api`` after proving Gateway write authority.
-		Status and counters are deliberately not guarded here: the runner owns them.
+		The runner/status code writes status and counters through raw SQL or ``frappe.db.set_value``,
+		which skip ``validate``, so this guard does not interfere with them.
 		"""
 		if getattr(frappe.flags, "in_broadcast_api", False):
 			return
 		if self.is_new():
-			if self.consent_attested or self.consent_attested_by or self.consent_attested_at:
-				frappe.throw("Consent can only be attested through the broadcast API.", frappe.PermissionError)
+			for field in GUARDED_FIELDS:
+				value = self.get(field)
+				if field in NEW_ROW_DEFAULTS:
+					bad = value not in (None, "") and str(value) != str(NEW_ROW_DEFAULTS[field])
+				else:
+					bad = bool(value) and field not in ("gateway", "template", "whatsapp_account")
+				if bad:
+					frappe.throw(f"{field} can only be set through the broadcast API.", frappe.PermissionError)
 			return
 		for field in GUARDED_FIELDS:
 			if self.has_value_changed(field):

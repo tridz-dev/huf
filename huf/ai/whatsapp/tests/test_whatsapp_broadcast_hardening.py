@@ -183,8 +183,9 @@ class TestControllerGuard(unittest.TestCase):
 		with self.assertRaises(PermissionError):
 			self._doc(False, ("gateway",)).validate()
 
-	def test_status_edit_allowed(self):
-		self._doc(False, ("status",)).validate()
+	def test_status_edit_rejected(self):
+		with self.assertRaises(PermissionError):
+			self._doc(False, ("status",)).validate()
 
 	def test_new_doc_with_consent_rejected(self):
 		d = self._doc(True)
