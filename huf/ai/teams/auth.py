@@ -9,7 +9,14 @@ Implements the Bot Connector -> bot validation contract
 - ``aud`` equals the configured bot ``app_id``;
 - ``exp``/``nbf`` honoured with a 300 s clock-skew leeway;
 - the ``serviceUrl`` claim (``serviceUrl`` or ``serviceurl``) equals ``activity.serviceUrl``;
-- the JWKS key's ``endorsements`` contain ``activity.channelId`` (``msteams``).
+- ``activity.channelId`` is ``msteams`` (pinned: the Bot Framework JWKS also endorses webchat/directline/
+  emulator, whose secret holders could otherwise mint activities with arbitrary tenant/sender data) AND the
+  JWKS key's ``endorsements`` contain it.
+
+Known protocol limit (accepted, S3): the Bot Framework JWT is NOT bound to the request body. A captured,
+unexpired token (~1 h lifetime + skew) can be replayed with an arbitrary body for the same bot whose
+``serviceUrl`` equals the claim. Mitigations are TLS on the endpoint, the channel pin, the serviceUrl match,
+tenant admission and event de-duplication; there is no cryptographic body binding in the protocol.
 
 Everything fails closed: any problem returns ``False`` and ``verify_request`` never raises. The spec
 asks for HTTP 403 on a missing endorsement and 401 otherwise; this function only answers
@@ -17,7 +24,10 @@ accept/reject, the generic webhook decides the status code (it currently answers
 
 Key cache: process-level plus ``frappe.cache`` (shared by workers), refreshed every 24 h. A stale cache
 is kept (up to 7 days) when a refresh fails. An unknown ``kid`` triggers at most one forced refetch per
-5 minutes. With no cached keys and a failing JWKS/OpenID endpoint the request is rejected.
+5 minutes, and only for tokens that already passed the cheap checks (RS256, sane ``kid``, unverified
+``aud``/``iss``/``exp``/``serviceUrl`` match), so junk kids cannot burn the window. JWKS network I/O runs
+outside the module lock behind a single-flight guard: one thread fetches, others keep verifying with cached
+keys (stale ones during a TTL refresh) or wait at most ``FETCH_WAIT_SECONDS``. With no cached keys and a failing JWKS/OpenID endpoint the request is rejected.
 
 Log lines carry reason codes only; tokens, headers and bodies are never logged.
 """
@@ -26,6 +36,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import time
 from collections.abc import Mapping
@@ -53,6 +64,10 @@ HTTP_TIMEOUT_SECONDS = 5
 MAX_RESPONSE_BYTES = 1024 * 1024
 MAX_TOKEN_CHARS = 16 * 1024
 MAX_KEYS = 64
+FETCH_WAIT_SECONDS = 2 * HTTP_TIMEOUT_SECONDS + 1
+MAX_KID_CHARS = 128
+_KID_RE = re.compile(r"[A-Za-z0-9._~+/=-]+")
+TEAMS_CHANNEL_ID = "msteams"
 _CACHE_KEY_PREFIX = "huf:teams:botframework_jwks:"
 
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -61,7 +76,13 @@ _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 _test_openid_url: str | None = None
 
 _lock = threading.RLock()
-_state: dict[str, Any] = {"keys": None, "fetched_at": 0.0, "last_forced": 0.0, "last_failure": 0.0}
+_state: dict[str, Any] = {
+	"keys": None,
+	"fetched_at": 0.0,
+	"last_forced": 0.0,
+	"last_failure": 0.0,
+	"inflight": None,  # threading.Event while one thread fetches (single-flight)
+}
 
 
 class _FetchError(Exception):
@@ -86,7 +107,7 @@ def _set_test_openid_url(url: str | None) -> None:
 def _reset_cache() -> None:
 	"""Drop process and shared cache for the active OpenID URL (tests)."""
 	with _lock:
-		_state.update(keys=None, fetched_at=0.0, last_forced=0.0, last_failure=0.0)
+		_state.update(keys=None, fetched_at=0.0, last_forced=0.0, last_failure=0.0, inflight=None)
 	try:
 		import frappe
 
@@ -177,9 +198,7 @@ def _load_shared_cache() -> None:
 		_state["fetched_at"] = float(cached.get("fetched_at") or 0)
 
 
-def _store(keys: dict[str, dict[str, Any]], now: float) -> None:
-	_state["keys"] = keys
-	_state["fetched_at"] = now
+def _store_shared(keys: dict[str, dict[str, Any]], now: float) -> None:
 	try:
 		import frappe
 
@@ -191,44 +210,73 @@ def _store(keys: dict[str, dict[str, Any]], now: float) -> None:
 
 
 def _refresh(now: float) -> bool:
-	"""Fetch keys now. Caller holds ``_lock``. False (and a short backoff) on failure."""
-	if now - _state["last_failure"] < FAILURE_BACKOFF_SECONDS:
-		return False
+	"""Single-flight JWKS fetch WITHOUT holding ``_lock`` during network I/O.
+
+	The first caller fetches; concurrent callers wait (bounded) for its result. False on failure/backoff.
+	"""
+	with _lock:
+		if now - _state["last_failure"] < FAILURE_BACKOFF_SECONDS:
+			return False
+		event = _state["inflight"]
+		leader = event is None
+		if leader:
+			event = threading.Event()
+			_state["inflight"] = event
+	if not leader:
+		return event.wait(FETCH_WAIT_SECONDS) and bool(getattr(event, "ok", False))
+	keys: dict[str, dict[str, Any]] | None = None
 	try:
-		_store(_fetch_keys(), now)
-		return True  # noqa: TRY300
+		keys = _fetch_keys()
 	except _FetchError as exc:
-		_state["last_failure"] = now
 		logger.warning(
 			"Teams JWKS refresh failed (%s); %s",
 			exc,
 			"using cached keys" if _state["keys"] else "no cached keys",
 		)
+	finally:
+		with _lock:
+			if keys is not None:
+				_state["keys"] = keys
+				_state["fetched_at"] = now
+			else:
+				_state["last_failure"] = now
+			_state["inflight"] = None
+		event.ok = keys is not None  # type: ignore[attr-defined]
+		event.set()
+	if keys is None:
 		return False
+	_store_shared(keys, now)
+	return True
+
+
+def _snapshot(now: float) -> tuple[dict[str, dict[str, Any]] | None, float]:
+	with _lock:
+		if _state["keys"] is None:
+			_load_shared_cache()
+		return _state["keys"], now - _state["fetched_at"]
 
 
 def _get_key(kid: str) -> dict[str, Any] | None:
-	"""Return the JWK for ``kid`` or None. Applies the cache/refetch policy."""
-	with _lock:
-		now = time.time()
-		if _state["keys"] is None:
-			_load_shared_cache()
-		keys = _state["keys"]
-		age = now - _state["fetched_at"]
-		if keys is None or age >= KEY_TTL_SECONDS:
+	"""Return the JWK for ``kid`` or None. Applies the cache/refetch policy (never fetches under ``_lock``)."""
+	now = time.time()
+	keys, age = _snapshot(now)
+	if keys is None or age >= KEY_TTL_SECONDS:
+		usable_stale = keys is not None and age < STALE_KEY_MAX_SECONDS
+		if not (usable_stale and _state["inflight"] is not None):  # someone else refreshing: use stale keys
 			_refresh(now)
-			keys = _state["keys"]
-			age = now - _state["fetched_at"]
-		if keys is None or age >= STALE_KEY_MAX_SECONDS:
-			return None
-		if kid in keys:
-			return keys[kid]
-		# Unknown kid: ONE forced refetch, at most once per MIN_FORCED_REFRESH_SECONDS.
-		if now - _state["last_forced"] >= MIN_FORCED_REFRESH_SECONDS:
-			_state["last_forced"] = now
-			if _refresh(now):
-				return _state["keys"].get(kid)
+			keys, age = _snapshot(now)
+	if keys is None or age >= STALE_KEY_MAX_SECONDS:
 		return None
+	if kid in keys:
+		return keys[kid]
+	# Unknown kid: ONE forced refetch, at most once per MIN_FORCED_REFRESH_SECONDS (caller pre-checked token).
+	with _lock:
+		if now - _state["last_forced"] < MIN_FORCED_REFRESH_SECONDS:
+			return None
+		_state["last_forced"] = now
+	if _refresh(now):
+		return (_state["keys"] or {}).get(kid)
+	return None
 
 
 # -- validation --------------------------------------------------------------------------------------
@@ -253,6 +301,41 @@ def _service_url_claim(claims: Mapping[str, Any]) -> Any:
 	for name, value in claims.items():
 		if isinstance(name, str) and name.lower() == "serviceurl":
 			return value
+	return None
+
+
+def _wall_clock() -> float:
+	# Same clock PyJWT uses for exp (not ``time.time``, which the key-cache policy uses).
+	from datetime import UTC, datetime
+
+	return datetime.now(UTC).timestamp()
+
+
+def _precheck(token: str, app_id: str, issuers: tuple[str, ...], body_service_url: str) -> str | None:
+	"""Cheap UNVERIFIED claim checks run before any key lookup/refetch. Returns a reason code or None.
+
+	Not a security decision on its own (the signature is checked afterwards); it only stops junk tokens
+	from triggering the rate-limited forced JWKS refetch.
+	"""
+	import jwt as pyjwt
+
+	try:
+		claims = pyjwt.decode(token, options={"verify_signature": False})
+	except pyjwt.PyJWTError:
+		return "malformed_token"
+	if not isinstance(claims, dict):
+		return "malformed_token"
+	aud = claims.get("aud")
+	auds = aud if isinstance(aud, list) else [aud]
+	if app_id not in auds:
+		return "pre_aud"
+	if claims.get("iss") not in issuers:
+		return "pre_iss"
+	exp = claims.get("exp")
+	if not isinstance(exp, int | float) or exp + CLOCK_SKEW_SECONDS < _wall_clock():
+		return "pre_exp"
+	if _normalize_service_url(_service_url_claim(claims)) != body_service_url:
+		return "service_url_mismatch"
 	return None
 
 
@@ -298,20 +381,31 @@ def _verify(request: GatewayInboundRequest, credentials: Mapping[str, str]) -> b
 	channel_id = activity.get("channelId")
 	if not body_service_url or not isinstance(channel_id, str) or not channel_id.strip():
 		return _reject("missing_service_url_or_channel")
+	if channel_id.strip().lower() != TEAMS_CHANNEL_ID:
+		return _reject("channel_not_msteams")
 
 	try:
 		header = pyjwt.get_unverified_header(token)
 	except pyjwt.PyJWTError:
 		return _reject("malformed_token")
 	kid = header.get("kid")
-	if header.get("alg") != "RS256" or not isinstance(kid, str) or not kid:
+	if (
+		header.get("alg") != "RS256"
+		or not isinstance(kid, str)
+		or len(kid) > MAX_KID_CHARS
+		or not _KID_RE.fullmatch(kid)
+	):
 		return _reject("bad_alg_or_kid")
+
+	issuers = _allowed_issuers(credentials)
+	reason = _precheck(token, app_id, issuers, body_service_url)
+	if reason:
+		return _reject(reason)
 
 	jwk = _get_key(kid)
 	if jwk is None:
 		return _reject("key_unavailable")
 
-	issuers = _allowed_issuers(credentials)
 	try:
 		public_key = pyjwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
 		claims = pyjwt.decode(

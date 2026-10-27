@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import threading
 import time
 import unittest
 from unittest import mock
@@ -317,3 +318,102 @@ class TestHygiene(TeamsAuthBase):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class TestChannelPin(TeamsAuthBase):
+	"""S1: tokens for other Bot Framework channels are rejected even when the key endorses them."""
+
+	def test_endorsed_non_teams_channels_rejected(self):
+		self.svc.set_jwks(
+			tf.build_jwks(self.key, endorsements=["msteams", "webchat", "directline", "emulator"])
+		)
+		for channel in ("webchat", "directline", "emulator", "WebChat"):
+			activity = dict(self.activity, channelId=channel)
+			with self.subTest(channel=channel):
+				self.assertFalse(self.verify(tf.make_bot_token(activity), activity=activity))
+
+	def test_msteams_still_passes(self):
+		self.svc.set_jwks(tf.build_jwks(self.key, endorsements=["msteams", "webchat"]))
+		self.assertTrue(self.verify(self.token()))
+		activity = dict(self.activity, channelId="MSTEAMS")
+		self.assertTrue(self.verify(tf.make_bot_token(activity), activity=activity))
+
+
+class TestForcedRefreshAbuse(TeamsAuthBase):
+	"""S7: junk kids cannot burn the forced-refetch window; fetch never blocks cached verifications."""
+
+	def test_junk_unknown_kid_with_bad_claims_does_not_consume_window(self):
+		self.assertTrue(self.verify(self.token()))
+		self.assertEqual(self.jwks_fetches(), 1)
+		junk = [
+			tf.make_bot_token(self.activity, kid="junk-1", audience="someone-else"),
+			tf.make_bot_token(self.activity, kid="junk-2", issuer="https://evil.example"),
+			tf.make_bot_token(self.activity, kid="junk-3", exp_delta=-3600),
+			tf.make_bot_token(
+				self.activity, kid="junk-4", service_url="https://smba.trafficmanager.net/evil/"
+			),
+			tf.make_bot_token(self.activity, kid="x" * 500),
+			tf.make_bot_token(self.activity, kid="bad kid\n"),
+		]
+		for token in junk:
+			self.assertFalse(self.verify(token))
+		self.assertEqual(self.jwks_fetches(), 1)
+		self.assertEqual(auth._state["last_forced"], 0.0)
+		# A real rollover is still picked up: the window was not consumed.
+		new_key = tf.generate_keypair(kid="rotated-after-spam")
+		self.svc.set_jwks(tf.build_jwks(self.key, new_key))
+		self.assertTrue(self.verify(tf.make_bot_token(self.activity, kid="rotated-after-spam", key=new_key)))
+
+	def test_slow_fetch_does_not_block_cached_verification(self):
+		self.assertTrue(self.verify(self.token()))
+		release = threading.Event()
+		started = threading.Event()
+		real_fetch = auth._fetch_keys
+
+		def slow_fetch():
+			started.set()
+			release.wait(10)
+			return real_fetch()
+
+		self.addCleanup(release.set)
+		results = {}
+		with mock.patch.object(auth, "_fetch_keys", side_effect=slow_fetch):
+			slow = threading.Thread(
+				target=lambda: results.setdefault("slow", self.verify(tf.unknown_kid_token(self.activity)))
+			)
+			slow.start()
+			self.assertTrue(started.wait(5))
+			good = self.token()
+			fast = threading.Thread(target=lambda: results.setdefault("fast", self.verify(good)))
+			t0 = time.monotonic()
+			fast.start()
+			fast.join(3)
+			self.assertFalse(fast.is_alive(), "cached verification blocked by JWKS fetch")
+			self.assertLess(time.monotonic() - t0, 3)
+			self.assertTrue(results["fast"])
+			release.set()
+			slow.join(10)
+		self.assertFalse(results["slow"])
+
+	def test_concurrent_refreshes_are_single_flight(self):
+		release = threading.Event()
+		calls = []
+		real_fetch = auth._fetch_keys
+
+		def slow_fetch():
+			calls.append(1)
+			release.wait(5)
+			return real_fetch()
+
+		token = self.token()
+		results = []
+		with mock.patch.object(auth, "_fetch_keys", side_effect=slow_fetch):
+			threads = [threading.Thread(target=lambda: results.append(self.verify(token))) for _ in range(4)]
+			for t in threads:
+				t.start()
+			time.sleep(0.3)
+			release.set()
+			for t in threads:
+				t.join(10)
+		self.assertEqual(len(calls), 1)
+		self.assertEqual(results, [True] * 4)
