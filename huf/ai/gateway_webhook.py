@@ -387,7 +387,7 @@ def _record_failed_status_whatsapp(gateway_name: str, status: dict) -> None:
 		pass
 
 
-def _apply_broadcast_status(status: dict) -> None:
+def _apply_broadcast_status(status: dict, gateway_name: str | None = None) -> None:
 	"""Mirror a Meta status onto a WhatsApp Broadcast Recipient row. Never raises."""
 	try:
 		from huf.ai.whatsapp import broadcast_status
@@ -398,6 +398,7 @@ def _apply_broadcast_status(status: dict) -> None:
 			status.get("timestamp"),
 			status.get("errors") if isinstance(status.get("errors"), list) else None,
 			status.get("biz_opaque_callback_data"),
+			gateway=gateway_name or "",
 		)
 	except Exception:
 		frappe.log_error(title="WhatsApp broadcast status failed", message=frappe.get_traceback())
@@ -787,7 +788,7 @@ def _handle_batched_payload(gateway, adapter, request) -> dict:
 	if not deferred:
 		for status in parsed.statuses:
 			_update_reply_status(gateway.name, status)
-			_apply_broadcast_status(status)
+			_apply_broadcast_status(status, gateway.name)
 			if str(status.get("status") or "").lower() == "failed":
 				_record_failed_status(gateway.name, status, getattr(gateway, "provider", None))
 		routed_updates = [update for update in parsed.template_updates if _record_template_update(update, gateway.name)]
