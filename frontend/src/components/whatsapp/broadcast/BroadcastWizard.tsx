@@ -226,7 +226,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
                 return (
                   <div key={k} className="space-y-1">
                     <Label htmlFor={`bc-var-${k}`}>Default value for {`{{${k}}}`}</Label>
-                    <Input id={`bc-var-${k}`} value={defaults[k] ?? ''} placeholder={v.sample ?? ''} onChange={(e) => setDefaults((d) => ({ ...d, [k]: e.target.value }))} />
+                    <Input id={`bc-var-${k}`} value={defaults[k] ?? ''} placeholder={v.sample ? `e.g. ${v.sample}` : ''} onChange={(e) => setDefaults((d) => ({ ...d, [k]: e.target.value }))} />
                   </div>
                 );
               })}
@@ -329,7 +329,11 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
             <div role="alert" className="rounded-md border border-amber-500 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950 dark:text-amber-100"><p className="font-medium">Warnings</p><ul className="list-disc pl-5">{preview.warnings.map((w) => <li key={w}>{w}</li>)}</ul></div>
           ) : null}
           {blocking.length ? (
-            <div role="alert" className="text-destructive"><p className="font-medium">Cannot start</p><ul className="list-disc pl-5">{blocking.map((w) => <li key={w}>{w}</li>)}</ul></div>
+            <div role="alert" className="text-destructive">
+              <p className="font-medium">Cannot start</p>
+              <ul className="list-disc pl-5">{blocking.map((w) => <li key={w}>{w}</li>)}</ul>
+              <p className="mt-1 text-xs text-steel">The template values are fixed once recipients are added. Discard this draft and start again with the missing values.</p>
+            </div>
           ) : null}
         </div>
       )}
@@ -342,7 +346,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
       )}
 
       <div className="flex justify-between">
-        <Button variant="outline" disabled={busy || step === 0 || (step === 1 && reviewing)} onClick={() => setStep((s) => s - 1)}>Back</Button>
+        <Button variant="outline" disabled={busy || step === 0 || (!!broadcast && step <= 2)} onClick={() => setStep((s) => s - 1)}>Back</Button>
         {step < 4 ? (
           <Button disabled={busy || (step === 1 && reviewing ? false : step === 3 ? blocking.length > 0 : !canNext)} onClick={() => (step === 1 && reviewing) ? setStep(2) : step === 3 ? setStep(4) : void next()}>
             {busy ? 'Working...' : step === 1 && reviewing ? 'Continue' : step === 1 ? 'Add recipients' : 'Next'}

@@ -238,7 +238,7 @@ describe('BroadcastWizard', () => {
       render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
       await pick(user, 'Approved template', /promo/);
       const f = await screen.findByLabelText('Default value for {{first_name}}');
-      expect(f).toHaveAttribute('placeholder', 'Ada');
+      expect(f).toHaveAttribute('placeholder', 'e.g. Ada');
       await user.type(f, 'friend');
       await user.click(screen.getByRole('button', { name: 'Next' }));
       expect(screen.getByText(/Columns: phone, first_name, city/)).toBeInTheDocument();
@@ -372,3 +372,19 @@ describe('buildHeaderButtonParams', () => {
     expect(buildHeaderButtonParams(null, 'x', {})).toEqual({});
   });
 });
+
+describe('BroadcastWizard once recipients are added', () => {
+  it('cannot go back to change template values (the draft keeps them)', async () => {
+    m.createBroadcast.mockResolvedValue(ok({ broadcast: 'BCAST-9' }));
+    m.addBroadcastRecipients.mockResolvedValue(ok({ added: 1, skipped: [], invalid: [], skippedTotal: 0, invalidTotal: 0 }));
+    const user = userEvent.setup();
+    render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
+    await pick(user, 'Approved template', /promo/);
+    await user.click(await screen.findByRole('button', { name: 'Next' }));
+    await user.type(screen.getByLabelText(/Recipients/), '1555000111');
+    await user.click(screen.getByRole('button', { name: 'Add recipients' }));
+    await user.click(await screen.findByRole('button', { name: 'Continue' }));
+    expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled();
+  });
+});
+
