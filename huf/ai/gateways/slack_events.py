@@ -1,6 +1,7 @@
 """Slack Events webhook handler."""
 import frappe
 import json
+import re
 import hmac
 import hashlib
 import time
@@ -68,14 +69,24 @@ def handle_slack_event():
         # Provider event id is channel:ts of the message itself. Slack sends both a
         # `message` and an `app_mention` event for one mention; both share this id.
         provider_event_id = f"{channel}:{ts}"
+        text = str(event.get("text") or "")
+        authorizations = payload.get("authorizations") or []
+        bot_id = ""
+        if authorizations and isinstance(authorizations[0], dict):
+            bot_id = str(authorizations[0].get("user_id") or "")
+        mention_token = f"<@{bot_id}>" if bot_id else ""
+        mentioned = event.get("type") == "app_mention" or bool(mention_token and mention_token in text)
+        if mention_token:
+            # Strip the bot mention (and following whitespace); unknown bot id => text untouched.
+            text = re.sub(re.escape(mention_token) + r"\s*", "", text)
         context = {
             "sender_id": str(event.get("user") or ""),
             "conversation_id": channel,
             # thread_id = thread_ts for replies, else the message's own ts (it roots a thread).
             "thread_id": str(event.get("thread_ts") or ts),
-            "message_text": str(event.get("text") or ""),
+            "message_text": text,
             "is_room": _is_room(event, channel),
-            "mentioned": "<@" in str(event.get("text") or ""),
+            "mentioned": mentioned,
         }
 
         ingest_gateway_event(

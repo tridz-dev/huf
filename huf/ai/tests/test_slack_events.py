@@ -322,7 +322,7 @@ class TestSlackEventsHandler(unittest.TestCase):
 		self.assertEqual(context["thread_id"], "1699999999.000001")
 		self.assertEqual(context["message_text"], "ping <@U_BOT> please")
 		self.assertIs(context["is_room"], True)
-		self.assertIs(context["mentioned"], True)
+		self.assertIs(context["mentioned"], False)  # bot id unknown (no authorizations)
 		self.assertIs(kwargs["verified_sender"], True)
 		self.assertEqual(kwargs["raw_payload"], payload)
 
@@ -429,6 +429,42 @@ class TestSlackEventsHandler(unittest.TestCase):
 			self.ingest.reset_mock()
 			self._call(message_event(**overrides))
 			self.assertIs(self.ingest.call_args.args[2]["is_room"], expected, overrides)
+
+	def test_mentioned_and_text_strip_with_known_bot_id(self):
+		payload = message_event(text="<@U_BOT>  do it <@U_BOT> now")
+		payload["authorizations"] = [{"user_id": "U_BOT"}]
+		self._call(payload)
+		context = self.ingest.call_args.args[2]
+		self.assertIs(context["mentioned"], True)
+		self.assertEqual(context["message_text"], "do it now")
+
+	def test_other_user_mention_is_not_mentioned_and_text_kept(self):
+		payload = message_event(text="hey <@U123> look")
+		payload["authorizations"] = [{"user_id": "U_BOT"}]
+		self._call(payload)
+		context = self.ingest.call_args.args[2]
+		self.assertIs(context["mentioned"], False)
+		self.assertEqual(context["message_text"], "hey <@U123> look")
+
+	def test_unknown_bot_id_message_not_mentioned_text_unchanged(self):
+		self._call(message_event(text="<@U_BOT> hi"))
+		context = self.ingest.call_args.args[2]
+		self.assertIs(context["mentioned"], False)
+		self.assertEqual(context["message_text"], "<@U_BOT> hi")
+
+	def test_app_mention_without_authorizations_is_mentioned_text_unchanged(self):
+		payload = {"type": "event_callback", "event": {
+			"type": "app_mention", "channel": "C1", "user": "U1", "text": "<@U_BOT> hi", "ts": "1.1"}}
+		self._call(payload)
+		context = self.ingest.call_args.args[2]
+		self.assertIs(context["mentioned"], True)
+		self.assertEqual(context["message_text"], "<@U_BOT> hi")
+
+	def test_app_mention_strips_bot_token_when_known(self):
+		payload = {"type": "event_callback", "authorizations": [{"user_id": "U_BOT"}], "event": {
+			"type": "app_mention", "channel": "C1", "user": "U1", "text": "<@U_BOT> hi", "ts": "1.1"}}
+		self._call(payload)
+		self.assertEqual(self.ingest.call_args.args[2]["message_text"], "hi")
 
 
 if __name__ == "__main__":
