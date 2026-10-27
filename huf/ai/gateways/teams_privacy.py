@@ -264,14 +264,14 @@ def _fail_closed(gateway, event, meta: tc.TeamsMeta):
 
 
 def resolve_reply_target(gateway, event, reply_text):
+	if not is_room(event):
+		return None
 	try:
-		if not needs_private_reply(gateway, event):
-			return None
+		private = needs_private_reply(gateway, event)
 	except Exception:
-		pass  # classification itself failed: fall through to the private path (fail closed)
-	else:
-		if not is_room(event):
-			return None
+		private = True  # classification failed: fail closed
+	if not private:
+		return None
 	meta = _meta(event)
 	try:
 		if not (meta.tenant_id and meta.user_aad_id):
