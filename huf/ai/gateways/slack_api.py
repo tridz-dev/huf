@@ -37,6 +37,7 @@ REQUIRED_BOT_SCOPES = [
 	"mpim:read",
 	"commands",
 	"files:read",
+	"reactions:read",
 ]
 
 

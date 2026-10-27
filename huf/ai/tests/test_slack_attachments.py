@@ -43,10 +43,38 @@ def test_image_is_passed_to_the_model(monkeypatch):
 	assert "cat.png" in out["note"] and "image" in out["note"]
 
 
-def test_audio_video_described_not_passed(monkeypatch):
+def test_audio_is_transcribed_when_possible(monkeypatch):
 	monkeypatch.setattr(sa, "download_slack_file", lambda info, tok: dl("audio", "audio/wav", "v.wav"))
+	monkeypatch.setattr(sa, "_transcribe", lambda f, agent: "the launch code is blue heron")
+	e = ev([{"name": "v.wav"}])
+	e.target_agent = "bot"
+	out = sa.build_files(object(), e)
+	assert out["files"] == [] and "transcript follows" in out["note"] and "blue heron" in out["note"]
+
+
+def test_audio_without_stt_is_described(monkeypatch):
+	monkeypatch.setattr(sa, "download_slack_file", lambda info, tok: dl("audio", "audio/wav", "v.wav"))
+	monkeypatch.setattr(sa, "_transcribe", lambda f, agent: "")
 	out = sa.build_files(object(), ev([{"name": "v.wav"}]))
+	assert "could not be transcribed" in out["note"]
+
+
+def test_video_described_not_passed(monkeypatch):
+	monkeypatch.setattr(sa, "download_slack_file", lambda info, tok: dl("video", "video/mp4", "c.mp4"))
+	out = sa.build_files(object(), ev([{"name": "c.mp4"}]))
 	assert out["files"] == [] and "not transcribed" in out["note"]
+
+
+def test_transcribe_returns_empty_without_agent_or_on_failure(monkeypatch):
+	assert sa._transcribe("F", None) == ""
+	import sys, types
+
+	mod = types.ModuleType("huf.ai.audio_service")
+	mod.transcribe_audio_file = lambda **k: {"success": False, "error": "no key"}
+	monkeypatch.setitem(sys.modules, "huf.ai.audio_service", mod)
+	assert sa._transcribe("F", "bot") == ""
+	mod.transcribe_audio_file = lambda **k: {"success": True, "transcript": "x" * 9000}
+	assert len(sa._transcribe("F", "bot")) == sa.MAX_TRANSCRIPT_CHARS
 
 
 def test_text_file_is_inlined_and_wrapped(monkeypatch):

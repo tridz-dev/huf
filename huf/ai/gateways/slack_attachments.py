@@ -16,6 +16,8 @@ from huf.ai.gateways.slack_files import download_slack_file
 
 MAX_FILES = 5
 MAX_INLINE_BYTES = 16 * 1024
+MAX_TRANSCRIPT_CHARS = 4000
+DEFAULT_STT_MODEL = "gemini/gemini-3.8-flash"  # override with site config huf_slack_stt_model
 TEXT_MIMES = ("text/plain", "text/csv")
 
 
@@ -58,6 +60,19 @@ def _with_download_url(gateway, info: dict) -> dict:
 	return {**info, **{k: fresh.get(k) for k in ("url_private_download", "url_private", "size", "mimetype", "name") if fresh.get(k)}}
 
 
+def _transcribe(file_name: str, agent_name) -> str:
+	"""Speech to text through Huf's audio service; "" when no STT provider/key is configured or it fails."""
+	if not agent_name:
+		return ""
+	try:
+		from huf.ai.audio_service import transcribe_audio_file
+
+		out = transcribe_audio_file(file_id=file_name, agent_name=agent_name, model=frappe.conf.get("huf_slack_stt_model") or DEFAULT_STT_MODEL) or {}
+		return str(out.get("transcript") or "")[:MAX_TRANSCRIPT_CHARS] if out.get("success") else ""
+	except Exception:
+		return ""
+
+
 def build_files(gateway, event):
 	files = _event_files(event)
 	if not files:
@@ -76,8 +91,14 @@ def build_files(gateway, event):
 		if kind == "image":
 			run_files.append({"file_id": file_ref, "file_name": got["filename"], "is_image": True})
 			line += ": image, shown to you"
-		elif kind in ("audio", "video"):
-			line += f": {kind} saved; its content is not transcribed or analysed"
+		elif kind == "audio":
+			transcript = _transcribe(file_ref, getattr(event, "target_agent", None))
+			if transcript:
+				line += ": audio, transcript follows:\n" + transcript
+			else:
+				line += ": audio saved; it could not be transcribed"
+		elif kind == "video":
+			line += ": video saved; its content is not transcribed or analysed"
 		elif mime in TEXT_MIMES:
 			text = _read_text(file_ref)
 			line += ":\n" + text if text else ": saved"

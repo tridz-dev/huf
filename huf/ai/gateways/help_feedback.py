@@ -258,6 +258,71 @@ def handle_feedback(gateway, session, actor_user, payload) -> dict:
 		return {"text": MSG_SAVE_FAILED}
 
 
+REACTION_UP = {"+1", "thumbsup", "thumbsup_all"}
+REACTION_DOWN = {"-1", "thumbsdown"}
+
+
+def _reaction_choice(name: str):
+	base = str(name or "").split("::", 1)[0]  # skin-tone variants look like "+1::skin-tone-3"
+	if base in REACTION_UP:
+		return "up"
+	if base in REACTION_DOWN:
+		return "down"
+	return None
+
+
+def handle_reaction(gateway, payload) -> bool:
+	"""A 👍/👎 reaction on one of the bot's answers counts as feedback from a linked asker.
+
+	Slack gives only the message timestamp, so the answer is matched to the asker's most recent
+	finished run in that conversation. Never raises; returns True when feedback was saved.
+	"""
+	try:
+		event = (payload or {}).get("event") or {}
+		choice = _reaction_choice(event.get("reaction"))
+		item = event.get("item") or {}
+		reactor = str(event.get("user") or "")
+		channel = str(item.get("channel") or "")
+		bot = str((((payload or {}).get("authorizations") or [{}])[0] or {}).get("user_id") or "")
+		if not choice or item.get("type") != "message" or not reactor or not channel:
+			return False
+		if bot and str(event.get("item_user") or "") != bot:
+			return False  # only reactions on the bot's own messages
+		team = str((payload or {}).get("team_id") or "")
+		link = frappe.get_all("Gateway Identity Link", filters={"gateway": gateway.name, "team_id": team,
+			"external_id": reactor, "state": "Linked"}, fields=["user"], limit_page_length=1)
+		if not link:
+			return False
+		key = f"huf:gw_reaction:{gateway.name}:{reactor}:{item.get('ts')}"
+		if frappe.cache().get_value(key):
+			return False
+		runs = frappe.get_all("Gateway Event", filters={"gateway": gateway.name, "conversation_id": channel,
+			"sender_id": reactor, "status": "Succeeded", "agent_run": ["is", "set"]},
+			fields=["agent_run"], order_by="creation desc", limit_page_length=1)
+		if not runs:
+			return False
+		run = runs[0]["agent_run"]
+		values = {"doctype": "Agent Run Feedback", "feedback": "Thumbs Up" if choice == "up" else "Thumbs Down",
+			"agent": frappe.db.get_value("Agent Run", run, "agent"), "agent_message": _message_for_run(run)}
+		previous = frappe.session.user
+		try:
+			frappe.set_user(link[0]["user"])
+			frappe.get_doc(values).insert()
+		finally:
+			frappe.set_user(previous)
+		frappe.cache().set_value(key, 1, expires_in_sec=24 * 3600)
+		try:
+			from huf.ai.gateways.slack_context import get_slack_api
+
+			get_slack_api(gateway).post_ephemeral(channel, reactor, text=MSG_THANKS)
+		except Exception:
+			pass
+		return True
+	except Exception:
+		_log("Slack reaction feedback failed")
+		return False
+
+
 gw_hooks.register(gw_hooks.PRE_INGEST_FILTER, pre_ingest_filter, provider="slack", priority=50)
 gw_hooks.register(gw_hooks.ON_RUN_SUCCESS, on_run_success, provider="slack")
 ia.register_action_handler(FEEDBACK_KIND, handle_feedback)

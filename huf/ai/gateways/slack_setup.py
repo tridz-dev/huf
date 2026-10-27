@@ -15,7 +15,7 @@ from huf.ai.gateways import slack_api
 from huf.ai.gateways.slack_api import SlackApiError
 from huf.ai.gateways.slack_context import get_gateway_credential, get_slack_api
 
-BOT_EVENTS = ["message.channels", "message.groups", "message.im", "message.mpim", "app_mention"]
+BOT_EVENTS = ["message.channels", "message.groups", "message.im", "message.mpim", "app_mention", "reaction_added"]
 EVENTS_PATH = "/api/method/huf.ai.gateways.slack_events.handle_slack_event"
 # Endpoint is created by a later work package (interactivity / buttons).
 INTERACTIVITY_PATH = "/api/method/huf.ai.gateways.slack_interactivity.handle_slack_interaction"

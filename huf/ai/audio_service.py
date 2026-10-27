@@ -316,9 +316,9 @@ def _get_default_stt_model(provider_name: str) -> str:
         "groq": "groq/whisper-large-v3",
         "deepgram": "deepgram/nova-2",
         # Multimodal providers transcribe via completion with audio input
-        "google": "gemini/gemini-2.5-flash",
-        "gemini": "gemini/gemini-2.5-flash",
-        "vertex_ai": "gemini/gemini-2.5-flash",
+        "google": "gemini/gemini-3.8-flash",
+        "gemini": "gemini/gemini-3.8-flash",
+        "vertex_ai": "gemini/gemini-3.8-flash",
     }
     return defaults.get(provider_name.lower())
 
@@ -370,7 +370,9 @@ def resolve_stt_config(agent_name: str = None, model: str = None) -> dict:
             stt_provider_name = model_doc[0].provider
         elif "/" in model:
             provider_slug = model.split("/")[0]
-            provs = frappe.get_all("AI Provider", filters={"slug": provider_slug}, fields=["name"])
+            # AI Provider has no slug field: match the provider brand (litellm prefix aliases included).
+            brand = {"gemini": "google", "vertex_ai": "google-vertex"}.get(provider_slug, provider_slug)
+            provs = frappe.get_all("AI Provider", filters={"provider_brand": brand}, fields=["name"])
             if provs:
                 stt_provider_name = provs[0].name
 

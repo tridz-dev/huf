@@ -365,3 +365,64 @@ def test_gateway_json_field_order():
 	assert f[0]["label"] == "Ask for feedback after answers"
 	assert d["field_order"].count("show_feedback_buttons") == 1
 	assert set(d["field_order"]) == {x["fieldname"] for x in d["fields"]}
+
+
+# ---- reactions as feedback ---------------------------------------------
+def test_reaction_choice_mapping():
+	assert hf._reaction_choice("+1") == "up" and hf._reaction_choice("thumbsup") == "up"
+	assert hf._reaction_choice("+1::skin-tone-3") == "up"
+	assert hf._reaction_choice("-1") == "down" and hf._reaction_choice("thumbsdown") == "down"
+	assert hf._reaction_choice("tada") is None and hf._reaction_choice(None) is None
+
+
+def _reaction_payload(**over):
+	event = {"type": "reaction_added", "user": "U1", "reaction": "+1", "item_user": "UBOT",
+		"item": {"type": "message", "channel": "C1", "ts": "1.2"}}
+	event.update(over)
+	return {"team_id": "T1", "authorizations": [{"user_id": "UBOT"}], "event": event}
+
+
+@pytest.fixture
+def rx(monkeypatch):
+	state = SimpleNamespace(saved=[], cache={}, links=[{"user": "ann@x.com"}], runs=[{"agent_run": "RUN1"}], told=[])
+
+	def get_all(doctype, **kw):
+		return state.links if doctype == "Gateway Identity Link" else state.runs
+
+	class Cache:
+		def get_value(self, k):
+			return state.cache.get(k)
+
+		def set_value(self, k, v, expires_in_sec=None):
+			state.cache[k] = v
+
+	monkeypatch.setattr(frappe, "get_all", get_all, raising=False)
+	monkeypatch.setattr(frappe, "cache", lambda: Cache(), raising=False)
+	monkeypatch.setattr(frappe, "get_doc", lambda values: SimpleNamespace(insert=lambda: state.saved.append(values)), raising=False)
+	monkeypatch.setattr(frappe, "set_user", lambda u: None, raising=False)
+	monkeypatch.setattr(frappe.db, "get_value", lambda *a, **k: "agent-1", raising=False)
+	monkeypatch.setattr(hf, "_message_for_run", lambda run: "MSG1")
+	import importlib
+
+	ctx = importlib.import_module("huf.ai.gateways.slack_context")
+	monkeypatch.setattr(ctx, "get_slack_api", lambda g, **k: SimpleNamespace(post_ephemeral=lambda *a, **kw: state.told.append(kw.get("text"))))
+	return state
+
+
+GWX = SimpleNamespace(name="gw1")
+
+
+def test_thumbs_up_on_bot_message_saves_feedback_once(rx):
+	assert hf.handle_reaction(GWX, _reaction_payload()) is True
+	assert rx.saved == [{"doctype": "Agent Run Feedback", "feedback": "Thumbs Up", "agent": "agent-1", "agent_message": "MSG1"}]
+	assert rx.told == [hf.MSG_THANKS]
+	assert hf.handle_reaction(GWX, _reaction_payload()) is False  # same reaction twice is ignored
+	assert len(rx.saved) == 1
+
+
+def test_reaction_ignored_for_other_cases(rx):
+	assert hf.handle_reaction(GWX, _reaction_payload(reaction="tada")) is False
+	assert hf.handle_reaction(GWX, _reaction_payload(item_user="UOTHER")) is False  # not the bot's message
+	rx.links = []
+	assert hf.handle_reaction(GWX, _reaction_payload()) is False  # reactor not linked
+	assert rx.saved == []

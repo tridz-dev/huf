@@ -65,6 +65,11 @@ def handle_slack_event():
     gateway = frappe.get_doc("Gateway", gateway_name)
 
     event = payload.get("event") or {}
+    if event.get("type") == "reaction_added":
+        from huf.ai.gateways import help_feedback
+
+        help_feedback.handle_reaction(gateway, payload)
+        return {"ok": True}
     if (
         event.get("type") in ("message", "app_mention")
         and not event.get("bot_id")

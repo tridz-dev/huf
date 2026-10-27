@@ -100,7 +100,7 @@ def test_manifest_scopes_and_events(env):
 	m = slack_setup.get_slack_manifest(GW)
 	assert m["oauth_config"]["scopes"]["bot"] == slack_api.REQUIRED_BOT_SCOPES
 	assert m["settings"]["event_subscriptions"]["bot_events"] == [
-		"message.channels", "message.groups", "message.im", "message.mpim", "app_mention"]
+		"message.channels", "message.groups", "message.im", "message.mpim", "app_mention", "reaction_added"]
 
 
 def test_manifest_request_url(env):
