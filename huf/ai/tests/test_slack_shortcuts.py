@@ -24,6 +24,12 @@ def _load():
 	name = "huf.ai.gateways.slack_shortcuts"
 	si_name = "huf.ai.gateways.slack_interactivity"
 	old = {n: sys.modules.pop(n, None) for n in (name, si_name)}
+	pkg = sys.modules.get("huf.ai.gateways")
+	old_attrs = {}
+	for short in ("slack_shortcuts", "slack_interactivity"):
+		if pkg is not None and hasattr(pkg, short):
+			old_attrs[short] = getattr(pkg, short)
+			delattr(pkg, short)
 	fake = types.ModuleType(si_name)
 	fake.register_action_handler = lambda k, fn: REGISTERED.__setitem__(k, fn)
 	sys.modules[si_name] = fake
@@ -37,6 +43,12 @@ def _load():
 		for n, o in old.items():
 			if o is not None:
 				sys.modules[n] = o
+		if pkg is not None:
+			for short in ("slack_shortcuts", "slack_interactivity"):
+				if hasattr(pkg, short):
+					delattr(pkg, short)
+			for short, o in old_attrs.items():
+				setattr(pkg, short, o)
 	return mod
 
 

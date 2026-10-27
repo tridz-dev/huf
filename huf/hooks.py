@@ -431,6 +431,7 @@ huf_tools = [
     "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS",
     "huf.ai.tools.gateway_reply.GATEWAY_REPLY_TOOLS",
     "huf.ai.tools.gateway_send.GATEWAY_SEND_TOOLS",
+    "huf.ai.tools.gateway_handoff.GATEWAY_HANDOFF_TOOLS",
 ]
 
 # Knowledge Backends Hook

@@ -8,4 +8,6 @@ MODULES = (
 	"huf.ai.gateways.health",
 	"huf.ai.gateways.privacy",
 	"huf.ai.gateways.slack_shortcuts",
+	"huf.ai.gateways.help_feedback",
+	"huf.ai.gateways.approvals",
 )

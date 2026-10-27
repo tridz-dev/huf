@@ -29,8 +29,14 @@ def _load_isolated():
 		rl = types.ModuleType("frappe.rate_limiter")
 		rl.rate_limit = lambda *a, **k: (lambda fn: fn)
 		stubs["frappe.rate_limiter"] = rl
+	pkg = sys.modules.get("huf.ai.gateways")
+	attrs = {}
 	for name in TARGETS:
 		touched[name] = sys.modules.pop(name, None)
+		short = name.rsplit(".", 1)[-1]
+		if pkg is not None and hasattr(pkg, short):
+			attrs[short] = getattr(pkg, short)
+			delattr(pkg, short)
 	sys.modules.update(stubs)
 	orig = _frappe_stub.whitelist
 	_frappe_stub.whitelist = lambda *a, **k: (lambda fn: fn)
@@ -45,6 +51,9 @@ def _load_isolated():
 			sys.modules.pop(name, None)
 			if old is not None:
 				sys.modules[name] = old
+		if pkg is not None:
+			for short, old_attr in attrs.items():
+				setattr(pkg, short, old_attr)
 	return ap, si
 
 
