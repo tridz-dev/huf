@@ -327,6 +327,3 @@ class TestAdapterWiring(_Base):
 		with patch("huf.ai.teams.auth.verify_request", return_value=True):
 			assert_adapter_conforms(adapter, request, GatewayReply(conversation_id=CONV, text="ok"))
 
-
-if __name__ == "__main__":
-	uni
