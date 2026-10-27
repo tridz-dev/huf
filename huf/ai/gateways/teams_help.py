@@ -141,7 +141,8 @@ def _status_text(gateway_name: str, user: str) -> str:
 	else:
 		lines.append("Recent requests:")
 		for run in runs:
-			lines.append(f"- {_s(run.get('name'))}: {_s(run.get('status')) or 'Unknown'} ({_s(run.get('creation'))})")
+			status = _s(run.get("status")) or "Unknown"
+			lines.append(f"- {_s(run.get('name'))}: {status} ({_s(run.get('creation'))})")
 	return "\n".join(lines)
 
 
@@ -202,7 +203,8 @@ def pre_ingest_commands(gateway, context) -> bool:
 		reply = {"type": "message", "text": text, "textFormat": "markdown"}
 		if _s(activity.get("id")):
 			reply["replyToId"] = _s(activity.get("id"))
-		teams_outbox.enqueue(gw, snapshot, "reply", {"activity": reply}, idempotency_key(gw, activity, command))
+		key = idempotency_key(gw, activity, command)
+		teams_outbox.enqueue(gw, snapshot, "reply", {"activity": reply}, key)
 	except Exception:
 		try:
 			frappe.log_error(frappe.get_traceback(), "Teams help command failed"[:140])
@@ -217,7 +219,10 @@ def pre_ingest_commands(gateway, context) -> bool:
 
 def register() -> None:
 	hooks.register(
-		hooks.PRE_INGEST_FILTER, pre_ingest_commands, provider=HOOK_PROVIDER, priority=tc.HOOK_PRIORITY_COMMANDS
+		hooks.PRE_INGEST_FILTER,
+		pre_ingest_commands,
+		provider=HOOK_PROVIDER,
+		priority=tc.HOOK_PRIORITY_COMMANDS,
 	)
 
 
