@@ -48,6 +48,12 @@ def handle_slack_event():
         return {"ok": False, "error": "malformed_payload"}
 
     if payload.get("type") == "url_verification":
+        # Signature already verified: remember that Slack accepted this Request URL (setup wizard).
+        frappe.cache().set_value(
+            f"huf_slack_url_verified:{gateway_name}",
+            __import__("datetime").datetime.utcnow().isoformat() + "Z",
+            expires_in_sec=60 * 60 * 24 * 365,
+        )
         from werkzeug.wrappers import Response
         return Response(json.dumps({"challenge": payload.get("challenge")}), status=200, mimetype="application/json")
 
