@@ -29,13 +29,26 @@ def fixture_status(name):
 class FakeDB:
 	def __init__(self):
 		self.recipients = {}
+		self.bumps = []
+		self.rowcount = 0
 		self.broadcasts = {"BC-1": {"gateway": GW, "status": "Running"}, "BC-2": {"gateway": "GW-2", "status": "Running"}, "BC-3": {"gateway": GW, "status": "Completed"}}
 
 	def add(self, name, broadcast="BC-1", status="sent", wamid=None, recipient="15551234567"):
 		self.recipients[name] = {"name": name, "broadcast": broadcast, "status": status, "wamid": wamid, "recipient": recipient, "skip_reason": None, "error_code": None}
 
+	def get_value(self, doctype, name, field, for_update=False):
+		if doctype == "WhatsApp Broadcast":
+			return self.broadcasts[name][field]
+		row = self.recipients.get(name)
+		return row[field] if row else None
+
 	def sql(self, query, args=None):
 		q = " ".join(query.split())
+		if q == "select row_count()":
+			return [(self.rowcount,)]
+		if q.startswith("update `tabWhatsApp Broadcast`"):
+			self.bumps.append(args)
+			return None
 		if q.startswith("update") and "skip_reason='opted_out'" in q:
 			row = self.recipients[args]
 			if row["status"] in ("queued", "deferred"):
@@ -43,8 +56,10 @@ class FakeDB:
 			return None
 		if q.startswith("update"):
 			row = self.recipients[args["_name"]]
+			self.rowcount = 0
 			if row["status"] == args["_current"]:
 				row.update({k: v for k, v in args.items() if not k.startswith("_")})
+				self.rowcount = 1
 			return None
 		if q.startswith("select 1") and "skip_reason='opted_out'" in q:
 			row = self.recipients[args]
@@ -101,7 +116,7 @@ class TestApplyStatus(Base):
 			s = fixture_status(fx)
 			self.assertTrue(bs.apply_status(s["id"], s["status"], s["timestamp"], None, None), fx)
 			self.assertEqual(self.row()["status"], expected)
-		self.assertEqual(self.frappe.recounted, ["BC-1"] * 3)
+		self.assertEqual(len(self.db.bumps), 3)
 
 	def test_never_regresses_and_replay_is_noop(self):
 		self.db.add("R1", status="read", wamid="w1")
@@ -109,7 +124,7 @@ class TestApplyStatus(Base):
 		self.assertFalse(bs.apply_status("w1", "sent", 1, None, None))
 		self.assertFalse(bs.apply_status("w1", "read", 1, None, None))
 		self.assertEqual(self.row()["status"], "read")
-		self.assertEqual(self.frappe.recounted, [])
+		self.assertEqual(self.db.bumps, [])
 
 	def test_failed_never_overwrites_delivered_or_read(self):
 		for st in ("delivered", "read"):
@@ -218,8 +233,8 @@ class TestHooks(unittest.TestCase):
 		from huf.ai import gateway_webhook as gw
 
 		with patch.object(bs, "apply_status") as apply:
-			gw._apply_broadcast_status({"id": "w", "status": "Failed", "timestamp": "5", "errors": [{"code": 1}], "biz_opaque_callback_data": "R9"})
-		apply.assert_called_once_with("w", "failed", "5", [{"code": 1}], "R9")
+			gw._apply_broadcast_status({"id": "w", "status": "Failed", "timestamp": "5", "errors": [{"code": 1}], "biz_opaque_callback_data": "R9"}, "GW-1")
+		apply.assert_called_once_with("w", "failed", "5", [{"code": 1}], "R9", gateway="GW-1")
 
 	def test_user_preferences_stop_calls_hook_and_swallows_errors(self):
 		from huf.ai.whatsapp import account_events as ae
