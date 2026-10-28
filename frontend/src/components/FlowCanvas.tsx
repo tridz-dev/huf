@@ -608,7 +608,7 @@ export function FlowCanvas({
       let x = end.position.x + end.offset;
       const y = end.position.y + 150;
       let guard = 0;
-      while (taken.some((p) => Math.abs(p.x - x) < 250 && Math.abs(p.y - y) < 90) && guard++ < 8) x += 280;
+      while (taken.some((p) => Math.abs(p.x - x) < 230 \&\& Math.abs(p.y - y) < 80) && guard++ < 8) x += 280;
       taken.push({ x, y });
       return {
         id: `ghost-${end.nodeId}-${end.route}`,
