@@ -196,7 +196,13 @@ export function FlowCanvas({
       // Measurements and selection are view state, not edits. React Flow can emit them
       // after the post-save re-sync guard has cleared, which flipped a just-saved flow
       // back to "Unsaved", so only real edits (move, add, remove, replace) schedule a write.
-      const isEdit = realChanges.some((change) => change.type !== 'dimensions' && change.type !== 'select');
+      // A plain click ends with a position change that carries no new position: that is not a move either.
+      const isEdit = realChanges.some(
+        (change) =>
+          change.type !== 'dimensions' &&
+          change.type !== 'select' &&
+          !(change.type === 'position' && change.position === undefined)
+      );
 
       setNodes((nds) => {
         const updatedNodes = applyNodeChanges(realChanges, nds);
@@ -220,11 +226,13 @@ export function FlowCanvas({
         return !changeId || !changeId.startsWith('edge-ghost-');
       });
       if (realChanges.length === 0) return;
+      // Selecting or deselecting an edge is view state, not an edit.
+      const isEdgeEdit = realChanges.some((change) => change.type !== 'select');
 
       setEdges((eds) => {
         const updatedEdges = applyEdgeChanges(realChanges, eds);
         // Schedule context update (debounced)
-        if (!isSyncingFromProps.current) {
+        if (isEdgeEdit && !isSyncingFromProps.current) {
           scheduleContextUpdate(undefined, updatedEdges);
         }
         return updatedEdges;
