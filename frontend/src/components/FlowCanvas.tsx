@@ -348,20 +348,19 @@ export function FlowCanvas({
       const newNodeId = `node_${Date.now()}`;
       const option = actionOptions.find((a) => a.id === actionId);
       const isEnd = actionId === 'end';
-      // Branch targets fan out sideways (same spacing as the add-step ghosts) so siblings never stack.
+      // Fan branch targets out sideways (True/False, approve/reject, router paths) so they never stack on one spot.
       const sourceCfg = sourceNode.data.actionConfig as ({ type?: string } & Record<string, unknown>) | undefined;
       const sourceHandles = branchHandlesFor(sourceCfg?.type, sourceCfg);
-      const handleIndex = sourceHandles.findIndex((h) => h.route === sourceRoute);
-      const siblingCount = sourceCfg?.type === 'router'
-        ? edges.filter((e) => e.source === sourceId && edgeRoute(e) === sourceRoute).length
-        : 0;
-      const offsetX = handleIndex >= 0
-        ? (handleIndex - (sourceHandles.length - 1) / 2) * 240
-        : siblingCount * 240;
+      const routeIndex = sourceHandles.findIndex((h) => h.route === sourceRoute);
+      const sideOffset = sourceHandles.length > 0 && routeIndex >= 0
+        ? (routeIndex - (sourceHandles.length - 1) / 2) * 240
+        : sourceCfg?.type === 'router'
+          ? edges.filter((e) => e.source === sourceId && edgeRoute(e) === 'option').length * 240
+          : 0;
       const newNode: Node<FlowNodeData> = {
         id: newNodeId,
         type: isEnd ? 'end' : 'action',
-        position: { x: sourceNode.position.x + offsetX, y: sourceNode.position.y + 150 },
+        position: { x: sourceNode.position.x + sideOffset, y: sourceNode.position.y + 150 },
         data: isEnd
           ? { label: actionLabel(actionId), nodeType: 'end', icon: option?.icon || 'CheckCircle2', configured: true, endConfig: {} }
           : {
