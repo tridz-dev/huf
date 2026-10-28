@@ -26,6 +26,12 @@ def _row(**over):
 	return base
 
 
+class _Refused(Exception):
+	def __init__(self, code, message, **extra):
+		super().__init__(message)
+		self.code, self.extra = code, extra
+
+
 class _Base(unittest.TestCase):
 	def setUp(self):
 		p = patch("huf.ai.whatsapp.management.frappe")
@@ -88,10 +94,12 @@ class TestPermissions(_Base):
 
 
 class TestStart(_Base):
-	def test_unattested_start_refused(self):
+	def test_unattested_start_is_refused_by_the_runner(self):
+		self.runner.StartRefused = _Refused
+		self.runner.start.side_effect = _Refused("consent_not_attested", "attest first")
 		res = mgmt.start_broadcast(BC, 3)
 		self.assertEqual(res["error"], "consent_not_attested")
-		self.runner.start.assert_not_called()
+		self.assertFalse(res["success"])
 
 	def test_confirm_mismatch_refused(self):
 		self.row = _row(consent_attested=1)
@@ -104,7 +112,7 @@ class TestStart(_Base):
 		self.runner.start.return_value = {"status": "Running"}
 		res = mgmt.start_broadcast(BC, " 3 ")
 		self.assertTrue(res["success"])
-		self.runner.start.assert_called_once_with(BC, user="ops@example.com")
+		self.runner.start.assert_called_once_with(BC, user="ops@example.com", override_warnings=[])
 		self.doc.add_comment.assert_called_once()
 		self.frappe.logger.assert_called_with("huf.whatsapp.broadcast")
 

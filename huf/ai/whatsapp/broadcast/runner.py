@@ -25,6 +25,8 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from huf.ai.whatsapp.broadcast import limits as broadcast_limits, policy, progress, send as broadcast_send
+from huf.ai.whatsapp.broadcast.checks import start_gate
+from huf.ai.whatsapp.broadcast.checks.start_gate import StartRefused
 
 BROADCAST = "WhatsApp Broadcast"
 RECIPIENT = "WhatsApp Broadcast Recipient"
@@ -138,43 +140,44 @@ def _log_event(event: str, broadcast: str, **extra) -> None:
 # --------------------------------------------------------------------------- lifecycle
 
 
-def _begin(
-	broadcast: str, user: str | None, *, allowed_from: tuple[str, ...], resuming: bool = False
-) -> dict:
+def _begin(broadcast, user, *, allowed_from, resuming=False, override_warnings=None) -> dict:
 	user = user or frappe.session.user
 	doc = frappe.get_doc(BROADCAST, broadcast)
 	if doc.status not in allowed_from:
 		frappe.throw(_("Broadcast is {0}; it can only be started from {1}").format(doc.status, ", ".join(allowed_from)))
-	if not doc.consent_attested:
-		frappe.throw(_("Recipient consent must be attested before sending"))
 	if not doc.gateway:
 		frappe.throw(_("Broadcast has no Gateway"))
 	if not _user_can_write(user, doc.gateway):
 		frappe.throw(_("Not permitted to send from this Gateway"), frappe.PermissionError)
 
 	preview = broadcast_limits.preview(broadcast) or {}
-	blocking = list(preview.get("blocking") or [])
-	if str(preview.get("template_status") or "").upper() not in ("", "APPROVED") and not blocking:
-		blocking.append(f"template_status={preview.get('template_status')}")
-	if blocking:
-		frappe.throw(_("Broadcast blocked: {0}").format("; ".join(str(b) for b in blocking)))
 	deferred = int(frappe.db.count(RECIPIENT, {"broadcast": broadcast, "status": "deferred"}) or 0)
-	if int(preview.get("queued") or 0) + deferred <= 0:
-		frappe.throw(_("No queued recipients"))
+	acknowledged = start_gate.check_preview(preview, deferred, None if resuming else (override_warnings or []))
 
 	# Serialise "one Running per gateway" on the Gateway row. Everything above was a (possibly
 	# snapshot) read, so after the lock use *locking* reads, which see the latest committed data.
 	frappe.db.get_value("Gateway", doc.gateway, "name", for_update=True)
 	if frappe.db.get_value(BROADCAST, broadcast, "status", for_update=True) not in allowed_from:
 		frappe.throw(_("Broadcast changed state; reload and retry"))
-	other = frappe.db.get_value(
-		BROADCAST,
-		{"gateway": doc.gateway, "status": "Running", "name": ["!=", broadcast]},
-		"name",
-		for_update=True,
-	)
-	if other:
-		frappe.throw(_("Another broadcast ({0}) is already running on this Gateway").format(other))
+	if policy.get("require_consent_attestation") and not frappe.db.get_value(
+		BROADCAST, broadcast, "consent_attested", for_update=True
+	):
+		raise StartRefused("consent_not_attested", _("Recipient consent must be attested before sending"))
+	if policy.get("one_active_per_gateway"):
+		other = frappe.db.get_value(
+			BROADCAST,
+			{"gateway": doc.gateway, "status": "Running", "name": ["!=", broadcast]},
+			"name",
+			for_update=True,
+		)
+		if other:
+			raise StartRefused(
+				"another_broadcast_running", _("Another broadcast ({0}) is already running on this Gateway").format(other)
+			)
+
+	deferred_over_budget = 0
+	if "over_budget" in acknowledged and preview.get("remaining_24h") is not None:
+		deferred_over_budget = start_gate.defer_over_budget(broadcast, int(preview["remaining_24h"]))
 
 	started_at = doc.started_at or now_datetime()
 	frappe.db.set_value(
@@ -204,12 +207,15 @@ def _begin(
 		_enqueue_tick(broadcast, user=user)
 	else:
 		_enqueue_tick(broadcast)
-	return {"broadcast": broadcast, "status": "Running", "queued": int(preview.get("queued") or 0)}
+	return {"broadcast": broadcast, "status": "Running", "queued": int(preview.get("queued") or 0),
+		"deferred_over_budget": deferred_over_budget}
 
 
-def start(broadcast: str, user: str | None = None) -> dict:
-	"""Validate and start a Draft broadcast (Paused goes through resume() so the resumer is authorized and recorded), then enqueue its first tick."""
-	return _begin(broadcast, user, allowed_from=("Draft",))
+def start(broadcast: str, user: str | None = None, override_warnings: list[str] | None = None) -> dict:
+	"""Start a Draft broadcast and enqueue its first tick (Paused goes through resume()).
+
+	``override_warnings`` must equal the preview's current warning codes, else ``StartRefused("warnings_changed")``."""
+	return _begin(broadcast, user, allowed_from=("Draft",), override_warnings=override_warnings)
 
 
 def resume(broadcast: str) -> dict:
@@ -313,7 +319,7 @@ def _due_rows(broadcast: str, limit: int) -> list[str]:
 		r[0]
 		for r in frappe.db.sql(
 			f"select name from `tab{RECIPIENT}` where broadcast=%s and "
-			"(status='queued' or (status='deferred' and (next_attempt_at is null or next_attempt_at<=%s))) "
+			"(status in ('queued','deferred') and (next_attempt_at is null or next_attempt_at<=%s)) "
 			"order by creation, name limit %s",
 			(broadcast, now_datetime(), int(limit)),
 		)
@@ -327,6 +333,15 @@ def _remaining(broadcast: str) -> dict[str, int]:
 		broadcast,
 	)
 	return {s: int(n) for s, n in rows}
+
+
+def _due_queued(broadcast: str) -> int:
+	"""Queued rows that may be sent now (over-budget rows wait for ``next_attempt_at``)."""
+	return int(frappe.db.sql(
+		f"select count(*) from `tab{RECIPIENT}` where broadcast=%s and status='queued' "
+		"and (next_attempt_at is null or next_attempt_at<=%s)",
+		(broadcast, now_datetime()),
+	)[0][0])
 
 
 def _complete_if_done(broadcast: str) -> bool:
@@ -469,7 +484,7 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 		return {"result": "completed", "sent": sent_total, "outcomes": outcomes}
 
 	remaining = _remaining(broadcast)
-	if remaining.get("queued") and _status(broadcast) == "Running":  # budget ran out with due work left
+	if _due_queued(broadcast) and _status(broadcast) == "Running":  # budget ran out with due work left
 		_release(key, token)
 		if run_as:
 			_enqueue_tick(broadcast, continuation=True, user=run_as)
