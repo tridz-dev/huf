@@ -17,6 +17,7 @@ import { BridgeUnavailable, LoadError } from '@/components/whatsapp/BridgeUnavai
 import { TemplatesTab } from '@/components/whatsapp/TemplatesTab';
 import { AudiencesPage } from '@/components/whatsapp/audiences/AudiencesPage';
 import { BroadcastTab } from '@/components/whatsapp/broadcast/BroadcastTab';
+import { BroadcastLimits } from '@/components/whatsapp/broadcast/BroadcastLimits';
 import { AccessTab } from '@/components/whatsapp/AccessTab';
 import { MessageLogTab } from '@/components/whatsapp/MessageLogTab';
 import { REASON_FALLBACK } from '@/components/whatsapp/overview/healthCopy';
@@ -245,6 +246,9 @@ export default function WhatsAppManagePage() {
                   ) : (
                     <Skeleton className="h-64" />
                   )}
+                  <div className="mt-8">
+                    <BroadcastLimits />
+                  </div>
                 </TabsContent>
               </>
             )}

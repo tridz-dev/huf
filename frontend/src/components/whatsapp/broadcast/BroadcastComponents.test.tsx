@@ -10,6 +10,10 @@ vi.mock('@/services/whatsappApi', async (orig) => ({
   ...(await orig<typeof import('@/services/whatsappApi')>()),
   listTemplates: vi.fn(),
 }));
+vi.mock('./limitsApi', async (orig) => ({
+  ...(await orig<typeof import('./limitsApi')>()),
+  getBroadcastLimits: vi.fn(async () => ({ success: true, limits: [] }) as never),
+}));
 vi.mock('./broadcastApi', async (orig) => ({
   ...(await orig<typeof import('./broadcastApi')>()),
   createBroadcast: vi.fn(), addBroadcastRecipients: vi.fn(), attestBroadcastConsent: vi.fn(),
@@ -186,6 +190,8 @@ describe('BroadcastWizard', () => {
     await toPreview(user);
     expect(m.attestBroadcastConsent).toHaveBeenCalledWith('BCAST-9', 'signup form');
     expect(await screen.findByText('w1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+    await user.click(screen.getByRole('checkbox', { name: /w1/ }));
     await user.click(screen.getByRole('button', { name: 'Next' }));
     const start = screen.getByRole('button', { name: 'Start broadcast' });
     expect(start).toBeDisabled();
@@ -194,7 +200,7 @@ describe('BroadcastWizard', () => {
     await user.clear(screen.getByLabelText(/Type 2 to confirm/));
     await user.type(screen.getByLabelText(/Type 2 to confirm/), '2');
     await user.click(start);
-    expect(m.startBroadcast).toHaveBeenCalledWith('BCAST-9', '2');
+    expect(m.startBroadcast).toHaveBeenCalledWith('BCAST-9', '2', ['w1']);
     expect(onStarted).toHaveBeenCalledWith('BCAST-9');
   });
 
