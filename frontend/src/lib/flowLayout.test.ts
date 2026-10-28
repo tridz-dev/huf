@@ -1,0 +1,40 @@
+import { describe, expect, it } from 'vitest';
+import { COLUMN_GAP, ROW_GAP, tidyPositions } from './flowLayout';
+
+const n = (id: string, x = 0, y = 0) => ({ id, position: { x, y } });
+
+describe('tidyPositions', () => {
+  it('lines a straight run up vertically', () => {
+    const p = tidyPositions([n('a', 5, 900), n('b', 400, 10), n('c', -50, 300)], [
+      { source: 'a', target: 'b' },
+      { source: 'b', target: 'c' },
+    ]);
+    expect(p.a).toEqual({ x: 250, y: 100 });
+    expect(p.b).toEqual({ x: 250, y: 100 + ROW_GAP });
+    expect(p.c).toEqual({ x: 250, y: 100 + 2 * ROW_GAP });
+  });
+
+  it('fans a branch out under its router and joins below both paths', () => {
+    const p = tidyPositions([n('t'), n('r'), n('x'), n('y'), n('end')], [
+      { source: 't', target: 'r' },
+      { source: 'r', target: 'x' },
+      { source: 'r', target: 'y' },
+      { source: 'x', target: 'end' },
+      { source: 'y', target: 'end' },
+    ]);
+    expect(p.x.y).toBe(p.y.y);
+    expect(p.y.x - p.x.x).toBe(COLUMN_GAP);
+    expect(p.r.x).toBe(250);
+    expect(p.end.y).toBe(100 + 3 * ROW_GAP);
+    expect(p.end.x).toBe((p.x.x + p.y.x) / 2);
+  });
+
+  it('survives a loop and a disconnected step', () => {
+    const p = tidyPositions([n('a'), n('b'), n('lone')], [
+      { source: 'a', target: 'b' },
+      { source: 'b', target: 'a' },
+    ]);
+    expect(Object.keys(p).sort()).toEqual(['a', 'b', 'lone']);
+    for (const v of Object.values(p)) expect(Number.isFinite(v.x) && Number.isFinite(v.y)).toBe(true);
+  });
+});

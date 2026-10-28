@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { summarizeDocPayload } from './flowRunDoc';
+import { htmlToText, summarizeDocPayload } from './flowRunDoc';
 
 const doc = {
   doctype: 'ToDo', name: 'abc123', owner: 'Administrator', modified_by: 'Administrator', docstatus: 0, idx: 0,
@@ -28,5 +28,22 @@ describe('summarizeDocPayload', () => {
     expect(s?.fields).toHaveLength(3);
     expect(s?.fields[0].value.length).toBe(120);
     expect(s?.hidden).toBe(10);
+  });
+});
+
+describe('rich text values', () => {
+  it('turns HTML into plain text with entities decoded', () => {
+    expect(htmlToText('<div class="ql-editor read-mode"><p>Call &amp; confirm</p><p>Second&nbsp;line<br>third</p></div>')).toBe('Call & confirm\nSecond line\nthird');
+    expect(htmlToText('1 < 2 and plain')).toBe('1 < 2 and plain');
+  });
+  it('shows the summary without markup and keeps the full text for Show more', () => {
+    const long = `<div><p>${'word '.repeat(60)}</p></div>`;
+    const s = summarizeDocPayload({ doctype: 'ToDo', name: 'a', description: long });
+    const f = s?.fields[0];
+    expect(f?.value).not.toContain('<');
+    expect(f?.value.length).toBe(120);
+    expect(f?.full).toBe(`${'word '.repeat(60)}`.trim());
+    const short = summarizeDocPayload({ doctype: 'ToDo', name: 'a', description: '<p>Hi</p>' });
+    expect(short?.fields[0]).toEqual({ key: 'description', label: 'Description', value: 'Hi' });
   });
 });
