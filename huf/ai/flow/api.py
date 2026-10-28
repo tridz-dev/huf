@@ -10,7 +10,6 @@ Provides REST-style APIs for:
 
 from __future__ import annotations
 
-import hmac
 import json
 
 import frappe
@@ -271,24 +270,30 @@ def resume_flow_run(flow_run_id: str, input: str | dict | None = None) -> dict:
 	}
 
 
-@frappe.whitelist()
-def approve_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
+def _decide_flow_run(flow_run_id: str, decision: str, comment: str | None) -> dict:
+	"""Shared approve/reject path.
+
+	Authorisation is the engine's approver check (declared role / users; System Manager when none
+	is declared) -- Flow Run read/write permission is deliberately not what gates a decision.
+	The check runs here first so the caller gets a precise error, and again inside the engine
+	before anything is mutated.
 	"""
-	Approve a flow run waiting for approval.
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Login required"), frappe.AuthenticationError)
+	if not frappe.db.exists("Flow Run", flow_run_id):
+		frappe.throw(_("Flow Run '{0}' not found").format(flow_run_id), frappe.DoesNotExistError)
 
-	Args:
-	    flow_run_id: Flow Run name
-	    comment: Optional comment
+	from huf.ai.flow import engine
 
-	Returns:
-	    dict with status and current_node_id
-	"""
-	if not frappe.has_permission("Flow Run", "read"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	flow_run = frappe.get_doc("Flow Run", flow_run_id)
+	if flow_run.status != "Waiting Approval":
+		frappe.throw(
+			_("Flow Run '{0}' is not waiting for approval (status: {1})").format(flow_run_id, flow_run.status)
+		)
+	verify = getattr(engine, "verify_approval_permission", None) or engine._verify_approval_permission
+	verify(engine._load_waiting(flow_run))
 
-	from huf.ai.flow.engine import approve_flow_run as engine_approve
-
-	engine_approve(flow_run_id, decision="approved", comment=comment)
+	engine.approve_flow_run(flow_run_id, decision=decision, comment=comment)
 
 	doc = frappe.get_doc("Flow Run", flow_run_id)
 	return {
@@ -296,33 +301,18 @@ def approve_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 		"status": doc.status,
 		"current_node_id": doc.current_node_id,
 	}
+
+
+@frappe.whitelist()
+def approve_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
+	"""Approve a flow run waiting for approval (caller must be a permitted approver)."""
+	return _decide_flow_run(flow_run_id, "approved", comment)
 
 
 @frappe.whitelist()
 def reject_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
-	"""
-	Reject a flow run waiting for approval.
-
-	Args:
-	    flow_run_id: Flow Run name
-	    comment: Optional comment
-
-	Returns:
-	    dict with status and current_node_id
-	"""
-	if not frappe.has_permission("Flow Run", "write"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
-
-	from huf.ai.flow.engine import approve_flow_run as engine_approve
-
-	engine_approve(flow_run_id, decision="rejected", comment=comment)
-
-	doc = frappe.get_doc("Flow Run", flow_run_id)
-	return {
-		"flow_run_id": doc.name,
-		"status": doc.status,
-		"current_node_id": doc.current_node_id,
-	}
+	"""Reject a flow run waiting for approval (caller must be a permitted approver)."""
+	return _decide_flow_run(flow_run_id, "rejected", comment)
 
 
 # ---------------------------------------------------------------------------
@@ -330,44 +320,8 @@ def reject_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _webhook_key_is_valid(defn: dict, webhook_key: str | None) -> bool:
-	"""Return True only if the flow's entry node is a webhook trigger with a
-	non-empty configured auth key that matches webhook_key (constant-time).
-
-	Fails closed: returns False if the entry node is missing, is not a
-	trigger.webhook, or has no/empty auth configured.
-	"""
-	entry_id = defn.get("entry")
-	entry_node = None
-	for n in defn.get("nodes", []):
-		if n.get("id") == entry_id and n.get("type") == "trigger.webhook":
-			entry_node = n
-			break
-
-	if entry_node is None:
-		return False
-
-	# The webhook auth key is written as "auth" by RightSidebar.tsx but as
-	# "apiKey" by NodeSelectionModal.tsx (frontend inconsistency, not a
-	# backend redundancy) - accept either so a webhook configured through
-	# either UI path can authenticate. "auth" takes precedence when both
-	# are somehow present.
-	node_config = entry_node.get("config", {})
-	expected_auth = node_config.get("auth") or node_config.get("apiKey")
-	if not expected_auth:
-		return False
-
-	return hmac.compare_digest(str(webhook_key or ""), str(expected_auth))
-
-
-def _webhook_entry_auth(defn: dict) -> str | None:
-	entry_id = defn.get("entry")
-	for node in defn.get("nodes", []):
-		if node.get("id") == entry_id and node.get("type") == "trigger.webhook":
-			node_config = node.get("config", {})
-			# See _webhook_key_is_valid for why both keys are checked.
-			return node_config.get("auth") or node_config.get("apiKey")
-	return None
+WEBHOOK_SECRET_HEADER = "X-Huf-Secret"
+WEBHOOK_FLOW_HEADER = "X-Huf-Flow-Id"
 
 
 def _request_headers() -> dict:
@@ -377,22 +331,22 @@ def _request_headers() -> dict:
 	return getattr(request, "headers", {}) or {}
 
 
-def _header_value(*names: str) -> str | None:
+def _request_method() -> str | None:
+	"""HTTP method of the current request, or None when not inside an HTTP request."""
+	request = getattr(frappe, "request", None)
+	method = getattr(request, "method", None) if request else None
+	return method.upper() if isinstance(method, str) else None
+
+
+def _presented_secret() -> str | None:
+	"""The webhook secret the caller sent: ``X-Huf-Secret`` header or ``?secret=`` query parameter."""
 	headers = _request_headers()
-	for name in names:
-		value = headers.get(name)
-		if value:
-			return value
-	return None
-
-
-def _bearer_token(value: str | None) -> str | None:
-	if not value:
-		return None
-	parts = value.split(None, 1)
-	if len(parts) == 2 and parts[0].lower() == "bearer":
-		return parts[1].strip() or None
-	return None
+	value = headers.get(WEBHOOK_SECRET_HEADER)
+	if value:
+		return value
+	request = getattr(frappe, "request", None)
+	args = getattr(request, "args", None) if request else None
+	return (args.get("secret") if args else None) or None
 
 
 def _parse_webhook_payload() -> dict:
@@ -412,189 +366,101 @@ def _parse_webhook_payload() -> dict:
 		if frappe.request.form:
 			payload = dict(frappe.request.form)
 		else:
-			exclude = {"cmd", "flow_id", "webhook_key", "key", "secret", "token"}
+			exclude = {"cmd", "flow_id", "secret"}
 			payload = {k: v for k, v in frappe.local.form_dict.items() if k not in exclude}
 
 	return payload if isinstance(payload, dict) else {"payload": payload}
 
 
-def _extract_webhook_key(payload: dict | None = None, explicit_key: str | None = None) -> str | None:
-	if explicit_key:
-		return explicit_key
-
-	request = getattr(frappe, "request", None)
-	if request and getattr(request, "args", None):
-		for key in ("webhook_key", "key", "secret", "token"):
-			if request.args.get(key):
-				return request.args.get(key)
-
-	headers_key = _header_value(
-		"X-Webhook-Secret",
-		"X-Huf-Webhook-Key",
-		"X-Webhook-Key",
-		"X-Hub-Signature",
-	)
-	if headers_key:
-		return headers_key
-
-	bearer = _bearer_token(_header_value("Authorization"))
-	if bearer:
-		return bearer
-
-	if request and getattr(request, "form", None):
-		for key in ("webhook_key", "key", "secret", "token"):
-			if request.form.get(key):
-				return request.form.get(key)
-
-	if payload:
-		for key in ("webhook_key", "key", "secret", "token"):
-			if payload.get(key):
-				return payload.get(key)
-
-	return None
-
-
-def _extract_flow_id(payload: dict | None = None, explicit_flow_id: str | None = None) -> str | None:
+def _extract_flow_id(explicit_flow_id: str | None = None) -> str | None:
 	if explicit_flow_id:
 		return explicit_flow_id
-
 	request = getattr(frappe, "request", None)
 	if request and getattr(request, "args", None) and request.args.get("flow_id"):
 		return request.args.get("flow_id")
-
-	header_flow_id = _header_value("X-Huf-Flow-Id", "X-Flow-Id")
-	if header_flow_id:
-		return header_flow_id
-
-	if request and getattr(request, "form", None) and request.form.get("flow_id"):
-		return request.form.get("flow_id")
-
-	if payload and payload.get("flow_id"):
-		return payload.get("flow_id")
-
-	return None
+	return _request_headers().get(WEBHOOK_FLOW_HEADER) or None
 
 
-def _load_active_flow_definition(flow_id: str) -> tuple[object, dict]:
-	if not frappe.db.exists("Flow Definition", flow_id):
-		frappe.throw(_("Flow '{0}' not found").format(flow_id), frappe.DoesNotExistError)
-
-	defn_doc = frappe.get_doc("Flow Definition", flow_id)
-	if defn_doc.status != "Active":
-		frappe.throw(_("Flow '{0}' is not active").format(flow_id))
-
-	defn = json.loads(defn_doc.definition_json) if isinstance(defn_doc.definition_json, str) else defn_doc.definition_json
-	return defn_doc, defn
+def _webhook_denied():
+	"""Single generic rejection so a caller cannot tell unknown, inactive and wrong-secret flows apart."""
+	frappe.local.response["http_status_code"] = 403
+	frappe.throw(_("Webhook request not permitted"), frappe.AuthenticationError)
 
 
-def _resolve_flow_by_webhook_key(webhook_key: str | None) -> str:
-	if not webhook_key:
-		frappe.throw(_("Webhook key is required"), frappe.AuthenticationError)
+def _resolve_flow_by_secret(secret: str | None) -> str:
+	from huf.ai.flow.triggers import active_webhook_flows, match_webhook_trigger
 
-	matches = []
-	for row in frappe.get_all(
-		"Flow Definition",
-		filters={"status": "Active"},
-		fields=["name", "definition_json"],
-	):
-		name = row.get("name") if isinstance(row, dict) else row.name
-		definition_json = row.get("definition_json") if isinstance(row, dict) else row.definition_json
-		defn = json.loads(definition_json) if isinstance(definition_json, str) else definition_json
-		expected_auth = _webhook_entry_auth(defn or {})
-		if expected_auth and hmac.compare_digest(str(webhook_key), str(expected_auth)):
-			matches.append(name)
-
-	if not matches:
-		frappe.throw(_("Invalid webhook key"), frappe.AuthenticationError)
-	if len(matches) > 1:
-		frappe.throw(_("Webhook key matches multiple active flows; provide flow_id"))
+	if not secret:
+		_webhook_denied()
+	matches = [
+		name
+		for name, _owner, defn in active_webhook_flows()
+		if match_webhook_trigger(defn, secret, None)[0] is not None
+	]
+	if len(matches) != 1:
+		# none: wrong secret; several: ambiguous. Either way nothing is started.
+		_webhook_denied()
 	return matches[0]
 
 
-def _run_flow_webhook(flow_id: str, webhook_key: str | None, payload: dict | None = None) -> dict:
-	defn_doc, defn = _load_active_flow_definition(flow_id)
+def _run_flow_webhook(flow_id: str | None, secret: str | None, payload: dict | None = None) -> dict:
+	from huf.ai.flow.triggers import match_webhook_trigger, parse_definition, start_flow_run
 
-	# Validate webhook auth - mandatory, fail closed.
-	if not _webhook_key_is_valid(defn, webhook_key):
-		frappe.throw(_("Invalid webhook key"), frappe.AuthenticationError)
+	if not flow_id or not frappe.db.exists("Flow Definition", flow_id):
+		_webhook_denied()
+	status, owner, definition_json = frappe.db.get_value(
+		"Flow Definition", flow_id, ["status", "owner", "definition_json"]
+	)
+	# Disabled / unpublished flows never accept webhooks.
+	if status != "Active":
+		_webhook_denied()
 
-	# Switch execution identity to the flow owner so the run does not execute as Guest.
-	# GW-11: identity resolution for this trigger surface is routed through the
-	# shared resolve_run_identity_and_authorize() helper. The webhook-key check
-	# above already authorizes this trigger, so authorized is always True here --
-	# this call only resolves who the run executes as, matching prior behavior.
+	node, reason = match_webhook_trigger(parse_definition(definition_json), secret, _request_method())
+	if node is None:
+		if reason == "bad_method":
+			frappe.local.response["http_status_code"] = 405
+			frappe.throw(_("Webhook method not allowed"), frappe.PermissionError)
+		_webhook_denied()
+
+	# Execute as the flow owner, never Guest. The secret check above authorises the trigger;
+	# resolve_run_identity_and_authorize only resolves who the run executes as.
 	from huf.ai.agent.access import TRIGGER_FLOW_WEBHOOK, resolve_run_identity_and_authorize
 
-	identity = resolve_run_identity_and_authorize(
-		None,
-		TRIGGER_FLOW_WEBHOOK,
-		{"owner": defn_doc.owner},
-	)
-	frappe.set_user(identity.run_as_user)
+	identity = resolve_run_identity_and_authorize(None, TRIGGER_FLOW_WEBHOOK, {"owner": owner})
 
 	if payload is None:
 		payload = _parse_webhook_payload()
 
-	from huf.ai.flow.engine import create_flow_run, run_flow as engine_run_flow
-
-	flow_run = create_flow_run(
-		flow_id=flow_id,
-		payload=payload,
-		trigger_type="Webhook",
+	flow_run = start_flow_run(
+		flow_id, payload, "Webhook", trigger_node_id=node["id"], user=identity.run_as_user, enqueue=True
 	)
-
-	# Run in background for webhooks
-	frappe.enqueue(
-		"huf.ai.flow.engine.run_flow",
-		queue="default",
-		flow_run_name=flow_run.name,
-	)
-
-	return {
-		"flow_run_id": flow_run.name,
-		"status": flow_run.status,
-	}
+	return {"flow_run_id": flow_run.name, "status": flow_run.status}
 
 
 @frappe.whitelist(allow_guest=True)
-def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
+def flow_webhook(flow_id: str | None = None, secret: str | None = None) -> dict:
 	"""
 	Webhook trigger endpoint for flows.
 
-	Validates webhook auth and starts a flow run.
-
-	Args:
-	    flow_id: Flow ID to trigger
-	    webhook_key: Authentication key
-
-	Returns:
-	    dict with flow_run_id and status
+	Authenticates with the per-flow ``secret`` from the ``trigger.webhook`` node config, sent as the
+	``X-Huf-Secret`` header or the ``?secret=`` query parameter (constant-time compare, fails closed).
+	The HTTP method must equal the node's configured ``method``. Only Active flows accept webhooks.
 	"""
-	# Frappe's make_form_dict drops query string arguments if the request has a JSON body.
-	# We must manually extract webhook_key from request.args if it's missing.
-	if webhook_key is None and getattr(frappe, "request", None) and frappe.request.args:
-		webhook_key = frappe.request.args.get("webhook_key")
-
-	return _run_flow_webhook(flow_id, webhook_key)
+	return _run_flow_webhook(_extract_flow_id(flow_id), _presented_secret() or secret)
 
 
 @frappe.whitelist(allow_guest=True)
-def flow_webhook_clean(flow_id: str | None = None, webhook_key: str | None = None) -> dict:
+def flow_webhook_clean(flow_id: str | None = None, secret: str | None = None) -> dict:
 	"""
 	Clean URL webhook receiver for providers that reject query parameters.
 
-	Key resolution is intentionally versatile while still failing closed:
-	- Frappe Cloud/Press: X-Webhook-Secret header.
-	- Huf/native callers: X-Huf-Webhook-Key or X-Huf-Flow-Id headers.
-	- Generic providers: Authorization: Bearer <key>, form fields, JSON body, or legacy args.
-
-	If flow_id is omitted, Huf resolves it by finding exactly one active
-	trigger.webhook flow whose configured auth matches the resolved key.
+	The secret comes from the ``X-Huf-Secret`` header (or ``?secret=``). ``flow_id`` is taken from the
+	argument, ``?flow_id=`` or the ``X-Huf-Flow-Id`` header; if absent, Huf finds the single Active
+	``trigger.webhook`` flow whose configured secret equals the presented one.
 	"""
-	payload = _parse_webhook_payload()
-	resolved_key = _extract_webhook_key(payload, webhook_key)
-	resolved_flow_id = _extract_flow_id(payload, flow_id) or _resolve_flow_by_webhook_key(resolved_key)
-	return _run_flow_webhook(resolved_flow_id, resolved_key, payload)
+	presented = _presented_secret() or secret
+	resolved_flow_id = _extract_flow_id(flow_id) or _resolve_flow_by_secret(presented)
+	return _run_flow_webhook(resolved_flow_id, presented)
 
 
 # ---------------------------------------------------------------------------
@@ -866,176 +732,153 @@ def clear_flow_trigger(flow_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+# Display metadata only. Every config field below the node is generated from graph_ir.schema.json.
+_NODE_DISPLAY = {
+	"trigger.webhook": ("Webhook Trigger", "Webhook", "trigger"),
+	"trigger.schedule": ("Schedule Trigger", "Clock", "trigger"),
+	"trigger.doc-event": ("Doc Event Trigger", "FileText", "trigger"),
+	"trigger.unset": ("Unset Trigger", "CircleDashed", "trigger"),
+	"agent.run": ("Run Agent", "SquareAsterisk", "ai"),
+	"tool.call": ("Call Tool", "Wrench", "ai"),
+	"router.llm": ("LLM Router", "GitBranch", "control"),
+	"router.decision": ("Decision Router", "GitBranch", "control"),
+	"human.approval": ("Human Approval", "UserCheck", "control"),
+	"condition": ("Condition (IF)", "GitFork", "control"),
+	"foreach": ("Loop", "RotateCw", "control"),
+	"parallel": ("Parallel", "Split", "control"),
+	"validate": ("Validate", "ShieldCheck", "control"),
+	"output": ("End", "CheckCircle2", "control"),
+	"transform": ("Transform Data", "Repeat", "transform"),
+	"state.get": ("Get State", "DatabaseZap", "state"),
+	"state.set": ("Set State", "Database", "state"),
+	"state.delete": ("Delete State", "Trash2", "state"),
+	"doc.create": ("Create Document", "FilePlus", "data"),
+}
+
+_SCHEMA_FILE = None
+
+
+def _graph_schema() -> dict:
+	global _SCHEMA_FILE
+	if _SCHEMA_FILE is None:
+		import os
+
+		path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "graph", "graph_ir.schema.json")
+		with open(path, encoding="utf-8") as fh:
+			_SCHEMA_FILE = json.load(fh)
+	return _SCHEMA_FILE
+
+
+def _ref_name(schema: dict) -> str | None:
+	ref = schema.get("$ref") if isinstance(schema, dict) else None
+	return ref.rsplit("/", 1)[-1] if ref else None
+
+
+def _field_type(schema: dict) -> dict:
+	"""Map one JSON-schema property to a UI field descriptor (type + constraints)."""
+	ref = _ref_name(schema)
+	if ref == "NodeId":
+		return {"type": "node_select"}
+	if ref == "Expression":
+		return {"type": "expression"}
+	if ref == "Reference":
+		return {"type": "reference"}
+	if ref == "ToolId":
+		return {"type": "tool_select"}
+	if ref == "Value":
+		return {"type": "value"}
+	if "enum" in schema:
+		return {"type": "select", "options": list(schema["enum"])}
+	if "const" in schema:
+		return {"type": "select", "options": [schema["const"]], "default": schema["const"]}
+	if "anyOf" in schema:
+		return {"type": "value"}
+	kind = schema.get("type")
+	if kind == "string":
+		out = {"type": "string"}
+		for src, dst in (("minLength", "min_length"), ("maxLength", "max_length")):
+			if src in schema:
+				out[dst] = schema[src]
+		return out
+	if kind == "integer":
+		out = {"type": "number"}
+		for src, dst in (("minimum", "min"), ("maximum", "max")):
+			if src in schema:
+				out[dst] = schema[src]
+		return out
+	if kind == "boolean":
+		return {"type": "boolean"}
+	if kind == "array":
+		item = schema.get("items", {})
+		if _ref_name(item) == "NodeId":
+			return {"type": "node_list"}
+		if item.get("type") == "string":
+			return {"type": "string_list"}
+	return {"type": "json"}
+
+
+def _node_config_schema(node_def: dict) -> tuple[str | None, dict, bool]:
+	"""``(node_type, config_schema, forbids_next)`` for one FlowGraph node definition."""
+	node_type, config, forbids_next = None, {}, False
+	for part in node_def.get("allOf", [node_def]):
+		props = part.get("properties") or {}
+		if "type" in props and "const" in props["type"]:
+			node_type = props["type"]["const"]
+			config = props.get("config", {})
+		if part.get("not", {}).get("required") == ["next"]:
+			forbids_next = True
+	return node_type, config, forbids_next
+
+
+def build_node_schemas(schema: dict | None = None) -> dict:
+	"""Node-type -> UI descriptor, generated from ``graph_ir.schema.json`` (FlowGraph node list)."""
+	schema = schema or _graph_schema()
+	defs = schema["$defs"]
+	out: dict = {}
+	for entry in defs["FlowNode"]["oneOf"]:
+		node_def = defs[_ref_name(entry)]
+		node_type, config, forbids_next = _node_config_schema(node_def)
+		if not node_type:
+			continue
+		required = set(config.get("required", []))
+		fields = []
+		for name, prop in (config.get("properties") or {}).items():
+			descriptor = _field_type(prop)
+			descriptor.update(
+				{"name": name, "label": name.replace("_", " ").title(), "required": name in required}
+			)
+			if prop.get("description"):
+				descriptor["description"] = prop["description"]
+			if "default" in prop:
+				descriptor["default"] = prop["default"]
+			fields.append(descriptor)
+		label, icon, category = _NODE_DISPLAY.get(node_type, (node_type, "Circle", "other"))
+		out[node_type] = {
+			"label": label,
+			"icon": icon,
+			"category": category,
+			"description": node_def.get("description") or label,
+			"has_backend": True,
+			"routing": {"next": not forbids_next, "on_error": True},
+			"config_schema": fields,
+			"json_schema": config,
+		}
+	return out
+
+
 @frappe.whitelist()
 def get_node_schemas() -> dict:
 	"""
-	Return JSON schema definitions for all available flow node types.
-
-	This endpoint enables schema-driven UI construction. The frontend can
-	query this to dynamically build configuration forms instead of
-	hardcoding TypeScript interfaces per node type.
+	Return field definitions for every flow node type, generated from the graph IR schema
+	(``huf/ai/graph/graph_ir.schema.json``, the source of truth; see docs/flow/FIELD_CONTRACT.md).
 
 	Returns:
-	    dict keyed by backend node type, each containing:
-	        label (str): Display name
-	        icon (str): Default icon name
-	        category (str): Category for grouping in UI
-	        description (str): Short description
-	        has_backend (bool): Whether this node type has a backend executor
-	        config_schema (list): List of field definitions for config form
+	    dict keyed by node type; each value has label, icon, category, description, has_backend,
+	    routing ({next, on_error}: whether the node may carry those pointers), config_schema (list of
+	    field descriptors: name, label, type, required, options/min/max/default) and json_schema
+	    (the raw config JSON schema).
 	"""
-	return {
-		"trigger.webhook": {
-			"label": "Webhook Trigger",
-			"icon": "Webhook",
-			"category": "trigger",
-			"description": "Start flow from an incoming webhook",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "auth", "label": "Auth Key", "type": "string", "description": "Optional authentication key"},
-				{"name": "method", "label": "HTTP Method", "type": "select", "options": ["GET", "POST", "PUT", "DELETE"], "default": "POST"},
-			],
-		},
-		"trigger.schedule": {
-			"label": "Schedule Trigger",
-			"icon": "Clock",
-			"category": "trigger",
-			"description": "Start flow on a scheduled interval (cron)",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "cron", "label": "Cron Expression", "type": "string", "required": True, "description": "Cron expression e.g., */5 * * * * for every 5 minutes"},
-				{"name": "schedule_name", "label": "Schedule Name", "type": "string", "description": "Optional name for this schedule"},
-				{"name": "timezone", "label": "Timezone", "type": "string", "default": "UTC", "description": "Timezone for schedule execution"},
-			],
-		},
-		"trigger.doc-event": {
-			"label": "Doc Event Trigger",
-			"icon": "FileText",
-			"category": "trigger",
-			"description": "Start flow when a document event occurs (create, update, delete)",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "doctype", "label": "DocType", "type": "doctype_select", "required": True, "description": "DocType to listen on (e.g., Sales Invoice, ToDo)"},
-				{"name": "event", "label": "Event", "type": "select", "options": ["after_insert", "on_update", "on_submit", "on_cancel", "on_delete"], "required": True, "description": "Document event to trigger on"},
-				{"name": "filters", "label": "Filters", "type": "json", "description": "Optional JSON filters to match documents (e.g., {\"status\": \"Draft\"})"},
-			],
-		},
-		"agent.run": {
-			"label": "Run Agent",
-			"icon": "Bot",
-			"category": "ai",
-			"description": "Execute a HUF AI agent",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "agent_name", "label": "Agent", "type": "agent_select", "required": True},
-				{"name": "input.prompt_template", "label": "Prompt Template", "type": "text"},
-				{"name": "conversation_mode", "label": "Conversation Mode", "type": "select", "options": ["flow_shared", "isolated"], "default": "flow_shared"},
-				{"name": "input.inject_flow_context", "label": "Inject Flow Context", "type": "boolean", "default": False},
-				{"name": "output.save_response_to_context", "label": "Save Response To", "type": "string", "description": "Context key for result"},
-			],
-		},
-		"tool.call": {
-			"label": "Call Tool",
-			"icon": "Wrench",
-			"category": "ai",
-			"description": "Execute a tool function deterministically",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "tool_name", "label": "Tool", "type": "tool_select", "required": True},
-				{"name": "args", "label": "Arguments", "type": "dynamic_args", "description": "Loaded from tool definition"},
-				{"name": "output.save_result_to_context", "label": "Save Result To", "type": "string", "description": "Context key for result"},
-			],
-		},
-		"router.llm": {
-			"label": "LLM Router",
-			"icon": "GitBranch",
-			"category": "control",
-			"description": "Route flow using LLM-based decision making",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "router_agent_name", "label": "Routing Agent", "type": "agent_select", "required": True},
-				{"name": "conversation_mode", "label": "Conversation Mode", "type": "select", "options": ["flow_shared", "isolated"], "default": "flow_shared"},
-			],
-		},
-		"human.approval": {
-			"label": "Human Approval",
-			"icon": "UserCheck",
-			"category": "control",
-			"description": "Pause flow for human approval decision",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "title", "label": "Title", "type": "string", "default": "Approval Required"},
-				{"name": "instructions", "label": "Instructions", "type": "text"},
-				{"name": "context_summary", "label": "Context Summary", "type": "text", "description": "Summary shown to the approver"},
-				{"name": "approval_type", "label": "Approval Type", "type": "select", "options": ["role", "user"], "default": "role"},
-				{"name": "approver_role", "label": "Approver Role", "type": "role_select", "show_if": {"field": "approval_type", "value": "role"}},
-				{"name": "approver_users", "label": "Approver Users", "type": "string", "show_if": {"field": "approval_type", "value": "user"}},
-				{"name": "reference_doctype", "label": "Reference DocType", "type": "doctype_select", "description": "Link approval to a specific document type"},
-				{"name": "reference_name", "label": "Reference Document", "type": "string", "description": "Document name"},
-				{"name": "store_decision_in_context", "label": "Store Decision Key", "type": "string", "default": "approval"},
-			],
-		},
-		"condition": {
-			"label": "Condition (IF)",
-			"icon": "GitFork",
-			"category": "control",
-			"description": "Branch flow based on a boolean expression (True/False)",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "expression", "label": "Condition Expression", "type": "expression", "required": True, "description": "e.g., context[\"status\"] == \"approved\""},
-				{"name": "true_node", "label": "True Branch (Node ID)", "type": "node_select", "description": "Node to go to if condition is true"},
-				{"name": "false_node", "label": "False Branch (Node ID)", "type": "node_select", "description": "Node to go to if condition is false"},
-			],
-		},
-		"http_request": {
-			"label": "HTTP Request",
-			"icon": "Globe",
-			"category": "integration",
-			"description": "Make an HTTP request to an external API",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "url", "label": "URL", "type": "string", "required": True},
-				{"name": "method", "label": "Method", "type": "select", "options": ["GET", "POST", "PUT", "PATCH", "DELETE"], "default": "GET"},
-				{"name": "headers", "label": "Headers", "type": "json", "description": "Request headers as JSON object"},
-				{"name": "body", "label": "Body", "type": "json", "description": "Request body (POST/PUT only)"},
-				{"name": "timeout", "label": "Timeout (seconds)", "type": "number", "default": 30},
-				{"name": "save_result_to_context", "label": "Save Result To", "type": "string", "description": "Context key for result"},
-			],
-		},
-		"transform": {
-			"label": "Transform Data",
-			"icon": "Repeat",
-			"category": "transform",
-			"description": "Map, copy, or template data between context variables",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "transformations", "label": "Transformations", "type": "transform_list", "description": "List of {source_field, target_field, operation}"},
-			],
-		},
-		"loop": {
-			"label": "Loop",
-			"icon": "RotateCw",
-			"category": "control",
-			"description": "Iterate over a list in context",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "iterate_over", "label": "Iterate Over", "type": "string", "required": True, "description": "Context key containing the array"},
-				{"name": "item_key", "label": "Item Variable", "type": "string", "default": "loop_item", "description": "Context key for current item"},
-				{"name": "index_key", "label": "Index Variable", "type": "string", "default": "loop_index"},
-				{"name": "loop_node", "label": "Loop Body Node", "type": "node_select", "description": "Node to execute per iteration"},
-				{"name": "done_node", "label": "Done Node", "type": "node_select", "description": "Node to go to when iteration completes"},
-				{"name": "max_iterations", "label": "Max Iterations", "type": "number", "default": 100},
-			],
-		},
-		"end": {
-			"label": "End",
-			"icon": "CheckCircle2",
-			"category": "control",
-			"description": "Mark flow as completed",
-			"has_backend": True,
-			"config_schema": [],
-		},
-	}
+	return build_node_schemas()
 
 
 @frappe.whitelist()
