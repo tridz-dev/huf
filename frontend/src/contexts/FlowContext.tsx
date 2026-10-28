@@ -1,8 +1,9 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Flow, FlowMetadata, FlowNode, FlowEdge } from '../types/flow.types';
 import { flowService } from '../services/flowService';
 import { popSnapshot, pushSnapshot } from '../lib/flowUndoStack';
+import { tidyPositions } from '../lib/flowLayout';
 import { BLOCKED_TOAST_ID } from '../lib/flowValidation';
 import { followRenamedTarget } from '../lib/flowEdgeLabels';
 import { removeStep, type RemoveStepMode } from '../lib/flowEdit';
@@ -40,6 +41,10 @@ interface FlowContextType {
   /** Remove one connection between two steps. */
   deleteEdge: (edgeId: string) => void;
   addEdge: (edge: FlowEdge) => void;
+  /** Re-arrange the steps in a clean layered layout (undoable). */
+  tidyLayout: () => void;
+  /** Bumped when steps are moved by the app (Tidy layout, its undo), so the canvas re-reads their positions. */
+  layoutRevision: number;
   undo: () => void;
   canUndo: boolean;
   saveFlow: () => Promise<void>;
@@ -90,6 +95,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   const UNDO_STACK_LIMIT = 20;
   const undoStackRef = useRef<{ nodes: FlowNode[]; edges: FlowEdge[] }[]>([]);
   const [undoDepth, setUndoDepth] = useState(0);
+  const [layoutRevision, setLayoutRevision] = useState(0);
 
   // Sync ref with state
   useEffect(() => {
@@ -454,6 +460,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
       return updated;
     });
     flowService.updateNodesAndEdges(activeFlowId, snapshot.nodes, snapshot.edges);
+    setLayoutRevision(v => v + 1);
     markUnsaved();
   }, [activeFlowId, markUnsaved]);
 
@@ -519,6 +526,26 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     });
   }, [activeFlowId, markUnsaved, undo]);
 
+  const tidyLayout = useCallback(() => {
+    if (!activeFlowId) return;
+    const prev = activeFlowRef.current;
+    if (!prev || prev.nodes.length === 0) return;
+    const positions = tidyPositions(prev.nodes, prev.edges);
+    const updatedNodes = prev.nodes.map(n => ({ ...n, position: positions[n.id] ?? n.position }));
+    undoStackRef.current = pushSnapshot(undoStackRef.current, { nodes: prev.nodes, edges: prev.edges }, UNDO_STACK_LIMIT);
+    setUndoDepth(undoStackRef.current.length);
+    setActiveFlowState(current => {
+      if (!current) return current;
+      const updated = { ...current, nodes: updatedNodes };
+      lastSyncedFlowRef.current = updated;
+      return updated;
+    });
+    flowService.updateNodesAndEdges(activeFlowId, updatedNodes, prev.edges);
+    setLayoutRevision(v => v + 1);
+    markUnsaved();
+    toast('Layout tidied', { action: { label: 'Undo', onClick: () => undo() } });
+  }, [activeFlowId, markUnsaved, undo]);
+
   const handleSetSelectedNode = useCallback((nodeId: string | null) => {
     toast.dismiss(BLOCKED_TOAST_ID);
     setSelectedNodeId(nodeId);
@@ -570,6 +597,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     deleteNode,
     deleteEdge,
     addEdge,
+    tidyLayout,
+    layoutRevision,
     undo,
     canUndo: undoDepth > 0,
     saveFlow,
@@ -602,6 +631,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     deleteNode,
     deleteEdge,
     addEdge,
+    tidyLayout,
+    layoutRevision,
     undo,
     undoDepth,
     saveFlow,

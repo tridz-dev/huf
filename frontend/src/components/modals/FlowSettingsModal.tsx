@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Checkbox } from '../ui/checkbox';
 import { humanizeFlowError } from '@/lib/flowValidation';
 import { useFlowContext } from '../../contexts/FlowContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { useNavigate } from 'react-router-dom';
 import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import { DisabledReason } from '../flow/DisabledReason';

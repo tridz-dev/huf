@@ -22,7 +22,8 @@ export interface DocSummary {
   name: string;
   /** "Created", "Submitted"... or null when the event is not known. */
   event: string | null;
-  fields: Array<{ key: string; label: string; value: string }>;
+  /** `full` is set when `value` was cut short, so the page can offer "Show more". */
+  fields: Array<{ key: string; label: string; value: string; full?: string }>;
   /** Number of fields not shown (empty ones and tables are left out). */
   hidden: number;
 }
@@ -31,6 +32,21 @@ const prettyKey = (key: string): string => {
   const words = key.replace(/_/g, ' ').trim();
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : key;
 };
+
+const HTML_HINT = /<\/?[a-z][^>]*>|&(?:[a-z]+|#\d+|#x[0-9a-f]+);/i;
+
+/** Rich-text field values (ToDo description...) arrive as HTML: plain text with line breaks kept. */
+export function htmlToText(value: string): string {
+  if (!HTML_HINT.test(value)) return value;
+  const spaced = value.replace(/<br\s*\/?>|<\/(p|div|li|h[1-6]|tr)>/gi, '\n');
+  let text: string;
+  if (typeof DOMParser !== 'undefined') {
+    text = new DOMParser().parseFromString(spaced, 'text/html').body.textContent ?? '';
+  } else {
+    text = spaced.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+  }
+  return text.replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
 
 const shorten = (text: string, max = 120): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
@@ -52,7 +68,9 @@ export function summarizeDocPayload(input: unknown, event?: string | null, maxFi
       hidden += 1;
       continue;
     }
-    shown.push({ key, label: prettyKey(key), value: typeof value === 'boolean' ? (value ? 'Yes' : 'No') : shorten(String(value)) });
+    const text = typeof value === 'boolean' ? (value ? 'Yes' : 'No') : htmlToText(String(value));
+    const short = shorten(text);
+    shown.push(short === text ? { key, label: prettyKey(key), value: text } : { key, label: prettyKey(key), value: short, full: text });
   }
   return { doctype: o.doctype, name: o.name, event: event ? DOC_EVENT_WORDS[event] ?? null : null, fields: shown, hidden };
 }
