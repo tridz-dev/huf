@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { htmlToText, summarizeDocPayload } from './flowRunDoc';
+import { deskDocUrl, htmlToText, summarizeDocPayload } from './flowRunDoc';
 
 const doc = {
   doctype: 'ToDo', name: 'abc123', owner: 'Administrator', modified_by: 'Administrator', docstatus: 0, idx: 0,
@@ -45,5 +45,17 @@ describe('rich text values', () => {
     expect(f?.full).toBe(`${'word '.repeat(60)}`.trim());
     const short = summarizeDocPayload({ doctype: 'ToDo', name: 'a', description: '<p>Hi</p>' });
     expect(short?.fields[0]).toEqual({ key: 'description', label: 'Description', value: 'Hi' });
+  });
+});
+
+describe('document header', () => {
+  it('takes the event from the payload when the run has none, and hides the _trigger block', () => {
+    const s = summarizeDocPayload({ doctype: 'ToDo', name: 'abc', description: 'x', _trigger: { event: 'on_update', docname: 'abc' } });
+    expect(s?.event).toBe('Updated');
+    expect(s?.fields.map((f) => f.key)).toEqual(['description']);
+    expect(s?.hidden).toBe(0);
+  });
+  it('links to the Desk document', () => {
+    expect(deskDocUrl('Sales Order', 'SO 1')).toBe('/app/sales-order/SO%201');
   });
 });

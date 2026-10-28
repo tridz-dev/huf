@@ -14,7 +14,7 @@ const DOC_EVENT_WORDS: Record<string, string> = {
 /** Fields the server adds to every document that are not part of what the user entered. */
 const INTERNAL_KEYS = new Set([
   'doctype', 'name', 'owner', 'creation', 'modified', 'modified_by', 'docstatus', 'idx',
-  'parent', 'parentfield', 'parenttype', 'amended_from', 'naming_series', '_user_tags', '_comments', '_assign', '_liked_by', '__unsaved',
+  'parent', 'parentfield', 'parenttype', 'amended_from', 'naming_series', '_trigger', '_user_tags', '_comments', '_assign', '_liked_by', '__unsaved',
 ]);
 
 export interface DocSummary {
@@ -27,6 +27,10 @@ export interface DocSummary {
   /** Number of fields not shown (empty ones and tables are left out). */
   hidden: number;
 }
+
+/** Desk URL of a document, so the run page can link to it. */
+export const deskDocUrl = (doctype: string, name: string): string =>
+  `/app/${doctype.toLowerCase().replace(/[\s_]+/g, '-')}/${encodeURIComponent(name)}`;
 
 const prettyKey = (key: string): string => {
   const words = key.replace(/_/g, ' ').trim();
@@ -72,5 +76,7 @@ export function summarizeDocPayload(input: unknown, event?: string | null, maxFi
     const short = shorten(text);
     shown.push(short === text ? { key, label: prettyKey(key), value: text } : { key, label: prettyKey(key), value: short, full: text });
   }
-  return { doctype: o.doctype, name: o.name, event: event ? DOC_EVENT_WORDS[event] ?? null : null, fields: shown, hidden };
+  const fired = o._trigger && typeof o._trigger === 'object' ? (o._trigger as Record<string, unknown>).event : null;
+  const eventKey = event || (typeof fired === 'string' ? fired : null);
+  return { doctype: o.doctype, name: o.name, event: eventKey ? DOC_EVENT_WORDS[eventKey] ?? null : null, fields: shown, hidden };
 }

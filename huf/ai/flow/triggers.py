@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import hmac
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import frappe
 
@@ -403,14 +403,25 @@ def _filter_payload_row(row: dict, doctype: str, owner: str, parenttype: str | N
 	return out
 
 
-def build_doc_event_payload(doc, owner: str) -> dict:
+def build_doc_event_payload(doc, owner: str, event: str | None = None) -> dict:
 	"""The payload a doc-event flow run starts with: the document as ``owner`` may read it.
+
+	``_trigger`` carries what happened (doctype, docname, event, owner, timestamp), kept apart from the
+	document's own fields so it can never overwrite one.
 
 	The run executes as the flow owner, so it must never see more than that user could open on screen:
 	fields above the owner's permission level and Password fields are removed (also in child rows).
 	"""
 	data = json.loads(frappe.as_json(doc.as_dict()))
-	return _filter_payload_row(data, doc.doctype, owner)
+	payload = _filter_payload_row(data, doc.doctype, owner)
+	payload["_trigger"] = {
+		"doctype": doc.doctype,
+		"docname": doc.name,
+		"event": event,
+		"owner": owner,
+		"timestamp": datetime.now(timezone.utc).isoformat(),
+	}
+	return payload
 
 
 def _skip_context() -> bool:
@@ -453,7 +464,7 @@ def run_doc_event_flows(doc, method=None, *args, **kwargs):
 				continue
 			if not frappe.has_permission(doctype, "read", doc=doc, user=owner):
 				continue
-			payload = build_doc_event_payload(doc, owner)
+			payload = build_doc_event_payload(doc, owner, method)
 			frappe.enqueue(
 				"huf.ai.flow.triggers.run_trigger_job",
 				queue="default",

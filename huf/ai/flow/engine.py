@@ -1150,21 +1150,23 @@ def _exec_trigger_doc_event(flow_run, node: dict, config: dict, settings: dict) 
 	"""
 	Execute trigger.doc-event node (config: ``doctype``, ``event``) - pass through with doc context.
 
-	The payload (``trigger`` and ``doc``) is set at flow run creation by the trigger entry point
+	The payload (the document's fields and ``_trigger``) is set at flow run creation by the trigger entry point
 	(``huf.ai.flow.triggers.run_flow_from_trigger``); this executor enriches it with event
 	metadata for downstream nodes.
 	"""
 	ctx = _context_of(flow_run, settings)
 
-	trigger_info = ctx.get("trigger") or {}
+	trigger_info = ctx.get("_trigger") or {}
 	doc_data = ctx.get("doc") or {}
 
 	doc_event_info = {
 		"trigger_type": "doc_event",
 		"triggered_at": str(now_datetime()),
 		"doctype": trigger_info.get("doctype", ctx.get("doctype")),
-		"docname": trigger_info.get("docname", ctx.get("docname")),
+		"docname": trigger_info.get("docname", ctx.get("name")),
 		"event": trigger_info.get("event", ctx.get("event")),
+		"owner": trigger_info.get("owner"),
+		"timestamp": trigger_info.get("timestamp"),
 	}
 
 	ctx.set("_doc_event_trigger", doc_event_info)

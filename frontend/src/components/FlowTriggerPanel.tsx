@@ -93,7 +93,7 @@ export function FlowTriggerPanel({ kind, docTypes, loadingDocTypes, value, onCha
               placeholder={loadingDocTypes ? 'Loading...' : 'Select a document type...'}
               disabled={loadingDocTypes}
               searchPlaceholder="Search document types..."
-              emptyText="No document type found."
+              emptyText={docTypes.length ? 'No matching document type.' : 'No document types are available to your account.'}
             />
             {errors.doctype ? (
               <p role="alert" className="mt-1 text-[11px] text-destructive" data-testid="flow-error-trigger.doc-event-doctype">{errors.doctype}</p>

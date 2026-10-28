@@ -246,6 +246,31 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 
 
 @frappe.whitelist()
+def get_trigger_doctypes() -> list[dict]:
+	"""Document types the current user may pick for a Data trigger: ones they can read.
+
+	Child tables, single doctypes, Huf's own bookkeeping and system logs are left out (events on them never start a flow).
+	Read from the permission tables, so flow editors who are not System Managers get a list too.
+	"""
+	from frappe.permissions import get_doctypes_with_read
+
+	from huf.ai.flow.triggers import HUF_MODULE, RECURSION_SKIP_DOCTYPES
+
+	readable = [d for d in get_doctypes_with_read() if d not in RECURSION_SKIP_DOCTYPES]
+	if not readable:
+		return []
+	rows = frappe.get_all(
+		"DocType",
+		filters={"name": ("in", readable), "istable": 0, "issingle": 0, "module": ("!=", HUF_MODULE)},
+		fields=["name"],
+		order_by="name asc",
+		limit_page_length=0,
+		ignore_permissions=True,
+	)
+	return [{"name": r.name} for r in rows]
+
+
+@frappe.whitelist()
 def get_trigger_doctype_info(doctype: str) -> dict:
 	"""What a Data trigger needs to know about a document type: whether it can be submitted (and so cancelled)."""
 	if not doctype or not frappe.db.exists("DocType", doctype):
