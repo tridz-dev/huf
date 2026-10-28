@@ -257,8 +257,21 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                 (!!output && typeof output === 'object' && (output as { success?: unknown }).success === false);
                             const steps = Object.entries(outputs).map(([id, output]) => ({ id, output, failed: stepFailed(id, output) }));
                             if (run.status === 'Failed' && run.current_node_id && !(run.current_node_id in outputs)) {
-                                steps.push({ id: run.current_node_id, output: run.last_error, failed: true });
+                                steps.push({ id: run.current_node_id, output: undefined, failed: true });
                             }
+                            // Why a step failed: its own result's error, else the run-level error when this is the node the run stopped at.
+                            const stepReason = (id: string, output: unknown): string | null => {
+                                const own = output && typeof output === 'object' ? (output as { error?: unknown }).error : null;
+                                if (typeof own === 'string' && own) return own;
+                                if (run.status === 'Failed' && id === run.current_node_id && run.last_error) {
+                                    const full = readableRunError(run.last_error, labelOf);
+                                    const prefix = `${labelOf(id)} failed: `;
+                                    return full.startsWith(prefix) ? full.slice(prefix.length) : full;
+                                }
+                                return null;
+                            };
+                            const isEmpty = (o: unknown) =>
+                                o === undefined || o === null || o === '' || (typeof o === 'object' && Object.keys(o as object).length === 0);
                             return (
                                 <>
                                     <div data-testid="flow-run-steps">
@@ -287,9 +300,16 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                                     : null}
                                                             </div>
                                                         )}
-                                                        <pre className="mt-2 bg-muted p-2 rounded text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-                                                            {typeof st.output === 'string' ? st.output : JSON.stringify(st.output, null, 2)}
-                                                        </pre>
+                                                        {st.failed && stepReason(st.id, st.output) && (
+                                                            <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive whitespace-pre-wrap" data-testid={`flow-run-step-error-${st.id}`}>
+                                                                {stepReason(st.id, st.output)}
+                                                            </div>
+                                                        )}
+                                                        {!isEmpty(st.output) && (
+                                                            <pre className="mt-2 bg-muted p-2 rounded text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                                                                {typeof st.output === 'string' ? st.output : JSON.stringify(st.output, null, 2)}
+                                                            </pre>
+                                                        )}
                                                     </li>
                                                 ))}
                                             </ol>

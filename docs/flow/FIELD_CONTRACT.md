@@ -476,3 +476,21 @@ The example is valid with a classifier that marks `http_request` as an http tool
 ## Save-time error copy
 
 `FlowDefinition.validate` never shows validator codes. `huf/ai/graph/error_copy.py` maps each failure to a plain sentence naming the step and field (e.g. "Step 'approval_1' (Human Approval): who can approve is required. Open the step and fill it in.", "Step 'n3' is not connected to the start of the flow. Connect it or delete it.").
+
+## 8. Engine behaviour notes added by WP1 (supersede the matching lines of sections 2, 6 and 7)
+
+**Triggers.** The only trigger path is the dispatcher in `huf/ai/flow/triggers.py` (`run_due_schedule_flows`, `run_doc_event_flows`, the webhook receiver). `set_flow_trigger` / `get_flow_trigger` / `clear_flow_trigger` and the Automation they created are removed; mentions of them in section 2 are obsolete. A schedule fires one Flow Run per (trigger node, due minute).
+
+**Scheduler tick.** Frappe's scheduler wakes every `scheduler_tick_interval` seconds (default 240). Only `common_site_config.json` is honoured (the scheduler process has no site; a value in a site's `site_config.json` is ignored). `huf.install.after_migrate` sets it to 60 in the common config when the bench has no value; the running `bench schedule` process must be restarted once to pick it up. Approval timeouts are also expired lazily: every read of a run waiting for approval (`get_flow_run`, run lists, `get_pending_approvals`, the agent tool) first routes an overdue approval along `timeout_next`.
+
+**Failed step record.** When a node fails (returns `failed` or raises), its stored output becomes `{"status": "failed", "error": "<readable reason>"}` (any other keys the node returned are kept). It is read at `context_json.__node_outputs__["<node_id>"].error` (`get_flow_run` -> `context_json`), and a later node can reference it like any output. A raised exception now fails the node (so `on_error` applies) instead of aborting the run.
+
+**Approval decision record** (the approval node's output): `{"decision": "approved" | "rejected" | "timeout", "comment", "decided_by", "decided_at"}`. `approved_by` / `approved_at` no longer exist. A timeout record has `decided_by: null` and `decided_at` set to the expiry time.
+
+**`router.llm` output**: `{"label", "node_id", "reason", "model", "provider"}`. `model` is the AI Model used (the configured `model`, else the provider default), or the one attempted when the call failed.
+
+**`tool.call.timeout_ms`** ("Wait up to") is enforced for MCP tools only: past it the step fails with "timed out after N ms". Built-in tools ignore it, because they run on the worker's Frappe request context (thread-bound DB connection and transaction) and cannot be abandoned or cancelled safely from a helper thread.
+
+**Run settings are gone.** The graph has no `settings`; the engine reads none. Every run uses the engine default hop budget (100) and a shared conversation; `foreach` is bounded by `config.max_iterations` and `contract.limits.max_foreach_iterations`. Agentic mode / orchestrator agent and the `decision_router` adapter are removed (`router.decision` always routes to its `default`). `run_flow` no longer accepts `mode` / `conversation_mode`.
+
+**Stale runs.** `huf.ai.flow.engine.sweep_stale_runs` (every 5 minutes) fails a Flow Run left in Queued/Running with no change for 30 minutes (`STALE_RUN_SWEEP_MINUTES`) and no live run lock, with last_error "Run did not complete (worker stopped)". Waiting runs are never swept. Manual "Mark as failed" is in `api.py` (WP5).

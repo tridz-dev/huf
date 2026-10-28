@@ -135,7 +135,7 @@ def cron_is_due(cron: str, minute: datetime) -> bool:
 def latest_due_minute(cron: str, now: datetime, window_seconds: int = 60) -> datetime | None:
 	"""The most recent minute at or before ``now`` (and after ``now - window_seconds``) on which ``cron`` fires.
 
-	The scheduler only ticks every ``scheduler_tick_interval`` seconds (Frappe default: 240), so asking
+	The scheduler only ticks every ``scheduler_tick_interval`` seconds (Frappe default: 240; Huf sets 60), so asking
 	"does the cron match this exact minute" would miss most runs (a daily 09:00 flow would fire on one
 	tick in four). Looking back over one tick window fires each due minute exactly once.
 	"""
@@ -183,6 +183,7 @@ def start_flow_run(
 	trigger_node_id: str | None = None,
 	user: str | None = None,
 	enqueue: bool = True,
+	commit_first: bool = False,
 ):
 	"""Create a Flow Run and run it (queued by default). The only place that talks to the engine.
 
@@ -200,6 +201,10 @@ def start_flow_run(
 	if trigger_node_id and flow_run.current_node_id != trigger_node_id:
 		flow_run.db_set("current_node_id", trigger_node_id)
 	if enqueue:
+		if commit_first:
+			# GET requests are not committed by Frappe, so the new run (and the worker's view of it)
+			# would be rolled back; commit before the job can look for it.
+			frappe.db.commit()  # nosemgrep
 		frappe.enqueue("huf.ai.flow.engine.run_flow", queue="default", flow_run_name=flow_run.name)
 	else:
 		engine.run_flow(flow_run.name)
@@ -237,11 +242,6 @@ def active_webhook_flows():
 # ---------------------------------------------------------------------------
 
 
-def _legacy_trigger_automation_active(flow_id: str) -> bool:
-	"""set_flow_trigger() binds an Automation that fires this flow's schedule itself; do not double fire."""
-	return bool(frappe.db.exists("Automation", {"name": f"Flow Trigger: {flow_id}", "status": "Active"}))
-
-
 def _already_fired(flow_id: str, node_id: str, scheduled_for: str) -> bool:
 	"""Durable once-per-minute marker: the Flow Run created for that (node, minute) is the record."""
 	return bool(
@@ -266,14 +266,14 @@ def run_due_schedule_flows(now: datetime | None = None) -> list[str]:
 	are not replayed.
 	"""
 	from frappe.utils import now_datetime
+	from frappe.utils.scheduler import get_scheduler_tick
 
 	minute = (now or now_datetime()).replace(second=0, microsecond=0)
-	window = int(frappe.conf.get("scheduler_tick_interval") or 240)
+	# look back one tick (plus a minute of slack for a late tick); the Flow Run per (node, minute) dedups
+	window = get_scheduler_tick() + 60
 	started: list[str] = []
 
 	for flow_id, owner, defn in _active_flows_with(SCHEDULE_TYPE):
-		if _legacy_trigger_automation_active(flow_id):
-			continue
 		for node in trigger_nodes(defn, SCHEDULE_TYPE):
 			cron = (node.get("config") or {}).get("cron")
 			try:
@@ -317,8 +317,12 @@ def due_approval_run_names(rows, now) -> list[str]:
 	return due
 
 
-def expire_due_approvals(now: datetime | None = None) -> list[str]:
-	"""Scheduler entry (every minute): apply ``timeout_next`` (or fail) for approvals past ``timeout_at``."""
+def expire_due_approvals(now: datetime | None = None, enqueue: bool = False) -> list[str]:
+	"""Apply ``timeout_next`` (or fail) for every approval past its ``timeout_at``.
+
+	Scheduler entry (every minute, runs the continuation inline) and the lazy path every read of an
+	approval-waiting run takes (``enqueue=True``: the continuation goes to a worker).
+	"""
 	from frappe.utils import now_datetime
 
 	from huf.ai.flow.engine import expire_approval
@@ -333,7 +337,7 @@ def expire_due_approvals(now: datetime | None = None) -> list[str]:
 	expired: list[str] = []
 	for name in due_approval_run_names(rows, now):
 		try:
-			if expire_approval(name, now):
+			if expire_approval(name, now, enqueue=enqueue):
 				expired.append(name)
 		except Exception:
 			frappe.log_error(frappe.get_traceback(), f"Flow approval expiry: {name}")
