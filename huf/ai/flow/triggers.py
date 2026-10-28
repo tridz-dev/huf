@@ -183,6 +183,7 @@ def start_flow_run(
 	trigger_node_id: str | None = None,
 	user: str | None = None,
 	enqueue: bool = True,
+	commit_first: bool = False,
 ):
 	"""Create a Flow Run and run it (queued by default). The only place that talks to the engine.
 
@@ -200,6 +201,10 @@ def start_flow_run(
 	if trigger_node_id and flow_run.current_node_id != trigger_node_id:
 		flow_run.db_set("current_node_id", trigger_node_id)
 	if enqueue:
+		if commit_first:
+			# GET requests are not committed by Frappe, so the new run (and the worker's view of it)
+			# would be rolled back; commit before the job can look for it.
+			frappe.db.commit()  # nosemgrep
 		frappe.enqueue("huf.ai.flow.engine.run_flow", queue="default", flow_run_name=flow_run.name)
 	else:
 		engine.run_flow(flow_run.name)
