@@ -132,6 +132,22 @@ def cron_is_due(cron: str, minute: datetime) -> bool:
 	return croniter(cron, minute + timedelta(seconds=1)).get_prev(datetime) == minute
 
 
+def latest_due_minute(cron: str, now: datetime, window_seconds: int = 60) -> datetime | None:
+	"""The most recent minute at or before ``now`` (and after ``now - window_seconds``) on which ``cron`` fires.
+
+	The scheduler only ticks every ``scheduler_tick_interval`` seconds (Frappe default: 240), so asking
+	"does the cron match this exact minute" would miss most runs (a daily 09:00 flow would fire on one
+	tick in four). Looking back over one tick window fires each due minute exactly once.
+	"""
+	from croniter import croniter
+
+	if not isinstance(cron, str) or len(cron.split()) != 5 or not croniter.is_valid(cron):
+		return None
+	now = now.replace(second=0, microsecond=0)
+	latest = croniter(cron, now + timedelta(seconds=1)).get_prev(datetime)
+	return latest if latest > now - timedelta(seconds=max(window_seconds, 60)) else None
+
+
 def build_doc_event_index(rows) -> dict:
 	"""``rows`` = iterable of ``(flow_id, owner, definition)`` -> ``{doctype: {frappe_event: [entry]}}``.
 
@@ -244,14 +260,15 @@ def _already_fired(flow_id: str, node_id: str, scheduled_for: str) -> bool:
 def run_due_schedule_flows(now: datetime | None = None) -> list[str]:
 	"""Scheduler entry (every minute): start every Active flow whose ``trigger.schedule`` cron is due.
 
-	Once per (flow, trigger node, minute): a cache lock guards concurrent scheduler ticks and the
-	Flow Run created for that minute is the durable marker (survives cache flush). Missed minutes
-	(scheduler down) are not replayed.
+	Once per (flow, trigger node, due minute): a cache lock guards concurrent scheduler ticks and the
+	Flow Run created for that minute is the durable marker (survives cache flush). A due minute is
+	caught up if it fell inside the last scheduler tick window; older missed minutes (scheduler down)
+	are not replayed.
 	"""
 	from frappe.utils import now_datetime
 
 	minute = (now or now_datetime()).replace(second=0, microsecond=0)
-	scheduled_for = minute.strftime("%Y-%m-%d %H:%M:%S")
+	window = int(frappe.conf.get("scheduler_tick_interval") or 240)
 	started: list[str] = []
 
 	for flow_id, owner, defn in _active_flows_with(SCHEDULE_TYPE):
@@ -260,8 +277,10 @@ def run_due_schedule_flows(now: datetime | None = None) -> list[str]:
 		for node in trigger_nodes(defn, SCHEDULE_TYPE):
 			cron = (node.get("config") or {}).get("cron")
 			try:
-				if not cron_is_due(cron, minute):
+				due = latest_due_minute(cron, minute, window)
+				if due is None:
 					continue
+				scheduled_for = due.strftime("%Y-%m-%d %H:%M:%S")
 				if _already_fired(flow_id, node["id"], scheduled_for):
 					continue
 				lock_key = f"huf:flow_schedule:{flow_id}:{node['id']}:{scheduled_for}"

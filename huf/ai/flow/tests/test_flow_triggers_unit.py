@@ -179,6 +179,21 @@ class TestExpireDueApprovals(unittest.TestCase):
 		self.assertEqual(T.due_approval_run_names(rows, self.NOW), ["past"])
 
 
+class TestLatestDueMinute(unittest.TestCase):
+	def test_catches_up_a_due_minute_inside_the_tick_window(self):
+		# A 4 minute tick lands at 09:03 for a cron due at 09:00.
+		self.assertEqual(T.latest_due_minute("0 9 * * *", datetime(2026, 10, 28, 9, 3, 40), 240), datetime(2026, 10, 28, 9, 0))
+
+	def test_a_due_minute_outside_the_window_is_not_replayed(self):
+		self.assertIsNone(T.latest_due_minute("0 9 * * *", datetime(2026, 10, 28, 9, 4, 5), 240))
+
+	def test_every_minute_cron_returns_the_current_minute_once_per_tick(self):
+		self.assertEqual(T.latest_due_minute("*/1 * * * *", datetime(2026, 10, 28, 9, 7, 30), 240), datetime(2026, 10, 28, 9, 7))
+
+	def test_invalid_cron_is_never_due(self):
+		self.assertIsNone(T.latest_due_minute("61 25 * * *", datetime(2026, 10, 28, 9, 0), 240))
+
+
 class TestWebhookHttpStatus(unittest.TestCase):
 	"""Frappe answers with the exception's http_status_code, so the rejection classes must carry 403 / 405."""
 
