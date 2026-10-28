@@ -1,0 +1,319 @@
+{
+ "actions": [],
+ "creation": "2026-10-28 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_recipients",
+  "max_recipients_default",
+  "max_recipients_ceiling",
+  "max_rows_per_broadcast",
+  "max_rows_per_request",
+  "max_csv_mb",
+  "min_phone_digits",
+  "section_speed",
+  "default_mps",
+  "max_mps_cap",
+  "ramp_first_batch",
+  "max_batch",
+  "max_attempts",
+  "auth_defer_seconds",
+  "gateway_down_defer_seconds",
+  "section_quality",
+  "held_throttle_enabled",
+  "held_ratio_limit",
+  "held_window",
+  "min_held_sample",
+  "section_safety",
+  "one_active_per_gateway",
+  "section_confirmation",
+  "require_typed_count",
+  "require_consent_attestation",
+  "section_api",
+  "rate_create_broadcast",
+  "rate_add_recipients",
+  "rate_remove_recipient",
+  "rate_delete_broadcast",
+  "rate_attest_consent",
+  "rate_start_broadcast",
+  "rate_pause_broadcast",
+  "rate_resume_broadcast",
+  "rate_cancel_broadcast",
+  "rate_pause_all",
+  "rate_limits_read",
+  "rate_limits_write",
+  "rate_audience_read",
+  "rate_audience_write",
+  "rate_audience_import"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_recipients",
+   "fieldtype": "Section Break",
+   "label": "Recipients"
+  },
+  {
+   "fieldname": "max_recipients_default",
+   "label": "Recipients per broadcast (default)",
+   "fieldtype": "Data",
+   "description": "Used when a broadcast does not set its own cap. 0 = no limit. Leave blank to use the default (1000)."
+  },
+  {
+   "fieldname": "max_recipients_ceiling",
+   "label": "Recipients per broadcast (highest allowed)",
+   "fieldtype": "Data",
+   "description": "No broadcast may ask for more than this. 0 = no limit. Leave blank to use the default (10000)."
+  },
+  {
+   "fieldname": "max_rows_per_broadcast",
+   "label": "Stored rows per broadcast",
+   "fieldtype": "Data",
+   "description": "Includes skipped contacts. Leave blank to use the default (50000)."
+  },
+  {
+   "fieldname": "max_rows_per_request",
+   "label": "Recipients per request",
+   "fieldtype": "Data",
+   "description": "How many recipients one add call accepts. Leave blank to use the default (10000)."
+  },
+  {
+   "fieldname": "max_csv_mb",
+   "label": "CSV size",
+   "fieldtype": "Data",
+   "description": "Largest CSV text accepted in one request. Leave blank to use the default (2)."
+  },
+  {
+   "fieldname": "min_phone_digits",
+   "label": "Shortest phone number",
+   "fieldtype": "Data",
+   "description": "Numbers with fewer digits are rejected as invalid. Leave blank to use the default (8)."
+  },
+  {
+   "fieldname": "section_speed",
+   "fieldtype": "Section Break",
+   "label": "Speed and retries"
+  },
+  {
+   "fieldname": "default_mps",
+   "label": "Default sending speed",
+   "fieldtype": "Data",
+   "description": "Used when a broadcast sets no speed. Leave blank to use the default (20)."
+  },
+  {
+   "fieldname": "max_mps_cap",
+   "label": "Speed cap",
+   "fieldtype": "Data",
+   "description": "Meta's default throughput is 80/s. When Meta reports a rate it is used unless you set a lower cap here. Leave blank to use the default (80)."
+  },
+  {
+   "fieldname": "ramp_first_batch",
+   "label": "First batch size",
+   "fieldtype": "Data",
+   "description": "Sending starts small, then doubles each chunk. Leave blank to use the default (20)."
+  },
+  {
+   "fieldname": "max_batch",
+   "label": "Largest batch",
+   "fieldtype": "Data",
+   "description": "Upper bound for one chunk. Leave blank to use the default (200)."
+  },
+  {
+   "fieldname": "max_attempts",
+   "label": "Attempts per recipient",
+   "fieldtype": "Data",
+   "description": "After this many tries a recipient is marked failed. Leave blank to use the default (5)."
+  },
+  {
+   "fieldname": "auth_defer_seconds",
+   "label": "Wait after an access-token error",
+   "fieldtype": "Data",
+   "description": "The recipient is retried after this delay. Leave blank to use the default (300)."
+  },
+  {
+   "fieldname": "gateway_down_defer_seconds",
+   "label": "Wait when the gateway is down",
+   "fieldtype": "Data",
+   "description": "The recipient is retried after this delay. Leave blank to use the default (300)."
+  },
+  {
+   "fieldname": "section_quality",
+   "fieldtype": "Section Break",
+   "label": "Quality protection"
+  },
+  {
+   "fieldname": "held_throttle_enabled",
+   "label": "Slow down when Meta holds messages",
+   "fieldtype": "Select",
+   "options": "\nOn\nOff",
+   "description": "Cuts speed to a quarter while many messages are held for quality assessment. Leave blank to use the default (True)."
+  },
+  {
+   "fieldname": "held_ratio_limit",
+   "label": "Held-message ratio that slows sending",
+   "fieldtype": "Data",
+   "description": "Share of recent sends held by Meta before sending slows. Leave blank to use the default (0.3)."
+  },
+  {
+   "fieldname": "held_window",
+   "label": "Held-message window",
+   "fieldtype": "Data",
+   "description": "How many recent sends are examined. Leave blank to use the default (50)."
+  },
+  {
+   "fieldname": "min_held_sample",
+   "label": "Minimum sample before slowing",
+   "fieldtype": "Data",
+   "description": "Avoids slowing on one held message out of two. Leave blank to use the default (10)."
+  },
+  {
+   "fieldname": "section_safety",
+   "fieldtype": "Section Break",
+   "label": "Safety"
+  },
+  {
+   "fieldname": "one_active_per_gateway",
+   "label": "One running broadcast per gateway",
+   "fieldtype": "Select",
+   "options": "\nOn\nOff",
+   "description": "Only one broadcast sends from a gateway at a time. Leave blank to use the default (True)."
+  },
+  {
+   "fieldname": "section_confirmation",
+   "fieldtype": "Section Break",
+   "label": "Confirmation"
+  },
+  {
+   "fieldname": "require_typed_count",
+   "label": "Type the recipient count to start",
+   "fieldtype": "Select",
+   "options": "\nOn\nOff",
+   "description": "The start step asks for the queued count (callers using API keys skip the typing). Leave blank to use the default (True)."
+  },
+  {
+   "fieldname": "require_consent_attestation",
+   "label": "Require consent confirmation",
+   "fieldtype": "Select",
+   "options": "\nOn\nOff",
+   "description": "Meta requires opt-in for business-initiated messages; this box is Huf's record of it. Leave blank to use the default (True)."
+  },
+  {
+   "fieldname": "section_api",
+   "fieldtype": "Section Break",
+   "label": "Request limits"
+  },
+  {
+   "fieldname": "rate_create_broadcast",
+   "label": "Create broadcast",
+   "fieldtype": "Data",
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (60)."
+  },
+  {
+   "fieldname": "rate_add_recipients",
+   "label": "Add recipients",
+   "fieldtype": "Data",
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (60)."
+  },
+  {
+   "fieldname": "rate_remove_recipient",
+   "label": "Remove recipient",
+   "fieldtype": "Data",
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (120)."
+  },
+  {
+   "fieldname": "rate_delete_broadcast",
+   "label": "Delete broadcast",
+   "fieldtype": "Data",
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (30)."
+  },
+  {
+   "fieldname": "rate_attest_consent",
+   "label": "Confirm consent",
+   "fieldtype": "Data",
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (60)."
+  },
+  {
+   "fieldname": "rate_start_broadcast",
+   "label": "Start broadcast",
+   "fieldtype": "Data",
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (30)."
+  },
+  {
+   "fieldname": "rate_pause_broadcast",
+   "label": "Pause broadcast",
+   "fieldtype": "Data",
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (60)."
+  },
+  {
+   "fieldname": "rate_resume_broadcast",
+   "label": "Resume broadcast",
+   "fieldtype": "Data",
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (60)."
+  },
+  {
+   "fieldname": "rate_cancel_broadcast",
+   "label": "Cancel broadcast",
+   "fieldtype": "Data",
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (60)."
+  },
+  {
+   "fieldname": "rate_pause_all",
+   "label": "Pause all broadcasts",
+   "fieldtype": "Data",
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (30)."
+  },
+  {
+   "fieldname": "rate_limits_read",
+   "label": "Read limits",
+   "fieldtype": "Data",
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (120)."
+  },
+  {
+   "fieldname": "rate_limits_write",
+   "label": "Change limits",
+   "fieldtype": "Data",
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (30)."
+  },
+  {
+   "fieldname": "rate_audience_read",
+   "label": "Audience reads",
+   "fieldtype": "Data",
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (120)."
+  },
+  {
+   "fieldname": "rate_audience_write",
+   "label": "Audience changes",
+   "fieldtype": "Data",
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (60)."
+  },
+  {
+   "fieldname": "rate_audience_import",
+   "label": "Audience import",
+   "fieldtype": "Data",
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (10)."
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-10-28 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "WhatsApp Broadcast Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Huf Admin",
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
