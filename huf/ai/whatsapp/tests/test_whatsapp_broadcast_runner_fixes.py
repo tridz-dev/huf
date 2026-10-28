@@ -190,8 +190,11 @@ class TestFixes(_Base):
 		runner.resume(b)
 		self.assertIn(frappe.session.user, authorized)
 		self.assertEqual(self.st(b, "started_by"), "Guest")  # provenance kept
-		self.assertTrue(frappe.db.exists("Comment", {"reference_doctype": B, "reference_name": b,
-													  "content": f"resumed_by: {frappe.session.user}"}))
+		self.assertEqual(self.st(b, "resumed_by"), frappe.session.user)
+		# a Comment cannot change who the runner acts as
+		frappe.get_doc({"doctype": "Comment", "comment_type": "Info", "reference_doctype": B, "reference_name": b,
+						"content": "resumed_by: Administrator-forged"}).insert(ignore_permissions=True)
+		self.assertEqual(runner._runner_user(b, "Guest"), frappe.session.user)
 		self.enqueue.assert_called_with(b, user=frappe.session.user)
 		self.assertEqual(runner._runner_user(b, "Guest"), frappe.session.user)
 

@@ -119,17 +119,8 @@ def _status(broadcast: str) -> str | None:
 
 
 def _runner_user(broadcast: str, started_by: str | None) -> str | None:
-	"""The identity the runner acts as: the latest resumer (Comment) else the original starter."""
-	rows = frappe.get_all(
-		"Comment",
-		filters={"reference_doctype": BROADCAST, "reference_name": broadcast, "content": ["like", "resumed_by: %"]},
-		fields=["content"],
-		order_by="creation desc, name desc",
-		limit=1,
-	)
-	if rows:
-		return rows[0]["content"].split(":", 1)[1].strip() or started_by
-	return started_by
+	"""The identity the runner acts as: the latest resumer (a field only the runner writes) else the starter."""
+	return frappe.db.get_value(BROADCAST, broadcast, "resumed_by") or started_by
 
 
 def _log_event(event: str, broadcast: str, **extra) -> None:
@@ -185,18 +176,9 @@ def _begin(
 			"started_at": started_at,
 			"pause_reason": None,
 			"finished_at": None,
+			**({"resumed_by": user} if resuming else {}),
 		},
 	)
-	if resuming:
-		frappe.get_doc(
-			{
-				"doctype": "Comment",
-				"comment_type": "Info",
-				"reference_doctype": BROADCAST,
-				"reference_name": broadcast,
-				"content": f"resumed_by: {user}",
-			}
-		).insert(ignore_permissions=True)
 	frappe.db.commit()
 	_log_event("resumed" if resuming else "started", broadcast, user=user)
 	if resuming:
@@ -217,7 +199,7 @@ def start(broadcast, user=None, override_warnings=None, expected_count=None) -> 
 def resume(broadcast: str) -> dict:
 	"""Resume a Paused broadcast, authorized as (and then run as) the person calling resume.
 
-	``started_by`` is kept for provenance; the resumer is recorded in a Comment (``resumed_by:``)."""
+	``started_by`` is kept for provenance; the resumer is recorded in the read-only field ``resumed_by``."""
 	return _begin(broadcast, frappe.session.user, allowed_from=("Paused",), resuming=True)
 
 

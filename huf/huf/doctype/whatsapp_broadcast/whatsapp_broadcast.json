@@ -9,6 +9,7 @@
   "status",
   "pause_reason",
   "acknowledged_warnings",
+  "resumed_by",
   "section_target",
   "gateway",
   "whatsapp_account",
@@ -76,6 +77,14 @@
    "fieldtype": "Small Text",
    "hidden": 1,
    "label": "Acknowledged warnings",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "resumed_by",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Resumed by",
    "no_copy": 1,
    "read_only": 1
   },

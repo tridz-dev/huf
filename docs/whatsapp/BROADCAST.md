@@ -115,7 +115,7 @@ Broadcast `status`: `Draft`, `Queued`, `Running`, `Paused`, `Completed`, `Cancel
 | Preview | any | Computes limits and cost, stores `cost_estimate` on the broadcast. No sends. |
 | Start | `Draft` only | Checks below, then `Running`, `started_by`, `started_at`, first tick enqueued. |
 | Pause | `Running` | `Paused`, `pause_reason` set (truncated to 140 characters). A pause on another state does nothing and returns success. |
-| Resume | `Paused` | Same checks as start. Records `resumed_by: <user>` as a comment; the resumer becomes the runner identity (ticks run as the resumer). `started_by` is kept. |
+| Resume | `Paused` | Same checks as start. Records the resumer in the read-only `resumed_by` field (a comment cannot change it); the resumer becomes the runner identity (ticks run as the resumer). `started_by` is kept. |
 | Cancel | any state except `Completed`, `Cancelled` | `Cancelled`, `finished_at` set. `queued` and `deferred` rows become `skipped` with reason `cancelled`. `sending` rows finish. |
 | Complete | `Running` | Set by the runner when no `queued`, `deferred` or `sending` row remains; `finished_at` set. |
 
@@ -137,7 +137,7 @@ Start on a `Paused` broadcast is refused ("it can only be started from Draft"); 
 
 - One live tick per broadcast, enforced by a cache lock (`huf:<site>:wa_broadcast_tick:<broadcast>`, a random token, TTL 600 s, refreshed at least every 30 s, every 20 sends and after each chunk; a tick that loses the lock exits). Job ids are site-scoped. Queue `long`, job timeout 1800 s.
 - A tick works for 240 s (`tick_budget_seconds`, internal; the lock TTL, heartbeat and permission re-check intervals are internal registry rows too). If `queued` rows remain it re-enqueues itself. If only future `deferred` rows (or in-flight `sending` rows) remain, the tick ends as `idle`; the `*/5` cron `resume_stale` revives a Running broadcast with no live lock (also when due `deferred` rows remain after a tick). Revival may take up to about 5 minutes.
-- The runner acts as the latest resumer (recorded as a `resumed_by:` comment) or, if none, `started_by`. Write permission on the Gateway is re-checked on every chunk and at least every 50 sends; a disabled user or lost permission pauses the broadcast with reason `permission_lost`.
+- The runner acts as the latest resumer (recorded in the read-only `resumed_by` field) or, if none, `started_by`. Write permission on the Gateway is re-checked on every chunk and at least every 50 sends; a disabled user or lost permission pauses the broadcast with reason `permission_lost`.
 - Status is re-read before every send, so a pause or cancel stops the tick within one send.
 
 ### Pacing
@@ -310,7 +310,7 @@ The code works without these, but they should be confirmed against Meta before r
 - **STOP keyword, `user_preferences` marketing stop and send-time 131050 all skip the contact's `queued` and `deferred` rows** in other unfinished broadcasts of the gateway. A 131050 arriving by status webhook also records the marketing stop and skips them.
 - **A template that is paused, disabled, rejected, quality RED, or whose category changes to MARKETING pauses running broadcasts** that use it, until someone resumes. Resume re-runs the start checks.
 - **One Running broadcast per gateway** by default (`one_active_per_gateway`, a safety). On: one broadcast sends from a gateway at a time. Off: broadcasts run side by side, share the gateway's sending speed through one limiter, and share its 24-hour contact budget. `concurrent_broadcast_max` (2 to 50, blank or 0 = no limit) caps how many run at once when the safety is off; over the cap the start is refused with `another_broadcast_running`.
-- **Concurrent broadcasts.** The sum of all broadcasts' sends from a gateway never exceeds the gateway rate (Meta's reported throughput, or `max_mps_cap`), and concurrent ticks take turns so none is starved. If the cache is unavailable each broadcast falls back to its own pacing. When a start works out the remaining 24-hour budget it counts recipients still waiting in the gateway's other Running broadcasts as already used, so a second start sees `over_budget` and holds the rest.
+- **Concurrent broadcasts.** The sum of all broadcasts' sends from a gateway never exceeds the gateway rate (Meta's reported throughput, or `max_mps_cap`), and concurrent ticks take turns so none is starved. If the cache is unavailable each broadcast falls back to its own pacing. When a start works out the remaining 24-hour budget it counts recipients still waiting in the gateway's other Running broadcasts as already used, so a second start sees `over_budget` and holds the rest. The shared speed is kept in the Redis cache and clocked by Redis. If the cache is down, each running broadcast paces itself at its own speed divided by the number of broadcasts running on that gateway. Each broadcast also respects its own speed on top of the shared schedule. A change to a recipient cap or ceiling setting takes effect on already-running broadcasts at their next send.
 - **135000 pauses conservatively** (section 11).
 - **Tier unknown means no budget check** (warning `tier_unknown`).
 - **Resume does not defer over-budget rows.** Only `start_broadcast` applies the deferral; a resumed broadcast is not checked against the budget as a block or a warning to acknowledge.
@@ -328,7 +328,7 @@ The code works without these, but they should be confirmed against Meta before r
 - **Resolving an `unknown` row.** There is no action for it. Look up the recipient in WhatsApp Manager's message log or the business inbox. If the message was delivered, a later `delivered` or `read` webhook matched by `wamid` or row name updates the row. If not delivered, leave it; do not resend inside this broadcast. To message the contact again, include them in a new broadcast.
 - **131049 is final for the broadcast.** The row is `skipped` and the broadcast can complete; there is no 24-hour deferral. Include the contact in a new broadcast later if appropriate.
 - **Stuck broadcast.** If a Running broadcast does not progress, wait for the `*/5` cron (`resume_stale`) which also turns stale `sending` rows into `unknown` and revives the tick. If it is `Paused`, read `pause_reason`, fix the cause, then resume.
-- **Audit.** Each mutating call leaves a comment on the broadcast; resume leaves `resumed_by: <user>`.
+- **Audit.** Each mutating call leaves a comment on the broadcast; resume sets the `resumed_by` field.
 - **After a pause for 132015, 132016, 135000, 131042.** Check the template and account notices in WhatsApp Manager before resuming.
 
 ## 14. Limits you can see and change
@@ -362,7 +362,7 @@ Blocking and warning entries are now coded objects `{code, message, limit_key}` 
 1. `preview_broadcast` returns `warnings` and `blocking` (section 6). Blocking issues cannot be overridden.
 2. The wizard shows each warning with an "I understand, continue anyway" checkbox; Next stays disabled on the Preview step while a warning is unchecked or a blocking issue exists.
 3. `start_broadcast` takes `override_warnings`, the list of warning codes the caller acknowledged. The server recomputes the preview. If the current set of warning codes is not exactly the acknowledged set (a warning appeared, or one went away), the start is refused with error `warnings_changed` and the current `warnings`; review them and call again. An empty list acknowledges "no warnings".
-   After the locks are taken the start also recounts the queued recipients and re-runs the preview, the warning check and the audience purpose check. If the recipient count no longer equals the confirmed count (for example another tab replaced the lists), the start is refused with `recipients_changed`. `resume_broadcast` keeps the codes acknowledged at start (stored as an `acknowledged_warnings` comment) and is refused with `warnings_changed` only if a warning code appears that was not acknowledged.
+   After the locks are taken the start also recounts the queued recipients and re-runs the preview, the warning check and the audience purpose check. If the recipient count no longer equals the confirmed count (for example another tab replaced the lists), the start is refused with `recipients_changed`. `resume_broadcast` keeps the codes acknowledged at start (stored in the broadcast's read-only `acknowledged_warnings` field) and is refused with `warnings_changed` only if a new warning appears other than "another broadcast is running", which comes and goes by itself and never blocks a resume.
 4. Callers authenticated with an API key (`Authorization: token key:secret`) skip the typed count, but still have to pass `override_warnings` explicitly, and it must match.
 5. Consent and "one running broadcast per gateway" are enforced in one place, `runner.start` under a lock on the Gateway row; the preview only reports them.
 6. The acknowledged codes go into the audit log line and the comment on the broadcast.
