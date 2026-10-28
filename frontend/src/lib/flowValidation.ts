@@ -73,6 +73,25 @@ export const TOOL_REQUIRED_INPUT: Record<string, Array<[key: string, message: st
   http_request: [['url', 'Enter the URL to call.']],
 };
 
+/**
+ * Problem with a "To"-style address list, or null when fine. Several addresses may be separated by commas or
+ * semicolons; an entry containing a `{...}` reference is filled in at run time and not checked. Values that are
+ * not plain text (a reference to earlier data) are not checked either.
+ */
+export function recipientProblem(value: unknown): string | null {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  const entries = value.split(/[;,]/).map((e) => e.trim()).filter(Boolean);
+  const bad = entries.filter((e) => {
+    if (/\{[^}]*\}/.test(e)) return false;
+    const addr = /<([^<>]+)>\s*$/.exec(e)?.[1] ?? e;
+    return !/^[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+$/.test(addr);
+  });
+  if (bad.length === 0) return null;
+  return bad.length === 1 && entries.length === 1
+    ? 'Enter a valid email address, like name@example.com.'
+    : `"${bad[0]}" is not a valid email address. Separate several addresses with commas.`;
+}
+
 const asObj = (v: unknown): Cfg => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Cfg) : {});
 
 function refProblem(v: unknown): boolean {
@@ -122,6 +141,10 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       const preset = TOOL_REQUIRED_INPUT[String(c.tool_id)];
       for (const [key, message] of preset ?? []) {
         if (isBlank(input[key])) add(`input.${key}`, message);
+      }
+      if (c.tool_id === 'gmail_send_email' && !isBlank(input.to)) {
+        const problem = recipientProblem(input.to);
+        if (problem) add('input.to', problem);
       }
       if (!preset) {
         for (const key of requiredInputsFor(String(c.tool_id))) {

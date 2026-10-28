@@ -1,7 +1,8 @@
 import json
 import frappe
 logger = frappe.logger("huf")
-from huf.ai.tools.credentials import require_credential, update_last_error
+from huf.ai.tools.credentials import get_credential, update_last_error
+from huf.ai.tools.provider_errors import ProviderCredentialError, check_google_response, mint_google_access_token, not_connected_message
 import requests
 
 BASE = "https://www.googleapis.com/drive/v3"
@@ -10,18 +11,12 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 def _get_access_token():
 	service_name = "google_drive"
-	client_id = require_credential(service_name, "client_id")
-	client_secret = require_credential(service_name, "client_secret")
-	refresh_token = require_credential(service_name, "refresh_token")
-
-	resp = requests.post(TOKEN_URL, data={
-		"client_id": client_id,
-		"client_secret": client_secret,
-		"refresh_token": refresh_token,
-		"grant_type": "refresh_token",
-	}, timeout=15)
-	resp.raise_for_status()
-	return resp.json()["access_token"]
+	client_id = get_credential(service_name, "client_id")
+	client_secret = get_credential(service_name, "client_secret")
+	refresh_token = get_credential(service_name, "refresh_token")
+	if not (client_id and client_secret and refresh_token):
+		raise ProviderCredentialError(not_connected_message("Google Drive", "the client ID, client secret and refresh token"), kind="missing")
+	return mint_google_access_token("Google Drive", client_id, client_secret, refresh_token)["access_token"]
 
 
 def _headers():
@@ -38,7 +33,7 @@ def handle_list_files(**kwargs):
 			params["q"] = kwargs["query"]
 
 		resp = requests.get(f"{BASE}/files", headers=_headers(), params=params, timeout=30)
-		resp.raise_for_status()
+		check_google_response(resp, "Google Drive", "drive.readonly", not_found="file")
 		files = resp.json().get("files", [])
 		return json.dumps({
 			"success": True, 
@@ -65,7 +60,7 @@ def handle_get_file(**kwargs):
 			params={"fields": "id,name,mimeType,modifiedTime,size,webViewLink"},
 			timeout=30,
 		)
-		resp.raise_for_status()
+		check_google_response(resp, "Google Drive", "drive.readonly", not_found="file")
 		data = resp.json()
 		return json.dumps({
 			"success": True, 
@@ -98,7 +93,7 @@ def handle_search_files(**kwargs):
 		params = {"q": q, "pageSize": 20, "fields": "files(id,name,mimeType,modifiedTime)"}
 
 		resp = requests.get(f"{BASE}/files", headers=_headers(), params=params, timeout=30)
-		resp.raise_for_status()
+		check_google_response(resp, "Google Drive", "drive.readonly", not_found="file")
 		files = resp.json().get("files", [])
 		return json.dumps({
 			"success": True, 

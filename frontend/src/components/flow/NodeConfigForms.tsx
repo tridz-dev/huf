@@ -291,16 +291,36 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
 // ─── Actions ──────────────────────────────────────────────────────────
 
 /** Fallback `input` keys per preset tool, used until/unless the tool's own schema is loaded. */
-const PRESET_FIELDS: Record<string, Array<{ key: string; label: string; optional?: boolean }>> = {
-  gmail_send_email: [{ key: 'to', label: 'To' }, { key: 'subject', label: 'Subject' }, { key: 'body', label: 'Body' }],
-  slack_send_message: [{ key: 'channel', label: 'Channel' }, { key: 'text', label: 'Message' }],
-  slack_send_thread_reply: [{ key: 'channel', label: 'Channel' }, { key: 'thread_ts', label: 'Thread' }, { key: 'text', label: 'Message' }],
-  gsheets_read: [{ key: 'spreadsheet_id', label: 'Spreadsheet ID' }, { key: 'range', label: 'Range', optional: true }],
-  gsheets_update: [{ key: 'spreadsheet_id', label: 'Spreadsheet ID' }, { key: 'range', label: 'Range' }, { key: 'data', label: 'Data' }],
+const PRESET_FIELDS: Record<string, Array<{ key: string; label: string; optional?: boolean; placeholder?: string; hint?: string }>> = {
+  gmail_send_email: [
+    { key: 'to', label: 'To', placeholder: 'name@example.com', hint: 'One address, or several separated by commas.' },
+    { key: 'subject', label: 'Subject' },
+    { key: 'body', label: 'Body' },
+  ],
+  slack_send_message: [
+    { key: 'channel', label: 'Channel', placeholder: 'C0123456789', hint: 'The channel ID: in Slack, open the channel, click its name, and copy the ID at the bottom. The bot must be invited to it.' },
+    { key: 'text', label: 'Message' },
+  ],
+  slack_send_thread_reply: [
+    { key: 'channel', label: 'Channel', placeholder: 'C0123456789', hint: 'The channel ID: in Slack, open the channel, click its name, and copy the ID at the bottom.' },
+    { key: 'thread_ts', label: 'Thread', placeholder: '1712345678.000100', hint: 'The timestamp of the first message in the thread: right-click it, then Copy link; it is the number after "p".' },
+    { key: 'text', label: 'Message' },
+  ],
+  gsheets_read: [
+    { key: 'spreadsheet_id', label: 'Spreadsheet ID', placeholder: '1AbC...xYz', hint: 'In the sheet URL, the long text between /d/ and /edit.' },
+    { key: 'range', label: 'Range', optional: true, placeholder: 'Sheet1!A1:D20' },
+  ],
+  gsheets_update: [
+    { key: 'spreadsheet_id', label: 'Spreadsheet ID', placeholder: '1AbC...xYz', hint: 'In the sheet URL, the long text between /d/ and /edit.' },
+    { key: 'range', label: 'Range', placeholder: 'Sheet1!A1:D20' },
+    { key: 'data', label: 'Data' },
+  ],
   gsheets_create: [{ key: 'title', label: 'Title' }],
   gdrive_list_files: [{ key: 'limit', label: 'Limit', optional: true }, { key: 'query', label: 'Query', optional: true }],
   gdrive_search_files: [{ key: 'query', label: 'Search for' }],
-  gdrive_get_file: [{ key: 'file_id', label: 'File ID' }],
+  gdrive_get_file: [
+    { key: 'file_id', label: 'File ID', placeholder: '1AbC...xYz', hint: 'In Drive, open the file and copy the text after /d/ (or after id=) in its URL.' },
+  ],
 };
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
@@ -504,8 +524,8 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
     const toolOptions = cardToolIds ? tools.filter((t) => cardToolIds.includes(t.value)) : tools;
     const timeoutSec = typeof cfg.timeout_ms === 'number' ? Math.round(cfg.timeout_ms / 1000) : '';
     const presetFields = PRESET_FIELDS[toolId];
-    const fields: Array<{ key: string; label: string; optional: boolean }> = presetFields
-      ? presetFields.map((p) => ({ key: p.key, label: p.label, optional: Boolean(p.optional) }))
+    const fields: Array<{ key: string; label: string; optional: boolean; placeholder?: string; hint?: string }> = presetFields
+      ? presetFields.map((p) => ({ key: p.key, label: p.label, optional: Boolean(p.optional), placeholder: p.placeholder, hint: p.hint }))
       : Object.keys(schemaProps).map((k) => ({ key: k, label: k, optional: !required.has(k) }));
 
     return (
@@ -530,7 +550,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
         <NotConnected toolId={toolId} testIdSuffix="sidebar" />
         {isHttp ? (
           <>
-            <FlowValueInput id="http-url" nodeId={nodeId} testId={f('input.url')} label="URL" value={input.url} onChange={(v) => setInput('url', v)} />
+            <FlowValueInput id="http-url" nodeId={nodeId} testId={f('input.url')} label="URL" placeholder="https://api.example.com/items" value={input.url} onChange={(v) => setInput('url', v)} />
             <Err field="input.url" />
             <div>
               <Label htmlFor="http-method" size="sm">Method</Label>
@@ -557,6 +577,8 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
                 testId={f(`input.${fld.key}`)}
                 label={fld.label}
                 optional={fld.optional}
+                placeholder={fld.placeholder}
+                hint={fld.hint}
                 value={input[fld.key]}
                 onChange={(v) => setInput(fld.key, v)}
               />
