@@ -147,14 +147,12 @@ def _begin(
 	deferred = int(frappe.db.count(RECIPIENT, {"broadcast": broadcast, "status": "deferred"}) or 0)
 	start_gate.check_preview(preview, deferred, None if resuming else (override_warnings or []))
 
-	# NOTE: the commit below ends the caller's transaction. Callers must not leave uncommitted writes that
-	# should roll back with a refused start; today none write before this point (tests that call this inside a
-	# rolled-back case commit their fixtures).
 	# Serialise "one Running per gateway" on the Gateway row. Everything above was a plain read, which
-	# InnoDB (REPEATABLE READ) serves from a snapshot taken at the first read. Nothing is written yet, so
-	# commit to end that snapshot BEFORE locking: every read after the lock then starts a fresh snapshot
-	# and sees what the starts that held the lock before us committed (24h budget, rows, running set).
-	frappe.db.commit()
+	# InnoDB (REPEATABLE READ) serves from a snapshot taken at the first read, so end that snapshot BEFORE
+	# locking: every read after the lock starts a fresh snapshot and sees what earlier starts committed.
+	# The commit would also end the caller's transaction, so it refuses to run over uncommitted writes.
+	# Nothing between the lock and the final commit below may commit or roll back (the lock would drop).
+	start_gate.commit_before_lock()
 	frappe.db.get_value("Gateway", doc.gateway, "name", for_update=True)
 	if frappe.db.get_value(BROADCAST, broadcast, "status", for_update=True) not in allowed_from:
 		frappe.throw(_("Broadcast changed state; reload and retry"))
@@ -425,7 +423,7 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 		ratio, sample = _held_ratio(broadcast)
 		throttled = _is_throttled(ratio, sample)
 		rate = max(1, mps // 4) if throttled else mps
-		share = None  # set lazily the first time the shared bucket is unavailable in this batch
+		share = None  # set lazily when the shared bucket is unavailable; re-read at every heartbeat
 		rows = _due_rows(broadcast, _batch_size(doc, sent_total, throttled))
 		if not rows:
 			break
@@ -437,6 +435,7 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 				if not _heartbeat(key, token):
 					return {"result": "lock_lost", "sent": sent_total, "outcomes": outcomes}
 				last_beat = time.monotonic()
+				share = None  # re-count running broadcasts: one that started mid-batch must slow us down too
 			if since_check >= policy.get("perm_recheck_every_sends"):
 				if (res := lost_permission()) is not None:
 					return res
