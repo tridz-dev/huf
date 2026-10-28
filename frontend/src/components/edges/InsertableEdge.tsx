@@ -90,7 +90,7 @@ export const InsertableEdge = memo(
               className={cn(
                 'flex items-center justify-center w-6 h-6 rounded-full border border-line bg-panel text-muted-foreground shadow-sm transition-all duration-150',
                 'hover:border-steel-soft hover:text-ink hover:scale-110',
-                (hovered || selected) ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'
+                (hovered || selected) ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
               )}
             >
               <Plus className="w-3 h-3" />
