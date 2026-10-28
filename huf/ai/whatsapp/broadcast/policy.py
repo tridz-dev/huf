@@ -93,7 +93,8 @@ LIMITS: tuple[Limit, ...] = (
 	Limit("held_ratio_limit", "Held-message ratio that slows sending", 0.30, "safety", "quality", "ratio", 0.01, 1.0, "Share of recent sends held by Meta before sending slows."),
 	Limit("held_window", "Held-message window", 50, "safety", "quality", "messages", 10, 500, "How many recent sends are examined."),
 	Limit("min_held_sample", "Minimum sample before slowing", 10, "safety", "quality", "messages", 1, 100, "Avoids slowing on one held message out of two."),
-	Limit("one_active_per_gateway", "One running broadcast per gateway", True, "safety", "safety", "", note="Only one broadcast sends from a gateway at a time.", boolean=True),
+	Limit("one_active_per_gateway", "One running broadcast per gateway", True, "safety", "safety", "", note="On: only one broadcast sends from a gateway at a time. Off: broadcasts run side by side and share the gateway's sending speed and its 24-hour contact budget.", boolean=True),
+	Limit("concurrent_broadcast_max", "Most broadcasts running at once", None, "safety", "safety", "broadcasts", 2, 50, "Only used when one running broadcast per gateway is off. Blank or 0 = no limit.", zero_unlimited=True),
 	# ---- confirmation
 	Limit("require_typed_count", "Type the recipient count to start", True, "safety", "confirmation", "", note="The start step asks for the queued count (callers using API keys skip the typing).", boolean=True),
 	Limit("require_consent_attestation", "Require consent confirmation", True, "safety", "confirmation", "", note="Meta requires opt-in for business-initiated messages; this box is Huf's record of it.", boolean=True),
@@ -162,6 +163,8 @@ def _parse_doc(doc) -> dict[str, Any]:
 		raw = doc.get(lim.key)
 		if not isinstance(raw, (str, int, float)) or str(raw).strip() == "":
 			continue
+		if lim.default is None and not isinstance(raw, str) and raw == 0:
+			continue  # an empty Int field is stored as 0: that is "blank", and the default is no limit
 		if lim.boolean:
 			out[lim.key] = raw in (1, True, "On", "1")
 		else:
@@ -201,6 +204,14 @@ def resolve(key: str, broadcast: Any = None) -> tuple[Any, str]:
 def get(key: str, broadcast: Any = None) -> Any:
 	"""Effective value of limit ``key`` (``None`` means "no limit" or "unknown")."""
 	return resolve(key, broadcast)[0]
+
+
+def concurrency_cap() -> int | None:
+	"""Most broadcasts allowed to run at once on a gateway; None = unlimited."""
+	if get("one_active_per_gateway"):
+		return 1
+	cap = get("concurrent_broadcast_max")
+	return int(cap) if cap else None
 
 
 def rate(key: str) -> Callable[[], int]:

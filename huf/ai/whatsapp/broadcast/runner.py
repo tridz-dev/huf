@@ -25,7 +25,7 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from huf.ai.whatsapp.broadcast import limits as broadcast_limits, policy, progress, send as broadcast_send
-from huf.ai.whatsapp.broadcast.checks import start_gate
+from huf.ai.whatsapp.broadcast.checks import gateway_bucket, start_gate
 from huf.ai.whatsapp.broadcast.checks.start_gate import StartRefused
 
 BROADCAST = "WhatsApp Broadcast"
@@ -165,17 +165,7 @@ def _begin(
 		BROADCAST, broadcast, "consent_attested", for_update=True
 	):
 		raise StartRefused("consent_not_attested", _("Recipient consent must be attested before sending"))
-	if policy.get("one_active_per_gateway"):
-		other = frappe.db.get_value(
-			BROADCAST,
-			{"gateway": doc.gateway, "status": "Running", "name": ["!=", broadcast]},
-			"name",
-			for_update=True,
-		)
-		if other:
-			raise StartRefused(
-				"another_broadcast_running", _("Another broadcast ({0}) is already running on this Gateway").format(other)
-			)
+	start_gate.check_concurrency(doc.gateway, broadcast)
 
 	preview, acknowledged = start_gate.recheck_locked(
 		broadcast, preview, resuming=resuming, override_warnings=override_warnings, expected_count=expected_count
@@ -464,6 +454,7 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 				since_check = 0
 			if _status(broadcast) != "Running":
 				return {"result": "stopped", "sent": sent_total, "outcomes": outcomes}
+			gateway_bucket.pace(doc.gateway)  # shared gateway mps across concurrent broadcasts
 			t0 = time.monotonic()
 			outcome = broadcast_send.send_one(name)
 			since_check += 1
