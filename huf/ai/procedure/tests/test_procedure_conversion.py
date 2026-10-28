@@ -224,7 +224,7 @@ class TestAnalyzeConversion(unittest.TestCase):
 			{
 				"id": "approve",
 				"type": "human.approval",
-				"config": {"message": "ok?", "approve_next": "done", "reject_next": "done"},
+				"config": {"message": "ok?", "approve_next": "done", "reject_next": "done", "approver_type": "role", "approver_role": "System Manager"},
 			},
 			{"id": "done", "type": "output", "config": {"value": {"$from": "input"}}},
 		]
