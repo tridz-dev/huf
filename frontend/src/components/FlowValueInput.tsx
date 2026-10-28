@@ -86,7 +86,7 @@ export function FlowValueInput({ id, label, value, onChange, optional, testId, n
         data-testid={testId ? `${testId}-mode` : undefined}
         aria-label={`${label}: how the value is given`}
         size="sm"
-        className={singleLine ? 'w-[118px] shrink-0' : 'w-[170px]'}
+        className={singleLine ? 'w-[140px] shrink-0' : 'w-[170px]'}
       >
         <SelectValue />
       </SelectTrigger>
