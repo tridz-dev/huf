@@ -42,6 +42,7 @@ import { actionOptions } from '../../data/actions';
 import { TriggerConfig, ActionConfig } from '../../types/flow.types';
 import type { ActionOption } from '../../types/modal.types';
 import { generateWebhookSecret } from '../../lib/flowWebhookUi';
+import { DEFAULT_PICKER, pickerToCron } from '../../lib/flowSchedule';
 
 interface NodeSelectionModalProps {
   open: boolean;
@@ -150,7 +151,8 @@ export function NodeSelectionModal({
       // The secret is generated up front so the webhook is never open; it stays visible and regenerable in the sidebar.
       setTriggerConfig({ type: 'webhook', method: 'POST', secret: generateWebhookSecret() } as TriggerConfig);
     } else if (triggerId === 'schedule') {
-      setTriggerConfig({ type: 'schedule' });
+      // Start from the picker's default (every day at 09:00) so what the form shows is what gets saved.
+      setTriggerConfig({ type: 'schedule', cron: pickerToCron(DEFAULT_PICKER) } as TriggerConfig);
     } else if (triggerId === 'doc-event') {
       setTriggerConfig({ type: 'doc-event' });
     } else {
