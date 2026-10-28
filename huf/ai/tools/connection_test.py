@@ -147,7 +147,13 @@ def test_connection(service: str, setting: str | None = None, credentials: str |
 def slack_channels_for_setting(setting: str | None) -> dict:
 	from huf.ai.tools.slack import SlackChannelError, fetch_channels
 
-	token = _resolve_credentials("slack", setting, {}).get("token")
+	if setting:
+		token = _resolve_credentials("slack", setting, {}).get("token")
+	else:
+		# No integration named (the flow step form): the one the tools themselves would use.
+		from huf.ai.tools.credentials import get_credential
+
+		token = get_credential("slack", "token")
 	if not token:
 		return {"status": "Not connected", "message": not_connected_message("Slack", "the bot token"), "channels": []}
 	try:
