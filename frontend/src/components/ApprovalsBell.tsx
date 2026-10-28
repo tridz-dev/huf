@@ -7,6 +7,8 @@ import { Badge } from './ui/badge';
 import { approveFlowRun, getPendingApprovals, rejectFlowRun } from '../services/flowApi';
 import type { PendingApproval } from '../services/flowApi';
 import { useUser } from '../contexts/UserContext';
+import { toast } from 'sonner';
+import { humanizeFlowError } from '@/lib/flowValidation';
 
 const REFRESH_INTERVAL_MS = 60000;
 const FLOW_EVENTS = ['frappe:flow_paused', 'frappe:flow_completed', 'frappe:flow_error'];
@@ -38,8 +40,9 @@ export function ApprovalsBell() {
   const handleApprove = async (flowRunId: string) => {
     try {
       await approveFlowRun(flowRunId);
+      toast.success('Approved. The flow will continue.');
     } catch (error) {
-      console.warn('ApprovalsBell: failed to approve flow run', error);
+      toast.error('Could not approve', { description: humanizeFlowError(error) });
     }
     await fetchApprovals();
   };
@@ -47,8 +50,9 @@ export function ApprovalsBell() {
   const handleReject = async (flowRunId: string) => {
     try {
       await rejectFlowRun(flowRunId);
+      toast.success('Rejected. The flow will follow its rejected path.');
     } catch (error) {
-      console.warn('ApprovalsBell: failed to reject flow run', error);
+      toast.error('Could not reject', { description: humanizeFlowError(error) });
     }
     await fetchApprovals();
   };
@@ -58,19 +62,20 @@ export function ApprovalsBell() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label="Pending approvals">
+        <Button variant="ghost" size="icon" className="relative" aria-label="Pending approvals" data-testid="flow-approvals-bell">
           <Bell className="w-4 h-4" />
           {count > 0 && (
             <Badge
               variant="destructive"
               className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 py-0 flex items-center justify-center"
+              data-testid="flow-approvals-count"
             >
               {count > 9 ? '9+' : count}
             </Badge>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0">
+      <PopoverContent align="end" className="w-80 p-0" data-testid="flow-approvals-panel">
         <div className="px-4 py-3 border-b text-sm font-semibold">Pending approvals</div>
         {count === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-muted-foreground">
@@ -79,7 +84,7 @@ export function ApprovalsBell() {
         ) : (
           <div className="max-h-80 overflow-y-auto divide-y">
             {approvals.map((approval) => (
-              <div key={approval.flow_run_id} className="px-4 py-3 space-y-2">
+              <div key={approval.flow_run_id} className="px-4 py-3 space-y-2" data-testid={`flow-approval-${approval.flow_run_id}`}>
                 <div>
                   <div className="text-sm font-medium">{approval.title || approval.flow_id}</div>
                   <div className="text-xs text-muted-foreground">
@@ -88,10 +93,10 @@ export function ApprovalsBell() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => handleApprove(approval.flow_run_id)}>
+                  <Button size="sm" variant="outline" data-testid={`flow-approve-${approval.flow_run_id}`} onClick={() => handleApprove(approval.flow_run_id)}>
                     Approve
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleReject(approval.flow_run_id)}>
+                  <Button size="sm" variant="outline" data-testid={`flow-reject-${approval.flow_run_id}`} onClick={() => handleReject(approval.flow_run_id)}>
                     Reject
                   </Button>
                   <Button size="sm" variant="ghost" asChild>

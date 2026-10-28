@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) => {
   const { deleteNode } = useFlowContext();
   return (
-    <div className="relative">
+    <div className="relative" data-testid={`flow-node-${id}`} data-node-type="end">
       <Handle
         type="target"
         position={Position.Top}
@@ -33,7 +33,9 @@ export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) =>
               e.stopPropagation();
               deleteNode(id);
             }}
-            title="Delete node"
+            data-testid={`flow-node-delete-${id}`}
+            aria-label="Delete step"
+            title="Delete step"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </Button>

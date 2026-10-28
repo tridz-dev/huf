@@ -17,6 +17,7 @@ import {
 import { useFlowContext } from '../../contexts/FlowContext';
 import { NODE_CARD_BASE, NODE_HANDLE, NODE_ICON_WELL, getExecutionStatusClasses } from './nodeStyles';
 import { cn } from '@/lib/utils';
+import { validateNode } from '../../lib/flowValidation';
 
 const iconMap: Record<string, LucideIcon> = {
   Webhook,
@@ -30,11 +31,12 @@ const iconMap: Record<string, LucideIcon> = {
 type TriggerNodeProps = NodeProps<FlowNodeData>;
 
 export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
-  const { deleteNode } = useFlowContext();
+  const { deleteNode, activeFlow } = useFlowContext();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const Icon = data.icon && iconMap[data.icon] ? iconMap[data.icon] : Zap;
+  const incomplete = validateNode({ id, data }, activeFlow?.edges ?? []);
   const statusClasses = getExecutionStatusClasses(data.status, selected, {
-    unconfigured: !data.configured,
+    unconfigured: incomplete.length > 0 || !data.triggerConfig?.type,
   });
 
   // A trigger only becomes `configured` after the user saves it in the trigger
@@ -49,7 +51,7 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
   };
 
   return (
-    <div className="relative">
+    <div className="relative" data-testid={`flow-node-${id}`} data-node-type={data.triggerConfig?.type ?? 'unset'} data-incomplete={incomplete.length > 0 ? 'true' : 'false'}>
       <Card className={cn(NODE_CARD_BASE, statusClasses)}>
         {selected && data.status !== 'running' && data.status !== 'waiting' && (
           <Button
@@ -57,7 +59,9 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
             size="icon"
             className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
             onClick={handleDeleteClick}
-            title="Delete node"
+            data-testid={`flow-node-delete-${id}`}
+            aria-label="Delete trigger"
+            title="Delete trigger"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </Button>
@@ -83,18 +87,18 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <div className="text-sm font-medium text-card-foreground truncate">
+              <div className="text-sm font-medium text-card-foreground truncate" data-testid={`flow-node-title-${id}`}>
                 {data.label}
               </div>
-              {!data.configured && (
+              {incomplete.length > 0 && (
                 <AlertCircle className="w-4 h-4 text-signal flex-shrink-0" />
               )}
             </div>
             {data.description && (
               <div className="text-xs text-muted-foreground">{data.description}</div>
             )}
-            {!data.configured && (
-              <div className="text-xs text-signal-ink mt-1">Click to configure</div>
+            {incomplete.length > 0 && (
+              <div className="text-xs text-signal-ink mt-1" data-testid={`flow-node-incomplete-${id}`}>Needs setup</div>
             )}
           </div>
           <span className="ml-auto flex-shrink-0 rounded border border-line bg-panel/60 font-mono uppercase tracking-wider text-steel-soft font-medium px-1.5 py-0.5 text-[9px]">
@@ -103,13 +107,14 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
         </div>
       </Card>
       <Handle
+        data-testid={`flow-handle-${id}`}
         type="source"
         position={Position.Bottom}
         className={NODE_HANDLE}
       />
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()} data-testid="flow-node-delete-dialog">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete "{data.label}"?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -120,6 +125,7 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              data-testid="flow-node-delete-confirm"
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
                 deleteNode(id);

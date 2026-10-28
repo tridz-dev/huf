@@ -9,6 +9,8 @@ import { toast } from 'sonner';
 import { FlowRunHistory } from './FlowRunHistory';
 import { FlowRunViewer } from './FlowRunViewer';
 import { FlowSettingsModal } from './modals/FlowSettingsModal';
+import { humanizeFlowError, summarizeIssues, validateFlow } from '@/lib/flowValidation';
+import { reportFlowRun } from '@/lib/flowRunToast';
 
 /**
  * Left-aligned "Flows > flow name [pencil]" control for the flow canvas
@@ -90,7 +92,7 @@ export function FlowToolbarTitle() {
 }
 
 export function FlowsHeaderActions() {
-  const { activeFlow, saveState, hasUnsavedChanges, saveFlow } = useFlowContext();
+  const { activeFlow, saveState, hasUnsavedChanges, saveFlow, setSelectedNode } = useFlowContext();
   const [isRunning, setIsRunning] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -126,73 +128,66 @@ export function FlowsHeaderActions() {
     }
   };
 
-  const handleRun = async () => {
-    if (!activeFlow) return;
+  const issues = activeFlow ? validateFlow(activeFlow.nodes, activeFlow.edges, 'run') : [];
 
-    // Auto-save if there are unsaved changes
-    if (hasUnsavedChanges) {
-      try {
-        await saveFlow();
-      } catch (err) {
-        toast.error('Failed to save before running', { description: err instanceof Error ? err.message : 'Unknown error' });
-        return;
-      }
+  /** Block with a readable message (and select the offending step) instead of a raw schema error. */
+  const blockedBy = (purpose: 'save' | 'run'): boolean => {
+    if (!activeFlow) return true;
+    const found = validateFlow(activeFlow.nodes, activeFlow.edges, purpose);
+    if (found.length === 0) return false;
+    if (found[0].nodeId) setSelectedNode(found[0].nodeId);
+    toast.error(purpose === 'save' ? "Can't save yet" : 'Finish setting up your flow first', {
+      description: `Finish setting up ${summarizeIssues(found)}`,
+    });
+    return true;
+  };
+
+  const saveIfNeeded = async (what: string): Promise<boolean> => {
+    if (!hasUnsavedChanges) return true;
+    if (blockedBy('save')) return false;
+    try {
+      await saveFlow();
+      return true;
+    } catch (err) {
+      toast.error(`Could not save before ${what}`, { description: humanizeFlowError(err) });
+      return false;
     }
+  };
+
+  const handleRun = async () => {
+    if (!activeFlow || blockedBy('run')) return;
+    if (!(await saveIfNeeded('running'))) return;
 
     setIsRunning(true);
     try {
-      const result = await runFlow(activeFlow.id);
-      // run_flow executes the flow SYNCHRONOUSLY and returns its final status,
-      // so a resolved promise does not mean the run succeeded. Reporting
-      // "Flow run started" unconditionally told users a run was fine when it
-      // had already failed; surface the real outcome instead.
-      if (result.status === 'Failed') {
-        toast.error('Flow run failed', {
-          description: `Run ID: ${result.flow_run_id} — open Runs for the error`,
-        });
-      } else if (result.status && result.status.startsWith('Waiting')) {
-        toast.info('Flow run is waiting', {
-          description: `${result.status} — Run ID: ${result.flow_run_id}`,
-        });
-      } else {
-        toast.success('Flow run started', { description: `Run ID: ${result.flow_run_id}` });
-      }
+      reportFlowRun(await runFlow(activeFlow.id));
     } catch (err) {
-      toast.error('Failed to run flow', { description: err instanceof Error ? err.message : 'Unknown error' });
+      toast.error('Could not run the flow', { description: humanizeFlowError(err) });
     } finally {
       setIsRunning(false);
     }
   };
 
   const handleSaveDraft = async () => {
+    if (blockedBy('save')) return;
     try {
       await saveFlow();
       toast.success('Flow saved');
     } catch (err) {
-      toast.error('Failed to save', { description: err instanceof Error ? err.message : 'Unknown error' });
+      toast.error('Could not save the flow', { description: humanizeFlowError(err) });
     }
   };
 
   const handlePublish = async () => {
-    if (!activeFlow) return;
-
-    // Auto-save if there are unsaved changes
-    if (hasUnsavedChanges) {
-      try {
-        await saveFlow();
-      } catch (err) {
-        toast.error('Failed to save before publishing', { description: err instanceof Error ? err.message : 'Unknown error' });
-        return;
-      }
-    }
+    if (!activeFlow || blockedBy('run')) return;
+    if (!(await saveIfNeeded('publishing'))) return;
 
     setIsPublishing(true);
     try {
-      // Mark as Active
       await updateFlowDefinitionFields(activeFlow.id, { status: 'Active' });
-      toast.success('Flow published successfully');
+      toast.success('Flow published');
     } catch (err) {
-      toast.error('Failed to publish flow', { description: err instanceof Error ? err.message : 'Unknown error' });
+      toast.error('Could not publish the flow', { description: humanizeFlowError(err) });
     } finally {
       setIsPublishing(false);
     }
@@ -202,7 +197,17 @@ export function FlowsHeaderActions() {
     <div className="flex items-center gap-2">
       {/* Save State Indicator (bare dot + text, no chip background) */}
       {activeFlow && (
-        <div className="flex items-center gap-1.5 mr-2 text-muted-foreground">
+        <div className="flex items-center gap-1.5 mr-2 text-muted-foreground" data-testid="flow-save-state">
+          {issues.length > 0 && (
+            <button
+              type="button"
+              data-testid="flow-validation-summary"
+              className="mr-2 text-xs text-signal-ink underline-offset-2 hover:underline"
+              onClick={() => issues[0].nodeId && setSelectedNode(issues[0].nodeId)}
+            >
+              {issues.length === 1 ? '1 thing to finish' : `${issues.length} things to finish`}
+            </button>
+          )}
           {saveState === 'saving' ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           ) : saveState === 'error' ? (
@@ -225,6 +230,7 @@ export function FlowsHeaderActions() {
         variant="outline"
         size="sm"
         className="gap-2"
+        data-testid="flow-save"
         onClick={handleSaveDraft}
         disabled={!activeFlow || saveState === 'saving' || !hasUnsavedChanges}
       >
@@ -237,6 +243,7 @@ export function FlowsHeaderActions() {
         variant="outline"
         size="sm"
         className="gap-2"
+        data-testid="flow-runs"
         onClick={() => setShowHistory(true)}
         disabled={!activeFlow}
       >
@@ -249,6 +256,7 @@ export function FlowsHeaderActions() {
         variant="outline"
         size="sm"
         className="gap-2"
+        data-testid="flow-settings"
         onClick={() => setShowSettings(true)}
         disabled={!activeFlow}
       >
@@ -261,6 +269,7 @@ export function FlowsHeaderActions() {
         variant="outline"
         size="sm"
         className="gap-2"
+        data-testid="flow-run"
         onClick={handleRun}
         disabled={!activeFlow || isRunning}
       >
@@ -273,6 +282,7 @@ export function FlowsHeaderActions() {
         variant="display"
         size="sm"
         className="gap-2"
+        data-testid="flow-publish"
         onClick={handlePublish}
         disabled={!activeFlow || isPublishing}
       >
