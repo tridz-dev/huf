@@ -142,3 +142,32 @@ def test_connection(service: str, setting: str | None = None, credentials: str |
 	except Exception:
 		frappe.log_error(title=f"{label} test connection")
 		return {"status": "Rejected", "message": f"Could not check {label}. The details are in the error log."}
+
+
+def slack_channels_for_setting(setting: str | None) -> dict:
+	from huf.ai.tools.slack import SlackChannelError, fetch_channels
+
+	token = _resolve_credentials("slack", setting, {}).get("token")
+	if not token:
+		return {"status": "Not connected", "message": not_connected_message("Slack", "the bot token"), "channels": []}
+	try:
+		channels = fetch_channels(token, force=True)
+	except SlackChannelError as e:
+		return {"status": "Rejected", "message": str(e), "channels": []}
+	except (httpx.TransportError, httpx.HTTPStatusError) as e:
+		frappe.logger("huf").warning(f"Slack channel list failed: {type(e).__name__}")
+		return {"status": "Rejected", "message": "Could not reach Slack right now. Try again.", "channels": []}
+	return {"status": "Connected", "channels": sorted(channels, key=lambda c: (c.get("name") or ""))}
+
+
+@frappe.whitelist(methods=["POST"])
+def list_slack_channels(setting: str | None = None) -> dict:
+	"""Read-only list of the Slack channels the integration's bot can see (no message is sent).
+
+	Returns ``{status: "Connected", channels: [{id, name, is_private}]}`` or
+	``{status: "Rejected" | "Not connected", message, channels: []}``.
+	"""
+	frappe.only_for(ALLOWED_ROLES)
+	if setting and not frappe.has_permission("Integration Settings", "read", doc=setting):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	return slack_channels_for_setting(setting)

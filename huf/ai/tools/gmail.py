@@ -161,7 +161,8 @@ def handle_send_email(**kwargs) -> str:
         )
         check_google_response(response, "Gmail", "gmail.send")
         
-        return json.dumps({"success": True, "results": response.json()})
+        # `to` lets a Flow run summary say who the mail went to (Gmail's own reply only has ids).
+        return json.dumps({"success": True, "results": {**response.json(), "to": to}})
     except Exception as e:
         logger.warning(f"Gmail Send Email Error: {str(e)}")
         update_last_error(service_name, str(e))

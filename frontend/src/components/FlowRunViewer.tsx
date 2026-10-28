@@ -24,6 +24,7 @@ import { humanizeFlowError } from '@/lib/flowValidation';
 import { describeDecision, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from '@/lib/flowRunFormat';
 import { deskDocUrl, summarizeDocPayload } from '@/lib/flowRunDoc';
 import { connectPath, notConnectedService } from '@/lib/flowIntegrations';
+import { redactSecrets, summarizeToolOutput } from '@/lib/flowToolSummary';
 import { Link } from 'react-router-dom';
 
 function DocFieldValue({ field }: { field: { key: string; value: string; full?: string } }) {
@@ -347,11 +348,27 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                                 st.failed && stepReason(st.id, st.output) ? withoutFailureKeys(st.output) : st.output,
                                                                 titleOf,
                                                             );
-                                                            return isEmpty(shown) ? null : (
+                                                            if (isEmpty(shown)) return null;
+                                                            // Tokens and auth headers never reach the screen, summarised or not.
+                                                            const safe = redactSecrets(shown);
+                                                            const toolId = activeFlow?.nodes.find((n) => n.id === st.id)?.data.actionConfig;
+                                                            const summary = st.failed
+                                                                ? null
+                                                                : summarizeToolOutput(toolId && toolId.type === 'tool-call' ? toolId.tool_id : undefined, st.output);
+                                                            const raw = (
                                                                 <pre data-testid={`flow-run-step-output-${st.id}`} className="mt-2 bg-muted p-2 rounded text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-                                                                    {typeof shown === 'string' ? shown : JSON.stringify(shown, null, 2)}
+                                                                    {typeof safe === 'string' ? safe : JSON.stringify(safe, null, 2)}
                                                                 </pre>
                                                             );
+                                                            return summary ? (
+                                                                <>
+                                                                    <div className="mt-1 text-sm" data-testid={`flow-run-step-summary-${st.id}`}>{summary}</div>
+                                                                    <details className="mt-1" data-testid={`flow-run-step-raw-${st.id}`}>
+                                                                        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">Show raw response</summary>
+                                                                        {raw}
+                                                                    </details>
+                                                                </>
+                                                            ) : raw;
                                                         })()}
                                                     </li>
                                                 ))}
