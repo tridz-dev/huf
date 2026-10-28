@@ -83,3 +83,24 @@ export function tidyPositions(nodes: LayoutNode[], edges: LayoutEdge[]): Record<
   }
   return positions;
 }
+
+interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** True when `rect` (flow coordinates) sits fully inside the visible canvas, keeping `margin` px clear (more at the top, under the toolbar). */
+export function isInView(
+  rect: Box,
+  viewport: { x: number; y: number; zoom: number },
+  size: { width: number; height: number },
+  margin = { top: 70, side: 24, bottom: 24 },
+): boolean {
+  const left = rect.x * viewport.zoom + viewport.x;
+  const top = rect.y * viewport.zoom + viewport.y;
+  const right = left + rect.width * viewport.zoom;
+  const bottom = top + rect.height * viewport.zoom;
+  return left >= margin.side && top >= margin.top && right <= size.width - margin.side && bottom <= size.height - margin.bottom;
+}
