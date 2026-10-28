@@ -137,19 +137,32 @@ export function FlowValueInput({ id, label, value, onChange, optional, testId, n
       )}
       {mode === 'template' && (
         <>
-          <Label htmlFor={`${id}-vars`} size="sm">
-            Values used in the template (JSON, e.g. {'{"order": {"$from": "input.order"}}'})
-          </Label>
-          <Textarea
-            id={`${id}-vars`}
-            className="min-h-[50px] w-full font-mono"
-            defaultValue={varsText}
-            key={`${id}-${mode}-${varsVersion}`}
-            onChange={(e) => onChange(textToValue('template', text, e.target.value))}
-          />
-          {isInvalidValueJson(varsText) && (
-            <p className="text-[10px] text-destructive">Vars are not valid JSON.</p>
+          {Object.keys((value as { vars?: Record<string, unknown> }).vars ?? {}).length > 0 && (
+            <ul className="space-y-0.5 text-[11px] text-muted-foreground" data-testid={testId ? `${testId}-vars-summary` : undefined}>
+              {Object.entries((value as { vars?: Record<string, { $from?: string }> }).vars ?? {}).map(([name, v]) => (
+                <li key={name} className="truncate">
+                  <span className="font-mono">{`{${name}}`}</span> is filled with{' '}
+                  <span className="font-mono">{typeof v?.$from === 'string' ? v.$from : 'a value'}</span>
+                </li>
+              ))}
+            </ul>
           )}
+          <details className="text-[11px]">
+            <summary className="cursor-pointer text-muted-foreground">Edit the values (advanced)</summary>
+            <Label htmlFor={`${id}-vars`} size="sm" className="mt-1 block">
+              Which data fills each {'{name}'}, as JSON
+            </Label>
+            <Textarea
+              id={`${id}-vars`}
+              className="min-h-[50px] w-full font-mono"
+              defaultValue={varsText}
+              key={`${id}-${mode}-${varsVersion}`}
+              onChange={(e) => onChange(textToValue('template', text, e.target.value))}
+            />
+            {isInvalidValueJson(varsText) && (
+              <p className="text-[10px] text-destructive">That is not valid JSON.</p>
+            )}
+          </details>
         </>
       )}
     </div>

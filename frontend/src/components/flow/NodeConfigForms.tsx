@@ -481,7 +481,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
               testId={f('tool_id')}
               options={toolOptions}
               value={toolId}
-              onValueChange={(v) => patch({ tool_id: v, input: {} })}
+              onValueChange={(v) => { if (v && v !== toolId) patch({ tool_id: v, input: {} }); }}
               placeholder={loading ? 'Loading...' : 'Choose a tool...'}
               disabled={loading}
               searchPlaceholder="Search tools..."
