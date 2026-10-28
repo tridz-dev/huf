@@ -319,7 +319,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                                 titleOf,
                                                             );
                                                             return isEmpty(shown) ? null : (
-                                                                <pre className="mt-2 bg-muted p-2 rounded text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                                                                <pre data-testid={`flow-run-step-output-${st.id}`} className="mt-2 bg-muted p-2 rounded text-xs font-mono overflow-x-auto whitespace-pre-wrap">
                                                                     {typeof shown === 'string' ? shown : JSON.stringify(shown, null, 2)}
                                                                 </pre>
                                                             );

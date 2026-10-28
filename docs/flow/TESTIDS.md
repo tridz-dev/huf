@@ -94,7 +94,7 @@ Publishing a flow with unconnected integration steps shows a warning toast (`Som
 |---|---|
 | `flow-run-history`, `flow-run-history-refresh`, `flow-run-row-<runId>` (`data-run-status`) | Runs sheet |
 | `flow-run-details`, `flow-run-current-node`, `flow-run-error`, `flow-run-approve`, `flow-run-reject` | Run details sheet; the open run is in the URL as `?run=<id>` |
-| `flow-run-meta`, `flow-run-flow-name`, `flow-run-trigger`, `flow-run-started`, `flow-run-finished`, `flow-run-duration`, `flow-run-decision-<nodeId>`, `flow-run-step-error-<nodeId>` (reason on a failed step card) | Run details facts and recorded approval decision |
+| `flow-run-meta`, `flow-run-flow-name`, `flow-run-trigger`, `flow-run-started`, `flow-run-finished`, `flow-run-duration`, `flow-run-decision-<nodeId>`, `flow-run-step-error-<nodeId>` (reason on a failed step card), `flow-run-step-output-<nodeId>` (step output, step ids shown as titles) | Run details facts and recorded approval decision |
 | `flow-run-stale`, `flow-run-mark-failed`, `flow-run-mark-failed-confirm` | Stuck-run notice and System Manager "Mark as failed" |
 | `executions-tab-flow-runs`, `flow-runs-table`, `flow-run-exec-row-<runId>` (`data-run-status`), `execution-flow-label-<agentRunId>`, `executions-runs-tile` | Executions page: Flow runs tab and flow-step labels |
 | `flow-settings-modal`, `flow-settings-name`, `-description`, `-category`, `-auto-convert`, `-save`, `-cancel`, `-delete` | Settings modal |
