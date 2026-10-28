@@ -2,13 +2,18 @@ import { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { Plus } from 'lucide-react';
 import { Card } from '../ui/card';
+import type { FlowEdgeRoute } from '../../types/flow.types';
 import { NODE_CARD_BASE, NODE_ICON_WELL, NODE_HANDLE } from './nodeStyles';
 import { cn } from '@/lib/utils';
 
 export interface AddStepGhostNodeData {
   /** The node id that a newly added action should be attached after. */
   sourceNodeId: string;
-  onAddNode?: (sourceNodeId: string) => void;
+  /** Which outgoing route of the source this step fills (default: its plain next). */
+  route?: FlowEdgeRoute;
+  /** Branch name shown on the card, e.g. "True". */
+  branchLabel?: string;
+  onAddNode?: (sourceNodeId: string, route?: FlowEdgeRoute) => void;
 }
 
 /**
@@ -28,15 +33,16 @@ export const AddStepGhostNode = memo(({ data }: NodeProps<AddStepGhostNodeData>)
       <Card
         role="button"
         tabIndex={0}
-        aria-label="Add step"
+        aria-label={data.branchLabel ? `Add step: ${data.branchLabel}` : 'Add step'}
+        data-testid={`flow-add-step-${data.sourceNodeId}${data.route && data.route !== 'next' ? `-${data.route}` : ''}`}
         onClick={(e) => {
           e.stopPropagation();
-          data.onAddNode?.(data.sourceNodeId);
+          data.onAddNode?.(data.sourceNodeId, data.route);
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            data.onAddNode?.(data.sourceNodeId);
+            data.onAddNode?.(data.sourceNodeId, data.route);
           }
         }}
         className={cn(
@@ -48,7 +54,7 @@ export const AddStepGhostNode = memo(({ data }: NodeProps<AddStepGhostNodeData>)
           <div className={cn(NODE_ICON_WELL, 'border border-dashed border-line bg-transparent text-muted-foreground')}>
             <Plus className="w-4 h-4" />
           </div>
-          <div className="text-sm font-medium text-muted-foreground">Add step</div>
+          <div className="text-sm font-medium text-muted-foreground">{data.branchLabel ? `${data.branchLabel}: add step` : 'Add step'}</div>
         </div>
       </Card>
     </div>

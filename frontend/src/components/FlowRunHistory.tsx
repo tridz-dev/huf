@@ -38,14 +38,14 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="w-[400px] sm:w-[500px] overflow-y-auto">
+            <SheetContent className="w-[400px] sm:w-[500px] overflow-y-auto" data-testid="flow-run-history">
                 <SheetHeader className="mb-6">
                     <div className="flex items-center justify-between">
                         <SheetTitle className="flex items-center gap-2">
                             <PlayCircle className="w-5 h-5 text-muted-foreground" />
                             Run history
                         </SheetTitle>
-                        <Button variant="ghost" size="icon" onClick={fetchRuns} disabled={loading} title="Refresh">
+                        <Button variant="ghost" size="icon" data-testid="flow-run-history-refresh" onClick={fetchRuns} disabled={loading} title="Refresh">
                             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                         </Button>
                     </div>
@@ -67,6 +67,8 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
                         runs.map((run) => (
                             <div
                                 key={run.name}
+                                data-testid={`flow-run-row-${run.name}`}
+                                data-run-status={run.status}
                                 className="p-3 border rounded-md hover:bg-muted/50 cursor-pointer transition-colors"
                                 onClick={() => {
                                     onSelectRun(run.name);

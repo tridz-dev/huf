@@ -15,6 +15,7 @@ import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Checkbox } from '../ui/checkbox';
+import { humanizeFlowError } from '@/lib/flowValidation';
 import { useFlowContext } from '../../contexts/FlowContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -134,7 +135,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
         console.error('Failed to fetch flow conversion status:', conversionErr);
       }
     } catch (err) {
-      toast.error('Failed to update settings', { description: err instanceof Error ? err.message : 'Unknown error' });
+      toast.error('Could not update the settings', { description: humanizeFlowError(err) });
     } finally {
       setIsSaving(false);
     }
@@ -142,7 +143,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogScrollContent className="sm:max-w-[425px]">
+      <DialogScrollContent className="sm:max-w-[425px]" data-testid="flow-settings-modal">
         <DialogScrollHeader>
           <DialogTitle>Flow settings</DialogTitle>
         </DialogScrollHeader>
@@ -151,6 +152,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
             <Label htmlFor="name">Flow name</Label>
             <Input
               id="name"
+              data-testid="flow-settings-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Enter flow name..."
@@ -160,6 +162,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
             <Label htmlFor="description">Description (optional)</Label>
             <Textarea
               id="description"
+              data-testid="flow-settings-description"
               className="min-h-[80px]"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -169,7 +172,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
           <div className="grid gap-2">
             <Label htmlFor="category">Category</Label>
             <Select value={category || 'Uncategorized'} onValueChange={setCategory}>
-              <SelectTrigger id="category">
+              <SelectTrigger id="category" data-testid="flow-settings-category">
                 <SelectValue placeholder="Select category" />
               </SelectTrigger>
               <SelectContent>
@@ -185,7 +188,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
             <div className="grid gap-2">
               <Label htmlFor="mode">Execution mode</Label>
               <Select value={mode} onValueChange={(v) => setMode(v as 'normal' | 'agentic')}>
-                <SelectTrigger id="mode">
+                <SelectTrigger id="mode" data-testid="flow-settings-mode">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -198,6 +201,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
               <Label htmlFor="max-hops">Max hops</Label>
               <Input
                 id="max-hops"
+                data-testid="flow-settings-max-hops"
                 type="number"
                 value={maxHops}
                 onChange={(e) => {
@@ -213,6 +217,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
           <div className="flex flex-row items-start gap-2">
             <Checkbox
               id="auto-convert-to-procedure"
+              data-testid="flow-settings-auto-convert"
               checked={autoConvertToProcedure}
               onCheckedChange={(checked) => setAutoConvertToProcedure(checked === true)}
               className="mt-0.5"
@@ -233,6 +238,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
             variant="destructive-ghost"
             size="sm"
             className="gap-2"
+            data-testid="flow-settings-delete"
             onClick={() => setShowDeleteConfirm(true)}
             disabled={isDeleting || isSaving}
           >
@@ -240,10 +246,10 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
             Delete flow
           </Button>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onClose} disabled={isDeleting || isSaving}>
+            <Button variant="outline" size="sm" data-testid="flow-settings-cancel" onClick={onClose} disabled={isDeleting || isSaving}>
               Cancel
             </Button>
-            <Button size="sm" onClick={handleSave} disabled={isSaving || isDeleting || !activeFlow} className="gap-2">
+            <Button size="sm" data-testid="flow-settings-save" onClick={handleSave} disabled={isSaving || isDeleting || !activeFlow} className="gap-2">
               {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
               Save changes
             </Button>

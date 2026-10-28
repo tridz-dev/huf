@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock } from 'lucide-react';
 import { toast } from 'sonner';
-import { Input } from './ui/input';
+import { ScheduleEditor } from './flow/ScheduleEditor';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { Combobox } from './ui/combobox';
@@ -11,13 +11,10 @@ import { clearFlowTrigger, getFlowTrigger, setFlowTrigger } from '../services/fl
 import {
   DOC_EVENTS,
   DEFAULT_DOC_EVENT_FORM,
-  DEFAULT_SCHEDULE_FORM,
   describeTriggerState,
   docEventFormToArgs,
   scheduleFormToArgs,
-  summaryToDocEventForm,
   summaryToNodeConfig,
-  summaryToScheduleForm,
   triggerDisabledReason,
   triggerErrorInfo,
   type DocEventForm,
@@ -33,32 +30,47 @@ interface FlowTriggerPanelProps {
   hasUnsavedChanges: boolean;
   docTypes: Array<{ value: string; label: string }>;
   loadingDocTypes: boolean;
-  /** Canonical node config (cron / doctype+event) after a hydrate / save / clear succeeds; null when there is none. */
-  onSynced?: (config: ReturnType<typeof summaryToNodeConfig>) => void;
+  /** The node's own config (the contract fields: cron, or doctype + event). The form edits it directly. */
+  value: { cron?: string; doctype?: string; event?: string };
+  onChange: (patch: Record<string, unknown>) => void;
+  /** Inline validation messages by contract field. */
+  errors?: Record<string, string | undefined>;
 }
+
+const EVENT_LABELS: Record<FlowDocEvent, string> = {
+  after_insert: 'When a record is created',
+  on_update: 'When a record is updated',
+  on_submit: 'When a record is submitted',
+  on_cancel: 'When a record is cancelled',
+  on_trash: 'When a record is deleted',
+};
 
 /**
  * Schedule / doc-event trigger editor. State lives in the backend (an Automation bound to the
  * flow's converted Procedure), not in the node config, so it hydrates from get_flow_trigger
  * and writes through set_flow_trigger.
  */
-export function FlowTriggerPanel({ kind, flowId, hasUnsavedChanges, docTypes, loadingDocTypes, onSynced }: FlowTriggerPanelProps) {
+export function FlowTriggerPanel({ kind, flowId, hasUnsavedChanges, docTypes, loadingDocTypes, value, onChange, errors = {} }: FlowTriggerPanelProps) {
   const navigate = useNavigate();
   const [summary, setSummary] = useState<FlowTriggerSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<TriggerErrorInfo | null>(null);
-  const [scheduleForm, setScheduleForm] = useState<ScheduleForm>(DEFAULT_SCHEDULE_FORM);
-  const [docForm, setDocForm] = useState<DocEventForm>(DEFAULT_DOC_EVENT_FORM);
+  // The node config is the single source of truth for the form; the saved trigger only seeds an empty node.
+  const scheduleForm: ScheduleForm = { cron: value.cron ?? '' };
+  const docForm: DocEventForm = {
+    ...DEFAULT_DOC_EVENT_FORM,
+    referenceDoctype: value.doctype ?? '',
+    docEvent: (DOC_EVENTS.find((e) => e === value.event) ?? DEFAULT_DOC_EVENT_FORM.docEvent) as FlowDocEvent,
+  };
 
-  // Latest callback without refetching when its identity changes (it closes over the selected node).
-  const syncedRef = useRef(onSynced);
-  syncedRef.current = onSynced;
+  const changeRef = useRef(onChange);
+  changeRef.current = onChange;
+  const valueRef = useRef(value);
+  valueRef.current = value;
 
   const hydrate = useCallback((s: FlowTriggerSummary | null) => {
     setSummary(s);
-    setScheduleForm(summaryToScheduleForm(s));
-    setDocForm(summaryToDocEventForm(s));
   }, []);
 
   useEffect(() => {
@@ -73,7 +85,9 @@ export function FlowTriggerPanel({ kind, flowId, hasUnsavedChanges, docTypes, lo
       .then((s) => {
         if (cancelled) return;
         hydrate(s);
-        syncedRef.current?.(summaryToNodeConfig(kind, s));
+        const mirror = summaryToNodeConfig(kind, s);
+        const v = valueRef.current;
+        if (mirror && !(v.cron || v.doctype)) changeRef.current(mirror);
       })
       .catch((e) => !cancelled && setError(triggerErrorInfo(e)))
       .finally(() => !cancelled && setLoading(false));
@@ -100,7 +114,6 @@ export function FlowTriggerPanel({ kind, flowId, hasUnsavedChanges, docTypes, lo
     try {
       const next = await setFlowTrigger(built.args);
       hydrate(next);
-      syncedRef.current?.(summaryToNodeConfig(kind, next));
       toast.success(next.enabled && next.automation_status === 'Active' ? 'Trigger saved' : 'Trigger saved, activation pending');
     } catch (e) {
       setError(triggerErrorInfo(e));
@@ -116,7 +129,6 @@ export function FlowTriggerPanel({ kind, flowId, hasUnsavedChanges, docTypes, lo
     try {
       await clearFlowTrigger(flowId);
       hydrate(null);
-      syncedRef.current?.(null);
       toast.success('Trigger removed');
     } catch (e) {
       setError(triggerErrorInfo(e));
@@ -130,64 +142,50 @@ export function FlowTriggerPanel({ kind, flowId, hasUnsavedChanges, docTypes, lo
 
   return (
     <div className="space-y-3">
-      {disabledReason ? <p className="text-xs text-muted-foreground">{disabledReason}</p> : null}
+      {disabledReason ? <p className="text-xs text-muted-foreground" data-testid="flow-trigger-disabled-reason">{disabledReason}</p> : null}
 
       {kind === 'schedule' ? (
-        <>
-          <div>
-            <Label htmlFor="cron">Cron expression</Label>
-            <Input
-              id="cron"
-              disabled={formDisabled}
-              value={scheduleForm.cron}
-              onChange={(e) => setScheduleForm({ cron: e.target.value })}
-              placeholder="0 */6 * * *"
-            />
-          </div>
-        </>
+        <ScheduleEditor
+          cron={value.cron}
+          error={errors.cron}
+          onChange={(cron) => onChange({ cron })}
+        />
       ) : (
         <>
           <div>
             <Label htmlFor="doctype">Document type</Label>
             <Combobox
               id="doctype"
+              testId="flow-field-trigger.doc-event-doctype"
               options={docTypes}
               value={docForm.referenceDoctype}
-              onValueChange={(v) => setDocForm({ ...docForm, referenceDoctype: v })}
-              placeholder={loadingDocTypes ? 'Loading...' : 'Select DocType...'}
-              disabled={formDisabled || loadingDocTypes}
-              searchPlaceholder="Search DocType..."
-              emptyText="No DocType found."
+              onValueChange={(v) => onChange({ doctype: v })}
+              placeholder={loadingDocTypes ? 'Loading...' : 'Select a document type...'}
+              disabled={loadingDocTypes}
+              searchPlaceholder="Search document types..."
+              emptyText="No document type found."
             />
+            {errors.doctype ? (
+              <p role="alert" className="mt-1 text-[11px] text-destructive" data-testid="flow-error-trigger.doc-event-doctype">{errors.doctype}</p>
+            ) : null}
           </div>
           <div>
-            <Label htmlFor="doc-event">Event</Label>
-            <Select
-              value={docForm.docEvent}
-              disabled={formDisabled}
-              onValueChange={(v) => setDocForm({ ...docForm, docEvent: v as FlowDocEvent })}
-            >
-              <SelectTrigger id="doc-event">
-                <SelectValue />
+            <Label htmlFor="doc-event">When it fires</Label>
+            <Select value={value.event ?? ''} onValueChange={(v) => onChange({ event: v })}>
+              <SelectTrigger id="doc-event" data-testid="flow-field-trigger.doc-event-event">
+                <SelectValue placeholder="Choose an event..." />
               </SelectTrigger>
               <SelectContent>
                 {DOC_EVENTS.map((e) => (
-                  <SelectItem key={e} value={e}>
-                    {e}
+                  <SelectItem key={e} value={e} data-testid={`flow-option-doc-event-${e}`}>
+                    {EVENT_LABELS[e]}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label htmlFor="doc-condition">Condition (optional)</Label>
-            <Input
-              id="doc-condition"
-              disabled={formDisabled}
-              value={docForm.condition}
-              onChange={(e) => setDocForm({ ...docForm, condition: e.target.value })}
-              placeholder="doc.status == 'Open'"
-            />
+            {errors.event ? (
+              <p role="alert" className="mt-1 text-[11px] text-destructive" data-testid="flow-error-trigger.doc-event-event">{errors.event}</p>
+            ) : null}
           </div>
         </>
       )}
@@ -240,11 +238,11 @@ export function FlowTriggerPanel({ kind, flowId, hasUnsavedChanges, docTypes, lo
       ) : null}
 
       <div className="flex gap-2">
-        <Button size="sm" disabled={formDisabled} onClick={save}>
-          {summary ? 'Save trigger' : 'Set trigger'}
+        <Button size="sm" data-testid="flow-trigger-apply" disabled={formDisabled} onClick={save}>
+          {summary ? 'Update trigger' : 'Activate trigger'}
         </Button>
         {summary ? (
-          <Button size="sm" variant="outline" disabled={formDisabled} onClick={clear}>
+          <Button size="sm" variant="outline" data-testid="flow-trigger-clear" disabled={formDisabled} onClick={clear}>
             Clear
           </Button>
         ) : null}

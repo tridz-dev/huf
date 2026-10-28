@@ -4,7 +4,6 @@ import ReactFlow, {
   Background,
   Controls,
   MiniMap,
-  addEdge,
   Connection,
   Edge,
   NodeChange,
@@ -28,7 +27,11 @@ import { FlowNodeRail, NODE_RAIL_ACTION_CATEGORY, NodeRailCategory } from './Flo
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
 import { useFlowContext } from '../contexts/FlowContext';
 import { flowService } from '../services/flowService';
-import { FlowNodeData, TriggerConfig, ActionConfig } from '../types/flow.types';
+import { makeFlowEdge, edgeRoute } from '../services/flowSerializer';
+import { branchHandlesFor } from '../lib/flowBranches';
+import { actionLabel, triggerLabel } from '../lib/flowLabels';
+import { actionOptions } from '../data/actions';
+import { FlowNodeData, TriggerConfig, ActionConfig, FlowEdgeRoute } from '../types/flow.types';
 import type { ActionOption } from '../types/modal.types';
 
 interface FlowCanvasProps {
@@ -62,6 +65,7 @@ export function FlowCanvas({
   const [modalMode, setModalMode] = useState<'trigger' | 'action'>('trigger');
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
   const [sourceNodeForAction, setSourceNodeForAction] = useState<string | null>(null);
+  const [sourceRouteForAction, setSourceRouteForAction] = useState<FlowEdgeRoute>('next');
   const [modalActionCategory, setModalActionCategory] = useState<ActionOption['category'] | null>(null);
 
   // Track if we're currently syncing from props to prevent feedback loops
@@ -225,22 +229,31 @@ export function FlowCanvas({
 
   const onConnect = useCallback(
     (connection: Connection) => {
+      if (!connection.source || !connection.target) return;
+      const source = connection.source;
+      const target = connection.target;
       setEdges((eds) => {
-        const newEdges = addEdge(connection, eds);
-        // Schedule context update (debounced)
+        const handle = connection.sourceHandle as FlowEdgeRoute | null;
+        const route: FlowEdgeRoute = handle ?? 'next';
+        const targetLabel = nodes.find((n) => n.id === target)?.data.label;
+        // Single-target routes (next/true/false/approve/...) replace an existing edge on the same handle.
+        const multi = route === 'option' || route === 'body';
+        const kept = multi ? eds : eds.filter((e) => !(e.source === source && edgeRoute(e) === route));
+        const index = kept.filter((e) => e.source === source && edgeRoute(e) === route).length;
+        const newEdges = [...kept, makeFlowEdge(source, target, route, { label: targetLabel, index })];
         if (!isSyncingFromProps.current) {
           scheduleContextUpdate(undefined, newEdges);
         }
         return newEdges;
       });
     },
-    [scheduleContextUpdate]
+    [scheduleContextUpdate, nodes]
   );
 
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node<FlowNodeData>) => {
       setSelectedNode(node.id);
-      if (node.data.nodeType === 'trigger') {
+      if (node.data.nodeType === 'trigger' && !node.data.triggerConfig?.type) {
         setCurrentNodeId(node.id);
         setModalMode('trigger');
         setIsModalOpen(true);
@@ -261,8 +274,9 @@ export function FlowCanvas({
     setSelectedEdge(null);
   }, [setSelectedNode, setSelectedEdge]);
 
-  const handleAddNode = useCallback((sourceNodeId: string) => {
+  const handleAddNode = useCallback((sourceNodeId: string, route: FlowEdgeRoute = 'next') => {
     setSourceNodeForAction(sourceNodeId);
+    setSourceRouteForAction(route);
     setModalActionCategory(null);
     setModalMode('action');
     setIsModalOpen(true);
@@ -273,15 +287,12 @@ export function FlowCanvas({
       const iconMap: Record<string, string> = {
         webhook: 'Webhook',
         schedule: 'Clock',
-        'doc-event': 'Database',
-        'app-trigger': 'Mail'
+        'doc-event': 'Database'
       };
-
       const labelMap: Record<string, string> = {
-        webhook: 'Webhook',
-        schedule: 'Schedule',
-        'doc-event': 'Doc Event',
-        'app-trigger': 'App Trigger'
+        webhook: triggerLabel('webhook'),
+        schedule: triggerLabel('schedule'),
+        'doc-event': triggerLabel('doc-event')
       };
 
       if (currentNodeId) {
@@ -326,109 +337,55 @@ export function FlowCanvas({
   );
 
   const handleSelectAction = useCallback(
-    (actionType: string, config: ActionConfig) => {
+    (actionId: string, config: ActionConfig) => {
       if (!sourceNodeForAction) return;
+      const sourceId = sourceNodeForAction;
+      const sourceRoute = sourceRouteForAction;
+      const sourceNode = nodes.find((n) => n.id === sourceId);
+      if (!sourceNode) return;
 
-      setNodes((currentNodes) => {
-        setEdges((currentEdges) => {
-          const sourceNode = currentNodes.find((n) => n.id === sourceNodeForAction);
-          if (!sourceNode) return currentEdges;
+      const newNodeId = `node_${Date.now()}`;
+      const option = actionOptions.find((a) => a.id === actionId);
+      const newNode: Node<FlowNodeData> = {
+        id: newNodeId,
+        type: 'action',
+        position: { x: sourceNode.position.x, y: sourceNode.position.y + 150 },
+        data: {
+          // The palette card name is the node title and the sidebar title.
+          label: actionLabel(actionId),
+          nodeType: 'action',
+          icon: option?.icon || 'Play',
+          configured: false,
+          actionConfig: config
+        }
+      };
 
-          const newNodeId = `node_${Date.now()}`;
-          const iconMap: Record<string, string> = {
-            'agent-run': 'Bot',
-            'tool-call': 'Wrench',
-            transform: 'Repeat',
-            router: 'GitBranch',
-            loop: 'RotateCw',
-            'human.approval': 'UserCheck',
-            'state-get': 'Database',
-            'state-set': 'Save',
-            'state-delete': 'Trash2',
-            'doc-create': 'FilePlus',
-            code: 'Code',
-            email: 'Mail',
-            webhook: 'Webhook',
-            file: 'FileText',
-            date: 'Calendar'
-          };
+      // Edges that left the source on the same route move onto the new node (insertion mid-chain).
+      const moving = edges.filter((e) => e.source === sourceId && edgeRoute(e) === sourceRoute);
+      const rest = edges.filter((e) => !moving.includes(e));
+      const firstHandle = branchHandlesFor((config as { type?: string }).type)[0];
+      const movedRoute: FlowEdgeRoute =
+        (config as { type?: string }).type === 'router' ? 'option'
+          : (config as { type?: string }).type === 'foreach' ? 'next'
+            : firstHandle?.route ?? 'next';
 
-          const labelMap: Record<string, string> = {
-            'agent-run': 'Run agent',
-            'tool-call': 'Call tool',
-            transform: 'Transform data',
-            router: 'Router',
-            loop: 'Loop',
-            'human.approval': 'Human in loop',
-            'state-get': 'Get state',
-            'state-set': 'Set state',
-            'state-delete': 'Delete state',
-            'doc-create': 'Create document',
-            code: 'Execute code',
-            email: 'Send email',
-            file: 'File operations',
-            // Previously missing, so these nodes fell through to the generic
-            // 'Action' fallback below and the canvas showed no indication of
-            // what the step actually did — a Condition node simply read
-            // "Action". 'webhook' and 'date' are gone: those cards were
-            // removed (HTTP Request supersedes webhook; no date tool exists).
-            condition: 'Condition',
-            'http-request': 'HTTP Request',
-            slack: 'Slack',
-            sheets: 'Google Sheets'
-          };
+      const newEdges = [
+        ...rest,
+        makeFlowEdge(sourceId, newNodeId, sourceRoute, { label: newNode.data.label, index: rest.filter((e) => e.source === sourceId && edgeRoute(e) === sourceRoute).length }),
+        ...moving.map((e, i) => makeFlowEdge(newNodeId, e.target, movedRoute, { label: nodes.find((n) => n.id === e.target)?.data.label, index: i })),
+      ];
+      const updatedNodes = [...nodes, newNode];
 
-          const newNode: Node<FlowNodeData> = {
-            id: newNodeId,
-            type: 'action',
-            position: {
-              x: sourceNode.position.x,
-              y: sourceNode.position.y + 150
-            },
-            data: {
-              label: labelMap[actionType] || 'Action',
-              nodeType: 'action',
-              icon: iconMap[actionType] || 'Play',
-              configured: true,
-              actionConfig: config
-            }
-          };
+      setNodes(updatedNodes);
+      setEdges(newEdges);
+      if (!isSyncingFromProps.current) updateNodesAndEdges(updatedNodes, newEdges);
 
-          const targetEdges = currentEdges.filter((e) => e.source === sourceNodeForAction);
-          const newEdges = currentEdges.filter((e) => e.source !== sourceNodeForAction);
-
-          newEdges.push({
-            id: `edge-${Date.now()}`,
-            source: sourceNodeForAction,
-            target: newNodeId,
-            type: 'default'
-          });
-
-          targetEdges.forEach((edge) => {
-            newEdges.push({
-              ...edge,
-              id: `edge-${Date.now()}-${Math.random()}`,
-              source: newNodeId
-            });
-          });
-
-          const updatedNodes = [...currentNodes, newNode];
-
-          // Direct update to context (not debounced) for explicit user actions
-          if (!isSyncingFromProps.current) {
-            updateNodesAndEdges(updatedNodes, newEdges);
-          }
-
-          setIsModalOpen(false);
-          setSourceNodeForAction(null);
-          setModalActionCategory(null);
-
-          return newEdges;
-        });
-        return currentNodes;
-      });
+      setIsModalOpen(false);
+      setSourceNodeForAction(null);
+      setModalActionCategory(null);
+      setSourceRouteForAction('next');
     },
-    [sourceNodeForAction, updateNodesAndEdges]
+    [sourceNodeForAction, sourceRouteForAction, nodes, edges, updateNodesAndEdges]
   );
 
   const nodeTypesWithAddButton = useMemo(
@@ -443,13 +400,36 @@ export function FlowCanvas({
 
   const edgeTypesWithInsert = useMemo(() => ({ insertable: InsertableEdge }), []);
 
-  // Every node with no outgoing edge — the open ends of the graph, and the
-  // only places a new step can be appended without rewiring by hand.
-  const leafNodes = useMemo(() => {
-    if (nodes.length === 0) return [];
-    const sourceIds = new Set(edges.map((e) => e.source));
-    return nodes.filter((n) => n.data.nodeType !== 'end' && !sourceIds.has(n.id));
+  // Open ends of the graph: every (node, route) that still needs a successor. A plain step has one open
+  // end (its 'next'); branching steps have one per missing branch.
+  const openEnds = useMemo(() => {
+    const ends: Array<{ nodeId: string; route: FlowEdgeRoute; handleId?: string; label?: string; position: { x: number; y: number }; offset: number }> = [];
+    for (const n of nodes) {
+      if (n.data.nodeType === 'end') continue;
+      const out = edges.filter((e) => e.source === n.id);
+      const cfg = n.data.actionConfig as ({ type?: string } & Record<string, unknown>) | undefined;
+      if (cfg?.type === 'router') {
+        if (!out.some((e) => edgeRoute(e) === 'option')) ends.push({ nodeId: n.id, route: 'option', handleId: 'option', label: 'Path', position: n.position, offset: 0 });
+        continue;
+      }
+      const handles = branchHandlesFor(cfg?.type, cfg);
+      if (handles.length === 0) {
+        if (!out.some((e) => edgeRoute(e) === 'next')) ends.push({ nodeId: n.id, route: 'next', position: n.position, offset: 0 });
+        continue;
+      }
+      handles.forEach((h, i) => {
+        if (!out.some((e) => edgeRoute(e) === h.route)) {
+          ends.push({ nodeId: n.id, route: h.route, handleId: h.handleId, label: h.label, position: n.position, offset: (i - (handles.length - 1) / 2) * 240 });
+        }
+      });
+    }
+    return ends;
   }, [nodes, edges]);
+
+  const leafNodes = useMemo(() => {
+    const ids = new Set(openEnds.map((o) => o.nodeId));
+    return nodes.filter((n) => ids.has(n.id));
+  }, [nodes, openEnds]);
 
   // Where a rail click inserts: after the selected node when there is one
   // (handleSelectAction rewires the downstream edge), otherwise at the last
@@ -473,7 +453,7 @@ export function FlowCanvas({
         return 'tool';
       case 'condition':
       case 'router':
-      case 'loop':
+      case 'foreach':
         return 'condition';
       default:
         return null;
@@ -498,39 +478,41 @@ export function FlowCanvas({
       }
       if (!insertionSourceId) return;
       setSourceNodeForAction(insertionSourceId);
+      setSourceRouteForAction(openEnds.find((o) => o.nodeId === insertionSourceId)?.route ?? 'next');
       setModalActionCategory(NODE_RAIL_ACTION_CATEGORY[category]);
       setModalMode('action');
       setIsModalOpen(true);
     },
-    [nodes, insertionSourceId]
+    [nodes, insertionSourceId, openEnds]
   );
 
   // Persistent "Add step" ghost card trailing the end of each open branch
   // (i.e. every node with no outgoing edge). Purely a render-time affordance —
   // it is never written back to the flow's nodes/edges via updateNodesAndEdges.
   const ghostNodes = useMemo<Node<AddStepGhostNodeData>[]>(() => {
-    return leafNodes.map((leaf) => ({
-      id: `ghost-${leaf.id}`,
+    return openEnds.map((end) => ({
+      id: `ghost-${end.nodeId}-${end.route}`,
       type: 'addStep',
-      position: { x: leaf.position.x, y: leaf.position.y + 150 },
+      position: { x: end.position.x + end.offset, y: end.position.y + 150 },
       draggable: false,
       selectable: false,
       connectable: false,
-      data: { sourceNodeId: leaf.id, onAddNode: handleAddNode }
+      data: { sourceNodeId: end.nodeId, route: end.route, branchLabel: end.label, onAddNode: handleAddNode }
     }));
-  }, [leafNodes, handleAddNode]);
+  }, [openEnds, handleAddNode]);
 
   const ghostEdges = useMemo<Edge[]>(
     () =>
       ghostNodes.map((ghost) => ({
         id: `edge-${ghost.id}`,
         source: ghost.data.sourceNodeId,
+        sourceHandle: openEnds.find((o) => `ghost-${o.nodeId}-${o.route}` === ghost.id)?.handleId,
         target: ghost.id,
         type: 'default',
         selectable: false,
         focusable: false
       })),
-    [ghostNodes]
+    [ghostNodes, openEnds]
   );
 
   const renderedNodes = useMemo(
@@ -546,7 +528,7 @@ export function FlowCanvas({
       edges.map((edge) => ({
         ...edge,
         type: 'insertable',
-        data: { sourceNodeId: edge.source, onInsertNode: handleAddNode }
+        data: { ...(edge.data ?? {}), sourceNodeId: edge.source, route: edgeRoute(edge), onInsertNode: handleAddNode }
       })),
     [edges, handleAddNode]
   );
@@ -569,7 +551,7 @@ export function FlowCanvas({
   }
 
   return (
-    <div className="flex-1 flex w-full h-full overflow-hidden">
+    <div className="flex-1 flex w-full h-full overflow-hidden" data-testid="flow-canvas">
       <FlowNodeRail
         activeCategory={railActiveCategory}
         disabledCategories={railDisabledCategories}
@@ -610,6 +592,7 @@ export function FlowCanvas({
               <Button
                 variant="default"
                 size="sm"
+                data-testid="flow-add-trigger"
                 onClick={() => {
                   setModalMode('trigger');
                   setCurrentNodeId(null);

@@ -11,6 +11,8 @@ import { getFlowDefinitions, getFlowDefinition } from '../services/flowApi';
 import { mapBackendStatusToFrontend } from '../services/flowSerializer';
 import { runFlow } from '../services/flowApi';
 import { toast } from 'sonner';
+import { reportFlowRun } from '@/lib/flowRunToast';
+import { humanizeFlowError } from '@/lib/flowValidation';
 import { useFlowContext } from '../contexts/FlowContext';
 import { FlowSettingsModal } from '../components/modals/FlowSettingsModal';
 
@@ -120,10 +122,9 @@ function FlowListPage() {
 
   const handleRunFlow = async (flowId: string) => {
     try {
-      const result = await runFlow(flowId);
-      toast.success('Flow run started', { description: `Run ID: ${result.flow_run_id}` });
+      reportFlowRun(await runFlow(flowId));
     } catch (err) {
-      toast.error('Failed to run flow', { description: err instanceof Error ? err.message : 'Unknown error' });
+      toast.error('Could not run the flow', { description: humanizeFlowError(err) });
     }
   };
 
@@ -132,8 +133,8 @@ function FlowListPage() {
       const newFlow = await createFlow('New Flow', 'Uncategorized');
       navigate(`/flows/${newFlow.id}`);
     } catch (err) {
-      toast.error('Failed to create flow', {
-        description: err instanceof Error ? err.message : 'Unknown error',
+      toast.error('Could not create the flow', {
+        description: humanizeFlowError(err),
       });
     }
   };
@@ -195,6 +196,7 @@ function FlowListPage() {
           )
         }
         renderItem={(flow) => (
+          <div data-testid={`flow-list-item-${flow.id}`}>
           <ItemCard
             title={flow.name}
             description={flow.description || 'No description'}
@@ -225,6 +227,7 @@ function FlowListPage() {
             ]}
             onClick={() => handleFlowClick(flow.id)}
           />
+          </div>
         )}
         keyExtractor={(flow) => flow.id}
       />

@@ -2,11 +2,13 @@ import { memo, useState } from 'react';
 import { BaseEdge, EdgeLabelRenderer, EdgeProps, getBezierPath } from 'reactflow';
 import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { FlowEdgeRoute } from '../../types/flow.types';
 
 export interface InsertableEdgeData {
   /** The node id a newly inserted action should be attached after (the edge's source). */
   sourceNodeId: string;
-  onInsertNode?: (sourceNodeId: string) => void;
+  route?: FlowEdgeRoute;
+  onInsertNode?: (sourceNodeId: string, route?: FlowEdgeRoute) => void;
 }
 
 /**
@@ -17,7 +19,7 @@ export interface InsertableEdgeData {
  * (`onAddNode`/`handleSelectAction` re-parents the downstream edge).
  */
 export const InsertableEdge = memo(
-  ({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, markerEnd, data }: EdgeProps<InsertableEdgeData>) => {
+  ({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, markerEnd, data, label }: EdgeProps<InsertableEdgeData>) => {
     const [hovered, setHovered] = useState(false);
     const [edgePath, labelX, labelY] = getBezierPath({
       sourceX,
@@ -42,10 +44,19 @@ export const InsertableEdge = memo(
           onMouseLeave={() => setHovered(false)}
           onClick={(e) => {
             e.stopPropagation();
-            data?.onInsertNode?.(data.sourceNodeId);
+            data?.onInsertNode?.(data.sourceNodeId, data.route);
           }}
         />
         <EdgeLabelRenderer>
+          {typeof label === 'string' && label ? (
+            <div
+              data-testid={`flow-edge-label-${id}`}
+              style={{ position: 'absolute', transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY - 16}px)` }}
+              className="pointer-events-none rounded bg-panel px-1.5 py-0.5 text-[10px] text-muted-foreground border border-line"
+            >
+              {label}
+            </div>
+          ) : null}
           <div
             style={{
               position: 'absolute',
@@ -58,9 +69,10 @@ export const InsertableEdge = memo(
             <button
               type="button"
               aria-label="Insert step"
+              data-testid={`flow-insert-step-${id}`}
               onClick={(e) => {
                 e.stopPropagation();
-                data?.onInsertNode?.(data.sourceNodeId);
+                data?.onInsertNode?.(data.sourceNodeId, data.route);
               }}
               className={cn(
                 'flex items-center justify-center w-5 h-5 rounded-full border border-line bg-panel text-muted-foreground shadow-sm transition-all duration-150',

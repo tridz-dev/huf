@@ -11,60 +11,57 @@ import {
 } from './dropdown-menu';
 
 interface VariablePickerProps {
-    onSelect: (variable: string) => void;
+    /**
+     * Called with a reference path (`input`, `trigger`, or a step id) and a short name that is safe
+     * to use as a `{placeholder}` in a prompt.
+     */
+    onSelect: (reference: string, suggestedName: string) => void;
+    /** Step the field belongs to (excluded from the list: a step cannot read its own result). */
+    currentNodeId?: string | null;
+    testId?: string;
 }
 
-export function VariablePicker({ onSelect }: VariablePickerProps) {
+function toPlaceholder(label: string, fallback: string): string {
+    const cleaned = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    return /^[a-z_]/.test(cleaned) ? cleaned : fallback;
+}
+
+/** Lets the user pick data from the trigger or an earlier step instead of typing a reference path. */
+export function VariablePicker({ onSelect, currentNodeId, testId = 'flow-variable-picker' }: VariablePickerProps) {
     const { activeFlow } = useFlowContext();
 
-    const variables = useMemo(() => {
-        const vars = ['trigger_payload'];
-        if (!activeFlow) return vars;
-
-        activeFlow.nodes.forEach(node => {
-            if (node.data.actionConfig) {
-                const ac = node.data.actionConfig as {
-                    save_response_to_context?: string;
-                    save_result_to_context?: string;
-                    output?: { save_result_to_context?: string };
-                    store_decision_in_context?: string;
-                };
-                if (ac.save_response_to_context) vars.push(ac.save_response_to_context);
-                if (ac.save_result_to_context) vars.push(ac.save_result_to_context);
-                if (ac.output?.save_result_to_context) vars.push(ac.output.save_result_to_context);
-                if (ac.store_decision_in_context) vars.push(ac.store_decision_in_context);
-            }
-        });
-
-        return [...new Set(vars)].filter(Boolean);
-    }, [activeFlow]);
+    const entries = useMemo(() => {
+        const list: Array<{ ref: string; label: string; name: string }> = [
+            { ref: 'input', label: 'Trigger input', name: 'input' },
+            { ref: 'trigger', label: 'Trigger details', name: 'trigger' },
+        ];
+        for (const node of activeFlow?.nodes ?? []) {
+            if (node.id === currentNodeId || node.data.nodeType !== 'action') continue;
+            list.push({ ref: node.id, label: `Result of "${node.data.label}"`, name: toPlaceholder(node.data.label, node.id) });
+        }
+        return list;
+    }, [activeFlow, currentNodeId]);
 
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 font-mono" title="Insert variable">
-                    {'{x}'} Variables
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" title="Insert data from an earlier step" data-testid={testId}>
+                    Insert data
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[200px] max-h-[300px] overflow-y-auto">
-                <DropdownMenuLabel className="text-xs">Available Variables</DropdownMenuLabel>
+            <DropdownMenuContent align="end" className="w-[220px] max-h-[300px] overflow-y-auto">
+                <DropdownMenuLabel className="text-xs">Data you can use</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {variables.map(v => (
+                {entries.map((e) => (
                     <DropdownMenuItem
-                        key={v}
-                        className="text-xs font-mono cursor-pointer"
-                        onSelect={() => onSelect(`{{${v}}}`)}
+                        key={e.ref}
+                        className="text-xs cursor-pointer"
+                        data-testid={`${testId}-item-${e.ref}`}
+                        onSelect={() => onSelect(e.ref, e.name)}
                     >
-                        {v}
+                        {e.label}
                     </DropdownMenuItem>
                 ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                    className="text-xs text-muted-foreground italic cursor-pointer"
-                    onSelect={() => onSelect(`{{context.}}`)}
-                >
-                    Custom...
-                </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
     );

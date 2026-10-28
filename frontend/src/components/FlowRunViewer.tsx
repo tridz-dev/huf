@@ -81,7 +81,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
 
     return (
         <Sheet open={!!runId} onOpenChange={(open) => !open && onClose()}>
-            <SheetContent className="w-[500px] sm:w-[700px] sm:max-w-[90vw] overflow-y-auto">
+            <SheetContent className="w-[500px] sm:w-[700px] sm:max-w-[90vw] overflow-y-auto" data-testid="flow-run-details">
                 <SheetHeader className="mb-6">
                     <SheetTitle className="flex items-center gap-2">
                         <Box className="w-5 h-5 text-muted-foreground" />
@@ -115,7 +115,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                             </div>
                             <div className="flex-1">
                                 <div className="text-xs text-muted-foreground mb-1">Current/Last Node</div>
-                                <div className="font-medium text-sm">{run.current_node_id || 'N/A'}</div>
+                                <div className="font-medium text-sm" data-testid="flow-run-current-node">{run.current_node_id || 'N/A'}</div>
                             </div>
                             <div className="flex-1">
                                 <div className="text-xs text-muted-foreground mb-1">Hops</div>
@@ -162,10 +162,10 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                 </div>
                                             )}
                                             <div className="flex items-center gap-3 pt-2">
-                                                <Button size="sm" onClick={() => handleApproval('approved')} className="bg-good hover:bg-good/90 text-panel gap-2">
+                                                <Button size="sm" data-testid="flow-run-approve" onClick={() => handleApproval('approved')} className="bg-good hover:bg-good/90 text-panel gap-2">
                                                     <Check className="w-4 h-4" /> Approve
                                                 </Button>
-                                                <Button size="sm" variant="outline" onClick={() => handleApproval('rejected')} className="text-destructive border-destructive hover:bg-destructive/10 gap-2">
+                                                <Button size="sm" variant="outline" data-testid="flow-run-reject" onClick={() => handleApproval('rejected')} className="text-destructive border-destructive hover:bg-destructive/10 gap-2">
                                                     <X className="w-4 h-4" /> Reject
                                                 </Button>
                                             </div>
