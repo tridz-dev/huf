@@ -12,6 +12,7 @@ Covers:
 - webhook endpoint signature/token validation
 """
 
+import inspect
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -300,11 +301,11 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
 
         defn_doc = SimpleNamespace(
             status="Active",
-            definition_json='{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook","config":{"secret":"correct-key-0123"}}]}',
+            definition_json='{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook","config":{"method":"POST","secret":"correct-key-0123456789abcdefghijklmn"}}]}',
         )
 
         mock_request = frappe._dict(
-            args={"secret": "correct-key-0123"},
+            args={"secret": "correct-key-0123456789abcdefghijklmn"},
             headers={"X-Huf-Secret": "wrong-key"},
             get_data=lambda **kw: b"{}",
         )
@@ -315,9 +316,11 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
         self.addCleanup(_request_patch.stop)
         try:
             with patch("frappe.db.exists", return_value=True):
-                with patch("frappe.get_doc", return_value=defn_doc):
+                with patch(
+                    "frappe.db.get_value", return_value=("Active", "owner", defn_doc.definition_json)
+                ):
                     with self.assertRaises(frappe.AuthenticationError):
-                        flow_webhook("flow-1")
+                        inspect.unwrap(flow_webhook)("flow-1")
         finally:
             pass
 
@@ -376,7 +379,7 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
         self.addCleanup(_request_patch.stop)
         with patch("frappe.get_all") as get_all:
             with self.assertRaises(frappe.AuthenticationError):
-                flow_webhook_clean()
+                inspect.unwrap(flow_webhook_clean)()
             # no flow is looked up by its secret
             get_all.assert_not_called()
 
@@ -396,4 +399,4 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
         with patch("frappe.db.exists", return_value=True):
             with patch("frappe.db.get_value", return_value=("Active", "owner", defn_doc.definition_json)):
                 with self.assertRaises(frappe.AuthenticationError):
-                    flow_webhook("flow-1")
+                    inspect.unwrap(flow_webhook)("flow-1")
