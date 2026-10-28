@@ -207,7 +207,7 @@ export function FlowsHeaderActions() {
       const missing = unconnectedSteps(activeFlow.nodes, await getFlowIntegrationStatus());
       if (missing.length > 0) {
         toast.warning('Some steps are not connected yet', {
-          description: `${missing.map((m) => `${m.stepLabel} (${m.service})`).join(', ')} will fail until you connect them.`,
+          description: `${missing.map((m) => (m.stepLabel === m.service ? m.stepLabel : `${m.stepLabel} (${m.service})`)).join(', ')} will fail until you connect them.`,
           id: 'flow-unconnected-warning',
         });
       }
