@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { CheckCircle2, Trash2 } from 'lucide-react';
 import { FlowNodeData } from '../../types/flow.types';
@@ -11,6 +12,7 @@ import { unreachableNodeIds } from '../../lib/flowEdit';
 
 export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) => {
   const { deleteNode, activeFlow } = useFlowContext();
+  const { canManage } = useFlowPermissions();
   const orphaned = activeFlow ? unreachableNodeIds(activeFlow.nodes, activeFlow.edges).has(id) : false;
   return (
     <div className="relative" data-testid={`flow-node-${id}`} data-node-type="end">
@@ -27,7 +29,7 @@ export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) =>
           selected && 'ring-2 ring-signal border-signal'
         )}
       >
-        {selected && (
+        {canManage && selected && (
           <Button
             variant="ghost"
             size="icon"

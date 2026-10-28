@@ -2,6 +2,7 @@ import { memo, useState } from 'react';
 import { BaseEdge, EdgeLabelRenderer, EdgeProps, getBezierPath } from 'reactflow';
 import { Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import type { FlowEdgeRoute } from '../../types/flow.types';
 
 export interface InsertableEdgeData {
@@ -30,6 +31,7 @@ const SHOWS_EDGE_LABEL = new Set<FlowEdgeRoute>(['option', 'error']);
 export const InsertableEdge = memo(
   ({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, markerEnd, data, label, selected }: EdgeProps<InsertableEdgeData>) => {
     const [hovered, setHovered] = useState(false);
+    const { canManage } = useFlowPermissions();
     const [edgePath, labelX, labelY] = getBezierPath({
       sourceX,
       sourceY,
@@ -70,6 +72,7 @@ export const InsertableEdge = memo(
               {label}
             </div>
           ) : null}
+          {canManage && (
           <div
             style={{
               position: 'absolute',
@@ -96,7 +99,8 @@ export const InsertableEdge = memo(
               <Plus className="w-3 h-3" />
             </button>
           </div>
-          {selected && (
+          )}
+          {canManage && selected && (
             <div
               style={{
                 position: 'absolute',

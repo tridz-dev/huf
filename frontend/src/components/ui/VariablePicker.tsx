@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useFlowContext } from '../../contexts/FlowContext';
 import { availableReferences, type RefScope } from '../../lib/flowRefs';
+import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import { Button } from './button';
 import {
     DropdownMenu,
@@ -29,11 +30,15 @@ interface VariablePickerProps {
 /** Lets the user pick data from the trigger or an earlier step instead of typing a reference path. */
 export function VariablePicker({ onSelect, currentNodeId, scope = 'ancestors', testId = 'flow-variable-picker', label }: VariablePickerProps) {
     const { activeFlow } = useFlowContext();
+    const { canManage } = useFlowPermissions();
 
     const entries = useMemo(
         () => availableReferences(currentNodeId, activeFlow?.nodes ?? [], activeFlow?.edges ?? [], scope),
         [activeFlow, currentNodeId, scope]
     );
+
+    // View-only users cannot change a value, so there is nothing to insert into.
+    if (!canManage) return null;
 
     return (
         <DropdownMenu>

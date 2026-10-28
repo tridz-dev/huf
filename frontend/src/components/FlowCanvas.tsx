@@ -307,6 +307,7 @@ export function FlowCanvas({
       // the flow "unsaved" even though nothing real changed. Drop them here.
       const realChanges = changes.filter((change) => {
         const changeId = 'id' in change ? change.id : undefined;
+        if (!canManage && change.type !== 'select' && change.type !== 'dimensions') return false; // view-only: nothing moves or goes away
         return !changeId || !changeId.startsWith('ghost-');
       });
       if (realChanges.length === 0) return;
@@ -335,7 +336,7 @@ export function FlowCanvas({
         return updatedNodes;
       });
     },
-    [scheduleContextUpdate, selectedNodeId, setSelectedNode]
+    [canManage, scheduleContextUpdate, selectedNodeId, setSelectedNode]
   );
 
   const onEdgesChange = useCallback(
@@ -345,6 +346,7 @@ export function FlowCanvas({
       // Filter their change events out before they can dirty the flow.
       const realChanges = changes.filter((change) => {
         const changeId = 'id' in change ? change.id : undefined;
+        if (!canManage && change.type !== 'select') return false;
         return !changeId || !changeId.startsWith('edge-ghost-');
       });
       if (realChanges.length === 0) return;
@@ -360,12 +362,12 @@ export function FlowCanvas({
         return updatedEdges;
       });
     },
-    [scheduleContextUpdate]
+    [canManage, scheduleContextUpdate]
   );
 
   const onConnect = useCallback(
     (connection: Connection) => {
-      if (!connection.source || !connection.target) return;
+      if (!canManage || !connection.source || !connection.target) return;
       const source = connection.source;
       const target = connection.target;
       const handle = connection.sourceHandle as FlowEdgeRoute | null;
@@ -397,19 +399,19 @@ export function FlowCanvas({
       setEdges(newEdges);
       if (!isSyncingFromProps.current) scheduleContextUpdate(updatedNodes, newEdges);
     },
-    [scheduleContextUpdate, nodes, edges]
+    [canManage, scheduleContextUpdate, nodes, edges]
   );
 
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node<FlowNodeData>) => {
       setSelectedNode(node.id);
-      if (node.data.nodeType === 'trigger' && !node.data.triggerConfig?.type) {
+      if (canManage && node.data.nodeType === 'trigger' && !node.data.triggerConfig?.type) {
         setCurrentNodeId(node.id);
         setModalMode('trigger');
         setIsModalOpen(true);
       }
     },
-    [setSelectedNode]
+    [canManage, setSelectedNode]
   );
 
   const onEdgeClick = useCallback(
@@ -421,6 +423,7 @@ export function FlowCanvas({
 
   const onCanvasKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      if (!canManage) return;
       if (e.key !== 'Delete' && e.key !== 'Backspace') return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
@@ -445,7 +448,7 @@ export function FlowCanvas({
       }
       setKeyboardDeleteId(node.id);
     },
-    [nodes, edges, selectedNodeId, selectedEdgeId, deleteNode]
+    [canManage, nodes, edges, selectedNodeId, selectedEdgeId, deleteNode]
   );
 
   useEffect(() => {
@@ -692,6 +695,7 @@ export function FlowCanvas({
   // (i.e. every node with no outgoing edge). Purely a render-time affordance —
   // it is never written back to the flow's nodes/edges via updateNodesAndEdges.
   const ghostNodes = useMemo<Node<AddStepGhostNodeData>[]>(() => {
+    if (!canManage) return []; // view-only: no "Add step" cards
     // A leaf whose step below is not connected to it would draw its "Add step" card on top of that step:
     // slide the card sideways until the spot is free.
     const taken: Array<{ x: number; y: number }> = nodes.map((n) => n.position);
@@ -713,7 +717,7 @@ export function FlowCanvas({
         data: { sourceNodeId: end.nodeId, route: end.route, branchLabel: end.label, onAddNode: handleAddNode }
       };
     });
-  }, [openEnds, nodes, handleAddNode]);
+  }, [canManage, openEnds, nodes, handleAddNode]);
 
   const ghostEdges = useMemo<Edge[]>(
     () =>
@@ -766,11 +770,13 @@ export function FlowCanvas({
 
   return (
     <div className="flex-1 flex w-full h-full overflow-hidden" data-testid="flow-canvas">
+      {canManage && (
       <FlowNodeRail
         activeCategory={railActiveCategory}
         disabledCategories={railDisabledCategories}
         onSelect={handleRailSelect}
       />
+      )}
       <div className="relative flex-1 h-full min-w-0">
       <ReactFlow
         nodes={renderedNodes}
@@ -784,6 +790,9 @@ export function FlowCanvas({
         nodeTypes={nodeTypesWithAddButton}
         edgeTypes={edgeTypesWithInsert}
         deleteKeyCode={null}
+        nodesDraggable={canManage}
+        nodesConnectable={canManage}
+        elementsSelectable
         fitView
         fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
@@ -797,7 +806,7 @@ export function FlowCanvas({
         <FitViewAfterRemovalOrLayout flowId={activeFlow?.id} nodeCount={activeFlow?.nodes.length ?? 0} edgeCount={activeFlow?.edges.length ?? 0} layoutRevision={layoutRevision} />
         <Panel position="top-right" className="m-2">
           <div className="flex gap-2">
-            {!nodes.some(n => n.data.nodeType === 'trigger') && (
+            {canManage && !nodes.some(n => n.data.nodeType === 'trigger') && (
               <Button
                 variant="default"
                 size="sm"
@@ -833,7 +842,7 @@ export function FlowCanvas({
                 </Button>
               </Link>
             )}
-            {activeFlow && !convertedProcedure && (
+            {activeFlow && canManage && !convertedProcedure && (
               <Button
                 variant="outline"
                 size="sm"

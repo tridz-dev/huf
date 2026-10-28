@@ -11,6 +11,7 @@ import { ActionConfigForm, TriggerConfigForm } from './flow/NodeConfigForms';
 import { FlowValueInput } from './FlowValueInput';
 import { edgeRoute } from '../services/flowSerializer';
 import { validateNode } from '@/lib/flowValidation';
+import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import { triggerLabel } from '@/lib/flowLabels';
 import type { FlowNodeData, TriggerConfig } from '../types/flow.types';
 
@@ -38,6 +39,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
   const { activeFlow, selectedNodeId, selectedEdgeId, updateNode, updateNodeData, updateEdges } = useFlowContext();
   const selectedNode = activeFlow?.nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = activeFlow?.edges.find((e) => e.id === selectedEdgeId);
+  const { canManage } = useFlowPermissions();
   const [isChangingTrigger, setIsChangingTrigger] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -51,6 +53,12 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
       className={cn('relative bg-card flex flex-col w-[300px]', 'h-full', !isSheet && 'border-l border-border')}
     >
       <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5">
+        {!canManage && (selectedNode || selectedEdge) && (
+          <div role="status" className="rounded-md border border-border bg-muted p-2 text-xs text-muted-foreground" data-testid="flow-view-only-banner">
+            You have view-only access to this flow
+          </div>
+        )}
+        <fieldset disabled={!canManage} className="contents">
         {!selectedNode && !selectedEdge ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Settings className="w-12 h-12 text-muted-foreground mb-4" />
@@ -88,9 +96,11 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 {nodeKindLabel}
               </span>
               <div className="flex-1" />
-              <Button variant="ghost" size="icon-sm" aria-label="Delete step" data-testid="flow-sidebar-delete" className="text-muted-foreground hover:text-destructive" onClick={() => setShowDeleteConfirm(true)}>
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
+              {canManage && (
+                <Button variant="ghost" size="icon-sm" aria-label="Delete step" data-testid="flow-sidebar-delete" className="text-muted-foreground hover:text-destructive" onClick={() => setShowDeleteConfirm(true)}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              )}
               <Button variant="ghost" size="icon-sm" aria-label="Close settings" data-testid="flow-sidebar-close" className="hover:bg-accent" onClick={onToggle}>
                 <X className="w-3.5 h-3.5 text-muted-foreground" />
               </Button>
@@ -121,10 +131,12 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <Label>Trigger type</Label>
-                    <Button variant="ghost" size="sm" data-testid="flow-trigger-change" onClick={() => setIsChangingTrigger(true)}>
-                      <Edit className="w-3 h-3 mr-1" />
-                      Change
-                    </Button>
+                    {canManage && (
+                      <Button variant="ghost" size="sm" data-testid="flow-trigger-change" onClick={() => setIsChangingTrigger(true)}>
+                        <Edit className="w-3 h-3 mr-1" />
+                        Change
+                      </Button>
+                    )}
                   </div>
                   <div className="p-2 rounded-md bg-muted text-sm" data-testid="flow-trigger-type">
                     {selectedNode.data.triggerConfig?.type ? (
@@ -157,6 +169,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
             )}
           </>
         ) : null}
+        </fieldset>
       </div>
 
       <DeleteStepDialog nodeId={showDeleteConfirm ? selectedNodeId : null} onOpenChange={setShowDeleteConfirm} />

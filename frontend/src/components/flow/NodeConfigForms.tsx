@@ -393,7 +393,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
   useEffect(() => {
     if (type !== 'human.approval') return;
     getApproverRoles()
-      .then((l) => setRoles((l || []).map((r) => ({ value: r.name, label: r.name, subtitle: r.group === 'Huf' ? 'Huf role' : undefined }))))
+      .then((l) => setRoles((l || []).map((r) => ({ value: r.name, label: r.name, subtitle: r.name === 'System Manager' ? 'Administrator-level role' : r.group === 'Huf' ? 'Huf role' : undefined }))))
       .catch(() => setRoles([]));
   }, [type]);
 

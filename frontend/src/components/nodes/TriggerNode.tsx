@@ -1,4 +1,5 @@
 import { memo, useState } from 'react';
+import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { AlertCircle, Zap, Webhook, Clock, Database, Mail, CircleDashed, Trash2, Loader2, CheckCircle2, XCircle, type LucideIcon } from 'lucide-react';
 import { FlowNodeData } from '../../types/flow.types';
@@ -32,6 +33,7 @@ type TriggerNodeProps = NodeProps<FlowNodeData>;
 
 export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
   const { deleteNode, activeFlow } = useFlowContext();
+  const { canManage } = useFlowPermissions();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const Icon = data.icon && iconMap[data.icon] ? iconMap[data.icon] : Zap;
   const incomplete = validateNode({ id, data }, activeFlow?.edges ?? []);
@@ -53,7 +55,7 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
   return (
     <div className="relative" data-testid={`flow-node-${id}`} data-node-type={data.triggerConfig?.type ?? 'unset'} data-incomplete={incomplete.length > 0 ? 'true' : 'false'}>
       <Card className={cn(NODE_CARD_BASE, statusClasses)}>
-        {selected && data.status !== 'running' && data.status !== 'waiting' && (
+        {canManage && selected && data.status !== 'running' && data.status !== 'waiting' && (
           <Button
             variant="ghost"
             size="icon"
