@@ -14,6 +14,7 @@ export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) =>
     <div className="relative" data-testid={`flow-node-${id}`} data-node-type="end">
       <Handle
         type="target"
+        data-testid={`flow-handle-in-${id}`}
         position={Position.Top}
         className="!bg-good border-2 border-panel w-3 h-3"
       />

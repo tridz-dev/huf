@@ -93,6 +93,7 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
     <div className="relative" data-testid={`flow-node-${id}`} data-node-type={cfg?.type} data-incomplete={incomplete.length > 0 ? 'true' : 'false'}>
       <Handle
         type="target"
+        data-testid={`flow-handle-in-${id}`}
         position={Position.Top}
         className={NODE_HANDLE}
       />

@@ -323,6 +323,8 @@ export function FlowCanvas({
               ...node.data,
               label: labelMap[config.type || 'webhook'] || 'Trigger',
               icon: iconMap[config.type || 'webhook'],
+              // Drop the "Select a trigger" hint of the placeholder once a trigger is chosen.
+              description: undefined,
               configured: true,
               triggerConfig: config
             }
