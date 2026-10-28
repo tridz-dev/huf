@@ -283,6 +283,44 @@ def run_due_schedule_flows(now: datetime | None = None) -> list[str]:
 	return started
 
 
+def due_approval_run_names(rows, now) -> list[str]:
+	"""Names of Waiting Approval rows (``{"name", "waiting"}``) whose ``waiting.timeout_at`` has passed."""
+	from huf.ai.flow.engine import approval_expired
+
+	due = []
+	for row in rows:
+		try:
+			waiting = json.loads(row.get("waiting") or "{}")
+		except (TypeError, ValueError):
+			continue
+		if isinstance(waiting, dict) and approval_expired(waiting, now):
+			due.append(row["name"])
+	return due
+
+
+def expire_due_approvals(now: datetime | None = None) -> list[str]:
+	"""Scheduler entry (every minute): apply ``timeout_next`` (or fail) for approvals past ``timeout_at``."""
+	from frappe.utils import now_datetime
+
+	from huf.ai.flow.engine import expire_approval
+
+	now = now or now_datetime()
+	rows = frappe.get_all(
+		"Flow Run",
+		filters={"status": "Waiting Approval", "waiting": ["like", "%timeout_at%"]},
+		fields=["name", "waiting"],
+		limit_page_length=500,
+	)
+	expired: list[str] = []
+	for name in due_approval_run_names(rows, now):
+		try:
+			if expire_approval(name, now):
+				expired.append(name)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), f"Flow approval expiry: {name}")
+	return expired
+
+
 # ---------------------------------------------------------------------------
 # Doc event
 # ---------------------------------------------------------------------------

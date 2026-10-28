@@ -69,10 +69,14 @@ def notify_flow_run_approvers(flow_run) -> int:
 	"""Notify the approvers of a Flow Run in "Waiting Approval". Never raises."""
 	try:
 		waiting = _waiting(flow_run)
-		users = [u for u in (waiting.get("approver_users") or []) if isinstance(u, str)]
-		role = waiting.get("approver_role")
-		if role and waiting.get("approval_type", "role") == "role":
-			users += _role_users(role)
+		approver_type = waiting.get("approver_type")
+		users = []
+		if approver_type == "role" and waiting.get("approver_role"):
+			users += _role_users(waiting["approver_role"])
+		elif approver_type == "user" and waiting.get("approver_users"):
+			users += [u for u in waiting["approver_users"] if isinstance(u, str)]
+		else:  # no declared approver: System Manager only (engine.check_approver)
+			users += _role_users("System Manager")
 		title = "Flow approval requested"
 		details = f"Flow run {flow_run.name} is waiting for your approval."
 		return _notify(KIND_FLOW, flow_run.name, users, title, details, DEFAULT_TTL)

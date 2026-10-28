@@ -163,3 +163,17 @@ class TestNodeSchemas(unittest.TestCase):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class TestExpireDueApprovals(unittest.TestCase):
+	NOW = datetime(2026, 10, 28, 12, 0, 0)
+
+	def test_only_past_deadlines_are_due(self):
+		rows = [
+			{"name": "past", "waiting": json.dumps({"timeout_at": "2026-10-28T11:59:00"})},
+			{"name": "future", "waiting": json.dumps({"timeout_at": "2026-10-28T12:30:00"})},
+			{"name": "none", "waiting": json.dumps({"timeout_at": None})},
+			{"name": "bad", "waiting": "{oops"},
+			{"name": "empty", "waiting": None},
+		]
+		self.assertEqual(T.due_approval_run_names(rows, self.NOW), ["past"])

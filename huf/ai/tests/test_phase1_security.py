@@ -300,10 +300,10 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
 
         defn_doc = SimpleNamespace(
             status="Active",
-            definition_json='{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook","config":{"auth":"correct-key"}}]}',
+            definition_json='{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook","config":{"secret":"correct-key-0123"}}]}',
         )
 
-        mock_request = frappe._dict(args={"webhook_key": "wrong-key"}, get_data=lambda **kw: b"{}")
+        mock_request = frappe._dict(args={"secret": "wrong-key"}, get_data=lambda **kw: b"{}")
         # patch.object restores the original frappe.request proxy; assigning None would leave every later
         # test (and the webhook tests) without a request binding.
         _request_patch = patch.object(frappe, "request", mock_request)
@@ -313,7 +313,7 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
             with patch("frappe.db.exists", return_value=True):
                 with patch("frappe.get_doc", return_value=defn_doc):
                     with self.assertRaises(frappe.AuthenticationError):
-                        flow_webhook("flow-1", webhook_key="wrong-key")
+                        flow_webhook("flow-1", secret="wrong-key")
         finally:
             pass
 
@@ -323,7 +323,7 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
 
         definition_json = (
             '{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook",'
-            '"config":{"auth":"correct-key"}}]}'
+            '"config":{"secret":"correct-key-0123"}}]}'
         )
         defn_doc = SimpleNamespace(status="Active", definition_json=definition_json, owner="flow-owner")
         flow_run = SimpleNamespace(name="FLOW-RUN-1", status="Queued")
