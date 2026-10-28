@@ -664,7 +664,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
                 placeholder="Name this path"
                 onChange={(ev) => updateEdges((activeFlow?.edges ?? []).map((x) => (x.id === e.id ? { ...x, label: ev.target.value } : x)))}
               />
-              <span className="text-xs text-muted-foreground truncate max-w-[90px] shrink-0" title={`Goes to ${labelOf(e.target)}`}>
+              <span className="text-xs text-muted-foreground truncate w-[84px] shrink-0" title={`Goes to ${labelOf(e.target)}`}>
                 {'\u2192 '}{labelOf(e.target)}
               </span>
             </div>
