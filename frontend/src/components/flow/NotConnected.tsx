@@ -19,7 +19,7 @@ export function NotConnected({ toolId, compact, testIdSuffix }: { toolId?: strin
       </span>
       <Link
         to={connectPath(service)}
-        className="text-[11px] text-primary underline-offset-2 hover:underline"
+        className="text-[11px] font-medium text-primary underline underline-offset-2"
         data-testid={`flow-connect-link-${testIdSuffix}`}
         aria-label={`Connect ${name}`}
         onClick={(e) => e.stopPropagation()}
