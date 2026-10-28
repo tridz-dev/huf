@@ -578,6 +578,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
               onChange={(e) => patch({ timeout_ms: e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value, 10)) * 1000 })}
               placeholder="No limit"
             />
+            <p className="mt-1 text-xs text-muted-foreground" data-testid={f('timeout_ms-help')}>Applies to connected (MCP) tools; built-in tools finish on their own.</p>
             <Err field="timeout_ms" />
           </div>
         ) : null}

@@ -717,7 +717,8 @@ def expire_approval(flow_run_name: str, now=None, enqueue: bool = False) -> bool
 		# when it ends, so commit now, otherwise the job would see the run still waiting and run the
 		# approval step again.
 		frappe.db.commit()  # nosemgrep
-		frappe.enqueue("huf.ai.flow.engine.run_flow", queue="default", flow_run_name=flow_run_name)
+		# "short" is drained before "default": the timeout path is what the user is watching for.
+		frappe.enqueue("huf.ai.flow.engine.run_flow", queue="short", flow_run_name=flow_run_name)
 	else:
 		run_flow(flow_run_name)
 	return True

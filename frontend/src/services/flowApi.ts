@@ -333,14 +333,12 @@ export async function unpublishFlow(flowId: string): Promise<{ flow_id: string; 
 /** Run a flow (start new execution) */
 export async function runFlow(
     flowId: string,
-    payload?: Record<string, unknown>,
-    mode?: string
+    payload?: Record<string, unknown>
 ): Promise<{ flow_run_id: string; status: string; current_node_id: string }> {
     try {
         const result = await call.post('huf.ai.flow.api.run_flow', {
             flow_id: flowId,
             payload: payload ? JSON.stringify(payload) : undefined,
-            mode,
         });
         return result.message as { flow_run_id: string; status: string; current_node_id: string };
     } catch (error) {

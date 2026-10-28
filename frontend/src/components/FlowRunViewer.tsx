@@ -21,7 +21,7 @@ import {
 import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
 import { calculateDuration, formatTimeAgo } from '@/utils/time';
 import { humanizeFlowError } from '@/lib/flowValidation';
-import { describeDecision } from '@/lib/flowRunFormat';
+import { describeDecision, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from '@/lib/flowRunFormat';
 import { summarizeDocPayload } from '@/lib/flowRunDoc';
 
 interface FlowRunViewerProps {
@@ -51,8 +51,14 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
     const [loading, setLoading] = useState(false);
     const [resumePayload, setResumePayload] = useState<string>('');
     const activeFlow = useOptionalFlowContext()?.activeFlow;
-    const labelOf = (nodeId: string | null | undefined) =>
-        (nodeId && (run?.node_labels?.[nodeId] || activeFlow?.nodes.find((n) => n.id === nodeId)?.data.label)) || nodeId || 'N/A';
+    // A step saved without a title comes back from the server under its id: fall back to the editor's title for it.
+    const titleOf = (nodeId: string): string | null => {
+        const fromRun = run?.node_labels?.[nodeId];
+        if (fromRun && fromRun !== nodeId) return fromRun;
+        const fromFlow = activeFlow?.nodes.find((n) => n.id === nodeId)?.data.label;
+        return typeof fromFlow === 'string' && fromFlow ? fromFlow : fromRun || null;
+    };
+    const labelOf = (nodeId: string | null | undefined) => (nodeId && titleOf(nodeId)) || nodeId || 'N/A';
 
     useEffect(() => {
         async function fetchRun() {
@@ -255,7 +261,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                             // A step whose own result says it did not succeed (tools return success:false) must never show as done.
                             const stepFailed = (id: string, output: unknown) =>
                                 (run.status === 'Failed' && id === run.current_node_id) ||
-                                (!!output && typeof output === 'object' && (output as { success?: unknown }).success === false);
+                                isFailedStepOutput(output);
                             const steps = Object.entries(outputs).map(([id, output]) => ({ id, output, failed: stepFailed(id, output) }));
                             if (run.status === 'Failed' && run.current_node_id && !(run.current_node_id in outputs)) {
                                 steps.push({ id: run.current_node_id, output: undefined, failed: true });
@@ -306,11 +312,18 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                                 {stepReason(st.id, st.output)}
                                                             </div>
                                                         )}
-                                                        {!isEmpty(st.output) && (
-                                                            <pre className="mt-2 bg-muted p-2 rounded text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-                                                                {typeof st.output === 'string' ? st.output : JSON.stringify(st.output, null, 2)}
-                                                            </pre>
-                                                        )}
+                                                        {(() => {
+                                                            // The reason is already shown above for a failed step: do not print it again in the output.
+                                                            const shown = titleNodeIds(
+                                                                st.failed && stepReason(st.id, st.output) ? withoutFailureKeys(st.output) : st.output,
+                                                                titleOf,
+                                                            );
+                                                            return isEmpty(shown) ? null : (
+                                                                <pre data-testid={`flow-run-step-output-${st.id}`} className="mt-2 bg-muted p-2 rounded text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                                                                    {typeof shown === 'string' ? shown : JSON.stringify(shown, null, 2)}
+                                                                </pre>
+                                                            );
+                                                        })()}
                                                     </li>
                                                 ))}
                                             </ol>
@@ -395,7 +408,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                     ) : (
                                         <div className="space-y-3">
                                             <div className="text-xs font-mono overflow-x-auto">
-                                                {JSON.stringify(run.waiting, null, 2)}
+                                                {JSON.stringify(titleNodeIds(run.waiting, titleOf), null, 2)}
                                             </div>
                                             <div className="space-y-2">
                                                 <div className="text-xs text-muted-foreground">

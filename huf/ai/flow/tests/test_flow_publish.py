@@ -82,7 +82,7 @@ class TestFlowPublish(IntegrationTestCase):
 	def test_user_without_write_access_is_refused(self):
 		frappe.db.set_value("Flow Definition", self.name, "status", "Active")
 		user = make_user(f"unpublish-{frappe.generate_hash(length=6)}@example.com", roles=[])
-		frappe.set_user(user)
+		frappe.set_user(user.name)
 		with self.assertRaises(frappe.PermissionError):
 			flow_api.unpublish_flow(self.flow_id)
 		frappe.set_user("Administrator")
