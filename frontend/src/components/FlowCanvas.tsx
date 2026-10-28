@@ -1,3 +1,4 @@
+import type { UIEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ReactFlow, {
@@ -101,6 +102,17 @@ function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layoutRevis
     return () => clearTimeout(timer);
   }, [flowId, nodeCount, edgeCount, layoutRevision, fitView, getNodes, getViewport, store]);
   return null;
+}
+
+/**
+ * The canvas is an overflow:hidden box. When something inside it takes focus while it is off screen (a newly added
+ * step, the control a closed dialog returns focus to), the browser scrolls that hidden box to reveal it, which drags
+ * the controls, minimap and toolbar out of place. The view is moved with the viewport transform only, so undo it.
+ */
+function keepCanvasUnscrolled(event: UIEvent<HTMLDivElement>) {
+  const el = event.currentTarget;
+  if (el.scrollTop !== 0) el.scrollTop = 0;
+  if (el.scrollLeft !== 0) el.scrollLeft = 0;
 }
 
 interface FlowCanvasProps {
@@ -753,6 +765,7 @@ export function FlowCanvas({
         fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
         className="bg-background w-full h-full"
+        onScroll={keepCanvasUnscrolled}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={2} color="color-mix(in srgb, var(--muted-foreground) 35%, transparent)" />
         {/* showInteractive (lock toggle button) defaults to true, so it's already shown */}
