@@ -2,7 +2,7 @@ import { apiCall, isApiError } from '@/lib/api';
 import type { WhatsAppResult } from '@/services/whatsappApi';
 
 // Backend contract owned by WP-B (audience_api.py). Adjust names here only.
-const MODULE = 'huf.ai.whatsapp.broadcast.audience_api';
+const MODULE = 'huf.ai.whatsapp.broadcast.audiences.api';
 const READ_METHODS = new Set(['list_audiences', 'get_audience', 'list_members', 'preview_audience_selection']);
 
 async function audienceCall<T>(method: string, args: Record<string, unknown>): Promise<WhatsAppResult<T>> {

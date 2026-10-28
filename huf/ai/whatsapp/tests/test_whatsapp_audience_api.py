@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 import frappe
 
-from huf.ai.whatsapp.broadcast import audience as aud
-from huf.ai.whatsapp.broadcast import audience_api as api
-from huf.ai.whatsapp.broadcast.audience_parts import importer as imp
+from huf.ai.whatsapp.broadcast.audiences import membership as aud
+from huf.ai.whatsapp.broadcast.audiences import api
+from huf.ai.whatsapp.broadcast.audiences import importer as imp
 
 GW = "GW-AUD-TEST"
 BCAST = "WhatsApp Broadcast"
@@ -201,7 +201,7 @@ class TestImport(AudienceTestCase):
 		self.assertTrue(out["queued"])
 		self.assertEqual(self.members(name), [])  # nothing written in the request
 		kwargs = enqueue.call_args.kwargs
-		self.assertEqual(enqueue.call_args.args[0], "huf.ai.whatsapp.broadcast.audience_parts.importer.run_import_job")
+		self.assertEqual(enqueue.call_args.args[0], "huf.ai.whatsapp.broadcast.audiences.importer.run_import_job")
 		self.assertEqual(imp.get_job_state(out["job_id"])["status"], "queued")
 		events = []
 		with patch.object(imp.frappe.db, "commit"), patch.object(aud, "IMPORT_CHUNK", 10), \

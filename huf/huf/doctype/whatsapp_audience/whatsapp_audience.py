@@ -46,12 +46,12 @@ class WhatsAppAudience(Document):
 	def _check_referenced_rename(self):
 		before = self.get_doc_before_save()
 		if before and before.title != self.title:
-			from huf.ai.whatsapp.broadcast import audience as aud
+			from huf.ai.whatsapp.broadcast.audiences import membership as aud
 
 			aud.assert_not_in_use(self.name, "renamed")
 
 	def on_trash(self):
-		from huf.ai.whatsapp.broadcast import audience as aud
+		from huf.ai.whatsapp.broadcast.audiences import membership as aud
 
 		aud.assert_not_in_use(self.name, "deleted")
 		frappe.flags.in_audience_api = True

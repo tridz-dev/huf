@@ -17,11 +17,11 @@ from frappe import _
 from frappe.rate_limiter import rate_limit
 from frappe.utils import cint, get_datetime, now_datetime
 
-from huf.ai.whatsapp.broadcast import audience as aud
+from huf.ai.whatsapp.broadcast.audiences import membership as aud
 from huf.ai.whatsapp.broadcast import recipients as broadcast_recipients
-from huf.ai.whatsapp.broadcast.audience_parts import csv_map as audience_csv
-from huf.ai.whatsapp.broadcast.audience_parts import importer as audience_import
-from huf.ai.whatsapp.broadcast.audience_parts.common import (
+from huf.ai.whatsapp.broadcast.audiences import csv_map as audience_csv
+from huf.ai.whatsapp.broadcast.audiences import importer as audience_import
+from huf.ai.whatsapp.broadcast.audiences.common import (
 	AUDIENCE_FIELDS,
 	_audit,
 	_flag,
@@ -299,7 +299,7 @@ def import_members(
 		job_id = frappe.generate_hash(length=16)
 		audience_import.set_job_state(job_id, {"job_id": job_id, "audience": audience, "status": "queued", "processed": 0, "total": len(mapped)})
 		frappe.enqueue(
-			"huf.ai.whatsapp.broadcast.audience_parts.importer.run_import_job",
+			"huf.ai.whatsapp.broadcast.audiences.importer.run_import_job",
 			queue="long",
 			timeout=3600,
 			audience=audience,

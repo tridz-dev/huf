@@ -11,7 +11,7 @@ from typing import Any
 import frappe
 from frappe.utils import cint, strip_html_tags
 
-from huf.ai.whatsapp.broadcast import audience as aud
+from huf.ai.whatsapp.broadcast.audiences import membership as aud
 from huf.ai.whatsapp.management import _error, _iso, _parse_json_arg
 
 _LOG = "huf.whatsapp.audience"

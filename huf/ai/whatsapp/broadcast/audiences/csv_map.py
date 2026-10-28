@@ -9,7 +9,7 @@ import csv
 import io
 from typing import Any
 
-from huf.ai.whatsapp.broadcast import audience as aud
+from huf.ai.whatsapp.broadcast.audiences import membership as aud
 from huf.ai.whatsapp.broadcast import recipients as broadcast_recipients
 from huf.ai.whatsapp.management import _error, _parse_json_arg
 

@@ -6,8 +6,8 @@
 import unittest
 from unittest.mock import patch
 
-from huf.ai.whatsapp.broadcast import audience as aud
-from huf.ai.whatsapp.broadcast.audience_parts import importer as imp
+from huf.ai.whatsapp.broadcast.audiences import membership as aud
+from huf.ai.whatsapp.broadcast.audiences import importer as imp
 
 
 def _aud(name, marketing=1, utility=0, source="form", default_at="2026-01-01 00:00:00"):

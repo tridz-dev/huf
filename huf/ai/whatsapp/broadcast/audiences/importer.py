@@ -3,7 +3,7 @@
 
 """WhatsApp audience member import: row validation, bulk insert, background job and its progress.
 
-Limits come from :mod:`huf.ai.whatsapp.broadcast.audience` (``LIMIT_*`` constants, rewired to policy later).
+Limits come from :mod:`huf.ai.whatsapp.broadcast.audiences.membership` (``LIMIT_*`` constants, rewired to policy later).
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from typing import Any
 import frappe
 from frappe.utils import get_datetime, now_datetime
 
-from huf.ai.whatsapp.broadcast import audience as aud
+from huf.ai.whatsapp.broadcast.audiences import membership as aud
 from huf.ai.whatsapp.broadcast import params as broadcast_params
 from huf.ai.whatsapp.broadcast import recipients as broadcast_recipients
 
