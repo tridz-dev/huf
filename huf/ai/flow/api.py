@@ -14,7 +14,90 @@ import json
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import add_to_date, now_datetime
+
+
+# ---------------------------------------------------------------------------
+# Time helpers
+#
+# Frappe stores and returns datetimes as naive strings in the *site* time zone
+# (System Settings -> Time Zone). Browsers cannot know that zone, so everything
+# this module sends to the UI is converted to a time-zone-aware UTC ISO string.
+# ---------------------------------------------------------------------------
+
+# A Queued/Running Flow Run that has not changed for this long is offered
+# "Mark as failed" to System Managers (the worker that owned it is gone).
+STALE_RUN_MINUTES = 15
+STALE_STATUSES = ("Queued", "Running")
+
+
+def _utc_iso(value) -> str | None:
+	"""Naive site-time-zone datetime (or its string) -> ``2026-10-28T01:45:00Z``. None stays None."""
+	if not value:
+		return None
+	from datetime import timezone
+
+	from frappe.utils import get_datetime, get_system_timezone
+
+	try:
+		import zoneinfo
+
+		dt = get_datetime(value)
+		if dt.tzinfo is None:
+			dt = dt.replace(tzinfo=zoneinfo.ZoneInfo(get_system_timezone()))
+		return dt.astimezone(timezone.utc).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+	except Exception:
+		return str(value)
+
+
+def _is_stale(status: str | None, modified) -> bool:
+	"""True for a Queued/Running run whose last change is older than STALE_RUN_MINUTES."""
+	if status not in STALE_STATUSES or not modified:
+		return False
+	from frappe.utils import get_datetime
+
+	return get_datetime(modified) < add_to_date(now_datetime(), minutes=-STALE_RUN_MINUTES)
+
+
+def _can_mark_failed() -> bool:
+	return "System Manager" in frappe.get_roles(frappe.session.user)
+
+
+def _node_labels(flow_id: str | None) -> dict:
+	"""``{node_id: step title}`` from the flow's saved definition (UI titles live in ``_label``)."""
+	if not flow_id or not frappe.db.exists("Flow Definition", flow_id):
+		return {}
+	raw = frappe.db.get_value("Flow Definition", flow_id, "definition_json")
+	try:
+		defn = json.loads(raw) if isinstance(raw, str) else (raw or {})
+	except (json.JSONDecodeError, TypeError):
+		return {}
+	nodes = defn.get("nodes") if isinstance(defn, dict) else None
+	if isinstance(nodes, dict):
+		nodes = [{"id": k, **(v or {})} for k, v in nodes.items()]
+	return {n["id"]: (n.get("_label") or n["id"]) for n in (nodes or []) if isinstance(n, dict) and n.get("id")}
+
+
+def _flow_names(flow_ids) -> dict:
+	flow_ids = list({f for f in flow_ids if f})
+	if not flow_ids:
+		return {}
+	return {
+		r.flow_id: r.flow_name
+		for r in frappe.get_all(
+			"Flow Definition", filters={"flow_id": ["in", flow_ids]}, fields=["flow_id", "flow_name"]
+		)
+	}
+
+
+@frappe.whitelist()
+def get_site_timezone() -> str:
+	"""IANA name of the site time zone (System Settings), for rendering naive Frappe datetimes."""
+	from frappe.utils import get_system_timezone
+
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Login required"), frappe.AuthenticationError)
+	return get_system_timezone()
 
 
 # ---------------------------------------------------------------------------
@@ -172,21 +255,89 @@ def get_flow_run(flow_run_id: str) -> dict:
 	except (json.JSONDecodeError, TypeError):
 		pass
 
+	stale = _is_stale(doc.status, doc.modified)
 	return {
 		"flow_run_id": doc.name,
 		"flow_id": doc.flow_id,
+		"flow_name": _flow_names([doc.flow_id]).get(doc.flow_id) or doc.flow_id,
 		"flow_version": doc.flow_version,
 		"mode": doc.mode,
 		"status": doc.status,
+		"trigger_type": doc.trigger_type,
 		"current_node_id": doc.current_node_id,
 		"hop_count": doc.hop_count,
 		"context_json": ctx,
 		"waiting": waiting,
+		"node_labels": _node_labels(doc.flow_id),
 		"last_error": doc.last_error,
 		"last_agent_run": doc.last_agent_run,
-		"started_at": str(doc.started_at) if doc.started_at else None,
-		"completed_at": str(doc.completed_at) if doc.completed_at else None,
+		"started_at": _utc_iso(doc.started_at),
+		"completed_at": _utc_iso(doc.completed_at),
+		"stale": stale,
+		"can_mark_failed": stale and _can_mark_failed(),
+		"stale_after_minutes": STALE_RUN_MINUTES,
 	}
+
+
+@frappe.whitelist()
+def mark_flow_run_failed(flow_run_id: str) -> dict:
+	"""Fail a Flow Run that is stuck in Queued/Running (System Manager only).
+
+	Only a run that has not changed for ``STALE_RUN_MINUTES`` can be failed this way; a run that is
+	really progressing, or already finished, is left alone with a clear message.
+	"""
+	if not _can_mark_failed():
+		frappe.throw(_("Only a System Manager can mark a run as failed."), frappe.PermissionError)
+	if not frappe.db.exists("Flow Run", flow_run_id):
+		frappe.throw(_("Flow Run '{0}' not found").format(flow_run_id), frappe.DoesNotExistError)
+
+	doc = frappe.get_doc("Flow Run", flow_run_id)
+	if doc.status not in STALE_STATUSES:
+		frappe.throw(
+			_("This run is {0}, so it cannot be marked as failed. Only runs stuck in Queued or Running can.").format(
+				doc.status
+			)
+		)
+	if not _is_stale(doc.status, doc.modified):
+		frappe.throw(
+			_("This run changed less than {0} minutes ago and may still be working. Try again later.").format(
+				STALE_RUN_MINUTES
+			)
+		)
+
+	from huf.ai.flow import engine
+
+	engine._fail_flow_run(doc, _("Marked as failed by {0}: the run was stuck in {1}.").format(frappe.session.user, doc.status))
+	doc.reload()
+	return {"flow_run_id": doc.name, "status": doc.status}
+
+
+_FLOW_RUN_LIST_FIELDS = [
+	"name",
+	"flow_id",
+	"flow_version",
+	"mode",
+	"status",
+	"current_node_id",
+	"hop_count",
+	"trigger_type",
+	"started_at",
+	"completed_at",
+	"modified",
+]
+
+
+def _shape_run_rows(rows: list) -> list:
+	names = _flow_names(r.flow_id for r in rows)
+	can_fail = _can_mark_failed()
+	for r in rows:
+		r["flow_name"] = names.get(r.flow_id) or r.flow_id
+		r["stale"] = _is_stale(r.status, r.modified)
+		r["can_mark_failed"] = r["stale"] and can_fail
+		r["started_at"] = _utc_iso(r.started_at)
+		r["completed_at"] = _utc_iso(r.completed_at)
+		r["modified"] = _utc_iso(r.modified)
+	return rows
 
 
 @frappe.whitelist()
@@ -200,7 +351,7 @@ def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit:
 	    limit: Max results (default 20)
 
 	Returns:
-	    list of flow run summaries
+	    list of flow run summaries (times are UTC ISO strings)
 	"""
 	if not frappe.has_permission("Flow Run", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
@@ -214,23 +365,101 @@ def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit:
 	runs = frappe.get_all(
 		"Flow Run",
 		filters=filters,
-		fields=[
-			"name",
-			"flow_id",
-			"flow_version",
-			"mode",
-			"status",
-			"current_node_id",
-			"hop_count",
-			"trigger_type",
-			"started_at",
-			"completed_at",
-		],
+		fields=_FLOW_RUN_LIST_FIELDS,
 		order_by="modified desc",
 		limit_page_length=limit,
 	)
 
-	return runs
+	return _shape_run_rows(runs)
+
+
+@frappe.whitelist()
+def list_flow_runs_page(
+	status: str | None = None,
+	flow_id: str | None = None,
+	search: str | None = None,
+	from_date: str | None = None,
+	start: int = 0,
+	limit: int = 20,
+) -> dict:
+	"""Paged Flow Run list across all flows for the Executions page.
+
+	``from_date`` is a UTC ISO string (what a browser sends); it is converted to the site time zone
+	before comparing with the stored naive ``started_at``. ``search`` matches flow name or run id.
+	Returns ``{"items": [...], "total": n}``.
+	"""
+	if not frappe.has_permission("Flow Run", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	start, limit = max(int(start or 0), 0), min(max(int(limit or 20), 1), 200)
+	filters: list = []
+	if status and status != "all":
+		filters.append(["status", "=", status])
+	if flow_id:
+		filters.append(["flow_id", "=", flow_id])
+	if from_date:
+		from frappe.utils import convert_utc_to_system_timezone, get_datetime
+
+		dt = get_datetime(from_date)
+		if dt.tzinfo is not None:
+			dt = convert_utc_to_system_timezone(dt).replace(tzinfo=None)
+		filters.append(["started_at", ">=", dt])
+
+	or_filters = None
+	if search and search.strip():
+		term = f"%{search.strip()}%"
+		matching = [
+			r.flow_id
+			for r in frappe.get_all(
+				"Flow Definition", filters={"flow_name": ["like", term]}, fields=["flow_id"], limit_page_length=500
+			)
+		]
+		or_filters = [["name", "like", term]]
+		if matching:
+			or_filters.append(["flow_id", "in", matching])
+
+	total = len(frappe.get_all("Flow Run", filters=filters, or_filters=or_filters, pluck="name"))
+	rows = frappe.get_all(
+		"Flow Run",
+		filters=filters,
+		or_filters=or_filters,
+		fields=_FLOW_RUN_LIST_FIELDS,
+		order_by="started_at desc, creation desc",
+		limit_start=start,
+		limit_page_length=limit,
+	)
+	return {"items": _shape_run_rows(rows), "total": total}
+
+
+@frappe.whitelist()
+def get_flow_step_labels(items: str | list) -> list:
+	"""Readable "Flow: <name> > <step title>" labels for Agent Runs made by flow steps.
+
+	``items`` is a list of ``{"flow_run": ..., "flow_node_id": ...}``; the result is aligned with it
+	(``None`` where the run or flow is unknown).
+	"""
+	if not frappe.has_permission("Flow Run", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if isinstance(items, str):
+		items = json.loads(items or "[]")
+
+	run_flow_ids = {}
+	for run_name in {i.get("flow_run") for i in items if i.get("flow_run")}:
+		run_flow_ids[run_name] = frappe.db.get_value("Flow Run", run_name, "flow_id")
+	names = _flow_names(run_flow_ids.values())
+	labels = {fid: _node_labels(fid) for fid in set(run_flow_ids.values()) if fid}
+
+	out = []
+	for i in items:
+		fid = run_flow_ids.get(i.get("flow_run"))
+		if not fid:
+			out.append(None)
+			continue
+		node_id = i.get("flow_node_id")
+		step = labels.get(fid, {}).get(node_id) or node_id
+		flow = names.get(fid) or fid
+		out.append(f"Flow: {flow} > {step}" if step else f"Flow: {flow}")
+	return out
 
 
 # ---------------------------------------------------------------------------
@@ -1235,8 +1464,8 @@ def get_pending_approvals(limit: int = 50) -> list:
 			"timeout_next": waiting.get("timeout_next"),
 			"timeout_ms": waiting.get("timeout_ms"),
 			"timeout_at": waiting.get("timeout_at"),
-			"started_at": str(run.started_at) if run.started_at else None,
-			"waiting_since": str(run.modified) if run.modified else None,
+			"started_at": _utc_iso(run.started_at),
+			"waiting_since": _utc_iso(run.modified),
 			"view_link": f"/huf/flows/{run.flow_id}?run={run.name}",
 		})
 

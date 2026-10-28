@@ -531,6 +531,11 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   return <FlowContext.Provider value={value}>{children}</FlowContext.Provider>;
 }
 
+/** Like useFlowContext, but returns undefined outside a FlowProvider (e.g. the Executions page). */
+export function useOptionalFlowContext() {
+  return useContext(FlowContext);
+}
+
 export function useFlowContext() {
   const context = useContext(FlowContext);
   if (context === undefined) {

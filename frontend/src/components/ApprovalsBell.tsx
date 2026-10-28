@@ -9,18 +9,17 @@ import type { PendingApproval } from '../services/flowApi';
 import { useUser } from '../contexts/UserContext';
 import { toast } from 'sonner';
 import { humanizeFlowError } from '@/lib/flowValidation';
+import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
+import { formatTimeAgo } from '@/utils/time';
 
 const REFRESH_INTERVAL_MS = 60000;
 const FLOW_EVENTS = ['frappe:flow_paused', 'frappe:flow_completed', 'frappe:flow_error'];
 
-function formatWaitingSince(value: string): string {
-  const d = new Date(value.replace(' ', 'T'));
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-}
 
 export function ApprovalsBell() {
   const [approvals, setApprovals] = useState<PendingApproval[]>([]);
   const { isAuthenticated } = useUser();
+  useSiteTimezone();
 
   const fetchApprovals = useCallback(async () => {
     try {
@@ -91,16 +90,21 @@ export function ApprovalsBell() {
             {approvals.map((approval) => (
               <div key={approval.flow_run_id} className="px-4 py-3 space-y-2" data-testid={`flow-approval-${approval.flow_run_id}`}>
                 <div>
-                  <div className="text-sm font-medium">{approval.title || approval.flow_name || approval.flow_id}</div>
-                  {(approval.message || approval.instructions) && (
+                  <div className="text-sm font-medium" data-testid={`flow-approval-flow-${approval.flow_run_id}`}>
+                    {approval.flow_name || approval.flow_id}
+                  </div>
+                  {(approval.message || approval.instructions) ? (
                     <div className="text-sm text-foreground mt-0.5" data-testid={`flow-approval-message-${approval.flow_run_id}`}>
                       {approval.message || approval.instructions}
                     </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground mt-0.5">Approval needed</div>
                   )}
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {approval.flow_name || approval.flow_id}
-                    {approval.waiting_since ? ` · waiting since ${formatWaitingSince(approval.waiting_since)}` : ''}
-                  </div>
+                  {approval.waiting_since && (
+                    <div className="text-xs text-muted-foreground mt-0.5" data-testid={`flow-approval-time-${approval.flow_run_id}`}>
+                      Waiting since {formatAbsoluteTime(approval.waiting_since)} ({formatTimeAgo(approval.waiting_since).toLowerCase()})
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <Button size="sm" variant="outline" data-testid={`flow-approve-${approval.flow_run_id}`} onClick={() => handleApprove(approval.flow_run_id)}>
