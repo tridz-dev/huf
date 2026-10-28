@@ -100,7 +100,12 @@ export interface ImportMapping {
   /** CSV columns that become the template body values, in order. */
   params?: string[];
 }
-export interface ImportTotals { added: number; updated: number; skipped_total: number; invalid_total: number }
+export interface ImportExample { row?: number; recipient?: string | null; reason?: string | null }
+export interface ImportTotals {
+  added: number; updated: number; skipped_total: number; invalid_total: number;
+  /** Example rows with the reason (capped server-side; the totals are the true counts). */
+  invalid?: ImportExample[]; skipped?: ImportExample[];
+}
 export type ImportResult =
   | ({ queued: false; member_count: number; suppressed_count: number } & ImportTotals)
   | { queued: true; job_id: string; rows: number };
@@ -111,6 +116,8 @@ export interface ImportStatus {
   processed: number;
   total: number;
   result?: ImportTotals;
+  invalid?: ImportExample[];
+  skipped?: ImportExample[];
   error?: string;
 }
 

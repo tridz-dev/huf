@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { errorText } from '@/services/whatsappApi';
-import { getImportStatus, importMembers, type ImportStatus, type ImportTotals, type OnConflict } from './audiencesApi';
+import { getImportStatus, importMembers, type ImportExample, type ImportStatus, type ImportTotals, type OnConflict } from './audiencesApi';
 import { csvToObjects, guessPhoneColumn } from './csv';
 
 const NONE = '__none__';
@@ -36,6 +36,18 @@ function ColumnSelect({ label, id, headers, value, onChange, optional }: {
         </Select>
       )}
     </Field>
+  );
+}
+
+function Examples({ label, rows, total }: { label: string; rows?: ImportExample[]; total: number }) {
+  if (!rows?.length) return null;
+  return (
+    <div className="text-xs">
+      <p className="font-medium">{label} ({total > rows.length ? `showing ${rows.length} of ${total}` : total})</p>
+      <ul className="list-disc pl-5">
+        {rows.map((r, i) => <li key={i}>{r.row ? `Row ${r.row}: ` : ''}{r.recipient ?? ''}{r.reason ? ` - ${r.reason}` : ''}</li>)}
+      </ul>
+    </div>
   );
 }
 
@@ -72,7 +84,7 @@ export function ImportMembersDialog({ audience, title, onClose, onDone }: Props)
       if (stop) return;
       if (!res.success) { setErr(errorText(res)); setJob(null); return; }
       setProgress(res);
-      if (res.status === 'done' && res.result) { setJob(null); setResult(res.result); toast.success('Import finished'); onDone(); }
+      if (res.status === 'done' && res.result) { setJob(null); setResult({ ...res.result, invalid: res.invalid ?? res.result.invalid, skipped: res.skipped ?? res.result.skipped }); toast.success('Import finished'); onDone(); }
       else if (res.status === 'failed') { setJob(null); setErr(res.error || 'The import failed.'); }
     };
     const id = setInterval(() => void tick(), POLL_MS);
@@ -108,6 +120,8 @@ export function ImportMembersDialog({ audience, title, onClose, onDone }: Props)
             <p className="text-sm">
               {result.added} added, {result.updated} updated, {result.skipped_total} skipped, {result.invalid_total} not valid.
             </p>
+            <Examples label="Not valid" rows={result.invalid} total={result.invalid_total} />
+            <Examples label="Skipped" rows={result.skipped} total={result.skipped_total} />
           </div>
         ) : job ? (
           <p role="status" className="text-sm">
