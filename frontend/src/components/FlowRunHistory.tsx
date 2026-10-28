@@ -36,13 +36,14 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
         }
     }, [open, flowId]);
 
-    // Live events can be unavailable (socket down), so keep unfinished runs fresh by polling while the list is open.
-    const hasUnfinished = runs.some((r) => !['Success', 'Failed', 'Cancelled'].includes(r.status));
+    // Live updates (socket) are not always available: poll while any run is unfinished (queued, running or waiting,
+    // e.g. for an approval that is answered or times out elsewhere).
+    const hasActiveRun = runs.some((r) => !['Success', 'Failed', 'Cancelled'].includes(r.status));
     useEffect(() => {
-        if (!open || !hasUnfinished) return;
-        const timer = setInterval(() => fetchRuns(true), 5000);
+        if (!open || !hasActiveRun) return;
+        const timer = setInterval(() => fetchRuns(true), 3000);
         return () => clearInterval(timer);
-    }, [open, hasUnfinished, flowId]);
+    }, [open, flowId, hasActiveRun]);
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>

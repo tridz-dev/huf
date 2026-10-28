@@ -44,6 +44,21 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
         fetchRun();
     }, [runId]);
 
+    // Same fallback as the run list: refresh while the run is still queued or running.
+    const active = run?.status === 'Queued' || run?.status === 'Running';
+    useEffect(() => {
+        if (!runId || !active) return;
+        const timer = setInterval(async () => {
+            try {
+                const data = await flowService.getFlowRun(runId);
+                if (data) setRun(data);
+            } catch (err) {
+                console.error(err);
+            }
+        }, 2000);
+        return () => clearInterval(timer);
+    }, [runId, active]);
+
     const handleApproval = async (decision: 'approved' | 'rejected') => {
         if (!runId) return;
         setLoading(true);

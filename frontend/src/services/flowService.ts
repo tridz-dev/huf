@@ -50,9 +50,9 @@ class FlowService {
     return items.map(item => ({
       id: item.flow_id,
       name: item.flow_name,
-      description: undefined,
+      description: item.description || undefined,
       status: mapBackendStatusToFrontend(item.status),
-      category: undefined,
+      category: item.category || undefined,
       nodeCount: 0, // Will be populated when flow is loaded individually
       createdAt: new Date(item.modified),
       updatedAt: new Date(item.modified),
@@ -70,6 +70,9 @@ class FlowService {
         : doc.definition_json;
 
       const flow = deserializeFlow(doc.flow_id, doc.flow_name, doc.status, graph);
+      // Name, description and category live on the Flow Definition record, not in the graph.
+      flow.description = doc.description || '';
+      flow.category = doc.category || 'Uncategorized';
       this.flowCache.set(id, flow);
       return flow;
     } catch {
@@ -109,11 +112,13 @@ class FlowService {
     };
 
     await saveFlowDefinition(flowId, defaultGraph);
+    // The first save names the record after its id; store the real name and category.
+    await updateFlowDefinitionFields(flowId, { flow_name: name, category: category || 'Uncategorized' });
 
     const newFlow: Flow = {
       id: flowId,
       name,
-      description: 'New automation flow',
+      description: '',
       status: 'draft',
       category: category || 'Uncategorized',
       nodes: [
@@ -160,8 +165,12 @@ class FlowService {
     if (!flow) return null;
 
     // Keep DocType fields in sync when renaming
-    if (typeof updates.name === 'string' && updates.name.trim()) {
-      await updateFlowDefinitionFields(id, { flow_name: updates.name });
+    const fields: { flow_name?: string; description?: string; category?: string } = {};
+    if (typeof updates.name === 'string' && updates.name.trim()) fields.flow_name = updates.name;
+    if (typeof updates.description === 'string') fields.description = updates.description;
+    if (typeof updates.category === 'string') fields.category = updates.category;
+    if (Object.keys(fields).length) {
+      await updateFlowDefinitionFields(id, fields);
     }
 
     const updatedFlow: Flow = {

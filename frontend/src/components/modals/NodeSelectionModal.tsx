@@ -165,7 +165,7 @@ export function NodeSelectionModal({
       'tool-call': tool(''),
       condition: { type: 'condition', expression: '' },
       router: { type: 'router', prompt: '' },
-      loop: { type: 'loop', items: { $from: '' }, max_iterations: 100, on_item_error: 'fail', collect: { $from: '' } },
+      loop: { type: 'foreach', items: { $from: '' }, max_iterations: 100, on_item_error: 'fail', collect: { $from: '' } },
       'human.approval': { type: 'human.approval', message: '' },
       end: { type: 'end' },
       'http-request': tool('http_request', { url: '', method: 'GET' }),
