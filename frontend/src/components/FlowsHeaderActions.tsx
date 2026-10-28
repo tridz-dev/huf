@@ -236,12 +236,12 @@ export function FlowsHeaderActions() {
     <div className="flex items-center gap-2">
       {/* Save State Indicator (bare dot + text, no chip background) */}
       {activeFlow && (
-        <div className="flex items-center gap-1.5 mr-2 text-muted-foreground" data-testid="flow-save-state">
+        <div className="flex items-center gap-1.5 mr-2 text-muted-foreground" data-testid="flow-save-state" title={issues.length > 0 ? ` to finish before it can run` : undefined}>
           {issues.length > 0 && (
             <button
               type="button"
               data-testid="flow-validation-summary"
-              className="mr-2 text-xs text-signal-ink underline-offset-2 hover:underline"
+              className="mr-2 hidden text-xs text-signal-ink underline-offset-2 hover:underline xl:inline"
               onClick={() => issues[0].nodeId && setSelectedNode(issues[0].nodeId)}
             >
               {issues.length === 1 ? '1 thing to finish' : `${issues.length} things to finish`}
