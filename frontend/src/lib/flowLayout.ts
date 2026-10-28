@@ -91,12 +91,12 @@ interface Box {
   height: number;
 }
 
-/** True when `rect` (flow coordinates) sits fully inside the visible canvas, keeping `margin` px clear (more at the top, under the toolbar). */
+/** True when `rect` (flow coordinates) sits fully inside the visible canvas, keeping `margin` px clear (none by default: only content that is actually cut off counts). */
 export function isInView(
   rect: Box,
   viewport: { x: number; y: number; zoom: number },
   size: { width: number; height: number },
-  margin = { top: 70, side: 24, bottom: 24 },
+  margin = { top: 0, side: 0, bottom: 0 },
 ): boolean {
   const left = rect.x * viewport.zoom + viewport.x;
   const top = rect.y * viewport.zoom + viewport.y;

@@ -47,10 +47,10 @@ describe('isInView', () => {
   it('is false when a step hangs below, beside or under the toolbar', () => {
     expect(isInView({ x: 100, y: 100, width: 200, height: 900 }, { x: 0, y: 0, zoom: 1 }, size)).toBe(false);
     expect(isInView({ x: 700, y: 100, width: 200, height: 100 }, { x: 0, y: 0, zoom: 1 }, size)).toBe(false);
-    expect(isInView({ x: 100, y: 20, width: 200, height: 100 }, { x: 0, y: 0, zoom: 1 }, size)).toBe(false);
+    expect(isInView({ x: 100, y: -20, width: 200, height: 100 }, { x: 0, y: 0, zoom: 1 }, size)).toBe(false);
   });
   it('accounts for zoom and pan', () => {
-    expect(isInView({ x: 100, y: 200, width: 400, height: 1400 }, { x: 0, y: 0, zoom: 0.5 }, size)).toBe(true);
+    expect(isInView({ x: 100, y: 100, width: 400, height: 1400 }, { x: 0, y: 0, zoom: 0.5 }, size)).toBe(true);
     expect(isInView({ x: 100, y: 100, width: 200, height: 100 }, { x: -200, y: 0, zoom: 1 }, size)).toBe(false);
   });
 });
