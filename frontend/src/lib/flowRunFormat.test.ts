@@ -80,5 +80,6 @@ describe('failed step output', () => {
 
     it('drops the status and error keys already shown as the reason', () => {
         expect(withoutFailureKeys({ status: 'failed', error: 'boom', status_code: 500 })).toEqual({ status_code: 500 });
+        expect(withoutFailureKeys({ success: false, error: 'boom' })).toEqual({});
     });
 });
