@@ -58,7 +58,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
   return (
     <div
       data-testid="flow-config-sidebar"
-      className={cn('relative bg-card flex flex-col w-[300px]', 'h-full', !isSheet \&\& 'border-l border-border')}
+      className={cn('relative bg-card flex flex-col w-[300px]', 'h-full', !isSheet && 'border-l border-border')}
     >
       <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5">
         {!selectedNode && !selectedEdge ? (
