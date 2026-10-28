@@ -15,6 +15,7 @@ import ReactFlow, {
   Panel,
   BackgroundVariant,
   useReactFlow,
+  useStore,
   useStoreApi,
   getNodesBounds
 } from 'reactflow';
@@ -60,8 +61,14 @@ import type { ActionOption } from '../types/modal.types';
 /** Fit-to-view never zooms in past 100% (a 3-step flow stays at normal size) nor out past 25%. */
 export const FIT_VIEW_OPTIONS = { padding: 0.3, maxZoom: 1, minZoom: 0.25 } as const;
 
+/** Narrowest canvas (px) that still has room for the overview next to the toolbar buttons. */
+const MINIMAP_MIN_CANVAS_WIDTH = 640;
+
 function FlowMiniMap() {
   const { setCenter, getZoom } = useReactFlow();
+  // In a narrow canvas (side panel open on a small window) the overview would sit under the top-right buttons.
+  const canvasWidth = useStore((s) => s.width);
+  if (canvasWidth && canvasWidth < MINIMAP_MIN_CANVAS_WIDTH) return null;
   return (
     <MiniMap
       position="top-left"
