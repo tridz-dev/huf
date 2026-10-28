@@ -532,7 +532,7 @@ def _mapped_rows(csv_text: Any, rows: Any, mapping: Any) -> list[dict] | dict[st
 		if not table:
 			return []
 		headers = [h.strip() for h in table[0]]
-		records = [dict(zip(headers, row + [""] * (len(headers) - len(row)))) for row in table[1:]]
+		records = [dict(zip(headers, row + [""] * (len(headers) - len(row)), strict=False)) for row in table[1:]]
 	else:
 		records = _parse_list(rows, "rows")
 		if not all(isinstance(r, dict) for r in records):

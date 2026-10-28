@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Callable, Iterable
+from collections.abc import Callable, Iterable
+from typing import Any
 
 import frappe
 from frappe.utils import cint, get_datetime, now_datetime
