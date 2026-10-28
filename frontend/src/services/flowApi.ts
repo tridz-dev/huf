@@ -51,8 +51,8 @@ export interface BackendFlowGraph {
 
 export type BackendNodeType =
     | 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event' | 'trigger.unset'
-    | 'agent.run' | 'tool.call' | 'router.llm' | 'human.approval'
-    | 'condition' | 'http_request' | 'transform' | 'loop' | 'output'
+    | 'agent.run' | 'tool.call' | 'router.llm' | 'router.decision' | 'human.approval'
+    | 'condition' | 'transform' | 'foreach' | 'parallel' | 'validate' | 'output'
     | 'state.get' | 'state.set' | 'state.delete' | 'doc.create';
 
 export interface BackendNode {
@@ -63,7 +63,7 @@ export interface BackendNode {
     next?: string | null;
     /** Node to route to if this node raises. Absent/null means an error here fails the run. */
     on_error?: string | null;
-    /** Frontend-only: stored for visual layout, ignored by engine */
+    /** Node-level UI extras (NodeCommon permits extra keys; engine ignores them, reads only `_label` for run logs). */
     _position?: { x: number; y: number };
     /** Frontend-only: visual label */
     _label?: string;
@@ -103,20 +103,6 @@ export interface BackendContract {
     applies_when: string[];
     permission_envelope: BackendPermissionEnvelope;
     limits: BackendResourceLimits;
-}
-
-/** @deprecated Pre-migration edge shape. No longer part of BackendFlowGraph -- kept only
- * so the frontend's own React Flow edge model (FlowEdgeData) can still describe an
- * edge's routing intent (always/on_success/on_failure/expression) before it gets
- * folded into a node's `next`/`on_error`/self-routing config at serialize time. */
-export interface BackendEdge {
-    id: string;
-    from: string;
-    to: string;
-    type: 'always' | 'on_success' | 'on_failure' | 'expression';
-    priority?: number;
-    condition?: string;
-    meta?: Record<string, unknown>;
 }
 
 /** @deprecated Flow-level run settings no longer fit in the graph-IR document
