@@ -101,7 +101,7 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
               <div className="text-xs text-signal-ink mt-1" data-testid={`flow-node-incomplete-${id}`}>Needs setup</div>
             )}
           </div>
-          <span className="ml-auto flex-shrink-0 rounded border border-line bg-panel/60 font-mono uppercase tracking-wider text-steel-soft font-medium px-1.5 py-0.5 text-[9px]">
+          <span className="ml-auto flex-shrink-0 rounded border border-line bg-panel/60 font-mono uppercase tracking-wider text-steel font-medium px-1.5 py-0.5 text-[9px]">
             Trigger
           </span>
         </div>

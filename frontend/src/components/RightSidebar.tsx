@@ -81,7 +81,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
         ) : selectedNode ? (
           <>
             <div className="-mx-3.5 -mt-3.5 mb-0 h-10 px-3.5 flex items-center gap-2 border-b border-border shrink-0">
-              <span className="text-[13px] leading-none truncate" style={{ fontWeight: 590 }} data-testid="flow-sidebar-title">
+              <span className="text-[13px] leading-none truncate" style={{ fontWeight: 590 }} title={selectedNode.data.label} data-testid="flow-sidebar-title">
                 {selectedNode.data.label}
               </span>
               <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">

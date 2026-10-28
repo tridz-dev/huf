@@ -207,6 +207,7 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
           <div className="flex gap-2 mt-1">
             <Input
               readOnly
+              aria-label="Webhook URL"
               value={webhookUrl(origin, activeFlow?.id)}
               data-testid={tid(kind, 'url')}
               className="bg-muted/50 font-mono text-xs text-muted-foreground"
