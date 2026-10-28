@@ -19,6 +19,7 @@
   "error_message",
   "section_consent",
   "consent_source",
+  "audience",
   "consent_at",
   "section_times",
   "sent_at",
@@ -143,6 +144,13 @@
    "fieldname": "consent_at",
    "fieldtype": "Datetime",
    "label": "Opted in at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "audience",
+   "fieldtype": "Data",
+   "label": "Audience",
+   "length": 140,
    "read_only": 1
   },
   {
