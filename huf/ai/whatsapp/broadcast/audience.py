@@ -176,8 +176,8 @@ def expand_selection(
 		if _truthy(item.get("exclude")):
 			continue
 		name = item["audience"]
-		aud = audiences[name]
 		matched = pick(item)
+		aud = audiences[name]
 		counts["total"] += len(matched)
 		stat = {"audience": name, "matched": len(matched), "added": 0}
 		if needed and needed not in purposes_of(aud):
