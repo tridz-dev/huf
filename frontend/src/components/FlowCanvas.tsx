@@ -30,6 +30,7 @@ import { flowService } from '../services/flowService';
 import { makeFlowEdge, edgeRoute } from '../services/flowSerializer';
 import { branchHandlesFor } from '../lib/flowBranches';
 import { toast } from 'sonner';
+import { ensureToolSchemasLoaded } from '../lib/flowToolSchemas';
 import { actionLabel, triggerLabel } from '../lib/flowLabels';
 import { actionOptions } from '../data/actions';
 import { FlowNodeData, TriggerConfig, ActionConfig, FlowEdgeRoute } from '../types/flow.types';
@@ -74,6 +75,11 @@ export function FlowCanvas({
   // Track pending updates to batch them
   const pendingUpdateRef = useRef<{ nodes?: Node<FlowNodeData>[]; edges?: Edge[] } | null>(null);
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Learn each tool's required inputs so validation can block incomplete tool steps.
+  useEffect(() => {
+    void ensureToolSchemasLoaded();
+  }, []);
 
   // Sync from activeFlow to local state when flow changes (not on every node/edge update)
   useEffect(() => {
