@@ -8,6 +8,7 @@
   "title",
   "status",
   "pause_reason",
+  "acknowledged_warnings",
   "section_target",
   "gateway",
   "whatsapp_account",
@@ -68,6 +69,14 @@
    "fieldname": "pause_reason",
    "fieldtype": "Data",
    "label": "Pause reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "acknowledged_warnings",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Acknowledged warnings",
+   "no_copy": 1,
    "read_only": 1
   },
   {

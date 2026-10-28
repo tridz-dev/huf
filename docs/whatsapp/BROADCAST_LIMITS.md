@@ -6,6 +6,10 @@ test fails when this file drifts from the registry. Do not edit the table by han
 Effective value = per-broadcast override, then **WhatsApp Broadcast Settings**, then the default.
 A blank setting uses the default. For the two recipient caps, `0` means no limit.
 
+Changes apply to broadcasts that are already running: the recipient cap is read again at every send, so lowering
+it (or the highest allowed value) stops a running broadcast from sending further rows ("max_recipients" skip), and
+raising it lets it continue. Speed settings are read when each work slice starts.
+
 | Key | Limit | Type | Default | Range | Unit | Note |
 | --- | --- | --- | --- | --- | --- | --- |
 | `template_approved_only` | Templates must be approved | Set by Meta | on | - | - | Meta only delivers APPROVED templates to start a conversation. |
@@ -87,3 +91,6 @@ A blank setting uses the default. For the two recipient caps, `0` means no limit
 | `consent_source_max` | Consent note length on a broadcast | Internal | 200 | - | characters | Audience-based consent notes are cut to this length. |
 | `member_consent_source_max` | Imported consent note length | Internal | 255 | - | characters | Per-contact consent text is cut to this length on import. |
 | `audience_delete_chunk` | Contact removal chunk | Internal | 1000 | - | contacts | Contacts deleted per query when removing members. |
+| `gateway_bucket_horizon_seconds` | Gateway speed schedule: corrupt-value limit | Internal | 3600 | - | seconds | A shared speed schedule further ahead than this (and 100 slots) is discarded as corrupt. It is never reset just for being busy. |
+| `gateway_bucket_key_seconds` | Gateway speed schedule lifetime | Internal | 3600 | - | seconds | How long an idle gateway's shared speed schedule is kept. |
+| `gateway_rate_cache_seconds` | Gateway speed lookup cache | Internal | 30 | - | seconds | How long a gateway's sending speed is remembered by a worker. |

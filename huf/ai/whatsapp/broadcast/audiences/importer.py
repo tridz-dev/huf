@@ -216,7 +216,7 @@ def get_job_state(job_id: str) -> dict | None:
 def run_import_job(audience: str, rows: list[dict], on_conflict: str, job_id: str, user: str) -> None:
 	"""Background import of a large list. Reports progress through the job state and a realtime event.
 
-	``progress.py`` publishes per-broadcast counters only, so the throttle (``progress.THROTTLE_SECONDS``) is
+	``progress.py`` publishes per-broadcast counters only, so the throttle (``progress.throttle_seconds()``) is
 	reused here with an audience-specific event instead.
 	"""
 	import time
@@ -230,7 +230,7 @@ def run_import_job(audience: str, rows: list[dict], on_conflict: str, job_id: st
 
 	def report(info: dict, force: bool = False):
 		now = time.time()
-		if not force and now - last["t"] < broadcast_progress.THROTTLE_SECONDS:
+		if not force and now - last["t"] < broadcast_progress.throttle_seconds():
 			return
 		last["t"] = now
 		state.update(info)

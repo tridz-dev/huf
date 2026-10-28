@@ -312,7 +312,7 @@ def _fill(broadcast: str, out: dict[str, Any], locked: bool = False) -> None:
 	out["recipients"] = sum(counts.values())
 	out["queued"] = counts.get("queued", 0)
 	out["skipped"] = counts.get("skipped", 0)
-	if int(b.get("max_recipients") or 0):
+	if policy.resolve("max_recipients_default", b)[1] != "default":  # the broadcast's own cap OR a saved setting
 		in_effect.add("max_recipients_default")
 	if out["queued"] + counts.get("deferred", 0) <= 0:
 		blocking.append(_issue("no_recipients", "There are no recipients waiting to be sent."))

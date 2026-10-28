@@ -146,6 +146,10 @@ LIMITS: tuple[Limit, ...] = (
 	Limit("consent_source_max", "Consent note length on a broadcast", 200, "internal", "audiences", "characters", note="Audience-based consent notes are cut to this length."),
 	Limit("member_consent_source_max", "Imported consent note length", 255, "internal", "audiences", "characters", note="Per-contact consent text is cut to this length on import."),
 	Limit("audience_delete_chunk", "Contact removal chunk", 1000, "internal", "audiences", "contacts", note="Contacts deleted per query when removing members."),
+	# ---- WP-I: gateway bucket / progress constants (read via policy.get at call time)
+	Limit("gateway_bucket_horizon_seconds", "Gateway speed schedule: corrupt-value limit", 3600, "internal", "speed", "seconds", note="A shared speed schedule further ahead than this (and 100 slots) is discarded as corrupt. It is never reset just for being busy."),
+	Limit("gateway_bucket_key_seconds", "Gateway speed schedule lifetime", 3600, "internal", "speed", "seconds", note="How long an idle gateway's shared speed schedule is kept."),
+	Limit("gateway_rate_cache_seconds", "Gateway speed lookup cache", 30, "internal", "speed", "seconds", note="How long a gateway's sending speed is remembered by a worker."),
 )
 
 BY_KEY: dict[str, Limit] = {lim.key: lim for lim in LIMITS}
@@ -310,6 +314,10 @@ test fails when this file drifts from the registry. Do not edit the table by han
 
 Effective value = per-broadcast override, then **WhatsApp Broadcast Settings**, then the default.
 A blank setting uses the default. For the two recipient caps, `0` means no limit.
+
+Changes apply to broadcasts that are already running: the recipient cap is read again at every send, so lowering
+it (or the highest allowed value) stops a running broadcast from sending further rows ("max_recipients" skip), and
+raising it lets it continue. Speed settings are read when each work slice starts.
 
 """
 

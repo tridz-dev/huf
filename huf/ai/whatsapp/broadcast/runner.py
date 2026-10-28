@@ -156,8 +156,11 @@ def _begin(
 	deferred = int(frappe.db.count(RECIPIENT, {"broadcast": broadcast, "status": "deferred"}) or 0)
 	start_gate.check_preview(preview, deferred, None if resuming else (override_warnings or []))
 
-	# Serialise "one Running per gateway" on the Gateway row. Everything above was a (possibly
-	# snapshot) read, so after the lock use *locking* reads, which see the latest committed data.
+	# Serialise "one Running per gateway" on the Gateway row. Everything above was a plain read, which
+	# InnoDB (REPEATABLE READ) serves from a snapshot taken at the first read. Nothing is written yet, so
+	# commit to end that snapshot BEFORE locking: every read after the lock then starts a fresh snapshot
+	# and sees what the starts that held the lock before us committed (24h budget, rows, running set).
+	frappe.db.commit()
 	frappe.db.get_value("Gateway", doc.gateway, "name", for_update=True)
 	if frappe.db.get_value(BROADCAST, broadcast, "status", for_update=True) not in allowed_from:
 		frappe.throw(_("Broadcast changed state; reload and retry"))
@@ -437,6 +440,7 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 		ratio, sample = _held_ratio(broadcast)
 		throttled = _is_throttled(ratio, sample)
 		rate = max(1, mps // 4) if throttled else mps
+		share = None  # set lazily the first time the shared bucket is unavailable in this batch
 		rows = _due_rows(broadcast, _batch_size(doc, sent_total, throttled))
 		if not rows:
 			break
@@ -454,7 +458,9 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 				since_check = 0
 			if _status(broadcast) != "Running":
 				return {"result": "stopped", "sent": sent_total, "outcomes": outcomes}
-			gateway_bucket.pace(doc.gateway)  # shared gateway mps across concurrent broadcasts
+			paced = gateway_bucket.pace(doc.gateway)  # shared gateway mps across concurrent broadcasts
+			if not paced and share is None:  # bucket down: split our speed with the other running broadcasts
+				share = gateway_bucket.running_share(doc.gateway)
 			t0 = time.monotonic()
 			outcome = broadcast_send.send_one(name)
 			since_check += 1
@@ -467,7 +473,7 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 				pause(broadcast, str(reason))
 				frappe.get_doc(BROADCAST, broadcast).recount(commit=True)
 				return {"result": "paused", "reason": reason, "sent": sent_total, "outcomes": outcomes}
-			_sleep(1.0 / rate - (time.monotonic() - t0))
+			_sleep(1.0 / (rate / (share or 1)) - (time.monotonic() - t0))
 		frappe.get_doc(BROADCAST, broadcast).recount(commit=True)
 		if not _heartbeat(key, token):
 			return {"result": "lock_lost", "sent": sent_total, "outcomes": outcomes}
