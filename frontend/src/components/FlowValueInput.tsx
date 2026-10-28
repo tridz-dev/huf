@@ -17,6 +17,8 @@ interface FlowValueInputProps {
   value: unknown;
   onChange: (value: unknown) => void;
   optional?: boolean;
+  /** data-testid for the value control; the mode select gets `${testId}-mode`. */
+  testId?: string;
 }
 
 const MODE_LABELS: Record<ValueMode, string> = {
@@ -30,7 +32,7 @@ const MODE_LABELS: Record<ValueMode, string> = {
  * Edits one graph-IR Value: a literal, a `$from` reference (e.g. `input.sender_id`,
  * `node_a.value`), a `$template` with `vars`, or a JSON array/object.
  */
-export function FlowValueInput({ id, label, value, onChange, optional }: FlowValueInputProps) {
+export function FlowValueInput({ id, label, value, onChange, optional, testId }: FlowValueInputProps) {
   const mode = valueMode(value);
   const text = valueToText(value);
   const varsText = templateVarsToText(value);
@@ -46,7 +48,7 @@ export function FlowValueInput({ id, label, value, onChange, optional }: FlowVal
           value={mode}
           onValueChange={(m) => onChange(textToValue(m as ValueMode, text, varsText))}
         >
-          <SelectTrigger id={`${id}-mode`} size="sm" className="w-[150px]">
+          <SelectTrigger id={`${id}-mode`} data-testid={testId ? `${testId}-mode` : undefined} size="sm" className="w-[150px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -61,6 +63,7 @@ export function FlowValueInput({ id, label, value, onChange, optional }: FlowVal
       {mode === 'literal' || mode === 'reference' ? (
         <Input
           id={id}
+          data-testid={testId}
           value={text}
           className={mode === 'reference' ? 'font-mono text-xs' : undefined}
           placeholder={mode === 'reference' ? 'e.g., input.sender_id' : undefined}
@@ -69,6 +72,7 @@ export function FlowValueInput({ id, label, value, onChange, optional }: FlowVal
       ) : (
         <Textarea
           id={id}
+          data-testid={testId}
           className="min-h-[60px] w-full font-mono"
           value={text}
           placeholder={mode === 'template' ? 'Refund for #{order}' : '[]'}

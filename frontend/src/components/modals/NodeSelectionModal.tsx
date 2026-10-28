@@ -11,11 +11,7 @@ import {
 } from '../ui/dialog-scroll';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Input } from '../ui/input';
-import { Textarea } from '../ui/textarea';
-import { Label } from '../ui/label';
 import { Button } from '../ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Badge } from '../ui/badge';
 import {
   Search,
   Webhook,
@@ -41,13 +37,9 @@ import {
 } from 'lucide-react';
 import { triggerOptions } from '../../data/triggers';
 import { actionOptions } from '../../data/actions';
-import { TriggerConfig, ActionConfig, AppTriggerIntegration } from '../../types/flow.types';
+import { TriggerConfig, ActionConfig } from '../../types/flow.types';
 import type { ActionOption } from '../../types/modal.types';
-import { getAgents, getDocTypes } from '../../services/agentApi';
-import type { AgentDoc } from '../../types/agent.types';
-import { toast } from 'sonner';
-import { createWebhookTriggerDefaults } from '../../lib/flowWebhookConfig';
-import { copyText } from '@/lib/clipboard';
+import { generateWebhookSecret } from '../../lib/flowWebhookUi';
 
 interface NodeSelectionModalProps {
   open: boolean;
@@ -85,7 +77,6 @@ const iconMap: Record<string, LucideIcon> = {
 };
 
 type MainTab = 'triggers' | 'actions';
-type TriggerSubTab = 'explore' | 'ai-agents';
 
 export function NodeSelectionModal({
   open,
@@ -97,7 +88,6 @@ export function NodeSelectionModal({
   actionCategory
 }: NodeSelectionModalProps) {
   const [mainTab, setMainTab] = useState<MainTab>(mode === 'trigger' ? 'triggers' : 'actions');
-  const [triggerSubTab, setTriggerSubTab] = useState<TriggerSubTab>('explore');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<string | null>(
     initialTriggerConfig?.type || null
@@ -116,20 +106,13 @@ export function NodeSelectionModal({
   useEffect(() => {
     if (!open) return;
     setMainTab(mode === 'trigger' ? 'triggers' : 'actions');
-    setTriggerSubTab('explore');
     setSearchQuery('');
     setSelectedItem(initialTriggerConfig?.type || null);
     setTriggerConfig(initialTriggerConfig || { type: undefined });
   }, [open, mode, initialTriggerConfig]);
 
-  const [agents, setAgents] = useState<AgentDoc[]>([]);
-  const [loadingAgents, setLoadingAgents] = useState(false);
-  const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
-  const [loadingDocTypes, setLoadingDocTypes] = useState(false);
-
   // The modal stays mounted between openings, so its tab has to follow the
-  // `mode` prop each time it is (re)opened — otherwise an "add action" request
-  // can land on the triggers tab left over from a previous opening.
+  // `mode` prop each time it is (re)opened.
   useEffect(() => {
     if (open) {
       setMainTab(mode === 'trigger' ? 'triggers' : 'actions');
@@ -137,37 +120,8 @@ export function NodeSelectionModal({
     }
   }, [open, mode]);
 
-  useEffect(() => {
-    if (open && docTypes.length === 0 && !loadingDocTypes) {
-      setLoadingDocTypes(true);
-      getDocTypes()
-        .then((data) => {
-          setDocTypes(data);
-          setLoadingDocTypes(false);
-        })
-        .catch((error) => {
-          console.error('Error loading DocTypes:', error);
-          setLoadingDocTypes(false);
-        });
-    }
-  }, [open, docTypes.length, loadingDocTypes]);
-
-  useEffect(() => {
-    if (open && triggerSubTab === 'ai-agents') {
-      setLoadingAgents(true);
-      getAgents().then((result) => {
-        const agentDocs = Array.isArray(result) ? result : result.items;
-        setAgents(agentDocs);
-        setLoadingAgents(false);
-      }).catch(() => {
-        setLoadingAgents(false);
-      });
-    }
-  }, [open, triggerSubTab]);
-
   const filteredTriggers = triggerOptions.filter(
     (trigger) =>
-      trigger.tab === triggerSubTab &&
       trigger.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -178,8 +132,7 @@ export function NodeSelectionModal({
   );
 
   const highlightTriggers = filteredTriggers.filter((t) => t.category === 'highlight');
-  const popularTriggers = filteredTriggers.filter((t) => t.category === 'popular');
-
+  
   const agentActions = filteredActions.filter((a) => a.category === 'agent');
   const toolActions = filteredActions.filter((a) => a.category === 'tool');
   const transformActions = filteredActions.filter((a) => a.category === 'transform');
@@ -190,64 +143,38 @@ export function NodeSelectionModal({
   const handleSelectTrigger = (triggerId: string) => {
     setSelectedItem(triggerId);
     if (triggerId === 'webhook') {
-      // Canonical key name is `auth`: RightSidebar reads and writes it there.
-      setTriggerConfig(createWebhookTriggerDefaults(window.location.origin));
+      // The secret is generated up front so the webhook is never open; it stays visible and regenerable in the sidebar.
+      setTriggerConfig({ type: 'webhook', method: 'POST', secret: generateWebhookSecret() } as TriggerConfig);
     } else if (triggerId === 'schedule') {
-      setTriggerConfig({
-        type: 'schedule'
-      });
+      setTriggerConfig({ type: 'schedule' });
     } else if (triggerId === 'doc-event') {
-      setTriggerConfig({
-        type: 'doc-event'
-      });
-    } else if (triggerId.includes('gmail') || triggerId.includes('slack')) {
-      setTriggerConfig({
-        type: 'app-trigger',
-        integration: triggerId as AppTriggerIntegration,
-        event: 'new_message'
-      });
+      setTriggerConfig({ type: 'doc-event' });
     } else {
-      // Clear any previous config form for triggers with no sub-settings
       setTriggerConfig({ type: undefined });
     }
   };
 
   const handleSelectAction = (actionId: string) => {
-    let config: ActionConfig = { type: undefined };
-
-    if (actionId === 'agent-run') {
-      config = { type: 'agent-run', agent_name: '', prompt_template: '', save_response_to_context: '' };
-    } else if (actionId === 'tool-call') {
-      config = { type: 'tool-call', tool_name: '', args: {}, output: { save_result_to_context: '' } };
-    } else if (actionId === 'condition') {
-      config = { type: 'condition', expression: '', true_node: '', false_node: '' };
-    } else if (actionId === 'router') {
-      config = { type: 'router', router_agent_name: '', conversation_mode: 'flow_shared' };
-    } else if (actionId === 'loop') {
-      config = { type: 'loop', iterate_over: '', item_key: 'loop_item', index_key: 'loop_index', max_iterations: 100 };
-    } else if (actionId === 'human.approval') {
-      config = { type: 'human.approval', title: 'Approval required', instructions: '', approval_type: 'role', store_decision_in_context: 'approval' };
-    } else if (actionId === 'http-request') {
-      config = { type: 'http-request', url: '', method: 'GET', timeout: 30 };
-    } else if (actionId === 'transform') {
-      config = { type: 'transform', op: 'lower', input: {} };
-    } else if (actionId === 'state-get') {
-      config = { type: 'state-get', key: '' };
-    } else if (actionId === 'state-set') {
-      config = { type: 'state-set', key: '', value: '' };
-    } else if (actionId === 'state-delete') {
-      config = { type: 'state-delete', key: '' };
-    } else if (actionId === 'doc-create') {
-      config = { type: 'doc-create', doctype: '', fields: {} };
-    } else if (actionId === 'email') {
-      config = { type: 'tool-call', tool_name: 'gmail_send_email', args: {}, output: { save_result_to_context: '' } };
-    } else if (actionId === 'slack') {
-      config = { type: 'tool-call', tool_name: 'slack_send_message', args: {}, output: { save_result_to_context: '' } };
-    } else if (actionId === 'sheets') {
-      config = { type: 'tool-call', tool_name: 'gsheets_read', args: {}, output: { save_result_to_context: '' } };
-    } else if (actionId === 'file') {
-      config = { type: 'tool-call', tool_name: 'gdrive_list_files', args: {}, output: { save_result_to_context: '' } };
-    }
+    const tool = (tool_id: string, input: Record<string, unknown> = {}) => ({ type: 'tool-call', tool_id, input });
+    const configs: Record<string, Record<string, unknown>> = {
+      'agent-run': { type: 'agent-run', agent: '', prompt: '' },
+      'tool-call': tool(''),
+      condition: { type: 'condition', expression: '' },
+      router: { type: 'router', prompt: '' },
+      loop: { type: 'loop', items: { $from: '' }, max_iterations: 100, on_item_error: 'fail', collect: { $from: '' } },
+      'human.approval': { type: 'human.approval', message: '' },
+      'http-request': tool('http_request', { url: '', method: 'GET' }),
+      transform: { type: 'transform', op: 'lower', input: {} },
+      'state-get': { type: 'state-get', key: '' },
+      'state-set': { type: 'state-set', key: '', value: '' },
+      'state-delete': { type: 'state-delete', key: '' },
+      'doc-create': { type: 'doc-create', doctype: '', fields: {} },
+      email: tool('gmail_send_email'),
+      slack: tool('slack_send_message'),
+      sheets: tool('gsheets_read'),
+      file: tool('gdrive_list_files'),
+    };
+    const config = (configs[actionId] ?? { type: undefined }) as unknown as ActionConfig;
 
     onSaveAction?.(actionId, config);
     onClose();
@@ -256,131 +183,6 @@ export function NodeSelectionModal({
   const handleSaveTrigger = () => {
     onSaveTrigger?.(triggerConfig);
     onClose();
-  };
-
-  const renderTriggerForm = () => {
-    if (!selectedItem || mainTab !== 'triggers') return null;
-    const config = triggerConfig;
-
-    if (config.type === 'webhook') {
-      return (
-        <div className="space-y-4 mt-4 overflow-y-auto max-h-[300px] pr-2 border rounded-lg p-3 bg-paper-deep/20">
-          <div>
-            <Label htmlFor="webhook-url">Webhook URL</Label>
-            <div className="flex gap-2">
-              <Input
-                id="webhook-url"
-                value={config.url || ''}
-                readOnly
-                className="bg-paper-deep text-xs font-mono"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  if (await copyText(config.url || '')) toast.success('Copied to clipboard');
-                  else toast.error("Couldn't copy. Select the text and copy it yourself.");
-                }}
-              >
-                Copy
-              </Button>
-            </div>
-            <p className="text-[10px] text-steel-soft mt-1">This is your endpoint. Send data here to trigger this flow.</p>
-          </div>
-          <div>
-            <Label htmlFor="method">HTTP method</Label>
-            <Select
-              value={config.method || 'POST'}
-              onValueChange={(value) =>
-                setTriggerConfig({ ...config, method: value as 'GET' | 'POST' | 'PUT' | 'DELETE' })
-              }
-            >
-              <SelectTrigger id="method">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="GET">GET</SelectItem>
-                <SelectItem value="POST">POST</SelectItem>
-                <SelectItem value="PUT">PUT</SelectItem>
-                <SelectItem value="DELETE">DELETE</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="api-key">Security — API key (optional)</Label>
-            <Input
-              id="api-key"
-              value={config.auth || ''}
-              onChange={(e) => setTriggerConfig({ ...config, auth: e.target.value })}
-              placeholder="Enter API key to require X-API-Key header"
-            />
-          </div>
-          <div>
-            <Label htmlFor="headers">Custom headers (JSON string)</Label>
-            <Textarea
-              id="headers"
-              className="bg-paper font-mono text-xs"
-              value={JSON.stringify(config.headers || {}, null, 2)}
-              onChange={(e) => {
-                try {
-                  const headers = JSON.parse(e.target.value);
-                  setTriggerConfig({ ...config, headers });
-                } catch {
-                  // Wait for valid JSON
-                }
-              }}
-              placeholder='{ "X-Custom": "Value" }'
-            />
-          </div>
-          <div>
-            <Label htmlFor="body-template">Expected Body Template (JSON for validation or documentation)</Label>
-            <Textarea
-              id="body-template"
-              className="min-h-[100px] bg-paper font-mono text-xs"
-              value={config.body_template || ''}
-              onChange={(e) => setTriggerConfig({ ...config, body_template: e.target.value })}
-              placeholder='{ "order_id": "123", "amount": 100 }'
-            />
-          </div>
-        </div>
-      );
-    }
-
-    if (config.type === 'schedule' || config.type === 'doc-event') {
-      return (
-        <p className="mt-4 text-sm text-muted-foreground">
-          Add the node, then set the {config.type === 'schedule' ? 'schedule' : 'document event'} in the
-          sidebar. It is saved as an Automation on the flow's Procedure once the flow is saved.
-        </p>
-      );
-    }
-
-    if (config.type === 'app-trigger') {
-      return (
-        <div className="space-y-4 mt-4">
-          <div>
-            <Label htmlFor="integration">Integration</Label>
-            <Input
-              id="integration"
-              value={config.integration || ''}
-              readOnly
-              className="bg-paper-deep"
-            />
-          </div>
-          <div>
-            <Label htmlFor="event">Event</Label>
-            <Input
-              id="event"
-              value={config.event || 'new_message'}
-              onChange={(e) => setTriggerConfig({ ...config, event: e.target.value })}
-              placeholder="e.g., new_message, new_email"
-            />
-          </div>
-        </div>
-      );
-    }
-
-    return null;
   };
 
   const renderActionCategory = (title: string, actions: typeof actionOptions) => {
@@ -400,6 +202,7 @@ export function NodeSelectionModal({
                 key={action.id}
                 type="button"
                 variant="ghost"
+                data-testid={`flow-card-${action.id}`}
                 className="flex h-auto w-full items-center justify-start gap-3 rounded border border-line p-3 font-normal hover:border-ink hover:bg-paper-deep"
                 onClick={() => handleSelectAction(action.id)}
               >
@@ -424,10 +227,10 @@ export function NodeSelectionModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogScrollContent className="max-w-3xl">
+      <DialogScrollContent className="max-w-3xl" data-testid={mainTab === 'triggers' ? 'flow-trigger-modal' : 'flow-action-modal'}>
         <DialogScrollHeader>
           <DialogTitle>
-            {mainTab === 'triggers' ? 'Select Trigger' : 'Add Action'}
+            {mainTab === 'triggers' ? 'Choose a trigger' : 'Add a step'}
           </DialogTitle>
         </DialogScrollHeader>
 
@@ -454,176 +257,38 @@ export function NodeSelectionModal({
             </TabsList>
           )}
 
-          <TabsContent value="triggers" className="flex-1 flex flex-col min-h-0 mt-4">
-            <Tabs value={triggerSubTab} onValueChange={(v) => { setTriggerSubTab(v as TriggerSubTab); setSelectedItem(null); setTriggerConfig({ type: undefined }); }} className="flex-1 flex flex-col min-h-0">
-              <TabsList layout="grid" cols={2} className="flex-shrink-0">
-                <TabsTrigger value="explore">Explore</TabsTrigger>
-                <TabsTrigger value="ai-agents">AI & agents</TabsTrigger>
-              </TabsList>
-
-              <div className="flex-1 overflow-y-auto mt-4 scrollbar-hidden">
-                <TabsContent value={triggerSubTab} className="mt-0">
-                  {triggerSubTab === 'ai-agents' ? (
-                    loadingAgents ? (
-                      <div className="flex items-center justify-center py-12">
-                        <div className="font-body text-steel-soft">Loading agents...</div>
-                      </div>
-                    ) : agents.length === 0 ? (
-                      <div className="flex items-center justify-center py-12">
-                        <div className="text-center font-body text-steel">
-                          <Bot className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                          <p>No agents available</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <h3 className="text-sm font-medium mb-3 text-steel">
-                          Available agents
-                        </h3>
-                        <div className="space-y-2">
-                          {agents.filter((agent) => {
-                            const query = searchQuery.toLowerCase();
-                            const summary = agent.description || '';
-                            return (
-                              (agent.agent_name || agent.name).toLowerCase().includes(query) ||
-                              summary.toLowerCase().includes(query) ||
-                              (agent.model || '').toLowerCase().includes(query) ||
-                              (agent.provider || '').toLowerCase().includes(query)
-                            );
-                          }).map((agent) => {
-                            const status = agent.disabled === 1 ? 'Disabled' : 'Active';
-                            const summary = agent.description?.slice(0, 120) || 'No description';
-
-                            return (
-                            <Button
-                              key={agent.name}
-                              type="button"
-                              variant="ghost"
-                              className={`flex h-auto w-full items-center justify-start gap-3 rounded-lg border p-3 font-normal ${selectedItem === agent.name
-                                ? 'border-signal bg-panel hover:bg-panel'
-                                : 'border-line hover:border-ink hover:bg-paper-deep'
-                                }`}
-                              onClick={() => {
-                                setSelectedItem(agent.name);
-                                setTriggerConfig({
-                                  type: 'app-trigger',
-                                  integration: 'agent' as unknown as AppTriggerIntegration,
-                                  event: 'run_agent',
-                                  config: { agentId: agent.name, agentName: agent.agent_name || agent.name }
-                                });
-                              }}
-                            >
-                              <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                {agent.agent_color ? (
-                                  <span
-                                    className="w-4 h-4 rounded-full border border-border"
-                                    style={{ backgroundColor: agent.agent_color }}
-                                  />
-                                ) : (
-                                  <Bot className="w-4 h-4 text-primary" />
-                                )}
-                              </div>
-                              <div className="text-left flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <div className="text-sm font-medium">{agent.agent_name || agent.name}</div>
-                                  <Badge variant={status === 'Active' ? 'default' : 'secondary'} size="sm">
-                                    {status}
-                                  </Badge>
-                                  {agent.allow_chat === 1 && (
-                                    <Badge variant="outline" size="sm">Chat</Badge>
-                                  )}
-                                </div>
-                                <div className="text-xs text-steel-soft line-clamp-1">
-                                  {summary}
-                                </div>
-                                <div className="text-xs text-steel-soft mt-1">
-                                  {agent.provider || 'Unknown provider'} • {agent.model || 'Unknown model'}
-                                  {agent.prompt_mode === 'Template' ? ' • Template' : ''}
-                                </div>
-                              </div>
-                            </Button>
-                          );
-                          })}
-                        </div>
-                      </div>
-                    )
-                  ) : (
-                    <>
-                      {highlightTriggers.length > 0 && (
-                        <div className="mb-6">
-                          <h3 className="text-sm font-medium mb-3 text-steel">
-                            Highlights
-                          </h3>
-                          <div className="grid grid-cols-2 gap-3">
-                            {highlightTriggers.map((trigger) => {
-                              const Icon = iconMap[trigger.icon || 'Webhook'];
-                              return (
-                                <Button
-                                  key={trigger.id}
-                                  type="button"
-                                  variant="ghost"
-                                  className={`flex h-auto items-center justify-start gap-3 rounded-lg border p-3 font-normal ${selectedItem === trigger.id
-                                    ? 'border-signal bg-panel hover:bg-panel'
-                                    : 'border-line hover:border-ink hover:bg-paper-deep'
-                                    }`}
-                                  onClick={() => handleSelectTrigger(trigger.id)}
-                                >
-                                  <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                    {Icon ? <Icon className="w-4 h-4 text-primary" /> : <div className="w-4 h-4" />}
-                                  </div>
-                                  <div className="text-left flex-1 min-w-0">
-                                    <div className="text-sm font-medium">{trigger.name}</div>
-                                  </div>
-                                </Button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {popularTriggers.length > 0 && (
-                        <div>
-                          <h3 className="text-sm font-medium mb-3 text-steel">
-                            Popular
-                          </h3>
-                          <div className="space-y-2">
-                            {popularTriggers.map((trigger) => {
-                              const Icon = iconMap[trigger.icon || 'Webhook'];
-                              return (
-                                <Button
-                                  key={trigger.id}
-                                  type="button"
-                                  variant="ghost"
-                                  className={`flex h-auto w-full items-center justify-start gap-3 rounded-lg border p-3 font-normal ${selectedItem === trigger.id
-                                    ? 'border-signal bg-panel hover:bg-panel'
-                                    : 'border-line hover:border-ink hover:bg-paper-deep'
-                                    }`}
-                                  onClick={() => handleSelectTrigger(trigger.id)}
-                                >
-                                  <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                    {Icon ? <Icon className="w-4 h-4 text-primary" /> : <div className="w-4 h-4" />}
-                                  </div>
-                                  <div className="text-left flex-1 min-w-0">
-                                    <div className="text-sm font-medium">{trigger.name}</div>
-                                    {trigger.description && (
-                                      <div className="text-xs text-steel-soft">
-                                        {trigger.description}
-                                      </div>
-                                    )}
-                                  </div>
-                                </Button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </TabsContent>
-
-                {renderTriggerForm()}
-              </div>
-            </Tabs>
+          <TabsContent value="triggers" className="flex-1 overflow-y-auto mt-4 scrollbar-hidden">
+            <div className="grid grid-cols-2 gap-3" data-testid="flow-trigger-palette">
+              {highlightTriggers.map((trigger) => {
+                const Icon = iconMap[trigger.icon || 'Webhook'];
+                return (
+                  <Button
+                    key={trigger.id}
+                    type="button"
+                    variant="ghost"
+                    data-testid={`flow-card-${trigger.id}`}
+                    className={`flex h-auto items-center justify-start gap-3 rounded-lg border p-3 font-normal ${selectedItem === trigger.id
+                      ? 'border-signal bg-panel hover:bg-panel'
+                      : 'border-line hover:border-ink hover:bg-paper-deep'
+                      }`}
+                    onClick={() => handleSelectTrigger(trigger.id)}
+                  >
+                    <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      {Icon ? <Icon className="w-4 h-4 text-primary" /> : <div className="w-4 h-4" />}
+                    </div>
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="text-sm font-medium">{trigger.name}</div>
+                      {trigger.description && <div className="text-xs text-steel-soft">{trigger.description}</div>}
+                    </div>
+                  </Button>
+                );
+              })}
+            </div>
+            {selectedItem && (
+              <p className="mt-4 text-sm text-muted-foreground">
+                Add the trigger, then finish setting it up in the sidebar.
+              </p>
+            )}
           </TabsContent>
 
           <TabsContent value="actions" className="flex-1 overflow-y-auto mt-4 scrollbar-hidden">
@@ -638,12 +303,12 @@ export function NodeSelectionModal({
         </DialogScrollBody>
 
         <DialogScrollFooter className="justify-end">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" data-testid="flow-modal-cancel" onClick={onClose}>
             Cancel
           </Button>
           {mainTab === 'triggers' && (
-            <Button onClick={handleSaveTrigger} disabled={!selectedItem}>
-              Save configuration
+            <Button data-testid="flow-modal-add-trigger" onClick={handleSaveTrigger} disabled={!selectedItem}>
+              Add trigger
             </Button>
           )}
         </DialogScrollFooter>

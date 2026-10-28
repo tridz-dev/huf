@@ -1,5 +1,5 @@
 /** Webhook secret + URL helpers (secret lives in trigger.webhook `config.secret`, length 8-256). */
-export const WEBHOOK_PATH = '/api/method/huf.ai.flow.api.flow_webhook';
+export const WEBHOOK_PATH = '/api/method/huf.ai.flow.api.flow_webhook_clean';
 
 export function generateWebhookSecret(): string {
   const bytes = new Uint8Array(24);
@@ -15,9 +15,9 @@ export function webhookUsage(origin: string, flowId: string | undefined, secret:
   const url = webhookUrl(origin, flowId);
   const key = secret || '<secret>';
   return {
-    query: `${url}&webhook_key=${key}`,
-    header: `X-Webhook-Secret: ${key}`,
-    curl: `curl -X ${method} -H "X-Webhook-Secret: ${key}" "${url}"`,
+    query: `${url}&secret=${key}`,
+    header: `X-Huf-Secret: ${key}`,
+    curl: `curl -X ${method} -H "X-Huf-Secret: ${key}" "${url}"`,
   };
 }
 
