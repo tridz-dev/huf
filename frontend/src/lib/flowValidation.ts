@@ -7,6 +7,7 @@ import { getTransformOp } from './flowTransformOps';
 import { branchHandlesFor } from './flowBranches';
 import { cronProblem } from './flowSchedule';
 import { secretProblem } from './flowWebhookUi';
+import { requiredInputsFor } from './flowToolSchemas';
 import { edgeRoute } from '../services/flowSerializer';
 import type { FlowEdge } from '../types/flow.types';
 
@@ -114,8 +115,14 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
         break;
       }
       const input = asObj(c.input);
-      for (const [key, message] of TOOL_REQUIRED_INPUT[String(c.tool_id)] ?? []) {
+      const preset = TOOL_REQUIRED_INPUT[String(c.tool_id)];
+      for (const [key, message] of preset ?? []) {
         if (isBlank(input[key])) add(`input.${key}`, message);
+      }
+      if (!preset) {
+        for (const key of requiredInputsFor(String(c.tool_id))) {
+          if (isBlank(input[key])) add(`input.${key}`, `Enter a value for "${key}".`);
+        }
       }
       break;
     }

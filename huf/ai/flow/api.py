@@ -576,9 +576,15 @@ def _flow_trigger_summary(flow_id: str) -> dict | None:
 		"last_run": str(trigger.last_execution) if trigger.last_execution else None,
 	}
 	if automation.status != "Active":
-		out["activation_required"] = _(
-			"Procedure {0} is {1}. Enable it (Testing or Active) and activate the automation for this trigger to fire."
-		).format(automation.procedure, procedure_status)
+		from huf.huf.doctype.automation.automation import RUNNABLE_PROCEDURE_STATUSES
+
+		if procedure_status in RUNNABLE_PROCEDURE_STATUSES:
+			# The procedure is ready: the flow itself is what is not live yet.
+			out["activation_required"] = _("Publish this flow to start the trigger.")
+		else:
+			out["activation_required"] = _(
+				"Procedure {0} is {1}. Enable it (Testing or Active) and activate the automation for this trigger to fire."
+			).format(automation.procedure, procedure_status)
 	if trigger.trigger_type == "Schedule":
 		out.update(
 			schedule_type=trigger.schedule_type,
