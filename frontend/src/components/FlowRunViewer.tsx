@@ -7,6 +7,7 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { toast } from 'sonner';
+import { useFlowContext } from '../contexts/FlowContext';
 
 interface FlowRunViewerProps {
     runId: string | null;
@@ -17,6 +18,9 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
     const [run, setRun] = useState<FlowRunDetail | null>(null);
     const [loading, setLoading] = useState(false);
     const [resumePayload, setResumePayload] = useState<string>('');
+    const { activeFlow } = useFlowContext();
+    const labelOf = (nodeId: string | null | undefined) =>
+        (nodeId && activeFlow?.nodes.find((n) => n.id === nodeId)?.data.label) || nodeId || 'N/A';
 
     useEffect(() => {
         async function fetchRun() {
@@ -115,7 +119,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                             </div>
                             <div className="flex-1">
                                 <div className="text-xs text-muted-foreground mb-1">Current/Last Node</div>
-                                <div className="font-medium text-sm" data-testid="flow-run-current-node">{run.current_node_id || 'N/A'}</div>
+                                <div className="font-medium text-sm" data-testid="flow-run-current-node">{labelOf(run.current_node_id)}</div>
                             </div>
                             <div className="flex-1">
                                 <div className="text-xs text-muted-foreground mb-1">Hops</div>
@@ -131,18 +135,56 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                 </div>
                                 {run.current_node_id && (
                                     <div className="text-xs text-muted-foreground mt-2">
-                                        Failed at node <span className="font-medium">{run.current_node_id}</span>
+                                        Failed at step <span className="font-medium">{labelOf(run.current_node_id)}</span>
                                     </div>
                                 )}
                             </div>
                         )}
 
-                        <div>
-                            <h3 className="text-sm font-semibold mb-3">Context Variables</h3>
-                            <div className="bg-muted p-4 rounded-md border text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-                                {JSON.stringify(run.context_json, null, 2)}
-                            </div>
-                        </div>
+                        {(() => {
+                            const { __node_outputs__: rawOutputs, ...input } = run.context_json ?? {};
+                            const outputs = (rawOutputs && typeof rawOutputs === 'object' ? rawOutputs : {}) as Record<string, unknown>;
+                            const steps = Object.entries(outputs).map(([id, output]) => ({ id, output, failed: false }));
+                            if (run.status === 'Failed' && run.current_node_id && !(run.current_node_id in outputs)) {
+                                steps.push({ id: run.current_node_id, output: run.last_error, failed: true });
+                            }
+                            return (
+                                <>
+                                    <div data-testid="flow-run-steps">
+                                        <h3 className="text-sm font-semibold mb-3">Steps that ran</h3>
+                                        {steps.length === 0 ? (
+                                            <p className="text-xs text-muted-foreground">No step output was recorded for this run.</p>
+                                        ) : (
+                                            <ol className="space-y-2">
+                                                {steps.map((st) => (
+                                                    <li
+                                                        key={st.id}
+                                                        data-testid={`flow-run-step-${st.id}`}
+                                                        data-step-status={st.failed ? 'failed' : 'done'}
+                                                        className="rounded-md border p-3"
+                                                    >
+                                                        <div className="flex items-center gap-2 text-sm font-medium">
+                                                            {st.failed ? <XCircle className="w-4 h-4 text-destructive" /> : <CheckCircle2 className="w-4 h-4 text-good" />}
+                                                            {labelOf(st.id)}
+                                                            <span className="text-xs font-normal text-muted-foreground">{st.failed ? 'Failed' : 'Done'}</span>
+                                                        </div>
+                                                        <pre className="mt-2 bg-muted p-2 rounded text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                                                            {typeof st.output === 'string' ? st.output : JSON.stringify(st.output, null, 2)}
+                                                        </pre>
+                                                    </li>
+                                                ))}
+                                            </ol>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-semibold mb-3">Trigger input</h3>
+                                        <div data-testid="flow-run-input" className="bg-muted p-4 rounded-md border text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                                            {JSON.stringify(input, null, 2)}
+                                        </div>
+                                    </div>
+                                </>
+                            );
+                        })()}
 
                         {run.status?.startsWith('Waiting') && run.waiting && Object.keys(run.waiting).length > 0 && (
                             <div>
