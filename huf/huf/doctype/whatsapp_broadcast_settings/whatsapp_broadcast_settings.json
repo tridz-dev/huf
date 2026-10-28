@@ -44,7 +44,18 @@
   "rate_limits_write",
   "rate_audience_read",
   "rate_audience_write",
-  "rate_audience_import"
+  "rate_audience_import",
+  "section_audiences",
+  "audience_max_members",
+  "audience_inline_import_rows",
+  "audience_max_import_rows",
+  "audience_max_csv_mb",
+  "audience_max_tags_per_member",
+  "audience_max_tag_length",
+  "audience_max_name_length",
+  "audience_max_remove_per_request",
+  "audience_page_size_max",
+  "audience_max_selection_items"
  ],
  "fields": [
   {
@@ -277,7 +288,7 @@
    "fieldname": "rate_audience_read",
    "label": "Audience reads",
    "fieldtype": "Data",
-   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (120)."
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (240)."
   },
   {
    "fieldname": "rate_audience_write",
@@ -289,7 +300,72 @@
    "fieldname": "rate_audience_import",
    "label": "Audience import",
    "fieldtype": "Data",
-   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (10)."
+   "description": "Requests allowed per minute for this action, per caller address. Leave blank to use the default (20)."
+  },
+  {
+   "fieldname": "section_audiences",
+   "fieldtype": "Section Break",
+   "label": "Audiences"
+  },
+  {
+   "fieldname": "audience_max_members",
+   "label": "Contacts per audience",
+   "fieldtype": "Data",
+   "description": "An audience stops accepting new contacts at this size. Leave blank to use the default (200000)."
+  },
+  {
+   "fieldname": "audience_inline_import_rows",
+   "label": "Import size run immediately",
+   "fieldtype": "Data",
+   "description": "Larger imports run in the background. Leave blank to use the default (10000)."
+  },
+  {
+   "fieldname": "audience_max_import_rows",
+   "label": "Contacts per import",
+   "fieldtype": "Data",
+   "description": "Most contacts one import may hold. Leave blank to use the default (200000)."
+  },
+  {
+   "fieldname": "audience_max_csv_mb",
+   "label": "Audience CSV size",
+   "fieldtype": "Data",
+   "description": "Largest CSV text accepted for an audience import. Leave blank to use the default (20)."
+  },
+  {
+   "fieldname": "audience_max_tags_per_member",
+   "label": "Tags per contact",
+   "fieldtype": "Data",
+   "description": "Most tags one contact can carry. Leave blank to use the default (20)."
+  },
+  {
+   "fieldname": "audience_max_tag_length",
+   "label": "Tag length",
+   "fieldtype": "Data",
+   "description": "Longest tag accepted. Leave blank to use the default (50)."
+  },
+  {
+   "fieldname": "audience_max_name_length",
+   "label": "Contact name length",
+   "fieldtype": "Data",
+   "description": "Longer names are rejected on import. The stored name field holds 140 characters. Leave blank to use the default (140)."
+  },
+  {
+   "fieldname": "audience_max_remove_per_request",
+   "label": "Contacts removed per request",
+   "fieldtype": "Data",
+   "description": "Most contacts one remove call accepts. Leave blank to use the default (10000)."
+  },
+  {
+   "fieldname": "audience_page_size_max",
+   "label": "Audience page size",
+   "fieldtype": "Data",
+   "description": "Largest page of members or audiences returned at once. Leave blank to use the default (200)."
+  },
+  {
+   "fieldname": "audience_max_selection_items",
+   "label": "Audiences per broadcast",
+   "fieldtype": "Data",
+   "description": "Most audiences one broadcast selection may combine. Leave blank to use the default (25)."
   }
  ],
  "issingle": 1,

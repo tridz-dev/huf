@@ -3,7 +3,7 @@
 
 """WhatsApp audience member import: row validation, bulk insert, background job and its progress.
 
-Limits come from :mod:`huf.ai.whatsapp.broadcast.audiences.membership` (``LIMIT_*`` constants, rewired to policy later).
+Limits come from :mod:`huf.ai.whatsapp.broadcast.audiences.membership` (limits read through ``policy.get``).
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from typing import Any
 import frappe
 from frappe.utils import get_datetime, now_datetime
 
+from huf.ai.whatsapp.broadcast import policy
 from huf.ai.whatsapp.broadcast.audiences import membership as aud
 from huf.ai.whatsapp.broadcast import params as broadcast_params
 from huf.ai.whatsapp.broadcast import recipients as broadcast_recipients
@@ -33,8 +34,9 @@ def clean_member(raw: dict) -> tuple[dict | None, str | None]:
 	if not phone.isdigit():
 		return None, "bsuid_not_supported"
 	name = str(raw.get("display_name") or "").strip()
-	if len(name) > aud.LIMIT_MAX_NAME_LENGTH:
-		return None, f"name_too_long (max {aud.LIMIT_MAX_NAME_LENGTH})"
+	max_name = policy.get("audience_max_name_length")
+	if len(name) > max_name:
+		return None, f"name_too_long (max {max_name})"
 	try:
 		tags = aud.normalize_tags(raw.get("tags"))
 	except ValueError as exc:
@@ -92,6 +94,8 @@ def import_rows(
 	stamp = now_datetime()
 	user = frappe.session.user
 	pending: list[list[Any]] = []
+	max_members, chunk = policy.get("audience_max_members"), policy.get("audience_import_chunk")
+	list_cap = policy.get("returned_list_limit")
 	fields = [
 		"name", "owner", "creation", "modified", "modified_by", "docstatus", "idx", "audience", "recipient",
 		"display_name", "params", "tags", "consent_source", "consent_at", "source", "added_at",
@@ -106,7 +110,7 @@ def import_rows(
 
 	def note(kind: str, entry: dict):
 		result[f"{kind}_total"] += 1
-		if len(result[kind]) < aud.RETURNED_LIST_LIMIT:
+		if len(result[kind]) < list_cap:
 			result[kind].append(entry)
 
 	for index, raw in enumerate(rows, start=1):
@@ -123,7 +127,7 @@ def import_rows(
 				seen.add(phone)
 				_update_member(existing[phone], clean)
 				result["updated"] += 1
-			elif len(existing) + result["added"] >= aud.LIMIT_MAX_MEMBERS_PER_AUDIENCE:
+			elif len(existing) + result["added"] >= max_members:
 				note("skipped", {"row": index, "recipient": phone, "reason": "audience_full"})
 			else:
 				seen.add(phone)
@@ -135,9 +139,9 @@ def import_rows(
 					]
 				)  # fmt: skip
 				result["added"] += 1
-		if len(pending) >= aud.IMPORT_CHUNK:
+		if len(pending) >= chunk:
 			flush()
-		if progress and index % aud.IMPORT_CHUNK == 0:
+		if progress and index % chunk == 0:
 			progress({"processed": index, "total": len(rows), **_brief(result)})
 	flush()
 	if progress:
@@ -161,7 +165,7 @@ def _update_member(existing: dict, clean: dict) -> None:
 		values["consent_at"] = clean["consent_at"]
 	if clean["tags"]:
 		merged = list(dict.fromkeys(aud._as_list(existing.get("tags")) + clean["tags"]))
-		values["tags"] = json.dumps(merged[:aud.LIMIT_MAX_TAGS_PER_MEMBER])
+		values["tags"] = json.dumps(merged[:policy.get("audience_max_tags_per_member")])
 	if values:
 		frappe.db.set_value(MEMBER, existing["name"], values)
 
@@ -173,7 +177,7 @@ def _job_key(job_id: str) -> str:
 
 def set_job_state(job_id: str, state: dict) -> None:
 	try:
-		frappe.cache().set(_job_key(job_id), json.dumps(state, default=str), ex=aud.IMPORT_JOB_TTL)
+		frappe.cache().set(_job_key(job_id), json.dumps(state, default=str), ex=policy.get("audience_import_job_ttl"))
 	except Exception:
 		pass
 

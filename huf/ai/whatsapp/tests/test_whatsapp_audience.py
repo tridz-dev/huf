@@ -6,6 +6,7 @@
 import unittest
 from unittest.mock import patch
 
+from huf.ai.whatsapp.broadcast import policy
 from huf.ai.whatsapp.broadcast.audiences import membership as aud
 from huf.ai.whatsapp.broadcast.audiences import importer as imp
 
@@ -56,9 +57,9 @@ class TestTags(unittest.TestCase):
 
 	def test_overlong_and_too_many_tags_rejected(self):
 		with self.assertRaises(ValueError):
-			aud.normalize_tags(["x" * (aud.LIMIT_MAX_TAG_LENGTH + 1)])
+			aud.normalize_tags(["x" * (policy.get("audience_max_tag_length") + 1)])
 		with self.assertRaises(ValueError):
-			aud.normalize_tags([f"t{i}" for i in range(aud.LIMIT_MAX_TAGS_PER_MEMBER + 1)])
+			aud.normalize_tags([f"t{i}" for i in range(policy.get("audience_max_tags_per_member") + 1)])
 
 	def test_any_and_all_modes(self):
 		self.assertTrue(aud.tags_match(["vip"], ["vip", "eu"], "any"))

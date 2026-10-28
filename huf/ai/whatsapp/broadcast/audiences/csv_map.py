@@ -9,6 +9,7 @@ import csv
 import io
 from typing import Any
 
+from huf.ai.whatsapp.broadcast import policy
 from huf.ai.whatsapp.broadcast.audiences import membership as aud
 from huf.ai.whatsapp.broadcast import recipients as broadcast_recipients
 from huf.ai.whatsapp.management import _error, _parse_json_arg
@@ -29,8 +30,9 @@ def mapped_rows(csv_text: Any, rows: Any, mapping: Any) -> list[dict] | dict[str
 	if csv_text and rows:
 		return _error("invalid", "Send either csv_text or rows, not both.")
 	if csv_text:
-		if len(str(csv_text).encode("utf-8")) > aud.LIMIT_MAX_CSV_BYTES:
-			return _error("csv_too_large", f"The file is larger than {aud.LIMIT_MAX_CSV_BYTES // (1024 * 1024)} MB.")
+		max_mb = policy.get("audience_max_csv_mb")
+		if len(str(csv_text).encode("utf-8")) > max_mb * 1024 * 1024:
+			return _error("csv_too_large", f"The file is larger than {max_mb:g} MB.")
 		reader = csv.reader(io.StringIO(str(csv_text).lstrip("﻿")))
 		table = [cells for cells in reader if any(c.strip() for c in cells)]
 		if not table:
@@ -42,8 +44,9 @@ def mapped_rows(csv_text: Any, rows: Any, mapping: Any) -> list[dict] | dict[str
 		if not all(isinstance(r, dict) for r in records):
 			return _error("invalid", "rows must be a list of objects.")
 		headers = list(records[0].keys()) if records else []
-	if len(records) > aud.LIMIT_MAX_IMPORT_ROWS:
-		return _error("too_many", f"Import at most {aud.LIMIT_MAX_IMPORT_ROWS} contacts at a time.")
+	max_rows = policy.get("audience_max_import_rows")
+	if len(records) > max_rows:
+		return _error("too_many", f"Import at most {max_rows} contacts at a time.")
 	columns = resolve_mapping(headers, mapping)
 	if isinstance(columns, dict) and columns.get("error"):
 		return columns
