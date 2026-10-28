@@ -35,5 +35,3 @@ export function csvToObjects(text: string): { headers: string[]; rows: Record<st
 export function guessPhoneColumn(headers: string[]): string {
   return headers.find((h) => /phone|mobile|whatsapp|number|msisdn/i.test(h)) ?? headers[0] ?? '';
 }
-
-export const maskPhone = (p: string) => (p.length <= 4 ? p : `${'•'.repeat(Math.max(p.length - 4, 0))}${p.slice(-4)}`);

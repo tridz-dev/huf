@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -8,15 +8,16 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { errorText } from '@/services/whatsappApi';
-import { importMembers, type ImportResult, type OnConflict } from './audiencesApi';
+import { getImportStatus, importMembers, type ImportStatus, type ImportTotals, type OnConflict } from './audiencesApi';
 import { csvToObjects, guessPhoneColumn } from './csv';
 
 const NONE = '__none__';
 const CONFLICTS: { value: OnConflict; label: string }[] = [
   { value: 'skip', label: 'Keep the existing contact' },
-  { value: 'update', label: 'Update name and values' },
-  { value: 'replace_tags', label: 'Update and replace tags' },
+  { value: 'update', label: 'Update name and values (tags are merged)' },
+  { value: 'fail', label: 'Stop if any contact already exists' },
 ];
+const POLL_MS = 1500;
 
 interface Props { audience: string; title: string; onClose: () => void; onDone: () => void }
 
@@ -43,11 +44,13 @@ export function ImportMembersDialog({ audience, title, onClose, onDone }: Props)
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [tags, setTags] = useState('');
-  const [paramCols, setParamCols] = useState<Record<string, string>>({});
+  const [paramCols, setParamCols] = useState<string[]>([]);
   const [conflict, setConflict] = useState<OnConflict>('skip');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [result, setResult] = useState<ImportResult | null>(null);
+  const [result, setResult] = useState<ImportTotals | null>(null);
+  const [job, setJob] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ImportStatus | null>(null);
 
   const parsed = useMemo(() => csvToObjects(text), [text]);
   const setCsv = (t: string) => {
@@ -56,11 +59,26 @@ export function ImportMembersDialog({ audience, title, onClose, onDone }: Props)
     setPhone(guessPhoneColumn(h));
     setName(h.find((x) => /name/i.test(x)) ?? '');
     setTags(h.find((x) => /tag|label|group/i.test(x)) ?? '');
-    setParamCols({});
+    setParamCols([]);
   };
   const onFile = async (f: File | undefined) => { if (f) setCsv(await f.text()); };
   const extra = parsed.headers.filter((h) => h !== phone && h !== name && h !== tags);
-  const paramMap = Object.fromEntries(Object.entries(paramCols).filter(([, v]) => v));
+
+  useEffect(() => {
+    if (!job) return undefined;
+    let stop = false;
+    const tick = async () => {
+      const res = await getImportStatus(audience, job);
+      if (stop) return;
+      if (!res.success) { setErr(errorText(res)); setJob(null); return; }
+      setProgress(res);
+      if (res.status === 'done' && res.result) { setJob(null); setResult(res.result); toast.success('Import finished'); onDone(); }
+      else if (res.status === 'failed') { setJob(null); setErr(res.error || 'The import failed.'); }
+    };
+    const id = setInterval(() => void tick(), POLL_MS);
+    return () => { stop = true; clearInterval(id); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job, audience]);
 
   const run = async () => {
     if (!parsed.rows.length) { setErr('Paste or upload a CSV with a header row and at least one contact.'); return; }
@@ -68,10 +86,11 @@ export function ImportMembersDialog({ audience, title, onClose, onDone }: Props)
     setBusy(true); setErr('');
     const res = await importMembers({
       audience, csv_text: text, on_conflict: conflict,
-      mapping: { phone, name: name || undefined, tags: tags || undefined, params: Object.keys(paramMap).length ? paramMap : undefined },
+      mapping: { phone, name: name || undefined, tags: tags || undefined, params: paramCols.length ? paramCols : undefined },
     });
     setBusy(false);
     if (!res.success) { setErr(errorText(res)); return; }
+    if (res.queued) { setJob(res.job_id); setProgress(null); return; }
     setResult(res);
     toast.success('Import finished');
     onDone();
@@ -87,14 +106,13 @@ export function ImportMembersDialog({ audience, title, onClose, onDone }: Props)
         {result ? (
           <div className="space-y-2" role="status">
             <p className="text-sm">
-              {result.added} added, {result.updated} updated, {result.skipped} skipped, {result.invalid} not valid.
+              {result.added} added, {result.updated} updated, {result.skipped_total} skipped, {result.invalid_total} not valid.
             </p>
-            {result.errors?.length ? (
-              <ul className="max-h-32 list-disc overflow-y-auto pl-5 text-xs text-steel">
-                {result.errors.slice(0, 20).map((e) => <li key={e.row}>Row {e.row}: {e.reason}</li>)}
-              </ul>
-            ) : null}
           </div>
+        ) : job ? (
+          <p role="status" className="text-sm">
+            Importing in the background{progress ? `: ${progress.processed} of ${progress.total} contacts` : '...'}. You can close this window.
+          </p>
         ) : (
           <div className="space-y-3">
             <Field label="CSV file" id="imp-file">
@@ -113,13 +131,13 @@ export function ImportMembersDialog({ audience, title, onClose, onDone }: Props)
                 {extra.length > 0 && (
                   <fieldset className="space-y-2">
                     <legend className="text-sm font-medium">Template values (optional)</legend>
-                    <p className="text-xs text-steel">Columns you keep here fill template variables with the same name.</p>
+                    <p className="text-xs text-steel">Ticked columns fill the template's variables, in the order they appear in the file.</p>
                     {extra.map((h) => (
                       <div key={h} className="flex items-center gap-2 text-sm">
                         <Checkbox
                           aria-label={`Use ${h} as a template value`}
-                          checked={paramCols[h] === h}
-                          onCheckedChange={(c) => setParamCols((cur) => ({ ...cur, [h]: c === true ? h : '' }))}
+                          checked={paramCols.includes(h)}
+                          onCheckedChange={(c) => setParamCols(extra.filter((x) => (x === h ? c === true : paramCols.includes(x))))}
                         />
                         {h}
                       </div>
@@ -143,8 +161,8 @@ export function ImportMembersDialog({ audience, title, onClose, onDone }: Props)
           </div>
         )}
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>{result ? 'Close' : 'Cancel'}</Button>
-          {!result && <Button disabled={busy} onClick={() => void run()}>Import contacts</Button>}
+          <Button variant="ghost" onClick={onClose}>{result || job ? 'Close' : 'Cancel'}</Button>
+          {!result && !job && <Button disabled={busy} onClick={() => void run()}>Import contacts</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>
