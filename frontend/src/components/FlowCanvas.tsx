@@ -102,9 +102,14 @@ function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layoutRevis
           const { width, height } = store.getState();
           const fresh = getNodes().filter((n) => !before.has(n.id));
           if (fresh.length === 0 || width <= 0) return;
-          const next = panToReveal(getNodesBounds(fresh), getViewport(), { width, height });
+          // A card that has not been measured yet counts with the usual card size.
+          const rects = fresh.map((n) => ({ x: n.position.x, y: n.position.y, width: n.width ?? 236, height: n.height ?? 62 }));
+          const left = Math.min(...rects.map((r) => r.x));
+          const top = Math.min(...rects.map((r) => r.y));
+          const bounds = { x: left, y: top, width: Math.max(...rects.map((r) => r.x + r.width)) - left, height: Math.max(...rects.map((r) => r.y + r.height)) - top };
+          const next = panToReveal(bounds, getViewport(), { width, height });
           if (next) setViewport({ ...next, zoom: getViewport().zoom }, { duration: 200 });
-        }, 60);
+        }, 150);
         return () => clearTimeout(timer);
       }
     }

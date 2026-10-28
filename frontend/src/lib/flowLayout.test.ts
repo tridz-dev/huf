@@ -66,7 +66,7 @@ describe('panToReveal', () => {
     expect(r).toEqual({ x: 0, y: -(760 - (600 - 24)) });
   });
   it('accounts for zoom', () => {
-    const r = panToReveal({ x: 0, y: 1000, width: 100, height: 100 }, { x: 0, y: 0, zoom: 0.5 }, size);
-    expect(r?.y).toBe(600 - 24 - 550);
+    const r = panToReveal({ x: 0, y: 2000, width: 100, height: 100 }, { x: 0, y: 0, zoom: 0.5 }, size);
+    expect(r?.y).toBe(600 - 24 - 1050);
   });
 });
