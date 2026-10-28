@@ -597,7 +597,7 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 
 	# Permission is verified before anything is mutated.
 	waiting = _load_waiting(flow_run)
-	_verify_approval_permission(waiting)
+	verify_approval_permission(waiting)
 
 	version = _pinned_version(flow_run)
 	run_ctx = _build_run_context(flow_run, version)
@@ -2280,9 +2280,14 @@ def _create_flow_conversation(flow_id: str, entry_node_id: str) -> "frappe.Docum
 	return conv
 
 
-def _verify_approval_permission(waiting: dict):
-	"""Raise PermissionError unless the current user may decide this approval (fail closed)."""
-	user = frappe.session.user
+def verify_approval_permission(run, user: str | None = None):
+	"""Raise PermissionError unless ``user`` (default: session user) may decide this run's approval.
+
+	``run`` is the Flow Run document (or its parsed ``waiting`` dict). Fail closed: see
+	:func:`check_approver`. Applies equally to approve and reject.
+	"""
+	waiting = run if isinstance(run, dict) else _load_waiting(run)
+	user = user or frappe.session.user
 	reason = check_approver(waiting, user, frappe.get_roles(user))
 	if reason:
 		frappe.throw(_(reason), frappe.PermissionError)
