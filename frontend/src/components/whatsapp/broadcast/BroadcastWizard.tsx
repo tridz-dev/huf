@@ -205,11 +205,11 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   const start = async () => {
     setBusy(true); setErr('');
     const res = await startBroadcast(broadcast, requireTyped ? typed.trim() : String(preview?.queued ?? ''), (preview?.warnings ?? []).map((w) => toIssue(w).code));
-    if (!res.success && res.error === 'warnings_changed') {
+    if (!res.success && (res.error === 'warnings_changed' || res.error === 'recipients_changed')) {
       // The situation changed since the preview: show the new list and ask again.
       const p = await previewBroadcast(broadcast);
       if (p.success) { setPreview(p.preview); setAcked({}); setStep(3); }
-      setBusy(false); setErr('Something changed since you reviewed this broadcast. Please review the warnings again.');
+      setBusy(false); setErr(res.error === 'recipients_changed' ? 'The recipient list changed since you reviewed this broadcast. Please review it again.' : 'Something changed since you reviewed this broadcast. Please review the warnings again.');
       return;
     }
     setBusy(false);

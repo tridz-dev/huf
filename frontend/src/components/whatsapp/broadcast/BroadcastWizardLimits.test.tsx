@@ -116,4 +116,16 @@ describe('wizard limits', () => {
     expect(await screen.findByText(/review the warnings again/)).toBeInTheDocument();
     expect(m.previewBroadcast).toHaveBeenCalledTimes(2);
   });
+
+  it('re-reviews when the recipient list changed before the start', async () => {
+    m.startBroadcast.mockResolvedValue({ success: false, error: 'recipients_changed', message: 'changed' } as never);
+    m.previewBroadcast.mockResolvedValue(ok({ preview: pv() }));
+    const user = userEvent.setup();
+    render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
+    await toPreview(user);
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.type(screen.getByLabelText(/Type 2 to confirm/), '2');
+    await user.click(screen.getByRole('button', { name: 'Start broadcast' }));
+    expect(await screen.findByText(/recipient list changed/)).toBeInTheDocument();
+  });
 });
