@@ -23,7 +23,7 @@ def _graph():
 		"fingerprint": "0" * 64,
 		"entry": ["t"],
 		"nodes": [
-			{"id": "t", "type": "trigger.webhook", "config": {"method": "POST", "secret": "unit-test-secret"}, "next": "e"},
+			{"id": "t", "type": "trigger.webhook", "config": {"method": "POST", "secret": "unit-test-secret-0123456789abcdefghij"}, "next": "e"},
 			{"id": "e", "type": "output", "config": {"value": "done"}},
 		],
 		"contract": {

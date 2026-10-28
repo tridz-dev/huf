@@ -1,4 +1,5 @@
-/** Webhook secret + URL helpers (secret lives in trigger.webhook `config.secret`, length 8-256). */
+/** Webhook secret + URL helpers (secret lives in trigger.webhook `config.secret`, length 32-256). */
+export const MIN_SECRET_LENGTH = 32;
 export const WEBHOOK_PATH = '/api/method/huf.ai.flow.api.flow_webhook_clean';
 
 export function generateWebhookSecret(): string {
@@ -15,7 +16,6 @@ export function webhookUsage(origin: string, flowId: string | undefined, secret:
   const url = webhookUrl(origin, flowId);
   const key = secret || '<secret>';
   return {
-    query: `${url}&secret=${key}`,
     header: `X-Huf-Secret: ${key}`,
     curl: `curl -X ${method} -H "X-Huf-Secret: ${key}" "${url}"`,
   };
@@ -24,7 +24,7 @@ export function webhookUsage(origin: string, flowId: string | undefined, secret:
 export function secretProblem(secret: unknown): string | null {
   const s = typeof secret === 'string' ? secret : '';
   if (!s) return 'A secret is required. Generate one so only your callers can start this flow.';
-  if (s.length < 8) return 'The secret must be at least 8 characters.';
+  if (s.length < MIN_SECRET_LENGTH) return `The secret must be at least ${MIN_SECRET_LENGTH} characters. Use the generate button for a strong one.`;
   if (s.length > 256) return 'The secret must be 256 characters or fewer.';
   return null;
 }

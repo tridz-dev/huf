@@ -82,7 +82,7 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 			"fingerprint": "0" * 64,
 			"entry": "start",
 			"nodes": [
-				{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret"}, "next": "send"},
+				{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}, "next": "send"},
 				{"id": "send", "type": "tool.call", "config": {"tool_id": self.tool.tool_name, "input": tool_input}},
 			],
 			"contract": {
@@ -227,7 +227,7 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 			"fingerprint": "0" * 64,
 			"entry": "start",
 			"nodes": [
-				{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret"}, "next": "out"},
+				{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}, "next": "out"},
 				{"id": "out", "type": "output", "config": {"value": value}},
 			],
 			"contract": {

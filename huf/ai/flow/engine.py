@@ -353,6 +353,47 @@ def _release_run_lock(flow_run_name: str) -> None:
 		pass
 
 
+#: A run in one of these statuses is finished: nothing may move it again.
+TERMINAL_STATUSES = ("Success", "Failed", "Cancelled")
+
+
+def _transition_run(
+	flow_run,
+	values: dict,
+	*,
+	from_statuses: tuple | list | None = None,
+	not_from_statuses: tuple | list | None = None,
+	bump_hop: bool = False,
+) -> bool:
+	"""Atomically move a Flow Run, only if it is still in the expected status.
+
+	One ``UPDATE ... WHERE name = %s AND status IN (...)`` (or ``NOT IN``): the database, not a
+	earlier read, decides. Two callers racing for the same transition (two approvers, an approver
+	and the timeout sweep, a live worker and "Mark as failed") cannot both win, whatever snapshot
+	of the row each of them read before. Returns True when this call made the change; on success
+	the in-memory document is updated to match.
+	"""
+	table = frappe.qb.DocType("Flow Run")
+	query = frappe.qb.update(table)
+	for field, value in values.items():
+		query = query.set(table[field], value)
+	if bump_hop:
+		query = query.set(table.hop_count, table.hop_count + 1)
+	query = query.set(table.modified, now_datetime()).where(table.name == flow_run.name)
+	if from_statuses:
+		query = query.where(table.status.isin(list(from_statuses)))
+	if not_from_statuses:
+		query = query.where(table.status.notin(list(not_from_statuses)))
+	query.run()
+	changed = (getattr(getattr(frappe.db, "_cursor", None), "rowcount", 0) or 0) > 0
+	if changed:
+		for field, value in values.items():
+			flow_run.set(field, value) if hasattr(flow_run, "set") else setattr(flow_run, field, value)
+		if bump_hop:
+			flow_run.hop_count = (flow_run.hop_count or 0) + 1
+	return changed
+
+
 # ---------------------------------------------------------------------------
 # Public entry points
 # ---------------------------------------------------------------------------
@@ -508,7 +549,10 @@ def run_flow(flow_run_name: str):
 		edges_list = effective_edges(defn)
 		run_ctx = _build_run_context(flow_run, version)
 
-		flow_run.db_set({"status": "Running", "last_error": ""})
+		if flow_run.status in TERMINAL_STATUSES:
+			return  # finished (or failed by an operator) while this job was queued: never revive it
+		if not _transition_run(flow_run, {"status": "Running", "last_error": ""}, not_from_statuses=TERMINAL_STATUSES):
+			return
 		commit_if_background()
 
 		try:
@@ -542,7 +586,7 @@ def _build_run_context(flow_run, version: PinnedVersion) -> FlowRunContext:
 
 def resume_flow_run(flow_run_name: str, user_input: dict | None = None):
 	"""
-	Resume a paused flow run (Waiting User / Waiting Approval).
+	Resume a paused flow run (Waiting User).
 
 	A pause records where to continue (structural knot 2), so resuming
 	*advances past* the node that paused rather than re-executing it. That is
@@ -550,44 +594,57 @@ def resume_flow_run(flow_run_name: str, user_input: dict | None = None):
 	side effects is a bug -- and what keeps a resumed run independent of any
 	edit made to the definition while it was waiting (F-1).
 
+	Runs under the run lock and leaves the waiting state with one conditional UPDATE, so two
+	concurrent resumes cannot both advance the run.
+
 	Args:
 	    flow_run_name: Name of the Flow Run
 	    user_input: Optional input to merge into context
 	"""
-	flow_run = frappe.get_doc("Flow Run", flow_run_name)
+	if not _acquire_run_lock(flow_run_name):
+		frappe.throw(_("This run is being updated right now. Refresh to see where it stands."))
 
-	if flow_run.status not in WAITING_STATUSES:
-		frappe.throw(_("Flow Run is not in a waiting state (status: {0})").format(flow_run.status))
-	if flow_run.status == "Waiting Approval":
-		# An approval is only ever resolved by approve_flow_run, which checks the approver.
-		frappe.throw(_("Flow Run is waiting for approval; use approve_flow_run"), frappe.PermissionError)
+	complete = False
+	try:
+		flow_run = frappe.get_doc("Flow Run", flow_run_name)
 
-	version = _pinned_version(flow_run)
-	run_ctx = _build_run_context(flow_run, version)
+		if flow_run.status not in WAITING_STATUSES:
+			frappe.throw(_("Flow Run is not in a waiting state (status: {0})").format(flow_run.status))
+		if flow_run.status == "Waiting Approval":
+			# An approval is only ever resolved by approve_flow_run, which checks the approver.
+			frappe.throw(_("Flow Run is waiting for approval; use approve_flow_run"), frappe.PermissionError)
 
-	if user_input:
-		run_ctx.context.update(user_input)
-		run_ctx.save_context()
+		waiting = _load_waiting(flow_run)
+		if approval_expired(waiting, now_datetime()):
+			frappe.throw(_("This request has expired and can no longer be answered."))
 
-	waiting = _load_waiting(flow_run)
-	paused_node = flow_run.current_node_id
-	next_node_id = waiting.get("resume_node") or _evaluate_edges(
-		flow_run, paused_node, {"status": "success"}, run_ctx.edges
-	)
+		version = _pinned_version(flow_run)
+		run_ctx = _build_run_context(flow_run, version)
+		paused_node = flow_run.current_node_id
+		next_node_id = waiting.get("resume_node") or _evaluate_edges(
+			flow_run, paused_node, {"status": "success"}, run_ctx.edges
+		)
 
-	flow_run.db_set({"waiting": None, "status": "Running"})
-	commit_if_background()
+		values = {"waiting": None, "status": "Running"}
+		if next_node_id:
+			values["current_node_id"] = next_node_id
+		if not _transition_run(flow_run, values, from_statuses=("Waiting User",), bump_hop=bool(next_node_id)):
+			frappe.throw(_("This run was already resumed by someone else."))
 
-	if not next_node_id:
-		# The node that paused was the last step on its chain.
-		_complete_flow_run(flow_run)
-		return
+		if user_input:
+			run_ctx.context.update(user_input)
+			run_ctx.save_context()
+		complete = not next_node_id
+		if complete:
+			# The node that paused was the last step on its chain.
+			_complete_flow_run(flow_run)
+		# The claim must be durable before the lock goes, or a second caller could take it again.
+		frappe.db.commit()  # nosemgrep
+	finally:
+		_release_run_lock(flow_run_name)
 
-	flow_run.db_set("current_node_id", next_node_id)
-	flow_run.db_set("hop_count", (flow_run.hop_count or 0) + 1)
-	commit_if_background()
-
-	run_flow(flow_run_name)
+	if not complete:
+		run_flow(flow_run_name)
 
 
 def _load_waiting(flow_run) -> dict:
@@ -615,6 +672,11 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 	node's output, so downstream nodes read it as ``{"$from": "<approval_node_id>"}``.
 	Routing is the node's own ``approve_next`` / ``reject_next``.
 
+	Concurrency: the decision runs under the run lock, re-reads the status under it, refuses an
+	approval whose deadline has passed, and moves the run out of ``Waiting Approval`` with one
+	conditional UPDATE. Exactly one of any number of simultaneous decisions (or a decision racing
+	the timeout sweep) wins; the others are refused and nothing downstream runs twice.
+
 	Args:
 	    flow_run_name: Name of the Flow Run
 	    decision: "approved" or "rejected"
@@ -623,47 +685,59 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 	if decision not in APPROVAL_DECISIONS:
 		frappe.throw(_("decision must be 'approved' or 'rejected'"))
 
-	flow_run = frappe.get_doc("Flow Run", flow_run_name)
+	if not _acquire_run_lock(flow_run_name):
+		frappe.throw(_("Someone else is deciding this approval right now. Refresh to see the result."))
 
-	if flow_run.status != "Waiting Approval":
-		frappe.throw(_("Flow Run is not waiting for approval (status: {0})").format(flow_run.status))
+	next_node = None
+	flow_run = None
+	try:
+		flow_run = frappe.get_doc("Flow Run", flow_run_name)
 
-	# Permission is verified before anything is mutated.
-	waiting = _load_waiting(flow_run)
-	verify_approval_permission(waiting)
+		if flow_run.status != "Waiting Approval":
+			frappe.throw(_("Flow Run is not waiting for approval (status: {0})").format(flow_run.status))
 
-	version = _pinned_version(flow_run)
-	run_ctx = _build_run_context(flow_run, version)
-	edges_list = run_ctx.edges
-	current_node = flow_run.current_node_id
+		# Permission is verified before anything is mutated.
+		waiting = _load_waiting(flow_run)
+		verify_approval_permission(waiting)
 
-	run_ctx.context.record_output(
-		current_node,
-		{
-			"decision": decision,
-			"comment": comment,
-			"decided_by": frappe.session.user,
-			"decided_at": _utc_now_iso(),
-		},
-	)
-	run_ctx.save_context()
+		if approval_expired(waiting, now_datetime()):
+			frappe.throw(_("This approval has expired"))
 
-	router = _build_router(flow_run, run_ctx, edges_list, ExecutionState(cursor=current_node))
-	next_node = router.resolve_labelled(current_node, decision)
+		version = _pinned_version(flow_run)
+		run_ctx = _build_run_context(flow_run, version)
+		edges_list = run_ctx.edges
+		current_node = flow_run.current_node_id
 
-	if not next_node:
-		flow_run.db_set("waiting", None)
-		_fail_flow_run(flow_run, f"No route for approval outcome '{decision}' from node '{current_node}'")
+		router = _build_router(flow_run, run_ctx, edges_list, ExecutionState(cursor=current_node))
+		next_node = router.resolve_labelled(current_node, decision)
+
+		values = {"waiting": None, "status": "Running"}
+		if next_node:
+			values["current_node_id"] = next_node
+		# The claim: only the caller whose UPDATE still finds the run waiting goes on.
+		if not _transition_run(flow_run, values, from_statuses=("Waiting Approval",), bump_hop=bool(next_node)):
+			frappe.throw(_("This approval was already decided"))
+
+		run_ctx.context.record_output(
+			current_node,
+			{
+				"decision": decision,
+				"comment": comment,
+				"decided_by": frappe.session.user,
+				"decided_at": _utc_now_iso(),
+			},
+		)
+		run_ctx.save_context()
+		if not next_node:
+			_fail_flow_run(flow_run, f"No route for approval outcome '{decision}' from node '{current_node}'")
 		_clear_flow_notifications(flow_run)
-		return
+		# The claim must be durable before the lock goes, or a second caller could decide again.
+		frappe.db.commit()  # nosemgrep
+	finally:
+		_release_run_lock(flow_run_name)
 
-	flow_run.db_set({"current_node_id": next_node, "waiting": None, "status": "Running"})
-	flow_run.db_set("hop_count", (flow_run.hop_count or 0) + 1)
-	commit_if_background()
-
-	_clear_flow_notifications(flow_run)
-
-	run_flow(flow_run.name)
+	if next_node:
+		run_flow(flow_run.name)
 
 
 def _utc_now_iso() -> str:
@@ -694,10 +768,17 @@ def expire_approval(flow_run_name: str, now=None, enqueue: bool = False) -> bool
 
 		timeout_next = waiting.get("timeout_next")
 		node_id = flow_run.current_node_id
+		values = {"waiting": None, "status": "Running"}
+		if timeout_next:
+			values["current_node_id"] = timeout_next
+		# Same conditional claim as a decision: if an approver got there first this loses quietly.
+		if not _transition_run(flow_run, values, from_statuses=("Waiting Approval",), bump_hop=bool(timeout_next)):
+			return False
+
 		if not timeout_next:
-			flow_run.db_set("waiting", None)
 			_fail_flow_run(flow_run, f"Approval timed out at node '{node_id}'")
 			_clear_flow_notifications(flow_run)
+			frappe.db.commit()  # nosemgrep
 			return True
 
 		version = _pinned_version(flow_run)
@@ -706,10 +787,8 @@ def expire_approval(flow_run_name: str, now=None, enqueue: bool = False) -> bool
 			node_id, {"decision": "timeout", "comment": None, "decided_by": None, "decided_at": _utc_now_iso()}
 		)
 		run_ctx.save_context()
-		flow_run.db_set({"current_node_id": timeout_next, "waiting": None, "status": "Running"})
-		flow_run.db_set("hop_count", (flow_run.hop_count or 0) + 1)
-		commit_if_background()
 		_clear_flow_notifications(flow_run)
+		frappe.db.commit()  # nosemgrep
 	finally:
 		_release_run_lock(flow_run_name)
 
@@ -1567,7 +1646,10 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 
 	# Persist earlier nodes' outputs so downstream {"$from": ...} still resolves after the pause.
 	_persist_context(flow_run, ctx, settings)
-	flow_run.db_set({"status": "Waiting Approval", "waiting": json.dumps(waiting_data)})
+	if not _transition_run(
+		flow_run, {"status": "Waiting Approval", "waiting": json.dumps(waiting_data)}, not_from_statuses=TERMINAL_STATUSES
+	):
+		return {"status": "waiting_approval"}  # the run finished meanwhile (operator action): do not revive it
 	commit_if_background()
 	_send_approval_notifications(flow_run, node, config, waiting_data)
 	flow_hooks.notify_approvers(flow_run)
@@ -2332,20 +2414,34 @@ def _sync_gateway_event(flow_run, status: str, reply_text: str | None = None, er
 	commit_if_background()
 
 
-def _complete_flow_run(flow_run, reply_text: str | None = None):
-	"""Mark a flow run as successfully completed."""
-	flow_run.db_set({"status": "Success", "completed_at": now_datetime()})
+def _complete_flow_run(flow_run, reply_text: str | None = None) -> bool:
+	"""Mark a flow run as successfully completed. A run that already finished is left alone (returns False)."""
+	if not _transition_run(
+		flow_run, {"status": "Success", "completed_at": now_datetime()}, not_from_statuses=TERMINAL_STATUSES
+	):
+		return False
 	commit_if_background()
 	_sync_gateway_event(flow_run, "Success", reply_text)
+	return True
 
 
-def _fail_flow_run(flow_run, error_msg: str):
-	"""Mark a flow run as failed."""
-	flow_run.db_set({"status": "Failed", "last_error": error_msg, "completed_at": now_datetime()})
+def _fail_flow_run(flow_run, error_msg: str) -> bool:
+	"""Mark a flow run as failed. A run that already finished is left alone (returns False).
+
+	The write is conditional on the run not being terminal already, so a live worker finishing a run
+	cannot be overwritten by "Mark as failed" or the stale sweep, and neither can undo a finished run.
+	"""
+	if not _transition_run(
+		flow_run,
+		{"status": "Failed", "last_error": error_msg, "completed_at": now_datetime()},
+		not_from_statuses=TERMINAL_STATUSES,
+	):
+		return False
 	commit_if_background()
 	_sync_gateway_event(flow_run, "Failed", error=error_msg)
 	_publish_flow_event(flow_run, "flow_failed", {"error": error_msg})
 	flow_hooks.notify_failure(flow_run.name)
+	return True
 
 
 # ---------------------------------------------------------------------------

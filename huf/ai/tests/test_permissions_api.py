@@ -125,6 +125,7 @@ class TestPermissionsAPISelfTargetingAndCapabilities(IntegrationTestCase):
 		"flows.use",
 		"flows.create",
 		"flows.manage",
+		"flows.publish_sensitive",
 		"data.tables.manage",
 		"data.records.create",
 		"data.records.view_all",
