@@ -608,7 +608,8 @@ export function FlowCanvas({
       let x = end.position.x + end.offset;
       const y = end.position.y + 150;
       let guard = 0;
-      while (taken.some((p) => Math.abs(p.x - x) < 230 && Math.abs(p.y - y) < 80) && guard++ < 8) x += 280;
+      const dir = end.offset < 0 ? -1 : 1; // a left-hand branch slides left, any other slides right
+      while (taken.some((p) => Math.abs(p.x - x) < 230 && Math.abs(p.y - y) < 80) && guard++ < 8) x += dir * 280;
       taken.push({ x, y });
       return {
         id: `ghost-${end.nodeId}-${end.route}`,
