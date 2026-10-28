@@ -54,6 +54,27 @@ class TestTriggerDoctypes(IntegrationTestCase):
 		self.assertTrue(flow_api.get_approver_roles())
 		self.assertTrue(flow_api.list_flow_tools())
 
+	def test_screens_show_view_only_when_the_server_would_refuse_flow_writes(self):
+		from huf import permissions
+
+		email = self._user("Huf User")
+		role = frappe.get_doc(
+			{"doctype": "Huf Role", "role_name": f"wp14-{frappe.generate_hash(length=5)}",
+			 "permissions": [{"capability": c} for c in ("flows.use", "flows.create", "flows.manage")]}
+		).insert(ignore_permissions=True)
+		frappe.get_doc({"doctype": "Huf User Role", "user": email, "huf_role": role.name, "enabled": 1}).insert(ignore_permissions=True)
+		frappe.cache().delete_value(f"huf_user_capabilities::{email}")
+		try:
+			frappe.set_user(email)
+			caps = permissions.get_me()["capabilities"]
+			self.assertIn("flows.use", caps)
+			self.assertNotIn("flows.manage", caps)
+			self.assertNotIn("flows.create", caps)
+		finally:
+			frappe.set_user("Administrator")
+			frappe.delete_doc("Huf User Role", email, force=True, ignore_permissions=True)
+			frappe.delete_doc("Huf Role", role.name, force=True, ignore_permissions=True)
+
 	def test_internal_tables_and_huf_bookkeeping_are_left_out(self):
 		frappe.set_user("Administrator")
 		names = {d["name"] for d in flow_api.get_trigger_doctypes()}
