@@ -12,6 +12,7 @@ from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.whatsapp.broadcast import runner as runner
 from huf.ai.whatsapp.broadcast import stale
+from huf.ai.whatsapp.tests.broadcast_policy_helper import limit_override
 from huf.ai.whatsapp.tests.test_whatsapp_broadcast_runner import GW, USER, B, R, _Base, _preview
 
 
@@ -126,7 +127,7 @@ class TestFixes(_Base):
 			return "sent"
 
 		patch.object(runner.broadcast_send, "send_one", side_effect=_send).start()
-		with patch.object(runner, "HEARTBEAT_EVERY_SENDS", 1):
+		with limit_override(heartbeat_every_sends=1):
 			res = runner.tick(b)
 		self.assertEqual(res["result"], "lock_lost")
 		raw = frappe.cache().get(runner._lock_key(b))
@@ -135,9 +136,7 @@ class TestFixes(_Base):
 	def test_heartbeat_refreshes_ttl_during_batch(self):
 		b = self.running(n=6)
 		self.fake_send()
-		with patch.object(runner, "_heartbeat", wraps=runner._heartbeat) as hb, patch.object(
-			runner, "HEARTBEAT_EVERY_SENDS", 2
-		):
+		with patch.object(runner, "_heartbeat", wraps=runner._heartbeat) as hb, limit_override(heartbeat_every_sends=2):
 			runner.tick(b)
 		self.assertGreaterEqual(hb.call_count, 3)  # more than the single end-of-batch beat
 
@@ -177,7 +176,7 @@ class TestFixes(_Base):
 			return "sent"
 
 		patch.object(runner.broadcast_send, "send_one", side_effect=_send).start()
-		with patch.object(runner, "PERM_RECHECK_EVERY_SENDS", 1):
+		with limit_override(perm_recheck_every_sends=1):
 			res = runner.tick(b)
 		self.assertEqual((res["result"], res["reason"]), ("paused", "permission_lost"))
 		self.assertEqual(calls["n"], 2)
@@ -210,7 +209,7 @@ class TestFixes(_Base):
 			frappe.db.set_value(R, name, "status", "sent")
 			return "sent"
 		patch.object(runner.broadcast_send, "send_one", side_effect=_send).start()
-		with patch.object(runner, "TICK_BUDGET_SECONDS", -1):
+		with limit_override(tick_budget_seconds=-1):
 			runner.tick(b, user=USER)
 		self.enqueue.assert_called_once_with(b, continuation=True, user=USER)
 		runner.tick(b, user=USER)

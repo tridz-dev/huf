@@ -16,6 +16,8 @@ from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.whatsapp.broadcast import runner as runner
 from huf.ai.whatsapp.broadcast import stale
+from huf.ai.whatsapp.broadcast import policy
+from huf.ai.whatsapp.tests.broadcast_policy_helper import limit_override
 
 GW = "GW-RUNNER-TEST"
 GW2 = "GW-RUNNER-TEST-2"
@@ -320,12 +322,12 @@ class TestTick(_Base):
 		b = self.running(n=1)
 		self.row(b, "15556660001", "sent", message_status=runner.HELD_STATUS, sent_at=now_datetime())
 		ratio, n = runner._held_ratio(b)
-		self.assertLess(n, runner.MIN_HELD_SAMPLE)
+		self.assertLess(n, policy.get("min_held_sample"))
 
 	def test_budget_exhausted_reenqueues_continuation(self):
 		b = self.running(n=5)
 		self.fake_send()
-		with patch.object(runner, "TICK_BUDGET_SECONDS", -1):
+		with limit_override(tick_budget_seconds=-1):
 			res = runner.tick(b)
 		self.assertEqual(res["result"], "continued")
 		self.enqueue.assert_called_once_with(b, continuation=True)

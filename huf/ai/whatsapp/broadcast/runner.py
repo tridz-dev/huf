@@ -9,7 +9,7 @@ Duplicate-send safety lives in the Broadcast Recipient row state machine (see
 into ``unknown``.
 
 Concurrency model: at most one live ``tick`` per broadcast (cache lock that doubles as heartbeat,
-plus ``job_id`` dedupe for external enqueues). A tick works for ``TICK_BUDGET_SECONDS`` and then
+plus ``job_id`` dedupe for external enqueues). A tick works for ``policy.get("tick_budget_seconds")`` and then
 re-enqueues itself (``enqueue_after_commit``). When only future ``deferred`` rows remain the tick
 exits without re-enqueuing (no busy loop); the ``*/5`` cron (``resume_stale``) revives it.
 """
@@ -24,28 +24,13 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
-from huf.ai.whatsapp.broadcast import limits as broadcast_limits, progress, send as broadcast_send
+from huf.ai.whatsapp.broadcast import limits as broadcast_limits, policy, progress, send as broadcast_send
 
 BROADCAST = "WhatsApp Broadcast"
 RECIPIENT = "WhatsApp Broadcast Recipient"
 
 QUEUE = "long"
-TICK_TIMEOUT = 1800
-TICK_BUDGET_SECONDS = 240  # one tick works this long, then re-enqueues itself
-LOCK_TTL = 600  # tick lock / heartbeat
-HEARTBEAT_SECONDS = 30  # refresh the lock at least this often while sending
-HEARTBEAT_EVERY_SENDS = 20
-PERM_RECHECK_EVERY_SENDS = 50  # re-authorize the runner user at least this often
-STALE_SENDING_MINUTES = 10
-
-DEFAULT_MPS = 20
-MAX_MPS = 80  # Meta default throughput; a higher tier is only used when the Graph read says so
-RAMP_FIRST_BATCH = 20
-MAX_BATCH = 200
-HELD_WINDOW = 50
-HELD_RATIO_LIMIT = 0.30
 HELD_STATUS = "held_for_quality_assessment"
-MIN_HELD_SAMPLE = 10  # do not throttle on 1 held of 2 sent
 
 
 # --------------------------------------------------------------------------- helpers
@@ -119,7 +104,7 @@ def _enqueue_tick(broadcast: str, *, continuation: bool = False, user: str | Non
 	frappe.enqueue(
 		"huf.ai.whatsapp.broadcast.runner.tick",
 		queue=QUEUE,
-		timeout=TICK_TIMEOUT,
+		timeout=policy.get("tick_timeout"),
 		job_id=job_id,
 		deduplicate=True,
 		enqueue_after_commit=True,
@@ -289,8 +274,8 @@ def _effective_mps(doc) -> int:
 		limits = broadcast_limits.get_messaging_limit(doc.gateway) or {}
 	except Exception:
 		limits = {}
-	cap = int(limits.get("mps") or MAX_MPS)
-	want = int(doc.mps or DEFAULT_MPS)
+	cap = policy.effective_mps_cap(limits.get("mps"))
+	want = int(policy.get("default_mps", doc))
 	return max(1, min(want, cap))
 
 
@@ -298,7 +283,7 @@ def _held_ratio(broadcast: str) -> tuple[float, int]:
 	rows = frappe.db.sql(
 		f"select message_status from `tab{RECIPIENT}` where broadcast=%s and sent_at is not null "
 		"order by sent_at desc limit %s",
-		(broadcast, HELD_WINDOW),
+		(broadcast, policy.get("held_window")),
 	)
 	n = len(rows)
 	if not n:
@@ -307,11 +292,19 @@ def _held_ratio(broadcast: str) -> tuple[float, int]:
 	return held / n, n
 
 
+def _is_throttled(ratio: float, sample: int) -> bool:
+	return (
+		bool(policy.get("held_throttle_enabled"))
+		and sample >= policy.get("min_held_sample")
+		and ratio > policy.get("held_ratio_limit")
+	)
+
+
 def _batch_size(doc, progressed: int, throttled: bool) -> int:
 	if progressed <= 0:
-		size = RAMP_FIRST_BATCH
+		size = policy.get("ramp_first_batch")
 	else:
-		size = min(MAX_BATCH, max(RAMP_FIRST_BATCH, progressed))  # doubles each chunk
+		size = min(policy.get("max_batch"), max(policy.get("ramp_first_batch"), progressed))  # doubles each chunk
 	return max(1, size // 2) if throttled else size
 
 
@@ -377,7 +370,7 @@ def _heartbeat(key: str, token: str) -> bool:
 	"""Refresh the lock TTL only while we still own it; False when ownership was lost."""
 	if not _owns(key, token):
 		return False
-	frappe.cache().set(key, token, ex=LOCK_TTL)
+	frappe.cache().set(key, token, ex=policy.get("lock_ttl"))
 	return True
 
 
@@ -388,7 +381,7 @@ def tick(broadcast: str, user: str | None = None) -> dict:
 	cache = frappe.cache()
 	key = _lock_key(broadcast)
 	token = uuid.uuid4().hex
-	if not cache.set(key, token, ex=LOCK_TTL, nx=True):
+	if not cache.set(key, token, ex=policy.get("lock_ttl"), nx=True):
 		return {"result": "locked"}
 	previous_user = frappe.session.user
 	try:
@@ -412,7 +405,7 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 		frappe.set_user(user)
 	frappe.flags.broadcast_pause = None
 
-	deadline = time.monotonic() + TICK_BUDGET_SECONDS
+	deadline = time.monotonic() + policy.get("tick_budget_seconds")
 	last_beat = time.monotonic()
 	since_check = 0
 	mps = _effective_mps(doc)
@@ -434,7 +427,7 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 			return res
 		since_check = 0
 		ratio, sample = _held_ratio(broadcast)
-		throttled = sample >= MIN_HELD_SAMPLE and ratio > HELD_RATIO_LIMIT
+		throttled = _is_throttled(ratio, sample)
 		rate = max(1, mps // 4) if throttled else mps
 		rows = _due_rows(broadcast, _batch_size(doc, sent_total, throttled))
 		if not rows:
@@ -443,11 +436,11 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 			if time.monotonic() >= deadline:
 				out_of_time = True
 				break
-			if time.monotonic() - last_beat >= HEARTBEAT_SECONDS or since_check and since_check % HEARTBEAT_EVERY_SENDS == 0:
+			if time.monotonic() - last_beat >= policy.get("heartbeat_seconds") or since_check and since_check % policy.get("heartbeat_every_sends") == 0:
 				if not _heartbeat(key, token):
 					return {"result": "lock_lost", "sent": sent_total, "outcomes": outcomes}
 				last_beat = time.monotonic()
-			if since_check >= PERM_RECHECK_EVERY_SENDS:
+			if since_check >= policy.get("perm_recheck_every_sends"):
 				if (res := lost_permission()) is not None:
 					return res
 				since_check = 0

@@ -20,17 +20,9 @@ from typing import Any
 
 import frappe
 
-from huf.ai.whatsapp.broadcast import params as broadcast_params
+from huf.ai.whatsapp.broadcast import params as broadcast_params, policy
 
 RECIPIENT_DOCTYPE = "WhatsApp Broadcast Recipient"
-DEFAULT_MAX_RECIPIENTS = 1000
-MAX_RECIPIENTS_CEILING = 10000  # highest max_recipients a broadcast may be given
-MAX_ROWS_PER_BROADCAST = 50000  # hard ceiling on stored rows (skipped rows count)
-MAX_ROWS_PER_REQUEST = 10000  # recipients accepted in one add call
-MAX_CSV_BYTES = 2 * 1024 * 1024
-RETURNED_LIST_LIMIT = 200  # skipped/invalid entries echoed back; totals are always exact
-MIN_DIGITS = 8
-MAX_DIGITS = 15  # E.164 upper bound
 PHONE_HEADERS = {"phone", "recipient", "phone_number", "phone number", "mobile", "wa_id", "whatsapp", "number"}
 
 
@@ -43,7 +35,7 @@ def normalize_recipient(raw: Any) -> str | None:
 	if bridge.is_bsuid(raw):
 		return str(raw).strip()
 	digits = bridge.normalize_phone(raw)
-	if not digits.isdigit() or not (MIN_DIGITS <= len(digits) <= MAX_DIGITS):
+	if not digits.isdigit() or not (policy.get("min_phone_digits") <= len(digits) <= policy.get("max_phone_digits")):
 		return None
 	return digits
 
@@ -115,6 +107,15 @@ def _policy_reason(gateway: str, recipient: str, is_marketing: bool) -> str | No
 	return None
 
 
+def effective_cap(doc) -> int | None:
+	"""Recipients a broadcast may hold: its own cap, else the default, bounded by the ceiling (None = no limit)."""
+	cap = policy.get("max_recipients_default", doc)
+	ceiling = policy.get("max_recipients_ceiling")
+	if cap is None:
+		return ceiling
+	return cap if ceiling is None else min(int(cap), int(ceiling))
+
+
 def prepare(broadcast: str, rows: list[dict]) -> dict:
 	"""Validate and store recipient rows for ``broadcast``.
 
@@ -124,7 +125,9 @@ def prepare(broadcast: str, rows: list[dict]) -> dict:
 	"""
 	doc = _load_broadcast(broadcast)
 	is_marketing = str(doc.category or "").upper() == "MARKETING"
-	cap = min(int(doc.max_recipients or DEFAULT_MAX_RECIPIENTS), MAX_RECIPIENTS_CEILING)
+	cap = effective_cap(doc)
+	max_rows = policy.get("max_rows_per_broadcast")
+	list_limit = policy.get("returned_list_limit")
 	seen = _existing_names(broadcast)
 	active = _active_count(broadcast)
 	total = _total_count(broadcast)
@@ -150,12 +153,12 @@ def prepare(broadcast: str, rows: list[dict]) -> dict:
 			continue
 		seen.add(name)
 
-		if active >= cap:
+		if cap is not None and active >= cap:
 			# Checked BEFORE policy-skipped rows are stored, so they cannot bypass the cap.
 			# Not stored: a later run with a higher max_recipients can still add this contact.
 			skipped.append({"recipient": recipient, "reason": "max_recipients"})
 			continue
-		if total >= MAX_ROWS_PER_BROADCAST:
+		if total >= max_rows:
 			skipped.append({"recipient": recipient, "reason": "row_ceiling"})
 			continue
 
@@ -183,9 +186,9 @@ def prepare(broadcast: str, rows: list[dict]) -> dict:
 	doc.recount()
 	return {
 		"added": added,
-		"skipped": skipped[:RETURNED_LIST_LIMIT],
+		"skipped": skipped[:list_limit],
 		"skipped_total": len(skipped),
-		"invalid": invalid[:RETURNED_LIST_LIMIT],
+		"invalid": invalid[:list_limit],
 		"invalid_total": len(invalid),
 	}
 
