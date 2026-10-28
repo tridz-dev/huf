@@ -263,11 +263,10 @@ def get_trigger_doctypes() -> list[dict]:
 		"DocType",
 		filters={"name": ("in", readable), "istable": 0, "issingle": 0, "module": ("!=", HUF_MODULE)},
 		fields=["name"],
-		order_by="name asc",
 		limit_page_length=0,
 		ignore_permissions=True,
 	)
-	return [{"name": r.name} for r in rows]
+	return [{"name": name} for name in sorted(r.name for r in rows)]
 
 
 @frappe.whitelist()
