@@ -198,6 +198,17 @@ class TestFixes(_Base):
 		self.enqueue.assert_called_with(b, user=frappe.session.user)
 		self.assertEqual(runner._runner_user(b, "Guest"), frappe.session.user)
 
+	def test_resumed_by_and_acknowledged_warnings_cannot_be_written_around_the_api(self):
+		b = self.make(status="Paused", started_by="Guest")
+		for field, value in (("resumed_by", "Administrator"), ("acknowledged_warnings", '["quality_red"]')):
+			frappe.flags.in_broadcast_api = False
+			doc = frappe.get_doc(B, b)
+			doc.flags.ignore_links = True  # the fixture's Gateway row does not exist; the guard is what is under test
+			doc.set(field, value)
+			with self.assertRaises(frappe.PermissionError):
+				doc.save(ignore_permissions=True)
+			frappe.db.rollback()
+
 	def test_resume_denied_when_resumer_lacks_write_even_if_starter_had_it(self):
 		b = self.make(status="Paused")
 		runner._gateway_write_ok.return_value = False

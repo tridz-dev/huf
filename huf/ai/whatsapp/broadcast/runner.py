@@ -147,6 +147,9 @@ def _begin(
 	deferred = int(frappe.db.count(RECIPIENT, {"broadcast": broadcast, "status": "deferred"}) or 0)
 	start_gate.check_preview(preview, deferred, None if resuming else (override_warnings or []))
 
+	# NOTE: the commit below ends the caller's transaction. Callers must not leave uncommitted writes that
+	# should roll back with a refused start; today none write before this point (tests that call this inside a
+	# rolled-back case commit their fixtures).
 	# Serialise "one Running per gateway" on the Gateway row. Everything above was a plain read, which
 	# InnoDB (REPEATABLE READ) serves from a snapshot taken at the first read. Nothing is written yet, so
 	# commit to end that snapshot BEFORE locking: every read after the lock then starts a fresh snapshot
