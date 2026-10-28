@@ -21,3 +21,22 @@ describe('followRenamedTarget', () => {
     expect(followRenamedTarget([e], 't1', 'Urgent', 'Escalate')[0].label).toBe('Urgent');
   });
 });
+
+import { branchColumnShift, subtreeIds } from './flowEdgeLabels';
+
+describe('branchColumnShift', () => {
+  it('moves a target that shares a column with a sibling branch', () => {
+    expect(branchColumnShift(600, [600])).toBe(280);
+    expect(branchColumnShift(600, [600, 880])).toBe(560);
+  });
+  it('leaves a target that already has room', () => {
+    expect(branchColumnShift(300, [600])).toBe(0);
+  });
+});
+
+describe('subtreeIds', () => {
+  it('collects the node and everything below it', () => {
+    const edges = [{ source: 'a', target: 'b' }, { source: 'b', target: 'c' }, { source: 'x', target: 'y' }];
+    expect(subtreeIds('b', edges)).toEqual(new Set(['b', 'c']));
+  });
+});
