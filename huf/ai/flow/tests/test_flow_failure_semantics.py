@@ -140,11 +140,12 @@ class TestFlowFailureSemantics(IntegrationTestCase):
 		self.assertIn("fail", flow_run.last_error)
 		self.assertIn("simulated tool failure", flow_run.last_error)
 
-	def test_d_always_edge_runs_cleanup_but_run_is_failed(self):
-		"""(d) The always edge is still followed (cleanup runs) yet the run ends Failed."""
+	def test_d_downstream_node_of_a_failed_step_never_runs(self):
+		"""(d) Flows have no ``always`` edge: a failed step's ``next`` is not followed, the run stops
+		at the failed step and ends Failed."""
 		flow_run = self._run({"next": "after"}, ["after"])
 
-		self.assertEqual(flow_run.current_node_id, "after")
+		self.assertEqual(flow_run.current_node_id, "fail")
 		self.assertEqual(flow_run.status, "Failed")
 		self.assertTrue(flow_run.last_error)
 
