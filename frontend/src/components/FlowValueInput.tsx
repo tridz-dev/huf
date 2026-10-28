@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { VariablePicker } from './ui/VariablePicker';
+import { useFlowContext } from '../contexts/FlowContext';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
@@ -45,7 +46,16 @@ export function FlowValueInput({ id, label, value, onChange, optional, testId, n
   const mode: ValueMode = derived !== 'literal' ? derived : picked ?? 'literal';
   const text = valueToText(value);
   const varsText = templateVarsToText(value);
+  const { activeFlow } = useFlowContext();
   const areaRef = useRef<HTMLTextAreaElement>(null);
+  /** A reference path in words: the step's name for a step id. */
+  const sourceName = (path: string) => {
+    const root = path.split(/[.[]/)[0];
+    if (root === 'input') return 'the trigger input';
+    if (root === 'trigger') return 'the trigger details';
+    const step = activeFlow?.nodes.find((n) => n.id === root);
+    return step ? `the result of "${step.data.label}"` : path;
+  };
   // Bumped when the picker rewrites the template variables so their editor shows the new text.
   const [varsVersion, setVarsVersion] = useState(0);
 
@@ -142,7 +152,7 @@ export function FlowValueInput({ id, label, value, onChange, optional, testId, n
               {Object.entries((value as { vars?: Record<string, { $from?: string }> }).vars ?? {}).map(([name, v]) => (
                 <li key={name} className="truncate">
                   <span className="font-mono">{`{${name}}`}</span> is filled with{' '}
-                  <span className="font-mono">{typeof v?.$from === 'string' ? v.$from : 'a value'}</span>
+                  <span title={typeof v?.$from === 'string' ? v.$from : undefined}>{typeof v?.$from === 'string' ? sourceName(v.$from) : 'a value'}</span>
                 </li>
               ))}
             </ul>
