@@ -15,6 +15,7 @@ import {
 } from '@/services/whatsappHealthApi';
 import { BridgeUnavailable, LoadError } from '@/components/whatsapp/BridgeUnavailable';
 import { TemplatesTab } from '@/components/whatsapp/TemplatesTab';
+import { AudiencesPage } from '@/components/whatsapp/audiences/AudiencesPage';
 import { BroadcastTab } from '@/components/whatsapp/broadcast/BroadcastTab';
 import { AccessTab } from '@/components/whatsapp/AccessTab';
 import { MessageLogTab } from '@/components/whatsapp/MessageLogTab';
@@ -23,7 +24,7 @@ import { GatewaySwitcher } from '@/components/whatsapp/overview/GatewaySwitcher'
 import { OverviewTab } from '@/components/whatsapp/overview/OverviewTab';
 import { SettingsTab } from '@/components/whatsapp/overview/SettingsTab';
 
-const TABS = ['overview', 'messages', 'templates', 'broadcast', 'access', 'settings'] as const;
+const TABS = ['overview', 'messages', 'templates', 'broadcast', 'audiences', 'access', 'settings'] as const;
 type TabName = (typeof TABS)[number];
 
 /** In-app checklist anchors: Settings sections, the Access tab, or the Messages tab for the test message. */
@@ -192,6 +193,7 @@ export default function WhatsAppManagePage() {
               <TabsTrigger value="messages">Messages</TabsTrigger>
               <TabsTrigger value="templates">Templates</TabsTrigger>
               <TabsTrigger value="broadcast">Broadcast</TabsTrigger>
+              <TabsTrigger value="audiences">Audiences</TabsTrigger>
               <TabsTrigger value="access">Access</TabsTrigger>
               <TabsTrigger value="settings">Settings</TabsTrigger>
             </TabsList>
@@ -222,6 +224,9 @@ export default function WhatsAppManagePage() {
                 </TabsContent>
                 <TabsContent value="broadcast" className="pt-3">
                   <BroadcastTab gateway={gateway} bridgeAvailable={connectorAvailable} />
+                </TabsContent>
+                <TabsContent value="audiences" className="pt-3">
+                  {connectorAvailable ? <AudiencesPage gateway={gateway} /> : <BridgeUnavailable />}
                 </TabsContent>
                 <TabsContent value="access" className="pt-3">
                   <AccessTab gateway={gateway} />
