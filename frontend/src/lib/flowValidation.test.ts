@@ -12,9 +12,9 @@ const trigger = (triggerConfig: Record<string, unknown>): NodeLike => ({
 });
 
 describe('flowValidation', () => {
-  it('requires a webhook secret of 8+ chars and GET/POST', () => {
+  it('requires a webhook secret of 32+ chars and GET/POST', () => {
     expect(validateNode(trigger({ type: 'webhook', method: 'PUT', secret: 'abc' }), []).map((i) => i.field)).toEqual(['method', 'secret']);
-    expect(validateNode(trigger({ type: 'webhook', method: 'POST', secret: 'abcdefgh' }), [])).toEqual([]);
+    expect(validateNode(trigger({ type: 'webhook', method: 'POST', secret: 'abcdefgh1234abcdefgh1234abcdefgh' }), [])).toEqual([]);
   });
 
   it('validates schedule cron and doc-event fields', () => {

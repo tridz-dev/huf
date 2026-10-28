@@ -118,7 +118,7 @@ def _valid_flow_definition() -> dict:
 			{
 				"id": "start",
 				"type": "trigger.webhook",
-				"config": {"method": "POST", "secret": "test-webhook-secret"},
+				"config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"},
 				"next": "finish",
 			},
 			{
@@ -141,7 +141,7 @@ def _old_shape_definition() -> dict:
 		"version": 1,
 		"entry": "start",
 		"nodes": [
-			{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret"}},
+			{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}},
 			{"id": "finish", "type": "end", "config": {}},
 		],
 		"edges": [{"from": "start", "to": "finish", "type": "always"}],

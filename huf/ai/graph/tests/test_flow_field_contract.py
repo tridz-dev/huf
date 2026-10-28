@@ -114,7 +114,7 @@ def _graph(nodes, entry, http=(), code=(), write=()):
 	}
 
 
-WEBHOOK = {"id": "t", "type": "trigger.webhook", "config": {"method": "POST", "secret": "s3cret-value"}, "next": "x"}
+WEBHOOK = {"id": "t", "type": "trigger.webhook", "config": {"method": "POST", "secret": "s3cret-value-0123456789abcdefghijkl"}, "next": "x"}
 OUT = {"id": "end", "type": "output", "config": {"value": "ok"}}
 
 
@@ -288,6 +288,7 @@ class TestFlowFieldContract(unittest.TestCase):
 
 		self.assertRejected(self._mutate("trigger.webhook", lambda g: cfg(g).pop("secret")))
 		self.assertRejected(self._mutate("trigger.webhook", lambda g: cfg(g).update(secret="short")))
+		self.assertRejected(self._mutate("trigger.webhook", lambda g: cfg(g).update(secret="x" * 31)))
 		self.assertRejected(self._mutate("trigger.webhook", lambda g: cfg(g).update(method="PUT")))
 		self.assertRejected(self._mutate("trigger.webhook", lambda g: cfg(g).update(method="DELETE")))
 		self.assertRejected(self._mutate("trigger.webhook", lambda g: cfg(g).update(auth="x")))

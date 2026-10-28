@@ -277,7 +277,14 @@ doc_events = {
         "on_update": [
             "huf.huf.doctype.huf_user_role.huf_user_role.sync_from_frappe_user",
             "huf.huf.doctype.huf_user_role.huf_user_role.grant_default_huf_roles",
+            # an owner who is disabled or loses a role must stop triggering document-event flows now
+            "huf.ai.flow.triggers.clear_trigger_cache",
         ],
+        "on_trash": "huf.ai.flow.triggers.clear_trigger_cache",
+    },
+    "Has Role": {
+        "after_insert": "huf.ai.flow.triggers.clear_trigger_cache",
+        "on_trash": "huf.ai.flow.triggers.clear_trigger_cache",
     },
     "Telegram Admin Binding": {
         "on_update": "huf.ai.telegram_web_access_enforce.on_binding_update",

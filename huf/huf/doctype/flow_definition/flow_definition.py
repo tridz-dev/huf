@@ -41,6 +41,7 @@ class FlowDefinition(Document):
 	def validate(self):
 		defn = self._validate_definition_json()
 		self._validate_activation(defn)
+		self._validate_sensitive_publish(defn)
 		self._validate_gateway_authority(defn)
 		self.updated_by = frappe.session.user
 		self.updated_at = now_datetime()
@@ -184,6 +185,26 @@ class FlowDefinition(Document):
 					)
 				)
 		return problems
+
+	def _validate_sensitive_publish(self, defn: dict):
+		"""A flow with a document-event trigger or a web request step can only be Active if the saving
+		user may publish such flows (see ``huf.ai.flow.publish_guard``). Steps that are unchanged from
+		the already-Active version do not need it again, so unrelated edits stay possible."""
+		if self.status != "Active":
+			return
+		flags = frappe.flags
+		if getattr(flags, "in_install", False) or getattr(flags, "in_migrate", False) or getattr(flags, "in_patch", False):
+			return
+		from huf.ai.flow.publish_guard import check_can_publish
+
+		previous = None
+		before = self.get_doc_before_save() if not self.is_new() else None
+		if before is not None and before.status == "Active":
+			try:
+				previous = json.loads(before.definition_json) if isinstance(before.definition_json, str) else before.definition_json
+			except (json.JSONDecodeError, TypeError):
+				previous = None
+		check_can_publish(defn, previous)
 
 	def _validate_activation(self, defn: dict):
 		"""Active flows must be runnable: Draft/Archived saves stay permissive. Reports

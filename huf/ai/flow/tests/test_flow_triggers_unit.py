@@ -17,7 +17,7 @@ from huf.ai.flow import triggers as T
 SCHEMA = json.loads((Path(T.__file__).parents[1] / "graph" / "graph_ir.schema.json").read_text())
 
 
-def _webhook(node_id="w", method="POST", secret="s3cret-value"):
+def _webhook(node_id="w", method="POST", secret="s3cret-value-0123456789abcdefghijkl"):
 	return {"id": node_id, "type": "trigger.webhook", "config": {"method": method, "secret": secret}}
 
 
@@ -26,7 +26,7 @@ class TestWebhookMatch(unittest.TestCase):
 		return {"entry": [n["id"] for n in nodes], "nodes": list(nodes)}
 
 	def test_ok(self):
-		node, why = T.match_webhook_trigger(self.defn(_webhook()), "s3cret-value", "POST")
+		node, why = T.match_webhook_trigger(self.defn(_webhook()), "s3cret-value-0123456789abcdefghijkl", "POST")
 		self.assertEqual((node["id"], why), ("w", "ok"))
 
 	def test_wrong_or_missing_secret(self):
@@ -36,15 +36,15 @@ class TestWebhookMatch(unittest.TestCase):
 
 	def test_method_enforced_only_after_secret(self):
 		d = self.defn(_webhook(method="GET"))
-		self.assertEqual(T.match_webhook_trigger(d, "s3cret-value", "POST"), (None, "bad_method"))
+		self.assertEqual(T.match_webhook_trigger(d, "s3cret-value-0123456789abcdefghijkl", "POST"), (None, "bad_method"))
 		self.assertEqual(T.match_webhook_trigger(d, "wrong", "POST"), (None, "bad_secret"))
-		self.assertEqual(T.match_webhook_trigger(d, "s3cret-value", "get")[1], "ok")
+		self.assertEqual(T.match_webhook_trigger(d, "s3cret-value-0123456789abcdefghijkl", "get")[1], "ok")
 
 	def test_non_http_call_skips_method(self):
-		self.assertEqual(T.match_webhook_trigger(self.defn(_webhook()), "s3cret-value", None)[1], "ok")
+		self.assertEqual(T.match_webhook_trigger(self.defn(_webhook()), "s3cret-value-0123456789abcdefghijkl", None)[1], "ok")
 
 	def test_fails_closed_on_missing_or_short_secret(self):
-		for bad in (None, "", "short", 1234567890):
+		for bad in (None, "", "short", "x" * 31, 1234567890):
 			node = {"id": "w", "type": "trigger.webhook", "config": {"method": "POST", "secret": bad}}
 			self.assertEqual(T.match_webhook_trigger(self.defn(node), bad or "", "POST")[0], None)
 
@@ -56,11 +56,11 @@ class TestWebhookMatch(unittest.TestCase):
 	def test_no_webhook_trigger_and_non_entry_node(self):
 		self.assertEqual(T.match_webhook_trigger({"entry": "a", "nodes": [{"id": "a", "type": "output", "config": {}}]}, "x", "POST"), (None, "no_trigger"))
 		d = {"entry": "other", "nodes": [_webhook(), {"id": "other", "type": "output", "config": {}}]}
-		self.assertEqual(T.match_webhook_trigger(d, "s3cret-value", "POST"), (None, "no_trigger"))
+		self.assertEqual(T.match_webhook_trigger(d, "s3cret-value-0123456789abcdefghijkl", "POST"), (None, "no_trigger"))
 
 	def test_picks_matching_node_among_several(self):
-		d = self.defn(_webhook("a", secret="aaaaaaaa"), _webhook("b", secret="bbbbbbbb"))
-		self.assertEqual(T.match_webhook_trigger(d, "bbbbbbbb", "POST")[0]["id"], "b")
+		d = self.defn(_webhook("a", secret="a" * 32), _webhook("b", secret="b" * 32))
+		self.assertEqual(T.match_webhook_trigger(d, "b" * 32, "POST")[0]["id"], "b")
 
 
 class TestCron(unittest.TestCase):
@@ -141,7 +141,7 @@ class TestNodeSchemas(unittest.TestCase):
 		self.assertEqual(set(wh), {"method", "secret"})
 		self.assertEqual(wh["method"]["options"], ["GET", "POST"])
 		self.assertTrue(wh["secret"]["required"])
-		self.assertEqual(wh["secret"]["min_length"], 8)
+		self.assertEqual(wh["secret"]["min_length"], 32)
 		self.assertEqual(f("trigger.doc-event")["event"]["options"], ["after_insert", "on_update", "on_submit", "on_cancel", "on_trash"])
 		self.assertEqual(set(f("trigger.schedule")), {"cron"})
 		self.assertEqual(set(f("condition")), {"expression", "on_true", "on_false"})

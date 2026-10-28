@@ -2094,7 +2094,7 @@ Existing Agent Run with additional flow linkage fields.
 
 | Type | Description |
 |:-----|:------------|
-| `trigger.webhook` | Creates FlowRun from webhook payload; authenticated by the node's `config.secret` sent as `X-Huf-Secret` (or `?secret=`) |
+| `trigger.webhook` | Creates FlowRun from webhook payload; authenticated by the node's `config.secret` sent as the `X-Huf-Secret` header only (no `?secret=`; 60/min per IP) |
 | `trigger.schedule` | Scheduled time-based triggers |
 | `trigger.doc-event` | Triggers based on Frappe lifecycle hooks |
 | `agent.run` | Runs a Huf agent via run_agent_sync |
