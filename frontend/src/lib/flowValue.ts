@@ -11,6 +11,8 @@ export function valueMode(v: unknown): ValueMode {
     if ('$template' in v) return 'template';
   }
   if (v !== null && typeof v === 'object') return 'json';
+  // Numbers and booleans are not text: show them as JSON so editing keeps their type.
+  if (typeof v === 'number' || typeof v === 'boolean') return 'json';
   return 'literal';
 }
 
@@ -27,7 +29,7 @@ export function valueToText(v: unknown): string {
     case 'template':
       return String((v as TemplateValue).$template ?? '');
     case 'json':
-      return JSON.stringify(v, null, 2);
+      return JSON.stringify(v, null, typeof v === 'object' ? 2 : undefined);
     default:
       return v == null ? '' : String(v);
   }

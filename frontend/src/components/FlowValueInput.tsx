@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
@@ -33,7 +34,11 @@ const MODE_LABELS: Record<ValueMode, string> = {
  * `node_a.value`), a `$template` with `vars`, or a JSON array/object.
  */
 export function FlowValueInput({ id, label, value, onChange, optional, testId }: FlowValueInputProps) {
-  const mode = valueMode(value);
+  // The mode lives in the value for references, templates and JSON objects/arrays. A value that is still
+  // plain text (empty, or JSON that does not parse yet) would fall back to "Literal", so remember the pick.
+  const [picked, setPicked] = useState<ValueMode | null>(null);
+  const derived = valueMode(value);
+  const mode: ValueMode = derived !== 'literal' ? derived : picked ?? 'literal';
   const text = valueToText(value);
   const varsText = templateVarsToText(value);
 
@@ -46,7 +51,10 @@ export function FlowValueInput({ id, label, value, onChange, optional, testId }:
         </Label>
         <Select
           value={mode}
-          onValueChange={(m) => onChange(textToValue(m as ValueMode, text, varsText))}
+          onValueChange={(m) => {
+            setPicked(m as ValueMode);
+            onChange(textToValue(m as ValueMode, text, varsText));
+          }}
         >
           <SelectTrigger id={`${id}-mode`} data-testid={testId ? `${testId}-mode` : undefined} size="sm" className="w-[150px]">
             <SelectValue />
