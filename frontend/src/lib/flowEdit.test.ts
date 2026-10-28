@@ -90,3 +90,27 @@ describe('routing fields follow edge removal', () => {
     expect(without.on_false).toBe('b');
   });
 });
+
+describe('routing fields of router and approval steps follow edge removal', () => {
+  const flow = (nodes: FlowNode[], edges: FlowEdge[]) => ({ id: 'f', name: 'f', status: 'draft' as const, nodes, edges, createdAt: new Date(), updatedAt: new Date(), version: 1 });
+  it('drops a removed router path from options', async () => {
+    const { serializeFlow } = await import('../services/flowSerializer');
+    const nodes = [node('t', 'trigger'), node('r', 'action', { type: 'router', prompt: 'p' }), node('a'), node('b')];
+    (nodes[0].data as { triggerConfig?: unknown }).triggerConfig = { type: 'webhook', method: 'POST', secret: 'abcdefgh1234' };
+    const edges = [e('t', 'r'), e('r', 'a', 'option', 'Billing'), e('r', 'b', 'option', 'Support')];
+    const opts = (es: FlowEdge[]) => ((serializeFlow(flow(nodes, es)).nodes.find((n) => n.id === 'r')?.config as { options?: Array<{ label: string }> }).options ?? []).map((o) => o.label);
+    expect(opts(edges)).toEqual(['Billing', 'Support']);
+    expect(opts(edges.filter((x) => x.target !== 'a'))).toEqual(['Support']);
+  });
+  it('drops approve_next / reject_next of an approval when its edge is removed', async () => {
+    const { serializeFlow } = await import('../services/flowSerializer');
+    const nodes = [node('t', 'trigger'), node('h', 'action', { type: 'human.approval', message: 'ok?' }), node('a'), node('b')];
+    (nodes[0].data as { triggerConfig?: unknown }).triggerConfig = { type: 'webhook', method: 'POST', secret: 'abcdefgh1234' };
+    const mk = (es: FlowEdge[]) => serializeFlow(flow(nodes, es)).nodes.find((n) => n.id === 'h')?.config as Record<string, unknown>;
+    const edges = [e('t', 'h'), makeFlowEdge('h', 'a', 'approve'), makeFlowEdge('h', 'b', 'reject')];
+    expect(mk(edges)).toMatchObject({ approve_next: 'a', reject_next: 'b' });
+    const cfg = mk(edges.filter((x) => x.target !== 'b'));
+    expect(cfg.approve_next).toBe('a');
+    expect(cfg.reject_next).toBeUndefined();
+  });
+});
