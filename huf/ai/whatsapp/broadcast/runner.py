@@ -156,8 +156,11 @@ def _begin(
 	deferred = int(frappe.db.count(RECIPIENT, {"broadcast": broadcast, "status": "deferred"}) or 0)
 	start_gate.check_preview(preview, deferred, None if resuming else (override_warnings or []))
 
-	# Serialise "one Running per gateway" on the Gateway row. Everything above was a (possibly
-	# snapshot) read, so after the lock use *locking* reads, which see the latest committed data.
+	# Serialise "one Running per gateway" on the Gateway row. Everything above was a plain read, which
+	# InnoDB (REPEATABLE READ) serves from a snapshot taken at the first read. Nothing is written yet, so
+	# commit to end that snapshot BEFORE locking: every read after the lock then starts a fresh snapshot
+	# and sees what the starts that held the lock before us committed (24h budget, rows, running set).
+	frappe.db.commit()
 	frappe.db.get_value("Gateway", doc.gateway, "name", for_update=True)
 	if frappe.db.get_value(BROADCAST, broadcast, "status", for_update=True) not in allowed_from:
 		frappe.throw(_("Broadcast changed state; reload and retry"))
