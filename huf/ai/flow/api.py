@@ -290,8 +290,7 @@ def _decide_flow_run(flow_run_id: str, decision: str, comment: str | None) -> di
 		frappe.throw(
 			_("Flow Run '{0}' is not waiting for approval (status: {1})").format(flow_run_id, flow_run.status)
 		)
-	verify = getattr(engine, "verify_approval_permission", None) or engine._verify_approval_permission
-	verify(engine._load_waiting(flow_run))
+	engine.verify_approval_permission(flow_run)
 
 	engine.approve_flow_run(flow_run_id, decision=decision, comment=comment)
 
@@ -1110,11 +1109,10 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 		return {"error": "Insufficient permissions to approve flow runs"}
 
 	try:
-		from huf.ai.flow.engine import approve_flow_run as engine_approve, _verify_approval_permission
+		from huf.ai.flow.engine import approve_flow_run as engine_approve, verify_approval_permission
 
 		doc = frappe.get_doc("Flow Run", flow_run_id)
-		waiting = json.loads(doc.waiting) if doc.waiting else {}
-		_verify_approval_permission(waiting)
+		verify_approval_permission(doc)
 
 		engine_approve(flow_run_id, decision=decision, comment=comment)
 		doc.reload()
@@ -1157,6 +1155,8 @@ def get_pending_approvals(limit: int = 50) -> list:
 	if not frappe.has_permission("Flow Run", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
+	from huf.ai.flow import engine
+
 	user = frappe.session.user
 	user_roles = set(frappe.get_roles(user))
 
@@ -1186,36 +1186,31 @@ def get_pending_approvals(limit: int = 50) -> list:
 		except (json.JSONDecodeError, TypeError):
 			waiting = {}
 
-		approval_type = waiting.get("approval_type", "role")
-		can_approve = False
+		# Same fail-closed rule as deciding: only runs the current user may decide are listed.
+		if engine.check_approver(waiting, user, user_roles) is not None:
+			continue
 
-		# Check if current user can approve this flow run
-		if approval_type == "role":
-			approver_role = waiting.get("approver_role")
-			if approver_role and approver_role in user_roles:
-				can_approve = True
-		elif approval_type in ("user", "users"):
-			approver_users = waiting.get("approver_users", [])
-			if isinstance(approver_users, str):
-				approver_users = [u.strip() for u in approver_users.split(",") if u.strip()]
-			if user in approver_users:
-				can_approve = True
-
-		if can_approve:
-			results.append({
-				"flow_run_id": run.name,
-				"flow_id": run.flow_id,
-				"flow_version": run.flow_version,
-				"current_node_id": run.current_node_id,
-				"title": waiting.get("title", "Approval Required"),
-				"instructions": waiting.get("instructions", ""),
-				"approval_type": approval_type,
-				"approver_role": waiting.get("approver_role"),
-				"approver_users": waiting.get("approver_users", []),
-				"started_at": str(run.started_at) if run.started_at else None,
-				"waiting_since": str(run.modified) if run.modified else None,
-				"view_link": f"/huf/flows/{run.flow_id}?run={run.name}",
-			})
+		approver_type = waiting.get("approver_type")
+		results.append({
+			"flow_run_id": run.name,
+			"flow_id": run.flow_id,
+			"flow_version": run.flow_version,
+			"current_node_id": run.current_node_id,
+			"node_id": waiting.get("node_id") or run.current_node_id,
+			"title": "Approval Required",
+			"message": waiting.get("message", ""),
+			"instructions": waiting.get("message", ""),
+			"approver_type": approver_type,
+			"approval_type": approver_type,
+			"approver_role": waiting.get("approver_role"),
+			"approver_users": waiting.get("approver_users") or [],
+			"timeout_next": waiting.get("timeout_next"),
+			"timeout_ms": waiting.get("timeout_ms"),
+			"timeout_at": waiting.get("timeout_at"),
+			"started_at": str(run.started_at) if run.started_at else None,
+			"waiting_since": str(run.modified) if run.modified else None,
+			"view_link": f"/huf/flows/{run.flow_id}?run={run.name}",
+		})
 
 	return results
 
