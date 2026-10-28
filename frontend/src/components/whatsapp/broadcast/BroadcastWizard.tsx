@@ -8,7 +8,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Field } from '@/components/ui/field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { errorText, listTemplates, type WhatsAppTemplate } from '@/services/whatsappApi';
-import { addBroadcastRecipients, attestBroadcastConsent, createBroadcast, deleteBroadcast, getBroadcastTemplateParams, previewBroadcast, startBroadcast, type AddRecipientsResult, type BroadcastPreview, type BroadcastRecipientInput, type BroadcastTemplateParams, type BroadcastTemplateVariable, type BroadcastSendVia } from './broadcastApi';
+import { addBroadcastRecipients, attestBroadcastConsent, createBroadcast, deleteBroadcast, getBroadcastTemplateParams, previewBroadcast, startBroadcast, type AddRecipientsResult, type BroadcastPreview, type BroadcastRecipientInput, type BroadcastTemplateParams, type BroadcastTemplateVariable, toIssue, type BroadcastSendVia } from './broadcastApi';
+import { getBroadcastLimits, limitFlag, limitNumber, type BroadcastLimit } from './limitsApi';
 
 const varKey = (v: BroadcastTemplateVariable, i: number) => (v.name ?? String(v.index ?? i + 1));
 
@@ -85,6 +86,19 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   const [buttonValues, setButtonValues] = useState<Record<number, string>>({});
   const [location, setLocation] = useState<LocationValue>(EMPTY_LOCATION);
   const started = useRef(false);
+  const [limits, setLimits] = useState<BroadcastLimit[] | null>(null);
+  const [acked, setAcked] = useState<Record<string, boolean>>({});
+  // Fallbacks equal the registry defaults, used only while the limits are unreadable.
+  const locationMax = limitNumber(limits, 'location_text_max', 1000);
+  const urlSuffixMax = limitNumber(limits, 'url_suffix_max', 200);
+  const copyCodeMax = limitNumber(limits, 'copy_code_max', 15);
+  const requireTyped = limitFlag(limits, 'require_typed_count', true);
+
+  useEffect(() => {
+    let live = true;
+    void getBroadcastLimits().then((res) => { if (live && res.success) setLimits(res.limits); });
+    return () => { live = false; };
+  }, [gateway]);
 
   useEffect(() => {
     void listTemplates(gateway, 'APPROVED').then((res) => {
@@ -158,13 +172,22 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
     const p = await previewBroadcast(broadcast);
     if (!p.success) return fail(p);
     setPreview(p.preview);
+    setAcked({});
+    void getBroadcastLimits(broadcast).then((res) => { if (res.success) setLimits(res.limits); });
     setBusy(false);
     return true;
   };
 
   const start = async () => {
     setBusy(true); setErr('');
-    const res = await startBroadcast(broadcast, typed.trim());
+    const res = await startBroadcast(broadcast, requireTyped ? typed.trim() : String(preview?.queued ?? ''), (preview?.warnings ?? []).map((w) => toIssue(w).code));
+    if (!res.success && res.error === 'warnings_changed') {
+      // The situation changed since the preview: show the new list and ask again.
+      const p = await previewBroadcast(broadcast);
+      if (p.success) { setPreview(p.preview); setAcked({}); setStep(3); }
+      setBusy(false); setErr('Something changed since you reviewed this broadcast. Please review the warnings again.');
+      return;
+    }
     setBusy(false);
     if (!res.success) { setErr(errorText(res)); return; }
     started.current = true;
@@ -189,7 +212,10 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
     setText('');
   };
 
-  const blocking = preview?.blocking ?? [];
+  const blocking = (preview?.blocking ?? []).map(toIssue);
+  const warnings = (preview?.warnings ?? []).map(toIssue);
+  const allAcked = warnings.every((w) => acked[w.code]);
+  const applied = (preview?.limits_in_effect ?? []).map((k) => limits?.find((l) => l.key === k)).filter((l): l is BroadcastLimit => !!l);
   const expected = preview ? String(preview.queued) : '';
   const canNext = [
     !!tpl && paramsReady,
@@ -271,10 +297,10 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
                   {(p) => <Input {...p} inputMode="decimal" value={location.longitude} onChange={(e) => setLocation((l) => ({ ...l, longitude: e.target.value }))} />}
                 </Field>
                 <Field label="Place name (optional)" id="bc-loc-name">
-                  {(p) => <Input {...p} maxLength={1000} value={location.name} onChange={(e) => setLocation((l) => ({ ...l, name: e.target.value }))} />}
+                  {(p) => <Input {...p} maxLength={locationMax} value={location.name} onChange={(e) => setLocation((l) => ({ ...l, name: e.target.value }))} />}
                 </Field>
                 <Field label="Address (optional)" id="bc-loc-address">
-                  {(p) => <Input {...p} maxLength={1000} value={location.address} onChange={(e) => setLocation((l) => ({ ...l, address: e.target.value }))} />}
+                  {(p) => <Input {...p} maxLength={locationMax} value={location.address} onChange={(e) => setLocation((l) => ({ ...l, address: e.target.value }))} />}
                 </Field>
               </div>
             </fieldset>
@@ -282,7 +308,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
           {urlButtons.map((b) => (
             <div key={b.index} className="space-y-1">
               <Label htmlFor={`bc-btn-${b.index}`}>{b.sub_type === 'copy_code' ? 'Coupon code' : 'Link suffix'} for button {b.label ? `"${b.label}"` : b.index + 1}{b.required ? '' : ' (optional)'}</Label>
-              <Input id={`bc-btn-${b.index}`} value={buttonValues[b.index] ?? ''} maxLength={b.sub_type === 'copy_code' ? 15 : 200} onChange={(e) => setButtonValues((v) => ({ ...v, [b.index]: e.target.value }))} />
+              <Input id={`bc-btn-${b.index}`} value={buttonValues[b.index] ?? ''} maxLength={b.sub_type === 'copy_code' ? copyCodeMax : urlSuffixMax} onChange={(e) => setButtonValues((v) => ({ ...v, [b.index]: e.target.value }))} />
             </div>
           ))}
           {isMarketing ? (
@@ -366,13 +392,29 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
           {preview.cost?.warnings?.length ? (
             <ul className="list-disc pl-5 text-xs text-steel">{preview.cost.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
           ) : null}
-          {preview.warnings.length ? (
-            <div role="alert" className="rounded-md border border-amber-500 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950 dark:text-amber-100"><p className="font-medium">Warnings</p><ul className="list-disc pl-5">{preview.warnings.map((w) => <li key={w}>{w}</li>)}</ul></div>
+          {applied.length ? (
+            <div aria-label="Limits applied to this broadcast" role="group" className="rounded-md border p-3">
+              <p className="font-medium">Limits applied to this broadcast</p>
+              <ul className="list-disc pl-5 text-xs text-steel">
+                {applied.map((l) => <li key={l.key}>{l.label}: {l.effective === null ? 'no limit' : typeof l.effective === 'boolean' ? (l.effective ? 'on' : 'off') : `${l.effective}${l.unit ? ` ${l.unit}` : ''}`}</li>)}
+              </ul>
+            </div>
+          ) : null}
+          {warnings.length ? (
+            <div role="alert" className="space-y-2 rounded-md border border-amber-500 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+              <p className="font-medium">Warnings</p>
+              {warnings.map((w) => (
+                <div key={w.code} className="flex items-start gap-2">
+                  <Checkbox id={`bc-ack-${w.code}`} checked={!!acked[w.code]} onCheckedChange={(v) => setAcked((a) => ({ ...a, [w.code]: v === true }))} />
+                  <Label htmlFor={`bc-ack-${w.code}`}><span>{w.message}</span> <span className="block text-xs">I understand, continue anyway.</span></Label>
+                </div>
+              ))}
+            </div>
           ) : null}
           {blocking.length ? (
             <div role="alert" className="text-destructive">
               <p className="font-medium">Cannot start</p>
-              <ul className="list-disc pl-5">{blocking.map((w) => <li key={w}>{w}</li>)}</ul>
+              <ul className="list-disc pl-5">{blocking.map((w) => <li key={w.code}>{w.message}</li>)}</ul>
               <p className="mt-1 text-xs text-steel">The template values are fixed once recipients are added. Discard this draft and start again with the missing values.</p>
             </div>
           ) : null}
@@ -381,19 +423,23 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
 
       {step === 4 && preview && (
         <div className="space-y-2">
-          <Label htmlFor="bc-confirm">Type {expected} to confirm sending to {expected} recipients</Label>
-          <Input id="bc-confirm" inputMode="numeric" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+          {requireTyped ? (
+            <>
+              <Label htmlFor="bc-confirm">Type {expected} to confirm sending to {expected} recipients</Label>
+              <Input id="bc-confirm" inputMode="numeric" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+            </>
+          ) : <p className="text-sm">Ready to send to <strong>{expected}</strong> recipients.</p>}
         </div>
       )}
 
       <div className="flex justify-between">
         <Button variant="outline" disabled={busy || step === 0 || (!!broadcast && step <= 2)} onClick={() => setStep((s) => s - 1)}>Back</Button>
         {step < 4 ? (
-          <Button disabled={busy || (step === 1 && reviewing ? false : step === 3 ? blocking.length > 0 : !canNext)} onClick={() => (step === 1 && reviewing) ? setStep(2) : step === 3 ? setStep(4) : void next()}>
+          <Button disabled={busy || (step === 1 && reviewing ? false : step === 3 ? blocking.length > 0 || !allAcked : !canNext)} onClick={() => (step === 1 && reviewing) ? setStep(2) : step === 3 ? setStep(4) : void next()}>
             {busy ? 'Working...' : step === 1 && reviewing ? 'Continue' : step === 1 ? 'Add recipients' : 'Next'}
           </Button>
         ) : (
-          <Button variant="destructive" disabled={busy || blocking.length > 0 || typed.trim() !== expected || !expected} onClick={() => void start()}>Start broadcast</Button>
+          <Button variant="destructive" disabled={busy || blocking.length > 0 || (requireTyped && typed.trim() !== expected) || !expected} onClick={() => void start()}>Start broadcast</Button>
         )}
       </div>
     </section>

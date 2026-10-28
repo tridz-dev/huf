@@ -31,7 +31,7 @@ describe('broadcast service', () => {
     await attestBroadcastConsent('B', 'web form');
     expect(post).toHaveBeenCalledWith(`${M}.attest_broadcast_consent`, { broadcast: 'B', consent_source: 'web form' });
     await startBroadcast('B', 5);
-    expect(post).toHaveBeenCalledWith(`${M}.start_broadcast`, { broadcast: 'B', confirm_count: '5' });
+    expect(post).toHaveBeenCalledWith(`${M}.start_broadcast`, { broadcast: 'B', confirm_count: '5', override_warnings: '[]' });
     await pauseBroadcast('B'); await resumeBroadcast('B'); await cancelBroadcast('B'); await pauseAllBroadcasts('G');
     expect(post).toHaveBeenCalledWith(`${M}.pause_broadcast`, { broadcast: 'B' });
     expect(post).toHaveBeenCalledWith(`${M}.resume_broadcast`, { broadcast: 'B' });
@@ -97,7 +97,7 @@ describe('broadcast response adapters', () => {
       limits: { recipients: 5, queued: 4, skipped: 1, category: 'MARKETING', template_status: 'APPROVED', within_limit: true, remaining_24h: 90, warnings: ['w'], blocking: ['b'] },
       cost: { currency: 'USD', total: null, by_country: {}, warnings: ['rate_unavailable:marketing:XX'] },
     });
-    expect(p).toMatchObject({ recipients: 5, queued: 4, skipped: 1, within_limit: true, remaining_24h: 90, warnings: ['w'], blocking: ['b'], consent_attested: true });
+    expect(p).toMatchObject({ recipients: 5, queued: 4, skipped: 1, within_limit: true, remaining_24h: 90, warnings: [{ code: 'w', message: 'w', limit_key: null }], blocking: [{ code: 'b', message: 'b', limit_key: null }], consent_attested: true });
     expect(p.cost?.warnings).toEqual(['rate_unavailable:marketing:XX']);
     expect(adaptPreview({}).blocking).toEqual([]);
   });
