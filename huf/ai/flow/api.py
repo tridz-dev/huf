@@ -117,6 +117,8 @@ def _trigger_event(doc, payload: dict) -> str | None:
 		defn = json.loads(raw) if isinstance(raw, str) else (raw or {})
 	except (json.JSONDecodeError, TypeError):
 		return None
+	if isinstance(defn, dict) and isinstance(defn.get("graph"), dict):
+		defn = defn["graph"]  # a pinned definition wraps the graph with its fingerprint
 	nodes = defn.get("nodes") if isinstance(defn, dict) else None
 	if isinstance(nodes, dict):
 		nodes = [{"id": k, **(v or {})} for k, v in nodes.items()]
