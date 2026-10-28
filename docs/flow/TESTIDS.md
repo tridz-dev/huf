@@ -73,7 +73,21 @@ Validation messages: `flow-error-<type>-<field>` (role="alert"), plus the node-l
 Blocked saves surface a toast; the first offending node is selected.
 
 ## Variable picker
-`flow-variable-picker` (default) / custom id above, items `<picker id>-item-<ref>` (`input`, `trigger`, a node id).
+Every text/value input has an "Insert data" picker listing the trigger (`input`, `trigger`), the steps that always run before the step (node ids) and, inside a loop, `foreach.item` / `foreach.index`. Later steps and other branches are never listed.
+Picker id = `<field test id>-picker`, items `<picker id>-item-<ref>`. Examples: `flow-field-tool.call-input.url-picker`, `flow-field-transform-input.text-picker`, `flow-field-condition-expression-picker`, `flow-field-router.llm-prompt-picker`, `flow-field-human.approval-message-picker`, `flow-field-output-value-picker`, `flow-binding-picker-<name>` (agent prompt data), `flow-agent-run-variable-picker`, `flow-loop-items-picker`, `flow-loop-collect-picker`.
+Value inputs insert a reference (`$from`) or, after typed text, a `$template` with the variable; the condition expression gets the name (`node_1` or `input`); the router prompt and approval message get `{input}` / `{node_1.field}` placeholders (filled in at run time).
+
+## Integrations and tool steps
+| Test id | Element |
+|---|---|
+| `flow-not-connected-node-<nodeId>` | "Not connected" badge + Connect link on a step whose integration has no credentials |
+| `flow-not-connected-sidebar`, `flow-connect-link-sidebar` | Same notice and link in the step settings (link goes to the real connect screen) |
+| `flow-node-tool-<nodeId>` | Human tool name on a tool step |
+| `flow-field-tool.call-timeout_ms` | "Wait up to" (seconds) |
+| `flow-field-router.llm-model`, `flow-option-router-model-default`, `flow-option-router-model-<modelName>` | Router AI model (optional) |
+| `flow-toggle-panels`, `flow-open-settings` | Canvas corner buttons |
+
+Publishing a flow with unconnected integration steps shows a warning toast (`Some steps are not connected yet`); it never blocks.
 
 ## Runs, run details, settings, approvals
 | Test id | Element |
