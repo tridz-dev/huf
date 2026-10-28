@@ -125,10 +125,12 @@ class TestFlowWp1(IntegrationTestCase):
 	def test_reading_an_overdue_approval_routes_it_on_the_timeout_edge(self):
 		run = self._waiting_run()
 		self._expire_deadline(run)
-		got = flow_api.get_flow_run(run.name)  # lazy expiry; enqueue runs inline under test
+		got = flow_api.get_flow_run(run.name)  # lazy expiry; the continuation is queued
+		run.reload()
+		self.assertEqual((run.status, run.current_node_id), ("Running", "late"))
+		flow_engine.run_flow(run.name)  # what the queued job does
 		run.reload()
 		self.assertEqual(run.status, "Success", run.last_error)
-		self.assertEqual(run.current_node_id, "late")
 		record = json.loads(run.context_json)[flow_engine.NODE_OUTPUTS_KEY]["ask"]
 		self.assertEqual(record["decision"], "timeout")
 		self.assertIsNone(record["decided_by"])
@@ -144,7 +146,7 @@ class TestFlowWp1(IntegrationTestCase):
 		self._expire_deadline(run)
 		flow_api.get_pending_approvals()
 		run.reload()
-		self.assertEqual(run.status, "Success")
+		self.assertEqual((run.status, run.current_node_id), ("Running", "late"))
 
 	def test_expiry_twice_does_not_run_the_step_twice(self):
 		run = self._waiting_run()
@@ -178,7 +180,13 @@ class TestFlowWp1(IntegrationTestCase):
 		graph["nodes"][0]["next"] = "done"
 		flow_id = self._save(graph, active=True)
 		now = datetime(2030, 1, 1, 10, 0, 5)
-		with patch("huf.ai.flow.triggers.frappe.cache") as cache:
+		def run_inline(method, queue=None, **kwargs):
+			triggers.run_trigger_job(**kwargs)
+
+		with (
+			patch("huf.ai.flow.triggers.frappe.cache") as cache,
+			patch("huf.ai.flow.triggers.frappe.enqueue", side_effect=run_inline),
+		):
 			cache.return_value.get_value.return_value = None
 			first = triggers.run_due_schedule_flows(now)
 			second = triggers.run_due_schedule_flows(now + timedelta(seconds=30))
@@ -189,8 +197,9 @@ class TestFlowWp1(IntegrationTestCase):
 	# -- stale runs --------------------------------------------------------
 
 	def test_sweeper_fails_a_stuck_run_but_not_a_fresh_or_waiting_one(self):
-		flow_id = self._save(_graph([_out("done", "ok")], WEBHOOK))
-		frappe.db.set_value("Flow Definition", flow_id, "status", "Draft")
+		graph = _graph([_out("done", "ok")], WEBHOOK)
+		graph["nodes"][0]["next"] = "done"
+		flow_id = self._save(graph)
 		stuck = flow_engine.create_flow_run(flow_id, payload={}, trigger_type="Webhook")
 		fresh = flow_engine.create_flow_run(flow_id, payload={}, trigger_type="Webhook")
 		long_ago = add_to_date(now_datetime(), minutes=-45)
@@ -212,9 +221,10 @@ class TestFlowWp1(IntegrationTestCase):
 
 	def test_a_failed_step_keeps_a_readable_error_in_its_stored_result(self):
 		graph = _graph(
-			[{"id": "bad", "type": "tool.call", "config": {"tool_id": "no_such_tool_wp1", "input": {}}}],
+			[{"id": "bad", "type": "tool.call", "config": {"tool_id": "http_request", "input": {"url": "http://127.0.0.1:1/"}}}],
 			WEBHOOK,
 		)
+		graph["contract"] = {**CONTRACT, "permission_envelope": {**CONTRACT["permission_envelope"], "http": ["http_request"]}}
 		graph["nodes"][0]["next"] = "bad"
 		flow_id = self._save(graph)
 		run = flow_engine.create_flow_run(flow_id, payload={}, trigger_type="Webhook")
