@@ -62,7 +62,10 @@ class TestTriggerDoctypes(IntegrationTestCase):
 			{"doctype": "Huf Role", "role_name": f"wp14-{frappe.generate_hash(length=5)}",
 			 "permissions": [{"capability": c} for c in ("flows.use", "flows.create", "flows.manage")]}
 		).insert(ignore_permissions=True)
-		frappe.get_doc({"doctype": "Huf User Role", "user": email, "huf_role": role.name, "enabled": 1}).insert(ignore_permissions=True)
+		if frappe.db.exists("Huf User Role", email):
+			frappe.db.set_value("Huf User Role", email, {"huf_role": role.name, "enabled": 1})
+		else:
+			frappe.get_doc({"doctype": "Huf User Role", "user": email, "huf_role": role.name, "enabled": 1}).insert(ignore_permissions=True)
 		frappe.cache().delete_value(f"huf_user_capabilities::{email}")
 		try:
 			frappe.set_user(email)
@@ -72,7 +75,7 @@ class TestTriggerDoctypes(IntegrationTestCase):
 			self.assertNotIn("flows.create", caps)
 		finally:
 			frappe.set_user("Administrator")
-			frappe.delete_doc("Huf User Role", email, force=True, ignore_permissions=True)
+			frappe.db.set_value("Huf User Role", email, "huf_role", "Huf User")
 			frappe.delete_doc("Huf Role", role.name, force=True, ignore_permissions=True)
 
 	def test_internal_tables_and_huf_bookkeeping_are_left_out(self):

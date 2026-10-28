@@ -48,7 +48,7 @@ import { makeFlowEdge, edgeRoute } from '../services/flowSerializer';
 import { branchHandlesFor } from '../lib/flowBranches';
 import { branchColumnShift, subtreeIds } from '../lib/flowEdgeLabels';
 import { toast } from '@/lib/toast';
-import { isInView } from '@/lib/flowLayout';
+import { isInView, panToReveal } from '@/lib/flowLayout';
 import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import { ensureToolSchemasLoaded } from '../lib/flowToolSchemas';
 import { actionLabel, triggerLabel } from '../lib/flowLabels';
@@ -80,17 +80,34 @@ function FlowMiniMap() {
 /**
  * After a step or connection is removed, or Tidy layout / its Undo moves the steps, fits the whole graph in view,
  * but only when something would otherwise be out of sight (an orphaned "Add step" card, a step moved off screen).
- * Adding steps never moves the view.
+ * When a step is added, the view only pans (zoom unchanged) if the new step or its "Add step" card would be cut off.
  */
 function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layoutRevision }: { flowId?: string; nodeCount: number; edgeCount: number; layoutRevision: number }) {
-  const { fitView, getNodes, getViewport } = useReactFlow();
+  const { fitView, getNodes, getViewport, setViewport } = useReactFlow();
   const store = useStoreApi();
   const last = useRef<{ flowId?: string; nodeCount: number; edgeCount: number; layoutRevision: number } | null>(null);
+  const knownIds = useRef<Set<string>>(new Set());
   useEffect(() => {
     const previous = last.current;
     last.current = { flowId, nodeCount, edgeCount, layoutRevision };
+    const before = knownIds.current;
+    const current = getNodes();
+    knownIds.current = new Set(current.map((n) => n.id));
     // The first render of a flow is fitted by <ReactFlow fitView>; only later edits come here.
     if (!previous || previous.flowId !== flowId) return;
+    if (nodeCount > previous.nodeCount && edgeCount >= previous.edgeCount) {
+      const added = current.filter((n) => !before.has(n.id));
+      if (added.length > 0) {
+        const timer = setTimeout(() => {
+          const { width, height } = store.getState();
+          const fresh = getNodes().filter((n) => !before.has(n.id));
+          if (fresh.length === 0 || width <= 0) return;
+          const next = panToReveal(getNodesBounds(fresh), getViewport(), { width, height });
+          if (next) setViewport({ ...next, zoom: getViewport().zoom }, { duration: 200 });
+        }, 60);
+        return () => clearTimeout(timer);
+      }
+    }
     const removed = nodeCount < previous.nodeCount || edgeCount < previous.edgeCount;
     if (!removed && layoutRevision === previous.layoutRevision) return;
     const timer = setTimeout(() => {
@@ -100,7 +117,7 @@ function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layoutRevis
       fitView({ padding: 0.3, maxZoom: 1, duration: 200 });
     }, 60);
     return () => clearTimeout(timer);
-  }, [flowId, nodeCount, edgeCount, layoutRevision, fitView, getNodes, getViewport, store]);
+  }, [flowId, nodeCount, edgeCount, layoutRevision, fitView, getNodes, getViewport, setViewport, store]);
   return null;
 }
 
