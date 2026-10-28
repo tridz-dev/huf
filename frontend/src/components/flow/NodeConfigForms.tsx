@@ -11,8 +11,8 @@ import { VariablePicker } from '../ui/VariablePicker';
 import { FlowValueInput } from '../FlowValueInput';
 import { FlowTriggerPanel } from '../FlowTriggerPanel';
 import { useFlowContext } from '../../contexts/FlowContext';
-import { getAgents, getDocTypes } from '../../services/agentApi';
-import { getApproverRoles } from '../../services/flowApi';
+import { getAgents } from '../../services/agentApi';
+import { getApproverRoles, getTriggerDoctypes } from '../../services/flowApi';
 import { getFlowTools, type FlowTool } from '../../services/toolApi';
 import { getModels, getProviders } from '../../services/providerApi';
 import { isChatModel } from '@/lib/chatModel';
@@ -183,7 +183,7 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
   useEffect(() => {
     if (type !== 'doc-event' || docTypes.length) return;
     setLoadingDocTypes(true);
-    getDocTypes()
+    getTriggerDoctypes()
       .then((l) => setDocTypes((l || []).map((d: { name: string }) => ({ value: d.name, label: d.name }))))
       .catch(() => setDocTypes([]))
       .finally(() => setLoadingDocTypes(false));

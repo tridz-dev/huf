@@ -22,7 +22,7 @@ import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
 import { calculateDuration, formatTimeAgo } from '@/utils/time';
 import { humanizeFlowError } from '@/lib/flowValidation';
 import { describeDecision, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from '@/lib/flowRunFormat';
-import { summarizeDocPayload } from '@/lib/flowRunDoc';
+import { deskDocUrl, summarizeDocPayload } from '@/lib/flowRunDoc';
 import { connectPath, notConnectedService } from '@/lib/flowIntegrations';
 import { Link } from 'react-router-dom';
 
@@ -379,7 +379,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                 <div className="rounded-md border p-4 space-y-3">
                                                     <div className="text-sm">
                                                         <span className="font-medium" data-testid="flow-run-document-doctype">{doc.doctype}</span>{' '}
-                                                        <span className="font-mono text-xs" data-testid="flow-run-document-name">{doc.name}</span>
+                                                        <a className="font-mono text-xs text-primary underline" href={deskDocUrl(doc.doctype, doc.name)} target="_blank" rel="noreferrer" data-testid="flow-run-document-name">{doc.name}</a>
                                                         {doc.event && (
                                                             <span className="ml-2 rounded-full border px-2 py-0.5 text-xs text-muted-foreground" data-testid="flow-run-document-event">
                                                                 {doc.event}
