@@ -346,10 +346,19 @@ export function FlowCanvas({
 
       const newNodeId = `node_${Date.now()}`;
       const option = actionOptions.find((a) => a.id === actionId);
+      // Fan branch targets out sideways (True/False, approve/reject, router paths) so they never stack on one spot.
+      const sourceCfg = sourceNode.data.actionConfig as ({ type?: string } & Record<string, unknown>) | undefined;
+      const sourceHandles = branchHandlesFor(sourceCfg?.type, sourceCfg);
+      const routeIndex = sourceHandles.findIndex((h) => h.route === sourceRoute);
+      const sideOffset = sourceHandles.length > 0 && routeIndex >= 0
+        ? (routeIndex - (sourceHandles.length - 1) / 2) * 240
+        : sourceCfg?.type === 'router'
+          ? edges.filter((e) => e.source === sourceId && edgeRoute(e) === 'option').length * 240
+          : 0;
       const newNode: Node<FlowNodeData> = {
         id: newNodeId,
         type: 'action',
-        position: { x: sourceNode.position.x, y: sourceNode.position.y + 150 },
+        position: { x: sourceNode.position.x + sideOffset, y: sourceNode.position.y + 150 },
         data: {
           // The palette card name is the node title and the sidebar title.
           label: actionLabel(actionId),
