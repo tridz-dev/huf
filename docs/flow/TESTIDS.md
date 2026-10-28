@@ -1,0 +1,83 @@
+# Flow builder test ids
+
+Stable `data-testid` hooks for live UI journeys. Field names are the contract config keys
+(`docs/flow/FIELD_CONTRACT.md`). `<type>` is the contract node type (`trigger.webhook`, `agent.run`,
+`tool.call`, `router.llm`, `condition`, `foreach`, `human.approval`, `transform`, `state.get`, `state.set`,
+`state.delete`, `doc.create`, `output`).
+
+## Toolbar and page
+| Test id | Element |
+|---|---|
+| `flow-new` | New flow button (list header) |
+| `flow-list-item-<flowId>` | Flow card on the list page |
+| `flow-sidebar-item-<flowId>` | Flow entry in the left sidebar |
+| `flow-canvas` | Canvas root |
+| `flow-save`, `flow-run`, `flow-publish`, `flow-runs`, `flow-settings` | Toolbar buttons |
+| `flow-save-state` | Saved / Unsaved indicator |
+| `flow-validation-summary` | "N things to finish" link (only while something is incomplete) |
+| `flow-add-trigger` | Add trigger button (when the flow has no trigger) |
+| `flow-rail-trigger`, `flow-rail-agent`, `flow-rail-condition`, `flow-rail-tool`, `flow-rail-data` | Left palette rail |
+
+## Palette modal
+`flow-trigger-modal`, `flow-action-modal`, `flow-modal-add-trigger`, `flow-modal-cancel`.
+Cards: `flow-card-<id>` with ids
+`webhook`, `schedule`, `doc-event` (triggers) and
+`agent-run`, `tool-call`, `router`, `condition`, `loop`, `human.approval`, `transform`, `state-get`,
+`state-set`, `state-delete`, `doc-create`, `email`, `http-request`, `file`, `slack`, `sheets` (steps).
+Card title = node title = sidebar title (derived from `data/actions.ts` / `data/triggers.ts`).
+
+## Canvas nodes
+| Test id | Element |
+|---|---|
+| `flow-node-<nodeId>` | Node wrapper (`data-node-type`, `data-incomplete="true|false"`) |
+| `flow-node-title-<nodeId>` | Node title |
+| `flow-node-incomplete-<nodeId>` | "Needs setup" marker |
+| `flow-node-delete-<nodeId>` | Delete button (on the selected node) |
+| `flow-node-delete-dialog`, `flow-node-delete-confirm` | Confirmation for configured nodes |
+| `flow-handle-<nodeId>` | Single source handle |
+| `flow-handle-<nodeId>-<route>` | Branch handle: `true`, `false`, `approve`, `reject`, `timeout`, `body` |
+| `flow-add-step-<nodeId>` | Add-step card after a plain step |
+| `flow-add-step-<nodeId>-<route>` | Add-step card for a branch (`true`, `false`, `approve`, `reject`, `body`, `option`, `timeout`) |
+| `flow-insert-step-<edgeId>` | "+" on an edge |
+| `flow-edge-label-<edgeId>` | Edge label |
+
+## Right sidebar
+`flow-config-sidebar`, `flow-sidebar-title`, `flow-config-title`, `flow-sidebar-delete`, `flow-sidebar-close`,
+`flow-delete-confirm`, `flow-delete-cancel`, `flow-node-title-input`, `flow-node-incomplete` (summary banner),
+`flow-trigger-type`, `flow-trigger-change`, `flow-edge-config`, `flow-edge-meaning`, `flow-edge-label`,
+`flow-branches`, `flow-branch-<route>`, `flow-branch-<route>-empty`.
+
+## Fields: `flow-field-<type>-<field>`, errors: `flow-error-<type>-<field>`
+Dropdown options inside Selects: `flow-option-<name>`; Combobox options: `<field testid>-option-<value>`.
+
+| Type | Fields |
+|---|---|
+| `trigger.webhook` | `url` (read-only), `secret`, `method` (options `flow-option-webhook-method-GET|POST`) |
+| | buttons `flow-webhook-copy-url`, `flow-webhook-copy-secret`, `flow-webhook-regenerate`; usage blocks `flow-webhook-usage`, `-query`, `-header`, `-curl` |
+| `trigger.schedule` | `frequency` (options `flow-option-schedule-frequency-<minutes|hours|daily|weekly|monthly|custom>`), `every`, `minute`, `hour`, `weekday`, `monthday`, `cron`; preview `flow-schedule-preview` |
+| `trigger.doc-event` | `doctype`, `event` (options `flow-option-doc-event-<event>`) |
+| trigger panel | `flow-trigger-apply`, `flow-trigger-clear`, `flow-trigger-disabled-reason` |
+| `agent.run` | `agent`, `prompt`, `prompt_bindings`; `flow-binding-<name>`; picker `flow-agent-run-variable-picker` (+ `-item-<ref>`) |
+| `tool.call` | `tool_id`, `input.<key>` (e.g. `input.to`, `input.subject`, `input.body`, `input.channel`, `input.text`, `input.url`, `input.method`, `input.headers`, `input.body`); every value control has a `-mode` select (`flow-field-tool.call-input.to-mode`) |
+| `router.llm` | `prompt`, `options` (list), `flow-router-path-label-<targetNodeId>`, `flow-router-path-<targetNodeId>`, `flow-router-no-paths`, `default` |
+| `condition` | `expression`; branches `flow-branch-true`, `flow-branch-false` |
+| `foreach` | `items`, `max_iterations`, `on_item_error` (`flow-option-loop-on-error-fail|skip`), `collect`; branches `flow-branch-body`, `flow-branch-next`; pickers `flow-loop-items-picker`, `flow-loop-collect-picker` |
+| `human.approval` | `message`, `approver_type` (`flow-option-approver-none|role|user`), `approver_role`, `approver_users`, `timeout_ms` (minutes in the UI); branches `flow-branch-approve|reject|timeout` |
+| `transform` | `op` (`flow-option-transform-op-<op>`), `input.<param>` |
+| `state.get|set|delete` | `key`, `default`, `value`, `ttl_seconds` |
+| `doc.create` | `doctype`, `fields.<i>.name`, `fields.<i>.value`, `fields.add` |
+| `output` | `flow-field-output-value` |
+
+Validation messages: `flow-error-<type>-<field>` (role="alert"), plus the node-level banner `flow-node-incomplete`.
+Blocked saves surface a toast; the first offending node is selected.
+
+## Variable picker
+`flow-variable-picker` (default) / custom id above, items `<picker id>-item-<ref>` (`input`, `trigger`, a node id).
+
+## Runs, run details, settings, approvals
+| Test id | Element |
+|---|---|
+| `flow-run-history`, `flow-run-history-refresh`, `flow-run-row-<runId>` (`data-run-status`) | Runs sheet |
+| `flow-run-details`, `flow-run-current-node`, `flow-run-error`, `flow-run-approve`, `flow-run-reject` | Run details sheet |
+| `flow-settings-modal`, `flow-settings-name`, `-description`, `-category`, `-mode`, `-max-hops`, `-auto-convert`, `-save`, `-cancel`, `-delete` | Settings modal |
+| `flow-approvals-bell`, `flow-approvals-count`, `flow-approvals-panel`, `flow-approval-<runId>`, `flow-approve-<runId>`, `flow-reject-<runId>` | Approvals bell |

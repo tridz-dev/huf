@@ -196,6 +196,7 @@ function FlowListPage() {
           )
         }
         renderItem={(flow) => (
+          <div data-testid={`flow-list-item-${flow.id}`}>
           <ItemCard
             title={flow.name}
             description={flow.description || 'No description'}
@@ -226,6 +227,7 @@ function FlowListPage() {
             ]}
             onClick={() => handleFlowClick(flow.id)}
           />
+          </div>
         )}
         keyExtractor={(flow) => flow.id}
       />

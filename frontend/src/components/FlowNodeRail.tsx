@@ -74,6 +74,7 @@ export function FlowNodeRail({
                 <button
                   type="button"
                   aria-label={`Add ${label} node`}
+                  data-testid={`flow-rail-${id}`}
                   aria-pressed={isActive}
                   disabled={isDisabled}
                   onClick={() => onSelect(id)}
