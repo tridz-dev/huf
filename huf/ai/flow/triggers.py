@@ -377,7 +377,7 @@ _TABLE_FIELDTYPES = frozenset({"Table", "Table MultiSelect"})
 def _filter_payload_row(row: dict, doctype: str, owner: str, parenttype: str | None = None) -> dict:
 	"""One document (or child row) as a dict, minus what ``owner`` may not read at their permission level.
 
-	Standard columns (name, owner, creation, docstatus ...) are kept. A field is dropped when it is a
+	Standard columns (name, owner, creation, docstatus ...) are kept; in-memory ``__`` markers are dropped. A field is dropped when it is a
 	Password field or its permission level is not one the owner can read; table fields are filtered
 	row by row against the child doctype.
 	"""
@@ -386,6 +386,8 @@ def _filter_payload_row(row: dict, doctype: str, owner: str, parenttype: str | N
 	fields = {df.fieldname: df for df in meta.fields}
 	out: dict = {}
 	for key, value in row.items():
+		if key.startswith("__"):
+			continue  # in-memory markers (``__unsaved``), not document data
 		df = fields.get(key)
 		if df is None:
 			out[key] = value
