@@ -3,6 +3,17 @@ import { useRouteError } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 
 const RELOAD_FLAG = 'huf:chunk-reload';
+/** One automatic reload per minute: a chunk that is still missing after it must show the Reload screen, not loop. */
+const RELOAD_WINDOW_MS = 60_000;
+
+function reloadedRecently(): boolean {
+	try {
+		const at = Number(sessionStorage.getItem(RELOAD_FLAG));
+		return Number.isFinite(at) && at > 0 && Date.now() - at < RELOAD_WINDOW_MS;
+	} catch {
+		return false;
+	}
+}
 
 /** True for stale-chunk errors after a frontend redeploy (old tab, new hashes). */
 function isChunkLoadError(error: unknown): boolean {
@@ -20,12 +31,15 @@ function isChunkLoadError(error: unknown): boolean {
 export function RouteErrorBoundary() {
 	const error = useRouteError();
 	const chunkError = isChunkLoadError(error);
-	const alreadyRetried =
-		typeof sessionStorage !== 'undefined' && sessionStorage.getItem(RELOAD_FLAG) === '1';
+	const alreadyRetried = reloadedRecently();
 
 	useEffect(() => {
 		if (!chunkError || alreadyRetried) return;
-		sessionStorage.setItem(RELOAD_FLAG, '1');
+		try {
+			sessionStorage.setItem(RELOAD_FLAG, String(Date.now()));
+		} catch {
+			/* sessionStorage unavailable */
+		}
 		window.location.reload();
 	}, [chunkError, alreadyRetried]);
 
@@ -62,11 +76,13 @@ export function RouteErrorBoundary() {
 	);
 }
 
-/** Clear the reload guard once the app has loaded healthy. Call from AppShell. */
+/** Forget the reload guard once the app has stayed healthy for a while (not at mount: the page chunk may still fail). */
 export function clearChunkReloadFlag() {
-	try {
-		sessionStorage.removeItem(RELOAD_FLAG);
-	} catch {
-		/* sessionStorage unavailable */
-	}
+	window.setTimeout(() => {
+		try {
+			sessionStorage.removeItem(RELOAD_FLAG);
+		} catch {
+			/* sessionStorage unavailable */
+		}
+	}, RELOAD_WINDOW_MS);
 }

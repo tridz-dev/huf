@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -51,26 +51,24 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
   const navigate = useNavigate();
   const { canManage, readOnlyReason } = useFlowPermissions();
 
-  // The flow whose values the fields currently hold. Fields are filled once per opening, never again
-  // while the dialog stays open, so a background refresh of the flow can't put the old name back over an edit.
-  const filledFor = useRef<string | null>(null);
-  useEffect(() => {
-    if (!open) {
-      filledFor.current = null;
-      return;
-    }
-    if (activeFlow && filledFor.current !== activeFlow.id) {
-      filledFor.current = activeFlow.id;
-      setName(activeFlow.name || '');
-      setDescription(activeFlow.description || '');
-      setCategory(activeFlow.category || '');
+  // Fill the fields while rendering, once per opening: the first thing the user sees (and can edit) is already the
+  // flow's real values, so a late effect can never put them back over what was typed or cleared.
+  const [filledFor, setFilledFor] = useState<string | null>(null);
+  if (!open && filledFor !== null) {
+    setFilledFor(null);
+  } else if (open && activeFlow && filledFor !== activeFlow.id) {
+    setFilledFor(activeFlow.id);
+    setName(activeFlow.name || '');
+    setDescription(activeFlow.description || '');
+    setCategory(activeFlow.category || '');
+  }
 
-      getFlowConversionStatus(activeFlow.id)
-        .then((status) => setAutoConvertToProcedure(status.auto_convert_to_procedure))
-        .catch(() => setAutoConvertToProcedure(false));
-    }
-    // Re-initialise only when the dialog opens or another flow is shown: depending on the whole flow object would
-    // reset what the user is typing whenever the canvas re-syncs the active flow in the background.
+  useEffect(() => {
+    if (!activeFlow || !open) return;
+    getFlowConversionStatus(activeFlow.id)
+      .then((status) => setAutoConvertToProcedure(status.auto_convert_to_procedure))
+      .catch(() => setAutoConvertToProcedure(false));
+    // Only when the dialog opens or another flow is shown (not on every background refresh of the flow).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFlow?.id, open]);
 

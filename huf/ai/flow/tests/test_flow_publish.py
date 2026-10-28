@@ -91,3 +91,14 @@ class TestFlowPublish(IntegrationTestCase):
 	def test_unknown_flow(self):
 		with self.assertRaises(frappe.DoesNotExistError):
 			flow_api.unpublish_flow("no-such-flow")
+
+	def test_submit_event_on_a_document_type_that_cannot_be_submitted_is_refused(self):
+		graph = _graph()
+		graph["nodes"][0] = {"id": "t", "type": "trigger.doc-event", "config": {"doctype": "ToDo", "event": "on_submit"}, "next": "e"}
+		frappe.db.set_value("Flow Definition", self.name, "definition_json", json.dumps(graph))
+		with self.assertRaises(frappe.ValidationError) as ctx:
+			flow_api.publish_flow(self.flow_id)
+		self.assertIn("cannot be submitted", str(ctx.exception))
+		graph["nodes"][0]["config"]["event"] = "on_trash"
+		frappe.db.set_value("Flow Definition", self.name, "definition_json", json.dumps(graph))
+		self.assertEqual(flow_api.publish_flow(self.flow_id)["status"], "Active")

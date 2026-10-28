@@ -219,7 +219,7 @@ export function NodeSelectionModal({
                 <div className="text-left flex-1 min-w-0">
                   <div className="text-sm font-medium">{action.name}</div>
                   {action.description && (
-                    <div className="text-xs text-steel-soft truncate">
+                    <div className="text-xs text-steel truncate">
                       {action.description}
                     </div>
                   )}
@@ -285,7 +285,7 @@ export function NodeSelectionModal({
                     </div>
                     <div className="text-left flex-1 min-w-0">
                       <div className="text-sm font-medium">{trigger.name}</div>
-                      {trigger.description && <div className="text-xs text-steel-soft">{trigger.description}</div>}
+                      {trigger.description && <div className="text-xs text-steel">{trigger.description}</div>}
                     </div>
                   </Button>
                 );
