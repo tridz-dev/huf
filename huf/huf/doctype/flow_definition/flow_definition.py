@@ -51,30 +51,20 @@ class FlowDefinition(Document):
 			self.version = (self.version or 0) + 1
 
 	def on_update(self):
-		self._sync_flow_trigger_with_status()
+		self._pause_flow_trigger_if_inactive()
 		self._maybe_convert_to_procedure()
 
-	def _sync_flow_trigger_with_status(self):
-		"""Keep a Flow's schedule / doc-event trigger Automation (set_flow_trigger) in step with
-		the Flow's published state. A Flow that is no longer Active must not keep firing, so its
-		Automation is paused; publishing it again resumes the Automation, but only when its
-		Procedure is already Testing/Active (a Procedure is never activated automatically)."""
+	def _pause_flow_trigger_if_inactive(self):
+		"""A Flow that is no longer Active must not keep firing through its schedule /
+		doc-event trigger Automation (set_flow_trigger): pause it. Graph edits are
+		surfaced separately as ``stale`` on the trigger summary."""
+		if self.status == "Active":
+			return
 		from huf.ai.flow.api import _flow_automation_name
-		from huf.huf.doctype.automation.automation import RUNNABLE_PROCEDURE_STATUSES
 
 		automation = _flow_automation_name(self.flow_id)
-		row = frappe.db.get_value("Automation", automation, ["status", "procedure"], as_dict=True)
-		if not row:
-			return
-		if self.status != "Active":
-			if row.status == "Active":
-				frappe.db.set_value("Automation", automation, "status", "Paused")
-				frappe.cache().delete_key("huf:doc_event_automation_triggers")
-			return
-		if row.status in ("Draft", "Paused") and (
-			frappe.db.get_value("Agent Procedure", row.procedure, "status") in RUNNABLE_PROCEDURE_STATUSES
-		):
-			frappe.db.set_value("Automation", automation, "status", "Active")
+		if frappe.db.get_value("Automation", automation, "status") == "Active":
+			frappe.db.set_value("Automation", automation, "status", "Paused")
 			frappe.cache().delete_key("huf:doc_event_automation_triggers")
 
 	def on_trash(self):
