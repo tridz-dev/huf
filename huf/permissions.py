@@ -50,6 +50,7 @@ CAPABILITIES: dict[str, str] = {
 	"flows.use": "Use Flows",
 	"flows.create": "Create Flows",
 	"flows.manage": "Manage Flows",
+	"flows.publish_sensitive": "Publish Flows With Document Triggers Or Web Requests",
 	# --- System ---
 	"system.providers.manage": "Manage AI Providers",
 	"system.models.manage": "Manage AI Models",
@@ -105,6 +106,7 @@ DEFAULT_ROLE_CAPABILITIES: dict[str, list[str]] = {
 		"flows.use",
 		"flows.create",
 		"flows.manage",
+		"flows.publish_sensitive",
 		"data.tables.manage",
 		"data.records.create",
 		"data.records.view_all",

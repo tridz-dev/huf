@@ -113,7 +113,7 @@ function expectRoundTrip(flow: Flow) {
  */
 function fullCanvas(): Flow {
   const nodes: FlowNode[] = [
-    trigger('t_webhook', { type: 'webhook', method: 'POST', secret: 'change-me-webhook-secret' }),
+    trigger('t_webhook', { type: 'webhook', method: 'POST', secret: 'change-me-webhook-secret-0123456789ab' }),
     trigger('t_schedule', { type: 'schedule', cron: '*/15 * * * *' }),
     trigger('t_doc', { type: 'doc-event', doctype: 'ToDo', event: 'after_insert' }),
     action('n_prep', { type: 'transform', op: 'trim', input: { text: { $from: 'input.message' } } }),

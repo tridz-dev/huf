@@ -55,7 +55,7 @@ def _graph(nodes, trigger):
 	}
 
 
-WEBHOOK = {"type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret"}}
+WEBHOOK = {"type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}}
 
 
 class TestFlowWp1(IntegrationTestCase):

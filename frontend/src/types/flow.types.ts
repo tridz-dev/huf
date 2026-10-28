@@ -66,7 +66,7 @@ export type ActionType =
 export interface WebhookTriggerConfig {
   type: 'webhook';
   method?: WebhookMethod;
-  /** 8-256 chars; receiver compares the presented key to this. */
+  /** 32-256 chars; receiver compares the X-Huf-Secret header to this. */
   secret?: string;
 }
 

@@ -25,7 +25,7 @@ WEBHOOK_TYPE = "trigger.webhook"
 SCHEDULE_TYPE = "trigger.schedule"
 DOC_EVENT_TYPE = "trigger.doc-event"
 
-MIN_SECRET_LENGTH = 8
+MIN_SECRET_LENGTH = 32
 
 # Schema event enum (graph_ir.schema.json TriggerDocEventNode.config.event) -> the Frappe
 # doc_events method name that fires it. Identical names today; the map is explicit so the
@@ -238,10 +238,6 @@ def _active_flows_with(trigger_type: str):
 		yield row["name"], row["owner"], parse_definition(row["definition_json"])
 
 
-def active_webhook_flows():
-	return _active_flows_with(WEBHOOK_TYPE)
-
-
 # ---------------------------------------------------------------------------
 # Schedule
 # ---------------------------------------------------------------------------
@@ -364,8 +360,55 @@ def get_doc_event_index() -> dict:
 
 
 def clear_trigger_cache(doc=None, method=None):
-	"""Flow Definition save/trash hook: drop the doctype -> flows lookup."""
+	"""Drop the doctype -> flows lookup.
+
+	Hooked on Flow Definition save / trash / publish / unpublish, and on User and Has Role changes
+	(an owner who is disabled or loses a role must stop triggering flows at once, not after the
+	cache expires).
+	"""
 	frappe.cache().delete_value(DOC_EVENT_CACHE_KEY)
+
+
+#: Field types never copied into a flow's payload, whoever may read them.
+PAYLOAD_STRIPPED_FIELDTYPES = frozenset({"Password"})
+_TABLE_FIELDTYPES = frozenset({"Table", "Table MultiSelect"})
+
+
+def _filter_payload_row(row: dict, doctype: str, owner: str, parenttype: str | None = None) -> dict:
+	"""One document (or child row) as a dict, minus what ``owner`` may not read at their permission level.
+
+	Standard columns (name, owner, creation, docstatus ...) are kept. A field is dropped when it is a
+	Password field or its permission level is not one the owner can read; table fields are filtered
+	row by row against the child doctype.
+	"""
+	meta = frappe.get_meta(doctype)
+	readable_levels = meta.get_permlevel_access("read", parenttype, user=owner)
+	fields = {df.fieldname: df for df in meta.fields}
+	out: dict = {}
+	for key, value in row.items():
+		df = fields.get(key)
+		if df is None:
+			out[key] = value
+			continue
+		if df.fieldtype in PAYLOAD_STRIPPED_FIELDTYPES or (df.permlevel or 0) not in readable_levels:
+			continue
+		if df.fieldtype in _TABLE_FIELDTYPES and isinstance(value, list) and df.options:
+			value = [
+				_filter_payload_row(child, df.options, owner, doctype) if isinstance(child, dict) else child
+				for child in value
+			]
+		out[key] = value
+	return out
+
+
+def build_doc_event_payload(doc, owner: str) -> dict:
+	"""The payload a doc-event flow run starts with: the document as ``owner`` may read it.
+
+	The run executes as the flow owner, so it must never see more than that user could open on screen:
+	fields above the owner's permission level and Password fields are removed (also in child rows).
+	"""
+	data = json.loads(frappe.as_json(doc.as_dict()))
+	return _filter_payload_row(data, doc.doctype, owner)
 
 
 def _skip_context() -> bool:
@@ -394,16 +437,21 @@ def run_doc_event_flows(doc, method=None, *args, **kwargs):
 	if is_recursion_skipped(doctype, frappe.get_meta(doctype).module):
 		return
 
-	payload = None
+	from huf.ai.flow.publish_guard import SENSITIVE_CAPABILITY
+	from huf.permissions import has_capability
+
 	for entry in by_event[method]:
 		owner = entry["owner"]
 		try:
 			if not frappe.db.get_value("User", owner, "enabled"):
 				continue
+			# A document-event flow reads documents on the owner's behalf: it only fires while the owner
+			# may still publish such flows.
+			if not has_capability(owner, SENSITIVE_CAPABILITY):
+				continue
 			if not frappe.has_permission(doctype, "read", doc=doc, user=owner):
 				continue
-			if payload is None:
-				payload = json.loads(frappe.as_json(doc.as_dict()))
+			payload = build_doc_event_payload(doc, owner)
 			frappe.enqueue(
 				"huf.ai.flow.triggers.run_trigger_job",
 				queue="default",

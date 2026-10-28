@@ -25,6 +25,7 @@ import { reportFlowRun } from '@/lib/flowRunToast';
 import { RunFlowDialog } from './flow/RunFlowDialog';
 import { DisabledReason } from './flow/DisabledReason';
 import { useFlowPermissions } from '@/hooks/useFlowPermissions';
+import { publishBlockedReason } from '@/lib/flowPublishGuard';
 import { useRunParam } from '@/hooks/useRunParam';
 
 /**
@@ -109,11 +110,13 @@ export function FlowToolbarTitle() {
 export function FlowsHeaderActions() {
   const { activeFlow, saveState, hasUnsavedChanges, saveFlow, setSelectedNode, setFlowPublished } = useFlowContext();
   const [showRunDialog, setShowRunDialog] = useState(false);
-  const { canManage, readOnlyReason } = useFlowPermissions();
+  const { canManage, canPublishSensitive, readOnlyReason } = useFlowPermissions();
   const [isPublishing, setIsPublishing] = useState(false);
   const [showUnpublish, setShowUnpublish] = useState(false);
   const [isUnpublishing, setIsUnpublishing] = useState(false);
   const isPublished = activeFlow?.status === 'active';
+  // A Data trigger or a web request step needs an extra permission to publish; say why Publish is off.
+  const publishBlocked = publishBlockedReason(activeFlow?.nodes ?? [], canPublishSensitive);
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedRunId, setSelectedRunId] = useRunParam();
@@ -333,7 +336,7 @@ export function FlowsHeaderActions() {
           Published
         </span>
       )}
-      <DisabledReason reason={canManage ? null : readOnlyReason}>
+      <DisabledReason reason={!canManage ? readOnlyReason : isPublished ? null : publishBlocked}>
         {isPublished ? (
           <Button
             variant="outline"
@@ -353,7 +356,7 @@ export function FlowsHeaderActions() {
             className="gap-2"
             data-testid="flow-publish"
             onClick={handlePublish}
-            disabled={!activeFlow || isPublishing || !canManage}
+            disabled={!activeFlow || isPublishing || !canManage || !!publishBlocked}
           >
             {isPublishing ? (
               <Loader2 className="w-4 h-4 animate-spin" />

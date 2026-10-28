@@ -12,7 +12,7 @@ Stable `data-testid` hooks for live UI journeys. Field names are the contract co
 | `flow-list-item-<flowId>` | Flow card on the list page |
 | `flow-sidebar-item-<flowId>` | Flow entry in the left sidebar |
 | `flow-canvas` | Canvas root |
-| `flow-save`, `flow-run`, `flow-publish`, `flow-runs`, `flow-settings` | Toolbar buttons |
+| `flow-save`, `flow-run`, `flow-publish`, `flow-runs`, `flow-settings` | Toolbar buttons. `flow-publish` is disabled, with the reason in the `disabled-reason` tooltip, for a user without `flows.publish_sensitive` when the flow has a Data trigger or a web request step |
 | `flow-save-state` | Saved / Unsaved indicator |
 | `flow-validation-summary` | "N things to finish" link (only while something is incomplete) |
 | `flow-add-trigger` | Add trigger button (when the flow has no trigger) |
@@ -54,7 +54,7 @@ Dropdown options inside Selects: `flow-option-<name>`; Combobox options: `<field
 | Type | Fields |
 |---|---|
 | `trigger.webhook` | `url` (read-only), `secret`, `method` (options `flow-option-webhook-method-GET|POST`) |
-| | buttons `flow-webhook-copy-url`, `flow-webhook-copy-secret`, `flow-webhook-regenerate`; usage blocks `flow-webhook-usage`, `-query`, `-header`, `-curl` |
+| | buttons `flow-webhook-copy-url`, `flow-webhook-copy-secret`, `flow-webhook-regenerate`; usage blocks `flow-webhook-usage`, `-header`, `-curl` (no query-string form: the secret is header-only) |
 | `trigger.schedule` | `frequency` (options `flow-option-schedule-frequency-<minutes|hours|daily|weekly|monthly|custom>`), `every`, `minute`, `hour`, `weekday`, `monthday`, `cron`; preview `flow-schedule-preview` |
 | `trigger.doc-event` | `doctype`, `event` (options `flow-option-doc-event-<event>`) |
 | trigger panel | `flow-trigger-apply`, `flow-trigger-clear`, `flow-trigger-disabled-reason` |

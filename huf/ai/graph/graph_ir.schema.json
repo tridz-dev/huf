@@ -953,9 +953,9 @@
                 },
                 "secret": {
                   "type": "string",
-                  "minLength": 8,
+                  "minLength": 32,
                   "maxLength": 256,
-                  "description": "Shared webhook secret. The receiver (huf.ai.flow.api) fails closed: a request is accepted only if its presented key equals this value (constant-time compare)."
+                  "description": "Shared webhook secret (at least 32 characters). The receiver (huf.ai.flow.api) fails closed: a request is accepted only if the X-Huf-Secret header equals this value (constant-time compare)."
                 }
               }
             }

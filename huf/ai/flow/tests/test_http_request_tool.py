@@ -33,6 +33,9 @@ class FakeResponse:
 		self.headers = headers or {}
 		self._body = body
 
+	def close(self):
+		pass
+
 	def iter_content(self, chunk_size=8192):
 		for i in range(0, len(self._body), chunk_size):
 			yield self._body[i : i + chunk_size]
@@ -48,8 +51,11 @@ def env(monkeypatch):
 		ip = dns.get(host, host if host.replace(".", "").isdigit() or ":" in host else "93.184.216.34")
 		return [(2, 1, 6, "", (ip, 0))]
 
-	def fake_request(method, url, **kwargs):
+	sent_to = []
+
+	def fake_send(method, url, ips, **kwargs):
 		calls.append((method, url, kwargs))
+		sent_to.append(list(ips))
 		return responses.pop(0)
 
 	tool_doc = MagicMock()
@@ -58,11 +64,11 @@ def env(monkeypatch):
 	tool_doc.allowed_for_guest = 0
 
 	monkeypatch.setattr(hh.socket, "getaddrinfo", fake_getaddrinfo)
-	monkeypatch.setattr(hh.requests, "request", fake_request)
+	monkeypatch.setattr(hh, "_send", fake_send)
 	monkeypatch.setattr(hh.frappe, "get_doc", lambda *a, **k: tool_doc)
 	monkeypatch.setattr(hh.frappe.session, "user", "Administrator", raising=False)
 	monkeypatch.setattr(hh, "has_capability", lambda user, cap: True)
-	return type("Env", (), {"calls": calls, "responses": responses, "dns": dns})
+	return type("Env", (), {"calls": calls, "responses": responses, "dns": dns, "sent_to": sent_to})
 
 
 def run(**kw):
@@ -176,3 +182,129 @@ def test_registered_in_hook_registry():
 	text = src.read_text()
 	assert '"function_path": "huf.ai.http_handler.http_request"' in text
 	assert "+ HTTP_TOOLS" in text
+
+
+# ---------------------------------------------------------------------------
+# DNS rebinding: resolve once, validate every address, connect to what was validated
+# ---------------------------------------------------------------------------
+
+
+def _rebinding_resolver(first, then):
+	"""getaddrinfo that answers ``first`` the first time a name is looked up and ``then`` afterwards."""
+	calls = []
+
+	def resolver(host, port, *a, **k):
+		calls.append(host)
+		ip = first if len(calls) == 1 else then
+		return [(2, 1, 6, "", (ip, 0))]
+
+	resolver.calls = calls
+	return resolver
+
+
+def test_rebinding_resolves_once_and_connects_to_the_validated_address(env, monkeypatch):
+	resolver = _rebinding_resolver("93.184.216.34", "127.0.0.1")
+	monkeypatch.setattr(hh.socket, "getaddrinfo", resolver)
+	env.responses.append(FakeResponse(200, b"{}", {"Content-Type": "application/json"}))
+	out = run(url="https://rebind.example.com/x")
+	assert out["success"] is True
+	assert resolver.calls == ["rebind.example.com"]  # one lookup for the request, not a second at connect time
+	assert env.sent_to == [["93.184.216.34"]]  # the public address that was validated
+
+
+def test_rebinding_private_first_answer_is_refused(env, monkeypatch):
+	monkeypatch.setattr(hh.socket, "getaddrinfo", _rebinding_resolver("10.0.0.7", "93.184.216.34"))
+	out = run(url="https://rebind.example.com/x")
+	assert out["success"] is False and env.calls == []
+
+
+def test_every_resolved_address_must_be_public(env, monkeypatch):
+	def mixed(host, port, *a, **k):
+		return [(2, 1, 6, "", ("93.184.216.34", 0)), (10, 1, 6, "", ("fd00::1", 0))]
+
+	monkeypatch.setattr(hh.socket, "getaddrinfo", mixed)
+	out = run(url="https://mixed.example.com/")
+	assert out["success"] is False and env.calls == []
+
+
+def test_redirect_hop_is_resolved_once_and_pinned_separately(env, monkeypatch):
+	answers = {"a.example.com": ["93.184.216.34"], "b.example.com": ["93.184.216.35"]}
+	seen = []
+
+	def resolver(host, port, *a, **k):
+		seen.append(host)
+		return [(2, 1, 6, "", (ip, 0)) for ip in answers[host]]
+
+	monkeypatch.setattr(hh.socket, "getaddrinfo", resolver)
+	env.responses.append(FakeResponse(302, headers={"Location": "https://b.example.com/y"}))
+	env.responses.append(FakeResponse(200, b"ok", {"Content-Type": "text/plain"}))
+	out = run(url="https://a.example.com/x")
+	assert out["success"] is True
+	assert seen == ["a.example.com", "b.example.com"]
+	assert env.sent_to == [["93.184.216.34"], ["93.184.216.35"]]
+
+
+def test_redirect_that_rebinds_to_private_is_blocked(env, monkeypatch):
+	answers = {"a.example.com": "93.184.216.34", "b.example.com": "169.254.169.254"}
+	monkeypatch.setattr(
+		hh.socket, "getaddrinfo", lambda host, port, *a, **k: [(2, 1, 6, "", (answers[host], 0))]
+	)
+	env.responses.append(FakeResponse(302, headers={"Location": "http://b.example.com/latest/meta-data"}))
+	out = run(url="https://a.example.com/x")
+	assert out["success"] is False and "Redirect blocked" in out["error"]
+	assert len(env.calls) == 1
+
+
+def test_pinned_adapter_dials_the_pinned_address_and_keeps_the_host_header():
+	"""Real socket: the name does not resolve anywhere, only the pin makes the request reach the server."""
+	import http.server
+	import threading
+
+	seen = {}
+
+	class Handler(http.server.BaseHTTPRequestHandler):
+		def do_GET(self):
+			seen["host"] = self.headers.get("Host")
+			self.send_response(200)
+			self.send_header("Content-Length", "2")
+			self.end_headers()
+			self.wfile.write(b"ok")
+
+		def log_message(self, *a):
+			pass
+
+	server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+	thread = threading.Thread(target=server.serve_forever, daemon=True)
+	thread.start()
+	try:
+		port = server.server_address[1]
+		response = hh._send("GET", f"http://pinned-only.invalid:{port}/hello", ["127.0.0.1"], timeout=5)
+		assert response.status_code == 200 and response.content == b"ok"
+		assert seen["host"] == f"pinned-only.invalid:{port}"
+		hh._close_response(response)
+	finally:
+		server.shutdown()
+
+
+def test_pinned_adapter_tries_the_next_validated_address():
+	import http.server
+	import threading
+
+	class Handler(http.server.BaseHTTPRequestHandler):
+		def do_GET(self):
+			self.send_response(204)
+			self.end_headers()
+
+		def log_message(self, *a):
+			pass
+
+	server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+	threading.Thread(target=server.serve_forever, daemon=True).start()
+	try:
+		port = server.server_address[1]
+		# first pinned address refuses the connection, the second one is the live server
+		response = hh._send("GET", f"http://pin-fallback.invalid:{port}/", ["127.0.0.2", "127.0.0.1"], timeout=5)
+		assert response.status_code == 204
+		hh._close_response(response)
+	finally:
+		server.shutdown()
