@@ -1355,3 +1355,62 @@ def convert_flow_to_procedure(flow_id: str, procedure_id: str | None = None) -> 
 		"tier": procedure.tier,
 		**result.summary.as_dict(),
 	}
+
+
+# ---------------------------------------------------------------------------
+# Approver roles
+# ---------------------------------------------------------------------------
+
+# Roles Frappe assigns automatically or reserves for the framework: nobody can be asked to
+# "hold" them, so offering them as an approver is a trap (All/Guest match everyone or no one).
+_AUTOMATIC_ROLES = frozenset({"All", "Guest", "Administrator"})
+
+# Desk-only utility roles shipped by the Frappe framework. They gate Desk features (reports,
+# scripts, dashboards, ...) and say nothing about who may approve a business step.
+_DESK_ONLY_SYSTEM_ROLES = frozenset(
+	{
+		"Desk User",
+		"Report Manager",
+		"Script Manager",
+		"Dashboard Manager",
+		"Workspace Manager",
+		"Prepared Report User",
+		"Translator",
+		"Inbox User",
+		"Newsletter Manager",
+		"Knowledge Base Contributor",
+		"Knowledge Base Editor",
+		"Blogger",
+		"Website Manager",
+		"Maintenance Manager",
+		"Maintenance User",
+	}
+)
+
+# Huf's own approver-capable roles, in display order. ``Huf Admin`` is backed by System Manager
+# (huf.permissions.HUF_ROLE_FRAPPE_ROLE_MAP), so System Manager is what a person actually holds.
+_HUF_APPROVER_ROLES = ("System Manager", "Huf Manager", "Huf User", "Huf Viewer")
+_HUF_HIDDEN_ROLES = frozenset({"Huf Admin", "Huf Gateway User"})
+
+
+@frappe.whitelist()
+def get_approver_roles() -> list[dict]:
+	"""Roles a Flow author may pick for a Human Approval step.
+
+	Huf roles come first, then every other enabled role (custom and app-defined business roles),
+	without the automatic roles (All, Guest, Administrator) and the framework's desk-only roles.
+	Returns ``[{name, group}]`` with ``group`` ``"Huf"`` or ``"Other"``.
+	"""
+	if not frappe.has_permission("Flow Definition", "write"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	rows = frappe.get_all("Role", filters={"disabled": 0}, fields=["name"], order_by="name asc", limit_page_length=0)
+	available = {row.name for row in rows}
+	hidden = _AUTOMATIC_ROLES | _DESK_ONLY_SYSTEM_ROLES | _HUF_HIDDEN_ROLES
+
+	result = [{"name": name, "group": "Huf"} for name in _HUF_APPROVER_ROLES if name in available]
+	huf = {item["name"] for item in result}
+	result.extend(
+		{"name": row.name, "group": "Other"} for row in rows if row.name not in huf and row.name not in hidden
+	)
+	return result

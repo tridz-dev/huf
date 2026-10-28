@@ -31,6 +31,17 @@ describe('flowValidation', () => {
     expect(validateNode(n, [{ source: 'c', target: 'x', sourceHandle: 'true' }] as never).map((i) => i.field)).toEqual(['branch.false']);
   });
 
+  it('requires an approver type on human approval', () => {
+    const n = action('h', { type: 'human.approval', message: 'ok?' });
+    const edges = [
+      { source: 'h', target: 'a', sourceHandle: 'approve' },
+      { source: 'h', target: 'b', sourceHandle: 'reject' },
+    ] as never;
+    expect(validateNode(n, edges).map((i) => i.field)).toContain('approver_type');
+    const ok = action('h', { type: 'human.approval', message: 'ok?', approver_type: 'role', approver_role: 'Sales Manager' });
+    expect(validateNode(ok, edges).map((i) => i.field)).not.toContain('approver_type');
+  });
+
   it('requires a trigger in a flow and summarises', () => {
     const issues = validateFlow([action('a', { type: 'agent-run' })], []);
     expect(issues[0].field).toBe('trigger');

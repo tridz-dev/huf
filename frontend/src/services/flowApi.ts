@@ -285,6 +285,16 @@ export async function getNodeSchemas(): Promise<Record<string, unknown>> {
     }
 }
 
+/** Roles that can be chosen as approvers (Huf roles first; no All/Guest/Administrator or desk-only roles). */
+export async function getApproverRoles(): Promise<Array<{ name: string; group: 'Huf' | 'Other' }>> {
+    try {
+        const result = await call.get('huf.ai.flow.api.get_approver_roles');
+        return (result.message as Array<{ name: string; group: 'Huf' | 'Other' }>) ?? [];
+    } catch (error) {
+        handleFrappeError(error, 'Error fetching approver roles');
+    }
+}
+
 // ─── Flow Run APIs ───────────────────────────────────────────────────
 
 /** Run a flow (start new execution) */
