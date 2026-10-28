@@ -1,6 +1,6 @@
 """Delete leftover Scheduled Job Type rows from the removed schedule_flow feature.
 
-Flow schedules now live on an Automation (set_flow_trigger). The old rows would keep
+Flow schedules are fired by the trigger dispatcher (huf.ai.flow.triggers). The old rows would keep
 invoking huf.ai.flow_api.execute_scheduled_flow, which no longer exists.
 """
 

@@ -69,11 +69,6 @@ class _Base(IntegrationTestCase):
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
-		for flow_id in self._flows:
-			try:
-				flow_api.clear_flow_trigger(flow_id)
-			except Exception:
-				pass
 		for name in self._automations:
 			for t in frappe.get_all("Automation Trigger", {"automation": name}, pluck="name"):
 				frappe.db.set_value("Agent Procedure Run", {"automation_trigger": t}, "automation_trigger", None)
@@ -323,83 +318,9 @@ class TestAgentTargetRegression(_Base):
 		self.assertEqual(frappe.db.get_value("Automation", automation.name, "total_runs"), 1)
 
 
-class TestFlowTriggerApi(_Base):
-	def test_schedule_round_trip(self):
-		flow_id = TestFlowTriggerStaleness._active_flow(self)
-		self.assertIsNone(flow_api.get_flow_trigger(flow_id))
-
-		out = flow_api.set_flow_trigger(flow_id, "schedule", cron="*/5 * * * *")
-		self.assertEqual(out["trigger_type"], "Schedule")
-		self.assertEqual(out["cron"], "*/5 * * * *")
-		self.assertTrue(out["next_run"])
-		# Conversion never activates (I8): the automation waits for the procedure.
-		self.assertEqual(out["automation_status"], "Draft")
-		self.assertTrue(out["activation_required"])
-		self.assertFalse(out["enabled"])
-		self.assertEqual(flow_api.get_flow_trigger(flow_id)["automation"], out["automation"])
-
-		# Same flow + same definition re-uses the procedure version; re-setting the
-		# schedule replaces the trigger in place (still exactly one).
-		again = flow_api.set_flow_trigger(flow_id, "schedule", cron="0 9 * * *")
-		self.assertEqual(again["procedure"], out["procedure"])
-		self.assertEqual(again["cron"], "0 9 * * *")
-		self.assertEqual(frappe.db.count("Automation Trigger", {"automation": out["automation"]}), 1)
-
-		# Once the procedure is enabled, re-setting activates the automation.
-		frappe.db.set_value("Agent Procedure", out["procedure"], "status", "Active")
-		active = flow_api.set_flow_trigger(flow_id, "schedule", cron="0 * * * *")
-		self.assertEqual(active["automation_status"], "Active")
-		self.assertTrue(active["enabled"])
-		self.assertNotIn("activation_required", active)
-
-		self.assertEqual(flow_api.clear_flow_trigger(flow_id)["status"], "cleared")
-		self.assertIsNone(flow_api.get_flow_trigger(flow_id))
-		self.assertFalse(frappe.db.exists("Automation", out["automation"]))
-		self.assertEqual(flow_api.clear_flow_trigger(flow_id)["status"], "not_found")
-
-	def test_doc_event_round_trip(self):
-		flow_id = self._flow()
-		out = flow_api.set_flow_trigger(
-			flow_id, "doc_event", reference_doctype="ToDo", doc_event="after_insert", condition="doc.priority == 'High'"
-		)
-		self.assertEqual(out["trigger_type"], "Doc Event")
-		self.assertEqual(out["reference_doctype"], "ToDo")
-		self.assertEqual(out["condition"], "doc.priority == 'High'")
-		self.assertIsNone(out["next_run"])
-		with self.assertRaises(frappe.ValidationError):
-			flow_api.set_flow_trigger(flow_id, "doc_event", reference_doctype="ToDo", doc_event="nope")
-
-	def test_non_deterministic_flow_is_refused_clearly(self):
-		nodes = [
-			{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret"}, "next": "ask"},
-			{"id": "ask", "type": "agent.run", "config": {"agent": "x", "prompt": "hi"}, "next": "finish"},
-			{"id": "finish", "type": "output", "config": {"value": {"ok": True}}},
-		]
-		flow_id = self._flow(_flow_definition(nodes))
-		with self.assertRaises(frappe.ValidationError) as ctx:
-			flow_api.set_flow_trigger(flow_id, "schedule", cron="*/5 * * * *")
-		self.assertIn("agent.run", str(ctx.exception))
-		self.assertIsNone(flow_api.get_flow_trigger(flow_id))
-		self.assertFalse(frappe.db.exists("Automation", flow_api._flow_automation_name(flow_id)))
-
-	def test_bad_inputs(self):
-		flow_id = self._flow()
-		for kwargs in (
-			{"trigger_type": "webhook"},
-			{"trigger_type": "schedule"},
-			{"trigger_type": "schedule", "cron": "* * *"},
-			{"trigger_type": "doc_event"},
-		):
-			with self.assertRaises(frappe.ValidationError):
-				flow_api.set_flow_trigger(flow_id, **kwargs)
-
-	def test_interval_schedules_are_not_supported(self):
-		flow_id = self._flow()
-		with self.assertRaises(TypeError):
-			flow_api.set_flow_trigger(flow_id, "schedule", interval="Daily")
-
+class TestFlowTriggerNodes(_Base):
 	def test_legacy_flow_scheduling_is_gone(self):
-		for name in ("schedule_flow", "unschedule_flow", "get_flow_schedule", "execute_scheduled_flow"):
+		for name in ("schedule_flow", "unschedule_flow", "get_flow_schedule", "execute_scheduled_flow", "set_flow_trigger", "get_flow_trigger", "clear_flow_trigger"):
 			self.assertFalse(hasattr(flow_api, name), name)
 
 	def _activate_with_trigger_node(self, trigger_node):
@@ -454,15 +375,6 @@ class TestRunAsEscalation(_Base):
 		for u in getattr(self, "_users", []):
 			frappe.delete_doc("User", u, force=1, ignore_permissions=True)
 
-	def test_manager_cannot_escalate_via_set_flow_trigger(self):
-		flow_id = self._flow()
-		manager = self._user(("Huf Manager",))
-		frappe.set_user(manager)
-		with self.assertRaises(frappe.PermissionError):
-			flow_api.set_flow_trigger(flow_id, "schedule", cron="*/5 * * * *", run_as_user="Administrator")
-		# Running as self is fine for a Manager.
-		frappe.set_user("Administrator")
-
 	def test_manager_cannot_escalate_via_update_automation(self):
 		from huf.ai.automation import service as automation_service
 
@@ -471,21 +383,6 @@ class TestRunAsEscalation(_Base):
 		frappe.set_user(manager)
 		with self.assertRaises(frappe.PermissionError):
 			automation_service.update_automation(doc.name, run_as_user="Administrator")
-
-	def test_manager_cannot_edit_flow_without_flow_write(self):
-		flow_id = self._flow()
-		user = self._user(("Huf Viewer",))
-		frappe.set_user(user)
-		with self.assertRaises(frappe.PermissionError):
-			flow_api.set_flow_trigger(flow_id, "schedule", cron="*/5 * * * *")
-
-	def test_system_manager_can_set_run_as_another_user(self):
-		flow_id = self._flow()
-		other = self._user(("Huf User",))
-		out = flow_api.set_flow_trigger(flow_id, "schedule", cron="*/5 * * * *", run_as_user=other)
-		auto = frappe.get_doc("Automation", out["automation"])
-		self.assertEqual(auto.run_as_user, other)
-		self.assertEqual(auto.run_as_set_by, "Administrator")
 
 	def test_fire_time_checks_who_set_run_as_user(self):
 		from huf.ai.automation.runner import _check_run_as_user_permission
@@ -499,59 +396,6 @@ class TestRunAsEscalation(_Base):
 			_check_run_as_user_permission(doc)
 		doc.run_as_set_by = "Administrator"
 		_check_run_as_user_permission(doc)
-
-
-class TestFlowTriggerStaleness(_Base):
-	def _active_flow(self, cron_node=None):
-		defn = _flow_definition(
-			[
-				{"id": "start", "type": "trigger.schedule", "config": {"cron": "*/5 * * * *"}, "next": "finish"},
-				{"id": "finish", "type": "output", "config": {"value": {"ok": True}}},
-			]
-		)
-		flow_id = self._flow(defn)
-		doc = frappe.get_doc("Flow Definition", flow_id)
-		doc.status = "Active"
-		doc.save(ignore_permissions=True)
-		return flow_id
-
-	def _live_trigger(self, flow_id):
-		out = flow_api.set_flow_trigger(flow_id, "schedule", cron="*/5 * * * *")
-		frappe.db.set_value("Agent Procedure", out["procedure"], "status", "Active")
-		return flow_api.set_flow_trigger(flow_id, "schedule", cron="*/5 * * * *")
-
-	def test_editing_flow_graph_marks_trigger_stale(self):
-		flow_id = self._active_flow()
-		out = self._live_trigger(flow_id)
-		self.assertEqual(out["automation_status"], "Active")
-		self.assertFalse(out["stale"])
-
-		doc = frappe.get_doc("Flow Definition", flow_id)
-		defn = json.loads(doc.definition_json)
-		defn["nodes"][1]["config"]["value"] = {"ok": False}
-		doc.definition_json = json.dumps(defn)
-		doc.save(ignore_permissions=True)
-		self.assertTrue(flow_api.get_flow_trigger(flow_id)["stale"])
-
-		# Re-applying binds a fresh procedure version and clears the flag.
-		again = flow_api.set_flow_trigger(flow_id, "schedule", cron="*/5 * * * *")
-		self.assertFalse(again["stale"])
-		self.assertNotEqual(again["procedure"], out["procedure"])
-
-	def test_deactivating_flow_pauses_trigger_automation(self):
-		flow_id = self._active_flow()
-		out = self._live_trigger(flow_id)
-		doc = frappe.get_doc("Flow Definition", flow_id)
-		doc.status = "Archived"
-		doc.save(ignore_permissions=True)
-		self.assertEqual(frappe.db.get_value("Automation", out["automation"], "status"), "Paused")
-
-	def test_set_trigger_on_draft_flow_stays_draft(self):
-		flow_id = self._flow()
-		out = flow_api.set_flow_trigger(flow_id, "schedule", cron="*/5 * * * *")
-		frappe.db.set_value("Agent Procedure", out["procedure"], "status", "Active")
-		again = flow_api.set_flow_trigger(flow_id, "schedule", cron="*/5 * * * *")
-		self.assertEqual(again["automation_status"], "Draft")
 
 
 class TestFixE(_Base):
@@ -592,9 +436,6 @@ class TestFixE(_Base):
 		result = analyze_conversion(defn)
 		self.assertFalse(result.convertible)
 		self.assertIn("trigger", result.reason.lower())
-		flow_id = self._flow(defn)
-		with self.assertRaises(frappe.ValidationError):
-			flow_api.set_flow_trigger(flow_id, "schedule", cron="*/5 * * * *")
 
 	def _doc_event_context(self, automation):
 		trigger = {"automation": automation.name, "name": "t-m5", "file_attachments": []}

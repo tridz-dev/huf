@@ -55,9 +55,7 @@ from huf.ai.gateways.slack import flow_hooks
 from huf.ai.graph.permissions import envelope_declares
 from huf.ai.flow.orchestrator import (
 	build_flow_context_system_message,
-	build_orchestrator_prompt,
 	build_router_prompt,
-	parse_decision,
 )
 from huf.ai.flow.tool_executor import execute as execute_tool
 from huf.ai.flow.tool_executor import tool_run_context
@@ -285,6 +283,43 @@ def _store_pin(flow_run, version: PinnedVersion) -> None:
 # ---------------------------------------------------------------------------
 
 
+#: A Flow Run left in Queued/Running for longer than this (no change, no live run lock) lost its
+#: worker; the every-5-minutes sweeper (:func:`sweep_stale_runs`) fails it.
+STALE_RUN_SWEEP_MINUTES = 30
+STALE_RUN_SWEEP_REASON = "Run did not complete (worker stopped)"
+
+
+def sweep_stale_runs(now=None, minutes: int | None = None) -> list[str]:
+	"""Scheduler entry (every 5 minutes): fail Flow Runs stuck in Queued/Running.
+
+	A run qualifies when it has not been modified for ``minutes`` (default
+	:data:`STALE_RUN_SWEEP_MINUTES`) and no worker holds its run lock. Waiting runs (approval,
+	user input) are never touched. A manual "Mark as failed" exists in ``api.py``.
+	"""
+	from datetime import timedelta
+
+	cutoff = (now or now_datetime()) - timedelta(minutes=minutes or STALE_RUN_SWEEP_MINUTES)
+	names = frappe.get_all(
+		"Flow Run",
+		filters={"status": ["in", ["Queued", "Running"]], "modified": ["<", cutoff]},
+		pluck="name",
+		limit_page_length=200,
+	)
+	failed: list[str] = []
+	for name in names:
+		try:
+			if frappe.cache().get(_run_lock_key(name)):
+				continue  # a worker is still advancing it
+			flow_run = frappe.get_doc("Flow Run", name)
+			if flow_run.status not in ("Queued", "Running"):
+				continue
+			_fail_flow_run(flow_run, STALE_RUN_SWEEP_REASON)
+			failed.append(name)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), f"Flow stale run sweep: {name}")
+	return failed
+
+
 def _run_lock_key(flow_run_name: str) -> str:
 	return f"huf:flow:run_lock:{flow_run_name}"
 
@@ -357,8 +392,6 @@ def select_entry_node(defn: dict, trigger_type: str = "Manual") -> str:
 def create_flow_run(
 	flow_id: str,
 	payload: dict | None = None,
-	mode: str | None = None,
-	conversation_mode: str | None = None,
 	trigger_type: str = "Manual",
 	ignore_permissions: bool = False,
 ) -> "frappe.Document":
@@ -376,8 +409,6 @@ def create_flow_run(
 	Args:
 	    flow_id: The flow_id to run
 	    payload: Initial trigger payload / input
-	    mode: Override mode (normal/agentic). If None, uses definition settings.
-	    conversation_mode: Override conversation_mode. If None, uses definition settings.
 	    trigger_type: Manual / Webhook / Schedule / Doc Event / Gateway
 	    ignore_permissions: for trusted callers that already authorised the route (Gateway)
 
@@ -399,15 +430,11 @@ def create_flow_run(
 
 	version = PinnedVersion.pin(defn)
 
-	settings = defn.get("settings", {})
-	resolved_mode = mode or settings.get("mode", "normal")
-	max_hops = settings.get("max_hops", DEFAULT_MAX_HOPS)
+	resolved_mode = "normal"
+	max_hops = DEFAULT_MAX_HOPS
 
-	# Create shared conversation if configured
-	conversation = None
-	conv_mode = conversation_mode or settings.get("conversation_mode", "flow_shared")
-	if conv_mode == "flow_shared":
-		conversation = _create_flow_conversation(flow_id, entry_node)
+	# Every run owns a shared conversation for its agent steps
+	conversation = _create_flow_conversation(flow_id, entry_node)
 
 	fields = {
 		"doctype": "Flow Run",
@@ -500,7 +527,7 @@ def _build_run_context(flow_run, version: PinnedVersion) -> FlowRunContext:
 		},
 	)
 	return FlowRunContext(
-		version.graph.get("settings", {}),
+		{},
 		flow_run=flow_run,
 		version=version,
 		context=context,
@@ -578,7 +605,7 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 
 	The approver is checked first (fail closed, see :func:`check_approver`) for
 	BOTH decisions. The decision record
-	``{"decision", "comment", "approved_by", "approved_at"}`` becomes the approval
+	``{"decision", "comment", "decided_by", "decided_at"}`` becomes the approval
 	node's output, so downstream nodes read it as ``{"$from": "<approval_node_id>"}``.
 	Routing is the node's own ``approve_next`` / ``reject_next``.
 
@@ -609,8 +636,8 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 		{
 			"decision": decision,
 			"comment": comment,
-			"approved_by": frappe.session.user,
-			"approved_at": str(now_datetime()),
+			"decided_by": frappe.session.user,
+			"decided_at": str(now_datetime()),
 		},
 	)
 	run_ctx.save_context()
@@ -633,37 +660,50 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 	run_flow(flow_run.name)
 
 
-def expire_approval(flow_run_name: str, now=None) -> bool:
+def expire_approval(flow_run_name: str, now=None, enqueue: bool = False) -> bool:
 	"""Apply ``timeout_next`` to an approval that has passed its ``timeout_ms`` deadline.
 
-	Meant for a periodic sweeper (no sweeper is wired by the engine itself). Returns
-	True when the run was advanced or failed, False when it is not (yet) expired.
-	With no ``timeout_next`` the run fails ("approval timed out").
+	Called by the every-minute sweeper and lazily whenever an approval-waiting run is read, so a
+	timeout does not depend on the scheduler tick alone. Returns True when the run was advanced or
+	failed, False when it is not (yet) expired or another caller already took it. With no
+	``timeout_next`` the run fails ("approval timed out"). ``enqueue=True`` hands the continuation to
+	a background worker (for read requests); otherwise it runs inline.
 	"""
-	flow_run = frappe.get_doc("Flow Run", flow_run_name)
-	if flow_run.status != "Waiting Approval":
-		return False
-	waiting = _load_waiting(flow_run)
-	if not approval_expired(waiting, now or now_datetime()):
-		return False
+	if not _acquire_run_lock(flow_run_name):
+		return False  # another caller is advancing this run right now
+	try:
+		flow_run = frappe.get_doc("Flow Run", flow_run_name)
+		if flow_run.status != "Waiting Approval":
+			return False
+		waiting = _load_waiting(flow_run)
+		if not approval_expired(waiting, now or now_datetime()):
+			return False
 
-	timeout_next = waiting.get("timeout_next")
-	node_id = flow_run.current_node_id
-	if not timeout_next:
-		flow_run.db_set("waiting", None)
-		_fail_flow_run(flow_run, f"Approval timed out at node '{node_id}'")
+		timeout_next = waiting.get("timeout_next")
+		node_id = flow_run.current_node_id
+		if not timeout_next:
+			flow_run.db_set("waiting", None)
+			_fail_flow_run(flow_run, f"Approval timed out at node '{node_id}'")
+			_clear_flow_notifications(flow_run)
+			return True
+
+		version = _pinned_version(flow_run)
+		run_ctx = _build_run_context(flow_run, version)
+		run_ctx.context.record_output(
+			node_id, {"decision": "timeout", "comment": None, "decided_by": None, "decided_at": str(now_datetime())}
+		)
+		run_ctx.save_context()
+		flow_run.db_set({"current_node_id": timeout_next, "waiting": None, "status": "Running"})
+		flow_run.db_set("hop_count", (flow_run.hop_count or 0) + 1)
+		commit_if_background()
 		_clear_flow_notifications(flow_run)
-		return True
+	finally:
+		_release_run_lock(flow_run_name)
 
-	version = _pinned_version(flow_run)
-	run_ctx = _build_run_context(flow_run, version)
-	run_ctx.context.record_output(node_id, {"decision": "timeout", "comment": None, "approved_by": None})
-	run_ctx.save_context()
-	flow_run.db_set({"current_node_id": timeout_next, "waiting": None, "status": "Running"})
-	flow_run.db_set("hop_count", (flow_run.hop_count or 0) + 1)
-	commit_if_background()
-	_clear_flow_notifications(flow_run)
-	run_flow(flow_run.name)
+	if enqueue:
+		frappe.enqueue("huf.ai.flow.engine.run_flow", queue="default", flow_run_name=flow_run_name)
+	else:
+		run_flow(flow_run_name)
 	return True
 
 
@@ -757,10 +797,6 @@ def _build_router(
 	chosen successor is not one of its ``on_failure`` edges (an ``on_error`` target is
 	one), so the run can still end ``Failed`` after an ``always`` edge ran cleanup nodes.
 	"""
-	run_ctx = _run_context(settings)
-	is_agentic = (run_ctx.mode if run_ctx is not None else "normal") == "agentic"
-	orch_policy = (settings or {}).get("orchestrator_call_policy", "after_each_node")
-
 	def default_resolver(node: NodeSpec, outcome: Outcome, context: GraphContext):
 		chosen = _resolve_default(node, outcome, context)
 		if outcome.status == "failed" and unhandled_failures is not None:
@@ -775,16 +811,6 @@ def _build_router(
 
 	def _resolve_default(node: NodeSpec, outcome: Outcome, context: GraphContext):
 		node_result = outcome.extra or {"status": outcome.status}
-		if is_agentic and _should_call_orchestrator(orch_policy, state.completed_nodes):
-			candidates = _get_outgoing_edges(node.id, edges_list)
-			if not candidates:
-				return None
-			chosen = _call_orchestrator(
-				flow_run, node.id, node_result, candidates, settings, state.completed_nodes
-			)
-			if not chosen:
-				raise RoutingError("Orchestrator did not return a valid next_node_id")
-			return chosen
 		return _evaluate_edges(flow_run, node.id, node_result, edges_list)
 
 	def labelled_resolver(node_id: str, label: str):
@@ -852,12 +878,33 @@ class _FlowEventListener:
 		)
 
 
+def failed_node_record(outcome: Outcome) -> dict:
+	"""The stored result of a failed node: ``{"status": "failed", "error": "<readable reason>"}``.
+
+	It replaces whatever partial output the node returned, so the Run details step card can show
+	why the step failed (read from ``context_json.__node_outputs__[<node id>].error``). Other
+	keys a node may have returned are kept next to these two.
+	"""
+	record = dict(outcome.output) if isinstance(outcome.output, dict) else {}
+	if outcome.output is not None and not isinstance(outcome.output, dict):
+		record["result"] = outcome.output
+	record["status"] = "failed"
+	record["error"] = str(outcome.error or record.get("error") or "The step failed")
+	return record
+
+
 def _make_node_handler(flow_run, settings):
 	"""Bridge one Flow node executor into the executor's handler contract."""
 
 	def handler(node: NodeSpec, context: GraphContext, state: ExecutionState):
-		result = _execute_node(flow_run, node.raw, settings)
+		try:
+			result = _execute_node(flow_run, node.raw, settings)
+		except Exception as exc:
+			frappe.log_error(frappe.get_traceback(), f"Flow node {node.id} raised")
+			result = {"status": "failed", "error": str(exc) or exc.__class__.__name__}
 		outcome = Outcome.from_mapping(result)
+		if outcome.status == "failed":
+			outcome.output = failed_node_record(outcome)
 		if not outcome.is_paused and node.type in EXTERNALLY_PAUSABLE_TYPES:
 			# Another subsystem may have parked this run while the node ran.
 			# Convert that into a typed pause here, in the adapter, so the
@@ -891,8 +938,6 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 
 	policy = ExecutionPolicy(
 		max_hops=getattr(flow_run, "max_hops", None) or DEFAULT_MAX_HOPS,
-		max_foreach_iterations=(settings or {}).get("max_foreach_iterations")
-		or ExecutionPolicy.max_foreach_iterations,
 	)
 
 	executor = GraphExecutor(
@@ -1156,6 +1201,14 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	service rather than assembled here -- exactly one record per call (I5, GT-05). An MCP tool
 	bypasses that service (``execute_mcp_tool`` has no telemetry of its own), so this function owns
 	its ``Agent Tool Call`` record for that path.
+
+	``timeout_ms`` ("Wait up to") bounds how long the step waits for an MCP tool: past it the step
+	fails with a readable message. It is NOT enforced for built-in tools. They run in the worker's
+	own Frappe request context (``frappe.local``: DB connection, session, transaction) which is bound
+	to the calling thread, so running one in a helper thread and abandoning it on timeout would leave
+	a live, uncancellable call writing through a connection the run no longer owns. Built-in tools
+	have their own limits (HTTP request timeouts, provider timeouts); the node's ``timeout_ms`` is
+	ignored for them.
 	"""
 	tool_name = config.get("tool_id")
 	if not tool_name:
@@ -1336,23 +1389,48 @@ def _run_coroutine(coro):
 		loop.close()
 
 
-def _router_completion(prompt_text: str) -> str:
-	"""One direct LLM completion with the site's first keyed AI Provider (no agent involved)."""
-	from huf.ai.app_seeding.hub_orchestrator import _default_model_for_provider, _find_keyed_provider
-	from huf.ai.providers.litellm import get_simple_completion
+def resolve_router_model(model_name: str | None = None) -> tuple[str, str]:
+	"""``(provider, model)`` for a router step.
+
+	``model_name`` is the name of an AI Model record: its provider is used. Without one, the first
+	keyed provider's default chat model is used. A named model that is missing, or whose provider has
+	no API key, is an authoring error and raises (the router then routes to its default).
+	"""
+	from huf.ai.app_seeding.hub_orchestrator import (
+		_default_model_for_provider,
+		_find_keyed_provider,
+		_provider_has_key,
+	)
+
+	if model_name:
+		provider = frappe.db.get_value("AI Model", model_name, "provider")
+		if not provider:
+			raise RuntimeError(f"AI model '{model_name}' was not found")
+		if not _provider_has_key(provider):
+			raise RuntimeError(f"AI provider '{provider}' for model '{model_name}' has no API key")
+		return provider, model_name
 
 	provider = _find_keyed_provider()
 	model = _default_model_for_provider(provider) if provider else None
 	if not provider or not model:
 		raise RuntimeError("no AI Provider with an API key and a chat model is configured")
+	return provider, model
+
+
+def _router_completion(prompt_text: str, provider: str, model: str) -> str:
+	"""One direct LLM completion (no agent involved) with the given provider and model."""
+	from huf.ai.providers.litellm import get_simple_completion
+
 	return _run_coroutine(get_simple_completion(model, [{"role": "user", "content": prompt_text}], provider))
 
 
 def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""Execute router.llm node (config: ``prompt``, ``options[{label,node_id}]``, ``default``).
+	"""Execute router.llm node (config: ``prompt``, ``options[{label,node_id}]``, ``default``, ``model``).
 
 	The model picks an option by label; no match, an unusable reply, or any failure routes to
-	``default`` (required, so routing is total). Output is ``{"label", "node_id", "reason"}``.
+	``default`` (required, so routing is total). ``model`` is an optional AI Model name; absent means
+	the first keyed provider's default chat model. Output is
+	``{"label", "node_id", "reason", "model", "provider"}`` (``model`` is the one used, or attempted).
 	"""
 	options = [o for o in (config.get("options") or []) if isinstance(o, dict) and o.get("node_id")]
 	default = config.get("default")
@@ -1363,10 +1441,17 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 
 	ctx = _context_of(flow_run, settings)
 	chosen, reason = None, ""
+	provider, model = None, config.get("model") or None
 	try:
-		reply = _router_completion(build_router_llm_prompt(config.get("prompt") or "", options, ctx.as_dict()))
-		chosen = choose_option(reply, options)
-		reason = "matched" if chosen else "no_match"
+		provider, model = resolve_router_model(model)
+		reply = _router_completion(
+			build_router_llm_prompt(config.get("prompt") or "", options, ctx.as_dict()), provider, model
+		)
+		if not reply:
+			reason = "llm_failed: the model returned no reply"
+		else:
+			chosen = choose_option(reply, options)
+			reason = "matched" if chosen else "no_match"
 	except Exception as e:
 		reason = f"llm_failed: {e}"
 
@@ -1377,16 +1462,15 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 	return {
 		"status": "success",
 		"next_node_id": node_id,
-		"output": {"label": label, "node_id": node_id, "reason": reason},
+		"output": {"label": label, "node_id": node_id, "reason": reason, "model": model, "provider": provider},
 	}
 
 
 def _exec_router_decision(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""Execute router.decision node (config: ``policy``, ``options``, ``default``).
 
-	The decision adapter is injected through run settings (``decision_router``) so Flow execution
-	does not implicitly activate a provider. An uncertain, failed or disabled decision routes to
-	``default`` (routing is total).
+	Not offered by the UI and never activates a provider: it always routes to ``default``
+	(routing is total) and says so in its output.
 	"""
 	default = config.get("default")
 	if not default:
@@ -1395,28 +1479,11 @@ def _exec_router_decision(flow_run, node: dict, config: dict, settings: dict) ->
 	if not valid_node_ids:
 		return {"status": "failed", "error": "router.decision node has no options"}
 
-	decision_router = (settings or {}).get("decision_router")
-	if not callable(decision_router):
-		return {
-			"status": "success",
-			"next_node_id": default,
-			"output": {"node_id": default, "reason": "router.decision is not enabled for this Flow run"},
-		}
-	ctx = _context_of(flow_run, settings)
-	candidates = _get_outgoing_edges(node.get("id"), _run_context(settings).edges if _run_context(settings) else [])
-	try:
-		from huf.ai.decision.flow_router import resolve_decision_route
-
-		response = decision_router(flow_run, node, config, ctx.as_dict(), candidates)
-		decision = resolve_decision_route(response, candidate_node_ids=valid_node_ids, uncertain_next=default)
-		node_id = decision.get("next_node_id") or default
-		return {
-			"status": "success",
-			"next_node_id": node_id,
-			"output": {"node_id": node_id, "reason": decision.get("reason", "")},
-		}
-	except Exception as exc:
-		return {"status": "success", "next_node_id": default, "output": {"node_id": default, "reason": str(exc)}}
+	return {
+		"status": "success",
+		"next_node_id": default,
+		"output": {"node_id": default, "reason": "router.decision is not enabled for this Flow run"},
+	}
 
 
 def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> dict:
@@ -1523,7 +1590,7 @@ def _exec_transform(flow_run, node: dict, config: dict, settings: dict) -> dict:
 
 def _flow_nodes_by_id(settings: dict) -> dict:
 	"""Every node in the pinned graph, by id -- for looking up a ``foreach``
-	``body`` or ``parallel`` ``branches`` member, which per spec/graph-ir.md
+	``body`` member, which per spec/graph-ir.md
 	section 2 lives in the same top-level ``nodes`` array as the main chain.
 	"""
 	run_ctx = _run_context(settings)
@@ -1532,8 +1599,7 @@ def _flow_nodes_by_id(settings: dict) -> dict:
 
 
 def _run_sub_chain(flow_run, settings: dict, node_ids: list) -> dict:
-	"""Walk one self-contained chain of node ids (a ``foreach`` body or a
-	``parallel`` branch) to completion, re-using :func:`_execute_node`'s own
+	"""Walk one self-contained chain of node ids (a ``foreach`` body) to completion, re-using :func:`_execute_node`'s own
 	dispatch table so every node type -- including a nested ``condition`` --
 	behaves exactly as it would on the main chain. Bounded by the chain's own
 	length (+2 headroom, mirroring ``procedure_runtime._sub_executor``): this
@@ -1561,7 +1627,7 @@ def _run_sub_chain(flow_run, settings: dict, node_ids: list) -> dict:
 		if node is None:
 			return {"status": "failed", "error": f"sub-chain references unknown node '{cursor}'"}
 		if node.get("type") == "human.approval":
-			return {"status": "failed", "error": f"human.approval '{cursor}' cannot run inside a loop body or parallel branch"}
+			return {"status": "failed", "error": f"human.approval '{cursor}' cannot run inside a loop body"}
 
 		last_result = _execute_node(flow_run, node, settings)
 		ctx.record_output(cursor, last_result.get("output", last_result.get("result")))
@@ -1650,36 +1716,6 @@ def _exec_foreach(flow_run, node: dict, config: dict, settings: dict) -> dict:
 
 	_persist_context(flow_run, ctx, settings)
 	return {"status": "success", "result": results, "output": results, "skipped": skipped}
-
-
-def _exec_parallel(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""
-	Execute parallel node - bounded fan-out over ``config.branches``
-	(graph_ir.schema.json ``ParallelNode``). ``join`` is always ``"all"``: the
-	node completes only once every branch has completed or failed.
-
-	Branches run sequentially, in declaration order -- not concurrently. Real
-	bounded concurrency (mirroring ``huf.ai.graph.scheduler.run_parallel_branches``,
-	used by the Procedure profile's own ``parallel`` node) is future work; this
-	keeps Flow's ``parallel`` schema-valid and runnable today without adding
-	threading to a runtime whose steps are already persisted and replayed one
-	at a time (``_FlowStateStore``), and produces the same per-branch results a
-	concurrent run would, just not concurrently.
-	"""
-	node_id = node.get("id")
-	branches = config.get("branches") or []
-	if not branches:
-		return {"status": "success", "result": {"branches_completed": 0, "join": config.get("join", "all")}}
-
-	for index, branch_ids in enumerate(branches):
-		outcome = _run_sub_chain(flow_run, settings, branch_ids)
-		if outcome.get("status") != "success":
-			return {"status": "failed", "error": f"parallel '{node_id}' branch {index} failed: {outcome.get('error')}"}
-
-	return {
-		"status": "success",
-		"result": {"branches_completed": len(branches), "join": config.get("join", "all")},
-	}
 
 
 def _exec_validate(flow_run, node: dict, config: dict, settings: dict) -> dict:
@@ -1862,7 +1898,6 @@ _NODE_EXECUTORS = {
 	"condition": _exec_condition,
 	"transform": _exec_transform,
 	"foreach": _exec_foreach,
-	"parallel": _exec_parallel,
 	"validate": _exec_validate,
 	"output": _exec_output,
 	"state.get": _exec_state_get,
@@ -1895,7 +1930,7 @@ def edges_from_nodes(nodes: list) -> list[dict]:
 	``config``: ``condition.on_true`` / ``on_false``, ``router.llm`` / ``router.decision``
 	``options[].node_id`` / ``default``, ``human.approval.approve_next`` / ``reject_next`` /
 	``timeout_next``. ``foreach.body`` is not an edge: the body is run inline by the loop and
-	``next`` is the loop's done edge. The edge list is what the router, the agentic orchestrator
+	``next`` is the loop's done edge. The edge list is what the router
 	and the approval flow route over.
 	"""
 	edges: list[dict] = []
@@ -1981,78 +2016,6 @@ def _get_outgoing_edges(node_id: str, edges_list: list) -> list[dict]:
 				}
 			)
 	return candidates
-
-
-# ---------------------------------------------------------------------------
-# Agentic mode helpers
-# ---------------------------------------------------------------------------
-
-
-def _should_call_orchestrator(policy: str, completed_nodes: list) -> bool:
-	"""Determine if orchestrator should be called based on policy."""
-	if policy == "start_and_after_each_node":
-		return True
-	if policy == "after_each_node":
-		return len(completed_nodes) > 0
-	return False
-
-
-def _call_orchestrator(
-	flow_run, current_node_id: str, node_result: dict, candidates: list, settings: dict, completed_nodes: list
-) -> str | None:
-	"""Call the orchestrator agent and return the chosen next_node_id."""
-	orchestrator_agent = (settings or {}).get("orchestrator_agent")
-	if not orchestrator_agent:
-		frappe.log_error("Agentic mode requires orchestrator_agent in settings", "Flow Engine")
-		return None
-
-	run_ctx = _run_context(settings)
-	ctx = _context_of(flow_run, settings)
-	valid_node_ids = {c["to"] for c in candidates}
-
-	prompt = build_orchestrator_prompt(
-		current_node_id=current_node_id,
-		current_node_result=node_result,
-		flow_context=ctx.as_dict(),
-		candidates=candidates,
-		completed_summary=", ".join(completed_nodes),
-	)
-
-	conv_mode = (settings or {}).get("conversation_mode", "flow_shared")
-	conversation_id = _conversation_of(flow_run, run_ctx) if conv_mode == "flow_shared" else None
-
-	try:
-		from huf.ai.agent.integration import run_agent_sync
-
-		result = run_agent_sync(
-			agent_name=orchestrator_agent,
-			prompt=prompt,
-			conversation_id=conversation_id,
-			channel_id="flow_orchestrator",
-			flow_run_id=flow_run.name,
-			flow_node_id=current_node_id,
-			run_kind="orchestrator",
-			now=True,
-		)
-
-		if not result.get("success"):
-			frappe.log_error(title="Flow Engine Orchestrator", message=f"Orchestrator failed: {result.get('error')}")
-			return None
-
-		decision = parse_decision(result.get("response", ""), valid_node_ids)
-
-		if decision.get("context_patch"):
-			ctx.update(decision["context_patch"])
-			_persist_context(flow_run, ctx, settings)
-
-		flow_run.db_set("last_agent_run", result.get("agent_run_id"))
-		commit_if_background()
-
-		return decision["next_node_id"]
-
-	except Exception as e:
-		frappe.log_error(title="Flow Engine Orchestrator", message=f"Orchestrator error: {str(e)}")
-		return None
 
 
 # ---------------------------------------------------------------------------

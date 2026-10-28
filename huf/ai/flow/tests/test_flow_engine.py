@@ -725,7 +725,7 @@ class TestApproveFlowRunRouting(unittest.TestCase):
 		stored = json.loads(flow_run.context_json)[flow_engine.NODE_OUTPUTS_KEY]["approval"]
 		self.assertEqual(stored["decision"], "approved")
 		self.assertEqual(stored["comment"], "lgtm")
-		self.assertEqual(stored["approved_by"], "boss")
+		self.assertEqual(stored["decided_by"], "boss")
 		# the next run_flow builds a fresh context from context_json: the output is still addressable
 		reloaded = flow_engine.load_context(flow_run.context_json)
 		self.assertEqual(reloaded.resolve({"$from": "approval.decision"}), "approved")

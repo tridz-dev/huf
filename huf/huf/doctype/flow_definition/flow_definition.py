@@ -52,21 +52,7 @@ class FlowDefinition(Document):
 			self.version = (self.version or 0) + 1
 
 	def on_update(self):
-		self._pause_flow_trigger_if_inactive()
 		self._maybe_convert_to_procedure()
-
-	def _pause_flow_trigger_if_inactive(self):
-		"""A Flow that is no longer Active must not keep firing through its schedule /
-		doc-event trigger Automation (set_flow_trigger): pause it. Graph edits are
-		surfaced separately as ``stale`` on the trigger summary."""
-		if self.status == "Active":
-			return
-		from huf.ai.flow.api import _flow_automation_name
-
-		automation = _flow_automation_name(self.flow_id)
-		if frappe.db.get_value("Automation", automation, "status") == "Active":
-			frappe.db.set_value("Automation", automation, "status", "Paused")
-			frappe.cache().delete_key("huf:doc_event_automation_triggers")
 
 	def on_trash(self):
 		system_records.guard_delete(self)

@@ -143,7 +143,10 @@ class TestRouterLlm(unittest.TestCase):
 	def _route(self, completion, config=None):
 		cfg = {"prompt": "urgent?", "options": self.OPTIONS, "default": "n_loop"}
 		cfg.update(config or {})
-		with patch.object(flow_engine, "_router_completion", side_effect=completion):
+		with (
+			patch.object(flow_engine, "resolve_router_model", side_effect=lambda m: ("OpenAI", m or "default-model")),
+			patch.object(flow_engine, "_router_completion", side_effect=lambda p, prov, mod: completion(p)),
+		):
 			return flow_engine._exec_router_llm(_Run(), {"id": "r"}, cfg, {})
 
 	def test_model_choice_routes_to_option_node(self):
@@ -170,9 +173,30 @@ class TestRouterLlm(unittest.TestCase):
 
 	def test_router_agent_name_is_not_read(self):
 		cfg = {"router_agent_name": "x", "options": self.OPTIONS, "default": "n_loop", "prompt": "p"}
-		with patch.object(flow_engine, "_router_completion", side_effect=lambda p: "banana"):
+		out = self._route(lambda p: "banana", cfg)
+		self.assertEqual(out["next_node_id"], "n_loop")
+
+	def test_explicit_model_is_used_and_recorded(self):
+		out = self._route(lambda p: "urgent", {"model": "gpt-5.4-mini"})
+		self.assertEqual(out["output"]["model"], "gpt-5.4-mini")
+		self.assertEqual(out["output"]["provider"], "OpenAI")
+
+	def test_no_model_uses_provider_default_and_records_it(self):
+		out = self._route(lambda p: "urgent")
+		self.assertEqual(out["output"]["model"], "default-model")
+
+	def test_unusable_model_routes_to_default_with_reason(self):
+		cfg = {"prompt": "p", "options": self.OPTIONS, "default": "n_loop", "model": "nope"}
+		with patch.object(flow_engine, "resolve_router_model", side_effect=RuntimeError("AI model 'nope' was not found")):
 			out = flow_engine._exec_router_llm(_Run(), {"id": "r"}, cfg, {})
 		self.assertEqual(out["next_node_id"], "n_loop")
+		self.assertIn("not found", out["output"]["reason"])
+		self.assertEqual(out["output"]["model"], "nope")
+
+	def test_empty_reply_is_reported_as_failure(self):
+		out = self._route(lambda p: "")
+		self.assertEqual(out["next_node_id"], "n_loop")
+		self.assertIn("llm_failed", out["output"]["reason"])
 
 	def test_router_prompt_lists_labels(self):
 		text = flow_engine.build_router_llm_prompt("is it?", self.OPTIONS, {"a": 1})
@@ -209,7 +233,7 @@ class TestNodeRegistry(unittest.TestCase):
 		for t in (
 			"trigger.webhook", "trigger.schedule", "trigger.doc-event", "trigger.unset", "agent.run", "tool.call",
 			"router.llm", "router.decision", "condition", "foreach", "human.approval", "transform", "output",
-			"state.get", "state.set", "state.delete", "doc.create", "validate", "parallel",
+			"state.get", "state.set", "state.delete", "doc.create", "validate",
 		):
 			self.assertIn(t, flow_engine._NODE_EXECUTORS)
 
