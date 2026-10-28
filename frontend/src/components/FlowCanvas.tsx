@@ -60,7 +60,7 @@ function FlowMiniMap() {
       ariaLabel="Flow overview"
       pannable
       zoomable
-      onClick={(_event, position) => setCenter(position.x, position.y, { zoom: getZoom(), duration: 200 })}
+      onClick={(_event, position) => setCenter(position.x, position.y, { zoom: getZoom() })}
       nodeColor={(node) => {
         if (node.type === 'trigger') return 'var(--primary)';
         if (node.type === 'end') return 'var(--good)';
