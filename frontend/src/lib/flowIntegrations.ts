@@ -53,9 +53,9 @@ const LABEL_SERVICE: Record<string, string> = {
   'Google Sheets': 'google_sheets',
 };
 
-/** The integration a failed step says is not connected ("Google Sheets is not connected. ..."), if any. */
+/** The integration a failed step says is not connected ("Google Sheets is not connected: ..."), if any. */
 export function notConnectedService(reason: string | null | undefined): string | undefined {
-  const m = /^(.+?) is not connected\./.exec(reason ?? '');
+  const m = /^(.+?) is not connected[.:]/.exec(reason ?? '');
   return m ? LABEL_SERVICE[m[1]] : undefined;
 }
 
