@@ -177,3 +177,16 @@ class TestExpireDueApprovals(unittest.TestCase):
 			{"name": "empty", "waiting": None},
 		]
 		self.assertEqual(T.due_approval_run_names(rows, self.NOW), ["past"])
+
+
+class TestWebhookHttpStatus(unittest.TestCase):
+	"""Frappe answers with the exception's http_status_code, so the rejection classes must carry 403 / 405."""
+
+	def test_denied_is_403_and_still_an_authentication_error(self):
+		import frappe
+
+		self.assertEqual(flow_api.WebhookDenied.http_status_code, 403)
+		self.assertTrue(issubclass(flow_api.WebhookDenied, frappe.AuthenticationError))
+
+	def test_wrong_method_is_405(self):
+		self.assertEqual(flow_api.WebhookMethodNotAllowed.http_status_code, 405)

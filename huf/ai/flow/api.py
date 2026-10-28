@@ -382,10 +382,22 @@ def _extract_flow_id(explicit_flow_id: str | None = None) -> str | None:
 	return _request_headers().get(WEBHOOK_FLOW_HEADER) or None
 
 
+class WebhookDenied(frappe.AuthenticationError):
+	"""Rejected webhook call. Frappe answers with the exception's own ``http_status_code`` (401 for a
+	plain AuthenticationError, which also advertises an OAuth challenge), so pin it to 403."""
+
+	http_status_code = 403
+
+
+class WebhookMethodNotAllowed(frappe.PermissionError):
+	"""Wrong HTTP method for the webhook trigger: answer 405, not the 403 a PermissionError implies."""
+
+	http_status_code = 405
+
+
 def _webhook_denied():
 	"""Single generic rejection so a caller cannot tell unknown, inactive and wrong-secret flows apart."""
-	frappe.local.response["http_status_code"] = 403
-	frappe.throw(_("Webhook request not permitted"), frappe.AuthenticationError)
+	frappe.throw(_("Webhook request not permitted"), WebhookDenied)
 
 
 def _resolve_flow_by_secret(secret: str | None) -> str:
@@ -419,8 +431,7 @@ def _run_flow_webhook(flow_id: str | None, secret: str | None, payload: dict | N
 	node, reason = match_webhook_trigger(parse_definition(definition_json), secret, _request_method())
 	if node is None:
 		if reason == "bad_method":
-			frappe.local.response["http_status_code"] = 405
-			frappe.throw(_("Webhook method not allowed"), frappe.PermissionError)
+			frappe.throw(_("Webhook method not allowed"), WebhookMethodNotAllowed)
 		_webhook_denied()
 
 	# Execute as the flow owner, never Guest. The secret check above authorises the trigger;
