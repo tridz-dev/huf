@@ -125,21 +125,25 @@ def create_audience(
 			return _error("invalid", "The consent date is not a valid date.")
 		if when > get_datetime(now_datetime()):
 			return _error("invalid", "The consent date cannot be in the future.")
+	prev = frappe.flags.get("in_audience_api")
 	frappe.flags.in_audience_api = True
-	doc = frappe.get_doc(
-		{
-			"doctype": aud.AUDIENCE,
-			"gateway": gateway,
-			"title": title,
-			"description": description,
-			"consent_source": consent_source,
-			"consent_basis": consent_basis,
-			"default_consent_at": default_consent_at or None,
-			"is_adhoc": 1 if _flag(is_adhoc) else 0,
-			**{f"purpose_{p}": 1 if p in purposes else 0 for p in aud.PURPOSES},
-		}
-	)
-	doc.insert(ignore_permissions=True)
+	try:
+		doc = frappe.get_doc(
+			{
+				"doctype": aud.AUDIENCE,
+				"gateway": gateway,
+				"title": title,
+				"description": description,
+				"consent_source": consent_source,
+				"consent_basis": consent_basis,
+				"default_consent_at": default_consent_at or None,
+				"is_adhoc": 1 if _flag(is_adhoc) else 0,
+				**{f"purpose_{p}": 1 if p in purposes else 0 for p in aud.PURPOSES},
+			}
+		)
+		doc.insert(ignore_permissions=True)
+	finally:
+		frappe.flags.in_audience_api = prev
 	_audit(doc.name, "created", gateway=gateway, purposes=",".join(sorted(purposes)))
 	return {"success": True, "audience": _view(_audience_row(doc.name))}
 
@@ -198,8 +202,12 @@ def delete_audience(audience: str | None = None) -> dict[str, Any]:
 			+ ", ".join(f"{u['name']} ({u['status']})" for u in used[:5]),
 		)
 	_audit(audience, "deleted", members=row.get("member_count"))
+	prev = frappe.flags.get("in_audience_api")
 	frappe.flags.in_audience_api = True
-	frappe.delete_doc(aud.AUDIENCE, audience, ignore_permissions=True, force=True)  # finished broadcasts keep the name
+	try:
+		frappe.delete_doc(aud.AUDIENCE, audience, ignore_permissions=True, force=True)  # finished broadcasts keep the name
+	finally:
+		frappe.flags.in_audience_api = prev
 	return {"success": True}
 
 

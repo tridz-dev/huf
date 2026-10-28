@@ -21,14 +21,15 @@ NEW_ROW_DEFAULTS = {"status": "Draft", "send_via": "messages"}
 
 
 def _json_value(value):
+	"""Parsed JSON for comparison; blank, NULL and an empty list/object all mean "not set"."""
 	if isinstance(value, str):
 		if not value.strip():
 			return None
 		try:
-			return json.loads(value)
+			value = json.loads(value)
 		except ValueError:
 			return value
-	return value
+	return None if value in ([], {}) else value
 
 
 def _picks(doc) -> list[tuple]:

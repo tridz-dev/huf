@@ -29,8 +29,12 @@ class StartRefused(frappe.ValidationError):
 		self.extra = extra
 
 
-class UncommittedWrites(RuntimeError):
-	"""Internal: a start was called with uncommitted writes pending, which its pre-lock commit would silently commit."""
+class UncommittedWrites(StartRefused):
+	"""A start was called with uncommitted writes pending, which its pre-lock commit would silently commit.
+	A StartRefused, so the API relays it as a clean error instead of a 500."""
+
+	def __init__(self, message: str):
+		super().__init__("uncommitted_writes", message)
 
 
 def commit_before_lock() -> None:

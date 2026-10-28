@@ -17,6 +17,7 @@ import frappe
 from frappe.utils import now_datetime
 
 from huf.ai.whatsapp.broadcast import api as mgmt, limits as bl, runner
+from huf.ai.whatsapp.broadcast.audiences import api as aud_api
 from huf.ai.whatsapp.broadcast.checks import start_gate
 from huf.ai.whatsapp.tests.broadcast_policy_helper import limit_override
 from huf.ai.whatsapp.tests.test_whatsapp_audience_api import AudienceTestCase
@@ -282,3 +283,24 @@ def aud_doctype() -> str:
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class TestReviewFollowUps(AudienceTestCase):
+	def test_uncommitted_writes_is_a_clean_start_refusal_not_a_500(self):
+		self.assertTrue(issubclass(start_gate.UncommittedWrites, start_gate.StartRefused))
+		err = start_gate.UncommittedWrites("pending writes")
+		self.assertEqual(err.code, "uncommitted_writes")
+
+	def test_audience_create_and_delete_restore_the_api_flag(self):
+		frappe.flags.in_audience_api = False
+		name = self.make("Flag restore")
+		self.assertFalse(frappe.flags.get("in_audience_api"))
+		self.assertTrue(aud_api.delete_audience(name)["success"])
+		self.assertFalse(frappe.flags.get("in_audience_api"))
+
+	def test_unchanged_empty_json_is_not_a_change(self):
+		from huf.huf.doctype.whatsapp_broadcast.whatsapp_broadcast import _json_value
+		for empty in (None, "", "  ", "[]", "{}", [], {}):
+			self.assertIsNone(_json_value(empty), empty)
+		self.assertEqual(_json_value('["a"]'), ["a"])
+		self.assertEqual(_json_value({"x": 1}), {"x": 1})
