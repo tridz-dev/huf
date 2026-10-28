@@ -10,6 +10,7 @@ import frappe
 
 from huf.ai.whatsapp.broadcast import audience as aud
 from huf.ai.whatsapp.broadcast import audience_api as api
+from huf.ai.whatsapp.broadcast import audience_import as imp
 
 GW = "GW-AUD-TEST"
 BCAST = "WhatsApp Broadcast"
@@ -200,13 +201,13 @@ class TestImport(AudienceTestCase):
 		self.assertTrue(out["queued"])
 		self.assertEqual(self.members(name), [])  # nothing written in the request
 		kwargs = enqueue.call_args.kwargs
-		self.assertEqual(enqueue.call_args.args[0], "huf.ai.whatsapp.broadcast.audience.run_import_job")
-		self.assertEqual(aud.get_job_state(out["job_id"])["status"], "queued")
+		self.assertEqual(enqueue.call_args.args[0], "huf.ai.whatsapp.broadcast.audience_import.run_import_job")
+		self.assertEqual(imp.get_job_state(out["job_id"])["status"], "queued")
 		events = []
-		with patch.object(aud.frappe.db, "commit"), patch.object(aud, "IMPORT_CHUNK", 10), \
+		with patch.object(imp.frappe.db, "commit"), patch.object(aud, "IMPORT_CHUNK", 10), \
 				patch.object(aud.frappe, "publish_realtime", side_effect=lambda *a, **k: events.append(a)), \
 				patch("huf.ai.whatsapp.broadcast.progress.THROTTLE_SECONDS", 0):
-			aud.run_import_job(**{k: kwargs[k] for k in ("audience", "rows", "on_conflict", "job_id", "user")})
+			imp.run_import_job(**{k: kwargs[k] for k in ("audience", "rows", "on_conflict", "job_id", "user")})
 		state = api.get_import_status(job_id=out["job_id"], audience=name)
 		self.assertEqual((state["status"], state["result"]["added"]), ("done", 30))
 		self.assertEqual(state["member_count"], 30)

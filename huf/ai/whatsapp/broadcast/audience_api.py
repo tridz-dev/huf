@@ -10,18 +10,26 @@ read from the gateway's consent records and never written here.
 
 from __future__ import annotations
 
-import csv
-import io
-import json
 from typing import Any
 
 import frappe
 from frappe import _
 from frappe.rate_limiter import rate_limit
-from frappe.utils import cint, get_datetime, now_datetime, strip_html_tags
+from frappe.utils import cint, get_datetime, now_datetime
 
 from huf.ai.whatsapp.broadcast import audience as aud
+from huf.ai.whatsapp.broadcast import audience_csv, audience_import
 from huf.ai.whatsapp.broadcast import recipients as broadcast_recipients
+from huf.ai.whatsapp.broadcast.audience_common import (
+	AUDIENCE_FIELDS,
+	_audit,
+	_flag,
+	_guard,
+	_page,
+	_parse_list,
+	_parse_purposes,
+	_view,
+)
 from huf.ai.whatsapp.management import (
 	_bridge_guard,
 	_error,
@@ -39,44 +47,16 @@ RATE_LIMIT_IMPORT = 20
 RATE_LIMIT_READ = 240
 REQUIRE_CONSENT_ATTESTATION = True  # Huf's own record of consent (Meta requires opt-in for business-initiated messages)
 MAX_SELECTION_ITEMS = 25
-_LOG = "huf.whatsapp.audience"
 
-_AUDIENCE_FIELDS = (
-	"name", "gateway", "title", "description", "is_adhoc", "consent_source", "consent_basis",
-	"purpose_marketing", "purpose_utility", "purpose_events", "default_consent_at", "consent_attested_by",
-	"consent_attested_at", "member_count", "suppressed_count", "creation", "modified",
-)  # fmt: skip
 _ON_CONFLICT = ("skip", "update", "fail")
-_AUTO_HEADERS = {
-	"phone": broadcast_recipients.PHONE_HEADERS,
-	"name": {"name", "display_name", "full_name", "contact", "customer"},
-	"tags": {"tags", "tag", "segment", "segments", "labels"},
-	"consent_source": {"consent_source"},
-	"consent_at": {"consent_at", "consent_date", "consented_at"},
-}
-
 
 # --- guards ----------------------------------------------------------------------------------------
-def _guard(fn):
-	"""Turn validation failures into the standard error dict (permission errors still raise)."""
-	import functools
-
-	@functools.wraps(fn)
-	def wrapper(*args: Any, **kwargs: Any):
-		try:
-			return fn(*args, **kwargs)
-		except frappe.PermissionError:
-			raise
-		except (frappe.ValidationError, ValueError) as exc:
-			return _error("invalid", strip_html_tags(str(exc)) or "Invalid request.")
-
-	return wrapper
 
 
 def _audience_row(audience: Any) -> dict[str, Any]:
 	if not audience or not frappe.db.exists(aud.AUDIENCE, audience):
 		return _error("not_found", "Audience not found.")
-	return frappe.db.get_value(aud.AUDIENCE, audience, list(_AUDIENCE_FIELDS), as_dict=True)
+	return frappe.db.get_value(aud.AUDIENCE, audience, list(AUDIENCE_FIELDS), as_dict=True)
 
 
 def _require_audience_write(audience: Any) -> dict[str, Any]:
@@ -107,43 +87,12 @@ def _require_gateway(gateway: Any, write: bool) -> dict[str, Any] | None:
 	return None
 
 
-def _audit(audience: str, action: str, **details: Any) -> None:
-	user = getattr(frappe.session, "user", None)
-	extra = ", ".join(f"{k}={v}" for k, v in details.items() if v not in (None, ""))
-	frappe.logger(_LOG).info(f"audience={audience} action={action} user={user} {extra}".strip())
-	try:
-		frappe.get_doc(aud.AUDIENCE, audience).add_comment("Info", f"{action} by {user}" + (f": {extra}" if extra else ""))
-	except Exception:
-		frappe.logger(_LOG).warning(f"audience={audience} action={action}: audit comment failed")
 
 
-def _view(row: dict[str, Any]) -> dict[str, Any]:
-	out = {k: row.get(k) for k in _AUDIENCE_FIELDS if not k.startswith("purpose_")}
-	out["consent_purposes"] = [p for p in aud.PURPOSES if cint(row.get(f"purpose_{p}"))]
-	out["is_adhoc"] = bool(cint(row.get("is_adhoc")))
-	for key in ("default_consent_at", "consent_attested_at", "creation", "modified"):
-		out[key] = _iso(out.get(key))
-	return out
 
 
-def _parse_purposes(value: Any) -> set[str]:
-	value = _parse_json_arg(value, "consent_purposes") if isinstance(value, str) and value.strip().startswith("[") else value
-	if isinstance(value, str):
-		value = [p for p in value.replace(";", ",").split(",")]
-	chosen = {str(p).strip().lower() for p in (value or []) if str(p).strip()}
-	unknown = chosen - set(aud.PURPOSES)
-	if unknown:
-		raise ValueError(f"Unknown consent purpose: {', '.join(sorted(unknown))}")
-	return chosen
 
 
-def _parse_list(value: Any, label: str) -> list:
-	parsed = _parse_json_arg(value, label)
-	if parsed in (None, ""):
-		return []
-	if not isinstance(parsed, list):
-		raise ValueError(f"{label} must be a list")
-	return parsed
 
 
 # --- audiences -------------------------------------------------------------------------------------
@@ -278,7 +227,7 @@ def list_audiences(
 		aud.AUDIENCE,
 		filters=filters,
 		or_filters=or_filters,
-		fields=list(_AUDIENCE_FIELDS),
+		fields=list(AUDIENCE_FIELDS),
 		order_by="modified desc",
 		limit_start=max(cint(start), 0),
 		limit_page_length=_page(limit),
@@ -335,7 +284,7 @@ def import_members(
 		return row
 	if on_conflict not in _ON_CONFLICT:
 		return _error("invalid", f"on_conflict must be one of {', '.join(_ON_CONFLICT)}.")
-	mapped = _mapped_rows(csv_text, rows, _parse_json_arg(mapping, "mapping"))
+	mapped = audience_csv.mapped_rows(csv_text, rows, _parse_json_arg(mapping, "mapping"))
 	if isinstance(mapped, dict):
 		return mapped
 	if not mapped:
@@ -347,9 +296,9 @@ def import_members(
 			return {**_error("conflicts", "Some contacts are already in this audience."), "conflicts": clashes[:50]}
 	if len(mapped) > aud.LIMIT_INLINE_IMPORT_ROWS:
 		job_id = frappe.generate_hash(length=16)
-		aud.set_job_state(job_id, {"job_id": job_id, "audience": audience, "status": "queued", "processed": 0, "total": len(mapped)})
+		audience_import.set_job_state(job_id, {"job_id": job_id, "audience": audience, "status": "queued", "processed": 0, "total": len(mapped)})
 		frappe.enqueue(
-			"huf.ai.whatsapp.broadcast.audience.run_import_job",
+			"huf.ai.whatsapp.broadcast.audience_import.run_import_job",
 			queue="long",
 			timeout=3600,
 			audience=audience,
@@ -360,7 +309,7 @@ def import_members(
 		)
 		_audit(audience, "import queued", rows=len(mapped), job_id=job_id)
 		return {"success": True, "queued": True, "job_id": job_id, "rows": len(mapped)}
-	result = aud.import_rows(audience, mapped, on_conflict)
+	result = audience_import.import_rows(audience, mapped, on_conflict)
 	counts = aud.refresh_counts(audience, row["gateway"])
 	_audit(audience, "imported", added=result["added"], updated=result["updated"], invalid=result["invalid_total"])
 	return {"success": True, "queued": False, **result, **counts}
@@ -375,7 +324,7 @@ def get_import_status(job_id: str | None = None, audience: str | None = None) ->
 	row = _require_audience_read(audience)
 	if row.get("error"):
 		return row
-	state = aud.get_job_state(str(job_id or ""))
+	state = audience_import.get_job_state(str(job_id or ""))
 	if not state or state.get("audience") != audience:
 		return _error("not_found", "Import not found or expired.")
 	return {"success": True, **state}
@@ -517,70 +466,3 @@ def _parse_selection(selection: Any) -> list[dict]:
 	if not all(isinstance(i, dict) and i.get("audience") for i in items):
 		raise ValueError("Each pick needs an audience.")
 	return items
-
-
-# --- CSV / mapping ---------------------------------------------------------------------------------
-def _mapped_rows(csv_text: Any, rows: Any, mapping: Any) -> list[dict] | dict[str, Any]:
-	"""Rows in ``import_rows`` shape, or an error dict."""
-	if csv_text and rows:
-		return _error("invalid", "Send either csv_text or rows, not both.")
-	if csv_text:
-		if len(str(csv_text).encode("utf-8")) > aud.LIMIT_MAX_CSV_BYTES:
-			return _error("csv_too_large", f"The file is larger than {aud.LIMIT_MAX_CSV_BYTES // (1024 * 1024)} MB.")
-		reader = csv.reader(io.StringIO(str(csv_text).lstrip("﻿")))
-		table = [cells for cells in reader if any(c.strip() for c in cells)]
-		if not table:
-			return []
-		headers = [h.strip() for h in table[0]]
-		records = [dict(zip(headers, row + [""] * (len(headers) - len(row)), strict=False)) for row in table[1:]]
-	else:
-		records = _parse_list(rows, "rows")
-		if not all(isinstance(r, dict) for r in records):
-			return _error("invalid", "rows must be a list of objects.")
-		headers = list(records[0].keys()) if records else []
-	if len(records) > aud.LIMIT_MAX_IMPORT_ROWS:
-		return _error("too_many", f"Import at most {aud.LIMIT_MAX_IMPORT_ROWS} contacts at a time.")
-	columns = _resolve_mapping(headers, mapping)
-	if isinstance(columns, dict) and columns.get("error"):
-		return columns
-	out = []
-	for rec in records:
-		item: dict[str, Any] = {"recipient": rec.get(columns["phone"])}
-		for field, key in (("display_name", "name"), ("tags", "tags"), ("consent_source", "consent_source"), ("consent_at", "consent_at")):
-			if columns.get(key):
-				item[field] = rec.get(columns[key])
-		if columns.get("params"):
-			item["params"] = {"body": [str(rec.get(c) if rec.get(c) is not None else "") for c in columns["params"]]}
-		out.append(item)
-	return out
-
-
-def _resolve_mapping(headers: list[str], mapping: Any) -> dict[str, Any]:
-	lowered = {h.strip().lower().replace("-", "_"): h for h in headers}
-	cols: dict[str, Any] = {}
-	if mapping:
-		if not isinstance(mapping, dict):
-			return _error("invalid", "mapping must be an object.")
-		cols = {("phone" if k == "recipient" else k): v for k, v in mapping.items()}
-		wanted = [v for k, v in cols.items() if k != "params" and v] + list(cols.get("params") or [])
-		missing = [c for c in wanted if c not in headers]
-		if missing:
-			return _error("unknown_column", f"These columns are not in the file: {', '.join(map(str, missing))}")
-	for key, names in _AUTO_HEADERS.items():
-		if not cols.get(key):
-			found = next((lowered[n] for n in lowered if n in names), None)
-			if found:
-				cols[key] = found
-	if not cols.get("phone"):
-		return _error("mapping_missing_phone", "Choose which column holds the phone number.")
-	return cols
-
-
-def _flag(value: Any) -> bool:
-	if isinstance(value, str):
-		return value.strip().lower() in ("1", "true", "yes", "on")
-	return bool(value)
-
-
-def _page(limit: Any) -> int:
-	return min(max(cint(limit) or 50, 1), aud.LIMIT_PAGE_SIZE_MAX)
