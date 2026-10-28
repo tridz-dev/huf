@@ -6,6 +6,7 @@ from frappe.model.document import Document
 from frappe.utils import now_datetime
 
 from huf.ai import system_records
+from huf.ai.graph.error_copy import describe_errors
 from huf.ai.graph.validator import FLOW_NODE_TYPES, validate_flow_graph
 from huf.ai.transaction import commit_if_background
 from huf.huf.doctype.flow_definition.activation_rules import collect_activation_problems
@@ -159,11 +160,7 @@ class FlowDefinition(Document):
 
 		result = validate_flow_graph(defn)
 		if not result.ok:
-			frappe.throw(
-				_("Definition JSON does not conform to the graph-IR Flow profile: {0}").format(
-					"; ".join(str(err) for err in result.errors)
-				)
-			)
+			frappe.throw(describe_errors(defn, result.errors), title=_("This flow cannot be saved yet"))
 
 		# schema_version is a schema-validated const ("1.0.0") at this point; store it
 		# verbatim rather than re-deriving or defaulting it.

@@ -385,6 +385,46 @@
         }
       ]
     },
+    "FlowToolCallNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "tool.call"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "tool_id",
+                "input"
+              ],
+              "properties": {
+                "tool_id": {
+                  "$ref": "#/$defs/ToolId"
+                },
+                "input": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  }
+                },
+                "timeout_ms": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "approved": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
     "TransformNode": {
       "allOf": [
         {
@@ -760,6 +800,11 @@
                 },
                 "default": {
                   "$ref": "#/$defs/NodeId"
+                },
+                "model": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Name of the AI Model record the router asks. Absent means the first keyed provider's default chat model."
                 }
               }
             }
@@ -788,7 +833,8 @@
               "required": [
                 "message",
                 "approve_next",
-                "reject_next"
+                "reject_next",
+                "approver_type"
               ],
               "properties": {
                 "message": {
@@ -813,7 +859,7 @@
                     "role",
                     "user"
                   ],
-                  "description": "Who may decide. 'role' requires approver_role; 'user' requires a non-empty approver_users. Absent means no approver restriction is declared; the engine must then fail closed (restrict to System Manager), never open."
+                  "description": "Who may decide (required). 'role' requires approver_role; 'user' requires a non-empty approver_users."
                 },
                 "approver_role": {
                   "type": "string",
@@ -871,31 +917,6 @@
                     "not": {
                       "required": [
                         "approver_role"
-                      ]
-                    }
-                  }
-                },
-                {
-                  "if": {
-                    "not": {
-                      "required": [
-                        "approver_type"
-                      ]
-                    }
-                  },
-                  "then": {
-                    "not": {
-                      "anyOf": [
-                        {
-                          "required": [
-                            "approver_role"
-                          ]
-                        },
-                        {
-                          "required": [
-                            "approver_users"
-                          ]
-                        }
                       ]
                     }
                   }
@@ -1027,7 +1048,7 @@
     "FlowNode": {
       "oneOf": [
         {
-          "$ref": "#/$defs/ToolCallNode"
+          "$ref": "#/$defs/FlowToolCallNode"
         },
         {
           "$ref": "#/$defs/TransformNode"
@@ -1037,9 +1058,6 @@
         },
         {
           "$ref": "#/$defs/ForeachNode"
-        },
-        {
-          "$ref": "#/$defs/ParallelNode"
         },
         {
           "$ref": "#/$defs/ValidateNode"

@@ -64,12 +64,12 @@ Notes:
 | UI action | `type` | config fields (all keys; `*` required) |
 |---|---|---|
 | Run Agent | `agent.run` | `agent`* string (Agent name), `prompt`* string (placeholders `{name}`), `prompt_bindings` object name -> Value |
-| Call Tool | `tool.call` | `tool_id`* string (literal, `^[a-zA-Z_][a-zA-Z0-9_.]*$`, never a reference), `input`* object of Value, `timeout_ms` int >=1, `recovery` enum `retry`/`resume`/`abort`/`compensate`, `approved` bool |
-| LLM Router | `router.llm` | `prompt`* string, `options`* array (min 1) of `{label* string, node_id* id}`, `default`* id. No `next`. |
+| Call Tool | `tool.call` | `tool_id`* string (literal, `^[a-zA-Z_][a-zA-Z0-9_.]*$`, never a reference), `input`* object of Value, `timeout_ms` int >=1, `approved` bool. (`recovery` was removed: flows have no recovery modes.) |
+| LLM Router | `router.llm` | `prompt`* string, `options`* array (min 1) of `{label* string, node_id* id}`, `default`* id, `model` string (optional; name of an AI Model record, absent = first keyed provider's default chat model). No `next`. |
 | (deterministic router) | `router.decision` | `policy`* string, `options`*, `default`* (same shapes). No `next`. Not offered by the UI. |
 | Condition | `condition` | `expression`* Expression, `on_true`* id, `on_false`* id. No `next`. |
 | Loop | `foreach` | `items`* Reference (`{"$from": ...}` only), `body`* array (min 1) of ids, `max_iterations`* int >=0, `on_item_error`* enum `fail`/`skip`, `collect`* Reference, `item_var` ident (default `item`), `index_var` ident (default `index`). Done edge is the node's `next`. |
-| Human in Loop | `human.approval` | `message`* string, `approve_next`* id, `reject_next`* id, `timeout_next` id, `timeout_ms` int >=1, `approver_type` enum `role`/`user`, `approver_role` string, `approver_users` array of string (min 1). No `next`. |
+| Human in Loop | `human.approval` | `message`* string, `approve_next`* id, `reject_next`* id, `timeout_next` id, `timeout_ms` int >=1, `approver_type`* enum `role`/`user`, `approver_role` string (required when `role`), `approver_users` array of string (min 1, required when `user`). No `next`. |
 | Transform Data | `transform` | `op`* enum (below), `input`* object of Value |
 | Execute Code | `tool.call` | `tool_id` `run_python`, `input` `{code: ...}`. **Unresolved, see section 6.** |
 | Send Email | `tool.call` | `tool_id` `gmail_send_email`; `input` `{to*, subject*, body*}` |
@@ -81,10 +81,9 @@ Notes:
 | Get / Set / Delete state | `state.get` / `state.set` / `state.delete` | get: `key`* Value, `default` Value; set: `key`*, `value`*, `ttl_seconds` int 1-2592000 or Value; delete: `key`* |
 | Create document | `doc.create` | `doctype`* string literal (must be in site allow-list `huf_flow_create_doc_doctypes`), `fields`* object of Value |
 | (assertions) | `validate` | `assertions`* array (min 1) of `{expression*, code*, message*}` |
-| (concurrency) | `parallel` | `branches`* array of arrays of ids (min 1 each), `join`* const `all`, `max_parallel_calls` int >=1 |
 
 `tool.call` UI presets (Email, Slack, Sheets, File, HTTP, Code) are `tool.call` and carry ONLY
-`tool_id`/`input` (+ optional `timeout_ms`, `recovery`, `approved`). The legacy `tool_name`, `args`,
+`tool_id`/`input` (+ optional `timeout_ms`, `approved`). The legacy `tool_name`, `args`,
 `parameters`, `output.save_result_to_context`, `mcp_server`, `agent_name`, `gateway` keys are rejected by the schema.
 Results are read by later nodes as `{"$from": "<node_id>"}` (or `<node_id>.field`); there is no
 "save result to context key".
@@ -107,8 +106,7 @@ or `coalesce`), **Map** = `select`, **Template** = a `{"$template", "vars"}` Val
 | `condition` | `config.on_true`, `config.on_false` | both required, both must exist; True branch -> `on_true`, False -> `on_false`. Node has no `next`. UI "True"/"False" handles write these; they must not be the same node unless intended. |
 | `router.llm` / `router.decision` | `config.options[i].node_id`, `config.default` | model picks an option by `label`; no match or failure goes to `default` (required, so routing is total). Node has no `next`. |
 | `foreach` (Loop) | `config.body` (ids), `next` | `body` lists top-level node ids run once per item, in chain order via their own `next`; the last body node has no `next` (no return edge to the loop; a back-edge is a cycle and is rejected). Body nodes must not be reachable by any other path. `next` is the "done" edge, taken after the last item. Per-item values: `{"$from": "foreach.item"}`, `{"$from": "foreach.index"}`. `collect` is a reference evaluated per item (typically a body node, `{"$from": "<body_node>"}`) producing the node's output list. `max_iterations` is capped by `contract.limits.max_foreach_iterations`. |
-| `human.approval` | `config.approve_next`, `config.reject_next`, `config.timeout_next` | approve -> `approve_next`; reject -> `reject_next`; no decision within `timeout_ms` -> `timeout_next` (if absent, the run times out/fails). No `next`. Approver restriction: `approver_type: "role"` requires `approver_role` and forbids `approver_users`; `"user"` requires `approver_users` and forbids `approver_role`; omitting `approver_type` forbids both. The engine must fail closed (System Manager only) when no approver is declared. The decision record is read downstream as `{"$from": "<approval_node_id>"}`. |
-| `parallel` | `config.branches`, `next` | branches run concurrently; `next` runs after all join. |
+| `human.approval` | `config.approve_next`, `config.reject_next`, `config.timeout_next` | approve -> `approve_next`; reject -> `reject_next`; no decision within `timeout_ms` -> `timeout_next` (if absent, the run times out/fails). No `next`. Approver restriction: `approver_type: "role"` requires `approver_role` and forbids `approver_users`; `"user"` requires `approver_users` and forbids `approver_role`; `approver_type` is REQUIRED: a flow without it fails at save with a readable message. The decision record is read downstream as `{"$from": "<approval_node_id>"}`. |
 | `output` | none | terminal; no `next`. |
 
 Validator also checks: all targets exist, every node reachable from `entry`, no cycles, all references resolve to
@@ -441,7 +439,7 @@ Legend: `t_*` triggers; `n_prep` Transform Data; `n_agent` Run Agent; `n_cond` C
 `n_human` Human in Loop; `n_loop` Loop (body `n_email`; done edge = `next: n_http`); `n_email` Send Email; `n_http` HTTP Request;
 `n_slack` Slack; `n_sheets` Google Sheets; `n_file` File Operations; `n_code` Execute Code; `n_done*` End.
 The `n_state_*`, `n_doc`, `n_validate` nodes are non-UI extras kept so the example covers all Flow node types
-except `parallel`, `router.decision`, `trigger.unset` (covered in the unit test).
+except `router.decision`, `trigger.unset` (covered in the unit test).
 The example is valid with a classifier that marks `http_request` as an http tool and `run_python` as a code tool.
 
 ## 6. Open items needing a decision (not resolvable in the schema)
@@ -453,7 +451,7 @@ The example is valid with a classifier that marks `http_request` as an http tool
 3. **Gateway / MCP binding**: the engine reads `config.mcp_server` and `config.gateway` on `tool.call`; the schema forbids them. The engine
    must resolve MCP tools by unique tool id (`find_unique_mcp_server_for_tool`). `FlowDefinition._validate_gateway_authority` is therefore dead for saved flows.
 4. **Backend consumers of the old names**: resolved. `flow_webhook` authenticates with the trigger node's `secret` (`X-Huf-Secret` or `?secret=`), the engine reads only the contract names (`on_true`/`on_false`, `foreach` body fields, `tool_id`/`input`, `approver_*`), `get_pending_approvals` and the approve/reject endpoints read the `waiting` keys in section 7, and `huf/ai/gateways/approvals.py` reads `approver_type`. Legacy keys (`auth`, `apiKey`, `webhook_key`, `approval_type`, `title`, `instructions`, `true_node`, `iterate_over`, `tool_name`) are ignored.
-5. `approver_type` is optional in the schema (human.approval fixtures predate it); the engine fails closed when absent (only a System Manager may decide).
+5. `approver_type` is required by the schema (pre-release: no legacy approval nodes). `parallel` and `tool.call.recovery` are Flow-removed; they remain only in the Procedure profile.
 
 ## 7. Engine behaviour notes (verified against `huf/ai/flow/engine.py`)
 
@@ -468,10 +466,13 @@ The example is valid with a classifier that marks `http_request` as an http tool
 * Timeouts: `timeout_ms` sets `timeout_at` when the run pauses. The every-minute scheduler job `huf.ai.flow.triggers.expire_due_approvals` calls `engine.expire_approval`, which routes to `timeout_next` (decision `timeout`) or fails the run when none is set. Resolution is one minute at best, and a run whose deadline passed while the scheduler was down expires on the next tick.
 
 **Routing and models**
-* `router.llm` makes one direct completion with the first keyed AI Provider's default chat model (no agent involved). An unmatched reply, no keyed provider, or any LLM failure routes to the node's required `default` (reason `no_match` / `llm_failed: ...`).
+* `router.llm` makes one direct completion with the optional `model` (AI Model name), else the first keyed AI Provider's default chat model (no agent involved). An unmatched reply, no keyed provider, or any LLM failure routes to the node's required `default` (reason `no_match` / `llm_failed: ...`).
 
 **Limitations**
 * Recovery: there is no flow-run recovery sweeper; a worker crash mid-node leaves the run `Running` until it is failed or re-run by hand (only approval expiry is scheduled).
 * `timeout_ms` on `tool.call` bounds the wait for the result but cannot cancel an already-running tool.
-* `parallel` runs its branches sequentially, not concurrently.
 * Run settings: only `mode`, `max_hops`, `conversation_mode`, `max_foreach_iterations`, `orchestrator_call_policy`, `orchestrator_agent` and `decision_router` are read by the engine; any other settings key is dead.
+
+## Save-time error copy
+
+`FlowDefinition.validate` never shows validator codes. `huf/ai/graph/error_copy.py` maps each failure to a plain sentence naming the step and field (e.g. "Step 'approval_1' (Human Approval): who can approve is required. Open the step and fill it in.", "Step 'n3' is not connected to the start of the flow. Connect it or delete it.").
