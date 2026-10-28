@@ -1,7 +1,6 @@
 import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
-import type { FlowTriggerSummary, SetFlowTriggerArgs } from '@/lib/flowTrigger';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -56,7 +55,7 @@ export interface BackendFlowGraph {
 export type BackendNodeType =
     | 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event' | 'trigger.unset'
     | 'agent.run' | 'tool.call' | 'router.llm' | 'router.decision' | 'human.approval'
-    | 'condition' | 'transform' | 'foreach' | 'parallel' | 'validate' | 'output'
+    | 'condition' | 'transform' | 'foreach' | 'validate' | 'output'
     | 'state.get' | 'state.set' | 'state.delete' | 'doc.create';
 
 export interface BackendNode {
@@ -501,34 +500,20 @@ export async function convertFlowToProcedure(flowId: string): Promise<FlowConver
     }
 }
 
-// ─── Flow trigger APIs (schedule / doc-event) ────────────────────────
+// ─── Integration connection status (Slack / Gmail / Drive / Sheets steps) ───
 
-/** Create or replace the flow's schedule / doc-event trigger. Converts the flow to a Draft
- * procedure if needed; the returned summary says whether the Automation is actually Active. */
-export async function setFlowTrigger(args: SetFlowTriggerArgs): Promise<FlowTriggerSummary> {
-    try {
-        const result = await call.post('huf.ai.flow.api.set_flow_trigger', { ...args });
-        return result.message as FlowTriggerSummary;
-    } catch (error) {
-        handleFrappeError(error, `Error setting trigger for flow ${args.flow_id}`);
-    }
+export interface FlowIntegrationStatus {
+    label: string;
+    connected: boolean;
 }
 
-/** The flow's current trigger summary, or null if it has none. */
-export async function getFlowTrigger(flowId: string): Promise<FlowTriggerSummary | null> {
+/** Which integrations the flow builder's steps use and whether each has credentials. */
+export async function getFlowIntegrationStatus(): Promise<Record<string, FlowIntegrationStatus>> {
     try {
-        const result = await call.get('huf.ai.flow.api.get_flow_trigger', { flow_id: flowId });
-        return (result.message as FlowTriggerSummary | null) ?? null;
-    } catch (error) {
-        handleFrappeError(error, `Error fetching trigger for flow ${flowId}`);
-    }
-}
-
-/** Remove the flow's trigger (the converted procedure is kept). */
-export async function clearFlowTrigger(flowId: string): Promise<void> {
-    try {
-        await call.post('huf.ai.flow.api.clear_flow_trigger', { flow_id: flowId });
-    } catch (error) {
-        handleFrappeError(error, `Error clearing trigger for flow ${flowId}`);
+        const result = await call.get('huf.ai.flow.integrations.get_flow_integration_status');
+        return (result.message ?? {}) as Record<string, FlowIntegrationStatus>;
+    } catch {
+        // Advisory only: without it the builder simply shows no "Not connected" badges.
+        return {};
     }
 }

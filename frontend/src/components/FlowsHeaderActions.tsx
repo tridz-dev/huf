@@ -4,12 +4,13 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { useFlowContext } from '../contexts/FlowContext';
-import { runFlow, updateFlowDefinitionFields } from '../services/flowApi';
+import { getFlowIntegrationStatus, runFlow, updateFlowDefinitionFields } from '../services/flowApi';
+import { unconnectedSteps } from '@/lib/flowIntegrations';
 import { toast } from 'sonner';
 import { FlowRunHistory } from './FlowRunHistory';
 import { FlowRunViewer } from './FlowRunViewer';
 import { FlowSettingsModal } from './modals/FlowSettingsModal';
-import { humanizeFlowError, summarizeIssues, validateFlow } from '@/lib/flowValidation';
+import { BLOCKED_TOAST_ID, humanizeFlowError, summarizeIssues, validateFlow } from '@/lib/flowValidation';
 import { reportFlowRun } from '@/lib/flowRunToast';
 import { RunFlowDialog } from './flow/RunFlowDialog';
 import { DisabledReason } from './flow/DisabledReason';
@@ -134,6 +135,7 @@ export function FlowsHeaderActions() {
     if (found.length === 0) return false;
     if (found[0].nodeId) setSelectedNode(found[0].nodeId);
     toast.error(purpose === 'save' ? "Can't save yet" : 'Finish setting up your flow first', {
+      id: BLOCKED_TOAST_ID,
       description: `Finish setting up ${summarizeIssues(found)}`,
     });
     return true;
@@ -185,6 +187,15 @@ export function FlowsHeaderActions() {
     try {
       await updateFlowDefinitionFields(activeFlow.id, { status: 'Active' });
       toast.success('Flow published');
+      // Non-blocking: publishing works, but these steps will fail until their integration is connected.
+      const missing = unconnectedSteps(activeFlow.nodes, await getFlowIntegrationStatus());
+      if (missing.length > 0) {
+        toast.warning('Some steps are not connected yet', {
+          description: `${missing.map((m) => `${m.stepLabel} (${m.service})`).join(', ')} will fail until you connect them.`,
+          duration: 12000,
+          id: 'flow-unconnected-warning',
+        });
+      }
     } catch (err) {
       toast.error('Could not publish the flow', { description: humanizeFlowError(err) });
     } finally {

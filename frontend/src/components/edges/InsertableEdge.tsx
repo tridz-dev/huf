@@ -12,6 +12,13 @@ export interface InsertableEdgeData {
 }
 
 /**
+ * Routes whose meaning is only on the edge (a router path's name, the error path). Every other branch
+ * (True/False, Approved/Rejected/Timed out, For each item) is already named on the step's own handle, so
+ * drawing it again on the edge made two labels collide near the step.
+ */
+const SHOWS_EDGE_LABEL = new Set<FlowEdgeRoute>(['option', 'error']);
+
+/**
  * Edge between two real, already-connected nodes. Renders like a normal
  * edge at rest; on hover (or focus) it reveals a small "+" button at the
  * midpoint that inserts a new action node between the two endpoints,
@@ -48,11 +55,12 @@ export const InsertableEdge = memo(
           }}
         />
         <EdgeLabelRenderer>
-          {typeof label === 'string' && label ? (
+          {typeof label === 'string' && label && SHOWS_EDGE_LABEL.has(data?.route ?? 'next') ? (
             <div
               data-testid={`flow-edge-label-${id}`}
+              title={label}
               style={{ position: 'absolute', transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY - 16}px)` }}
-              className="pointer-events-none rounded bg-panel px-1.5 py-0.5 text-[10px] text-muted-foreground border border-line"
+              className="max-w-[150px] truncate rounded bg-panel px-1.5 py-0.5 text-[10px] text-muted-foreground border border-line"
             >
               {label}
             </div>

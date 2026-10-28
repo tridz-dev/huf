@@ -239,31 +239,36 @@ describe('flowSerializer: schema-valid output and lossless round trip', () => {
     expect(schemaErrors(g)).toEqual([]);
   });
 
-  it('round-trips parallel (branch chains + join next) and router.decision', () => {
+  it('round-trips router.decision', () => {
     const flow = flowOf(
       [
         trigger('t', { type: 'schedule', cron: '0 * * * *' }),
-        action('p', { type: 'parallel', join: 'all', max_parallel_calls: 2 }),
-        action('a1', { type: 'tool-call', tool_id: 'slack_send_message', input: { channel: '#a', text: 'x' } }),
-        action('a2', { type: 'state-delete', key: 'k' }),
-        action('b1', { type: 'state-get', key: 'k' }),
         action('d', { type: 'router-decision', policy: 'by_amount', default: 'e1' }),
         end('e1', { value: 1 }),
         end('e2', { value: 2 }),
       ],
       [
-        edge('t', 'p'),
-        edge('p', 'a1', 'branch', { branchIndex: 0, index: 0 }),
-        edge('a1', 'a2'),
-        edge('p', 'b1', 'branch', { branchIndex: 1, index: 1 }),
-        edge('p', 'd', 'next'),
+        edge('t', 'd'),
         edge('d', 'e1', 'option', { label: 'low', index: 0 }),
         edge('d', 'e2', 'option', { label: 'high', index: 1 }),
       ]
     );
     const g = expectRoundTrip(flow);
-    expect(nodeOf(g, 'p').config).toEqual({ join: 'all', max_parallel_calls: 2, branches: [['a1', 'a2'], ['b1']] });
     expect(nodeOf(g, 'd').type).toBe('router.decision');
+    expect(schemaErrors(g)).toEqual([]);
+  });
+
+  it('keeps the optional router model through a round trip', () => {
+    const flow = flowOf(
+      [
+        trigger('t', { type: 'schedule', cron: '0 * * * *' }),
+        action('r', { type: 'router', prompt: 'p', model: 'gpt-4o-mini', default: 'e1' }),
+        end('e1', { value: 1 }),
+      ],
+      [edge('t', 'r'), edge('r', 'e1', 'option', { label: 'one', index: 0 })]
+    );
+    const g = expectRoundTrip(flow);
+    expect(nodeOf(g, 'r').config.model).toBe('gpt-4o-mini');
     expect(schemaErrors(g)).toEqual([]);
   });
 
@@ -290,7 +295,7 @@ describe('flowSerializer: schema-valid output and lossless round trip', () => {
     expect(schemaErrors(g)).toEqual([]);
   });
 
-  it('preserves state/doc.create/validate/foreach/parallel as their real types', () => {
+  it('preserves state/doc.create/validate/foreach as their real types', () => {
     const g = serializeFlow(fullCanvas());
     const types = Object.fromEntries(g.nodes.map((n) => [n.id, n.type]));
     expect(types).toMatchObject({
@@ -474,7 +479,9 @@ describe('action cards (src/data/actions.ts)', () => {
   it('has a contract mapping for every card and no Execute Code card', () => {
     const ids = actionOptions.map((a) => a.id);
     expect(ids).not.toContain('code');
-    expect(ids.sort()).toEqual(Object.keys(ACTION_CARD_CONTRACT).sort());
+    expect(ids).not.toContain('parallel');
+    // End is a real palette card but serializes to `output`, not a canvas action config.
+    expect(ids.filter((id) => id !== 'end').sort()).toEqual(Object.keys(ACTION_CARD_CONTRACT).sort());
   });
 
   it('maps each card to the node type its config discriminator serializes to', () => {

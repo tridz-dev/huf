@@ -88,7 +88,6 @@ export const ACTION_TO_BACKEND_TYPE: Record<ActionType, BackendNodeType> = {
     'human.approval': 'human.approval',
     'condition': 'condition',
     'foreach': 'foreach',
-    'parallel': 'parallel',
     'validate': 'validate',
     'transform': 'transform',
     'state-get': 'state.get',
@@ -108,7 +107,6 @@ const ROUTING_KEYS: Partial<Record<BackendNodeType, string[]>> = {
     'router.decision': ['options'],
     'human.approval': ['approve_next', 'reject_next', 'timeout_next'],
     'foreach': ['body'],
-    'parallel': ['branches'],
 };
 
 /** Node types with no `next` key at all. */
@@ -116,7 +114,7 @@ const NO_NEXT_TYPES = new Set<string>(['condition', 'router.llm', 'router.decisi
 
 /** Valid values of a handle id / edge route other than 'next'. */
 export const FLOW_EDGE_ROUTES: readonly FlowEdgeRoute[] = [
-    'next', 'error', 'true', 'false', 'option', 'default', 'approve', 'reject', 'timeout', 'body', 'branch',
+    'next', 'error', 'true', 'false', 'option', 'default', 'approve', 'reject', 'timeout', 'body',
 ];
 
 const ROUTE_LABELS: Partial<Record<FlowEdgeRoute, string>> = {
@@ -141,21 +139,17 @@ export function makeFlowEdgeId(source: string, route: FlowEdgeRoute, target: str
 export interface MakeFlowEdgeOptions {
     /** router option label (route 'option'). */
     label?: string;
-    /** position among same-route edges of the source (option/body/branch). */
+    /** position among same-route edges of the source (option/body). */
     index?: number;
-    /** parallel branch index (route 'branch'). */
-    branchIndex?: number;
 }
 
 /** Build the canonical canvas edge for a route. Used by deserialize; WP-D should use it for new connections. */
 export function makeFlowEdge(source: string, target: string, route: FlowEdgeRoute, opts: MakeFlowEdgeOptions = {}): FlowEdge {
     const label = route === 'option' ? opts.label ?? target
-        : route === 'branch' ? `Branch ${(opts.branchIndex ?? 0) + 1}`
         : ROUTE_LABELS[route];
-    const data: { route: FlowEdgeRoute; branchIndex?: number } = { route };
-    if (route === 'branch') data.branchIndex = opts.branchIndex ?? 0;
+    const data: { route: FlowEdgeRoute } = { route };
     const edge: FlowEdge = {
-        id: makeFlowEdgeId(source, route, target, route === 'option' || route === 'body' || route === 'branch' ? opts.index ?? 0 : undefined),
+        id: makeFlowEdgeId(source, route, target, route === 'option' || route === 'body' ? opts.index ?? 0 : undefined),
         source,
         target,
         type: 'default',
@@ -267,19 +261,6 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
             const seen = new Set<string>();
             const body = byRoute('body').flatMap((e) => walkChain(e.target, nextOf, seen));
             if (body.length) config.body = body;
-            break;
-        }
-        case 'parallel': {
-            config.join = 'all';
-            const seen = new Set<string>();
-            const heads = byRoute('branch');
-            const indexes = [...new Set(heads.map((e) => (e.data as { branchIndex?: number } | undefined)?.branchIndex ?? 0))].sort((a, b) => a - b);
-            const branches = indexes
-                .map((i) => heads
-                    .filter((e) => ((e.data as { branchIndex?: number } | undefined)?.branchIndex ?? 0) === i)
-                    .flatMap((e) => walkChain(e.target, nextOf, seen)))
-                .filter((b) => b.length > 0);
-            if (branches.length) config.branches = branches;
             break;
         }
         case 'output':
@@ -482,7 +463,6 @@ function getDefaultLabel(backendType: string): string {
         'condition': 'Condition (IF)',
         'transform': 'Transform data',
         'foreach': 'Loop',
-        'parallel': 'Parallel',
         'validate': 'Validate',
         'state.get': 'Get state',
         'state.set': 'Set state',
@@ -507,7 +487,6 @@ function getDefaultIcon(backendType: string): string {
         'condition': 'GitBranch',
         'transform': 'Repeat',
         'foreach': 'RotateCw',
-        'parallel': 'Split',
         'validate': 'ShieldCheck',
         'state.get': 'Database',
         'state.set': 'Save',
@@ -559,14 +538,6 @@ function deserializeEdgesForNode(node: BackendNode, byId: Map<string, BackendNod
             heads((cfg.body as string[] | undefined) ?? []).forEach((id, index) => push(id, 'body', { index }));
             push(node.next, 'next');
             break;
-        case 'parallel': {
-            let index = 0;
-            ((cfg.branches as string[][] | undefined) ?? []).forEach((branch, branchIndex) => {
-                for (const id of heads(branch)) push(id, 'branch', { branchIndex, index: index++ });
-            });
-            push(node.next, 'next');
-            break;
-        }
         default:
             push(node.next, 'next');
     }

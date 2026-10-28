@@ -17,6 +17,17 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { PanelLeftOpen, PanelRightOpen, Maximize2, Plus, Sparkles } from 'lucide-react';
 import { Button } from './ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
+import { actionHasConfiguredContent } from '../lib/flowNodeConfigured';
 import { TriggerNode } from './nodes/TriggerNode';
 import { ActionNode } from './nodes/ActionNode';
 import { EndNode } from './nodes/EndNode';
@@ -53,6 +64,7 @@ export function FlowCanvas({
     activeFlow,
     updateNodesAndEdges,
     updateNode,
+    deleteNode,
     selectedNodeId,
     setSelectedNode,
     setSelectedEdge,
@@ -61,6 +73,8 @@ export function FlowCanvas({
     canUndo
   } = useFlowContext();
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
+  // Delete / Backspace on a selected step asks first (the click-to-delete buttons already do).
+  const [keyboardDeleteId, setKeyboardDeleteId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<Node<FlowNodeData>[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -199,6 +213,10 @@ export function FlowCanvas({
       });
       if (realChanges.length === 0) return;
 
+      // Keyboard selection (Tab to a step, Enter) opens that step's settings like a click does.
+      const picked = realChanges.find((c) => c.type === 'select' && c.selected);
+      if (picked && 'id' in picked && picked.id !== selectedNodeId) setSelectedNode(picked.id);
+
       // Measurements and selection are view state, not edits. React Flow can emit them
       // after the post-save re-sync guard has cleared, which flipped a just-saved flow
       // back to "Unsaved", so only real edits (move, add, remove, replace) schedule a write.
@@ -219,7 +237,7 @@ export function FlowCanvas({
         return updatedNodes;
       });
     },
-    [scheduleContextUpdate]
+    [scheduleContextUpdate, selectedNodeId, setSelectedNode]
   );
 
   const onEdgesChange = useCallback(
@@ -287,6 +305,24 @@ export function FlowCanvas({
       setSelectedEdge(edge.id);
     },
     [setSelectedEdge]
+  );
+
+  const onCanvasKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable || target?.closest('[role="dialog"], [role="combobox"]')) return;
+      const node = nodes.find((n) => n.selected && !n.id.startsWith('ghost-')) ?? nodes.find((n) => n.id === selectedNodeId);
+      if (!node || node.data.status === 'running' || node.data.status === 'waiting') return;
+      e.preventDefault();
+      if (node.data.nodeType === 'action' && !actionHasConfiguredContent(node.data)) {
+        deleteNode(node.id);
+        return;
+      }
+      setKeyboardDeleteId(node.id);
+    },
+    [nodes, selectedNodeId, deleteNode]
   );
 
   const onPaneClick = useCallback(() => {
@@ -589,7 +625,7 @@ export function FlowCanvas({
   }
 
   return (
-    <div className="flex-1 flex w-full h-full overflow-hidden" data-testid="flow-canvas">
+    <div className="flex-1 flex w-full h-full overflow-hidden" data-testid="flow-canvas" onKeyDown={onCanvasKeyDown}>
       <FlowNodeRail
         activeCategory={railActiveCategory}
         disabledCategories={railDisabledCategories}
@@ -607,6 +643,7 @@ export function FlowCanvas({
         onPaneClick={onPaneClick}
         nodeTypes={nodeTypesWithAddButton}
         edgeTypes={edgeTypesWithInsert}
+        deleteKeyCode={null}
         fitView
         fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
@@ -616,12 +653,14 @@ export function FlowCanvas({
         {/* showInteractive (lock toggle button) defaults to true, so it's already shown */}
         <Controls className="!bottom-6 !rounded-lg !border !border-line !overflow-hidden !shadow-sm" />
         <MiniMap
+          position="top-left"
+          ariaLabel="Flow overview"
           nodeColor={(node) => {
             if (node.type === 'trigger') return 'var(--primary)';
             if (node.type === 'end') return 'var(--good)';
             return 'var(--muted)';
           }}
-          className="!bg-background !border-border !bottom-6"
+          className="!bg-background !border-border"
           style={{ width: 120, height: 80, borderRadius: 8, border: '1px solid var(--border)', boxShadow: '0 1px 3px color-mix(in srgb, var(--foreground) 12%, transparent)' }}
         />
         <Panel position="top-right" className="m-2">
@@ -663,6 +702,9 @@ export function FlowCanvas({
               variant="outline"
               size="icon"
               className="h-10 w-10"
+              aria-label="Hide or show the side panels"
+              title="Hide or show the side panels"
+              data-testid="flow-toggle-panels"
               onClick={() => {
                 if (showLeftSidebar || showRightSidebar) {
                   onToggleLeftSidebar();
@@ -683,6 +725,8 @@ export function FlowCanvas({
               variant="outline"
               size="icon"
               className="h-10 w-10"
+              aria-label="Show the flow list"
+              title="Show the flow list"
               onClick={onToggleLeftSidebar}
             >
               <PanelLeftOpen className="w-4 h-4" />
@@ -695,6 +739,9 @@ export function FlowCanvas({
               variant="outline"
               size="icon"
               className="h-10 w-10"
+              aria-label="Show step settings"
+              title="Show step settings"
+              data-testid="flow-open-settings"
               onClick={onToggleRightSidebar}
             >
               <PanelRightOpen className="w-4 h-4" />
@@ -717,6 +764,30 @@ export function FlowCanvas({
         onSaveTrigger={handleSaveTriggerConfig}
         onSaveAction={handleSelectAction}
       />
+
+      <AlertDialog open={keyboardDeleteId !== null} onOpenChange={(open) => !open && setKeyboardDeleteId(null)}>
+        <AlertDialogContent data-testid="flow-node-delete-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{nodes.find((n) => n.id === keyboardDeleteId)?.data.label ?? 'this step'}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Its settings and connections will be removed. You can undo this right after.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="flow-node-delete-confirm"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (keyboardDeleteId) deleteNode(keyboardDeleteId);
+                setKeyboardDeleteId(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {activeFlow && (
         <ConvertToProcedureDialog

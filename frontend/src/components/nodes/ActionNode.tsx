@@ -43,6 +43,8 @@ import { cn } from '@/lib/utils';
 import { actionHasConfiguredContent } from '../../lib/flowNodeConfigured';
 import { branchHandlesFor, ROUTER_HANDLE } from '../../lib/flowBranches';
 import { validateNode } from '../../lib/flowValidation';
+import { toolLabel } from '../../lib/flowIntegrations';
+import { NotConnected } from '../flow/NotConnected';
 
 const iconMap: Record<string, LucideIcon> = {
   Play,
@@ -76,6 +78,7 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
   const cfg = data.actionConfig as ({ type?: string } & Record<string, unknown>) | undefined;
   const handles = branchHandlesFor(cfg?.type, cfg);
   const isRouter = cfg?.type === 'router';
+  const toolId = cfg?.type === 'tool-call' && typeof cfg.tool_id === 'string' && cfg.tool_id ? cfg.tool_id : undefined;
   const statusClasses = getExecutionStatusClasses(data.status, selected, { unconfigured: incomplete.length > 0 });
 
   // Confirm only when the node has real config; a picked-but-blank node deletes
@@ -138,6 +141,12 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
             {data.description && (
               <div className="text-xs text-muted-foreground">{data.description}</div>
             )}
+            {toolId && toolLabel(toolId).toLowerCase() !== data.label.toLowerCase() && (
+              <div className="text-xs text-muted-foreground truncate" title={toolLabel(toolId)} data-testid={`flow-node-tool-${id}`}>
+                {toolLabel(toolId)}
+              </div>
+            )}
+            {toolId && <NotConnected toolId={toolId} compact testIdSuffix={`node-${id}`} />}
           </div>
         </div>
       </Card>
@@ -152,7 +161,15 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
             className={NODE_HANDLE}
             data-testid={`flow-handle-${id}-${h.route}`}
           >
-            <span className="pointer-events-none absolute top-3 -translate-x-1/2 whitespace-nowrap text-[9px] text-muted-foreground">{h.label}</span>
+            {/* Sit beside the dot, not under it, so the edge leaving the dot never runs through the text. */}
+            <span
+              className={cn(
+                'pointer-events-none absolute top-2 whitespace-nowrap text-[10px] text-muted-foreground',
+                i === 0 ? 'right-3' : i === handles.length - 1 ? 'left-3' : '-translate-x-1/2'
+              )}
+            >
+              {h.label}
+            </span>
           </Handle>
         ))
       ) : (

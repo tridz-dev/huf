@@ -171,6 +171,16 @@ class TestRouterLlm(unittest.TestCase):
 		self.assertEqual(self._route(lambda p: "urgent", {"default": None})["status"], "failed")
 		self.assertEqual(self._route(lambda p: "urgent", {"options": []})["status"], "failed")
 
+	def test_text_refs_resolve_in_router_prompt_and_message(self):
+		from huf.ai.graph.executor import GraphContext
+
+		ctx = GraphContext({"amount": 150, "who": {"name": "Ada"}})
+		ctx.node_outputs["n_prev"] = {"ok": True}
+		render = flow_engine.render_text_refs
+		self.assertEqual(render("Order {input.amount} by {input.who.name}", ctx), "Order 150 by Ada")
+		self.assertEqual(render("Prev: {n_prev.ok}", ctx), "Prev: true")
+		self.assertEqual(render("Keep {unknown.path} and {{input.amount}} as written", ctx), "Keep {unknown.path} and {{input.amount}} as written")
+
 	def test_router_agent_name_is_not_read(self):
 		cfg = {"router_agent_name": "x", "options": self.OPTIONS, "default": "n_loop", "prompt": "p"}
 		out = self._route(lambda p: "banana", cfg)

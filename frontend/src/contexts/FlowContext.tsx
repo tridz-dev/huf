@@ -3,6 +3,8 @@ import { toast } from 'sonner';
 import { Flow, FlowMetadata, FlowNode, FlowEdge } from '../types/flow.types';
 import { flowService } from '../services/flowService';
 import { popSnapshot, pushSnapshot } from '../lib/flowUndoStack';
+import { BLOCKED_TOAST_ID } from '../lib/flowValidation';
+import { followRenamedTarget } from '../lib/flowEdgeLabels';
 
 export type SaveState = 'saved' | 'saving' | 'unsaved' | 'error';
 
@@ -324,6 +326,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   // ─── Synchronous node/edge mutations (cache-only, fast) ────────────
 
   const markUnsaved = useCallback(() => {
+    toast.dismiss(BLOCKED_TOAST_ID);
     setHasUnsavedChanges(true);
     setSaveState('unsaved');
   }, []);
@@ -380,16 +383,25 @@ export function FlowProvider({ children }: { children: ReactNode }) {
 
   const updateNode = useCallback((nodeId: string, updates: Partial<FlowNode>) => {
     if (!activeFlowId) return;
+    // Router path names that still equal this step's old title follow its rename.
+    const before = activeFlowRef.current;
+    const oldLabel = before?.nodes.find(n => n.id === nodeId)?.data.label;
+    const newLabel = updates.data?.label;
+    const renamedEdges = before && oldLabel !== undefined && newLabel !== undefined
+      ? followRenamedTarget(before.edges, nodeId, oldLabel, newLabel)
+      : undefined;
+    const edgesChanged = Boolean(before && renamedEdges && renamedEdges !== before.edges);
     setActiveFlowState(prev => {
       if (!prev) return prev;
       const updatedNodes = prev.nodes.map(n =>
         n.id === nodeId ? { ...n, ...updates } : n
       );
-      const updated = { ...prev, nodes: updatedNodes };
+      const updated = { ...prev, nodes: updatedNodes, ...(edgesChanged && renamedEdges ? { edges: renamedEdges } : {}) };
       lastSyncedFlowRef.current = updated;
       return updated;
     });
     flowService.updateNode(activeFlowId, nodeId, updates);
+    if (edgesChanged && renamedEdges) flowService.updateEdges(activeFlowId, renamedEdges);
     markUnsaved();
   }, [activeFlowId, markUnsaved]);
 
@@ -449,11 +461,13 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   }, [activeFlowId, selectedNodeId, markUnsaved, undo]);
 
   const handleSetSelectedNode = useCallback((nodeId: string | null) => {
+    toast.dismiss(BLOCKED_TOAST_ID);
     setSelectedNodeId(nodeId);
     if (nodeId) setSelectedEdgeId(null);
   }, []);
 
   const handleSetSelectedEdge = useCallback((edgeId: string | null) => {
+    toast.dismiss(BLOCKED_TOAST_ID);
     setSelectedEdgeId(edgeId);
     if (edgeId) setSelectedNodeId(null);
   }, []);
