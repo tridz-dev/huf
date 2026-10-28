@@ -1509,7 +1509,8 @@ def get_approver_roles() -> list[dict]:
 	without the automatic roles (All, Guest, Administrator) and the framework's desk-only roles.
 	Returns ``[{name, group}]`` with ``group`` ``"Huf"`` or ``"Other"``.
 	"""
-	if not frappe.has_permission("Flow Definition", "write"):
+	# Read is enough: a read-only viewer opening a flow still needs the names to show the saved role.
+	if not frappe.has_permission("Flow Definition", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 	rows = frappe.get_all("Role", filters={"disabled": 0}, fields=["name"], order_by="name asc", limit_page_length=0)

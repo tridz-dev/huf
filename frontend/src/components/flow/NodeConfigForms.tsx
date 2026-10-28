@@ -454,7 +454,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
             placeholder={loading ? 'Loading...' : 'Choose an agent...'}
             disabled={loading}
             searchPlaceholder="Search agents..."
-            emptyText="No agent found."
+            emptyText={agents.length ? 'No matching agent.' : 'No agents are available to your account.'}
             linkTo={linkRoutes.agent}
           />
           <Err field="agent" />
@@ -540,7 +540,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
               placeholder={loading ? 'Loading...' : 'Choose a tool...'}
               disabled={loading}
               searchPlaceholder="Search tools..."
-              emptyText="No tool found."
+              emptyText={toolOptions.length ? 'No matching tool.' : 'No tools are available to your account.'}
             />
             <Err field="tool_id" />
           </div>
@@ -810,7 +810,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
         {approverType === 'role' && (
           <div>
             <Label htmlFor="approver-role" size="sm">Role</Label>
-            <Combobox id="approver-role" testId={f('approver_role')} options={roles} value={str(cfg.approver_role)} onValueChange={(v) => patch({ approver_role: v })} placeholder="Choose a role..." searchPlaceholder="Search roles..." emptyText="No role found." />
+            <Combobox id="approver-role" testId={f('approver_role')} options={roles} value={str(cfg.approver_role)} onValueChange={(v) => patch({ approver_role: v })} placeholder="Choose a role..." searchPlaceholder="Search roles..." emptyText={roles.length ? 'No matching role.' : 'No roles are available to choose from.'} />
             <Err field="approver_role" />
           </div>
         )}
