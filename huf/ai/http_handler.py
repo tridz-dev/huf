@@ -375,3 +375,111 @@ def handle_post_request(url, headers=None, data=None, json_data=None, tool_name=
 	return handle_http_request(
 		"POST", url, headers=headers, data=data, json_data=json_data, tool_name=tool_name
 	)
+
+
+HTTP_TOOL_NAME = "http_request"
+MAX_TOOL_BODY_CHARS = 64 * 1024  # 64KB returned to the Flow / agent
+_TOOL_HEADER_ALLOWLIST = {
+	"content-type", "content-length", "content-encoding", "location", "etag",
+	"last-modified", "cache-control", "retry-after", "date", "link",
+}
+
+
+def _coerce_mapping(value, label):
+	"""Accept a dict or a JSON-object string (Flow templates often yield strings)."""
+	if value in (None, ""):
+		return None, None
+	if isinstance(value, dict):
+		return value, None
+	if isinstance(value, str):
+		try:
+			parsed = json.loads(value)
+		except (json.JSONDecodeError, ValueError):
+			return None, f"{label} must be a JSON object"
+		if isinstance(parsed, dict):
+			return parsed, None
+	return None, f"{label} must be a JSON object"
+
+
+def http_request(url, method="GET", headers=None, body=None):
+	"""Built-in ``http_request`` tool: thin, safe wrapper over ``handle_http_request``.
+
+	Reuses its SSRF guard (public IPs only, http/https only), manual redirect
+	handling with per-hop re-validation, method allow-list, ``agent.use``
+	capability check and the 10MB streaming cap. The tool row has
+	``allowed_for_guest=0`` and the wrapper blocks Guest outright.
+
+	Returns a JSON string: ``success`` is True only for 2xx. Non-2xx and any
+	guard/transport failure yield ``success: false`` (with ``status_code`` /
+	``error``) so the Flow engine can mark the node failed.
+	"""
+	if frappe.session.user == "Guest":
+		return json.dumps({"success": False, "error": "Guest users cannot use http_request.", "status_code": 403})
+
+	if not url or not isinstance(url, str):
+		return json.dumps({"success": False, "error": "url is required"})
+
+	method = str(method or "GET").upper()
+	req_headers, err = _coerce_mapping(headers, "headers")
+	if err:
+		return json.dumps({"success": False, "error": err})
+
+	data = json_data = None
+	if body not in (None, ""):
+		if isinstance(body, (dict, list)):
+			json_data = body
+		elif isinstance(body, str):
+			try:
+				parsed = json.loads(body)
+			except (json.JSONDecodeError, ValueError):
+				parsed = None
+			if isinstance(parsed, (dict, list)):
+				json_data = parsed
+			else:
+				data = body
+		else:
+			data = str(body)
+
+	# Call the undecorated function: the rate limiter is keyed to web requests and
+	# this runs inside a worker. Guard behaviour is unchanged.
+	inner = getattr(handle_http_request, "__wrapped__", handle_http_request)
+	result = inner(
+		method,
+		url,
+		headers=req_headers,
+		data=data,
+		json_data=json_data,
+		tool_name=HTTP_TOOL_NAME,
+	)
+
+	if not isinstance(result, dict):
+		return json.dumps({"success": False, "error": "Unexpected response from HTTP handler"})
+
+	status = result.get("status_code")
+	if not result.get("success"):
+		out = {"success": False, "error": result.get("error") or "Request failed"}
+		if status is not None:
+			out["status_code"] = status
+		return json.dumps(out, default=str)
+
+	payload = result.get("data")
+	body_text = payload if isinstance(payload, str) else json.dumps(payload, default=str)
+	truncated = len(body_text) > MAX_TOOL_BODY_CHARS
+	if truncated:
+		body_text = body_text[:MAX_TOOL_BODY_CHARS]
+
+	resp_headers = {
+		k: v for k, v in (result.get("headers") or {}).items() if str(k).lower() in _TOOL_HEADER_ALLOWLIST
+	}
+	ok = isinstance(status, int) and 200 <= status < 300
+	out = {
+		"success": ok,
+		"status_code": status,
+		"headers": resp_headers,
+		"body": body_text,
+		"truncated": truncated,
+		"final_url": result.get("final_url"),
+	}
+	if not ok:
+		out["error"] = f"HTTP {status}"
+	return json.dumps(out, default=str)
