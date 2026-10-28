@@ -103,7 +103,7 @@ function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layoutRevis
           const fresh = getNodes().filter((n) => !before.has(n.id));
           if (fresh.length === 0 || width <= 0) return;
           // A card that has not been measured yet counts with the usual card size.
-          const rects = fresh.map((n) => ({ x: n.position.x, y: n.position.y, width: n.measured?.width ?? 236, height: n.measured?.height ?? 62 }));
+          const rects = fresh.map((n) => ({ x: n.position.x, y: n.position.y, width: n.width ?? 236, height: n.height ?? 62 }));
           const left = Math.min(...rects.map((r) => r.x));
           const top = Math.min(...rects.map((r) => r.y));
           const bounds = { x: left, y: top, width: Math.max(...rects.map((r) => r.x + r.width)) - left, height: Math.max(...rects.map((r) => r.y + r.height)) - top };
