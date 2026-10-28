@@ -17,9 +17,9 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
     const [runs, setRuns] = useState<FlowRunSummary[]>([]);
     const [loading, setLoading] = useState(false);
 
-    const fetchRuns = async () => {
+    const fetchRuns = async (silent = false) => {
         if (!flowId) return;
-        setLoading(true);
+        if (!silent) setLoading(true);
         try {
             const data = await flowService.listFlowRuns(flowId);
             setRuns(data || []);
@@ -36,17 +36,12 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
         }
     }, [open, flowId]);
 
-    // Live updates (socket) are not always available: poll while any run is still queued or running.
-    const hasActiveRun = runs.some((r) => r.status === 'Queued' || r.status === 'Running');
+    // Live updates (socket) are not always available: poll while any run is unfinished (queued, running or waiting,
+    // e.g. for an approval that is answered or times out elsewhere).
+    const hasActiveRun = runs.some((r) => !['Success', 'Failed', 'Cancelled'].includes(r.status));
     useEffect(() => {
         if (!open || !hasActiveRun) return;
-        const timer = setInterval(async () => {
-            try {
-                setRuns((await flowService.listFlowRuns(flowId)) || []);
-            } catch (err) {
-                console.error(err);
-            }
-        }, 2000);
+        const timer = setInterval(() => fetchRuns(true), 3000);
         return () => clearInterval(timer);
     }, [open, flowId, hasActiveRun]);
 
@@ -59,7 +54,7 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
                             <PlayCircle className="w-5 h-5 text-muted-foreground" />
                             Run history
                         </SheetTitle>
-                        <Button variant="ghost" size="icon" data-testid="flow-run-history-refresh" onClick={fetchRuns} disabled={loading} title="Refresh">
+                        <Button variant="ghost" size="icon" data-testid="flow-run-history-refresh" onClick={() => fetchRuns()} disabled={loading} title="Refresh">
                             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                         </Button>
                     </div>

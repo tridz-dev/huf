@@ -65,7 +65,7 @@ export function ApprovalsBell() {
   const count = approvals.length;
 
   return (
-    <Popover>
+    <Popover onOpenChange={(open) => { if (open) void fetchApprovals(); }}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative" aria-label="Pending approvals" data-testid="flow-approvals-bell">
           <Bell className="w-4 h-4" />
