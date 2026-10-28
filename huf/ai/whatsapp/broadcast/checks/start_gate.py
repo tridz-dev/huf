@@ -69,6 +69,23 @@ def check_preview(preview: dict[str, Any], deferred: int, acknowledged: list[str
 	return current
 
 
+def check_concurrency(gateway: str, broadcast: str) -> None:
+	"""Refuse a start when the gateway already runs its allowed number of broadcasts.
+
+	Call with the Gateway row locked; uses locking reads so a start committed a moment ago is seen."""
+	cap = policy.concurrency_cap()
+	if cap is None:
+		return
+	others = broadcast_limits._running_others(gateway, broadcast, locked=True)
+	if len(others) >= cap:
+		raise StartRefused(
+			"another_broadcast_running",
+			_("{0} broadcast(s) are already running on this Gateway ({1}); the limit is {2}").format(
+				len(others), ", ".join(others), cap
+			),
+		)
+
+
 def _hold_until(gateway: str | None):
 	"""When the next 24h slot opens: the oldest counted send plus the window, else now plus the window."""
 	hours = int(policy.get("over_budget_hold_hours"))
@@ -162,7 +179,7 @@ def recheck_locked(broadcast, preview, *, resuming, override_warnings, expected_
 			),
 			queued=counted,
 		)
-	preview = broadcast_limits.preview(broadcast) or preview
+	preview = broadcast_limits.preview(broadcast, locked=True) or preview  # sees other starts' commits
 	deferred = int(frappe.db.count(RECIPIENT, {"broadcast": broadcast, "status": "deferred"}) or 0)
 	acknowledged = check_preview(preview, deferred, None if resuming else (override_warnings or []))
 	issues = audience_check.purpose_issues(broadcast, preview.get("category"))

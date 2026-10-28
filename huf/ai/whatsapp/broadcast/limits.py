@@ -174,30 +174,49 @@ def _queued_numbers(broadcast: str) -> list[str]:
 	return [str(r[0] or "") for r in rows]
 
 
-def _running_others(gateway: str, broadcast: str) -> list[str]:
+def _running_others(gateway: str, broadcast: str, locked: bool = False) -> list[str]:
+	"""Other Running broadcasts on the gateway; ``locked`` = locking read (sees just-committed starts)."""
 	rows = frappe.db.sql(
 		"select name from `tabWhatsApp Broadcast` "
-		"where gateway=%s and status='Running' and name!=%s order by name",
+		"where gateway=%s and status='Running' and name!=%s order by name" + (" for update" if locked else ""),
 		(gateway, broadcast),
 	)
 	return [str(r[0]) for r in rows]
 
 
-def _used_24h(gateway: str) -> int:
-	"""Unique recipients already started in the last 24h by ANY broadcast on this gateway."""
-	cutoff = add_to_date(now_datetime(), hours=-24)
+def _used_24h(gateway: str, broadcast: str | None = None, others: list[str] | None = None) -> int:
+	"""Unique recipients that count against the gateway's 24h budget.
+
+	Counted: started in the last 24h by ANY broadcast on the gateway. Reserved: recipients still
+	waiting (queued, or deferred for retry) in the OTHER Running broadcasts ``others``, so two
+	concurrent broadcasts cannot both claim the same remaining budget. Rows held for the next
+	window (``next_attempt_at`` in the future) reserve nothing. One recipient counts once."""
+	now = now_datetime()
+	params: dict[str, Any] = {"gateway": gateway, "cutoff": add_to_date(now, hours=-24), "now": now}
+	reserved = ""
+	if others:
+		marks = ",".join(f"%(o{i})s" for i in range(len(others)))
+		params.update({f"o{i}": name for i, name in enumerate(others)})
+		reserved = (
+			"union select r.recipient from `tabWhatsApp Broadcast Recipient` r "
+			f"where r.broadcast in ({marks}) and (r.status = 'deferred' or "
+			"(r.status = 'queued' and (r.next_attempt_at is null or r.next_attempt_at <= %(now)s)))"
+		)
 	row = frappe.db.sql(
-		"""
-		select count(distinct r.recipient)
-		from `tabWhatsApp Broadcast Recipient` r
-		join `tabWhatsApp Broadcast` b on b.name = r.broadcast
-		where b.gateway = %(gateway)s
-		  and (
-		    (r.status in ('sent','delivered','read','unknown') and r.sent_at >= %(cutoff)s)
-		    or (r.status = 'sending' and r.modified >= %(cutoff)s)
-		  )
+		f"""
+		select count(*) from (
+		  select r.recipient
+		  from `tabWhatsApp Broadcast Recipient` r
+		  join `tabWhatsApp Broadcast` b on b.name = r.broadcast
+		  where b.gateway = %(gateway)s
+		    and (
+		      (r.status in ('sent','delivered','read','unknown') and r.sent_at >= %(cutoff)s)
+		      or (r.status = 'sending' and r.modified >= %(cutoff)s)
+		    )
+		  {reserved}
+		) u
 		""",
-		{"gateway": gateway, "cutoff": cutoff},
+		params,
 	)
 	return int(row[0][0]) if row else 0
 
@@ -280,7 +299,7 @@ def _check_params(b: dict[str, Any], broadcast: str, blocking: list[dict[str, An
 		blocking.append(_issue("missing_params", f"{n_invalid} recipients have invalid template values: {uniq(invalid)}"))
 
 
-def _fill(broadcast: str, out: dict[str, Any]) -> None:
+def _fill(broadcast: str, out: dict[str, Any], locked: bool = False) -> None:
 	b = _broadcast_row(broadcast)
 	if not b:
 		out["blocking"].append(_issue("broadcast_not_found", "This broadcast does not exist."))
@@ -339,19 +358,23 @@ def _fill(broadcast: str, out: dict[str, Any]) -> None:
 	if reason:
 		blocking.append(_issue("gateway_disconnected", reason))
 
-	others = _running_others(gateway, broadcast)
-	if policy.get("one_active_per_gateway"):
-		in_effect.add("one_active_per_gateway")
-		if others:
-			blocking.append(_issue(
-				"another_broadcast_running",
-				"Another broadcast is already sending from this gateway: " + ", ".join(others),
-				"one_active_per_gateway",
-			))
+	others = _running_others(gateway, broadcast, locked)
+	cap = policy.concurrency_cap()
+	key = "one_active_per_gateway" if policy.get("one_active_per_gateway") else "concurrent_broadcast_max"
+	if cap is not None:
+		in_effect.add(key)
+	if cap is not None and len(others) >= cap:
+		blocking.append(_issue(
+			"another_broadcast_running",
+			("Another broadcast is already sending from this gateway: " if cap == 1
+				else f"This gateway already runs {len(others)} broadcasts (limit {cap}): ") + ", ".join(others),
+			key,
+		))
 	elif others:
 		warnings.append(_issue(
 			"other_broadcast_running",
-			"Other broadcasts are sending from this gateway at the same time: " + ", ".join(others),
+			"Other broadcasts are sending from this gateway at the same time and share its sending speed: "
+			+ ", ".join(others),
 			"one_active_per_gateway",
 		))
 
@@ -379,7 +402,7 @@ def _fill(broadcast: str, out: dict[str, Any]) -> None:
 		))
 	else:
 		in_effect.add("messaging_tier_24h")
-		remaining = max(limit["max_unique_24h"] - _used_24h(gateway), 0)
+		remaining = max(limit["max_unique_24h"] - _used_24h(gateway, broadcast, others), 0)
 		out["remaining_24h"] = remaining
 		out["within_limit"] = out["queued"] <= remaining
 		if not out["within_limit"]:
@@ -392,7 +415,7 @@ def _fill(broadcast: str, out: dict[str, Any]) -> None:
 	out["limits_in_effect"] = sorted(in_effect)
 
 
-def preview(broadcast: str) -> dict[str, Any]:
+def preview(broadcast: str, locked: bool = False) -> dict[str, Any]:
 	"""Pre-start check of a Broadcast. Never raises; unexpected errors become a blocking entry."""
 	out: dict[str, Any] = {
 		"recipients": 0,
@@ -407,7 +430,7 @@ def preview(broadcast: str) -> dict[str, Any]:
 		"limits_in_effect": [],
 	}
 	try:
-		_fill(broadcast or "", out)
+		_fill(broadcast or "", out, locked)
 	except Exception as exc:  # noqa: BLE001 - class name only
 		frappe.logger(LOGGER).warning("broadcast preview failed (%s)", type(exc).__name__)
 		out["blocking"].append(_issue("preview_failed", "The pre-start check failed; try again."))

@@ -26,6 +26,7 @@
   "min_held_sample",
   "section_safety",
   "one_active_per_gateway",
+  "concurrent_broadcast_max",
   "section_confirmation",
   "require_typed_count",
   "require_consent_attestation",
@@ -186,7 +187,13 @@
    "label": "One running broadcast per gateway",
    "fieldtype": "Select",
    "options": "\nOn\nOff",
-   "description": "Only one broadcast sends from a gateway at a time. Leave blank to use the default (True)."
+   "description": "On: only one broadcast sends from a gateway at a time. Off: broadcasts run side by side and share the gateway's sending speed and its 24-hour contact budget. Leave blank to use the default (True)."
+  },
+  {
+   "fieldname": "concurrent_broadcast_max",
+   "label": "Most broadcasts running at once",
+   "fieldtype": "Int",
+   "description": "Only used when one running broadcast per gateway is off. Blank or 0 = no limit. Otherwise 2 to 50."
   },
   {
    "fieldname": "section_confirmation",

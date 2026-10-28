@@ -39,7 +39,8 @@ A blank setting uses the default. For the two recipient caps, `0` means no limit
 | `held_ratio_limit` | Held-message ratio that slows sending | Safety | 0.3 | 0.01 to 1 | ratio | Share of recent sends held by Meta before sending slows. |
 | `held_window` | Held-message window | Safety | 50 | 10 to 500 | messages | How many recent sends are examined. |
 | `min_held_sample` | Minimum sample before slowing | Safety | 10 | 1 to 100 | messages | Avoids slowing on one held message out of two. |
-| `one_active_per_gateway` | One running broadcast per gateway | Safety | on | - | - | Only one broadcast sends from a gateway at a time. |
+| `one_active_per_gateway` | One running broadcast per gateway | Safety | on | - | - | On: only one broadcast sends from a gateway at a time. Off: broadcasts run side by side and share the gateway's sending speed and its 24-hour contact budget. |
+| `concurrent_broadcast_max` | Most broadcasts running at once | Safety | - | 2 to 50 | broadcasts | Only used when one running broadcast per gateway is off. Blank or 0 = no limit. |
 | `require_typed_count` | Type the recipient count to start | Safety | on | - | - | The start step asks for the queued count (callers using API keys skip the typing). |
 | `require_consent_attestation` | Require consent confirmation | Safety | on | - | - | Meta requires opt-in for business-initiated messages; this box is Huf's record of it. |
 | `tick_timeout` | Worker job timeout | Internal | 1800 | - | seconds | - |
