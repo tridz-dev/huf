@@ -31,7 +31,7 @@ Not implemented:
 - Scheduling a start time.
 - Groups and free-form messages. Broadcasts send templates only.
 - Cost in the preview while no rates are filled in (section 8).
-- A shared sending-speed budget across broadcasts of one gateway. By default only one broadcast runs per gateway; the `one_active_per_gateway` safety can be switched off, in which case broadcasts run side by side with no shared pacing (section 14).
+- A shared sending-speed budget across broadcasts of one gateway. By default only one broadcast runs per gateway; the `one_active_per_gateway` safety can be switched off (optionally capped by `concurrent_broadcast_max`), in which case broadcasts run side by side and share the gateway's sending speed and 24-hour contact budget (section 14).
 
 ## 2. Consent and recipient intake
 
@@ -181,7 +181,7 @@ Warnings (overridable: the operator acknowledges each code at start):
 | `quality_yellow` | Number quality is YELLOW. |
 | `over_budget` | Queued recipients exceed `remaining_24h`. Continuing sends the first `remaining_24h` now and holds the rest for 24 hours (section 14). |
 | `tier_unknown` | The tier could not be read; the budget was not checked. |
-| `other_broadcast_running` | Other broadcasts are sending from the gateway; only when `one_active_per_gateway` is off. |
+| `other_broadcast_running` | Other broadcasts are sending from the gateway and share its sending speed; only when `one_active_per_gateway` is off. |
 | `us_plus_one_marketing` | MARKETING template and queued US `+1` numbers. Intake already skips those, so this appears only for rows queued before the template's category became MARKETING. |
 
 The earlier free-text blocking strings (`recipients_exceed_24h_budget:...`, `quality_red`, `template_not_found`, ...) no longer exist.
@@ -309,7 +309,8 @@ The code works without these, but they should be confirmed against Meta before r
 - **`unknown` rows are never auto-resent.** A `sent`, `delivered` or `read` webhook moves them forward.
 - **STOP keyword, `user_preferences` marketing stop and send-time 131050 all skip the contact's `queued` and `deferred` rows** in other unfinished broadcasts of the gateway. A 131050 arriving by status webhook also records the marketing stop and skips them.
 - **A template that is paused, disabled, rejected, quality RED, or whose category changes to MARKETING pauses running broadcasts** that use it, until someone resumes. Resume re-runs the start checks.
-- **One Running broadcast per gateway** by default (`one_active_per_gateway`, a safety). Switching it off has no shared speed budget between broadcasts; that coordination is not implemented.
+- **One Running broadcast per gateway** by default (`one_active_per_gateway`, a safety). On: one broadcast sends from a gateway at a time. Off: broadcasts run side by side, share the gateway's sending speed through one limiter, and share its 24-hour contact budget. `concurrent_broadcast_max` (2 to 50, blank or 0 = no limit) caps how many run at once when the safety is off; over the cap the start is refused with `another_broadcast_running`.
+- **Concurrent broadcasts.** The sum of all broadcasts' sends from a gateway never exceeds the gateway rate (Meta's reported throughput, or `max_mps_cap`), and concurrent ticks take turns so none is starved. If the cache is unavailable each broadcast falls back to its own pacing. When a start works out the remaining 24-hour budget it counts recipients still waiting in the gateway's other Running broadcasts as already used, so a second start sees `over_budget` and holds the rest.
 - **135000 pauses conservatively** (section 11).
 - **Tier unknown means no budget check** (warning `tier_unknown`).
 - **Resume does not defer over-budget rows.** Only `start_broadcast` applies the deferral; a resumed broadcast is not checked against the budget as a block or a warning to acknowledge.
