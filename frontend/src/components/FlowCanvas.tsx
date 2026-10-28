@@ -601,16 +601,26 @@ export function FlowCanvas({
   // (i.e. every node with no outgoing edge). Purely a render-time affordance —
   // it is never written back to the flow's nodes/edges via updateNodesAndEdges.
   const ghostNodes = useMemo<Node<AddStepGhostNodeData>[]>(() => {
-    return openEnds.map((end) => ({
-      id: `ghost-${end.nodeId}-${end.route}`,
-      type: 'addStep',
-      position: { x: end.position.x + end.offset, y: end.position.y + 150 },
-      draggable: false,
-      selectable: false,
-      connectable: false,
-      data: { sourceNodeId: end.nodeId, route: end.route, branchLabel: end.label, onAddNode: handleAddNode }
-    }));
-  }, [openEnds, handleAddNode]);
+    // A leaf whose step below is not connected to it would draw its "Add step" card on top of that step:
+    // slide the card sideways until the spot is free.
+    const taken: Array<{ x: number; y: number }> = nodes.map((n) => n.position);
+    return openEnds.map((end) => {
+      let x = end.position.x + end.offset;
+      const y = end.position.y + 150;
+      let guard = 0;
+      while (taken.some((p) => Math.abs(p.x - x) < 250 && Math.abs(p.y - y) < 90) && guard++ < 8) x += 280;
+      taken.push({ x, y });
+      return {
+        id: `ghost-${end.nodeId}-${end.route}`,
+        type: 'addStep',
+        position: { x, y },
+        draggable: false,
+        selectable: false,
+        connectable: false,
+        data: { sourceNodeId: end.nodeId, route: end.route, branchLabel: end.label, onAddNode: handleAddNode }
+      };
+    });
+  }, [openEnds, nodes, handleAddNode]);
 
   const ghostEdges = useMemo<Edge[]>(
     () =>
