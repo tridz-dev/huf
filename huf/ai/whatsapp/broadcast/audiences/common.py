@@ -11,6 +11,7 @@ from typing import Any
 import frappe
 from frappe.utils import cint, strip_html_tags
 
+from huf.ai.whatsapp.broadcast import policy
 from huf.ai.whatsapp.broadcast.audiences import membership as aud
 from huf.ai.whatsapp.management import _error, _iso, _parse_json_arg
 
@@ -82,5 +83,5 @@ def _flag(value: Any) -> bool:
 
 
 def _page(limit: Any) -> int:
-	return min(max(cint(limit) or 50, 1), aud.LIMIT_PAGE_SIZE_MAX)
+	return min(max(cint(limit) or 50, 1), policy.get("audience_page_size_max"))
 

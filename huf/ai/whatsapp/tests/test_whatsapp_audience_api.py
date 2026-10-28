@@ -8,12 +8,19 @@ from unittest.mock import patch
 
 import frappe
 
+from huf.ai.whatsapp.broadcast import policy
 from huf.ai.whatsapp.broadcast.audiences import membership as aud
 from huf.ai.whatsapp.broadcast.audiences import api
 from huf.ai.whatsapp.broadcast.audiences import importer as imp
 
 GW = "GW-AUD-TEST"
 BCAST = "WhatsApp Broadcast"
+
+
+def _limits(**overrides):
+	"""Patch ``policy.get`` so the named limits take the given values; the rest keep their effective value."""
+	real = policy.get
+	return patch.object(policy, "get", side_effect=lambda key, broadcast=None: overrides.get(key, real(key, broadcast)))
 
 
 def _import(audience, **kw):
@@ -169,7 +176,7 @@ class TestImport(AudienceTestCase):
 
 	def test_oversized_csv_refused(self):
 		name = self.make()
-		with patch.object(aud, "LIMIT_MAX_CSV_BYTES", 10):
+		with _limits(audience_max_csv_mb=10 / (1024 * 1024)):
 			self.assertEqual(_import(name, csv_text="phone\n447700900123\n")["error"], "csv_too_large")
 
 	def test_on_conflict_skip_update_fail(self):
@@ -189,14 +196,14 @@ class TestImport(AudienceTestCase):
 
 	def test_audience_member_limit(self):
 		name = self.make()
-		with patch.object(aud, "LIMIT_MAX_MEMBERS_PER_AUDIENCE", 1):
+		with _limits(audience_max_members=1):
 			out = _import(name, rows=[{"phone": "447700900123"}, {"phone": "447700900124"}])
 		self.assertEqual((out["added"], out["skipped"][0]["reason"]), (1, "audience_full"))
 
 	def test_large_import_is_queued_and_job_reports_progress(self):
 		name = self.make()
 		rows = [{"phone": f"4477009{i:05d}", "tags": "bulk"} for i in range(30)]
-		with patch.object(aud, "LIMIT_INLINE_IMPORT_ROWS", 10), patch.object(api.frappe, "enqueue") as enqueue:
+		with _limits(audience_inline_import_rows=10), patch.object(api.frappe, "enqueue") as enqueue:
 			out = _import(name, rows=rows)
 		self.assertTrue(out["queued"])
 		self.assertEqual(self.members(name), [])  # nothing written in the request
@@ -204,7 +211,7 @@ class TestImport(AudienceTestCase):
 		self.assertEqual(enqueue.call_args.args[0], "huf.ai.whatsapp.broadcast.audiences.importer.run_import_job")
 		self.assertEqual(imp.get_job_state(out["job_id"])["status"], "queued")
 		events = []
-		with patch.object(imp.frappe.db, "commit"), patch.object(aud, "IMPORT_CHUNK", 10), \
+		with patch.object(imp.frappe.db, "commit"), _limits(audience_import_chunk=10), \
 				patch.object(aud.frappe, "publish_realtime", side_effect=lambda *a, **k: events.append(a)), \
 				patch("huf.ai.whatsapp.broadcast.progress.THROTTLE_SECONDS", 0):
 			imp.run_import_job(**{k: kwargs[k] for k in ("audience", "rows", "on_conflict", "job_id", "user")})
@@ -218,7 +225,7 @@ class TestImport(AudienceTestCase):
 
 	def test_import_over_row_limit_refused(self):
 		name = self.make()
-		with patch.object(aud, "LIMIT_MAX_IMPORT_ROWS", 2):
+		with _limits(audience_max_import_rows=2):
 			self.assertEqual(_import(name, rows=[{"phone": "447700900123"}] * 3)["error"], "too_many")
 
 

@@ -17,6 +17,7 @@ from frappe import _
 from frappe.rate_limiter import rate_limit
 from frappe.utils import cint, get_datetime, now_datetime
 
+from huf.ai.whatsapp.broadcast import policy
 from huf.ai.whatsapp.broadcast.audiences import membership as aud
 from huf.ai.whatsapp.broadcast import recipients as broadcast_recipients
 from huf.ai.whatsapp.broadcast.audiences import csv_map as audience_csv
@@ -43,11 +44,6 @@ from huf.ai.whatsapp.management import (
 # Rate limits (calls per RATE_SECONDS). WP-A's policy.py is not on this branch yet; the coordinator
 # rewires these to the per-endpoint API limits in policy.
 RATE_SECONDS = 60
-RATE_LIMIT_WRITE = 60
-RATE_LIMIT_IMPORT = 20
-RATE_LIMIT_READ = 240
-REQUIRE_CONSENT_ATTESTATION = True  # Huf's own record of consent (Meta requires opt-in for business-initiated messages)
-MAX_SELECTION_ITEMS = 25
 
 _ON_CONFLICT = ("skip", "update", "fail")
 
@@ -98,7 +94,7 @@ def _require_gateway(gateway: Any, write: bool) -> dict[str, Any] | None:
 
 # --- audiences -------------------------------------------------------------------------------------
 @frappe.whitelist(methods=["POST"])
-@rate_limit(limit=RATE_LIMIT_WRITE, seconds=RATE_SECONDS)
+@rate_limit(limit=policy.rate("rate_audience_write"), seconds=RATE_SECONDS)
 @_bridge_guard
 @_guard
 def create_audience(
@@ -119,7 +115,7 @@ def create_audience(
 	purposes = _parse_purposes(consent_purposes)
 	if not purposes:
 		return _error("purposes_required", "Choose what these contacts agreed to receive.")
-	if REQUIRE_CONSENT_ATTESTATION and not _flag(consent_attested):
+	if policy.get("require_consent_attestation") and not _flag(consent_attested):
 		return _error("consent_not_attested", "Confirm that these contacts agreed to receive your messages.")
 	if default_consent_at:
 		try:
@@ -148,7 +144,7 @@ def create_audience(
 
 
 @frappe.whitelist(methods=["POST"])
-@rate_limit(limit=RATE_LIMIT_WRITE, seconds=RATE_SECONDS)
+@rate_limit(limit=policy.rate("rate_audience_write"), seconds=RATE_SECONDS)
 @_bridge_guard
 @_guard
 def update_audience(
@@ -185,7 +181,7 @@ def update_audience(
 
 
 @frappe.whitelist(methods=["POST"])
-@rate_limit(limit=RATE_LIMIT_WRITE, seconds=RATE_SECONDS)
+@rate_limit(limit=policy.rate("rate_audience_write"), seconds=RATE_SECONDS)
 @_bridge_guard
 @_guard
 def delete_audience(audience: str | None = None) -> dict[str, Any]:
@@ -207,7 +203,7 @@ def delete_audience(audience: str | None = None) -> dict[str, Any]:
 
 
 @frappe.whitelist()
-@rate_limit(limit=RATE_LIMIT_READ, seconds=RATE_SECONDS)
+@rate_limit(limit=policy.rate("rate_audience_read"), seconds=RATE_SECONDS)
 @_bridge_guard
 @_guard
 def list_audiences(
@@ -238,7 +234,7 @@ def list_audiences(
 
 
 @frappe.whitelist()
-@rate_limit(limit=RATE_LIMIT_READ, seconds=RATE_SECONDS)
+@rate_limit(limit=policy.rate("rate_audience_read"), seconds=RATE_SECONDS)
 @_bridge_guard
 @_guard
 def get_audience(audience: str | None = None) -> dict[str, Any]:
@@ -258,7 +254,7 @@ def get_audience(audience: str | None = None) -> dict[str, Any]:
 
 # --- members ---------------------------------------------------------------------------------------
 @frappe.whitelist(methods=["POST"])
-@rate_limit(limit=RATE_LIMIT_IMPORT, seconds=RATE_SECONDS)
+@rate_limit(limit=policy.rate("rate_audience_import"), seconds=RATE_SECONDS)
 @_bridge_guard
 @_guard
 def import_members(
@@ -276,7 +272,7 @@ def import_members(
 	the template body values in order. ``on_conflict``: ``skip`` (keep existing), ``update`` (overwrite
 	provided fields, merge tags) or ``fail`` (write nothing when any contact already exists).
 
-	Up to ``LIMIT_INLINE_IMPORT_ROWS`` rows are imported in the request and the totals returned. Larger
+	Up to ``audience_inline_import_rows`` rows are imported in the request and the totals returned. Larger
 	files run as a background job: the result has ``queued: true`` and a ``job_id`` for
 	:func:`get_import_status`.
 	"""
@@ -295,7 +291,7 @@ def import_members(
 		clashes = [r["recipient"] for r in mapped if broadcast_recipients.normalize_recipient(r.get("recipient")) in existing]
 		if clashes:
 			return {**_error("conflicts", "Some contacts are already in this audience."), "conflicts": clashes[:50]}
-	if len(mapped) > aud.LIMIT_INLINE_IMPORT_ROWS:
+	if len(mapped) > policy.get("audience_inline_import_rows"):
 		job_id = frappe.generate_hash(length=16)
 		audience_import.set_job_state(job_id, {"job_id": job_id, "audience": audience, "status": "queued", "processed": 0, "total": len(mapped)})
 		frappe.enqueue(
@@ -317,7 +313,7 @@ def import_members(
 
 
 @frappe.whitelist()
-@rate_limit(limit=RATE_LIMIT_READ, seconds=RATE_SECONDS)
+@rate_limit(limit=policy.rate("rate_audience_read"), seconds=RATE_SECONDS)
 @_bridge_guard
 @_guard
 def get_import_status(job_id: str | None = None, audience: str | None = None) -> dict[str, Any]:
@@ -332,7 +328,7 @@ def get_import_status(job_id: str | None = None, audience: str | None = None) ->
 
 
 @frappe.whitelist(methods=["POST"])
-@rate_limit(limit=RATE_LIMIT_WRITE, seconds=RATE_SECONDS)
+@rate_limit(limit=policy.rate("rate_audience_write"), seconds=RATE_SECONDS)
 @_bridge_guard
 @_guard
 def remove_members(audience: str | None = None, recipients: Any = None) -> dict[str, Any]:
@@ -341,8 +337,9 @@ def remove_members(audience: str | None = None, recipients: Any = None) -> dict[
 	if row.get("error"):
 		return row
 	wanted = _parse_list(recipients, "recipients")
-	if len(wanted) > aud.LIMIT_MAX_REMOVE_PER_REQUEST:
-		return _error("too_many", f"Remove at most {aud.LIMIT_MAX_REMOVE_PER_REQUEST} contacts per request.")
+	max_remove = policy.get("audience_max_remove_per_request")
+	if len(wanted) > max_remove:
+		return _error("too_many", f"Remove at most {max_remove} contacts per request.")
 	phones = [p for p in (broadcast_recipients.normalize_recipient(r) for r in wanted) if p]
 	before = frappe.db.count(aud.MEMBER, {"audience": audience})
 	for i in range(0, len(phones), 1000):
@@ -354,7 +351,7 @@ def remove_members(audience: str | None = None, recipients: Any = None) -> dict[
 
 
 @frappe.whitelist()
-@rate_limit(limit=RATE_LIMIT_READ, seconds=RATE_SECONDS)
+@rate_limit(limit=policy.rate("rate_audience_read"), seconds=RATE_SECONDS)
 @_bridge_guard
 @_guard
 def list_members(
@@ -414,7 +411,7 @@ def list_members(
 
 # --- selection preview -----------------------------------------------------------------------------
 @frappe.whitelist()
-@rate_limit(limit=RATE_LIMIT_READ, seconds=RATE_SECONDS)
+@rate_limit(limit=policy.rate("rate_audience_read"), seconds=RATE_SECONDS)
 @_bridge_guard
 @_guard
 def preview_audience_selection(broadcast: str | None = None, selection: Any = None) -> dict[str, Any]:
@@ -462,8 +459,9 @@ def preview_audience_selection(broadcast: str | None = None, selection: Any = No
 
 def _parse_selection(selection: Any) -> list[dict]:
 	items = _parse_list(selection, "selection")
-	if len(items) > MAX_SELECTION_ITEMS:
-		raise ValueError(f"Pick at most {MAX_SELECTION_ITEMS} audiences.")
+	max_items = policy.get("audience_max_selection_items")
+	if len(items) > max_items:
+		raise ValueError(f"Pick at most {max_items} audiences.")
 	if not all(isinstance(i, dict) and i.get("audience") for i in items):
 		raise ValueError("Each pick needs an audience.")
 	return items

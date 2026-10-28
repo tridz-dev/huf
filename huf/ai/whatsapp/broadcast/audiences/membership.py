@@ -10,8 +10,7 @@ is read, never written, when a list is counted or expanded.
 :func:`expand_selection` is a pure function (include lists minus exclude lists, deduped by recipient, the
 first list wins for params and consent). Everything that touches the database is in the other functions.
 
-Limits in this module are module constants (``LIMIT_*``). WP-A's ``policy.py`` is not available in this
-branch yet; the coordinator rewires them to ``policy.get(...)``.
+Limits are read through ``policy.get(...)`` (group ``audiences`` in the limits registry).
 """
 
 from __future__ import annotations
@@ -25,26 +24,13 @@ import frappe
 from frappe.utils import cint
 
 from huf.ai.gateway_core.constants import ENTRY_STATE_OPTED_OUT
+from huf.ai.whatsapp.broadcast import policy
 
 AUDIENCE = "WhatsApp Audience"
 MEMBER = "WhatsApp Audience Member"
 BROADCAST = "WhatsApp Broadcast"
 BROADCAST_AUDIENCE = "WhatsApp Broadcast Audience"
 
-# --- limits (to be rewired to policy.get by the coordinator) ---------------------------------------
-LIMIT_MAX_MEMBERS_PER_AUDIENCE = 200000
-LIMIT_INLINE_IMPORT_ROWS = 10000  # imports above this run as a background job
-LIMIT_MAX_IMPORT_ROWS = 200000
-LIMIT_MAX_CSV_BYTES = 20 * 1024 * 1024
-LIMIT_MAX_TAGS_PER_MEMBER = 20
-LIMIT_MAX_TAG_LENGTH = 50
-LIMIT_MAX_NAME_LENGTH = 140
-LIMIT_MAX_REMOVE_PER_REQUEST = 10000
-LIMIT_PAGE_SIZE_MAX = 200
-RETURNED_LIST_LIMIT = 200
-IMPORT_CHUNK = 1000
-SUPPRESSION_CHUNK = 500
-IMPORT_JOB_TTL = 86400
 
 PURPOSES = ("marketing", "utility", "events")
 _PURPOSE_FIELD = {"marketing": "purpose_marketing", "utility": "purpose_utility", "events": "purpose_events"}
@@ -73,16 +59,18 @@ def normalize_tags(value: Any) -> list[str]:
 			value = _TAG_SPLIT.split(text)
 	if not isinstance(value, (list, tuple, set)):
 		raise ValueError("tags must be a list")
+	max_len = policy.get("audience_max_tag_length")
 	out: list[str] = []
 	for item in value:
 		tag = re.sub(r"\s+", " ", str(item or "")).strip().lower()
 		if not tag or tag in out:
 			continue
-		if len(tag) > LIMIT_MAX_TAG_LENGTH:
-			raise ValueError(f"tag too long (max {LIMIT_MAX_TAG_LENGTH} characters)")
+		if len(tag) > max_len:
+			raise ValueError(f"tag too long (max {max_len} characters)")
 		out.append(tag)
-	if len(out) > LIMIT_MAX_TAGS_PER_MEMBER:
-		raise ValueError(f"too many tags (max {LIMIT_MAX_TAGS_PER_MEMBER})")
+	max_tags = policy.get("audience_max_tags_per_member")
+	if len(out) > max_tags:
+		raise ValueError(f"too many tags (max {max_tags})")
 	return out
 
 
@@ -253,8 +241,9 @@ def suppression_map(gateway: str, recipients: Iterable[str], marketing: bool = T
 		return {}
 	out: dict[str, str] = {}
 	opted_state = ENTRY_STATE_OPTED_OUT
-	for i in range(0, len(items), SUPPRESSION_CHUNK):
-		chunk = items[i : i + SUPPRESSION_CHUNK]
+	step = policy.get("audience_suppression_chunk")
+	for i in range(0, len(items), step):
+		chunk = items[i : i + step]
 		for row in frappe.get_all(
 			"Gateway Access Entry",
 			filters={"gateway": gateway, "entry_type": "Sender", "external_id": ["in", chunk], "state": opted_state},

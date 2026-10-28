@@ -63,6 +63,19 @@ A blank setting uses the default. For the two recipient caps, `0` means no limit
 | `rate_pause_all` | Pause all broadcasts | Safety | 30 | 1 to 1000 | requests/min | Requests allowed per minute for this action, per caller address. |
 | `rate_limits_read` | Read limits | Safety | 120 | 1 to 1000 | requests/min | Requests allowed per minute for this action, per caller address. |
 | `rate_limits_write` | Change limits | Safety | 30 | 1 to 1000 | requests/min | Requests allowed per minute for this action, per caller address. |
-| `rate_audience_read` | Audience reads | Safety | 120 | 1 to 1000 | requests/min | Requests allowed per minute for this action, per caller address. |
+| `rate_audience_read` | Audience reads | Safety | 240 | 1 to 1000 | requests/min | Requests allowed per minute for this action, per caller address. |
 | `rate_audience_write` | Audience changes | Safety | 60 | 1 to 1000 | requests/min | Requests allowed per minute for this action, per caller address. |
-| `rate_audience_import` | Audience import | Safety | 10 | 1 to 1000 | requests/min | Requests allowed per minute for this action, per caller address. |
+| `rate_audience_import` | Audience import | Safety | 20 | 1 to 1000 | requests/min | Requests allowed per minute for this action, per caller address. |
+| `audience_max_members` | Contacts per audience | Huf setting | 200000 | 1 to 1e+07 | contacts | An audience stops accepting new contacts at this size. |
+| `audience_inline_import_rows` | Import size run immediately | Huf setting | 10000 | 1 to 1e+06 | rows | Larger imports run in the background. |
+| `audience_max_import_rows` | Contacts per import | Huf setting | 200000 | 1 to 1e+07 | rows | Most contacts one import may hold. |
+| `audience_max_csv_mb` | Audience CSV size | Huf setting | 20 | 1 to 200 | MB | Largest CSV text accepted for an audience import. |
+| `audience_max_tags_per_member` | Tags per contact | Huf setting | 20 | 1 to 100 | tags | Most tags one contact can carry. |
+| `audience_max_tag_length` | Tag length | Huf setting | 50 | 1 to 200 | characters | Longest tag accepted. |
+| `audience_max_name_length` | Contact name length | Huf setting | 140 | 1 to 140 | characters | Longer names are rejected on import. The stored name field holds 140 characters. |
+| `audience_max_remove_per_request` | Contacts removed per request | Huf setting | 10000 | 1 to 1e+06 | contacts | Most contacts one remove call accepts. |
+| `audience_page_size_max` | Audience page size | Huf setting | 200 | 10 to 1000 | rows | Largest page of members or audiences returned at once. |
+| `audience_max_selection_items` | Audiences per broadcast | Huf setting | 25 | 1 to 100 | audiences | Most audiences one broadcast selection may combine. |
+| `audience_import_chunk` | Import commit size | Internal | 1000 | - | rows | Rows written per database commit during an import. |
+| `audience_suppression_chunk` | Suppression lookup size | Internal | 500 | - | contacts | Contacts checked against opt-outs per query. |
+| `audience_import_job_ttl` | Import progress kept | Internal | 86400 | - | seconds | How long a finished import's progress stays readable. |

@@ -305,7 +305,7 @@ class TestApi(_Settings):
 		need = {"key", "label", "group", "kind", "value", "default", "effective", "source", "unit", "min", "max", "note", "editable"}
 		for row in rows:
 			self.assertTrue(need <= set(row), row["key"])
-			self.assertIn(row["group"], ("meta", "recipients", "speed", "safety", "quality", "confirmation", "api"))
+			self.assertIn(row["group"], ("meta", "recipients", "speed", "safety", "quality", "confirmation", "api", "audiences"))
 		by = {r["key"]: r for r in rows}
 		self.assertEqual(by["max_batch"]["effective"], 200)
 		self.assertEqual(by["max_batch"]["source"], "default")

@@ -32,7 +32,7 @@ class Limit:
 	label: str
 	default: Any
 	kind: str  # meta | setting | safety | internal
-	group: str  # meta | recipients | speed | safety | quality | confirmation | api
+	group: str  # meta | recipients | speed | safety | quality | confirmation | api | audiences
 	unit: str = ""
 	min: float | None = None
 	max: float | None = None
@@ -120,9 +120,23 @@ LIMITS: tuple[Limit, ...] = (
 	_rate("rate_pause_all", "Pause all broadcasts", 30),
 	_rate("rate_limits_read", "Read limits", 120),
 	_rate("rate_limits_write", "Change limits", 30),
-	_rate("rate_audience_read", "Audience reads", 120),
+	_rate("rate_audience_read", "Audience reads", 240),
 	_rate("rate_audience_write", "Audience changes", 60),
-	_rate("rate_audience_import", "Audience import", 10),
+	_rate("rate_audience_import", "Audience import", 20),
+	# ---- audiences (WP-B2): the audience backend's former hard-coded limits
+	Limit("audience_max_members", "Contacts per audience", 200000, "setting", "audiences", "contacts", 1, 10_000_000, "An audience stops accepting new contacts at this size."),
+	Limit("audience_inline_import_rows", "Import size run immediately", 10000, "setting", "audiences", "rows", 1, 1_000_000, "Larger imports run in the background."),
+	Limit("audience_max_import_rows", "Contacts per import", 200000, "setting", "audiences", "rows", 1, 10_000_000, "Most contacts one import may hold."),
+	Limit("audience_max_csv_mb", "Audience CSV size", 20, "setting", "audiences", "MB", 1, 200, "Largest CSV text accepted for an audience import."),
+	Limit("audience_max_tags_per_member", "Tags per contact", 20, "setting", "audiences", "tags", 1, 100, "Most tags one contact can carry."),
+	Limit("audience_max_tag_length", "Tag length", 50, "setting", "audiences", "characters", 1, 200, "Longest tag accepted."),
+	Limit("audience_max_name_length", "Contact name length", 140, "setting", "audiences", "characters", 1, 140, "Longer names are rejected on import. The stored name field holds 140 characters."),
+	Limit("audience_max_remove_per_request", "Contacts removed per request", 10000, "setting", "audiences", "contacts", 1, 1_000_000, "Most contacts one remove call accepts."),
+	Limit("audience_page_size_max", "Audience page size", 200, "setting", "audiences", "rows", 10, 1000, "Largest page of members or audiences returned at once."),
+	Limit("audience_max_selection_items", "Audiences per broadcast", 25, "setting", "audiences", "audiences", 1, 100, "Most audiences one broadcast selection may combine."),
+	Limit("audience_import_chunk", "Import commit size", 1000, "internal", "audiences", "rows", note="Rows written per database commit during an import."),
+	Limit("audience_suppression_chunk", "Suppression lookup size", 500, "internal", "audiences", "contacts", note="Contacts checked against opt-outs per query."),
+	Limit("audience_import_job_ttl", "Import progress kept", 86400, "internal", "audiences", "seconds", note="How long a finished import's progress stays readable."),
 )
 
 BY_KEY: dict[str, Limit] = {lim.key: lim for lim in LIMITS}
