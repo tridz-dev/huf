@@ -911,6 +911,9 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 		# another writer). Leave it exactly as it is (F-4).
 		return result
 
+	# Keep every step's output on the run (paused, failed or finished) so the Flow Run view can show them.
+	_persist_context(flow_run, _context_of(flow_run, settings), settings)
+
 	if result.status == ExecutionResult.PAUSED:
 		_publish_flow_event(
 			flow_run,
