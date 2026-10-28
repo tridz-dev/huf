@@ -11,6 +11,9 @@ import { requiredInputsFor } from './flowToolSchemas';
 import { edgeRoute } from '../services/flowSerializer';
 import type { FlowEdge } from '../types/flow.types';
 
+/** Id of the "Can't save yet" / "Finish setting up" toast, so the next edit or selection can dismiss it. */
+export const BLOCKED_TOAST_ID = 'flow-blocked';
+
 type Cfg = Record<string, unknown>;
 
 export interface NodeLike {

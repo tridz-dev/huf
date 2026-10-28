@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useFlowContext } from '../../contexts/FlowContext';
+import { availableReferences, type RefScope } from '../../lib/flowRefs';
 import { Button } from './button';
 import {
     DropdownMenu,
@@ -12,44 +13,44 @@ import {
 
 interface VariablePickerProps {
     /**
-     * Called with a reference path (`input`, `trigger`, or a step id) and a short name that is safe
-     * to use as a `{placeholder}` in a prompt.
+     * Called with a reference path (`input`, `trigger`, `foreach.item` or a step id) and a short name that is
+     * safe to use as a `{placeholder}` in a prompt or template.
      */
     onSelect: (reference: string, suggestedName: string) => void;
-    /** Step the field belongs to (excluded from the list: a step cannot read its own result). */
+    /** Step the field belongs to: only the trigger and steps that always run before it are listed. */
     currentNodeId?: string | null;
+    /** `loop-body`: the steps inside this loop (for a loop's "result to collect"). */
+    scope?: RefScope;
     testId?: string;
-}
-
-function toPlaceholder(label: string, fallback: string): string {
-    const cleaned = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-    return /^[a-z_]/.test(cleaned) ? cleaned : fallback;
+    /** Accessible name; defaults to "Insert data". */
+    label?: string;
 }
 
 /** Lets the user pick data from the trigger or an earlier step instead of typing a reference path. */
-export function VariablePicker({ onSelect, currentNodeId, testId = 'flow-variable-picker' }: VariablePickerProps) {
+export function VariablePicker({ onSelect, currentNodeId, scope = 'ancestors', testId = 'flow-variable-picker', label }: VariablePickerProps) {
     const { activeFlow } = useFlowContext();
 
-    const entries = useMemo(() => {
-        const list: Array<{ ref: string; label: string; name: string }> = [
-            { ref: 'input', label: 'Trigger input', name: 'input' },
-            { ref: 'trigger', label: 'Trigger details', name: 'trigger' },
-        ];
-        for (const node of activeFlow?.nodes ?? []) {
-            if (node.id === currentNodeId || node.data.nodeType !== 'action') continue;
-            list.push({ ref: node.id, label: `Result of "${node.data.label}"`, name: toPlaceholder(node.data.label, node.id) });
-        }
-        return list;
-    }, [activeFlow, currentNodeId]);
+    const entries = useMemo(
+        () => availableReferences(currentNodeId, activeFlow?.nodes ?? [], activeFlow?.edges ?? [], scope),
+        [activeFlow, currentNodeId, scope]
+    );
 
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" title="Insert data from an earlier step" data-testid={testId}>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs px-2.5"
+                    title="Insert data from the trigger or an earlier step"
+                    aria-label={label ?? 'Insert data'}
+                    data-testid={testId}
+                >
                     Insert data
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[220px] max-h-[300px] overflow-y-auto">
+            <DropdownMenuContent align="end" className="w-[240px] max-h-[300px] overflow-y-auto">
                 <DropdownMenuLabel className="text-xs">Data you can use</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {entries.map((e) => (

@@ -43,6 +43,8 @@ import { cn } from '@/lib/utils';
 import { actionHasConfiguredContent } from '../../lib/flowNodeConfigured';
 import { branchHandlesFor, ROUTER_HANDLE } from '../../lib/flowBranches';
 import { validateNode } from '../../lib/flowValidation';
+import { toolLabel } from '../../lib/flowIntegrations';
+import { NotConnected } from '../flow/NotConnected';
 
 const iconMap: Record<string, LucideIcon> = {
   Play,
@@ -76,6 +78,7 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
   const cfg = data.actionConfig as ({ type?: string } & Record<string, unknown>) | undefined;
   const handles = branchHandlesFor(cfg?.type, cfg);
   const isRouter = cfg?.type === 'router';
+  const toolId = cfg?.type === 'tool-call' && typeof cfg.tool_id === 'string' && cfg.tool_id ? cfg.tool_id : undefined;
   const statusClasses = getExecutionStatusClasses(data.status, selected, { unconfigured: incomplete.length > 0 });
 
   // Confirm only when the node has real config; a picked-but-blank node deletes
@@ -138,6 +141,12 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
             {data.description && (
               <div className="text-xs text-muted-foreground">{data.description}</div>
             )}
+            {toolId && toolLabel(toolId).toLowerCase() !== data.label.toLowerCase() && (
+              <div className="text-xs text-muted-foreground truncate" title={toolLabel(toolId)} data-testid={`flow-node-tool-${id}`}>
+                {toolLabel(toolId)}
+              </div>
+            )}
+            {toolId && <NotConnected toolId={toolId} compact testIdSuffix={`node-${id}`} />}
           </div>
         </div>
       </Card>
