@@ -102,3 +102,17 @@ Publishing a flow with unconnected integration steps shows a warning toast (`Som
 | `flow-run-dialog`, `flow-run-payload`, `flow-run-payload-error`, `flow-run-start`, `flow-run-cancel` | Run dialog (JSON input data) opened by the Run button and the list card Run action |
 | `disabled-reason` | Wrapper around a control disabled for a view-only user; hover/focus shows the explanation |
 | `connection-indicator` (`data-status` = connecting / connected / offline) | Header dot for the live-updates connection |
+
+## Connections, step removal, publish state (wp7)
+| Test id | Element |
+|---|---|
+| `flow-edge-line-<edgeId>` | The hit area of a connection (click it away from the + to select the line; it is highlighted) |
+| `flow-edge-remove-<edgeId>` | "Remove connection" button on the selected line |
+| `flow-edge-delete-dialog`, `flow-edge-delete-confirm` | Confirmation shown by that button and by the Delete key on a selected line |
+| `flow-edge-config` | Sidebar "Connection" panel of the selected line |
+| `flow-node-orphan-<nodeId>` | "Nothing leads to this step" on a step no trigger reaches |
+| `flow-delete-mode`, `flow-delete-mode-reconnect`, `flow-delete-mode-cascade` | Choice in the step delete dialog (`flow-node-delete-dialog`) when the step has a step after it: "Remove step and reconnect" (default) / "Remove step and everything after it" |
+| `flow-published-badge`, `flow-unpublish`, `flow-unpublish-dialog`, `flow-unpublish-confirm` | Published state in the header; Unpublish replaces Publish while the flow is published |
+| `flow-run-document`, `flow-run-document-doctype`, `-name`, `-event`, `-fields`, `flow-run-full-payload` | Data trigger run: "Document" summary and the collapsed "Full payload" (`flow-run-input` is inside it) |
+| `flow-doc-event-reset-note` | Message shown when changing the document type cleared an event that type cannot have |
+| `boot-fallback`, `app-error-screen`, `chunk-error-screen` | "Something went wrong / Reload" screens (entry script, app crash, page chunk) |
