@@ -30,6 +30,8 @@ const categoryOptions = [
   { label: 'Uncategorized', value: 'uncategorized' },
   { label: 'Automation', value: 'automation' },
   { label: 'Integration', value: 'integration' },
+  { label: 'Support', value: 'support' },
+  { label: 'Sales', value: 'sales' },
 ];
 
 function getStatusVariant(status: FlowMetadata['status']) {
@@ -71,9 +73,9 @@ function FlowListPage() {
           return {
             id: item.flow_id,
             name: def.flow_name || item.flow_name,
-            description: undefined,
+            description: def.description || undefined,
             status: mapBackendStatusToFrontend(def.status || item.status),
-            category: undefined,
+            category: def.category || 'Uncategorized',
             nodeCount: nodes.length || 0,
             createdAt: new Date(item.modified),
             updatedAt: new Date(item.modified),
@@ -82,9 +84,9 @@ function FlowListPage() {
           return {
             id: item.flow_id,
             name: item.flow_name,
-            description: undefined,
+            description: item.description || undefined,
             status: mapBackendStatusToFrontend(item.status),
-            category: undefined,
+            category: item.category || 'Uncategorized',
             nodeCount: 0,
             createdAt: new Date(item.modified),
             updatedAt: new Date(item.modified),

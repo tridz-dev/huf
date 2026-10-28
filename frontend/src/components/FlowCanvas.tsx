@@ -193,10 +193,15 @@ export function FlowCanvas({
       });
       if (realChanges.length === 0) return;
 
+      // Measurements and selection are view state, not edits. React Flow can emit them
+      // after the post-save re-sync guard has cleared, which flipped a just-saved flow
+      // back to "Unsaved", so only real edits (move, add, remove, replace) schedule a write.
+      const isEdit = realChanges.some((change) => change.type !== 'dimensions' && change.type !== 'select');
+
       setNodes((nds) => {
         const updatedNodes = applyNodeChanges(realChanges, nds);
         // Schedule context update (debounced)
-        if (!isSyncingFromProps.current) {
+        if (isEdit && !isSyncingFromProps.current) {
           scheduleContextUpdate(updatedNodes, undefined);
         }
         return updatedNodes;
