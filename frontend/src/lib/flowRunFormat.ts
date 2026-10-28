@@ -42,8 +42,8 @@ export function isFailedStepOutput(output: unknown): boolean {
     return o.status === 'failed' || o.success === false || (typeof o.error === 'string' && o.error !== '' && o.status !== 'success');
 }
 
-/** The output without the `status` / `error` keys a failed step card already shows as its reason. */
+/** The output without the `status` / `error` / `success: false` keys a failed step card already shows as its reason. */
 export function withoutFailureKeys(output: unknown): unknown {
     if (!output || typeof output !== 'object' || Array.isArray(output)) return output;
-    return Object.fromEntries(Object.entries(output as Record<string, unknown>).filter(([k]) => k !== 'status' && k !== 'error'));
+    return Object.fromEntries(Object.entries(output as Record<string, unknown>).filter(([k, v]) => k !== 'status' && k !== 'error' && !(k === 'success' && v === false)));
 }
