@@ -449,8 +449,7 @@ The example is valid with a classifier that marks `http_request` as an http tool
 1. **Execute Code**: `run_python` is registered by `huf/install.py` (type "Code Execution") but Flow runs have no Agent Execution
    Profile, so the runtime registry refuses it on every call and `list_flow_tools` deliberately hides it. The schema-correct mapping is
    `tool.call` + `tool_id: "run_python"`, but it cannot work in a Flow today. Either hide the card, or give Flows an execution profile.
-2. **HTTP Request**: no registry tool named for generic HTTP exists. Agent Tool Function types `GET`/`POST` exist (user-created, arbitrary names).
-   Needs a registered tool (this contract assumes the id `http_request`, with `input` `{url, method, headers, body}`) or a decision to use user tools.
+2. **HTTP Request**: resolved. Built-in tool `http_request` (App Provided, declared in `huf/ai/tools/_registry.py` `HTTP_TOOLS`, function `huf.ai.http_handler.http_request(url, method="GET", headers=None, body=None)`) matches the `input` contract `{url, method, headers, body}`. Returns a JSON string with `success` (true only for 2xx), `status_code`, `headers` subset, `body` (64KB cap), `truncated`.
 3. **Gateway / MCP binding**: the engine reads `config.mcp_server` and `config.gateway` on `tool.call`; the schema forbids them. The engine
    must resolve MCP tools by unique tool id (`find_unique_mcp_server_for_tool`). `FlowDefinition._validate_gateway_authority` is therefore dead for saved flows.
 4. **Backend consumers of the old names** (owned by other workers): `huf/ai/flow/api.py` `_webhook_key_is_valid`/`_webhook_entry_auth`
