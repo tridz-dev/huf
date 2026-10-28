@@ -66,6 +66,7 @@ export function ExecutionAnalyticsDashboard({ fromDate, granularity, listedRunCo
     <div>
       <GaugeRow className="rounded-none border-0">
         <MetricGauge
+          testId="executions-runs-tile"
           label="Runs"
           value={number.format(listedRunCount ?? summary.run_count)}
           info={listedRunCount !== undefined ? 'Runs in the list below' : `${summary.success_count} successful · ${summary.failed_count} failed`}

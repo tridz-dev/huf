@@ -13,6 +13,7 @@ export interface MetricGaugeProps {
   value: string | number;
   unit?: string;
   info?: string;
+  testId?: string;
 }
 
 export function MetricGauge({
@@ -21,9 +22,10 @@ export function MetricGauge({
   value,
   unit,
   info,
+  testId,
 }: MetricGaugeProps) {
   return (
-    <div className="px-[18px] py-4 min-w-0">
+    <div className="px-[18px] py-4 min-w-0" data-testid={testId}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="font-body text-[11px] font-medium text-steel-soft">
