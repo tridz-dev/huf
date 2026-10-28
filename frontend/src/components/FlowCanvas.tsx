@@ -12,7 +12,8 @@ import ReactFlow, {
   applyEdgeChanges,
   Node,
   Panel,
-  BackgroundVariant
+  BackgroundVariant,
+  useReactFlow
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { PanelLeftOpen, PanelRightOpen, Maximize2, Plus, Sparkles } from 'lucide-react';
@@ -49,6 +50,27 @@ import { actionLabel, triggerLabel } from '../lib/flowLabels';
 import { actionOptions } from '../data/actions';
 import { FlowNodeData, TriggerConfig, ActionConfig, FlowEdgeRoute } from '../types/flow.types';
 import type { ActionOption } from '../types/modal.types';
+
+/** Overview map: drag its rectangle or click anywhere on it to move the canvas there. */
+function FlowMiniMap() {
+  const { setCenter, getZoom } = useReactFlow();
+  return (
+    <MiniMap
+      position="top-left"
+      ariaLabel="Flow overview"
+      pannable
+      zoomable
+      onClick={(_event, position) => setCenter(position.x, position.y, { zoom: getZoom(), duration: 200 })}
+      nodeColor={(node) => {
+        if (node.type === 'trigger') return 'var(--primary)';
+        if (node.type === 'end') return 'var(--good)';
+        return 'var(--muted)';
+      }}
+      className="!bg-background !border-border"
+      style={{ width: 120, height: 80, borderRadius: 8, border: '1px solid var(--border)', boxShadow: '0 1px 3px color-mix(in srgb, var(--foreground) 12%, transparent)' }}
+    />
+  );
+}
 
 interface FlowCanvasProps {
   showLeftSidebar: boolean;
@@ -701,19 +723,7 @@ export function FlowCanvas({
         <Background variant={BackgroundVariant.Dots} gap={16} size={2} color="color-mix(in srgb, var(--muted-foreground) 35%, transparent)" />
         {/* showInteractive (lock toggle button) defaults to true, so it's already shown */}
         <Controls className="!bottom-6 !rounded-lg !border !border-line !overflow-hidden !shadow-sm" />
-        <MiniMap
-          position="top-left"
-          ariaLabel="Flow overview"
-          pannable
-          zoomable
-          nodeColor={(node) => {
-            if (node.type === 'trigger') return 'var(--primary)';
-            if (node.type === 'end') return 'var(--good)';
-            return 'var(--muted)';
-          }}
-          className="!bg-background !border-border"
-          style={{ width: 120, height: 80, borderRadius: 8, border: '1px solid var(--border)', boxShadow: '0 1px 3px color-mix(in srgb, var(--foreground) 12%, transparent)' }}
-        />
+        <FlowMiniMap />
         <Panel position="top-right" className="m-2">
           <div className="flex gap-2">
             {!nodes.some(n => n.data.nodeType === 'trigger') && (
