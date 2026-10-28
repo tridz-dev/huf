@@ -26,8 +26,8 @@ def http(monkeypatch, body):
 
 
 READ = [
-	("handle_list_channels", {}, {"ok": True, "channels": [{"id": "C1", "name": "g"}]}),
-	("handle_get_channel_history", {"channel": "C1"}, {"ok": True, "messages": [{"ts": "1", "text": "hi"}]}),
+	("handle_list_channels", {}, {"ok": True, "channels": [{"id": "C0123456789", "name": "g"}]}),
+	("handle_get_channel_history", {"channel": "C0123456789"}, {"ok": True, "messages": [{"ts": "1", "text": "hi"}]}),
 	("handle_list_users", {}, {"ok": True, "members": [{"id": "U1", "name": "a"}]}),
 ]
 
@@ -87,8 +87,8 @@ def test_search_works_with_user_token_and_both_flags(monkeypatch):
 
 
 @pytest.mark.parametrize("fn,args", [
-	("handle_send_message", {"channel": "C", "text": "t"}),
-	("handle_send_message_thread", {"channel": "C", "text": "t", "thread_ts": "1"}),
+	("handle_send_message", {"channel": "C0123456789", "text": "t"}),
+	("handle_send_message_thread", {"channel": "C0123456789", "text": "t", "thread_ts": "1"}),
 ])
 def test_send_refuses_user_token(monkeypatch, fn, args):
 	creds(monkeypatch, token=USER)
@@ -99,8 +99,8 @@ def test_send_refuses_user_token(monkeypatch, fn, args):
 
 
 @pytest.mark.parametrize("fn,args", [
-	("handle_send_message", {"channel": "C", "text": "t"}),
-	("handle_send_message_thread", {"channel": "C", "text": "t", "thread_ts": "1"}),
+	("handle_send_message", {"channel": "C0123456789", "text": "t"}),
+	("handle_send_message_thread", {"channel": "C0123456789", "text": "t", "thread_ts": "1"}),
 ])
 def test_send_bot_token_works_without_read_flag(monkeypatch, fn, args):
 	creds(monkeypatch)
@@ -112,11 +112,11 @@ def test_send_bot_token_works_without_read_flag(monkeypatch, fn, args):
 def test_send_user_token_allowed_with_flag(monkeypatch):
 	creds(monkeypatch, token=USER, allow_user_token="1")
 	http(monkeypatch, {"ok": True})
-	assert json.loads(slack.handle_send_message(channel="C", text="t"))["success"] is True
+	assert json.loads(slack.handle_send_message(channel="C0123456789", text="t"))["success"] is True
 
 
 def test_error_path_does_not_leak_token(monkeypatch):
 	creds(monkeypatch, allow_workspace_read="1")
 	http(monkeypatch, {"ok": False, "error": "channel_not_found"})
-	s = slack.handle_get_channel_history(channel="C1")
-	assert "channel_not_found" in s and BOT not in s
+	s = slack.handle_get_channel_history(channel="C0123456789")
+	assert "could not find that channel" in s and BOT not in s

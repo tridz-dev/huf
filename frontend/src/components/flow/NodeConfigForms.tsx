@@ -17,6 +17,7 @@ import { getFlowTools, type FlowTool } from '../../services/toolApi';
 import { getModels, getProviders } from '../../services/providerApi';
 import { isChatModel } from '@/lib/chatModel';
 import { NotConnected } from './NotConnected';
+import { SlackChannelPicker } from './SlackChannelPicker';
 import { ACTION_CARD_CONTRACT } from '../../data/actions';
 import { registerToolSchemas } from '@/lib/flowToolSchemas';
 import { TRANSFORM_OPS, getTransformOp } from '@/lib/flowTransformOps';
@@ -296,11 +297,11 @@ const PRESET_FIELDS: Record<string, Array<{ key: string; label: string; optional
     { key: 'body', label: 'Body' },
   ],
   slack_send_message: [
-    { key: 'channel', label: 'Channel', placeholder: 'C0123456789', hint: 'The channel ID: in Slack, open the channel, click its name, and copy the ID at the bottom. The bot must be invited to it.' },
+    { key: 'channel', label: 'Channel', placeholder: '#general', hint: 'The channel name (like #general) or ID. The bot must be invited to the channel.' },
     { key: 'text', label: 'Message' },
   ],
   slack_send_thread_reply: [
-    { key: 'channel', label: 'Channel', placeholder: 'C0123456789', hint: 'The channel ID: in Slack, open the channel, click its name, and copy the ID at the bottom.' },
+    { key: 'channel', label: 'Channel', placeholder: '#general', hint: 'The channel name (like #general) or ID. The bot must be invited to the channel.' },
     { key: 'thread_ts', label: 'Thread', placeholder: '1712345678.000100', hint: 'The timestamp of the first message in the thread: right-click it, then Copy link; it is the number after "p".' },
     { key: 'text', label: 'Message' },
   ],
@@ -581,6 +582,11 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
                 onChange={(v) => setInput(fld.key, v)}
               />
               <Err field={`input.${fld.key}`} />
+              {fld.key === 'channel' && toolId.startsWith('slack_send') && (
+                <div className="mt-2">
+                  <SlackChannelPicker value={str(input.channel)} onPick={(id) => setInput('channel', id)} />
+                </div>
+              )}
             </div>
           ))
         ) : toolId ? (

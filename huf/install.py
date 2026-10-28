@@ -1187,7 +1187,13 @@ def _adapter_required_credentials(provider_id, extra_fields=None):
 # (see huf/huf/doctype/gateway/gateway.py) and consumed by slack_events.py, not by
 # SlackGatewayAdapter itself, so it can't be discovered from credential_schema alone.
 _EXTRA_REQUIRED_CREDENTIALS = {
-	"slack": [{"key": "signing_secret", "label": "Slack Signing Secret", "required": True}],
+	# Optional: no Slack tool uses it; only needed to receive Slack events (Gateway still enforces it).
+	"slack": [{
+		"key": "signing_secret",
+		"label": "Slack Signing Secret",
+		"required": False,
+		"description": "Only needed to receive Slack events",
+	}],
 }
 
 

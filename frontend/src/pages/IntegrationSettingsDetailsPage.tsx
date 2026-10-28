@@ -445,7 +445,7 @@ export function IntegrationSettingsDetailsPage({
               </TabsContent>
 
               <TabsContent value="recipients" className="space-y-4">
-                <RecipientsTab form={form} />
+                <RecipientsTab form={form} service={displayService} settingId={settingId && !isNew ? settingId : undefined} />
               </TabsContent>
 
               {'channel' in tabConfig && (

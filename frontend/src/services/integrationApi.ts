@@ -368,3 +368,26 @@ export async function testIntegrationConnection(
     throw error;
   }
 }
+
+export interface SlackChannel {
+  id: string;
+  name: string;
+  is_private: boolean;
+}
+
+export interface SlackChannelList {
+  status: 'Connected' | 'Rejected' | 'Not connected';
+  message?: string;
+  channels: SlackChannel[];
+}
+
+/** Read-only list of the Slack channels the integration's bot can see. Posts nothing. */
+export async function listSlackChannels(setting?: string): Promise<SlackChannelList> {
+  try {
+    const response = await call.post('huf.ai.tools.connection_test.list_slack_channels', { setting });
+    return (response.message ?? response) as SlackChannelList;
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}

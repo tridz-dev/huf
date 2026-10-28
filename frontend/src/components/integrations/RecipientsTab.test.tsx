@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { useForm } from 'react-hook-form';
 import { RecipientsTab } from './RecipientsTab';
 
@@ -46,5 +46,48 @@ describe('RecipientsTab', () => {
     const { container } = render(<Harness />);
     fireEvent.click(screen.getAllByLabelText('Remove recipient')[0]);
     expect(container.querySelectorAll('[data-field-row]')).toHaveLength(1);
+  });
+});
+
+describe('RecipientsTab Slack channels', () => {
+  it('loads the channels read-only and lists them with copy-id buttons', async () => {
+    const api = await import('@/services/integrationApi');
+    const spy = vi.spyOn(api, 'listSlackChannels').mockResolvedValue({
+      status: 'Connected',
+      channels: [{ id: 'C0123456789', name: 'huf-live-test', is_private: false }],
+    });
+    function SlackHarness() {
+      const form = useForm<any>({ defaultValues: { recipients: [] } });
+      return <RecipientsTab form={form} service="slack" settingId="Slack main" />;
+    }
+    render(<SlackHarness />);
+    expect(screen.queryByTestId('slack-channel-list')).toBeNull();
+    fireEvent.click(screen.getByTestId('slack-load-channels'));
+    expect(await screen.findByTestId('slack-channel-huf-live-test')).toBeTruthy();
+    expect(screen.getByLabelText('Copy ID of #huf-live-test')).toBeTruthy();
+    expect(spy).toHaveBeenCalledWith('Slack main');
+  });
+
+  it('shows the reason when Slack refuses', async () => {
+    const api = await import('@/services/integrationApi');
+    vi.spyOn(api, 'listSlackChannels').mockResolvedValue({ status: 'Rejected', message: 'Slack needs the groups:read permission', channels: [] });
+    function SlackHarness() {
+      const form = useForm<any>({ defaultValues: { recipients: [] } });
+      return <RecipientsTab form={form} service="slack" settingId="Slack main" />;
+    }
+    render(<SlackHarness />);
+    fireEvent.click(screen.getByTestId('slack-load-channels'));
+    expect((await screen.findByTestId('slack-channels-error')).textContent).toContain('groups:read');
+  });
+
+  it('offers no channel loader for other services or unsaved integrations', () => {
+    function H({ service, settingId }: { service?: string; settingId?: string }) {
+      const form = useForm<any>({ defaultValues: { recipients: [] } });
+      return <RecipientsTab form={form} service={service} settingId={settingId} />;
+    }
+    const { rerender } = render(<H service="telegram" settingId="x" />);
+    expect(screen.queryByTestId('slack-load-channels')).toBeNull();
+    rerender(<H service="slack" />);
+    expect(screen.queryByTestId('slack-load-channels')).toBeNull();
   });
 });

@@ -57,6 +57,9 @@ import { FlowNodeData, TriggerConfig, ActionConfig, FlowEdgeRoute } from '../typ
 import type { ActionOption } from '../types/modal.types';
 
 /** Overview map: drag its rectangle or click anywhere on it to move the canvas there. */
+/** Fit-to-view never zooms in past 100% (a 3-step flow stays at normal size) nor out past 25%. */
+export const FIT_VIEW_OPTIONS = { padding: 0.3, maxZoom: 1, minZoom: 0.25 } as const;
+
 function FlowMiniMap() {
   const { setCenter, getZoom } = useReactFlow();
   return (
@@ -120,7 +123,7 @@ function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layoutRevis
       const nodes = getNodes();
       const { width, height } = store.getState();
       if (nodes.length > 0 && width > 0 && isInView(getNodesBounds(nodes), getViewport(), { width, height })) return;
-      fitView({ padding: 0.3, maxZoom: 1, duration: 200 });
+      fitView({ ...FIT_VIEW_OPTIONS, duration: 200 });
     }, 60);
     return () => clearTimeout(timer);
   }, [flowId, nodeCount, edgeCount, layoutRevision, fitView, getNodes, getViewport, setViewport, store]);
@@ -794,14 +797,15 @@ export function FlowCanvas({
         nodesConnectable={canManage}
         elementsSelectable
         fitView
-        fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
+        fitViewOptions={FIT_VIEW_OPTIONS}
+        minZoom={FIT_VIEW_OPTIONS.minZoom}
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
         className="bg-background w-full h-full"
         onScroll={keepCanvasUnscrolled}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={2} color="color-mix(in srgb, var(--muted-foreground) 35%, transparent)" />
         {/* showInteractive (lock toggle button) defaults to true, so it's already shown */}
-        <Controls className="!bottom-6 !rounded-lg !border !border-line !overflow-hidden !shadow-sm" />
+        <Controls fitViewOptions={FIT_VIEW_OPTIONS} className="!bottom-6 !rounded-lg !border !border-line !overflow-hidden !shadow-sm" />
         <FlowMiniMap />
         <FitViewAfterRemovalOrLayout flowId={activeFlow?.id} nodeCount={activeFlow?.nodes.length ?? 0} edgeCount={activeFlow?.edges.length ?? 0} layoutRevision={layoutRevision} />
         <Panel position="top-right" className="m-2">

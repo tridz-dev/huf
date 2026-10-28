@@ -128,3 +128,11 @@ Publishing a flow with unconnected integration steps shows a warning toast (`Som
 | `integration-test-connection` | "Test connection" button (read-only check; typed values are used when filled in, otherwise the saved ones) |
 | `integration-test-result` (`data-status` = Connected / Rejected / Not connected) | Result line with the plain reason |
 | `flow-step-<kind>-input.<field>-hint` | One-line "where do I find this" under a tool input (Slack channel, Sheets and Drive IDs) |
+
+## Slack channels and run summaries (wp16)
+| Test id | Element |
+|---|---|
+| `flow-run-step-summary-<nodeId>` | One-line plain summary above a finished integration step's output (Posted to, Sent to, status from host, row/file counts) |
+| `flow-run-step-raw-<nodeId>` | Collapsed "Show raw response" (`<details>`); the secrets-stripped output stays at `flow-run-step-output-<nodeId>` inside it |
+| `slack-load-channels`, `slack-channels`, `slack-channel-list`, `slack-channel-<name>`, `slack-copy-id-<name>`, `slack-channels-error`, `slack-channels-empty` | Integration > Recipients tab (saved Slack integration): read-only "Load channels" list with copy-ID buttons |
+| `flow-slack-channel-picker`, `flow-field-slack-channel-pick`, `flow-slack-channel-picker-error` | "Or pick a channel" searchable list under the Slack step's Channel field (only when Slack is connected) |
