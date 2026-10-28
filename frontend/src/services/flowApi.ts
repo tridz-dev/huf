@@ -10,6 +10,8 @@ export interface FlowDefinitionListItem {
     name: string;
     flow_id: string;
     flow_name: string;
+    description?: string;
+    category?: string;
     status: 'Draft' | 'Active' | 'Archived';
     version: number;
     schema_version: number;
@@ -20,6 +22,8 @@ export interface FlowDefinitionListItem {
 export interface FlowDefinitionDoc {
     flow_id: string;
     flow_name: string;
+    description?: string;
+    category?: string;
     status: 'Draft' | 'Active' | 'Archived';
     version: number;
     /** Graph-IR schema_version, e.g. "1.0.0" -- a string, not an int (huf/ai/graph/graph_ir.schema.json). */
@@ -166,7 +170,7 @@ export interface PendingApproval {
 // ─── Flow Definition APIs ────────────────────────────────────────────
 
 const FLOW_LIST_FIELDS = [
-    'name', 'flow_id', 'flow_name', 'status',
+    'name', 'flow_id', 'flow_name', 'description', 'category', 'status',
     'version', 'schema_version', 'modified',
 ];
 
@@ -224,7 +228,7 @@ export async function deleteFlowDefinition(flowId: string): Promise<void> {
 /** Update flow name or status (DocType field update) */
 export async function updateFlowDefinitionFields(
     flowId: string,
-    fields: { flow_name?: string; status?: string }
+    fields: { flow_name?: string; description?: string; category?: string; status?: string }
 ): Promise<void> {
     try {
         await db.updateDoc(doctype['Flow Definition'], flowId, fields);
