@@ -5,6 +5,8 @@ import type { FlowRunSummary } from '../services/flowApi';
 import { Loader2, RefreshCw, PlayCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
+import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
+import { formatTimeAgo } from '@/utils/time';
 
 interface FlowRunHistoryProps {
     flowId: string;
@@ -14,6 +16,7 @@ interface FlowRunHistoryProps {
 }
 
 export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: FlowRunHistoryProps) {
+    useSiteTimezone();
     const [runs, setRuns] = useState<FlowRunSummary[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -99,7 +102,7 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
                                 </div>
                                 <div className="text-xs text-muted-foreground flex justify-between items-center">
                                     <span className="truncate max-w-[150px]">Trigger: {run.trigger_type}</span>
-                                    {run.started_at && <span title={run.started_at}>{new Date(run.started_at).toLocaleString()}</span>}
+                                    {run.started_at && <span title={formatTimeAgo(run.started_at)}>{formatAbsoluteTime(run.started_at)}</span>}
                                 </div>
                             </div>
                         ))

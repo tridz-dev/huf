@@ -2,12 +2,26 @@ import { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 import { flowService } from '../services/flowService';
 import type { FlowRunDetail } from '../services/flowApi';
-import { Loader2, Box, CheckCircle2, XCircle, Clock, Check, X, Play } from 'lucide-react';
+import { Loader2, Box, CheckCircle2, XCircle, Clock, Check, X, Play, AlertTriangle } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { toast } from 'sonner';
-import { useFlowContext } from '../contexts/FlowContext';
+import { useOptionalFlowContext } from '../contexts/FlowContext';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from './ui/alert-dialog';
+import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
+import { calculateDuration, formatTimeAgo } from '@/utils/time';
+import { humanizeFlowError } from '@/lib/flowValidation';
+import { describeDecision } from '@/lib/flowRunFormat';
 
 interface FlowRunViewerProps {
     runId: string | null;
@@ -20,13 +34,24 @@ function readableRunError(message: string, labelOf: (id?: string | null) => stri
     return m ? `${labelOf(m[1])} failed: ${m[2]}` : message;
 }
 
+function TimeValue({ value }: { value: string | null | undefined }) {
+    if (!value) return <span className="text-muted-foreground">Not available</span>;
+    return (
+        <span title={formatTimeAgo(value)}>
+            {formatAbsoluteTime(value)}
+        </span>
+    );
+}
+
 export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
+    useSiteTimezone();
+    const [confirmFail, setConfirmFail] = useState(false);
     const [run, setRun] = useState<FlowRunDetail | null>(null);
     const [loading, setLoading] = useState(false);
     const [resumePayload, setResumePayload] = useState<string>('');
-    const { activeFlow } = useFlowContext();
+    const activeFlow = useOptionalFlowContext()?.activeFlow;
     const labelOf = (nodeId: string | null | undefined) =>
-        (nodeId && activeFlow?.nodes.find((n) => n.id === nodeId)?.data.label) || nodeId || 'N/A';
+        (nodeId && (run?.node_labels?.[nodeId] || activeFlow?.nodes.find((n) => n.id === nodeId)?.data.label)) || nodeId || 'N/A';
 
     useEffect(() => {
         async function fetchRun() {
@@ -75,6 +100,24 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                 description: err instanceof Error ? err.message : 'Unknown error'
             });
             setLoading(false);
+        }
+    };
+
+    const refreshRun = async () => {
+        if (!runId) return;
+        const data = await flowService.getFlowRun(runId);
+        if (data) setRun(data);
+    };
+
+    const handleMarkFailed = async () => {
+        if (!runId) return;
+        setConfirmFail(false);
+        try {
+            await flowService.markFlowRunFailed(runId);
+            toast.success('Run marked as failed.');
+            await refreshRun();
+        } catch (err) {
+            toast.error('Could not mark this run as failed', { description: humanizeFlowError(err) });
         }
     };
 
@@ -148,6 +191,49 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                             </div>
                         </div>
 
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm" data-testid="flow-run-meta">
+                            <div>
+                                <div className="text-xs text-muted-foreground">Flow</div>
+                                <div className="font-medium" data-testid="flow-run-flow-name">{run.flow_name || run.flow_id}</div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-muted-foreground">Started by</div>
+                                <div className="font-medium" data-testid="flow-run-trigger">{run.trigger_type || 'Not available'}</div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-muted-foreground">Started</div>
+                                <div data-testid="flow-run-started"><TimeValue value={run.started_at} /></div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-muted-foreground">Finished</div>
+                                <div data-testid="flow-run-finished"><TimeValue value={run.completed_at} /></div>
+                            </div>
+                            {run.completed_at && (
+                                <div>
+                                    <div className="text-xs text-muted-foreground">Duration</div>
+                                    <div data-testid="flow-run-duration">{calculateDuration(run.started_at, run.completed_at)}</div>
+                                </div>
+                            )}
+                        </div>
+
+                        {run.stale && (
+                            <div className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-tint/50 p-4" data-testid="flow-run-stale">
+                                <AlertTriangle className="w-4 h-4 mt-0.5 text-warning" />
+                                <div className="flex-1 text-sm">
+                                    <div className="font-medium">This run looks stuck</div>
+                                    <p className="text-muted-foreground mt-0.5">
+                                        It has been {run.status} for more than {run.stale_after_minutes} minutes without any change.
+                                        {run.can_mark_failed ? '' : ' A System Manager can mark it as failed.'}
+                                    </p>
+                                    {run.can_mark_failed && (
+                                        <Button size="sm" variant="outline" className="mt-3" data-testid="flow-run-mark-failed" onClick={() => setConfirmFail(true)}>
+                                            Mark as failed
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {run.status === 'Failed' && run.last_error && (
                             <div data-testid="flow-run-error">
                                 <h3 className="text-sm font-semibold mb-3">Error</h3>
@@ -193,6 +279,14 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                             {labelOf(st.id)}
                                                             <span className="text-xs font-normal text-muted-foreground">{st.failed ? 'Failed' : 'Done'}</span>
                                                         </div>
+                                                        {describeDecision(st.output) && (
+                                                            <div className="mt-1 text-sm" data-testid={`flow-run-decision-${st.id}`}>
+                                                                {describeDecision(st.output)}
+                                                                {typeof (st.output as { comment?: unknown }).comment === 'string' && (st.output as { comment: string }).comment
+                                                                    ? <span className="text-muted-foreground">: "{(st.output as { comment: string }).comment}"</span>
+                                                                    : null}
+                                                            </div>
+                                                        )}
                                                         <pre className="mt-2 bg-muted p-2 rounded text-xs font-mono overflow-x-auto whitespace-pre-wrap">
                                                             {typeof st.output === 'string' ? st.output : JSON.stringify(st.output, null, 2)}
                                                         </pre>
@@ -272,6 +366,20 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                     </div>
                 )}
             </SheetContent>
+            <AlertDialog open={confirmFail} onOpenChange={setConfirmFail}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Mark this run as failed?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            The run will be stopped and recorded as failed. This cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction data-testid="flow-run-mark-failed-confirm" onClick={handleMarkFailed}>Mark as failed</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </Sheet>
     );
 }

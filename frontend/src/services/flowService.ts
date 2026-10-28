@@ -22,6 +22,7 @@ import {
   approveFlowRun as apiApproveFlowRun,
   rejectFlowRun as apiRejectFlowRun,
   resumeFlowRun as apiResumeFlowRun,
+  markFlowRunFailed as apiMarkFlowRunFailed,
 } from './flowApi';
 import type { FlowRunSummary, FlowRunDetail } from './flowApi';
 import { serializeFlow, deserializeFlow, mapBackendStatusToFrontend, defaultContract } from './flowSerializer';
@@ -245,6 +246,10 @@ class FlowService {
 
   async resumeFlowRun(flowRunId: string, input?: Record<string, unknown>) {
     return apiResumeFlowRun(flowRunId, input);
+  }
+
+  async markFlowRunFailed(flowRunId: string) {
+    return apiMarkFlowRunFailed(flowRunId);
   }
 
   // ─── Local-only mutation helpers (update cache, notify) ────────────

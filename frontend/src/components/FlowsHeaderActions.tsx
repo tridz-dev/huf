@@ -11,6 +11,7 @@ import { FlowRunViewer } from './FlowRunViewer';
 import { FlowSettingsModal } from './modals/FlowSettingsModal';
 import { humanizeFlowError, summarizeIssues, validateFlow } from '@/lib/flowValidation';
 import { reportFlowRun } from '@/lib/flowRunToast';
+import { useRunParam } from '@/hooks/useRunParam';
 
 /**
  * Left-aligned "Flows > flow name [pencil]" control for the flow canvas
@@ -97,18 +98,10 @@ export function FlowsHeaderActions() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useRunParam();
 
   const location = useLocation();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const sp = new URLSearchParams(location.search);
-    const runFromUrl = sp.get('run');
-    if (runFromUrl) {
-      setSelectedRunId(runFromUrl);
-    }
-  }, [location.search]);
 
   const openSettingsFromUrl = () => {
     const sp = new URLSearchParams(location.search);

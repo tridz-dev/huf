@@ -131,6 +131,12 @@ export interface FlowRunSummary {
     current_node_id: string;
     hop_count: number;
     trigger_type: string;
+    /** Display name of the flow (flow_id when the definition is gone). */
+    flow_name: string;
+    /** Queued/Running and unchanged for a long time: the worker is probably gone. */
+    stale: boolean;
+    can_mark_failed: boolean;
+    /** UTC ISO strings. */
     started_at: string | null;
     completed_at: string | null;
 }
@@ -139,17 +145,25 @@ export interface FlowRunSummary {
 export interface FlowRunDetail {
     flow_run_id: string;
     flow_id: string;
+    flow_name: string;
     flow_version: number;
     mode: string;
     status: string;
+    trigger_type: string;
     current_node_id: string;
     hop_count: number;
     context_json: Record<string, unknown>;
     waiting: Record<string, unknown>;
+    /** Step titles by node id, from the flow's saved definition. */
+    node_labels: Record<string, string>;
     last_error: string | null;
     last_agent_run: string | null;
+    /** UTC ISO strings. */
     started_at: string | null;
     completed_at: string | null;
+    stale: boolean;
+    can_mark_failed: boolean;
+    stale_after_minutes: number;
 }
 
 /** Pending human approval (from get_pending_approvals endpoint) */
@@ -332,6 +346,57 @@ export async function listFlowRuns(
         return result.message as FlowRunSummary[];
     } catch (error) {
         handleFrappeError(error, 'Error listing flow runs');
+    }
+}
+
+export interface FlowRunsPage {
+    items: FlowRunSummary[];
+    total: number;
+}
+
+/** Page of Flow Runs across all flows (Executions page). `fromDate` is a UTC ISO string. */
+export async function listFlowRunsPage(params: {
+    status?: string;
+    search?: string;
+    fromDate?: string;
+    start?: number;
+    limit?: number;
+}): Promise<FlowRunsPage> {
+    try {
+        const result = await call.get('huf.ai.flow.api.list_flow_runs_page', {
+            status: params.status,
+            search: params.search || undefined,
+            from_date: params.fromDate,
+            start: params.start ?? 0,
+            limit: params.limit ?? 20,
+        });
+        return result.message as FlowRunsPage;
+    } catch (error) {
+        handleFrappeError(error, 'Error listing flow runs');
+    }
+}
+
+/** "Flow: <name> > <step title>" for Agent Runs made by flow steps; null where unknown. */
+export async function getFlowStepLabels(
+    items: Array<{ flow_run: string; flow_node_id?: string | null }>
+): Promise<Array<string | null>> {
+    try {
+        const result = await call.post('huf.ai.flow.api.get_flow_step_labels', {
+            items: JSON.stringify(items),
+        });
+        return result.message as Array<string | null>;
+    } catch {
+        return items.map(() => null);
+    }
+}
+
+/** System Manager only: fail a run stuck in Queued/Running. */
+export async function markFlowRunFailed(flowRunId: string): Promise<{ flow_run_id: string; status: string }> {
+    try {
+        const result = await call.post('huf.ai.flow.api.mark_flow_run_failed', { flow_run_id: flowRunId });
+        return result.message as { flow_run_id: string; status: string };
+    } catch (error) {
+        handleFrappeError(error, `Error marking flow run ${flowRunId} as failed`);
     }
 }
 
