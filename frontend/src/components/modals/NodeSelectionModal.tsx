@@ -27,6 +27,8 @@ import {
   RotateCw,
   Code,
   Bot,
+  CheckCircle2,
+  SquareAsterisk,
   UserCheck,
   Wrench,
   Globe,
@@ -73,7 +75,9 @@ const iconMap: Record<string, LucideIcon> = {
   Globe,
   Save,
   Trash2,
-  FilePlus
+  FilePlus,
+  CheckCircle2,
+  SquareAsterisk,
 };
 
 type MainTab = 'triggers' | 'actions';
@@ -163,6 +167,7 @@ export function NodeSelectionModal({
       router: { type: 'router', prompt: '' },
       loop: { type: 'loop', items: { $from: '' }, max_iterations: 100, on_item_error: 'fail', collect: { $from: '' } },
       'human.approval': { type: 'human.approval', message: '' },
+      end: { type: 'end' },
       'http-request': tool('http_request', { url: '', method: 'GET' }),
       transform: { type: 'transform', op: 'lower', input: {} },
       'state-get': { type: 'state-get', key: '' },

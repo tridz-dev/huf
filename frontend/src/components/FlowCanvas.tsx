@@ -29,6 +29,7 @@ import { useFlowContext } from '../contexts/FlowContext';
 import { flowService } from '../services/flowService';
 import { makeFlowEdge, edgeRoute } from '../services/flowSerializer';
 import { branchHandlesFor } from '../lib/flowBranches';
+import { toast } from 'sonner';
 import { actionLabel, triggerLabel } from '../lib/flowLabels';
 import { actionOptions } from '../data/actions';
 import { FlowNodeData, TriggerConfig, ActionConfig, FlowEdgeRoute } from '../types/flow.types';
@@ -346,22 +347,39 @@ export function FlowCanvas({
 
       const newNodeId = `node_${Date.now()}`;
       const option = actionOptions.find((a) => a.id === actionId);
+      const isEnd = actionId === 'end';
+      // Branch targets fan out sideways (same spacing as the add-step ghosts) so siblings never stack.
+      const sourceCfg = sourceNode.data.actionConfig as ({ type?: string } & Record<string, unknown>) | undefined;
+      const sourceHandles = branchHandlesFor(sourceCfg?.type, sourceCfg);
+      const handleIndex = sourceHandles.findIndex((h) => h.route === sourceRoute);
+      const siblingCount = sourceCfg?.type === 'router'
+        ? edges.filter((e) => e.source === sourceId && edgeRoute(e) === sourceRoute).length
+        : 0;
+      const offsetX = handleIndex >= 0
+        ? (handleIndex - (sourceHandles.length - 1) / 2) * 240
+        : siblingCount * 240;
       const newNode: Node<FlowNodeData> = {
         id: newNodeId,
-        type: 'action',
-        position: { x: sourceNode.position.x, y: sourceNode.position.y + 150 },
-        data: {
-          // The palette card name is the node title and the sidebar title.
-          label: actionLabel(actionId),
-          nodeType: 'action',
-          icon: option?.icon || 'Play',
-          configured: false,
-          actionConfig: config
-        }
+        type: isEnd ? 'end' : 'action',
+        position: { x: sourceNode.position.x + offsetX, y: sourceNode.position.y + 150 },
+        data: isEnd
+          ? { label: actionLabel(actionId), nodeType: 'end', icon: option?.icon || 'CheckCircle2', configured: true, endConfig: {} }
+          : {
+            // The palette card name is the node title and the sidebar title.
+            label: actionLabel(actionId),
+            nodeType: 'action',
+            icon: option?.icon || 'Play',
+            configured: false,
+            actionConfig: config
+          }
       };
 
       // Edges that left the source on the same route move onto the new node (insertion mid-chain).
       const moving = edges.filter((e) => e.source === sourceId && edgeRoute(e) === sourceRoute);
+      if (isEnd && moving.length > 0) {
+        toast.error('End can only finish a path', { description: 'Add it at the open end of a path, not in front of another step.' });
+        return;
+      }
       const rest = edges.filter((e) => !moving.includes(e));
       const firstHandle = branchHandlesFor((config as { type?: string }).type)[0];
       const movedRoute: FlowEdgeRoute =
