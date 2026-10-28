@@ -116,3 +116,15 @@ Publishing a flow with unconnected integration steps shows a warning toast (`Som
 | `flow-run-document`, `flow-run-document-doctype`, `-name`, `-event`, `-fields`, `flow-run-full-payload` | Data trigger run: "Document" summary and the collapsed "Full payload" (`flow-run-input` is inside it) |
 | `flow-doc-event-reset-note` | Message shown when changing the document type cleared an event that type cannot have |
 | `boot-fallback`, `app-error-screen`, `chunk-error-screen` | "Something went wrong / Reload" screens (entry script, app crash, page chunk) |
+| `flow-run-document-value-<field>`, `flow-run-document-more-<field>` | Data trigger run: a long document field (HTML shown as plain text) and its "Show more" / "Show less" button |
+| `flow-run-step-connect-<nodeId>` | "Connect" link in a failed step card whose reason is "<Integration> is not connected" |
+| `agent-run-source`, `agent-run-flow-run-link` | Agent run details of a flow step: "Flow: <flow name> > <step title>" heading text and the link to the Flow Run |
+| `flow-tidy-layout` | Canvas toolbar "Tidy layout" button (lines the steps up; toast has Undo) |
+
+## Integration set-up help (wp12)
+| Test id | Element |
+|---|---|
+| `integration-setup-guide`, `integration-setup-steps`, `integration-setup-scopes` | Numbered how-to and the exact permissions, on the Integration screen for Gmail, Slack, Google Sheets and Google Drive |
+| `integration-test-connection` | "Test connection" button (read-only check; typed values are used when filled in, otherwise the saved ones) |
+| `integration-test-result` (`data-status` = Connected / Rejected / Not connected) | Result line with the plain reason |
+| `flow-step-<kind>-input.<field>-hint` | One-line "where do I find this" under a tool input (Slack channel, Sheets and Drive IDs) |

@@ -1,6 +1,5 @@
 import frappe
 from frappe.utils.background_jobs import enqueue
-from huf.ai.agent.integration import run_agent_sync
 from frappe.utils.safe_exec import get_safe_globals, safe_eval
 from uuid import uuid4
 from frappe.utils import now_datetime
@@ -354,6 +353,10 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
                 
                 {''.join(transcribed_content)}
                 """
+
+            # Imported here, not at module level: this module loads on the first document event of every
+            # background job, and integration pulls in the whole LLM stack (~3 s cold, once per job).
+            from huf.ai.agent.integration import run_agent_sync
 
             run_agent_sync(agent_name, prompt, provider, model, channel_id=channel, external_id=external_id, files=files, now=True)
 

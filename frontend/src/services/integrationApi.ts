@@ -341,3 +341,30 @@ export async function attachServiceTools(
     throw error;
   }
 }
+
+export interface ConnectionTestResult {
+  status: 'Connected' | 'Rejected' | 'Not connected';
+  message: string;
+}
+
+/**
+ * Harmless read-only check of a Gmail / Slack / Drive / Sheets integration. Typed values are used instead of
+ * saved ones and are never stored.
+ */
+export async function testIntegrationConnection(
+  service: string,
+  setting?: string,
+  credentials?: Record<string, string>,
+): Promise<ConnectionTestResult> {
+  try {
+    const response = await call.post('huf.ai.tools.connection_test.test_connection', {
+      service,
+      setting,
+      credentials: JSON.stringify(credentials ?? {}),
+    });
+    return (response.message ?? response) as ConnectionTestResult;
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}

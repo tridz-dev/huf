@@ -6,7 +6,7 @@ import { Loader2, Box, CheckCircle2, XCircle, Clock, Check, X, Play, AlertTriang
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { useOptionalFlowContext } from '../contexts/FlowContext';
 import {
     AlertDialog,
@@ -23,6 +23,26 @@ import { calculateDuration, formatTimeAgo } from '@/utils/time';
 import { humanizeFlowError } from '@/lib/flowValidation';
 import { describeDecision, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from '@/lib/flowRunFormat';
 import { summarizeDocPayload } from '@/lib/flowRunDoc';
+import { connectPath, notConnectedService } from '@/lib/flowIntegrations';
+import { Link } from 'react-router-dom';
+
+function DocFieldValue({ field }: { field: { key: string; value: string; full?: string } }) {
+    const [open, setOpen] = useState(false);
+    if (!field.full) return <>{field.value}</>;
+    return (
+        <>
+            <span data-testid={`flow-run-document-value-${field.key}`}>{open ? field.full : field.value}</span>{' '}
+            <button
+                type="button"
+                className="text-xs font-medium text-primary underline"
+                data-testid={`flow-run-document-more-${field.key}`}
+                onClick={() => setOpen((v) => !v)}
+            >
+                {open ? 'Show less' : 'Show more'}
+            </button>
+        </>
+    );
+}
 
 interface FlowRunViewerProps {
     runId: string | null;
@@ -310,6 +330,15 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                         {st.failed && stepReason(st.id, st.output) && (
                                                             <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive whitespace-pre-wrap" data-testid={`flow-run-step-error-${st.id}`}>
                                                                 {stepReason(st.id, st.output)}
+                                                                {notConnectedService(stepReason(st.id, st.output)) && (
+                                                                    <Link
+                                                                        to={connectPath(notConnectedService(stepReason(st.id, st.output)) as string)}
+                                                                        className="ml-2 font-medium underline"
+                                                                        data-testid={`flow-run-step-connect-${st.id}`}
+                                                                    >
+                                                                        Connect
+                                                                    </Link>
+                                                                )}
                                                             </div>
                                                         )}
                                                         {(() => {
@@ -362,7 +391,9 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                             {doc.fields.map((f) => (
                                                                 <div key={f.key} className="contents">
                                                                     <dt className="text-xs text-muted-foreground pt-0.5">{f.label}</dt>
-                                                                    <dd className="break-words">{f.value}</dd>
+                                                                    <dd className="break-words whitespace-pre-wrap">
+                                                                        <DocFieldValue field={f} />
+                                                                    </dd>
                                                                 </div>
                                                             ))}
                                                         </dl>

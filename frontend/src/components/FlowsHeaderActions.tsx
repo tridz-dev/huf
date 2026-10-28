@@ -16,7 +16,7 @@ import {
 import { useFlowContext } from '../contexts/FlowContext';
 import { getFlowIntegrationStatus, runFlow } from '../services/flowApi';
 import { unconnectedSteps } from '@/lib/flowIntegrations';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { FlowRunHistory } from './FlowRunHistory';
 import { FlowRunViewer } from './FlowRunViewer';
 import { FlowSettingsModal } from './modals/FlowSettingsModal';
@@ -208,7 +208,6 @@ export function FlowsHeaderActions() {
       if (missing.length > 0) {
         toast.warning('Some steps are not connected yet', {
           description: `${missing.map((m) => `${m.stepLabel} (${m.service})`).join(', ')} will fail until you connect them.`,
-          duration: 12000,
           id: 'flow-unconnected-warning',
         });
       }

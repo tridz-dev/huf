@@ -5,68 +5,65 @@ from email.mime.text import MIMEText
 import frappe
 logger = frappe.logger("huf")
 import httpx
-from huf.ai.tools.credentials import require_credential, get_credential, update_last_error, set_credential
+from huf.ai.tools.credentials import get_credential, update_last_error, set_credential
+from huf.ai.tools.provider_errors import (
+    ProviderCredentialError,
+    check_google_response,
+    invalid_recipients,
+    normalize_recipients,
+    mint_google_access_token,
+    not_connected_message,
+)
+
+GMAIL_SEND_SCOPE = "gmail.send"
 
 
-def _get_gmail_access_token() -> str:
-    """Get Gmail OAuth2 access token by refreshing if needed and persisting tokens."""
+def _resolve_gmail_access_token() -> str:
+    """Return a valid Gmail access token, refreshing and persisting it when needed.
+
+    Raises ProviderCredentialError with plain copy when credentials are missing or Google rejects them.
+    """
     service_name = "gmail"
 
-    # Try to get existing access token first
     access_token = get_credential(service_name, "access_token")
     access_token_expiry_str = get_credential(service_name, "access_token_expiry")
 
-    # Check if token is still valid (not expired)
     if access_token and access_token_expiry_str:
         try:
             expiry_time = float(access_token_expiry_str)
-            current_time = time.time()
             # If token expires in more than 60 seconds, use it
-            if current_time < expiry_time - 60:
+            if time.time() < expiry_time - 60:
                 return access_token
         except (ValueError, TypeError):
             # If expiry time is malformed, proceed to refresh
             pass
 
-    # Try to refresh using client_id, client_secret, refresh_token
+    client_id = get_credential(service_name, "client_id")
+    client_secret = get_credential(service_name, "client_secret")
+    refresh_token = get_credential(service_name, "refresh_token")
+    if not (client_id and client_secret and refresh_token):
+        raise ProviderCredentialError(not_connected_message("Gmail", "the client ID, client secret and refresh token"), kind="missing")
+
+    data = mint_google_access_token("Gmail", client_id, client_secret, refresh_token)
+    new_token = data["access_token"]
+    expiry_time = time.time() + data.get("expires_in", 3600)
+    set_credential(service_name, "access_token", new_token)
+    set_credential(service_name, "access_token_expiry", str(expiry_time))
+    return new_token
+
+
+def _get_gmail_access_token():
+    """Like _resolve_gmail_access_token but returns None instead of raising."""
     try:
-        client_id = require_credential(service_name, "client_id")
-        client_secret = require_credential(service_name, "client_secret")
-        refresh_token = require_credential(service_name, "refresh_token")
-
-        response = httpx.post(
-            "https://oauth2.googleapis.com/token",
-            data={
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "refresh_token": refresh_token,
-                "grant_type": "refresh_token",
-            },
-            timeout=15
-        )
-        response.raise_for_status()
-        data = response.json()
-        new_token = data.get("access_token")
-        expires_in = data.get("expires_in", 3600)  # Default to 1 hour if not provided
-
-        # Calculate expiry time as current time + expires_in (in seconds)
-        expiry_time = time.time() + expires_in
-
-        # Persist the new token and expiry back to Integration Settings
-        set_credential(service_name, "access_token", new_token)
-        set_credential(service_name, "access_token_expiry", str(expiry_time))
-
-        return new_token
+        return _resolve_gmail_access_token()
     except Exception as e:
         logger.warning(f"Gmail token refresh error: {e}")
         return None
 
 
 def _get_gmail_headers():
-    """Get Gmail API headers."""
-    token = _get_gmail_access_token()
-    if not token:
-        raise ValueError("Gmail access token or refresh token not configured/valid")
+    """Get Gmail API headers. Raises ProviderCredentialError with the specific reason."""
+    token = _resolve_gmail_access_token()
     return {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
@@ -91,7 +88,7 @@ def handle_get_emails(**kwargs) -> str:
             params=params,
             timeout=30
         )
-        response.raise_for_status()
+        check_google_response(response, "Gmail", "gmail.readonly")
         
         data = response.json()
         messages = data.get("messages", [])
@@ -105,7 +102,7 @@ def handle_get_emails(**kwargs) -> str:
                     params={"format": "metadata", "metadataHeaders": ["Subject", "From", "Date"]},
                     timeout=30
                 )
-                msg_resp.raise_for_status()
+                check_google_response(msg_resp, "Gmail", "gmail.readonly")
                 msg_data = msg_resp.json()
                 
                 headers_dict = {h["name"]: h["value"] for h in msg_data.get("payload", {}).get("headers", [])}
@@ -141,6 +138,11 @@ def handle_send_email(**kwargs) -> str:
         if not all([to, subject, body]):
             return json.dumps({"success": False, "error": "to, subject, and body are required"})
 
+        bad = invalid_recipients(to)
+        if bad:
+            return json.dumps({"success": False, "error": "Enter a valid email address for To (not: " + ", ".join(bad)[:120] + ")."})
+        to = normalize_recipients(to)
+
         headers = _get_gmail_headers()
         
         # Create email message
@@ -157,7 +159,7 @@ def handle_send_email(**kwargs) -> str:
             json=payload,
             timeout=30
         )
-        response.raise_for_status()
+        check_google_response(response, "Gmail", "gmail.send")
         
         return json.dumps({"success": True, "results": response.json()})
     except Exception as e:
@@ -176,6 +178,11 @@ def handle_create_draft(**kwargs) -> str:
         if not all([to, subject, body]):
             return json.dumps({"success": False, "error": "to, subject, and body are required"})
 
+        bad = invalid_recipients(to)
+        if bad:
+            return json.dumps({"success": False, "error": "Enter a valid email address for To (not: " + ", ".join(bad)[:120] + ")."})
+        to = normalize_recipients(to)
+
         headers = _get_gmail_headers()
         
         message = MIMEText(body)
@@ -191,7 +198,7 @@ def handle_create_draft(**kwargs) -> str:
             json=payload,
             timeout=30
         )
-        response.raise_for_status()
+        check_google_response(response, "Gmail", "gmail.compose")
         
         return json.dumps({"success": True, "results": response.json()})
     except Exception as e:
@@ -217,7 +224,7 @@ def handle_mark_as_read(**kwargs) -> str:
             json=payload,
             timeout=30
         )
-        response.raise_for_status()
+        check_google_response(response, "Gmail", "gmail.modify")
         
         return json.dumps({"success": True, "results": response.json()})
     except Exception as e:

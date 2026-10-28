@@ -35,6 +35,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { copyText } from '@/lib/clipboard';
+import { getFlowStepLabels } from '@/services/flowApi';
+import { humanizeToolPrompt } from '@/lib/flowIntegrations';
 /** One row of the Overview / Tokens & Cost definition list. */
 function DefinitionRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
@@ -127,6 +129,7 @@ function CopyableTextPanel({
 }
 
 interface AgentRunDetail extends AgentRunDoc {
+  flow_id?: string | null;
   prompt?: string;
   response?: string;
   provider?: string;
@@ -165,6 +168,7 @@ function AgentRunDetailPage() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [isSilentDegradation, setIsSilentDegradation] = useState(false);
   const [contextMetrics, setContextMetrics] = useState<RunContextMetricsResponse | null>(null);
+  const [flowLabel, setFlowLabel] = useState<string | null>(null);
 
   useEffect(() => {
     if (!runId) {
@@ -177,6 +181,11 @@ function AgentRunDetailPage() {
       const data = await fetchAgentRunDetail(runId);
       setRun(data);
       setLoading(false);
+      setFlowLabel(null);
+      if (data?.flow_run) {
+        const [label] = await getFlowStepLabels([{ flow_run: data.flow_run, flow_node_id: data.flow_node_id }]);
+        setFlowLabel(label);
+      }
     })();
 
     (async () => {
@@ -395,6 +404,7 @@ function AgentRunDetailPage() {
   }
 
   const status = run.status || 'Unknown';
+  const isFlowStep = Boolean(run.flow_run);
   const duration = calculateDuration(run.start_time ?? null, run.end_time ?? null);
   const startedAt = run.start_time ? formatTimeAgo(run.start_time) : 'Not available';
 
@@ -413,23 +423,43 @@ function AgentRunDetailPage() {
 
         <div className="rounded-lg border border-line bg-panel p-5">
           <div className="flex flex-wrap items-center gap-3 pb-4">
-            <h2 className="text-[17px] font-[600] text-ink">Agent run</h2>
+            <h2 className="text-[17px] font-[600] text-ink">{isFlowStep ? 'Flow step run' : 'Agent run'}</h2>
             <Badge variant={getAgentRunStatusVariant(run.status)}>{status}</Badge>
-            <span className="text-[13px] text-steel">{run.agent || 'Unknown agent'}</span>
+            <span className="text-[13px] text-steel" data-testid="agent-run-source">
+              {isFlowStep ? flowLabel || 'Flow step' : run.agent || 'Unknown agent'}
+            </span>
           </div>
 
           <div className="grid gap-x-10 gap-y-4 md:grid-cols-2">
             <DefinitionColumn heading="Overview">
-              <DefinitionRow
-                label="Agent"
-                value={
-                  <Link to={`/agents/${run.agent}`} className="hover:text-signal">
-                    {run.agent || 'Unknown'}
-                  </Link>
-                }
-              />
-              <DefinitionRow label="Provider" value={run.provider || 'Unknown'} />
-              <DefinitionRow label="Model" value={run.model || 'Unknown'} mono />
+              {isFlowStep && (
+                <DefinitionRow
+                  label="Flow run"
+                  value={
+                    <Link
+                      to={`/flows/${run.flow_id}?run=${encodeURIComponent(run.flow_run as string)}`}
+                      className="hover:text-signal"
+                      data-testid="agent-run-flow-run-link"
+                    >
+                      {flowLabel || run.flow_run}
+                    </Link>
+                  }
+                />
+              )}
+              {!(isFlowStep && !run.agent) && (
+                <>
+                  <DefinitionRow
+                    label="Agent"
+                    value={
+                      <Link to={`/agents/${run.agent}`} className="hover:text-signal">
+                        {run.agent || 'Unknown'}
+                      </Link>
+                    }
+                  />
+                  <DefinitionRow label="Provider" value={run.provider || 'Unknown'} />
+                  <DefinitionRow label="Model" value={run.model || 'Unknown'} mono />
+                </>
+              )}
               <DefinitionRow label="Started" value={startedAt} />
               <DefinitionRow label="Duration" value={duration} />
               <DefinitionRow
@@ -535,7 +565,7 @@ function AgentRunDetailPage() {
         )}
 
         <div className="grid gap-4 md:grid-cols-2">
-          <CopyableTextPanel title="Prompt" content={run.prompt} emptyText="No prompt recorded." />
+          <CopyableTextPanel title="Prompt" content={humanizeToolPrompt(run.prompt)} emptyText="No prompt recorded." />
           <CopyableTextPanel title="Response" content={run.response} emptyText="No response recorded." />
         </div>
 

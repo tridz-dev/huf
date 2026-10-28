@@ -40,6 +40,25 @@ export function toolLabel(toolId: string | undefined, apiLabel?: string): string
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+/** Prompt of a flow-step tool call ("Tool: <id>\nArgs: ...") with the human tool name instead of the raw id. */
+export function humanizeToolPrompt(prompt: string | undefined | null): string {
+  if (!prompt) return '';
+  return prompt.replace(/^Tool: (\S+)/, (_m, id: string) => `Tool: ${toolLabel(id)}`);
+}
+
+const LABEL_SERVICE: Record<string, string> = {
+  Slack: 'slack',
+  Gmail: 'gmail',
+  'Google Drive': 'google_drive',
+  'Google Sheets': 'google_sheets',
+};
+
+/** The integration a failed step says is not connected ("Google Sheets is not connected. ..."), if any. */
+export function notConnectedService(reason: string | null | undefined): string | undefined {
+  const m = /^(.+?) is not connected\./.exec(reason ?? '');
+  return m ? LABEL_SERVICE[m[1]] : undefined;
+}
+
 /** Where the user connects an integration (the real credentials screen, with the service preselected). */
 export function connectPath(service: string): string {
   return service === 'slack'

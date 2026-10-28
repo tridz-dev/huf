@@ -8,6 +8,7 @@ import frappe
 logger = frappe.logger("huf")
 import httpx
 from huf.ai.tools.credentials import require_credential, get_credential, update_last_error
+from huf.ai.tools.provider_errors import ProviderCredentialError, not_connected_message, slack_error_message
 
 
 UNTRUSTED_NOTICE = (
@@ -63,7 +64,7 @@ def _get_slack_headers():
     service_name = "slack"
     token = get_credential(service_name, "token")
     if not token:
-        raise ValueError("Slack token not configured")
+        raise ProviderCredentialError(not_connected_message("Slack", "the bot token"), kind="missing")
     return {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
@@ -94,7 +95,7 @@ def handle_send_message(**kwargs) -> str:
         
         data = response.json()
         if not data.get("ok"):
-            error_msg = data.get("error", "Unknown error")
+            error_msg = slack_error_message(data)
             update_last_error(service_name, error_msg)
             return json.dumps({"success": False, "error": error_msg}, default=str)
         
@@ -131,7 +132,7 @@ def handle_send_message_thread(**kwargs) -> str:
         
         data = response.json()
         if not data.get("ok"):
-            error_msg = data.get("error", "Unknown error")
+            error_msg = slack_error_message(data)
             update_last_error(service_name, error_msg)
             return json.dumps({"success": False, "error": error_msg}, default=str)
         
@@ -162,7 +163,7 @@ def handle_list_channels(**kwargs) -> str:
         
         data = response.json()
         if not data.get("ok"):
-            error_msg = data.get("error", "Unknown error")
+            error_msg = slack_error_message(data)
             update_last_error(service_name, error_msg)
             return json.dumps({"success": False, "error": error_msg}, default=str)
         
@@ -206,7 +207,7 @@ def handle_get_channel_history(**kwargs) -> str:
         
         data = response.json()
         if not data.get("ok"):
-            error_msg = data.get("error", "Unknown error")
+            error_msg = slack_error_message(data)
             update_last_error(service_name, error_msg)
             return json.dumps({"success": False, "error": error_msg}, default=str)
         
@@ -250,7 +251,7 @@ def handle_search_messages(**kwargs) -> str:
         
         data = response.json()
         if not data.get("ok"):
-            error_msg = data.get("error", "Unknown error")
+            error_msg = slack_error_message(data)
             update_last_error(service_name, error_msg)
             return json.dumps({"success": False, "error": error_msg}, default=str)
         
@@ -291,7 +292,7 @@ def handle_list_users(**kwargs) -> str:
         
         data = response.json()
         if not data.get("ok"):
-            error_msg = data.get("error", "Unknown error")
+            error_msg = slack_error_message(data)
             update_last_error(service_name, error_msg)
             return json.dumps({"success": False, "error": error_msg}, default=str)
         

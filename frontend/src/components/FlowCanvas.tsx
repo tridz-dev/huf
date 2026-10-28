@@ -16,7 +16,7 @@ import ReactFlow, {
   useReactFlow
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { PanelLeftOpen, PanelRightOpen, Maximize2, Plus, Sparkles } from 'lucide-react';
+import { PanelLeftOpen, PanelRightOpen, Maximize2, Plus, Sparkles, LayoutTemplate } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   AlertDialog,
@@ -44,7 +44,8 @@ import { flowService } from '../services/flowService';
 import { makeFlowEdge, edgeRoute } from '../services/flowSerializer';
 import { branchHandlesFor } from '../lib/flowBranches';
 import { branchColumnShift, subtreeIds } from '../lib/flowEdgeLabels';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
+import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import { ensureToolSchemasLoaded } from '../lib/flowToolSchemas';
 import { actionLabel, triggerLabel } from '../lib/flowLabels';
 import { actionOptions } from '../data/actions';
@@ -72,6 +73,21 @@ function FlowMiniMap() {
   );
 }
 
+/** Fits the whole graph in view after a structural edit (step or connection added/removed, Tidy layout). */
+function FitViewOnStructureChange({ flowId, signature }: { flowId?: string; signature: string }) {
+  const { fitView } = useReactFlow();
+  const last = useRef<{ flowId?: string; signature: string } | null>(null);
+  useEffect(() => {
+    const previous = last.current;
+    last.current = { flowId, signature };
+    // The first render of a flow is fitted by <ReactFlow fitView>; only later edits come here.
+    if (!previous || previous.flowId !== flowId || previous.signature === signature) return;
+    const timer = setTimeout(() => fitView({ padding: 0.3, maxZoom: 1, duration: 200 }), 60);
+    return () => clearTimeout(timer);
+  }, [flowId, signature, fitView]);
+  return null;
+}
+
 interface FlowCanvasProps {
   showLeftSidebar: boolean;
   showRightSidebar: boolean;
@@ -97,8 +113,11 @@ export function FlowCanvas({
     deleteEdge,
     saveState,
     undo,
-    canUndo
+    canUndo,
+    tidyLayout,
+    layoutRevision,
   } = useFlowContext();
+  const { canManage, readOnlyReason } = useFlowPermissions();
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
   // Delete / Backspace on a selected step asks first (the click-to-delete buttons already do).
   const [keyboardDeleteId, setKeyboardDeleteId] = useState<string | null>(null);
@@ -143,7 +162,7 @@ export function FlowCanvas({
         isSyncingFromProps.current = false;
       });
     }
-  }, [activeFlow?.id, activeFlow?.version, activeFlow?.nodes.length, activeFlow?.edges.length]); // Re-sync on ID/version change OR structural changes (add/delete)
+  }, [activeFlow?.id, activeFlow?.version, activeFlow?.nodes.length, activeFlow?.edges.length, layoutRevision]); // Re-sync on ID/version change OR structural changes (add/delete)
 
   // Keyboard undo (Cmd/Ctrl+Z). Scoped to node deletion for now (see
   // FlowContext.undo). The "Undo" action on the delete toast is the primary,
@@ -724,6 +743,7 @@ export function FlowCanvas({
         {/* showInteractive (lock toggle button) defaults to true, so it's already shown */}
         <Controls className="!bottom-6 !rounded-lg !border !border-line !overflow-hidden !shadow-sm" />
         <FlowMiniMap />
+        <FitViewOnStructureChange flowId={activeFlow?.id} signature={`${activeFlow?.nodes.length ?? 0}:${activeFlow?.edges.length ?? 0}:${layoutRevision}`} />
         <Panel position="top-right" className="m-2">
           <div className="flex gap-2">
             {!nodes.some(n => n.data.nodeType === 'trigger') && (
@@ -739,6 +759,19 @@ export function FlowCanvas({
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add trigger
+              </Button>
+            )}
+            {activeFlow && nodes.length > 1 && (
+              <Button
+                variant="outline"
+                size="sm"
+                data-testid="flow-tidy-layout"
+                disabled={!canManage}
+                title={canManage ? 'Line the steps up neatly' : readOnlyReason ?? undefined}
+                onClick={tidyLayout}
+              >
+                <LayoutTemplate className="w-4 h-4 mr-2" />
+                Tidy layout
               </Button>
             )}
             {activeFlow && convertedProcedure && (

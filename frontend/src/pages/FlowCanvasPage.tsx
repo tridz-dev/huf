@@ -6,6 +6,7 @@ import { RightSidebar } from '../components/RightSidebar';
 import { useFlowContext } from '../contexts/FlowContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/lib/toast';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
 export function FlowCanvasPage() {
@@ -23,6 +24,17 @@ export function FlowCanvasPage() {
       navigate('/flows');
     }
   }, [flowId, setActiveFlow, navigate]);
+
+  // A toast is about the last action: the next click or key press in the editor dismisses it (toasts
+  // themselves stay clickable, e.g. an Undo button).
+  useEffect(() => {
+    const dismiss = (event: Event) => {
+      if (event.target instanceof Element && event.target.closest('[data-sonner-toaster]')) return;
+      toast.dismiss();
+    };
+    document.addEventListener('pointerdown', dismiss, true);
+    return () => document.removeEventListener('pointerdown', dismiss, true);
+  }, []);
 
   useEffect(() => {
     if (isMobile) {

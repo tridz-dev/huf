@@ -3,6 +3,8 @@
 
 """Which integrations the Flow builder's Slack / Sheets / Drive / Gmail steps need, and whether each is connected."""
 
+import re
+
 import frappe
 from frappe import _
 
@@ -30,6 +32,24 @@ def service_for_tool(tool_id: str) -> str | None:
 		if (tool_id or "").startswith(prefix):
 			return service
 	return None
+
+
+_MISSING_CREDENTIAL = re.compile(r"Credential not found for service '([^']+)'")
+
+
+def friendly_tool_error(error: str | None) -> str | None:
+	"""Plain wording for a tool failure caused by a missing integration credential.
+
+	The credential lookup names an internal key and an environment variable; a Flow step should say
+	``"Google Sheets is not connected. Connect it in Integrations."`` instead. Other errors are
+	returned unchanged.
+	"""
+	match = _MISSING_CREDENTIAL.search(error or "")
+	if not match:
+		return error
+	service = match.group(1)
+	label = FLOW_INTEGRATIONS[service][0] if service in FLOW_INTEGRATIONS else service.replace("_", " ").title()
+	return f"{label} is not connected. Connect it in Integrations."
 
 
 def is_connected(service: str) -> bool:

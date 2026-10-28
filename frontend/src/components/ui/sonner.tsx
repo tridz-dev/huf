@@ -8,6 +8,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
       className="toaster group"
       position="bottom-right"
       visibleToasts={5}
+      expand
+      gap={8}
       duration={3000}
       closeButton
       {...props}
