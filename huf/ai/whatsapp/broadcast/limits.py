@@ -41,6 +41,7 @@ from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.whatsapp import token_check as tc
 from huf.ai.whatsapp.broadcast import policy
+from huf.ai.whatsapp.broadcast.checks import audience_check
 
 LOGGER = "huf.whatsapp.broadcast"
 LIMIT_FIELD = "whatsapp_business_manager_messaging_limit"
@@ -295,6 +296,7 @@ def _fill(broadcast: str, out: dict[str, Any]) -> None:
 
 	if tpl:
 		_check_params(b, broadcast, blocking)
+		blocking.extend(audience_check.purpose_issues(broadcast, out["category"]))
 
 	if out["category"] == "MARKETING":
 		us = [n for n in _queued_numbers(broadcast) if _is_us_plus_one(n)]
