@@ -77,18 +77,21 @@ function FlowMiniMap() {
 }
 
 /**
- * After a structural edit (step or connection added/removed, Tidy layout) fits the whole graph in view,
- * but only when something would otherwise be out of sight: a graph that is already fully visible stays where it is.
+ * After a step or connection is removed, or Tidy layout / its Undo moves the steps, fits the whole graph in view,
+ * but only when something would otherwise be out of sight (an orphaned "Add step" card, a step moved off screen).
+ * Adding steps never moves the view.
  */
-function FitViewOnStructureChange({ flowId, signature }: { flowId?: string; signature: string }) {
+function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layoutRevision }: { flowId?: string; nodeCount: number; edgeCount: number; layoutRevision: number }) {
   const { fitView, getNodes, getViewport } = useReactFlow();
   const store = useStoreApi();
-  const last = useRef<{ flowId?: string; signature: string } | null>(null);
+  const last = useRef<{ flowId?: string; nodeCount: number; edgeCount: number; layoutRevision: number } | null>(null);
   useEffect(() => {
     const previous = last.current;
-    last.current = { flowId, signature };
+    last.current = { flowId, nodeCount, edgeCount, layoutRevision };
     // The first render of a flow is fitted by <ReactFlow fitView>; only later edits come here.
-    if (!previous || previous.flowId !== flowId || previous.signature === signature) return;
+    if (!previous || previous.flowId !== flowId) return;
+    const removed = nodeCount < previous.nodeCount || edgeCount < previous.edgeCount;
+    if (!removed && layoutRevision === previous.layoutRevision) return;
     const timer = setTimeout(() => {
       const nodes = getNodes();
       const { width, height } = store.getState();
@@ -96,7 +99,7 @@ function FitViewOnStructureChange({ flowId, signature }: { flowId?: string; sign
       fitView({ padding: 0.3, maxZoom: 1, duration: 200 });
     }, 60);
     return () => clearTimeout(timer);
-  }, [flowId, signature, fitView, getNodes, getViewport, store]);
+  }, [flowId, nodeCount, edgeCount, layoutRevision, fitView, getNodes, getViewport, store]);
   return null;
 }
 
@@ -755,7 +758,7 @@ export function FlowCanvas({
         {/* showInteractive (lock toggle button) defaults to true, so it's already shown */}
         <Controls className="!bottom-6 !rounded-lg !border !border-line !overflow-hidden !shadow-sm" />
         <FlowMiniMap />
-        <FitViewOnStructureChange flowId={activeFlow?.id} signature={`${activeFlow?.nodes.length ?? 0}:${activeFlow?.edges.length ?? 0}:${layoutRevision}`} />
+        <FitViewAfterRemovalOrLayout flowId={activeFlow?.id} nodeCount={activeFlow?.nodes.length ?? 0} edgeCount={activeFlow?.edges.length ?? 0} layoutRevision={layoutRevision} />
         <Panel position="top-right" className="m-2">
           <div className="flex gap-2">
             {!nodes.some(n => n.data.nodeType === 'trigger') && (
