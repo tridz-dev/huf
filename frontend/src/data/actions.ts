@@ -50,6 +50,13 @@ export const actionOptions: ActionOption[] = [
     icon: 'UserCheck',
     category: 'control'
   },
+  {
+    id: 'end',
+    name: 'End',
+    description: 'Finish the flow and return a result',
+    icon: 'CheckCircle2',
+    category: 'control'
+  },
 
   // ─── Transform ──────────────────────────────────────────────────────
   {
