@@ -26,16 +26,7 @@ import {
 import { FlowNodeData } from '../../types/flow.types';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '../ui/alert-dialog';
+import { DeleteStepDialog } from '../flow/DeleteStepDialog';
 import { useFlowContext } from '../../contexts/FlowContext';
 import { Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { NODE_CARD_BASE, NODE_HANDLE, NODE_ICON_WELL, getExecutionStatusClasses } from './nodeStyles';
@@ -43,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { actionHasConfiguredContent } from '../../lib/flowNodeConfigured';
 import { branchHandlesFor, ROUTER_HANDLE } from '../../lib/flowBranches';
 import { validateNode } from '../../lib/flowValidation';
+import { unreachableNodeIds } from '../../lib/flowEdit';
 import { toolLabel } from '../../lib/flowIntegrations';
 import { NotConnected } from '../flow/NotConnected';
 
@@ -75,11 +67,12 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const Icon = data.icon && iconMap[data.icon] ? iconMap[data.icon] : Play;
   const incomplete = validateNode({ id, data }, activeFlow?.edges ?? []);
+  const orphaned = activeFlow ? unreachableNodeIds(activeFlow.nodes, activeFlow.edges).has(id) : false;
   const cfg = data.actionConfig as ({ type?: string } & Record<string, unknown>) | undefined;
   const handles = branchHandlesFor(cfg?.type, cfg);
   const isRouter = cfg?.type === 'router';
   const toolId = cfg?.type === 'tool-call' && typeof cfg.tool_id === 'string' && cfg.tool_id ? cfg.tool_id : undefined;
-  const statusClasses = getExecutionStatusClasses(data.status, selected, { unconfigured: incomplete.length > 0 });
+  const statusClasses = getExecutionStatusClasses(data.status, selected, { unconfigured: incomplete.length > 0 || orphaned });
 
   // Confirm only when the node has real config; a picked-but-blank node deletes
   // immediately (see actionHasConfiguredContent).
@@ -130,13 +123,16 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <div className="text-sm font-medium text-card-foreground truncate" data-testid={`flow-node-title-${id}`}>
+              <div className="text-sm font-medium min-w-0 text-card-foreground line-clamp-2 break-words leading-snug" title={data.label} data-testid={`flow-node-title-${id}`}>
                 {data.label}
               </div>
               {incomplete.length > 0 && <AlertCircle className="w-4 h-4 text-signal shrink-0" aria-label="Needs setup" />}
             </div>
             {incomplete.length > 0 && (
               <div className="text-xs text-signal-ink" data-testid={`flow-node-incomplete-${id}`}>Needs setup</div>
+            )}
+            {orphaned && (
+              <div className="text-xs text-signal-ink" data-testid={`flow-node-orphan-${id}`}>Nothing leads to this step</div>
             )}
             {data.description && (
               <div className="text-xs text-muted-foreground">{data.description}</div>
@@ -176,30 +172,7 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
         <Handle id={isRouter ? ROUTER_HANDLE : undefined} type="source" position={Position.Bottom} className={NODE_HANDLE} data-testid={`flow-handle-${id}`} />
       )}
 
-      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <AlertDialogContent onClick={(e) => e.stopPropagation()} data-testid="flow-node-delete-dialog">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete "{data.label}"?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This node is configured. Deleting it will permanently remove its settings and any
-              edges connected to it. This can't be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              data-testid="flow-node-delete-confirm"
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                deleteNode(id);
-                setShowDeleteConfirm(false);
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteStepDialog nodeId={showDeleteConfirm ? id : null} onOpenChange={setShowDeleteConfirm} />
     </div>
   );
 });

@@ -4,16 +4,7 @@ import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { cn } from '@/lib/utils';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from './ui/alert-dialog';
+import { DeleteStepDialog } from './flow/DeleteStepDialog';
 import { useFlowContext } from '../contexts/FlowContext';
 import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { ActionConfigForm, TriggerConfigForm } from './flow/NodeConfigForms';
@@ -44,7 +35,7 @@ const ROUTE_TEXT: Record<string, string> = {
 };
 
 export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps) {
-  const { activeFlow, selectedNodeId, selectedEdgeId, updateNode, deleteNode, updateEdges } = useFlowContext();
+  const { activeFlow, selectedNodeId, selectedEdgeId, updateNode, updateNodeData, updateEdges } = useFlowContext();
   const selectedNode = activeFlow?.nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = activeFlow?.edges.find((e) => e.id === selectedEdgeId);
   const [isChangingTrigger, setIsChangingTrigger] = useState(false);
@@ -118,7 +109,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 id="node-title"
                 data-testid="flow-node-title-input"
                 value={selectedNode.data.label}
-                onChange={(e) => updateNode(selectedNode.id, { data: { ...selectedNode.data, label: e.target.value } })}
+                onChange={(e) => updateNodeData(selectedNode.id, (data) => ({ ...data, label: e.target.value }))}
                 className="font-medium"
               />
             </div>
@@ -160,7 +151,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                   label="Result"
                   optional
                   value={selectedNode.data.endConfig?.value}
-                  onChange={(v) => updateNode(selectedNode.id, { data: { ...selectedNode.data, endConfig: { value: v } } as FlowNodeData })}
+                  onChange={(v) => updateNodeData(selectedNode.id, (data) => ({ ...data, endConfig: { value: v } }) as FlowNodeData)}
                 />
               </div>
             )}
@@ -168,30 +159,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
         ) : null}
       </div>
 
-      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this step?</AlertDialogTitle>
-            <AlertDialogDescription>The step and its connections will be removed.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="flow-delete-cancel">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              data-testid="flow-delete-confirm"
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (selectedNodeId) {
-                  deleteNode(selectedNodeId);
-                  setShowDeleteConfirm(false);
-                  onToggle();
-                }
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteStepDialog nodeId={showDeleteConfirm ? selectedNodeId : null} onOpenChange={setShowDeleteConfirm} />
 
       {selectedNode && (
         <NodeSelectionModal

@@ -58,6 +58,7 @@ function searchInputCell(
         <Search className="h-3.5 w-3.5 shrink-0 text-steel-soft" />
       </InputGroupAddon>
       <InputGroupInput
+        aria-label={searchPlaceholder.replace(/\.{3}$/, '')}
         placeholder={searchPlaceholder}
         className="text-ui-text text-ink placeholder:text-steel-soft"
         value={searchValue}
@@ -144,6 +145,7 @@ export function FilterBar({
     cells.push(
       <Select key={`filter-${index}`} value={filter.value} onValueChange={filter.onChange}>
         <SelectTrigger
+          aria-label={`${filter.label}: ${current}`}
           className={flushTriggerClass}
           icon={<ChevronDown className="h-3.5 w-3.5 text-steel-soft" />}
         >

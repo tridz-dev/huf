@@ -5,6 +5,7 @@ import { flowService } from '../services/flowService';
 import { popSnapshot, pushSnapshot } from '../lib/flowUndoStack';
 import { BLOCKED_TOAST_ID } from '../lib/flowValidation';
 import { followRenamedTarget } from '../lib/flowEdgeLabels';
+import { removeStep, type RemoveStepMode } from '../lib/flowEdit';
 
 export type SaveState = 'saved' | 'saving' | 'unsaved' | 'error';
 
@@ -30,11 +31,20 @@ interface FlowContextType {
   updateNodesAndEdges: (nodes: FlowNode[], edges: FlowEdge[]) => void;
   addNode: (node: FlowNode) => void;
   updateNode: (nodeId: string, updates: Partial<FlowNode>) => void;
-  deleteNode: (nodeId: string) => void;
+  /** Change a step's data from the latest committed value, so quick consecutive edits never overwrite each other. */
+  updateNodeData: (nodeId: string, update: (data: FlowNode['data']) => FlowNode['data']) => void;
+  /** The latest committed copy of a step. */
+  getNode: (nodeId: string) => FlowNode | undefined;
+  /** Remove a step. Default `reconnect` joins the step before it to the step after it; `cascade` also removes what only it led to. */
+  deleteNode: (nodeId: string, mode?: RemoveStepMode) => void;
+  /** Remove one connection between two steps. */
+  deleteEdge: (edgeId: string) => void;
   addEdge: (edge: FlowEdge) => void;
   undo: () => void;
   canUndo: boolean;
   saveFlow: () => Promise<void>;
+  /** Publish or unpublish a flow; the active flow and the list pick up the new status. */
+  setFlowPublished: (flowId: string, published: boolean) => Promise<void>;
   refreshFlows: () => Promise<void>;
 }
 
@@ -248,6 +258,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
 
   const setActiveFlow = useCallback((flowId: string) => {
     setActiveFlowId(flowId);
+    // Never keep showing the previous flow while the next one loads: settings, Run and Publish would act on the wrong flow.
+    if (activeFlowRef.current?.id !== flowId) setActiveFlowState(flowService.getCachedFlow(flowId));
     setSelectedNodeId(null);
     undoStackRef.current = [];
     setUndoDepth(0);
@@ -257,6 +269,9 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   const createFlow = useCallback(async (name: string, category?: string) => {
     const newFlow = await flowService.createFlow(name, category);
     setActiveFlowId(newFlow.id);
+    setActiveFlowState(flowService.getCachedFlow(newFlow.id) ?? newFlow);
+    setHasUnsavedChanges(false);
+    setSaveState('saved');
     await refreshFlows();
     return newFlow;
   }, [refreshFlows]);
@@ -286,6 +301,15 @@ export function FlowProvider({ children }: { children: ReactNode }) {
       setActiveFlowId(null);
     }
   }, [activeFlowId, refreshFlows]);
+
+  const setFlowPublished = useCallback(async (flowId: string, published: boolean) => {
+    await flowService.setPublished(flowId, published);
+    const cached = flowService.getCachedFlow(flowId);
+    if (cached && flowId === activeFlowRef.current?.id) {
+      setActiveFlowState(prev => (prev ? { ...prev, status: cached.status } : prev));
+    }
+    await refreshFlows();
+  }, [refreshFlows]);
 
   // ─── Save Flow Logic ──────────────────────────────────────────────
 
@@ -391,6 +415,11 @@ export function FlowProvider({ children }: { children: ReactNode }) {
       ? followRenamedTarget(before.edges, nodeId, oldLabel, newLabel)
       : undefined;
     const edgesChanged = Boolean(before && renamedEdges && renamedEdges !== before.edges);
+    if (before) {
+      // Keep the ref current right away: two edits in the same tick must build on each other.
+      const updatedNodes = before.nodes.map(n => (n.id === nodeId ? { ...n, ...updates } : n));
+      activeFlowRef.current = { ...before, nodes: updatedNodes, ...(edgesChanged && renamedEdges ? { edges: renamedEdges } : {}) };
+    }
     setActiveFlowState(prev => {
       if (!prev) return prev;
       const updatedNodes = prev.nodes.map(n =>
@@ -404,6 +433,14 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     if (edgesChanged && renamedEdges) flowService.updateEdges(activeFlowId, renamedEdges);
     markUnsaved();
   }, [activeFlowId, markUnsaved]);
+
+  const getNode = useCallback((nodeId: string) => activeFlowRef.current?.nodes.find(n => n.id === nodeId), []);
+
+  const updateNodeData = useCallback((nodeId: string, update: (data: FlowNode['data']) => FlowNode['data']) => {
+    const current = activeFlowRef.current?.nodes.find(n => n.id === nodeId);
+    if (!current) return;
+    updateNode(nodeId, { data: update(current.data) });
+  }, [updateNode]);
 
   // Restore a prior nodes+edges snapshot. Goes through the same context-level
   // update as other structural mutations, so FlowCanvas's resync effect (keyed on
@@ -428,37 +465,59 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     restoreSnapshot(snapshot);
   }, [restoreSnapshot]);
 
-  const deleteNode = useCallback((nodeId: string) => {
+  const deleteNode = useCallback((nodeId: string, mode: RemoveStepMode = 'reconnect') => {
     if (!activeFlowId) return;
     const prev = activeFlowRef.current;
     if (!prev) return;
     const deletedNode = prev.nodes.find(n => n.id === nodeId);
     undoStackRef.current = pushSnapshot(undoStackRef.current, { nodes: prev.nodes, edges: prev.edges }, UNDO_STACK_LIMIT);
     setUndoDepth(undoStackRef.current.length);
-    const updatedNodes = prev.nodes.filter(n => n.id !== nodeId);
-    const updatedEdges = prev.edges.filter(
-      e => e.source !== nodeId && e.target !== nodeId
-    );
+    const { nodes: updatedNodes, edges: updatedEdges } = removeStep({ nodes: prev.nodes, edges: prev.edges }, nodeId, mode);
+    const removedCount = prev.nodes.length - updatedNodes.length;
     setActiveFlowState(current => {
       if (!current) return current;
       const updated = { ...current, nodes: updatedNodes, edges: updatedEdges };
       lastSyncedFlowRef.current = updated;
       return updated;
     });
-    flowService.deleteNode(activeFlowId, nodeId);
-    if (selectedNodeId === nodeId) {
+    flowService.updateNodesAndEdges(activeFlowId, updatedNodes, updatedEdges);
+    if (selectedNodeId && !updatedNodes.some(n => n.id === selectedNodeId)) {
       setSelectedNodeId(null);
     }
     markUnsaved();
     const label = (deletedNode?.data as { label?: string } | undefined)?.label;
     toast('Node deleted', {
-      description: label ? `"${label}" was removed from the flow.` : undefined,
+      description: removedCount > 1
+        ? `"${label ?? 'The step'}" and ${removedCount - 1} step${removedCount - 1 === 1 ? '' : 's'} after it were removed from the flow.`
+        : label ? `"${label}" was removed from the flow.` : undefined,
       action: {
         label: 'Undo',
         onClick: () => undo(),
       },
     });
   }, [activeFlowId, selectedNodeId, markUnsaved, undo]);
+
+  const deleteEdge = useCallback((edgeId: string) => {
+    if (!activeFlowId) return;
+    const prev = activeFlowRef.current;
+    if (!prev || !prev.edges.some(e => e.id === edgeId)) return;
+    undoStackRef.current = pushSnapshot(undoStackRef.current, { nodes: prev.nodes, edges: prev.edges }, UNDO_STACK_LIMIT);
+    setUndoDepth(undoStackRef.current.length);
+    const updatedEdges = prev.edges.filter(e => e.id !== edgeId);
+    setActiveFlowState(current => {
+      if (!current) return current;
+      const updated = { ...current, edges: updatedEdges };
+      lastSyncedFlowRef.current = updated;
+      return updated;
+    });
+    flowService.updateEdges(activeFlowId, updatedEdges);
+    setSelectedEdgeId(null);
+    markUnsaved();
+    toast('Connection removed', {
+      description: 'The step it led to is not connected any more. Connect it again or delete it.',
+      action: { label: 'Undo', onClick: () => undo() },
+    });
+  }, [activeFlowId, markUnsaved, undo]);
 
   const handleSetSelectedNode = useCallback((nodeId: string | null) => {
     toast.dismiss(BLOCKED_TOAST_ID);
@@ -506,11 +565,15 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNodesAndEdges,
     addNode,
     updateNode,
+    updateNodeData,
+    getNode,
     deleteNode,
+    deleteEdge,
     addEdge,
     undo,
     canUndo: undoDepth > 0,
     saveFlow,
+    setFlowPublished,
     refreshFlows,
   }), [
     flows,
@@ -534,11 +597,15 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNodesAndEdges,
     addNode,
     updateNode,
+    updateNodeData,
+    getNode,
     deleteNode,
+    deleteEdge,
     addEdge,
     undo,
     undoDepth,
     saveFlow,
+    setFlowPublished,
     refreshFlows,
   ]);
 

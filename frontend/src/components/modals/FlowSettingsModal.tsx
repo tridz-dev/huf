@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -51,8 +51,16 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
   const navigate = useNavigate();
   const { canManage, readOnlyReason } = useFlowPermissions();
 
+  // The flow whose values the fields currently hold. Fields are filled once per opening, never again
+  // while the dialog stays open, so a background refresh of the flow can't put the old name back over an edit.
+  const filledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (activeFlow && open) {
+    if (!open) {
+      filledFor.current = null;
+      return;
+    }
+    if (activeFlow && filledFor.current !== activeFlow.id) {
+      filledFor.current = activeFlow.id;
       setName(activeFlow.name || '');
       setDescription(activeFlow.description || '');
       setCategory(activeFlow.category || '');

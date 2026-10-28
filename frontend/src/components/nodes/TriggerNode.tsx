@@ -87,7 +87,7 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <div className="text-sm font-medium text-card-foreground truncate" data-testid={`flow-node-title-${id}`}>
+              <div className="text-sm font-medium min-w-0 text-card-foreground line-clamp-2 break-words leading-snug" title={data.label} data-testid={`flow-node-title-${id}`}>
                 {data.label}
               </div>
               {incomplete.length > 0 && (

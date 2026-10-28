@@ -1,4 +1,6 @@
+import { useEffect, useRef, useState } from 'react';
 import { ScheduleEditor } from './flow/ScheduleEditor';
+import { getTriggerDoctypeInfo } from '../services/flowApi';
 import { Label } from './ui/label';
 import { Combobox } from './ui/combobox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -31,6 +33,41 @@ export function FlowTriggerPanel({ kind, docTypes, loadingDocTypes, value, onCha
   const docForm = {
     referenceDoctype: value.doctype ?? '',
   };
+  // Submit and cancel only exist for document types that can be submitted. null = not known yet.
+  const [submittable, setSubmittable] = useState<{ doctype: string; yes: boolean } | null>(null);
+  const [resetNote, setResetNote] = useState<string | null>(null);
+  const eventRef = useRef(value.event);
+  eventRef.current = value.event;
+
+  useEffect(() => {
+    const doctype = value.doctype;
+    if (kind !== 'doc-event' || !doctype) {
+      setSubmittable(null);
+      return;
+    }
+    let cancelled = false;
+    getTriggerDoctypeInfo(doctype)
+      .then((info) => {
+        if (cancelled) return;
+        setSubmittable({ doctype, yes: info.is_submittable });
+        const event = eventRef.current;
+        if (!info.is_submittable && (event === 'on_submit' || event === 'on_cancel')) {
+          setResetNote(`"${EVENT_LABELS[event]}" is not available for ${doctype}, because it cannot be submitted. Choose another event.`);
+          onChange({ event: undefined });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSubmittable(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // onChange is a fresh closure on every render; the doctype is the only input that should refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, value.doctype]);
+
+  const knownNotSubmittable = submittable !== null && submittable.doctype === value.doctype && !submittable.yes;
+  const events = DOC_EVENTS.filter((e) => !(knownNotSubmittable && (e === 'on_submit' || e === 'on_cancel')));
 
   return (
     <div className="space-y-3">
@@ -49,7 +86,10 @@ export function FlowTriggerPanel({ kind, docTypes, loadingDocTypes, value, onCha
               testId="flow-field-trigger.doc-event-doctype"
               options={docTypes}
               value={docForm.referenceDoctype}
-              onValueChange={(v) => onChange({ doctype: v })}
+              onValueChange={(v) => {
+                setResetNote(null);
+                onChange({ doctype: v });
+              }}
               placeholder={loadingDocTypes ? 'Loading...' : 'Select a document type...'}
               disabled={loadingDocTypes}
               searchPlaceholder="Search document types..."
@@ -61,18 +101,24 @@ export function FlowTriggerPanel({ kind, docTypes, loadingDocTypes, value, onCha
           </div>
           <div>
             <Label htmlFor="doc-event">When it fires</Label>
-            <Select value={value.event ?? ''} onValueChange={(v) => onChange({ event: v })}>
+            <Select value={value.event ?? ''} onValueChange={(v) => {
+              setResetNote(null);
+              onChange({ event: v });
+            }}>
               <SelectTrigger id="doc-event" data-testid="flow-field-trigger.doc-event-event">
                 <SelectValue placeholder="Choose an event..." />
               </SelectTrigger>
               <SelectContent>
-                {DOC_EVENTS.map((e) => (
+                {events.map((e) => (
                   <SelectItem key={e} value={e} data-testid={`flow-option-doc-event-${e}`}>
                     {EVENT_LABELS[e]}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {resetNote ? (
+              <p role="status" className="mt-1 text-[11px] text-signal-ink" data-testid="flow-doc-event-reset-note">{resetNote}</p>
+            ) : null}
             {errors.event ? (
               <p role="alert" className="mt-1 text-[11px] text-destructive" data-testid="flow-error-trigger.doc-event-event">{errors.event}</p>
             ) : null}

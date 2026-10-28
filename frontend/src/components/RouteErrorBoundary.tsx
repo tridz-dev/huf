@@ -31,17 +31,17 @@ export function RouteErrorBoundary() {
 
 	if (chunkError) {
 		return (
-			<div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-paper text-center px-6">
+			<div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-paper text-center px-6" data-testid="chunk-error-screen">
 				<p className="text-sm text-ink font-medium">
-					{alreadyRetried ? 'A new version is available.' : 'Updating to the latest version…'}
+					{alreadyRetried ? 'Something went wrong' : 'Updating to the latest version…'}
 				</p>
 				{alreadyRetried && (
 					<>
 						<p className="text-xs text-steel max-w-sm">
-							The app was updated in the background. Refresh once to load the latest version.
+							A part of the app could not be loaded, usually because it was updated in the background. Reload to get the latest version.
 						</p>
 						<Button size="sm" onClick={() => window.location.reload()}>
-							Refresh
+							Reload
 						</Button>
 					</>
 				)}
@@ -51,7 +51,7 @@ export function RouteErrorBoundary() {
 
 	return (
 		<div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-paper text-center px-6">
-			<p className="text-sm text-ink font-medium">Something went wrong.</p>
+			<p className="text-sm text-ink font-medium">Something went wrong</p>
 			<p className="text-xs text-steel max-w-md break-words">
 				{(error as { message?: string })?.message || 'Unexpected error'}
 			</p>

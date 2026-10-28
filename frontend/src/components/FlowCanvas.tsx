@@ -36,6 +36,8 @@ import { InsertableEdge, InsertableEdgeData } from './edges/InsertableEdge';
 import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { FlowNodeRail, NODE_RAIL_ACTION_CATEGORY, NodeRailCategory } from './FlowNodeRail';
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
+import { DeleteStepDialog } from './flow/DeleteStepDialog';
+import { connectionProblem } from '../lib/flowEdit';
 import { useFlowContext } from '../contexts/FlowContext';
 import { flowService } from '../services/flowService';
 import { makeFlowEdge, edgeRoute } from '../services/flowSerializer';
@@ -67,8 +69,10 @@ export function FlowCanvas({
     updateNode,
     deleteNode,
     selectedNodeId,
+    selectedEdgeId,
     setSelectedNode,
     setSelectedEdge,
+    deleteEdge,
     saveState,
     undo,
     canUndo
@@ -76,6 +80,8 @@ export function FlowCanvas({
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
   // Delete / Backspace on a selected step asks first (the click-to-delete buttons already do).
   const [keyboardDeleteId, setKeyboardDeleteId] = useState<string | null>(null);
+  // Same for a selected connection: the button on the line and the Delete key both ask first.
+  const [edgeDeleteId, setEdgeDeleteId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<Node<FlowNodeData>[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -273,6 +279,11 @@ export function FlowCanvas({
       const target = connection.target;
       const handle = connection.sourceHandle as FlowEdgeRoute | null;
       const route: FlowEdgeRoute = handle ?? 'next';
+      const problem = connectionProblem({ nodes, edges }, { source, target, route });
+      if (problem) {
+        toast.error("Can't connect these steps", { description: problem, id: 'flow-connection-refused' });
+        return;
+      }
       const targetLabel = nodes.find((n) => n.id === target)?.data.label;
       // Single-target routes (next/true/false/approve/...) replace an existing edge on the same handle.
       const multi = route === 'option' || route === 'body';
@@ -326,7 +337,16 @@ export function FlowCanvas({
       // Only when the user is on the canvas (or nowhere in particular), never in another part of the page.
       if (target && target !== document.body && !target.closest('[data-testid="flow-canvas"]')) return;
       const node = nodes.find((n) => n.selected && !n.id.startsWith('ghost-')) ?? nodes.find((n) => n.id === selectedNodeId);
-      if (!node || node.data.status === 'running' || node.data.status === 'waiting') return;
+      if (!node) {
+        // No step selected: Delete removes the selected connection (after asking).
+        const edge = edges.find((ed) => ed.selected && !ed.id.startsWith('edge-ghost-')) ?? edges.find((ed) => ed.id === selectedEdgeId);
+        if (edge) {
+          e.preventDefault();
+          setEdgeDeleteId(edge.id);
+        }
+        return;
+      }
+      if (node.data.status === 'running' || node.data.status === 'waiting') return;
       e.preventDefault();
       if (node.data.nodeType === 'action' && !actionHasConfiguredContent(node.data)) {
         deleteNode(node.id);
@@ -334,7 +354,7 @@ export function FlowCanvas({
       }
       setKeyboardDeleteId(node.id);
     },
-    [nodes, selectedNodeId, deleteNode]
+    [nodes, edges, selectedNodeId, selectedEdgeId, deleteNode]
   );
 
   useEffect(() => {
@@ -619,7 +639,7 @@ export function FlowCanvas({
       edges.map((edge) => ({
         ...edge,
         type: 'insertable',
-        data: { ...(edge.data ?? {}), sourceNodeId: edge.source, route: edgeRoute(edge), onInsertNode: handleAddNode }
+        data: { ...(edge.data ?? {}), sourceNodeId: edge.source, route: edgeRoute(edge), onInsertNode: handleAddNode, onRemove: (edgeId: string) => setEdgeDeleteId(edgeId) }
       })),
     [edges, handleAddNode]
   );
@@ -672,6 +692,8 @@ export function FlowCanvas({
         <MiniMap
           position="top-left"
           ariaLabel="Flow overview"
+          pannable
+          zoomable
           nodeColor={(node) => {
             if (node.type === 'trigger') return 'var(--primary)';
             if (node.type === 'end') return 'var(--good)';
@@ -782,29 +804,36 @@ export function FlowCanvas({
         onSaveAction={handleSelectAction}
       />
 
-      <AlertDialog open={keyboardDeleteId !== null} onOpenChange={(open) => !open && setKeyboardDeleteId(null)}>
-        <AlertDialogContent data-testid="flow-node-delete-dialog">
+      <AlertDialog open={edgeDeleteId !== null} onOpenChange={(open) => !open && setEdgeDeleteId(null)}>
+        <AlertDialogContent data-testid="flow-edge-delete-dialog">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete "{nodes.find((n) => n.id === keyboardDeleteId)?.data.label ?? 'this step'}"?</AlertDialogTitle>
+            <AlertDialogTitle>Remove this connection?</AlertDialogTitle>
             <AlertDialogDescription>
-              Its settings and connections will be removed. You can undo this right after.
+              {(() => {
+                const edge = edges.find((ed) => ed.id === edgeDeleteId);
+                const from = nodes.find((n) => n.id === edge?.source)?.data.label ?? 'the step';
+                const to = nodes.find((n) => n.id === edge?.target)?.data.label ?? 'the next step';
+                return `"${from}" will no longer lead to "${to}". The steps stay on the canvas; connect them again or delete the one left over. You can undo this right after.`;
+              })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              data-testid="flow-node-delete-confirm"
+              data-testid="flow-edge-delete-confirm"
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                if (keyboardDeleteId) deleteNode(keyboardDeleteId);
-                setKeyboardDeleteId(null);
+                if (edgeDeleteId) deleteEdge(edgeDeleteId);
+                setEdgeDeleteId(null);
               }}
             >
-              Delete
+              Remove connection
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <DeleteStepDialog nodeId={keyboardDeleteId} onOpenChange={(open) => !open && setKeyboardDeleteId(null)} />
 
       {activeFlow && (
         <ConvertToProcedureDialog

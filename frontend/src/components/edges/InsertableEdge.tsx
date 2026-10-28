@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import { BaseEdge, EdgeLabelRenderer, EdgeProps, getBezierPath } from 'reactflow';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { FlowEdgeRoute } from '../../types/flow.types';
 
@@ -9,6 +9,8 @@ export interface InsertableEdgeData {
   sourceNodeId: string;
   route?: FlowEdgeRoute;
   onInsertNode?: (sourceNodeId: string, route?: FlowEdgeRoute) => void;
+  /** Ask to remove this connection (the canvas confirms first). */
+  onRemove?: (edgeId: string) => void;
 }
 
 /**
@@ -26,7 +28,7 @@ const SHOWS_EDGE_LABEL = new Set<FlowEdgeRoute>(['option', 'error']);
  * (`onAddNode`/`handleSelectAction` re-parents the downstream edge).
  */
 export const InsertableEdge = memo(
-  ({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, markerEnd, data, label }: EdgeProps<InsertableEdgeData>) => {
+  ({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, markerEnd, data, label, selected }: EdgeProps<InsertableEdgeData>) => {
     const [hovered, setHovered] = useState(false);
     const [edgePath, labelX, labelY] = getBezierPath({
       sourceX,
@@ -39,7 +41,13 @@ export const InsertableEdge = memo(
 
     return (
       <>
-        <BaseEdge id={id} path={edgePath} style={style} markerEnd={markerEnd} />
+        <BaseEdge
+          id={id}
+          path={edgePath}
+          style={selected ? { ...style, stroke: 'var(--signal)', strokeWidth: 3 } : style}
+          markerEnd={markerEnd}
+          interactionWidth={24}
+        />
         {/* Wider, invisible hit area so the hover affordance is easy to reach. */}
         <path
           d={edgePath}
@@ -49,10 +57,7 @@ export const InsertableEdge = memo(
           className="cursor-pointer"
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
-          onClick={(e) => {
-            e.stopPropagation();
-            data?.onInsertNode?.(data.sourceNodeId, data.route);
-          }}
+          data-testid={`flow-edge-line-${id}`}
         />
         <EdgeLabelRenderer>
           {typeof label === 'string' && label && SHOWS_EDGE_LABEL.has(data?.route ?? 'next') ? (
@@ -85,12 +90,37 @@ export const InsertableEdge = memo(
               className={cn(
                 'flex items-center justify-center w-6 h-6 rounded-full border border-line bg-panel text-muted-foreground shadow-sm transition-all duration-150',
                 'hover:border-steel-soft hover:text-ink hover:scale-110',
-                hovered ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'
+                (hovered || selected) ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'
               )}
             >
               <Plus className="w-3 h-3" />
             </button>
           </div>
+          {selected && (
+            <div
+              style={{
+                position: 'absolute',
+                transform: `translate(-50%, -50%) translate(${labelX + 100}px, ${labelY}px)`,
+                pointerEvents: 'all'
+              }}
+              className="nodrag nopan"
+            >
+              <button
+                type="button"
+                aria-label="Remove connection"
+                title="Remove connection"
+                data-testid={`flow-edge-remove-${id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  data?.onRemove?.(id);
+                }}
+                className="flex items-center gap-1 rounded-md border border-line bg-panel px-2 py-1 text-xs text-destructive shadow-sm hover:bg-destructive/10"
+              >
+                <Trash2 className="w-3 h-3" />
+                Remove connection
+              </button>
+            </div>
+          )}
         </EdgeLabelRenderer>
       </>
     );

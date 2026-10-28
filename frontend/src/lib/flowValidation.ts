@@ -9,7 +9,8 @@ import { cronProblem } from './flowSchedule';
 import { secretProblem } from './flowWebhookUi';
 import { requiredInputsFor } from './flowToolSchemas';
 import { edgeRoute } from '../services/flowSerializer';
-import type { FlowEdge } from '../types/flow.types';
+import { unreachableNodeIds } from './flowEdit';
+import type { FlowEdge, FlowNode } from '../types/flow.types';
 
 /** Id of the "Can't save yet" / "Finish setting up" toast, so the next edit or selection can dismiss it. */
 export const BLOCKED_TOAST_ID = 'flow-blocked';
@@ -210,28 +211,16 @@ export function validateFlow(nodes: NodeLike[], edges: EdgeLike[], purpose: 'sav
     issues.unshift({ nodeId: '', nodeLabel: 'Flow', kind: 'flow', field: 'trigger', message: 'Add a trigger so the flow knows when to start.' });
   }
   // A step nothing leads to can never run, and the server refuses to store it.
-  const reached = new Set(nodes.filter((n) => n.data.nodeType === 'trigger').map((n) => n.id));
-  const queue = [...reached];
-  while (queue.length) {
-    const from = queue.pop() as string;
-    for (const e of edges) {
-      if (e.source === from && !reached.has(e.target)) {
-        reached.add(e.target);
-        queue.push(e.target);
-      }
-    }
-  }
-  if (reached.size > 0) {
-    for (const n of nodes) {
-      if (!reached.has(n.id)) {
-        issues.push({
-          nodeId: n.id,
-          nodeLabel: n.data.label || nodeKind(n),
-          kind: 'flow',
-          field: 'connection',
-          message: 'Nothing leads to this step. Connect it to the flow or delete it.',
-        });
-      }
+  const orphans = unreachableNodeIds(nodes as Array<Pick<FlowNode, 'id' | 'data'>>, edges);
+  for (const n of nodes) {
+    if (orphans.has(n.id)) {
+      issues.push({
+        nodeId: n.id,
+        nodeLabel: n.data.label || nodeKind(n),
+        kind: 'flow',
+        field: 'connection',
+        message: 'Nothing leads to this step. Connect it to the flow or delete it.',
+      });
     }
   }
   return issues;

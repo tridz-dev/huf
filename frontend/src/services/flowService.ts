@@ -23,6 +23,8 @@ import {
   rejectFlowRun as apiRejectFlowRun,
   resumeFlowRun as apiResumeFlowRun,
   markFlowRunFailed as apiMarkFlowRunFailed,
+  publishFlow as apiPublishFlow,
+  unpublishFlow as apiUnpublishFlow,
 } from './flowApi';
 import type { FlowRunSummary, FlowRunDetail } from './flowApi';
 import { serializeFlow, deserializeFlow, mapBackendStatusToFrontend, defaultContract } from './flowSerializer';
@@ -219,6 +221,13 @@ class FlowService {
     };
     await updateFlowDefinitionFields(id, { status: statusMap[status] || 'Draft' });
     return this.updateFlowLocal(id, { status });
+  }
+
+  /** Publish (status Active) or unpublish (back to Draft) a flow, then mirror the status in the cache. */
+  async setPublished(id: string, published: boolean): Promise<Flow | null> {
+    if (published) await apiPublishFlow(id);
+    else await apiUnpublishFlow(id);
+    return this.updateFlowLocal(id, { status: published ? 'active' : 'draft' });
   }
 
   /** Run a flow via the backend */
