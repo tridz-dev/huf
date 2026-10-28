@@ -13,6 +13,7 @@ import { FlowTriggerPanel } from '../FlowTriggerPanel';
 import { useFlowContext } from '../../contexts/FlowContext';
 import { getAgents, getDocTypes, getRoles } from '../../services/agentApi';
 import { getFlowTools, type FlowTool } from '../../services/toolApi';
+import { registerToolSchemas } from '@/lib/flowToolSchemas';
 import { TRANSFORM_OPS, getTransformOp } from '@/lib/flowTransformOps';
 import { branchHandlesFor } from '@/lib/flowBranches';
 import { validateNode, TOOL_REQUIRED_INPUT, nodeKind } from '@/lib/flowValidation';
@@ -276,6 +277,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
     setLoading(true);
     getFlowTools()
       .then((list) => {
+        registerToolSchemas(list || []);
         const by: Record<string, FlowTool> = {};
         (list || []).forEach((t) => { by[t.name] = t; });
         setToolsByName(by);
