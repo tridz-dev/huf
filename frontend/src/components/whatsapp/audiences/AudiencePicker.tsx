@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field } from '@/components/ui/field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { errorText } from '@/services/whatsappApi';
+import { errorText, type WhatsAppResult } from '@/services/whatsappApi';
 import {
   getAudience, listAudiences, previewAudienceSelection,
   type Audience, type AudienceSelectionItem, type SelectionPreview,
@@ -20,10 +20,13 @@ interface Props {
    */
   broadcast?: string;
   onPreview?: (p: SelectionPreview | null) => void;
+  /** Server preview used before the broadcast exists (instead of the size estimate). Change `previewKey` to re-run it. */
+  previewer?: (selection: AudienceSelectionItem[]) => Promise<WhatsAppResult<SelectionPreview>>;
+  previewKey?: string;
 }
 
 /** Reusable multi-select: pick audiences, narrow each by tag, include or exclude, see live counts. */
-export function AudiencePicker({ gateway, value, onChange, broadcast, onPreview }: Props) {
+export function AudiencePicker({ gateway, value, onChange, broadcast, onPreview, previewer, previewKey }: Props) {
   const [audiences, setAudiences] = useState<Audience[]>([]);
   const [tagsByAudience, setTags] = useState<Record<string, string[]>>({});
   const [preview, setPreview] = useState<SelectionPreview | null>(null);
@@ -39,6 +42,13 @@ export function AudiencePicker({ gateway, value, onChange, broadcast, onPreview 
   useEffect(() => {
     const id = ++seq.current;
     if (!value.length) { setPreview(null); onPreview?.(null); return; }
+    if (!broadcast && previewer) {
+      void previewer(value).then((r) => {
+        if (id !== seq.current) return;
+        if (r.success) { setPreview(r); setError(''); onPreview?.(r); } else { setError(errorText(r)); onPreview?.(null); }
+      });
+      return;
+    }
     if (!broadcast) {
       // No broadcast yet: the server preview needs one, so estimate from the audience sizes.
       if (!audiences.length) return;
@@ -46,12 +56,12 @@ export function AudiencePicker({ gateway, value, onChange, broadcast, onPreview 
       setPreview(est); setError(''); onPreview?.(est);
       return;
     }
-    void previewAudienceSelection(broadcast, value).then((r) => {
+    void previewAudienceSelection(broadcast as string, value).then((r) => {
       if (id !== seq.current) return;
       if (r.success) { setPreview(r); setError(''); onPreview?.(r); } else { setError(errorText(r)); onPreview?.(null); }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, broadcast, audiences]);
+  }, [key, broadcast, audiences, previewKey]);
 
   useEffect(() => {
     for (const v of value) {

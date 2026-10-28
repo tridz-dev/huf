@@ -8,7 +8,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Field } from '@/components/ui/field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { errorText, listTemplates, type WhatsAppTemplate } from '@/services/whatsappApi';
-import { addBroadcastRecipients, attestBroadcastConsent, createBroadcast, deleteBroadcast, getBroadcastTemplateParams, previewBroadcast, startBroadcast, type AddRecipientsResult, type BroadcastPreview, type BroadcastRecipientInput, type BroadcastTemplateParams, type BroadcastTemplateVariable, toIssue, type BroadcastSendVia } from './broadcastApi';
+import { addBroadcastRecipients, attestBroadcastConsent, createBroadcast, deleteBroadcast, getBroadcastTemplateParams, previewBroadcast, startBroadcast, type AddRecipientsResult, type BroadcastPreview, type BroadcastRecipientInput, type BroadcastTemplateParams, type BroadcastTemplateVariable, toIssue, type BroadcastSendVia, adaptAddResult } from './broadcastApi';
+import type { AudienceSelectionItem, SelectionPreview } from '../audiences/audiencesApi';
+import { RecipientsStep } from './recipients/RecipientsStep';
+import { setBroadcastAudiences, type ConsentCover } from './recipients/audienceSelectionApi';
 import { getBroadcastLimits, limitFlag, limitNumber, type BroadcastLimit } from './limitsApi';
 
 const varKey = (v: BroadcastTemplateVariable, i: number) => (v.name ?? String(v.index ?? i + 1));
@@ -72,6 +75,12 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   const [text, setText] = useState('');
   const [csv, setCsv] = useState<string | null>(null);
   const [result, setResult] = useState<AddRecipientsResult | null>(null);
+  const [selection, setSelection] = useState<AudienceSelectionItem[]>([]);
+  const [audPreview, setAudPreview] = useState<SelectionPreview | null>(null);
+  const [listsResult, setListsResult] = useState<AddRecipientsResult | null>(null);
+  const [cover, setCover] = useState<ConsentCover | null>(null);
+  const manualDone = useRef(false);
+  const manualAdded = useRef(0);
   const [consent, setConsent] = useState(false);
   const [source, setSource] = useState('');
   const [preview, setPreview] = useState<BroadcastPreview | null>(null);
@@ -157,18 +166,34 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
       setBroadcast(id);
     }
     const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-    const res = await addBroadcastRecipients(id, csv !== null ? { csvText: csv } : hasHeaderRow(text) ? { csvText: text } : { recipients: parseRecipientLines(lines, named, vars) });
-    if (!res.success) return fail(res);
-    setResult(res);
+    let added = 0;
+    if ((csv !== null || lines.length) && !manualDone.current) {
+      const res = await addBroadcastRecipients(id, csv !== null ? { csvText: csv } : hasHeaderRow(text) ? { csvText: text } : { recipients: parseRecipientLines(lines, named, vars) });
+      if (!res.success) return fail(res);
+      manualDone.current = true;
+      manualAdded.current = res.added;
+      setResult(res);
+    }
+    // Lists go in after the manual rows so the consent cover is computed over everything.
+    if (selection.length) {
+      const res = await setBroadcastAudiences(id, selection);
+      if (!res.success) return fail(res);
+      if (res.blocked.length) return fail({ success: false, error: 'audience_purpose_mismatch', message: res.blocked.map((b) => b.message).join(' ') });
+      setListsResult(adaptAddResult(res));
+      setCover(res.consent);
+      added += res.added;
+    }
     setBusy(false);
-    setReviewing(res.added > 0);
+    setReviewing(added + manualAdded.current > 0);
     return true;
   };
 
   const submitConsent = async (): Promise<boolean> => {
     setBusy(true); setErr('');
-    const a = await attestBroadcastConsent(broadcast, source.trim());
-    if (!a.success) return fail(a);
+    if (!covered) {
+      const a = await attestBroadcastConsent(broadcast, source.trim());
+      if (!a.success) return fail(a);
+    }
     const p = await previewBroadcast(broadcast);
     if (!p.success) return fail(p);
     setPreview(p.preview);
@@ -212,6 +237,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
     setText('');
   };
 
+  const covered = !!cover?.satisfied;
   const blocking = (preview?.blocking ?? []).map(toIssue);
   const warnings = (preview?.warnings ?? []).map(toIssue);
   const allAcked = warnings.every((w) => acked[w.code]);
@@ -219,8 +245,8 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   const expected = preview ? String(preview.queued) : '';
   const canNext = [
     !!tpl && paramsReady,
-    (csv !== null || text.trim().length > 0) && !busy,
-    consent && source.trim().length > 0 && !busy,
+    (csv !== null || text.trim().length > 0 || selection.length > 0) && !(audPreview?.blocked.length) && !busy,
+    (covered || (consent && source.trim().length > 0)) && !busy,
   ][step];
 
   const next = async () => {
@@ -331,41 +357,21 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
         </div>
       )}
 
-      {(step === 1) && (
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <Label htmlFor="bc-recipients">Recipients (one phone number per line)</Label>
-            <Textarea id="bc-recipients" rows={8} value={text} disabled={reviewing || csv !== null} onChange={(e) => setText(e.target.value)} placeholder="+14155550101" />
-            <p className="text-xs text-steel">
-              {vars.length > 0
-                ? `Columns: phone, ${vars.map((v, i) => varKey(v, i)).join(', ')} (comma or tab separated). Missing values use the defaults from step 1.`
-                : 'Columns: phone.'}
-              {extraColumns.length ? ` For per-recipient values, start with a header line such as phone,${extraColumns.join(',')}; an empty cell uses the default.` : ''}
-            </p>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="bc-csv">Or upload a CSV (header: phone)</Label>
-            <Input id="bc-csv" type="file" accept=".csv,text/csv" disabled={reviewing} onChange={(e) => void onFile(e.target.files?.[0])} />
-            {csv !== null ? <p className="text-xs text-steel">CSV loaded ({csv.split('\n').length - 1} rows)</p> : null}
-          </div>
-          {result ? (
-            <div role="status" className="rounded-md border p-3 text-sm">
-              <p><strong>{result.added}</strong> recipients added.</p>
-              {result.invalidTotal ? (
-                <div><p>{result.invalidTotal} invalid{result.invalidTotal > result.invalid.length ? ` (showing ${result.invalid.length})` : ''}:</p>
-                  <ul className="list-disc pl-5">{result.invalid.map((x, i) => <li key={i}>{x.recipient ?? ''}{x.reason ? `: ${x.reason}` : ''}</li>)}</ul></div>
-              ) : null}
-              {result.skippedTotal ? (
-                <div><p>{result.skippedTotal} skipped{result.skippedTotal > result.skipped.length ? ` (showing ${result.skipped.length})` : ''}:</p>
-                  <ul className="list-disc pl-5">{result.skipped.map((x, i) => <li key={i}>{x.recipient}: {x.reason}</li>)}</ul></div>
-              ) : null}
-              {result.added === 0 ? <p className="text-destructive">No valid recipients. Fix the list and try again.</p> : null}
-            </div>
-          ) : null}
-        </div>
+      {step === 1 && (
+        <RecipientsStep
+          gateway={gateway} templateCategory={tpl?.category} selection={selection} onSelection={setSelection}
+          onAudiencePreview={setAudPreview} text={text} onText={setText} csv={csv} onFile={(f) => void onFile(f)}
+          locked={reviewing} result={result} listsResult={listsResult}
+          columnsHint={`${vars.length > 0
+            ? `Columns: phone, ${vars.map((v, i) => varKey(v, i)).join(', ')} (comma or tab separated). Missing values use the defaults from step 1.`
+            : 'Columns: phone.'}${extraColumns.length ? ` For per-recipient values, start with a header line such as phone,${extraColumns.join(',')}; an empty cell uses the default.` : ''}`}
+        />
       )}
 
       {step === 2 && (
+        covered ? (
+          <p role="status" className="text-sm">Consent covered by: {cover?.audiences.map((a) => a.title ?? a.audience).join(', ')}. Each list was confirmed when it was created, so there is nothing more to confirm here.</p>
+        ) : (
         <div className="space-y-3">
           <div className="flex items-start gap-2">
             <Checkbox id="bc-consent" checked={consent} onCheckedChange={(v) => setConsent(v === true)} />
@@ -376,6 +382,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
             <Input id="bc-source" value={source} onChange={(e) => setSource(e.target.value)} />
           </div>
         </div>
+        )
       )}
 
       {step === 3 && preview && (
