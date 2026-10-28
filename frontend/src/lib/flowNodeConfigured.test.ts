@@ -9,24 +9,23 @@ describe('actionHasConfiguredContent', () => {
   it('is false for a freshly picked action type with no fields filled', () => {
     // NodeSelectionModal sets configured: true as soon as the type is picked.
     expect(check({ type: 'agent-run' }, true)).toBe(false);
-    expect(check({ type: 'http-request', url: '   ' }, true)).toBe(false);
+    expect(check({ type: 'tool-call', tool_id: '   ' }, true)).toBe(false);
   });
 
   it('is true once a meaningful field has content', () => {
-    expect(check({ type: 'agent-run', agent_name: 'support' })).toBe(true);
-    expect(check({ type: 'tool-call', tool_name: 'search' })).toBe(true);
-    expect(check({ type: 'http-request', url: 'https://example.com' })).toBe(true);
-    expect(check({ type: 'loop', iterate_over: 'items' })).toBe(true);
+    expect(check({ type: 'agent-run', agent: 'support' })).toBe(true);
+    expect(check({ type: 'tool-call', tool_id: 'search' })).toBe(true);
+    expect(check({ type: 'foreach', items: { $from: 'input.items' } })).toBe(true);
   });
 
-  it('treats any condition branch target as configuration', () => {
-    expect(check({ type: 'condition', true_node: 'n1' })).toBe(true);
+  it('treats a condition expression as configuration', () => {
+    expect(check({ type: 'condition', expression: "input['a'] > 1" })).toBe(true);
     expect(check({ type: 'condition' })).toBe(false);
   });
 
   it('treats approval assignees as configuration', () => {
-    expect(check({ type: 'human.approval', assigned_user: ['a@b.c'] })).toBe(true);
-    expect(check({ type: 'human.approval', assigned_user: [] })).toBe(false);
+    expect(check({ type: 'human.approval', approver_users: ['a@b.c'] })).toBe(true);
+    expect(check({ type: 'human.approval', approver_users: [] })).toBe(false);
   });
 
   it('treats a chosen transform op as configuration', () => {

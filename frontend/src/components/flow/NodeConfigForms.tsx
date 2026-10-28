@@ -20,6 +20,7 @@ import { generateWebhookSecret, webhookUrl, webhookUsage } from '@/lib/flowWebho
 import { actionCardId, actionLabel } from '@/lib/flowLabels';
 import { copyText } from '@/lib/clipboard';
 import { linkRoutes } from '@/lib/link-routes';
+import { edgeRoute } from '../../services/flowSerializer';
 import type { FlowNodeData } from '../../types/flow.types';
 
 type Cfg = Record<string, unknown>;
@@ -222,17 +223,17 @@ function BranchRows({ nodeId, cfgType, cfg }: { nodeId: string; cfgType: string;
       <Label size="sm">Where each path goes</Label>
       <p className="text-[11px] text-muted-foreground">Drag from the matching dot on the step, or use its Add step button.</p>
       {handles.map((h) => {
-        const edge = activeFlow?.edges.find((e) => e.source === nodeId && e.sourceHandle === h.id);
+        const edge = activeFlow?.edges.find((e) => e.source === nodeId && edgeRoute(e) === h.route);
         const target = activeFlow?.nodes.find((n) => n.id === edge?.target);
         return (
-          <div key={h.id} className="flex items-center justify-between rounded-md border border-border px-2 py-1.5 text-xs" data-testid={`flow-branch-${h.id}`}>
+          <div key={h.route} className="flex items-center justify-between rounded-md border border-border px-2 py-1.5 text-xs" data-testid={`flow-branch-${h.route}`}>
             <span className="font-medium">{h.label}</span>
             {target ? (
               <button type="button" className="text-primary hover:underline truncate max-w-[150px]" onClick={() => setSelectedNode(target.id)}>
                 {target.data.label}
               </button>
             ) : (
-              <span className="text-muted-foreground" data-testid={`flow-branch-${h.id}-empty`}>Not connected</span>
+              <span className="text-muted-foreground" data-testid={`flow-branch-${h.route}-empty`}>Not connected</span>
             )}
           </div>
         );
@@ -447,7 +448,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
   }
 
   if (type === 'router') {
-    const out = (activeFlow?.edges ?? []).filter((e) => e.source === nodeId);
+    const out = (activeFlow?.edges ?? []).filter((e) => e.source === nodeId && edgeRoute(e) === 'option');
     const labelOf = (id: string) => activeFlow?.nodes.find((n) => n.id === id)?.data.label ?? id;
     return (
       <Section title={title} hint="Connect one arrow from this step to each possible next step and name it. The AI picks the arrow whose name fits best.">
@@ -522,7 +523,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
     );
   }
 
-  if (type === 'loop') {
+  if (type === 'foreach') {
     const itemsRef = str(asObj(cfg.items).$from);
     const collectRef = str(asObj(cfg.collect).$from);
     return (
@@ -568,7 +569,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
           <Input id="loop-collect" data-testid={f('collect')} className="font-mono text-xs" value={collectRef} onChange={(e) => patch({ collect: { $from: e.target.value } })} placeholder="n_email" />
           <Err field="collect" />
         </div>
-        <BranchRows nodeId={nodeId} cfgType="loop" cfg={cfg} />
+        <BranchRows nodeId={nodeId} cfgType="foreach" cfg={cfg} />
         <Err field="branch.body" />
       </Section>
     );

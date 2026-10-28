@@ -28,7 +28,7 @@ describe('flowValidation', () => {
 
   it('requires condition branches from edges', () => {
     const n = action('c', { type: 'condition', expression: "input['a'] > 1" });
-    expect(validateNode(n, [{ source: 'c', target: 'x', sourceHandle: 'true' }]).map((i) => i.field)).toEqual(['branch.false']);
+    expect(validateNode(n, [{ source: 'c', target: 'x', sourceHandle: 'true' }] as never).map((i) => i.field)).toEqual(['branch.false']);
   });
 
   it('requires a trigger in a flow and summarises', () => {

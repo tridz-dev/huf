@@ -7,6 +7,8 @@ import { getTransformOp } from './flowTransformOps';
 import { branchHandlesFor } from './flowBranches';
 import { cronProblem } from './flowSchedule';
 import { secretProblem } from './flowWebhookUi';
+import { edgeRoute } from '../services/flowSerializer';
+import type { FlowEdge } from '../types/flow.types';
 
 type Cfg = Record<string, unknown>;
 
@@ -14,12 +16,7 @@ export interface NodeLike {
   id: string;
   data: { label?: string; nodeType?: string; triggerConfig?: unknown; actionConfig?: unknown };
 }
-export interface EdgeLike {
-  source: string;
-  target: string;
-  sourceHandle?: string | null;
-  label?: unknown;
-}
+export type EdgeLike = Pick<FlowEdge, 'source' | 'target' | 'sourceHandle' | 'label' | 'data'>;
 
 export interface FlowIssue {
   nodeId: string;
@@ -47,7 +44,7 @@ export function nodeKind(node: NodeLike): string {
     case 'tool-call': return 'tool.call';
     case 'router': return 'router.llm';
     case 'condition': return 'condition';
-    case 'loop': return 'foreach';
+    case 'foreach': return 'foreach';
     case 'human.approval': return 'human.approval';
     case 'transform': return 'transform';
     case 'state-get': return 'state.get';
@@ -124,10 +121,11 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
     }
     case 'router.llm': {
       if (isBlank(c.prompt)) add('prompt', 'Describe how the AI should choose a path.');
-      if (out.length === 0) add('options', 'Connect at least one path from this step.');
+      const paths = out.filter((e) => edgeRoute(e as FlowEdge) === 'option');
+      if (paths.length === 0) add('options', 'Connect at least one path from this step.');
       else {
-        if (out.some((e) => isBlank(e.label))) add('options', 'Give every path a label so the AI can pick it.');
-        if (isBlank(c.default)) add('default', 'Choose the path to use when nothing matches.');
+        if (paths.some((e) => isBlank(e.label))) add('options', 'Give every path a label so the AI can pick it.');
+        if (!paths.some((e) => e.target === c.default)) add('default', 'Choose the path to use when nothing matches.');
       }
       break;
     }
@@ -184,8 +182,8 @@ function missingBranches(
 ) {
   const t = asObj(node.data.actionConfig).type as string;
   for (const h of branchHandlesFor(t, config)) {
-    if (h.id === 'timeout' || (t === 'loop' && h.id === 'done')) continue;
-    if (!out.some((e) => e.sourceHandle === h.id)) add(`branch.${h.id}`, `Connect the "${h.label}" path to a next step.`);
+    if (h.optional) continue;
+    if (!out.some((e) => edgeRoute(e as FlowEdge) === h.route)) add(`branch.${h.route}`, `Connect the "${h.label}" path to a next step.`);
   }
 }
 
