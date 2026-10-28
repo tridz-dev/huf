@@ -1,3 +1,4 @@
+import { FlowsListHeaderActions } from '../components/FlowsListHeaderActions';
 import { useCallback, useState } from 'react';
 import { Calendar, Play, Activity, Settings, Workflow } from 'lucide-react';
 import { PageFrame } from '@/layouts/PageFrame';
@@ -150,6 +151,7 @@ function FlowListPage() {
     <PageFrame
       title="Flows"
       badge={<ExperimentalBadge />}
+      actions={<FlowsListHeaderActions />}
       filters={
         <FilterBar
           searchPlaceholder="Search flows..."
