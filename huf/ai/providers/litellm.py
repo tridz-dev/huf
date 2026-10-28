@@ -1138,6 +1138,10 @@ def _normalize_model_name(model: str, provider: str, brand: str = None) -> str:
         "moonshot": "moonshot",
     }
 
+    # A provider named anything (e.g. "Team OpenAI") still routes by its brand.
+    if brand and brand.lower() in provider_prefix_map:
+        return f"{provider_prefix_map[brand.lower()]}/{model}"
+
     prefix = provider_prefix_map.get(provider.lower(), provider.lower())
     return f"{prefix}/{model}"
 
