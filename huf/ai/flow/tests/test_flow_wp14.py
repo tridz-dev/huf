@@ -49,6 +49,11 @@ class TestTriggerDoctypes(IntegrationTestCase):
 		frappe.set_user("Administrator")
 		self.assertIn("User", {d["name"] for d in flow_api.get_trigger_doctypes()})
 
+	def test_read_only_flow_viewer_can_still_list_approver_roles_and_tools(self):
+		frappe.set_user(self._user("Huf User"))
+		self.assertTrue(flow_api.get_approver_roles())
+		self.assertTrue(flow_api.list_flow_tools())
+
 	def test_internal_tables_and_huf_bookkeeping_are_left_out(self):
 		frappe.set_user("Administrator")
 		names = {d["name"] for d in flow_api.get_trigger_doctypes()}
