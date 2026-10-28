@@ -22,6 +22,7 @@ from huf.ai.whatsapp.broadcast.audiences import membership as aud
 from huf.ai.whatsapp.broadcast import recipients as broadcast_recipients
 from huf.ai.whatsapp.broadcast.audiences import csv_map as audience_csv
 from huf.ai.whatsapp.broadcast.audiences import importer as audience_import
+from huf.ai.whatsapp.broadcast.audiences import selection as audience_selection
 from huf.ai.whatsapp.broadcast.audiences.common import (
 	AUDIENCE_FIELDS,
 	_audit,
@@ -272,9 +273,10 @@ def import_members(
 	the template body values in order. ``on_conflict``: ``skip`` (keep existing), ``update`` (overwrite
 	provided fields, merge tags) or ``fail`` (write nothing when any contact already exists).
 
-	Up to ``audience_inline_import_rows`` rows are imported in the request and the totals returned. Larger
-	files run as a background job: the result has ``queued: true`` and a ``job_id`` for
-	:func:`get_import_status`.
+	Up to ``audience_inline_import_rows`` rows are imported in the request and the totals returned, with
+	``invalid`` / ``skipped`` example lists (``{row, recipient, reason}``, capped at ``returned_list_limit``;
+	the ``*_total`` counts are exact). Larger files run as a background job: the result has ``queued: true``
+	and a ``job_id`` for :func:`get_import_status`, which returns the same lists once the job is done.
 	"""
 	row = _require_audience_write(audience)
 	if row.get("error"):
@@ -309,6 +311,8 @@ def import_members(
 	result = audience_import.import_rows(audience, mapped, on_conflict)
 	counts = aud.refresh_counts(audience, row["gateway"])
 	_audit(audience, "imported", added=result["added"], updated=result["updated"], invalid=result["invalid_total"])
+	result["invalid"] = audience_import.example_rows(result.get("invalid"), True)
+	result["skipped"] = audience_import.example_rows(result.get("skipped"), True)
 	return {"success": True, "queued": False, **result, **counts}
 
 
@@ -324,7 +328,15 @@ def get_import_status(job_id: str | None = None, audience: str | None = None) ->
 	state = audience_import.get_job_state(str(job_id or ""))
 	if not state or state.get("audience") != audience:
 		return _error("not_found", "Import not found or expired.")
-	return {"success": True, **state}
+	finished = dict(state["result"]) if isinstance(state.get("result"), dict) else {}
+	reveal = _gateway_write_allowed(row.get("gateway"))
+	examples = {}
+	for kind in ("invalid", "skipped"):
+		examples[kind] = finished[kind] = audience_import.example_rows(finished.get(kind), reveal)
+		examples[f"{kind}_total"] = int(finished.get(f"{kind}_total") or state.get(f"{kind}_total") or 0)
+	if finished:
+		state = {**state, "result": finished}
+	return {"success": True, **state, **examples}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -427,41 +439,34 @@ def preview_audience_selection(broadcast: str | None = None, selection: Any = No
 	if not _gateway_read_allowed(gateway):
 		raise frappe.PermissionError(_("Not permitted to read broadcasts on this Gateway"))
 	items = _parse_selection(selection)
-	if not any(not aud._truthy(i.get("exclude")) for i in items):
-		return _error("invalid", "Pick at least one audience to include.")
-	for item in items:
-		other = frappe.db.get_value(aud.AUDIENCE, item.get("audience"), "gateway") if item.get("audience") else None
-		if other != gateway:
-			return _error("invalid", "Every audience must belong to the same WhatsApp gateway as the broadcast.")
-	audiences, members = aud.load_inputs(items)
-	category = aud.template_category(broadcast)
-	everyone = {m["recipient"] for rows in members.values() for m in rows}
-	suppressed = aud.suppression_map(gateway, everyone, marketing=str(category or "").upper() == "MARKETING")
-	result = aud.expand_selection(items, audiences, members, suppressed, category)
-	needed = aud.purpose_for_category(category)
-	blocked = [
-		{
-			"code": "audience_purpose_mismatch",
-			"audience": name,
-			"message": f"{audiences[name]['title']} was not collected for {needed} messages.",
-		}
-		for name in result["blocked_audiences"]
-	]
-	return {
-		"success": True,
-		"counts": result["counts"],
-		"per_audience": result["per_audience"],
-		"blocked": blocked,
-		"category": category,
-		"purpose_required": needed,
-	}
+	problem = audience_selection.check_selection(gateway, items)
+	if problem:
+		return _error("invalid", problem)
+	return audience_selection.preview_payload(gateway, items, aud.template_category(broadcast))
+
+
+@frappe.whitelist()
+@rate_limit(limit=policy.rate("rate_audience_read"), seconds=RATE_SECONDS)
+@_bridge_guard
+@_guard
+def preview_audience_selection_for_gateway(
+	gateway: str | None = None, selection: Any = None, template_category: str | None = None
+) -> dict[str, Any]:
+	"""Same counts as :func:`preview_audience_selection` but without a Broadcast document (wizard step).
+
+	``template_category`` (MARKETING / UTILITY / AUTHENTICATION) applies the purpose rule and the marketing
+	suppression; leave it out to count without the purpose rule. Needs read access to the Gateway.
+	"""
+	denied = _require_gateway(gateway, write=False)
+	if denied:
+		return denied
+	items = _parse_selection(selection)
+	problem = audience_selection.check_selection(gateway, items)
+	if problem:
+		return _error("invalid", problem)
+	category = str(template_category or "").strip().upper() or None
+	return audience_selection.preview_payload(gateway, items, category)
 
 
 def _parse_selection(selection: Any) -> list[dict]:
-	items = _parse_list(selection, "selection")
-	max_items = policy.get("audience_max_selection_items")
-	if len(items) > max_items:
-		raise ValueError(f"Pick at most {max_items} audiences.")
-	if not all(isinstance(i, dict) and i.get("audience") for i in items):
-		raise ValueError("Each pick needs an audience.")
-	return items
+	return audience_selection.parse_selection(selection)

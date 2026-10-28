@@ -75,6 +75,7 @@ def _insert_row(
 	params: dict | None,
 	consent_source: str | None,
 	consent_at: str | None,
+	audience: str | None = None,
 ) -> None:
 	frappe.get_doc(
 		{
@@ -86,8 +87,19 @@ def _insert_row(
 			"params": json.dumps(params) if params else None,
 			"consent_source": consent_source,
 			"consent_at": consent_at,
+			"audience": audience,
 		}
 	).insert(ignore_permissions=True)
+
+
+def _audience_of(row: dict) -> str | None:
+	"""The audience a row came from (set by ``set_broadcast_audiences``); None for manual rows."""
+	return str(row.get("audience") or "").strip()[:140] or None
+
+
+def _audience_kw(row: dict) -> dict:
+	audience = _audience_of(row)
+	return {"audience": audience} if audience else {}
 
 
 def _policy_reason(gateway: str, recipient: str, is_marketing: bool) -> str | None:
@@ -164,7 +176,7 @@ def prepare(broadcast: str, rows: list[dict]) -> dict:
 
 		reason = _policy_reason(doc.gateway, recipient, is_marketing)
 		if reason is not None:
-			_insert_row(broadcast, recipient, "skipped", reason, None, None, None)
+			_insert_row(broadcast, recipient, "skipped", reason, None, None, None, **_audience_kw(row))
 			total += 1
 			skipped.append({"recipient": recipient, "reason": reason})
 			continue
@@ -178,6 +190,7 @@ def prepare(broadcast: str, rows: list[dict]) -> dict:
 			params,
 			row.get("consent_source") or None,
 			row.get("consent_at") or None,
+			**_audience_kw(row),
 		)
 		active += 1
 		total += 1

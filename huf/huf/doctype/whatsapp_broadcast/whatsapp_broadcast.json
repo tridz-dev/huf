@@ -16,6 +16,7 @@
   "language_code",
   "category",
   "send_via",
+  "audiences",
   "section_params",
   "body_params",
   "header_params",
@@ -129,6 +130,12 @@
    "default": "messages",
    "description": "marketing_messages = Meta Marketing Messages API (MARKETING templates only; needs MM API onboarding).",
    "read_only": 1
+  },
+  {
+   "fieldname": "audiences",
+   "fieldtype": "Table",
+   "label": "Audiences",
+   "options": "WhatsApp Broadcast Audience"
   },
   {
    "fieldname": "section_params",

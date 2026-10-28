@@ -149,6 +149,24 @@ def import_rows(
 	return result
 
 
+def example_rows(entries: Any, reveal: bool) -> list[dict]:
+	"""Capped ``{row, recipient, reason}`` examples; phone digits are masked unless ``reveal``."""
+	cap = policy.get("returned_list_limit")
+	out = []
+	for e in list(entries or [])[:cap]:
+		if not isinstance(e, dict):
+			continue
+		who = e.get("recipient")
+		out.append(
+			{
+				"row": e.get("row"),
+				"recipient": who if reveal else aud.mask_phone(who),
+				"reason": e.get("reason"),
+			}
+		)
+	return out
+
+
 def _brief(result: dict) -> dict:
 	return {k: result[k] for k in ("added", "updated", "skipped_total", "invalid_total")}
 
