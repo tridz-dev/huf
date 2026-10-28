@@ -52,6 +52,26 @@ def redact_text(text) -> str:
 	return out
 
 
+def specific_message(kind: str, provider: str | None = None, model: str | None = None) -> str | None:
+	"""Plain-English, provider-specific reason for a failure kind (None when kind has no specific wording)."""
+	who = f"The {provider} key" if provider else "The provider key"
+	prov = provider or "the provider"
+	if kind == "auth":
+		return f"{who} was rejected: check the provider key in AI Providers."
+	if kind == "model_not_found":
+		m = f" '{model}'" if model else ""
+		return f"The model{m} was not found at {prov}: check the model name on the agent."
+	if kind == "rate_limited":
+		return f"{prov} is rate-limiting requests: wait a moment and run again."
+	if kind == "quota_exceeded":
+		return f"The {prov} account is out of quota or credit: check billing at the provider."
+	if kind == "timeout":
+		return f"{prov} took too long to respond: run again in a moment."
+	if kind == "server_error":
+		return f"Could not reach {prov} (network or provider outage): run again in a moment."
+	return None
+
+
 def classify_status(status_code, text: str = "") -> str:
 	"""Map an HTTP status (and body text) to an error kind."""
 	low = (text or "").lower()
@@ -79,7 +99,7 @@ def classify_status(status_code, text: str = "") -> str:
 
 def classify_text(text: str) -> str:
 	low = (text or "").lower()
-	if any(m in low for m in ("api key not configured", "password not found", "invalid api key", "unauthorized", "authenticationerror")):
+	if any(m in low for m in ("api key not configured", "password not found", "invalid api key", "incorrect api key", "unauthorized", "authenticationerror", "permissiondeniederror")):
 		return "auth"
 	if any(m in low for m in ("no longer available", "model not found", "notfounderror", "unsupported model")):
 		return "model_not_found"
