@@ -29,6 +29,11 @@ CREDS = {"client_id": "cid", "client_secret": SECRET, "refresh_token": "rt-" + S
 REJECT_TAIL = "Reconnect Gmail in Integrations."
 
 
+def _post_router(token_resp, api_resp):
+	"""httpx.post is one global: answer the token URL and the API URL separately."""
+	return lambda url, *a, **k: token_resp if "oauth2.googleapis.com" in url else api_resp
+
+
 def _fake_credential(values):
 	return lambda service, key, default=None: values.get(key, default)
 
@@ -40,9 +45,11 @@ class TestGmailCredentialErrors(IntegrationTestCase):
 		with patch("huf.ai.tools.gmail.get_credential", side_effect=_fake_credential(dict(creds))), \
 			patch("huf.ai.tools.gmail.set_credential"), \
 			patch("huf.ai.tools.gmail.update_last_error"), \
-			patch("huf.ai.tools.provider_errors.httpx.post", return_value=token_resp), \
-			patch("huf.ai.tools.gmail.httpx.post", return_value=api_resp) as api_post:
+			patch("httpx.post", side_effect=_post_router(token_resp, api_resp)) as post:
 			out = json.loads(gmail.handle_send_email(**args))
+			api_post = MagicMock(call_count=sum(1 for c in post.call_args_list if "gmail.googleapis.com" in c[0][0]))
+			api_post.assert_not_called = lambda: self.assertEqual(api_post.call_count, 0)
+			api_post.assert_called_once = lambda: self.assertEqual(api_post.call_count, 1)
 			return out, api_post
 
 	def test_missing_credentials(self):
@@ -119,7 +126,7 @@ class TestSlackAndGoogleErrors(IntegrationTestCase):
 
 	def _slack(self, body):
 		with patch("huf.ai.tools.slack.get_credential", return_value="xoxb-fake"), patch("huf.ai.tools.slack.update_last_error"), \
-			patch("huf.ai.tools.slack.httpx.post", return_value=_resp(200, body)):
+			patch("httpx.post", return_value=_resp(200, body)):
 			return json.loads(slack.handle_send_message(channel="C1", text="hi"))["error"]
 
 	def test_slack_revoked(self):
@@ -138,7 +145,7 @@ class TestSlackAndGoogleErrors(IntegrationTestCase):
 
 	def _google(self, module, handler, token_resp, api_resp=None, **kwargs):
 		with patch.object(module, "get_credential", side_effect=_fake_credential(dict(CREDS))), patch.object(module, "update_last_error"), \
-			patch("huf.ai.tools.provider_errors.httpx.post", return_value=token_resp), \
+			patch("httpx.post", return_value=token_resp), \
 			patch.object(module.requests, "get", return_value=api_resp), patch.object(module.requests, "put", return_value=api_resp):
 			return json.loads(handler(**kwargs))["error"]
 
@@ -165,10 +172,8 @@ class TestSlackAndGoogleErrors(IntegrationTestCase):
 
 class TestConnectionTest(IntegrationTestCase):
 	def _run(self, service, creds, token_resp=None, api_resp=None):
-		with patch("huf.ai.tools.provider_errors.httpx.post", return_value=token_resp), \
-			patch("huf.ai.tools.connection_test.httpx.get", return_value=api_resp) as get, \
-			patch("huf.ai.tools.connection_test.httpx.post", return_value=api_resp), \
-			patch("huf.ai.tools.connection_test.get_credential", return_value=None):
+		with patch("httpx.post", side_effect=_post_router(token_resp, api_resp)), \
+			patch("httpx.get", return_value=api_resp) as get:
 			return test_connection(service=service, credentials=creds), get
 
 	def test_gmail_connected_reads_profile_only(self):

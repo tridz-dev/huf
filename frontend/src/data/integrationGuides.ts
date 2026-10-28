@@ -44,7 +44,7 @@ export const INTEGRATION_GUIDES: Record<string, IntegrationGuide> = {
       'Create a Slack app at api.slack.com/apps (From scratch) in your workspace.',
       'Under OAuth & Permissions, add the bot token scopes below.',
       'Install the app to your workspace and copy the Bot User OAuth Token (it starts with xoxb-).',
-      'Paste the token on the Credentials tab, then press Test connection. Invite the bot to any channel it should post in.',
+      'Paste the token on the Credentials tab (the signing secret is under Basic Information), then press Test connection. Invite the bot to any channel it should post in.',
     ],
     scopes: 'Bot scopes: chat:write to post messages. Add channels:read and groups:read to list channels, channels:history and groups:history to read history, and users:read to list people.',
   },
