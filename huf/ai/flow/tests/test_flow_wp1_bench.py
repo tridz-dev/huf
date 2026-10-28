@@ -183,11 +183,7 @@ class TestFlowWp1(IntegrationTestCase):
 		def run_inline(method, queue=None, **kwargs):
 			triggers.run_trigger_job(**kwargs)
 
-		with (
-			patch("huf.ai.flow.triggers.frappe.cache") as cache,
-			patch("huf.ai.flow.triggers.frappe.enqueue", side_effect=run_inline),
-		):
-			cache.return_value.get_value.return_value = None
+		with patch("huf.ai.flow.triggers.frappe.enqueue", side_effect=run_inline):
 			first = triggers.run_due_schedule_flows(now)
 			second = triggers.run_due_schedule_flows(now + timedelta(seconds=30))
 		self.assertIn(flow_id, first)
