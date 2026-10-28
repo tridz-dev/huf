@@ -6,13 +6,26 @@ from frappe.model.document import Document
 from frappe.utils import get_datetime, now_datetime
 
 PURPOSE_FIELDS = ("purpose_marketing", "purpose_utility", "purpose_events")
+# Written only by the audience API / membership code (``in_audience_api``, or raw set_value which skips validate).
+API_ONLY_FIELDS = ("is_adhoc", "member_count", "suppressed_count")
 
 
 class WhatsAppAudience(Document):
 	"""A consented list of WhatsApp contacts. Opt-out is NOT stored here: it stays in the gateway's
 	consent records and is looked up when the list is used."""
 
+	def _check_api_only(self):
+		"""Creating an audience and its counters/ad-hoc flag go through the audience API (it records the attestation)."""
+		if getattr(frappe.flags, "in_audience_api", False):
+			return
+		if self.is_new():
+			frappe.throw("Audiences can only be created through the audience API.", frappe.PermissionError)
+		for field in API_ONLY_FIELDS:
+			if self.has_value_changed(field):
+				frappe.throw(f"{field} can only be changed through the audience API.", frappe.PermissionError)
+
 	def validate(self):
+		self._check_api_only()
 		self.title = (self.title or "").strip()
 		self.consent_source = (self.consent_source or "").strip()
 		if not self.title:
