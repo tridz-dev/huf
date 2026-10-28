@@ -161,7 +161,15 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
             className={NODE_HANDLE}
             data-testid={`flow-handle-${id}-${h.route}`}
           >
-            <span className="pointer-events-none absolute top-3 -translate-x-1/2 whitespace-nowrap text-[9px] text-muted-foreground">{h.label}</span>
+            {/* Sit beside the dot, not under it, so the edge leaving the dot never runs through the text. */}
+            <span
+              className={cn(
+                'pointer-events-none absolute top-2 whitespace-nowrap text-[10px] text-muted-foreground',
+                i === 0 ? 'right-3' : i === handles.length - 1 ? 'left-3' : '-translate-x-1/2'
+              )}
+            >
+              {h.label}
+            </span>
           </Handle>
         ))
       ) : (

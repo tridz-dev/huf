@@ -55,6 +55,11 @@ export function FlowValueInput({ id, label, value, onChange, optional, testId, n
     setPicked(next.mode);
     if (next.mode === 'template') setVarsVersion((v) => v + 1);
     onChange(next.value);
+    requestAnimationFrame(() => {
+      const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null;
+      el?.focus();
+      if (el && mode !== 'json') el.setSelectionRange(el.value.length, el.value.length);
+    });
   };
 
   const singleLine = mode === 'literal' || mode === 'reference';

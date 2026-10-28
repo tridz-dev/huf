@@ -50,7 +50,12 @@ export function VariablePicker({ onSelect, currentNodeId, scope = 'ancestors', t
                     Insert data
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[240px] max-h-[300px] overflow-y-auto">
+            <DropdownMenuContent
+                align="end"
+                className="w-[240px] max-h-[300px] overflow-y-auto"
+                // The field that received the data takes focus (not the button), so the user can keep typing.
+                onCloseAutoFocus={(e) => e.preventDefault()}
+            >
                 <DropdownMenuLabel className="text-xs">Data you can use</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {entries.map((e) => (
