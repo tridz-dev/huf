@@ -673,7 +673,13 @@ def _run_flow_webhook(flow_id: str | None, secret: str | None, payload: dict | N
 		payload = _parse_webhook_payload()
 
 	flow_run = start_flow_run(
-		flow_id, payload, "Webhook", trigger_node_id=node["id"], user=identity.run_as_user, enqueue=True
+		flow_id,
+		payload,
+		"Webhook",
+		trigger_node_id=node["id"],
+		user=identity.run_as_user,
+		enqueue=True,
+		commit_first=True,
 	)
 	return {"flow_run_id": flow_run.name, "status": flow_run.status}
 
