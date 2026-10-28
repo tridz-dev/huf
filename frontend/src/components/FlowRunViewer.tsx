@@ -362,8 +362,8 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                             );
                                                             return summary ? (
                                                                 <>
-                                                                    <div className="mt-1 text-sm" data-testid={`flow-run-step-summary-${st.id}`}>{summary}</div>
-                                                                    <details className="mt-1" data-testid={`flow-run-step-raw-${st.id}`}>
+                                                                    <div className="mt-1 text-sm" data-testid={`flow-run-summary-${st.id}`}>{summary}</div>
+                                                                    <details className="mt-1" data-testid={`flow-run-raw-${st.id}`}>
                                                                         <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">Show raw response</summary>
                                                                         {raw}
                                                                     </details>
