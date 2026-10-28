@@ -43,7 +43,7 @@ Card title = node title = sidebar title (derived from `data/actions.ts` / `data/
 | `flow-edge-label-<edgeId>` | Edge label |
 
 ## Right sidebar
-`flow-config-sidebar`, `flow-sidebar-title`, `flow-config-title`, `flow-sidebar-delete`, `flow-sidebar-close`,
+`flow-config-sidebar`, `flow-sidebar-title`, `flow-config-title`, `flow-sidebar-delete`, `flow-sidebar-close`, `flow-view-only-banner` (view-only users),
 `flow-delete-confirm`, `flow-delete-cancel`, `flow-node-title-input`, `flow-node-incomplete` (summary banner),
 `flow-trigger-type`, `flow-trigger-change`, `flow-edge-config`, `flow-edge-meaning`, `flow-edge-label`,
 `flow-branches`, `flow-branch-<route>`, `flow-branch-<route>-empty`.

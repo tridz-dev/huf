@@ -1,4 +1,5 @@
 import { memo, useState } from 'react';
+import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import { Handle, Position, NodeProps } from 'reactflow';
 import {
   Play,
@@ -64,6 +65,7 @@ type ActionNodeProps = NodeProps<FlowNodeData>;
 
 export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
   const { deleteNode, activeFlow } = useFlowContext();
+  const { canManage } = useFlowPermissions();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const Icon = data.icon && iconMap[data.icon] ? iconMap[data.icon] : Play;
   const incomplete = validateNode({ id, data }, activeFlow?.edges ?? []);
@@ -94,7 +96,7 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
         className={NODE_HANDLE}
       />
       <Card className={cn(NODE_CARD_BASE, statusClasses)}>
-        {selected && data.status !== 'running' && data.status !== 'waiting' && (
+        {canManage && selected && data.status !== 'running' && data.status !== 'waiting' && (
           <Button
             variant="ghost"
             size="icon"
