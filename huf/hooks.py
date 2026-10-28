@@ -354,6 +354,7 @@ scheduler_events = {
             "huf.ai.agent.integration.recover_stalled_agent_runs",
             "huf.ai.gateways.teams.outbox.retry_due",
             "huf.ai.flow.triggers.run_due_schedule_flows",
+            "huf.ai.flow.triggers.expire_due_approvals",
         ],
         "*/10 * * * *": [
             "huf.ai.gateway_service.reap_stuck_gateway_events",
