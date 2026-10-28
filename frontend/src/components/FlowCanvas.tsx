@@ -308,11 +308,13 @@ export function FlowCanvas({
   );
 
   const onCanvasKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: KeyboardEvent) => {
       if (e.key !== 'Delete' && e.key !== 'Backspace') return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable || target?.closest('[role="dialog"], [role="combobox"]')) return;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable || target?.closest('[role="dialog"], [role="alertdialog"], [role="combobox"], [role="listbox"], [role="menu"]')) return;
+      // Only when the user is on the canvas (or nowhere in particular), never in another part of the page.
+      if (target && target !== document.body && !target.closest('[data-testid="flow-canvas"]')) return;
       const node = nodes.find((n) => n.selected && !n.id.startsWith('ghost-')) ?? nodes.find((n) => n.id === selectedNodeId);
       if (!node || node.data.status === 'running' || node.data.status === 'waiting') return;
       e.preventDefault();
@@ -324,6 +326,11 @@ export function FlowCanvas({
     },
     [nodes, selectedNodeId, deleteNode]
   );
+
+  useEffect(() => {
+    window.addEventListener('keydown', onCanvasKeyDown);
+    return () => window.removeEventListener('keydown', onCanvasKeyDown);
+  }, [onCanvasKeyDown]);
 
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
@@ -625,7 +632,7 @@ export function FlowCanvas({
   }
 
   return (
-    <div className="flex-1 flex w-full h-full overflow-hidden" data-testid="flow-canvas" onKeyDown={onCanvasKeyDown}>
+    <div className="flex-1 flex w-full h-full overflow-hidden" data-testid="flow-canvas">
       <FlowNodeRail
         activeCategory={railActiveCategory}
         disabledCategories={railDisabledCategories}
