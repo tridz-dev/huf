@@ -643,6 +643,7 @@ class TestDocEventPayload(WP11Base):
 				"doctype": self.PARENT,
 				"name": "P-1",
 				"owner": "someone@example.com",
+				"__unsaved": 1,
 				"title": "visible",
 				"api_key": "*****",
 				"salary": "100000",
@@ -666,6 +667,7 @@ class TestDocEventPayload(WP11Base):
 		self.assertNotIn("salary", payload)
 		self.assertNotIn("api_key", payload)
 		self.assertEqual(payload["name"], "P-1")
+		self.assertNotIn("__unsaved", payload)
 		row = payload["rows"][0]
 		self.assertEqual(row["note"], "n")
 		self.assertNotIn("token", row)
