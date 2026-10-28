@@ -14,7 +14,6 @@ import frappe
 import httpx
 from frappe import _
 
-from huf.ai.tools.credentials import get_credential
 from huf.ai.tools.provider_errors import (
 	ProviderCredentialError,
 	check_google_response,
@@ -44,9 +43,8 @@ def _resolve_credentials(service: str, setting: str | None, provided: dict) -> d
 		for row in doc.credentials:
 			if row.key in keys:
 				creds[row.key] = row.get_password("value", raise_exception=False)
-	else:
-		for key in keys:
-			creds[key] = get_credential(service, key)
+	# With no saved integration (the "new" screen) only the typed values count: another integration's
+	# credentials must not make an empty form look connected.
 	for key in keys:
 		value = (provided.get(key) or "").strip() if isinstance(provided.get(key), str) else ""
 		if value:

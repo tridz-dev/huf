@@ -173,8 +173,7 @@ class TestSlackAndGoogleErrors(IntegrationTestCase):
 class TestConnectionTest(IntegrationTestCase):
 	def _run(self, service, creds, token_resp=None, api_resp=None):
 		with patch("httpx.post", side_effect=_post_router(token_resp, api_resp)), \
-			patch("httpx.get", return_value=api_resp) as get, \
-			patch("huf.ai.tools.connection_test.get_credential", return_value=None):
+			patch("httpx.get", return_value=api_resp) as get:
 			return test_connection(service=service, credentials=creds), get
 
 	def test_gmail_connected_reads_profile_only(self):
