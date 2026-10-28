@@ -1,3 +1,4 @@
+import { ConnectionIndicator } from './common/ConnectionIndicator';
 import * as React from "react"
 import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Layers, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, MessageCircle, Send, Keyboard, SlidersHorizontal, Boxes, type LucideIcon } from "lucide-react"
 import { SOLUTIONS_WORD } from "@/components/solutions/labels"
@@ -331,6 +332,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenuItem>
           </SidebarMenu>
         )}
+        <div className="px-4 py-1 flex justify-end group-data-[collapsible=icon]:justify-center">
+          <ConnectionIndicator />
+        </div>
         <NavUser />
       </SidebarFooter>
       <SidebarRail />
