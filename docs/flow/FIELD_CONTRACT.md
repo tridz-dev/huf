@@ -85,6 +85,7 @@ Notes:
 `tool.call` UI presets (Email, Slack, Sheets, File, HTTP, Code) are `tool.call` and carry ONLY
 `tool_id`/`input` (+ optional `timeout_ms`, `approved`). The legacy `tool_name`, `args`,
 `parameters`, `output.save_result_to_context`, `mcp_server`, `agent_name`, `gateway` keys are rejected by the schema.
+`router.llm.prompt` and `human.approval.message` are plain strings; `{input.field}`, `{trigger.x}`, `{<node_id>.field}` and `{foreach.item}` placeholders in them are filled in at run time (`engine.render_text_refs`); a placeholder that does not resolve is left as written.
 Results are read by later nodes as `{"$from": "<node_id>"}` (or `<node_id>.field`); there is no
 "save result to context key".
 
