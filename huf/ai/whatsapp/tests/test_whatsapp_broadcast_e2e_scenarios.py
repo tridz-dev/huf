@@ -375,7 +375,6 @@ class TestScenario1Settings(G2Case):
 		finally:
 			frappe.flags.in_broadcast_api = prev
 
-	@unittest.expectedFailure  # PRODUCT BUG (see LIVE_VERIFY_REPORT.md, finding F1): the setting never applies to API-created broadcasts
 	def test_max_recipients_default_setting_applies_to_a_new_broadcast(self):
 		self.settings(max_recipients_default=2)
 		b = self.mk()
