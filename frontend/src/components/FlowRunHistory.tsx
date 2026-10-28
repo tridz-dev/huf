@@ -17,9 +17,9 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
     const [runs, setRuns] = useState<FlowRunSummary[]>([]);
     const [loading, setLoading] = useState(false);
 
-    const fetchRuns = async () => {
+    const fetchRuns = async (silent = false) => {
         if (!flowId) return;
-        setLoading(true);
+        if (!silent) setLoading(true);
         try {
             const data = await flowService.listFlowRuns(flowId);
             setRuns(data || []);
@@ -36,6 +36,14 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
         }
     }, [open, flowId]);
 
+    // Live events can be unavailable (socket down), so keep unfinished runs fresh by polling while the list is open.
+    const hasUnfinished = runs.some((r) => !['Success', 'Failed', 'Cancelled'].includes(r.status));
+    useEffect(() => {
+        if (!open || !hasUnfinished) return;
+        const timer = setInterval(() => fetchRuns(true), 5000);
+        return () => clearInterval(timer);
+    }, [open, hasUnfinished, flowId]);
+
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent className="w-[400px] sm:w-[500px] overflow-y-auto" data-testid="flow-run-history">
@@ -45,7 +53,7 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
                             <PlayCircle className="w-5 h-5 text-muted-foreground" />
                             Run history
                         </SheetTitle>
-                        <Button variant="ghost" size="icon" data-testid="flow-run-history-refresh" onClick={fetchRuns} disabled={loading} title="Refresh">
+                        <Button variant="ghost" size="icon" data-testid="flow-run-history-refresh" onClick={() => fetchRuns()} disabled={loading} title="Refresh">
                             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                         </Button>
                     </div>
