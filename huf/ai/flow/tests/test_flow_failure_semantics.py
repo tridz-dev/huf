@@ -109,7 +109,7 @@ class TestFlowFailureSemantics(IntegrationTestCase):
 		flow_id = f"_test-flow-failure-{frappe.generate_hash(length=8)}"
 		saved = flow_api.save_flow_definition(flow_id, definition)
 		self._names["Flow Definition"].append(saved["flow_id"])
-		flow_run = create_flow_run(flow_id=flow_id, payload={}, trigger_type="Doc Event")
+		flow_run = create_flow_run(flow_id=flow_id, payload={}, trigger_type="Webhook")
 		self._names["Flow Run"].append(flow_run.name)
 		failed_tool_result = {"success": False, "error": "simulated tool failure"}
 		with patch("huf.ai.flow.engine.execute_tool", return_value=failed_tool_result):

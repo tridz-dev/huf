@@ -212,7 +212,12 @@ def start_flow_run(
 
 
 def run_trigger_job(flow_id: str, payload: dict, trigger_type: str, trigger_node_id: str, run_as: str):
-	"""Background job: start (and run) one triggered flow as ``run_as``."""
+	"""Background job: start (and run) one triggered flow as ``run_as``.
+
+	The flow may have been paused or deleted between the trigger and this job running: then nothing starts.
+	"""
+	if frappe.db.get_value("Flow Definition", flow_id, "status") != "Active":
+		return
 	frappe.set_user(run_as)
 	frappe.flags.huf_flow_run_origin = True  # docs written by this run must not re-trigger flows
 	start_flow_run(flow_id, payload, trigger_type, trigger_node_id, user=run_as, enqueue=False)
