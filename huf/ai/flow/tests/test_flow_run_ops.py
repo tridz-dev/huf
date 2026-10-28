@@ -35,6 +35,7 @@ class TestFlowRunOps(IntegrationTestCase):
 		)
 		flow.flags.ignore_validate = True
 		flow.insert(ignore_permissions=True)
+		self.flow_name_doc = flow.name
 		self._docs.append(("Flow Definition", flow.name))
 
 	def tearDown(self):
@@ -48,6 +49,7 @@ class TestFlowRunOps(IntegrationTestCase):
 		run = frappe.get_doc(
 			{
 				"doctype": "Flow Run",
+				"flow_definition": self.flow_name_doc,
 				"flow_id": self.flow_id,
 				"status": status,
 				"trigger_type": "Manual",
