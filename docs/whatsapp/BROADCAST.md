@@ -485,7 +485,9 @@ Callers with read but not write permission on the gateway see phone numbers as t
 
 ### Wizard flow
 
-The **Audiences** tab of the WhatsApp page lists audiences, creates them with the consent form, imports with column mapping, and shows members with tag and suppressed filters. The broadcast wizard in the code this document was written from still has the steps Template, Recipients, Consent, Preview, Confirm. A step that picks audiences (per-list tags, include/exclude, live counts total / duplicates / suppressed / final, and "paste or upload for this broadcast only" creating an ad-hoc audience) is separate work (WP-E2) and is not described here as shipped.
+The **Audiences** tab of the WhatsApp page lists audiences, creates them with the consent form, imports with column mapping (invalid and skipped rows are listed with reasons), and shows members with tag and suppressed filters.
+
+In the broadcast wizard the Recipients step offers two sources that can be combined: **Saved lists** (pick one or more audiences, each with an optional tag filter and an include/exclude toggle, with live counts for total, duplicates, excluded, opted out and final) and **Just for this broadcast** (paste or upload a CSV). Before the draft exists the counts come from `preview_audience_selection_for_gateway` using the chosen template's category; a list whose consent purposes do not cover the template category is shown as blocked and the step cannot continue. Adding recipients creates the draft, adds any pasted rows, then applies the lists with `set_broadcast_audiences`. If every list row comes from audiences with a recorded attester, the Consent step shows "Consent covered by" the list titles and skips the checkbox; pasted rows still need the broadcast's own attestation. Once recipients are added the step is locked; to change the lists, discard the draft and start again.
 
 ### Audience API reference
 
