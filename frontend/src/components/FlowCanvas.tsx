@@ -40,6 +40,7 @@ import { useFlowContext } from '../contexts/FlowContext';
 import { flowService } from '../services/flowService';
 import { makeFlowEdge, edgeRoute } from '../services/flowSerializer';
 import { branchHandlesFor } from '../lib/flowBranches';
+import { branchColumnShift, subtreeIds } from '../lib/flowEdgeLabels';
 import { toast } from 'sonner';
 import { ensureToolSchemasLoaded } from '../lib/flowToolSchemas';
 import { actionLabel, triggerLabel } from '../lib/flowLabels';
@@ -270,22 +271,31 @@ export function FlowCanvas({
       if (!connection.source || !connection.target) return;
       const source = connection.source;
       const target = connection.target;
-      setEdges((eds) => {
-        const handle = connection.sourceHandle as FlowEdgeRoute | null;
-        const route: FlowEdgeRoute = handle ?? 'next';
-        const targetLabel = nodes.find((n) => n.id === target)?.data.label;
-        // Single-target routes (next/true/false/approve/...) replace an existing edge on the same handle.
-        const multi = route === 'option' || route === 'body';
-        const kept = multi ? eds : eds.filter((e) => !(e.source === source && edgeRoute(e) === route));
-        const index = kept.filter((e) => e.source === source && edgeRoute(e) === route).length;
-        const newEdges = [...kept, makeFlowEdge(source, target, route, { label: targetLabel, index })];
-        if (!isSyncingFromProps.current) {
-          scheduleContextUpdate(undefined, newEdges);
-        }
-        return newEdges;
-      });
+      const handle = connection.sourceHandle as FlowEdgeRoute | null;
+      const route: FlowEdgeRoute = handle ?? 'next';
+      const targetLabel = nodes.find((n) => n.id === target)?.data.label;
+      // Single-target routes (next/true/false/approve/...) replace an existing edge on the same handle.
+      const multi = route === 'option' || route === 'body';
+      const kept = multi ? edges : edges.filter((e) => !(e.source === source && edgeRoute(e) === route));
+      const index = kept.filter((e) => e.source === source && edgeRoute(e) === route).length;
+      const newEdges = [...kept, makeFlowEdge(source, target, route, { label: targetLabel, index })];
+
+      // Give each branch of a step its own column so a new path is never hidden behind another box.
+      const targetNode = nodes.find((n) => n.id === target);
+      const siblings = kept.filter((e) => e.source === source && e.target !== target).map((e) => nodes.find((n) => n.id === e.target)?.position.x);
+      const shift = targetNode && siblings.length > 0
+        ? branchColumnShift(targetNode.position.x, siblings.filter((x): x is number => typeof x === 'number'))
+        : 0;
+      let updatedNodes: Node<FlowNodeData>[] | undefined;
+      if (shift !== 0) {
+        const moving = subtreeIds(target, newEdges);
+        updatedNodes = nodes.map((n) => (moving.has(n.id) ? { ...n, position: { ...n.position, x: n.position.x + shift } } : n));
+        setNodes(updatedNodes);
+      }
+      setEdges(newEdges);
+      if (!isSyncingFromProps.current) scheduleContextUpdate(updatedNodes, newEdges);
     },
-    [scheduleContextUpdate, nodes]
+    [scheduleContextUpdate, nodes, edges]
   );
 
   const onNodeClick = useCallback(
@@ -308,11 +318,13 @@ export function FlowCanvas({
   );
 
   const onCanvasKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: KeyboardEvent) => {
       if (e.key !== 'Delete' && e.key !== 'Backspace') return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable || target?.closest('[role="dialog"], [role="combobox"]')) return;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable || target?.closest('[role="dialog"], [role="alertdialog"], [role="combobox"], [role="listbox"], [role="menu"]')) return;
+      // Only when the user is on the canvas (or nowhere in particular), never in another part of the page.
+      if (target && target !== document.body && !target.closest('[data-testid="flow-canvas"]')) return;
       const node = nodes.find((n) => n.selected && !n.id.startsWith('ghost-')) ?? nodes.find((n) => n.id === selectedNodeId);
       if (!node || node.data.status === 'running' || node.data.status === 'waiting') return;
       e.preventDefault();
@@ -324,6 +336,11 @@ export function FlowCanvas({
     },
     [nodes, selectedNodeId, deleteNode]
   );
+
+  useEffect(() => {
+    window.addEventListener('keydown', onCanvasKeyDown);
+    return () => window.removeEventListener('keydown', onCanvasKeyDown);
+  }, [onCanvasKeyDown]);
 
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
@@ -625,7 +642,7 @@ export function FlowCanvas({
   }
 
   return (
-    <div className="flex-1 flex w-full h-full overflow-hidden" data-testid="flow-canvas" onKeyDown={onCanvasKeyDown}>
+    <div className="flex-1 flex w-full h-full overflow-hidden" data-testid="flow-canvas">
       <FlowNodeRail
         activeCategory={railActiveCategory}
         disabledCategories={railDisabledCategories}

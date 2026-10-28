@@ -83,7 +83,7 @@ export const InsertableEdge = memo(
                 data?.onInsertNode?.(data.sourceNodeId, data.route);
               }}
               className={cn(
-                'flex items-center justify-center w-5 h-5 rounded-full border border-line bg-panel text-muted-foreground shadow-sm transition-all duration-150',
+                'flex items-center justify-center w-6 h-6 rounded-full border border-line bg-panel text-muted-foreground shadow-sm transition-all duration-150',
                 'hover:border-steel-soft hover:text-ink hover:scale-110',
                 hovered ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'
               )}
