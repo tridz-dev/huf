@@ -495,6 +495,10 @@ def run_flow(flow_run_name: str):
 
 	try:
 		flow_run = frappe.get_doc("Flow Run", flow_run_name)
+		if flow_run.status in WAITING_STATUSES:
+			# A queued job for a run that has since paused again: only approve / resume / expiry move a
+			# waiting run (they set it Running first). Re-entering here would run the paused step twice.
+			return
 		version = _pinned_version(flow_run)
 		defn = version.graph
 
@@ -701,6 +705,10 @@ def expire_approval(flow_run_name: str, now=None, enqueue: bool = False) -> bool
 		_release_run_lock(flow_run_name)
 
 	if enqueue:
+		# The transition must be visible to the worker before it starts: a read request commits only
+		# when it ends, so commit now, otherwise the job would see the run still waiting and run the
+		# approval step again.
+		frappe.db.commit()  # nosemgrep
 		frappe.enqueue("huf.ai.flow.engine.run_flow", queue="default", flow_run_name=flow_run_name)
 	else:
 		run_flow(flow_run_name)

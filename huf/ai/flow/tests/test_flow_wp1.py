@@ -129,6 +129,22 @@ class TestStaleRunSweeper(unittest.TestCase):
 		self.assertEqual(flow_engine.STALE_RUN_SWEEP_MINUTES, 30)
 
 
+class TestRunFlowSkipsWaitingRuns(unittest.TestCase):
+	def test_a_queued_job_for_a_waiting_run_does_nothing(self):
+		run = MagicMock(status="Waiting Approval")
+		with (
+			patch.object(flow_engine, "frappe") as fake_frappe,
+			patch.object(flow_engine, "_acquire_run_lock", return_value=True),
+			patch.object(flow_engine, "_release_run_lock") as release,
+			patch.object(flow_engine, "_execute_loop") as loop,
+		):
+			fake_frappe.get_doc.return_value = run
+			flow_engine.run_flow("FR-1")
+		loop.assert_not_called()
+		run.db_set.assert_not_called()
+		release.assert_called_once_with("FR-1")
+
+
 class TestSchedulerWiring(unittest.TestCase):
 	def test_hooks_register_the_sweepers(self):
 		hooks = importlib.import_module("huf.hooks")
