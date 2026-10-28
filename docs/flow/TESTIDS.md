@@ -80,5 +80,8 @@ Blocked saves surface a toast; the first offending node is selected.
 |---|---|
 | `flow-run-history`, `flow-run-history-refresh`, `flow-run-row-<runId>` (`data-run-status`) | Runs sheet |
 | `flow-run-details`, `flow-run-current-node`, `flow-run-error`, `flow-run-approve`, `flow-run-reject` | Run details sheet |
-| `flow-settings-modal`, `flow-settings-name`, `-description`, `-category`, `-mode`, `-max-hops`, `-auto-convert`, `-save`, `-cancel`, `-delete` | Settings modal |
+| `flow-settings-modal`, `flow-settings-name`, `-description`, `-category`, `-auto-convert`, `-save`, `-cancel`, `-delete` | Settings modal |
 | `flow-approvals-bell`, `flow-approvals-count`, `flow-approvals-panel`, `flow-approval-<runId>`, `flow-approve-<runId>`, `flow-reject-<runId>` | Approvals bell |
+| `flow-run-dialog`, `flow-run-payload`, `flow-run-payload-error`, `flow-run-start`, `flow-run-cancel` | Run dialog (JSON input data) opened by the Run button and the list card Run action |
+| `disabled-reason` | Wrapper around a control disabled for a view-only user; hover/focus shows the explanation |
+| `connection-indicator` (`data-status` = connecting / connected / offline) | Header dot for the live-updates connection |

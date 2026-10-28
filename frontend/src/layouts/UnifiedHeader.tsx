@@ -14,6 +14,7 @@ import { ApprovalsBell } from '../components/ApprovalsBell';
 import { ExecutionApprovalsBell } from '../components/ExecutionApprovalsBell';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { SOLUTIONS_WORD } from '../components/solutions/labels';
+import { ConnectionIndicator } from '../components/common/ConnectionIndicator';
 
 interface UnifiedHeaderProps {
   actions?: ReactNode;
@@ -158,6 +159,7 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
       </div> */}
 
       <div className="flex items-center gap-2">
+        <ConnectionIndicator />
         <ApprovalsBell />
         {(hasCapability('execution.approve') || hasCapability('ssh.approve')) && (
           <ExecutionApprovalsBell />

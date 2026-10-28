@@ -4,11 +4,15 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { useFlowContext } from '../contexts/FlowContext';
 import { toast } from 'sonner';
+import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 
 export function FlowsListHeaderActions() {
   const navigate = useNavigate();
   const { createFlow } = useFlowContext();
   const [creating, setCreating] = useState(false);
+  const { canCreate } = useFlowPermissions();
+
+  if (!canCreate) return null;
 
   const handleNewFlow = async () => {
     try {

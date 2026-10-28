@@ -19,6 +19,8 @@ import { humanizeFlowError } from '@/lib/flowValidation';
 import { useFlowContext } from '../../contexts/FlowContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { useFlowPermissions } from '@/hooks/useFlowPermissions';
+import { DisabledReason } from '../flow/DisabledReason';
 import { Trash2, Loader2, AlertTriangle } from 'lucide-react';
 import { getFlowConversionStatus, updateFlowAutoConvert } from '../../services/flowApi';
 import {
@@ -42,22 +44,18 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
-  const [maxHops, setMaxHops] = useState(100);
-  const [mode, setMode] = useState<'normal' | 'agentic'>('normal');
   const [autoConvertToProcedure, setAutoConvertToProcedure] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const navigate = useNavigate();
+  const { canManage, readOnlyReason } = useFlowPermissions();
 
   useEffect(() => {
     if (activeFlow && open) {
       setName(activeFlow.name || '');
       setDescription(activeFlow.description || '');
       setCategory(activeFlow.category || '');
-      const settings = activeFlow.settings || {};
-      setMode((settings.mode as 'normal' | 'agentic') || 'normal');
-      setMaxHops(typeof settings.max_hops === 'number' ? settings.max_hops : 100);
 
       getFlowConversionStatus(activeFlow.id)
         .then((status) => setAutoConvertToProcedure(status.auto_convert_to_procedure))
@@ -102,22 +100,12 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
       return;
     }
 
-    if (!Number.isFinite(maxHops) || maxHops < 1) {
-      toast.error('Max Hops must be at least 1');
-      return;
-    }
-
     setIsSaving(true);
     try {
       await updateFlowMetadata(activeFlow.id, {
         name,
         description,
         category,
-        settings: {
-          ...(activeFlow.settings || {}),
-          mode,
-          max_hops: maxHops,
-        },
       });
       await updateFlowAutoConvert(activeFlow.id, autoConvertToProcedure);
       toast.success('Flow settings updated');
@@ -187,36 +175,6 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="mode">Execution mode</Label>
-              <Select value={mode} onValueChange={(v) => setMode(v as 'normal' | 'agentic')}>
-                <SelectTrigger id="mode" data-testid="flow-settings-mode">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="agentic">Agentic</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="max-hops">Max hops</Label>
-              <Input
-                id="max-hops"
-                data-testid="flow-settings-max-hops"
-                type="number"
-                value={maxHops}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  const parsed = parseInt(raw, 10);
-                  setMaxHops(Number.isFinite(parsed) ? parsed : 100);
-                }}
-                min={1}
-                max={1000}
-              />
-            </div>
-          </div>
           <div className="flex flex-row items-start gap-2">
             <Checkbox
               id="auto-convert-to-procedure"
@@ -237,25 +195,31 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
           </div>
         </DialogScrollBody>
         <DialogScrollFooter className="items-center justify-between sm:justify-between">
-          <Button
-            variant="destructive-ghost"
-            size="sm"
-            className="gap-2"
-            data-testid="flow-settings-delete"
-            onClick={() => setShowDeleteConfirm(true)}
-            disabled={isDeleting || isSaving}
-          >
-            {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-            Delete flow
-          </Button>
+          {canManage ? (
+            <Button
+              variant="destructive-ghost"
+              size="sm"
+              className="gap-2"
+              data-testid="flow-settings-delete"
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={isDeleting || isSaving}
+            >
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Delete flow
+            </Button>
+          ) : (
+            <span />
+          )}
           <div className="flex gap-2">
             <Button variant="outline" size="sm" data-testid="flow-settings-cancel" onClick={onClose} disabled={isDeleting || isSaving}>
               Cancel
             </Button>
-            <Button size="sm" data-testid="flow-settings-save" onClick={handleSave} disabled={isSaving || isDeleting || !activeFlow} className="gap-2">
-              {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Save changes
-            </Button>
+            <DisabledReason reason={canManage ? null : readOnlyReason}>
+              <Button size="sm" data-testid="flow-settings-save" onClick={handleSave} disabled={isSaving || isDeleting || !activeFlow || !canManage} className="gap-2">
+                {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                Save changes
+              </Button>
+            </DisabledReason>
           </div>
         </DialogScrollFooter>
       </DialogScrollContent>

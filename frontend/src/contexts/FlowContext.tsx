@@ -48,8 +48,6 @@ function flowsEqual(a: Flow | null, b: Flow | null): boolean {
     a.description === b.description &&
     a.status === b.status &&
     a.category === b.category &&
-    (a.settings?.mode || null) === (b.settings?.mode || null) &&
-    (a.settings?.max_hops ?? null) === (b.settings?.max_hops ?? null) &&
     a.version === b.version &&
     a.nodes.length === b.nodes.length &&
     a.edges.length === b.edges.length

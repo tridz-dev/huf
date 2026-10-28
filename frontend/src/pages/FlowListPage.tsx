@@ -15,6 +15,8 @@ import { toast } from 'sonner';
 import { reportFlowRun } from '@/lib/flowRunToast';
 import { humanizeFlowError } from '@/lib/flowValidation';
 import { useFlowContext } from '../contexts/FlowContext';
+import { RunFlowDialog } from '../components/flow/RunFlowDialog';
+import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import { FlowSettingsModal } from '../components/modals/FlowSettingsModal';
 
 const statusOptions = [
@@ -54,6 +56,8 @@ function FlowListPage() {
   const navigate = useNavigate();
   const { setActiveFlow, createFlow } = useFlowContext();
   const [showSettings, setShowSettings] = useState(false);
+  const [runTarget, setRunTarget] = useState<{ id: string; name: string } | null>(null);
+  const { canCreate, canManage } = useFlowPermissions();
 
   // Memoize fetchFn with NO dependencies to prevent ANY re-renders
   const fetchFn = useCallback(async () => {
@@ -123,9 +127,10 @@ function FlowListPage() {
     setShowSettings(true);
   };
 
-  const handleRunFlow = async (flowId: string) => {
+  const handleRunFlow = async (payload: Record<string, unknown>) => {
+    if (!runTarget) return;
     try {
-      reportFlowRun(await runFlow(flowId));
+      reportFlowRun(await runFlow(runTarget.id, payload));
     } catch (err) {
       toast.error('Could not run the flow', { description: humanizeFlowError(err) });
     }
@@ -194,8 +199,8 @@ function FlowListPage() {
               variant="create"
               icon={Workflow}
               title="No flows"
-              description="Create flows to automate your tasks."
-              action={{ label: 'New flow', onClick: handleNewFlow }}
+              description={canCreate ? 'Create flows to automate your tasks.' : 'No flows have been shared with you yet.'}
+              action={canCreate ? { label: 'New flow', onClick: handleNewFlow } : undefined}
             />
           )
         }
@@ -218,14 +223,12 @@ function FlowListPage() {
               },
             ]}
             actions={[
-              {
-                icon: Play,
-                label: 'Run flow',
-                onClick: () => handleRunFlow(flow.id),
-              },
+              ...(canManage
+                ? [{ icon: Play, label: 'Run flow', onClick: () => setRunTarget({ id: flow.id, name: flow.name }) }]
+                : []),
               {
                 icon: Settings,
-                label: 'Configure',
+                label: canManage ? 'Configure' : 'Settings',
                 onClick: () => handleConfigureFlow(flow.id),
               },
             ]}
@@ -234,6 +237,13 @@ function FlowListPage() {
           </div>
         )}
         keyExtractor={(flow) => flow.id}
+      />
+      <RunFlowDialog
+        open={!!runTarget}
+        flowId={runTarget?.id ?? null}
+        flowName={runTarget?.name}
+        onOpenChange={(open) => !open && setRunTarget(null)}
+        onRun={handleRunFlow}
       />
       <FlowSettingsModal
         open={showSettings}
