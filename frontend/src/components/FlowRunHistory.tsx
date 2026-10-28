@@ -36,6 +36,20 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
         }
     }, [open, flowId]);
 
+    // Live updates (socket) are not always available: poll while any run is still queued or running.
+    const hasActiveRun = runs.some((r) => r.status === 'Queued' || r.status === 'Running');
+    useEffect(() => {
+        if (!open || !hasActiveRun) return;
+        const timer = setInterval(async () => {
+            try {
+                setRuns((await flowService.listFlowRuns(flowId)) || []);
+            } catch (err) {
+                console.error(err);
+            }
+        }, 2000);
+        return () => clearInterval(timer);
+    }, [open, flowId, hasActiveRun]);
+
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent className="w-[400px] sm:w-[500px] overflow-y-auto" data-testid="flow-run-history">
