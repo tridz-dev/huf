@@ -39,13 +39,21 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
         }
     }, [open, flowId]);
 
-    // Live updates (socket) are not always available: poll while any run is unfinished (queued, running or waiting,
-    // e.g. for an approval that is answered or times out elsewhere).
+    // Live updates (socket) are not always available. While the sheet is open, poll quietly so runs started elsewhere
+    // (schedule, webhook, document events) show up without a manual refresh; faster while a run is unfinished
+    // (queued, running or waiting, e.g. for an approval answered elsewhere). Paused while the browser tab is hidden.
     const hasActiveRun = runs.some((r) => !['Success', 'Failed', 'Cancelled'].includes(r.status));
     useEffect(() => {
-        if (!open || !hasActiveRun) return;
-        const timer = setInterval(() => fetchRuns(true), 3000);
-        return () => clearInterval(timer);
+        if (!open) return;
+        const tick = () => {
+            if (!document.hidden) fetchRuns(true);
+        };
+        const timer = setInterval(tick, hasActiveRun ? 3000 : 5000);
+        document.addEventListener('visibilitychange', tick);
+        return () => {
+            clearInterval(timer);
+            document.removeEventListener('visibilitychange', tick);
+        };
     }, [open, flowId, hasActiveRun]);
 
     return (

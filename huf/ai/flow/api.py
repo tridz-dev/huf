@@ -89,6 +89,19 @@ def _can_mark_failed() -> bool:
 	return "System Manager" in frappe.get_roles(frappe.session.user)
 
 
+# Step title shown when a saved step has no title of its own (flows written outside the editor).
+_STEP_TYPE_TITLES = {
+	"agent.run": "Run agent",
+	"tool.call": "Call tool",
+	"router.llm": "LLM Router",
+	"condition": "Condition (If/Else)",
+	"foreach": "Loop",
+	"human.approval": "Human in Loop",
+	"end": "End",
+	"transform": "Transform data",
+}
+
+
 def _node_labels(flow_id: str | None) -> dict:
 	"""``{node_id: step title}`` from the flow's saved definition (UI titles live in ``_label``)."""
 	if not flow_id or not frappe.db.exists("Flow Definition", flow_id):
@@ -101,7 +114,11 @@ def _node_labels(flow_id: str | None) -> dict:
 	nodes = defn.get("nodes") if isinstance(defn, dict) else None
 	if isinstance(nodes, dict):
 		nodes = [{"id": k, **(v or {})} for k, v in nodes.items()]
-	return {n["id"]: (n.get("_label") or n["id"]) for n in (nodes or []) if isinstance(n, dict) and n.get("id")}
+	return {
+		n["id"]: (n.get("_label") or _STEP_TYPE_TITLES.get(n.get("type")) or n["id"])
+		for n in (nodes or [])
+		if isinstance(n, dict) and n.get("id")
+	}
 
 
 def _trigger_event(doc, payload: dict) -> str | None:

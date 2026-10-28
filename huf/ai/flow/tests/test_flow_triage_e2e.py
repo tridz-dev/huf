@@ -47,13 +47,13 @@ def triage_graph():
 		{
 			"id": "cond_awaiting",
 			"type": "condition",
-			"config": {"expression": 'context["outputs"]["get_state"]["found"]', "on_true": "extract_num", "on_false": "has_refund"},
+			"config": {"expression": 'get_state["found"]', "on_true": "extract_num", "on_false": "has_refund"},
 		},
 		{"id": "extract_num", "type": "transform", "config": {"op": "regex_extract", "input": {"text": {"$from": "lower"}, "pattern": "\\d+"}}, "next": "cond_num"},
 		{
 			"id": "cond_num",
 			"type": "condition",
-			"config": {"expression": 'context["outputs"]["extract_num"] != None', "on_true": "create_todo", "on_false": "reply_ask"},
+			"config": {"expression": 'extract_num != None', "on_true": "create_todo", "on_false": "reply_ask"},
 		},
 		{
 			"id": "create_todo",
@@ -75,7 +75,7 @@ def triage_graph():
 		{
 			"id": "cond_refund",
 			"type": "condition",
-			"config": {"expression": 'context["outputs"]["has_refund"] == True', "on_true": "remember", "on_false": "reply_default"},
+			"config": {"expression": 'has_refund == True', "on_true": "remember", "on_false": "reply_default"},
 		},
 		{
 			"id": "remember",
