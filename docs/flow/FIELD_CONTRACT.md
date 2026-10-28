@@ -485,7 +485,7 @@ The example is valid with a classifier that marks `http_request` as an http tool
 
 **Failed step record.** When a node fails (returns `failed` or raises), its stored output becomes `{"status": "failed", "error": "<readable reason>"}` (any other keys the node returned are kept). It is read at `context_json.__node_outputs__["<node_id>"].error` (`get_flow_run` -> `context_json`), and a later node can reference it like any output. A raised exception now fails the node (so `on_error` applies) instead of aborting the run.
 
-**Approval decision record** (the approval node's output): `{"decision": "approved" | "rejected" | "timeout", "comment", "decided_by", "decided_at"}`. `approved_by` / `approved_at` no longer exist. A timeout record has `decided_by: null` and `decided_at` set to the expiry time.
+**Approval decision record** (the approval node's output): `{"decision": "approved" | "rejected" | "timeout", "comment", "decided_by", "decided_at"}`. `approved_by` / `approved_at` no longer exist. A timeout record has `decided_by: null` and `decided_at` set to the expiry time. `decided_at` is a time-zone-aware UTC string (`2026-10-28T02:49:20Z`).
 
 **`router.llm` output**: `{"label", "node_id", "reason", "model", "provider"}`. `model` is the AI Model used (the configured `model`, else the provider default), or the one attempted when the call failed.
 
@@ -494,3 +494,5 @@ The example is valid with a classifier that marks `http_request` as an http tool
 **Run settings are gone.** The graph has no `settings`; the engine reads none. Every run uses the engine default hop budget (100) and a shared conversation; `foreach` is bounded by `config.max_iterations` and `contract.limits.max_foreach_iterations`. Agentic mode / orchestrator agent and the `decision_router` adapter are removed (`router.decision` always routes to its `default`). `run_flow` no longer accepts `mode` / `conversation_mode`.
 
 **Stale runs.** `huf.ai.flow.engine.sweep_stale_runs` (every 5 minutes) fails a Flow Run left in Queued/Running with no change for 30 minutes (`STALE_RUN_SWEEP_MINUTES`) and no live run lock, with last_error "Run did not complete (worker stopped)". Waiting runs are never swept. Manual "Mark as failed" is in `api.py` (WP5).
+
+**`router.llm` context.** The model is shown the workflow input and the outputs of the steps that already ran (`{"input": ..., "steps": {<node_id>: <output>}}`, truncated to 4000 characters), so a router placed after a Run Agent step can route on that step's reply.

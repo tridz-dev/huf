@@ -642,7 +642,7 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 			"decision": decision,
 			"comment": comment,
 			"decided_by": frappe.session.user,
-			"decided_at": str(now_datetime()),
+			"decided_at": _utc_now_iso(),
 		},
 	)
 	run_ctx.save_context()
@@ -663,6 +663,13 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 	_clear_flow_notifications(flow_run)
 
 	run_flow(flow_run.name)
+
+
+def _utc_now_iso() -> str:
+	"""Now as a time-zone-aware UTC string (``2026-10-28T02:49:20Z``), the form the UI converts to the browser zone."""
+	from datetime import datetime, timezone
+
+	return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def expire_approval(flow_run_name: str, now=None, enqueue: bool = False) -> bool:
@@ -695,7 +702,7 @@ def expire_approval(flow_run_name: str, now=None, enqueue: bool = False) -> bool
 		version = _pinned_version(flow_run)
 		run_ctx = _build_run_context(flow_run, version)
 		run_ctx.context.record_output(
-			node_id, {"decision": "timeout", "comment": None, "decided_by": None, "decided_at": str(now_datetime())}
+			node_id, {"decision": "timeout", "comment": None, "decided_by": None, "decided_at": _utc_now_iso()}
 		)
 		run_ctx.save_context()
 		flow_run.db_set({"current_node_id": timeout_next, "waiting": None, "status": "Running"})
@@ -1475,7 +1482,13 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 	try:
 		provider, model = resolve_router_model(model)
 		reply = _router_completion(
-			build_router_llm_prompt(render_text_refs(config.get("prompt") or "", ctx), options, ctx.as_dict()), provider, model
+			build_router_llm_prompt(
+				render_text_refs(config.get("prompt") or "", ctx),
+				options,
+				{"input": ctx.as_dict(), "steps": ctx.node_outputs},
+			),
+			provider,
+			model,
 		)
 		if not reply:
 			reason = "llm_failed: the model returned no reply"
