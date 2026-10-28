@@ -32,7 +32,6 @@ export type DocEventName =
   | 'on_cancel'
   | 'on_trash';
 
-export type ToolRecovery = 'retry' | 'resume' | 'abort' | 'compensate';
 export type ApproverType = 'role' | 'user';
 export type ForeachItemError = 'fail' | 'skip';
 
@@ -55,7 +54,6 @@ export type ActionType =
   | 'human.approval'
   | 'condition'
   | 'foreach'
-  | 'parallel'
   | 'validate'
   | 'transform'
   | 'state-get'
@@ -92,7 +90,7 @@ export type TriggerConfig =
 
 // ─── Action configs ───────────────────────────────────────────────────
 // Routing fields (next, on_error, condition on_true/on_false, router options/default,
-// approve_next/reject_next/timeout_next, foreach body, parallel branches) are NOT config
+// approve_next/reject_next/timeout_next, foreach body) are NOT config
 // here: they are derived from canvas edges on every save (see FlowEdgeRoute).
 
 export interface AgentRunActionConfig {
@@ -107,13 +105,14 @@ export interface ToolCallActionConfig {
   tool_id?: string;
   input?: Record<string, FlowValue>;
   timeout_ms?: number;
-  recovery?: ToolRecovery;
   approved?: boolean;
 }
 
 export interface RouterLlmActionConfig {
   type: 'router';
   prompt?: string;
+  /** AI Model record name; absent = the provider default. */
+  model?: string;
   /**
    * Fallback target node id. Kept only while it is still a routed target of this
    * node; otherwise the serializer falls back to the first option target.
@@ -150,12 +149,6 @@ export interface ForeachActionConfig {
   collect?: FlowReference;
   item_var?: string;
   index_var?: string;
-}
-
-export interface ParallelActionConfig {
-  type: 'parallel';
-  join?: 'all';
-  max_parallel_calls?: number;
 }
 
 export interface ValidateAssertion {
@@ -217,7 +210,6 @@ export type ActionConfig =
   | HumanApprovalActionConfig
   | ConditionActionConfig
   | ForeachActionConfig
-  | ParallelActionConfig
   | ValidateActionConfig
   | TransformActionConfig
   | StateGetActionConfig
@@ -244,17 +236,14 @@ export interface EndConfig {
  *  default   -> router default when it is not also an option target
  *  approve/reject/timeout -> human.approval approve_next / reject_next / timeout_next
  *  body      -> foreach body (edge to the first node of a chain; chain follows `next`)
- *  branch    -> parallel branch (data.branchIndex; edge to the first node of a chain)
  *  (foreach "done" edge is the plain 'next' route)
  */
 export type FlowEdgeRoute =
   | 'next' | 'error' | 'true' | 'false' | 'option' | 'default'
-  | 'approve' | 'reject' | 'timeout' | 'body' | 'branch';
+  | 'approve' | 'reject' | 'timeout' | 'body';
 
 export interface FlowEdgeData {
   route?: FlowEdgeRoute;
-  /** Parallel only: which branch this head belongs to. */
-  branchIndex?: number;
 }
 
 export interface FlowNodeData {

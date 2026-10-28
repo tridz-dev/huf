@@ -41,7 +41,6 @@ const ROUTE_TEXT: Record<string, string> = {
   reject: 'Runs when rejected',
   timeout: 'Runs when nobody answers in time',
   body: 'Runs once for each item',
-  branch: 'Runs in parallel',
 };
 
 export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps) {
@@ -156,6 +155,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 <p className="text-xs text-muted-foreground">The flow finishes here. The value below is returned as its result.</p>
                 <FlowValueInput
                   id="end-value"
+                  nodeId={selectedNode.id}
                   testId="flow-field-output-value"
                   label="Result"
                   optional

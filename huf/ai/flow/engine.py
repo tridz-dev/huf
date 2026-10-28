@@ -43,6 +43,7 @@ What changed in T-22, and why (defect ids are from the track plan):
 """
 
 import json
+import re
 
 import frappe
 from frappe import _
@@ -1432,6 +1433,27 @@ def _router_completion(prompt_text: str, provider: str, model: str) -> str:
 	return _run_coroutine(get_simple_completion(model, [{"role": "user", "content": prompt_text}], provider))
 
 
+_TEXT_REF_RE = re.compile(r"(?<!\{)\{([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*|\[\d+\])*)\}(?!\})")
+
+
+def render_text_refs(text: str, ctx: GraphContext) -> str:
+	"""Fill ``{input.field}`` / ``{node_id.field}`` / ``{foreach.item}`` placeholders in a plain-text field.
+
+	Used for ``router.llm.prompt`` and ``human.approval.message`` (the Insert data picker writes these).
+	A placeholder that does not resolve is left as written, so ordinary braces in a message never fail a run.
+	"""
+	from huf.ai.graph.templates import _stringify
+
+	def sub(match: re.Match) -> str:
+		path = match.group(1)
+		if path.split(".")[0].split("[")[0] not in ctx.reference_roots():
+			return match.group(0)
+		value = ctx.resolve_reference(path)
+		return match.group(0) if value is None else _stringify(value)
+
+	return _TEXT_REF_RE.sub(sub, text or "")
+
+
 def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""Execute router.llm node (config: ``prompt``, ``options[{label,node_id}]``, ``default``, ``model``).
 
@@ -1453,7 +1475,7 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 	try:
 		provider, model = resolve_router_model(model)
 		reply = _router_completion(
-			build_router_llm_prompt(config.get("prompt") or "", options, ctx.as_dict()), provider, model
+			build_router_llm_prompt(render_text_refs(config.get("prompt") or "", ctx), options, ctx.as_dict()), provider, model
 		)
 		if not reply:
 			reason = "llm_failed: the model returned no reply"
@@ -1518,7 +1540,7 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 	waiting_data = {
 		"type": "approval",
 		"node_id": node.get("id"),
-		"message": config.get("message", ""),
+		"message": render_text_refs(config.get("message", ""), ctx),
 		"approver_type": config.get("approver_type"),
 		"approver_role": config.get("approver_role"),
 		"approver_users": config.get("approver_users") or [],

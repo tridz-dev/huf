@@ -79,3 +79,38 @@ export function isInvalidValueJson(text: string): boolean {
     return true;
   }
 }
+
+/**
+ * Insert a picked reference into a Value, in the field's current mode:
+ *  - reference: replaced by the pick;
+ *  - template: `{name}` is appended to the text and `name` bound to the reference in `vars`;
+ *  - literal: an empty field becomes the reference; text becomes a template ending in the placeholder;
+ *  - json: `{"$from": "ref"}` is inserted at `caret` (or appended).
+ * Returns the new Value and the mode the editor should now show.
+ */
+export function insertReferenceIntoValue(
+  value: unknown,
+  mode: ValueMode,
+  ref: string,
+  name: string,
+  caret?: number
+): { value: unknown; mode: ValueMode } {
+  if (mode === 'reference') return { value: { $from: ref }, mode };
+  if (mode === 'template') {
+    const t = value as TemplateValue;
+    const vars = { ...(t.vars ?? {}) };
+    let key = name;
+    for (let i = 2; key in vars && JSON.stringify(vars[key]) !== JSON.stringify({ $from: ref }); i++) key = `${name}_${i}`;
+    vars[key] = { $from: ref };
+    return { value: { $template: `${t.$template ?? ''}{${key}}`, vars }, mode };
+  }
+  if (mode === 'json') {
+    const text = valueToText(value);
+    const snippet = JSON.stringify({ $from: ref });
+    const at = caret === undefined ? text.length : Math.min(Math.max(caret, 0), text.length);
+    return { value: textToValue('json', `${text.slice(0, at)}${snippet}${text.slice(at)}`), mode };
+  }
+  const text = valueToText(value);
+  if (!text.trim()) return { value: { $from: ref }, mode: 'reference' };
+  return { value: { $template: `${text}{${name}}`, vars: { [name]: { $from: ref } } }, mode: 'template' };
+}

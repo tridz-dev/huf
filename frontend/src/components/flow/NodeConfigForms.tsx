@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Copy, RefreshCw } from 'lucide-react';
 import { Input } from '../ui/input';
@@ -6,7 +6,7 @@ import { Textarea } from '../ui/textarea';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Combobox } from '../ui/combobox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '../ui/select';
 import { VariablePicker } from '../ui/VariablePicker';
 import { FlowValueInput } from '../FlowValueInput';
 import { FlowTriggerPanel } from '../FlowTriggerPanel';
@@ -14,6 +14,9 @@ import { useFlowContext } from '../../contexts/FlowContext';
 import { getAgents, getDocTypes } from '../../services/agentApi';
 import { getApproverRoles } from '../../services/flowApi';
 import { getFlowTools, type FlowTool } from '../../services/toolApi';
+import { getModels, getProviders } from '../../services/providerApi';
+import { NotConnected } from './NotConnected';
+import { ACTION_CARD_CONTRACT } from '../../data/actions';
 import { registerToolSchemas } from '@/lib/flowToolSchemas';
 import { TRANSFORM_OPS, getTransformOp } from '@/lib/flowTransformOps';
 import { branchHandlesFor } from '@/lib/flowBranches';
@@ -21,6 +24,8 @@ import { validateNode, TOOL_REQUIRED_INPUT, nodeKind } from '@/lib/flowValidatio
 import { generateWebhookSecret, webhookUrl, webhookUsage } from '@/lib/flowWebhookUi';
 import { actionCardId, actionLabel } from '@/lib/flowLabels';
 import { copyText } from '@/lib/clipboard';
+import { toolLabel } from '@/lib/flowIntegrations';
+import { uniqueName } from '@/lib/flowRefs';
 import { linkRoutes } from '@/lib/link-routes';
 import { edgeRoute } from '../../services/flowSerializer';
 import type { FlowNodeData } from '../../types/flow.types';
@@ -81,11 +86,60 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   );
 }
 
+/**
+ * A multi-line text field with an "Insert data" picker that inserts the chosen reference text at the cursor.
+ * `format` turns the reference path into the text to insert (an expression name, or a `{placeholder}`).
+ */
+function PickerTextarea({
+  id, testId, pickerTestId, nodeId, label, value, onChange, format, placeholder, className, mono,
+}: {
+  id: string;
+  testId: string;
+  pickerTestId: string;
+  nodeId: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  format: (ref: string) => string;
+  placeholder?: string;
+  className?: string;
+  mono?: boolean;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const insert = (reference: string) => {
+    const text = format(reference);
+    const el = ref.current;
+    const at = el?.selectionStart ?? value.length;
+    const end = el?.selectionEnd ?? at;
+    onChange(`${value.slice(0, at)}${text}${value.slice(end)}`);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(at + text.length, at + text.length);
+    });
+  };
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-1 min-h-7">
+        <Label htmlFor={id} size="sm">{label}</Label>
+        <VariablePicker currentNodeId={nodeId} testId={pickerTestId} label={`Insert data into ${label}`} onSelect={(r) => insert(r)} />
+      </div>
+      <Textarea
+        id={id}
+        ref={ref}
+        data-testid={testId}
+        className={`${className ?? 'min-h-[80px]'} w-full${mono ? ' font-mono' : ''}`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
 // ─── Triggers ─────────────────────────────────────────────────────────
 
 export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
   const { node, cfg, patch, kind, shell, activeFlow } = useNodeForm(nodeId, 'triggerConfig');
-  const { hasUnsavedChanges } = useFlowContext();
   const [docTypes, setDocTypes] = useState<Opt[]>([]);
   const [loadingDocTypes, setLoadingDocTypes] = useState(false);
   const type = str(cfg.type);
@@ -185,8 +239,6 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
       <Section title={type === 'schedule' ? 'Schedule' : 'Data'}>
         <FlowTriggerPanel
           kind={type}
-          flowId={activeFlow?.id}
-          hasUnsavedChanges={hasUnsavedChanges}
           docTypes={docTypes}
           loadingDocTypes={loadingDocTypes}
           value={{ cron: str(cfg.cron), doctype: str(cfg.doctype), event: str(cfg.event) }}
@@ -215,6 +267,7 @@ const PRESET_FIELDS: Record<string, Array<{ key: string; label: string; optional
 };
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+const DEFAULT_MODEL = '__provider_default__';
 
 function BranchRows({ nodeId, cfgType, cfg }: { nodeId: string; cfgType: string; cfg: Cfg }) {
   const { activeFlow, setSelectedNode } = useFlowContext();
@@ -253,6 +306,22 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
   const [tools, setTools] = useState<Array<Opt & { subtitle?: string }>>([]);
   const [toolsByName, setToolsByName] = useState<Record<string, FlowTool>>({});
   const [loading, setLoading] = useState(false);
+  const [modelGroups, setModelGroups] = useState<Array<{ provider: string; models: Opt[] }>>([]);
+
+  useEffect(() => {
+    if (type !== 'router') return;
+    Promise.all([getModels(), getProviders()])
+      .then(([models, providers]) => {
+        const names = new Map((providers as Array<{ name: string; provider_name?: string }>).map((p) => [p.name, p.provider_name || p.name]));
+        const groups = new Map<string, Opt[]>();
+        for (const m of models) {
+          const g = names.get(m.provider) ?? m.provider;
+          groups.set(g, [...(groups.get(g) ?? []), { value: m.name, label: m.model_name || m.name }]);
+        }
+        setModelGroups([...groups.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([provider, list]) => ({ provider, models: list })));
+      })
+      .catch(() => setModelGroups([]));
+  }, [type]);
 
   useEffect(() => {
     if (type !== 'agent-run') return;
@@ -285,7 +354,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
         setTools(
           (list || [])
             .filter((t) => t.name !== 'run_python')
-            .map((t) => ({ value: t.name, label: t.label || t.name, subtitle: t.source === 'mcp' ? `MCP: ${t.mcp_server || 'server'}` : 'Built-in' }))
+            .map((t) => ({ value: t.name, label: toolLabel(t.name, t.label), subtitle: t.source === 'mcp' ? `MCP: ${t.mcp_server || 'server'}` : 'Built-in' }))
         );
       })
       .catch(() => { setTools([]); setToolsByName({}); })
@@ -303,7 +372,9 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
     <VariablePicker
       currentNodeId={nodeId}
       testId="flow-agent-run-variable-picker"
-      onSelect={(ref, name) => {
+      onSelect={(ref, suggested) => {
+        const existing = Object.entries(bindings).find(([, v]) => asObj(v).$from === ref)?.[0];
+        const name = existing ?? uniqueName(suggested, Object.keys(bindings));
         patch({
           prompt: `${current}${current && !current.endsWith(' ') ? ' ' : ''}{${name}}`,
           prompt_bindings: { ...bindings, [name]: { $from: ref } },
@@ -357,8 +428,15 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
                 <Input
                   className="font-mono text-xs"
                   aria-label={`Source for ${name}`}
+                  data-testid={`flow-binding-source-${name}`}
                   value={str(asObj(value).$from)}
                   onChange={(e) => patch({ prompt_bindings: { ...bindings, [name]: { $from: e.target.value } } })}
+                />
+                <VariablePicker
+                  currentNodeId={nodeId}
+                  testId={`flow-binding-picker-${name}`}
+                  label={`Pick the data for ${name}`}
+                  onSelect={(ref) => patch({ prompt_bindings: { ...bindings, [name]: { $from: ref } } })}
                 />
                 <Button
                   variant="ghost"
@@ -385,6 +463,9 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
     const isHttp = toolId === 'http_request';
     const schemaProps = asObj(asObj(toolsByName[toolId]?.params_json_schema).properties);
     const required = new Set(TOOL_REQUIRED_INPUT[toolId]?.map(([k]) => k) ?? (asObj(toolsByName[toolId]?.params_json_schema).required as string[] | undefined) ?? []);
+    const cardToolIds = ACTION_CARD_CONTRACT[actionCardId(cfg as { type?: unknown; tool_id?: unknown })]?.toolIds;
+    const toolOptions = cardToolIds ? tools.filter((t) => cardToolIds.includes(t.value)) : tools;
+    const timeoutSec = typeof cfg.timeout_ms === 'number' ? Math.round(cfg.timeout_ms / 1000) : '';
     const presetFields = PRESET_FIELDS[toolId];
     const fields: Array<{ key: string; label: string; optional: boolean }> = presetFields
       ? presetFields.map((p) => ({ key: p.key, label: p.label, optional: Boolean(p.optional) }))
@@ -398,7 +479,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
             <Combobox
               id="tool-id"
               testId={f('tool_id')}
-              options={tools}
+              options={toolOptions}
               value={toolId}
               onValueChange={(v) => patch({ tool_id: v, input: {} })}
               placeholder={loading ? 'Loading...' : 'Choose a tool...'}
@@ -409,9 +490,10 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
             <Err field="tool_id" />
           </div>
         )}
+        <NotConnected toolId={toolId} testIdSuffix="sidebar" />
         {isHttp ? (
           <>
-            <FlowValueInput id="http-url" testId={f('input.url')} label="URL" value={input.url} onChange={(v) => setInput('url', v)} />
+            <FlowValueInput id="http-url" nodeId={nodeId} testId={f('input.url')} label="URL" value={input.url} onChange={(v) => setInput('url', v)} />
             <Err field="input.url" />
             <div>
               <Label htmlFor="http-method" size="sm">Method</Label>
@@ -426,14 +508,15 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
                 </SelectContent>
               </Select>
             </div>
-            <FlowValueInput id="http-headers" testId={f('input.headers')} label="Headers" optional value={input.headers} onChange={(v) => setInput('headers', v)} />
-            <FlowValueInput id="http-body" testId={f('input.body')} label="Body" optional value={input.body} onChange={(v) => setInput('body', v)} />
+            <FlowValueInput id="http-headers" nodeId={nodeId} testId={f('input.headers')} label="Headers" optional value={input.headers} onChange={(v) => setInput('headers', v)} />
+            <FlowValueInput id="http-body" nodeId={nodeId} testId={f('input.body')} label="Body" optional value={input.body} onChange={(v) => setInput('body', v)} />
           </>
         ) : toolId && fields.length > 0 ? (
           fields.map((fld) => (
             <div key={`${toolId}-${fld.key}`}>
               <FlowValueInput
                 id={`tool-in-${fld.key}`}
+                nodeId={nodeId}
                 testId={f(`input.${fld.key}`)}
                 label={fld.label}
                 optional={fld.optional}
@@ -446,6 +529,21 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
         ) : toolId ? (
           <p className="text-xs text-muted-foreground">This tool needs no settings.</p>
         ) : null}
+        {toolId ? (
+          <div>
+            <Label htmlFor="tool-timeout" size="sm">Wait up to (seconds, optional)</Label>
+            <Input
+              id="tool-timeout"
+              data-testid={f('timeout_ms')}
+              type="number"
+              min={1}
+              value={timeoutSec}
+              onChange={(e) => patch({ timeout_ms: e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value, 10)) * 1000 })}
+              placeholder="No limit"
+            />
+            <Err field="timeout_ms" />
+          </div>
+        ) : null}
       </Section>
     );
   }
@@ -456,16 +554,37 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
     return (
       <Section title={title} hint="Connect one arrow from this step to each possible next step and name it. The AI picks the arrow whose name fits best.">
         <div>
-          <Label htmlFor="router-prompt" size="sm">How should the AI choose?</Label>
-          <Textarea
+          <PickerTextarea
             id="router-prompt"
-            data-testid={f('prompt')}
-            className="min-h-[80px] w-full"
+            testId={f('prompt')}
+            pickerTestId={`${f('prompt')}-picker`}
+            nodeId={nodeId}
+            label="How should the AI choose?"
             value={str(cfg.prompt)}
-            onChange={(e) => patch({ prompt: e.target.value })}
+            onChange={(v) => patch({ prompt: v })}
+            format={(ref) => `{${ref}}`}
             placeholder="For example: Is this request urgent or routine?"
           />
           <Err field="prompt" />
+        </div>
+        <div>
+          <Label htmlFor="router-model" size="sm">AI model (optional)</Label>
+          <Select value={str(cfg.model) || DEFAULT_MODEL} onValueChange={(v) => patch({ model: v === DEFAULT_MODEL ? undefined : v })}>
+            <SelectTrigger id="router-model" data-testid={f('model')}>
+              <SelectValue placeholder="Use provider default" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={DEFAULT_MODEL} data-testid="flow-option-router-model-default">Use provider default</SelectItem>
+              {modelGroups.map((g) => (
+                <SelectGroup key={g.provider}>
+                  <SelectLabel>{g.provider}</SelectLabel>
+                  {g.models.map((m) => (
+                    <SelectItem key={m.value} value={m.value} data-testid={`flow-option-router-model-${m.value}`}>{m.label}</SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-2" data-testid={f('options')}>
           <Label size="sm">Paths</Label>
@@ -473,13 +592,17 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
           {out.map((e) => (
             <div key={e.id} className="flex items-center gap-2" data-testid={`flow-router-path-${e.target}`}>
               <Input
+                className="min-w-0"
+                title={typeof e.label === 'string' ? e.label : undefined}
                 aria-label={`Label for path to ${labelOf(e.target)}`}
                 data-testid={`flow-router-path-label-${e.target}`}
                 value={typeof e.label === 'string' ? e.label : ''}
                 placeholder="Name this path"
                 onChange={(ev) => updateEdges((activeFlow?.edges ?? []).map((x) => (x.id === e.id ? { ...x, label: ev.target.value } : x)))}
               />
-              <span className="text-xs text-muted-foreground truncate max-w-[90px]">{labelOf(e.target)}</span>
+              <span className="text-xs text-muted-foreground truncate max-w-[90px] shrink-0" title={`Goes to ${labelOf(e.target)}`}>
+                {'\u2192 '}{labelOf(e.target)}
+              </span>
             </div>
           ))}
           <Err field="options" />
@@ -508,15 +631,20 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
     return (
       <Section title={title} hint="Checks a condition. The True path runs when it holds, otherwise the False path.">
         <div>
-          <Label htmlFor="condition-expr" size="sm">Condition</Label>
-          <Textarea
+          <PickerTextarea
             id="condition-expr"
-            data-testid={f('expression')}
-            className="min-h-[60px] w-full font-mono"
+            testId={f('expression')}
+            pickerTestId={`${f('expression')}-picker`}
+            nodeId={nodeId}
+            label="Condition"
             value={str(cfg.expression)}
-            onChange={(e) => patch({ expression: e.target.value })}
+            onChange={(v) => patch({ expression: v })}
+            format={(ref) => ref.replace(/\.(\w+)/g, "['$1']")}
+            className="min-h-[60px]"
+            mono
             placeholder="input['amount'] > 100"
           />
+          <p className="mt-1 text-[11px] text-muted-foreground">Use Insert data to add the trigger or an earlier step, then pick a field, for example input['amount'].</p>
           <Err field="expression" />
         </div>
         <BranchRows nodeId={nodeId} cfgType="condition" cfg={cfg} />
@@ -567,7 +695,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
         <div>
           <div className="flex justify-between items-center mb-1">
             <Label htmlFor="loop-collect" size="sm">Result to collect from each item</Label>
-            <VariablePicker currentNodeId={nodeId} testId="flow-loop-collect-picker" onSelect={(ref) => patch({ collect: { $from: ref } })} />
+            <VariablePicker currentNodeId={nodeId} scope="loop-body" testId="flow-loop-collect-picker" onSelect={(ref) => patch({ collect: { $from: ref } })} />
           </div>
           <Input id="loop-collect" data-testid={f('collect')} className="font-mono text-xs" value={collectRef} onChange={(e) => patch({ collect: { $from: e.target.value } })} placeholder="n_email" />
           <Err field="collect" />
@@ -585,10 +713,18 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
     return (
       <Section title={title} hint="Pauses the flow until someone approves or rejects. Each outcome is its own path.">
         <div>
-          <div className="flex justify-between items-center mb-1">
-            <Label htmlFor="approval-message" size="sm">Message for the approver</Label>
-          </div>
-          <Textarea id="approval-message" data-testid={f('message')} className="min-h-[60px] w-full" value={str(cfg.message)} onChange={(e) => patch({ message: e.target.value })} placeholder="Approve this refund?" />
+          <PickerTextarea
+            id="approval-message"
+            testId={f('message')}
+            pickerTestId={`${f('message')}-picker`}
+            nodeId={nodeId}
+            label="Message for the approver"
+            value={str(cfg.message)}
+            onChange={(v) => patch({ message: v })}
+            format={(ref) => `{${ref}}`}
+            className="min-h-[60px]"
+            placeholder="Approve this refund?"
+          />
           <Err field="message" />
         </div>
         <div>
@@ -675,7 +811,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
         </div>
         {spec?.params.map((param) => (
           <div key={`${spec.name}-${param}`}>
-            <FlowValueInput id={`transform-in-${param}`} testId={f(`input.${param}`)} label={param} optional={spec.optional?.includes(param)} value={input[param]} onChange={(v) => setInput(param, v)} />
+            <FlowValueInput id={`transform-in-${param}`} nodeId={nodeId} testId={f(`input.${param}`)} label={param} optional={spec.optional?.includes(param)} value={input[param]} onChange={(v) => setInput(param, v)} />
             <Err field={`input.${param}`} />
           </div>
         ))}
@@ -687,14 +823,14 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
     return (
       <Section title={title} hint="Saved values belong to this flow. Use a template to key by sender, for example cart:{sender}.">
         <div>
-          <FlowValueInput id="state-key" testId={f('key')} label="Key" value={cfg.key} onChange={(v) => patch({ key: v })} />
+          <FlowValueInput id="state-key" nodeId={nodeId} testId={f('key')} label="Key" value={cfg.key} onChange={(v) => patch({ key: v })} />
           <Err field="key" />
         </div>
-        {type === 'state-get' && <FlowValueInput id="state-default" testId={f('default')} label="Default" optional value={cfg.default} onChange={(v) => patch({ default: v })} />}
+        {type === 'state-get' && <FlowValueInput id="state-default" nodeId={nodeId} testId={f('default')} label="Default" optional value={cfg.default} onChange={(v) => patch({ default: v })} />}
         {type === 'state-set' && (
           <>
             <div>
-              <FlowValueInput id="state-value" testId={f('value')} label="Value" value={cfg.value} onChange={(v) => patch({ value: v })} />
+              <FlowValueInput id="state-value" nodeId={nodeId} testId={f('value')} label="Value" value={cfg.value} onChange={(v) => patch({ value: v })} />
               <Err field="value" />
             </div>
             <div>
@@ -734,7 +870,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
               </div>
               <Button variant="ghost" size="sm" aria-label="Remove field" className="h-8 px-2 text-destructive" onClick={() => patch({ fields: Object.fromEntries(entries.filter((_, j) => j !== i)) })}>×</Button>
             </div>
-            <FlowValueInput id={`doc-field-${i}-value`} testId={f(`fields.${i}.value`)} label="Value" value={val} onChange={(v) => patch({ fields: Object.fromEntries(entries.map(([k, o], j) => (j === i ? [k, v] : [k, o]))) })} />
+            <FlowValueInput id={`doc-field-${i}-value`} nodeId={nodeId} testId={f(`fields.${i}.value`)} label="Value" value={val} onChange={(v) => patch({ fields: Object.fromEntries(entries.map(([k, o], j) => (j === i ? [k, v] : [k, o]))) })} />
           </div>
         ))}
         <Button variant="outline" size="sm" className="w-full" data-testid={f('fields.add')} onClick={() => patch({ fields: { ...fields, [`field_${entries.length + 1}`]: '' } })}>
