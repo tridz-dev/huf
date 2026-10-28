@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import frappe
 
-from huf.ai.whatsapp.broadcast import limits as bl, runner
+from huf.ai.whatsapp.broadcast import limits as bl, policy, progress, runner
 from huf.ai.whatsapp.broadcast.checks import gateway_bucket as gb, start_gate
 from huf.ai.whatsapp.tests.broadcast_policy_helper import limit_override
 from huf.ai.whatsapp.tests.test_whatsapp_broadcast_runner import _preview, GW, R, USER, B, _Base
@@ -208,3 +208,25 @@ class TestResumeAcknowledgements(_Base):
 		self.preview.return_value = _preview(warnings=[_w("quality_red")])
 		runner.start(b, USER, ["quality_red"])
 		self.assertEqual(frappe.db.get_value(B, b, "acknowledged_warnings"), '["quality_red"]')
+
+
+class TestRegistryAndInEffect(_Base):
+	def test_internal_rows_are_read_at_call_time(self):
+		for key in ("gateway_bucket_horizon_seconds", "gateway_bucket_key_seconds", "gateway_rate_cache_seconds"):
+			self.assertEqual(policy.BY_KEY[key].kind, "internal")
+		with limit_override(progress_throttle_seconds=7):
+			self.assertEqual(progress.throttle_seconds(), 7.0)
+		with limit_override(gateway_rate_cache_seconds=0, max_mps_cap=5):
+			gb._rates.clear()
+			patch.object(bl, "get_messaging_limit", return_value={"mps": None}).start()
+			self.assertEqual(gb.gateway_rate(GW), 5)
+
+	def test_a_saved_cap_setting_is_reported_as_in_effect(self):
+		patch.object(bl, "get_messaging_limit", return_value={"tier": "TIER_UNLIMITED", "max_unique_24h": None, "quality": None, "mps": 80}).start()
+		patch.object(bl, "_template_row", return_value={"status": "APPROVED", "category": "UTILITY"}).start()
+		b = self.make(n=1)
+		self.assertNotIn("max_recipients_default", REAL_PREVIEW(b)["limits_in_effect"])
+		with limit_override(max_recipients_default=7):
+			self.assertIn("max_recipients_default", REAL_PREVIEW(b)["limits_in_effect"])
+		own = self.make(n=1, max_recipients=3)
+		self.assertIn("max_recipients_default", REAL_PREVIEW(own)["limits_in_effect"])

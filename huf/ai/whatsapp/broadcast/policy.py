@@ -315,6 +315,10 @@ test fails when this file drifts from the registry. Do not edit the table by han
 Effective value = per-broadcast override, then **WhatsApp Broadcast Settings**, then the default.
 A blank setting uses the default. For the two recipient caps, `0` means no limit.
 
+Changes apply to broadcasts that are already running: the recipient cap is read again at every send, so lowering
+it (or the highest allowed value) stops a running broadcast from sending further rows ("max_recipients" skip), and
+raising it lets it continue. Speed settings are read when each work slice starts.
+
 """
 
 

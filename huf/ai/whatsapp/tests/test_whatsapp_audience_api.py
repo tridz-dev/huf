@@ -213,7 +213,7 @@ class TestImport(AudienceTestCase):
 		events = []
 		with patch.object(imp.frappe.db, "commit"), _limits(audience_import_chunk=10), \
 				patch.object(aud.frappe, "publish_realtime", side_effect=lambda *a, **k: events.append(a)), \
-				patch("huf.ai.whatsapp.broadcast.progress.THROTTLE_SECONDS", 0):
+				patch("huf.ai.whatsapp.broadcast.progress.throttle_seconds", return_value=0):
 			imp.run_import_job(**{k: kwargs[k] for k in ("audience", "rows", "on_conflict", "job_id", "user")})
 		state = api.get_import_status(job_id=out["job_id"], audience=name)
 		self.assertEqual((state["status"], state["result"]["added"]), ("done", 30))
