@@ -70,6 +70,19 @@ export function cronToPicker(cron: string | undefined): SchedulePicker {
 
 const FIELD = /^(\*|\d+(-\d+)?)(\/\d+)?(,(\*|\d+(-\d+)?)(\/\d+)?)*$/;
 
+const LIMITS: Array<[number, number]> = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 7]];
+
+/** True when every number in one cron part is inside the allowed range for that position. */
+function partInRange(part: string, [lo, hi]: [number, number]): boolean {
+  return part.split(',').every((item) => {
+    const [base, step] = item.split('/');
+    if (step !== undefined && Number(step) < 1) return false;
+    if (base === '*') return true;
+    const [from, to] = base.split('-').map(Number);
+    return from >= lo && from <= hi && (to === undefined || (to >= from && to <= hi));
+  });
+}
+
 /** Plain-language problem with a cron string, or null when it is a well-formed 5-part cron. */
 export function cronProblem(cron: string | undefined): string | null {
   const text = (cron ?? '').trim();
@@ -77,6 +90,9 @@ export function cronProblem(cron: string | undefined): string | null {
   const parts = text.split(/\s+/);
   if (parts.length !== 5) return 'A schedule needs 5 parts: minute hour day month weekday (for example 0 9 * * 1).';
   if (!parts.every((p) => FIELD.test(p))) return 'One of the schedule parts is not valid. Use numbers, *, ranges like 1-5, or steps like */15.';
+  if (!parts.every((p, i) => partInRange(p, LIMITS[i]))) {
+    return 'One of the schedule numbers is out of range: minute 0-59, hour 0-23, day 1-31, month 1-12, weekday 0-6.';
+  }
   return null;
 }
 

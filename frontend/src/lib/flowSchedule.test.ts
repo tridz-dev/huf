@@ -22,6 +22,9 @@ describe('flowSchedule', () => {
     expect(cronProblem('')).toMatch(/Choose when/);
     expect(cronProblem('* * *')).toMatch(/5 parts/);
     expect(cronProblem('a b c d e')).toMatch(/not valid/);
+    expect(cronProblem('61 25 * * *')).toMatch(/out of range/);
+    expect(cronProblem('*/0 * * * *')).toMatch(/out of range/);
+    expect(cronProblem('*/15 9-17 * * 1-5')).toBeNull();
     expect(cronProblem('*/15 * * * *')).toBeNull();
     expect(describeCron('0 9 * * 1')).toBe('Every Monday at 09:00 (server time)');
     expect(describeCron('')).toBe('No valid schedule yet.');
