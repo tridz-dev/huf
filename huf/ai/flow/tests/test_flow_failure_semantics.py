@@ -87,10 +87,10 @@ class TestFlowFailureSemantics(IntegrationTestCase):
 			"fingerprint": "0" * 64,
 			"entry": "start",
 			"nodes": [
-				{"id": "start", "type": "trigger.webhook", "config": {"method": "POST"}, "next": "fail"},
+				{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret"}, "next": "fail"},
 				failing,
 				*(
-					{"id": node_id, "type": "trigger.webhook", "config": {"method": "POST"}}
+					{"id": node_id, "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret"}}
 					for node_id in terminal_ids
 				),
 			],

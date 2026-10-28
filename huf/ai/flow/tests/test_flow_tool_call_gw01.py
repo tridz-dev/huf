@@ -218,7 +218,7 @@ class TestSavedFlowInvokesRealTool(unittest.TestCase):
 				{
 					"id": "start",
 					"type": "trigger.webhook",
-					"config": {"method": "POST"},
+					"config": {"method": "POST", "secret": "test-webhook-secret"},
 					"next": "call",
 				},
 				{

@@ -807,8 +807,100 @@
                 "timeout_ms": {
                   "type": "integer",
                   "minimum": 1
+                },
+                "approver_type": {
+                  "enum": [
+                    "role",
+                    "user"
+                  ],
+                  "description": "Who may decide. 'role' requires approver_role; 'user' requires a non-empty approver_users. Absent means no approver restriction is declared; the engine must then fail closed (restrict to System Manager), never open."
+                },
+                "approver_role": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Frappe Role name allowed to approve (approver_type 'role')."
+                },
+                "approver_users": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": "User ids (emails) allowed to approve (approver_type 'user')."
                 }
-              }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "required": [
+                      "approver_type"
+                    ],
+                    "properties": {
+                      "approver_type": {
+                        "const": "role"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "approver_role"
+                    ],
+                    "not": {
+                      "required": [
+                        "approver_users"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "required": [
+                      "approver_type"
+                    ],
+                    "properties": {
+                      "approver_type": {
+                        "const": "user"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "approver_users"
+                    ],
+                    "not": {
+                      "required": [
+                        "approver_role"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "not": {
+                      "required": [
+                        "approver_type"
+                      ]
+                    }
+                  },
+                  "then": {
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": [
+                            "approver_role"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "approver_users"
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
             }
           }
         }
@@ -828,7 +920,8 @@
               "type": "object",
               "additionalProperties": false,
               "required": [
-                "method"
+                "method",
+                "secret"
               ],
               "properties": {
                 "method": {
@@ -836,6 +929,12 @@
                     "GET",
                     "POST"
                   ]
+                },
+                "secret": {
+                  "type": "string",
+                  "minLength": 8,
+                  "maxLength": 256,
+                  "description": "Shared webhook secret. The receiver (huf.ai.flow.api) fails closed: a request is accepted only if its presented key equals this value (constant-time compare)."
                 }
               }
             }

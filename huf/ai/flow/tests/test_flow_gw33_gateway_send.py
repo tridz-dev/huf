@@ -112,7 +112,7 @@ class TestToolCallSendsWithoutLLMTurn(IntegrationTestCase):
 				{
 					"id": "start",
 					"type": "trigger.webhook",
-					"config": {"method": "POST"},
+					"config": {"method": "POST", "secret": "test-webhook-secret"},
 					"next": "send",
 				},
 				{

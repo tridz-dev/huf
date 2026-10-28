@@ -40,7 +40,7 @@ def triage_graph():
 	sender = {"$from": "input.sender_id"}
 	key = {"$template": "wa:{s}", "vars": {"s": sender}}
 	nodes = [
-		{"id": "start", "type": "trigger.webhook", "config": {"method": "POST"}, "next": "trim"},
+		{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret"}, "next": "trim"},
 		{"id": "trim", "type": "transform", "config": {"op": "trim", "input": {"text": {"$from": "input.message"}}}, "next": "lower"},
 		{"id": "lower", "type": "transform", "config": {"op": "lower", "input": {"text": {"$from": "trim"}}}, "next": "get_state"},
 		{"id": "get_state", "type": "state.get", "config": {"key": key}, "next": "cond_awaiting"},

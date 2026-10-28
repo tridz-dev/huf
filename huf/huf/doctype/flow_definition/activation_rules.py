@@ -18,7 +18,7 @@ UNSET_TRIGGER_TYPE = "trigger.unset"
 
 # Required, non-blank string config keys per node type (mirrors graph_ir.schema.json).
 REQUIRED_CONFIG_KEYS: dict[str, tuple[str, ...]] = {
-	"trigger.webhook": ("method",),
+	"trigger.webhook": ("method", "secret"),
 	"trigger.schedule": ("cron",),
 	"trigger.doc-event": ("doctype", "event"),
 	"agent.run": ("agent", "prompt"),

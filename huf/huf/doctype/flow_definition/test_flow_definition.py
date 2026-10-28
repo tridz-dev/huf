@@ -30,7 +30,7 @@ def _valid_definition(flow_id):
 			{
 				"id": "start",
 				"type": "trigger.webhook",
-				"config": {"method": "POST"},
+				"config": {"method": "POST", "secret": "test-webhook-secret"},
 				"next": "finish",
 			},
 			{

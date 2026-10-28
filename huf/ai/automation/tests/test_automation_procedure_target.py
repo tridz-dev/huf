@@ -47,7 +47,7 @@ def _flow_definition(nodes=None):
 		"entry": "start",
 		"nodes": nodes
 		or [
-			{"id": "start", "type": "trigger.webhook", "config": {"method": "POST"}, "next": "finish"},
+			{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret"}, "next": "finish"},
 			{"id": "finish", "type": "output", "config": {"value": {"ok": True}}},
 		],
 		"contract": {
@@ -371,7 +371,7 @@ class TestFlowTriggerApi(_Base):
 
 	def test_non_deterministic_flow_is_refused_clearly(self):
 		nodes = [
-			{"id": "start", "type": "trigger.webhook", "config": {"method": "POST"}, "next": "ask"},
+			{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret"}, "next": "ask"},
 			{"id": "ask", "type": "agent.run", "config": {"agent": "x", "prompt": "hi"}, "next": "finish"},
 			{"id": "finish", "type": "output", "config": {"value": {"ok": True}}},
 		]
