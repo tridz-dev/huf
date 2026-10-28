@@ -201,7 +201,7 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
       else toast.error("Couldn't copy. Select the text and copy it yourself.");
     };
     return (
-      <Section title="Webhook" hint="Send a request to this address to start the flow. Callers must present the secret.">
+      <Section title="Webhook" hint="Send a request to this address to start the flow. Callers must send the secret in the X-Huf-Secret header.">
         <div>
           <Label size="sm">Webhook URL</Label>
           <div className="flex gap-2 mt-1">
@@ -260,9 +260,7 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
         </div>
         <div className="text-xs space-y-1" data-testid="flow-webhook-usage">
           <p className="font-medium">How to call it</p>
-          <p className="text-muted-foreground">Add the secret to the URL:</p>
-          <code className="block break-all rounded bg-muted/50 p-1.5 font-mono text-[10px]" data-testid="flow-webhook-usage-query">{usage.query}</code>
-          <p className="text-muted-foreground">or send it as a header:</p>
+          <p className="text-muted-foreground">Send the secret as a header (not in the address):</p>
           <code className="block break-all rounded bg-muted/50 p-1.5 font-mono text-[10px]" data-testid="flow-webhook-usage-header">{usage.header}</code>
           <p className="text-muted-foreground">Example:</p>
           <code className="block break-all rounded bg-muted/50 p-1.5 font-mono text-[10px]" data-testid="flow-webhook-usage-curl">{usage.curl}</code>

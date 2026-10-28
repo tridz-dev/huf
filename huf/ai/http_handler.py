@@ -3,6 +3,11 @@ import json
 import socket
 from urllib.parse import urlparse
 
+from requests.adapters import HTTPAdapter
+from urllib3.connection import HTTPConnection, HTTPSConnection
+from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
+from urllib3.exceptions import ConnectTimeoutError, NewConnectionError
+
 import frappe
 import requests
 from requests.exceptions import RequestException
@@ -26,14 +31,15 @@ def _http_request(method, url, **kwargs):
     if method.upper() not in ALLOWED_METHODS:
         raise ValueError(f"HTTP method '{method}' is not allowed")
 
-    is_valid, error_msg = validate_url(url)
-    if not is_valid:
+    ips, error_msg = resolve_public_ips(url)
+    if error_msg:
         raise ValueError(error_msg)
 
     request_kwargs = {"timeout": kwargs.get("timeout", DEFAULT_TIMEOUT)}
     request_kwargs.update(kwargs)
 
-    return requests.request(method, url, **request_kwargs)
+    # allow_redirects is forced off by _send's callers; this helper never follows redirects blindly.
+    return _send(method, url, ips, **request_kwargs)
 
 def _is_public_ip(ip_str: str) -> bool:
 	"""Return True only if ip_str is a routable public address.
@@ -77,35 +83,131 @@ def extract_origin(url_str):
 	return (parsed.scheme, parsed.hostname, port)
 
 
+def resolve_public_ips(url):
+    """Resolve ``url``'s host ONCE and check every address it maps to (A and AAAA).
+
+    Returns ``(ips, None)`` when the URL is http/https and all resolved addresses are public, else
+    ``(None, error_message)``. The caller connects to these addresses (see :func:`_send`) instead of
+    resolving the name a second time, so a DNS answer that changes between check and connect (DNS
+    rebinding) cannot redirect the request to an internal address.
+    """
+    parsed = urlparse(url)
+
+    # Allow only HTTP and HTTPS
+    if parsed.scheme not in ("http", "https"):
+        return None, "Only HTTP and HTTPS schemes are allowed"
+
+    if not parsed.hostname:
+        return None, "Invalid URL: no hostname"
+
+    try:
+        addr_info = socket.getaddrinfo(parsed.hostname, None)
+    except socket.gaierror:
+        return None, f"Cannot resolve hostname: {parsed.hostname}"
+
+    ips = []
+    for info in addr_info:
+        ip = info[4][0]
+        if ip not in ips:
+            ips.append(ip)
+    if not ips:
+        return None, f"Cannot resolve hostname: {parsed.hostname}"
+
+    for ip in ips:
+        if not _is_public_ip(ip):
+            return None, "Requests to private/internal addresses are not allowed"
+
+    return ips, None
+
+
 def validate_url(url):
-	"""
-	Validate URL to prevent SSRF and other attacks.
+    """
+    Validate URL to prevent SSRF and other attacks.
 
-	Returns a tuple (is_valid, error_message).
-	"""
-	parsed = urlparse(url)
+    Returns a tuple (is_valid, error_message). This only checks; code that goes on to make the request
+    should use :func:`resolve_public_ips` + :func:`_send` so it connects to the addresses it checked.
+    """
+    ips, error = resolve_public_ips(url)
+    if error:
+        return False, error
+    return True, None
 
-	# Allow only HTTP and HTTPS
-	if parsed.scheme not in ("http", "https"):
-		return False, "Only HTTP and HTTPS schemes are allowed"
 
-	if not parsed.hostname:
-		return False, "Invalid URL: no hostname"
+def _make_pinned_connection(base, pins):
+    """A connection class that dials a pre-validated address for a pinned host name.
 
-	# Resolve hostname and reject if any resolved IP is private/internal.
-	# NOTE: this does not prevent DNS rebinding — the request below re-resolves
-	# independently. Rebinding mitigation is a known follow-up (see plan 002 notes).
-	try:
-		addr_info = socket.getaddrinfo(parsed.hostname, None)
-		ips = {info[4][0] for info in addr_info}
-	except socket.gaierror:
-		return False, f"Cannot resolve hostname: {parsed.hostname}"
+    Only the TCP connect is redirected: the URL host stays the host for the ``Host`` header, TLS SNI and
+    certificate verification, because urllib3 reads ``self.host`` again after the socket exists.
+    """
 
-	for ip in ips:
-		if not _is_public_ip(ip):
-			return False, "Requests to private/internal addresses are not allowed"
+    class PinnedConnection(base):
+        def _new_conn(self):
+            name = self._dns_host
+            ips = pins.get(str(name).rstrip(".").lower())
+            if not ips:
+                return super()._new_conn()
+            last_error = None
+            for ip in ips:
+                self._dns_host = ip
+                try:
+                    return super()._new_conn()
+                except (NewConnectionError, ConnectTimeoutError) as exc:
+                    last_error = exc
+                finally:
+                    self._dns_host = name
+            raise last_error
 
-	return True, None
+    return PinnedConnection
+
+
+class PinnedDNSAdapter(HTTPAdapter):
+    """requests adapter that connects each pinned host name to the addresses already validated for it."""
+
+    def __init__(self, pins, *args, **kwargs):
+        self._pins = {str(host).lower(): list(ips) for host, ips in pins.items()}
+        super().__init__(*args, **kwargs)
+
+    def init_poolmanager(self, *args, **kwargs):
+        super().init_poolmanager(*args, **kwargs)
+
+        class _HTTPPool(HTTPConnectionPool):
+            ConnectionCls = _make_pinned_connection(HTTPConnection, self._pins)
+
+        class _HTTPSPool(HTTPSConnectionPool):
+            ConnectionCls = _make_pinned_connection(HTTPSConnection, self._pins)
+
+        self.poolmanager.pool_classes_by_scheme = {"http": _HTTPPool, "https": _HTTPSPool}
+
+
+def _send(method, url, ips, **kwargs):
+    """One HTTP request whose connection goes to ``ips`` (already validated), not to a fresh DNS answer.
+
+    Returns the response; the session that owns its connection is on ``response._huf_session`` so the
+    caller can close it once the body is read. When an HTTP proxy is configured in the environment the
+    proxy resolves the name itself and pinning does not apply.
+    """
+    host = urlparse(url).hostname
+    session = requests.Session()
+    adapter = PinnedDNSAdapter({host: ips})
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    try:
+        response = session.request(method, url, **kwargs)
+    except Exception:
+        session.close()
+        raise
+    response._huf_session = session
+    return response
+
+
+def _close_response(response):
+    session = getattr(response, "_huf_session", None)
+    try:
+        response.close()
+    except Exception:
+        pass
+    if session is not None:
+        session.close()
 
 
 @rate_limit(key="tool_name", limit=100, seconds=60)
@@ -128,6 +230,7 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 			"error": f"HTTP method '{method}' is not allowed. Allowed methods: {', '.join(sorted(ALLOWED_METHODS))}",
 		}
 
+	sessions = []
 	try:
 		tool_info = {}
 		tool_allowed_for_guest = False
@@ -169,9 +272,9 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 			if not url.startswith(("http://", "https://")):
 				final_url = tool_info["base_url"].rstrip("/") + "/" + url.lstrip("/")
 
-		# Validate URL to prevent SSRF
-		is_valid, error_msg = validate_url(final_url)
-		if not is_valid:
+		# Validate URL to prevent SSRF. The host is resolved once here; the request connects to these addresses.
+		pinned_ips, error_msg = resolve_public_ips(final_url)
+		if error_msg:
 			return {
 				"success": False,
 				"error": error_msg,
@@ -226,7 +329,8 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 			"x-auth-token", "authorization-signature"
 		}
 		for _hop in range(max_redirects + 1):
-			response = requests.request(method, current_url, **request_kwargs)
+			response = _send(method, current_url, pinned_ips, **request_kwargs)
+			sessions.append(response)
 			if response.status_code not in (301, 302, 303, 307, 308):
 				break
 			location = response.headers.get("Location")
@@ -234,8 +338,9 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 				break
 			# Resolve relative redirects against the current URL.
 			next_url = requests.compat.urljoin(current_url, location)
-			is_valid, error_msg = validate_url(next_url)
-			if not is_valid:
+			# Every hop is resolved and checked once, and connected to at the checked addresses.
+			pinned_ips, error_msg = resolve_public_ips(next_url)
+			if error_msg:
 				return {
 					"success": False,
 					"error": f"Redirect blocked: {error_msg}",
@@ -321,6 +426,9 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 			"suggestion": "Check the URL and network connection.",
 			"status_code": getattr(e.response, "status_code", None) if hasattr(e, "response") else None,
 		}
+	finally:
+		for _response in sessions:
+			_close_response(_response)
 
 
 @rate_limit(key="tool_name", limit=100, seconds=60)

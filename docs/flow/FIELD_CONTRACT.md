@@ -47,7 +47,7 @@ attributes: `input['amount'] > 100`, not `input.amount` and not `context["x"]`.
 | UI item | `type` | config field | JSON type | Required | Constraint |
 |---|---|---|---|---|---|
 | Webhook | `trigger.webhook` | `method` | string | yes | enum `GET`, `POST` |
-| | | `secret` | string | yes | length 8-256; receiver compares the presented key to this value (constant time), fail closed |
+| | | `secret` | string | yes | length 32-256; the receiver compares the `X-Huf-Secret` header to this value (constant time), fail closed. A secret in the URL (`?secret=`) is not accepted |
 | Schedule | `trigger.schedule` | `cron` | string | yes | min length 1; 5-part cron (`minute hour day month dow`), evaluated in server system time |
 | Data (doc event) | `trigger.doc-event` | `doctype` | string | yes | min length 1, literal |
 | | | `event` | string | yes | enum `after_insert`, `on_update`, `on_submit`, `on_cancel`, `on_trash` |
@@ -142,7 +142,7 @@ proven ancestors, expressions parse, `transform.op` known, `contract.limits` wit
       "type": "trigger.webhook",
       "config": {
         "method": "POST",
-        "secret": "change-me-webhook-secret"
+        "secret": "change-me-webhook-secret-0123456789abcdef"
       },
       "next": "n_prep"
     },
@@ -451,7 +451,7 @@ The example is valid with a classifier that marks `http_request` as an http tool
 2. **HTTP Request**: resolved. Built-in tool `http_request` (App Provided, declared in `huf/ai/tools/_registry.py` `HTTP_TOOLS`, function `huf.ai.http_handler.http_request(url, method="GET", headers=None, body=None)`) matches the `input` contract `{url, method, headers, body}`. Returns a JSON string with `success` (true only for 2xx), `status_code`, `headers` subset, `body` (64KB cap), `truncated`.
 3. **Gateway / MCP binding**: the engine reads `config.mcp_server` and `config.gateway` on `tool.call`; the schema forbids them. The engine
    must resolve MCP tools by unique tool id (`find_unique_mcp_server_for_tool`). `FlowDefinition._validate_gateway_authority` is therefore dead for saved flows.
-4. **Backend consumers of the old names**: resolved. `flow_webhook` authenticates with the trigger node's `secret` (`X-Huf-Secret` or `?secret=`), the engine reads only the contract names (`on_true`/`on_false`, `foreach` body fields, `tool_id`/`input`, `approver_*`), `get_pending_approvals` and the approve/reject endpoints read the `waiting` keys in section 7, and `huf/ai/gateways/approvals.py` reads `approver_type`. Legacy keys (`auth`, `apiKey`, `webhook_key`, `approval_type`, `title`, `instructions`, `true_node`, `iterate_over`, `tool_name`) are ignored.
+4. **Backend consumers of the old names**: resolved. `flow_webhook` authenticates with the trigger node's `secret` (the `X-Huf-Secret` header only; the flow must be named by `flow_id`, it is never looked up by its secret; 60 calls a minute per caller address, then 429), the engine reads only the contract names (`on_true`/`on_false`, `foreach` body fields, `tool_id`/`input`, `approver_*`), `get_pending_approvals` and the approve/reject endpoints read the `waiting` keys in section 7, and `huf/ai/gateways/approvals.py` reads `approver_type`. Legacy keys (`auth`, `apiKey`, `webhook_key`, `approval_type`, `title`, `instructions`, `true_node`, `iterate_over`, `tool_name`) are ignored.
 5. `approver_type` is required by the schema (pre-release: no legacy approval nodes). `parallel` and `tool.call.recovery` are Flow-removed; they remain only in the Procedure profile.
 
 ## 7. Engine behaviour notes (verified against `huf/ai/flow/engine.py`)
@@ -497,3 +497,12 @@ The example is valid with a classifier that marks `http_request` as an http tool
 **Stale runs.** `huf.ai.flow.engine.sweep_stale_runs` (every 5 minutes) fails a Flow Run left in Queued/Running with no change for 30 minutes (`STALE_RUN_SWEEP_MINUTES`) and no live run lock, with last_error "Run did not complete (worker stopped)". Waiting runs are never swept. Manual "Mark as failed" is in `api.py` (WP5).
 
 **`router.llm` context.** The model is shown the workflow input and the outputs of the steps that already ran (`{"input": ..., "steps": {<node_id>: <output>}}`, truncated to 4000 characters), so a router placed after a Run Agent step can route on that step's reply.
+
+## 9. Security and concurrency rules added by WP11
+
+* **Webhook.** The secret travels only in the `X-Huf-Secret` header (32-256 characters; the editor generates 48). `?secret=` is not accepted. The flow is always named (`flow_id`, `?flow_id=` or `X-Huf-Flow-Id`); a flow is never looked up by its secret. Both endpoints allow 60 calls a minute per caller address and then answer 429. Unknown flow, unpublished flow, wrong or missing secret all answer the same 403.
+* **Approvals and resume.** `approve_flow_run` / `reject_flow_run` / `resume_flow_run` / the timeout sweep take the run lock, re-read the status under it and leave `Waiting Approval` / `Waiting User` with one conditional `UPDATE ... WHERE status = ...`. Exactly one of any number of simultaneous callers wins; the rest get a plain "already decided" message and nothing runs twice. A decision on an approval whose deadline has passed is refused ("This approval has expired"); the timeout path owns it.
+* **Terminal statuses.** `Success`, `Failed` and `Cancelled` are final. Every engine write that ends a run (complete, fail, "Mark as failed", the stale sweep) is conditional on the run not being final already, so a live worker cannot be overwritten and a finished run cannot be failed. "Mark as failed" takes the run lock and refuses while a worker holds it.
+* **Publishing sensitive flows.** A flow with a `trigger.doc-event` or a web request step (`tool.call` of `http_request`, or any GET / POST tool) can only be Active if the saving user holds the capability `flows.publish_sensitive` (Huf Manager and Huf Admin by default; add it to a custom Huf role on purpose). The check runs in the Flow Definition validator, so `publish_flow` and any direct save enforce it. Editing an unrelated step of an already-published flow does not need it; adding or changing a sensitive step does. A document-event flow also stops firing while its owner lacks the capability or is disabled.
+* **Document-event payload.** The run starts with the document as its owner may read it: fields above the owner's permission level and Password fields are removed, also in child rows. The lookup cache is cleared on Flow Definition save / publish / unpublish and on User and Has Role changes.
+* **Web requests** resolve the host once, require every returned address (IPv4 and IPv6) to be public, and connect to those addresses (the URL host still drives `Host` and TLS). Each redirect hop is resolved and checked the same way. With an HTTP proxy configured in the environment the proxy resolves names itself and pinning does not apply.

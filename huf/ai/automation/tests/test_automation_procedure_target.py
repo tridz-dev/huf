@@ -47,7 +47,7 @@ def _flow_definition(nodes=None):
 		"entry": "start",
 		"nodes": nodes
 		or [
-			{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret"}, "next": "finish"},
+			{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}, "next": "finish"},
 			{"id": "finish", "type": "output", "config": {"value": {"ok": True}}},
 		],
 		"contract": {

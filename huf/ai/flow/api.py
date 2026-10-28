@@ -14,6 +14,7 @@ import json
 
 import frappe
 from frappe import _
+from frappe.rate_limiter import rate_limit
 from frappe.utils import add_to_date, now_datetime
 
 
@@ -264,6 +265,10 @@ def _set_flow_status(flow_id: str, status: str) -> dict:
 	if doc.status != status:
 		doc.status = status
 		doc.save()
+	# Publishing / unpublishing changes which flows document events may start; do not wait for the cache to expire.
+	from huf.ai.flow.triggers import clear_trigger_cache
+
+	clear_trigger_cache()
 	return {"flow_id": doc.flow_id, "status": doc.status}
 
 
@@ -398,23 +403,35 @@ def mark_flow_run_failed(flow_run_id: str) -> dict:
 	if not frappe.db.exists("Flow Run", flow_run_id):
 		frappe.throw(_("Flow Run '{0}' not found").format(flow_run_id), frappe.DoesNotExistError)
 
-	doc = frappe.get_doc("Flow Run", flow_run_id)
-	if doc.status not in STALE_STATUSES:
-		frappe.throw(
-			_("This run is {0}, so it cannot be marked as failed. Only runs stuck in Queued or Running can.").format(
-				doc.status
-			)
-		)
-	if not _is_stale(doc.status, doc.modified):
-		frappe.throw(
-			_("This run changed less than {0} minutes ago and may still be working. Try again later.").format(
-				STALE_RUN_MINUTES
-			)
-		)
-
 	from huf.ai.flow import engine
 
-	engine._fail_flow_run(doc, _("Marked as failed by {0}: the run was stuck in {1}.").format(frappe.session.user, doc.status))
+	# Same lock a live worker holds while it advances the run: if it is held, the run is not stuck.
+	if not engine._acquire_run_lock(flow_run_id):
+		frappe.throw(_("This run is being worked on right now, so it cannot be marked as failed."))
+	try:
+		doc = frappe.get_doc("Flow Run", flow_run_id)
+		if doc.status not in STALE_STATUSES:
+			frappe.throw(
+				_("This run is {0}, so it cannot be marked as failed. Only runs stuck in Queued or Running can.").format(
+					doc.status
+				)
+			)
+		if not _is_stale(doc.status, doc.modified):
+			frappe.throw(
+				_("This run changed less than {0} minutes ago and may still be working. Try again later.").format(
+					STALE_RUN_MINUTES
+				)
+			)
+
+		# Conditional on the run not being finished: a worker that completed it meanwhile wins.
+		failed = engine._fail_flow_run(
+			doc, _("Marked as failed by {0}: the run was stuck in {1}.").format(frappe.session.user, doc.status)
+		)
+		if not failed:
+			frappe.throw(_("This run has already finished, so it was left as it is."))
+		frappe.db.commit()  # nosemgrep -- the change must be durable before the lock is released
+	finally:
+		engine._release_run_lock(flow_run_id)
 	doc.reload()
 	return {"flow_run_id": doc.name, "status": doc.status}
 
@@ -678,14 +695,12 @@ def _request_method() -> str | None:
 
 
 def _presented_secret() -> str | None:
-	"""The webhook secret the caller sent: ``X-Huf-Secret`` header or ``?secret=`` query parameter."""
-	headers = _request_headers()
-	value = headers.get(WEBHOOK_SECRET_HEADER)
-	if value:
-		return value
-	request = getattr(frappe, "request", None)
-	args = getattr(request, "args", None) if request else None
-	return (args.get("secret") if args else None) or None
+	"""The webhook secret the caller sent: the ``X-Huf-Secret`` header only.
+
+	A secret in the URL ends up in access logs, browser history and proxies, so ``?secret=`` is not
+	accepted at all.
+	"""
+	return _request_headers().get(WEBHOOK_SECRET_HEADER) or None
 
 
 def _parse_webhook_payload() -> dict:
@@ -738,22 +753,6 @@ def _webhook_denied():
 	frappe.throw(_("Webhook request not permitted"), WebhookDenied)
 
 
-def _resolve_flow_by_secret(secret: str | None) -> str:
-	from huf.ai.flow.triggers import active_webhook_flows, match_webhook_trigger
-
-	if not secret:
-		_webhook_denied()
-	matches = [
-		name
-		for name, _owner, defn in active_webhook_flows()
-		if match_webhook_trigger(defn, secret, None)[0] is not None
-	]
-	if len(matches) != 1:
-		# none: wrong secret; several: ambiguous. Either way nothing is started.
-		_webhook_denied()
-	return matches[0]
-
-
 def _run_flow_webhook(flow_id: str | None, secret: str | None, payload: dict | None = None) -> dict:
 	from huf.ai.flow.triggers import match_webhook_trigger, parse_definition, start_flow_run
 
@@ -793,30 +792,39 @@ def _run_flow_webhook(flow_id: str | None, secret: str | None, payload: dict | N
 	return {"flow_run_id": flow_run.name, "status": flow_run.status}
 
 
+#: Webhook endpoints are public, so they are throttled per caller address before anything else runs.
+#: Over the limit Frappe answers 429 with a generic message, whatever the flow or secret.
+WEBHOOK_RATE_LIMIT = 60
+WEBHOOK_RATE_WINDOW_SECONDS = 60
+
+
 @frappe.whitelist(allow_guest=True)
-def flow_webhook(flow_id: str | None = None, secret: str | None = None) -> dict:
+@rate_limit(limit=WEBHOOK_RATE_LIMIT, seconds=WEBHOOK_RATE_WINDOW_SECONDS)
+def flow_webhook(flow_id: str | None = None) -> dict:
 	"""
 	Webhook trigger endpoint for flows.
 
-	Authenticates with the per-flow ``secret`` from the ``trigger.webhook`` node config, sent as the
-	``X-Huf-Secret`` header or the ``?secret=`` query parameter (constant-time compare, fails closed).
-	The HTTP method must equal the node's configured ``method``. Only Active flows accept webhooks.
+	The flow is named by ``flow_id`` (argument, ``?flow_id=`` or the ``X-Huf-Flow-Id`` header) and the
+	caller authenticates with that flow's ``trigger.webhook`` secret, sent ONLY as the ``X-Huf-Secret``
+	header (constant-time compare, fails closed; ``?secret=`` is not accepted). The HTTP method must
+	equal the node's configured ``method``. Only Active flows accept webhooks. An unknown flow, an
+	inactive flow and a wrong or missing secret all get the same 403. At most 60 calls a minute per
+	caller address, then 429.
 	"""
-	return _run_flow_webhook(_extract_flow_id(flow_id), _presented_secret() or secret)
+	return _run_flow_webhook(_extract_flow_id(flow_id), _presented_secret())
 
 
 @frappe.whitelist(allow_guest=True)
-def flow_webhook_clean(flow_id: str | None = None, secret: str | None = None) -> dict:
+@rate_limit(limit=WEBHOOK_RATE_LIMIT, seconds=WEBHOOK_RATE_WINDOW_SECONDS)
+def flow_webhook_clean(flow_id: str | None = None) -> dict:
 	"""
-	Clean URL webhook receiver for providers that reject query parameters.
+	Webhook receiver for providers that cannot put the flow id in a query string.
 
-	The secret comes from the ``X-Huf-Secret`` header (or ``?secret=``). ``flow_id`` is taken from the
-	argument, ``?flow_id=`` or the ``X-Huf-Flow-Id`` header; if absent, Huf finds the single Active
-	``trigger.webhook`` flow whose configured secret equals the presented one.
+	Same rules as :func:`flow_webhook`: the secret comes from the ``X-Huf-Secret`` header only, and
+	the flow must be named (argument, ``?flow_id=`` or the ``X-Huf-Flow-Id`` header). A flow is never
+	looked up by its secret.
 	"""
-	presented = _presented_secret() or secret
-	resolved_flow_id = _extract_flow_id(flow_id) or _resolve_flow_by_secret(presented)
-	return _run_flow_webhook(resolved_flow_id, presented)
+	return _run_flow_webhook(_extract_flow_id(flow_id), _presented_secret())
 
 
 # ---------------------------------------------------------------------------

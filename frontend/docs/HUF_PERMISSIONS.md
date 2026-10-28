@@ -18,7 +18,7 @@ Core capabilities are defined in `huf/permissions.py` as flat strings, grouped b
 - **Chat**: `chat.use`, `chat.view_own`, `chat.view_all`
 - **Knowledge**: `knowledge.use`, `knowledge.create`, `knowledge.manage`
 - **Tools**: `tools.use`, `tools.create`, `tools.manage`
-- **Flows**: `flows.use`, `flows.create`, `flows.manage`
+- **Flows**: `flows.use`, `flows.create`, `flows.manage`, `flows.publish_sensitive` (publish a flow that has a document-event trigger or a web request step; Huf Admin and Huf Manager hold it by default, a custom Huf role does not unless you add it)
 - **System**: `system.providers.manage`, `system.models.manage`, `system.mcp.manage`, `system.settings.manage`
 - **Users & Roles**: `users.invite`, `users.manage`, `roles.manage`
 
@@ -37,7 +37,7 @@ Default Huf roles and their capabilities:
     - Chat: `chat.use`, `chat.view_own`, `chat.view_all`
     - Knowledge: `knowledge.use`, `knowledge.create`, `knowledge.manage`
     - Tools: `tools.use`, `tools.create`, `tools.manage`
-    - Flows: `flows.use`, `flows.create`, `flows.manage`
+    - Flows: `flows.use`, `flows.create`, `flows.manage`, `flows.publish_sensitive`
 
 - **Huf User**
   - Backed by Frappe role `Huf User`.

@@ -154,6 +154,30 @@ class FakeFlowRun:
 		pass
 
 
+def _fake_transition(flow_run, values, *, from_statuses=None, not_from_statuses=None, bump_hop=False):
+	"""Stand-in for ``engine._transition_run`` (a conditional SQL UPDATE) on a FakeFlowRun."""
+	status = getattr(flow_run, "status", None)
+	if from_statuses and status not in from_statuses:
+		return False
+	if not_from_statuses and status in not_from_statuses:
+		return False
+	flow_run.db_set(dict(values))
+	if bump_hop:
+		flow_run.hop_count = (flow_run.hop_count or 0) + 1
+	return True
+
+
+_transition_patch = patch.object(flow_engine, "_transition_run", _fake_transition)
+
+
+def setUpModule():
+	_transition_patch.start()
+
+
+def tearDownModule():
+	_transition_patch.stop()
+
+
 @contextlib.contextmanager
 def _no_mcp():
 	"""A built-in tool call without the optional heavy imports (agents SDK, whatsapp/cryptography)."""
