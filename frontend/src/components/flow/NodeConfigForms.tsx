@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Copy, RefreshCw } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
@@ -530,7 +530,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
         <NotConnected toolId={toolId} testIdSuffix="sidebar" />
         {isHttp ? (
           <>
-            <FlowValueInput id="http-url" nodeId={nodeId} testId={f('input.url')} label="URL" value={input.url} onChange={(v) => setInput('url', v)} />
+            <FlowValueInput id="http-url" stacked nodeId={nodeId} testId={f('input.url')} label="URL" value={input.url} onChange={(v) => setInput('url', v)} />
             <Err field="input.url" />
             <div>
               <Label htmlFor="http-method" size="sm">Method</Label>

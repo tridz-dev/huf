@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { getFlowDefinitions, getFlowDefinition } from '../services/flowApi';
 import { mapBackendStatusToFrontend } from '../services/flowSerializer';
 import { runFlow } from '../services/flowApi';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { reportFlowRun } from '@/lib/flowRunToast';
 import { humanizeFlowError } from '@/lib/flowValidation';
 import { useFlowContext } from '../contexts/FlowContext';

@@ -1,4 +1,4 @@
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 export interface FlowRunResult {
   flow_run_id: string;

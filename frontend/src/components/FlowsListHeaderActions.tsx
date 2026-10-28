@@ -3,7 +3,7 @@ import { Plus, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { useFlowContext } from '../contexts/FlowContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 
 export function FlowsListHeaderActions() {

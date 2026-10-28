@@ -17,20 +17,25 @@ Features:
 Uses LiteLLM's experimental MCP client for underlying MCP protocol handling.
 """
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import contextvars
 import json
 from contextlib import AsyncExitStack
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
-from agents import FunctionTool
-
 from huf.ai.transaction import commit_if_background
+
+if TYPE_CHECKING:
+    # Imported lazily where a tool is built: the agents SDK costs ~1 s to import, and a Flow tool step
+    # only needs the light server lookup in this module.
+    from agents import FunctionTool
 
 
 # MCP Tool prefix to identify MCP-sourced tools during execution
@@ -336,6 +341,8 @@ def _create_mcp_function_tool(mcp_server, tool_def: dict, seen_names: set[str] |
         # Sanitize tool name for OpenAI compatibility
         safe_name = _safe_tool_name(mcp_server, tool_name)
         safe_name = _dedupe_tool_name(safe_name, seen_names)
+
+        from agents import FunctionTool
 
         tool = FunctionTool(
             name=safe_name,

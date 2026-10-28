@@ -52,6 +52,7 @@ from frappe.desk.doctype.notification_log.notification_log import enqueue_create
 from frappe.desk.doctype.notification_settings.notification_settings import is_email_notifications_enabled
 
 from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
+from huf.ai.flow.integrations import friendly_tool_error
 from huf.ai.gateways.slack import flow_hooks
 from huf.ai.graph.permissions import envelope_declares
 from huf.ai.flow.orchestrator import (
@@ -1311,7 +1312,7 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 
 		result = normalize_tool_result(raw)
 		is_success = result["success"]
-		error_msg = result["error"]
+		error_msg = friendly_tool_error(result["error"])
 
 		if tool_call_doc is not None:
 			tool_result = result["result"]
@@ -1344,12 +1345,13 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			"error": error_msg or None,
 		}
 	except Exception as e:
+		error_text = friendly_tool_error(str(e))
 		if tool_call_doc is not None:
-			tool_call_doc.update({"status": "Failed", "error_message": str(e)})
+			tool_call_doc.update({"status": "Failed", "error_message": error_text})
 			tool_call_doc.save(ignore_permissions=True)
-		run_doc.db_set({"status": "Failed", "error_message": str(e), "end_time": now_datetime()})
+		run_doc.db_set({"status": "Failed", "error_message": error_text, "end_time": now_datetime()})
 		commit_if_background()
-		return {"status": "failed", "error": str(e)}
+		return {"status": "failed", "error": error_text}
 
 
 def build_router_llm_prompt(prompt: str, options: list, context: dict) -> str:

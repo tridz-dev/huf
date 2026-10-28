@@ -5,7 +5,7 @@ from unittest.mock import patch
 from frappe.tests.utils import FrappeTestCase
 
 from huf.ai.flow import integrations
-from huf.ai.flow.integrations import get_flow_integration_status, service_for_tool
+from huf.ai.flow.integrations import friendly_tool_error, get_flow_integration_status, service_for_tool
 
 
 class TestFlowIntegrationStatus(FrappeTestCase):
@@ -26,3 +26,22 @@ class TestFlowIntegrationStatus(FrappeTestCase):
 		self.assertFalse(status["gmail"]["connected"])  # only one of three keys
 		self.assertFalse(status["google_sheets"]["connected"])
 		self.assertEqual(status["slack"]["label"], "Slack")
+
+
+class TestFriendlyToolError(FrappeTestCase):
+	def test_missing_credential_becomes_not_connected(self):
+		raw = (
+			"Credential not found for service 'google_sheets', key 'client_id'. "
+			"Please set it in HUF Settings or via environment variable 'GOOGLE_SHEETS_CLIENT_ID'"
+		)
+		self.assertEqual(
+			friendly_tool_error(raw), "Google Sheets is not connected. Connect it in Integrations."
+		)
+		self.assertEqual(
+			friendly_tool_error("Error: " + raw.replace("google_sheets", "slack")),
+			"Slack is not connected. Connect it in Integrations.",
+		)
+
+	def test_other_errors_unchanged(self):
+		self.assertEqual(friendly_tool_error("HTTP 500"), "HTTP 500")
+		self.assertEqual(friendly_tool_error(""), "")

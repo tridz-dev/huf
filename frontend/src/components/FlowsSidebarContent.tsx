@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 export function FlowsSidebarContent() {
   const { flows, activeFlowId, setActiveFlow, createFlow, deleteFlow, updateFlowName } = useFlowContext();

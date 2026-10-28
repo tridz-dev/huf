@@ -25,6 +25,8 @@ interface FlowValueInputProps {
   testId?: string;
   /** Step this field belongs to. When set, an "Insert data" picker lists the trigger and earlier steps. */
   nodeId?: string;
+  /** Put the "how the value is given" choice above the input so a long value (a URL) gets the full width. */
+  stacked?: boolean;
 }
 
 const MODE_LABELS: Record<ValueMode, string> = {
@@ -38,7 +40,7 @@ const MODE_LABELS: Record<ValueMode, string> = {
  * Edits one graph-IR Value: a literal, a `$from` reference (e.g. `input.sender_id`,
  * `node_a.value`), a `$template` with `vars`, or a JSON array/object.
  */
-export function FlowValueInput({ id, label, value, onChange, optional, testId, nodeId }: FlowValueInputProps) {
+export function FlowValueInput({ id, label, value, onChange, optional, testId, nodeId, stacked }: FlowValueInputProps) {
   // The mode lives in the value for references, templates and JSON objects/arrays. A value that is still
   // plain text (empty, or JSON that does not parse yet) would fall back to "Literal", so remember the pick.
   const [picked, setPicked] = useState<ValueMode | null>(null);
@@ -117,13 +119,13 @@ export function FlowValueInput({ id, label, value, onChange, optional, testId, n
         ) : null}
       </div>
       {singleLine ? (
-        <div className="flex items-center gap-1.5">
+        <div className={stacked ? 'space-y-1.5' : 'flex items-center gap-1.5'}>
           {modeSelect}
           <Input
             id={id}
             data-testid={testId}
             value={text}
-            className={mode === 'reference' ? 'min-w-0 font-mono text-xs' : 'min-w-0'}
+            className={[mode === 'reference' ? 'min-w-0 font-mono text-xs' : 'min-w-0', stacked ? 'w-full' : ''].join(' ').trim()}
             placeholder={mode === 'reference' ? 'e.g., input.sender_id' : undefined}
             onChange={(e) => onChange(textToValue(mode, e.target.value))}
           />
