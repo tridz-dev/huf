@@ -40,6 +40,8 @@ def get_flow_definition(flow_id: str) -> dict:
 	return {
 		"flow_id": doc.flow_id,
 		"flow_name": doc.flow_name,
+		"description": doc.description or "",
+		"category": doc.category or "",
 		"definition_json": json.loads(doc.definition_json) if isinstance(doc.definition_json, str) else doc.definition_json,
 		"version": doc.version,
 		"schema_version": doc.schema_version,
