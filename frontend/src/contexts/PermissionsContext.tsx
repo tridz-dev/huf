@@ -22,7 +22,7 @@ interface PermissionsContextType {
 // Context
 // ---------------------------------------------------------------------------
 
-const PermissionsContext = createContext<PermissionsContextType | undefined>(undefined);
+export const PermissionsContext = createContext<PermissionsContextType | undefined>(undefined);
 
 // ---------------------------------------------------------------------------
 // Provider

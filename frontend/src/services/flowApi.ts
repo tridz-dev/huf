@@ -109,18 +109,6 @@ export interface BackendContract {
     limits: BackendResourceLimits;
 }
 
-/** @deprecated Flow-level run settings no longer fit in the graph-IR document
- * (additionalProperties: false leaves no room for a `settings` key). Kept as the type
- * of `Flow.settings`, a frontend/local-only field the engine now defaults instead
- * (huf.ai.flow.engine.DEFAULT_MAX_HOPS, etc.) -- see flowSerializer.ts. */
-export interface BackendSettings {
-    mode?: 'normal' | 'agentic';
-    max_hops?: number;
-    orchestrator_agent?: string;
-    orchestrator_call_policy?: string;
-    conversation_mode?: 'flow_shared' | 'per_node';
-}
-
 /** Flow Run summary (from list endpoint) */
 export interface FlowRunSummary {
     name: string;
