@@ -90,28 +90,29 @@ function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layoutRevis
   useEffect(() => {
     const previous = last.current;
     last.current = { flowId, nodeCount, edgeCount, layoutRevision };
+    // Ids as of the last settled view; the canvas store catches up with a change a moment after props change.
     const before = knownIds.current;
-    const current = getNodes();
-    knownIds.current = new Set(current.map((n) => n.id));
+    const remember = () => { knownIds.current = new Set(getNodes().map((n) => n.id)); };
     // The first render of a flow is fitted by <ReactFlow fitView>; only later edits come here.
-    if (!previous || previous.flowId !== flowId) return;
+    if (!previous || previous.flowId !== flowId) {
+      const settle = setTimeout(remember, 400);
+      return () => clearTimeout(settle);
+    }
     if (nodeCount > previous.nodeCount && edgeCount >= previous.edgeCount) {
-      const added = current.filter((n) => !before.has(n.id));
-      if (added.length > 0) {
-        const timer = setTimeout(() => {
-          const { width, height } = store.getState();
-          const fresh = getNodes().filter((n) => !before.has(n.id));
-          if (fresh.length === 0 || width <= 0) return;
-          // A card that has not been measured yet counts with the usual card size.
-          const rects = fresh.map((n) => ({ x: n.position.x, y: n.position.y, width: n.width ?? 236, height: n.height ?? 62 }));
-          const left = Math.min(...rects.map((r) => r.x));
-          const top = Math.min(...rects.map((r) => r.y));
-          const bounds = { x: left, y: top, width: Math.max(...rects.map((r) => r.x + r.width)) - left, height: Math.max(...rects.map((r) => r.y + r.height)) - top };
-          const next = panToReveal(bounds, getViewport(), { width, height });
-          if (next) setViewport({ ...next, zoom: getViewport().zoom }, { duration: 200 });
-        }, 150);
-        return () => clearTimeout(timer);
-      }
+      const timer = setTimeout(() => {
+        const { width, height } = store.getState();
+        const fresh = getNodes().filter((n) => !before.has(n.id));
+        remember();
+        if (fresh.length === 0 || width <= 0 || before.size === 0) return;
+        // A card that has not been measured yet counts with the usual card size.
+        const rects = fresh.map((n) => ({ x: n.position.x, y: n.position.y, width: n.width ?? 236, height: n.height ?? 62 }));
+        const left = Math.min(...rects.map((r) => r.x));
+        const top = Math.min(...rects.map((r) => r.y));
+        const bounds = { x: left, y: top, width: Math.max(...rects.map((r) => r.x + r.width)) - left, height: Math.max(...rects.map((r) => r.y + r.height)) - top };
+        const next = panToReveal(bounds, getViewport(), { width, height });
+        if (next) setViewport({ ...next, zoom: getViewport().zoom }, { duration: 200 });
+      }, 150);
+      return () => clearTimeout(timer);
     }
     const removed = nodeCount < previous.nodeCount || edgeCount < previous.edgeCount;
     if (!removed && layoutRevision === previous.layoutRevision) return;
