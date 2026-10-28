@@ -384,7 +384,13 @@ def _transition_run(
 		query = query.where(table.status.isin(list(from_statuses)))
 	if not_from_statuses:
 		query = query.where(table.status.notin(list(not_from_statuses)))
-	query.run()
+	try:
+		query.run()
+	except frappe.QueryDeadlockError:
+		# MariaDB with snapshot isolation refuses an UPDATE on a row another transaction changed since
+		# this one first read it ("Record has changed since last read", error 1020). That is the same
+		# answer as "0 rows matched": somebody else already moved this run.
+		return False
 	changed = (getattr(getattr(frappe.db, "_cursor", None), "rowcount", 0) or 0) > 0
 	if changed:
 		for field, value in values.items():

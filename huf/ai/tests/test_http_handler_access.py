@@ -122,8 +122,8 @@ class TestAuthorizationST071(unittest.TestCase):
 			mock_tool_doc.allowed_for_guest = False
 			mock_get_doc.return_value = mock_tool_doc
 
-			with patch("huf.ai.http_handler.validate_url", return_value=(True, None)):
-				with patch("huf.ai.http_handler.requests.request") as mock_request:
+			with patch("huf.ai.http_handler.resolve_public_ips", return_value=(["93.184.216.34"], None)):
+				with patch("huf.ai.http_handler._send") as mock_request:
 					mock_response = Mock()
 					mock_response.status_code = 200
 					mock_response.headers = {}
@@ -154,7 +154,7 @@ class TestAuthorizationST071(unittest.TestCase):
 			mock_tool_doc.allowed_for_guest = True
 			mock_get_doc.return_value = mock_tool_doc
 
-			with patch("huf.ai.http_handler.requests.request") as mock_request:
+			with patch("huf.ai.http_handler._send") as mock_request:
 				mock_response = Mock()
 				mock_response.status_code = 200
 				mock_response.headers = {}
@@ -221,8 +221,8 @@ class TestGuestAccessST072(unittest.TestCase):
 			mock_tool_doc.allowed_for_guest = True
 			mock_get_doc.return_value = mock_tool_doc
 
-			with patch("huf.ai.http_handler.validate_url", return_value=(True, None)):
-				with patch("huf.ai.http_handler.requests.request") as mock_request:
+			with patch("huf.ai.http_handler.resolve_public_ips", return_value=(["93.184.216.34"], None)):
+				with patch("huf.ai.http_handler._send") as mock_request:
 					mock_response = Mock()
 					mock_response.status_code = 200
 					mock_response.headers = {}
@@ -258,8 +258,8 @@ class TestHeaderOriginBindingST073(unittest.TestCase):
 			mock_tool_doc.allowed_for_guest = False
 			mock_get_doc.return_value = mock_tool_doc
 
-			with patch("huf.ai.http_handler.validate_url", return_value=(True, None)):
-				with patch("huf.ai.http_handler.requests.request") as mock_request:
+			with patch("huf.ai.http_handler.resolve_public_ips", return_value=(["93.184.216.34"], None)):
+				with patch("huf.ai.http_handler._send") as mock_request:
 					mock_response = Mock()
 					mock_response.status_code = 200
 					mock_response.headers = {}
@@ -297,11 +297,11 @@ class TestHeaderOriginBindingST073(unittest.TestCase):
 			mock_tool_doc.allowed_for_guest = False
 			mock_get_doc.return_value = mock_tool_doc
 
-			with patch("huf.ai.http_handler.requests.request") as mock_request:
+			with patch("huf.ai.http_handler._send") as mock_request:
 				# Mock validate_url to allow the cross-origin request
 				with patch(
-					"huf.ai.http_handler.validate_url",
-					return_value=(True, None),
+					"huf.ai.http_handler.resolve_public_ips",
+					return_value=(["93.184.216.34"], None),
 				):
 					mock_response = Mock()
 					mock_response.status_code = 200
@@ -337,9 +337,9 @@ class TestHeaderOriginBindingST073(unittest.TestCase):
 			mock_tool_doc.allowed_for_guest = False
 			mock_get_doc.return_value = mock_tool_doc
 
-			with patch("huf.ai.http_handler.requests.request") as mock_request:
-				with patch("huf.ai.http_handler.validate_url") as mock_validate:
-					mock_validate.return_value = (True, None)
+			with patch("huf.ai.http_handler._send") as mock_request:
+				with patch("huf.ai.http_handler.resolve_public_ips") as mock_validate:
+					mock_validate.return_value = (["93.184.216.34"], None)
 
 					# First response: 302 redirect to different origin
 					redirect_response = Mock()
@@ -383,8 +383,8 @@ class TestResponseSizeCappingST074(unittest.TestCase):
 			mock_tool_doc.allowed_for_guest = False
 			mock_get_doc.return_value = mock_tool_doc
 
-			with patch("huf.ai.http_handler.validate_url", return_value=(True, None)):
-				with patch("huf.ai.http_handler.requests.request") as mock_request:
+			with patch("huf.ai.http_handler.resolve_public_ips", return_value=(["93.184.216.34"], None)):
+				with patch("huf.ai.http_handler._send") as mock_request:
 					mock_response = Mock()
 					mock_response.status_code = 200
 					mock_response.headers = {"Content-Length": "1000"}
@@ -414,8 +414,8 @@ class TestResponseSizeCappingST074(unittest.TestCase):
 			mock_tool_doc.allowed_for_guest = False
 			mock_get_doc.return_value = mock_tool_doc
 
-			with patch("huf.ai.http_handler.validate_url", return_value=(True, None)):
-				with patch("huf.ai.http_handler.requests.request") as mock_request:
+			with patch("huf.ai.http_handler.resolve_public_ips", return_value=(["93.184.216.34"], None)):
+				with patch("huf.ai.http_handler._send") as mock_request:
 					mock_response = Mock()
 					mock_response.status_code = 200
 					# No Content-Length to pass fast-path check
@@ -451,8 +451,8 @@ class TestResponseSizeCappingST074(unittest.TestCase):
 			mock_tool_doc.allowed_for_guest = False
 			mock_get_doc.return_value = mock_tool_doc
 
-			with patch("huf.ai.http_handler.validate_url", return_value=(True, None)):
-				with patch("huf.ai.http_handler.requests.request") as mock_request:
+			with patch("huf.ai.http_handler.resolve_public_ips", return_value=(["93.184.216.34"], None)):
+				with patch("huf.ai.http_handler._send") as mock_request:
 					mock_response = Mock()
 					mock_response.status_code = 200
 					# Set Content-Length > MAX_RESPONSE_SIZE
