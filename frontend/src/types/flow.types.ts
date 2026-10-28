@@ -1,5 +1,4 @@
 import { Node as ReactFlowNode, Edge as ReactFlowEdge } from 'reactflow';
-import type { BackendSettings } from '../services/flowApi';
 
 export type FlowStatus = 'draft' | 'active' | 'paused' | 'error';
 
@@ -286,8 +285,6 @@ export interface Flow {
   createdAt: Date;
   updatedAt: Date;
   version: number;
-  /** Engine execution settings (mirrors backend definition_json.settings) */
-  settings?: BackendSettings;
 }
 
 export interface FlowMetadata {

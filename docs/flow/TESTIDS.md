@@ -79,6 +79,12 @@ Blocked saves surface a toast; the first offending node is selected.
 | Test id | Element |
 |---|---|
 | `flow-run-history`, `flow-run-history-refresh`, `flow-run-row-<runId>` (`data-run-status`) | Runs sheet |
-| `flow-run-details`, `flow-run-current-node`, `flow-run-error`, `flow-run-approve`, `flow-run-reject` | Run details sheet |
-| `flow-settings-modal`, `flow-settings-name`, `-description`, `-category`, `-mode`, `-max-hops`, `-auto-convert`, `-save`, `-cancel`, `-delete` | Settings modal |
-| `flow-approvals-bell`, `flow-approvals-count`, `flow-approvals-panel`, `flow-approval-<runId>`, `flow-approve-<runId>`, `flow-reject-<runId>` | Approvals bell |
+| `flow-run-details`, `flow-run-current-node`, `flow-run-error`, `flow-run-approve`, `flow-run-reject` | Run details sheet; the open run is in the URL as `?run=<id>` |
+| `flow-run-meta`, `flow-run-flow-name`, `flow-run-trigger`, `flow-run-started`, `flow-run-finished`, `flow-run-duration`, `flow-run-decision-<nodeId>` | Run details facts and recorded approval decision |
+| `flow-run-stale`, `flow-run-mark-failed`, `flow-run-mark-failed-confirm` | Stuck-run notice and System Manager "Mark as failed" |
+| `executions-tab-flow-runs`, `flow-runs-table`, `flow-run-exec-row-<runId>` (`data-run-status`), `execution-flow-label-<agentRunId>` | Executions page: Flow runs tab and flow-step labels |
+| `flow-settings-modal`, `flow-settings-name`, `-description`, `-category`, `-auto-convert`, `-save`, `-cancel`, `-delete` | Settings modal |
+| `flow-approvals-bell`, `flow-approvals-count`, `flow-approvals-panel`, `flow-approval-<runId>`, `flow-approve-<runId>`, `flow-reject-<runId>`, `flow-approval-flow-<runId>`, `flow-approval-message-<runId>`, `flow-approval-time-<runId>` | Approvals bell |
+| `flow-run-dialog`, `flow-run-payload`, `flow-run-payload-error`, `flow-run-start`, `flow-run-cancel` | Run dialog (JSON input data) opened by the Run button and the list card Run action |
+| `disabled-reason` | Wrapper around a control disabled for a view-only user; hover/focus shows the explanation |
+| `connection-indicator` (`data-status` = connecting / connected / offline) | Header dot for the live-updates connection |

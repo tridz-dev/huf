@@ -11,6 +11,7 @@ import {
 } from '../services/executionApi';
 import type { PendingExecutionApproval } from '../services/executionApi';
 import { useUser } from '../contexts/UserContext';
+import { parseServerDate, useSiteTimezone } from '@/lib/serverTime';
 
 const REFRESH_INTERVAL_MS = 60000;
 /** Recompute expiry urgency independently of the fetch cycle so the
@@ -29,7 +30,7 @@ function executionKindLabel(kind: string): string {
 }
 
 function formatExpiry(expiresOn: string, now: number): { label: string; urgent: boolean; expired: boolean } {
-  const expiresAt = new Date(expiresOn).getTime();
+  const expiresAt = parseServerDate(expiresOn)?.getTime() ?? Number.NaN;
   if (Number.isNaN(expiresAt)) {
     return { label: 'Expiry unknown', urgent: false, expired: false };
   }
@@ -56,6 +57,7 @@ function formatExpiry(expiresOn: string, now: number): { label: string; urgent: 
 }
 
 export function ExecutionApprovalsBell() {
+  useSiteTimezone();
   const [approvals, setApprovals] = useState<PendingExecutionApproval[]>([]);
   const [now, setNow] = useState(() => Date.now());
   const [decidingName, setDecidingName] = useState<string | null>(null);

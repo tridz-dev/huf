@@ -11,6 +11,10 @@ import { FlowRunViewer } from './FlowRunViewer';
 import { FlowSettingsModal } from './modals/FlowSettingsModal';
 import { humanizeFlowError, summarizeIssues, validateFlow } from '@/lib/flowValidation';
 import { reportFlowRun } from '@/lib/flowRunToast';
+import { RunFlowDialog } from './flow/RunFlowDialog';
+import { DisabledReason } from './flow/DisabledReason';
+import { useFlowPermissions } from '@/hooks/useFlowPermissions';
+import { useRunParam } from '@/hooks/useRunParam';
 
 /**
  * Left-aligned "Flows > flow name [pencil]" control for the flow canvas
@@ -93,22 +97,15 @@ export function FlowToolbarTitle() {
 
 export function FlowsHeaderActions() {
   const { activeFlow, saveState, hasUnsavedChanges, saveFlow, setSelectedNode } = useFlowContext();
-  const [isRunning, setIsRunning] = useState(false);
+  const [showRunDialog, setShowRunDialog] = useState(false);
+  const { canManage, readOnlyReason } = useFlowPermissions();
   const [isPublishing, setIsPublishing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useRunParam();
 
   const location = useLocation();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const sp = new URLSearchParams(location.search);
-    const runFromUrl = sp.get('run');
-    if (runFromUrl) {
-      setSelectedRunId(runFromUrl);
-    }
-  }, [location.search]);
 
   const openSettingsFromUrl = () => {
     const sp = new URLSearchParams(location.search);
@@ -154,17 +151,19 @@ export function FlowsHeaderActions() {
     }
   };
 
+  /** Check and save the flow, then ask for the input data before running. */
   const handleRun = async () => {
     if (!activeFlow || blockedBy('run')) return;
     if (!(await saveIfNeeded('running'))) return;
+    setShowRunDialog(true);
+  };
 
-    setIsRunning(true);
+  const startRun = async (payload: Record<string, unknown>) => {
+    if (!activeFlow) return;
     try {
-      reportFlowRun(await runFlow(activeFlow.id));
+      reportFlowRun(await runFlow(activeFlow.id, payload));
     } catch (err) {
       toast.error('Could not run the flow', { description: humanizeFlowError(err) });
-    } finally {
-      setIsRunning(false);
     }
   };
 
@@ -265,34 +264,38 @@ export function FlowsHeaderActions() {
       </Button>
 
       {/* Run Button */}
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-2"
-        data-testid="flow-run"
-        onClick={handleRun}
-        disabled={!activeFlow || isRunning}
-      >
-        {isRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-        <span>Run</span>
-      </Button>
+      <DisabledReason reason={canManage ? null : readOnlyReason}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          data-testid="flow-run"
+          onClick={handleRun}
+          disabled={!activeFlow || !canManage}
+        >
+          <Play className="w-4 h-4" />
+          <span>Run</span>
+        </Button>
+      </DisabledReason>
 
       {/* Publish Button */}
-      <Button
-        variant="display"
-        size="sm"
-        className="gap-2"
-        data-testid="flow-publish"
-        onClick={handlePublish}
-        disabled={!activeFlow || isPublishing}
-      >
-        {isPublishing ? (
-          <Loader2 className="w-4 h-4 animate-spin" />
-        ) : (
-          <Upload className="w-4 h-4" />
-        )}
-        <span>Publish</span>
-      </Button>
+      <DisabledReason reason={canManage ? null : readOnlyReason}>
+        <Button
+          variant="display"
+          size="sm"
+          className="gap-2"
+          data-testid="flow-publish"
+          onClick={handlePublish}
+          disabled={!activeFlow || isPublishing || !canManage}
+        >
+          {isPublishing ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Upload className="w-4 h-4" />
+          )}
+          <span>Publish</span>
+        </Button>
+      </DisabledReason>
 
       {activeFlow && (
         <FlowRunHistory
@@ -305,6 +308,13 @@ export function FlowsHeaderActions() {
       <FlowRunViewer
         runId={selectedRunId}
         onClose={() => setSelectedRunId(null)}
+      />
+      <RunFlowDialog
+        open={showRunDialog}
+        flowId={activeFlow?.id ?? null}
+        flowName={activeFlow?.name}
+        onOpenChange={setShowRunDialog}
+        onRun={startRun}
       />
       <FlowSettingsModal
         open={showSettings}

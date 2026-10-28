@@ -48,8 +48,6 @@ function flowsEqual(a: Flow | null, b: Flow | null): boolean {
     a.description === b.description &&
     a.status === b.status &&
     a.category === b.category &&
-    (a.settings?.mode || null) === (b.settings?.mode || null) &&
-    (a.settings?.max_hops ?? null) === (b.settings?.max_hops ?? null) &&
     a.version === b.version &&
     a.nodes.length === b.nodes.length &&
     a.edges.length === b.edges.length
@@ -531,6 +529,11 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   ]);
 
   return <FlowContext.Provider value={value}>{children}</FlowContext.Provider>;
+}
+
+/** Like useFlowContext, but returns undefined outside a FlowProvider (e.g. the Executions page). */
+export function useOptionalFlowContext() {
+  return useContext(FlowContext);
 }
 
 export function useFlowContext() {
