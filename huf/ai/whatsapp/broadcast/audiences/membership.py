@@ -296,6 +296,17 @@ def referencing_broadcasts(audience: str) -> list[dict]:
 	)
 
 
+def attested_covered_broadcasts(audience: str) -> list[str]:
+	"""Broadcasts (any status) whose consent was covered by this audience's attestation."""
+	rows = frappe.db.sql(
+		"select distinct b.name from `tabWhatsApp Broadcast` b "
+		"join `tabWhatsApp Broadcast Recipient` r on r.broadcast = b.name "
+		"where r.audience = %s and b.consent_attested = 1 and b.consent_source like %s order by b.name",
+		(audience, "Audiences:%"),
+	)
+	return [r[0] for r in rows]
+
+
 def assert_not_in_use(audience: str, verb: str) -> None:
 	used = referencing_broadcasts(audience)
 	if used:

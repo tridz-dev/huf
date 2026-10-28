@@ -140,7 +140,9 @@ def _log_event(event: str, broadcast: str, **extra) -> None:
 # --------------------------------------------------------------------------- lifecycle
 
 
-def _begin(broadcast, user, *, allowed_from, resuming=False, override_warnings=None) -> dict:
+def _begin(
+	broadcast, user, *, allowed_from, resuming=False, override_warnings=None, expected_count=None
+) -> dict:
 	user = user or frappe.session.user
 	doc = frappe.get_doc(BROADCAST, broadcast)
 	if doc.status not in allowed_from:
@@ -152,7 +154,7 @@ def _begin(broadcast, user, *, allowed_from, resuming=False, override_warnings=N
 
 	preview = broadcast_limits.preview(broadcast) or {}
 	deferred = int(frappe.db.count(RECIPIENT, {"broadcast": broadcast, "status": "deferred"}) or 0)
-	acknowledged = start_gate.check_preview(preview, deferred, None if resuming else (override_warnings or []))
+	start_gate.check_preview(preview, deferred, None if resuming else (override_warnings or []))
 
 	# Serialise "one Running per gateway" on the Gateway row. Everything above was a (possibly
 	# snapshot) read, so after the lock use *locking* reads, which see the latest committed data.
@@ -175,9 +177,10 @@ def _begin(broadcast, user, *, allowed_from, resuming=False, override_warnings=N
 				"another_broadcast_running", _("Another broadcast ({0}) is already running on this Gateway").format(other)
 			)
 
-	deferred_over_budget = 0
-	if "over_budget" in acknowledged and preview.get("remaining_24h") is not None:
-		deferred_over_budget = start_gate.defer_over_budget(broadcast, int(preview["remaining_24h"]))
+	preview, acknowledged = start_gate.recheck_locked(
+		broadcast, preview, resuming=resuming, override_warnings=override_warnings, expected_count=expected_count
+	)
+	deferred_over_budget = start_gate.apply_budget_hold(broadcast, doc.gateway, preview, acknowledged, resuming)
 
 	started_at = doc.started_at or now_datetime()
 	frappe.db.set_value(
@@ -211,11 +214,11 @@ def _begin(broadcast, user, *, allowed_from, resuming=False, override_warnings=N
 		"deferred_over_budget": deferred_over_budget}
 
 
-def start(broadcast: str, user: str | None = None, override_warnings: list[str] | None = None) -> dict:
+def start(broadcast, user=None, override_warnings=None, expected_count=None) -> dict:
 	"""Start a Draft broadcast and enqueue its first tick (Paused goes through resume()).
 
 	``override_warnings`` must equal the preview's current warning codes, else ``StartRefused("warnings_changed")``."""
-	return _begin(broadcast, user, allowed_from=("Draft",), override_warnings=override_warnings)
+	return _begin(broadcast, user, allowed_from=("Draft",), override_warnings=override_warnings, expected_count=expected_count)  # noqa: E501
 
 
 def resume(broadcast: str) -> dict:

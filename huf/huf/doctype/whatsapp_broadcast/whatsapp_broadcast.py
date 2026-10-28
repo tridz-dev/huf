@@ -11,7 +11,8 @@ GUARDED_FIELDS = (
 	*COUNTED, "total",
 )
 # Values a brand-new row may carry without the broadcast API (the doctype defaults).
-NEW_ROW_DEFAULTS = {"status": "Draft", "send_via": "messages", "max_recipients": 1000, "mps": 10}
+# max_recipients / mps have no doctype default: blank means "use WhatsApp Broadcast Settings".
+NEW_ROW_DEFAULTS = {"status": "Draft", "send_via": "messages"}
 
 
 class WhatsAppBroadcast(Document):

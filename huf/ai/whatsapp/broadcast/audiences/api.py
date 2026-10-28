@@ -44,7 +44,7 @@ from huf.ai.whatsapp.management import (
 
 # Rate limits (calls per RATE_SECONDS). WP-A's policy.py is not on this branch yet; the coordinator
 # rewires these to the per-endpoint API limits in policy.
-RATE_SECONDS = 60
+RATE_SECONDS = policy.BY_KEY["api_rate_window_seconds"].default
 
 _ON_CONFLICT = ("skip", "update", "fail")
 
@@ -354,8 +354,9 @@ def remove_members(audience: str | None = None, recipients: Any = None) -> dict[
 		return _error("too_many", f"Remove at most {max_remove} contacts per request.")
 	phones = [p for p in (broadcast_recipients.normalize_recipient(r) for r in wanted) if p]
 	before = frappe.db.count(aud.MEMBER, {"audience": audience})
-	for i in range(0, len(phones), 1000):
-		frappe.db.delete(aud.MEMBER, {"audience": audience, "recipient": ["in", phones[i : i + 1000]]})
+	chunk = policy.get("audience_delete_chunk")
+	for i in range(0, len(phones), chunk):
+		frappe.db.delete(aud.MEMBER, {"audience": audience, "recipient": ["in", phones[i : i + chunk]]})
 	counts = aud.refresh_counts(audience, row["gateway"])
 	removed = before - counts["member_count"]
 	_audit(audience, "removed members", removed=removed)

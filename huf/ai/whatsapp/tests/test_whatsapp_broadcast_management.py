@@ -112,7 +112,9 @@ class TestStart(_Base):
 		self.runner.start.return_value = {"status": "Running"}
 		res = mgmt.start_broadcast(BC, " 3 ")
 		self.assertTrue(res["success"])
-		self.runner.start.assert_called_once_with(BC, user="ops@example.com", override_warnings=[])
+		self.runner.start.assert_called_once_with(
+			BC, user="ops@example.com", override_warnings=[], expected_count=3
+		)
 		self.doc.add_comment.assert_called_once()
 		self.frappe.logger.assert_called_with("huf.whatsapp.broadcast")
 

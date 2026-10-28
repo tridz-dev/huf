@@ -38,11 +38,11 @@ def _can_read(broadcast: str | None) -> str | None:
 	gateway = ""
 	if broadcast:
 		gateway = frappe.db.get_value("WhatsApp Broadcast", broadcast, "gateway") or ""
-		if not gateway:
-			return ""
+	if gateway:
 		if not _gateway_read_allowed(gateway):
 			raise frappe.PermissionError("Not permitted to read limits for this Gateway")
 	elif not frappe.has_permission("Gateway", "read") and "Huf Admin" not in frappe.get_roles():
+		# no broadcast, an unknown one, or one without a gateway: never open access
 		raise frappe.PermissionError("Not permitted to read limits")
 	return gateway
 
@@ -116,11 +116,4 @@ def update_broadcast_limits(values: Any = None) -> dict[str, Any]:
 		policy.set_values(parsed)
 	except ValueError as exc:
 		return _error("invalid_limit", str(exc))
-	user = frappe.session.user
-	summary = ", ".join(f"{k}={'default' if v in (None, '') else v}" for k, v in parsed.items())
-	frappe.logger(_LOG).info(f"limits updated by={user} {summary}")
-	try:
-		frappe.get_doc(policy.SETTINGS).add_comment("Info", f"limits changed by {user}: {summary}")
-	except Exception:  # noqa: BLE001
-		frappe.logger(_LOG).warning("limits audit comment failed")
 	return {"success": True, "limits": build_rows(None, "")}

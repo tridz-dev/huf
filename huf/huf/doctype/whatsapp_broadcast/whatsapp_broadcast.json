@@ -197,14 +197,12 @@
    "fieldname": "max_recipients",
    "fieldtype": "Int",
    "label": "Max recipients",
-   "default": "1000",
    "read_only": 1
   },
   {
    "fieldname": "mps",
    "fieldtype": "Int",
    "label": "Messages per second",
-   "default": "10",
    "description": "Pacing target, capped by the number's throughput."
   },
   {

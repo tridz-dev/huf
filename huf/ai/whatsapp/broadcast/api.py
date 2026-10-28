@@ -439,7 +439,7 @@ def start_broadcast(
 	from huf.ai.whatsapp.broadcast import runner as broadcast_runner
 
 	try:
-		result = broadcast_runner.start(broadcast, user=frappe.session.user, override_warnings=acknowledged)
+		result = broadcast_runner.start(broadcast, user=frappe.session.user, override_warnings=acknowledged, expected_count=queued)
 	except broadcast_runner.StartRefused as exc:
 		return {"success": False, "error": exc.code, "message": str(exc), **exc.extra}
 	_broadcast_audit(broadcast, "started", queued=queued, override_warnings=acknowledged)

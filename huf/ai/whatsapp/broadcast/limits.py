@@ -202,6 +202,25 @@ def _used_24h(gateway: str) -> int:
 	return int(row[0][0]) if row else 0
 
 
+def oldest_counted_send(gateway: str):
+	"""Time of the oldest send inside the 24h budget window on this gateway (None when nothing counts)."""
+	cutoff = add_to_date(now_datetime(), hours=-24)
+	row = frappe.db.sql(
+		"""
+		select min(coalesce(r.sent_at, r.modified))
+		from `tabWhatsApp Broadcast Recipient` r
+		join `tabWhatsApp Broadcast` b on b.name = r.broadcast
+		where b.gateway = %(gateway)s
+		  and (
+		    (r.status in ('sent','delivered','read','unknown') and r.sent_at >= %(cutoff)s)
+		    or (r.status = 'sending' and r.modified >= %(cutoff)s)
+		  )
+		""",
+		{"gateway": gateway, "cutoff": cutoff},
+	)
+	return row[0][0] if row and row[0][0] else None
+
+
 # template parameters: see template_check (re-exported here)
 from huf.ai.whatsapp.broadcast.checks.template_check import _loads, _samples, send_problems, template_requirements  # noqa: E402,F401
 

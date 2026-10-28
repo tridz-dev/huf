@@ -14,9 +14,11 @@ import time
 
 import frappe
 
+from huf.ai.whatsapp.broadcast import policy
+
 EVENT = "wa_broadcast_progress"
 DOCTYPE = "WhatsApp Broadcast"
-THROTTLE_SECONDS = 2
+THROTTLE_SECONDS = policy.BY_KEY["progress_throttle_seconds"].default
 _FIELDS = ("status", "total", "queued", "sending", "sent", "delivered", "read", "failed", "deferred", "unknown", "skipped", "pause_reason")
 
 

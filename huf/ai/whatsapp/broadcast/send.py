@@ -215,7 +215,9 @@ def send_one(recipient_name: str) -> str:
 		return "lost_claim"
 
 	# per-broadcast cap (rows already started, excluding this one)
-	max_recipients = int(bc.get("max_recipients") or 0)
+	from huf.ai.whatsapp.broadcast.recipients import effective_cap
+
+	max_recipients = int(effective_cap(bc) or 0)  # own cap, else the setting; 0 = no limit
 	if max_recipients and _started_count(bc["name"]) > max_recipients:
 		_write(recipient_name, status="skipped", skip_reason="max_recipients")
 		return "skipped"

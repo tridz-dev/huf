@@ -14,6 +14,7 @@ import frappe
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.whatsapp.broadcast import runner
+from huf.ai.whatsapp.broadcast.checks import start_gate
 from huf.ai.whatsapp.tests.broadcast_policy_helper import limit_override
 from huf.ai.whatsapp.tests.test_whatsapp_broadcast_runner import GW, GW2, USER, B, R, _Base, _preview
 
@@ -58,9 +59,10 @@ class TestAcknowledgement(_Base):
 			runner.start(self.make(), USER, ["quality_red"])
 		self.assertEqual(cm.exception.code, "template_not_approved")
 
-	def test_resume_needs_no_acknowledgement(self):
+	def test_resume_needs_no_new_acknowledgement_for_codes_accepted_at_start(self):
 		self.preview.return_value = _preview(warnings=[_w("quality_red")])
 		b = self.make(status="Paused")
+		start_gate.record_acknowledged(b, ["quality_red"])  # what start stored (WP-H)
 		runner.resume(b)
 		self.assertEqual(self.st(b), "Running")
 
