@@ -479,7 +479,7 @@ export const SidebarGroupLabel = React.forwardRef<
       ref={ref}
       data-sidebar="group-label"
       className={cn(
-        "flex h-6 shrink-0 items-center rounded-md px-2 font-mono text-eyebrow uppercase text-steel-soft outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
+        "flex h-6 shrink-0 items-center rounded-md px-2 font-mono text-eyebrow uppercase text-steel outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
         "group-data-[collapsible=icon]:hidden",
         className
       )}
@@ -600,6 +600,12 @@ export const SidebarMenuButton = React.forwardRef<
   ) => {
     const Comp = asChild ? Slot : "button"
     const { isMobile, state } = useSidebar()
+    const tooltipText =
+      typeof tooltip === "string"
+        ? tooltip
+        : typeof tooltip?.children === "string"
+          ? tooltip.children
+          : undefined
 
     const button = (
       <Comp
@@ -621,6 +627,8 @@ export const SidebarMenuButton = React.forwardRef<
             "h-[34px] w-[38px] justify-center gap-0 rounded-[9px] p-0 [&>svg]:size-[18px]",
         )}
         {...props}
+        // The visible text is hidden when the sidebar is collapsed to icons: keep the control named for assistive tech.
+        aria-label={props["aria-label"] ?? (state === "collapsed" ? tooltipText : undefined)}
       />
     )
 

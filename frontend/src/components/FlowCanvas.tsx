@@ -617,6 +617,7 @@ export function FlowCanvas({
         draggable: false,
         selectable: false,
         connectable: false,
+        focusable: false, // its own button is the control; the wrapper must not be a second, nested one
         data: { sourceNodeId: end.nodeId, route: end.route, branchLabel: end.label, onAddNode: handleAddNode }
       };
     });
