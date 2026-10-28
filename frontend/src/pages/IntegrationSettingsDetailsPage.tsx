@@ -13,6 +13,7 @@ import { AddIntegrationToAgentModal } from '@/components/integrations/AddIntegra
 import { ConnectChannelAgentModal } from '@/components/integrations/ConnectChannelAgentModal';
 import { GeneralTab } from '@/components/integrations/GeneralTab';
 import { CredentialsTab } from '@/components/integrations/CredentialsTab';
+import { IntegrationSetupGuide } from '@/components/integrations/IntegrationSetupGuide';
 import { RecipientsTab } from '@/components/integrations/RecipientsTab';
 import { ChannelTab } from '@/components/integrations/ChannelTab';
 import { integrationFormSchema, type IntegrationFormValues } from '@/components/integrations/types';
@@ -416,6 +417,8 @@ export function IntegrationSettingsDetailsPage({
             </Button>
           </div>
         )}
+
+        <IntegrationSetupGuide service={displayService} settingId={settingId && !isNew ? settingId : undefined} form={form} />
 
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">

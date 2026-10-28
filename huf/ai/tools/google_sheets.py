@@ -1,7 +1,8 @@
 import json
 import frappe
 logger = frappe.logger("huf")
-from huf.ai.tools.credentials import require_credential, update_last_error
+from huf.ai.tools.credentials import get_credential, update_last_error
+from huf.ai.tools.provider_errors import ProviderCredentialError, check_google_response, mint_google_access_token, not_connected_message
 import requests
 
 BASE = "https://sheets.googleapis.com/v4/spreadsheets"
@@ -10,18 +11,12 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 def _get_access_token():
 	service_name = "google_sheets"
-	client_id = require_credential(service_name, "client_id")
-	client_secret = require_credential(service_name, "client_secret")
-	refresh_token = require_credential(service_name, "refresh_token")
-
-	resp = requests.post(TOKEN_URL, data={
-		"client_id": client_id,
-		"client_secret": client_secret,
-		"refresh_token": refresh_token,
-		"grant_type": "refresh_token",
-	}, timeout=15)
-	resp.raise_for_status()
-	return resp.json()["access_token"]
+	client_id = get_credential(service_name, "client_id")
+	client_secret = get_credential(service_name, "client_secret")
+	refresh_token = get_credential(service_name, "refresh_token")
+	if not (client_id and client_secret and refresh_token):
+		raise ProviderCredentialError(not_connected_message("Google Sheets", "the client ID, client secret and refresh token"), kind="missing")
+	return mint_google_access_token("Google Sheets", client_id, client_secret, refresh_token)["access_token"]
 
 
 def _headers():
@@ -43,7 +38,7 @@ def handle_read_sheet(**kwargs):
 			headers=_headers(),
 			timeout=30,
 		)
-		resp.raise_for_status()
+		check_google_response(resp, "Google Sheets", "spreadsheets", not_found="spreadsheet")
 		data = resp.json()
 		return json.dumps({
 			"success": True,
@@ -78,7 +73,7 @@ def handle_update_sheet(**kwargs):
 			json={"values": values},
 			timeout=30,
 		)
-		resp.raise_for_status()
+		check_google_response(resp, "Google Sheets", "spreadsheets", not_found="spreadsheet")
 		data = resp.json()
 		return json.dumps({
 			"success": True,
@@ -107,7 +102,7 @@ def handle_create_sheet(**kwargs):
 			json={"properties": {"title": title}},
 			timeout=30,
 		)
-		resp.raise_for_status()
+		check_google_response(resp, "Google Sheets", "spreadsheets", not_found="spreadsheet")
 		data = resp.json()
 		return json.dumps({
 			"success": True,
