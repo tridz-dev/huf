@@ -137,6 +137,8 @@ class TestSettingsWiring(_PreviewBase):
 		with patch.object(bl, "_broadcast_row", return_value=row):
 			self.assertIn("max_recipients_default", self._preview()["limits_in_effect"])
 
+
+class TestCacheTtl(unittest.TestCase):
 	def test_cache_ttl_comes_from_policy(self):
 		cache = _FakeCache()
 		seen = {}
