@@ -267,11 +267,13 @@ export function FlowsHeaderActions() {
         size="sm"
         className="gap-2"
         data-testid="flow-save"
+        aria-label="Save"
+        title="Save"
         onClick={handleSaveDraft}
         disabled={!activeFlow || saveState === 'saving' || !hasUnsavedChanges}
       >
         <Save className="w-4 h-4" />
-        <span>Save</span>
+        <span className="hidden xl:inline">Save</span>
       </Button>
 
       {/* Runs Button */}
@@ -280,11 +282,13 @@ export function FlowsHeaderActions() {
         size="sm"
         className="gap-2"
         data-testid="flow-runs"
+        aria-label="Runs"
+        title="Runs"
         onClick={() => setShowHistory(true)}
         disabled={!activeFlow}
       >
         <History className="w-4 h-4" />
-        <span>Runs</span>
+        <span className="hidden xl:inline">Runs</span>
       </Button>
 
       {/* Settings Button */}
@@ -293,11 +297,13 @@ export function FlowsHeaderActions() {
         size="sm"
         className="gap-2"
         data-testid="flow-settings"
+        aria-label="Settings"
+        title="Settings"
         onClick={() => setShowSettings(true)}
         disabled={!activeFlow}
       >
         <Settings className="w-4 h-4" />
-        <span>Settings</span>
+        <span className="hidden xl:inline">Settings</span>
       </Button>
 
       {/* Run Button */}
@@ -307,11 +313,13 @@ export function FlowsHeaderActions() {
           size="sm"
           className="gap-2"
           data-testid="flow-run"
+          aria-label="Run"
+          title="Run"
           onClick={handleRun}
           disabled={!activeFlow || !canManage}
         >
           <Play className="w-4 h-4" />
-          <span>Run</span>
+          <span className="hidden xl:inline">Run</span>
         </Button>
       </DisabledReason>
 
