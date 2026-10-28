@@ -75,6 +75,7 @@ class WP11Base(IntegrationTestCase):
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
+		frappe.db.commit()  # drop this connection's old snapshot: other connections changed rows meanwhile
 		for flow_id in self._flows:
 			frappe.db.delete("Flow Run", {"flow_id": flow_id})
 			if frappe.db.exists("Flow Definition", flow_id):
@@ -192,6 +193,33 @@ class TestApprovalRaces(WP11Base):
 		record = json.loads(fresh.context_json)[flow_engine.NODE_OUTPUTS_KEY]["ask"]
 		winner = [k for k, v in results.items() if v == "won"][0]
 		self.assertEqual(record["comment"], winner)
+
+	def test_loser_with_a_stale_snapshot_gets_a_clear_refusal(self):
+		"""The loser read the run before the winner committed; its own re-read is stale, only the UPDATE tells."""
+		run = self._waiting_run()
+		self.assertEqual(frappe.db.get_value("Flow Run", run.name, "status"), "Waiting Approval")  # snapshot taken
+		site = frappe.local.site
+
+		def winner():
+			frappe.init(site=site)
+			frappe.connect()
+			frappe.set_user("Administrator")
+			try:
+				flow_engine.approve_flow_run(run.name, "approved", "winner")
+				frappe.db.commit()
+			finally:
+				frappe.destroy()
+
+		t = threading.Thread(target=winner)
+		t.start()
+		t.join(timeout=60)
+		with self.assertRaises(frappe.ValidationError) as ctx:
+			flow_engine.approve_flow_run(run.name, "rejected", "loser")
+		self.assertIn("already decided", str(ctx.exception))
+		frappe.db.rollback()
+		self.assertEqual(self._todos(), [f"{self.marker} approved"])
+		record = json.loads(frappe.db.get_value("Flow Run", run.name, "context_json"))[flow_engine.NODE_OUTPUTS_KEY]["ask"]
+		self.assertEqual(record["comment"], "winner")
 
 	def test_stale_loser_is_stopped_by_the_conditional_update(self):
 		"""A caller that already read 'Waiting Approval' (stale snapshot) cannot move a run another caller decided."""
@@ -658,11 +686,12 @@ class TestDocEventPayload(WP11Base):
 
 class TestDocEventCacheInvalidation(WP11Base):
 	def _warm(self):
-		triggers.get_doc_event_index()
-		self.assertIsNotNone(frappe.cache().get_value(triggers.DOC_EVENT_CACHE_KEY))
+		"""Plant a recognisably stale lookup; a cleared cache is rebuilt from the database without it."""
+		frappe.cache().set_value(triggers.DOC_EVENT_CACHE_KEY, json.dumps({"__stale__": {}}), expires_in_sec=300)
+		self.assertIn("__stale__", triggers.get_doc_event_index())
 
 	def _cold(self):
-		return frappe.cache().get_value(triggers.DOC_EVENT_CACHE_KEY) is None
+		return "__stale__" not in triggers.get_doc_event_index()
 
 	def _user(self):
 		email = f"wp11-cache-{frappe.generate_hash(length=6)}@example.com"
