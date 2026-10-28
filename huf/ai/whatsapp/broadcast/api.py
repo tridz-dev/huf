@@ -31,6 +31,7 @@ from huf.ai.whatsapp.management import (
 )
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.whatsapp.broadcast import params as broadcast_params, policy
+from huf.ai.whatsapp.broadcast.checks import start_gate
 
 
 # --- Broadcast (WP-7) ----------------------------------------------------------------------------
@@ -399,31 +400,49 @@ def preview_broadcast(broadcast: str | None = None) -> dict[str, Any]:
 		"status": row.get("status"),
 		"consent_attested": bool(row.get("consent_attested")),
 		"limits": limits,
+		"limits_in_effect": list((limits or {}).get("limits_in_effect") or []),
 		"cost": cost,
-		"confirm_required": int(token or 0) > 0,
+		"confirm_required": bool(policy.get("require_typed_count")) and int(token or 0) > 0,
 		"queued": _queued_count(broadcast),
 	}
+
+
+def _is_api_key_caller() -> bool:
+	"""True when the request is authenticated with an API key/secret (``Authorization: token key:secret``)."""
+	header = frappe.get_request_header("Authorization")
+	return isinstance(header, str) and header.strip().lower().startswith("token ")
 
 
 @frappe.whitelist(methods=["POST"])
 @rate_limit(limit=policy.rate("rate_start_broadcast"), seconds=60)
 @_bridge_guard
-def start_broadcast(broadcast: str | None = None, confirm_count: Any = None) -> dict[str, Any]:
-	"""Start (or restart a Draft) broadcast. Requires attested consent and the typed count to equal the queued recipients."""
+def start_broadcast(
+	broadcast: str | None = None, confirm_count: Any = None, override_warnings: Any = None
+) -> dict[str, Any]:
+	"""Start (or restart a Draft) broadcast.
+
+	The typed count must equal the queued recipients (when ``require_typed_count`` is on; API-key callers skip it).
+	``override_warnings``: acknowledged warning codes; the runner refuses with ``warnings_changed`` (plus the
+	current warnings) when they differ, and enforces consent and one-running under a lock."""
 	row = _require_broadcast_write(broadcast)
 	if row.get("error"):
 		return row
-	if not row.get("consent_attested"):
-		return _error("consent_not_attested", "Attest that recipients opted in before starting.")
+	acknowledged = start_gate.parse_override_warnings(override_warnings)
+	if acknowledged is None:
+		return _error("invalid_override_warnings", "override_warnings must be a JSON list of warning codes.")
 	queued = _queued_count(broadcast)
 	if queued <= 0:
 		return _error("no_recipients", "There are no queued recipients.")
-	if str(confirm_count if confirm_count is not None else "").strip() != str(queued):
-		return _error("confirm_mismatch", f"Type the number of queued recipients ({queued}) to confirm.")
+	if policy.get("require_typed_count") and not _is_api_key_caller():
+		if str(confirm_count if confirm_count is not None else "").strip() != str(queued):
+			return _error("confirm_mismatch", f"Type the number of queued recipients ({queued}) to confirm.")
 	from huf.ai.whatsapp.broadcast import runner as broadcast_runner
 
-	result = broadcast_runner.start(broadcast, user=frappe.session.user)
-	_broadcast_audit(broadcast, "started", queued=queued)
+	try:
+		result = broadcast_runner.start(broadcast, user=frappe.session.user, override_warnings=acknowledged)
+	except broadcast_runner.StartRefused as exc:
+		return {"success": False, "error": exc.code, "message": str(exc), **exc.extra}
+	_broadcast_audit(broadcast, "started", queued=queued, override_warnings=acknowledged)
 	return {"success": True, "broadcast": broadcast, "queued": queued, **(result if isinstance(result, dict) else {})}
 
 
