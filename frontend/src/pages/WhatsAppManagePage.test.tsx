@@ -55,7 +55,7 @@ describe('WhatsAppManagePage', () => {
 		open('/');
 		expect(await screen.findByText(/steps left/)).toBeInTheDocument();
 		await waitFor(() => expect(screen.getByTestId('search')).toHaveTextContent('gateway=GW-1'));
-		expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Messages', 'Templates', 'Broadcast', 'Access', 'Settings']);
+		expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Messages', 'Templates', 'Broadcast', 'Audiences', 'Access', 'Settings']);
 	});
 
 	it('honours ?tab= and ?gateway= deep links', async () => {
