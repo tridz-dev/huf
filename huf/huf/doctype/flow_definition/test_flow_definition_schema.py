@@ -176,7 +176,8 @@ class TestFlowDefinitionValidation(unittest.TestCase):
 		# message that prove it was actually rejected for being the old shape, not
 		# some unrelated reason.
 		message = str(ctx.exception)
-		self.assertIn("graph-IR", message)
+		self.assertIn("flow definition is incomplete", message)
+		self.assertNotIn("[SCHEMA]", message)
 
 	def test_rejects_stray_old_format_keys_even_with_new_required_fields_present(self):
 		"""A definition that supplies every new-IR required key *and* still carries a
