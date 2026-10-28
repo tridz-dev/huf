@@ -68,10 +68,10 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
             } else {
                 await flowService.rejectFlowRun(runId);
             }
-            toast.success(`Flow run ${decision} successfully`);
+            toast.success(decision === 'approved' ? 'Approved. The flow will continue.' : 'Rejected. The flow will follow its rejected path.');
             onClose();
         } catch (err) {
-            toast.error(`Failed to ${decision} flow run`, {
+            toast.error(decision === 'approved' ? 'Could not approve this run' : 'Could not reject this run', {
                 description: err instanceof Error ? err.message : 'Unknown error'
             });
             setLoading(false);
