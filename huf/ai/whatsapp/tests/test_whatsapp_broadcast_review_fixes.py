@@ -184,6 +184,11 @@ class TestLimitsReadAuthority(_Base):
 
 
 class TestSettingsAudit(_Base):
+	def setUp(self):
+		super().setUp()
+		# these tests save the Single directly, which commits: put the limit back so other modules see the default
+		self.addCleanup(lambda: (policy.set_values({"max_csv_mb": None}), frappe.db.commit()))
+
 	def _comments(self):
 		return frappe.get_all(
 			"Comment", {"reference_doctype": SETTINGS, "reference_name": SETTINGS, "content": ["like", "limits changed%"]},

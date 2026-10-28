@@ -402,7 +402,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
             <div aria-label="Limits applied to this broadcast" role="group" className="rounded-md border p-3">
               <p className="font-medium">Limits applied to this broadcast</p>
               <ul className="list-disc pl-5 text-xs text-steel">
-                {applied.map((l) => <li key={l.key}>{l.label}: {l.effective === null ? 'no limit' : typeof l.effective === 'boolean' ? (l.effective ? 'on' : 'off') : `${l.effective}${l.unit ? ` ${l.unit}` : ''}`}</li>)}
+                {applied.map((l) => <li key={l.key}>{l.label}: {l.effective === null ? (l.kind === 'meta' ? 'not known yet' : 'no limit') : typeof l.effective === 'boolean' ? (l.effective ? 'on' : 'off') : `${l.effective}${l.unit ? ` ${l.unit}` : ''}`}</li>)}
               </ul>
             </div>
           ) : null}

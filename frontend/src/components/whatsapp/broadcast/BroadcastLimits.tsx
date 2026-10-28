@@ -25,8 +25,8 @@ const BADGE: Record<BroadcastLimit['kind'], { text: string; variant: 'outline' |
   internal: { text: 'Internal', variant: 'outline' },
 };
 
-const show = (v: LimitValue, unit?: string | null) => {
-  if (v === null || v === undefined || v === '') return 'No limit';
+const show = (v: LimitValue, unit?: string | null, kind?: string) => {
+  if (v === null || v === undefined || v === '') return kind === 'meta' ? 'Read from Meta when a broadcast is chosen' : 'No limit';
   if (typeof v === 'boolean') return v ? 'On' : 'Off';
   return unit ? `${v} ${unit}` : String(v);
 };
@@ -132,8 +132,8 @@ export function BroadcastLimits() {
                       {l.note ? <p className="text-xs text-steel">{l.note}</p> : null}
                     </div>
                     <div className="text-sm">
-                      <p>Now: <strong>{show(l.effective, l.unit)}</strong></p>
-                      <p className="text-xs text-steel">Default: {show(l.default, l.unit)}</p>
+                      <p>Now: <strong>{show(l.effective, l.unit, l.kind)}</strong></p>
+                      <p className="text-xs text-steel">Default: {show(l.default, l.unit, l.kind)}</p>
                     </div>
                     <div className="flex items-end gap-2">
                       {editable ? (
