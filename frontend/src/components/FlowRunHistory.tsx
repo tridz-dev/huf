@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 import { flowService } from '../services/flowService';
 import type { FlowRunSummary } from '../services/flowApi';
@@ -19,17 +19,24 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
     useSiteTimezone();
     const [runs, setRuns] = useState<FlowRunSummary[]>([]);
     const [loading, setLoading] = useState(false);
+    const [loadFailed, setLoadFailed] = useState(false);
+    // Only the newest request may update the list: a slow, older answer must not put an outdated (or empty) list back.
+    const latest = useRef(0);
 
     const fetchRuns = async (silent = false) => {
         if (!flowId) return;
+        const mine = ++latest.current;
         if (!silent) setLoading(true);
         try {
             const data = await flowService.listFlowRuns(flowId);
+            if (mine !== latest.current) return;
             setRuns(data || []);
+            setLoadFailed(false);
         } catch (err) {
             console.error(err);
+            if (mine === latest.current) setLoadFailed(true);
         } finally {
-            setLoading(false);
+            if (mine === latest.current) setLoading(false);
         }
     };
 
@@ -78,6 +85,10 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
                     {loading && runs.length === 0 ? (
                         <div className="flex justify-center p-8">
                             <Loader2 className="animate-spin w-6 h-6 text-muted-foreground" />
+                        </div>
+                    ) : runs.length === 0 && loadFailed ? (
+                        <div className="text-center p-8 text-sm text-muted-foreground bg-muted/30 rounded-lg border border-dashed" data-testid="flow-run-history-error">
+                            Could not load the run history. It will try again in a few seconds, or use Refresh.
                         </div>
                     ) : runs.length === 0 ? (
                         <div className="text-center p-8 text-sm text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
