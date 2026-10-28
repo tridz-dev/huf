@@ -7,6 +7,7 @@ import { getTransformOp } from './flowTransformOps';
 import { branchHandlesFor } from './flowBranches';
 import { cronProblem } from './flowSchedule';
 import { secretProblem } from './flowWebhookUi';
+import { requiredInputsFor } from './flowToolSchemas';
 import { edgeRoute } from '../services/flowSerializer';
 import type { FlowEdge } from '../types/flow.types';
 
@@ -114,8 +115,14 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
         break;
       }
       const input = asObj(c.input);
-      for (const [key, message] of TOOL_REQUIRED_INPUT[String(c.tool_id)] ?? []) {
+      const preset = TOOL_REQUIRED_INPUT[String(c.tool_id)];
+      for (const [key, message] of preset ?? []) {
         if (isBlank(input[key])) add(`input.${key}`, message);
+      }
+      if (!preset) {
+        for (const key of requiredInputsFor(String(c.tool_id))) {
+          if (isBlank(input[key])) add(`input.${key}`, `Enter a value for "${key}".`);
+        }
       }
       break;
     }
@@ -198,6 +205,31 @@ export function validateFlow(nodes: NodeLike[], edges: EdgeLike[], purpose: 'sav
   if (!nodes.some((n) => n.data.nodeType === 'trigger')) {
     issues.unshift({ nodeId: '', nodeLabel: 'Flow', kind: 'flow', field: 'trigger', message: 'Add a trigger so the flow knows when to start.' });
   }
+  // A step nothing leads to can never run, and the server refuses to store it.
+  const reached = new Set(nodes.filter((n) => n.data.nodeType === 'trigger').map((n) => n.id));
+  const queue = [...reached];
+  while (queue.length) {
+    const from = queue.pop() as string;
+    for (const e of edges) {
+      if (e.source === from && !reached.has(e.target)) {
+        reached.add(e.target);
+        queue.push(e.target);
+      }
+    }
+  }
+  if (reached.size > 0) {
+    for (const n of nodes) {
+      if (!reached.has(n.id)) {
+        issues.push({
+          nodeId: n.id,
+          nodeLabel: n.data.label || nodeKind(n),
+          kind: 'flow',
+          field: 'connection',
+          message: 'Nothing leads to this step. Connect it to the flow or delete it.',
+        });
+      }
+    }
+  }
   return issues;
 }
 
@@ -219,6 +251,7 @@ export function humanizeFlowError(err: unknown, fallback = 'Something went wrong
   }
   text = text.trim();
   if (!text) return fallback;
+  if (/UNREACHABLE_NODE|not reachable from entry/i.test(text)) return 'A step is not connected to the flow. Connect it or delete it, then save again.';
   const lower = text.toLowerCase();
   const required = /'([a-z_]+)' is a required property/i.exec(text);
   if (required) return `A required setting is missing (${required[1].replace(/_/g, ' ')}). Open the highlighted step and fill it in.`;

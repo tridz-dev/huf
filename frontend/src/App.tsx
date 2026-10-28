@@ -442,7 +442,7 @@ function AppShell() {
           <Route
             path="/flows"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability="flows.use">
                 <FlowProvider>
                   <UnifiedLayout headerActions={<FlowsListHeaderActions />}>
                     <Suspense fallback={<PageLoader />}>
@@ -456,7 +456,7 @@ function AppShell() {
           <Route
             path="/flows/:flowId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability="flows.use">
                 <FlowProvider>
                   <ModalProvider>
                     <Suspense fallback={<PageLoader />}>

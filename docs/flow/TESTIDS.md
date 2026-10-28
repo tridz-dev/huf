@@ -35,6 +35,7 @@ Card title = node title = sidebar title (derived from `data/actions.ts` / `data/
 | `flow-node-delete-<nodeId>` | Delete button (on the selected node) |
 | `flow-node-delete-dialog`, `flow-node-delete-confirm` | Confirmation for configured nodes |
 | `flow-handle-<nodeId>` | Single source handle |
+| `flow-handle-in-<nodeId>` | Incoming (target) handle: drop a connection here |
 | `flow-handle-<nodeId>-<route>` | Branch handle: `true`, `false`, `approve`, `reject`, `timeout`, `body` |
 | `flow-add-step-<nodeId>` | Add-step card after a plain step |
 | `flow-add-step-<nodeId>-<route>` | Add-step card for a branch (`true`, `false`, `approve`, `reject`, `body`, `option`, `timeout`) |

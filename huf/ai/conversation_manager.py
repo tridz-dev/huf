@@ -413,7 +413,10 @@ class ConversationManager:
             # callers can enumerate conversation ids (existence oracle).
             try:
                 conversation = frappe.get_doc("Agent Conversation", conversation_id)
-                accessible = conversation.agent == self.agent_name and (
+                # A Flow's shared conversation is created by the engine before any agent is known
+                # (agent unset), so the steps of that flow may all join it.
+                joins_flow = not conversation.agent and (conversation.session_id or "").startswith("flow:")
+                accessible = (conversation.agent == self.agent_name or joins_flow) and (
                     conversation.owner == frappe.session.user
                     or conversation.session_id == self.session_id
                     or has_capability(frappe.session.user, "chat.view_all")

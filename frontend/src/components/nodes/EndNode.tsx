@@ -14,6 +14,7 @@ export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) =>
     <div className="relative" data-testid={`flow-node-${id}`} data-node-type="end">
       <Handle
         type="target"
+        data-testid={`flow-handle-in-${id}`}
         position={Position.Top}
         className="!bg-good border-2 border-panel w-3 h-3"
       />
@@ -45,7 +46,7 @@ export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) =>
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-foreground truncate">{data.label}</div>
+            <div className="text-sm font-medium text-foreground truncate" data-testid={`flow-node-title-${id}`}>{data.label}</div>
             {data.description && (
               <div className="text-xs text-muted-foreground">{data.description}</div>
             )}
