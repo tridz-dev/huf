@@ -29,6 +29,23 @@ class StartRefused(frappe.ValidationError):
 		self.extra = extra
 
 
+class UncommittedWrites(RuntimeError):
+	"""Internal: a start was called with uncommitted writes pending, which its pre-lock commit would silently commit."""
+
+
+def commit_before_lock() -> None:
+	"""End the read snapshot before the Gateway lock is taken.
+
+	The commit also ends the caller's transaction, so a caller with uncommitted writes (``transaction_writes``)
+	is a bug: refuse instead of committing them for it. Tests share one transaction with their fixtures and
+	run with ``frappe.flags.in_test``; they are exempt (the guard has its own test that clears the flag)."""
+	if getattr(frappe.db, "transaction_writes", 0) and not frappe.flags.in_test:
+		raise UncommittedWrites(
+			"Broadcast start was called with uncommitted database writes; commit or roll back before starting."
+		)
+	frappe.db.commit()
+
+
 def _code(issue: Any) -> str:
 	return str(issue.get("code")) if isinstance(issue, dict) else str(issue)
 
