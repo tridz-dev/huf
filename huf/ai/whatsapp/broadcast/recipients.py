@@ -97,6 +97,11 @@ def _audience_of(row: dict) -> str | None:
 	return str(row.get("audience") or "").strip()[:140] or None
 
 
+def _audience_kw(row: dict) -> dict:
+	audience = _audience_of(row)
+	return {"audience": audience} if audience else {}
+
+
 def _policy_reason(gateway: str, recipient: str, is_marketing: bool) -> str | None:
 	"""Skip reason from policy, or None when the recipient may be queued."""
 	from huf.ai.whatsapp import account_events as events
@@ -171,7 +176,7 @@ def prepare(broadcast: str, rows: list[dict]) -> dict:
 
 		reason = _policy_reason(doc.gateway, recipient, is_marketing)
 		if reason is not None:
-			_insert_row(broadcast, recipient, "skipped", reason, None, None, None, _audience_of(row))
+			_insert_row(broadcast, recipient, "skipped", reason, None, None, None, **_audience_kw(row))
 			total += 1
 			skipped.append({"recipient": recipient, "reason": reason})
 			continue
@@ -185,7 +190,7 @@ def prepare(broadcast: str, rows: list[dict]) -> dict:
 			params,
 			row.get("consent_source") or None,
 			row.get("consent_at") or None,
-			_audience_of(row),
+			**_audience_kw(row),
 		)
 		active += 1
 		total += 1
