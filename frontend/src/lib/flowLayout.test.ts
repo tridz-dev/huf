@@ -54,3 +54,19 @@ describe('isInView', () => {
     expect(isInView({ x: 100, y: 100, width: 200, height: 100 }, { x: -200, y: 0, zoom: 1 }, size)).toBe(false);
   });
 });
+
+import { panToReveal } from './flowLayout';
+describe('panToReveal', () => {
+  const size = { width: 800, height: 600 };
+  it('does nothing when the box is fully visible', () => {
+    expect(panToReveal({ x: 10, y: 10, width: 100, height: 50 }, { x: 0, y: 0, zoom: 1 }, size)).toBeNull();
+  });
+  it('pans up just enough for a box below the canvas, keeping x', () => {
+    const r = panToReveal({ x: 100, y: 700, width: 200, height: 60 }, { x: 0, y: 0, zoom: 1 }, size);
+    expect(r).toEqual({ x: 0, y: -(760 - (600 - 24)) });
+  });
+  it('accounts for zoom', () => {
+    const r = panToReveal({ x: 0, y: 1000, width: 100, height: 100 }, { x: 0, y: 0, zoom: 0.5 }, size);
+    expect(r?.y).toBe(600 - 24 - 550);
+  });
+});

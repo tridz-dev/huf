@@ -91,6 +91,29 @@ interface Box {
   height: number;
 }
 
+/**
+ * The viewport offset that brings `rect` fully into view at the current zoom with `pad` px clear, moving as little as possible
+ * (a rect taller or wider than the canvas is aligned to its top-left). Null when it is already fully visible.
+ */
+export function panToReveal(
+  rect: Box,
+  viewport: { x: number; y: number; zoom: number },
+  size: { width: number; height: number },
+  pad = 24,
+): { x: number; y: number } | null {
+  if (isInView(rect, viewport, size)) return null;
+  const left = rect.x * viewport.zoom + viewport.x;
+  const top = rect.y * viewport.zoom + viewport.y;
+  const w = rect.width * viewport.zoom;
+  const h = rect.height * viewport.zoom;
+  const shift = (start: number, len: number, avail: number): number => {
+    if (len + 2 * pad > avail || start < pad) return pad - start;
+    if (start + len > avail - pad) return avail - pad - (start + len);
+    return 0;
+  };
+  return { x: viewport.x + shift(left, w, size.width), y: viewport.y + shift(top, h, size.height) };
+}
+
 /** True when `rect` (flow coordinates) sits fully inside the visible canvas, keeping `margin` px clear (none by default: only content that is actually cut off counts). */
 export function isInView(
   rect: Box,
