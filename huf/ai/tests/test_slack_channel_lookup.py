@@ -89,7 +89,7 @@ def test_thread_reply_resolves_name(monkeypatch):
 def test_list_slack_channels_api(monkeypatch):
 	_wire(monkeypatch, [PAGE1, PAGE2])
 	monkeypatch.setattr(connection_test, "_resolve_credentials", lambda s, setting, p: {"token": TOKEN})
-	out = connection_test.slack_channels_for_setting(None)
+	out = connection_test.slack_channels_for_setting("s")
 	assert out["status"] == "Connected"
 	assert [c["name"] for c in out["channels"]] == ["general", "huf-live-test"]
 	assert TOKEN not in json.dumps(out)
@@ -98,7 +98,7 @@ def test_list_slack_channels_api(monkeypatch):
 def test_list_slack_channels_rejected(monkeypatch):
 	_wire(monkeypatch, [{"ok": False, "error": "missing_scope", "needed": "groups:read"}])
 	monkeypatch.setattr(connection_test, "_resolve_credentials", lambda s, setting, p: {"token": TOKEN})
-	out = connection_test.slack_channels_for_setting(None)
+	out = connection_test.slack_channels_for_setting("s")
 	assert out["status"] == "Rejected" and "groups:read" in out["message"] and out["channels"] == []
 
 
@@ -109,3 +109,12 @@ def test_reply_carries_readable_channel_name(monkeypatch):
 	# by id: the name comes from the channel cache that the lookup above filled
 	out = json.loads(slack.handle_send_message(channel="C222222222", text="hi"))
 	assert out["results"]["channel_name"] == "huf-live-test"
+
+
+def test_list_without_setting_uses_the_default_integration_token(monkeypatch):
+	_wire(monkeypatch, [PAGE2])
+	import huf.ai.tools.credentials as creds_mod
+
+	monkeypatch.setattr(creds_mod, "get_credential", lambda svc, key, default=None: TOKEN if (svc, key) == ("slack", "token") else default)
+	out = connection_test.slack_channels_for_setting(None)
+	assert out["status"] == "Connected" and out["channels"][0]["id"] == "C222222222"
