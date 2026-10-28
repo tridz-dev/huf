@@ -236,12 +236,12 @@ export function FlowsHeaderActions() {
     <div className="flex items-center gap-2">
       {/* Save State Indicator (bare dot + text, no chip background) */}
       {activeFlow && (
-        <div className="flex items-center gap-1.5 mr-2 text-muted-foreground" data-testid="flow-save-state">
+        <div className="flex items-center gap-1.5 mr-2 text-muted-foreground" data-testid="flow-save-state" title={issues.length > 0 ? ` to finish before it can run` : undefined}>
           {issues.length > 0 && (
             <button
               type="button"
               data-testid="flow-validation-summary"
-              className="mr-2 text-xs text-signal-ink underline-offset-2 hover:underline"
+              className="mr-2 hidden text-xs text-signal-ink underline-offset-2 hover:underline xl:inline"
               onClick={() => issues[0].nodeId && setSelectedNode(issues[0].nodeId)}
             >
               {issues.length === 1 ? '1 thing to finish' : `${issues.length} things to finish`}
@@ -270,11 +270,13 @@ export function FlowsHeaderActions() {
         size="sm"
         className="gap-2"
         data-testid="flow-save"
+        aria-label="Save"
+        title="Save"
         onClick={handleSaveDraft}
         disabled={!activeFlow || saveState === 'saving' || !hasUnsavedChanges}
       >
         <Save className="w-4 h-4" />
-        <span>Save</span>
+        <span className="hidden xl:inline">Save</span>
       </Button>
 
       {/* Runs Button */}
@@ -283,11 +285,13 @@ export function FlowsHeaderActions() {
         size="sm"
         className="gap-2"
         data-testid="flow-runs"
+        aria-label="Runs"
+        title="Runs"
         onClick={() => setShowHistory(true)}
         disabled={!activeFlow}
       >
         <History className="w-4 h-4" />
-        <span>Runs</span>
+        <span className="hidden xl:inline">Runs</span>
       </Button>
 
       {/* Settings Button */}
@@ -296,11 +300,13 @@ export function FlowsHeaderActions() {
         size="sm"
         className="gap-2"
         data-testid="flow-settings"
+        aria-label="Settings"
+        title="Settings"
         onClick={() => setShowSettings(true)}
         disabled={!activeFlow}
       >
         <Settings className="w-4 h-4" />
-        <span>Settings</span>
+        <span className="hidden xl:inline">Settings</span>
       </Button>
 
       {/* Run Button */}
@@ -310,11 +316,13 @@ export function FlowsHeaderActions() {
           size="sm"
           className="gap-2"
           data-testid="flow-run"
+          aria-label="Run"
+          title="Run"
           onClick={handleRun}
           disabled={!activeFlow || !canManage}
         >
           <Play className="w-4 h-4" />
-          <span>Run</span>
+          <span className="hidden xl:inline">Run</span>
         </Button>
       </DisabledReason>
 

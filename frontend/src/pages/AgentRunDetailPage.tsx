@@ -438,7 +438,7 @@ function AgentRunDetailPage() {
                   value={
                     <Link
                       to={`/flows/${run.flow_id}?run=${encodeURIComponent(run.flow_run as string)}`}
-                      className="hover:text-signal"
+                      className="text-signal underline-offset-2 hover:underline"
                       data-testid="agent-run-flow-run-link"
                     >
                       {flowLabel || run.flow_run}
