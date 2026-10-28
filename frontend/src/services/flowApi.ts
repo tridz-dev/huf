@@ -152,8 +152,10 @@ export interface FlowRunDetail {
 export interface PendingApproval {
     flow_run_id: string;
     flow_id: string;
+    flow_name?: string;
     current_node_id: string;
     title: string;
+    message?: string;
     instructions: string;
     approval_type: string;
     started_at: string | null;

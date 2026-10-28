@@ -1178,6 +1178,15 @@ def get_pending_approvals(limit: int = 50) -> list:
 		limit_page_length=limit,
 	)
 
+	flow_names = {
+		row.flow_id: row.flow_name
+		for row in frappe.get_all(
+			"Flow Definition",
+			filters={"flow_id": ["in", list({r.flow_id for r in pending_runs})]},
+			fields=["flow_id", "flow_name"],
+		)
+	} if pending_runs else {}
+
 	results = []
 
 	for run in pending_runs:
@@ -1194,6 +1203,7 @@ def get_pending_approvals(limit: int = 50) -> list:
 		results.append({
 			"flow_run_id": run.name,
 			"flow_id": run.flow_id,
+			"flow_name": flow_names.get(run.flow_id) or run.flow_id,
 			"flow_version": run.flow_version,
 			"current_node_id": run.current_node_id,
 			"node_id": waiting.get("node_id") or run.current_node_id,
