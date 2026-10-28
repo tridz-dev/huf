@@ -252,7 +252,7 @@ def delete_audience(audience: str | None = None) -> dict[str, Any]:
 		)
 	_audit(audience, "deleted", members=row.get("member_count"))
 	frappe.flags.in_audience_api = True
-	frappe.delete_doc(aud.AUDIENCE, audience, ignore_permissions=True)
+	frappe.delete_doc(aud.AUDIENCE, audience, ignore_permissions=True, force=True)  # finished broadcasts keep the name
 	return {"success": True}
 
 
@@ -280,8 +280,8 @@ def list_audiences(
 		or_filters=or_filters,
 		fields=list(_AUDIENCE_FIELDS),
 		order_by="modified desc",
-		start=max(cint(start), 0),
-		page_length=_page(limit),
+		limit_start=max(cint(start), 0),
+		limit_page_length=_page(limit),
 	)
 	total = len(frappe.get_all(aud.AUDIENCE, filters=filters, or_filters=or_filters, pluck="name"))
 	return {"success": True, "audiences": [_view(r) for r in rows], "total": total}
@@ -442,7 +442,7 @@ def list_members(
 		page = members[offset : offset + size]
 	else:
 		total = frappe.db.count(aud.MEMBER, filters)
-		page = frappe.get_all(aud.MEMBER, filters=filters, fields=fields, order_by="recipient asc", start=offset, page_length=size)
+		page = frappe.get_all(aud.MEMBER, filters=filters, fields=fields, order_by="recipient asc", limit_start=offset, limit_page_length=size)
 	reasons = aud.suppression_map(row["gateway"], [m["recipient"] for m in page])
 	reveal = bool(_gateway_write_allowed(row["gateway"]))
 	out = []

@@ -24,6 +24,7 @@ from typing import Any
 import frappe
 from frappe.utils import cint, get_datetime, now_datetime
 
+from huf.ai.gateway_core.constants import ENTRY_STATE_OPTED_OUT
 from huf.ai.whatsapp.broadcast import params as broadcast_params
 from huf.ai.whatsapp.broadcast import recipients as broadcast_recipients
 
@@ -249,13 +250,11 @@ def suppression_map(gateway: str, recipients: Iterable[str], marketing: bool = T
 	the contact's latest marketing preference is stop (Gateway Consent). Phone digits only; the phone<->BSUID
 	alias lookup of ``gateway_service.is_opted_out`` is applied again by ``recipients.prepare`` at send time.
 	"""
-	from huf.ai import gateway_service
-
 	items = [r for r in dict.fromkeys(recipients or []) if r]
 	if not items:
 		return {}
 	out: dict[str, str] = {}
-	opted_state = getattr(gateway_service, "ENTRY_STATE_OPTED_OUT", "opted_out")
+	opted_state = ENTRY_STATE_OPTED_OUT
 	for i in range(0, len(items), SUPPRESSION_CHUNK):
 		chunk = items[i : i + SUPPRESSION_CHUNK]
 		for row in frappe.get_all(

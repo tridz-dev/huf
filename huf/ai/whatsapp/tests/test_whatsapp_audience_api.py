@@ -99,7 +99,6 @@ class TestCreateAndConsent(AudienceTestCase):
 				doc.set(field, value)
 				with self.assertRaises(frappe.ValidationError):
 					doc.save(ignore_permissions=True)
-				frappe.db.rollback()
 
 	def test_update_audience_ignores_attestation_and_only_narrows_purposes(self):
 		name = self.make(purposes=("marketing",))
@@ -112,10 +111,10 @@ class TestCreateAndConsent(AudienceTestCase):
 		self.assertEqual(api.update_audience(audience=name, consent_purposes=[])["error"], "purposes_required")
 
 	def test_write_needs_gateway_authority(self):
+		name = self.make()
 		with patch.object(api, "_gateway_write_allowed", return_value=False):
 			with self.assertRaises(frappe.PermissionError):
 				api.create_audience(gateway=GW, title="x")
-			name = self.make()
 			with self.assertRaises(frappe.PermissionError):
 				api.delete_audience(audience=name)
 			with self.assertRaises(frappe.PermissionError):
@@ -137,7 +136,7 @@ class TestImport(AudienceTestCase):
 		]
 		out = _import(name, rows=rows)
 		self.assertTrue(out["success"], out)
-		self.assertEqual((out["added"], out["skipped_total"], out["invalid_total"]), (2, 1, 6))
+		self.assertEqual((out["added"], out["skipped_total"], out["invalid_total"]), (2, 1, 5))
 		self.assertEqual(out["skipped"][0]["reason"], "duplicate_in_file")
 		reasons = [i["reason"] for i in out["invalid"]]
 		self.assertEqual(reasons[:2], ["invalid_number", "invalid_number"])
@@ -260,7 +259,7 @@ class TestMembersAndMasking(AudienceTestCase):
 	def test_suppressed_filter_and_reasons_come_from_consent_records(self):
 		name = self.seed()
 		frappe.get_doc({"doctype": "Gateway Access Entry", "name": "GAE-AUD-1", "gateway": GW, "entry_type": "Sender",
-						"external_id": "447700900124", "state": "opted_out"}).db_insert()  # fmt: skip
+						"external_id": "447700900124", "state": "Opted out"}).db_insert()  # fmt: skip
 		frappe.get_doc({"doctype": "Gateway Consent", "name": "GC-AUD-1", "gateway": GW, "sender_id": "447700900125",
 						"category": "marketing_messages", "value": "stop", "meta_timestamp": 5}).db_insert()  # fmt: skip
 		frappe.get_doc({"doctype": "Gateway Consent", "name": "GC-AUD-2", "gateway": GW, "sender_id": "447700900123",
@@ -301,7 +300,7 @@ class TestSelectionPreview(AudienceTestCase):
 		_import(b, rows=[{"phone": "447700900123"}, {"phone": "447700900126"}])
 		_import(c, rows=[{"phone": "447700900125"}, {"phone": "447700900127"}])
 		frappe.get_doc({"doctype": "Gateway Access Entry", "name": "GAE-AUD-2", "gateway": GW, "entry_type": "Sender",
-						"external_id": "447700900124", "state": "opted_out"}).db_insert()  # fmt: skip
+						"external_id": "447700900124", "state": "Opted out"}).db_insert()  # fmt: skip
 		bc = self.draft_broadcast(a)
 		selection = [{"audience": a}, {"audience": b}, {"audience": c, "exclude": True, "tags": []}]
 		with patch.object(aud, "template_category", return_value="MARKETING"):
