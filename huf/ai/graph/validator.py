@@ -135,7 +135,8 @@ FLOW_ONLY_NODE_TYPES: frozenset[str] = frozenset(
 	}
 )
 
-FLOW_NODE_TYPES: frozenset[str] = PROCEDURE_NODE_TYPES | FLOW_ONLY_NODE_TYPES
+# ``parallel`` is a Procedure-only node: Flow has no concurrent branches.
+FLOW_NODE_TYPES: frozenset[str] = (PROCEDURE_NODE_TYPES - {"parallel"}) | FLOW_ONLY_NODE_TYPES
 
 _PROFILE_NODE_TYPES: dict[str, frozenset[str]] = {
 	"procedure": PROCEDURE_NODE_TYPES,
@@ -315,33 +316,72 @@ def validate_flow_graph(graph: dict, **kwargs: Any) -> ValidationResult:
 # --------------------------------------------------------------------------------------
 
 
+def _node_defs_by_type(profile: str) -> dict[str, str]:
+	"""``node type -> $defs name`` for the profile's node union (``FlowNode`` / ``ProcedureNode``)."""
+	union = "FlowNode" if profile == "flow" else "ProcedureNode"
+	defs = GRAPH_IR_SCHEMA["$defs"]
+	out: dict[str, str] = {}
+	for branch in defs[union]["oneOf"]:
+		name = branch["$ref"].rsplit("/", 1)[-1]
+		for part in defs[name].get("allOf", []):
+			const = (part.get("properties") or {}).get("type", {}).get("const")
+			if const:
+				out[const] = name
+	return out
+
+
 def _check_schema(graph: dict, profile: str) -> list[ValidationError]:
 	def_name = _PROFILE_SCHEMA_DEF[profile]
 	subschema = {"$defs": GRAPH_IR_SCHEMA["$defs"], "$ref": f"#/$defs/{def_name}"}
 	validator = Draft202012Validator(subschema)
+	node_defs = _node_defs_by_type(profile)
 	errors: list[ValidationError] = []
 	for err in sorted(validator.iter_errors(graph), key=lambda e: [str(p) for p in e.path]):
 		path = list(err.path)
+		if err.context and len(path) == 2 and path[0] == "nodes" and isinstance(path[1], int):
+			# A node failed the node-type ``oneOf``: jsonschema flattens every branch's errors
+			# together, which is useless for naming the real problem. Re-validate against the one
+			# definition that matches the node's own type instead.
+			node = graph["nodes"][path[1]]
+			ntype = node.get("type") if isinstance(node, dict) else None
+			if ntype not in node_defs:
+				errors.append(
+					ValidationError(
+						code="SCHEMA",
+						node_id=_node_id_from_path(graph, path),
+						field="type",
+						message=f"node type {ntype!r} is not a supported node type",
+					)
+				)
+				continue
+			node_validator = Draft202012Validator({"$defs": GRAPH_IR_SCHEMA["$defs"], "$ref": f"#/$defs/{node_defs[ntype]}"})
+			for sub in sorted(node_validator.iter_errors(node), key=lambda e: [str(p) for p in e.path]):
+				full = path + list(sub.absolute_path)
+				errors.append(
+					ValidationError(
+						code="SCHEMA",
+						node_id=_node_id_from_path(graph, full),
+						field=_field_from_path(full),
+						message=_leaf_message(sub),
+					)
+				)
+			continue
 		errors.append(
 			ValidationError(
 				code="SCHEMA",
 				node_id=_node_id_from_path(graph, path),
 				field=_field_from_path(path),
-				message=_describe_schema_error(err),
+				message=_leaf_message(err),
 			)
 		)
 	return errors
 
 
-def _describe_schema_error(err) -> str:
-	"""jsonschema's ``oneOf``/``anyOf`` failures report only "not valid under any schema" at the
-	top level, with the actually-useful detail buried in ``.context``. Recurse into the deepest
-	(most specific) sub-error so the message names the real problem (e.g. "'tool_id' is not of
-	type 'string'") instead of the generic wrapper.
-	"""
+def _leaf_message(err) -> str:
+	"""Deepest (most specific) message of a jsonschema error (recurses into ``.context``)."""
 	if err.context:
 		best = max(err.context, key=lambda sub: len(list(sub.absolute_path)))
-		return _describe_schema_error(best)
+		return _leaf_message(best)
 	return err.message
 
 

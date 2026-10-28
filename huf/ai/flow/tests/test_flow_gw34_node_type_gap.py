@@ -93,10 +93,14 @@ class TestNodeTypeAllowListMatchesSchemaIntent(unittest.TestCase):
 	plus the six Flow-only ones -- output/foreach/parallel/validate are Procedure types,
 	so they are (and must remain) Flow-usable too."""
 
-	def test_output_foreach_parallel_validate_are_flow_usable(self):
-		for node_type in ("output", "foreach", "parallel", "validate"):
+	def test_output_foreach_validate_are_flow_usable(self):
+		for node_type in ("output", "foreach", "validate"):
 			self.assertIn(node_type, PROCEDURE_NODE_TYPES)
 			self.assertIn(node_type, FLOW_NODE_TYPES)
+
+	def test_parallel_is_procedure_only(self):
+		self.assertIn("parallel", PROCEDURE_NODE_TYPES)
+		self.assertNotIn("parallel", FLOW_NODE_TYPES)
 
 	def test_every_flow_node_type_has_an_executor(self):
 		missing = sorted(FLOW_NODE_TYPES - set(flow_engine._NODE_EXECUTORS))

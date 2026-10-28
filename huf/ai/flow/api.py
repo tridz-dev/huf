@@ -763,7 +763,6 @@ _NODE_DISPLAY = {
 	"human.approval": ("Human Approval", "UserCheck", "control"),
 	"condition": ("Condition (IF)", "GitFork", "control"),
 	"foreach": ("Loop", "RotateCw", "control"),
-	"parallel": ("Parallel", "Split", "control"),
 	"validate": ("Validate", "ShieldCheck", "control"),
 	"output": ("End", "CheckCircle2", "control"),
 	"transform": ("Transform Data", "Repeat", "transform"),

@@ -165,7 +165,13 @@ def _minimal_examples():
 	ex["human.approval"] = _wrap(
 		{
 			"type": "human.approval",
-			"config": {"message": "ok?", "approve_next": "end", "reject_next": "end2"},
+			"config": {
+				"message": "ok?",
+				"approve_next": "end",
+				"reject_next": "end2",
+				"approver_type": "role",
+				"approver_role": "Sales Manager",
+			},
 		},
 		extra=[{"id": "end2", "type": "output", "config": {"value": "r"}}],
 	)
@@ -208,13 +214,6 @@ def _minimal_examples():
 		},
 		extra=[{"id": "b1", **_tool("slack_send_message", {"channel": "c", "text": {"$from": "foreach.item"}})}],
 	)
-	ex["parallel"] = _wrap(
-		{"type": "parallel", "config": {"branches": [["p1"], ["p2"]], "join": "all"}},
-		extra=[
-			{"id": "p1", **_tool("slack_send_message", {"channel": "c", "text": "a"})},
-			{"id": "p2", **_tool("slack_send_message", {"channel": "c", "text": "b"})},
-		],
-	)
 	ex["validate"] = _wrap(
 		{"type": "validate", "config": {"assertions": [{"expression": "input['a'] == 1", "code": "C", "message": "m"}]}}
 	)
@@ -225,6 +224,16 @@ def _minimal_examples():
 	ex["output"] = _graph([WEBHOOK | {"next": "x"}, {"id": "x", "type": "output", "config": {"value": {"$from": "input.a"}}}], "t")
 	ex["trigger.unset"] = _graph([{"id": "t", "type": "trigger.unset", "config": {}, "next": "end"}, OUT], "t")
 	return ex
+
+
+def _wrap_parallel():
+	return _wrap(
+		{"type": "parallel", "config": {"branches": [["p1"], ["p2"]], "join": "all"}},
+		extra=[
+			{"id": "p1", **_tool("slack_send_message", {"channel": "c", "text": "a"})},
+			{"id": "p2", **_tool("slack_send_message", {"channel": "c", "text": "b"})},
+		],
+	)
 
 
 def _errs(graph):
@@ -358,7 +367,56 @@ class TestFlowFieldContract(unittest.TestCase):
 		self.assertRejected(self._mutate("human.approval+role", lambda g: cfg(g).pop("approver_role")))
 		self.assertRejected(self._mutate("human.approval+role", lambda g: cfg(g).update(approver_users=["a@b.c"])))
 		self.assertRejected(self._mutate("human.approval+users", lambda g: cfg(g).update(approver_users=[])))
-		self.assertRejected(self._mutate("human.approval", lambda g: cfg(g).update(approver_role="Sales")))
+		self.assertRejected(self._mutate("human.approval+users", lambda g: cfg(g).update(approver_role="Sales")))
+
+	def test_human_approval_requires_approver_type(self):
+		def cfg(g):
+			return self._node(g, "x")["config"]
+
+		self.assertRejected(self._mutate("human.approval", lambda g: cfg(g).pop("approver_type")))
+		self.assertRejected(self._mutate("human.approval", lambda g: cfg(g).update(approver_type=None)))
+		result = _validate(self._mutate("human.approval", lambda g: (cfg(g).pop("approver_type"), cfg(g).pop("approver_role"))))
+		self.assertFalse(result.ok)
+		from huf.ai.graph.error_copy import describe_errors
+
+		text = describe_errors(None, result.errors)
+		self.assertIn("who can approve is required", text)
+		self.assertNotIn("[SCHEMA]", text)
+
+	def test_router_llm_model_is_optional_string(self):
+		def cfg(g):
+			return self._node(g, "x")["config"]
+
+		result, msg = _errs(self._mutate("router.llm", lambda g: cfg(g).update(model="gpt-4o-mini")))
+		self.assertTrue(result.ok, msg)
+		self.assertRejected(self._mutate("router.llm", lambda g: cfg(g).update(model="")))
+		self.assertRejected(self._mutate("router.llm", lambda g: cfg(g).update(model={"provider": "OpenAI"})))
+
+	def test_tool_call_recovery_removed(self):
+		def cfg(g):
+			return self._node(g, "x")["config"]
+
+		self.assertRejected(self._mutate("slack", lambda g: cfg(g).update(recovery="retry")))
+
+	def test_parallel_node_removed(self):
+		graph = _wrap_parallel()
+		result = _validate(graph)
+		self.assertFalse(result.ok)
+		from huf.ai.graph.error_copy import describe_errors
+
+		text = describe_errors(graph, result.errors)
+		self.assertIn("flows do not support", text)
+		self.assertNotIn("[", text)
+
+	def test_unreachable_node_copy(self):
+		graph = self._mutate("slack", lambda g: g["nodes"].append({"id": "orphan", "type": "output", "config": {"value": 1}}))
+		result = _validate(graph)
+		self.assertFalse(result.ok)
+		from huf.ai.graph.error_copy import describe_errors
+
+		text = describe_errors(graph, result.errors)
+		self.assertIn("not connected to the start of the flow", text)
+		self.assertNotIn("UNREACHABLE", text)
 
 	def test_transform_negatives(self):
 		def cfg(g):
