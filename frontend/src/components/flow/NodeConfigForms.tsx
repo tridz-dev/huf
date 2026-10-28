@@ -297,11 +297,11 @@ const PRESET_FIELDS: Record<string, Array<{ key: string; label: string; optional
     { key: 'body', label: 'Body' },
   ],
   slack_send_message: [
-    { key: 'channel', label: 'Channel', placeholder: '#general', hint: 'The channel name (like #general) or ID. The bot must be invited to the channel.' },
+    { key: 'channel', label: 'Channel', placeholder: '#general', hint: 'The channel name (like #general) or the channel ID. The bot must be invited to it.' },
     { key: 'text', label: 'Message' },
   ],
   slack_send_thread_reply: [
-    { key: 'channel', label: 'Channel', placeholder: '#general', hint: 'The channel name (like #general) or ID. The bot must be invited to the channel.' },
+    { key: 'channel', label: 'Channel', placeholder: '#general', hint: 'The channel name (like #general) or the channel ID. The bot must be invited to it.' },
     { key: 'thread_ts', label: 'Thread', placeholder: '1712345678.000100', hint: 'The timestamp of the first message in the thread: right-click it, then Copy link; it is the number after "p".' },
     { key: 'text', label: 'Message' },
   ],
