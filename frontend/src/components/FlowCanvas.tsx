@@ -13,7 +13,9 @@ import ReactFlow, {
   Node,
   Panel,
   BackgroundVariant,
-  useReactFlow
+  useReactFlow,
+  useStoreApi,
+  getNodesBounds
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { PanelLeftOpen, PanelRightOpen, Maximize2, Plus, Sparkles, LayoutTemplate } from 'lucide-react';
@@ -45,6 +47,7 @@ import { makeFlowEdge, edgeRoute } from '../services/flowSerializer';
 import { branchHandlesFor } from '../lib/flowBranches';
 import { branchColumnShift, subtreeIds } from '../lib/flowEdgeLabels';
 import { toast } from '@/lib/toast';
+import { isInView } from '@/lib/flowLayout';
 import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import { ensureToolSchemasLoaded } from '../lib/flowToolSchemas';
 import { actionLabel, triggerLabel } from '../lib/flowLabels';
@@ -73,18 +76,27 @@ function FlowMiniMap() {
   );
 }
 
-/** Fits the whole graph in view after a structural edit (step or connection added/removed, Tidy layout). */
+/**
+ * After a structural edit (step or connection added/removed, Tidy layout) fits the whole graph in view,
+ * but only when something would otherwise be out of sight: a graph that is already fully visible stays where it is.
+ */
 function FitViewOnStructureChange({ flowId, signature }: { flowId?: string; signature: string }) {
-  const { fitView } = useReactFlow();
+  const { fitView, getNodes, getViewport } = useReactFlow();
+  const store = useStoreApi();
   const last = useRef<{ flowId?: string; signature: string } | null>(null);
   useEffect(() => {
     const previous = last.current;
     last.current = { flowId, signature };
     // The first render of a flow is fitted by <ReactFlow fitView>; only later edits come here.
     if (!previous || previous.flowId !== flowId || previous.signature === signature) return;
-    const timer = setTimeout(() => fitView({ padding: 0.3, maxZoom: 1, duration: 200 }), 60);
+    const timer = setTimeout(() => {
+      const nodes = getNodes();
+      const { width, height } = store.getState();
+      if (nodes.length > 0 && width > 0 && isInView(getNodesBounds(nodes), getViewport(), { width, height })) return;
+      fitView({ padding: 0.3, maxZoom: 1, duration: 200 });
+    }, 60);
     return () => clearTimeout(timer);
-  }, [flowId, signature, fitView]);
+  }, [flowId, signature, fitView, getNodes, getViewport, store]);
   return null;
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COLUMN_GAP, ROW_GAP, tidyPositions } from './flowLayout';
+import { COLUMN_GAP, ROW_GAP, isInView, tidyPositions } from './flowLayout';
 
 const n = (id: string, x = 0, y = 0) => ({ id, position: { x, y } });
 
@@ -36,5 +36,21 @@ describe('tidyPositions', () => {
     ]);
     expect(Object.keys(p).sort()).toEqual(['a', 'b', 'lone']);
     for (const v of Object.values(p)) expect(Number.isFinite(v.x) && Number.isFinite(v.y)).toBe(true);
+  });
+});
+
+describe('isInView', () => {
+  const size = { width: 840, height: 850 };
+  it('is true for content well inside the canvas', () => {
+    expect(isInView({ x: 100, y: 100, width: 200, height: 300 }, { x: 0, y: 0, zoom: 1 }, size)).toBe(true);
+  });
+  it('is false when a step hangs below, beside or under the toolbar', () => {
+    expect(isInView({ x: 100, y: 100, width: 200, height: 900 }, { x: 0, y: 0, zoom: 1 }, size)).toBe(false);
+    expect(isInView({ x: 700, y: 100, width: 200, height: 100 }, { x: 0, y: 0, zoom: 1 }, size)).toBe(false);
+    expect(isInView({ x: 100, y: 20, width: 200, height: 100 }, { x: 0, y: 0, zoom: 1 }, size)).toBe(false);
+  });
+  it('accounts for zoom and pan', () => {
+    expect(isInView({ x: 100, y: 200, width: 400, height: 1400 }, { x: 0, y: 0, zoom: 0.5 }, size)).toBe(true);
+    expect(isInView({ x: 100, y: 100, width: 200, height: 100 }, { x: -200, y: 0, zoom: 1 }, size)).toBe(false);
   });
 });
