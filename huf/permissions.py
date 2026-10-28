@@ -348,5 +348,15 @@ def get_me() -> dict:
 		"user": user,
 		"full_name": full_name,
 		"huf_role": get_user_huf_role(user),
-		"capabilities": get_user_capabilities(user),
+		"capabilities": _capabilities_the_server_honours(user),
 	}
+
+
+def _capabilities_the_server_honours(user: str) -> list[str]:
+	"""The capability list the screens act on. A Huf Role can grant flows.create / flows.manage to someone whose Frappe roles
+	cannot write Flow Definition; the server would refuse every save, so the screens must show those users view-only."""
+	capabilities = list(get_user_capabilities(user))
+	for capability, ptype in (("flows.create", "create"), ("flows.manage", "write")):
+		if capability in capabilities and not frappe.has_permission("Flow Definition", ptype, user=user):
+			capabilities.remove(capability)
+	return capabilities
