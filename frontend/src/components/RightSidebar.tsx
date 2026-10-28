@@ -143,14 +143,14 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     )}
                   </div>
                 </div>
-                <TriggerConfigForm nodeId={selectedNode.id} />
+                <TriggerConfigForm key={selectedNode.id} nodeId={selectedNode.id} />
               </>
             )}
 
-            {selectedNode.data.nodeType === 'action' && <ActionConfigForm nodeId={selectedNode.id} />}
+            {selectedNode.data.nodeType === 'action' && <ActionConfigForm key={selectedNode.id} nodeId={selectedNode.id} />}
 
             {selectedNode.data.nodeType === 'end' && (
-              <div className="space-y-3">
+              <div className="space-y-3" key={selectedNode.id}>
                 <Label weight="semibold" className="block" data-testid="flow-config-title">End</Label>
                 <p className="text-xs text-muted-foreground">The flow finishes here. The value below is returned as its result.</p>
                 <FlowValueInput
