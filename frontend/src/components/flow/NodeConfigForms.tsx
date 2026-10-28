@@ -11,7 +11,8 @@ import { VariablePicker } from '../ui/VariablePicker';
 import { FlowValueInput } from '../FlowValueInput';
 import { FlowTriggerPanel } from '../FlowTriggerPanel';
 import { useFlowContext } from '../../contexts/FlowContext';
-import { getAgents, getDocTypes, getRoles } from '../../services/agentApi';
+import { getAgents, getDocTypes } from '../../services/agentApi';
+import { getApproverRoles } from '../../services/flowApi';
 import { getFlowTools, type FlowTool } from '../../services/toolApi';
 import { registerToolSchemas } from '@/lib/flowToolSchemas';
 import { TRANSFORM_OPS, getTransformOp } from '@/lib/flowTransformOps';
@@ -248,7 +249,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
   const { updateEdges } = useFlowContext();
   const type = str(cfg.type);
   const [agents, setAgents] = useState<Opt[]>([]);
-  const [roles, setRoles] = useState<Opt[]>([]);
+  const [roles, setRoles] = useState<Array<Opt & { subtitle?: string }>>([]);
   const [tools, setTools] = useState<Array<Opt & { subtitle?: string }>>([]);
   const [toolsByName, setToolsByName] = useState<Record<string, FlowTool>>({});
   const [loading, setLoading] = useState(false);
@@ -267,8 +268,8 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
 
   useEffect(() => {
     if (type !== 'human.approval') return;
-    getRoles()
-      .then((l) => setRoles((l || []).map((r: { name: string }) => ({ value: r.name, label: r.name }))))
+    getApproverRoles()
+      .then((l) => setRoles((l || []).map((r) => ({ value: r.name, label: r.name, subtitle: r.group === 'Huf' ? 'Huf role' : undefined }))))
       .catch(() => setRoles([]));
   }, [type]);
 
@@ -578,7 +579,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
   }
 
   if (type === 'human.approval') {
-    const approverType = str(cfg.approver_type) || 'none';
+    const approverType = str(cfg.approver_type);
     const users = Array.isArray(cfg.approver_users) ? (cfg.approver_users as string[]) : [];
     const timeoutMin = typeof cfg.timeout_ms === 'number' ? Math.round(cfg.timeout_ms / 60000) : '';
     return (
@@ -603,14 +604,14 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
             }
           >
             <SelectTrigger id="approver-type" data-testid={f('approver_type')}>
-              <SelectValue />
+              <SelectValue placeholder="Choose who can approve" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none" data-testid="flow-option-approver-none">System Managers only</SelectItem>
               <SelectItem value="role" data-testid="flow-option-approver-role">People with a role</SelectItem>
               <SelectItem value="user" data-testid="flow-option-approver-user">Specific people</SelectItem>
             </SelectContent>
           </Select>
+          <Err field="approver_type" />
         </div>
         {approverType === 'role' && (
           <div>

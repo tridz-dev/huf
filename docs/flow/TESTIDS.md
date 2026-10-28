@@ -63,7 +63,7 @@ Dropdown options inside Selects: `flow-option-<name>`; Combobox options: `<field
 | `router.llm` | `prompt`, `options` (list), `flow-router-path-label-<targetNodeId>`, `flow-router-path-<targetNodeId>`, `flow-router-no-paths`, `default` |
 | `condition` | `expression`; branches `flow-branch-true`, `flow-branch-false` |
 | `foreach` | `items`, `max_iterations`, `on_item_error` (`flow-option-loop-on-error-fail|skip`), `collect`; branches `flow-branch-body`, `flow-branch-next`; pickers `flow-loop-items-picker`, `flow-loop-collect-picker` |
-| `human.approval` | `message`, `approver_type` (`flow-option-approver-none|role|user`), `approver_role`, `approver_users`, `timeout_ms` (minutes in the UI); branches `flow-branch-approve|reject|timeout` |
+| `human.approval` | `message`, `approver_type` (required; `flow-option-approver-role|user`; inline error `flow-error-actionConfig-approver_type`), `approver_role`, `approver_users`, `timeout_ms` (minutes in the UI); branches `flow-branch-approve|reject|timeout` |
 | `transform` | `op` (`flow-option-transform-op-<op>`), `input.<param>` |
 | `state.get|set|delete` | `key`, `default`, `value`, `ttl_seconds` |
 | `doc.create` | `doctype`, `fields.<i>.name`, `fields.<i>.value`, `fields.add` |
