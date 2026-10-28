@@ -63,7 +63,10 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
         .then((status) => setAutoConvertToProcedure(status.auto_convert_to_procedure))
         .catch(() => setAutoConvertToProcedure(false));
     }
-  }, [activeFlow, open]);
+    // Re-initialise only when the dialog opens or another flow is shown: depending on the whole flow object would
+    // reset what the user is typing whenever the canvas re-syncs the active flow in the background.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFlow?.id, open]);
 
   const { deleteFlow } = useFlowContext();
 

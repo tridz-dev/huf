@@ -194,8 +194,8 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                         <div className="space-y-4">
                                             <div>
                                                 <h4 className="font-semibold text-warning">{run.waiting.title as string || 'Approval Required'}</h4>
-                                                {(run.waiting.instructions as string) && (
-                                                    <p className="text-sm text-warning mt-1">{run.waiting.instructions as string}</p>
+                                                {((run.waiting.instructions || run.waiting.message) as string) && (
+                                                    <p className="text-sm text-warning mt-1" data-testid="flow-run-approval-message">{(run.waiting.instructions || run.waiting.message) as string}</p>
                                                 )}
                                             </div>
                                             {(run.waiting.context_summary as string) && (
