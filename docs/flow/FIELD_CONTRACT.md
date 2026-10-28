@@ -452,7 +452,26 @@ The example is valid with a classifier that marks `http_request` as an http tool
 2. **HTTP Request**: resolved. Built-in tool `http_request` (App Provided, declared in `huf/ai/tools/_registry.py` `HTTP_TOOLS`, function `huf.ai.http_handler.http_request(url, method="GET", headers=None, body=None)`) matches the `input` contract `{url, method, headers, body}`. Returns a JSON string with `success` (true only for 2xx), `status_code`, `headers` subset, `body` (64KB cap), `truncated`.
 3. **Gateway / MCP binding**: the engine reads `config.mcp_server` and `config.gateway` on `tool.call`; the schema forbids them. The engine
    must resolve MCP tools by unique tool id (`find_unique_mcp_server_for_tool`). `FlowDefinition._validate_gateway_authority` is therefore dead for saved flows.
-4. **Backend consumers of the old names** (owned by other workers): `huf/ai/flow/api.py` `_webhook_key_is_valid`/`_webhook_entry_auth`
-   read `auth`/`apiKey` (must read `secret`); `get_node_schemas()` advertises legacy field names and is wrong for every type;
-   `engine.py` reads `loop_node/done_node/iterate_over`, `transformations`, `tool_name/args`, `approver_*` defaults, `true_node/false_node`.
-5. `approver_type` is optional in the schema (human.approval fixtures predate it); the engine must fail closed when absent.
+4. **Backend consumers of the old names**: resolved. `flow_webhook` authenticates with the trigger node's `secret` (`X-Huf-Secret` or `?secret=`), the engine reads only the contract names (`on_true`/`on_false`, `foreach` body fields, `tool_id`/`input`, `approver_*`), `get_pending_approvals` and the approve/reject endpoints read the `waiting` keys in section 7, and `huf/ai/gateways/approvals.py` reads `approver_type`. Legacy keys (`auth`, `apiKey`, `webhook_key`, `approval_type`, `title`, `instructions`, `true_node`, `iterate_over`, `tool_name`) are ignored.
+5. `approver_type` is optional in the schema (human.approval fixtures predate it); the engine fails closed when absent (only a System Manager may decide).
+
+## 7. Engine behaviour notes (verified against `huf/ai/flow/engine.py`)
+
+**Templating and expressions**
+* `{{var}}` is NOT supported anywhere. In `agent.run.prompt`, `{name}` placeholders are filled from `prompt_bindings`; `{{`/`}}` are literal braces. Other dynamic values use `{"$from": ...}` or `{"$template": "...", "vars": {...}}`.
+* `router.llm.prompt` and `human.approval.message` are plain text: no placeholders are substituted.
+* `condition` expressions use `input[...]` roots (AST-restricted evaluator).
+
+**Approvals**
+* The `waiting` JSON of a paused run holds: `type` (`approval`), `node_id`, `message`, `approver_type` (`role`|`user`), `approver_role`, `approver_users`, `timeout_next`, `timeout_ms`, `timeout_at` (ISO). `get_pending_approvals` returns these (plus `title`/`instructions`/`approval_type` aliases for the current frontend).
+* Fail closed, same rule for approve and reject (`engine.check_approver` / `verify_approval_permission`): `role` needs the role, `user` needs membership in `approver_users`, anything else (absent type, empty role/list) means System Manager only. A System Manager can always decide. `get_pending_approvals` lists only runs the caller may decide.
+* Timeouts: `timeout_ms` sets `timeout_at` when the run pauses. The every-minute scheduler job `huf.ai.flow.triggers.expire_due_approvals` calls `engine.expire_approval`, which routes to `timeout_next` (decision `timeout`) or fails the run when none is set. Resolution is one minute at best, and a run whose deadline passed while the scheduler was down expires on the next tick.
+
+**Routing and models**
+* `router.llm` makes one direct completion with the first keyed AI Provider's default chat model (no agent involved). An unmatched reply, no keyed provider, or any LLM failure routes to the node's required `default` (reason `no_match` / `llm_failed: ...`).
+
+**Limitations**
+* Recovery: there is no flow-run recovery sweeper; a worker crash mid-node leaves the run `Running` until it is failed or re-run by hand (only approval expiry is scheduled).
+* `timeout_ms` on `tool.call` bounds the wait for the result but cannot cancel an already-running tool.
+* `parallel` runs its branches sequentially, not concurrently.
+* Run settings: only `mode`, `max_hops`, `conversation_mode`, `max_foreach_iterations`, `orchestrator_call_policy`, `orchestrator_agent` and `decision_router` are read by the engine; any other settings key is dead.
