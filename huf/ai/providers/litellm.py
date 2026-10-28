@@ -127,9 +127,15 @@ class ProviderUnavailableError(Exception):
         self.kind = kind
 
 
-def _sanitize_provider_error_message(raw_message: str, normalized_model: str | None = None) -> str:
+def _sanitize_provider_error_message(raw_message: str, normalized_model: str | None = None,
+                                     provider: str | None = None, status_code=None) -> str:
     """Return a user-safe provider error message with no LiteLLM/provider internals."""
     text = (raw_message or "").lower()
+
+    from huf.ai.providers.errors import classify_status, specific_message
+    specific = specific_message(classify_status(status_code, raw_message or ""), provider, normalized_model)
+    if specific:
+        return specific
 
     if "api key not configured" in text or "password not found" in text or "invalid api key" in text:
         return "This provider is not configured correctly yet. Add or update its API key and try again."
@@ -166,10 +172,12 @@ def _sanitize_provider_error_message(raw_message: str, normalized_model: str | N
     return f"The AI provider could not complete this request{model_hint}. Please try again or choose a different model."
 
 
-def _raise_provider_unavailable(raw_message: str, normalized_model: str | None = None):
+def _raise_provider_unavailable(raw_message: str, normalized_model: str | None = None,
+                                provider: str | None = None, status_code=None):
     raise ProviderUnavailableError(
-        _sanitize_provider_error_message(raw_message, normalized_model),
+        _sanitize_provider_error_message(raw_message, normalized_model, provider, status_code),
         log_message=raw_message,
+        status_code=status_code,
     )
 
 
@@ -1893,6 +1901,8 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     _raise_provider_unavailable(
                         f"{raw_msg} (exhausted {_RATE_LIMIT_MAX_ATTEMPTS} attempts with backoff: {backoff_exc})",
                         normalized_model,
+                        provider,
+                        getattr(backoff_exc, "status_code", None),
                     )
 
             except RateLimitError as e:
@@ -1915,7 +1925,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             except APIError as e:
                 raw_msg = f"API error for model '{normalized_model}': {str(e)}"
                 frappe.log_error(message=raw_msg, title="LiteLLM Provider")
-                _raise_provider_unavailable(raw_msg, normalized_model)
+                _raise_provider_unavailable(raw_msg, normalized_model, provider, getattr(e, "status_code", None))
 
             except Exception as e:
                 raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
@@ -1923,10 +1933,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     message=f"{raw_msg}\n\n{frappe.get_traceback()}",
                     title="LiteLLM Provider"
                 )
-                if "ContextWindowExceededError" in str(e) or "RateLimitError" in str(e):
+                if "ContextWindowExceededError" in str(e):
                     raise e
 
-                _raise_provider_unavailable(raw_msg, normalized_model)
+                _raise_provider_unavailable(raw_msg, normalized_model, provider, getattr(e, "status_code", None))
 
             # Empty-response guard. Retry the completion once. A model that already ran tools
             # this run may legitimately end with no text (the tool delivered the reply, e.g. a
@@ -2122,10 +2132,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             title="LiteLLM Provider"
         )
 
-        if "ContextWindowExceededError" in str(e) or "RateLimitError" in str(e):
+        if "ContextWindowExceededError" in str(e):
             raise e
 
-        _raise_provider_unavailable(msg)
+        _raise_provider_unavailable(msg, locals().get("normalized_model"), provider, getattr(e, "status_code", None))
 
 
 async def get_simple_completion(model: str, messages: list, provider: str) -> str:
