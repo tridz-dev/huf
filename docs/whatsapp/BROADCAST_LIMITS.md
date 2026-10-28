@@ -13,11 +13,11 @@ A blank setting uses the default. For the two recipient caps, `0` means no limit
 | `quality_rating` | Number quality rating | Set by Meta | - | - | - | Set by Meta from user feedback; a low rating can reduce your tier. |
 | `marketing_stop_131050` | Contacts who stopped marketing | Set by Meta | on | - | - | Meta rejects marketing messages to contacts who chose to stop them (error 131050); they are skipped. |
 | `opt_out_stop` | STOP replies | Set by Meta | on | - | - | Contacts who reply STOP are never messaged again until they opt back in. |
-| `bsuid_refused` | Username-only contacts | Set by Meta | on | - | - | A business-scoped user ID cannot be used as a recipient; send to the phone number. (Not verified against Meta's documentation.) |
-| `us_plus_one_marketing` | US (+1) marketing | Set by Meta | on | - | - | Meta does not deliver marketing templates to US +1 numbers. (Not verified against Meta's documentation.) |
+| `bsuid_refused` | Username-only contacts | Internal | on | - | - | Meta allows messaging a business-scoped user ID (recipient field, from a number in the same business portfolio; not for one-tap, zero-tap or copy-code authentication templates). Huf does not send by user ID yet, so these contacts are skipped; send to the phone number. |
+| `us_plus_one_marketing` | US (+1) marketing | Set by Meta | on | - | - | Meta does not deliver marketing templates to US phone numbers (+1 with a US area code; Canadian +1 numbers are not affected). |
 | `per_user_marketing_limit_131049` | Per-contact marketing cap | Set by Meta | on | - | - | Meta limits how many marketing messages one person receives (error 131049); that contact is skipped. |
 | `header_text_max` | Header text length | Set by Meta | 60 | - | characters | Template header text is limited to 60 characters. |
-| `copy_code_max` | Copy-code length | Set by Meta | 15 | - | characters | A copy-code button value is up to 15 letters or digits. (Not verified against Meta's documentation.) |
+| `copy_code_max` | Copy-code length | Set by Meta | 15 | - | characters | Huf allows up to 15 letters or digits. Meta's template docs give up to 20 characters for the button example; the send-time limit was not confirmed, so Huf keeps the lower value. (Not verified against Meta's documentation.) |
 | `max_phone_digits` | Phone number length | Set by Meta | 15 | - | digits | E.164 allows at most 15 digits. |
 | `max_recipients_default` | Recipients per broadcast (default) | Huf setting | 1000 | 1 to 1e+07 | recipients | Used when a broadcast does not set its own cap. 0 = no limit. |
 | `max_recipients_ceiling` | Recipients per broadcast (highest allowed) | Huf setting | 10000 | 1 to 1e+07 | recipients | No broadcast may ask for more than this. 0 = no limit. |
