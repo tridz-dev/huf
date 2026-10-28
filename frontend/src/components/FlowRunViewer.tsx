@@ -14,6 +14,12 @@ interface FlowRunViewerProps {
     onClose: () => void;
 }
 
+/** Engine errors name the node id and the internal edge rule; show the step title and the actual reason. */
+function readableRunError(message: string, labelOf: (id?: string | null) => string): string {
+    const m = /^Node '([^']+)' of type '[^']+' failed and declares no on_error successor: ([\s\S]*)$/.exec(message);
+    return m ? `${labelOf(m[1])} failed: ${m[2]}` : message;
+}
+
 export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
     const [run, setRun] = useState<FlowRunDetail | null>(null);
     const [loading, setLoading] = useState(false);
@@ -146,7 +152,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                             <div data-testid="flow-run-error">
                                 <h3 className="text-sm font-semibold mb-3">Error</h3>
                                 <div className="bg-destructive/10 border border-destructive/30 text-destructive p-4 rounded-md text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-                                    {run.last_error}
+                                    {readableRunError(run.last_error, labelOf)}
                                 </div>
                                 {run.current_node_id && (
                                     <div className="text-xs text-muted-foreground mt-2">
@@ -159,7 +165,11 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                         {(() => {
                             const { __node_outputs__: rawOutputs, ...input } = run.context_json ?? {};
                             const outputs = (rawOutputs && typeof rawOutputs === 'object' ? rawOutputs : {}) as Record<string, unknown>;
-                            const steps = Object.entries(outputs).map(([id, output]) => ({ id, output, failed: false }));
+                            // A step whose own result says it did not succeed (tools return success:false) must never show as done.
+                            const stepFailed = (id: string, output: unknown) =>
+                                (run.status === 'Failed' && id === run.current_node_id) ||
+                                (!!output && typeof output === 'object' && (output as { success?: unknown }).success === false);
+                            const steps = Object.entries(outputs).map(([id, output]) => ({ id, output, failed: stepFailed(id, output) }));
                             if (run.status === 'Failed' && run.current_node_id && !(run.current_node_id in outputs)) {
                                 steps.push({ id: run.current_node_id, output: run.last_error, failed: true });
                             }
