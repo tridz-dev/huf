@@ -117,47 +117,35 @@ def defer_over_budget(broadcast: str, remaining: int, gateway: str | None = None
 	return len(later)
 
 
-ACK_PREFIX = "acknowledged_warnings: "
+# Warnings that describe the moment, not the broadcast: a resume is never refused because one appeared.
+TRANSIENT_WARNINGS = frozenset({"other_broadcast_running"})
+ACK_FIELD = "acknowledged_warnings"
 
 
 def record_acknowledged(broadcast: str, codes) -> None:
-	"""Remember on the broadcast (a Comment) which warning codes the operator accepted at start."""
-	frappe.get_doc(
-		{
-			"doctype": "Comment",
-			"comment_type": "Info",
-			"reference_doctype": "WhatsApp Broadcast",
-			"reference_name": broadcast,
-			"content": ACK_PREFIX + json.dumps(sorted(codes)),
-		}
-	).insert(ignore_permissions=True)
+	"""Remember on the broadcast (field ``acknowledged_warnings``, JSON list) which warning codes were accepted."""
+	frappe.db.set_value(
+		"WhatsApp Broadcast", broadcast, ACK_FIELD, json.dumps(sorted(set(codes))), update_modified=False
+	)
 
 
 def stored_acknowledged(broadcast: str) -> set[str]:
-	rows = frappe.get_all(
-		"Comment",
-		filters={
-			"reference_doctype": "WhatsApp Broadcast",
-			"reference_name": broadcast,
-			"content": ["like", ACK_PREFIX + "%"],
-		},
-		fields=["content"],
-		order_by="creation desc, name desc",
-		limit=1,
-	)
-	if not rows:
-		return set()
+	raw = frappe.db.get_value("WhatsApp Broadcast", broadcast, ACK_FIELD)
 	try:
-		return set(json.loads(rows[0]["content"][len(ACK_PREFIX):]))
+		value = json.loads(raw) if raw else []
 	except ValueError:
 		return set()
+	if not isinstance(value, list):
+		return set()
+	return {c for c in value if isinstance(c, str)}
 
 
 def resume_acknowledged(broadcast: str, preview: dict[str, Any]) -> set[str]:
-	"""Codes still acknowledged on resume. A warning the operator never accepted at start refuses the resume."""
+	"""Codes still acknowledged on resume. A warning the operator never accepted at start refuses the resume,
+	except transient ones (``TRANSIENT_WARNINGS``), which would otherwise strand a paused broadcast."""
 	stored = stored_acknowledged(broadcast)
 	current = {_code(w) for w in preview.get("warnings") or []}
-	if current - stored:
+	if current - stored - TRANSIENT_WARNINGS:
 		raise StartRefused(
 			"warnings_changed",
 			_("New warnings appeared since this broadcast started; review them and start a new one if needed."),

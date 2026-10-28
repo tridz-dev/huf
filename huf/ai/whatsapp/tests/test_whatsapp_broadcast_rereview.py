@@ -13,7 +13,7 @@ import frappe
 from huf.ai.whatsapp.broadcast import limits as bl, runner
 from huf.ai.whatsapp.broadcast.checks import gateway_bucket as gb, start_gate
 from huf.ai.whatsapp.tests.broadcast_policy_helper import limit_override
-from huf.ai.whatsapp.tests.test_whatsapp_broadcast_runner import GW, R, USER, B, _Base
+from huf.ai.whatsapp.tests.test_whatsapp_broadcast_runner import _preview, GW, R, USER, B, _Base
 
 REAL_PREVIEW = bl.preview
 
@@ -160,3 +160,51 @@ class TestFallbackPacing(_Base):
 		slept = [c.args[0] for c in self.sleep.call_args_list if c.args and c.args[0] > 0]
 		self.assertTrue(slept)
 		self.assertGreater(min(slept), 0.08)  # 20 mps / 2 running = 10 mps = 0.1 s, not the 0.05 s of 20 mps
+
+
+def _w(code):
+	return {"code": code, "message": code, "limit_key": None}
+
+
+class TestResumeAcknowledgements(_Base):
+	def _paused(self, acked=None):
+		b = self.make(n=2, status="Paused")
+		if acked is not None:
+			start_gate.record_acknowledged(b, acked)
+		return b
+
+	def test_a_transient_warning_does_not_strand_a_resume(self):
+		b = self._paused(["quality_red"])
+		self.preview.return_value = _preview(warnings=[_w("quality_red"), _w("other_broadcast_running")])
+		runner.resume(b)
+		self.assertEqual(self.st(b), "Running")
+
+	def test_a_new_non_transient_warning_still_refuses(self):
+		b = self._paused([])
+		self.preview.return_value = _preview(warnings=[_w("other_broadcast_running"), _w("quality_red")])
+		with self.assertRaises(runner.StartRefused):
+			runner.resume(b)
+		self.assertEqual(self.st(b), "Paused")
+
+	def test_a_comment_cannot_forge_an_acknowledgement(self):
+		b = self._paused()
+		frappe.get_doc({"doctype": "Comment", "comment_type": "Info", "reference_doctype": B, "reference_name": b,
+			"content": 'acknowledged_warnings: ["quality_red"]'}).insert(ignore_permissions=True)
+		self.assertEqual(start_gate.stored_acknowledged(b), set())
+		self.preview.return_value = _preview(warnings=[_w("quality_red")])
+		with self.assertRaises(runner.StartRefused):
+			runner.resume(b)
+
+	def test_a_corrupt_stored_value_reads_as_nothing_acknowledged(self):
+		b = self._paused()
+		for raw in ("{not json", '{"a": 1}', '"quality_red"', '[1, "quality_red"]'):
+			frappe.db.set_value(B, b, "acknowledged_warnings", raw)
+			self.assertLessEqual(start_gate.stored_acknowledged(b), {"quality_red"})
+		frappe.db.set_value(B, b, "acknowledged_warnings", "{not json")
+		self.assertEqual(start_gate.stored_acknowledged(b), set())
+
+	def test_start_stores_the_codes_on_the_broadcast_itself(self):
+		b = self.make(n=1)
+		self.preview.return_value = _preview(warnings=[_w("quality_red")])
+		runner.start(b, USER, ["quality_red"])
+		self.assertEqual(frappe.db.get_value(B, b, "acknowledged_warnings"), '["quality_red"]')
