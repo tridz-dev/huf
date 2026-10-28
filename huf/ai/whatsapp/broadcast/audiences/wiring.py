@@ -31,7 +31,7 @@ from huf.ai.whatsapp.broadcast.audiences.common import _guard
 from huf.ai.whatsapp.management import _bridge_guard, _error, _gateway_read_allowed
 
 RECIPIENT = "WhatsApp Broadcast Recipient"
-RATE_SECONDS = 60
+RATE_SECONDS = policy.BY_KEY["api_rate_window_seconds"].default
 
 
 def _template_category(broadcast: str, fallback: str | None) -> str | None:
@@ -89,7 +89,7 @@ def consent_cover(broadcast: str) -> dict[str, Any]:
 		"manual_rows": manual,
 		"audiences": [
 			{"audience": r["audience"], "title": r.get("title"), "consent_source": r.get("consent_source"),
-			 "attested": r["attested"]}
+			 "attested": r["attested"], "attested_by": r.get("consent_attested_by")}
 			for r in rows
 		],
 	}  # fmt: skip
@@ -151,6 +151,9 @@ def set_broadcast_audiences(broadcast: str | None = None, selection: Any = None)
 	if row.get("error"):
 		return row
 	if row.get("status") != "Draft":
+		return _error("not_draft", "Audiences can only be changed while the broadcast is a Draft.")
+	# Lock the broadcast row, then re-check: a start that won the race must not see its rows change.
+	if frappe.db.get_value(aud.BROADCAST, broadcast, "status", for_update=True) != "Draft":
 		return _error("not_draft", "Audiences can only be changed while the broadcast is a Draft.")
 	items = _clean_items(audience_selection.parse_selection(selection))
 	problem = audience_selection.check_selection(row["gateway"], items)
@@ -215,7 +218,10 @@ def set_broadcast_audiences(broadcast: str | None = None, selection: Any = None)
 
 def _attest_from_audiences(broadcast: str, cover: dict[str, Any]) -> None:
 	"""Record that the audiences' own attestations cover this broadcast (who/when are the caller/now)."""
-	titles = ", ".join(str(a.get("title") or a["audience"]) for a in cover["audiences"])
+	titles = ", ".join(
+		f"{a.get('title') or a['audience']} (attested by {a.get('attested_by') or 'unknown'})"
+		for a in cover["audiences"]
+	)
 	frappe.db.set_value(
 		aud.BROADCAST,
 		broadcast,
@@ -223,7 +229,7 @@ def _attest_from_audiences(broadcast: str, cover: dict[str, Any]) -> None:
 			"consent_attested": 1,
 			"consent_attested_by": frappe.session.user,
 			"consent_attested_at": frappe.utils.now_datetime(),
-			"consent_source": f"Audiences: {titles}"[:200],
+			"consent_source": f"Audiences: {titles}"[: policy.get("consent_source_max")],
 		},
 	)
 

@@ -79,3 +79,10 @@ A blank setting uses the default. For the two recipient caps, `0` means no limit
 | `audience_import_chunk` | Import commit size | Internal | 1000 | - | rows | Rows written per database commit during an import. |
 | `audience_suppression_chunk` | Suppression lookup size | Internal | 500 | - | contacts | Contacts checked against opt-outs per query. |
 | `audience_import_job_ttl` | Import progress kept | Internal | 86400 | - | seconds | How long a finished import's progress stays readable. |
+| `over_budget_hold_hours` | Over-budget hold | Internal | 24 | - | hours | Rows beyond the 24h budget wait until the oldest counted send leaves this window (or this long from now). |
+| `defer_chunk` | Deferral update size | Internal | 1000 | - | rows | Rows updated per query when holding rows back. |
+| `progress_throttle_seconds` | Progress update spacing | Internal | 2 | - | seconds | Live progress is sent at most this often per broadcast or import. |
+| `api_rate_window_seconds` | API rate window | Internal | 60 | - | seconds | The window the per-minute request limits are counted over. |
+| `consent_source_max` | Consent note length on a broadcast | Internal | 200 | - | characters | Audience-based consent notes are cut to this length. |
+| `member_consent_source_max` | Imported consent note length | Internal | 255 | - | characters | Per-contact consent text is cut to this length on import. |
+| `audience_delete_chunk` | Contact removal chunk | Internal | 1000 | - | contacts | Contacts deleted per query when removing members. |

@@ -137,6 +137,14 @@ LIMITS: tuple[Limit, ...] = (
 	Limit("audience_import_chunk", "Import commit size", 1000, "internal", "audiences", "rows", note="Rows written per database commit during an import."),
 	Limit("audience_suppression_chunk", "Suppression lookup size", 500, "internal", "audiences", "contacts", note="Contacts checked against opt-outs per query."),
 	Limit("audience_import_job_ttl", "Import progress kept", 86400, "internal", "audiences", "seconds", note="How long a finished import's progress stays readable."),
+	# ---- WP-H: remaining hard-coded internals (append-only)
+	Limit("over_budget_hold_hours", "Over-budget hold", 24, "internal", "safety", "hours", note="Rows beyond the 24h budget wait until the oldest counted send leaves this window (or this long from now)."),
+	Limit("defer_chunk", "Deferral update size", 1000, "internal", "safety", "rows", note="Rows updated per query when holding rows back."),
+	Limit("progress_throttle_seconds", "Progress update spacing", 2, "internal", "safety", "seconds", note="Live progress is sent at most this often per broadcast or import."),
+	Limit("api_rate_window_seconds", "API rate window", 60, "internal", "api", "seconds", note="The window the per-minute request limits are counted over."),
+	Limit("consent_source_max", "Consent note length on a broadcast", 200, "internal", "audiences", "characters", note="Audience-based consent notes are cut to this length."),
+	Limit("member_consent_source_max", "Imported consent note length", 255, "internal", "audiences", "characters", note="Per-contact consent text is cut to this length on import."),
+	Limit("audience_delete_chunk", "Contact removal chunk", 1000, "internal", "audiences", "contacts", note="Contacts deleted per query when removing members."),
 )
 
 BY_KEY: dict[str, Limit] = {lim.key: lim for lim in LIMITS}

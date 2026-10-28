@@ -63,7 +63,7 @@ def clean_member(raw: dict) -> tuple[dict | None, str | None]:
 			"display_name": name or None,
 			"tags": tags,
 			"params": aud._as_dict(params) if isinstance(params, str) else (params or None),
-			"consent_source": str(raw.get("consent_source") or "").strip()[:255] or None,
+			"consent_source": str(raw.get("consent_source") or "").strip()[: policy.get("member_consent_source_max")] or None,
 			"consent_at": consent_at,
 		},
 		None,

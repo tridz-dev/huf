@@ -24,6 +24,7 @@ class WhatsAppAudience(Document):
 		else:
 			self._check_immutable()
 			self._check_referenced_rename()
+			self._check_consent_source()
 
 	def _stamp_attestation(self):
 		# Always server-side: whatever the client sent is overwritten.
@@ -49,6 +50,22 @@ class WhatsAppAudience(Document):
 			from huf.ai.whatsapp.broadcast.audiences import membership as aud
 
 			aud.assert_not_in_use(self.name, "renamed")
+
+	def _check_consent_source(self):
+		"""The consent text is evidence: frozen while a live broadcast uses it or one relied on it."""
+		before = self.get_doc_before_save()
+		if not before or _norm(before.consent_source) == _norm(self.consent_source):
+			return
+		from huf.ai.whatsapp.broadcast.audiences import membership as aud
+
+		aud.assert_not_in_use(self.name, "given a new consent source")
+		covered = aud.attested_covered_broadcasts(self.name)
+		if covered:
+			frappe.throw(
+				"The consent source cannot be changed: it was relied on as consent for "
+				+ ", ".join(covered[:5])
+				+ ". Create a new audience instead."
+			)
 
 	def on_trash(self):
 		from huf.ai.whatsapp.broadcast.audiences import membership as aud
