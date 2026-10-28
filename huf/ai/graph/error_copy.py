@@ -93,6 +93,8 @@ def _leaf(field: str | None) -> str:
 
 
 def _schema_sentence(graph: dict | None, err) -> str:
+	if not err.node_id:
+		return "The flow definition is incomplete or out of date. Reload the page and try again."
 	who = _step(graph, err.node_id)
 	msg = err.message or ""
 	if "is not a supported node type" in msg:

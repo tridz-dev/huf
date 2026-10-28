@@ -59,7 +59,7 @@ def specific_message(kind: str, provider: str | None = None, model: str | None =
 	if kind == "auth":
 		return f"{who} was rejected: check the provider key in AI Providers."
 	if kind == "model_not_found":
-		m = f" '{model}'" if model else ""
+		m = f" '{model.split('/', 1)[-1]}'" if model else ""
 		return f"The model{m} was not found at {prov}: check the model name on the agent."
 	if kind == "rate_limited":
 		return f"{prov} is rate-limiting requests: wait a moment and run again."

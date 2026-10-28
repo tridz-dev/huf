@@ -8,7 +8,7 @@ export function DisabledReason({ reason, children }: { reason: string | null; ch
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span tabIndex={0} className="inline-flex" data-testid="disabled-reason">
+          <span tabIndex={0} className="inline-flex [&>button:disabled]:pointer-events-none" data-testid="disabled-reason">
             {children}
           </span>
         </TooltipTrigger>
