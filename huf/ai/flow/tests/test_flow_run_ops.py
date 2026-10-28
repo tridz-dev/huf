@@ -93,6 +93,17 @@ class TestFlowRunOps(IntegrationTestCase):
 		out = flow_api.get_flow_step_labels([{"flow_run": name, "flow_node_id": "n1"}, {"flow_run": "nope"}])
 		self.assertEqual(out, ["Flow: Run Ops Flow > Send the email", None])
 
+	def test_untitled_step_gets_its_type_title_not_its_id(self):
+		frappe.db.set_value(
+			"Flow Definition",
+			self.flow_name_doc,
+			"definition_json",
+			json.dumps({"nodes": [{"id": "n7", "type": "router.llm"}, {"id": "zz", "type": "mystery"}]}),
+		)
+		labels = flow_api._node_labels(self.flow_name_doc)
+		self.assertEqual(labels["n7"], "LLM Router")
+		self.assertEqual(labels["zz"], "zz")
+
 	def test_mark_failed_requires_stale_run(self):
 		fresh = self._run(status="Running", minutes_ago=1)
 		with self.assertRaises(frappe.ValidationError):

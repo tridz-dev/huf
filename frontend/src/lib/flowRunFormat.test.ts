@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeDecision } from './flowRunFormat';
+import { describeDecision, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from './flowRunFormat';
 import { parseServerDate, setSiteTimezoneForTests, toServerDatetime } from './serverTime';
 
 describe('describeDecision', () => {
@@ -41,4 +41,44 @@ describe('server time', () => {
     expect(parseServerDate('2026-12-01 12:00:00')?.toISOString()).toBe('2026-12-01T17:00:00.000Z');
     setSiteTimezoneForTests(null);
   });
+});
+
+describe('titleNodeIds', () => {
+    const titles: Record<string, string> = { n2: 'Send the email', n3: 'Escalate' };
+    const titleOf = (id: string) => titles[id] ?? null;
+
+    it('shows step titles for router, condition and approval targets', () => {
+        expect(titleNodeIds({ label: 'billing', node_id: 'n2', reason: 'matched' }, titleOf)).toEqual({
+            label: 'billing',
+            node_id: 'Send the email',
+            reason: 'matched',
+        });
+        expect(titleNodeIds({ on_true: 'n2', on_false: 'n3', timeout_next: 'n3' }, titleOf)).toEqual({
+            on_true: 'Send the email',
+            on_false: 'Escalate',
+            timeout_next: 'Escalate',
+        });
+    });
+
+    it('leaves unknown ids and unrelated keys alone and recurses', () => {
+        expect(titleNodeIds({ node_id: 'zz', other: 'n2', nested: [{ next: 'n3' }] }, titleOf)).toEqual({
+            node_id: 'zz',
+            other: 'n2',
+            nested: [{ next: 'Escalate' }],
+        });
+    });
+});
+
+describe('failed step output', () => {
+    it('treats status failed with an error as failed, even when the run went on', () => {
+        expect(isFailedStepOutput({ status: 'failed', error: 'boom' })).toBe(true);
+        expect(isFailedStepOutput({ success: false })).toBe(true);
+        expect(isFailedStepOutput({ status: 'success', value: 1 })).toBe(false);
+        expect(isFailedStepOutput('text')).toBe(false);
+        expect(isFailedStepOutput(null)).toBe(false);
+    });
+
+    it('drops the status and error keys already shown as the reason', () => {
+        expect(withoutFailureKeys({ status: 'failed', error: 'boom', status_code: 500 })).toEqual({ status_code: 500 });
+    });
 });
