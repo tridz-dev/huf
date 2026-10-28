@@ -11,7 +11,7 @@ from unittest.mock import patch
 import frappe
 
 from huf.ai.whatsapp.broadcast import limits as bl, runner
-from huf.ai.whatsapp.broadcast.checks import start_gate
+from huf.ai.whatsapp.broadcast.checks import gateway_bucket as gb, start_gate
 from huf.ai.whatsapp.tests.broadcast_policy_helper import limit_override
 from huf.ai.whatsapp.tests.test_whatsapp_broadcast_runner import GW, R, USER, B, _Base
 
@@ -105,3 +105,58 @@ class TestStartSeesOtherStartsOnItsOwnConnection(_Base):
 			with self.assertRaises(runner.StartRefused) as cm:
 				runner.start(b, USER, [], expected_count=3)
 		self.assertEqual(cm.exception.code, "recipients_changed")
+
+
+class TestGatewayBucket(_Base):
+	"""Real Redis, no sleeping: waits are read from ``reserve`` and never slept."""
+
+	def setUp(self):
+		super().setUp()
+		gb.reset(GW)
+		self.addCleanup(gb.reset, GW)
+
+	def test_many_tickers_on_a_slow_gateway_queue_instead_of_bursting(self):
+		# 1 message/s with 15 tickers each holding one reservation: the 11th used to push the schedule past
+		# the 10 s horizon, which reset it and let a burst through.
+		waits = [gb.reserve(GW, 1.0) for _ in range(15)]
+		self.assertTrue(all(w is not None for w in waits))
+		for i, w in enumerate(waits):
+			self.assertAlmostEqual(w, float(i), delta=0.6, msg=str(waits))
+		self.assertEqual(waits, sorted(waits))
+
+	def test_the_schedule_uses_redis_time_not_the_worker_clock(self):
+		self.assertIsNone(gb._now())  # no worker timestamp is sent; the Lua script reads TIME itself
+		first, second = gb.reserve(GW, 10.0), gb.reserve(GW, 10.0)
+		self.assertLess(first, 0.2)
+		self.assertAlmostEqual(second - first, 0.1, delta=0.05)
+
+	def test_reset_really_forgets_the_schedule(self):
+		for _ in range(3):
+			gb.reserve(GW, 1.0)
+		self.assertGreater(gb.reserve(GW, 1.0), 2.0)
+		gb.reset(GW)
+		self.assertLess(gb.reserve(GW, 1.0), 0.6)
+
+	def test_settings_read_at_call_time(self):
+		with limit_override(gateway_bucket_horizon_seconds=1):
+			self.assertEqual(gb.horizon(1.0), 100.0)  # never below 100 slots ahead
+		self.assertGreaterEqual(gb.horizon(1.0), 100.0)
+
+
+class TestFallbackPacing(_Base):
+	def test_running_share_counts_running_broadcasts_on_the_gateway(self):
+		self.assertEqual(gb.running_share(GW), 1)
+		self.make(status="Running")
+		self.make(status="Running")
+		self.assertEqual(gb.running_share(GW), 2)
+
+	def test_bucket_unavailable_divides_the_pace_by_the_running_count(self):
+		a = self.make(n=3, status="Running")
+		self.make(n=1, status="Running")
+		self.addCleanup(lambda: frappe.cache().delete(runner._lock_key(a)))
+		self.fake_send()
+		patch.object(runner.gateway_bucket, "pace", return_value=False).start()
+		self.assertEqual(runner.tick(a)["result"], "completed")
+		slept = [c.args[0] for c in self.sleep.call_args_list if c.args and c.args[0] > 0]
+		self.assertTrue(slept)
+		self.assertGreater(min(slept), 0.08)  # 20 mps / 2 running = 10 mps = 0.1 s, not the 0.05 s of 20 mps
