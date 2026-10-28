@@ -38,13 +38,10 @@ export function AudienceFormDialog({ gateway, audience, onClose, onSaved }: Prop
   const save = async () => {
     if (missing) { setErr(missing); return; }
     setBusy(true); setErr('');
-    const body = {
-      title: title.trim(), description: description.trim(), consent_source: source.trim(),
-      consent_basis: basis as ConsentBasis, consent_purposes: purposes,
-    };
+    const body = { title: title.trim(), description: description.trim(), consent_source: source.trim(), consent_purposes: purposes };
     const res = editing && audience
       ? await updateAudience(audience.name, body)
-      : await createAudience({ gateway, ...body, attest: true });
+      : await createAudience({ gateway, ...body, consent_basis: basis as ConsentBasis, consent_attested: true });
     setBusy(false);
     if (!res.success) { setErr(errorText(res)); return; }
     toast.success(editing ? 'Audience updated' : 'Audience created');
@@ -72,7 +69,7 @@ export function AudienceFormDialog({ gateway, audience, onClose, onSaved }: Prop
           </Field>
           <Field label="How did they agree?" id="aud-basis" required>
             {(p) => (
-              <Select value={basis || undefined} onValueChange={(v) => setBasis(v as ConsentBasis)}>
+              <Select value={basis || undefined} disabled={editing} onValueChange={(v) => setBasis(v as ConsentBasis)}>
                 <SelectTrigger {...p} className="w-full" aria-label="How did they agree?">
                   <SelectValue placeholder="Choose one" />
                 </SelectTrigger>
@@ -89,11 +86,13 @@ export function AudienceFormDialog({ gateway, audience, onClose, onSaved }: Prop
                 <Checkbox
                   id={`aud-purpose-${p.value}`}
                   checked={purposes.includes(p.value)}
+                  disabled={editing && !audience?.consent_purposes.includes(p.value)}
                   onCheckedChange={(c) => togglePurpose(p.value, c === true)}
                 />
                 <Label htmlFor={`aud-purpose-${p.value}`} className="text-sm font-normal">{p.label}</Label>
               </div>
             ))}
+            {editing && <p className="text-xs text-steel">You can narrow what they agreed to, but not add to it.</p>}
             <p className="text-xs text-steel">Marketing templates can only be sent to audiences that agreed to marketing.</p>
           </fieldset>
           {editing ? (

@@ -8,11 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { errorText } from '@/services/whatsappApi';
-import { listMembers, removeMembers, type AudienceMember } from './audiencesApi';
-import { maskPhone } from './csv';
+import { getAudience, listMembers, removeMembers, type AudienceMember } from './audiencesApi';
 
 const ALL = '__all__';
 const PAGE_SIZE = 50;
+const SUPPRESSED_LABEL: Record<string, string> = { opted_out: 'Opted out', marketing_opted_out: 'Opted out of marketing' };
 
 export function MemberTable({ audience, refreshKey = 0, onChanged }: { audience: string; refreshKey?: number; onChanged?: () => void }) {
   const [q, setQ] = useState('');
@@ -23,16 +23,20 @@ export function MemberTable({ audience, refreshKey = 0, onChanged }: { audience:
   const [total, setTotal] = useState(0);
   const [tagOptions, setTagOptions] = useState<string[]>([]);
   const [error, setError] = useState('');
-  const [reveal, setReveal] = useState(false);
+  const [masked, setMasked] = useState(true);
 
   const load = useCallback(async () => {
-    const res = await listMembers(audience, { q: q.trim() || undefined, tags: tag ? [tag] : undefined, suppressed: suppressedOnly || undefined }, page, PAGE_SIZE);
+    const res = await listMembers(audience, { search: q.trim() || undefined, tags: tag ? [tag] : undefined, suppressed: suppressedOnly || undefined }, page, PAGE_SIZE);
     if (!res.success) { setError(errorText(res)); setMembers([]); return; }
     setError('');
     setMembers(res.members);
     setTotal(res.total);
-    if (res.tags) setTagOptions(res.tags);
+    setMasked(res.masked);
   }, [audience, q, tag, suppressedOnly, page]);
+
+  useEffect(() => {
+    void getAudience(audience).then((r) => { if (r.success) setTagOptions(r.audience.tags.map((t) => t.tag)); });
+  }, [audience, refreshKey]);
 
   useEffect(() => {
     const t = setTimeout(() => void load(), q ? 250 : 0);
@@ -52,7 +56,7 @@ export function MemberTable({ audience, refreshKey = 0, onChanged }: { audience:
     <div className="space-y-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_12rem_auto] sm:items-end">
         <Field label="Search" id="mem-q">
-          <Input id="mem-q" placeholder="Name or number" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
+          <Input id="mem-q" placeholder="Number" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
         </Field>
         <Field label="Tag" id="mem-tag">
           {(p) => (
@@ -70,9 +74,7 @@ export function MemberTable({ audience, refreshKey = 0, onChanged }: { audience:
           Only opted-out
         </div>
       </div>
-      <div className="flex justify-end">
-        <Button variant="ghost" size="sm" onClick={() => setReveal((r) => !r)}>{reveal ? 'Hide numbers' : 'Show numbers'}</Button>
-      </div>
+      {masked && <p className="text-xs text-steel">Numbers are hidden. Only people who manage this WhatsApp gateway can see them.</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {members && members.length === 0 && !error ? (
         <p className="text-sm text-steel">No contacts match.</p>
@@ -84,16 +86,18 @@ export function MemberTable({ audience, refreshKey = 0, onChanged }: { audience:
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(members ?? []).map((m) => (
-              <TableRow key={m.name}>
-                <TableCell>{reveal ? m.recipient : maskPhone(m.recipient)}</TableCell>
+            {(members ?? []).map((m, i) => (
+              <TableRow key={`${m.recipient}-${i}`}>
+                <TableCell>{m.recipient}</TableCell>
                 <TableCell>{m.display_name || '-'}</TableCell>
                 <TableCell className="space-x-1">{m.tags.map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}</TableCell>
                 <TableCell>
-                  {m.suppressed ? <Badge variant="destructive">Opted out{m.suppressed_reason ? `: ${m.suppressed_reason}` : ''}</Badge> : 'Active'}
+                  {m.suppressed ? <Badge variant="destructive">{SUPPRESSED_LABEL[m.suppressed] ?? 'Opted out'}</Badge> : 'Active'}
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button variant="ghost" size="sm" aria-label={`Remove ${maskPhone(m.recipient)}`} onClick={() => void remove(m)}>Remove</Button>
+                  {!masked && (
+                    <Button variant="ghost" size="sm" aria-label={`Remove ${m.recipient}`} onClick={() => void remove(m)}>Remove</Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

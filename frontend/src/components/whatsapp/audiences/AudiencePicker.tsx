@@ -14,13 +14,16 @@ interface Props {
   gateway: string;
   value: AudienceSelectionItem[];
   onChange: (next: AudienceSelectionItem[]) => void;
-  /** Template used to flag audiences that did not agree to this kind of message. */
-  template?: string;
+  /**
+   * Broadcast used for exact counts (duplicates, opt-outs, purpose check). Without one (before the broadcast
+   * exists) the counts are an estimate from audience sizes.
+   */
+  broadcast?: string;
   onPreview?: (p: SelectionPreview | null) => void;
 }
 
 /** Reusable multi-select: pick audiences, narrow each by tag, include or exclude, see live counts. */
-export function AudiencePicker({ gateway, value, onChange, template, onPreview }: Props) {
+export function AudiencePicker({ gateway, value, onChange, broadcast, onPreview }: Props) {
   const [audiences, setAudiences] = useState<Audience[]>([]);
   const [tagsByAudience, setTags] = useState<Record<string, string[]>>({});
   const [preview, setPreview] = useState<SelectionPreview | null>(null);
@@ -36,18 +39,25 @@ export function AudiencePicker({ gateway, value, onChange, template, onPreview }
   useEffect(() => {
     const id = ++seq.current;
     if (!value.length) { setPreview(null); onPreview?.(null); return; }
-    void previewAudienceSelection({ selection: value, template }).then((r) => {
+    if (!broadcast) {
+      // No broadcast yet: the server preview needs one, so estimate from the audience sizes.
+      if (!audiences.length) return;
+      const est = estimate(value, audiences);
+      setPreview(est); setError(''); onPreview?.(est);
+      return;
+    }
+    void previewAudienceSelection(broadcast, value).then((r) => {
       if (id !== seq.current) return;
       if (r.success) { setPreview(r); setError(''); onPreview?.(r); } else { setError(errorText(r)); onPreview?.(null); }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, template]);
+  }, [key, broadcast, audiences]);
 
   useEffect(() => {
     for (const v of value) {
       if (tagsByAudience[v.audience]) continue;
       setTags((t) => ({ ...t, [v.audience]: [] }));
-      void getAudience(v.audience).then((r) => { if (r.success) setTags((t) => ({ ...t, [v.audience]: r.tags ?? [] })); });
+      void getAudience(v.audience).then((r) => { if (r.success) setTags((t) => ({ ...t, [v.audience]: r.audience.tags.map((x) => x.tag) })); });
     }
   }, [key, tagsByAudience, value]);
 
@@ -59,7 +69,7 @@ export function AudiencePicker({ gateway, value, onChange, template, onPreview }
     <div className="space-y-3">
       <Field label="Add an audience" id="aud-pick">
         {(p) => (
-          <Select value={adding || undefined} onValueChange={(v) => { setAdding(''); onChange([...value, { audience: v, tags: [], tag_mode: 'any', exclude: false }]); }}>
+          <Select value={adding || undefined} onValueChange={(v) => { setAdding(''); onChange([...value, { audience: v, tags: [], tag_filter_mode: 'any', exclude: false }]); }}>
             <SelectTrigger {...p} className="w-full" aria-label="Add an audience"><SelectValue placeholder="Choose an audience" /></SelectTrigger>
             <SelectContent>
               {available.map((a) => <SelectItem key={a.name} value={a.name}>{a.title} ({a.member_count})</SelectItem>)}
@@ -101,23 +111,43 @@ export function AudiencePicker({ gateway, value, onChange, template, onPreview }
               })}
             </div>
           )}
-          {preview?.per_audience.find((p) => p.audience === v.audience)?.blocked_by_purpose && (
-            <p role="alert" className="mt-2 text-xs text-destructive">
-              {preview.per_audience.find((p) => p.audience === v.audience)?.reason ?? 'This audience did not agree to this kind of message.'}
-            </p>
-          )}
+          {preview?.blocked.filter((b) => b.audience === v.audience).map((b) => (
+            <p key={b.code} role="alert" className="mt-2 text-xs text-destructive">{b.message}</p>
+          ))}
         </div>
       ))}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {preview && (
-        <div className="flex flex-wrap gap-2 text-xs" role="status" aria-label="Audience counts">
-          <Badge variant="secondary">Selected {preview.total}</Badge>
-          <Badge variant="secondary">Duplicates {preview.dupes}</Badge>
-          <Badge variant="secondary">Opted out {preview.suppressed}</Badge>
-          {preview.blocked_by_purpose > 0 && <Badge variant="destructive">Not agreed to this message type {preview.blocked_by_purpose}</Badge>}
-          <Badge>Will receive {preview.final}</Badge>
-        </div>
+        <>
+          <div className="flex flex-wrap gap-2 text-xs" role="status" aria-label="Audience counts">
+            <Badge variant="secondary">{preview.estimated ? 'Up to ' : ''}Selected {preview.counts.total}</Badge>
+            {!preview.estimated && <Badge variant="secondary">Excluded {preview.counts.excluded}</Badge>}
+            {!preview.estimated && <Badge variant="secondary">Duplicates {preview.counts.dupes}</Badge>}
+            <Badge variant="secondary">Opted out {preview.counts.suppressed}</Badge>
+            {preview.counts.blocked_by_purpose > 0 && (
+              <Badge variant="destructive">Not agreed to this message type {preview.counts.blocked_by_purpose}</Badge>
+            )}
+            <Badge>{preview.estimated ? 'About ' : ''}Will receive {preview.counts.final}</Badge>
+          </div>
+          {preview.estimated && (
+            <p className="text-xs text-steel">
+              Estimate from audience sizes. Duplicates between lists, exclusions and message-type checks are counted once the broadcast is created.
+            </p>
+          )}
+        </>
       )}
     </div>
   );
+}
+
+/** Rough counts from member_count / suppressed_count when no broadcast exists to preview against. */
+function estimate(value: AudienceSelectionItem[], audiences: Audience[]): SelectionPreview {
+  const sum = (pick: (a: Audience) => number) =>
+    value.reduce((n, v) => (v.exclude ? n : n + pick(audiences.find((a) => a.name === v.audience) ?? ({} as Audience))), 0);
+  const total = sum((a) => a.member_count || 0);
+  const suppressed = sum((a) => a.suppressed_count || 0);
+  return {
+    counts: { total, dupes: 0, excluded: 0, suppressed, blocked_by_purpose: 0, final: Math.max(total - suppressed, 0) },
+    per_audience: [], blocked: [], estimated: true,
+  };
 }
