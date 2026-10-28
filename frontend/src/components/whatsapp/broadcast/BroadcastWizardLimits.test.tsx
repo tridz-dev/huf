@@ -92,6 +92,20 @@ describe('wizard limits', () => {
     expect(await screen.findByText('Default recipient cap: 1000')).toBeInTheDocument();
   });
 
+  it('does not call an unknown Meta limit "no limit"', async () => {
+    m.getBroadcastLimits.mockResolvedValue(ok({ limits: [
+      L('require_typed_count', true),
+      { ...L('messaging_tier_24h', null, 'Unique contacts per 24 hours'), kind: 'meta', editable: false },
+      L('max_recipients_ceiling', null, 'Highest recipient cap'),
+    ] }));
+    m.previewBroadcast.mockResolvedValue(ok({ preview: pv({ limits_in_effect: ['messaging_tier_24h', 'max_recipients_ceiling'] }) }));
+    const user = userEvent.setup();
+    render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
+    await toPreview(user);
+    expect(await screen.findByText('Unique contacts per 24 hours: not known yet')).toBeInTheDocument();
+    expect(await screen.findByText('Highest recipient cap: no limit')).toBeInTheDocument();
+  });
+
   it('hides the typed-count gate when the limit is off', async () => {
     m.getBroadcastLimits.mockResolvedValue(ok({ limits: [L('require_typed_count', false)] }));
     m.previewBroadcast.mockResolvedValue(ok({ preview: pv() }));
