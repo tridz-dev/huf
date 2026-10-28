@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from huf.ai.whatsapp.broadcast import audience as aud
+from huf.ai.whatsapp.broadcast.audience_parts import importer as imp
 
 
 def _aud(name, marketing=1, utility=0, source="form", default_at="2026-01-01 00:00:00"):
@@ -155,26 +156,26 @@ class TestExpandSelection(unittest.TestCase):
 
 class TestCleanMember(unittest.TestCase):
 	def test_valid_row_is_normalised(self):
-		clean, reason = aud.clean_member({"recipient": "+44 7700 900123", "display_name": " Ann ", "tags": "VIP,eu"})
+		clean, reason = imp.clean_member({"recipient": "+44 7700 900123", "display_name": " Ann ", "tags": "VIP,eu"})
 		self.assertIsNone(reason)
 		self.assertEqual((clean["recipient"], clean["display_name"], clean["tags"]), ("447700900123", "Ann", ["vip", "eu"]))
 
 	def test_invalid_numbers(self):
 		for bad in ("", None, "abc", "1234567", "1" * 16):
-			self.assertEqual(aud.clean_member({"recipient": bad})[1], "invalid_number", bad)
+			self.assertEqual(imp.clean_member({"recipient": bad})[1], "invalid_number", bad)
 
 	def test_bsuid_refused(self):
-		self.assertEqual(aud.clean_member({"recipient": "IN.4608123"})[1], "bsuid_not_supported")
+		self.assertEqual(imp.clean_member({"recipient": "IN.4608123"})[1], "bsuid_not_supported")
 
 	def test_overlong_name_and_tags(self):
-		self.assertIn("name_too_long", aud.clean_member({"recipient": "447700900123", "display_name": "n" * 141})[1])
-		self.assertIn("invalid_tags", aud.clean_member({"recipient": "447700900123", "tags": "x" * 60})[1])
+		self.assertIn("name_too_long", imp.clean_member({"recipient": "447700900123", "display_name": "n" * 141})[1])
+		self.assertIn("invalid_tags", imp.clean_member({"recipient": "447700900123", "tags": "x" * 60})[1])
 
 	def test_future_consent_date_refused(self):
 		self.assertEqual(
-			aud.clean_member({"recipient": "447700900123", "consent_at": "2999-01-01"})[1], "consent_date_in_future"
+			imp.clean_member({"recipient": "447700900123", "consent_at": "2999-01-01"})[1], "consent_date_in_future"
 		)
-		self.assertEqual(aud.clean_member({"recipient": "447700900123", "consent_at": "not a date"})[1], "invalid_consent_date")
+		self.assertEqual(imp.clean_member({"recipient": "447700900123", "consent_at": "not a date"})[1], "invalid_consent_date")
 
 
 class TestMaskAndPurpose(unittest.TestCase):
