@@ -9,7 +9,7 @@ Duplicate-send safety lives in the Broadcast Recipient row state machine (see
 into ``unknown``.
 
 Concurrency model: at most one live ``tick`` per broadcast (cache lock that doubles as heartbeat,
-plus ``job_id`` dedupe for external enqueues). A tick works for ``TICK_BUDGET_SECONDS`` and then
+plus ``job_id`` dedupe for external enqueues). A tick works for ``policy.get("tick_budget_seconds")`` and then
 re-enqueues itself (``enqueue_after_commit``). When only future ``deferred`` rows remain the tick
 exits without re-enqueuing (no busy loop); the ``*/5`` cron (``resume_stale``) revives it.
 """
@@ -24,28 +24,15 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
-from huf.ai.whatsapp.broadcast import limits as broadcast_limits, progress, send as broadcast_send
+from huf.ai.whatsapp.broadcast import limits as broadcast_limits, policy, progress, send as broadcast_send
+from huf.ai.whatsapp.broadcast.checks import gateway_bucket, start_gate
+from huf.ai.whatsapp.broadcast.checks.start_gate import StartRefused
 
 BROADCAST = "WhatsApp Broadcast"
 RECIPIENT = "WhatsApp Broadcast Recipient"
 
 QUEUE = "long"
-TICK_TIMEOUT = 1800
-TICK_BUDGET_SECONDS = 240  # one tick works this long, then re-enqueues itself
-LOCK_TTL = 600  # tick lock / heartbeat
-HEARTBEAT_SECONDS = 30  # refresh the lock at least this often while sending
-HEARTBEAT_EVERY_SENDS = 20
-PERM_RECHECK_EVERY_SENDS = 50  # re-authorize the runner user at least this often
-STALE_SENDING_MINUTES = 10
-
-DEFAULT_MPS = 20
-MAX_MPS = 80  # Meta default throughput; a higher tier is only used when the Graph read says so
-RAMP_FIRST_BATCH = 20
-MAX_BATCH = 200
-HELD_WINDOW = 50
-HELD_RATIO_LIMIT = 0.30
 HELD_STATUS = "held_for_quality_assessment"
-MIN_HELD_SAMPLE = 10  # do not throttle on 1 held of 2 sent
 
 
 # --------------------------------------------------------------------------- helpers
@@ -119,7 +106,7 @@ def _enqueue_tick(broadcast: str, *, continuation: bool = False, user: str | Non
 	frappe.enqueue(
 		"huf.ai.whatsapp.broadcast.runner.tick",
 		queue=QUEUE,
-		timeout=TICK_TIMEOUT,
+		timeout=policy.get("tick_timeout"),
 		job_id=job_id,
 		deduplicate=True,
 		enqueue_after_commit=True,
@@ -132,17 +119,8 @@ def _status(broadcast: str) -> str | None:
 
 
 def _runner_user(broadcast: str, started_by: str | None) -> str | None:
-	"""The identity the runner acts as: the latest resumer (Comment) else the original starter."""
-	rows = frappe.get_all(
-		"Comment",
-		filters={"reference_doctype": BROADCAST, "reference_name": broadcast, "content": ["like", "resumed_by: %"]},
-		fields=["content"],
-		order_by="creation desc, name desc",
-		limit=1,
-	)
-	if rows:
-		return rows[0]["content"].split(":", 1)[1].strip() or started_by
-	return started_by
+	"""The identity the runner acts as: the latest resumer (a field only the runner writes) else the starter."""
+	return frappe.db.get_value(BROADCAST, broadcast, "resumed_by") or started_by
 
 
 def _log_event(event: str, broadcast: str, **extra) -> None:
@@ -154,42 +132,40 @@ def _log_event(event: str, broadcast: str, **extra) -> None:
 
 
 def _begin(
-	broadcast: str, user: str | None, *, allowed_from: tuple[str, ...], resuming: bool = False
+	broadcast, user, *, allowed_from, resuming=False, override_warnings=None, expected_count=None
 ) -> dict:
 	user = user or frappe.session.user
 	doc = frappe.get_doc(BROADCAST, broadcast)
 	if doc.status not in allowed_from:
 		frappe.throw(_("Broadcast is {0}; it can only be started from {1}").format(doc.status, ", ".join(allowed_from)))
-	if not doc.consent_attested:
-		frappe.throw(_("Recipient consent must be attested before sending"))
 	if not doc.gateway:
 		frappe.throw(_("Broadcast has no Gateway"))
 	if not _user_can_write(user, doc.gateway):
 		frappe.throw(_("Not permitted to send from this Gateway"), frappe.PermissionError)
 
 	preview = broadcast_limits.preview(broadcast) or {}
-	blocking = list(preview.get("blocking") or [])
-	if str(preview.get("template_status") or "").upper() not in ("", "APPROVED") and not blocking:
-		blocking.append(f"template_status={preview.get('template_status')}")
-	if blocking:
-		frappe.throw(_("Broadcast blocked: {0}").format("; ".join(str(b) for b in blocking)))
 	deferred = int(frappe.db.count(RECIPIENT, {"broadcast": broadcast, "status": "deferred"}) or 0)
-	if int(preview.get("queued") or 0) + deferred <= 0:
-		frappe.throw(_("No queued recipients"))
+	start_gate.check_preview(preview, deferred, None if resuming else (override_warnings or []))
 
-	# Serialise "one Running per gateway" on the Gateway row. Everything above was a (possibly
-	# snapshot) read, so after the lock use *locking* reads, which see the latest committed data.
+	# Serialise "one Running per gateway" on the Gateway row. Everything above was a plain read, which
+	# InnoDB (REPEATABLE READ) serves from a snapshot taken at the first read, so end that snapshot BEFORE
+	# locking: every read after the lock starts a fresh snapshot and sees what earlier starts committed.
+	# The commit would also end the caller's transaction, so it refuses to run over uncommitted writes.
+	# Nothing between the lock and the final commit below may commit or roll back (the lock would drop).
+	start_gate.commit_before_lock()
 	frappe.db.get_value("Gateway", doc.gateway, "name", for_update=True)
 	if frappe.db.get_value(BROADCAST, broadcast, "status", for_update=True) not in allowed_from:
 		frappe.throw(_("Broadcast changed state; reload and retry"))
-	other = frappe.db.get_value(
-		BROADCAST,
-		{"gateway": doc.gateway, "status": "Running", "name": ["!=", broadcast]},
-		"name",
-		for_update=True,
+	if policy.get("require_consent_attestation") and not frappe.db.get_value(
+		BROADCAST, broadcast, "consent_attested", for_update=True
+	):
+		raise StartRefused("consent_not_attested", _("Recipient consent must be attested before sending"))
+	start_gate.check_concurrency(doc.gateway, broadcast)
+
+	preview, acknowledged = start_gate.recheck_locked(
+		broadcast, preview, resuming=resuming, override_warnings=override_warnings, expected_count=expected_count
 	)
-	if other:
-		frappe.throw(_("Another broadcast ({0}) is already running on this Gateway").format(other))
+	deferred_over_budget = start_gate.apply_budget_hold(broadcast, doc.gateway, preview, acknowledged, resuming)
 
 	started_at = doc.started_at or now_datetime()
 	frappe.db.set_value(
@@ -201,36 +177,30 @@ def _begin(
 			"started_at": started_at,
 			"pause_reason": None,
 			"finished_at": None,
+			**({"resumed_by": user} if resuming else {}),
 		},
 	)
-	if resuming:
-		frappe.get_doc(
-			{
-				"doctype": "Comment",
-				"comment_type": "Info",
-				"reference_doctype": BROADCAST,
-				"reference_name": broadcast,
-				"content": f"resumed_by: {user}",
-			}
-		).insert(ignore_permissions=True)
 	frappe.db.commit()
 	_log_event("resumed" if resuming else "started", broadcast, user=user)
 	if resuming:
 		_enqueue_tick(broadcast, user=user)
 	else:
 		_enqueue_tick(broadcast)
-	return {"broadcast": broadcast, "status": "Running", "queued": int(preview.get("queued") or 0)}
+	return {"broadcast": broadcast, "status": "Running", "queued": int(preview.get("queued") or 0),
+		"deferred_over_budget": deferred_over_budget}
 
 
-def start(broadcast: str, user: str | None = None) -> dict:
-	"""Validate and start a Draft broadcast (Paused goes through resume() so the resumer is authorized and recorded), then enqueue its first tick."""
-	return _begin(broadcast, user, allowed_from=("Draft",))
+def start(broadcast, user=None, override_warnings=None, expected_count=None) -> dict:
+	"""Start a Draft broadcast and enqueue its first tick (Paused goes through resume()).
+
+	``override_warnings`` must equal the preview's current warning codes, else ``StartRefused("warnings_changed")``."""
+	return _begin(broadcast, user, allowed_from=("Draft",), override_warnings=override_warnings, expected_count=expected_count)  # noqa: E501
 
 
 def resume(broadcast: str) -> dict:
 	"""Resume a Paused broadcast, authorized as (and then run as) the person calling resume.
 
-	``started_by`` is kept for provenance; the resumer is recorded in a Comment (``resumed_by:``)."""
+	``started_by`` is kept for provenance; the resumer is recorded in the read-only field ``resumed_by``."""
 	return _begin(broadcast, frappe.session.user, allowed_from=("Paused",), resuming=True)
 
 
@@ -289,8 +259,8 @@ def _effective_mps(doc) -> int:
 		limits = broadcast_limits.get_messaging_limit(doc.gateway) or {}
 	except Exception:
 		limits = {}
-	cap = int(limits.get("mps") or MAX_MPS)
-	want = int(doc.mps or DEFAULT_MPS)
+	cap = policy.effective_mps_cap(limits.get("mps"))
+	want = int(policy.get("default_mps", doc))
 	return max(1, min(want, cap))
 
 
@@ -298,7 +268,7 @@ def _held_ratio(broadcast: str) -> tuple[float, int]:
 	rows = frappe.db.sql(
 		f"select message_status from `tab{RECIPIENT}` where broadcast=%s and sent_at is not null "
 		"order by sent_at desc limit %s",
-		(broadcast, HELD_WINDOW),
+		(broadcast, policy.get("held_window")),
 	)
 	n = len(rows)
 	if not n:
@@ -307,11 +277,19 @@ def _held_ratio(broadcast: str) -> tuple[float, int]:
 	return held / n, n
 
 
+def _is_throttled(ratio: float, sample: int) -> bool:
+	return (
+		bool(policy.get("held_throttle_enabled"))
+		and sample >= policy.get("min_held_sample")
+		and ratio > policy.get("held_ratio_limit")
+	)
+
+
 def _batch_size(doc, progressed: int, throttled: bool) -> int:
 	if progressed <= 0:
-		size = RAMP_FIRST_BATCH
+		size = policy.get("ramp_first_batch")
 	else:
-		size = min(MAX_BATCH, max(RAMP_FIRST_BATCH, progressed))  # doubles each chunk
+		size = min(policy.get("max_batch"), max(policy.get("ramp_first_batch"), progressed))  # doubles each chunk
 	return max(1, size // 2) if throttled else size
 
 
@@ -320,7 +298,7 @@ def _due_rows(broadcast: str, limit: int) -> list[str]:
 		r[0]
 		for r in frappe.db.sql(
 			f"select name from `tab{RECIPIENT}` where broadcast=%s and "
-			"(status='queued' or (status='deferred' and (next_attempt_at is null or next_attempt_at<=%s))) "
+			"(status in ('queued','deferred') and (next_attempt_at is null or next_attempt_at<=%s)) "
 			"order by creation, name limit %s",
 			(broadcast, now_datetime(), int(limit)),
 		)
@@ -334,6 +312,15 @@ def _remaining(broadcast: str) -> dict[str, int]:
 		broadcast,
 	)
 	return {s: int(n) for s, n in rows}
+
+
+def _due_queued(broadcast: str) -> int:
+	"""Queued rows that may be sent now (over-budget rows wait for ``next_attempt_at``)."""
+	return int(frappe.db.sql(
+		f"select count(*) from `tab{RECIPIENT}` where broadcast=%s and status='queued' "
+		"and (next_attempt_at is null or next_attempt_at<=%s)",
+		(broadcast, now_datetime()),
+	)[0][0])
 
 
 def _complete_if_done(broadcast: str) -> bool:
@@ -377,7 +364,7 @@ def _heartbeat(key: str, token: str) -> bool:
 	"""Refresh the lock TTL only while we still own it; False when ownership was lost."""
 	if not _owns(key, token):
 		return False
-	frappe.cache().set(key, token, ex=LOCK_TTL)
+	frappe.cache().set(key, token, ex=policy.get("lock_ttl"))
 	return True
 
 
@@ -388,7 +375,7 @@ def tick(broadcast: str, user: str | None = None) -> dict:
 	cache = frappe.cache()
 	key = _lock_key(broadcast)
 	token = uuid.uuid4().hex
-	if not cache.set(key, token, ex=LOCK_TTL, nx=True):
+	if not cache.set(key, token, ex=policy.get("lock_ttl"), nx=True):
 		return {"result": "locked"}
 	previous_user = frappe.session.user
 	try:
@@ -412,7 +399,7 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 		frappe.set_user(user)
 	frappe.flags.broadcast_pause = None
 
-	deadline = time.monotonic() + TICK_BUDGET_SECONDS
+	deadline = time.monotonic() + policy.get("tick_budget_seconds")
 	last_beat = time.monotonic()
 	since_check = 0
 	mps = _effective_mps(doc)
@@ -434,8 +421,9 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 			return res
 		since_check = 0
 		ratio, sample = _held_ratio(broadcast)
-		throttled = sample >= MIN_HELD_SAMPLE and ratio > HELD_RATIO_LIMIT
+		throttled = _is_throttled(ratio, sample)
 		rate = max(1, mps // 4) if throttled else mps
+		share = None  # set lazily when the shared bucket is unavailable; re-read at every heartbeat
 		rows = _due_rows(broadcast, _batch_size(doc, sent_total, throttled))
 		if not rows:
 			break
@@ -443,16 +431,20 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 			if time.monotonic() >= deadline:
 				out_of_time = True
 				break
-			if time.monotonic() - last_beat >= HEARTBEAT_SECONDS or since_check and since_check % HEARTBEAT_EVERY_SENDS == 0:
+			if time.monotonic() - last_beat >= policy.get("heartbeat_seconds") or since_check and since_check % policy.get("heartbeat_every_sends") == 0:
 				if not _heartbeat(key, token):
 					return {"result": "lock_lost", "sent": sent_total, "outcomes": outcomes}
 				last_beat = time.monotonic()
-			if since_check >= PERM_RECHECK_EVERY_SENDS:
+				share = None  # re-count running broadcasts: one that started mid-batch must slow us down too
+			if since_check >= policy.get("perm_recheck_every_sends"):
 				if (res := lost_permission()) is not None:
 					return res
 				since_check = 0
 			if _status(broadcast) != "Running":
 				return {"result": "stopped", "sent": sent_total, "outcomes": outcomes}
+			paced = gateway_bucket.pace(doc.gateway)  # shared gateway mps across concurrent broadcasts
+			if not paced and share is None:  # bucket down: split our speed with the other running broadcasts
+				share = gateway_bucket.running_share(doc.gateway)
 			t0 = time.monotonic()
 			outcome = broadcast_send.send_one(name)
 			since_check += 1
@@ -465,7 +457,7 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 				pause(broadcast, str(reason))
 				frappe.get_doc(BROADCAST, broadcast).recount(commit=True)
 				return {"result": "paused", "reason": reason, "sent": sent_total, "outcomes": outcomes}
-			_sleep(1.0 / rate - (time.monotonic() - t0))
+			_sleep(1.0 / (rate / (share or 1)) - (time.monotonic() - t0))
 		frappe.get_doc(BROADCAST, broadcast).recount(commit=True)
 		if not _heartbeat(key, token):
 			return {"result": "lock_lost", "sent": sent_total, "outcomes": outcomes}
@@ -476,7 +468,7 @@ def _tick_locked(broadcast: str, key: str, token: str, run_as: str | None = None
 		return {"result": "completed", "sent": sent_total, "outcomes": outcomes}
 
 	remaining = _remaining(broadcast)
-	if remaining.get("queued") and _status(broadcast) == "Running":  # budget ran out with due work left
+	if _due_queued(broadcast) and _status(broadcast) == "Running":  # budget ran out with due work left
 		_release(key, token)
 		if run_as:
 			_enqueue_tick(broadcast, continuation=True, user=run_as)

@@ -8,12 +8,12 @@ from __future__ import annotations
 import frappe
 from frappe.utils import add_to_date, now_datetime
 
-from huf.ai.whatsapp.broadcast import runner
+from huf.ai.whatsapp.broadcast import policy, runner
 
 
 def resume_stale() -> dict:
 	"""Cron */5: stale ``sending`` -> ``unknown`` (never resent); revive Running broadcasts w/o a tick."""
-	cutoff = add_to_date(now_datetime(), minutes=-runner.STALE_SENDING_MINUTES)
+	cutoff = add_to_date(now_datetime(), minutes=-policy.get("stale_sending_minutes"))
 	stale = frappe.db.sql(
 		f"select name, broadcast from `tab{runner.RECIPIENT}` where status='sending' and modified < %s",
 		cutoff,

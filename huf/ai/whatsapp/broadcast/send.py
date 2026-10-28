@@ -29,15 +29,12 @@ import frappe
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.gateway_adapters import whatsapp_errors as errors
-from huf.ai.whatsapp.broadcast import params as broadcast_params
+from huf.ai.whatsapp.broadcast import params as broadcast_params, policy as broadcast_policy
 
 RECIPIENT = "WhatsApp Broadcast Recipient"
 BROADCAST = "WhatsApp Broadcast"
-MAX_ATTEMPTS = 5
 PER_USER_LIMIT_CODE = 131049
 PER_USER_LIMIT_REASON = "per_user_marketing_limit"
-GATEWAY_DOWN_DEFER_SECONDS = 300
-AUTH_DEFER_SECONDS = 300
 
 OUTCOMES = ("sent", "failed", "deferred", "unknown", "skipped", "lost_claim")
 # pre-POST refusals (policy / validation) from the bridge that mean "do not message this contact"
@@ -54,7 +51,7 @@ def _claim(name: str) -> bool:
 		frappe.db.sql(
 			f"update `tab{RECIPIENT}` set status='sending', attempts=ifnull(attempts,0)+1, modified=%s "
 			"where name=%s and status in ('queued','deferred') and ifnull(attempts,0) < %s",
-			(now_datetime(), name, MAX_ATTEMPTS),
+			(now_datetime(), name, broadcast_policy.get("max_attempts")),
 		)
 		owned = frappe.db.sql("select row_count()")[0][0] == 1
 		frappe.db.commit()
@@ -191,7 +188,7 @@ def send_one(recipient_name: str) -> str:
 	before = _load(recipient_name) or {}
 	if not _claim(recipient_name):
 		row = _load(recipient_name)
-		if row and row.get("status") in ("queued", "deferred") and int(row.get("attempts") or 0) >= MAX_ATTEMPTS:
+		if row and row.get("status") in ("queued", "deferred") and int(row.get("attempts") or 0) >= broadcast_policy.get("max_attempts"):
 			frappe.db.sql(
 				f"update `tab{RECIPIENT}` set status='failed', failed_at=%s, error_message=%s "
 				"where name=%s and status in ('queued','deferred')",
@@ -218,7 +215,9 @@ def send_one(recipient_name: str) -> str:
 		return "lost_claim"
 
 	# per-broadcast cap (rows already started, excluding this one)
-	max_recipients = int(bc.get("max_recipients") or 0)
+	from huf.ai.whatsapp.broadcast.recipients import effective_cap
+
+	max_recipients = int(effective_cap(bc) or 0)  # own cap, else the setting; 0 = no limit
 	if max_recipients and _started_count(bc["name"]) > max_recipients:
 		_write(recipient_name, status="skipped", skip_reason="max_recipients")
 		return "skipped"
@@ -319,7 +318,7 @@ def _after_bridge_error(name: str, attempts: int, payload: dict[str, Any], gatew
 			return "skipped"
 		if code == "gateway_disconnected":
 			frappe.flags.broadcast_pause = "gateway_disconnected"
-			_write(name, status="deferred", next_attempt_at=_later(GATEWAY_DOWN_DEFER_SECONDS), error_message=message)
+			_write(name, status="deferred", next_attempt_at=_later(broadcast_policy.get("gateway_down_defer_seconds")), error_message=message)
 			return "deferred"
 		if code == "send_failed":
 			# no Graph answer: timeout, dropped connection or an unreadable response. It may have been delivered.
@@ -354,14 +353,14 @@ def _after_bridge_error(name: str, attempts: int, payload: dict[str, Any], gatew
 		# token is fixed (the attempt did not reach the recipient, so it does not count)
 		frappe.flags.broadcast_pause = f"meta_error_{ecode or 190}"
 		_write(
-			name, status="deferred", attempts=max(attempts - 1, 0), next_attempt_at=_later(AUTH_DEFER_SECONDS), **common
+			name, status="deferred", attempts=max(attempts - 1, 0), next_attempt_at=_later(broadcast_policy.get("auth_defer_seconds")), **common
 		)
 		return "deferred"
 
 	if errors.is_pause_signal(ecode):
 		frappe.flags.broadcast_pause = f"meta_error_{ecode}"
 
-	if cls.get("retryable") and attempts < MAX_ATTEMPTS:
+	if cls.get("retryable") and attempts < broadcast_policy.get("max_attempts"):
 		delay = errors.backoff_seconds(cls, attempts) or 60
 		_write(name, status="deferred", next_attempt_at=_later(delay), **common)
 		return "deferred"

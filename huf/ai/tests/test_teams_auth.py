@@ -1,8 +1,9 @@
 import json
+import pathlib
 import sys
 
-sys.path.insert(0, "huf/ai/tests")
-sys.path.insert(0, "huf/testing")
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()

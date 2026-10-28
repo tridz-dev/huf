@@ -8,6 +8,8 @@
   "title",
   "status",
   "pause_reason",
+  "acknowledged_warnings",
+  "resumed_by",
   "section_target",
   "gateway",
   "whatsapp_account",
@@ -16,6 +18,7 @@
   "language_code",
   "category",
   "send_via",
+  "audiences",
   "section_params",
   "body_params",
   "header_params",
@@ -67,6 +70,22 @@
    "fieldname": "pause_reason",
    "fieldtype": "Data",
    "label": "Pause reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "acknowledged_warnings",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Acknowledged warnings",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "resumed_by",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Resumed by",
+   "no_copy": 1,
    "read_only": 1
   },
   {
@@ -131,6 +150,12 @@
    "read_only": 1
   },
   {
+   "fieldname": "audiences",
+   "fieldtype": "Table",
+   "label": "Audiences",
+   "options": "WhatsApp Broadcast Audience"
+  },
+  {
    "fieldname": "section_params",
    "fieldtype": "Section Break",
    "label": "Default parameters"
@@ -190,14 +215,12 @@
    "fieldname": "max_recipients",
    "fieldtype": "Int",
    "label": "Max recipients",
-   "default": "1000",
    "read_only": 1
   },
   {
    "fieldname": "mps",
    "fieldtype": "Int",
    "label": "Messages per second",
-   "default": "10",
    "description": "Pacing target, capped by the number's throughput."
   },
   {

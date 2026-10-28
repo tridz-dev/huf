@@ -90,10 +90,22 @@ export interface BroadcastPreview {
   template_status?: string | null;
   within_limit: boolean | null;
   remaining_24h: number | null;
-  warnings: string[];
-  blocking: string[];
+  warnings: BroadcastIssue[];
+  blocking: BroadcastIssue[];
+  /** Keys (see get_broadcast_limits) of the limits that affected this broadcast. */
+  limits_in_effect: string[];
   cost: BroadcastCost | null;
   confirm_required: boolean;
+}
+
+/** A blocking reason or an overridable warning. `code` is what start_broadcast's override_warnings takes. */
+export interface BroadcastIssue { code: string; message: string; limit_key?: string | null }
+
+/** Contract items are `{code,message,limit_key}`; a bare string is tolerated and used as both code and message. */
+export function toIssue(x: unknown): BroadcastIssue {
+  if (typeof x === 'string') return { code: x, message: x, limit_key: null };
+  const o = (x ?? {}) as Partial<BroadcastIssue>;
+  return { code: String(o.code ?? o.message ?? ''), message: String(o.message ?? o.code ?? ''), limit_key: o.limit_key ?? null };
 }
 
 export interface BroadcastRecipientInput {
@@ -152,8 +164,9 @@ export function adaptPreview(r: Record<string, any>): BroadcastPreview {
     template_status: l.template_status ?? null,
     within_limit: l.within_limit ?? null,
     remaining_24h: l.remaining_24h ?? null,
-    warnings: Array.isArray(l.warnings) ? l.warnings : [],
-    blocking: Array.isArray(l.blocking) ? l.blocking : [],
+    warnings: (Array.isArray(l.warnings) ? l.warnings : []).map(toIssue),
+    blocking: (Array.isArray(l.blocking) ? l.blocking : []).map(toIssue),
+    limits_in_effect: (Array.isArray(r.limits_in_effect) ? r.limits_in_effect : Array.isArray(l.limits_in_effect) ? l.limits_in_effect : []).map(String),
     cost: r.cost ?? null,
     confirm_required: !!r.confirm_required,
   };
@@ -234,8 +247,10 @@ export const attestBroadcastConsent = (broadcast: string, consentSource: string)
 export const previewBroadcast = (broadcast: string) =>
   mapOk(broadcastCall<Record<string, any>>('preview_broadcast', { broadcast }, 'post'), (r) => ({ preview: adaptPreview(r) }));
 
-export const startBroadcast = (broadcast: string, confirmCount: string | number) =>
-  broadcastCall<Mutated & { queued?: number }>('start_broadcast', { broadcast, confirm_count: String(confirmCount) }, 'post');
+/** `overrideWarnings` = codes of the warnings the operator acknowledged; the server rejects the start (`warnings_changed`) if they no longer match. */
+export const startBroadcast = (broadcast: string, confirmCount: string | number, overrideWarnings: string[] = []) =>
+  broadcastCall<Mutated & { queued?: number; warnings?: unknown[] }>(
+    'start_broadcast', { broadcast, confirm_count: String(confirmCount), override_warnings: JSON.stringify(overrideWarnings) }, 'post');
 
 export const pauseBroadcast = (broadcast: string) => broadcastCall<Mutated>('pause_broadcast', { broadcast }, 'post');
 export const resumeBroadcast = (broadcast: string) => broadcastCall<Mutated>('resume_broadcast', { broadcast }, 'post');
