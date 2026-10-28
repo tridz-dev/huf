@@ -104,6 +104,34 @@ def _node_labels(flow_id: str | None) -> dict:
 	return {n["id"]: (n.get("_label") or n["id"]) for n in (nodes or []) if isinstance(n, dict) and n.get("id")}
 
 
+def _trigger_event(doc, payload: dict) -> str | None:
+	"""Document event (``after_insert``, ``on_submit``...) that started a Doc Event run, read from the flow's data trigger.
+
+	The event is not part of the document payload, so it comes from the data trigger of the flow's definition that
+	matches the document type (the definition the run was pinned to when there is one).
+	"""
+	if doc.trigger_type != "Doc Event":
+		return None
+	raw = doc.pinned_definition or frappe.db.get_value("Flow Definition", doc.flow_id, "definition_json")
+	try:
+		defn = json.loads(raw) if isinstance(raw, str) else (raw or {})
+	except (json.JSONDecodeError, TypeError):
+		return None
+	nodes = defn.get("nodes") if isinstance(defn, dict) else None
+	if isinstance(nodes, dict):
+		nodes = [{"id": k, **(v or {})} for k, v in nodes.items()]
+	triggers = [
+		n.get("config") or {}
+		for n in (nodes or [])
+		if isinstance(n, dict) and n.get("type") == "trigger.doc-event"
+	]
+	doctype = payload.get("doctype") if isinstance(payload, dict) else None
+	for cfg in triggers:
+		if cfg.get("doctype") == doctype and cfg.get("event"):
+			return cfg["event"]
+	return next((c["event"] for c in triggers if c.get("event")), None)
+
+
 def _flow_names(flow_ids) -> dict:
 	flow_ids = list({f for f in flow_ids if f})
 	if not flow_ids:
@@ -195,6 +223,44 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 		doc.insert()
 
 	return {"flow_id": doc.flow_id, "version": doc.version}
+
+
+@frappe.whitelist()
+def get_trigger_doctype_info(doctype: str) -> dict:
+	"""What a Data trigger needs to know about a document type: whether it can be submitted (and so cancelled)."""
+	if not doctype or not frappe.db.exists("DocType", doctype):
+		frappe.throw(_("Document type {0} was not found").format(doctype), frappe.DoesNotExistError)
+	if not frappe.has_permission(doctype, "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	return {"doctype": doctype, "is_submittable": bool(frappe.get_meta(doctype).is_submittable)}
+
+
+def _set_flow_status(flow_id: str, status: str) -> dict:
+	"""Switch a Flow Definition between Draft and Active; the write permission is checked on the document."""
+	if not frappe.db.exists("Flow Definition", flow_id):
+		frappe.throw(_("Flow {0} was not found").format(flow_id), frappe.DoesNotExistError)
+	doc = frappe.get_doc("Flow Definition", flow_id)
+	if not frappe.has_permission("Flow Definition", "write", doc=doc):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if doc.status != status:
+		doc.status = status
+		doc.save()
+	return {"flow_id": doc.flow_id, "status": doc.status}
+
+
+@frappe.whitelist()
+def publish_flow(flow_id: str) -> dict:
+	"""Publish a flow (status Active): its triggers start firing. Refused with a readable message if the flow is not runnable."""
+	return _set_flow_status(flow_id, "Active")
+
+
+@frappe.whitelist()
+def unpublish_flow(flow_id: str) -> dict:
+	"""Take a published flow back to Draft: webhook calls are refused and schedule / document-event triggers stop firing.
+
+	Runs already in progress finish; nothing is deleted. Publish again to restore the triggers.
+	"""
+	return _set_flow_status(flow_id, "Draft")
 
 
 # ---------------------------------------------------------------------------
@@ -290,6 +356,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 		"context_json": ctx,
 		"waiting": waiting,
 		"node_labels": _node_labels(doc.flow_id),
+		"trigger_event": _trigger_event(doc, ctx),
 		"last_error": doc.last_error,
 		"last_agent_run": doc.last_agent_run,
 		"started_at": _utc_iso(doc.started_at),

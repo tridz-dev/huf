@@ -1,10 +1,20 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
-import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle, Settings, Pencil } from 'lucide-react';
+import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle, Settings, Pencil, CircleOff } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
 import { useFlowContext } from '../contexts/FlowContext';
-import { getFlowIntegrationStatus, runFlow, updateFlowDefinitionFields } from '../services/flowApi';
+import { getFlowIntegrationStatus, runFlow } from '../services/flowApi';
 import { unconnectedSteps } from '@/lib/flowIntegrations';
 import { toast } from 'sonner';
 import { FlowRunHistory } from './FlowRunHistory';
@@ -97,10 +107,13 @@ export function FlowToolbarTitle() {
 }
 
 export function FlowsHeaderActions() {
-  const { activeFlow, saveState, hasUnsavedChanges, saveFlow, setSelectedNode } = useFlowContext();
+  const { activeFlow, saveState, hasUnsavedChanges, saveFlow, setSelectedNode, setFlowPublished } = useFlowContext();
   const [showRunDialog, setShowRunDialog] = useState(false);
   const { canManage, readOnlyReason } = useFlowPermissions();
   const [isPublishing, setIsPublishing] = useState(false);
+  const [showUnpublish, setShowUnpublish] = useState(false);
+  const [isUnpublishing, setIsUnpublishing] = useState(false);
+  const isPublished = activeFlow?.status === 'active';
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedRunId, setSelectedRunId] = useRunParam();
@@ -185,7 +198,7 @@ export function FlowsHeaderActions() {
 
     setIsPublishing(true);
     try {
-      await updateFlowDefinitionFields(activeFlow.id, { status: 'Active' });
+      await setFlowPublished(activeFlow.id, true);
       toast.success('Flow published');
       // Non-blocking: publishing works, but these steps will fail until their integration is connected.
       const missing = unconnectedSteps(activeFlow.nodes, await getFlowIntegrationStatus());
@@ -200,6 +213,20 @@ export function FlowsHeaderActions() {
       toast.error('Could not publish the flow', { description: humanizeFlowError(err) });
     } finally {
       setIsPublishing(false);
+    }
+  };
+
+  const handleUnpublish = async () => {
+    if (!activeFlow) return;
+    setIsUnpublishing(true);
+    try {
+      await setFlowPublished(activeFlow.id, false);
+      toast.success('Flow unpublished', { description: 'It is a draft again. Its triggers no longer start it.' });
+      setShowUnpublish(false);
+    } catch (err) {
+      toast.error('Could not unpublish the flow', { description: humanizeFlowError(err) });
+    } finally {
+      setIsUnpublishing(false);
     }
   };
 
@@ -289,24 +316,72 @@ export function FlowsHeaderActions() {
         </Button>
       </DisabledReason>
 
-      {/* Publish Button */}
-      <DisabledReason reason={canManage ? null : readOnlyReason}>
-        <Button
-          variant="display"
-          size="sm"
-          className="gap-2"
-          data-testid="flow-publish"
-          onClick={handlePublish}
-          disabled={!activeFlow || isPublishing || !canManage}
+      {/* Publish / Unpublish */}
+      {isPublished && (
+        <span
+          className="inline-flex items-center gap-1 rounded-full border border-good/40 px-2 py-0.5 text-xs font-medium text-good"
+          data-testid="flow-published-badge"
         >
-          {isPublishing ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Upload className="w-4 h-4" />
-          )}
-          <span>Publish</span>
-        </Button>
+          <CheckCircle2 className="w-3 h-3" />
+          Published
+        </span>
+      )}
+      <DisabledReason reason={canManage ? null : readOnlyReason}>
+        {isPublished ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            data-testid="flow-unpublish"
+            onClick={() => setShowUnpublish(true)}
+            disabled={!activeFlow || isUnpublishing || !canManage}
+          >
+            <CircleOff className="w-4 h-4" />
+            <span>Unpublish</span>
+          </Button>
+        ) : (
+          <Button
+            variant="display"
+            size="sm"
+            className="gap-2"
+            data-testid="flow-publish"
+            onClick={handlePublish}
+            disabled={!activeFlow || isPublishing || !canManage}
+          >
+            {isPublishing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4" />
+            )}
+            <span>Publish</span>
+          </Button>
+        )}
       </DisabledReason>
+
+      <AlertDialog open={showUnpublish} onOpenChange={setShowUnpublish}>
+        <AlertDialogContent data-testid="flow-unpublish-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unpublish "{activeFlow?.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The flow goes back to a draft. Its webhook is refused and its schedule and document triggers stop starting
+              it. Runs already in progress finish. Publish it again whenever you want to turn it back on.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="flow-unpublish-confirm"
+              disabled={isUnpublishing}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleUnpublish();
+              }}
+            >
+              {isUnpublishing ? 'Unpublishing...' : 'Unpublish'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {activeFlow && (
         <FlowRunHistory

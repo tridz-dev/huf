@@ -11,6 +11,26 @@
   <body>
     <div id="root"></div>
     <script>
+      // If the app cannot start (a script or chunk fails to load after a redeploy, or the server answers with an
+      // error), show a readable screen instead of a blank page. React replaces this as soon as it mounts.
+      (function () {
+        function showFallback() {
+          var root = document.getElementById('root');
+          if (!root || root.firstChild) return;
+          root.innerHTML =
+            '<div data-testid="boot-fallback" role="alert" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-family:system-ui,sans-serif;text-align:center;padding:24px;color:#1b1b1f">' +
+            '<p style="font-size:15px;font-weight:600;margin:0">Something went wrong</p>' +
+            '<p style="font-size:13px;margin:0;max-width:360px;color:#5b5b66">Huf could not finish loading. This usually clears up after reloading the page.</p>' +
+            '<button type="button" onclick="window.location.reload()" style="font-size:13px;padding:6px 14px;border-radius:8px;border:1px solid #c9c9d1;background:#fff;cursor:pointer">Reload</button>' +
+            '</div>';
+        }
+        window.addEventListener('error', function () { setTimeout(showFallback, 0); }, true);
+        window.addEventListener('unhandledrejection', function () { setTimeout(showFallback, 0); });
+        window.addEventListener('vite:preloadError', function () { setTimeout(showFallback, 0); });
+        setTimeout(showFallback, 20000);
+      })();
+    </script>
+    <script>
       window.csrf_token = "{{ csrf_token }}";
       if (!window.frappe) window.frappe = {};
       window.app_name = "{{ app_name }}";

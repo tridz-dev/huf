@@ -143,6 +143,8 @@ export interface FlowRunDetail {
     waiting: Record<string, unknown>;
     /** Step titles by node id, from the flow's saved definition. */
     node_labels: Record<string, string>;
+    /** Document event that started a Data trigger run (e.g. on_submit); null for other triggers. */
+    trigger_event?: string | null;
     last_error: string | null;
     last_agent_run: string | null;
     /** UTC ISO strings. */
@@ -297,6 +299,36 @@ export async function getApproverRoles(): Promise<Array<{ name: string; group: '
 }
 
 // ─── Flow Run APIs ───────────────────────────────────────────────────
+
+/** Whether a document type can be submitted (and cancelled): only then do those Data trigger events exist. */
+export async function getTriggerDoctypeInfo(doctype: string): Promise<{ doctype: string; is_submittable: boolean }> {
+    try {
+        const result = await call.post('huf.ai.flow.api.get_trigger_doctype_info', { doctype });
+        return result.message as { doctype: string; is_submittable: boolean };
+    } catch (error) {
+        handleFrappeError(error, `Error loading document type ${doctype}`);
+    }
+}
+
+/** Publish a flow (status Active): its triggers start firing. */
+export async function publishFlow(flowId: string): Promise<{ flow_id: string; status: string }> {
+    try {
+        const result = await call.post('huf.ai.flow.api.publish_flow', { flow_id: flowId });
+        return result.message as { flow_id: string; status: string };
+    } catch (error) {
+        handleFrappeError(error, `Error publishing flow ${flowId}`);
+    }
+}
+
+/** Take a published flow back to Draft: webhook calls are refused and schedule / document triggers stop firing. */
+export async function unpublishFlow(flowId: string): Promise<{ flow_id: string; status: string }> {
+    try {
+        const result = await call.post('huf.ai.flow.api.unpublish_flow', { flow_id: flowId });
+        return result.message as { flow_id: string; status: string };
+    } catch (error) {
+        handleFrappeError(error, `Error unpublishing flow ${flowId}`);
+    }
+}
 
 /** Run a flow (start new execution) */
 export async function runFlow(

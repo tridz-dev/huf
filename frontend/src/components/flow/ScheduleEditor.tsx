@@ -165,7 +165,7 @@ export function ScheduleEditor({ cron, onChange, disabled, error }: Props) {
       )}
 
       <div>
-        <Label htmlFor="cron" size="sm">Schedule (cron: minute hour day month weekday)</Label>
+        <Label htmlFor="cron" size="sm">Schedule expression (cron)</Label>
         <Input
           id="cron"
           data-testid="flow-field-trigger.schedule-cron"
@@ -181,6 +181,7 @@ export function ScheduleEditor({ cron, onChange, disabled, error }: Props) {
         />
       </div>
 
+      <p className="text-xs text-muted-foreground">Five parts: minute, hour, day of month, month, day of week.</p>
       <p className="text-xs text-muted-foreground" data-testid="flow-schedule-preview">
         {describeCron(cron)}
       </p>

@@ -7,9 +7,11 @@ import { Button } from '../ui/button';
 import { useFlowContext } from '../../contexts/FlowContext';
 import { NODE_CARD_BASE, NODE_ICON_WELL } from './nodeStyles';
 import { cn } from '@/lib/utils';
+import { unreachableNodeIds } from '../../lib/flowEdit';
 
 export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) => {
-  const { deleteNode } = useFlowContext();
+  const { deleteNode, activeFlow } = useFlowContext();
+  const orphaned = activeFlow ? unreachableNodeIds(activeFlow.nodes, activeFlow.edges).has(id) : false;
   return (
     <div className="relative" data-testid={`flow-node-${id}`} data-node-type="end">
       <Handle
@@ -46,7 +48,10 @@ export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) =>
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-foreground truncate" data-testid={`flow-node-title-${id}`}>{data.label}</div>
+            <div className="text-sm font-medium min-w-0 text-foreground line-clamp-2 break-words leading-snug" title={data.label} data-testid={`flow-node-title-${id}`}>{data.label}</div>
+            {orphaned && (
+              <div className="text-xs text-signal-ink" data-testid={`flow-node-orphan-${id}`}>Nothing leads to this step</div>
+            )}
             {data.description && (
               <div className="text-xs text-muted-foreground">{data.description}</div>
             )}

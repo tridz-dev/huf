@@ -22,6 +22,7 @@ import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
 import { calculateDuration, formatTimeAgo } from '@/utils/time';
 import { humanizeFlowError } from '@/lib/flowValidation';
 import { describeDecision } from '@/lib/flowRunFormat';
+import { summarizeDocPayload } from '@/lib/flowRunDoc';
 
 interface FlowRunViewerProps {
     runId: string | null;
@@ -315,12 +316,52 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                             </ol>
                                         )}
                                     </div>
-                                    <div>
-                                        <h3 className="text-sm font-semibold mb-3">Trigger input</h3>
-                                        <div data-testid="flow-run-input" className="bg-muted p-4 rounded-md border text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-                                            {JSON.stringify(input, null, 2)}
-                                        </div>
-                                    </div>
+                                    {(() => {
+                                        const doc = summarizeDocPayload(input, run.trigger_event);
+                                        const raw = (
+                                            <div data-testid="flow-run-input" className="bg-muted p-4 rounded-md border text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                                                {JSON.stringify(input, null, 2)}
+                                            </div>
+                                        );
+                                        if (!doc) {
+                                            return (
+                                                <div>
+                                                    <h3 className="text-sm font-semibold mb-3">Trigger input</h3>
+                                                    {raw}
+                                                </div>
+                                            );
+                                        }
+                                        return (
+                                            <div data-testid="flow-run-document">
+                                                <h3 className="text-sm font-semibold mb-3">Document</h3>
+                                                <div className="rounded-md border p-4 space-y-3">
+                                                    <div className="text-sm">
+                                                        <span className="font-medium" data-testid="flow-run-document-doctype">{doc.doctype}</span>{' '}
+                                                        <span className="font-mono text-xs" data-testid="flow-run-document-name">{doc.name}</span>
+                                                        {doc.event && (
+                                                            <span className="ml-2 rounded-full border px-2 py-0.5 text-xs text-muted-foreground" data-testid="flow-run-document-event">
+                                                                {doc.event}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {doc.fields.length > 0 && (
+                                                        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm" data-testid="flow-run-document-fields">
+                                                            {doc.fields.map((f) => (
+                                                                <div key={f.key} className="contents">
+                                                                    <dt className="text-xs text-muted-foreground pt-0.5">{f.label}</dt>
+                                                                    <dd className="break-words">{f.value}</dd>
+                                                                </div>
+                                                            ))}
+                                                        </dl>
+                                                    )}
+                                                </div>
+                                                <details className="mt-3 text-xs" data-testid="flow-run-full-payload">
+                                                    <summary className="cursor-pointer text-muted-foreground">Full payload</summary>
+                                                    <div className="mt-2">{raw}</div>
+                                                </details>
+                                            </div>
+                                        );
+                                    })()}
                                 </>
                             );
                         })()}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Copy, RefreshCw } from 'lucide-react';
 import { Input } from '../ui/input';
@@ -15,6 +15,7 @@ import { getAgents, getDocTypes } from '../../services/agentApi';
 import { getApproverRoles } from '../../services/flowApi';
 import { getFlowTools, type FlowTool } from '../../services/toolApi';
 import { getModels, getProviders } from '../../services/providerApi';
+import { isChatModel } from '@/lib/chatModel';
 import { NotConnected } from './NotConnected';
 import { ACTION_CARD_CONTRACT } from '../../data/actions';
 import { registerToolSchemas } from '@/lib/flowToolSchemas';
@@ -43,18 +44,53 @@ interface FormShell {
   Err: (props: { field: string }) => ReactNode;
 }
 
-/** Shared hook: current node, its config, a merge-patch writer and the inline-error helper. */
+/** How long typing may pause before an edit is written to the flow. Keeps a fast typist from re-rendering the whole canvas on every key. */
+const COMMIT_DELAY_MS = 200;
+
+/**
+ * Shared hook: current node, its config, a merge-patch writer and the inline-error helper.
+ * Edits show up in the form at once (local draft) and reach the flow after a short pause, on blur and on unmount.
+ */
 function useNodeForm(nodeId: string, slot: 'triggerConfig' | 'actionConfig') {
-  const { activeFlow, updateNode } = useFlowContext();
+  const { activeFlow, updateNodeData, getNode } = useFlowContext();
   const node = activeFlow?.nodes.find((n) => n.id === nodeId);
   const edges = activeFlow?.edges ?? [];
-  const cfg = asObj(node?.data[slot]);
+  const draftRef = useRef<{ nodeId: string; cfg: Cfg } | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [, rerender] = useState(0);
+
+  const commit = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    const draft = draftRef.current;
+    if (!draft) return;
+    draftRef.current = null;
+    updateNodeData(draft.nodeId, (data) => ({ ...data, [slot]: draft.cfg }) as FlowNodeData);
+  }, [updateNodeData, slot]);
+
+  // Write any pending edit when focus leaves a field (so Save/Run right after typing see it) and when this form goes away.
+  useEffect(() => {
+    document.addEventListener('focusout', commit);
+    return () => {
+      document.removeEventListener('focusout', commit);
+      commit();
+    };
+  }, [commit, nodeId]);
+
+  const draft = draftRef.current && draftRef.current.nodeId === nodeId ? draftRef.current.cfg : null;
+  const cfg = draft ?? asObj(node?.data[slot]);
 
   const patch = (p: Cfg) => {
-    if (!node) return;
-    const merged: Cfg = { ...asObj(node.data[slot]), ...p };
+    const base = draftRef.current && draftRef.current.nodeId === nodeId ? draftRef.current.cfg : asObj(getNode(nodeId)?.data[slot]);
+    if (!getNode(nodeId)) return;
+    const merged: Cfg = { ...base, ...p };
     for (const k of Object.keys(p)) if (p[k] === undefined) delete merged[k];
-    updateNode(nodeId, { data: { ...node.data, [slot]: merged } as FlowNodeData });
+    draftRef.current = { nodeId, cfg: merged };
+    rerender((n) => n + 1);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(commit, COMMIT_DELAY_MS);
   };
 
   const kind = node ? nodeKind(node) : 'unknown';
@@ -314,7 +350,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
       .then(([models, providers]) => {
         const names = new Map((providers as Array<{ name: string; provider_name?: string }>).map((p) => [p.name, p.provider_name || p.name]));
         const groups = new Map<string, Opt[]>();
-        for (const m of models) {
+        for (const m of models.filter(isChatModel)) {
           const g = names.get(m.provider) ?? m.provider;
           groups.set(g, [...(groups.get(g) ?? []), { value: m.name, label: m.model_name || m.name }]);
         }

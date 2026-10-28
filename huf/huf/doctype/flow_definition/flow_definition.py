@@ -166,12 +166,31 @@ class FlowDefinition(Document):
 					frappe.PermissionError,
 				)
 
+	@staticmethod
+	def _doc_event_problems(defn: dict) -> list[str]:
+		"""Submit / cancel events only exist for submittable document types; anything else would never fire."""
+		problems = []
+		for node in (defn.get("nodes") or []) if isinstance(defn, dict) else []:
+			if not isinstance(node, dict) or node.get("type") != "trigger.doc-event":
+				continue
+			config = node.get("config") or {}
+			doctype, event = config.get("doctype"), config.get("event")
+			if event not in ("on_submit", "on_cancel") or not doctype or not frappe.db.exists("DocType", doctype):
+				continue
+			if not frappe.get_meta(doctype).is_submittable:
+				problems.append(
+					_("trigger {0}: {1} cannot be submitted or cancelled, so \"{2}\" never fires").format(
+						repr(node.get("id")), doctype, event
+					)
+				)
+		return problems
+
 	def _validate_activation(self, defn: dict):
 		"""Active flows must be runnable: Draft/Archived saves stay permissive. Reports
 		every problem in a single message rather than failing on the first."""
 		if self.status != "Active":
 			return
-		problems = collect_activation_problems(defn)
+		problems = collect_activation_problems(defn) + self._doc_event_problems(defn)
 		if problems:
 			frappe.throw(
 				_("Flow cannot be Active: {0}").format("; ".join(problems)),
