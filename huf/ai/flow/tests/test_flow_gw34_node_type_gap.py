@@ -223,43 +223,10 @@ class TestExecForeach(unittest.TestCase):
 		self.assertIn("max_iterations", result["error"])
 
 
-class TestExecParallel(unittest.TestCase):
-	def test_runs_every_branch_to_completion(self):
-		branch_a = {
-			"id": "a1",
-			"type": "transform",
-			"config": {"op": "coalesce", "input": {"values": [{"$from": "input.x"}]}},
-		}
-		branch_b = {
-			"id": "b1",
-			"type": "transform",
-			"config": {"op": "coalesce", "input": {"values": [{"$from": "input.y"}]}},
-		}
-		parallel_node = {
-			"id": "fan_out",
-			"type": "parallel",
-			"config": {"branches": [["a1"], ["b1"]], "join": "all"},
-		}
-		settings = _settings_for([parallel_node, branch_a, branch_b], data={"x": 1, "y": 2})
-
-		result = flow_engine._exec_parallel(_FakeFlowRun(), parallel_node, parallel_node["config"], settings)
-
-		self.assertEqual(result["status"], "success")
-		self.assertEqual(result["result"]["branches_completed"], 2)
-
-	def test_one_failing_branch_fails_the_node(self):
-		branch_a = {"id": "a1", "type": "transform", "config": {"op": "coalesce", "input": {"values": []}}}
-		branch_b = {"id": "b1", "type": "transform", "config": {"op": "not_a_real_op", "input": {}}}
-		parallel_node = {
-			"id": "fan_out",
-			"type": "parallel",
-			"config": {"branches": [["a1"], ["b1"]], "join": "all"},
-		}
-		settings = _settings_for([parallel_node, branch_a, branch_b], data={})
-
-		result = flow_engine._exec_parallel(_FakeFlowRun(), parallel_node, parallel_node["config"], settings)
-
-		self.assertEqual(result["status"], "failed")
+class TestParallelRemoved(unittest.TestCase):
+	def test_parallel_is_not_a_flow_executor(self):
+		self.assertNotIn("parallel", flow_engine._NODE_EXECUTORS)
+		self.assertFalse(hasattr(flow_engine, "_exec_parallel"))
 
 
 if __name__ == "__main__":

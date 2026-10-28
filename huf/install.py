@@ -157,12 +157,45 @@ def after_install():
 		)
 
 
+#: Frappe's scheduler wakes every ``scheduler_tick_interval`` seconds (default 240). Flow approval
+#: timeouts and "every minute" schedules are only as precise as that tick, so Huf wants 60.
+FLOW_SCHEDULER_TICK_SECONDS = 60
+
+
+def ensure_scheduler_tick():
+	"""Set ``scheduler_tick_interval`` to 60 s when the bench has not chosen a value.
+
+	Frappe reads the tick in the bench-wide scheduler process, which has no site context, so only
+	``common_site_config.json`` is honoured: a value in a site's ``site_config.json`` is ignored.
+	An explicit value already in the common config is respected. The running ``bench schedule``
+	process reads the value at start, so it must be restarted once for a change to apply.
+	"""
+	try:
+		import json
+		import os
+
+		from frappe.installer import update_site_config
+
+		path = os.path.join(frappe.local.sites_path or "sites", "common_site_config.json")
+		with open(path) as fh:
+			if json.load(fh).get("scheduler_tick_interval"):
+				return
+		update_site_config("scheduler_tick_interval", FLOW_SCHEDULER_TICK_SECONDS, site_config_path=path)
+		frappe.logger("huf").info(
+			"Set scheduler_tick_interval=%s in common_site_config.json (restart the scheduler to apply)",
+			FLOW_SCHEDULER_TICK_SECONDS,
+		)
+	except Exception:
+		frappe.log_error(title="huf after_migrate: scheduler_tick_interval not set", message=frappe.get_traceback())
+
+
 def after_migrate():
 	"""
 	Called after app migration.
 	Syncs all discovered tools from all installed apps.
 	"""
 	create_huf_roles()
+	ensure_scheduler_tick()
 	try:
 		from huf.ai.document_search import ensure_fulltext_indexes
 
