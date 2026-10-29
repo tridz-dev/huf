@@ -47,7 +47,7 @@ export function StepHeader({ node, onClose, onDelete }: { node: FlowNode; onClos
           aria-label="Step name"
           title={node.data.label}
           value={node.data.label}
-          readOnly={!canManage}
+          disabled={!canManage}
           placeholder="Name this step"
           onChange={(e) => updateNodeData(node.id, (data) => ({ ...data, label: e.target.value }))}
           size="sm"
