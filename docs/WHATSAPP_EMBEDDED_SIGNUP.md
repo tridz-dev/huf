@@ -30,7 +30,16 @@ Self-hosted sites usually cannot be a Tech Provider themselves, so they use `bro
 
 ### broker_server tenants
 
-Create a tenant key with the whitelisted `create_tenant_key(tenant_id, site_url)` (System Manager); the plaintext key is returned once and only its SHA-256 hash is stored in the `Embedded Signup Tenant` child row. Disable a tenant by unchecking `enabled`. Tenants call `POST /api/method/huf.ai.channels.embedded_signup.broker_exchange` with `X-Huf-Tenant: <id>`, `Authorization: Bearer <key>` and JSON `{code, waba_id}`. The response is `{access_token, webhook_signing_secret}`. The signing secret is derived per tenant (HMAC of the app secret); the real app secret is never sent. The broker's webhook forwarder must re-sign forwarded events with that secret, because tenants cannot see Meta's signature key.
+Create a tenant key with the whitelisted `create_tenant_key(tenant_id, site_url)` (System Manager); the plaintext key is returned once and only its SHA-256 hash is stored in the `Embedded Signup Tenant` child row. Disable a tenant by unchecking `enabled`. Tenants call `POST /api/method/huf.ai.channels.embedded_signup.broker_exchange` with `X-Huf-Tenant: <id>`, `Authorization: Bearer <key>` and JSON `{code, waba_id, phone_number_id, callback_url}`. The tenant sends the URL of its own WhatsApp webhook (`.../api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway_name=<gateway>`); it must be https and on the same host as the tenant's `site_url`. The broker records `waba_id -> tenant` (and the callback) in `Embedded Signup WABA`; a WABA already owned by another tenant is refused. The response is `{access_token, webhook_signing_secret}`. The signing secret is derived per tenant (HMAC of the app secret); the real app secret is never sent. Tenants store that derived secret as their `app_secret`, so their normal webhook handler verifies forwarded events unchanged.
+
+### Webhook forwarding (broker_server)
+
+Meta sends every tenant WABA's webhooks to the broker app's single callback. In the Facebook signup settings (mode `broker_server`) copy the **Broker webhook callback URL** (`/api/method/huf.ai.channels.embedded_signup.broker_webhook`) and the **verify token** into the Meta app's webhook configuration.
+
+- `GET`: answers Meta's `hub.challenge` when `hub.verify_token` matches the stored `broker_verify_token`.
+- `POST`: `X-Hub-Signature-256` is verified with the broker's real app secret (constant-time); anything else is `401`. The payload is split per `entry.id` (WABA id) by tenant, re-signed with that tenant's derived secret over the exact forwarded bytes, and queued (`short` queue) as a POST to the tenant's stored callback URL. Meta gets `200` immediately.
+- The forward job tries 3 times with backoff (1s, 4s) on network errors, 5xx and 429; a 4xx from the tenant is not retried. Outcomes are audited in `Embedded Signup Audit` (`Forwarded` / `Failed` with entry counts; `Dropped` for WABAs with no mapping, disabled tenants or an invalid callback). Message bodies are never logged or audited.
+- One callback is stored per WABA; connecting a second number on the same WABA from another gateway replaces it.
 
 ## Security notes
 
@@ -40,4 +49,4 @@ Create a tenant key with the whitelisted `create_tenant_key(tenant_id, site_url)
 - The browser only trusts `message` events from `https://*.facebook.com`.
 - Broker URL must be https.
 - The generated PIN is shown once in the wizard; store it, it is needed to re-register the number.
-- Not covered here: Meta's review, the hosted Huf Cloud deployment, and forwarding webhooks to tenant sites.
+- Not covered here: Meta's review, the hosted Huf Cloud deployment.
