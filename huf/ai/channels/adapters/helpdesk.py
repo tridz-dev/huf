@@ -93,6 +93,13 @@ def create_ticket(conversation, subject_hint: str = "", summary: str = "", prior
 
 
 def _add_communication(ticket_name: str, content: str, sender: str, subject: str = "", sent_or_received: str = "Received"):
+	from huf.ai.channels.run_as import channel_inbound
+
+	with channel_inbound():
+		return _insert_communication(ticket_name, content, sender, subject, sent_or_received)
+
+
+def _insert_communication(ticket_name: str, content: str, sender: str, subject: str, sent_or_received: str):
 	return frappe.get_doc(
 		{
 			"doctype": "Communication",

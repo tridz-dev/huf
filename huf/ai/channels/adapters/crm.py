@@ -102,6 +102,13 @@ def create_lead(phone: str, name: str | None = None, email: str | None = None, r
 
 def add_note(lead: str, title: str, content: str) -> str | None:
 	"""FCRM Note on the lead, else a Comment. Returns the note name (None for a Comment)."""
+	from huf.ai.channels.run_as import channel_inbound
+
+	with channel_inbound():
+		return _add_note(lead, title, content)
+
+
+def _add_note(lead: str, title: str, content: str) -> str | None:
 	content = (content or "")[:5000]
 	try:
 		if frappe.db.exists("DocType", NOTE) and _has(NOTE, "reference_doctype"):

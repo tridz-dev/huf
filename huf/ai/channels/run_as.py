@@ -6,6 +6,7 @@ during the run carry ``huf_channel_conversation`` (a Custom Field) naming the Ch
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from contextvars import ContextVar
 
 import frappe
@@ -39,6 +40,40 @@ def validate_run_as(gateway) -> None:
 		frappe.throw(_("Run as user {0} must be a System User.").format(user))
 	if profile and (row.role_profile_name or "") != profile:
 		frappe.throw(_("Run as role profile must match the role profile of {0}.").format(user))
+	_reject_privileged(user)
+
+
+def _reject_privileged(user: str) -> None:
+	"""Reject admin-grade run-as users and privilege escalation by the saving user."""
+	from huf.permissions import has_capability
+
+	roles = set(frappe.get_roles(user))
+	if "System Manager" in roles:
+		frappe.throw(_("Run as user {0} has the System Manager role. Use a least-privileged service user.").format(user))
+	if has_capability(user, "system.integrations.manage"):
+		frappe.throw(
+			_("Run as user {0} can manage integrations (system.integrations.manage). Use a least-privileged service user.").format(user)
+		)
+	saver = frappe.session.user
+	if saver != "Administrator":
+		extra = sorted(roles - set(frappe.get_roles(saver)))
+		if extra:
+			frappe.throw(
+				_("Run as user {0} holds roles you do not have ({1}). You can only choose a user whose roles are a subset of yours.").format(
+					user, ", ".join(extra)
+				)
+			)
+
+
+@contextmanager
+def channel_inbound():
+	"""Mark records written while relaying a customer's inbound message into a linked doc."""
+	prev = getattr(frappe.flags, "huf_channel_inbound", False)
+	frappe.flags.huf_channel_inbound = True
+	try:
+		yield
+	finally:
+		frappe.flags.huf_channel_inbound = prev
 
 
 def current_conversation() -> str | None:

@@ -252,7 +252,7 @@ override_doctype_class = {
 doc_events = {
     "*": {
         "validate": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "before_insert": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations", "huf.ai.channels.run_as.stamp_audit"],
+        "before_insert": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
         "after_insert": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
         "before_save": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
         "after_save": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
@@ -266,6 +266,11 @@ doc_events = {
         "on_trash": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
         "after_delete": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
     },
+    "HD Ticket": {"before_insert": ["huf.ai.channels.run_as.stamp_audit"]},
+    "CRM Lead": {"before_insert": ["huf.ai.channels.run_as.stamp_audit"]},
+    "Sales Order": {"before_insert": ["huf.ai.channels.run_as.stamp_audit"]},
+    "Contact": {"before_insert": ["huf.ai.channels.run_as.stamp_audit"]},
+    "ToDo": {"before_insert": ["huf.ai.channels.run_as.stamp_audit"]},
     "Communication": {
         "after_insert": [
             "huf.ai.gateway_adapters.email.on_communication_inserted",

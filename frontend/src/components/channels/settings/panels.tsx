@@ -114,7 +114,7 @@ export function RunAsPanel({ gw, gateway, onSaved }: PanelProps) {
     <Card>
       <CardHeader><CardTitle className="text-sm">Run as</CardTitle></CardHeader>
       <CardContent className="grid max-w-md gap-3">
-        <p className="text-xs text-steel">Agents answering on this number act as this user. Never Administrator.</p>
+        <p className="text-xs text-steel">Agents answering on this number act as this user. Never Administrator. Admins (System Manager or integrations-manage users) are rejected.</p>
         <Field label="Run as user" error={error} size="sm">
           {(fp) => <Input {...fp} value={user} onChange={(e) => setUser(e.target.value)} placeholder="user@example.com" />}
         </Field>

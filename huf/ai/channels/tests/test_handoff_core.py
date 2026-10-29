@@ -187,9 +187,7 @@ class TestHandoffCore(IntegrationTestCase):
 	# --- Communication hook ---
 	def test_communication_hook_calls_reply(self):
 		self.conv.db_set({"status": "handed_off", "handoff_doctype": "ToDo", "handoff_name": "TODO-X"})
-		comm = frappe._dict(
-			sent_or_received="Sent", reference_doctype="ToDo", reference_name="TODO-X", content="<p>On it</p>"
-		)
+		comm = self._comm()
 		with patch.object(reply_api, "deliver_reply", return_value={"status": "sent"}) as send:
 			handoff_hooks.communication_after_insert(comm)
 		self.assertEqual(send.call_args.kwargs["text"], "On it")
@@ -202,3 +200,47 @@ class TestHandoffCore(IntegrationTestCase):
 		with patch.object(reply_api, "deliver_reply") as send:
 			handoff_hooks.communication_after_insert(received)
 		send.assert_not_called()
+
+	def _comm(self, **kw):
+		return frappe._dict(
+			{
+				"communication_type": "Communication",
+				"sent_or_received": "Sent",
+				"sender": REPLY_USER,
+				"reference_doctype": "ToDo",
+				"reference_name": "TODO-X",
+				"content": "<p>On it</p>",
+				**kw,
+			}
+		)
+
+	def _relayed(self, comm):
+		self._users()
+		self.conv.db_set({"status": "handed_off", "handoff_doctype": "ToDo", "handoff_name": "TODO-X"})
+		with patch.object(reply_api, "deliver_reply", return_value={"status": "sent"}) as send:
+			handoff_hooks.communication_after_insert(comm)
+		return send.called
+
+	def test_relay_requires_human_staff_sender(self):
+		self.assertTrue(self._relayed(self._comm()))
+		for sender in ("Administrator", "Guest", "noreply@example.com", "nobody@nowhere.test", ""):
+			self.assertFalse(self._relayed(self._comm(sender=sender)), sender)
+
+	def test_relay_skips_non_communication_and_internal_recipients(self):
+		self.assertFalse(self._relayed(self._comm(communication_type="Automated Message")))
+		self.assertFalse(self._relayed(self._comm(recipients="boss@example.com")))
+		self.assertFalse(self._relayed(self._comm(recipients="", cc="boss@example.com")))
+		self.assertTrue(self._relayed(self._comm(recipients="15550003333@whatsapp.invalid")))
+
+	def test_relay_skips_channel_created_communication(self):
+		frappe.flags.huf_channel_inbound = True
+		self.addCleanup(setattr, frappe.flags, "huf_channel_inbound", False)
+		self.assertFalse(self._relayed(self._comm()))
+
+	def test_not_handed_off_conversation_comments_instead_of_dropping(self):
+		self._users()
+		self.conv.db_set({"status": "closed", "handoff_doctype": "ToDo", "handoff_name": "TODO-X"})
+		with patch.object(reply_api, "deliver_reply") as send, patch.object(handoff_hooks, "_comment") as note:
+			handoff_hooks.communication_after_insert(self._comm())
+		send.assert_not_called()
+		self.assertIn("conversation is closed", note.call_args.args[2])

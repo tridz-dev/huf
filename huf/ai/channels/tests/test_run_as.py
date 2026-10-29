@@ -28,7 +28,7 @@ class TestRunAs(IntegrationTestCase):
 					"first_name": "RunAs",
 					"user_type": "System User",
 					"send_welcome_email": 0,
-					"roles": [{"role": "System Manager"}],
+					"roles": [{"role": "Desk User"}],
 				}
 			).insert(ignore_permissions=True)
 		sfx = frappe.generate_hash(length=6)
@@ -135,3 +135,45 @@ class TestRunAs(IntegrationTestCase):
 
 		self._process(event, runner)
 		self.assertEqual(seen["user"], "Administrator")
+
+	def _mk_user(self, email, roles):
+		if not frappe.db.exists("User", email):
+			frappe.get_doc(
+				{
+					"doctype": "User",
+					"email": email,
+					"first_name": "T",
+					"user_type": "System User",
+					"send_welcome_email": 0,
+					"roles": [{"role": r} for r in roles],
+				}
+			).insert(ignore_permissions=True)
+
+	def test_system_manager_run_as_rejected(self):
+		self._mk_user("runas-sm@example.com", ["System Manager"])
+		self.gw.run_as_user = "runas-sm@example.com"
+		with self.assertRaises(frappe.ValidationError):
+			self.gw.save(ignore_permissions=True)
+
+	def test_integrations_manage_capability_rejected(self):
+		with patch("huf.permissions.has_capability", return_value=True):
+			self.gw.run_as_user = RUN_USER
+			with self.assertRaises(frappe.ValidationError):
+				self.gw.save(ignore_permissions=True)
+
+	def test_run_as_roles_must_be_subset_of_saver(self):
+		self._mk_user("runas-saver@example.com", ["Desk User"])
+		self._mk_user("runas-wide@example.com", ["Desk User", "Website Manager"])
+		frappe.set_user("runas-saver@example.com")
+		self.gw.run_as_user = "runas-wide@example.com"
+		with self.assertRaises(frappe.ValidationError):
+			run_as.validate_run_as(self.gw)
+		self.gw.run_as_user = RUN_USER
+		run_as.validate_run_as(self.gw)
+
+	def test_hooks_register_stamp_audit_only_for_audit_doctypes(self):
+		events = frappe.get_hooks("doc_events")
+		star = events.get("*", {}).get("before_insert", [])
+		self.assertNotIn("huf.ai.channels.run_as.stamp_audit", star)
+		for dt in run_as.AUDIT_DOCTYPES:
+			self.assertIn("huf.ai.channels.run_as.stamp_audit", events.get(dt, {}).get("before_insert", []))
