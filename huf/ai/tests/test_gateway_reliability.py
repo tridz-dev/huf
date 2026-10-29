@@ -457,6 +457,7 @@ class TestModule(SupportCase):
 			get_doc = MagicMock(return_value=doc)
 			monkeypatch.setattr(gateway_service.frappe, "get_doc", get_doc)
 			monkeypatch.setattr(gateway_service, "now_datetime", _dt.datetime.now)
+			monkeypatch.setattr(gateway_service.frappe, "log_error", lambda *a, **k: None, raising=False)
 			assert gateway_service.process_gateway_event("GE-9") == {"event_name": "GE-9", "status": status}
 			get_doc.assert_called_once_with("Gateway Event", "GE-9")
 

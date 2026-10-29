@@ -89,7 +89,7 @@ class TestIngestFilterSeam(SupportCase):
 			self.admitted.append(dict(context))
 			return True, ""
 
-		def route(gw_name, context):
+		def route(gw_name, context, **kw):
 			self.routed.append(dict(context))
 			return {"status": "Queued", "target_type": "Agent", "agent": "A1", "binding": None}
 

@@ -83,6 +83,13 @@ def gw(policy="Ask to link account"):
 	return SimpleNamespace(name="GW-1", provider="slack", unmapped_policy=policy, integration_settings="IS")
 
 
+def _get_doc(*a, **k):
+	"""Gateway for doctype lookups; an insertable stand-in for dict-built docs (Slack Action Session)."""
+	if a and isinstance(a[0], dict):
+		return SimpleNamespace(name="AS-1", insert=lambda **kw: None)
+	return gw()
+
+
 def ev(sender="U1", team="T1", **kw):
 	payload = {"team_id": team, "event": {"channel": "C1"}}
 	payload.update(kw.pop("payload", {}))
@@ -357,7 +364,7 @@ class TestModule(SupportCase):
 		created = []
 		monkeypatch.setattr(identity, "_create_link", lambda *a, **k: created.append(a))
 		monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
-		monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+		monkeypatch.setattr(frappe, "get_doc", _get_doc, raising=False)
 		tok = identity.create_self_link_token("GW-1", "T1", "U1")
 		assert identity.preview_self_link(tok)["external_id"] == "U1"
 		sent = []
@@ -373,7 +380,7 @@ class TestModule(SupportCase):
 		fake_confirm(monkeypatch, lambda *a: None)
 		monkeypatch.setattr(identity, "_create_link", lambda *a, **k: SimpleNamespace(name="L5"))
 		monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
-		monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+		monkeypatch.setattr(frappe, "get_doc", _get_doc, raising=False)
 		tok = identity.create_self_link_token("GW-1", "T1", "U1")
 		identity.confirm_self_link(tok)
 		with self.assertRaises(Perm):
@@ -409,7 +416,7 @@ class TestModule(SupportCase):
 		monkeypatch = self.monkeypatch
 		tok = identity.create_self_link_token("GW-1", "T1", "U1")
 		monkeypatch.setattr(identity, "_find_link", lambda g, t, e: link("bob@x.com"))
-		monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+		monkeypatch.setattr(frappe, "get_doc", _get_doc, raising=False)
 		with self.assertRaises(Perm):
 			identity.confirm_self_link(tok)
 
@@ -449,7 +456,7 @@ class TestModule(SupportCase):
 		created = []
 		monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
 		monkeypatch.setattr(identity, "_create_link", lambda *a, **k: created.append(a) or SimpleNamespace(name="L9"))
-		monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+		monkeypatch.setattr(frappe, "get_doc", _get_doc, raising=False)
 		assert identity.link_identity("GW-1", "T1", "U1", "bob@x.com") == {"name": "L9", "user": "bob@x.com"}
 		assert created[0][4] == "Admin"
 
@@ -620,7 +627,7 @@ class TestModule(SupportCase):
 		fake_confirm(monkeypatch, lambda *a: None)
 		monkeypatch.setattr(identity, "_create_link", lambda *a, **k: SimpleNamespace(name="L5"))
 		monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
-		monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+		monkeypatch.setattr(frappe, "get_doc", _get_doc, raising=False)
 		tok = identity.create_self_link_token("GW-1", "T1", "U1")
 		real_delete = identity._cache().delete_value
 		identity._cache().delete_value = lambda k: None  # simulate the lost-delete race
@@ -637,7 +644,7 @@ class TestModule(SupportCase):
 		created = []
 		monkeypatch.setattr(identity, "_create_link", lambda *a, **k: created.append(a) or SimpleNamespace(name="L5"))
 		monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
-		monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+		monkeypatch.setattr(frappe, "get_doc", _get_doc, raising=False)
 		tok = identity.create_self_link_token("GW-1", "T1", "U1")
 		held = identity.key_lock("GW-1", "T1", "U1")
 		assert held
@@ -654,7 +661,7 @@ class TestModule(SupportCase):
 		fake_confirm(monkeypatch, boom)
 		monkeypatch.setattr(identity, "_create_link", lambda *a, **k: SimpleNamespace(name="L5"))
 		monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
-		monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+		monkeypatch.setattr(frappe, "get_doc", _get_doc, raising=False)
 		monkeypatch.setattr(frappe, "log_error", lambda *a, **k: None, raising=False)
 		monkeypatch.setattr(frappe, "get_traceback", lambda: "tb", raising=False)
 		tok = identity.create_self_link_token("GW-1", "T1", "U1")
@@ -671,7 +678,7 @@ class TestModule(SupportCase):
 				monkeypatch.setattr(frappe, "has_permission", lambda *a, **k: True, raising=False)
 				monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
 				monkeypatch.setattr(identity, "_create_link", lambda *a, **k: self.fail("must not link"))
-				monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+				monkeypatch.setattr(frappe, "get_doc", _get_doc, raising=False)
 				with self.assertRaises(Perm):
 					identity.link_identity("GW-1", "T1", "U1", target)
 
@@ -680,7 +687,7 @@ class TestModule(SupportCase):
 		monkeypatch.setattr(frappe, "get_roles", lambda user=None: ["System Manager"] if user else ["Huf Manager"])
 		monkeypatch.setattr(frappe, "has_permission", lambda *a, **k: True, raising=False)
 		monkeypatch.setattr(identity, "_find_link", lambda g, t, e: SimpleNamespace(name="L1", user="bob@x.com"))
-		monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+		monkeypatch.setattr(frappe, "get_doc", _get_doc, raising=False)
 		with self.assertRaises(Perm):
 			identity.link_identity("GW-1", "T1", "U1", "carol@x.com")
 
@@ -690,14 +697,14 @@ class TestModule(SupportCase):
 		monkeypatch.setattr(frappe, "has_permission", lambda *a, **k: True, raising=False)
 		monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
 		monkeypatch.setattr(identity, "_create_link", lambda *a, **k: SimpleNamespace(name="L9"))
-		monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+		monkeypatch.setattr(frappe, "get_doc", _get_doc, raising=False)
 		assert identity.link_identity("GW-1", "T1", "U1", "bob@x.com")["user"] == "bob@x.com"
 
 	def test_system_manager_can_link_administrator(self):
 		monkeypatch = self.monkeypatch
 		monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
 		monkeypatch.setattr(identity, "_create_link", lambda *a, **k: SimpleNamespace(name="L9"))
-		monkeypatch.setattr(frappe, "get_doc", lambda *a, **k: gw(), raising=False)
+		monkeypatch.setattr(frappe, "get_doc", _get_doc, raising=False)
 		assert identity.link_identity("GW-1", "T1", "U1", "Administrator")["user"] == "Administrator"
 
 	def test_usable_rejects_administrator_for_non_admin_sources(self):

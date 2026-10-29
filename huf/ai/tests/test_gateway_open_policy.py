@@ -69,10 +69,12 @@ def _fx_heavy(self):
 
 
 def _doc(provider, policy="Open"):
-	return SimpleNamespace(
+	d = SimpleNamespace(
 		provider=provider, direct_policy=policy, is_enabled=0, execution_user="",
 		default_target_type="", default_agent="", default_flow="", integration_settings="",
 	)
+	d.get = lambda key, default=None: getattr(d, key, default)
+	return d
 
 
 class TestModule(SupportCase):
