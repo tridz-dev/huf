@@ -663,7 +663,6 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          <Route path="/channels/*" element={<Navigate to="/gateways" replace />} />
           <Route
             path="/settings"
             element={
