@@ -5,6 +5,9 @@ import { EXECUTE_CODE_CAPABILITY } from '@/lib/flow-graph/codeFlow';
 
 export const FLOW_READ_ONLY_REASON = 'You have view-only access to flows. Ask an admin for permission to change or run them.';
 
+/** Tooltip on the "View only" pill in the editor header. */
+export const FLOW_VIEW_ONLY_HINT = 'You can look at this flow, its steps and its runs, but not change or run it. Ask a flow editor to give you edit access.';
+
 export interface FlowPermissions {
   /** Create a new flow. */
   canCreate: boolean;

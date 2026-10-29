@@ -2,144 +2,177 @@ import { ActionOption } from "../types/modal.types";
 import type { ActionType } from "../types/flow.types";
 import type { BackendNodeType } from "../services/flowApi";
 
+/**
+ * The step palette. `name` is also the title a new card gets on the canvas and in the sidebar, so it is written as
+ * a plain phrase. `description` is one short line about what the step does. `keywords` only widen search (old and
+ * technical words people may still type); they are never shown.
+ */
 export const actionOptions: ActionOption[] = [
-  // ─── AI & Agents ────────────────────────────────────────────────────
+  // ─── AI ─────────────────────────────────────────────────────────────
   {
     id: 'agent-run',
     name: 'Run agent',
-    description: 'Asks one of your AI agents to do a task and passes its reply on.',
+    description: 'Give an AI agent a task and use its answer.',
     icon: 'SquareAsterisk',
-    category: 'agent'
+    category: 'agent',
+    keywords: ['ai', 'assistant', 'llm', 'prompt'],
   },
-
-  // ─── Tools ──────────────────────────────────────────────────────────
-  {
-    id: 'tool-call',
-    name: 'Call tool',
-    description: 'Runs one tool, built in or from a connected server.',
-    icon: 'Wrench',
-    category: 'tool'
-  },
-
-  // ─── Control Flow ───────────────────────────────────────────────────
   {
     id: 'router',
-    name: 'LLM Router',
-    description: 'Lets an AI model pick which path the flow takes.',
+    name: 'Choose with AI',
+    description: 'Let an AI pick which path to follow.',
     icon: 'GitBranch',
-    category: 'control'
+    category: 'agent',
+    keywords: ['router', 'llm router', 'decide', 'path', 'ai'],
   },
+
+  // ─── Decisions and loops ────────────────────────────────────────────
   {
     id: 'condition',
-    name: 'Condition (If/Else)',
-    description: 'Sends the flow down a True or False path, based on your data.',
-    icon: 'GitBranch',
-    category: 'control'
+    name: 'If / else',
+    description: 'Go one of two ways, based on your data.',
+    icon: 'GitFork',
+    category: 'control',
+    keywords: ['condition', 'if', 'else', 'check', 'true', 'false', 'yes', 'no'],
   },
   {
-    id: "loop",
-    name: "Loop",
-    description: "Repeats some steps once for each item in a list.",
-    icon: "RotateCw",
-    category: "control",
-  },
-  {
-    id: 'human.approval',
-    name: 'Human in Loop',
-    description: 'Pauses until a person approves or rejects.',
-    icon: 'UserCheck',
-    category: 'control'
+    id: 'loop',
+    name: 'Repeat for each item',
+    description: 'Run some steps once for every item in a list.',
+    icon: 'RotateCw',
+    category: 'control',
+    keywords: ['loop', 'foreach', 'each', 'list', 'repeat'],
   },
   {
     id: 'end',
-    name: 'End',
-    description: 'Finishes the flow and returns a result.',
-    icon: 'CheckCircle2',
-    category: 'control'
+    name: 'Finish',
+    description: 'Ends the flow and gives back a result.',
+    icon: 'Flag',
+    category: 'control',
+    keywords: ['end', 'stop', 'result', 'done'],
   },
 
-  // ─── Transform ──────────────────────────────────────────────────────
+  // ─── People ─────────────────────────────────────────────────────────
+  {
+    id: 'human.approval',
+    name: 'Wait for approval',
+    description: 'Pause until a person approves or rejects.',
+    icon: 'UserCheck',
+    category: 'people',
+    keywords: ['human', 'human in loop', 'approve', 'reject', 'review', 'person'],
+  },
+
+  // ─── Work with data ─────────────────────────────────────────────────
   {
     id: 'transform',
-    name: 'Transform data',
-    description: 'Changes text, lists or records without any AI.',
+    name: 'Change data',
+    description: 'Change text, lists or records, without AI.',
     icon: 'Repeat',
-    category: 'transform'
-  },
-  {
-    id: 'state-get',
-    name: 'Get state',
-    description: 'Reads a value this flow saved earlier.',
-    icon: 'Database',
-    category: 'transform'
+    category: 'data',
+    keywords: ['transform', 'text', 'filter', 'sort', 'join', 'concatenate', 'regex', 'lowercase', 'uppercase'],
   },
   {
     id: 'state-set',
-    name: 'Set state',
-    description: 'Saves a value so this flow can use it later.',
+    name: 'Save data for later',
+    description: 'Remember a value for later steps or runs.',
     icon: 'Save',
-    category: 'transform'
+    category: 'data',
+    keywords: ['state', 'set state', 'store', 'remember', 'variable'],
+  },
+  {
+    id: 'state-get',
+    name: 'Look up saved data',
+    description: 'Read a value this flow saved earlier.',
+    icon: 'ArchiveRestore',
+    category: 'data',
+    keywords: ['state', 'get state', 'read', 'recall', 'variable'],
   },
   {
     id: 'state-delete',
-    name: 'Delete state',
-    description: 'Forgets a value this flow saved earlier.',
-    icon: 'Trash2',
-    category: 'transform'
+    name: 'Forget saved data',
+    description: 'Remove a value this flow saved earlier.',
+    icon: 'ArchiveX',
+    category: 'data',
+    keywords: ['state', 'delete state', 'remove', 'clear'],
   },
   {
     id: 'doc-create',
-    name: 'Create document',
-    description: 'Creates a new record, such as a ToDo.',
+    name: 'Create a record',
+    description: 'Add a new record, such as a ToDo.',
     icon: 'FilePlus',
-    category: 'transform'
+    category: 'data',
+    keywords: ['document', 'create document', 'doctype', 'insert', 'todo'],
   },
 
-  // ─── Utilities ──────────────────────────────────────────────────────
-  {
-    id: 'email',
-    name: 'Send email',
-    description: 'Sends an email from your connected Gmail.',
-    icon: 'Mail',
-    category: 'utility'
-  },
-  {
-    id: 'http-request',
-    name: 'HTTP Request',
-    description: 'Calls a web address and returns the response.',
-    icon: 'Globe',
-    category: 'utility'
-  },
-  {
-    id: 'code-run',
-    name: 'Execute code',
-    description: 'Run Python in a sandbox',
-    icon: 'Terminal',
-    category: 'utility'
-  },
-  {
-    id: 'file',
-    name: 'File operations',
-    description: 'Lists, searches or reads files in Google Drive.',
-    icon: 'FileText',
-    category: 'utility'
-  },
-
-  // ─── Integrations ──────────────────────────────────────────────────
+  // ─── Apps ───────────────────────────────────────────────────────────
   {
     id: 'slack',
     name: 'Slack',
-    description: 'Posts a message to a Slack channel.',
+    description: 'Post a message to a Slack channel.',
     icon: 'MessageSquare',
-    category: 'integration'
+    category: 'apps',
+    keywords: ['message', 'chat', 'channel', 'notify'],
+  },
+  {
+    id: 'email',
+    name: 'Send email',
+    description: 'Send an email from your Gmail.',
+    icon: 'Mail',
+    category: 'apps',
+    keywords: ['gmail', 'mail', 'message', 'notify'],
   },
   {
     id: 'sheets',
     name: 'Google Sheets',
-    description: 'Reads, writes or creates Google Sheets.',
+    description: 'Read, update or create a spreadsheet.',
     icon: 'Sheet',
-    category: 'integration'
+    category: 'apps',
+    keywords: ['spreadsheet', 'google', 'excel', 'rows'],
   },
+  {
+    id: 'file',
+    name: 'Google Drive files',
+    description: 'List, search or get files in Google Drive.',
+    icon: 'FileText',
+    category: 'apps',
+    keywords: ['drive', 'file operations', 'files', 'google', 'documents'],
+  },
+  {
+    id: 'tool-call',
+    name: 'Do something in an app',
+    description: 'Pick any action from a connected app.',
+    icon: 'Wrench',
+    category: 'apps',
+    keywords: ['call tool', 'tool', 'action', 'mcp', 'integration'],
+  },
+
+  // ─── Advanced ───────────────────────────────────────────────────────
+  {
+    id: 'http-request',
+    name: 'Web request',
+    description: 'Call a web address and use the answer.',
+    icon: 'Globe',
+    category: 'advanced',
+    keywords: ['http', 'http request', 'api', 'rest', 'url', 'fetch', 'get', 'post'],
+  },
+  {
+    id: 'code-run',
+    name: 'Run Python code',
+    description: 'Run a short Python snippet in a safe sandbox.',
+    icon: 'Terminal',
+    category: 'advanced',
+    keywords: ['execute code', 'code', 'script', 'python'],
+  },
+];
+
+/** Section titles of the palette, in order. Category ids stay internal. */
+export const ACTION_SECTIONS: Array<{ category: ActionOption['category']; title: string }> = [
+  { category: 'agent', title: 'AI' },
+  { category: 'control', title: 'Decide and repeat' },
+  { category: 'people', title: 'People' },
+  { category: 'data', title: 'Work with data' },
+  { category: 'apps', title: 'Apps' },
+  { category: 'advanced', title: 'Advanced' },
 ];
 
 /**

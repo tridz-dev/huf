@@ -10,37 +10,13 @@ import {
   DialogScrollFooter,
   DialogScrollHeader,
 } from '../ui/dialog-scroll';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Tabs, TabsContent } from '../ui/tabs';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
-import {
-  Search,
-  Webhook,
-  Clock,
-  Mail,
-  MessageSquare,
-  FileText,
-  Calendar,
-  Database,
-  Sheet,
-  Repeat,
-  GitBranch,
-  RotateCw,
-  Code,
-  Bot,
-  CheckCircle2,
-  SquareAsterisk,
-  UserCheck,
-  Wrench,
-  Globe,
-  Save,
-  Trash2,
-  FilePlus,
-  Terminal,
-  type LucideIcon
-} from 'lucide-react';
+import { Search } from 'lucide-react';
 import { triggerOptions } from '../../data/triggers';
-import { actionOptions } from '../../data/actions';
+import { ACTION_SECTIONS, actionOptions } from '../../data/actions';
+import { paletteIcon } from '../nodes/nodeIcons';
 import { TriggerConfig, ActionConfig } from '../../types/flow.types';
 import type { ActionOption } from '../../types/modal.types';
 import { generateWebhookSecret } from '../../lib/flow-graph/flowWebhookUi';
@@ -62,31 +38,6 @@ interface NodeSelectionModalProps {
    */
   actionCategory?: ActionOption['category'] | null;
 }
-const iconMap: Record<string, LucideIcon> = {
-  Webhook,
-  Clock,
-  Mail,
-  MessageSquare,
-  FileText,
-  Calendar,
-  Database,
-  Sheet,
-  Repeat,
-  GitBranch,
-  RotateCw,
-  Code,
-  UserCheck,
-  Bot,
-  Wrench,
-  Globe,
-  Save,
-  Trash2,
-  FilePlus,
-  Terminal,
-  CheckCircle2,
-  SquareAsterisk,
-};
-
 type MainTab = 'triggers' | 'actions';
 
 export function NodeSelectionModal({
@@ -135,26 +86,19 @@ export function NodeSelectionModal({
     }
   }, [open, mode]);
 
-  const filteredTriggers = triggerOptions.filter(
-    (trigger) =>
-      trigger.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const query = searchQuery.trim().toLowerCase();
+  const matches = (text: Array<string | undefined>) => !query || text.some((t) => t?.toLowerCase().includes(query));
+
+  const filteredTriggers = triggerOptions.filter((trigger) => matches([trigger.name, trigger.description]));
 
   const filteredActions = actionOptions.filter(
     (action) =>
       (!actionCategory || action.category === actionCategory) &&
       (action.id !== CODE_RUN_ACTION || codeAvailable) &&
-      action.name.toLowerCase().includes(searchQuery.toLowerCase())
+      matches([action.name, action.description, ...(action.keywords ?? [])])
   );
 
   const highlightTriggers = filteredTriggers.filter((t) => t.category === 'highlight');
-  
-  const agentActions = filteredActions.filter((a) => a.category === 'agent');
-  const toolActions = filteredActions.filter((a) => a.category === 'tool');
-  const transformActions = filteredActions.filter((a) => a.category === 'transform');
-  const controlActions = filteredActions.filter((a) => a.category === 'control');
-  const utilityActions = filteredActions.filter((a) => a.category === 'utility');
-  const integrationActions = filteredActions.filter((a) => a.category === 'integration');
 
   const handleSelectTrigger = (triggerId: string) => {
     setSelectedItem(triggerId);
@@ -204,57 +148,74 @@ export function NodeSelectionModal({
     onClose();
   };
 
-  const renderActionCategory = (title: string, actions: typeof actionOptions) => {
+  const renderTile = (option: { id: string; name: string; description?: string; icon?: string }, onClick: () => void, selectedTile = false) => {
+    const Icon = paletteIcon(option.icon);
+    return (
+      <Button
+        key={option.id}
+        type="button"
+        variant="ghost"
+        data-testid={`flow-card-${option.id}`}
+        className={`flex h-auto w-full min-w-0 items-center justify-start gap-3 rounded-lg border p-3 font-normal ${selectedTile
+          ? 'border-signal bg-panel hover:bg-panel'
+          : 'border-line hover:border-ink hover:bg-paper-deep'
+          }`}
+        onClick={onClick}
+      >
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded bg-primary/10">
+          <Icon className="h-4 w-4 text-primary" aria-hidden />
+        </div>
+        <div className="min-w-0 flex-1 text-left">
+          <div className="truncate text-sm font-medium" title={option.name}>{option.name}</div>
+          {option.description && (
+            <div className="mt-0.5 truncate text-xs leading-snug text-steel" title={option.description} data-testid={`flow-card-desc-${option.id}`}>
+              {option.description}
+            </div>
+          )}
+        </div>
+      </Button>
+    );
+  };
+
+  const renderActionCategory = (title: string, category: ActionOption['category']) => {
+    const actions = filteredActions.filter((a) => a.category === category);
     if (actions.length === 0) return null;
 
     return (
-      <div className="mb-6">
-        <h3 className="text-sm font-medium mb-3 text-steel">{title}</h3>
-        <div className="grid grid-cols-2 gap-3">
-          {actions.map((action) => {
-            const Icon = iconMap[action.icon || 'FileText'];
-            // Super safe check to prevent React Error 130 (object without $$typeof)
-            const isValidComponent = Icon && (typeof Icon === 'function' || (typeof Icon === 'object' && '$$typeof' in Icon));
-
-            return (
-              <Button
-                key={action.id}
-                type="button"
-                variant="ghost"
-                data-testid={`flow-card-${action.id}`}
-                className="flex h-auto w-full items-center justify-start gap-3 rounded border border-line p-3 font-normal hover:border-ink hover:bg-paper-deep"
-                onClick={() => handleSelectAction(action.id)}
-              >
-                <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  {isValidComponent ? <Icon className="w-4 h-4 text-primary" /> : <div className="w-4 h-4" />}
-                </div>
-                <div className="text-left flex-1 min-w-0">
-                  <div className="text-sm font-medium">{action.name}</div>
-                  {action.description && (
-                    <div className="mt-0.5 text-xs leading-snug text-steel whitespace-normal break-words" data-testid={`flow-card-desc-${action.id}`}>
-                      {action.description}
-                    </div>
-                  )}
-                </div>
-              </Button>
-            );
-          })}
+      <div className="mb-6" data-testid={`flow-palette-section-${category}`}>
+        <h3 className="mb-3 text-sm font-medium text-steel">{title}</h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {actions.map((action) => renderTile(action, () => handleSelectAction(action.id)))}
         </div>
       </div>
     );
   };
 
+  const nothingFound = mainTab === 'triggers' ? highlightTriggers.length === 0 : filteredActions.length === 0;
+  const emptyState = (
+    <div className="flex flex-col items-center gap-2 py-12 text-center" data-testid="flow-palette-empty">
+      <Search className="h-6 w-6 text-steel-soft" aria-hidden />
+      <p className="text-sm font-medium">No {mainTab === 'triggers' ? 'triggers' : 'steps'} match "{searchQuery.trim()}"</p>
+      <p className="text-sm text-steel">
+        {mainTab === 'triggers' ? 'Try "web", "schedule" or "record".' : 'Try "email", "agent" or "if".'}
+      </p>
+      <Button variant="outline" size="sm" data-testid="flow-palette-clear-search" onClick={() => setSearchQuery('')}>
+        Show all
+      </Button>
+    </div>
+  );
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogScrollContent className="max-w-3xl" data-testid={mainTab === 'triggers' ? 'flow-trigger-modal' : 'flow-action-modal'}>
+      <DialogScrollContent className="h-[min(680px,85dvh)] max-w-3xl" data-testid={mainTab === 'triggers' ? 'flow-trigger-modal' : 'flow-action-modal'}>
         <DialogScrollHeader>
           <DialogTitle>
-            {mainTab === 'triggers' ? 'Choose a trigger' : 'Add a step'}
+            {mainTab === 'triggers' ? 'Choose what starts this flow' : 'Add a step'}
           </DialogTitle>
           <DialogDescription data-testid="flow-palette-intro">
             {mainTab === 'triggers'
-              ? 'A trigger decides when the flow starts. Pick one, then set it up in the side panel.'
-              : 'Each step does one job and passes its result to the next step. Pick one to add it here.'}
+              ? 'Pick what makes the flow start. You set it up in the side panel next.'
+              : 'Each step does one job and passes its result to the next one. Pick a step to add it here.'}
           </DialogDescription>
         </DialogScrollHeader>
 
@@ -270,58 +231,21 @@ export function NodeSelectionModal({
         </div>
 
         <Tabs value={mainTab} onValueChange={(v) => { setMainTab(v as MainTab); setSelectedItem(null); setTriggerConfig({ type: undefined }); }} className="flex-1 flex flex-col min-h-0">
-          {/* In action mode the modal must not offer a Triggers tab at all: a
-              trigger belongs only to the entry node, and selecting one here
-              routes to the trigger-save handler with no target node, silently
-              creating a disconnected orphan trigger. `mode` already determines
-              the content, so the tab bar is redundant as well as harmful. */}
-          {mode !== 'trigger' ? null : (
-            <TabsList layout="grid" cols={1} className="flex-shrink-0">
-              <TabsTrigger value="triggers">Triggers</TabsTrigger>
-            </TabsList>
-          )}
-
-          <TabsContent value="triggers" className="flex-1 overflow-y-auto mt-4 scrollbar-hidden">
-            <div className="grid grid-cols-2 gap-3" data-testid="flow-trigger-palette">
-              {highlightTriggers.map((trigger) => {
-                const Icon = iconMap[trigger.icon || 'Webhook'];
-                return (
-                  <Button
-                    key={trigger.id}
-                    type="button"
-                    variant="ghost"
-                    data-testid={`flow-card-${trigger.id}`}
-                    className={`flex h-auto items-center justify-start gap-3 rounded-lg border p-3 font-normal ${selectedItem === trigger.id
-                      ? 'border-signal bg-panel hover:bg-panel'
-                      : 'border-line hover:border-ink hover:bg-paper-deep'
-                      }`}
-                    onClick={() => handleSelectTrigger(trigger.id)}
-                  >
-                    <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      {Icon ? <Icon className="w-4 h-4 text-primary" /> : <div className="w-4 h-4" />}
-                    </div>
-                    <div className="text-left flex-1 min-w-0">
-                      <div className="text-sm font-medium">{trigger.name}</div>
-                      {trigger.description && <div className="mt-0.5 text-xs leading-snug text-steel whitespace-normal break-words" data-testid={`flow-card-desc-${trigger.id}`}>{trigger.description}</div>}
-                    </div>
-                  </Button>
-                );
-              })}
-            </div>
-            {selectedItem && (
+          <TabsContent value="triggers" className="mt-4 flex-1 overflow-y-auto scrollbar-hidden">
+            {nothingFound ? emptyState : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" data-testid="flow-trigger-palette">
+                {highlightTriggers.map((trigger) => renderTile(trigger, () => handleSelectTrigger(trigger.id), selectedItem === trigger.id))}
+              </div>
+            )}
+            {selectedItem && !nothingFound && (
               <p className="mt-4 text-sm text-muted-foreground">
                 Add the trigger, then finish setting it up in the sidebar.
               </p>
             )}
           </TabsContent>
 
-          <TabsContent value="actions" className="flex-1 overflow-y-auto mt-4 scrollbar-hidden">
-            {renderActionCategory('AI & Agents', agentActions)}
-            {renderActionCategory('Tools', toolActions)}
-            {renderActionCategory('Control Flow', controlActions)}
-            {renderActionCategory('Transform & State', transformActions)}
-            {renderActionCategory('Utilities', utilityActions)}
-            {renderActionCategory('Integrations', integrationActions)}
+          <TabsContent value="actions" className="mt-4 flex-1 overflow-y-auto scrollbar-hidden">
+            {nothingFound ? emptyState : ACTION_SECTIONS.map((section) => renderActionCategory(section.title, section.category))}
           </TabsContent>
         </Tabs>
         </DialogScrollBody>

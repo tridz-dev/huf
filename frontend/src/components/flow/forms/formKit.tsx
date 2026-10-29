@@ -7,6 +7,7 @@ import { edgeRoute } from '../../../services/flowSerializer';
 import { nodeKind, validateNode } from '@/lib/flow-graph/flowValidation';
 import { type FlowNodeData } from '../../../types/flow.types';
 import { useFlowContext } from '../../../contexts/FlowContext';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 
 export type Cfg = Record<string, unknown>;
 export type Opt = { value: string; label: string };
@@ -31,6 +32,7 @@ const COMMIT_DELAY_MS = 200;
  */
 export function useNodeForm(nodeId: string, slot: 'triggerConfig' | 'actionConfig') {
   const { activeFlow, updateNodeData, getNode } = useFlowContext();
+  const { canManage } = useFlowPermissions();
   const node = activeFlow?.nodes.find((n) => n.id === nodeId);
   const edges = activeFlow?.edges ?? [];
   const draftRef = useRef<{ nodeId: string; cfg: Cfg } | null>(null);
@@ -72,7 +74,8 @@ export function useNodeForm(nodeId: string, slot: 'triggerConfig' | 'actionConfi
   };
 
   const kind = node ? nodeKind(node) : 'unknown';
-  const issues = node ? validateNode(node, edges) : [];
+  // Required-field messages are for the people who can fix them; a viewer reads the step as it is.
+  const issues = node && canManage ? validateNode(node, edges) : [];
   const error = (field: string) => issues.find((i) => i.field === field)?.message;
   const Err = ({ field }: { field: string }) => {
     const m = error(field);

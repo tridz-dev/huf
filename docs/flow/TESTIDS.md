@@ -31,7 +31,11 @@ Card title = node title = sidebar title (derived from `data/actions.ts` / `data/
 |---|---|
 | `flow-node-<nodeId>` | Node wrapper (`data-node-type`, `data-incomplete="true|false"`) |
 | `flow-node-title-<nodeId>` | Node title |
-| `flow-node-incomplete-<nodeId>` | "Needs setup" marker |
+| `flow-node-subtitle-<nodeId>` | One line saying what the step does ("Send a message to #alerts"); full text in the tooltip |
+| `flow-node-status-<nodeId>` | The card's ONE status word (`data-status`: ready, needs-setup, not-connected, orphan, running, waiting, done, failed). Never wraps; cards are the same size in every state |
+| `flow-node-incomplete-<nodeId>` | Inner text of the status word when it is "Needs setup" |
+| `flow-node-marker-<nodeId>` | "Trigger" / "End" marker on trigger and end cards |
+| `flow-node-choose-trigger-<nodeId>` | "Choose a trigger" button on the empty trigger card (title "Choose what starts this flow") |
 | `flow-node-delete-<nodeId>` | Delete button (on the selected node) |
 | `flow-node-delete-dialog`, `flow-node-delete-confirm` | Confirmation for configured nodes |
 | `flow-handle-<nodeId>` | Single source handle |
@@ -82,7 +86,7 @@ Value inputs insert a reference (`$from`) or, after typed text, a `$template` wi
 |---|---|
 | `flow-not-connected-node-<nodeId>` | "Not connected" badge + Connect link on a step whose integration has no credentials |
 | `flow-not-connected-sidebar`, `flow-connect-link-sidebar` | Same notice and link in the step settings (link goes to the real connect screen) |
-| `flow-node-tool-<nodeId>` | Human tool name on a tool step |
+| `flow-node-tool-<nodeId>` | Removed: the tool's plain name is now the card subtitle (`flow-node-subtitle-<nodeId>`) |
 | `flow-field-tool.call-timeout_ms` | "Wait up to" (seconds) |
 | `flow-field-router.llm-model`, `flow-option-router-model-default`, `flow-option-router-model-<modelName>` | Router AI model (optional) |
 | `flow-toggle-panels`, `flow-open-settings` | Canvas corner buttons |
@@ -110,9 +114,11 @@ Publishing a flow with unconnected integration steps shows a warning toast (`Som
 | `flow-edge-remove-<edgeId>` | "Remove connection" button on the selected line |
 | `flow-edge-delete-dialog`, `flow-edge-delete-confirm` | Confirmation shown by that button and by the Delete key on a selected line |
 | `flow-edge-config` | Sidebar "Connection" panel of the selected line |
-| `flow-node-orphan-<nodeId>` | "Nothing leads to this step" on a step no trigger reaches |
+| `flow-node-orphan-<nodeId>` | "Nothing leads here" status word on a step no trigger reaches |
 | `flow-delete-mode`, `flow-delete-mode-reconnect`, `flow-delete-mode-cascade` | Choice in the step delete dialog (`flow-node-delete-dialog`) when the step has a step after it: "Remove step and reconnect" (default) / "Remove step and everything after it" |
-| `flow-published-badge`, `flow-unpublish`, `flow-unpublish-dialog`, `flow-unpublish-confirm` | Published state in the header; Unpublish replaces Publish while the flow is published |
+| `flow-published-badge`, `flow-draft-badge`, `flow-status-pill`, `flow-unpublish`, `flow-unpublish-dialog`, `flow-unpublish-confirm` | Header status: wrapper `flow-published-badge` while Live (`flow-draft-badge` while not) around the shared pill `flow-status-pill` (Draft / Live / Has problems); Unpublish replaces Publish while the flow is live |
+| `status-pill-<kind>` | Default test id of the shared `StatusPill` (`data-status` = kind: draft, live, has_problems, archived, queued, running, waiting_approval, waiting_review, finished, failed, stuck, approved, rejected, timed_out) |
+| `flow-list-status-<flowId>` | Status pill on a flow's card in the list |
 | `flow-run-document`, `flow-run-document-doctype`, `-name`, `-event`, `-fields`, `flow-run-full-payload` | Data trigger run: "Document" summary and the collapsed "Full payload" (`flow-run-input` is inside it) |
 | `flow-doc-event-reset-note` | Message shown when changing the document type cleared an event that type cannot have |
 | `boot-fallback`, `app-error-screen`, `chunk-error-screen` | "Something went wrong / Reload" screens (entry script, app crash, page chunk) |
@@ -125,15 +131,32 @@ Publishing a flow with unconnected integration steps shows a warning toast (`Som
 | Test id | Element |
 |---|---|
 | `integration-setup-guide`, `integration-setup-steps`, `integration-setup-scopes` | Numbered how-to and the exact permissions, on the Integration screen for Gmail, Slack, Google Sheets and Google Drive |
-| `integration-test-connection` | "Test connection" button (read-only check; typed values are used when filled in, otherwise the saved ones) |
-| `integration-test-result` (`data-status` = Connected / Rejected / Not connected) | Result line with the plain reason |
+| `integration-test-connection` | "Test connection" button in the page header (read-only check; typed values are used when filled in, otherwise the saved ones). Disabled on a new integration until a credential is typed |
+| `integration-test-result` (`data-status` = connected / attention / not_connected / inactive / unchecked) | The one status sentence under the title: what the last check said and when |
 | `flow-step-<kind>-input.<field>-hint` | One-line "where do I find this" under a tool input (Slack channel, Sheets and Drive IDs) |
+
+## Integrations health (UX-7)
+| Test id | Element |
+|---|---|
+| `integration-card-<name>` (`data-status`) | One connection card on /integrations; `integration-card-title` friendly name, `integration-card-detail` the one status sentence |
+| `integration-status` (`data-status` = connected / attention / not_connected / inactive / unchecked / active) | The single status pill (cards, page header, inactive rows) |
+| `integration-use-in-agent-<name>`, `integration-open-<name>` | Card buttons "Use in agent" and "Fix this" / "Settings" |
+| `integration-use-in-agent` | Header button on the details page (same verb for channels) |
+| `integration-inactive-groups`, `integration-group-<service>` | Collapsed "Not in use" section that groups identical inactive copies per service |
+| `integration-category-filter` | "All categories" dropdown (integrations list, service catalog) |
+| `integration-header`, `integration-title`, `integration-save` | Details page header, friendly title, Save/Create |
+| `integration-status-line`, `integration-fix-credentials`, `integration-last-problem` | Status line, "Add credentials" / "Update credentials" button that scrolls to and focuses the first empty credential, dismissible "Problem since the last check" |
+| `integration-credentials`, `integration-name-input`, `credential-input-<key>`, `credential-state-<key>` | Name and credentials section (first on the page); per-field Saved / Not set badge |
+| `integration-setup-toggle` | "How to connect" accordion trigger (closed by default) |
+| `integration-options` | Active and "Use by default" switches |
+| `settings-skill-sources-editor`, `skill-source-row-<n>`, `skill-source-add`, `skill-sources-json-toggle`, `skill-sources-json`, `skill-sources-json-error`, `settings-skill-sources-save` | Code and skills page: skill sources list editor, Edit as JSON toggle and area, Save |
 
 ## Slack channels and run summaries (wp16)
 | Test id | Element |
 |---|---|
 | `flow-run-summary-<nodeId>` | One-line plain summary above a finished integration step's output (Posted to, Sent to, status from host, row/file counts) |
 | `flow-run-raw-<nodeId>` | Collapsed "Show raw response" (`<details>`); the secrets-stripped output stays at `flow-run-step-output-<nodeId>` inside it |
+| `slack-channels-loading`, `slack-channels-retry`, `slack-use-<name>` | Recipients tab channel list: loading line, Try again button after an error or timeout (15 s), "Save as recipient" row action. `slack-load-channels` is now the Reload button; the list loads when the tab opens |
 | `slack-load-channels`, `slack-channels`, `slack-channel-list`, `slack-channel-<name>`, `slack-copy-id-<name>`, `slack-channels-error`, `slack-channels-empty` | Integration > Recipients tab (saved Slack integration): read-only "Load channels" list with copy-ID buttons |
 | `flow-slack-channel-picker`, `flow-field-slack-channel-pick`, `flow-slack-channel-picker-error` | "Or pick a channel" searchable list under the Slack step's Channel field (only when Slack is connected) |
 
@@ -150,7 +173,7 @@ Node type `code.run`, canvas type `code-run`, palette card `flow-card-code-run` 
 | `flow-code-help` | "How your code runs" help (`<details>`) |
 | `flow-code-readonly-note` | "You need permission to run code to edit this step." (the form is then disabled) |
 | `flow-error-code.run-code`, `-profile`, `-timeout_s`, `-inputs` | Inline required-field errors |
-| `flow-node-code-profile-<nodeId>` | Profile name on the canvas node card |
+| `flow-node-code-profile-<nodeId>` | Removed: the card subtitle says "Run a Python snippet" (the profile stays in the step settings) |
 | `flow-code-output-exit` | Exit status badge in a step's output in Run details (inside `flow-run-step-output-<nodeId>`) |
 | `flow-code-output-stdout`, `flow-code-output-stdout-empty` | Printed output block / "Nothing was printed." |
 | `flow-code-output-result` | Result as formatted JSON (absent when the code returned nothing) |
@@ -171,7 +194,10 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-help`, `flow-help-popover`, `flow-help-shortcuts`, `flow-help-guide-link` | "?" button in the editor header, its popover (how a flow works, keyboard shortcuts) and the link to the full guide |
 | `flow-first-run-guide`, `flow-first-run-guide-close` | 3-step card on a flow with only a trigger (hidden for view-only users; closing it is remembered in the browser) |
 | `flow-minimap` | Overview map, bottom-left of the canvas (hidden when the canvas is narrower than 640px) |
-| `flow-palette-intro` | One-sentence intro under the "Choose a trigger" / "Add a step" title |
+| `flow-palette-intro` | One-sentence intro under the "Choose what starts this flow" / "Add a step" title |
+| `flow-palette-empty` | Empty state of the palette search ("No steps match ..."), with `flow-palette-clear-search` ("Show all") |
+| `flow-palette-section-<category>` | A labelled palette section: agent (AI), control (Decide and repeat), people, data (Work with data), apps, advanced |
+| `flow-transform-group-<section>` | Labelled group in the Transform operation list: change-text, find-in-text, pick-rows, group-combine, values |
 | `flow-card-desc-<cardId>` | The one-line "what does this step do" under a palette card |
 | `flow-config-hint` | Intro sentence at the top of a step or trigger form |
 | `flow-hint-<form>-<field>` | One-line hint under a field (for example `flow-hint-webhook-secret`, `flow-hint-loop-max`, `flow-hint-approval-timeout`, `flow-hint-transform-op`, `flow-hint-transform-example`, `flow-hint-condition`) |
@@ -185,3 +211,23 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-run-payload-hint` | Run dialog help under the input box |
 | `flow-run-history-header`, `flow-run-history-body`, `flow-run-history-timezone` | Sticky header, scrolling body and time zone note of the Runs sheet |
 | `flow-run-details-header`, `flow-run-details-body`, `flow-run-timezone-note` | Same for Run details |
+| `flow-view-only-pill`, `flow-view-only-pill-hint` | "View only" pill beside the flow name in the editor header (people who cannot edit the flow; tooltip on hover and focus) |
+| `flow-webhook-secret-hidden` | Replaces the secret field, Copy and Regenerate for people who cannot edit the flow; none of `flow-webhook-copy-secret`, `flow-webhook-regenerate` or the secret input exist for them |
+| `flow-settings-view-only`, `flow-settings-name-value`, `flow-settings-description-value`, `flow-settings-category-value`, `flow-settings-close` | Read-only flow settings (no Save, Cancel, Delete or inputs) |
+| `flow-run-history-empty` | Empty Runs sheet; the text for view-only users has no "Press Run" |
+| `flow-not-connected-note-<suffix>` | "A flow editor needs to connect X" shown instead of the Connect link to view-only users |
+| `settings-skill-sources`, `settings-skill-source-<name>`, `settings-skill-sources-empty`, `settings-skill-sources-error` | Read-only skill sources on Agent settings (people who are not system administrators; there is no JSON box and no Save destinations) |
+
+## UX-2 humanize core (HumanValue, JsonArea, friendly run title)
+| testid | Where |
+|---|---|
+| `flow-run-title` (`data-run-id`) | Run details header: "Run #N · started by you · 2 mins ago" (never the internal id) |
+| `flow-run-human-<nodeId>` | A step's output as labelled rows (HumanValue root); `flow-run-human-input` for the data a run started with |
+| `<root>-row-<path>`, `<root>-label-<path>`, `<root>-value-<path>` | One labelled row of HumanValue; `<path>` is the dotted key path (`customer.name`, `lines.0.qty`) |
+| `<root>-list-<path>` (+ `-toggle`, `-count` "N items", `-items`, `-item-<i>`, `-show-more`) | A list: collapsed "N items · first few", opens to one card per item |
+| `<root>-text-<path>` (+ `-more`) | Long text folded to a preview with Show more / Show less |
+| `<root>-empty`, `<root>-raw-toggle` | Empty text; the "{ } Raw" control (`aria-expanded`); the raw JSON area opens below it |
+| `flow-run-received-<nodeId>` | "Data received" caption: the run's trigger input shown inside the first step instead of a second block |
+| `flow-run-trigger-input`, `flow-run-input-empty` | Separate "Data this run started with" block (only when no step repeats it) and its "No data was sent" line |
+| `flow-run-step-output-<nodeId>`, `flow-run-input` | Now the RAW JSON text, present only after "{ } Raw" is opened (HumanValue is the default view) |
+| `flow-json-<key>`, `-input`, `-format`, `-copy`, `-error`, `-toggle`, `-more`, `-help`, `-text` | JsonArea (the one component for legitimate JSON): `-toggle` is "Show as form" / "Edit as JSON", remembered per key; `-more` folds over 12 lines |

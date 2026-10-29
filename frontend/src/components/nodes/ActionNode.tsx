@@ -1,82 +1,41 @@
 import { memo, useState } from 'react';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { Handle, Position, NodeProps } from 'reactflow';
-import {
-  Play,
-  Repeat,
-  GitBranch,
-  RotateCw,
-  UserCheck,
-  Code,
-  Mail,
-  Webhook,
-  FileText,
-  Calendar,
-  Bot,
-  Wrench,
-  Trash2,
-  Database,
-  Save,
-  FilePlus,
-  Globe,
-  MessageSquare,
-  Sheet,
-  Terminal,
-  AlertCircle,
-  type LucideIcon,
-} from 'lucide-react';
 import { FlowNodeData } from '../../types/flow.types';
-import { Card } from '../ui/card';
-import { Button } from '../ui/button';
 import { DeleteStepDialog } from '../flow/DeleteStepDialog';
 import { useFlowContext } from '../../contexts/FlowContext';
-import { Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
-import { NODE_CARD_BASE, NODE_HANDLE, NODE_ICON_WELL, getExecutionStatusClasses, handleSpread } from './nodeStyles';
-import { cn } from '@/lib/utils';
+import { NODE_HANDLE, getExecutionStatusClasses, handleSpread } from './nodeStyles';
 import { actionHasConfiguredContent } from '../../lib/flow/flowNodeConfigured';
 import { branchHandlesFor, ROUTER_HANDLE } from '../../lib/flow/flowBranches';
 import { validateNode } from '../../lib/flow-graph/flowValidation';
 import { orphanNote } from '../../lib/flow-graph/flowCanvasGraph';
-import { toolLabel } from '../../lib/flow/flowIntegrations';
-import { NotConnected } from '../flow/NotConnected';
-
-const iconMap: Record<string, LucideIcon> = {
-  Play,
-  Repeat,
-  GitBranch,
-  RotateCw,
-  UserCheck,
-  Code,
-  Mail,
-  Webhook,
-  FileText,
-  Calendar,
-  Bot,
-  Wrench,
-  Database,
-  Save,
-  Trash2,
-  FilePlus,
-  Globe,
-  MessageSquare,
-  Sheet,
-  Terminal,
-};
+import { connectPath, integrationForTool, isToolUnconnected, useIntegrationStatus } from '../../lib/flow/flowIntegrations';
+import { actionSubtitle, cardStatus } from '../../lib/flow/flowNodeCard';
+import { cardIcon } from './nodeIcons';
+import { CardStatusLine, ConnectLink, NodeCard } from './NodeCard';
 
 type ActionNodeProps = NodeProps<FlowNodeData>;
 
 export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
   const { deleteNode, activeFlow } = useFlowContext();
   const { canManage } = useFlowPermissions();
+  const integrationStatus = useIntegrationStatus();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const Icon = data.icon && iconMap[data.icon] ? iconMap[data.icon] : Play;
   const incomplete = validateNode({ id, data }, activeFlow?.edges ?? []);
-  const orphaned = activeFlow ? orphanNote(id, activeFlow.nodes, activeFlow.edges) : null;
+  // Only a step with no line into it: one with a line from a cut-off part is not "nothing leads here".
+  const orphaned = activeFlow ? orphanNote(id, activeFlow.nodes, activeFlow.edges) === 'Nothing leads to this step' : false;
   const cfg = data.actionConfig as ({ type?: string } & Record<string, unknown>) | undefined;
   const handles = branchHandlesFor(cfg?.type, cfg);
   const isRouter = cfg?.type === 'router';
   const toolId = cfg?.type === 'tool-call' && typeof cfg.tool_id === 'string' && cfg.tool_id ? cfg.tool_id : undefined;
-  const statusClasses = getExecutionStatusClasses(data.status, selected, { unconfigured: incomplete.length > 0 || orphaned !== null });
+  const service = integrationForTool(toolId);
+  const status = cardStatus({
+    runStatus: data.status,
+    incomplete: incomplete.length > 0,
+    orphaned,
+    notConnected: isToolUnconnected(toolId, integrationStatus),
+  });
+  const frameClass = getExecutionStatusClasses(data.status, selected, { unconfigured: incomplete.length > 0 || orphaned });
 
   // Confirm only when the node has real config; a picked-but-blank node deletes
   // immediately (see actionHasConfiguredContent).
@@ -89,6 +48,7 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
     }
   };
 
+  const canDelete = canManage && selected && data.status !== 'running' && data.status !== 'waiting';
   return (
     <div className="relative" data-testid={`flow-node-${id}`} data-node-type={cfg?.type} data-incomplete={incomplete.length > 0 ? 'true' : 'false'}>
       <Handle
@@ -97,64 +57,34 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
         position={Position.Top}
         className={NODE_HANDLE}
       />
-      <Card className={cn(NODE_CARD_BASE, statusClasses)}>
-        {canManage && selected && data.status !== 'running' && data.status !== 'waiting' && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            onClick={handleDeleteClick}
-            data-testid={`flow-node-delete-${id}`}
-            aria-label="Delete step"
-            title="Delete step"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </Button>
-        )}
-        <div className="flex items-center gap-3 pr-6">
-          <div className={cn(NODE_ICON_WELL, 'text-ink relative')}>
-            {data.status === 'running' ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : data.status === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 text-good" />
-            ) : data.status === 'error' ? (
-              <XCircle className="w-5 h-5 text-destructive" />
-            ) : data.status === 'waiting' ? (
-              <Clock className="w-5 h-5 text-signal" />
-            ) : (
-              <Icon className="w-5 h-5" />
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <div className="text-sm font-medium min-w-0 text-card-foreground line-clamp-2 break-words leading-snug" title={data.label} data-testid={`flow-node-title-${id}`}>
-                {data.label}
-              </div>
-              {incomplete.length > 0 && <AlertCircle className="w-4 h-4 text-signal shrink-0" aria-label="Needs setup" />}
-            </div>
-            {incomplete.length > 0 && (
-              <div className="text-xs text-signal-ink" data-testid={`flow-node-incomplete-${id}`} title={incomplete[0]?.message ?? 'Select this step to set it up'}>Needs setup</div>
-            )}
-            {orphaned && (
-              <div className="text-xs text-signal-ink" data-testid={`flow-node-orphan-${id}`}>{orphaned}</div>
-            )}
-            {data.description && (
-              <div className="text-xs text-muted-foreground">{data.description}</div>
-            )}
-            {toolId && toolLabel(toolId).toLowerCase() !== data.label.toLowerCase() && (
-              <div className="text-xs text-muted-foreground truncate" title={toolLabel(toolId)} data-testid={`flow-node-tool-${id}`}>
-                {toolLabel(toolId)}
-              </div>
-            )}
-            {cfg?.type === 'code-run' && typeof cfg.profile === 'string' && cfg.profile && (
-              <div className="text-xs text-muted-foreground truncate" title={`Runs under ${cfg.profile}`} data-testid={`flow-node-code-profile-${id}`}>
-                {cfg.profile}
-              </div>
-            )}
-            {toolId && <NotConnected toolId={toolId} compact testIdSuffix={`node-${id}`} />}
-          </div>
-        </div>
-      </Card>
+      <NodeCard
+        id={id}
+        icon={cardIcon(data)}
+        title={data.label}
+        subtitle={actionSubtitle(data.actionConfig)}
+        frameClass={frameClass}
+        onDelete={canDelete ? handleDeleteClick : undefined}
+        deleteLabel="Delete step"
+        footer={
+          <CardStatusLine
+            id={id}
+            status={status}
+            title={status.kind === 'needs-setup' ? incomplete[0]?.message ?? 'Select this step to set it up' : undefined}
+            action={
+              status.kind === 'not-connected' && service ? (
+                <span data-testid={`flow-not-connected-node-${id}`} className="contents">
+                  <ConnectLink
+                    to={connectPath(service)}
+                    label="Connect"
+                    ariaLabel={`Connect ${integrationStatus[service]?.label ?? service}`}
+                    testId={`flow-connect-link-node-${id}`}
+                  />
+                </span>
+              ) : undefined
+            }
+          />
+        }
+      />
       {handles.length > 0 ? (
         handles.map((h, i) => (
           <Handle

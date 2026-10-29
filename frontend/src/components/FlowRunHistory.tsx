@@ -9,6 +9,7 @@ import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
 import { formatTimeAgo } from '@/utils/time';
 import { flowRunStatusLabel } from '@/lib/flow-run/flowRunFormat';
 import { runTimesSentence } from '@/lib/flow-run/flowTimeZone';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 
 interface FlowRunHistoryProps {
     flowId: string;
@@ -19,6 +20,7 @@ interface FlowRunHistoryProps {
 
 export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: FlowRunHistoryProps) {
     const siteZone = useSiteTimezone();
+    const { canManage } = useFlowPermissions();
     const [runs, setRuns] = useState<FlowRunSummary[]>([]);
     const [loading, setLoading] = useState(false);
     const [loadFailed, setLoadFailed] = useState(false);
@@ -67,7 +69,7 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="flex w-[400px] flex-col gap-0 overflow-hidden p-0 sm:w-[500px]" data-testid="flow-run-history">
+            <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-hidden p-0 sm:w-[500px]" data-testid="flow-run-history">
                 <SheetHeader className="shrink-0 border-b border-border bg-background px-6 pb-4 pt-6 pr-12" data-testid="flow-run-history-header">
                     <div className="flex items-center justify-between">
                         <SheetTitle className="flex items-center gap-2">
@@ -94,8 +96,10 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
                             Could not load the run history. It will try again in a few seconds, or use Refresh.
                         </div>
                     ) : runs.length === 0 ? (
-                        <div className="text-center p-8 text-sm text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
-                            No runs found for this flow yet. Press Run to try it now, or publish it so its trigger starts it.
+                        <div className="text-center p-8 text-sm text-muted-foreground bg-muted/30 rounded-lg border border-dashed" data-testid="flow-run-history-empty">
+                            {canManage
+                                ? 'No runs found for this flow yet. Press Run to try it now, or publish it so its trigger starts it.'
+                                : 'No runs yet. Runs show up here once the flow has been started.'}
                         </div>
                     ) : (
                         runs.map((run) => (

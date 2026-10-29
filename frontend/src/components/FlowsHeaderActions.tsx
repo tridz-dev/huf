@@ -1,5 +1,5 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
-import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle, Settings, Pencil, CircleOff } from 'lucide-react';
+import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle, Settings, Pencil, CircleOff, Eye } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -25,11 +25,13 @@ import { reportFlowRun } from '@/lib/flow-run/flowRunToast';
 import { RunFlowDialog } from './flow/RunFlowDialog';
 import { FlowHelpPopover } from './flow/FlowHelpPopover';
 import { DisabledReason } from './flow/DisabledReason';
-import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { FLOW_VIEW_ONLY_HINT, useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { publishBlockedReason } from '@/lib/flow/flowPublishGuard';
 import { codePublishBlockedReason } from '@/lib/flow-graph/codeFlow';
 import { useCodeFlowStatus } from '@/lib/flow-graph/useCodeFlowStatus';
 import { useRunParam } from '@/hooks/flow/useRunParam';
+import { flowStatusKind, StatusPill } from './common/StatusPill';
 
 /**
  * Left-aligned "Flows > flow name [pencil]" control for the flow canvas
@@ -39,6 +41,7 @@ import { useRunParam } from '@/hooks/flow/useRunParam';
  */
 export function FlowToolbarTitle() {
   const { activeFlow, updateFlowName } = useFlowContext();
+  const { canManage } = useFlowPermissions();
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
 
@@ -95,17 +98,37 @@ export function FlowToolbarTitle() {
           {activeFlow.name || 'Untitled flow'}
         </span>
       )}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label="Edit flow name"
-        onClick={startEditing}
-        disabled={isEditing}
-        className="h-6 w-6 shrink-0 text-steel hover:text-ink"
-      >
-        <Pencil className="h-3.5 w-3.5" />
-      </Button>
+      {canManage ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Edit flow name"
+          onClick={startEditing}
+          disabled={isEditing}
+          className="h-6 w-6 shrink-0 text-steel hover:text-ink"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+      ) : (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                tabIndex={0}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-line bg-paper-deep px-2 py-0.5 text-xs font-medium text-steel"
+                data-testid="flow-view-only-pill"
+              >
+                <Eye className="h-3 w-3" aria-hidden />
+                View only
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-[260px]" data-testid="flow-view-only-pill-hint">
+              {FLOW_VIEW_ONLY_HINT}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
     </div>
   );
 }
@@ -208,7 +231,7 @@ export function FlowsHeaderActions() {
     setIsPublishing(true);
     try {
       await setFlowPublished(activeFlow.id, true);
-      toast.success('Flow published', { description: 'Its trigger is on now: the webhook accepts calls, and schedule or record triggers start runs. Unpublish to turn it off.' });
+      toast.success('Flow is live', { description: 'Its trigger is on now: the webhook accepts calls, and schedule or record triggers start runs. Unpublish to turn it off.' });
       // Non-blocking: publishing works, but these steps will fail until their integration is connected.
       const missing = unconnectedSteps(activeFlow.nodes, await getFlowIntegrationStatus());
       if (missing.length > 0) {
@@ -218,7 +241,7 @@ export function FlowsHeaderActions() {
         });
       }
     } catch (err) {
-      toast.error('Could not publish the flow', { description: humanizeFlowError(err) });
+      toast.error('Could not make the flow live', { description: humanizeFlowError(err) });
     } finally {
       setIsPublishing(false);
     }
@@ -229,10 +252,10 @@ export function FlowsHeaderActions() {
     setIsUnpublishing(true);
     try {
       await setFlowPublished(activeFlow.id, false);
-      toast.success('Flow unpublished', { description: 'It is a draft again. Its triggers no longer start it.' });
+      toast.success('Flow is a draft again', { description: 'It is no longer live. Its triggers no longer start it.' });
       setShowUnpublish(false);
     } catch (err) {
-      toast.error('Could not unpublish the flow', { description: humanizeFlowError(err) });
+      toast.error('Could not turn the flow off', { description: humanizeFlowError(err) });
     } finally {
       setIsUnpublishing(false);
     }
@@ -243,7 +266,7 @@ export function FlowsHeaderActions() {
       {/* Save State Indicator (bare dot + text, no chip background) */}
       {activeFlow && (
         <div className="flex items-center gap-1.5 mr-2 text-muted-foreground" data-testid="flow-save-state" title={issues.length > 0 ? ` to finish before it can run` : undefined}>
-          {issues.length > 0 && (
+          {canManage && issues.length > 0 && (
             <button
               type="button"
               data-testid="flow-validation-summary"
@@ -273,19 +296,21 @@ export function FlowsHeaderActions() {
       <FlowHelpPopover />
 
       {/* Save Draft Button */}
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-2"
-        data-testid="flow-save"
-        aria-label="Save"
-        title="Save your changes (Ctrl/Cmd+S)"
-        onClick={handleSaveDraft}
-        disabled={!activeFlow || saveState === 'saving' || !hasUnsavedChanges}
-      >
-        <Save className="w-4 h-4" />
-        <span className="hidden xl:inline">Save</span>
-      </Button>
+      <DisabledReason reason={canManage ? null : readOnlyReason}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          data-testid="flow-save"
+          aria-label="Save"
+          title="Save your changes (Ctrl/Cmd+S)"
+          onClick={handleSaveDraft}
+          disabled={!activeFlow || saveState === 'saving' || !hasUnsavedChanges}
+        >
+          <Save className="w-4 h-4" />
+          <span className="hidden xl:inline">Save</span>
+        </Button>
+      </DisabledReason>
 
       {/* Runs Button */}
       <Button
@@ -309,7 +334,7 @@ export function FlowsHeaderActions() {
         className="gap-2"
         data-testid="flow-settings"
         aria-label="Settings"
-        title="Settings: name, description and category"
+        title={canManage ? 'Settings: name, description and category' : 'Settings: see the name, description and category'}
         onClick={() => setShowSettings(true)}
         disabled={!activeFlow}
       >
@@ -335,14 +360,14 @@ export function FlowsHeaderActions() {
       </DisabledReason>
 
       {/* Publish / Unpublish */}
-      {isPublished && (
-        <span
-          className="inline-flex items-center gap-1 rounded-full border border-good/40 px-2 py-0.5 text-xs font-medium text-good"
-          data-testid="flow-published-badge"
-          title="Published: the trigger is on"
-        >
-          <CheckCircle2 className="w-3 h-3" />
-          <span className="sr-only xl:not-sr-only">Published</span>
+      {activeFlow && (
+        <span data-testid={isPublished ? 'flow-published-badge' : 'flow-draft-badge'} className="inline-flex">
+          <StatusPill
+            kind={flowStatusKind(activeFlow.status, issues.length)}
+            compact
+            data-testid="flow-status-pill"
+            title={isPublished ? 'Live: the trigger is on' : 'Draft: the trigger is off until you publish'}
+          />
         </span>
       )}
       <DisabledReason reason={!canManage ? readOnlyReason : isPublished ? null : publishBlocked}>
