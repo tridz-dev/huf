@@ -1,6 +1,7 @@
 import json
 import sys
 import types
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -193,6 +194,6 @@ def test_doc_event_never_raises(world):
 
 
 def test_hooks_registered():
-	src = open("huf/hooks.py").read()
+	src = (Path(__file__).resolve().parents[2] / "hooks.py").read_text()
 	assert "huf.ai.gateways.flow_reply.on_flow_run_update" in src
 	assert "huf.ai.tools.gateways.reply.GATEWAY_REPLY_TOOLS" in src

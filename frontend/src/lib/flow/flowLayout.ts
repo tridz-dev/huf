@@ -94,24 +94,41 @@ interface Box {
 /**
  * The viewport offset that brings `rect` fully into view at the current zoom with `pad` px clear, moving as little as possible
  * (a rect taller or wider than the canvas is aligned to its top-left). Null when it is already fully visible.
+ * `covered` is an overlay drawn on the canvas (screen px, canvas origin: the overview and zoom buttons bottom-left): a rect
+ * that would sit under it is lifted until it clears the overlay, as long as its top stays in view.
  */
 export function panToReveal(
   rect: Box,
   viewport: { x: number; y: number; zoom: number },
   size: { width: number; height: number },
   pad = 24,
+  covered?: Box,
 ): { x: number; y: number } | null {
-  if (isInView(rect, viewport, size)) return null;
-  const left = rect.x * viewport.zoom + viewport.x;
-  const top = rect.y * viewport.zoom + viewport.y;
-  const w = rect.width * viewport.zoom;
-  const h = rect.height * viewport.zoom;
+  const screen = (vp: { x: number; y: number; zoom: number }) => ({
+    left: rect.x * vp.zoom + vp.x,
+    top: rect.y * vp.zoom + vp.y,
+    w: rect.width * vp.zoom,
+    h: rect.height * vp.zoom,
+  });
+  const under = (vp: { x: number; y: number; zoom: number }) => {
+    if (!covered) return false;
+    const r = screen(vp);
+    return r.left < covered.x + covered.width && r.left + r.w > covered.x && r.top < covered.y + covered.height && r.top + r.h > covered.y;
+  };
+  if (isInView(rect, viewport, size) && !under(viewport)) return null;
+  const { left, top, w, h } = screen(viewport);
   const shift = (start: number, len: number, avail: number): number => {
     if (len + 2 * pad > avail || start < pad) return pad - start;
     if (start + len > avail - pad) return avail - pad - (start + len);
     return 0;
   };
-  return { x: viewport.x + shift(left, w, size.width), y: viewport.y + shift(top, h, size.height) };
+  const moved = { ...viewport, x: viewport.x + shift(left, w, size.width), y: viewport.y + shift(top, h, size.height) };
+  if (covered && under(moved)) {
+    const r = screen(moved);
+    const lift = covered.y - pad - (r.top + r.h);
+    if (lift < 0 && r.top + lift >= pad) moved.y += lift;
+  }
+  return { x: moved.x, y: moved.y };
 }
 
 /** True when `rect` (flow coordinates) sits fully inside the visible canvas, keeping `margin` px clear (none by default: only content that is actually cut off counts). */

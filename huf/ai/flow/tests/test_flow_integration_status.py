@@ -2,13 +2,13 @@
 
 from unittest.mock import patch
 
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from huf.ai.flow import integrations
 from huf.ai.flow.integrations import friendly_tool_error, get_flow_integration_status, service_for_tool
 
 
-class TestFlowIntegrationStatus(FrappeTestCase):
+class TestFlowIntegrationStatus(IntegrationTestCase):
 	def test_tool_to_service(self):
 		self.assertEqual(service_for_tool("slack_send_message"), "slack")
 		self.assertEqual(service_for_tool("gmail_send_email"), "gmail")
@@ -28,7 +28,7 @@ class TestFlowIntegrationStatus(FrappeTestCase):
 		self.assertEqual(status["slack"]["label"], "Slack")
 
 
-class TestFriendlyToolError(FrappeTestCase):
+class TestFriendlyToolError(IntegrationTestCase):
 	def test_missing_credential_becomes_not_connected(self):
 		raw = (
 			"Credential not found for service 'google_sheets', key 'client_id'. "

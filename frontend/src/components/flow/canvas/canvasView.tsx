@@ -19,6 +19,13 @@ const MINIMAP_STYLE = {
   boxShadow: '0 1px 3px color-mix(in srgb, var(--foreground) 12%, transparent)',
 } as const;
 
+/** Screen area (px, canvas origin) the zoom buttons and the overview hide at the bottom-left of the canvas. */
+function coveredByOverlays(width: number, height: number) {
+  const boxHeight = MINIMAP_STYLE.height + MINIMAP_STYLE.marginBottom + 8;
+  const boxWidth = width >= MINIMAP_MIN_CANVAS_WIDTH ? MINIMAP_STYLE.marginLeft + MINIMAP_STYLE.width + 8 : MINIMAP_STYLE.marginLeft;
+  return { x: 0, y: height - boxHeight, width: boxWidth, height: boxHeight };
+}
+
 /** Overview map: drag its rectangle or click anywhere on it to move the canvas there; scroll on it to zoom. */
 export function FlowMiniMap() {
   const { setCenter, getZoom } = useReactFlow();
@@ -77,7 +84,7 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
         const left = Math.min(...rects.map((r) => r.x));
         const top = Math.min(...rects.map((r) => r.y));
         const bounds = { x: left, y: top, width: Math.max(...rects.map((r) => r.x + r.width)) - left, height: Math.max(...rects.map((r) => r.y + r.height)) - top };
-        const next = panToReveal(bounds, getViewport(), { width, height });
+        const next = panToReveal(bounds, getViewport(), { width, height }, undefined, coveredByOverlays(width, height));
         if (next) setViewport({ ...next, zoom: getViewport().zoom }, { duration: 200 });
       }, 150);
       return () => clearTimeout(timer);

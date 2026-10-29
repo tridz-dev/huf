@@ -639,6 +639,7 @@ class TestDocEventPayload(WP11Base):
 	def _doc(self):
 		return SimpleNamespace(
 			doctype=self.PARENT,
+			name="P-1",
 			as_dict=lambda: {
 				"doctype": self.PARENT,
 				"name": "P-1",

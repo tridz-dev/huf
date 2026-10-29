@@ -346,9 +346,20 @@ class TestFlowTriggerNodes(_Base):
 
 	def test_panel_doc_event_node_config_saves_and_activates(self):
 		# Frontend summaryToNodeConfig('doc-event', ...) -> { doctype, event }, event within the schema enum
-		for event in ("after_insert", "on_update", "on_submit", "on_cancel", "on_trash"):
+		for event in ("after_insert", "on_update", "on_trash"):
 			self._activate_with_trigger_node(
 				{"type": "trigger.doc-event", "config": {"doctype": "ToDo", "event": event}}
+			)
+
+	def test_panel_doc_event_submit_events_save_and_activate_on_a_submittable_doctype(self):
+		# A flow validation rejects on_submit / on_cancel on a document type that cannot be submitted (ToDo
+		# cannot): by design, so the submit events are checked against a doctype that can.
+		submittable = frappe.db.get_value("DocType", {"is_submittable": 1}, "name")
+		if not submittable:
+			self.skipTest("this site has no submittable doctype to attach on_submit / on_cancel to")
+		for event in ("on_submit", "on_cancel"):
+			self._activate_with_trigger_node(
+				{"type": "trigger.doc-event", "config": {"doctype": submittable, "event": event}}
 			)
 
 	def test_trigger_bound_marker_is_rejected(self):
