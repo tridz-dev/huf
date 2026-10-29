@@ -194,13 +194,15 @@ class TestLessonReminders(unittest.TestCase):
 		for patcher in (patch.object(tools_lms, "_schema_ready", return_value=True),):
 			patcher.start()
 			self.addCleanup(patcher.stop)
-		self.cache = {}
-
-	def _cache_get(self, key):
-		return self.cache.get(key)
-
-	def _cache_set(self, key, value, *a, **kw):
-		self.cache[key] = value
+		self.logged = []
+		self.allowed = True
+		for patcher in (
+			patch.object(tools_lms.reminder_policy, "recently_sent", side_effect=lambda kind, dt, name, days: (kind, dt, name) in self.logged),
+			patch.object(tools_lms.reminder_policy, "record", side_effect=lambda gw, rcpt, kind, dt, name: self.logged.append((kind, dt, name))),
+			patch.object(tools_lms.reminder_policy, "may_send_proactive", side_effect=lambda gw, phone: self.allowed),
+		):
+			patcher.start()
+			self.addCleanup(patcher.stop)
 
 	def test_stale_enrollment_gets_one_reminder_per_three_days(self):
 		stale = [{"name": "ENR-1", "member": "ana@example.com", "course": "Python 101", "creation": "2026-10-01 00:00:00", "last": None}]
@@ -209,9 +211,7 @@ class TestLessonReminders(unittest.TestCase):
 			tools_lms, "_reminder_target", return_value=("gw-1", "15550102030")
 		), patch.object(tools_lms, "_gateway_template", return_value="lesson_reminder"), patch.object(
 			tools_lms, "_send_template", side_effect=lambda *a, **k: sent.append(a) or {"success": True}
-		), patch.object(
-			tools_lms, "_cache_get", side_effect=self._cache_get
-		), patch.object(tools_lms, "_cache_set", side_effect=self._cache_set):
+		):
 			self.assertEqual(tools_lms.send_lesson_reminders(), 1)
 			self.assertEqual(tools_lms.send_lesson_reminders(), 0)
 		self.assertEqual(len(sent), 1)
@@ -230,11 +230,29 @@ class TestLessonReminders(unittest.TestCase):
 			tools_lms, "_reminder_target", return_value=("gw-1", "15550102030")
 		), patch.object(tools_lms, "_gateway_template", return_value="lesson_reminder"), patch.object(
 			tools_lms, "_send_template", return_value={"success": False, "error": "opted_out"}
-		), patch.object(
-			tools_lms, "_cache_get", side_effect=self._cache_get
-		), patch.object(tools_lms, "_cache_set", side_effect=self._cache_set):
+		):
 			self.assertEqual(tools_lms.send_lesson_reminders(), 0)
-		self.assertEqual(self.cache, {})
+		self.assertEqual(self.logged, [])
+
+
+class TestLessonReminderGates(TestLessonReminders):
+	def test_no_opt_in_or_kill_switch_sends_nothing(self):
+		stale = [{"name": "ENR-1", "member": "ana@example.com", "course": "Python 101", "creation": "2026-10-01 00:00:00", "last": None}]
+		self.allowed = False
+		with patch.object(tools_lms, "_stale_enrollments", return_value=stale), patch.object(
+			tools_lms, "_reminder_target", return_value=("gw-1", "15550102030")
+		), patch.object(tools_lms, "_gateway_template", return_value="lesson_reminder"), patch.object(tools_lms, "_send_template") as send:
+			self.assertEqual(tools_lms.send_lesson_reminders(), 0)
+		send.assert_not_called()
+
+	def test_throttle_is_db_log_not_cache(self):
+		stale = [{"name": "ENR-1", "member": "ana@example.com", "course": "Python 101", "creation": "2026-10-01 00:00:00", "last": None}]
+		self.logged.append((tools_lms.REMINDER_KIND, tools_lms.ENROLLMENT, "ENR-1"))
+		with patch.object(tools_lms, "_stale_enrollments", return_value=stale), patch.object(
+			tools_lms, "_reminder_target", return_value=("gw-1", "15550102030")
+		), patch.object(tools_lms, "_gateway_template", return_value="lesson_reminder"), patch.object(tools_lms, "_send_template") as send:
+			self.assertEqual(tools_lms.send_lesson_reminders(), 0)
+		send.assert_not_called()
 
 
 class TestLmsToolRegistry(unittest.TestCase):

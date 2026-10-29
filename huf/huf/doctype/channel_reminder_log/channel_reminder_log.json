@@ -1,0 +1,22 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-10-29 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["gateway", "recipient", "kind", "reference_doctype", "reference_name", "sent_at"],
+ "fields": [
+  {"fieldname":"gateway","fieldtype":"Link","in_list_view":1,"label":"Gateway","options":"Gateway","reqd":1,"read_only":1,"search_index":1},
+  {"fieldname":"recipient","fieldtype":"Data","in_list_view":1,"label":"Recipient","length":255,"reqd":1,"read_only":1,"search_index":1},
+  {"fieldname":"kind","fieldtype":"Data","in_list_view":1,"label":"Kind","length":140,"reqd":1,"read_only":1,"search_index":1},
+  {"fieldname":"reference_doctype","fieldtype":"Data","label":"Reference DocType","length":140,"read_only":1},
+  {"fieldname":"reference_name","fieldtype":"Data","label":"Reference name","length":255,"read_only":1,"search_index":1},
+  {"fieldname":"sent_at","fieldtype":"Datetime","in_list_view":1,"label":"Sent at","reqd":1,"read_only":1,"search_index":1}
+ ],
+ "in_create": 1,
+ "module": "Huf",
+ "name": "Channel Reminder Log",
+ "permissions": [{"read": 1, "role": "System Manager"}],
+ "sort_field": "creation",
+ "sort_order": "DESC"
+}

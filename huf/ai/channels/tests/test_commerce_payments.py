@@ -26,7 +26,7 @@ def _ensure_order_doctype():
 		return
 	fields = [("status", "Select", "Draft\nPaid"), ("payment_status", "Data", None), ("payment_link", "Data", None),
 		("conversation", "Data", None), ("gateway", "Data", None), ("total", "Currency", None), ("currency", "Data", None),
-		("reminder_sent_at", "Datetime", None)]
+		("reminder_sent_at", "Datetime", None), ("reminder_attempted_at", "Datetime", None)]
 	frappe.get_doc({
 		"doctype": "DocType", "name": ORDER, "module": "Huf", "custom": 1, "autoname": "hash",
 		"fields": [{"fieldname": f, "label": f, "fieldtype": t, **({"options": o} if o else {})} for f, t, o in fields],
@@ -153,7 +153,7 @@ class TestCommercePayments(IntegrationTestCase):
 	# ---------------------------------------------------------------- paid
 	def test_razorpay_paid_marks_and_confirms_with_template(self):
 		o = self._order()
-		body = json.dumps({"event": "payment_link.paid", "payload": {"payment_link": {"entity": {"reference_id": o.name}}}}).encode()
+		body = json.dumps({"event": "payment_link.paid", "payload": {"payment_link": {"entity": {"reference_id": o.name, "amount": 10000, "currency": "INR"}}}}).encode()
 		sig = hmac.new(RZP_SECRET.encode(), body, hashlib.sha256).hexdigest()
 		with patch.object(reply_api, "deliver_reply", return_value={"status": "sent"}) as send:
 			res = payments.process_razorpay(body, sig, self.gw.name)
@@ -175,7 +175,7 @@ class TestCommercePayments(IntegrationTestCase):
 	def test_stripe_paid_free_text_when_no_template(self):
 		self.gw.db_set("order_confirmed_template", "")
 		o = self._order()
-		body = json.dumps({"type": "checkout.session.completed", "data": {"object": {"payment_status": "paid", "metadata": {"reference": o.name}}}}).encode()
+		body = json.dumps({"type": "checkout.session.completed", "data": {"object": {"payment_status": "paid", "amount_total": 10000, "currency": "inr", "metadata": {"reference": o.name}}}}).encode()
 		ts = int(time.time())
 		sig = hmac.new(STRIPE_SECRET.encode(), f"{ts}.".encode() + body, hashlib.sha256).hexdigest()
 		with patch.object(reply_api, "deliver_reply", return_value={"status": "sent"}) as send:
@@ -187,7 +187,13 @@ class TestCommercePayments(IntegrationTestCase):
 	def _age(self, order, hours=5):
 		frappe.db.set_value(ORDER, order.name, "creation", add_to_date(now_datetime(), hours=-hours), update_modified=False)
 
+	def _opt_in(self, phone="15550001111"):
+		from huf.ai.whatsapp import account_events as events
+
+		events._insert_consent(self.gw.name, phone, events.MARKETING, "resume", source="manual")
+
 	def test_cart_recovery_once_only(self):
+		self._opt_in()
 		o = self._order()
 		self._age(o)
 		with patch.object(reply_api, "deliver_reply", return_value={"status": "sent"}) as send:
@@ -199,6 +205,7 @@ class TestCommercePayments(IntegrationTestCase):
 		self.assertTrue(frappe.db.get_value(ORDER, o.name, "reminder_sent_at"))
 
 	def test_cart_recovery_skips_opted_out_young_and_off(self):
+		self._opt_in()
 		o = self._order()
 		self._age(o)
 		young = self._order()
@@ -233,3 +240,88 @@ class TestCommercePayments(IntegrationTestCase):
 		self.assertTrue(res["success"])
 		self.assertEqual(create.call_count, 5)
 		self.assertEqual(create.call_args.kwargs["gateway_name"], self.gw.name)
+
+	# ---------------------------------------------------------------- hardening (final review)
+	def _rzp(self, o, amount=10000, currency="INR", gateway=None):
+		body = json.dumps({"event": "payment_link.paid", "payload": {"payment_link": {"entity": {"reference_id": o.name, "amount": amount, "currency": currency}}}}).encode()
+		sig = hmac.new(RZP_SECRET.encode(), body, hashlib.sha256).hexdigest()
+		return payments.process_razorpay(body, sig, gateway or self.gw.name)
+
+	def _stripe(self, o, event="checkout.session.completed", amount=10000, currency="inr"):
+		body = json.dumps({"type": event, "data": {"object": {"payment_status": "paid", "amount_total": amount, "currency": currency, "metadata": {"reference": o.name}}}}).encode()
+		ts = int(time.time())
+		sig = hmac.new(STRIPE_SECRET.encode(), f"{ts}.".encode() + body, hashlib.sha256).hexdigest()
+		return payments.process_stripe(body, f"t={ts},v1={sig}", self.gw.name)
+
+	def test_paid_event_for_other_gateway_is_refused_without_state_change(self):
+		o = self._order()
+		other = frappe.get_doc({**self.gw.as_dict(), "name": None, "gateway_name": f"Other {frappe.generate_hash(length=6)}", "integration_settings": self.gw.integration_settings, "doctype": "Gateway"}).insert(ignore_permissions=True)
+		with patch.object(reply_api, "deliver_reply") as send:
+			res = self._rzp(o, gateway=other.name)
+		self.assertEqual((res["ok"], res["error"]), (False, "gateway_mismatch"))
+		send.assert_not_called()
+		self.assertEqual(frappe.db.get_value(ORDER, o.name, "payment_status"), "Unpaid")
+		frappe.local.response = frappe._dict()
+		payments._reject(res)
+		self.assertEqual(frappe.local.response["http_status_code"], 403)
+
+	def test_amount_or_currency_mismatch_does_not_mark_paid(self):
+		o = self._order()
+		with patch.object(reply_api, "deliver_reply") as send:
+			self.assertEqual(self._rzp(o, amount=100)["status"], "amount_mismatch")
+			self.assertEqual(self._rzp(o, currency="USD")["status"], "amount_mismatch")
+			self.assertEqual(self._stripe(o, amount=1)["status"], "amount_mismatch")
+			self.assertEqual(self._stripe(o, currency="usd")["status"], "amount_mismatch")
+		send.assert_not_called()
+		self.assertEqual(frappe.db.get_value(ORDER, o.name, "payment_status"), "Unpaid")
+
+	def test_duplicate_stripe_events_send_one_confirmation_under_row_lock(self):
+		o = self._order()
+		with patch.object(reply_api, "deliver_reply", return_value={"status": "sent"}) as send, patch.object(
+			frappe.db, "get_value", wraps=frappe.db.get_value
+		) as gv:
+			a = self._stripe(o)
+			b = self._stripe(o, event="checkout.session.async_payment_succeeded")
+		self.assertEqual((a["status"], b["status"]), ("paid", "already_paid"))
+		self.assertEqual(send.call_count, 1)
+		self.assertEqual(send.call_args.kwargs["category"], "utility")
+		self.assertTrue(any(c.kwargs.get("for_update") for c in gv.call_args_list))
+
+	def test_cart_recovery_needs_opt_in_and_honours_kill_switch(self):
+		o = self._order()
+		self._age(o)
+		with patch.object(reply_api, "deliver_reply") as send:
+			self.assertEqual(cart_recovery.run_cart_recovery(), 0)
+		send.assert_not_called()
+		self._opt_in()
+		with patch.object(reply_api, "deliver_reply") as send, patch("huf.ai.whatsapp.broadcast.schedule.emergency_stop_active", return_value=True):
+			self.assertEqual(cart_recovery.run_cart_recovery(), 0)
+		send.assert_not_called()
+
+	def test_cart_recovery_filters_by_order_gateway(self):
+		self._opt_in()
+		o = self._order()
+		self._age(o)
+		other = frappe.get_doc({**self.gw.as_dict(), "name": None, "gateway_name": f"Other {frappe.generate_hash(length=6)}", "doctype": "Gateway"}).insert(ignore_permissions=True)
+		frappe.db.set_value(ORDER, o.name, "gateway", other.name)
+		with patch.object(reply_api, "deliver_reply", return_value={"status": "sent"}) as send:
+			cart_recovery.run_cart_recovery()
+		self.assertFalse([c for c in send.call_args_list if c.args and c.args[0] == o.name])
+		self.assertFalse(frappe.db.get_value(ORDER, o.name, "reminder_sent_at"))
+
+	def test_cart_recovery_failure_retried_once_after_24h_only(self):
+		self._opt_in()
+		o = self._order()
+		self._age(o, hours=30)
+		with patch.object(reply_api, "deliver_reply", return_value={"status": "failed"}) as send:
+			cart_recovery.run_cart_recovery()
+			self.assertEqual(send.call_count, 1)
+			self.assertTrue(frappe.db.get_value(ORDER, o.name, "reminder_attempted_at"))
+			cart_recovery.run_cart_recovery()  # within 24h: no retry
+			self.assertEqual(send.call_count, 1)
+			frappe.db.set_value(ORDER, o.name, "reminder_attempted_at", add_to_date(now_datetime(), hours=-25))
+			cart_recovery.run_cart_recovery()  # the one retry
+			self.assertEqual(send.call_count, 2)
+			frappe.db.set_value(ORDER, o.name, "reminder_attempted_at", add_to_date(now_datetime(), hours=-50))
+			cart_recovery.run_cart_recovery()  # never more
+			self.assertEqual(send.call_count, 2)

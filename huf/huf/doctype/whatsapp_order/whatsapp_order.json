@@ -18,7 +18,8 @@
   "section_payment",
   "payment_link",
   "source_message_id",
-  "reminder_sent_at"
+  "reminder_sent_at",
+  "reminder_attempted_at"
  ],
  "fields": [
   {
@@ -116,6 +117,12 @@
    "fieldname": "reminder_sent_at",
    "fieldtype": "Datetime",
    "label": "Cart reminder sent at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reminder_attempted_at",
+   "fieldtype": "Datetime",
+   "label": "Cart reminder last failed at",
    "read_only": 1
   }
  ],
