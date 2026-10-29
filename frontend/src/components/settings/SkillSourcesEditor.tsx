@@ -62,7 +62,7 @@ export function SkillSourcesEditor({ rows, onChange }: SkillSourcesEditorProps) 
 
   return (
     <div className="space-y-4" data-testid="skill-sources-editor">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           Each source is a repository folder that holds skills. They appear in the skill import window.
         </p>

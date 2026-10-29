@@ -332,6 +332,9 @@ export function IntegrationSettingsDetailsPage({
   };
   const { health, fixLabel } = deriveStatus(savedDoc, live, isNew);
 
+  // After a refused or empty check the check itself says what is wrong; the step error would only repeat it.
+  const showLastProblem = !live && docMeta.testStatus !== 'Rejected' && docMeta.testStatus !== 'Not connected';
+
   const openCredentials = () => {
     setActiveTab('connection');
     requestAnimationFrame(() => {
@@ -361,7 +364,7 @@ export function IntegrationSettingsDetailsPage({
         testing={testing}
         fixLabel={fixLabel}
         onFix={openCredentials}
-        lastProblem={plainProblem(docMeta.lastError) || undefined}
+        lastProblem={showLastProblem ? plainProblem(docMeta.lastError) || undefined : undefined}
         onDismissProblem={dismissProblem}
       />
     ) : null;
