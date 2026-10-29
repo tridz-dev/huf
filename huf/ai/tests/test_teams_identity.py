@@ -270,10 +270,10 @@ def _non_admin(monkeypatch, can_write=False):
 	monkeypatch.setattr(frappe, "has_permission", lambda *a, **k: can_write, raising=False)
 
 
+_AUTOUSE = (_fx_env,)
+
+
 class TestModule(SupportCase):
-	def setUp(self):
-		super().setUp()
-		self.use(_fx_env)
 	# ---- resolve_user / hook ------------------------------------------------------
 	def test_resolve_user_linked(self):
 		store = self.use(_fx_store)

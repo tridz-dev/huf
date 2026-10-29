@@ -37,10 +37,10 @@ def verify(token, *, fetch=None, now=T, url=URL, app_id=fx.DEFAULT_APP_ID, heade
 	)
 
 
+_AUTOUSE = (_fx_clean,)
+
+
 class TestModule(SupportCase):
-	def setUp(self):
-		super().setUp()
-		self.use(_fx_clean)
 	def test_valid_token_passes(self):
 		r = verify(fx.make_token())
 		assert r.ok and r.reason == tc.REASON_OK

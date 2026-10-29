@@ -125,11 +125,14 @@ class CapLog:
 
 
 class SupportCase(unittest.TestCase):
-	def _callSetUp(self):
+	def _autouse(self):
 		import sys
 
 		for fx in getattr(sys.modules[type(self).__module__], "_AUTOUSE", ()):
 			self.use(fx)
+
+	def _callSetUp(self):
+		self._autouse()
 		super()._callSetUp()
 
 	@property
@@ -143,15 +146,17 @@ class SupportCase(unittest.TestCase):
 	def _fin(self, fn):
 		if "_fx_fins" not in self.__dict__:
 			self._fx_fins = []
-			self.addCleanup(self.reset_fixtures)
+			self.addCleanup(self.reset_fixtures, False)
 		self._fx_fins.append(fn)
 
-	def reset_fixtures(self):
+	def reset_fixtures(self, rerun_autouse=True):
 		"""Finalise and forget every fixture so far (pytest builds them fresh per parametrized case)."""
 		fins = self.__dict__.get("_fx_fins", [])
 		while fins:
 			fins.pop()()
 		self.__dict__.get("_fx_cache", {}).clear()
+		if rerun_autouse:
+			self._autouse()
 
 	def _make_monkeypatch(self):
 		m = MonkeyPatch()

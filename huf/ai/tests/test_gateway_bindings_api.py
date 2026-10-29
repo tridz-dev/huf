@@ -157,10 +157,10 @@ def ch(i, **kw):
 	return {"id": f"C{i}", "name": f"chan{i}", "is_member": True, **kw}
 
 
+_AUTOUSE = (_fx_env,)
+
+
 class TestModule(SupportCase):
-	def setUp(self):
-		super().setUp()
-		self.use(_fx_env)
 	# ---- permissions ----
 	def test_denied_without_role_or_write(self):
 		monkeypatch = self.monkeypatch

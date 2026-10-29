@@ -153,11 +153,10 @@ def _real_adapter_send(target, posted):
 	return adapter.send_reply(reply)
 
 
+_AUTOUSE = (_fx_heavy_modules, _fx_clean,)
+
+
 class TestModule(SupportCase):
-	def setUp(self):
-		super().setUp()
-		self.use(_fx_heavy_modules)
-		self.use(_fx_clean)
 	# ---- hooks ----
 	def test_call_first_strict_converts_exception_to_denied(self):
 		monkeypatch = self.monkeypatch

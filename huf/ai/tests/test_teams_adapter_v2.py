@@ -255,11 +255,10 @@ def _send(ad, ob, **kw):
 	return ob.calls[-1][4]
 
 
+_AUTOUSE = (_fx_fresh_auth_cache, _fx_cache,)
+
+
 class TestModule(SupportCase):
-	def setUp(self):
-		super().setUp()
-		self.use(_fx_fresh_auth_cache)
-		self.use(_fx_cache)
 	def test_fixture_kind(self):
 		for name, kind in [
 		("channel_mention", "message"),

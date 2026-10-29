@@ -222,10 +222,10 @@ def _fx_send(self):
 	return run
 
 
+_AUTOUSE = (_fx_heavy_modules,)
+
+
 class TestModule(SupportCase):
-	def setUp(self):
-		super().setUp()
-		self.use(_fx_heavy_modules)
 	# ---- failure notice ----
 	def test_failure_notice_has_ref_and_no_error_text(self):
 		env = self.use(_fx_env)

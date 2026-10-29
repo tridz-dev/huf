@@ -128,11 +128,10 @@ def ctx(tenant=HOME, conv_tenant=None):
 	return {"raw_payload": raw}
 
 
+_AUTOUSE = (_fx_env, _fx_creds,)
+
+
 class TestModule(SupportCase):
-	def setUp(self):
-		super().setUp()
-		self.use(_fx_env)
-		self.use(_fx_creds)
 	# ---- GUID validation -----------------------------------------------------------
 	def test_normalize_guid_lowercases(self):
 		assert tt.normalize_guid(HOME.upper()) == HOME

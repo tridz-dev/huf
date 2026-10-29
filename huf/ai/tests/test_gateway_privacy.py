@@ -87,10 +87,10 @@ def ev(conv="C1", ctype=None, sender="U1", thread="111.2", name="EV-1", run=None
 	)
 
 
+_AUTOUSE = (_fx_env,)
+
+
 class TestModule(SupportCase):
-	def setUp(self):
-		super().setUp()
-		self.use(_fx_env)
 	# ---- policies -------------------------------------------------------------------
 	def test_reply_where_asked_no_change(self):
 		env = self.use(_fx_env)

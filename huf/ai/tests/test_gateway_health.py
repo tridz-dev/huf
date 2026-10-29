@@ -201,10 +201,10 @@ def _by(results):
 	return {r["check"]: r for r in results}
 
 
+_AUTOUSE = (_fx_env,)
+
+
 class TestModule(SupportCase):
-	def setUp(self):
-		super().setUp()
-		self.use(_fx_env)
 	# ------------------------------------------------------------------ hooks
 	def test_hooks_registered_for_all_providers(self):
 		env = self.use(_fx_env)

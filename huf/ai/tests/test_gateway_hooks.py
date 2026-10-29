@@ -45,10 +45,10 @@ def _flags(monkeypatch):
 	return frappe.flags
 
 
+_AUTOUSE = (_fx_clean,)
+
+
 class TestModule(SupportCase):
-	def setUp(self):
-		super().setUp()
-		self.use(_fx_clean)
 	def test_priority_order_and_call_all(self):
 		hooks.register("h", lambda g: "b", priority=200)
 		hooks.register("h", lambda g: "a", priority=10)

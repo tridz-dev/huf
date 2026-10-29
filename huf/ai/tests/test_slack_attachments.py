@@ -31,11 +31,10 @@ def dl(kind, mime, name="a", size=10):
 	return {"file_doc": "FILE-1", "filename": name, "mime_type": mime, "size": size, "kind": kind, "file_id": "F1"}
 
 
+_AUTOUSE = (_fx_creds, _fx_no_api,)
+
+
 class TestModule(SupportCase):
-	def setUp(self):
-		super().setUp()
-		self.use(_fx_creds)
-		self.use(_fx_no_api)
 	def test_no_files_returns_none(self):
 		assert sa.build_files(object(), ev([])) is None
 		assert sa.build_files(object(), SimpleNamespace(raw_payload={})) is None

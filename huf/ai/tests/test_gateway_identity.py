@@ -218,10 +218,10 @@ def _ask(monkeypatch, event=None):
 	return exc.exception.reason
 
 
+_AUTOUSE = (_fx_env,)
+
+
 class TestModule(SupportCase):
-	def setUp(self):
-		super().setUp()
-		self.use(_fx_env)
 	# ---- lookup -------------------------------------------------------------------
 	def test_linked_hit(self):
 		monkeypatch = self.monkeypatch
