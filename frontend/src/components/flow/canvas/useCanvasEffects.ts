@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { flowService } from '../../../services/flowService';
+import { edgeRoute } from '../../../services/flowSerializer';
+import { onEdgeAction } from '@/lib/flow-graph/edgeActions';
+import type { FlowEdgeRoute } from '../../../types/flow.types';
 
 /** Keyboard undo (Cmd/Ctrl+Z). Skipped while focus is in a text field so it doesn't fight the input's own native undo. */
 export function useUndoShortcut(undo: () => void, canUndo: boolean) {
@@ -46,4 +49,18 @@ export function useConvertedProcedure(flowId: string | undefined, version: unkno
     };
   }, [flowId, version, saveState]);
   return convertedProcedure;
+}
+
+/** Runs the "Add a step here" / "Remove connection" buttons of the connection panel on the canvas. */
+export function useEdgeActions(edges: Array<{ id: string; source: string; data?: unknown; sourceHandle?: string | null }>, onInsert: (sourceNodeId: string, route: FlowEdgeRoute) => void, onRemove: (edgeId: string) => void) {
+  useEffect(
+    () =>
+      onEdgeAction(({ type, edgeId }) => {
+        const edge = edges.find((e) => e.id === edgeId);
+        if (!edge) return;
+        if (type === 'remove') onRemove(edgeId);
+        else onInsert(edge.source, edgeRoute(edge as Parameters<typeof edgeRoute>[0]));
+      }),
+    [edges, onInsert, onRemove],
+  );
 }

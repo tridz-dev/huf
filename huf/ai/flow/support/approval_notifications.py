@@ -6,11 +6,14 @@ names, so tests can still patch them on the engine module.
 
 from __future__ import annotations
 
+import html
+
 import frappe
 from frappe import _
 from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
 from frappe.desk.doctype.notification_settings.notification_settings import is_email_notifications_enabled
 
+from huf.ai.flow.support.approval_card import build_card, facts_html, flow_name_of
 from huf.ai.transaction import commit_if_background
 
 
@@ -73,58 +76,53 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 		)
 		return
 	
-	title = "Approval Required"
-	instructions = waiting_data.get("message") or "Please review and approve this flow."
-	
+	card = build_card(waiting_data.get("flow_name") or flow_name_of(flow_run), waiting_data)
+	headline, lead, facts = card["headline"], card["lead"], card["facts"]
+
 	flow_run_path = f"/huf/flows/{flow_run.flow_id}?run={flow_run.name}"
-	
+
 	_host = (frappe.conf.get("host_name") or frappe.utils.get_url()).rstrip("/")
 	flow_run_url = f"{_host}{flow_run_path}"
 
-	
+	# The bell entry and the email say the same thing: a sentence, the key facts, one link. No flow id, run id
+	# or payload; the link opens the run.
+	body = f"<p>{html.escape(lead)}</p>{facts_html(facts)}"
+
 	# Create notification for each approver
 	for user in approvers:
 		try:
 			# Get user email for notification (enqueue_create_notification expects emails)
 			user_email = frappe.db.get_value("User", user, "email") or user
-			
+
 			# 1. Create Frappe Notification Log (appears in bell icon)
 			enqueue_create_notification(user_email, {
 				"type": "Assignment",
 				"document_type": "Flow Run",
 				"document_name": flow_run.name,
-				"subject": _("Approval Required: {0}").format(title),
+				"subject": headline,
 				"email_content": f"""
-					<p>{instructions}</p>
-					<p><strong>{_("Flow")}:</strong> {flow_run.flow_id}</p>
-					<p><strong>{_("Run ID")}:</strong> {flow_run.name}</p>
-					<p><a href="{flow_run_url}">{_("View Flow Run")}</a></p>
+					{body}
+					<p><a href="{flow_run_url}">{_("Review and decide")}</a></p>
 				""",
 			})
-			
+
 			if is_email_notifications_enabled(user):
 				user_doc = frappe.get_doc("User", user)
 				if user_doc.email:
 					frappe.sendmail(
 						recipients=[user_doc.email],
-						subject=_("[HUF] Approval Required: {0}").format(title),
+						subject=headline,
 						message=f"""
-							<p>{_("Dear")} {user_doc.full_name or user},</p>
-							<p>{_("A flow is waiting for your approval.")}</p>
-							<hr>
-							<p><strong>{_("Flow")}:</strong> {flow_run.flow_id}</p>
-							<p><strong>{_("Run ID")}:</strong> {flow_run.name}</p>
-							<p><strong>{_("Instructions")}:</strong></p>
-							<p>{instructions}</p>
-							<hr>
+							<p>{_("Hello")} {html.escape(user_doc.full_name or user)},</p>
+							{body}
 							<p>
-								<a href="{flow_run_url}" 
+								<a href="{flow_run_url}"
 								   style="background-color: #171717; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-									{_("Review Approval")}
+									{_("Review and decide")}
 								</a>
 							</p>
 							<p style="color: #666; font-size: 12px;">
-								{_("This is an automated message from the HUF Flow Engine.")}
+								{_("Open the link to approve or reject. You are getting this because you can decide this request.")}
 							</p>
 						""",
 						delayed=True,

@@ -18,20 +18,20 @@ import { actionHasConfiguredContent } from '../lib/flow/flowNodeConfigured';
 import { TriggerNode } from './nodes/TriggerNode';
 import { ActionNode } from './nodes/ActionNode';
 import { EndNode } from './nodes/EndNode';
-import { AddStepGhostNode, AddStepGhostNodeData } from './nodes/AddStepGhostNode';
-import { InsertableEdge, InsertableEdgeData } from './edges/InsertableEdge';
+import { AddStepGhostNode } from './nodes/AddStepGhostNode';
+import { InsertableEdge, GhostEdge } from './edges/InsertableEdge';
 import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { FlowNodeRail, NODE_RAIL_ACTION_CATEGORY, NodeRailCategory } from './FlowNodeRail';
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
 import { DeleteStepDialog } from './flow/DeleteStepDialog';
-import { FIT_VIEW_OPTIONS, FitViewAfterRemovalOrLayout, FlowControls, FlowMiniMap, keepCanvasUnscrolled, withSelection } from './flow/canvas/canvasView';
+import { FIT_VIEW_OPTIONS, FitViewAfterRemovalOrLayout, FlowControls, FlowMiniMap, KeepSelectedClearOfToolbar, keepCanvasUnscrolled } from './flow/canvas/canvasView';
+import { useRenderedGraph } from './flow/canvas/useRenderedGraph';
 import { FlowCanvasToolbar } from './flow/canvas/FlowCanvasToolbar';
 import { EdgeDeleteDialog } from './flow/canvas/EdgeDeleteDialog';
-import { useConvertedProcedure, useUndoShortcut } from './flow/canvas/useCanvasEffects';
+import { useConvertedProcedure, useEdgeActions, useUndoShortcut } from './flow/canvas/useCanvasEffects';
 import { connectionProblem } from '../lib/flow/flowEdit';
 import { useFlowContext } from '../contexts/FlowContext';
-import { edgeRoute } from '../services/flowSerializer';
-import { addActionStep, computeOpenEnds, connectSteps, connectionRoute, ghostPositions } from '../lib/flow-graph/flowCanvasGraph';
+import { RENDER_ONLY_EDGE_PREFIX, RENDER_ONLY_NODE_PREFIX, addActionStep, computeOpenEnds, connectSteps, connectionRoute } from '../lib/flow-graph/flowCanvasGraph';
 import { toast } from '@/lib/toast';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { FirstRunGuide } from './flow/FirstRunGuide';
@@ -168,7 +168,7 @@ export function FlowCanvas({
       const realChanges = changes.filter((change) => {
         const changeId = 'id' in change ? change.id : undefined;
         if (!canManage && change.type !== 'select' && change.type !== 'dimensions') return false; // view-only: nothing moves or goes away
-        return !changeId || !changeId.startsWith('ghost-');
+        return !changeId || !changeId.startsWith(RENDER_ONLY_NODE_PREFIX);
       });
       if (realChanges.length === 0) return;
 
@@ -207,7 +207,7 @@ export function FlowCanvas({
       const realChanges = changes.filter((change) => {
         const changeId = 'id' in change ? change.id : undefined;
         if (!canManage && change.type !== 'select') return false;
-        return !changeId || !changeId.startsWith('edge-ghost-');
+        return !changeId || !changeId.startsWith(RENDER_ONLY_EDGE_PREFIX);
       });
       if (realChanges.length === 0) return;
       // Selecting or deselecting an edge is view state, not an edit.
@@ -272,10 +272,10 @@ export function FlowCanvas({
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable || target?.closest('[role="dialog"], [role="alertdialog"], [role="combobox"], [role="listbox"], [role="menu"]')) return;
       // Only when the user is on the canvas (or nowhere in particular), never in another part of the page.
       if (target && target !== document.body && !target.closest('[data-testid="flow-canvas"]')) return;
-      const node = nodes.find((n) => n.selected && !n.id.startsWith('ghost-')) ?? nodes.find((n) => n.id === selectedNodeId);
+      const node = nodes.find((n) => n.selected && !n.id.startsWith(RENDER_ONLY_NODE_PREFIX)) ?? nodes.find((n) => n.id === selectedNodeId);
       if (!node) {
         // No step selected: Delete removes the selected connection (after asking).
-        const edge = edges.find((ed) => ed.selected && !ed.id.startsWith('edge-ghost-')) ?? edges.find((ed) => ed.id === selectedEdgeId);
+        const edge = edges.find((ed) => ed.selected && !ed.id.startsWith(RENDER_ONLY_EDGE_PREFIX)) ?? edges.find((ed) => ed.id === selectedEdgeId);
         if (edge) {
           e.preventDefault();
           setEdgeDeleteId(edge.id);
@@ -400,7 +400,7 @@ export function FlowCanvas({
     []
   );
 
-  const edgeTypesWithInsert = useMemo(() => ({ insertable: InsertableEdge }), []);
+  const edgeTypesWithInsert = useMemo(() => ({ insertable: InsertableEdge, ghost: GhostEdge }), []);
 
   const openEnds = useMemo(() => computeOpenEnds(nodes, edges), [nodes, edges]);
 
@@ -464,60 +464,10 @@ export function FlowCanvas({
     [nodes, insertionSourceId, openEnds]
   );
 
-  // Persistent "Add step" ghost card trailing the end of each open branch
-  // (i.e. every node with no outgoing edge). Purely a render-time affordance —
-  // it is never written back to the flow's nodes/edges via updateNodesAndEdges.
-  const ghostNodes = useMemo<Node<AddStepGhostNodeData>[]>(() => {
-    if (!canManage) return []; // view-only: no "Add step" cards
-    const spots = ghostPositions(nodes, openEnds);
-    return openEnds.map((end, i) => {
-      const { x, y } = spots[i];
-      return {
-        id: `ghost-${end.nodeId}-${end.route}`,
-        type: 'addStep',
-        position: { x, y },
-        draggable: false,
-        selectable: false,
-        connectable: false,
-        focusable: false, // its own button is the control; the wrapper must not be a second, nested one
-        data: { sourceNodeId: end.nodeId, route: end.route, branchLabel: end.label, onAddNode: handleAddNode }
-      };
-    });
-  }, [canManage, openEnds, nodes, handleAddNode]);
+  useEdgeActions(edges, handleAddNode, setEdgeDeleteId);
 
-  const ghostEdges = useMemo<Edge[]>(
-    () =>
-      ghostNodes.map((ghost) => ({
-        id: `edge-${ghost.id}`,
-        source: ghost.data.sourceNodeId,
-        sourceHandle: openEnds.find((o) => `ghost-${o.nodeId}-${o.route}` === ghost.id)?.handleId,
-        target: ghost.id,
-        type: 'default',
-        selectable: false,
-        focusable: false
-      })),
-    [ghostNodes, openEnds]
-  );
-
-  // The highlighted step always follows the selection the side panel shows (see withSelection).
-  const renderedNodes = useMemo(() => [...withSelection(nodes, selectedNodeId), ...(ghostNodes as unknown as Node<FlowNodeData>[])], [nodes, ghostNodes, selectedNodeId]);
-
-  // Real edges get the hover "+" insert affordance (mid-chain insertion);
-  // ghost edges (leading to the trailing "Add step" card) render as plain
-  // edges since that leaf already has its own persistent affordance.
-  const insertableEdges = useMemo<Edge<InsertableEdgeData>[]>(
-    () =>
-      edges.map((edge) => ({
-        ...edge,
-        type: 'insertable',
-        data: { ...(edge.data ?? {}), sourceNodeId: edge.source, route: edgeRoute(edge), onInsertNode: handleAddNode, onRemove: (edgeId: string) => setEdgeDeleteId(edgeId) }
-      })),
-    [edges, handleAddNode]
-  );
-  const renderedEdges = useMemo(
-    () => [...insertableEdges, ...ghostEdges],
-    [insertableEdges, ghostEdges]
-  );
+  // On-screen-only extras (Add step cards, the loop's return line, End subtitles) are never written back to the flow.
+  const { renderedNodes, renderedEdges } = useRenderedGraph({ canManage, nodes, edges, openEnds, selectedNodeId, onAddNode: handleAddNode, onRemoveEdge: setEdgeDeleteId });
 
   if (!activeFlow) {
     return (
@@ -557,23 +507,19 @@ export function FlowCanvas({
         nodesDraggable={canManage}
         nodesConnectable={canManage}
         elementsSelectable
-        fitView
         fitViewOptions={FIT_VIEW_OPTIONS}
         minZoom={FIT_VIEW_OPTIONS.minZoom}
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
-        className="bg-background w-full h-full"
+        className="bg-background w-full h-full [&_.react-flow__handle]:transition-shadow [&_.react-flow__handle]:after:absolute [&_.react-flow__handle]:after:-inset-2 [&_.react-flow__handle]:after:content-[''] [&_.react-flow__handle:hover]:!bg-signal [&_.react-flow__handle:hover]:shadow-[0_0_0_4px_color-mix(in_srgb,var(--signal)_30%,transparent)]"
         onScroll={keepCanvasUnscrolled}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={2} color="color-mix(in srgb, var(--muted-foreground) 35%, transparent)" />
         {/* showInteractive (lock toggle button) defaults to true, so it's already shown */}
         <FlowControls className="!bottom-6 !rounded-lg !border !border-line !overflow-hidden !shadow-sm" />
-        <FlowMiniMap />
+        <FlowMiniMap stepCount={nodes.length} />
+        <KeepSelectedClearOfToolbar selectedNodeId={selectedNodeId} />
         <FitViewAfterRemovalOrLayout flowId={activeFlow?.id} nodeCount={activeFlow?.nodes.length ?? 0} edgeCount={activeFlow?.edges.length ?? 0} layoutRevision={layoutRevision} />
-        {canManage && nodes.length <= 1 && (
-          <Panel position="top-center" className="mt-[68px]">
-            <FirstRunGuide />
-          </Panel>
-        )}
+        {canManage && nodes.length <= 1 && <FirstRunGuide />}
         <Panel position="top-right" className="m-2">
           <FlowCanvasToolbar
             canManage={canManage}

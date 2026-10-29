@@ -211,6 +211,12 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-run-payload-hint` | Run dialog help under the input box |
 | `flow-run-history-header`, `flow-run-history-body`, `flow-run-history-timezone` | Sticky header, scrolling body and time zone note of the Runs sheet |
 | `flow-run-details-header`, `flow-run-details-body`, `flow-run-timezone-note` | Same for Run details |
+| `flow-view-only-pill`, `flow-view-only-pill-hint` | "View only" pill beside the flow name in the editor header (people who cannot edit the flow; tooltip on hover and focus) |
+| `flow-webhook-secret-hidden` | Replaces the secret field, Copy and Regenerate for people who cannot edit the flow; none of `flow-webhook-copy-secret`, `flow-webhook-regenerate` or the secret input exist for them |
+| `flow-settings-view-only`, `flow-settings-name-value`, `flow-settings-description-value`, `flow-settings-category-value`, `flow-settings-close` | Read-only flow settings (no Save, Cancel, Delete or inputs) |
+| `flow-run-history-empty` | Empty Runs sheet; the text for view-only users has no "Press Run" |
+| `flow-not-connected-note-<suffix>` | "A flow editor needs to connect X" shown instead of the Connect link to view-only users |
+| `settings-skill-sources`, `settings-skill-source-<name>`, `settings-skill-sources-empty`, `settings-skill-sources-error` | Read-only skill sources on Agent settings (people who are not system administrators; there is no JSON box and no Save destinations) |
 
 ## UX-2 humanize core (HumanValue, JsonArea, friendly run title)
 | testid | Where |

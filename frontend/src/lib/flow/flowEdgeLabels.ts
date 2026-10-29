@@ -1,5 +1,6 @@
 import type { FlowEdge } from '../../types/flow.types';
 import { edgeRoute } from '../../services/flowSerializer';
+import { COLUMN_GAP } from './flowLayout';
 
 /**
  * Router path names start as the target step's title and keep following that title when the step is
@@ -43,7 +44,7 @@ export function subtreeIds(rootId: string, edges: Array<Pick<FlowEdge, 'source' 
 export function branchColumnShift(
   targetX: number,
   siblingXs: number[],
-  column = 280
+  column = COLUMN_GAP
 ): number {
   let x = targetX;
   let guard = 0;

@@ -8,8 +8,8 @@ import { DeleteStepDialog } from './flow/DeleteStepDialog';
 import { useFlowContext } from '../contexts/FlowContext';
 import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { ActionConfigForm, TriggerConfigForm } from './flow/NodeConfigForms';
+import { EdgeConnectionPanel } from './flow/canvas/EdgeConnectionPanel';
 import { FlowValueInput } from './FlowValueInput';
-import { edgeRoute } from '../services/flowSerializer';
 import { validateNode } from '@/lib/flow-graph/flowValidation';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { triggerLabel } from '@/lib/flow/flowLabels';
@@ -23,21 +23,8 @@ interface RightSidebarProps {
 
 const TRIGGER_ICONS: Record<string, string> = { webhook: 'Webhook', schedule: 'Clock', 'doc-event': 'Database' };
 
-const ROUTE_TEXT: Record<string, string> = {
-  next: 'Runs next',
-  error: 'Runs if the step fails',
-  true: 'Runs when the condition is true',
-  false: 'Runs when the condition is false',
-  option: 'A path the AI can choose',
-  default: 'Used when nothing else matches',
-  approve: 'Runs when approved',
-  reject: 'Runs when rejected',
-  timeout: 'Runs when nobody answers in time',
-  body: 'Runs once for each item',
-};
-
 export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps) {
-  const { activeFlow, selectedNodeId, selectedEdgeId, updateNode, updateNodeData, updateEdges } = useFlowContext();
+  const { activeFlow, selectedNodeId, selectedEdgeId, updateNode, updateNodeData } = useFlowContext();
   const selectedNode = activeFlow?.nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = activeFlow?.edges.find((e) => e.id === selectedEdgeId);
   const { canManage } = useFlowPermissions();
@@ -51,7 +38,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
   return (
     <div
       data-testid="flow-config-sidebar"
-      className={cn('relative bg-card flex flex-col w-[300px]', 'h-full', !isSheet && 'border-l border-border')}
+      className={cn('relative bg-card flex flex-col', isSheet ? 'w-full max-w-full' : 'w-[300px] border-l border-border', 'h-full')}
     >
       {!canManage && (selectedNode || selectedEdge) && (
         <div role="status" className="shrink-0 border-b border-border bg-muted px-3.5 py-2 text-xs text-muted-foreground" data-testid="flow-view-only-banner">
@@ -69,27 +56,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
             </p>
           </div>
         ) : selectedEdge ? (
-          <div className="space-y-3" data-testid="flow-edge-config">
-            <div className="text-sm font-semibold">Connection</div>
-            <p className="text-xs text-muted-foreground" data-testid="flow-edge-meaning">
-              {ROUTE_TEXT[edgeRoute(selectedEdge)] ?? 'Connection'}
-            </p>
-            {edgeRoute(selectedEdge) === 'option' ? (
-              <div>
-                <Label htmlFor="edge-label" size="sm">Path name</Label>
-                <Input
-                  id="edge-label"
-                  data-testid="flow-edge-label"
-                  value={(selectedEdge.label as string) || ''}
-                  onChange={(e) =>
-                    activeFlow && updateEdges(activeFlow.edges.map((edge) => (edge.id === selectedEdge.id ? { ...edge, label: e.target.value } : edge)))
-                  }
-                  placeholder="For example: urgent"
-                />
-                <p className="text-[11px] text-muted-foreground mt-1">The AI picks the path whose name fits best.</p>
-              </div>
-            ) : null}
-          </div>
+          <EdgeConnectionPanel edgeId={selectedEdge.id} />
         ) : selectedNode ? (
           <>
             <div className="sticky -top-3.5 z-10 bg-card -mx-3.5 -mt-3.5 mb-0 h-10 px-3.5 flex items-center gap-2 border-b border-border shrink-0">
@@ -105,12 +72,14 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
               )}
-              <Button variant="ghost" size="icon-sm" aria-label="Close settings" data-testid="flow-sidebar-close" className="hover:bg-accent" onClick={onToggle}>
-                <X className="w-3.5 h-3.5 text-muted-foreground" />
-              </Button>
+              {!isSheet && (
+                <Button variant="ghost" size="icon-sm" aria-label="Close settings" data-testid="flow-sidebar-close" className="hover:bg-accent" onClick={onToggle}>
+                  <X className="w-3.5 h-3.5 text-muted-foreground" />
+                </Button>
+              )}
             </div>
 
-            {issues.length > 0 && (
+            {canManage && issues.length > 0 && (
               <div role="status" className="flex items-start gap-2 rounded-md border border-signal/40 bg-signal/5 p-2 text-xs" data-testid="flow-node-incomplete">
                 <AlertCircle className="w-4 h-4 text-signal shrink-0" />
                 <span>Finish setting up {selectedNode.data.label}: {issues[0].message}{issues.length > 1 ? ` (${issues.length - 1} more)` : ''}</span>

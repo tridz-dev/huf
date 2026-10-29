@@ -50,6 +50,7 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
+from huf.ai.flow.support.approval_card import waiting_fields
 from huf.ai.flow.support.approval_notifications import _clear_flow_notifications, _send_approval_notifications
 from huf.ai.flow.support.approvers import approval_expired, check_approver
 from huf.ai.flow.integrations import friendly_tool_error
@@ -66,6 +67,7 @@ from huf.ai.flow.orchestrator import (
 	build_flow_context_system_message,
 	build_router_prompt,
 )
+from huf.ai.flow.support.redact import pinned_json
 from huf.ai.flow.tool_executor import execute as execute_tool
 from huf.ai.flow.tool_executor import tool_run_context
 from huf.ai.graph.executor import (
@@ -82,6 +84,10 @@ from huf.ai.graph.executor import (
 	RoutingError,
 	RoutingMode,
 	Router,
+)
+from huf.ai.graph.error_copy import (
+	approval_timeout_message, describe_exception, describe_run_error, no_route_message, plain_error,
+	step_failed_sentence, step_ref, step_title, tool_timeout_message,
 )
 from huf.ai.graph.expressions import evaluate_bool, parse_expression
 from huf.ai.graph.transforms import Limits as TransformLimits
@@ -241,7 +247,7 @@ def load_definition(flow_id: str) -> dict:
 	"""
 	doc = frappe.get_doc("Flow Definition", flow_id)
 	if doc.status != "Active":
-		frappe.throw(_("Flow '{0}' is not active (status: {1})").format(flow_id, doc.status))
+		frappe.throw(_("This flow is not published yet. Publish it before running it."))
 
 	defn = json.loads(doc.definition_json) if isinstance(doc.definition_json, str) else doc.definition_json
 	return defn
@@ -275,12 +281,7 @@ def _store_pin(flow_run, version: PinnedVersion) -> None:
 	try:
 		if not frappe.db.has_column("Flow Run", "pinned_definition"):
 			return
-		flow_run.db_set(
-			{
-				"pinned_fingerprint": version.fingerprint,
-				"pinned_definition": version.to_json(),
-			}
-		)
+		flow_run.db_set({"pinned_fingerprint": version.fingerprint, "pinned_definition": pinned_json(version)})
 	except Exception:
 		# Pin persistence is an optimisation over re-resolving; never let it
 		# take down a run.
@@ -295,7 +296,7 @@ def _store_pin(flow_run, version: PinnedVersion) -> None:
 #: A Flow Run left in Queued/Running for longer than this (no change, no live run lock) lost its
 #: worker; the every-5-minutes sweeper (:func:`sweep_stale_runs`) fails it.
 STALE_RUN_SWEEP_MINUTES = 30
-STALE_RUN_SWEEP_REASON = "Run did not complete (worker stopped)"
+STALE_RUN_SWEEP_REASON = "The run stopped before it finished, probably because the server restarted. Run it again."
 
 
 def sweep_stale_runs(now=None, minutes: int | None = None) -> list[str]:
@@ -432,7 +433,7 @@ def select_entry_node(defn: dict, trigger_type: str = "Manual") -> str:
 	entry = defn.get("entry")
 	entries = [entry] if isinstance(entry, str) else [e for e in (entry or []) if isinstance(e, str)]
 	if not entries:
-		raise ValueError("Flow definition has no entry node")
+		raise ValueError("This flow has no starting step. Add a trigger and try again.")
 	wanted = TRIGGER_NODE_TYPES.get(trigger_type)
 	if wanted is None:
 		return entries[0]
@@ -442,7 +443,7 @@ def select_entry_node(defn: dict, trigger_type: str = "Manual") -> str:
 			return node_id
 	if all(not str(types.get(e) or "").startswith("trigger.") for e in entries):
 		return entries[0]
-	raise ValueError(f"Flow has no {wanted} entry for a {trigger_type} run")
+	raise ValueError(f"This flow does not start from a {trigger_type} trigger, so it cannot be run that way.")
 
 
 def create_flow_run(
@@ -477,12 +478,12 @@ def create_flow_run(
 	from huf.huf.doctype.flow_definition.activation_rules import entry_is_unset
 
 	if entry_is_unset(defn):
-		frappe.throw(_("Flow {0} has no trigger configured (trigger.unset is not runnable)").format(flow_id))
+		frappe.throw(_("This flow has no trigger yet. Choose what starts it, then run it again."))
 
 	try:
 		entry_node = select_entry_node(defn, trigger_type)
 	except ValueError as exc:
-		frappe.throw(_("Cannot start flow {0}: {1}").format(flow_id, str(exc)))
+		frappe.throw(_("This flow cannot be started. {0}").format(str(exc)))
 
 	from huf.ai.flow import code_node
 
@@ -517,7 +518,7 @@ def create_flow_run(
 	}
 	if _has_pin_columns():
 		fields["pinned_fingerprint"] = version.fingerprint
-		fields["pinned_definition"] = version.to_json()
+		fields["pinned_definition"] = pinned_json(version)
 
 	flow_run = frappe.get_doc(fields)
 	# Authenticated callers are already verified by the public API.
@@ -527,7 +528,7 @@ def create_flow_run(
 		flow_run.insert(ignore_permissions=True)
 	else:
 		if not frappe.has_permission("Flow Run", "create", doc=flow_run):
-			frappe.throw(_("Not permitted to create Flow Run"), frappe.PermissionError)
+			frappe.throw(_("You do not have permission to run flows. Ask an admin for access."), frappe.PermissionError)
 		flow_run.insert()
 	commit_if_background()
 
@@ -578,7 +579,7 @@ def run_flow(flow_run_name: str):
 		try:
 			_execute_loop(flow_run, nodes_map, edges_list, run_ctx)
 		except Exception as e:
-			_fail_flow_run(flow_run, str(e))
+			_fail_flow_run(flow_run, describe_exception(e))
 			frappe.log_error(f"Flow engine error: {frappe.get_traceback()}", "Flow Engine")
 	finally:
 		_release_run_lock(flow_run_name)
@@ -629,10 +630,10 @@ def resume_flow_run(flow_run_name: str, user_input: dict | None = None):
 		flow_run = frappe.get_doc("Flow Run", flow_run_name)
 
 		if flow_run.status not in WAITING_STATUSES:
-			frappe.throw(_("Flow Run is not in a waiting state (status: {0})").format(flow_run.status))
+			frappe.throw(_("This run is not waiting for anything right now."))
 		if flow_run.status == "Waiting Approval":
 			# An approval is only ever resolved by approve_flow_run, which checks the approver.
-			frappe.throw(_("Flow Run is waiting for approval; use approve_flow_run"), frappe.PermissionError)
+			frappe.throw(_("This run is waiting for approval. An approver has to approve or reject it."), frappe.PermissionError)
 
 		waiting = _load_waiting(flow_run)
 		if approval_expired(waiting, now_datetime()):
@@ -704,7 +705,7 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 	    comment: Optional comment
 	"""
 	if decision not in APPROVAL_DECISIONS:
-		frappe.throw(_("decision must be 'approved' or 'rejected'"))
+		frappe.throw(_("Choose Approve or Reject."))
 
 	if not _acquire_run_lock(flow_run_name):
 		frappe.throw(_("Someone else is deciding this approval right now. Refresh to see the result."))
@@ -715,7 +716,7 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 		flow_run = frappe.get_doc("Flow Run", flow_run_name)
 
 		if flow_run.status != "Waiting Approval":
-			frappe.throw(_("Flow Run is not waiting for approval (status: {0})").format(flow_run.status))
+			frappe.throw(_("This run is not waiting for approval any more."))
 
 		# Permission is verified before anything is mutated.
 		waiting = _load_waiting(flow_run)
@@ -750,7 +751,7 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 		)
 		run_ctx.save_context()
 		if not next_node:
-			_fail_flow_run(flow_run, f"No route for approval outcome '{decision}' from node '{current_node}'")
+			_fail_flow_run(flow_run, no_route_message(version.graph, current_node, decision))
 		# The claim must be durable before the lock goes, or a second caller could decide again.
 		frappe.db.commit()  # nosemgrep
 		_ensure_claim_durable(flow_run_name)
@@ -831,7 +832,7 @@ def expire_approval(flow_run_name: str, now=None, enqueue: bool = False) -> bool
 			return False
 
 		if not timeout_next:
-			_fail_flow_run(flow_run, f"Approval timed out at node '{node_id}'")
+			_fail_flow_run(flow_run, approval_timeout_message(_pinned_version(flow_run).graph, node_id))
 			frappe.db.commit()  # nosemgrep
 			_clear_flow_notifications(flow_run)  # best effort, after the outcome is durable (see approve_flow_run)
 			return True
@@ -917,7 +918,7 @@ def _build_router(
 				for e in edges_list
 			)
 			if not handled:
-				unhandled_failures.append(f"Node '{node.id}' failed: {outcome.error or 'unknown error'}")
+				unhandled_failures.append(step_failed_sentence(step_title(node.raw), outcome.error))
 		return chosen
 
 	def _resolve_default(node: NodeSpec, outcome: Outcome, context: GraphContext):
@@ -1012,7 +1013,7 @@ def _make_node_handler(flow_run, settings):
 			result = _execute_node(flow_run, node.raw, settings)
 		except Exception as exc:
 			frappe.log_error(frappe.get_traceback(), f"Flow node {node.id} raised")
-			result = {"status": "failed", "error": str(exc) or exc.__class__.__name__}
+			result = {"status": "failed", "error": describe_exception(exc)}
 		outcome = Outcome.from_mapping(result)
 		if outcome.status == "failed":
 			outcome.output = failed_node_record(outcome)
@@ -1080,7 +1081,7 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 
 	if result.status == ExecutionResult.FAILED:
 		_publish_flow_event(flow_run, "flow_error", {"error": result.error})
-		_fail_flow_run(flow_run, result.error)
+		_fail_flow_run(flow_run, describe_run_error(result.error, {i: step_title(n.raw) for i, n in program.nodes.items()}))
 		return result
 
 	if unhandled_failures:
@@ -1119,7 +1120,7 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 		return executor(flow_run, node, config, settings)
 	except TemplateError as exc:
 		# Authoring error in a {"$template": ...} value: fail this node (so on_error applies).
-		return {"status": "failed", "error": f"Template error: {exc}"}
+		return {"status": "failed", "error": str(exc)}
 
 
 def _exec_trigger_webhook(flow_run, node: dict, config: dict, settings: dict) -> dict:
@@ -1130,7 +1131,7 @@ def _exec_trigger_webhook(flow_run, node: dict, config: dict, settings: dict) ->
 
 def _exec_trigger_unset(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""trigger.unset is a placeholder with no trigger configured; it is not runnable."""
-	return {"status": "failed", "error": "trigger.unset is not runnable: configure a trigger for this flow"}
+	return {"status": "failed", "error": "This flow has no trigger yet. Choose what starts it, then run it again."}
 
 
 def _exec_trigger_schedule(flow_run, node: dict, config: dict, settings: dict) -> dict:
@@ -1194,7 +1195,7 @@ def render_agent_prompt(config: dict, ctx: GraphContext) -> str:
 	is an authoring error (``TemplateError`` fails the node).
 	"""
 	bindings = ctx.resolve(config.get("prompt_bindings") or {})
-	return render_template(config.get("prompt") or "", bindings if isinstance(bindings, dict) else {})
+	return render_template(config.get("prompt") or "", bindings if isinstance(bindings, dict) else {}, objects="json")
 
 
 def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
@@ -1204,9 +1205,9 @@ def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""
 	agent_name = config.get("agent")
 	if not agent_name:
-		return {"status": "failed", "error": "agent.run node missing agent in config"}
+		return {"status": "failed", "error": "Choose which agent this step should ask, then run again."}
 	if not config.get("prompt"):
-		return {"status": "failed", "error": "agent.run node missing prompt in config"}
+		return {"status": "failed", "error": "Write what this step should ask the agent, then run again."}
 
 	run_ctx = _run_context(settings)
 	ctx = _context_of(flow_run, settings)
@@ -1241,7 +1242,7 @@ def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			"error": result.get("error"),
 		}
 	except Exception as e:
-		return {"status": "failed", "error": str(e)}
+		return {"status": "failed", "error": describe_exception(e)}
 
 
 def _bound_gateway(flow_run, run_id: str = ""):
@@ -1325,7 +1326,7 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""
 	tool_name = config.get("tool_id")
 	if not tool_name:
-		return {"status": "failed", "error": "tool.call node missing tool_id in config"}
+		return {"status": "failed", "error": "Choose which action this step should do, then run again."}
 
 	run_ctx = _run_context(settings)
 	ctx = _context_of(flow_run, settings)
@@ -1387,7 +1388,7 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			try:
 				raw = loop.run_until_complete(coro)
 			except asyncio.TimeoutError:
-				raw = {"success": False, "error": f"tool '{tool_name}' timed out after {config['timeout_ms']} ms"}
+				raw = {"success": False, "error": tool_timeout_message(config["timeout_ms"])}
 			finally:
 				loop.close()
 			if not isinstance(raw, dict):
@@ -1399,7 +1400,7 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 				raw = {
 					"success": not is_error,
 					"result": raw,
-					"error": " ".join(t for t in texts if t) or "MCP tool reported an error" if is_error else "",
+					"error": " ".join(t for t in texts if t) or "The tool reported a problem without saying what." if is_error else "",
 				}
 		else:
 			with tool_run_context(invocation_ctx), _bound_gateway(flow_run, getattr(run_doc, "name", "") or ""):
@@ -1440,7 +1441,7 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			"error": error_msg or None,
 		}
 	except Exception as e:
-		error_text = friendly_tool_error(str(e))
+		error_text = friendly_tool_error(describe_exception(e))
 		if tool_call_doc is not None:
 			tool_call_doc.update({"status": "Failed", "error_message": error_text})
 			tool_call_doc.save(ignore_permissions=True)
@@ -1460,9 +1461,9 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 	options = [o for o in (config.get("options") or []) if isinstance(o, dict) and o.get("node_id")]
 	default = config.get("default")
 	if not default:
-		return {"status": "failed", "error": "router.llm node missing default in config"}
+		return {"status": "failed", "error": "Choose which path to take when the AI cannot decide, then run again."}
 	if not options:
-		return {"status": "failed", "error": "router.llm node has no options"}
+		return {"status": "failed", "error": "Add at least one path for the AI to choose from, then run again."}
 
 	ctx = _context_of(flow_run, settings)
 	chosen, reason = None, ""
@@ -1479,12 +1480,12 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 			model,
 		)
 		if not reply:
-			reason = "llm_failed: the model returned no reply"
+			reason = "The AI did not answer, so the default path was taken."
 		else:
 			chosen = choose_option(reply, options)
-			reason = "matched" if chosen else "no_match"
+			reason = "matched" if chosen else "The answer did not match any path, so the default path was taken."
 	except Exception as e:
-		reason = f"llm_failed: {e}"
+		reason = f"The AI could not be asked, so the default path was taken. {describe_exception(e)}"
 
 	if chosen:
 		node_id, label = chosen["node_id"], chosen.get("label")
@@ -1505,15 +1506,15 @@ def _exec_router_decision(flow_run, node: dict, config: dict, settings: dict) ->
 	"""
 	default = config.get("default")
 	if not default:
-		return {"status": "failed", "error": "router.decision node missing default in config"}
+		return {"status": "failed", "error": "Choose which path to take by default, then run again."}
 	valid_node_ids = {o["node_id"] for o in (config.get("options") or []) if isinstance(o, dict) and o.get("node_id")}
 	if not valid_node_ids:
-		return {"status": "failed", "error": "router.decision node has no options"}
+		return {"status": "failed", "error": "Add at least one path to choose from, then run again."}
 
 	return {
 		"status": "success",
 		"next_node_id": default,
-		"output": {"node_id": default, "reason": "router.decision is not enabled for this Flow run"},
+		"output": {"node_id": default, "reason": "Choosing a path by rule is not turned on, so the default path was taken."},
 	}
 
 
@@ -1541,7 +1542,7 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 	waiting_data = {
 		"type": "approval",
 		"node_id": node.get("id"),
-		"message": render_text_refs(config.get("message", ""), ctx),
+		**waiting_fields(flow_run, node, render_text_refs(config.get("message", ""), ctx), ctx.data),
 		"approver_type": config.get("approver_type"),
 		"approver_role": config.get("approver_role"),
 		"approver_users": config.get("approver_users") or [],
@@ -1595,19 +1596,19 @@ def _exec_code_run(flow_run, node: dict, config: dict, settings: dict):
 	if done >= code_node.MAX_CODE_RUNS_PER_FLOW_RUN:
 		return {
 			"status": "failed",
-			"error": f"This run already ran {code_node.MAX_CODE_RUNS_PER_FLOW_RUN} code steps, the most one run may start.",
+			"error": f"This run already ran {code_node.MAX_CODE_RUNS_PER_FLOW_RUN} code steps, which is the most one run may start. Use fewer code steps or a smaller loop.",
 		}
 	try:
 		inputs = json.loads(json.dumps(ctx.resolve(config.get("inputs") or {}), default=str))
 	except (TypeError, ValueError) as exc:
-		return {"status": "failed", "error": f"The inputs of this step could not be read: {exc}"}
+		return {"status": "failed", "error": "The data given to this code step could not be read. Check the values you pass in."}
 
 	try:
 		dispatched = code_execution.run_flow_code(
 			flow_run, node, config.get("code"), config.get("profile"), inputs, timeout_s=config.get("timeout_s")
 		)
 	except (frappe.PermissionError, frappe.ValidationError) as exc:
-		return {"status": "failed", "error": str(exc) or "The code step was not allowed to run."}
+		return {"status": "failed", "error": plain_error(str(exc)) or "This code step was not allowed to run."}
 
 	call_name = dispatched["agent_tool_call"]
 	approval = dispatched.get("approval")
@@ -1634,7 +1635,7 @@ def _exec_code_run(flow_run, node: dict, config: dict, settings: dict):
 		{"status": "Waiting Code", "waiting": json.dumps(waiting_data)},
 		not_from_statuses=TERMINAL_STATUSES,
 	):
-		return {"status": "failed", "error": "The run finished before its code step could start."}
+		return {"status": "failed", "error": "The run had already ended before this code step could start."}
 	commit_if_background()
 	return Outcome.paused(PauseRequest(kind="code", status_label="Waiting Code"))
 
@@ -1733,16 +1734,16 @@ def _exec_condition(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	false_node = config.get("on_false")
 
 	if not expression:
-		return {"status": "failed", "error": "condition node missing 'expression' in config"}
+		return {"status": "failed", "error": "Write the check this condition should make, then run again."}
 	if not true_node or not false_node:
-		return {"status": "failed", "error": "condition node needs both 'on_true' and 'on_false'"}
+		return {"status": "failed", "error": "Choose the next step for both Yes and No, then run again."}
 
 	ctx = _context_of(flow_run, settings)
 
 	try:
 		result = evaluate_bool(parse_expression(expression), ctx.reference_roots())
 	except Exception as e:
-		return {"status": "failed", "error": f"Condition evaluation failed: {str(e)}"}
+		return {"status": "failed", "error": "This condition could not be checked against the data it received. Check what you compare, and that earlier steps give it that data."}
 
 	return {
 		"status": "success",
@@ -1774,7 +1775,7 @@ def _exec_transform(flow_run, node: dict, config: dict, settings: dict) -> dict:
 
 	if not result.ok:
 		err = result.error
-		return {"status": "failed", "error": err.message if err else f"transform '{config.get('op')}' failed"}
+		return {"status": "failed", "error": plain_error(err.message) if err else "This step could not change the data it received. Check its settings."}
 
 	return {"status": "success", "result": result.value, "output": result.value}
 
@@ -1812,15 +1813,15 @@ def _run_sub_chain(flow_run, settings: dict, node_ids: list) -> dict:
 	while cursor is not None:
 		hops += 1
 		if hops > max_hops:
-			return {"status": "failed", "error": f"sub-chain exceeded its hop budget ({max_hops})"}
+			return {"status": "failed", "error": "The steps inside this loop kept going without ending. Check how they are connected."}
 
 		node = by_id.get(cursor)
 		if node is None:
-			return {"status": "failed", "error": f"sub-chain references unknown node '{cursor}'"}
+			return {"status": "failed", "error": "A step inside this loop points at a step that no longer exists. Reconnect it."}
 		if node.get("type") == "human.approval":
-			return {"status": "failed", "error": f"human.approval '{cursor}' cannot run inside a loop body"}
+			return {"status": "failed", "error": f'{step_ref(node, True)} waits for approval, which a loop cannot do. Move it outside the loop.'}
 		if node.get("type") == "code.run":
-			return {"status": "failed", "error": "An Execute code step cannot run inside a loop."}
+			return {"status": "failed", "error": f'{step_ref(node, True)} runs code, which a loop cannot do. Move it outside the loop.'}
 
 		last_result = _execute_node(flow_run, node, settings)
 		ctx.record_output(cursor, last_result.get("output", last_result.get("result")))
@@ -1859,7 +1860,7 @@ def _exec_foreach(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	ctx = _context_of(flow_run, settings)
 	items = ctx.resolve(config.get("items"))
 	if not isinstance(items, list):
-		return {"status": "failed", "error": f"The loop '{node.get('_label') or node_id}' needs a list for its items, but what it was given is not a list"}
+		return {"status": "failed", "error": f'{step_ref(node, True)} needs a list to go through, but got something else. Choose a list from an earlier step.'}
 
 	run_ctx = _run_context(settings)
 	contract_limits = ((run_ctx.definition.get("contract") or {}).get("limits") or {}) if run_ctx is not None else {}
@@ -1868,7 +1869,7 @@ def _exec_foreach(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	if len(items) > effective_cap:
 		return {
 			"status": "failed",
-			"error": f"The loop '{node.get('_label') or node_id}' has {len(items)} items, more than its limit of {effective_cap}. Raise the limit or send fewer items.",
+			"error": f'{step_ref(node, True)} got {len(items)} items, but its limit is {effective_cap}. Raise the limit or send fewer items.',
 		}
 
 	body_ids = config.get("body") or []
@@ -1895,7 +1896,7 @@ def _exec_foreach(flow_run, node: dict, config: dict, settings: dict) -> dict:
 						continue
 					return {
 						"status": "failed",
-						"error": f"The loop '{node.get('_label') or node_id}' stopped at item {index}: {outcome.get('error')}",
+						"error": f'{step_ref(node, True)} stopped at item {index + 1}: {outcome.get("error")}',
 					}
 				results.append(ctx.resolve(collect_ref) if collect_ref is not None else None)
 			finally:
@@ -1933,13 +1934,13 @@ def _exec_validate(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		except Exception as e:
 			return {
 				"status": "failed",
-				"error": f"validate node '{node.get('id')}' assertion expression failed: {e}",
+				"error": f'{step_ref(node, True)} could not check one of its rules against the data it received. Check the rule.',
 			}
 		if not truthy:
 			failures.append({"code": assertion["code"], "message": assertion["message"]})
 
 	if failures:
-		return {"status": "failed", "error": json.dumps(failures)}
+		return {"status": "failed", "error": " ".join(str(f.get("message") or "A check did not pass.") for f in failures)}
 	return {"status": "success", "result": {"assertions_passed": len(config.get("assertions", []))}}
 
 
@@ -1967,19 +1968,19 @@ def _exec_output(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		try:
 			enforce_output_budget(value, budget=budget)
 		except OutputBudgetExceeded as exc:
-			return {"status": "failed", "error": str(exc)}
+			return {"status": "failed", "error": plain_error(str(exc))}
 	elif isinstance(value, dict):
 		size = len(json.dumps(value, default=str, ensure_ascii=False).encode("utf-8"))
 		if size > budget.max_bytes:
 			return {
 				"status": "failed",
-				"error": f"output node '{node.get('id')}' value is {size} bytes, exceeds max_output_bytes ({budget.max_bytes}); refusing to truncate",
+				"error": f'The result of {step_ref(node)} is too large ({size // 1024} KB, the limit is {budget.max_bytes // 1024} KB). Send less data.',
 			}
 		for key, field_value in value.items():
 			if isinstance(field_value, list) and len(field_value) > budget.max_rows:
 				return {
 					"status": "failed",
-					"error": f"output node '{node.get('id')}' field '{key}' has {len(field_value)} rows, exceeds max_rows ({budget.max_rows}); refusing to truncate",
+					"error": f'The result of {step_ref(node)} has {len(field_value)} rows in "{key}", but the limit is {budget.max_rows}. Send fewer rows.',
 				}
 
 	return {"status": "success", "output": value, "result": value}
@@ -1994,16 +1995,16 @@ def _state_node(flow_run, node: dict, config: dict, settings: dict, allowed: set
 	"""Shared shell: validate config keys, resolve inputs, scope to the *running* flow."""
 	unknown = sorted(set(config) - allowed)
 	if unknown:
-		return {"status": "failed", "error": f"{node.get('type')}: unsupported config {unknown}"}
+		return {"status": "failed", "error": f'{step_ref(node, True)} has settings this step does not use. Remove them and save again.'}
 	flow_id = getattr(flow_run, "flow_id", None)
 	ctx = _context_of(flow_run, settings)
 	resolved = {k: ctx.resolve(v) for k, v in config.items()}
 	try:
 		output = op(flow_id, resolved)
 	except flow_state.FlowStateError as exc:
-		return {"status": "failed", "error": f"{node.get('type')}: {exc}"}
+		return {"status": "failed", "error": plain_error(str(exc))}
 	except frappe.QueryDeadlockError:  # another run saved the same key at the same moment
-		return {"status": "failed", "error": f"{node.get('type')}: another run was saving the same key at that moment. Run it again."}
+		return {"status": "failed", "error": f'{step_ref(node, True)} could not save because another run was saving the same data at that moment. Run it again.'}
 	return {"status": "success", "result": output, "output": output}
 
 
@@ -2054,7 +2055,7 @@ def _exec_doc_create(flow_run, node: dict, config: dict, settings: dict) -> dict
 	"""
 	unknown = sorted(set(config) - {"doctype", "fields"})
 	if unknown or "doctype" not in config or "fields" not in config:
-		return {"status": "failed", "error": "doc.create requires exactly doctype and fields (got unsupported keys: %s)" % unknown}
+		return {"status": "failed", "error": f'{step_ref(node, True)} is missing its record type or fields, or has settings it does not use. Open the step and check it.'}
 	ctx = _context_of(flow_run, settings)
 	run_ctx = _run_context(settings)
 	limits = ((run_ctx.definition.get("contract") or {}).get("limits") or {}) if run_ctx is not None else {}
@@ -2064,18 +2065,18 @@ def _exec_doc_create(flow_run, node: dict, config: dict, settings: dict) -> dict
 	try:  # the site allow-list first: its message is the clearer one for an unsupported doctype
 		flow_create_doc.check_doctype(doctype, flow_create_doc.allowed_doctypes(frappe.conf))
 	except flow_create_doc.CreateDocError as exc:
-		return {"status": "failed", "error": f"doc.create: {exc}"}
+		return {"status": "failed", "error": plain_error(str(exc))}
 	if not isinstance(doctype, str) or not envelope_declares(envelope, ptype="create", doctype=doctype):
-		return {"status": "failed", "error": f"doc.create: contract permission_envelope.write does not grant {doctype!r}"}
+		return {"status": "failed", "error": f'{step_ref(node, True)} is not allowed to create "{doctype}" records. Ask an admin to allow it for this flow.'}
 	done = ctx.data.get(_WRITES_KEY) or 0
 	if done >= max_writes:
-		return {"status": "failed", "error": f"doc.create exceeds contract limits.max_writes ({max_writes})"}
+		return {"status": "failed", "error": f'{step_ref(node, True)} would create more records than this flow is allowed to ({max_writes}). Ask an admin to raise the limit.'}
 	try:
 		result = flow_create_doc.create_document(config["doctype"], ctx.resolve(config["fields"]))
 	except flow_create_doc.CreateDocError as exc:
-		return {"status": "failed", "error": f"doc.create: {exc}"}
-	except frappe.PermissionError as exc:
-		return {"status": "failed", "error": f"doc.create: permission denied ({exc})"}
+		return {"status": "failed", "error": plain_error(str(exc))}
+	except frappe.PermissionError:
+		return {"status": "failed", "error": f'You do not have permission to create "{doctype}" records. Ask an admin for access.'}
 	ctx.set(_WRITES_KEY, done + 1)
 	return {"status": "success", "result": result, "output": result}
 
