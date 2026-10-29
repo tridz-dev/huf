@@ -10,6 +10,7 @@ Each entry is a dict with:
 """
 
 from huf.ai.tools import telegram_admin_spec, telegram_tool_spec
+from huf.ai.tools.integration.registry_entries import http_tools, with_service as _with_service
 
 # Array parameters whose elements are objects (the doctype row has no item-type field, so the schema
 # builders look the fieldname up here instead of declaring every array as an array of strings).
@@ -688,21 +689,6 @@ FRAPPE_GENERIC_TOOLS = [
             _p("order_by", description="SQL-style order-by clause"),
         ],
     },
-]
-
-HTTP_TOOLS = [
-	{
-		"tool_name": "http_request",
-		"description": "Make an outbound HTTP request to a public URL. Private/internal addresses are blocked, redirects are re-validated, Guest users are blocked. Returns JSON {success, status_code, headers, body}; success is false for non-2xx.",
-		"function_path": "huf.ai.http_handler.http_request",
-		"category": "Developer Tools",
-		"parameters": [
-			_p("url", required=True, description="Absolute http(s) URL"),
-			_p("method", description="GET, POST, PUT, PATCH, DELETE or HEAD (default GET)"),
-			_p("headers", type="object", description="Request headers as a JSON object"),
-			_p("body", description="Request body: JSON object/array or raw string"),
-		],
-	},
 ]
 
 GMAIL_TOOLS = [
@@ -2212,23 +2198,6 @@ TELEGRAM_ADMIN_TOOLS = [
 	},
 ]
 
-def _with_service(tools: list[dict], service: str) -> list[dict]:
-	"""Stamp the owning Integration Service key onto each tool definition.
-
-	Tools are already grouped one list per service in this file, so the
-	association is declared once here instead of repeated on every entry. The
-	key must match an `Integration Service` docname, because that link is what
-	lets the UI tell a user which account a tool needs before they attach it.
-	An entry that already names a service keeps its own value.
-
-	`service` is catalog metadata only (UI hint, `integration_utils` lookups): it
-	does NOT gate which agents can use the tool. App Provided rows are fully
-	owned by the migrate sync (`sync_discovered_tools`), which upserts every
-	field. Per-conversation gating (e.g. `telegram_admin` only inside a Telegram
-	gateway chat with admin-enabled groups) is enforced by the tool handler.
-	"""
-	return [{**tool, "service": tool.get("service") or service} for tool in tools]
-
 
 DOCUMENT_ARTIFACT_TOOLS = [
 	{
@@ -2848,7 +2817,7 @@ ALL_INTEGRATION_TOOLS = (
 	+ DESKTOP_PROCESS_TOOLS
 	+ DESKTOP_LOCAL_MCP_TOOLS
 	+ LAZY_DISCOVERY_TOOLS
-	+ HTTP_TOOLS
+	+ http_tools(_p)
 	# Tools backed by a connectable service. Keys match Integration Service
 	# docnames and the SERVICE_NAME each tool module uses for credentials.
 	+ _with_service(SLACK_TOOLS, "slack")

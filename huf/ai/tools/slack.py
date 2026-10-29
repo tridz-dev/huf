@@ -12,7 +12,7 @@ import frappe
 logger = frappe.logger("huf")
 import httpx
 from huf.ai.tools.credentials import require_credential, get_credential, update_last_error
-from huf.ai.tools.provider_errors import ProviderCredentialError, not_connected_message, slack_error_message
+from huf.ai.tools.integration.provider_errors import ProviderCredentialError, not_connected_message, slack_error_message
 
 
 UNTRUSTED_NOTICE = (
