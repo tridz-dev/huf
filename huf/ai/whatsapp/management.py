@@ -1651,7 +1651,7 @@ def list_message_log_filters(gateway_name: str | None = None) -> dict[str, Any]:
 
 
 def can_launch_whatsapp_app(user: str | None = None, app: dict | None = None, **_kwargs: Any) -> bool:
-	"""Launcher gate for the WhatsApp tile: an integrations admin AND at least one enabled WhatsApp gateway."""
+	"""Launcher gate for the WhatsApp tile: any integrations admin, even before the first gateway exists (the app hosts setup)."""
 	try:
 		user = user or frappe.session.user
 		if not user or user == "Guest":
@@ -1662,9 +1662,7 @@ def can_launch_whatsapp_app(user: str | None = None, app: dict | None = None, **
 			from huf.permissions import has_capability
 
 			allowed = bool(has_capability(user, "system.integrations.manage"))
-		if not allowed:
-			return False
-		return bool(frappe.db.exists("Gateway", {"provider": WHATSAPP_PROVIDER, "is_enabled": 1}))
+		return allowed
 	except Exception:
 		return False
 
