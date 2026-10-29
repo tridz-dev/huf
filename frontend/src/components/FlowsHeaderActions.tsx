@@ -15,21 +15,21 @@ import {
 } from './ui/alert-dialog';
 import { useFlowContext } from '../contexts/FlowContext';
 import { getFlowIntegrationStatus, runFlow } from '../services/flowApi';
-import { unconnectedSteps } from '@/lib/flowIntegrations';
+import { unconnectedSteps } from '@/lib/flow/flowIntegrations';
 import { toast } from '@/lib/toast';
 import { FlowRunHistory } from './FlowRunHistory';
 import { FlowRunViewer } from './FlowRunViewer';
 import { FlowSettingsModal } from './modals/FlowSettingsModal';
-import { BLOCKED_TOAST_ID, humanizeFlowError, summarizeIssues, validateFlow } from '@/lib/flowValidation';
-import { reportFlowRun } from '@/lib/flowRunToast';
+import { BLOCKED_TOAST_ID, humanizeFlowError, summarizeIssues, validateFlow } from '@/lib/flow-graph/flowValidation';
+import { reportFlowRun } from '@/lib/flow-run/flowRunToast';
 import { RunFlowDialog } from './flow/RunFlowDialog';
 import { FlowHelpPopover } from './flow/FlowHelpPopover';
 import { DisabledReason } from './flow/DisabledReason';
-import { useFlowPermissions } from '@/hooks/useFlowPermissions';
-import { publishBlockedReason } from '@/lib/flowPublishGuard';
-import { codePublishBlockedReason } from '@/lib/codeFlow';
-import { useCodeFlowStatus } from '@/lib/useCodeFlowStatus';
-import { useRunParam } from '@/hooks/useRunParam';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { publishBlockedReason } from '@/lib/flow/flowPublishGuard';
+import { codePublishBlockedReason } from '@/lib/flow-graph/codeFlow';
+import { useCodeFlowStatus } from '@/lib/flow-graph/useCodeFlowStatus';
+import { useRunParam } from '@/hooks/flow/useRunParam';
 
 /**
  * Left-aligned "Flows > flow name [pencil]" control for the flow canvas

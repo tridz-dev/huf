@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '../ui/button';
-import { FIRST_RUN_STEPS } from '@/lib/flowHelp';
+import { FIRST_RUN_STEPS } from '@/lib/flow/flowHelp';
 
 const KEY = 'huf.flow.firstRunGuide.dismissed';
 

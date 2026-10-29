@@ -5,7 +5,7 @@ import { DialogScrollBody, DialogScrollContent, DialogScrollFooter, DialogScroll
 import { Textarea } from '../ui/textarea';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
-import { parsePayload, readLastPayload, rememberPayload } from '@/lib/flowRunPayload';
+import { parsePayload, readLastPayload, rememberPayload } from '@/lib/flow-run/flowRunPayload';
 
 interface RunFlowDialogProps {
   open: boolean;

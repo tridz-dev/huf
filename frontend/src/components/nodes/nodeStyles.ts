@@ -29,3 +29,8 @@ export function getExecutionStatusClasses(
   }
   return 'border-line';
 }
+
+/** Spreads the `count` branch handles of a step evenly along its bottom edge. */
+export const handleSpread = (index: number, count: number) => ({
+  left: `${((index + 1) / (count + 1)) * 100}%`,
+});

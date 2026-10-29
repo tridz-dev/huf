@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 import { flowService } from '../services/flowService';
-import type { FlowRunDetail } from '../services/flowApi';
 import { Loader2, Box, CheckCircle2, XCircle, Clock, Check, X, Play, AlertTriangle } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -18,59 +17,27 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from './ui/alert-dialog';
-import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
-import { calculateDuration, formatTimeAgo } from '@/utils/time';
-import { runTimesSentence } from '@/lib/flowTimeZone';
-import { humanizeFlowError } from '@/lib/flowValidation';
-import { asCodeStepOutput, describeDecision, flowRunStatusLabel, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from '@/lib/flowRunFormat';
-import { deskDocUrl, summarizeDocPayload } from '@/lib/flowRunDoc';
-import { connectPath, notConnectedService } from '@/lib/flowIntegrations';
-import { redactSecrets, summarizeToolOutput } from '@/lib/flowToolSummary';
+import { useSiteTimezone } from '@/lib/serverTime';
+import { calculateDuration } from '@/utils/time';
+import { DocFieldValue, readableRunError, TimeValue } from './flow/RunViewerParts';
+import { useFlowRunDetail } from '@/hooks/flow/useFlowRunDetail';
+import { runTimesSentence } from '@/lib/flow-run/flowTimeZone';
+import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
+import { asCodeStepOutput, describeDecision, flowRunStatusLabel, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from '@/lib/flow-run/flowRunFormat';
+import { deskDocUrl, summarizeDocPayload } from '@/lib/flow-run/flowRunDoc';
+import { connectPath, notConnectedService } from '@/lib/flow/flowIntegrations';
+import { redactSecrets, summarizeToolOutput } from '@/lib/flow/flowToolSummary';
 import { Link } from 'react-router-dom';
-
-function DocFieldValue({ field }: { field: { key: string; value: string; full?: string } }) {
-    const [open, setOpen] = useState(false);
-    if (!field.full) return <>{field.value}</>;
-    return (
-        <>
-            <span data-testid={`flow-run-document-value-${field.key}`}>{open ? field.full : field.value}</span>{' '}
-            <button
-                type="button"
-                className="text-xs font-medium text-primary underline"
-                data-testid={`flow-run-document-more-${field.key}`}
-                onClick={() => setOpen((v) => !v)}
-            >
-                {open ? 'Show less' : 'Show more'}
-            </button>
-        </>
-    );
-}
 
 interface FlowRunViewerProps {
     runId: string | null;
     onClose: () => void;
 }
 
-/** Engine errors name the node id and the internal edge rule; show the step title and the actual reason. */
-function readableRunError(message: string, labelOf: (id?: string | null) => string): string {
-    const m = /^Node '([^']+)' of type '[^']+' failed and declares no on_error successor: ([\s\S]*)$/.exec(message);
-    return m ? `${labelOf(m[1])} failed: ${m[2]}` : message;
-}
-
-function TimeValue({ value }: { value: string | null | undefined }) {
-    if (!value) return <span className="text-muted-foreground">Not available</span>;
-    return (
-        <span title={formatTimeAgo(value)}>
-            {formatAbsoluteTime(value)}
-        </span>
-    );
-}
-
 export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
     const siteZone = useSiteTimezone();
     const [confirmFail, setConfirmFail] = useState(false);
-    const [run, setRun] = useState<FlowRunDetail | null>(null);
-    const [loading, setLoading] = useState(false);
+    const { run, loading, setLoading, refreshRun } = useFlowRunDetail(runId);
     const [resumePayload, setResumePayload] = useState<string>('');
     const activeFlow = useOptionalFlowContext()?.activeFlow;
     // A step saved without a title comes back from the server under its id: fall back to the editor's title for it.
@@ -81,38 +48,6 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
         return typeof fromFlow === 'string' && fromFlow ? fromFlow : fromRun || null;
     };
     const labelOf = (nodeId: string | null | undefined) => (nodeId && titleOf(nodeId)) || nodeId || 'N/A';
-
-    useEffect(() => {
-        async function fetchRun() {
-            if (!runId) return;
-            setLoading(true);
-            try {
-                const data = await flowService.getFlowRun(runId);
-                if (data) setRun(data);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        }
-        fetchRun();
-    }, [runId]);
-
-    // Same fallback as the run list: refresh while the run is still queued or running.
-    // A step waiting for code to finish (or be approved) moves on by itself, so keep refreshing there too.
-    const active = run?.status === 'Queued' || run?.status === 'Running' || run?.status === 'Waiting Code';
-    useEffect(() => {
-        if (!runId || !active) return;
-        const timer = setInterval(async () => {
-            try {
-                const data = await flowService.getFlowRun(runId);
-                if (data) setRun(data);
-            } catch (err) {
-                console.error(err);
-            }
-        }, 2000);
-        return () => clearInterval(timer);
-    }, [runId, active]);
 
     const handleApproval = async (decision: 'approved' | 'rejected') => {
         if (!runId) return;
@@ -131,12 +66,6 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
             });
             setLoading(false);
         }
-    };
-
-    const refreshRun = async () => {
-        if (!runId) return;
-        const data = await flowService.getFlowRun(runId);
-        if (data) setRun(data);
     };
 
     const handleMarkFailed = async () => {
@@ -247,7 +176,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                             )}
                         </div>
 
-                        <p className="-mt-3 text-[11px] text-muted-foreground" data-testid="flow-run-timezone-note">{runTimesSentence(siteZone)}</p>
+                        <p className="-mt-3 text-meta text-muted-foreground" data-testid="flow-run-timezone-note">{runTimesSentence(siteZone)}</p>
 
                         {run.stale && (
                             <div className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-tint/50 p-4" data-testid="flow-run-stale">

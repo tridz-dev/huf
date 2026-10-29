@@ -1,8 +1,8 @@
-import { memo, useState } from 'react';
+import { memo, useState, type CSSProperties } from 'react';
 import { BaseEdge, EdgeLabelRenderer, EdgeProps, getBezierPath } from 'reactflow';
 import { Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useFlowPermissions } from '@/hooks/useFlowPermissions';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import type { FlowEdgeRoute } from '../../types/flow.types';
 
 export interface InsertableEdgeData {
@@ -20,6 +20,13 @@ export interface InsertableEdgeData {
  * drawing it again on the edge made two labels collide near the step.
  */
 const SHOWS_EDGE_LABEL = new Set<FlowEdgeRoute>(['option', 'error']);
+
+/** Places an overlay (label, insert button, remove button) centred at a point on the canvas. */
+const overlayStyle = (x: number, y: number, interactive = false): CSSProperties => ({
+  position: 'absolute',
+  transform: `translate(-50%, -50%) translate(${x}px, ${y}px)`,
+  ...(interactive ? { pointerEvents: 'all' as const } : {}),
+});
 
 /**
  * Edge between two real, already-connected nodes. Renders like a normal
@@ -66,19 +73,15 @@ export const InsertableEdge = memo(
             <div
               data-testid={`flow-edge-label-${id}`}
               title={label}
-              style={{ position: 'absolute', transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY - 16}px)` }}
-              className="max-w-[150px] truncate rounded bg-panel px-1.5 py-0.5 text-[10px] text-muted-foreground border border-line"
+              style={overlayStyle(labelX, labelY - 16)}
+              className="max-w-[150px] truncate rounded bg-panel px-1.5 py-0.5 text-eyebrow tracking-normal text-muted-foreground border border-line"
             >
               {label}
             </div>
           ) : null}
           {canManage && (
           <div
-            style={{
-              position: 'absolute',
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
-              pointerEvents: 'all'
-            }}
+            style={overlayStyle(labelX, labelY, true)}
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => setHovered(false)}
           >
@@ -103,11 +106,7 @@ export const InsertableEdge = memo(
           )}
           {canManage && selected && (
             <div
-              style={{
-                position: 'absolute',
-                transform: `translate(-50%, -50%) translate(${labelX + 100}px, ${labelY}px)`,
-                pointerEvents: 'all'
-              }}
+              style={overlayStyle(labelX + 100, labelY, true)}
               className="nodrag nopan"
             >
               <button

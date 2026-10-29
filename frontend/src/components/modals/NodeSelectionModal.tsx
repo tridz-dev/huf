@@ -43,11 +43,11 @@ import { triggerOptions } from '../../data/triggers';
 import { actionOptions } from '../../data/actions';
 import { TriggerConfig, ActionConfig } from '../../types/flow.types';
 import type { ActionOption } from '../../types/modal.types';
-import { generateWebhookSecret } from '../../lib/flowWebhookUi';
-import { DEFAULT_PICKER, pickerToCron } from '../../lib/flowSchedule';
-import { CODE_RUN_ACTION, DEFAULT_CODE_PROFILE, DEFAULT_CODE_TIMEOUT_S } from '../../lib/codeFlow';
-import { useCodeFlowStatus } from '../../lib/useCodeFlowStatus';
-import { useFlowPermissions } from '../../hooks/useFlowPermissions';
+import { generateWebhookSecret } from '../../lib/flow-graph/flowWebhookUi';
+import { DEFAULT_PICKER, pickerToCron } from '../../lib/flow-graph/flowSchedule';
+import { CODE_RUN_ACTION, DEFAULT_CODE_PROFILE, DEFAULT_CODE_TIMEOUT_S } from '../../lib/flow-graph/codeFlow';
+import { useCodeFlowStatus } from '../../lib/flow-graph/useCodeFlowStatus';
+import { useFlowPermissions } from '../../hooks/flow/useFlowPermissions';
 
 interface NodeSelectionModalProps {
   open: boolean;

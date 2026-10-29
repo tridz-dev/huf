@@ -13,7 +13,7 @@ import {
   valueMode,
   valueToText,
   type ValueMode,
-} from '@/lib/flowValue';
+} from '@/lib/flow-graph/flowValue';
 
 interface FlowValueInputProps {
   id: string;
@@ -155,18 +155,18 @@ export function FlowValueInput({ id, label, value, onChange, optional, testId, n
         </>
       )}
       {hint && (
-        <p className="text-[11px] leading-snug text-muted-foreground break-words" data-testid={testId ? `${testId}-hint` : undefined}>{hint}</p>
+        <p className="text-meta leading-snug text-muted-foreground break-words" data-testid={testId ? `${testId}-hint` : undefined}>{hint}</p>
       )}
       {mode !== 'literal' && (
-        <p className="text-[11px] leading-snug text-muted-foreground break-words" data-testid={testId ? `${testId}-mode-help` : undefined}>{MODE_HELP[mode]}</p>
+        <p className="text-meta leading-snug text-muted-foreground break-words" data-testid={testId ? `${testId}-mode-help` : undefined}>{MODE_HELP[mode]}</p>
       )}
       {mode === 'json' && isInvalidValueJson(text) && (
-        <p className="text-[10px] text-destructive">Not valid JSON — saved as plain text.</p>
+        <p className="text-eyebrow tracking-normal text-destructive">Not valid JSON — saved as plain text.</p>
       )}
       {mode === 'template' && (
         <>
           {Object.keys((value as { vars?: Record<string, unknown> }).vars ?? {}).length > 0 && (
-            <ul className="space-y-0.5 text-[11px] text-muted-foreground" data-testid={testId ? `${testId}-vars-summary` : undefined}>
+            <ul className="space-y-0.5 text-meta text-muted-foreground" data-testid={testId ? `${testId}-vars-summary` : undefined}>
               {Object.entries((value as { vars?: Record<string, { $from?: string }> }).vars ?? {}).map(([name, v]) => (
                 <li key={name} className="truncate">
                   <span className="font-mono">{`{${name}}`}</span> is filled with{' '}
@@ -175,7 +175,7 @@ export function FlowValueInput({ id, label, value, onChange, optional, testId, n
               ))}
             </ul>
           )}
-          <details className="text-[11px]">
+          <details className="text-meta">
             <summary className="cursor-pointer text-muted-foreground">Edit the values (advanced)</summary>
             <Label htmlFor={`${id}-vars`} size="sm" className="mt-1 block">
               Which data fills each {'{name}'}, as JSON
@@ -188,7 +188,7 @@ export function FlowValueInput({ id, label, value, onChange, optional, testId, n
               onChange={(e) => onChange(textToValue('template', text, e.target.value))}
             />
             {isInvalidValueJson(varsText) && (
-              <p className="text-[10px] text-destructive">That is not valid JSON.</p>
+              <p className="text-eyebrow tracking-normal text-destructive">That is not valid JSON.</p>
             )}
           </details>
         </>

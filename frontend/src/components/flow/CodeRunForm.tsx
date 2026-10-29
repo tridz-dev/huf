@@ -13,10 +13,10 @@ import {
   byteLength,
   profileLabel,
   usableProfiles,
-} from '@/lib/codeFlow';
-import { useCodeFlowStatus } from '@/lib/useCodeFlowStatus';
-import { useFlowPermissions } from '@/hooks/useFlowPermissions';
-import type { CodeFlowProfile } from '@/services/codeFlowApi';
+} from '@/lib/flow-graph/codeFlow';
+import { useCodeFlowStatus } from '@/lib/flow-graph/useCodeFlowStatus';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import type { CodeFlowProfile } from '@/services/flow/codeFlowApi';
 
 type Cfg = Record<string, unknown>;
 
