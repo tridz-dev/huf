@@ -427,8 +427,8 @@ class TestScopedSetupStatus(unittest.TestCase):
 				"success": True,
 				"connector_available": True,
 				"gateways": [
-					{"name": "GW-A", "health": "healthy", "enabled": True},
-					{"name": "GW-B", "health": "disabled", "enabled": False},
+					{"name": "GW-A", "health": "healthy", "enabled": True, "setup_stage": "not_connected"},
+					{"name": "GW-B", "health": "disabled", "enabled": False, "setup_stage": "off"},
 				],
 			},
 		)

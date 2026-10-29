@@ -312,7 +312,29 @@ def _gateway_status(gateway: dict[str, Any], connector_available: bool | None = 
 			gateway, presence, connector_available=connector_available, mismatch=mismatch, app_id=app_id
 		)
 	)
+	payload["setup_stage"] = _setup_stage(payload)
 	return payload
+
+
+def _setup_stage(payload: dict[str, Any]) -> str:
+	"""PLAN 4.1 ``setup_stage`` from a built gateway payload (see ``health.compute_setup_stage``)."""
+	from huf.ai.whatsapp import health
+
+	steps = {c.get("code"): c.get("state") for c in payload.get("checklist") or []}
+	policy = payload.get("policy") or {}
+	return health.compute_setup_stage(
+		enabled=bool(payload.get("enabled")),
+		health=str(payload.get("health") or ""),
+		# the checklist's credentials step is "blocked" on a mismatch or a rejected token, which still counts as saved
+		credentials_ok=bool(
+			payload.get("access_token_present") and payload.get("verify_token_present") and payload.get("phone_number_id")
+		),
+		webhook_verified=steps.get("webhook") == "done",
+		inbound_seen=steps.get("subscribed") == "done",
+		outbound_ok=steps.get("test_message") == "done",
+		bound=bool(policy.get("default_target")),
+		access_policy_chosen=bool(policy.get("direct_policy")),
+	)
 
 
 @frappe.whitelist()
@@ -322,7 +344,7 @@ def get_setup_status(gateway_name: str | None = None) -> dict[str, Any]:
 
 	With ``gateway_name``: ``{success, connector_available, gateway, accounts}`` where ``accounts``
 	holds only that gateway's own linked account. Without: ``{success, connector_available,
-	gateways: [{name, health, enabled}]}`` and nothing else.
+	gateways: [{name, health, enabled, setup_stage}]}`` and nothing else.
 	"""
 	_require_admin()
 	available = bridge.is_available()
@@ -336,7 +358,14 @@ def get_setup_status(gateway_name: str | None = None) -> dict[str, Any]:
 			row = dict(row)
 			row["whatsapp_account"] = _gateway_whatsapp_account(row["name"])
 			status = _gateway_status(row, available)
-			summary.append({"name": status["name"], "health": status["health"], "enabled": status["enabled"]})
+			summary.append(
+				{
+					"name": status["name"],
+					"health": status["health"],
+					"enabled": status["enabled"],
+					"setup_stage": status["setup_stage"],
+				}
+			)
 		return {"success": True, "connector_available": available, "gateways": summary}
 
 	rows = frappe.get_all(
