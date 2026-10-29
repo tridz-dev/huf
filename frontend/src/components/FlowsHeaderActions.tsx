@@ -263,9 +263,9 @@ export function FlowsHeaderActions() {
   return (
     <div className="flex items-center gap-2">
       {/* Save State Indicator (bare dot + text, no chip background) */}
-      {activeFlow && canManage && (
+      {activeFlow && (
         <div className="flex items-center gap-1.5 mr-2 text-muted-foreground" data-testid="flow-save-state" title={issues.length > 0 ? ` to finish before it can run` : undefined}>
-          {issues.length > 0 && (
+          {canManage && issues.length > 0 && (
             <button
               type="button"
               data-testid="flow-validation-summary"

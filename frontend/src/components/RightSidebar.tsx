@@ -105,9 +105,11 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
               )}
-              <Button variant="ghost" size="icon-sm" aria-label="Close settings" data-testid="flow-sidebar-close" className="hover:bg-accent" onClick={onToggle}>
-                <X className="w-3.5 h-3.5 text-muted-foreground" />
-              </Button>
+              {!isSheet && (
+                <Button variant="ghost" size="icon-sm" aria-label="Close settings" data-testid="flow-sidebar-close" className="hover:bg-accent" onClick={onToggle}>
+                  <X className="w-3.5 h-3.5 text-muted-foreground" />
+                </Button>
+              )}
             </div>
 
             {canManage && issues.length > 0 && (
