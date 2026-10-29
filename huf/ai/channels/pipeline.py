@@ -16,6 +16,7 @@ ACTIONS = ("continue", "reply", "route", "handoff", "drop")
 
 # Dotted paths of hook callables. Later WPs append here.
 PRE_ROUTE_HOOKS: list[str] = []
+PRE_ROUTE_HOOKS.append("huf.ai.channels.rules.routing_rules_hook")
 
 
 @dataclass
