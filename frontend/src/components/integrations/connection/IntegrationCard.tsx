@@ -39,17 +39,17 @@ export function IntegrationCard({ setting, onOpen, onUseInAgent }: IntegrationCa
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
           <Logo className="h-5 w-5" />
         </span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 space-y-1.5">
           <h3 className="line-clamp-2 break-words text-body-text font-semibold leading-snug text-ink" title={title} data-testid="integration-card-title">
             {title}
           </h3>
-          <p className="truncate text-sm text-steel">
+          <p className="break-words text-sm text-steel">
             {[title === identity.title ? `Edited ${formatTimeAgo(setting.modified).toLowerCase()}` : identity.title, setting.is_default ? 'Default' : '']
               .filter(Boolean)
               .join(' · ')}
           </p>
+          <IntegrationStatusPill health={health} />
         </div>
-        <IntegrationStatusPill health={health} className="shrink-0" />
       </div>
 
       <div className="min-h-[2.75rem] flex-1">
@@ -65,7 +65,7 @@ export function IntegrationCard({ setting, onOpen, onUseInAgent }: IntegrationCa
         {checked && <p className="mt-1 text-xs text-steel-soft">{checked}</p>}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
           variant="outline"

@@ -155,7 +155,7 @@ export function IntegrationSettingsListingPage({
 
       <GridView
         items={visible}
-        columns={{ sm: 1, md: 2, lg: 3 }}
+        columns={{ sm: 1, md: 2, lg: 2, xl: 3 }}
         loading={initialLoading}
         emptyState={
           search || categoryFilter !== 'all' ? (
