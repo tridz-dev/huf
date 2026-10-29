@@ -3,7 +3,7 @@
 Source of truth for trigger config is ``docs/flow/FIELD_CONTRACT.md`` / ``graph_ir.schema.json``:
 
 * ``trigger.webhook``   ``{method: GET|POST, secret}``
-* ``trigger.schedule``  ``{cron}``            5-part cron, evaluated in server system time
+* ``trigger.schedule``  ``{cron, time_zone?}`` 5-part cron, evaluated in ``time_zone`` (default: the site time zone)
 * ``trigger.doc-event`` ``{doctype, event}``  event in ``DOC_EVENT_MAP``
 
 Everything here is dispatch only. The run itself is created and executed by the engine
@@ -269,6 +269,8 @@ def run_due_schedule_flows(now: datetime | None = None) -> list[str]:
 	from frappe.utils import now_datetime
 	from frappe.utils.scheduler import get_scheduler_tick
 
+	from huf.ai.flow.support.schedule_rules import minute_in_zone
+
 	minute = (now or now_datetime()).replace(second=0, microsecond=0)
 	# look back one tick (plus a minute of slack for a late tick); the Flow Run per (node, minute) dedups
 	window = get_scheduler_tick() + 60
@@ -278,7 +280,8 @@ def run_due_schedule_flows(now: datetime | None = None) -> list[str]:
 		for node in trigger_nodes(defn, SCHEDULE_TYPE):
 			cron = (node.get("config") or {}).get("cron")
 			try:
-				due = latest_due_minute(cron, minute, window)
+				# The cron is read on the clock of the zone chosen in the editor (the site zone when none was chosen).
+				due = latest_due_minute(cron, minute_in_zone(minute, (node.get("config") or {}).get("time_zone")), window)
 				if due is None:
 					continue
 				scheduled_for = due.strftime("%Y-%m-%d %H:%M:%S")

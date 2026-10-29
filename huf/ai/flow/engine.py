@@ -477,7 +477,7 @@ def create_flow_run(
 	defn_doc = frappe.get_doc("Flow Definition", flow_id)
 	defn = json.loads(defn_doc.definition_json) if isinstance(defn_doc.definition_json, str) else defn_doc.definition_json
 
-	from huf.ai.flow.support.flow_validation import check_runnable
+	from huf.ai.graph.validation.flow_validation import check_runnable
 	from huf.huf.doctype.flow_definition.activation_rules import entry_is_unset
 
 	if entry_is_unset(defn):

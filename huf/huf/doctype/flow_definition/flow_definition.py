@@ -6,7 +6,7 @@ from frappe.model.document import Document
 from frappe.utils import now_datetime
 
 from huf.ai import system_records
-from huf.ai.flow.support.flow_validation import validate_flow
+from huf.ai.graph.validation.flow_validation import validate_flow
 from huf.ai.graph.error_copy import describe_errors
 from huf.ai.graph.validator import FLOW_NODE_TYPES, MODE_DRAFT, MODE_PUBLISH
 from huf.ai.transaction import commit_if_background

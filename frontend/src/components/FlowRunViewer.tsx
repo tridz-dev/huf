@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 import { flowService } from '../services/flowService';
-import { Loader2, Box, CheckCircle2, XCircle, Clock, Check, X, Play, AlertTriangle } from 'lucide-react';
+import { Loader2, Box, CheckCircle2, XCircle, Clock, Play, AlertTriangle } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Textarea } from './ui/textarea';
 import { toast } from '@/lib/toast';
 import { useOptionalFlowContext } from '../contexts/FlowContext';
 import {
@@ -29,20 +28,28 @@ import { decisionMovedRun } from '@/lib/flow-run/flowRunDecision';
 import { connectPath, notConnectedService } from '@/lib/flow/flowIntegrations';
 import { redactSecrets } from '@/lib/flow/flowToolSummary';
 import { HumanValue } from '@/components/common/HumanValue';
+import { JsonArea } from '@/components/common/JsonArea';
+import { describeJsonProblem } from '@/lib/flow-run/jsonErrors';
 import { RunStepOutput } from './flow/RunStepOutput';
 import { friendlyRunTitle, humanizeMessageText, placeTriggerInput, startedByWords } from '@/lib/flow-run/humanize';
 import { useFlowRunIdentity } from '@/hooks/flow/useFlowRunIdentity';
 import { useUser } from '@/contexts/UserContext';
 import { Link } from 'react-router-dom';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { RunDecisionBar } from './flow/decision/RunDecisionBar';
+import { useViewport } from '@/lib/ui/responsive';
+import { ArrowLeft } from 'lucide-react';
 
 interface FlowRunViewerProps {
     runId: string | null;
     onClose: () => void;
+    /** Opened from the run history: a "Runs" button in the header goes back to that list. */
+    onBack?: () => void;
 }
 
-export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
+export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
     const siteZone = useSiteTimezone();
+    const { isPhone } = useViewport();
     const { canManage } = useFlowPermissions();
     const [confirmFail, setConfirmFail] = useState(false);
     const { run, loading, setLoading, refreshRun } = useFlowRunDetail(runId);
@@ -108,14 +115,12 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
         if (!runId) return;
         let parsed: Record<string, unknown> | undefined;
         if (resumePayload.trim()) {
-            try {
-                parsed = JSON.parse(resumePayload);
-            } catch (err) {
-                toast.error('Invalid JSON payload', {
-                    description: err instanceof Error ? err.message : 'Unable to parse JSON',
-                });
+            const problem = describeJsonProblem(resumePayload);
+            if (problem) {
+                toast.error('The extra information is not valid', { description: problem.message });
                 return;
             }
+            parsed = JSON.parse(resumePayload);
         }
         setLoading(true);
         try {
@@ -132,8 +137,13 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
 
     return (
         <Sheet open={!!runId} onOpenChange={(open) => !open && onClose()}>
-            <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-hidden p-0 sm:w-[700px] sm:max-w-[90vw]" data-testid="flow-run-details">
-                <SheetHeader className="shrink-0 border-b border-border bg-background px-6 pb-4 pt-6 pr-12" data-testid="flow-run-details-header">
+            <SheetContent side={isPhone ? 'bottom' : 'right'} className="flex w-full max-w-full flex-col gap-0 overflow-hidden p-0 max-sm:h-[92dvh] max-sm:rounded-t-xl sm:w-[clamp(420px,62vw,640px)] sm:max-w-none" data-testid="flow-run-details">
+                <SheetHeader className="shrink-0 border-b border-border bg-background px-4 pb-4 pt-4 pr-12 sm:px-6 sm:pt-6" data-testid="flow-run-details-header">
+                    {onBack && (
+                        <Button type="button" variant="ghost" size="sm" className="-ml-2 mb-1 w-fit gap-1.5 px-2 max-[1023px]:min-h-11" data-testid="flow-run-back" onClick={onBack}>
+                            <ArrowLeft className="h-4 w-4" aria-hidden /> Runs
+                        </Button>
+                    )}
                     <SheetTitle className="flex items-center gap-2">
                         <Box className="w-5 h-5 text-muted-foreground" />
                         Run details
@@ -143,7 +153,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                     </SheetDescription>
                 </SheetHeader>
 
-                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5" data-testid="flow-run-details-body">
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6" data-testid="flow-run-details-body">
                 {loading ? (
                     <div className="flex justify-center p-12">
                         <Loader2 className="animate-spin w-8 h-8 text-muted-foreground" />
@@ -152,7 +162,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                     <div className="text-center p-8 text-muted-foreground">Run not found</div>
                 ) : (
                     <div className="space-y-6">
-                        <div className="flex items-center gap-4 border p-4 rounded-lg bg-muted/20">
+                        <div className="flex items-center gap-4 border p-4 rounded-lg bg-muted/20 max-sm:flex-col max-sm:items-stretch max-sm:gap-3">
                             <div className="flex-1">
                                 <div className="text-xs text-muted-foreground mb-1">Status</div>
                                 <Badge variant={
@@ -396,39 +406,29 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                     {humanizeMessageText(run.waiting.context_summary as string, { names: stepNames })}
                                                 </div>
                                             )}
-                                            <div className="flex items-center gap-3 pt-2">
-                                                <Button size="sm" data-testid="flow-run-approve" onClick={() => handleApproval('approved')} className="bg-good hover:bg-good/90 text-panel gap-2">
-                                                    <Check className="w-4 h-4" /> Approve
-                                                </Button>
-                                                <Button size="sm" variant="outline" data-testid="flow-run-reject" onClick={() => handleApproval('rejected')} className="text-destructive border-destructive hover:bg-destructive/10 gap-2">
-                                                    <X className="w-4 h-4" /> Reject
-                                                </Button>
-                                            </div>
+                                            {!isPhone && <RunDecisionBar canDecide={run.can_decide !== false} reason={run.cannot_decide_reason} busy={loading} onDecide={handleApproval} />}
                                         </div>
                                     ) : (
-                                        <div className="space-y-3">
-                                            <div className="text-xs font-mono overflow-x-auto">
-                                                {JSON.stringify(titleNodeIds(run.waiting, titleOf), null, 2)}
-                                            </div>
+                                        <div className="space-y-3" data-testid="flow-run-waiting-user">
+                                            <HumanValue value={titleNodeIds(run.waiting, titleOf)} names={stepNames} testId="flow-run-human-waiting" raw rawTitle="Raw data of this wait" emptyText="This run is waiting for someone to continue it." />
                                             <div className="space-y-2">
-                                                <div className="text-xs text-muted-foreground">
-                                                    Optional JSON input to merge into context when resuming:
-                                                </div>
-                                                <Textarea
-                                                    className="min-h-[80px] text-xs font-mono"
+                                                <JsonArea
+                                                    surfaceKey="run-resume"
+                                                    title="Extra information to continue with (JSON, optional)"
+                                                    help={'Leave this empty to continue as it is. To pass something on to the next steps, write it as JSON, for example { "user_input": "yes" }. If the text is not valid JSON, Continue stays off until it is fixed.'}
                                                     value={resumePayload}
-                                                    onChange={(e) => setResumePayload(e.target.value)}
-                                                    placeholder='e.g. { "user_input": "yes" }'
-                                                    disabled={loading}
+                                                    onChange={setResumePayload}
+                                                    placeholder='{ "user_input": "yes" }'
                                                 />
                                                 <div className="flex justify-end">
                                                     <Button
                                                         size="sm"
                                                         onClick={handleResume}
-                                                        disabled={loading}
+                                                        disabled={loading || (resumePayload.trim() !== '' && !!describeJsonProblem(resumePayload))}
+                                                        data-testid="flow-run-resume"
                                                         className="gap-2"
                                                     >
-                                                        <Play className="w-4 h-4" /> Resume Flow
+                                                        <Play className="w-4 h-4" /> Continue
                                                     </Button>
                                                 </div>
                                             </div>
@@ -440,6 +440,9 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                     </div>
                 )}
                 </div>
+                {isPhone && run?.status === 'Waiting Approval' && run.waiting?.type === 'approval' && (
+                    <RunDecisionBar sticky canDecide={run.can_decide !== false} reason={run.cannot_decide_reason} busy={loading} onDecide={handleApproval} />
+                )}
             </SheetContent>
             <AlertDialog open={confirmFail} onOpenChange={setConfirmFail}>
                 <AlertDialogContent>

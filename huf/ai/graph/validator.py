@@ -223,7 +223,7 @@ def validate_graph(
 	errors.extend(_check_control_flow_targets(graph, nodes_by_id))
 	if draft:
 		# A half-built flow may have loose steps, loops of links, unfinished values and tools whose closure is not
-		# known yet; those are reported as things to finish (see huf.ai.flow.support.flow_validation), not as a
+		# known yet; those are reported as things to finish (see huf.ai.graph.validation.flow_validation), not as a
 		# reason to refuse the save.
 		errors.extend(_check_limits_policy(graph))
 		return ValidationResult(ok=not errors, profile=profile, errors=tuple(errors))

@@ -7,7 +7,7 @@ export function ConditionForm({ nodeId, cfg, patch, f, Err, title }: ActionFormP
   const { canManage } = useFlowPermissions();
 
   return (
-    <Section title={title} hint="Checks a condition. The True path runs when it holds, otherwise the False path.">
+    <Section title={title} hint="Checks a condition. The Yes path runs when it holds, otherwise the No path.">
       <div>
         <PickerTextarea
           id="condition-expr"

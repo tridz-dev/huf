@@ -1,279 +1,294 @@
-import { FlowsListHeaderActions } from '../components/FlowsListHeaderActions';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Calendar, Play, Activity, Settings, Workflow } from 'lucide-react';
-import { PageFrame } from '@/layouts/PageFrame';
-import { FilterBar, GridView, ItemCard, EmptyState } from '../components/dashboard';
-import { ExperimentalBadge } from '../components/common/ExperimentalBadge';
-import { usePageData } from '../hooks/dashboard/usePageData';
-
-import { FlowMetadata } from '../types/flow.types';
+import { Workflow } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getFlowDefinitions, getFlowDefinition, FLOW_LIST_LIMIT, type FlowListQuery } from '../services/flowApi';
-import { mapBackendStatusToFrontend } from '../services/flowSerializer';
-import { runFlow } from '../services/flowApi';
+import { PageFrame } from '@/layouts/PageFrame';
+import { GridView, EmptyState } from '../components/dashboard';
+import { LoadMoreButton } from '../components/dashboard/LoadMoreButton';
+import { ExperimentalBadge } from '../components/common/ExperimentalBadge';
+import { FlowsListHeaderActions } from '../components/FlowsListHeaderActions';
+import { Button } from '../components/ui/button';
 import { toast } from '@/lib/toast';
 import { reportFlowRun } from '@/lib/flow-run/flowRunToast';
 import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
+import { FLOW_GUIDE_URL } from '@/lib/flow/flowHelp';
+import { runFlow } from '../services/flowApi';
+import {
+  cloneFlow, listFlowCards, listFlowCategories, type FlowCard as FlowCardData, type FlowListSort,
+} from '../services/flow/flowCardsApi';
 import { useFlowContext } from '../contexts/FlowContext';
 import { RunFlowDialog } from '../components/flow/RunFlowDialog';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
-import { FLOW_GUIDE_URL } from '@/lib/flow/flowHelp';
-import { flowStatusKind, StatusPill, statusLabel } from '../components/common/StatusPill';
 import { FlowSettingsModal } from '../components/modals/FlowSettingsModal';
+import { FlowCard } from '../components/flow/list/FlowCard';
+import { FlowListFilters, type FilterChoice } from '../components/flow/list/FlowListFilters';
+import { FirstFlowCoach } from '../components/flow/list/FirstFlowCoach';
+import { NewFlowDialog } from '../components/flow/list/NewFlowDialog';
+import { DeleteFlowDialog } from '../components/flow/list/DeleteFlowDialog';
 
-const statusOptions = [
-  { label: 'All status', value: 'all' },
-  { label: statusLabel('live'), value: 'active' },
-  { label: statusLabel('draft'), value: 'draft' },
-  { label: statusLabel('archived'), value: 'paused' },
-  { label: statusLabel('has_problems'), value: 'error' },
+/** One word for each stored status (what people read: Draft / Live). */
+const STATUS_OPTIONS: FilterChoice[] = [
+  { label: 'All statuses', value: 'all' },
+  { label: 'Live', value: 'Active' },
+  { label: 'Draft', value: 'Draft' },
 ];
 
-const categoryOptions = [
-  { label: 'All categories', value: 'all' },
-  { label: 'Uncategorized', value: 'uncategorized' },
-  { label: 'Automation', value: 'automation' },
-  { label: 'Integration', value: 'integration' },
-  { label: 'Support', value: 'support' },
-  { label: 'Sales', value: 'sales' },
-  { label: 'Huf Demo', value: 'huf demo' },
+const SORT_OPTIONS: FilterChoice[] = [
+  { label: 'Recently updated', value: 'recent' },
+  { label: 'Name A to Z', value: 'name' },
 ];
+
+const BASE_CATEGORIES = ['Automation', 'Integration', 'Support', 'Sales'];
+const PAGE_SIZE = 100;
 
 export { FlowListPage };
 export default FlowListPage;
 
 function FlowListPage() {
   const navigate = useNavigate();
-  const { setActiveFlow, createFlow } = useFlowContext();
-  const [showSettings, setShowSettings] = useState(false);
-  const [runTarget, setRunTarget] = useState<{ id: string; name: string } | null>(null);
+  const { setActiveFlow, deleteFlow } = useFlowContext();
   const { canCreate, canManage } = useFlowPermissions();
 
-  // What the server is asked for: with hundreds of flows, search and filters must reach the server or older flows
-  // could never be found. (The page still filters the loaded rows too, so the list answers instantly while typing.)
-  const [serverQuery, setServerQuery] = useState<FlowListQuery>({});
-  const fetchFn = useCallback(async () => {
-    const items = await getFlowDefinitions(serverQuery);
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('all');
+  const [category, setCategory] = useState('all');
+  const [sort, setSort] = useState<FlowListSort>('recent');
+  const [usedCategories, setUsedCategories] = useState<string[]>([]);
 
-    // Enrich with metadata (description, category) and nodeCount from definition_json
-    const withMetadata = await Promise.all(
-      items.map(async (item) => {
-        try {
-          const def = await getFlowDefinition(item.flow_id);
-          const graph = def.definition_json;
-          // The shared graph-IR carries no `metadata` any more (additionalProperties:
-          // false) -- name/description/category live on the Flow Definition doctype
-          // record itself, not inside definition_json. See flowSerializer.ts.
-          const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+  const [items, setItems] = useState<FlowCardData[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [failed, setFailed] = useState(false);
 
-          return {
-            id: item.flow_id,
-            name: def.flow_name || item.flow_name,
-            description: def.description || undefined,
-            status: mapBackendStatusToFrontend(def.status || item.status),
-            category: def.category || 'Uncategorized',
-            nodeCount: nodes.length || 0,
-            createdAt: new Date(item.modified),
-            updatedAt: new Date(item.modified),
-          } as FlowMetadata;
-        } catch {
-          return {
-            id: item.flow_id,
-            name: item.flow_name,
-            description: item.description || undefined,
-            status: mapBackendStatusToFrontend(item.status),
-            category: item.category || 'Uncategorized',
-            nodeCount: 0,
-            createdAt: new Date(item.modified),
-            updatedAt: new Date(item.modified),
-          } as FlowMetadata;
-        }
-      })
-    );
+  const [showSettings, setShowSettings] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [runTarget, setRunTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; live: boolean } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-    return withMetadata;
-  }, [serverQuery]);
-
-  const { data, allData, loading, search, setSearch, filters, setFilters, refresh } = usePageData<FlowMetadata>({
-    fetchFn,
-    searchFields: ['name', 'description'],
-    filterFn: useCallback((flow: FlowMetadata, filters: Record<string, string>) => {
-      if (filters.status && filters.status !== 'all' && flow.status !== filters.status) {
-        return false;
+  // Newest answer wins: typing quickly must never let a slow older answer overwrite a newer one.
+  const requestId = useRef(0);
+  const load = useCallback(
+    async (debounced: boolean) => {
+      const mine = ++requestId.current;
+      try {
+        const result = await listFlowCards({
+          search: debounced ? search.trim() || undefined : undefined,
+          status: status === 'all' ? undefined : status,
+          category: category === 'all' ? undefined : category,
+          sort,
+          limit: PAGE_SIZE,
+        });
+        if (mine !== requestId.current) return;
+        setItems(result.items);
+        setTotal(result.total);
+        setFailed(false);
+      } catch {
+        if (mine === requestId.current) setFailed(true);
+      } finally {
+        if (mine === requestId.current) setLoading(false);
       }
-      if (filters.category && filters.category !== 'all' && flow.category?.toLowerCase() !== filters.category) {
-        return false;
-      }
-      return true;
-    }, []),
-  });
+    },
+    [search, status, category, sort],
+  );
 
-  // Ask the server again a moment after the search text or a filter changes (not on first render).
-  const firstQuery = useRef(true);
+  const firstLoad = useRef(true);
   useEffect(() => {
-    const category = filters.category && filters.category !== 'all' && filters.category !== 'uncategorized'
-      ? categoryOptions.find((c) => c.value === filters.category)?.label
-      : undefined;
-    const status = filters.status && filters.status !== 'all'
-      ? ({ active: 'Active', draft: 'Draft', paused: 'Archived' } as Record<string, string>)[filters.status]
-      : undefined;
-    const next: FlowListQuery = { search: search.trim() || undefined, status, category };
-    const timer = setTimeout(() => setServerQuery((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next)), 300);
+    const wait = firstLoad.current ? 0 : 250;
+    firstLoad.current = false;
+    const timer = setTimeout(() => void load(true), wait);
     return () => clearTimeout(timer);
-  }, [search, filters.category, filters.status]);
+  }, [load]);
+
   useEffect(() => {
-    if (firstQuery.current) {
-      firstQuery.current = false;
-      return;
+    void listFlowCategories().then(setUsedCategories);
+  }, []);
+
+  const refresh = () => {
+    void load(true);
+    void listFlowCategories().then(setUsedCategories);
+  };
+
+  const loadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const more = await listFlowCards({
+        search: search.trim() || undefined,
+        status: status === 'all' ? undefined : status,
+        category: category === 'all' ? undefined : category,
+        sort,
+        limit: PAGE_SIZE,
+        start: items.length,
+      });
+      setItems((prev) => [...prev, ...more.items.filter((m) => !prev.some((p) => p.flow_id === m.flow_id))]);
+      setTotal(more.total);
+    } catch (err) {
+      toast.error('Could not load more flows', { description: humanizeFlowError(err) });
+    } finally {
+      setLoadingMore(false);
     }
-    void refresh();
-    // refresh follows fetchFn, which follows serverQuery
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverQuery]);
-
-  const handleFlowClick = (flowId: string) => {
-    // Navigate to the flow canvas
-    navigate(`/flows/${flowId}`);
   };
 
-  const handleConfigureFlow = (flowId: string) => {
-    // Stay on the list page and open the shared FlowSettingsModal
-    setActiveFlow(flowId);
-    setShowSettings(true);
+  const categoryOptions: FilterChoice[] = [
+    { label: 'All categories', value: 'all' },
+    { label: 'Uncategorized', value: 'Uncategorized' },
+    ...[...new Set([...BASE_CATEGORIES, ...usedCategories])]
+      .filter((c) => c.toLowerCase() !== 'uncategorized')
+      .sort((a, b) => a.localeCompare(b))
+      .map((c) => ({ label: c, value: c })),
+  ];
+
+  const isFiltered = !!search.trim() || status !== 'all' || category !== 'all';
+  const clearFilters = () => {
+    setSearch('');
+    setStatus('all');
+    setCategory('all');
   };
 
-  const handleRunFlow = async (payload: Record<string, unknown>) => {
+  const handleRun = async (payload: Record<string, unknown>) => {
     if (!runTarget) return;
     try {
       reportFlowRun(await runFlow(runTarget.id, payload));
+      refresh();
     } catch (err) {
       toast.error('Could not run the flow', { description: humanizeFlowError(err) });
     }
   };
 
-  const handleNewFlow = async () => {
+  const handleDuplicate = async (card: FlowCardData) => {
     try {
-      const newFlow = await createFlow('New Flow', 'Uncategorized');
-      navigate(`/flows/${newFlow.id}`);
-    } catch (err) {
-      toast.error('Could not create the flow', {
-        description: humanizeFlowError(err),
+      const copy = await cloneFlow(card.flow_id);
+      toast.success(`Copied as "${copy.flow_name}"`, {
+        description: copy.needs_setup.length > 0 ? `It is a draft. ${copy.needs_setup.map((n) => `${n.title}: ${n.what}`).join('. ')}` : 'It is a draft. Open it to make changes.',
+        action: { label: 'Open', onClick: () => navigate(`/flows/${copy.flow_id}`) },
       });
+      refresh();
+    } catch (err) {
+      toast.error('Could not copy the flow', { description: humanizeFlowError(err) });
     }
   };
 
-  const isFiltered =
-    !!search || (filters.status && filters.status !== 'all') || (filters.category && filters.category !== 'all');
-  const handleClearFilters = () => {
-    setSearch('');
-    setFilters({});
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteFlow(deleteTarget.id);
+      toast.success('Flow deleted');
+      setDeleteTarget(null);
+      refresh();
+    } catch (err) {
+      toast.error('Could not delete the flow', { description: humanizeFlowError(err) });
+    } finally {
+      setDeleting(false);
+    }
   };
+
+  const noFlowsAtAll = !loading && !failed && items.length === 0 && !isFiltered;
 
   return (
     <PageFrame
       title="Flows"
-      badge={<ExperimentalBadge />}
+      badge={<ExperimentalBadge className="max-sm:hidden" />}
+      meta={!loading && total > 0 ? <span className="hidden sm:inline">{`${total} ${total === 1 ? 'flow' : 'flows'}`}</span> : undefined}
       actions={<FlowsListHeaderActions />}
       filters={
-        <FilterBar
-          searchPlaceholder="Search flows..."
-          searchValue={search}
+        <FlowListFilters
+          search={search}
           onSearchChange={setSearch}
-          filters={[
-            {
-              label: 'Status',
-              value: filters.status || 'all',
-              options: statusOptions,
-              onChange: (value) => setFilters({ ...filters, status: value }),
-            },
-            {
-              label: 'Category',
-              value: filters.category || 'all',
-              options: categoryOptions,
-              onChange: (value) => setFilters({ ...filters, category: value }),
-            },
-          ]}
+          status={status}
+          onStatusChange={setStatus}
+          statusOptions={STATUS_OPTIONS}
+          category={category}
+          onCategoryChange={setCategory}
+          categoryOptions={categoryOptions}
+          sort={sort}
+          onSortChange={(v) => setSort(v as FlowListSort)}
+          sortOptions={SORT_OPTIONS}
         />
       }
     >
-      {allData.length >= FLOW_LIST_LIMIT && (
-        <p className="mb-3 text-xs text-muted-foreground" data-testid="flow-list-limit-note">
-          Showing the {FLOW_LIST_LIMIT} flows changed most recently. Search or use the filters to find others.
-        </p>
+      {failed && (
+        <div className="py-12 text-center" data-testid="flow-list-error">
+          <p className="mb-3 text-ui-text text-steel">The flows could not be loaded.</p>
+          <Button variant="outline" onClick={refresh}>
+            Try again
+          </Button>
+        </div>
       )}
-      <GridView
-        items={data}
-        columns={{ sm: 1, md: 2, lg: 3 }}
-        loading={loading}
-        emptyState={
-          isFiltered ? (
-            <EmptyState
-              variant="no-results"
-              icon={Workflow}
-              title="No flows found"
-              filterTerm={search}
-              secondaryAction={{ label: 'Clear filters', onClick: handleClearFilters }}
+
+      {!failed && (
+        <GridView
+          items={items}
+          columns={{ sm: 1, md: 2, lg: 3 }}
+          loading={loading}
+          emptyState={
+            noFlowsAtAll && canCreate ? (
+              <FirstFlowCoach onStart={() => setShowNew(true)} />
+            ) : noFlowsAtAll ? (
+              <EmptyState
+                variant="passive"
+                icon={Workflow}
+                title="No flows yet"
+                description="No flows have been shared with you yet. Ask a teammate to share one, or ask your administrator for access to create flows."
+                secondaryAction={{ label: 'How flows work', onClick: () => window.open(FLOW_GUIDE_URL, '_blank', 'noopener') }}
+              />
+            ) : (
+              <EmptyState
+                variant="no-results"
+                icon={Workflow}
+                title="No flows found"
+                filterTerm={search}
+                description={search.trim() ? `Nothing matches "${search.trim()}". Search looks in names, descriptions and categories.` : 'No flows match these filters.'}
+                secondaryAction={{ label: 'Clear filters', onClick: clearFilters }}
+              />
+            )
+          }
+          renderItem={(card) => (
+            <FlowCard
+              card={card}
+              canManage={canManage}
+              canCreate={canCreate}
+              onOpen={() => navigate(`/flows/${card.flow_id}`)}
+              onRun={() => setRunTarget({ id: card.flow_id, name: card.flow_name })}
+              onSettings={() => {
+                // Stay on the list and open the shared settings dialog (read-only summary for view-only users).
+                setActiveFlow(card.flow_id);
+                setShowSettings(true);
+              }}
+              onDuplicate={() => void handleDuplicate(card)}
+              onDelete={() => setDeleteTarget({ id: card.flow_id, name: card.flow_name, live: card.status === 'Active' })}
             />
-          ) : (
-            <EmptyState
-              variant="create"
-              icon={Workflow}
-              title="No flows yet"
-              description={canCreate ? 'A flow starts from a trigger, such as a webhook or a schedule, then runs steps one after another. Create your first flow to try it.' : 'No flows have been shared with you yet. Ask a teammate to share one, or ask your administrator for access to create flows.'}
-              action={canCreate ? { label: 'New flow', onClick: handleNewFlow } : undefined}
-              secondaryAction={{ label: 'How flows work', onClick: () => window.open(FLOW_GUIDE_URL, '_blank', 'noopener') }}
-            />
-          )
-        }
-        renderItem={(flow) => (
-          <div data-testid={`flow-list-item-${flow.id}`} title={flow.description || undefined}>
-          <ItemCard
-            title={flow.name}
-            description={flow.description || 'No description'}
-            status={{
-              label: statusLabel(flowStatusKind(flow.status)),
-              node: <StatusPill kind={flowStatusKind(flow.status)} data-testid={`flow-list-status-${flow.id}`} />,
-            }}
-            metadata={[
-              { label: 'Category', value: flow.category || 'Uncategorized' },
-              { label: 'Steps', value: flow.nodeCount.toString(), icon: Activity },
-              {
-                label: 'Updated',
-                value: new Date(flow.updatedAt).toLocaleDateString(),
-                icon: Calendar
-              },
-            ]}
-            actions={[
-              ...(canManage
-                ? [{ icon: Play, label: 'Run flow', onClick: () => setRunTarget({ id: flow.id, name: flow.name }) }]
-                : []),
-              {
-                icon: Settings,
-                label: canManage ? 'Configure' : 'View settings',
-                onClick: () => handleConfigureFlow(flow.id),
-              },
-            ]}
-            onClick={() => handleFlowClick(flow.id)}
-          />
-          </div>
-        )}
-        keyExtractor={(flow) => flow.id}
-      />
+          )}
+          keyExtractor={(card) => card.flow_id}
+        />
+      )}
+
+      {!failed && !loading && items.length > 0 && total > items.length && (
+        <div className="flex flex-col items-center gap-1 pb-4" data-testid="flow-list-limit-note">
+          <p className="text-xs text-steel">
+            Showing {items.length} of {total} flows.
+          </p>
+          <LoadMoreButton hasMore loading={loadingMore} onLoadMore={() => void loadMore()} />
+        </div>
+      )}
+
       <RunFlowDialog
         open={!!runTarget}
         flowId={runTarget?.id ?? null}
         flowName={runTarget?.name}
         onOpenChange={(open) => !open && setRunTarget(null)}
-        onRun={handleRunFlow}
+        onRun={handleRun}
       />
       <FlowSettingsModal
         open={showSettings}
         onClose={() => {
           setShowSettings(false);
-          // Refresh the list so name/description/category updates are visible without manual reload
+          // Refresh the list so name/description/category updates are visible without a manual reload.
           refresh();
         }}
       />
+      <DeleteFlowDialog flow={deleteTarget} deleting={deleting} onCancel={() => setDeleteTarget(null)} onConfirm={() => void handleDelete()} />
+      <NewFlowDialog open={showNew} onOpenChange={setShowNew} />
     </PageFrame>
   );
 }

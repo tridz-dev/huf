@@ -19,7 +19,7 @@ from frappe.tests import IntegrationTestCase
 
 from huf.ai.flow import api as flow_api
 from huf.ai.flow import engine as flow_engine
-from huf.ai.flow.support.flow_validation import validate_flow
+from huf.ai.graph.validation.flow_validation import validate_flow
 from huf.ai.flow.support.turned_off import SKIPPABLE_NODE_TYPES
 
 LIMITS = {
@@ -216,7 +216,7 @@ class TestDraftSaveOnBench(IntegrationTestCase):
 		self.assertNotIn("incomplete", json.dumps(saved))
 
 	def test_validate_api_computes_the_list_now(self):
-		from huf.ai.flow.support.flow_validation import validate_flow_definition
+		from huf.ai.graph.validation.flow_validation import validate_flow_definition
 
 		flow_id, _ = self._save(self._half_built())
 		draft = validate_flow_definition(flow_id, "draft")

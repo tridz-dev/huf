@@ -10,15 +10,21 @@ A flow starts from a **trigger** and then runs **steps** one after another. Each
 
 The **?** button in the editor header repeats this and lists the keyboard shortcuts.
 
+## The Flows list
+
+Each card shows the flow name (two lines at most; hover for the full name), a plain description (or "Starts when a web request arrives, then 3 steps." when the author wrote none), one status word (**Draft** or **Live**), what starts it, how the **last run** went and how long ago, and the steps as small icons. **Open** edits the flow, **Run** starts it by hand, and the **...** menu has **Duplicate**, **Settings** and **Delete**. Search looks in names, descriptions and categories; the dropdowns filter by status and category and sort.
+
+**New flow** opens a chooser: **Start from scratch**, or a **template** (a ready-made small flow: reply to a web request, split big and small orders, loop over items, ask an AI agent, ask a person to approve, run on a schedule, react to a new record, post to Slack, send an email ...). A template is copied into a NEW draft that is yours: its own name ("... 2" if the name is taken), its own webhook secret, and steps that still need something (a Slack channel, an e-mail address, a connected app) marked "Needs setup". The catalog ships with the app (`frontend/src/data/flowTemplates.json`, made from the Huf Demo flows with site-specific values removed), so it works on any site without a set-up script.
+
 ## Header buttons
 
 | Button | What it does |
 |---|---|
 | Save | Saves your changes (Ctrl/Cmd+S). A flow with a missing field cannot be saved; the step is selected and says what is missing. |
 | Runs | Run history of this flow, newest first. Select a run to see what each step did. |
-| Settings | Name, description and category. Delete the flow here. |
+| Settings | Name, description and category; a collapsed **More** (procedure option); and a **Danger zone** to delete the flow (asks "Delete this flow?" in the same dialog). Saving only changes these details, never the steps. |
 | Run | Starts one real run now with input data you type (JSON). Emails are sent and records are created. |
-| Publish | Turns the trigger on: the webhook accepts calls, a schedule or record change starts runs. |
+| Publish | Asks first: it shows what will start the flow (the web address with a Copy button, "every day at 09:00", "when a ToDo is created") and warns about apps that are not connected or unfinished steps. **Publish** then turns the trigger on. |
 | Unpublish | Turns the trigger off. The flow becomes a draft again; runs in progress finish. |
 
 Read-only users can look at flows and runs but cannot save, run or publish.
@@ -37,7 +43,10 @@ Most fields have an **Insert data** button. It lists the trigger and the steps t
 
 Starts the flow when another system sends a request to the flow's web address.
 
-- Fields: URL (read only), Secret, Method (POST or GET).
+- Fields: how it is called (POST can send data, GET only starts the flow), the secret, the web address (read only, with Copy).
+- The secret shows as `****c3e6`. Press Show to see it for 30 seconds, Copy to copy it, "Make a new secret" (after a confirmation) to replace it. People who can only view the flow see "Hidden. Ask a flow editor."
+- "Data it sends": press "Paste a sample request" (or "Use last received request") to list the fields the other app sends, so you know what later steps can use. The sample is kept with the flow (small, passwords and keys hidden).
+- "How to call this webhook" (closed by default) is for whoever connects the other app: a "Request body (JSON)" example and a ready-to-run command.
 - The caller sends the secret in the `X-Huf-Secret` header. A flow must be live (published) to accept calls.
 - Example: `curl -X POST -H "X-Huf-Secret: <secret>" -H "Content-Type: application/json" -d '{"name":"Ada"}' "<url>"`
 - Answers: 200 started (the answer holds the run id), 403 wrong or missing secret or not published, 405 wrong method, 429 more than 60 calls a minute.
@@ -47,18 +56,19 @@ Starts the flow when another system sends a request to the flow's web address.
 
 Starts the flow by itself at times you choose, while the flow is published.
 
-- Fields: How often (every few minutes or hours, every day, week or month, or a custom cron expression).
-- Times use the site's time zone, which the editor shows under the schedule. Run history shows times in your browser's time zone, so they can differ.
-- Cron has five parts: minute, hour, day of month, month, day of week. `*/15 * * * *` is every 15 minutes; `0 9 * * 1-5` is weekdays at 09:00.
-- Common errors: a cron with a number out of range (for example hour 25); forgetting to publish.
+- Fields: How often (every few minutes or hours, every day, on certain days of the week, every month, or Custom), the time, and the time zone.
+- The summary says it in words, for example "Every day at 09:00 in Asia/Kolkata", with the next three runs and how the time shows in your browser. The time zone starts as the site's; change it if the schedule should follow another clock. Run history shows times in your browser's time zone.
+- Every few hours counts from midnight (3 hours = 00:00, 03:00, 06:00 ...). Monthly can be day 1 to 31 or the last day of the month; months without that day are skipped.
+- Custom takes a five-part pattern (minute, hour, day of month, month, day of week): `*/5 9-17 * * 1-5` is every 5 minutes, 9am to 5pm, Monday to Friday. It only appears under Custom.
+- Common errors: a pattern with a number out of range (for example hour 25); forgetting to publish.
 
-### Record change (was "Data")
+### When a document changes (was "Data" / "Record change")
 
-Starts the flow when a record changes, for example when a ToDo is created.
+Starts the flow when something is added, changed or deleted in your data, for example when a To-do is created.
 
-- Fields: Document type, When it fires (created, updated, submitted, cancelled, deleted).
-- Submit and cancel only exist for document types that can be submitted.
-- The record's fields are available as `input['field']`.
+- A sentence: "When a [kind of record] is [created]". The list is searchable and leaves out system records. The event starts as "created".
+- Events: created, changed, deleted; submitted and cancelled only for document types that can be submitted.
+- The details of the record are available to the steps that follow.
 - Common errors: choosing an event the document type never fires; forgetting to publish.
 
 ## Steps

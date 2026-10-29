@@ -3,6 +3,8 @@ export type ModalTab = 'explore' | 'ai-agents' | 'apps' | 'utility';
 export interface TriggerOption {
   id: string;
   name: string;
+  /** Short name for the step on the canvas and in its panel, when the card name is a sentence. */
+  nodeTitle?: string;
   description?: string;
   icon?: string;
   category: 'popular' | 'highlight' | 'utility' | 'app';

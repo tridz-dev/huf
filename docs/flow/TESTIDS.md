@@ -20,6 +20,7 @@ Stable `data-testid` hooks for live UI journeys. Field names are the contract co
 
 ## Palette modal
 `flow-trigger-modal`, `flow-action-modal`, `flow-modal-add-trigger`, `flow-modal-cancel`.
+Trigger modal: one list of cards (no tab bar, no search); the chosen card has `data-selected="true"` and a check `flow-card-check-<id>`; hint line `flow-trigger-hint` always takes its space. Empty trigger: card button `flow-node-choose-trigger-<nodeId>` and side-panel button `flow-trigger-choose` (panel `flow-trigger-unset`) both open `flow-trigger-modal`.
 Cards: `flow-card-<id>` with ids
 `webhook`, `schedule`, `doc-event` (triggers) and
 `agent-run`, `tool-call`, `router`, `condition`, `loop`, `human.approval`, `transform`, `state-get`,
@@ -78,10 +79,12 @@ Dropdown options inside Selects: `flow-option-<name>`; Combobox options: `<field
 
 | Type | Fields |
 |---|---|
-| `trigger.webhook` | `url` (read-only), `secret`, `method` (options `flow-option-webhook-method-GET|POST`) |
-| | buttons `flow-webhook-copy-url`, `flow-webhook-copy-secret`, `flow-webhook-regenerate`; usage blocks `flow-webhook-usage`, `-header`, `-curl` (no query-string form: the secret is header-only) |
-| `trigger.schedule` | `frequency` (options `flow-option-schedule-frequency-<minutes|hours|daily|weekly|monthly|custom>`), `every`, `minute`, `hour`, `weekday`, `monthday`, `cron`; preview `flow-schedule-preview` |
-| `trigger.doc-event` | `doctype`, `event` (options `flow-option-doc-event-<event>`) |
+| `trigger.webhook` | `url` (read-only address), `secret` (read-only, masked `****c3e6` until Show; `data-masked`), `method` (options `flow-option-webhook-method-GET|POST`) |
+| | buttons `flow-webhook-copy-url`, `flow-webhook-copy-secret`, `flow-webhook-secret-toggle` (Show for 30 s / Hide), `flow-webhook-regenerate` (opens `flow-webhook-regenerate-dialog` with `-cancel` / `-confirm`); note `flow-webhook-secret-new-note`; pill `flow-webhook-live`; panel `flow-webhook-panel` |
+| | data it sends: `flow-webhook-data`, `flow-webhook-fields` / `flow-webhook-field` (plain rows), buttons `flow-webhook-paste-sample`, `flow-webhook-use-last`, `flow-webhook-clear-sample`, JSON area `flow-json-webhook-sample` (`-input`, `-help`, `-copy`, `-format`, `-error`), `flow-webhook-sample-save` / `-cancel`, `flow-webhook-sample-note` |
+| | developer reference (closed until opened): `flow-webhook-usage` (`data-open`), `flow-webhook-howto-toggle`, `flow-webhook-howto`, JSON area `flow-json-webhook-body` (title "Request body (JSON)"), command `flow-webhook-usage-curl` with `flow-webhook-usage-curl-copy`, `flow-webhook-usage-secret-note`, `flow-webhook-responses` |
+| `trigger.schedule` | `frequency` (options `flow-option-schedule-frequency-<minutes|hours|daily|weekly|monthly|custom>`), `every` (options `flow-option-schedule-every-<n>`), `minute` (hours only), `time` (daily, weekly, monthly), `weekday` (group) with `weekday-<0..6>` buttons and presets `flow-schedule-preset-<weekdays|weekend|everyday>`, `monthday` (options `flow-option-schedule-monthday-<1..31|last>`), `zone` (time zone; options `flow-field-trigger.schedule-zone-option-<IANA name>`), `cron` (only under Custom); `flow-schedule-preview` wraps `flow-schedule-summary` (sentence), `flow-schedule-timezone` (how the time shows in the browser) and `flow-schedule-next-runs` / `flow-schedule-next-run` |
+| `trigger.doc-event` | `doctype` (searchable list, `-search`, options `flow-field-trigger.doc-event-doctype-option-<name>`), `event` (options `flow-option-doc-event-<event>`); sentence `flow-data-sentence`, panel `flow-data-trigger`, `flow-doc-event-filter` (the "Only when... coming soon" note) |
 | trigger panel | `flow-trigger-apply`, `flow-trigger-clear`, `flow-trigger-disabled-reason` |
 | `agent.run` | `agent`, `prompt`, `prompt_bindings`; `flow-binding-<name>`; picker `flow-agent-run-variable-picker` (+ `-item-<ref>`) |
 | `tool.call` | `tool_id`, `input.<key>` (e.g. `input.to`, `input.subject`, `input.body`, `input.channel`, `input.text`, `input.url`, `input.method`, `input.headers`, `input.body`); every value control has a `-mode` select (`flow-field-tool.call-input.to-mode`) |
@@ -228,8 +231,8 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-hint-<form>-<field>` | One-line hint under a field (for example `flow-hint-webhook-secret`, `flow-hint-loop-max`, `flow-hint-approval-timeout`, `flow-hint-transform-op`, `flow-hint-transform-example`, `flow-hint-condition`) |
 | `<field testid>-hint` | Hint under a value input (URL, Subject, Spreadsheet ID ...); `<field testid>-mode-help` explains Reference / Template / JSON |
 | `flow-condition-examples`, `flow-schedule-examples`, `flow-doc-event-explained` | Folded example lists (condition syntax, cron examples, what each Data event means) |
-| `flow-webhook-usage-curl-data`, `flow-webhook-responses` | curl example with a JSON body; what 200 / 403 / 405 / 429 mean |
-| `flow-hint-schedule-intro`, `flow-schedule-timezone`, `flow-hint-schedule-cron` | Schedule intro, the site time zone sentence, cron help |
+| `flow-webhook-responses` | What 200 / 403 / 405 / 429 mean (inside the closed-by-default developer reference) |
+| `flow-hint-schedule-intro`, `flow-hint-schedule-every`, `flow-hint-schedule-monthday`, `flow-hint-schedule-zone`, `flow-hint-schedule-cron` | Schedule intro and field help |
 | `flow-hint-doc-event-intro`, `flow-hint-doc-event-doctype`, `flow-hint-doc-event-event` | Data trigger help |
 | `flow-hint-trigger-type`, `flow-sidebar-empty-hint` | Sidebar help lines (the Step name help and the "Steps after this one" footer were removed) |
 | `flow-settings-name-hint`, `flow-settings-description-hint`, `flow-settings-category-hint` | Settings dialog hints |
@@ -237,7 +240,7 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-run-history-header`, `flow-run-history-body`, `flow-run-history-timezone` | Sticky header, scrolling body and time zone note of the Runs sheet |
 | `flow-run-details-header`, `flow-run-details-body`, `flow-run-timezone-note` | Same for Run details |
 | `flow-view-only-pill`, `flow-view-only-pill-hint` | "View only" pill beside the flow name in the editor header (people who cannot edit the flow; tooltip on hover and focus) |
-| `flow-webhook-secret-hidden` | Replaces the secret field, Copy and Regenerate for people who cannot edit the flow; none of `flow-webhook-copy-secret`, `flow-webhook-regenerate` or the secret input exist for them |
+| `flow-webhook-secret-hidden` | "Hidden. Ask a flow editor." in place of the secret, Show, Copy and Make a new secret for people who cannot edit the flow; none of `flow-webhook-copy-secret`, `flow-webhook-regenerate`, `flow-webhook-secret-toggle`, the paste / use-last buttons or the secret input exist for them |
 | `flow-settings-view-only`, `flow-settings-name-value`, `flow-settings-description-value`, `flow-settings-category-value`, `flow-settings-close` | Read-only flow settings (no Save, Cancel, Delete or inputs) |
 | `flow-run-history-empty` | Empty Runs sheet; the text for view-only users has no "Press Run" |
 | `flow-not-connected-note-<suffix>` | "A flow editor needs to connect X" shown instead of the Connect link to view-only users |
@@ -256,3 +259,31 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-run-trigger-input`, `flow-run-input-empty` | Separate "Data this run started with" block (only when no step repeats it) and its "No data was sent" line |
 | `flow-run-step-output-<nodeId>`, `flow-run-input` | Now the RAW JSON text, present only after "{ } Raw" is opened (HumanValue is the default view) |
 | `flow-json-<key>`, `-input`, `-format`, `-copy`, `-error`, `-toggle`, `-more`, `-help`, `-text` | JsonArea (the one component for legitimate JSON): `-toggle` is "Show as form" / "Edit as JSON", remembered per key; `-more` folds over 12 lines |
+| `flow-run-waiting-user`, `flow-run-human-waiting`, `flow-json-run-resume` (+ `-input`, `-error`, `-format`, `-copy`), `flow-run-resume` | Run waiting for someone to continue: its facts as labelled rows and the optional "extra information (JSON)" area; `flow-run-resume` is the Continue button (off while the JSON is invalid) |
+
+## UX-11 / UX-20 flows list, new-flow chooser, publish and settings dialogs
+| testid | Where |
+|---|---|
+| `flow-list-item-<flowId>` | Flow card (whole card opens the flow). Inside it: `flow-card-title` (2 lines, `title` = full name), `flow-card-description`, `flow-card-trigger` ("Starts when ..."), `flow-card-last-run` (`data-run-status`), `flow-card-category` (only when set), `flow-card-steps` (icon strip), `flow-card-trigger-icon` (`data-trigger`) |
+| `flow-card-open`, `flow-card-run`, `flow-card-menu`, `flow-card-menu-content`, `flow-card-duplicate`, `flow-card-settings`, `flow-card-delete` | Labelled card actions and the "..." menu (view-only people only get Open and the menu's "View settings") |
+| `flow-list-filters`, `flow-list-search`, `flow-list-status-filter`, `flow-list-category-filter`, `flow-list-sort` (wide screens), `flow-list-filters-button` ("Filters (n)") + `flow-list-filters-sheet` with `flow-list-status-filter-sheet`, `-category-filter-sheet`, `-sort-sheet` (phone), `flow-list-limit-note`, `flow-list-error` | List filter row ("All statuses", "All categories", "Recently updated"), the "Showing N of M" note with Show more, load error |
+| `flow-delete-dialog`, `flow-delete-name`, `flow-delete-confirm` | Delete confirmation opened from a card ("Delete this flow?") |
+| `flow-first-run-coach`, `flow-first-run-start` | "Build your first flow" panel on an empty list, and its "Start with a template" button |
+| `flow-new-dialog`, `flow-new-scratch`, `flow-template-<templateId>`, `flow-templates-<group>`, `flow-template-steps` | New flow chooser: start from scratch, one button per template (ids in `data/flowTemplates.json`), group sections, icon strip |
+| `flow-publish-dialog`, `flow-publish-summary` (`data-start-kind`), `flow-publish-warnings`, `flow-publish-warning-unconnected`, `flow-publish-warning-problem`, `flow-publish-connect`, `flow-publish-cancel`, `flow-publish-confirm` | Publish summary: what will start the flow (+ web address with Copy for a webhook), warnings, confirm |
+| `flow-settings-more`, `flow-settings-danger-zone`, `flow-settings-category-new`, `flow-settings-name-error`, `flow-settings-error` | Settings: collapsed "More" (holds `flow-settings-auto-convert`), Danger zone, new-category input, inline errors |
+| `flow-settings-delete` (opens the in-dialog confirm), `flow-settings-delete-title`, `flow-settings-delete-cancel`, `flow-settings-delete-confirm` | Settings deletion: the confirm replaces the dialog body (no second dialog) |
+
+## UX-23 responsive shell, phone steps list, roles
+| testid | Where |
+|---|---|
+| `flow-page` (`data-layout` = `docked` / `sheet` / `phone`) | The editor page. `docked`: step panel beside the canvas; `sheet`: panel opens over it (canvas would drop under 520px); `phone`: under 768px |
+| `flow-header-more`, `flow-header-more-menu`, `flow-status-pill-menu` | Header "..." menu at 1200px and narrower (and on a phone). It holds `flow-runs` (Run history), `flow-settings` (Flow settings), `flow-help`, `flow-tidy-layout`, `flow-convert-to-procedure` / `flow-saved-as-procedure`; on a phone also `flow-phone-view-toggle-menu` (Show map / Show steps) |
+| `flow-name` | The flow name in the header (tooltip carries the whole name) |
+| `flow-step-panel` (`data-width`), `flow-panel-resizer` | Docked step panel and its grab bar (role separator, 300-480, arrow keys, remembered) |
+| `flow-step-sheet`, `flow-sheet-back` | Step settings as a sheet (under ~900px and on a phone) and its "Back to the flow" control; `flow-phone-read-only-note` on a phone |
+| `flow-phone-banner`, `flow-phone-view-steps`, `flow-phone-show-map` | Phone: the "Editing steps works best on a larger screen" note with View steps, and the Show map button |
+| `flow-steps-list`, `flow-step-card-<nodeId>` (+ `-title-`, `-summary-`, `-status-`), `flow-step-branch-<nodeId>` | Phone steps list: one card per step in reading order (icon, title, one line, status); branch name above the first step of a branch |
+| `flow-run-decision-bar`, `flow-run-decision-inline`, `flow-run-cannot-decide`, `flow-run-back` | Run details: sticky Approve / Reject bar on a phone, the inline pair elsewhere, the sentence shown to someone who may not decide, the "Runs" back button |
+| `flow-approval-group-<firstRunId>`, `flow-approval-group-heading` | Bell: identical requests grouped under "3 waiting: Order approval" (every request keeps its own `flow-approve-<runId>` / `flow-reject-<runId>`) |
+| `no-access-page`, `no-access-title`, `no-access-body`, `no-access-go-flows`, `no-access-go-hub` | "You don't have access to this page" (Hub, Flows, Executions, Settings, Agents, Dashboard) |

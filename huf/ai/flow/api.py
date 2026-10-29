@@ -19,6 +19,7 @@ from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.api_support import require_permission
 from huf.ai.flow.support.approval_card import build_card
+from huf.ai.flow.support.decision_rights import approval_decision_rights
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
 from huf.ai.flow.support.redact import definition_for_user
 
@@ -234,7 +235,7 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 		)
 		doc.insert()
 
-	from huf.ai.flow.support.flow_validation import unfinished_count
+	from huf.ai.graph.validation.flow_validation import unfinished_count
 	from huf.ai.flow.support.router_text import text_ref_warnings_for
 
 	warnings = text_ref_warnings_for(definition_json)
@@ -244,15 +245,17 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 
 @frappe.whitelist()
 def get_trigger_doctypes() -> list[dict]:
-	"""Document types the current user may pick for a Data trigger: ones they can read.
+	"""Document types the current user may pick for a "When a document changes" trigger: ones they can read.
 
-	Child tables, single doctypes, Huf's own bookkeeping and system logs are left out (events on them never start a flow).
-	Read from the permission tables, so flow editors who are not System Managers get a list too.
+	Returns ``[{name, label, group, module}]`` (``group``: common / yours / apps) ordered for a picker. Child tables, single
+	doctypes, Huf's own bookkeeping and the system's plumbing (permissions, tokens, logs) are left out. Read from the
+	permission tables, so flow editors who are not System Managers get a list too.
 	"""
 	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
 
 	from frappe.permissions import get_doctypes_with_read
 
+	from huf.ai.flow.support.doctype_catalog import build_catalog
 	from huf.ai.flow.triggers import HUF_MODULE, RECURSION_SKIP_DOCTYPES
 
 	readable = [d for d in get_doctypes_with_read() if d not in RECURSION_SKIP_DOCTYPES]
@@ -261,11 +264,11 @@ def get_trigger_doctypes() -> list[dict]:
 	rows = frappe.get_all(
 		"DocType",
 		filters={"name": ("in", readable), "istable": 0, "issingle": 0, "module": ("!=", HUF_MODULE)},
-		fields=["name"],
+		fields=["name", "module", "custom"],
 		limit_page_length=0,
 		ignore_permissions=True,
 	)
-	return [{"name": name} for name in sorted(r.name for r in rows)]
+	return build_catalog(rows)
 
 
 @frappe.whitelist()
@@ -390,6 +393,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 		pass
 
 	stale = _is_stale(doc.status, doc.modified)
+	can_decide, cannot_decide_reason = approval_decision_rights(doc.status, waiting)
 	return {
 		"flow_run_id": doc.name,
 		"flow_id": doc.flow_id,
@@ -411,6 +415,8 @@ def get_flow_run(flow_run_id: str) -> dict:
 		"stale": stale,
 		"can_mark_failed": stale and _can_mark_failed(),
 		"stale_after_minutes": STALE_RUN_MINUTES,
+		"can_decide": can_decide,
+		"cannot_decide_reason": cannot_decide_reason,
 	}
 
 
@@ -1139,14 +1145,9 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 @frappe.whitelist()
 def get_pending_approvals(limit: int = 50) -> list:
 	"""
-	Get list of flow runs waiting for approval that the current user can approve.
-	
-	This endpoint is used by the Approval Inbox feature to show users
-	all pending approvals that require their attention.
-	
+	Get list of flow runs waiting for approval that the current user can approve (used by the Approval Inbox).
 	Args:
 	    limit: Maximum number of results (default 50)
-	
 	Returns:
 	    list of pending approval items with flow details
 	"""
