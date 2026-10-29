@@ -258,11 +258,13 @@ class TestModule(SupportCase):
 	def test_help_variants(self):
 		for text in ["help", "HELP", "/help", "?", "What can you do", "  help  ", "what can you do?", "<@UBOT> help"]:
 			with self.subTest(text=text):
+				self.reset_fixtures()
 				assert hf.is_help_text(text)
 
 	def test_non_help(self):
 		for text in ["", "helpful", "help me with invoices", "what can you do for invoices", "??", "can you help"]:
 			with self.subTest(text=text):
+				self.reset_fixtures()
 				assert not hf.is_help_text(text)
 
 	def test_help_answers_and_drops(self):

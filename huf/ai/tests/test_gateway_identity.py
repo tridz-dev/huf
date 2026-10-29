@@ -285,19 +285,21 @@ class TestModule(SupportCase):
 		assert created and created[0][4] == "Auto email"
 
 	def test_auto_map_flag_off(self):
-		monkeypatch = self.monkeypatch
 		for flag in ["", "0"]:
 			with self.subTest(flag=flag):
+				self.reset_fixtures()
+				monkeypatch = self.monkeypatch
 				created = _auto_setup(monkeypatch, flag=flag)
 				with self.assertRaises(gw_hooks.GatewayHookDenied):
 					identity.resolve_run_user(gw(), ev())
 				assert not created
 
 	def test_auto_map_rejects_unsafe_users(self):
-		monkeypatch = self.monkeypatch
 		for info in [{"is_bot": True}, {"deleted": True}, {"is_restricted": True}, {"is_ultra_restricted": True},
 	 {"team_id": "T-OTHER"}, {"profile": {}}]:
 			with self.subTest(info=info):
+				self.reset_fixtures()
+				monkeypatch = self.monkeypatch
 				created = _auto_setup(monkeypatch, info=info)
 				with self.assertRaises(gw_hooks.GatewayHookDenied):
 					identity.resolve_run_user(gw(), ev())
@@ -392,9 +394,10 @@ class TestModule(SupportCase):
 			identity.confirm_self_link(tok)
 
 	def test_confirm_rejects_bad_callers(self):
-		monkeypatch = self.monkeypatch
 		for user in ["Guest", "Administrator", "disabled@x.com"]:
 			with self.subTest(user=user):
+				self.reset_fixtures()
+				monkeypatch = self.monkeypatch
 				tok = identity.create_self_link_token("GW-1", "T1", "U1")
 				monkeypatch.setattr(frappe, "session", SimpleNamespace(user=user))
 				with self.assertRaises(Perm):
@@ -510,6 +513,7 @@ class TestModule(SupportCase):
 	def test_json_valid_and_fields_ordered(self):
 		for rel in JSONS:
 			with self.subTest(rel=rel):
+				self.reset_fixtures()
 				doc = json.loads((ROOT / rel).read_text())
 				names = [f["fieldname"] for f in doc["fields"]]
 				assert len(names) == len(set(names))
@@ -657,9 +661,10 @@ class TestModule(SupportCase):
 		frappe.db.set_value.assert_called_with(identity.DOCTYPE, "L5", "state", "Revoked")
 
 	def test_gateway_writer_cannot_link_privileged_user(self):
-		monkeypatch = self.monkeypatch
 		for target, roles in [("Administrator", []), ("boss@x.com", ["System Manager"])]:
 			with self.subTest(target=target, roles=roles):
+				self.reset_fixtures()
+				monkeypatch = self.monkeypatch
 				monkeypatch.setattr(frappe, "get_roles", lambda user=None: roles if user else ["Huf Manager"])
 				monkeypatch.setattr(frappe, "has_permission", lambda *a, **k: True, raising=False)
 				monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
@@ -696,5 +701,6 @@ class TestModule(SupportCase):
 	def test_usable_rejects_administrator_for_non_admin_sources(self):
 		for source in ["Self link", "Auto email", None]:
 			with self.subTest(source=source):
+				self.reset_fixtures()
 				assert identity._usable("Administrator", source) is False
 				assert identity._usable("Administrator", "Admin") is True

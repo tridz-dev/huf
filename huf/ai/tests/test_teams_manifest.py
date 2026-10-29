@@ -164,6 +164,7 @@ class TestModule(SupportCase):
 	def test_bad_semver(self):
 		for v in ["1.0", "v1.0.0", "abc", "1.0.0.0"]:
 			with self.subTest(v=v):
+				self.reset_fixtures()
 				assert "version must be semver (x.y.z)" in errs(mk(version=v))
 
 	def test_length_limits(self):
@@ -198,6 +199,7 @@ class TestModule(SupportCase):
 		("", False),
 	]:
 			with self.subTest(dom=dom, ok=ok):
+				self.reset_fixtures()
 				if ok:
 					assert tm.normalize_domain(dom)
 					assert mk(valid_domains=[dom])["validDomains"]
@@ -237,9 +239,10 @@ class TestModule(SupportCase):
 			tm.download_teams_app_package("GW-1")
 
 	def test_download_allowed_and_no_secrets(self):
-		monkeypatch = self.monkeypatch
 		for roles, can_write in [(["System Manager"], False), (["Huf User"], True)]:
 			with self.subTest(roles=roles, can_write=can_write):
+				self.reset_fixtures()
+				monkeypatch = self.monkeypatch
 				resp, _ = _setup_download(monkeypatch, roles, can_write)
 				tm.download_teams_app_package("GW-1", version="2.1.0")
 				assert resp["type"] == "download" and resp["filename"] == "teams-app-GW-1-2.1.0.zip"

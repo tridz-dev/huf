@@ -210,6 +210,7 @@ class TestModule(SupportCase):
 	def test_value_required(self):
 		for mt in ["Direct message", "Room or channel", "Thread", "Sender"]:
 			with self.subTest(mt=mt):
+				self.reset_fixtures()
 				with self.assertRaises(ValErr):
 					ba.validate_binding_payload(good(match_type=mt, match_value="  "))
 				assert ba.validate_binding_payload(good(match_type=mt, match_value=" X1 "))["match_value"] == "X1"
@@ -281,10 +282,11 @@ class TestModule(SupportCase):
 		assert env.db.sets == [("C", 1), ("A", 2), ("B", 3)]
 
 	def test_reorder_rejects_bad_sets_without_writes(self):
-		env = self.use(_fx_env)
-		monkeypatch = self.monkeypatch
 		for order in [["A", "A", "B"], ["A", "B"], ["A", "B", "C", "D"], "notalist"]:
 			with self.subTest(order=order):
+				self.reset_fixtures()
+				env = self.use(_fx_env)
+				monkeypatch = self.monkeypatch
 				monkeypatch.setattr(ba, "_ordered_bindings", lambda g: [{"name": "A"}, {"name": "B"}, {"name": "C"}])
 				with self.assertRaises(ValErr):
 					ba.reorder_bindings("gw", order)

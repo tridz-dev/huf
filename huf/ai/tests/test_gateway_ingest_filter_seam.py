@@ -14,7 +14,7 @@ import types
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from huf.ai.tests.unit_support import SupportCase  # noqa: E402
+from huf.ai.tests.unit_support import MonkeyPatch, SupportCase  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, "testing"))
 import _stub_env  # noqa: E402
@@ -242,7 +242,7 @@ class TestTeamsFilterComposition(SupportCase):
 		self.order = []
 		self.tokens = []
 		self.outbox = []
-		self.pm = pytest.MonkeyPatch()
+		self.pm = MonkeyPatch()
 		self.tt = importlib.import_module("huf.ai.gateways.teams.tenant")
 		self.th = importlib.import_module("huf.ai.gateways.teams.messaging.help")
 		self.ta = importlib.import_module("huf.ai.gateways.teams.actions")
@@ -273,6 +273,7 @@ class TestTeamsFilterComposition(SupportCase):
 	def test_foreign_tenant_command_gets_no_reply_no_token_and_is_rejected(self):
 		for text in ["connect", "help", "status"]:
 			with self.subTest(text=text):
+				self.reset_fixtures()
 				res = self._teams("x-" + text, text, tenant=_FOREIGN)
 				assert res == {"event_name": "EVT-1", "status": "Rejected"}
 				assert self.outbox == [] and self.tokens == []

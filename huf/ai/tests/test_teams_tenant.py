@@ -140,6 +140,7 @@ class TestModule(SupportCase):
 	def test_normalize_guid_rejects(self):
 		for bad in ["", None, "contoso.onmicrosoft.com", "{" + HOME + "}", HOME + "x", "1234", 5, HOME[:-1]]:
 			with self.subTest(bad=bad):
+				self.reset_fixtures()
 				assert tt.normalize_guid(bad) == ""
 
 	def test_parse_dedupes_and_splits(self):

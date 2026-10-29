@@ -133,6 +133,7 @@ class TestModule(SupportCase):
 	("C1", None, True), ("G1", None, True), ("D1", None, False),
 ]:
 			with self.subTest(conv=conv, ctype=ctype, room=room):
+				self.reset_fixtures()
 				assert privacy.is_room(ev(conv=conv, ctype=ctype)) is room
 
 	def test_is_room_payload_as_json_string(self):

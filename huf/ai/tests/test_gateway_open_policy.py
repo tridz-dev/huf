@@ -76,15 +76,17 @@ def _doc(provider, policy="Open"):
 
 class TestModule(SupportCase):
 	def test_open_allowed_for_identity_providers(self):
-		heavy = self.use(_fx_heavy)
 		for provider in ["Slack", "slack", "Microsoft Teams", "microsoft teams", " MICROSOFT TEAMS "]:
 			with self.subTest(provider=provider):
+				self.reset_fixtures()
+				heavy = self.use(_fx_heavy)
 				heavy.Gateway.validate(_doc(provider))
 
 	def test_open_blocked_for_other_providers(self):
-		heavy = self.use(_fx_heavy)
 		for provider in ["Telegram", "WhatsApp", "Discord", "", None]:
 			with self.subTest(provider=provider):
+				self.reset_fixtures()
+				heavy = self.use(_fx_heavy)
 				with self.assertRaisesRegex(ValueError, "Public direct-message gateways are not available"):
 					heavy.Gateway.validate(_doc(provider))
 

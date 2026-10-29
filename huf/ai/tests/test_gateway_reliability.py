@@ -338,9 +338,10 @@ class TestModule(SupportCase):
 		assert api.remove_reaction.call_count == 2
 
 	def test_reaction_parse_fallback(self):
-		api = self.use(_fx_api)
 		for bad in ["", "nocolon", "C1:", ":1.2", "C1:abc", None]:
 			with self.subTest(bad=bad):
+				self.reset_fixtures()
+				api = self.use(_fx_api)
 				reliability.slack_on_run_start(GW, ev(provider_event_id=bad), "agent")
 				api.add_reaction.assert_not_called()
 
@@ -384,9 +385,10 @@ class TestModule(SupportCase):
 		assert isinstance(r, SlackApiError) and ad.calls == 3 and len(sleeps) == 2
 
 	def test_permanent_not_retried(self):
-		send = self.use(_fx_send)
 		for code in ["invalid_auth", "channel_not_found", "not_in_channel", "is_archived"]:
 			with self.subTest(code=code):
+				self.reset_fixtures()
+				send = self.use(_fx_send)
 				ad = Adapter(ValueError(f"Slack chat.postMessage failed: {code}"), "X")
 				r, sleeps = send(ad)
 				assert isinstance(r, ValueError) and ad.calls == 1 and sleeps == []

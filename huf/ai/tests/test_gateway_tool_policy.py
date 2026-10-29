@@ -463,6 +463,7 @@ class TestModule(SupportCase):
 		"huf/huf/doctype/gateway_tool_policy/gateway_tool_policy.json",
 	]:
 			with self.subTest(rel=rel):
+				self.reset_fixtures()
 				d = _load(rel)
 				names = [f["fieldname"] for f in d["fields"] if f["fieldtype"] != "Section Break" or f["fieldname"]]
 				assert len(set(d["field_order"])) == len(d["field_order"])

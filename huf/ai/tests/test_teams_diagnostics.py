@@ -263,11 +263,12 @@ class TestModule(SupportCase):
 		assert by_id(run(env))["token_acquisition"]["status"] == "pass"
 
 	def test_token_failure_mapping(self):
-		env = self.use(_fx_env)
-		monkeypatch = self.monkeypatch
 		for code, needle in [("invalid_client", "secret"), ("unauthorized_client", "Tenant"),
 	("invalid_tenant_id", "tenant"), ("weird_code", "Retry")]:
 			with self.subTest(code=code, needle=needle):
+				self.reset_fixtures()
+				env = self.use(_fx_env)
+				monkeypatch = self.monkeypatch
 				def boom(creds, gateway_name=None):
 					raise teams_api.TeamsApiError(401, code=code)
 

@@ -339,9 +339,10 @@ class TestModule(SupportCase):
 		assert send(text=None, card=json.dumps({"type": "AdaptiveCard", "body": []}))["success"]
 
 	def test_card_validation(self):
-		w = self.use(_fx_w)
 		for bad in [["x"], {"type": "Other"}, {"body": []}, "{not json"]:
 			with self.subTest(bad=bad):
+				self.reset_fixtures()
+				w = self.use(_fx_w)
 				w.roles = ["System Manager"]
 				add_ref(w)
 				assert not send(text=None, card=bad)["success"]

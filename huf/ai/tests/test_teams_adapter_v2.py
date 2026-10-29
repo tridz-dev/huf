@@ -272,6 +272,7 @@ class TestModule(SupportCase):
 		("conversation_update", "install"),
 	]:
 			with self.subTest(name=name, kind=kind):
+				self.reset_fixtures()
 				ev = make().normalize_inbound(req(load(name)))
 				assert isinstance(ev, NormalizedGatewayEvent)
 				assert ev.raw_payload["huf_kind"] == kind
@@ -465,6 +466,7 @@ class TestModule(SupportCase):
 		"",
 	]:
 			with self.subTest(url=url):
+				self.reset_fixtures()
 				ob = FakeOutbox()
 				ad = make(outbox=ob, reference_lookup=lookup_for(ref_row(service_url=url)))
 				with self.assertRaises(Exception):

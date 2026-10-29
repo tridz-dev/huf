@@ -140,14 +140,27 @@ class SupportCase(unittest.TestCase):
 	def caplog(self):
 		return self._fx_cache_get("caplog", self._make_caplog)
 
+	def _fin(self, fn):
+		if "_fx_fins" not in self.__dict__:
+			self._fx_fins = []
+			self.addCleanup(self.reset_fixtures)
+		self._fx_fins.append(fn)
+
+	def reset_fixtures(self):
+		"""Finalise and forget every fixture so far (pytest builds them fresh per parametrized case)."""
+		fins = self.__dict__.get("_fx_fins", [])
+		while fins:
+			fins.pop()()
+		self.__dict__.get("_fx_cache", {}).clear()
+
 	def _make_monkeypatch(self):
 		m = MonkeyPatch()
-		self.addCleanup(m.undo)
+		self._fin(m.undo)
 		return m
 
 	def _make_caplog(self):
 		c = CapLog()
-		self.addCleanup(c.close)
+		self._fin(c.close)
 		return c
 
 	def _fx_cache_get(self, key, make):
@@ -169,7 +182,7 @@ class SupportCase(unittest.TestCase):
 					for _ in gen:
 						pass
 
-				self.addCleanup(fin)
+				self._fin(fin)
 				return val
 			return res
 

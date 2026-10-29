@@ -168,6 +168,7 @@ class TestModule(SupportCase):
 	def test_parse_meta_every_fixture(self):
 		for fixture in sorted(p.stem for p in FIXTURES.glob("*.json")):
 			with self.subTest(fixture=fixture):
+				self.reset_fixtures()
 				m = refs.parse_meta(load(fixture))
 				assert isinstance(m, tc.TeamsMeta)
 				assert m.tenant_id and m.service_url.startswith("https://")

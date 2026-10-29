@@ -66,6 +66,7 @@ class TestModule(SupportCase):
 	"https://evil.com#@files.slack.com/", "ftp://files.slack.com/x", "", "not a url",
 ]:
 			with self.subTest(url=url):
+				self.reset_fixtures()
 				out, env = run({"url_private_download": url})
 				assert out is None and env.calls == []
 
@@ -97,6 +98,7 @@ class TestModule(SupportCase):
 	def test_bad_mime(self):
 		for ctype in ["application/x-msdownload", "application/zip", "application/javascript", "image/../x"]:
 			with self.subTest(ctype=ctype):
+				self.reset_fixtures()
 				out, _ = run({}, Env(Resp(ctype=ctype)))
 				assert out is None
 
@@ -104,6 +106,7 @@ class TestModule(SupportCase):
 		for ctype in ["image/png", "audio/mpeg", "video/mp4", "text/plain; charset=utf-8", "text/csv",
 	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]:
 			with self.subTest(ctype=ctype):
+				self.reset_fixtures()
 				out, _ = run({}, Env(Resp(ctype=ctype)))
 				assert out
 
@@ -117,6 +120,7 @@ class TestModule(SupportCase):
 	("..", "slack-file"), ("", "slack-file"), (".hidden", "hidden"),
 ]:
 			with self.subTest(raw=raw, expected=expected):
+				self.reset_fixtures()
 				assert sf.sanitize_filename(raw) == expected
 
 	def test_filename_length_and_saved_name(self):
@@ -153,6 +157,7 @@ class TestModule(SupportCase):
 	"https://:pw@files.slack.com/x",
 ]:
 			with self.subTest(url=url):
+				self.reset_fixtures()
 				out, env = run({"url_private_download": url})
 				assert out is None and env.calls == []
 
@@ -170,6 +175,7 @@ class TestModule(SupportCase):
 	def test_octet_stream_falls_back_to_file_mimetype(self):
 		for ctype in ["application/octet-stream", "", None]:
 			with self.subTest(ctype=ctype):
+				self.reset_fixtures()
 				resp = Resp(ctype=ctype or "")
 				if ctype is None:
 					resp.headers = {}

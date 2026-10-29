@@ -385,9 +385,10 @@ class TestModule(SupportCase):
 		env.api.post_message.assert_not_called()
 
 	def test_dm_rejects_non_user_targets(self):
-		env = self.use(_fx_env)
 		for uid in ["C0123456", "general", "#general", "U1", "U12 34", "u012abc"]:
 			with self.subTest(uid=uid):
+				self.reset_fixtures()
+				env = self.use(_fx_env)
 				with self.assertRaises(Thrown):
 					slack_setup.send_test_dm(GW, slack_user_id=uid)
 				env.api.post_message.assert_not_called()

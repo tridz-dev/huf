@@ -418,6 +418,7 @@ class TestModule(SupportCase):
 	def test_ssrf_allows_good(self):
 		for url in GOOD:
 			with self.subTest(url=url):
+				self.reset_fixtures()
 				out = api.validate_service_url(url)
 				assert out.startswith("https://") and not out.endswith("/")
 
@@ -430,6 +431,7 @@ class TestModule(SupportCase):
 	def test_ssrf_rejects_hostile(self):
 		for url in HOSTILE:
 			with self.subTest(url=url):
+				self.reset_fixtures()
 				with self.assertRaises(api.TeamsApiError) as ei:
 					api.validate_service_url(url)
 				assert ei.exception.code == "invalid_service_url"

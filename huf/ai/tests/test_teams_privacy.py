@@ -216,9 +216,10 @@ class TestModule(SupportCase):
 		assert tp.resolve_conversation_key(GW, ev(raw_payload=act)) is None
 
 	def test_never_raises_on_malformed(self):
-		env = self.use(_fx_env)
 		for raw in [None, "", "not json", "[]", 5, {"conversation": None}, {"from": 1}]:
 			with self.subTest(raw=raw):
+				self.reset_fixtures()
+				env = self.use(_fx_env)
 				e = ev(raw_payload=raw)
 				assert tp.resolve_conversation_key(GW, e) is None
 				assert tp.resolve_reply_target(GW, e, "x") in (None, tp.UNUSABLE_TARGET)
@@ -285,9 +286,10 @@ class TestModule(SupportCase):
 		assert tp.resolve_reply_target(GW, ev(), "hi") == PERSONAL
 
 	def test_personal_chat_never_redirects(self):
-		env = self.use(_fx_env)
 		for policy in ["Always private", "Private when records touched", "Channel"]:
 			with self.subTest(policy=policy):
+				self.reset_fixtures()
+				env = self.use(_fx_env)
 				env.policy = policy
 				env.tool_rows = [{"tool": "get_document"}]
 				e = ev("personal_message", thread_id=None)

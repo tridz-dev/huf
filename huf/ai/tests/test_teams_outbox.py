@@ -325,11 +325,13 @@ class TestModule(SupportCase):
 	def test_transient_statuses(self):
 		for status in [429, 500, 502, 503, 599]:
 			with self.subTest(status=status):
+				self.reset_fixtures()
 				assert ob.is_transient(FakeErr(status=status))
 
 	def test_permanent_statuses(self):
 		for status in [400, 401, 403, 404, 413]:
 			with self.subTest(status=status):
+				self.reset_fixtures()
 				assert not ob.is_transient(FakeErr(status=status))
 
 	def test_timeouts_transient_validation_permanent(self):
@@ -520,10 +522,11 @@ class TestModule(SupportCase):
 		assert put["url"].endswith("/activities/A1") and put["headers"]["Authorization"] == "Bearer TKN-1"
 
 	def test_default_sender_fails_closed_without_credentials(self):
-		store = self.use(_fx_store)
-		real_sender = self.use(_fx_real_sender)
 		for drop in ["app_id", "app_password", "tenant_id"]:
 			with self.subTest(drop=drop):
+				self.reset_fixtures()
+				store = self.use(_fx_store)
+				real_sender = self.use(_fx_real_sender)
 				real_sender.creds = {k: v for k, v in real_sender.creds.items() if k != drop}
 				n = mk(store)
 				assert ob.deliver(n, now=NOW, http=real_sender.http) == "Failed"

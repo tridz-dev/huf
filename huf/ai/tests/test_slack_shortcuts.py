@@ -180,6 +180,7 @@ class TestModule(SupportCase):
 	def test_is_room(self):
 		for channel, room in [("C1", True), ("G1", True), ("D1", False), ("", False)]:
 			with self.subTest(channel=channel, room=room):
+				self.reset_fixtures()
 				assert sc.is_room_channel(channel) is room
 
 	def test_dm_context_not_room(self):

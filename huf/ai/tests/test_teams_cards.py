@@ -130,5 +130,6 @@ class TestModule(SupportCase):
 	def test_approval_card_minimal_inputs(self):
 		for builder_args in [("s", "t", None), ("s", "", [])]:
 			with self.subTest(builder_args=builder_args):
+				self.reset_fixtures()
 				card, fb = c.approval_card(*builder_args)
 				assert card["actions"] and fb

@@ -112,6 +112,7 @@ class TestModule(SupportCase):
 	def test_entra_issuer_single_tenant(self):
 		for tmpl in tc.ENTRA_ISSUER_TEMPLATES:
 			with self.subTest(tmpl=tmpl):
+				self.reset_fixtures()
 				iss = tmpl.format(tenant_id="tenant-1")
 				calls = []
 				entra_meta = teams_auth.ENTRA_METADATA_TEMPLATE.format(tenant_id="tenant-1")
@@ -208,6 +209,7 @@ class TestModule(SupportCase):
 	def test_missing_header(self):
 		for hdr in ["", None]:
 			with self.subTest(hdr=hdr):
+				self.reset_fixtures()
 				r = teams_auth.verify_bearer(
 					hdr, app_id="a", activity_service_url=URL, fetch_json=fx.fake_fetch_json(), now=fx.fixed_clock()
 				)
@@ -216,6 +218,7 @@ class TestModule(SupportCase):
 	def test_garbled_header(self):
 		for hdr in ["Bearer", "Basic abc", "Bearer a b", "Bearer not.a.jwt", "token"]:
 			with self.subTest(hdr=hdr):
+				self.reset_fixtures()
 				assert verify("", header=hdr).reason == tc.REASON_MALFORMED_TOKEN
 
 	def test_endorsement_missing_msteams(self):

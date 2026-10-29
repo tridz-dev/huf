@@ -429,10 +429,11 @@ class TestModule(SupportCase):
 		assert ti._cache().get_value(ti._NONCE_PREFIX + "nonce0")  # not consumed
 
 	def test_confirm_requires_real_user(self):
-		store = self.use(_fx_store)
-		monkeypatch = self.monkeypatch
 		for user in ["Guest", "Administrator", "disabled@x.com", ""]:
 			with self.subTest(user=user):
+				self.reset_fixtures()
+				store = self.use(_fx_store)
+				monkeypatch = self.monkeypatch
 				monkeypatch.setattr(frappe, "session", SimpleNamespace(user=user))
 				tok = ti.create_link_token("GW-1", TENANT, AAD)
 				with self.assertRaises(Perm):
@@ -495,9 +496,10 @@ class TestModule(SupportCase):
 		assert out["person_label"] == "Totally The CEO"
 
 	def test_room_denial_has_no_url_and_mints_no_token(self):
-		store = self.use(_fx_store)
 		for ctype in ["channel", "groupChat"]:
 			with self.subTest(ctype=ctype):
+				self.reset_fixtures()
+				store = self.use(_fx_store)
 				reason = denied(room_ev(ctype))
 				assert reason.startswith(PREFIX) and "personal chat" in reason and "connect" in reason
 				assert "http" not in reason and "token" not in reason

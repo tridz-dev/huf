@@ -241,19 +241,21 @@ class TestModule(SupportCase):
 		assert res == [False] and len(env.sent) == 1
 
 	def test_parse_command_variants(self):
-		env = self.use(_fx_env)
 		for text, expected in [
 		("help", "help"), ("HELP", "help"), ("  Help  ", "help"), ("/help", "help"),
 		("/Connect", "connect"), ("status", "status"), ("/STATUS ", "status"),
 		("disconnect", "disconnect"), (" / disconnect", "disconnect"),
 	]:
 			with self.subTest(text=text, expected=expected):
+				self.reset_fixtures()
+				env = self.use(_fx_env)
 				assert env.h.parse_command(text) == expected
 
 	def test_non_commands_pass_through(self):
-		env = self.use(_fx_env)
 		for text in ["", "helpme", "help me", "connect now", "what is status", "//help", "statuses", None, 5, "hello"]:
 			with self.subTest(text=text):
+				self.reset_fixtures()
+				env = self.use(_fx_env)
 				c = {"message_text": text, "raw_payload": load("personal_message")}
 				assert env.h.pre_ingest_commands(GW, c) is True
 				assert env.sent == []
@@ -264,9 +266,10 @@ class TestModule(SupportCase):
 		assert env.h.pre_ingest_commands(GW, None) is True
 
 	def test_help_linked_in_every_chat_type(self):
-		env = self.use(_fx_env)
 		for fixture in FIX:
 			with self.subTest(fixture=fixture):
+				self.reset_fixtures()
+				env = self.use(_fx_env)
 				res, _ = run(env, fixture, "help")
 				assert res is False
 				assert "enabled workflows" in reply_text(env)
@@ -294,9 +297,10 @@ class TestModule(SupportCase):
 		assert env.tokens == [("gw1", TENANT, AAD, "Ada Example")]
 
 	def test_connect_in_shared_chat_never_mints_token(self):
-		env = self.use(_fx_env)
 		for fixture in ["channel_mention", "group_chat_message"]:
 			with self.subTest(fixture=fixture):
+				self.reset_fixtures()
+				env = self.use(_fx_env)
 				env.links.clear()
 				run(env, fixture, "connect")
 				assert reply_text(env) == "Open a personal chat with me and send connect."
@@ -341,18 +345,20 @@ class TestModule(SupportCase):
 		assert env.fake.queries == []
 
 	def test_status_in_shared_chat_does_not_list_runs(self):
-		env = self.use(_fx_env)
 		for fixture in ["channel_mention", "group_chat_message"]:
 			with self.subTest(fixture=fixture):
+				self.reset_fixtures()
+				env = self.use(_fx_env)
 				seed_runs(env)
 				run(env, fixture, "status")
 				assert reply_text(env) == "Open a personal chat with me and send status."
 				assert env.fake.queries == []
 
 	def test_disconnect_in_every_chat_type(self):
-		env = self.use(_fx_env)
 		for fixture in FIX:
 			with self.subTest(fixture=fixture):
+				self.reset_fixtures()
+				env = self.use(_fx_env)
 				res, _ = run(env, fixture, "disconnect")
 				assert res is False
 				assert reply_text(env).startswith("Your Huf account is disconnected from Teams.")
@@ -390,7 +396,6 @@ class TestModule(SupportCase):
 		assert act["type"] == "message" and act["replyToId"] == c["raw_payload"]["id"]
 
 	def test_hostile_service_url_sends_nothing(self):
-		env = self.use(_fx_env)
 		for url in [
 		"http://smba.trafficmanager.net/amer/",
 		"https://evil.example.com/",
@@ -399,6 +404,8 @@ class TestModule(SupportCase):
 		"javascript:1",
 	]:
 			with self.subTest(url=url):
+				self.reset_fixtures()
+				env = self.use(_fx_env)
 				res, _ = run(env, "personal_message", "help", activity={"serviceUrl": url})
 				assert res is False
 				assert env.sent == []
@@ -478,10 +485,11 @@ class TestModule(SupportCase):
 		assert len(calls) == 1 and calls[0][0] == "gw1" and calls[0][1].conversation_type == "personal"
 
 	def test_connect_in_room_remembers_nothing_and_mints_no_token(self):
-		env = self.use(_fx_env)
-		monkeypatch = self.monkeypatch
 		for fixture in ["channel_mention", "group_chat_message"]:
 			with self.subTest(fixture=fixture):
+				self.reset_fixtures()
+				env = self.use(_fx_env)
+				monkeypatch = self.monkeypatch
 				calls = []
 				monkeypatch.setattr(env.h.teams_refs, "upsert_reference", lambda *a, **k: calls.append(a))
 				env.links.clear()

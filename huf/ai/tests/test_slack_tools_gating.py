@@ -34,9 +34,10 @@ READ = [
 
 class TestModule(SupportCase):
 	def test_read_tools_off_by_default(self):
-		monkeypatch = self.monkeypatch
 		for fn, args, body in READ:
 			with self.subTest(fn=fn, args=args, body=body):
+				self.reset_fixtures()
+				monkeypatch = self.monkeypatch
 				creds(monkeypatch)
 				m = http(monkeypatch, body)
 				out = json.loads(getattr(slack, fn)(**args))
@@ -45,9 +46,10 @@ class TestModule(SupportCase):
 				assert BOT not in json.dumps(out)
 
 	def test_read_tools_on_when_enabled(self):
-		monkeypatch = self.monkeypatch
 		for fn, args, body in READ:
 			with self.subTest(fn=fn, args=args, body=body):
+				self.reset_fixtures()
+				monkeypatch = self.monkeypatch
 				creds(monkeypatch, allow_workspace_read="1")
 				http(monkeypatch, body)
 				out = json.loads(getattr(slack, fn)(**args))
@@ -90,12 +92,13 @@ class TestModule(SupportCase):
 		assert USER not in s
 
 	def test_send_refuses_user_token(self):
-		monkeypatch = self.monkeypatch
 		for fn, args in [
 	("handle_send_message", {"channel": "C", "text": "t"}),
 	("handle_send_message_thread", {"channel": "C", "text": "t", "thread_ts": "1"}),
 ]:
 			with self.subTest(fn=fn, args=args):
+				self.reset_fixtures()
+				monkeypatch = self.monkeypatch
 				creds(monkeypatch, token=USER)
 				m = http(monkeypatch, {"ok": True})
 				s = getattr(slack, fn)(**args)
@@ -103,12 +106,13 @@ class TestModule(SupportCase):
 				m.assert_not_called()
 
 	def test_send_bot_token_works_without_read_flag(self):
-		monkeypatch = self.monkeypatch
 		for fn, args in [
 	("handle_send_message", {"channel": "C", "text": "t"}),
 	("handle_send_message_thread", {"channel": "C", "text": "t", "thread_ts": "1"}),
 ]:
 			with self.subTest(fn=fn, args=args):
+				self.reset_fixtures()
+				monkeypatch = self.monkeypatch
 				creds(monkeypatch)
 				m = http(monkeypatch, {"ok": True})
 				assert json.loads(getattr(slack, fn)(**args))["success"] is True
