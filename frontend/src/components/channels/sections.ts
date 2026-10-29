@@ -1,4 +1,4 @@
-import { Activity, FileText, House, Megaphone, Phone, Plug, Settings, Workflow, type LucideIcon } from 'lucide-react';
+import { Activity, ChartLine, FileText, House, Megaphone, Phone, Plug, Settings, Workflow, type LucideIcon } from 'lucide-react';
 
 export interface ChannelSection {
   key: string;
@@ -14,6 +14,7 @@ export const CHANNEL_SECTIONS: ChannelSection[] = [
   { key: 'broadcasts', label: 'Broadcasts', path: 'broadcasts', icon: Megaphone },
   { key: 'templates', label: 'Templates', path: 'templates', icon: FileText },
   { key: 'automations', label: 'Automations', path: 'automations', icon: Workflow },
+  { key: 'analytics', label: 'Analytics', path: 'analytics', icon: ChartLine },
   { key: 'connections', label: 'Connections', path: 'connections', icon: Plug },
   { key: 'numbers', label: 'Numbers', path: 'numbers', icon: Phone },
   { key: 'settings', label: 'Settings', path: 'settings', icon: Settings },
