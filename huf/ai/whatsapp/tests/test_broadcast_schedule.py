@@ -60,7 +60,7 @@ class TestSchedule(_Base):
 
 	def test_emergency_stop_blocks(self):
 		name = self._due()
-		with patch.object(frappe.conf, "get", side_effect=lambda k, d=None: 1 if k == schedule.STOP_FLAG else d):
+		with patch.dict(frappe.local.conf, {schedule.STOP_FLAG: 1}):
 			out = schedule.start_due()
 		self.assertEqual(out["started"], [])
 		self.assertEqual(frappe.db.get_value(B, name, "status"), "Scheduled")

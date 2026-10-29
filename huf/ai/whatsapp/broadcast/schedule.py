@@ -158,7 +158,7 @@ def retry_failed(broadcast: str) -> dict:
 			"body_params": src.body_params, "header_params": src.header_params, "button_params": src.button_params,
 			"consent_source": src.consent_source, "consent_attested": 0,
 			"max_recipients": src.max_recipients, "mps": src.mps,
-		}).insert(ignore_permissions=True)
+		}).insert(ignore_permissions=True, ignore_links=True)
 		result = br.prepare(new.name, rows)  # re-applies opt-out / allow-list / marketing policy
 	finally:
 		frappe.flags.in_broadcast_api = prev
