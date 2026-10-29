@@ -344,8 +344,9 @@ class TestSlackEventsHandler(unittest.TestCase):
 	def test_url_verification_returns_challenge_without_ingesting(self):
 		payload = {"type": "url_verification", "challenge": "abc123xyz"}
 		response = self._call(payload)
-		self.assertEqual(json.loads(response.body), {"challenge": "abc123xyz"})
-		self.assertEqual(response.status, 200)
+		body = response.body if hasattr(response, "body") else response.get_data(as_text=True)  # stub vs real werkzeug
+		self.assertEqual(json.loads(body), {"challenge": "abc123xyz"})
+		self.assertEqual(response.status_code if hasattr(response, "status_code") else response.status, 200)
 		self.ingest.assert_not_called()
 
 	# -- event dispatch --------------------------------------------------------
