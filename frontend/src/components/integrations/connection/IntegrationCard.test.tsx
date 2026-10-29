@@ -12,7 +12,7 @@ describe('IntegrationCard', () => {
   it('shows a friendly name and one status, never the auto id or a green dot beside a rejection', () => {
     render(
       <IntegrationCard
-        setting={{ ...base, last_test_status: 'Rejected', last_test_message: 'Gmail rejected the saved credentials. Update them below, then test again.' }}
+        setting={{ ...base, last_test_status: 'Rejected', last_test_message: 'Gmail rejected the saved credentials (token expired or revoked).' }}
         onOpen={vi.fn()}
         onUseInAgent={vi.fn()}
       />,
@@ -22,7 +22,7 @@ describe('IntegrationCard', () => {
     expect(screen.getAllByTestId('integration-status')).toHaveLength(1);
     expect(screen.getByTestId('integration-status').textContent).toBe('Needs attention');
     expect(screen.queryByText(/^active$/i)).toBeNull();
-    expect(screen.getByTestId('integration-card-detail').textContent).toContain('Update them below');
+    expect(screen.getByTestId('integration-card-detail').textContent).toContain('token expired or revoked');
   });
 
   it('opens the page from Fix this and Use in agent without opening the page', () => {
