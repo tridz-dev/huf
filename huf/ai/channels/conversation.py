@@ -96,9 +96,18 @@ def _as_doc(conversation):
 	return conversation
 
 
+def window_applies(channel: str | None) -> bool:
+	"""The 24h customer-service window is a WhatsApp rule; other channels have none."""
+	return (channel or "whatsapp") == "whatsapp"
+
+
 def is_within_24h(conversation, now=None) -> bool:
-	"""True when the customer's last inbound message is under 24h old (free-form replies allowed)."""
+	"""True when the customer's last inbound message is under 24h old (free-form replies allowed).
+
+	Always True for channels where the window does not apply (Telegram, Slack, Teams)."""
 	doc = _as_doc(conversation)
+	if doc and not window_applies(doc.get("channel")):
+		return True
 	last = doc.get("last_inbound_at") if doc else None
 	if not last:
 		return False

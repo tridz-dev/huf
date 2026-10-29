@@ -1,7 +1,7 @@
 """Human reply API for Channel Conversations: send_reply / list_templates / return_to_ai / close.
 
 Gate: Huf capability ``channels.reply`` or an integrations admin (``system.integrations.manage``).
-Every send goes through the WhatsApp adapter / bridge, which call ``outbound_policy`` (site allow-list,
+Every send goes through the gateway's own adapter (WhatsApp bridge, Telegram, Slack, Teams; templates and the 24h window are WhatsApp-only), which call ``outbound_policy`` (site allow-list,
 STOP, BSUID) before anything is posted.
 """
 
@@ -71,7 +71,10 @@ def deliver_reply(conversation, text=None, template=None, params=None, attachmen
 		return _result("error", error="attachments_unsupported")
 	from huf.ai.whatsapp import outbound_policy as policy
 
+	whatsapp = conv.window_applies(doc.get("channel"))
 	try:
+		if template and not whatsapp:
+			return _result("error", error="templates_unsupported")
 		if template:
 			message_id = _send_template(doc.gateway, doc.contact_handle, template, params)
 			preview = f"[template] {template}"

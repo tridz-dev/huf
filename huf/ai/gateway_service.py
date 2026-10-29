@@ -224,14 +224,15 @@ def _record_reply_sent(event, provider_message_id) -> None:
 
 
 def _track_conversation_inbound(gateway_doc, event, context) -> None:
-    """Upsert the Channel Conversation for a WhatsApp inbound event. Never raises."""
+    """Upsert the Channel Conversation for an inbound event (WhatsApp/Telegram/Slack/Teams). Never raises."""
     try:
         from huf.ai.channels import conversation as conv
 
-        if conv.channel_for_provider(gateway_doc.provider) != "whatsapp":
+        channel = conv.channel_for_provider(gateway_doc.provider)
+        if not channel:
             return
         doc = conv.get_or_create_conversation(
-            gateway_doc.name, str(context.get("sender_id") or ""), channel="whatsapp",
+            gateway_doc.name, str(context.get("sender_id") or ""), channel=channel,
             contact_name=str(context.get("sender_name") or "") or None,
         )
         if not doc:
