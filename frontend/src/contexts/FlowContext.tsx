@@ -4,7 +4,6 @@ import { Flow, FlowMetadata, FlowNode, FlowEdge } from '../types/flow.types';
 import { flowService } from '../services/flowService';
 import { popSnapshot, pushSnapshot } from '../lib/flow-graph/flowUndoStack';
 import { tidyPositions } from '../lib/flow/flowLayout';
-import { BLOCKED_TOAST_ID } from '../lib/flow-graph/flowValidation';
 import { followRenamedTarget } from '../lib/flow/flowEdgeLabels';
 import { removeStep, type RemoveStepMode } from '../lib/flow/flowEdit';
 import { announceConversion, flowsEqual } from '../lib/flow-graph/flowSync';
@@ -38,8 +37,7 @@ interface FlowContextType {
   updateNodeData: (nodeId: string, update: (data: FlowNode['data']) => FlowNode['data']) => void;
   /** The latest committed copy of a step. */
   getNode: (nodeId: string) => FlowNode | undefined;
-  /** The latest committed flow, even before React has re-rendered with it (for checks made right after typing). */
-  getFlow: () => Flow | null;
+  getFlow: () => Flow | null; // latest committed flow, even before React re-renders with it
   /** Remove a step. Default `reconnect` joins the step before it to the step after it; `cascade` also removes what only it led to. */
   deleteNode: (nodeId: string, mode?: RemoveStepMode) => void;
   /** Remove one connection between two steps. */
@@ -259,7 +257,6 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   // ─── Synchronous node/edge mutations (cache-only, fast) ────────────
 
   const markUnsaved = useCallback(() => {
-    toast.dismiss(BLOCKED_TOAST_ID);
     setHasUnsavedChanges(true);
     setSaveState('unsaved');
   }, []);
@@ -411,13 +408,11 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   }, [activeFlowId, markUnsaved, undo, patchActive]);
 
   const handleSetSelectedNode = useCallback((nodeId: string | null) => {
-    toast.dismiss(BLOCKED_TOAST_ID);
     setSelectedNodeId(nodeId);
     if (nodeId) setSelectedEdgeId(null);
   }, []);
 
   const handleSetSelectedEdge = useCallback((edgeId: string | null) => {
-    toast.dismiss(BLOCKED_TOAST_ID);
     setSelectedEdgeId(edgeId);
     if (edgeId) setSelectedNodeId(null);
   }, []);
