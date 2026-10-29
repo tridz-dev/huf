@@ -104,7 +104,7 @@ def _rule_error(row) -> str | None:
 	target_type = row.get("target_type")
 	target = (row.get("target") or "").strip()
 	match_value = (row.get("match_value") or "").strip()
-	if rule_type in ("keyword", "first_message") and not match_value:
+	if rule_type == "keyword" and not match_value:
 		return _("match value is required for {0} rules").format(rule_type)
 	if rule_type == "contact_attribute":
 		if not (row.get("attribute") or "").strip():

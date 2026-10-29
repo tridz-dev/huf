@@ -159,8 +159,8 @@ class TestRoutingRuleTargets(IntegrationTestCase):
 	def test_save_rejects_missing_match_value(self):
 		with self.assertRaises(frappe.ValidationError):
 			rules_api.save_rules(self.gw, [self._row(match_value="")])
-		with self.assertRaises(frappe.ValidationError):
-			rules_api.save_rules(self.gw, [self._row(rule_type="first_message", match_value=None)])
+		# first_message ignores match_value, so it is not required
+		rules_api.save_rules(self.gw, [self._row(rule_type="first_message", match_value=None)])
 		with self.assertRaises(frappe.ValidationError):
 			rules_api.save_rules(self.gw, [self._row(rule_type="contact_attribute", attribute="", match_value="x")])
 
