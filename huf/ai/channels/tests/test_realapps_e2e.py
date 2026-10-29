@@ -139,7 +139,9 @@ class TestErpRealFlow(IntegrationTestCase):
 		self.sfx = frappe.generate_hash(length=6)
 		self.gw, self.conv = make_gateway_conversation()
 		self.customer = frappe.get_doc(
-			{"doctype": "Customer", "customer_name": f"WA Cust {self.sfx}", "customer_type": "Individual"}
+			{"doctype": "Customer", "customer_name": f"WA Cust {self.sfx}", "customer_type": "Individual",
+			 "customer_group": frappe.db.get_value("Customer Group", {"is_group": 0}, "name"),
+			 "territory": frappe.db.get_value("Territory", {"is_group": 0}, "name")}
 		).insert(ignore_permissions=True)
 		frappe.get_doc(
 			{
