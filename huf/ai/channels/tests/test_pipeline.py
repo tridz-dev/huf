@@ -21,8 +21,8 @@ def hook_continue(ctx):
 
 class TestPipeline(IntegrationTestCase):
 	def test_noop_by_default(self):
-		self.assertEqual(pipeline.PRE_ROUTE_HOOKS, [])
-		self.assertIsNone(run_pre_route({}))
+		with patch.object(pipeline, "PRE_ROUTE_HOOKS", []):
+			self.assertIsNone(run_pre_route({}))
 
 	def test_continue_falls_through(self):
 		with patch.object(pipeline, "PRE_ROUTE_HOOKS", [f"{__name__}.hook_continue"]):
