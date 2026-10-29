@@ -29,7 +29,7 @@ export function FlowHelpPopover() {
           <dl className="mt-1 space-y-1" data-testid="flow-help-shortcuts">
             {FLOW_SHORTCUTS.map((sc) => (
               <div key={sc.keys} className="flex items-start justify-between gap-3">
-                <dt className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">{sc.keys}</dt>
+                <dt className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-micro">{sc.keys}</dt>
                 <dd className="text-right text-muted-foreground">{sc.does}</dd>
               </div>
             ))}
