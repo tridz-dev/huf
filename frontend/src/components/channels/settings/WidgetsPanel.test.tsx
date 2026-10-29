@@ -17,7 +17,9 @@ describe('WidgetsPanel', () => {
     render(<WidgetsPanel {...props} />);
     await waitFor(() => expect(screen.getByDisplayValue('https://wa.me/15551234567')).toBeInTheDocument());
     expect(screen.getByDisplayValue('<script src="x"></script>')).toBeInTheDocument();
-    expect(screen.getByText(/QR codes are not available/)).toBeInTheDocument();
+    expect(screen.queryByText(/QR codes are not available/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('QR code').querySelector('svg path')).not.toBeNull();
+    expect(screen.getByText('Download SVG')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Ref tag'), { target: { value: 'ad1' } });
     await waitFor(() => expect(api.getClickToChat).toHaveBeenLastCalledWith('GW-1', '', 'ad1', '+1 555 123 4567'));
   });
@@ -25,6 +27,6 @@ describe('WidgetsPanel', () => {
     api.getClickToChat.mockResolvedValue({ wa_me_url: 'https://wa.me/1', qr_svg: '<svg></svg>' });
     api.getWidgetSnippet.mockResolvedValue('s');
     render(<WidgetsPanel {...props} />);
-    expect(await screen.findByText('Download QR')).toBeInTheDocument();
+    expect(await screen.findByText('Download SVG')).toBeInTheDocument();
   });
 });
