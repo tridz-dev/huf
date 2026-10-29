@@ -1,4 +1,4 @@
-import { Activity, ChartLine, FileText, House, Megaphone, Phone, Plug, Settings, Workflow, type LucideIcon } from 'lucide-react';
+import { Activity, ChartLine, FileText, House, Megaphone, Phone, Plug, Settings, ShoppingBag, Workflow, type LucideIcon } from 'lucide-react';
 import { channelMeta } from './channelsMeta';
 
 export interface ChannelSection {
@@ -16,6 +16,7 @@ export const CHANNEL_SECTIONS: ChannelSection[] = [
   { key: 'activity', label: 'Activity', path: 'activity', icon: Activity },
   { key: 'broadcasts', label: 'Broadcasts', path: 'broadcasts', icon: Megaphone, whatsappOnly: true },
   { key: 'templates', label: 'Templates', path: 'templates', icon: FileText, whatsappOnly: true },
+  { key: 'commerce', label: 'Commerce', path: 'commerce', icon: ShoppingBag, whatsappOnly: true },
   { key: 'automations', label: 'Automations', path: 'automations', icon: Workflow },
   { key: 'analytics', label: 'Analytics', path: 'analytics', icon: ChartLine },
   { key: 'connections', label: 'Connections', path: 'connections', icon: Plug },

@@ -3,6 +3,7 @@ import { ExternalLink, Loader2, SquareAsterisk } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useIsHufAdmin } from '@/contexts/PermissionsContext';
+import { OrderCard } from '../commerce/OrderCard';
 import { TimeStamp } from '@/components/whatsapp/TimeStamp';
 import {
   closeConversation,
@@ -82,6 +83,7 @@ export function ConversationThread({ name, onChanged }: { name: string; onChange
         )}
       </div>
       {error && <p role="alert" className="px-4 py-1 text-xs text-destructive">{error}</p>}
+      <OrderCard conversation={name} />
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
         {messages.map((m, i) => {
           const out = m.direction === 'out';
