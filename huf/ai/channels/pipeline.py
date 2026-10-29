@@ -16,6 +16,7 @@ ACTIONS = ("continue", "reply", "route", "handoff", "drop")
 
 # Dotted paths of hook callables. Later WPs append here.
 PRE_ROUTE_HOOKS: list[str] = [
+	"huf.ai.channels.wa_flows.flow_response_hook",  # records nfm_reply form responses; never changes the route
 	"huf.ai.channels.handoff_hooks.handed_off_hook",  # handed-off chats skip the AI: always first
 	"huf.ai.channels.hours.business_hours_hook",
 	"huf.ai.channels.rules.routing_rules_hook",

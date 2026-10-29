@@ -127,20 +127,32 @@ def render_order(order: Any) -> str:
 	return f"{text} {note}" if note else text
 
 
-def render_form_response(nfm: Any) -> str:
-	nfm = _dict(nfm)
-	name = cap(nfm.get("name"), _NAME_CAP) or "flow"
-	raw = nfm.get("response_json")
-	compact = ""
-	if isinstance(raw, (dict, list)):
-		compact = json.dumps(raw, ensure_ascii=False, separators=(",", ":"))
-	elif isinstance(raw, str) and raw.strip():
+def parse_form_response(nfm: Any) -> dict:
+	"""``response_json`` of an nfm_reply as a dict (``{}`` when absent; a non-object value is kept under ``_raw``)."""
+	raw = _dict(nfm).get("response_json")
+	if isinstance(raw, str) and raw.strip():
 		try:
-			compact = json.dumps(json.loads(raw), ensure_ascii=False, separators=(",", ":"))
+			raw = json.loads(raw)
 		except ValueError:
-			compact = raw.strip()
-	head = f"[Form response: {name}]"
-	return f"{head} {cap_bytes(compact, MAX_FORM_BYTES)}" if compact else head
+			return {"_raw": raw.strip()}
+	if isinstance(raw, dict):
+		return raw
+	return {"_raw": raw} if raw else {}
+
+
+def render_form_response(nfm: Any) -> str:
+	"""Agent-readable summary: ``Form submitted: key=value, ...`` (the flow token is not shown)."""
+	data = parse_form_response(nfm)
+	if "_raw" in data:
+		body = str(data["_raw"]) if not isinstance(data["_raw"], (dict, list)) else json.dumps(data["_raw"], ensure_ascii=False)
+	else:
+		body = ", ".join(
+			f"{k}={v if isinstance(v, str) else json.dumps(v, ensure_ascii=False, separators=(',', ':'))}"
+			for k, v in data.items()
+			if k != "flow_token"
+		)
+	head = "Form submitted:"
+	return f"{head} {cap_bytes(body, MAX_FORM_BYTES)}" if body else "Form submitted"
 
 
 def render_interactive(interactive: Any) -> str:
