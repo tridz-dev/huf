@@ -12,10 +12,16 @@ import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
 import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
 import { formatTimeAgo } from '@/utils/time';
 import { decisionMovedRun } from '@/lib/flow-run/flowRunDecision';
+import { humanizeMessageText } from '@/lib/flow-run/humanize';
 
 const REFRESH_INTERVAL_MS = 60000;
 const FLOW_EVENTS = ['frappe:flow_paused', 'frappe:flow_completed', 'frappe:flow_error'];
 
+
+/** The approval request as a sentence: any data a flow wrote into the message as JSON reads as plain facts. */
+function approvalSentence(approval: PendingApproval): string {
+  return humanizeMessageText(approval.message || approval.instructions || '');
+}
 
 export function ApprovalsBell() {
   const [approvals, setApprovals] = useState<PendingApproval[]>([]);
@@ -108,9 +114,9 @@ export function ApprovalsBell() {
                   <div className="text-sm font-medium" data-testid={`flow-approval-flow-${approval.flow_run_id}`}>
                     {approval.flow_name || approval.flow_id}
                   </div>
-                  {(approval.message || approval.instructions) ? (
-                    <div className="text-sm text-foreground mt-0.5" data-testid={`flow-approval-message-${approval.flow_run_id}`}>
-                      {approval.message || approval.instructions}
+                  {approvalSentence(approval) ? (
+                    <div className="text-sm text-foreground mt-0.5 break-words" data-testid={`flow-approval-message-${approval.flow_run_id}`}>
+                      {approvalSentence(approval)}
                     </div>
                   ) : (
                     <div className="text-sm text-muted-foreground mt-0.5">Approval needed</div>
