@@ -348,6 +348,7 @@ scheduler_events = {
         "huf.ai.flow.state.purge_expired",
         "huf.ai.whatsapp.send_keys.purge_expired",
         "huf.ai.secrets.purge_expired",
+        "huf.ai.channels.commerce.catalog.sync_all_catalogs",
     ],
     "cron": {
         "*/1 * * * *": [
