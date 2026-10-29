@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ShieldAlert } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import {
@@ -60,7 +61,16 @@ function formatExpiry(expiresOn: string, now: number): { label: string; urgent: 
   return { label: `Expires in ${diffDays} day${diffDays === 1 ? '' : 's'}`, urgent, expired: false };
 }
 
-export function ExecutionApprovalsBell() {
+interface ExecutionApprovalsBellProps {
+  /** `dialog`: no icon button, just the list in a dialog (the editor header's "..." menu opens it). */
+  variant?: 'icon' | 'dialog';
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Reports how many requests wait (for the menu entry). */
+  onCount?: (count: number) => void;
+}
+
+export function ExecutionApprovalsBell({ variant = 'icon', open, onOpenChange, onCount }: ExecutionApprovalsBellProps = {}) {
   useSiteTimezone();
   const [approvals, setApprovals] = useState<PendingExecutionApproval[]>([]);
   const [now, setNow] = useState(() => Date.now());
@@ -114,23 +124,10 @@ export function ExecutionApprovalsBell() {
   };
 
   const count = approvals.length;
+  useEffect(() => onCount?.(count), [count, onCount]);
 
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label="Pending execution approvals" data-testid="execution-approvals-bell">
-          <ShieldAlert className="w-4 h-4" />
-          {count > 0 && (
-            <Badge
-              variant="destructive"
-              className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 py-0 flex items-center justify-center"
-            >
-              {count > 9 ? '9+' : count}
-            </Badge>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0">
+  const panel = (
+    <>
         <div className="px-4 py-3 border-b text-sm font-semibold">Pending execution approvals</div>
         {count === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-muted-foreground">
@@ -181,6 +178,38 @@ export function ExecutionApprovalsBell() {
             })}
           </div>
         )}
+      </>
+  );
+
+  // In a narrow editor header the bell lives in the "..." menu: the same list in a dialog, no icon button of its own.
+  if (variant === 'dialog') {
+    return (
+      <Dialog open={!!open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-[420px] p-0" data-testid="execution-approvals-dialog">
+          <DialogTitle className="sr-only">Pending execution approvals</DialogTitle>
+          {panel}
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative" aria-label="Pending execution approvals" data-testid="execution-approvals-bell">
+          <ShieldAlert className="w-4 h-4" />
+          {count > 0 && (
+            <Badge
+              variant="destructive"
+              className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 py-0 flex items-center justify-center"
+            >
+              {count > 9 ? '9+' : count}
+            </Badge>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-0">
+        {panel}
       </PopoverContent>
     </Popover>
   );

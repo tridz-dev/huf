@@ -17,7 +17,7 @@ export function KeepSelectedVisible({ selectedNodeId }: { selectedNodeId: string
   const height = useStore((s) => s.height);
   useEffect(() => {
     if (!selectedNodeId || !width || !height) return;
-    const timer = setTimeout(() => {
+    const pan = () => {
       const node = rfRef.current.getNode(selectedNodeId);
       if (!node) return;
       // A sheet laid over the canvas covers its right side; a docked panel has already narrowed the canvas itself.
@@ -32,8 +32,10 @@ export function KeepSelectedVisible({ selectedNodeId }: { selectedNodeId: string
       };
       const next = panToReveal(rect, vp, { width: visibleWidth, height });
       if (next) rfRef.current.setViewport({ ...next, zoom: vp.zoom }, { duration: 200 });
-    }, 140);
-    return () => clearTimeout(timer);
+    };
+    // Again after the sheet has slid in: its width is only known once it is on screen.
+    const timers = [setTimeout(pan, 140), setTimeout(pan, 560)];
+    return () => timers.forEach(clearTimeout);
   }, [selectedNodeId, width, height]);
   return null;
 }

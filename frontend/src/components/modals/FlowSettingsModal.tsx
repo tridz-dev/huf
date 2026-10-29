@@ -83,6 +83,8 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
   }, [activeFlow?.id, open]);
 
   const isLive = activeFlow?.status === 'active';
+  // The details are filled in once the flow has loaded; until then the fields wait, so anything typed early is never replaced.
+  const waiting = !activeFlow;
 
   const handleDelete = async () => {
     if (!activeFlow) return;
@@ -191,6 +193,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
                   id="name"
                   data-testid="flow-settings-name"
                   value={name}
+                  disabled={waiting}
                   maxLength={NAME_LIMIT}
                   aria-invalid={!!nameError}
                   onChange={(e) => {
@@ -214,6 +217,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
                   data-testid="flow-settings-description"
                   className="min-h-[80px]"
                   value={description}
+                  disabled={waiting}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="For example: Sends a Slack message when a large order comes in."
                 />
@@ -223,7 +227,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="category">Category</Label>
-                <Select value={category || 'Uncategorized'} onValueChange={setCategory}>
+                <Select value={category || 'Uncategorized'} onValueChange={setCategory} disabled={waiting}>
                   <SelectTrigger id="category" data-testid="flow-settings-category">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>

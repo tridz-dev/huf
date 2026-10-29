@@ -10,15 +10,21 @@ A flow starts from a **trigger** and then runs **steps** one after another. Each
 
 The **?** button in the editor header repeats this and lists the keyboard shortcuts.
 
+## The Flows list
+
+Each card shows the flow name (two lines at most; hover for the full name), a plain description (or "Starts when a web request arrives, then 3 steps." when the author wrote none), one status word (**Draft** or **Live**), what starts it, how the **last run** went and how long ago, and the steps as small icons. **Open** edits the flow, **Run** starts it by hand, and the **...** menu has **Duplicate**, **Settings** and **Delete**. Search looks in names, descriptions and categories; the dropdowns filter by status and category and sort.
+
+**New flow** opens a chooser: **Start from scratch**, or a **template** (a ready-made small flow: reply to a web request, split big and small orders, loop over items, ask an AI agent, ask a person to approve, run on a schedule, react to a new record, post to Slack, send an email ...). A template is copied into a NEW draft that is yours: its own name ("... 2" if the name is taken), its own webhook secret, and steps that still need something (a Slack channel, an e-mail address, a connected app) marked "Needs setup". The catalog ships with the app (`frontend/src/data/flowTemplates.json`, made from the Huf Demo flows with site-specific values removed), so it works on any site without a set-up script.
+
 ## Header buttons
 
 | Button | What it does |
 |---|---|
 | Save | Saves your changes (Ctrl/Cmd+S). A flow with a missing field cannot be saved; the step is selected and says what is missing. |
 | Runs | Run history of this flow, newest first. Select a run to see what each step did. |
-| Settings | Name, description and category. Delete the flow here. |
+| Settings | Name, description and category; a collapsed **More** (procedure option); and a **Danger zone** to delete the flow (asks "Delete this flow?" in the same dialog). Saving only changes these details, never the steps. |
 | Run | Starts one real run now with input data you type (JSON). Emails are sent and records are created. |
-| Publish | Turns the trigger on: the webhook accepts calls, a schedule or record change starts runs. |
+| Publish | Asks first: it shows what will start the flow (the web address with a Copy button, "every day at 09:00", "when a ToDo is created") and warns about apps that are not connected or unfinished steps. **Publish** then turns the trigger on. |
 | Unpublish | Turns the trigger off. The flow becomes a draft again; runs in progress finish. |
 
 Read-only users can look at flows and runs but cannot save, run or publish.
