@@ -2903,6 +2903,20 @@ GATEWAY_SETUP_TOOLS = [
 ]
 
 
+# Channel conversation tools (BE-ADAPT-HD): FYI ticket without handoff.
+CHANNEL_HELPDESK_TOOLS = [
+	{
+		"tool_name": "create_ticket",
+		"description": "Create a Helpdesk ticket (FYI, no handoff) for the current channel conversation. The conversation stays with the AI.",
+		"function_path": "huf.ai.channels.tools.create_ticket",
+		"category": "Helpdesk Tools",
+		"parameters": [
+			_p("summary", required=True, description="What the ticket is about"),
+			_p("priority", description="low, normal, high or urgent (default normal)"),
+		],
+	},
+]
+
 ALL_INTEGRATION_TOOLS = (
 	# Platform capabilities — no external account to connect.
 	RECIPIENT_TOOLS
@@ -2927,6 +2941,7 @@ ALL_INTEGRATION_TOOLS = (
 	+ DESKTOP_LOCAL_MCP_TOOLS
 	+ LAZY_DISCOVERY_TOOLS
 	+ GATEWAY_SETUP_TOOLS
+	+ CHANNEL_HELPDESK_TOOLS
 	# Tools backed by a connectable service. Keys match Integration Service
 	# docnames and the SERVICE_NAME each tool module uses for credentials.
 	+ _with_service(SLACK_TOOLS, "slack")

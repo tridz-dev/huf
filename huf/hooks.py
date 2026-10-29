@@ -325,6 +325,8 @@ doc_events = {
     },
 }
 
+doc_events["HD Ticket"] = {"on_update": "huf.ai.channels.adapters.helpdesk.on_ticket_update"}
+
 # Scheduled Tasks
 # ---------------
 
