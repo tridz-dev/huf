@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { allTimeZones, browserTimeNote, describeZone, runTimesSentence, scheduleZoneLine, zoneOffsetLabel } from './flowTimeZone';
+import { allTimeZones, browserTimeNote, describeZone, runTimesSentence, sameZone, scheduleZoneLine, zoneOffsetLabel } from './flowTimeZone';
 
 describe('flowTimeZone', () => {
   const at = new Date('2026-10-28T12:00:00Z');
@@ -16,6 +16,11 @@ describe('flowTimeZone', () => {
     expect(browserTimeNote('03:30', 'Asia/Kolkata')).toMatch(/^Shows as 03:30 in your browser \(.+\)\.$|^$/);
     expect(browserTimeNote('03:30', null)).toBe('');
     expect(runTimesSentence('Asia/Kolkata')).toMatch(/browser's time zone/);
+  });
+  it('treats two names for one clock as the same zone', () => {
+    expect(sameZone('Asia/Calcutta', 'Asia/Kolkata')).toBe(true);
+    expect(sameZone('UTC', 'Asia/Kolkata')).toBe(false);
+    expect(sameZone('UTC', 'UTC')).toBe(true);
   });
   it('lists time zones', () => {
     const zones = allTimeZones('Asia/Kolkata');

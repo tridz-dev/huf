@@ -54,10 +54,22 @@ export function scheduleZoneLine(zone: string | null | undefined, isSiteZone: bo
   return `Runs in ${describeZone(zone).replace(' (', ' time (')}${isSiteZone ? ", this site's time zone" : ''}.`;
 }
 
+/** True when two zone names keep the same clock all year (a browser says Asia/Calcutta where the site says Asia/Kolkata). */
+export function sameZone(a: string, b: string): boolean {
+  if (a === b) return true;
+  try {
+    const probes = [Date.now(), Date.now() + 91 * 86_400_000, Date.now() + 182 * 86_400_000, Date.now() + 273 * 86_400_000];
+    const read = (zone: string, at: number) => new Date(at).toLocaleString('en-US', { timeZone: zone, hourCycle: 'h23' });
+    return probes.every((at) => read(a, at) === read(b, at));
+  } catch {
+    return false;
+  }
+}
+
 /** "Shows as 03:30 in your browser (UTC)": how a fixed run time reads where the person is, or '' when the clocks agree. */
 export function browserTimeNote(shownAs: string, zone: string | null | undefined): string {
   const browser = browserZone();
-  if (!zone || browser === zone) return '';
+  if (!zone || sameZone(browser, zone)) return '';
   return `Shows as ${shownAs} in your browser (${browser}).`;
 }
 

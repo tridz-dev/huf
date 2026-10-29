@@ -48,13 +48,16 @@ attributes: `input['amount'] > 100`, not `input.amount` and not `context["x"]`.
 |---|---|---|---|---|---|
 | Webhook | `trigger.webhook` | `method` | string | yes | enum `GET`, `POST` |
 | | | `secret` | string | yes | length 32-256; the receiver compares the `X-Huf-Secret` header to this value (constant time), fail closed. A secret in the URL (`?secret=`) is not accepted |
-| Schedule | `trigger.schedule` | `cron` | string | yes | min length 1; 5-part cron (`minute hour day month dow`), evaluated in server system time |
+| Schedule | `trigger.schedule` | `cron` | string | yes | min length 1; 5-part cron (`minute hour day month dow`; numbers, ranges, steps, lists, names, `L` for the last day of the month), read on the clock of `time_zone` |
+| | | `time_zone` | string | no | IANA name such as `Asia/Kolkata`; absent means the site time zone. Checked with plain sentences when the flow is made live (`support/schedule_rules.py`) |
 | Data (doc event) | `trigger.doc-event` | `doctype` | string | yes | min length 1, literal |
 | | | `event` | string | yes | enum `after_insert`, `on_update`, `on_submit`, `on_cancel`, `on_trash` |
 | (placeholder, not runnable) | `trigger.unset` | none | | | empty config; cannot activate |
 
 Notes:
-* `auth`, `apiKey`, `webhook_key`, `intervalType`, `interval`, `cronExpression`, `schedule_name`, `timezone`, `filters`, `PUT`, `DELETE`, `on_delete` are all invalid. The UI compiles any "every N hours/days" picker to a cron string before saving. `timezone` is not offered: the scheduler (`set_flow_trigger`) runs cron in system time, so there is nothing to consume it.
+* `auth`, `apiKey`, `webhook_key`, `intervalType`, `interval`, `cronExpression`, `schedule_name`, `timezone` (the key is `time_zone`), `filters`, `PUT`, `DELETE`, `on_delete` are all invalid. The UI compiles any "every N hours/days" picker to a cron string before saving. The optional `time_zone` is consumed by `run_due_schedule_flows`, which reads each cron on that zone's clock.
+
+Every node may also carry `_sample` (UI extra like `_label`): a trimmed example of the data the step receives (webhook trigger: a sample request), at most 8 KB, passwords and keys hidden. Only people who can edit the flow get it back from the server; run snapshots never keep it.
 * Webhook method: the receiver (`flow_webhook` / `flow_webhook_clean`) does not branch on the method; the schema restricts to GET/POST so the UI never promises PUT/DELETE.
 * Doc-event filters/conditions are not part of the node (they live on the Automation Trigger created by `set_flow_trigger`).
 * A trigger node has `next` like any node; multiple triggers each point into the same flow body.

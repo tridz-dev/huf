@@ -22,7 +22,7 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
 
   if (!type) {
     return (
-      <div className="space-y-3" data-testid="flow-trigger-unset">
+      <div className="mt-3 space-y-3" data-testid="flow-trigger-unset">
         <p className="text-sm text-muted-foreground">
           Every flow starts with one thing that makes it run: a request from another app, a time you choose, or a change to your data.
         </p>
