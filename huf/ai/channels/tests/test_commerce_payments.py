@@ -100,13 +100,15 @@ class TestCommercePayments(IntegrationTestCase):
 		self.assertEqual(post.call_args.kwargs["data"]["metadata[reference]"], "ORD1")
 
 	def test_erpnext_guarded_and_patched(self):
-		with self.assertRaises(payments.PaymentError):
-			payments.ERPNextProvider().create_link(1, "INR", "SO-1")
+		with patch.object(frappe, "get_installed_apps", return_value=["frappe", "huf"]):
+			with self.assertRaises(payments.PaymentError) as ctx:
+				payments.ERPNextProvider().create_link(1, "INR", "SO-1")
+		self.assertEqual(str(ctx.exception), "erpnext_not_installed")
 		pr = MagicMock(payment_url="https://erp/pay", )
 		pr.name = "PR-1"
 		fake = MagicMock()
 		fake.make_payment_request.return_value = pr
-		with patch.dict("sys.modules", {"erpnext": MagicMock(), "erpnext.accounts": MagicMock(), "erpnext.accounts.doctype": MagicMock(),
+		with patch.object(frappe, "get_installed_apps", return_value=["frappe", "erpnext"]), patch.dict("sys.modules", {"erpnext": MagicMock(), "erpnext.accounts": MagicMock(), "erpnext.accounts.doctype": MagicMock(),
 				"erpnext.accounts.doctype.payment_request": MagicMock(payment_request=fake)}):
 			link = payments.ERPNextProvider().create_link(1, "INR", "SO-1")
 		self.assertEqual(link, {"url": "https://erp/pay", "provider_ref": "PR-1"})

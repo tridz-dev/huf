@@ -56,6 +56,8 @@ class ERPNextProvider(PaymentProvider):
 	name = "erpnext"
 
 	def create_link(self, amount, currency, reference, customer=None):
+		if "erpnext" not in frappe.get_installed_apps():
+			raise PaymentError("erpnext_not_installed")
 		try:
 			from erpnext.accounts.doctype.payment_request import payment_request as pr_mod
 		except Exception as exc:

@@ -47,6 +47,22 @@ def lookup_customer(phone: str | None = None) -> dict:
 	return {"success": True, "found": True, **found}
 
 
+def _default_company() -> str | None:
+	return (
+		frappe.defaults.get_user_default("Company")
+		or frappe.db.get_single_value("Global Defaults", "default_company")
+		or frappe.db.get_value("Company", {}, "name")
+	)
+
+
+def _selling_price_list(customer: str) -> str | None:
+	return (
+		frappe.db.get_value("Customer", customer, "default_price_list")
+		or frappe.db.get_single_value("Selling Settings", "selling_price_list")
+		or frappe.db.get_value("Price List", {"selling": 1, "enabled": 1}, "name")
+	)
+
+
 def create_order(items=None, delivery_date: str | None = None) -> dict:
 	"""Create a DRAFT Sales Order for the conversation's customer. Never submitted."""
 	if not erpnext_installed():
@@ -77,9 +93,12 @@ def create_order(items=None, delivery_date: str | None = None) -> dict:
 		if rate is not None:
 			row["rate"] = rate
 		rows.append(row)
+	company = _default_company()
 	doc = frappe.get_doc(
 		{
 			"doctype": "Sales Order",
+			"company": company,
+			"selling_price_list": _selling_price_list(customer),
 			"customer": customer,
 			"transaction_date": frappe.utils.nowdate(),
 			"delivery_date": delivery_date or frappe.utils.add_days(frappe.utils.nowdate(), 7),
@@ -88,7 +107,11 @@ def create_order(items=None, delivery_date: str | None = None) -> dict:
 		}
 	)
 	doc.flags.ignore_permissions = False
-	doc.insert()  # draft only: never submit
+	try:
+		doc.run_method("set_missing_values")  # price list / currency / rates, as the desk form does
+		doc.insert()  # draft only: never submit
+	except frappe.ValidationError as exc:
+		return {"success": False, "error": f"Could not create the order: {str(exc)[:200]}"}
 	return {"success": True, "order": doc.name, "status": "Draft", "customer": customer}
 
 

@@ -280,7 +280,14 @@ class TestBrokerServer(_Base):
 			return es.broker_exchange()
 
 	def audit(self):
-		return frappe.get_all("Embedded Signup Audit", fields=["outcome", "reason", "tenant_id"], order_by="creation desc", limit=3)
+		# audit rows are committed and persist across runs: only this test's rows (unique per-test request IP), newest first
+		return frappe.get_all(
+			"Embedded Signup Audit",
+			filters={"ip_address": frappe.local.request_ip},
+			fields=["outcome", "reason", "tenant_id"],
+			order_by="creation desc",
+			limit=3,
+		)
 
 	def test_accepts_valid_tenant_and_audits_without_token(self):
 		fake = FakeRequests()

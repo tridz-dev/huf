@@ -129,8 +129,17 @@ def lms_enroll(course: str = "", **_ignored) -> str:
 	existing = frappe.get_all(ENROLLMENT, filters={"course": course_name, "member": member}, fields=["name"], limit_page_length=1)
 	if existing:
 		return json.dumps({"success": True, "enrollment": existing[0]["name"], "created": False}, default=str)
-	doc = frappe.get_doc({"doctype": ENROLLMENT, "course": course_name, "member": member})
-	doc.insert(ignore_permissions=True)
+	# LMS only lets a member enroll themselves (and enforces paid/self-learning rules for anyone who does not
+	# manage the course), so enroll as the member; the run-as user is never treated as a course manager.
+	run_user = frappe.session.user
+	try:
+		frappe.set_user(member)
+		doc = frappe.get_doc({"doctype": ENROLLMENT, "course": course_name, "member": member})
+		doc.insert(ignore_permissions=True)
+	except (frappe.PermissionError, frappe.ValidationError) as exc:
+		return _err("enroll_refused", str(exc)[:300])
+	finally:
+		frappe.set_user(run_user)
 	return json.dumps({"success": True, "enrollment": doc.name, "created": True}, default=str)
 
 
