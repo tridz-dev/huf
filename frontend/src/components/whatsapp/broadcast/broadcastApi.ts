@@ -17,7 +17,7 @@ async function broadcastCall<T>(method: string, args: Record<string, unknown>, v
 
 // ---- Broadcast ------------------------------------------------------------
 
-export type BroadcastStatus = 'Draft' | 'Queued' | 'Running' | 'Paused' | 'Completed' | 'Cancelled' | 'Failed';
+export type BroadcastStatus = 'Draft' | 'Scheduled' | 'Queued' | 'Running' | 'Paused' | 'Completed' | 'Cancelled' | 'Failed';
 export type BroadcastRecipientStatus =
   'queued' | 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | 'deferred' | 'unknown' | 'skipped';
 
@@ -38,6 +38,7 @@ export interface Broadcast {
   consent_attested?: number;
   max_recipients?: number | null;
   mps?: number | null;
+  scheduled_at?: string | null;
   started_by?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
@@ -251,6 +252,15 @@ export const previewBroadcast = (broadcast: string) =>
 export const startBroadcast = (broadcast: string, confirmCount: string | number, overrideWarnings: string[] = []) =>
   broadcastCall<Mutated & { queued?: number; warnings?: unknown[] }>(
     'start_broadcast', { broadcast, confirm_count: String(confirmCount), override_warnings: JSON.stringify(overrideWarnings) }, 'post');
+
+/** `scheduledAt` is 'YYYY-MM-DD HH:mm:ss' in the SITE timezone. */
+export const scheduleBroadcast = (broadcast: string, scheduledAt: string, confirmCount: string | number, overrideWarnings: string[] = []) =>
+  broadcastCall<Mutated & { scheduled_at?: string }>(
+    'schedule_broadcast', { broadcast, scheduled_at: scheduledAt, confirm_count: String(confirmCount), override_warnings: JSON.stringify(overrideWarnings) }, 'post');
+export const unscheduleBroadcast = (broadcast: string) => broadcastCall<Mutated>('unschedule_broadcast', { broadcast }, 'post');
+/** Creates a new Draft with the retryable failed recipients; returns its name in `broadcast`. */
+export const retryFailedRecipients = (broadcast: string) =>
+  broadcastCall<{ broadcast?: string; retried_from?: string; added?: number }>('retry_failed_recipients', { broadcast }, 'post');
 
 export const pauseBroadcast = (broadcast: string) => broadcastCall<Mutated>('pause_broadcast', { broadcast }, 'post');
 export const resumeBroadcast = (broadcast: string) => broadcastCall<Mutated>('resume_broadcast', { broadcast }, 'post');

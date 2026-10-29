@@ -24,7 +24,7 @@ MARKETING_STOP_CODE = 131050
 PER_USER_LIMIT_CODE = 131049
 PER_USER_LIMIT_REASON = "per_user_marketing_limit"
 # A stopped contact must not be messaged by a broadcast that has not finished.
-_LIVE_BROADCAST = ("Queued", "Running", "Paused")
+_LIVE_BROADCAST = ("Scheduled", "Queued", "Running", "Paused")
 
 # status -> (rank, column holding its timestamp)
 _RANK = {"queued": 0, "deferred": 0, "sending": 1, "unknown": 1.5, "sent": 2, "failed": 2.5, "delivered": 3, "read": 4}
