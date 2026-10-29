@@ -77,7 +77,9 @@ export function triggerSubtitle(cfg: TriggerConfig | undefined): string {
       return 'Runs on a web request';
     case 'schedule': {
       const text = describeCron(cfg.cron).replace(/ \(server time\)$/, '');
-      return text.startsWith('No valid') ? 'Pick when it should run' : text;
+      if (text.startsWith('No valid')) return 'Pick when it should run';
+      // A custom cron expression is code to most people: say it is custom, show the pattern in the step's settings.
+      return text.startsWith('Custom schedule') ? 'Runs on a custom schedule' : text;
     }
     case 'doc-event': {
       const dt = typed(cfg.doctype);
