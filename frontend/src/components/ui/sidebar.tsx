@@ -6,7 +6,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { PanelLeft } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
-import { cn } from "@/lib/utils"
+import { cn, nameWhenCollapsed } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
@@ -600,12 +600,6 @@ export const SidebarMenuButton = React.forwardRef<
   ) => {
     const Comp = asChild ? Slot : "button"
     const { isMobile, state } = useSidebar()
-    const tooltipText =
-      typeof tooltip === "string"
-        ? tooltip
-        : typeof tooltip?.children === "string"
-          ? tooltip.children
-          : undefined
 
     const button = (
       <Comp
@@ -626,9 +620,7 @@ export const SidebarMenuButton = React.forwardRef<
           state === "collapsed" &&
             "h-[34px] w-[38px] justify-center gap-0 rounded-[9px] p-0 [&>svg]:size-[18px]",
         )}
-        {...props}
-        // The visible text is hidden when the sidebar is collapsed to icons: keep the control named for assistive tech.
-        aria-label={props["aria-label"] ?? (state === "collapsed" ? tooltipText : undefined)}
+        {...nameWhenCollapsed(props, state === "collapsed", tooltip)}
       />
     )
 

@@ -12,7 +12,7 @@ import {
 import { Label } from '../ui/label';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { useFlowContext } from '../../contexts/FlowContext';
-import { outgoingEdges, removeStep, type RemoveStepMode } from '../../lib/flowEdit';
+import { outgoingEdges, removeStep, type RemoveStepMode } from '../../lib/flow/flowEdit';
 
 interface DeleteStepDialogProps {
   nodeId: string | null;

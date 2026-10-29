@@ -61,3 +61,16 @@ export async function settleAll<T extends readonly unknown[]>(
     return undefined;
   }) as { [K in keyof T]: T[K] | undefined };
 }
+
+/**
+ * The visible text of a sidebar button is hidden when the sidebar is collapsed to icons: keep the control
+ * named for assistive tech by falling back to its tooltip text as the accessible name.
+ */
+export function nameWhenCollapsed<P extends { 'aria-label'?: string }>(
+  props: P,
+  collapsed: boolean,
+  tooltip: string | { children?: unknown } | undefined,
+): P {
+  const text = typeof tooltip === 'string' ? tooltip : typeof tooltip?.children === 'string' ? tooltip.children : undefined;
+  return { ...props, 'aria-label': props['aria-label'] ?? (collapsed ? text : undefined) };
+}

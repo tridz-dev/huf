@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { loadCodeFlowStatus, refreshCodeFlowStatus, useCodeFlowStatus } from '@/lib/useCodeFlowStatus';
+import { loadCodeFlowStatus, refreshCodeFlowStatus, useCodeFlowStatus } from '@/lib/flow-graph/useCodeFlowStatus';
 import { getAgentSettings, updateAgentSettings } from '@/services/agentSettingsApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { PageFrame } from '@/layouts/PageFrame';

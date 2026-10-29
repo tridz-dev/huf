@@ -6,7 +6,7 @@ import frappe
 logger = frappe.logger("huf")
 import httpx
 from huf.ai.tools.credentials import get_credential, update_last_error, set_credential
-from huf.ai.tools.provider_errors import (
+from huf.ai.tools.integration.provider_errors import (
     ProviderCredentialError,
     check_google_response,
     invalid_recipients,

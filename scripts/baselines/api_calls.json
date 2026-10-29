@@ -1,7 +1,4 @@
 {
-  "components/RightSidebar.tsx": {
-    "urls": 1
-  },
   "components/ai-elements/image.tsx": {
     "fetch": 2
   },
@@ -15,9 +12,6 @@
     "fetch": 1,
     "urls": 1
   },
-  "components/modals/TriggerConfigModal.tsx": {
-    "urls": 1
-  },
   "lib/apiSnippets.ts": {
     "fetch": 2,
     "urls": 1
@@ -26,12 +20,6 @@
     "urls": 1
   },
   "lib/csrfRetryInterceptor.ts": {
-    "urls": 1
-  },
-  "lib/flowWebhookConfig.test.ts": {
-    "urls": 1
-  },
-  "lib/flowWebhookConfig.ts": {
     "urls": 1
   },
   "lib/sessionInvalidation.test.ts": {

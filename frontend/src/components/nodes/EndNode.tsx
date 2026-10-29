@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { useFlowPermissions } from '@/hooks/useFlowPermissions';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { CheckCircle2, Trash2 } from 'lucide-react';
 import { FlowNodeData } from '../../types/flow.types';
@@ -8,7 +8,7 @@ import { Button } from '../ui/button';
 import { useFlowContext } from '../../contexts/FlowContext';
 import { NODE_CARD_BASE, NODE_ICON_WELL } from './nodeStyles';
 import { cn } from '@/lib/utils';
-import { unreachableNodeIds } from '../../lib/flowEdit';
+import { unreachableNodeIds } from '../../lib/flow/flowEdit';
 
 export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) => {
   const { deleteNode, activeFlow } = useFlowContext();

@@ -1,12 +1,11 @@
-import { useEffect, useState, useMemo, type ReactNode } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowUpDown, Loader2, AlertTriangle, Copy, Check } from 'lucide-react';
+import { ArrowUpDown, Loader2, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { PageFrame } from '@/layouts/PageFrame';
-import { cn } from '@/lib/utils';
 import type { AgentRunDoc } from '@/services/agentRunApi';
 import { getAgentRuns } from '@/services/agentRunApi';
 import { checkCacheableModels } from '@/services/agentApi';
@@ -34,100 +33,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { copyText } from '@/lib/clipboard';
 import { getFlowStepLabels } from '@/services/flowApi';
-import { humanizeToolPrompt } from '@/lib/flowIntegrations';
-/** One row of the Overview / Tokens & Cost definition list. */
-function DefinitionRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
-  return (
-    <div className="flex h-[26px] items-center justify-between gap-4">
-      <span className="text-[13px] text-steel shrink-0">{label}</span>
-      <span
-        className={cn(
-          'text-[13px] tabular-nums truncate text-right text-ink',
-          mono && 'font-mono'
-        )}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-/** A labeled column of DefinitionRows, headed by a mono uppercase eyebrow. */
-function DefinitionColumn({ heading, children }: { heading: string; children: ReactNode }) {
-  return (
-    <div>
-      <div className="font-mono text-[10px] uppercase tracking-widest text-steel pb-1.5">{heading}</div>
-      <div className="divide-y divide-line">{children}</div>
-    </div>
-  );
-}
-
-/** One field in the Context panel's four-column stat row: 11px label over a 13px value. */
-function ContextStat({
-  label,
-  value,
-  capitalize,
-}: {
-  label: string;
-  value: ReactNode;
-  capitalize?: boolean;
-}) {
-  return (
-    <div className="min-w-0">
-      <div className="text-[11px] text-steel truncate">{label}</div>
-      <div className={cn('text-[13px] tabular-nums text-ink truncate', capitalize && 'capitalize')}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-/** Prompt/Response panel: title + copy button, content in a mono box. */
-function CopyableTextPanel({
-  title,
-  content,
-  emptyText,
-}: {
-  title: string;
-  content?: string | null;
-  emptyText: string;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    if (!content) return;
-    try {
-      if (!(await copyText(content))) throw new Error('Copy failed');
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch (error) {
-      console.error('Failed to copy to clipboard:', error);
-    }
-  };
-
-  return (
-    <div className="rounded-lg border border-line bg-panel p-4">
-      <div className="flex items-center justify-between gap-2 pb-2">
-        <h3 className="text-[13px] font-[590] text-ink">{title}</h3>
-        <button
-          type="button"
-          onClick={handleCopy}
-          disabled={!content}
-          aria-label={`Copy ${title.toLowerCase()}`}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-steel transition-colors hover:bg-paper-deep hover:text-ink disabled:pointer-events-none disabled:opacity-40"
-        >
-          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-        </button>
-      </div>
-      <div className="max-h-[320px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-paper-deep p-3 font-mono text-xs leading-[1.6] text-ink">
-        {content || emptyText}
-      </div>
-    </div>
-  );
-}
-
+import { ContextStat, CopyableTextPanel, DefinitionColumn, DefinitionRow } from '@/components/executions/RunDetailParts';
+import { humanizeToolPrompt } from '@/lib/flow/flowIntegrations';
 interface AgentRunDetail extends AgentRunDoc {
   flow_id?: string | null;
   prompt?: string;

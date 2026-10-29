@@ -8,7 +8,7 @@ import { approveFlowRun, getPendingApprovals, rejectFlowRun } from '../services/
 import type { PendingApproval } from '../services/flowApi';
 import { useUser } from '../contexts/UserContext';
 import { toast } from 'sonner';
-import { humanizeFlowError } from '@/lib/flowValidation';
+import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
 import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
 import { formatTimeAgo } from '@/utils/time';
 

@@ -10,6 +10,7 @@ Each entry is a dict with:
 """
 
 from huf.ai.tools import telegram_admin_spec, telegram_tool_spec
+from huf.ai.tools.integration.registry_entries import with_service as _with_service
 
 # Array parameters whose elements are objects (the doctype row has no item-type field, so the schema
 # builders look the fieldname up here instead of declaring every array as an array of strings).
@@ -2211,23 +2212,6 @@ TELEGRAM_ADMIN_TOOLS = [
 		"parameters": telegram_admin_spec.registry_parameters(_p),
 	},
 ]
-
-def _with_service(tools: list[dict], service: str) -> list[dict]:
-	"""Stamp the owning Integration Service key onto each tool definition.
-
-	Tools are already grouped one list per service in this file, so the
-	association is declared once here instead of repeated on every entry. The
-	key must match an `Integration Service` docname, because that link is what
-	lets the UI tell a user which account a tool needs before they attach it.
-	An entry that already names a service keeps its own value.
-
-	`service` is catalog metadata only (UI hint, `integration_utils` lookups): it
-	does NOT gate which agents can use the tool. App Provided rows are fully
-	owned by the migrate sync (`sync_discovered_tools`), which upserts every
-	field. Per-conversation gating (e.g. `telegram_admin` only inside a Telegram
-	gateway chat with admin-enabled groups) is enforced by the tool handler.
-	"""
-	return [{**tool, "service": tool.get("service") or service} for tool in tools]
 
 
 DOCUMENT_ARTIFACT_TOOLS = [

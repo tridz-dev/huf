@@ -7,8 +7,8 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
 import { formatTimeAgo } from '@/utils/time';
-import { flowRunStatusLabel } from '@/lib/flowRunFormat';
-import { runTimesSentence } from '@/lib/flowTimeZone';
+import { flowRunStatusLabel } from '@/lib/flow-run/flowRunFormat';
+import { runTimesSentence } from '@/lib/flow-run/flowTimeZone';
 
 interface FlowRunHistoryProps {
     flowId: string;
@@ -81,7 +81,7 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
                     <SheetDescription>
                         Recent runs of this flow, newest first. Select one to see what each step did.
                     </SheetDescription>
-                    <p className="text-micro text-muted-foreground" data-testid="flow-run-history-timezone">{runTimesSentence(siteZone)}</p>
+                    <p className="text-meta text-muted-foreground" data-testid="flow-run-history-timezone">{runTimesSentence(siteZone)}</p>
                 </SheetHeader>
 
                 <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-5" data-testid="flow-run-history-body">

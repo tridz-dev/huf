@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Combobox, type ComboboxOption } from '../ui/combobox';
 import { Label } from '../ui/label';
 import { listSlackChannels } from '@/services/integrationApi';
-import { useIntegrationStatus } from '@/lib/flowIntegrations';
+import { useIntegrationStatus } from '@/lib/flow/flowIntegrations';
 
 /**
  * "Pick a channel" list for a Slack step, shown only when Slack is connected. Channels are read (never posted to)

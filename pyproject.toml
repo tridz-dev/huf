@@ -123,3 +123,8 @@ typing-modules = ["frappe.types.DF"]
 quote-style = "double"
 indent-style = "tab"
 docstring-code-format = true
+
+[tool.pytest.ini_options]
+# Bench-less pytest: stub `frappe` only when it is not importable (see scripts/pytest_frappe_stub.py).
+pythonpath = ["."]
+addopts = "-p scripts.pytest_frappe_stub"

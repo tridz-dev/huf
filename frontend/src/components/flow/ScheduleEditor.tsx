@@ -10,10 +10,10 @@ import {
   pickerToCron,
   type ScheduleKind,
   type SchedulePicker,
-} from '@/lib/flowSchedule';
+} from '@/lib/flow-graph/flowSchedule';
 import { useSiteTimezone } from '@/lib/serverTime';
-import { scheduleZoneSentence } from '@/lib/flowTimeZone';
-import { SCHEDULE_EXAMPLES } from '@/lib/flowHelp';
+import { scheduleZoneSentence } from '@/lib/flow-run/flowTimeZone';
+import { SCHEDULE_EXAMPLES } from '@/lib/flow/flowHelp';
 import { Code, Examples, FieldHint } from './FieldHint';
 
 const KINDS: Array<{ id: ScheduleKind; label: string }> = [
@@ -202,7 +202,7 @@ export function ScheduleEditor({ cron, onChange, disabled, error }: Props) {
         {scheduleZoneSentence(siteZone)}
       </p>
       {problem ? (
-        <p role="alert" className="text-micro text-destructive" data-testid="flow-error-trigger.schedule-cron">
+        <p role="alert" className="text-meta text-destructive" data-testid="flow-error-trigger.schedule-cron">
           {problem}
         </p>
       ) : null}
