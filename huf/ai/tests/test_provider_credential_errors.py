@@ -125,9 +125,15 @@ class TestSlackAndGoogleErrors(IntegrationTestCase):
 		self.assertEqual(out["error"], "Slack is not connected: add the bot token in Integrations.")
 
 	def _slack(self, body):
+		# A channel written as an ID passes through untouched. Anything else is looked up by name with a
+		# GET to conversations.list, so a short fake like "C1" would reach the real Slack: the GET is
+		# patched to fail loudly so these tests can never touch the network.
+		def no_network(*args, **kwargs):
+			raise AssertionError("test reached the network: " + str(args[:1]))
+
 		with patch("huf.ai.tools.slack.get_credential", return_value="xoxb-fake"), patch("huf.ai.tools.slack.update_last_error"), \
-			patch("httpx.post", return_value=_resp(200, body)):
-			return json.loads(slack.handle_send_message(channel="C1", text="hi"))["error"]
+			patch("httpx.get", side_effect=no_network), patch("httpx.post", return_value=_resp(200, body)):
+			return json.loads(slack.handle_send_message(channel="C01234567", text="hi"))["error"]
 
 	def test_slack_revoked(self):
 		self.assertEqual(self._slack({"ok": False, "error": "token_revoked"}),

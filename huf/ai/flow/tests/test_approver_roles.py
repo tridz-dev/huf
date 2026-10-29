@@ -1,12 +1,12 @@
 """get_approver_roles: automatic and desk-only roles are never offered."""
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from huf.ai.flow.api import get_approver_roles
 
 
-class TestApproverRoles(FrappeTestCase):
+class TestApproverRoles(IntegrationTestCase):
 	def test_filters_and_ordering(self):
 		roles = get_approver_roles()
 		names = [r["name"] for r in roles]

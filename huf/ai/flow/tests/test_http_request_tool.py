@@ -7,6 +7,7 @@ Runs without a bench (scripts/pytest_frappe_stub.py stubs frappe). The network l
 import importlib
 import json
 import sys
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -66,7 +67,8 @@ def env(monkeypatch):
 	monkeypatch.setattr(hh.socket, "getaddrinfo", fake_getaddrinfo)
 	monkeypatch.setattr(hh, "_send", fake_send)
 	monkeypatch.setattr(hh.frappe, "get_doc", lambda *a, **k: tool_doc)
-	monkeypatch.setattr(hh.frappe.session, "user", "Administrator", raising=False)
+	# Replace the whole session object (a real frappe without a site has no bound session to patch).
+	monkeypatch.setattr(hh.frappe, "session", SimpleNamespace(user="Administrator"), raising=False)
 	monkeypatch.setattr(hh, "has_capability", lambda user, cap: True)
 	return type("Env", (), {"calls": calls, "responses": responses, "dns": dns, "sent_to": sent_to})
 
