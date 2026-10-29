@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import {
   Check, X, ThumbsUp, ThumbsDown, Car, DollarSign, Calendar, User, Users,
   Settings, Bot, Workflow, Database, BookOpen, Cpu, Plus, Send, Sparkles,
-  Home, LayoutDashboard, MessageSquare, CircleHelp,
+  Home, LayoutDashboard, MessageSquare, CircleHelp, AlertTriangle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { stashSecret } from '@/services/secretsApi';
 
 export interface AskUserOption {
   id?: string;
@@ -16,13 +17,23 @@ export interface AskUserOption {
   description?: string;
 }
 
+export interface AskUserSecretField {
+  id: string;
+  label: string;
+  secret?: boolean;
+}
+
 export interface AskUserPayload {
   question: string;
-  kind: 'yes_no' | 'single_choice' | 'multi_choice' | 'input' | 'textarea';
+  kind: 'yes_no' | 'single_choice' | 'multi_choice' | 'input' | 'textarea' | 'secret';
   options?: AskUserOption[];
   allow_free_text?: boolean;
   suggested_answers?: string[];
   note?: string;
+  /** kind 'secret' only: masked inputs. Values never enter the chat. */
+  fields?: AskUserSecretField[];
+  /** kind 'secret' only: why the secret is needed. */
+  purpose?: string;
 }
 
 // Curated allowlist from the ask-user contract — unknown names fall back to CircleHelp
@@ -70,12 +81,47 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
   const [selected, setSelected] = useState<string[]>([]);
   const [text, setText] = useState('');
   const [showFreeText, setShowFreeText] = useState(false);
+  const [secretValues, setSecretValues] = useState<Record<string, string>>({});
+  const [secretBusy, setSecretBusy] = useState(false);
+  const [secretError, setSecretError] = useState<string | null>(null);
+  const secretInFlight = useRef(false);
+  const baseId = useId();
 
   const submit = (answer: string) => {
     const trimmed = answer.trim();
     if (!trimmed || answered) return;
     setAnswered(trimmed);
     onSubmit(trimmed);
+  };
+
+  const secretFields = payload.fields ?? [];
+  const secretReady =
+    secretFields.length > 0 && secretFields.every(f => (secretValues[f.id] ?? '').length > 0);
+
+  /**
+   * Stash the secret values server-side and send only the reference to chat.
+   * Values are cleared whatever the outcome; on failure nothing is sent.
+   */
+  const submitSecret = async () => {
+    if (!secretReady || secretInFlight.current || answered !== null) return;
+    secretInFlight.current = true;
+    setSecretBusy(true);
+    setSecretError(null);
+    const values = Object.fromEntries(secretFields.map(f => [f.id, secretValues[f.id] ?? '']));
+    let outcome;
+    try {
+      outcome = await stashSecret(values, payload.purpose ?? payload.question);
+    } catch {
+      outcome = { ok: false as const, message: 'The credentials could not be stored. Try again.' };
+    }
+    setSecretValues({});
+    secretInFlight.current = false;
+    setSecretBusy(false);
+    if (!outcome.ok) {
+      setSecretError(outcome.message);
+      return;
+    }
+    submit(`[secret provided: credentials_ref=${outcome.credentials_ref}, fields=${secretFields.map(f => f.id).join(',')}]`);
   };
 
   const toggleOption = (label: string) => {
@@ -172,6 +218,54 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
                 )}
               </div>
             </>
+          )}
+
+          {payload.kind === 'secret' && (
+            <form
+              autoComplete="off"
+              className="space-y-2"
+              onSubmit={e => {
+                e.preventDefault();
+                void submitSecret();
+              }}
+            >
+              {payload.purpose && payload.purpose !== payload.question && (
+                <p className="text-xs text-steel-soft">{payload.purpose}</p>
+              )}
+              {secretFields.map(field => {
+                const inputId = `${baseId}-${field.id}`;
+                return (
+                  <div key={field.id} className="grid gap-1">
+                    <label htmlFor={inputId} className="text-xs text-steel">{field.label}</label>
+                    <Input
+                      id={inputId}
+                      name={field.id}
+                      type="password"
+                      autoComplete="off"
+                      value={secretValues[field.id] ?? ''}
+                      onChange={e => {
+                        const next = e.target.value;
+                        setSecretValues(prev => ({ ...prev, [field.id]: next }));
+                      }}
+                      className="bg-paper text-xs"
+                    />
+                  </div>
+                );
+              })}
+              {secretError && (
+                <p role="alert" className="flex items-center gap-1 text-xs text-destructive">
+                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>{secretError}</span>
+                </p>
+              )}
+              <Button
+                type="submit"
+                disabled={!secretReady || secretBusy}
+                className="h-auto rounded-sm bg-signal px-3 py-1.5 text-xs font-normal text-white hover:bg-signal-ink disabled:bg-paper-deep disabled:text-steel-soft disabled:opacity-100"
+              >
+                Submit
+              </Button>
+            </form>
           )}
 
           {(isText || (isChoice && payload.allow_free_text && showFreeText)) && (
