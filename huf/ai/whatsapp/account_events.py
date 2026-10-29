@@ -206,14 +206,29 @@ def _meta_ts(value: Any) -> int | None:
 	return ts if ts > 0 else None
 
 
-def _insert_consent(gateway: str, sender: str, category: str, value: str, detail: str = "", timestamp: Any = None) -> bool:
-	"""Insert one consent row; False when Meta's (gateway, sender, category, value, timestamp) was already stored."""
+def _insert_consent(
+	gateway: str,
+	sender: str,
+	category: str,
+	value: str,
+	detail: str = "",
+	timestamp: Any = None,
+	source: str = "user_preferences",
+	attested_by: str | None = None,
+	attestation_note: str | None = None,
+) -> bool:
+	"""Insert one consent row; False when Meta's (gateway, sender, category, value, timestamp) was already stored.
+
+	``source`` says where the opt-in came from (``Gateway Consent.source``). ``attested_by``/``attestation_note``
+	are set for import and API captures only.
+	"""
 	meta_ts = _meta_ts(timestamp)
 	if meta_ts is not None and frappe.db.exists(
 		"Gateway Consent",
 		{"gateway": gateway, "sender_id": sender, "category": category, "value": value, "meta_timestamp": meta_ts},
 	):
 		return False
+	now = frappe.utils.now_datetime()
 	frappe.get_doc(
 		{
 			"doctype": "Gateway Consent",
@@ -221,8 +236,12 @@ def _insert_consent(gateway: str, sender: str, category: str, value: str, detail
 			"sender_id": sender,
 			"category": category,
 			"value": value,
+			"source": source,
 			"detail": (detail or "")[:500],
-			"changed_at": frappe.utils.now_datetime(),
+			"attested_by": attested_by,
+			"attestation_note": (attestation_note or "").strip()[:500] or None,
+			"captured_at": now,
+			"changed_at": now,
 			# Meta's event time (UTC epoch) orders rows; a missing one falls back to receipt time as a UTC epoch
 			# (now_datetime() is naive site-tz, so its .timestamp() would be skewed by the site offset)
 			"meta_timestamp": meta_ts or int(time.time()),
@@ -274,3 +293,16 @@ def is_marketing_allowed(gateway: str, sender: Any) -> bool:
 	if not key:
 		return True
 	return _latest_consent(gateway, key, MARKETING) != "stop"
+
+
+def record_inbound_opt_in(gateway: str, sender: Any) -> bool:
+	"""Record the inbound opt-in: the contact sent START after a STOP (the existing opt-in keyword).
+
+	Provenance only: a Meta marketing ``stop`` is never overridden by a keyword, so nothing is written when the
+	latest marketing preference is ``stop``. Returns True when a row was added. The caller decides when START
+	counts (today: only from a sender in the opted-out state).
+	"""
+	key = _norm_sender(sender)
+	if not gateway or not key or _latest_consent(gateway, key, MARKETING) == "stop":
+		return False
+	return _insert_consent(gateway, key, MARKETING, "resume", "inbound START keyword", source="inbound")
