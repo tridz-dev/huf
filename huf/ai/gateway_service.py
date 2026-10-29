@@ -246,8 +246,8 @@ def _track_conversation_inbound(gateway_doc, event, context) -> None:
 def _track_conversation_outbound(event) -> None:
     """Stamp last_outbound_at on the event's Channel Conversation. Never raises."""
     try:
-        name = event.get("channel_conversation")
-        if name:
+        name = getattr(event, "channel_conversation", None)
+        if name and isinstance(name, str):
             from huf.ai.channels import conversation as conv
 
             conv.touch_outbound(name)
@@ -2683,7 +2683,7 @@ def _process_gateway_event(event_name: str) -> dict:
 
     from huf.ai.channels import run_as as _run_as
 
-    _audit_conversation = event.get("channel_conversation")
+    _audit_conversation = getattr(event, "channel_conversation", None)
     _audit_token = _run_as.set_current_conversation(
         _audit_conversation if isinstance(_audit_conversation, str) else None
     )
