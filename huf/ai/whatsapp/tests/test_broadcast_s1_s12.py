@@ -440,7 +440,7 @@ class TestBroadcastS1S12(S12Case):
 		for r in self.rows(b):
 			counts[r["status"]] += 1
 		self.assertEqual(counts, {"read": 2, "delivered": 1})
-		self.assertEqual((int(self.val(b, "read_count") or 0), int(self.val(b, "delivered_count") or 0)), (2, 1))
+		self.assertEqual((int(self.val(b, "read") or 0), int(self.val(b, "delivered") or 0), int(self.val(b, "sent") or 0)), (2, 1, 0))
 		# allow-list guard (site config wa_outbound_allowlist): a recipient outside it is never posted
 		b2 = self.ready(2, base=20)
 		calls = len(self.graph.calls)
@@ -484,9 +484,8 @@ class TestBroadcastS1S12(S12Case):
 			out = bapi.add_broadcast_recipients(broadcast=b, recipients=json.dumps([num(3)]))
 		self.assertEqual(out.get("error"), "not_draft", out)
 		self.api(bapi.pause_broadcast, broadcast=b)
-		with as_user(WRITER), meta():
-			out = bapi.start_broadcast(broadcast=b, confirm_count=2)
-		self.assertFalse(out.get("success"), "start on a Paused broadcast must be refused (use resume)")
+		with as_user(WRITER), self.assertRaises(frappe.ValidationError):  # "can only be started from Draft"
+			bapi.start_broadcast(broadcast=b, confirm_count=2)
 		# marketing: a US +1 number is skipped
 		mb = self.mk(STATE["mkt"])
 		self.add(mb, ["15551230001", num(5)])
@@ -695,7 +694,7 @@ class TestBroadcastS1S12(S12Case):
 			else:
 				self.assertEqual((outcome, row["status"]), ("failed", "failed"))
 		for got, want in zip(delays, (2, 4, 8, 16), strict=True):
-			self.assertAlmostEqual(got, want, delta=1.5)
+			self.assertTrue(want * 0.8 - 1.5 <= got <= want * 1.2 + 0.5, f"delay {got:.2f}s, expected about {want}s (+/-20% jitter)")
 		self.assertEqual(self.graph.recipients.count(num(0)), 5)
 		self.assertEqual(bsend.send_one(retry), "lost_claim")
 		self.assertEqual(bsend.send_one(limited), "skipped")
