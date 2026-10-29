@@ -55,6 +55,14 @@ def _default_company() -> str | None:
 	)
 
 
+def _selling_price_list(customer: str) -> str | None:
+	return (
+		frappe.db.get_value("Customer", customer, "default_price_list")
+		or frappe.db.get_single_value("Selling Settings", "selling_price_list")
+		or frappe.db.get_value("Price List", {"selling": 1, "enabled": 1}, "name")
+	)
+
+
 def create_order(items=None, delivery_date: str | None = None) -> dict:
 	"""Create a DRAFT Sales Order for the conversation's customer. Never submitted."""
 	if not erpnext_installed():
@@ -90,6 +98,7 @@ def create_order(items=None, delivery_date: str | None = None) -> dict:
 		{
 			"doctype": "Sales Order",
 			"company": company,
+			"selling_price_list": _selling_price_list(customer),
 			"customer": customer,
 			"transaction_date": frappe.utils.nowdate(),
 			"delivery_date": delivery_date or frappe.utils.add_days(frappe.utils.nowdate(), 7),

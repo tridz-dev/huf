@@ -43,6 +43,7 @@ class TestErpLogic(IntegrationTestCase):
 			patch.object(frappe.db, "exists", return_value=True),
 			patch.object(frappe.db, "get_value", return_value=10),
 			patch(f"{ERP}._default_company", return_value="Co"),
+			patch(f"{ERP}._selling_price_list", return_value="Standard Selling"),
 			patch("frappe.utils.nowdate", return_value="2026-01-01"),
 			patch("frappe.utils.add_days", return_value="2026-01-08"),
 			patch.object(frappe, "get_doc", return_value=doc) as gd,
