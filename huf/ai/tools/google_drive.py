@@ -2,7 +2,7 @@ import json
 import frappe
 logger = frappe.logger("huf")
 from huf.ai.tools.credentials import get_credential, update_last_error
-from huf.ai.tools.provider_errors import ProviderCredentialError, check_google_response, mint_google_access_token, not_connected_message
+from huf.ai.tools.integration.provider_errors import ProviderCredentialError, check_google_response, mint_google_access_token, not_connected_message
 import requests
 
 BASE = "https://www.googleapis.com/drive/v3"

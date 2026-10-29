@@ -8,7 +8,7 @@ from frappe.tests import IntegrationTestCase
 
 from huf.ai.tools import gmail, google_drive, google_sheets, slack
 from huf.ai.tools.connection_test import test_connection
-from huf.ai.tools.provider_errors import invalid_recipients, normalize_recipients
+from huf.ai.tools.integration.provider_errors import invalid_recipients, normalize_recipients
 
 
 def _resp(status: int, body: dict | None = None):

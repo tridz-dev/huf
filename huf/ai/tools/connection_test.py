@@ -14,7 +14,7 @@ import frappe
 import httpx
 from frappe import _
 
-from huf.ai.tools.provider_errors import (
+from huf.ai.tools.integration.provider_errors import (
 	ProviderCredentialError,
 	check_google_response,
 	mint_google_access_token,
