@@ -47,6 +47,7 @@ def _fx_heavy(self):
 		"frappe.model.document": document,
 		"frappe.rate_limiter": _mod("frappe.rate_limiter", rate_limit=lambda **k: (lambda f: f)),
 		"huf.ai.gateway_adapters": pkg,
+		"huf.ai.gateway_adapters.provider_hooks": _mod("h", get=lambda *a, **k: None),
 		"huf.ai.gateway_adapters.provider_ids": _mod("p", provider_to_service_id=lambda x: x),
 		"huf.ai.gateway_adapters.registered": _mod("r", get_adapter_class=lambda *a, **k: None),
 		"huf.ai.gateway_adapters.types": _mod("t", GatewayReply=object),

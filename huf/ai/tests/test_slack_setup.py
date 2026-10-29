@@ -191,7 +191,7 @@ def _post(monkeypatch, payload, signature_error=None):
 	monkeypatch.setattr(frappe, "request", req, raising=False)
 	monkeypatch.setattr(events, "_verify_slack_signature", lambda *a, **k: signature_error)
 	monkeypatch.setattr(frappe.local, "response", SimpleNamespace(), raising=False)
-	return events.handle_slack_event()
+	return getattr(events.handle_slack_event, "__wrapped__", events.handle_slack_event)()
 
 
 class TestModule(SupportCase):

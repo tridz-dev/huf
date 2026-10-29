@@ -1,5 +1,6 @@
 """Tests for Slack identity mapping (huf.ai.gateways.slack.identity) and its doctype JSON."""
 
+import datetime as _dt
 import json
 import unittest
 import pathlib
@@ -68,6 +69,7 @@ def _fx_env(self):
 	monkeypatch.setattr(frappe, "throw", _throw, raising=False)
 	monkeypatch.setattr(frappe, "local", SimpleNamespace(conf={"encryption_key": "secret-key"}), raising=False)
 	monkeypatch.setattr(frappe, "session", SimpleNamespace(user="alice@x.com"), raising=False)
+	monkeypatch.setattr("frappe.utils.now_datetime", _dt.datetime.now)
 	monkeypatch.setattr(frappe, "generate_hash", lambda length=10: f"nonce{next(counter)}", raising=False)
 	monkeypatch.setattr(frappe, "get_roles", lambda: ["System Manager"], raising=False)
 	monkeypatch.setattr(frappe.utils, "get_url", lambda: "https://huf.test", raising=False)

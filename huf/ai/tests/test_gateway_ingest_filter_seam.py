@@ -7,6 +7,7 @@ Only persistence edges are faked.
 
 from __future__ import annotations
 
+import datetime as _dt
 import importlib
 import os
 import sys
@@ -97,6 +98,7 @@ class TestIngestFilterSeam(SupportCase):
 			patch.object(frappe.db, "get_value", side_effect=get_value),
 			patch.object(frappe, "get_doc", side_effect=get_doc),
 			patch.object(frappe, "enqueue"),
+			patch.object(gs, "now_datetime", side_effect=_dt.datetime.now),
 			patch.object(gs, "_admission", side_effect=admission),
 			patch.object(gs, "resolve_gateway_route", side_effect=route),
 			patch.object(hooks, "register_all"),

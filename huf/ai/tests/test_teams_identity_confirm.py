@@ -23,6 +23,10 @@ _stub_env.install()
 
 from huf.ai.tests.unit_support import SupportCase  # noqa: E402
 
+import pathlib as _pl  # noqa: E402
+
+_REPO = _pl.Path(__file__).resolve().parents[3]
+
 from huf.ai.gateways import hooks  # noqa: E402
 from huf.ai.gateways.teams.messaging import cards  # noqa: E402
 
@@ -292,7 +296,7 @@ class TestModule(SupportCase):
 	def test_handler_registered_explicitly_and_only_for_idlink(self):
 		w = self.use(_fx_w)
 		assert w.ta._KIND_HANDLERS.get("idlink") is w.tic.handle_click
-		src = Path("huf/ai/gateways/teams/identity_confirm.py").read_text()
+		src = (_REPO / "huf/ai/gateways/teams/identity_confirm.py").read_text()
 		tree = ast.parse(src)
 		calls = [n for n in tree.body if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)]
 		assert any(getattr(c.value.func, "id", "") == "register" for c in calls)  # register() at import
