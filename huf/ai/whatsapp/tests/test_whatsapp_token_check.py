@@ -193,3 +193,87 @@ class TestTokenCheckBridge(_Scenarios, _TokenCheckBase):
 		r = self._check()
 		self.assertEqual(r["source"], "debug_token")
 		self.assertTrue(r["valid"])
+
+
+class _Resp:
+	def __init__(self, status, body):
+		self.status_code = status
+		self._body = body
+
+	def json(self):
+		return self._body
+
+
+class TestTokenCheckAppSecretMapping(unittest.TestCase):
+	"""Error-code mapping when the saved App Secret does not match the token's app (Graph code 100)."""
+
+	BASE = "https://graph.example.test/v25.0"
+	APPSECRET_ERR = {
+		"error": {
+			"message": "Invalid appsecret_proof provided in the API argument",
+			"type": "GraphMethodException",
+			"code": 100,
+		}
+	}
+
+	def _run(self, body, status=400):
+		from huf.ai.whatsapp import token_check as tc
+
+		def http_get(url, params=None, headers=None):
+			return _Resp(status, body)
+
+		return tc.run_check(
+			{"token": "EAAFAKE", "app_secret": "wrong-secret", "app_id": "123", "phone_id": "555", "waba_id": "", "base": self.BASE},
+			http_get,
+		)
+
+	def test_code_100_appsecret_proof_maps_to_app_secret_message(self):
+		from huf.ai.whatsapp import token_check as tc
+
+		r = self._run(self.APPSECRET_ERR)
+		self.assertIs(r["valid"], False)
+		self.assertEqual(r["error_code"], 100)
+		self.assertEqual(r["message"], tc.MSG_APP_SECRET)
+		self.assertEqual(
+			tc.MSG_APP_SECRET,
+			"The app secret doesn't match this token's app. Check the App Secret in Meta app settings (Settings > Basic).",
+		)
+		self.assertNotIn("expired", r["message"])
+
+	def test_nested_debug_error_appsecret_proof_maps_to_app_secret_message(self):
+		from huf.ai.whatsapp import token_check as tc
+
+		r = self._run({"data": {"is_valid": False, "error": self.APPSECRET_ERR["error"]}}, status=200)
+		self.assertIs(r["valid"], False)
+		self.assertEqual(r["message"], tc.MSG_APP_SECRET)
+
+	def test_other_code_100_keeps_permission_message(self):
+		from huf.ai.whatsapp import token_check as tc
+
+		r = self._run({"error": {"message": "Unsupported get request", "code": 100}})
+		self.assertEqual(r["message"], tc.MSG_PERMISSION)
+
+	def test_code_190_keeps_expired_message(self):
+		from huf.ai.whatsapp import token_check as tc
+
+		r = self._run({"error": {"message": "Session has expired", "code": 190}})
+		self.assertEqual(r["message"], tc.MSG_EXPIRED)
+
+	def test_verify_with_meta_surfaces_app_secret_message(self):
+		import frappe
+		from huf.ai.whatsapp import credential_sync as cs
+		from huf.ai.whatsapp import token_check as tc
+
+		creds = {
+			"access_token": "EAAFAKE",
+			"app_secret": "wrong-secret",
+			"app_id": "123",
+			"phone_number_id": "555",
+			"business_account_id": "",
+			"graph_api_url": "https://graph.example.test",
+			"graph_api_version": "v25.0",
+		}
+		with self.assertRaises(frappe.ValidationError) as ctx:
+			cs.verify_with_meta(creds, lambda url, params=None, headers=None: _Resp(400, self.APPSECRET_ERR))
+		self.assertIn(tc.MSG_APP_SECRET, str(ctx.exception))
+		self.assertNotIn("expired or was revoked", str(ctx.exception))
