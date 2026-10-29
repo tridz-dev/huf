@@ -23,6 +23,7 @@ import { FlowSettingsModal } from './modals/FlowSettingsModal';
 import { BLOCKED_TOAST_ID, humanizeFlowError, summarizeIssues, validateFlow } from '@/lib/flowValidation';
 import { reportFlowRun } from '@/lib/flowRunToast';
 import { RunFlowDialog } from './flow/RunFlowDialog';
+import { FlowHelpPopover } from './flow/FlowHelpPopover';
 import { DisabledReason } from './flow/DisabledReason';
 import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import { publishBlockedReason } from '@/lib/flowPublishGuard';
@@ -202,7 +203,7 @@ export function FlowsHeaderActions() {
     setIsPublishing(true);
     try {
       await setFlowPublished(activeFlow.id, true);
-      toast.success('Flow published');
+      toast.success('Flow published', { description: 'Its trigger is on now: the webhook accepts calls, and schedule or record triggers start runs. Unpublish to turn it off.' });
       // Non-blocking: publishing works, but these steps will fail until their integration is connected.
       const missing = unconnectedSteps(activeFlow.nodes, await getFlowIntegrationStatus());
       if (missing.length > 0) {
@@ -264,6 +265,8 @@ export function FlowsHeaderActions() {
         </div>
       )}
 
+      <FlowHelpPopover />
+
       {/* Save Draft Button */}
       <Button
         variant="outline"
@@ -271,7 +274,7 @@ export function FlowsHeaderActions() {
         className="gap-2"
         data-testid="flow-save"
         aria-label="Save"
-        title="Save"
+        title="Save your changes (Ctrl/Cmd+S)"
         onClick={handleSaveDraft}
         disabled={!activeFlow || saveState === 'saving' || !hasUnsavedChanges}
       >
@@ -286,7 +289,7 @@ export function FlowsHeaderActions() {
         className="gap-2"
         data-testid="flow-runs"
         aria-label="Runs"
-        title="Runs"
+        title="Runs: see every run of this flow and what each step did"
         onClick={() => setShowHistory(true)}
         disabled={!activeFlow}
       >
@@ -301,7 +304,7 @@ export function FlowsHeaderActions() {
         className="gap-2"
         data-testid="flow-settings"
         aria-label="Settings"
-        title="Settings"
+        title="Settings: name, description and category"
         onClick={() => setShowSettings(true)}
         disabled={!activeFlow}
       >
@@ -317,7 +320,7 @@ export function FlowsHeaderActions() {
           className="gap-2"
           data-testid="flow-run"
           aria-label="Run"
-          title="Run"
+          title="Run now: starts the flow once with the input you choose"
           onClick={handleRun}
           disabled={!activeFlow || !canManage}
         >
@@ -343,6 +346,7 @@ export function FlowsHeaderActions() {
             size="sm"
             className="gap-2"
             data-testid="flow-unpublish"
+            title="Unpublish: turn the triggers off. The flow becomes a draft again"
             onClick={() => setShowUnpublish(true)}
             disabled={!activeFlow || isUnpublishing || !canManage}
           >
@@ -355,6 +359,7 @@ export function FlowsHeaderActions() {
             size="sm"
             className="gap-2"
             data-testid="flow-publish"
+            title="Publish: turn the trigger on so the flow starts by itself (webhook calls, schedule or record changes)"
             onClick={handlePublish}
             disabled={!activeFlow || isPublishing || !canManage || !!publishBlocked}
           >

@@ -20,6 +20,7 @@ import {
 } from './ui/alert-dialog';
 import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
 import { calculateDuration, formatTimeAgo } from '@/utils/time';
+import { runTimesSentence } from '@/lib/flowTimeZone';
 import { humanizeFlowError } from '@/lib/flowValidation';
 import { describeDecision, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from '@/lib/flowRunFormat';
 import { deskDocUrl, summarizeDocPayload } from '@/lib/flowRunDoc';
@@ -66,7 +67,7 @@ function TimeValue({ value }: { value: string | null | undefined }) {
 }
 
 export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
-    useSiteTimezone();
+    const siteZone = useSiteTimezone();
     const [confirmFail, setConfirmFail] = useState(false);
     const [run, setRun] = useState<FlowRunDetail | null>(null);
     const [loading, setLoading] = useState(false);
@@ -177,8 +178,8 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
 
     return (
         <Sheet open={!!runId} onOpenChange={(open) => !open && onClose()}>
-            <SheetContent className="w-[500px] sm:w-[700px] sm:max-w-[90vw] overflow-y-auto" data-testid="flow-run-details">
-                <SheetHeader className="mb-6">
+            <SheetContent className="flex w-[500px] flex-col gap-0 overflow-hidden p-0 sm:w-[700px] sm:max-w-[90vw]" data-testid="flow-run-details">
+                <SheetHeader className="shrink-0 border-b border-border bg-background px-6 pb-4 pt-6 pr-12" data-testid="flow-run-details-header">
                     <SheetTitle className="flex items-center gap-2">
                         <Box className="w-5 h-5 text-muted-foreground" />
                         Run details
@@ -188,6 +189,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                     </SheetDescription>
                 </SheetHeader>
 
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5" data-testid="flow-run-details-body">
                 {loading ? (
                     <div className="flex justify-center p-12">
                         <Loader2 className="animate-spin w-8 h-8 text-muted-foreground" />
@@ -210,11 +212,11 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                 </Badge>
                             </div>
                             <div className="flex-1">
-                                <div className="text-xs text-muted-foreground mb-1">Current/Last Node</div>
+                                <div className="text-xs text-muted-foreground mb-1">Last step</div>
                                 <div className="font-medium text-sm" data-testid="flow-run-current-node">{labelOf(run.current_node_id)}</div>
                             </div>
                             <div className="flex-1">
-                                <div className="text-xs text-muted-foreground mb-1">Hops</div>
+                                <div className="text-xs text-muted-foreground mb-1" title="How many steps the run has gone through">Steps run</div>
                                 <div className="font-medium text-sm">{run.hop_count}</div>
                             </div>
                         </div>
@@ -243,6 +245,8 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                 </div>
                             )}
                         </div>
+
+                        <p className="-mt-3 text-[11px] text-muted-foreground" data-testid="flow-run-timezone-note">{runTimesSentence(siteZone)}</p>
 
                         {run.stale && (
                             <div className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-tint/50 p-4" data-testid="flow-run-stale">
@@ -487,6 +491,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                         )}
                     </div>
                 )}
+                </div>
             </SheetContent>
             <AlertDialog open={confirmFail} onOpenChange={setConfirmFail}>
                 <AlertDialogContent>

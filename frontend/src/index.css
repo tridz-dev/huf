@@ -593,3 +593,16 @@
   background: var(--paper-deep);
   border-color: var(--line-dark);
 }
+
+/* A side sheet (run details, run history) is open on the right: keep toasts to the left of it so they never
+   cover its corner. The sheet is at most 700px / 90vw wide. */
+body:has([role="dialog"][data-state="open"].inset-y-0.right-0) [data-sonner-toaster][data-x-position="right"] {
+  right: auto !important;
+  left: 16px !important;
+  --width: min(356px, calc(100vw - 740px));
+}
+@media (max-width: 1100px) {
+  body:has([role="dialog"][data-state="open"].inset-y-0.right-0) [data-sonner-toaster][data-x-position="right"] {
+    --width: 300px;
+  }
+}
