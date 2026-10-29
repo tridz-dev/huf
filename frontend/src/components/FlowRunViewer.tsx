@@ -247,7 +247,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                             )}
                         </div>
 
-                        <p className="-mt-3 text-[11px] text-muted-foreground" data-testid="flow-run-timezone-note">{runTimesSentence(siteZone)}</p>
+                        <p className="-mt-3 text-meta text-muted-foreground" data-testid="flow-run-timezone-note">{runTimesSentence(siteZone)}</p>
 
                         {run.stale && (
                             <div className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-tint/50 p-4" data-testid="flow-run-stale">

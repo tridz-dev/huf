@@ -156,7 +156,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
               onChange={(e) => setName(e.target.value)}
               placeholder="For example: New order alert"
             />
-            <p className="text-[11px] text-muted-foreground" data-testid="flow-settings-name-hint">Pick a name that says what the flow does. It is required.</p>
+            <p className="text-meta text-muted-foreground" data-testid="flow-settings-name-hint">Pick a name that says what the flow does. It is required.</p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="description">Description (optional)</Label>
@@ -168,7 +168,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="For example: Sends a Slack message when a large order comes in."
             />
-            <p className="text-[11px] text-muted-foreground" data-testid="flow-settings-description-hint">Shown on the flow's card. Helpful for teammates who did not build it.</p>
+            <p className="text-meta text-muted-foreground" data-testid="flow-settings-description-hint">Shown on the flow's card. Helpful for teammates who did not build it.</p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="category">Category</Label>
@@ -188,7 +188,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
                 )}
               </SelectContent>
             </Select>
-            <p className="text-[11px] text-muted-foreground" data-testid="flow-settings-category-hint">Groups flows in the list so you can filter by it.</p>
+            <p className="text-meta text-muted-foreground" data-testid="flow-settings-category-hint">Groups flows in the list so you can filter by it.</p>
           </div>
           <div className="flex flex-row items-start gap-2">
             <Checkbox

@@ -31,7 +31,7 @@ import { Button } from '../ui/button';
 import { DeleteStepDialog } from '../flow/DeleteStepDialog';
 import { useFlowContext } from '../../contexts/FlowContext';
 import { Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
-import { NODE_CARD_BASE, NODE_HANDLE, NODE_ICON_WELL, getExecutionStatusClasses } from './nodeStyles';
+import { NODE_CARD_BASE, NODE_HANDLE, NODE_ICON_WELL, getExecutionStatusClasses, handleSpread } from './nodeStyles';
 import { cn } from '@/lib/utils';
 import { actionHasConfiguredContent } from '../../lib/flow/flowNodeConfigured';
 import { branchHandlesFor, ROUTER_HANDLE } from '../../lib/flow/flowBranches';
@@ -162,14 +162,14 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
             id={h.handleId}
             type="source"
             position={Position.Bottom}
-            style={{ left: `${((i + 1) / (handles.length + 1)) * 100}%` }}
+            style={handleSpread(i, handles.length)}
             className={NODE_HANDLE}
             data-testid={`flow-handle-${id}-${h.route}`}
           >
             {/* Sit beside the dot, not under it, so the edge leaving the dot never runs through the text. */}
             <span
               className={cn(
-                'pointer-events-none absolute top-2 whitespace-nowrap text-[10px] text-muted-foreground',
+                'pointer-events-none absolute top-2 whitespace-nowrap text-eyebrow tracking-normal text-muted-foreground',
                 i === 0 ? 'right-3' : i === handles.length - 1 ? 'left-3' : '-translate-x-1/2'
               )}
             >

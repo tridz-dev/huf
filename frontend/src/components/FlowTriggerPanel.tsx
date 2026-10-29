@@ -102,7 +102,7 @@ export function FlowTriggerPanel({ kind, docTypes, loadingDocTypes, value, onCha
             />
             <FieldHint testId="flow-hint-doc-event-doctype">The kind of record to watch, such as ToDo or Customer.</FieldHint>
             {errors.doctype ? (
-              <p role="alert" className="mt-1 text-[11px] text-destructive" data-testid="flow-error-trigger.doc-event-doctype">{errors.doctype}</p>
+              <p role="alert" className="mt-1 text-meta text-destructive" data-testid="flow-error-trigger.doc-event-doctype">{errors.doctype}</p>
             ) : null}
           </div>
           <div>
@@ -131,10 +131,10 @@ export function FlowTriggerPanel({ kind, docTypes, loadingDocTypes, value, onCha
               ))}
             </Examples>
             {resetNote ? (
-              <p role="status" className="mt-1 text-[11px] text-signal-ink" data-testid="flow-doc-event-reset-note">{resetNote}</p>
+              <p role="status" className="mt-1 text-meta text-signal-ink" data-testid="flow-doc-event-reset-note">{resetNote}</p>
             ) : null}
             {errors.event ? (
-              <p role="alert" className="mt-1 text-[11px] text-destructive" data-testid="flow-error-trigger.doc-event-event">{errors.event}</p>
+              <p role="alert" className="mt-1 text-meta text-destructive" data-testid="flow-error-trigger.doc-event-event">{errors.event}</p>
             ) : null}
           </div>
         </>

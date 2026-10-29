@@ -13,13 +13,13 @@ export function NotConnected({ toolId, compact, testIdSuffix }: { toolId?: strin
   const name = status[service]?.label ?? service;
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5" data-testid={`flow-not-connected-${testIdSuffix}`}>
-      <span className="inline-flex items-center gap-1 rounded bg-signal/10 px-1.5 py-0.5 text-[11px] font-medium text-signal-ink">
+      <span className="inline-flex items-center gap-1 rounded bg-signal/10 px-1.5 py-0.5 text-meta font-medium text-signal-ink">
         <Plug className="w-3 h-3" aria-hidden />
         Not connected
       </span>
       <Link
         to={connectPath(service)}
-        className="text-[11px] font-medium text-primary underline underline-offset-2"
+        className="text-meta font-medium text-primary underline underline-offset-2"
         data-testid={`flow-connect-link-${testIdSuffix}`}
         aria-label={`Connect ${name}`}
         onClick={(e) => e.stopPropagation()}
