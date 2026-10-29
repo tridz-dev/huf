@@ -49,7 +49,10 @@ def run_pre_route(context: dict) -> Decision | None:
 			hook = frappe.get_attr(path)
 			decision = hook(context)
 		except Exception:
-			frappe.log_error(title=f"huf pre-route hook failed: {path}")
+			try:
+				frappe.log_error(title=f"huf pre-route hook failed: {path}")
+			except Exception:
+				pass  # a failing hook (or its logging) must never raise into ingest
 			continue
 		if isinstance(decision, Decision) and decision.action in ACTIONS and decision.action != "continue":
 			return decision
