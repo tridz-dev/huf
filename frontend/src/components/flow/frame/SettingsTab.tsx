@@ -68,7 +68,6 @@ export function SettingsTab({ node }: { node: FlowNode }) {
           <p className="mt-1 text-xs" data-testid="flow-on-failure-value">
             {errorTarget ? `The flow carries on with "${errorTarget.data.label}".` : 'The flow stops and the run shows as failed.'}
           </p>
-          <FieldHint>Draw a line from the step's "If it fails" dot to another step to carry on instead.</FieldHint>
         </div>
       )}
 
