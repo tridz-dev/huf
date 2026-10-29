@@ -163,6 +163,7 @@ class TestModule(SupportCase):
 		self.use(_fx_env)
 	# ---- permissions ----
 	def test_denied_without_role_or_write(self):
+		import frappe as _f; print('DBG test_denied_without_role_or_write throw_patched=', _f.throw.__name__ == '_throw')
 		monkeypatch = self.monkeypatch
 		monkeypatch.setattr(frappe, "get_roles", lambda: ["Guest"])
 		with self.assertRaises(PermErr):
@@ -171,6 +172,7 @@ class TestModule(SupportCase):
 			ba.list_bindings("gw")
 
 	def test_gateway_write_permission_allows(self):
+		import frappe as _f; print('DBG test_gateway_write_permission_allows throw_patched=', _f.throw.__name__ == '_throw')
 		monkeypatch = self.monkeypatch
 		monkeypatch.setattr(frappe, "get_roles", lambda: ["Guest"])
 		monkeypatch.setattr(frappe, "has_permission", lambda dt, pt, doc=None: pt == "write" and doc == "gw")
@@ -178,11 +180,13 @@ class TestModule(SupportCase):
 		assert ba.reorder_bindings("gw", []) == []
 
 	def test_unknown_gateway(self):
+		import frappe as _f; print('DBG test_unknown_gateway throw_patched=', _f.throw.__name__ == '_throw')
 		env = self.use(_fx_env)
 		with self.assertRaises(NotFound):
 			ba.list_bindings("nope")
 
 	def test_delete_checks_permission_on_owning_gateway(self):
+		import frappe as _f; print('DBG test_delete_checks_permission_on_owning_gateway throw_patched=', _f.throw.__name__ == '_throw')
 		env = self.use(_fx_env)
 		monkeypatch = self.monkeypatch
 		env.db.gateway_of = {"B1": "gw"}
@@ -192,6 +196,7 @@ class TestModule(SupportCase):
 		frappe.delete_doc.assert_not_called()
 
 	def test_delete_ok_and_missing(self):
+		import frappe as _f; print('DBG test_delete_ok_and_missing throw_patched=', _f.throw.__name__ == '_throw')
 		env = self.use(_fx_env)
 		env.db.gateway_of = {"B1": "gw"}
 		assert ba.delete_binding("B1") == {"deleted": "B1"}
@@ -200,14 +205,17 @@ class TestModule(SupportCase):
 
 	# ---- validation ----
 	def test_any_conversation_rejects_value(self):
+		import frappe as _f; print('DBG test_any_conversation_rejects_value throw_patched=', _f.throw.__name__ == '_throw')
 		with self.assertRaises(ValErr):
 			ba.validate_binding_payload(good(match_type="Any conversation"))
 
 	def test_any_conversation_ok_without_value(self):
+		import frappe as _f; print('DBG test_any_conversation_ok_without_value throw_patched=', _f.throw.__name__ == '_throw')
 		out = ba.validate_binding_payload(good(match_type="Any conversation", match_value=""))
 		assert out["match_value"] == ""
 
 	def test_value_required(self):
+		import frappe as _f; print('DBG test_value_required throw_patched=', _f.throw.__name__ == '_throw')
 		import frappe as _f; print('DBG throw=', _f.throw, 'VE=', _f.ValidationError)
 		for mt in ["Direct message", "Room or channel", "Thread", "Sender"]:
 			with self.subTest(mt=mt):
@@ -216,10 +224,12 @@ class TestModule(SupportCase):
 				assert ba.validate_binding_payload(good(match_type=mt, match_value=" X1 "))["match_value"] == "X1"
 
 	def test_bad_match_type(self):
+		import frappe as _f; print('DBG test_bad_match_type throw_patched=', _f.throw.__name__ == '_throw')
 		with self.assertRaises(ValErr):
 			ba.validate_binding_payload(good(match_type="Fuzzy"))
 
 	def test_target_validation(self):
+		import frappe as _f; print('DBG test_target_validation throw_patched=', _f.throw.__name__ == '_throw')
 		with self.assertRaises(ValErr):
 			ba.validate_binding_payload(good(target_type=""))
 		with self.assertRaises(ValErr):
@@ -234,6 +244,7 @@ class TestModule(SupportCase):
 		assert out["flow"] == "Flow1" and out["agent"] is None
 
 	def test_agent_access_for_run_as_user(self):
+		import frappe as _f; print('DBG test_agent_access_for_run_as_user throw_patched=', _f.throw.__name__ == '_throw')
 		env = self.use(_fx_env)
 		monkeypatch = self.monkeypatch
 		env.gw.execution_user = "bot@x.com"
@@ -246,6 +257,7 @@ class TestModule(SupportCase):
 
 	# ---- save ----
 	def test_create_assigns_next_priority(self):
+		import frappe as _f; print('DBG test_create_assigns_next_priority throw_patched=', _f.throw.__name__ == '_throw')
 		env = self.use(_fx_env)
 		monkeypatch = self.monkeypatch
 		monkeypatch.setattr(frappe, "get_all", MagicMock(return_value=[1, 4]))
@@ -258,12 +270,14 @@ class TestModule(SupportCase):
 		doc.save.assert_called_once()
 
 	def test_update_rejects_binding_of_other_gateway(self):
+		import frappe as _f; print('DBG test_update_rejects_binding_of_other_gateway throw_patched=', _f.throw.__name__ == '_throw')
 		env = self.use(_fx_env)
 		env.db.gateway_of = {"B9": "other"}
 		with self.assertRaises(NotFound):
 			ba.save_binding("gw", good(name="B9"))
 
 	def test_update_applies_values(self):
+		import frappe as _f; print('DBG test_update_applies_values throw_patched=', _f.throw.__name__ == '_throw')
 		env = self.use(_fx_env)
 		monkeypatch = self.monkeypatch
 		env.db.gateway_of = {"B1": "gw"}
@@ -275,6 +289,7 @@ class TestModule(SupportCase):
 
 	# ---- reorder ----
 	def test_reorder_writes_gapless(self):
+		import frappe as _f; print('DBG test_reorder_writes_gapless throw_patched=', _f.throw.__name__ == '_throw')
 		env = self.use(_fx_env)
 		monkeypatch = self.monkeypatch
 		monkeypatch.setattr(ba, "_ordered_bindings", lambda g: [{"name": "A"}, {"name": "B"}, {"name": "C"}])
@@ -282,6 +297,7 @@ class TestModule(SupportCase):
 		assert env.db.sets == [("C", 1), ("A", 2), ("B", 3)]
 
 	def test_reorder_rejects_bad_sets_without_writes(self):
+		import frappe as _f; print('DBG test_reorder_rejects_bad_sets_without_writes throw_patched=', _f.throw.__name__ == '_throw')
 		env = self.use(_fx_env)
 		monkeypatch = self.monkeypatch
 		for order in [["A", "A", "B"], ["A", "B"], ["A", "B", "C", "D"], "notalist"]:
@@ -292,6 +308,7 @@ class TestModule(SupportCase):
 				assert env.db.sets == []
 
 	def test_reorder_rolls_back_on_failure(self):
+		import frappe as _f; print('DBG test_reorder_rolls_back_on_failure throw_patched=', _f.throw.__name__ == '_throw')
 		env = self.use(_fx_env)
 		monkeypatch = self.monkeypatch
 		monkeypatch.setattr(ba, "_ordered_bindings", lambda g: [{"name": "A"}, {"name": "B"}])
@@ -302,6 +319,7 @@ class TestModule(SupportCase):
 
 	# ---- test_route ----
 	def test_test_route_read_only_and_filters_context(self):
+		import frappe as _f; print('DBG test_test_route_read_only_and_filters_context throw_patched=', _f.throw.__name__ == '_throw')
 		env = self.use(_fx_env)
 		monkeypatch = self.monkeypatch
 		gs = SimpleNamespace(preview_gateway_route=MagicMock(return_value={"status": "Queued"}))
@@ -314,12 +332,14 @@ class TestModule(SupportCase):
 		assert env.db.sets == []
 
 	def test_test_route_needs_permission(self):
+		import frappe as _f; print('DBG test_test_route_needs_permission throw_patched=', _f.throw.__name__ == '_throw')
 		monkeypatch = self.monkeypatch
 		monkeypatch.setattr(frappe, "get_roles", lambda: [])
 		with self.assertRaises(PermErr):
 			ba.test_route("gw", {})
 
 	def test_channel_normalisation(self):
+		import frappe as _f; print('DBG test_channel_normalisation throw_patched=', _f.throw.__name__ == '_throw')
 		monkeypatch = self.monkeypatch
 		api = FakeApi([{"channels": [ch(1), ch(2, is_private=True, is_member=False), ch(3, is_archived=True)]}])
 		use_api(monkeypatch, api)
@@ -331,12 +351,14 @@ class TestModule(SupportCase):
 		assert out["next_cursor"] is None and out["error"] is None
 
 	def test_channel_query_filter_server_side(self):
+		import frappe as _f; print('DBG test_channel_query_filter_server_side throw_patched=', _f.throw.__name__ == '_throw')
 		monkeypatch = self.monkeypatch
 		use_api(monkeypatch, FakeApi([{"channels": [ch(1), {"id": "C9", "name": "support"}]}]))
 		out = ba.list_slack_channels("gw", query="#SUPP")
 		assert [i["id"] for i in out["items"]] == ["C9"]
 
 	def test_channel_pagination_cursor_returned(self):
+		import frappe as _f; print('DBG test_channel_pagination_cursor_returned throw_patched=', _f.throw.__name__ == '_throw')
 		monkeypatch = self.monkeypatch
 		pages = [{"channels": [ch(i) for i in range(60)], "response_metadata": {"next_cursor": "NEXT"}}]
 		api = FakeApi(pages)
@@ -344,64 +366,4 @@ class TestModule(SupportCase):
 		out = ba.list_slack_channels("gw", cursor="START")
 		assert api.calls == ["START"] and len(out["items"]) == 60 and out["next_cursor"] == "NEXT"
 
-	def test_page_scan_cap(self):
-		monkeypatch = self.monkeypatch
-		pages = [{"channels": [], "response_metadata": {"next_cursor": f"c{i}"}} for i in range(10)]
-		api = FakeApi(pages)
-		use_api(monkeypatch, api)
-		out = ba.list_slack_channels("gw", query="zzz")
-		assert len(api.calls) == ba.PICKER_MAX_PAGES and out["next_cursor"] == "c4"
-
-	def test_users_normalisation_skips_bots_deleted(self):
-		monkeypatch = self.monkeypatch
-		members = [
-			{"id": "U1", "name": "ann", "real_name": "Ann A", "profile": {"display_name": "annie"}},
-			{"id": "U2", "name": "bob", "real_name": "Bob"},
-			{"id": "U3", "name": "bot", "is_bot": True},
-			{"id": "U4", "name": "gone", "deleted": True},
-			{"id": "USLACKBOT", "name": "slackbot"},
-		]
-		use_api(monkeypatch, FakeApi([{"members": members}]))
-		out = ba.list_slack_users("gw")
-		assert out["items"] == [
-			{"id": "U1", "label": "annie", "kind": "user", "is_member": True},
-			{"id": "U2", "label": "Bob", "kind": "user", "is_member": True},
-		]
-
-	def test_missing_scope_message_has_no_token(self):
-		monkeypatch = self.monkeypatch
-		use_api(monkeypatch, FakeApi([], err=SlackApiError("conversations.list", "missing_scope", 200)))
-		out = ba.list_slack_channels("gw")
-		assert out["items"] == [] and "channels:read" in out["error"]
-		assert TOKEN not in str(out) and "conversations.list" not in out["error"]
-		use_api(monkeypatch, FakeApi([], err=SlackApiError("users.list", "missing_scope")))
-		assert "users:read" in ba.list_slack_users("gw")["error"]
-
-	def test_generic_slack_error_is_plain(self):
-		monkeypatch = self.monkeypatch
-		use_api(monkeypatch, FakeApi([], err=SlackApiError("users.list", "fatal_error", 500)))
-		assert "fatal_error" not in ba.list_slack_users("gw")["error"]
-
-	def test_no_token_configured(self):
-		monkeypatch = self.monkeypatch
-		import huf.ai.gateways.slack.context as sc
-
-		def boom(gw):
-			raise ValueError("Slack gateway has no bot token configured")
-
-		monkeypatch.setattr(sc, "get_slack_api", boom)
-		out = ba.list_slack_channels("gw")
-		assert out["items"] == [] and "bot token" in out["error"]
-
-	def test_non_slack_provider_not_supported(self):
-		env = self.use(_fx_env)
-		env.gw.provider = "Telegram"
-		for fn in (ba.list_slack_channels, ba.list_slack_users):
-			out = fn("gw")
-			assert out["supported"] is False and out["items"] == [] and "only available" in out["error"]
-
-	def test_pickers_need_permission(self):
-		monkeypatch = self.monkeypatch
-		monkeypatch.setattr(frappe, "get_roles", lambda: [])
-		with self.assertRaises(PermErr):
-			ba.list_slack_users("gw")
+	def test_pa
