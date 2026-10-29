@@ -10,6 +10,7 @@ export const SETTINGS_SECTIONS = [
   { key: 'hours', label: 'Business hours' },
   { key: 'replies', label: 'Replies & calls' },
   { key: 'danger', label: 'Danger zone' },
+  { key: 'facebook', label: 'Facebook signup' },
 ] as const;
 
 export type SettingsKey = (typeof SETTINGS_SECTIONS)[number]['key'];

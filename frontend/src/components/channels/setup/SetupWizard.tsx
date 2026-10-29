@@ -70,7 +70,17 @@ export function SetupWizard({ gateway, onGatewayCreated, onStepChange, onDone }:
 
   const gw = status.gateway;
   let body: React.ReactNode = null;
-  if (step === 1) body = <ChoosePathStep onManual={() => setStep(2)} />;
+  if (step === 1) body = (
+      <ChoosePathStep
+        onManual={() => setStep(2)}
+        onFacebookConnected={(res) => {
+          setVerifyToken(res.verify_token_hint);
+          setStep(3);
+          if (res.gateway !== gateway) onGatewayCreated?.(res.gateway);
+          else void status.refresh();
+        }}
+      />
+    );
   else if (step === 2)
     body = (
       <CredentialsStep

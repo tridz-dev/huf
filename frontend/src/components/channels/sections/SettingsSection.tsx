@@ -12,6 +12,7 @@ import {
   type PanelProps,
 } from '../settings/panels';
 import { WidgetsPanel } from '../settings/WidgetsPanel';
+import { FacebookSignupPanel } from '../settings/FacebookSignupPanel';
 import { useSettingsData } from '../settings/useSettingsData';
 
 const PANELS: Record<SettingsKey, (p: PanelProps) => JSX.Element> = {
@@ -24,6 +25,7 @@ const PANELS: Record<SettingsKey, (p: PanelProps) => JSX.Element> = {
   hours: HoursPanel,
   replies: RepliesPanel,
   danger: DangerPanel,
+  facebook: FacebookSignupPanel,
 };
 
 const OTHER_SECTIONS = [
