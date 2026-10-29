@@ -56,7 +56,7 @@ def handoff_from_decision(gateway_name: str, event_name: str, context: dict, pay
 		doc = (
 			frappe.get_doc("Channel Conversation", name)
 			if name
-			else conv.get_or_create_conversation(gateway_name, str(context.get("sender_id") or ""), channel="whatsapp")
+			else conv.get_or_create_conversation(gateway_name, str(context.get("sender_id") or ""))
 		)
 		if doc is None:
 			return
