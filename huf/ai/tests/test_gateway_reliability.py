@@ -79,7 +79,7 @@ class FakeCache:
 	def __init__(self):
 		self.d = {}
 
-	def get_value(self, k):
+	def get_value(self, k, **_kw):
 		return self.d.get(k)
 
 	def set_value(self, k, v, expires_in_sec=None):
@@ -452,15 +452,24 @@ class TestModule(SupportCase):
 		if gateway_service is None:
 			self.skipTest("gateway_service not importable in stub env")
 
+		real_get_doc = gateway_service.frappe.get_doc  # before the loop: monkeypatch wraps it each pass
 		for status in ("Running", "Succeeded", "Failed", "Rejected"):
 			doc = SimpleNamespace(name="GE-9", status=status)
-			get_doc = MagicMock(return_value=doc)
+			def fake_get_doc(*args, **kwargs):
+				# Only the event is faked; frappe internals (System Settings for the reaper's clock)
+				# go through get_doc too and need the real thing.
+				if args[:2] == ("Gateway Event", "GE-9"):
+					return doc
+				return real_get_doc(*args, **kwargs)
+
+			get_doc = MagicMock(side_effect=fake_get_doc)
 			monkeypatch.setattr(gateway_service.frappe, "get_doc", get_doc)
 			monkeypatch.setattr(gateway_service, "now_datetime", _dt.datetime.now)
 			monkeypatch.setattr("frappe.utils.data.now_datetime", _dt.datetime.now)
 			monkeypatch.setattr(gateway_service.frappe, "log_error", lambda *a, **k: None, raising=False)
 			assert gateway_service.process_gateway_event("GE-9") == {"event_name": "GE-9", "status": status}
-			get_doc.assert_called_once_with("Gateway Event", "GE-9")
+			event_calls = [c for c in get_doc.call_args_list if c.args[:1] == ("Gateway Event",)]
+			assert [c.args for c in event_calls] == [("Gateway Event", "GE-9")]
 
 	def test_run_idempotency_key_format_documented(self):
 		import inspect

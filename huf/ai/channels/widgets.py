@@ -25,7 +25,7 @@ def _gateway_number(gateway: str, phone: str | None) -> str:
 	if number is None:
 		from huf.ai.whatsapp import token_check
 
-		cached = frappe.cache().get_value(token_check._result_key(gateway)) or {}
+		cached = frappe.cache().get_value(token_check._result_key(gateway), expires=True) or {}
 		number = _phone(((cached.get("phone") or {}).get("display")))
 	if number is None:
 		frappe.throw(_("The gateway phone number is not known yet. Run the token check or pass the number."), frappe.ValidationError)
