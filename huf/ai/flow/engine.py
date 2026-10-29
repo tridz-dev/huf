@@ -762,6 +762,7 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 	# open transaction (MariaDB error 1020 / deadlock). Inside the decision's transaction that rollback
 	# used to take the decision with it while the request still answered "approved".
 	_clear_flow_notifications(flow_run)
+	frappe.db.commit()  # nosemgrep  the downstream steps start on a fresh snapshot, not on the tidy-up's older one
 
 	if next_node:
 		run_flow(flow_run.name)
@@ -2001,6 +2002,8 @@ def _state_node(flow_run, node: dict, config: dict, settings: dict, allowed: set
 		output = op(flow_id, resolved)
 	except flow_state.FlowStateError as exc:
 		return {"status": "failed", "error": f"{node.get('type')}: {exc}"}
+	except frappe.QueryDeadlockError:  # another run saved the same key at the same moment
+		return {"status": "failed", "error": f"{node.get('type')}: another run was saving the same key at that moment. Run it again."}
 	return {"status": "success", "result": output, "output": output}
 
 

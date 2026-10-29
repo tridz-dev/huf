@@ -135,7 +135,8 @@ class TestApprovalDecisionIsNotLost(WP11Base):
 		record = json.loads(frappe.db.get_value("Flow Run", run.name, "context_json"))[flow_engine.NODE_OUTPUTS_KEY]["ask"]
 		self.assertEqual(record["decision"], "approved")
 		self.assertEqual(record["comment"], "fast approver")
-		self.assertEqual(self._notification_read(run), [1])  # and the approvers' notification is cleared
+		states = self._notification_read(run)  # the run's own approver notifications plus the late row: all cleared
+		self.assertTrue(states and set(states) == {1}, states)
 
 	def test_reject_holds_the_same_way(self):
 		run = self._waiting_run()
@@ -237,3 +238,12 @@ class TestApprovalDecisionIsNotLost(WP11Base):
 			approval_notifications._clear_flow_notifications(run)  # retried once, then logged and dropped
 		with patch.object(approval_notifications.frappe.db, "set_value", side_effect=RuntimeError("boom")):
 			approval_notifications._clear_flow_notifications(run)
+
+	def test_concurrent_state_write_conflict_is_a_plain_failed_step(self):
+		"""Two runs saving the same state key at once: the loser's step fails in plain words, not with a raw database error."""
+		run = self._waiting_run()
+		with patch.object(flow_engine.flow_state, "set_state", side_effect=frappe.QueryDeadlockError("1020")):
+			result = flow_engine._exec_state_set(run, {"id": "s"}, {"key": "k", "value": "v"}, {})
+		self.assertEqual(result["status"], "failed")
+		self.assertIn("another run was saving the same key", result["error"])
+		self.assertNotIn("1020", result["error"])
