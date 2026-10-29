@@ -160,7 +160,9 @@ class TestRoutingRuleTargets(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			rules_api.save_rules(self.gw, [self._row(match_value="")])
 		# first_message ignores match_value, so it is not required
-		rules_api.save_rules(self.gw, [self._row(rule_type="first_message", match_value=None)])
+		from huf.ai.channels.rules import rule_errors
+
+		self.assertEqual(rule_errors([self._row(rule_type="first_message", match_value=None)]), [])
 		with self.assertRaises(frappe.ValidationError):
 			rules_api.save_rules(self.gw, [self._row(rule_type="contact_attribute", attribute="", match_value="x")])
 
