@@ -42,6 +42,31 @@ def _tool_schema() -> dict:
 	return tool
 
 
+class TestAaaDbg(unittest.TestCase):  # DEBUGTMP
+	def test_a(self):
+		import sys
+		def chk(tag):
+			print("DBGSEQ", tag, repr(frappe.cache.get("__dbg2__")), file=sys.stderr)
+		chk("start")
+		with self.assertRaises(frappe.ValidationError):
+			frappe.throw("x")
+		chk("after throw")
+		with patch.multiple(frappe.db, get_value=MagicMock(), exists=MagicMock(return_value=True)):
+			chk("in patch")
+		chk("after patch")
+		t = TestGatewayValidation("test_account_phone_must_equal_gateway_phone")
+		gw = t._gw()
+		chk("after _gw")
+		with t._db(account_phone="PN-OTHER"), patch.object(bridge, "is_available", return_value=True):
+			chk("in db")
+			try:
+				gw._validate_whatsapp()
+			except frappe.ValidationError:
+				pass
+			chk("after validate")
+		chk("end")
+
+
 class TestSchemaSnapshot(unittest.TestCase):
 	def test_model_cannot_see_gateway_or_account(self):
 		names = {p["name"] if isinstance(p, dict) and "name" in p else p.get("fieldname") for p in _tool_schema()["parameters"]}
