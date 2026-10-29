@@ -25,8 +25,10 @@ import {
 } from "@/components/ui/tooltip"
 
 const SIDEBAR_STORAGE_KEY = "sidebar:state"
+/** What the person chose while the window was narrow (kept apart so a narrow window never rewrites the wide-screen choice). */
+const SIDEBAR_NARROW_STORAGE_KEY = "sidebar:state:narrow"
 const SIDEBAR_WIDTH = "15.5rem"
-const SIDEBAR_WIDTH_MOBILE = "18rem"
+const SIDEBAR_WIDTH_MOBILE = "min(85vw, 20rem)"
 const SIDEBAR_WIDTH_ICON = "4rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
@@ -55,6 +57,8 @@ export const SidebarProvider = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> & {
     defaultOpen?: boolean
+    /** Window width (px) at or below which the navigation is the icon rail on its own, until the person opens it. */
+    collapseBelow?: number
     open?: boolean
     onOpenChange?: (open: boolean) => void
   }
@@ -62,6 +66,7 @@ export const SidebarProvider = React.forwardRef<
   (
     {
       defaultOpen = true,
+      collapseBelow,
       open: openProp,
       onOpenChange: setOpenProp,
       className,
@@ -82,23 +87,35 @@ export const SidebarProvider = React.forwardRef<
         return defaultOpen
       }
     })
-    const open = openProp ?? _open
+    // Narrow window: the rail by default. What the person does with it there is remembered separately.
+    const narrow = useWindowAtOrBelow(collapseBelow)
+    const [narrowChoice, setNarrowChoice] = React.useState<boolean | null>(() => {
+      try {
+        const stored = localStorage.getItem(SIDEBAR_NARROW_STORAGE_KEY)
+        return stored === null ? null : stored === "true"
+      } catch {
+        return null
+      }
+    })
+    const open = openProp ?? (narrow ? narrowChoice ?? false : _open)
     const setOpen = React.useCallback(
       (value: boolean | ((value: boolean) => boolean)) => {
         const openState = typeof value === "function" ? value(open) : value
         if (setOpenProp) {
           setOpenProp(openState)
+        } else if (narrow) {
+          setNarrowChoice(openState)
         } else {
           _setOpen(openState)
         }
 
         try {
-          localStorage.setItem(SIDEBAR_STORAGE_KEY, String(openState))
+          localStorage.setItem(narrow ? SIDEBAR_NARROW_STORAGE_KEY : SIDEBAR_STORAGE_KEY, String(openState))
         } catch {
           void 0
         }
       },
-      [setOpenProp, open]
+      [setOpenProp, open, narrow]
     )
 
     const toggleSidebar = React.useCallback(() => {
@@ -166,6 +183,21 @@ export const SidebarProvider = React.forwardRef<
   }
 )
 SidebarProvider.displayName = "SidebarProvider"
+
+function useWindowAtOrBelow(limit?: number): boolean {
+  const [below, setBelow] = React.useState(() => limit !== undefined && typeof window !== "undefined" && window.innerWidth <= limit)
+  React.useEffect(() => {
+    if (limit === undefined) {
+      setBelow(false)
+      return
+    }
+    const check = () => setBelow(window.innerWidth <= limit)
+    check()
+    window.addEventListener("resize", check)
+    return () => window.removeEventListener("resize", check)
+  }, [limit])
+  return below
+}
 
 export const Sidebar = React.forwardRef<
   HTMLDivElement,

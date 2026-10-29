@@ -95,6 +95,18 @@ def _can_mark_failed() -> bool:
 	return "System Manager" in frappe.get_roles(frappe.session.user)
 
 
+def _approval_decision_rights(status: str | None, waiting: dict) -> tuple[bool, str | None]:
+	"""(may the signed-in user approve or reject this run, why not). Same fail-closed check the decision itself runs, so the
+	Approve / Reject buttons are only offered to people the server will let through."""
+	if status != "Waiting Approval":
+		return False, None
+	from huf.ai.flow import engine
+
+	user = frappe.session.user
+	reason = engine.check_approver(waiting, user, set(frappe.get_roles(user)))
+	return reason is None, reason
+
+
 # Step title shown when a saved step has no title of its own (flows written outside the editor).
 _STEP_TYPE_TITLES = {
 	"agent.run": "Run agent",
@@ -392,6 +404,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 		pass
 
 	stale = _is_stale(doc.status, doc.modified)
+	can_decide, cannot_decide_reason = _approval_decision_rights(doc.status, waiting)
 	return {
 		"flow_run_id": doc.name,
 		"flow_id": doc.flow_id,
@@ -413,6 +426,8 @@ def get_flow_run(flow_run_id: str) -> dict:
 		"stale": stale,
 		"can_mark_failed": stale and _can_mark_failed(),
 		"stale_after_minutes": STALE_RUN_MINUTES,
+		"can_decide": can_decide,
+		"cannot_decide_reason": cannot_decide_reason,
 	}
 
 

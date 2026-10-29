@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { getMe, type MeResponse } from '@/services/permissionsApi';
+import { PAGE_ACCESS_ANY } from '@/lib/permissions/pageAccess';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -10,6 +11,8 @@ interface PermissionsContextType {
   hufRole: string | null;
   /** Full flat list of capability strings the user has. */
   capabilities: string[];
+  /** Capabilities the Huf Role grants that the server would refuse (the user's Frappe roles cannot write flows). */
+  withheldCapabilities: string[];
   /** True while the initial getMe() call is in flight. */
   isLoading: boolean;
   /** Return true if the user has the given capability string. */
@@ -38,6 +41,7 @@ export function PermissionsProvider({ children }: PermissionsProviderProps) {
     full_name: '',
     huf_role: null,
     capabilities: [],
+    withheld_capabilities: [],
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -56,6 +60,8 @@ export function PermissionsProvider({ children }: PermissionsProviderProps) {
   }, []);
 
   const hasCapability = (capability: string): boolean => {
+    // "*" asks whether the person has any Huf role at all.
+    if (capability === PAGE_ACCESS_ANY) return data.capabilities.length > 0;
     return data.capabilities.includes(capability);
   };
 
@@ -64,6 +70,7 @@ export function PermissionsProvider({ children }: PermissionsProviderProps) {
       value={{
         hufRole: data.huf_role,
         capabilities: data.capabilities,
+        withheldCapabilities: data.withheld_capabilities ?? [],
         isLoading,
         hasCapability,
         refresh: load,
