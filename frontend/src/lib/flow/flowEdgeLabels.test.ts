@@ -26,8 +26,8 @@ import { branchColumnShift, subtreeIds } from './flowEdgeLabels';
 
 describe('branchColumnShift', () => {
   it('moves a target that shares a column with a sibling branch', () => {
-    expect(branchColumnShift(600, [600])).toBe(280);
-    expect(branchColumnShift(600, [600, 880])).toBe(560);
+    expect(branchColumnShift(600, [600])).toBe(290);
+    expect(branchColumnShift(600, [600, 890])).toBe(580);
   });
   it('leaves a target that already has room', () => {
     expect(branchColumnShift(300, [600])).toBe(0);

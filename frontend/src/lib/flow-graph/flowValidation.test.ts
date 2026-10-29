@@ -17,6 +17,11 @@ describe('flowValidation', () => {
     expect(validateNode(trigger({ type: 'webhook', method: 'POST', secret: 'abcdefgh1234abcdefgh1234abcdefgh' }), [])).toEqual([]);
   });
 
+  it('does not ask a viewer for a webhook secret the server hid from them', () => {
+    expect(validateNode(trigger({ type: 'webhook', method: 'POST', secret: null, secret_hidden: true }), [])).toEqual([]);
+    expect(validateNode(trigger({ type: 'webhook', method: 'POST', secret: null }), []).map((i) => i.field)).toEqual(['secret']);
+  });
+
   it('validates schedule cron and doc-event fields', () => {
     expect(validateNode(trigger({ type: 'schedule', cron: '* *' }), [])[0].field).toBe('cron');
     expect(validateNode(trigger({ type: 'doc-event' }), []).map((i) => i.field)).toEqual(['doctype', 'event']);

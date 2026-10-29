@@ -95,7 +95,8 @@ describe('lists', () => {
     if (list.kind !== 'list') throw new Error('expected list');
     expect(list.items.map((i) => i.title)).toEqual(['Widget', 'Gadget']);
     expect(list.items[0].facts).toBe('Price: 5, Qty: 2');
-    expect(list.items[0].node.kind).toBe('rows');
+    expect(list.items[0].body.kind).toBe('rows');
+    expect(list.items[0].body.kind === 'rows' && list.items[0].body.rows.map((r) => r.key)).toEqual(['qty', 'price']);
   });
   it('falls back to Item N and ignores empty entries', () => {
     const list = humanize([{ qty: 2 }, null, { qty: 3 }]);

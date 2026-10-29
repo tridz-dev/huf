@@ -214,6 +214,7 @@ export function IntegrationSettingsListingPage({
                   type="button"
                   className="flex w-full items-center gap-3 px-4 py-3 text-left"
                   aria-expanded={open}
+                  data-testid={`integration-group-toggle-${group.service}`}
                   onClick={() => setOpenGroups((prev) => ({ ...prev, [group.service]: !open }))}
                 >
                   <Logo className="h-5 w-5 shrink-0" />

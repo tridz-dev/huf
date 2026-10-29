@@ -21,7 +21,7 @@ import { useFlowContext } from '../../contexts/FlowContext';
 import { toast } from '@/lib/toast';
 import { useNavigate } from 'react-router-dom';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
-import { DisabledReason } from '../flow/DisabledReason';
+import { FlowSettingsReadOnly } from './FlowSettingsReadOnly';
 import { Trash2, Loader2, AlertTriangle } from 'lucide-react';
 import { getFlowConversionStatus, updateFlowAutoConvert } from '../../services/flowApi';
 import {
@@ -50,7 +50,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const navigate = useNavigate();
-  const { canManage, readOnlyReason } = useFlowPermissions();
+  const { canManage } = useFlowPermissions();
 
   // Fill the fields while rendering, once per opening: the first thing the user sees (and can edit) is already the
   // flow's real values, so a late effect can never put them back over what was typed or cleared.
@@ -65,7 +65,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
   }
 
   useEffect(() => {
-    if (!activeFlow || !open) return;
+    if (!activeFlow || !open || !canManage) return;
     getFlowConversionStatus(activeFlow.id)
       .then((status) => setAutoConvertToProcedure(status.auto_convert_to_procedure))
       .catch(() => setAutoConvertToProcedure(false));
@@ -139,6 +139,10 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
     }
   };
 
+  if (!canManage) {
+    return <FlowSettingsReadOnly open={open} onClose={onClose} name={name} description={description} category={category} />;
+  }
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogScrollContent className="sm:max-w-[425px]" data-testid="flow-settings-modal">
@@ -210,31 +214,25 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
           </div>
         </DialogScrollBody>
         <DialogScrollFooter className="items-center justify-between sm:justify-between">
-          {canManage ? (
-            <Button
-              variant="destructive-ghost"
-              size="sm"
-              className="gap-2"
-              data-testid="flow-settings-delete"
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={isDeleting || isSaving}
-            >
-              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              Delete flow
-            </Button>
-          ) : (
-            <span />
-          )}
+          <Button
+            variant="destructive-ghost"
+            size="sm"
+            className="gap-2"
+            data-testid="flow-settings-delete"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={isDeleting || isSaving}
+          >
+            {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            Delete flow
+          </Button>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" data-testid="flow-settings-cancel" onClick={onClose} disabled={isDeleting || isSaving}>
               Cancel
             </Button>
-            <DisabledReason reason={canManage ? null : readOnlyReason}>
-              <Button size="sm" data-testid="flow-settings-save" onClick={handleSave} disabled={isSaving || isDeleting || !activeFlow || !canManage} className="gap-2">
-                {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-                Save changes
-              </Button>
-            </DisabledReason>
+            <Button size="sm" data-testid="flow-settings-save" onClick={handleSave} disabled={isSaving || isDeleting || !activeFlow} className="gap-2">
+              {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+              Save changes
+            </Button>
           </div>
         </DialogScrollFooter>
       </DialogScrollContent>

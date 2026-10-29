@@ -351,6 +351,7 @@ export function isBackendNodeConfigured(node: BackendNode): boolean {
     if (node.type === 'trigger.unset') return false;
     const config = (node.config ?? {}) as Record<string, unknown>;
     return (REQUIRED_CONFIG_KEYS[node.type] ?? []).every((key) => {
+        if (key === 'secret' && config.secret_hidden === true) return true; // set, but hidden from a viewer
         const v = config[key];
         return v != null && !(typeof v === 'string' && v.trim() === '');
     });
