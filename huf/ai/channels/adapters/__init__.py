@@ -102,3 +102,5 @@ def adapter_for_conversation(conversation) -> ChannelAdapter:
 	if not target and conversation.get("gateway"):
 		target = frappe.db.get_value("Gateway", conversation.get("gateway"), "handoff_target")
 	return get_adapter(target)
+
+ADAPTER_MODULES["crm"] = "huf.ai.channels.adapters.crm"
