@@ -99,7 +99,7 @@ class TestIsOpen(_Base):
 
 	def test_holidays_union_child_rows_and_holiday_list(self):
 		gw = self.unsaved(holidays=[{"holiday_date": "2026-11-02"}], holiday_list="Public Holidays")
-		erp_list = SimpleNamespace(holidays=[SimpleNamespace(holiday_date=date(2026, 11, 3))])
+		erp_list = {"holidays": [SimpleNamespace(holiday_date=date(2026, 11, 3))]}
 		with (
 			patch.object(frappe.db, "exists", return_value=True),
 			patch.object(frappe, "get_cached_doc", return_value=erp_list) as cached,
