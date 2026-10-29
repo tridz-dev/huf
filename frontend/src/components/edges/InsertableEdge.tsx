@@ -20,6 +20,8 @@ export interface InsertableEdgeData {
   onInsertNode?: (sourceNodeId: string, route?: FlowEdgeRoute) => void;
   /** Ask to remove this connection (the canvas confirms first). */
   onRemove?: (edgeId: string) => void;
+  /** Select this connection (the name pill is a click target too). */
+  onSelect?: (edgeId: string) => void;
 }
 
 /** Colour family per branch kind: green yes/approved, red no/rejected/failed, amber timed out, grey otherwise. */
@@ -132,9 +134,10 @@ export const InsertableEdge = memo(
               data-testid={`flow-edge-label-${id}`}
               data-source={source}
               title={pill}
-              style={overlayStyle(pillPos.x, pillPos.y, zoom)}
+              onClick={() => data?.onSelect?.(id)}
+              style={overlayStyle(pillPos.x, pillPos.y, zoom, !data?.loopBack)}
               className={cn(
-                'pointer-events-none max-w-[220px] whitespace-normal break-words rounded-full border px-2.5 py-0.5 text-center text-xs font-medium leading-tight shadow-sm',
+                'max-w-[220px] cursor-pointer whitespace-normal break-words rounded-full border px-2.5 py-0.5 text-center text-xs font-medium leading-tight shadow-sm',
                 PILL_TONE[data?.tone ?? 'neutral'],
               )}
             >
