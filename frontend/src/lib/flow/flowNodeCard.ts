@@ -1,5 +1,5 @@
 import type { ActionConfig, FlowNodeData, TriggerConfig } from '../../types/flow.types';
-import { describeCron } from '../flow-graph/flowSchedule';
+import { describeCron } from '../flow-graph/flowScheduleText';
 import { getTransformOp } from '../flow-graph/flowTransformOps';
 import { toolLabel } from './flowIntegrations';
 
@@ -76,10 +76,8 @@ export function triggerSubtitle(cfg: TriggerConfig | undefined): string {
     case 'webhook':
       return 'Runs on a web request';
     case 'schedule': {
-      const text = describeCron(cfg.cron).replace(/ \(server time\)$/, '');
-      if (text.startsWith('No valid')) return 'Pick when it should run';
-      // A custom cron expression is code to most people: say it is custom, show the pattern in the step's settings.
-      return text.startsWith('Custom schedule') ? 'Runs on a custom schedule' : text;
+      const text = describeCron(cfg.cron);
+      return text.startsWith('No valid') ? 'Pick when it should run' : text;
     }
     case 'doc-event': {
       const dt = typed(cfg.doctype);

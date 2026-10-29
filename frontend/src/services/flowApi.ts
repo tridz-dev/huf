@@ -72,6 +72,8 @@ export interface BackendNode {
     _label?: string;
     /** Frontend-only: icon name */
     _icon?: string;
+    /** A saved example of the data this step receives (webhook trigger): <= 8 KB, secrets hidden, only editors get it back. */
+    _sample?: Record<string, unknown>;
 }
 
 export interface BackendDocPermission {
