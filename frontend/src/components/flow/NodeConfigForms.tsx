@@ -107,7 +107,7 @@ function useNodeForm(nodeId: string, slot: 'triggerConfig' | 'actionConfig') {
   const Err = ({ field }: { field: string }) => {
     const m = error(field);
     return m ? (
-      <p role="alert" className="mt-1 text-[11px] text-destructive" data-testid={`flow-error-${kind}-${field}`}>
+      <p role="alert" className="mt-1 text-micro text-destructive" data-testid={`flow-error-${kind}-${field}`}>
         {m}
       </p>
     ) : null;
@@ -272,13 +272,13 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
         <div className="text-xs space-y-1" data-testid="flow-webhook-usage">
           <p className="font-medium">How to call it</p>
           <p className="text-muted-foreground">Send the secret as a header (not in the address):</p>
-          <code className="block break-all rounded bg-muted/50 p-1.5 font-mono text-[10px]" data-testid="flow-webhook-usage-header">{usage.header}</code>
+          <code className="block break-all rounded bg-muted/50 p-1.5 font-mono text-micro" data-testid="flow-webhook-usage-header">{usage.header}</code>
           <p className="text-muted-foreground">Example:</p>
-          <code className="block break-all rounded bg-muted/50 p-1.5 font-mono text-[10px]" data-testid="flow-webhook-usage-curl">{usage.curl}</code>
+          <code className="block break-all rounded bg-muted/50 p-1.5 font-mono text-micro" data-testid="flow-webhook-usage-curl">{usage.curl}</code>
           {method === 'POST' && (
             <>
               <p className="text-muted-foreground">To send data as well:</p>
-              <code className="block break-all rounded bg-muted/50 p-1.5 font-mono text-[10px]" data-testid="flow-webhook-usage-curl-data">{usage.curlWithData}</code>
+              <code className="block break-all rounded bg-muted/50 p-1.5 font-mono text-micro" data-testid="flow-webhook-usage-curl-data">{usage.curlWithData}</code>
             </>
           )}
           <p className="text-muted-foreground">What you get back:</p>
@@ -357,7 +357,7 @@ function BranchRows({ nodeId, cfgType, cfg }: { nodeId: string; cfgType: string;
   return (
     <div className="space-y-1.5" data-testid="flow-branches">
       <Label size="sm">Where each path goes</Label>
-      <p className="text-[11px] text-muted-foreground">Drag from the matching dot on the step, or use its Add step button.</p>
+      <p className="text-micro text-muted-foreground">Drag from the matching dot on the step, or use its Add step button.</p>
       {handles.map((h) => {
         const edge = activeFlow?.edges.find((e) => e.source === nodeId && edgeRoute(e) === h.route);
         const target = activeFlow?.nodes.find((n) => n.id === edge?.target);
