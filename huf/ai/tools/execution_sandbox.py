@@ -154,23 +154,6 @@ MAX_SHARED_DIR_FILES = 50
 #: attribute access), so legitimate formatting is unaffected.
 _DENIED_ATTRS = frozenset({"format", "format_map"})
 
-#: Environment-variable name fragments (case-insensitive) that are stripped from
-#: the child process environment. The child cannot read ``os.environ`` anyway
-#: (``import os`` is blocked and ``os`` is not in the globals), but pruning is a
-#: cheap extra layer against accidental leakage via a future broker bug.
-_SECRET_ENV_FRAGMENTS = (
-	"SECRET",
-	"TOKEN",
-	"PASSWORD",
-	"PRIVATE_KEY",
-	"API_KEY",
-	"DATABASE_URL",
-	"DB_PASSWORD",
-	"REDIS_URL",
-	"OPENAI_API_KEY",
-	"ANTHROPIC_API_KEY",
-)
-
 
 @dataclass
 class ExecutionResult:
@@ -184,6 +167,11 @@ class ExecutionResult:
 	mem_mb_peak: float | None
 	output_bytes: int
 	limits_hit: bool
+	#: Flow path only (``capture_result``): the JSON-safe value of the ``result`` variable, and
+	#: whether it (or stdout) was cut at the output cap.
+	result: object = None
+	result_truncated: bool = False
+	output_truncated: bool = False
 
 	def to_dict(self) -> dict:
 		return asdict(self)
@@ -801,6 +789,7 @@ def _build_globals(
 	control_fd: int | None = None,
 	workdir: str | None = None,
 	allowed_modules: list[str] | None = None,
+	inputs: dict | None = None,
 ) -> dict:
 	"""Assemble the curated globals dict for ``exec``.
 
@@ -841,6 +830,11 @@ def _build_globals(
 
 	if workdir:
 		globals_dict["__builtins__"]["open"] = _make_workdir_open(workdir)
+
+	if inputs is not None:
+		# Flow path: the step's mapped inputs, as plain data. Code gets values, never a way to
+		# change what runs (the code and the profile come from the published definition).
+		globals_dict["inputs"] = inputs
 
 	if control_fd is not None:
 		client = _BrokerClient(control_fd)
@@ -900,6 +894,23 @@ def _start_memory_watchdog(max_memory_mb: int):
 		return None
 
 
+def _jsonable_capped(value, max_bytes: int):
+	"""``(json_safe_value, truncated)``: ``value`` round-tripped through JSON, cut at ``max_bytes``.
+
+	Anything JSON cannot represent becomes its string form (``default=str``). A value whose JSON text
+	is longer than the cap is returned as the first ``max_bytes`` bytes of that text (a string) and
+	flagged, so a step can never store an unbounded result.
+	"""
+	try:
+		text = json.dumps(value, default=str)
+	except (TypeError, ValueError, RecursionError):
+		text = json.dumps(str(value))
+	raw = text.encode("utf-8", "replace")
+	if len(raw) > max_bytes:
+		return raw[:max_bytes].decode("utf-8", "replace"), True
+	return json.loads(text), False
+
+
 def _run_user_code(
 	code: str,
 	max_output_bytes: int,
@@ -907,6 +918,8 @@ def _run_user_code(
 	control_fd: int | None = None,
 	workdir: str | None = None,
 	allowed_modules: list[str] | None = None,
+	inputs: dict | None = None,
+	capture_result: bool = False,
 ) -> dict:
 	"""Compile + execute ``code`` in the (already rlimit-ed) child process.
 
@@ -949,7 +962,7 @@ def _run_user_code(
 		warnings.filterwarnings("ignore", message=".*never reads 'printed' variable.*")
 
 		globals_dict = _build_globals(
-			control_fd=control_fd, workdir=workdir, allowed_modules=allowed_modules
+			control_fd=control_fd, workdir=workdir, allowed_modules=allowed_modules, inputs=inputs
 		)
 		locals_dict: dict = {}
 
@@ -963,6 +976,9 @@ def _run_user_code(
 			"stderr": "",
 			"limits_hit": _CAPTURE_BUF.hit,
 		}
+		if capture_result:
+			value = locals_dict.get("result", globals_dict.get("result"))
+			result["result"], result["result_truncated"] = _jsonable_capped(value, max_output_bytes)
 	except MemoryError as exc:
 		result = {
 			"exit_status": "OOM",
@@ -1022,6 +1038,7 @@ def _run_user_code(
 			"stderr": "[huf-exec] no result produced",
 			"limits_hit": False,
 		}
+	result["output_truncated"] = bool(_CAPTURE_BUF is not None and _CAPTURE_BUF.hit)
 	return result
 
 
@@ -1065,6 +1082,10 @@ def _child_main(argv: list[str]) -> int:
 	max_output_bytes = int(payload.get("max_output_bytes") or DEFAULT_MAX_OUTPUT_BYTES)
 	max_memory_mb = int(limits.get("max_memory_mb") or 0)
 	allowed_modules = payload.get("allowed_modules") or []
+	inputs = payload.get("inputs")
+	if inputs is not None and not isinstance(inputs, dict):
+		inputs = None
+	capture_result = bool(payload.get("capture_result"))
 
 	control_fd = payload.get(CONTROL_FD_PAYLOAD_KEY)
 	if control_fd is not None:
@@ -1089,6 +1110,8 @@ def _child_main(argv: list[str]) -> int:
 		control_fd=control_fd,
 		workdir=workdir,
 		allowed_modules=allowed_modules,
+		inputs=inputs,
+		capture_result=capture_result,
 	)
 	result["output_bytes"] = len((result.get("stdout") or "").encode("utf-8", "replace"))
 
@@ -1102,13 +1125,27 @@ def _child_main(argv: list[str]) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _sanitize_child_env() -> dict:
-	"""Return the child environment with secret-looking variables removed."""
-	env = dict(os.environ)
-	for key in list(env):
-		upper = key.upper()
-		if any(fragment in upper for fragment in _SECRET_ENV_FRAGMENTS):
-			env.pop(key, None)
+#: Environment variables the child may inherit. An allow-list, not a deny-list: the worker's
+#: environment can carry anything an operator exported (Redis / database URLs, API keys, cloud
+#: credentials) and a name-fragment filter cannot know them all. Sandboxed code cannot read its own
+#: environment today (``os`` is not importable), but the child must never be handed secrets.
+_CHILD_ENV_ALLOWLIST = frozenset(
+	{"PATH", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ", "VIRTUAL_ENV", "PYTHONPATH", "PYTHONHASHSEED"}
+)
+
+
+def _sanitize_child_env(home: str | None = None) -> dict:
+	"""The child environment: the allow-list above, a throwaway ``HOME``, single-threaded math libraries.
+
+	Nothing from ``site_config`` / ``common_site_config`` (database, Redis, encryption key) is ever
+	passed down: Frappe keeps those in files, not in the environment, and whatever the operator did
+	export is dropped unless it is listed in ``_CHILD_ENV_ALLOWLIST``.
+	"""
+	env = {key: value for key, value in os.environ.items() if key in _CHILD_ENV_ALLOWLIST}
+	env.setdefault("PATH", "/usr/local/bin:/usr/bin:/bin")
+	env["HOME"] = home or tempfile.gettempdir()
+	env["PYTHONNOUSERSITE"] = "1"
+	env["PYTHONDONTWRITEBYTECODE"] = "1"
 	# Single-thread BLAS/OpenMP math libraries to avoid huge mmap virtual memory
 	# allocations that fail under RLIMIT_AS or cause thread thrashing in sandboxes.
 	env["OPENBLAS_NUM_THREADS"] = "1"
@@ -1243,6 +1280,8 @@ def run_sandboxed(
 	broker_handler=None,
 	broker_thread_start=None,
 	broker_thread_end=None,
+	inputs: dict | None = None,
+	capture_result: bool = False,
 ) -> ExecutionResult:
 	"""Run ``code`` in an isolated subprocess and return an :class:`ExecutionResult`.
 
@@ -1291,6 +1330,8 @@ def run_sandboxed(
 			broker_handler,
 			broker_thread_start,
 			broker_thread_end,
+			inputs,
+			capture_result,
 		)
 	finally:
 		shutil.rmtree(bookkeeping_dir, ignore_errors=True)
@@ -1306,6 +1347,8 @@ def _supervise_child(
 	broker_handler=None,
 	broker_thread_start=None,
 	broker_thread_end=None,
+	inputs: dict | None = None,
+	capture_result: bool = False,
 ) -> ExecutionResult:
 	"""Launch + supervise the isolated child (body of :func:`run_sandboxed`).
 
@@ -1328,6 +1371,10 @@ def _supervise_child(
 		"max_output_bytes": max_output_bytes,
 		"allowed_modules": allowed_modules or [],
 	}
+	if inputs is not None:
+		payload["inputs"] = inputs
+	if capture_result:
+		payload["capture_result"] = True
 	if child_sock is not None:
 		payload[CONTROL_FD_PAYLOAD_KEY] = child_sock.fileno()
 	if mounted_dir is not None:
@@ -1344,7 +1391,7 @@ def _supervise_child(
 
 	popen_kwargs = {
 		"cwd": work_dir,
-		"env": _sanitize_child_env(),
+		"env": _sanitize_child_env(bookkeeping_dir),
 		"stdout": subprocess.PIPE,
 		"stderr": subprocess.PIPE,
 	}
@@ -1432,8 +1479,10 @@ def _supervise_child(
 
 	if isinstance(parsed, dict) and "exit_status" in parsed:
 		out = parsed.get("stdout") or ""
+		output_truncated = bool(parsed.get("output_truncated"))
 		if len(out.encode("utf-8", "replace")) > max_output_bytes:
 			out = out.encode("utf-8", "replace")[:max_output_bytes].decode("utf-8", "replace")
+			output_truncated = True
 		limits_hit = bool(parsed.get("limits_hit"))
 		return ExecutionResult(
 			exit_status=parsed.get("exit_status") or "Error",
@@ -1444,6 +1493,9 @@ def _supervise_child(
 			mem_mb_peak=mem_mb_peak,
 			output_bytes=len(out.encode("utf-8", "replace")),
 			limits_hit=limits_hit,
+			result=parsed.get("result"),
+			result_truncated=bool(parsed.get("result_truncated")),
+			output_truncated=output_truncated,
 		)
 
 	# No structured result: the child crashed or was killed by a signal.
