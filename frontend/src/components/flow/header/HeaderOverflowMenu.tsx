@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { CircleHelp, History, LayoutTemplate, MoreHorizontal, Settings, Sparkles } from 'lucide-react';
+import { CircleHelp, History, LayoutTemplate, MoreHorizontal, Settings, ShieldAlert, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { StatusPill, type StatusKind } from '@/components/common/StatusPill';
 import { FlowHelpDialog } from '../FlowHelpPopover';
+import { ExecutionApprovalsBell } from '../../ExecutionApprovalsBell';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import { HIT_TARGET } from '@/lib/ui/responsive';
 import { cn } from '@/lib/utils';
 
@@ -41,6 +43,10 @@ export function HeaderOverflowMenu({
   statusKind, canManage, readOnlyReason, hasSteps, convertedProcedure, onOpenRuns, onOpenSettings, onTidy, onConvert, extra, editTools,
 }: HeaderOverflowMenuProps) {
   const [showHelp, setShowHelp] = useState(false);
+  const [showCodeApprovals, setShowCodeApprovals] = useState(false);
+  const [codeApprovals, setCodeApprovals] = useState(0);
+  const { hasCapability } = usePermissions();
+  const canApproveCode = hasCapability('execution.approve') || hasCapability('ssh.approve');
   const row = cn('gap-2', HIT_TARGET);
   return (
     <>
@@ -66,6 +72,11 @@ export function HeaderOverflowMenu({
           <DropdownMenuItem className={row} data-testid="flow-help" onSelect={() => setShowHelp(true)}>
             <CircleHelp className="h-4 w-4" aria-hidden /> Help
           </DropdownMenuItem>
+          {canApproveCode && (
+            <DropdownMenuItem className={row} data-testid="flow-code-approvals" onSelect={() => setShowCodeApprovals(true)}>
+              <ShieldAlert className="h-4 w-4" aria-hidden /> Code run approvals{codeApprovals > 0 ? ` (${codeApprovals})` : ''}
+            </DropdownMenuItem>
+          )}
           {editTools && hasSteps && (
             <DropdownMenuItem className={row} data-testid="flow-tidy-layout" disabled={!canManage} title={canManage ? undefined : readOnlyReason ?? undefined} onSelect={onTidy}>
               <LayoutTemplate className="h-4 w-4" aria-hidden /> Tidy layout
@@ -84,6 +95,7 @@ export function HeaderOverflowMenu({
         </DropdownMenuContent>
       </DropdownMenu>
       <FlowHelpDialog open={showHelp} onOpenChange={setShowHelp} />
+      {canApproveCode && <ExecutionApprovalsBell variant="dialog" open={showCodeApprovals} onOpenChange={setShowCodeApprovals} onCount={setCodeApprovals} />}
     </>
   );
 }
