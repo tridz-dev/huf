@@ -63,11 +63,11 @@ class TestHandoffCore(IntegrationTestCase):
 		self.conv = conv.get_or_create_conversation(self.gw.name, "15550003333")
 
 	def _users(self):
+		from huf.testing.factories import make_user
+
 		for email in (NO_PERM_USER, REPLY_USER):
 			if not frappe.db.exists("User", email):
-				frappe.get_doc(
-					{"doctype": "User", "email": email, "first_name": "T", "send_welcome_email": 0, "roles": [{"role": "System User"}]}
-				).insert(ignore_permissions=True)
+				make_user(email=email)
 
 	# --- ecosystem ---
 	def test_ecosystem_detection(self):

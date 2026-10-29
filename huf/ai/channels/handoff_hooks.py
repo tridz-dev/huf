@@ -13,6 +13,8 @@ def _conversation_for(context: dict):
 	if name:
 		return frappe.get_doc("Channel Conversation", name)
 	inner = context.get("context") or {}
+	if not context.get("gateway") or not inner.get("sender_id"):
+		return None
 	rows = frappe.get_all(
 		"Channel Conversation",
 		filters={"gateway": context.get("gateway"), "contact_handle": str(inner.get("sender_id") or ""), "status": ["!=", "closed"]},

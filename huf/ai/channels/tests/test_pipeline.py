@@ -21,7 +21,7 @@ def hook_continue(ctx):
 
 class TestPipeline(IntegrationTestCase):
 	def test_noop_by_default(self):
-		self.assertEqual(pipeline.PRE_ROUTE_HOOKS, [])
+		self.assertEqual(pipeline.PRE_ROUTE_HOOKS, ["huf.ai.channels.handoff_hooks.handed_off_hook"])
 		self.assertIsNone(run_pre_route({}))
 
 	def test_continue_falls_through(self):
