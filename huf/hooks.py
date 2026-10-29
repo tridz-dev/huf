@@ -266,7 +266,10 @@ doc_events = {
         "on_trash": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
         "after_delete": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
     },
-    "HD Ticket": {"before_insert": ["huf.ai.channels.run_as.stamp_audit"]},
+    "HD Ticket": {
+        "before_insert": ["huf.ai.channels.run_as.stamp_audit"],
+        "on_update": "huf.ai.channels.adapters.helpdesk.on_ticket_update",
+    },
     "CRM Lead": {"before_insert": ["huf.ai.channels.run_as.stamp_audit"]},
     "Sales Order": {"before_insert": ["huf.ai.channels.run_as.stamp_audit"]},
     "Contact": {"before_insert": ["huf.ai.channels.run_as.stamp_audit"]},
@@ -329,8 +332,6 @@ doc_events = {
         "on_update": "huf.ai.artifact_extraction.on_agent_message_change",
     },
 }
-
-doc_events["HD Ticket"] = {"on_update": "huf.ai.channels.adapters.helpdesk.on_ticket_update"}
 
 # Scheduled Tasks
 # ---------------
