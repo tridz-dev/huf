@@ -5,6 +5,8 @@ import { Label } from './ui/label';
 import { Combobox } from './ui/combobox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { DOC_EVENTS, type FlowDocEvent } from '../lib/flowTrigger';
+import { DOC_EVENT_HELP } from '../lib/flowHelp';
+import { Examples, FieldHint } from './flow/FieldHint';
 
 interface FlowTriggerPanelProps {
   kind: 'schedule' | 'doc-event';
@@ -79,6 +81,9 @@ export function FlowTriggerPanel({ kind, docTypes, loadingDocTypes, value, onCha
         />
       ) : (
         <>
+          <p className="text-xs text-muted-foreground" data-testid="flow-hint-doc-event-intro">
+            Starts the flow when a record changes, for example when a ToDo is created. It only runs while the flow is published. Steps can read the record as input['field'].
+          </p>
           <div>
             <Label htmlFor="doctype">Document type</Label>
             <Combobox
@@ -95,6 +100,7 @@ export function FlowTriggerPanel({ kind, docTypes, loadingDocTypes, value, onCha
               searchPlaceholder="Search document types..."
               emptyText={docTypes.length ? 'No matching document type.' : 'No document types are available to your account.'}
             />
+            <FieldHint testId="flow-hint-doc-event-doctype">The kind of record to watch, such as ToDo or Customer.</FieldHint>
             {errors.doctype ? (
               <p role="alert" className="mt-1 text-[11px] text-destructive" data-testid="flow-error-trigger.doc-event-doctype">{errors.doctype}</p>
             ) : null}
@@ -116,6 +122,14 @@ export function FlowTriggerPanel({ kind, docTypes, loadingDocTypes, value, onCha
                 ))}
               </SelectContent>
             </Select>
+            <FieldHint testId="flow-hint-doc-event-event">
+              {value.event && DOC_EVENT_HELP[value.event] ? DOC_EVENT_HELP[value.event] : 'Choose the moment that starts the flow. Each choice is explained here.'}
+            </FieldHint>
+            <Examples testId="flow-doc-event-explained" title="What each choice means">
+              {events.map((e) => (
+                <p key={e}><strong>{EVENT_LABELS[e]}.</strong> {DOC_EVENT_HELP[e]}</p>
+              ))}
+            </Examples>
             {resetNote ? (
               <p role="status" className="mt-1 text-[11px] text-signal-ink" data-testid="flow-doc-event-reset-note">{resetNote}</p>
             ) : null}

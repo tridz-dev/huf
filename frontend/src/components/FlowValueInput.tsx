@@ -38,6 +38,14 @@ const MODE_LABELS: Record<ValueMode, string> = {
   json: 'JSON',
 };
 
+/** One line under a value that is not plain text: what that way of giving a value means. */
+const MODE_HELP: Record<ValueMode, string> = {
+  literal: 'Typed exactly as written.',
+  reference: 'Takes the value from the trigger or an earlier step, for example input.name. Use Insert data to pick it.',
+  template: 'Text with {name} placeholders. Each placeholder is filled with data from the trigger or an earlier step.',
+  json: 'A list or an object, for example ["a", "b"] or {"name": "Ada"}.',
+};
+
 /**
  * Edits one graph-IR Value: a literal, a `$from` reference (e.g. `input.sender_id`,
  * `node_a.value`), a `$template` with `vars`, or a JSON array/object.
@@ -146,8 +154,11 @@ export function FlowValueInput({ id, label, value, onChange, optional, testId, n
           />
         </>
       )}
-      {hint && mode === 'literal' && (
-        <p className="text-[11px] text-muted-foreground" data-testid={testId ? `${testId}-hint` : undefined}>{hint}</p>
+      {hint && (
+        <p className="text-[11px] leading-snug text-muted-foreground break-words" data-testid={testId ? `${testId}-hint` : undefined}>{hint}</p>
+      )}
+      {mode !== 'literal' && (
+        <p className="text-[11px] leading-snug text-muted-foreground break-words" data-testid={testId ? `${testId}-mode-help` : undefined}>{MODE_HELP[mode]}</p>
       )}
       {mode === 'json' && isInvalidValueJson(text) && (
         <p className="text-[10px] text-destructive">Not valid JSON — saved as plain text.</p>

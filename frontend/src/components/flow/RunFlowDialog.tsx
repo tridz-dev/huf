@@ -56,7 +56,7 @@ export function RunFlowDialog({ open, flowId, flowName, onOpenChange, onRun }: R
         <DialogScrollHeader>
           <DialogTitle>Run {flowName ? `"${flowName}"` : 'flow'}</DialogTitle>
           <DialogDescription>
-            This is the data the trigger hands to the flow. Steps can read it as the flow input.
+            Starts the flow once, right now, as if its trigger had fired. This is a real run: emails are sent and records are created.
           </DialogDescription>
         </DialogScrollHeader>
         <DialogScrollBody className="grid gap-2 py-4">
@@ -75,7 +75,10 @@ export function RunFlowDialog({ open, flowId, flowName, onOpenChange, onRun }: R
               {error}
             </p>
           ) : (
-            <p className="text-xs text-muted-foreground">Leave it as {'{}'} to run without input.</p>
+            <p className="text-xs text-muted-foreground" data-testid="flow-run-payload-hint">
+              This is the data the trigger would hand to the flow. Steps read it as input, for example {'{"name": "Ada"}'} is available as input.name.
+              Leave it as {'{}'} to run without input. When the run finishes, find it under Runs.
+            </p>
           )}
         </DialogScrollBody>
         <DialogScrollFooter>
