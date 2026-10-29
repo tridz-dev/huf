@@ -49,6 +49,14 @@ export interface IntegrationSettingsDoc {
   telegram_last_webhook_setup?: string;
   last_used?: string;
   last_error?: string;
+  /** A name the user chose (for example "Marketing Slack"). Empty: the service name and account are shown. */
+  display_label?: string;
+  /** Answer of the last Test connection on the saved credentials. */
+  last_test_status?: '' | 'Connected' | 'Rejected' | 'Not connected';
+  last_test_at?: string;
+  last_test_message?: string;
+  /** Who or what the credentials connect to (workspace, mailbox), learned from Test connection. */
+  account_label?: string;
   modified?: string;
 }
 

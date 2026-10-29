@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Bot, Link, Settings, Star, Users } from 'lucide-react';
+import { ChevronDown, Link, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageFrame } from '@/layouts/PageFrame';
-import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '@/components/dashboard';
+import { FilterBar, GridView, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import {
   getIntegrationSettings,
@@ -12,10 +12,14 @@ import {
 import { AddIntegrationToAgentModal } from '@/components/integrations/AddIntegrationToAgentModal';
 import { ConnectChannelAgentModal } from '@/components/integrations/ConnectChannelAgentModal';
 import { ServiceCatalogModal } from '@/components/integrations/ServiceCatalogModal';
-import { ServiceToolCount } from '@/components/integrations/ServiceToolCount';
+import { IntegrationCard } from '@/components/integrations/connection/IntegrationCard';
+import { IntegrationStatusPill } from '@/components/integrations/connection/IntegrationStatusPill';
+import { CategoryFilter } from '@/components/integrations/connection/CategoryFilter';
+import { Button } from '@/components/ui/button';
 import type { IntegrationSettingsDoc, IntegrationServiceDoc } from '@/types/integration.types';
 import { formatTimeAgo } from '@/utils/time';
 import { getServiceIdentity } from '@/data/serviceIdentity';
+import { groupInactiveDuplicates, integrationHealth, integrationTitle, sortByHealth } from '@/lib/integrations/health';
 import { getServiceSurfaceMap, type ServiceSurface } from '@/services/serviceSurfaceCache';
 
 interface IntegrationSettingsListingPageProps {
@@ -63,10 +67,7 @@ export function IntegrationSettingsListingPage({
 
   const categories = useMemo(() => {
     const unique = new Set(services.map((s) => s.category).filter(Boolean));
-    return [
-      { label: 'All categories', value: 'all' },
-      ...Array.from(unique).sort().map((c) => ({ label: c, value: c })),
-    ];
+    return Array.from(unique).sort();
   }, [services]);
 
   const {
@@ -116,9 +117,13 @@ export function IntegrationSettingsListingPage({
       const isGateway = surface === 'Gateway';
       return kind === 'channels' ? isGateway : true;
     });
-    if (categoryFilter === 'all') return byKind;
-    return byKind.filter((item) => serviceCategoryMap.get(item.service) === categoryFilter);
+    const inCategory =
+      categoryFilter === 'all' ? byKind : byKind.filter((item) => serviceCategoryMap.get(item.service) === categoryFilter);
+    return sortByHealth(inCategory);
   }, [allSettings, categoryFilter, kind, serviceCategoryMap, serviceSurfaceMap]);
+
+  const { visible, groups } = useMemo(() => groupInactiveDuplicates(settings), [settings]);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (error) {
@@ -135,15 +140,7 @@ export function IntegrationSettingsListingPage({
           searchPlaceholder={kind === 'channels' ? 'Search channels...' : 'Search integrations...'}
           searchValue={search}
           onSearchChange={setSearch}
-          filters={[
-            {
-              label: 'Category',
-              value: categoryFilter,
-              placeholder: 'Category',
-              options: categories,
-              onChange: setCategoryFilter,
-            },
-          ]}
+          actions={<CategoryFilter value={categoryFilter} categories={categories} onChange={setCategoryFilter} />}
         />
       }
     >
@@ -157,7 +154,7 @@ export function IntegrationSettingsListingPage({
       )}
 
       <GridView
-        items={settings}
+        items={visible}
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
@@ -192,52 +189,65 @@ export function IntegrationSettingsListingPage({
             />
           )
         }
-        renderItem={(setting) => {
-          const category = serviceCategoryMap.get(setting.service);
-          const identity = getServiceIdentity(setting.service);
-          const metadata = [
-            ...(category ? [{ label: 'Category', value: category }] : []),
-            { label: 'Tools', value: <ServiceToolCount service={setting.service} /> },
-            ...(setting.is_default ? [{ label: 'Default', value: 'Yes', icon: Star }] : []),
-            ...(setting.last_used
-              ? [{ label: 'Last used', value: formatTimeAgo(setting.last_used) }]
-              : []),
-            ...(setting.last_error
-              ? [{ label: 'Error', value: setting.last_error.slice(0, 40), icon: AlertCircle }]
-              : []),
-          ];
-
-          return (
-            <ItemCard
-              title={setting.name}
-              description={`${identity.title} ${kind === 'channels' ? 'channel' : 'integration'}`}
-              icon={identity.icon}
-              status={{
-                label: setting.is_active ? 'active' : 'inactive',
-                variant: setting.is_active ? 'default' : 'secondary',
-              }}
-              metadata={metadata}
-              actions={[
-                {
-                  icon: Bot,
-                  label: serviceSurfaceMap?.get(setting.service.toLowerCase()) === 'Gateway' ? 'Connect agent' : 'Add to Agent',
-                  onClick: () => {
-                    setSelectedSetting(setting);
-                    setAddToAgentOpen(true);
-                  },
-                },
-                {
-                  icon: Settings,
-                  label: 'Configure',
-                  onClick: () => navigate(detailsRoute(setting.name)),
-                },
-              ]}
-              onClick={() => navigate(detailsRoute(setting.name))}
-            />
-          );
-        }}
+        renderItem={(setting) => (
+          <IntegrationCard
+            setting={setting}
+            onOpen={() => navigate(detailsRoute(setting.name))}
+            onUseInAgent={() => {
+              setSelectedSetting(setting);
+              setAddToAgentOpen(true);
+            }}
+          />
+        )}
         keyExtractor={(setting) => setting.name}
       />
+
+      {groups.length > 0 && (
+        <section className="mt-6 space-y-2" data-testid="integration-inactive-groups" aria-label="Not in use">
+          <h2 className="text-sm font-medium text-steel">Not in use</h2>
+          {groups.map((group) => {
+            const open = openGroups[group.service] ?? false;
+            const Logo = getServiceIdentity(group.service).icon;
+            return (
+              <div key={group.service} className="rounded-lg border bg-card" data-testid={`integration-group-${group.service}`}>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left"
+                  aria-expanded={open}
+                  onClick={() => setOpenGroups((prev) => ({ ...prev, [group.service]: !open }))}
+                >
+                  <Logo className="h-5 w-5 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-ink">
+                      {group.title}: {group.items.length} inactive copies
+                    </span>
+                    <span className="block truncate text-xs text-steel">
+                      Switched off and never named. Open one to set it up, or delete the ones you do not need.
+                    </span>
+                  </span>
+                  <ChevronDown className={`h-4 w-4 shrink-0 text-steel transition-transform ${open ? 'rotate-180' : ''}`} />
+                </button>
+                {open && (
+                  <ul className="divide-y border-t">
+                    {group.items.map((item) => (
+                      <li key={item.name} className="flex items-center gap-3 px-4 py-2 text-sm">
+                        <span className="min-w-0 flex-1 truncate">
+                          {integrationTitle(item)}
+                          <span className="ml-2 text-xs text-steel-soft">edited {formatTimeAgo(item.modified).toLowerCase()}</span>
+                        </span>
+                        <IntegrationStatusPill health={integrationHealth(item)} />
+                        <Button type="button" variant="ghost" size="sm" onClick={() => navigate(detailsRoute(item.name))}>
+                          Open
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       <LoadMoreButton
         hasMore={hasMore}
@@ -248,14 +258,14 @@ export function IntegrationSettingsListingPage({
 
       {!hasMore && settings.length > 0 && categoryFilter === 'all' && (
         <div className="text-center py-4 text-sm font-body text-steel">
-          {total !== undefined ? `Showing all ${total} integrations` : 'No more integrations to load'}
+          {total !== undefined ? `Showing all ${total} connection${total === 1 ? '' : 's'}` : 'No more to load'}
         </div>
       )}
 
       {categoryFilter !== 'all' && settings.length > 0 && (
         <div className="text-center py-4 text-sm font-body text-steel flex items-center justify-center gap-1">
           <Users className="w-4 h-4" />
-          {settings.length} integration{settings.length !== 1 ? 's' : ''} in this category
+          {settings.length} connection{settings.length !== 1 ? 's' : ''} in this category
         </div>
       )}
 

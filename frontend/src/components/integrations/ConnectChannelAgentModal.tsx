@@ -111,7 +111,7 @@ export function ConnectChannelAgentModal({
         <DialogScrollHeader>
           <DialogTitle className="flex items-center gap-2">
             <Bot className="h-5 w-5" />
-            Connect an agent
+            Use in agent
           </DialogTitle>
           <DialogDescription>
             Choose the agent that answers messages on this channel. It also gets the channel&apos;s tools.
@@ -184,7 +184,7 @@ export function ConnectChannelAgentModal({
           </Button>
           <Button onClick={handleConnect} disabled={!selected || selected === currentAgent || submitting}>
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Connect agent
+            Use in agent
           </Button>
         </DialogScrollFooter>
       </DialogScrollContent>
