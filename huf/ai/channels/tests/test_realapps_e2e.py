@@ -246,3 +246,24 @@ class TestLmsRealFlow(IntegrationTestCase):
 		res = self._enroll(paid)
 		self.assertFalse(res["success"], res)
 		self.assertFalse(frappe.db.exists("LMS Enrollment", {"course": paid, "member": self.member}))
+
+
+@unittest.skipUnless("frappe_whatsapp" in _APPS, "frappe_whatsapp not installed")
+class TestRealWhatsAppDoctypes(IntegrationTestCase):
+	def test_standins_never_shadow_real_doctypes(self):
+		"""test_broadcast_s1_s12 creates custom stand-ins only for missing doctypes; with frappe_whatsapp they stay real."""
+		from huf.ai.whatsapp.tests import test_broadcast_s1_s12 as s1
+
+		s1._ensure_stub_doctypes()
+		self.assertEqual(s1.STATE["stubs"], [])
+		for name in s1._STUBS:
+			custom, module = frappe.db.get_value("DocType", name, ["custom", "module"])
+			self.assertEqual((custom, module), (0, "Frappe Whatsapp"), name)
+
+	def test_huf_does_not_define_doctypes_named_like_frappe_whatsapp(self):
+		fw = {
+			d.name
+			for d in frappe.get_all("DocType", filters={"module": "Frappe Whatsapp"}, fields=["name"])
+		}
+		huf = {d.name for d in frappe.get_all("DocType", filters={"module": "Huf"}, fields=["name"])}
+		self.assertEqual(fw & huf, set())
