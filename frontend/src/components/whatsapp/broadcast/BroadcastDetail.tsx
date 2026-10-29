@@ -101,7 +101,7 @@ export function BroadcastDetail({ name, onBack }: { name: string; onBack: () => 
         {b.pause_reason ? <span className="text-xs text-steel">Paused: {b.pause_reason}</span> : null}
         {active ? (
           <span className="ml-auto flex items-center gap-1 text-xs text-steel" role="status" aria-label={live ? 'Live updates' : 'Updating by polling'}>
-            <span aria-hidden className={`inline-block size-2 rounded-full ${live ? 'bg-green-500' : 'bg-muted-foreground'}`} />
+            <span aria-hidden className={`inline-block size-2 rounded-full ${live ? 'bg-good' : 'bg-muted-foreground'}`} />
             {live ? 'Live' : 'Polling'}
           </span>
         ) : null}

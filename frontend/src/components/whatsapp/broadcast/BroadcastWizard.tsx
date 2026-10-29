@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -407,7 +408,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
             </div>
           ) : null}
           {warnings.length ? (
-            <div role="alert" className="space-y-2 rounded-md border border-amber-500 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+            <Alert variant="warning" className="space-y-2">
               <p className="font-medium">Warnings</p>
               {warnings.map((w) => (
                 <div key={w.code} className="flex items-start gap-2">
@@ -415,7 +416,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
                   <Label htmlFor={`bc-ack-${w.code}`}><span>{w.message}</span> <span className="block text-xs">I understand, continue anyway.</span></Label>
                 </div>
               ))}
-            </div>
+            </Alert>
           ) : null}
           {blocking.length ? (
             <div role="alert" className="text-destructive">
