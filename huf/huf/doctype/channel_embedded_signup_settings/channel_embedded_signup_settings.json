@@ -1,0 +1,39 @@
+{
+ "actions": [],
+ "creation": "2026-10-29 12:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "enabled", "mode", "facebook_app_id", "config_id", "graph_version", "app_secret",
+  "broker_section", "broker_url", "tenant_id", "broker_api_key",
+  "tenants_section", "allowed_tenants"
+ ],
+ "fields": [
+  {"default": "0", "fieldname": "enabled", "fieldtype": "Check", "label": "Enabled"},
+  {"default": "direct", "fieldname": "mode", "fieldtype": "Select", "label": "Mode", "options": "direct\nbroker\nbroker_server", "reqd": 1},
+  {"fieldname": "facebook_app_id", "fieldtype": "Data", "label": "Facebook App ID"},
+  {"fieldname": "config_id", "fieldtype": "Data", "label": "Embedded Signup Configuration ID"},
+  {"default": "v21.0", "fieldname": "graph_version", "fieldtype": "Data", "label": "Graph API Version"},
+  {"depends_on": "eval:doc.mode!='broker'", "fieldname": "app_secret", "fieldtype": "Password", "label": "Facebook App Secret"},
+  {"depends_on": "eval:doc.mode=='broker'", "fieldname": "broker_section", "fieldtype": "Section Break", "label": "Broker (Huf Cloud)"},
+  {"fieldname": "broker_url", "fieldtype": "Data", "label": "Broker URL"},
+  {"fieldname": "tenant_id", "fieldtype": "Data", "label": "Tenant ID"},
+  {"fieldname": "broker_api_key", "fieldtype": "Password", "label": "Broker API Key"},
+  {"depends_on": "eval:doc.mode=='broker_server'", "fieldname": "tenants_section", "fieldtype": "Section Break", "label": "Allowed Tenants"},
+  {"fieldname": "allowed_tenants", "fieldtype": "Table", "label": "Allowed Tenants", "options": "Embedded Signup Tenant"}
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-10-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Channel Embedded Signup Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "read": 1, "role": "System Manager", "write": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
