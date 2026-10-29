@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
-"""Tests for huf.ai.desktop_import (publishing a Huf Desktop conversation).
+"""Tests for huf.ai.desktop.conversation_import (publishing a Huf Desktop conversation).
 
 Run with:
 	bench --site <site> run-tests --app huf --module huf.ai.desktop.tests.test_desktop_import
@@ -17,7 +17,7 @@ try:  # Frappe v16
 except ImportError:  # Frappe v15
 	from frappe.tests.utils import FrappeTestCase as IntegrationTestCase
 
-from huf.ai import desktop_import as di
+from huf.ai.desktop import conversation_import as di
 from huf.testing import desktop_test_helpers as h
 
 

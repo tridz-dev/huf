@@ -42,7 +42,7 @@ def import_conversation_capabilities():
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def import_conversation(
 	client_conversation_id: str,
 	idempotency_key: str,
@@ -137,7 +137,7 @@ def import_conversation(
 		}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete_imported_conversation(
 	conversation_id: str, client_conversation_id: str, idempotency_key: str | None = None
 ):
