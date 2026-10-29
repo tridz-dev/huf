@@ -19,6 +19,8 @@ export interface ChannelConversation {
   message_count?: number;
   modified: string;
   within_24h: boolean;
+  handoff_doctype?: string | null;
+  handoff_name?: string | null;
 }
 
 export interface ConversationMessage {
@@ -34,9 +36,17 @@ export interface ConversationMessage {
   sent_by: string;
 }
 
+export interface ConversationToolCall {
+  name: string;
+  agent_run: string | null;
+  tool: string;
+  status: string;
+  creation: string;
+}
+
 export interface ConversationDetail extends ChannelConversation {
   messages: ConversationMessage[];
-  tool_calls?: unknown[];
+  tool_calls?: ConversationToolCall[];
 }
 
 export interface ConversationList {
@@ -74,4 +84,39 @@ export function listConversations(
 
 export function getConversation(name: string) {
   return get<{ conversation?: ConversationDetail } & Partial<ConversationDetail>>('get_conversation', { name });
+}
+
+export interface EcosystemApp {
+  installed: boolean;
+  version: string | null;
+  enabled_for_whatsapp: boolean;
+}
+export type EcosystemKey = 'crm' | 'erpnext' | 'helpdesk' | 'lms' | 'ravan';
+export type Ecosystem = Record<EcosystemKey, EcosystemApp>;
+
+async function unwrapCall<T>(path: string, verb: 'get' | 'post', args: Record<string, unknown>): Promise<ChannelsResult<T>> {
+  try {
+    const res = verb === 'post' ? await call.post(path, args) : await call.get(path, args);
+    const body = ((res && typeof res === 'object' && 'message' in res ? (res as { message: unknown }).message : res) ?? {}) as T & {
+      success?: boolean;
+      status?: string;
+      error?: string;
+    };
+    if (body.success === false || body.status === 'error') return { ok: false, error: body.error || 'Request failed' };
+    return { ok: true, data: body };
+  } catch (e) {
+    return { ok: false, error: getFrappeErrorMessage(e) };
+  }
+}
+
+export function getEcosystem() {
+  return unwrapCall<Ecosystem>('huf.ai.channels.ecosystem.get_ecosystem', 'get', {});
+}
+
+export function returnToAi(conversation: string) {
+  return unwrapCall<{ conversation_status?: string }>('huf.ai.channels.reply_api.return_to_ai', 'post', { conversation });
+}
+
+export function closeConversation(conversation: string) {
+  return unwrapCall<{ conversation_status?: string }>('huf.ai.channels.reply_api.close', 'post', { conversation });
 }

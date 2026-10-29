@@ -28,7 +28,7 @@ export function ChannelsRoutes() {
             <Route path="n/:gw">
               <Route index element={<Navigate to="home" replace />} />
               <Route path="home" element={<Home />} />
-              <Route path="activity" element={<Activity />} />
+              <Route path="activity/:conversationId?" element={<Activity />} />
               <Route path="broadcasts/*" element={<Broadcasts />} />
               <Route path="templates/:name?" element={<Templates />} />
               <Route path="automations/:tab?" element={<Automations />} />

@@ -15,7 +15,7 @@ vi.mock('@/services/whatsappApi', async (orig) => ({
   listMessageLog: vi.fn(),
   listMessageLogFilters: vi.fn(),
 }));
-vi.mock('@/services/channelsApi', () => ({ listConversations: vi.fn() }));
+vi.mock('@/services/channelsApi', () => ({ listConversations: vi.fn(), getConversation: vi.fn(), returnToAi: vi.fn(), closeConversation: vi.fn() }));
 vi.mock('../useChannelGateway', () => ({ useChannelGateway: () => 'GW-1' }));
 import { listMessageLog, listMessageLogFilters } from '@/services/whatsappApi';
 import { listConversations } from '@/services/channelsApi';
@@ -40,15 +40,24 @@ beforeEach(() => {
 describe('ActivitySection', () => {
   it('has no send panel and opens ?event= deep link', async () => {
     render(<MemoryRouter initialEntries={['/?send=1&event=EV-1']}><ActivitySection /></MemoryRouter>);
+    await userEvent.click(screen.getByRole('button', { name: 'Messages' }));
     await waitFor(() => expect(screen.getByText('detail m1')).toBeTruthy());
     expect(screen.queryByText(/send a message/i)).toBeNull();
   });
 
-  it('toggles to conversations', async () => {
+  it('defaults to conversations', async () => {
     render(<MemoryRouter><ActivitySection /></MemoryRouter>);
-    await userEvent.click(screen.getByRole('button', { name: 'Conversations' }));
     expect(await screen.findByText('Asha')).toBeTruthy();
-    expect(screen.getByText('Handed off')).toBeTruthy();
+    expect(screen.getAllByText('Handed off').length).toBeGreaterThan(1);
     expect(screen.getByText('24h')).toBeTruthy();
+  });
+});
+
+describe('conversation filter', () => {
+  it('passes status to the list call', async () => {
+    render(<MemoryRouter><ActivitySection /></MemoryRouter>);
+    await screen.findByText('Asha');
+    await userEvent.click(screen.getByRole('button', { name: 'Closed' }));
+    await waitFor(() => expect(listConversations).toHaveBeenLastCalledWith('GW-1', { status: 'closed' }));
   });
 });
