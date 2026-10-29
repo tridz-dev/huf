@@ -68,8 +68,15 @@ def _fx_heavy(self):
 		sys.modules.pop("huf.ai.gateway_service", None)
 
 
+class _Doc(SimpleNamespace):
+	def __getattr__(self, name):  # Document helper checks unrelated to the policy under test
+		if name.startswith("_validate_"):
+			return lambda *a, **k: None
+		raise AttributeError(name)
+
+
 def _doc(provider, policy="Open"):
-	d = SimpleNamespace(
+	d = _Doc(
 		provider=provider, direct_policy=policy, is_enabled=0, execution_user="",
 		default_target_type="", default_agent="", default_flow="", integration_settings="",
 	)

@@ -159,7 +159,7 @@ def fake_confirm(monkeypatch, send):
 	"""Temporarily install a fake identity_confirm (no sys.modules / package attribute leaks)."""
 	import types as _t
 
-	import huf.ai.gateways as pkg
+	import huf.ai.gateways.slack as pkg
 
 	mod = _t.ModuleType("huf.ai.gateways.slack.identity_confirm")
 	mod.send_confirmation = send
