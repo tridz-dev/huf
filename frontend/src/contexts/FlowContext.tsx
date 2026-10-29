@@ -7,6 +7,8 @@ import { tidyPositions } from '../lib/flow/flowLayout';
 import { BLOCKED_TOAST_ID } from '../lib/flow-graph/flowValidation';
 import { followRenamedTarget } from '../lib/flow/flowEdgeLabels';
 import { removeStep, type RemoveStepMode } from '../lib/flow/flowEdit';
+import { announceConversion, flowsEqual } from '../lib/flow-graph/flowSync';
+import { useFlowRealtimeStatus } from '../hooks/flow/useFlowRealtimeStatus';
 
 export type SaveState = 'saved' | 'saving' | 'unsaved' | 'error';
 
@@ -55,22 +57,6 @@ interface FlowContextType {
 
 const FlowContext = createContext<FlowContextType | undefined>(undefined);
 
-// Deep equality check for flows to prevent unnecessary updates
-function flowsEqual(a: Flow | null, b: Flow | null): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  return (
-    a.id === b.id &&
-    a.name === b.name &&
-    a.description === b.description &&
-    a.status === b.status &&
-    a.category === b.category &&
-    a.version === b.version &&
-    a.nodes.length === b.nodes.length &&
-    a.edges.length === b.edges.length
-  );
-}
-
 export function FlowProvider({ children }: { children: ReactNode }) {
   const [flows, setFlows] = useState<FlowMetadata[]>([]);
   const [activeFlowId, setActiveFlowId] = useState<string | null>(null);
@@ -85,6 +71,15 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   // Ref to track last synced flow to prevent circular updates
   const lastSyncedFlowRef = useRef<Flow | null>(null);
   const activeFlowRef = useRef<Flow | null>(activeFlow);
+  // Applies an edit to the active flow and remembers it as synced, so the flowService echo is ignored.
+  const patchActive = useCallback((patch: (flow: Flow) => Partial<Flow>) => {
+    setActiveFlowState(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...patch(prev) };
+      lastSyncedFlowRef.current = updated;
+      return updated;
+    });
+  }, []);
 
   // Undo history for node deletion. Full nodes+edges snapshots are taken before
   // each delete and replayed verbatim on undo, so a restored node can never come
@@ -182,85 +177,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFlowId]);
 
-  // ─── Realtime Event Listeners for Flow Execution Tracker ─────────────
-  useEffect(() => {
-    if (!activeFlowId) return;
-
-    const handleNodeStart = (e: Event) => {
-      const data = (e as CustomEvent).detail;
-      setActiveFlowState(prev => {
-        if (!prev) return prev;
-        const nodes = prev.nodes.map(n =>
-          n.id === data.node_id ? { ...n, data: { ...n.data, status: 'running' as const } } : n
-        );
-        return { ...prev, nodes };
-      });
-    };
-
-    const handleNodeEnd = (e: Event) => {
-      const data = (e as CustomEvent).detail;
-      setActiveFlowState(prev => {
-        if (!prev) return prev;
-        const nodes = prev.nodes.map(n =>
-          n.id === data.node_id ? { ...n, data: { ...n.data, status: data.status === 'success' ? ('success' as const) : ('error' as const) } } : n
-        );
-        return { ...prev, nodes };
-      });
-    };
-
-    const handleFlowPaused = (e: Event) => {
-      const data = (e as CustomEvent).detail;
-      setActiveFlowState(prev => {
-        if (!prev) return prev;
-        const nodes = prev.nodes.map(n =>
-          n.id === data.node_id ? { ...n, data: { ...n.data, status: 'waiting' as const } } : n
-        );
-        return { ...prev, nodes };
-      });
-    };
-
-    const handleFlowCompleted = (e: Event) => {
-      const data = (e as CustomEvent).detail;
-      setActiveFlowState(prev => {
-        if (!prev) return prev;
-        // Mark node as success if provided
-        const nodes = prev.nodes.map(n =>
-          data.node_id && n.id === data.node_id ? { ...n, data: { ...n.data, status: 'success' as const } } : n
-        );
-        return { ...prev, nodes };
-      });
-      refreshFlows(); // Reload flows to get updated statuses
-    };
-
-    const handleFlowError = (e: Event) => {
-      const data = (e as CustomEvent).detail;
-      // Mark flow as error
-      setActiveFlowState(prev => {
-        if (!prev) return prev;
-        // Mark the active node as error
-        const nodes = prev.nodes.map(n =>
-          n.data.status === 'running' || (data.node_id && n.id === data.node_id)
-            ? { ...n, data: { ...n.data, status: 'error' as const } }
-            : n
-        );
-        return { ...prev, nodes };
-      });
-    };
-
-    window.addEventListener('frappe:flow_node_start', handleNodeStart);
-    window.addEventListener('frappe:flow_node_end', handleNodeEnd);
-    window.addEventListener('frappe:flow_paused', handleFlowPaused);
-    window.addEventListener('frappe:flow_completed', handleFlowCompleted);
-    window.addEventListener('frappe:flow_error', handleFlowError);
-
-    return () => {
-      window.removeEventListener('frappe:flow_node_start', handleNodeStart);
-      window.removeEventListener('frappe:flow_node_end', handleNodeEnd);
-      window.removeEventListener('frappe:flow_paused', handleFlowPaused);
-      window.removeEventListener('frappe:flow_completed', handleFlowCompleted);
-      window.removeEventListener('frappe:flow_error', handleFlowError);
-    };
-  }, [activeFlowId, refreshFlows]);
+  useFlowRealtimeStatus(activeFlowId, setActiveFlowState, refreshFlows);
 
   const setActiveFlow = useCallback((flowId: string) => {
     setActiveFlowId(flowId);
@@ -328,23 +245,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
       setSaveState('saved');
       setHasUnsavedChanges(false);
 
-      // The "create a procedure from this flow on save" checkbox (if enabled) runs
-      // after the flow itself is saved and leaves a note on the doc explaining what
-      // happened -- surface it so the user isn't left guessing. A missing note (the
-      // checkbox was off) is silently skipped.
-      try {
-        const conversion = await flowService.getConversionStatus(activeFlowId);
-        if (conversion.conversion_note) {
-          if (conversion.converted_procedure) {
-            toast.success(conversion.conversion_note);
-          } else {
-            toast.info(conversion.conversion_note);
-          }
-        }
-      } catch (conversionErr) {
-        // Non-critical: the flow itself saved fine, just couldn't fetch the note.
-        console.error('Failed to fetch flow conversion status:', conversionErr);
-      }
+      await announceConversion(activeFlowId);
     } catch (err: unknown) {
       setSaveState('error');
       console.error('Failed to save flow:', err);
@@ -365,51 +266,31 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   const updateNodes = useCallback((nodes: FlowNode[]) => {
     if (!activeFlowId) return;
     // Update local state first to avoid flicker
-    setActiveFlowState(prev => {
-      if (!prev) return prev;
-      const updated = { ...prev, nodes };
-      lastSyncedFlowRef.current = updated;
-      return updated;
-    });
+    patchActive(() => ({ nodes }));
     flowService.updateNodes(activeFlowId, nodes);
     markUnsaved();
-  }, [activeFlowId, markUnsaved]);
+  }, [activeFlowId, markUnsaved, patchActive]);
 
   const updateEdges = useCallback((edges: FlowEdge[]) => {
     if (!activeFlowId) return;
-    setActiveFlowState(prev => {
-      if (!prev) return prev;
-      const updated = { ...prev, edges };
-      lastSyncedFlowRef.current = updated;
-      return updated;
-    });
+    patchActive(() => ({ edges }));
     flowService.updateEdges(activeFlowId, edges);
     markUnsaved();
-  }, [activeFlowId, markUnsaved]);
+  }, [activeFlowId, markUnsaved, patchActive]);
 
   const updateNodesAndEdges = useCallback((nodes: FlowNode[], edges: FlowEdge[]) => {
     if (!activeFlowId) return;
-    setActiveFlowState(prev => {
-      if (!prev) return prev;
-      const updated = { ...prev, nodes, edges };
-      lastSyncedFlowRef.current = updated;
-      return updated;
-    });
+    patchActive(() => ({ nodes, edges }));
     flowService.updateNodesAndEdges(activeFlowId, nodes, edges);
     markUnsaved();
-  }, [activeFlowId, markUnsaved]);
+  }, [activeFlowId, markUnsaved, patchActive]);
 
   const addNode = useCallback((node: FlowNode) => {
     if (!activeFlowId) return;
-    setActiveFlowState(prev => {
-      if (!prev) return prev;
-      const updated = { ...prev, nodes: [...prev.nodes, node] };
-      lastSyncedFlowRef.current = updated;
-      return updated;
-    });
+    patchActive(prev => ({ nodes: [...prev.nodes, node] }));
     flowService.addNode(activeFlowId, node);
     markUnsaved();
-  }, [activeFlowId, markUnsaved]);
+  }, [activeFlowId, markUnsaved, patchActive]);
 
   const updateNode = useCallback((nodeId: string, updates: Partial<FlowNode>) => {
     if (!activeFlowId) return;
@@ -453,16 +334,11 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   // node/edge counts) cancels any in-flight debounced push before re-syncing.
   const restoreSnapshot = useCallback((snapshot: { nodes: FlowNode[]; edges: FlowEdge[] }) => {
     if (!activeFlowId) return;
-    setActiveFlowState(prev => {
-      if (!prev) return prev;
-      const updated = { ...prev, nodes: snapshot.nodes, edges: snapshot.edges };
-      lastSyncedFlowRef.current = updated;
-      return updated;
-    });
+    patchActive(() => ({ nodes: snapshot.nodes, edges: snapshot.edges }));
     flowService.updateNodesAndEdges(activeFlowId, snapshot.nodes, snapshot.edges);
     setLayoutRevision(v => v + 1);
     markUnsaved();
-  }, [activeFlowId, markUnsaved]);
+  }, [activeFlowId, markUnsaved, patchActive]);
 
   const undo = useCallback(() => {
     const { snapshot, rest } = popSnapshot(undoStackRef.current);
@@ -481,12 +357,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     setUndoDepth(undoStackRef.current.length);
     const { nodes: updatedNodes, edges: updatedEdges } = removeStep({ nodes: prev.nodes, edges: prev.edges }, nodeId, mode);
     const removedCount = prev.nodes.length - updatedNodes.length;
-    setActiveFlowState(current => {
-      if (!current) return current;
-      const updated = { ...current, nodes: updatedNodes, edges: updatedEdges };
-      lastSyncedFlowRef.current = updated;
-      return updated;
-    });
+    patchActive(() => ({ nodes: updatedNodes, edges: updatedEdges }));
     flowService.updateNodesAndEdges(activeFlowId, updatedNodes, updatedEdges);
     if (selectedNodeId && !updatedNodes.some(n => n.id === selectedNodeId)) {
       setSelectedNodeId(null);
@@ -502,7 +373,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
         onClick: () => undo(),
       },
     });
-  }, [activeFlowId, selectedNodeId, markUnsaved, undo]);
+  }, [activeFlowId, selectedNodeId, markUnsaved, undo, patchActive]);
 
   const deleteEdge = useCallback((edgeId: string) => {
     if (!activeFlowId) return;
@@ -511,12 +382,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     undoStackRef.current = pushSnapshot(undoStackRef.current, { nodes: prev.nodes, edges: prev.edges }, UNDO_STACK_LIMIT);
     setUndoDepth(undoStackRef.current.length);
     const updatedEdges = prev.edges.filter(e => e.id !== edgeId);
-    setActiveFlowState(current => {
-      if (!current) return current;
-      const updated = { ...current, edges: updatedEdges };
-      lastSyncedFlowRef.current = updated;
-      return updated;
-    });
+    patchActive(() => ({ edges: updatedEdges }));
     flowService.updateEdges(activeFlowId, updatedEdges);
     setSelectedEdgeId(null);
     markUnsaved();
@@ -524,7 +390,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
       description: 'The step it led to is not connected any more. Connect it again or delete it.',
       action: { label: 'Undo', onClick: () => undo() },
     });
-  }, [activeFlowId, markUnsaved, undo]);
+  }, [activeFlowId, markUnsaved, undo, patchActive]);
 
   const tidyLayout = useCallback(() => {
     if (!activeFlowId) return;
@@ -534,17 +400,12 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     const updatedNodes = prev.nodes.map(n => ({ ...n, position: positions[n.id] ?? n.position }));
     undoStackRef.current = pushSnapshot(undoStackRef.current, { nodes: prev.nodes, edges: prev.edges }, UNDO_STACK_LIMIT);
     setUndoDepth(undoStackRef.current.length);
-    setActiveFlowState(current => {
-      if (!current) return current;
-      const updated = { ...current, nodes: updatedNodes };
-      lastSyncedFlowRef.current = updated;
-      return updated;
-    });
+    patchActive(() => ({ nodes: updatedNodes }));
     flowService.updateNodesAndEdges(activeFlowId, updatedNodes, prev.edges);
     setLayoutRevision(v => v + 1);
     markUnsaved();
     toast('Layout tidied', { action: { label: 'Undo', onClick: () => undo() } });
-  }, [activeFlowId, markUnsaved, undo]);
+  }, [activeFlowId, markUnsaved, undo, patchActive]);
 
   const handleSetSelectedNode = useCallback((nodeId: string | null) => {
     toast.dismiss(BLOCKED_TOAST_ID);
@@ -560,15 +421,10 @@ export function FlowProvider({ children }: { children: ReactNode }) {
 
   const addEdge = useCallback((edge: FlowEdge) => {
     if (!activeFlowId) return;
-    setActiveFlowState(prev => {
-      if (!prev) return prev;
-      const updated = { ...prev, edges: [...prev.edges, edge] };
-      lastSyncedFlowRef.current = updated;
-      return updated;
-    });
+    patchActive(prev => ({ edges: [...prev.edges, edge] }));
     flowService.addEdge(activeFlowId, edge);
     markUnsaved();
-  }, [activeFlowId, markUnsaved]);
+  }, [activeFlowId, markUnsaved, patchActive]);
 
   const value = useMemo(() => ({
     flows,
