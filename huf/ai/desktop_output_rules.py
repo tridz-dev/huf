@@ -21,9 +21,24 @@ MAX_RESULTS = 100
 # extension -> (content type, Artifact.artifact_type, magic prefix or None, stored inline as text)
 ALLOWED = {
 	"pdf": ("application/pdf", "document", b"%PDF-", False),
-	"docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "document", b"PK\x03\x04", False),
-	"xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "document", b"PK\x03\x04", False),
-	"pptx": ("application/vnd.openxmlformats-officedocument.presentationml.presentation", "document", b"PK\x03\x04", False),
+	"docx": (
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		"document",
+		b"PK\x03\x04",
+		False,
+	),
+	"xlsx": (
+		"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		"document",
+		b"PK\x03\x04",
+		False,
+	),
+	"pptx": (
+		"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+		"document",
+		b"PK\x03\x04",
+		False,
+	),
 	"png": ("image/png", "image", b"\x89PNG\r\n\x1a\n", False),
 	"jpg": ("image/jpeg", "image", b"\xff\xd8\xff", False),
 	"jpeg": ("image/jpeg", "image", b"\xff\xd8\xff", False),
@@ -33,7 +48,10 @@ ALLOWED = {
 	"html": ("text/html", "html", None, True),
 	"json": ("application/json", "text", None, True),
 }
-SECRET_NAME = re.compile(r"(^|[._-])(id_rsa|id_ed25519|credentials?|secrets?|passwd|netrc|npmrc|token|apikey|api_key)([._-]|$)", re.I)
+SECRET_NAME = re.compile(
+	r"(^|[._-])(id_rsa|id_ed25519|credentials?|secrets?|passwd|netrc|npmrc|token|apikey|api_key)([._-]|$)",
+	re.I,
+)
 SECRET_EXT = {"pem", "key", "p12", "pfx", "env", "kdbx", "gpg", "asc"}
 
 
