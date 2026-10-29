@@ -4,6 +4,7 @@
  * JSON-schema error after Save. Field names are the contract's config keys.
  */
 import { getTransformOp } from './flowTransformOps';
+import { transformParamHelp } from './flowHelp';
 import { branchHandlesFor } from './flowBranches';
 import { cronProblem } from './flowSchedule';
 import { secretProblem } from './flowWebhookUi';
@@ -190,7 +191,7 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       }
       const input = asObj(c.input);
       for (const p of spec.params) {
-        if (!spec.optional?.includes(p) && isBlank(input[p])) add(`input.${p}`, `Enter a value for "${p}".`);
+        if (!spec.optional?.includes(p) && isBlank(input[p])) add(`input.${p}`, `Enter a value for "${transformParamHelp(spec.name, p).label}".`);
       }
       break;
     }
