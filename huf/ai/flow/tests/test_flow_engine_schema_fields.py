@@ -178,8 +178,8 @@ class TestRouterLlm(unittest.TestCase):
 		ctx.node_outputs["n_prev"] = {"ok": True}
 		render = flow_engine.render_text_refs
 		self.assertEqual(render("Order {input.amount} by {input.who.name}", ctx), "Order 150 by Ada")
-		self.assertEqual(render("Prev: {n_prev.ok}", ctx), "Prev: true")
-		self.assertEqual(render("Keep {unknown.path} and {{input.amount}} as written", ctx), "Keep {unknown.path} and {{input.amount}} as written")
+		self.assertEqual(render("Prev: {n_prev.ok}", ctx), "Prev: Yes")
+		self.assertEqual(render("Keep {unknown.path} and {{input.amount}} as written", ctx), "Keep  and {{input.amount}} as written")  # unresolved: empty, never literal braces
 
 	def test_router_agent_name_is_not_read(self):
 		cfg = {"router_agent_name": "x", "options": self.OPTIONS, "default": "n_loop", "prompt": "p"}
@@ -206,7 +206,7 @@ class TestRouterLlm(unittest.TestCase):
 	def test_empty_reply_is_reported_as_failure(self):
 		out = self._route(lambda p: "")
 		self.assertEqual(out["next_node_id"], "n_loop")
-		self.assertIn("llm_failed", out["output"]["reason"])
+		self.assertIn("did not answer", out["output"]["reason"])
 
 	def test_router_prompt_lists_labels(self):
 		text = flow_engine.build_router_llm_prompt("is it?", self.OPTIONS, {"a": 1})

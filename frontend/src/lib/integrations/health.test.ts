@@ -87,3 +87,13 @@ describe('grouping', () => {
     expect(sorted.map((d) => d.name)).toEqual(['bad', 'ok', 'off']);
   });
 });
+
+describe('plainProblem', () => {
+  it('drops the "Reconnect X in Integrations." tail that a step wrote', async () => {
+    const { plainProblem } = await import('./health');
+    expect(plainProblem('Gmail rejected the saved credentials (token expired or revoked). Reconnect Gmail in Integrations.')).toBe(
+      'Gmail rejected the saved credentials (token expired or revoked).',
+    );
+    expect(plainProblem(undefined)).toBe('');
+  });
+});

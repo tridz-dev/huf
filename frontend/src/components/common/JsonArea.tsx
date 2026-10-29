@@ -140,7 +140,7 @@ export function JsonArea({ surfaceKey, title, help, value, onChange, readOnly = 
           <div data-testid={textTestId}>
             <pre
               aria-labelledby={titleId}
-              className={cn('overflow-x-auto whitespace-pre-wrap break-words rounded bg-muted p-2 font-mono text-xs leading-relaxed', folded && 'max-h-[17rem] overflow-hidden')}
+              className={cn('overflow-x-auto whitespace-pre rounded bg-muted p-2 font-mono text-xs leading-relaxed', folded && 'max-h-[17rem] overflow-hidden')}
               data-testid={`${base}-text`}
             >
               {highlightJson(shown)}

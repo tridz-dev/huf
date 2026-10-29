@@ -15,10 +15,20 @@ class TestRender(unittest.TestCase):
 
 	def test_types(self):
 		out = render_template("{a}|{b}|{c}|{d}|{e}", {"a": True, "b": 1.5, "c": None, "d": [1], "e": {"k": "v"}})
-		self.assertEqual(out, 'true|1.5||[1]|{"k": "v"}')
+		self.assertEqual(out, "true|1.5||1 item: 1|K: v")  # lists and objects become a short summary, never JSON
+
+	def test_objects_never_pasted_as_json(self):
+		order = {"customer": {"name": "Ada Lovelace"}, "total": 450, "items": [{"name": "A"}, {"name": "B"}, {"name": "C"}]}
+		out = render_template("Order: {o}", {"o": order})
+		self.assertEqual(out, "Order: Customer: Ada Lovelace, Total: 450, Items: 3 items: A, B and 1 more")
+		for junk in ('{"', "[{", '":', "'"):
+			self.assertNotIn(junk, out)
+
+	def test_json_mode_for_model_text(self):
+		self.assertEqual(render_template("{d}", {"d": {"k": "v"}}, objects="json"), '{"k": "v"}')
 
 	def test_undefined_var_raises(self):
-		with self.assertRaisesRegex(TemplateError, "undefined variable 'nope'"):
+		with self.assertRaisesRegex(TemplateError, r"uses \{nope\} but no data was chosen"):
 			render_template("hi {nope}", {})
 
 	def test_malformed_raises(self):

@@ -57,7 +57,8 @@ describe('actionSubtitle', () => {
 
 describe('triggerSubtitle', () => {
   it('reads like a sentence', () => {
-    expect(triggerSubtitle({ type: 'schedule', cron: '0 9 * * 1-5' })).not.toMatch(/server time|cron/i);
+    expect(triggerSubtitle({ type: 'schedule', cron: '0 9 * * 1-5' })).toBe('Runs on a custom schedule');
+    expect(triggerSubtitle({ type: 'schedule', cron: '0 9 * * *' })).toBe('Every day at 09:00');
     expect(triggerSubtitle({ type: 'doc-event', doctype: 'ToDo', event: 'after_insert' })).toBe('When a ToDo is created');
     expect(triggerSubtitle({ type: undefined })).toBe('Choose what starts this flow');
   });

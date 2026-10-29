@@ -130,7 +130,7 @@ export function NodeCard({ id, icon: Icon, iconClass, title, subtitle, frameClas
         </div>
         <div className="min-w-0 flex-1 space-y-0.5">
           <div
-            className={cn('text-sm font-medium leading-snug text-card-foreground', titleWraps ? 'line-clamp-2' : 'truncate')}
+            className={cn('text-sm font-medium leading-snug text-card-foreground', titleWraps ? 'line-clamp-2 text-balance' : 'truncate')}
             title={title}
             data-testid={`flow-node-title-${id}`}
           >

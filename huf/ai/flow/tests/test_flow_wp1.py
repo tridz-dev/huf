@@ -90,7 +90,7 @@ class TestToolCallTimeout(unittest.TestCase):
 	def test_mcp_tool_past_timeout_ms_fails_with_a_readable_message(self):
 		out = self._run(50)
 		self.assertEqual(out["status"], "failed")
-		self.assertIn("timed out after 50 ms", out["error"])
+		self.assertIn("waited 50 ms", out["error"])
 
 
 class TestApprovalWording(unittest.TestCase):
@@ -115,7 +115,7 @@ class TestStaleRunSweeper(unittest.TestCase):
 	def test_fails_runs_with_the_documented_reason(self):
 		result, fail, _ = self._sweep(["FR-1", "FR-2"])
 		self.assertEqual(result, ["FR-1", "FR-2"])
-		self.assertEqual(fail.call_args.args[1], "Run did not complete (worker stopped)")
+		self.assertEqual(fail.call_args.args[1], flow_engine.STALE_RUN_SWEEP_REASON)
 
 	def test_skips_a_run_whose_worker_holds_the_lock(self):
 		result, fail, _ = self._sweep(["FR-1", "FR-2"], locked=("FR-1",))
