@@ -42,6 +42,8 @@ class TestErpLogic(IntegrationTestCase):
 			patch(f"{ERP}._conversation_customer", return_value=("CUST-A", None)),
 			patch.object(frappe.db, "exists", return_value=True),
 			patch.object(frappe.db, "get_value", return_value=10),
+			patch("frappe.utils.nowdate", return_value="2026-01-01"),
+			patch("frappe.utils.add_days", return_value="2026-01-08"),
 			patch.object(frappe, "get_doc", return_value=doc) as gd,
 		):
 			res = tools_erp.create_order([{"item_code": "I", "qty": 2}])
