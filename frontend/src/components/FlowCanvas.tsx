@@ -467,7 +467,7 @@ export function FlowCanvas({
   useEdgeActions(edges, handleAddNode, setEdgeDeleteId);
 
   // On-screen-only extras (Add step cards, the loop's return line, End subtitles) are never written back to the flow.
-  const { renderedNodes, renderedEdges } = useRenderedGraph({ canManage, nodes, edges, openEnds, selectedNodeId, onAddNode: handleAddNode, onRemoveEdge: setEdgeDeleteId });
+  const { renderedNodes, renderedEdges } = useRenderedGraph({ canManage, nodes, edges, openEnds, selectedNodeId, selectedEdgeId, onSelectEdge: setSelectedEdge, onAddNode: handleAddNode, onRemoveEdge: setEdgeDeleteId });
 
   if (!activeFlow) {
     return (
