@@ -311,7 +311,15 @@ def _is_unfinished(err, prefix: list) -> bool:
 	"""
 	leaf = _leaf_error(err)
 	full_path = prefix + list(leaf.absolute_path)
-	return len(full_path) >= 3 and full_path[0] == "nodes" and full_path[2] == "config" and leaf.validator in _UNFINISHED_KEYWORDS
+	if not (len(full_path) >= 3 and full_path[0] == "nodes" and full_path[2] == "config" and leaf.validator in _UNFINISHED_KEYWORDS):
+		return False
+	# "Too short" only counts as unfinished when there is nothing there yet. A secret that is typed but weak
+	# is a wrong value, never stored (WP11).
+	if leaf.validator == "minLength":
+		return leaf.instance == ""
+	if leaf.validator == "minItems":
+		return leaf.instance == []
+	return True
 
 
 def _check_schema(graph: dict, profile: str, draft: bool = False) -> list[ValidationError]:

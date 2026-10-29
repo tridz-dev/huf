@@ -133,11 +133,13 @@ class TestDraftVsPublish(unittest.TestCase):
 		self.assertFalse(publish.ok)
 		self.assertIn("loose", {i.node_id for i in publish.issues})
 
-	def test_short_webhook_secret_is_unfinished(self):
+	def test_missing_webhook_secret_is_unfinished_but_a_weak_one_is_refused(self):
 		g = finished_flow()
-		g["nodes"][0]["config"]["secret"] = "short"
+		g["nodes"][0]["config"]["secret"] = ""
 		self.assertTrue(validate_flow(g, "draft").ok)
 		self.assertFalse(validate_flow(g, "publish").ok)
+		g["nodes"][0]["config"]["secret"] = "short"  # typed but weak: never stored (WP11)
+		self.assertFalse(validate_flow(g, "draft").ok)
 
 	# --- structure: refused in every mode -------------------------------------------------
 
