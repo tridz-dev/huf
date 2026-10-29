@@ -31,7 +31,7 @@ export function ChannelsRoutes() {
               <Route path="activity" element={<Activity />} />
               <Route path="broadcasts/*" element={<Broadcasts />} />
               <Route path="templates/:name?" element={<Templates />} />
-              <Route path="automations" element={<Automations />} />
+              <Route path="automations/:tab?" element={<Automations />} />
               <Route path="connections" element={<Connections />} />
               <Route path="numbers" element={<Numbers />} />
               <Route path="settings/:section?" element={<Settings />} />
