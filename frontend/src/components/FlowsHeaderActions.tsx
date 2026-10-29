@@ -30,6 +30,7 @@ import { publishBlockedReason } from '@/lib/flow/flowPublishGuard';
 import { codePublishBlockedReason } from '@/lib/flow-graph/codeFlow';
 import { useCodeFlowStatus } from '@/lib/flow-graph/useCodeFlowStatus';
 import { useRunParam } from '@/hooks/flow/useRunParam';
+import { flowStatusKind, StatusPill } from './common/StatusPill';
 
 /**
  * Left-aligned "Flows > flow name [pencil]" control for the flow canvas
@@ -208,7 +209,7 @@ export function FlowsHeaderActions() {
     setIsPublishing(true);
     try {
       await setFlowPublished(activeFlow.id, true);
-      toast.success('Flow published', { description: 'Its trigger is on now: the webhook accepts calls, and schedule or record triggers start runs. Unpublish to turn it off.' });
+      toast.success('Flow is live', { description: 'Its trigger is on now: the webhook accepts calls, and schedule or record triggers start runs. Unpublish to turn it off.' });
       // Non-blocking: publishing works, but these steps will fail until their integration is connected.
       const missing = unconnectedSteps(activeFlow.nodes, await getFlowIntegrationStatus());
       if (missing.length > 0) {
@@ -218,7 +219,7 @@ export function FlowsHeaderActions() {
         });
       }
     } catch (err) {
-      toast.error('Could not publish the flow', { description: humanizeFlowError(err) });
+      toast.error('Could not make the flow live', { description: humanizeFlowError(err) });
     } finally {
       setIsPublishing(false);
     }
@@ -229,10 +230,10 @@ export function FlowsHeaderActions() {
     setIsUnpublishing(true);
     try {
       await setFlowPublished(activeFlow.id, false);
-      toast.success('Flow unpublished', { description: 'It is a draft again. Its triggers no longer start it.' });
+      toast.success('Flow is a draft again', { description: 'It is no longer live. Its triggers no longer start it.' });
       setShowUnpublish(false);
     } catch (err) {
-      toast.error('Could not unpublish the flow', { description: humanizeFlowError(err) });
+      toast.error('Could not turn the flow off', { description: humanizeFlowError(err) });
     } finally {
       setIsUnpublishing(false);
     }
@@ -335,14 +336,14 @@ export function FlowsHeaderActions() {
       </DisabledReason>
 
       {/* Publish / Unpublish */}
-      {isPublished && (
-        <span
-          className="inline-flex items-center gap-1 rounded-full border border-good/40 px-2 py-0.5 text-xs font-medium text-good"
-          data-testid="flow-published-badge"
-          title="Published: the trigger is on"
-        >
-          <CheckCircle2 className="w-3 h-3" />
-          <span className="sr-only xl:not-sr-only">Published</span>
+      {activeFlow && (
+        <span data-testid={isPublished ? 'flow-published-badge' : 'flow-draft-badge'} className="inline-flex">
+          <StatusPill
+            kind={flowStatusKind(activeFlow.status, issues.length)}
+            compact
+            data-testid="flow-status-pill"
+            title={isPublished ? 'Live: the trigger is on' : 'Draft: the trigger is off until you publish'}
+          />
         </span>
       )}
       <DisabledReason reason={!canManage ? readOnlyReason : isPublished ? null : publishBlocked}>

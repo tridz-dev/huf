@@ -156,7 +156,7 @@ export const SCHEDULE_EXAMPLES: Array<{ cron: string; meaning: string }> = [
 
 export const WEBHOOK_RESPONSES: Array<{ code: string; meaning: string }> = [
   { code: '200', meaning: 'The flow started. The answer holds the run id.' },
-  { code: '403', meaning: 'Wrong or missing secret, or the flow is not published.' },
+  { code: '403', meaning: 'Wrong or missing secret, or the flow is not live yet.' },
   { code: '405', meaning: 'The request used a different method than the one chosen above.' },
   { code: '429', meaning: 'Too many calls (more than 60 a minute from one address).' },
 ];
