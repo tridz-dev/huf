@@ -42,12 +42,12 @@ function NodeView({ node, root, path }: { node: HumanNode; root: string; path: s
       return <ListValue node={node} testId={`${root}-list${at}`} path={path} renderNode={(n, p) => <NodeView node={n} root={root} path={p} />} />;
     case 'rows':
       return (
-        <dl className="grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm" data-testid={`${root}-rows${at}`}>
+        <dl className="grid grid-cols-1 gap-y-2 text-sm sm:grid-cols-[minmax(0,max-content)_minmax(0,1fr)] sm:gap-x-4 sm:gap-y-1.5" data-testid={`${root}-rows${at}`}>
           {node.rows.map((r) => {
             const nested = r.node.kind === 'rows' || r.node.kind === 'list';
             return (
-              <div key={r.path} className="contents" data-testid={`${root}-row-${r.path}`}>
-                <dt className="max-w-[9rem] pt-0.5 text-xs text-muted-foreground break-words sm:max-w-[12rem]" data-testid={`${root}-label-${r.path}`}>{r.label}</dt>
+              <div key={r.path} className="sm:contents" data-testid={`${root}-row-${r.path}`}>
+                <dt className="pt-0.5 text-xs sm:max-w-[12rem] text-muted-foreground break-words" data-testid={`${root}-label-${r.path}`}>{r.label}</dt>
                 <dd className={cn('min-w-0', nested && r.node.kind === 'rows' && 'border-l border-line pl-3')} data-testid={`${root}-value-${r.path}`}>
                   <NodeView node={r.node} root={root} path={r.path} />
                 </dd>
