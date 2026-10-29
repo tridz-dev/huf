@@ -162,12 +162,12 @@ class FlowService {
     return getFlowConversionStatus(id);
   }
 
-  /** Update a flow locally and save to backend */
+  /**
+   * Change a flow's name, description or category: only those record fields are written. The steps are NOT saved
+   * here (that is the editor's Save), so unfinished edits can never make this call fail, and nothing is saved
+   * behind the person's back.
+   */
   async updateFlow(id: string, updates: Partial<Flow>): Promise<Flow | null> {
-    const flow = this.flowCache.get(id);
-    if (!flow) return null;
-
-    // Keep DocType fields in sync when renaming
     const fields: { flow_name?: string; description?: string; category?: string } = {};
     if (typeof updates.name === 'string' && updates.name.trim()) fields.flow_name = updates.name;
     if (typeof updates.description === 'string') fields.description = updates.description;
@@ -176,33 +176,20 @@ class FlowService {
       await updateFlowDefinitionFields(id, fields);
     }
 
-    const updatedFlow: Flow = {
-      ...flow,
-      ...updates,
-      updatedAt: new Date(),
-      version: flow.version + 1,
-    };
-
+    const flow = this.flowCache.get(id);
+    if (!flow) return null;
+    const updatedFlow: Flow = { ...flow, ...updates, updatedAt: new Date() };
     this.flowCache.set(id, updatedFlow);
     this.notifyListeners();
-
-    // Save to backend
-    const graph = serializeFlow(updatedFlow);
-    await saveFlowDefinition(id, graph);
-
     return updatedFlow;
   }
 
-  /** Delete a flow from the backend */
+  /** Delete a flow from the backend. A refusal (not allowed, still in use) is thrown so the caller can say so. */
   async deleteFlow(id: string): Promise<boolean> {
-    try {
-      await deleteFlowDefinition(id);
-      this.flowCache.delete(id);
-      this.notifyListeners();
-      return true;
-    } catch {
-      return false;
-    }
+    await deleteFlowDefinition(id);
+    this.flowCache.delete(id);
+    this.notifyListeners();
+    return true;
   }
 
   /** Update flow name (backend + cache) */

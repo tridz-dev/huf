@@ -3,19 +3,8 @@ import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle, Settings, P
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from './ui/alert-dialog';
 import { useFlowContext } from '../contexts/FlowContext';
-import { getFlowIntegrationStatus, runFlow } from '../services/flowApi';
-import { unconnectedSteps } from '@/lib/flow/flowIntegrations';
+import { runFlow } from '../services/flowApi';
 import { toast } from '@/lib/toast';
 import { FlowRunHistory } from './FlowRunHistory';
 import { FlowRunViewer } from './FlowRunViewer';
@@ -23,6 +12,9 @@ import { FlowSettingsModal } from './modals/FlowSettingsModal';
 import { BLOCKED_TOAST_ID, humanizeFlowError, summarizeIssues, validateFlow } from '@/lib/flow-graph/flowValidation';
 import { reportFlowRun } from '@/lib/flow-run/flowRunToast';
 import { RunFlowDialog } from './flow/RunFlowDialog';
+import { PublishFlowDialog } from './flow/publish/PublishFlowDialog';
+import { UnpublishFlowDialog } from './flow/publish/UnpublishFlowDialog';
+import { publishedToast, startSummary } from '@/lib/flow-list/flowPublishSummary';
 import { FlowHelpPopover } from './flow/FlowHelpPopover';
 import { DisabledReason } from './flow/DisabledReason';
 import { FLOW_VIEW_ONLY_HINT, useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
@@ -138,6 +130,7 @@ export function FlowsHeaderActions() {
   const [showRunDialog, setShowRunDialog] = useState(false);
   const { canManage, canPublishSensitive, readOnlyReason } = useFlowPermissions();
   const [isPublishing, setIsPublishing] = useState(false);
+  const [showPublish, setShowPublish] = useState(false);
   const [showUnpublish, setShowUnpublish] = useState(false);
   const [isUnpublishing, setIsUnpublishing] = useState(false);
   const isPublished = activeFlow?.status === 'active';
@@ -224,22 +217,23 @@ export function FlowsHeaderActions() {
     }
   };
 
+  /** Check and save, then show what will start the flow and ask before it goes live. */
   const handlePublish = async () => {
     if (!activeFlow || blockedBy('run')) return;
     if (!(await saveIfNeeded('publishing'))) return;
+    setShowPublish(true);
+  };
 
+  const confirmPublish = async () => {
+    if (!activeFlow) return;
     setIsPublishing(true);
     try {
       await setFlowPublished(activeFlow.id, true);
-      toast.success('Flow is live', { description: 'Its trigger is on now: the webhook accepts calls, and schedule or record triggers start runs. Unpublish to turn it off.' });
-      // Non-blocking: publishing works, but these steps will fail until their integration is connected.
-      const missing = unconnectedSteps(activeFlow.nodes, await getFlowIntegrationStatus());
-      if (missing.length > 0) {
-        toast.warning('Some steps are not connected yet', {
-          description: `${missing.map((m) => (m.stepLabel === m.service ? m.stepLabel : `${m.stepLabel} (${m.service})`)).join(', ')} will fail until you connect them.`,
-          id: 'flow-unconnected-warning',
-        });
-      }
+      const trigger = activeFlow.nodes.find((n) => n.data.nodeType === 'trigger')?.data.triggerConfig;
+      toast.success(publishedToast(startSummary(trigger, activeFlow.id, window.location.origin)).title, {
+        description: publishedToast(startSummary(trigger, activeFlow.id, window.location.origin)).description,
+      });
+      setShowPublish(false);
     } catch (err) {
       toast.error('Could not make the flow live', { description: humanizeFlowError(err) });
     } finally {
@@ -403,30 +397,27 @@ export function FlowsHeaderActions() {
         )}
       </DisabledReason>
 
-      <AlertDialog open={showUnpublish} onOpenChange={setShowUnpublish}>
-        <AlertDialogContent data-testid="flow-unpublish-dialog">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Unpublish "{activeFlow?.name}"?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The flow goes back to a draft. Its webhook is refused and its schedule and document triggers stop starting
-              it. Runs already in progress finish. Publish it again whenever you want to turn it back on.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              data-testid="flow-unpublish-confirm"
-              disabled={isUnpublishing}
-              onClick={(e) => {
-                e.preventDefault();
-                void handleUnpublish();
-              }}
-            >
-              {isUnpublishing ? 'Unpublishing...' : 'Unpublish'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {activeFlow && (
+        <PublishFlowDialog
+          open={showPublish}
+          onOpenChange={setShowPublish}
+          flowId={activeFlow.id}
+          flowName={activeFlow.name}
+          trigger={activeFlow.nodes.find((n) => n.data.nodeType === 'trigger')?.data.triggerConfig}
+          steps={activeFlow.nodes}
+          problems={issues.map((i) => ({ title: i.nodeLabel, message: i.message }))}
+          publishing={isPublishing}
+          onConfirm={() => void confirmPublish()}
+        />
+      )}
+      <UnpublishFlowDialog
+        open={showUnpublish}
+        onOpenChange={setShowUnpublish}
+        flowName={activeFlow?.name ?? ''}
+        trigger={activeFlow?.nodes.find((n) => n.data.nodeType === 'trigger')?.data.triggerConfig}
+        busy={isUnpublishing}
+        onConfirm={() => void handleUnpublish()}
+      />
 
       {activeFlow && (
         <FlowRunHistory
