@@ -327,6 +327,14 @@ def run_problem(flow_run, config: dict) -> str | None:
 	return profile_problem(config.get("profile"))
 
 
+def runs_so_far(flow_run_name: str) -> int:
+	"""How many code executions this Flow Run has started (one audit row each), for the per-run cap."""
+	runs = frappe.get_all("Agent Run", filters={"flow_run": flow_run_name}, pluck="name", limit_page_length=0)
+	if not runs:
+		return 0
+	return frappe.db.count("Agent Tool Call", {"agent_run": ["in", runs], "tool": "run_python"})
+
+
 # ---------------------------------------------------------------------------
 # Turning the audit row into the step's output
 # ---------------------------------------------------------------------------
