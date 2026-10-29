@@ -87,3 +87,51 @@ def handle_handoff_to_solution(**kwargs) -> str:
 		},
 		default=str,
 	)
+
+
+def _chat_conversation(gateway, space_key):
+	"""Channel Conversation of the current chat (via its Gateway Event, else gateway + handle)."""
+	rows = frappe.get_all(
+		"Gateway Event",
+		filters={"gateway": gateway, "channel_conversation": ["is", "set"]},
+		or_filters={"conversation_id": space_key, "sender_id": space_key},
+		fields=["channel_conversation"],
+		order_by="creation desc",
+		limit=1,
+	)
+	if rows:
+		return rows[0]["channel_conversation"]
+	rows = frappe.get_all(
+		"Channel Conversation",
+		filters={"gateway": gateway, "contact_handle": space_key, "status": ["!=", "closed"]},
+		pluck="name",
+		limit_page_length=1,
+	)
+	return rows[0] if rows else None
+
+
+def handle_handoff_to_human(**kwargs) -> str:
+	gateway, space_key = _run_chat()
+	if not gateway:
+		return _err("gateway_context_required", "handoff_to_human only works inside a gateway conversation")
+	name = _chat_conversation(gateway, space_key)
+	if not name:
+		return _err("conversation_not_found", "No channel conversation exists for this chat")
+	from huf.ai.channels.handoff import handoff_conversation
+
+	result = handoff_conversation(
+		name,
+		target=str(kwargs.get("target") or "") or None,
+		summary=str(kwargs.get("summary") or ""),
+		priority=str(kwargs.get("priority") or "normal").lower(),
+	)
+	return json.dumps(
+		{
+			"success": True,
+			"conversation": name,
+			"linked_doctype": result.get("doctype"),
+			"linked_name": result.get("name"),
+			"message": "Chat handed to a human. The AI will not answer further messages in this chat.",
+		},
+		default=str,
+	)

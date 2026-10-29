@@ -2073,6 +2073,11 @@ def _continue_ingest(
     from huf.ai.channels.pipeline import run_pre_route
 
     pre = run_pre_route({"gateway": gateway_name, "event": event.name, "context": context})
+    if pre is not None and pre.action == "handoff":
+        from huf.ai.channels.handoff import handoff_from_decision
+
+        handoff_from_decision(gateway_name, event.name, context, pre.payload or {})
+        return _record_event(event, "pre_route_handoff")
     if pre is not None and pre.action in ("reply", "handoff"):
         text = str((pre.payload or {}).get("text") or "")
         if text:
