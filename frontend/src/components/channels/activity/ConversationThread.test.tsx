@@ -5,6 +5,7 @@ import { render, screen } from '@testing-library/react';
 
 vi.mock('@/contexts/PermissionsContext', () => ({ useIsHufAdmin: () => true }));
 vi.mock('@/services/channelsApi', () => ({ getConversation: vi.fn(), returnToAi: vi.fn(), closeConversation: vi.fn() }));
+vi.mock('@/services/commerceApi', () => ({ listConversationOrders: vi.fn().mockResolvedValue({ ok: true, data: [] }) }));
 import { getConversation, returnToAi } from '@/services/channelsApi';
 import { ConversationThread } from './ConversationThread';
 

@@ -16,6 +16,7 @@ const Numbers = lazy(() => import('./sections/NumbersSection'));
 const Settings = lazy(() => import('./sections/SettingsSection'));
 const Analytics = lazy(() => import('./sections/AnalyticsSection'));
 const Setup = lazy(() => import('./sections/SetupSection'));
+const Commerce = lazy(() => import('./sections/CommerceSection'));
 
 /** Broadcasts and Templates exist for WhatsApp only; other channels bounce to Home. */
 function WhatsAppOnly({ children }: { children: JSX.Element }) {
@@ -46,6 +47,7 @@ export function ChannelsRoutes() {
               <Route path="activity/:conversationId?" element={<Activity />} />
               <Route path="broadcasts/*" element={<WhatsAppOnly><Broadcasts /></WhatsAppOnly>} />
               <Route path="templates/:name?" element={<WhatsAppOnly><Templates /></WhatsAppOnly>} />
+              <Route path="commerce/:tab?" element={<WhatsAppOnly><Commerce /></WhatsAppOnly>} />
               <Route path="automations/:tab?" element={<Automations />} />
               <Route path="connections" element={<Connections />} />
               <Route path="numbers" element={<Numbers />} />
