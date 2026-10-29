@@ -21,7 +21,7 @@ import _stub_env  # noqa: E402
 
 _stub_env.install()
 
-import pytest  # noqa: E402
+from huf.ai.tests.unit_support import SupportCase  # noqa: E402
 
 from huf.ai.gateways import hooks  # noqa: E402
 from huf.ai.gateways.teams.messaging import cards  # noqa: E402
@@ -137,8 +137,8 @@ class _Throw(Exception):
 	pass
 
 
-@pytest.fixture
-def w(monkeypatch):
+def _fx_w(self):
+	monkeypatch = self.monkeypatch
 	import frappe as real_frappe
 
 	for name in ("actions", "identity_confirm"):
@@ -207,88 +207,92 @@ def link_state(w):
 	return next(iter(w.links.values()))["state"]
 
 
-def test_confirm_creates_pending_and_queues_card_to_personal_chat(w):
-	assert start_link(w) == {"linked": False, "pending": True, "user": "alice@x.com"}
-	assert link_state(w) == "Pending"
-	assert w.ti.resolve_user("gw1", TENANT, AAD) is None
-	gateway, snapshot, kind, payload, key = w.outbox[0]
-	assert gateway == "gw1" and kind == "card"
-	assert snapshot["conversation_id"] == CONV and snapshot["tenant_id"] == TENANT
-	card_json = json.dumps(payload["activity"])
-	assert "Did you just connect your Teams account to Huf user Alice A?" in card_json
-	assert "If not, ignore this." in card_json and "Yes" in card_json
-	session = next(iter(w.sessions.values()))
-	assert session["kind"] == "idlink" and session["tenant_id"] == TENANT
-	assert json.loads(session["payload"]) == {"link": next(iter(w.links))}
-	assert payload["action_session"] == session["name"]
-	assert "Eve The CEO" not in card_json  # attacker-chosen label is never in the card
+class TestModule(SupportCase):
+	def test_confirm_creates_pending_and_queues_card_to_personal_chat(self):
+		w = self.use(_fx_w)
+		assert start_link(w) == {"linked": False, "pending": True, "user": "alice@x.com"}
+		assert link_state(w) == "Pending"
+		assert w.ti.resolve_user("gw1", TENANT, AAD) is None
+		gateway, snapshot, kind, payload, key = w.outbox[0]
+		assert gateway == "gw1" and kind == "card"
+		assert snapshot["conversation_id"] == CONV and snapshot["tenant_id"] == TENANT
+		card_json = json.dumps(payload["activity"])
+		assert "Did you just connect your Teams account to Huf user Alice A?" in card_json
+		assert "If not, ignore this." in card_json and "Yes" in card_json
+		session = next(iter(w.sessions.values()))
+		assert session["kind"] == "idlink" and session["tenant_id"] == TENANT
+		assert json.loads(session["payload"]) == {"link": next(iter(w.links))}
+		assert payload["action_session"] == session["name"]
+		assert "Eve The CEO" not in card_json  # attacker-chosen label is never in the card
 
-
-def test_same_principal_yes_links(w):
-	start_link(w)
-	body = click(w)
-	assert "now connected" in json.dumps(body)
-	assert link_state(w) == "Linked"
-	assert w.ti.resolve_user("gw1", TENANT, AAD) == "alice@x.com"
-
-
-def test_other_principal_refused_and_nothing_changes(w):
-	start_link(w)
-	body = click(w, aad=AAD2)
-	assert "no longer valid" in json.dumps(body)
-	assert link_state(w) == "Pending" and next(iter(w.sessions.values()))["state"] == "Open"
-	assert w.ti.resolve_user("gw1", TENANT, AAD) is None
-
-
-def test_other_tenant_same_aad_refused(w):
-	start_link(w)
-	click(w, tenant="00000000-0000-0000-0000-00000000ffff")
-	assert link_state(w) == "Pending"
-
-
-def test_no_revokes(w):
-	start_link(w)
-	body = click(w, verb=cards.VERB_REJECT)
-	assert "nothing was connected" in json.dumps(body)
-	assert link_state(w) == "Revoked" and w.ti.resolve_user("gw1", TENANT, AAD) is None
-
-
-def test_second_click_cannot_flip_after_decision(w):
-	start_link(w)
-	click(w, verb=cards.VERB_REJECT)
-	click(w, verb=cards.VERB_APPROVE)
-	assert link_state(w) == "Revoked"
-
-
-def test_no_personal_reference_revokes_pending(w, monkeypatch):
-	monkeypatch.setattr(w.tic.teams_refs, "get_personal_reference", lambda g, t, a: None)
-	with pytest.raises(Exception):
+	def test_same_principal_yes_links(self):
+		w = self.use(_fx_w)
 		start_link(w)
-	assert link_state(w) == "Revoked" and w.outbox == []
-	assert w.ti.resolve_user("gw1", TENANT, AAD) is None
+		body = click(w)
+		assert "now connected" in json.dumps(body)
+		assert link_state(w) == "Linked"
+		assert w.ti.resolve_user("gw1", TENANT, AAD) == "alice@x.com"
 
-
-def test_outbox_failure_revokes_pending(w, monkeypatch):
-	def boom(*a, **k):
-		raise RuntimeError("db down")
-
-	monkeypatch.setattr(w.tic.teams_outbox, "enqueue", boom)
-	with pytest.raises(Exception):
+	def test_other_principal_refused_and_nothing_changes(self):
+		w = self.use(_fx_w)
 		start_link(w)
-	assert link_state(w) == "Revoked"
+		body = click(w, aad=AAD2)
+		assert "no longer valid" in json.dumps(body)
+		assert link_state(w) == "Pending" and next(iter(w.sessions.values()))["state"] == "Open"
+		assert w.ti.resolve_user("gw1", TENANT, AAD) is None
 
+	def test_other_tenant_same_aad_refused(self):
+		w = self.use(_fx_w)
+		start_link(w)
+		click(w, tenant="00000000-0000-0000-0000-00000000ffff")
+		assert link_state(w) == "Pending"
 
-def test_new_attempt_supersedes_older_pending(w):
-	start_link(w)
-	w.local.conf = {"encryption_key": "k"}
-	start_link(w)
-	states = sorted(r["state"] for r in w.links.values())
-	assert states == ["Pending", "Revoked"]
+	def test_no_revokes(self):
+		w = self.use(_fx_w)
+		start_link(w)
+		body = click(w, verb=cards.VERB_REJECT)
+		assert "nothing was connected" in json.dumps(body)
+		assert link_state(w) == "Revoked" and w.ti.resolve_user("gw1", TENANT, AAD) is None
 
+	def test_second_click_cannot_flip_after_decision(self):
+		w = self.use(_fx_w)
+		start_link(w)
+		click(w, verb=cards.VERB_REJECT)
+		click(w, verb=cards.VERB_APPROVE)
+		assert link_state(w) == "Revoked"
 
-def test_handler_registered_explicitly_and_only_for_idlink(w):
-	assert w.ta._KIND_HANDLERS.get("idlink") is w.tic.handle_click
-	src = Path("huf/ai/gateways/teams/identity_confirm.py").read_text()
-	tree = ast.parse(src)
-	calls = [n for n in tree.body if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)]
-	assert any(getattr(c.value.func, "id", "") == "register" for c in calls)  # register() at import
+	def test_no_personal_reference_revokes_pending(self):
+		w = self.use(_fx_w)
+		monkeypatch = self.monkeypatch
+		monkeypatch.setattr(w.tic.teams_refs, "get_personal_reference", lambda g, t, a: None)
+		with self.assertRaises(Exception):
+			start_link(w)
+		assert link_state(w) == "Revoked" and w.outbox == []
+		assert w.ti.resolve_user("gw1", TENANT, AAD) is None
+
+	def test_outbox_failure_revokes_pending(self):
+		w = self.use(_fx_w)
+		monkeypatch = self.monkeypatch
+		def boom(*a, **k):
+			raise RuntimeError("db down")
+
+		monkeypatch.setattr(w.tic.teams_outbox, "enqueue", boom)
+		with self.assertRaises(Exception):
+			start_link(w)
+		assert link_state(w) == "Revoked"
+
+	def test_new_attempt_supersedes_older_pending(self):
+		w = self.use(_fx_w)
+		start_link(w)
+		w.local.conf = {"encryption_key": "k"}
+		start_link(w)
+		states = sorted(r["state"] for r in w.links.values())
+		assert states == ["Pending", "Revoked"]
+
+	def test_handler_registered_explicitly_and_only_for_idlink(self):
+		w = self.use(_fx_w)
+		assert w.ta._KIND_HANDLERS.get("idlink") is w.tic.handle_click
+		src = Path("huf/ai/gateways/teams/identity_confirm.py").read_text()
+		tree = ast.parse(src)
+		calls = [n for n in tree.body if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)]
+		assert any(getattr(c.value.func, "id", "") == "register" for c in calls)  # register() at import
