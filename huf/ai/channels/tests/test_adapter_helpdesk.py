@@ -124,11 +124,13 @@ class TestHelpdeskAdapterLogic(unittest.TestCase):
 @unittest.skipUnless("helpdesk" in frappe.get_installed_apps(), "Helpdesk not installed")
 class TestHelpdeskAdapterIntegration(IntegrationTestCase):
 	def test_handoff_roundtrip(self):
+		from huf.ai.channels.tests._support import make_gateway_conversation
+
 		frappe.set_user("Administrator")
 		self.addCleanup(frappe.db.rollback)
-		conv = _conv()
-		conv.name = "CC-NONE"
+		_gw, conv = make_gateway_conversation()
 		with patch.object(helpdesk, "_transcript", return_value="Customer: hi"):
 			dt, name = helpdesk.Adapter().handoff(conv, "summary", "normal")
 		self.assertEqual(dt, "HD Ticket")
 		self.assertTrue(frappe.db.exists("Communication", {"reference_doctype": dt, "reference_name": name}))
+		self.assertEqual(frappe.db.get_value("HD Ticket", name, "huf_channel_conversation"), conv.name)
