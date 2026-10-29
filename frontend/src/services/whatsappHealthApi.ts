@@ -92,6 +92,8 @@ export interface GatewayHealthStatus {
 	/** The channel credential this gateway uses ('' when none is connected). */
 	integration_settings?: string;
 	health: HealthState;
+	/** PLAN 4.1 stage: not_connected, connected_unverified, receiving, live_unrouted, live, blocked, degraded or off. */
+	setup_stage?: string | null;
 	reasons: HealthReason[];
 	next_step: NextStep | null;
 	checklist: ChecklistItem[];

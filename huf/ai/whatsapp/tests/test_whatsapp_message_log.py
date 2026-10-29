@@ -588,7 +588,7 @@ class TestWhatsAppAppTile(_Base):
 	def test_permission_method_truth_table(self):
 		can = mgmt.can_launch_whatsapp_app
 		frappe.db.set_value("Gateway", {"provider": "WhatsApp"}, "is_enabled", 0)
-		self.assertFalse(can("Administrator", {}), "no enabled WhatsApp gateway")
+		self.assertTrue(can("Administrator", {}), "admins can launch with zero enabled gateways (setup lives in the app)")
 		gw = self.make_gateway("T")
 		self.assertTrue(can("Administrator", {}))
 		self.assertTrue(can(user="Administrator", app={"app_id": "whatsapp"}))
@@ -602,9 +602,10 @@ class TestWhatsAppAppTile(_Base):
 		with patch("huf.permissions.has_capability", return_value=True):
 			self.assertTrue(can(PLAIN_USER, {}), "integrations capability")
 		frappe.db.set_value("Gateway", gw.name, "is_enabled", 0)
-		self.assertFalse(can("Administrator", {}))
+		self.assertTrue(can("Administrator", {}), "disabled gateway does not hide the tile from admins")
 		frappe.db.set_value("Gateway", gw.name, {"is_enabled": 1, "provider": "Telegram"})
-		self.assertFalse(can("Administrator", {}), "only WhatsApp gateways count")
+		self.assertTrue(can("Administrator", {}), "gateway provider is irrelevant to the admin gate")
+		self.assertFalse(can(PLAIN_USER, {}), "non-admin without the capability stays out, gateways or not")
 
 	def test_permission_method_never_raises(self):
 		with patch.object(mgmt.frappe, "get_roles", side_effect=RuntimeError("boom")):
