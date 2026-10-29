@@ -17,8 +17,8 @@ import frappe
 
 from huf.ai.desktop import output_rules as rules
 from huf.ai.desktop import outputs as do
-from huf.testing import desktop_test_helpers as h
 from huf.ai.desktop.tests.test_desktop_remote_sessions import RemoteBase
+from huf.testing import desktop_test_helpers as h
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
 
