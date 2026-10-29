@@ -127,9 +127,8 @@ class TestCreateFromTemplate(CloneBase):
 		self.assertNotEqual(secret1, secret2)
 
 	def test_agent_template_without_any_agent_asks_to_create_one(self):
-		node = {"id": "a", "type": "agent.run", "config": {"agent": "", "prompt": "Say hi"}, "next": None}
+		node = {"id": "a", "type": "agent.run", "config": {"agent": "", "prompt": "Say hi"}}
 		graph = _graph(extra_nodes=[node])
-		graph["nodes"][2]["next"] = None
 		original = clone._first_agent
 		clone._first_agent = lambda: None
 		try:

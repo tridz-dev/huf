@@ -36,12 +36,16 @@ def _graph(trigger=None, extra_nodes=None):
 		{"id": "yes", "type": "output", "config": {"value": "big"}, "_label": "Big"},
 		{"id": "no", "type": "output", "config": {"value": "small"}, "_label": "Small"},
 	]
+	extra_nodes = extra_nodes or []
+	if extra_nodes:  # the extra steps sit on the "yes" path so every step is reachable
+		nodes[1]["config"]["on_true"] = extra_nodes[0]["id"]
+		extra_nodes[-1]["next"] = "yes"
 	return {
 		"schema_version": "1.0.0",
 		"profile": "flow",
 		"fingerprint": "0" * 64,
 		"entry": [trigger["id"]],
-		"nodes": nodes + (extra_nodes or []),
+		"nodes": nodes + extra_nodes,
 		"contract": {
 			"input_schema": {"type": "object"},
 			"output_schema": {"type": "object"},
@@ -87,8 +91,8 @@ class TestListFlowCards(IntegrationTestCase):
 		self.tag = frappe.generate_hash(length=6)
 		self.ids = []
 		for name, desc, category in (
-			(f"Alpha {self.tag}", "Sends a welcome note", "Sales"),
-			(f"Beta {self.tag}", "", "Support"),
+			(f"Alpha {self.tag}", f"Sends a welcome note {self.tag}", "Sales"),
+			(f"Beta {self.tag}", "", f"Cat{self.tag}"),
 		):
 			flow_id = f"_test-ux11-{frappe.generate_hash(length=8)}"
 			flow_api.save_flow_definition(flow_id, _graph())
@@ -108,8 +112,8 @@ class TestListFlowCards(IntegrationTestCase):
 
 	def test_search_covers_name_description_and_category(self):
 		self.assertEqual(self._names(search=f"alpha {self.tag}"), [f"Alpha {self.tag}"])
-		self.assertEqual(self._names(search="welcome note"), [f"Alpha {self.tag}"])
-		self.assertEqual(self._names(search=f"Support"), [f"Beta {self.tag}"])
+		self.assertEqual(self._names(search=f"welcome note {self.tag}"), [f"Alpha {self.tag}"])
+		self.assertEqual(self._names(search=f"cat{self.tag}"), [f"Beta {self.tag}"])
 
 	def test_category_status_and_sort(self):
 		self.assertEqual(self._names(category="sales", search=self.tag), [f"Alpha {self.tag}"])
