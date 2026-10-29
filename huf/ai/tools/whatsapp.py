@@ -589,8 +589,22 @@ def _is_opted_out(kwargs: dict, recipient: str) -> bool:
 		return True  # fail closed
 
 
+def _allowlist_refusal(recipient: str) -> Optional[str]:
+	"""Site allow-list (``wa_outbound_allowlist``) for sends that bypass the outbound policy choke point."""
+	from huf.ai.whatsapp import outbound_policy as policy
+
+	try:
+		policy.check_allowlist(recipient)
+	except policy.OutboundRefused as e:
+		return _refused(e.code, str(e))
+	return None
+
+
 def _free_form_refusal(kwargs: dict, recipient: str, what: str) -> Optional[str]:
-	"""Server-side gate of every free-form non-text send: opt-out, then window / allow_proactive."""
+	"""Server-side gate of every free-form non-text send: allow-list, opt-out, then window / allow_proactive."""
+	refusal = _allowlist_refusal(recipient)
+	if refusal:
+		return refusal
 	if _is_opted_out(kwargs, recipient):
 		return _refused("opted_out", "This contact opted out (STOP); no messages are sent until they opt back in (START).")
 	if _is_proactive_send(kwargs, recipient) and not (
@@ -863,6 +877,9 @@ def _send_template(kwargs: dict) -> str:
 	if header_params is None or button_params is None:
 		return _error("'header_params' and 'button_params' must be lists (or JSON lists)")
 
+	refusal = _allowlist_refusal(recipient)
+	if refusal:
+		return refusal
 	if _is_opted_out(kwargs, recipient):
 		return _refused("opted_out", "This contact opted out (STOP); no messages are sent until they opt back in (START).")
 	if bridge.is_bsuid(recipient):
