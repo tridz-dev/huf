@@ -77,9 +77,15 @@ def create_order(items=None, delivery_date: str | None = None) -> dict:
 		if rate is not None:
 			row["rate"] = rate
 		rows.append(row)
+	company = (
+		frappe.defaults.get_user_default("Company")
+		or frappe.db.get_single_value("Global Defaults", "default_company")
+		or frappe.db.get_value("Company", {}, "name")
+	)
 	doc = frappe.get_doc(
 		{
 			"doctype": "Sales Order",
+			"company": company,
 			"customer": customer,
 			"transaction_date": frappe.utils.nowdate(),
 			"delivery_date": delivery_date or frappe.utils.add_days(frappe.utils.nowdate(), 7),
@@ -88,7 +94,10 @@ def create_order(items=None, delivery_date: str | None = None) -> dict:
 		}
 	)
 	doc.flags.ignore_permissions = False
-	doc.insert()  # draft only: never submit
+	try:
+		doc.insert()  # draft only: never submit
+	except frappe.ValidationError as exc:
+		return {"success": False, "error": f"Could not create the order: {str(exc)[:200]}"}
 	return {"success": True, "order": doc.name, "status": "Draft", "customer": customer}
 
 
