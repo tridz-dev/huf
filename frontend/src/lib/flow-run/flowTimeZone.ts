@@ -29,17 +29,36 @@ export function browserZone(): string {
   }
 }
 
+const unique = (names: Array<string | null | undefined>) => [...new Set(names.filter((n): n is string => Boolean(n)))].sort((a, b) => (a === 'UTC' ? -1 : b === 'UTC' ? 1 : a.localeCompare(b)));
+
 /**
- * One sentence for the schedule editor: schedules run in the site's time zone, and this shows how that
- * compares with the browser.
+ * Every time zone name the browser knows (plus UTC and any `include`d names, because a browser lists only one spelling per
+ * zone, e.g. Asia/Calcutta for Asia/Kolkata), alphabetical; a short built-in list when the browser cannot list them.
  */
-export function scheduleZoneSentence(siteZone: string | null | undefined): string {
-  if (!siteZone) return 'Schedules run in the time zone of this site.';
+export function allTimeZones(...include: Array<string | null | undefined>): string[] {
+  const fallback = ['UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Asia/Tokyo', 'Europe/London', 'Europe/Berlin', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Australia/Sydney'];
+  try {
+    const list = (Intl as unknown as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf?.('timeZone') ?? fallback;
+    return unique(['UTC', ...list, ...include]);
+  } catch {
+    return unique([...fallback, ...include]);
+  }
+}
+
+/**
+ * The one line under a schedule that says which clock it runs on: "Runs in Asia/Kolkata time (UTC+05:30), this site's time zone."
+ * A time chosen by the author reads "Runs in Europe/London time (UTC+00:00)." with no claim about the site.
+ */
+export function scheduleZoneLine(zone: string | null | undefined, isSiteZone: boolean): string {
+  if (!zone) return 'Runs in the time zone of this site.';
+  return `Runs in ${describeZone(zone).replace(' (', ' time (')}${isSiteZone ? ", this site's time zone" : ''}.`;
+}
+
+/** "Shows as 03:30 in your browser (UTC)": how a fixed run time reads where the person is, or '' when the clocks agree. */
+export function browserTimeNote(shownAs: string, zone: string | null | undefined): string {
   const browser = browserZone();
-  const base = `Times here are in the site's time zone: ${describeZone(siteZone)}.`;
-  return browser === siteZone
-    ? base
-    : `${base} Your browser is in ${describeZone(browser)}, so run times in the history appear shifted by the difference.`;
+  if (!zone || browser === zone) return '';
+  return `Shows as ${shownAs} in your browser (${browser}).`;
 }
 
 /** Short zone note for run lists: the browser zone, which is the zone run times are shown in. */
