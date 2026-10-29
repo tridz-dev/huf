@@ -451,10 +451,9 @@ class TestModule(SupportCase):
 		if gateway_service is None:
 			self.skipTest("gateway_service not importable in stub env")
 
+		real_get_doc = gateway_service.frappe.get_doc  # before the loop: monkeypatch wraps it each pass
 		for status in ("Running", "Succeeded", "Failed", "Rejected"):
 			doc = SimpleNamespace(name="GE-9", status=status)
-			real_get_doc = gateway_service.frappe.get_doc
-
 			def fake_get_doc(*args, **kwargs):
 				# Only the event is faked; frappe internals (System Settings for the reaper's clock)
 				# go through get_doc too and need the real thing.
