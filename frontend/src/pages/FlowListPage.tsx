@@ -238,7 +238,7 @@ function FlowListPage() {
           )
         }
         renderItem={(flow) => (
-          <div data-testid={`flow-list-item-${flow.id}`}>
+          <div data-testid={`flow-list-item-${flow.id}`} title={flow.description || undefined}>
           <ItemCard
             title={flow.name}
             description={flow.description || 'No description'}
