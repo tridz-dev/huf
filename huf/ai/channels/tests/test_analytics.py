@@ -41,6 +41,8 @@ class TestAnalytics(IntegrationTestCase):
 			{"doctype": "WhatsApp Broadcast Recipient", "broadcast": bc, "recipient": phone, "status": status, "sent_at": f"{self.today} 10:00:00"}
 		)
 		d.flags.ignore_links = True
+		frappe.flags.in_broadcast_api = True
+		self.addCleanup(setattr, frappe.flags, "in_broadcast_api", False)
 		d.insert(ignore_permissions=True)
 
 	def test_aggregates(self):
