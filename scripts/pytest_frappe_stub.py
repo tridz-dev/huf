@@ -1,9 +1,11 @@
-"""Repo-root pytest bootstrap for bench-less runs.
+"""Pytest plugin (loaded via ``addopts = -p scripts.pytest_frappe_stub`` in pyproject.toml) for bench-less runs.
+
+It lives under ``scripts/`` because the repo layout guard forbids a top-level ``conftest.py``.
 
 ``huf/__init__.py`` does ``import frappe`` unconditionally, so pytest cannot even import a test
 module under ``huf/`` on a machine without frappe. When (and only when) the real ``frappe`` is not
 importable, install an auto-stub so pure-logic tests (e.g. ``huf/ai/graph/tests``) can run with plain
-``python -m pytest``. On a bench the real package is importable and this file does nothing.
+``python -m pytest``. On a bench the real package is importable and this module does nothing.
 """
 
 import importlib.abc

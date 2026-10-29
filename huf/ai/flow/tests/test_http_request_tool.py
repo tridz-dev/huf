@@ -1,6 +1,6 @@
 """Tests for the built-in ``http_request`` tool (huf.ai.http_handler.http_request).
 
-Runs without a bench (root conftest stubs frappe). The network layer is mocked: DNS via
+Runs without a bench (scripts/pytest_frappe_stub.py stubs frappe). The network layer is mocked: DNS via
 ``socket.getaddrinfo`` and ``requests.request``.
 """
 
