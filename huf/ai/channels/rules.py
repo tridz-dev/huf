@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 
 import frappe
+from frappe import _
+from frappe.utils import cint
 
 from huf.ai.channels.pipeline import Decision
 
@@ -62,6 +64,74 @@ def _matches(rule, text: str, conv) -> bool:
 	return False
 
 
+def _agent_live(name: str) -> bool:
+	"""True when an Agent with this name exists and is not disabled."""
+	if not name:
+		return False
+	row = frappe.db.get_value("Agent", name, ["name", "disabled"], as_dict=True)
+	return bool(row) and not row.disabled
+
+
+def _solution_route(target: str) -> dict | None:
+	"""Route payload for a Solution's live primary target, or None if it has none."""
+	from huf.ai.solutions import loader
+
+	state = loader.load_solution_states([target]).get(target)
+	if not state:
+		return None
+	agent, flow = state.get("primary_agent"), state.get("primary_flow")
+	if state.get("primary_target_type") == "Agent" and agent and _agent_live(agent):
+		return {"target_type": "Agent", "agent": agent, "flow": None, "solution": target}
+	if state.get("primary_target_type") == "Flow" and flow:
+		return {"target_type": "Flow", "agent": None, "flow": flow, "solution": target}
+	return None
+
+
+def rule_errors(rows) -> list[str]:
+	"""Save-time problems for the enabled rows (empty list when all are usable)."""
+	problems = []
+	for idx, row in enumerate(rows or [], start=1):
+		if not cint(row.get("enabled")):
+			continue
+		err = _rule_error(row)
+		if err:
+			problems.append(_("Row {0}: {1}").format(idx, err))
+	return problems
+
+
+def _rule_error(row) -> str | None:
+	rule_type = row.get("rule_type")
+	target_type = row.get("target_type")
+	target = (row.get("target") or "").strip()
+	match_value = (row.get("match_value") or "").strip()
+	if rule_type in ("keyword", "first_message") and not match_value:
+		return _("match value is required for {0} rules").format(rule_type)
+	if rule_type == "contact_attribute":
+		if not (row.get("attribute") or "").strip():
+			return _("attribute is required for contact attribute rules")
+		if not match_value:
+			return _("match value is required for contact attribute rules")
+	if target_type == "human":
+		return None
+	if not target:
+		return _("target is required for {0} targets").format(target_type)
+	if target_type == "agent":
+		return None if _agent_live(target) else _("agent {0} does not exist or is disabled").format(target)
+	if target_type == "solution":
+		if _solution_route(target) is None:
+			return _("solution {0} does not exist or has no live primary target").format(target)
+		return None
+	return _("unknown target type {0}").format(target_type)
+
+
+def _skip(rule, reason: str) -> None:
+	frappe.logger("huf.channels.rules").info(
+		f"routing rule skipped: rule_type={rule.rule_type} target_type={rule.target_type} "
+		f"target={rule.target} reason={reason}"
+	)
+	return None
+
+
 def _decision(rule, gateway) -> Decision | None:
 	target = (rule.target or "").strip()
 	if rule.target_type == "human":
@@ -72,18 +142,14 @@ def _decision(rule, gateway) -> Decision | None:
 	if not target:
 		return None
 	if rule.target_type == "agent":
+		if not _agent_live(target):
+			return _skip(rule, "agent missing or disabled")
 		return Decision("route", {"target_type": "Agent", "agent": target, "flow": None})
 	if rule.target_type == "solution":
-		from huf.ai.solutions import loader
-
-		state = loader.load_solution_states([target]).get(target)
-		if not state:
-			return None
-		agent, flow = state.get("primary_agent"), state.get("primary_flow")
-		if state.get("primary_target_type") == "Agent" and agent:
-			return Decision("route", {"target_type": "Agent", "agent": agent, "flow": None, "solution": target})
-		if state.get("primary_target_type") == "Flow" and flow:
-			return Decision("route", {"target_type": "Flow", "agent": None, "flow": flow, "solution": target})
+		payload = _solution_route(target)
+		if payload is None:
+			return _skip(rule, "solution has no live primary target")
+		return Decision("route", payload)
 	return None
 
 
