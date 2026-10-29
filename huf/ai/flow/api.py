@@ -680,6 +680,8 @@ def _decide_flow_run(flow_run_id: str, decision: str, comment: str | None) -> di
 	engine.approve_flow_run(flow_run_id, decision=decision, comment=comment)
 
 	doc = frappe.get_doc("Flow Run", flow_run_id)
+	if not engine.run_moved_on(doc, flow_run):  # never confirm a decision that changed nothing
+		frappe.throw(_(engine.DECISION_NOT_SAVED))
 	return {
 		"flow_run_id": doc.name,
 		"status": doc.status,
@@ -1139,11 +1141,8 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 # ---------------------------------------------------------------------------
 
 
-# Re-enabled 2026-08-07. This was disabled on 2026-08-02 on the belief that it
-# returned 403 even for Administrator. That was a misdiagnosis: the 403 came
-# from an expired session (Frappe answers Guest with "not whitelisted"), not
-# from the permission check below. Verified over HTTP with a live Administrator
-# session — the endpoint answers 200 with a normal list.
+# The endpoint answers Administrator normally (verified over HTTP). An earlier 403 report came from an
+# expired session (Frappe answers Guest with "not whitelisted"), not from the permission check below.
 # ---------------------------------------------------------------------------
 @frappe.whitelist()
 def get_pending_approvals(limit: int = 50) -> list:

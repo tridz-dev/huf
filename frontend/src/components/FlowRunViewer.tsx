@@ -25,6 +25,7 @@ import { runTimesSentence } from '@/lib/flow-run/flowTimeZone';
 import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
 import { asCodeStepOutput, describeDecision, flowRunStatusLabel, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from '@/lib/flow-run/flowRunFormat';
 import { deskDocUrl, summarizeDocPayload } from '@/lib/flow-run/flowRunDoc';
+import { decisionMovedRun } from '@/lib/flow-run/flowRunDecision';
 import { connectPath, notConnectedService } from '@/lib/flow/flowIntegrations';
 import { redactSecrets, summarizeToolOutput } from '@/lib/flow/flowToolSummary';
 import { Link } from 'react-router-dom';
@@ -53,10 +54,17 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
         if (!runId) return;
         setLoading(true);
         try {
-            if (decision === 'approved') {
-                await flowService.approveFlowRun(runId);
-            } else {
-                await flowService.rejectFlowRun(runId);
+            const stepDecided = run?.current_node_id;
+            const answer = decision === 'approved'
+                ? await flowService.approveFlowRun(runId)
+                : await flowService.rejectFlowRun(runId);
+            if (!decisionMovedRun(answer, stepDecided)) {
+                toast.error(decision === 'approved' ? 'Could not approve this run' : 'Could not reject this run', {
+                    description: 'The run did not move on, so nothing was recorded. Please try again.',
+                });
+                await refreshRun();
+                setLoading(false);
+                return;
             }
             toast.success(decision === 'approved' ? 'Approved. The flow will continue.' : 'Rejected. The flow will follow its rejected path.');
             onClose();

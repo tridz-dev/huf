@@ -141,22 +141,32 @@ def _clear_flow_notifications(flow_run):
 	"""
 	Mark all notifications for a specific flow run as read.
 	Called when a human decision is made.
+
+	Best effort, and it must run AFTER the decision has been committed: the notification rows may be
+	inserted by a background job at the same moment, and a conflicting write (MariaDB snapshot conflict
+	1020 or a deadlock) rolls back the whole open transaction, not just this statement. A failed attempt
+	is retried once on a fresh transaction; after that the notifications stay unread (a log line says so).
 	"""
-	try:
-		# Standard Frappe approach: find notification log entries for this document
-		# and mark them as read for all users who were notified.
-		frappe.db.set_value(
-			"Notification Log",
-			{
-				"document_type": "Flow Run",
-				"document_name": flow_run.name,
-				"read": 0
-			},
-			"read",
-			1,
-			update_modified=False
-		)
-		commit_if_background()
-	except Exception:
-		# Cleanup is best-effort
-		pass
+	for attempt in (1, 2):
+		try:
+			# Standard Frappe approach: find notification log entries for this document
+			# and mark them as read for all users who were notified.
+			frappe.db.set_value(
+				"Notification Log",
+				{
+					"document_type": "Flow Run",
+					"document_name": flow_run.name,
+					"read": 0
+				},
+				"read",
+				1,
+				update_modified=False
+			)
+			commit_if_background()
+			return
+		except Exception as exc:
+			if attempt == 1 and isinstance(exc, frappe.QueryDeadlockError):
+				frappe.db.rollback()  # the database already ended the transaction; start a clean one
+				continue
+			frappe.logger("huf").warning(f"Could not mark the approval notifications of run {flow_run.name} as read: {exc}")
+			return

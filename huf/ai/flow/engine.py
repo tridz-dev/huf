@@ -51,6 +51,7 @@ from frappe.utils import now_datetime
 
 from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
 from huf.ai.flow.support.approval_notifications import _clear_flow_notifications, _send_approval_notifications
+from huf.ai.flow.support.approvers import approval_expired, check_approver
 from huf.ai.flow.integrations import friendly_tool_error
 from huf.ai.gateways.slack import flow_hooks
 from huf.ai.graph.permissions import envelope_declares
@@ -678,6 +679,7 @@ def _load_waiting(flow_run) -> dict:
 
 
 APPROVAL_DECISIONS = ("approved", "rejected")
+DECISION_NOT_SAVED = "Your decision could not be saved. Nothing changed; please try again."
 
 
 @frappe.whitelist()
@@ -735,7 +737,7 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 			values["current_node_id"] = next_node
 		# The claim: only the caller whose UPDATE still finds the run waiting goes on.
 		if not _transition_run(flow_run, values, from_statuses=("Waiting Approval",), bump_hop=bool(next_node)):
-			frappe.throw(_("This approval was already decided"))
+			_refuse_lost_claim(flow_run_name)
 
 		run_ctx.context.record_output(
 			current_node,
@@ -749,14 +751,47 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 		run_ctx.save_context()
 		if not next_node:
 			_fail_flow_run(flow_run, f"No route for approval outcome '{decision}' from node '{current_node}'")
-		_clear_flow_notifications(flow_run)
 		# The claim must be durable before the lock goes, or a second caller could decide again.
 		frappe.db.commit()  # nosemgrep
+		_ensure_claim_durable(flow_run_name)
 	finally:
 		_release_run_lock(flow_run_name)
 
+	# Tidying the approvers' notifications is best effort and comes AFTER the decision is durable: it
+	# updates rows a background job may be inserting, and a conflicting write there rolls back the whole
+	# open transaction (MariaDB error 1020 / deadlock). Inside the decision's transaction that rollback
+	# used to take the decision with it while the request still answered "approved".
+	_clear_flow_notifications(flow_run)
+
 	if next_node:
 		run_flow(flow_run.name)
+
+
+def _refuse_lost_claim(flow_run_name: str) -> None:
+	"""Raise the refusal for a decision whose conditional UPDATE changed nothing: someone else already
+	decided (or expired) the run, or the database refused the write itself (snapshot conflict) and the
+	run is still waiting. Either way the caller gets an error, never a success."""
+	frappe.db.rollback()  # nothing of this call is written yet; end the snapshot so the re-read is current
+	if frappe.db.get_value("Flow Run", flow_run_name, "status") == "Waiting Approval":
+		frappe.throw(_(DECISION_NOT_SAVED))
+	frappe.throw(_("This approval was already decided"))
+
+
+def _ensure_claim_durable(flow_run_name: str) -> None:
+	"""After the claim's commit the run must have left ``Waiting Approval``. The database can roll a
+	transaction back behind the code's back (deadlock victim, snapshot conflict); the commit then commits
+	nothing, so refuse instead of confirming a decision that was not recorded."""
+	if frappe.db.get_value("Flow Run", flow_run_name, "status") == "Waiting Approval":
+		frappe.throw(_(DECISION_NOT_SAVED))
+
+
+def run_moved_on(after, before) -> bool:
+	"""False when a decision left the run exactly where it was (still waiting at the same step)."""
+	return not (
+		after.status == "Waiting Approval"
+		and after.current_node_id == before.current_node_id
+		and (after.hop_count or 0) <= (before.hop_count or 0)
+	)
 
 
 def _utc_now_iso() -> str:
@@ -796,8 +831,8 @@ def expire_approval(flow_run_name: str, now=None, enqueue: bool = False) -> bool
 
 		if not timeout_next:
 			_fail_flow_run(flow_run, f"Approval timed out at node '{node_id}'")
-			_clear_flow_notifications(flow_run)
 			frappe.db.commit()  # nosemgrep
+			_clear_flow_notifications(flow_run)  # best effort, after the outcome is durable (see approve_flow_run)
 			return True
 
 		version = _pinned_version(flow_run)
@@ -806,8 +841,8 @@ def expire_approval(flow_run_name: str, now=None, enqueue: bool = False) -> bool
 			node_id, {"decision": "timeout", "comment": None, "decided_by": None, "decided_at": _utc_now_iso()}
 		)
 		run_ctx.save_context()
-		_clear_flow_notifications(flow_run)
 		frappe.db.commit()  # nosemgrep
+		_clear_flow_notifications(flow_run)  # best effort, after the outcome is durable (see approve_flow_run)
 	finally:
 		_release_run_lock(flow_run_name)
 
@@ -821,47 +856,6 @@ def expire_approval(flow_run_name: str, now=None, enqueue: bool = False) -> bool
 	else:
 		run_flow(flow_run_name)
 	return True
-
-
-def approval_expired(waiting: dict, now) -> bool:
-	"""True when the approval's recorded ``timeout_at`` (ISO string) is in the past."""
-	raw = (waiting or {}).get("timeout_at")
-	if not raw:
-		return False
-	from datetime import datetime
-
-	try:
-		deadline = datetime.fromisoformat(str(raw))
-	except ValueError:
-		return False
-	if isinstance(now, str):
-		now = datetime.fromisoformat(now)
-	return now >= deadline
-
-
-def check_approver(waiting: dict, user: str, roles) -> str | None:
-	"""Fail-closed approver check. Returns None when allowed, else a denial reason.
-
-	* ``approver_type == "role"``: ``user`` must hold ``approver_role``.
-	* ``approver_type == "user"``: ``user`` must be in ``approver_users``.
-	* anything else (absent included), or a type whose list/role is empty: only a
-	  ``System Manager`` may decide.
-	The same check applies to approve and reject.
-	"""
-	waiting = waiting or {}
-	roles = set(roles or ())
-	approver_type = waiting.get("approver_type")
-	if approver_type == "role" and waiting.get("approver_role"):
-		if waiting["approver_role"] in roles:
-			return None
-		return "You do not have the required role '%s' to decide this approval" % waiting["approver_role"]
-	if approver_type == "user" and waiting.get("approver_users"):
-		if user in set(waiting["approver_users"]):
-			return None
-		return "You are not an authorised approver for this flow run"
-	if "System Manager" in roles:
-		return None
-	return "Only a System Manager may decide this approval"
 
 
 # ---------------------------------------------------------------------------
