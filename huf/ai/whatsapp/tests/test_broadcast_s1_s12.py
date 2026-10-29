@@ -263,6 +263,11 @@ class S12Case(unittest.TestCase):
 
 	def setUp(self):
 		frappe.set_user("Administrator")
+		# a site-wide owner-only allow-list (live checks) must not filter the synthetic recipients
+		conf_patch = patch.dict(frappe.conf)
+		conf_patch.start()
+		self.addCleanup(conf_patch.stop)
+		frappe.conf.pop("wa_outbound_allowlist", None)
 		self._wipe()
 		self.addCleanup(self._wipe)
 		self.addCleanup(patch.stopall)
