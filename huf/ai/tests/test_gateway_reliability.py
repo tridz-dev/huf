@@ -1,3 +1,4 @@
+import datetime as _dt
 import pathlib
 import sys
 from types import SimpleNamespace
@@ -455,6 +456,7 @@ class TestModule(SupportCase):
 			doc = SimpleNamespace(name="GE-9", status=status)
 			get_doc = MagicMock(return_value=doc)
 			monkeypatch.setattr(gateway_service.frappe, "get_doc", get_doc)
+			monkeypatch.setattr(gateway_service, "now_datetime", _dt.datetime.now)
 			assert gateway_service.process_gateway_event("GE-9") == {"event_name": "GE-9", "status": status}
 			get_doc.assert_called_once_with("Gateway Event", "GE-9")
 
