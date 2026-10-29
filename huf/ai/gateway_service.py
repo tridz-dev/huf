@@ -2607,6 +2607,7 @@ def _process_gateway_event(event_name: str) -> dict:
             raise gw_hooks.GatewayHookDenied(gw_hooks.STRICT_DENIED_REASON)
         run_user = (
             gw_hooks.call_first(gw_hooks.RESOLVE_RUN_USER, gateway, event, strict=True)
+            or _gateway_run_as_user(gateway)
             or gateway.execution_user
         )
     except gw_hooks.GatewayHookDenied as denied:
@@ -2658,6 +2659,12 @@ def _process_gateway_event(event_name: str) -> dict:
             _reject_gateway_event(gateway, event, "Rejected", identity.reason)
             return {"event_name": event.name, "status": "Rejected"}
 
+    from huf.ai.channels import run_as as _run_as
+
+    _audit_conversation = event.get("channel_conversation")
+    _audit_token = _run_as.set_current_conversation(
+        _audit_conversation if isinstance(_audit_conversation, str) else None
+    )
     try:
         frappe.set_user(run_user)
         event.db_set("status", "Running")
@@ -2839,7 +2846,14 @@ def _process_gateway_event(event_name: str) -> dict:
             except Exception:
                 pass
         raise
+    finally:
+        _run_as.reset_current_conversation(_audit_token)
 
+
+def _gateway_run_as_user(gateway) -> str | None:
+    """The Gateway's run_as_user when set (validated on save); None leaves behaviour unchanged."""
+    value = getattr(gateway, "run_as_user", None)
+    return value if isinstance(value, str) and value.strip() else None
 
 
 # -- WhatsApp reply pipeline ----------------------------------------------------
