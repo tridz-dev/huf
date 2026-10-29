@@ -277,3 +277,37 @@ class TestTokenCheckAppSecretMapping(unittest.TestCase):
 			cs.verify_with_meta(creds, lambda url, params=None, headers=None: _Resp(400, self.APPSECRET_ERR))
 		self.assertIn(tc.MSG_APP_SECRET, str(ctx.exception))
 		self.assertNotIn("expired or was revoked", str(ctx.exception))
+
+
+class TestTokenCheckBadSignatureMapping(TestTokenCheckAppSecretMapping):
+	"""Wrong App Secret: debug_token (access_token=app_id|secret) answers top-level code 190 'signature'."""
+
+	SIGNATURE_ERR = {
+		"error": {"message": "Invalid OAuth access token signature.", "type": "OAuthException", "code": 190}
+	}
+
+	def test_debug_token_190_signature_maps_to_app_secret_message(self):
+		from huf.ai.whatsapp import token_check as tc
+
+		r = self._run(self.SIGNATURE_ERR)
+		self.assertIs(r["valid"], False)
+		self.assertEqual(r["error_code"], 190)
+		self.assertEqual(r["message"], tc.MSG_APP_SECRET)
+
+	def test_plain_190_with_data_error_keeps_expired_message(self):
+		from huf.ai.whatsapp import token_check as tc
+
+		r = self._run({"data": {"is_valid": False, "error": {"code": 190, "message": "Session has expired"}}}, status=200)
+		self.assertEqual(r["message"], tc.MSG_EXPIRED)
+
+	def test_190_session_expired_without_signature_keeps_expired_message(self):
+		from huf.ai.whatsapp import token_check as tc
+
+		r = self._run({"error": {"message": "Session has expired on Monday", "type": "OAuthException", "code": 190}})
+		self.assertEqual(r["message"], tc.MSG_EXPIRED)
+
+	def test_190_error_validating_access_token_keeps_expired_message(self):
+		from huf.ai.whatsapp import token_check as tc
+
+		r = self._run({"error": {"message": "Error validating access token", "type": "OAuthException", "code": 190}})
+		self.assertEqual(r["message"], tc.MSG_EXPIRED)
