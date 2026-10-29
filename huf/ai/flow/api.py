@@ -206,7 +206,8 @@ def get_flow_definition(flow_id: str) -> dict:
 @frappe.whitelist(methods=["POST"])
 def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 	"""
-	Save/update a flow definition. Validates schema and bumps version.
+	Save/update a flow definition. A draft may be unfinished (steps missing settings, loose steps); only a
+	structurally broken definition is refused. A published flow must be finished. Bumps the version.
 
 	Args:
 	    flow_id: Flow ID
@@ -239,9 +240,17 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 		)
 		doc.insert()
 
+	from huf.ai.flow.support.flow_validation import validate_flow
 	from huf.ai.flow.support.router_text import text_ref_warnings_for
 
-	return {"flow_id": doc.flow_id, "version": doc.version, "warnings": text_ref_warnings_for(definition_json)}
+	# Saving never blocks on an unfinished flow; say how many things are left so the caller can show it.
+	unfinished = len(validate_flow(json.loads(definition_json), "publish").issues)
+	return {
+		"flow_id": doc.flow_id,
+		"version": doc.version,
+		"warnings": text_ref_warnings_for(definition_json),
+		"unfinished": unfinished,
+	}
 
 
 @frappe.whitelist()

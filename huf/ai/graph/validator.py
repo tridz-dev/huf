@@ -174,11 +174,23 @@ _REFERENCE_ROOT_RE = re.compile(r"^(input|trigger|row|foreach\.(?:item|index)|[a
 # --------------------------------------------------------------------------------------
 
 
+#: How strictly :func:`validate_graph` reads a document. ``publish`` is the full gate a graph must pass before
+#: it may run or go live. ``draft`` accepts a half-built flow (steps may lack required settings, nothing
+#: needs to be connected yet) and only refuses a document that is structurally broken: unreadable shape,
+#: unknown step types, duplicate ids, links to steps that do not exist, limits over policy.
+MODE_DRAFT = "draft"
+MODE_PUBLISH = "publish"
+
+#: JSON-schema keywords that only say "this setting is missing or empty": fine in a draft, fatal on publish.
+_UNFINISHED_KEYWORDS: frozenset[str] = frozenset({"required", "minLength", "minItems"})
+
+
 def validate_graph(
 	graph: dict,
 	profile: str,
 	*,
 	classify_tool: ToolClassifier = default_tool_classifier,
+	mode: str = MODE_PUBLISH,
 ) -> ValidationResult:
 	"""Validate ``graph`` against ``profile`` ("procedure" or "flow"). See module docstring for
 	the full check list. Returns a :class:`ValidationResult`; never raises for an invalid graph
@@ -210,7 +222,8 @@ def validate_graph(
 			errors=(ValidationError("NOT_AN_OBJECT", None, None, "graph document must be a JSON object"),),
 		)
 
-	schema_errors = _check_schema(graph, profile)
+	draft = mode == MODE_DRAFT
+	schema_errors = _check_schema(graph, profile, draft=draft)
 	if schema_errors:
 		# A schema-invalid document cannot be trusted for any further structural analysis
 		# (missing "nodes", non-dict nodes, non-string ids, ...) -- fail closed immediately.
@@ -222,6 +235,12 @@ def validate_graph(
 	errors: list[ValidationError] = []
 	errors.extend(_check_profile_node_types(nodes, profile))
 	errors.extend(_check_control_flow_targets(graph, nodes_by_id))
+	if draft:
+		# A half-built flow may have loose steps, loops of links, unfinished values and tools whose closure is not
+		# known yet; those are reported as things to finish (see huf.ai.flow.support.flow_validation), not as a
+		# reason to refuse the save.
+		errors.extend(_check_limits_policy(graph))
+		return ValidationResult(ok=not errors, profile=profile, errors=tuple(errors))
 	errors.extend(_check_reachability(graph, nodes_by_id))
 	errors.extend(_check_acyclic(graph, nodes_by_id))
 	errors.extend(_check_tool_ids_literal(nodes))
@@ -278,7 +297,24 @@ def _node_defs_by_type(profile: str) -> dict[str, str]:
 	return out
 
 
-def _check_schema(graph: dict, profile: str) -> list[ValidationError]:
+def _leaf_error(err):
+	"""The deepest (most specific) jsonschema error under ``err``."""
+	if err.context:
+		return _leaf_error(max(err.context, key=lambda sub: len(list(sub.absolute_path))))
+	return err
+
+
+def _is_unfinished(err, prefix: list) -> bool:
+	"""True when ``err`` only says a step setting is missing or empty (``nodes[i].config...``).
+
+	``prefix`` is the path of the document ``err`` was raised against, relative to the graph root (empty for the graph itself).
+	"""
+	leaf = _leaf_error(err)
+	full_path = prefix + list(leaf.absolute_path)
+	return len(full_path) >= 3 and full_path[0] == "nodes" and full_path[2] == "config" and leaf.validator in _UNFINISHED_KEYWORDS
+
+
+def _check_schema(graph: dict, profile: str, draft: bool = False) -> list[ValidationError]:
 	def_name = _PROFILE_SCHEMA_DEF[profile]
 	subschema = {"$defs": GRAPH_IR_SCHEMA["$defs"], "$ref": f"#/$defs/{def_name}"}
 	validator = Draft202012Validator(subschema)
@@ -305,6 +341,8 @@ def _check_schema(graph: dict, profile: str) -> list[ValidationError]:
 			node_validator = Draft202012Validator({"$defs": GRAPH_IR_SCHEMA["$defs"], "$ref": f"#/$defs/{node_defs[ntype]}"})
 			for sub in sorted(node_validator.iter_errors(node), key=lambda e: [str(p) for p in e.path]):
 				full = path + list(sub.absolute_path)
+				if draft and _is_unfinished(sub, path):
+					continue
 				errors.append(
 					ValidationError(
 						code="SCHEMA",
@@ -313,6 +351,8 @@ def _check_schema(graph: dict, profile: str) -> list[ValidationError]:
 						message=_leaf_message(sub),
 					)
 				)
+			continue
+		if draft and _is_unfinished(err, []):
 			continue
 		errors.append(
 			ValidationError(

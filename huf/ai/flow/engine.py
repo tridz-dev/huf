@@ -480,6 +480,16 @@ def create_flow_run(
 	if entry_is_unset(defn):
 		frappe.throw(_("This flow has no trigger yet. Choose what starts it, then run it again."))
 
+	# A draft may be saved half-built; a run needs every step finished (UX-17 publish-mode check).
+	from huf.ai.flow.support.flow_validation import validate_flow
+
+	finished = validate_flow(defn, "publish")
+	if not finished.ok:
+		frappe.throw(
+			_("Finish setting up this flow before running it. {0}").format(" ".join(finished.messages(defn))),
+			title=_("This flow is not finished"),
+		)
+
 	try:
 		entry_node = select_entry_node(defn, trigger_type)
 	except ValueError as exc:

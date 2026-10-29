@@ -6,8 +6,9 @@ from frappe.model.document import Document
 from frappe.utils import now_datetime
 
 from huf.ai import system_records
+from huf.ai.flow.support.flow_validation import validate_flow
 from huf.ai.graph.error_copy import describe_errors
-from huf.ai.graph.validator import FLOW_NODE_TYPES, validate_flow_graph
+from huf.ai.graph.validator import FLOW_NODE_TYPES, MODE_DRAFT, MODE_PUBLISH
 from huf.ai.transaction import commit_if_background
 from huf.huf.doctype.flow_definition.activation_rules import collect_activation_problems
 
@@ -146,7 +147,10 @@ class FlowDefinition(Document):
 		except (json.JSONDecodeError, TypeError) as e:
 			frappe.throw(_("Invalid JSON in definition: {0}").format(str(e)))
 
-		result = validate_flow_graph(defn)
+		# Saving never blocks on an unfinished flow (UX-17): a draft only has to be structurally sound.
+		# A flow that is Active must be finished, because its triggers start runs from what is stored.
+		# (The Active check is _validate_activation, which runs next.)
+		result = validate_flow(defn, MODE_DRAFT)
 		if not result.ok:
 			frappe.throw(describe_errors(defn, result.errors), title=_("This flow cannot be saved yet"))
 
@@ -241,5 +245,13 @@ class FlowDefinition(Document):
 		if problems:
 			frappe.throw(
 				_("Flow cannot be Active: {0}").format("; ".join(problems)),
+				title=_("Flow is not ready to activate"),
+			)
+		# Whatever else keeps the flow from running (a loop of links, a value from a step that has not run yet,
+		# a short secret): the same publish-mode check a run makes.
+		finished = validate_flow(defn, MODE_PUBLISH)
+		if not finished.ok:
+			frappe.throw(
+				_("Flow cannot be Active: {0}").format(" ".join(finished.messages(defn))),
 				title=_("Flow is not ready to activate"),
 			)
