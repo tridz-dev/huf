@@ -2,9 +2,15 @@ import type { Connection, Edge, Node } from 'reactflow';
 import { branchHandlesFor } from '../flow/flowBranches';
 import { branchColumnShift, subtreeIds } from '../flow/flowEdgeLabels';
 import { actionLabel } from '../flow/flowLabels';
+import { COLUMN_GAP } from '../flow/flowLayout';
+import { unreachableNodeIds } from '../flow/flowEdit';
 import { makeFlowEdge, edgeRoute } from '../../services/flowSerializer';
 import { actionOptions } from '../../data/actions';
 import type { ActionConfig, FlowEdgeRoute, FlowNodeData } from '../../types/flow.types';
+
+/** Ids of cards and lines that exist only on screen; they are never written back to the flow. */
+export const RENDER_ONLY_NODE_PREFIX = 'ghost-';
+export const RENDER_ONLY_EDGE_PREFIX = 'edge-ghost-';
 
 type StepCfg = ({ type?: string } & Record<string, unknown>) | undefined;
 
@@ -16,6 +22,8 @@ export interface OpenEnd {
   label?: string;
   position: { x: number; y: number };
   offset: number;
+  /** The branch may stay unconnected ("When done", "Timed out"). */
+  optional?: boolean;
 }
 
 /**
@@ -39,7 +47,7 @@ export function computeOpenEnds(nodes: Node<FlowNodeData>[], edges: Edge[]): Ope
     }
     handles.forEach((h, i) => {
       if (!out.some((e) => edgeRoute(e) === h.route)) {
-        ends.push({ nodeId: n.id, route: h.route, handleId: h.handleId, label: h.label, position: n.position, offset: (i - (handles.length - 1) / 2) * 240 });
+        ends.push({ nodeId: n.id, route: h.route, handleId: h.handleId, label: h.label, position: n.position, offset: (i - (handles.length - 1) / 2) * COLUMN_GAP, optional: h.optional });
       }
     });
   }
@@ -47,20 +55,107 @@ export function computeOpenEnds(nodes: Node<FlowNodeData>[], edges: Edge[]): Ope
 }
 
 /**
- * Where each open end's "Add step" card sits. A leaf whose step below is not connected to it would draw its
- * card on top of that step: slide the card sideways until the spot is free.
+ * The steps of every loop's body: each step reachable from the loop's "For each item" connection, keyed by loop id.
+ * The body ends where its chain has nothing after it; the run then goes back to the loop for the next item.
  */
-export function ghostPositions(nodes: Node<FlowNodeData>[], openEnds: OpenEnd[]): Array<{ x: number; y: number }> {
-  const taken: Array<{ x: number; y: number }> = nodes.map((n) => n.position);
-  return openEnds.map((end) => {
+export function loopBodies(nodes: Node<FlowNodeData>[], edges: Edge[]): Map<string, Set<string>> {
+  const bodies = new Map<string, Set<string>>();
+  for (const loop of nodes) {
+    if ((loop.data.actionConfig as StepCfg)?.type !== 'foreach') continue;
+    const seen = new Set<string>();
+    const stack = edges.filter((e) => e.source === loop.id && edgeRoute(e) === 'body').map((e) => e.target);
+    while (stack.length) {
+      const id = stack.pop() as string;
+      if (seen.has(id) || id === loop.id) continue;
+      seen.add(id);
+      for (const e of edges) if (e.source === id) stack.push(e.target);
+    }
+    bodies.set(loop.id, seen);
+  }
+  return bodies;
+}
+
+/** A loop body's last step and the loop it returns to (drawn as a "Next item" line instead of an "Add step" card). */
+export interface LoopBack {
+  leafId: string;
+  loopId: string;
+}
+
+export function loopBacks(nodes: Node<FlowNodeData>[], edges: Edge[], openEnds: OpenEnd[]): LoopBack[] {
+  const bodies = loopBodies(nodes, edges);
+  const out: LoopBack[] = [];
+  for (const end of openEnds) {
+    if (end.route !== 'next') continue;
+    for (const [loopId, members] of bodies) if (members.has(end.nodeId)) { out.push({ leafId: end.nodeId, loopId }); break; }
+  }
+  return out;
+}
+
+export interface GhostSpot {
+  end: OpenEnd;
+  x: number;
+  y: number;
+}
+
+/**
+ * Where "Add step" cards go. Not drawn: a loop body's last step (it returns to the loop instead), an optional branch
+ * ("When done", "Timed out") until its step is selected, and a spot where another step already sits (a step left
+ * unconnected below): a card there would look like a stray box. Cards of one step are a full column apart.
+ */
+export function ghostSpots(nodes: Node<FlowNodeData>[], openEnds: OpenEnd[], edges: Edge[], selectedId: string | null): GhostSpot[] {
+  const back = new Set(loopBacks(nodes, edges, openEnds).map((l) => l.leafId));
+  const real = nodes.map((n) => n.position);
+  const placed: Array<{ x: number; y: number }> = [];
+  const out: GhostSpot[] = [];
+  for (const end of openEnds) {
+    if (end.route === 'next' && back.has(end.nodeId)) continue;
+    if (end.optional && end.nodeId !== selectedId) continue;
     let x = end.position.x + end.offset;
     const y = end.position.y + 150;
+    if (real.some((p) => Math.abs(p.x - x) < 230 && Math.abs(p.y - y) < 80)) continue;
+    const dir = end.offset < 0 ? -1 : 1;
     let guard = 0;
-    const dir = end.offset < 0 ? -1 : 1; // a left-hand branch slides left, any other slides right
-    while (taken.some((p) => Math.abs(p.x - x) < 230 && Math.abs(p.y - y) < 80) && guard++ < 8) x += dir * 280;
-    taken.push({ x, y });
-    return { x, y };
-  });
+    while (placed.some((p) => Math.abs(p.x - x) < 250 && Math.abs(p.y - y) < 80) && guard++ < 8) x += dir * COLUMN_GAP;
+    placed.push({ x, y });
+    out.push({ end, x, y });
+  }
+  return out;
+}
+
+/** Plain name of a branch for its pill on the connection; null when the connection needs none (a plain "next"). */
+export function branchPillText(edge: Edge, source: Node<FlowNodeData> | undefined): string | null {
+  const route = edgeRoute(edge);
+  if (route === 'option') return (typeof edge.label === 'string' && edge.label) || 'Path';
+  if (route === 'error') return 'If it fails';
+  if (route === 'default') return 'Otherwise';
+  const cfg = source?.data.actionConfig as StepCfg;
+  return branchHandlesFor(cfg?.type, cfg).find((h) => h.route === route)?.label ?? null;
+}
+
+/**
+ * Subtitle for End steps that have none: which path they close ("After “Approved”"), so Ends after different
+ * branches can be told apart. Display only; never written to the flow.
+ */
+export function endSubtitles(nodes: Node<FlowNodeData>[], edges: Edge[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const n of nodes) {
+    if (n.data.nodeType !== 'end' || n.data.description) continue;
+    const names = [...new Set(edges.filter((e) => e.target === n.id).map((e) => {
+      const source = nodes.find((s) => s.id === e.source);
+      return branchPillText(e, source) ?? source?.data.label ?? '';
+    }).filter(Boolean))];
+    if (names.length > 0) out.set(n.id, `After \u201c${names.slice(0, 2).join(', ')}\u201d${names.length > 2 ? '...' : ''}`);
+  }
+  return out;
+}
+
+/**
+ * Why a step is flagged as cut off, or null when the trigger reaches it. "Nothing leads to this step" only fits a step with
+ * no line into it; a step that has one, but from a part that is itself cut off, is "Not connected to the trigger".
+ */
+export function orphanNote(id: string, nodes: Array<Pick<Node<FlowNodeData>, 'id' | 'data'>>, edges: Array<Pick<Edge, 'source' | 'target'>>): string | null {
+  if (!unreachableNodeIds(nodes, edges).has(id)) return null;
+  return edges.some((e) => e.target === id && e.source !== id) ? 'Not connected to the trigger' : 'Nothing leads to this step';
 }
 
 /** Edges and moved steps after connecting `source` to `target` on `route`. */
@@ -115,9 +210,9 @@ export function addActionStep(
   const sourceHandles = branchHandlesFor(sourceCfg?.type, sourceCfg);
   const routeIndex = sourceHandles.findIndex((h) => h.route === sourceRoute);
   const sideOffset = sourceHandles.length > 0 && routeIndex >= 0
-    ? (routeIndex - (sourceHandles.length - 1) / 2) * 240
+    ? (routeIndex - (sourceHandles.length - 1) / 2) * COLUMN_GAP
     : sourceCfg?.type === 'router'
-      ? edges.filter((e) => e.source === sourceId && edgeRoute(e) === 'option').length * 240
+      ? edges.filter((e) => e.source === sourceId && edgeRoute(e) === 'option').length * COLUMN_GAP
       : 0;
   const newNode: Node<FlowNodeData> = {
     id: newNodeId,

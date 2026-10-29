@@ -4,7 +4,7 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { FlowNodeData } from '../../types/flow.types';
 import { useFlowContext } from '../../contexts/FlowContext';
 import { cn } from '@/lib/utils';
-import { unreachableNodeIds } from '../../lib/flow/flowEdit';
+import { orphanNote } from '../../lib/flow-graph/flowCanvasGraph';
 import { cardStatus, END_SUBTITLE } from '../../lib/flow/flowNodeCard';
 import { cardIcon } from './nodeIcons';
 import { CardStatusLine, NodeCard } from './NodeCard';
@@ -13,7 +13,8 @@ import { CardStatusLine, NodeCard } from './NodeCard';
 export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) => {
   const { deleteNode, activeFlow } = useFlowContext();
   const { canManage } = useFlowPermissions();
-  const orphaned = activeFlow ? unreachableNodeIds(activeFlow.nodes, activeFlow.edges).has(id) : false;
+  // Only a step with no line into it: one with a line from a cut-off part is not "nothing leads here".
+  const orphaned = activeFlow ? orphanNote(id, activeFlow.nodes, activeFlow.edges) === 'Nothing leads to this step' : false;
   const status = cardStatus({ runStatus: data.status, incomplete: false, orphaned, notConnected: false });
   return (
     <div className="relative" data-testid={`flow-node-${id}`} data-node-type="end">
