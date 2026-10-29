@@ -88,10 +88,10 @@ export function FlowToolbarTitle() {
           onBlur={commit}
           onKeyDown={handleKeyDown}
           autoFocus
-          className="h-6 text-[13px] font-medium text-ink border-0 px-1 py-0 focus-visible:ring-1 min-w-0 max-w-[240px]"
+          className="h-6 text-[13px] font-medium text-ink border-0 px-1 py-0 focus-visible:ring-1 min-w-0 max-w-[160px] xl:max-w-[240px]"
         />
       ) : (
-        <span className="text-[13px] font-medium text-ink truncate max-w-[240px]">
+        <span className="text-[13px] font-medium text-ink truncate max-w-[130px] xl:max-w-[240px]" title={activeFlow.name}>
           {activeFlow.name || 'Untitled flow'}
         </span>
       )}
@@ -339,9 +339,10 @@ export function FlowsHeaderActions() {
         <span
           className="inline-flex items-center gap-1 rounded-full border border-good/40 px-2 py-0.5 text-xs font-medium text-good"
           data-testid="flow-published-badge"
+          title="Published: the trigger is on"
         >
           <CheckCircle2 className="w-3 h-3" />
-          Published
+          <span className="sr-only xl:not-sr-only">Published</span>
         </span>
       )}
       <DisabledReason reason={!canManage ? readOnlyReason : isPublished ? null : publishBlocked}>
@@ -356,7 +357,7 @@ export function FlowsHeaderActions() {
             disabled={!activeFlow || isUnpublishing || !canManage}
           >
             <CircleOff className="w-4 h-4" />
-            <span>Unpublish</span>
+            <span className="sr-only xl:not-sr-only">Unpublish</span>
           </Button>
         ) : (
           <Button
@@ -373,7 +374,7 @@ export function FlowsHeaderActions() {
             ) : (
               <Upload className="w-4 h-4" />
             )}
-            <span>Publish</span>
+            <span className="sr-only xl:not-sr-only">Publish</span>
           </Button>
         )}
       </DisabledReason>
