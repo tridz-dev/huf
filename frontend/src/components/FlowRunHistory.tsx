@@ -8,6 +8,7 @@ import { Badge } from './ui/badge';
 import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
 import { formatTimeAgo } from '@/utils/time';
 import { flowRunStatusLabel } from '@/lib/flowRunFormat';
+import { runTimesSentence } from '@/lib/flowTimeZone';
 
 interface FlowRunHistoryProps {
     flowId: string;
@@ -17,7 +18,7 @@ interface FlowRunHistoryProps {
 }
 
 export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: FlowRunHistoryProps) {
-    useSiteTimezone();
+    const siteZone = useSiteTimezone();
     const [runs, setRuns] = useState<FlowRunSummary[]>([]);
     const [loading, setLoading] = useState(false);
     const [loadFailed, setLoadFailed] = useState(false);
@@ -66,8 +67,8 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="w-[400px] sm:w-[500px] overflow-y-auto" data-testid="flow-run-history">
-                <SheetHeader className="mb-6">
+            <SheetContent className="flex w-[400px] flex-col gap-0 overflow-hidden p-0 sm:w-[500px]" data-testid="flow-run-history">
+                <SheetHeader className="shrink-0 border-b border-border bg-background px-6 pb-4 pt-6 pr-12" data-testid="flow-run-history-header">
                     <div className="flex items-center justify-between">
                         <SheetTitle className="flex items-center gap-2">
                             <PlayCircle className="w-5 h-5 text-muted-foreground" />
@@ -78,11 +79,12 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
                         </Button>
                     </div>
                     <SheetDescription>
-                        Recent executions for this flow
+                        Recent runs of this flow, newest first. Select one to see what each step did.
                     </SheetDescription>
+                    <p className="text-[11px] text-muted-foreground" data-testid="flow-run-history-timezone">{runTimesSentence(siteZone)}</p>
                 </SheetHeader>
 
-                <div className="space-y-3">
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-5" data-testid="flow-run-history-body">
                     {loading && runs.length === 0 ? (
                         <div className="flex justify-center p-8">
                             <Loader2 className="animate-spin w-6 h-6 text-muted-foreground" />
@@ -93,7 +95,7 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
                         </div>
                     ) : runs.length === 0 ? (
                         <div className="text-center p-8 text-sm text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
-                            No runs found for this flow.
+                            No runs found for this flow yet. Press Run to try it now, or publish it so its trigger starts it.
                         </div>
                     ) : (
                         runs.map((run) => (

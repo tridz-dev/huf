@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Dialog,
+  DialogDescription,
   DialogTitle,
 } from '../ui/dialog';
 import {
@@ -230,7 +231,7 @@ export function NodeSelectionModal({
                 <div className="text-left flex-1 min-w-0">
                   <div className="text-sm font-medium">{action.name}</div>
                   {action.description && (
-                    <div className="text-xs text-steel truncate">
+                    <div className="mt-0.5 text-xs leading-snug text-steel whitespace-normal break-words" data-testid={`flow-card-desc-${action.id}`}>
                       {action.description}
                     </div>
                   )}
@@ -250,13 +251,18 @@ export function NodeSelectionModal({
           <DialogTitle>
             {mainTab === 'triggers' ? 'Choose a trigger' : 'Add a step'}
           </DialogTitle>
+          <DialogDescription data-testid="flow-palette-intro">
+            {mainTab === 'triggers'
+              ? 'A trigger decides when the flow starts. Pick one, then set it up in the side panel.'
+              : 'Each step does one job and passes its result to the next step. Pick one to add it here.'}
+          </DialogDescription>
         </DialogScrollHeader>
 
         <DialogScrollBody className="flex flex-col pb-4">
         <div className="relative mb-4 flex-shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-soft" />
           <Input
-            placeholder={`Search ${mainTab}...`}
+            placeholder={mainTab === 'triggers' ? 'Search triggers...' : 'Search steps...'}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -296,7 +302,7 @@ export function NodeSelectionModal({
                     </div>
                     <div className="text-left flex-1 min-w-0">
                       <div className="text-sm font-medium">{trigger.name}</div>
-                      {trigger.description && <div className="text-xs text-steel">{trigger.description}</div>}
+                      {trigger.description && <div className="mt-0.5 text-xs leading-snug text-steel whitespace-normal break-words" data-testid={`flow-card-desc-${trigger.id}`}>{trigger.description}</div>}
                     </div>
                   </Button>
                 );
