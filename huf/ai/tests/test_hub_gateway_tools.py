@@ -194,3 +194,26 @@ class TestHubGatewayTools(IntegrationTestCase):
 		self.assertFalse(result["success"])
 		self.assertTrue(result["permission_denied"])
 		self.assertFalse(frappe.db.exists("Gateway", "Hub Test GW"))
+
+	def test_setup_gateway_rejects_non_whitelisted_non_secret_fields(self):
+		frappe.set_user("Administrator")
+		for key in ("access_token", "app_secret", "random_key"):
+			r = pairing_module.setup_gateway(
+				"WhatsApp", "Hub Test WL GW", credentials_ref="SS-0000", non_secret_fields={key: "x" * 12}
+			)
+			self.assertFalse(r["success"])
+			self.assertIn(key, r["error"])
+
+	def test_setup_gateway_redacts_adapter_errors(self):
+		from unittest.mock import patch
+
+		frappe.set_user("Administrator")
+
+		class Boom:
+			def __init__(self, creds):
+				raise ValueError("bad EAAsecrettokenvalue123")
+
+		with patch("huf.ai.gateway_webhook._adapter_class_for_provider", return_value=Boom):
+			r = pairing_module.setup_gateway("WhatsApp", "Hub Test Red GW", credentials={"phone_number_id": "1"})
+		self.assertFalse(r["success"])
+		self.assertNotIn("EAAsecrettokenvalue123", r["error"])

@@ -100,7 +100,17 @@ def resolve_and_consume(ref: str, user: str | None = None) -> dict[str, str]:
 		frappe.throw(_("credentials_ref has expired."), frappe.ValidationError)
 	out = {row.field_id: row.get_password("value", raise_exception=False) or "" for row in doc.secret_fields}
 	doc.db_set({"consumed": 1, "consumed_at": now_datetime()}, update_modified=False)
+	_wipe_values(doc)
 	return out
+
+
+def _wipe_values(doc) -> None:
+	"""Drop the stored plaintext (child rows + __Auth entries) once consumed."""
+	from frappe.utils.password import delete_all_passwords_for
+
+	for row in doc.secret_fields:
+		delete_all_passwords_for(row.doctype, row.name)
+	frappe.db.delete("Huf Secret Stash Field", {"parent": doc.name})
 
 
 def purge_expired() -> None:

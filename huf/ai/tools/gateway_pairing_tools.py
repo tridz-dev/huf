@@ -43,6 +43,26 @@ def _integrations_denial() -> dict[str, Any] | None:
 	}
 
 
+_NON_SECRET_WHITELIST = {
+	"WhatsApp": {"phone_number_id", "waba_id", "business_account_id", "app_id", "display_phone_number", "display_name"},
+}
+_GENERIC_NON_SECRET = {"chat", "chat_id", "bot_username", "username", "display_name", "workspace", "team_id", "app_id"}
+
+
+def _redact_text(text: str) -> str:
+	from huf.ai.secrets import redact
+
+	return redact(str(text))
+
+
+def _disallowed_non_secret_keys(provider: str, fields: dict) -> list[str]:
+	"""Keys that are not whitelisted for the provider or look like secrets."""
+	from huf.ai.secrets import _SECRET_KEY_RE
+
+	allowed = _NON_SECRET_WHITELIST.get(provider, _GENERIC_NON_SECRET)
+	return [str(k) for k in fields if _SECRET_KEY_RE.search(str(k)) or str(k) not in allowed]
+
+
 def setup_gateway(
 	provider: str,
 	gateway_name: str,
@@ -88,13 +108,21 @@ def setup_gateway(
 			"success": False,
 			"error": "Plaintext credentials are not accepted from an agent. Collect them with the secret form and pass credentials_ref.",
 		}
+	if non_secret_fields:
+		if not isinstance(non_secret_fields, dict):
+			return {"success": False, "error": "non_secret_fields must be an object."}
+		if bad := _disallowed_non_secret_keys(provider, non_secret_fields):
+			return {
+				"success": False,
+				"error": f"non_secret_fields keys not allowed for {provider}: {', '.join(bad)}. Secrets must go through the secret form.",
+			}
 	if credentials_ref:
 		if credentials:
 			return {"success": False, "error": "Pass either credentials or credentials_ref, not both."}
 		try:
 			credentials = resolve_and_consume(credentials_ref, frappe.session.user)
 		except (frappe.ValidationError, frappe.PermissionError) as exc:
-			return {"success": False, "error": str(exc)}
+			return {"success": False, "error": _redact_text(str(exc))}
 	if non_secret_fields:
 		credentials = {**(credentials or {}), **{k: str(v) for k, v in non_secret_fields.items()}}
 
@@ -107,12 +135,12 @@ def setup_gateway(
 	try:
 		adapter_cls = _adapter_class_for_provider(provider)
 	except Exception as exc:
-		return {"success": False, "error": f"Unsupported or uninstalled channel provider '{provider}': {exc}"}
+		return {"success": False, "error": _redact_text(f"Unsupported or uninstalled channel provider '{provider}': {exc}")}
 
 	try:
 		adapter = adapter_cls(credentials)
 	except ValueError as exc:
-		return {"success": False, "error": f"Credential validation failed for {provider}: {exc}"}
+		return {"success": False, "error": _redact_text(f"Credential validation failed for {provider}: {exc}")}
 
 	# 2. Save Integration Settings
 	#
@@ -205,9 +233,9 @@ def setup_gateway(
 			if res_data.get("ok"):
 				auto_webhook_status = "Auto-configured with Telegram API"
 			else:
-				auto_webhook_status = f"Telegram setWebhook notice: {res_data.get('description')}"
+				auto_webhook_status = _redact_text(f"Telegram setWebhook notice: {res_data.get('description')}")
 		except Exception as e:
-			auto_webhook_status = f"Webhook auto-set attempted: {e}"
+			auto_webhook_status = _redact_text(f"Webhook auto-set attempted: {e}")
 
 	return {
 		"success": True,

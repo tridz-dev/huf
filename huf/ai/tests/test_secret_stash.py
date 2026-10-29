@@ -84,3 +84,8 @@ class TestSecretStash(IntegrationTestCase):
 		doc.validate()
 		self.assertNotIn("EAAabcdefghijklmnop", str(doc.tool_args))
 		self.assertNotIn("supersecretvalue", str(doc.tool_result))
+
+	def test_consume_clears_stored_values(self):
+		ref = self._stash()["credentials_ref"]
+		S.resolve_and_consume(ref, "Administrator")
+		self.assertEqual(frappe.db.count("Huf Secret Stash Field", {"parent": ref}), 0)
