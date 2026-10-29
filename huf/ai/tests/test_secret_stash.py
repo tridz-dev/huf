@@ -64,16 +64,10 @@ class TestSecretStash(IntegrationTestCase):
 			def __init__(self, creds):
 				FakeAdapter.seen = creds
 
-		real_get_doc = frappe.get_doc
-
-		def fake_get_doc(*a, **kw):
-			if a and a[0] == "Huf Secret Stash":
-				return real_get_doc(*a, **kw)
-			raise RuntimeError("stop after validation")
-
 		with patch("huf.ai.gateway_webhook._adapter_class_for_provider", return_value=FakeAdapter), patch(
-			"frappe.db.get_value", return_value=None
-		), patch("frappe.get_doc", side_effect=fake_get_doc):
+			"huf.ai.tools.gateway_pairing_tools.provider_to_service_id",
+			side_effect=RuntimeError("stop after validation"),
+		):
 			with self.assertRaises(RuntimeError):
 				setup_gateway("Telegram", "GW-x", credentials_ref=ref, non_secret_fields={"chat": "1"})
 		self.assertEqual(FakeAdapter.seen, {"token": "123456:ABCDEFGH", "chat": "1"})
