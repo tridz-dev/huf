@@ -1,5 +1,5 @@
 import { FlowsListHeaderActions } from '../components/FlowsListHeaderActions';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Calendar, Play, Activity, Settings, Workflow } from 'lucide-react';
 import { PageFrame } from '@/layouts/PageFrame';
 import { FilterBar, GridView, ItemCard, EmptyState } from '../components/dashboard';
@@ -8,7 +8,7 @@ import { usePageData } from '../hooks/dashboard/usePageData';
 
 import { FlowMetadata } from '../types/flow.types';
 import { useNavigate } from 'react-router-dom';
-import { getFlowDefinitions, getFlowDefinition } from '../services/flowApi';
+import { getFlowDefinitions, getFlowDefinition, FLOW_LIST_LIMIT, type FlowListQuery } from '../services/flowApi';
 import { mapBackendStatusToFrontend } from '../services/flowSerializer';
 import { runFlow } from '../services/flowApi';
 import { toast } from '@/lib/toast';
@@ -61,9 +61,11 @@ function FlowListPage() {
   const [runTarget, setRunTarget] = useState<{ id: string; name: string } | null>(null);
   const { canCreate, canManage } = useFlowPermissions();
 
-  // Memoize fetchFn with NO dependencies to prevent ANY re-renders
+  // What the server is asked for: with hundreds of flows, search and filters must reach the server or older flows
+  // could never be found. (The page still filters the loaded rows too, so the list answers instantly while typing.)
+  const [serverQuery, setServerQuery] = useState<FlowListQuery>({});
   const fetchFn = useCallback(async () => {
-    const items = await getFlowDefinitions();
+    const items = await getFlowDefinitions(serverQuery);
 
     // Enrich with metadata (description, category) and nodeCount from definition_json
     const withMetadata = await Promise.all(
@@ -102,9 +104,9 @@ function FlowListPage() {
     );
 
     return withMetadata;
-  }, []);
+  }, [serverQuery]);
 
-  const { data, loading, search, setSearch, filters, setFilters, refresh } = usePageData<FlowMetadata>({
+  const { data, allData, loading, search, setSearch, filters, setFilters, refresh } = usePageData<FlowMetadata>({
     fetchFn,
     searchFields: ['name', 'description'],
     filterFn: useCallback((flow: FlowMetadata, filters: Record<string, string>) => {
@@ -117,6 +119,29 @@ function FlowListPage() {
       return true;
     }, []),
   });
+
+  // Ask the server again a moment after the search text or a filter changes (not on first render).
+  const firstQuery = useRef(true);
+  useEffect(() => {
+    const category = filters.category && filters.category !== 'all' && filters.category !== 'uncategorized'
+      ? categoryOptions.find((c) => c.value === filters.category)?.label
+      : undefined;
+    const status = filters.status && filters.status !== 'all'
+      ? ({ active: 'Active', draft: 'Draft', paused: 'Archived' } as Record<string, string>)[filters.status]
+      : undefined;
+    const next: FlowListQuery = { search: search.trim() || undefined, status, category };
+    const timer = setTimeout(() => setServerQuery((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next)), 300);
+    return () => clearTimeout(timer);
+  }, [search, filters.category, filters.status]);
+  useEffect(() => {
+    if (firstQuery.current) {
+      firstQuery.current = false;
+      return;
+    }
+    void refresh();
+    // refresh follows fetchFn, which follows serverQuery
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverQuery]);
 
   const handleFlowClick = (flowId: string) => {
     // Navigate to the flow canvas
@@ -183,6 +208,11 @@ function FlowListPage() {
         />
       }
     >
+      {allData.length >= FLOW_LIST_LIMIT && (
+        <p className="mb-3 text-xs text-muted-foreground" data-testid="flow-list-limit-note">
+          Showing the {FLOW_LIST_LIMIT} flows changed most recently. Search or use the filters to find others.
+        </p>
+      )}
       <GridView
         items={data}
         columns={{ sm: 1, md: 2, lg: 3 }}
