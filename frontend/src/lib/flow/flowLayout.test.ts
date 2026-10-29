@@ -69,4 +69,14 @@ describe('panToReveal', () => {
     const r = panToReveal({ x: 0, y: 2000, width: 100, height: 100 }, { x: 0, y: 0, zoom: 0.5 }, size);
     expect(r?.y).toBe(600 - 24 - 1050);
   });
+  it('lifts a box that would sit under the bottom-left overlays', () => {
+    const covered = { x: 0, y: 450, width: 270, height: 150 };
+    // Fully inside the canvas but under the overview: moved up so its bottom clears the overlay by the padding.
+    const r = panToReveal({ x: 100, y: 500, width: 200, height: 60 }, { x: 0, y: 0, zoom: 1 }, size, 24, covered);
+    expect(r).toEqual({ x: 0, y: -(560 - (450 - 24)) });
+  });
+  it('leaves a box that is clear of the overlays alone', () => {
+    const covered = { x: 0, y: 450, width: 270, height: 150 };
+    expect(panToReveal({ x: 400, y: 500, width: 200, height: 60 }, { x: 0, y: 0, zoom: 1 }, size, 24, covered)).toBeNull();
+  });
 });
