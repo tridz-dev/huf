@@ -1,21 +1,18 @@
 import { Button } from '@/components/ui/button';
+import type { CompleteSignupResult } from '@/services/embeddedSignupApi';
+import { EmbeddedSignupStep } from './EmbeddedSignupStep';
 
-export function ChoosePathStep({ onManual }: { onManual: () => void }) {
+export function ChoosePathStep({
+  onManual,
+  onFacebookConnected,
+}: {
+  onManual: () => void;
+  onFacebookConnected?: (result: CompleteSignupResult) => void;
+}) {
   return (
     <div className="space-y-3">
       <div className="rounded-md border border-line p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-ink">Connect with Facebook</p>
-            <p className="text-sm text-steel">Recommended. Log in to Meta and pick your number, no copy and paste.</p>
-          </div>
-          <Button disabled variant="outline" aria-describedby="fb-soon">
-            Connect with Facebook
-          </Button>
-        </div>
-        <p id="fb-soon" className="mt-2 text-xs text-steel">
-          Coming soon.
-        </p>
+        <EmbeddedSignupStep onConnected={(r) => onFacebookConnected?.(r)} />
       </div>
       <div className="rounded-md border border-line p-4">
         <div className="flex items-center justify-between gap-3">
