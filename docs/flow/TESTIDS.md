@@ -44,7 +44,7 @@ Card title = node title = sidebar title (derived from `data/actions.ts` / `data/
 | `flow-add-step-<nodeId>` | Add-step card after a plain step |
 | `flow-add-step-<nodeId>-<route>` | Add-step card for a branch (`true`, `false`, `approve`, `reject`, `body`, `option`, `timeout`) |
 | `flow-insert-step-<edgeId>` | "+" on an edge |
-| `flow-edge-label-<edgeId>` | Edge label |
+| `flow-edge-label-<edgeId>` | Branch name pill on a connection (Yes/No, Approved/Rejected/Timed out, For each item/When done, a router path in full, Next item on the loop-back line); 12px on screen at any zoom |
 
 ## Right sidebar
 `flow-config-sidebar`, `flow-sidebar-title`, `flow-config-title`, `flow-sidebar-delete`, `flow-sidebar-close`, `flow-view-only-banner` (view-only users),
@@ -111,7 +111,12 @@ Publishing a flow with unconnected integration steps shows a warning toast (`Som
 | Test id | Element |
 |---|---|
 | `flow-edge-line-<edgeId>` | The hit area of a connection (click it away from the + to select the line; it is highlighted) |
-| `flow-edge-remove-<edgeId>` | "Remove connection" button on the selected line |
+| `flow-edge-remove-<edgeId>` | "Remove connection" button (28px, tooltip) on the selected line |
+| `flow-edge-controls-<edgeId>` | The "+" / remove buttons of a line (shown on hover or when selected) |
+| `flow-edge-from`, `flow-edge-to` | Step chips of the connection panel (click selects that step) |
+| `flow-edge-kind` | Pill naming the kind of connection ("If Yes", "Loop: for each item", "Loop: when done") |
+| `flow-edge-ends` | The From -> To row of the connection panel |
+| `flow-edge-panel-insert`, `flow-edge-panel-remove` | "Add a step here" / "Remove connection" in the connection panel |
 | `flow-edge-delete-dialog`, `flow-edge-delete-confirm` | Confirmation shown by that button and by the Delete key on a selected line |
 | `flow-edge-config` | Sidebar "Connection" panel of the selected line |
 | `flow-node-orphan-<nodeId>` | "Nothing leads here" status word on a step no trigger reaches |
@@ -192,8 +197,8 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | Test id | Meaning |
 |---|---|
 | `flow-help`, `flow-help-popover`, `flow-help-shortcuts`, `flow-help-guide-link` | "?" button in the editor header, its popover (how a flow works, keyboard shortcuts) and the link to the full guide |
-| `flow-first-run-guide`, `flow-first-run-guide-close` | 3-step card on a flow with only a trigger (hidden for view-only users; closing it is remembered in the browser) |
-| `flow-minimap` | Overview map, bottom-left of the canvas (hidden when the canvas is narrower than 640px) |
+| `flow-first-run-guide`, `flow-first-run-guide-close` | Coach mark anchored to the trigger (`data-placement` beside-trigger or below) on a flow with only a trigger (hidden for view-only users; closing it is remembered in the browser) |
+| `flow-minimap` | Overview map, bottom-left of the canvas (hidden under 8 steps and when the canvas is narrower than 640px) |
 | `flow-palette-intro` | One-sentence intro under the "Choose what starts this flow" / "Add a step" title |
 | `flow-palette-empty` | Empty state of the palette search ("No steps match ..."), with `flow-palette-clear-search` ("Show all") |
 | `flow-palette-section-<category>` | A labelled palette section: agent (AI), control (Decide and repeat), people, data (Work with data), apps, advanced |
