@@ -10,6 +10,7 @@
   "default_model",
   "security_section",
   "allow_self_approval",
+  "allow_code_in_flows",
   "run_budget_section",
   "max_turns_ceiling",
   "max_depth",
@@ -47,6 +48,14 @@
    "fieldname": "allow_self_approval",
    "fieldtype": "Check",
    "label": "Allow Self-Approval"
+  },
+  {
+   "default": "0",
+   "description": "Lets Flows run Python code inside a sandbox. Off by default. Also needs the server switch huf_python_execution_enabled in the site configuration.",
+   "fieldname": "allow_code_in_flows",
+   "fieldtype": "Check",
+   "label": "Allow Code Execution In Flows",
+   "permlevel": 1
   },
   {
    "fieldname": "run_budget_section",
@@ -103,7 +112,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2025-10-29 11:16:51.068652",
+ "modified": "2026-10-28 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Settings",
@@ -118,6 +127,12 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "write": 1,
+   "role": "System Manager"
   }
  ],
  "row_format": "Dynamic",

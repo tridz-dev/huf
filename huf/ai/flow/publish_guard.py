@@ -28,8 +28,11 @@ HTTP_TOOL_ID = "http_request"
 #: Agent Tool Function types that call a web address.
 HTTP_TOOL_TYPES = ("GET", "POST")
 
+CODE_RUN_TYPE = "code.run"
+
 DOC_EVENT_LABEL = "a document-event trigger"
 WEB_REQUEST_LABEL = "a web request step"
+CODE_LABEL = "an Execute code step"
 
 
 def _is_web_tool(tool_id) -> bool:
@@ -57,6 +60,11 @@ def sensitive_nodes(defn) -> list[dict]:
 		elif node.get("type") == TOOL_CALL_TYPE and _is_web_tool(config.get("tool_id")):
 			label = WEB_REQUEST_LABEL
 			shape = {"tool_id": config.get("tool_id"), "input": config.get("input")}
+		elif node.get("type") == CODE_RUN_TYPE:
+			from huf.ai.flow.code_node import fingerprint
+
+			found.append({"id": node.get("id"), "label": CODE_LABEL, "fingerprint": fingerprint(node)})
+			continue
 		else:
 			continue
 		found.append(
@@ -92,12 +100,18 @@ def can_publish_sensitive(user: str | None = None) -> bool:
 
 
 def check_can_publish(defn, previous_defn=None, user: str | None = None) -> None:
-	"""Raise PermissionError unless ``user`` may have ``defn`` Active.
+	"""Raise unless ``user`` may have ``defn`` Active.
 
 	Nothing is required when the flow has no sensitive step, or when every sensitive step is exactly as
 	it was in the already-Active version (``previous_defn``): editing an unrelated step of a published
 	flow does not need the capability, adding or changing a sensitive one does.
+
+	An Execute code step has its own rules on top (``huf.ai.flow.code_node.check_publish``): both code
+	switches must be on, its settings sound, and a new or changed one needs ``flows.execute_code``.
 	"""
+	from huf.ai.flow import code_node
+
+	code_node.check_publish(defn, previous_defn, user)
 	current = sensitive_nodes(defn)
 	if not current:
 		return

@@ -24,6 +24,7 @@ import {
   WEBHOOK_RESPONSES, transformParamHelp, TRANSFORM_HELP,
 } from '@/lib/flowHelp';
 import { SlackChannelPicker } from './SlackChannelPicker';
+import { CodeRunFields } from './CodeRunForm';
 import { ACTION_CARD_CONTRACT } from '../../data/actions';
 import { registerToolSchemas } from '@/lib/flowToolSchemas';
 import { TRANSFORM_OPS, getTransformOp } from '@/lib/flowTransformOps';
@@ -1012,6 +1013,14 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
           Add field
         </Button>
         <FieldHint testId="flow-hint-doc-create-fields">One row per field to fill in. The field name is the one shown in the record's form, in lowercase with underscores.</FieldHint>
+      </Section>
+    );
+  }
+
+  if (type === 'code-run') {
+    return (
+      <Section title={title} hint="Runs Python you write in a sandbox. The flow continues with what your code prints and returns.">
+        <CodeRunFields nodeId={nodeId} cfg={cfg} patch={patch} Err={Err} />
       </Section>
     );
   }

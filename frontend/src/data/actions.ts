@@ -111,6 +111,13 @@ export const actionOptions: ActionOption[] = [
     category: 'utility'
   },
   {
+    id: 'code-run',
+    name: 'Execute code',
+    description: 'Run Python in a sandbox',
+    icon: 'Terminal',
+    category: 'utility'
+  },
+  {
     id: 'file',
     name: 'File operations',
     description: 'Lists, searches or reads files in Google Drive.',
@@ -138,7 +145,8 @@ export const actionOptions: ActionOption[] = [
 /**
  * How each card materialises on the canvas (FIELD_CONTRACT section 2). `configType` is the
  * ActionConfig discriminator; `toolId` presets `tool_id` for the tool.call-based cards.
- * Execute Code has no card: Flows have no execution profile, so run_python cannot run.
+ * Execute code (`code-run`, graph-IR `code.run`) is its own node type, not a tool call; its card is only offered
+ * while the server says code may run in Flows and the user holds flows.execute_code (see lib/codeFlow.ts).
  * HTTP Request maps to tool_id `http_request` (tool registration is tracked separately).
  */
 export interface ActionCardContract {
@@ -162,6 +170,7 @@ export const ACTION_CARD_CONTRACT: Record<string, ActionCardContract> = {
   'state-set': { configType: 'state-set', backendType: 'state.set' },
   'state-delete': { configType: 'state-delete', backendType: 'state.delete' },
   'doc-create': { configType: 'doc-create', backendType: 'doc.create' },
+  'code-run': { configType: 'code-run', backendType: 'code.run' },
   'email': { configType: 'tool-call', backendType: 'tool.call', toolId: 'gmail_send_email' },
   'http-request': { configType: 'tool-call', backendType: 'tool.call', toolId: 'http_request' },
   'file': {

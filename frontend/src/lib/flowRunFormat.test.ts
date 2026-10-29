@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeDecision, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from './flowRunFormat';
+import { asCodeStepOutput, describeDecision, flowRunStatusLabel, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from './flowRunFormat';
 import { parseServerDate, setSiteTimezoneForTests, toServerDatetime } from './serverTime';
 
 describe('describeDecision', () => {
@@ -81,5 +81,25 @@ describe('failed step output', () => {
     it('drops the status and error keys already shown as the reason', () => {
         expect(withoutFailureKeys({ status: 'failed', error: 'boom', status_code: 500 })).toEqual({ status_code: 500 });
         expect(withoutFailureKeys({ success: false, error: 'boom' })).toEqual({});
+    });
+});
+
+describe('Execute code step output', () => {
+    it('reads stdout, result, exit status and truncation', () => {
+        expect(asCodeStepOutput({ stdout: 'hi\n', result: { n: 2 }, exit_status: 'Ok', truncated: false })).toEqual({
+            stdout: 'hi\n', result: { n: 2 }, exitStatus: 'Ok', truncated: false,
+        });
+        expect(asCodeStepOutput({ status: 'failed', error: 'x', exit_status: 'Timeout', truncated: true })).toMatchObject({ exitStatus: 'Timeout', stdout: '', truncated: true });
+    });
+
+    it('is null for any other step output', () => {
+        expect(asCodeStepOutput({ result: 1 })).toBeNull();
+        expect(asCodeStepOutput('text')).toBeNull();
+        expect(asCodeStepOutput(null)).toBeNull();
+    });
+
+    it('words the Waiting Code status', () => {
+        expect(flowRunStatusLabel('Waiting Code')).toBe('Waiting for code');
+        expect(flowRunStatusLabel('Waiting Approval')).toBe('Waiting Approval');
     });
 });

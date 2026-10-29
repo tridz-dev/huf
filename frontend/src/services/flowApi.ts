@@ -56,7 +56,7 @@ export type BackendNodeType =
     | 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event' | 'trigger.unset'
     | 'agent.run' | 'tool.call' | 'router.llm' | 'router.decision' | 'human.approval'
     | 'condition' | 'transform' | 'foreach' | 'validate' | 'output'
-    | 'state.get' | 'state.set' | 'state.delete' | 'doc.create';
+    | 'state.get' | 'state.set' | 'state.delete' | 'doc.create' | 'code.run';
 
 export interface BackendNode {
     id: string;
@@ -114,7 +114,7 @@ export interface FlowRunSummary {
     flow_id: string;
     flow_version: number;
     mode: string;
-    status: 'Queued' | 'Running' | 'Waiting Approval' | 'Waiting User' | 'Success' | 'Failed';
+    status: 'Queued' | 'Running' | 'Waiting Approval' | 'Waiting User' | 'Waiting Code' | 'Success' | 'Failed';
     current_node_id: string;
     hop_count: number;
     trigger_type: string;

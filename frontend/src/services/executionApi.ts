@@ -23,6 +23,8 @@ export interface PendingExecutionApproval {
   approver_role: string | null;
   requested_by: string | null;
   agent_name: string | null;
+  /** "Flow: <name> > <step>" when the code belongs to a Flow step. */
+  flow_label?: string | null;
   can_decide: boolean;
 }
 

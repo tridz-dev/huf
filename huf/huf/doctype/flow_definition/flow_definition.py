@@ -41,6 +41,7 @@ class FlowDefinition(Document):
 	def validate(self):
 		defn = self._validate_definition_json()
 		self._validate_activation(defn)
+		self._validate_code_edit(defn)
 		self._validate_sensitive_publish(defn)
 		self._validate_gateway_authority(defn)
 		self.updated_by = frappe.session.user
@@ -185,6 +186,25 @@ class FlowDefinition(Document):
 					)
 				)
 		return problems
+
+	def _validate_code_edit(self, defn: dict):
+		"""Adding or changing an Execute code step needs ``flows.execute_code``, in a draft too, so nobody
+		without it writes the code an admin later publishes."""
+		flags = frappe.flags
+		if getattr(flags, "in_install", False) or getattr(flags, "in_migrate", False) or getattr(flags, "in_patch", False):
+			return
+		from huf.ai.flow.code_node import check_edit, code_nodes
+
+		if not code_nodes(defn):
+			return
+		before = self.get_doc_before_save() if not self.is_new() else None
+		previous = None
+		if before is not None:
+			try:
+				previous = json.loads(before.definition_json) if isinstance(before.definition_json, str) else before.definition_json
+			except (json.JSONDecodeError, TypeError):
+				previous = None
+		check_edit(defn, previous)
 
 	def _validate_sensitive_publish(self, defn: dict):
 		"""A flow with a document-event trigger or a web request step can only be Active if the saving

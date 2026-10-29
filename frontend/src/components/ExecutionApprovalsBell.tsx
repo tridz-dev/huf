@@ -114,7 +114,7 @@ export function ExecutionApprovalsBell() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label="Pending execution approvals">
+        <Button variant="ghost" size="icon" className="relative" aria-label="Pending execution approvals" data-testid="execution-approvals-bell">
           <ShieldAlert className="w-4 h-4" />
           {count > 0 && (
             <Badge
@@ -138,7 +138,7 @@ export function ExecutionApprovalsBell() {
               const expiry = formatExpiry(approval.expires_on, now);
               const deciding = decidingName === approval.name;
               return (
-                <div key={approval.name} className="px-4 py-3 space-y-2">
+                <div key={approval.name} className="px-4 py-3 space-y-2" data-testid={`execution-approval-${approval.name}`}>
                   <div className="flex items-center justify-between gap-2">
                     <Badge variant="pill-neutral">{executionKindLabel(approval.execution_kind)}</Badge>
                     <Badge variant={expiry.urgent ? 'pill-danger' : 'pill-warning'}>
@@ -148,7 +148,7 @@ export function ExecutionApprovalsBell() {
                   <div>
                     <div className="text-sm font-medium">{approval.requested_capability}</div>
                     <div className="text-xs text-muted-foreground">
-                      {approval.agent_name ? `${approval.agent_name}` : 'Unknown agent'}
+                      {approval.flow_label ?? (approval.agent_name ? `${approval.agent_name}` : 'Unknown agent')}
                       {approval.requested_by ? ` · requested by ${approval.requested_by}` : ''}
                     </div>
                   </div>
@@ -157,6 +157,7 @@ export function ExecutionApprovalsBell() {
                       size="sm"
                       variant="outline"
                       disabled={deciding}
+                      data-testid={`execution-approve-${approval.name}`}
                       onClick={() => handleApprove(approval.name)}
                     >
                       Approve
@@ -165,6 +166,7 @@ export function ExecutionApprovalsBell() {
                       size="sm"
                       variant="outline"
                       disabled={deciding}
+                      data-testid={`execution-reject-${approval.name}`}
                       onClick={() => handleReject(approval.name)}
                     >
                       Reject

@@ -51,6 +51,7 @@ CAPABILITIES: dict[str, str] = {
 	"flows.create": "Create Flows",
 	"flows.manage": "Manage Flows",
 	"flows.publish_sensitive": "Publish Flows With Document Triggers Or Web Requests",
+	"flows.execute_code": "Add And Publish Flows That Run Code",
 	# --- System ---
 	"system.providers.manage": "Manage AI Providers",
 	"system.models.manage": "Manage AI Models",

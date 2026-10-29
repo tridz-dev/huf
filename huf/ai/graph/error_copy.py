@@ -34,6 +34,7 @@ NODE_TYPE_LABELS: dict[str, str] = {
 	"state.set": "Set State",
 	"state.delete": "Delete State",
 	"doc.create": "Create Document",
+	"code.run": "Execute Code",
 }
 
 FIELD_LABELS: dict[str, str] = {

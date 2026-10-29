@@ -14,6 +14,8 @@ export function reportFlowRun(result: FlowRunResult): void {
   const detail = `Run ${result.flow_run_id}`;
   if (status === 'Failed' || status === 'Error') {
     toast.error('The flow ran but failed', { description: `${detail}. Open Runs to see what went wrong.` });
+  } else if (status === 'Waiting Code') {
+    toast.info('The flow is running your code', { description: `${detail}. It continues when the code finishes or is approved.` });
   } else if (status.startsWith('Waiting')) {
     toast.info('The flow is waiting for approval', { description: `${detail}. It continues once someone responds.` });
   } else if (status === 'Completed' || status === 'Success') {

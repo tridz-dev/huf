@@ -86,6 +86,10 @@ ARTIFACT_TEXT_INLINE_BYTES = 2000
 #: shared directories (alongside the knowledge system's artifacts).
 _SHARED_DIR_SUBDIR = "code_execution"
 
+#: Subdirectory of the site's private files area holding one throwaway scratch folder per Flow
+#: step (``huf_scratch/<flow run>/<node>``), removed as soon as the step ends and swept daily.
+SCRATCH_SUBDIR = "huf_scratch"
+
 
 # ---------------------------------------------------------------------------
 # Small helpers
@@ -565,8 +569,56 @@ def run_python(
 	if profile.filesystem_policy == "Shared Directory":
 		_resolve_shared_dir_limit_mb(agent)
 
+	return _dispatch(
+		code,
+		profile,
+		acting_user,
+		{
+			"agent_run": _name_of(agent_run),
+			"conversation": _name_of(conversation),
+			"tool": kwargs.get("tool_name") or _TOOL_NAME,
+			"call_id": kwargs.get("call_id") or kwargs.get("tool_call_id"),
+		},
+	)
+
+
+def _dispatch(
+	code: str,
+	profile: Any,
+	acting_user: str,
+	audit_links: dict,
+	*,
+	inputs: dict | None = None,
+	flow_ref: dict | None = None,
+	approval_ttl_hours: int | None = None,
+	wall_cap_s: int | None = None,
+) -> dict:
+	"""Shared core of both entry points: audit row, approval parking, enqueue.
+
+	The caller (``run_python`` for an agent, ``run_flow_code`` for a Flow step) has already
+	enforced its own gates (site switch, capability, agent / flow switches, profile enabled).
+	What is common is everything from the profile snapshot on:
+
+	* snapshot the Execution Profile and hash the code (the raw code is never stored on the
+	  audit row; only ``code_ref``);
+	* create exactly one ``Agent Tool Call`` audit row, linked through ``audit_links``
+	  (``agent_run`` / ``conversation`` / ``tool`` / ``call_id``);
+	* ``Never Allow`` -> fail the row and raise ``PermissionError``;
+	* ``Ask Every Time`` -> park behind an ``Agent Execution Approval`` (the resumable payload,
+	  including ``inputs`` and ``flow_ref``, is held in Redis, never in the database);
+	* ``Auto Approve`` -> enqueue.
+
+	``inputs`` (flow path only) is JSON data handed to the code as the ``inputs`` variable;
+	``flow_ref`` (``{"flow_run", "node_id"}``) tells the worker where to put the scratch folder
+	and whom to nudge when the call finishes. ``wall_cap_s`` lowers the profile's wall limit for
+	this one call.
+	"""
 	# 5/6. Snapshot + code hash (raw code is never stored on the audit row).
 	snapshot = _build_profile_snapshot(profile)
+	if wall_cap_s:
+		# A Flow step may ask for less time than its profile allows, never more.
+		limits = snapshot["limits"]
+		limits["max_wall_time_s"] = min(int(limits.get("max_wall_time_s") or wall_cap_s), int(wall_cap_s))
 	code_ref = _sha256(code)
 
 	# 7. Create the audit record (Started). ``tool_args`` references the hash,
@@ -576,13 +628,13 @@ def run_python(
 	call = frappe.get_doc(
 		{
 			"doctype": "Agent Tool Call",
-			"agent_run": _name_of(agent_run),
-			"conversation": _name_of(conversation),
-			"tool": kwargs.get("tool_name") or _TOOL_NAME,
+			"agent_run": audit_links.get("agent_run"),
+			"conversation": audit_links.get("conversation"),
+			"tool": audit_links.get("tool") or _TOOL_NAME,
 			"is_mcp_tool": 0,
 			"tool_args": json.dumps({"code_ref": code_ref}),
 			"status": "Started",
-			"call_id": kwargs.get("call_id") or kwargs.get("tool_call_id"),
+			"call_id": audit_links.get("call_id"),
 			"execution_profile": profile.name,
 			"execution_profile_snapshot": snapshot,
 			"code_ref": code_ref,
@@ -604,6 +656,7 @@ def run_python(
 
 	# 8b. Ask Every Time — park behind an approval record, do NOT enqueue.
 	if approval_mode == "Ask Every Time":
+		ttl_hours = approval_ttl_hours or _APPROVAL_TTL_HOURS
 		# ``ignore_permissions=True`` is intentional and security-relevant: the
 		# dispatcher is a trusted internal path that has already enforced the
 		# kill switch + ``code_execution.run`` capability + agent/profile gates,
@@ -620,7 +673,7 @@ def run_python(
 				"requested_capability": _capability_summary(profile),
 				"code_ref": code_ref,
 				"status": "Pending",
-				"expires_on": add_to_date(now_datetime(), hours=_APPROVAL_TTL_HOURS),
+				"expires_on": add_to_date(now_datetime(), hours=ttl_hours),
 				"requested_by": acting_user,
 			}
 		)
@@ -642,7 +695,13 @@ def run_python(
 		# approver. A lapsed hold fails closed (the approval lapses to
 		# Expired); rejection/expiry finalize the audit row without enqueueing.
 		stash_pending_execution(
-			approval.name, code=code, profile_snapshot=snapshot, acting_user=acting_user
+			approval.name,
+			code=code,
+			profile_snapshot=snapshot,
+			acting_user=acting_user,
+			inputs=inputs,
+			flow_ref=flow_ref,
+			ttl_hours=ttl_hours,
 		)
 
 		# ``Agent Tool Call.status`` has no dedicated "waiting" option; "Queued"
@@ -658,15 +717,18 @@ def run_python(
 			"status": "Pending Approval",
 			"agent_tool_call": call.name,
 			"approval": approval.name,
+			"expires_on": approval.expires_on,
 			"code_ref": code_ref,
 			"message": "Execution paused pending approval.",
 		}
 
-	# 8c. Auto Approve (default) — enqueue immediately.
-	enqueue_execution(call.name, code, snapshot, acting_user=acting_user)
-
+	# 8c. Auto Approve (default) — enqueue immediately. The row is marked Queued first: a fast
+	#     worker (or an in-process run) must not have its outcome overwritten by this write.
 	call.status = "Queued"
 	call.save(ignore_permissions=True)
+	enqueue_execution(
+		call.name, code, snapshot, acting_user=acting_user, inputs=inputs, flow_ref=flow_ref
+	)
 
 	return {
 		"success": True,
@@ -674,6 +736,72 @@ def run_python(
 		"agent_tool_call": call.name,
 		"code_ref": code_ref,
 	}
+
+
+def run_flow_code(
+	flow_run: Any,
+	node: dict,
+	code: str,
+	profile_name: str,
+	inputs: dict | None = None,
+	timeout_s: int | None = None,
+) -> dict:
+	"""Dispatch the code of one published ``code.run`` Flow step.
+
+	The caller (the Flow engine) has already checked both switches, the flow owner's
+	capabilities and the step's size / profile rules (``huf.ai.flow.code_node``); the two gates
+	every execution path shares are repeated here as defence in depth. ``code`` and
+	``profile_name`` MUST come from the run's pinned definition, never from run input;
+	``inputs`` is plain data for the code.
+
+	Exactly one ``Agent Tool Call`` audit row is written (profile snapshot + code hash), linked to
+	the step's ``Agent Run`` (and so to the Flow Run). Returns the dispatch dict of
+	:func:`_dispatch` plus ``agent_run``; raises ``PermissionError`` / ``ValidationError`` with a
+	plain message when the run is not allowed.
+	"""
+	from uuid import uuid4
+
+	if not _is_site_enabled():
+		frappe.throw("Python code execution is disabled on this site.", frappe.ValidationError)
+	acting_user = frappe.session.user
+	if not has_capability(acting_user, "code_execution.run"):
+		frappe.throw("You do not have permission to run Python code.", frappe.PermissionError)
+
+	profile = frappe.get_doc("Execution Profile", profile_name)
+	if profile.disabled:
+		frappe.throw("The selected Execution Profile is disabled.", frappe.ValidationError)
+	if profile.filesystem_policy == "Shared Directory":
+		frappe.throw(
+			"A Shared Directory profile needs an agent conversation, which a Flow step does not have. "
+			"Pick a profile with a scratch folder.",
+			frappe.ValidationError,
+		)
+
+	from huf.ai.flow.engine import _create_flow_agent_run
+
+	run_doc = _create_flow_agent_run(
+		flow_run=flow_run,
+		node=node,
+		run_kind="tool",
+		prompt=f"Execute code ({profile.name}), {len((code or '').encode('utf-8'))} bytes",
+	)
+	flow_ref = {"flow_run": flow_run.name, "node_id": node.get("id")}
+	out = _dispatch(
+		code,
+		profile,
+		acting_user,
+		{
+			"agent_run": run_doc.name,
+			"conversation": getattr(flow_run, "conversation", None),
+			"tool": _TOOL_NAME,
+			"call_id": f"call_{uuid4().hex[:12]}",
+		},
+		inputs=inputs or {},
+		flow_ref=flow_ref,
+		wall_cap_s=timeout_s,
+	)
+	out["agent_run"] = run_doc.name
+	return out
 
 
 # ---------------------------------------------------------------------------
@@ -686,6 +814,8 @@ def enqueue_execution(
 	code: str,
 	profile_snapshot: dict,
 	acting_user: str | None = None,
+	inputs: dict | None = None,
+	flow_ref: dict | None = None,
 ) -> None:
 	"""Enqueue :func:`execute_job` on the ``code-execution`` RQ queue.
 
@@ -696,19 +826,32 @@ def enqueue_execution(
 	impersonates it for every broker call — the worker itself runs as a
 	privileged/system user and must never leak that identity into the broker.
 	When it is missing the broker denies every call (fail closed).
+
+	A Flow step (``flow_ref`` set) goes to the queue named by the site config
+	``huf_flow_code_queue`` (default ``long``, which every standard deployment already works), and
+	is enqueued only after the caller's transaction commits, so the run is already parked in
+	``Waiting Code`` when the worker finishes. ``inputs`` is plain JSON data for the code.
 	"""
 	limits = (profile_snapshot or {}).get("limits") or {}
 	wall = int(limits.get("max_wall_time_s") or DEFAULT_WALL_TIME_S)
 
+	kwargs = {}
+	queue = "code-execution"
+	if flow_ref:
+		queue = str(frappe.conf.get("huf_flow_code_queue") or "long")
+		kwargs["enqueue_after_commit"] = True
 	frappe.enqueue(
 		"huf.ai.tools.code_execution.execute_job",
-		queue="code-execution",
+		queue=queue,
 		timeout=wall + RQ_WALL_GRACE_S,
 		agent_tool_call_name=agent_tool_call_name,
 		code=code,
 		profile_snapshot=profile_snapshot,
 		acting_user=acting_user,
+		inputs=inputs,
+		flow_ref=flow_ref,
 		now=bool(getattr(frappe.flags, "in_test", False)),
+		**kwargs,
 	)
 
 
@@ -741,11 +884,18 @@ def _pending_execution_key(approval_name: str) -> str:
 
 
 def stash_pending_execution(
-	approval_name: str, *, code: str, profile_snapshot: dict, acting_user: str | None
+	approval_name: str,
+	*,
+	code: str,
+	profile_snapshot: dict,
+	acting_user: str | None,
+	inputs: dict | None = None,
+	flow_ref: dict | None = None,
+	ttl_hours: int | None = None,
 ) -> None:
 	"""Hold the resumable dispatch payload for a parked execution in Redis.
 
-	Called by :func:`run_python` right after the ``Agent Execution Approval``
+	Called by :func:`_dispatch` right after the ``Agent Execution Approval``
 	row is inserted. The TTL mirrors the approval's ``expires_on`` so the hold
 	never outlives the window in which the approval is actionable. The payload
 	is the only place the raw code survives between park and approval; nothing
@@ -756,11 +906,13 @@ def stash_pending_execution(
 		"code_ref": _sha256(code),
 		"profile_snapshot": profile_snapshot or {},
 		"acting_user": acting_user,
+		"inputs": inputs,
+		"flow_ref": flow_ref,
 	}
 	frappe.cache().set_value(
 		_pending_execution_key(approval_name),
-		json.dumps(payload),
-		expires_in_sec=_APPROVAL_TTL_HOURS * 3600,
+		json.dumps(payload, default=str),
+		expires_in_sec=(ttl_hours or _APPROVAL_TTL_HOURS) * 3600,
 	)
 
 
@@ -814,10 +966,14 @@ def load_pending_execution(approval_doc) -> dict:
 		)
 
 	snapshot = payload.get("profile_snapshot")
+	inputs = payload.get("inputs")
+	flow_ref = payload.get("flow_ref")
 	return {
 		"code": code,
 		"profile_snapshot": snapshot if isinstance(snapshot, dict) else {},
 		"acting_user": acting_user,
+		"inputs": inputs if isinstance(inputs, dict) else None,
+		"flow_ref": flow_ref if isinstance(flow_ref, dict) else None,
 	}
 
 
@@ -839,6 +995,8 @@ def enqueue_approved_execution(approval_doc, payload: dict) -> None:
 		payload["code"],
 		payload["profile_snapshot"],
 		acting_user=payload["acting_user"],
+		inputs=payload.get("inputs"),
+		flow_ref=payload.get("flow_ref"),
 	)
 	clear_pending_execution(approval_doc.name)
 
@@ -1305,6 +1463,8 @@ def execute_job(
 	code: str,
 	profile_snapshot: dict,
 	acting_user: str | None = None,
+	inputs: dict | None = None,
+	flow_ref: dict | None = None,
 ) -> None:
 	"""RQ worker: run the sandboxed interpreter and record the outcome.
 
@@ -1321,10 +1481,55 @@ def execute_job(
 	    snapshotted before the run; after the run (always, via ``finally``) it
 	    is cap-checked again and new/changed files are written back as
 	    ``Agent Context Artifact`` records.
-	  * "Scratch Only" — the Phase-3 throwaway temp directory, discarded after.
+	  * "Scratch Only" — a throwaway directory, always deleted afterwards. For a Flow step
+	    (``flow_ref``) it is ``<site>/private/files/huf_scratch/<flow run>/<node>``; for an agent a
+	    temp directory.
 	  * "None" — no filesystem access; ``run_sandboxed`` gets ``scratch_dir=None``.
+
+	A Flow step (``flow_ref``) also gets ``inputs`` as the ``inputs`` variable, has its ``result``
+	variable captured, and, whatever the outcome, schedules the continuation of the parked Flow Run
+	once the audit row is final.
 	"""
+	try:
+		_run_job(agent_tool_call_name, code, profile_snapshot, acting_user, inputs, flow_ref)
+	finally:
+		if flow_ref:
+			from huf.ai.flow import code_node
+
+			code_node.schedule_continue(flow_ref.get("flow_run"))
+
+
+def _flow_scratch_dir(flow_ref: dict) -> str:
+	"""The private scratch folder of one Flow step; created here, removed by the caller."""
+	path = os.path.join(
+		get_files_path(is_private=True),
+		SCRATCH_SUBDIR,
+		_conversation_dir_key(flow_ref.get("flow_run")),
+		_conversation_dir_key(flow_ref.get("node_id")),
+	)
+	os.makedirs(path, exist_ok=True)
+	return path
+
+
+def _remove_flow_scratch(path: str) -> None:
+	shutil.rmtree(path, ignore_errors=True)
+	try:
+		os.rmdir(os.path.dirname(path))  # the run's folder, once its last step folder is gone
+	except OSError:
+		pass
+
+
+def _run_job(
+	agent_tool_call_name: str,
+	code: str,
+	profile_snapshot: dict,
+	acting_user: str | None,
+	inputs: dict | None,
+	flow_ref: dict | None,
+) -> None:
 	call = frappe.get_doc("Agent Tool Call", agent_tool_call_name)
+	if flow_ref and call.status in ("Completed", "Failed"):
+		return  # the step was already given up on (nobody picked it up in time): never run it late
 	limits = (profile_snapshot or {}).get("limits") or {}
 	max_output = int(limits.get("max_output_bytes") or DEFAULT_MAX_OUTPUT_BYTES)
 	filesystem_policy = (profile_snapshot or {}).get("filesystem_policy") or "None"
@@ -1345,6 +1550,7 @@ def execute_job(
 	broker_handler = _make_broker_handler(profile_snapshot, acting_user)
 
 	scratch_dir = None
+	flow_scratch = None
 	shared_ctx = None
 	if filesystem_policy == "Shared Directory":
 		shared_ctx = _prepare_shared_dir(call)
@@ -1353,8 +1559,12 @@ def execute_job(
 			return
 		mount_dir = shared_ctx["dir"]
 	elif filesystem_policy == "Scratch Only":
-		scratch_dir = tempfile.mkdtemp(prefix="huf-exec-")
-		mount_dir = scratch_dir
+		if flow_ref:
+			flow_scratch = _flow_scratch_dir(flow_ref)
+			mount_dir = flow_scratch
+		else:
+			scratch_dir = tempfile.mkdtemp(prefix="huf-exec-")
+			mount_dir = scratch_dir
 	else:  # "None": no filesystem mounted; the child exposes no file I/O
 		mount_dir = None
 
@@ -1367,8 +1577,12 @@ def execute_job(
 			broker_handler=broker_handler,
 			broker_thread_start=broker_handler.thread_start,
 			broker_thread_end=broker_handler.thread_end,
+			inputs=(inputs or {}) if flow_ref else None,
+			capture_result=bool(flow_ref),
 		)
-		_apply_result(call, result, max_output, broker_calls=broker_handler.call_counts)
+		_apply_result(
+			call, result, max_output, broker_calls=broker_handler.call_counts, flow=bool(flow_ref)
+		)
 	except Exception as exc:  # noqa: BLE001 - never leave the row stuck at Started
 		call.status = "Failed"
 		call.exit_status = "Error"
@@ -1386,12 +1600,22 @@ def execute_job(
 			_finalize_shared_dir(call, shared_ctx)
 		if scratch_dir is not None:
 			shutil.rmtree(scratch_dir, ignore_errors=True)
+		if flow_scratch is not None:
+			_remove_flow_scratch(flow_scratch)
 
 
 def _apply_result(
-	call, result: ExecutionResult, max_output: int, broker_calls: dict | None = None
+	call,
+	result: ExecutionResult,
+	max_output: int,
+	broker_calls: dict | None = None,
+	flow: bool = False,
 ) -> None:
-	"""Map an :class:`ExecutionResult` onto the ``Agent Tool Call`` audit row."""
+	"""Map an :class:`ExecutionResult` onto the ``Agent Tool Call`` audit row.
+
+	A Flow step stores its whole step output on the row (``stdout``, ``result``, ``exit_status``,
+	``truncated``) so the Flow Run can build the node output from the audit row alone.
+	"""
 	ok = result.exit_status == "Ok"
 
 	call.status = "Completed" if ok else "Failed"
@@ -1408,7 +1632,15 @@ def _apply_result(
 	}
 	# Match the codebase convention of wrapping scalar tool output as
 	# {"output": "..."} (see ``agent_integration.process_tool_call``).
-	call.tool_result = {"output": _truncate(result.stdout, max_output) or ""}
+	if flow:
+		call.tool_result = {
+			"stdout": result.stdout or "",
+			"result": result.result,
+			"exit_status": result.exit_status,
+			"truncated": bool(result.output_truncated or result.result_truncated),
+		}
+	else:
+		call.tool_result = {"output": _truncate(result.stdout, max_output) or ""}
 
 	if not ok:
 		call.error_message = _truncate(result.stderr, 60000)

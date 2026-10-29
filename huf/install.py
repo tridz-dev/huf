@@ -1672,6 +1672,18 @@ def create_default_execution_profiles():
 			"max_output_bytes": 2097152,
 		},
 		{
+			# The profile an "Execute code" Flow step starts with: runs on its own (nobody has to
+			# approve each run), a private scratch folder, no network, small fixed limits.
+			"profile_name": "Flow Scratch",
+			"approval_mode": "Auto Approve",
+			"is_builtin": 1,
+			"filesystem_policy": "Scratch Only",
+			"max_wall_time_s": 30,
+			"max_cpu_seconds": 30,
+			"max_memory_mb": 256,
+			"max_output_bytes": 262144,
+		},
+		{
 			"profile_name": "Blocked",
 			"approval_mode": "Never Allow",
 			"is_builtin": 1,
