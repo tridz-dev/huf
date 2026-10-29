@@ -8,7 +8,7 @@ import os
 import sys
 from types import SimpleNamespace
 
-import pytest
+from huf.ai.tests.unit_support import SupportCase  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, "testing"))
 import _stub_env  # noqa: E402
@@ -94,8 +94,8 @@ class FakeFrappe:
 		return [p for p in self.policies if p["gateway"] == filters["gateway"]]
 
 
-@pytest.fixture
-def fk(monkeypatch):
+def _fx_fk(self):
+	monkeypatch = self.monkeypatch
 	f = FakeFrappe()
 	monkeypatch.setattr(tp, "frappe", f)
 	monkeypatch.setattr(tp, "_CONFIRMER", None)
@@ -110,194 +110,68 @@ def denied(out):
 	return out is not None and json.loads(out).get("denied") is True
 
 
-# ---------------------------------------------------------------- context
-def test_non_gateway_run_unaffected(fk):
-	assert tp.check_tool_call("any", {}, "RUN-X", True) is None
-	assert tp.check_tool_call("any", {}, "RUN-WEB", True) is None
-	assert tp.check_tool_call("any", {}, None, True) is None
 
 
-def test_context_resolved_and_cached(fk):
-	assert tp.resolve_gateway_context(RUN) == {"gateway": "gw1", "channel": "C1", "event": "EV-1"}
-	n = fk.db.calls
-	tp.resolve_gateway_context(RUN)
-	assert fk.db.calls == n
 
 
-def test_context_error_with_run_id_fails_closed(fk, monkeypatch):
-	monkeypatch.setattr(tp, "resolve_gateway_context", lambda r: (_ for _ in ()).throw(RuntimeError("x")))
-	assert denied(tp.check_tool_call("t", {}, RUN, True))
-	assert denied(tp.check_tool_call("t", {}, RUN, False))
 
 
-def test_context_error_without_run_id_unchanged(fk, monkeypatch):
-	monkeypatch.setattr(tp, "resolve_gateway_context", lambda r: (_ for _ in ()).throw(RuntimeError("x")))
-	assert tp.check_tool_call("t", {}, None, True) is None
 
 
-def test_db_lookup_exception_fails_closed(fk, monkeypatch):
-	monkeypatch.setattr(fk.db, "get_value", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("db down")))
-	assert denied(tp.check_tool_call("t", {}, "RUN-NEW", False))
 
 
-def test_negative_cache_ttl_is_short(fk):
-	assert tp.resolve_gateway_context("RUN-X") is None
-	assert fk.cache_obj.ttl["huf_a8_ctx:RUN-X"] <= 60
-	tp.resolve_gateway_context(RUN)
-	assert fk.cache_obj.ttl["huf_a8_ctx:" + RUN] > 60
 
 
-# ---------------------------------------------------------------- S8: new outbound tools
-def test_new_outbound_tools_listed():
-	assert {"gateway_send", "gateway_reply", "gateway_handoff"} <= tp.SLACK_SEND_TOOLS
 
 
-def test_read_then_gateway_send_refused(fk):
-	tp.note_tool_executed("slack_get_channel_history", RUN)
-	out = tp.check_tool_call("gateway_send", {"recipient": "user:bob", "text": "x"}, RUN)
-	assert denied(out) and json.loads(out)["reason"] == "exfiltration_guard"
 
 
-def test_read_then_gateway_handoff_refused(fk):
-	tp.note_tool_executed("slack_search_messages", RUN)
-	assert denied(tp.check_tool_call("gateway_handoff", {"summary": "x"}, RUN))
 
 
-def test_read_then_gateway_reply_to_origin_allowed(fk):
-	tp.note_tool_executed("slack_search_messages", RUN)
-	assert tp.check_tool_call("gateway_reply", {"text": "x"}, RUN) is None
 
 
-def test_gateway_send_allowed_by_cross_channel_policy(fk):
-	fk.policies = [pol(mode=tp.DENY, tools="", cross=1)]
-	tp.note_tool_executed("slack_search_messages", RUN)
-	assert tp.check_tool_call("gateway_send", {"recipient": "user:bob"}, RUN) is None
 
 
-# ---------------------------------------------------------------- confirmation flag
-def test_flag_off_gateway_run_runs(fk):
-	assert tp.check_tool_call("t", {}, RUN, False) is None
 
 
-def test_flag_on_without_confirmer_refused(fk):
-	out = tp.check_tool_call("t", {}, RUN, True)
-	assert denied(out) and json.loads(out)["requires_confirmation"] is True
 
 
-def test_flag_on_confirmer_gets_call_and_result_returned(fk):
-	seen = []
-	tp.set_confirmer(lambda ctx, tool, args: seen.append((ctx["gateway"], tool, args)) or {"status": "pending"})
-	out = tp.check_tool_call("t", {"a": 1}, RUN, True)
-	assert json.loads(out) == {"status": "pending"}
-	assert seen == [("gw1", "t", {"a": 1})]
 
 
-def test_confirmer_returning_none_refuses(fk):
-	tp.set_confirmer(lambda *a: None)
-	assert denied(tp.check_tool_call("t", {}, RUN, True))
 
 
-def test_confirmer_exception_fails_closed(fk):
-	def boom(*a):
-		raise RuntimeError("x")
-
-	tp.set_confirmer(boom)
-	assert denied(tp.check_tool_call("t", {}, RUN, True))
 
 
-# ---------------------------------------------------------------- policy semantics
-def test_no_policy_no_restriction(fk):
-	assert tp.get_allowed_tools("gw1", {"conversation_id": "C1"}) is None
-	assert tp.is_tool_allowed("gw1", {"conversation_id": "C1"}, "anything")
 
 
-def test_allow_list(fk):
-	fk.policies = [pol(tools="a\nb, c")]
-	ev = {"conversation_id": "C1"}
-	assert tp.get_allowed_tools("gw1", ev) == {"a", "b", "c"}
-	assert tp.is_tool_allowed("gw1", ev, "a") and not tp.is_tool_allowed("gw1", ev, "z")
-	assert denied(tp.check_tool_call("z", {}, RUN))
-	assert tp.check_tool_call("a", {}, RUN) is None
 
 
-def test_deny_list(fk):
-	fk.policies = [pol(mode=tp.DENY, tools="bad")]
-	ev = {"conversation_id": "C1"}
-	assert tp.get_allowed_tools("gw1", ev) is None
-	assert not tp.is_tool_allowed("gw1", ev, "bad") and tp.is_tool_allowed("gw1", ev, "ok")
-	assert denied(tp.check_tool_call("bad", {}, RUN))
 
 
-def test_channel_scope_overrides_gateway_wide(fk):
-	fk.policies = [pol(tools="a"), pol(scope="C1", mode=tp.DENY, tools="a")]
-	assert not tp.is_tool_allowed("gw1", {"conversation_id": "C1"}, "a")
-	assert tp.is_tool_allowed("gw1", {"conversation_id": "C2"}, "a")
-	assert not tp.is_tool_allowed("gw1", {"conversation_id": "C2"}, "b")
 
 
-def test_other_gateway_policy_ignored(fk):
-	fk.policies = [pol(gateway="other", tools="a")]
-	assert tp.is_tool_allowed("gw1", {"conversation_id": "C1"}, "z")
 
 
-def test_sanitized_name_matches(fk):
-	fk.policies = [pol(mode=tp.DENY, tools="my tool")]
-	assert not tp.is_tool_allowed("gw1", {"conversation_id": "C1"}, "my_tool")
 
 
-def test_policy_beats_confirmation_order(fk):
-	fk.policies = [pol(tools="a")]
-	tp.set_confirmer(lambda *a: {"ok": 1})
-	assert "not allowed" in json.loads(tp.check_tool_call("z", {}, RUN, True))["error"]
 
 
-def test_policy_error_fails_closed(fk, monkeypatch):
-	monkeypatch.setattr(tp, "is_tool_allowed", lambda *a: (_ for _ in ()).throw(RuntimeError("db")))
-	assert denied(tp.check_tool_call("t", {}, RUN))
 
 
-# ---------------------------------------------------------------- exfil guard
-def test_send_before_read_ok(fk):
-	assert tp.check_tool_call("slack_send_message", {"channel": "C9"}, RUN) is None
 
 
-def test_read_then_send_other_channel_refused(fk):
-	tp.note_tool_executed("slack_get_channel_history", RUN)
-	out = tp.check_tool_call("slack_send_message", {"channel": "C9"}, RUN)
-	assert denied(out) and json.loads(out)["reason"] == "exfiltration_guard"
 
 
-def test_search_also_arms(fk):
-	tp.note_tool_executed("slack_search_messages", RUN)
-	assert denied(tp.check_tool_call("slack_send_thread_reply", {"channel": "C9"}, RUN))
 
 
-def test_read_then_send_same_channel_ok(fk):
-	tp.note_tool_executed("slack_search_messages", RUN)
-	assert tp.check_tool_call("slack_send_message", {"channel": "C1"}, RUN) is None
 
 
-def test_read_then_send_without_channel_refused(fk):
-	tp.note_tool_executed("slack_search_messages", RUN)
-	assert denied(tp.check_tool_call("slack_send_message", {}, RUN))
 
 
-def test_policy_allows_cross_channel(fk):
-	fk.policies = [pol(mode=tp.DENY, tools="", cross=1)]
-	tp.note_tool_executed("slack_get_channel_history", RUN)
-	assert tp.check_tool_call("slack_send_message", {"channel": "C9"}, RUN) is None
 
 
-def test_guard_is_per_run(fk):
-	tp.note_tool_executed("slack_get_channel_history", RUN)
-	fk.db.runs["RUN-2"] = "gw:EV-1"
-	assert tp.check_tool_call("slack_send_message", {"channel": "C9"}, "RUN-2") is None
 
 
-def test_non_read_tool_does_not_arm_and_non_gateway_ignored(fk):
-	tp.note_tool_executed("slack_list_channels", RUN)
-	tp.note_tool_executed("slack_search_messages", "RUN-X")
-	assert tp.check_tool_call("slack_send_message", {"channel": "C9"}, RUN) is None
 
 
 # ---------------------------------------------------------------- sdk_tools wrapper
@@ -322,44 +196,18 @@ def invoke(tool, run=RUN, args="{}"):
 	return asyncio.run(tool.on_invoke_tool({"agent_run_id": run}, args))
 
 
-def test_wrapper_flag_off_executes(monkeypatch, fk):
-	tool, calls = make_tool(monkeypatch, fk, False)
-	assert json.loads(invoke(tool)) == {"ok": True} and len(calls) == 1
 
 
-def test_wrapper_flag_on_gateway_not_executed(monkeypatch, fk):
-	tool, calls = make_tool(monkeypatch, fk, True)
-	assert denied(invoke(tool)) and calls == []
 
 
-def test_wrapper_flag_on_non_gateway_executes(monkeypatch, fk):
-	tool, calls = make_tool(monkeypatch, fk, True)
-	assert json.loads(invoke(tool, "RUN-X")) == {"ok": True} and len(calls) == 1
 
 
-def test_wrapper_no_run_context_executes(monkeypatch, fk):
-	tool, calls = make_tool(monkeypatch, fk, True)
-	assert json.loads(asyncio.run(tool.on_invoke_tool(None, "{}"))) == {"ok": True}
 
 
-def test_wrapper_llm_cannot_spoof_run_id(monkeypatch, fk):
-	tool, calls = make_tool(monkeypatch, fk, True)
-	out = invoke(tool, RUN, json.dumps({"agent_run_id": "RUN-X"}))
-	assert denied(out) and calls == []
 
 
-def test_wrapper_read_then_send_blocked(monkeypatch, fk):
-	tool, calls = make_tool(monkeypatch, fk, False)
-	tp.note_tool_executed("slack_get_channel_history", RUN)
-	assert denied(invoke(tool, RUN, json.dumps({"channel": "C9"}))) and calls == []
 
 
-def test_wrapper_marks_read_after_execution(monkeypatch, fk):
-	tool, calls = make_tool(monkeypatch, fk, False)
-	tool.name  # noqa: B018
-	monkeypatch.setattr(tp, "SLACK_READ_TOOLS", frozenset({"slack_send_message"}))
-	invoke(tool)
-	assert fk.cache_obj.get_value(f"{tp._READ_PREFIX}{RUN}") == 1
 
 
 # ---------------------------------------------------------------- JSON validation
@@ -368,28 +216,265 @@ def _load(rel):
 		return json.load(f)
 
 
-@pytest.mark.parametrize(
-	"rel",
-	[
+class TestModule(SupportCase):
+	# ---------------------------------------------------------------- context
+	def test_non_gateway_run_unaffected(self):
+		fk = self.use(_fx_fk)
+		assert tp.check_tool_call("any", {}, "RUN-X", True) is None
+		assert tp.check_tool_call("any", {}, "RUN-WEB", True) is None
+		assert tp.check_tool_call("any", {}, None, True) is None
+
+	def test_context_resolved_and_cached(self):
+		fk = self.use(_fx_fk)
+		assert tp.resolve_gateway_context(RUN) == {"gateway": "gw1", "channel": "C1", "event": "EV-1"}
+		n = fk.db.calls
+		tp.resolve_gateway_context(RUN)
+		assert fk.db.calls == n
+
+	def test_context_error_with_run_id_fails_closed(self):
+		fk = self.use(_fx_fk)
+		monkeypatch = self.monkeypatch
+		monkeypatch.setattr(tp, "resolve_gateway_context", lambda r: (_ for _ in ()).throw(RuntimeError("x")))
+		assert denied(tp.check_tool_call("t", {}, RUN, True))
+		assert denied(tp.check_tool_call("t", {}, RUN, False))
+
+	def test_context_error_without_run_id_unchanged(self):
+		fk = self.use(_fx_fk)
+		monkeypatch = self.monkeypatch
+		monkeypatch.setattr(tp, "resolve_gateway_context", lambda r: (_ for _ in ()).throw(RuntimeError("x")))
+		assert tp.check_tool_call("t", {}, None, True) is None
+
+	def test_db_lookup_exception_fails_closed(self):
+		fk = self.use(_fx_fk)
+		monkeypatch = self.monkeypatch
+		monkeypatch.setattr(fk.db, "get_value", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("db down")))
+		assert denied(tp.check_tool_call("t", {}, "RUN-NEW", False))
+
+	def test_negative_cache_ttl_is_short(self):
+		fk = self.use(_fx_fk)
+		assert tp.resolve_gateway_context("RUN-X") is None
+		assert fk.cache_obj.ttl["huf_a8_ctx:RUN-X"] <= 60
+		tp.resolve_gateway_context(RUN)
+		assert fk.cache_obj.ttl["huf_a8_ctx:" + RUN] > 60
+
+	# ---------------------------------------------------------------- S8: new outbound tools
+	def test_new_outbound_tools_listed(self):
+		assert {"gateway_send", "gateway_reply", "gateway_handoff"} <= tp.SLACK_SEND_TOOLS
+
+	def test_read_then_gateway_send_refused(self):
+		fk = self.use(_fx_fk)
+		tp.note_tool_executed("slack_get_channel_history", RUN)
+		out = tp.check_tool_call("gateway_send", {"recipient": "user:bob", "text": "x"}, RUN)
+		assert denied(out) and json.loads(out)["reason"] == "exfiltration_guard"
+
+	def test_read_then_gateway_handoff_refused(self):
+		fk = self.use(_fx_fk)
+		tp.note_tool_executed("slack_search_messages", RUN)
+		assert denied(tp.check_tool_call("gateway_handoff", {"summary": "x"}, RUN))
+
+	def test_read_then_gateway_reply_to_origin_allowed(self):
+		fk = self.use(_fx_fk)
+		tp.note_tool_executed("slack_search_messages", RUN)
+		assert tp.check_tool_call("gateway_reply", {"text": "x"}, RUN) is None
+
+	def test_gateway_send_allowed_by_cross_channel_policy(self):
+		fk = self.use(_fx_fk)
+		fk.policies = [pol(mode=tp.DENY, tools="", cross=1)]
+		tp.note_tool_executed("slack_search_messages", RUN)
+		assert tp.check_tool_call("gateway_send", {"recipient": "user:bob"}, RUN) is None
+
+	# ---------------------------------------------------------------- confirmation flag
+	def test_flag_off_gateway_run_runs(self):
+		fk = self.use(_fx_fk)
+		assert tp.check_tool_call("t", {}, RUN, False) is None
+
+	def test_flag_on_without_confirmer_refused(self):
+		fk = self.use(_fx_fk)
+		out = tp.check_tool_call("t", {}, RUN, True)
+		assert denied(out) and json.loads(out)["requires_confirmation"] is True
+
+	def test_flag_on_confirmer_gets_call_and_result_returned(self):
+		fk = self.use(_fx_fk)
+		seen = []
+		tp.set_confirmer(lambda ctx, tool, args: seen.append((ctx["gateway"], tool, args)) or {"status": "pending"})
+		out = tp.check_tool_call("t", {"a": 1}, RUN, True)
+		assert json.loads(out) == {"status": "pending"}
+		assert seen == [("gw1", "t", {"a": 1})]
+
+	def test_confirmer_returning_none_refuses(self):
+		fk = self.use(_fx_fk)
+		tp.set_confirmer(lambda *a: None)
+		assert denied(tp.check_tool_call("t", {}, RUN, True))
+
+	def test_confirmer_exception_fails_closed(self):
+		fk = self.use(_fx_fk)
+		def boom(*a):
+			raise RuntimeError("x")
+
+		tp.set_confirmer(boom)
+		assert denied(tp.check_tool_call("t", {}, RUN, True))
+
+	# ---------------------------------------------------------------- policy semantics
+	def test_no_policy_no_restriction(self):
+		fk = self.use(_fx_fk)
+		assert tp.get_allowed_tools("gw1", {"conversation_id": "C1"}) is None
+		assert tp.is_tool_allowed("gw1", {"conversation_id": "C1"}, "anything")
+
+	def test_allow_list(self):
+		fk = self.use(_fx_fk)
+		fk.policies = [pol(tools="a\nb, c")]
+		ev = {"conversation_id": "C1"}
+		assert tp.get_allowed_tools("gw1", ev) == {"a", "b", "c"}
+		assert tp.is_tool_allowed("gw1", ev, "a") and not tp.is_tool_allowed("gw1", ev, "z")
+		assert denied(tp.check_tool_call("z", {}, RUN))
+		assert tp.check_tool_call("a", {}, RUN) is None
+
+	def test_deny_list(self):
+		fk = self.use(_fx_fk)
+		fk.policies = [pol(mode=tp.DENY, tools="bad")]
+		ev = {"conversation_id": "C1"}
+		assert tp.get_allowed_tools("gw1", ev) is None
+		assert not tp.is_tool_allowed("gw1", ev, "bad") and tp.is_tool_allowed("gw1", ev, "ok")
+		assert denied(tp.check_tool_call("bad", {}, RUN))
+
+	def test_channel_scope_overrides_gateway_wide(self):
+		fk = self.use(_fx_fk)
+		fk.policies = [pol(tools="a"), pol(scope="C1", mode=tp.DENY, tools="a")]
+		assert not tp.is_tool_allowed("gw1", {"conversation_id": "C1"}, "a")
+		assert tp.is_tool_allowed("gw1", {"conversation_id": "C2"}, "a")
+		assert not tp.is_tool_allowed("gw1", {"conversation_id": "C2"}, "b")
+
+	def test_other_gateway_policy_ignored(self):
+		fk = self.use(_fx_fk)
+		fk.policies = [pol(gateway="other", tools="a")]
+		assert tp.is_tool_allowed("gw1", {"conversation_id": "C1"}, "z")
+
+	def test_sanitized_name_matches(self):
+		fk = self.use(_fx_fk)
+		fk.policies = [pol(mode=tp.DENY, tools="my tool")]
+		assert not tp.is_tool_allowed("gw1", {"conversation_id": "C1"}, "my_tool")
+
+	def test_policy_beats_confirmation_order(self):
+		fk = self.use(_fx_fk)
+		fk.policies = [pol(tools="a")]
+		tp.set_confirmer(lambda *a: {"ok": 1})
+		assert "not allowed" in json.loads(tp.check_tool_call("z", {}, RUN, True))["error"]
+
+	def test_policy_error_fails_closed(self):
+		fk = self.use(_fx_fk)
+		monkeypatch = self.monkeypatch
+		monkeypatch.setattr(tp, "is_tool_allowed", lambda *a: (_ for _ in ()).throw(RuntimeError("db")))
+		assert denied(tp.check_tool_call("t", {}, RUN))
+
+	# ---------------------------------------------------------------- exfil guard
+	def test_send_before_read_ok(self):
+		fk = self.use(_fx_fk)
+		assert tp.check_tool_call("slack_send_message", {"channel": "C9"}, RUN) is None
+
+	def test_read_then_send_other_channel_refused(self):
+		fk = self.use(_fx_fk)
+		tp.note_tool_executed("slack_get_channel_history", RUN)
+		out = tp.check_tool_call("slack_send_message", {"channel": "C9"}, RUN)
+		assert denied(out) and json.loads(out)["reason"] == "exfiltration_guard"
+
+	def test_search_also_arms(self):
+		fk = self.use(_fx_fk)
+		tp.note_tool_executed("slack_search_messages", RUN)
+		assert denied(tp.check_tool_call("slack_send_thread_reply", {"channel": "C9"}, RUN))
+
+	def test_read_then_send_same_channel_ok(self):
+		fk = self.use(_fx_fk)
+		tp.note_tool_executed("slack_search_messages", RUN)
+		assert tp.check_tool_call("slack_send_message", {"channel": "C1"}, RUN) is None
+
+	def test_read_then_send_without_channel_refused(self):
+		fk = self.use(_fx_fk)
+		tp.note_tool_executed("slack_search_messages", RUN)
+		assert denied(tp.check_tool_call("slack_send_message", {}, RUN))
+
+	def test_policy_allows_cross_channel(self):
+		fk = self.use(_fx_fk)
+		fk.policies = [pol(mode=tp.DENY, tools="", cross=1)]
+		tp.note_tool_executed("slack_get_channel_history", RUN)
+		assert tp.check_tool_call("slack_send_message", {"channel": "C9"}, RUN) is None
+
+	def test_guard_is_per_run(self):
+		fk = self.use(_fx_fk)
+		tp.note_tool_executed("slack_get_channel_history", RUN)
+		fk.db.runs["RUN-2"] = "gw:EV-1"
+		assert tp.check_tool_call("slack_send_message", {"channel": "C9"}, "RUN-2") is None
+
+	def test_non_read_tool_does_not_arm_and_non_gateway_ignored(self):
+		fk = self.use(_fx_fk)
+		tp.note_tool_executed("slack_list_channels", RUN)
+		tp.note_tool_executed("slack_search_messages", "RUN-X")
+		assert tp.check_tool_call("slack_send_message", {"channel": "C9"}, RUN) is None
+
+	def test_wrapper_flag_off_executes(self):
+		monkeypatch = self.monkeypatch
+		fk = self.use(_fx_fk)
+		tool, calls = make_tool(monkeypatch, fk, False)
+		assert json.loads(invoke(tool)) == {"ok": True} and len(calls) == 1
+
+	def test_wrapper_flag_on_gateway_not_executed(self):
+		monkeypatch = self.monkeypatch
+		fk = self.use(_fx_fk)
+		tool, calls = make_tool(monkeypatch, fk, True)
+		assert denied(invoke(tool)) and calls == []
+
+	def test_wrapper_flag_on_non_gateway_executes(self):
+		monkeypatch = self.monkeypatch
+		fk = self.use(_fx_fk)
+		tool, calls = make_tool(monkeypatch, fk, True)
+		assert json.loads(invoke(tool, "RUN-X")) == {"ok": True} and len(calls) == 1
+
+	def test_wrapper_no_run_context_executes(self):
+		monkeypatch = self.monkeypatch
+		fk = self.use(_fx_fk)
+		tool, calls = make_tool(monkeypatch, fk, True)
+		assert json.loads(asyncio.run(tool.on_invoke_tool(None, "{}"))) == {"ok": True}
+
+	def test_wrapper_llm_cannot_spoof_run_id(self):
+		monkeypatch = self.monkeypatch
+		fk = self.use(_fx_fk)
+		tool, calls = make_tool(monkeypatch, fk, True)
+		out = invoke(tool, RUN, json.dumps({"agent_run_id": "RUN-X"}))
+		assert denied(out) and calls == []
+
+	def test_wrapper_read_then_send_blocked(self):
+		monkeypatch = self.monkeypatch
+		fk = self.use(_fx_fk)
+		tool, calls = make_tool(monkeypatch, fk, False)
+		tp.note_tool_executed("slack_get_channel_history", RUN)
+		assert denied(invoke(tool, RUN, json.dumps({"channel": "C9"}))) and calls == []
+
+	def test_wrapper_marks_read_after_execution(self):
+		monkeypatch = self.monkeypatch
+		fk = self.use(_fx_fk)
+		tool, calls = make_tool(monkeypatch, fk, False)
+		tool.name  # noqa: B018
+		monkeypatch.setattr(tp, "SLACK_READ_TOOLS", frozenset({"slack_send_message"}))
+		invoke(tool)
+		assert fk.cache_obj.get_value(f"{tp._READ_PREFIX}{RUN}") == 1
+
+	def test_field_order_matches_fields(self):
+		for rel in [
 		"huf/huf/doctype/agent_tool_function/agent_tool_function.json",
 		"huf/huf/doctype/gateway_tool_policy/gateway_tool_policy.json",
-	],
-)
-def test_field_order_matches_fields(rel):
-	d = _load(rel)
-	names = [f["fieldname"] for f in d["fields"] if f["fieldtype"] != "Section Break" or f["fieldname"]]
-	assert len(set(d["field_order"])) == len(d["field_order"])
-	assert set(d["field_order"]) == {f["fieldname"] for f in d["fields"]}
-	assert names
+	]:
+			with self.subTest(rel=rel):
+				d = _load(rel)
+				names = [f["fieldname"] for f in d["fields"] if f["fieldtype"] != "Section Break" or f["fieldname"]]
+				assert len(set(d["field_order"])) == len(d["field_order"])
+				assert set(d["field_order"]) == {f["fieldname"] for f in d["fields"]}
+				assert names
 
+	def test_requires_confirmation_field_shape(self):
+		d = _load("huf/huf/doctype/agent_tool_function/agent_tool_function.json")
+		f = next(x for x in d["fields"] if x["fieldname"] == "requires_confirmation")
+		assert f["fieldtype"] == "Check" and str(f["default"]) == "0"
+		assert d["field_order"].index("requires_confirmation") == d["field_order"].index("allowed_for_guest") + 1
 
-def test_requires_confirmation_field_shape():
-	d = _load("huf/huf/doctype/agent_tool_function/agent_tool_function.json")
-	f = next(x for x in d["fields"] if x["fieldname"] == "requires_confirmation")
-	assert f["fieldtype"] == "Check" and str(f["default"]) == "0"
-	assert d["field_order"].index("requires_confirmation") == d["field_order"].index("allowed_for_guest") + 1
-
-
-def test_policy_doctype_system_manager_only():
-	d = _load("huf/huf/doctype/gateway_tool_policy/gateway_tool_policy.json")
-	assert {p["role"] for p in d["permissions"]} == {"System Manager"}
+	def test_policy_doctype_system_manager_only(self):
+		d = _load("huf/huf/doctype/gateway_tool_policy/gateway_tool_policy.json")
+		assert {p["role"] for p in d["permissions"]} == {"System Manager"}
