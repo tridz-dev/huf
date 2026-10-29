@@ -17,6 +17,8 @@ from frappe import _
 from frappe.rate_limiter import rate_limit
 from frappe.utils import add_to_date, now_datetime
 
+from huf.ai.api_support import require_permission
+
 
 # ---------------------------------------------------------------------------
 # Time helpers
@@ -170,8 +172,7 @@ def get_site_timezone() -> str:
 	"""IANA name of the site time zone (System Settings), for rendering naive Frappe datetimes."""
 	from frappe.utils import get_system_timezone
 
-	if frappe.session.user == "Guest":
-		frappe.throw(_("Login required"), frappe.AuthenticationError)
+	require_permission(frappe.session.user != "Guest", "Login required")
 	return get_system_timezone()
 
 
@@ -207,7 +208,7 @@ def get_flow_definition(flow_id: str) -> dict:
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 	"""
 	Save/update a flow definition. Validates schema and bumps version.
@@ -253,6 +254,8 @@ def get_trigger_doctypes() -> list[dict]:
 	Child tables, single doctypes, Huf's own bookkeeping and system logs are left out (events on them never start a flow).
 	Read from the permission tables, so flow editors who are not System Managers get a list too.
 	"""
+	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
+
 	from frappe.permissions import get_doctypes_with_read
 
 	from huf.ai.flow.triggers import HUF_MODULE, RECURSION_SKIP_DOCTYPES
@@ -297,13 +300,13 @@ def _set_flow_status(flow_id: str, status: str) -> dict:
 	return {"flow_id": doc.flow_id, "status": doc.status}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def publish_flow(flow_id: str) -> dict:
 	"""Publish a flow (status Active): its triggers start firing. Refused with a readable message if the flow is not runnable."""
 	return _set_flow_status(flow_id, "Active")
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def unpublish_flow(flow_id: str) -> dict:
 	"""Take a published flow back to Draft: webhook calls are refused and schedule / document-event triggers stop firing.
 
@@ -660,8 +663,7 @@ def _decide_flow_run(flow_run_id: str, decision: str, comment: str | None) -> di
 	The check runs here first so the caller gets a precise error, and again inside the engine
 	before anything is mutated.
 	"""
-	if frappe.session.user == "Guest":
-		frappe.throw(_("Login required"), frappe.AuthenticationError)
+	require_permission(frappe.session.user != "Guest", "Login required")
 	if not frappe.db.exists("Flow Run", flow_run_id):
 		frappe.throw(_("Flow Run '{0}' not found").format(flow_run_id), frappe.DoesNotExistError)
 
@@ -684,13 +686,13 @@ def _decide_flow_run(flow_run_id: str, decision: str, comment: str | None) -> di
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def approve_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 	"""Approve a flow run waiting for approval (caller must be a permitted approver)."""
 	return _decide_flow_run(flow_run_id, "approved", comment)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def reject_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 	"""Reject a flow run waiting for approval (caller must be a permitted approver)."""
 	return _decide_flow_run(flow_run_id, "rejected", comment)
@@ -778,8 +780,19 @@ def _webhook_denied():
 	frappe.throw(_("Webhook request not permitted"), WebhookDenied)
 
 
+def _verify_webhook_secret(definition_json, secret: str | None):
+	"""Verify the presented secret against the flow's ``trigger.webhook`` node(s), then its HTTP method.
+
+	The secret compare is constant time (``hmac.compare_digest`` in ``match_webhook_trigger``) and
+	fails closed. Returns ``(node, reason)``; ``node`` is None on rejection.
+	"""
+	from huf.ai.flow.triggers import match_webhook_trigger, parse_definition
+
+	return match_webhook_trigger(parse_definition(definition_json), secret, _request_method())
+
+
 def _run_flow_webhook(flow_id: str | None, secret: str | None, payload: dict | None = None) -> dict:
-	from huf.ai.flow.triggers import match_webhook_trigger, parse_definition, start_flow_run
+	from huf.ai.flow.triggers import start_flow_run
 
 	if not flow_id or not frappe.db.exists("Flow Definition", flow_id):
 		_webhook_denied()
@@ -790,7 +803,7 @@ def _run_flow_webhook(flow_id: str | None, secret: str | None, payload: dict | N
 	if status != "Active":
 		_webhook_denied()
 
-	node, reason = match_webhook_trigger(parse_definition(definition_json), secret, _request_method())
+	node, reason = _verify_webhook_secret(definition_json, secret)
 	if node is None:
 		if reason == "bad_method":
 			frappe.throw(_("Webhook method not allowed"), WebhookMethodNotAllowed)
@@ -1003,6 +1016,7 @@ def get_node_schemas() -> dict:
 	    field descriptors: name, label, type, required, options/min/max/default) and json_schema
 	    (the raw config JSON schema).
 	"""
+	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
 	return build_node_schemas()
 
 
@@ -1400,7 +1414,7 @@ def analyze_flow_conversion(flow_id: str) -> dict:
 	return {"convertible": True, **result.summary.as_dict()}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def convert_flow_to_procedure(flow_id: str, procedure_id: str | None = None) -> dict:
 	"""
 	Convert a deterministic Flow into a Draft Agent Procedure.
