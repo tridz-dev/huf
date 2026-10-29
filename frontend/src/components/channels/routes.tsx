@@ -14,6 +14,7 @@ const Automations = lazy(() => import('./sections/AutomationsSection'));
 const Connections = lazy(() => import('./sections/ConnectionsSection'));
 const Numbers = lazy(() => import('./sections/NumbersSection'));
 const Settings = lazy(() => import('./sections/SettingsSection'));
+const Analytics = lazy(() => import('./sections/AnalyticsSection'));
 const Setup = lazy(() => import('./sections/SetupSection'));
 
 /** Broadcasts and Templates exist for WhatsApp only; other channels bounce to Home. */
@@ -48,6 +49,7 @@ export function ChannelsRoutes() {
               <Route path="automations/:tab?" element={<Automations />} />
               <Route path="connections" element={<Connections />} />
               <Route path="numbers" element={<Numbers />} />
+              <Route path="analytics" element={<Analytics />} />
               <Route path="settings/:section?" element={<Settings />} />
             </Route>
           </Route>

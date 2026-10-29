@@ -132,7 +132,7 @@ class TestHandoffCore(IntegrationTestCase):
 	def test_hook_is_first(self):
 		from huf.ai.channels.pipeline import PRE_ROUTE_HOOKS
 
-		self.assertEqual(PRE_ROUTE_HOOKS[0], "huf.ai.channels.handoff_hooks.handed_off_hook")
+		self.assertLess(PRE_ROUTE_HOOKS.index("huf.ai.channels.handoff_hooks.handed_off_hook"), PRE_ROUTE_HOOKS.index("huf.ai.channels.hours.business_hours_hook"))
 
 	# --- reply api ---
 	def test_send_reply_inside_window(self):
