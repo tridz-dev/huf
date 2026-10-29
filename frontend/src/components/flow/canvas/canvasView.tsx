@@ -90,6 +90,8 @@ export function FlowMiniMap() {
  */
 export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layoutRevision }: { flowId?: string; nodeCount: number; edgeCount: number; layoutRevision: number }) {
   const rf = useReactFlow();
+  const rfRef = useRef(rf); // the instance may be a new object on every render: keep the pending first-fit timer alive
+  rfRef.current = rf;
   const { getNodes, getViewport, setViewport } = rf;
   const store = useStoreApi();
   const last = useRef<{ flowId?: string; nodeCount: number; edgeCount: number; layoutRevision: number } | null>(null);
@@ -102,7 +104,7 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
     const remember = () => { knownIds.current = new Set(getNodes().map((n) => n.id)); };
     // The first render of a flow is fitted by <ReactFlow fitView>; only later edits come here.
     if (!previous || previous.flowId !== flowId) {
-      const settle = setTimeout(() => { remember(); const { width, height } = store.getState(); fitClearOfOverlays(rf, width, height); }, 400);
+      const settle = setTimeout(() => { remember(); const { width, height } = store.getState(); fitClearOfOverlays(rfRef.current, width, height); }, 400);
       return () => clearTimeout(settle);
     }
     if (nodeCount > previous.nodeCount && edgeCount >= previous.edgeCount) {
@@ -128,10 +130,10 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
       const { width, height } = store.getState();
       if (nodes.length > 0 && width > 0 && isInView(getNodesBounds(nodes), getViewport(), { width, height })) return;
       const { width: w, height: h } = store.getState();
-      fitClearOfOverlays(rf, w, h, 200);
+      fitClearOfOverlays(rfRef.current, w, h, 200);
     }, 60);
     return () => clearTimeout(timer);
-  }, [flowId, nodeCount, edgeCount, layoutRevision, rf, getNodes, getViewport, setViewport, store]);
+  }, [flowId, nodeCount, edgeCount, layoutRevision, getNodes, getViewport, setViewport, store]);
   return null;
 }
 
