@@ -58,7 +58,7 @@ def fetch_flows(gateway: str, http_get: Callable[..., Any] | None = None) -> lis
 
 @frappe.whitelist()
 def list_wa_flows(gateway: str, refresh: int | str = 1) -> list[dict]:
-	"""Admin: sync the WABA's Flows into the ``WhatsApp Flow`` cache and return them (``refresh=0`` = cache only)."""
+	"""Admin: sync the WABA's Flows into the ``WhatsApp Flow Cache`` doctype and return them (``refresh=0`` = cache only)."""
 	return sync_flows(gateway, refresh)
 
 
@@ -77,16 +77,16 @@ def sync_flows(gateway: str, refresh: int | str = 1, http_get: Callable[..., Any
 				"categories": ",".join(str(c) for c in (row.get("categories") or [])),
 				"last_synced": now,
 			}
-			name = frappe.db.get_value("WhatsApp Flow", {"gateway": gateway, "flow_id": str(row["id"])})
+			name = frappe.db.get_value("WhatsApp Flow Cache", {"gateway": gateway, "flow_id": str(row["id"])})
 			if name:
-				frappe.db.set_value("WhatsApp Flow", name, values)
+				frappe.db.set_value("WhatsApp Flow Cache", name, values)
 			else:
-				frappe.get_doc({"doctype": "WhatsApp Flow", "gateway": gateway, "flow_id": str(row["id"]), **values}).insert()
-		for name, fid in frappe.get_all("WhatsApp Flow", {"gateway": gateway}, ["name", "flow_id"], as_list=True):
+				frappe.get_doc({"doctype": "WhatsApp Flow Cache", "gateway": gateway, "flow_id": str(row["id"]), **values}).insert()
+		for name, fid in frappe.get_all("WhatsApp Flow Cache", {"gateway": gateway}, ["name", "flow_id"], as_list=True):
 			if fid not in seen:
-				frappe.delete_doc("WhatsApp Flow", name)
+				frappe.delete_doc("WhatsApp Flow Cache", name)
 	return frappe.get_all(
-		"WhatsApp Flow", {"gateway": gateway}, ["name", "flow_id", "flow_name", "status", "categories", "last_synced"],
+		"WhatsApp Flow Cache", {"gateway": gateway}, ["name", "flow_id", "flow_name", "status", "categories", "last_synced"],
 		order_by="flow_name asc",
 	)
 
@@ -99,7 +99,7 @@ def send_flow(gateway: str, to: str, flow_name: str, cta: str, body: str = "", s
 	data: Any = None, send: Callable[..., Any] | None = None) -> dict[str, Any]:
 	"""Send an interactive ``flow`` message from ``gateway`` to ``to`` (opt-out, allow-list and 24h gate apply)."""
 	flow = frappe.db.get_value(
-		"WhatsApp Flow", {"gateway": gateway, "flow_name": flow_name}, ["name", "flow_id", "status"], as_dict=True
+		"WhatsApp Flow Cache", {"gateway": gateway, "flow_name": flow_name}, ["name", "flow_id", "status"], as_dict=True
 	)
 	if not flow:
 		return {"success": False, "error": "flow_not_found", "message": f"Unknown flow {flow_name!r}; sync flows first."}
@@ -156,7 +156,7 @@ def record_response(gateway: str, nfm: dict, conversation: str | None = None) ->
 	flow = None
 	if token.startswith(TOKEN_PREFIX):
 		fid = token[len(TOKEN_PREFIX):].split(":", 1)[0]
-		flow = frappe.db.get_value("WhatsApp Flow", {"gateway": gateway, "flow_id": fid})
+		flow = frappe.db.get_value("WhatsApp Flow Cache", {"gateway": gateway, "flow_id": fid})
 	doc = frappe.get_doc(
 		{
 			"doctype": "WhatsApp Flow Response", "gateway": gateway, "conversation": conversation, "flow": flow,

@@ -48,7 +48,7 @@ class TestWaFlows(IntegrationTestCase):
 
 	def _flow(self, fid="F1", name="Signup", status="PUBLISHED"):
 		return frappe.get_doc(
-			{"doctype": "WhatsApp Flow", "gateway": self.gw.name, "flow_id": fid, "flow_name": name, "status": status}
+			{"doctype": "WhatsApp Flow Cache", "gateway": self.gw.name, "flow_id": fid, "flow_name": name, "status": status}
 		).insert(ignore_permissions=True)
 
 	def test_list_syncs_cache(self):
@@ -63,7 +63,7 @@ class TestWaFlows(IntegrationTestCase):
 		self.assertTrue(calls[0].endswith("/waba1/flows"))
 		self.assertEqual([r["flow_id"] for r in rows], ["F1"])
 		self.assertEqual(rows[0]["categories"], "SIGN_UP")
-		self.assertFalse(frappe.db.exists("WhatsApp Flow", {"flow_id": "OLD"}))
+		self.assertFalse(frappe.db.exists("WhatsApp Flow Cache", {"flow_id": "OLD"}))
 
 	def test_list_requires_admin(self):
 		user = "flows-nobody@example.com"
