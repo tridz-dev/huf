@@ -26,22 +26,21 @@ export function ConnectionPanel({ toolId }: { toolId?: string }) {
     );
   }
   return (
-    <div
-      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-warning/40 bg-warning-tint px-3 py-2 text-xs"
-      data-testid="flow-connection-needed"
-    >
-      <Plug className="h-4 w-4 shrink-0 text-warning" aria-hidden />
-      <span className="min-w-0 flex-1 font-medium" data-testid="flow-not-connected-sidebar">
-        {canManage ? `Connect ${name} to use this step` : `${name} is not connected`}
-      </span>
+    <div className="space-y-2.5 rounded-md border border-warning/30 bg-warning-tint px-3 py-2.5 text-xs" data-testid="flow-connection-needed">
+      <div className="flex items-start gap-2">
+        <Plug className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+        <span className="min-w-0 flex-1 font-medium text-warning" data-testid="flow-not-connected-sidebar">
+          {canManage ? `Connect ${name} to use this step` : `${name} is not connected`}
+        </span>
+      </div>
       {canManage ? (
-        <Button asChild size="sm" data-testid="flow-connect-link-sidebar">
+        <Button asChild size="sm" className="w-full" data-testid="flow-connect-link-sidebar">
           <Link to={connectPath(service)} aria-label={`Connect ${name}`}>
             Connect {name}
           </Link>
         </Button>
       ) : (
-        <span className="w-full text-meta text-muted-foreground" data-testid="flow-not-connected-note-sidebar">
+        <span className="block text-meta text-muted-foreground" data-testid="flow-not-connected-note-sidebar">
           A flow editor needs to connect {name}.
         </span>
       )}
