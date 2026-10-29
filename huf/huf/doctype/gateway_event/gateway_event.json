@@ -4,7 +4,7 @@
  "creation": "2026-07-26 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
- "field_order": ["gateway", "idempotency_key", "provider_event_id", "status", "received_at", "verified_sender", "sender_id", "conversation_id", "thread_id", "message_text", "section_route", "binding", "target_type", "target_agent", "target_flow", "agent_run", "flow_run", "section_delivery", "reply_message_id", "reply_status", "delivery_error", "section_audit", "raw_payload", "error_message", "recovery_attempts", "retry_deadline", "solution"],
+ "field_order": ["gateway", "idempotency_key", "provider_event_id", "status", "received_at", "verified_sender", "sender_id", "conversation_id", "thread_id", "message_text", "section_route", "binding", "target_type", "target_agent", "target_flow", "agent_run", "flow_run", "section_delivery", "reply_message_id", "reply_status", "delivery_error", "section_audit", "raw_payload", "error_message", "recovery_attempts", "retry_deadline", "solution", "channel_conversation"],
  "fields": [
   {"fieldname":"gateway","fieldtype":"Link","in_list_view":1,"label":"Gateway","options":"Gateway","reqd":1,"read_only":1},
   {"fieldname":"idempotency_key","fieldtype":"Data","label":"Idempotency key","read_only":1,"reqd":1,"unique":1},
@@ -32,7 +32,8 @@
   {"fieldname":"error_message","fieldtype":"Small Text","label":"Error","read_only":1},
   {"fieldname":"recovery_attempts","fieldtype":"Int","label":"Recovery attempts","read_only":1,"default":"0"},
   {"fieldname":"retry_deadline","fieldtype":"Datetime","label":"Retry deadline","read_only":1},
-  {"fieldname":"solution","fieldtype":"Link","label":"Solution","options":"Solution","read_only":1}
+  {"fieldname":"solution","fieldtype":"Link","label":"Solution","options":"Solution","read_only":1},
+  {"fieldname":"channel_conversation","fieldtype":"Link","label":"Channel conversation","options":"Channel Conversation","read_only":1,"search_index":1}
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
