@@ -3,7 +3,7 @@
 Source of truth for trigger config is ``docs/flow/FIELD_CONTRACT.md`` / ``graph_ir.schema.json``:
 
 * ``trigger.webhook``   ``{method: GET|POST, secret}``
-* ``trigger.schedule``  ``{cron}``            5-part cron, evaluated in server system time
+* ``trigger.schedule``  ``{cron, time_zone?}`` 5-part cron, evaluated in ``time_zone`` (default: the site time zone)
 * ``trigger.doc-event`` ``{doctype, event}``  event in ``DOC_EVENT_MAP``
 
 Everything here is dispatch only. The run itself is created and executed by the engine
@@ -130,6 +130,28 @@ def cron_is_due(cron: str, minute: datetime) -> bool:
 	minute = minute.replace(second=0, microsecond=0)
 	# Previous fire time strictly before (minute + 1s) is `minute` iff the cron matches `minute`.
 	return croniter(cron, minute + timedelta(seconds=1)).get_prev(datetime) == minute
+
+
+def minute_in_zone(minute: datetime, zone: str | None, system_zone: str | None = None) -> datetime:
+	"""``minute`` (naive, in the site time zone) as the naive wall-clock minute in ``zone``.
+
+	A schedule fires on the clock of the zone the author picked. With no zone, or a name that is not a time zone,
+	the site zone is used, which is the clock ``minute`` is already on.
+	"""
+	if not zone or not isinstance(zone, str):
+		return minute
+	from zoneinfo import ZoneInfo
+
+	try:
+		target = ZoneInfo(zone)
+		if system_zone is None:
+			from frappe.utils import get_system_timezone
+
+			system_zone = get_system_timezone()
+		source = ZoneInfo(system_zone)
+	except Exception:
+		return minute
+	return minute.replace(tzinfo=source).astimezone(target).replace(tzinfo=None)
 
 
 def latest_due_minute(cron: str, now: datetime, window_seconds: int = 60) -> datetime | None:
@@ -278,7 +300,8 @@ def run_due_schedule_flows(now: datetime | None = None) -> list[str]:
 		for node in trigger_nodes(defn, SCHEDULE_TYPE):
 			cron = (node.get("config") or {}).get("cron")
 			try:
-				due = latest_due_minute(cron, minute, window)
+				# The cron is read on the clock of the zone chosen in the editor (the site zone when none was chosen).
+				due = latest_due_minute(cron, minute_in_zone(minute, (node.get("config") or {}).get("time_zone")), window)
 				if due is None:
 					continue
 				scheduled_for = due.strftime("%Y-%m-%d %H:%M:%S")

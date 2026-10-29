@@ -246,15 +246,18 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 
 @frappe.whitelist()
 def get_trigger_doctypes() -> list[dict]:
-	"""Document types the current user may pick for a Data trigger: ones they can read.
+	"""Document types the current user may pick for a "When a document changes" trigger: ones they can read.
 
-	Child tables, single doctypes, Huf's own bookkeeping and system logs are left out (events on them never start a flow).
-	Read from the permission tables, so flow editors who are not System Managers get a list too.
+	Returns ``[{name, label, group, module}]`` (``group``: common / yours / apps) ordered for a picker. Child tables, single
+	doctypes, Huf's own bookkeeping and the system's plumbing (permissions, tokens, logs, print settings) are left out:
+	events on them never start a flow or are not something a person would watch. Read from the permission tables, so
+	flow editors who are not System Managers get a list too.
 	"""
 	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
 
 	from frappe.permissions import get_doctypes_with_read
 
+	from huf.ai.flow.support.doctype_catalog import build_catalog
 	from huf.ai.flow.triggers import HUF_MODULE, RECURSION_SKIP_DOCTYPES
 
 	readable = [d for d in get_doctypes_with_read() if d not in RECURSION_SKIP_DOCTYPES]
@@ -263,11 +266,11 @@ def get_trigger_doctypes() -> list[dict]:
 	rows = frappe.get_all(
 		"DocType",
 		filters={"name": ("in", readable), "istable": 0, "issingle": 0, "module": ("!=", HUF_MODULE)},
-		fields=["name"],
+		fields=["name", "module", "custom"],
 		limit_page_length=0,
 		ignore_permissions=True,
 	)
-	return [{"name": name} for name in sorted(r.name for r in rows)]
+	return build_catalog(rows)
 
 
 @frappe.whitelist()

@@ -4,14 +4,16 @@ The secret in ``trigger.webhook`` ``config.secret`` is a credential: whoever has
 read access (Huf User, Huf Viewer) is wider than write access (Huf Manager, System Manager), so every path that hands a
 definition to a user redacts the secret unless that user can write the flow.
 
-Redaction is a copy: the stored definition is never touched, and the engine, the webhook check and the editors of the
+A trigger's saved sample request (``node._sample``) is request data, so it goes the same way: only editors see it, and
+a run never keeps it. Redaction is a copy: the stored definition is never touched, and the engine, the webhook check and the editors of the
 flow keep working with the real value.
 """
 
-import copy
 import json
 
 import frappe
+
+from huf.ai.flow.support.trigger_sample import drop_samples
 
 WEBHOOK_TYPE = "trigger.webhook"
 
@@ -31,7 +33,7 @@ def hide_webhook_secrets(graph):
 	"""A copy of ``graph`` where every webhook secret is ``None`` and flagged ``secret_hidden: true``."""
 	if not isinstance(graph, dict):
 		return graph
-	redacted = copy.deepcopy(graph)
+	redacted = drop_samples(graph)
 	for config in _webhook_configs(redacted):
 		if config.get("secret"):
 			config["secret"] = None
@@ -43,7 +45,7 @@ def drop_webhook_secrets(graph):
 	"""A copy of ``graph`` without webhook secrets. For snapshots a run keeps: the run never needs the caller's password."""
 	if not isinstance(graph, dict):
 		return graph
-	stripped = copy.deepcopy(graph)
+	stripped = drop_samples(graph)
 	for config in _webhook_configs(stripped):
 		config.pop("secret", None)
 	return stripped

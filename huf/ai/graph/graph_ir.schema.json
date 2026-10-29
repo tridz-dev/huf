@@ -1006,6 +1006,10 @@
                 "cron": {
                   "type": "string",
                   "minLength": 1
+                },
+                "time_zone": {
+                  "type": "string",
+                  "description": "IANA time zone the cron is read in, for example Asia/Kolkata. Absent means the site time zone."
                 }
               }
             }
