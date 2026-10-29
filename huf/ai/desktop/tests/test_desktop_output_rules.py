@@ -1,13 +1,13 @@
 # Copyright (c) 2026, Tridz Technologies Pvt Ltd and contributors
-"""Bench-free tests: ``python3 -m unittest huf/ai/desktop/tests/test_desktop_output_rules.py`` (pure module, loaded by path)."""
+"""Bench-free tests: ``python3 -m unittest huf/ai/desktop/tests/test_output_rules.py`` (pure module, loaded by path)."""
 
 import base64
 import importlib.util
 import pathlib
 import unittest
 
-_p = pathlib.Path(__file__).resolve().parents[2] / "desktop_output_rules.py"
-_spec = importlib.util.spec_from_file_location("desktop_output_rules", _p)
+_p = pathlib.Path(__file__).resolve().parents[1] / "output_rules.py"
+_spec = importlib.util.spec_from_file_location("output_rules", _p)
 r = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(r)
 

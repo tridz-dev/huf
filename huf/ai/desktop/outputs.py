@@ -13,8 +13,9 @@ import json
 import frappe
 from frappe import _
 
+from huf.ai.api_support import require_permission
 from huf.ai.desktop import executor as dx
-from huf.ai import desktop_output_rules as rules
+from huf.ai.desktop import output_rules as rules
 
 
 def _deny(msg):
@@ -106,6 +107,7 @@ def search_skills_and_agents(query=None, kind="all", limit=50):
 	Agent permission query: owner / allowed users / roles, enabled, non-system). Skills carry no
 	per-user permission (the Skill doctype is System Manager only and the rest of the app lists them
 	to every user through ``get_skill_options``), so only ``Active`` skills are listed."""
+	require_permission(frappe.has_permission("Agent", "read"), "Not permitted to read agents")
 	if kind not in ("all", "agent", "skill"):
 		kind = "all"
 	items = []

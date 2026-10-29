@@ -1,13 +1,13 @@
 # Copyright (c) 2026, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
-"""REAL DB tests for ``upload_desktop_output`` and ``search_skills_and_agents`` (huf.ai.desktop_outputs).
+"""REAL DB tests for ``upload_desktop_output`` and ``search_skills_and_agents`` (huf.ai.desktop.outputs).
 
 A real desktop lease (registered through the real endpoint, secret held in ``desktop_test_helpers``), real
 users, a real Agent and desktop-hosted Agent Conversation; the whitelisted functions are called directly.
 
 Run with:
-	bench --site <site> run-tests --app huf --module huf.ai.tests.test_desktop_outputs
+	bench --site <site> run-tests --app huf --module huf.ai.desktop.tests.test_desktop_outputs
 """
 
 import base64
@@ -15,8 +15,8 @@ import json
 
 import frappe
 
-from huf.ai import desktop_output_rules as rules
-from huf.ai import desktop_outputs as do
+from huf.ai.desktop import output_rules as rules
+from huf.ai.desktop import outputs as do
 from huf.testing import desktop_test_helpers as h
 from huf.ai.desktop.tests.test_desktop_remote_sessions import RemoteBase
 
