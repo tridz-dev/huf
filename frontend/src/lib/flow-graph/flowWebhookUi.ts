@@ -1,6 +1,8 @@
 /** Webhook secret + URL helpers (secret lives in trigger.webhook `config.secret`, length 32-256). */
+import { WEBHOOK_PATH } from '@/services/flow/webhookEndpoint';
+
 export const MIN_SECRET_LENGTH = 32;
-export const WEBHOOK_PATH = '/api/method/huf.ai.flow.api.flow_webhook_clean';
+export { WEBHOOK_PATH };
 
 export function generateWebhookSecret(): string {
   const bytes = new Uint8Array(24);
