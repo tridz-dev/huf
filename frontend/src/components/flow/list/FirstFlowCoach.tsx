@@ -24,7 +24,7 @@ export function FirstFlowCoach({ onStart }: FirstFlowCoachProps) {
       </span>
       <div className="space-y-1">
         <h2 className="text-lg font-semibold text-ink">Build your first flow</h2>
-        <p className="text-ui-text text-steel">A flow does something for you automatically. It takes about two minutes.</p>
+        <p className="text-ui-text text-steel">A flow does a job for you automatically, again and again, whenever something happens.</p>
       </div>
       <ol className="w-full space-y-2 text-left text-ui-text text-steel">
         {STEPS.map((text, i) => (
