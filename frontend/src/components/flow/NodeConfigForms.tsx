@@ -20,7 +20,7 @@ import { NotConnected } from './NotConnected';
 import { Code, Examples, FieldHint } from './FieldHint';
 import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import {
-  APPROVAL_TIMEOUT_HELP, APPROVER_TYPE_HELP, CONDITION_EXAMPLES, CONDITION_HELP, INTEGRATION_NEEDS, LOOP_HELP,
+  APPROVAL_TIMEOUT_HELP, APPROVER_TYPE_HELP, CONDITION_EXAMPLES, conditionHelp, INTEGRATION_NEEDS, LOOP_HELP,
   WEBHOOK_RESPONSES, transformParamHelp, TRANSFORM_HELP,
 } from '@/lib/flowHelp';
 import { SlackChannelPicker } from './SlackChannelPicker';
@@ -750,10 +750,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
             mono
             placeholder="input['amount'] > 100"
           />
-          <FieldHint testId="flow-hint-condition">
-            {canManage ? 'Use Insert data to add the trigger or an earlier step, then pick a field, for example input[\'amount\']. ' : ''}
-            {CONDITION_HELP}
-          </FieldHint>
+          <FieldHint testId="flow-hint-condition">{conditionHelp(canManage)}</FieldHint>
           <Examples testId="flow-condition-examples" title="Show examples">
             {CONDITION_EXAMPLES.map((ex) => (
               <p key={ex.text}><Code>{ex.text}</Code> {ex.meaning}</p>
@@ -888,7 +885,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
                 const list = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
                 patch({ approver_users: list.length ? list : undefined });
               }}
-              placeholder="manager@company.com, cfo@company.com"
+              placeholder="manager@company.com"
             />
             <FieldHint testId="flow-hint-approver-users">Use the email address each person signs in with.</FieldHint>
             <Err field="approver_users" />

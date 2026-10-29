@@ -13,7 +13,6 @@ import { edgeRoute } from '../services/flowSerializer';
 import { validateNode } from '@/lib/flowValidation';
 import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import { triggerLabel } from '@/lib/flowLabels';
-import { triggerOptions } from '../data/triggers';
 import { STEP_NEEDS_HINT } from '@/lib/flowHelp';
 import type { FlowNodeData, TriggerConfig } from '../types/flow.types';
 
@@ -93,7 +92,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
           </div>
         ) : selectedNode ? (
           <>
-            <div className="-mx-3.5 -mt-3.5 mb-0 h-10 px-3.5 flex items-center gap-2 border-b border-border shrink-0">
+            <div className="sticky top-0 z-10 bg-card -mx-3.5 -mt-3.5 mb-0 h-10 px-3.5 flex items-center gap-2 border-b border-border shrink-0">
               <span className="text-[13px] leading-none truncate" style={{ fontWeight: 590 }} title={selectedNode.data.label} data-testid="flow-sidebar-title">
                 {selectedNode.data.label}
               </span>
@@ -151,9 +150,11 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       <span className="text-muted-foreground">Not set up yet</span>
                     )}
                   </div>
-                  <p className="mt-1 text-[11px] leading-snug text-muted-foreground" data-testid="flow-hint-trigger-type">
-                    {triggerOptions.find((t) => t.id === selectedNode.data.triggerConfig?.type)?.description ?? 'The trigger decides when the flow starts. Use Change to choose one.'}
-                  </p>
+                  {!selectedNode.data.triggerConfig?.type && (
+                    <p className="mt-1 text-[11px] leading-snug text-muted-foreground" data-testid="flow-hint-trigger-type">
+                      The trigger decides when the flow starts. Use Change to choose one.
+                    </p>
+                  )}
                 </div>
                 <TriggerConfigForm key={selectedNode.id} nodeId={selectedNode.id} />
               </>

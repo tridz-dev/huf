@@ -18,7 +18,7 @@ export function zoneOffsetLabel(zone: string, at: Date = new Date()): string {
 export function describeZone(zone: string | null | undefined, at: Date = new Date()): string {
   if (!zone) return '';
   const off = zoneOffsetLabel(zone, at);
-  return off ? `${zone} (${off})` : zone;
+  return off && off !== zone ? `${zone} (${off})` : zone;
 }
 
 export function browserZone(): string {
