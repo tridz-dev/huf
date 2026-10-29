@@ -277,7 +277,7 @@ class TestTeamsFilterComposition(SupportCase):
 			with self.subTest(text=text):
 				self.reset_fixtures()
 				res = self._teams("x-" + text, text, tenant=_FOREIGN)
-				assert res == {"event_name": "EVT-1", "status": "Rejected"}
+				assert res == {"event_name": "EVT-1", "status": "Rejected"}, res
 				assert self.outbox == [] and self.tokens == []
 				assert self.events[0].db_set.call_args[0][0] == {
 					"status": "Rejected", "error_message": "tenant_not_allowed"}
