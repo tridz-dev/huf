@@ -26,9 +26,14 @@ class TestAnalytics(IntegrationTestCase):
 		return d
 
 	def _broadcast(self, **kw):
-		d = frappe.get_doc({"doctype": "WhatsApp Broadcast", "title": "t", "category": "marketing", **kw})
+		counts = {k: kw.pop(k) for k in ("sent", "delivered", "read", "failed") if k in kw}
+		d = frappe.get_doc(
+			{"doctype": "WhatsApp Broadcast", "title": "t", "category": "marketing", "template": "tpl", "template_name": "tpl", **kw}
+		)
 		d.flags.ignore_links = True
 		d.insert(ignore_permissions=True)
+		for k, v in counts.items():
+			frappe.db.set_value("WhatsApp Broadcast", d.name, k, v, update_modified=False)
 		return d
 
 	def _recipient(self, bc, phone, status="delivered"):
