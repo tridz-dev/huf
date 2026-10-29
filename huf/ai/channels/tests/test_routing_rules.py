@@ -13,18 +13,16 @@ class TestRoutingRules(IntegrationTestCase):
 		frappe.set_user("Administrator")
 		self.addCleanup(frappe.db.rollback)
 		self.addCleanup(frappe.set_user, "Administrator")
-		self.gw = frappe.get_all("Gateway", pluck="name", limit=1)
-		if not self.gw:
-			self.skipTest("no Gateway available")
-		self.gw = self.gw[0]
-		self.doc = frappe.get_doc("Gateway", self.gw)
-		self.doc.set("routing_rules", [])
-		self.doc.handoff_message = "A human will help"
-		self.doc.handoff_target = "helpdesk"
+		self.gw = "GW-TEST"
+		self.doc = frappe._dict(
+			routing_rules=[], handoff_message="A human will help", handoff_target="helpdesk"
+		)
 
 	def _rule(self, **kw):
 		base = {"rule_type": "keyword", "target_type": "agent", "target": "AgentX", "priority": 10, "enabled": 1}
-		self.doc.append("routing_rules", {**base, **kw})
+		row = frappe._dict({**base, **kw, "idx": len(self.doc.routing_rules) + 1, "attribute": None, "match_value": None})
+		row.update(kw)
+		self.doc.routing_rules.append(row)
 
 	def _run(self, text="hello", conversation=None, pinned=False, resolver="Queued"):
 		ctx = {"gateway": self.gw, "context": {"message_text": text, "sender_id": HANDLE}}
@@ -38,7 +36,7 @@ class TestRoutingRules(IntegrationTestCase):
 	def test_keyword_whole_word(self):
 		self._rule(match_value="price")
 		self.assertEqual(self._run("what is the price?").payload["agent"], "AgentX")
-		self.assertEqual(self._run("PRICES please").payload["agent"], "AgentX")  # prefix of text? no
+		self.assertEqual(self._run("PRICES please").payload["agent"], "AgentX")  # prefix match
 		self.assertIsNone(self._run("hello there"))
 
 	def test_first_message(self):
@@ -49,10 +47,8 @@ class TestRoutingRules(IntegrationTestCase):
 	def test_contact_attribute(self):
 		self._rule(rule_type="contact_attribute", attribute="channel", match_value="WhatsApp")
 		c = frappe._dict(message_count=5, status="ai", channel="whatsapp", contact=None)
-		c.get = c.__getitem__
 		self.assertIsNotNone(self._run(conversation=c))
 		c2 = frappe._dict(message_count=5, status="ai", channel="slack", contact=None)
-		c2.get = c2.__getitem__
 		self.assertIsNone(self._run(conversation=c2))
 
 	def test_priority_and_disabled(self):
@@ -89,7 +85,9 @@ class TestRoutingRules(IntegrationTestCase):
 		with self.assertRaises(frappe.PermissionError):
 			rules_api.save_rules(self.gw, [])
 		frappe.set_user("Administrator")
-		self.assertIsInstance(rules_api.get_rules(self.gw), list)
+		self.doc.routing_rules = [frappe._dict(rule_type="keyword", target="A")]
+		with patch.object(frappe, "get_doc", return_value=self.doc):
+			self.assertEqual(rules_api.get_rules(self.gw)[0]["target"], "A")
 
 
 frappe_get_doc = frappe.get_doc
