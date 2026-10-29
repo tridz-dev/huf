@@ -106,7 +106,10 @@ export const InsertableEdge = memo(
       : { ...style, stroke: 'var(--steel-soft)', strokeWidth: 1.75, ...(loopBack ? { strokeDasharray: '6 4' } : {}) };
     const pill = data?.pill;
     // Router paths all leave one dot: their names go partway along each line so they never pile up.
-    const pillPos = data?.route === 'option' ? routed.pillMidAt : routed.pillAt;
+    const scale = zoom < 1 ? Math.min(1 / zoom, 3) : 1;
+    const pillBase = data?.route === 'option' ? routed.pointAt(Math.min(Math.max(routed.length * 0.4, 28 + 14 * scale), Math.max(routed.length - 40, 0))) : routed.pillAt;
+    // A name sitting right under its step is pushed down as it is scaled up, so it never covers the step's edge.
+    const pillPos = data?.route !== 'option' && pillBase.x === routed.points[0]?.x && pillBase.y < (routed.points[0]?.y ?? 0) + 24 ? { x: pillBase.x, y: pillBase.y + (scale - 1) * 8 } : pillBase;
     const showControls = canManage && (hovered || selected);
 
     return (
