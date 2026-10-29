@@ -16,55 +16,9 @@ from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.tools import _registry, whatsapp
 
 
-_orig_run = unittest.TestCase.run  # DEBUGTMP
-
-
-def _dbg_run(self, result=None):  # DEBUGTMP
-	import sys
-	try:
-		pre = repr(frappe.cache.get("__dbg__"))
-	except Exception as e:
-		pre = "ERR " + str(e)
-	r = _orig_run(self, result)
-	try:
-		post = repr(frappe.cache.get("__dbg__"))
-	except Exception as e:
-		post = "ERR " + str(e)
-	print("DBG", self.id().split(".", 4)[-1], pre, post, file=sys.stderr)
-	return r
-
-
-unittest.TestCase.run = _dbg_run  # DEBUGTMP
-
-
 def _tool_schema() -> dict:
 	tool = next(t for t in _registry.WHATSAPP_TOOLS if t["tool_name"] == "whatsapp")
 	return tool
-
-
-class TestAaaDbg(unittest.TestCase):  # DEBUGTMP
-	def test_a(self):
-		import sys
-		def chk(tag):
-			print("DBGSEQ", tag, repr(frappe.cache.get("__dbg2__")), file=sys.stderr)
-		chk("start")
-		with self.assertRaises(frappe.ValidationError):
-			frappe.throw("x")
-		chk("after throw")
-		with patch.multiple(frappe.db, get_value=MagicMock(), exists=MagicMock(return_value=True)):
-			chk("in patch")
-		chk("after patch")
-		t = TestGatewayValidation("test_account_phone_must_equal_gateway_phone")
-		gw = t._gw()
-		chk("after _gw")
-		with t._db(account_phone="PN-OTHER"), patch.object(bridge, "is_available", return_value=True):
-			chk("in db")
-			try:
-				gw._validate_whatsapp()
-			except frappe.ValidationError:
-				pass
-			chk("after validate")
-		chk("end")
 
 
 class TestSchemaSnapshot(unittest.TestCase):
@@ -273,6 +227,14 @@ class TestListMessages(unittest.TestCase):
 
 
 class TestGatewayValidation(unittest.TestCase):
+	def setUp(self):
+		# frappe.throw() translates its message. On a cold site cache the first translation load would
+		# otherwise happen inside a test that has frappe.db.get_value/exists mocked, and it leaves the
+		# shared Redis connection out of step for the rest of the process (later cache reads then
+		# return the wrong replies). Warm it here, with the real db, before any mock is active.
+		frappe._("warm translation cache")
+		frappe.get_meta("Gateway")
+
 	def _gw(self, **fields):
 		from huf.huf.doctype.gateway.gateway import Gateway
 
