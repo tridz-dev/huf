@@ -14,6 +14,7 @@ import { ApprovalsBell } from '../components/ApprovalsBell';
 import { ExecutionApprovalsBell } from '../components/ExecutionApprovalsBell';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { SOLUTIONS_WORD } from '../components/solutions/labels';
+import { cn } from '../lib/utils';
 
 interface UnifiedHeaderProps {
   actions?: ReactNode;
@@ -21,6 +22,8 @@ interface UnifiedHeaderProps {
   showCurrentCrumb?: boolean;
   /** Overrides the left-hand ancestry-crumb/page-title zone entirely when provided. */
   leftContent?: ReactNode;
+  /** On a phone the title gets a row of its own and the actions a second row (the flow editor header). */
+  stackOnPhone?: boolean;
 }
 
 /**
@@ -91,7 +94,7 @@ export function AncestryCrumb({
   );
 }
 
-export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftContent }: UnifiedHeaderProps) {
+export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftContent, stackOnPhone }: UnifiedHeaderProps) {
   const location = useLocation();
   const { hasCapability } = usePermissions();
 
@@ -136,8 +139,8 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
   const hasAncestry = !!breadcrumbs && breadcrumbs.length >= 2;
 
   return (
-    <div className="flex items-center justify-between flex-1">
-      <div className="flex items-center gap-2 min-w-0">
+    <div className={cn('flex flex-1 items-center justify-between', stackOnPhone && 'flex-wrap gap-y-1 max-md:py-1')}>
+      <div className={cn('flex min-w-0 items-center gap-2', stackOnPhone && 'max-md:basis-full')}>
         {leftContent ? (
           leftContent
         ) : hasAncestry ? (
@@ -157,10 +160,12 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
         </div>
       </div> */}
 
-      <div className="flex items-center gap-2">
-        <ApprovalsBell />
+      <div className={cn('flex items-center gap-2', stackOnPhone && 'max-md:basis-full max-md:justify-end')}>
+        {/* Approvals are only asked for by people who use flows: for anyone else the server would refuse every poll. */}
+        {hasCapability('flows.use') && <ApprovalsBell />}
         {(hasCapability('execution.approve') || hasCapability('ssh.approve')) && (
-          <ExecutionApprovalsBell />
+          // Code-run approvals are an administrator's desk job: on a phone's second header row there is no room for them.
+          <span className={cn('contents', stackOnPhone && 'max-md:hidden')}><ExecutionApprovalsBell /></span>
         )}
         {actions}
       </div>

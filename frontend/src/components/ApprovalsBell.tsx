@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Button } from './ui/button';
@@ -9,23 +8,21 @@ import type { PendingApproval } from '../services/flowApi';
 import { useUser } from '../contexts/UserContext';
 import { toast } from 'sonner';
 import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
-import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
-import { formatTimeAgo } from '@/utils/time';
+import { useSiteTimezone } from '@/lib/serverTime';
 import { decisionMovedRun } from '@/lib/flow-run/flowRunDecision';
-import { humanizeMessageText } from '@/lib/flow-run/humanize';
+import { ApprovalsList } from './flow/decision/ApprovalsList';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
+import { useViewport } from '@/lib/ui/responsive';
 
 const REFRESH_INTERVAL_MS = 60000;
 const FLOW_EVENTS = ['frappe:flow_paused', 'frappe:flow_completed', 'frappe:flow_error'];
 
 
-/** The approval request as a sentence: any data a flow wrote into the message as JSON reads as plain facts. */
-function approvalSentence(approval: PendingApproval): string {
-  return humanizeMessageText(approval.message || approval.instructions || '');
-}
-
 export function ApprovalsBell() {
   const [approvals, setApprovals] = useState<PendingApproval[]>([]);
   const { isAuthenticated } = useUser();
+  const { isPhone } = useViewport();
+  const [sheetOpen, setSheetOpen] = useState(false);
   useSiteTimezone();
 
   const fetchApprovals = useCallback(async () => {
@@ -83,65 +80,51 @@ export function ApprovalsBell() {
   };
 
   const count = approvals.length;
+  const trigger = (
+    <Button variant="ghost" size="icon" className="relative max-[1023px]:min-h-11 max-[1023px]:min-w-11" aria-label="Pending approvals" data-testid="flow-approvals-bell" onClick={isPhone ? () => { void fetchApprovals(); setSheetOpen(true); } : undefined}>
+      <Bell className="w-4 h-4" />
+      {count > 0 && (
+        <Badge
+          variant="destructive"
+          className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 py-0 flex items-center justify-center"
+          data-testid="flow-approvals-count"
+        >
+          {count > 9 ? '9+' : count}
+        </Badge>
+      )}
+    </Button>
+  );
+  const body = count === 0 ? (
+    <div className="px-4 py-6 text-center text-sm text-muted-foreground">No approvals waiting</div>
+  ) : (
+    <div className="max-h-80 overflow-y-auto max-sm:max-h-none">
+      <ApprovalsList approvals={approvals} deciding={deciding} onDecide={decide} large={isPhone} onNavigate={() => setSheetOpen(false)} />
+    </div>
+  );
 
+  // A phone gets a full-width sheet from the bottom; a bigger screen a popover under the bell.
+  if (isPhone) {
+    return (
+      <>
+        {trigger}
+        <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+          <SheetContent side="bottom" className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden rounded-t-xl p-0" data-testid="flow-approvals-panel">
+            <SheetHeader className="shrink-0 border-b px-4 py-3 pr-12 text-left">
+              <SheetTitle className="text-base">{count > 0 ? `Needs your approval (${count})` : 'Pending approvals'}</SheetTitle>
+              <SheetDescription className="sr-only">Runs waiting for your decision.</SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">{body}</div>
+          </SheetContent>
+        </Sheet>
+      </>
+    );
+  }
   return (
     <Popover onOpenChange={(open) => { if (open) void fetchApprovals(); }}>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label="Pending approvals" data-testid="flow-approvals-bell">
-          <Bell className="w-4 h-4" />
-          {count > 0 && (
-            <Badge
-              variant="destructive"
-              className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 py-0 flex items-center justify-center"
-              data-testid="flow-approvals-count"
-            >
-              {count > 9 ? '9+' : count}
-            </Badge>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0" data-testid="flow-approvals-panel">
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent align="end" className="w-[min(360px,calc(100vw-1rem))] p-0" data-testid="flow-approvals-panel">
         <div className="px-4 py-3 border-b text-sm font-semibold">Pending approvals</div>
-        {count === 0 ? (
-          <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-            No approvals waiting
-          </div>
-        ) : (
-          <div className="max-h-80 overflow-y-auto divide-y">
-            {approvals.map((approval) => (
-              <div key={approval.flow_run_id} className="px-4 py-3 space-y-2" data-testid={`flow-approval-${approval.flow_run_id}`}>
-                <div>
-                  <div className="text-sm font-medium" data-testid={`flow-approval-flow-${approval.flow_run_id}`}>
-                    {approval.flow_name || approval.flow_id}
-                  </div>
-                  {approvalSentence(approval) ? (
-                    <div className="text-sm text-foreground mt-0.5 break-words" data-testid={`flow-approval-message-${approval.flow_run_id}`}>
-                      {approvalSentence(approval)}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-muted-foreground mt-0.5">Approval needed</div>
-                  )}
-                  {approval.waiting_since && (
-                    <div className="text-xs text-muted-foreground mt-0.5" data-testid={`flow-approval-time-${approval.flow_run_id}`}>
-                      Waiting since {formatAbsoluteTime(approval.waiting_since)} ({formatTimeAgo(approval.waiting_since).toLowerCase()})
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" disabled={deciding.has(approval.flow_run_id)} data-testid={`flow-approve-${approval.flow_run_id}`} onClick={() => decide(approval, 'approve')}>
-                    Approve
-                  </Button>
-                  <Button size="sm" variant="outline" disabled={deciding.has(approval.flow_run_id)} data-testid={`flow-reject-${approval.flow_run_id}`} onClick={() => decide(approval, 'reject')}>
-                    Reject
-                  </Button>
-                  <Button size="sm" variant="ghost" asChild>
-                    <Link to={`/flows/${approval.flow_id}?run=${approval.flow_run_id}`}>Open</Link>
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {body}
       </PopoverContent>
     </Popover>
   );

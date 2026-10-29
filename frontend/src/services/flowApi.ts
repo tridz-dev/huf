@@ -155,6 +155,10 @@ export interface FlowRunDetail {
     stale: boolean;
     can_mark_failed: boolean;
     stale_after_minutes: number;
+    /** The signed-in person may approve or reject this run (only meaningful while it waits for approval). */
+    can_decide?: boolean;
+    /** Why not, when they may not. */
+    cannot_decide_reason?: string | null;
 }
 
 /** Pending human approval (from get_pending_approvals endpoint) */

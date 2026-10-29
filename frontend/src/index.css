@@ -594,15 +594,26 @@
   border-color: var(--line-dark);
 }
 
-/* A side sheet (run details, run history) is open on the right: keep toasts to the left of it so they never
-   cover its corner. The sheet is at most 700px / 90vw wide. */
-body:has([role="dialog"][data-state="open"].inset-y-0.right-0) [data-sonner-toaster][data-x-position="right"] {
+/* Toasts are bottom-centre. They must never cover a panel:
+   - a side sheet (run details, run history, step settings as a sheet) is open on the right and at most 62% of the window wide,
+     so the toasts keep to the 38% on its left;
+   - the step panel docked beside the canvas shifts them to the middle of the canvas (the editor sets --flow-toast-shift). */
+[data-sonner-toaster][data-x-position="center"] {
+  transform: translateX(calc(-50% + var(--flow-toast-shift, 0px)));
+}
+body:has([role="dialog"][data-state="open"].inset-y-0.right-0) [data-sonner-toaster][data-x-position="center"] {
   right: auto !important;
   left: 16px !important;
-  --width: min(356px, calc(100vw - 740px));
+  transform: none !important;
+  --width: min(356px, calc(38vw - 32px));
 }
-@media (max-width: 1100px) {
-  body:has([role="dialog"][data-state="open"].inset-y-0.right-0) [data-sonner-toaster][data-x-position="right"] {
-    --width: 300px;
+@media (max-width: 767px) {
+  [data-sonner-toaster][data-x-position="center"] {
+    transform: none !important;
+  }
+  body:has([role="dialog"][data-state="open"].inset-y-0.right-0) [data-sonner-toaster][data-x-position="center"] {
+    left: var(--mobile-offset-left, 16px) !important;
+    right: var(--mobile-offset-right, 16px) !important;
+    --width: 100%;
   }
 }

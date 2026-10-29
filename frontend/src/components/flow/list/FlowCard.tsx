@@ -15,7 +15,7 @@ import { triggerOptions } from '@/data/triggers';
 import { formatTimeAgo } from '@/utils/time';
 import { cn } from '@/lib/utils';
 import {
-  cardDescription, cardStatusKind, lastRunLine, runStatusKind, stepsText, triggerLine,
+  cardDescription, cardStatusKind, descriptionIsGenerated, lastRunLine, runStatusKind, stepsText, triggerLine, visibleCategory,
 } from '@/lib/flow-list/flowListSummary';
 import type { FlowCard as FlowCardData } from '@/services/flow/flowCardsApi';
 import { FlowStepStrip } from './FlowStepStrip';
@@ -50,6 +50,8 @@ export function FlowCard({ card, canManage, canCreate, onOpen, onRun, onSettings
   const statusKind = cardStatusKind(card);
   const TriggerIcon = (card.trigger.type !== 'unset' && NODE_ICONS[TRIGGER_ICON[card.trigger.type] ?? '']) || CircleDashed;
   const description = useMemo(() => cardDescription(card), [card]);
+  const generated = descriptionIsGenerated(card);
+  const category = visibleCategory(card.category);
   const runKind = card.last_run ? runStatusKind(card.last_run) : null;
   const lastRun = lastRunLine(card.last_run, (iso) => formatTimeAgo(iso));
   const runFailed = runKind === 'failed' || runKind === 'stuck';
@@ -88,15 +90,19 @@ export function FlowCard({ card, canManage, canCreate, onOpen, onRun, onSettings
         {description}
       </p>
 
-      <div className="flex min-h-control-sm items-center justify-between gap-2">
-        <FlowStepStrip steps={card.steps} total={card.step_count} data-testid="flow-card-steps" />
-        <span className="shrink-0 text-xs text-steel">{stepsText(card.step_count)}</span>
-      </div>
+      {card.step_count > 0 && (
+        <div className="flex min-h-control-sm items-center justify-between gap-2">
+          <FlowStepStrip steps={card.steps} total={card.step_count} data-testid="flow-card-steps" />
+          <span className="shrink-0 text-xs text-steel">{stepsText(card.step_count)}</span>
+        </div>
+      )}
 
       <div className="space-y-1 text-xs">
-        <p className="truncate text-steel" data-testid="flow-card-trigger">
-          {triggerLine(card.trigger)}
-        </p>
+        {!generated && (
+          <p className="truncate text-steel" data-testid="flow-card-trigger">
+            {triggerLine(card.trigger)}
+          </p>
+        )}
         <p
           className={cn('truncate', runFailed ? 'font-medium text-destructive' : 'text-steel')}
           title={card.last_run?.failed_step ? `Stopped at: ${card.last_run.failed_step}` : undefined}
@@ -106,9 +112,9 @@ export function FlowCard({ card, canManage, canCreate, onOpen, onRun, onSettings
           {lastRun}
           {card.last_run?.failed_step && runKind === 'failed' ? ` at "${card.last_run.failed_step}"` : ''}
         </p>
-        {card.category && (
+        {category && (
           <p className="truncate text-steel-soft" data-testid="flow-card-category">
-            {card.category}
+            {category}
           </p>
         )}
       </div>
