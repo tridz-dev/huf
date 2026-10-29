@@ -163,3 +163,25 @@ Node type `code.run`, canvas type `code-run`, palette card `flow-card-code-run` 
 | `settings-code-in-flows-note` | "Only a system administrator can change this." (non-admins) |
 
 Publish is disabled (reason in `disabled-reason`) when the flow has an Execute code step and code is off or the user lacks `flows.execute_code`.
+
+## Help text and guidance (wp17)
+
+| Test id | Meaning |
+|---|---|
+| `flow-help`, `flow-help-popover`, `flow-help-shortcuts`, `flow-help-guide-link` | "?" button in the editor header, its popover (how a flow works, keyboard shortcuts) and the link to the full guide |
+| `flow-first-run-guide`, `flow-first-run-guide-close` | 3-step card on a flow with only a trigger (hidden for view-only users; closing it is remembered in the browser) |
+| `flow-minimap` | Overview map, bottom-left of the canvas (hidden when the canvas is narrower than 640px) |
+| `flow-palette-intro` | One-sentence intro under the "Choose a trigger" / "Add a step" title |
+| `flow-card-desc-<cardId>` | The one-line "what does this step do" under a palette card |
+| `flow-config-hint` | Intro sentence at the top of a step or trigger form |
+| `flow-hint-<form>-<field>` | One-line hint under a field (for example `flow-hint-webhook-secret`, `flow-hint-loop-max`, `flow-hint-approval-timeout`, `flow-hint-transform-op`, `flow-hint-transform-example`, `flow-hint-condition`) |
+| `<field testid>-hint` | Hint under a value input (URL, Subject, Spreadsheet ID ...); `<field testid>-mode-help` explains Reference / Template / JSON |
+| `flow-condition-examples`, `flow-schedule-examples`, `flow-doc-event-explained` | Folded example lists (condition syntax, cron examples, what each Data event means) |
+| `flow-webhook-usage-curl-data`, `flow-webhook-responses` | curl example with a JSON body; what 200 / 403 / 405 / 429 mean |
+| `flow-hint-schedule-intro`, `flow-schedule-timezone`, `flow-hint-schedule-cron` | Schedule intro, the site time zone sentence, cron help |
+| `flow-hint-doc-event-intro`, `flow-hint-doc-event-doctype`, `flow-hint-doc-event-event` | Data trigger help |
+| `flow-hint-step-name`, `flow-hint-trigger-type`, `flow-hint-step-result`, `flow-sidebar-empty-hint` | Sidebar help lines |
+| `flow-settings-name-hint`, `flow-settings-description-hint`, `flow-settings-category-hint` | Settings dialog hints |
+| `flow-run-payload-hint` | Run dialog help under the input box |
+| `flow-run-history-header`, `flow-run-history-body`, `flow-run-history-timezone` | Sticky header, scrolling body and time zone note of the Runs sheet |
+| `flow-run-details-header`, `flow-run-details-body`, `flow-run-timezone-note` | Same for Run details |
