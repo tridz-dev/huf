@@ -9,8 +9,8 @@ import frappe
 TEMPLATES_PACK: list[dict[str, Any]] = [
 	{"name": "order_confirmed", "body": "Hi, your order {{1}} for {{2}} is confirmed. Thank you for shopping with us!", "samples": ["ORD-0001", "INR 999"]},
 	{"name": "order_shipped", "body": "Good news! Your order {{1}} has shipped. Tracking: {{2}}.", "samples": ["ORD-0001", "TRK123456"]},
-	{"name": "payment_reminder", "body": "Your order {{1}} for {{2}} is awaiting payment. Pay here: {{3}}", "samples": ["ORD-0001", "INR 999", "https://pay.example.com/abc"]},
-	{"name": "invoice_ready", "body": "The invoice {{1}} for your order is ready: {{2}}", "samples": ["INV-0001", "https://example.com/invoice/abc"]},
+	{"name": "payment_reminder", "body": "Your order {{1}} for {{2}} is awaiting payment. Pay here: {{3}} Thank you.", "samples": ["ORD-0001", "INR 999", "https://pay.example.com/abc"]},
+	{"name": "invoice_ready", "body": "The invoice {{1}} for your order is ready: {{2}} Thank you.", "samples": ["INV-0001", "https://example.com/invoice/abc"]},
 	{"name": "cart_reminder", "body": "You left items in your cart (order {{1}}, {{2}}). Reply here and we will help you complete it.", "samples": ["ORD-0001", "INR 999"]},
 ]
 
