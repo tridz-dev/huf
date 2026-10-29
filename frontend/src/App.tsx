@@ -107,6 +107,7 @@ const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
 const SolutionsPage = lazy(() => import('./pages/SolutionsPage'));
 const NewSolutionPage = lazy(() => import('./pages/NewSolutionPage'));
 const SolutionDetailPage = lazy(() => import('./pages/SolutionDetailPage'));
+const ChannelsRoutes = lazy(() => import('./components/channels/routes'));
 const WhatsAppManagePage = lazy(() => import('./pages/WhatsAppManagePage'));
 const TelegramManagePage = lazy(() => import('./pages/TelegramManagePage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
@@ -545,6 +546,16 @@ function AppShell() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <ChatOnlyPage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/channels/*"
+            element={
+              <ProtectedRoute requiredCapability="system.integrations.manage">
+                <Suspense fallback={<PageLoader />}>
+                  <ChannelsRoutes />
                 </Suspense>
               </ProtectedRoute>
             }
