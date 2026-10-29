@@ -19,6 +19,7 @@ PRE_ROUTE_HOOKS: list[str] = [
 	"huf.ai.channels.handoff_hooks.handed_off_hook",  # handed-off chats skip the AI: always first
 	"huf.ai.channels.hours.business_hours_hook",
 	"huf.ai.channels.rules.routing_rules_hook",
+	"huf.ai.channels.widgets.ref_opt_in_hook",  # [ref:...] click-to-chat opt-in; records only
 ]
 
 

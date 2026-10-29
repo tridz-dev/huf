@@ -47,3 +47,16 @@ export async function getEcosystemApps(): Promise<EcosystemApps> {
     return all;
   }
 }
+
+const WIDGETS = 'huf.ai.channels.widgets';
+
+export interface ClickToChat { wa_me_url: string; qr_svg: string | null }
+
+export async function getClickToChat(gateway: string, prefill: string, ref: string, phone?: string | null): Promise<ClickToChat> {
+  return unwrap<ClickToChat>(await call.get(`${WIDGETS}.get_click_to_chat`, { gateway, prefill, ref, phone: phone ?? undefined }));
+}
+
+export async function getWidgetSnippet(gateway: string, prefill: string, ref: string, label: string, position: string, phone?: string | null): Promise<string> {
+  const res = unwrap<{ snippet: string }>(await call.get(`${WIDGETS}.get_widget_snippet`, { gateway, prefill, ref, label, position, phone: phone ?? undefined }));
+  return res.snippet;
+}
