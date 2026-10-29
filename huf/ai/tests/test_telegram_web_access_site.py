@@ -80,7 +80,7 @@ class TestTelegramWebAccessSite(IntegrationTestCase):
 		self.assertFalse(cookie["secure"])  # a client-supplied X-Forwarded-Proto is not trusted
 		self.assertEqual(cookie["max_age"], 7200)
 		row = _sessiondata(sid)
-		data = json.loads(row)
+		data = frappe.safe_eval(row)  # Frappe stores str(dict), not JSON
 		self.assertEqual(data["audit_user"], "telegram:4242")
 		end = datetime.fromisoformat(data["session_end"])
 		self.assertIsNotNone(end.tzinfo)
@@ -123,9 +123,9 @@ class TestTelegramWebAccessSite(IntegrationTestCase):
 
 	def test_expired_session_end_rejected_on_resume(self):
 		sid = self._login()
-		session_data = json.loads(_sessiondata(sid))
+		session_data = frappe.safe_eval(_sessiondata(sid))  # Frappe stores str(dict), not JSON
 		session_data["session_end"] = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
-		frappe.db.sql("update tabSessions set sessiondata=%s where sid=%s", (json.dumps(session_data), sid))
+		frappe.db.sql("update tabSessions set sessiondata=%s where sid=%s", (str(session_data), sid))
 		frappe.cache.hset("session", sid, frappe._dict(user=EMAIL, sid=sid, data=frappe._dict(session_data)))
 		frappe.local.request = _request({"Cookie": f"sid={sid}"})
 		frappe.local.cookie_manager = CookieManager()

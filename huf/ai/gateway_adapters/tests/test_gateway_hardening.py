@@ -25,6 +25,10 @@ class TestUniqueRaceIsDuplicate(unittest.TestCase):
 		def fake_get_doc(*args, **kwargs):
 			if args and isinstance(args[0], dict) and args[0].get("doctype") == "Gateway Event":
 				return doc
+			if args and args[0] == "Gateway":
+				# ingest loads the Gateway for the pre-ingest filter hooks before inserting the
+				# event; no real Gateway "GW" exists here, a stand-in with no filters is enough.
+				return MagicMock()
 			return real_get_doc(*args, **kwargs)
 
 		real_get_value = frappe.db.get_value
@@ -140,7 +144,7 @@ class TestWebhookLimits(unittest.TestCase):
 				"_ingest_rate_limited",
 				side_effect=frappe.RateLimitExceededError("slow"),
 			),
-			patch.object(gateway_webhook.frappe, "local", SimpleNamespace(response_headers=headers)),
+			patch.object(gateway_webhook.frappe, "local", SimpleNamespace(response_headers=headers, flags=SimpleNamespace(in_test=True)),
 		):
 			with self.assertRaises(frappe.RateLimitExceededError):
 				gateway_webhook._ingest_rate_gate()

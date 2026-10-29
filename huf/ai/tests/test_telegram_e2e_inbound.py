@@ -400,7 +400,9 @@ class TestNonMessageKindsDoNotRunAgent(unittest.TestCase):
 		):
 			gs._continue_ingest(event, "gw1", "1", ctx, True)
 		rec.assert_called_once()
-		get_doc.assert_not_called()  # no Gateway lookup, consent, rate bucket or Agent run
+		# Only the ingest-hook Gateway lookup happens (hooks need the doc); the second lookup that
+		# feeds consent, the rate bucket and the Agent run must not.
+		get_doc.assert_called_once_with("Gateway", "gw1")
 
 	def test_reaction_removed_also_record_only(self):
 		h = Harness()
@@ -663,7 +665,11 @@ class TestPromptAssembly(unittest.TestCase):
 	def test_channel_note_prepended_and_text_kept(self):
 		_, run, _, _ = self._run(load_fixture("message_text"))
 		prompt = run.call_args.kwargs["prompt"]
-		self.assertTrue(prompt.startswith("[Channel note: Telegram: keep replies short."))
+		# gateways/safety.py (BUILD_PROMPT, all providers) puts its "[Message from ...]" header first;
+		# the channel note follows it, then the user's text.
+		header, rest = prompt.split("\n", 1)
+		self.assertTrue(header.startswith("[Message from "))
+		self.assertTrue(rest.startswith("[Channel note: Telegram: keep replies short."))
 		self.assertTrue(prompt.endswith(load_fixture("message_text")["message"]["text"]))
 
 	def test_conversation_ref_per_chat_and_per_topic(self):

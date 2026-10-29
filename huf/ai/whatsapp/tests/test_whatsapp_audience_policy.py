@@ -153,7 +153,8 @@ class TestBehaviour(_Base):
 			with patch.object(api.frappe, "get_doc") as get_doc, patch.object(api, "_audit"), \
 					patch.object(api, "_view", return_value={}), patch.object(api, "_audience_row"):
 				get_doc.return_value.name = "A"
-				self.assertTrue(api.create_audience(**kw)["success"])
+				out = api.create_audience(**kw)
+				self.assertTrue(out.get("success"), out)
 
 	def test_rate_limits_follow_settings(self):
 		for key, default in (("rate_audience_read", 240), ("rate_audience_write", 60), ("rate_audience_import", 20)):

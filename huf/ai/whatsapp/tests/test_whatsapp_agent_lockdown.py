@@ -226,7 +226,8 @@ class TestGatewayValidation(unittest.TestCase):
 		from huf.huf.doctype.gateway.gateway import Gateway
 
 		gw = Gateway.__new__(Gateway)
-		base = {"provider": "WhatsApp", "is_enabled": 1, "name": "GW-B", "whatsapp_account": "WA-1"}
+		base = {"provider": "WhatsApp", "is_enabled": 1, "name": "GW-B", "whatsapp_account": "WA-1",
+			"whatsapp_business_account_id": "WABA-1"}
 		base.update(fields)
 		gw.__dict__.update(base)
 		gw.get = lambda key, default=None: base.get(key, default)

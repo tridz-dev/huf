@@ -295,10 +295,10 @@ def check_token_for_gateway(
 		return {"success": False, "error_code": "gateway_not_found", "message": "Choose a WhatsApp gateway."}
 	cache = frappe.cache()
 	if not force:
-		cached = cache.get_value(_result_key(gateway_name))
+		cached = cache.get_value(_result_key(gateway_name), expires=True)
 		if cached:
 			return dict(cached, cached=True)
-	if cache.get_value(_stamp_key(gateway_name)):
+	if cache.get_value(_stamp_key(gateway_name), expires=True):
 		return {
 			"success": False,
 			"error_code": "rate_limited",
