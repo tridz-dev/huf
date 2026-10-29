@@ -24,6 +24,7 @@ import { humanizeFlowError, validateFlow } from '@/lib/flow-graph/flowValidation
 import { FlowChecklist } from './flow/frame/FlowChecklist';
 import { setChecklistOpen } from './flow/frame/frameStore';
 import { useFlowIssues } from './flow/frame/useFlowIssues';
+import { useFrozenWhilePressed } from './flow/frame/useFrozenWhilePressed';
 import { reportFlowRun } from '@/lib/flow-run/flowRunToast';
 import { RunFlowDialog } from './flow/RunFlowDialog';
 import { FlowHelpPopover } from './flow/FlowHelpPopover';
@@ -175,6 +176,8 @@ export function FlowsHeaderActions() {
   };
 
   const issues = useFlowIssues();
+  // The status word beside Publish changes with the count: hold it while a button is pressed (see useFrozenWhilePressed).
+  const pillIssues = useFrozenWhilePressed(issues.length);
 
   /**
    * Running and publishing need a finished flow. When it is not, open the list of what is left (each row has a Fix
@@ -356,7 +359,7 @@ export function FlowsHeaderActions() {
       {activeFlow && (
         <span data-testid={isPublished ? 'flow-published-badge' : 'flow-draft-badge'} className="inline-flex">
           <StatusPill
-            kind={flowStatusKind(activeFlow.status, issues.length)}
+            kind={flowStatusKind(activeFlow.status, pillIssues)}
             data-testid="flow-status-pill"
             title={isPublished ? 'Live: the trigger is on' : 'Draft: the trigger is off until you publish'}
           />
