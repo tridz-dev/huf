@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useFlowContext } from '@/contexts/FlowContext';
-import { getFlowIntegrationStatus, runFlow } from '@/services/flowApi';
-import { unconnectedSteps } from '@/lib/flow/flowIntegrations';
+import { runFlow } from '@/services/flowApi';
+import { publishedToast, startSummary } from '@/lib/flow-list/flowPublishSummary';
 import { toast } from '@/lib/toast';
 import { BLOCKED_TOAST_ID, humanizeFlowError, summarizeIssues, validateFlow } from '@/lib/flow-graph/flowValidation';
 import { reportFlowRun } from '@/lib/flow-run/flowRunToast';
@@ -14,6 +14,7 @@ export function useFlowHeaderActions() {
   const { activeFlow, hasUnsavedChanges, saveFlow, setSelectedNode, setFlowPublished } = useFlowContext();
   const [showRunDialog, setShowRunDialog] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [showPublish, setShowPublish] = useState(false);
   const [showUnpublish, setShowUnpublish] = useState(false);
   const [isUnpublishing, setIsUnpublishing] = useState(false);
 
@@ -68,21 +69,22 @@ export function useFlowHeaderActions() {
     }
   };
 
+  /** Check and save, then show what will start the flow and ask before it goes live. */
   const handlePublish = async () => {
     if (!activeFlow || blockedBy('run')) return;
     if (!(await saveIfNeeded('publishing'))) return;
+    setShowPublish(true);
+  };
+
+  const confirmPublish = async () => {
+    if (!activeFlow) return;
     setIsPublishing(true);
     try {
       await setFlowPublished(activeFlow.id, true);
-      toast.success('Flow is live', { description: 'Its trigger is on now: the webhook accepts calls, and schedule or record triggers start runs. Unpublish to turn it off.' });
-      // Non-blocking: publishing works, but these steps will fail until their integration is connected.
-      const missing = unconnectedSteps(activeFlow.nodes, await getFlowIntegrationStatus());
-      if (missing.length > 0) {
-        toast.warning('Some steps are not connected yet', {
-          description: `${missing.map((m) => (m.stepLabel === m.service ? m.stepLabel : `${m.stepLabel} (${m.service})`)).join(', ')} will fail until you connect them.`,
-          id: 'flow-unconnected-warning',
-        });
-      }
+      const trigger = activeFlow.nodes.find((n) => n.data.nodeType === 'trigger')?.data.triggerConfig;
+      const toastText = publishedToast(startSummary(trigger, activeFlow.id, window.location.origin));
+      toast.success(toastText.title, { description: toastText.description });
+      setShowPublish(false);
     } catch (err) {
       toast.error('Could not make the flow live', { description: humanizeFlowError(err) });
     } finally {
@@ -105,7 +107,7 @@ export function useFlowHeaderActions() {
   };
 
   return {
-    showRunDialog, setShowRunDialog, isPublishing, showUnpublish, setShowUnpublish, isUnpublishing,
+    showRunDialog, setShowRunDialog, isPublishing, showPublish, setShowPublish, confirmPublish, showUnpublish, setShowUnpublish, isUnpublishing,
     handleRun, startRun, handleSaveDraft, handlePublish, handleUnpublish,
   };
 }

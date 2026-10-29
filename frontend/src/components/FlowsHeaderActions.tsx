@@ -2,16 +2,6 @@ import { useEffect, useState } from 'react';
 import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle, Settings, CircleOff } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from './ui/alert-dialog';
 import { useFlowContext } from '../contexts/FlowContext';
 import { FlowRunHistory } from './FlowRunHistory';
 import { FlowRunViewer } from './FlowRunViewer';
@@ -19,6 +9,8 @@ import { FlowSettingsModal } from './modals/FlowSettingsModal';
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
 import { validateFlow } from '@/lib/flow-graph/flowValidation';
 import { RunFlowDialog } from './flow/RunFlowDialog';
+import { PublishFlowDialog } from './flow/publish/PublishFlowDialog';
+import { UnpublishFlowDialog } from './flow/publish/UnpublishFlowDialog';
 import { FlowHelpPopover } from './flow/FlowHelpPopover';
 import { DisabledReason } from './flow/DisabledReason';
 import { HeaderOverflowMenu } from './flow/header/HeaderOverflowMenu';
@@ -221,35 +213,27 @@ export function FlowsHeaderActions() {
         />
       )}
 
-      <AlertDialog open={header.showUnpublish} onOpenChange={header.setShowUnpublish}>
-        <AlertDialogContent data-testid="flow-unpublish-dialog">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Unpublish this flow?</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-2">
-                <p className="truncate font-medium text-ink" title={activeFlow?.name} data-testid="flow-unpublish-name">{activeFlow?.name}</p>
-                <p>
-                  The flow goes back to a draft. Its webhook is refused and its schedule and document triggers stop starting
-                  it. Runs already in progress finish. Publish it again whenever you want to turn it back on.
-                </p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              data-testid="flow-unpublish-confirm"
-              disabled={header.isUnpublishing}
-              onClick={(e) => {
-                e.preventDefault();
-                void header.handleUnpublish();
-              }}
-            >
-              {header.isUnpublishing ? 'Unpublishing...' : 'Unpublish'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {activeFlow && (
+        <PublishFlowDialog
+          open={header.showPublish}
+          onOpenChange={header.setShowPublish}
+          flowId={activeFlow.id}
+          flowName={activeFlow.name}
+          trigger={activeFlow.nodes.find((n) => n.data.nodeType === 'trigger')?.data.triggerConfig}
+          steps={activeFlow.nodes}
+          problems={issues.map((i) => ({ title: i.nodeLabel, message: i.message }))}
+          publishing={header.isPublishing}
+          onConfirm={() => void header.confirmPublish()}
+        />
+      )}
+      <UnpublishFlowDialog
+        open={header.showUnpublish}
+        onOpenChange={header.setShowUnpublish}
+        flowName={activeFlow?.name ?? ''}
+        trigger={activeFlow?.nodes.find((n) => n.data.nodeType === 'trigger')?.data.triggerConfig}
+        busy={header.isUnpublishing}
+        onConfirm={() => void header.handleUnpublish()}
+      />
 
       {activeFlow && (
         <FlowRunHistory flowId={activeFlow.id} open={showHistory} onOpenChange={setShowHistory} onSelectRun={setSelectedRunId} />
