@@ -35,7 +35,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_to_date, get_datetime, now_datetime
 
-from huf.ai.flow.code_node_result import DEFAULT_TIMEOUT_S, error_text, output_from_call  # noqa: F401
+from huf.ai.flow.support.code_node_result import DEFAULT_TIMEOUT_S, error_text, output_from_call  # noqa: F401
 
 NODE_TYPE = "code.run"
 EXECUTE_CAPABILITY = "flows.execute_code"

@@ -48,13 +48,19 @@ import re
 import frappe
 from frappe import _
 from frappe.utils import now_datetime
-from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
-from frappe.desk.doctype.notification_settings.notification_settings import is_email_notifications_enabled
 
 from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
+from huf.ai.flow.support.approval_notifications import _clear_flow_notifications, _send_approval_notifications
 from huf.ai.flow.integrations import friendly_tool_error
 from huf.ai.gateways.slack import flow_hooks
 from huf.ai.graph.permissions import envelope_declares
+from huf.ai.flow.support.router_text import (
+	build_router_llm_prompt,
+	choose_option,
+	render_text_refs,
+	resolve_router_model,
+	_router_completion,
+)
 from huf.ai.flow.orchestrator import (
 	build_flow_context_system_message,
 	build_router_prompt,
@@ -1448,116 +1454,6 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		return {"status": "failed", "error": error_text}
 
 
-def build_router_llm_prompt(prompt: str, options: list, context: dict) -> str:
-	"""Prompt asking the model to pick exactly one option label."""
-	labels = [str((o or {}).get("label")) for o in options]
-	return "\n".join(
-		[
-			"You are a routing step in a workflow. Choose exactly one option for the situation below.",
-			"Reply with ONLY the option label, exactly as written, and nothing else.",
-			"",
-			"## Instruction",
-			str(prompt),
-			"",
-			"## Options",
-			*[f"- {label}" for label in labels],
-			"",
-			"## Workflow input",
-			json.dumps(context, default=str)[:4000],
-		]
-	)
-
-
-def choose_option(text: str, options: list) -> dict | None:
-	"""Map the model's reply onto one option (``{"label", "node_id"}``), or None.
-
-	Accepts the bare label, a quoted label, a JSON object with ``label``, or a reply that mentions
-	exactly one label. Ambiguity or no match is None (the caller routes to ``default``).
-	"""
-	if not isinstance(text, str) or not text.strip():
-		return None
-	by_label = {str((o or {}).get("label", "")).strip().lower(): o for o in options if (o or {}).get("node_id")}
-	candidate = text.strip().strip("`\"' \n.")
-	if candidate.startswith("{"):
-		try:
-			parsed = json.loads(text.strip().strip("`"))
-			if isinstance(parsed, dict):
-				candidate = str(parsed.get("label", "")).strip()
-		except ValueError:
-			pass
-	if candidate.lower() in by_label:
-		return by_label[candidate.lower()]
-	lowered = text.lower()
-	hits = [o for label, o in by_label.items() if label and label in lowered]
-	return hits[0] if len(hits) == 1 else None
-
-
-def _run_coroutine(coro):
-	import asyncio
-
-	loop = asyncio.new_event_loop()
-	try:
-		return loop.run_until_complete(coro)
-	finally:
-		loop.close()
-
-
-def resolve_router_model(model_name: str | None = None) -> tuple[str, str]:
-	"""``(provider, model)`` for a router step.
-
-	``model_name`` is the name of an AI Model record: its provider is used. Without one, the first
-	keyed provider's default chat model is used. A named model that is missing, or whose provider has
-	no API key, is an authoring error and raises (the router then routes to its default).
-	"""
-	from huf.ai.app_seeding.hub_orchestrator import (
-		_default_model_for_provider,
-		_find_keyed_provider,
-		_provider_has_key,
-	)
-
-	if model_name:
-		provider = frappe.db.get_value("AI Model", model_name, "provider")
-		if not provider:
-			raise RuntimeError(f"AI model '{model_name}' was not found")
-		if not _provider_has_key(provider):
-			raise RuntimeError(f"AI provider '{provider}' for model '{model_name}' has no API key")
-		return provider, model_name
-
-	provider = _find_keyed_provider()
-	model = _default_model_for_provider(provider) if provider else None
-	if not provider or not model:
-		raise RuntimeError("no AI Provider with an API key and a chat model is configured")
-	return provider, model
-
-
-def _router_completion(prompt_text: str, provider: str, model: str) -> str:
-	"""One direct LLM completion (no agent involved) with the given provider and model."""
-	from huf.ai.providers.litellm import get_simple_completion
-
-	return _run_coroutine(get_simple_completion(model, [{"role": "user", "content": prompt_text}], provider))
-
-
-_TEXT_REF_RE = re.compile(r"(?<!\{)\{([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*|\[\d+\])*)\}(?!\})")
-
-
-def render_text_refs(text: str, ctx: GraphContext) -> str:
-	"""Fill ``{input.field}`` / ``{node_id.field}`` / ``{foreach.item}`` placeholders in a plain-text field.
-
-	Used for ``router.llm.prompt`` and ``human.approval.message`` (the Insert data picker writes these).
-	A placeholder that does not resolve is left as written, so ordinary braces in a message never fail a run.
-	"""
-	from huf.ai.graph.templates import _stringify
-
-	def sub(match: re.Match) -> str:
-		path = match.group(1)
-		if path.split(".")[0].split("[")[0] not in ctx.reference_roots():
-			return match.group(0)
-		value = ctx.resolve_reference(path)
-		return match.group(0) if value is None else _stringify(value)
-
-	return _TEXT_REF_RE.sub(sub, text or "")
-
-
 def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""Execute router.llm node (config: ``prompt``, ``options[{label,node_id}]``, ``default``, ``model``).
 
@@ -2319,158 +2215,6 @@ def _get_outgoing_edges(node_id: str, edges_list: list) -> list[dict]:
 				}
 			)
 	return candidates
-
-
-# ---------------------------------------------------------------------------
-# Approval notifications
-# ---------------------------------------------------------------------------
-
-
-def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_data: dict):
-	"""
-	Send notification to approvers when a flow reaches human.approval node.
-	
-	Supports two notification methods:
-	1. Frappe Notification Log (bell icon in UI)
-	2. Email notification (if email is configured)
-	
-	Args:
-		flow_run: The Flow Run document
-		node: The current node dict
-		config: Node configuration
-		waiting_data: The waiting state data
-	"""
-	approver_type = waiting_data.get("approver_type")
-	approvers = []
-
-	# Same rule as check_approver: no declared approver means System Manager only.
-	if approver_type == "role" and waiting_data.get("approver_role"):
-		approver_role = waiting_data.get("approver_role")
-	elif approver_type == "user" and waiting_data.get("approver_users"):
-		approver_role = None
-	else:
-		approver_type, approver_role = "role", "System Manager"
-
-	if approver_type == "role":
-		if approver_role:
-			# Optimized role lookup: Get all users with this role directly from Has Role table
-			approver_names = frappe.get_all(
-				"Has Role",
-				filters={"role": approver_role, "parenttype": "User"},
-				pluck="parent"
-			)
-			if approver_names:
-				# Filter to ensure we only notify enabled System Users
-				approvers = frappe.get_all(
-					"User",
-					filters={
-						"name": ["in", approver_names],
-						"enabled": 1,
-						"user_type": "System User",
-					},
-					pluck="name"
-				)
-	elif approver_type == "user":
-		approvers = list(waiting_data.get("approver_users") or [])
-	
-	# Ensure unique recipients to avoid duplicate emails
-	if approvers:
-		approvers = list(set(approvers))
-	
-	if not approvers:
-		frappe.log_error(
-			title="Flow Approval Notification",
-			message=f"No approvers found for flow run {flow_run.name}",
-		)
-		return
-	
-	title = "Approval Required"
-	instructions = waiting_data.get("message") or "Please review and approve this flow."
-	
-	flow_run_path = f"/huf/flows/{flow_run.flow_id}?run={flow_run.name}"
-	
-	_host = (frappe.conf.get("host_name") or frappe.utils.get_url()).rstrip("/")
-	flow_run_url = f"{_host}{flow_run_path}"
-
-	
-	# Create notification for each approver
-	for user in approvers:
-		try:
-			# Get user email for notification (enqueue_create_notification expects emails)
-			user_email = frappe.db.get_value("User", user, "email") or user
-			
-			# 1. Create Frappe Notification Log (appears in bell icon)
-			enqueue_create_notification(user_email, {
-				"type": "Assignment",
-				"document_type": "Flow Run",
-				"document_name": flow_run.name,
-				"subject": _("Approval Required: {0}").format(title),
-				"email_content": f"""
-					<p>{instructions}</p>
-					<p><strong>{_("Flow")}:</strong> {flow_run.flow_id}</p>
-					<p><strong>{_("Run ID")}:</strong> {flow_run.name}</p>
-					<p><a href="{flow_run_url}">{_("View Flow Run")}</a></p>
-				""",
-			})
-			
-			if is_email_notifications_enabled(user):
-				user_doc = frappe.get_doc("User", user)
-				if user_doc.email:
-					frappe.sendmail(
-						recipients=[user_doc.email],
-						subject=_("[HUF] Approval Required: {0}").format(title),
-						message=f"""
-							<p>{_("Dear")} {user_doc.full_name or user},</p>
-							<p>{_("A flow is waiting for your approval.")}</p>
-							<hr>
-							<p><strong>{_("Flow")}:</strong> {flow_run.flow_id}</p>
-							<p><strong>{_("Run ID")}:</strong> {flow_run.name}</p>
-							<p><strong>{_("Instructions")}:</strong></p>
-							<p>{instructions}</p>
-							<hr>
-							<p>
-								<a href="{flow_run_url}" 
-								   style="background-color: #171717; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-									{_("Review Approval")}
-								</a>
-							</p>
-							<p style="color: #666; font-size: 12px;">
-								{_("This is an automated message from the HUF Flow Engine.")}
-							</p>
-						""",
-						delayed=True,
-					)
-		except Exception as e:
-			# Log error but don't fail the flow
-			frappe.log_error(
-				title=_("Flow Approval Notification"),
-				message=f"Failed to send approval notification to {user}: {str(e)}",
-			)
-
-
-def _clear_flow_notifications(flow_run):
-	"""
-	Mark all notifications for a specific flow run as read.
-	Called when a human decision is made.
-	"""
-	try:
-		# Standard Frappe approach: find notification log entries for this document
-		# and mark them as read for all users who were notified.
-		frappe.db.set_value(
-			"Notification Log",
-			{
-				"document_type": "Flow Run",
-				"document_name": flow_run.name,
-				"read": 0
-			},
-			"read",
-			1,
-			update_modified=False
-		)
-		commit_if_background()
-	except Exception:
-		# Cleanup is best-effort
-		pass
 
 
 # ---------------------------------------------------------------------------
