@@ -1,5 +1,6 @@
 import type { UIEvent } from 'react';
 import { useEffect, useRef } from 'react';
+import type { Node } from 'reactflow';
 import { MiniMap, useReactFlow, useStore, useStoreApi, getNodesBounds } from 'reactflow';
 import { isInView, panToReveal } from '@/lib/flow/flowLayout';
 
@@ -111,4 +112,13 @@ export function keepCanvasUnscrolled(event: UIEvent<HTMLDivElement>) {
   const el = event.currentTarget;
   if (el.scrollTop !== 0) el.scrollTop = 0;
   if (el.scrollLeft !== 0) el.scrollLeft = 0;
+}
+
+/**
+ * Marks exactly the step the side panel shows as selected. A pending field edit written to the flow just as another step is
+ * clicked re-syncs the canvas from the flow (which carries no selection): the panel then showed the clicked step while the
+ * canvas showed none selected, with no delete button on it and the keyboard focus lost.
+ */
+export function withSelection<T extends Node>(nodes: T[], selectedNodeId: string | null): T[] {
+  return nodes.map((n) => ((n.selected ?? false) === (n.id === selectedNodeId) ? n : { ...n, selected: n.id === selectedNodeId }));
 }
