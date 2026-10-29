@@ -318,17 +318,18 @@ function HowToCall({ method, origin, flowId, secret, sample }: {
   useEffect(() => setBody(sampleText), [sampleText]);
   const usage = webhookUsage(origin, flowId, secret, method, method === 'POST' ? body : undefined);
   return (
-    <div className="rounded-md border border-line" data-testid="flow-webhook-usage" data-open={open}>
-      <button
-        type="button"
-        aria-expanded={open}
-        className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm font-medium"
-        data-testid="flow-webhook-howto-toggle"
-        onClick={() => setOpen((v) => !v)}
-      >
+    // A native <details>, not a button: people who can only view the flow sit inside a disabled form, and reading the reference is still fine for them.
+    <details
+      className="rounded-md border border-line"
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+      data-testid="flow-webhook-usage"
+      data-open={open}
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-sm font-medium" data-testid="flow-webhook-howto-toggle">
         <ChevronRight className={`h-4 w-4 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden />
         How to call this webhook
-      </button>
+      </summary>
       {open && (
         <div className="space-y-3 border-t border-line p-3" data-testid="flow-webhook-howto">
           <p className="text-xs text-muted-foreground">
@@ -359,6 +360,6 @@ function HowToCall({ method, origin, flowId, secret, sample }: {
           </div>
         </div>
       )}
-    </div>
+    </details>
   );
 }

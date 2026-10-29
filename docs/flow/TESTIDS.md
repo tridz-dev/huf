@@ -79,7 +79,7 @@ Dropdown options inside Selects: `flow-option-<name>`; Combobox options: `<field
 
 | Type | Fields |
 |---|---|
-| `trigger.webhook` | `url` (read-only address), `secret` (read-only, masked `****c3e6` until Show; `data-masked`), `method` (options `flow-option-webhook-method-GET|POST`) |
+| `trigger.webhook` | `url` (read-only address), `secret` (read-only, masked `****c3e6` until Show; `data-masked`), `flow-webhook-url-text` (the address as shown, wrapping only at / . ? =), `method` (options `flow-option-webhook-method-GET|POST`) |
 | | buttons `flow-webhook-copy-url`, `flow-webhook-copy-secret`, `flow-webhook-secret-toggle` (Show for 30 s / Hide), `flow-webhook-regenerate` (opens `flow-webhook-regenerate-dialog` with `-cancel` / `-confirm`); note `flow-webhook-secret-new-note`; pill `flow-webhook-live`; panel `flow-webhook-panel` |
 | | data it sends: `flow-webhook-data`, `flow-webhook-fields` / `flow-webhook-field` (plain rows), buttons `flow-webhook-paste-sample`, `flow-webhook-use-last`, `flow-webhook-clear-sample`, JSON area `flow-json-webhook-sample` (`-input`, `-help`, `-copy`, `-format`, `-error`), `flow-webhook-sample-save` / `-cancel`, `flow-webhook-sample-note` |
 | | developer reference (closed until opened): `flow-webhook-usage` (`data-open`), `flow-webhook-howto-toggle`, `flow-webhook-howto`, JSON area `flow-json-webhook-body` (title "Request body (JSON)"), command `flow-webhook-usage-curl` with `flow-webhook-usage-curl-copy`, `flow-webhook-usage-secret-note`, `flow-webhook-responses` |
