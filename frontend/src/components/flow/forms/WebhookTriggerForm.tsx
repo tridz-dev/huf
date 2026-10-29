@@ -7,7 +7,6 @@ import { JsonArea } from '../../common/JsonArea';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { Textarea } from '../../ui/textarea';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -150,22 +149,17 @@ export function WebhookTriggerForm({ nodeId }: { nodeId: string }) {
           <Label htmlFor="webhook-url" size="sm">Web address</Label>
           <StatusPill kind={live ? 'live' : 'draft'} label={live ? 'Live' : 'Not live yet'} data-testid="flow-webhook-live" />
         </div>
-        <div className="mt-1 flex items-start gap-2">
-          <Textarea
-            id="webhook-url"
-            readOnly
-            rows={2}
-            aria-label="Webhook URL"
-            value={url}
-            data-testid={tid(kind, 'url')}
-            onFocus={(e) => e.currentTarget.select()}
-            className="min-h-0 flex-1 resize-none break-all bg-muted/50 font-mono text-xs text-muted-foreground"
-          />
-          <Button type="button" variant="outline" size="sm" data-testid="flow-webhook-copy-url" onClick={() => copy(url, 'Web address')}>
-            <Copy className="mr-1 h-3.5 w-3.5" />
-            Copy
-          </Button>
+        {/* The whole address is shown, wrapping only after a / . ? or = (never inside a word); the field below carries the same text for copying and assistive tech. */}
+        <div className="mt-1 rounded-md border border-input bg-muted/50 px-2.5 py-2 font-mono text-xs text-muted-foreground" data-testid="flow-webhook-url-text">
+          {url.split(/(?<=[/.?=&])/).map((part, i) => (
+            <span key={i}>{i > 0 && <wbr />}{part}</span>
+          ))}
         </div>
+        <Input id="webhook-url" readOnly aria-label="Webhook URL" value={url} data-testid={tid(kind, 'url')} className="pointer-events-none absolute h-px w-px overflow-hidden border-0 p-0 opacity-0" tabIndex={-1} />
+        <Button type="button" variant="outline" size="sm" className="mt-2" data-testid="flow-webhook-copy-url" onClick={() => copy(url, 'Web address')}>
+          <Copy className="mr-1 h-3.5 w-3.5" />
+          Copy web address
+        </Button>
         <FieldHint testId="flow-hint-webhook-url">Give this address to the app that should start the flow.{live ? '' : ' Publish the flow to switch it on.'}</FieldHint>
       </div>
 

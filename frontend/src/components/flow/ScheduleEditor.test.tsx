@@ -23,7 +23,7 @@ describe('ScheduleEditor', () => {
     render(<Harness initial="0 9 * * *" />);
     expect(screen.queryByTestId('flow-field-trigger.schedule-cron')).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.getByTestId('flow-schedule-summary').textContent).toBe('Every day at 09:00 in Asia/Kolkata (UTC+05:30)');
+    expect(screen.getByTestId('flow-schedule-summary').textContent).toBe('Every day at 09:00 in Asia/Kolkata');
     expect(screen.getAllByTestId('flow-schedule-next-run')).toHaveLength(3);
   });
 
