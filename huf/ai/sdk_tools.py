@@ -1038,6 +1038,15 @@ def create_function_tool(
                 )
                 return json.dumps({"error": str(e)})
 
+        _inner_invoke_tool = on_invoke_tool
+
+        async def on_invoke_tool(ctx=None, args_json: str = None) -> str:
+            # Mark agent tool execution so credential-taking tools can refuse plaintext secrets.
+            from huf.ai.secrets import agent_tool_context
+
+            with agent_tool_context():
+                return await _inner_invoke_tool(ctx, args_json)
+
         safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', (name or ""))
         if len(safe_name) > 128:
             safe_name = safe_name[:128]
