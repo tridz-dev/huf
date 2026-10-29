@@ -2903,6 +2903,35 @@ GATEWAY_SETUP_TOOLS = [
 ]
 
 
+# ERPNext channel tools (BE-ADAPT-ERP): bound to the current conversation's customer; orders are draft only.
+ERP_CHANNEL_TOOLS = [
+	{
+		"tool_name": "erp_lookup_customer",
+		"description": "Find the ERPNext customer and contact for a phone number. Defaults to the conversation sender.",
+		"function_path": "huf.ai.channels.tools_erp.lookup_customer",
+		"category": "ERPNext Tools",
+		"parameters": [_p("phone", description="Phone number (optional; defaults to the conversation sender)")],
+	},
+	{
+		"tool_name": "erp_create_order",
+		"description": "Create a DRAFT Sales Order for the conversation's customer (never submitted; staff confirm it).",
+		"function_path": "huf.ai.channels.tools_erp.create_order",
+		"category": "ERPNext Tools",
+		"parameters": [
+			_p("items", type="array", required=True, description="List of {item_code, qty}"),
+			_p("delivery_date", description="Requested delivery date (YYYY-MM-DD)"),
+		],
+	},
+	{
+		"tool_name": "erp_order_status",
+		"description": "Status, delivery and billing of the conversation customer's recent orders, or of one order.",
+		"function_path": "huf.ai.channels.tools_erp.order_status",
+		"category": "ERPNext Tools",
+		"parameters": [_p("order_name", description="Sales Order name (optional)")],
+	},
+]
+
+
 ALL_INTEGRATION_TOOLS = (
 	# Platform capabilities — no external account to connect.
 	RECIPIENT_TOOLS
@@ -2927,6 +2956,7 @@ ALL_INTEGRATION_TOOLS = (
 	+ DESKTOP_LOCAL_MCP_TOOLS
 	+ LAZY_DISCOVERY_TOOLS
 	+ GATEWAY_SETUP_TOOLS
+	+ ERP_CHANNEL_TOOLS
 	# Tools backed by a connectable service. Keys match Integration Service
 	# docnames and the SERVICE_NAME each tool module uses for credentials.
 	+ _with_service(SLACK_TOOLS, "slack")
