@@ -293,7 +293,7 @@ function ExecutionsRunsTab() {
               </div>
             );
           }
-          return <div className="font-body text-[13px] font-medium text-ink">{agent || 'Unknown Agent'}</div>;
+          return <div className="font-body text-[13px] font-medium text-ink">{agent || (row.original.flow_run ? 'Flow step (flow no longer exists)' : 'Unknown Agent')}</div>;
         },
       },
       {
@@ -737,7 +737,7 @@ function ExecutionsFlowRunsTab() {
               }}
             />
           ) : (
-            <EmptyState variant="passive" icon={Activity} title="No flow runs" description="No flow has run yet." />
+            <EmptyState variant="passive" icon={Activity} title="No flow runs" description="No flow has run yet. Runs appear here when a flow is run or its trigger fires." />
           )
         ) : (
           <Table>
