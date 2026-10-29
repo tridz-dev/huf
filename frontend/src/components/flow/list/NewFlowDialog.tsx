@@ -6,10 +6,10 @@ import { DialogScrollBody, DialogScrollContent, DialogScrollHeader } from '@/com
 import { paletteIcon, NODE_ICONS } from '@/components/nodes/nodeIcons';
 import { triggerOptions } from '@/data/triggers';
 import { FLOW_TEMPLATES, TEMPLATE_GROUPS, templateSteps, templateTrigger, type FlowTemplate } from '@/data/flowTemplates';
-import { stepInfo } from '@/lib/flow/flowListSummary';
+import { stepInfo } from '@/lib/flow-list/flowListSummary';
 import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
 import { toast } from '@/lib/toast';
-import { createFlowFromTemplate } from '@/services/flowCardsApi';
+import { createFlowFromTemplate } from '@/services/flow/flowCardsApi';
 import { useFlowContext } from '@/contexts/FlowContext';
 import { cn } from '@/lib/utils';
 

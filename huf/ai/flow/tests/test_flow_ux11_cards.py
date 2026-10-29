@@ -12,7 +12,7 @@ import json
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.flow import flow_cards
+from huf.ai.flow.listing import cards as flow_cards
 from huf.ai.flow import api as flow_api
 
 LIMITS = {

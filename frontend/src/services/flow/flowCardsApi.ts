@@ -53,7 +53,7 @@ export interface FlowCardsQuery {
 /** One page of flows with everything a list card shows. */
 export async function listFlowCards(query: FlowCardsQuery = {}): Promise<{ items: FlowCard[]; total: number }> {
     try {
-        const result = await call.get('huf.ai.flow.flow_cards.list_flow_cards', { ...query });
+        const result = await call.get('huf.ai.flow.listing.cards.list_flow_cards', { ...query });
         return result.message as { items: FlowCard[]; total: number };
     } catch (error) {
         handleFrappeError(error, 'Error fetching flows');
@@ -63,7 +63,7 @@ export async function listFlowCards(query: FlowCardsQuery = {}): Promise<{ items
 /** Categories that flows already use. */
 export async function listFlowCategories(): Promise<string[]> {
     try {
-        const result = await call.get('huf.ai.flow.flow_cards.list_flow_categories');
+        const result = await call.get('huf.ai.flow.listing.cards.list_flow_categories');
         return (result.message as string[]) ?? [];
     } catch {
         return [];
@@ -87,7 +87,7 @@ export interface CreatedFlow {
 /** Copy a flow into a new draft ("<name> (copy)") with a fresh webhook secret. */
 export async function cloneFlow(flowId: string): Promise<CreatedFlow> {
     try {
-        const result = await call.post('huf.ai.flow.clone.clone_flow', { flow_id: flowId });
+        const result = await call.post('huf.ai.flow.listing.clone.clone_flow', { flow_id: flowId });
         return result.message as CreatedFlow;
     } catch (error) {
         handleFrappeError(error, `Error copying flow ${flowId}`);
@@ -102,7 +102,7 @@ export async function createFlowFromTemplate(input: {
     definition: unknown;
 }): Promise<CreatedFlow> {
     try {
-        const result = await call.post('huf.ai.flow.clone.create_flow_from_template', {
+        const result = await call.post('huf.ai.flow.listing.clone.create_flow_from_template', {
             name: input.name,
             description: input.description,
             category: input.category,

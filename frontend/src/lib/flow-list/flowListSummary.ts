@@ -2,7 +2,7 @@ import { actionOptions } from '@/data/actions';
 import { describeCron } from '@/lib/flow-graph/flowSchedule';
 import { actionCardId } from '@/lib/flow/flowLabels';
 import type { StatusKind } from '@/components/common/StatusPill';
-import type { FlowCard, FlowCardLastRun, FlowCardStep, FlowCardTrigger } from '@/services/flowCardsApi';
+import type { FlowCard, FlowCardLastRun, FlowCardStep, FlowCardTrigger } from '@/services/flow/flowCardsApi';
 
 /**
  * Plain words for the Flows list: what starts a flow, what it does in a line, and how the last run went.

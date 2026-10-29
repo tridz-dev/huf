@@ -1,6 +1,6 @@
 import { paletteIcon } from '@/components/nodes/nodeIcons';
-import { stepInfo } from '@/lib/flow/flowListSummary';
-import type { FlowCardStep } from '@/services/flowCardsApi';
+import { stepInfo } from '@/lib/flow-list/flowListSummary';
+import type { FlowCardStep } from '@/services/flow/flowCardsApi';
 import { cn } from '@/lib/utils';
 
 interface FlowStepStripProps {

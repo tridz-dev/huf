@@ -8,7 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { startSummary } from '@/lib/flow/flowPublishSummary';
+import { startSummary } from '@/lib/flow-list/flowPublishSummary';
 import type { TriggerConfig } from '@/types/flow.types';
 
 interface UnpublishFlowDialogProps {

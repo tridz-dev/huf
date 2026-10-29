@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FlowCard } from '@/services/flowCardsApi';
+import type { FlowCard } from '@/services/flow/flowCardsApi';
 import {
   cardDescription, cardStatusKind, generatedSummary, isEngineNotation, lastRunLine, matchesSearch, runStatusKind,
   stepInfo, stepsText, triggerLine,

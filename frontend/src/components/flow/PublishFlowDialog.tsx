@@ -5,7 +5,7 @@ import { DialogScrollBody, DialogScrollContent, DialogScrollFooter, DialogScroll
 import { Button } from '@/components/ui/button';
 import { CopyField } from '@/components/ui/copy-field';
 import { connectPath, integrationForTool, toolLabel, useIntegrationStatus } from '@/lib/flow/flowIntegrations';
-import { startSummary } from '@/lib/flow/flowPublishSummary';
+import { startSummary } from '@/lib/flow-list/flowPublishSummary';
 import type { TriggerConfig } from '@/types/flow.types';
 
 export interface PublishProblem {

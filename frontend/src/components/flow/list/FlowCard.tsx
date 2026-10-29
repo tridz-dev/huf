@@ -16,8 +16,8 @@ import { formatTimeAgo } from '@/utils/time';
 import { cn } from '@/lib/utils';
 import {
   cardDescription, cardStatusKind, lastRunLine, runStatusKind, stepsText, triggerLine,
-} from '@/lib/flow/flowListSummary';
-import type { FlowCard as FlowCardData } from '@/services/flowCardsApi';
+} from '@/lib/flow-list/flowListSummary';
+import type { FlowCard as FlowCardData } from '@/services/flow/flowCardsApi';
 import { FlowStepStrip } from './FlowStepStrip';
 
 /** What the play button is called. "Run" opens the Run dialog today; UX-14 turns it into "Run test". */
@@ -88,7 +88,7 @@ export function FlowCard({ card, canManage, canCreate, onOpen, onRun, onSettings
         {description}
       </p>
 
-      <div className="flex min-h-6 items-center justify-between gap-2">
+      <div className="flex min-h-control-sm items-center justify-between gap-2">
         <FlowStepStrip steps={card.steps} total={card.step_count} data-testid="flow-card-steps" />
         <span className="shrink-0 text-xs text-steel">{stepsText(card.step_count)}</span>
       </div>
@@ -135,7 +135,7 @@ export function FlowCard({ card, canManage, canCreate, onOpen, onRun, onSettings
             <Button
               size="icon"
               variant="ghost"
-              className="ml-auto h-8 w-8"
+              className="ml-auto"
               aria-label={`More actions for ${card.flow_name}`}
               title="More actions"
               data-testid="flow-card-menu"

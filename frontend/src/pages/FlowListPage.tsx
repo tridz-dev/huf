@@ -14,7 +14,7 @@ import { FLOW_GUIDE_URL } from '@/lib/flow/flowHelp';
 import { runFlow } from '../services/flowApi';
 import {
   cloneFlow, listFlowCards, listFlowCategories, type FlowCard as FlowCardData, type FlowListSort,
-} from '../services/flowCardsApi';
+} from '../services/flow/flowCardsApi';
 import { useFlowContext } from '../contexts/FlowContext';
 import { RunFlowDialog } from '../components/flow/RunFlowDialog';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';

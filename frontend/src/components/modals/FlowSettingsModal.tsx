@@ -21,7 +21,7 @@ import { useNavigate } from 'react-router-dom';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { FlowSettingsReadOnly } from './FlowSettingsReadOnly';
 import { getFlowConversionStatus, updateFlowAutoConvert } from '../../services/flowApi';
-import { listFlowCategories } from '../../services/flowCardsApi';
+import { listFlowCategories } from '../../services/flow/flowCardsApi';
 import { DELETE_FLOW_BUTTON, DELETE_FLOW_TITLE, deleteFlowMessage } from '../flow/list/DeleteFlowDialog';
 
 interface FlowSettingsModalProps {

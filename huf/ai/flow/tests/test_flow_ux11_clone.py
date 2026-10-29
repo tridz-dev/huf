@@ -13,7 +13,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.flow import api as flow_api
-from huf.ai.flow import clone
+from huf.ai.flow.listing import clone
 from huf.ai.flow.tests.test_flow_ux11_cards import _graph
 
 SECRET = "ux11-original-secret-0123456789abcdef0123456789"
