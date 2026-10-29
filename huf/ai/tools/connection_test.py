@@ -63,8 +63,8 @@ def _missing_error(service: str, creds: dict) -> "ProviderCredentialError | None
 
 
 def _on_this_screen(label: str, message: str) -> str:
-	"""The provider copy ends with "Reconnect X in Integrations."; on the Integrations screen that is replaced by the next step."""
-	return re.sub(rf"\s*Reconnect {re.escape(label)} in Integrations\.$", " Update them below, then test again.", message)
+	"""The provider copy ends with "Reconnect X in Integrations."; on the Integrations screen that is a button, so the sentence is dropped."""
+	return re.sub(rf"\s*Reconnect {re.escape(label)} in Integrations\.$", "", message)
 
 
 def _resolve_credentials(service: str, setting: str | None, provided: dict) -> dict:
