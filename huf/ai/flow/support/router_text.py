@@ -164,3 +164,13 @@ def text_ref_warnings(defn: dict | None) -> list[str]:
 					"left empty. Insert data from an earlier step instead."
 				)
 	return warnings
+
+
+def text_ref_warnings_for(definition_json) -> list[str]:
+	""":func:`text_ref_warnings` for a definition given as JSON text or a dict; unreadable input has no warnings."""
+	import json
+
+	try:
+		return text_ref_warnings(json.loads(definition_json) if isinstance(definition_json, str) else definition_json)
+	except (ValueError, TypeError):
+		return []

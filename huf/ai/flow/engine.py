@@ -50,8 +50,7 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
-from huf.ai.flow.support.approval_card import flow_name_of
-from huf.ai.flow.support.humanize import approval_headline, approval_lead, facts_sentence, key_facts
+from huf.ai.flow.support.approval_card import waiting_fields
 from huf.ai.flow.support.approval_notifications import _clear_flow_notifications, _send_approval_notifications
 from huf.ai.flow.support.approvers import approval_expired, check_approver
 from huf.ai.flow.integrations import friendly_tool_error
@@ -86,14 +85,9 @@ from huf.ai.graph.executor import (
 	RoutingMode,
 	Router,
 )
-from huf.ai.flow.support.humanize import label_for
 from huf.ai.graph.error_copy import (
-	describe_exception,
-	describe_run_error,
-	plain_error,
-	step_failed_sentence,
-	step_ref,
-	step_title,
+	approval_timeout_message, describe_exception, describe_run_error, no_route_message, plain_error,
+	step_failed_sentence, step_ref, step_title, tool_timeout_message,
 )
 from huf.ai.graph.expressions import evaluate_bool, parse_expression
 from huf.ai.graph.transforms import Limits as TransformLimits
@@ -757,11 +751,7 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 		)
 		run_ctx.save_context()
 		if not next_node:
-			_fail_flow_run(
-				flow_run,
-				f'Nothing is connected after "{_step_title_of(flow_run, current_node)}" for '
-				f'{"Approve" if decision == "approved" else "Reject"}. Connect a next step and run again.',
-			)
+			_fail_flow_run(flow_run, no_route_message(version.graph, current_node, decision))
 		# The claim must be durable before the lock goes, or a second caller could decide again.
 		frappe.db.commit()  # nosemgrep
 		_ensure_claim_durable(flow_run_name)
@@ -777,22 +767,6 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 
 	if next_node:
 		run_flow(flow_run.name)
-
-
-def _waited(ms) -> str:
-	return f"{ms} ms" if ms < 1000 else f"{ms / 1000:g} seconds"
-
-
-def _step_title_of(flow_run, node_id: str | None) -> str:
-	"""The title a person gave a step of this run's pinned flow (its type's name when untitled), never a node id."""
-	try:
-		for node in _pinned_version(flow_run).graph.get("nodes", []):
-			if isinstance(node, dict) and node.get("id") == node_id:
-				title = step_title(node)
-				return "the approval step" if title == "this step" else title
-	except Exception:
-		pass
-	return "the approval step"
 
 
 def _refuse_lost_claim(flow_run_name: str) -> None:
@@ -858,11 +832,7 @@ def expire_approval(flow_run_name: str, now=None, enqueue: bool = False) -> bool
 			return False
 
 		if not timeout_next:
-			_fail_flow_run(
-				flow_run,
-				f'No one answered "{_step_title_of(flow_run, node_id)}" in time, so the run was stopped. '
-				"Ask the approvers to answer sooner, or connect a path for time-outs.",
-			)
+			_fail_flow_run(flow_run, approval_timeout_message(_pinned_version(flow_run).graph, node_id))
 			frappe.db.commit()  # nosemgrep
 			_clear_flow_notifications(flow_run)  # best effort, after the outcome is durable (see approve_flow_run)
 			return True
@@ -1225,7 +1195,6 @@ def render_agent_prompt(config: dict, ctx: GraphContext) -> str:
 	is an authoring error (``TemplateError`` fails the node).
 	"""
 	bindings = ctx.resolve(config.get("prompt_bindings") or {})
-	# The prompt is read by a model, not a person: structured values stay JSON here.
 	return render_template(config.get("prompt") or "", bindings if isinstance(bindings, dict) else {}, objects="json")
 
 
@@ -1419,10 +1388,7 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			try:
 				raw = loop.run_until_complete(coro)
 			except asyncio.TimeoutError:
-				raw = {
-					"success": False,
-					"error": f"This step waited {_waited(config['timeout_ms'])} and got no answer. Try again, or raise the wait time.",
-				}
+				raw = {"success": False, "error": tool_timeout_message(config["timeout_ms"])}
 			finally:
 				loop.close()
 			if not isinstance(raw, dict):
@@ -1573,20 +1539,10 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 
 		timeout_at = (now_datetime() + timedelta(milliseconds=timeout_ms)).isoformat()
 
-	flow_name = flow_name_of(flow_run)
-	message = render_text_refs(config.get("message", ""), ctx)
-	facts = key_facts(ctx.data)
 	waiting_data = {
 		"type": "approval",
 		"node_id": node.get("id"),
-		# What the approver reads: a sentence first (the author's message, else a plain statement), then a few
-		# labelled facts from the data the run started with. The bell, run page, mail and Slack all use these.
-		"message": approval_lead(flow_name, message),
-		"headline": approval_headline(flow_name),
-		"flow_name": flow_name,
-		"step_title": step_title(node),
-		"facts": facts,
-		"context_summary": facts_sentence(facts),
+		**waiting_fields(flow_run, node, render_text_refs(config.get("message", ""), ctx), ctx.data),
 		"approver_type": config.get("approver_type"),
 		"approver_role": config.get("approver_role"),
 		"approver_users": config.get("approver_users") or [],
@@ -2024,7 +1980,7 @@ def _exec_output(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			if isinstance(field_value, list) and len(field_value) > budget.max_rows:
 				return {
 					"status": "failed",
-					"error": f'The result of {step_ref(node)} has {len(field_value)} rows in "{label_for(key)}", but the limit is {budget.max_rows}. Send fewer rows.',
+					"error": f'The result of {step_ref(node)} has {len(field_value)} rows in "{key}", but the limit is {budget.max_rows}. Send fewer rows.',
 				}
 
 	return {"status": "success", "output": value, "result": value}

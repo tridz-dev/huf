@@ -239,14 +239,9 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 		)
 		doc.insert()
 
-	from huf.ai.flow.support.router_text import text_ref_warnings
+	from huf.ai.flow.support.router_text import text_ref_warnings_for
 
-	# Warnings never block a save; they tell the author what will be left empty at run time.
-	try:
-		warnings = text_ref_warnings(json.loads(definition_json))
-	except (ValueError, TypeError):
-		warnings = []
-	return {"flow_id": doc.flow_id, "version": doc.version, "warnings": warnings}
+	return {"flow_id": doc.flow_id, "version": doc.version, "warnings": text_ref_warnings_for(definition_json)}
 
 
 @frappe.whitelist()

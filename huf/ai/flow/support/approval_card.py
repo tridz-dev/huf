@@ -72,3 +72,19 @@ def slack_details(card: dict) -> str:
 	lines = [card["lead"]] + [f"{f['label']}: {f['value']}" for f in card["facts"]]
 	text = "\n".join(lines)
 	return text if len(text) <= MAX_SLACK_DETAILS else text[: MAX_SLACK_DETAILS - 1].rstrip() + "…"
+
+
+def waiting_fields(flow_run, node: dict, rendered_message: str, payload: dict) -> dict:
+	"""What the engine stores on ``waiting`` so every channel can show the same card (message sentence, headline, facts)."""
+	from huf.ai.graph.error_copy import step_title
+
+	name = flow_name_of(flow_run)
+	facts = humanize.key_facts(payload)
+	return {
+		"message": humanize.approval_lead(name, rendered_message),
+		"headline": humanize.approval_headline(name),
+		"flow_name": name,
+		"step_title": step_title(node),
+		"facts": facts,
+		"context_summary": humanize.facts_sentence(facts),
+	}

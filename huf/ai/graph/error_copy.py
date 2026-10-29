@@ -404,3 +404,29 @@ def describe_run_error(message: str | None, titles: dict | None = None) -> str:
 	if _NOT_ADVANCEABLE.match(text):
 		return "This run can no longer continue."
 	return plain_error(text) or "The run did not finish."
+
+
+def waited_text(ms: int) -> str:
+	return f"{ms} ms" if ms < 1000 else f"{ms / 1000:g} seconds"
+
+
+def tool_timeout_message(ms: int) -> str:
+	return f"This step waited {waited_text(ms)} and got no answer. Try again, or raise the wait time."
+
+
+def _title_in(graph: dict | None, node_id: str | None) -> str:
+	title = step_title(_node_of(graph, node_id), node_id)
+	return "the approval step" if title == "this step" else title
+
+
+def no_route_message(graph: dict | None, node_id: str | None, decision: str) -> str:
+	"""Why a run stopped after a decision that has no next step connected."""
+	answer = "Approve" if decision == "approved" else "Reject"
+	return f'Nothing is connected after "{_title_in(graph, node_id)}" for {answer}. Connect a next step and run again.'
+
+
+def approval_timeout_message(graph: dict | None, node_id: str | None) -> str:
+	return (
+		f'No one answered "{_title_in(graph, node_id)}" in time, so the run was stopped. '
+		"Ask the approvers to answer sooner, or connect a path for time-outs."
+	)
