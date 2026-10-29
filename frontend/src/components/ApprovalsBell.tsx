@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
 import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
 import { formatTimeAgo } from '@/utils/time';
+import { decisionMovedRun } from '@/lib/flow-run/flowRunDecision';
 
 const REFRESH_INTERVAL_MS = 60000;
 const FLOW_EVENTS = ['frappe:flow_paused', 'frappe:flow_completed', 'frappe:flow_error'];
@@ -41,24 +42,38 @@ export function ApprovalsBell() {
     };
   }, [fetchApprovals, isAuthenticated]);
 
-  const handleApprove = async (flowRunId: string) => {
-    try {
-      await approveFlowRun(flowRunId);
-      toast.success('Approved. The flow will continue.');
-    } catch (error) {
-      toast.error('Could not approve', { description: humanizeFlowError(error) });
-    }
-    await fetchApprovals();
+  // Runs whose decision is on its way: their buttons stay off until the server has answered and the list is read again.
+  const [deciding, setDeciding] = useState<Set<string>>(new Set());
+  const decidingRef = useRef<Set<string>>(new Set());
+
+  const setBusy = (flowRunId: string, busy: boolean) => {
+    const next = new Set(decidingRef.current);
+    if (busy) next.add(flowRunId); else next.delete(flowRunId);
+    decidingRef.current = next;
+    setDeciding(next);
   };
 
-  const handleReject = async (flowRunId: string) => {
+  // The success toast only follows the server's answer that the run moved on; the list is read again either way.
+  const decide = async (approval: PendingApproval, decision: 'approve' | 'reject') => {
+    const flowRunId = approval.flow_run_id;
+    if (decidingRef.current.has(flowRunId)) return;
+    setBusy(flowRunId, true);
+    const approving = decision === 'approve';
     try {
-      await rejectFlowRun(flowRunId);
-      toast.success('Rejected. The flow will follow its rejected path.');
+      const answer = approving ? await approveFlowRun(flowRunId) : await rejectFlowRun(flowRunId);
+      if (decisionMovedRun(answer, approval.current_node_id)) {
+        toast.success(approving ? 'Approved. The flow will continue.' : 'Rejected. The flow will follow its rejected path.');
+      } else {
+        toast.error(approving ? 'Could not approve' : 'Could not reject', {
+          description: 'The run did not move on, so nothing was recorded. Please try again.',
+        });
+      }
     } catch (error) {
-      toast.error('Could not reject', { description: humanizeFlowError(error) });
+      toast.error(approving ? 'Could not approve' : 'Could not reject', { description: humanizeFlowError(error) });
+    } finally {
+      await fetchApprovals();
+      setBusy(flowRunId, false);
     }
-    await fetchApprovals();
   };
 
   const count = approvals.length;
@@ -107,10 +122,10 @@ export function ApprovalsBell() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" data-testid={`flow-approve-${approval.flow_run_id}`} onClick={() => handleApprove(approval.flow_run_id)}>
+                  <Button size="sm" variant="outline" disabled={deciding.has(approval.flow_run_id)} data-testid={`flow-approve-${approval.flow_run_id}`} onClick={() => decide(approval, 'approve')}>
                     Approve
                   </Button>
-                  <Button size="sm" variant="outline" data-testid={`flow-reject-${approval.flow_run_id}`} onClick={() => handleReject(approval.flow_run_id)}>
+                  <Button size="sm" variant="outline" disabled={deciding.has(approval.flow_run_id)} data-testid={`flow-reject-${approval.flow_run_id}`} onClick={() => decide(approval, 'reject')}>
                     Reject
                   </Button>
                   <Button size="sm" variant="ghost" asChild>
