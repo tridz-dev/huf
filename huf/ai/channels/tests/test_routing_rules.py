@@ -17,6 +17,15 @@ class TestRoutingRules(IntegrationTestCase):
 		self.doc = frappe._dict(
 			routing_rules=[], handoff_message="A human will help", handoff_target="helpdesk"
 		)
+		for agent_name in ("AgentX", "High", "Low", "Off", "Fb"):
+			frappe.get_doc(
+				{
+					"doctype": "Agent",
+					"agent_name": agent_name,
+					"agent_modality": "Text",
+					"instructions": "Routing test agent.",
+				}
+			).insert(ignore_permissions=True)
 
 	def _rule(self, **kw):
 		base = {"rule_type": "keyword", "target_type": "agent", "target": "AgentX", "priority": 10, "enabled": 1}
