@@ -137,3 +137,40 @@ class TestListFlowCards(IntegrationTestCase):
 		self.assertEqual(item["last_run"]["failed_step"], "Big?")
 		other = next(i for i in flow_cards.list_flow_cards(search=self.tag)["items"] if i["flow_id"] != flow_id)
 		self.assertIsNone(other["last_run"])
+
+
+class TestCardsForReadOnlyPeople(IntegrationTestCase):
+	"""A person who may only read flows (Huf Viewer, Huf User) still gets the list, without any webhook secret."""
+
+	def setUp(self):
+		frappe.set_user("Administrator")
+		self.flow_id = f"_test-ux11v-{frappe.generate_hash(length=8)}"
+		flow_api.save_flow_definition(self.flow_id, _graph())
+		frappe.db.commit()
+		self.users = []
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		frappe.delete_doc("Flow Definition", self.flow_id, ignore_permissions=True, force=True)
+		for email in self.users:
+			if frappe.db.exists("User", email):
+				frappe.delete_doc("User", email, ignore_permissions=True, force=True)
+		frappe.db.commit()
+
+	def _user(self, role):
+		email = f"ux11v-{frappe.generate_hash(length=6)}@example.com"
+		user = frappe.get_doc({"doctype": "User", "email": email, "first_name": "Ux11", "send_welcome_email": 0, "roles": [{"role": role}]})
+		user.flags.ignore_permissions = True
+		user.insert()
+		self.users.append(email)
+		return email
+
+	def test_viewers_and_users_get_cards_without_the_secret(self):
+		for role in ("Huf Viewer", "Huf User"):
+			frappe.set_user(self._user(role))
+			result = flow_cards.list_flow_cards(search=self.flow_id[:12], limit=5)
+			item = next(i for i in result["items"] if i["flow_id"] == self.flow_id)
+			self.assertEqual(item["trigger"]["type"], "webhook", role)
+			self.assertEqual(item["step_count"], 3, role)
+			self.assertNotIn("s" * 40, json.dumps(result), role)
+			self.assertEqual(flow_cards.list_flow_categories.__name__, "list_flow_categories")
