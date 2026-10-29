@@ -67,7 +67,7 @@ export function WidgetsPanel({ gw, health }: PanelProps) {
           {link && <CopyField label="wa.me link" value={link.wa_me_url} />}
           {qrSvg && (
             <div className="space-y-2">
-              <div className="w-40 rounded-md border bg-card p-2 text-card-foreground [&>svg]:h-auto [&>svg]:w-full" aria-label="QR code" dangerouslySetInnerHTML={{ __html: qrSvg }} />
+              <div className="w-40 rounded-md border bg-white p-2 text-black [&>svg]:h-auto [&>svg]:w-full" aria-label="QR code" dangerouslySetInnerHTML={{ __html: qrSvg }} />
               <Button variant="outline" size="sm" onClick={downloadQr}><Download className="h-4 w-4" />Download SVG</Button>
             </div>
           )}
