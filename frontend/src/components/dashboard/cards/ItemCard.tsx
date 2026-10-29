@@ -82,7 +82,7 @@ export function ItemCard({
       ) : null}
       <div className="flex flex-col flex-1">
         <CardHeader className="pb-3">
-          <CardTitle className="line-clamp-1 flex items-center gap-2 text-body-text font-semibold">
+          <CardTitle className="line-clamp-1 min-w-0 flex items-center gap-2 text-body-text font-semibold">
             {avatarColor && (
               <span
                 className="w-3 h-3 rounded-sm shrink-0 border border-border"

@@ -505,7 +505,7 @@ class TestExecForeach(unittest.TestCase):
 		_ctx(flow_run, items=[1, 2, 3])
 		_drive(self._defn(max_iterations=2), flow_run)
 		self.assertEqual(flow_run.status, "Failed")
-		self.assertIn("max_iterations", flow_run.last_error)
+		self.assertIn("more than its limit of 2", flow_run.last_error)
 
 	def test_non_list_items_fails(self):
 		flow_run = FakeFlowRun(current_node_id="loop", max_hops=10)
