@@ -144,7 +144,7 @@ class TestWebhookLimits(unittest.TestCase):
 				"_ingest_rate_limited",
 				side_effect=frappe.RateLimitExceededError("slow"),
 			),
-			patch.object(gateway_webhook.frappe, "local", SimpleNamespace(response_headers=headers, flags=SimpleNamespace(in_test=True)),
+			patch.object(gateway_webhook.frappe, "local", SimpleNamespace(response_headers=headers)),
 		):
 			with self.assertRaises(frappe.RateLimitExceededError):
 				gateway_webhook._ingest_rate_gate()
@@ -254,7 +254,11 @@ class TestPairingFixes(unittest.TestCase):
 		with (
 			patch.object(gateway_service.frappe, "form_dict", {}),
 			patch.object(gateway_service.frappe, "session", SimpleNamespace(user="a@x.com")),
-			patch.object(gateway_service.frappe, "local", SimpleNamespace(response_headers=headers)),
+			patch.object(
+				gateway_service.frappe,
+				"local",
+				SimpleNamespace(response_headers=headers, flags=SimpleNamespace(in_test=True)),
+			),
 			patch.object(
 				gateway_service, "_approve_rate_limited", side_effect=frappe.RateLimitExceededError("x")
 			),
