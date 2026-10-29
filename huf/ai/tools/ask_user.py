@@ -15,7 +15,10 @@ from frappe import _
 
 from huf.ai.tools.builder import _as_bool
 
-ASK_USER_KINDS = ("yes_no", "single_choice", "multi_choice", "input", "textarea")
+ASK_USER_KINDS = ("yes_no", "single_choice", "multi_choice", "input", "textarea", "secret")
+
+# Form-only kind: masked fields whose values are stashed server-side, never sent to chat.
+_SECRET_KIND = "secret"
 
 # Kinds that require a non-empty options list.
 _CHOICE_KINDS = ("single_choice", "multi_choice")
@@ -90,6 +93,7 @@ def _clean_options(raw_options):
 
 MAX_QUESTIONS = 10
 MAX_OPTIONS = 12
+MAX_SECRET_FIELDS = 10
 # Upper bound for any single free-text field (question text, option label, title, ...).
 MAX_TEXT_LENGTH = 500
 
@@ -178,7 +182,27 @@ ASK_USER_PARAMS_SCHEMA = {
 					"kind": {
 						"type": "string",
 						"enum": list(ASK_USER_KINDS),
-						"description": "Optional; inferred from options/allow_multiple when omitted",
+						"description": "Optional; inferred from options/allow_multiple when omitted. "
+						"'secret' collects masked credentials via 'fields'.",
+					},
+					"fields": {
+						"type": "array",
+						"minItems": 1,
+						"maxItems": MAX_SECRET_FIELDS,
+						"description": "Only for kind 'secret': the masked inputs. Values are stored "
+						"server-side and never enter the chat.",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {"type": "string", "description": "Unique field id, e.g. 'access_token'"},
+								"label": {"type": "string", "description": "Label shown above the input"},
+							},
+							"required": ["id", "label"],
+						},
+					},
+					"purpose": {
+						"type": "string",
+						"description": "Only for kind 'secret': why the secret is needed; defaults to the question text",
 					},
 				},
 				"required": ["id", "text"],
@@ -262,6 +286,44 @@ def _normalize_question_options(raw_options, index: int):
 	return options, invalid_icons
 
 
+def _normalize_secret_fields(raw_fields, index: int) -> list[dict]:
+	"""Validate ``fields`` of a secret question: non-empty, unique ids, non-empty labels."""
+	fields = _parse_json_list(raw_fields, f"questions[{index}].fields")
+	if not fields:
+		_usage_error(_("questions[{0}] with kind 'secret' needs at least one field.").format(index))
+	if len(fields) > MAX_SECRET_FIELDS:
+		_usage_error(_("questions[{0}] has more than {1} secret fields.").format(index, MAX_SECRET_FIELDS))
+	cleaned, seen = [], set()
+	for pos, raw in enumerate(fields):
+		if not isinstance(raw, dict):
+			_usage_error(_("questions[{0}].fields[{1}] must be an object with id and label.").format(index, pos))
+		field_id = _safe_id(raw.get("id") or "")
+		if not field_id:
+			_usage_error(_("questions[{0}].fields[{1}] needs a non-empty id.").format(index, pos))
+		if field_id in seen:
+			_usage_error(_("questions[{0}].fields has duplicate id '{1}'.").format(index, field_id))
+		seen.add(field_id)
+		label = _cap_text(str(raw.get("label") or "").strip())
+		if not label:
+			_usage_error(_("questions[{0}].fields[{1}] needs a non-empty label.").format(index, pos))
+		cleaned.append({"id": field_id, "label": label, "secret": True})
+	return cleaned
+
+
+def _normalize_secret_question(raw: dict, qid: str, text: str, index: int) -> dict:
+	"""A ``kind: "secret"`` question: masked fields only, no options, no free text."""
+	return {
+		"id": qid,
+		"text": text,
+		"kind": _SECRET_KIND,
+		"options": [],
+		"allow_multiple": False,
+		"allow_free_text": False,
+		"fields": _normalize_secret_fields(raw.get("fields"), index),
+		"purpose": _cap_text(str(raw.get("purpose") or "").strip() or text),
+	}
+
+
 def normalize_questions(questions) -> tuple[list[dict], list[str]]:
 	"""Validate the ``questions`` array into the canonical question shape.
 
@@ -288,6 +350,10 @@ def normalize_questions(questions) -> tuple[list[dict], list[str]]:
 		while qid in seen:
 			qid = f"{qid}_{index + 1}"
 		seen.add(qid)
+
+		if raw.get("kind") == _SECRET_KIND:
+			cleaned.append(_normalize_secret_question(raw, qid, text, index))
+			continue
 
 		options, bad_icons = _normalize_question_options(
 			_parse_json_list(raw.get("options"), f"questions[{index}].options"), index
@@ -319,6 +385,13 @@ def normalize_questions(questions) -> tuple[list[dict], list[str]]:
 			question["placeholder"] = _cap_text(raw["placeholder"])
 		cleaned.append(question)
 	return cleaned, invalid_icons
+
+
+def _secret_block_extras(question: dict) -> dict:
+	"""Fields and purpose travel in the block only for secret questions."""
+	if question["kind"] != _SECRET_KIND:
+		return {}
+	return {"fields": question["fields"], "purpose": question["purpose"]}
 
 
 def ask_user(
@@ -365,6 +438,7 @@ def ask_user(
 				"kind": q["kind"],
 				"options": q["options"],
 				"allow_free_text": q["allow_free_text"],
+				**_secret_block_extras(q),
 			},
 			ensure_ascii=False,
 		)
@@ -411,6 +485,8 @@ def _legacy_single(question, kind, options, allow_free_text, suggested_answers, 
 	if not question:
 		_usage_error(_("'question' is required."))
 
+	if kind == _SECRET_KIND:
+		_usage_error(_("kind 'secret' needs the questions form with a 'fields' list."))
 	if kind not in ASK_USER_KINDS:
 		_usage_error(_("'kind' must be one of: {0}.").format(", ".join(ASK_USER_KINDS)))
 
