@@ -44,8 +44,9 @@ export function IntegrationCard({ setting, onOpen, onUseInAgent }: IntegrationCa
             {title}
           </h3>
           <p className="truncate text-sm text-steel">
-            {identity.title}
-            {setting.is_default ? ' · Default' : ''}
+            {[title === identity.title ? `Edited ${formatTimeAgo(setting.modified).toLowerCase()}` : identity.title, setting.is_default ? 'Used by default' : '']
+              .filter(Boolean)
+              .join(' · ')}
           </p>
         </div>
         <IntegrationStatusPill health={health} className="shrink-0" />

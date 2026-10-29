@@ -29,7 +29,7 @@ import {
   updateIntegrationSetting,
 } from '@/services/integrationApi';
 import { getServiceIdentity } from '@/data/serviceIdentity';
-import { deriveStatus, integrationHealth, integrationTitle, isTestable } from '@/lib/integrations/health';
+import { deriveStatus, integrationHealth, integrationTitle, isTestable, plainProblem } from '@/lib/integrations/health';
 import {
   buildCredentialsPayload,
   parseRequiredCredentials,
@@ -323,7 +323,8 @@ export function IntegrationSettingsDetailsPage({
 
   const savedDoc = {
     service: displayService,
-    is_active: (watchIsActive ? 1 : 0) as 0 | 1,
+    // An inactive connection that was tested still shows what the test said; "Switched off" is in the subtitle.
+    is_active: (watchIsActive || docMeta.testStatus ? 1 : 0) as 0 | 1,
     last_error: docMeta.lastError,
     last_test_status: docMeta.testStatus,
     last_test_message: docMeta.testMessage,
@@ -360,7 +361,7 @@ export function IntegrationSettingsDetailsPage({
         testing={testing}
         fixLabel={fixLabel}
         onFix={openCredentials}
-        lastProblem={docMeta.lastError}
+        lastProblem={plainProblem(docMeta.lastError) || undefined}
         onDismissProblem={dismissProblem}
       />
     ) : null;
@@ -370,7 +371,7 @@ export function IntegrationSettingsDetailsPage({
       <div className="p-6 space-y-6 max-w-6xl mx-auto">
         <IntegrationHeader
           title={pageTitle}
-          subtitle={isNew ? undefined : `${serviceTitle}${watchIsDefault ? ' · Used by default' : ''}`}
+          subtitle={isNew ? undefined : [pageTitle.startsWith(serviceTitle) ? '' : serviceTitle, watchIsActive ? '' : 'Switched off', watchIsDefault ? 'Used by default' : ''].filter(Boolean).join(' · ') || undefined}
           isNew={isNew}
           showSaveButton={showSaveButton}
           saving={saving}
