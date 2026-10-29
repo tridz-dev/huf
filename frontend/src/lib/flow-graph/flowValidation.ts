@@ -114,7 +114,7 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
     if (kind === 'trigger.unset') add('type', 'Choose how this flow starts.');
     if (kind === 'trigger.webhook') {
       if (c.method !== 'GET' && c.method !== 'POST') add('method', 'Choose GET or POST.');
-      const p = secretProblem(c.secret);
+      const p = c.secret_hidden === true ? null : secretProblem(c.secret); // hidden = set, the viewer just cannot see it
       if (p) add('secret', p);
     }
     if (kind === 'trigger.schedule') {

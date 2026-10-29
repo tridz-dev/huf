@@ -92,9 +92,11 @@
    "label": "Flow Definition"
   },
   {
+   "description": "Holds the webhook secret, so only people who may change flows can read it here; everyone else gets it from get_flow_definition with the secret hidden.",
    "fieldname": "definition_json",
    "fieldtype": "JSON",
    "label": "Definition JSON",
+   "permlevel": 1,
    "reqd": 1
   },
   {
@@ -182,6 +184,18 @@
    "report": 1,
    "role": "System Manager",
    "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "System Manager",
+   "permlevel": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Huf Manager",
+   "permlevel": 1,
    "write": 1
   },
   {

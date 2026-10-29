@@ -224,7 +224,7 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
         <h3 className="text-sm font-medium">No gateway configured yet</h3>
         <p className="text-sm text-muted-foreground">
           This channel isn&apos;t connected to a gateway yet, so it can&apos;t receive incoming
-          messages. Use Connect agent above to pick the agent that answers it, and a gateway is
+          messages. Press Use in agent above to pick the agent that answers it, and a gateway is
           created for you.
         </p>
       </div>

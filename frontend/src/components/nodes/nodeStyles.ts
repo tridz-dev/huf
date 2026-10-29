@@ -1,6 +1,7 @@
 import type { FlowNodeData } from '../../types/flow.types';
 
-export const NODE_CARD_BASE = 'w-[236px] p-4 transition-colors duration-200 bg-panel border-line';
+/** Every card is the same size, whatever its state: nothing reflows when a step becomes valid or fails. */
+export const NODE_CARD_BASE = 'relative flex h-[100px] w-[236px] flex-col justify-center p-3 transition-colors duration-200 bg-panel border-line';
 export const NODE_HANDLE = 'w-3.5 h-3.5 !bg-ink border-2 border-panel';
 export const NODE_ICON_WELL = 'w-7 h-7 rounded-lg bg-paper-deep flex items-center justify-center';
 
