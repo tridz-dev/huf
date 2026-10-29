@@ -1,5 +1,5 @@
 import { Toaster as Sonner } from "sonner"
-import { useIsMobile } from "@/hooks/use-mobile"
+import { useViewport } from "@/lib/ui/responsive"
 
 type ToasterProps = React.ComponentProps<typeof Sonner>
 
@@ -8,7 +8,7 @@ type ToasterProps = React.ComponentProps<typeof Sonner>
  * On a phone they move to the top: the bottom edge belongs to the sticky Approve / Reject bar and the sheets.
  */
 const Toaster = ({ ...props }: ToasterProps) => {
-  const isPhone = useIsMobile()
+  const { isPhone } = useViewport()
   return (
     <Sonner
       className="toaster group"

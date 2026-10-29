@@ -3,6 +3,8 @@ import { useUser } from '@/contexts/UserContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { UnifiedLayout } from '@/layouts/UnifiedLayout';
 import { hasPageAccess, type PageCapability } from '@/lib/permissions/pageAccess';
+
+export { PAGE_ACCESS, PAGE_ACCESS_ANY } from '@/lib/permissions/pageAccess';
 import { AuthenticatingPage } from './AuthenticatingPage';
 import { NoAccessPanel } from './common/NoAccessPanel';
 

@@ -3,8 +3,7 @@ import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useLocati
 import { AnimatePresence, motion } from 'motion/react';
 import { UserProvider } from './contexts/UserContext';
 import { PermissionsProvider, usePermissions } from './contexts/PermissionsContext';
-import { ProtectedRoute } from './components/ProtectedRoute';
-import { PAGE_ACCESS, PAGE_ACCESS_ANY } from './lib/permissions/pageAccess';
+import { ProtectedRoute, PAGE_ACCESS, PAGE_ACCESS_ANY } from './components/ProtectedRoute';
 import { AuthenticatingPage } from './components/AuthenticatingPage';
 import { FlowProvider } from './contexts/FlowContext';
 import { ModalProvider } from './contexts/ModalContext';

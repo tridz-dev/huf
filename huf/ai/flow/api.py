@@ -19,6 +19,7 @@ from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.api_support import require_permission
 from huf.ai.flow.support.approval_card import build_card
+from huf.ai.flow.support.decision_rights import approval_decision_rights
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
 from huf.ai.flow.support.redact import definition_for_user
 
@@ -93,18 +94,6 @@ def _is_stale(status: str | None, modified) -> bool:
 
 def _can_mark_failed() -> bool:
 	return "System Manager" in frappe.get_roles(frappe.session.user)
-
-
-def _approval_decision_rights(status: str | None, waiting: dict) -> tuple[bool, str | None]:
-	"""(may the signed-in user approve or reject this run, why not). Same fail-closed check the decision itself runs, so the
-	Approve / Reject buttons are only offered to people the server will let through."""
-	if status != "Waiting Approval":
-		return False, None
-	from huf.ai.flow import engine
-
-	user = frappe.session.user
-	reason = engine.check_approver(waiting, user, set(frappe.get_roles(user)))
-	return reason is None, reason
 
 
 # Step title shown when a saved step has no title of its own (flows written outside the editor).
@@ -404,7 +393,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 		pass
 
 	stale = _is_stale(doc.status, doc.modified)
-	can_decide, cannot_decide_reason = _approval_decision_rights(doc.status, waiting)
+	can_decide, cannot_decide_reason = approval_decision_rights(doc.status, waiting)
 	return {
 		"flow_run_id": doc.name,
 		"flow_id": doc.flow_id,
@@ -1156,14 +1145,9 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 @frappe.whitelist()
 def get_pending_approvals(limit: int = 50) -> list:
 	"""
-	Get list of flow runs waiting for approval that the current user can approve.
-	
-	This endpoint is used by the Approval Inbox feature to show users
-	all pending approvals that require their attention.
-	
+	Get list of flow runs waiting for approval that the current user can approve (used by the Approval Inbox).
 	Args:
 	    limit: Maximum number of results (default 50)
-	
 	Returns:
 	    list of pending approval items with flow details
 	"""

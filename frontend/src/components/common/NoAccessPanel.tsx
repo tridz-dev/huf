@@ -31,11 +31,11 @@ export function NoAccessPanel({ pageName }: { pageName?: string }) {
         {canUseAnything && (
           <div className="flex flex-wrap items-center justify-center gap-2">
             {canUseFlows && (
-              <Button asChild variant="outline" className="max-[1023px]:h-11">
+              <Button asChild variant="outline" className="max-[1023px]:min-h-11">
                 <Link to="/flows" data-testid="no-access-go-flows">Go to Flows</Link>
               </Button>
             )}
-            <Button asChild variant="outline" className="max-[1023px]:h-11">
+            <Button asChild variant="outline" className="max-[1023px]:min-h-11">
               <Link to="/" data-testid="no-access-go-hub">Back to the Hub</Link>
             </Button>
           </div>

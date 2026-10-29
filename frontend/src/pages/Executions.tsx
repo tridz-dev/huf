@@ -5,7 +5,7 @@ import { FilterBar, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
 import { StatusDot, type StatusDotVariant } from '@/components/dashboard/ledger/LedgerSection';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { usePermissions } from '@/contexts/PermissionsContext';
+import { useExecutionsAccess } from '@/hooks/permissions/useExecutionsAccess';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import type { AgentRunDoc } from '@/services/agentRunApi';
 import { formatTimeAgo, calculateDuration } from '@/utils/time';
@@ -59,8 +59,7 @@ function getRunStatusDot(status?: string): { variant: StatusDotVariant; label: s
 
 /** The "Runs" tab — this is the original Executions page body, unchanged. */
 function ExecutionsRunsTab() {
-  const { hasCapability: runsHasCapability } = usePermissions();
-  const canSeeAnalytics = runsHasCapability('agent.view_all');
+  const { canSeeAnalytics } = useExecutionsAccess(); // analytics are only for people who see all agents
   useSiteTimezone();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -420,7 +419,6 @@ function ExecutionsRunsTab() {
         live in the same frame instead of two separately-bordered blocks.
       */}
       <div className="w-full rounded-lg border border-line bg-panel overflow-hidden">
-        {/* Figures come from analytics, which only people who see all agents may ask for: never ask on someone else's behalf. */}
         {canSeeAnalytics && <ExecutionAnalyticsDashboard fromDate={analyticsFromDate} granularity={analyticsGranularity} listedRunCount={initialLoading ? undefined : total} />}
         <div className="border-t border-line">
           {initialLoading ? (
@@ -524,18 +522,11 @@ function ExecutionsRunsTab() {
  */
 export default function Executions() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { hasCapability } = usePermissions();
-  const canSeeAnalytics = hasCapability('agent.view_all');
-  const canSeeFlowRuns = hasCapability('flows.use');
+  const { canSeeAnalytics, canSeeFlowRuns, allows } = useExecutionsAccess();
 
   const tabFromUrl = searchParams.get('tab');
-  const requestedTab: ExecutionsTab =
-    tabFromUrl && (EXECUTIONS_TABS as readonly string[]).includes(tabFromUrl)
-      ? (tabFromUrl as ExecutionsTab)
-      : DEFAULT_TAB;
-  // A tab this role cannot read falls back to the run list.
-  const activeTab: ExecutionsTab =
-    (requestedTab === 'analytics' && !canSeeAnalytics) || (requestedTab === 'flow-runs' && !canSeeFlowRuns) ? DEFAULT_TAB : requestedTab;
+  const requestedTab = tabFromUrl && (EXECUTIONS_TABS as readonly string[]).includes(tabFromUrl) ? (tabFromUrl as ExecutionsTab) : DEFAULT_TAB;
+  const activeTab: ExecutionsTab = allows(requestedTab) ? requestedTab : DEFAULT_TAB; // a tab this role cannot read falls back to the runs
 
   const handleTabChange = (value: string) => {
     setSearchParams(
@@ -562,16 +553,8 @@ export default function Executions() {
       <TabsContent value="runs" className="flex-1 min-h-0">
         <ExecutionsRunsTab />
       </TabsContent>
-      {canSeeFlowRuns && (
-        <TabsContent value="flow-runs" className="flex-1 min-h-0">
-          <ExecutionsFlowRunsTab />
-        </TabsContent>
-      )}
-      {canSeeAnalytics && (
-        <TabsContent value="analytics" className="flex-1 min-h-0">
-          <AnalyticsPage />
-        </TabsContent>
-      )}
+      {canSeeFlowRuns && <TabsContent value="flow-runs" className="flex-1 min-h-0"><ExecutionsFlowRunsTab /></TabsContent>}
+      {canSeeAnalytics && <TabsContent value="analytics" className="flex-1 min-h-0"><AnalyticsPage /></TabsContent>}
     </Tabs>
   );
 }
