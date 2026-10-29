@@ -8,9 +8,9 @@ import {
 describe('filters and URL', () => {
   it('round-trips filters and keeps unrelated params', () => {
     const filters = { ...EMPTY_FILTERS, q: 'order', direction: 'out' as const, status: 'failed', from: '2026-01-01' };
-    const params = filtersToParams(filters, new URLSearchParams('gateway=GW&tab=messages'));
+    const params = filtersToParams(filters, new URLSearchParams('gateway=GW&view=1'));
     expect(params.get('gateway')).toBe('GW');
-    expect(params.get('tab')).toBe('messages');
+    expect(params.get('view')).toBe('1');
     expect(filtersFromParams(params)).toEqual(filters);
   });
   it('drops empty values and ignores a bad direction', () => {

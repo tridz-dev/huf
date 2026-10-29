@@ -328,6 +328,11 @@ export default function GatewaysPage() {
   async function handleCreateGateway(event: FormEvent) {
     event.preventDefault();
     if (!gatewayName.trim()) return;
+    // WhatsApp numbers are connected through the Channels setup flow, not a bare gateway draft.
+    if (provider === 'WhatsApp') {
+      navigate('/channels/whatsapp/setup');
+      return;
+    }
     setCreating(true);
     setError('');
     try {
@@ -672,7 +677,7 @@ export default function GatewaysPage() {
                       {
                         icon: MessageSquare,
                         label: 'Manage WhatsApp',
-                        onClick: () => navigate(`/whatsapp?gateway=${encodeURIComponent(gateway.name)}`),
+                        onClick: () => navigate(`/channels/whatsapp/n/${encodeURIComponent(gateway.name)}/home`),
                       },
                     ]
                   : []),
@@ -855,7 +860,7 @@ export default function GatewaysPage() {
                         onValueChange={(v) =>
                           setEditingGateway({
                             ...editingGateway,
-                            default_target_type: (v === '__none' ? '' : v) as any,
+                            default_target_type: (v === '__none' ? '' : v) as GatewayDoc['default_target_type'],
                           })
                         }
                       >

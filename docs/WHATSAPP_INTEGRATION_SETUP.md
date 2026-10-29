@@ -110,7 +110,7 @@ Open Manage WhatsApp and pick a gateway at the top right. The page has four tabs
 - **Access**: people waiting for approval, approved people and revoked people.
 - **Settings**: credentials status and the token check, reply rules (fallback template and who can message), the linked WhatsApp account, and an "Edit in gateway settings" link to the channel's page in Huf (Gateways > the channel > Channel tab).
 
-Checklist steps that point at credentials, the app secret or the on/off switch jump to the matching Settings section. "Approve your first sender" jumps to the Access tab.
+Checklist steps that point at credentials, the app secret or the on/off switch jump to the matching section under Settings in the Channels app. "Approve your first sender" jumps to Settings > Access.
 
 Every WhatsApp gateway setting can be edited on the channel's **Channel** tab: who can message (pairing reply, limits and the people list), opt-out keywords and limits, replies (typing, voice notes, link previews, error text, retries, fallback template), what the agent may send, calls and solutions routing. **Connect agent** on the channel page picks the agent that answers the channel, creating the gateway when there is none.
 
@@ -159,7 +159,7 @@ Admission:
 - With `Allow list`, a direct message is denied unless an approved **Gateway Access Entry** matches the sender. The sender's `external_id` is stored digits-only (see section 8).
 - With `Pairing`, an unknown sender creates a pending pairing request and gets a reply with their pairing code (`pairing_reply_enabled`, on by default, capped by `pairing_reply_daily_limit`). The triggering message is not executed. If replies were off when the request was created, the code is sent with the sender's next message once they are turned on. Approving the request sends the sender a welcome message.
 
-Managing people (the People list on the channel's Channel tab, or the Access tab in the WhatsApp console):
+Managing people (the People list on the channel's Channel tab, or Settings > Access in the Channels app):
 
 | Action | Effect |
 |---|---|
@@ -206,7 +206,7 @@ Place it in the site's `server` block before the generic Frappe proxy location. 
 
 ### 3.4 Verify the setup
 
-Call `huf.ai.whatsapp.management.get_setup_status` (System Manager or Huf Admin), or open the WhatsApp page in the Huf console (`/whatsapp`). It reports:
+Call `huf.ai.whatsapp.management.get_setup_status` (System Manager or Huf Admin), or open Home in the Channels app (`/channels/whatsapp`, which opens the number's Home at `/channels/whatsapp/n/<gateway>/home`; the old `/whatsapp` URL redirects there). It reports:
 
 - `bridge_available`
 - the WhatsApp Accounts found
@@ -221,7 +221,7 @@ The **Test message** box on the Channel tab sends to a phone number with country
 | What you see | Meaning | Fix |
 |---|---|---|
 | Health reason `signature_failed` ("Meta is calling us, but the signature check failed. Check the app secret."), next step `fix_app_secret` | Meta reached the callback URL, but the `X-Hub-Signature-256` check failed (or the GET verify token did not match). Almost always a wrong or stale App Secret. | Copy the App Secret again from the Meta app (App settings, Basic) into the Integration Settings credential `app_secret`. The error clears when the next valid event arrives, or after 24 hours. |
-| Health reason `senders_waiting`, checklist step "Approve your first sender" | Messages arrive but come from people nobody has approved yet (Pairing). The agent does not run for them. | Approve them on the Access tab or the channel's Channel tab. |
+| Health reason `senders_waiting`, checklist step "Approve your first sender" | Messages arrive but come from people nobody has approved yet (Pairing). The agent does not run for them. | Approve them under Settings > Access or the channel's Channel tab. |
 | Health reason `no_events_yet` ("Meta hasn't sent us anything yet") | Meta has not called the callback URL, or the `messages` field is not subscribed. | Check the callback URL and the subscription in Meta. If Meta's "Verify and save" succeeded, the checklist step "webhook" is already done. |
 
 How the signature signal works: when a WhatsApp webhook call fails the signature (POST) or the verify-token check (GET), Huf stores one timestamp on the Gateway (`last_signature_failure_at`) and nothing else: no headers, body, token or secret. A successful GET verification stores `last_verify_ok_at`. Each is written at most once a minute per gateway, so unauthenticated traffic cannot cause a write storm. The failure counts only for 24 hours and only while no valid event has arrived after it. Trade-off: because the callback is unauthenticated, anyone who knows the URL can make the gateway show "blocked" by sending a bad signature; it clears with the next valid message and never affects message handling.
@@ -280,7 +280,7 @@ derived from `Gateway.whatsapp_account`).
 
 ## App tile
 
-Huf seeds a first-party `WhatsApp` tile in the app launcher (`/huf/whatsapp`, category Communicate) on install
+Huf seeds a first-party `WhatsApp` tile in the app launcher (it opens the Channels app at `/huf/channels/whatsapp`, category Communicate) on install
 and migrate. An admin's `enabled` choice is never overwritten. The tile is shown only to System Manager, Huf Admin
 or users with `system.integrations.manage`, and only while at least one enabled WhatsApp gateway exists
 (`huf.ai.whatsapp.management.can_launch_whatsapp_app`).
@@ -304,7 +304,7 @@ Approval and pairing notifications follow the same rule. If the window is closed
 
 ### 4.3 Template management
 
-**UI**: the WhatsApp page in the Huf console (`/whatsapp`).
+**UI**: Templates in the Channels app (`/channels/whatsapp/n/<gateway>/templates`).
 
 **Management API** (`huf.ai.whatsapp.management`, all whitelisted):
 
@@ -439,7 +439,7 @@ When the background job processes an event with an image, document, audio, video
 - `adapter.send_media(to, kind, link=..., media_id=..., caption=..., filename=...)`: `kind` is `image`, `document`, `audio` or `video`. Give exactly one of a public `link` or a Meta `media_id`. Captions are up to 1024 characters and are not allowed on audio. `filename` applies to documents. Direct mode posts the Graph `/messages` payload. Bridge mode inserts an Outgoing `WhatsApp Message` with `content_type` and `attach` (so only `link` is supported; `media_id` and `filename` are not).
 - **Media links are checked before sending.** Meta downloads a `link` asynchronously after it accepts the send, so a dead, hotlink-protected (HTTP 403) or HTML-returning URL still gets a message id and is then silently never delivered. Huf therefore fetches the link first (https only, up to 3 redirects, every hop SSRF-checked, short timeout) and requires HTTP 200, a content type that matches the kind (never a web page) and the Meta size cap (image 5 MB, audio/video 16 MB, document 100 MB, sticker 100 KB static / 500 KB animated). A failure returns `media_link_unreachable`, `media_link_wrong_type` or `media_link_too_large` without calling Graph. Uploading the file (`file_url`) is the reliable path; it skips the link fetch entirely.
 - Free-form media is subject to the same 24h window as text. A closed window raises `WhatsAppWindowClosed` (management API: `window_closed`). There is no template fallback for media.
-- `GatewayReply.attachments` is honoured by the WhatsApp adapter: the first attachment (URL or media id) is sent with the reply text as its caption; for audio the text follows as a separate message. Other adapters ignore the field, and the agent reply pipeline does not produce attachments yet, so today media is sent through the explicit paths: the adapter, the management endpoint `send_media_message` (console Messages tab: paperclip button, public link or file upload), and the agent tool action `send_media`.
+- `GatewayReply.attachments` is honoured by the WhatsApp adapter: the first attachment (URL or media id) is sent with the reply text as its caption; for audio the text follows as a separate message. Other adapters ignore the field, and the agent reply pipeline does not produce attachments yet, so today media is sent through the explicit paths: the adapter, the management endpoint `send_media_message`, and the agent tool action `send_media`.
 - Uploaded files must be public (`/files/...`) for Meta to fetch them. Private files are rejected with `invalid_file`.
 
 ### Fake Graph API

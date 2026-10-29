@@ -120,7 +120,7 @@ describe('NewSolutionPage', () => {
     expect(names[0]).toBe('order_ready');
     expect(screen.getByText('Shared')).toBeInTheDocument();
     expect(screen.getByText('We suggest these settings for Take orders')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Review on Main counter' })).toHaveAttribute('href', '/whatsapp?gateway=gw1&tab=settings');
+    expect(screen.getByRole('link', { name: 'Review on Main counter' })).toHaveAttribute('href', '/channels/whatsapp/n/gw1/settings/connection');
   });
 
   it('keywords can be added and removed; draft template shows Draft', async () => {

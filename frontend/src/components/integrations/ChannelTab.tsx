@@ -22,7 +22,6 @@ import {
 import { ProviderPanels } from '@/components/gateway/ProviderPanels';
 import { CONNECTOR_NEEDED } from '@/components/whatsapp/BridgeUnavailable';
 import { getSetupStatus } from '@/services/whatsappHealthApi';
-import { WhatsAppChannelSettings } from './WhatsAppChannelSettings';
 import { getGatewayReadiness } from '@/utils/gatewayReadiness';
 import { getIntegrationSetting, setupTelegramWebhook } from '@/services/integrationApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
@@ -122,7 +121,7 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
     try {
       const preview = await getGatewayReadinessPreview(gatewayName);
       setReadiness(preview);
-    } catch (error) {
+    } catch {
       // GW-15: this is a server-verified check on top of the local heuristic
       // below, not a replacement for it -- if the endpoint is unreachable we
       // just fall back to the local, less complete checklist rather than
@@ -337,11 +336,10 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
                 'Save the credentials to link this number to its WhatsApp account for templates and message history.'
               )}
             </span>
-            <Button type="button" variant="outline" size="sm" onClick={() => navigate(`/whatsapp?gateway=${encodeURIComponent(gateway.name)}`)}>
-              Open WhatsApp console
+            <Button type="button" variant="outline" size="sm" onClick={() => navigate(`/channels/whatsapp/n/${encodeURIComponent(gateway.name)}/settings`)}>
+              Manage in Channels
             </Button>
           </div>
-          <WhatsAppChannelSettings gateway={gateway} onChange={handleFieldChange} />
         </>
       )}
 

@@ -83,7 +83,7 @@ beforeEach(() => {
 
 describe('TemplatesTab wizard wiring', () => {
   it('opens the wizard for a new template, linkable through ?new=1, and Cancel returns to the list', async () => {
-    open('/?tab=templates');
+    open('/');
     await userEvent.click(await screen.findByRole('button', { name: /New template/ }));
     expect(screen.getByText('wizard create')).toBeInTheDocument();
     expect(screen.getByTestId('search')).toHaveTextContent('new=1');
@@ -91,16 +91,15 @@ describe('TemplatesTab wizard wiring', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Cancel wizard' }));
     expect(await screen.findByRole('button', { name: /New template/ })).toBeInTheDocument();
     expect(screen.getByTestId('search')).not.toHaveTextContent('new=1');
-    expect(screen.getByTestId('search')).toHaveTextContent('tab=templates');
   });
 
   it('?new=1 opens the wizard straight away', async () => {
-    open('/?tab=templates&new=1');
+    open('/?new=1');
     expect(await screen.findByText('wizard create')).toBeInTheDocument();
   });
 
   it('?edit=<name> loads the template and prefills the wizard with edits left', async () => {
-    open('/?tab=templates&edit=tpl-1');
+    open('/?edit=tpl-1');
     expect(await screen.findByText('wizard edit')).toBeInTheDocument();
     expect(getTemplate).toHaveBeenCalledWith('tpl-1');
     expect(wizard.props).toMatchObject({ docName: 'tpl-1', editsLeft: 3 });
@@ -108,7 +107,7 @@ describe('TemplatesTab wizard wiring', () => {
   });
 
   it('Edit from the detail pane sets ?edit= and refreshes the list when the wizard finishes', async () => {
-    open('/?tab=templates');
+    open('/');
     await userEvent.click(await screen.findByRole('button', { name: /Edit and resubmit/ }));
     await screen.findByText('wizard edit');
     expect(screen.getByTestId('search')).toHaveTextContent('edit=tpl-1');
@@ -145,14 +144,14 @@ describe('TemplatesTab solutions', () => {
   });
 
   it('shows Used by chips and a Shared pill per row', async () => {
-    open('/?tab=templates');
+    open('/');
     await screen.findByText('care_hello');
     expect(screen.getAllByTestId('used-by').length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText('Shared').length).toBeGreaterThan(0);
   });
 
   it('the Any solution filter narrows the list', async () => {
-    open('/?tab=templates');
+    open('/');
     await screen.findByText('care_hello');
     await userEvent.click(await screen.findByLabelText('Filter by solution'));
     await userEvent.click(await screen.findByText('Orders', { selector: '[role="option"] *, [role="option"]' }));
@@ -173,7 +172,7 @@ describe('TemplatesTab solutions', () => {
 
 describe('TemplatesTab wizard follow-ups', () => {
   it('reopens the shared dialog on a conflict; Edit for everyone acknowledges the retry', async () => {
-    open('/?tab=templates&edit=tpl-1');
+    open('/?edit=tpl-1');
     await screen.findByText('wizard edit');
     expect(wizard.props?.acknowledgeShared).toBe(false);
     await userEvent.click(screen.getByRole('button', { name: 'Trigger shared' }));
@@ -184,7 +183,7 @@ describe('TemplatesTab wizard follow-ups', () => {
   });
 
   it('Make a copy from the conflict dialog opens create mode with the source as copyFrom', async () => {
-    open('/?tab=templates&edit=tpl-1');
+    open('/?edit=tpl-1');
     await screen.findByText('wizard edit');
     await userEvent.click(screen.getByRole('button', { name: 'Trigger shared' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Make a copy' }));

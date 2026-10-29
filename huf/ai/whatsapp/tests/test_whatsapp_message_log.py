@@ -568,10 +568,10 @@ class TestWhatsAppAppTile(_Base):
 		doc = frappe.get_doc("HUF App", {"app_id": "whatsapp"})
 		self.assertEqual(
 			(doc.title, doc.route, doc.source_app, doc.launch_mode, doc.category, doc.enabled),
-			("WhatsApp", "/huf/whatsapp", "huf", "Route", "Communicate", 1),
+			("WhatsApp", "/huf/channels/whatsapp", "huf", "Route", "Communicate", 1),
 		)
 		self.assertEqual(doc.permission_method, "huf.ai.whatsapp.management.can_launch_whatsapp_app")
-		self.assertEqual(doc.description, "Manage WhatsApp templates and see messages handled by your agents.")
+		self.assertEqual(doc.description, "Set up and automate WhatsApp: AI agents, broadcasts, templates, handoff to Help Desk/CRM")
 		frappe.db.set_value("HUF App", doc.name, {"enabled": 0, "title": "Hand edited"})
 		install.create_whatsapp_app()
 		again = frappe.get_doc("HUF App", doc.name)
