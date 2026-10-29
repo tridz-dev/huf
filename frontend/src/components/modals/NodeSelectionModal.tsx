@@ -36,6 +36,7 @@ import {
   Save,
   Trash2,
   FilePlus,
+  Terminal,
   type LucideIcon
 } from 'lucide-react';
 import { triggerOptions } from '../../data/triggers';
@@ -44,6 +45,9 @@ import { TriggerConfig, ActionConfig } from '../../types/flow.types';
 import type { ActionOption } from '../../types/modal.types';
 import { generateWebhookSecret } from '../../lib/flowWebhookUi';
 import { DEFAULT_PICKER, pickerToCron } from '../../lib/flowSchedule';
+import { CODE_RUN_ACTION, DEFAULT_CODE_PROFILE, DEFAULT_CODE_TIMEOUT_S } from '../../lib/codeFlow';
+import { useCodeFlowStatus } from '../../lib/useCodeFlowStatus';
+import { useFlowPermissions } from '../../hooks/useFlowPermissions';
 
 interface NodeSelectionModalProps {
   open: boolean;
@@ -78,6 +82,7 @@ const iconMap: Record<string, LucideIcon> = {
   Save,
   Trash2,
   FilePlus,
+  Terminal,
   CheckCircle2,
   SquareAsterisk,
 };
@@ -93,6 +98,10 @@ export function NodeSelectionModal({
   initialTriggerConfig,
   actionCategory
 }: NodeSelectionModalProps) {
+  // The Execute code card only shows while the server allows code in Flows and this user may run it.
+  const { status: codeStatus } = useCodeFlowStatus();
+  const { canExecuteCode } = useFlowPermissions();
+  const codeAvailable = Boolean(codeStatus?.available) && canExecuteCode;
   const [mainTab, setMainTab] = useState<MainTab>(mode === 'trigger' ? 'triggers' : 'actions');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<string | null>(
@@ -134,6 +143,7 @@ export function NodeSelectionModal({
   const filteredActions = actionOptions.filter(
     (action) =>
       (!actionCategory || action.category === actionCategory) &&
+      (action.id !== CODE_RUN_ACTION || codeAvailable) &&
       action.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -177,6 +187,7 @@ export function NodeSelectionModal({
       'state-set': { type: 'state-set', key: '', value: '' },
       'state-delete': { type: 'state-delete', key: '' },
       'doc-create': { type: 'doc-create', doctype: '', fields: {} },
+      'code-run': { type: 'code-run', code: '', profile: codeStatus?.default_profile || DEFAULT_CODE_PROFILE, inputs: {}, timeout_s: DEFAULT_CODE_TIMEOUT_S },
       email: tool('gmail_send_email'),
       slack: tool('slack_send_message'),
       sheets: tool('gsheets_read'),

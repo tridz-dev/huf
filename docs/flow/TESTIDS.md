@@ -23,7 +23,7 @@ Stable `data-testid` hooks for live UI journeys. Field names are the contract co
 Cards: `flow-card-<id>` with ids
 `webhook`, `schedule`, `doc-event` (triggers) and
 `agent-run`, `tool-call`, `router`, `condition`, `loop`, `human.approval`, `transform`, `state-get`,
-`state-set`, `state-delete`, `doc-create`, `email`, `http-request`, `file`, `slack`, `sheets` (steps).
+`state-set`, `state-delete`, `doc-create`, `email`, `http-request`, `file`, `slack`, `sheets` (steps), and `code-run` (Execute code: only offered when the server allows code in Flows and the user holds `flows.execute_code`, see wp19 below).
 Card title = node title = sidebar title (derived from `data/actions.ts` / `data/triggers.ts`).
 
 ## Canvas nodes
@@ -136,3 +136,30 @@ Publishing a flow with unconnected integration steps shows a warning toast (`Som
 | `flow-run-raw-<nodeId>` | Collapsed "Show raw response" (`<details>`); the secrets-stripped output stays at `flow-run-step-output-<nodeId>` inside it |
 | `slack-load-channels`, `slack-channels`, `slack-channel-list`, `slack-channel-<name>`, `slack-copy-id-<name>`, `slack-channels-error`, `slack-channels-empty` | Integration > Recipients tab (saved Slack integration): read-only "Load channels" list with copy-ID buttons |
 | `flow-slack-channel-picker`, `flow-field-slack-channel-pick`, `flow-slack-channel-picker-error` | "Or pick a channel" searchable list under the Slack step's Channel field (only when Slack is connected) |
+
+## Execute code in Flows (wp19)
+Node type `code.run`, canvas type `code-run`, palette card `flow-card-code-run` (name "Execute code"; hidden while the switch is off or without `flows.execute_code`). Ids below are used as written (one Execute code form is open at a time).
+| Test id | Element |
+|---|---|
+| `flow-code-editor` | Python code editor (textarea with a line-number gutter `flow-code-gutter`) |
+| `flow-code-profile` | Profile select trigger (options `flow-option-code-profile-<name>`, default "Flow Scratch") |
+| `flow-code-profile-badge` | "Needs approval each run" badge, shown only for a profile whose approval mode is not Auto Approve |
+| `flow-code-timeout` | Time limit in seconds (capped at the profile's limit) |
+| `flow-code-inputs-add` | Add input button |
+| `flow-code-input-key-<i>`, `flow-code-input-value-<i>` | Name and value of input row `i` (value is a Flow value control: `-mode` and `-picker` suffixes as for other fields); remove with `flow-code-input-remove-<i>` |
+| `flow-code-help` | "How your code runs" help (`<details>`) |
+| `flow-code-readonly-note` | "You need permission to run code to edit this step." (the form is then disabled) |
+| `flow-error-code.run-code`, `-profile`, `-timeout_s`, `-inputs` | Inline required-field errors |
+| `flow-node-code-profile-<nodeId>` | Profile name on the canvas node card |
+| `flow-code-output-exit` | Exit status badge in a step's output in Run details (inside `flow-run-step-output-<nodeId>`) |
+| `flow-code-output-stdout`, `flow-code-output-stdout-empty` | Printed output block / "Nothing was printed." |
+| `flow-code-output-result` | Result as formatted JSON (absent when the code returned nothing) |
+| `flow-code-output-truncated` | "Output was cut off because it was too long." |
+| `run-waiting-code-note` | Pending-actions line of a run in status "Waiting Code" (displayed "Waiting for code"; `data-run-status="Waiting Code"` on list rows): "Waiting for an administrator to approve this code run. Check the approvals bell." or "Running your code in a sandbox..." |
+| `execution-approvals-bell`, `execution-approval-<name>`, `execution-approve-<name>`, `execution-reject-<name>` | Approvals bell (code runs waiting for a decision): the bell, one pending item (its heading reads "Flow: <flow> > <step>" for a Flow step), and its Approve / Reject buttons |
+| `settings-code-in-flows` | "Code in Flows" card on Settings > Agent settings |
+| `settings-code-in-flows-switch` | "Allow code execution in Flows" switch (disabled unless the user is a System Manager) |
+| `settings-code-in-flows-status` | "Server switch: on" / "Server switch: off - ..." line |
+| `settings-code-in-flows-note` | "Only a system administrator can change this." (non-admins) |
+
+Publish is disabled (reason in `disabled-reason`) when the flow has an Execute code step and code is off or the user lacks `flows.execute_code`.

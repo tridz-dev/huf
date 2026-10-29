@@ -60,6 +60,7 @@ def get_pending_agent_execution_approvals(limit: int = 50) -> list[dict]:
 
 		requested_by = None
 		agent_name = None
+		flow_label = None
 		if doc.agent_tool_call:
 			call_info = frappe.db.get_value(
 				"Agent Tool Call", doc.agent_tool_call, ["owner", "agent_run"], as_dict=True
@@ -67,7 +68,21 @@ def get_pending_agent_execution_approvals(limit: int = 50) -> list[dict]:
 			if call_info:
 				requested_by = call_info.owner
 				if call_info.agent_run:
-					agent_name = frappe.db.get_value("Agent Run", call_info.agent_run, "agent")
+					run_info = frappe.db.get_value(
+						"Agent Run", call_info.agent_run, ["agent", "flow_run", "flow_node_id"], as_dict=True
+					)
+					if run_info:
+						agent_name = run_info.agent
+						if run_info.flow_run:
+							from huf.ai.flow.api import get_flow_step_labels
+
+							try:
+								labels = get_flow_step_labels(
+									[{"flow_run": run_info.flow_run, "flow_node_id": run_info.flow_node_id}]
+								)
+								flow_label = labels[0] if labels else None
+							except frappe.PermissionError:
+								flow_label = None  # the approver may not read flow runs: show the generic heading
 
 		results.append(
 			{
@@ -80,6 +95,7 @@ def get_pending_agent_execution_approvals(limit: int = 50) -> list[dict]:
 				"approver_role": doc.approver_role,
 				"requested_by": requested_by,
 				"agent_name": agent_name,
+				"flow_label": flow_label,
 				"can_decide": True,
 			}
 		)

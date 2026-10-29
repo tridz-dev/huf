@@ -43,6 +43,20 @@ describe('flowValidation', () => {
     expect(validateNode(ok, edges).map((i) => i.field)).not.toContain('approver_type');
   });
 
+  it('checks Execute code: code, profile, size, time limit and input names', () => {
+    const ok = { type: 'code-run', code: 'result = 1', profile: 'Flow Scratch', inputs: {}, timeout_s: 30 };
+    expect(validateNode(action('x', ok), [])).toEqual([]);
+    const blank = validateNode(action('x', { ...ok, code: '  ', profile: '' }), []);
+    expect(blank.map((i) => [i.field, i.message])).toEqual([
+      ['code', 'Add the Python code to run.'],
+      ['profile', 'Choose how the code is allowed to run.'],
+    ]);
+    expect(validateNode(action('x', { ...ok, code: 'a'.repeat(65537) }), []).map((i) => i.field)).toEqual(['code']);
+    expect(validateNode(action('x', { ...ok, timeout_s: 0 }), []).map((i) => i.field)).toEqual(['timeout_s']);
+    expect(validateNode(action('x', { ...ok, inputs: { '': 1 } }), []).map((i) => i.field)).toEqual(['inputs']);
+    expect(validateNode(action('x', ok), [])[0]?.kind).toBeUndefined();
+  });
+
   it('requires a trigger in a flow and summarises', () => {
     const issues = validateFlow([action('a', { type: 'agent-run' })], []);
     expect(issues[0].field).toBe('trigger');

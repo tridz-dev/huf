@@ -10,6 +10,7 @@ import { getAgentRuns, type AgentRunDoc } from '@/services/agentRunApi';
 import { getFlowStepLabels, listFlowRunsPage, type FlowRunSummary } from '@/services/flowApi';
 import { formatTimeAgo, calculateDuration } from '@/utils/time';
 import { formatAbsoluteTime, toServerDatetime, useSiteTimezone } from '@/lib/serverTime';
+import { flowRunStatusLabel } from '@/lib/flowRunFormat';
 import { useRunParam } from '@/hooks/useRunParam';
 import { FlowRunViewer } from '@/components/FlowRunViewer';
 import { Button } from '@/components/ui/button';
@@ -588,6 +589,7 @@ const FLOW_RUN_STATUS_OPTIONS = [
   { label: 'Running', value: 'Running' },
   { label: 'Waiting Approval', value: 'Waiting Approval' },
   { label: 'Waiting User', value: 'Waiting User' },
+  { label: 'Waiting for code', value: 'Waiting Code' },
   { label: 'Success', value: 'Success' },
   { label: 'Failed', value: 'Failed' },
 ];
@@ -596,7 +598,7 @@ function getFlowRunStatusDot(status?: string): { variant: StatusDotVariant; labe
   if (status === 'Success') return { variant: 'ok', label: status };
   if (status === 'Failed') return { variant: 'fail', label: status };
   if (status === 'Queued') return { variant: 'idle', label: status };
-  return { variant: 'run', label: status || 'Running' };
+  return { variant: 'run', label: flowRunStatusLabel(status) || 'Running' };
 }
 
 /** The "Flow runs" tab: every Flow Run, newest first; a row opens the same Run details sheet as the flow canvas. */

@@ -10,6 +10,7 @@ import { secretProblem } from './flowWebhookUi';
 import { requiredInputsFor } from './flowToolSchemas';
 import { edgeRoute } from '../services/flowSerializer';
 import { unreachableNodeIds } from './flowEdit';
+import { MAX_CODE_BYTES } from './codeFlow';
 import type { FlowEdge, FlowNode } from '../types/flow.types';
 
 /** Id of the "Can't save yet" / "Finish setting up" toast, so the next edit or selection can dismiss it. */
@@ -56,6 +57,7 @@ export function nodeKind(node: NodeLike): string {
     case 'state-set': return 'state.set';
     case 'state-delete': return 'state.delete';
     case 'doc-create': return 'doc.create';
+    case 'code-run': return 'code.run';
     default: return typeof t === 'string' ? t : 'unknown';
   }
 }
@@ -202,6 +204,15 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       break;
     case 'doc.create':
       if (isBlank(c.doctype)) add('doctype', 'Enter the document type to create.');
+      break;
+    case 'code.run':
+      if (isBlank(c.code)) add('code', 'Add the Python code to run.');
+      else if (typeof c.code === 'string' && new TextEncoder().encode(c.code).length > MAX_CODE_BYTES) add('code', 'The code is too long. Keep it under 64 KB.');
+      if (isBlank(c.profile)) add('profile', 'Choose how the code is allowed to run.');
+      if (c.timeout_s !== undefined && (typeof c.timeout_s !== 'number' || !Number.isInteger(c.timeout_s) || c.timeout_s < 1)) {
+        add('timeout_s', 'The time limit must be at least 1 second.');
+      }
+      if (Object.keys(asObj(c.inputs)).some((k) => k.trim() === '')) add('inputs', 'Give every input a name.');
       break;
     default:
       break;
