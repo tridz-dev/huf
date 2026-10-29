@@ -177,13 +177,30 @@ const FLOW_LIST_FIELDS = [
     'version', 'schema_version', 'modified',
 ];
 
-/** List all flow definitions */
-export async function getFlowDefinitions(): Promise<FlowDefinitionListItem[]> {
+/** What the Flows list may ask the server to narrow down by, so older flows stay reachable when there are many. */
+export interface FlowListQuery {
+    search?: string;
+    /** Backend status: Draft, Active or Archived. */
+    status?: string;
+    /** Category name, matched without regard to capitals. */
+    category?: string;
+}
+
+/** The most flows the list loads at once. */
+export const FLOW_LIST_LIMIT = 100;
+
+/** List flow definitions, newest change first, at most FLOW_LIST_LIMIT. */
+export async function getFlowDefinitions(query: FlowListQuery = {}): Promise<FlowDefinitionListItem[]> {
     try {
+        const filters: Array<[string, '=' | 'like', string]> = [];
+        if (query.search?.trim()) filters.push(['flow_name', 'like', `%${query.search.trim()}%`]);
+        if (query.status) filters.push(['status', '=', query.status]);
+        if (query.category) filters.push(['category', 'like', query.category]);
         const flows = await db.getDocList(doctype['Flow Definition'], {
             fields: FLOW_LIST_FIELDS,
+            filters,
             orderBy: { field: 'modified', order: 'desc' },
-            limit: 100,
+            limit: FLOW_LIST_LIMIT,
         });
         return flows as FlowDefinitionListItem[];
     } catch (error) {
