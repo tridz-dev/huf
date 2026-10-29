@@ -18,8 +18,8 @@ export interface BranchHandle {
 }
 
 const CONDITION: BranchHandle[] = [
-  { route: 'true', handleId: 'true', label: 'True' },
-  { route: 'false', handleId: 'false', label: 'False' },
+  { route: 'true', handleId: 'true', label: 'Yes' },
+  { route: 'false', handleId: 'false', label: 'No' },
 ];
 const HUMAN: BranchHandle[] = [
   { route: 'approve', handleId: 'approve', label: 'Approved' },
@@ -28,7 +28,8 @@ const HUMAN: BranchHandle[] = [
 const HUMAN_TIMEOUT: BranchHandle = { route: 'timeout', handleId: 'timeout', label: 'Timed out', optional: true };
 const FOREACH: BranchHandle[] = [
   { route: 'body', handleId: 'body', label: 'For each item' },
-  { route: 'next', handleId: undefined, label: 'When done', optional: true },
+  // Its own handle id: an id-less handle would be taken for the first handle ('For each item') by React Flow.
+  { route: 'next', handleId: 'next', label: 'When done', optional: true },
 ];
 
 /** Fixed branch handles of an action config (`type` is the canvas discriminator). */
@@ -47,3 +48,26 @@ export function branchHandlesFor(actionType: string | undefined, config?: Record
 
 /** Whether a node type keeps a single free-form fan-out handle (router: one 'option' edge per path). */
 export const ROUTER_HANDLE = 'option';
+
+/** Colour family of a branch name pill. */
+export type BranchTone = 'good' | 'bad' | 'warn' | 'loop' | 'neutral';
+
+/** Tone of the pill drawn on a connection of this route. */
+export function branchTone(route: FlowEdgeRoute): BranchTone {
+  switch (route) {
+    case 'true':
+    case 'approve':
+      return 'good';
+    case 'false':
+    case 'reject':
+    case 'error':
+      return 'bad';
+    case 'timeout':
+      return 'warn';
+    case 'body':
+    case 'next':
+      return 'loop';
+    default:
+      return 'neutral';
+  }
+}

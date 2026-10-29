@@ -36,7 +36,7 @@ import { cn } from '@/lib/utils';
 import { actionHasConfiguredContent } from '../../lib/flow/flowNodeConfigured';
 import { branchHandlesFor, ROUTER_HANDLE } from '../../lib/flow/flowBranches';
 import { validateNode } from '../../lib/flow-graph/flowValidation';
-import { unreachableNodeIds } from '../../lib/flow/flowEdit';
+import { orphanNote } from '../../lib/flow-graph/flowCanvasGraph';
 import { toolLabel } from '../../lib/flow/flowIntegrations';
 import { NotConnected } from '../flow/NotConnected';
 
@@ -71,12 +71,12 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const Icon = data.icon && iconMap[data.icon] ? iconMap[data.icon] : Play;
   const incomplete = validateNode({ id, data }, activeFlow?.edges ?? []);
-  const orphaned = activeFlow ? unreachableNodeIds(activeFlow.nodes, activeFlow.edges).has(id) : false;
+  const orphaned = activeFlow ? orphanNote(id, activeFlow.nodes, activeFlow.edges) : null;
   const cfg = data.actionConfig as ({ type?: string } & Record<string, unknown>) | undefined;
   const handles = branchHandlesFor(cfg?.type, cfg);
   const isRouter = cfg?.type === 'router';
   const toolId = cfg?.type === 'tool-call' && typeof cfg.tool_id === 'string' && cfg.tool_id ? cfg.tool_id : undefined;
-  const statusClasses = getExecutionStatusClasses(data.status, selected, { unconfigured: incomplete.length > 0 || orphaned });
+  const statusClasses = getExecutionStatusClasses(data.status, selected, { unconfigured: incomplete.length > 0 || orphaned !== null });
 
   // Confirm only when the node has real config; a picked-but-blank node deletes
   // immediately (see actionHasConfiguredContent).
@@ -136,7 +136,7 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
               <div className="text-xs text-signal-ink" data-testid={`flow-node-incomplete-${id}`} title={incomplete[0]?.message ?? 'Select this step to set it up'}>Needs setup</div>
             )}
             {orphaned && (
-              <div className="text-xs text-signal-ink" data-testid={`flow-node-orphan-${id}`}>Nothing leads to this step</div>
+              <div className="text-xs text-signal-ink" data-testid={`flow-node-orphan-${id}`}>{orphaned}</div>
             )}
             {data.description && (
               <div className="text-xs text-muted-foreground">{data.description}</div>
@@ -165,17 +165,8 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
             style={handleSpread(i, handles.length)}
             className={NODE_HANDLE}
             data-testid={`flow-handle-${id}-${h.route}`}
-          >
-            {/* Sit beside the dot, not under it, so the edge leaving the dot never runs through the text. */}
-            <span
-              className={cn(
-                'pointer-events-none absolute top-2 whitespace-nowrap text-eyebrow tracking-normal text-muted-foreground',
-                i === 0 ? 'right-3' : i === handles.length - 1 ? 'left-3' : '-translate-x-1/2'
-              )}
-            >
-              {h.label}
-            </span>
-          </Handle>
+            title={`${h.label}: drag from here to connect`}
+          />
         ))
       ) : (
         <Handle id={isRouter ? ROUTER_HANDLE : undefined} type="source" position={Position.Bottom} className={NODE_HANDLE} data-testid={`flow-handle-${id}`} />
