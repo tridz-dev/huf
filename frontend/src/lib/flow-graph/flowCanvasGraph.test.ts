@@ -1,0 +1,87 @@
+import { describe, expect, it } from 'vitest';
+import type { Edge, Node } from 'reactflow';
+import { branchPillText, computeOpenEnds, endSubtitles, ghostSpots, loopBacks, orphanNote } from './flowCanvasGraph';
+import { makeFlowEdge } from '../../services/flowSerializer';
+import type { FlowNodeData } from '../../types/flow.types';
+
+const node = (id: string, x: number, y: number, type: 'trigger' | 'action' | 'end', cfg?: Record<string, unknown>): Node<FlowNodeData> => ({
+  id,
+  position: { x, y },
+  data: { label: id, nodeType: type, configured: true, actionConfig: cfg as never },
+});
+const edges = (...e: Array<[string, string, Parameters<typeof makeFlowEdge>[2]]>): Edge[] => e.map(([s, t, r]) => makeFlowEdge(s, t, r) as Edge);
+
+const loopFlow = () => {
+  const nodes = [node('t', 0, 0, 'trigger'), node('loop', 0, 150, 'action', { type: 'foreach' }), node('body', 0, 300, 'action', { type: 'agent-run' }), node('done', 290, 300, 'end')];
+  return { nodes, edges: edges(['t', 'loop', 'next'], ['loop', 'body', 'body'], ['loop', 'done', 'next']) };
+};
+
+describe('loops', () => {
+  it('returns the last step of the body to the loop instead of offering an Add step card', () => {
+    const { nodes, edges: ed } = loopFlow();
+    const ends = computeOpenEnds(nodes, ed);
+    expect(loopBacks(nodes, ed, ends)).toEqual([{ leafId: 'body', loopId: 'loop' }]);
+    expect(ghostSpots(nodes, ends, ed, null)).toEqual([]);
+  });
+
+  it('keeps "For each item" and "When done" on separate handles', () => {
+    const { nodes } = loopFlow();
+    const ends = computeOpenEnds(nodes, []);
+    expect(new Set(ends.filter((e) => e.nodeId === 'loop').map((e) => e.handleId)).size).toBe(2);
+  });
+
+  it('shows the optional "When done" card only while the loop is selected', () => {
+    const nodes = [node('t', 0, 0, 'trigger'), node('loop', 0, 150, 'action', { type: 'foreach' }), node('body', -145, 300, 'action', { type: 'agent-run' })];
+    const ed = edges(['t', 'loop', 'next'], ['loop', 'body', 'body']);
+    const ends = computeOpenEnds(nodes, ed);
+    expect(ghostSpots(nodes, ends, ed, null).map((g) => g.end.route)).toEqual([]);
+    expect(ghostSpots(nodes, ends, ed, 'loop').map((g) => g.end.route)).toEqual(['next']);
+  });
+});
+
+describe('ghost cards', () => {
+  it('puts the cards of one step a full column apart', () => {
+    const nodes = [node('t', 0, 0, 'trigger'), node('c', 0, 150, 'action', { type: 'condition' })];
+    const ed = edges(['t', 'c', 'next']);
+    const spots = ghostSpots(nodes, computeOpenEnds(nodes, ed), ed, null);
+    expect(spots.map((s) => s.x)).toEqual([-145, 145]);
+    expect(spots[1].x - spots[0].x - 236).toBeGreaterThanOrEqual(40);
+  });
+
+  it('draws no card where an unconnected step already sits', () => {
+    const nodes = [node('t', 0, 0, 'trigger'), node('stray', 0, 150, 'action', { type: 'agent-run' })];
+    expect(ghostSpots(nodes, computeOpenEnds(nodes, []), [], null).filter((g) => g.end.nodeId === 't')).toEqual([]);
+  });
+});
+
+describe('labels', () => {
+  it('names branches in plain words', () => {
+    const nodes = [node('c', 0, 0, 'action', { type: 'condition' }), node('a', 0, 150, 'action', { type: 'human.approval' })];
+    expect(branchPillText(makeFlowEdge('c', 'x', 'true') as Edge, nodes[0])).toBe('Yes');
+    expect(branchPillText(makeFlowEdge('c', 'x', 'false') as Edge, nodes[0])).toBe('No');
+    expect(branchPillText(makeFlowEdge('a', 'x', 'reject') as Edge, nodes[1])).toBe('Rejected');
+    expect(branchPillText(makeFlowEdge('c', 'x', 'next') as Edge, node('p', 0, 0, 'action', { type: 'agent-run' }))).toBeNull();
+    expect(branchPillText(makeFlowEdge('r', 'x', 'option', { label: 'Urgent escalation to the support lead' }) as Edge, undefined)).toBe('Urgent escalation to the support lead');
+  });
+
+  it('tells End steps after different branches apart', () => {
+    const nodes = [node('c', 0, 0, 'action', { type: 'condition' }), node('e1', 0, 150, 'end'), node('e2', 290, 150, 'end')];
+    const ed = edges(['c', 'e1', 'true'], ['c', 'e2', 'false']);
+    const subs = endSubtitles(nodes, ed);
+    expect(subs.get('e1')).not.toEqual(subs.get('e2'));
+    expect(subs.get('e1')).toContain('Yes');
+  });
+});
+
+describe('orphanNote', () => {
+  const nodes = [node('t', 0, 0, 'trigger'), node('a', 0, 150, 'action', { type: 'condition' }), node('e', 0, 300, 'end'), node('lone', 290, 0, 'action', { type: 'agent-run' })];
+  it('says nothing leads to a step with no line into it', () => {
+    expect(orphanNote('lone', nodes, edges(['a', 'e', 'true']))).toBe('Nothing leads to this step');
+  });
+  it('does not say that for a step that has a line into it from a cut-off part', () => {
+    expect(orphanNote('e', nodes, edges(['a', 'e', 'true']))).toBe('Not connected to the trigger');
+  });
+  it('says nothing for a reachable step', () => {
+    expect(orphanNote('e', nodes, edges(['t', 'a', 'next'], ['a', 'e', 'true']))).toBeNull();
+  });
+});

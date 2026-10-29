@@ -133,7 +133,7 @@ class TestDocCreateNode(IntegrationTestCase):
 		self.assertEqual(_run(cfg, settings=settings)["status"], "success")
 		second = _run(cfg, settings=settings)
 		self.assertEqual(second["status"], "failed")
-		self.assertIn("max_writes", second["error"])
+		self.assertIn("more records than this flow is allowed", second["error"])
 
 	def test_zero_max_writes_blocks(self):
 		self.assertEqual(_run({"doctype": "ToDo", "fields": {"description": self.marker}}, max_writes=0)["status"], "failed")
@@ -147,7 +147,7 @@ class TestDocCreateNode(IntegrationTestCase):
 		for write in ([], [{"doctype": "Note"}]):
 			r = _run({"doctype": "ToDo", "fields": {"description": self.marker}}, settings=_settings(write=write))
 			self.assertEqual(r["status"], "failed")
-			self.assertIn("permission_envelope", r["error"])
+			self.assertIn("is not allowed to create", r["error"])
 		self.assertEqual(frappe.db.count("ToDo"), before)
 
 	def test_missing_envelope_denies(self):
@@ -155,7 +155,7 @@ class TestDocCreateNode(IntegrationTestCase):
 		del settings.version.graph["contract"]["permission_envelope"]
 		r = _run({"doctype": "ToDo", "fields": {"description": self.marker}}, settings=settings)
 		self.assertEqual(r["status"], "failed")
-		self.assertIn("permission_envelope", r["error"])
+		self.assertIn("is not allowed to create", r["error"])
 
 	def test_allowlist_still_denies_when_envelope_grants(self):
 		r = _run({"doctype": "User", "fields": {"email": "a@b.c"}}, settings=_settings(write=[{"doctype": "User"}]))
@@ -179,7 +179,7 @@ class TestDocCreateNode(IntegrationTestCase):
 		finally:
 			frappe.set_user("Administrator")
 		self.assertEqual(r["status"], "failed")
-		self.assertIn("ermission", r["error"])
+		self.assertIn("not allowed to create", r["error"])
 		self.assertFalse(frappe.db.exists("Flow Definition", "_flowtest-denied"))
 
 

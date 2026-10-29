@@ -18,6 +18,7 @@ from frappe.rate_limiter import rate_limit
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.api_support import require_permission
+from huf.ai.flow.support.approval_card import build_card
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
 from huf.ai.flow.support.redact import definition_for_user
 
@@ -238,7 +239,9 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 		)
 		doc.insert()
 
-	return {"flow_id": doc.flow_id, "version": doc.version}
+	from huf.ai.flow.support.router_text import text_ref_warnings_for
+
+	return {"flow_id": doc.flow_id, "version": doc.version, "warnings": text_ref_warnings_for(definition_json)}
 
 
 @frappe.whitelist()
@@ -659,15 +662,13 @@ def _decide_flow_run(flow_run_id: str, decision: str, comment: str | None) -> di
 	"""
 	require_permission(frappe.session.user != "Guest", "Login required")
 	if not frappe.db.exists("Flow Run", flow_run_id):
-		frappe.throw(_("Flow Run '{0}' not found").format(flow_run_id), frappe.DoesNotExistError)
+		frappe.throw(_("This run could not be found. It may have been deleted."), frappe.DoesNotExistError)
 
 	from huf.ai.flow import engine
 
 	flow_run = frappe.get_doc("Flow Run", flow_run_id)
 	if flow_run.status != "Waiting Approval":
-		frappe.throw(
-			_("Flow Run '{0}' is not waiting for approval (status: {1})").format(flow_run_id, flow_run.status)
-		)
+		frappe.throw(_("This run is not waiting for approval any more."))
 	engine.verify_approval_permission(flow_run)
 
 	engine.approve_flow_run(flow_run_id, decision=decision, comment=comment)
@@ -1201,6 +1202,8 @@ def get_pending_approvals(limit: int = 50) -> list:
 			continue
 
 		approver_type = waiting.get("approver_type")
+		flow_name = flow_names.get(run.flow_id)
+		card = build_card(flow_name if flow_name and flow_name != run.flow_id else None, waiting)
 		results.append({
 			"flow_run_id": run.name,
 			"flow_id": run.flow_id,
@@ -1208,9 +1211,12 @@ def get_pending_approvals(limit: int = 50) -> list:
 			"flow_version": run.flow_version,
 			"current_node_id": run.current_node_id,
 			"node_id": waiting.get("node_id") or run.current_node_id,
-			"title": "Approval Required",
-			"message": waiting.get("message", ""),
-			"instructions": waiting.get("message", ""),
+			# The bell prints title/message as they are: a headline, then one sentence with the key facts.
+			"title": card["headline"],
+			"headline": card["headline"],
+			"message": card["sentence"],
+			"instructions": card["sentence"],
+			"facts": card["facts"],
 			"approver_type": approver_type,
 			"approval_type": approver_type,
 			"approver_role": waiting.get("approver_role"),

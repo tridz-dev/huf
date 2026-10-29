@@ -220,7 +220,7 @@ class TestExecForeach(unittest.TestCase):
 		result = flow_engine._exec_foreach(_FakeFlowRun(), foreach_node, foreach_node["config"], settings)
 
 		self.assertEqual(result["status"], "failed")
-		self.assertIn("more than its limit of 2", result["error"])
+		self.assertIn("its limit is 2", result["error"])
 
 
 class TestParallelRemoved(unittest.TestCase):
@@ -238,4 +238,4 @@ class TestTriggerUnsetExecutor(unittest.TestCase):
 		node = {"id": "start", "type": "trigger.unset", "config": {}}
 		result = flow_engine._exec_trigger_unset(_FakeFlowRun(), node, {}, _settings_for([node]))
 		self.assertEqual(result["status"], "failed")
-		self.assertIn("not runnable", result["error"])
+		self.assertIn("no trigger yet", result["error"])

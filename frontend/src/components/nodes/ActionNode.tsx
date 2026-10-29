@@ -5,11 +5,10 @@ import { FlowNodeData } from '../../types/flow.types';
 import { DeleteStepDialog } from '../flow/DeleteStepDialog';
 import { useFlowContext } from '../../contexts/FlowContext';
 import { NODE_HANDLE, getExecutionStatusClasses, handleSpread } from './nodeStyles';
-import { cn } from '@/lib/utils';
 import { actionHasConfiguredContent } from '../../lib/flow/flowNodeConfigured';
 import { branchHandlesFor, ROUTER_HANDLE } from '../../lib/flow/flowBranches';
 import { validateNode } from '../../lib/flow-graph/flowValidation';
-import { unreachableNodeIds } from '../../lib/flow/flowEdit';
+import { orphanNote } from '../../lib/flow-graph/flowCanvasGraph';
 import { connectPath, integrationForTool, isToolUnconnected, useIntegrationStatus } from '../../lib/flow/flowIntegrations';
 import { actionSubtitle, cardStatus } from '../../lib/flow/flowNodeCard';
 import { cardIcon } from './nodeIcons';
@@ -23,7 +22,8 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
   const integrationStatus = useIntegrationStatus();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const incomplete = validateNode({ id, data }, activeFlow?.edges ?? []);
-  const orphaned = activeFlow ? unreachableNodeIds(activeFlow.nodes, activeFlow.edges).has(id) : false;
+  // Only a step with no line into it: one with a line from a cut-off part is not "nothing leads here".
+  const orphaned = activeFlow ? orphanNote(id, activeFlow.nodes, activeFlow.edges) === 'Nothing leads to this step' : false;
   const cfg = data.actionConfig as ({ type?: string } & Record<string, unknown>) | undefined;
   const handles = branchHandlesFor(cfg?.type, cfg);
   const isRouter = cfg?.type === 'router';
@@ -95,17 +95,8 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
             style={handleSpread(i, handles.length)}
             className={NODE_HANDLE}
             data-testid={`flow-handle-${id}-${h.route}`}
-          >
-            {/* Sit beside the dot, not under it, so the edge leaving the dot never runs through the text. */}
-            <span
-              className={cn(
-                'pointer-events-none absolute top-2 whitespace-nowrap text-eyebrow tracking-normal text-muted-foreground',
-                i === 0 ? 'right-3' : i === handles.length - 1 ? 'left-3' : '-translate-x-1/2'
-              )}
-            >
-              {h.label}
-            </span>
-          </Handle>
+            title={`${h.label}: drag from here to connect`}
+          />
         ))
       ) : (
         <Handle id={isRouter ? ROUTER_HANDLE : undefined} type="source" position={Position.Bottom} className={NODE_HANDLE} data-testid={`flow-handle-${id}`} />

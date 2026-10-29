@@ -491,7 +491,7 @@ class TestExecForeach(unittest.TestCase):
 		_ctx(flow_run, items=["a", {"x": 1}])  # upper() of an object fails
 		_drive(self._defn(), flow_run)
 		self.assertEqual(flow_run.status, "Failed")
-		self.assertIn("item 1", flow_run.last_error)
+		self.assertIn("item 2", flow_run.last_error)
 
 	def test_on_item_error_skip_drops_the_item_and_continues(self):
 		flow_run = FakeFlowRun(current_node_id="loop", max_hops=10)
@@ -505,7 +505,7 @@ class TestExecForeach(unittest.TestCase):
 		_ctx(flow_run, items=[1, 2, 3])
 		_drive(self._defn(max_iterations=2), flow_run)
 		self.assertEqual(flow_run.status, "Failed")
-		self.assertIn("more than its limit of 2", flow_run.last_error)
+		self.assertIn("its limit is 2", flow_run.last_error)
 
 	def test_non_list_items_fails(self):
 		flow_run = FakeFlowRun(current_node_id="loop", max_hops=10)
@@ -891,7 +891,7 @@ class TestHopLimitAndEndCompletion(unittest.TestCase):
 		with patch.object(flow_engine, "_publish_flow_event"):
 			flow_engine._execute_loop(flow_run, nodes_map, [], {})
 		self.assertEqual(flow_run.status, "Failed")
-		self.assertIn("Hop limit", flow_run.last_error)
+		self.assertIn("took more than 5 steps", flow_run.last_error)
 
 	def test_end_node_completes_run_successfully(self):
 		flow_run = FakeFlowRun(current_node_id="n1", hop_count=0, max_hops=10)
@@ -908,7 +908,7 @@ class TestHopLimitAndEndCompletion(unittest.TestCase):
 		with patch.object(flow_engine, "_publish_flow_event"):
 			flow_engine._execute_loop(flow_run, {}, [], {})
 		self.assertEqual(flow_run.status, "Failed")
-		self.assertIn("missing", flow_run.last_error)
+		self.assertIn("no longer exists", flow_run.last_error)
 
 	def test_normal_mode_advances_via_evaluate_edges_between_nodes(self):
 		flow_run = FakeFlowRun(current_node_id="n1", hop_count=0, max_hops=10, mode="Normal")

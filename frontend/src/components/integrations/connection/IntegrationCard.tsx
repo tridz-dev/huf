@@ -40,12 +40,13 @@ export function IntegrationCard({ setting, onOpen, onUseInAgent }: IntegrationCa
           <Logo className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-body-text font-semibold text-ink" title={title} data-testid="integration-card-title">
+          <h3 className="line-clamp-2 break-words text-body-text font-semibold leading-snug text-ink" title={title} data-testid="integration-card-title">
             {title}
           </h3>
           <p className="truncate text-sm text-steel">
-            {identity.title}
-            {setting.is_default ? ' · Default' : ''}
+            {[title === identity.title ? `Edited ${formatTimeAgo(setting.modified).toLowerCase()}` : identity.title, setting.is_default ? 'Default' : '']
+              .filter(Boolean)
+              .join(' · ')}
           </p>
         </div>
         <IntegrationStatusPill health={health} className="shrink-0" />

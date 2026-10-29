@@ -81,6 +81,7 @@ export function SkillSourcesEditor({ rows, onChange }: SkillSourcesEditorProps) 
           </p>
           <Textarea
             id="skill_sources_json"
+            data-testid="skill-sources-json-input"
             value={text}
             onChange={(e) => onText(e.target.value)}
             spellCheck={false}

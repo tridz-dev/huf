@@ -64,7 +64,8 @@ export interface HumanItem {
   title: string;
   /** Short facts shown while the item is closed ("Total 450, Paid"). */
   facts: string;
-  node: HumanNode;
+  /** What the opened card shows: the item's rows without the one already used as `title`; `empty` when nothing is left. */
+  body: HumanNode;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -182,13 +183,15 @@ function listNode(items: unknown[], key: string, path: string, opts: HumanOption
   const humanItems: HumanItem[] = nodes.map(({ i, node }) => {
     let title = `Item ${i + 1}`;
     let factsRows: HumanRow[] = [];
+    let body: HumanNode = node;
     if (node.kind === 'rows') {
       const titleRow = TITLE_KEYS.map((k) => node.rows.find((r) => r.key.toLowerCase() === k)).find((r) => r && (r.node.kind === 'text' || r.node.kind === 'scalar'));
       if (titleRow) title = nodeText(titleRow.node);
       factsRows = node.rows.filter((r) => r !== titleRow);
+      body = factsRows.length ? { kind: 'rows', rows: factsRows } : { kind: 'empty' };
     }
     const facts = node.kind === 'rows' ? factsOf(factsRows, 3) : nodeText(node);
-    return { index: i, title, facts, node };
+    return { index: i, title, facts, body };
   });
   const allScalar = nodes.every((n) => n.node.kind === 'scalar' || n.node.kind === 'text');
   const shownTexts = humanItems.slice(0, 3).map((it) => (allScalar ? it.facts : it.title));

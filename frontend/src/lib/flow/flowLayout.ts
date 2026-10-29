@@ -14,7 +14,8 @@ interface LayoutEdge {
 }
 
 export const ROW_GAP = 150;
-export const COLUMN_GAP = 260;
+/** Distance between the left edges of two steps side by side: a 236px card plus a 54px gap, so branches never touch. */
+export const COLUMN_GAP = 290;
 const ORIGIN_X = 250;
 const ORIGIN_Y = 100;
 

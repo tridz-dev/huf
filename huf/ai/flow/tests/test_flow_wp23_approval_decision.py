@@ -245,5 +245,5 @@ class TestApprovalDecisionIsNotLost(WP11Base):
 		with patch.object(flow_engine.flow_state, "set_state", side_effect=frappe.QueryDeadlockError("1020")):
 			result = flow_engine._exec_state_set(run, {"id": "s"}, {"key": "k", "value": "v"}, {})
 		self.assertEqual(result["status"], "failed")
-		self.assertIn("another run was saving the same key", result["error"])
+		self.assertIn("another run was saving the same data", result["error"])
 		self.assertNotIn("1020", result["error"])
