@@ -2982,6 +2982,23 @@ COMMERCE_TOOLS = [
 ]
 
 
+# WhatsApp Flows (BE-FLOWS): send a Flow form to the current conversation's contact.
+WA_FLOW_TOOLS = [
+	{
+		"tool_name": "send_wa_flow",
+		"description": "Send a WhatsApp Flow (a native form) to the current conversation's contact. The submitted answers come back as a 'Form submitted: key=value' message.",
+		"function_path": "huf.ai.channels.wa_flows.handle_send_wa_flow",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("flow_name", required=True, description="Name of a synced, published WhatsApp Flow"),
+			_p("cta", required=True, description="Button label that opens the form (max 30 chars)"),
+			_p("screen", description="Optional first screen id"),
+			_p("data", type="object", description="Optional data for the first screen"),
+		],
+	},
+]
+
+
 ALL_INTEGRATION_TOOLS = (
 	# Platform capabilities — no external account to connect.
 	RECIPIENT_TOOLS
@@ -3010,6 +3027,7 @@ ALL_INTEGRATION_TOOLS = (
 	+ ERP_CHANNEL_TOOLS
 	+ CHANNEL_HELPDESK_TOOLS
 	+ COMMERCE_TOOLS
+	+ WA_FLOW_TOOLS
 	# Tools backed by a connectable service. Keys match Integration Service
 	# docnames and the SERVICE_NAME each tool module uses for credentials.
 	+ _with_service(SLACK_TOOLS, "slack")
@@ -3033,3 +3051,4 @@ ALL_INTEGRATION_TOOLS = (
 	+ _with_service(SERP_YOUTUBE_TOOLS, "serpapi")
 	+ FRAPPE_CLOUD_TOOLS  # entries already declare service="frappe_cloud"
 )
+

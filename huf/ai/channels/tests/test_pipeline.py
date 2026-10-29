@@ -21,7 +21,8 @@ def hook_continue(ctx):
 
 class TestPipeline(IntegrationTestCase):
 	def test_noop_by_default(self):
-		self.assertEqual(pipeline.PRE_ROUTE_HOOKS[0], "huf.ai.channels.handoff_hooks.handed_off_hook")
+		hooks = pipeline.PRE_ROUTE_HOOKS
+		self.assertLess(hooks.index("huf.ai.channels.handoff_hooks.handed_off_hook"), hooks.index("huf.ai.channels.hours.business_hours_hook"))
 		with patch.object(pipeline, "PRE_ROUTE_HOOKS", []):
 			self.assertIsNone(run_pre_route({}))
 

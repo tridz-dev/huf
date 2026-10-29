@@ -16,10 +16,12 @@ ACTIONS = ("continue", "reply", "route", "handoff", "drop")
 
 # Dotted paths of hook callables. Later WPs append here.
 PRE_ROUTE_HOOKS: list[str] = [
-	"huf.ai.channels.handoff_hooks.handed_off_hook",  # handed-off chats skip the AI: always first
+	# Record-only hooks first: they never return a Decision, so later short-circuits cannot skip them.
+	"huf.ai.channels.widgets.ref_opt_in_hook",  # [ref:...] click-to-chat opt-in
+	"huf.ai.channels.wa_flows.flow_response_hook",  # nfm_reply form responses
+	"huf.ai.channels.handoff_hooks.handed_off_hook",  # handed-off chats skip the AI: first routing hook
 	"huf.ai.channels.hours.business_hours_hook",
 	"huf.ai.channels.rules.routing_rules_hook",
-	"huf.ai.channels.widgets.ref_opt_in_hook",  # [ref:...] click-to-chat opt-in; records only
 ]
 
 
