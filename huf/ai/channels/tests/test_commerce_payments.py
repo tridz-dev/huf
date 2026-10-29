@@ -220,4 +220,4 @@ class TestCommercePayments(IntegrationTestCase):
 			res = templates_pack.submit_templates_pack(self.gw.name)
 		self.assertTrue(res["success"])
 		self.assertEqual(create.call_count, 5)
-		self.assertEqual(cre
+		self.assertEqual(create.call_args.kwargs["gateway_name"], self.gw.name)
