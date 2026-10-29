@@ -151,7 +151,8 @@ def business_hours_hook(context: dict) -> Decision | None:
 	conversation = (ctx.get("context") or {}).get("conversation_id") or (ctx.get("context") or {}).get("sender_id")
 	key = f"{_CACHE_PREFIX}:{gateway.name}:{conversation or 'none'}:{next_open.isoformat() if next_open else 'never'}"
 	cache = frappe.cache()
-	if cache.get_value(key):
+	# expires=True keeps the lookup out of frappe.local.cache, which would otherwise pin the first miss.
+	if cache.get_value(key, expires=True):
 		return Decision("drop")
 	if next_open:
 		local_tz = pytz.timezone(tz_name)
