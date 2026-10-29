@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
@@ -82,10 +83,41 @@ class TestIsOpen(_Base):
 			self.assertTrue(hours.is_open(gw, datetime(2026, 11, 2, 6, 0, tzinfo=timezone.utc)))
 			self.assertFalse(hours.is_open(gw, datetime(2026, 11, 2, 4, 0, tzinfo=timezone.utc)))
 
-	def test_holiday_closes_open_window(self):
+	def test_holiday_closes_open_window_when_holidays_patched(self):
 		gw = self.unsaved(holiday_list="Test Holidays")
 		with patch.object(hours, "_holidays", return_value={date(2026, 11, 2)}):
 			self.assertFalse(hours.is_open(gw, MON_1000))
+
+	def test_holiday_child_row_closes_open_window(self):
+		# Real Gateway Holiday child rows, no patching of _holidays.
+		gw = self.unsaved(holidays=[{"holiday_date": "2026-11-02", "description": "Election day"}])
+		self.assertFalse(hours.is_open(gw, MON_1000))
+
+	def test_holiday_child_row_on_other_date_does_not_close(self):
+		gw = self.unsaved(holidays=[{"holiday_date": "2026-11-03", "description": "Not Monday"}])
+		self.assertTrue(hours.is_open(gw, MON_1000))
+
+	def test_holidays_union_child_rows_and_holiday_list(self):
+		gw = self.unsaved(holidays=[{"holiday_date": "2026-11-02"}], holiday_list="Public Holidays")
+		erp_list = SimpleNamespace(holidays=[SimpleNamespace(holiday_date=date(2026, 11, 3))])
+		with (
+			patch.object(frappe.db, "exists", return_value=True),
+			patch.object(frappe, "get_cached_doc", return_value=erp_list) as cached,
+		):
+			self.assertEqual(hours._holidays(gw), {date(2026, 11, 2), date(2026, 11, 3)})
+		cached.assert_called_once_with("Holiday List", "Public Holidays")
+		self.assertFalse(hours.is_open(gw, datetime(2026, 11, 3, 10, 0, tzinfo=timezone.utc)))
+
+	def test_holiday_list_name_ignored_without_holiday_list_doctype(self):
+		gw = self.unsaved(holiday_list="Public Holidays")
+		with patch.object(frappe.db, "exists", side_effect=lambda dt, *a, **k: False):
+			self.assertEqual(hours._holidays(gw), set())
+			self.assertTrue(hours.is_open(gw, MON_1000))
+
+	def test_holiday_list_name_missing_document_is_ignored(self):
+		gw = self.unsaved(holiday_list="Deleted List", holidays=[{"holiday_date": "2026-11-09"}])
+		with patch.object(frappe.db, "exists", side_effect=lambda dt, *a, **k: dt == "DocType"):
+			self.assertEqual(hours._holidays(gw), {date(2026, 11, 9)})
 
 	def test_disabled_means_no_restriction(self):
 		gw = self.unsaved(business_hours_enabled=0)
