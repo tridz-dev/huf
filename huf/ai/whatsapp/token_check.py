@@ -104,6 +104,13 @@ def _is_app_secret_mismatch(err: dict | None) -> bool:
 	return str(err.get("code")) == "100" and "appsecret_proof" in str(err.get("message") or "").lower()
 
 
+def _is_bad_app_signature(err: dict | None) -> bool:
+	"""Code 190 'signature' from debug_token: the App Secret (app token) is wrong, the input token may be fine."""
+	if not isinstance(err, dict):
+		return False
+	return str(err.get("code")) == "190" and "signature" in str(err.get("message") or "").lower()
+
+
 def _message_for_error(err: dict | None) -> str:
 	if _is_app_secret_mismatch(err):
 		return MSG_APP_SECRET
@@ -197,7 +204,10 @@ def run_check(creds: dict[str, Any], http_get: Callable[..., Any] = default_http
 			if not valid:
 				code = (err or {}).get("code")
 				out["error_code"] = code
-				out["message"] = _message_for_error(err) if err else MSG_EXPIRED
+				if not data and _is_bad_app_signature(err):
+					out["message"] = MSG_APP_SECRET
+				else:
+					out["message"] = _message_for_error(err) if err else MSG_EXPIRED
 				return out
 			if out["missing_scopes"]:
 				out["message"] = "The token is missing: " + ", ".join(out["missing_scopes"]) + "."
