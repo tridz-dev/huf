@@ -2024,9 +2024,27 @@ def _continue_ingest(
         return _record_event(event, "unsupported_recorded: fixed reply, no run")
 
     referral_tag, button_payload = _routing_inputs(event)
-    route = resolve_gateway_route(
-        gateway_name, context, referral_tag=referral_tag, button_payload=button_payload, commit_pin=True
-    )
+    from huf.ai.channels.pipeline import run_pre_route
+
+    pre = run_pre_route({"gateway": gateway_name, "event": event.name, "context": context})
+    if pre is not None and pre.action in ("reply", "handoff"):
+        text = str((pre.payload or {}).get("text") or "")
+        if text:
+            _send_plain_reply(
+                gateway,
+                str(context.get("sender_id") or ""),
+                str(context.get("conversation_id") or "") or None,
+                text,
+            )
+        return _record_event(event, f"pre_route_{pre.action}")
+    if pre is not None and pre.action == "drop":
+        return _record_event(event, "pre_route_drop")
+    if pre is not None and pre.action == "route" and (pre.payload or {}).get("target_type"):
+        route = {"status": "Queued", "binding": None, **pre.payload}
+    else:
+        route = resolve_gateway_route(
+            gateway_name, context, referral_tag=referral_tag, button_payload=button_payload, commit_pin=True
+        )
     if route["status"] == "Triage":
         return _send_triage_prompt(event, gateway, context, route)
     if route["status"] != "Queued":
