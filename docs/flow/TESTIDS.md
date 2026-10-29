@@ -237,3 +237,16 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-run-step-output-<nodeId>`, `flow-run-input` | Now the RAW JSON text, present only after "{ } Raw" is opened (HumanValue is the default view) |
 | `flow-json-<key>`, `-input`, `-format`, `-copy`, `-error`, `-toggle`, `-more`, `-help`, `-text` | JsonArea (the one component for legitimate JSON): `-toggle` is "Show as form" / "Edit as JSON", remembered per key; `-more` folds over 12 lines |
 | `flow-run-waiting-user`, `flow-run-human-waiting`, `flow-json-run-resume` (+ `-input`, `-error`, `-format`, `-copy`), `flow-run-resume` | Run waiting for someone to continue: its facts as labelled rows and the optional "extra information (JSON)" area; `flow-run-resume` is the Continue button (off while the JSON is invalid) |
+
+## UX-11 / UX-20 flows list, new-flow chooser, publish and settings dialogs
+| testid | Where |
+|---|---|
+| `flow-list-item-<flowId>` | Flow card (whole card opens the flow). Inside it: `flow-card-title` (2 lines, `title` = full name), `flow-card-description`, `flow-card-trigger` ("Starts when ..."), `flow-card-last-run` (`data-run-status`), `flow-card-category` (only when set), `flow-card-steps` (icon strip), `flow-card-trigger-icon` (`data-trigger`) |
+| `flow-card-open`, `flow-card-run`, `flow-card-menu`, `flow-card-menu-content`, `flow-card-duplicate`, `flow-card-settings`, `flow-card-delete` | Labelled card actions and the "..." menu (view-only people only get Open and the menu's "View settings") |
+| `flow-list-filters`, `flow-list-search`, `flow-list-status-filter`, `flow-list-category-filter`, `flow-list-sort`, `flow-list-limit-note`, `flow-list-error` | List filter row ("All statuses", "All categories", "Recently updated"), the "Showing N of M" note with Show more, load error |
+| `flow-delete-dialog`, `flow-delete-name`, `flow-delete-confirm` | Delete confirmation opened from a card ("Delete this flow?") |
+| `flow-first-run-coach`, `flow-first-run-start` | "Build your first flow" panel on an empty list, and its "Start with a template" button |
+| `flow-new-dialog`, `flow-new-scratch`, `flow-template-<templateId>`, `flow-templates-<group>`, `flow-template-steps` | New flow chooser: start from scratch, one button per template (ids in `data/flowTemplates.json`), group sections, icon strip |
+| `flow-publish-dialog`, `flow-publish-summary` (`data-start-kind`), `flow-publish-warnings`, `flow-publish-warning-unconnected`, `flow-publish-warning-problem`, `flow-publish-connect`, `flow-publish-cancel`, `flow-publish-confirm` | Publish summary: what will start the flow (+ web address with Copy for a webhook), warnings, confirm |
+| `flow-settings-more`, `flow-settings-danger-zone`, `flow-settings-category-new`, `flow-settings-name-error`, `flow-settings-error` | Settings: collapsed "More" (holds `flow-settings-auto-convert`), Danger zone, new-category input, inline errors |
+| `flow-settings-delete` (opens the in-dialog confirm), `flow-settings-delete-title`, `flow-settings-delete-cancel`, `flow-settings-delete-confirm` | Settings deletion: the confirm replaces the dialog body (no second dialog) |

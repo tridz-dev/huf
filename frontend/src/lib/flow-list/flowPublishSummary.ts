@@ -1,4 +1,4 @@
-import { describeCron } from '@/lib/flow-graph/flowSchedule';
+import { describeCron } from '@/lib/flow-trigger/scheduleText';
 import { webhookUrl } from '@/lib/flow-graph/flowWebhookUi';
 import type { TriggerConfig } from '@/types/flow.types';
 

@@ -1,5 +1,5 @@
 import { actionOptions } from '@/data/actions';
-import { describeCron } from '@/lib/flow-graph/flowSchedule';
+import { describeCron } from '@/lib/flow-trigger/scheduleText';
 import { actionCardId } from '@/lib/flow/flowLabels';
 import type { StatusKind } from '@/components/common/StatusPill';
 import type { FlowCard, FlowCardLastRun, FlowCardStep, FlowCardTrigger } from '@/services/flow/flowCardsApi';
