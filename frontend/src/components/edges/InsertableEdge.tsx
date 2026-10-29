@@ -102,7 +102,7 @@ export const InsertableEdge = memo(
     }, [obstacles, loopBack, target, sourceX, sourceY, targetX, targetY]);
 
     const lineStyle = selected
-      ? { ...style, stroke: 'var(--signal)', strokeWidth: 3 }
+      ? { ...style, stroke: 'var(--signal)', strokeWidth: 2.5 }
       : { ...style, stroke: 'var(--steel-soft)', strokeWidth: 1.75, ...(loopBack ? { strokeDasharray: '6 4' } : {}) };
     const pill = data?.pill;
     // Router paths all leave one dot: their names go partway along each line so they never pile up.
