@@ -78,6 +78,8 @@ CAPABILITIES: dict[str, str] = {
 	"ssh.approve": "Approve SSH Executions",
 	# --- Docker Execution ---
 	"docker.run": "Run Docker Execution Tool",
+	# --- Channels ---
+	"channels.reply": "Reply to Channel Conversations",
 	# --- Developer Platform ---
 	"developer.access": "Access Developer Platform",
 	"developer.keys.manage": "Manage Developer API Keys",

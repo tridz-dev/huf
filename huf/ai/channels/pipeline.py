@@ -16,6 +16,7 @@ ACTIONS = ("continue", "reply", "route", "handoff", "drop")
 
 # Dotted paths of hook callables. Later WPs append here.
 PRE_ROUTE_HOOKS: list[str] = []
+PRE_ROUTE_HOOKS.insert(0, "huf.ai.channels.handoff_hooks.handed_off_hook")  # handed-off chats skip the AI: always first
 
 
 @dataclass

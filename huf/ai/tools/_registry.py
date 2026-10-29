@@ -93,6 +93,26 @@ HANDOFF_TOOLS = [
 	},
 ]
 
+HANDOFF_HUMAN_TOOLS = [
+	{
+		"tool_name": "handoff_to_human",
+		"description": (
+			"Hand the current WhatsApp conversation to a human. The AI stops answering this chat, a linked ticket/lead "
+			"is created when the gateway's handoff target (Helpdesk/CRM) is set, and the contact receives the gateway's "
+			"handoff message once. Only works inside a gateway conversation. Arguments: summary (what the human needs "
+			"to know), priority (low, normal, high, urgent), target (optional: none, helpdesk, crm, erpnext; defaults "
+			"to the gateway setting)."
+		),
+		"function_path": "huf.ai.tools.handoff.handle_handoff_to_human",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("summary", required=True, description="Short summary of the conversation and what the customer needs"),
+			_p("priority", description="low, normal, high or urgent (default normal)"),
+			_p("target", description="Optional handoff target: none, helpdesk, crm or erpnext; default is the gateway setting"),
+		],
+	},
+]
+
 SLACK_TOOLS = [
 	{
 		"tool_name": "slack_send_message",
@@ -2861,6 +2881,7 @@ ALL_INTEGRATION_TOOLS = (
 	# Platform capabilities — no external account to connect.
 	RECIPIENT_TOOLS
 	+ HANDOFF_TOOLS
+	+ HANDOFF_HUMAN_TOOLS
 	+ CRM_TOOLS
 	+ HELPDESK_TOOLS
 	+ RAVEN_TOOLS

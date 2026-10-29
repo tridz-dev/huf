@@ -265,6 +265,9 @@ doc_events = {
         "on_trash": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
         "after_delete": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
     },
+    "Communication": {
+        "after_insert": "huf.ai.channels.handoff_hooks.communication_after_insert",
+    },
     "WhatsApp Templates": {
         "before_validate": "huf.ai.gateway_adapters.whatsapp_template_guard.guard_template_write",
         "validate": "huf.ai.gateway_adapters.whatsapp_template_guard.guard_template_write",
