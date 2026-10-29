@@ -38,6 +38,8 @@ interface FlowContextType {
   updateNodeData: (nodeId: string, update: (data: FlowNode['data']) => FlowNode['data']) => void;
   /** The latest committed copy of a step. */
   getNode: (nodeId: string) => FlowNode | undefined;
+  /** The latest committed flow, even before React has re-rendered with it (for checks made right after typing). */
+  getFlow: () => Flow | null;
   /** Remove a step. Default `reconnect` joins the step before it to the step after it; `cascade` also removes what only it led to. */
   deleteNode: (nodeId: string, mode?: RemoveStepMode) => void;
   /** Remove one connection between two steps. */
@@ -322,6 +324,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   }, [activeFlowId, markUnsaved]);
 
   const getNode = useCallback((nodeId: string) => activeFlowRef.current?.nodes.find(n => n.id === nodeId), []);
+  const getFlow = useCallback(() => activeFlowRef.current, []);
 
   const updateNodeData = useCallback((nodeId: string, update: (data: FlowNode['data']) => FlowNode['data']) => {
     const current = activeFlowRef.current?.nodes.find(n => n.id === nodeId);
@@ -450,6 +453,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNode,
     updateNodeData,
     getNode,
+    getFlow,
     deleteNode,
     deleteEdge,
     addEdge,
@@ -484,6 +488,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNode,
     updateNodeData,
     getNode,
+    getFlow,
     deleteNode,
     deleteEdge,
     addEdge,

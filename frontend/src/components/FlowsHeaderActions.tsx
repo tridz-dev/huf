@@ -20,7 +20,7 @@ import { toast } from '@/lib/toast';
 import { FlowRunHistory } from './FlowRunHistory';
 import { FlowRunViewer } from './FlowRunViewer';
 import { FlowSettingsModal } from './modals/FlowSettingsModal';
-import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
+import { humanizeFlowError, validateFlow } from '@/lib/flow-graph/flowValidation';
 import { FlowChecklist } from './flow/frame/FlowChecklist';
 import { setChecklistOpen } from './flow/frame/frameStore';
 import { useFlowIssues } from './flow/frame/useFlowIssues';
@@ -137,7 +137,7 @@ export function FlowToolbarTitle() {
 }
 
 export function FlowsHeaderActions() {
-  const { activeFlow, saveState, hasUnsavedChanges, saveFlow, setFlowPublished } = useFlowContext();
+  const { activeFlow, saveState, hasUnsavedChanges, saveFlow, setFlowPublished, getFlow } = useFlowContext();
   const [showRunDialog, setShowRunDialog] = useState(false);
   const { canManage, canPublishSensitive, readOnlyReason } = useFlowPermissions();
   const [isPublishing, setIsPublishing] = useState(false);
@@ -182,7 +182,9 @@ export function FlowsHeaderActions() {
    * triggers start from what is stored and so has to stay finished.
    */
   const needsFinishing = (): boolean => {
-    if (!activeFlow || issues.length === 0) return false;
+    // Read the flow as it is right now: a field the person just typed in may not have reached this render yet.
+    const latest = getFlow();
+    if (!activeFlow || !latest || validateFlow(latest.nodes, latest.edges).length === 0) return false;
     setChecklistOpen(true);
     return true;
   };
