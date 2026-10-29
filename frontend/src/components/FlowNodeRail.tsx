@@ -1,4 +1,4 @@
-import { Zap, Bot, GitBranch, Wrench, Database, type LucideIcon } from 'lucide-react';
+import { Zap, SquareAsterisk, GitBranch, Plug, Database, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -21,8 +21,8 @@ export const NODE_RAIL_ACTION_CATEGORY: Record<
 > = {
   agent: 'agent',
   condition: 'control',
-  tool: 'tool',
-  data: 'integration',
+  tool: 'apps',
+  data: 'data',
 };
 
 interface RailItem {
@@ -32,11 +32,11 @@ interface RailItem {
 }
 
 const RAIL_ITEMS: RailItem[] = [
-  { id: 'trigger', label: 'Trigger', icon: Zap },
-  { id: 'agent', label: 'Agent', icon: Bot },
-  { id: 'condition', label: 'Condition', icon: GitBranch },
-  { id: 'tool', label: 'Tool', icon: Wrench },
-  { id: 'data', label: 'Data', icon: Database },
+  { id: 'trigger', label: 'What starts it', icon: Zap },
+  { id: 'agent', label: 'AI', icon: SquareAsterisk },
+  { id: 'condition', label: 'Decide and repeat', icon: GitBranch },
+  { id: 'tool', label: 'Apps', icon: Plug },
+  { id: 'data', label: 'Work with data', icon: Database },
 ];
 
 export interface FlowNodeRailProps {
@@ -73,7 +73,7 @@ export function FlowNodeRail({
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  aria-label={`Add ${label} node`}
+                  aria-label={`Add a step: ${label}`}
                   data-testid={`flow-rail-${id}`}
                   aria-pressed={isActive}
                   disabled={isDisabled}

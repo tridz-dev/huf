@@ -4,7 +4,7 @@ export const triggerOptions: TriggerOption[] = [
   {
     id: 'webhook',
     name: 'Webhook',
-    description: 'Starts the flow when another system sends a request to its web address.',
+    description: 'Starts when another system calls its address.',
     icon: 'Webhook',
     category: 'highlight',
     tab: 'explore'
@@ -12,15 +12,15 @@ export const triggerOptions: TriggerOption[] = [
   {
     id: 'schedule',
     name: 'Schedule',
-    description: 'Starts the flow by itself at times you choose, such as every morning.',
+    description: 'Starts by itself at times you choose.',
     icon: 'Clock',
     category: 'highlight',
     tab: 'explore'
   },
   {
     id: 'doc-event',
-    name: 'Data',
-    description: 'Starts the flow when a record is created, changed or deleted.',
+    name: 'Record change',
+    description: 'Starts when a record is added, changed or deleted.',
     icon: 'Database',
     category: 'highlight',
     tab: 'explore'

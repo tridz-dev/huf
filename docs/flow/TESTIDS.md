@@ -31,7 +31,11 @@ Card title = node title = sidebar title (derived from `data/actions.ts` / `data/
 |---|---|
 | `flow-node-<nodeId>` | Node wrapper (`data-node-type`, `data-incomplete="true|false"`) |
 | `flow-node-title-<nodeId>` | Node title |
-| `flow-node-incomplete-<nodeId>` | "Needs setup" marker |
+| `flow-node-subtitle-<nodeId>` | One line saying what the step does ("Send a message to #alerts"); full text in the tooltip |
+| `flow-node-status-<nodeId>` | The card's ONE status word (`data-status`: ready, needs-setup, not-connected, orphan, running, waiting, done, failed). Never wraps; cards are the same size in every state |
+| `flow-node-incomplete-<nodeId>` | Inner text of the status word when it is "Needs setup" |
+| `flow-node-marker-<nodeId>` | "Trigger" / "End" marker on trigger and end cards |
+| `flow-node-choose-trigger-<nodeId>` | "Choose a trigger" button on the empty trigger card (title "Choose what starts this flow") |
 | `flow-node-delete-<nodeId>` | Delete button (on the selected node) |
 | `flow-node-delete-dialog`, `flow-node-delete-confirm` | Confirmation for configured nodes |
 | `flow-handle-<nodeId>` | Single source handle |
@@ -82,7 +86,7 @@ Value inputs insert a reference (`$from`) or, after typed text, a `$template` wi
 |---|---|
 | `flow-not-connected-node-<nodeId>` | "Not connected" badge + Connect link on a step whose integration has no credentials |
 | `flow-not-connected-sidebar`, `flow-connect-link-sidebar` | Same notice and link in the step settings (link goes to the real connect screen) |
-| `flow-node-tool-<nodeId>` | Human tool name on a tool step |
+| `flow-node-tool-<nodeId>` | Removed: the tool's plain name is now the card subtitle (`flow-node-subtitle-<nodeId>`) |
 | `flow-field-tool.call-timeout_ms` | "Wait up to" (seconds) |
 | `flow-field-router.llm-model`, `flow-option-router-model-default`, `flow-option-router-model-<modelName>` | Router AI model (optional) |
 | `flow-toggle-panels`, `flow-open-settings` | Canvas corner buttons |
@@ -110,9 +114,11 @@ Publishing a flow with unconnected integration steps shows a warning toast (`Som
 | `flow-edge-remove-<edgeId>` | "Remove connection" button on the selected line |
 | `flow-edge-delete-dialog`, `flow-edge-delete-confirm` | Confirmation shown by that button and by the Delete key on a selected line |
 | `flow-edge-config` | Sidebar "Connection" panel of the selected line |
-| `flow-node-orphan-<nodeId>` | "Nothing leads to this step" on a step no trigger reaches |
+| `flow-node-orphan-<nodeId>` | "Nothing leads here" status word on a step no trigger reaches |
 | `flow-delete-mode`, `flow-delete-mode-reconnect`, `flow-delete-mode-cascade` | Choice in the step delete dialog (`flow-node-delete-dialog`) when the step has a step after it: "Remove step and reconnect" (default) / "Remove step and everything after it" |
-| `flow-published-badge`, `flow-unpublish`, `flow-unpublish-dialog`, `flow-unpublish-confirm` | Published state in the header; Unpublish replaces Publish while the flow is published |
+| `flow-published-badge`, `flow-draft-badge`, `flow-status-pill`, `flow-unpublish`, `flow-unpublish-dialog`, `flow-unpublish-confirm` | Header status: wrapper `flow-published-badge` while Live (`flow-draft-badge` while not) around the shared pill `flow-status-pill` (Draft / Live / Has problems); Unpublish replaces Publish while the flow is live |
+| `status-pill-<kind>` | Default test id of the shared `StatusPill` (`data-status` = kind: draft, live, has_problems, archived, queued, running, waiting_approval, waiting_review, finished, failed, stuck, approved, rejected, timed_out) |
+| `flow-list-status-<flowId>` | Status pill on a flow's card in the list |
 | `flow-run-document`, `flow-run-document-doctype`, `-name`, `-event`, `-fields`, `flow-run-full-payload` | Data trigger run: "Document" summary and the collapsed "Full payload" (`flow-run-input` is inside it) |
 | `flow-doc-event-reset-note` | Message shown when changing the document type cleared an event that type cannot have |
 | `boot-fallback`, `app-error-screen`, `chunk-error-screen` | "Something went wrong / Reload" screens (entry script, app crash, page chunk) |
@@ -167,7 +173,7 @@ Node type `code.run`, canvas type `code-run`, palette card `flow-card-code-run` 
 | `flow-code-help` | "How your code runs" help (`<details>`) |
 | `flow-code-readonly-note` | "You need permission to run code to edit this step." (the form is then disabled) |
 | `flow-error-code.run-code`, `-profile`, `-timeout_s`, `-inputs` | Inline required-field errors |
-| `flow-node-code-profile-<nodeId>` | Profile name on the canvas node card |
+| `flow-node-code-profile-<nodeId>` | Removed: the card subtitle says "Run a Python snippet" (the profile stays in the step settings) |
 | `flow-code-output-exit` | Exit status badge in a step's output in Run details (inside `flow-run-step-output-<nodeId>`) |
 | `flow-code-output-stdout`, `flow-code-output-stdout-empty` | Printed output block / "Nothing was printed." |
 | `flow-code-output-result` | Result as formatted JSON (absent when the code returned nothing) |
@@ -188,7 +194,10 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-help`, `flow-help-popover`, `flow-help-shortcuts`, `flow-help-guide-link` | "?" button in the editor header, its popover (how a flow works, keyboard shortcuts) and the link to the full guide |
 | `flow-first-run-guide`, `flow-first-run-guide-close` | 3-step card on a flow with only a trigger (hidden for view-only users; closing it is remembered in the browser) |
 | `flow-minimap` | Overview map, bottom-left of the canvas (hidden when the canvas is narrower than 640px) |
-| `flow-palette-intro` | One-sentence intro under the "Choose a trigger" / "Add a step" title |
+| `flow-palette-intro` | One-sentence intro under the "Choose what starts this flow" / "Add a step" title |
+| `flow-palette-empty` | Empty state of the palette search ("No steps match ..."), with `flow-palette-clear-search` ("Show all") |
+| `flow-palette-section-<category>` | A labelled palette section: agent (AI), control (Decide and repeat), people, data (Work with data), apps, advanced |
+| `flow-transform-group-<section>` | Labelled group in the Transform operation list: change-text, find-in-text, pick-rows, group-combine, values |
 | `flow-card-desc-<cardId>` | The one-line "what does this step do" under a palette card |
 | `flow-config-hint` | Intro sentence at the top of a step or trigger form |
 | `flow-hint-<form>-<field>` | One-line hint under a field (for example `flow-hint-webhook-secret`, `flow-hint-loop-max`, `flow-hint-approval-timeout`, `flow-hint-transform-op`, `flow-hint-transform-example`, `flow-hint-condition`) |
