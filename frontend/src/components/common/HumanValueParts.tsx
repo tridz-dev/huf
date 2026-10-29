@@ -51,8 +51,8 @@ export function ListValue({
         <ol className="mt-2 space-y-2" data-testid={`${testId}-items`}>
           {node.items.slice(0, shown).map((item: HumanItem) => (
             <li key={item.index} className="rounded-md border border-line bg-paper-deep/40 p-2" data-testid={`${testId}-item-${item.index}`}>
-              {node.items.some((i) => i.node.kind === 'rows') && <div className="mb-1 text-sm font-medium">{item.title}</div>}
-              {renderNode(item.node, path ? `${path}.${item.index}` : String(item.index))}
+              {node.items.some((i) => i.body.kind === 'rows' || i.title !== `Item ${i.index + 1}`) && <div className="mb-1 text-sm font-medium">{item.title}</div>}
+              {item.body.kind !== 'empty' && renderNode(item.body, path ? `${path}.${item.index}` : String(item.index))}
             </li>
           ))}
           {node.items.length > shown && (
