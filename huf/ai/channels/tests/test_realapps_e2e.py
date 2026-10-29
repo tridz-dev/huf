@@ -147,7 +147,7 @@ class TestErpRealFlow(IntegrationTestCase):
 			{
 				"doctype": "Contact",
 				"first_name": f"WA{self.sfx}",
-				"mobile_no": f"+{self.conv.contact_handle}",
+				"phone_nos": [{"phone": f"+{self.conv.contact_handle}", "is_primary_mobile_no": 1}],
 				"links": [{"link_doctype": "Customer", "link_name": self.customer.name}],
 			}
 		).insert(ignore_permissions=True)
