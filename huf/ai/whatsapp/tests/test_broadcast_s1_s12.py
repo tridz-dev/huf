@@ -35,7 +35,7 @@ from frappe.utils import add_to_date, now_datetime
 
 from huf.ai import gateway_service, gateway_webhook
 from huf.ai.gateway_adapters import GatewayInboundRequest, whatsapp_bridge as bridge
-from huf.ai.whatsapp.broadcast import api as bapi, limits as blimits, runner, send as bsend, stale
+from huf.ai.whatsapp.broadcast import api as bapi, limits as blimits, policy, runner, send as bsend, stale
 
 PREFIX = "S1S12"
 ACCOUNT = f"{PREFIX} Account"
@@ -273,6 +273,9 @@ class S12Case(unittest.TestCase):
 		patch("frappe.get_request_header", lambda *a, **k: None).start()
 		patch("frappe.enqueue", lambda *a, **kw: self.ticks.append((a, kw))).start()
 		patch.object(runner, "_sleep", lambda s: None).start()
+		_get = policy.get
+		patch.object(policy, "get", lambda key, *a, **k: 100000 if str(key).startswith("rate_") else _get(key, *a, **k)).start()
+		meta().start()  # Meta's tier/quality read is the only Graph GET; no network
 		patch("huf.ai.gateway_webhook._ingest_rate_gate", lambda: None).start()
 		self._prev_request = getattr(frappe.local, "request", None)
 		self._prev_ip = getattr(frappe.local, "request_ip", None)
@@ -394,7 +397,7 @@ class S12Case(unittest.TestCase):
 
 def _envelope(value: dict, field: str = "messages") -> dict:
 	value = {"messaging_product": "whatsapp", "metadata": {"phone_number_id": PHONE_ID}, **value}
-	return {"object": "whatsapp_business_account", "entry": [{"id": "s1s12-waba", "changes": [{"field": field, "value": value}]}]}
+	return {"object": "whatsapp_business_account", "entry": [{"id": "s1s12-biz", "changes": [{"field": field, "value": value}]}]}
 
 
 # ------------------------------------------------------------------ S1-S12
@@ -459,8 +462,9 @@ class TestBroadcastS1S12(S12Case):
 		gateway_service._record_opt_out(gw_doc, num(1))
 		b = self.mk()
 		out = self.add(b, [num(0), num(1), num(0), "12"])
-		self.assertEqual(out["added"], 2, out)  # the STOP row is stored (skipped) and counted as added
-		self.assertIn((num(0), "duplicate"), [(s["recipient"], s["reason"]) for s in out["skipped"]], out)
+		self.assertEqual(out["added"], 1, out)  # the STOP number is stored as a skipped row, reported in `skipped`
+		reasons = sorted((s["recipient"], s["reason"]) for s in out["skipped"])
+		self.assertEqual(reasons, [(num(0), "duplicate"), (num(1), "opted_out")], out)
 		self.assertEqual(out["invalid_total"], 1, out)
 		rows = self.by_recipient(b)
 		self.assertEqual((rows[num(1)]["status"], rows[num(1)]["skip_reason"]), ("skipped", "opted_out"))
@@ -497,7 +501,10 @@ class TestBroadcastS1S12(S12Case):
 		frappe.db.commit()
 		with as_user(WRITER), meta():
 			pv = bapi.preview_broadcast(broadcast=b)
-		self.assertIn("template_not_approved:PAUSED", [str(x.get("code") if isinstance(x, dict) else x) for x in pv["limits"]["blocking"]], pv["limits"])
+		blocking = pv["limits"]["blocking"]
+		self.assertEqual([x["code"] for x in blocking], ["template_not_approved"], pv["limits"])
+		self.assertIn("paused", blocking[0]["message"])  # the status is in the message (plan text says code:<STATUS>)
+		self.assertEqual(pv["limits"]["template_status"], "PAUSED")
 		out = self.start(b, 2)
 		self.assertFalse(out.get("success"), out)
 		self.assertIn("Broadcast blocked", str(out.get("message")), out)
