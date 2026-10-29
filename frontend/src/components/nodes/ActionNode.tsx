@@ -21,6 +21,7 @@ import {
   Globe,
   MessageSquare,
   Sheet,
+  Terminal,
   AlertCircle,
   type LucideIcon,
 } from 'lucide-react';
@@ -58,7 +59,8 @@ const iconMap: Record<string, LucideIcon> = {
   FilePlus,
   Globe,
   MessageSquare,
-  Sheet
+  Sheet,
+  Terminal,
 };
 
 type ActionNodeProps = NodeProps<FlowNodeData>;
@@ -142,6 +144,11 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
             {toolId && toolLabel(toolId).toLowerCase() !== data.label.toLowerCase() && (
               <div className="text-xs text-muted-foreground truncate" title={toolLabel(toolId)} data-testid={`flow-node-tool-${id}`}>
                 {toolLabel(toolId)}
+              </div>
+            )}
+            {cfg?.type === 'code-run' && typeof cfg.profile === 'string' && cfg.profile && (
+              <div className="text-xs text-muted-foreground truncate" title={`Runs under ${cfg.profile}`} data-testid={`flow-node-code-profile-${id}`}>
+                {cfg.profile}
               </div>
             )}
             {toolId && <NotConnected toolId={toolId} compact testIdSuffix={`node-${id}`} />}

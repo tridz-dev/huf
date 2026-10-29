@@ -59,7 +59,8 @@ export type ActionType =
   | 'state-get'
   | 'state-set'
   | 'state-delete'
-  | 'doc-create';
+  | 'doc-create'
+  | 'code-run';
 
 // ─── Trigger configs (field names == graph-IR config keys) ────────────
 
@@ -192,6 +193,17 @@ export interface DocCreateActionConfig {
   fields?: Record<string, FlowValue>;
 }
 
+/** Execute code (graph-IR `code.run`): sandboxed Python run under an Execution Profile. */
+export interface CodeRunActionConfig {
+  type: 'code-run';
+  code?: string;
+  /** Execution Profile name. */
+  profile?: string;
+  /** Data passed to the code as the `inputs` dictionary. */
+  inputs?: Record<string, FlowValue>;
+  timeout_s?: number;
+}
+
 /**
  * A backend node type this UI has no editor for. Kept verbatim (`backend_type` + its
  * config) so it round-trips instead of being rewritten as a tool call.
@@ -216,6 +228,7 @@ export type ActionConfig =
   | StateSetActionConfig
   | StateDeleteActionConfig
   | DocCreateActionConfig
+  | CodeRunActionConfig
   | UnknownActionConfig
   | { type: undefined };
 

@@ -47,3 +47,32 @@ export function withoutFailureKeys(output: unknown): unknown {
     if (!output || typeof output !== 'object' || Array.isArray(output)) return output;
     return Object.fromEntries(Object.entries(output as Record<string, unknown>).filter(([k, v]) => k !== 'status' && k !== 'error' && !(k === 'success' && v === false)));
 }
+
+/** Run status as people read it: "Waiting Code" is "Waiting for code"; every other status is shown as stored. */
+export function flowRunStatusLabel(status: string | null | undefined): string {
+    return status === 'Waiting Code' ? 'Waiting for code' : status || '';
+}
+
+/** What an Execute code step records as its output. */
+export interface CodeStepOutput {
+    stdout: string;
+    result: unknown;
+    exitStatus: string;
+    truncated: boolean;
+}
+
+/**
+ * The Execute code view of a step output (`{stdout, result, exit_status, truncated}`), or null for any other step.
+ * A failed code step may carry only some of the keys, so `exit_status` alone identifies it.
+ */
+export function asCodeStepOutput(output: unknown): CodeStepOutput | null {
+    if (!output || typeof output !== 'object' || Array.isArray(output)) return null;
+    const o = output as { stdout?: unknown; result?: unknown; exit_status?: unknown; truncated?: unknown };
+    if (typeof o.exit_status !== 'string') return null;
+    return {
+        stdout: typeof o.stdout === 'string' ? o.stdout : '',
+        result: o.result,
+        exitStatus: o.exit_status,
+        truncated: o.truncated === true,
+    };
+}

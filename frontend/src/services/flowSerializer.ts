@@ -94,6 +94,7 @@ export const ACTION_TO_BACKEND_TYPE: Record<ActionType, BackendNodeType> = {
     'state-set': 'state.set',
     'state-delete': 'state.delete',
     'doc-create': 'doc.create',
+    'code-run': 'code.run',
 };
 
 const BACKEND_TO_ACTION_TYPE: Record<string, ActionType> = Object.fromEntries(
@@ -269,6 +270,10 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
         case 'tool.call':
             if (config.input === undefined) config.input = {};
             break;
+        case 'code.run':
+            if (config.inputs === undefined || config.inputs === null || typeof config.inputs !== 'object') config.inputs = {};
+            if (typeof config.timeout_s !== 'number') delete config.timeout_s;
+            break;
         default:
             break;
     }
@@ -404,6 +409,7 @@ const REQUIRED_CONFIG_KEYS: Partial<Record<string, string[]>> = {
     'state.set': ['key'],
     'state.delete': ['key'],
     'doc.create': ['doctype'],
+    'code.run': ['code', 'profile'],
     'transform': ['op'],
 };
 
@@ -468,6 +474,7 @@ function getDefaultLabel(backendType: string): string {
         'state.set': 'Set state',
         'state.delete': 'Delete state',
         'doc.create': 'Create document',
+        'code.run': 'Execute code',
         'output': 'End',
     };
     return labels[backendType] || backendType;
@@ -492,6 +499,7 @@ function getDefaultIcon(backendType: string): string {
         'state.set': 'Save',
         'state.delete': 'Trash2',
         'doc.create': 'FilePlus',
+        'code.run': 'Terminal',
         'output': 'CheckCircle2',
     };
     return icons[backendType] || 'Play';

@@ -34,6 +34,8 @@ export function actionHasConfiguredContent(data: Pick<FlowNodeData, 'actionConfi
       return Boolean(config.key !== undefined && config.key !== '' && config.key !== null);
     case 'doc-create':
       return Boolean(config.doctype?.trim());
+    case 'code-run':
+      return has(config.code);
     case 'unknown':
       return true;
     default:

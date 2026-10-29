@@ -18,6 +18,7 @@ import { getModels, getProviders } from '../../services/providerApi';
 import { isChatModel } from '@/lib/chatModel';
 import { NotConnected } from './NotConnected';
 import { SlackChannelPicker } from './SlackChannelPicker';
+import { CodeRunFields } from './CodeRunForm';
 import { ACTION_CARD_CONTRACT } from '../../data/actions';
 import { registerToolSchemas } from '@/lib/flowToolSchemas';
 import { TRANSFORM_OPS, getTransformOp } from '@/lib/flowTransformOps';
@@ -940,6 +941,14 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
         <Button variant="outline" size="sm" className="w-full" data-testid={f('fields.add')} onClick={() => patch({ fields: { ...fields, [`field_${entries.length + 1}`]: '' } })}>
           Add field
         </Button>
+      </Section>
+    );
+  }
+
+  if (type === 'code-run') {
+    return (
+      <Section title={title} hint="Runs Python you write in a sandbox. The flow continues with what your code prints and returns.">
+        <CodeRunFields nodeId={nodeId} cfg={cfg} patch={patch} Err={Err} />
       </Section>
     );
   }

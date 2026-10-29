@@ -21,7 +21,7 @@ import {
 import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
 import { calculateDuration, formatTimeAgo } from '@/utils/time';
 import { humanizeFlowError } from '@/lib/flowValidation';
-import { describeDecision, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from '@/lib/flowRunFormat';
+import { asCodeStepOutput, describeDecision, flowRunStatusLabel, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from '@/lib/flowRunFormat';
 import { deskDocUrl, summarizeDocPayload } from '@/lib/flowRunDoc';
 import { connectPath, notConnectedService } from '@/lib/flowIntegrations';
 import { redactSecrets, summarizeToolOutput } from '@/lib/flowToolSummary';
@@ -98,7 +98,8 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
     }, [runId]);
 
     // Same fallback as the run list: refresh while the run is still queued or running.
-    const active = run?.status === 'Queued' || run?.status === 'Running';
+    // A step waiting for code to finish (or be approved) moves on by itself, so keep refreshing there too.
+    const active = run?.status === 'Queued' || run?.status === 'Running' || run?.status === 'Waiting Code';
     useEffect(() => {
         if (!runId || !active) return;
         const timer = setInterval(async () => {
@@ -205,8 +206,8 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                 }>
                                     {run.status === 'Success' && <CheckCircle2 className="w-3 h-3 mr-1" />}
                                     {run.status === 'Failed' && <XCircle className="w-3 h-3 mr-1" />}
-                                    {run.status === 'Waiting Approval' && <Clock className="w-3 h-3 mr-1" />}
-                                    {run.status}
+                                    {(run.status === 'Waiting Approval' || run.status === 'Waiting Code') && <Clock className="w-3 h-3 mr-1" />}
+                                    {flowRunStatusLabel(run.status)}
                                 </Badge>
                             </div>
                             <div className="flex-1">
@@ -355,6 +356,36 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                             const summary = st.failed
                                                                 ? null
                                                                 : summarizeToolOutput(toolId && toolId.type === 'tool-call' ? toolId.tool_id : undefined, st.output);
+                                                            const codeOut = asCodeStepOutput(safe);
+                                                            if (codeOut) {
+                                                                return (
+                                                                    <div className="mt-2 space-y-2" data-testid={`flow-run-step-output-${st.id}`}>
+                                                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                                            Exit status
+                                                                            <Badge variant={codeOut.exitStatus === 'Ok' ? 'success' : 'destructive'} data-testid="flow-code-output-exit">{codeOut.exitStatus}</Badge>
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className="text-xs text-muted-foreground mb-1">Printed output</div>
+                                                                            {codeOut.stdout ? (
+                                                                                <pre data-testid="flow-code-output-stdout" className="max-h-60 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs">{codeOut.stdout}</pre>
+                                                                            ) : (
+                                                                                <p className="text-xs text-muted-foreground" data-testid="flow-code-output-stdout-empty">Nothing was printed.</p>
+                                                                            )}
+                                                                        </div>
+                                                                        {codeOut.result !== undefined && codeOut.result !== null && (
+                                                                            <div>
+                                                                                <div className="text-xs text-muted-foreground mb-1">Result</div>
+                                                                                <pre data-testid="flow-code-output-result" className="max-h-60 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs">
+                                                                                    {typeof codeOut.result === 'string' ? codeOut.result : JSON.stringify(codeOut.result, null, 2)}
+                                                                                </pre>
+                                                                            </div>
+                                                                        )}
+                                                                        {codeOut.truncated && (
+                                                                            <p className="text-xs text-warning" data-testid="flow-code-output-truncated">Output was cut off because it was too long.</p>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            }
                                                             const raw = (
                                                                 <pre data-testid={`flow-run-step-output-${st.id}`} className="mt-2 bg-muted p-2 rounded text-xs font-mono overflow-x-auto whitespace-pre-wrap">
                                                                     {typeof safe === 'string' ? safe : JSON.stringify(safe, null, 2)}
@@ -431,7 +462,13 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                             <div>
                                 <h3 className="text-sm font-semibold mb-3 text-warning">Pending Actions</h3>
                                 <div className="bg-warning-tint/50 p-4 rounded-md border border-warning/25">
-                                    {run.waiting.type === 'approval' ? (
+                                    {run.waiting.type === 'code' ? (
+                                        <p className="text-sm text-warning" data-testid="run-waiting-code-note">
+                                            {run.waiting.approval
+                                                ? 'Waiting for an administrator to approve this code run. Check the approvals bell.'
+                                                : 'Running your code in a sandbox...'}
+                                        </p>
+                                    ) : run.waiting.type === 'approval' ? (
                                         <div className="space-y-4">
                                             <div>
                                                 <h4 className="font-semibold text-warning">{run.waiting.title as string || 'Approval Required'}</h4>

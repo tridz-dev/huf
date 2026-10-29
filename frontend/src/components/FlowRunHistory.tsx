@@ -7,6 +7,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
 import { formatTimeAgo } from '@/utils/time';
+import { flowRunStatusLabel } from '@/lib/flowRunFormat';
 
 interface FlowRunHistoryProps {
     flowId: string;
@@ -116,7 +117,7 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
                                                 run.status === 'Failed' ? 'destructive' : 'secondary'
                                         }
                                     >
-                                        {run.status}
+                                        {flowRunStatusLabel(run.status)}
                                     </Badge>
                                 </div>
                                 <div className="text-xs text-muted-foreground flex justify-between items-center">

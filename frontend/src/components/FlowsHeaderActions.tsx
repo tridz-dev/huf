@@ -26,6 +26,8 @@ import { RunFlowDialog } from './flow/RunFlowDialog';
 import { DisabledReason } from './flow/DisabledReason';
 import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import { publishBlockedReason } from '@/lib/flowPublishGuard';
+import { codePublishBlockedReason } from '@/lib/codeFlow';
+import { useCodeFlowStatus } from '@/lib/useCodeFlowStatus';
 import { useRunParam } from '@/hooks/useRunParam';
 
 /**
@@ -116,7 +118,10 @@ export function FlowsHeaderActions() {
   const [isUnpublishing, setIsUnpublishing] = useState(false);
   const isPublished = activeFlow?.status === 'active';
   // A Data trigger or a web request step needs an extra permission to publish; say why Publish is off.
-  const publishBlocked = publishBlockedReason(activeFlow?.nodes ?? [], canPublishSensitive);
+  const { status: codeStatus } = useCodeFlowStatus();
+  const publishBlocked =
+    publishBlockedReason(activeFlow?.nodes ?? [], canPublishSensitive) ??
+    codePublishBlockedReason(activeFlow?.nodes ?? [], codeStatus);
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedRunId, setSelectedRunId] = useRunParam();
