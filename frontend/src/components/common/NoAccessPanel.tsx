@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { LockKeyhole } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,11 @@ export function NoAccessPanel({ pageName }: { pageName?: string }) {
   const { hasCapability, isLoading } = usePermissions();
   const canUseFlows = !isLoading && hasCapability('flows.use');
   const canUseAnything = !isLoading && hasCapability(PAGE_ACCESS_ANY);
+  useEffect(() => {
+    const before = document.title;
+    document.title = 'No access - Huf AI';
+    return () => { document.title = before; };
+  }, []);
   return (
     <div className="flex h-full w-full items-center justify-center p-6" data-testid="no-access-page" role="region" aria-label="No access">
       <div className="max-w-md space-y-5 text-center">
