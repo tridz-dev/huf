@@ -20,12 +20,12 @@ import {
 } from './ui/alert-dialog';
 import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
 import { calculateDuration, formatTimeAgo } from '@/utils/time';
-import { runTimesSentence } from '@/lib/flowTimeZone';
-import { humanizeFlowError } from '@/lib/flowValidation';
-import { asCodeStepOutput, describeDecision, flowRunStatusLabel, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from '@/lib/flowRunFormat';
-import { deskDocUrl, summarizeDocPayload } from '@/lib/flowRunDoc';
-import { connectPath, notConnectedService } from '@/lib/flowIntegrations';
-import { redactSecrets, summarizeToolOutput } from '@/lib/flowToolSummary';
+import { runTimesSentence } from '@/lib/flow-run/flowTimeZone';
+import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
+import { asCodeStepOutput, describeDecision, flowRunStatusLabel, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from '@/lib/flow-run/flowRunFormat';
+import { deskDocUrl, summarizeDocPayload } from '@/lib/flow-run/flowRunDoc';
+import { connectPath, notConnectedService } from '@/lib/flow/flowIntegrations';
+import { redactSecrets, summarizeToolOutput } from '@/lib/flow/flowToolSummary';
 import { Link } from 'react-router-dom';
 
 function DocFieldValue({ field }: { field: { key: string; value: string; full?: string } }) {

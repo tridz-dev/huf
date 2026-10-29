@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { followRenamedTarget } from './flowEdgeLabels';
-import type { FlowEdge } from '../types/flow.types';
+import type { FlowEdge } from '../../types/flow.types';
 
 const opt = (id: string, target: string, label: string): FlowEdge =>
   ({ id, source: 'r', target, label, sourceHandle: 'option', data: { route: 'option' } }) as FlowEdge;

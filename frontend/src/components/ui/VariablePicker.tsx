@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useFlowContext } from '../../contexts/FlowContext';
-import { availableReferences, type RefScope } from '../../lib/flowRefs';
-import { useFlowPermissions } from '@/hooks/useFlowPermissions';
+import { availableReferences, type RefScope } from '../../lib/flow/flowRefs';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { Button } from './button';
 import {
     DropdownMenu,

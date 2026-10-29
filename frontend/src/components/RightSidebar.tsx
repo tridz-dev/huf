@@ -10,10 +10,10 @@ import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { ActionConfigForm, TriggerConfigForm } from './flow/NodeConfigForms';
 import { FlowValueInput } from './FlowValueInput';
 import { edgeRoute } from '../services/flowSerializer';
-import { validateNode } from '@/lib/flowValidation';
-import { useFlowPermissions } from '@/hooks/useFlowPermissions';
-import { triggerLabel } from '@/lib/flowLabels';
-import { STEP_NEEDS_HINT } from '@/lib/flowHelp';
+import { validateNode } from '@/lib/flow-graph/flowValidation';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { triggerLabel } from '@/lib/flow/flowLabels';
+import { STEP_NEEDS_HINT } from '@/lib/flow/flowHelp';
 import type { FlowNodeData, TriggerConfig } from '../types/flow.types';
 
 interface RightSidebarProps {

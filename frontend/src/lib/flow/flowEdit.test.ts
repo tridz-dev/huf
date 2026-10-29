@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { connectionProblem, removeStep, unreachableNodeIds } from './flowEdit';
-import { edgeRoute, makeFlowEdge } from '../services/flowSerializer';
-import type { FlowEdge, FlowNode } from '../types/flow.types';
+import { edgeRoute, makeFlowEdge } from '../../services/flowSerializer';
+import type { FlowEdge, FlowNode } from '../../types/flow.types';
 
 const node = (id: string, nodeType: 'trigger' | 'action' | 'end' = 'action', actionConfig?: Record<string, unknown>): FlowNode =>
   ({ id, type: nodeType, position: { x: 0, y: 0 }, data: { label: id, nodeType, configured: true, actionConfig: actionConfig as never } }) as FlowNode;
@@ -78,7 +78,7 @@ describe('connectionProblem', () => {
 
 describe('routing fields follow edge removal', () => {
   it('drops on_true from a condition when its True edge is removed, keeps on_false', async () => {
-    const { serializeFlow } = await import('../services/flowSerializer');
+    const { serializeFlow } = await import('../../services/flowSerializer');
     const nodes = [node('t', 'trigger'), node('c', 'action', { type: 'condition', expression: 'x' }), node('a'), node('b')];
     (nodes[0].data as { triggerConfig?: unknown }).triggerConfig = { type: 'webhook', method: 'POST', secret: 'abcdefgh1234abcdefgh1234abcdefgh1234' };
     const mk = (edges: FlowEdge[]) => serializeFlow({ id: 'f', name: 'f', status: 'draft', nodes, edges, createdAt: new Date(), updatedAt: new Date(), version: 1 });
@@ -94,7 +94,7 @@ describe('routing fields follow edge removal', () => {
 describe('routing fields of router and approval steps follow edge removal', () => {
   const flow = (nodes: FlowNode[], edges: FlowEdge[]) => ({ id: 'f', name: 'f', status: 'draft' as const, nodes, edges, createdAt: new Date(), updatedAt: new Date(), version: 1 });
   it('drops a removed router path from options', async () => {
-    const { serializeFlow } = await import('../services/flowSerializer');
+    const { serializeFlow } = await import('../../services/flowSerializer');
     const nodes = [node('t', 'trigger'), node('r', 'action', { type: 'router', prompt: 'p' }), node('a'), node('b')];
     (nodes[0].data as { triggerConfig?: unknown }).triggerConfig = { type: 'webhook', method: 'POST', secret: 'abcdefgh1234abcdefgh1234abcdefgh1234' };
     const edges = [e('t', 'r'), e('r', 'a', 'option', 'Billing'), e('r', 'b', 'option', 'Support')];
@@ -103,7 +103,7 @@ describe('routing fields of router and approval steps follow edge removal', () =
     expect(opts(edges.filter((x) => x.target !== 'a'))).toEqual(['Support']);
   });
   it('drops approve_next / reject_next of an approval when its edge is removed', async () => {
-    const { serializeFlow } = await import('../services/flowSerializer');
+    const { serializeFlow } = await import('../../services/flowSerializer');
     const nodes = [node('t', 'trigger'), node('h', 'action', { type: 'human.approval', message: 'ok?' }), node('a'), node('b')];
     (nodes[0].data as { triggerConfig?: unknown }).triggerConfig = { type: 'webhook', method: 'POST', secret: 'abcdefgh1234abcdefgh1234abcdefgh1234' };
     const mk = (es: FlowEdge[]) => serializeFlow(flow(nodes, es)).nodes.find((n) => n.id === 'h')?.config as Record<string, unknown>;

@@ -1,5 +1,5 @@
 import { memo, useState } from 'react';
-import { useFlowPermissions } from '@/hooks/useFlowPermissions';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { Handle, Position, NodeProps } from 'reactflow';
 import {
   Play,
@@ -33,11 +33,11 @@ import { useFlowContext } from '../../contexts/FlowContext';
 import { Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { NODE_CARD_BASE, NODE_HANDLE, NODE_ICON_WELL, getExecutionStatusClasses } from './nodeStyles';
 import { cn } from '@/lib/utils';
-import { actionHasConfiguredContent } from '../../lib/flowNodeConfigured';
-import { branchHandlesFor, ROUTER_HANDLE } from '../../lib/flowBranches';
-import { validateNode } from '../../lib/flowValidation';
-import { unreachableNodeIds } from '../../lib/flowEdit';
-import { toolLabel } from '../../lib/flowIntegrations';
+import { actionHasConfiguredContent } from '../../lib/flow/flowNodeConfigured';
+import { branchHandlesFor, ROUTER_HANDLE } from '../../lib/flow/flowBranches';
+import { validateNode } from '../../lib/flow-graph/flowValidation';
+import { unreachableNodeIds } from '../../lib/flow/flowEdit';
+import { toolLabel } from '../../lib/flow/flowIntegrations';
 import { NotConnected } from '../flow/NotConnected';
 
 const iconMap: Record<string, LucideIcon> = {

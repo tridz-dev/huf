@@ -2,7 +2,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/lib/flowIntegrations', () => ({
+vi.mock('@/lib/flow/flowIntegrations', () => ({
   useIntegrationStatus: () => ({ slack: { label: 'Slack', connected: true } }),
 }));
 vi.mock('@/services/integrationApi', () => ({

@@ -5,7 +5,7 @@
  * `sourceHandle` is the route id, except 'next' which is the default (id-less) handle. The serializer
  * recomputes on_true/on_false, approve_next/reject_next/timeout_next, foreach body and router options from them.
  */
-import type { FlowEdgeRoute } from '../types/flow.types';
+import type { FlowEdgeRoute } from '../../types/flow.types';
 
 export interface BranchHandle {
   /** Route written on the edge. */

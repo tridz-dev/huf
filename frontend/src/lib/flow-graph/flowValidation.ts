@@ -4,15 +4,15 @@
  * JSON-schema error after Save. Field names are the contract's config keys.
  */
 import { getTransformOp } from './flowTransformOps';
-import { transformParamHelp } from './flowHelp';
-import { branchHandlesFor } from './flowBranches';
+import { transformParamHelp } from '../flow/flowHelp';
+import { branchHandlesFor } from '../flow/flowBranches';
 import { cronProblem } from './flowSchedule';
 import { secretProblem } from './flowWebhookUi';
-import { requiredInputsFor } from './flowToolSchemas';
-import { edgeRoute } from '../services/flowSerializer';
-import { unreachableNodeIds } from './flowEdit';
+import { requiredInputsFor } from '../flow/flowToolSchemas';
+import { edgeRoute } from '../../services/flowSerializer';
+import { unreachableNodeIds } from '../flow/flowEdit';
 import { MAX_CODE_BYTES } from './codeFlow';
-import type { FlowEdge, FlowNode } from '../types/flow.types';
+import type { FlowEdge, FlowNode } from '../../types/flow.types';
 
 /** Id of the "Can't save yet" / "Finish setting up" toast, so the next edit or selection can dismiss it. */
 export const BLOCKED_TOAST_ID = 'flow-blocked';

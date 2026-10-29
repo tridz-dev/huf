@@ -4,8 +4,8 @@ import { getTriggerDoctypeInfo } from '../services/flowApi';
 import { Label } from './ui/label';
 import { Combobox } from './ui/combobox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { DOC_EVENTS, type FlowDocEvent } from '../lib/flowTrigger';
-import { DOC_EVENT_HELP } from '../lib/flowHelp';
+import { DOC_EVENTS, type FlowDocEvent } from '../lib/flow-graph/flowTrigger';
+import { DOC_EVENT_HELP } from '../lib/flow/flowHelp';
 import { Examples, FieldHint } from './flow/FieldHint';
 
 interface FlowTriggerPanelProps {

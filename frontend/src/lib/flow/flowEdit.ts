@@ -3,8 +3,8 @@
  * connection, and finding steps nothing leads to. Edge routing fields (on_true, options, approve_next...)
  * are derived from edges on save (see flowSerializer), so editing edges here is all it takes to keep them right.
  */
-import type { FlowEdge, FlowEdgeRoute, FlowNode } from '../types/flow.types';
-import { edgeRoute, makeFlowEdge } from '../services/flowSerializer';
+import type { FlowEdge, FlowEdgeRoute, FlowNode } from '../../types/flow.types';
+import { edgeRoute, makeFlowEdge } from '../../services/flowSerializer';
 import { branchHandlesFor } from './flowBranches';
 import { subtreeIds } from './flowEdgeLabels';
 

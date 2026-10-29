@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { TRANSFORM_OPS } from './flowTransformOps';
+import { TRANSFORM_OPS } from '../flow-graph/flowTransformOps';
 import { TRANSFORM_HELP, transformParamHelp, conditionHelp, DOC_EVENT_HELP, CONDITION_EXAMPLES } from './flowHelp';
-import { DOC_EVENTS } from './flowTrigger';
+import { DOC_EVENTS } from '../flow-graph/flowTrigger';
 
 describe('flow help copy', () => {
   it('describes every transform operation with a summary and an example', () => {

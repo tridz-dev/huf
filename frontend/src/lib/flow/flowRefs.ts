@@ -4,8 +4,8 @@
  * the current step goes through it (the save-time validator rejects anything else). Later steps, side
  * branches and the step itself never appear.
  */
-import { edgeRoute } from '../services/flowSerializer';
-import type { FlowEdge } from '../types/flow.types';
+import { edgeRoute } from '../../services/flowSerializer';
+import type { FlowEdge } from '../../types/flow.types';
 
 export interface FlowRefEntry {
   /** Reference path written into `{"$from": ...}` / expressions / `{placeholders}`. */

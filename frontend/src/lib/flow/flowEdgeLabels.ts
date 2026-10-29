@@ -1,5 +1,5 @@
-import type { FlowEdge } from '../types/flow.types';
-import { edgeRoute } from '../services/flowSerializer';
+import type { FlowEdge } from '../../types/flow.types';
+import { edgeRoute } from '../../services/flowSerializer';
 
 /**
  * Router path names start as the target step's title and keep following that title when the step is

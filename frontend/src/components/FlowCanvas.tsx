@@ -32,7 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from './ui/alert-dialog';
-import { actionHasConfiguredContent } from '../lib/flowNodeConfigured';
+import { actionHasConfiguredContent } from '../lib/flow/flowNodeConfigured';
 import { TriggerNode } from './nodes/TriggerNode';
 import { ActionNode } from './nodes/ActionNode';
 import { EndNode } from './nodes/EndNode';
@@ -42,18 +42,18 @@ import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { FlowNodeRail, NODE_RAIL_ACTION_CATEGORY, NodeRailCategory } from './FlowNodeRail';
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
 import { DeleteStepDialog } from './flow/DeleteStepDialog';
-import { connectionProblem } from '../lib/flowEdit';
+import { connectionProblem } from '../lib/flow/flowEdit';
 import { useFlowContext } from '../contexts/FlowContext';
 import { flowService } from '../services/flowService';
 import { makeFlowEdge, edgeRoute } from '../services/flowSerializer';
-import { branchHandlesFor } from '../lib/flowBranches';
-import { branchColumnShift, subtreeIds } from '../lib/flowEdgeLabels';
+import { branchHandlesFor } from '../lib/flow/flowBranches';
+import { branchColumnShift, subtreeIds } from '../lib/flow/flowEdgeLabels';
 import { toast } from '@/lib/toast';
-import { isInView, panToReveal } from '@/lib/flowLayout';
-import { useFlowPermissions } from '@/hooks/useFlowPermissions';
+import { isInView, panToReveal } from '@/lib/flow/flowLayout';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { FirstRunGuide } from './flow/FirstRunGuide';
-import { ensureToolSchemasLoaded } from '../lib/flowToolSchemas';
-import { actionLabel, triggerLabel } from '../lib/flowLabels';
+import { ensureToolSchemasLoaded } from '../lib/flow/flowToolSchemas';
+import { actionLabel, triggerLabel } from '../lib/flow/flowLabels';
 import { actionOptions } from '../data/actions';
 import { FlowNodeData, TriggerConfig, ActionConfig, FlowEdgeRoute } from '../types/flow.types';
 import type { ActionOption } from '../types/modal.types';

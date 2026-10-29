@@ -36,7 +36,7 @@ import {
 } from '@/components/ui/table';
 import { copyText } from '@/lib/clipboard';
 import { getFlowStepLabels } from '@/services/flowApi';
-import { humanizeToolPrompt } from '@/lib/flowIntegrations';
+import { humanizeToolPrompt } from '@/lib/flow/flowIntegrations';
 /** One row of the Overview / Tokens & Cost definition list. */
 function DefinitionRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (

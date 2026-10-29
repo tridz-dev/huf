@@ -12,12 +12,12 @@ import { getFlowDefinitions, getFlowDefinition, FLOW_LIST_LIMIT, type FlowListQu
 import { mapBackendStatusToFrontend } from '../services/flowSerializer';
 import { runFlow } from '../services/flowApi';
 import { toast } from '@/lib/toast';
-import { reportFlowRun } from '@/lib/flowRunToast';
-import { humanizeFlowError } from '@/lib/flowValidation';
+import { reportFlowRun } from '@/lib/flow-run/flowRunToast';
+import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
 import { useFlowContext } from '../contexts/FlowContext';
 import { RunFlowDialog } from '../components/flow/RunFlowDialog';
-import { useFlowPermissions } from '@/hooks/useFlowPermissions';
-import { FLOW_GUIDE_URL } from '@/lib/flowHelp';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { FLOW_GUIDE_URL } from '@/lib/flow/flowHelp';
 import { FlowSettingsModal } from '../components/modals/FlowSettingsModal';
 
 const statusOptions = [

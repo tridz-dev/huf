@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { redactSecrets, summarizeToolOutput } from './flowToolSummary';
-import { setSiteTimezoneForTests } from './serverTime';
+import { setSiteTimezoneForTests } from '../serverTime';
 
 const slack = (extra: object = {}) => ({
   status: 'success',

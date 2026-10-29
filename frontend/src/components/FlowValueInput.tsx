@@ -13,7 +13,7 @@ import {
   valueMode,
   valueToText,
   type ValueMode,
-} from '@/lib/flowValue';
+} from '@/lib/flow-graph/flowValue';
 
 interface FlowValueInputProps {
   id: string;

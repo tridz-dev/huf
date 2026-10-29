@@ -1,5 +1,5 @@
-import { actionOptions } from '../data/actions';
-import { triggerOptions } from '../data/triggers';
+import { actionOptions } from '../../data/actions';
+import { triggerOptions } from '../../data/triggers';
 
 /**
  * One name per step kind: the palette card name is the node title and the sidebar title.

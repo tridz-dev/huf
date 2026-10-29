@@ -2,7 +2,7 @@ import { memo, useState } from 'react';
 import { BaseEdge, EdgeLabelRenderer, EdgeProps, getBezierPath } from 'reactflow';
 import { Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useFlowPermissions } from '@/hooks/useFlowPermissions';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import type { FlowEdgeRoute } from '../../types/flow.types';
 
 export interface InsertableEdgeData {

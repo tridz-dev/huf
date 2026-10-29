@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FlowNode } from '@/types/flow.types';
 import { publishBlockedReason, sensitiveFlowFeatures } from './flowPublishGuard';
-import { codePublishBlockedReason } from './codeFlow';
+import { codePublishBlockedReason } from '../flow-graph/codeFlow';
 
 const node = (data: Record<string, unknown>): FlowNode =>
   ({ id: 'n', type: 'x', position: { x: 0, y: 0 }, data: { label: 'n', nodeType: 'action', configured: true, ...data } }) as unknown as FlowNode;

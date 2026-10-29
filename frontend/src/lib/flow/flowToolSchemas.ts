@@ -3,7 +3,7 @@
  * Validation uses it so a tool step cannot be saved without the inputs its schema requires,
  * for every tool and not only the preset cards.
  */
-import { getFlowTools } from '../services/toolApi';
+import { getFlowTools } from '../../services/toolApi';
 
 const requiredByTool = new Map<string, string[]>();
 let loading: Promise<void> | null = null;

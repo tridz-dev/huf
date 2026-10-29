@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { TRANSFORM_OPS, TRANSFORM_OP_NAMES } from './flowTransformOps';
 import { valueMode, textToValue, valueToText, templateVarsToText } from './flowValue';
 
-const graphDir = resolve(__dirname, '../../../huf/ai/graph');
+const graphDir = resolve(__dirname, '../../../../huf/ai/graph');
 
 describe('transform op parity with backend', () => {
   it('matches the REGISTRY keys in transforms.py', () => {

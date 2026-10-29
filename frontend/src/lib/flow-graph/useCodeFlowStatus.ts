@@ -3,7 +3,7 @@
  * step form, the publish check and the settings screen. `refreshCodeFlowStatus()` re-reads it (after the switch changes).
  */
 import { useEffect, useState } from 'react';
-import { fetchCodeFlowStatus, type CodeFlowStatus } from '@/services/codeFlowApi';
+import { fetchCodeFlowStatus, type CodeFlowStatus } from '@/services/flow/codeFlowApi';
 
 let cached: CodeFlowStatus | null = null;
 let inFlight: Promise<CodeFlowStatus | null> | null = null;

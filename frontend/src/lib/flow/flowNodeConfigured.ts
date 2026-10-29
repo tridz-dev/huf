@@ -1,4 +1,4 @@
-import type { ActionConfig, FlowNodeData } from '../types/flow.types';
+import type { ActionConfig, FlowNodeData } from '../../types/flow.types';
 
 /**
  * Whether an action node carries user-entered configuration worth protecting

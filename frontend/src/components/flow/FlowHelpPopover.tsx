@@ -1,7 +1,7 @@
 import { CircleHelp, ExternalLink } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { FIRST_RUN_STEPS, FLOW_GUIDE_URL, FLOW_SHORTCUTS } from '@/lib/flowHelp';
+import { FIRST_RUN_STEPS, FLOW_GUIDE_URL, FLOW_SHORTCUTS } from '@/lib/flow/flowHelp';
 
 /** "?" button in the editor header: how a flow works, keyboard shortcuts and a link to the full guide. */
 export function FlowHelpPopover() {

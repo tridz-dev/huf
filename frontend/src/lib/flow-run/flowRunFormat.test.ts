@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { asCodeStepOutput, describeDecision, flowRunStatusLabel, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from './flowRunFormat';
-import { parseServerDate, setSiteTimezoneForTests, toServerDatetime } from './serverTime';
+import { parseServerDate, setSiteTimezoneForTests, toServerDatetime } from '../serverTime';
 
 describe('describeDecision', () => {
   it('words an approval with who and when', () => {

@@ -2,11 +2,11 @@ import { createContext, useContext, useState, useCallback, useEffect, useMemo, u
 import { toast } from '@/lib/toast';
 import { Flow, FlowMetadata, FlowNode, FlowEdge } from '../types/flow.types';
 import { flowService } from '../services/flowService';
-import { popSnapshot, pushSnapshot } from '../lib/flowUndoStack';
-import { tidyPositions } from '../lib/flowLayout';
-import { BLOCKED_TOAST_ID } from '../lib/flowValidation';
-import { followRenamedTarget } from '../lib/flowEdgeLabels';
-import { removeStep, type RemoveStepMode } from '../lib/flowEdit';
+import { popSnapshot, pushSnapshot } from '../lib/flow-graph/flowUndoStack';
+import { tidyPositions } from '../lib/flow/flowLayout';
+import { BLOCKED_TOAST_ID } from '../lib/flow-graph/flowValidation';
+import { followRenamedTarget } from '../lib/flow/flowEdgeLabels';
+import { removeStep, type RemoveStepMode } from '../lib/flow/flowEdit';
 
 export type SaveState = 'saved' | 'saving' | 'unsaved' | 'error';
 

@@ -1,5 +1,5 @@
 import { memo, useState } from 'react';
-import { useFlowPermissions } from '@/hooks/useFlowPermissions';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { Zap, Webhook, Clock, Database, Mail, CircleDashed, Trash2, Loader2, CheckCircle2, XCircle, type LucideIcon } from 'lucide-react';
 import { FlowNodeData } from '../../types/flow.types';
@@ -18,7 +18,7 @@ import {
 import { useFlowContext } from '../../contexts/FlowContext';
 import { NODE_CARD_BASE, NODE_HANDLE, NODE_ICON_WELL, getExecutionStatusClasses } from './nodeStyles';
 import { cn } from '@/lib/utils';
-import { validateNode } from '../../lib/flowValidation';
+import { validateNode } from '../../lib/flow-graph/flowValidation';
 
 const iconMap: Record<string, LucideIcon> = {
   Webhook,

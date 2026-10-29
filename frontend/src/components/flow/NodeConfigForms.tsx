@@ -18,23 +18,23 @@ import { getModels, getProviders } from '../../services/providerApi';
 import { isChatModel } from '@/lib/chatModel';
 import { NotConnected } from './NotConnected';
 import { Code, Examples, FieldHint } from './FieldHint';
-import { useFlowPermissions } from '@/hooks/useFlowPermissions';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import {
   APPROVAL_TIMEOUT_HELP, APPROVER_TYPE_HELP, CONDITION_EXAMPLES, conditionHelp, INTEGRATION_NEEDS, LOOP_HELP,
   WEBHOOK_RESPONSES, transformParamHelp, TRANSFORM_HELP,
-} from '@/lib/flowHelp';
+} from '@/lib/flow/flowHelp';
 import { SlackChannelPicker } from './SlackChannelPicker';
 import { CodeRunFields } from './CodeRunForm';
 import { ACTION_CARD_CONTRACT } from '../../data/actions';
-import { registerToolSchemas } from '@/lib/flowToolSchemas';
-import { TRANSFORM_OPS, getTransformOp } from '@/lib/flowTransformOps';
-import { branchHandlesFor } from '@/lib/flowBranches';
-import { validateNode, TOOL_REQUIRED_INPUT, nodeKind } from '@/lib/flowValidation';
-import { generateWebhookSecret, webhookUrl, webhookUsage } from '@/lib/flowWebhookUi';
-import { actionCardId, actionLabel } from '@/lib/flowLabels';
+import { registerToolSchemas } from '@/lib/flow/flowToolSchemas';
+import { TRANSFORM_OPS, getTransformOp } from '@/lib/flow-graph/flowTransformOps';
+import { branchHandlesFor } from '@/lib/flow/flowBranches';
+import { validateNode, TOOL_REQUIRED_INPUT, nodeKind } from '@/lib/flow-graph/flowValidation';
+import { generateWebhookSecret, webhookUrl, webhookUsage } from '@/lib/flow-graph/flowWebhookUi';
+import { actionCardId, actionLabel } from '@/lib/flow/flowLabels';
 import { copyText } from '@/lib/clipboard';
-import { toolLabel } from '@/lib/flowIntegrations';
-import { uniqueName } from '@/lib/flowRefs';
+import { toolLabel } from '@/lib/flow/flowIntegrations';
+import { uniqueName } from '@/lib/flow/flowRefs';
 import { linkRoutes } from '@/lib/link-routes';
 import { edgeRoute } from '../../services/flowSerializer';
 import type { FlowNodeData } from '../../types/flow.types';

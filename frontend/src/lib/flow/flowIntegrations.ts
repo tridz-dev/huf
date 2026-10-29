@@ -3,7 +3,7 @@
  * tool needs, and where to connect it.
  */
 import { useEffect, useState } from 'react';
-import { getFlowIntegrationStatus, type FlowIntegrationStatus } from '../services/flowApi';
+import { getFlowIntegrationStatus, type FlowIntegrationStatus } from '../../services/flowApi';
 
 const TOOL_LABELS: Record<string, string> = {
   gmail_send_email: 'Send an email',

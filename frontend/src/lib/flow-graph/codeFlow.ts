@@ -1,5 +1,5 @@
 /** Execute code in Flows: constants and pure helpers (no network). The shared status lives in useCodeFlowStatus.ts. */
-import type { CodeFlowProfile, CodeFlowStatus } from '@/services/codeFlowApi';
+import type { CodeFlowProfile, CodeFlowStatus } from '@/services/flow/codeFlowApi';
 import type { FlowNode } from '@/types/flow.types';
 
 /** Capability a user needs to add, edit and publish Execute code steps (mirrors the server rule). */

@@ -7,8 +7,8 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
 import { formatTimeAgo } from '@/utils/time';
-import { flowRunStatusLabel } from '@/lib/flowRunFormat';
-import { runTimesSentence } from '@/lib/flowTimeZone';
+import { flowRunStatusLabel } from '@/lib/flow-run/flowRunFormat';
+import { runTimesSentence } from '@/lib/flow-run/flowTimeZone';
 
 interface FlowRunHistoryProps {
     flowId: string;

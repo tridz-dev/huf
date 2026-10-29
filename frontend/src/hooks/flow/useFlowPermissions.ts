@@ -1,7 +1,7 @@
 import { useContext } from 'react';
 import { PermissionsContext } from '@/contexts/PermissionsContext';
-import { PUBLISH_SENSITIVE_CAPABILITY } from '@/lib/flowPublishGuard';
-import { EXECUTE_CODE_CAPABILITY } from '@/lib/codeFlow';
+import { PUBLISH_SENSITIVE_CAPABILITY } from '@/lib/flow/flowPublishGuard';
+import { EXECUTE_CODE_CAPABILITY } from '@/lib/flow-graph/codeFlow';
 
 export const FLOW_READ_ONLY_REASON = 'You have view-only access to flows. Ask an admin for permission to change or run them.';
 

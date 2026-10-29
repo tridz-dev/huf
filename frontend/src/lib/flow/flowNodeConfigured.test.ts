@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { actionHasConfiguredContent } from './flowNodeConfigured';
-import type { ActionConfig } from '../types/flow.types';
+import type { ActionConfig } from '../../types/flow.types';
 
 const check = (actionConfig: ActionConfig | undefined, configured = true) =>
   actionHasConfiguredContent({ actionConfig, configured });

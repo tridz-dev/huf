@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Plug } from 'lucide-react';
-import { connectPath, integrationForTool, isToolUnconnected, useIntegrationStatus } from '@/lib/flowIntegrations';
+import { connectPath, integrationForTool, isToolUnconnected, useIntegrationStatus } from '@/lib/flow/flowIntegrations';
 
 /**
  * "Not connected" badge + Connect link for a step whose integration has no credentials.
