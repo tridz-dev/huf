@@ -48,13 +48,17 @@ class TestRunGatewayBinding(unittest.TestCase):
 			seen.update(kwargs)
 			return "{}"
 
+		def fake_idempotent_send(action, kwargs, gateway_name):
+			# The durable send-key claim inserts a row linked to the Gateway; "GW-OWN" is not a real
+			# Gateway, so run the dispatch step directly and keep the test about argument binding.
+			return fake_send(kwargs)
+
 		with patch.object(whatsapp, "_run_gateway", return_value="GW-OWN"), patch.object(
 			whatsapp, "_authorize", return_value=None
 		), patch.object(whatsapp, "_scope_refusal", return_value=None), patch.object(
-			whatsapp, "_send_message", side_effect=fake_send
+			whatsapp, "_idempotent_send", side_effect=fake_idempotent_send
 		):
-			_r = whatsapp.handle_action("send_message", to="1", message="x", gateway_name="GW-OTHER", whatsapp_account="WA-OTHER")
-			print("DBG result", _r, type(frappe.db.exists), type(frappe.db.get_value), file=__import__("sys").stderr)
+			whatsapp.handle_action("send_message", to="1", message="x", gateway_name="GW-OTHER", whatsapp_account="WA-OTHER")
 		self.assertEqual(seen["gateway_name"], "GW-OWN")
 		self.assertNotIn("whatsapp_account", seen)
 
@@ -223,13 +227,6 @@ class TestListMessages(unittest.TestCase):
 
 
 class TestGatewayValidation(unittest.TestCase):
-	def tearDown(self):  # DEBUGTMP
-		import sys
-		print("DBG", self._testMethodName, type(frappe.cache), type(frappe.db), file=sys.stderr)
-		try:
-			print("DBG hget", repr(frappe.cache.hget("doctype_meta", "Gateway"))[:80], file=sys.stderr)
-		except Exception as e:
-			print("DBG hget err", e, file=sys.stderr)
 	def _gw(self, **fields):
 		from huf.huf.doctype.gateway.gateway import Gateway
 
