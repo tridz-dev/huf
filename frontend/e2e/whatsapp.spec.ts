@@ -10,6 +10,7 @@ import { callsOf, makeNumberSummary, makeSolutionSummary, mockSolutionsApi } fro
 
 const MGMT = '**/api/method/huf.ai.whatsapp.management.';
 const SERVICE = '**/api/method/huf.ai.gateway_service.';
+const CHANNELS = '**/api/method/huf.ai.channels.api.';
 
 const gateway = (name: string, over: Record<string, unknown> = {}) => ({
   name,
@@ -64,6 +65,11 @@ function body(request: { postData(): string | null; url(): string }): Record<str
   return Object.fromEntries(new URL(request.url()).searchParams);
 }
 
+/** Activity opens on Conversations; the raw WhatsApp message log sits behind the Messages toggle. */
+async function openMessages(page: Page) {
+  await page.getByRole('group', { name: 'Activity view' }).getByRole('button', { name: 'Messages' }).click();
+}
+
 interface WhatsAppMockOptions {
   connector?: boolean;
   access?: Record<string, unknown>[];
@@ -89,18 +95,23 @@ async function mockWhatsApp(page: Page, opts: WhatsAppMockOptions = {}) {
       return route.fulfill(ok(answer(args)));
     });
 
+  let tokenCheck: Record<string, unknown> | null = null;
   await handle('get_setup_status', (args) =>
     args.gateway_name
-      ? { success: true, connector_available: connector, accounts: [], gateway: gateway(String(args.gateway_name), opts.gatewayOver) }
+      ? { success: true, connector_available: connector, accounts: [], gateway: gateway(String(args.gateway_name), { token_check: tokenCheck, ...opts.gatewayOver }) }
       : {
           success: true, connector_available: connector,
           gateways: [{ name: 'GW-1', health: 'healthy', enabled: true }, { name: 'GW-2', health: 'blocked', enabled: true }],
         },
   );
-  await handle('check_token', () => ({
-    success: true, valid: true, token_type: 'SYSTEM_USER', expires_at: null, missing_scopes: [], waba_ids: [],
-    phone: { quality: 'GREEN' }, webhook_subscribed: true, checked_at: new Date().toISOString(), source: 'debug_token',
-  }));
+  await handle('check_token', () => {
+    // The status call reports the stored result of the last check, as the server does.
+    tokenCheck = {
+      valid: true, token_type: 'SYSTEM_USER', expires_at: null, missing_scopes: [], waba_ids: [],
+      phone: { quality: 'GREEN' }, webhook_subscribed: true, checked_at: new Date().toISOString(), source: 'debug_token',
+    };
+    return { success: true, ...tokenCheck };
+  });
   await handle('list_message_log_filters', () => ({ success: true, statuses: [], agents: [], templates: [], ...opts.logFilters }));
   await handle('list_message_log', (args) => ({
     success: true,
@@ -108,9 +119,10 @@ async function mockWhatsApp(page: Page, opts: WhatsAppMockOptions = {}) {
     next_cursor: null,
     has_more: false,
   }));
-  await handle('list_templates', () => ({ success: true, templates: opts.templates ?? [] }));
+  await handle('list_templates', () => (connector ? { success: true, templates: opts.templates ?? [] } : { success: false, error: 'bridge_unavailable' }));
   await handle('list_template_drafts', () => ({ success: true, drafts: [] }));
   await handle('get_template', (args) => ({ success: true, ...templateDetail(String(args.name)), ...opts.templateDetail }));
+  await handle('list_conversations', () => ({ items: [], has_more: false }), CHANNELS);
   await handle('send_text_message', () => ({ success: true, message_id: 'wamid.NEW' }));
   await handle('approve_gateway_pairing', () => {
     waiting = [];
@@ -166,6 +178,7 @@ test.describe('Channels: WhatsApp', () => {
   test('activity lists the log of the chosen gateway and opens a detail sheet', async ({ page }) => {
     const calls = await mockWhatsApp(page);
     await goto(page, '/channels/whatsapp/n/GW-1/activity');
+    await openMessages(page);
     await expect(page.getByText('hello m1')).toBeVisible();
     expect(calls.some((c) => c.method === 'list_message_log' && c.args.gateway_name === 'GW-1')).toBe(true);
     await page.getByText('hello m1').click();
@@ -177,6 +190,7 @@ test.describe('Channels: WhatsApp', () => {
   test('a failed message explains the Meta error in plain words', async ({ page }) => {
     await mockWhatsApp(page);
     await goto(page, '/channels/whatsapp/n/GW-1/activity');
+    await openMessages(page);
     await page.getByText('hello m2').click();
     const alert = page.getByRole('dialog').getByRole('alert');
     await expect(alert).toContainText('Window closed');
@@ -186,6 +200,7 @@ test.describe('Channels: WhatsApp', () => {
   test('switching gateway reloads the log for the other gateway only', async ({ page }) => {
     const calls = await mockWhatsApp(page);
     await goto(page, '/channels/whatsapp/n/GW-2/activity');
+    await openMessages(page);
     await expect(page.getByText('hello g2')).toBeVisible();
     await expect(page.getByText('hello m1')).toHaveCount(0);
     expect(calls.filter((c) => c.method === 'list_message_log').every((c) => c.args.gateway_name === 'GW-2')).toBe(true);
@@ -194,6 +209,7 @@ test.describe('Channels: WhatsApp', () => {
   test('activity is read-only: no send panel, even with the legacy ?send=1', async ({ page }) => {
     const calls = await mockWhatsApp(page);
     await goto(page, '/channels/whatsapp/n/GW-1/activity?send=1');
+    await openMessages(page);
     await expect(page.getByText('hello m1')).toBeVisible();
     await expect(page.getByLabel('Message text')).toHaveCount(0);
     expect(calls.some((c) => c.method === 'send_text_message')).toBe(false);
@@ -430,6 +446,7 @@ test.describe('Channels: WhatsApp with Solutions', () => {
     });
     await mockSolutionsApi(page);
     await goto(page, '/channels/whatsapp/n/GW-1/activity');
+    await openMessages(page);
     await expect(page.getByRole('columnheader', { name: 'Solution' })).toBeVisible();
     const m1 = page.getByRole('row').filter({ hasText: 'hello m1' });
     const m2 = page.getByRole('row').filter({ hasText: 'hello m2' });
@@ -448,6 +465,7 @@ test.describe('Channels: WhatsApp with Solutions', () => {
     await mockWhatsApp(page);
     await mockSolutionsApi(page);
     await goto(page, '/channels/whatsapp/n/GW-1/activity');
+    await openMessages(page);
     await expect(page.getByText('hello m1')).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Solution' })).toHaveCount(0);
     await expect(page.getByRole('combobox', { name: 'Solution' })).toHaveCount(0);

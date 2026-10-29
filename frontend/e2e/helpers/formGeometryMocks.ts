@@ -96,6 +96,7 @@ function answer(url: string, req: any): any {
   if (meth.includes('get_logged_user')) return m('Administrator');
   if (meth.includes('huf.permissions.get_me')) return m({ user: 'Administrator', full_name: 'Administrator', huf_role: 'Huf Admin', capabilities: ['agent.use','agent.view_all','flows.use','chat.use','users.manage','roles.manage','system.providers.manage','system.integrations.manage','system.mcp.manage','data.tables.manage','data.records.view_own','data.records.view_all'] });
   if (meth.includes('get_count')) return m(3);
+  if (meth.includes('huf.ai.channels.api') && short === 'list_conversations') return m({ items: [], has_more: false });
   if (meth.includes('whatsapp.management') || meth.includes('gateway_service')) {
     const ms = (x: any) => m(x && typeof x === 'object' && !Array.isArray(x) ? { success: true, ...x } : x);
     switch (short) {
@@ -160,9 +161,10 @@ export type GeometryRoute = { id: string; path: string; act?: (p: Page) => Promi
 const S: Array<[string, string, ((p: Page) => Promise<void>)?]> = [
   ['wa-overview', 'channels/whatsapp/n/GW-1/home'],
   ['wa-overview-blocked', 'channels/whatsapp/n/GW-2/home'],
-  ['wa-messages', 'channels/whatsapp/n/GW-1/activity'],
-  ['wa-message-detail', 'channels/whatsapp/n/GW-1/activity', async (p: Page) => { await click(p, 'table tbody tr >> nth=2'); }],
-  ['wa-messages-send', 'channels/whatsapp/n/GW-1/activity?send=1'],
+  // Activity opens on Conversations; the WhatsApp message log (and its detail sheet) sits behind the Messages toggle.
+  ['wa-messages', 'channels/whatsapp/n/GW-1/activity', async (p: Page) => { await click(p, '[role=group][aria-label="Activity view"] button:has-text("Messages")'); }],
+  ['wa-message-detail', 'channels/whatsapp/n/GW-1/activity', async (p: Page) => { await click(p, '[role=group][aria-label="Activity view"] button:has-text("Messages")'); await click(p, 'table tbody tr >> nth=2'); }],
+  ['wa-messages-send', 'channels/whatsapp/n/GW-1/activity?send=1', async (p: Page) => { await click(p, '[role=group][aria-label="Activity view"] button:has-text("Messages")'); }],
   ['wa-templates', 'channels/whatsapp/n/GW-1/templates'],
   ['wa-template-rejected', 'channels/whatsapp/n/GW-1/templates', async (p: Page) => { await click(p, 'text=payment_reminder'); }],
   ['wa-template-send-dialog', 'channels/whatsapp/n/GW-1/templates', async (p: Page) => { await click(p, 'text=order_update'); await p.waitForTimeout(800); await click(p, 'button:has-text("Send"):not([disabled])'); }],
