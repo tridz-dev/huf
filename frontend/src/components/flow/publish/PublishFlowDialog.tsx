@@ -49,7 +49,12 @@ export function PublishFlowDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !publishing && onOpenChange(next)}>
-      <DialogScrollContent className="sm:max-w-[500px]" data-testid="flow-publish-dialog">
+      <DialogScrollContent
+        className="sm:max-w-[500px]"
+        data-testid="flow-publish-dialog"
+        // The web address box would otherwise grab focus and show its text as selected; leave focus on the dialog.
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogScrollHeader>
           <DialogTitle>Publish this flow?</DialogTitle>
           <DialogDescription className="break-words" title={flowName}>
@@ -59,7 +64,7 @@ export function PublishFlowDialog({
         <DialogScrollBody className="grid gap-4 py-4">
           <div className="grid gap-2" data-testid="flow-publish-summary" data-start-kind={start.kind}>
             <p className="text-sm text-foreground">
-              {start.kind === 'none' ? 'Nothing starts this flow yet' : <>This flow will start <strong className="font-semibold">{start.text}</strong>:</>}
+              {start.kind === 'none' ? 'Nothing starts this flow yet' : <>This flow will start <strong className="font-semibold">{start.text}</strong>{start.url ? ':' : '.'}</>}
             </p>
             {start.url && (
               <>
