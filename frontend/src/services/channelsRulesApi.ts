@@ -32,7 +32,7 @@ export interface EcosystemApps { helpdesk: boolean; crm: boolean }
 export async function getEcosystemApps(): Promise<EcosystemApps> {
   const all = { helpdesk: true, crm: true };
   try {
-    const r = unwrap<unknown>(await call.get('huf.ai.channels.ecosystem.get_ecosystem_apps', {}));
+    const r = unwrap<unknown>(await call.get('huf.ai.channels.ecosystem.get_ecosystem', {}));
     if (!r || typeof r !== 'object') return all;
     const o = r as Record<string, unknown>;
     const list = Array.isArray(r) ? (r as unknown[]) : Array.isArray(o.apps) ? (o.apps as unknown[]) : null;
