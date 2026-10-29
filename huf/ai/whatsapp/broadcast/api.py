@@ -38,10 +38,10 @@ from huf.ai.whatsapp.broadcast.checks import start_gate
 # Thin API over broadcast_recipients / broadcast_limits / broadcast_cost / broadcast_runner. Those
 # modules are imported lazily inside each function so that a problem there never breaks this module.
 #
-# Per-recipient retry of failed rows is deliberately NOT offered (no ``retry_failed_broadcast_recipients``):
-# a ``failed`` row is a permanent Meta verdict (invalid number, user stopped marketing, template or quality
-# problem) and ``unknown`` rows may already have been delivered, so re-sending either risks a duplicate or a
-# repeat spam signal. A second attempt is a new, separately attested broadcast to a corrected list.
+# Retry (``retry_failed_recipients``) never reopens a broadcast: only ``failed`` rows with a Graph code the error
+# taxonomy marks retryable go into a NEW Draft broadcast that must be attested and started again. Permanent
+# verdicts, policy refusals, skipped rows (opt-out, allow-list) and ``unknown`` rows (maybe delivered) are never retried.
+# Scheduling: see ``broadcast.schedule``.
 
 _BROADCAST = "WhatsApp Broadcast"
 _BROADCAST_RECIPIENT = "WhatsApp Broadcast Recipient"
@@ -53,7 +53,7 @@ _BROADCAST_FIELDS = (
 	"name", "title", "status", "pause_reason", "gateway", "whatsapp_account", "template", "template_name",
 	"language_code", "category", "body_params", "header_params", "button_params", "consent_source",
 	"consent_attested", "consent_attested_by", "consent_attested_at", "max_recipients", "mps", "send_via",
-	"started_by", "started_at", "finished_at", "creation", "modified", *_BROADCAST_COUNT_FIELDS,
+	"scheduled_at", "started_by", "started_at", "finished_at", "creation", "modified", *_BROADCAST_COUNT_FIELDS,
 )
 
 
@@ -106,7 +106,7 @@ def _broadcast_view(row: dict[str, Any]) -> dict[str, Any]:
 				out[key] = json.loads(value)
 			except ValueError:
 				pass
-	for key in ("creation", "modified", "started_at", "finished_at", "consent_attested_at"):
+	for key in ("creation", "modified", "scheduled_at", "started_at", "finished_at", "consent_attested_at"):
 		out[key] = _iso(out.get(key))
 	return out
 
@@ -494,7 +494,79 @@ def pause_all_broadcasts(gateway: str | None = None) -> dict[str, Any]:
 	from huf.ai.whatsapp.broadcast import runner as broadcast_runner
 
 	result = broadcast_runner.pause_all(gateway, "kill_switch")
+	from huf.ai.whatsapp.broadcast import schedule as broadcast_schedule
+
+	broadcast_schedule.hold_scheduled(gateway)
 	for name in running:
 		_broadcast_audit(name, "pause_all", gateway=gateway)
 	frappe.logger(_BROADCAST_LOG).info(f"gateway={gateway} action=pause_all user={frappe.session.user} paused={len(running)}")
 	return {"success": True, "gateway": gateway, "paused": running, **(result if isinstance(result, dict) else {})}
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=policy.rate("rate_start_broadcast"), seconds=60)
+@_bridge_guard
+def schedule_broadcast(
+	broadcast: str | None = None, scheduled_at: Any = None, confirm_count: Any = None, override_warnings: Any = None
+) -> dict[str, Any]:
+	"""Schedule a Draft broadcast to start at ``scheduled_at`` (site timezone). Same gate and confirmation as ``start_broadcast``."""
+	row = _require_broadcast_write(broadcast)
+	if row.get("error"):
+		return row
+	acknowledged = start_gate.parse_override_warnings(override_warnings)
+	if acknowledged is None:
+		return _error("invalid_override_warnings", "override_warnings must be a JSON list of warning codes.")
+	try:
+		frappe.utils.get_datetime(scheduled_at)
+	except Exception:
+		return _error("invalid_scheduled_at", "scheduled_at must be a date and time.")
+	queued = _queued_count(broadcast)
+	if queued <= 0:
+		return _error("no_recipients", "There are no queued recipients.")
+	if policy.get("require_typed_count") and not _is_api_key_caller():
+		if str(confirm_count if confirm_count is not None else "").strip() != str(queued):
+			return _error("confirm_mismatch", f"Type the number of queued recipients ({queued}) to confirm.")
+	from huf.ai.whatsapp.broadcast import schedule as broadcast_schedule
+
+	try:
+		result = broadcast_schedule.schedule(broadcast, scheduled_at, frappe.session.user, acknowledged)
+	except start_gate.StartRefused as exc:
+		return {"success": False, "error": exc.code, "message": str(exc), **exc.extra}
+	_broadcast_audit(broadcast, "scheduled", scheduled_at=result.get("scheduled_at"))
+	return {"success": True, **result}
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=policy.rate("rate_cancel_broadcast"), seconds=60)
+@_bridge_guard
+def unschedule_broadcast(broadcast: str | None = None) -> dict[str, Any]:
+	"""Return a Scheduled broadcast to Draft."""
+	row = _require_broadcast_write(broadcast)
+	if row.get("error"):
+		return row
+	from huf.ai.whatsapp.broadcast import schedule as broadcast_schedule
+
+	try:
+		result = broadcast_schedule.unschedule(broadcast)
+	except start_gate.StartRefused as exc:
+		return {"success": False, "error": exc.code, "message": str(exc), **exc.extra}
+	_broadcast_audit(broadcast, "unscheduled")
+	return {"success": True, **result}
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=policy.rate("rate_create_broadcast"), seconds=60)
+@_bridge_guard
+def retry_failed_recipients(broadcast: str | None = None) -> dict[str, Any]:
+	"""New Draft broadcast with the retryable failed recipients (never opted-out, allow-list or policy refusals)."""
+	row = _require_broadcast_write(broadcast)
+	if row.get("error"):
+		return row
+	from huf.ai.whatsapp.broadcast import schedule as broadcast_schedule
+
+	try:
+		result = broadcast_schedule.retry_failed(broadcast)
+	except start_gate.StartRefused as exc:
+		return {"success": False, "error": exc.code, "message": str(exc), **exc.extra}
+	_broadcast_audit(result["broadcast"], "retry_created", retried_from=broadcast, added=result.get("added"))
+	return {"success": True, **result}
