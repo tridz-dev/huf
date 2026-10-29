@@ -38,7 +38,7 @@ PER_USER_LIMIT_REASON = "per_user_marketing_limit"
 
 OUTCOMES = ("sent", "failed", "deferred", "unknown", "skipped", "lost_claim")
 # pre-POST refusals (policy / validation) from the bridge that mean "do not message this contact"
-_SKIP_CODES = {"opted_out", "marketing_opted_out", "bsuid_recipient"}
+_SKIP_CODES = {"opted_out", "marketing_opted_out", "bsuid_recipient", "recipient_not_allowlisted"}
 _STARTED = ("sending", "sent", "delivered", "read", "unknown", "failed")
 
 

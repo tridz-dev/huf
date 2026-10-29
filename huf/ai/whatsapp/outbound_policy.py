@@ -6,7 +6,7 @@
 Every send path (adapter text/media/template/fallback, the bridge template send, the agent tools)
 calls into this module before anything is written or posted:
 
-* :func:`check_recipient`: STOP (opt-out) and the BSUID refusal (a business-scoped user id is not a
+* :func:`check_recipient`: the site allow-list (``wa_outbound_allowlist``, when set), STOP (opt-out) and the BSUID refusal (a business-scoped user id is not a
   phone number Meta accepts as ``to``).
 * :func:`check_template`: the template must be APPROVED (a paused/rejected/pending one is refused) and
   a MARKETING template is refused for a contact whose latest marketing preference is ``stop``.
@@ -18,11 +18,13 @@ Refusals raise :class:`OutboundRefused` with a stable machine-readable ``code``.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import frappe
 
 OUTREACH = "template_outreach"  # Gateway Consent category: the contact was sent a proactive template
+ALLOWLIST_KEY = "wa_outbound_allowlist"  # site config: E.164 digits allowed to receive any outbound WhatsApp send
 
 
 class OutboundRefused(frappe.ValidationError):
@@ -39,13 +41,45 @@ def _is_bsuid(recipient: Any) -> bool:
 	return bridge.is_bsuid(recipient)
 
 
+def _digits(value: Any) -> str:
+	return re.sub(r"\D", "", str(value or ""))
+
+
+def allowlist_numbers() -> set[str] | None:
+	"""Digits of the site-config ``wa_outbound_allowlist`` (a list or a comma string), or None when the key is absent.
+
+	A key that is present but empty allows nothing (fail closed).
+	"""
+	raw = frappe.conf.get(ALLOWLIST_KEY)
+	if raw is None:
+		return None
+	items = raw.split(",") if isinstance(raw, str) else list(raw) if isinstance(raw, (list, tuple, set)) else [raw]
+	return {d for d in (_digits(item) for item in items) if d}
+
+
+def check_allowlist(recipient: Any) -> None:
+	"""Refuse any recipient that is not on the site-config ``wa_outbound_allowlist`` (no-op when the key is absent)."""
+	allowed = allowlist_numbers()
+	if allowed is None:
+		return
+	if _digits(recipient) not in allowed:
+		raise OutboundRefused(
+			"This number is not on the site's WhatsApp outbound allow-list; nothing was sent.",
+			"recipient_not_allowlisted",
+		)
+
+
 def check_recipient(gateway: str | None, recipient: Any) -> None:
-	"""Refuse a BSUID recipient and a STOPped contact. ``gateway`` None skips only the opt-out lookup."""
+	"""Refuse a BSUID recipient, a number outside the site allow-list and a STOPped contact.
+
+	``gateway`` None skips only the opt-out lookup.
+	"""
 	if _is_bsuid(recipient):
 		raise OutboundRefused(
 			"A business-scoped user id (BSUID) cannot be used as a WhatsApp recipient; send to the contact's phone number.",
 			"bsuid_recipient",
 		)
+	check_allowlist(recipient)
 	if gateway:
 		from huf.ai import gateway_service
 
