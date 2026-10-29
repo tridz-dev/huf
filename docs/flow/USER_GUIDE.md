@@ -159,6 +159,14 @@ Changes data without AI. Pick an operation; each shows a one-line description an
 
 Common errors: a required field empty; a list expected but text given.
 
+### Execute code
+
+Runs a short piece of Python in a sandbox and passes what it prints and returns to the next step. The card only appears when your administrator allows code in flows and your role may use it.
+
+- Fields: Python code, How it may run (the sandbox profile), inputs, and a time limit.
+- The run details show the exit status (Ok or not), what the code printed and its result. Output that is too long is cut off and says so.
+- Common errors: an error in the code (the printed error is in the output); the time limit; the administrator has not approved the code (the run waits for approval).
+
 ### Get state, Set state, Delete state
 
 A small memory that belongs to the flow. Set state saves a value under a key (optionally forgetting it after some seconds), Get state reads it (with an optional default), Delete state removes it. Use a template key such as `cart:{sender}` to keep one value per sender.
