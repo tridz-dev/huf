@@ -193,13 +193,52 @@ def verify_stripe_signature(body: bytes, header: str, secret: str, now: float | 
 
 # ------------------------------------------------------------------ paid handling
 
-def mark_paid(order: str, gateway: str | None = None) -> dict[str, Any]:
-	"""Mark the order Paid (idempotent) and send the confirmation once."""
+_ZERO_DECIMAL = frozenset({"BIF", "CLP", "DJF", "GNF", "JPY", "KMF", "KRW", "MGA", "PYG", "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF"})
+
+
+def _minor_units(amount: Any, currency: str) -> int:
+	from decimal import ROUND_HALF_UP, Decimal
+
+	factor = 1 if str(currency or "").upper() in _ZERO_DECIMAL else 100
+	return int((Decimal(str(amount or 0)) * factor).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def _paid_matches(doc, paid: dict[str, Any]) -> bool:
+	"""``paid`` = {"minor": int | None, "currency": str | None} straight from the provider payload."""
+	try:
+		minor, cur = paid.get("minor"), str(paid.get("currency") or "").upper()
+		return (
+			minor is not None
+			and int(minor) == _minor_units(doc.total, doc.currency)
+			and cur == str(doc.currency or "").upper()
+		)
+	except Exception:
+		return False
+
+
+def mark_paid(order: str, gateway: str | None = None, paid: dict[str, Any] | None = None) -> dict[str, Any]:
+	"""Mark the order Paid (idempotent under a row lock) and send the confirmation once.
+
+	With ``gateway`` (webhook path) the order must belong to that gateway; with ``paid`` the provider-reported
+	amount (minor units) and currency must equal the order's. Neither mismatch changes state.
+	"""
 	if not frappe.db.exists("DocType", ORDER) or not frappe.db.exists(ORDER, order):
 		return {"status": "ignored"}
-	doc = frappe.get_doc(ORDER, order)
-	if doc.payment_status == "Paid":
+	if gateway and frappe.db.get_value(ORDER, order, "gateway") != gateway:
+		frappe.logger("huf").warning(f"Payment webhook for {order} refused: gateway mismatch")
+		return {"status": "gateway_mismatch"}
+	# Row lock: a concurrent duplicate event waits here, then sees Paid and sends nothing.
+	locked = frappe.db.get_value(ORDER, order, ["payment_status"], as_dict=True, for_update=True)
+	if (locked or {}).get("payment_status") == "Paid":
 		return {"status": "already_paid"}
+	doc = frappe.get_doc(ORDER, order)
+	if paid is not None and not _paid_matches(doc, paid):
+		frappe.logger("huf").warning(f"Payment for {order} not applied: amount/currency mismatch")
+		try:
+			doc.add_comment("Comment", f"Paid event ignored: provider amount/currency did not match the order ({doc.currency} {doc.total}).")
+		except Exception:
+			pass
+		return {"status": "amount_mismatch"}
 	values = {"payment_status": "Paid"}
 	field = frappe.get_meta(ORDER).get_field("status")
 	if field and "Paid" in (field.options or "").split("\n"):
@@ -218,9 +257,9 @@ def _send_confirmation(doc, gateway: str | None) -> str:
 	template = frappe.db.get_value("Gateway", gw, "order_confirmed_template") if gw else None
 	total = f"{doc.currency} {doc.total}"
 	if template:
-		res = reply_api.deliver_reply(doc.conversation, template=template, params=[doc.name, total])
+		res = reply_api.deliver_reply(doc.conversation, template=template, params=[doc.name, total], category="utility")
 	else:
-		res = reply_api.deliver_reply(doc.conversation, text=f"Payment received for order {doc.name} ({total}). Thank you!")
+		res = reply_api.deliver_reply(doc.conversation, text=f"Payment received for order {doc.name} ({total}). Thank you!", category="utility")
 	return res.get("status", "unknown")
 
 
@@ -234,6 +273,15 @@ def _gateway_secret(gateway: str, key: str) -> str:
 	return _cred(gateway, key)
 
 
+def _applied(ref: str | None, gateway: str, paid: dict[str, Any]) -> dict[str, Any]:
+	if not ref:
+		return {"ok": True, "status": "ignored"}
+	res = mark_paid(ref, gateway, paid)
+	if res.get("status") == "gateway_mismatch":
+		return {"ok": False, "error": "gateway_mismatch"}
+	return {"ok": True, **res}
+
+
 def process_razorpay(body: bytes, signature: str, gateway: str) -> dict[str, Any]:
 	if not verify_razorpay_signature(body, signature, _gateway_secret(gateway, "razorpay_webhook_secret")):
 		return {"ok": False, "error": "invalid_signature"}
@@ -242,7 +290,8 @@ def process_razorpay(body: bytes, signature: str, gateway: str) -> dict[str, Any
 		return {"ok": True, "status": "ignored"}
 	entity = ((event.get("payload") or {}).get("payment_link") or {}).get("entity") or {}
 	ref = entity.get("reference_id") or (entity.get("notes") or {}).get("reference")
-	return {"ok": True, **mark_paid(ref, gateway)} if ref else {"ok": True, "status": "ignored"}
+	paid = {"minor": entity.get("amount_paid", entity.get("amount")), "currency": entity.get("currency")}
+	return _applied(ref, gateway, paid)
 
 
 def process_stripe(body: bytes, signature: str, gateway: str) -> dict[str, Any]:
@@ -255,12 +304,13 @@ def process_stripe(body: bytes, signature: str, gateway: str) -> dict[str, Any]:
 	if obj.get("payment_status") not in (None, "paid"):
 		return {"ok": True, "status": "ignored"}
 	ref = (obj.get("metadata") or {}).get("reference") or obj.get("client_reference_id")
-	return {"ok": True, **mark_paid(ref, gateway)} if ref else {"ok": True, "status": "ignored"}
+	paid = {"minor": obj.get("amount_total"), "currency": obj.get("currency")}
+	return _applied(ref, gateway, paid)
 
 
 def _reject(result: dict[str, Any]) -> dict[str, Any]:
 	if not result.get("ok"):
-		frappe.local.response["http_status_code"] = 401
+		frappe.local.response["http_status_code"] = 403 if result.get("error") == "gateway_mismatch" else 401
 	return result
 
 

@@ -60,8 +60,17 @@ def _send_template(gateway_name: str, handle: str, template: str, params: Any) -
 	return str(res.get("wamid") or res.get("message_id") or res.get("id") or res.get("name") or "")
 
 
-def deliver_reply(conversation, text=None, template=None, params=None, attachments=None) -> dict[str, Any]:
-	"""Permission-free core of :func:`send_reply` (callers have already authorised the sender)."""
+_POLICY_CODES = frozenset({"recipient_not_allowlisted", "bsuid_recipient", "opted_out", "template_not_approved", "marketing_opted_out"})
+CATEGORIES = ("service", "utility", "marketing")
+
+
+def deliver_reply(conversation, text=None, template=None, params=None, attachments=None, category: str = "service") -> dict[str, Any]:
+	"""Permission-free core of :func:`send_reply` (callers have already authorised the sender).
+
+	``category``: service (default, human reply) | utility (transactional) | marketing (needs a recorded
+	marketing opt-in and no emergency stop)."""
+	if category not in CATEGORIES:
+		return _result("error", error="invalid_category")
 	doc = conversation if not isinstance(conversation, str) else _load(conversation)
 	if doc is None:
 		return _result("error", error="not_found")
@@ -71,6 +80,13 @@ def deliver_reply(conversation, text=None, template=None, params=None, attachmen
 		return _result("error", error="attachments_unsupported")
 	from huf.ai.whatsapp import outbound_policy as policy
 
+	if category == "marketing":
+		from huf.ai.channels import reminder_policy
+
+		if reminder_policy.kill_switch_active(doc.gateway):
+			return _result("refused", error="emergency_stop", message="Marketing sends are stopped")
+		if not reminder_policy.has_marketing_opt_in(doc.gateway, doc.contact_handle):
+			return _result("refused", error="no_marketing_opt_in", message="No recorded marketing opt-in for this contact")
 	whatsapp = conv.window_applies(doc.get("channel"))
 	try:
 		if template and not whatsapp:
@@ -91,6 +107,8 @@ def deliver_reply(conversation, text=None, template=None, params=None, attachmen
 		from huf.ai.gateway_adapters.whatsapp_bridge import BridgeError
 
 		code = exc.payload.get("error") if isinstance(exc, BridgeError) else None
+		if code in _POLICY_CODES:  # the bridge re-wraps outbound-policy refusals as BridgeError
+			return _result("refused", error=code, message=str(exc.payload.get("message") or exc)[:300])
 		frappe.logger("huf").warning(f"Channel reply failed for {doc.name}: {code or type(exc).__name__}")
 		return _result("failed", error=code or "send_failed", message=str(exc)[:300])
 	conv.touch_outbound(doc, preview=preview)

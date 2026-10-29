@@ -202,3 +202,31 @@ class TestHandoffCore(IntegrationTestCase):
 		with patch.object(reply_api, "deliver_reply") as send:
 			handoff_hooks.communication_after_insert(received)
 		send.assert_not_called()
+
+	# --- categories / allow-list (final review) ---
+	def test_marketing_category_requires_recorded_opt_in(self):
+		from huf.ai.whatsapp import account_events as events
+
+		with patch.object(reply_api, "_send_template", return_value="wamid.1") as send:
+			res = reply_api.deliver_reply(self.conv.name, template="cart_reminder", params=["x"], category="marketing")
+			self.assertEqual((res["status"], res["error"]), ("refused", "no_marketing_opt_in"))
+			send.assert_not_called()
+			events._insert_consent(self.gw.name, "15550003333", events.MARKETING, "resume", source="manual")
+			self.assertEqual(reply_api.deliver_reply(self.conv.name, template="cart_reminder", params=["x"], category="marketing")["status"], "sent")
+			with patch("huf.ai.whatsapp.broadcast.schedule.emergency_stop_active", return_value=True):
+				self.assertEqual(reply_api.deliver_reply(self.conv.name, template="cart_reminder", category="marketing")["error"], "emergency_stop")
+			self.assertEqual(reply_api.deliver_reply(self.conv.name, template="t", category="utility")["status"], "sent")
+		self.assertEqual(reply_api.deliver_reply(self.conv.name, text="hi", category="bogus")["error"], "invalid_category")
+
+	def test_allowlist_refusal_surfaces_as_refused_from_template_path(self):
+		from huf.ai.gateway_adapters import whatsapp_bridge as bridge
+
+		with patch.dict(frappe.conf, {"wa_outbound_allowlist": ["15559990000"]}), patch.object(
+			bridge, "is_available", return_value=True
+		), patch.object(bridge, "_account_or_error", return_value={"phone_id": "x"}), patch.object(
+			bridge, "_refuse_if_disconnected"
+		), patch.object(bridge, "_template_docname", return_value="order_confirmed-en"), patch.object(
+			bridge, "_template_row", return_value=None
+		):
+			res = reply_api.deliver_reply(self.conv.name, template="order_confirmed", params=["a"])
+		self.assertEqual((res["status"], res["error"]), ("refused", "recipient_not_allowlisted"))

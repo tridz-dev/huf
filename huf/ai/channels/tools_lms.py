@@ -14,7 +14,7 @@ from typing import Any
 import frappe
 from frappe.utils import add_days, get_datetime
 
-from huf.ai.channels import run_as
+from huf.ai.channels import reminder_policy, run_as
 from huf.ai.channels.adapters import lms
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.tools.whatsapp import _free_form_refusal
@@ -25,7 +25,7 @@ ENROLLMENT = lms.ENROLLMENT
 CERTIFICATE = lms.CERTIFICATE
 PROGRESS = lms.PROGRESS
 REMINDER_DAYS = 3
-REMINDER_CACHE_KEY = "lms_reminder:{}"
+REMINDER_KIND = "lms_lesson_reminder"
 _MAX_ENROLLMENTS_PER_RUN = 500
 _NOT_INSTALLED = "LMS is not installed"
 
@@ -184,20 +184,6 @@ def lms_send_certificate(course: str = "", **_ignored) -> str:
 
 
 # ---------------------------------------------------------------- daily lesson reminders
-def _cache_get(key: str):
-	try:
-		return frappe.cache().get_value(key)
-	except Exception:
-		return None
-
-
-def _cache_set(key: str, value: str, expires_in_sec: int) -> None:
-	try:
-		frappe.cache().set_value(key, value, expires_in_sec=expires_in_sec)
-	except Exception:
-		frappe.logger("huf").warning("LMS reminder: could not record the send time")
-
-
 def _last_progress(member: str, course: str):
 	if not lms._has_doctype(PROGRESS):
 		return None
@@ -273,12 +259,13 @@ def send_lesson_reminders() -> int:
 		template = _gateway_template(gateway)
 		if not template:
 			continue
-		key = REMINDER_CACHE_KEY.format(enrollment["name"])
-		if _cache_get(key):
+		if reminder_policy.recently_sent(REMINDER_KIND, ENROLLMENT, enrollment["name"], REMINDER_DAYS):
+			continue
+		if not reminder_policy.may_send_proactive(gateway, phone):
 			continue
 		res = _send_template(gateway, phone, template, [enrollment["course"]])
 		if res.get("success"):
-			_cache_set(key, now.isoformat(), expires_in_sec=REMINDER_DAYS * 86400)
+			reminder_policy.record(gateway, phone, REMINDER_KIND, ENROLLMENT, enrollment["name"])
 			sent += 1
 		else:
 			frappe.logger("huf").info(f"LMS reminder for {enrollment['name']} not sent: {res.get('error')}")
