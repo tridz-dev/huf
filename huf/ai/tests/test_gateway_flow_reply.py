@@ -5,6 +5,10 @@ from types import SimpleNamespace
 
 from huf.ai.tests.unit_support import SupportCase  # noqa: E402
 
+import pathlib as _pl  # noqa: E402
+
+_REPO = _pl.Path(__file__).resolve().parents[3]
+
 from huf.ai.gateways import flow_reply
 from huf.ai.tools.gateways import reply as tool
 
@@ -229,6 +233,6 @@ class TestModule(SupportCase):
 		flow_reply.on_flow_run_update(None)
 
 	def test_hooks_registered(self):
-		src = open("huf/hooks.py").read()
+		src = open(_REPO / "huf/hooks.py").read()
 		assert "huf.ai.gateways.flow_reply.on_flow_run_update" in src
 		assert "huf.ai.tools.gateways.reply.GATEWAY_REPLY_TOOLS" in src

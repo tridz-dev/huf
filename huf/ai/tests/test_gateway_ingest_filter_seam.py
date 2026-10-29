@@ -7,6 +7,7 @@ Only persistence edges are faked.
 
 from __future__ import annotations
 
+import datetime as _dt
 import importlib
 import os
 import sys
@@ -88,7 +89,7 @@ class TestIngestFilterSeam(SupportCase):
 			self.admitted.append(dict(context))
 			return True, ""
 
-		def route(gw_name, context):
+		def route(gw_name, context, **kw):
 			self.routed.append(dict(context))
 			return {"status": "Queued", "target_type": "Agent", "agent": "A1", "binding": None}
 
@@ -97,6 +98,7 @@ class TestIngestFilterSeam(SupportCase):
 			patch.object(frappe.db, "get_value", side_effect=get_value),
 			patch.object(frappe, "get_doc", side_effect=get_doc),
 			patch.object(frappe, "enqueue"),
+			patch.object(gs, "now_datetime", side_effect=_dt.datetime.now),
 			patch.object(gs, "_admission", side_effect=admission),
 			patch.object(gs, "resolve_gateway_route", side_effect=route),
 			patch.object(hooks, "register_all"),
@@ -274,8 +276,10 @@ class TestTeamsFilterComposition(SupportCase):
 		for text in ["connect", "help", "status"]:
 			with self.subTest(text=text):
 				self.reset_fixtures()
+				self.tearDown()  # pytest re-ran setup_method for each parametrized case
+				self.setUp()
 				res = self._teams("x-" + text, text, tenant=_FOREIGN)
-				assert res == {"event_name": "EVT-1", "status": "Rejected"}
+				assert res == {"event_name": "EVT-1", "status": "Rejected"}, res
 				assert self.outbox == [] and self.tokens == []
 				assert self.events[0].db_set.call_args[0][0] == {
 					"status": "Rejected", "error_message": "tenant_not_allowed"}

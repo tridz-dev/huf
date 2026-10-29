@@ -12,6 +12,10 @@ _stub_env.install()
 
 from huf.ai.tests.unit_support import SupportCase  # noqa: E402
 
+import pathlib as _pl  # noqa: E402
+
+_REPO = _pl.Path(__file__).resolve().parents[3]
+
 from huf.ai.gateways.teams import outbox as ob  # noqa: E402
 
 NOW = datetime(2026, 10, 27, 12, 0, 0)
@@ -463,7 +467,7 @@ class TestModule(SupportCase):
 		assert len(ob.retry_due(limit=3, now=NOW)) == 3 and len(store.jobs) == 3
 
 	def test_scheduler_line_in_hooks_static(self):
-		src = Path("huf/hooks.py").read_text()
+		src = (_REPO / "huf/hooks.py").read_text()
 		tree = ast.parse(src)
 		for node in tree.body:
 			if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "scheduler_events":
@@ -475,10 +479,10 @@ class TestModule(SupportCase):
 	def test_hooks_py_compiles(self):
 		import py_compile
 
-		py_compile.compile("huf/hooks.py", doraise=True)
+		py_compile.compile(str(_REPO / "huf/hooks.py"), doraise=True)
 
 	def test_doctype_json_field_order_sane(self):
-		d = json.loads(Path("huf/huf/doctype/teams_outbound_message/teams_outbound_message.json").read_text())
+		d = json.loads((_REPO / "huf/huf/doctype/teams_outbound_message/teams_outbound_message.json").read_text())
 		names = {f["fieldname"] for f in d["fields"]}
 		assert [x for x in d["field_order"] if x not in names] == []
 		assert {f["fieldname"] for f in d["fields"] if f["fieldtype"] not in ("Section Break",)} <= set(d["field_order"])

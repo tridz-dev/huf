@@ -17,6 +17,10 @@ _stub_env.install()
 
 from huf.ai.tests.unit_support import SupportCase  # noqa: E402
 
+import pathlib as _pl  # noqa: E402
+
+_REPO = _pl.Path(__file__).resolve().parents[3]
+
 from huf.ai.gateways import hooks  # noqa: E402
 from huf.ai.gateways.teams.messaging import cards  # noqa: E402
 from huf.ai.gateways.teams import contract as tc  # noqa: E402
@@ -900,7 +904,7 @@ class TestModule(SupportCase):
 		assert env.sessions["tas-1"]["card_activity_id"] == "act-9"
 
 	def test_doctype_json_shape(self):
-		p = Path("huf/huf/doctype/teams_action_session/teams_action_session.json")
+		p = (_REPO / "huf/huf/doctype/teams_action_session/teams_action_session.json")
 		d = json.loads(p.read_text())
 		assert d["name"] == "Teams Action Session"
 		assert [x["role"] for x in d["permissions"]] == ["System Manager"]
@@ -909,11 +913,11 @@ class TestModule(SupportCase):
 			"payload", "state", "decided_by", "decision", "expires_at"):
 			assert name in fields
 		assert fields["state"]["options"].split("\n") == ["Open", "Decided", "Expired"]
-		py_compile.compile("huf/huf/doctype/teams_action_session/teams_action_session.py", doraise=True)
+		py_compile.compile(str(_REPO / "huf/huf/doctype/teams_action_session/teams_action_session.py"), doraise=True)
 
 	def test_hooks_py_doc_events_is_list_with_both_handlers(self):
-		src = Path("huf/hooks.py").read_text()
-		py_compile.compile("huf/hooks.py", doraise=True)
+		src = (_REPO / "huf/hooks.py").read_text()
+		py_compile.compile(str(_REPO / "huf/hooks.py"), doraise=True)
 		tree = ast.parse(src)
 		value = None
 		for node in ast.walk(tree):
@@ -925,12 +929,12 @@ class TestModule(SupportCase):
 		assert "huf.ai.gateways.teams.actions.on_approval_inserted" in entry
 
 	def test_teams_actions_has_no_slack_imports(self):
-		src = Path("huf/ai/gateways/teams/actions.py").read_text()
+		src = (_REPO / "huf/ai/gateways/teams/actions.py").read_text()
 		assert "slack" not in src.lower().replace("slack's", "")
 
 	def test_modules_compile(self):
 		for f in ("teams/actions.py", "teams/messaging/cards.py"):
-			py_compile.compile(f"huf/ai/gateways/{f}", doraise=True)
+			py_compile.compile(str(_REPO / f"huf/ai/gateways/{f}"), doraise=True)
 
 	def test_webhook_override_returned_as_response(self):
 		wh = self.use(_fx_wh)
