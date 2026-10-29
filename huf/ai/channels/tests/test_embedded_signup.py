@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import secrets
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -232,7 +235,9 @@ class TestCompleteSignupDirect(_Base):
 		out, fake = self.run_signup(gateway_name="ES Gateway " + secrets.token_hex(3))
 		post = fake.calls[0]
 		self.assertTrue(post[1].startswith("https://cloud.huf.example/"))
-		self.assertEqual(post[2]["json"], {"code": CODE, "waba_id": WABA, "phone_number_id": PHONE})
+		body = post[2]["json"]
+		self.assertEqual({k: body[k] for k in ("code", "waba_id", "phone_number_id")}, {"code": CODE, "waba_id": WABA, "phone_number_id": PHONE})
+		self.assertTrue(body["callback_url"].endswith(f"handle_gateway_webhook?gateway_name=ES%20Gateway%20{out['gateway'][-6:]}"))
 		self.assertEqual(post[2]["headers"]["Authorization"], f"Bearer {BROKER_KEY}")
 		self.assertEqual(post[2]["headers"]["X-Huf-Tenant"], "acme")
 		self.assertEqual(fake.urls("GET"), [])
@@ -324,3 +329,194 @@ class TestBrokerServer(_Base):
 		self.assertNotIn(CODE, str(cm.exception))
 		self.assertNotIn(CODE, self.all_text())
 		self.assertEqual(self.audit()[0].outcome, "Failed")
+
+
+# ---------------------------------------------------------------------------
+# BE-BROKER-FWD: broker webhook forwarding
+# ---------------------------------------------------------------------------
+VERIFY = "broker-verify-" + "v" * 10
+WABA_A = "1000000000000001"
+WABA_B = "1000000000000002"
+WABA_X = "1000000000000009"
+CB_A = "https://acme.example/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway_name=WA-A"
+CB_B = "https://beta.example/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway_name=WA-B"
+
+
+def _sig(secret, body):
+	return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+
+def _derived(tenant):
+	return hmac.new(APP_SECRET.encode(), f"tenant:{tenant}".encode(), hashlib.sha256).hexdigest()
+
+
+def _entry(waba, text="secret-body"):
+	return {"id": waba, "changes": [{"field": "messages", "value": {"messages": [{"id": "wamid.1", "text": {"body": text}}]}}]}
+
+
+class TestBrokerForwarding(_Base):
+	def setUp(self):
+		super().setUp()
+		configure(mode="broker_server", broker_verify_token=VERIFY)
+		es.create_tenant_key("acme", "https://acme.example")
+		es.create_tenant_key("beta", "https://beta.example")
+		for w in (WABA_A, WABA_B, WABA_X):
+			if frappe.db.exists(es.WABA_DOCTYPE, w):
+				frappe.delete_doc(es.WABA_DOCTYPE, w, force=True, ignore_permissions=True)
+		es._record_waba("acme", WABA_A, PHONE, CB_A)
+		es._record_waba("beta", WABA_B, PHONE, CB_B)
+		self._req = getattr(frappe.local, "request", None)
+
+	def tearDown(self):
+		frappe.local.request = self._req
+		for w in (WABA_A, WABA_B, WABA_X):
+			if frappe.db.exists(es.WABA_DOCTYPE, w):
+				frappe.delete_doc(es.WABA_DOCTYPE, w, force=True, ignore_permissions=True)
+		frappe.db.commit()
+		super().tearDown()
+
+	def get(self, **args):
+		frappe.local.request = SimpleNamespace(method="GET", args=args, headers={}, get_data=lambda: b"")
+		frappe.local.response = frappe._dict()
+		return es.broker_webhook()
+
+	def post(self, payload, secret=APP_SECRET, signature=None):
+		body = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
+		headers = {"X-Hub-Signature-256": signature if signature is not None else _sig(secret, body)}
+		frappe.local.request = SimpleNamespace(method="POST", args={}, headers=headers, get_data=lambda: body)
+		frappe.local.response = frappe._dict()
+		with patch(f"{MOD}.frappe.enqueue") as enq:
+			out = es.broker_webhook()
+		return out, enq
+
+	def test_get_challenge(self):
+		self.assertIsNone(self.get(**{"hub.mode": "subscribe", "hub.verify_token": VERIFY, "hub.challenge": "12345"}))
+		self.assertEqual(frappe.local.response["result"], "12345")
+		out = self.get(**{"hub.mode": "subscribe", "hub.verify_token": "wrong", "hub.challenge": "1"})
+		self.assertFalse(out["success"])
+		self.assertEqual(frappe.local.response.http_status_code, 403)
+
+	def test_bad_signature_401_and_nothing_enqueued(self):
+		for kw in ({"secret": "nope"}, {"signature": ""}, {"signature": "sha256=zz"}):
+			out, enq = self.post({"entry": [_entry(WABA_A)]}, **kw)
+			self.assertFalse(out["success"])
+			self.assertEqual(frappe.local.response.http_status_code, 401)
+			enq.assert_not_called()
+
+	def test_split_multi_tenant_resign_and_unknown_dropped(self):
+		payload = {"object": "whatsapp_business_account", "entry": [_entry(WABA_A, "a1"), _entry(WABA_B, "b1"), _entry(WABA_A, "a2"), _entry(WABA_X, "x")]}
+		out, enq = self.post(payload)
+		self.assertEqual((out["forwarded"], out["dropped"]), (2, 1))
+		calls = {c.kwargs["tenant_id"]: c.kwargs for c in enq.call_args_list}
+		self.assertEqual(set(calls), {"acme", "beta"})
+		for tenant, url, wabas in (("acme", CB_A, [WABA_A, WABA_A]), ("beta", CB_B, [WABA_B])):
+			kw = calls[tenant]
+			self.assertEqual(kw["url"], url)
+			self.assertEqual(kw["queue"], "short")
+			body = json.loads(kw["body"])
+			self.assertEqual([e["id"] for e in body["entry"]], wabas)
+			self.assertEqual(body["object"], "whatsapp_business_account")
+			# re-signed over the exact forwarded bytes with the tenant's derived secret only
+			self.assertEqual(kw["signature"], _sig(_derived(tenant), kw["body"].encode()))
+			self.assertNotEqual(kw["signature"], _sig(APP_SECRET, kw["body"].encode()))
+		self.assertNotIn("b1", calls["acme"]["body"])
+		dropped = frappe.get_all("Embedded Signup Audit", filters={"outcome": "Dropped", "waba_id": WABA_X})
+		self.assertTrue(dropped)
+		self.assertNotIn("secret-body", str(frappe.get_all("Embedded Signup Audit", fields=["*"])))
+
+	def test_only_unknown_waba_enqueues_nothing(self):
+		out, enq = self.post({"entry": [_entry(WABA_X)]})
+		self.assertEqual((out["forwarded"], out["dropped"]), (0, 1))
+		enq.assert_not_called()
+
+	def test_forward_job_posts_to_tenant_url_with_retries(self):
+		fake = MagicMock()
+		fake.post.side_effect = [resp(503), resp(500), resp(200)]
+		sleeps = []
+		with patch(f"{MOD}.requests", fake):
+			ok = es.forward_to_tenant("acme", CB_A, '{"entry":[]}', "sha256=ab", 1, sleep=sleeps.append)
+		self.assertTrue(ok)
+		self.assertEqual(fake.post.call_count, 3)
+		self.assertEqual(len(sleeps), 2)
+		args, kw = fake.post.call_args
+		self.assertEqual(args[0], CB_A)
+		self.assertEqual(kw["headers"]["X-Hub-Signature-256"], "sha256=ab")
+		self.assertEqual(kw["data"], b'{"entry":[]}')
+		self.assertTrue(kw["timeout"])
+
+	def test_forward_job_gives_up_and_does_not_retry_4xx(self):
+		fake = MagicMock()
+		fake.post.return_value = resp(500)
+		with patch(f"{MOD}.requests", fake):
+			self.assertFalse(es.forward_to_tenant("acme", CB_A, "{}", "sha256=ab", 1, sleep=lambda s: None))
+		self.assertEqual(fake.post.call_count, 3)
+		fake.post.reset_mock()
+		fake.post.return_value = resp(401)
+		with patch(f"{MOD}.requests", fake):
+			self.assertFalse(es.forward_to_tenant("acme", CB_A, "{}", "sha256=ab", 1, sleep=lambda s: None))
+		self.assertEqual(fake.post.call_count, 1)
+
+	def test_callback_validation(self):
+		self.assertTrue(es._callback_ok("https://acme.example", CB_A))
+		for bad in ("https://evil.example/x", "http://acme.example/x", "https://acme.example:8443/x", ""):
+			with patch.dict(frappe.conf, {"developer_mode": 0}):
+				self.assertFalse(es._callback_ok("https://acme.example", bad), bad)
+		self.assertFalse(es._callback_ok("", CB_A))
+
+	def test_waba_cannot_be_claimed_by_another_tenant(self):
+		key = es.create_tenant_key("beta", "https://beta.example")["api_key"]
+		frappe.local.request_ip = "10.9.9.9"
+		frappe.local.request = SimpleNamespace(headers={"X-Huf-Tenant": "beta", "Authorization": f"Bearer {key}", "X-Forwarded-Proto": "https"}, scheme="https", method="POST")
+		frappe.local.form_dict = frappe._dict(code=CODE, waba_id=WABA_A, cmd="x")
+		with patch(f"{MOD}.requests", FakeRequests()):
+			with self.assertRaises(frappe.PermissionError):
+				es.broker_exchange()
+		self.assertEqual(frappe.db.get_value(es.WABA_DOCTYPE, WABA_A, "tenant_id"), "acme")
+
+	def test_exchange_records_mapping_and_rejects_foreign_callback(self):
+		key = es.create_tenant_key("acme", "https://acme.example")["api_key"]
+		frappe.local.request_ip = "10.8.8.8"
+
+		def call(cb):
+			frappe.local.request = SimpleNamespace(headers={"X-Huf-Tenant": "acme", "Authorization": f"Bearer {key}", "X-Forwarded-Proto": "https"}, scheme="https", method="POST")
+			frappe.local.form_dict = frappe._dict(code=CODE, waba_id=WABA_X, phone_number_id=PHONE, callback_url=cb, cmd="x")
+			with patch(f"{MOD}.requests", FakeRequests()):
+				return es.broker_exchange()
+
+		with self.assertRaises(frappe.ValidationError):
+			call("https://evil.example/hook")
+		self.assertFalse(frappe.db.exists(es.WABA_DOCTYPE, WABA_X))
+		call(CB_A)
+		row = frappe.db.get_value(es.WABA_DOCTYPE, WABA_X, ["tenant_id", "phone_number_id", "callback_url"], as_dict=True)
+		self.assertEqual((row.tenant_id, row.phone_number_id, row.callback_url), ("acme", PHONE, CB_A))
+
+	def test_tenant_handler_accepts_resigned_and_rejects_wrong(self):
+		from huf.ai import gateway_webhook
+		from huf.ai.gateway_adapters import GatewayInboundRequest
+		from huf.ai.gateway_adapters.whatsapp import WhatsAppGatewayAdapter
+
+		out, enq = self.post({"entry": [_entry(WABA_A)]})
+		kw = enq.call_args.kwargs
+		creds = {"phone_number_id": PHONE, "access_token": "t", "webhook_verify_token": "v", "app_secret": _derived("acme")}
+
+		def deliver(signature):
+			adapter = WhatsAppGatewayAdapter(creds, gateway_context={"gateway_name": "WA-A"})
+			request = GatewayInboundRequest(kw["body"].encode(), headers={"X-Hub-Signature-256": signature}, query={}, method="POST")
+			mock_frappe = MagicMock()
+			mock_frappe.request = SimpleNamespace(args={"gateway_name": "WA-A"}, content_length=len(kw["body"]))
+			mock_frappe.local = SimpleNamespace(response=SimpleNamespace(), response_headers={})
+			mock_frappe.get_doc.return_value = SimpleNamespace(name="WA-A", provider="WhatsApp", is_enabled=1)
+			with patch("huf.ai.gateway_webhook.frappe", mock_frappe), patch(
+				"huf.ai.gateway_webhook.get_gateway_adapter", return_value=adapter
+			), patch("huf.ai.gateway_webhook._inbound_request", return_value=request), patch(
+				"huf.ai.gateway_webhook._ingest_rate_gate"
+			), patch("huf.ai.gateway_webhook._supports_batch_parse", return_value=True), patch(
+				"huf.ai.gateway_webhook._handle_batched_payload", return_value={"success": True, "accepted": True}
+			):
+				return gateway_webhook.handle_gateway_webhook(), mock_frappe.local.response
+
+		ok, _r = deliver(kw["signature"])
+		self.assertEqual(ok, {"success": True, "accepted": True})
+		bad, r = deliver(_sig(APP_SECRET, kw["body"].encode()))  # the broker's real secret must not validate
+		self.assertEqual(bad, {"success": False, "error": "Provider verification failed"})
+		self.assertEqual(r.http_status_code, 401)

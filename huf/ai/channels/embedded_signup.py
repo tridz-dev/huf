@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import re
 import secrets as pysecrets
+import time
 from typing import Any
 from urllib.parse import urlparse
 
@@ -32,6 +34,10 @@ from huf.ai.secrets import redact as redact_obj
 from huf.ai.whatsapp import token_check
 
 SETTINGS = "Channel Embedded Signup Settings"
+WABA_DOCTYPE = "Embedded Signup WABA"
+BROKER_WEBHOOK_METHOD = "huf.ai.channels.embedded_signup.broker_webhook"
+FORWARD_ATTEMPTS = 3
+FORWARD_BACKOFF_SECONDS = (1, 4)
 GRAPH_ROOT = "https://graph.facebook.com"
 HTTP_TIMEOUT = 20
 ADMIN_ROLES = ("System Manager", "Huf Admin")
@@ -166,11 +172,13 @@ def get_settings_admin() -> dict[str, Any]:
 		"tenant_id": s.tenant_id or "",
 		"app_secret_set": bool(_secret(s, "app_secret")),
 		"broker_api_key_set": bool(_secret(s, "broker_api_key")),
+		"broker_verify_token_set": bool(_secret(s, "broker_verify_token")),
+		"broker_callback_url": f"{frappe.utils.get_url().rstrip('/')}/api/method/{BROKER_WEBHOOK_METHOD}",
 	}
 
 
 _EDITABLE = ("enabled", "mode", "facebook_app_id", "config_id", "graph_version", "broker_url", "tenant_id")
-_WRITE_ONLY = ("app_secret", "broker_api_key")
+_WRITE_ONLY = ("app_secret", "broker_api_key", "broker_verify_token")
 
 
 @frappe.whitelist(methods=["POST"])
@@ -241,7 +249,9 @@ def _exchange_code_with_meta(settings, code: str) -> str:
 	return str(token)
 
 
-def _exchange_via_broker(settings, code: str, waba_id: str, phone_number_id: str) -> dict[str, Any]:
+def _exchange_via_broker(
+	settings, code: str, waba_id: str, phone_number_id: str, callback_url: str = ""
+) -> dict[str, Any]:
 	url = (settings.broker_url or "").strip()
 	key = _secret(settings, "broker_api_key")
 	if not url or not key:
@@ -251,7 +261,12 @@ def _exchange_via_broker(settings, code: str, waba_id: str, phone_number_id: str
 	try:
 		resp = requests.post(
 			url,
-			json={"code": code, "waba_id": waba_id, "phone_number_id": phone_number_id},
+			json={
+				"code": code,
+				"waba_id": waba_id,
+				"phone_number_id": phone_number_id,
+				"callback_url": callback_url,
+			},
 			headers={"Authorization": f"Bearer {key}", "X-Huf-Tenant": settings.tenant_id or ""},
 			timeout=HTTP_TIMEOUT,
 		)
@@ -297,6 +312,14 @@ def _register_phone(settings, phone_number_id: str, token: str, pin: str) -> str
 	except Exception as exc:
 		return _("Could not register the phone number: {0}").format(_clean(exc, token, pin))
 	return None
+
+
+def _planned_gateway_name(gateway_name: str | None, phone_number_id: str) -> str:
+	"""The Gateway name ``_save_gateway`` will use (needed before it exists, for the webhook callback URL)."""
+	if (gateway_name or "").strip():
+		return gateway_name.strip()
+	hit = frappe.db.get_value("Gateway", {"provider": "WhatsApp", "phone_number_id": phone_number_id}, "name")
+	return hit or f"WhatsApp {phone_number_id[-4:]}"
 
 
 def _save_gateway(
@@ -428,7 +451,10 @@ def complete_signup(
 	token = ""
 	try:
 		if s.mode == "broker":
-			body = _exchange_via_broker(s, code, waba_id, phone_number_id)
+			from huf.ai.whatsapp.management import _webhook_url
+
+			callback = _webhook_url(_planned_gateway_name(gateway_name, phone_number_id))
+			body = _exchange_via_broker(s, code, waba_id, phone_number_id, callback)
 			token = str(body["access_token"])
 			app_secret = str(body.get("webhook_signing_secret") or "")
 			if not app_secret:
@@ -499,6 +525,42 @@ def _audit(tenant_id: str, outcome: str, reason: str = "", waba_id: str = "") ->
 		pass
 
 
+def _derive_signing_secret(settings, tenant_id: str) -> str:
+	return hmac.new(
+		_secret(settings, "app_secret").encode(), f"tenant:{tenant_id}".encode(), hashlib.sha256
+	).hexdigest()
+
+
+def _callback_ok(site_url: str | None, callback_url: str) -> bool:
+	"""https (developer mode excepted) and the same host as the tenant's registered site_url."""
+	cb = urlparse(callback_url or "")
+	site = urlparse(site_url or "")
+	if not site.hostname or not cb.hostname or cb.hostname.lower() != site.hostname.lower():
+		return False
+	if cb.scheme not in ("https", "http") or (cb.port or 0) != (site.port or 0):
+		return False
+	return cb.scheme == "https" or bool(frappe.conf.get("developer_mode"))
+
+
+def _record_waba(tenant_id: str, waba_id: str, phone_number_id: str, callback_url: str) -> None:
+	if frappe.db.exists(WABA_DOCTYPE, waba_id):
+		doc = frappe.get_doc(WABA_DOCTYPE, waba_id)
+		doc.phone_number_id = phone_number_id or doc.phone_number_id
+		doc.callback_url = callback_url or doc.callback_url
+		doc.save(ignore_permissions=True)
+	else:
+		frappe.get_doc(
+			{
+				"doctype": WABA_DOCTYPE,
+				"tenant_id": tenant_id,
+				"waba_id": waba_id,
+				"phone_number_id": phone_number_id,
+				"callback_url": callback_url,
+			}
+		).insert(ignore_permissions=True)
+	frappe.db.commit()
+
+
 def _authenticate_tenant(settings, tenant_id: str, key: str):
 	"""Constant-time check of the bearer key against the stored hash. Returns the tenant row or None."""
 	row = next(
@@ -527,7 +589,8 @@ def broker_exchange() -> dict[str, Any]:
 		reject("broker_disabled", frappe.PermissionError)
 	if not _request_is_https():
 		reject("https_required", frappe.PermissionError)
-	if not tenant_id or not key or _authenticate_tenant(s, tenant_id, key) is None:
+	tenant_row = _authenticate_tenant(s, tenant_id, key) if tenant_id and key else None
+	if tenant_row is None:
 		reject("bad_credentials")
 
 	form = frappe.form_dict
@@ -535,14 +598,146 @@ def broker_exchange() -> dict[str, Any]:
 	waba_id = str(form.get("waba_id") or "").strip()
 	if not code or (waba_id and not _ID_RE.match(waba_id)):
 		reject("bad_request", frappe.ValidationError)
+	phone_number_id = str(form.get("phone_number_id") or "").strip()
+	if phone_number_id and not _ID_RE.match(phone_number_id):
+		reject("bad_request", frappe.ValidationError)
+	callback_url = str(form.get("callback_url") or "").strip()
+	if callback_url and not _callback_ok(tenant_row.site_url, callback_url):
+		reject("bad_callback_url", frappe.ValidationError)
+	if waba_id:
+		owner = frappe.db.get_value(WABA_DOCTYPE, waba_id, "tenant_id")
+		if owner and owner != tenant_id:
+			reject("waba_owned_by_other_tenant", frappe.PermissionError)
 	try:
 		token = _exchange_code_with_meta(s, code)
 	except SignupError as exc:
 		_audit(tenant_id, "Failed", "meta_exchange_failed", waba_id)
 		_log_error("Embedded Signup broker exchange failed", exc, code)
 		frappe.throw(_clean(exc, code), frappe.ValidationError)
+	if waba_id:
+		_record_waba(tenant_id, waba_id, phone_number_id, callback_url)
 	_audit(tenant_id, "Success", "", waba_id)
 	# Never hand out the real app secret: the tenant gets a per-tenant derived signing secret
 	# (the broker's webhook forwarder re-signs forwarded events with it).
-	derived = hmac.new(_secret(s, "app_secret").encode(), f"tenant:{tenant_id}".encode(), hashlib.sha256).hexdigest()
-	return {"access_token": token, "webhook_signing_secret": derived}
+	return {"access_token": token, "webhook_signing_secret": _derive_signing_secret(s, tenant_id)}
+
+
+# ---------------------------------------------------------------------------
+# broker_server: Meta webhook -> owning tenant
+# ---------------------------------------------------------------------------
+def _sign(secret: str, body: bytes) -> str:
+	return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+
+def _broker_signature_ok(secret: str, body: bytes, header: str) -> bool:
+	if not secret or not header or not header.startswith("sha256="):
+		return False
+	return hmac.compare_digest(header.encode(), _sign(secret, body).encode())
+
+
+def _split_by_tenant(settings, payload: dict) -> tuple[list[tuple[str, str, dict]], list[str]]:
+	"""Returns ([(tenant_id, callback_url, tenant_payload)], dropped_waba_ids)."""
+	enabled = {r.tenant_id: r for r in settings.allowed_tenants or [] if r.enabled}
+	groups: dict[str, dict[str, Any]] = {}
+	dropped: list[str] = []
+	for entry in payload.get("entry") or []:
+		waba = str(entry.get("id") or "") if isinstance(entry, dict) else ""
+		row = frappe.db.get_value(WABA_DOCTYPE, waba, ["tenant_id", "callback_url"], as_dict=True) if waba else None
+		tenant = enabled.get(row.tenant_id) if row else None
+		if not row or tenant is None or not row.callback_url or not _callback_ok(tenant.site_url, row.callback_url):
+			dropped.append(waba[:40])
+			continue
+		g = groups.setdefault(row.tenant_id, {"url": row.callback_url, "entries": []})
+		g["entries"].append(entry)
+	out = []
+	for tenant_id, g in groups.items():
+		tp = {k: v for k, v in payload.items() if k != "entry"}
+		tp["entry"] = g["entries"]
+		out.append((tenant_id, g["url"], tp))
+	return out, dropped
+
+
+@frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
+def broker_webhook() -> Any:
+	"""broker_server: Meta's app-level webhook. Verifies, splits per owning tenant, forwards async."""
+	s = _settings()
+	req = frappe.request
+	if not (s.enabled and s.mode == "broker_server"):
+		frappe.local.response.http_status_code = 403
+		return {"success": False}
+
+	if req.method == "GET":
+		token = _secret(s, "broker_verify_token")
+		given = str(req.args.get("hub.verify_token") or "")
+		if (
+			token
+			and str(req.args.get("hub.mode") or "subscribe") == "subscribe"
+			and hmac.compare_digest(given.encode(), token.encode())
+		):
+			frappe.local.response.update(
+				{"type": "txt", "doctype": "gateway-callback", "result": str(req.args.get("hub.challenge") or "")}
+			)
+			return None
+		frappe.local.response.http_status_code = 403
+		return {"success": False}
+
+	body = req.get_data() or b""
+	if not _broker_signature_ok(_secret(s, "app_secret"), body, req.headers.get("X-Hub-Signature-256") or ""):
+		_audit("", "Rejected", "bad_webhook_signature")
+		frappe.local.response.http_status_code = 401
+		return {"success": False}
+	try:
+		payload = json.loads(body)
+		if not isinstance(payload, dict):
+			raise ValueError
+	except ValueError:
+		frappe.local.response.http_status_code = 400
+		return {"success": False}
+
+	parts, dropped = _split_by_tenant(s, payload)
+	for tenant_id, url, tp in parts:
+		raw = json.dumps(tp, separators=(",", ":"), ensure_ascii=False).encode()
+		frappe.enqueue(
+			f"{MOD_PATH}.forward_to_tenant",
+			queue="short",
+			enqueue_after_commit=False,
+			tenant_id=tenant_id,
+			url=url,
+			body=raw.decode(),
+			signature=_sign(_derive_signing_secret(s, tenant_id), raw),
+			entries=len(tp["entry"]),
+		)
+	for waba in dropped:
+		_audit("", "Dropped", "unknown_waba", waba)
+	return {"success": True, "forwarded": len(parts), "dropped": len(dropped)}
+
+
+MOD_PATH = "huf.ai.channels.embedded_signup"
+
+
+def forward_to_tenant(tenant_id: str, url: str, body: str, signature: str, entries: int = 0, sleep=time.sleep) -> bool:
+	"""Background job: POST the re-signed payload to the tenant, up to 3 attempts with backoff.
+
+	Only counts and ids are audited; the body is never logged.
+	"""
+	status = "exception"
+	for attempt in range(FORWARD_ATTEMPTS):
+		try:
+			resp = requests.post(
+				url,
+				data=body.encode(),
+				headers={"Content-Type": "application/json", "X-Hub-Signature-256": signature},
+				timeout=HTTP_TIMEOUT,
+			)
+			status = str(resp.status_code)
+			if resp.status_code < 400:
+				_audit(tenant_id, "Forwarded", f"entries={entries}")
+				return True
+			if resp.status_code < 500 and resp.status_code != 429:
+				break  # tenant rejected it; retrying will not help
+		except Exception:
+			status = "exception"
+		if attempt < FORWARD_ATTEMPTS - 1:
+			sleep(FORWARD_BACKOFF_SECONDS[min(attempt, len(FORWARD_BACKOFF_SECONDS) - 1)])
+	_audit(tenant_id, "Failed", f"forward_failed:{status}:entries={entries}")
+	return False
