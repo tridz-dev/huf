@@ -222,7 +222,11 @@ class TestHandoffCore(IntegrationTestCase):
 		from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 
 		with patch.dict(frappe.conf, {"wa_outbound_allowlist": ["15559990000"]}), patch.object(
-			bridge, "_account_or_error", return_value=MagicMock()
-		), patch.object(bridge, "_refuse_if_disconnected"), patch.object(bridge, "_template_row", return_value=None):
+			bridge, "is_available", return_value=True
+		), patch.object(bridge, "_account_or_error", return_value={"phone_id": "x"}), patch.object(
+			bridge, "_refuse_if_disconnected"
+		), patch.object(bridge, "_template_docname", return_value="order_confirmed-en"), patch.object(
+			bridge, "_template_row", return_value=None
+		):
 			res = reply_api.deliver_reply(self.conv.name, template="order_confirmed", params=["a"])
 		self.assertEqual((res["status"], res["error"]), ("refused", "recipient_not_allowlisted"))

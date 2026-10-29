@@ -78,7 +78,11 @@ class TestCommercePayments(IntegrationTestCase):
 	def _order(self, **kw):
 		vals = {"doctype": ORDER, "status": "Draft", "payment_status": "Unpaid", "gateway": self.gw.name, "conversation": self.conv.name, "total": 100, "currency": "INR"}
 		vals.update(kw)
-		return frappe.get_doc(vals).insert(ignore_permissions=True)
+		doc = frappe.get_doc(vals).insert(ignore_permissions=True)
+		total = vals["total"]
+		frappe.db.set_value(ORDER, doc.name, "total", total)  # the real doctype recomputes total from items
+		doc.total = total
+		return doc
 
 	# ---------------------------------------------------------------- links
 	def test_razorpay_link(self):
@@ -255,7 +259,7 @@ class TestCommercePayments(IntegrationTestCase):
 
 	def test_paid_event_for_other_gateway_is_refused_without_state_change(self):
 		o = self._order()
-		other = frappe.get_doc({**self.gw.as_dict(), "name": None, "gateway_name": f"Other {frappe.generate_hash(length=6)}", "integration_settings": self.gw.integration_settings, "doctype": "Gateway"}).insert(ignore_permissions=True)
+		other = frappe.get_doc({**self.gw.as_dict(), "name": None, "gateway_name": f"Other {frappe.generate_hash(length=6)}", "is_enabled": 0, "doctype": "Gateway"}).insert(ignore_permissions=True)
 		with patch.object(reply_api, "deliver_reply") as send:
 			res = self._rzp(o, gateway=other.name)
 		self.assertEqual((res["ok"], res["error"]), (False, "gateway_mismatch"))
@@ -302,7 +306,7 @@ class TestCommercePayments(IntegrationTestCase):
 		self._opt_in()
 		o = self._order()
 		self._age(o)
-		other = frappe.get_doc({**self.gw.as_dict(), "name": None, "gateway_name": f"Other {frappe.generate_hash(length=6)}", "doctype": "Gateway"}).insert(ignore_permissions=True)
+		other = frappe.get_doc({**self.gw.as_dict(), "name": None, "gateway_name": f"Other {frappe.generate_hash(length=6)}", "is_enabled": 0, "doctype": "Gateway"}).insert(ignore_permissions=True)
 		frappe.db.set_value(ORDER, o.name, "gateway", other.name)
 		with patch.object(reply_api, "deliver_reply", return_value={"status": "sent"}) as send:
 			cart_recovery.run_cart_recovery()
