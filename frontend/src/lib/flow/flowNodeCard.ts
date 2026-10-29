@@ -74,7 +74,7 @@ const DOC_EVENT_WORD: Record<string, string> = {
 export function triggerSubtitle(cfg: TriggerConfig | undefined): string {
   switch (cfg?.type) {
     case 'webhook':
-      return 'Starts when a web request arrives';
+      return 'Runs on a web request';
     case 'schedule': {
       const text = describeCron(cfg.cron).replace(/ \(server time\)$/, '');
       return text.startsWith('No valid') ? 'Pick when it should run' : text;
@@ -179,4 +179,4 @@ export function actionSubtitle(cfg: ActionConfig | undefined): string {
   }
 }
 
-export const END_SUBTITLE = 'Ends the flow and gives the result';
+export const END_SUBTITLE = 'Ends the flow';
