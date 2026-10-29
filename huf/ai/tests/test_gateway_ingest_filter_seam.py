@@ -276,6 +276,8 @@ class TestTeamsFilterComposition(SupportCase):
 		for text in ["connect", "help", "status"]:
 			with self.subTest(text=text):
 				self.reset_fixtures()
+				self.tearDown()  # pytest re-ran setup_method for each parametrized case
+				self.setUp()
 				res = self._teams("x-" + text, text, tenant=_FOREIGN)
 				assert res == {"event_name": "EVT-1", "status": "Rejected"}, res
 				assert self.outbox == [] and self.tokens == []
