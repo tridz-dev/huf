@@ -106,12 +106,17 @@ class TestHubGatewayTools(IntegrationTestCase):
 
 	def test_non_admin_denied(self):
 		self._create_non_admin_user()
-		with self.assertRaises(frappe.PermissionError):
-			pairing_module.test_gateway_health("Any Gateway")
+		health = pairing_module.test_gateway_health("Any Gateway")
+		self.assertFalse(health["success"])
+		self.assertTrue(health["permission_denied"])
+		self.assertNotIn("is_enabled", health)  # no gateway data leaks
+		approval = pairing_module.approve_pairing_code("PAIR-ABCD2345", gateway_name="Any Gateway")
+		self.assertFalse(approval["success"])
+		self.assertTrue(approval["permission_denied"])
+		self.assertNotIn("entry_id", approval)
+		# list_pairing_requests keeps its raising contract (pinned by test_gateway_pairing_hardening).
 		with self.assertRaises(frappe.PermissionError):
 			pairing_module.list_pairing_requests()
-		with self.assertRaises(frappe.PermissionError):
-			pairing_module.approve_pairing_code("PAIR-ABCD2345", gateway_name="Any Gateway")
 
 	def test_admin_calls_return_expected_shape(self):
 		frappe.set_user("Administrator")
@@ -185,5 +190,7 @@ class TestHubGatewayTools(IntegrationTestCase):
 
 	def test_setup_gateway_non_admin_denied(self):
 		self._create_non_admin_user()
-		with self.assertRaises(frappe.PermissionError):
-			pairing_module.setup_gateway("WhatsApp", "Hub Test GW", credentials_ref="SS-0000")
+		result = pairing_module.setup_gateway("WhatsApp", "Hub Test GW", credentials_ref="SS-0000")
+		self.assertFalse(result["success"])
+		self.assertTrue(result["permission_denied"])
+		self.assertFalse(frappe.db.exists("Gateway", "Hub Test GW"))

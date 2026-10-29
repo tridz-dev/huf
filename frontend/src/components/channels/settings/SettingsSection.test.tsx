@@ -77,6 +77,17 @@ describe('Settings sections', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Disable' }));
     await waitFor(() => expect(api.updateGateway).toHaveBeenCalledWith('GW-1', { is_enabled: 0 }));
   });
+  it('hours saves holiday rows and the optional ERPNext list name', async () => {
+    open('/hours');
+    fireEvent.click(await screen.findByRole('button', { name: 'Add holiday' }));
+    fireEvent.change(screen.getByLabelText('Holiday date 1'), { target: { value: '2026-11-02' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add holiday' }));
+    fireEvent.change(screen.getByLabelText('Holiday date 2'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(api.updateGateway).toHaveBeenCalledWith('GW-1', expect.objectContaining({
+      holidays: [{ holiday_date: '2026-11-02', description: '' }], holiday_list: '',
+    })));
+  });
   it('validateRunAs', () => {
     expect(validateRunAs(' guest ')).not.toBeNull();
     expect(validateRunAs('a@b.c')).toBeNull();

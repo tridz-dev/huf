@@ -25,12 +25,19 @@ export interface BusinessHourRow {
   end_time: string;
 }
 
+export interface BusinessHolidayRow {
+  holiday_date: string;
+  description?: string;
+}
+
 /** Gateway fields added by the Automation section (not yet in the shared GatewayDoc type). */
 export interface AutomationFields {
   run_as_user?: string;
   run_as_role_profile?: string;
   business_hours_enabled?: 0 | 1;
   business_hours?: BusinessHourRow[];
+  holidays?: BusinessHolidayRow[];
+  /** Optional ERPNext/HRMS Holiday List name (Data, not a Link: the DocType may be absent). */
   holiday_list?: string;
   after_hours_mode?: 'agent_24_7' | 'away_message' | 'away_template';
   away_message?: string;

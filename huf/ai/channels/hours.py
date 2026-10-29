@@ -4,14 +4,16 @@ Registered as a pre-route hook (``huf.ai.channels.pipeline.PRE_ROUTE_HOOKS``). P
 
 * ``business_hours_enabled`` off: no restriction, the hook passes through.
 * ``after_hours_mode == "agent_24_7"``: the agent answers at all times, the hook passes through.
-* Outside the window (or on a holiday from ``holiday_list``) with ``away_message``/``away_template``:
+* Outside the window (or on a holiday) with ``away_message``/``away_template``:
   the away reply is sent at most once per conversation per closed window. Later messages in the same
   closed window are dropped (no agent run). The window is identified by its next opening time, so the
   next closed window gets a new reply. The cache key TTL runs until that opening time.
 
 Window rules: a row covers ``[start_time, end_time)`` on its weekday. ``end_time < start_time`` is an
 overnight range: the part after midnight belongs to the window that started the previous day.
-A holiday in the site's Holiday List closes every window that starts on that date.
+A holiday closes every window that starts on that date. Holidays come from the gateway's ``holidays``
+child rows (always available) and, when the ERPNext/HRMS ``Holiday List`` DocType is installed, from the
+Holiday List named in the ``holiday_list`` Data field. The two sources are unioned.
 Times are evaluated in the site timezone (``get_system_timezone``).
 """
 
@@ -22,6 +24,7 @@ from typing import Any
 
 import frappe
 import pytz
+from frappe.utils import getdate
 
 from huf.ai.channels.pipeline import Decision
 
@@ -78,11 +81,18 @@ def _windows(gateway_doc) -> list[tuple[int, time, time]]:
 
 
 def _holidays(gateway_doc) -> set[date]:
+	"""Union of the gateway's own ``holidays`` rows and the optional ERPNext Holiday List."""
+	days: set[date] = set()
+	for row in gateway_doc.get("holidays") or []:
+		if row.get("holiday_date"):
+			days.add(getdate(row.get("holiday_date")))
+
 	name = gateway_doc.get("holiday_list")
-	if not name or not frappe.db.exists("DocType", "Holiday List"):
-		return set()
-	holiday_list = frappe.get_cached_doc("Holiday List", name)
-	return {row.holiday_date for row in holiday_list.get("holidays") or [] if row.holiday_date}
+	# Holiday List is ERPNext/HRMS; on a frappe-only site the name is simply ignored.
+	if name and frappe.db.exists("DocType", "Holiday List") and frappe.db.exists("Holiday List", name):
+		holiday_list = frappe.get_cached_doc("Holiday List", name)
+		days.update(getdate(row.holiday_date) for row in holiday_list.get("holidays") or [] if row.holiday_date)
+	return days
 
 
 def _open_at(local: datetime, windows: list, holidays: set[date]) -> bool:
