@@ -129,7 +129,8 @@ def lms_enroll(course: str = "", **_ignored) -> str:
 	existing = frappe.get_all(ENROLLMENT, filters={"course": course_name, "member": member}, fields=["name"], limit_page_length=1)
 	if existing:
 		return json.dumps({"success": True, "enrollment": existing[0]["name"], "created": False}, default=str)
-	doc = frappe.get_doc({"doctype": ENROLLMENT, "course": course_name, "member": member}).insert(ignore_permissions=True)
+	doc = frappe.get_doc({"doctype": ENROLLMENT, "course": course_name, "member": member})
+	doc.insert(ignore_permissions=True)
 	return json.dumps({"success": True, "enrollment": doc.name, "created": True}, default=str)
 
 

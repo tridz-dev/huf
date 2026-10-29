@@ -66,7 +66,7 @@ def find_member(phone: str | None) -> str | None:
 	if not digits:
 		return None
 	linked = _contact_user(digits)
-	if _usable(linked):
+	if linked and _usable(linked):
 		return linked
 	rows = frappe.get_all(
 		"User",
