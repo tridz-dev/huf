@@ -77,8 +77,10 @@ def notify_flow_run_approvers(flow_run) -> int:
 			users += [u for u in waiting["approver_users"] if isinstance(u, str)]
 		else:  # no declared approver: System Manager only (engine.check_approver)
 			users += _role_users("System Manager")
-		title = "Flow approval requested"
-		details = f"Flow run {flow_run.name} is waiting for your approval."
+		from huf.ai.flow.support.approval_card import build_card, flow_name_of, slack_details
+
+		card = build_card(flow_name_of(flow_run) if getattr(flow_run, "flow_id", None) else None, waiting)
+		title, details = card["headline"], slack_details(card)
 		return _notify(KIND_FLOW, flow_run.name, users, title, details, DEFAULT_TTL)
 	except Exception:
 		_log("Slack flow approval notify failed")
@@ -192,10 +194,25 @@ def handle_click(gateway, session, actor_user, payload=None) -> dict:
 	finally:
 		frappe.set_user(previous)
 	verb = "Approved" if choice == "approve" else "Rejected"
-	label = "approval" if kind == KIND_EXECUTION else "flow approval"
-	text = f"{verb} by {actor_user} at {frappe.utils.now()} ({label} {name})"
+	text = f"{verb} by {_display_name(actor_user)} at {_clock_time()}"
 	return {"text": text, "blocks": bk.status_line(text, icon=":white_check_mark:" if choice == "approve"
 		else ":no_entry_sign:").blocks}
+
+
+def _display_name(user) -> str:
+	"""The person's name for a Slack status line (their user id only when no name is on file)."""
+	try:
+		return str(frappe.db.get_value("User", user, "full_name") or user)
+	except Exception:
+		return str(user)
+
+
+def _clock_time() -> str:
+	"""``10:42`` in the site's time zone."""
+	try:
+		return frappe.utils.now_datetime().strftime("%H:%M")
+	except Exception:
+		return str(frappe.utils.now())
 
 
 def _decision_fn(kind, choice):

@@ -333,7 +333,8 @@ class TestRunning(CodeFlowBase):
 	def test_path_outside_scratch_is_denied_readably(self):
 		run = self._run(self._save(_code_graph("result = open('/etc/passwd').read()")))
 		self.assertEqual(run.status, "Failed")
-		self.assertIn("outside the sandbox workspace", run.last_error)
+		self.assertIn("outside its allowed folder", run.last_error)
+		self.assertNotIn("PermissionError", run.last_error)
 		self.assertNotIn("Traceback", run.last_error)
 		self.assertEqual(self._scratch_entries().count(code_execution._conversation_dir_key(run.name)), 0)
 
@@ -341,7 +342,8 @@ class TestRunning(CodeFlowBase):
 		run = self._run(self._save(_code_graph("x = 1\ny = x / 0", on_error="recover")))
 		self.assertEqual(run.status, "Success", run.last_error)
 		out = self._outputs(run)
-		self.assertIn("ZeroDivisionError", out["code"]["error"])
+		self.assertIn("divided by zero", out["code"]["error"])
+		self.assertNotIn("ZeroDivisionError", out["code"]["error"])
 		self.assertIn("line 2", out["code"]["error"])
 		self.assertEqual(out["recover"], "recovered")
 
@@ -350,7 +352,8 @@ class TestRunning(CodeFlowBase):
 			run = self._run(self._save(_code_graph(code)))
 			self.assertEqual(run.status, "Failed", code)
 		run = self._run(self._save(_code_graph("import socket")))
-		self.assertIn("not permitted", run.last_error)
+		self.assertIn("not allowed to use", run.last_error)
+		self.assertNotIn("ImportError", run.last_error)
 
 	def test_infinite_loop_is_killed_with_a_timeout_message(self):
 		start = time.monotonic()
@@ -436,7 +439,7 @@ class TestRunning(CodeFlowBase):
 			["c"],
 		)
 		self.assertEqual(out["status"], "failed")
-		self.assertIn("inside a loop", out["error"])
+		self.assertIn("a loop cannot do", out["error"])
 
 
 class TestApproval(CodeFlowBase):
@@ -548,7 +551,7 @@ class TestChildProcess(IntegrationTestCase):
 		self.assertIn("256 MB", code_node.error_text("OOM", "", {"max_memory_mb": 256}))
 		trace = 'Traceback (most recent call last):\n  File "<huf-exec>", line 3, in <module>\nKeyError: \'a\''
 		self.assertEqual(
-			code_node.error_text("Error", trace), "The code stopped with an error on line 3: KeyError: 'a'"
+			code_node.error_text("Error", trace), "The code looked for 'a', which is not in its data (line 3). Check the data the step receives."
 		)
 
 	def test_purge_removes_old_scratch_folders_only(self):

@@ -41,12 +41,15 @@ def friendly_tool_error(error: str | None) -> str | None:
 	"""Plain wording for a tool failure caused by a missing integration credential.
 
 	The credential lookup names an internal key and an environment variable; a Flow step should say
-	``"Google Sheets is not connected. Connect it in Integrations."`` instead. Other errors are
-	returned unchanged.
+	``"Google Sheets is not connected. Connect it in Integrations."`` instead. Other provider and integration
+	messages ("X is not connected: add ...", a rejected token, a blocked address) get the same plain wording;
+	any other error only loses HTML and Python noise (``plain_error``).
 	"""
 	match = _MISSING_CREDENTIAL.search(error or "")
 	if not match:
-		return error
+		from huf.ai.graph.error_copy import plain_error
+
+		return plain_error(error) if error else error
 	service = match.group(1)
 	label = FLOW_INTEGRATIONS[service][0] if service in FLOW_INTEGRATIONS else service.replace("_", " ").title()
 	return f"{label} is not connected. Connect it in Integrations."
