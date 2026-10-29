@@ -125,15 +125,32 @@ Publishing a flow with unconnected integration steps shows a warning toast (`Som
 | Test id | Element |
 |---|---|
 | `integration-setup-guide`, `integration-setup-steps`, `integration-setup-scopes` | Numbered how-to and the exact permissions, on the Integration screen for Gmail, Slack, Google Sheets and Google Drive |
-| `integration-test-connection` | "Test connection" button (read-only check; typed values are used when filled in, otherwise the saved ones) |
-| `integration-test-result` (`data-status` = Connected / Rejected / Not connected) | Result line with the plain reason |
+| `integration-test-connection` | "Test connection" button in the page header (read-only check; typed values are used when filled in, otherwise the saved ones). Disabled on a new integration until a credential is typed |
+| `integration-test-result` (`data-status` = connected / attention / not_connected / inactive / unchecked) | The one status sentence under the title: what the last check said and when |
 | `flow-step-<kind>-input.<field>-hint` | One-line "where do I find this" under a tool input (Slack channel, Sheets and Drive IDs) |
+
+## Integrations health (UX-7)
+| Test id | Element |
+|---|---|
+| `integration-card-<name>` (`data-status`) | One connection card on /integrations; `integration-card-title` friendly name, `integration-card-detail` the one status sentence |
+| `integration-status` (`data-status` = connected / attention / not_connected / inactive / unchecked / active) | The single status pill (cards, page header, inactive rows) |
+| `integration-use-in-agent-<name>`, `integration-open-<name>` | Card buttons "Use in agent" and "Fix this" / "Settings" |
+| `integration-use-in-agent` | Header button on the details page (same verb for channels) |
+| `integration-inactive-groups`, `integration-group-<service>` | Collapsed "Not in use" section that groups identical inactive copies per service |
+| `integration-category-filter` | "All categories" dropdown (integrations list, service catalog) |
+| `integration-header`, `integration-title`, `integration-save` | Details page header, friendly title, Save/Create |
+| `integration-status-line`, `integration-fix-credentials`, `integration-last-problem` | Status line, "Add credentials" / "Update credentials" button that scrolls to and focuses the first empty credential, dismissible "Problem since the last check" |
+| `integration-credentials`, `integration-name-input`, `credential-input-<key>`, `credential-state-<key>` | Name and credentials section (first on the page); per-field Saved / Not set badge |
+| `integration-setup-toggle` | "How to connect" accordion trigger (closed by default) |
+| `integration-options` | Active and "Use by default" switches |
+| `settings-skill-sources-editor`, `skill-source-row-<n>`, `skill-source-add`, `skill-sources-json-toggle`, `skill-sources-json`, `skill-sources-json-error`, `settings-skill-sources-save` | Code and skills page: skill sources list editor, Edit as JSON toggle and area, Save |
 
 ## Slack channels and run summaries (wp16)
 | Test id | Element |
 |---|---|
 | `flow-run-summary-<nodeId>` | One-line plain summary above a finished integration step's output (Posted to, Sent to, status from host, row/file counts) |
 | `flow-run-raw-<nodeId>` | Collapsed "Show raw response" (`<details>`); the secrets-stripped output stays at `flow-run-step-output-<nodeId>` inside it |
+| `slack-channels-loading`, `slack-channels-retry`, `slack-use-<name>` | Recipients tab channel list: loading line, Try again button after an error or timeout (15 s), "Save as recipient" row action. `slack-load-channels` is now the Reload button; the list loads when the tab opens |
 | `slack-load-channels`, `slack-channels`, `slack-channel-list`, `slack-channel-<name>`, `slack-copy-id-<name>`, `slack-channels-error`, `slack-channels-empty` | Integration > Recipients tab (saved Slack integration): read-only "Load channels" list with copy-ID buttons |
 | `flow-slack-channel-picker`, `flow-field-slack-channel-pick`, `flow-slack-channel-picker-error` | "Or pick a channel" searchable list under the Slack step's Channel field (only when Slack is connected) |
 

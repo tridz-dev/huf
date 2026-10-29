@@ -54,6 +54,11 @@ const LIST_FIELDS = [
   'is_default',
   'last_used',
   'last_error',
+  'display_label',
+  'last_test_status',
+  'last_test_at',
+  'last_test_message',
+  'account_label',
   'modified',
 ] as const;
 
@@ -218,9 +223,11 @@ export async function getIntegrationSettings(
 
     const filters: Array<[string, string, unknown]> = [];
 
-    if (search?.trim()) {
-      filters.push(['name', 'like', `%${search.trim()}%`]);
-    }
+    // A connection is found by the name the user gave it, the account it is connected to, or its id.
+    const like = search?.trim() ? `%${search.trim()}%` : '';
+    const orFilters: Array<[string, string, unknown]> = like
+      ? [['display_label', 'like', like], ['account_label', 'like', like], ['name', 'like', like], ['service', 'like', like]]
+      : [];
     if (service && service !== 'all') {
       filters.push(['service', '=', service]);
     }
@@ -228,6 +235,7 @@ export async function getIntegrationSettings(
     const settings = await db.getDocList(doctype['Integration Settings'], {
       fields: [...LIST_FIELDS],
       filters: filters.length > 0 ? (filters as never) : undefined,
+      ...(orFilters.length > 0 && { orFilters: orFilters as never }),
       limit: limit + 1,
       ...(start > 0 && { limit_start: start }),
       orderBy: { field: 'modified', order: 'desc' },
@@ -237,12 +245,9 @@ export async function getIntegrationSettings(
     const hasMore = mapped.length > limit;
     const items = hasMore ? mapped.slice(0, limit) : mapped;
 
-    const total = await fetchPaginatedCount(
-      page,
-      items.length,
-      doctype['Integration Settings'],
-      filters,
-    );
+    const total = like
+      ? items.length
+      : await fetchPaginatedCount(page, items.length, doctype['Integration Settings'], filters);
 
     return { items, hasMore, total };
   } catch (error) {
@@ -344,7 +349,16 @@ export async function attachServiceTools(
 
 export interface ConnectionTestResult {
   status: 'Connected' | 'Rejected' | 'Not connected';
+  /**
+   * ok | no_credentials (nothing saved) | missing_credentials (some saved) | rejected | missing_permission
+   * | unreachable (could not ask the service: says nothing about the credentials).
+   */
+  code?: 'ok' | 'no_credentials' | 'missing_credentials' | 'rejected' | 'missing_permission' | 'unreachable';
   message: string;
+  /** Workspace or mailbox the credentials connect to. */
+  account?: string | null;
+  /** Set when the answer was kept on the saved integration. */
+  checked_at?: string;
 }
 
 /**
@@ -377,15 +391,39 @@ export interface SlackChannel {
 
 export interface SlackChannelList {
   status: 'Connected' | 'Rejected' | 'Not connected';
+  code?: ConnectionTestResult['code'];
   message?: string;
   channels: SlackChannel[];
 }
 
-/** Read-only list of the Slack channels the integration's bot can see. Posts nothing. */
+/** Longest the screens wait for the channel list before showing an error with a retry. */
+export const SLACK_CHANNELS_TIMEOUT_MS = 15000;
+
+/** Read-only list of the Slack channels the integration's bot can see. Posts nothing. Never waits forever. */
 export async function listSlackChannels(setting?: string): Promise<SlackChannelList> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error('Slack is taking too long to answer. Try again in a moment.')),
+      SLACK_CHANNELS_TIMEOUT_MS,
+    );
+  });
   try {
-    const response = await call.post('huf.ai.tools.connection_test.list_slack_channels', { setting });
+    const request = call.post('huf.ai.tools.connection_test.list_slack_channels', { setting });
+    const response = await Promise.race([request, timeout]);
     return (response.message ?? response) as SlackChannelList;
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/** Forget the answer of the last check without testing again (the "Last problem" dismiss). */
+export async function clearIntegrationError(name: string): Promise<void> {
+  try {
+    await db.updateDoc(doctype['Integration Settings'], name, { last_error: '' });
   } catch (error) {
     handleFrappeError(error);
     throw error;
