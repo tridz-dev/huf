@@ -33,12 +33,17 @@ type HealthInput = Pick<
   'service' | 'is_active' | 'last_error' | 'last_test_status' | 'last_test_message' | 'account_label'
 >;
 
+/** Errors recorded by running steps end with "Reconnect X in Integrations."; on these screens the next step is a button instead. */
+export function plainProblem(text: string | undefined | null): string {
+  return (text || '').replace(/\s*Reconnect [^.]+ in Integrations\.\s*$/, '').trim();
+}
+
 export function isTestable(service: string): boolean {
   return TESTABLE_SERVICES.includes(service);
 }
 
 export function integrationHealth(setting: HealthInput): IntegrationHealth {
-  const error = (setting.last_error || '').trim();
+  const error = plainProblem(setting.last_error);
   const message = (setting.last_test_message || '').trim();
   if (!setting.is_active) {
     return { kind: 'inactive', label: 'Inactive', tone: 'neutral', detail: 'Switched off. Agents and flows skip it.', needsCredentials: false };
@@ -141,7 +146,7 @@ export function deriveStatus(
   } else if (!isNew) {
     health = integrationHealth(saved);
   }
-  if (health?.kind === 'attention' && saved.last_error && health.detail === saved.last_error) {
+  if (health?.kind === 'attention' && saved.last_error && health.detail === plainProblem(saved.last_error)) {
     health = { ...health, detail: 'A step reported a problem after the last check.' };
   }
   const code = live?.result.code;
