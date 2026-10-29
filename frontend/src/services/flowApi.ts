@@ -72,6 +72,8 @@ export interface BackendNode {
     _label?: string;
     /** Frontend-only: icon name */
     _icon?: string;
+    /** A saved example of the data this step receives (webhook trigger): <= 8 KB, secrets hidden, only editors get it back. */
+    _sample?: Record<string, unknown>;
 }
 
 export interface BackendDocPermission {
@@ -282,16 +284,6 @@ export async function getApproverRoles(): Promise<Array<{ name: string; group: '
 }
 
 // ─── Flow Run APIs ───────────────────────────────────────────────────
-
-/** Document types the current user may pick for a Data trigger (the ones they can read). */
-export async function getTriggerDoctypes(): Promise<Array<{ name: string }>> {
-    try {
-        const result = await call.post('huf.ai.flow.api.get_trigger_doctypes', {});
-        return (result.message as Array<{ name: string }>) ?? [];
-    } catch (error) {
-        handleFrappeError(error, 'Error fetching document types');
-    }
-}
 
 /** Whether a document type can be submitted (and cancelled): only then do those Data trigger events exist. */
 export async function getTriggerDoctypeInfo(doctype: string): Promise<{ doctype: string; is_submittable: boolean }> {

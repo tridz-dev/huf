@@ -4,7 +4,6 @@ import { flowService } from '../services/flowService';
 import { Loader2, Box, CheckCircle2, XCircle, Clock, Play, AlertTriangle } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Textarea } from './ui/textarea';
 import { toast } from '@/lib/toast';
 import { useOptionalFlowContext } from '../contexts/FlowContext';
 import {
@@ -29,6 +28,8 @@ import { decisionMovedRun } from '@/lib/flow-run/flowRunDecision';
 import { connectPath, notConnectedService } from '@/lib/flow/flowIntegrations';
 import { redactSecrets } from '@/lib/flow/flowToolSummary';
 import { HumanValue } from '@/components/common/HumanValue';
+import { JsonArea } from '@/components/common/JsonArea';
+import { describeJsonProblem } from '@/lib/flow-run/jsonErrors';
 import { RunStepOutput } from './flow/RunStepOutput';
 import { friendlyRunTitle, humanizeMessageText, placeTriggerInput, startedByWords } from '@/lib/flow-run/humanize';
 import { useFlowRunIdentity } from '@/hooks/flow/useFlowRunIdentity';
@@ -114,14 +115,12 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
         if (!runId) return;
         let parsed: Record<string, unknown> | undefined;
         if (resumePayload.trim()) {
-            try {
-                parsed = JSON.parse(resumePayload);
-            } catch (err) {
-                toast.error('Invalid JSON payload', {
-                    description: err instanceof Error ? err.message : 'Unable to parse JSON',
-                });
+            const problem = describeJsonProblem(resumePayload);
+            if (problem) {
+                toast.error('The extra information is not valid', { description: problem.message });
                 return;
             }
+            parsed = JSON.parse(resumePayload);
         }
         setLoading(true);
         try {
@@ -410,29 +409,26 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
                                             {!isPhone && <RunDecisionBar canDecide={run.can_decide !== false} reason={run.cannot_decide_reason} busy={loading} onDecide={handleApproval} />}
                                         </div>
                                     ) : (
-                                        <div className="space-y-3">
-                                            <div className="text-xs font-mono overflow-x-auto">
-                                                {JSON.stringify(titleNodeIds(run.waiting, titleOf), null, 2)}
-                                            </div>
+                                        <div className="space-y-3" data-testid="flow-run-waiting-user">
+                                            <HumanValue value={titleNodeIds(run.waiting, titleOf)} names={stepNames} testId="flow-run-human-waiting" raw rawTitle="Raw data of this wait" emptyText="This run is waiting for someone to continue it." />
                                             <div className="space-y-2">
-                                                <div className="text-xs text-muted-foreground">
-                                                    Optional JSON input to merge into context when resuming:
-                                                </div>
-                                                <Textarea
-                                                    className="min-h-[80px] text-xs font-mono"
+                                                <JsonArea
+                                                    surfaceKey="run-resume"
+                                                    title="Extra information to continue with (JSON, optional)"
+                                                    help={'Leave this empty to continue as it is. To pass something on to the next steps, write it as JSON, for example { "user_input": "yes" }. If the text is not valid JSON, Continue stays off until it is fixed.'}
                                                     value={resumePayload}
-                                                    onChange={(e) => setResumePayload(e.target.value)}
-                                                    placeholder='e.g. { "user_input": "yes" }'
-                                                    disabled={loading}
+                                                    onChange={setResumePayload}
+                                                    placeholder='{ "user_input": "yes" }'
                                                 />
                                                 <div className="flex justify-end">
                                                     <Button
                                                         size="sm"
                                                         onClick={handleResume}
-                                                        disabled={loading}
+                                                        disabled={loading || (resumePayload.trim() !== '' && !!describeJsonProblem(resumePayload))}
+                                                        data-testid="flow-run-resume"
                                                         className="gap-2"
                                                     >
-                                                        <Play className="w-4 h-4" /> Resume Flow
+                                                        <Play className="w-4 h-4" /> Continue
                                                     </Button>
                                                 </div>
                                             </div>
