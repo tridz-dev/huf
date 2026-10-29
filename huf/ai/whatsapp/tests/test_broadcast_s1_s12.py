@@ -58,6 +58,51 @@ def num(i: int) -> str:
 	return f"447700900{i:03d}"
 
 
+# ------------------------------------------------------------------ stand-in doctypes
+# This bench may not have frappe_whatsapp. The broadcast code reads WhatsApp Account / Templates / Button / Message
+# through the bridge, so when they are missing the module creates minimal custom stand-ins (only the columns the
+# code touches) and drops them again in tearDownModule. Nothing is created when the real app is installed.
+
+_STUBS = {
+	"WhatsApp Account": ("field:account_name", 0, [
+		("account_name", "Data"), ("status", "Data"), ("url", "Data"), ("version", "Data"), ("phone_id", "Data"),
+		("business_id", "Data"), ("app_id", "Data"), ("token", "Password"), ("webhook_verify_token", "Data"),
+		("is_default_outgoing", "Check")]),
+	"WhatsApp Templates": ("prompt", 0, [
+		("template_name", "Data"), ("actual_name", "Data"), ("template", "Small Text"), ("sample_values", "Data"),
+		("sample", "Data"), ("header_type", "Data"), ("header", "Data"), ("language", "Data"),
+		("language_code", "Data"), ("category", "Data"), ("status", "Data"), ("whatsapp_account", "Data")]),
+	"WhatsApp Button": ("hash", 1, [
+		("button_type", "Data"), ("button_label", "Data"), ("url_type", "Data"), ("website_url", "Data")]),
+	"WhatsApp Message": ("hash", 0, [
+		("type", "Data"), ("to", "Data"), ("use_template", "Check"), ("template", "Data"), ("whatsapp_account", "Data"),
+		("content_type", "Data"), ("message_id", "Data"), ("status", "Data"), ("template_parameters", "Small Text"),
+		("body_param", "Small Text"), ("template_header_parameters", "Small Text"), ("attach", "Data")]),
+}
+
+
+def _ensure_stub_doctypes() -> None:
+	STATE["stubs"] = []
+	for name, (autoname, istable, fields) in _STUBS.items():
+		if frappe.db.exists("DocType", name):
+			continue
+		frappe.get_doc(
+			{
+				"doctype": "DocType", "name": name, "module": "Huf", "custom": 1, "autoname": autoname, "istable": istable,
+				"fields": [{"fieldname": f, "label": f, "fieldtype": t} for f, t in fields],
+				"permissions": [{"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1}],
+			}
+		).insert(ignore_permissions=True)
+		STATE["stubs"].append(name)
+	frappe.db.commit()
+
+
+def _drop_stub_doctypes() -> None:
+	for name in reversed(STATE.get("stubs", [])):
+		frappe.delete_doc("DocType", name, force=True, ignore_permissions=True)
+	frappe.db.commit()
+
+
 # ------------------------------------------------------------------ fixtures
 
 
@@ -73,9 +118,9 @@ def _purge() -> None:
 		frappe.db.delete("Gateway Access Entry", {"gateway": gw})
 		frappe.db.delete("DocShare", {"share_doctype": "Gateway", "share_name": gw})
 		frappe.db.delete("Gateway", {"name": gw})
-	frappe.db.delete("WhatsApp Templates", {"whatsapp_account": ACCOUNT})
-	frappe.db.delete("WhatsApp Message", {"whatsapp_account": ACCOUNT})
-	frappe.db.delete("WhatsApp Account", {"name": ACCOUNT})
+	for dt, field in (("WhatsApp Templates", "whatsapp_account"), ("WhatsApp Message", "whatsapp_account"), ("WhatsApp Account", "name")):
+		if frappe.db.exists("DocType", dt):
+			frappe.db.delete(dt, {field: ACCOUNT})
 	if STATE.get("integration"):
 		frappe.db.delete("Integration Settings", {"name": STATE["integration"]})
 	for user in (WRITER, ADMIN):
@@ -105,6 +150,7 @@ def _user(email: str, roles: tuple[str, ...] = ()) -> None:
 
 def setUpModule() -> None:
 	frappe.set_user("Administrator")
+	_ensure_stub_doctypes()
 	_purge()
 	frappe.get_doc(
 		{
@@ -139,6 +185,7 @@ def setUpModule() -> None:
 def tearDownModule() -> None:
 	frappe.set_user("Administrator")
 	_purge()
+	_drop_stub_doctypes()
 	frappe.db.commit()
 
 
