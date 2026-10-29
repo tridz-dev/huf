@@ -146,7 +146,8 @@ export function deriveStatus(
   } else if (!isNew) {
     health = integrationHealth(saved);
   }
-  if (health?.kind === 'attention' && saved.last_error && health.detail === plainProblem(saved.last_error)) {
+  // Attention that comes only from a step's error: the sentence says so and the error sits in its own box.
+  if (health?.kind === 'attention' && !live && !health.needsCredentials && saved.last_error && health.detail === plainProblem(saved.last_error)) {
     health = { ...health, detail: 'A step reported a problem after the last check.' };
   }
   const code = live?.result.code;

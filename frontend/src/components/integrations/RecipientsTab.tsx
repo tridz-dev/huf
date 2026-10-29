@@ -109,7 +109,7 @@ function SlackChannelLoader({ settingId, onUse }: { settingId: string; onUse: (c
           <ul className="max-h-64 divide-y overflow-y-auto rounded-md border" data-testid="slack-channel-list">
             {shown.map((c) => (
               <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm" data-testid={`slack-channel-${c.name}`}>
-                <span className="min-w-0 flex-1 truncate font-medium">
+                <span className="min-w-0 basis-full break-words font-medium sm:basis-0 sm:flex-1">
                   #{c.name}
                   {c.is_private && <Lock className="ml-1.5 inline h-3 w-3 text-muted-foreground" aria-label="Private channel" />}
                 </span>
@@ -136,7 +136,7 @@ export function RecipientsTab({ form, service, settingId }: RecipientsTabProps) 
   });
 
   return (
-    <div className="space-y-4 rounded-lg border p-6">
+    <div className="space-y-4 rounded-lg border p-3 sm:p-6">
       {service === 'slack' && settingId && (
         <SlackChannelLoader
           settingId={settingId}

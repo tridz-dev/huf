@@ -16,6 +16,7 @@ const FIT_MIN_ZOOM = 0.75;
 const FIT_MIN_ZOOM_LARGE = 0.4;
 /** Narrowest a flow is fitted to keep it from running off the sides. */
 const FIT_MIN_ZOOM_NARROW = 0.5;
+const FIT_MIN_ZOOM_NARROW_LARGE = 0.3;
 /** Room (px) above the flow for the buttons in the top-right corner, and at the sides and bottom. */
 export const FIT_TOP_INSET = 64;
 const FIT_SIDE_INSET = 40;
@@ -63,7 +64,7 @@ export function fitClearOfOverlays(rf: ReactFlowInstance, width: number, height:
     const fitW = availW / bounds.width;
     let zoom = Math.min(1, Math.max(minZoom, Math.min(fitW, availH / bounds.height)));
     // Never cut the flow off at the sides (a phone is narrower than two branches): only its length may scroll.
-    if (zoom > fitW) zoom = Math.max(fitW, FIT_MIN_ZOOM_NARROW);
+    if (zoom > fitW) zoom = Math.max(fitW, steps <= READABLE_STEP_LIMIT ? FIT_MIN_ZOOM_NARROW : FIT_MIN_ZOOM_NARROW_LARGE);
     const x = (width - bounds.width * zoom) / 2 - bounds.x * zoom;
     const spare = availH - bounds.height * zoom;
     // Taller than the canvas at the smallest readable zoom: start at the top, the rest is a scroll away.
