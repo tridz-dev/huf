@@ -222,6 +222,13 @@ class TestListMessages(unittest.TestCase):
 
 
 class TestGatewayValidation(unittest.TestCase):
+	def tearDown(self):  # DEBUGTMP
+		import sys
+		print("DBG", self._testMethodName, type(frappe.cache), type(frappe.db), file=sys.stderr)
+		try:
+			print("DBG hget", repr(frappe.cache.hget("doctype_meta", "Gateway"))[:80], file=sys.stderr)
+		except Exception as e:
+			print("DBG hget err", e, file=sys.stderr)
 	def _gw(self, **fields):
 		from huf.huf.doctype.gateway.gateway import Gateway
 
