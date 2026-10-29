@@ -2,7 +2,8 @@ import type { UIEvent } from 'react';
 import { useEffect, useRef } from 'react';
 import type { Node } from 'reactflow';
 import type { ReactFlowInstance } from 'reactflow';
-import { Controls, MiniMap, useReactFlow, useStore, useStoreApi, getNodesBounds } from 'reactflow';
+import type { Rect } from 'reactflow';
+import { Controls, MiniMap, useReactFlow, useStore, useStoreApi, getNodesBounds, getViewportForBounds } from 'reactflow';
 import { isInView, panToReveal } from '@/lib/flow/flowLayout';
 
 /** Fit-to-view never zooms in past 100% (a 3-step flow stays at normal size) nor out past 25%. */
@@ -35,19 +36,18 @@ function coveredByOverlays(width: number, height: number) {
 export function fitClearOfOverlays(rf: ReactFlowInstance, width: number, height: number, duration = 0) {
   const nodes = rf.getNodes();
   if (nodes.length === 0 || width <= 0) return;
-  rf.fitView({ ...FIT_VIEW_OPTIONS, duration });
-  setTimeout(() => {
-    const covered = coveredByOverlays(width, height);
-    const { x, y, zoom } = rf.getViewport();
-    const under = nodes.some((n) => {
-      const left = (n.positionAbsolute?.x ?? n.position.x) * zoom + x;
-      const top = (n.positionAbsolute?.y ?? n.position.y) * zoom + y;
-      return left < covered.x + covered.width && left + (n.width ?? 236) * zoom > covered.x && top < covered.y + covered.height && top + (n.height ?? 62) * zoom > covered.y;
+  const bounds = getNodesBounds(nodes);
+  const fit = (b: Rect) => getViewportForBounds(b, width, height, FIT_VIEW_OPTIONS.minZoom, FIT_VIEW_OPTIONS.maxZoom, FIT_VIEW_OPTIONS.padding);
+  const covered = coveredByOverlays(width, height);
+  const hidden = (vp: { x: number; y: number; zoom: number }) =>
+    nodes.some((n) => {
+      const left = (n.positionAbsolute?.x ?? n.position.x) * vp.zoom + vp.x;
+      const top = (n.positionAbsolute?.y ?? n.position.y) * vp.zoom + vp.y;
+      return left < covered.x + covered.width && left + (n.width ?? 236) * vp.zoom > covered.x && top < covered.y + covered.height && top + (n.height ?? 62) * vp.zoom > covered.y;
     });
-    if (!under) return;
-    const b = getNodesBounds(nodes);
-    rf.fitBounds({ x: b.x, y: b.y, width: b.width, height: b.height + (covered.height + 16) / zoom }, { ...FIT_VIEW_OPTIONS, duration });
-  }, duration + 60);
+  let vp = fit(bounds);
+  if (hidden(vp)) vp = fit({ ...bounds, height: bounds.height + (covered.height + 16) / vp.zoom });
+  rf.setViewport(vp, { duration });
 }
 
 /** Zoom buttons whose "fit view" also keeps the flow clear of the overview. */
@@ -96,6 +96,14 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
   const store = useStoreApi();
   const last = useRef<{ flowId?: string; nodeCount: number; edgeCount: number; layoutRevision: number } | null>(null);
   const knownIds = useRef<Set<string>>(new Set());
+  // The first fit of a flow (done by <ReactFlow fitView> once the steps are in): check it left nothing under the bottom-left corner.
+  const firstFitFor = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!flowId || nodeCount === 0 || firstFitFor.current === flowId) return;
+    firstFitFor.current = flowId;
+    const timer = setTimeout(() => { const { width, height } = store.getState(); fitClearOfOverlays(rfRef.current, width, height); }, 500);
+    return () => clearTimeout(timer);
+  }, [flowId, nodeCount, store]);
   useEffect(() => {
     const previous = last.current;
     last.current = { flowId, nodeCount, edgeCount, layoutRevision };
@@ -104,7 +112,7 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
     const remember = () => { knownIds.current = new Set(getNodes().map((n) => n.id)); };
     // The first render of a flow is fitted by <ReactFlow fitView>; only later edits come here.
     if (!previous || previous.flowId !== flowId) {
-      const settle = setTimeout(() => { remember(); const { width, height } = store.getState(); fitClearOfOverlays(rfRef.current, width, height); }, 400);
+      const settle = setTimeout(remember, 400);
       return () => clearTimeout(settle);
     }
     if (nodeCount > previous.nodeCount && edgeCount >= previous.edgeCount) {
