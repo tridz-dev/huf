@@ -138,6 +138,7 @@ class TestErpRealFlow(IntegrationTestCase):
 		self.addCleanup(frappe.set_user, "Administrator")
 		self.sfx = frappe.generate_hash(length=6)
 		self.gw, self.conv = make_gateway_conversation()
+		self._ensure_selling_basics()
 		self.customer = frappe.get_doc(
 			{"doctype": "Customer", "customer_name": f"WA Cust {self.sfx}", "customer_type": "Individual",
 			 "customer_group": frappe.db.get_value("Customer Group", {"is_group": 0}, "name"),
@@ -161,6 +162,18 @@ class TestErpRealFlow(IntegrationTestCase):
 				"is_stock_item": 0,
 			}
 		).insert(ignore_permissions=True)
+
+	def _ensure_selling_basics(self):
+		"""The shared test company may lack a currency / selling price list (rolled back with the test)."""
+		company = frappe.db.get_value("Company", {}, "name")
+		currency = frappe.db.get_value("Company", company, "default_currency")
+		if not currency:
+			currency = frappe.db.get_single_value("Global Defaults", "default_currency") or "USD"
+			frappe.db.set_value("Company", company, "default_currency", currency)
+		if not frappe.db.exists("Price List", {"selling": 1, "enabled": 1}):
+			frappe.get_doc(
+				{"doctype": "Price List", "price_list_name": f"WA Selling {self.sfx}", "currency": currency, "selling": 1, "enabled": 1}
+			).insert(ignore_permissions=True)
 
 	def test_create_order_makes_draft_sales_order(self):
 		from huf.ai.channels import tools_erp
