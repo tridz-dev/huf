@@ -20,6 +20,7 @@ export const triggerOptions: TriggerOption[] = [
   {
     id: 'doc-event',
     name: 'When a document changes',
+    nodeTitle: 'Document change',
     description: 'Starts when something is added, changed or deleted in your data, like a new customer.',
     icon: 'Database',
     category: 'highlight',
