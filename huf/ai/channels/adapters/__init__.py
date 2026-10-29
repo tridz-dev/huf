@@ -107,3 +107,6 @@ def adapter_for_conversation(conversation) -> ChannelAdapter:
 	return get_adapter(target)
 
 ADAPTER_MODULES["crm"] = "huf.ai.channels.adapters.crm"
+
+ADAPTER_MODULES["lms"] = "huf.ai.channels.adapters.lms"
+TARGET_APPS["lms"] = "lms"

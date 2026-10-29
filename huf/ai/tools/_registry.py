@@ -3016,3 +3016,40 @@ ALL_INTEGRATION_TOOLS = (
 	+ _with_service(SERP_YOUTUBE_TOOLS, "serpapi")
 	+ FRAPPE_CLOUD_TOOLS  # entries already declare service="frappe_cloud"
 )
+
+
+# BE-LMS: Frappe LMS agent tools (enroll, progress, certificate) and the lesson-reminder job.
+LMS_TOOLS = [
+	{
+		"tool_name": "lms_list_courses",
+		"description": "List the published Frappe LMS courses.",
+		"function_path": "huf.ai.channels.tools_lms.lms_list_courses",
+		"category": "Communication Tools",
+		"parameters": [],
+	},
+	{
+		"tool_name": "lms_enroll",
+		"description": (
+			"Enroll the current WhatsApp contact in a published LMS course. Only works when the number matches an existing account; "
+			"never creates an account. Argument: course (name or title)."
+		),
+		"function_path": "huf.ai.channels.tools_lms.lms_enroll",
+		"category": "Communication Tools",
+		"parameters": [_p("course", required=True, description="Course name or title")],
+	},
+	{
+		"tool_name": "lms_my_progress",
+		"description": "Show the current WhatsApp contact's LMS enrollments and progress.",
+		"function_path": "huf.ai.channels.tools_lms.lms_my_progress",
+		"category": "Communication Tools",
+		"parameters": [],
+	},
+	{
+		"tool_name": "lms_send_certificate",
+		"description": "Send the current contact's certificate PDF for a course as a WhatsApp document. Argument: course (name or title).",
+		"function_path": "huf.ai.channels.tools_lms.lms_send_certificate",
+		"category": "Communication Tools",
+		"parameters": [_p("course", required=True, description="Course name or title")],
+	},
+]
+ALL_INTEGRATION_TOOLS = (*ALL_INTEGRATION_TOOLS, *LMS_TOOLS)

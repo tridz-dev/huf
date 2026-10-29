@@ -348,6 +348,7 @@ scheduler_events = {
         "huf.ai.flow.state.purge_expired",
         "huf.ai.whatsapp.send_keys.purge_expired",
         "huf.ai.secrets.purge_expired",
+        "huf.ai.channels.tools_lms.send_lesson_reminders",
     ],
     "cron": {
         "*/1 * * * *": [
