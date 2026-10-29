@@ -1,4 +1,6 @@
-import { ChevronDown, Search } from 'lucide-react';
+import { ChevronDown, Search, SlidersHorizontal } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -21,16 +23,17 @@ interface FlowListFiltersProps {
   sortOptions: FilterChoice[];
 }
 
-const TRIGGER = 'h-control-sm w-auto min-w-[9rem] flex-1 gap-2 rounded-lg border-line bg-panel px-3 py-0 text-ui-text text-ink shadow-none sm:flex-none';
+const TRIGGER = 'h-control-sm w-auto min-w-[9rem] gap-2 rounded-lg border-line bg-panel px-3 py-0 text-ui-text text-ink shadow-none';
+const TRIGGER_FULL = 'h-control-sm w-full gap-2 rounded-lg border-line bg-panel px-3 py-0 text-ui-text text-ink shadow-none';
 
 function Dropdown({
-  label, value, onChange, options, testId,
-}: { label: string; value: string; onChange: (v: string) => void; options: FilterChoice[]; testId: string }) {
+  label, value, onChange, options, testId, full,
+}: { label: string; value: string; onChange: (v: string) => void; options: FilterChoice[]; testId: string; full?: boolean }) {
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger
         aria-label={label}
-        className={TRIGGER}
+        className={full ? TRIGGER_FULL : TRIGGER}
         icon={<ChevronDown className="h-3.5 w-3.5 text-steel-soft" />}
         data-testid={testId}
       >
@@ -52,9 +55,18 @@ function Dropdown({
  * no codes. The search looks in the name, the description and the category.
  */
 export function FlowListFilters(props: FlowListFiltersProps) {
+  // On a phone the three dropdowns fold into one "Filters" button so the row stays one line tall.
+  const active = [props.status !== 'all', props.category !== 'all', props.sort !== props.sortOptions[0]?.value].filter(Boolean).length;
+  const dropdowns = (full: boolean) => (
+    <>
+      <Dropdown full={full} label="Status" value={props.status} onChange={props.onStatusChange} options={props.statusOptions} testId={full ? 'flow-list-status-filter-sheet' : 'flow-list-status-filter'} />
+      <Dropdown full={full} label="Category" value={props.category} onChange={props.onCategoryChange} options={props.categoryOptions} testId={full ? 'flow-list-category-filter-sheet' : 'flow-list-category-filter'} />
+      <Dropdown full={full} label="Sort by" value={props.sort} onChange={props.onSortChange} options={props.sortOptions} testId={full ? 'flow-list-sort-sheet' : 'flow-list-sort'} />
+    </>
+  );
   return (
-    <div className="flex flex-1 flex-wrap items-center gap-2" data-testid="flow-list-filters">
-      <InputGroup size="sm" className="min-w-0 basis-full rounded-lg border-line bg-panel shadow-none sm:basis-64 sm:flex-1 sm:max-w-sm">
+    <div className="flex min-w-0 flex-1 items-center gap-2" data-testid="flow-list-filters">
+      <InputGroup size="sm" className="min-w-0 flex-1 rounded-lg border-line bg-panel shadow-none sm:max-w-sm">
         <InputGroupAddon align="inline-start" className="py-0">
           <Search className="h-3.5 w-3.5 shrink-0 text-steel-soft" />
         </InputGroupAddon>
@@ -68,9 +80,18 @@ export function FlowListFilters(props: FlowListFiltersProps) {
           data-testid="flow-list-search"
         />
       </InputGroup>
-      <Dropdown label="Status" value={props.status} onChange={props.onStatusChange} options={props.statusOptions} testId="flow-list-status-filter" />
-      <Dropdown label="Category" value={props.category} onChange={props.onCategoryChange} options={props.categoryOptions} testId="flow-list-category-filter" />
-      <Dropdown label="Sort by" value={props.sort} onChange={props.onSortChange} options={props.sortOptions} testId="flow-list-sort" />
+      <div className="hidden items-center gap-2 sm:flex">{dropdowns(false)}</div>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="shrink-0 gap-1.5 sm:hidden" data-testid="flow-list-filters-button" aria-label={active ? `Filters (${active} on)` : 'Filters'}>
+            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
+            Filters{active ? ` (${active})` : ''}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="grid w-64 gap-2 p-3" data-testid="flow-list-filters-sheet">
+          {dropdowns(true)}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
