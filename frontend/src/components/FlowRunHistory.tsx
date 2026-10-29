@@ -10,6 +10,7 @@ import { formatTimeAgo } from '@/utils/time';
 import { flowRunStatusLabel } from '@/lib/flow-run/flowRunFormat';
 import { runTimesSentence } from '@/lib/flow-run/flowTimeZone';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { useViewport } from '@/lib/ui/responsive';
 
 interface FlowRunHistoryProps {
     flowId: string;
@@ -21,6 +22,7 @@ interface FlowRunHistoryProps {
 export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: FlowRunHistoryProps) {
     const siteZone = useSiteTimezone();
     const { canManage } = useFlowPermissions();
+    const { isPhone } = useViewport();
     const [runs, setRuns] = useState<FlowRunSummary[]>([]);
     const [loading, setLoading] = useState(false);
     const [loadFailed, setLoadFailed] = useState(false);
@@ -69,7 +71,7 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-hidden p-0 sm:w-[500px]" data-testid="flow-run-history">
+            <SheetContent side={isPhone ? 'bottom' : 'right'} className="flex w-full max-w-full flex-col gap-0 overflow-hidden p-0 max-sm:h-[92dvh] max-sm:rounded-t-xl sm:w-[min(420px,62vw)] sm:max-w-none" data-testid="flow-run-history">
                 <SheetHeader className="shrink-0 border-b border-border bg-background px-6 pb-4 pt-6 pr-12" data-testid="flow-run-history-header">
                     <div className="flex items-center justify-between">
                         <SheetTitle className="flex items-center gap-2">

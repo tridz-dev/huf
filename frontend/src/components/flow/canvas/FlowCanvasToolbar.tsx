@@ -8,6 +8,10 @@ interface FlowCanvasToolbarProps {
   hasTrigger: boolean;
   /** More than the trigger alone is on the canvas. */
   hasSteps: boolean;
+  /** Tidy layout and Convert to procedure show here (they move into the header's "..." menu when the window is narrow). */
+  editTools: boolean;
+  /** A phone only reads: no adding, tidying or converting. */
+  phone: boolean;
   convertedProcedure: string | null;
   onAddTrigger: () => void;
   onTidy: () => void;
@@ -17,11 +21,11 @@ interface FlowCanvasToolbarProps {
 
 /** Buttons in the canvas's top-right corner: add trigger, tidy layout, procedure conversion, panel toggle. */
 export function FlowCanvasToolbar({
-  canManage, readOnlyReason, hasTrigger, hasSteps, convertedProcedure, onAddTrigger, onTidy, onConvert, onTogglePanels,
+  canManage, readOnlyReason, hasTrigger, hasSteps, editTools, phone, convertedProcedure, onAddTrigger, onTidy, onConvert, onTogglePanels,
 }: FlowCanvasToolbarProps) {
   return (
     <div className="flex gap-2">
-      {canManage && !hasTrigger && (
+      {canManage && !phone && !hasTrigger && (
         <Button
           variant="default"
           size="sm"
@@ -33,7 +37,7 @@ export function FlowCanvasToolbar({
           Add trigger
         </Button>
       )}
-      {hasSteps && (
+      {hasSteps && editTools && (
         <Button
           variant="outline"
           size="sm"
@@ -46,7 +50,7 @@ export function FlowCanvasToolbar({
           Tidy layout
         </Button>
       )}
-      {convertedProcedure && (
+      {convertedProcedure && editTools && (
         <Link to={`/procedures/${convertedProcedure}`}>
           <Button variant="outline" size="sm">
             <Sparkles className="w-4 h-4 mr-2" />
@@ -54,7 +58,7 @@ export function FlowCanvasToolbar({
           </Button>
         </Link>
       )}
-      {canManage && !convertedProcedure && (
+      {canManage && editTools && !convertedProcedure && (
         <Button
           variant="outline"
           size="sm"
@@ -65,17 +69,19 @@ export function FlowCanvasToolbar({
           Convert to procedure
         </Button>
       )}
-      <Button
-        variant="outline"
-        size="icon"
-        className="h-control-lg w-control-lg"
-        aria-label="Hide or show the side panels"
-        title="Hide or show the side panels"
-        data-testid="flow-toggle-panels"
-        onClick={onTogglePanels}
-      >
-        <Maximize2 className="w-4 h-4" />
-      </Button>
+      {!phone && (
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-control-lg w-control-lg"
+          aria-label="Hide or show the side panels"
+          title="Hide or show the side panels"
+          data-testid="flow-toggle-panels"
+          onClick={onTogglePanels}
+        >
+          <Maximize2 className="w-4 h-4" />
+        </Button>
+      )}
     </div>
   );
 }

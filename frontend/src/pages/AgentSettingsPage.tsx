@@ -23,15 +23,13 @@ export function AgentSettingsPage() {
   const [togglingCode, setTogglingCode] = useState(false);
 
   useEffect(() => {
-    // Agent Settings can only be read by a System Manager: for anyone else a failed load is expected, not an error.
-    Promise.all([
-      getAgentSettings().then((doc) => ({ doc, error: null as unknown })).catch((error) => ({ doc: undefined, error })),
-      loadCodeFlowStatus(),
-    ])
-      .then(([result, status]) => {
-        if (result.error && status?.can_manage !== false) {
-          toast.error(getFrappeErrorMessage(result.error) || 'Failed to load these settings');
-        }
+    // Agent Settings can only be read by a System Manager: ask whether this person is one first, and never ask the server
+    // for a document it will refuse (a refused read shows up as a failing call and a console error for everyone else).
+    loadCodeFlowStatus()
+      .then(async (status) => {
+        if (status?.can_manage === false) return;
+        const result = await getAgentSettings().then((doc) => ({ doc, error: null as unknown })).catch((error) => ({ doc: undefined, error }));
+        if (result.error) toast.error(getFrappeErrorMessage(result.error) || 'Failed to load these settings');
         const loaded = rowsFromStored(result.doc?.skill_destinations);
         setRows(loaded);
         setSavedJson(jsonFromRows(loaded));
