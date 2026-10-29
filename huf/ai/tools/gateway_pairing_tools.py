@@ -108,13 +108,6 @@ def setup_gateway(
 			"success": False,
 			"error": "Plaintext credentials are not accepted from an agent. Collect them with the secret form and pass credentials_ref.",
 		}
-	if credentials_ref:
-		if credentials:
-			return {"success": False, "error": "Pass either credentials or credentials_ref, not both."}
-		try:
-			credentials = resolve_and_consume(credentials_ref, frappe.session.user)
-		except (frappe.ValidationError, frappe.PermissionError) as exc:
-			return {"success": False, "error": _redact_text(str(exc))}
 	if non_secret_fields:
 		if not isinstance(non_secret_fields, dict):
 			return {"success": False, "error": "non_secret_fields must be an object."}
@@ -123,6 +116,14 @@ def setup_gateway(
 				"success": False,
 				"error": f"non_secret_fields keys not allowed for {provider}: {', '.join(bad)}. Secrets must go through the secret form.",
 			}
+	if credentials_ref:
+		if credentials:
+			return {"success": False, "error": "Pass either credentials or credentials_ref, not both."}
+		try:
+			credentials = resolve_and_consume(credentials_ref, frappe.session.user)
+		except (frappe.ValidationError, frappe.PermissionError) as exc:
+			return {"success": False, "error": _redact_text(str(exc))}
+	if non_secret_fields:
 		credentials = {**(credentials or {}), **{k: str(v) for k, v in non_secret_fields.items()}}
 
 	if not provider or not gateway_name or not credentials:

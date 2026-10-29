@@ -186,6 +186,7 @@ class TestHandoffCore(IntegrationTestCase):
 
 	# --- Communication hook ---
 	def test_communication_hook_calls_reply(self):
+		self._users()
 		self.conv.db_set({"status": "handed_off", "handoff_doctype": "ToDo", "handoff_name": "TODO-X"})
 		comm = self._comm()
 		with patch.object(reply_api, "deliver_reply", return_value={"status": "sent"}) as send:

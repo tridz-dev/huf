@@ -172,7 +172,9 @@ class TestRunAs(IntegrationTestCase):
 		run_as.validate_run_as(self.gw)
 
 	def test_hooks_register_stamp_audit_only_for_audit_doctypes(self):
-		events = frappe.get_hooks("doc_events")
+		from huf import hooks as huf_hooks
+
+		events = huf_hooks.doc_events
 		star = events.get("*", {}).get("before_insert", [])
 		self.assertNotIn("huf.ai.channels.run_as.stamp_audit", star)
 		for dt in run_as.AUDIT_DOCTYPES:
