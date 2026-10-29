@@ -53,7 +53,8 @@ class TestRunGatewayBinding(unittest.TestCase):
 		), patch.object(whatsapp, "_scope_refusal", return_value=None), patch.object(
 			whatsapp, "_send_message", side_effect=fake_send
 		):
-			whatsapp.handle_action("send_message", to="1", message="x", gateway_name="GW-OTHER", whatsapp_account="WA-OTHER")
+			_r = whatsapp.handle_action("send_message", to="1", message="x", gateway_name="GW-OTHER", whatsapp_account="WA-OTHER")
+			print("DBG result", _r, type(frappe.db.exists), type(frappe.db.get_value), file=__import__("sys").stderr)
 		self.assertEqual(seen["gateway_name"], "GW-OWN")
 		self.assertNotIn("whatsapp_account", seen)
 
