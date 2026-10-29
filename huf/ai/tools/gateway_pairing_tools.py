@@ -17,11 +17,30 @@ from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 
 
 def _require_integrations_manager() -> None:
-	"""Hub gateway tools are admin-only: the session user needs ``system.integrations.manage``."""
+	"""Hub gateway tools are admin-only: the session user needs ``system.integrations.manage``.
+
+	Raises ``frappe.PermissionError``. Used by tools whose pre-existing contract is to raise
+	(``list_pairing_requests``).
+	"""
+	if _integrations_denial():
+		frappe.throw(_("Managing integrations is not permitted for this user."), frappe.PermissionError)
+
+
+def _integrations_denial() -> dict[str, Any] | None:
+	"""Return a denial result when the session user lacks ``system.integrations.manage``, else None.
+
+	Tools that return result dicts (``setup_gateway``, ``approve_pairing_code``, ``test_gateway_health``)
+	return this shape so the agent gets a normal tool result. The check runs before any read or write.
+	"""
 	from huf.permissions import has_capability
 
-	if not has_capability(frappe.session.user, "system.integrations.manage"):
-		frappe.throw(_("Managing integrations is not permitted for this user."), frappe.PermissionError)
+	if has_capability(frappe.session.user, "system.integrations.manage"):
+		return None
+	return {
+		"success": False,
+		"error": _("Managing integrations is not permitted for this user."),
+		"permission_denied": True,
+	}
 
 
 def setup_gateway(
@@ -62,7 +81,8 @@ def setup_gateway(
 	"""
 	from huf.ai.secrets import in_agent_tool_call, resolve_and_consume
 
-	_require_integrations_manager()
+	if denied := _integrations_denial():
+		return denied
 	if credentials and in_agent_tool_call():
 		return {
 			"success": False,
@@ -276,7 +296,8 @@ def approve_pairing_code(
 	Returns:
 		Dict with approval status and sender details
 	"""
-	_require_integrations_manager()
+	if denied := _integrations_denial():
+		return denied
 	if not pairing_code_or_id:
 		return {"success": False, "error": "pairing_code_or_id is required."}
 
@@ -308,7 +329,8 @@ def test_gateway_health(gateway_name: str) -> dict[str, Any]:
 	Returns:
 		Health diagnostic report
 	"""
-	_require_integrations_manager()
+	if denied := _integrations_denial():
+		return denied
 	if not frappe.db.exists("Gateway", gateway_name):
 		return {"success": False, "error": f"Gateway '{gateway_name}' does not exist."}
 
