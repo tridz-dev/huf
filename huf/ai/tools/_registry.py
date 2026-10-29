@@ -691,6 +691,8 @@ FRAPPE_GENERIC_TOOLS = [
     },
 ]
 
+HTTP_TOOLS = http_tools(_p)
+
 GMAIL_TOOLS = [
 	{
 		"tool_name": "gmail_get_emails",
@@ -2817,7 +2819,7 @@ ALL_INTEGRATION_TOOLS = (
 	+ DESKTOP_PROCESS_TOOLS
 	+ DESKTOP_LOCAL_MCP_TOOLS
 	+ LAZY_DISCOVERY_TOOLS
-	+ http_tools(_p)
+	+ HTTP_TOOLS
 	# Tools backed by a connectable service. Keys match Integration Service
 	# docnames and the SERVICE_NAME each tool module uses for credentials.
 	+ _with_service(SLACK_TOOLS, "slack")

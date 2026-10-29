@@ -180,8 +180,9 @@ def test_registered_in_hook_registry():
 	assigned = [n for n in tree.body if isinstance(n, ast.Assign) and any(getattr(t, "id", "") == "HTTP_TOOLS" for t in n.targets)]
 	assert assigned, "HTTP_TOOLS missing from _registry.py"
 	text = src.read_text()
-	assert '"function_path": "huf.ai.http_handler.http_request"' in text
 	assert "+ HTTP_TOOLS" in text
+	entries = src.parent / "integration" / "registry_entries.py"
+	assert '"function_path": "huf.ai.http_handler.http_request"' in entries.read_text()
 
 
 # ---------------------------------------------------------------------------
