@@ -38,15 +38,16 @@ describe('FlowCard', () => {
     expect(screen.getByTestId('flow-card-title')).toHaveAttribute('title', expect.stringContaining('A very long flow name'));
     expect(screen.getByTestId('flow-card-title').className).toContain('line-clamp-2');
     expect(screen.getByTestId('flow-card-description')).toHaveTextContent('Starts every day at 09:00, then 2 steps.');
+    expect(screen.queryByTestId('flow-card-trigger')).toBeNull(); // the summary already says it
     expect(screen.getByTestId('flow-list-status-f1')).toHaveTextContent('Live');
-    expect(screen.getByTestId('flow-card-trigger')).toHaveTextContent('Starts every day at 09:00');
     expect(screen.getByTestId('flow-card-last-run')).toHaveTextContent('Last run: Finished 2 mins ago');
     expect(screen.getByTestId('flow-card-category')).toHaveTextContent('Sales');
   });
 
   it('keeps the author description when it is plain, and hides an empty category', () => {
-    setup({ description: 'Tells the team about big orders.', category: '' });
+    setup({ description: 'Tells the team about big orders.', category: 'Uncategorized' });
     expect(screen.getByTestId('flow-card-description')).toHaveTextContent('Tells the team about big orders.');
+    expect(screen.getByTestId('flow-card-trigger')).toHaveTextContent('Starts every day at 09:00');
     expect(screen.queryByTestId('flow-card-category')).toBeNull();
   });
 

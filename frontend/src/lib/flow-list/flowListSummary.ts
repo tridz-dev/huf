@@ -54,7 +54,7 @@ export function stepsText(count: number): string {
 /** A one-line summary written for people: "Starts when a web request arrives, then 3 steps." */
 export function generatedSummary(card: Pick<FlowCard, 'trigger' | 'step_count'>): string {
   const phrase = triggerPhrase(card.trigger);
-  if (!phrase) return card.step_count > 0 ? `Has ${stepsText(card.step_count)}. Choose what starts it.` : 'Nothing set up yet.';
+  if (!phrase) return card.step_count > 0 ? `Has ${stepsText(card.step_count)}. Choose what starts it.` : 'Nothing set up yet. Open it to choose what starts it.';
   const lead = triggerLine(card.trigger);
   return card.step_count > 0 ? `${lead}, then ${stepsText(card.step_count)}.` : `${lead}.`;
 }
@@ -64,11 +64,21 @@ export function isEngineNotation(text: string): boolean {
   return /->|=>|→/.test(text) || /\{\s*["'][^}]*["']\s*:/.test(text);
 }
 
+/** True when the card shows a generated summary (the author wrote nothing, or wrote engine notation). */
+export function descriptionIsGenerated(card: Pick<FlowCard, 'description'>): boolean {
+  const own = (card.description || '').trim();
+  return !own || isEngineNotation(own);
+}
+
 /** The line under the title: the author's own description when it reads like a sentence, otherwise a summary. */
 export function cardDescription(card: Pick<FlowCard, 'description' | 'trigger' | 'step_count'>): string {
-  const own = (card.description || '').trim();
-  if (own && !isEngineNotation(own)) return own;
-  return generatedSummary(card);
+  return descriptionIsGenerated(card) ? generatedSummary(card) : card.description.trim();
+}
+
+/** Category worth showing on a card: nothing for "no category" or the placeholder "Uncategorized". */
+export function visibleCategory(category: string | null | undefined): string {
+  const c = (category || '').trim();
+  return c.toLowerCase() === 'uncategorized' ? '' : c;
 }
 
 /** Palette id (data/actions.ts) of a step in the card strip: its icon and plain name come from there. */

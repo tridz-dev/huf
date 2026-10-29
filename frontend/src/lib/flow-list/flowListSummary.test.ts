@@ -29,7 +29,7 @@ describe('description', () => {
   it('generates a summary when there is nothing to show', () => {
     expect(generatedSummary(card())).toBe('Starts when a web request arrives, then 3 steps.');
     expect(generatedSummary(card({ step_count: 0 }))).toBe('Starts when a web request arrives.');
-    expect(generatedSummary(card({ trigger: { type: 'unset' }, step_count: 0 }))).toBe('Nothing set up yet.');
+    expect(generatedSummary(card({ trigger: { type: 'unset' }, step_count: 0 }))).toBe('Nothing set up yet. Open it to choose what starts it.');
   });
   it('spots engine notation and raw JSON', () => {
     expect(isEngineNotation('Webhook -> Transform -> End.')).toBe(true);
