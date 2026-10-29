@@ -2811,9 +2811,35 @@ LAZY_DISCOVERY_TOOLS = [
 	},
 ]
 
-# Hub gateway setup (PLAN 4.3 P0a). Admin-only: each handler checks system.integrations.manage.
-# Deliberately no setup_gateway here: credentials go through the secure setup wizard, never chat.
+# Hub gateway setup (PLAN 4.3 P0a/P0b). Admin-only: each handler checks system.integrations.manage.
+# setup_gateway takes only a credentials_ref from the secret form (huf.ai.secrets.stash_secret); the
+# schema has no plaintext `credentials` parameter, and the function rejects plaintext in agent context.
 GATEWAY_SETUP_TOOLS = [
+	{
+		"tool_name": "setup_gateway",
+		"description": (
+			"Create or update a channel Gateway (e.g. WhatsApp) from credentials the user entered in the secret form. "
+			"Pass the credentials_ref returned by that form (e.g. SS-0001) and the non-secret fields (phone_number_id, "
+			"waba_id, app_id). The secret values are never shown to you. Returns the webhook_url to give the user for "
+			"Meta's webhook settings. Admin only."
+		),
+		"function_path": "huf.ai.tools.gateway_pairing_tools.setup_gateway",
+		"category": "Builder",
+		"parameters": [
+			_p("provider", required=True, description="Channel provider, e.g. WhatsApp"),
+			_p("gateway_name", required=True, description="Name for this Gateway instance, e.g. WhatsApp Support"),
+			_p(
+				"credentials_ref",
+				required=True,
+				description="credentials_ref from the secret form, e.g. SS-0001. Single use, expires in 30 minutes.",
+			),
+			_p(
+				"non_secret_fields",
+				type="object",
+				description="Non-secret values: phone_number_id, waba_id, app_id (JSON object of name to value)",
+			),
+		],
+	},
 	{
 		"tool_name": "test_gateway_health",
 		"description": (

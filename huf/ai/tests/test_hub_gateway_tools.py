@@ -23,6 +23,7 @@ GATEWAY_TOOLS = {
 	"list_pairing_requests": "huf.ai.tools.gateway_pairing_tools.list_pairing_requests",
 	"approve_pairing_code": "huf.ai.tools.gateway_pairing_tools.approve_pairing_code",
 }
+SETUP_GATEWAY_PATH = "huf.ai.tools.gateway_pairing_tools.setup_gateway"
 NON_ADMIN_USER = "hub-gateway-nonadmin@example.com"
 
 
@@ -69,14 +70,18 @@ class TestHubGatewayTools(IntegrationTestCase):
 			self.assertIn(tool_name, entries, f"{tool_name} not registered")
 			self.assertEqual(entries[tool_name]["function_path"], function_path)
 
-	def test_setup_gateway_not_registered(self):
-		names = {t["tool_name"] for t in registry_module.ALL_INTEGRATION_TOOLS}
-		self.assertNotIn("setup_gateway", names)
+	def test_setup_gateway_registered_without_credentials_param(self):
+		entries = {t["tool_name"]: t for t in registry_module.ALL_INTEGRATION_TOOLS}
+		self.assertIn("setup_gateway", entries)
+		self.assertEqual(entries["setup_gateway"]["function_path"], SETUP_GATEWAY_PATH)
+		params = {p["fieldname"] for p in entries["setup_gateway"]["parameters"]}
+		self.assertEqual(params, {"provider", "gateway_name", "credentials_ref", "non_secret_fields"})
+		self.assertNotIn("credentials", params)
 
 	def test_gateway_tools_in_builder_tool_names(self):
 		for tool_name in GATEWAY_TOOLS:
 			self.assertIn(tool_name, hub_orchestrator_module.BUILDER_TOOL_NAMES)
-		self.assertNotIn("setup_gateway", hub_orchestrator_module.BUILDER_TOOL_NAMES)
+		self.assertIn("setup_gateway", hub_orchestrator_module.BUILDER_TOOL_NAMES)
 
 	def test_provisioned_hub_agent_has_tools_and_playbook(self):
 		hub_orchestrator_module.create_hub_orchestrator_agent()
@@ -86,13 +91,18 @@ class TestHubGatewayTools(IntegrationTestCase):
 		attached = {row.tool for row in agent.get("agent_tool") or []}
 		for tool_name in GATEWAY_TOOLS:
 			self.assertIn(tool_name, attached, f"{tool_name} not attached to Hub Orchestrator")
-		self.assertNotIn("setup_gateway", attached)
+		self.assertIn("setup_gateway", attached)
 
 		instructions = agent.instructions or ""
-		self.assertIn("CHANNEL SETUP", instructions)
+		self.assertIn("CHANNEL SETUP v2", instructions)
 		self.assertIn("/huf/channels/whatsapp/setup", instructions)
 		self.assertIn("test_gateway_health", instructions)
 		self.assertIn("approve_pairing_code", instructions)
+		self.assertIn("setup_gateway", instructions)
+		self.assertIn("credentials_ref", instructions)
+		self.assertIn('kind "secret"', instructions)
+		self.assertIn("whatsapp_setup", instructions)
+		self.assertIn("/huf/channels/whatsapp/n/", instructions)
 
 	def test_non_admin_denied(self):
 		self._create_non_admin_user()
@@ -117,3 +127,63 @@ class TestHubGatewayTools(IntegrationTestCase):
 		approval = pairing_module.approve_pairing_code("")
 		self.assertFalse(approval["success"])
 		self.assertIn("required", approval["error"])
+
+	def test_setup_gateway_rejects_plaintext_in_agent_context(self):
+		from huf.ai import secrets as S
+
+		frappe.set_user("Administrator")
+		with S.agent_tool_context():
+			r = pairing_module.setup_gateway(
+				"WhatsApp", "Hub Test Plaintext GW", credentials={"access_token": "EAAabcdefghijklmnop"}
+			)
+		self.assertFalse(r["success"])
+		self.assertIn("credentials_ref", r["error"])
+		self.assertFalse(frappe.db.exists("Gateway", "Hub Test Plaintext GW"))
+
+	def test_setup_gateway_credentials_ref_consumes_stash(self):
+		from unittest.mock import patch
+
+		from huf.ai import secrets as S
+
+		frappe.set_user("Administrator")
+		ref = S.stash_secret(
+			{"access_token": "EAAtestvalue12345", "app_secret": "appsecretvalue"}, "whatsapp_setup"
+		)["credentials_ref"]
+
+		seen = {}
+
+		class FakeAdapter:
+			def __init__(self, creds):
+				seen.update(creds)
+
+		with (
+			patch("huf.ai.gateway_webhook._adapter_class_for_provider", return_value=FakeAdapter),
+			patch(
+				"huf.ai.tools.gateway_pairing_tools.provider_to_service_id",
+				side_effect=RuntimeError("stop after validation"),
+			),
+		):
+			with self.assertRaises(RuntimeError):
+				pairing_module.setup_gateway(
+					"WhatsApp",
+					"Hub Test Stash GW",
+					credentials_ref=ref,
+					non_secret_fields={"phone_number_id": "1", "waba_id": "2", "app_id": "3"},
+				)
+
+		self.assertEqual(seen["access_token"], "EAAtestvalue12345")
+		self.assertEqual(seen["app_secret"], "appsecretvalue")
+		self.assertEqual(seen["phone_number_id"], "1")
+		self.assertEqual(frappe.db.get_value("Huf Secret Stash", ref, "consumed"), 1)
+
+		# Single use: a second call with the same ref is refused, not replayed.
+		again = pairing_module.setup_gateway(
+			"WhatsApp", "Hub Test Stash GW", credentials_ref=ref, non_secret_fields={"phone_number_id": "1"}
+		)
+		self.assertFalse(again["success"])
+		self.assertIn("already used", again["error"])
+
+	def test_setup_gateway_non_admin_denied(self):
+		self._create_non_admin_user()
+		with self.assertRaises(frappe.PermissionError):
+			pairing_module.setup_gateway("WhatsApp", "Hub Test GW", credentials_ref="SS-0000")

@@ -79,6 +79,7 @@ BUILDER_TOOL_NAMES = (
     "test_gateway_health",
     "list_pairing_requests",
     "approve_pairing_code",
+    "setup_gateway",
 )
 
 
@@ -240,7 +241,7 @@ def create_hub_orchestrator_agent() -> bool:
 
 
 # Bumped with the CHANNEL SETUP playbook so already-installed sites pick up the new instructions.
-INSTRUCTIONS_MARKER = "CHANNEL SETUP"
+INSTRUCTIONS_MARKER = "CHANNEL SETUP v2"
 
 
 def ensure_hub_orchestrator_instructions() -> bool:

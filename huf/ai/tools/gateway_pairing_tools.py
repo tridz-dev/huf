@@ -62,6 +62,7 @@ def setup_gateway(
 	"""
 	from huf.ai.secrets import in_agent_tool_call, resolve_and_consume
 
+	_require_integrations_manager()
 	if credentials and in_agent_tool_call():
 		return {
 			"success": False,
