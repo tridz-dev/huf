@@ -78,7 +78,7 @@ class FakeCache:
 	def __init__(self):
 		self.d = {}
 
-	def get_value(self, k):
+	def get_value(self, k, **_kw):
 		return self.d.get(k)
 
 	def set_value(self, k, v, expires_in_sec=None):

@@ -123,7 +123,7 @@ def get_messaging_limit(gateway: str) -> dict[str, Any]:
 		if not gateway or not frappe.db.exists("Gateway", gateway):
 			return _empty()
 		cache = frappe.cache()
-		cached = cache.get_value(_cache_key(gateway))
+		cached = cache.get_value(_cache_key(gateway), expires=True)
 		if isinstance(cached, dict):
 			return dict(cached)
 		result = _fetch(gateway)
