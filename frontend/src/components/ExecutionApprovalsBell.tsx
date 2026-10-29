@@ -20,6 +20,10 @@ const TICK_INTERVAL_MS = 30000;
 /** Below this remaining time, an approval is flagged as urgent (24h TTL). */
 const URGENT_THRESHOLD_MS = 60 * 60 * 1000;
 
+const CAPABILITY_LABELS: Record<string, string> = {
+  'code_execution.run': 'Run Python code',
+};
+
 const EXECUTION_KIND_LABELS: Record<string, string> = {
   code_execution: 'Code execution',
   ssh_exec: 'SSH command',
@@ -146,7 +150,7 @@ export function ExecutionApprovalsBell() {
                     </Badge>
                   </div>
                   <div>
-                    <div className="text-sm font-medium">{approval.requested_capability}</div>
+                    <div className="text-sm font-medium">{CAPABILITY_LABELS[approval.requested_capability] ?? approval.requested_capability}</div>
                     <div className="text-xs text-muted-foreground">
                       {approval.flow_label ?? (approval.agent_name ? `${approval.agent_name}` : 'Unknown agent')}
                       {approval.requested_by ? ` · requested by ${approval.requested_by}` : ''}
