@@ -7,6 +7,8 @@ import { reasonMessage } from '@/components/whatsapp/overview/healthCopy';
 import { HealthBanner } from '@/components/whatsapp/overview/HealthBanner';
 import { TokenCard } from '@/components/whatsapp/overview/TokenCard';
 import { listConversations, type ConversationStatus } from '@/services/channelsApi';
+import { getNumberSummary } from '@/services/solutionsApi';
+import type { NumberSummary } from '@/types/solutions';
 import { checkToken, getSetupStatus, type GatewayHealthStatus } from '@/services/whatsappHealthApi';
 
 const COUNT_LIMIT = 100;
@@ -34,6 +36,7 @@ export function HomeDashboard({ gateway }: { gateway: string }) {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
+  const [numberSummary, setNumberSummary] = useState<NumberSummary | null>(null);
   const [counts, setCounts] = useState<Record<string, { n: number; capped: boolean } | null>>({});
 
   const load = useCallback(async () => {
@@ -60,6 +63,14 @@ export function HomeDashboard({ gateway }: { gateway: string }) {
     };
   }, [gateway]);
 
+  // Solutions data is additive: a failed summary only drops the blame line.
+  useEffect(() => {
+    let live = true;
+    setNumberSummary(null);
+    getNumberSummary(gateway).then((s) => { if (live) setNumberSummary(s); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [gateway]);
+
   const onCheck = async () => {
     setChecking(true);
     await checkToken(gateway);
@@ -72,7 +83,7 @@ export function HomeDashboard({ gateway }: { gateway: string }) {
   return (
     <div className="space-y-4 p-5">
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      <HealthBanner gateway={gw} loading={loading} checking={checking} onCheck={() => void onCheck()} />
+      <HealthBanner gateway={gw} loading={loading} checking={checking} onCheck={() => void onCheck()} numberSummary={numberSummary} />
 
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Counters">
         <Counter label="Conversations" value={fmt(counts.all)} />

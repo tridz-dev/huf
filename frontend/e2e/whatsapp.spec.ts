@@ -290,11 +290,10 @@ test.describe('Channels: WhatsApp with Solutions', () => {
     await expect(page).toHaveURL(/\/channels\/whatsapp\/n\/GW-2\/home/);
   });
 
-  // Solutions-on-number cards leave Home: they belong to Automations (FE-AUTOM); un-fixme there.
-  test.fixme('overview lists the solutions on the number and the routing order', async ({ page }) => {
+  test('overview lists the solutions on the number and the routing order', async ({ page }) => {
     await mockWhatsApp(page);
     const calls = await mockSolutionsApi(page, { numberSummaries: { 'GW-1': busyNumber() } });
-    await goto(page, '/channels/whatsapp/n/GW-1/automations');
+    await goto(page, '/channels/whatsapp/n/GW-1/automations/agents');
     await expect.poll(() => callsOf(calls, 'get_number_summary').map((c) => c.args.gateway)).toContain('GW-1');
 
     await expect(page.getByText('Solutions on this number', { exact: true })).toBeVisible();
@@ -317,49 +316,45 @@ test.describe('Channels: WhatsApp with Solutions', () => {
     await expect(rows.filter({ hasText: 'Anything else' })).toContainText('Triage assistant');
   });
 
-  // Solutions-on-number cards leave Home: they belong to Automations (FE-AUTOM); un-fixme there.
-  test.fixme('a number with no live solution says it replies to no one', async ({ page }) => {
+  test('a number with no live solution says it replies to no one', async ({ page }) => {
     await mockWhatsApp(page);
     await mockSolutionsApi(page, { numberSummaries: { 'GW-1': busyNumber({ solutions: [{ name: 'care', title: 'Care desk', status: 'Paused', usage_pct: null, sends_24h: 0 }], routing_order: [] }) } });
-    await goto(page, '/channels/whatsapp/n/GW-1/automations');
+    await goto(page, '/channels/whatsapp/n/GW-1/automations/agents');
     await expect(page.getByText('This number replies to no one yet.')).toBeVisible();
     await expect(page.getByText('No rules')).toBeVisible();
   });
 
-  // Solutions-on-number cards leave Home: they belong to Automations (FE-AUTOM); un-fixme there.
-  test.fixme('a degraded number blames the solution that sent the most', async ({ page }) => {
+  test('a degraded number blames the solution that sent the most', async ({ page }) => {
     await mockWhatsApp(page, {
       gatewayOver: { health: 'degraded', reasons: [{ code: 'delivery_failures', message: 'Meta is rejecting some messages.' }] },
     });
     await mockSolutionsApi(page, {
       numberSummaries: { 'GW-1': busyNumber({ quality: { rating: 'Medium', source: 'meta' }, blame: { solution: 'orders', share_pct: 91 } }) },
     });
-    await goto(page, '/channels/whatsapp/n/GW-1/automations');
+    await goto(page, '/channels/whatsapp/n/GW-1/home');
     const banner = page.getByRole('alert').filter({ hasText: 'Meta is rejecting some messages.' });
     await expect(banner).toContainText('Quality is medium.');
     await expect(banner).toContainText("Most of today's sends came from Order desk (91% of sends in the last 24 hours).");
     await expect(banner.getByRole('link', { name: 'Order desk' })).toHaveAttribute('href', /\/solutions\/orders$/);
   });
 
-  // Solutions-on-number cards leave Home: they belong to Automations (FE-AUTOM); un-fixme there.
-  test.fixme('no blame line while the number is healthy and quality is good', async ({ page }) => {
+  test('no blame line while the number is healthy and quality is good', async ({ page }) => {
     await mockWhatsApp(page);
     await mockSolutionsApi(page, {
       numberSummaries: { 'GW-1': busyNumber({ quality: { rating: 'High', source: 'meta' }, blame: { solution: 'orders', share_pct: 91 } }) },
     });
-    await goto(page, '/channels/whatsapp/n/GW-1/automations');
-    await expect(page.getByText('Solutions on this number', { exact: true })).toBeVisible();
+    await goto(page, '/channels/whatsapp/n/GW-1/home');
+    await expect(page.getByLabel('Counters')).toBeVisible();
     await expect(page.getByText(/Most of today's sends/)).toHaveCount(0);
   });
 
-  // Solutions-on-number cards leave Home: they belong to Automations (FE-AUTOM); un-fixme there.
-  test.fixme('a failing Solutions summary hides its cards and nothing else', async ({ page }) => {
+  test('a failing Solutions summary hides its cards and nothing else', async ({ page }) => {
     await mockWhatsApp(page);
     await mockSolutionsApi(page, {
       handlers: { get_number_summary: () => ({ error: { code: 'not_permitted', message: 'No.' } }) },
     });
-    await goto(page, '/channels/whatsapp/n/GW-1/automations');
-    await expect(page.getByText(/steps? left/)).toBeVisible();
+    await goto(page, '/channels/whatsapp/n/GW-1/automations/agents');
+    await expect(page.getByRole('navigation', { name: 'Automation tabs' })).toBeVisible();
     await expect(page.getByText('Solutions on this number', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Routing order', { exact: true })).toHaveCount(0);
   });
