@@ -41,9 +41,12 @@ interface TemplatesTabProps {
   gateway?: string;
   /** Show only this solution's templates and hide account-level actions (sync, manager link, drafts). */
   scopeSolution?: string;
+  /** Route-driven selection (Channels shell): when `onSelect` is given, the selected template comes from the URL. */
+  selectedName?: string;
+  onSelect?: (name: string) => void;
 }
 
-export function TemplatesTab({ gateway, scopeSolution }: TemplatesTabProps) {
+export function TemplatesTab({ gateway, scopeSolution, selectedName, onSelect }: TemplatesTabProps) {
   const scoped = !!scopeSolution;
   const { hufRole } = usePermissions();
   const isAdmin = hufRole === 'Huf Admin';
@@ -66,7 +69,9 @@ export function TemplatesTab({ gateway, scopeSolution }: TemplatesTabProps) {
   const [copyDraft, setCopyDraft] = useState<TemplateWizardDraft | null>(null);
   const [editError, setEditError] = useState('');
   const [section, setSection] = useState('templates');
-  const [selected, setSelected] = useState('');
+  const [selectedLocal, setSelectedLocal] = useState('');
+  const selected = onSelect ? (selectedName ?? '') : selectedLocal;
+  const setSelected = useCallback((name: string) => { if (onSelect) onSelect(name); else setSelectedLocal(name); }, [onSelect]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [filters, setFilters] = useState<TemplateFilters>({ search: '', status: ALL_OPTION, category: ALL_OPTION, language: ALL_OPTION, solution: ALL_OPTION });
   const [solutions, setSolutions] = useState<SolutionSummary[]>([]);

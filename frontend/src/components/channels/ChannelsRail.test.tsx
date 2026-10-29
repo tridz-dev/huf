@@ -6,6 +6,10 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 const api = vi.hoisted(() => ({ getSetupStatus: vi.fn() }));
 vi.mock('@/services/whatsappHealthApi', async (orig) => ({ ...(await orig<object>()), ...api }));
 
+vi.mock('@/components/whatsapp/TemplatesTab', () => ({ TemplatesTab: () => <div>templates tab</div> }));
+vi.mock('@/components/whatsapp/broadcast/BroadcastList', () => ({ BroadcastList: () => <div>broadcast list</div> }));
+vi.mock('@/components/whatsapp/broadcast/BroadcastTab', () => ({ EmergencyStop: () => <div>emergency</div> }));
+
 import { ChannelsRoutes } from './routes';
 
 beforeAll(() => {

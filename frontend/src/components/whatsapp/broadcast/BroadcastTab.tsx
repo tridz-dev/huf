@@ -10,21 +10,39 @@ import { BroadcastWizard } from './BroadcastWizard';
 
 type View = { kind: 'list' } | { kind: 'new' } | { kind: 'detail'; name: string };
 
-export function BroadcastTab({ gateway, bridgeAvailable = true }: { gateway: string; bridgeAvailable?: boolean }) {
-  const [view, setView] = useState<View>({ kind: 'list' });
+export function EmergencyStop({ gateway, onStopped }: { gateway: string; onStopped?: () => void }) {
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [refresh, setRefresh] = useState(0);
-  if (!bridgeAvailable) return <BridgeUnavailable />;
 
   const stopAll = async () => {
     setBusy(true);
     const res = await pauseAllBroadcasts(gateway);
     setBusy(false);
     setArmed(false);
-    if (res.success) { toast.success('All broadcasts on this gateway were paused'); setRefresh((n) => n + 1); }
+    if (res.success) { toast.success('All broadcasts on this gateway were paused'); onStopped?.(); }
     else toast.error(errorText(res));
   };
+
+  return (
+    <section aria-label="Emergency stop" className="rounded-md border border-destructive/50 p-3">
+      <h3 className="text-sm font-semibold text-destructive">Emergency stop</h3>
+      <p className="mb-2 text-xs text-steel">Immediately pauses every running broadcast on this gateway. You can resume them one by one afterwards.</p>
+      {armed ? (
+        <div className="flex items-center gap-2">
+          <Button variant="destructive" disabled={busy} onClick={() => void stopAll()}>Confirm: stop all broadcasts</Button>
+          <Button variant="ghost" onClick={() => setArmed(false)}>Keep running</Button>
+        </div>
+      ) : (
+        <Button variant="destructive" onClick={() => setArmed(true)}>Stop all broadcasts</Button>
+      )}
+    </section>
+  );
+}
+
+export function BroadcastTab({ gateway, bridgeAvailable = true }: { gateway: string; bridgeAvailable?: boolean }) {
+  const [view, setView] = useState<View>({ kind: 'list' });
+  const [refresh, setRefresh] = useState(0);
+  if (!bridgeAvailable) return <BridgeUnavailable />;
 
   return (
     <div className="space-y-6">
@@ -32,18 +50,7 @@ export function BroadcastTab({ gateway, bridgeAvailable = true }: { gateway: str
       {view.kind === 'new' && <BroadcastWizard gateway={gateway} onClose={() => setView({ kind: 'list' })} onStarted={(name) => setView({ kind: 'detail', name })} />}
       {view.kind === 'detail' && <BroadcastDetail key={`${view.name}-${refresh}`} name={view.name} onBack={() => setView({ kind: 'list' })} />}
 
-      <section aria-label="Emergency stop" className="rounded-md border border-destructive/50 p-3">
-        <h3 className="text-sm font-semibold text-destructive">Emergency stop</h3>
-        <p className="mb-2 text-xs text-steel">Immediately pauses every running broadcast on this gateway. You can resume them one by one afterwards.</p>
-        {armed ? (
-          <div className="flex items-center gap-2">
-            <Button variant="destructive" disabled={busy} onClick={() => void stopAll()}>Confirm: stop all broadcasts</Button>
-            <Button variant="ghost" onClick={() => setArmed(false)}>Keep running</Button>
-          </div>
-        ) : (
-          <Button variant="destructive" onClick={() => setArmed(true)}>Stop all broadcasts</Button>
-        )}
-      </section>
+      <EmergencyStop gateway={gateway} onStopped={() => setRefresh((n) => n + 1)} />
     </div>
   );
 }
