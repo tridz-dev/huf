@@ -47,7 +47,7 @@ describe('OverviewTab states', () => {
 	const view = (over: Parameters<typeof gatewayFixture>[0], loading = false) =>
 		render(
 			<MemoryRouter>
-				<OverviewTab gateway={loading ? null : gatewayFixture(over)} loading={loading} checking={false} onCheck={vi.fn()} onTurnOn={vi.fn()} settingsHref="/s" failedEventHref={() => '?tab=messages'} />
+				<OverviewTab gateway={loading ? null : gatewayFixture(over)} loading={loading} checking={false} onCheck={vi.fn()} onTurnOn={vi.fn()} settingsHref="/s" failedEventHref={() => '?event=EV-1'} />
 			</MemoryRouter>
 		);
 

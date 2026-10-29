@@ -12,7 +12,7 @@ export function TemplatesStep({ wiz }: { wiz: WizardApi }) {
     .filter((t) => (t.status ?? '').toLowerCase() === 'approved')
     .sort((a, b) => Number(suggested.includes(b.template_name)) - Number(suggested.includes(a.template_name)));
   const number = summaries[state.gateway]?.label || state.gateway;
-  const settingsLink = `/whatsapp?gateway=${encodeURIComponent(state.gateway)}&tab=settings`;
+  const settingsLink = `/channels/whatsapp/n/${encodeURIComponent(state.gateway)}/settings/connection`;
 
   return (
     <div className="space-y-3">

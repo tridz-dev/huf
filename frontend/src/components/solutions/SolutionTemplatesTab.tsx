@@ -16,10 +16,10 @@ export function SolutionTemplatesTab({ overview }: { overview: SolutionOverview 
       <p className="text-sm text-steel">
         Templates live on the WhatsApp account at Meta. This list shows the ones this solution uses. Manage the full set in{' '}
         <Link
-          to={gateway ? `/whatsapp?tab=templates&gateway=${encodeURIComponent(gateway)}` : '/whatsapp?tab=templates'}
+          to={gateway ? `/channels/whatsapp/n/${encodeURIComponent(gateway)}/templates` : '/channels/whatsapp'}
           className="font-medium text-ink underline"
         >
-          Settings &gt; WhatsApp
+          Channels &gt; Templates
         </Link>
         .
       </p>
