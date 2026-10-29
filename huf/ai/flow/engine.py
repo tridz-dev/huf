@@ -1864,7 +1864,7 @@ def _exec_foreach(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	ctx = _context_of(flow_run, settings)
 	items = ctx.resolve(config.get("items"))
 	if not isinstance(items, list):
-		return {"status": "failed", "error": f"foreach node '{node_id}' 'items' did not resolve to a list"}
+		return {"status": "failed", "error": f"The loop '{node.get('_label') or node_id}' needs a list for its items, but what it was given is not a list"}
 
 	run_ctx = _run_context(settings)
 	contract_limits = ((run_ctx.definition.get("contract") or {}).get("limits") or {}) if run_ctx is not None else {}
@@ -1873,7 +1873,7 @@ def _exec_foreach(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	if len(items) > effective_cap:
 		return {
 			"status": "failed",
-			"error": f"foreach '{node_id}' has {len(items)} items, exceeds max_iterations ({effective_cap})",
+			"error": f"The loop '{node.get('_label') or node_id}' has {len(items)} items, more than its limit of {effective_cap}. Raise the limit or send fewer items.",
 		}
 
 	body_ids = config.get("body") or []
@@ -1900,7 +1900,7 @@ def _exec_foreach(flow_run, node: dict, config: dict, settings: dict) -> dict:
 						continue
 					return {
 						"status": "failed",
-						"error": f"foreach '{node_id}' item {index} failed: {outcome.get('error')}",
+						"error": f"The loop '{node.get('_label') or node_id}' stopped at item {index}: {outcome.get('error')}",
 					}
 				results.append(ctx.resolve(collect_ref) if collect_ref is not None else None)
 			finally:

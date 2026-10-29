@@ -82,8 +82,28 @@ export function AgentRunForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
           <Label size="sm">Data used in the prompt</Label>
           <FieldHint testId="flow-hint-agent-run-bindings">Each {'{name}'} in the prompt is replaced by the data below, for example input.ticket.</FieldHint>
           {Object.entries(bindings).map(([name, value]) => (
-            <div key={name} className="flex items-center gap-2" data-testid={`flow-binding-${name}`}>
-              <span className="font-mono text-xs w-24 shrink-0 truncate">{`{${name}}`}</span>
+            <div key={name} className="space-y-1" data-testid={`flow-binding-${name}`}>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs flex-1 min-w-0 truncate">{`{${name}}`}</span>
+                <VariablePicker
+                  currentNodeId={nodeId}
+                  testId={`flow-binding-picker-${name}`}
+                  label={`Pick the data for ${name}`}
+                  onSelect={(ref) => patch({ prompt_bindings: { ...bindings, [name]: { $from: ref } } })}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Remove ${name}`}
+                  onClick={() => {
+                    const next = { ...bindings };
+                    delete next[name];
+                    patch({ prompt_bindings: Object.keys(next).length ? next : undefined });
+                  }}
+                >
+                  ×
+                </Button>
+              </div>
               <Input
                 className="font-mono text-xs"
                 aria-label={`Source for ${name}`}
@@ -91,24 +111,6 @@ export function AgentRunForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
                 value={str(asObj(value).$from)}
                 onChange={(e) => patch({ prompt_bindings: { ...bindings, [name]: { $from: e.target.value } } })}
               />
-              <VariablePicker
-                currentNodeId={nodeId}
-                testId={`flow-binding-picker-${name}`}
-                label={`Pick the data for ${name}`}
-                onSelect={(ref) => patch({ prompt_bindings: { ...bindings, [name]: { $from: ref } } })}
-              />
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label={`Remove ${name}`}
-                onClick={() => {
-                  const next = { ...bindings };
-                  delete next[name];
-                  patch({ prompt_bindings: Object.keys(next).length ? next : undefined });
-                }}
-              >
-                ×
-              </Button>
             </div>
           ))}
         </div>
