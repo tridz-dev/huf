@@ -11,10 +11,12 @@ import { copyText } from '@/lib/clipboard';
 import { generateWebhookSecret, webhookUrl, webhookUsage } from '@/lib/flow-graph/flowWebhookUi';
 import { getTriggerDoctypes } from '../../../services/flowApi';
 import { toast } from '@/lib/toast';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { type Opt, Section, str, tid, useNodeForm } from './formKit';
 
 export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
   const { node, cfg, patch, kind, shell, activeFlow } = useNodeForm(nodeId, 'triggerConfig');
+  const { canManage } = useFlowPermissions();
   const [docTypes, setDocTypes] = useState<Opt[]>([]);
   const [loadingDocTypes, setLoadingDocTypes] = useState(false);
   const type = str(cfg.type);
@@ -32,9 +34,11 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
 
   if (type === 'webhook') {
     const secret = str(cfg.secret);
+    // The server hides the secret from people who cannot edit the flow; they are never offered a way to copy or change it.
+    const secretHidden = !canManage || cfg.secret_hidden === true;
     const method = str(cfg.method) || 'POST';
     const origin = window.location.origin;
-    const usage = webhookUsage(origin, activeFlow?.id, secret, method);
+    const usage = webhookUsage(origin, activeFlow?.id, secretHidden ? undefined : secret, method);
     const copy = async (text: string, what: string) => {
       if (await copyText(text)) toast.success(`${what} copied`);
       else toast.error("Couldn't copy. Select the text and copy it yourself.");
@@ -57,35 +61,47 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
           </div>
           <FieldHint testId="flow-hint-webhook-url">Give this address to the system that should start the flow.</FieldHint>
         </div>
-        <div>
-          <Label htmlFor="webhook-secret" size="sm">Secret</Label>
-          <div className="flex gap-2 mt-1">
-            <Input
-              id="webhook-secret"
-              data-testid={tid(kind, 'secret')}
-              value={secret}
-              onChange={(e) => patch({ secret: e.target.value })}
-              className="font-mono text-xs"
-            />
-            <Button variant="outline" size="icon" aria-label="Copy secret" data-testid="flow-webhook-copy-secret" disabled={!secret} onClick={() => copy(secret, 'Secret')}>
-              <Copy className="w-3.5 h-3.5" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Generate a new secret"
-              data-testid="flow-webhook-regenerate"
-              onClick={() => {
-                patch({ secret: generateWebhookSecret() });
-                toast.info('New secret generated. Save the flow, then update anything that calls this webhook.');
-              }}
+        {secretHidden ? (
+          <div>
+            <Label size="sm">Secret</Label>
+            <p
+              className="mt-1 rounded-md border border-dashed border-line bg-muted/40 px-2.5 py-2 text-xs text-muted-foreground"
+              data-testid="flow-webhook-secret-hidden"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </Button>
+              Hidden. Only people who can edit this flow see the secret.
+            </p>
           </div>
-          <FieldHint testId="flow-hint-webhook-secret">A password only your callers know. They send it in the X-Huf-Secret header. Generate a new one if it leaks.</FieldHint>
-          <shell.Err field="secret" />
-        </div>
+        ) : (
+          <div>
+            <Label htmlFor="webhook-secret" size="sm">Secret</Label>
+            <div className="flex gap-2 mt-1">
+              <Input
+                id="webhook-secret"
+                data-testid={tid(kind, 'secret')}
+                value={secret}
+                onChange={(e) => patch({ secret: e.target.value })}
+                className="font-mono text-xs"
+              />
+              <Button variant="outline" size="icon" aria-label="Copy secret" data-testid="flow-webhook-copy-secret" disabled={!secret} onClick={() => copy(secret, 'Secret')}>
+                <Copy className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Generate a new secret"
+                data-testid="flow-webhook-regenerate"
+                onClick={() => {
+                  patch({ secret: generateWebhookSecret() });
+                  toast.info('New secret generated. Save the flow, then update anything that calls this webhook.');
+                }}
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+            <FieldHint testId="flow-hint-webhook-secret">A password only your callers know. They send it in the X-Huf-Secret header. Generate a new one if it leaks.</FieldHint>
+            <shell.Err field="secret" />
+          </div>
+        )}
         <div>
           <Label htmlFor="webhook-method" size="sm">Method</Label>
           <Select value={method} onValueChange={(v) => patch({ method: v })}>
