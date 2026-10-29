@@ -236,3 +236,4 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-run-trigger-input`, `flow-run-input-empty` | Separate "Data this run started with" block (only when no step repeats it) and its "No data was sent" line |
 | `flow-run-step-output-<nodeId>`, `flow-run-input` | Now the RAW JSON text, present only after "{ } Raw" is opened (HumanValue is the default view) |
 | `flow-json-<key>`, `-input`, `-format`, `-copy`, `-error`, `-toggle`, `-more`, `-help`, `-text` | JsonArea (the one component for legitimate JSON): `-toggle` is "Show as form" / "Edit as JSON", remembered per key; `-more` folds over 12 lines |
+| `flow-run-waiting-user`, `flow-run-human-waiting`, `flow-json-run-resume` (+ `-input`, `-error`, `-format`, `-copy`), `flow-run-resume` | Run waiting for someone to continue: its facts as labelled rows and the optional "extra information (JSON)" area; `flow-run-resume` is the Continue button (off while the JSON is invalid) |

@@ -72,12 +72,14 @@ export interface JsonAreaProps {
   allowEmpty?: boolean;
   /** The friendly view of the same data. When given, the area opens as this form until the user chooses JSON. */
   formView?: ReactNode;
+  /** Shown in an empty box: a small example so nobody starts from nothing. */
+  placeholder?: string;
   className?: string;
   /** Extra id wrapped around the text only (keeps older step-output ids pointing at the data). */
   textTestId?: string;
 }
 
-export function JsonArea({ surfaceKey, title, help, value, onChange, readOnly = false, allowEmpty = true, formView, className, textTestId }: JsonAreaProps) {
+export function JsonArea({ surfaceKey, title, help, value, onChange, readOnly = false, allowEmpty = true, formView, placeholder, className, textTestId }: JsonAreaProps) {
   const base = `flow-json-${surfaceKey}`;
   const titleId = useId();
   const [mode, setMode] = useState<Mode>(() => (formView ? readMode(surfaceKey) ?? 'form' : 'json'));
@@ -152,6 +154,7 @@ export function JsonArea({ surfaceKey, title, help, value, onChange, readOnly = 
             aria-invalid={!!problem}
             aria-describedby={problem ? `${titleId}-error` : undefined}
             spellCheck={false}
+            placeholder={placeholder}
             value={value}
             onChange={(e) => onChange?.(e.target.value)}
             rows={Math.min(Math.max(lineCount, 4), folded ? COLLAPSE_LINES : 40)}
