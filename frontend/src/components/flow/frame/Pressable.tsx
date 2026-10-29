@@ -1,4 +1,4 @@
-import { forwardRef, type HTMLAttributes, type KeyboardEvent } from 'react';
+import { forwardRef, type HTMLAttributes, type KeyboardEvent, type MouseEvent } from 'react';
 
 /**
  * A button that is not a <button>. The phone shows every step read-only by switching off all form controls in the
@@ -14,7 +14,7 @@ export const Pressable = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElemen
     if (e.defaultPrevented) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      e.currentTarget.click();
+      onClick?.(e as unknown as MouseEvent<HTMLDivElement>);
     }
   };
   return <div ref={ref} role={role} tabIndex={0} onClick={onClick} onKeyDown={keys} {...rest} />;

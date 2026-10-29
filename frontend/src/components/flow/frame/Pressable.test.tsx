@@ -17,7 +17,7 @@ describe('Pressable', () => {
     fireEvent.keyDown(el, { key: 'Enter' });
     fireEvent.keyDown(el, { key: ' ' });
     expect(onClick).toHaveBeenCalledTimes(3);
-    expect((screen.getByText('real button') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('real button').matches(':disabled')).toBe(true);
   });
 
   it('is a tab when asked to be', () => {

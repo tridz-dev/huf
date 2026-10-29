@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useFlowContext } from '../../../contexts/FlowContext';
+import { useFlowContext } from '@/contexts/FlowContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { validateFlow, type FlowIssue } from '@/lib/flow-graph/flowValidation';
 

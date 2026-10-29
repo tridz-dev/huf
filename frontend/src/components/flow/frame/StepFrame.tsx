@@ -17,7 +17,7 @@ import { StatusStrip } from './StatusStrip';
 import { StepHeader } from './StepHeader';
 import { StepTestPlaceholder } from './TestTab';
 import { TriggerTypeRow } from './TriggerTypeRow';
-import { useFlowIssues } from './useFlowIssues';
+import { useFlowIssues } from '@/hooks/flow/useFlowIssues';
 
 const TAB_LABEL: Record<FrameTab, string> = { setup: 'Setup', test: 'Test', settings: 'Settings' };
 

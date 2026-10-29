@@ -5,8 +5,8 @@ import { useFlowContext } from '../../../contexts/FlowContext';
 import { cn } from '@/lib/utils';
 import { requestFocus, setChecklistOpen, useFrame } from './frameStore';
 import { finishText, groupByStep } from './frameIssues';
-import { useFlowIssues } from './useFlowIssues';
-import { useFrozenWhilePressed } from './useFrozenWhilePressed';
+import { useFlowIssues } from '@/hooks/flow/useFlowIssues';
+import { useFrozenWhilePressed } from '@/hooks/flow/useFrozenWhilePressed';
 
 /**
  * "3 steps to finish": opens the list of everything left to finish in the flow, each with a Fix button that selects
