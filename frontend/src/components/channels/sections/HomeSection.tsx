@@ -4,7 +4,8 @@ import { HomeDashboard } from '../home/HomeDashboard';
 import { SETUP_STEP_TITLES, SETUP_TOTAL_STEPS, stageRank } from '../setupStage';
 import { SetupWizard } from '../setup/SetupWizard';
 import { useSetupStatus } from '../setup/useSetupStatus';
-import { useChannelGateway } from '../useChannelGateway';
+import { ChannelHome } from '../home/ChannelHome';
+import { useChannel, useChannelGateway } from '../useChannelGateway';
 
 function SetupProgress({ step }: { step: number }) {
   const next = SETUP_STEP_TITLES[Math.min(step, SETUP_TOTAL_STEPS) - 1];
@@ -20,11 +21,19 @@ function SetupProgress({ step }: { step: number }) {
 
 export default function HomeSection() {
   const gateway = useChannelGateway();
-  const status = useSetupStatus(gateway, false);
+  const channel = useChannel();
+  const status = useSetupStatus(channel === 'whatsapp' ? gateway : undefined, false);
   const [finished, setFinished] = useState(false);
   const [step, setStep] = useState(1);
 
   if (!gateway) return null;
+  if (channel !== 'whatsapp') {
+    return (
+      <PageFrame title="Home">
+        <ChannelHome gateway={gateway} />
+      </PageFrame>
+    );
+  }
   if (!status.loaded) {
     return (
       <PageFrame title="Home">

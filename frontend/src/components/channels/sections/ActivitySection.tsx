@@ -6,19 +6,22 @@ import { PageFrame } from '@/layouts/PageFrame';
 import { ActivityLog } from '../activity/ActivityLog';
 import { ConversationThread } from '../activity/ConversationThread';
 import { ConversationsList } from '../activity/ConversationsList';
-import { useChannelGateway } from '../useChannelGateway';
+import { useChannel, useChannelGateway } from '../useChannelGateway';
 
 type View = 'messages' | 'conversations';
 
 export default function ActivitySection() {
   const gateway = useChannelGateway();
+  const channel = useChannel();
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [reloadKey, setReloadKey] = useState(0);
   const base = pathname.replace(/\/activity(\/.*)?$/, '/activity');
-  const [view, setView] = useState<View>('conversations');
-  const toggle = (
+  const [chosen, setView] = useState<View>('conversations');
+  // The raw message log is the WhatsApp event stream; other channels show conversations only.
+  const view: View = channel === 'whatsapp' ? chosen : 'conversations';
+  const toggle = channel !== 'whatsapp' ? undefined : (
     <div role="group" aria-label="Activity view" className="flex gap-1">
       {(['messages', 'conversations'] as const).map((v) => (
         <Button key={v} size="sm" variant={view === v ? 'secondary' : 'ghost'} aria-pressed={view === v} onClick={() => setView(v)}>
