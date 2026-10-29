@@ -71,7 +71,7 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
             status={status}
             title={status.kind === 'needs-setup' ? incomplete[0]?.message ?? 'Select this step to set it up' : undefined}
             action={
-              status.kind === 'not-connected' && service ? (
+              status.kind === 'not-connected' && service && canManage ? (
                 <span data-testid={`flow-not-connected-node-${id}`} className="contents">
                   <ConnectLink
                     to={connectPath(service)}
