@@ -312,7 +312,10 @@ def approval_sentence(flow_name: str | None, step_title: str | None, message: st
 	``step_title`` is accepted so every channel passes the same arguments; the sentence does not repeat it
 	(a person reads the flow name in the headline and the message below it).
 	"""
-	parts = [approval_lead(flow_name, message), facts_sentence(facts)]
+	lead = approval_lead(flow_name, message)
+	# A fact the author's message already states (an inserted order shows its customer and total) is not said twice.
+	fresh = [f for f in (facts or []) if f"{f.get('label')}: {f.get('value')}" not in lead]
+	parts = [lead, facts_sentence(fresh)]
 	if ask:
 		parts.append("Approve or reject.")
 	return " ".join(p for p in parts if p)

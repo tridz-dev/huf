@@ -152,3 +152,10 @@ class TestApprovalWording(unittest.TestCase):
 			with self.subTest(args=args):
 				self.assertEqual(hz.approval_sentence(*args), expected)
 		self.assertTrue(hz.approval_sentence("F", "S", "M", [], ask=True).endswith("Approve or reject."))
+
+	def test_facts_already_in_the_message_are_not_repeated(self):
+		facts = [{"label": "Customer", "value": "Ada"}, {"label": "Total", "value": "450"}]
+		self.assertEqual(hz.approval_sentence("F", "S", "Refund Customer: Ada, Total: 450?", facts), "Refund Customer: Ada, Total: 450?")
+		self.assertEqual(
+			hz.approval_sentence("F", "S", "Refund Customer: Ada?", facts), "Refund Customer: Ada? Total: 450."
+		)
