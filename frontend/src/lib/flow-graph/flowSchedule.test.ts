@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseCron } from './cronFields';
+import { parseCron } from '../flow-trigger/cronFields';
 import { HOUR_STEPS, MINUTE_STEPS, DEFAULT_PICKER, cronProblem, cronToPicker, pickerForKind, pickerToCron } from './flowSchedule';
-import { clock, describeCron, fixedClockTime, hourWord } from './flowScheduleText';
-import { clockInOtherZone, formatWall, instantOf, nextRuns, wallIn } from './flowScheduleRuns';
+import { clock, describeCron, fixedClockTime, hourWord } from '../flow-trigger/scheduleText';
+import { clockInOtherZone, formatWall, instantOf, nextRuns, wallIn } from '../flow-trigger/scheduleRuns';
 
 describe('pickerToCron', () => {
   it('compiles every picker kind to a 5-part cron', () => {

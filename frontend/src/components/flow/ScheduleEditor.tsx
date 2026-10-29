@@ -16,8 +16,8 @@ import {
   type ScheduleKind,
   type SchedulePicker,
 } from '@/lib/flow-graph/flowSchedule';
-import { clock, describeCron, fixedClockTime } from '@/lib/flow-graph/flowScheduleText';
-import { clockInOtherZone, formatWall, nextRuns } from '@/lib/flow-graph/flowScheduleRuns';
+import { clock, describeCron, fixedClockTime } from '@/lib/flow-trigger/scheduleText';
+import { clockInOtherZone, formatWall, nextRuns } from '@/lib/flow-trigger/scheduleRuns';
 import { useSiteTimezone } from '@/lib/serverTime';
 import { allTimeZones, browserTimeNote, browserZone, describeZone } from '@/lib/flow-run/flowTimeZone';
 import { SCHEDULE_EXAMPLES } from '@/lib/flow/flowHelp';
@@ -221,7 +221,7 @@ export function ScheduleEditor({ cron, timeZone, onChange, onZoneChange, disable
                   aria-label={WEEKDAYS[d]}
                   disabled={disabled}
                   data-testid={`flow-field-trigger.schedule-weekday-${d}`}
-                  className="h-8 min-w-11 px-2"
+                  className="min-w-11 px-2"
                   onClick={() => toggleDay(d)}
                 >
                   {SHORT[d]}
@@ -238,7 +238,7 @@ export function ScheduleEditor({ cron, timeZone, onChange, onZoneChange, disable
                 variant="ghost"
                 disabled={disabled}
                 data-testid={`flow-schedule-preset-${p.id}`}
-                className="h-7 px-2 text-xs"
+                className="px-2 text-xs"
                 onClick={() => {
                   setTouched(true);
                   update({ ...picker, weekdays: p.days });

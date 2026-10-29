@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MASK, MAX_SAMPLE_BYTES, inferFields, parseSampleText, redactSample } from './flowSample';
+import { MASK, MAX_SAMPLE_BYTES, inferFields, parseSampleText, redactSample } from './sample';
 
 describe('redactSample', () => {
   it('hides secrets at any depth and keeps the rest', () => {

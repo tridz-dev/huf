@@ -132,28 +132,6 @@ def cron_is_due(cron: str, minute: datetime) -> bool:
 	return croniter(cron, minute + timedelta(seconds=1)).get_prev(datetime) == minute
 
 
-def minute_in_zone(minute: datetime, zone: str | None, system_zone: str | None = None) -> datetime:
-	"""``minute`` (naive, in the site time zone) as the naive wall-clock minute in ``zone``.
-
-	A schedule fires on the clock of the zone the author picked. With no zone, or a name that is not a time zone,
-	the site zone is used, which is the clock ``minute`` is already on.
-	"""
-	if not zone or not isinstance(zone, str):
-		return minute
-	from zoneinfo import ZoneInfo
-
-	try:
-		target = ZoneInfo(zone)
-		if system_zone is None:
-			from frappe.utils import get_system_timezone
-
-			system_zone = get_system_timezone()
-		source = ZoneInfo(system_zone)
-	except Exception:
-		return minute
-	return minute.replace(tzinfo=source).astimezone(target).replace(tzinfo=None)
-
-
 def latest_due_minute(cron: str, now: datetime, window_seconds: int = 60) -> datetime | None:
 	"""The most recent minute at or before ``now`` (and after ``now - window_seconds``) on which ``cron`` fires.
 
@@ -290,6 +268,8 @@ def run_due_schedule_flows(now: datetime | None = None) -> list[str]:
 	"""
 	from frappe.utils import now_datetime
 	from frappe.utils.scheduler import get_scheduler_tick
+
+	from huf.ai.flow.support.schedule_rules import minute_in_zone
 
 	minute = (now or now_datetime()).replace(second=0, microsecond=0)
 	# look back one tick (plus a minute of slack for a late tick); the Flow Run per (node, minute) dedups

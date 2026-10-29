@@ -2,7 +2,7 @@
  * Friendly schedule <-> 5-part cron (`minute hour day month dow`). The Flow node stores `cron` (and, when the author
  * chose one, `time_zone`; see docs/flow/FIELD_CONTRACT.md); the picker compiles to it and reads it back.
  */
-import { CRON_LIMITS, parseCron } from './cronFields';
+import { CRON_LIMITS, parseCron } from '../flow-trigger/cronFields';
 
 export type ScheduleKind = 'minutes' | 'hours' | 'daily' | 'weekly' | 'monthly' | 'custom';
 

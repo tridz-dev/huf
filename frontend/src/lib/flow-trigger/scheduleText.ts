@@ -1,6 +1,6 @@
 /** Plain-language sentence for a schedule: "Every 5 minutes, 9am to 5pm, Monday to Friday". No cron words, no zone. */
 import { parseCron, type CronFields } from './cronFields';
-import { WEEKDAYS, cronProblem, cronToPicker } from './flowSchedule';
+import { WEEKDAYS, cronProblem, cronToPicker } from '../flow-graph/flowSchedule';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 export const clock = (h: number, m: number) => `${pad(h)}:${pad(m)}`;

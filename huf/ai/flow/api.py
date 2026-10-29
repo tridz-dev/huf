@@ -249,9 +249,8 @@ def get_trigger_doctypes() -> list[dict]:
 	"""Document types the current user may pick for a "When a document changes" trigger: ones they can read.
 
 	Returns ``[{name, label, group, module}]`` (``group``: common / yours / apps) ordered for a picker. Child tables, single
-	doctypes, Huf's own bookkeeping and the system's plumbing (permissions, tokens, logs, print settings) are left out:
-	events on them never start a flow or are not something a person would watch. Read from the permission tables, so
-	flow editors who are not System Managers get a list too.
+	doctypes, Huf's own bookkeeping and the system's plumbing (permissions, tokens, logs) are left out. Read from the
+	permission tables, so flow editors who are not System Managers get a list too.
 	"""
 	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
 

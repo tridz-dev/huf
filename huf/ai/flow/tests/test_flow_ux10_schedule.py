@@ -7,7 +7,7 @@ import unittest
 from datetime import datetime
 
 from huf.ai.flow import triggers as T
-from huf.ai.flow.support.schedule_rules import cron_problem, schedule_problems, time_zone_problem
+from huf.ai.flow.support.schedule_rules import cron_problem, minute_in_zone, schedule_problems, time_zone_problem
 from huf.huf.doctype.flow_definition.activation_rules import collect_activation_problems
 
 
@@ -64,20 +64,20 @@ class TestTimezone(unittest.TestCase):
 class TestMinuteInZone(unittest.TestCase):
 	def test_no_zone_or_unknown_zone_keeps_the_site_clock(self):
 		m = datetime(2026, 10, 30, 9, 0)
-		self.assertEqual(T.minute_in_zone(m, None, "Asia/Kolkata"), m)
-		self.assertEqual(T.minute_in_zone(m, "", "Asia/Kolkata"), m)
-		self.assertEqual(T.minute_in_zone(m, "Mars/Base", "Asia/Kolkata"), m)
+		self.assertEqual(minute_in_zone(m, None, "Asia/Kolkata"), m)
+		self.assertEqual(minute_in_zone(m, "", "Asia/Kolkata"), m)
+		self.assertEqual(minute_in_zone(m, "Mars/Base", "Asia/Kolkata"), m)
 
 	def test_converts_wall_clock(self):
 		site_now = datetime(2026, 10, 30, 14, 30)  # Kolkata
-		self.assertEqual(T.minute_in_zone(site_now, "UTC", "Asia/Kolkata"), datetime(2026, 10, 30, 9, 0))
-		self.assertEqual(T.minute_in_zone(site_now, "Asia/Kolkata", "Asia/Kolkata"), site_now)
+		self.assertEqual(minute_in_zone(site_now, "UTC", "Asia/Kolkata"), datetime(2026, 10, 30, 9, 0))
+		self.assertEqual(minute_in_zone(site_now, "Asia/Kolkata", "Asia/Kolkata"), site_now)
 
 	def test_daily_nine_in_other_zone_fires_at_the_right_site_minute(self):
 		# 09:00 UTC is 14:30 in Kolkata: the schedule is due when the site clock reads 14:30.
-		due = T.latest_due_minute("0 9 * * *", T.minute_in_zone(datetime(2026, 10, 30, 14, 30), "UTC", "Asia/Kolkata"))
+		due = T.latest_due_minute("0 9 * * *", minute_in_zone(datetime(2026, 10, 30, 14, 30), "UTC", "Asia/Kolkata"))
 		self.assertEqual(due, datetime(2026, 10, 30, 9, 0))
-		self.assertIsNone(T.latest_due_minute("0 9 * * *", T.minute_in_zone(datetime(2026, 10, 30, 9, 0), "UTC", "Asia/Kolkata")))
+		self.assertIsNone(T.latest_due_minute("0 9 * * *", minute_in_zone(datetime(2026, 10, 30, 9, 0), "UTC", "Asia/Kolkata")))
 
 
 class TestSchema(unittest.TestCase):

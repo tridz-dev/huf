@@ -5,7 +5,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { cn } from '@/lib/utils';
 import { filterDoctypes } from '@/lib/flow-graph/flowTrigger';
-import type { TriggerDoctype } from '@/services/flowTriggerApi';
+import type { TriggerDoctype } from '@/services/flow/triggerApi';
 
 const GROUP_TITLE: Record<TriggerDoctype['group'], string> = {
   common: 'Everyday records',

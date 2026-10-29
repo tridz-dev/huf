@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { DOC_EVENTS, EVENT_WORD, type FlowDocEvent } from '@/lib/flow-graph/flowTrigger';
 import { DOC_EVENT_HELP } from '@/lib/flow/flowHelp';
 import { getTriggerDoctypeInfo } from '@/services/flowApi';
-import { listTriggerDoctypes, type TriggerDoctype } from '@/services/flowTriggerApi';
+import { listTriggerDoctypes, type TriggerDoctype } from '@/services/flow/triggerApi';
 import { str, useNodeForm } from './formKit';
 
 const EVERYDAY: FlowDocEvent[] = ['after_insert', 'on_update', 'on_trash'];

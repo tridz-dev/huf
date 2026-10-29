@@ -1,5 +1,5 @@
 import type { ActionConfig, FlowNodeData, TriggerConfig } from '../../types/flow.types';
-import { describeCron } from '../flow-graph/flowScheduleText';
+import { describeCron } from '../flow-trigger/scheduleText';
 import { getTransformOp } from '../flow-graph/flowTransformOps';
 import { toolLabel } from './flowIntegrations';
 

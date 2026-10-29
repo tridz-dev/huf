@@ -7,6 +7,7 @@ mirrors ``frontend/src/lib/flow-graph/flowSchedule.ts`` so the editor and the se
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 SCHEDULE_TYPE = "trigger.schedule"
@@ -78,6 +79,28 @@ def time_zone_problem(zone) -> str | None:
 	except Exception:
 		return f"{zone!r} is not a time zone name. Use one such as Asia/Kolkata or Europe/London."
 	return None
+
+
+def minute_in_zone(minute: datetime, zone: str | None, system_zone: str | None = None) -> datetime:
+	"""``minute`` (naive, in the site time zone) as the naive wall-clock minute in ``zone``.
+
+	A schedule fires on the clock of the zone the author picked. With no zone, or a name that is not a time zone,
+	the site zone is used, which is the clock ``minute`` is already on.
+	"""
+	if not zone or not isinstance(zone, str):
+		return minute
+	from zoneinfo import ZoneInfo
+
+	try:
+		target = ZoneInfo(zone)
+		if system_zone is None:
+			from frappe.utils import get_system_timezone
+
+			system_zone = get_system_timezone()
+		source = ZoneInfo(system_zone)
+	except Exception:
+		return minute
+	return minute.replace(tzinfo=source).astimezone(target).replace(tzinfo=None)
 
 
 def schedule_problems(defn) -> list[str]:

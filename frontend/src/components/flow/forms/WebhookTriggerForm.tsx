@@ -22,8 +22,8 @@ import { StatusPill } from '../../common/StatusPill';
 import { WEBHOOK_RESPONSES } from '@/lib/flow/flowHelp';
 import { copyText } from '@/lib/clipboard';
 import { SECRET_REVEAL_MS, generateWebhookSecret, maskSecret, webhookUrl, webhookUsage } from '@/lib/flow-graph/flowWebhookUi';
-import { EXAMPLE_REQUEST, inferFields, parseSampleText, redactSample } from '@/lib/flow-graph/flowSample';
-import { getLastWebhookRequest } from '@/services/flowTriggerApi';
+import { EXAMPLE_REQUEST, inferFields, parseSampleText, redactSample } from '@/lib/flow-trigger/sample';
+import { getLastWebhookRequest } from '@/services/flow/triggerApi';
 import { toast } from '@/lib/toast';
 import { useFlowContext } from '@/contexts/FlowContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
@@ -133,7 +133,7 @@ export function WebhookTriggerForm({ nodeId }: { nodeId: string }) {
           <FieldHint testId="flow-hint-webhook-secret">
             A password only the apps that call this flow know. They send it with every request.{revealed ? ' It hides itself again in 30 seconds.' : ''}
           </FieldHint>
-          <Button type="button" variant="ghost" size="sm" className="mt-1 h-7 px-2 text-xs" data-testid="flow-webhook-regenerate" onClick={() => setConfirmNew(true)}>
+          <Button type="button" variant="ghost" size="sm" className="mt-1 px-2 text-xs" data-testid="flow-webhook-regenerate" onClick={() => setConfirmNew(true)}>
             <RefreshCw className="mr-1 h-3 w-3" />
             Make a new secret
           </Button>
