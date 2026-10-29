@@ -220,6 +220,38 @@ def _record_reply_sent(event, provider_message_id) -> None:
             )
     except Exception:
         pass
+    _track_conversation_outbound(event)
+
+
+def _track_conversation_inbound(gateway_doc, event, context) -> None:
+    """Upsert the Channel Conversation for a WhatsApp inbound event. Never raises."""
+    try:
+        from huf.ai.channels import conversation as conv
+
+        if conv.channel_for_provider(gateway_doc.provider) != "whatsapp":
+            return
+        doc = conv.get_or_create_conversation(
+            gateway_doc.name, str(context.get("sender_id") or ""), channel="whatsapp",
+            contact_name=str(context.get("sender_name") or "") or None,
+        )
+        if not doc:
+            return
+        conv.touch_inbound(doc, preview=context.get("message_text"))
+        event.db_set("channel_conversation", doc.name, update_modified=False)
+    except Exception:
+        frappe.log_error(title="Channel Conversation inbound upsert failed")
+
+
+def _track_conversation_outbound(event) -> None:
+    """Stamp last_outbound_at on the event's Channel Conversation. Never raises."""
+    try:
+        name = event.get("channel_conversation")
+        if name:
+            from huf.ai.channels import conversation as conv
+
+            conv.touch_outbound(name)
+    except Exception:
+        frappe.log_error(title="Channel Conversation outbound upsert failed")
 
 
 
@@ -1891,6 +1923,8 @@ def ingest_gateway_event(
     if _filter_reason:
         _reject_gateway_event(_hook_gateway, event, "Rejected", _filter_reason)
         return {"event_name": event.name, "status": "Rejected"}
+
+    _track_conversation_inbound(_hook_gateway, event, context)
 
     gw_hooks.call_all(gw_hooks.ON_EVENT_RECEIVED, _hook_gateway, event)
 
