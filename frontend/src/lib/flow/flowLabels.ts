@@ -10,7 +10,7 @@ export function actionLabel(actionId: string): string {
 }
 
 export function triggerLabel(triggerId: string | undefined): string {
-  return triggerOptions.find((t) => t.id === triggerId)?.name ?? 'Trigger';
+  return triggerOptions.find((t) => t.id === triggerId)?.name ?? 'What starts the flow';
 }
 
 const TOOL_CARD: Record<string, string> = {
@@ -29,6 +29,8 @@ const TOOL_CARD: Record<string, string> = {
 /** Palette card id (data/actions.ts) that produced an action config, so titles can be derived from it. */
 export function actionCardId(config: { type?: unknown; tool_id?: unknown } | undefined): string {
   const type = typeof config?.type === 'string' ? config.type : '';
+  // The canvas config type is `foreach`; the palette card is called `loop`.
+  if (type === 'foreach') return 'loop';
   if (type === 'tool-call' && typeof config?.tool_id === 'string' && TOOL_CARD[config.tool_id]) return TOOL_CARD[config.tool_id];
   return type;
 }
