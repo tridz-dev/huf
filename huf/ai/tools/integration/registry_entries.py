@@ -1,4 +1,4 @@
-"""Registry helpers shared by ``huf.ai.tools._registry``: service stamping and the ``http_request`` tool."""
+"""Registry helpers shared by ``huf.ai.tools._registry``: service stamping."""
 
 
 def with_service(tools: list[dict], service: str) -> list[dict]:
@@ -17,21 +17,3 @@ def with_service(tools: list[dict], service: str) -> list[dict]:
 	gateway chat with admin-enabled groups) is enforced by the tool handler.
 	"""
 	return [{**tool, "service": tool.get("service") or service} for tool in tools]
-
-
-def http_tools(_p) -> list[dict]:
-	"""Tool definitions for the registry; ``_p`` is the registry's parameter-row builder."""
-	return [
-		{
-			"tool_name": "http_request",
-			"description": "Make an outbound HTTP request to a public URL. Private/internal addresses are blocked, redirects are re-validated, Guest users are blocked. Returns JSON {success, status_code, headers, body}; success is false for non-2xx.",
-			"function_path": "huf.ai.http_handler.http_request",
-			"category": "Developer Tools",
-			"parameters": [
-				_p("url", required=True, description="Absolute http(s) URL"),
-				_p("method", description="GET, POST, PUT, PATCH, DELETE or HEAD (default GET)"),
-				_p("headers", type="object", description="Request headers as a JSON object"),
-				_p("body", description="Request body: JSON object/array or raw string"),
-			],
-		},
-	]

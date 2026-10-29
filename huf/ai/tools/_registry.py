@@ -10,7 +10,7 @@ Each entry is a dict with:
 """
 
 from huf.ai.tools import telegram_admin_spec, telegram_tool_spec
-from huf.ai.tools.integration.registry_entries import http_tools, with_service as _with_service
+from huf.ai.tools.integration.registry_entries import with_service as _with_service
 
 # Array parameters whose elements are objects (the doctype row has no item-type field, so the schema
 # builders look the fieldname up here instead of declaring every array as an array of strings).
@@ -691,7 +691,20 @@ FRAPPE_GENERIC_TOOLS = [
     },
 ]
 
-HTTP_TOOLS = http_tools(_p)
+HTTP_TOOLS = [
+	{
+		"tool_name": "http_request",
+		"description": "Make an outbound HTTP request to a public URL. Private/internal addresses are blocked, redirects are re-validated, Guest users are blocked. Returns JSON {success, status_code, headers, body}; success is false for non-2xx.",
+		"function_path": "huf.ai.http_handler.http_request",
+		"category": "Developer Tools",
+		"parameters": [
+			_p("url", required=True, description="Absolute http(s) URL"),
+			_p("method", description="GET, POST, PUT, PATCH, DELETE or HEAD (default GET)"),
+			_p("headers", type="object", description="Request headers as a JSON object"),
+			_p("body", description="Request body: JSON object/array or raw string"),
+		],
+	},
+]
 
 GMAIL_TOOLS = [
 	{
