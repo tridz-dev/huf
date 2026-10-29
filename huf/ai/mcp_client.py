@@ -30,7 +30,7 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
-from huf.ai.mcp_errors import (
+from huf.ai.mcp_support.errors import (
     _extract_retry_after_seconds,
     _format_mcp_error,
     _has_status_code,

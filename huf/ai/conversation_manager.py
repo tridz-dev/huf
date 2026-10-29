@@ -6,7 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import now
 
-from huf.ai.conversation_history import (  # noqa: F401
+from huf.ai.conversation.history import (  # noqa: F401
     _is_tool_message,
     _tool_call_group_intervals,
     _tool_call_ids_from_assistant,
