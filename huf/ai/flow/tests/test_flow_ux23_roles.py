@@ -124,7 +124,10 @@ class TestWithheldFlowCapabilities(IntegrationTestCase):
 			}
 		).insert(ignore_permissions=True)
 		self._cleanup.append(("Huf Role", role.name))
-		frappe.get_doc({"doctype": "Huf User Role", "user": email, "huf_role": role.name, "enabled": 1}).insert(ignore_permissions=True)
+		# Creating the user already made a Huf User Role row: change it through save() so the Frappe role mapping runs.
+		assignment = frappe.get_doc("Huf User Role", email) if frappe.db.exists("Huf User Role", email) else frappe.new_doc("Huf User Role")
+		assignment.update({"user": email, "huf_role": role.name, "enabled": 1})
+		assignment.save(ignore_permissions=True)
 		self._cleanup.append(("Huf User Role", email))
 		frappe.cache().delete_value(f"huf_user_capabilities::{email}")
 		return email

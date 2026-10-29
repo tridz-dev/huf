@@ -123,7 +123,7 @@ export function FlowCanvasPage() {
           <SheetContent
             side="right"
             {...{ [FLOW_PANEL_ATTR]: '' }}
-            className="flex w-full flex-col gap-0 overflow-hidden p-0 max-w-none sm:w-[min(480px,62vw)] sm:max-w-none [&>button]:hidden"
+            className="flex w-full flex-col gap-0 overflow-hidden p-0 max-w-none sm:w-[min(420px,62vw)] sm:max-w-none [&>button]:hidden"
             data-testid="flow-step-sheet"
           >
             <div className="flex shrink-0 items-center gap-2 border-b border-line px-2 py-1.5">
