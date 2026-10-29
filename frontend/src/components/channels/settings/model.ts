@@ -6,6 +6,7 @@ export const SETTINGS_SECTIONS = [
   { key: 'policy', label: 'Policy' },
   { key: 'access', label: 'Access & consent' },
   { key: 'run-as', label: 'Run as' },
+  { key: 'widgets', label: 'Opt-in & widgets' },
   { key: 'hours', label: 'Business hours' },
   { key: 'replies', label: 'Replies & calls' },
   { key: 'danger', label: 'Danger zone' },

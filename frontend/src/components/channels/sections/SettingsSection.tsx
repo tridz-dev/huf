@@ -11,6 +11,7 @@ import {
   AccessPanel, ConnectionPanel, CredentialsPanel, DangerPanel, HoursPanel, PolicyPanel, RepliesPanel, RunAsPanel,
   type PanelProps,
 } from '../settings/panels';
+import { WidgetsPanel } from '../settings/WidgetsPanel';
 import { useSettingsData } from '../settings/useSettingsData';
 
 const PANELS: Record<SettingsKey, (p: PanelProps) => JSX.Element> = {
@@ -19,6 +20,7 @@ const PANELS: Record<SettingsKey, (p: PanelProps) => JSX.Element> = {
   policy: PolicyPanel,
   access: AccessPanel,
   'run-as': RunAsPanel,
+  widgets: WidgetsPanel,
   hours: HoursPanel,
   replies: RepliesPanel,
   danger: DangerPanel,
