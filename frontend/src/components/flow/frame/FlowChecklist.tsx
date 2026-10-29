@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { requestFocus, setChecklistOpen, useFrame } from './frameStore';
 import { finishText, groupByStep } from './frameIssues';
 import { useFlowIssues } from './useFlowIssues';
+import { useFrozenWhilePressed } from './useFrozenWhilePressed';
 
 /**
  * "3 steps to finish": opens the list of everything left to finish in the flow, each with a Fix button that selects
@@ -18,24 +19,29 @@ export function FlowChecklist({ live, className }: { live: boolean; className?: 
   const { setSelectedNode } = useFlowContext();
   const groups = groupByStep(issues);
   const text = finishText(issues);
+  // Hold the header wording while a button is held down, so the controls beside it do not move under the pointer.
+  const shownText = useFrozenWhilePressed(text);
 
   return (
     <Popover open={open && issues.length > 0} onOpenChange={setChecklistOpen}>
       <PopoverAnchor asChild>
-        <span className={cn('inline-flex', className)}>
-          {issues.length > 0 && (
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                data-testid="flow-validation-summary"
-                aria-label={`${text}. Show what is left`}
-                className="inline-flex min-h-8 items-center gap-0.5 whitespace-nowrap rounded px-1 text-xs font-medium text-warning underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span className="hidden xl:inline">{text}</span>
-                <span className="xl:hidden">{issues.length > 0 ? `${text.split(' ')[0]} to finish` : ''}</span>
-                <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-              </button>
-            </PopoverTrigger>
+        <span className={cn('inline-flex items-center gap-1.5', className)}>
+          {shownText !== '' && (
+            <>
+              <span aria-hidden className="text-muted-foreground/60">&middot;</span>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  data-testid="flow-validation-summary"
+                  aria-label={`${shownText}. Show what is left`}
+                  className="inline-flex min-h-8 items-center gap-0.5 whitespace-nowrap rounded px-1 text-xs font-medium text-warning underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="hidden xl:inline">{shownText}</span>
+                  <span className="xl:hidden">{`${shownText.split(' ')[0]} to finish`}</span>
+                  <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                </button>
+              </PopoverTrigger>
+            </>
           )}
         </span>
       </PopoverAnchor>

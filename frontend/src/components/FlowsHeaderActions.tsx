@@ -282,12 +282,7 @@ export function FlowsHeaderActions() {
               saveState === 'error' ? 'Save Failed' :
                 hasUnsavedChanges ? 'Unsaved' : 'Saved'}
           </span>
-          {canManage && issues.length > 0 && (
-            <>
-              <span aria-hidden className="text-muted-foreground/60">&middot;</span>
-              <FlowChecklist live={isPublished} />
-            </>
-          )}
+          {canManage && <FlowChecklist live={isPublished} />}
         </div>
       )}
 
