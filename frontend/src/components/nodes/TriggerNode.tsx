@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { AlertCircle, Zap, Webhook, Clock, Database, Mail, CircleDashed, Trash2, Loader2, CheckCircle2, XCircle, type LucideIcon } from 'lucide-react';
+import { Zap, Webhook, Clock, Database, Mail, CircleDashed, Trash2, Loader2, CheckCircle2, XCircle, type LucideIcon } from 'lucide-react';
 import { FlowNodeData } from '../../types/flow.types';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
@@ -92,9 +92,6 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
               <div className="text-sm font-medium min-w-0 text-card-foreground line-clamp-2 break-words leading-snug" title={data.label} data-testid={`flow-node-title-${id}`}>
                 {data.label}
               </div>
-              {incomplete.length > 0 && (
-                <AlertCircle className="w-4 h-4 text-signal flex-shrink-0" />
-              )}
             </div>
             {data.description && (
               <div className="text-xs text-muted-foreground">{data.description}</div>

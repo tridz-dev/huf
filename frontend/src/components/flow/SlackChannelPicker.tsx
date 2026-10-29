@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Combobox, type ComboboxOption } from '../ui/combobox';
 import { Label } from '../ui/label';
 import { listSlackChannels } from '@/services/integrationApi';
@@ -13,6 +13,11 @@ export function SlackChannelPicker({ value, onPick }: { value: string; onPick: (
   const [options, setOptions] = useState<ComboboxOption[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase().replace(/^#/, '');
+    return (options ?? []).filter((o) => !q || o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q));
+  }, [options, search]);
 
   if (!status.slack?.connected) return null;
 
@@ -39,14 +44,15 @@ export function SlackChannelPicker({ value, onPick }: { value: string; onPick: (
       <Combobox
         id="slack-channel-pick"
         testId="flow-field-slack-channel-pick"
-        options={options ?? []}
+        options={shown}
+        shouldFilter={false}
+        onSearchChange={setSearch}
         value={options?.some((o) => o.value === value) ? value : ''}
         onValueChange={(v) => v && onPick(v)}
         onOpenChange={(open) => { if (open && !options && !loading) void load(); }}
         placeholder={loading ? 'Loading channels...' : 'Search channels...'}
         searchPlaceholder="Search channels..."
-        emptyText={loading ? 'Loading...' : 'No matching channel. Type its name or ID above.'}
-        disabled={loading}
+        emptyText={loading ? 'Loading channels...' : problem ?? 'No matching channel. Type its name or ID above.'}
       />
       {problem && <p className="mt-1 text-xs text-destructive" role="alert" data-testid="flow-slack-channel-picker-error">{problem}</p>}
     </div>
