@@ -193,7 +193,7 @@ class LocalCache:
 	def set_value(self, key, value, expires_in_sec=None):
 		self.d[key] = value
 
-	def get_value(self, key):
+	def get_value(self, key, expires=False):
 		return self.d.get(key)
 
 	def delete_value(self, key):
@@ -212,6 +212,19 @@ def get_cache(cache: Any = None) -> Any:
 		return frappe.cache()
 	except Exception:
 		return _LOCAL
+
+
+def _get(c: Any, key: str) -> Any:
+	"""Read a key that is written with an expiry.
+
+	frappe's ``get_value`` memoises a miss in ``frappe.local.cache`` unless ``expires=True``, and
+	``set_value(expires_in_sec=)`` writes Redis only - so without it a read before the write hides the
+	write for the rest of the request/process.
+	"""
+	try:
+		return c.get_value(key, expires=True)
+	except TypeError:  # a plain test double with ``get_value(key)``
+		return c.get_value(key)
 
 
 def digest(*parts: str) -> str:
@@ -259,7 +272,7 @@ def record(scope: str, errors: list[str], *, cache: Any = None) -> None:
 			pass
 		c = get_cache(cache)
 		for key in (f"huf_tg_blkerr:{digest(scope)}", f"huf_tg_blkfb:{digest(_conversation_of(scope))}"):
-			have = c.get_value(key)
+			have = _get(c, key)
 			merged = (list(have) if isinstance(have, list) else []) + errors
 			c.set_value(key, merged[-10:], expires_in_sec=ERROR_TTL_SECONDS)
 	except Exception:
@@ -269,7 +282,7 @@ def record(scope: str, errors: list[str], *, cache: Any = None) -> None:
 def _pop(key: str, cache: Any) -> list[str]:
 	try:
 		c = get_cache(cache)
-		have = c.get_value(key)
+		have = _get(c, key)
 		if isinstance(have, list) and have:
 			try:
 				c.delete_value(key)

@@ -92,6 +92,10 @@ def _scan_files(patterns, globs, exclude_dirs=("node_modules", "dist", "build", 
 		for p in REPO_ROOT.glob(g):
 			if not p.is_file() or any(d in p.parts for d in exclude_dirs):
 				continue
+			# Unit-test files and e2e mock fixtures carry made-up method strings (huf.a.b, fake
+			# webhook URLs); they are fixtures, not calls into the backend.
+			if ".test." in p.name or ".spec." in p.name or p.name.endswith("Mocks.ts"):
+				continue
 			# Skip comment/JSDoc lines: they mention paths in prose, not calls.
 			text = "\n".join(
 				ln for ln in _read(p).splitlines() if not ln.lstrip().startswith(("*", "//", "/*"))

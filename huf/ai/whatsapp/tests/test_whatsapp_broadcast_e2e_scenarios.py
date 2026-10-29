@@ -106,6 +106,9 @@ def _user(email: str, roles: tuple[str, ...] = ()) -> None:
 
 
 def setUpModule() -> None:
+	if not bridge.is_available():
+		# The scenarios drive real WhatsApp Account / WhatsApp Templates / WhatsApp Message rows.
+		raise unittest.SkipTest("frappe_whatsapp is not installed (needs the WhatsApp Account doctype)")
 	frappe.set_user("Administrator")
 	_purge()
 	frappe.get_doc(
@@ -141,6 +144,8 @@ def setUpModule() -> None:
 
 
 def tearDownModule() -> None:
+	if not bridge.is_available():
+		return
 	frappe.set_user("Administrator")
 	policy.set_values({lim.key: None for lim in policy.LIMITS if lim.editable})
 	_purge()

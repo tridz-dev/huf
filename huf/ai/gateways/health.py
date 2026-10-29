@@ -83,7 +83,9 @@ def _on_event_received(gateway, event) -> None:
 			return
 		key = f"gateway_health:last_event:{name}"
 		cache = _cache()
-		if cache.get_value(key):
+		# expires=True: frappe memoises a miss in frappe.local.cache otherwise, and set_value with an
+		# expiry only writes Redis, so the throttle would never engage within one process.
+		if cache.get_value(key, expires=True):
 			return
 		cache.set_value(key, 1, expires_in_sec=LAST_EVENT_THROTTLE_SECONDS)
 		frappe.db.set_value("Gateway", name, "last_event_at", _now(), update_modified=False)

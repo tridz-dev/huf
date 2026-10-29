@@ -523,7 +523,8 @@ def revoke_binding_sessions(
 	sids = []
 	for sid, raw in rows:
 		try:
-			data = json.loads(raw or "{}")
+			# Frappe stores ``str(data)`` (a Python repr, not JSON) and reads it back with safe_eval.
+			data = frappe.safe_eval(raw or "{}")
 		except Exception:
 			continue
 		m = data.get(MARKER_KEY) if isinstance(data, dict) else None
