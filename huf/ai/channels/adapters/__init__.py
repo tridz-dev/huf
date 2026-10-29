@@ -13,7 +13,10 @@ from typing import Any
 import frappe
 
 # target name -> dotted module path exposing ``Adapter``. Concrete adapter WPs append here.
-ADAPTER_MODULES: dict[str, str] = {"erpnext": "huf.ai.channels.adapters.erpnext"}
+ADAPTER_MODULES: dict[str, str] = {
+	"erpnext": "huf.ai.channels.adapters.erpnext",
+	"helpdesk": "huf.ai.channels.adapters.helpdesk",
+}
 # target name -> Frappe app that must be installed for the adapter to be used.
 TARGET_APPS: dict[str, str] = {"helpdesk": "helpdesk", "crm": "crm", "erpnext": "erpnext"}
 # linked-document doctype -> target, to find the adapter of an already handed-off conversation.

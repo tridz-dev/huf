@@ -267,7 +267,10 @@ doc_events = {
         "after_delete": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
     },
     "Communication": {
-        "after_insert": "huf.ai.channels.handoff_hooks.communication_after_insert",
+        "after_insert": [
+            "huf.ai.gateway_adapters.email.on_communication_inserted",
+            "huf.ai.channels.handoff_hooks.communication_after_insert",
+        ],
     },
     "WhatsApp Templates": {
         "before_validate": "huf.ai.gateway_adapters.whatsapp_template_guard.guard_template_write",
@@ -316,14 +319,13 @@ doc_events = {
     "Knowledge Input": {
         "on_trash": "huf.ai.knowledge.hooks.on_knowledge_input_deleted",
     },
-    "Communication": {
-        "after_insert": "huf.ai.gateway_adapters.email.on_communication_inserted",
-    },
     "Agent Message": {
         "after_insert": "huf.ai.artifact_extraction.on_agent_message_change",
         "on_update": "huf.ai.artifact_extraction.on_agent_message_change",
     },
 }
+
+doc_events["HD Ticket"] = {"on_update": "huf.ai.channels.adapters.helpdesk.on_ticket_update"}
 
 # Scheduled Tasks
 # ---------------
