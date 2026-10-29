@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 from unittest.mock import patch
 
 import frappe
+import huf
 from frappe.tests import IntegrationTestCase
 
 from huf.ai import gateway_service as gsvc
@@ -55,7 +57,7 @@ class TestConsentSchema(IntegrationTestCase):
 		self.assertEqual(meta.get_field("attested_by").options, "User")
 		self.assertEqual(meta.get_field("attestation_note").fieldtype, "Small Text")
 		self.assertEqual(meta.get_field("captured_at").fieldtype, "Datetime")
-		path = frappe.get_module_path("huf", "huf", "doctype", "gateway_consent", "gateway_consent.json")
+		path = os.path.join(os.path.dirname(huf.__file__), "huf", "doctype", "gateway_consent", "gateway_consent.json")
 		with open(path) as fh:
 			field_order = json.load(fh)["field_order"]
 		for name in ("attested_by", "attestation_note", "captured_at"):
