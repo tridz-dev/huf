@@ -240,7 +240,10 @@ def _track_conversation_inbound(gateway_doc, event, context) -> None:
         conv.touch_inbound(doc, preview=context.get("message_text"))
         event.db_set("channel_conversation", doc.name, update_modified=False)
     except Exception:
-        frappe.log_error(title="Channel Conversation inbound upsert failed")
+        try:
+            frappe.log_error(title="Channel Conversation inbound upsert failed")
+        except Exception:
+            pass  # tracking must never raise into ingest, even if logging itself fails
 
 
 def _track_conversation_outbound(event) -> None:
@@ -252,7 +255,10 @@ def _track_conversation_outbound(event) -> None:
 
             conv.touch_outbound(name)
     except Exception:
-        frappe.log_error(title="Channel Conversation outbound upsert failed")
+        try:
+            frappe.log_error(title="Channel Conversation outbound upsert failed")
+        except Exception:
+            pass  # tracking must never raise into ingest, even if logging itself fails
 
 
 
