@@ -51,17 +51,16 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
         id={id}
         icon={cardIcon(data)}
         iconClass={unset ? 'text-signal' : undefined}
-        // The empty trigger says what to do in plain words; it never shows the stored placeholder name.
-        title={unset ? 'Choose what starts this flow' : data.label}
-        titleWraps={unset}
+        // The empty trigger is one short line and one button; it never shows the stored placeholder name.
+        title={unset ? 'Start here' : data.label}
         subtitle={unset ? undefined : triggerSubtitle(data.triggerConfig)}
         frameClass={statusClasses}
         onDelete={canDelete ? handleDeleteClick : undefined}
         deleteLabel="Delete trigger"
         footer={
           unset && canManage ? (
-            <Button size="sm" className="mt-1 w-full" data-testid={`flow-node-choose-trigger-${id}`} title="Choose what starts this flow">
-              Choose a trigger
+            <Button size="sm" className="mt-1 w-full whitespace-nowrap px-2 text-xs" data-testid={`flow-node-choose-trigger-${id}`}>
+              Choose what starts this flow
             </Button>
           ) : (
             <CardStatusLine
