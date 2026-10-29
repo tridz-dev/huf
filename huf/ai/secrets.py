@@ -45,11 +45,9 @@ def in_agent_tool_call() -> bool:
 # Stash
 # ---------------------------------------------------------------------------
 def _rate_limit(user: str) -> None:
-	key = f"huf_secret_stash:{user}"
-	cache = frappe.cache()
-	count = int(cache.get_value(key) or 0) + 1
-	cache.set_value(key, count, expires_in_sec=3600)
-	if count > STASH_RATE_LIMIT_PER_HOUR:
+	since = now_datetime() - timedelta(hours=1)
+	count = frappe.db.count("Huf Secret Stash", {"owner": user, "creation": [">", since]})
+	if count >= STASH_RATE_LIMIT_PER_HOUR:
 		frappe.throw(_("Too many secret stashes; try again later."), frappe.TooManyRequestsError)
 
 
