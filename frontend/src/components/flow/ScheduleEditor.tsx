@@ -50,7 +50,7 @@ interface Props {
   disabled?: boolean;
 }
 
-const every = (n: number, unit: string) => (n === 1 ? unit : `${n} ${unit}s`);
+const every = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`;
 
 /**
  * The schedule picker: friendly choices compile to the 5-part `cron` stored on the trigger. The raw cron box only exists
@@ -324,7 +324,7 @@ export function ScheduleEditor({ cron, timeZone, onChange, onZoneChange, disable
 
       <div className="rounded-md border border-line bg-muted/30 p-2.5 space-y-1" data-testid="flow-schedule-preview">
         <p className="text-sm font-medium text-ink break-words" data-testid="flow-schedule-summary">
-          {valid && zoneKnown ? `${summary} in ${describeZone(zone)}` : summary}
+          {valid && zoneKnown ? `${summary} in ${zone}` : summary}
         </p>
         {browserNote && <p className="text-xs text-muted-foreground" data-testid="flow-schedule-timezone">{browserNote}</p>}
         {runs.length > 0 && (

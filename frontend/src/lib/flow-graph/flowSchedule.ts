@@ -30,7 +30,7 @@ export const DEFAULT_PICKER: SchedulePicker = { kind: 'daily', every: 15, minute
 export function pickerForKind(kind: ScheduleKind, from: SchedulePicker): SchedulePicker {
   if (kind === from.kind) return from;
   if (kind === 'minutes') return { ...from, kind, every: 15 };
-  if (kind === 'hours') return { ...from, kind, every: 1, minute: 0 };
+  if (kind === 'hours') return { ...from, kind, every: 1 };
   return { ...from, kind };
 }
 

@@ -10,7 +10,8 @@ export function actionLabel(actionId: string): string {
 }
 
 export function triggerLabel(triggerId: string | undefined): string {
-  return triggerOptions.find((t) => t.id === triggerId)?.name ?? 'What starts the flow';
+  const option = triggerOptions.find((t) => t.id === triggerId);
+  return option?.nodeTitle ?? option?.name ?? 'What starts the flow';
 }
 
 const TOOL_CARD: Record<string, string> = {
