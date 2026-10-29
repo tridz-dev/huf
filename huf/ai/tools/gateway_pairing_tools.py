@@ -27,8 +27,10 @@ def _require_integrations_manager() -> None:
 def setup_gateway(
 	provider: str,
 	gateway_name: str,
-	credentials: dict[str, str],
+	credentials: dict[str, str] | None = None,
 	*,
+	credentials_ref: str | None = None,
+	non_secret_fields: dict[str, str] | None = None,
 	default_target_type: str = "Agent",
 	default_agent: str | None = None,
 	default_flow: str | None = None,
@@ -51,11 +53,30 @@ def setup_gateway(
 		room_policy: "Allow list", "Open", or "Disabled"
 		room_sender_policy: "Allow list" or "Open"
 		mention_required: Whether group messages require explicit @mentioning the bot
+		credentials_ref: Stash reference from ``huf.ai.secrets.stash_secret``; resolved (and consumed) server-side
+		non_secret_fields: Non-secret credential-row values (e.g. phone_number_id) merged with the stash
 		execution_user: User account to run agent/flow under (defaults to current session user)
 
 	Returns:
 		Dict containing setup result, webhook URL, and status details.
 	"""
+	from huf.ai.secrets import in_agent_tool_call, resolve_and_consume
+
+	if credentials and in_agent_tool_call():
+		return {
+			"success": False,
+			"error": "Plaintext credentials are not accepted from an agent. Collect them with the secret form and pass credentials_ref.",
+		}
+	if credentials_ref:
+		if credentials:
+			return {"success": False, "error": "Pass either credentials or credentials_ref, not both."}
+		try:
+			credentials = resolve_and_consume(credentials_ref, frappe.session.user)
+		except (frappe.ValidationError, frappe.PermissionError) as exc:
+			return {"success": False, "error": str(exc)}
+	if non_secret_fields:
+		credentials = {**(credentials or {}), **{k: str(v) for k, v in non_secret_fields.items()}}
+
 	if not provider or not gateway_name or not credentials:
 		return {"success": False, "error": "Provider, gateway_name, and credentials are required."}
 

@@ -420,6 +420,9 @@ async def invoke_tool(
 	if telemetry:
 		telemetry_doc = _start_tool_call_telemetry(tool_name, args_dict, ctx)
 
+	from huf.ai.secrets import _in_agent_tool_call
+
+	_agent_tok = _in_agent_tool_call.set(True)
 	try:
 		sig = inspect.signature(handler)
 		accepts_kwargs = any(
@@ -458,6 +461,8 @@ async def invoke_tool(
 	except Exception as e:
 		logger.debug(f"tool_invocation: error invoking '{tool_name}': {e!s}\n{frappe.get_traceback()}")
 		tool_result = ToolResult(success=False, error=str(e))
+	finally:
+		_in_agent_tool_call.reset(_agent_tok)
 
 	if telemetry_doc is not None:
 		_finalize_tool_call_telemetry(telemetry_doc, tool_result)

@@ -341,6 +341,7 @@ scheduler_events = {
         "huf.ai.gateway_service.cleanup_stale_access_entries",
         "huf.ai.flow.state.purge_expired",
         "huf.ai.whatsapp.send_keys.purge_expired",
+        "huf.ai.secrets.purge_expired",
     ],
     "cron": {
         "*/1 * * * *": [
