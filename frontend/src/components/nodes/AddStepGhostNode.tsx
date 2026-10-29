@@ -48,7 +48,7 @@ export const AddStepGhostNode = memo(({ data }: NodeProps<AddStepGhostNodeData>)
         }}
         className={cn(
           NODE_CARD_BASE,
-          'h-[72px] border-dashed border-steel-soft/60 bg-panel/40 shadow-none cursor-pointer hover:border-steel-soft hover:bg-panel/60 transition-colors'
+          'h-[72px] border-dashed border-steel-soft bg-panel/40 shadow-none cursor-pointer hover:border-steel-soft hover:bg-panel/60 transition-colors'
         )}
       >
         <div className="flex items-center gap-3">
