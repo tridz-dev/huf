@@ -10,6 +10,8 @@ import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { actionCardId, actionLabel } from '@/lib/flow/flowLabels';
 import type { FlowNode } from '../../../types/flow.types';
 import { useFrame } from './frameStore';
+import { Pressable } from './Pressable';
+import { useViewport } from '@/lib/ui/responsive';
 import { canDisableStep, canDuplicateStep, duplicateStep } from './stepActions';
 
 /** The step's kind in small grey words under its name: "Trigger", "End", or what the step does ("Condition"). */
@@ -26,6 +28,7 @@ export function stepKindLabel(node: Pick<FlowNode, 'data'>): string {
 export function StepHeader({ node, onClose, onDelete }: { node: FlowNode; onClose?: () => void; onDelete: () => void }) {
   const { updateNodeData, addNode, setSelectedNode } = useFlowContext();
   const { canManage } = useFlowPermissions();
+  const { isPhone } = useViewport();
   const hint = useFrame((s) => s.hint);
   const [menuOpen, setMenuOpen] = useState(false);
   const Icon = cardIcon(node.data);
@@ -55,14 +58,13 @@ export function StepHeader({ node, onClose, onDelete }: { node: FlowNode; onClos
           {hint ? (
             <Popover>
               <PopoverTrigger asChild>
-                <button
-                  type="button"
+                <Pressable
                   aria-label="About this step"
                   data-testid="flow-step-info"
                   className="inline-flex h-4 w-4 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Info className="h-3 w-3" aria-hidden />
-                </button>
+                </Pressable>
               </PopoverTrigger>
               <PopoverContent align="start" className="w-72 max-w-[calc(100vw-2rem)] text-xs leading-relaxed text-muted-foreground" data-testid="flow-config-hint">
                 {hint}
@@ -71,7 +73,7 @@ export function StepHeader({ node, onClose, onDelete }: { node: FlowNode; onClos
           ) : null}
         </div>
       </div>
-      {canManage && (
+      {canManage && !isPhone && (
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon-sm" aria-label="More actions for this step" data-testid="flow-step-menu" className="shrink-0 text-muted-foreground">

@@ -16,6 +16,7 @@ import { nodeKind } from '@/lib/flow-graph/flowValidation';
 import { cn } from '@/lib/utils';
 import type { FlowNode } from '../../../types/flow.types';
 import { FieldError } from '../forms/formKit';
+import { Pressable } from './Pressable';
 
 type Cfg = Record<string, unknown>;
 
@@ -149,9 +150,11 @@ function ViewAsJson({ node }: { node: FlowNode }) {
   }, [open, activeFlow, node.id]);
   return (
     <Collapsible open={open} onOpenChange={setOpen} data-testid="flow-view-as-json">
-      <CollapsibleTrigger type="button" className="flex min-h-8 w-full items-center gap-1 rounded-md text-left text-xs font-medium text-muted-foreground hover:text-foreground" data-testid="flow-view-as-json-toggle">
-        <ChevronRight className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-90')} aria-hidden />
-        View as JSON
+      <CollapsibleTrigger asChild data-testid="flow-view-as-json-toggle">
+        <Pressable className="flex min-h-8 w-full items-center gap-1 rounded-md text-left text-xs font-medium text-muted-foreground hover:text-foreground">
+          <ChevronRight className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-90')} aria-hidden />
+          View as JSON
+        </Pressable>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-2 space-y-2">
         <p className="text-meta text-muted-foreground">The step exactly as the flow stores it. For reading and copying only.</p>

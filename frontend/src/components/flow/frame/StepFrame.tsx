@@ -8,6 +8,7 @@ import { ActionConfigForm, TriggerConfigForm } from '../NodeConfigForms';
 import { nodeKind } from '@/lib/flow-graph/flowValidation';
 import type { FlowNode, FlowNodeData } from '../../../types/flow.types';
 import { ConnectionPanel } from './ConnectionPanel';
+import { Pressable } from './Pressable';
 import { clearFocusRequest, requestFocus, useFrame } from './frameStore';
 import { issueTab, issuesForStep, tabsFor, type FrameTab } from './frameIssues';
 import { focusFieldIn } from './focusField';
@@ -75,11 +76,10 @@ export function StepFrame({ node, onClose, onDelete }: { node: FlowNode; onClose
       {tabs.length > 1 && (
         <div role="tablist" aria-label="Step sections" className="flex h-10 shrink-0 items-end gap-5 border-b border-border px-3.5" data-testid="flow-sidebar-tabs">
           {tabs.map((t) => (
-            <button
+            <Pressable
               key={t}
               id={tabIds[t]}
               role="tab"
-              type="button"
               aria-selected={tab === t}
               aria-controls={`${tabIds[t]}-panel`}
               data-testid={`flow-sidebar-tab-${t}`}
@@ -91,7 +91,7 @@ export function StepFrame({ node, onClose, onDelete }: { node: FlowNode; onClose
             >
               {TAB_LABEL[t]}
               {count(t) > 0 && <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-label={`${count(t)} to finish`} data-testid={`flow-sidebar-tab-${t}-dot`} />}
-            </button>
+            </Pressable>
           ))}
         </div>
       )}

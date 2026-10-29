@@ -1,6 +1,7 @@
 import { AlertCircle, CheckCircle2, ChevronRight, PowerOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { stripText } from './frameIssues';
+import { Pressable } from './Pressable';
 
 /**
  * 36px strip under the panel header: "2 things to finish >" (amber; click jumps to the first one) or "Ready" (green).
@@ -9,8 +10,7 @@ import { stripText } from './frameIssues';
 export function StatusStrip({ count, disabled, onJump }: { count: number; disabled?: boolean; onJump: () => void }) {
   if (count > 0) {
     return (
-      <button
-        type="button"
+      <Pressable
         onClick={onJump}
         data-testid="flow-status-strip"
         data-state="todo"
@@ -23,7 +23,7 @@ export function StatusStrip({ count, disabled, onJump }: { count: number; disabl
         <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
         <span className="min-w-0 flex-1 truncate">{stripText(count)}</span>
         <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />
-      </button>
+      </Pressable>
     );
   }
   if (disabled) {

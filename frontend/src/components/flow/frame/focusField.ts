@@ -19,7 +19,7 @@ export function focusFieldIn(root: ParentNode, kind: string, field: string): boo
   const el = findFieldElement(root, kind, field);
   if (!el) {
     // It may sit in a folded "More options": open those and look again next frame.
-    root.querySelectorAll<HTMLElement>('[data-more-options][data-state="closed"] > button').forEach((b) => b.click());
+    root.querySelectorAll<HTMLElement>('[data-more-options][data-state="closed"] > [role="button"]').forEach((b) => b.click());
     return false;
   }
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
