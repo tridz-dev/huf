@@ -163,7 +163,7 @@ class TestWebhookSecretIsHidden(UX1Base):
 		self.assertTrue(rows)
 		self.assertNotIn(SECRET, json.dumps(rows, default=str))
 		try:
-			value = frappe.client.get_value("Flow Definition", self.flow_id, "definition_json")
+			value = frappe.client.get_value("Flow Definition", "definition_json", self.flow_id)
 		except frappe.PermissionError:
 			value = None
 		self.assertNotIn(SECRET, json.dumps(value, default=str))
