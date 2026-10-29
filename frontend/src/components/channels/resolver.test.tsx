@@ -66,7 +66,7 @@ describe('channels resolver', () => {
   });
 
   it('prefers the last-used gateway', async () => {
-    localStorage.setItem('huf.channels.whatsapp.lastGateway', 'GW-2');
+    localStorage.setItem('huf:channels:whatsapp:lastGateway', 'GW-2');
     summary([
       { name: 'GW-1', enabled: true },
       { name: 'GW-2', enabled: true },
@@ -102,8 +102,8 @@ describe('channels resolver', () => {
   });
 
   it('uses the per-channel last-used gateway', async () => {
-    localStorage.setItem('huf.channels.telegram.lastGateway', 'TG-2');
-    localStorage.setItem('huf.channels.whatsapp.lastGateway', 'GW-1');
+    localStorage.setItem('huf:channels:telegram:lastGateway', 'TG-2');
+    localStorage.setItem('huf:channels:whatsapp:lastGateway', 'GW-1');
     summary([{ name: 'GW-1', enabled: true }]);
     tg([{ name: 'TG-1', enabled: true }, { name: 'TG-2', enabled: true }]);
     open('/channels/telegram');

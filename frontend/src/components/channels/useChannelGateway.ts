@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { isChannelKey, type ChannelKey } from './channelsMeta';
 
-const key = (channel: string) => `huf.channels.${channel}.lastGateway`;
+const key = (channel: string) => `huf:channels:${channel}:lastGateway`;
 
 export function getLastGateway(channel: string = 'whatsapp'): string | null {
   try {
