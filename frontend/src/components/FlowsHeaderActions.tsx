@@ -364,7 +364,6 @@ export function FlowsHeaderActions() {
         <span data-testid={isPublished ? 'flow-published-badge' : 'flow-draft-badge'} className="inline-flex">
           <StatusPill
             kind={flowStatusKind(activeFlow.status, issues.length)}
-            compact
             data-testid="flow-status-pill"
             title={isPublished ? 'Live: the trigger is on' : 'Draft: the trigger is off until you publish'}
           />
