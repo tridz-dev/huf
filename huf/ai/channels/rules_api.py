@@ -7,6 +7,7 @@ import json
 import frappe
 from frappe import _
 
+from huf.ai.channels.rules import rule_errors
 from huf.permissions import has_capability
 
 _FIELDS = ("rule_type", "match_value", "attribute", "target_type", "target", "priority", "enabled")
@@ -29,6 +30,9 @@ def save_rules(gateway: str, rules) -> list[dict]:
 	_check()
 	if isinstance(rules, str):
 		rules = json.loads(rules or "[]")
+	problems = rule_errors(rules or [])
+	if problems:
+		frappe.throw("<br>".join(problems), frappe.ValidationError, title=_("Invalid routing rules"))
 	doc = frappe.get_doc("Gateway", gateway)
 	doc.set("routing_rules", [])
 	for r in rules or []:

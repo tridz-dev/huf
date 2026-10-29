@@ -111,6 +111,7 @@ class TestRoutingRuleTargets(IntegrationTestCase):
 				"doctype": "Agent",
 				"agent_name": name,
 				"agent_modality": "Text",
+				"instructions": "Routing test agent.",
 				"disabled": disabled,
 			}
 		)
