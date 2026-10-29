@@ -2903,11 +2903,31 @@ GATEWAY_SETUP_TOOLS = [
 ]
 
 
+CRM_LEAD_TOOLS = [
+	{
+		"tool_name": "create_lead",
+		"description": (
+			"Create (or find) the Frappe CRM Lead for the current WhatsApp contact, matched by phone. "
+			"Only works inside a gateway conversation and when Frappe CRM is installed. "
+			"Arguments: name (optional), email (optional), note (optional, added to the lead)."
+		),
+		"function_path": "huf.ai.channels.tools_crm.handle_create_lead",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("name", description="Contact's name"),
+			_p("email", description="Contact's email"),
+			_p("note", description="Note to add to the lead"),
+		],
+	},
+]
+
+
 ALL_INTEGRATION_TOOLS = (
 	# Platform capabilities — no external account to connect.
 	RECIPIENT_TOOLS
 	+ HANDOFF_TOOLS
 	+ HANDOFF_HUMAN_TOOLS
+	+ CRM_LEAD_TOOLS
 	+ CRM_TOOLS
 	+ HELPDESK_TOOLS
 	+ RAVEN_TOOLS
