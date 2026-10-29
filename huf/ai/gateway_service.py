@@ -778,6 +778,16 @@ def _record_opt_in_linked(gateway, sender_id: str) -> None:
         _record_opt_in(gateway, linked)
 
 
+def _record_inbound_consent(gateway, sender_id: str) -> None:
+    """Inbound START opt-in as a Gateway Consent row (source inbound). Never raises: ingest must not fail on it."""
+    try:
+        from huf.ai.whatsapp import account_events
+
+        account_events.record_inbound_opt_in(gateway.name, sender_id)
+    except Exception:
+        frappe.log_error(title="WhatsApp inbound opt-in consent not recorded", message=frappe.get_traceback())
+
+
 def _record_opt_in(gateway, sender_id: str) -> None:
     row = _live_sender_entry(gateway, sender_id)
     if not row or row["state"] != ENTRY_STATE_OPTED_OUT:
@@ -846,6 +856,8 @@ def _handle_consent_event(event, gateway, context: dict[str, Any]) -> dict | Non
     if state == ENTRY_STATE_OPTED_OUT:
         if _text_matches_keywords(gateway, text, "opt_in_keywords", DEFAULT_OPT_IN_KEYWORDS):
             _record_opt_in_linked(gateway, sender_id)
+            if gateway.provider == "WhatsApp":
+                _record_inbound_consent(gateway, sender_id)
             _send_plain_reply(gateway, sender_id, conversation_id, DEFAULT_OPT_IN_REPLY)
             return _reject_event(event, "Sender opted back in (START); no agent run")
         return _reject_event(event, "Sender has opted out")
