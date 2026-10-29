@@ -234,6 +234,13 @@ def cancel(broadcast: str) -> dict:
 	return {"broadcast": broadcast, "status": "Cancelled"}
 
 
+def hold_scheduled(gateway: str, reason: str = "kill_switch") -> list[str]:
+	"""Kill switch companion: Scheduled broadcasts of the gateway return to Draft."""
+	from huf.ai.whatsapp.broadcast import schedule
+
+	return schedule.hold_scheduled(gateway, reason)
+
+
 def pause_all(gateway: str, reason: str = "kill_switch") -> list[str]:
 	"""Kill switch: pause every Running broadcast on the gateway."""
 	frappe.flags.broadcast_pause = reason

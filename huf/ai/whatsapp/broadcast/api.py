@@ -494,9 +494,7 @@ def pause_all_broadcasts(gateway: str | None = None) -> dict[str, Any]:
 	from huf.ai.whatsapp.broadcast import runner as broadcast_runner
 
 	result = broadcast_runner.pause_all(gateway, "kill_switch")
-	from huf.ai.whatsapp.broadcast import schedule as broadcast_schedule
-
-	broadcast_schedule.hold_scheduled(gateway)
+	broadcast_runner.hold_scheduled(gateway)
 	for name in running:
 		_broadcast_audit(name, "pause_all", gateway=gateway)
 	frappe.logger(_BROADCAST_LOG).info(f"gateway={gateway} action=pause_all user={frappe.session.user} paused={len(running)}")
