@@ -220,7 +220,7 @@ class TestExecForeach(unittest.TestCase):
 		result = flow_engine._exec_foreach(_FakeFlowRun(), foreach_node, foreach_node["config"], settings)
 
 		self.assertEqual(result["status"], "failed")
-		self.assertIn("max_iterations", result["error"])
+		self.assertIn("more than its limit of 2", result["error"])
 
 
 class TestParallelRemoved(unittest.TestCase):
