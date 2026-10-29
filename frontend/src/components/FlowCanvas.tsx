@@ -500,9 +500,15 @@ export function FlowCanvas({
     [ghostNodes, openEnds]
   );
 
+  // The highlighted step always follows the selection the side panel shows. A pending edit that is written to the flow just
+  // as another step is clicked re-syncs the canvas from the flow (which carries no selection): without this the panel showed
+  // the clicked step while the canvas showed none selected, with no delete button on it and the keyboard focus lost.
   const renderedNodes = useMemo(
-    () => [...nodes, ...(ghostNodes as unknown as Node<FlowNodeData>[])],
-    [nodes, ghostNodes]
+    () => [
+      ...nodes.map((n) => ((n.selected ?? false) === (n.id === selectedNodeId) ? n : { ...n, selected: n.id === selectedNodeId })),
+      ...(ghostNodes as unknown as Node<FlowNodeData>[]),
+    ],
+    [nodes, ghostNodes, selectedNodeId]
   );
 
   // Real edges get the hover "+" insert affordance (mid-chain insertion);
