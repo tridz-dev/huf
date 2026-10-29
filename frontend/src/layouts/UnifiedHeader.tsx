@@ -164,7 +164,8 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
         {/* Approvals are only asked for by people who use flows: for anyone else the server would refuse every poll. */}
         {hasCapability('flows.use') && <ApprovalsBell />}
         {(hasCapability('execution.approve') || hasCapability('ssh.approve')) && (
-          <ExecutionApprovalsBell />
+          // Code-run approvals are an administrator's desk job: on a phone's second header row there is no room for them.
+          <span className={cn('contents', stackOnPhone && 'max-md:hidden')}><ExecutionApprovalsBell /></span>
         )}
         {actions}
       </div>

@@ -24,6 +24,7 @@ export function useStepPanelLayout(root: RefObject<HTMLElement | null>, windowWi
   const layout = panelLayout(available, wanted);
   const panelWidth = layout.mode === 'docked' ? layout.width : wanted;
 
+  // No dependency list on purpose: the panel mounts after the flow has loaded, and its width must be set whenever it appears.
   useLayoutEffect(() => {
     if (panelRef.current) panelRef.current.style.width = `${panelWidth}px`;
     // Toasts are centred on the canvas, not on the window: shift them by half the difference of what sits left and right of it.
@@ -32,10 +33,8 @@ export function useStepPanelLayout(root: RefObject<HTMLElement | null>, windowWi
     const doc = document.documentElement;
     if (docked && rootEl) doc.style.setProperty('--flow-toast-shift', `${Math.round((rootEl.getBoundingClientRect().left - panelWidth) / 2)}px`);
     else doc.style.removeProperty('--flow-toast-shift');
-    return () => {
-      doc.style.removeProperty('--flow-toast-shift');
-    };
-  }, [layout.mode, panelWidth, available, root]);
+  });
+  useLayoutEffect(() => () => { document.documentElement.style.removeProperty('--flow-toast-shift'); }, []);
 
   const resize = useCallback((width: number) => setWanted(clampPanelWidth(width)), []);
   const commit = useCallback(() => setWanted((w) => { storePanelWidth(w); return w; }), []);

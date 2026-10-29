@@ -141,7 +141,7 @@ export function FlowCanvasPage() {
             )}
             <div className="min-h-0 flex-1 overflow-hidden">
               {/* On a phone the step forms are for reading: every field is switched off. */}
-              <fieldset disabled={isPhone} className="contents">
+              <fieldset disabled={isPhone} className="contents [&_input:disabled]:!opacity-100 [&_input:disabled]:text-ink [&_textarea:disabled]:!opacity-100 [&_textarea:disabled]:text-ink [&_[role=combobox]:disabled]:!opacity-100 [&_[role=combobox]:disabled]:text-ink">
                 <RightSidebar variant="sheet" onToggle={closeSheet} />
               </fieldset>
             </div>
