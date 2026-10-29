@@ -4,7 +4,7 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "enabled", "mode", "facebook_app_id", "config_id", "graph_version", "app_secret",
+  "enabled", "mode", "facebook_app_id", "config_id", "graph_version", "app_secret", "broker_verify_token",
   "broker_section", "broker_url", "tenant_id", "broker_api_key",
   "tenants_section", "allowed_tenants"
  ],
@@ -15,6 +15,7 @@
   {"fieldname": "config_id", "fieldtype": "Data", "label": "Embedded Signup Configuration ID"},
   {"default": "v21.0", "fieldname": "graph_version", "fieldtype": "Data", "label": "Graph API Version"},
   {"depends_on": "eval:doc.mode!='broker'", "fieldname": "app_secret", "fieldtype": "Password", "label": "Facebook App Secret"},
+  {"depends_on": "eval:doc.mode=='broker_server'", "fieldname": "broker_verify_token", "fieldtype": "Password", "label": "Broker Webhook Verify Token"},
   {"depends_on": "eval:doc.mode=='broker'", "fieldname": "broker_section", "fieldtype": "Section Break", "label": "Broker (Huf Cloud)"},
   {"fieldname": "broker_url", "fieldtype": "Data", "label": "Broker URL"},
   {"fieldname": "tenant_id", "fieldtype": "Data", "label": "Tenant ID"},

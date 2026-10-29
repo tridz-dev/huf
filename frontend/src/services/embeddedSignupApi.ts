@@ -41,12 +41,16 @@ export interface SignupSettings {
   tenant_id: string;
   app_secret_set: boolean;
   broker_api_key_set: boolean;
+  broker_verify_token_set: boolean;
+  /** broker_server: the URL to set as the Meta app's webhook callback. */
+  broker_callback_url: string;
 }
 
-export type SignupSettingsPatch = Partial<Omit<SignupSettings, 'app_secret_set' | 'broker_api_key_set'>> & {
+export type SignupSettingsPatch = Partial<Omit<SignupSettings, 'app_secret_set' | 'broker_api_key_set' | 'broker_verify_token_set' | 'broker_callback_url'>> & {
   /** Write-only: omit or leave empty to keep the stored value. */
   app_secret?: string;
   broker_api_key?: string;
+  broker_verify_token?: string;
 };
 
 export async function getSignupConfig(): Promise<SignupConfig> {

@@ -6,7 +6,7 @@
  "field_order": ["tenant_id", "outcome", "reason", "waba_id", "ip_address"],
  "fields": [
   {"fieldname": "tenant_id", "fieldtype": "Data", "in_list_view": 1, "label": "Tenant ID", "read_only": 1},
-  {"fieldname": "outcome", "fieldtype": "Select", "in_list_view": 1, "label": "Outcome", "options": "Success\nRejected\nFailed", "read_only": 1},
+  {"fieldname": "outcome", "fieldtype": "Select", "in_list_view": 1, "label": "Outcome", "options": "Success\nRejected\nFailed\nForwarded\nDropped", "read_only": 1},
   {"fieldname": "reason", "fieldtype": "Data", "label": "Reason", "read_only": 1},
   {"fieldname": "waba_id", "fieldtype": "Data", "label": "WABA ID", "read_only": 1},
   {"fieldname": "ip_address", "fieldtype": "Data", "label": "IP Address", "read_only": 1}

@@ -1,0 +1,27 @@
+{
+ "actions": [],
+ "autoname": "field:waba_id",
+ "creation": "2026-10-29 13:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["tenant_id", "waba_id", "phone_number_id", "callback_url"],
+ "fields": [
+  {"fieldname": "tenant_id", "fieldtype": "Data", "in_list_view": 1, "label": "Tenant ID", "reqd": 1, "read_only": 1},
+  {"fieldname": "waba_id", "fieldtype": "Data", "in_list_view": 1, "label": "WABA ID", "reqd": 1, "unique": 1, "read_only": 1},
+  {"fieldname": "phone_number_id", "fieldtype": "Data", "in_list_view": 1, "label": "Phone Number ID", "read_only": 1},
+  {"fieldname": "callback_url", "fieldtype": "Data", "label": "Tenant Webhook Callback URL", "read_only": 1}
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-10-29 13:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Embedded Signup WABA",
+ "owner": "Administrator",
+ "permissions": [
+  {"delete": 1, "read": 1, "report": 1, "role": "System Manager"}
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -21,6 +21,7 @@ export function FacebookSignupPanel() {
   const [s, setS] = useState<SignupSettings | null>(null);
   const [appSecret, setAppSecret] = useState('');
   const [brokerKey, setBrokerKey] = useState('');
+  const [verifyToken, setVerifyToken] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -57,10 +58,12 @@ export function FacebookSignupPanel() {
         tenant_id: s.tenant_id,
         ...(appSecret ? { app_secret: appSecret } : {}),
         ...(brokerKey ? { broker_api_key: brokerKey } : {}),
+        ...(verifyToken ? { broker_verify_token: verifyToken } : {}),
       });
       setS(next);
       setAppSecret('');
       setBrokerKey('');
+      setVerifyToken('');
       toast.success('Facebook signup settings saved');
     } catch (e) {
       setError(getFrappeErrorMessage(e) || 'Could not save.');
@@ -120,6 +123,20 @@ export function FacebookSignupPanel() {
                   placeholder={s.broker_api_key_set ? 'Leave empty to keep the current key' : ''} />
               )}
             </Field>
+          </>
+        )}
+        {s.mode === 'broker_server' && (
+          <>
+            <Field label="Broker webhook callback URL" size="sm">
+              {(fp) => <Input {...fp} readOnly value={s.broker_callback_url} onFocus={(e) => e.currentTarget.select()} />}
+            </Field>
+            <Field label={`Webhook verify token (${s.broker_verify_token_set ? 'set' : 'not set'})`} size="sm">
+              {(fp) => (
+                <Input {...fp} type="password" autoComplete="new-password" value={verifyToken} onChange={(e) => setVerifyToken(e.target.value)}
+                  placeholder={s.broker_verify_token_set ? 'Leave empty to keep the current token' : ''} />
+              )}
+            </Field>
+            <p className="text-xs text-steel">Set the callback URL and verify token as the webhook of your Meta app. Events are verified here and forwarded to the tenant that owns each WhatsApp account.</p>
           </>
         )}
         {s.mode === 'broker_server' && (
