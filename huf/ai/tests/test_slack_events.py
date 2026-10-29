@@ -179,6 +179,12 @@ class TestSlackEventsHandler(unittest.TestCase):
 			p.start()
 			self.addCleanup(p.stop)
 
+		# When another module already imported the real `frappe.rate_limiter` (so the identity
+		# stub above was not installed), the real decorator needs an identity to bucket on.
+		_prev_ip = getattr(frappe.local, "request_ip", None)
+		frappe.local.request_ip = "127.0.0.1"
+		self.addCleanup(setattr, frappe.local, "request_ip", _prev_ip)
+
 	def _call(self, payload: dict | bytes, headers: dict | None = None, gateway_name=GATEWAY, sign_it=True):
 		body = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
 		if headers is None:
