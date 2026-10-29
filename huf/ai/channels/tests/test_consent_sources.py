@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 import frappe
@@ -54,8 +55,11 @@ class TestConsentSchema(IntegrationTestCase):
 		self.assertEqual(meta.get_field("attested_by").options, "User")
 		self.assertEqual(meta.get_field("attestation_note").fieldtype, "Small Text")
 		self.assertEqual(meta.get_field("captured_at").fieldtype, "Datetime")
+		path = frappe.get_module_path("huf", "huf", "doctype", "gateway_consent", "gateway_consent.json")
+		with open(path) as fh:
+			field_order = json.load(fh)["field_order"]
 		for name in ("attested_by", "attestation_note", "captured_at"):
-			self.assertIn(name, meta.field_order or [], f"{name} missing from field_order")
+			self.assertIn(name, field_order, f"{name} missing from field_order")
 
 
 class TestInboundOptIn(_Fixture, IntegrationTestCase):
@@ -70,7 +74,7 @@ class TestInboundOptIn(_Fixture, IntegrationTestCase):
 		self.assertIsNotNone(rows[0]["captured_at"])
 
 	def test_plain_inbound_message_records_no_consent(self):
-		gateway = self.make_gateway("P", policy="Open")
+		gateway = self.make_gateway("P", policy="Allow list")
 		self.ingest(gateway, FRESH, "hello there")
 		self.assertEqual(self.consent_rows(gateway, FRESH), [])
 
@@ -92,14 +96,14 @@ class TestImportOptIns(_Fixture, IntegrationTestCase):
 		frappe.set_user("Administrator")
 
 	def test_import_requires_attestation(self):
-		gateway = self.make_gateway("P", policy="Open")
+		gateway = self.make_gateway("P", policy="Allow list")
 		for note in ("", "   ", None):
 			with self.assertRaises(frappe.ValidationError):
 				consent_api.import_opt_ins(gateway=gateway, rows=[FRESH], attestation_note=note)
 		self.assertEqual(self.consent_rows(gateway, FRESH), [])
 
 	def test_import_records_import_source_and_attester(self):
-		gateway = self.make_gateway("P", policy="Open")
+		gateway = self.make_gateway("P", policy="Allow list")
 		result = consent_api.import_opt_ins(gateway=gateway, rows=[FRESH], attestation_note=NOTE)
 		self.assertEqual(result["created"], 1)
 		rows = self.consent_rows(gateway, FRESH)
@@ -117,7 +121,7 @@ class TestImportOptIns(_Fixture, IntegrationTestCase):
 		self.assertTrue(gsvc.is_opted_out(gateway, PHONE))
 
 	def test_csv_string_with_header_and_counts(self):
-		gateway = self.make_gateway("P", policy="Open")
+		gateway = self.make_gateway("P", policy="Allow list")
 		csv_text = f"phone\n{FRESH}\n{OTHER}\nnot-a-number\n"
 		result = consent_api.import_opt_ins(gateway=gateway, rows=csv_text, attestation_note=NOTE)
 		self.assertEqual(result["created"], 2)
@@ -126,13 +130,13 @@ class TestImportOptIns(_Fixture, IntegrationTestCase):
 		self.assertEqual(result["skipped_opted_out"], 0)
 
 	def test_second_import_counts_as_updated(self):
-		gateway = self.make_gateway("P", policy="Open")
+		gateway = self.make_gateway("P", policy="Allow list")
 		consent_api.import_opt_ins(gateway=gateway, rows=[FRESH], attestation_note=NOTE)
 		result = consent_api.import_opt_ins(gateway=gateway, rows=[{"phone": FRESH}], attestation_note=NOTE)
 		self.assertEqual((result["created"], result["updated"]), (0, 1))
 
 	def test_import_permission_gate(self):
-		gateway = self.make_gateway("P", policy="Open")
+		gateway = self.make_gateway("P", policy="Allow list")
 		with patch("huf.ai.channels.consent_api.has_capability", return_value=False):
 			with self.assertRaises(frappe.PermissionError):
 				consent_api.import_opt_ins(gateway=gateway, rows=[FRESH], attestation_note=NOTE)
@@ -145,7 +149,7 @@ class TestRecordOptIn(_Fixture, IntegrationTestCase):
 		frappe.set_user("Administrator")
 
 	def test_api_source_default(self):
-		gateway = self.make_gateway("P", policy="Open")
+		gateway = self.make_gateway("P", policy="Allow list")
 		result = consent_api.record_opt_in(gateway=gateway, phone=FRESH)
 		self.assertEqual(result["status"], "created")
 		rows = self.consent_rows(gateway, FRESH)
@@ -153,7 +157,7 @@ class TestRecordOptIn(_Fixture, IntegrationTestCase):
 		self.assertEqual(rows[0]["attested_by"], "Administrator")
 
 	def test_api_note_is_stored(self):
-		gateway = self.make_gateway("P", policy="Open")
+		gateway = self.make_gateway("P", policy="Allow list")
 		consent_api.record_opt_in(gateway=gateway, phone=FRESH, note="web form")
 		self.assertEqual(self.consent_rows(gateway, FRESH)[0]["attestation_note"], "web form")
 
@@ -164,17 +168,17 @@ class TestRecordOptIn(_Fixture, IntegrationTestCase):
 		self.assertEqual(self.consent_rows(gateway, PHONE), [])
 
 	def test_invalid_phone_reported(self):
-		gateway = self.make_gateway("P", policy="Open")
+		gateway = self.make_gateway("P", policy="Allow list")
 		result = consent_api.record_opt_in(gateway=gateway, phone="abc")
 		self.assertEqual(result["status"], "invalid")
 
 	def test_unknown_source_rejected(self):
-		gateway = self.make_gateway("P", policy="Open")
+		gateway = self.make_gateway("P", policy="Allow list")
 		with self.assertRaises(frappe.ValidationError):
 			consent_api.record_opt_in(gateway=gateway, phone=FRESH, source="inbound")
 
 	def test_api_permission_gate(self):
-		gateway = self.make_gateway("P", policy="Open")
+		gateway = self.make_gateway("P", policy="Allow list")
 		with patch("huf.ai.channels.consent_api.has_capability", return_value=False):
 			with self.assertRaises(frappe.PermissionError):
 				consent_api.record_opt_in(gateway=gateway, phone=FRESH)
