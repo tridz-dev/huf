@@ -185,3 +185,17 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-run-payload-hint` | Run dialog help under the input box |
 | `flow-run-history-header`, `flow-run-history-body`, `flow-run-history-timezone` | Sticky header, scrolling body and time zone note of the Runs sheet |
 | `flow-run-details-header`, `flow-run-details-body`, `flow-run-timezone-note` | Same for Run details |
+
+## UX-2 humanize core (HumanValue, JsonArea, friendly run title)
+| testid | Where |
+|---|---|
+| `flow-run-title` (`data-run-id`) | Run details header: "Run #N · started by you · 2 mins ago" (never the internal id) |
+| `flow-run-human-<nodeId>` | A step's output as labelled rows (HumanValue root); `flow-run-human-input` for the data a run started with |
+| `<root>-row-<path>`, `<root>-label-<path>`, `<root>-value-<path>` | One labelled row of HumanValue; `<path>` is the dotted key path (`customer.name`, `lines.0.qty`) |
+| `<root>-list-<path>` (+ `-toggle`, `-count` "N items", `-items`, `-item-<i>`, `-show-more`) | A list: collapsed "N items · first few", opens to one card per item |
+| `<root>-text-<path>` (+ `-more`) | Long text folded to a preview with Show more / Show less |
+| `<root>-empty`, `<root>-raw-toggle` | Empty text; the "{ } Raw" control (`aria-expanded`); the raw JSON area opens below it |
+| `flow-run-received-<nodeId>` | "Data received" caption: the run's trigger input shown inside the first step instead of a second block |
+| `flow-run-trigger-input`, `flow-run-input-empty` | Separate "Data this run started with" block (only when no step repeats it) and its "No data was sent" line |
+| `flow-run-step-output-<nodeId>`, `flow-run-input` | Now the RAW JSON text, present only after "{ } Raw" is opened (HumanValue is the default view) |
+| `flow-json-<key>`, `-input`, `-format`, `-copy`, `-error`, `-toggle`, `-more`, `-help`, `-text` | JsonArea (the one component for legitimate JSON): `-toggle` is "Show as form" / "Edit as JSON", remembered per key; `-more` folds over 12 lines |
