@@ -27,6 +27,8 @@ interface Params {
   edges: Edge[];
   openEnds: OpenEnd[];
   selectedNodeId: string | null;
+  selectedEdgeId: string | null;
+  onSelectEdge: (edgeId: string) => void;
   onAddNode: (sourceNodeId: string, route?: FlowEdgeRoute) => void;
   onRemoveEdge: (edgeId: string) => void;
 }
@@ -35,7 +37,7 @@ interface Params {
  * What the canvas draws: the real steps and connections plus the on-screen-only extras (an "Add step" card per open
  * branch, a "Next item" line back to the loop from the end of its body, End subtitles naming the path they close).
  */
-export function useRenderedGraph({ canManage, nodes, edges, openEnds, selectedNodeId, onAddNode, onRemoveEdge }: Params) {
+export function useRenderedGraph({ canManage, nodes, edges, openEnds, selectedNodeId, selectedEdgeId, onSelectEdge, onAddNode, onRemoveEdge }: Params) {
   const spots = useMemo(() => (canManage ? ghostSpots(nodes, openEnds, edges, selectedNodeId) : []), [canManage, nodes, openEnds, edges, selectedNodeId]);
 
   const ghostNodes = useMemo<Node<AddStepGhostNodeData>[]>(
@@ -78,10 +80,11 @@ export function useRenderedGraph({ canManage, nodes, edges, openEnds, selectedNo
           type: 'insertable',
           sourceHandle: handleFor(edge, source),
           markerEnd: ARROW,
-          data: { ...(edge.data ?? {}), sourceNodeId: edge.source, route, pill, tone: branchTone(route), onInsertNode: onAddNode, onRemove: onRemoveEdge },
+          selected: selectedEdgeId !== null ? edge.id === selectedEdgeId : edge.selected,
+          data: { ...(edge.data ?? {}), sourceNodeId: edge.source, route, pill, tone: branchTone(route), onInsertNode: onAddNode, onRemove: onRemoveEdge, onSelect: onSelectEdge },
         };
       }),
-    [edges, nodes, onAddNode, onRemoveEdge],
+    [edges, nodes, selectedEdgeId, onSelectEdge, onAddNode, onRemoveEdge],
   );
 
   const loopBackEdges = useMemo<Edge<InsertableEdgeData>[]>(

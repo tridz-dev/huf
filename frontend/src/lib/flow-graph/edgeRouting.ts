@@ -33,6 +33,9 @@ export interface RoutedEdge {
   pillAt: Pt;
   /** Pill centre for a connection whose branch name must stay apart from its siblings (several leave one dot): partway along. */
   pillMidAt: Pt;
+  /** Total length of the line and the point at a distance along it (pills that must keep clear of the step they leave). */
+  length: number;
+  pointAt: (distance: number) => Pt;
   /** Centre of the "+" / remove controls: on the last stretch, clear of the arrow head. */
   controlsAt: Pt;
 }
@@ -139,7 +142,7 @@ function controlsPoint(points: Pt[]): Pt {
 
 function finish(points: Pt[]): RoutedEdge {
   const clean = dedupe(points);
-  return { points: clean, path: roundedPath(clean), pillAt: pillPoint(clean), pillMidAt: pointAlong(clean, length(clean) * 0.4), controlsAt: controlsPoint(clean) };
+  return { points: clean, path: roundedPath(clean), pillAt: pillPoint(clean), pillMidAt: pointAlong(clean, length(clean) * 0.4), length: length(clean), pointAt: (d) => pointAlong(clean, d), controlsAt: controlsPoint(clean) };
 }
 
 /**
