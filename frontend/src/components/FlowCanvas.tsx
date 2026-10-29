@@ -819,7 +819,7 @@ export function FlowCanvas({
         <FlowMiniMap />
         <FitViewAfterRemovalOrLayout flowId={activeFlow?.id} nodeCount={activeFlow?.nodes.length ?? 0} edgeCount={activeFlow?.edges.length ?? 0} layoutRevision={layoutRevision} />
         {canManage && nodes.length <= 1 && (
-          <Panel position="top-center" className="mt-14">
+          <Panel position="top-center" className="mt-[68px]">
             <FirstRunGuide />
           </Panel>
         )}
