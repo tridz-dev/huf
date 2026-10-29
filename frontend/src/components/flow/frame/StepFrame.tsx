@@ -124,7 +124,7 @@ export function StepFrame({ node, onClose, onDelete }: { node: FlowNode; onClose
                   testId="flow-field-output-value"
                   label="Result"
                   optional
-                  hint="Shown in run details as what the flow produced. Leave it empty if you do not need a result."
+                  hint="The flow finishes here. This is shown in run details as what the flow produced. Leave it empty if you do not need a result."
                   value={node.data.endConfig?.value}
                   onChange={(v) => updateNodeData(node.id, (data) => ({ ...data, endConfig: { value: v } }) as FlowNodeData)}
                 />
