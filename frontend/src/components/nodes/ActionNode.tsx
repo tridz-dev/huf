@@ -131,7 +131,7 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
               {incomplete.length > 0 && <AlertCircle className="w-4 h-4 text-signal shrink-0" aria-label="Needs setup" />}
             </div>
             {incomplete.length > 0 && (
-              <div className="text-xs text-signal-ink" data-testid={`flow-node-incomplete-${id}`}>Needs setup</div>
+              <div className="text-xs text-signal-ink" data-testid={`flow-node-incomplete-${id}`} title={incomplete[0]?.message ?? 'Select this step to set it up'}>Needs setup</div>
             )}
             {orphaned && (
               <div className="text-xs text-signal-ink" data-testid={`flow-node-orphan-${id}`}>Nothing leads to this step</div>

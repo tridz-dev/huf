@@ -97,7 +97,7 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
               <div className="text-xs text-muted-foreground">{data.description}</div>
             )}
             {incomplete.length > 0 && (
-              <div className="text-xs text-signal-ink mt-1" data-testid={`flow-node-incomplete-${id}`}>Needs setup</div>
+              <div className="text-xs text-signal-ink mt-1" data-testid={`flow-node-incomplete-${id}`} title={incomplete[0]?.message ?? 'Select this trigger to set it up'}>Needs setup</div>
             )}
           </div>
           <span className="ml-auto flex-shrink-0 rounded border border-line bg-panel/60 font-mono uppercase tracking-wider text-steel font-medium px-1.5 py-0.5 text-[9px]">

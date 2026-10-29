@@ -7,7 +7,7 @@ export const actionOptions: ActionOption[] = [
   {
     id: 'agent-run',
     name: 'Run agent',
-    description: 'Execute a HUF AI agent',
+    description: 'Asks one of your AI agents to do a task and passes its reply on.',
     icon: 'SquareAsterisk',
     category: 'agent'
   },
@@ -16,7 +16,7 @@ export const actionOptions: ActionOption[] = [
   {
     id: 'tool-call',
     name: 'Call tool',
-    description: 'Execute a tool function',
+    description: 'Runs one tool, built in or from a connected server.',
     icon: 'Wrench',
     category: 'tool'
   },
@@ -25,35 +25,35 @@ export const actionOptions: ActionOption[] = [
   {
     id: 'router',
     name: 'LLM Router',
-    description: 'Intelligently route based on AI analysis',
+    description: 'Lets an AI model pick which path the flow takes.',
     icon: 'GitBranch',
     category: 'control'
   },
   {
     id: 'condition',
     name: 'Condition (If/Else)',
-    description: 'Branch flow based on data',
+    description: 'Sends the flow down a True or False path, based on your data.',
     icon: 'GitBranch',
     category: 'control'
   },
   {
     id: "loop",
     name: "Loop",
-    description: "Iterate over array data",
+    description: "Repeats some steps once for each item in a list.",
     icon: "RotateCw",
     category: "control",
   },
   {
     id: 'human.approval',
     name: 'Human in Loop',
-    description: 'Request human approval',
+    description: 'Pauses until a person approves or rejects.',
     icon: 'UserCheck',
     category: 'control'
   },
   {
     id: 'end',
     name: 'End',
-    description: 'Finish the flow and return a result',
+    description: 'Finishes the flow and returns a result.',
     icon: 'CheckCircle2',
     category: 'control'
   },
@@ -62,35 +62,35 @@ export const actionOptions: ActionOption[] = [
   {
     id: 'transform',
     name: 'Transform data',
-    description: 'Map and transform data fields',
+    description: 'Changes text, lists or records without any AI.',
     icon: 'Repeat',
     category: 'transform'
   },
   {
     id: 'state-get',
     name: 'Get state',
-    description: 'Read a saved value by key (per flow)',
+    description: 'Reads a value this flow saved earlier.',
     icon: 'Database',
     category: 'transform'
   },
   {
     id: 'state-set',
     name: 'Set state',
-    description: 'Save a value by key, with optional TTL',
+    description: 'Saves a value so this flow can use it later.',
     icon: 'Save',
     category: 'transform'
   },
   {
     id: 'state-delete',
     name: 'Delete state',
-    description: 'Remove a saved value by key',
+    description: 'Forgets a value this flow saved earlier.',
     icon: 'Trash2',
     category: 'transform'
   },
   {
     id: 'doc-create',
     name: 'Create document',
-    description: 'Insert a document of an allowed DocType',
+    description: 'Creates a new record, such as a ToDo.',
     icon: 'FilePlus',
     category: 'transform'
   },
@@ -99,21 +99,21 @@ export const actionOptions: ActionOption[] = [
   {
     id: 'email',
     name: 'Send email',
-    description: 'Send an email notification',
+    description: 'Sends an email from your connected Gmail.',
     icon: 'Mail',
     category: 'utility'
   },
   {
     id: 'http-request',
     name: 'HTTP Request',
-    description: 'Make an HTTP request to any URL',
+    description: 'Calls a web address and returns the response.',
     icon: 'Globe',
     category: 'utility'
   },
   {
     id: 'file',
     name: 'File operations',
-    description: 'List, search, or read files in Google Drive',
+    description: 'Lists, searches or reads files in Google Drive.',
     icon: 'FileText',
     category: 'utility'
   },
@@ -122,14 +122,14 @@ export const actionOptions: ActionOption[] = [
   {
     id: 'slack',
     name: 'Slack',
-    description: 'Send messages to Slack',
+    description: 'Posts a message to a Slack channel.',
     icon: 'MessageSquare',
     category: 'integration'
   },
   {
     id: 'sheets',
     name: 'Google Sheets',
-    description: 'Read or write spreadsheet data',
+    description: 'Reads, writes or creates Google Sheets.',
     icon: 'Sheet',
     category: 'integration'
   },

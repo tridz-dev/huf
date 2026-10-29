@@ -13,6 +13,8 @@ import { edgeRoute } from '../services/flowSerializer';
 import { validateNode } from '@/lib/flowValidation';
 import { useFlowPermissions } from '@/hooks/useFlowPermissions';
 import { triggerLabel } from '@/lib/flowLabels';
+import { triggerOptions } from '../data/triggers';
+import { STEP_NEEDS_HINT } from '@/lib/flowHelp';
 import type { FlowNodeData, TriggerConfig } from '../types/flow.types';
 
 interface RightSidebarProps {
@@ -63,6 +65,9 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Settings className="w-12 h-12 text-muted-foreground mb-4" />
             <div className="text-sm text-muted-foreground">Select a step or a connection to see its settings</div>
+            <p className="mt-2 max-w-[240px] text-xs text-muted-foreground" data-testid="flow-sidebar-empty-hint">
+              Click a step on the canvas to set it up. A step marked "Needs setup" still has something missing. Click a line to see what it means.
+            </p>
           </div>
         ) : selectedEdge ? (
           <div className="space-y-3" data-testid="flow-edge-config">
@@ -122,6 +127,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 onChange={(e) => updateNodeData(selectedNode.id, (data) => ({ ...data, label: e.target.value }))}
                 className="font-medium"
               />
+              <p className="mt-1 text-[11px] leading-snug text-muted-foreground" data-testid="flow-hint-step-name">A name that says what this step does. It shows on the canvas and in run details.</p>
             </div>
 
             <div className="border-t border-border" />
@@ -145,17 +151,25 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       <span className="text-muted-foreground">Not set up yet</span>
                     )}
                   </div>
+                  <p className="mt-1 text-[11px] leading-snug text-muted-foreground" data-testid="flow-hint-trigger-type">
+                    {triggerOptions.find((t) => t.id === selectedNode.data.triggerConfig?.type)?.description ?? 'The trigger decides when the flow starts. Use Change to choose one.'}
+                  </p>
                 </div>
                 <TriggerConfigForm key={selectedNode.id} nodeId={selectedNode.id} />
               </>
             )}
 
-            {selectedNode.data.nodeType === 'action' && <ActionConfigForm key={selectedNode.id} nodeId={selectedNode.id} />}
+            {selectedNode.data.nodeType === 'action' && (
+              <>
+                <ActionConfigForm key={selectedNode.id} nodeId={selectedNode.id} />
+                <p className="border-t border-border pt-2 text-[11px] leading-snug text-muted-foreground" data-testid="flow-hint-step-result">{STEP_NEEDS_HINT}</p>
+              </>
+            )}
 
             {selectedNode.data.nodeType === 'end' && (
               <div className="space-y-3" key={selectedNode.id}>
                 <Label weight="semibold" className="block" data-testid="flow-config-title">End</Label>
-                <p className="text-xs text-muted-foreground">The flow finishes here. The value below is returned as its result.</p>
+                <p className="text-xs text-muted-foreground">The flow finishes here. The value below is returned as the flow's result and shown in run details. Leave it empty if you do not need a result.</p>
                 <FlowValueInput
                   id="end-value"
                   nodeId={selectedNode.id}
