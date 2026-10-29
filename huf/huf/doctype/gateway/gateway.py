@@ -64,6 +64,10 @@ class Gateway(Document):
         if self.is_enabled and self.execution_user:
             self._validate_execution_user_role()
 
+        from huf.ai.channels.run_as import validate_run_as
+
+        validate_run_as(self)
+
         # ST-04.4: Verify execution_user has access to default_agent if set
         if self.is_enabled and self.execution_user and self.default_agent:
             self._validate_agent_access()

@@ -145,6 +145,7 @@ after_migrate = [
     "huf.install.after_migrate",
     "huf.ai.skills.hooks.sync_app_skills",
     "huf.install.seed_voice_engines",
+    "huf.ai.channels.run_as.ensure_all_audit_fields",
 ]
 
 # Uninstallation
@@ -251,7 +252,7 @@ override_doctype_class = {
 doc_events = {
     "*": {
         "validate": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "before_insert": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "before_insert": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations", "huf.ai.channels.run_as.stamp_audit"],
         "after_insert": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
         "before_save": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
         "after_save": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
