@@ -724,7 +724,6 @@ class TestEditTemplate(LifecycleCase):
 		# quota consumed only on success
 		self.assertEqual(json.loads(self._state(docname).edit_log or "[]"), [])
 		detail = mgmt.get_template(name=docname)
-		print("DBG", repr(docname), repr(self.account.name), frappe.cache().get_value(bridge._edit_blocked_key(self.account.name, docname)), out["edit_blocked_until"], detail["editable"], detail["whatsapp_account"], detail["status"], bridge._edit_blocked_until(detail["whatsapp_account"], docname), frappe.get_all("WhatsApp Templates", fields=["name","whatsapp_account"]))
 		self.assertEqual((detail["editable"], detail["editable_reason"], detail["edits_left"]), (False, "edit_blocked", 10))
 		self.assertTrue(detail["edit_blocked_until"])
 		# no retry loop: the next attempt is refused locally
