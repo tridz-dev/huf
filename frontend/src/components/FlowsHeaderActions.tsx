@@ -123,7 +123,7 @@ export function FlowsHeaderActions() {
         </div>
       )}
 
-      {isPhone && canManage && <FlowChecklist live={isPublished} />}
+      {isPhone && canManage && <FlowChecklist live={isPublished} separator={false} />}
 
       {!isCompact && <FlowHelpPopover />}
 

@@ -13,7 +13,7 @@ import { useFrozenWhilePressed } from './useFrozenWhilePressed';
  * the step and puts the cursor in the field. Saving never waits for this list; Run and Publish open it instead of
  * failing quietly.
  */
-export function FlowChecklist({ live, className }: { live: boolean; className?: string }) {
+export function FlowChecklist({ live, className, separator = true }: { live: boolean; className?: string; separator?: boolean }) {
   const issues = useFlowIssues();
   const open = useFrame((s) => s.checklistOpen);
   const { setSelectedNode } = useFlowContext();
@@ -28,7 +28,7 @@ export function FlowChecklist({ live, className }: { live: boolean; className?: 
         <span className={cn('inline-flex items-center gap-1.5', className)}>
           {shownText !== '' && (
             <>
-              <span aria-hidden className="text-muted-foreground/60">&middot;</span>
+              {separator && <span aria-hidden className="text-muted-foreground/60">&middot;</span>}
               <PopoverTrigger asChild>
                 <button
                   type="button"
