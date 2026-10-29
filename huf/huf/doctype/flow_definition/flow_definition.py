@@ -150,6 +150,12 @@ class FlowDefinition(Document):
 		if not result.ok:
 			frappe.throw(describe_errors(defn, result.errors), title=_("This flow cannot be saved yet"))
 
+		from huf.ai.flow.support.router_text import text_ref_warnings
+
+		warnings = text_ref_warnings(defn)
+		if warnings:  # never blocks the save; tells the author what will be left empty at run time
+			frappe.msgprint("<br>".join(warnings), title=_("Check this flow"), indicator="orange")
+
 		# schema_version is a schema-validated const ("1.0.0") at this point; store it
 		# verbatim rather than re-deriving or defaulting it.
 		self.schema_version = defn.get("schema_version")

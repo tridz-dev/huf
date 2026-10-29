@@ -10,8 +10,11 @@ Behaviour (documented contract):
   :class:`TemplateError`, which fails the node with a clear message.
 * A declared variable whose value is null (e.g. a ``$from`` that resolved to nothing) renders as
   the empty string.
-* bool -> ``true``/``false``; numbers via ``str``; list/dict -> compact JSON.
-* Template and rendered output are length-capped.
+* bool -> ``true``/``false``; numbers via ``str``.
+* A list or object is never pasted in as JSON (a customer would read it in an email or a Slack message):
+  it becomes a short readable summary (``Ada Lovelace``, ``Total: 450, Status: paid``, ``3 items: A, B and 1
+  more``). ``objects="json"`` keeps JSON for text a model reads (agent prompts).
+* Template and rendered output are length-capped. Error messages are plain sentences for a flow author.
 """
 
 from __future__ import annotations
@@ -30,7 +33,7 @@ class TemplateError(ValueError):
 	"""Template is malformed, references an undefined variable, or is too large."""
 
 
-def _stringify(value: Any) -> str:
+def _stringify(value: Any, objects: str = "summary") -> str:
 	if value is None:
 		return ""
 	if isinstance(value, bool):
@@ -39,12 +42,16 @@ def _stringify(value: Any) -> str:
 		return value
 	if isinstance(value, (int, float)):
 		return str(value)
-	return json.dumps(value, default=str)
+	if objects == "json":
+		return json.dumps(value, default=str)
+	from huf.ai.flow.support.humanize import summarize
+
+	return summarize(value) or ""
 
 
-def render_template(template: str, values: Mapping[str, Any]) -> str:
+def render_template(template: str, values: Mapping[str, Any], objects: str = "summary") -> str:
 	if not isinstance(template, str) or len(template) > MAX_TEMPLATE_CHARS:
-		raise TemplateError(f"template must be a string of at most {MAX_TEMPLATE_CHARS} characters")
+		raise TemplateError(f"This text is longer than {MAX_TEMPLATE_CHARS} characters. Shorten it.")
 
 	def sub(match: re.Match) -> str:
 		tok = match.group(0)
@@ -54,12 +61,18 @@ def render_template(template: str, values: Mapping[str, Any]) -> str:
 			return "}"
 		name = match.group(1)
 		if name is None:
-			raise TemplateError(f"template has an unescaped or malformed brace: {template[:60]!r}")
+			raise TemplateError(
+				"This text has a stray { or } brace. Type {{ or }} to show a brace, or remove it."
+			)
 		if name not in values:
-			raise TemplateError(f"template references undefined variable {name!r}")
-		return _stringify(values[name])
+			raise TemplateError(
+				f"This text uses {{{name}}} but no data was chosen for it. Choose the data for it or remove it."
+			)
+		return _stringify(values[name], objects)
 
 	out = _TOKEN_RE.sub(sub, template)
 	if len(out) > MAX_RENDERED_CHARS:
-		raise TemplateError(f"rendered template exceeds {MAX_RENDERED_CHARS} characters")
+		raise TemplateError(
+			f"The finished text is longer than {MAX_RENDERED_CHARS} characters. Shorten it or use less data."
+		)
 	return out

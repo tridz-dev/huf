@@ -84,15 +84,15 @@ def resolve_router_model(model_name: str | None = None) -> tuple[str, str]:
 	if model_name:
 		provider = frappe.db.get_value("AI Model", model_name, "provider")
 		if not provider:
-			raise RuntimeError(f"AI model '{model_name}' was not found")
+			raise RuntimeError(f"The AI model \"{model_name}\" was not found. Pick another model in this step.")
 		if not _provider_has_key(provider):
-			raise RuntimeError(f"AI provider '{provider}' for model '{model_name}' has no API key")
+			raise RuntimeError(f"{provider} has no API key yet. Add one in AI Providers.")
 		return provider, model_name
 
 	provider = _find_keyed_provider()
 	model = _default_model_for_provider(provider) if provider else None
 	if not provider or not model:
-		raise RuntimeError("no AI Provider with an API key and a chat model is configured")
+		raise RuntimeError("No AI provider is set up yet. Add one with its API key in AI Providers.")
 	return provider, model
 
 
@@ -105,20 +105,62 @@ def _router_completion(prompt_text: str, provider: str, model: str) -> str:
 
 _TEXT_REF_RE = re.compile(r"(?<!\{)\{([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*|\[\d+\])*)\}(?!\})")
 
+# Roots that always exist; every step id is also a root.
+_FIXED_REF_ROOTS = ("input", "trigger", "context", "foreach")
+
 
 def render_text_refs(text: str, ctx: GraphContext) -> str:
 	"""Fill ``{input.field}`` / ``{node_id.field}`` / ``{foreach.item}`` placeholders in a plain-text field.
 
-	Used for ``router.llm.prompt`` and ``human.approval.message`` (the Insert data picker writes these).
-	A placeholder that does not resolve is left as written, so ordinary braces in a message never fail a run.
+	Used for ``router.llm.prompt`` and ``human.approval.message`` (the Insert data picker writes these), text
+	that people read. A value is written the way a person reads it (:func:`humanize.summarize`): a whole
+	object or list becomes a short summary, never JSON, and a date reads as a date. A placeholder that does not
+	resolve renders as an empty value, never as the literal braces (the flow author gets a warning when the flow
+	is saved, see :func:`text_ref_warnings`), so a message never fails a run and never shows ``{input.x}``.
 	"""
-	from huf.ai.graph.templates import _stringify
+	from huf.ai.flow.support.humanize import summarize
 
 	def sub(match: re.Match) -> str:
 		path = match.group(1)
 		if path.split(".")[0].split("[")[0] not in ctx.reference_roots():
-			return match.group(0)
+			return ""
 		value = ctx.resolve_reference(path)
-		return match.group(0) if value is None else _stringify(value)
+		return summarize(value) or ""
 
 	return _TEXT_REF_RE.sub(sub, text or "")
+
+
+# Plain-text step fields that take {placeholders}, by step type, with the name people see for the field.
+_TEXT_REF_FIELDS = {"human.approval": (("message", "message"),), "router.llm": (("prompt", "instruction"),)}
+
+
+def text_ref_warnings(defn: dict | None) -> list[str]:
+	"""Plain sentences for placeholders in message/prompt fields that point at nothing, for the save response.
+
+	A placeholder whose first part is neither the trigger input nor a step of this flow renders as an empty
+	value; this says so at save time, naming the step the way the canvas does.
+	"""
+	from huf.ai.graph.error_copy import step_title
+
+	nodes = (defn or {}).get("nodes") if isinstance(defn, dict) else None
+	if isinstance(nodes, dict):
+		nodes = [{"id": k, **(v or {})} for k, v in nodes.items()]
+	nodes = [n for n in (nodes or []) if isinstance(n, dict)]
+	roots = set(_FIXED_REF_ROOTS) | {str(n.get("id")) for n in nodes if n.get("id")}
+	warnings: list[str] = []
+	for node in nodes:
+		for field, noun in _TEXT_REF_FIELDS.get(str(node.get("type")), ()):
+			text = (node.get("config") or {}).get(field)
+			if not isinstance(text, str):
+				continue
+			bad = []
+			for match in _TEXT_REF_RE.finditer(text):
+				path = match.group(1)
+				if path.split(".")[0].split("[")[0] not in roots and match.group(0) not in bad:
+					bad.append(match.group(0))
+			if bad:
+				warnings.append(
+					f'{step_title(node)}: the {noun} uses {", ".join(bad)}, which has no data behind it, so it will be '
+					"left empty. Insert data from an earlier step instead."
+				)
+	return warnings

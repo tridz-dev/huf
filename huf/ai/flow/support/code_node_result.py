@@ -41,14 +41,18 @@ def error_text(exit_status: str | None, stderr: str | None, limits: dict | None 
 	text = html.unescape(stderr or "").strip()
 	if not text:
 		return str(_("The code failed without a message."))
+	from huf.ai.graph.error_copy import _EXC_PREFIX, code_error_copy, plain_error
+
 	if "Traceback (most recent call last)" not in text and not text.startswith(("SyntaxError", "[huf-exec]")):
-		return text[:500]  # already a sentence (for example: the request was rejected)
+		return plain_error(text)[:500]  # already a sentence (for example: the request was rejected)
 	lines = [ln for ln in text.splitlines() if ln.strip() and not ln.startswith("[huf-exec]")]
 	last = lines[-1].strip() if lines else text[:200]
 	line_numbers = _LINE_RE.findall(text)
-	if line_numbers:
-		return str(_("The code stopped with an error on line {0}: {1}").format(line_numbers[-1], last))[:500]
-	return str(_("The code stopped with an error: {0}").format(last))[:500]
+	line = line_numbers[-1] if line_numbers else None
+	m = _EXC_PREFIX.match(last)
+	if m:
+		return code_error_copy(m.group(1), last[m.end():], line)
+	return code_error_copy("", last, line)
 
 
 def _json_value(value):

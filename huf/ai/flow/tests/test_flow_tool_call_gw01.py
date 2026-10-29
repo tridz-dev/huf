@@ -136,7 +136,7 @@ class TestToolCallSchemaExecutorConsistency(unittest.TestCase):
 	def test_missing_tool_id_fails_with_actionable_message(self):
 		result, captured = self._run({"input": {}})
 		self.assertEqual(result["status"], "failed")
-		self.assertIn("tool_id", result["error"])
+		self.assertIn("Choose which action", result["error"])
 		self.assertEqual(captured, {})
 
 

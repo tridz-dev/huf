@@ -209,7 +209,7 @@ class TestFlowWp1(IntegrationTestCase):
 		self.assertNotIn(waiting.name, swept)
 		stuck.reload()
 		self.assertEqual(stuck.status, "Failed")
-		self.assertEqual(stuck.last_error, "Run did not complete (worker stopped)")
+		self.assertEqual(stuck.last_error, flow_engine.STALE_RUN_SWEEP_REASON)
 		fresh.reload()
 		self.assertEqual(fresh.status, "Queued")
 
