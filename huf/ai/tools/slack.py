@@ -78,9 +78,11 @@ def _cache_key(token: str) -> str:
 	return hashlib.sha256(token.encode()).hexdigest()[:16]
 
 
-def fetch_channels(token: str, force: bool = False) -> list[dict]:
+def fetch_channels(token: str, force: bool = False, timeout: float = 30, deadline: float | None = None) -> list[dict]:
 	"""All channels (public and private) the bot can see, via conversations.list. Cached for 5 minutes.
 
+	timeout: seconds to wait for each Slack page. deadline: ``time.monotonic()`` value after which the
+	listing stops with a plain "taking too long" error instead of hanging the screen.
 	Raises SlackChannelError with a plain message when Slack refuses (for example a missing scope).
 	"""
 	key = _cache_key(token)
@@ -94,11 +96,13 @@ def fetch_channels(token: str, force: bool = False) -> list[dict]:
 		params = {"types": "public_channel,private_channel", "exclude_archived": "true", "limit": 200}
 		if cursor:
 			params["cursor"] = cursor
+		if deadline is not None and time.monotonic() > deadline:
+			raise SlackChannelError("Slack is taking too long to list the channels. Try again in a minute.")
 		resp = httpx.get(
 			"https://slack.com/api/conversations.list",
 			headers={"Authorization": f"Bearer {token}"},
 			params=params,
-			timeout=30,
+			timeout=timeout,
 		)
 		resp.raise_for_status()
 		data = resp.json()

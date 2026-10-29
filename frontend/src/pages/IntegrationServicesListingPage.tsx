@@ -1,15 +1,14 @@
 import { useEffect } from 'react';
-import { Calendar, KeyRound, Puzzle, Settings, Shield } from 'lucide-react';
+import { Puzzle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageFrame } from '@/layouts/PageFrame';
 import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '@/components/dashboard';
+import { CategoryFilter } from '@/components/integrations/connection/CategoryFilter';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { getIntegrationServicesPaginated } from '@/services/integrationApi';
 import { integrationCategoryFilterOptions } from '@/data/integrations';
-import { parseRequiredCredentials } from '@/types/integration.types';
 import type { IntegrationServiceDoc } from '@/types/integration.types';
-import { formatTimeAgo } from '@/utils/time';
 import { getServiceIdentity } from '@/data/serviceIdentity';
 
 export function IntegrationServicesListingPage() {
@@ -69,15 +68,13 @@ export function IntegrationServicesListingPage() {
           searchPlaceholder="Search services..."
           searchValue={search}
           onSearchChange={setSearch}
-          filters={[
-            {
-              label: 'Category',
-              value: categoryFilter,
-              placeholder: 'Category',
-              options: integrationCategoryFilterOptions,
-              onChange: (value) => setFilter('category', value),
-            },
-          ]}
+          actions={
+            <CategoryFilter
+              value={categoryFilter}
+              categories={integrationCategoryFilterOptions.filter((o) => o.value !== 'all').map((o) => o.value)}
+              onChange={(value) => setFilter('category', value)}
+            />
+          }
         />
       }
     >
@@ -119,39 +116,14 @@ export function IntegrationServicesListingPage() {
         }
         renderItem={(service) => {
           const identity = getServiceIdentity(service.service_name);
-          const credentialCount = parseRequiredCredentials(service.required_credentials).length;
-          const metadata = [
-            { label: 'Category', value: service.category },
-            {
-              label: 'Credentials',
-              value: `${credentialCount} field${credentialCount !== 1 ? 's' : ''}`,
-              icon: KeyRound,
-            },
-            ...(service.is_builtin
-              ? [{ label: 'Type', value: 'Built-in', icon: Shield }]
-              : []),
-            ...(service.modified
-              ? [{ label: 'Updated', value: formatTimeAgo(service.modified), icon: Calendar }]
-              : []),
-          ];
-
           return (
             <ItemCard
               title={identity.title}
               icon={identity.icon}
               description={service.description || 'No description'}
-              status={{
-                label: service.is_builtin ? 'built-in' : 'custom',
-                variant: service.is_builtin ? 'outline' : 'default',
-              }}
-              metadata={metadata}
-              actions={[
-                {
-                  icon: Settings,
-                  label: 'Configure',
-                  onClick: () =>
-                    navigate(`/integration-services/${encodeURIComponent(service.service_name)}`),
-                },
+              badges={[
+                ...(service.category ? [{ label: service.category, variant: 'secondary' as const }] : []),
+                ...(service.is_builtin ? [] : [{ label: 'Custom', variant: 'outline' as const }]),
               ]}
               onClick={() =>
                 navigate(`/integration-services/${encodeURIComponent(service.service_name)}`)

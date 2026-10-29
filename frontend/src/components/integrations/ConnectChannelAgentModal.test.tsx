@@ -44,14 +44,14 @@ describe('ConnectChannelAgentModal', () => {
   it('shows the agent that answers today and preselects it', async () => {
     renderModal();
     expect(await screen.findByText('Bakery helper', { selector: 'span' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Connect agent' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Use in agent' })).toBeDisabled();
   });
 
   it('connects the chosen agent to the existing gateway', async () => {
     const onConnected = renderModal();
     await screen.findByText('Support bot');
     await userEvent.click(screen.getByText('Support bot'));
-    await userEvent.click(screen.getByRole('button', { name: 'Connect agent' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Use in agent' }));
     await waitFor(() =>
       expect(api.connect).toHaveBeenCalledWith({ integrationSettings: 'IS-1', agent: 'A2', gatewayName: 'GW-1' }),
     );
@@ -68,7 +68,7 @@ describe('ConnectChannelAgentModal', () => {
     renderModal();
     expect(await screen.findByText(/One is created for you/)).toBeInTheDocument();
     await userEvent.click(screen.getByText('Support bot'));
-    await userEvent.click(screen.getByRole('button', { name: 'Connect agent' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Use in agent' }));
     await waitFor(() => expect(toast.warning).toHaveBeenCalled());
     expect(api.connect.mock.calls[0][0].gatewayName).toBeUndefined();
   });

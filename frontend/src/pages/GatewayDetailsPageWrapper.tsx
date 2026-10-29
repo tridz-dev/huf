@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { UnifiedLayout } from '@/layouts/UnifiedLayout';
 import { IntegrationSettingsDetailsPage } from './IntegrationSettingsDetailsPage';
 import { getIntegrationSetting } from '@/services/integrationApi';
+import { integrationTitle } from '@/lib/integrations/health';
 
 export { GatewayDetailsPageWrapper };
 export default GatewayDetailsPageWrapper;
@@ -16,7 +17,7 @@ function GatewayDetailsPageWrapper() {
     if (settingId && !isNew) {
       getIntegrationSetting(settingId)
         .then((doc) => {
-          setTitle(doc.name);
+          setTitle(integrationTitle(doc));
         })
         .catch(() => {
           setTitle('Channel');
