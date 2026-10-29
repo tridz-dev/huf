@@ -66,7 +66,7 @@ def get_or_create_conversation(gateway: str, handle: str, channel: str | None = 
 
 def _touch(doc, ts_field: str, when, preview: str | None) -> None:
 	when = get_datetime(when) if when else now_datetime()
-	values = {ts_field: when, "message_count": (doc.message_count or 0) + 1}
+	values = {ts_field: when, "message_count": (getattr(doc, "message_count", 0) or 0) + 1}
 	if preview:
 		values["last_message_preview"] = " ".join(str(preview).split())[:_PREVIEW_CHARS]
 	doc.db_set(values, update_modified=True)
