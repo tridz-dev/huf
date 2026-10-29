@@ -132,6 +132,7 @@ FLOW_ONLY_NODE_TYPES: frozenset[str] = frozenset(
 		"state.set",
 		"state.delete",
 		"doc.create",
+		"code.run",
 	}
 )
 

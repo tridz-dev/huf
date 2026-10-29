@@ -100,6 +100,7 @@ _STEP_TYPE_TITLES = {
 	"human.approval": "Human in Loop",
 	"end": "End",
 	"transform": "Transform data",
+	"code.run": "Execute code",
 }
 
 
@@ -876,6 +877,7 @@ _NODE_DISPLAY = {
 	"state.set": ("Set State", "Database", "state"),
 	"state.delete": ("Delete State", "Trash2", "state"),
 	"doc.create": ("Create Document", "FilePlus", "data"),
+	"code.run": ("Execute Code", "Terminal", "data"),
 }
 
 _SCHEMA_FILE = None
