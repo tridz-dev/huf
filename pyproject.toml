@@ -24,7 +24,10 @@ dependencies = [
     "httpx>=0.24.0",
     "chromadb",
     "llama-index-vector-stores-chroma",
-    "llama-index-vector-stores-postgres",
+    # asyncpg>=0.30 is required for CPython 3.14 (frappe v16): 0.29 has no cp314
+    # build. Without it pip backtracks to old postgres stores pinning asyncpg<0.30.
+    "asyncpg>=0.30",
+    "llama-index-vector-stores-postgres>=0.9.0",
     "llama-index-vector-stores-weaviate",
     "llama-index-vector-stores-pinecone",
     "redisvl>=0.5",
