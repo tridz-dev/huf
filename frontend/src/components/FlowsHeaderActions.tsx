@@ -1,5 +1,5 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
-import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle, Settings, Pencil, CircleOff } from 'lucide-react';
+import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle, Settings, Pencil, CircleOff, Eye } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -25,7 +25,8 @@ import { reportFlowRun } from '@/lib/flow-run/flowRunToast';
 import { RunFlowDialog } from './flow/RunFlowDialog';
 import { FlowHelpPopover } from './flow/FlowHelpPopover';
 import { DisabledReason } from './flow/DisabledReason';
-import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { FLOW_VIEW_ONLY_HINT, useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { publishBlockedReason } from '@/lib/flow/flowPublishGuard';
 import { codePublishBlockedReason } from '@/lib/flow-graph/codeFlow';
 import { useCodeFlowStatus } from '@/lib/flow-graph/useCodeFlowStatus';
@@ -39,6 +40,7 @@ import { useRunParam } from '@/hooks/flow/useRunParam';
  */
 export function FlowToolbarTitle() {
   const { activeFlow, updateFlowName } = useFlowContext();
+  const { canManage } = useFlowPermissions();
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
 
@@ -95,17 +97,37 @@ export function FlowToolbarTitle() {
           {activeFlow.name || 'Untitled flow'}
         </span>
       )}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label="Edit flow name"
-        onClick={startEditing}
-        disabled={isEditing}
-        className="h-6 w-6 shrink-0 text-steel hover:text-ink"
-      >
-        <Pencil className="h-3.5 w-3.5" />
-      </Button>
+      {canManage ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Edit flow name"
+          onClick={startEditing}
+          disabled={isEditing}
+          className="h-6 w-6 shrink-0 text-steel hover:text-ink"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+      ) : (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                tabIndex={0}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-line bg-paper-deep px-2 py-0.5 text-xs font-medium text-steel"
+                data-testid="flow-view-only-pill"
+              >
+                <Eye className="h-3 w-3" aria-hidden />
+                View only
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-[260px]" data-testid="flow-view-only-pill-hint">
+              {FLOW_VIEW_ONLY_HINT}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
     </div>
   );
 }
@@ -241,7 +263,7 @@ export function FlowsHeaderActions() {
   return (
     <div className="flex items-center gap-2">
       {/* Save State Indicator (bare dot + text, no chip background) */}
-      {activeFlow && (
+      {activeFlow && canManage && (
         <div className="flex items-center gap-1.5 mr-2 text-muted-foreground" data-testid="flow-save-state" title={issues.length > 0 ? ` to finish before it can run` : undefined}>
           {issues.length > 0 && (
             <button
@@ -273,19 +295,21 @@ export function FlowsHeaderActions() {
       <FlowHelpPopover />
 
       {/* Save Draft Button */}
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-2"
-        data-testid="flow-save"
-        aria-label="Save"
-        title="Save your changes (Ctrl/Cmd+S)"
-        onClick={handleSaveDraft}
-        disabled={!activeFlow || saveState === 'saving' || !hasUnsavedChanges}
-      >
-        <Save className="w-4 h-4" />
-        <span className="hidden xl:inline">Save</span>
-      </Button>
+      <DisabledReason reason={canManage ? null : readOnlyReason}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          data-testid="flow-save"
+          aria-label="Save"
+          title="Save your changes (Ctrl/Cmd+S)"
+          onClick={handleSaveDraft}
+          disabled={!activeFlow || saveState === 'saving' || !hasUnsavedChanges}
+        >
+          <Save className="w-4 h-4" />
+          <span className="hidden xl:inline">Save</span>
+        </Button>
+      </DisabledReason>
 
       {/* Runs Button */}
       <Button
@@ -309,7 +333,7 @@ export function FlowsHeaderActions() {
         className="gap-2"
         data-testid="flow-settings"
         aria-label="Settings"
-        title="Settings: name, description and category"
+        title={canManage ? 'Settings: name, description and category' : 'Settings: see the name, description and category'}
         onClick={() => setShowSettings(true)}
         disabled={!activeFlow}
       >

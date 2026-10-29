@@ -261,7 +261,7 @@ function FlowListPage() {
                 : []),
               {
                 icon: Settings,
-                label: canManage ? 'Configure' : 'Settings',
+                label: canManage ? 'Configure' : 'View settings',
                 onClick: () => handleConfigureFlow(flow.id),
               },
             ]}

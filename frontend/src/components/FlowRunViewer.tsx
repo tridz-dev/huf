@@ -29,6 +29,7 @@ import { decisionMovedRun } from '@/lib/flow-run/flowRunDecision';
 import { connectPath, notConnectedService } from '@/lib/flow/flowIntegrations';
 import { redactSecrets, summarizeToolOutput } from '@/lib/flow/flowToolSummary';
 import { Link } from 'react-router-dom';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 
 interface FlowRunViewerProps {
     runId: string | null;
@@ -37,6 +38,7 @@ interface FlowRunViewerProps {
 
 export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
     const siteZone = useSiteTimezone();
+    const { canManage } = useFlowPermissions();
     const [confirmFail, setConfirmFail] = useState(false);
     const { run, loading, setLoading, refreshRun } = useFlowRunDetail(runId);
     const [resumePayload, setResumePayload] = useState<string>('');
@@ -116,7 +118,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
 
     return (
         <Sheet open={!!runId} onOpenChange={(open) => !open && onClose()}>
-            <SheetContent className="flex w-[500px] flex-col gap-0 overflow-hidden p-0 sm:w-[700px] sm:max-w-[90vw]" data-testid="flow-run-details">
+            <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-hidden p-0 sm:w-[700px] sm:max-w-[90vw]" data-testid="flow-run-details">
                 <SheetHeader className="shrink-0 border-b border-border bg-background px-6 pb-4 pt-6 pr-12" data-testid="flow-run-details-header">
                     <SheetTitle className="flex items-center gap-2">
                         <Box className="w-5 h-5 text-muted-foreground" />
@@ -273,7 +275,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                         {st.failed && stepReason(st.id, st.output) && (
                                                             <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive whitespace-pre-wrap" data-testid={`flow-run-step-error-${st.id}`}>
                                                                 {stepReason(st.id, st.output)}
-                                                                {notConnectedService(stepReason(st.id, st.output)) && (
+                                                                {canManage && notConnectedService(stepReason(st.id, st.output)) && (
                                                                     <Link
                                                                         to={connectPath(notConnectedService(stepReason(st.id, st.output)) as string)}
                                                                         className="ml-2 font-medium underline"

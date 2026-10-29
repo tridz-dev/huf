@@ -10,6 +10,7 @@ import { loadCodeFlowStatus, refreshCodeFlowStatus, useCodeFlowStatus } from '@/
 import { getAgentSettings, updateAgentSettings } from '@/services/agentSettingsApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { PageFrame } from '@/layouts/PageFrame';
+import { SkillSourcesReadOnly } from '@/components/settings/SkillSourcesReadOnly';
 
 const DEFAULT_DESTINATIONS = {
   'huf-skills': {
@@ -127,45 +128,53 @@ export function AgentSettingsPage() {
               className={codeStatus.server_switch ? 'text-xs text-good' : 'text-xs text-warning'}
               data-testid="settings-code-in-flows-status"
             >
-              {codeStatus.server_switch
-                ? 'Server switch: on'
-                : 'Server switch: off - code cannot run until a server administrator turns on huf_python_execution_enabled in the site configuration.'}
+              {!codeStatus.can_manage
+                ? codeStatus.server_switch
+                  ? 'Code can run on this site once a system administrator allows it.'
+                  : 'Code cannot run on this site. A server administrator has to turn it on first.'
+                : codeStatus.server_switch
+                  ? 'Server switch: on'
+                  : 'Server switch: off - code cannot run until a server administrator turns on huf_python_execution_enabled in the site configuration.'}
             </p>
           )}
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Skill destinations</CardTitle>
-          <CardDescription>
-            Configure common skill sources used by the Skills import modal and marketplace.
-            The default <code>huf-skills</code> destination points to the official curated registry.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="skill_destinations">Destinations JSON</Label>
-            <Textarea
-              id="skill_destinations"
-              value={jsonValue}
-              onChange={(e) => setJsonValue(e.target.value)}
-              className="min-h-[280px] font-mono text-sm"
-              placeholder='{"my-skills": {"repo_url": "https://github.com/org/repo", "path": "skills", "ref": "main"}}'
-            />
-            <p className="text-xs text-muted-foreground">
-              Enter a JSON object keyed by destination name. Each value must include{' '}
-              <code>repo_url</code>, optionally <code>path</code> and <code>ref</code>.
-            </p>
-          </div>
-          <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={saving}>
-              {saving && <span className="mr-2 animate-spin">⟳</span>}
-              <Save className="w-4 h-4 mr-2" />
-              Save destinations
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {!codeStatus?.can_manage ? (
+        <SkillSourcesReadOnly />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Skill destinations</CardTitle>
+            <CardDescription>
+              Configure common skill sources used by the Skills import modal and marketplace.
+              The default <code>huf-skills</code> destination points to the official curated registry.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="skill_destinations">Destinations JSON</Label>
+              <Textarea
+                id="skill_destinations"
+                value={jsonValue}
+                onChange={(e) => setJsonValue(e.target.value)}
+                className="min-h-[280px] font-mono text-sm"
+                placeholder='{"my-skills": {"repo_url": "https://github.com/org/repo", "path": "skills", "ref": "main"}}'
+              />
+              <p className="text-xs text-muted-foreground">
+                Enter a JSON object keyed by destination name. Each value must include{' '}
+                <code>repo_url</code>, optionally <code>path</code> and <code>ref</code>.
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={handleSave} disabled={saving}>
+                {saving && <span className="mr-2 animate-spin">⟳</span>}
+                <Save className="w-4 h-4 mr-2" />
+                Save destinations
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </PageFrame>
   );
 }

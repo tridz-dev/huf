@@ -51,7 +51,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
   return (
     <div
       data-testid="flow-config-sidebar"
-      className={cn('relative bg-card flex flex-col w-[300px]', 'h-full', !isSheet && 'border-l border-border')}
+      className={cn('relative bg-card flex flex-col', isSheet ? 'w-full max-w-full' : 'w-[300px] border-l border-border', 'h-full')}
     >
       {!canManage && (selectedNode || selectedEdge) && (
         <div role="status" className="shrink-0 border-b border-border bg-muted px-3.5 py-2 text-xs text-muted-foreground" data-testid="flow-view-only-banner">
@@ -110,7 +110,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               </Button>
             </div>
 
-            {issues.length > 0 && (
+            {canManage && issues.length > 0 && (
               <div role="status" className="flex items-start gap-2 rounded-md border border-signal/40 bg-signal/5 p-2 text-xs" data-testid="flow-node-incomplete">
                 <AlertCircle className="w-4 h-4 text-signal shrink-0" />
                 <span>Finish setting up {selectedNode.data.label}: {issues[0].message}{issues.length > 1 ? ` (${issues.length - 1} more)` : ''}</span>
