@@ -20,7 +20,7 @@ import { CredentialsCard } from '@/components/whatsapp/overview/CredentialsCard'
 import { PolicySection } from '@/components/whatsapp/overview/PolicySection';
 import { AccessTab } from '@/components/whatsapp/AccessTab';
 import { WhatsAppChannelSettings } from '@/components/integrations/WhatsAppChannelSettings';
-import { validateRunAs, WEEKDAYS, type BusinessHourRow, type GatewayFull } from './model';
+import { validateRunAs, WEEKDAYS, type BusinessHourRow, type BusinessHolidayRow, type GatewayFull } from './model';
 
 const save = (name: string, patch: Record<string, unknown>) => updateGateway(name, patch as Partial<GatewayDoc>);
 
@@ -130,18 +130,23 @@ export function RunAsPanel({ gw, gateway, onSaved }: PanelProps) {
 export function HoursPanel({ gw, gateway, onSaved }: PanelProps) {
   const [enabled, setEnabled] = useState(!!gateway?.business_hours_enabled);
   const [rows, setRows] = useState<BusinessHourRow[]>(gateway?.business_hours ?? []);
-  const [holiday, setHoliday] = useState(gateway?.holiday_list ?? '');
+  const [holidays, setHolidays] = useState<BusinessHolidayRow[]>(gateway?.holidays ?? []);
+  const [holidayList, setHolidayList] = useState(gateway?.holiday_list ?? '');
   const [mode, setMode] = useState(gateway?.after_hours_mode ?? 'agent_24_7');
   const [message, setMessage] = useState(gateway?.away_message ?? '');
   const [template, setTemplate] = useState(gateway?.away_template ?? '');
   const [busy, setBusy] = useState(false);
   const setRow = (i: number, patch: Partial<BusinessHourRow>) =>
     setRows((r) => r.map((row, j) => (j === i ? { ...row, ...patch } : row)));
+  const setHolidayRow = (i: number, patch: Partial<BusinessHolidayRow>) =>
+    setHolidays((r) => r.map((row, j) => (j === i ? { ...row, ...patch } : row)));
   const submit = async () => {
     setBusy(true);
     try {
       await save(gw, {
-        business_hours_enabled: enabled ? 1 : 0, business_hours: rows, holiday_list: holiday,
+        business_hours_enabled: enabled ? 1 : 0, business_hours: rows,
+        holidays: holidays.filter((h) => h.holiday_date),
+        holiday_list: holidayList,
         after_hours_mode: mode, away_message: message, away_template: template,
       });
       toast.success('Business hours saved');
@@ -174,7 +179,22 @@ export function HoursPanel({ gw, gateway, onSaved }: PanelProps) {
           </div>
         ))}
         <div><Button variant="outline" onClick={() => setRows((r) => [...r, { weekday: 'Monday', start_time: '09:00', end_time: '17:00' }])}>Add hours</Button></div>
-        <Field label="Holiday list" size="sm">{(fp) => <Input {...fp} value={holiday} onChange={(e) => setHoliday(e.target.value)} />}</Field>
+        <div className="grid gap-2">
+          <span className="text-sm font-medium">Holidays</span>
+          {holidays.map((h, i) => (
+            <div key={i} className="flex items-end gap-2">
+              <Field label="Date" size="sm">
+                {(fp) => <Input {...fp} type="date" aria-label={`Holiday date ${i + 1}`} value={h.holiday_date} onChange={(e) => setHolidayRow(i, { holiday_date: e.target.value })} />}
+              </Field>
+              <Field label="Description" size="sm">
+                {(fp) => <Input {...fp} value={h.description ?? ''} onChange={(e) => setHolidayRow(i, { description: e.target.value })} />}
+              </Field>
+              <Button variant="ghost" onClick={() => setHolidays((r) => r.filter((_, j) => j !== i))}>Remove</Button>
+            </div>
+          ))}
+          <div><Button variant="outline" onClick={() => setHolidays((r) => [...r, { holiday_date: '', description: '' }])}>Add holiday</Button></div>
+        </div>
+        <Field label="ERPNext Holiday List name (optional)" size="sm">{(fp) => <Input {...fp} value={holidayList} onChange={(e) => setHolidayList(e.target.value)} />}</Field>
         <Field label="After hours" size="sm">
           {(fp) => (
             <Select value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
