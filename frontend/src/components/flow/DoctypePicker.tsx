@@ -83,7 +83,7 @@ export function DoctypePicker({ id, testId, options, value, onChange, onClosed, 
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-64 p-0" align="start">
         <Command shouldFilter={false}>
-          <CommandInput placeholder="Search document types" value={query} onValueChange={setQuery} data-testid={`${testId}-search`} />
+          <CommandInput placeholder="Search document types..." value={query} onValueChange={setQuery} data-testid={`${testId}-search`} />
           <CommandList>
             <CommandEmpty>{options.length ? 'Nothing matches that. Try a shorter word.' : 'No document types are available to your account.'}</CommandEmpty>
             {flat ? (
