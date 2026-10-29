@@ -45,6 +45,8 @@ interface ItemCardProps {
   status?: {
     label: string;
     variant?: BadgeVariant;
+    /** Replaces the dot + word (for example a StatusPill). `label` stays the accessible text. */
+    node?: ReactNode;
   };
   metadata?: MetadataItem[];
   badges?: Array<{ label: ReactNode; variant?: BadgeVariant }>;
@@ -98,8 +100,12 @@ export function ItemCard({
           )}
           {status && (
             <CardAction className="top-5 flex items-center gap-2">
-              <StatusDot variant={badgeVariantToStatusDot(status.variant)} />
-              <span className="font-body text-[13px] font-medium text-steel">{status.label}</span>
+              {status.node ?? (
+                <>
+                  <StatusDot variant={badgeVariantToStatusDot(status.variant)} />
+                  <span className="font-body text-[13px] font-medium text-steel">{status.label}</span>
+                </>
+              )}
             </CardAction>
           )}
         </CardHeader>

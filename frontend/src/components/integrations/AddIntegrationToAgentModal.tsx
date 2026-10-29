@@ -195,7 +195,7 @@ export function AddIntegrationToAgentModal({
         <DialogScrollHeader>
           <DialogTitle className="flex items-center gap-2">
             <Bot className="w-5 h-5" />
-            Add to Agent
+            Use in agent
           </DialogTitle>
           <DialogDescription>
             <div className="space-y-2">

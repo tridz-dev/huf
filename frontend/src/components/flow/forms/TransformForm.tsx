@@ -1,9 +1,9 @@
 import { FieldHint } from '../FieldHint';
 import { FlowValueInput } from '../../FlowValueInput';
 import { Label } from '../../ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '../../ui/select';
 import { TRANSFORM_HELP, transformParamHelp } from '@/lib/flow/flowHelp';
-import { getTransformOp, TRANSFORM_OPS } from '@/lib/flow-graph/flowTransformOps';
+import { getTransformOp, TRANSFORM_OPS, TRANSFORM_SECTIONS } from '@/lib/flow-graph/flowTransformOps';
 import { type ActionFormProps, asObj, Section, str } from './formKit';
 
 export function TransformForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps) {
@@ -21,8 +21,13 @@ export function TransformForm({ nodeId, cfg, patch, f, Err, title }: ActionFormP
             <SelectValue placeholder="Choose an operation..." />
           </SelectTrigger>
           <SelectContent>
-            {TRANSFORM_OPS.map((o) => (
-              <SelectItem key={o.name} value={o.name} data-testid={`flow-option-transform-op-${o.name}`}>{o.label}</SelectItem>
+            {TRANSFORM_SECTIONS.map((sec) => (
+              <SelectGroup key={sec.id} data-testid={`flow-transform-group-${sec.id}`}>
+                <SelectLabel>{sec.title}</SelectLabel>
+                {TRANSFORM_OPS.filter((o) => o.section === sec.id).map((o) => (
+                  <SelectItem key={o.name} value={o.name} data-testid={`flow-option-transform-op-${o.name}`}>{o.label}</SelectItem>
+                ))}
+              </SelectGroup>
             ))}
           </SelectContent>
         </Select>

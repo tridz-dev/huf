@@ -10,7 +10,7 @@ vi.mock('../services/flowApi', () => ({
   rejectFlowRun: vi.fn(),
 }));
 vi.mock('../contexts/UserContext', () => ({ useUser: () => ({ isAuthenticated: true }) }));
-vi.mock('@/lib/serverTime', () => ({ formatAbsoluteTime: () => 'now', useSiteTimezone: () => 'UTC' }));
+vi.mock('@/lib/serverTime', () => ({ formatAbsoluteTime: () => 'Oct 29, 2026, 5:15 PM', parseServerDate: (v: string) => new Date(v), useSiteTimezone: () => 'UTC' }));
 vi.mock('@/utils/time', () => ({ formatTimeAgo: () => 'just now' }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -66,5 +66,16 @@ describe('ApprovalsBell decisions', () => {
     release({ flow_run_id: 'r1', status: 'Running', current_node_id: 'no' });
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Rejected. The flow will follow its rejected path.'));
     await waitFor(() => expect(screen.getByTestId('flow-reject-r1')).not.toBeDisabled());
+  });
+
+  it('reads a message that has data written into it as a sentence, never as JSON', async () => {
+    const withJson = { ...item('r9'), message: 'Approve this order: {"amount":42,"customer":{"name":"Ada"},"note":null,"sent_at":"2026-10-29T17:15:54Z"}', instructions: '' };
+    vi.mocked(getPendingApprovals).mockResolvedValue([withJson]);
+    await openBell();
+    const text = (await screen.findByTestId('flow-approval-message-r9')).textContent ?? '';
+    expect(text).toMatch(/^Approve this order: /);
+    expect(text).toContain('Amount: 42');
+    expect(text).toContain('Customer: Ada');
+    expect(text).not.toMatch(/[{}"]|null|2026-10-29T/);
   });
 });

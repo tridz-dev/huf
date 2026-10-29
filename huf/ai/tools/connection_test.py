@@ -9,16 +9,18 @@ never stores anything and never returns credential values.
 """
 
 import json
+import re
+import time
 
 import frappe
 import httpx
 from frappe import _
+from frappe.utils import now_datetime
 
 from huf.ai.tools.integration.provider_errors import (
 	ProviderCredentialError,
 	check_google_response,
 	mint_google_access_token,
-	not_connected_message,
 	slack_error_message,
 )
 
@@ -30,7 +32,39 @@ SERVICE_KEYS = {
 	"slack": ("token",),
 }
 LABELS = {"gmail": "Gmail", "google_drive": "Google Drive", "google_sheets": "Google Sheets", "slack": "Slack"}
+KEY_NAMES = {
+	"client_id": "the client ID",
+	"client_secret": "the client secret",
+	"refresh_token": "the refresh token",
+	"token": "the bot token",
+}
 ALLOWED_ROLES = ("System Manager", "Huf Manager")
+# Seconds the Recipients tab / flow step may wait for Slack before it shows an error with a retry.
+CHANNEL_LIST_TIMEOUT = 10
+CHANNEL_LIST_BUDGET = 20
+
+
+def _list_of(names: list[str]) -> str:
+	if len(names) <= 1:
+		return "".join(names)
+	return ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def _missing_error(service: str, creds: dict) -> "ProviderCredentialError | None":
+	"""Nothing (or not everything) saved: told apart from credentials the provider refused."""
+	missing = [k for k in SERVICE_KEYS[service] if not creds.get(k)]
+	if not missing:
+		return None
+	if len(missing) == len(SERVICE_KEYS[service]):
+		message = f"No credentials saved yet. Add {_list_of([KEY_NAMES[k] for k in missing])} first."
+	else:
+		message = f"Some credentials are missing: add {_list_of([KEY_NAMES[k] for k in missing])}."
+	return ProviderCredentialError(message, kind="missing")
+
+
+def _on_this_screen(label: str, message: str) -> str:
+	"""The provider copy ends with "Reconnect X in Integrations."; on the Integrations screen that is replaced by the next step."""
+	return re.sub(rf"\s*Reconnect {re.escape(label)} in Integrations\.$", " Update them below, then test again.", message)
 
 
 def _resolve_credentials(service: str, setting: str | None, provided: dict) -> dict:
@@ -53,14 +87,10 @@ def _resolve_credentials(service: str, setting: str | None, provided: dict) -> d
 
 
 def _google_tokens(label: str, creds: dict) -> str:
-	if not all(creds.get(k) for k in GOOGLE_KEYS):
-		raise ProviderCredentialError(
-			not_connected_message(label, "the client ID, client secret and refresh token"), kind="missing"
-		)
 	return mint_google_access_token(label, creds["client_id"], creds["client_secret"], creds["refresh_token"])["access_token"]
 
 
-def _test_gmail(creds: dict) -> str:
+def _test_gmail(creds: dict) -> tuple[str, str | None]:
 	token = _google_tokens("Gmail", creds)
 	resp = httpx.get(
 		"https://gmail.googleapis.com/gmail/v1/users/me/profile",
@@ -72,18 +102,18 @@ def _test_gmail(creds: dict) -> str:
 	except ProviderCredentialError as e:
 		if e.kind == "scope":
 			# The token itself is accepted; sending only needs gmail.send, which cannot read the profile.
-			return "Google accepted the saved credentials. They cannot read the mailbox profile, which is fine for sending (gmail.send)."
+			return "Google accepted the saved credentials. They cannot read the mailbox profile, which is fine for sending (gmail.send).", None
 		raise
 	address = resp.json().get("emailAddress")
-	return f"Connected to Gmail as {address}." if address else "Google accepted the saved credentials."
+	return (f"Connected to Gmail as {address}." if address else "Google accepted the saved credentials."), address
 
 
-def _test_sheets(creds: dict) -> str:
+def _test_sheets(creds: dict) -> tuple[str, str | None]:
 	_google_tokens("Google Sheets", creds)
-	return "Google accepted the saved credentials. Sheets has no read-only check, so access to a specific spreadsheet is only confirmed when a step runs."
+	return "Google accepted the saved credentials. Sheets has no read-only check, so access to a specific spreadsheet is only confirmed when a step runs.", None
 
 
-def _test_drive(creds: dict) -> str:
+def _test_drive(creds: dict) -> tuple[str, str | None]:
 	token = _google_tokens("Google Drive", creds)
 	resp = httpx.get(
 		"https://www.googleapis.com/drive/v3/about",
@@ -94,23 +124,38 @@ def _test_drive(creds: dict) -> str:
 	check_google_response(resp, "Google Drive", "drive.readonly")
 	user = resp.json().get("user") or {}
 	who = user.get("emailAddress") or user.get("displayName")
-	return f"Connected to Google Drive as {who}." if who else "Google accepted the saved credentials."
+	return (f"Connected to Google Drive as {who}." if who else "Google accepted the saved credentials."), who
 
 
-def _test_slack(creds: dict) -> str:
+def _test_slack(creds: dict) -> tuple[str, str | None]:
 	token = creds.get("token")
-	if not token:
-		raise ProviderCredentialError(not_connected_message("Slack", "the bot token"), kind="missing")
 	resp = httpx.post("https://slack.com/api/auth.test", headers={"Authorization": f"Bearer {token}"}, timeout=15)
 	resp.raise_for_status()
 	data = resp.json()
 	if not data.get("ok"):
 		raise ProviderCredentialError(slack_error_message(data))
 	team, user = data.get("team"), data.get("user")
-	return f"Connected to Slack workspace {team} as {user}." if team and user else "Slack accepted the saved token."
+	message = f"Connected to Slack workspace {team} as {user}." if team and user else "Slack accepted the saved token."
+	return message, team
 
 
 _TESTERS = {"gmail": _test_gmail, "google_sheets": _test_sheets, "google_drive": _test_drive, "slack": _test_slack}
+
+
+def _remember_check(setting: str, result: dict) -> None:
+	"""Keep the answer of a check of the SAVED credentials, so the list can show health without testing again.
+
+	A success also clears an older "last error": from then on any error shown is newer than the last good check.
+	"""
+	values = {
+		"last_test_status": result["status"],
+		"last_test_at": now_datetime(),
+		"last_test_message": result["message"][:500],
+		"account_label": (result.get("account") or "")[:140],
+	}
+	if result["status"] == "Connected":
+		values["last_error"] = ""
+	frappe.db.set_value("Integration Settings", setting, values, update_modified=False)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -119,7 +164,9 @@ def test_connection(service: str, setting: str | None = None, credentials: str |
 
 	setting: an Integration Settings name whose saved credentials are used.
 	credentials: optional values typed on the form (used instead of saved ones, never stored).
-	Returns ``{status: "Connected" | "Rejected" | "Not connected", message}``.
+	Returns ``{status, code, message, account?, checked_at?}``. status is Connected | Rejected | Not connected;
+	code is ok | no_credentials | missing_credentials | rejected | missing_permission | unreachable.
+	When only saved credentials were checked, the answer is also kept on the integration (not for ``unreachable``).
 	"""
 	frappe.only_for(ALLOWED_ROLES)
 	if service not in _TESTERS:
@@ -129,19 +176,42 @@ def test_connection(service: str, setting: str | None = None, credentials: str |
 	if isinstance(credentials, str):
 		credentials = json.loads(credentials or "{}")
 	provided = credentials if isinstance(credentials, dict) else {}
+	typed = any(isinstance(provided.get(k), str) and provided[k].strip() for k in SERVICE_KEYS[service])
 
 	label = LABELS[service]
+	result: dict
 	try:
-		message = _TESTERS[service](_resolve_credentials(service, setting, provided))
-		return {"status": "Connected", "message": message}
+		creds = _resolve_credentials(service, setting, provided)
+		missing = _missing_error(service, creds)
+		if missing:
+			raise missing
+		message, account = _TESTERS[service](creds)
+		result = {"status": "Connected", "code": "ok", "message": message, "account": account}
 	except ProviderCredentialError as e:
-		return {"status": "Not connected" if e.kind == "missing" else "Rejected", "message": str(e)}
+		if e.kind == "missing":
+			code = "no_credentials" if str(e).startswith("No credentials") else "missing_credentials"
+			result = {"status": "Not connected", "code": code, "message": str(e)}
+		else:
+			result = {
+				"status": "Rejected",
+				"code": "missing_permission" if e.kind == "scope" else "rejected",
+				"message": _on_this_screen(label, str(e)),
+			}
 	except (httpx.TransportError, httpx.HTTPStatusError) as e:
 		frappe.logger("huf").warning(f"{label} test connection failed: {type(e).__name__}")
-		return {"status": "Rejected", "message": f"Could not check {label} right now. Check the server's internet access and try again."}
+		return {
+			"status": "Rejected",
+			"code": "unreachable",
+			"message": f"Could not check {label} right now. Check the server's internet access and try again.",
+		}
 	except Exception:
 		frappe.log_error(title=f"{label} test connection")
-		return {"status": "Rejected", "message": f"Could not check {label}. The details are in the error log."}
+		return {"status": "Rejected", "code": "unreachable", "message": f"Could not check {label}. The details are in the error log."}
+
+	if setting and not typed:
+		_remember_check(setting, result)
+		result["checked_at"] = str(now_datetime())
+	return result
 
 
 def slack_channels_for_setting(setting: str | None) -> dict:
@@ -155,15 +225,17 @@ def slack_channels_for_setting(setting: str | None) -> dict:
 
 		token = get_credential("slack", "token")
 	if not token:
-		return {"status": "Not connected", "message": not_connected_message("Slack", "the bot token"), "channels": []}
+		return {"status": "Not connected", "code": "no_credentials", "message": "No credentials saved yet. Add the bot token first.", "channels": []}
 	try:
-		channels = fetch_channels(token, force=True)
+		channels = fetch_channels(
+			token, force=True, timeout=CHANNEL_LIST_TIMEOUT, deadline=time.monotonic() + CHANNEL_LIST_BUDGET
+		)
 	except SlackChannelError as e:
-		return {"status": "Rejected", "message": str(e), "channels": []}
+		return {"status": "Rejected", "code": "rejected", "message": str(e), "channels": []}
 	except (httpx.TransportError, httpx.HTTPStatusError) as e:
 		frappe.logger("huf").warning(f"Slack channel list failed: {type(e).__name__}")
-		return {"status": "Rejected", "message": "Could not reach Slack right now. Try again.", "channels": []}
-	return {"status": "Connected", "channels": sorted(channels, key=lambda c: (c.get("name") or ""))}
+		return {"status": "Rejected", "code": "unreachable", "message": "Could not reach Slack right now. Try again.", "channels": []}
+	return {"status": "Connected", "code": "ok", "channels": sorted(channels, key=lambda c: (c.get("name") or ""))}
 
 
 @frappe.whitelist(methods=["POST"])

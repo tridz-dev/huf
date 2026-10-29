@@ -18,14 +18,15 @@ import { useFlowContext } from '../contexts/FlowContext';
 import { RunFlowDialog } from '../components/flow/RunFlowDialog';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { FLOW_GUIDE_URL } from '@/lib/flow/flowHelp';
+import { flowStatusKind, StatusPill, statusLabel } from '../components/common/StatusPill';
 import { FlowSettingsModal } from '../components/modals/FlowSettingsModal';
 
 const statusOptions = [
   { label: 'All status', value: 'all' },
-  { label: 'Active', value: 'active' },
-  { label: 'Draft', value: 'draft' },
-  { label: 'Paused', value: 'paused' },
-  { label: 'Error', value: 'error' },
+  { label: statusLabel('live'), value: 'active' },
+  { label: statusLabel('draft'), value: 'draft' },
+  { label: statusLabel('archived'), value: 'paused' },
+  { label: statusLabel('has_problems'), value: 'error' },
 ];
 
 const categoryOptions = [
@@ -37,19 +38,6 @@ const categoryOptions = [
   { label: 'Sales', value: 'sales' },
   { label: 'Huf Demo', value: 'huf demo' },
 ];
-
-function getStatusVariant(status: FlowMetadata['status']) {
-  switch (status) {
-    case 'active':
-      return 'success';
-    case 'error':
-      return 'destructive';
-    case 'paused':
-      return 'secondary';
-    default:
-      return 'outline';
-  }
-}
 
 export { FlowListPage };
 export default FlowListPage;
@@ -243,8 +231,8 @@ function FlowListPage() {
             title={flow.name}
             description={flow.description || 'No description'}
             status={{
-              label: flow.status,
-              variant: getStatusVariant(flow.status),
+              label: statusLabel(flowStatusKind(flow.status)),
+              node: <StatusPill kind={flowStatusKind(flow.status)} data-testid={`flow-list-status-${flow.id}`} />,
             }}
             metadata={[
               { label: 'Category', value: flow.category || 'Uncategorized' },
