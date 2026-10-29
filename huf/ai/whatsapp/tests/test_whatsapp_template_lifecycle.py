@@ -98,6 +98,8 @@ class LifecycleCase(fgc.FakeGraphCase):
 
 	def _agent(self, action, **kwargs):
 		"""Call the agent tool the way a run does: the run's gateway is bound server-side (never a tool argument)."""
+		# these tool actions manage the gateway's bridge account: point the run's gateway at it (rolled back with the test)
+		frappe.db.set_value("Gateway", self.direct_gateway.name, "whatsapp_account", self.account.name)
 		with wa_tool.trusted_gateway(self.direct_gateway.name):
 			return wa_tool.handle_action(action, **kwargs)
 
