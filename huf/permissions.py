@@ -345,19 +345,31 @@ def get_me() -> dict:
 	user = frappe.session.user
 	full_name = frappe.db.get_value("User", user, "full_name") or user
 
+	capabilities, withheld = _split_capabilities_by_what_the_server_honours(user)
 	return {
 		"user": user,
 		"full_name": full_name,
 		"huf_role": get_user_huf_role(user),
-		"capabilities": _capabilities_the_server_honours(user),
+		"capabilities": capabilities,
+		# Granted by the Huf Role but not usable: the user's Frappe roles cannot write Flow Definition. The screens say so
+		# instead of leaving the person to wonder why a "Manage flows" role shows no editing buttons.
+		"withheld_capabilities": withheld,
 	}
 
 
-def _capabilities_the_server_honours(user: str) -> list[str]:
-	"""The capability list the screens act on. A Huf Role can grant flows.create / flows.manage to someone whose Frappe roles
-	cannot write Flow Definition; the server would refuse every save, so the screens must show those users view-only."""
+def _split_capabilities_by_what_the_server_honours(user: str) -> tuple[list[str], list[str]]:
+	"""(capabilities the screens act on, capabilities the Huf Role grants that the server would refuse).
+
+	A Huf Role can grant flows.create / flows.manage to someone whose Frappe roles cannot write Flow Definition (the Huf Role's
+	`frappe_role` decides that); the server would refuse every save, so the screens must show those users view-only."""
 	capabilities = list(get_user_capabilities(user))
+	withheld: list[str] = []
 	for capability, ptype in (("flows.create", "create"), ("flows.manage", "write")):
 		if capability in capabilities and not frappe.has_permission("Flow Definition", ptype, user=user):
 			capabilities.remove(capability)
-	return capabilities
+			withheld.append(capability)
+	return capabilities, withheld
+
+
+def _capabilities_the_server_honours(user: str) -> list[str]:
+	return _split_capabilities_by_what_the_server_honours(user)[0]

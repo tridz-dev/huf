@@ -3,7 +3,7 @@ import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useLocati
 import { AnimatePresence, motion } from 'motion/react';
 import { UserProvider } from './contexts/UserContext';
 import { PermissionsProvider, usePermissions } from './contexts/PermissionsContext';
-import { ProtectedRoute } from './components/ProtectedRoute';
+import { ProtectedRoute, PAGE_ACCESS, PAGE_ACCESS_ANY } from './components/ProtectedRoute';
 import { AuthenticatingPage } from './components/AuthenticatingPage';
 import { FlowProvider } from './contexts/FlowContext';
 import { ModalProvider } from './contexts/ModalContext';
@@ -173,7 +173,7 @@ function AppShell() {
           <Route
             path="/"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.hub} pageName="The Hub">
                 <UnifiedLayout hideHeader>
                   <Suspense fallback={<PageLoader />}>
                     <HubSimplePage />
@@ -185,7 +185,7 @@ function AppShell() {
           <Route
             path="/dashboard"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.dashboard} pageName="The dashboard">
                 <UnifiedLayout headerActions={<HomeHeaderActions />}>
                   <Suspense fallback={<PageLoader />}>
                     <HomePage />
@@ -209,7 +209,7 @@ function AppShell() {
           <Route
             path="/agents"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.agents} pageName="Agents">
                 <UnifiedLayout headerActions={<AgentsHeaderActions />}>
                   <Suspense fallback={<PageLoader />}>
                     <AgentsPage />
@@ -221,7 +221,7 @@ function AppShell() {
           <Route
             path="/agents/:id"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.agents} pageName="Agents">
                 <Suspense fallback={<PageLoader />}>
                   <AgentFormPageWrapper />
                 </Suspense>
@@ -442,7 +442,7 @@ function AppShell() {
           <Route
             path="/flows"
             element={
-              <ProtectedRoute requiredCapability="flows.use">
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.flows} pageName="Flows">
                 <FlowProvider>
                   <UnifiedLayout headerActions={<FlowsListHeaderActions />}>
                     <Suspense fallback={<PageLoader />}>
@@ -456,7 +456,7 @@ function AppShell() {
           <Route
             path="/flows/:flowId"
             element={
-              <ProtectedRoute requiredCapability="flows.use">
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.flows} pageName="Flows">
                 <FlowProvider>
                   <ModalProvider>
                     <Suspense fallback={<PageLoader />}>
@@ -562,7 +562,7 @@ function AppShell() {
           <Route
             path="/executions"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.executions} pageName="Executions">
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <Executions />
@@ -587,7 +587,7 @@ function AppShell() {
           <Route
             path="/executions/:runId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.executions} pageName="Executions">
                 <Suspense fallback={<PageLoader />}>
                   <AgentRunDetailPageWrapper />
                 </Suspense>
@@ -656,7 +656,7 @@ function AppShell() {
           <Route
             path="/settings"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.settings} pageName="Settings">
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <AgentSettingsPage />
@@ -668,7 +668,7 @@ function AppShell() {
           <Route
             path="/settings/general"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS_ANY} pageName="Settings">
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <GeneralSettingsPage />
@@ -680,7 +680,7 @@ function AppShell() {
           <Route
             path="/settings/developer"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS_ANY} pageName="Settings">
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <DeveloperSettingsPage />

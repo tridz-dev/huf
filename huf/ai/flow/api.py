@@ -19,6 +19,7 @@ from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.api_support import require_permission
 from huf.ai.flow.support.approval_card import build_card
+from huf.ai.flow.support.decision_rights import approval_decision_rights
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
 from huf.ai.flow.support.redact import definition_for_user
 
@@ -394,6 +395,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 		pass
 
 	stale = _is_stale(doc.status, doc.modified)
+	can_decide, cannot_decide_reason = approval_decision_rights(doc.status, waiting)
 	return {
 		"flow_run_id": doc.name,
 		"flow_id": doc.flow_id,
@@ -415,6 +417,8 @@ def get_flow_run(flow_run_id: str) -> dict:
 		"stale": stale,
 		"can_mark_failed": stale and _can_mark_failed(),
 		"stale_after_minutes": STALE_RUN_MINUTES,
+		"can_decide": can_decide,
+		"cannot_decide_reason": cannot_decide_reason,
 	}
 
 
@@ -1143,14 +1147,9 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 @frappe.whitelist()
 def get_pending_approvals(limit: int = 50) -> list:
 	"""
-	Get list of flow runs waiting for approval that the current user can approve.
-	
-	This endpoint is used by the Approval Inbox feature to show users
-	all pending approvals that require their attention.
-	
+	Get list of flow runs waiting for approval that the current user can approve (used by the Approval Inbox).
 	Args:
 	    limit: Maximum number of results (default 50)
-	
 	Returns:
 	    list of pending approval items with flow details
 	"""

@@ -250,3 +250,17 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-publish-dialog`, `flow-publish-summary` (`data-start-kind`), `flow-publish-warnings`, `flow-publish-warning-unconnected`, `flow-publish-warning-problem`, `flow-publish-connect`, `flow-publish-cancel`, `flow-publish-confirm` | Publish summary: what will start the flow (+ web address with Copy for a webhook), warnings, confirm |
 | `flow-settings-more`, `flow-settings-danger-zone`, `flow-settings-category-new`, `flow-settings-name-error`, `flow-settings-error` | Settings: collapsed "More" (holds `flow-settings-auto-convert`), Danger zone, new-category input, inline errors |
 | `flow-settings-delete` (opens the in-dialog confirm), `flow-settings-delete-title`, `flow-settings-delete-cancel`, `flow-settings-delete-confirm` | Settings deletion: the confirm replaces the dialog body (no second dialog) |
+
+## UX-23 responsive shell, phone steps list, roles
+| testid | Where |
+|---|---|
+| `flow-page` (`data-layout` = `docked` / `sheet` / `phone`) | The editor page. `docked`: step panel beside the canvas; `sheet`: panel opens over it (canvas would drop under 520px); `phone`: under 768px |
+| `flow-header-more`, `flow-header-more-menu`, `flow-status-pill-menu` | Header "..." menu at 1200px and narrower (and on a phone). It holds `flow-runs` (Run history), `flow-settings` (Flow settings), `flow-help`, `flow-tidy-layout`, `flow-convert-to-procedure` / `flow-saved-as-procedure`; on a phone also `flow-phone-view-toggle-menu` (Show map / Show steps) |
+| `flow-name` | The flow name in the header (tooltip carries the whole name) |
+| `flow-step-panel` (`data-width`), `flow-panel-resizer` | Docked step panel and its grab bar (role separator, 300-480, arrow keys, remembered) |
+| `flow-step-sheet`, `flow-sheet-back` | Step settings as a sheet (under ~900px and on a phone) and its "Back to the flow" control; `flow-phone-read-only-note` on a phone |
+| `flow-phone-banner`, `flow-phone-view-steps`, `flow-phone-show-map` | Phone: the "Editing steps works best on a larger screen" note with View steps, and the Show map button |
+| `flow-steps-list`, `flow-step-card-<nodeId>` (+ `-title-`, `-summary-`, `-status-`), `flow-step-branch-<nodeId>` | Phone steps list: one card per step in reading order (icon, title, one line, status); branch name above the first step of a branch |
+| `flow-run-decision-bar`, `flow-run-decision-inline`, `flow-run-cannot-decide`, `flow-run-back` | Run details: sticky Approve / Reject bar on a phone, the inline pair elsewhere, the sentence shown to someone who may not decide, the "Runs" back button |
+| `flow-approval-group-<firstRunId>`, `flow-approval-group-heading` | Bell: identical requests grouped under "3 waiting: Order approval" (every request keeps its own `flow-approve-<runId>` / `flow-reject-<runId>`) |
+| `no-access-page`, `no-access-title`, `no-access-body`, `no-access-go-flows`, `no-access-go-hub` | "You don't have access to this page" (Hub, Flows, Executions, Settings, Agents, Dashboard) |

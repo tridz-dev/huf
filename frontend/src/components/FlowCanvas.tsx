@@ -24,6 +24,7 @@ import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { FlowNodeRail, NODE_RAIL_ACTION_CATEGORY, NodeRailCategory } from './FlowNodeRail';
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
 import { DeleteStepDialog } from './flow/DeleteStepDialog';
+import { KeepSelectedVisible } from './flow/canvas/KeepSelectedVisible';
 import { FIT_VIEW_OPTIONS, FitViewAfterRemovalOrLayout, FlowControls, FlowMiniMap, KeepSelectedClearOfToolbar, keepCanvasUnscrolled } from './flow/canvas/canvasView';
 import { useRenderedGraph } from './flow/canvas/useRenderedGraph';
 import { FlowCanvasToolbar } from './flow/canvas/FlowCanvasToolbar';
@@ -35,6 +36,7 @@ import { RENDER_ONLY_EDGE_PREFIX, RENDER_ONLY_NODE_PREFIX, addActionStep, comput
 import { toast } from '@/lib/toast';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { FirstRunGuide } from './flow/FirstRunGuide';
+import { useViewport } from '@/lib/ui/responsive';
 import { ensureToolSchemasLoaded } from '../lib/flow/flowToolSchemas';
 import { triggerLabel } from '../lib/flow/flowLabels';
 import { FlowNodeData, TriggerConfig, ActionConfig, FlowEdgeRoute } from '../types/flow.types';
@@ -70,6 +72,8 @@ export function FlowCanvas({
     layoutRevision,
   } = useFlowContext();
   const { canManage, readOnlyReason } = useFlowPermissions();
+  // 1200px and narrower: Tidy layout and Convert to procedure live in the header's "..." menu. A phone has no editing tools at all.
+  const { isCompact, isPhone } = useViewport();
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
   // Delete / Backspace on a selected step asks first (the click-to-delete buttons already do).
   const [keyboardDeleteId, setKeyboardDeleteId] = useState<string | null>(null);
@@ -484,7 +488,7 @@ export function FlowCanvas({
 
   return (
     <div className="flex-1 flex w-full h-full overflow-hidden" data-testid="flow-canvas">
-      {canManage && (
+      {canManage && !isPhone && (
       <FlowNodeRail
         activeCategory={railActiveCategory}
         disabledCategories={railDisabledCategories}
@@ -518,14 +522,17 @@ export function FlowCanvas({
         <FlowControls className="!bottom-6 !rounded-lg !border !border-line !overflow-hidden !shadow-sm" />
         <FlowMiniMap stepCount={nodes.length} />
         <KeepSelectedClearOfToolbar selectedNodeId={selectedNodeId} />
+        <KeepSelectedVisible selectedNodeId={selectedNodeId} />
         <FitViewAfterRemovalOrLayout flowId={activeFlow?.id} nodeCount={activeFlow?.nodes.length ?? 0} edgeCount={activeFlow?.edges.length ?? 0} layoutRevision={layoutRevision} />
-        {canManage && nodes.length <= 1 && <FirstRunGuide />}
+        {canManage && !isPhone && !selectedNodeId && nodes.length <= 1 && <FirstRunGuide />}
         <Panel position="top-right" className="m-2">
           <FlowCanvasToolbar
             canManage={canManage}
             readOnlyReason={readOnlyReason}
             hasTrigger={nodes.some((n) => n.data.nodeType === 'trigger')}
             hasSteps={nodes.length > 1}
+            editTools={!isCompact}
+            phone={isPhone}
             convertedProcedure={convertedProcedure}
             onAddTrigger={() => {
               setModalMode('trigger');
