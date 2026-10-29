@@ -188,7 +188,7 @@ function FlowListPage() {
   return (
     <PageFrame
       title="Flows"
-      badge={<ExperimentalBadge />}
+      badge={<ExperimentalBadge className="max-sm:hidden" />}
       meta={!loading && total > 0 ? <span className="hidden sm:inline">{`${total} ${total === 1 ? 'flow' : 'flows'}`}</span> : undefined}
       actions={<FlowsListHeaderActions />}
       filters={

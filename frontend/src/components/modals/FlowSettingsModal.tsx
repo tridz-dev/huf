@@ -160,16 +160,14 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
           <>
             <DialogScrollHeader>
               <DialogTitle data-testid="flow-settings-delete-title">{DELETE_FLOW_TITLE}</DialogTitle>
-              <DialogDescription asChild>
-                <div>
-                  <span className="mb-2 block break-words font-medium text-foreground" title={activeFlow?.name} data-testid="flow-delete-name">
-                    {activeFlow?.name}
-                  </span>
-                  {deleteFlowMessage(isLive)}
-                </div>
-              </DialogDescription>
+              <DialogDescription className="sr-only">{deleteFlowMessage(isLive)}</DialogDescription>
             </DialogScrollHeader>
-            <DialogScrollBody className="py-2" />
+            <DialogScrollBody className="grid content-start gap-2 py-4">
+              <span className="break-words font-medium text-foreground" title={activeFlow?.name} data-testid="flow-delete-name">
+                {activeFlow?.name}
+              </span>
+              <p className="text-sm text-muted-foreground">{deleteFlowMessage(isLive)}</p>
+            </DialogScrollBody>
             <DialogScrollFooter className="justify-end">
               <Button variant="outline" size="sm" data-testid="flow-settings-delete-cancel" onClick={() => setConfirmingDelete(false)} disabled={isDeleting}>
                 Cancel
