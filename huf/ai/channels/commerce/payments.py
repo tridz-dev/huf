@@ -147,6 +147,18 @@ def create_payment_link(order: str, gateway: str | None = None) -> dict[str, str
 	return link
 
 
+@frappe.whitelist(methods=["POST"])
+def create_order_payment_link(order: str) -> dict[str, Any]:
+	"""Admin action: create (and store) a payment link for a WhatsApp Order."""
+	from huf.ai.whatsapp import management as mgmt
+
+	mgmt._require_admin()
+	try:
+		return {"success": True, **create_payment_link(order)}
+	except PaymentError as e:
+		return {"success": False, "error": str(e)}
+
+
 def _handle(doc) -> str:
 	if getattr(doc, "conversation", None):
 		return frappe.db.get_value("Channel Conversation", doc.conversation, "contact_handle") or ""

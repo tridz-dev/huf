@@ -121,6 +121,18 @@ class TestCommercePayments(IntegrationTestCase):
 			payments.create_payment_link(o.name)
 		self.assertEqual(frappe.db.get_value(ORDER, o.name, "payment_link"), "https://rzp.io/y")
 
+	def test_create_order_payment_link_whitelisted_wrapper(self):
+		o = self._order()
+		self.assertIn(payments.create_order_payment_link, frappe.whitelisted)
+		with patch("huf.ai.channels.commerce.payments.requests.post", return_value=_resp(200, {"id": "p", "short_url": "https://rzp.io/z"})):
+			res = payments.create_order_payment_link(o.name)
+		self.assertEqual((res["success"], res["url"]), (True, "https://rzp.io/z"))
+		self.gw.db_set("payment_provider", "none")
+		self.assertEqual(payments.create_order_payment_link(o.name), {"success": False, "error": "no_payment_provider"})
+		frappe.set_user("Guest")
+		with self.assertRaises(frappe.PermissionError):
+			payments.create_order_payment_link(o.name)
+
 	# ---------------------------------------------------------------- signatures
 	def test_razorpay_signature(self):
 		body = b'{"a":1}'
