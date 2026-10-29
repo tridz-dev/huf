@@ -18,16 +18,21 @@ import {
     AlertDialogTitle,
 } from './ui/alert-dialog';
 import { useSiteTimezone } from '@/lib/serverTime';
-import { calculateDuration } from '@/utils/time';
+import { calculateDuration, formatTimeAgo } from '@/utils/time';
 import { DocFieldValue, readableRunError, TimeValue } from './flow/RunViewerParts';
 import { useFlowRunDetail } from '@/hooks/flow/useFlowRunDetail';
 import { runTimesSentence } from '@/lib/flow-run/flowTimeZone';
 import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
-import { asCodeStepOutput, describeDecision, flowRunStatusLabel, isFailedStepOutput, titleNodeIds, withoutFailureKeys } from '@/lib/flow-run/flowRunFormat';
+import { describeDecision, flowRunStatusLabel, isFailedStepOutput, titleNodeIds } from '@/lib/flow-run/flowRunFormat';
 import { deskDocUrl, summarizeDocPayload } from '@/lib/flow-run/flowRunDoc';
 import { decisionMovedRun } from '@/lib/flow-run/flowRunDecision';
 import { connectPath, notConnectedService } from '@/lib/flow/flowIntegrations';
-import { redactSecrets, summarizeToolOutput } from '@/lib/flow/flowToolSummary';
+import { redactSecrets } from '@/lib/flow/flowToolSummary';
+import { HumanValue } from '@/components/common/HumanValue';
+import { RunStepOutput } from './flow/RunStepOutput';
+import { friendlyRunTitle, humanizeMessageText, placeTriggerInput, startedByWords } from '@/lib/flow-run/humanize';
+import { useFlowRunIdentity } from '@/hooks/flow/useFlowRunIdentity';
+import { useUser } from '@/contexts/UserContext';
 import { Link } from 'react-router-dom';
 
 interface FlowRunViewerProps {
@@ -41,6 +46,13 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
     const { run, loading, setLoading, refreshRun } = useFlowRunDetail(runId);
     const [resumePayload, setResumePayload] = useState<string>('');
     const activeFlow = useOptionalFlowContext()?.activeFlow;
+    const { user } = useUser();
+    const identity = useFlowRunIdentity(runId);
+    const runTitle = friendlyRunTitle({
+        runNumber: identity?.run_number,
+        startedBy: run ? startedByWords({ triggerType: run.trigger_type, owner: identity?.started_by, ownerName: identity?.started_by_name, currentUser: user?.name }) : null,
+        ago: run?.started_at ? formatTimeAgo(run.started_at) : null,
+    });
     // A step saved without a title comes back from the server under its id: fall back to the editor's title for it.
     const titleOf = (nodeId: string): string | null => {
         const fromRun = run?.node_labels?.[nodeId];
@@ -48,6 +60,8 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
         const fromFlow = activeFlow?.nodes.find((n) => n.id === nodeId)?.data.label;
         return typeof fromFlow === 'string' && fromFlow ? fromFlow : fromRun || null;
     };
+    // Names for ids that show up inside step data and text (router choice, approval targets...).
+    const stepNames: Record<string, string> = Object.fromEntries(Object.keys(run?.node_labels ?? {}).map((id) => [id, titleOf(id) ?? id]));
     const labelOf = (nodeId: string | null | undefined) => (nodeId && titleOf(nodeId)) || nodeId || 'N/A';
 
     const handleApproval = async (decision: 'approved' | 'rejected') => {
@@ -122,8 +136,8 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                         <Box className="w-5 h-5 text-muted-foreground" />
                         Run details
                     </SheetTitle>
-                    <SheetDescription>
-                        {runId}
+                    <SheetDescription data-testid="flow-run-title" data-run-id={runId}>
+                        {runTitle}
                     </SheetDescription>
                 </SheetHeader>
 
@@ -240,8 +254,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                 }
                                 return null;
                             };
-                            const isEmpty = (o: unknown) =>
-                                o === undefined || o === null || o === '' || (typeof o === 'object' && Object.keys(o as object).length === 0);
+                            const placement = summarizeDocPayload(input, run.trigger_event) ? ({ mode: 'none' } as const) : placeTriggerInput(input, steps);
                             return (
                                 <>
                                     <div data-testid="flow-run-steps">
@@ -284,64 +297,17 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                                 )}
                                                             </div>
                                                         )}
-                                                        {(() => {
-                                                            // The reason is already shown above for a failed step: do not print it again in the output.
-                                                            const shown = titleNodeIds(
-                                                                st.failed && stepReason(st.id, st.output) ? withoutFailureKeys(st.output) : st.output,
-                                                                titleOf,
-                                                            );
-                                                            if (isEmpty(shown)) return null;
-                                                            // Tokens and auth headers never reach the screen, summarised or not.
-                                                            const safe = redactSecrets(shown);
-                                                            const toolId = activeFlow?.nodes.find((n) => n.id === st.id)?.data.actionConfig;
-                                                            const summary = st.failed
-                                                                ? null
-                                                                : summarizeToolOutput(toolId && toolId.type === 'tool-call' ? toolId.tool_id : undefined, st.output);
-                                                            const codeOut = asCodeStepOutput(safe);
-                                                            if (codeOut) {
-                                                                return (
-                                                                    <div className="mt-2 space-y-2" data-testid={`flow-run-step-output-${st.id}`}>
-                                                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                                            Exit status
-                                                                            <Badge variant={codeOut.exitStatus === 'Ok' ? 'success' : 'destructive'} data-testid="flow-code-output-exit">{codeOut.exitStatus}</Badge>
-                                                                        </div>
-                                                                        <div>
-                                                                            <div className="text-xs text-muted-foreground mb-1">Printed output</div>
-                                                                            {codeOut.stdout ? (
-                                                                                <pre data-testid="flow-code-output-stdout" className="max-h-60 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs">{codeOut.stdout}</pre>
-                                                                            ) : (
-                                                                                <p className="text-xs text-muted-foreground" data-testid="flow-code-output-stdout-empty">Nothing was printed.</p>
-                                                                            )}
-                                                                        </div>
-                                                                        {codeOut.result !== undefined && codeOut.result !== null && (
-                                                                            <div>
-                                                                                <div className="text-xs text-muted-foreground mb-1">Result</div>
-                                                                                <pre data-testid="flow-code-output-result" className="max-h-60 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs">
-                                                                                    {typeof codeOut.result === 'string' ? codeOut.result : JSON.stringify(codeOut.result, null, 2)}
-                                                                                </pre>
-                                                                            </div>
-                                                                        )}
-                                                                        {codeOut.truncated && (
-                                                                            <p className="text-xs text-warning" data-testid="flow-code-output-truncated">Output was cut off because it was too long.</p>
-                                                                        )}
-                                                                    </div>
-                                                                );
-                                                            }
-                                                            const raw = (
-                                                                <pre data-testid={`flow-run-step-output-${st.id}`} className="mt-2 bg-muted p-2 rounded text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-                                                                    {typeof safe === 'string' ? safe : JSON.stringify(safe, null, 2)}
-                                                                </pre>
-                                                            );
-                                                            return summary ? (
-                                                                <>
-                                                                    <div className="mt-1 text-sm" data-testid={`flow-run-summary-${st.id}`}>{summary}</div>
-                                                                    <details className="mt-1" data-testid={`flow-run-raw-${st.id}`}>
-                                                                        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">Show raw response</summary>
-                                                                        {raw}
-                                                                    </details>
-                                                                </>
-                                                            ) : raw;
-                                                        })()}
+                                                        <RunStepOutput
+                                                            stepId={st.id}
+                                                            output={st.output}
+                                                            failed={st.failed}
+                                                            reasonShown={!!stepReason(st.id, st.output)}
+                                                            decisionShown={!!describeDecision(st.output)}
+                                                            names={stepNames}
+                                                            titleOf={titleOf}
+                                                            toolId={(() => { const cfg = activeFlow?.nodes.find((n) => n.id === st.id)?.data.actionConfig; return cfg && cfg.type === 'tool-call' ? cfg.tool_id : undefined; })()}
+                                                            dataReceived={placement.mode === 'merged' && placement.stepId === st.id ? input : undefined}
+                                                        />
                                                     </li>
                                                 ))}
                                             </ol>
@@ -355,10 +321,16 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                             </div>
                                         );
                                         if (!doc) {
+                                            // The data the run started with is shown once: inside the first step when that step repeats it.
+                                            if (placement.mode === 'merged') return null;
                                             return (
-                                                <div>
-                                                    <h3 className="text-sm font-semibold mb-3">Trigger input</h3>
-                                                    {raw}
+                                                <div data-testid="flow-run-trigger-input">
+                                                    <h3 className="text-sm font-semibold mb-3">Data this run started with</h3>
+                                                    {placement.mode === 'none' ? (
+                                                        <p className="text-xs text-muted-foreground" data-testid="flow-run-input-empty">No data was sent with this run.</p>
+                                                    ) : (
+                                                        <HumanValue value={redactSecrets(input)} names={stepNames} testId="flow-run-human-input" raw rawTitle="Raw data this run started with" rawTextTestId="flow-run-input" />
+                                                    )}
                                                 </div>
                                             );
                                         }
@@ -414,12 +386,12 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                             <div>
                                                 <h4 className="font-semibold text-warning">{run.waiting.title as string || 'Approval Required'}</h4>
                                                 {((run.waiting.instructions || run.waiting.message) as string) && (
-                                                    <p className="text-sm text-warning mt-1" data-testid="flow-run-approval-message">{(run.waiting.instructions || run.waiting.message) as string}</p>
+                                                    <p className="text-sm text-warning mt-1" data-testid="flow-run-approval-message">{humanizeMessageText((run.waiting.instructions || run.waiting.message) as string, { names: stepNames })}</p>
                                                 )}
                                             </div>
                                             {(run.waiting.context_summary as string) && (
                                                 <div className="bg-background/80 p-3 rounded text-sm text-muted-foreground whitespace-pre-wrap">
-                                                    {run.waiting.context_summary as string}
+                                                    {humanizeMessageText(run.waiting.context_summary as string, { names: stepNames })}
                                                 </div>
                                             )}
                                             <div className="flex items-center gap-3 pt-2">
