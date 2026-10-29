@@ -2811,6 +2811,52 @@ LAZY_DISCOVERY_TOOLS = [
 	},
 ]
 
+# Hub gateway setup (PLAN 4.3 P0a). Admin-only: each handler checks system.integrations.manage.
+# Deliberately no setup_gateway here: credentials go through the secure setup wizard, never chat.
+GATEWAY_SETUP_TOOLS = [
+	{
+		"tool_name": "test_gateway_health",
+		"description": (
+			"Run the health probe for a WhatsApp/channel Gateway: whether it is enabled, its last event and last error, "
+			"and whether its stored credentials initialize the adapter. Use after the user says they finished entering "
+			"credentials in the setup wizard; if the probe is not verified yet, call it again later (poll) rather than "
+			"telling the user it is done. Admin only."
+		),
+		"function_path": "huf.ai.tools.gateway_pairing_tools.test_gateway_health",
+		"category": "Builder",
+		"parameters": [
+			_p("gateway_name", required=True, description="Name of the Gateway document to check"),
+		],
+	},
+	{
+		"tool_name": "list_pairing_requests",
+		"description": (
+			"List pending (unexpired) pairing requests: people who messaged the channel and wait for approval. "
+			"Codes are masked. Use it to show who is waiting, then approve_pairing_code after the user confirms. Admin only."
+		),
+		"function_path": "huf.ai.tools.gateway_pairing_tools.list_pairing_requests",
+		"category": "Builder",
+		"parameters": [
+			_p("gateway_name", description="Optional Gateway name to filter pending requests"),
+		],
+	},
+	{
+		"tool_name": "approve_pairing_code",
+		"description": (
+			"Approve a pending pairing request so that person can chat with the channel. Pass the pairing code the user "
+			"gives you (or the entry id from list_pairing_requests). Only call it after the user confirms the person. Admin only."
+		),
+		"function_path": "huf.ai.tools.gateway_pairing_tools.approve_pairing_code",
+		"category": "Builder",
+		"parameters": [
+			_p("pairing_code_or_id", required=True, description="The pairing code (e.g. PAIR-7A9KXM4Q) or the entry id"),
+			_p("gateway_name", description="Gateway the code belongs to (required when using a code)"),
+			_p("notes", description="Optional notes recorded with the approval"),
+		],
+	},
+]
+
+
 ALL_INTEGRATION_TOOLS = (
 	# Platform capabilities — no external account to connect.
 	RECIPIENT_TOOLS
@@ -2833,6 +2879,7 @@ ALL_INTEGRATION_TOOLS = (
 	+ DESKTOP_PROCESS_TOOLS
 	+ DESKTOP_LOCAL_MCP_TOOLS
 	+ LAZY_DISCOVERY_TOOLS
+	+ GATEWAY_SETUP_TOOLS
 	# Tools backed by a connectable service. Keys match Integration Service
 	# docnames and the SERVICE_NAME each tool module uses for credentials.
 	+ _with_service(SLACK_TOOLS, "slack")
