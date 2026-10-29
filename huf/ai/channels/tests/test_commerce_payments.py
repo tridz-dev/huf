@@ -25,7 +25,7 @@ def _ensure_order_doctype():
 	if frappe.db.exists("DocType", ORDER):
 		return
 	fields = [("status", "Select", "Draft\nPaid"), ("payment_status", "Data", None), ("payment_link", "Data", None),
-		("conversation", "Data", None), ("total", "Currency", None), ("currency", "Data", None),
+		("conversation", "Data", None), ("gateway", "Data", None), ("total", "Currency", None), ("currency", "Data", None),
 		("reminder_sent_at", "Datetime", None)]
 	frappe.get_doc({
 		"doctype": "DocType", "name": ORDER, "module": "Huf", "custom": 1, "autoname": "hash",
@@ -76,7 +76,7 @@ class TestCommercePayments(IntegrationTestCase):
 		self.conv = conv.get_or_create_conversation(self.gw.name, "15550001111")
 
 	def _order(self, **kw):
-		vals = {"doctype": ORDER, "status": "Draft", "payment_status": "Unpaid", "conversation": self.conv.name, "total": 100, "currency": "INR"}
+		vals = {"doctype": ORDER, "status": "Draft", "payment_status": "Unpaid", "gateway": self.gw.name, "conversation": self.conv.name, "total": 100, "currency": "INR"}
 		vals.update(kw)
 		return frappe.get_doc(vals).insert(ignore_permissions=True)
 
