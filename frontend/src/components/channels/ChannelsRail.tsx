@@ -1,11 +1,11 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { ArrowLeft, SquareAsterisk } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { CHANNEL_SECTIONS, sectionHref } from './sections';
-import { useChannelGateway, rememberGateway } from './useChannelGateway';
-import { useGatewaySummary } from './useGatewaySummary';
+import { CHANNELS, channelEnabled, channelMeta } from './channelsMeta';
+import { sectionsFor, sectionHref } from './sections';
+import { useChannel, useChannelGateway, rememberGateway } from './useChannelGateway';
+import { useAllGateways } from './useGatewaySummary';
 
-const OTHER_CHANNELS = ['Telegram', 'Slack', 'Teams'];
 
 const itemClass = (active: boolean) =>
   cn(
@@ -19,31 +19,52 @@ function ActiveBar() {
 
 export function ChannelsRail() {
   const gw = useChannelGateway();
+  const channel = useChannel();
+  const meta = channelMeta(channel);
   const navigate = useNavigate();
-  const { gateways } = useGatewaySummary();
+  const { byChannel } = useAllGateways();
+  const gateways = byChannel[channel];
 
   return (
     <nav aria-label="Channels" className="flex h-full w-[248px] flex-col bg-sidebar">
       <div className="space-y-1 border-b border-line p-3">
         <div className="px-1 pb-1 text-xs font-medium uppercase tracking-wide text-steel">Channel</div>
-        <div className="rounded-md bg-paper-deep px-3 py-2 text-sm font-medium text-ink">WhatsApp</div>
-        {OTHER_CHANNELS.map((c) => (
-          <div key={c} aria-disabled="true" className="flex items-center justify-between px-3 py-1.5 text-sm text-steel-soft">
-            <span>{c}</span>
-            <span className="rounded bg-paper-deep px-1.5 text-xs text-steel">P2</span>
-          </div>
-        ))}
+        {CHANNELS.map((c) => {
+          const Icon = c.icon;
+          if (c.key === channel) {
+            return (
+              <div key={c.key} aria-current="true" className="flex items-center gap-2 rounded-md bg-paper-deep px-3 py-2 text-sm font-medium text-ink">
+                <Icon className="h-4 w-4" />
+                {c.label}
+              </div>
+            );
+          }
+          if (!channelEnabled(c.key, byChannel[c.key].length)) {
+            return (
+              <div key={c.key} aria-disabled="true" title={`No ${c.label} ${c.noun.toLowerCase()} connected`} className="flex items-center gap-2 px-3 py-1.5 text-sm text-steel-soft">
+                <Icon className="h-4 w-4" />
+                <span>{c.label}</span>
+              </div>
+            );
+          }
+          return (
+            <NavLink key={c.key} to={`/channels/${c.key}`} className={() => itemClass(false)}>
+              <Icon className="h-4 w-4" />
+              {c.label}
+            </NavLink>
+          );
+        })}
         {gateways.length > 0 && (
           <select
-            aria-label="Number"
+            aria-label={meta.nounSingular.replace(/^./, (x) => x.toUpperCase())}
             className="mt-2 w-full rounded-md border border-line bg-panel px-2 py-1.5 text-sm text-ink"
             value={gw ?? ''}
             onChange={(e) => {
-              rememberGateway(e.target.value);
-              navigate(`/channels/whatsapp/n/${encodeURIComponent(e.target.value)}/home`);
+              rememberGateway(e.target.value, channel);
+              navigate(`/channels/${channel}/n/${encodeURIComponent(e.target.value)}/home`);
             }}
           >
-            {!gw && <option value="">Select a number</option>}
+            {!gw && <option value="">Select a {meta.nounSingular}</option>}
             {gateways.map((g) => (
               <option key={g.name} value={g.name}>
                 {g.name}
@@ -54,7 +75,7 @@ export function ChannelsRail() {
       </div>
 
       <ul className="flex-1 space-y-0.5 overflow-y-auto p-2">
-        {CHANNEL_SECTIONS.map((s) => {
+        {sectionsFor(channel).map((s) => {
           const gatewayless = s.key === 'numbers';
           const disabled = !gw && !gatewayless;
           const Icon = s.icon;
@@ -71,7 +92,7 @@ export function ChannelsRail() {
           return (
             <li key={s.key}>
               <NavLink
-                to={sectionHref(s, gw)}
+                to={sectionHref(s, gw, channel)}
                 end={false}
                 className={({ isActive }) => itemClass(isActive)}
               >

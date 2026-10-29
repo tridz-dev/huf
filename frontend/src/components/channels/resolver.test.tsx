@@ -4,7 +4,9 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 const api = vi.hoisted(() => ({ getSetupStatus: vi.fn() }));
+const list = vi.hoisted(() => ({ listChannelGateways: vi.fn() }));
 vi.mock('@/services/whatsappHealthApi', async (orig) => ({ ...(await orig<object>()), ...api }));
+vi.mock('@/services/channelGatewaysApi', () => list);
 
 vi.mock('@/contexts/UserContext', () => ({ useUser: () => ({ user: { name: 'ops@example.com' } }) }));
 
@@ -37,6 +39,8 @@ const open = (url: string) =>
 describe('channels resolver', () => {
   beforeEach(() => {
     api.getSetupStatus.mockReset();
+    list.listChannelGateways.mockReset();
+    list.listChannelGateways.mockResolvedValue({ ok: false, error: 'not found' });
     localStorage.clear();
   });
 
@@ -82,5 +86,39 @@ describe('channels resolver', () => {
     open('/channels/whatsapp/n/GW-1/home');
     await screen.findByRole('navigation', { name: 'Breadcrumb' });
     expect(screen.queryByText(/Finish setup/)).toBeNull();
+  });
+
+  const tg = (rows: { name: string; enabled: boolean }[]) =>
+    list.listChannelGateways.mockResolvedValue({
+      ok: true,
+      data: rows.map((r) => ({ ...r, provider: 'Telegram', channel: 'telegram' })),
+    });
+
+  it('resolves telegram to its own gateway, ignoring whatsapp', async () => {
+    summary([{ name: 'GW-1', enabled: true }]);
+    tg([{ name: 'TG-1', enabled: true }]);
+    open('/channels/telegram');
+    await waitFor(() => expect(screen.getByTestId('loc').textContent).toBe('/channels/telegram/n/TG-1/home'));
+  });
+
+  it('uses the per-channel last-used gateway', async () => {
+    localStorage.setItem('huf.channels.telegram.lastGateway', 'TG-2');
+    localStorage.setItem('huf.channels.whatsapp.lastGateway', 'GW-1');
+    summary([{ name: 'GW-1', enabled: true }]);
+    tg([{ name: 'TG-1', enabled: true }, { name: 'TG-2', enabled: true }]);
+    open('/channels/telegram');
+    await waitFor(() => expect(screen.getByTestId('loc').textContent).toBe('/channels/telegram/n/TG-2/home'));
+  });
+
+  it('sends a channel with no gateways to its setup and unknown channels to whatsapp', async () => {
+    summary([{ name: 'GW-1', enabled: true }]);
+    open('/channels/slack');
+    await waitFor(() => expect(screen.getByTestId('loc').textContent).toBe('/channels/slack/setup'));
+  });
+
+  it('falls back to whatsapp-only when the list call fails', async () => {
+    summary([{ name: 'GW-1', enabled: true }]);
+    open('/channels/whatsapp');
+    await waitFor(() => expect(screen.getByTestId('loc').textContent).toBe('/channels/whatsapp/n/GW-1/home'));
   });
 });

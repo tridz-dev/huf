@@ -6,6 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageFrame } from '@/layouts/PageFrame';
 import { healthLabel, type HealthState } from '@/services/whatsappHealthApi';
+import { channelMeta } from '../channelsMeta';
+import { useChannel } from '../useChannelGateway';
 import { useGatewaySummary } from '../useGatewaySummary';
 
 const PILL: Record<string, 'pill-success' | 'pill-warning' | 'pill-danger' | 'pill-neutral'> = {
@@ -17,21 +19,22 @@ const PILL: Record<string, 'pill-success' | 'pill-warning' | 'pill-danger' | 'pi
 };
 
 export default function NumbersSection() {
-  const { gateways, loading, error } = useGatewaySummary();
+  const channel = channelMeta(useChannel());
+  const { gateways, loading, error } = useGatewaySummary(channel.key);
   const add = (
     <Button asChild size="sm">
-      <Link to="/channels/whatsapp/setup"><Plus className="mr-1 h-4 w-4" />Add number</Link>
+      <Link to={channel.setupHref}><Plus className="mr-1 h-4 w-4" />Add {channel.nounSingular}</Link>
     </Button>
   );
   return (
-    <PageFrame title="Numbers" actions={add}>
+    <PageFrame title={channel.noun} actions={add}>
       <div className="space-y-3 p-5">
         {loading ? (
           <Skeleton className="h-24 w-full" />
         ) : error ? (
           <p role="alert" className="text-sm text-destructive">{error}</p>
         ) : gateways.length === 0 ? (
-          <p className="text-sm text-steel">No WhatsApp numbers yet.</p>
+          <p className="text-sm text-steel">No {channel.label} {channel.noun.toLowerCase()} yet.</p>
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
             {gateways.map((g) => {
@@ -50,7 +53,7 @@ export default function NumbersSection() {
                     </div>
                     <Link
                       className="text-xs text-signal-ink underline"
-                      to={`/channels/whatsapp/n/${encodeURIComponent(g.name)}/home`}
+                      to={`/channels/${channel.key}/n/${encodeURIComponent(g.name)}/home`}
                     >
                       Open
                     </Link>

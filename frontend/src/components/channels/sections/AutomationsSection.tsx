@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { getAgents } from '@/services/agentApi';
 import { getGateway } from '@/services/gatewayApi';
 import { listSolutions } from '@/services/solutionsApi';
-import { useChannelGateway } from '../useChannelGateway';
+import { useChannel, useChannelGateway } from '../useChannelGateway';
 import { AgentsTab } from '../automations/AgentsTab';
 import { HandoffTab } from '../automations/HandoffTab';
 import { RulesTab, type TargetOption } from '../automations/RulesTab';
@@ -21,17 +21,24 @@ export const AUTOMATION_TABS = [
 ] as const;
 type TabKey = (typeof AUTOMATION_TABS)[number]['key'];
 
-export const resolveTab = (raw: string | undefined): TabKey =>
-  AUTOMATION_TABS.find((t) => t.key === raw)?.key ?? 'agents';
+/** Agents & Solutions is the WhatsApp-specific tab; other channels start at Routing rules. */
+export const tabsFor = (channel: string) =>
+  channel === 'whatsapp' ? AUTOMATION_TABS : AUTOMATION_TABS.filter((t) => t.key !== 'agents');
+
+export const resolveTab = (raw: string | undefined, channel = 'whatsapp'): TabKey => {
+  const tabs = tabsFor(channel);
+  return tabs.find((t) => t.key === raw)?.key ?? tabs[0].key;
+};
 
 export default function AutomationsSection() {
   const gw = useChannelGateway();
+  const channel = useChannel();
   const { tab: raw } = useParams<{ tab?: string }>();
-  const tab = resolveTab(raw);
+  const tab = resolveTab(raw, channel);
   const [gateway, setGateway] = useState<GatewayFull | null>(null);
   const [solutions, setSolutions] = useState<TargetOption[]>([]);
   const [agents, setAgents] = useState<TargetOption[]>([]);
-  const base = gw ? `/channels/whatsapp/n/${encodeURIComponent(gw)}/automations` : '';
+  const base = gw ? `/channels/${channel}/n/${encodeURIComponent(gw)}/automations` : '';
 
   const reload = useCallback(async () => {
     if (!gw) return;
@@ -52,9 +59,9 @@ export default function AutomationsSection() {
     <PageFrame title="Automations">
       <div className="flex flex-col gap-4 p-5">
         <nav aria-label="Automation tabs" className="flex gap-4 overflow-x-auto border-b border-line">
-          {TAB_LINKS(base, tab)}
+          {TAB_LINKS(base, tab, channel)}
         </nav>
-        {!gw && <p className="text-sm text-steel">Pick a number to see its automations.</p>}
+        {!gw && <p className="text-sm text-steel">Pick a gateway to see its automations.</p>}
         {gw && tab === 'agents' && <AgentsTab gw={gw} />}
         {gw && tab === 'rules' && <RulesTab gw={gw} solutions={solutions} agents={agents} />}
         {gw && tab !== 'agents' && tab !== 'rules' && !gateway && <p className="text-sm text-steel">Loading...</p>}
@@ -66,8 +73,8 @@ export default function AutomationsSection() {
   );
 }
 
-function TAB_LINKS(base: string, tab: TabKey) {
-  return AUTOMATION_TABS.map((t) => (
+function TAB_LINKS(base: string, tab: TabKey, channel: string) {
+  return tabsFor(channel).map((t) => (
     <Link
       key={t.key}
       to={`${base}/${t.key}`}

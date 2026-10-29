@@ -4,7 +4,9 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 const api = vi.hoisted(() => ({ getSetupStatus: vi.fn() }));
+const list = vi.hoisted(() => ({ listChannelGateways: vi.fn() }));
 vi.mock('@/services/whatsappHealthApi', async (orig) => ({ ...(await orig<object>()), ...api }));
+vi.mock('@/services/channelGatewaysApi', () => list);
 
 vi.mock('@/components/whatsapp/TemplatesTab', () => ({ TemplatesTab: () => <div>templates tab</div> }));
 vi.mock('@/components/whatsapp/broadcast/BroadcastList', () => ({ BroadcastList: () => <div>broadcast list</div> }));
@@ -35,6 +37,7 @@ const open = (url: string) =>
 describe('ChannelsRail', () => {
   beforeEach(() => {
     localStorage.clear();
+    list.listChannelGateways.mockResolvedValue({ ok: true, data: [] });
     setWidth(1280);
     api.getSetupStatus.mockResolvedValue({
       ok: true,
@@ -47,7 +50,7 @@ describe('ChannelsRail', () => {
     for (const l of ['Home', 'Activity', 'Broadcasts', 'Templates', 'Automations', 'Connections', 'Numbers', 'Settings', 'Ask Hub', 'Back to Huf']) {
       expect(await screen.findByRole('link', { name: l })).toBeTruthy();
     }
-    expect(screen.getAllByText('P2')).toHaveLength(3);
+    expect(screen.queryByText('P2')).toBeNull();
     const active = screen.getByRole('link', { name: 'Templates' });
     expect(active.className).toContain('bg-paper-deep');
     expect(active.querySelector('[data-testid="active-bar"]')).toBeTruthy();
@@ -68,5 +71,33 @@ describe('ChannelsRail', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Close menu' }));
     });
     expect(screen.queryByRole('navigation', { name: 'Channels' })).toBeNull();
+  });
+
+  it('enables a channel only when it has a gateway', async () => {
+    list.listChannelGateways.mockResolvedValue({
+      ok: true,
+      data: [{ name: 'TG-1', provider: 'Telegram', channel: 'telegram', enabled: true }],
+    });
+    open('/channels/whatsapp/n/GW-1/home');
+    expect(await screen.findByRole('link', { name: 'Telegram' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Slack' })).toBeNull();
+    expect(screen.getByText('Slack').closest('[aria-disabled="true"]')).toBeTruthy();
+    expect(screen.getByText('Teams').closest('[aria-disabled="true"]')).toBeTruthy();
+  });
+
+  it('hides Templates and Broadcasts for telegram and names the list Bots', async () => {
+    list.listChannelGateways.mockResolvedValue({
+      ok: true,
+      data: [{ name: 'TG-1', provider: 'Telegram', channel: 'telegram', enabled: true }],
+    });
+    open('/channels/telegram/n/TG-1/home');
+    expect(await screen.findByRole('link', { name: 'Bots' })).toBeTruthy();
+    for (const l of ['Home', 'Activity', 'Automations', 'Connections', 'Settings']) {
+      expect(screen.getByRole('link', { name: l })).toBeTruthy();
+    }
+    expect(screen.queryByRole('link', { name: 'Templates' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Broadcasts' })).toBeNull();
+    expect(screen.getByText('Channels', { selector: 'span' })).toBeTruthy();
+    expect(screen.getByText('Telegram', { selector: 'span' })).toBeTruthy();
   });
 });

@@ -1,8 +1,10 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useParams } from 'react-router-dom';
 import { PageLoader } from '@/components/PageLoader';
 import { ChannelsLayout } from './ChannelsLayout';
+import { isChannelKey } from './channelsMeta';
 import { GatewayResolver } from './Resolver';
+import { useChannel } from './useChannelGateway';
 
 const Home = lazy(() => import('./sections/HomeSection'));
 const Activity = lazy(() => import('./sections/ActivitySection'));
@@ -14,6 +16,18 @@ const Numbers = lazy(() => import('./sections/NumbersSection'));
 const Settings = lazy(() => import('./sections/SettingsSection'));
 const Setup = lazy(() => import('./sections/SetupSection'));
 
+/** Broadcasts and Templates exist for WhatsApp only; other channels bounce to Home. */
+function WhatsAppOnly({ children }: { children: JSX.Element }) {
+  const channel = useChannel();
+  return channel === 'whatsapp' ? children : <Navigate to="../home" replace />;
+}
+
+/** Unknown `:channel` values fall back to WhatsApp. */
+function ChannelGuard() {
+  const { channel } = useParams<{ channel: string }>();
+  return isChannelKey(channel) ? <Outlet /> : <Navigate to="/channels/whatsapp" replace />;
+}
+
 /** Nested route tree for `/channels/*` (mounted in App.tsx). */
 export function ChannelsRoutes() {
   return (
@@ -21,7 +35,7 @@ export function ChannelsRoutes() {
       <Routes>
         <Route element={<ChannelsLayout />}>
           <Route index element={<Navigate to="whatsapp" replace />} />
-          <Route path="whatsapp">
+          <Route path=":channel" element={<ChannelGuard />}>
             <Route index element={<GatewayResolver />} />
             <Route path="setup" element={<Setup />} />
             <Route path="numbers" element={<Numbers />} />
@@ -29,8 +43,8 @@ export function ChannelsRoutes() {
               <Route index element={<Navigate to="home" replace />} />
               <Route path="home" element={<Home />} />
               <Route path="activity/:conversationId?" element={<Activity />} />
-              <Route path="broadcasts/*" element={<Broadcasts />} />
-              <Route path="templates/:name?" element={<Templates />} />
+              <Route path="broadcasts/*" element={<WhatsAppOnly><Broadcasts /></WhatsAppOnly>} />
+              <Route path="templates/:name?" element={<WhatsAppOnly><Templates /></WhatsAppOnly>} />
               <Route path="automations/:tab?" element={<Automations />} />
               <Route path="connections" element={<Connections />} />
               <Route path="numbers" element={<Numbers />} />
