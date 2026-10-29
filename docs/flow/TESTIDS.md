@@ -14,7 +14,7 @@ Stable `data-testid` hooks for live UI journeys. Field names are the contract co
 | `flow-canvas` | Canvas root |
 | `flow-save`, `flow-run`, `flow-publish`, `flow-runs`, `flow-settings` | Toolbar buttons. `flow-publish` is disabled, with the reason in the `disabled-reason` tooltip, for a user without `flows.publish_sensitive` when the flow has a Data trigger or a web request step |
 | `flow-save-state` | Saved / Unsaved indicator |
-| `flow-validation-summary` | "N things to finish" link (only while something is incomplete) |
+| `flow-validation-summary` | "N steps to finish" button beside "Saved" (only while something is unfinished). Opens the checklist `flow-issues-popover`; Run and Publish open it too instead of failing |
 | `flow-add-trigger` | Add trigger button (when the flow has no trigger) |
 | `flow-rail-trigger`, `flow-rail-agent`, `flow-rail-condition`, `flow-rail-tool`, `flow-rail-data` | Left palette rail |
 
@@ -46,11 +46,32 @@ Card title = node title = sidebar title (derived from `data/actions.ts` / `data/
 | `flow-insert-step-<edgeId>` | "+" on an edge |
 | `flow-edge-label-<edgeId>` | Branch name pill on a connection (Yes/No, Approved/Rejected/Timed out, For each item/When done, a router path in full, Next item on the loop-back line); 12px on screen at any zoom |
 
-## Right sidebar
-`flow-config-sidebar`, `flow-sidebar-title`, `flow-config-title`, `flow-sidebar-delete`, `flow-sidebar-close`, `flow-view-only-banner` (view-only users),
-`flow-delete-confirm`, `flow-delete-cancel`, `flow-node-title-input`, `flow-node-incomplete` (summary banner),
-`flow-trigger-type`, `flow-trigger-change`, `flow-edge-config`, `flow-edge-meaning`, `flow-edge-label`,
-`flow-branches`, `flow-branch-<route>`, `flow-branch-<route>-empty`.
+## Right sidebar (step panel frame, UX-8)
+The panel is `components/RightSidebar.tsx` + `components/flow/frame/*`. A step's name appears ONCE, in the header input.
+
+| testid | Where |
+|---|---|
+| `flow-config-sidebar` | Panel root. `flow-view-only-banner` for view-only people; `flow-sidebar-empty-hint` when nothing is selected |
+| `flow-step-frame` (`data-step-kind`) | The open step: header, status strip, tabs, body |
+| `flow-sidebar-header` | 56px sticky header: icon, name, kind, `...` menu, close |
+| `flow-node-title-input` | The step name (editable in place; the only place the name is shown or typed). `flow-sidebar-title` no longer exists |
+| `flow-sidebar-kind` | Small grey kind under the name ("Trigger", "End", "If / else") |
+| `flow-step-info`, `flow-config-hint` | The (i) beside the kind and its popover with the longer explanation of the step |
+| `flow-step-menu`, `flow-step-menu-content`, `flow-step-duplicate`, `flow-step-disable`, `flow-sidebar-delete` | `...` menu: Duplicate, Disable / Turn on (linear action steps only), Delete (red). A disabled step has `data-disabled="true"` on its card |
+| `flow-sidebar-close` | Close (panel variant only; the phone sheet has its own) |
+| `flow-status-strip` (`data-state` = `todo`/`ready`/`off`) | 36px strip: "2 things to finish >" (amber button; jumps to the first one and focuses it) or "Ready" |
+| `flow-sidebar-tabs`, `flow-sidebar-tab-setup`, `flow-sidebar-tab-test`, `flow-sidebar-tab-settings` | Tabs. Triggers: Setup + Test. End: no tabs (Setup only). `flow-sidebar-tab-<name>-dot` = something to finish in that tab (always Setup for required fields) |
+| `flow-tab-setup`, `flow-tab-test`, `flow-tab-settings` | The three bodies (all stay mounted; inactive ones are `hidden`) |
+| `flow-connection-needed`, `flow-connect-link-sidebar`, `flow-not-connected-sidebar`, `flow-connection-ok` | Top of Setup for integration steps: amber "Connect X to use this step" with a Connect button, or a calm "X is connected" |
+| `flow-node-orphan-note` | Setup note when nothing leads to the step |
+| `flow-more-options`, `flow-more-options-toggle` | Folded optional settings (`data-state` open/closed). Opens by itself when one has a value or when a field inside is jumped to |
+| `flow-step-test-placeholder`, `flow-step-test-sample`, `flow-step-test-run` | Test tab until UX-16 (sample input, "Test step" disabled with the reason "Coming soon") |
+| `flow-settings-on-failure`, `flow-on-failure-value`, `flow-step-notes`, `flow-step-reference-name`, `flow-view-as-json`, `flow-view-as-json-toggle`, `flow-view-as-json-text` | Settings tab. The step's time limit lives here too: `flow-field-tool.call-timeout_ms` (connected tools only), `flow-field-human.approval-timeout_ms` |
+| `flow-trigger-type`, `flow-trigger-change`, `flow-hint-trigger-type` | Trigger row at the top of a trigger's Setup |
+| `flow-edge-config`, `flow-edge-meaning`, `flow-edge-label`, `flow-delete-confirm`, `flow-delete-cancel` | Connection panel and delete dialog |
+| `flow-branches`, `flow-branch-<route>`, `flow-branch-<route>-empty` | "Where each path goes" |
+
+Checklist (header "Saved . 3 steps to finish"): `flow-validation-summary` (button), `flow-issues-popover`, `flow-issues-title`, `flow-issues-note` (draft: "Your changes are saved ..."; live flow: "has to be finished before it can be saved"), `flow-issues-list`, `flow-issues-step-<nodeId>`, `flow-issues-row-<nodeId>-<field>`, `flow-issues-fix-<nodeId>-<field>` ("Fix": selects the step, opens the tab, scrolls to and focuses the field). Saving never blocks except for a live flow; Run and Publish open this list instead of a toast.
 
 ## Fields: `flow-field-<type>-<field>`, errors: `flow-error-<type>-<field>`
 Dropdown options inside Selects: `flow-option-<name>`; Combobox options: `<field testid>-option-<value>`.
@@ -73,8 +94,7 @@ Dropdown options inside Selects: `flow-option-<name>`; Combobox options: `<field
 | `doc.create` | `doctype`, `fields.<i>.name`, `fields.<i>.value`, `fields.add` |
 | `output` | `flow-field-output-value` |
 
-Validation messages: `flow-error-<type>-<field>` (role="alert"), plus the node-level banner `flow-node-incomplete`.
-Blocked saves surface a toast; the first offending node is selected.
+Validation messages: `flow-error-<type>-<field>` (role="alert"). They are hidden on a form nobody has touched; a field's message appears after the person has been in the field and left it, when "Fix" or the status strip sends them there, or never otherwise. There is no banner above the form (`flow-node-incomplete` is gone) and no toast: one place per error.
 
 ## Variable picker
 Every text/value input has an "Insert data" picker listing the trigger (`input`, `trigger`), the steps that always run before the step (node ids) and, inside a loop, `foreach.item` / `foreach.index`. Later steps and other branches are never listed.
@@ -204,14 +224,14 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-palette-section-<category>` | A labelled palette section: agent (AI), control (Decide and repeat), people, data (Work with data), apps, advanced |
 | `flow-transform-group-<section>` | Labelled group in the Transform operation list: change-text, find-in-text, pick-rows, group-combine, values |
 | `flow-card-desc-<cardId>` | The one-line "what does this step do" under a palette card |
-| `flow-config-hint` | Intro sentence at the top of a step or trigger form |
+| `flow-config-hint` | Intro sentence of a step or trigger, inside the (i) popover in the panel header |
 | `flow-hint-<form>-<field>` | One-line hint under a field (for example `flow-hint-webhook-secret`, `flow-hint-loop-max`, `flow-hint-approval-timeout`, `flow-hint-transform-op`, `flow-hint-transform-example`, `flow-hint-condition`) |
 | `<field testid>-hint` | Hint under a value input (URL, Subject, Spreadsheet ID ...); `<field testid>-mode-help` explains Reference / Template / JSON |
 | `flow-condition-examples`, `flow-schedule-examples`, `flow-doc-event-explained` | Folded example lists (condition syntax, cron examples, what each Data event means) |
 | `flow-webhook-usage-curl-data`, `flow-webhook-responses` | curl example with a JSON body; what 200 / 403 / 405 / 429 mean |
 | `flow-hint-schedule-intro`, `flow-schedule-timezone`, `flow-hint-schedule-cron` | Schedule intro, the site time zone sentence, cron help |
 | `flow-hint-doc-event-intro`, `flow-hint-doc-event-doctype`, `flow-hint-doc-event-event` | Data trigger help |
-| `flow-hint-step-name`, `flow-hint-trigger-type`, `flow-hint-step-result`, `flow-sidebar-empty-hint` | Sidebar help lines |
+| `flow-hint-trigger-type`, `flow-sidebar-empty-hint` | Sidebar help lines (the Step name help and the "Steps after this one" footer were removed) |
 | `flow-settings-name-hint`, `flow-settings-description-hint`, `flow-settings-category-hint` | Settings dialog hints |
 | `flow-run-payload-hint` | Run dialog help under the input box |
 | `flow-run-history-header`, `flow-run-history-body`, `flow-run-history-timezone` | Sticky header, scrolling body and time zone note of the Runs sheet |
