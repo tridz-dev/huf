@@ -25,7 +25,7 @@ import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { FlowNodeRail, NODE_RAIL_ACTION_CATEGORY, NodeRailCategory } from './FlowNodeRail';
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
 import { DeleteStepDialog } from './flow/DeleteStepDialog';
-import { FIT_VIEW_OPTIONS, FitViewAfterRemovalOrLayout, FlowMiniMap, keepCanvasUnscrolled } from './flow/canvas/canvasView';
+import { FIT_VIEW_OPTIONS, FitViewAfterRemovalOrLayout, FlowMiniMap, keepCanvasUnscrolled, withSelection } from './flow/canvas/canvasView';
 import { FlowCanvasToolbar } from './flow/canvas/FlowCanvasToolbar';
 import { EdgeDeleteDialog } from './flow/canvas/EdgeDeleteDialog';
 import { useConvertedProcedure, useUndoShortcut } from './flow/canvas/useCanvasEffects';
@@ -500,16 +500,8 @@ export function FlowCanvas({
     [ghostNodes, openEnds]
   );
 
-  // The highlighted step always follows the selection the side panel shows. A pending edit that is written to the flow just
-  // as another step is clicked re-syncs the canvas from the flow (which carries no selection): without this the panel showed
-  // the clicked step while the canvas showed none selected, with no delete button on it and the keyboard focus lost.
-  const renderedNodes = useMemo(
-    () => [
-      ...nodes.map((n) => ((n.selected ?? false) === (n.id === selectedNodeId) ? n : { ...n, selected: n.id === selectedNodeId })),
-      ...(ghostNodes as unknown as Node<FlowNodeData>[]),
-    ],
-    [nodes, ghostNodes, selectedNodeId]
-  );
+  // The highlighted step always follows the selection the side panel shows (see withSelection).
+  const renderedNodes = useMemo(() => [...withSelection(nodes, selectedNodeId), ...(ghostNodes as unknown as Node<FlowNodeData>[])], [nodes, ghostNodes, selectedNodeId]);
 
   // Real edges get the hover "+" insert affordance (mid-chain insertion);
   // ghost edges (leading to the trailing "Add step" card) render as plain
