@@ -16,6 +16,27 @@ from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.tools import _registry, whatsapp
 
 
+_orig_run = unittest.TestCase.run  # DEBUGTMP
+
+
+def _dbg_run(self, result=None):  # DEBUGTMP
+	import sys
+	try:
+		pre = repr(frappe.cache.get("__dbg__"))
+	except Exception as e:
+		pre = "ERR " + str(e)
+	r = _orig_run(self, result)
+	try:
+		post = repr(frappe.cache.get("__dbg__"))
+	except Exception as e:
+		post = "ERR " + str(e)
+	print("DBG", self.id().split(".", 4)[-1], pre, post, file=sys.stderr)
+	return r
+
+
+unittest.TestCase.run = _dbg_run  # DEBUGTMP
+
+
 def _tool_schema() -> dict:
 	tool = next(t for t in _registry.WHATSAPP_TOOLS if t["tool_name"] == "whatsapp")
 	return tool
