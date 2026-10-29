@@ -67,8 +67,10 @@ export type ActionType =
 export interface WebhookTriggerConfig {
   type: 'webhook';
   method?: WebhookMethod;
-  /** 32-256 chars; receiver compares the X-Huf-Secret header to this. */
-  secret?: string;
+  /** 32-256 chars; receiver compares the X-Huf-Secret header to this. Null when the server hides it from a viewer. */
+  secret?: string | null;
+  /** The server hid the secret because this user cannot edit the flow (never written back). */
+  secret_hidden?: boolean;
 }
 
 export interface ScheduleTriggerConfig {

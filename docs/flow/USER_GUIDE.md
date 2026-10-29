@@ -38,7 +38,7 @@ Most fields have an **Insert data** button. It lists the trigger and the steps t
 Starts the flow when another system sends a request to the flow's web address.
 
 - Fields: URL (read only), Secret, Method (POST or GET).
-- The caller sends the secret in the `X-Huf-Secret` header. A flow must be published to accept calls.
+- The caller sends the secret in the `X-Huf-Secret` header. A flow must be live (published) to accept calls.
 - Example: `curl -X POST -H "X-Huf-Secret: <secret>" -H "Content-Type: application/json" -d '{"name":"Ada"}' "<url>"`
 - Answers: 200 started (the answer holds the run id), 403 wrong or missing secret or not published, 405 wrong method, 429 more than 60 calls a minute.
 - Common errors: calling with `?secret=` in the address (not accepted, use the header); flow not published; method differs from the one chosen.
@@ -52,7 +52,7 @@ Starts the flow by itself at times you choose, while the flow is published.
 - Cron has five parts: minute, hour, day of month, month, day of week. `*/15 * * * *` is every 15 minutes; `0 9 * * 1-5` is weekdays at 09:00.
 - Common errors: a cron with a number out of range (for example hour 25); forgetting to publish.
 
-### Data
+### Record change (was "Data")
 
 Starts the flow when a record changes, for example when a ToDo is created.
 
@@ -71,14 +71,14 @@ Asks one of your AI agents to do a task; its reply goes to the next step.
 - Example prompt: `Summarise this support ticket in two sentences: {ticket}`
 - Common errors: no agent chosen; the agent's AI provider has no working key (the step fails with a message naming the provider).
 
-### Call tool
+### Do something in an app (was "Call tool")
 
 Runs one tool (built in or from a connected server). Pick the tool, then fill its fields.
 
 - Optional "Wait up to" applies to tools from connected servers.
 - Common errors: required field empty; tool needs an integration that is not connected.
 
-### HTTP Request
+### Web request (was "HTTP Request")
 
 Calls a web address and passes the response to the next step.
 
@@ -102,11 +102,11 @@ The bot must be invited to the channel. Common errors: Slack not connected; chan
 Reads, writes or creates a spreadsheet. Fields depend on the tool: Spreadsheet ID (the text between `/d/` and `/edit` in the sheet's address), Range (`Sheet1!A1:D20`), Data (a list of rows: `[["Name","Amount"],["Ada",120]]`).
 Common errors: Google Sheets not connected; missing range.
 
-### File operations
+### Google Drive files (was "File operations")
 
 Lists, searches or reads files in Google Drive. Common errors: Google Drive not connected; missing file ID.
 
-### Condition (If/Else)
+### If / else (was "Condition (If/Else)")
 
 Sends the flow down the **True** or **False** path.
 
@@ -115,7 +115,7 @@ Sends the flow down the **True** or **False** path.
 - Examples: `input['amount'] > 100`, `input['status'] == 'paid'`, `input['country'] in ['IN', 'US']`, `input['vip'] and input['total'] >= 500`.
 - Common errors: missing quotes around text; one of the two paths not connected.
 
-### LLM Router
+### Choose with AI (was "LLM Router")
 
 Lets an AI model choose the next step.
 
@@ -123,14 +123,14 @@ Lets an AI model choose the next step.
 - Name the paths clearly, for example `urgent` and `routine`; the AI picks the one whose name fits.
 - Common errors: a path without a name; no default path; the provider has no working key.
 
-### Loop
+### Repeat for each item (was "Loop")
 
 Repeats the steps on the **For each item** path once for every item of a list, then continues on **When done**.
 
 - Fields: List to loop over (for example `input.recipients`), Maximum items (a safety limit: a longer list fails the loop), If one item fails (stop the flow or skip that item), Result to collect (added to a list handed to the next step).
 - Common errors: the list field is not a list; the list is longer than the maximum.
 
-### Human in Loop
+### Wait for approval (was "Human in Loop")
 
 Pauses until a person approves or rejects. **Approved**, **Rejected** and (when a time limit is set) **Timed out** are separate paths.
 
@@ -139,7 +139,7 @@ Pauses until a person approves or rejects. **Approved**, **Rejected** and (when 
 - If nobody answers in time the flow follows the Timed out path; without that path the run fails.
 - Common errors: approver not chosen; the person answering has not the role.
 
-### Transform data
+### Change data (was "Transform data")
 
 Changes data without AI. Pick an operation; each shows a one-line description and an example.
 
@@ -150,16 +150,16 @@ Changes data without AI. Pick an operation; each shows a one-line description an
 | Replace text | Replaces part of the text | "a-b" with "-" to " " gives "a b" |
 | Contains / Starts with | True or false check on text | "INV-1" starts with "INV-" is true |
 | Split (first part) | Keeps the part before the separator | "Ada Lovelace" gives "Ada" |
-| Regex extract | First piece matching a pattern | `[0-9]+` on "order 4521" gives "4521" |
-| Concatenate | Joins values | ["a","b"] with "-" gives "a-b" |
+| Find with a pattern (regex) | First piece matching a pattern | `[0-9]+` on "order 4521" gives "4521" |
+| Join text together | Joins values | ["a","b"] with "-" gives "a-b" |
 | Select fields, Filter rows, Sort rows, Limit rows | Work on a list of records | keep rows where `row['amount'] > 100` |
 | Group by, Aggregate, Batch, Distinct | Group, count or sum, split in chunks, remove duplicates | sum of "amount" |
 | Join, Lookup | Combine two lists | add the customer to each order |
-| Coalesce | First value that is not empty | [null, "x"] gives "x" |
+| First value that is not empty | First value that is not empty | [null, "x"] gives "x" |
 
 Common errors: a required field empty; a list expected but text given.
 
-### Execute code
+### Run Python code (was "Execute code")
 
 Runs a short piece of Python in a sandbox and passes what it prints and returns to the next step. The card only appears when your administrator allows code in flows and your role may use it.
 
@@ -167,15 +167,15 @@ Runs a short piece of Python in a sandbox and passes what it prints and returns 
 - The run details show the exit status (Ok or not), what the code printed and its result. Output that is too long is cut off and says so.
 - Common errors: an error in the code (the printed error is in the output); the time limit; the administrator has not approved the code (the run waits for approval).
 
-### Get state, Set state, Delete state
+### Save data for later, Look up saved data, Forget saved data
 
 A small memory that belongs to the flow. Set state saves a value under a key (optionally forgetting it after some seconds), Get state reads it (with an optional default), Delete state removes it. Use a template key such as `cart:{sender}` to keep one value per sender.
 
-### Create document
+### Create a record (was "Create document")
 
 Creates a record of a document type your administrator allowed (for example ToDo). Add one row per field. The new record's details go to the next step. Common errors: document type not allowed; a required field of the record missing.
 
-### End
+### Finish (was "End")
 
 Finishes the flow and returns an optional result (shown in run details).
 

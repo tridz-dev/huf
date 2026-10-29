@@ -177,21 +177,75 @@ class TestSlackAndGoogleErrors(IntegrationTestCase):
 
 
 class TestConnectionTest(IntegrationTestCase):
-	def _run(self, service, creds, token_resp=None, api_resp=None):
-		with patch("httpx.post", side_effect=_post_router(token_resp, api_resp)), \
+	def _run(self, service, creds, token_resp=None, api_resp=None, post_body=None):
+		router = (lambda url, *a, **k: _resp(200, post_body)) if post_body is not None else _post_router(token_resp, api_resp)
+		with patch("httpx.post", side_effect=router), \
 			patch("httpx.get", return_value=api_resp) as get:
 			return test_connection(service=service, credentials=creds), get
 
 	def test_gmail_connected_reads_profile_only(self):
 		out, get = self._run("gmail", CREDS, _resp(200, {"access_token": "at"}), _resp(200, {"emailAddress": "me@example.com"}))
-		self.assertEqual(out, {"status": "Connected", "message": "Connected to Gmail as me@example.com."})
+		self.assertEqual(
+			out,
+			{"status": "Connected", "code": "ok", "message": "Connected to Gmail as me@example.com.", "account": "me@example.com"},
+		)
 		self.assertTrue(get.call_args[0][0].endswith("/users/me/profile"))
 
 	def test_gmail_rejected(self):
 		out, _ = self._run("gmail", CREDS, _resp(400, {"error": "invalid_grant"}))
 		self.assertEqual(out["status"], "Rejected")
+		self.assertEqual(out["code"], "rejected")
 		self.assertIn("token expired or revoked", out["message"])
+		# on the Integrations screen the next step is a sentence, not "Reconnect Gmail in Integrations"
+		self.assertNotIn("in Integrations", out["message"])
 		self.assertNotIn(SECRET, json.dumps(out))
+
+	def test_nothing_saved_is_not_connected_not_rejected(self):
+		out, get = self._run("gmail", {})
+		self.assertEqual((out["status"], out["code"]), ("Not connected", "no_credentials"))
+		self.assertTrue(out["message"].startswith("No credentials saved yet"))
+		self.assertNotIn("wrong", out["message"])
+		get.assert_not_called()
+
+	def test_partly_filled_names_what_is_missing(self):
+		out, _ = self._run("gmail", {"client_id": "cid"})
+		self.assertEqual((out["status"], out["code"]), ("Not connected", "missing_credentials"))
+		self.assertIn("the client secret and the refresh token", out["message"])
+
+	def test_slack_nothing_saved(self):
+		out, _ = self._run("slack", {})
+		self.assertEqual((out["status"], out["code"]), ("Not connected", "no_credentials"))
+		self.assertIn("bot token", out["message"])
+
+	def test_slack_reports_workspace_as_account(self):
+		out, _ = self._run("slack", {"token": "xoxb-fake"}, api_resp=None, post_body={"ok": True, "team": "Tridz", "user": "huf_live"})
+		self.assertEqual((out["status"], out["account"]), ("Connected", "Tridz"))
+
+	def test_network_failure_is_unreachable_not_rejected_credentials(self):
+		with patch("httpx.post", side_effect=httpx.ConnectError("down")):
+			out = test_connection(service="slack", credentials={"token": "xoxb-fake"})
+		self.assertEqual(out["code"], "unreachable")
+
+	def test_saved_check_is_remembered_and_clears_the_old_error(self):
+		import frappe
+
+		name = frappe.get_all("Integration Settings", filters={"service": "slack"}, pluck="name", limit=1)
+		if not name:
+			self.skipTest("needs a saved Slack integration")
+		before = frappe.db.get_value("Integration Settings", name[0], ["last_error", "last_test_status"], as_dict=True)
+		frappe.db.set_value("Integration Settings", name[0], "last_error", "Slack could not find that channel.")
+		try:
+			with patch("huf.ai.tools.connection_test._resolve_credentials", return_value={"token": "xoxb-fake"}), \
+				patch("httpx.post", return_value=_resp(200, {"ok": True, "team": "Tridz", "user": "huf_live"})):
+				out = test_connection(service="slack", setting=name[0])
+			row = frappe.db.get_value(
+				"Integration Settings", name[0], ["last_error", "last_test_status", "account_label"], as_dict=True
+			)
+			self.assertEqual(out["status"], "Connected")
+			self.assertEqual((row.last_test_status, row.account_label), ("Connected", "Tridz"))
+			self.assertFalse(row.last_error)
+		finally:
+			frappe.db.set_value("Integration Settings", name[0], {"last_error": before.last_error, "last_test_status": before.last_test_status})
 
 	def test_gmail_send_only_scope_is_still_connected(self):
 		scope = {"error": {"status": "PERMISSION_DENIED", "details": [{"reason": "ACCESS_TOKEN_SCOPE_INSUFFICIENT"}]}}

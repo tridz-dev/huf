@@ -14,5 +14,7 @@ export interface ActionOption {
   name: string;
   description?: string;
   icon?: string;
-  category: 'agent' | 'tool' | 'transform' | 'control' | 'utility' | 'integration';
+  category: 'agent' | 'control' | 'people' | 'data' | 'apps' | 'advanced';
+  /** Extra words that find this step in search (never shown). */
+  keywords?: string[];
 }

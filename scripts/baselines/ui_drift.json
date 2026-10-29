@@ -347,16 +347,6 @@
       "inline_style": 1,
       "text_px": 2
     },
-    "components/nodes/ActionNode.tsx": {
-      "fixed_height": 1
-    },
-    "components/nodes/EndNode.tsx": {
-      "fixed_height": 1
-    },
-    "components/nodes/TriggerNode.tsx": {
-      "fixed_height": 1,
-      "text_px": 1
-    },
     "components/playground/CompareView.tsx": {
       "raw_element": 1,
       "text_px": 1
@@ -683,11 +673,11 @@
     }
   },
   "totals": {
-    "fixed_height": 111,
+    "fixed_height": 108,
     "hex_colour": 98,
     "inline_style": 45,
     "raw_element": 76,
-    "text_px": 364
+    "text_px": 363
   },
   "version": 1
 }

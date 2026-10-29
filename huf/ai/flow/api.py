@@ -20,6 +20,7 @@ from frappe.utils import add_to_date, now_datetime
 from huf.ai.api_support import require_permission
 from huf.ai.flow.support.approval_card import build_card
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
+from huf.ai.flow.support.redact import definition_for_user
 
 
 # ---------------------------------------------------------------------------
@@ -185,15 +186,7 @@ def get_site_timezone() -> str:
 
 @frappe.whitelist()
 def get_flow_definition(flow_id: str) -> dict:
-	"""
-	Get a flow definition.
-
-	Args:
-	    flow_id: Flow ID
-
-	Returns:
-	    dict with definition_json, version, status
-	"""
+	"""A flow: definition_json, version, status. Whoever cannot write the flow gets its webhook secret hidden (``secret: null``, ``secret_hidden: true``)."""
 	if not frappe.has_permission("Flow Definition", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
@@ -203,7 +196,7 @@ def get_flow_definition(flow_id: str) -> dict:
 		"flow_name": doc.flow_name,
 		"description": doc.description or "",
 		"category": doc.category or "",
-		"definition_json": json.loads(doc.definition_json) if isinstance(doc.definition_json, str) else doc.definition_json,
+		"definition_json": definition_for_user(doc),
 		"version": doc.version,
 		"schema_version": doc.schema_version,
 		"status": doc.status,

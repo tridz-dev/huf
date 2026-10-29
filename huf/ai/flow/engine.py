@@ -68,6 +68,7 @@ from huf.ai.flow.orchestrator import (
 	build_flow_context_system_message,
 	build_router_prompt,
 )
+from huf.ai.flow.support.redact import pinned_json
 from huf.ai.flow.tool_executor import execute as execute_tool
 from huf.ai.flow.tool_executor import tool_run_context
 from huf.ai.graph.executor import (
@@ -286,12 +287,7 @@ def _store_pin(flow_run, version: PinnedVersion) -> None:
 	try:
 		if not frappe.db.has_column("Flow Run", "pinned_definition"):
 			return
-		flow_run.db_set(
-			{
-				"pinned_fingerprint": version.fingerprint,
-				"pinned_definition": version.to_json(),
-			}
-		)
+		flow_run.db_set({"pinned_fingerprint": version.fingerprint, "pinned_definition": pinned_json(version)})
 	except Exception:
 		# Pin persistence is an optimisation over re-resolving; never let it
 		# take down a run.
@@ -528,7 +524,7 @@ def create_flow_run(
 	}
 	if _has_pin_columns():
 		fields["pinned_fingerprint"] = version.fingerprint
-		fields["pinned_definition"] = version.to_json()
+		fields["pinned_definition"] = pinned_json(version)
 
 	flow_run = frappe.get_doc(fields)
 	# Authenticated callers are already verified by the public API.
