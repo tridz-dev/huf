@@ -13,8 +13,8 @@ from huf.ai.channels.commerce import catalog, messages
 CAT = "huf.ai.channels.commerce.catalog"
 
 ITEMS = [
-	{"item_code": "B-2", "item_name": "Bravo", "description": "<p>Tasty</p>", "image": "/files/b.png", "brand": "Acme"},
 	{"item_code": "A-1", "item_name": "Alpha", "description": "", "image": "https://cdn.x/a.png", "brand": None},
+	{"item_code": "B-2", "item_name": "Bravo", "description": "<p>Tasty</p>", "image": "/files/b.png", "brand": "Acme"},
 	{"item_code": "NOPRICE", "item_name": "x", "description": "", "image": "/files/n.png", "brand": None},
 	{"item_code": "NOIMG", "item_name": "y", "description": "", "image": "", "brand": None},
 ]
