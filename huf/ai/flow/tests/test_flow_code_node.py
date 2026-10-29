@@ -308,6 +308,8 @@ class TestRunning(CodeFlowBase):
 			out, {"stdout": "total 42\n", "result": {"sum": 42}, "exit_status": "Ok", "truncated": False}
 		)
 		self.assertEqual(len(self._calls(run)), 1)  # exactly one audit row
+		self.assertEqual(code_node.runs_so_far(run.name), 1)
+		self.assertNotIn("_code_run_count", json.loads(run.context_json))
 		self.assertEqual(self._scratch_entries().count(code_execution._conversation_dir_key(run.name)), 0)
 
 	def test_audit_row_has_profile_snapshot_and_code_hash_not_code(self):
@@ -413,7 +415,8 @@ class TestRunning(CodeFlowBase):
 
 	def test_per_run_cap(self):
 		flow_id = self._save(_code_graph("print(1)"))
-		run = self._run(flow_id, {"_code_run_count": code_node.MAX_CODE_RUNS_PER_FLOW_RUN})
+		with patch.object(code_node, "runs_so_far", return_value=code_node.MAX_CODE_RUNS_PER_FLOW_RUN):
+			run = self._run(flow_id)
 		self.assertEqual(run.status, "Failed")
 		self.assertIn("most one run may start", run.last_error)
 

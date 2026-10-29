@@ -1675,9 +1675,6 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 # code.run -- run Python in the sandbox, park the run until it finishes
 # ---------------------------------------------------------------------------
 
-_CODE_RUNS_KEY = "_code_run_count"
-
-
 def _exec_code_run(flow_run, node: dict, config: dict, settings: dict):
 	"""``code.run``: config ``code``, ``profile``, ``inputs`` (name -> value / ``$from``), ``timeout_s``.
 
@@ -1703,7 +1700,7 @@ def _exec_code_run(flow_run, node: dict, config: dict, settings: dict):
 	problem = code_node.run_problem(flow_run, config)
 	if problem:
 		return {"status": "failed", "error": problem}
-	done = ctx.data.get(_CODE_RUNS_KEY) or 0
+	done = code_node.runs_so_far(flow_run.name)
 	if done >= code_node.MAX_CODE_RUNS_PER_FLOW_RUN:
 		return {
 			"status": "failed",
@@ -1720,7 +1717,6 @@ def _exec_code_run(flow_run, node: dict, config: dict, settings: dict):
 		)
 	except (frappe.PermissionError, frappe.ValidationError) as exc:
 		return {"status": "failed", "error": str(exc) or "The code step was not allowed to run."}
-	ctx.set(_CODE_RUNS_KEY, done + 1)
 
 	call_name = dispatched["agent_tool_call"]
 	approval = dispatched.get("approval")
