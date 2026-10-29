@@ -6,6 +6,8 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 const api = vi.hoisted(() => ({ getSetupStatus: vi.fn() }));
 vi.mock('@/services/whatsappHealthApi', async (orig) => ({ ...(await orig<object>()), ...api }));
 
+vi.mock('@/contexts/UserContext', () => ({ useUser: () => ({ user: { name: 'ops@example.com' } }) }));
+
 import { ChannelsRoutes } from './routes';
 
 beforeAll(() => {
@@ -72,7 +74,7 @@ describe('channels resolver', () => {
   it('shows the setup banner when the gateway is pre-live and tolerates a missing field', async () => {
     summary([{ name: 'GW-1', enabled: true, setup_stage: 'receiving' }]);
     open('/channels/whatsapp/n/GW-1/home');
-    expect(await screen.findByText(/Finish setup to go live \(3 of 6\)/)).toBeTruthy();
+    expect(await screen.findByText(/Finish setup to go live \(4 of 6\)/)).toBeTruthy();
   });
 
   it('shows no banner without setup_stage', async () => {
