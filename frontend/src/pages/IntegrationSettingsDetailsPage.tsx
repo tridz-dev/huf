@@ -371,7 +371,7 @@ export function IntegrationSettingsDetailsPage({
       <div className="p-6 space-y-6 max-w-6xl mx-auto">
         <IntegrationHeader
           title={pageTitle}
-          subtitle={isNew ? undefined : [serviceTitle === pageTitle ? '' : serviceTitle, watchIsActive ? '' : 'Switched off', watchIsDefault ? 'Used by default' : ''].filter(Boolean).join(' · ') || undefined}
+          subtitle={isNew ? undefined : [pageTitle.startsWith(serviceTitle) ? '' : serviceTitle, watchIsActive ? '' : 'Switched off', watchIsDefault ? 'Used by default' : ''].filter(Boolean).join(' · ') || undefined}
           isNew={isNew}
           showSaveButton={showSaveButton}
           saving={saving}
