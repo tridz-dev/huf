@@ -18,9 +18,9 @@ export function usableProfiles(status: CodeFlowStatus | null): CodeFlowProfile[]
   return (status?.profiles ?? []).filter((p) => p.usable);
 }
 
-/** "Flow Scratch - runs automatically" / "Restricted - needs approval each run". */
+/** "Flow Scratch - runs automatically" / "Restricted - asks for approval". */
 export function profileLabel(profile: Pick<CodeFlowProfile, 'name' | 'approval_mode'>): string {
-  return `${profile.name} - ${profile.approval_mode === 'Auto Approve' ? 'runs automatically' : 'needs approval each run'}`;
+  return `${profile.name} - ${profile.approval_mode === 'Auto Approve' ? 'runs automatically' : 'asks for approval'}`;
 }
 
 /** Whether a flow has at least one Execute code step. */
