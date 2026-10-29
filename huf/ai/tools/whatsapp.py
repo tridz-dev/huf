@@ -115,7 +115,7 @@ _GATEWAY_FLAG_FIELDS = {
 _BOUND_KWARGS = ("gateway_name", "whatsapp_account")
 _SEND_ACTIONS = {
 	"send_message", "send_media", "send_voice_note", "send_location", "send_contact", "send_reaction",
-	"send_template", "create_template", *_MEDIA_ACTIONS, *_INTERACTIVE_ACTIONS,
+	"send_template", "create_template", *_MEDIA_ACTIONS, *_INTERACTIVE_ACTIONS, "send_products",
 }
 _LIST_DEFAULT_LIMIT = 20
 _LIST_MAX_LIMIT = 50
@@ -414,6 +414,10 @@ def _dispatch(action: str, kwargs: dict) -> str:
 		return _send_reaction(kwargs)
 	elif action in _INTERACTIVE_ACTIONS:
 		return _send_interactive(kwargs, _INTERACTIVE_ACTIONS[action])
+	elif action == "send_products":
+		from huf.ai.channels.commerce import messages as commerce_messages
+
+		return commerce_messages.deliver(kwargs, _deliver_typed)
 	elif action == "send_template":
 		return _send_template(kwargs)
 	elif action == "list_messages":

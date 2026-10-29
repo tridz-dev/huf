@@ -2069,6 +2069,10 @@ def _continue_ingest(
             )
         return _record_event(event, "unsupported_recorded: fixed reply, no run")
 
+    from huf.ai.channels.commerce.orders import handle_inbound_order
+
+    handle_inbound_order(gateway_name, event, context)  # inbound `order` carts only; no-op otherwise, never raises
+
     referral_tag, button_payload = _routing_inputs(event)
     from huf.ai.channels.pipeline import run_pre_route
 

@@ -2966,6 +2966,22 @@ ERP_CHANNEL_TOOLS = [
 ]
 
 
+# Commerce blueprint (BE-CATALOG): send catalog products as interactive product / product_list messages.
+COMMERCE_TOOLS = [
+	{
+		"tool_name": "send_products",
+		"description": "Send catalog products to the customer as a WhatsApp product card (one item) or product list (several). item_codes are ERPNext Item codes (the catalog retailer ids). Same window, opt-out and recipient rules as every WhatsApp send.",
+		"function_path": "huf.ai.channels.commerce.messages.send_products",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("item_codes", type="array", required=True, description="Item codes to show (max 30)"),
+			_p("header", description="Header text for a product list (max 60)"),
+			_p("body", description="Message text shown with the products"),
+		],
+	},
+]
+
+
 ALL_INTEGRATION_TOOLS = (
 	# Platform capabilities — no external account to connect.
 	RECIPIENT_TOOLS
@@ -2993,6 +3009,7 @@ ALL_INTEGRATION_TOOLS = (
 	+ GATEWAY_SETUP_TOOLS
 	+ ERP_CHANNEL_TOOLS
 	+ CHANNEL_HELPDESK_TOOLS
+	+ COMMERCE_TOOLS
 	# Tools backed by a connectable service. Keys match Integration Service
 	# docnames and the SERVICE_NAME each tool module uses for credentials.
 	+ _with_service(SLACK_TOOLS, "slack")

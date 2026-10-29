@@ -1,0 +1,37 @@
+{
+ "actions": [],
+ "autoname": "format:WAO-{#####}",
+ "creation": "2026-10-29 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["gateway", "conversation", "contact_handle", "status", "payment_status", "section_items", "items", "total", "currency", "customer_note", "section_payment", "payment_link", "source_message_id"],
+ "fields": [
+  {"fieldname":"gateway","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"Gateway","options":"Gateway","reqd":1,"search_index":1},
+  {"fieldname":"conversation","fieldtype":"Link","label":"Conversation","options":"Channel Conversation","search_index":1},
+  {"fieldname":"contact_handle","fieldtype":"Data","in_list_view":1,"label":"Contact handle","length":255,"search_index":1},
+  {"default":"Draft","fieldname":"status","fieldtype":"Select","in_list_view":1,"in_standard_filter":1,"label":"Status","options":"Draft\nConfirmed\nPaid\nCancelled\nShipped","reqd":1},
+  {"fieldname":"payment_status","fieldtype":"Data","in_list_view":1,"label":"Payment status","length":64},
+  {"fieldname":"section_items","fieldtype":"Section Break","label":"Items"},
+  {"fieldname":"items","fieldtype":"Table","label":"Items","options":"WhatsApp Order Item"},
+  {"fieldname":"total","fieldtype":"Float","in_list_view":1,"label":"Total","read_only":1},
+  {"fieldname":"currency","fieldtype":"Data","label":"Currency","length":8},
+  {"fieldname":"customer_note","fieldtype":"Small Text","label":"Customer note"},
+  {"fieldname":"section_payment","fieldtype":"Section Break","label":"Payment"},
+  {"fieldname":"payment_link","fieldtype":"Data","label":"Payment link","length":500,"options":"URL"},
+  {"fieldname":"source_message_id","fieldtype":"Data","label":"Source message ID","length":140,"read_only":1,"search_index":1}
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "Huf",
+ "name": "WhatsApp Order",
+ "owner": "Administrator",
+ "permissions": [
+  {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1},
+  {"create":1,"delete":1,"read":1,"report":1,"role":"Huf Admin","write":1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
