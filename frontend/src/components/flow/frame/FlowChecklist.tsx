@@ -29,7 +29,7 @@ export function FlowChecklist({ live, className }: { live: boolean; className?: 
                 type="button"
                 data-testid="flow-validation-summary"
                 aria-label={`${text}. Show what is left`}
-                className="inline-flex min-h-8 items-center gap-0.5 rounded px-1 text-xs font-medium text-warning underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex min-h-8 items-center gap-0.5 whitespace-nowrap rounded px-1 text-xs font-medium text-warning underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span className="hidden xl:inline">{text}</span>
                 <span className="xl:hidden">{issues.length > 0 ? `${text.split(' ')[0]} to finish` : ''}</span>
