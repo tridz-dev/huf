@@ -124,8 +124,15 @@ export const CONDITION_EXAMPLES: Array<{ text: string; meaning: string }> = [
   { text: "input['vip'] and input['total'] >= 500", meaning: 'both must be true (use "or" for either, "not" to flip)' },
 ];
 
-export const CONDITION_HELP =
-  "Write a check that is true or false. Read the trigger data as input['field'] and an earlier step's result with Insert data. Compare with ==, !=, >, >=, <, <= or in, and combine checks with and, or, not.";
+const CONDITION_SYNTAX =
+  "Compare with ==, !=, >, >=, <, <= or in, and combine checks with and, or, not.";
+
+/** Help under the Condition box. Only people who can edit are told about the Insert data button. */
+export function conditionHelp(canEdit: boolean): string {
+  return canEdit
+    ? `Write a check that is true or false. Read the trigger data as input['field'], and use Insert data for an earlier step's result. ${CONDITION_SYNTAX}`
+    : `A check that is true or false. Trigger data is read as input['field']. ${CONDITION_SYNTAX}`;
+}
 
 // ─── Data trigger ───────────────────────────────────────────────────────
 
