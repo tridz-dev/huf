@@ -143,7 +143,7 @@ class TestNodeSchemas(unittest.TestCase):
 		self.assertTrue(wh["secret"]["required"])
 		self.assertEqual(wh["secret"]["min_length"], 32)
 		self.assertEqual(f("trigger.doc-event")["event"]["options"], ["after_insert", "on_update", "on_submit", "on_cancel", "on_trash"])
-		self.assertEqual(set(f("trigger.schedule")), {"cron"})
+		self.assertEqual(set(f("trigger.schedule")), {"cron", "time_zone"})
 		self.assertEqual(set(f("condition")), {"expression", "on_true", "on_false"})
 		self.assertEqual(f("foreach")["body"]["type"], "node_list")
 		self.assertEqual(f("human.approval")["approver_users"]["type"], "string_list")

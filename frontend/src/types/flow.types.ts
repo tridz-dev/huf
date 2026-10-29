@@ -75,8 +75,10 @@ export interface WebhookTriggerConfig {
 
 export interface ScheduleTriggerConfig {
   type: 'schedule';
-  /** 5-part cron, system time. */
+  /** 5-part cron, read on the clock of `time_zone`. */
   cron?: string;
+  /** IANA zone the cron is read in. Absent means the site's time zone. */
+  time_zone?: string;
 }
 
 export interface DocEventTriggerConfig {
@@ -273,6 +275,8 @@ export interface FlowNodeData {
   endConfig?: EndConfig;
   /** Live execution status — updated via Frappe Realtime events */
   status?: 'idle' | 'running' | 'success' | 'error' | 'waiting';
+  /** A saved example of the data this step receives or returns (stored as `_sample`: <= 8 KB, secrets hidden, editors only). */
+  sample?: Record<string, unknown>;
 }
 
 export type FlowNode = ReactFlowNode<FlowNodeData>;

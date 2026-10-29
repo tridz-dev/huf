@@ -37,9 +37,12 @@ class TestTriggerDoctypes(IntegrationTestCase):
 
 	def test_huf_manager_who_is_not_a_system_manager_gets_a_list(self):
 		frappe.set_user(self._user("Huf Manager"))
-		names = [d["name"] for d in flow_api.get_trigger_doctypes()]
-		self.assertIn("ToDo", names)
-		self.assertEqual(names, sorted(names))
+		rows = flow_api.get_trigger_doctypes()
+		self.assertIn("ToDo", [d["name"] for d in rows])
+		# Ordered for a picker: everyday records first, each group alphabetical by the name people see.
+		order = {"common": 0, "yours": 1, "apps": 2}
+		keys = [(order[d["group"]], d["label"].lower()) for d in rows]
+		self.assertEqual(keys, sorted(keys))
 
 	def test_list_is_limited_to_what_the_user_can_read(self):
 		frappe.set_user(self._user("Huf Manager"))

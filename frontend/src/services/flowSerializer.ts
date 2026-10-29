@@ -222,6 +222,7 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
     out._position = node.position;
     if (node.data?.label !== undefined) out._label = node.data.label;
     if (node.data?.icon !== undefined) out._icon = node.data.icon;
+    if (node.data?.sample !== undefined) out._sample = node.data.sample;
     return out;
 }
 
@@ -269,7 +270,7 @@ function extractNodeConfig(node: FlowNode, backendType: BackendNodeType): Record
     if (backendType.startsWith('trigger.')) {
         config = plainConfig((data?.triggerConfig ?? {}) as Record<string, unknown>);
         const allowed = backendType === 'trigger.webhook' ? ['method', 'secret']
-            : backendType === 'trigger.schedule' ? ['cron'] : ['doctype', 'event'];
+            : backendType === 'trigger.schedule' ? ['cron', 'time_zone'] : ['doctype', 'event'];
         return Object.fromEntries(Object.entries(config).filter(([k]) => allowed.includes(k)));
     }
 
@@ -365,6 +366,7 @@ function buildNodeData(node: BackendNode): FlowNodeData {
         nodeType: frontendType as FlowNodeData['nodeType'],
         icon: node._icon || getDefaultIcon(node.type),
         configured: isBackendNodeConfigured(node),
+        ...(node._sample && typeof node._sample === 'object' ? { sample: node._sample } : {}),
     };
 
     if (node.type === 'trigger.unset') {
