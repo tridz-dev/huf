@@ -235,13 +235,12 @@ function missingBranches(
 }
 
 /**
- * `purpose: 'save'` lets a placeholder trigger (nothing chosen yet) through, since a draft with an unset
- * trigger is valid to store; run and publish need every step finished.
+ * Everything left to finish in a flow: unfinished settings, steps nothing leads to, no trigger. Saving a draft never
+ * waits for this list (UX-17); running, publishing and a live flow's save do. Computed from the flow each time,
+ * never stored, so it cannot go stale. The server runs the same check (`validate_flow`) with its own rules.
  */
-export function validateFlow(nodes: NodeLike[], edges: EdgeLike[], purpose: 'save' | 'run' = 'run'): FlowIssue[] {
-  const issues = nodes
-    .flatMap((n) => validateNode(n, edges))
-    .filter((i) => !(purpose === 'save' && i.kind === 'trigger.unset'));
+export function validateFlow(nodes: NodeLike[], edges: EdgeLike[]): FlowIssue[] {
+  const issues = nodes.flatMap((n) => validateNode(n, edges));
   if (!nodes.some((n) => n.data.nodeType === 'trigger')) {
     issues.unshift({ nodeId: '', nodeLabel: 'Flow', kind: 'flow', field: 'trigger', message: 'Add a trigger so the flow knows when to start.' });
   }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { APPROVAL_TIMEOUT_HELP, APPROVER_TYPE_HELP } from '@/lib/flow/flowHelp';
+import { APPROVER_TYPE_HELP } from '@/lib/flow/flowHelp';
 import { Combobox } from '../../ui/combobox';
 import { FieldHint } from '../FieldHint';
 import { Input } from '../../ui/input';
@@ -18,7 +18,6 @@ export function ApprovalForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
   }, []);
   const approverType = str(cfg.approver_type);
   const users = Array.isArray(cfg.approver_users) ? (cfg.approver_users as string[]) : [];
-  const timeoutMin = typeof cfg.timeout_ms === 'number' ? Math.round(cfg.timeout_ms / 60000) : '';
   return (
     <Section title={title} hint="Pauses the flow until someone approves or rejects. Approved and Rejected are separate paths. Approvers see the request in the bell menu at the top and on the run's details.">
       <div>
@@ -85,20 +84,6 @@ export function ApprovalForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
           <Err field="approver_users" />
         </div>
       )}
-      <div>
-        <Label htmlFor="approval-timeout" size="sm">Give up after (minutes, optional)</Label>
-        <Input
-          id="approval-timeout"
-          data-testid={f('timeout_ms')}
-          type="number"
-          min={1}
-          value={timeoutMin}
-          onChange={(e) => patch({ timeout_ms: e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value, 10)) * 60000 })}
-          placeholder="No time limit"
-        />
-        <FieldHint testId="flow-hint-approval-timeout">{APPROVAL_TIMEOUT_HELP}</FieldHint>
-        <Err field="timeout_ms" />
-      </div>
       <BranchRows nodeId={nodeId} cfgType="human.approval" cfg={cfg} />
       <Err field="branch.approve" />
       <Err field="branch.reject" />

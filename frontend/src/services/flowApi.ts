@@ -72,6 +72,10 @@ export interface BackendNode {
     _label?: string;
     /** Frontend-only: icon name */
     _icon?: string;
+    /** Turned off: the engine skips the step and carries on with `next`. */
+    _disabled?: boolean;
+    /** The author's note about the step. Never read by the engine. */
+    _notes?: string;
 }
 
 export interface BackendDocPermission {

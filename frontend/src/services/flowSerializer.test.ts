@@ -449,6 +449,22 @@ describe('flowSerializer: sidecar fields and helpers', () => {
     expect(Object.keys(n.config).filter((k) => k.startsWith('_'))).toEqual([]);
   });
 
+  it('keeps "turned off" and the author note as node-level extras across a save and a reload', () => {
+    const flow = fullCanvas();
+    const step = flow.nodes.find((n) => n.id === 'n_prep');
+    if (!step) throw new Error('fixture step missing');
+    step.data = { ...step.data, disabled: true, notes: 'Skipped while the API is down' };
+    const graph = serializeFlow(flow);
+    expect(nodeOf(graph, 'n_prep')._disabled).toBe(true);
+    expect(nodeOf(graph, 'n_prep')._notes).toBe('Skipped while the API is down');
+    expect(Object.keys(nodeOf(graph, 'n_prep').config).filter((k) => k.startsWith('_'))).toEqual([]);
+    const back = deserializeFlow('f', 'F', 'Draft', graph).nodes.find((n) => n.id === 'n_prep');
+    expect(back?.data.disabled).toBe(true);
+    expect(back?.data.notes).toBe('Skipped while the API is down');
+    // untouched steps carry neither
+    expect(nodeOf(serializeFlow(fullCanvas()), 'n_prep')._disabled).toBeUndefined();
+  });
+
   it('auto-layouts nodes vertically when _position is absent', () => {
     const graph = serializeFlow(fullCanvas());
     graph.nodes.forEach((n) => { delete n._position; });

@@ -271,6 +271,10 @@ export interface FlowNodeData {
   actionConfig?: ActionConfig;
   /** End nodes only. */
   endConfig?: EndConfig;
+  /** Turned off: the flow skips this step and carries on with the next one (linear action steps only). */
+  disabled?: boolean;
+  /** The author's own note about the step (Settings tab). Shown to people, never read by the flow. */
+  notes?: string;
   /** Live execution status — updated via Frappe Realtime events */
   status?: 'idle' | 'running' | 'success' | 'error' | 'waiting';
 }

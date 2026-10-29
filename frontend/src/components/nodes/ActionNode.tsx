@@ -50,7 +50,7 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
 
   const canDelete = canManage && selected && data.status !== 'running' && data.status !== 'waiting';
   return (
-    <div className="relative" data-testid={`flow-node-${id}`} data-node-type={cfg?.type} data-incomplete={incomplete.length > 0 ? 'true' : 'false'}>
+    <div className={data.disabled ? 'relative opacity-60' : 'relative'} data-disabled={data.disabled ? 'true' : undefined} title={data.disabled ? 'Turned off: the flow skips this step' : undefined} data-testid={`flow-node-${id}`} data-node-type={cfg?.type} data-incomplete={incomplete.length > 0 ? 'true' : 'false'}>
       <Handle
         type="target"
         data-testid={`flow-handle-in-${id}`}

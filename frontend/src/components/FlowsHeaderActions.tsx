@@ -20,7 +20,10 @@ import { toast } from '@/lib/toast';
 import { FlowRunHistory } from './FlowRunHistory';
 import { FlowRunViewer } from './FlowRunViewer';
 import { FlowSettingsModal } from './modals/FlowSettingsModal';
-import { BLOCKED_TOAST_ID, humanizeFlowError, summarizeIssues, validateFlow } from '@/lib/flow-graph/flowValidation';
+import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
+import { FlowChecklist } from './flow/frame/FlowChecklist';
+import { setChecklistOpen } from './flow/frame/frameStore';
+import { useFlowIssues } from './flow/frame/useFlowIssues';
 import { reportFlowRun } from '@/lib/flow-run/flowRunToast';
 import { RunFlowDialog } from './flow/RunFlowDialog';
 import { FlowHelpPopover } from './flow/FlowHelpPopover';
@@ -134,7 +137,7 @@ export function FlowToolbarTitle() {
 }
 
 export function FlowsHeaderActions() {
-  const { activeFlow, saveState, hasUnsavedChanges, saveFlow, setSelectedNode, setFlowPublished } = useFlowContext();
+  const { activeFlow, saveState, hasUnsavedChanges, saveFlow, setFlowPublished } = useFlowContext();
   const [showRunDialog, setShowRunDialog] = useState(false);
   const { canManage, canPublishSensitive, readOnlyReason } = useFlowPermissions();
   const [isPublishing, setIsPublishing] = useState(false);
@@ -171,24 +174,21 @@ export function FlowsHeaderActions() {
     }
   };
 
-  const issues = activeFlow ? validateFlow(activeFlow.nodes, activeFlow.edges, 'run') : [];
+  const issues = useFlowIssues();
 
-  /** Block with a readable message (and select the offending step) instead of a raw schema error. */
-  const blockedBy = (purpose: 'save' | 'run'): boolean => {
-    if (!activeFlow) return true;
-    const found = validateFlow(activeFlow.nodes, activeFlow.edges, purpose);
-    if (found.length === 0) return false;
-    if (found[0].nodeId) setSelectedNode(found[0].nodeId);
-    toast.error(purpose === 'save' ? "Can't save yet" : 'Finish setting up your flow first', {
-      id: BLOCKED_TOAST_ID,
-      description: `Finish setting up ${summarizeIssues(found)}`,
-    });
+  /**
+   * Running and publishing need a finished flow. When it is not, open the list of what is left (each row has a Fix
+   * button) instead of failing quietly or with a toast. Saving is never blocked, except for a live flow, which
+   * triggers start from what is stored and so has to stay finished.
+   */
+  const needsFinishing = (): boolean => {
+    if (!activeFlow || issues.length === 0) return false;
+    setChecklistOpen(true);
     return true;
   };
 
   const saveIfNeeded = async (what: string): Promise<boolean> => {
     if (!hasUnsavedChanges) return true;
-    if (blockedBy('save')) return false;
     try {
       await saveFlow();
       return true;
@@ -200,7 +200,7 @@ export function FlowsHeaderActions() {
 
   /** Check and save the flow, then ask for the input data before running. */
   const handleRun = async () => {
-    if (!activeFlow || blockedBy('run')) return;
+    if (!activeFlow || needsFinishing()) return;
     if (!(await saveIfNeeded('running'))) return;
     setShowRunDialog(true);
   };
@@ -215,7 +215,7 @@ export function FlowsHeaderActions() {
   };
 
   const handleSaveDraft = async () => {
-    if (blockedBy('save')) return;
+    if (isPublished && needsFinishing()) return;
     try {
       await saveFlow();
       toast.success('Flow saved');
@@ -225,7 +225,7 @@ export function FlowsHeaderActions() {
   };
 
   const handlePublish = async () => {
-    if (!activeFlow || blockedBy('run')) return;
+    if (!activeFlow || needsFinishing()) return;
     if (!(await saveIfNeeded('publishing'))) return;
 
     setIsPublishing(true);
@@ -263,19 +263,9 @@ export function FlowsHeaderActions() {
 
   return (
     <div className="flex items-center gap-2">
-      {/* Save State Indicator (bare dot + text, no chip background) */}
+      {/* Save state: "Saved" and, next to it, what is left to finish (opens the list) */}
       {activeFlow && (
-        <div className="flex items-center gap-1.5 mr-2 text-muted-foreground" data-testid="flow-save-state" title={issues.length > 0 ? ` to finish before it can run` : undefined}>
-          {canManage && issues.length > 0 && (
-            <button
-              type="button"
-              data-testid="flow-validation-summary"
-              className="mr-2 hidden text-xs text-signal-ink underline-offset-2 hover:underline xl:inline"
-              onClick={() => issues[0].nodeId && setSelectedNode(issues[0].nodeId)}
-            >
-              {issues.length === 1 ? '1 thing to finish' : `${issues.length} things to finish`}
-            </button>
-          )}
+        <div className="flex items-center gap-1.5 mr-2 text-muted-foreground" data-testid="flow-save-state">
           {saveState === 'saving' ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           ) : saveState === 'error' ? (
@@ -290,6 +280,12 @@ export function FlowsHeaderActions() {
               saveState === 'error' ? 'Save Failed' :
                 hasUnsavedChanges ? 'Unsaved' : 'Saved'}
           </span>
+          {canManage && issues.length > 0 && (
+            <>
+              <span aria-hidden className="text-muted-foreground/60">&middot;</span>
+              <FlowChecklist live={isPublished} />
+            </>
+          )}
         </div>
       )}
 

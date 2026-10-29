@@ -68,6 +68,8 @@ from huf.ai.flow.orchestrator import (
 	build_router_prompt,
 )
 from huf.ai.flow.support.redact import pinned_json
+from huf.ai.flow.support.tool_result import normalize_tool_result
+from huf.ai.flow.support.turned_off import is_turned_off, turned_off_result
 from huf.ai.flow.tool_executor import execute as execute_tool
 from huf.ai.flow.tool_executor import tool_run_context
 from huf.ai.graph.executor import (
@@ -475,20 +477,13 @@ def create_flow_run(
 	defn_doc = frappe.get_doc("Flow Definition", flow_id)
 	defn = json.loads(defn_doc.definition_json) if isinstance(defn_doc.definition_json, str) else defn_doc.definition_json
 
+	from huf.ai.flow.support.flow_validation import check_runnable
 	from huf.huf.doctype.flow_definition.activation_rules import entry_is_unset
 
 	if entry_is_unset(defn):
 		frappe.throw(_("This flow has no trigger yet. Choose what starts it, then run it again."))
 
-	# A draft may be saved half-built; a run needs every step finished (UX-17 publish-mode check).
-	from huf.ai.flow.support.flow_validation import validate_flow
-
-	finished = validate_flow(defn, "publish")
-	if not finished.ok:
-		frappe.throw(
-			_("Finish setting up this flow before running it. {0}").format(" ".join(finished.messages(defn))),
-			title=_("This flow is not finished"),
-		)
+	check_runnable(defn)  # a draft may be saved half-built; a run needs every step finished (UX-17)
 
 	try:
 		entry_node = select_entry_node(defn, trigger_type)
@@ -1126,6 +1121,9 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 	if not executor:
 		frappe.throw(_("Unknown node type: {0}").format(node_type))
 
+	if is_turned_off(node):
+		return turned_off_result()
+
 	try:
 		return executor(flow_run, node, config, settings)
 	except TemplateError as exc:
@@ -1276,40 +1274,6 @@ def _bound_gateway(flow_run, run_id: str = ""):
 	except Exception:
 		gateway, contact = "", ""
 	return trusted_gateway(gateway, run_id=run_id, contact=contact)
-
-
-def normalize_tool_result(raw) -> dict:
-	"""Collapse whatever a tool returned into ``{"success", "result", "error"}``.
-
-	The invocation layer wraps results as ``{"success", "result", "error"}``, but many tools
-	return a JSON *string* such as ``{"success": false, "error": "..."}`` (or ``{"error": ...}``)
-	as their ``result`` and the wrapper still says success. A tool that reports ``success: false``,
-	or carries a truthy ``error`` key, is a failure here, so the node is marked failed instead of
-	green. A JSON string result is parsed so later nodes can read fields with ``{"$from": "<node>.x"}``.
-	"""
-	if isinstance(raw, dict) and "success" in raw:
-		success = bool(raw.get("success"))
-		inner = raw.get("result")
-		error = raw.get("error") or ""
-	else:
-		success, inner, error = True, raw, ""
-
-	if isinstance(inner, str) and inner.lstrip()[:1] in ("{", "["):
-		try:
-			inner = json.loads(inner)
-		except (ValueError, TypeError):
-			pass
-
-	if isinstance(inner, dict):
-		reported_error = inner.get("error")
-		if inner.get("success") is False or reported_error:
-			success = False
-			if not error:
-				error = str(reported_error or inner.get("message") or "tool reported failure")
-
-	if not success and not error:
-		error = "tool failed"
-	return {"success": success, "result": inner, "error": error if not success else ""}
 
 
 def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:

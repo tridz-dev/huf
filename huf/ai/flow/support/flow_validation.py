@@ -174,6 +174,21 @@ def load_definition(raw) -> dict:
 	return raw
 
 
+def check_runnable(defn) -> None:
+	"""Refuse to start a run of a flow with anything left to finish (a draft may be saved half-built, a run may not)."""
+	finished = validate_flow(defn, MODE_PUBLISH)
+	if not finished.ok:
+		frappe.throw(
+			_("Finish setting up this flow before running it. {0}").format(" ".join(finished.messages(defn))),
+			title=_("This flow is not finished"),
+		)
+
+
+def unfinished_count(definition_json) -> int:
+	"""How many things are left to finish in a stored definition (what ``save_flow_definition`` reports back)."""
+	return len(validate_flow(load_definition(definition_json), MODE_PUBLISH).issues)
+
+
 def explain(defn, errors) -> str:
 	"""All ``errors`` as readable sentences, for a save or publish dialog."""
 	return describe_errors(defn, errors)

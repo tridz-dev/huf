@@ -4,9 +4,8 @@ import { Combobox } from '../../ui/combobox';
 import { FieldHint } from '../FieldHint';
 import { FlowValueInput } from '../../FlowValueInput';
 import { INTEGRATION_NEEDS } from '@/lib/flow/flowHelp';
-import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
-import { NotConnected } from '../NotConnected';
+import { MoreOptions } from '../frame/MoreOptions';
 import { PRESET_FIELDS } from './toolPresetFields';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { SlackChannelPicker } from '../SlackChannelPicker';
@@ -16,6 +15,8 @@ import { registerToolSchemas } from '@/lib/flow/flowToolSchemas';
 import { toolLabel } from '@/lib/flow/flowIntegrations';
 import { type ActionFormProps, asObj, type Opt, Section, str } from './formKit';
 import { type FlowTool, getFlowTools } from '../../../services/toolApi';
+
+const isEmptyValue = (v: unknown) => v === undefined || v === null || v === '' || (typeof v === 'object' && v !== null && Object.keys(v).length === 0);
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
@@ -49,7 +50,6 @@ export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
   const required = new Set(TOOL_REQUIRED_INPUT[toolId]?.map(([k]) => k) ?? (asObj(toolsByName[toolId]?.params_json_schema).required as string[] | undefined) ?? []);
   const cardToolIds = ACTION_CARD_CONTRACT[actionCardId(cfg as { type?: unknown; tool_id?: unknown })]?.toolIds;
   const toolOptions = cardToolIds ? tools.filter((t) => cardToolIds.includes(t.value)) : tools;
-  const timeoutSec = typeof cfg.timeout_ms === 'number' ? Math.round(cfg.timeout_ms / 1000) : '';
   const presetFields = PRESET_FIELDS[toolId];
   const fields: Array<{ key: string; label: string; optional: boolean; placeholder?: string; hint?: string }> = presetFields
     ? presetFields.map((p) => ({ key: p.key, label: p.label, optional: Boolean(p.optional), placeholder: p.placeholder, hint: p.hint }))
@@ -61,6 +61,28 @@ export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
   const toolHint = isHttp
     ? 'Calls a web address and hands the response to the next step. Addresses on private networks are blocked.'
     : `Runs one tool and hands its result to the next step.${INTEGRATION_NEEDS[cardId] ? ` ${INTEGRATION_NEEDS[cardId]}` : ''}`;
+
+  const renderField = (fld: (typeof fields)[number]) => (
+    <div key={`${toolId}-${fld.key}`}>
+      <FlowValueInput
+        id={`tool-in-${fld.key}`}
+        nodeId={nodeId}
+        testId={f(`input.${fld.key}`)}
+        label={fld.label}
+        optional={fld.optional}
+        placeholder={fld.placeholder}
+        hint={fld.hint}
+        value={input[fld.key]}
+        onChange={(v) => setInput(fld.key, v)}
+      />
+      <Err field={`input.${fld.key}`} />
+      {fld.key === 'channel' && toolId.startsWith('slack_send') && (
+        <div className="mt-2">
+          <SlackChannelPicker value={str(input.channel)} onPick={(id) => setInput('channel', id)} />
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <Section title={title} hint={toolHint}>
@@ -82,7 +104,6 @@ export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
           <Err field="tool_id" />
         </div>
       )}
-      <NotConnected toolId={toolId} testIdSuffix="sidebar" />
       {isHttp ? (
         <>
           <FlowValueInput id="http-url" nodeId={nodeId} testId={f('input.url')} label="URL" placeholder="https://api.example.com/items" hint="The full address, starting with https://. Use Insert data to add a value from an earlier step." value={input.url} onChange={(v) => setInput('url', v)} />
@@ -101,49 +122,22 @@ export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
             </Select>
             <FieldHint testId="flow-hint-http-method">GET reads data. POST, PUT and PATCH send the Body. DELETE removes something.</FieldHint>
           </div>
+          <MoreOptions defaultOpen={Boolean(input.headers || input.body)}>
           <FlowValueInput id="http-headers" nodeId={nodeId} testId={f('input.headers')} label="Headers" optional hint={'Extra request headers as JSON, for example {"Authorization": "Bearer your-key"}. Choose JSON as the value type.'} value={input.headers} onChange={(v) => setInput('headers', v)} />
           <FlowValueInput id="http-body" nodeId={nodeId} testId={f('input.body')} label="Body" optional hint={'The data to send with POST, PUT or PATCH. For JSON, choose JSON as the value type, for example {"name": "Ada"}.'} value={input.body} onChange={(v) => setInput('body', v)} />
+          </MoreOptions>
         </>
       ) : toolId && fields.length > 0 ? (
-        fields.map((fld) => (
-          <div key={`${toolId}-${fld.key}`}>
-            <FlowValueInput
-              id={`tool-in-${fld.key}`}
-              nodeId={nodeId}
-              testId={f(`input.${fld.key}`)}
-              label={fld.label}
-              optional={fld.optional}
-              placeholder={fld.placeholder}
-              hint={fld.hint}
-              value={input[fld.key]}
-              onChange={(v) => setInput(fld.key, v)}
-            />
-            <Err field={`input.${fld.key}`} />
-            {fld.key === 'channel' && toolId.startsWith('slack_send') && (
-              <div className="mt-2">
-                <SlackChannelPicker value={str(input.channel)} onPick={(id) => setInput('channel', id)} />
-              </div>
-            )}
-          </div>
-        ))
+        <>
+          {fields.filter((fld) => !fld.optional).map(renderField)}
+          {fields.some((fld) => fld.optional) && (
+            <MoreOptions defaultOpen={fields.some((fld) => fld.optional && !isEmptyValue(input[fld.key]))}>
+              {fields.filter((fld) => fld.optional).map(renderField)}
+            </MoreOptions>
+          )}
+        </>
       ) : toolId ? (
         <p className="text-xs text-muted-foreground" data-testid="flow-hint-tool-no-settings">This tool needs no settings. It runs as soon as the step before it finishes.</p>
-      ) : null}
-      {toolId ? (
-        <div>
-          <Label htmlFor="tool-timeout" size="sm">Wait up to (seconds, optional)</Label>
-          <Input
-            id="tool-timeout"
-            data-testid={f('timeout_ms')}
-            type="number"
-            min={1}
-            value={timeoutSec}
-            onChange={(e) => patch({ timeout_ms: e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value, 10)) * 1000 })}
-            placeholder="No limit"
-          />
-          <p className="mt-1 text-xs text-muted-foreground" data-testid={f('timeout_ms-help')}>Applies to connected (MCP) tools; built-in tools finish on their own.</p>
-          <Err field="timeout_ms" />
-        </div>
       ) : null}
     </Section>
   );

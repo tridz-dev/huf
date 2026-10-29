@@ -1,5 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Label } from '../../ui/label';
+import { fieldKey, isFieldRevealed, setStepHint, touchField, useFrame } from '../frame/frameStore';
 import { Textarea } from '../../ui/textarea';
 import { VariablePicker } from '../../ui/VariablePicker';
 import { branchHandlesFor } from '@/lib/flow/flowBranches';
@@ -77,30 +78,65 @@ export function useNodeForm(nodeId: string, slot: 'triggerConfig' | 'actionConfi
   // Required-field messages are for the people who can fix them; a viewer reads the step as it is.
   const issues = node && canManage ? validateNode(node, edges) : [];
   const error = (field: string) => issues.find((i) => i.field === field)?.message;
-  const Err = ({ field }: { field: string }) => {
-    const m = error(field);
-    return m ? (
-      <p role="alert" className="mt-1 text-meta text-destructive" data-testid={`flow-error-${kind}-${field}`}>
-        {m}
-      </p>
-    ) : null;
-  };
+  // One stable component for the life of the form, reading the latest values through a ref: a new component type on
+  // every render would remount the message (and drop its focus listener) on each keystroke.
+  const latest = useRef({ nodeId, kind, error });
+  latest.current = { nodeId, kind, error };
+  const ErrRef = useRef(function Err({ field }: { field: string }) {
+    const { nodeId: id, kind: k, error: e } = latest.current;
+    return <FieldError nodeId={id} kind={k} field={field} message={e(field)} />;
+  });
+  const Err = ErrRef.current;
   const shell: FormShell = { kind, error, Err };
   return { node, edges, cfg, patch, kind, shell, activeFlow };
 }
 
+/**
+ * The message under a required field. It stays hidden on a form nobody has touched: it appears once the person has
+ * been in the field and left it, or after a save / publish / run attempt, or when "N things to finish" is used.
+ * The (empty) anchor also watches focus leaving the control just above it.
+ */
+export function FieldError({ nodeId, kind, field, message }: { nodeId: string; kind: string; field: string; message?: string }) {
+  const anchor = useRef<HTMLSpanElement>(null);
+  const shown = useFrame((s) => isFieldRevealed(s, nodeId, field));
+  useEffect(() => {
+    // Paths between steps are not a typed field: they are shown by the checklist and the branch rows, not on blur.
+    if (field.startsWith('branch.')) return;
+    let control: Element | null = anchor.current?.previousElementSibling ?? null;
+    while (control && (control as HTMLElement).dataset?.errAnchor !== undefined) control = control.previousElementSibling;
+    const target = control ?? anchor.current?.parentElement;
+    if (!target) return;
+    const onOut = (ev: Event) => {
+      const next = (ev as FocusEvent).relatedTarget as Node | null;
+      if (!next || !target.contains(next)) touchField(nodeId, field);
+    };
+    target.addEventListener('focusout', onOut);
+    return () => target.removeEventListener('focusout', onOut);
+  }, [nodeId, field]);
+  return (
+    <>
+      <span ref={anchor} hidden aria-hidden data-err-anchor={fieldKey(nodeId, field)} />
+      {message && shown ? (
+        <p role="alert" className="mt-1 text-meta text-destructive" data-testid={`flow-error-${kind}-${field}`}>
+          {message}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 export const tid = (kind: string, field: string) => `flow-field-${kind}-${field}`;
 
-export function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
-  return (
-    <div className="space-y-3">
-      <Label weight="semibold" className="mb-2 block" data-testid="flow-config-title">
-        {title}
-      </Label>
-      {hint ? <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md break-words" data-testid="flow-config-hint">{hint}</div> : null}
-      {children}
-    </div>
-  );
+/**
+ * The body of a step's Setup tab. The step's title and kind live in the panel header, so this renders no heading;
+ * the longer explanation of the step goes behind the (i) in the header.
+ */
+export function Section({ hint, children }: { title?: string; hint?: string; children: ReactNode }) {
+  useEffect(() => {
+    setStepHint(hint ?? null);
+    return () => setStepHint(null);
+  }, [hint]);
+  return <div className="space-y-4">{children}</div>;
 }
 
 /**

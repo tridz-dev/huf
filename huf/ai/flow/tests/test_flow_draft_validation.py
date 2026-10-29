@@ -20,6 +20,7 @@ from frappe.tests import IntegrationTestCase
 from huf.ai.flow import api as flow_api
 from huf.ai.flow import engine as flow_engine
 from huf.ai.flow.support.flow_validation import validate_flow
+from huf.ai.flow.support.turned_off import SKIPPABLE_NODE_TYPES
 
 LIMITS = {
 	"max_nodes": 20,
@@ -257,3 +258,15 @@ class TestDraftSaveOnBench(IntegrationTestCase):
 		# unpublish, and the same unfinished save goes through
 		flow_api.unpublish_flow(flow_id)
 		flow_api.save_flow_definition(flow_id, self._half_built())
+
+
+class TestTurnedOffStep(IntegrationTestCase):
+	def test_a_turned_off_step_is_stepped_over_without_running(self):
+		node = {"id": "a", "type": "agent.run", "_disabled": True, "config": {}}
+		out = flow_engine._execute_node(None, node, {})
+		self.assertEqual(out["status"], "success")
+		self.assertTrue(out["skipped"])
+
+	def test_branching_steps_cannot_be_turned_off(self):
+		self.assertNotIn("condition", SKIPPABLE_NODE_TYPES)
+		self.assertNotIn("human.approval", SKIPPABLE_NODE_TYPES)

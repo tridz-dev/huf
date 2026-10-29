@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FieldHint } from '../FieldHint';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
+import { MoreOptions } from '../frame/MoreOptions';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '../../ui/select';
 import { edgeRoute } from '../../../services/flowSerializer';
 import { getModels, getProviders } from '../../../services/providerApi';
@@ -47,26 +48,6 @@ export function RouterForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProp
         <FieldHint testId="flow-hint-router-prompt">Ask a question the path names can answer. The AI also sees the trigger data and the results of earlier steps. Be specific about when each path applies.</FieldHint>
         <Err field="prompt" />
       </div>
-      <div>
-        <Label htmlFor="router-model" size="sm">AI model (optional)</Label>
-        <Select value={str(cfg.model) || DEFAULT_MODEL} onValueChange={(v) => patch({ model: v === DEFAULT_MODEL ? undefined : v })}>
-          <SelectTrigger id="router-model" data-testid={f('model')}>
-            <SelectValue placeholder="Use provider default" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={DEFAULT_MODEL} data-testid="flow-option-router-model-default">Use provider default</SelectItem>
-            {modelGroups.map((g) => (
-              <SelectGroup key={g.provider}>
-                <SelectLabel>{g.provider}</SelectLabel>
-                {g.models.map((m) => (
-                  <SelectItem key={m.value} value={m.value} data-testid={`flow-option-router-model-${m.value}`}>{m.label}</SelectItem>
-                ))}
-              </SelectGroup>
-            ))}
-          </SelectContent>
-        </Select>
-        <FieldHint testId="flow-hint-router-model">Leave on the provider default unless you need a specific model. The provider needs a working key.</FieldHint>
-      </div>
       <div className="space-y-2" data-testid={f('options')}>
         <Label size="sm">Paths</Label>
         <FieldHint testId="flow-hint-router-paths">Each path is an arrow to a next step. A short, clear name helps the AI choose well.</FieldHint>
@@ -106,6 +87,28 @@ export function RouterForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProp
           <Err field="default" />
         </div>
       )}
+      <MoreOptions defaultOpen={Boolean(cfg.model)}>
+      <div>
+          <Label htmlFor="router-model" size="sm">AI model (optional)</Label>
+          <Select value={str(cfg.model) || DEFAULT_MODEL} onValueChange={(v) => patch({ model: v === DEFAULT_MODEL ? undefined : v })}>
+            <SelectTrigger id="router-model" data-testid={f('model')}>
+              <SelectValue placeholder="Use provider default" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={DEFAULT_MODEL} data-testid="flow-option-router-model-default">Use provider default</SelectItem>
+              {modelGroups.map((g) => (
+                <SelectGroup key={g.provider}>
+                  <SelectLabel>{g.provider}</SelectLabel>
+                  {g.models.map((m) => (
+                    <SelectItem key={m.value} value={m.value} data-testid={`flow-option-router-model-${m.value}`}>{m.label}</SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
+          <FieldHint testId="flow-hint-router-model">Leave on the provider default unless you need a specific model. The provider needs a working key.</FieldHint>
+        </div>
+      </MoreOptions>
     </Section>
   );
 }
