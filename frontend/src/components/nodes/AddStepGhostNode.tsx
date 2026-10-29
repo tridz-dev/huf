@@ -34,6 +34,7 @@ export const AddStepGhostNode = memo(({ data }: NodeProps<AddStepGhostNodeData>)
         role="button"
         tabIndex={0}
         aria-label={data.branchLabel ? `Add step: ${data.branchLabel}` : 'Add step'}
+        title={data.branchLabel ? `Add the step that runs on the "${data.branchLabel}" path` : 'Add the step that runs next'}
         data-testid={`flow-add-step-${data.sourceNodeId}${data.route && data.route !== 'next' ? `-${data.route}` : ''}`}
         onClick={(e) => {
           e.stopPropagation();

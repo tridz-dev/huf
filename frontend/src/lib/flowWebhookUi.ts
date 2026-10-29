@@ -18,6 +18,7 @@ export function webhookUsage(origin: string, flowId: string | undefined, secret:
   return {
     header: `X-Huf-Secret: ${key}`,
     curl: `curl -X ${method} -H "X-Huf-Secret: ${key}" "${url}"`,
+    curlWithData: `curl -X POST -H "X-Huf-Secret: ${key}" -H "Content-Type: application/json" -d '{"name":"Ada","amount":120}' "${url}"`,
   };
 }
 

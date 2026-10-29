@@ -17,6 +17,7 @@ import { humanizeFlowError } from '@/lib/flowValidation';
 import { useFlowContext } from '../contexts/FlowContext';
 import { RunFlowDialog } from '../components/flow/RunFlowDialog';
 import { useFlowPermissions } from '@/hooks/useFlowPermissions';
+import { FLOW_GUIDE_URL } from '@/lib/flowHelp';
 import { FlowSettingsModal } from '../components/modals/FlowSettingsModal';
 
 const statusOptions = [
@@ -34,6 +35,7 @@ const categoryOptions = [
   { label: 'Integration', value: 'integration' },
   { label: 'Support', value: 'support' },
   { label: 'Sales', value: 'sales' },
+  { label: 'Huf Demo', value: 'huf demo' },
 ];
 
 function getStatusVariant(status: FlowMetadata['status']) {
@@ -198,9 +200,10 @@ function FlowListPage() {
             <EmptyState
               variant="create"
               icon={Workflow}
-              title="No flows"
-              description={canCreate ? 'Create flows to automate your tasks.' : 'No flows have been shared with you yet.'}
+              title="No flows yet"
+              description={canCreate ? 'A flow starts from a trigger, such as a webhook or a schedule, then runs steps one after another. Create your first flow to try it.' : 'No flows have been shared with you yet. Ask a teammate to share one, or ask your administrator for access to create flows.'}
               action={canCreate ? { label: 'New flow', onClick: handleNewFlow } : undefined}
+              secondaryAction={{ label: 'How flows work', onClick: () => window.open(FLOW_GUIDE_URL, '_blank', 'noopener') }}
             />
           )
         }
@@ -215,7 +218,7 @@ function FlowListPage() {
             }}
             metadata={[
               { label: 'Category', value: flow.category || 'Uncategorized' },
-              { label: 'Nodes', value: flow.nodeCount.toString(), icon: Activity },
+              { label: 'Steps', value: flow.nodeCount.toString(), icon: Activity },
               {
                 label: 'Updated',
                 value: new Date(flow.updatedAt).toLocaleDateString(),

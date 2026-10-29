@@ -11,6 +11,10 @@ import {
   type ScheduleKind,
   type SchedulePicker,
 } from '@/lib/flowSchedule';
+import { useSiteTimezone } from '@/lib/serverTime';
+import { scheduleZoneSentence } from '@/lib/flowTimeZone';
+import { SCHEDULE_EXAMPLES } from '@/lib/flowHelp';
+import { Code, Examples, FieldHint } from './FieldHint';
 
 const KINDS: Array<{ id: ScheduleKind; label: string }> = [
   { id: 'minutes', label: 'Every few minutes' },
@@ -32,6 +36,7 @@ const num = (v: string) => (v === '' ? 0 : Number(v));
 
 /** Friendly interval picker that compiles to the 5-part `cron` stored on the trigger, plus a raw cron box. */
 export function ScheduleEditor({ cron, onChange, disabled, error }: Props) {
+  const siteZone = useSiteTimezone();
   const [picker, setPicker] = useState<SchedulePicker>(() => cronToPicker(cron));
   const [raw, setRaw] = useState(cron ?? '');
 
@@ -57,6 +62,9 @@ export function ScheduleEditor({ cron, onChange, disabled, error }: Props) {
 
   return (
     <div className="space-y-3">
+      <p className="text-xs text-muted-foreground" data-testid="flow-hint-schedule-intro">
+        Starts the flow by itself at the times you choose. It only runs while the flow is published.
+      </p>
       <div>
         <Label htmlFor="schedule-kind" size="sm">How often</Label>
         <Select value={picker.kind} disabled={disabled} onValueChange={(v) => update({ ...picker, kind: v as ScheduleKind })}>
@@ -179,11 +187,19 @@ export function ScheduleEditor({ cron, onChange, disabled, error }: Props) {
           }}
           placeholder="0 9 * * 1"
         />
+        <FieldHint testId="flow-hint-schedule-cron">Five parts: minute, hour, day of month, month, day of week. The boxes above fill this in for you.</FieldHint>
+        <Examples testId="flow-schedule-examples" title="Show examples">
+          {SCHEDULE_EXAMPLES.map((ex) => (
+            <p key={ex.cron}><Code>{ex.cron}</Code> {ex.meaning}</p>
+          ))}
+        </Examples>
       </div>
 
-      <p className="text-xs text-muted-foreground">Five parts: minute, hour, day of month, month, day of week.</p>
       <p className="text-xs text-muted-foreground" data-testid="flow-schedule-preview">
         {describeCron(cron)}
+      </p>
+      <p className="text-xs text-muted-foreground" data-testid="flow-schedule-timezone">
+        {scheduleZoneSentence(siteZone)}
       </p>
       {problem ? (
         <p role="alert" className="text-[11px] text-destructive" data-testid="flow-error-trigger.schedule-cron">

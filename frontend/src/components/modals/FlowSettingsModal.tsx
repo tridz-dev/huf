@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Dialog,
+  DialogDescription,
   DialogTitle,
 } from '../ui/dialog';
 import {
@@ -143,6 +144,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
       <DialogScrollContent className="sm:max-w-[425px]" data-testid="flow-settings-modal">
         <DialogScrollHeader>
           <DialogTitle>Flow settings</DialogTitle>
+          <DialogDescription>The name, description and category show up in the flows list.</DialogDescription>
         </DialogScrollHeader>
         <DialogScrollBody className="grid gap-4 py-4">
           <div className="grid gap-2">
@@ -152,8 +154,9 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
               data-testid="flow-settings-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Enter flow name..."
+              placeholder="For example: New order alert"
             />
+            <p className="text-[11px] text-muted-foreground" data-testid="flow-settings-name-hint">Pick a name that says what the flow does. It is required.</p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="description">Description (optional)</Label>
@@ -163,8 +166,9 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
               className="min-h-[80px]"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does this flow do?"
+              placeholder="For example: Sends a Slack message when a large order comes in."
             />
+            <p className="text-[11px] text-muted-foreground" data-testid="flow-settings-description-hint">Shown on the flow's card. Helpful for teammates who did not build it.</p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="category">Category</Label>
@@ -178,8 +182,13 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
                 <SelectItem value="Integration">Integration</SelectItem>
                 <SelectItem value="Support">Support</SelectItem>
                 <SelectItem value="Sales">Sales</SelectItem>
+                <SelectItem value="Huf Demo">Huf Demo</SelectItem>
+                {category && !['Uncategorized', 'Automation', 'Integration', 'Support', 'Sales', 'Huf Demo'].includes(category) && (
+                  <SelectItem value={category}>{category}</SelectItem>
+                )}
               </SelectContent>
             </Select>
+            <p className="text-[11px] text-muted-foreground" data-testid="flow-settings-category-hint">Groups flows in the list so you can filter by it.</p>
           </div>
           <div className="flex flex-row items-start gap-2">
             <Checkbox
@@ -194,8 +203,8 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
                 Create a procedure from this flow on save
               </Label>
               <p className="text-sm text-muted-foreground">
-                Every save recompiles this flow into a draft, reusable procedure -- only
-                works for flows with no AI-driven steps (agent runs, routers, or approvals).
+                Every save turns this flow into a draft, reusable procedure. This only works for flows
+                without AI-driven steps (agent runs, LLM routers or approvals).
               </p>
             </div>
           </div>

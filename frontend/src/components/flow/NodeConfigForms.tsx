@@ -17,6 +17,12 @@ import { getFlowTools, type FlowTool } from '../../services/toolApi';
 import { getModels, getProviders } from '../../services/providerApi';
 import { isChatModel } from '@/lib/chatModel';
 import { NotConnected } from './NotConnected';
+import { Code, Examples, FieldHint } from './FieldHint';
+import { useFlowPermissions } from '@/hooks/useFlowPermissions';
+import {
+  APPROVAL_TIMEOUT_HELP, APPROVER_TYPE_HELP, CONDITION_EXAMPLES, CONDITION_HELP, INTEGRATION_NEEDS, LOOP_HELP,
+  WEBHOOK_RESPONSES, transformParamHelp, TRANSFORM_HELP,
+} from '@/lib/flowHelp';
 import { SlackChannelPicker } from './SlackChannelPicker';
 import { ACTION_CARD_CONTRACT } from '../../data/actions';
 import { registerToolSchemas } from '@/lib/flowToolSchemas';
@@ -117,7 +123,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
       <Label weight="semibold" className="mb-2 block" data-testid="flow-config-title">
         {title}
       </Label>
-      {hint ? <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md">{hint}</div> : null}
+      {hint ? <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md break-words" data-testid="flow-config-hint">{hint}</div> : null}
       {children}
     </div>
   );
@@ -202,7 +208,7 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
       else toast.error("Couldn't copy. Select the text and copy it yourself.");
     };
     return (
-      <Section title="Webhook" hint="Send a request to this address to start the flow. Callers must send the secret in the X-Huf-Secret header.">
+      <Section title="Webhook" hint="Starts the flow when another system sends a request to the address below. The flow must be published first. The data it sends becomes the flow input, which steps read as input['name'].">
         <div>
           <Label size="sm">Webhook URL</Label>
           <div className="flex gap-2 mt-1">
@@ -217,6 +223,7 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
               <Copy className="w-3.5 h-3.5" />
             </Button>
           </div>
+          <FieldHint testId="flow-hint-webhook-url">Give this address to the system that should start the flow.</FieldHint>
         </div>
         <div>
           <Label htmlFor="webhook-secret" size="sm">Secret</Label>
@@ -244,6 +251,7 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
               <RefreshCw className="w-3.5 h-3.5" />
             </Button>
           </div>
+          <FieldHint testId="flow-hint-webhook-secret">A password only your callers know. They send it in the X-Huf-Secret header. Generate a new one if it leaks.</FieldHint>
           <shell.Err field="secret" />
         </div>
         <div>
@@ -257,6 +265,7 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
               <SelectItem value="POST" data-testid="flow-option-webhook-method-POST">POST</SelectItem>
             </SelectContent>
           </Select>
+          <FieldHint testId="flow-hint-webhook-method">Callers must use this method. POST can carry data as JSON; GET cannot.</FieldHint>
           <shell.Err field="method" />
         </div>
         <div className="text-xs space-y-1" data-testid="flow-webhook-usage">
@@ -265,6 +274,18 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
           <code className="block break-all rounded bg-muted/50 p-1.5 font-mono text-[10px]" data-testid="flow-webhook-usage-header">{usage.header}</code>
           <p className="text-muted-foreground">Example:</p>
           <code className="block break-all rounded bg-muted/50 p-1.5 font-mono text-[10px]" data-testid="flow-webhook-usage-curl">{usage.curl}</code>
+          {method === 'POST' && (
+            <>
+              <p className="text-muted-foreground">To send data as well:</p>
+              <code className="block break-all rounded bg-muted/50 p-1.5 font-mono text-[10px]" data-testid="flow-webhook-usage-curl-data">{usage.curlWithData}</code>
+            </>
+          )}
+          <p className="text-muted-foreground">What you get back:</p>
+          <ul className="space-y-0.5 text-muted-foreground" data-testid="flow-webhook-responses">
+            {WEBHOOK_RESPONSES.map((r) => (
+              <li key={r.code}><span className="font-mono">{r.code}</span> {r.meaning}</li>
+            ))}
+          </ul>
         </div>
       </Section>
     );
@@ -293,30 +314,33 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
 const PRESET_FIELDS: Record<string, Array<{ key: string; label: string; optional?: boolean; placeholder?: string; hint?: string }>> = {
   gmail_send_email: [
     { key: 'to', label: 'To', placeholder: 'name@example.com', hint: 'One address, or several separated by commas.' },
-    { key: 'subject', label: 'Subject' },
-    { key: 'body', label: 'Body' },
+    { key: 'subject', label: 'Subject', hint: 'The subject line of the email.' },
+    { key: 'body', label: 'Body', hint: 'The message text. Use Insert data to add details from earlier steps.' },
   ],
   slack_send_message: [
     { key: 'channel', label: 'Channel', placeholder: '#general', hint: 'The channel name (like #general) or the channel ID. The bot must be invited to it.' },
-    { key: 'text', label: 'Message' },
+    { key: 'text', label: 'Message', hint: 'The text to post. Use Insert data to add details from earlier steps.' },
   ],
   slack_send_thread_reply: [
     { key: 'channel', label: 'Channel', placeholder: '#general', hint: 'The channel name (like #general) or the channel ID. The bot must be invited to it.' },
     { key: 'thread_ts', label: 'Thread', placeholder: '1712345678.000100', hint: 'The timestamp of the first message in the thread: right-click it, then Copy link; it is the number after "p".' },
-    { key: 'text', label: 'Message' },
+    { key: 'text', label: 'Message', hint: 'The text of the reply.' },
   ],
   gsheets_read: [
     { key: 'spreadsheet_id', label: 'Spreadsheet ID', placeholder: '1AbC...xYz', hint: 'In the sheet URL, the long text between /d/ and /edit.' },
-    { key: 'range', label: 'Range', optional: true, placeholder: 'Sheet1!A1:D20' },
+    { key: 'range', label: 'Range', optional: true, placeholder: 'Sheet1!A1:D20', hint: 'Which cells to read. Leave empty to read the first sheet.' },
   ],
   gsheets_update: [
     { key: 'spreadsheet_id', label: 'Spreadsheet ID', placeholder: '1AbC...xYz', hint: 'In the sheet URL, the long text between /d/ and /edit.' },
-    { key: 'range', label: 'Range', placeholder: 'Sheet1!A1:D20' },
-    { key: 'data', label: 'Data' },
+    { key: 'range', label: 'Range', placeholder: 'Sheet1!A1:D20', hint: 'Where to write, starting cell first. Existing cells there are replaced.' },
+    { key: 'data', label: 'Data', hint: 'The rows to write, as a list of lists: [["Name","Amount"],["Ada",120]]. Choose JSON as the value type.' },
   ],
-  gsheets_create: [{ key: 'title', label: 'Title' }],
-  gdrive_list_files: [{ key: 'limit', label: 'Limit', optional: true }, { key: 'query', label: 'Query', optional: true }],
-  gdrive_search_files: [{ key: 'query', label: 'Search for' }],
+  gsheets_create: [{ key: 'title', label: 'Title', hint: 'The name of the new spreadsheet.', placeholder: 'Weekly report' }],
+  gdrive_list_files: [
+    { key: 'limit', label: 'Limit', optional: true, placeholder: '20', hint: 'The most files to list. Leave empty for the default.' },
+    { key: 'query', label: 'Query', optional: true, placeholder: "name contains 'invoice'", hint: 'Optional filter written in Google Drive search syntax.' },
+  ],
+  gdrive_search_files: [{ key: 'query', label: 'Search for', placeholder: 'invoice', hint: 'Words to look for in file names and content.' }],
   gdrive_get_file: [
     { key: 'file_id', label: 'File ID', placeholder: '1AbC...xYz', hint: 'In Drive, open the file and copy the text after /d/ (or after id=) in its URL.' },
   ],
@@ -356,6 +380,7 @@ function BranchRows({ nodeId, cfgType, cfg }: { nodeId: string; cfgType: string;
 export function ActionConfigForm({ nodeId }: { nodeId: string }) {
   const { node, cfg, patch, kind, shell, activeFlow } = useNodeForm(nodeId, 'actionConfig');
   const { updateEdges } = useFlowContext();
+  const { canManage } = useFlowPermissions();
   const type = str(cfg.type);
   const [agents, setAgents] = useState<Opt[]>([]);
   const [roles, setRoles] = useState<Array<Opt & { subtitle?: string }>>([]);
@@ -443,7 +468,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
     const prompt = str(cfg.prompt);
     const bindings = asObj(cfg.prompt_bindings);
     return (
-      <Section title={title}>
+      <Section title={title} hint="Asks one of your AI agents to do a task. The agent's reply goes to the next step.">
         <div>
           <Label htmlFor="agent-name" size="sm">Agent</Label>
           <Combobox
@@ -458,6 +483,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
             emptyText={agents.length ? 'No matching agent.' : 'No agents are available to your account.'}
             linkTo={linkRoutes.agent}
           />
+          <FieldHint testId="flow-hint-agent-run-agent">The agent that does the work. Create or change agents on the Agents page.</FieldHint>
           <Err field="agent" />
         </div>
         <div>
@@ -471,13 +497,15 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
             className="min-h-[80px] w-full"
             value={prompt}
             onChange={(e) => patch({ prompt: e.target.value })}
-            placeholder="What should the agent do? Use {name} to include data from an earlier step."
+            placeholder="Summarise this support ticket in two sentences: {ticket}"
           />
+          <FieldHint testId="flow-hint-agent-run-prompt">Write the task as you would to a person. Use Insert data, or type {'{name}'}, to include data from the trigger or an earlier step.</FieldHint>
           <Err field="prompt" />
         </div>
         {Object.keys(bindings).length > 0 && (
           <div className="space-y-2" data-testid={f('prompt_bindings')}>
             <Label size="sm">Data used in the prompt</Label>
+            <FieldHint testId="flow-hint-agent-run-bindings">Each {'{name}'} in the prompt is replaced by the data below, for example input.ticket.</FieldHint>
             {Object.entries(bindings).map(([name, value]) => (
               <div key={name} className="flex items-center gap-2" data-testid={`flow-binding-${name}`}>
                 <span className="font-mono text-xs w-24 shrink-0 truncate">{`{${name}}`}</span>
@@ -525,10 +553,17 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
     const presetFields = PRESET_FIELDS[toolId];
     const fields: Array<{ key: string; label: string; optional: boolean; placeholder?: string; hint?: string }> = presetFields
       ? presetFields.map((p) => ({ key: p.key, label: p.label, optional: Boolean(p.optional), placeholder: p.placeholder, hint: p.hint }))
-      : Object.keys(schemaProps).map((k) => ({ key: k, label: k, optional: !required.has(k) }));
+      : Object.keys(schemaProps).map((k) => {
+        const d = asObj(schemaProps[k]).description;
+        return { key: k, label: k, optional: !required.has(k), hint: typeof d === 'string' ? d : undefined };
+      });
+    const cardId = actionCardId(cfg as { type?: unknown; tool_id?: unknown });
+    const toolHint = isHttp
+      ? 'Calls a web address and hands the response to the next step. Addresses on private networks are blocked.'
+      : `Runs one tool and hands its result to the next step.${INTEGRATION_NEEDS[cardId] ? ` ${INTEGRATION_NEEDS[cardId]}` : ''}`;
 
     return (
-      <Section title={title}>
+      <Section title={title} hint={toolHint}>
         {!isHttp && (
           <div>
             <Label htmlFor="tool-id" size="sm">Tool</Label>
@@ -543,13 +578,14 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
               searchPlaceholder="Search tools..."
               emptyText={toolOptions.length ? 'No matching tool.' : 'No tools are available to your account.'}
             />
+            <FieldHint testId="flow-hint-tool-id">Choose what this step should do. Its settings appear below.</FieldHint>
             <Err field="tool_id" />
           </div>
         )}
         <NotConnected toolId={toolId} testIdSuffix="sidebar" />
         {isHttp ? (
           <>
-            <FlowValueInput id="http-url" nodeId={nodeId} testId={f('input.url')} label="URL" placeholder="https://api.example.com/items" value={input.url} onChange={(v) => setInput('url', v)} />
+            <FlowValueInput id="http-url" nodeId={nodeId} testId={f('input.url')} label="URL" placeholder="https://api.example.com/items" hint="The full address, starting with https://. Use Insert data to add a value from an earlier step." value={input.url} onChange={(v) => setInput('url', v)} />
             <Err field="input.url" />
             <div>
               <Label htmlFor="http-method" size="sm">Method</Label>
@@ -563,9 +599,10 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
                   ))}
                 </SelectContent>
               </Select>
+              <FieldHint testId="flow-hint-http-method">GET reads data. POST, PUT and PATCH send the Body. DELETE removes something.</FieldHint>
             </div>
-            <FlowValueInput id="http-headers" nodeId={nodeId} testId={f('input.headers')} label="Headers" optional value={input.headers} onChange={(v) => setInput('headers', v)} />
-            <FlowValueInput id="http-body" nodeId={nodeId} testId={f('input.body')} label="Body" optional value={input.body} onChange={(v) => setInput('body', v)} />
+            <FlowValueInput id="http-headers" nodeId={nodeId} testId={f('input.headers')} label="Headers" optional hint={'Extra request headers as JSON, for example {"Authorization": "Bearer your-key"}. Choose JSON as the value type.'} value={input.headers} onChange={(v) => setInput('headers', v)} />
+            <FlowValueInput id="http-body" nodeId={nodeId} testId={f('input.body')} label="Body" optional hint={'The data to send with POST, PUT or PATCH. For JSON, choose JSON as the value type, for example {"name": "Ada"}.'} value={input.body} onChange={(v) => setInput('body', v)} />
           </>
         ) : toolId && fields.length > 0 ? (
           fields.map((fld) => (
@@ -590,7 +627,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
             </div>
           ))
         ) : toolId ? (
-          <p className="text-xs text-muted-foreground">This tool needs no settings.</p>
+          <p className="text-xs text-muted-foreground" data-testid="flow-hint-tool-no-settings">This tool needs no settings. It runs as soon as the step before it finishes.</p>
         ) : null}
         {toolId ? (
           <div>
@@ -616,7 +653,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
     const out = (activeFlow?.edges ?? []).filter((e) => e.source === nodeId && edgeRoute(e) === 'option');
     const labelOf = (id: string) => activeFlow?.nodes.find((n) => n.id === id)?.data.label ?? id;
     return (
-      <Section title={title} hint="Connect one arrow from this step to each possible next step and name it. The AI picks the arrow whose name fits best.">
+      <Section title={title} hint="Lets an AI model choose the next step. Connect one arrow from this step to each possible next step and name it (for example urgent, routine). The AI reads your question and the data, then picks the arrow whose name fits best.">
         <div>
           <PickerTextarea
             id="router-prompt"
@@ -629,6 +666,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
             format={(ref) => `{${ref}}`}
             placeholder="For example: Is this request urgent or routine?"
           />
+          <FieldHint testId="flow-hint-router-prompt">Ask a question the path names can answer. The AI also sees the trigger data and the results of earlier steps. Be specific about when each path applies.</FieldHint>
           <Err field="prompt" />
         </div>
         <div>
@@ -649,9 +687,11 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
               ))}
             </SelectContent>
           </Select>
+          <FieldHint testId="flow-hint-router-model">Leave on the provider default unless you need a specific model. The provider needs a working key.</FieldHint>
         </div>
         <div className="space-y-2" data-testid={f('options')}>
           <Label size="sm">Paths</Label>
+          <FieldHint testId="flow-hint-router-paths">Each path is an arrow to a next step. A short, clear name helps the AI choose well.</FieldHint>
           {out.length === 0 ? <p className="text-xs text-muted-foreground" data-testid="flow-router-no-paths">No paths yet.</p> : null}
           {out.map((e) => (
             <div key={e.id} className="flex items-center gap-2" data-testid={`flow-router-path-${e.target}`}>
@@ -684,6 +724,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
                 ))}
               </SelectContent>
             </Select>
+            <FieldHint testId="flow-hint-router-default">Used when the AI cannot pick a path or its answer fits none of them.</FieldHint>
             <Err field="default" />
           </div>
         )}
@@ -708,7 +749,15 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
             mono
             placeholder="input['amount'] > 100"
           />
-          <p className="mt-1 text-[11px] text-muted-foreground">Use Insert data to add the trigger or an earlier step, then pick a field, for example input['amount'].</p>
+          <FieldHint testId="flow-hint-condition">
+            {canManage ? 'Use Insert data to add the trigger or an earlier step, then pick a field, for example input[\'amount\']. ' : ''}
+            {CONDITION_HELP}
+          </FieldHint>
+          <Examples testId="flow-condition-examples" title="Show examples">
+            {CONDITION_EXAMPLES.map((ex) => (
+              <p key={ex.text}><Code>{ex.text}</Code> {ex.meaning}</p>
+            ))}
+          </Examples>
           <Err field="expression" />
         </div>
         <BranchRows nodeId={nodeId} cfgType="condition" cfg={cfg} />
@@ -722,13 +771,14 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
     const itemsRef = str(asObj(cfg.items).$from);
     const collectRef = str(asObj(cfg.collect).$from);
     return (
-      <Section title={title} hint="Runs the steps on the 'For each item' path once per item, then continues on 'When done'.">
+      <Section title={title} hint={LOOP_HELP}>
         <div>
           <div className="flex justify-between items-center mb-1">
             <Label htmlFor="loop-items" size="sm">List to loop over</Label>
             <VariablePicker currentNodeId={nodeId} testId="flow-loop-items-picker" onSelect={(ref) => patch({ items: { $from: ref } })} />
           </div>
           <Input id="loop-items" data-testid={f('items')} className="font-mono text-xs" value={itemsRef} onChange={(e) => patch({ items: { $from: e.target.value } })} placeholder="input.recipients" />
+          <FieldHint testId="flow-hint-loop-items">A list from the trigger or an earlier step, for example input.recipients. Use Insert data to pick it.</FieldHint>
           <Err field="items" />
         </div>
         <div>
@@ -741,6 +791,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
             value={typeof cfg.max_iterations === 'number' ? cfg.max_iterations : ''}
             onChange={(e) => patch({ max_iterations: e.target.value === '' ? undefined : parseInt(e.target.value, 10) })}
           />
+          <FieldHint testId="flow-hint-loop-max">Safety limit. If the list has more items than this, the loop fails instead of running.</FieldHint>
           <Err field="max_iterations" />
         </div>
         <div>
@@ -754,6 +805,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
               <SelectItem value="skip" data-testid="flow-option-loop-on-error-skip">Skip that item</SelectItem>
             </SelectContent>
           </Select>
+          <FieldHint testId="flow-hint-loop-on-error">Stop the flow ends the run at the first failing item. Skip that item carries on with the rest.</FieldHint>
           <Err field="on_item_error" />
         </div>
         <div>
@@ -761,7 +813,8 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
             <Label htmlFor="loop-collect" size="sm">Result to collect from each item</Label>
             <VariablePicker currentNodeId={nodeId} scope="loop-body" testId="flow-loop-collect-picker" onSelect={(ref) => patch({ collect: { $from: ref } })} />
           </div>
-          <Input id="loop-collect" data-testid={f('collect')} className="font-mono text-xs" value={collectRef} onChange={(e) => patch({ collect: { $from: e.target.value } })} placeholder="n_email" />
+          <Input id="loop-collect" data-testid={f('collect')} className="font-mono text-xs" value={collectRef} onChange={(e) => patch({ collect: { $from: e.target.value } })} placeholder="node_1234.value" />
+          <FieldHint testId="flow-hint-loop-collect">After each item, this value is added to a list. When the loop is done, the next step receives that list. Pick a step inside the loop with Insert data.</FieldHint>
           <Err field="collect" />
         </div>
         <BranchRows nodeId={nodeId} cfgType="foreach" cfg={cfg} />
@@ -775,7 +828,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
     const users = Array.isArray(cfg.approver_users) ? (cfg.approver_users as string[]) : [];
     const timeoutMin = typeof cfg.timeout_ms === 'number' ? Math.round(cfg.timeout_ms / 60000) : '';
     return (
-      <Section title={title} hint="Pauses the flow until someone approves or rejects. Each outcome is its own path.">
+      <Section title={title} hint="Pauses the flow until someone approves or rejects. Approved and Rejected are separate paths. Approvers see the request in the bell menu at the top and on the run's details.">
         <div>
           <PickerTextarea
             id="approval-message"
@@ -789,6 +842,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
             className="min-h-[60px]"
             placeholder="Approve this refund?"
           />
+          <FieldHint testId="flow-hint-approval-message">What the approver reads. Say what is being approved and include the key facts with Insert data.</FieldHint>
           <Err field="message" />
         </div>
         <div>
@@ -811,12 +865,14 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
               <SelectItem value="user" data-testid="flow-option-approver-user">Specific people</SelectItem>
             </SelectContent>
           </Select>
+          <FieldHint testId="flow-hint-approver-type">{APPROVER_TYPE_HELP[approverType] ?? 'Pick a role (everyone who has it can answer) or list specific people.'}</FieldHint>
           <Err field="approver_type" />
         </div>
         {approverType === 'role' && (
           <div>
             <Label htmlFor="approver-role" size="sm">Role</Label>
             <Combobox id="approver-role" testId={f('approver_role')} options={roles} value={str(cfg.approver_role)} onValueChange={(v) => patch({ approver_role: v })} placeholder="Choose a role..." searchPlaceholder="Search roles..." emptyText={roles.length ? 'No matching role.' : 'No roles are available to choose from.'} />
+            <FieldHint testId="flow-hint-approver-role">Roles are managed by your administrator.</FieldHint>
             <Err field="approver_role" />
           </div>
         )}
@@ -833,6 +889,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
               }}
               placeholder="manager@company.com, cfo@company.com"
             />
+            <FieldHint testId="flow-hint-approver-users">Use the email address each person signs in with.</FieldHint>
             <Err field="approver_users" />
           </div>
         )}
@@ -845,7 +902,9 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
             min={1}
             value={timeoutMin}
             onChange={(e) => patch({ timeout_ms: e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value, 10)) * 60000 })}
+            placeholder="No time limit"
           />
+          <FieldHint testId="flow-hint-approval-timeout">{APPROVAL_TIMEOUT_HELP}</FieldHint>
           <Err field="timeout_ms" />
         </div>
         <BranchRows nodeId={nodeId} cfgType="human.approval" cfg={cfg} />
@@ -857,8 +916,9 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
 
   if (type === 'transform') {
     const spec = getTransformOp(str(cfg.op));
+    const opHelp = spec ? TRANSFORM_HELP[spec.name] : undefined;
     return (
-      <Section title={title}>
+      <Section title={title} hint="Changes data without any AI: text, lists and records. The result goes to the next step.">
         <div>
           <Label htmlFor="transform-op" size="sm">What to do</Label>
           <Select value={str(cfg.op)} onValueChange={(v) => patch({ op: v, input: {} })}>
@@ -871,30 +931,41 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
               ))}
             </SelectContent>
           </Select>
+          {opHelp ? (
+            <div data-testid="flow-hint-transform-op">
+              <FieldHint>{opHelp.summary}</FieldHint>
+              <FieldHint className="italic" testId="flow-hint-transform-example">Example: {opHelp.example}</FieldHint>
+            </div>
+          ) : (
+            <FieldHint testId="flow-hint-transform-op">Pick an operation to see what it does, with an example.</FieldHint>
+          )}
           <Err field="op" />
         </div>
-        {spec?.params.map((param) => (
+        {spec?.params.map((param) => {
+          const ph = transformParamHelp(spec.name, param);
+          return (
           <div key={`${spec.name}-${param}`}>
-            <FlowValueInput id={`transform-in-${param}`} nodeId={nodeId} testId={f(`input.${param}`)} label={param} optional={spec.optional?.includes(param)} value={input[param]} onChange={(v) => setInput(param, v)} />
+            <FlowValueInput id={`transform-in-${param}`} nodeId={nodeId} testId={f(`input.${param}`)} label={ph.label} placeholder={ph.placeholder} hint={ph.hint} optional={spec.optional?.includes(param)} value={input[param]} onChange={(v) => setInput(param, v)} />
             <Err field={`input.${param}`} />
           </div>
-        ))}
+          );
+        })}
       </Section>
     );
   }
 
   if (type === 'state-get' || type === 'state-set' || type === 'state-delete') {
     return (
-      <Section title={title} hint="Saved values belong to this flow. Use a template to key by sender, for example cart:{sender}.">
+      <Section title={title} hint={type === 'state-get' ? 'Reads a value this flow saved earlier (in this or a previous run). It becomes the result of the step. Values belong to this flow only.' : type === 'state-set' ? 'Saves a value under a key so this flow can read it later, even in another run. Values belong to this flow only. Use a template to key by sender, for example cart:{sender}.' : 'Removes a value this flow saved earlier. Nothing happens if the key does not exist.'}>
         <div>
-          <FlowValueInput id="state-key" nodeId={nodeId} testId={f('key')} label="Key" value={cfg.key} onChange={(v) => patch({ key: v })} />
+          <FlowValueInput id="state-key" nodeId={nodeId} testId={f('key')} label="Key" placeholder="cart:42" hint="The name the value is saved under. Reading it later needs the same key." value={cfg.key} onChange={(v) => patch({ key: v })} />
           <Err field="key" />
         </div>
-        {type === 'state-get' && <FlowValueInput id="state-default" nodeId={nodeId} testId={f('default')} label="Default" optional value={cfg.default} onChange={(v) => patch({ default: v })} />}
+        {type === 'state-get' && <FlowValueInput id="state-default" nodeId={nodeId} testId={f('default')} label="Default" optional hint="Returned when nothing is saved under this key." value={cfg.default} onChange={(v) => patch({ default: v })} />}
         {type === 'state-set' && (
           <>
             <div>
-              <FlowValueInput id="state-value" nodeId={nodeId} testId={f('value')} label="Value" value={cfg.value} onChange={(v) => patch({ value: v })} />
+              <FlowValueInput id="state-value" nodeId={nodeId} testId={f('value')} label="Value" hint="What to save. Use Insert data to save something from an earlier step." value={cfg.value} onChange={(v) => patch({ value: v })} />
               <Err field="value" />
             </div>
             <div>
@@ -907,7 +978,9 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
                 max={2592000}
                 value={typeof cfg.ttl_seconds === 'number' ? cfg.ttl_seconds : ''}
                 onChange={(e) => patch({ ttl_seconds: e.target.value === '' ? undefined : parseInt(e.target.value, 10) })}
+                placeholder="Keep until deleted"
               />
+              <FieldHint testId="flow-hint-state-ttl">After this many seconds the value is forgotten. 3600 is one hour, 86400 is one day.</FieldHint>
             </div>
           </>
         )}
@@ -919,10 +992,11 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
     const fields = asObj(cfg.fields);
     const entries = Object.entries(fields);
     return (
-      <Section title={title} hint="Only document types your administrator has allowed can be created here.">
+      <Section title={title} hint="Creates a new record, for example a ToDo. Only document types your administrator has allowed can be created here. Details of the new record go to the next step.">
         <div>
           <Label htmlFor="doc-create-doctype" size="sm">Document type</Label>
           <Input id="doc-create-doctype" data-testid={f('doctype')} value={str(cfg.doctype)} onChange={(e) => patch({ doctype: e.target.value })} placeholder="ToDo" />
+          <FieldHint testId="flow-hint-doc-create-doctype">The kind of record to create, as named in the app (for example ToDo or Customer).</FieldHint>
           <Err field="doctype" />
         </div>
         {entries.map(([name, val], i) => (
@@ -930,7 +1004,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <Label htmlFor={`doc-field-${i}-name`} size="sm">Field name</Label>
-                <Input id={`doc-field-${i}-name`} data-testid={f(`fields.${i}.name`)} value={name} onChange={(e) => patch({ fields: Object.fromEntries(entries.map(([k, v], j) => (j === i ? [e.target.value, v] : [k, v]))) })} />
+                <Input id={`doc-field-${i}-name`} data-testid={f(`fields.${i}.name`)} placeholder="description" value={name} onChange={(e) => patch({ fields: Object.fromEntries(entries.map(([k, v], j) => (j === i ? [e.target.value, v] : [k, v]))) })} />
               </div>
               <Button variant="ghost" size="sm" aria-label="Remove field" className="h-8 px-2 text-destructive" onClick={() => patch({ fields: Object.fromEntries(entries.filter((_, j) => j !== i)) })}>×</Button>
             </div>
@@ -940,6 +1014,7 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
         <Button variant="outline" size="sm" className="w-full" data-testid={f('fields.add')} onClick={() => patch({ fields: { ...fields, [`field_${entries.length + 1}`]: '' } })}>
           Add field
         </Button>
+        <FieldHint testId="flow-hint-doc-create-fields">One row per field to fill in. The field name is the one shown in the record's form, in lowercase with underscores.</FieldHint>
       </Section>
     );
   }

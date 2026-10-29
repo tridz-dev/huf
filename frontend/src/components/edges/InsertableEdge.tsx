@@ -85,6 +85,7 @@ export const InsertableEdge = memo(
             <button
               type="button"
               aria-label="Insert step"
+              title="Insert a step on this connection"
               data-testid={`flow-insert-step-${id}`}
               onClick={(e) => {
                 e.stopPropagation();

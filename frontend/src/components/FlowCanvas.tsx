@@ -51,19 +51,20 @@ import { branchColumnShift, subtreeIds } from '../lib/flowEdgeLabels';
 import { toast } from '@/lib/toast';
 import { isInView, panToReveal } from '@/lib/flowLayout';
 import { useFlowPermissions } from '@/hooks/useFlowPermissions';
+import { FirstRunGuide } from './flow/FirstRunGuide';
 import { ensureToolSchemasLoaded } from '../lib/flowToolSchemas';
 import { actionLabel, triggerLabel } from '../lib/flowLabels';
 import { actionOptions } from '../data/actions';
 import { FlowNodeData, TriggerConfig, ActionConfig, FlowEdgeRoute } from '../types/flow.types';
 import type { ActionOption } from '../types/modal.types';
 
-/** Overview map: drag its rectangle or click anywhere on it to move the canvas there. */
 /** Fit-to-view never zooms in past 100% (a 3-step flow stays at normal size) nor out past 25%. */
 export const FIT_VIEW_OPTIONS = { padding: 0.3, maxZoom: 1, minZoom: 0.25 } as const;
 
 /** Narrowest canvas (px) that still has room for the overview next to the toolbar buttons. */
 const MINIMAP_MIN_CANVAS_WIDTH = 640;
 
+/** Overview map: drag its rectangle or click anywhere on it to move the canvas there; scroll on it to zoom. */
 function FlowMiniMap() {
   const { setCenter, getZoom } = useReactFlow();
   // In a narrow canvas (side panel open on a small window) the overview would sit under the top-right buttons.
@@ -71,7 +72,7 @@ function FlowMiniMap() {
   if (canvasWidth && canvasWidth < MINIMAP_MIN_CANVAS_WIDTH) return null;
   return (
     <MiniMap
-      position="top-left"
+      position="bottom-left"
       ariaLabel="Flow overview"
       pannable
       zoomable
@@ -82,7 +83,9 @@ function FlowMiniMap() {
         return 'var(--muted)';
       }}
       className="!bg-background !border-border"
-      style={{ width: 120, height: 80, borderRadius: 8, border: '1px solid var(--border)', boxShadow: '0 1px 3px color-mix(in srgb, var(--foreground) 12%, transparent)' }}
+      data-testid="flow-minimap"
+      // Sits to the right of the zoom controls (bottom-left), big enough to read, and can be dragged and zoomed.
+      style={{ width: 200, height: 130, marginLeft: 58, marginBottom: 12, borderRadius: 8, border: '1px solid var(--border)', boxShadow: '0 1px 3px color-mix(in srgb, var(--foreground) 12%, transparent)' }}
     />
   );
 }
@@ -815,6 +818,11 @@ export function FlowCanvas({
         <Controls fitViewOptions={FIT_VIEW_OPTIONS} className="!bottom-6 !rounded-lg !border !border-line !overflow-hidden !shadow-sm" />
         <FlowMiniMap />
         <FitViewAfterRemovalOrLayout flowId={activeFlow?.id} nodeCount={activeFlow?.nodes.length ?? 0} edgeCount={activeFlow?.edges.length ?? 0} layoutRevision={layoutRevision} />
+        {canManage && nodes.length <= 1 && (
+          <Panel position="top-center" className="mt-14">
+            <FirstRunGuide />
+          </Panel>
+        )}
         <Panel position="top-right" className="m-2">
           <div className="flex gap-2">
             {canManage && !nodes.some(n => n.data.nodeType === 'trigger') && (
@@ -822,6 +830,7 @@ export function FlowCanvas({
                 variant="default"
                 size="sm"
                 data-testid="flow-add-trigger"
+                title="Choose what starts this flow"
                 onClick={() => {
                   setModalMode('trigger');
                   setCurrentNodeId(null);
@@ -857,6 +866,7 @@ export function FlowCanvas({
               <Button
                 variant="outline"
                 size="sm"
+                title="Save this flow as a reusable draft procedure (only for flows without AI-driven steps)"
                 onClick={() => setIsConvertDialogOpen(true)}
               >
                 <Sparkles className="w-4 h-4 mr-2" />
@@ -885,7 +895,7 @@ export function FlowCanvas({
           </div>
         </Panel>
         {!showLeftSidebar && (
-          <Panel position="bottom-left" className="mb-4">
+          <Panel position="top-left" className="m-2">
             <Button
               variant="outline"
               size="icon"
