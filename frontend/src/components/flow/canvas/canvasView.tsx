@@ -1,7 +1,8 @@
 import type { UIEvent } from 'react';
 import { useEffect, useRef } from 'react';
 import type { Node } from 'reactflow';
-import { MiniMap, useReactFlow, useStore, useStoreApi, getNodesBounds } from 'reactflow';
+import type { ReactFlowInstance } from 'reactflow';
+import { Controls, MiniMap, useReactFlow, useStore, useStoreApi, getNodesBounds } from 'reactflow';
 import { isInView, panToReveal } from '@/lib/flow/flowLayout';
 
 /** Fit-to-view never zooms in past 100% (a 3-step flow stays at normal size) nor out past 25%. */
@@ -25,6 +26,35 @@ function coveredByOverlays(width: number, height: number) {
   const boxHeight = MINIMAP_STYLE.height + MINIMAP_STYLE.marginBottom + 8;
   const boxWidth = width >= MINIMAP_MIN_CANVAS_WIDTH ? MINIMAP_STYLE.marginLeft + MINIMAP_STYLE.width + 8 : MINIMAP_STYLE.marginLeft;
   return { x: 0, y: height - boxHeight, width: boxWidth, height: boxHeight };
+}
+
+/**
+ * Fits the whole flow, then, when a step or "Add step" card would still sit under the zoom buttons or the overview in the
+ * bottom-left corner, fits again with room for that corner under the content (a little smaller, nothing hidden).
+ */
+export function fitClearOfOverlays(rf: ReactFlowInstance, width: number, height: number, duration = 0) {
+  const nodes = rf.getNodes();
+  if (nodes.length === 0 || width <= 0) return;
+  rf.fitView({ ...FIT_VIEW_OPTIONS, duration });
+  setTimeout(() => {
+    const covered = coveredByOverlays(width, height);
+    const { x, y, zoom } = rf.getViewport();
+    const under = nodes.some((n) => {
+      const left = (n.positionAbsolute?.x ?? n.position.x) * zoom + x;
+      const top = (n.positionAbsolute?.y ?? n.position.y) * zoom + y;
+      return left < covered.x + covered.width && left + (n.width ?? 236) * zoom > covered.x && top < covered.y + covered.height && top + (n.height ?? 62) * zoom > covered.y;
+    });
+    if (!under) return;
+    const b = getNodesBounds(nodes);
+    rf.fitBounds({ x: b.x, y: b.y, width: b.width, height: b.height + (covered.height + 16) / zoom }, { ...FIT_VIEW_OPTIONS, duration });
+  }, duration + 60);
+}
+
+/** Zoom buttons whose "fit view" also keeps the flow clear of the overview. */
+export function FlowControls({ className }: { className?: string }) {
+  const rf = useReactFlow();
+  const store = useStoreApi();
+  return <Controls fitViewOptions={FIT_VIEW_OPTIONS} className={className} onFitView={() => { const { width, height } = store.getState(); fitClearOfOverlays(rf, width, height); }} />;
 }
 
 /** Overview map: drag its rectangle or click anywhere on it to move the canvas there; scroll on it to zoom. */
@@ -59,7 +89,8 @@ export function FlowMiniMap() {
  * When a step is added, the view only pans (zoom unchanged) if the new step or its "Add step" card would be cut off.
  */
 export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layoutRevision }: { flowId?: string; nodeCount: number; edgeCount: number; layoutRevision: number }) {
-  const { fitView, getNodes, getViewport, setViewport } = useReactFlow();
+  const rf = useReactFlow();
+  const { getNodes, getViewport, setViewport } = rf;
   const store = useStoreApi();
   const last = useRef<{ flowId?: string; nodeCount: number; edgeCount: number; layoutRevision: number } | null>(null);
   const knownIds = useRef<Set<string>>(new Set());
@@ -71,7 +102,7 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
     const remember = () => { knownIds.current = new Set(getNodes().map((n) => n.id)); };
     // The first render of a flow is fitted by <ReactFlow fitView>; only later edits come here.
     if (!previous || previous.flowId !== flowId) {
-      const settle = setTimeout(remember, 400);
+      const settle = setTimeout(() => { remember(); const { width, height } = store.getState(); fitClearOfOverlays(rf, width, height); }, 400);
       return () => clearTimeout(settle);
     }
     if (nodeCount > previous.nodeCount && edgeCount >= previous.edgeCount) {
@@ -96,10 +127,11 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
       const nodes = getNodes();
       const { width, height } = store.getState();
       if (nodes.length > 0 && width > 0 && isInView(getNodesBounds(nodes), getViewport(), { width, height })) return;
-      fitView({ ...FIT_VIEW_OPTIONS, duration: 200 });
+      const { width: w, height: h } = store.getState();
+      fitClearOfOverlays(rf, w, h, 200);
     }, 60);
     return () => clearTimeout(timer);
-  }, [flowId, nodeCount, edgeCount, layoutRevision, fitView, getNodes, getViewport, setViewport, store]);
+  }, [flowId, nodeCount, edgeCount, layoutRevision, rf, getNodes, getViewport, setViewport, store]);
   return null;
 }
 

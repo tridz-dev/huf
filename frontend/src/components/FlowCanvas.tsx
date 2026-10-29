@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
-  Controls,
   Connection,
   Edge,
   NodeChange,
@@ -25,7 +24,7 @@ import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { FlowNodeRail, NODE_RAIL_ACTION_CATEGORY, NodeRailCategory } from './FlowNodeRail';
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
 import { DeleteStepDialog } from './flow/DeleteStepDialog';
-import { FIT_VIEW_OPTIONS, FitViewAfterRemovalOrLayout, FlowMiniMap, keepCanvasUnscrolled, withSelection } from './flow/canvas/canvasView';
+import { FIT_VIEW_OPTIONS, FitViewAfterRemovalOrLayout, FlowControls, FlowMiniMap, keepCanvasUnscrolled, withSelection } from './flow/canvas/canvasView';
 import { FlowCanvasToolbar } from './flow/canvas/FlowCanvasToolbar';
 import { EdgeDeleteDialog } from './flow/canvas/EdgeDeleteDialog';
 import { useConvertedProcedure, useUndoShortcut } from './flow/canvas/useCanvasEffects';
@@ -567,7 +566,7 @@ export function FlowCanvas({
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={2} color="color-mix(in srgb, var(--muted-foreground) 35%, transparent)" />
         {/* showInteractive (lock toggle button) defaults to true, so it's already shown */}
-        <Controls fitViewOptions={FIT_VIEW_OPTIONS} className="!bottom-6 !rounded-lg !border !border-line !overflow-hidden !shadow-sm" />
+        <FlowControls className="!bottom-6 !rounded-lg !border !border-line !overflow-hidden !shadow-sm" />
         <FlowMiniMap />
         <FitViewAfterRemovalOrLayout flowId={activeFlow?.id} nodeCount={activeFlow?.nodes.length ?? 0} edgeCount={activeFlow?.edges.length ?? 0} layoutRevision={layoutRevision} />
         {canManage && nodes.length <= 1 && (
