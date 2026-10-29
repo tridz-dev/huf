@@ -175,7 +175,7 @@ class TestHubTriageWiring(IntegrationTestCase):
 	def test_current_instructions_left_alone(self):
 		with (
 			patch("frappe.db.exists", return_value=True),
-			patch("frappe.db.get_value", return_value="x 0. TRIAGE y"),
+			patch("frappe.db.get_value", return_value="x 0. TRIAGE y CHANNEL SETUP z"),
 			patch("frappe.db.set_value") as set_value,
 		):
 			self.assertFalse(hub_orchestrator_module.ensure_hub_orchestrator_instructions())
