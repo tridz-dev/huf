@@ -60,7 +60,7 @@ export function StateForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps
                 testId={f('ttl_seconds')}
                 label="Keep it for"
                 units={TTL_UNITS}
-                placeholder="Until I forget it"
+                placeholder="No limit"
                 value={typeof cfg.ttl_seconds === 'number' ? cfg.ttl_seconds : undefined}
                 onChange={(s) => patch({ ttl_seconds: s === undefined ? undefined : Math.min(s, MAX_TTL_SECONDS) })}
                 hint="After this long it is forgotten. Leave empty to keep it until a Forget saved data step removes it. The longest is 30 days."

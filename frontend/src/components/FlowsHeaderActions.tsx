@@ -17,6 +17,7 @@ import { FlowHelpPopover } from './flow/FlowHelpPopover';
 import { DisabledReason } from './flow/DisabledReason';
 import { HeaderOverflowMenu } from './flow/header/HeaderOverflowMenu';
 import { useFlowHeaderActions } from './flow/header/useFlowHeaderActions';
+import { showSaveStatus } from './flow/header/saveStatus';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { publishBlockedReason } from '@/lib/flow/flowPublishGuard';
 import { codePublishBlockedReason } from '@/lib/flow-graph/codeFlow';
@@ -91,7 +92,7 @@ export function FlowsHeaderActions() {
   // The status word changes with the count: hold it while a button is pressed (see useFrozenWhilePressed).
   const statusKind = flowStatusKind(activeFlow?.status, useFrozenWhilePressed(issues.length));
   const hit = cn('gap-2', HIT_TARGET);
-  const showSaveState = !!activeFlow && !isPhone;
+  const showSaveState = showSaveStatus({ hasFlow: !!activeFlow, isPhone, canManage });
 
   const publishButton = isPublished ? (
     <Button
@@ -122,7 +123,7 @@ export function FlowsHeaderActions() {
   );
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 max-[1499px]:gap-1">
       {/* Save state (bare dot + text, no chip background). Nothing is edited on a phone, so it has none. */}
       {showSaveState && (
         <div className="mr-1 flex items-center gap-1.5 text-muted-foreground" data-testid="flow-save-state">

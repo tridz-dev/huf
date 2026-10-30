@@ -66,6 +66,10 @@ class TestInputHint(unittest.TestCase):
 		ctx = {"scheduled_for": "2026-10-30 06:35:00", "trigger_node": "empty_trigger", "due": "2026-10-30", "amount": 5}
 		self.assertEqual(input_hint(ctx), "amount 5")
 
+	def test_rich_text_values_read_as_plain_words(self):
+		html = '<div class="ql-editor read-mode"><p>Order &amp; <b>delivery</b></p></div>'
+		self.assertEqual(input_hint({"description": html}), "description Order & delivery")
+
 	def test_empty_and_long(self):
 		self.assertEqual(input_hint({}), "")
 		self.assertEqual(input_hint(None), "")

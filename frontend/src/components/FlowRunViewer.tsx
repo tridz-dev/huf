@@ -180,7 +180,7 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
                     </SheetDescription>
                 </SheetHeader>
 
-                <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6" data-testid="flow-run-details-body">
+                <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5 sm:px-6" data-testid="flow-run-details-body">
                 {loading && !run ? (
                     <div className="flex justify-center p-12">
                         <Loader2 className="animate-spin w-8 h-8 text-muted-foreground" />

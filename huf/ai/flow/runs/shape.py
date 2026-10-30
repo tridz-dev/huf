@@ -110,6 +110,14 @@ def _fact_label(key: str) -> str:
 	return key.replace("_", " ").replace("-", " ").strip().lower()
 
 
+def _plain_text(value: str) -> str:
+	"""A rich-text value as plain words: tags removed, entities decoded, whitespace collapsed."""
+	if "<" not in value and "&" not in value:
+		return value.strip()
+	import html as _html
+	return " ".join(_html.unescape(re.sub(r"<[^>]*>", " ", value)).split())
+
+
 def input_hint(ctx: dict) -> str:
 	"""A few facts from the data a run started with ("amount 150, note walkthrough B"); empty when there are none."""
 	if not isinstance(ctx, dict):
@@ -118,6 +126,8 @@ def input_hint(ctx: dict) -> str:
 	for key, value in ctx.items():
 		if key.startswith("__") or any(w in key.lower() for w in _SECRET_WORDS + _INTERNAL_WORDS):
 			continue
+		if isinstance(value, str):
+			value = _plain_text(value)
 		if isinstance(value, str) and _DATE_LIKE.match(value.strip()):
 			continue
 		if isinstance(value, bool):

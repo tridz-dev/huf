@@ -139,7 +139,8 @@ export function FlowMiniMap({ stepCount }: { stepCount: number }) {
       ariaLabel="Flow overview"
       pannable
       zoomable
-      onClick={(_event, position) => setCenter(position.x, position.y, { zoom: getZoom(), duration: motionMs(250) })}
+      // A jump, not a glide: the animated pan zooms out and back in on a long way, so the view never settled where the person clicked.
+      onClick={(_event, position) => setCenter(position.x, position.y, { zoom: getZoom(), duration: 0 })}
       nodeColor={minimapColor}
       nodeBorderRadius={4}
       nodeStrokeWidth={0}

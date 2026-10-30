@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Edge, Node } from 'reactflow';
 import { addActionStep, branchPillText, computeOpenEnds, endSubtitles, ghostSpots, loopBacks, orphanNote } from './flowCanvasGraph';
 import { edgeRoute, makeFlowEdge } from '../../services/flowSerializer';
-import { ROW_GAP } from '../flow/flowLayout';
+import { CARD_WIDTH, ROW_GAP } from '../flow/flowLayout';
 import type { FlowNodeData } from '../../types/flow.types';
 
 const node = (id: string, x: number, y: number, type: 'trigger' | 'action' | 'end', cfg?: Record<string, unknown>): Node<FlowNodeData> => ({
@@ -84,6 +84,17 @@ describe('orphanNote', () => {
   });
   it('says nothing for a reachable step', () => {
     expect(orphanNote('e', nodes, edges(['t', 'a', 'next'], ['a', 'e', 'true']))).toBeNull();
+  });
+});
+
+describe('adding a step where another already sits', () => {
+  it('puts the new step one column aside instead of on top of it', () => {
+    const nodes = [node('t', 0, 0, 'trigger'), node('c', 0, 150, 'action', { type: 'condition' }), node('stray', -145, 150 + ROW_GAP, 'action', { type: 'agent-run' })];
+    const out = addActionStep(nodes, edges(['t', 'c', 'next']), 'c', 'true', 'transform', { type: 'transform' } as never);
+    if (!out || out === 'end-in-front') throw new Error('expected a graph');
+    const added = out.nodes[out.nodes.length - 1];
+    expect(added.position.y).toBe(150 + ROW_GAP);
+    expect(Math.abs(added.position.x - -145)).toBeGreaterThanOrEqual(CARD_WIDTH);
   });
 });
 

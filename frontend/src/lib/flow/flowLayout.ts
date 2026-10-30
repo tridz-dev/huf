@@ -2,10 +2,10 @@
  * "Tidy layout" and the view helpers around it. The layout itself lives in lib/flow-canvas/autoLayout.ts (layered,
  * branch-aware, even spacing); this file adds the branch order of real flow connections and keeps the old names.
  */
-import { autoLayout, COLUMN_GAP, ROW_GAP, type LayoutEdge, type LayoutNode } from '../flow-canvas/autoLayout';
+import { autoLayout, CARD_WIDTH, COLUMN_GAP, ROW_GAP, type LayoutEdge, type LayoutNode } from '../flow-canvas/autoLayout';
 import { branchHandlesFor } from './flowBranches';
 
-export { COLUMN_GAP, ROW_GAP };
+export { CARD_WIDTH, COLUMN_GAP, ROW_GAP };
 
 interface StepLike extends LayoutNode {
   data?: { actionConfig?: object | undefined };
