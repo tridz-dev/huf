@@ -164,7 +164,7 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       break;
     }
     case 'condition':
-      if (isBlank(c.expression)) add('expression', "Enter the check, for example input['amount'] > 100.");
+      if (isBlank(c.expression)) add('expression', "Add at least one rule.");
       missingBranches(node, out, c, add);
       break;
     case 'foreach':

@@ -355,3 +355,16 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `shortcuts-dialog`, `shortcuts-group-flow-editor` | The `?` dialog; inside a flow its "Flow editor" group comes first (not listed on a phone) |
 
 Shortcuts (Cmd and Ctrl both work): K palette, S save, Enter run a test (again inside the Run box starts it), Z undo, Shift+Z / Y redo, D duplicate, C copy, V paste (also into another flow, via localStorage `huf.flow.clipboard.v1`), A select every step, Shift+click / Shift+drag select several steps. Text fields keep their own Z / C / V.
+
+## Condition builder (UX-13)
+| testid | What |
+|---|---|
+| `flow-condition-builder` | The rules area of a Condition step (not shown to view-only people, who get `flow-condition-readonly` with the sentence) |
+| `flow-condition-match` (`-all`, `-any`) | All of / Any of for the whole check (only with two or more rules or groups); `flow-condition-group-<g>-match` (`-all`, `-any`) for a group |
+| `flow-condition-row-<i>` and `flow-condition-group-<g>-row-<i>` | One rule. Parts: `-field` (the data checked; opens the Use data picker), `-op` (the how; options `flow-option-condition-op-<operator>`), `-value` (typed value, or the chip of other data), `-value-picker` ("+ Use data" for a value), `-value-clear` (type a value instead), `-ignore-case`, `-remove`, `-unfinished` (what is missing) |
+| `flow-condition-add-rule`, `flow-condition-add-group`, `flow-condition-group-<g>`, `flow-condition-group-<g>-add-rule`, `flow-condition-group-<g>-remove` | Add and remove |
+| `flow-condition-sentence` (`flow-condition-sentence-text`, `flow-condition-sentence-empty`) | "Yes when ..." |
+| `flow-condition-too-long` | More rules than fit in 500 characters |
+| `flow-condition-raw-toggle` | "Write it yourself" / "Back to rules" (remembered in the browser: `huf.flow.condition.writeItYourself`); `flow-condition-raw-locked` replaces it while hand-written text cannot be shown as rules |
+| `flow-condition-raw-area`, `flow-field-condition-expression` (text box), `flow-field-condition-expression-picker`, `flow-condition-handwritten` (the "written by hand" note), `flow-hint-condition`, `flow-condition-examples` ("Help and examples"), `flow-condition-raw-too-long` | The text version |
+| `flow-branches`, `flow-branch-true` / `flow-branch-false` (`-target`, `-empty`, `-add`) | "Where each path goes": Yes -> step, No -> step, "Add step" asks the canvas for the step picker on that path |
