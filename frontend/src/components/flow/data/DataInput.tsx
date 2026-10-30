@@ -31,6 +31,8 @@ export interface DataInputProps {
   placeholder?: string;
   /** One line under the box: where to find the value. */
   hint?: string;
+  /** Test id of the hint line, when it must keep an older name (default `<testId>-hint`). */
+  hintTestId?: string;
   /** Test id of the box; the "+ Use data" button is `<testId>-picker` and the preview `<testId>-preview`. */
   testId?: string;
   id?: string;
@@ -72,7 +74,7 @@ export function DataInput(props: DataInputProps) {
   return <ChipField {...props} />;
 }
 
-function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, testId, id, label, optional, accept = 'value', scope, disabled }: DataInputProps) {
+function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, hintTestId, testId, id, label, optional, accept = 'value', scope, disabled }: DataInputProps) {
   const autoId = useId();
   const inputId = id ?? autoId;
   const hintId = `${inputId}-hint`;
@@ -256,7 +258,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
         </PopoverContent>
       </Popover>
       {hint ? (
-        <p id={hintId} className="text-meta leading-snug text-muted-foreground break-words" data-testid={testId ? `${testId}-hint` : undefined}>
+        <p id={hintId} className="text-meta leading-snug text-muted-foreground break-words" data-testid={hintTestId ?? (testId ? `${testId}-hint` : undefined)}>
           {hint}
         </p>
       ) : null}

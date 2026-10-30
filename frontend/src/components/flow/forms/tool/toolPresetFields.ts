@@ -39,7 +39,7 @@ export const PRESET_FIELDS: Record<string, PresetField[]> = {
   gsheets_update: [
     { key: 'spreadsheet_id', label: 'Spreadsheet', normalize: 'google', placeholder: 'Paste the link of the sheet', hint: 'Open the Google Sheet and copy the address from your browser. Pasting the whole link works; so does just its ID.' },
     { key: 'range', label: 'Where to write', placeholder: 'Sheet1!A1', hint: 'The first cell to fill in. What is already in those cells is replaced.' },
-    { key: 'data', label: 'Rows to write', kind: 'json', hint: 'One list per row, for example [["Name","Amount"],["Ada",120]]. Or pick a list from an earlier step with + Use data.' },
+    { key: 'data', label: 'Rows to write', kind: 'json', placeholder: '[\n  ["Name", "Amount"],\n  ["Ada", 120]\n]', hint: 'One list per row, for example [["Name","Amount"],["Ada",120]]. Or pick a list from an earlier step with + Use data.' },
   ],
   gsheets_create: [{ key: 'title', label: 'Name of the new spreadsheet', placeholder: 'Weekly report', hint: 'You can find it in Google Drive under this name.' }],
   gdrive_list_files: [

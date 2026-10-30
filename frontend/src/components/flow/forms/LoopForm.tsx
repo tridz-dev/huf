@@ -16,6 +16,7 @@ export function LoopForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps)
         Err={Err}
         nodeId={nodeId}
         label="List to go through"
+        hintTestId="flow-hint-loop-items"
         accept="list"
         placeholder="Choose a list with + Use data"
         hint="A list from the trigger or an earlier step, like the items of an order. The steps on the 'For each item' path run once for every entry."
@@ -28,6 +29,7 @@ export function LoopForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps)
         Err={Err}
         nodeId={nodeId}
         label="Result to collect"
+        hintTestId="flow-hint-loop-collect"
         accept="one"
         scope="loop-body"
         placeholder="Choose a step inside the loop"

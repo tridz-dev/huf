@@ -44,6 +44,7 @@ export function RouterForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProp
         Err={Err}
         nodeId={nodeId}
         label="What should the AI decide?"
+        hintTestId="flow-hint-router-prompt"
         kind="longtext"
         placeholder="Is this request urgent or routine?"
         hint="Ask a question that your path names answer, for example: Is this request urgent or routine? The AI also sees the data from the trigger and the steps before. Add details with + Use data, and say when each path applies."

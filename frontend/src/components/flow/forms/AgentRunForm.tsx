@@ -55,6 +55,7 @@ export function AgentRunForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
         Err={Err}
         nodeId={nodeId}
         label="What to tell it"
+        hintTestId="flow-hint-agent-run-prompt"
         kind="longtext"
         placeholder="Summarise this support ticket in two sentences, then suggest a reply."
         hint="Write the task as you would to a colleague. Use + Use data to include details from the trigger or an earlier step, like the ticket text."

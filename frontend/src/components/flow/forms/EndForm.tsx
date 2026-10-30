@@ -46,6 +46,7 @@ export function EndForm({ node }: { node: FlowNode }) {
   const flowName = activeFlow?.name || 'This flow';
   return (
     <Section title="End" hint="The flow finishes here. The outcome is the headline people read for the run, like Approved or Refund sent.">
+      <p className="text-xs text-muted-foreground" data-testid="flow-end-lead">The flow finishes here. Say how the run ended so people can tell at a glance.</p>
       <div className="space-y-2" data-testid="flow-end-outcome">
         <DataInput
           id="end-outcome-label"

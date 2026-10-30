@@ -179,7 +179,7 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       missingBranches(node, out, c, add);
       break;
     case 'human.approval':
-      if (isBlank(c.message)) add('message', 'Write what the approver should decide.');
+      if (isBlank(c.message)) add('message', 'Write the message the approver will see.');
       if (c.approver_type !== 'role' && c.approver_type !== 'user') add('approver_type', 'Choose who can approve.');
       if (c.approver_type === 'role' && isBlank(c.approver_role)) add('approver_role', 'Choose the role that can approve.');
       if (c.approver_type === 'user' && isBlank(c.approver_users)) add('approver_users', 'Enter at least one approver.');

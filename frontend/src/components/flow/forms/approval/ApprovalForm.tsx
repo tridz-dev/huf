@@ -108,6 +108,7 @@ export function ApprovalForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
         Err={Err}
         nodeId={nodeId}
         label="What should the approver decide?"
+        hintTestId="flow-hint-approval-message"
         kind="longtext"
         placeholder="Approve a refund of $450 for Ada Lovelace?"
         hint="Say what is being approved, with the key facts first. Add details with + Use data."
