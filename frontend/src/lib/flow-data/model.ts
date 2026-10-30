@@ -2,7 +2,7 @@
  * The picker's model: which steps a field can read from, their fields and examples, and what a chip means.
  * Built from the flow in the editor (so a step added a moment ago is there) plus the server's catalog (the examples).
  */
-import { enclosingLoops, guaranteedPredecessors } from '../flow/flowRefs';
+import { enclosingLoops, guaranteedPredecessors, loopBodyNodes, type RefScope } from '../flow/flowRefs';
 import type { FlowEdge, FlowNode } from '../../types/flow.types';
 import { inferFields, sampleText, sentenceLabel } from './infer';
 import type { CatalogField, CatalogStep, DataCatalog, ListInfo, DataPick, PickMode, SampleSource } from './types';
@@ -60,9 +60,9 @@ const serverStep = (catalog: DataCatalog | null, id: string): CatalogStep | unde
 
 const asRecord = (v: unknown): Record<string, unknown> | undefined => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined);
 
-export function buildPickerModel(nodes: FlowNode[], edges: Edge[], nodeId: string | null | undefined, catalog: DataCatalog | null): PickerModel {
+export function buildPickerModel(nodes: FlowNode[], edges: Edge[], nodeId: string | null | undefined, catalog: DataCatalog | null, scope: RefScope = 'ancestors'): PickerModel {
   const steps: PickerStep[] = [];
-  const trigger = nodes.find((n) => n.data.nodeType === 'trigger');
+  const trigger = scope === 'ancestors' ? nodes.find((n) => n.data.nodeType === 'trigger') : undefined;
   if (trigger) {
     const server = serverStep(catalog, trigger.id);
     const local = asRecord(trigger.data.sample);
@@ -82,7 +82,20 @@ export function buildPickerModel(nodes: FlowNode[], edges: Edge[], nodeId: strin
       doctype: server?.doctype ?? (trigger.data.triggerConfig as { doctype?: string } | undefined)?.doctype ?? null,
     });
   }
-  if (nodeId) {
+  if (scope === 'loop-body' && nodeId) {
+    // A loop's "result to collect": what the steps inside this loop produce, and the item being worked on.
+    const loopNode = nodes.find((n) => n.id === nodeId);
+    steps.push({
+      id: `${nodeId}:item`, title: 'This loop: current item', chipTitle: loopNode?.data.label ?? 'Loop', kind: 'loop', node: loopNode,
+      fields: [{ path: 'foreach.item', label: 'Current item', type: 'text', sample: null }, { path: 'foreach.index', label: 'Item number', type: 'number', sample: null }],
+      hasSample: false, source: 'none', root: 'foreach.item', canFetchLast: false,
+    });
+    for (const id of loopBodyNodes(nodeId, edges)) {
+      const n = nodes.find((x) => x.id === id);
+      if (!n || n.data.nodeType !== 'action') continue;
+      steps.push({ id: n.id, title: n.data.label, chipTitle: n.data.label, kind: 'step', node: n, fields: [], hasSample: false, source: 'none', root: n.id, canFetchLast: false });
+    }
+  } else if (nodeId) {
     const loops = enclosingLoops(nodeId, nodes, edges);
     if (loops.length > 0) {
       const loopNode = nodes.find((n) => n.id === loops[0]);

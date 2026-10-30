@@ -6,6 +6,10 @@ import { TRANSFORM_HELP, transformParamHelp } from '@/lib/flow/flowHelp';
 import { getTransformOp, TRANSFORM_OPS, TRANSFORM_SECTIONS } from '@/lib/flow-graph/flowTransformOps';
 import { type ActionFormProps, asObj, Section, str } from './formKit';
 
+/** Inputs that take a whole list from an earlier step, and inputs that are a list or a set of named values typed in. */
+const LIST_PARAMS = new Set(['rows', 'left', 'right', 'from']);
+const JSON_PARAMS = new Set(['fields', 'where', 'values', 'parts']);
+
 export function TransformForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps) {
   const input = asObj(cfg.input);
   const setInput = (key: string, value: unknown) => patch({ input: { ...input, [key]: value } });
@@ -45,7 +49,7 @@ export function TransformForm({ nodeId, cfg, patch, f, Err, title }: ActionFormP
         const ph = transformParamHelp(spec.name, param);
         return (
         <div key={`${spec.name}-${param}`}>
-          <FlowValueInput id={`transform-in-${param}`} nodeId={nodeId} testId={f(`input.${param}`)} label={ph.label} placeholder={ph.placeholder} hint={ph.hint} optional={spec.optional?.includes(param)} value={input[param]} onChange={(v) => setInput(param, v)} />
+          <FlowValueInput id={`transform-in-${param}`} nodeId={nodeId} testId={f(`input.${param}`)} label={ph.label} placeholder={ph.placeholder} hint={ph.hint} optional={spec.optional?.includes(param)} kind={JSON_PARAMS.has(param) ? 'json' : undefined} accept={LIST_PARAMS.has(param) ? 'list' : undefined} value={input[param]} onChange={(v) => setInput(param, v)} />
           <Err field={`input.${param}`} />
         </div>
         );

@@ -81,7 +81,7 @@ const PARAMS: Record<string, ParamHelp> = {
   default: { label: 'If nothing matches', hint: 'What to return when there is no match. Leave empty for nothing.', placeholder: 'unknown' },
   parts: { label: 'Parts to join', hint: 'A list, for example ["a","b"], or pick a list from an earlier step.', placeholder: '["a","b","c"]' },
   fields: { label: 'Fields to keep', hint: 'A list of field names.', placeholder: '["name","email"]' },
-  rows: { label: 'Rows', hint: 'A list of records, usually from an earlier step. Pick it with Insert data.', placeholder: '[{"name":"Ada"}]' },
+  rows: { label: 'Rows', hint: 'A list of records, usually from an earlier step. Pick it with Use data.', placeholder: '[{"name":"Ada"}]' },
   where: { label: 'Keep rows where', hint: "A check written with row, for example row['amount'] > 100.", placeholder: "row['amount'] > 100" },
   key: { label: 'Field', hint: 'The field to use, for example city or customer.name.', placeholder: 'city' },
   order: { label: 'Order', hint: 'asc for smallest first (default), desc for largest first.', placeholder: 'asc' },
@@ -127,10 +127,10 @@ export const CONDITION_EXAMPLES: Array<{ text: string; meaning: string }> = [
 const CONDITION_SYNTAX =
   "Compare with ==, !=, >, >=, <, <= or in, and combine checks with and, or, not.";
 
-/** Help under the Condition box. Only people who can edit are told about the Insert data button. */
+/** Help under the Condition box. Only people who can edit are told about the Use data button. */
 export function conditionHelp(canEdit: boolean): string {
   return canEdit
-    ? `Write a check that is true or false. Read the trigger data as input['field'], and use Insert data for an earlier step's result. ${CONDITION_SYNTAX}`
+    ? `Write a check that is true or false. Read the trigger data as input['field'], and use + Use data for an earlier step's result. ${CONDITION_SYNTAX}`
     : `A check that is true or false. Trigger data is read as input['field']. ${CONDITION_SYNTAX}`;
 }
 
@@ -174,7 +174,7 @@ export const APPROVAL_TIMEOUT_HELP =
 // ─── Loop ───────────────────────────────────────────────────────────────
 
 export const LOOP_HELP =
-  "Runs the steps on the 'For each item' path once for every entry of a list, one after the other, then continues on 'When done'. Inside the loop, pick the current entry with Insert data.";
+  "Runs the steps on the 'For each item' path once for every entry of a list, one after the other, then continues on 'When done'. Inside the loop, pick the current entry with Use data.";
 
 // ─── Integrations ───────────────────────────────────────────────────────
 
@@ -186,4 +186,4 @@ export const INTEGRATION_NEEDS: Record<string, string> = {
 };
 
 /** A note shown under a step name in the sidebar: what it needs and what it gives to the next step. */
-export const STEP_NEEDS_HINT = 'Steps after this one can use its result: choose it in Insert data.';
+export const STEP_NEEDS_HINT = 'Steps after this one can use its result: choose it in Use data.';
