@@ -81,6 +81,8 @@ export function uniqueVariable(name: string, taken: Iterable<string>): string {
 export function parseValue(value: unknown): ParsedValue {
   if (value === undefined || value === null || value === '') return { segments: [], extraVars: {}, form: 'text', hadVars: false };
   if (typeof value === 'string') return { segments: [{ kind: 'text', text: value }], extraVars: {}, form: 'text', hadVars: false };
+  // A brand-new step starts with `{ $from: '' }`: nothing chosen yet, so an empty field, not a broken chip.
+  if (isPlainFrom(value) && value.$from === '') return { segments: [], extraVars: {}, form: 'from', hadVars: false };
   if (isPlainFrom(value)) {
     const name = variableName(lastWord(value.$from));
     return { segments: [{ kind: 'chip', chip: { id: newChipId(), name, ref: value.$from } }], extraVars: {}, form: 'from', hadVars: false };

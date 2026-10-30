@@ -40,6 +40,17 @@ def tool_run_context(ctx: RunContext):
 		_ambient_run_context.reset(token)
 
 
+def with_step_limit(tool_name: str, args: dict, config: dict) -> dict:
+	"""A Web request step's "Stop waiting after" limit becomes the request's own timeout.
+
+	Other built-in tools keep their own limits (the engine docs for ``_exec_tool_call`` say why), so only
+	``http_request`` takes it; MCP tools are bounded by the engine itself.
+	"""
+	if tool_name == "http_request" and config.get("timeout_ms"):
+		args["timeout_seconds"] = config["timeout_ms"] / 1000.0
+	return args
+
+
 def execute(
 	tool_name: str,
 	args: dict,

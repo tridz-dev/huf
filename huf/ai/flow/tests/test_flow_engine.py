@@ -587,6 +587,25 @@ class TestExecToolCallInterpolation(unittest.TestCase):
 		)
 		self.assertEqual(captured["args"]["text"], "Hi Ada")
 
+	def test_web_request_step_limit_becomes_request_timeout(self):
+		flow_run = FakeFlowRun()
+		_ctx(flow_run)
+		captured = {}
+
+		def fake_execute(tool_name, call_args):
+			captured["args"] = call_args
+			return {"success": True, "result": "ok"}
+
+		with patch.object(flow_engine, "frappe") as fake_frappe, \
+			_no_mcp(), \
+			patch.object(flow_engine, "execute_tool", side_effect=fake_execute), \
+			patch.object(flow_engine, "_create_flow_agent_run", return_value=MagicMock()):
+			fake_frappe.get_doc.return_value = MagicMock()
+			flow_engine._exec_tool_call(
+				flow_run, {"id": "n1"}, {"tool_id": "http_request", "input": {"url": "https://x.example"}, "timeout_ms": 12000}, {}
+			)
+		self.assertEqual(captured["args"]["timeout_seconds"], 12.0)
+
 	def test_legacy_names_are_not_read(self):
 		flow_run = FakeFlowRun()
 		with patch.object(flow_engine, "execute_tool") as ex:

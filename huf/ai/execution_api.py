@@ -42,8 +42,11 @@ def get_pending_agent_execution_approvals(limit: int = 50) -> list[dict]:
 
 	user = frappe.session.user
 
+	# A request past its deadline can no longer be decided (the decide path lapses it to Expired), so it is
+	# not listed. The stored status stays Pending until somebody touches it: by design no scheduler sweeps these.
 	pending_names = frappe.get_all(
 		"Agent Execution Approval",
+		or_filters=[["expires_on", ">", frappe.utils.now_datetime()], ["expires_on", "is", "not set"]],
 		filters={"status": "Pending"},
 		pluck="name",
 		order_by="expires_on asc",

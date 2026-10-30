@@ -115,7 +115,9 @@ export function AgentSettingsPage() {
               {serverAllows
                 ? canManage
                   ? 'Your server administrator allows code to run on this site.'
-                  : 'Code can run on this site once a system administrator allows it.'
+                  : codeStatus?.allowed
+                    ? 'Code can run on this site.'
+                    : 'Code can run on this site once a system administrator allows it.'
                 : 'Code cannot run on this site yet. Ask your server administrator to turn it on first.'}
             </p>
           )}

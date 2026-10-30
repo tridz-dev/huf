@@ -57,7 +57,8 @@ export function SettingsTab({ node }: { node: FlowNode }) {
   }, [toolId]);
 
   const toolSeconds = typeof cfg.timeout_ms === 'number' ? Math.round(cfg.timeout_ms / 1000) : '';
-  const showToolTimeout = type === 'tool-call' && (isMcp || toolSeconds !== '');
+  const isWebRequest = type === 'tool-call' && toolId === 'http_request';
+  const showToolTimeout = type === 'tool-call' && (isMcp || isWebRequest || toolSeconds !== '');
 
   return (
     <div className="space-y-5" data-testid="flow-settings-tab">
@@ -81,9 +82,13 @@ export function SettingsTab({ node }: { node: FlowNode }) {
             disabled={!canManage}
             value={toolSeconds}
             onChange={(e) => patchConfig({ timeout_ms: e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value, 10)) * 1000 })}
-            placeholder="No limit"
+            placeholder={isWebRequest ? '30' : 'No limit'}
           />
-          <FieldHint testId={`flow-field-${kind}-timeout_ms-help`}>How long to wait for the connected tool to answer. Leave empty for no limit.</FieldHint>
+          <FieldHint testId={`flow-field-${kind}-timeout_ms-help`}>
+            {isWebRequest
+              ? 'How long to wait for the website to answer before this step fails. Leave empty to wait up to 30 seconds.'
+              : 'How long to wait for the connected tool to answer. Leave empty for no limit.'}
+          </FieldHint>
           <FieldError nodeId={node.id} kind={kind} field="timeout_ms" />
         </div>
       )}

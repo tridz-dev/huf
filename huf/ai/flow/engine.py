@@ -73,7 +73,7 @@ from huf.ai.flow.support.tool_result import normalize_tool_result
 from huf.ai.flow.support.plain.transform_text import plain_transform_error
 from huf.ai.flow.testrun import gate as test_gate, stored_mode
 from huf.ai.flow.support.turned_off import is_turned_off, turned_off_result
-from huf.ai.flow.tool_executor import execute as execute_tool
+from huf.ai.flow.tool_executor import execute as execute_tool, with_step_limit
 from huf.ai.flow.tool_executor import tool_run_context
 from huf.ai.graph.executor import (
 	ExecutionPolicy,
@@ -1315,7 +1315,7 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 
 	run_ctx = _run_context(settings)
 	ctx = _context_of(flow_run, settings)
-	args = ctx.resolve(dict(config.get("input") or {}))
+	args = with_step_limit(tool_name, ctx.resolve(dict(config.get("input") or {})), config)
 
 	run_doc = _create_flow_agent_run(
 		flow_run=flow_run,

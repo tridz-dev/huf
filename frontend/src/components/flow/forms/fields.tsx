@@ -70,7 +70,7 @@ export function DurationField({
           type="number"
           inputMode="decimal"
           min={1}
-          className="w-24 shrink-0"
+          className="w-28 shrink-0"
           disabled={disabled}
           value={amount}
           placeholder={placeholder ?? 'No limit'}
