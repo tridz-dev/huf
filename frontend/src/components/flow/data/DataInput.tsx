@@ -237,7 +237,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
           align="start"
           sideOffset={12}
           collisionPadding={12}
-          className="w-[340px] max-w-[calc(100vw-24px)] p-0"
+          className="w-[340px] max-w-[calc(100vw-24px)] p-0 data-[state=closed]:!animate-none"
           onCloseAutoFocus={(e) => {
             e.preventDefault();
             // Not when the picker was opened again while this one was still fading out: that would pull the focus out of the new one.
