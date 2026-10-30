@@ -16,6 +16,7 @@ import { nodeKind } from '@/lib/flow-graph/flowValidation';
 import { cn } from '@/lib/utils';
 import type { FlowNode } from '../../../types/flow.types';
 import { FieldError } from '../forms/formKit';
+import { ApprovalTimeoutField } from '../forms/approval/ApprovalTimeoutField';
 import { Pressable } from './Pressable';
 
 type Cfg = Record<string, unknown>;
@@ -85,6 +86,19 @@ export function SettingsTab({ node }: { node: FlowNode }) {
             placeholder="No limit"
           />
           <FieldHint testId={`flow-field-${kind}-timeout_ms-help`}>How long to wait for the connected tool to answer.</FieldHint>
+          <FieldError nodeId={node.id} kind={kind} field="timeout_ms" />
+        </div>
+      )}
+
+      {type === 'human.approval' && (
+        <div>
+          <ApprovalTimeoutField
+            nodeId={node.id}
+            kind={kind}
+            timeoutMs={typeof cfg.timeout_ms === 'number' ? cfg.timeout_ms : undefined}
+            onChange={(ms) => patchConfig({ timeout_ms: ms })}
+            disabled={!canManage}
+          />
           <FieldError nodeId={node.id} kind={kind} field="timeout_ms" />
         </div>
       )}

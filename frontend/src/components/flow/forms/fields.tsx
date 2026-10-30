@@ -23,12 +23,14 @@ export function ValueField({ field, f, Err, nodeId, ...rest }: { field: string; 
  * `perUnit: 1000`); the person never sees either.
  */
 export function DurationField({
-  id, testId, label, hint, value, onChange, units, perUnit = 1, placeholder, disabled, optionalWord = true,
+  id, testId, label, hint, hintTestId, value, onChange, units, perUnit = 1, placeholder, disabled, optionalWord = true,
 }: {
   id: string;
   testId: string;
   label: string;
   hint?: ReactNode;
+  /** Test id of the hint, when it must keep an older name (default `<testId>-hint`). */
+  hintTestId?: string;
   /** In seconds, or in milliseconds when `perUnit` is 1000. */
   value: number | undefined;
   onChange: (next: number | undefined) => void;
@@ -85,7 +87,7 @@ export function DurationField({
           </SelectContent>
         </Select>
       </div>
-      {hint ? <FieldHint testId={`${testId}-hint`}>{hint}</FieldHint> : null}
+      {hint ? <FieldHint testId={hintTestId ?? `${testId}-hint`}>{hint}</FieldHint> : null}
     </div>
   );
 }

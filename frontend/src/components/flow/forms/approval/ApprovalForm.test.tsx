@@ -18,7 +18,7 @@ vi.mock('@/services/flow/formOptionsApi', () => ({
 }));
 
 import { ApprovalForm } from './ApprovalForm';
-import { flow, latest, renderForm, updateEdges } from '../__tests__/formTestKit';
+import { latest, renderForm, updateEdges } from '../__tests__/formTestKit';
 
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
 Element.prototype.scrollIntoView ??= () => {};
@@ -118,52 +118,22 @@ describe('ApprovalForm: what the approver sees', () => {
   });
 });
 
-describe('ApprovalForm: the time limit and the Timed out path', () => {
-  it('is in minutes, hours or days, and says what happens at the end', async () => {
-    renderForm(ApprovalForm, { type: 'human.approval', timeout_ms: 5400000 });
-    const amount = (await screen.findByTestId('flow-field-test-timeout_ms')) as HTMLInputElement;
-    expect(amount.value).toBe('90');
-    expect(screen.getByTestId('flow-field-test-timeout_ms-unit').textContent).toContain('minutes');
-    expect(screen.getByTestId('flow-field-test-timeout_ms-hint').textContent).toContain('After 90 minutes');
-    fireEvent.change(amount, { target: { value: '2' } });
-    expect(latest.timeout_ms).toBe(120000);
+describe('ApprovalForm: the time limit summary', () => {
+  it('says what happens if nobody answers and offers to set a limit', async () => {
+    renderForm(ApprovalForm, { type: 'human.approval' });
+    expect((await screen.findByTestId('flow-approval-timeout-summary-text')).textContent).toBe('The flow waits as long as it takes.');
+    expect(screen.getByTestId('flow-approval-timeout-edit').textContent).toBe('Set a time limit');
   });
 
-  it('with no limit set there is no Timed out path to show', async () => {
+  it('reads the limit in words and shows the Timed out path only while one is set', async () => {
+    renderForm(ApprovalForm, { type: 'human.approval', timeout_ms: 5400000, approve_next: 'end' });
+    expect((await screen.findByTestId('flow-approval-timeout-summary-text')).textContent).toBe('After 90 minutes the flow follows the "Timed out" path.');
+    expect(screen.getByTestId('flow-branch-timeout')).toBeTruthy();
+    expect(screen.getByTestId('flow-approval-timeout-edit').textContent).toBe('Change');
+    cleanup();
     renderForm(ApprovalForm, { type: 'human.approval', approve_next: 'end' });
-    await screen.findByText('What should the approver decide?');
+    await screen.findByTestId('flow-approval-timeout-summary');
     expect(screen.queryByTestId('flow-branch-timeout')).toBeNull();
     expect(screen.getByTestId('flow-branch-approve')).toBeTruthy();
-  });
-
-  it('clearing the limit removes the Timed out connection, after asking when something is connected', async () => {
-    flow.edges.push({ id: 't1', source: 'step', target: 'end', sourceHandle: 'timeout', data: { route: 'timeout' } });
-    renderForm(ApprovalForm, { type: 'human.approval', timeout_ms: 60000 });
-    const amount = await screen.findByTestId('flow-field-test-timeout_ms');
-    fireEvent.change(amount, { target: { value: '' } });
-    expect(latest.timeout_ms).toBe(60000);
-    fireEvent.click(await screen.findByTestId('flow-approval-timeout-clear'));
-    expect(latest.timeout_ms).toBeUndefined();
-    const keep = updateEdges.mock.calls.at(-1)?.[0] as Array<{ id: string }>;
-    expect(keep.some((e) => e.id === 't1')).toBe(false);
-    flow.edges.pop();
-  });
-
-  it('keeping the limit puts the number back', async () => {
-    flow.edges.push({ id: 't1', source: 'step', target: 'end', sourceHandle: 'timeout', data: { route: 'timeout' } });
-    renderForm(ApprovalForm, { type: 'human.approval', timeout_ms: 60000 });
-    const amount = await screen.findByTestId('flow-field-test-timeout_ms');
-    fireEvent.change(amount, { target: { value: '' } });
-    fireEvent.click(await screen.findByTestId('flow-approval-timeout-keep'));
-    await waitFor(() => expect((screen.getByTestId('flow-field-test-timeout_ms') as HTMLInputElement).value).toBe('1'));
-    expect(latest.timeout_ms).toBe(60000);
-    expect(updateEdges).not.toHaveBeenCalled();
-    flow.edges.pop();
-  });
-
-  it('clearing with nothing connected needs no question', async () => {
-    renderForm(ApprovalForm, { type: 'human.approval', timeout_ms: 60000 });
-    fireEvent.change(await screen.findByTestId('flow-field-test-timeout_ms'), { target: { value: '' } });
-    expect(latest.timeout_ms).toBeUndefined();
   });
 });

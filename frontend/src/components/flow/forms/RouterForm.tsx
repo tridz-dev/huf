@@ -96,10 +96,10 @@ export function RouterForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProp
           <Label htmlFor="router-model" size="sm">AI model (optional)</Label>
           <Select value={str(cfg.model) || DEFAULT_MODEL} onValueChange={(v) => patch({ model: v === DEFAULT_MODEL ? undefined : v })}>
             <SelectTrigger id="router-model" data-testid={f('model')}>
-              <SelectValue placeholder="Use the usual model" />
+              <SelectValue placeholder="Use provider default" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={DEFAULT_MODEL} data-testid="flow-option-router-model-default">Use the usual model</SelectItem>
+              <SelectItem value={DEFAULT_MODEL} data-testid="flow-option-router-model-default">Use provider default</SelectItem>
               {modelGroups.map((g) => (
                 <SelectGroup key={g.provider}>
                   <SelectLabel>{g.provider}</SelectLabel>
@@ -110,7 +110,7 @@ export function RouterForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProp
               ))}
             </SelectContent>
           </Select>
-          <FieldHint testId="flow-hint-router-model">Pick a model only if you need a specific one. The company that provides it needs a working key.</FieldHint>
+          <FieldHint testId="flow-hint-router-model">Leave on the provider default unless you need a specific model. The provider needs a working key.</FieldHint>
         </div>
       </MoreOptions>
     </Section>

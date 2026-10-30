@@ -3,24 +3,20 @@ import { Plus, X } from 'lucide-react';
 import { APPROVER_TYPE_HELP } from '@/lib/flow/flowHelp';
 import { ApprovalCardPreview, type PreviewFact } from './ApprovalCardPreview';
 import { ApproverUsersField } from './ApproverUsersField';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '../../../ui/alert-dialog';
 import { Button } from '../../../ui/button';
 import { Combobox } from '../../../ui/combobox';
 import { DataInput } from '../../data/DataInput';
-import { DurationField, ValueField } from '../fields';
+import { ValueField } from '../fields';
 import { FieldHint } from '../../FieldHint';
 import { Input } from '../../../ui/input';
 import { Label } from '../../../ui/label';
-import { MoreOptions } from '../../frame/MoreOptions';
+import { requestFocus } from '../../frame/frameStore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select';
-import { edgeRoute } from '../../../../services/flowSerializer';
 import { fromTextRefs, toTextRefs } from '@/lib/flow-data/textRefs';
 import { getApproverRoles } from '../../../../services/flowApi';
 import { describeChip, previewOf, type PickerModel } from '@/lib/flow-data/model';
 import { parseValue } from '@/lib/flow-data/chips';
-import { durationWords, type TimeUnit } from '@/lib/flow-data/flowUnits';
+import { durationWords } from '@/lib/flow-data/flowUnits';
 import { type ActionFormProps, BranchRows, type Opt, Section, str } from '../formKit';
 import { useAsValue } from '../useAsValue';
 import { useDataCatalog } from '../../data/useDataCatalog';
@@ -28,7 +24,7 @@ import { useFlowContext } from '../../../../contexts/FlowContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 
 const MAX_DETAILS = 6;
-const TIMEOUT_UNITS: TimeUnit[] = ['minutes', 'hours', 'days'];
+const TIMEOUT_UNITS = ['minutes', 'hours', 'days'] as const;
 
 /** What each role means, in the words of someone who does not manage the system. */
 const ROLE_WORDS: Record<string, string> = {
@@ -48,7 +44,7 @@ function sampleText(value: unknown, model: PickerModel): string {
 
 export function ApprovalForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps) {
   const [roles, setRoles] = useState<Array<Opt & { subtitle?: string }>>([]);
-  const { activeFlow, updateEdges } = useFlowContext();
+  const { activeFlow } = useFlowContext();
   const { canManage } = useFlowPermissions();
   const { model } = useDataCatalog(nodeId);
 
@@ -65,22 +61,6 @@ export function ApprovalForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
   const [cardTitle, toTitle] = useAsValue(str(cfg.title), toTextRefs, (v) => fromTextRefs(v));
   const setDetails = (next: Detail[]) => patch({ details: next.length ? next : undefined });
 
-  // ---- the time limit and the "Timed out" path that goes with it ----
-  const timeoutEdges = (activeFlow?.edges ?? []).filter((e) => e.source === nodeId && edgeRoute(e) === 'timeout');
-  const [confirmClear, setConfirmClear] = useState(false);
-  const [redraw, setRedraw] = useState(0);
-  const setTimeout_ = (ms: number | undefined) => {
-    if (ms === undefined && timeoutEdges.length > 0) {
-      setConfirmClear(true);
-      return;
-    }
-    patch({ timeout_ms: ms });
-  };
-  const clearTimeoutAndPath = () => {
-    updateEdges((activeFlow?.edges ?? []).filter((e) => !(e.source === nodeId && edgeRoute(e) === 'timeout')));
-    patch({ timeout_ms: undefined });
-    setConfirmClear(false);
-  };
   const timeoutMs = typeof cfg.timeout_ms === 'number' ? cfg.timeout_ms : undefined;
 
   // ---- the live card ----
@@ -200,40 +180,21 @@ export function ApprovalForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
       <Err field="branch.approve" />
       <Err field="branch.reject" />
 
-      <MoreOptions defaultOpen={timeoutMs !== undefined} testId="flow-more-options-approval">
-        <DurationField
-          key={redraw}
-          id="approval-timeout"
-          testId={f('timeout_ms')}
-          label="If nobody answers, stop waiting after"
-          units={TIMEOUT_UNITS}
-          perUnit={1000}
-          placeholder="Wait as long as it takes"
-          value={timeoutMs}
-          onChange={setTimeout_}
-          disabled={!canManage}
-          hint={
-            timeoutMs !== undefined
-              ? `After ${durationWords(timeoutMs / 1000, TIMEOUT_UNITS)} with no answer, the flow carries on along the "Timed out" path.${timeoutEdges.length > 0 ? '' : ' Connect a step to that path.'}`
-              : 'Leave empty to wait as long as it takes. If you set a time, a "Timed out" path appears for what should happen then.'
-          }
-        />
-        <Err field="timeout_ms" />
-      </MoreOptions>
-      <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove the "Timed out" path?</AlertDialogTitle>
-            <AlertDialogDescription>
-              A step is connected to the "Timed out" path. Without a time limit that path is not used, so its connection will be removed. The step itself stays on the canvas.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="flow-approval-timeout-keep" onClick={() => setRedraw((n) => n + 1)}>Keep the time limit</AlertDialogCancel>
-            <AlertDialogAction data-testid="flow-approval-timeout-clear" onClick={clearTimeoutAndPath}>Remove the path</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <div className="flex items-start justify-between gap-3 rounded-md border border-border p-2.5" data-testid="flow-approval-timeout-summary">
+        <div className="min-w-0 text-xs">
+          <p className="font-medium text-foreground">If nobody answers</p>
+          <p className="mt-0.5 text-muted-foreground break-words" data-testid="flow-approval-timeout-summary-text">
+            {timeoutMs !== undefined
+              ? `After ${durationWords(timeoutMs / 1000, [...TIMEOUT_UNITS])} the flow follows the "Timed out" path.`
+              : 'The flow waits as long as it takes.'}
+          </p>
+        </div>
+        {canManage && (
+          <Button type="button" variant="outline" size="sm" className="shrink-0" data-testid="flow-approval-timeout-edit" onClick={() => requestFocus(nodeId, 'timeout_ms')}>
+            {timeoutMs !== undefined ? 'Change' : 'Set a time limit'}
+          </Button>
+        )}
+      </div>
     </Section>
   );
 }
