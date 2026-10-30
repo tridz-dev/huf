@@ -40,6 +40,9 @@ export interface DataInputProps {
   disabled?: boolean;
 }
 
+/** A number or Yes/No typed into a text box is shown as its words; only a list or an object is shown as JSON. */
+const asText = (value: unknown) => (typeof value === 'number' || typeof value === 'boolean' ? String(value) : value);
+
 const DEFAULT_PLACEHOLDER = 'Type, or press / to use data';
 
 /**
@@ -50,7 +53,7 @@ const DEFAULT_PLACEHOLDER = 'Type, or press / to use data';
 export function DataInput(props: DataInputProps) {
   const { kind = 'text', value } = props;
   if (kind === 'yesno') return <YesNoInput {...props} />;
-  const isOther = parseValue(kind === 'number' && typeof value === 'number' ? String(value) : value).form === 'other';
+  const isOther = parseValue(asText(value)).form === 'other';
   // Once a box is in JSON it stays there while it is being edited (half-typed JSON is not a list yet).
   const [asJson, setAsJson] = useState(isOther);
   useEffect(() => {
@@ -81,7 +84,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
   const { model, loading, refresh } = useDataCatalog(nodeId);
   const editor = useRef<ChipEditorHandle>(null);
 
-  const normalized = kind === 'number' && typeof value === 'number' ? String(value) : value;
+  const normalized = asText(value);
   const [state, setState] = useState<ParsedValue>(() => parseValue(normalized));
   const [version, setVersion] = useState(0);
   const sent = useRef(JSON.stringify(value ?? null));
