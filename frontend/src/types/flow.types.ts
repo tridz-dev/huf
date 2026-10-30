@@ -138,6 +138,10 @@ export interface HumanApprovalActionConfig {
   approver_role?: string;
   approver_users?: string[];
   timeout_ms?: number;
+  /** The card's headline (1-120 characters, `{input.field}` placeholders are filled in). */
+  title?: string;
+  /** Up to 6 facts the approver sees: a label (optional) and the data. */
+  details?: Array<{ label?: string; value: FlowValue }>;
 }
 
 export interface ConditionActionConfig {
@@ -239,6 +243,15 @@ export type ActionConfig =
 /** End node (graph-IR `output`): `value` is a Value; there is never a `next`. */
 export interface EndConfig {
   value?: FlowValue;
+  /** How the run reads when it ends here ("Approved", good). Absent: "Finished". */
+  outcome?: EndOutcome;
+}
+
+export type OutcomeTone = 'good' | 'neutral' | 'bad';
+
+export interface EndOutcome {
+  label?: string;
+  tone?: OutcomeTone;
 }
 
 // ─── Edges ────────────────────────────────────────────────────────────

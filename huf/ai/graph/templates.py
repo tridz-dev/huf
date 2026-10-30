@@ -80,6 +80,15 @@ def _marked(name: str, value: Any) -> str | None:
 	return None
 
 
+def render_marked(mode: str, value: Any) -> str | None:
+	"""Text for ``value`` in the wording a placeholder prefix asks for (``table``, ``joined`` or ``count``), else None.
+
+	The plain-text fields (``{table:input.order}`` in an approval message) use this so they read exactly like a template
+	variable named ``table_order`` does.
+	"""
+	return _marked(f"{mode}_x", value)
+
+
 def render_template(template: str, values: Mapping[str, Any], objects: str = "summary") -> str:
 	if not isinstance(template, str) or len(template) > MAX_TEMPLATE_CHARS:
 		raise TemplateError(f"This text is longer than {MAX_TEMPLATE_CHARS} characters. Shorten it.")

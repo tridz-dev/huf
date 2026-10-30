@@ -58,7 +58,6 @@ export function SettingsTab({ node }: { node: FlowNode }) {
   }, [toolId]);
 
   const toolSeconds = typeof cfg.timeout_ms === 'number' ? Math.round(cfg.timeout_ms / 1000) : '';
-  const approvalMinutes = typeof cfg.timeout_ms === 'number' ? Math.round(cfg.timeout_ms / 60000) : '';
   const showToolTimeout = type === 'tool-call' && (isMcp || toolSeconds !== '');
 
   return (
@@ -86,26 +85,6 @@ export function SettingsTab({ node }: { node: FlowNode }) {
             placeholder="No limit"
           />
           <FieldHint testId={`flow-field-${kind}-timeout_ms-help`}>How long to wait for the connected tool to answer.</FieldHint>
-          <FieldError nodeId={node.id} kind={kind} field="timeout_ms" />
-        </div>
-      )}
-
-      {type === 'human.approval' && (
-        <div>
-          <Label htmlFor="approval-timeout" size="sm">If nobody answers, stop waiting after (minutes)</Label>
-          <Input
-            id="approval-timeout"
-            data-testid={`flow-field-${kind}-timeout_ms`}
-            type="number"
-            min={1}
-            disabled={!canManage}
-            value={approvalMinutes}
-            onChange={(e) => patchConfig({ timeout_ms: e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value, 10)) * 60000 })}
-            placeholder="No time limit"
-          />
-          <FieldHint testId="flow-hint-approval-timeout">
-            When the time is up, the flow follows the "Timed out" path from this step. Leave empty to wait as long as it takes.
-          </FieldHint>
           <FieldError nodeId={node.id} kind={kind} field="timeout_ms" />
         </div>
       )}

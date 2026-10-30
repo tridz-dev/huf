@@ -103,7 +103,11 @@ def _router_completion(prompt_text: str, provider: str, model: str) -> str:
 	return _run_coroutine(get_simple_completion(model, [{"role": "user", "content": prompt_text}], provider))
 
 
-_TEXT_REF_RE = re.compile(r"(?<!\{)\{([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*|\[\d+\])*)\}(?!\})")
+# ``{input.total}``; ``{table:input.order}`` / ``{joined:n1.items}`` / ``{count:n1.items}`` ask for a record as rows, a list
+# joined with commas, or the number of items (the same three wordings "Use data" offers in a template).
+_TEXT_REF_RE = re.compile(
+	r"(?<!\{)\{(?:(table|joined|count):)?([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*|\[\d+\])*)\}(?!\})"
+)
 
 # Roots that always exist; every step id is also a root.
 _FIXED_REF_ROOTS = ("input", "trigger", "context", "foreach")
@@ -119,19 +123,21 @@ def render_text_refs(text: str, ctx: GraphContext) -> str:
 	is saved, see :func:`text_ref_warnings`), so a message never fails a run and never shows ``{input.x}``.
 	"""
 	from huf.ai.flow.support.humanize import summarize
+	from huf.ai.graph.templates import render_marked
 
 	def sub(match: re.Match) -> str:
-		path = match.group(1)
+		mode, path = match.group(1), match.group(2)
 		if path.split(".")[0].split("[")[0] not in ctx.reference_roots():
 			return ""
 		value = ctx.resolve_reference(path)
-		return summarize(value) or ""
+		marked = render_marked(mode, value) if mode else None
+		return marked if marked is not None else (summarize(value) or "")
 
 	return _TEXT_REF_RE.sub(sub, text or "")
 
 
 # Plain-text step fields that take {placeholders}, by step type, with the name people see for the field.
-_TEXT_REF_FIELDS = {"human.approval": (("message", "message"),), "router.llm": (("prompt", "instruction"),)}
+_TEXT_REF_FIELDS = {"human.approval": (("message", "message"), ("title", "title")), "router.llm": (("prompt", "instruction"),)}
 
 
 def text_ref_warnings(defn: dict | None) -> list[str]:
@@ -155,7 +161,7 @@ def text_ref_warnings(defn: dict | None) -> list[str]:
 				continue
 			bad = []
 			for match in _TEXT_REF_RE.finditer(text):
-				path = match.group(1)
+				path = match.group(2)
 				if path.split(".")[0].split("[")[0] not in roots and match.group(0) not in bad:
 					bad.append(match.group(0))
 			if bad:

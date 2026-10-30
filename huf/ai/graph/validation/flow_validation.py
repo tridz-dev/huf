@@ -113,7 +113,7 @@ def _issue_field(err: ValidationError) -> str | None:
 	return err.field
 
 
-def _unset_and_blank_issues(defn: dict) -> list[FlowIssue]:
+def _unset_and_blank_issues(defn: dict, check_people: bool = True) -> list[FlowIssue]:
 	"""Things the schema cannot see: no trigger, a trigger nobody chose, a required text that is only spaces."""
 	from huf.huf.doctype.flow_definition.activation_rules import REQUIRED_CONFIG_KEYS, UNSET_TRIGGER_TYPE, _is_blank
 
@@ -131,10 +131,33 @@ def _unset_and_blank_issues(defn: dict) -> list[FlowIssue]:
 				issues.append(
 					FlowIssue(n.get("id"), f"config.{key}", "BLANK", describe_error(defn, ValidationError("SCHEMA", n.get("id"), f"config.{key}", f"'{key}' is a required property")))
 				)
+		if check_people:
+			issues.extend(_unknown_approver_issues(n))
 	return issues
 
 
-def validate_flow(defn, mode: str = MODE_PUBLISH, *, classify_tool=None) -> FlowValidation:
+def _unknown_approver_issues(node: dict) -> list[FlowIssue]:
+	"""A "wait for approval" step that names people: every name must be a real, enabled person (a typo would stall the run)."""
+	config = node.get("config") if isinstance(node.get("config"), dict) else {}
+	if node.get("type") != "human.approval" or config.get("approver_type") != "user":
+		return []
+	from huf.ai.graph.error_copy import step_title
+
+	issues: list[FlowIssue] = []
+	for name in config.get("approver_users") or []:
+		if not isinstance(name, str) or not name.strip():
+			continue
+		if not frappe.db.exists("User", {"name": name.strip(), "enabled": 1}):
+			issues.append(
+				FlowIssue(
+					node.get("id"), "config.approver_users", "UNKNOWN_APPROVER",
+					_('{0}: no one here is called "{1}". Pick each approver from the list.').format(step_title(node), name),
+				)
+			)
+	return issues
+
+
+def validate_flow(defn, mode: str = MODE_PUBLISH, *, classify_tool=None, check_people: bool = True) -> FlowValidation:
 	"""Check ``defn`` (a parsed flow definition) in ``mode`` (``"draft"`` or ``"publish"``).
 
 	Always returns a result; read ``result.ok`` for "passes in this mode", ``result.errors`` for the structural
@@ -159,7 +182,7 @@ def validate_flow(defn, mode: str = MODE_PUBLISH, *, classify_tool=None) -> Flow
 
 	for err in full.errors:
 		add(FlowIssue(err.node_id, _issue_field(err), err.code, describe_error(defn, err)))
-	for issue in _unset_and_blank_issues(defn):
+	for issue in _unset_and_blank_issues(defn, check_people):
 		# The schema already reports an empty required setting; do not list it twice.
 		if issue.code == "BLANK" and (issue.node_id, _leaf(issue.field)) in seen:
 			continue
@@ -176,7 +199,8 @@ def load_definition(raw) -> dict:
 
 def check_runnable(defn) -> None:
 	"""Refuse to start a run of a flow with anything left to finish (a draft may be saved half-built, a run may not)."""
-	finished = validate_flow(defn, MODE_PUBLISH)
+	# People are checked when a flow is saved or made live, not at every run (a test run of a draft may name anyone).
+	finished = validate_flow(defn, MODE_PUBLISH, check_people=False)
 	if not finished.ok:
 		frappe.throw(
 			_("Finish setting up this flow before running it. {0}").format(" ".join(finished.messages(defn))),

@@ -18,7 +18,7 @@
  */
 
 import type {
-    ActionConfig, ActionType, Flow, FlowEdge, FlowEdgeRoute, FlowNode, FlowNodeData, FlowStatus, TriggerConfig,
+    ActionConfig, ActionType, EndOutcome, Flow, FlowEdge, FlowEdgeRoute, FlowNode, FlowNodeData, FlowStatus, OutcomeTone, TriggerConfig,
 } from '@/types/flow.types';
 import type { BackendFlowGraph, BackendNode, BackendNodeType } from './flowApi';
 import { layoutWhenUnplaced } from '../lib/flow/flowLayout';
@@ -161,6 +161,15 @@ function walkChain(head: string, nextOf: Map<string, string>, seen: Set<string>)
     return out;
 }
 
+/** The End step's outcome as stored: only the parts that are set (`{}` means "Finished", neutral, so it is left out). */
+function cleanOutcome(raw: unknown): EndOutcome | undefined {
+    if (!raw || typeof raw !== 'object') return undefined;
+    const o = raw as { label?: unknown; tone?: unknown };
+    const label = typeof o.label === 'string' && o.label.trim() !== '' ? o.label.trim() : undefined;
+    const tone: OutcomeTone | undefined = o.tone === 'good' || o.tone === 'bad' || o.tone === 'neutral' ? o.tone : undefined;
+    return label || tone ? { ...(label ? { label } : {}), ...(tone ? { tone } : {}) } : undefined;
+}
+
 function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string, string>): BackendNode {
     const type = mapFrontendNodeTypeToBackend(node);
     const config = extractNodeConfig(node, type);
@@ -190,7 +199,8 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
         case 'human.approval':
             setIf('approve_next', first('approve'));
             setIf('reject_next', first('reject'));
-            setIf('timeout_next', first('timeout'));
+            // A "Timed out" path only exists while there is a time limit.
+            setIf('timeout_next', typeof config.timeout_ms === 'number' && config.timeout_ms > 0 ? first('timeout') : undefined);
             break;
         case 'foreach': {
             const seen = new Set<string>();
@@ -266,7 +276,8 @@ function extractNodeConfig(node: FlowNode, backendType: BackendNodeType): Record
 
     if (backendType === 'output') {
         const value = data?.endConfig?.value;
-        return value === undefined ? {} : { value };
+        const outcome = cleanOutcome(data?.endConfig?.outcome);
+        return { ...(value === undefined ? {} : { value }), ...(outcome ? { outcome } : {}) };
     }
     if (backendType === 'trigger.unset') return {};
 
@@ -383,7 +394,10 @@ function buildNodeData(node: BackendNode): FlowNodeData {
             : node.type === 'trigger.doc-event' ? 'doc-event' : 'webhook';
         base.triggerConfig = { type, ...node.config } as TriggerConfig;
     } else if (frontendType === 'end') {
-        base.endConfig = { ...(node.config.value !== undefined ? { value: node.config.value } : {}) };
+        base.endConfig = {
+            ...(node.config.value !== undefined ? { value: node.config.value } : {}),
+            ...(cleanOutcome(node.config.outcome) ? { outcome: cleanOutcome(node.config.outcome) } : {}),
+        };
     } else {
         const config: Record<string, unknown> = { ...node.config };
         for (const key of ROUTING_KEYS[node.type] ?? []) delete config[key];

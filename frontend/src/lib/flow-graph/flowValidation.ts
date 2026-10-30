@@ -62,15 +62,15 @@ export function nodeKind(node: NodeLike): string {
 
 /** Required `input` keys per preset tool (contract section 2). */
 export const TOOL_REQUIRED_INPUT: Record<string, Array<[key: string, message: string]>> = {
-  gmail_send_email: [['to', 'Enter who the email goes to.'], ['subject', 'Enter a subject.'], ['body', 'Enter the email body.']],
-  slack_send_message: [['channel', 'Enter a Slack channel.'], ['text', 'Enter the message text.']],
-  slack_send_thread_reply: [['channel', 'Enter a Slack channel.'], ['thread_ts', 'Enter the thread to reply to.'], ['text', 'Enter the message text.']],
-  gsheets_read: [['spreadsheet_id', 'Enter the spreadsheet ID.']],
-  gsheets_update: [['spreadsheet_id', 'Enter the spreadsheet ID.'], ['range', 'Enter the cell range.'], ['data', 'Enter the data to write.']],
-  gsheets_create: [['title', 'Enter a title for the new spreadsheet.']],
+  gmail_send_email: [['to', 'Enter who the email goes to.'], ['subject', 'Enter a subject.'], ['body', 'Write the message.']],
+  slack_send_message: [['channel', 'Choose a Slack channel.'], ['text', 'Write the message.']],
+  slack_send_thread_reply: [['channel', 'Choose a Slack channel.'], ['thread_ts', 'Paste the link of the thread to reply to.'], ['text', 'Write the reply.']],
+  gsheets_read: [['spreadsheet_id', 'Paste the link of the spreadsheet.']],
+  gsheets_update: [['spreadsheet_id', 'Paste the link of the spreadsheet.'], ['range', 'Enter where to start writing, for example Sheet1!A1.'], ['data', 'Add the rows to write.']],
+  gsheets_create: [['title', 'Enter a name for the new spreadsheet.']],
   gdrive_search_files: [['query', 'Enter what to search for.']],
-  gdrive_get_file: [['file_id', 'Enter the file ID.']],
-  http_request: [['url', 'Enter the URL to call.']],
+  gdrive_get_file: [['file_id', 'Paste the link of the file.']],
+  http_request: [['url', 'Enter the web address to call.']],
 };
 
 /**
@@ -168,14 +168,14 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       missingBranches(node, out, c, add);
       break;
     case 'foreach':
-      if (refProblem(c.items)) add('items', 'Choose the list to loop over.');
-      if (typeof c.max_iterations !== 'number' || c.max_iterations < 0) add('max_iterations', 'Enter the maximum number of items to process.');
+      if (refProblem(c.items)) add('items', 'Choose the list to go through.');
+      if (typeof c.max_iterations !== 'number' || c.max_iterations < 0) add('max_iterations', 'Enter the most items to go through.');
       if (c.on_item_error !== 'fail' && c.on_item_error !== 'skip') add('on_item_error', 'Choose what happens when an item fails.');
       if (refProblem(c.collect)) add('collect', 'Choose which result to collect from each item.');
       missingBranches(node, out, c, add);
       break;
     case 'human.approval':
-      if (isBlank(c.message)) add('message', 'Write the message the approver will see.');
+      if (isBlank(c.message)) add('message', 'Write what the approver should decide.');
       if (c.approver_type !== 'role' && c.approver_type !== 'user') add('approver_type', 'Choose who can approve.');
       if (c.approver_type === 'role' && isBlank(c.approver_role)) add('approver_role', 'Choose the role that can approve.');
       if (c.approver_type === 'user' && isBlank(c.approver_users)) add('approver_users', 'Enter at least one approver.');
@@ -197,11 +197,11 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
     case 'state.get':
     case 'state.set':
     case 'state.delete':
-      if (isBlank(c.key)) add('key', 'Enter the key.');
-      if (kind === 'state.set' && isBlank(c.value)) add('value', 'Enter the value to save.');
+      if (isBlank(c.key)) add('key', 'Enter the name to save it under.');
+      if (kind === 'state.set' && isBlank(c.value)) add('value', 'Enter what to save.');
       break;
     case 'doc.create':
-      if (isBlank(c.doctype)) add('doctype', 'Enter the document type to create.');
+      if (isBlank(c.doctype)) add('doctype', 'Choose the kind of record to create.');
       break;
     case 'code.run':
       if (isBlank(c.code)) add('code', 'Add the Python code to run.');

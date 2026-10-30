@@ -2,27 +2,36 @@ import { useEffect, useState } from 'react';
 import { ACTION_CARD_CONTRACT } from '../../../data/actions';
 import { Combobox } from '../../ui/combobox';
 import { FieldHint } from '../FieldHint';
-import { FlowValueInput } from '../../FlowValueInput';
+import { HttpJsonField } from './HttpFields';
 import { INTEGRATION_NEEDS } from '@/lib/flow/flowHelp';
 import { Label } from '../../ui/label';
 import { MoreOptions } from '../frame/MoreOptions';
-import { PRESET_FIELDS } from './toolPresetFields';
+import { fieldFromSchema, normalizePasted, PRESET_FIELDS, type PresetField } from './toolPresetFields';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { SlackChannelPicker } from '../SlackChannelPicker';
+import { SlackChannelField } from './SlackChannelField';
 import { TOOL_REQUIRED_INPUT } from '@/lib/flow-graph/flowValidation';
+import { ValueField } from './fields';
 import { actionCardId } from '@/lib/flow/flowLabels';
+import { integrationForTool, toolLabel } from '@/lib/flow/flowIntegrations';
 import { registerToolSchemas } from '@/lib/flow/flowToolSchemas';
-import { toolLabel } from '@/lib/flow/flowIntegrations';
 import { type ActionFormProps, asObj, type Opt, Section, str } from './formKit';
 import { type FlowTool, getFlowTools } from '../../../services/toolApi';
 
 const isEmptyValue = (v: unknown) => v === undefined || v === null || v === '' || (typeof v === 'object' && v !== null && Object.keys(v).length === 0);
 
-const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+const HTTP_METHODS: Array<{ value: string; label: string; help: string }> = [
+  { value: 'GET', label: 'GET: read', help: 'Gets data from the address. Nothing is changed there.' },
+  { value: 'POST', label: 'POST: create or send', help: 'Sends the request body, usually to create something new.' },
+  { value: 'PUT', label: 'PUT: replace', help: 'Sends the request body to replace something that exists.' },
+  { value: 'PATCH', label: 'PATCH: change part', help: 'Sends the request body to change part of something.' },
+  { value: 'DELETE', label: 'DELETE: remove', help: 'Removes the thing at the address.' },
+];
 
-/** Fields that hold a list or a set of named values (JSON area) and fields that hold a message (taller box). */
-const JSON_FIELDS = new Set(['data']);
-const LONG_FIELDS = new Set(['body', 'text', 'message', 'content']);
+const SOURCE_WORDS = (t: FlowTool): string => {
+  const app = integrationForTool(t.name);
+  if (app) return { slack: 'Slack', gmail: 'Gmail', google_drive: 'Google Drive', google_sheets: 'Google Sheets' }[app] ?? 'App';
+  return t.source === 'mcp' ? `From ${t.mcp_server || 'a connected app'}` : 'Built in';
+};
 
 export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps) {
   const input = asObj(cfg.input);
@@ -42,7 +51,7 @@ export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
         setTools(
           (list || [])
             .filter((t) => t.name !== 'run_python')
-            .map((t) => ({ value: t.name, label: toolLabel(t.name, t.label), subtitle: t.source === 'mcp' ? `MCP: ${t.mcp_server || 'server'}` : 'Built-in' }))
+            .map((t) => ({ value: t.name, label: toolLabel(t.name, t.label), subtitle: SOURCE_WORDS(t) }))
         );
       })
       .catch(() => { setTools([]); setToolsByName({}); })
@@ -50,86 +59,111 @@ export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
   }, []);
   const toolId = str(cfg.tool_id);
   const isHttp = toolId === 'http_request';
-  const schemaProps = asObj(asObj(toolsByName[toolId]?.params_json_schema).properties);
-  const required = new Set(TOOL_REQUIRED_INPUT[toolId]?.map(([k]) => k) ?? (asObj(toolsByName[toolId]?.params_json_schema).required as string[] | undefined) ?? []);
-  const cardToolIds = ACTION_CARD_CONTRACT[actionCardId(cfg as { type?: unknown; tool_id?: unknown })]?.toolIds;
-  const toolOptions = cardToolIds ? tools.filter((t) => cardToolIds.includes(t.value)) : tools;
-  const presetFields = PRESET_FIELDS[toolId];
-  const fields: Array<{ key: string; label: string; optional: boolean; placeholder?: string; hint?: string }> = presetFields
-    ? presetFields.map((p) => ({ key: p.key, label: p.label, optional: Boolean(p.optional), placeholder: p.placeholder, hint: p.hint }))
-    : Object.keys(schemaProps).map((k) => {
-      const d = asObj(schemaProps[k]).description;
-      return { key: k, label: k, optional: !required.has(k), hint: typeof d === 'string' ? d : undefined };
-    });
+  const schema = asObj(toolsByName[toolId]?.params_json_schema);
+  const schemaProps = asObj(schema.properties);
+  const required = new Set(TOOL_REQUIRED_INPUT[toolId]?.map(([k]) => k) ?? (schema.required as string[] | undefined) ?? []);
   const cardId = actionCardId(cfg as { type?: unknown; tool_id?: unknown });
+  const cardToolIds = ACTION_CARD_CONTRACT[cardId]?.toolIds;
+  const toolOptions = cardToolIds ? tools.filter((t) => cardToolIds.includes(t.value)) : tools;
+  // A card that does one thing (Send email) needs no "what to do" choice; one that does several (Sheets) or the open-ended Call tool does.
+  const showToolChoice = !isHttp && !(cardToolIds && cardToolIds.length === 1 && toolId === cardToolIds[0]);
+  const presetFields = PRESET_FIELDS[toolId];
+  const fields: PresetField[] = presetFields ?? Object.keys(schemaProps).map((k) => fieldFromSchema(k, asObj(schemaProps[k]), required.has(k)));
+  const isSlack = toolId.startsWith('slack_send');
   const toolHint = isHttp
-    ? 'Calls a web address and hands the response to the next step. Addresses on private networks are blocked.'
-    : `Runs one tool and hands its result to the next step.${INTEGRATION_NEEDS[cardId] ? ` ${INTEGRATION_NEEDS[cardId]}` : ''}`;
+    ? 'Calls a web address and gives the answer to the next step. Addresses on private networks are blocked.'
+    : `${toolSentence(toolId, cardId)}${INTEGRATION_NEEDS[cardId] ? ` ${INTEGRATION_NEEDS[cardId]}` : ''}`;
 
-  const renderField = (fld: (typeof fields)[number]) => (
-    <div key={`${toolId}-${fld.key}`}>
-      <FlowValueInput
-        id={`tool-in-${fld.key}`}
+  const renderField = (fld: PresetField) => {
+    if (fld.key === 'channel' && isSlack) {
+      return (
+        <SlackChannelField
+          key={`${toolId}-channel`}
+          nodeId={nodeId}
+          testId={f('input.channel')}
+          value={input.channel}
+          onChange={(v) => setInput('channel', v)}
+          Err={<Err field="input.channel" />}
+          hint={fld.hint ?? ''}
+        />
+      );
+    }
+    return (
+      <ValueField
+        key={`${toolId}-${fld.key}`}
+        field={`input.${fld.key}`}
+        f={f}
+        Err={Err}
         nodeId={nodeId}
-        testId={f(`input.${fld.key}`)}
         label={fld.label}
         optional={fld.optional}
         placeholder={fld.placeholder}
         hint={fld.hint}
-        kind={JSON_FIELDS.has(fld.key) ? 'json' : LONG_FIELDS.has(fld.key) ? 'longtext' : undefined}
+        kind={fld.kind}
         value={input[fld.key]}
-        onChange={(v) => setInput(fld.key, v)}
+        onChange={(v) => setInput(fld.key, normalizePasted(fld.normalize, v))}
       />
-      <Err field={`input.${fld.key}`} />
-      {fld.key === 'channel' && toolId.startsWith('slack_send') && (
-        <div className="mt-2">
-          <SlackChannelPicker value={str(input.channel)} onPick={(id) => setInput('channel', id)} />
-        </div>
-      )}
-    </div>
-  );
+    );
+  };
 
   return (
     <Section title={title} hint={toolHint}>
-      {!isHttp && (
+      {showToolChoice && (
         <div>
-          <Label htmlFor="tool-id" size="sm">Tool</Label>
+          <Label htmlFor="tool-id" size="sm">{cardToolIds ? 'What to do' : 'What this step runs'}</Label>
           <Combobox
             id="tool-id"
             testId={f('tool_id')}
             options={toolOptions}
             value={toolId}
             onValueChange={(v) => { if (v && v !== toolId) patch({ tool_id: v, input: {} }); }}
-            placeholder={loading ? 'Loading...' : 'Choose a tool...'}
+            placeholder={loading ? 'Loading...' : cardToolIds ? 'Choose what to do...' : 'Search the apps and tools you can use...'}
             disabled={loading}
-            searchPlaceholder="Search tools..."
-            emptyText={toolOptions.length ? 'No matching tool.' : 'No tools are available to your account.'}
+            searchPlaceholder="Search..."
+            emptyText={toolOptions.length ? 'Nothing matches that. Try another word.' : 'Nothing is available to your account yet.'}
           />
-          <FieldHint testId="flow-hint-tool-id">Choose what this step should do. Its settings appear below.</FieldHint>
+          <FieldHint testId="flow-hint-tool-id">{cardToolIds ? 'Choose what this step should do. The settings for it appear below.' : 'Choose an app action or a built-in tool. The settings for it appear below.'}</FieldHint>
           <Err field="tool_id" />
         </div>
       )}
       {isHttp ? (
         <>
-          <FlowValueInput id="http-url" nodeId={nodeId} testId={f('input.url')} label="URL" placeholder="https://api.example.com/items" hint="The full address, starting with https://. Click + Use data to add a value from an earlier step." value={input.url} onChange={(v) => setInput('url', v)} />
-          <Err field="input.url" />
+          <ValueField field="input.url" f={f} Err={Err} nodeId={nodeId} label="Web address" kind="url" placeholder="https://api.yourshop.com/orders" hint="The full address to call, starting with https://. Use + Use data to put in a value from an earlier step, like an order number." value={input.url} onChange={(v) => setInput('url', v)} />
           <div>
-            <Label htmlFor="http-method" size="sm">Method</Label>
+            <Label htmlFor="http-method" size="sm">What to do there</Label>
             <Select value={str(input.method) || 'GET'} onValueChange={(v) => setInput('method', v)}>
               <SelectTrigger id="http-method" data-testid={f('input.method')}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {HTTP_METHODS.map((m) => (
-                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                  <SelectItem key={m.value} value={m.value} description={m.help} data-testid={`flow-option-http-method-${m.value}`}>{m.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <FieldHint testId="flow-hint-http-method">GET reads data. POST, PUT and PATCH send the Body. DELETE removes something.</FieldHint>
+            <FieldHint testId="flow-hint-http-method">{HTTP_METHODS.find((m) => m.value === (str(input.method) || 'GET'))?.help} Most services want GET to read and POST to send.</FieldHint>
           </div>
-          <MoreOptions defaultOpen={Boolean(input.headers || input.body)}>
-          <FlowValueInput id="http-headers" nodeId={nodeId} testId={f('input.headers')} label="Headers" optional kind="json" hint={'Extra request headers, for example {"Authorization": "Bearer your-key"}.'} value={input.headers} onChange={(v) => setInput('headers', v)} />
-          <FlowValueInput id="http-body" nodeId={nodeId} testId={f('input.body')} label="Body" optional kind="json" hint={'The data to send with POST, PUT or PATCH, for example {"name": "Ada"}.'} value={input.body} onChange={(v) => setInput('body', v)} />
+          <MoreOptions defaultOpen={Boolean(!isEmptyValue(input.headers) || !isEmptyValue(input.body))}>
+            <HttpJsonField
+              surfaceKey="headers"
+              title="Extra details to send (headers)"
+              help={'Extra information the service asks for, most often a key to prove who you are. For example: Authorization = Bearer your-key. Switch to JSON to paste a whole set.'}
+              example={{ Authorization: 'Bearer your-key' }}
+              value={input.headers}
+              onChange={(v) => setInput('headers', v)}
+              nodeId={nodeId}
+              rows={{ keyLabel: 'Name', valueLabel: 'Value', keyPlaceholder: 'Authorization', valuePlaceholder: 'Bearer your-key', addLabel: 'Add a detail' }}
+            />
+            <HttpJsonField
+              surfaceKey="body"
+              title="Request body (JSON)"
+              help={'The data sent with POST, PUT or PATCH, written as JSON. Fill in the fields, or edit it as JSON if the service gives you an example to copy. Text that is not valid JSON is sent exactly as written.'}
+              example={{ name: 'Ada Lovelace', email: 'ada@example.com' }}
+              value={input.body}
+              onChange={(v) => setInput('body', v)}
+              nodeId={nodeId}
+              rows={{ keyLabel: 'Field', valueLabel: 'Value', keyPlaceholder: 'name', valuePlaceholder: 'Ada Lovelace', addLabel: 'Add a field' }}
+            />
           </MoreOptions>
         </>
       ) : toolId && fields.length > 0 ? (
@@ -142,8 +176,17 @@ export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
           )}
         </>
       ) : toolId ? (
-        <p className="text-xs text-muted-foreground" data-testid="flow-hint-tool-no-settings">This tool needs no settings. It runs as soon as the step before it finishes.</p>
+        <p className="text-xs text-muted-foreground" data-testid="flow-hint-tool-no-settings">This step needs no settings. It runs as soon as the step before it finishes.</p>
       ) : null}
     </Section>
   );
+}
+
+/** One plain sentence for the (i) of a tool step. */
+function toolSentence(toolId: string, cardId: string): string {
+  if (toolId === 'gmail_send_email') return 'Sends an email from your connected Gmail account. A test run shows what would be sent, without sending it.';
+  if (toolId.startsWith('slack_send')) return 'Posts a message in Slack. A test run shows what would be posted, without posting it.';
+  if (toolId.startsWith('gsheets_')) return toolId === 'gsheets_read' ? 'Reads rows from a Google Sheet and gives them to the next step.' : toolId === 'gsheets_update' ? 'Writes rows into a Google Sheet.' : toolId === 'gsheets_create' ? 'Creates a new Google Sheet.' : 'Works with a Google Sheet.';
+  if (toolId.startsWith('gdrive_')) return 'Looks for files in Google Drive and gives them to the next step.';
+  return cardId === 'tool' ? 'Runs an action in one of your apps, or a built-in tool, and gives the result to the next step.' : 'Does one thing and gives the result to the next step.';
 }

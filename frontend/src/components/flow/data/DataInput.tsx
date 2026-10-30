@@ -8,6 +8,7 @@ import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { useViewport } from '@/lib/ui/responsive';
 import { getLastWebhookRequest } from '@/services/flow/triggerApi';
 import { cn } from '@/lib/utils';
+import type { RefScope } from '@/lib/flow/flowRefs';
 import {
   chipBefore, chipNames, makeChip, parseValue, serializeValue, uniqueVariable, type Chip, type ParsedValue, type Segment,
 } from '@/lib/flow-data/chips';
@@ -35,8 +36,14 @@ export interface DataInputProps {
   id?: string;
   label?: string;
   optional?: boolean;
-  /** `list`: the field takes a whole list (a loop's items); picking a list sets it directly. */
-  accept?: 'value' | 'list';
+  /**
+   * `list`: the field takes a whole list (a loop's items); picking a list sets it directly.
+   * `one`: the field takes exactly one thing from an earlier step (a loop's "result to collect"); a pick sets it directly.
+   * Both are pick-only: typing is not possible, because what is stored is a reference.
+   */
+  accept?: 'value' | 'list' | 'one';
+  /** `loop-body`: the steps inside this loop (for a loop's "result to collect"). */
+  scope?: RefScope;
   disabled?: boolean;
 }
 
@@ -65,7 +72,7 @@ export function DataInput(props: DataInputProps) {
   return <ChipField {...props} />;
 }
 
-function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, testId, id, label, optional, accept = 'value', disabled }: DataInputProps) {
+function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, testId, id, label, optional, accept = 'value', scope, disabled }: DataInputProps) {
   const autoId = useId();
   const inputId = id ?? autoId;
   const hintId = `${inputId}-hint`;
@@ -81,7 +88,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
     setLocked((prev) => (prev === now ? prev : now));
   });
   const editable = canManage && !disabled && !locked;
-  const { model, loading, refresh } = useDataCatalog(nodeId);
+  const { model, loading, refresh } = useDataCatalog(nodeId, scope);
   const editor = useRef<ChipEditorHandle>(null);
 
   const normalized = asText(value);
@@ -141,7 +148,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
     origin.current.picked = true;
     isOpen.current = false;
     setOpen(false);
-    if (accept === 'list') {
+    if (accept === 'list' || accept === 'one') {
       const next = { $from: pick.ref };
       sent.current = JSON.stringify(next);
       setState(parseValue(next));
@@ -178,7 +185,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
   const chips = state.segments.some((s) => s.kind === 'chip');
   const preview = chips ? previewOf(state.segments, model) : null;
   const multiline = kind === 'longtext';
-  const ph = placeholder ?? (nodeId ? DEFAULT_PLACEHOLDER : undefined);
+  const ph = placeholder ?? (nodeId ? (accept === 'value' ? DEFAULT_PLACEHOLDER : 'Choose with + Use data') : undefined);
 
   return (
     <div ref={wrap} className="space-y-1" data-testid={testId ? `${testId}-box` : undefined}>
@@ -205,6 +212,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
               describe={describe}
               onSegments={onSegments}
               multiline={multiline}
+              pickOnly={accept !== 'value'}
               editable={editable}
               placeholder={ph}
               ariaLabel={label}
@@ -244,7 +252,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
             if (!isOpen.current) editor.current?.focus();
           }}
         >
-          <DataPicker key={openCount} model={model} accept={accept} onPick={onPick} onFetchLast={fetchLast} loading={loading} />
+          <DataPicker key={openCount} model={model} accept={accept === 'list' ? 'list' : 'value'} onPick={onPick} onFetchLast={fetchLast} loading={loading} />
         </PopoverContent>
       </Popover>
       {hint ? (

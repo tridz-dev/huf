@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Unlink } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useFlowContext } from '../../../contexts/FlowContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
-import { FlowValueInput } from '../../FlowValueInput';
+import { EndForm } from '../forms/EndForm';
 import { ActionConfigForm, TriggerConfigForm } from '../NodeConfigForms';
 import { nodeKind } from '@/lib/flow-graph/flowValidation';
-import type { FlowNode, FlowNodeData } from '../../../types/flow.types';
+import type { FlowNode } from '../../../types/flow.types';
 import { ConnectionPanel } from './ConnectionPanel';
 import { Pressable } from './Pressable';
 import { clearFocusRequest, requestFocus, useFrame } from './frameStore';
@@ -26,7 +25,6 @@ const TAB_LABEL: Record<FrameTab, string> = { setup: 'Setup', test: 'Test', sett
  * bodies stay mounted (inactive ones are hidden) so a half-typed field and the "(i)" text survive a tab change.
  */
 export function StepFrame({ node, onClose, onDelete }: { node: FlowNode; onClose?: () => void; onDelete: () => void }) {
-  const { updateNodeData } = useFlowContext();
   const { canManage } = useFlowPermissions();
   const issues = useFlowIssues();
   const mine = useMemo(() => issuesForStep(issues, node.id), [issues, node.id]);
@@ -116,20 +114,7 @@ export function StepFrame({ node, onClose, onDelete }: { node: FlowNode; onClose
                 <ActionConfigForm key={node.id} nodeId={node.id} />
               </>
             )}
-            {node.data.nodeType === 'end' && (
-              <div key={node.id}>
-                <FlowValueInput
-                  id="end-value"
-                  nodeId={node.id}
-                  testId="flow-field-output-value"
-                  label="Result"
-                  optional
-                  hint="The flow finishes here. This is shown in run details as what the flow produced. Leave it empty if you do not need a result."
-                  value={node.data.endConfig?.value}
-                  onChange={(v) => updateNodeData(node.id, (data) => ({ ...data, endConfig: { value: v } }) as FlowNodeData)}
-                />
-              </div>
-            )}
+            {node.data.nodeType === 'end' && <EndForm key={node.id} node={node} />}
           </div>
           {tabs.includes('test') && (
             <div role="tabpanel" id={`${tabIds.test}-panel`} aria-labelledby={tabIds.test} hidden={tab !== 'test'} data-testid="flow-tab-test">
