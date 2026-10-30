@@ -34,6 +34,7 @@ import { useRunOverlay } from '../lib/flow-graph/runOverlay';
 import { useRunParam } from '../hooks/flow/useRunParam';
 import { FlowCanvasToolbar } from './flow/canvas/FlowCanvasToolbar';
 import { EdgeDeleteDialog } from './flow/canvas/EdgeDeleteDialog';
+import { registerPendingFlush } from '../lib/flow-graph/pendingWrites';
 import { glideNodes, useConvertedProcedure, useEdgeActions } from './flow/canvas/useCanvasEffects';
 import { FlowShortcuts } from './flow/shortcuts/FlowShortcuts';
 import { connectionProblem } from '../lib/flow/flowEdit';
@@ -181,6 +182,21 @@ export function FlowCanvas({
       }
     }, 50); // 50ms debounce
   }, [activeFlow, nodes, edges, updateNodesAndEdges]);
+
+  // Write a move or connection that is still waiting out its 50 ms right now. Tidy layout calls this first (through
+  // flushPendingWrites) so a drag made a moment earlier is part of what it lays out and is not written over it afterwards.
+  const edgesRef = useRef(edges);
+  edgesRef.current = edges;
+  const flushNow = useCallback(() => {
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+      updateTimeoutRef.current = null;
+    }
+    const pending = pendingUpdateRef.current;
+    pendingUpdateRef.current = null;
+    if (pending && activeFlow && !isSyncingFromProps.current) updateNodesAndEdges(pending.nodes ?? nodesRef.current, pending.edges ?? edgesRef.current);
+  }, [activeFlow, updateNodesAndEdges]);
+  useEffect(() => registerPendingFlush(flushNow), [flushNow]);
 
   // Cleanup timeout on unmount
   useEffect(() => {

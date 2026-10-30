@@ -10,6 +10,7 @@ import { tidyPositions } from '../lib/flow/flowLayout';
 import { followRenamedTarget } from '../lib/flow/flowEdgeLabels';
 import { type RemoveStepMode } from '../lib/flow/flowEdit';
 import { removeSteps } from '../lib/flow-graph/removeSteps';
+import { flushPendingWrites } from '../lib/flow-graph/pendingWrites';
 import { announceConversion, flowsEqual } from '../lib/flow-graph/flowSync';
 import { useFlowRealtimeStatus } from '../hooks/flow/useFlowRealtimeStatus';
 
@@ -395,6 +396,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
 
   const tidyLayout = useCallback(() => {
     if (!activeFlowId) return;
+    flushPendingWrites(); // a drag made a moment ago is laid out too, and is not written over the result
     const prev = activeFlowRef.current;
     if (!prev || prev.nodes.length === 0) return;
     const positions = tidyPositions(prev.nodes, prev.edges);
