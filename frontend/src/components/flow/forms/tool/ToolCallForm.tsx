@@ -102,7 +102,11 @@ export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
         hint={fld.hint}
         kind={fld.kind}
         value={input[fld.key]}
-        onChange={(v) => setInput(fld.key, normalizePasted(fld.normalize, v))}
+        onChange={(v) => {
+          // A link is turned into its id when it arrives in one go (pasted), never while someone is typing it letter by letter.
+          const before = typeof input[fld.key] === 'string' ? (input[fld.key] as string).length : 0;
+          setInput(fld.key, typeof v === 'string' && v.length - before > 10 ? normalizePasted(fld.normalize, v) : v);
+        }}
       />
     );
   };
