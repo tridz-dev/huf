@@ -8,6 +8,11 @@ const slack = (extra: object = {}) => ({
 });
 
 describe('summarizeToolOutput', () => {
+  it('says a test run skipped the step instead of claiming it was sent', () => {
+    const output = { simulated: true, summary: 'Would send email to ada@example.com', id: 'sample-0001', threadId: 'sample-0001' };
+    expect(summarizeToolOutput('gmail_send_email', output)).toBe('Would send email to ada@example.com (skipped in test)');
+    expect(summarizeToolOutput(undefined, { status: 'success', result: output })).toBe('Would send email to ada@example.com (skipped in test)');
+  });
   it('words a Slack post with the channel name and time, no link', () => {
     setSiteTimezoneForTests('UTC');
     const text = summarizeToolOutput('slack_send_message', slack({ channel_name: 'huf-live-test' }));

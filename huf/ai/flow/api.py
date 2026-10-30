@@ -19,7 +19,7 @@ from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.api_support import require_permission
 from huf.ai.flow.runs.shape import extras_for_detail
-from huf.ai.flow.support.approval_card import build_card
+from huf.ai.flow.support.approval_card import api_card, build_card
 from huf.ai.flow.support.decision_rights import approval_decision_rights
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
 from huf.ai.flow.support.redact import definition_for_user
@@ -427,6 +427,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 		"stale_after_minutes": STALE_RUN_MINUTES,
 		"can_decide": can_decide,
 		"cannot_decide_reason": cannot_decide_reason,
+		"approval_card": api_card(_flow_names([doc.flow_id]).get(doc.flow_id), waiting, doc.flow_id) if doc.status == "Waiting Approval" else None,
 		**extras_for_detail(doc, ctx),
 	}
 
@@ -1137,6 +1138,7 @@ def get_pending_approvals(limit: int = 50) -> list:
 			"message": card["sentence"],
 			"instructions": card["sentence"],
 			"facts": card["facts"],
+			"approval_card": api_card(flow_name, waiting, run.flow_id),
 			"approver_type": approver_type,
 			"approval_type": approver_type,
 			"approver_role": waiting.get("approver_role"),
