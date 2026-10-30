@@ -42,7 +42,8 @@ class TestConnectionHealthIsPersistedOnlyByEditors(IntegrationTestCase):
 		self.assertIn("checked_at", out)
 
 	def test_typed_values_are_never_stored_for_anyone(self):
-		with patch("frappe.only_for"), patch("httpx.post", return_value=_ok_slack()), self._permission({"read", "write"}), \
+		with patch("frappe.only_for"), patch("huf.ai.tools.connection_test._resolve_credentials", return_value={"token": "xoxb-typed"}), \
+			patch("httpx.post", return_value=_ok_slack()), self._permission({"read", "write"}), \
 			patch("huf.ai.tools.connection_test._remember_check") as remember:
 			out = test_connection(service="slack", setting="any-setting", credentials={"token": "xoxb-typed"})
 		self.assertEqual(out["status"], "Connected")

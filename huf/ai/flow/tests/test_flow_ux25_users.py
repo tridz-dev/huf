@@ -81,16 +81,16 @@ class TestFlowUserLookup(IntegrationTestCase):
 		with patch("frappe.cache") as cache:
 			cache.return_value.incr.side_effect = lambda key: next(counts)
 			for _ in range(60):
-				api.search_flow_users("a")
+				api._need_flow_edit_and_rate()
 			with self.assertRaises(frappe.ValidationError):
-				api.search_flow_users("a")
+				api._need_flow_edit_and_rate()
 
 	def test_the_limit_is_per_person(self):
 		seen = []
 		with patch("frappe.cache") as cache:
 			cache.return_value.incr.side_effect = lambda key: (seen.append(key), 1)[1]
-			api.search_flow_users("a")
+			api._need_flow_edit_and_rate()
 			frappe.set_user(self._user("Huf Manager"))
-			api.search_flow_users("a")
+			api._need_flow_edit_and_rate()
 		self.assertEqual(len(set(seen)), 2)
 		self.assertEqual(api.USER_LOOKUP_LIMIT, 60)
