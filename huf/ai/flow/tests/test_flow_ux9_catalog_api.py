@@ -13,7 +13,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import now_datetime
 
-from huf.ai.flow import catalog_api
+from huf.ai.flow.catalog import api as catalog_api
 from huf.testing.factories import make_user
 
 SECRET = "s" * 40

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Iterable
 
-from huf.ai.flow.support.catalog import IDENT, MAX_TEXT, sample_for
+from huf.ai.flow.catalog.fields import IDENT, MAX_TEXT, sample_for
 
 LINK_KEY = "_links"
 MAX_LINKS = 6

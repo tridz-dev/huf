@@ -4,8 +4,8 @@ import json
 import unittest
 from types import SimpleNamespace
 
-from huf.ai.flow.support import catalog as cat
-from huf.ai.flow.support import doc_fields as df
+from huf.ai.flow.catalog import fields as cat
+from huf.ai.flow.catalog import doc_fields as df
 
 ORDER = {
 	"customer": {"name": "Ada Lovelace", "email": "ada@example.com", "credit": {"limit": 5000}},

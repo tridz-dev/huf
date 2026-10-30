@@ -13,8 +13,8 @@ import json
 import frappe
 from frappe import _
 
-from huf.ai.flow.support import catalog as cat
-from huf.ai.flow.support import doc_fields
+from huf.ai.flow.catalog import fields as cat
+from huf.ai.flow.catalog import doc_fields
 from huf.ai.flow.support.trigger_sample import redact_sample
 
 NODE_OUTPUTS_KEY = "__node_outputs__"
