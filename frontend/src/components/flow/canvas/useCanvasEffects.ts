@@ -3,6 +3,32 @@ import { flowService } from '../../../services/flowService';
 import { edgeRoute } from '../../../services/flowSerializer';
 import { onEdgeAction } from '@/lib/flow-graph/edgeActions';
 import type { FlowEdgeRoute } from '../../../types/flow.types';
+import type { Node } from 'reactflow';
+import { blendPositions, motionMs, runFrames } from '@/lib/flow-canvas/tween';
+
+/** Length (ms) of the glide steps make to their places after Tidy layout (and its Undo). */
+export const TIDY_GLIDE_MS = 320;
+
+/**
+ * Moves the steps from where they are to where `target` puts them, a frame at a time, then leaves them exactly on `target`.
+ * Returns null (and does nothing) when the same steps are not on both sides, nothing moves, or motion is reduced: the
+ * caller then just sets the target.
+ */
+export function glideNodes<T extends Node>(current: T[], target: T[], setNodes: (nodes: T[]) => void, onDone: () => void): (() => void) | null {
+  const ms = motionMs(TIDY_GLIDE_MS);
+  const same = current.length === target.length && target.every((n) => current.some((c) => c.id === n.id));
+  const moved = same && target.some((n) => {
+    const c = current.find((v) => v.id === n.id);
+    return c && (c.position.x !== n.position.x || c.position.y !== n.position.y);
+  });
+  if (!moved || ms === 0) return null;
+  const from = Object.fromEntries(current.map((n) => [n.id, n.position]));
+  const to = Object.fromEntries(target.map((n) => [n.id, n.position]));
+  return runFrames(ms, (t) => {
+    const at = blendPositions(from, to, t);
+    setNodes(t >= 1 ? target : target.map((n) => ({ ...n, position: at[n.id] })));
+  }, onDone);
+}
 
 /** Keyboard undo (Cmd/Ctrl+Z). Skipped while focus is in a text field so it doesn't fight the input's own native undo. */
 export function useUndoShortcut(undo: () => void, canUndo: boolean) {

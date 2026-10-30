@@ -30,7 +30,7 @@ import { ZOOM_MAX, ZOOM_MIN } from '@/lib/flow-canvas/zoomLod';
 import { useRenderedGraph } from './flow/canvas/useRenderedGraph';
 import { FlowCanvasToolbar } from './flow/canvas/FlowCanvasToolbar';
 import { EdgeDeleteDialog } from './flow/canvas/EdgeDeleteDialog';
-import { useConvertedProcedure, useEdgeActions, useUndoShortcut } from './flow/canvas/useCanvasEffects';
+import { glideNodes, useConvertedProcedure, useEdgeActions, useUndoShortcut } from './flow/canvas/useCanvasEffects';
 import { connectionProblem } from '../lib/flow/flowEdit';
 import { useFlowContext } from '../contexts/FlowContext';
 import { RENDER_ONLY_EDGE_PREFIX, RENDER_ONLY_NODE_PREFIX, addActionStep, computeOpenEnds, connectSteps, connectionRoute } from '../lib/flow-graph/flowCanvasGraph';
@@ -91,6 +91,10 @@ export function FlowCanvas({
 
   // Track if we're currently syncing from props to prevent feedback loops
   const isSyncingFromProps = useRef(false);
+  const stopGlide = useRef<(() => void) | null>(null);
+  const lastLayoutRevision = useRef(layoutRevision);
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
   // Track pending updates to batch them
   const pendingUpdateRef = useRef<{ nodes?: Node<FlowNodeData>[]; edges?: Edge[] } | null>(null);
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -112,10 +116,17 @@ export function FlowCanvas({
       pendingUpdateRef.current = null;
 
       isSyncingFromProps.current = true;
-      setNodes(activeFlow.nodes);
+      stopGlide.current?.();
+      stopGlide.current = null;
+      const tidied = lastLayoutRevision.current !== layoutRevision;
+      lastLayoutRevision.current = layoutRevision;
+      // Tidy layout and its Undo: the steps glide to their new places.
+      const glide = tidied ? glideNodes(nodesRef.current, activeFlow.nodes, setNodes, () => { isSyncingFromProps.current = false; stopGlide.current = null; }) : null;
+      stopGlide.current = glide;
+      if (!glide) setNodes(activeFlow.nodes);
       setEdges(activeFlow.edges);
       // Clear the guard after React has processed the batched state updates
-      requestAnimationFrame(() => {
+      if (!glide) requestAnimationFrame(() => {
         isSyncingFromProps.current = false;
       });
     }
@@ -159,6 +170,7 @@ export function FlowCanvas({
       if (updateTimeoutRef.current) {
         clearTimeout(updateTimeoutRef.current);
       }
+      stopGlide.current?.();
     };
   }, []);
 

@@ -5,6 +5,8 @@ import type { ReactFlowInstance } from 'reactflow';
 import { Controls, MiniMap, useNodesInitialized, useReactFlow, useStore, useStoreApi, getNodesBounds } from 'reactflow';
 import { isInView, panToReveal } from '@/lib/flow/flowLayout';
 import { RENDER_ONLY_NODE_PREFIX } from '@/lib/flow-graph/flowCanvasGraph';
+import { motionMs } from '@/lib/flow-canvas/tween';
+import { TIDY_GLIDE_MS } from './useCanvasEffects';
 import { FIT_MIN_READABLE, READABLE_STEP_LIMIT, ZOOM_MIN } from '@/lib/flow-canvas/zoomLod';
 
 /** Fit-to-view never zooms in past 100% (a 3-step flow stays at normal size) nor out past the canvas minimum. */
@@ -168,13 +170,15 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
     }
     const removed = nodeCount < previous.nodeCount || edgeCount < previous.edgeCount;
     if (!removed && layoutRevision === previous.layoutRevision) return;
+    // Tidy layout (or its Undo) always re-fits, once the steps have glided to their places; a removal only when something is out of sight.
+    const relaid = layoutRevision !== previous.layoutRevision;
     const timer = setTimeout(() => {
       const nodes = getNodes();
       const { width, height } = store.getState();
-      if (nodes.length > 0 && width > 0 && isInView(getNodesBounds(nodes), getViewport(), { width, height })) return;
+      if (!relaid && nodes.length > 0 && width > 0 && isInView(getNodesBounds(nodes), getViewport(), { width, height })) return;
       const { width: w, height: h } = store.getState();
-      fitClearOfOverlays(rfRef.current, w, h, 200);
-    }, 60);
+      fitClearOfOverlays(rfRef.current, w, h, motionMs(260));
+    }, relaid ? motionMs(TIDY_GLIDE_MS) + 40 : 60);
     return () => clearTimeout(timer);
   }, [flowId, nodeCount, edgeCount, layoutRevision, getNodes, getViewport, setViewport, store]);
   return null;
