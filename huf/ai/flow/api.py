@@ -18,6 +18,7 @@ from frappe.rate_limiter import rate_limit
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.api_support import require_permission
+from huf.ai.flow.runs.access import can_access_run, require_run_access
 from huf.ai.flow.runs.shape import extras_for_detail
 from huf.ai.flow.support.approval_card import api_card, build_card
 from huf.ai.flow.support.decision_rights import approval_decision_rights
@@ -194,6 +195,7 @@ def get_flow_definition(flow_id: str) -> dict:
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 	doc = frappe.get_doc("Flow Definition", flow_id)
+	doc.check_permission("read")
 	return {
 		"flow_id": doc.flow_id,
 		"flow_name": doc.flow_name,
@@ -339,6 +341,8 @@ def run_flow(
 	"""
 	if not frappe.has_permission("Flow Run", "create"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if flow_id and frappe.db.exists("Flow Definition", flow_id) and not frappe.has_permission("Flow Definition", "read", doc=flow_id):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)  # starting a flow needs read on THAT flow
 
 	# Parse payload
 	if isinstance(payload, str):
@@ -384,8 +388,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 	Returns:
 	    dict with status, current_node_id, context_json, waiting state
 	"""
-	if not frappe.has_permission("Flow Run", "read"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	require_run_access(flow_run_id, "read")
 
 	_expire_overdue_approvals(flow_run_id)
 	doc = frappe.get_doc("Flow Run", flow_run_id)
@@ -443,6 +446,7 @@ def mark_flow_run_failed(flow_run_id: str) -> dict:
 		frappe.throw(_("Only a System Manager can mark a run as failed."), frappe.PermissionError)
 	if not frappe.db.exists("Flow Run", flow_run_id):
 		frappe.throw(_("Flow Run '{0}' not found").format(flow_run_id), frappe.DoesNotExistError)
+	require_run_access(flow_run_id, "write", "write")  # on this run and its flow, not just the role
 
 	from huf.ai.flow import engine
 
@@ -530,7 +534,10 @@ def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit:
 	if run_mode:
 		filters["run_mode"] = stored_mode(run_mode)
 
-	runs = frappe.get_all(
+	if flow_id and frappe.db.exists("Flow Definition", flow_id) and not frappe.has_permission("Flow Definition", "read", doc=flow_id):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	# get_list, not get_all: runs of flows hidden from the caller by User Permissions stay out of the answer.
+	runs = frappe.get_list(
 		"Flow Run",
 		filters=filters,
 		fields=_FLOW_RUN_LIST_FIELDS,
@@ -587,8 +594,10 @@ def list_flow_runs_page(
 		if matching:
 			or_filters.append(["flow_id", "in", matching])
 
-	total = len(frappe.get_all("Flow Run", filters=filters, or_filters=or_filters, pluck="name"))
-	rows = frappe.get_all(
+	if flow_id and frappe.db.exists("Flow Definition", flow_id) and not frappe.has_permission("Flow Definition", "read", doc=flow_id):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	total = len(frappe.get_list("Flow Run", filters=filters, or_filters=or_filters, pluck="name", limit_page_length=0))
+	rows = frappe.get_list(
 		"Flow Run",
 		filters=filters,
 		or_filters=or_filters,
@@ -614,6 +623,8 @@ def get_flow_step_labels(items: str | list) -> list:
 
 	run_flow_ids = {}
 	for run_name in {i.get("flow_run") for i in items if i.get("flow_run")}:
+		if not can_access_run(run_name, "read"):
+			continue  # a run the caller may not open gets no label (None), same as an unknown run
 		run_flow_ids[run_name] = frappe.db.get_value("Flow Run", run_name, "flow_id")
 	names = _flow_names(run_flow_ids.values())
 	labels = {fid: _node_labels(fid) for fid in set(run_flow_ids.values()) if fid}
@@ -648,8 +659,7 @@ def resume_flow_run(flow_run_id: str, input: str | dict | None = None) -> dict:
 	Returns:
 	    dict with status and current_node_id
 	"""
-	if not frappe.has_permission("Flow Run", "write"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	require_run_access(flow_run_id, "write")
 
 	# Parse input
 	if isinstance(input, str):
@@ -962,7 +972,7 @@ def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 	Returns:
 	    dict with status, context summary, waiting state
 	"""
-	if not frappe.has_permission("Flow Run", "read"):
+	if not can_access_run(flow_run_id, "read"):
 		return {"error": "Insufficient permissions to view flow runs"}
 
 	try:
@@ -1004,7 +1014,7 @@ def handle_resume_flow_run(flow_run_id: str, input: dict | None = None, **kwargs
 	Returns:
 	    dict with updated status
 	"""
-	if not frappe.has_permission("Flow Run", "write"):
+	if not can_access_run(flow_run_id, "write"):
 		return {"error": "Insufficient permissions to resume flow runs"}
 
 	try:
@@ -1036,7 +1046,7 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 	Returns:
 	    dict with updated status
 	"""
-	if not frappe.has_permission("Flow Run", "read"):
+	if not can_access_run(flow_run_id, "read"):
 		return {"error": "Insufficient permissions to approve flow runs"}
 
 	try:

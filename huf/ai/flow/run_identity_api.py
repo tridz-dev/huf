@@ -11,12 +11,13 @@ person. Kept out of ``api.get_flow_run`` so the run payload stays unchanged.
 import frappe
 from frappe import _
 
+from huf.ai.flow.runs.access import require_run_access
+
 
 @frappe.whitelist(methods=["GET"])
 def get_flow_run_identity(flow_run_id: str) -> dict:
 	"""``{run_number, started_by, started_by_name}`` for one Flow Run the caller may read."""
-	if not frappe.has_permission("Flow Run", "read", flow_run_id):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	require_run_access(flow_run_id, "read")
 	run = frappe.db.get_value("Flow Run", flow_run_id, ["flow_id", "creation", "owner"], as_dict=True)
 	if not run:
 		frappe.throw(_("Run not found"), frappe.DoesNotExistError)
