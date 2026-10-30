@@ -40,6 +40,7 @@ export function VariablePicker({ onSelect, currentNodeId, scope = 'ancestors', a
     const { activeFlow, updateNodeData } = useFlowContext();
     const { isPhone } = useViewport();
     const [open, setOpen] = useState(false);
+    const [openCount, setOpenCount] = useState(0);
     const { model, loading, refresh } = useDataCatalog(currentNodeId ?? undefined, scope);
 
     // View-only users cannot change a value, so there is nothing to insert into.
@@ -62,7 +63,7 @@ export function VariablePicker({ onSelect, currentNodeId, scope = 'ancestors', a
     };
 
     return (
-        <Popover open={open} onOpenChange={(o) => { if (o) refresh(); setOpen(o); }}>
+        <Popover open={open} onOpenChange={(o) => { if (o) { refresh(); setOpenCount((c) => c + 1); } setOpen(o); }}>
             <PopoverTrigger asChild>
                 <Button
                     type="button"
@@ -85,7 +86,7 @@ export function VariablePicker({ onSelect, currentNodeId, scope = 'ancestors', a
                 // The field that received the data takes focus (not the button), so the user can keep typing.
                 onCloseAutoFocus={(e) => e.preventDefault()}
             >
-                <DataPicker model={model} accept={accept} onPick={pick} onFetchLast={fetchLast} loading={loading} />
+                <DataPicker key={openCount} model={model} accept={accept} onPick={pick} onFetchLast={fetchLast} loading={loading} />
             </PopoverContent>
         </Popover>
     );

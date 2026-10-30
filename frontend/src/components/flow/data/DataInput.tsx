@@ -40,6 +40,9 @@ export interface DataInputProps {
   disabled?: boolean;
 }
 
+/** A number or Yes/No typed into a text box is shown as its words; only a list or an object is shown as JSON. */
+const asText = (value: unknown) => (typeof value === 'number' || typeof value === 'boolean' ? String(value) : value);
+
 const DEFAULT_PLACEHOLDER = 'Type, or press / to use data';
 
 /**
@@ -50,7 +53,7 @@ const DEFAULT_PLACEHOLDER = 'Type, or press / to use data';
 export function DataInput(props: DataInputProps) {
   const { kind = 'text', value } = props;
   if (kind === 'yesno') return <YesNoInput {...props} />;
-  const isOther = parseValue(kind === 'number' && typeof value === 'number' ? String(value) : value).form === 'other';
+  const isOther = parseValue(asText(value)).form === 'other';
   // Once a box is in JSON it stays there while it is being edited (half-typed JSON is not a list yet).
   const [asJson, setAsJson] = useState(isOther);
   useEffect(() => {
@@ -81,7 +84,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
   const { model, loading, refresh } = useDataCatalog(nodeId);
   const editor = useRef<ChipEditorHandle>(null);
 
-  const normalized = kind === 'number' && typeof value === 'number' ? String(value) : value;
+  const normalized = asText(value);
   const [state, setState] = useState<ParsedValue>(() => parseValue(normalized));
   const [version, setVersion] = useState(0);
   const sent = useRef(JSON.stringify(value ?? null));
@@ -111,6 +114,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
   // ---- the picker ----
   const [open, setOpen] = useState(false);
   const isOpen = useRef(false);
+  const [openCount, setOpenCount] = useState(0); // a fresh picker every time it opens, even when the last one is still fading out
   isOpen.current = open;
   const origin = useRef<{ by: 'button' | 'slash' | 'chip'; position: number; chipId?: string; picked: boolean }>({ by: 'button', position: 0, picked: false });
   const openPicker = (by: 'button' | 'slash' | 'chip', chipId?: string) => {
@@ -118,6 +122,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
     origin.current = { by, position, chipId, picked: false };
     refresh();
     isOpen.current = true;
+    setOpenCount((c) => c + 1);
     setOpen(true);
   };
   const openFromSlash = (position: number) => {
@@ -239,7 +244,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
             if (!isOpen.current) editor.current?.focus();
           }}
         >
-          <DataPicker model={model} accept={accept} onPick={onPick} onFetchLast={fetchLast} loading={loading} />
+          <DataPicker key={openCount} model={model} accept={accept} onPick={onPick} onFetchLast={fetchLast} loading={loading} />
         </PopoverContent>
       </Popover>
       {hint ? (
