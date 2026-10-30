@@ -21,9 +21,11 @@ MAX_KEYS = 40
 
 _SECRET_KEY = re.compile(
 	r"pass(word|wd)?|secret|token|authorization|api[_-]?key|credential|cookie|signature|private|bearer|jwt|csrf|xsrf"
-	r"|session[_-]?(id|key)|access[_-]?key|(^|[_\-\s.])auth($|[_\-\s.])|^sid$",
+	r"|session[_-]?(id|key)|access[_-]?key",
 	re.I,
 )
+# A bare "auth" / "sid" holding text is a credential; holding an object it is only a container (its own keys are checked).
+_AUTH_WORD = re.compile(r"(^|[_\-\s.])auth($|[_\-\s.])|^sid$", re.I)
 # Values that look like credentials even when the key around them is harmless ("value": "sk-...", "note": "Bearer ...").
 _SECRET_VALUE = re.compile(
 	r"(sk-[A-Za-z0-9_\-]{16,}|xox[abprs]-[A-Za-z0-9\-]{10,}|gh[pousr]_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_\-]{30,}"
@@ -45,8 +47,11 @@ def is_header_key(key) -> bool:
 	return str(key).strip().lower().replace("_", "-") in HEADER_KEYS
 
 
-def is_secret_key(key) -> bool:
-	return bool(_SECRET_KEY.search(str(key)))
+def is_secret_key(key, item=None) -> bool:
+	"""True for a name that carries a credential. ``item`` (the value) lets a bare ``auth`` that holds an object pass."""
+	if _SECRET_KEY.search(str(key)):
+		return True
+	return not isinstance(item, (dict, list, tuple)) and bool(_AUTH_WORD.search(str(key)))
 
 
 def secret_pair(value) -> bool:
@@ -69,7 +74,7 @@ def _trim(value, depth: int, max_list: int = MAX_LIST, max_text: int = MAX_TEXT)
 		for i, (key, item) in enumerate(value.items()):
 			if i >= MAX_KEYS:
 				break
-			if is_header_key(key) or is_secret_key(key) or (pair and key == "value"):
+			if is_header_key(key) or is_secret_key(key, item) or (pair and key == "value"):
 				out[str(key)] = MASK
 			else:
 				out[str(key)] = _trim(item, depth + 1, max_list, max_text)
