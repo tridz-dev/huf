@@ -21,7 +21,7 @@ import type { ActionOption } from '../../types/modal.types';
 import { generateWebhookSecret } from '../../lib/flow-graph/flowWebhookUi';
 import { DEFAULT_PICKER, pickerToCron } from '../../lib/flow-graph/flowSchedule';
 import { CODE_RUN_ACTION } from '../../lib/flow-graph/codeFlow';
-import { defaultActionConfig } from '../../lib/flow/actionDefaults';
+import { defaultActionConfig } from '../../lib/flow-history/actionDefaults';
 import { useCodeFlowStatus } from '../../lib/flow-graph/useCodeFlowStatus';
 import { useFlowPermissions } from '../../hooks/flow/useFlowPermissions';
 

@@ -3,7 +3,8 @@ import { toast } from '@/lib/toast';
 import { Flow, FlowMetadata, FlowNode, FlowEdge } from '../types/flow.types';
 import { flowService } from '../services/flowService';
 import { useFlowHistory } from '../lib/flow-history/useFlowHistory';
-import { announce } from '../lib/flow-history/announce';
+import { removedDescription } from '../lib/flow-history/historyText';
+import { useHistoryStepper } from '../lib/flow-history/useHistoryStepper';
 import type { GraphChange, GraphSnapshot } from '../lib/flow-history/graphChange';
 import { tidyPositions } from '../lib/flow/flowLayout';
 import { followRenamedTarget } from '../lib/flow/flowEdgeLabels';
@@ -79,18 +80,19 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   // Ref to track last synced flow to prevent circular updates
   const lastSyncedFlowRef = useRef<Flow | null>(null);
   const activeFlowRef = useRef<Flow | null>(activeFlow);
-  // Applies an edit to the active flow, remembers it as synced (so the flowService echo is ignored) and records it in the
-  // undo history. The ref is updated right away: two edits in the same tick must build on each other.
+  // Applies an edit to the active flow (the ref is updated at once: two edits in one tick build on each other), marks it synced
+  // (the flowService echo is ignored) and records it in the undo history.
   const history = useFlowHistory();
+  const { record: recordHistory, reset: resetHistory, undo: undoHistory, redo: redoHistory } = history;
   const patchActive = useCallback((patch: (flow: Flow) => Partial<Flow>, hint?: Partial<GraphChange>) => {
     const prev = activeFlowRef.current;
     if (!prev) return;
     const updated = { ...prev, ...patch(prev) };
-    history.record({ nodes: prev.nodes, edges: prev.edges }, { nodes: updated.nodes, edges: updated.edges }, hint);
+    recordHistory({ nodes: prev.nodes, edges: prev.edges }, { nodes: updated.nodes, edges: updated.edges }, hint);
     activeFlowRef.current = updated;
     lastSyncedFlowRef.current = updated;
     setActiveFlowState(updated);
-  }, [history.record]);
+  }, [recordHistory]);
 
   // Steps of undo history live in useFlowHistory (session-local: cleared on flow switch, gone after a reload).
   const [layoutRevision, setLayoutRevision] = useState(0);
@@ -187,8 +189,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     // Never keep showing the previous flow while the next one loads: settings, Run and Publish would act on the wrong flow.
     if (activeFlowRef.current?.id !== flowId) setActiveFlowState(flowService.getCachedFlow(flowId));
     setSelectedNodeId(null);
-    history.reset();
-  }, [history.reset]);
+    resetHistory();
+  }, [resetHistory]);
 
 
   const createFlow = useCallback(async (name: string, category?: string) => {
@@ -307,7 +309,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
       // Keep the ref current right away: two edits in the same tick must build on each other.
       const updatedNodes = before.nodes.map(n => (n.id === nodeId ? { ...n, ...updates } : n));
       const after = { ...before, nodes: updatedNodes, ...(edgesChanged && renamedEdges ? { edges: renamedEdges } : {}) };
-      history.record({ nodes: before.nodes, edges: before.edges }, { nodes: after.nodes, edges: after.edges });
+      recordHistory({ nodes: before.nodes, edges: before.edges }, { nodes: after.nodes, edges: after.edges });
       activeFlowRef.current = after;
     }
     setActiveFlowState(prev => {
@@ -322,7 +324,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     flowService.updateNode(activeFlowId, nodeId, updates);
     if (edgesChanged && renamedEdges) flowService.updateEdges(activeFlowId, renamedEdges);
     markUnsaved();
-  }, [activeFlowId, markUnsaved, history.record]);
+  }, [activeFlowId, markUnsaved, recordHistory]);
 
   const getNode = useCallback((nodeId: string) => activeFlowRef.current?.nodes.find(n => n.id === nodeId), []);
   const getFlow = useCallback(() => activeFlowRef.current, []);
@@ -333,12 +335,10 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNode(nodeId, { data: update(current.data) });
   }, [updateNode]);
 
-  // Put a snapshot from the history back. Goes through the same context-level update as other structural mutations, so
-  // FlowCanvas's resync effect (keyed on node/edge counts and layoutRevision) cancels any in-flight debounced push before re-syncing.
+  // Put a snapshot from the history back (layoutRevision makes the canvas re-read it; selection and live status are not part of it).
   const restoreSnapshot = useCallback((snapshot: GraphSnapshot) => {
     if (!activeFlowId) return;
     const current = activeFlowRef.current;
-    // Selection is view state and live run status comes from the server: neither travels with an older snapshot.
     const liveStatus = new Map((current?.nodes ?? []).map(n => [n.id, n.data.status]));
     const nodes = snapshot.nodes.map(n => ({ ...n, selected: false, dragging: false, data: { ...n.data, status: liveStatus.get(n.id) ?? n.data.status } }));
     const updated = { ...(current as Flow), nodes, edges: snapshot.edges };
@@ -352,20 +352,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     markUnsaved();
   }, [activeFlowId, markUnsaved]);
 
-  const stepHistory = useCallback((direction: 'undo' | 'redo') => {
-    const current = activeFlowRef.current;
-    if (!current) return;
-    const step = direction === 'undo' ? history.undo({ nodes: current.nodes, edges: current.edges }) : history.redo({ nodes: current.nodes, edges: current.edges });
-    if (!step.snapshot) return;
-    restoreSnapshot(step.snapshot);
-    const what = (step.label ?? 'the last change').replace(/^./, c => c.toLowerCase());
-    const text = direction === 'undo' ? `Undid: ${what}` : `Redid: ${what}`;
-    announce(text);
-    toast(text, { id: 'flow-history-toast', duration: 2500 });
-  }, [history.undo, history.redo, restoreSnapshot]);
-
-  const undo = useCallback(() => stepHistory('undo'), [stepHistory]);
-  const redo = useCallback(() => stepHistory('redo'), [stepHistory]);
+  const { undo, redo } = useHistoryStepper({ getFlow, undoStep: undoHistory, redoStep: redoHistory, restore: restoreSnapshot });
 
   const deleteNode = useCallback((nodeId: string, mode: RemoveStepMode = 'reconnect') => {
     if (!activeFlowId) return;
@@ -381,15 +368,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     }
     markUnsaved();
     const label = (deletedNode?.data as { label?: string } | undefined)?.label;
-    toast('Node deleted', {
-      description: removedCount > 1
-        ? `"${label ?? 'The step'}" and ${removedCount - 1} step${removedCount - 1 === 1 ? '' : 's'} after it were removed from the flow.`
-        : label ? `"${label}" was removed from the flow.` : undefined,
-      action: {
-        label: 'Undo',
-        onClick: () => undo(),
-      },
-    });
+    toast('Node deleted', { description: removedDescription(label, removedCount), action: { label: 'Undo', onClick: () => undo() } });
   }, [activeFlowId, selectedNodeId, markUnsaved, undo, patchActive]);
 
   const deleteEdge = useCallback((edgeId: string) => {

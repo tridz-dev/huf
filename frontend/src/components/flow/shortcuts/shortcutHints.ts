@@ -7,7 +7,7 @@ export function shortcutText(id: string): string {
   if (!entry) return '';
   const platform = detectPlatform();
   const keys = entry.keys ?? formatBinding(entry.binding, platform);
-  return platform === 'mac' ? keys.join('') : keys.join('+');
+  return platform === 'mac' ? keys.map((k) => (k === 'Shift' ? '\u21e7' : k)).join('') : keys.join('+');
 }
 
 /** A tooltip with its shortcut: "Undo: moved a step (⌘Z)". */

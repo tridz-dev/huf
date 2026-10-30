@@ -5,7 +5,7 @@ import { announce } from '@/lib/flow-history/announce';
 import { duplicateSteps } from '@/lib/flow-history/flowDuplicate';
 import { buildClipboard, pasteSteps, readClipboard, writeClipboard } from '@/lib/flow-history/flowClipboard';
 import { insertSpot, insertStep } from '@/lib/flow-history/insertStep';
-import { defaultActionConfig } from '@/lib/flow/actionDefaults';
+import { defaultActionConfig } from '@/lib/flow-history/actionDefaults';
 
 const stepsText = (n: number) => (n === 1 ? 'Step' : `${n} steps`);
 

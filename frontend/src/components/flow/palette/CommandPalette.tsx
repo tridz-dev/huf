@@ -19,6 +19,7 @@ import { shortcutText } from '../shortcuts/shortcutHints';
 import { useFlowStepActions } from '../shortcuts/useFlowStepActions';
 import { StatusPill, flowStatusKind } from '@/components/common/StatusPill';
 import { cn } from '@/lib/utils';
+import { toast } from '@/lib/toast';
 import { paletteFilter } from './paletteFilter';
 
 interface CommandPaletteProps {
@@ -47,6 +48,7 @@ export function FlowCommandPalette({ open, onOpenChange, getSelectedIds, onOpenH
 
   useEffect(() => {
     if (!open) return;
+    toast.dismiss(); // a toast about the last action would sit on top of the list
     setSearch('');
     setSelected(getSelectedIds());
     setRecent(readRecentFlows());

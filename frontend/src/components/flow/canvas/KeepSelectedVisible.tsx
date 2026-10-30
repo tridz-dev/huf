@@ -31,7 +31,8 @@ export function KeepSelectedVisible({ selectedNodeId }: { selectedNodeId: string
         height: node.height ?? 62,
       };
       const next = panToReveal(rect, vp, { width: visibleWidth, height });
-      if (next) rfRef.current.setViewport({ ...next, zoom: vp.zoom }, { duration: 200 });
+      // People who ask their system for less motion get the view moved at once.
+      if (next) rfRef.current.setViewport({ ...next, zoom: vp.zoom }, { duration: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : 200 });
     };
     // Again after the sheet has slid in: its width is only known once it is on screen.
     const timers = [setTimeout(pan, 140), setTimeout(pan, 560)];

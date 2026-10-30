@@ -9,7 +9,7 @@ let counter = 0;
 
 export function announce(message: string): void {
   // A trailing non-breaking space makes the second identical message a real change for the live region.
-  const text = counter++ % 2 === 0 ? message : `${message} `;
+  const text = counter++ % 2 === 0 ? message : `${message}\u00a0`;
   listeners.forEach((l) => l(text));
 }
 
