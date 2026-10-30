@@ -2,7 +2,7 @@ import type { Connection, Edge, Node } from 'reactflow';
 import { branchHandlesFor } from '../flow/flowBranches';
 import { branchColumnShift, subtreeIds } from '../flow/flowEdgeLabels';
 import { actionLabel } from '../flow/flowLabels';
-import { COLUMN_GAP, ROW_GAP } from '../flow/flowLayout';
+import { CARD_WIDTH, COLUMN_GAP, ROW_GAP } from '../flow/flowLayout';
 import { unreachableNodeIds } from '../flow/flowEdit';
 import { makeFlowEdge, edgeRoute } from '../../services/flowSerializer';
 import { actionOptions } from '../../data/actions';
@@ -236,6 +236,15 @@ export function addActionStep(
   // The new step takes the place of the step that was there (same column, same row); that one moves down a row below.
   const displacedFirst = moving.length > 0 ? nodes.find((n) => n.id === moving[0].target) : undefined;
   if (displacedFirst) newNode.position = { x: displacedFirst.position.x, y: displacedFirst.position.y };
+  else {
+    // A free spot only: when a step already sits where this one would land (an older flow, a step moved by hand), the new card
+    // goes one column aside instead of on top of it.
+    const dir = sideOffset < 0 ? -1 : 1;
+    let guard = 0;
+    while (nodes.some((n) => Math.abs(n.position.x - newNode.position.x) < CARD_WIDTH - 6 && Math.abs(n.position.y - newNode.position.y) < 80) && guard++ < 8) {
+      newNode.position = { x: newNode.position.x + dir * COLUMN_GAP, y: newNode.position.y };
+    }
+  }
   const rest = edges.filter((e) => !moving.includes(e));
   const firstHandle = branchHandlesFor((config as { type?: string }).type)[0];
   const movedRoute: FlowEdgeRoute =

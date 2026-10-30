@@ -40,7 +40,7 @@ export function RunStepOutput({ stepId, output, reasonShown, failed, decisionSho
     if (isEmpty(shown) && !(merged && humanize(dataReceived).kind !== 'empty')) {
         if (rawOutput === undefined || isEmpty(rawOutput)) return null;
         return (
-            <HumanValue value={undefined} raw rawValue={redactSecrets(rawOutput)} testId={`flow-run-human-${stepId}`} rawTitle="Raw data of this step" rawTextTestId={`flow-run-step-output-${stepId}`} />
+            <HumanValue value={undefined} raw rawValue={redactSecrets(titleNodeIds(rawOutput, titleOf))} testId={`flow-run-human-${stepId}`} rawTitle="Raw data of this step" rawTextTestId={`flow-run-step-output-${stepId}`} />
         );
     }
     const useInput = merged && humanize(shown).kind === 'empty';

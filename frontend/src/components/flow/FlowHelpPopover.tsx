@@ -50,7 +50,7 @@ export function FlowHelpPopover() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className={`gap-2 ${HIT_TARGET}`} data-testid="flow-help" aria-label="Help" title="Help: how flows work and keyboard shortcuts">
+        <Button variant="outline" size="sm" className={`gap-2 max-[1359px]:hidden ${HIT_TARGET}`} data-testid="flow-help" aria-label="Help" title="Help: how flows work and keyboard shortcuts">
           <CircleHelp className="w-4 h-4" />
         </Button>
       </PopoverTrigger>

@@ -97,7 +97,7 @@ export function ApprovalsBell() {
   const body = count === 0 ? (
     <div className="px-4 py-6 text-center text-sm text-muted-foreground">No approvals waiting</div>
   ) : (
-    <div className="max-h-80 overflow-y-auto max-sm:max-h-none">
+    <div className="max-h-[min(30rem,70dvh)] overflow-y-auto max-sm:max-h-none">
       <ApprovalsList approvals={approvals} deciding={deciding} onDecide={decide} large={isPhone} onNavigate={() => setSheetOpen(false)} />
     </div>
   );

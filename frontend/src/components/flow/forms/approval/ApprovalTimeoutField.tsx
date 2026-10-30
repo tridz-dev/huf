@@ -50,7 +50,7 @@ export function ApprovalTimeoutField({
         label="If nobody answers, stop waiting after"
         units={UNITS}
         perUnit={1000}
-        placeholder="Wait as long as it takes"
+        placeholder="No limit"
         value={timeoutMs}
         onChange={change}
         disabled={disabled}
