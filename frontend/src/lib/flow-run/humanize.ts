@@ -331,12 +331,25 @@ export function placeTriggerInput(input: unknown, steps: Array<{ id: string; out
   return { mode: 'separate' };
 }
 
+/** What fired a run, as a plain label ("Data change", not the stored "Doc Event"). */
+export function triggerLabel(triggerType: string | null | undefined): string {
+  switch ((triggerType || '').toLowerCase()) {
+    case 'manual': return 'Started by hand';
+    case 'webhook': return 'Webhook';
+    case 'schedule': return 'Schedule';
+    case 'doc event': return 'Data change';
+    case 'gateway': return 'Chat message';
+    default: return triggerType || '';
+  }
+}
+
 /** Who started a run, in words: the person ("you" for the viewer), or what fired it. */
 export function startedByWords(args: { triggerType?: string | null; owner?: string | null; ownerName?: string | null; currentUser?: string | null }): string {
   const t = (args.triggerType || '').toLowerCase();
   if (t.includes('webhook')) return 'a webhook';
   if (t.includes('schedule')) return 'a schedule';
   if (t.includes('doc') || t.includes('data') || t.includes('event')) return 'a data change';
+  if (t.includes('gateway')) return 'a chat message';
   if (args.owner && args.currentUser && args.owner === args.currentUser) return 'you';
   return args.ownerName || args.owner || 'someone';
 }

@@ -22,6 +22,9 @@ interface RunWaitingCardProps {
   onResume: () => void;
 }
 
+/** The wait without the keys that only name its kind and step (shown to nobody; the raw view keeps them). */
+const withoutInternalKeys = (waiting: Record<string, unknown>) => Object.fromEntries(Object.entries(waiting).filter(([key]) => key !== 'type' && key !== 'node_id'));
+
 /** What the run is waiting for, with the facts and the buttons to answer it, above the steps. */
 export function RunWaitingCard({ run, names, titleOf, busy, phone, onDecide, resumePayload, onResumePayload, onResume }: RunWaitingCardProps) {
   const waiting = run.waiting ?? {};
@@ -70,8 +73,9 @@ export function RunWaitingCard({ run, names, titleOf, busy, phone, onDecide, res
 
   return (
     <section className="rounded-lg border border-warning/40 bg-warning-tint/50 p-4" data-testid="flow-run-waiting-user">
-      <h3 className="text-sm font-semibold text-ink">Waiting for someone to continue it</h3>
-      <HumanValue value={titleNodeIds(waiting, titleOf)} names={names} testId="flow-run-human-waiting" raw rawTitle="Raw data of this wait" emptyText="This run is waiting for someone to continue it." className="mt-2" />
+      <h3 className="text-sm font-semibold text-ink">Waiting for your reply</h3>
+      {/* The kind of wait ("user_input") and the step's id are internal words: the rows show only what the person needs; the raw data keeps all of it. */}
+      <HumanValue value={titleNodeIds(withoutInternalKeys(waiting), titleOf)} rawValue={titleNodeIds(waiting, titleOf)} names={names} testId="flow-run-human-waiting" raw rawTitle="Raw data of this wait" emptyText="This run is waiting for someone to continue it." className="mt-2" />
       <div className="mt-3 space-y-2">
         <JsonArea
           surfaceKey="run-resume"
