@@ -38,7 +38,7 @@ MODE_DRAFT = "draft"
 MODE_PUBLISH = "publish"
 
 #: JSON-schema keywords that only say "this setting is missing or empty": fine in a draft, fatal on publish.
-_UNFINISHED_KEYWORDS: frozenset[str] = frozenset({"required", "minLength", "minItems"})
+_UNFINISHED_KEYWORDS: frozenset[str] = frozenset({"required", "minLength", "minItems", "pattern"})
 
 
 # --------------------------------------------------------------------------------------
@@ -78,7 +78,8 @@ def _is_unfinished(err, prefix: list) -> bool:
 		return False
 	# "Too short" only counts as unfinished when there is nothing there yet. A secret that is typed but weak
 	# is a wrong value, never stored (WP11).
-	if leaf.validator == "minLength":
+	if leaf.validator in ("minLength", "pattern"):
+		# An empty reference ({"$from": ""}) fails the pattern as well as minLength: both just mean "not chosen yet".
 		return leaf.instance == ""
 	if leaf.validator == "minItems":
 		return leaf.instance == []

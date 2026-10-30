@@ -101,6 +101,18 @@ class TestDraftVsPublish(unittest.TestCase):
 		self.assertTrue(validate_flow(g, "draft").ok)
 		self.assertFalse(validate_flow(g, "publish").ok)
 
+	def test_new_loop_step_with_empty_references_saves_as_a_draft(self):
+		# What "Add step > Repeat for each item" writes before anything is chosen: empty $from references fail the
+		# reference pattern as well as minLength. Both only mean "not chosen yet" (w1close-04).
+		loop = {"id": "l", "type": "foreach", "config": {"items": {"$from": ""}, "max_iterations": 100, "on_item_error": "fail", "collect": {"$from": ""}}}
+		g = _graph([_trigger("l"), loop])
+		draft = validate_flow(g, "draft")
+		self.assertTrue(draft.ok, draft.errors)
+		self.assertFalse(validate_flow(g, "publish").ok)
+		# a reference that is typed but malformed is still a wrong value, never stored
+		loop["config"]["items"] = {"$from": "not a path!"}
+		self.assertFalse(validate_flow(g, "draft").ok)
+
 	def test_condition_without_paths_or_check(self):
 		g = _graph([_trigger("c"), {"id": "c", "type": "condition", "config": {}}])
 		draft = validate_flow(g, "draft")

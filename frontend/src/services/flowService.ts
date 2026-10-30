@@ -8,6 +8,7 @@
  * minimal changes. Methods that were synchronous are now async.
  */
 
+import { cancelFlowRun as apiCancelFlowRun } from './flow/flowRunActionsApi';
 import { Flow, FlowMetadata, FlowNode, FlowEdge, FlowStatus } from '../types/flow.types';
 import {
   getFlowDefinitions,
@@ -218,8 +219,8 @@ class FlowService {
   }
 
   /** Run a flow via the backend */
-  async runFlow(flowId: string, payload?: Record<string, unknown>): Promise<{ flow_run_id: string; status: string }> {
-    return apiRunFlow(flowId, payload);
+  async runFlow(flowId: string, payload?: Record<string, unknown>, mode: 'test' | 'real' = 'real'): Promise<{ flow_run_id: string; status: string }> {
+    return apiRunFlow(flowId, payload, mode);
   }
 
   // ─── Flow Run API Wrappers ──────────────────────────────────────────
@@ -246,6 +247,10 @@ class FlowService {
 
   async markFlowRunFailed(flowRunId: string) {
     return apiMarkFlowRunFailed(flowRunId);
+  }
+
+  async cancelFlowRun(flowRunId: string) {
+    return apiCancelFlowRun(flowRunId);
   }
 
   // ─── Local-only mutation helpers (update cache, notify) ────────────

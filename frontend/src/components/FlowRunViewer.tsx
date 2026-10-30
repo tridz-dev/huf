@@ -1,67 +1,54 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 import { flowService } from '../services/flowService';
-import { Loader2, Box, CheckCircle2, XCircle, Clock, Play, AlertTriangle } from 'lucide-react';
-import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { toast } from '@/lib/toast';
 import { useOptionalFlowContext } from '../contexts/FlowContext';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from './ui/alert-dialog';
 import { useSiteTimezone } from '@/lib/serverTime';
-import { calculateDuration, formatTimeAgo } from '@/utils/time';
-import { DocFieldValue, readableRunError, TimeValue } from './flow/RunViewerParts';
 import { useFlowRunDetail } from '@/hooks/flow/useFlowRunDetail';
-import { runTimesSentence } from '@/lib/flow-run/flowTimeZone';
 import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
-import { describeDecision, flowRunStatusLabel, isFailedStepOutput, titleNodeIds } from '@/lib/flow-run/flowRunFormat';
-import { deskDocUrl, summarizeDocPayload } from '@/lib/flow-run/flowRunDoc';
 import { decisionMovedRun } from '@/lib/flow-run/flowRunDecision';
-import { connectPath, notConnectedService } from '@/lib/flow/flowIntegrations';
-import { redactSecrets } from '@/lib/flow/flowToolSummary';
-import { HumanValue } from '@/components/common/HumanValue';
-import { JsonArea } from '@/components/common/JsonArea';
 import { describeJsonProblem } from '@/lib/flow-run/jsonErrors';
-import { RunStepOutput } from './flow/RunStepOutput';
-import { friendlyRunTitle, humanizeMessageText, placeTriggerInput, startedByWords } from '@/lib/flow-run/humanize';
+import { friendlyRunTitle, startedByWords } from '@/lib/flow-run/humanize';
+import { buildRunStory } from '@/lib/flow-run/story/runSteps';
+import { runHeadline, startedLine } from '@/lib/flow-run/story/headline';
 import { useFlowRunIdentity } from '@/hooks/flow/useFlowRunIdentity';
 import { useUser } from '@/contexts/UserContext';
-import { Link } from 'react-router-dom';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { RunDecisionBar } from './flow/decision/RunDecisionBar';
 import { useViewport } from '@/lib/ui/responsive';
-import { ArrowLeft } from 'lucide-react';
+import { OutcomeChip, RunStatusPill } from './flow/run/RunStatusBits';
+import { RunStepCard } from './flow/run/RunStepCard';
+import { RunStatusBanner } from './flow/run/RunStatusBanner';
+import { RunWaitingCard } from './flow/run/RunWaitingCard';
+import { RunDetailsFold } from './flow/run/RunDetailsFold';
+import { RunInputBlocks } from './flow/run/RunInputBlocks';
+import { RunError } from './flow/run/RunError';
+import { plainRunError } from '@/lib/flow-run/story/runErrors';
+import { stoppedByPerson } from '@/lib/flow-run/story/runStatus';
 
 interface FlowRunViewerProps {
     runId: string | null;
     onClose: () => void;
-    /** Opened from the run history: a "Runs" button in the header goes back to that list. */
+    /** Opened from the run history: a "Run history" link in the header goes back to that list. */
     onBack?: () => void;
 }
 
 export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
     const siteZone = useSiteTimezone();
+    const navigate = useNavigate();
     const { isPhone } = useViewport();
     const { canManage } = useFlowPermissions();
-    const [confirmFail, setConfirmFail] = useState(false);
     const { run, loading, setLoading, refreshRun } = useFlowRunDetail(runId);
     const [resumePayload, setResumePayload] = useState<string>('');
-    const activeFlow = useOptionalFlowContext()?.activeFlow;
+    const flowContext = useOptionalFlowContext();
+    const activeFlow = flowContext?.activeFlow;
     const { user } = useUser();
     const identity = useFlowRunIdentity(runId);
-    const runTitle = friendlyRunTitle({
-        runNumber: identity?.run_number,
-        startedBy: run ? startedByWords({ triggerType: run.trigger_type, owner: identity?.started_by, ownerName: identity?.started_by_name, currentUser: user?.name }) : null,
-        ago: run?.started_at ? formatTimeAgo(run.started_at) : null,
-    });
+    const bodyRef = useRef<HTMLDivElement>(null);
+
     // A step saved without a title comes back from the server under its id: fall back to the editor's title for it.
     const titleOf = (nodeId: string): string | null => {
         const fromRun = run?.node_labels?.[nodeId];
@@ -71,7 +58,35 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
     };
     // Names for ids that show up inside step data and text (router choice, approval targets...).
     const stepNames: Record<string, string> = Object.fromEntries(Object.keys(run?.node_labels ?? {}).map((id) => [id, titleOf(id) ?? id]));
-    const labelOf = (nodeId: string | null | undefined) => (nodeId && titleOf(nodeId)) || nodeId || 'N/A';
+    const toolIdOf = (id: string) => {
+        const cfg = activeFlow?.nodes.find((n) => n.id === id)?.data.actionConfig;
+        return cfg && cfg.type === 'tool-call' ? cfg.tool_id : undefined;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const story = useMemo(() => (run ? buildRunStory(run, { titleOf, currentUser: user?.name }) : null), [run, activeFlow, user?.name]);
+
+    const startedWords = run ? startedByWords({ triggerType: run.trigger_type, owner: run.started_by ?? identity?.started_by, ownerName: run.started_by_name ?? identity?.started_by_name, currentUser: user?.name }) : '';
+    const runTitle = friendlyRunTitle({ runNumber: run?.run_number ?? identity?.run_number });
+
+    // The step that needs attention (failed or waiting) is brought into view once the run is shown.
+    const shownFor = useRef<string | null>(null);
+    useEffect(() => {
+        if (!run || !story || shownFor.current === run.flow_run_id) return;
+        shownFor.current = run.flow_run_id;
+        const target = bodyRef.current?.querySelector('[data-step-status="failed"]');
+        target?.scrollIntoView?.({ block: 'nearest' });
+    }, [run, story]);
+    useEffect(() => { if (!runId) shownFor.current = null; }, [runId]);
+
+    const openStep = (nodeId: string) => {
+        if (!run) return;
+        if (flowContext && activeFlow?.id === run.flow_id) {
+            flowContext.setSelectedNode(nodeId);
+            onClose();
+        } else {
+            navigate(`/flows/${encodeURIComponent(run.flow_id)}?step=${encodeURIComponent(nodeId)}`);
+        }
+    };
 
     const handleApproval = async (decision: 'approved' | 'rejected') => {
         if (!runId) return;
@@ -99,15 +114,25 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
         }
     };
 
-    const handleMarkFailed = async () => {
+    const handleStop = async () => {
         if (!runId) return;
-        setConfirmFail(false);
         try {
             await flowService.markFlowRunFailed(runId);
-            toast.success('Run marked as failed.');
+            toast.success('Run stopped.');
             await refreshRun();
         } catch (err) {
-            toast.error('Could not mark this run as failed', { description: humanizeFlowError(err) });
+            toast.error('Could not stop this run', { description: humanizeFlowError(err) });
+        }
+    };
+
+    const handleCancel = async () => {
+        if (!runId) return;
+        try {
+            await flowService.cancelFlowRun(runId);
+            toast.success('Run cancelled.');
+            await refreshRun();
+        } catch (err) {
+            toast.error('Could not cancel this run', { description: humanizeFlowError(err) });
         }
     };
 
@@ -135,308 +160,80 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
         }
     };
 
+    const headline = run ? runHeadline(run, Date.now(), user?.name) : null;
+    const lastStep = run?.current_node_id ? (titleOf(run.current_node_id) ?? '') : '';
+
     return (
         <Sheet open={!!runId} onOpenChange={(open) => !open && onClose()}>
             <SheetContent side={isPhone ? 'bottom' : 'right'} className="flex w-full max-w-full flex-col gap-0 overflow-hidden p-0 max-sm:h-[92dvh] max-sm:rounded-t-xl sm:w-[clamp(420px,62vw,640px)] sm:max-w-none" data-testid="flow-run-details">
                 <SheetHeader className="shrink-0 border-b border-border bg-background px-4 pb-4 pt-4 pr-12 sm:px-6 sm:pt-6" data-testid="flow-run-details-header">
                     {onBack && (
                         <Button type="button" variant="ghost" size="sm" className="-ml-2 mb-1 w-fit gap-1.5 px-2 max-[1023px]:min-h-11" data-testid="flow-run-back" onClick={onBack}>
-                            <ArrowLeft className="h-4 w-4" aria-hidden /> Runs
+                            <ArrowLeft className="h-4 w-4" aria-hidden /> Run history
                         </Button>
                     )}
-                    <SheetTitle className="flex items-center gap-2">
-                        <Box className="w-5 h-5 text-muted-foreground" />
-                        Run details
+                    <SheetTitle data-testid="flow-run-title" data-run-id={runId}>
+                        {runTitle}{run?.flow_name ? <span className="font-normal text-steel"> · {run.flow_name}</span> : null}
                     </SheetTitle>
-                    <SheetDescription data-testid="flow-run-title" data-run-id={runId}>
-                        {runTitle}
+                    <SheetDescription data-testid="flow-run-started-by">
+                        {run ? startedLine(startedWords, run.started_at) : 'Loading the run...'}
                     </SheetDescription>
                 </SheetHeader>
 
-                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6" data-testid="flow-run-details-body">
-                {loading ? (
+                <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6" data-testid="flow-run-details-body">
+                {loading && !run ? (
                     <div className="flex justify-center p-12">
                         <Loader2 className="animate-spin w-8 h-8 text-muted-foreground" />
                     </div>
-                ) : !run ? (
+                ) : !run || !story || !headline ? (
                     <div className="text-center p-8 text-muted-foreground">Run not found</div>
                 ) : (
-                    <div className="space-y-6">
-                        <div className="flex items-center gap-4 border p-4 rounded-lg bg-muted/20 max-sm:flex-col max-sm:items-stretch max-sm:gap-3">
-                            <div className="flex-1">
-                                <div className="text-xs text-muted-foreground mb-1">Status</div>
-                                <Badge variant={
-                                    run.status === 'Success' ? 'default' :
-                                        run.status === 'Failed' ? 'destructive' : 'secondary'
-                                }>
-                                    {run.status === 'Success' && <CheckCircle2 className="w-3 h-3 mr-1" />}
-                                    {run.status === 'Failed' && <XCircle className="w-3 h-3 mr-1" />}
-                                    {(run.status === 'Waiting Approval' || run.status === 'Waiting Code') && <Clock className="w-3 h-3 mr-1" />}
-                                    {flowRunStatusLabel(run.status)}
-                                </Badge>
+                    <div className="space-y-5 pb-6">
+                        <div data-testid="flow-run-headline">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <RunStatusPill status={run.status} stale={run.stale} />
+                                {run.outcome && <OutcomeChip outcome={run.outcome} />}
                             </div>
-                            <div className="flex-1">
-                                <div className="text-xs text-muted-foreground mb-1">Last step</div>
-                                <div className="font-medium text-sm" data-testid="flow-run-current-node">{labelOf(run.current_node_id)}</div>
-                            </div>
-                            <div className="flex-1">
-                                <div className="text-xs text-muted-foreground mb-1" title="How many steps the run has gone through">Steps run</div>
-                                <div className="font-medium text-sm">{run.hop_count}</div>
-                            </div>
+                            <h2 className="mt-2 text-lg font-semibold leading-snug text-ink" data-testid="flow-run-headline-text">{headline.headline}</h2>
+                            {headline.sub && <p className="mt-0.5 text-sm text-steel" data-testid="flow-run-headline-sub">{headline.sub}</p>}
                         </div>
 
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm" data-testid="flow-run-meta">
-                            <div>
-                                <div className="text-xs text-muted-foreground">Flow</div>
-                                <div className="font-medium" data-testid="flow-run-flow-name">{run.flow_name || run.flow_id}</div>
-                            </div>
-                            <div>
-                                <div className="text-xs text-muted-foreground">Started by</div>
-                                <div className="font-medium" data-testid="flow-run-trigger">{run.trigger_type || 'Not available'}</div>
-                            </div>
-                            <div>
-                                <div className="text-xs text-muted-foreground">Started</div>
-                                <div data-testid="flow-run-started"><TimeValue value={run.started_at} /></div>
-                            </div>
-                            <div>
-                                <div className="text-xs text-muted-foreground">Finished</div>
-                                <div data-testid="flow-run-finished"><TimeValue value={run.completed_at} /></div>
-                            </div>
-                            {run.completed_at && (
-                                <div>
-                                    <div className="text-xs text-muted-foreground">Duration</div>
-                                    <div data-testid="flow-run-duration">{calculateDuration(run.started_at, run.completed_at)}</div>
-                                </div>
+                        {run.status === 'Failed' && run.last_error && !stoppedByPerson(run.last_error) && !story.steps.some((s) => s.status === 'failed' || s.children?.some((c) => c.status === 'failed')) && (
+                            <RunError reason={plainRunError(run.last_error)} canManage={canManage} />
+                        )}
+
+                        <RunStatusBanner run={run} canManage={canManage} onStop={handleStop} onCancel={handleCancel} />
+
+                        <RunWaitingCard
+                            run={run}
+                            names={stepNames}
+                            titleOf={titleOf}
+                            busy={loading}
+                            phone={isPhone}
+                            onDecide={handleApproval}
+                            resumePayload={resumePayload}
+                            onResumePayload={setResumePayload}
+                            onResume={handleResume}
+                        />
+
+                        <section data-testid="flow-run-steps">
+                            <h3 className="mb-3 text-sm font-semibold text-ink">What happened</h3>
+                            {story.steps.length === 0 ? (
+                                <p className="text-sm text-steel" data-testid="flow-run-steps-empty">
+                                    {run.status === 'Queued' ? 'Nothing has run yet.' : 'No step output was recorded for this run.'}
+                                </p>
+                            ) : (
+                                <ol className="space-y-2" data-testid="flow-run-timeline">
+                                    {story.steps.map((st) => (
+                                        <RunStepCard key={st.id} step={st} names={stepNames} titleOf={titleOf} toolIdOf={toolIdOf} canManage={canManage} onOpenStep={openStep} />
+                                    ))}
+                                </ol>
                             )}
-                        </div>
+                        </section>
 
-                        <p className="-mt-3 text-meta text-muted-foreground" data-testid="flow-run-timezone-note">{runTimesSentence(siteZone)}</p>
+                        <RunInputBlocks story={story} triggerEvent={run.trigger_event} names={stepNames} />
 
-                        {run.stale && (
-                            <div className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-tint/50 p-4" data-testid="flow-run-stale">
-                                <AlertTriangle className="w-4 h-4 mt-0.5 text-warning" />
-                                <div className="flex-1 text-sm">
-                                    <div className="font-medium">This run looks stuck</div>
-                                    <p className="text-muted-foreground mt-0.5">
-                                        It has been {run.status} for more than {run.stale_after_minutes} minutes without any change.
-                                        {run.can_mark_failed ? '' : ' A System Manager can mark it as failed.'}
-                                    </p>
-                                    {run.can_mark_failed && (
-                                        <Button size="sm" variant="outline" className="mt-3" data-testid="flow-run-mark-failed" onClick={() => setConfirmFail(true)}>
-                                            Mark as failed
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {run.status === 'Failed' && run.last_error && (
-                            <div data-testid="flow-run-error">
-                                <h3 className="text-sm font-semibold mb-3">Error</h3>
-                                <div className="bg-destructive/10 border border-destructive/30 text-destructive p-4 rounded-md text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-                                    {readableRunError(run.last_error, labelOf)}
-                                </div>
-                                {run.current_node_id && (
-                                    <div className="text-xs text-muted-foreground mt-2">
-                                        Failed at step <span className="font-medium">{labelOf(run.current_node_id)}</span>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {(() => {
-                            const { __node_outputs__: rawOutputs, ...input } = run.context_json ?? {};
-                            const outputs = (rawOutputs && typeof rawOutputs === 'object' ? rawOutputs : {}) as Record<string, unknown>;
-                            // A step whose own result says it did not succeed (tools return success:false) must never show as done.
-                            const stepFailed = (id: string, output: unknown) =>
-                                (run.status === 'Failed' && id === run.current_node_id) ||
-                                isFailedStepOutput(output);
-                            const steps = Object.entries(outputs).map(([id, output]) => ({ id, output, failed: stepFailed(id, output) }));
-                            if (run.status === 'Failed' && run.current_node_id && !(run.current_node_id in outputs)) {
-                                steps.push({ id: run.current_node_id, output: undefined, failed: true });
-                            }
-                            // Why a step failed: its own result's error, else the run-level error when this is the node the run stopped at.
-                            const stepReason = (id: string, output: unknown): string | null => {
-                                const own = output && typeof output === 'object' ? (output as { error?: unknown }).error : null;
-                                if (typeof own === 'string' && own) return own;
-                                if (run.status === 'Failed' && id === run.current_node_id && run.last_error) {
-                                    const full = readableRunError(run.last_error, labelOf);
-                                    const prefix = `${labelOf(id)} failed: `;
-                                    return full.startsWith(prefix) ? full.slice(prefix.length) : full;
-                                }
-                                return null;
-                            };
-                            const placement = summarizeDocPayload(input, run.trigger_event) ? ({ mode: 'none' } as const) : placeTriggerInput(input, steps);
-                            return (
-                                <>
-                                    <div data-testid="flow-run-steps">
-                                        <h3 className="text-sm font-semibold mb-3">Steps that ran</h3>
-                                        {steps.length === 0 ? (
-                                            <p className="text-xs text-muted-foreground">No step output was recorded for this run.</p>
-                                        ) : (
-                                            <ol className="space-y-2">
-                                                {steps.map((st) => (
-                                                    <li
-                                                        key={st.id}
-                                                        data-testid={`flow-run-step-${st.id}`}
-                                                        data-step-status={st.failed ? 'failed' : 'done'}
-                                                        className="rounded-md border p-3"
-                                                    >
-                                                        <div className="flex items-center gap-2 text-sm font-medium">
-                                                            {st.failed ? <XCircle className="w-4 h-4 text-destructive" /> : <CheckCircle2 className="w-4 h-4 text-good" />}
-                                                            {labelOf(st.id)}
-                                                            <span className="text-xs font-normal text-muted-foreground">{st.failed ? 'Failed' : 'Done'}</span>
-                                                        </div>
-                                                        {describeDecision(st.output) && (
-                                                            <div className="mt-1 text-sm" data-testid={`flow-run-decision-${st.id}`}>
-                                                                {describeDecision(st.output)}
-                                                                {typeof (st.output as { comment?: unknown }).comment === 'string' && (st.output as { comment: string }).comment
-                                                                    ? <span className="text-muted-foreground">: "{(st.output as { comment: string }).comment}"</span>
-                                                                    : null}
-                                                            </div>
-                                                        )}
-                                                        {st.failed && stepReason(st.id, st.output) && (
-                                                            <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive whitespace-pre-wrap" data-testid={`flow-run-step-error-${st.id}`}>
-                                                                {stepReason(st.id, st.output)}
-                                                                {canManage && notConnectedService(stepReason(st.id, st.output)) && (
-                                                                    <Link
-                                                                        to={connectPath(notConnectedService(stepReason(st.id, st.output)) as string)}
-                                                                        className="ml-2 font-medium underline"
-                                                                        data-testid={`flow-run-step-connect-${st.id}`}
-                                                                    >
-                                                                        Connect
-                                                                    </Link>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        <RunStepOutput
-                                                            stepId={st.id}
-                                                            output={st.output}
-                                                            failed={st.failed}
-                                                            reasonShown={!!stepReason(st.id, st.output)}
-                                                            decisionShown={!!describeDecision(st.output)}
-                                                            names={stepNames}
-                                                            titleOf={titleOf}
-                                                            toolId={(() => { const cfg = activeFlow?.nodes.find((n) => n.id === st.id)?.data.actionConfig; return cfg && cfg.type === 'tool-call' ? cfg.tool_id : undefined; })()}
-                                                            dataReceived={placement.mode === 'merged' && placement.stepId === st.id ? input : undefined}
-                                                        />
-                                                    </li>
-                                                ))}
-                                            </ol>
-                                        )}
-                                    </div>
-                                    {(() => {
-                                        const doc = summarizeDocPayload(input, run.trigger_event);
-                                        const raw = (
-                                            <div data-testid="flow-run-input" className="bg-muted p-4 rounded-md border text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-                                                {JSON.stringify(input, null, 2)}
-                                            </div>
-                                        );
-                                        if (!doc) {
-                                            // The data the run started with is shown once: inside the first step when that step repeats it.
-                                            if (placement.mode === 'merged') return null;
-                                            return (
-                                                <div data-testid="flow-run-trigger-input">
-                                                    <h3 className="text-sm font-semibold mb-3">Data this run started with</h3>
-                                                    {placement.mode === 'none' ? (
-                                                        <p className="text-xs text-muted-foreground" data-testid="flow-run-input-empty">No data was sent with this run.</p>
-                                                    ) : (
-                                                        <HumanValue value={redactSecrets(input)} names={stepNames} testId="flow-run-human-input" raw rawTitle="Raw data this run started with" rawTextTestId="flow-run-input" />
-                                                    )}
-                                                </div>
-                                            );
-                                        }
-                                        return (
-                                            <div data-testid="flow-run-document">
-                                                <h3 className="text-sm font-semibold mb-3">Document</h3>
-                                                <div className="rounded-md border p-4 space-y-3">
-                                                    <div className="text-sm">
-                                                        <span className="font-medium" data-testid="flow-run-document-doctype">{doc.doctype}</span>{' '}
-                                                        <a className="font-mono text-xs text-primary underline" href={deskDocUrl(doc.doctype, doc.name)} target="_blank" rel="noreferrer" data-testid="flow-run-document-name">{doc.name}</a>
-                                                        {doc.event && (
-                                                            <span className="ml-2 rounded-full border px-2 py-0.5 text-xs text-muted-foreground" data-testid="flow-run-document-event">
-                                                                {doc.event}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    {doc.fields.length > 0 && (
-                                                        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm" data-testid="flow-run-document-fields">
-                                                            {doc.fields.map((f) => (
-                                                                <div key={f.key} className="contents">
-                                                                    <dt className="text-xs text-muted-foreground pt-0.5">{f.label}</dt>
-                                                                    <dd className="break-words whitespace-pre-wrap">
-                                                                        <DocFieldValue field={f} />
-                                                                    </dd>
-                                                                </div>
-                                                            ))}
-                                                        </dl>
-                                                    )}
-                                                </div>
-                                                <details className="mt-3 text-xs" data-testid="flow-run-full-payload">
-                                                    <summary className="cursor-pointer text-muted-foreground">Full payload</summary>
-                                                    <div className="mt-2">{raw}</div>
-                                                </details>
-                                            </div>
-                                        );
-                                    })()}
-                                </>
-                            );
-                        })()}
-
-                        {run.status?.startsWith('Waiting') && run.waiting && Object.keys(run.waiting).length > 0 && (
-                            <div>
-                                <h3 className="text-sm font-semibold mb-3 text-warning">Pending Actions</h3>
-                                <div className="bg-warning-tint/50 p-4 rounded-md border border-warning/25">
-                                    {run.waiting.type === 'code' ? (
-                                        <p className="text-sm text-warning" data-testid="run-waiting-code-note">
-                                            {run.waiting.approval
-                                                ? 'Waiting for an administrator to approve this code run. Check the approvals bell.'
-                                                : 'Running your code in a sandbox...'}
-                                        </p>
-                                    ) : run.waiting.type === 'approval' ? (
-                                        <div className="space-y-4">
-                                            <div>
-                                                <h4 className="font-semibold text-warning">{run.waiting.title as string || 'Approval Required'}</h4>
-                                                {((run.waiting.instructions || run.waiting.message) as string) && (
-                                                    <p className="text-sm text-warning mt-1" data-testid="flow-run-approval-message">{humanizeMessageText((run.waiting.instructions || run.waiting.message) as string, { names: stepNames })}</p>
-                                                )}
-                                            </div>
-                                            {(run.waiting.context_summary as string) && (
-                                                <div className="bg-background/80 p-3 rounded text-sm text-muted-foreground whitespace-pre-wrap">
-                                                    {humanizeMessageText(run.waiting.context_summary as string, { names: stepNames })}
-                                                </div>
-                                            )}
-                                            {!isPhone && <RunDecisionBar canDecide={run.can_decide !== false} reason={run.cannot_decide_reason} busy={loading} onDecide={handleApproval} />}
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-3" data-testid="flow-run-waiting-user">
-                                            <HumanValue value={titleNodeIds(run.waiting, titleOf)} names={stepNames} testId="flow-run-human-waiting" raw rawTitle="Raw data of this wait" emptyText="This run is waiting for someone to continue it." />
-                                            <div className="space-y-2">
-                                                <JsonArea
-                                                    surfaceKey="run-resume"
-                                                    title="Extra information to continue with (JSON, optional)"
-                                                    help={'Leave this empty to continue as it is. To pass something on to the next steps, write it as JSON, for example { "user_input": "yes" }. If the text is not valid JSON, Continue stays off until it is fixed.'}
-                                                    value={resumePayload}
-                                                    onChange={setResumePayload}
-                                                    placeholder='{ "user_input": "yes" }'
-                                                />
-                                                <div className="flex justify-end">
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={handleResume}
-                                                        disabled={loading || (resumePayload.trim() !== '' && !!describeJsonProblem(resumePayload))}
-                                                        data-testid="flow-run-resume"
-                                                        className="gap-2"
-                                                    >
-                                                        <Play className="w-4 h-4" /> Continue
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
+                        <RunDetailsFold run={run} runId={run.flow_run_id} siteZone={siteZone} stepCount={story.stepCount} lastStep={lastStep} startedWords={startedWords} />
                     </div>
                 )}
                 </div>
@@ -444,20 +241,6 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
                     <RunDecisionBar sticky canDecide={run.can_decide !== false} reason={run.cannot_decide_reason} busy={loading} onDecide={handleApproval} />
                 )}
             </SheetContent>
-            <AlertDialog open={confirmFail} onOpenChange={setConfirmFail}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Mark this run as failed?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            The run will be stopped and recorded as failed. This cannot be undone.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction data-testid="flow-run-mark-failed-confirm" onClick={handleMarkFailed}>Mark as failed</AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
         </Sheet>
     );
 }

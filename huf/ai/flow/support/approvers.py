@@ -30,10 +30,13 @@ def check_approver(waiting: dict, user: str, roles) -> str | None:
 	* ``approver_type == "user"``: ``user`` must be in ``approver_users``.
 	* anything else (absent included), or a type whose list/role is empty: only a
 	  ``System Manager`` may decide.
-	The same check applies to approve and reject.
+	The same check applies to approve and reject. In a test run the person who started the test may also
+	decide it, so they can try the whole flow without asking anyone.
 	"""
 	waiting = waiting or {}
 	roles = set(roles or ())
+	if waiting.get("test_run") and user and waiting.get("test_owner") == user:
+		return None
 	approver_type = waiting.get("approver_type")
 	if approver_type == "role" and waiting.get("approver_role"):
 		if waiting["approver_role"] in roles:
