@@ -29,9 +29,8 @@ export function RunStatusBanner({ run, canManage, onStop, onCancel }: RunStatusB
         <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning-tint/50 p-4" data-testid="flow-run-stale">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
           <div className="min-w-0 flex-1 text-sm">
-            <p className="font-medium text-ink" data-testid="flow-run-stuck-for">This run has been stuck for {spokenDuration(stuckMs(run))}</p>
-            <p className="mt-0.5 text-steel">
-              It is {run.status === 'Queued' ? 'still waiting to start' : 'still running'}, but nothing has changed. If it is not coming back, you can stop it.
+            <p className="text-ink" data-testid="flow-run-stuck-for">
+              It is {run.status === 'Queued' ? 'still waiting to start' : 'still running'}, but nothing has changed in {spokenDuration(stuckMs(run))}. If it is not coming back, you can stop it.
               {run.can_mark_failed ? '' : ' A system manager can stop it.'}
             </p>
             {run.can_mark_failed && (

@@ -17,9 +17,9 @@ export function stuckMs(run: Pick<FlowRunDetail, 'stale' | 'modified_at' | 'star
 /** The outcome sentence of a run, per state. */
 export function runHeadline(run: FlowRunDetail, now: number = Date.now()): RunHeadlineText {
   const status = run.status;
-  if (run.stale) return { headline: `Stuck for ${spokenDuration(stuckMs(run, now))}`, sub: 'Nothing has changed since then.' };
+  if (run.stale) return { headline: `Stuck for ${spokenDuration(stuckMs(run, now))}`, sub: '' };
   if (status === 'Success') {
-    const took = runDuration(run.started_at, run.completed_at);
+    const took = runDuration(run.started_at, run.completed_at).replace(/^Under/, 'under');
     if (run.outcome) return { headline: run.outcome.label, sub: took ? `Run finished in ${took}` : 'Run finished' };
     return { headline: took ? `Finished in ${took}` : 'Finished', sub: '' };
   }
@@ -28,7 +28,7 @@ export function runHeadline(run: FlowRunDetail, now: number = Date.now()): RunHe
     if (by) return { headline: `Stopped by ${by.by}`, sub: by.why };
     return { headline: 'This run stopped because a step failed', sub: '' };
   }
-  if (status === 'Waiting Approval') return { headline: 'Waiting for approval', sub: run.started_at ? `Since ${friendlyClock(run.modified_at ?? run.started_at)}` : '' };
+  if (status === 'Waiting Approval') return { headline: 'Waiting for approval', sub: '' };
   if (status === 'Waiting Code') return { headline: 'Waiting for a code review', sub: 'It continues by itself once the code has been approved.' };
   if (status === 'Waiting User') return { headline: 'Waiting for someone to continue it', sub: '' };
   if (status === 'Queued') return { headline: 'Waiting for a worker', sub: 'It is in line and starts as soon as a worker is free.' };

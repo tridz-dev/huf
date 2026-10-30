@@ -137,8 +137,9 @@ export function buildRunStory(run: FlowRunDetail, { titleOf }: BuildOptions): Ru
       phrase: stepPhrase(type, status, title),
       status,
       output: failed ? withoutFailureKeys(output) : output,
-      ...(status === 'done' ? describe(type, output, titleOf, run.outcome?.label) : {}),
+      ...(status === 'done' ? describe(type, output, titleOf, run.outcome?.label !== title ? run.outcome?.label : undefined) : {}),
     };
+    if (failed) step.hideOutput = true;
     if (failed && reasonRaw) step.reason = plainRunError(reasonRaw, title);
     if (stopped && byPerson) {
       step.reason = `Stopped by ${byPerson.by}. ${byPerson.why}`;

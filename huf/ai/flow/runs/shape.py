@@ -14,6 +14,7 @@ functions read the flow definition and users.
 from __future__ import annotations
 
 import json
+import re
 from bisect import bisect_right
 
 import frappe
@@ -25,6 +26,9 @@ _DECISION_OUTCOMES = {
 }
 _TONES = {"good", "neutral", "bad"}
 _SECRET_WORDS = ("secret", "token", "password", "passwd", "api_key", "apikey", "authorization", "credential")
+# Facts the engine adds on its own (schedule runs): not something the person sent, and not worth a hint.
+_INTERNAL_WORDS = ("node", "scheduled", "trigger")
+_DATE_LIKE = re.compile(r"^\d{4}-\d{2}-\d{2}")
 NODE_OUTPUTS_KEY = "__node_outputs__"
 HINT_MAX_CHARS = 70
 HINT_MAX_FACTS = 2
@@ -97,7 +101,9 @@ def input_hint(ctx: dict) -> str:
 		return ""
 	facts = []
 	for key, value in ctx.items():
-		if key.startswith("__") or any(w in key.lower() for w in _SECRET_WORDS):
+		if key.startswith("__") or any(w in key.lower() for w in _SECRET_WORDS + _INTERNAL_WORDS):
+			continue
+		if isinstance(value, str) and _DATE_LIKE.match(value.strip()):
 			continue
 		if isinstance(value, bool):
 			value = "yes" if value else "no"

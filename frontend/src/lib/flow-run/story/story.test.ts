@@ -107,7 +107,7 @@ describe('buildRunStory', () => {
     expect(approval.hideOutput).toBe(true);
     expect(approval.comment).toBeUndefined();
     expect(end.phrase).toBe('Ended');
-    expect(end.sentence).toBe('Rejected');
+    expect(end.sentence).toBeUndefined(); // the step is already titled Rejected
     expect(end.hideOutput).toBe(true);
   });
 
@@ -146,6 +146,21 @@ describe('buildRunStory', () => {
     const [s] = buildRunStory(r, { titleOf: titleOf(r) }).steps;
     expect(s.status).toBe('stopped');
     expect(s.reason).toMatch(/^Stopped by Administrator\./);
+  });
+});
+
+describe('failed steps', () => {
+  it('keep their data behind Raw and say the end outcome when the title does not', () => {
+    const r = run({
+      status: 'Success', current_node_id: 'end', outcome: { label: 'Order shipped', tone: 'good' },
+      context_json: { __node_outputs__: { end: 'done' } }, node_labels: { end: 'Finish' }, step_meta: { end: { type: 'output' } },
+    });
+    expect(buildRunStory(r, { titleOf: titleOf(r) }).steps[0].sentence).toBe('Order shipped');
+    const f = run({
+      status: 'Failed', current_node_id: 'h', last_error: 'HTTP 404',
+      context_json: { __node_outputs__: { h: { error: 'HTTP 404', status_code: 404, body: 'x' } } }, node_labels: { h: 'HTTP Request' }, step_meta: { h: { type: 'tool.call' } },
+    });
+    expect(buildRunStory(f, { titleOf: titleOf(f) }).steps[0].hideOutput).toBe(true);
   });
 });
 
