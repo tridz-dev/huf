@@ -63,7 +63,7 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
         return cfg && cfg.type === 'tool-call' ? cfg.tool_id : undefined;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    const story = useMemo(() => (run ? buildRunStory(run, { titleOf }) : null), [run, activeFlow]);
+    const story = useMemo(() => (run ? buildRunStory(run, { titleOf, currentUser: user?.name }) : null), [run, activeFlow, user?.name]);
 
     const startedWords = run ? startedByWords({ triggerType: run.trigger_type, owner: run.started_by ?? identity?.started_by, ownerName: run.started_by_name ?? identity?.started_by_name, currentUser: user?.name }) : '';
     const runTitle = friendlyRunTitle({ runNumber: run?.run_number ?? identity?.run_number });
@@ -160,7 +160,7 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
         }
     };
 
-    const headline = run ? runHeadline(run) : null;
+    const headline = run ? runHeadline(run, Date.now(), user?.name) : null;
     const lastStep = run?.current_node_id ? (titleOf(run.current_node_id) ?? '') : '';
 
     return (

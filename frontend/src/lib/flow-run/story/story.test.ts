@@ -146,6 +146,9 @@ describe('buildRunStory', () => {
     const [s] = buildRunStory(r, { titleOf: titleOf(r) }).steps;
     expect(s.status).toBe('stopped');
     expect(s.reason).toMatch(/^Stopped by Administrator\./);
+    const mine = buildRunStory(r, { titleOf: titleOf(r), currentUser: 'Administrator' }).steps[0];
+    expect(mine.reason).toMatch(/^Stopped by you\./);
+    expect(runHeadline(r, Date.now(), 'Administrator').headline).toBe('Stopped by you');
   });
 });
 

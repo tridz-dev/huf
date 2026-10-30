@@ -4,7 +4,7 @@ import { placeTriggerInput } from '../humanize';
 import { summarizeDocPayload } from '../flowRunDoc';
 import { friendlyClock } from './time';
 import { plainRunError } from './runErrors';
-import { stoppedByPerson } from './runStatus';
+import { stoppedByPerson, whoWords } from './runStatus';
 import { stepPhrase } from './stepWords';
 
 export type StepStatus = 'done' | 'failed' | 'waiting' | 'stopped';
@@ -93,10 +93,12 @@ function describe(type: string, output: unknown, title: (id: string) => string |
 
 interface BuildOptions {
   titleOf: (id: string) => string | null;
+  /** The signed-in person's user id, so "Stopped by you" reads as such. */
+  currentUser?: string | null;
 }
 
 /** The run as a list of steps in plain words: loop bodies grouped under their loop, trigger input merged into step 1. */
-export function buildRunStory(run: FlowRunDetail, { titleOf }: BuildOptions): RunStory {
+export function buildRunStory(run: FlowRunDetail, { titleOf, currentUser }: BuildOptions): RunStory {
   const { __node_outputs__: rawOutputs, ...input } = run.context_json ?? {};
   const outputs = (isObj(rawOutputs) ? rawOutputs : {}) as Record<string, unknown>;
   const meta = run.step_meta ?? {};
@@ -142,7 +144,7 @@ export function buildRunStory(run: FlowRunDetail, { titleOf }: BuildOptions): Ru
     if (failed) step.hideOutput = true;
     if (failed && reasonRaw) step.reason = plainRunError(reasonRaw, title);
     if (stopped && byPerson) {
-      step.reason = `Stopped by ${byPerson.by}. ${byPerson.why}`;
+      step.reason = `Stopped by ${whoWords(byPerson.by, currentUser)}. ${byPerson.why}`;
       step.output = undefined;
     }
     if (status === 'waiting') {

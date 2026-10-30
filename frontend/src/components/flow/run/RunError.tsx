@@ -17,14 +17,20 @@ interface RunErrorProps {
 export function RunError({ reason, stepId, canManage, onOpenStep }: RunErrorProps) {
   const service = canManage ? notConnectedService(reason) : undefined;
   const name = notConnectedName(reason);
+  const providers = canManage && /\bAI Providers\b/.test(reason);
   return (
-    <div className="mt-2 rounded-md border-l-2 border-destructive bg-destructive/5 px-3 py-2" data-testid="flow-run-error">
+    <div className="mt-2 rounded-r-md border-l-2 border-destructive bg-destructive/5 px-3 py-2" data-testid="flow-run-error">
       <p className="text-sm text-ink" data-testid={stepId ? `flow-run-step-error-${stepId}` : 'flow-run-error-text'}>{reason}</p>
-      {(stepId || service) && (
+      {(stepId || service || providers) && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {stepId && onOpenStep && (
             <Button type="button" size="sm" variant="outline" className="max-[1023px]:min-h-11" data-testid={`flow-run-fix-${stepId}`} onClick={() => onOpenStep(stepId)}>
               {canManage ? 'Fix this step' : 'Open this step'}
+            </Button>
+          )}
+          {providers && (
+            <Button asChild size="sm" variant="outline" className="max-[1023px]:min-h-11">
+              <Link to="/providers" data-testid="flow-run-open-providers">Open AI Providers</Link>
             </Button>
           )}
           {service && (
