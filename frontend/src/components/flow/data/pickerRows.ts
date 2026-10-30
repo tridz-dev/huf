@@ -119,9 +119,14 @@ export function viewRows(view: PickerView, model: PickerModel, accept: Accept): 
   if (view.kind === 'fields') {
     const shown = accept === 'list' ? step.fields.filter((f) => f.type === 'list' && f.path) : step.fields.filter((f) => f.path && !f.advanced_only);
     const rows = shown.map((f) => fieldRow(step, f, accept, false));
-    // A reference may be a step's whole result (a loop collects what its steps produced).
-    if (accept === 'ref' && step.kind === 'step') {
-      rows.unshift({ key: 'result', testId: 'flow-use-data-result', title: 'Everything this step produced', step, action: pick(step, step.id, step.chipTitle) });
+    // A step's whole result: a loop collects it, a step that has not run yet has no fields to pick from.
+    if (step.kind === 'step') {
+      const hasRoot = step.fields.some((f) => f.path === step.id);
+      if (!step.hasSample) rows.push({ key: 'result', testId: 'flow-use-data-result', title: 'Its result', subtitle: 'No sample yet: run a test to see it', step, action: pick(step, step.id, step.chipTitle) });
+      else if (!hasRoot) {
+        const summary = accept === 'value';
+        rows.push({ key: 'result', testId: 'flow-use-data-result', title: summary ? 'Show everything as a summary table' : 'Everything this step produced', step, action: pick(step, step.id, step.chipTitle, summary ? 'summary' : undefined) });
+      }
     }
     return rows;
   }

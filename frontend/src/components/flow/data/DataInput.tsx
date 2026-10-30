@@ -152,6 +152,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
     toast.success('Now using the last real request as the example.');
   };
 
+  const notANumber = kind === 'number' && typeof value === 'string' && value.trim() !== '';
   const chips = state.segments.some((s) => s.kind === 'chip');
   const preview = chips ? previewOf(state.segments, model) : null;
   const multiline = kind === 'longtext';
@@ -226,6 +227,11 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
       {hint ? (
         <p id={hintId} className="text-meta leading-snug text-muted-foreground break-words" data-testid={testId ? `${testId}-hint` : undefined}>
           {hint}
+        </p>
+      ) : null}
+      {notANumber ? (
+        <p role="alert" className="text-meta leading-snug text-destructive" data-testid={testId ? `${testId}-not-a-number` : undefined}>
+          Enter a number, for example 5.
         </p>
       ) : null}
       {preview ? (

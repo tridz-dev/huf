@@ -17,9 +17,9 @@ export function YesNoInput({ value, onChange, hint, testId, id, label, optional,
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={NOT_SET}>Not set</SelectItem>
-          <SelectItem value="yes">Yes</SelectItem>
-          <SelectItem value="no">No</SelectItem>
+          <SelectItem value={NOT_SET} data-testid={testId ? `${testId}-unset` : undefined}>Not set</SelectItem>
+          <SelectItem value="yes" data-testid={testId ? `${testId}-yes` : undefined}>Yes</SelectItem>
+          <SelectItem value="no" data-testid={testId ? `${testId}-no` : undefined}>No</SelectItem>
         </SelectContent>
       </Select>
       {hint ? <p className="text-meta leading-snug text-muted-foreground break-words">{hint}</p> : null}

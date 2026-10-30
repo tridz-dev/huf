@@ -67,7 +67,7 @@ describe('modes of the picker', () => {
 
   it('a reference field picks any field directly and may take a step whole', () => {
     const rows = viewRows({ kind: 'fields', stepId: 'a' }, model, 'ref');
-    expect(rows.map((r) => r.title)).toEqual(['Everything this step produced']);
+    expect(rows.map((r) => r.title)).toEqual(['Its result']);
     expect(rows[0].action).toMatchObject({ pick: { ref: 'a' } });
     expect(viewRows({ kind: 'object', stepId: 't', path: 'input.customer' }, model, 'ref')[0].title).toBe('Everything in Customer');
   });
@@ -114,5 +114,20 @@ describe('typed names', () => {
     expect(resolveTyped('customer.name', model)).toBeNull();
     expect(resolveTyped('m.value', model)).toBeNull();
     expect(resolveTyped('a-b.c', model, step)).toBeNull();
+  });
+});
+
+describe('a step that has not run yet', () => {
+  it('can still be used as a whole: "Its result"', () => {
+    const rows = viewRows({ kind: 'fields', stepId: 'a' }, model, 'value');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ title: 'Its result', subtitle: 'No sample yet: run a test to see it', action: { type: 'pick', pick: { ref: 'a', stepTitle: 'Look up' } } });
+  });
+  it('a step with examples offers its whole result as a summary table when it has no single value', () => {
+    const withSample = [nodes[0], { ...nodes[1], data: { ...nodes[1].data, sample: { tier: 'gold', credit: 5 } } }, nodes[2]];
+    const m = buildPickerModel(withSample as FlowNode[], edges, 'm', null);
+    const rows = viewRows({ kind: 'fields', stepId: 'a' }, m, 'value');
+    expect(rows.map((r) => r.title)).toEqual(['Tier', 'Credit', 'Show everything as a summary table']);
+    expect(rows[2].action).toMatchObject({ pick: { ref: 'a', mode: 'summary' } });
   });
 });
