@@ -347,3 +347,29 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `shortcuts-dialog`, `shortcuts-group-flow-editor` | The `?` dialog; inside a flow its "Flow editor" group comes first (not listed on a phone) |
 
 Shortcuts (Cmd and Ctrl both work): K palette, S save, Enter run a test (again inside the Run box starts it), Z undo, Shift+Z / Y redo, D duplicate, C copy, V paste (also into another flow, via localStorage `huf.flow.clipboard.v1`), A select every step, Shift+click / Shift+drag select several steps. Text fields keep their own Z / C / V.
+
+## Step forms in plain words (UX-12, `components/flow/forms/*`)
+Every value box is a `DataInput`: its id is `flow-field-<kind>-<field>` (`-picker`, `-preview`, `-preview-text`, `-hint` as for any data box). `<kind>` is the contract type (`agent.run`, `tool.call`, `router.llm`, `foreach`, `human.approval`, `transform`, `state.set`, `doc.create`, `output`).
+
+| testid | What |
+|---|---|
+| `flow-field-agent.run-agent` (+ `-option-<agent name>`), `flow-field-agent.run-prompt` | Run agent: "Which agent", "What to tell it" (the prompt and its data are one chip box) |
+| `flow-field-tool.call-tool_id` | "What to do" for a card that does several things (Sheets, Drive, Slack) and the open-ended Call tool. Not shown for Send email |
+| `flow-field-tool.call-input.<field>` | Fields of a tool step (`to`, `subject`, `body`, `channel`, `text`, `spreadsheet_id`, `range`, `url`...) |
+| `flow-slack-channel-field` (`data-mode` `pick` / `type`), `flow-slack-channel-picker`, `flow-field-tool.call-input.channel`, `flow-slack-channel-type-it`, `flow-slack-channel-use-list`, `flow-hint-slack-channel` | The one Slack channel control: a list of the workspace's channels, with "Type the channel name instead" and back |
+| `flow-field-tool.call-input.method`, `flow-option-http-method-<METHOD>` | HTTP "What to do there" |
+| `flow-http-headers`, `flow-json-http-headers-*` (`-toggle`, `-input`, `-format`, `-copy`, `-error`), `flow-http-headers-rows-key-<i>` / `-value-<i>` / `-add` / `-remove-<i>`, `flow-http-headers-example` | Headers as name / value rows, "Edit as JSON" |
+| `flow-http-body`, `flow-json-http-body-*`, `flow-http-body-rows-*`, `flow-http-body-example` | "Request body (JSON)" area: fields as rows or JSON, Format, Copy, readable error, "Use an example" |
+| `flow-field-router.llm-prompt`, `flow-router-path-<target>`, `flow-router-path-label-<target>`, `flow-router-path-goes-<target>`, `flow-field-router.llm-default`, `flow-more-options` | Choose with AI: the question, each path (name, "then goes to"), the fallback, the model under More options |
+| `flow-field-foreach-items`, `flow-field-foreach-collect` (+ `-picker`), `flow-more-options-loop`, `flow-field-foreach-max_iterations`, `flow-field-foreach-on_item_error` | Repeat for each item. The list and the result are pick-only chips (typing does nothing) |
+| `flow-field-transform-op`, `flow-option-transform-op-<op>`, `flow-transform-group-<section>`, `flow-hint-transform-example`, `flow-field-transform-input.<param>`, `flow-field-transform-input.<param>-add` / `-item-<i>` / `-remove-<i>` (a short list as rows), `flow-more-options-transform` | Change data |
+| `flow-field-state.set-key`, `-value`, `-ttl_seconds` (number) / `-ttl_seconds-unit` / `-unit-<minutes\|hours\|days>`, `flow-more-options-state`, `flow-field-state.get-key`, `flow-field-state.get-default`, `flow-field-state.delete-key` | Save / look up / forget saved data |
+| `flow-field-doc.create-doctype` (+ `-option-<name>`), `flow-field-doc.create-fields`, `flow-doc-field-<fieldname>`, `flow-field-doc.create-fields.<i>.name` / `.value` / `.remove`, `flow-field-doc.create-fields.add` | Create document: pick the kind of record, then fields by name |
+| `flow-field-human.approval-message`, `-title`, `-approver_type`, `-approver_role` | Wait for approval: question, card headline, who |
+| `flow-field-human.approval-approver_users` (group), `-search`, `-list`, `-option-<user>`, `-nobody`, `-chip-<user>`, `-remove-<user>`, `-unknown` | Specific people: picked from people who exist; a saved name nobody has shows in red |
+| `flow-approval-card-section`, `flow-field-human.approval-details.<i>.label` / `.value` / `.remove`, `flow-field-human.approval-details.add` | "What the approver sees": up to 6 details |
+| `flow-approval-preview`, `-title`, `-note`, `-facts`, `-fact-<i>` | The live card, looks like the bell card |
+| `flow-more-options-approval`, `flow-field-human.approval-timeout_ms` (number) / `-timeout_ms-unit` / `-unit-<minutes\|hours\|days>` / `-timeout_ms-hint`, `flow-approval-timeout-clear`, `flow-approval-timeout-keep`, `flow-branch-timeout` | "If nobody answers": the time limit in minutes / hours / days. The "Timed out" path exists only while it is set; clearing it asks, then removes the path |
+| `flow-end-outcome`, `flow-field-output-outcome-label`, `flow-end-tone` (radiogroup), `flow-end-tone-<good\|neutral\|bad>`, `flow-end-preview`, `flow-end-preview-chip` (`data-tone`), `flow-end-preview-headline`, `flow-more-options-end`, `flow-field-output-value` | End: the outcome ("Approved", Good / Neutral / Bad) with a preview of the run headline; the result folded under More options |
+| `flow-code-editor`, `flow-code-example`, `flow-code-profile`, `flow-code-input-key-<i>` / `-value-<i>` / `-remove-<i>`, `flow-code-inputs-add`, `flow-more-options-code`, `flow-code-timeout` | Execute code: the code, "Start from an example", data for the code, the time limit folded away |
+| `flow-run-test-pill` | The grey "Test run" pill beside the status in run details (the history rows keep `flow-run-test-chip-<runId>`, "Test") |
