@@ -73,3 +73,26 @@ class TestSavedDataAndRecordErrors(unittest.TestCase):
 		with self.assertRaises(cd.CreateDocError) as cm:
 			cd.validate_fields([], {"nope": 1})
 		self.assertIn('no field called "nope"', str(cm.exception))
+
+
+class TestPinnedSampleLists(unittest.TestCase):
+	def test_twenty_items_stay_twenty_inside_the_cap(self):
+		from huf.ai.flow.support.trigger_sample import MAX_SAMPLE_BYTES, redact_sample
+
+		agents = [{"name": f"Agent {i}", "role": "Helps with task number %d" % i} for i in range(20)]
+		safe = redact_sample({"agents": agents, "total": 20})
+		self.assertEqual(len(safe["agents"]), 20)
+		self.assertEqual(safe["total"], 20)
+		import json
+
+		self.assertLessEqual(len(json.dumps(safe).encode()), MAX_SAMPLE_BYTES)
+
+	def test_big_items_still_fit_the_cap_by_keeping_fewer(self):
+		import json
+
+		from huf.ai.flow.support.trigger_sample import MAX_SAMPLE_BYTES, redact_sample
+
+		rows = [{f"field_{k}": "x" * 190 for k in range(10)} for _ in range(20)]
+		safe = redact_sample({"rows": rows})
+		self.assertLessEqual(len(json.dumps(safe).encode()), MAX_SAMPLE_BYTES)
+		self.assertIn("rows", safe)

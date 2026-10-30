@@ -5,7 +5,9 @@
 export const MAX_SAMPLE_BYTES = 8 * 1024;
 const MAX_DEPTH = 6;
 const MAX_TEXT = 200;
-const MAX_LIST = 5;
+const MAX_LIST = 20;
+/** Tried in order until the sample fits: (items kept per list, characters kept per text). 20 items are kept whenever they fit. */
+const LIMITS: Array<[number, number]> = [[MAX_LIST, MAX_TEXT], [10, 120], [5, 80]];
 const MAX_KEYS = 40;
 const SECRET_KEY = /pass(word|wd)?|secret|token|authorization|api[_-]?key|credential|cookie|signature|private/i;
 export const MASK = '(hidden)';
@@ -13,29 +15,32 @@ export const MASK = '(hidden)';
 /** What the example request and the "paste a sample" box start with, so nobody faces an empty box. */
 export const EXAMPLE_REQUEST = { name: 'Ada Lovelace', email: 'ada@example.com', amount: 120 };
 
-function trim(value: unknown, depth: number): unknown {
+function trim(value: unknown, depth: number, maxList = MAX_LIST, maxText = MAX_TEXT): unknown {
   if (depth > MAX_DEPTH) return '...';
-  if (Array.isArray(value)) return value.slice(0, MAX_LIST).map((v) => trim(v, depth + 1));
+  if (Array.isArray(value)) return value.slice(0, maxList).map((v) => trim(v, depth + 1, maxList, maxText));
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     Object.entries(value as Record<string, unknown>)
       .slice(0, MAX_KEYS)
       .forEach(([k, v]) => {
-        out[k] = SECRET_KEY.test(k) ? MASK : trim(v, depth + 1);
+        out[k] = SECRET_KEY.test(k) ? MASK : trim(v, depth + 1, maxList, maxText);
       });
     return out;
   }
-  if (typeof value === 'string') return value.length <= MAX_TEXT ? value : `${value.slice(0, MAX_TEXT - 3)}...`;
+  if (typeof value === 'string') return value.length <= maxText ? value : `${value.slice(0, maxText - 3)}...`;
   if (value === null || typeof value === 'number' || typeof value === 'boolean') return value;
-  return String(value).slice(0, MAX_TEXT);
+  return String(value).slice(0, maxText);
 }
 
 const size = (v: unknown) => new TextEncoder().encode(JSON.stringify(v)).length;
 
 /** A safe, small copy of a request body. */
 export function redactSample(value: unknown): unknown {
-  const trimmed = trim(value, 0);
-  if (size(trimmed) <= MAX_SAMPLE_BYTES) return trimmed;
+  let trimmed: unknown = null;
+  for (const [maxList, maxText] of LIMITS) {
+    trimmed = trim(value, 0, maxList, maxText);
+    if (size(trimmed) <= MAX_SAMPLE_BYTES) return trimmed;
+  }
   if (trimmed && typeof trimmed === 'object' && !Array.isArray(trimmed)) {
     const kept: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(trimmed as Record<string, unknown>)) {
