@@ -21,6 +21,7 @@ import type {
     ActionConfig, ActionType, Flow, FlowEdge, FlowEdgeRoute, FlowNode, FlowNodeData, FlowStatus, TriggerConfig,
 } from '@/types/flow.types';
 import type { BackendFlowGraph, BackendNode, BackendNodeType } from './flowApi';
+import { layoutWhenUnplaced } from '../lib/flow/flowLayout';
 import { defaultContract, deriveContract, placeholderFingerprint } from './flow/flowContract';
 
 export { defaultContract };
@@ -297,12 +298,13 @@ export function deserializeFlow(
     graph: BackendFlowGraph
 ): Flow {
     const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+    const edges = graph.nodes.flatMap((n) => deserializeEdgesForNode(n, byId));
     return {
         id: flowId,
         name: flowName,
         status: mapBackendStatusToFrontend(status),
-        nodes: graph.nodes.map((node, index) => deserializeNode(node, index)),
-        edges: graph.nodes.flatMap((n) => deserializeEdgesForNode(n, byId)),
+        nodes: layoutWhenUnplaced(graph.nodes.map((node, index) => deserializeNode(node, index)), edges, graph.nodes.some((n) => !n._position)),
+        edges,
         createdAt: new Date(),
         updatedAt: new Date(),
         // Version lives on the Flow Definition doctype record, not in the graph.

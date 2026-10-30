@@ -12,14 +12,17 @@ export interface ShortcutHelp {
 }
 
 export const FLOW_SHORTCUTS: ShortcutHelp[] = [
+  { keys: 'Ctrl/Cmd + K', does: 'Search steps, flows and actions' },
   { keys: 'Ctrl/Cmd + S', does: 'Save the flow' },
+  { keys: 'Ctrl/Cmd + Z', does: 'Undo any edit (Shift + Z or Ctrl + Y redoes it)' },
+  { keys: 'Ctrl/Cmd + D', does: 'Duplicate the selected step' },
+  { keys: 'Ctrl/Cmd + C, V', does: 'Copy and paste steps, also into another flow' },
+  { keys: 'Shift + click or drag', does: 'Select several steps' },
   { keys: 'Delete or Backspace', does: 'Remove the selected step or connection (asks first)' },
-  { keys: 'Ctrl/Cmd + Z', does: 'Undo the last removal' },
   { keys: 'Tab', does: 'Move between the steps' },
   { keys: 'Enter', does: 'Open the "Add step" card that has focus' },
   { keys: 'Esc', does: 'Close a dialog or panel' },
-  { keys: 'Scroll or pinch', does: 'Zoom the canvas' },
-  { keys: 'Drag the background', does: 'Move around the canvas' },
+  { keys: '?', does: 'Show every keyboard shortcut' },
 ];
 
 /** The three things to do on an empty canvas. */

@@ -11,7 +11,7 @@ export function getExecutionStatusClasses(
   options?: { unconfigured?: boolean }
 ): string {
   if (status === 'running') {
-    return 'ring-2 ring-signal border-signal ring-offset-2 ring-offset-background animate-pulse';
+    return 'ring-2 ring-signal border-signal ring-offset-2 ring-offset-background motion-safe:animate-pulse';
   }
   if (status === 'success') {
     return 'border-good';

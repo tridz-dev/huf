@@ -25,11 +25,17 @@ import { FlowNodeRail, NODE_RAIL_ACTION_CATEGORY, NodeRailCategory } from './Flo
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
 import { DeleteStepDialog } from './flow/DeleteStepDialog';
 import { KeepSelectedVisible } from './flow/canvas/KeepSelectedVisible';
-import { FIT_VIEW_OPTIONS, FitViewAfterRemovalOrLayout, FlowControls, FlowMiniMap, KeepSelectedClearOfToolbar, keepCanvasUnscrolled } from './flow/canvas/canvasView';
+import { CANVAS_CLASS, FIT_VIEW_OPTIONS, FitViewAfterRemovalOrLayout, FlowControls, FlowMiniMap, KeepSelectedClearOfToolbar, keepCanvasUnscrolled } from './flow/canvas/canvasView';
+import { ZOOM_MAX, ZOOM_MIN } from '@/lib/flow-canvas/zoomLod';
 import { useRenderedGraph } from './flow/canvas/useRenderedGraph';
+import { useArrowNavigation } from './flow/canvas/useArrowNavigation';
+import { RunOverlayChip } from './flow/canvas/RunOverlayChip';
+import { useRunOverlay } from '../lib/flow-graph/runOverlay';
+import { useRunParam } from '../hooks/flow/useRunParam';
 import { FlowCanvasToolbar } from './flow/canvas/FlowCanvasToolbar';
 import { EdgeDeleteDialog } from './flow/canvas/EdgeDeleteDialog';
-import { useConvertedProcedure, useEdgeActions, useUndoShortcut } from './flow/canvas/useCanvasEffects';
+import { glideNodes, useConvertedProcedure, useEdgeActions } from './flow/canvas/useCanvasEffects';
+import { FlowShortcuts } from './flow/shortcuts/FlowShortcuts';
 import { connectionProblem } from '../lib/flow/flowEdit';
 import { useFlowContext } from '../contexts/FlowContext';
 import { RENDER_ONLY_EDGE_PREFIX, RENDER_ONLY_NODE_PREFIX, addActionStep, computeOpenEnds, connectSteps, connectionRoute } from '../lib/flow-graph/flowCanvasGraph';
@@ -41,6 +47,9 @@ import { ensureToolSchemasLoaded } from '../lib/flow/flowToolSchemas';
 import { triggerLabel } from '../lib/flow/flowLabels';
 import { FlowNodeData, TriggerConfig, ActionConfig, FlowEdgeRoute } from '../types/flow.types';
 import type { ActionOption } from '../types/modal.types';
+
+/** Shift-click (or Cmd/Ctrl-click) adds a step to the selection; Shift-drag on the background draws a selection box. */
+const MULTI_SELECT_KEYS = ['Shift', 'Meta', 'Control'];
 
 interface FlowCanvasProps {
   showLeftSidebar: boolean;
@@ -66,8 +75,6 @@ export function FlowCanvas({
     setSelectedEdge,
     deleteEdge,
     saveState,
-    undo,
-    canUndo,
     tidyLayout,
     layoutRevision,
   } = useFlowContext();
@@ -75,6 +82,16 @@ export function FlowCanvas({
   // 1200px and narrower: Tidy layout and Convert to procedure live in the header's "..." menu. A phone has no editing tools at all.
   const { isCompact, isPhone } = useViewport();
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
+  // A run opened from history or a link (?run=<id>) is drawn on the canvas and stays drawn after its details are closed, so
+  // each step can be hovered for what it produced, until the person hides it, opens another run or leaves the flow.
+  const [openRunId] = useRunParam();
+  const [shownRunId, setShownRunId] = useState<string | null>(null);
+  useEffect(() => { if (openRunId) setShownRunId(openRunId); }, [openRunId]);
+  useEffect(() => { setShownRunId(openRunId); }, [activeFlow?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const runOverlay = useRunOverlay(shownRunId);
+  const deleteRef = useRef(deleteNode);
+  deleteRef.current = deleteNode;
+  const onDeleteNode = useCallback((nodeId: string) => deleteRef.current(nodeId), []);
   // Delete / Backspace on a selected step asks first (the click-to-delete buttons already do).
   const [keyboardDeleteId, setKeyboardDeleteId] = useState<string | null>(null);
   // Same for a selected connection: the button on the line and the Delete key both ask first.
@@ -90,6 +107,10 @@ export function FlowCanvas({
 
   // Track if we're currently syncing from props to prevent feedback loops
   const isSyncingFromProps = useRef(false);
+  const stopGlide = useRef<(() => void) | null>(null);
+  const lastLayoutRevision = useRef(layoutRevision);
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
   // Track pending updates to batch them
   const pendingUpdateRef = useRef<{ nodes?: Node<FlowNodeData>[]; edges?: Edge[] } | null>(null);
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -111,16 +132,23 @@ export function FlowCanvas({
       pendingUpdateRef.current = null;
 
       isSyncingFromProps.current = true;
-      setNodes(activeFlow.nodes);
+      stopGlide.current?.();
+      stopGlide.current = null;
+      const tidied = lastLayoutRevision.current !== layoutRevision;
+      lastLayoutRevision.current = layoutRevision;
+      // Tidy layout and its Undo: the steps glide to their new places.
+      const glide = tidied ? glideNodes(nodesRef.current, activeFlow.nodes, setNodes, () => { isSyncingFromProps.current = false; stopGlide.current = null; }) : null;
+      stopGlide.current = glide;
+      if (!glide) setNodes(activeFlow.nodes);
       setEdges(activeFlow.edges);
       // Clear the guard after React has processed the batched state updates
-      requestAnimationFrame(() => {
+      if (!glide) requestAnimationFrame(() => {
         isSyncingFromProps.current = false;
       });
     }
   }, [activeFlow?.id, activeFlow?.version, activeFlow?.nodes.length, activeFlow?.edges.length, layoutRevision]); // Re-sync on ID/version change OR structural changes (add/delete)
 
-  useUndoShortcut(undo, canUndo);
+  useArrowNavigation(nodes, edges);
 
   const convertedProcedure = useConvertedProcedure(activeFlow?.id, activeFlow?.version, saveState);
 
@@ -158,6 +186,7 @@ export function FlowCanvas({
       if (updateTimeoutRef.current) {
         clearTimeout(updateTimeoutRef.current);
       }
+      stopGlide.current?.();
     };
   }, []);
 
@@ -471,7 +500,7 @@ export function FlowCanvas({
   useEdgeActions(edges, handleAddNode, setEdgeDeleteId);
 
   // On-screen-only extras (Add step cards, the loop's return line, End subtitles) are never written back to the flow.
-  const { renderedNodes, renderedEdges } = useRenderedGraph({ canManage, nodes, edges, openEnds, selectedNodeId, selectedEdgeId, onSelectEdge: setSelectedEdge, onAddNode: handleAddNode, onRemoveEdge: setEdgeDeleteId });
+  const { renderedNodes, renderedEdges } = useRenderedGraph({ canManage, nodes, edges, openEnds, selectedNodeId, selectedEdgeId, onSelectEdge: setSelectedEdge, onAddNode: handleAddNode, onRemoveEdge: setEdgeDeleteId, overlay: runOverlay, onDeleteNode });
 
   if (!activeFlow) {
     return (
@@ -508,13 +537,15 @@ export function FlowCanvas({
         nodeTypes={nodeTypesWithAddButton}
         edgeTypes={edgeTypesWithInsert}
         deleteKeyCode={null}
+        multiSelectionKeyCode={MULTI_SELECT_KEYS}
         nodesDraggable={canManage}
         nodesConnectable={canManage}
         elementsSelectable
         fitViewOptions={FIT_VIEW_OPTIONS}
-        minZoom={FIT_VIEW_OPTIONS.minZoom}
+        minZoom={ZOOM_MIN}
+        maxZoom={ZOOM_MAX}
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
-        className="bg-background w-full h-full [&_.react-flow__handle]:transition-shadow [&_.react-flow__handle]:after:absolute [&_.react-flow__handle]:after:-inset-2 [&_.react-flow__handle]:after:content-[''] [&_.react-flow__handle:hover]:!bg-signal [&_.react-flow__handle:hover]:shadow-[0_0_0_4px_color-mix(in_srgb,var(--signal)_30%,transparent)]"
+        className={CANVAS_CLASS}
         onScroll={keepCanvasUnscrolled}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={2} color="color-mix(in srgb, var(--muted-foreground) 35%, transparent)" />
@@ -523,6 +554,7 @@ export function FlowCanvas({
         <FlowMiniMap stepCount={nodes.length} />
         <KeepSelectedClearOfToolbar selectedNodeId={selectedNodeId} />
         <KeepSelectedVisible selectedNodeId={selectedNodeId} />
+        <FlowShortcuts />
         <FitViewAfterRemovalOrLayout flowId={activeFlow?.id} nodeCount={activeFlow?.nodes.length ?? 0} edgeCount={activeFlow?.edges.length ?? 0} layoutRevision={layoutRevision} />
         {canManage && !isPhone && !selectedNodeId && nodes.length <= 1 && <FirstRunGuide />}
         <Panel position="top-right" className="m-2">
@@ -547,6 +579,11 @@ export function FlowCanvas({
             }}
           />
         </Panel>
+        {runOverlay && (
+          <Panel position="top-left" className="m-2">
+            <RunOverlayChip onHide={() => setShownRunId(null)} />
+          </Panel>
+        )}
         {!showLeftSidebar && (
           <Panel position="top-left" className="m-2">
             <Button

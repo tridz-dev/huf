@@ -30,6 +30,8 @@
   "waiting_section",
   "waiting",
   "last_error",
+  "outcome_label",
+  "outcome_tone",
   "timing_tab",
   "started_at",
   "column_break_tm1",
@@ -198,6 +200,20 @@
    "fieldname": "last_error",
    "fieldtype": "Small Text",
    "label": "Last Error",
+   "read_only": 1
+  },
+  {
+   "description": "What the run came to for the business, from the End step's outcome ('Approved', 'Rejected'...).",
+   "fieldname": "outcome_label",
+   "fieldtype": "Data",
+   "label": "Outcome",
+   "read_only": 1
+  },
+  {
+   "fieldname": "outcome_tone",
+   "fieldtype": "Select",
+   "label": "Outcome Tone",
+   "options": "\ngood\nneutral\nbad",
    "read_only": 1
   },
   {

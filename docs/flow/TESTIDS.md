@@ -33,7 +33,7 @@ Card title = node title = sidebar title (derived from `data/actions.ts` / `data/
 | `flow-node-<nodeId>` | Node wrapper (`data-node-type`, `data-incomplete="true|false"`) |
 | `flow-node-title-<nodeId>` | Node title |
 | `flow-node-subtitle-<nodeId>` | One line saying what the step does ("Send a message to #alerts"); full text in the tooltip |
-| `flow-node-status-<nodeId>` | The card's ONE status word (`data-status`: ready, needs-setup, not-connected, orphan, running, waiting, done, failed). Never wraps; cards are the same size in every state |
+| `flow-node-status-<nodeId>` | The card's ONE status word (`data-status`: ready, needs-setup, not-connected, orphan, running, waiting, done, failed, skipped). Under 80% zoom it is a coloured dot with the same test id and `aria-label`. Never wraps; cards are the same size in every state |
 | `flow-node-incomplete-<nodeId>` | Inner text of the status word when it is "Needs setup" |
 | `flow-node-marker-<nodeId>` | "Trigger" / "End" marker on trigger and end cards |
 | `flow-node-choose-trigger-<nodeId>` | "Choose a trigger" button on the empty trigger card (title "Choose what starts this flow") |
@@ -45,6 +45,10 @@ Card title = node title = sidebar title (derived from `data/actions.ts` / `data/
 | `flow-add-step-<nodeId>` | Add-step card after a plain step |
 | `flow-add-step-<nodeId>-<route>` | Add-step card for a branch (`true`, `false`, `approve`, `reject`, `body`, `option`, `timeout`) |
 | `flow-insert-step-<edgeId>` | "+" on an edge |
+| `flow-node-title-<nodeId>` / `data-lod` | The title; the card element carries `data-lod` = `full` (zoom 80% and up: icon, title, subtitle, status word), `compact` (50% to under 80%: icon, enlarged title, status dot) or `icon` (under 50%: an icon tile; the title shows on hover or focus in `flow-node-hover-<nodeId>`) |
+| `flow-node-hover-<nodeId>`, `flow-node-run-summary-<nodeId>` | Note under a card on hover/focus: the title of an icon tile and, with a run shown on the canvas, one line of what the step produced (or why it failed) |
+| `flow-run-overlay-chip`, `flow-run-overlay-hide` | "Showing this run" chip (top-left of the canvas) while a run is drawn on the canvas, and its Hide button. A run opened from history or `?run=<id>` stays drawn after the details close, until Hide, another run, or another flow |
+| `data-run="taken"/"untaken"` on `flow-edge-label-<edgeId>` | A connection the shown run went along (green line) or not (faded) |
 | `flow-edge-label-<edgeId>` | Branch name pill on a connection (Yes/No, Approved/Rejected/Timed out, For each item/When done, a router path in full, Next item on the loop-back line); 12px on screen at any zoom |
 
 ## Right sidebar (step panel frame, UX-8)
@@ -58,7 +62,7 @@ The panel is `components/RightSidebar.tsx` + `components/flow/frame/*`. A step's
 | `flow-node-title-input` | The step name (editable in place; the only place the name is shown or typed). `flow-sidebar-title` no longer exists |
 | `flow-sidebar-kind` | Small grey kind under the name ("Trigger", "End", "If / else") |
 | `flow-step-info`, `flow-config-hint` | The (i) beside the kind and its popover with the longer explanation of the step |
-| `flow-step-menu`, `flow-step-menu-content`, `flow-step-duplicate`, `flow-step-disable`, `flow-sidebar-delete` | `...` menu: Duplicate, Disable / Turn on (linear action steps only), Delete (red). A disabled step has `data-disabled="true"` on its card |
+| `flow-step-menu`, `flow-step-menu-content`, `flow-step-duplicate`, `flow-step-copy`, `flow-step-disable`, `flow-sidebar-delete` | `...` menu: Duplicate (not on a trigger), Copy, Disable / Turn on (linear action steps only), Delete (red); Duplicate and Copy show their keyboard hint. A disabled step has `data-disabled="true"` on its card |
 | `flow-sidebar-close` | Close (panel variant only; the phone sheet has its own) |
 | `flow-status-strip` (`data-state` = `todo`/`ready`/`off`) | 36px strip: "2 things to finish >" (amber button; jumps to the first one and focuses it) or "Ready" |
 | `flow-sidebar-tabs`, `flow-sidebar-tab-setup`, `flow-sidebar-tab-test`, `flow-sidebar-tab-settings` | Tabs. Triggers: Setup + Test. End: no tabs (Setup only). `flow-sidebar-tab-<name>-dot` = something to finish in that tab (always Setup for required fields) |
@@ -129,7 +133,8 @@ Publishing a flow with unconnected integration steps shows a warning toast (`Som
 | `flow-run-dialog`, `flow-run-start` (label `Run test` / `Run for real`), `flow-run-cancel` | Run dialog opened by the Run button and the list card Run action |
 | `flow-run-mode`, `flow-run-mode-test`, `flow-run-mode-real` (radio, `data-state`), `flow-run-mode-test-card`, `flow-run-mode-real-card`, `flow-run-real-warning` | Run dialog: Test run (default) / Run for real and the warning shown for a real run |
 | `flow-run-form`, `flow-run-field-<field>` (`.` becomes `-`), `flow-run-use-last`, `flow-run-use-sample`, `flow-run-note`, `flow-run-loading`, `flow-run-payload-hint` | Run dialog: the form generated from the trigger's declared fields, 'Use last real request', 'Use sample' |
-| `flow-json-run-payload`, `-input`, `-toggle`, `-error`, `-format`, `-copy` (JsonArea) | Run dialog: the JSON view of the same details ('Edit as JSON' / 'Show as form'); replaces the old `flow-run-payload` / `flow-run-payload-error` |
+| `flow-json-run-payload`, `-input`, `-toggle`, `-error`, `-format`, `-copy` (JsonArea) | Run dialog: the JSON view of the same details ('Edit as JSON' / 'Show as form'); replaces the old `flow-run-payload` (the box) and its syntax error |
+| `flow-run-payload-error` | Run dialog: text that is valid JSON but not an object ('The input must be a JSON object'); the JSON area's own message covers broken JSON |
 | `flow-run-test-chip-<runId>` | Grey 'Test' chip in the Runs sheet |
 | `disabled-reason` | Wrapper around a control disabled for a view-only user; hover/focus shows the explanation |
 | `connection-indicator` (`data-status` = connecting / connected / offline) | Header dot for the live-updates connection |
@@ -225,7 +230,7 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 |---|---|
 | `flow-help`, `flow-help-popover`, `flow-help-shortcuts`, `flow-help-guide-link` | "?" button in the editor header, its popover (how a flow works, keyboard shortcuts) and the link to the full guide |
 | `flow-first-run-guide`, `flow-first-run-guide-close` | Coach mark anchored to the trigger (`data-placement` beside-trigger or below) on a flow with only a trigger (hidden for view-only users; closing it is remembered in the browser) |
-| `flow-minimap` | Overview map, bottom-left of the canvas (hidden under 8 steps and when the canvas is narrower than 640px) |
+| `rf__minimap` (React Flow keeps its own id; the `flow-minimap` prop is overridden) | Overview map, bottom-left of the canvas (hidden under 8 steps and when the canvas is narrower than 640px) |
 | `flow-palette-intro` | One-sentence intro under the "Choose what starts this flow" / "Add a step" title |
 | `flow-palette-empty` | Empty state of the palette search ("No steps match ..."), with `flow-palette-clear-search` ("Show all") |
 | `flow-palette-section-<category>` | A labelled palette section: agent (AI), control (Decide and repeat), people, data (Work with data), apps, advanced |
@@ -323,7 +328,22 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-run-stale`, `flow-run-stuck-for`, `flow-run-mark-failed` ("Stop run"), `flow-run-mark-failed-confirm`, `flow-run-queued`, `flow-run-cancel` | Stuck banner, queued note, stop/cancel actions |
 | `flow-run-details-fold` (`<details>`), `flow-run-details-toggle`, `flow-run-meta`, `flow-run-flow-name`, `flow-run-trigger`, `flow-run-started`, `flow-run-finished` (only when finished), `flow-run-duration`, `flow-run-step-count`, `flow-run-current-node`, `flow-run-id`, `flow-run-id-copy`, `flow-run-timezone-note` | "Details" fold (collapsed by default) |
 | `flow-run-back` | "Run history" link back to the list |
-| `flow-run-row-<runId>` (`data-run-status`), `flow-run-row-title-<runId>`, `flow-run-row-status-<runId>`, `flow-run-row-outcome-<runId>`, `flow-run-row-started-<runId>`, `flow-run-row-hint-<runId>` | Run history rows |
+| `flow-run-row-<runId>` (`data-run-status`), `flow-run-hist-title-<runId>`, `flow-run-hist-status-<runId>`, `flow-run-hist-outcome-<runId>`, `flow-run-hist-started-<runId>`, `flow-run-hist-hint-<runId>` | Run history rows |
 | `executions-tabs`, `executions-tab-runs` ("Agent runs"), `executions-tab-flow-runs` ("Flow runs"), `executions-tab-analytics`, `executions-tab-hint`, `page-frame-tabs`; `flow-run-exec-row-<runId>`, `flow-run-exec-title-<runId>`, `flow-run-exec-status-<runId>`, `flow-run-exec-outcome-<runId>` | Executions page |
 
 `useRunOverlay(runId)` (lib/flow-run/useRunOverlay.ts) returns `{ nodes: { [stepId]: { status: 'done'|'failed'|'waiting'|'stopped', summary } }, runStatus, currentNodeId, loading }` for the canvas.
+
+## Keyboard, undo and the Cmd+K palette (UX-19)
+| testid | What |
+|---|---|
+| `flow-history-buttons` (group), `flow-undo`, `flow-redo` | Undo / Redo in the header above 1200px (tooltip names the change: "Undo: edited ... (⌘Z)"); at 1200px and narrower the same ids are items of the `...` menu (`flow-header-more-menu`). Hidden on a phone |
+| `flow-palette-open`, `flow-shortcuts` | `...` menu items "Search and commands" and "Keyboard shortcuts" (not on a phone) |
+| `flow-palette` (dialog, `data-state`), `flow-palette-input`, `flow-palette-list`, `flow-palette-no-results` | Cmd/Ctrl+K palette |
+| `flow-palette-add` (group), `flow-palette-add-<actionId>` (e.g. `-email`, `-human.approval`) | "Add a step after ..." (behind the selected step, else at the end) |
+| `flow-palette-goto` (group), `flow-palette-goto-<nodeId>` | "Go to a step": selects it and opens its panel |
+| `flow-palette-actions` (group), `flow-palette-action-<id>` (`save`, `publish`, `run`, `tidy`, `undo`, `redo`, `duplicate`, `copy`, `paste`, `settings`, `runs`, `help`, `shortcuts`) | Editor actions |
+| `flow-palette-flows` (group: "Recent flows" with an empty search, "Open a flow" while typing), `flow-palette-flow-<flowId>` | Other flows |
+| `flow-live-region` (`role=status`, `aria-live=polite`) | Screen-reader announcements: "Step duplicated", "Undid: ...", "Redid: ...", "2 steps pasted" |
+| `shortcuts-dialog`, `shortcuts-group-flow-editor` | The `?` dialog; inside a flow its "Flow editor" group comes first (not listed on a phone) |
+
+Shortcuts (Cmd and Ctrl both work): K palette, S save, Enter run a test (again inside the Run box starts it), Z undo, Shift+Z / Y redo, D duplicate, C copy, V paste (also into another flow, via localStorage `huf.flow.clipboard.v1`), A select every step, Shift+click / Shift+drag select several steps. Text fields keep their own Z / C / V.

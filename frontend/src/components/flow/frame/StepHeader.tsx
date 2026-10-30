@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Copy, Info, MoreHorizontal, PowerOff, Power, Trash2, X } from 'lucide-react';
+import { Copy, CopyPlus, Info, MoreHorizontal, PowerOff, Power, Trash2, X } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../../ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '../../ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
 import { cardIcon } from '../../nodes/nodeIcons';
 import { useFlowContext } from '../../../contexts/FlowContext';
@@ -12,7 +12,9 @@ import type { FlowNode } from '../../../types/flow.types';
 import { useFrame } from './frameStore';
 import { Pressable } from './Pressable';
 import { useViewport } from '@/lib/ui/responsive';
-import { canDisableStep, canDuplicateStep, duplicateStep } from './stepActions';
+import { canDisableStep, canDuplicateStep } from './stepActions';
+import { useFlowStepActions } from '../shortcuts/useFlowStepActions';
+import { shortcutText } from '../shortcuts/shortcutHints';
 
 /** The step's kind in small grey words under its name: "Trigger", "End", or what the step does ("Condition"). */
 export function stepKindLabel(node: Pick<FlowNode, 'data'>): string {
@@ -26,7 +28,8 @@ export function stepKindLabel(node: Pick<FlowNode, 'data'>): string {
  * grey type with an (i) for the longer explanation, a "..." menu and Close.
  */
 export function StepHeader({ node, onClose, onDelete }: { node: FlowNode; onClose?: () => void; onDelete: () => void }) {
-  const { updateNodeData, addNode, setSelectedNode } = useFlowContext();
+  const { updateNodeData } = useFlowContext();
+  const stepActions = useFlowStepActions();
   const { canManage } = useFlowPermissions();
   const { isPhone } = useViewport();
   const hint = useFrame((s) => s.hint);
@@ -82,17 +85,15 @@ export function StepHeader({ node, onClose, onDelete }: { node: FlowNode; onClos
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-44" data-testid="flow-step-menu-content">
             {duplicate && (
-              <DropdownMenuItem
-                data-testid="flow-step-duplicate"
-                onSelect={() => {
-                  const copy = duplicateStep(node);
-                  addNode(copy);
-                  setSelectedNode(copy.id);
-                }}
-              >
-                <Copy className="mr-2 h-4 w-4" /> Duplicate
+              <DropdownMenuItem data-testid="flow-step-duplicate" onSelect={() => void stepActions.duplicate([node.id])}>
+                <CopyPlus className="mr-2 h-4 w-4" /> Duplicate
+                <DropdownMenuShortcut>{shortcutText('flow-duplicate')}</DropdownMenuShortcut>
               </DropdownMenuItem>
             )}
+            <DropdownMenuItem data-testid="flow-step-copy" onSelect={() => void stepActions.copy([node.id])}>
+              <Copy className="mr-2 h-4 w-4" /> Copy
+              <DropdownMenuShortcut>{shortcutText('flow-copy')}</DropdownMenuShortcut>
+            </DropdownMenuItem>
             {disable && (
               <DropdownMenuItem
                 data-testid="flow-step-disable"
@@ -102,7 +103,7 @@ export function StepHeader({ node, onClose, onDelete }: { node: FlowNode; onClos
                 {node.data.disabled ? 'Turn on' : 'Disable'}
               </DropdownMenuItem>
             )}
-            {(duplicate || disable) && <DropdownMenuSeparator />}
+            <DropdownMenuSeparator />
             <DropdownMenuItem data-testid="flow-sidebar-delete" className="text-destructive focus:text-destructive" onSelect={onDelete}>
               <Trash2 className="mr-2 h-4 w-4" /> Delete
             </DropdownMenuItem>

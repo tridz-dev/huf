@@ -88,6 +88,15 @@ describe('RunFlowDialog', () => {
     expect(screen.getByTestId('flow-run-start')).not.toBeDisabled();
   });
 
+  it('says so when the text is valid JSON but not an object', async () => {
+    getFlowDefinition.mockResolvedValue(definition([{ id: 't', type: 'trigger.schedule', config: {} }]));
+    open();
+    const box = await screen.findByTestId('flow-json-run-payload-input');
+    fireEvent.change(box, { target: { value: '[1, 2]' } });
+    expect(screen.getByTestId('flow-run-payload-error')).toHaveTextContent('JSON object');
+    expect(screen.getByTestId('flow-run-start')).toBeDisabled();
+  });
+
   it('keeps the form and the JSON in step', async () => {
     getFlowDefinition.mockResolvedValue(definition([webhook]));
     open();

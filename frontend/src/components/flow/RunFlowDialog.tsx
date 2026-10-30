@@ -10,8 +10,10 @@ import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Switch } from '../ui/switch';
 import { JsonArea } from '../common/JsonArea';
 import { cn } from '@/lib/utils';
+import { withShortcut } from './shortcuts/shortcutHints';
 import { getFlowDefinition } from '@/services/flowApi';
 import { getLastWebhookRequest } from '@/services/flow/triggerApi';
+import { describeJsonProblem } from '@/lib/flow-run/jsonErrors';
 import { parsePayload, readLastPayload, rememberPayload, RUN_MODE_BUTTON, type RunMode } from '@/lib/flow-run/flowRunPayload';
 import { hasData, payloadFromForm, runFormFields, valuesFromPayload, type RunField, type RunFormValues } from '@/lib/flow-run/runForm';
 
@@ -193,7 +195,17 @@ export function RunFlowDialog({ open, flowId, flowName, onOpenChange, onRun }: R
 
   return (
     <Dialog open={open} onOpenChange={(next) => !running && onOpenChange(next)}>
-      <DialogScrollContent className="sm:max-w-[560px]" data-testid="flow-run-dialog">
+      <DialogScrollContent
+        className="sm:max-w-[560px]"
+        data-testid="flow-run-dialog"
+        // Cmd/Ctrl+Enter again starts the test run (never a real one: that one is a click on purpose).
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && mode === 'test' && !running && !loading && !error) {
+            e.preventDefault();
+            void handleRun();
+          }
+        }}
+      >
         <DialogScrollHeader>
           <DialogTitle>Run {flowName ? `"${flowName}"` : 'flow'}</DialogTitle>
           <DialogDescription>Starts the flow once, right now, as if its trigger had fired. Choose how, then give it the details it would receive.</DialogDescription>
@@ -258,6 +270,12 @@ export function RunFlowDialog({ open, flowId, flowName, onOpenChange, onRun }: R
                 formView={hasForm ? formView : undefined}
               />
             )}
+            {/* Text that is valid JSON but not an object ([1, 2], 5): the JSON area has nothing to say about it. */}
+            {error && !describeJsonProblem(text) && (
+              <p role="alert" data-testid="flow-run-payload-error" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
             {!hasForm && !loading && !error && (
               <p className="text-meta text-muted-foreground" data-testid="flow-run-payload-hint">
                 This flow does not say what details it expects. Leave the box as {'{}'} to run without any. When the run finishes, find it under Runs.
@@ -269,7 +287,7 @@ export function RunFlowDialog({ open, flowId, flowName, onOpenChange, onRun }: R
           <Button variant="outline" size="sm" data-testid="flow-run-cancel" onClick={() => onOpenChange(false)} disabled={running}>
             Cancel
           </Button>
-          <Button size="sm" className="gap-2" data-testid="flow-run-start" onClick={handleRun} disabled={running || loading || !!error}>
+          <Button size="sm" className="gap-2" data-testid="flow-run-start" title={mode === 'test' ? withShortcut('Start the test run', 'flow-run') : undefined} onClick={handleRun} disabled={running || loading || !!error}>
             {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
             {RUN_MODE_BUTTON[mode]}
           </Button>
