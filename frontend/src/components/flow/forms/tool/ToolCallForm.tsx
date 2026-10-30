@@ -1,21 +1,21 @@
 import { useEffect, useState } from 'react';
-import { ACTION_CARD_CONTRACT } from '../../../data/actions';
-import { Combobox } from '../../ui/combobox';
-import { FieldHint } from '../FieldHint';
+import { ACTION_CARD_CONTRACT } from '../../../../data/actions';
+import { Combobox } from '../../../ui/combobox';
+import { FieldHint } from '../../FieldHint';
 import { HttpJsonField } from './HttpFields';
 import { INTEGRATION_NEEDS } from '@/lib/flow/flowHelp';
-import { Label } from '../../ui/label';
-import { MoreOptions } from '../frame/MoreOptions';
+import { Label } from '../../../ui/label';
+import { MoreOptions } from '../../frame/MoreOptions';
 import { fieldFromSchema, normalizePasted, PRESET_FIELDS, type PresetField } from './toolPresetFields';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select';
 import { SlackChannelField } from './SlackChannelField';
 import { TOOL_REQUIRED_INPUT } from '@/lib/flow-graph/flowValidation';
-import { ValueField } from './fields';
+import { ValueField } from '../fields';
 import { actionCardId } from '@/lib/flow/flowLabels';
 import { integrationForTool, toolLabel } from '@/lib/flow/flowIntegrations';
 import { registerToolSchemas } from '@/lib/flow/flowToolSchemas';
-import { type ActionFormProps, asObj, type Opt, Section, str } from './formKit';
-import { type FlowTool, getFlowTools } from '../../../services/toolApi';
+import { type ActionFormProps, asObj, type Opt, Section, str } from '../formKit';
+import { type FlowTool, getFlowTools } from '../../../../services/toolApi';
 
 const isEmptyValue = (v: unknown) => v === undefined || v === null || v === '' || (typeof v === 'object' && v !== null && Object.keys(v).length === 0);
 

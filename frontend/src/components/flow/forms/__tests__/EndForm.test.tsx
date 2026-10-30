@@ -7,7 +7,7 @@ vi.mock('@/contexts/FlowContext', async () => (await import('./formTestKit')).co
 vi.mock('@/hooks/flow/useFlowPermissions', async () => (await import('./formTestKit')).permissionsMock());
 vi.mock('@/services/flow/catalogApi', async () => (await import('./formTestKit')).catalogMock());
 
-import { EndForm } from './EndForm';
+import { EndForm } from '../EndForm';
 import { updateNodeData } from './formTestKit';
 import { deserializeFlow, serializeFlow } from '@/services/flowSerializer';
 import type { EndConfig, FlowNode, FlowNodeData } from '@/types/flow.types';

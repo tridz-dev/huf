@@ -1,4 +1,4 @@
-import type { DataKind } from '../data/DataInput';
+import type { DataKind } from '../../data/DataInput';
 
 /** How a pasted link is turned into the id the tool needs. */
 export type Normalize = 'google' | 'slack_thread';

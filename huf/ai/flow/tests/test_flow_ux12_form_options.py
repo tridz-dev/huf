@@ -5,7 +5,7 @@ import types
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.flow import form_options_api as api
+from huf.ai.flow.catalog import form_options_api as api
 
 
 def df(fieldname, fieldtype="Data", label=None, **kw):

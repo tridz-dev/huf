@@ -7,7 +7,7 @@ vi.mock('@/hooks/flow/useFlowPermissions', async () => (await import('./formTest
 vi.mock('@/services/flow/catalogApi', async () => (await import('./formTestKit')).catalogMock());
 vi.mock('@/services/agentApi', () => ({ getAgents: vi.fn().mockResolvedValue([{ name: 'AG-1', agent_name: 'Support helper' }]) }));
 
-import { AgentRunForm } from './AgentRunForm';
+import { AgentRunForm } from '../AgentRunForm';
 import { boxText, latest, renderForm } from './formTestKit';
 
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;

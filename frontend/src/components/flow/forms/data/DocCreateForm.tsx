@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
-import { Button } from '../../ui/button';
-import { Combobox } from '../../ui/combobox';
-import { DataInput } from '../data/DataInput';
-import { FieldHint } from '../FieldHint';
-import { Input } from '../../ui/input';
-import { Label } from '../../ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
+import { Button } from '../../../ui/button';
+import { Combobox } from '../../../ui/combobox';
+import { DataInput } from '../../data/DataInput';
+import { FieldHint } from '../../FieldHint';
+import { Input } from '../../../ui/input';
+import { Label } from '../../../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select';
 import { type CreateDocField, type CreateDocType, listCreateDocFields, listCreateDocTypes } from '@/services/flow/formOptionsApi';
-import { type ActionFormProps, asObj, Section, str } from './formKit';
+import { type ActionFormProps, asObj, Section, str } from '../formKit';
 
 const KIND_HINT: Record<CreateDocField['kind'], string> = {
   text: '',

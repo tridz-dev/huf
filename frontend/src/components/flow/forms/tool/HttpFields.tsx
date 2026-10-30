@@ -1,8 +1,8 @@
 import { type ReactNode } from 'react';
-import { Button } from '../../ui/button';
+import { Button } from '../../../ui/button';
 import { JsonArea } from '@/components/common/JsonArea';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
-import { isRowShaped, KeyValueRows } from './fields';
+import { isRowShaped, KeyValueRows } from '../fields';
 
 const asText = (v: unknown): string => (typeof v === 'string' ? v : v === undefined || v === null ? '' : JSON.stringify(v, null, 2));
 

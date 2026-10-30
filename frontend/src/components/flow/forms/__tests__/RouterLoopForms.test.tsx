@@ -7,8 +7,8 @@ vi.mock('@/hooks/flow/useFlowPermissions', async () => (await import('./formTest
 vi.mock('@/services/flow/catalogApi', async () => (await import('./formTestKit')).catalogMock());
 vi.mock('@/services/providerApi', () => ({ getModels: vi.fn().mockResolvedValue([]), getProviders: vi.fn().mockResolvedValue([]) }));
 
-import { LoopForm } from './LoopForm';
-import { RouterForm } from './RouterForm';
+import { LoopForm } from '../LoopForm';
+import { RouterForm } from '../RouterForm';
 import { flow, latest, renderForm, updateEdges } from './formTestKit';
 
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;

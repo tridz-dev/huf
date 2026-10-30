@@ -6,7 +6,7 @@ import { FieldHint } from '../FieldHint';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { splitDuration, toSeconds, UNIT_LABEL, type TimeUnit } from '@/lib/flow/flowUnits';
+import { splitDuration, toSeconds, UNIT_LABEL, type TimeUnit } from '@/lib/flow-data/flowUnits';
 
 /** One value of a step: the data input, with the required-field message under it. */
 export function ValueField({ field, f, Err, nodeId, ...rest }: { field: string; f: (field: string) => string; Err: (p: { field: string }) => ReactNode; nodeId: string } & Omit<DataInputProps, 'testId' | 'nodeId'>) {

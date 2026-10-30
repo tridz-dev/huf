@@ -1,8 +1,8 @@
-import { FieldHint } from '../FieldHint';
-import { MoreOptions } from '../frame/MoreOptions';
-import { type ActionFormProps, Section, str } from './formKit';
-import { DurationField, ValueField } from './fields';
-import type { TimeUnit } from '@/lib/flow/flowUnits';
+import { FieldHint } from '../../FieldHint';
+import { MoreOptions } from '../../frame/MoreOptions';
+import { type ActionFormProps, Section, str } from '../formKit';
+import { DurationField, ValueField } from '../fields';
+import type { TimeUnit } from '@/lib/flow-data/flowUnits';
 
 const TTL_UNITS: TimeUnit[] = ['minutes', 'hours', 'days'];
 const MAX_TTL_SECONDS = 2592000;

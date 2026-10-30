@@ -6,7 +6,7 @@ import { type ComponentType, type ReactNode, useState } from 'react';
 import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
-import type { ActionFormProps, Cfg } from './formKit';
+import type { ActionFormProps, Cfg } from '../formKit';
 
 export const ORDER = { customer: { name: 'Ada Lovelace', email: 'ada@example.com' }, total: 450, items: [{ name: 'Tea' }, { name: 'Cake' }] };
 

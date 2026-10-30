@@ -2,9 +2,9 @@
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/contexts/FlowContext', async () => (await import('./formTestKit')).contextMock());
-vi.mock('@/hooks/flow/useFlowPermissions', async () => (await import('./formTestKit')).permissionsMock());
-vi.mock('@/services/flow/catalogApi', async () => (await import('./formTestKit')).catalogMock());
+vi.mock('@/contexts/FlowContext', async () => (await import('../__tests__/formTestKit')).contextMock());
+vi.mock('@/hooks/flow/useFlowPermissions', async () => (await import('../__tests__/formTestKit')).permissionsMock());
+vi.mock('@/services/flow/catalogApi', async () => (await import('../__tests__/formTestKit')).catalogMock());
 vi.mock('@/services/flow/formOptionsApi', () => ({
   listCreateDocTypes: vi.fn().mockResolvedValue([{ name: 'ToDo', label: 'To-do' }, { name: 'Note', label: 'Note' }]),
   listCreateDocFields: vi.fn().mockImplementation(async (dt: string) =>
@@ -21,9 +21,9 @@ vi.mock('@/services/flow/formOptionsApi', () => ({
 import { DocCreateForm } from './DocCreateForm';
 import { StateForm } from './StateForm';
 import { TransformForm, startingData } from './TransformForm';
-import { latest, renderForm } from './formTestKit';
+import { latest, renderForm } from '../__tests__/formTestKit';
 import { buildPickerModel } from '@/lib/flow-data/model';
-import { flow } from './formTestKit';
+import { flow } from '../__tests__/formTestKit';
 
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
 Element.prototype.scrollIntoView ??= () => {};

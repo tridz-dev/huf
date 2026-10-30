@@ -2,9 +2,9 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/contexts/FlowContext', async () => (await import('./formTestKit')).contextMock());
-vi.mock('@/hooks/flow/useFlowPermissions', async () => (await import('./formTestKit')).permissionsMock());
-vi.mock('@/services/flow/catalogApi', async () => (await import('./formTestKit')).catalogMock());
+vi.mock('@/contexts/FlowContext', async () => (await import('../__tests__/formTestKit')).contextMock());
+vi.mock('@/hooks/flow/useFlowPermissions', async () => (await import('../__tests__/formTestKit')).permissionsMock());
+vi.mock('@/services/flow/catalogApi', async () => (await import('../__tests__/formTestKit')).catalogMock());
 vi.mock('@/services/flowApi', async (orig) => ({
   ...(await orig<typeof import('@/services/flowApi')>()),
   getApproverRoles: vi.fn().mockResolvedValue([{ name: 'System Manager', group: 'Huf' }, { name: '_Test Role', group: 'Other' }, { name: 'Accountant', group: 'Other' }]),
@@ -18,7 +18,7 @@ vi.mock('@/services/flow/formOptionsApi', () => ({
 }));
 
 import { ApprovalForm } from './ApprovalForm';
-import { flow, latest, renderForm, updateEdges } from './formTestKit';
+import { flow, latest, renderForm, updateEdges } from '../__tests__/formTestKit';
 
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
 Element.prototype.scrollIntoView ??= () => {};

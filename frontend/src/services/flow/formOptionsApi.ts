@@ -35,7 +35,7 @@ export interface CheckedUser {
 
 export async function listCreateDocTypes(): Promise<CreateDocType[]> {
   try {
-    const result = await call.post('huf.ai.flow.form_options_api.get_create_document_types', {});
+    const result = await call.post('huf.ai.flow.catalog.form_options_api.get_create_document_types', {});
     return (result.message as CreateDocType[]) ?? [];
   } catch (error) {
     handleFrappeError(error, 'Error loading the kinds of record');
@@ -44,7 +44,7 @@ export async function listCreateDocTypes(): Promise<CreateDocType[]> {
 
 export async function listCreateDocFields(doctype: string): Promise<CreateDocField[]> {
   try {
-    const result = await call.post('huf.ai.flow.form_options_api.get_create_document_fields', { doctype });
+    const result = await call.post('huf.ai.flow.catalog.form_options_api.get_create_document_fields', { doctype });
     return (result.message as CreateDocField[]) ?? [];
   } catch (error) {
     handleFrappeError(error, 'Error loading the fields');
@@ -53,7 +53,7 @@ export async function listCreateDocFields(doctype: string): Promise<CreateDocFie
 
 export async function searchFlowUsers(query: string): Promise<FlowUser[]> {
   try {
-    const result = await call.post('huf.ai.flow.form_options_api.search_flow_users', { query });
+    const result = await call.post('huf.ai.flow.catalog.form_options_api.search_flow_users', { query });
     return (result.message as FlowUser[]) ?? [];
   } catch (error) {
     handleFrappeError(error, 'Error looking up people');
@@ -62,7 +62,7 @@ export async function searchFlowUsers(query: string): Promise<FlowUser[]> {
 
 export async function checkFlowUsers(users: string[]): Promise<CheckedUser[]> {
   try {
-    const result = await call.post('huf.ai.flow.form_options_api.check_flow_users', { users });
+    const result = await call.post('huf.ai.flow.catalog.form_options_api.check_flow_users', { users });
     return (result.message as CheckedUser[]) ?? [];
   } catch (error) {
     handleFrappeError(error, 'Error checking people');

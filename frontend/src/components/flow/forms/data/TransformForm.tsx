@@ -1,12 +1,12 @@
-import { FieldHint } from '../FieldHint';
-import { Label } from '../../ui/label';
-import { MoreOptions } from '../frame/MoreOptions';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '../../ui/select';
+import { FieldHint } from '../../FieldHint';
+import { Label } from '../../../ui/label';
+import { MoreOptions } from '../../frame/MoreOptions';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '../../../ui/select';
 import { TRANSFORM_HELP, transformParamHelp } from '@/lib/flow/flowHelp';
 import { getTransformOp, TRANSFORM_OPS, TRANSFORM_SECTIONS } from '@/lib/flow-graph/flowTransformOps';
-import { type ActionFormProps, asObj, Section, str } from './formKit';
-import { ListRows, ValueField } from './fields';
-import { useDataCatalog } from '../data/useDataCatalog';
+import { type ActionFormProps, asObj, Section, str } from '../formKit';
+import { ListRows, ValueField } from '../fields';
+import { useDataCatalog } from '../../data/useDataCatalog';
 import type { PickerModel } from '@/lib/flow-data/model';
 
 /** Inputs that take a whole list from an earlier step, and inputs that are a short list of values typed in. */

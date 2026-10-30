@@ -1,8 +1,8 @@
 import { type ReactNode, useState } from 'react';
-import { Button } from '../../ui/button';
-import { DataInput } from '../data/DataInput';
-import { FieldHint } from '../FieldHint';
-import { SlackChannelPicker, channelFor, useSlackChannels } from '../SlackChannelPicker';
+import { Button } from '../../../ui/button';
+import { DataInput } from '../../data/DataInput';
+import { FieldHint } from '../../FieldHint';
+import { SlackChannelPicker, channelFor, useSlackChannels } from '../../SlackChannelPicker';
 import { useIntegrationStatus } from '@/lib/flow/flowIntegrations';
 
 /**

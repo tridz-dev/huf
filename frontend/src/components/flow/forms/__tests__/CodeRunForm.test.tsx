@@ -12,8 +12,8 @@ vi.mock('@/lib/flow-graph/useCodeFlowStatus', () => ({
   }),
 }));
 
-import { CodeRunFields } from '../CodeRunForm';
-import { Section } from './formKit';
+import { CodeRunFields } from '../../CodeRunForm';
+import { Section } from '../formKit';
 import { renderForm, latest } from './formTestKit';
 
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
