@@ -82,6 +82,7 @@ def prepare_graph(graph: dict, *, from_template: bool) -> tuple[dict, list[dict]
 		if not isinstance(node, dict):
 			continue
 		node.pop("_sample", None)
+		node.pop("_sample_at", None)
 		config = node.get("config") if isinstance(node.get("config"), dict) else {}
 		node["config"] = config
 		node_type = node.get("type")

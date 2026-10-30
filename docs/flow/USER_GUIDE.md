@@ -118,12 +118,16 @@ Lists, searches or reads files in Google Drive. Common errors: Google Drive not 
 
 ### If / else (was "Condition (If/Else)")
 
-Sends the flow down the **True** or **False** path.
+Sends the flow down the **Yes** or **No** path.
 
-- Field: Condition, a check that is true or false.
-- Syntax: read trigger data as `input['field']`; compare with `==`, `!=`, `>`, `>=`, `<`, `<=`, `in`; combine with `and`, `or`, `not`. Text needs quotes.
-- Examples: `input['amount'] > 100`, `input['status'] == 'paid'`, `input['country'] in ['IN', 'US']`, `input['vip'] and input['total'] >= 500`.
-- Common errors: missing quotes around text; one of the two paths not connected.
+- Build the check with **rules**. Each rule is: data from the trigger or an earlier step (picked with "Use data", with its example shown), how to compare it (is, is not, is more than, is less than, is at least, is at most, contains, does not contain, starts with, ends with, is one of, is none of, is empty, is not empty, is yes, is no) and a value, or other data.
+- **All of / Any of** says whether every rule or just one has to be true. **Add group** adds a bracket of rules with its own All of / Any of (one level deep).
+- Under the rules a sentence says what the check means: "Yes when Amount is more than 100 and Status is Paid." "Ignore capital letters" is ticked by default for text.
+- Numbers: a value that looks like a number compares as a number, also when the data arrives as the text "150".
+- **Where each path goes** shows "Yes -> step" and "No -> step", with an Add step button for each.
+- **Write it yourself** shows the check as text for people who prefer it: read trigger data as `input['field']`; compare with `==`, `!=`, `>`, `>=`, `<`, `<=`, `in`; combine with `and`, `or`, `not`; text needs quotes. Four helpers exist: `lower(x)`, `number(x)`, `startswith(x, y)`, `endswith(x, y)`. Examples: `input['amount'] > 100`, `input['status'] == 'paid'`, `input['country'] in ['IN', 'US']`, `startswith(input['sku'], 'AB-')`.
+- A check written by hand that rules cannot show opens in the text box with a note, and is never rewritten.
+- Common errors: no rule yet ("Add at least one rule"); one of the two paths not connected.
 
 ### Choose with AI (was "LLM Router")
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { flowService } from '../../../services/flowService';
 import { edgeRoute } from '../../../services/flowSerializer';
-import { onEdgeAction } from '@/lib/flow-graph/edgeActions';
+import { onAddStepRequest, onEdgeAction } from '@/lib/flow-graph/edgeActions';
 import type { FlowEdgeRoute } from '../../../types/flow.types';
 import type { Node } from 'reactflow';
 import { blendPositions, motionMs, runFrames } from '@/lib/flow-canvas/tween';
@@ -68,4 +68,6 @@ export function useEdgeActions(edges: Array<{ id: string; source: string; data?:
       }),
     [edges, onInsert, onRemove],
   );
+  // "Add step" on a Yes / No row in the side panel.
+  useEffect(() => onAddStepRequest(({ sourceNodeId, route }) => onInsert(sourceNodeId, route)), [onInsert]);
 }

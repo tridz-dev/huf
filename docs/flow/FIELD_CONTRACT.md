@@ -57,7 +57,7 @@ attributes: `input['amount'] > 100`, not `input.amount` and not `context["x"]`.
 Notes:
 * `auth`, `apiKey`, `webhook_key`, `intervalType`, `interval`, `cronExpression`, `schedule_name`, `timezone` (the key is `time_zone`), `filters`, `PUT`, `DELETE`, `on_delete` are all invalid. The UI compiles any "every N hours/days" picker to a cron string before saving. The optional `time_zone` is consumed by `run_due_schedule_flows`, which reads each cron on that zone's clock.
 
-Every node may also carry `_sample` (UI extra like `_label`): a trimmed example of the data the step receives (webhook trigger: a sample request), at most 8 KB, passwords and keys hidden. Only people who can edit the flow get it back from the server; run snapshots never keep it.
+Every node may also carry `_sample` (UI extra like `_label`) and `_sample_at` (ISO time it was pinned): a pinned example, at most 8 KB, passwords and keys hidden. On a trigger it is the data the flow starts with (an object: a sample request). On any other step it is what the step **produced** when it was tested, as the step gives it (an object, a list or text; see section 12). Only people who can edit the flow get it back from the server; run snapshots never keep it, a copy of a flow drops it, and the server shrinks an oversized `_sample` on every save.
 * Webhook method: the receiver (`flow_webhook` / `flow_webhook_clean`) does not branch on the method; the schema restricts to GET/POST so the UI never promises PUT/DELETE.
 * Doc-event filters/conditions are not part of the node (they live on the Automation Trigger created by `set_flow_trigger`).
 * A trigger node has `next` like any node; multiple triggers each point into the same flow body.
@@ -461,7 +461,7 @@ The example is valid with a classifier that marks `http_request` as an http tool
 **Templating and expressions**
 * `{{var}}` is NOT supported anywhere. In `agent.run.prompt`, `{name}` placeholders are filled from `prompt_bindings`; `{{`/`}}` are literal braces. Other dynamic values use `{"$from": ...}` or `{"$template": "...", "vars": {...}}`.
 * `router.llm.prompt` and `human.approval.message` are plain text: no placeholders are substituted.
-* `condition` expressions use `input[...]` roots (AST-restricted evaluator).
+* `condition` expressions use `input[...]` roots (AST-restricted evaluator). The only calls allowed are `number(x)`, `lower(x)`, `startswith(x, y)` and `endswith(x, y)` (fixed names and argument counts, total: wrong types give null / false). The Condition builder writes and reads exactly the shapes of `docs/flow/CONDITION.md`.
 
 **Approvals**
 * The `waiting` JSON of a paused run holds: `type` (`approval`), `node_id`, `message`, `approver_type` (`role`|`user`), `approver_role`, `approver_users`, `timeout_next`, `timeout_ms`, `timeout_at` (ISO). `get_pending_approvals` returns these (plus `title`/`instructions`/`approval_type` aliases for the current frontend).
@@ -559,7 +559,24 @@ An `output` (End) node may declare `outcome: {label, tone}`: how the run reads t
 * **Served.** `get_flow_run`, `list_flow_runs` and `list_flow_runs_page` return `outcome: {"label": str, "tone": "good"|"neutral"|"bad"} | null` for a finished (Success) run: the recorded outcome first, else (End without outcome) what an approver decided ("Approved" good, "Rejected" bad, "Timed out" neutral), else null. A Failed or unfinished run has no outcome; the status says it. The row fields `outcome_label` / `outcome_tone` are not part of the response.
 * **Showing it.** The run headline uses the label ("Rejected", bad tone) with the small "Run finished" line under it; the outcome chip beside the status in Run history and Executions uses the same label and tone.
 
-## 12. Step forms (UX-12)
+## 12. Testing one step, pinned samples (UX-16)
+
+### 12.1 API (`huf.ai.flow.testrun.step_test_api`, editors only: write permission on the flow)
+
+* `get_step_test_info(flow_id, node_id)` -> `{kind, effect, calls_ai, simulated, approval, trigger, trigger_kind, doctype?, parts, sample_input}`. `effect` is `reads` | `changes` | `sends` (`huf/ai/flow/testrun/effects.py`). `parts` is the data the step receives, for display: `[{key, title, kind: input|step|item, source: pinned|trigger_sample|last_run|none, value, shortened, ran_at}]`. `key` is `input` (what the flow starts with: the trigger's `_sample`, else the latest successful run's payload), a step id (that step's `_sample`, else its output in the latest successful run) or `item` (first item of the enclosing loop's list). Only steps the step's settings mention are listed. `sample_input` is `{input, steps: {<step id>: output}, item?}`, the same data as one object.
+* `test_step(flow_id, node_id, sample_input=None)` (POST) runs ONE step against `sample_input` (this shape, 64 KB at most; absent: the sample of `get_step_test_info`) and returns `{status: success|failed, mode: real|simulated|preview, output, output_shortened, pin_value, duration_ms, error, fix_hint, tested_at, effect, calls_ai, summary, preview, goes_to, branch}`. No Flow Run is created and nothing is stored: the run history never shows a step test.
+* `list_recent_documents(flow_id, node_id)` -> the five most recently changed documents of a data trigger's type that the caller may open; `get_document_sample(flow_id, node_id, docname)` -> `{sample}` as the flow would receive it (fields the caller may not read are left out).
+* Limits: 20 tests a minute per person (then a plain "You are testing steps very quickly"); 30 seconds per step (steps that can be slow, meaning agents, AI routers, loops and web reads, run in a `short`-queue job that is stopped at 30 s); output at most 64 KB with secret-looking keys and token-shaped values hidden; `pin_value` at most 8 KB.
+
+### 12.2 What runs
+
+Conditions, loops, transforms, checks, End, "Use saved data" and every tool classified `reads` run for real. A tool step that `changes` or `sends`, a record creation, "Save data for later" / "Forget saved data" (also inside a loop) and a code step answer with the simulated output of section 11.1 (`mode: simulated`, `summary`: "Would send email to ..."); a code step is only ever run by a full test run. An agent or an AI router makes a real call to the AI model (`calls_ai: true`); an agent's tools follow the same rule as in a test run. "Wait for approval" returns `mode: preview` and `preview: {title, note, facts, who_can_decide}`, the card the approver would get; it never pauses and nobody is told. Triggers: schedule -> a simulated tick `{scheduled_for, trigger_node, cron}`; webhook -> the last received request; data trigger -> the newest document you can open (or the one given in `sample_input.input`).
+
+### 12.3 Pinned samples (shape for the Use-data picker)
+
+"Pin this output" stores `pin_value` of the last test as the step's `_sample` (and `_sample_at`) through the normal flow save. For a simulated step the "Would ..." wording is left out and the sample fields (`id`, `ts` ...) stay. The picker (`catalog.api`) reads `_sample` of an earlier step as **its output**: an object gives its fields under `<step id>.<field>`, a list or text gives the step's result as a whole. A trigger's `_sample` is `input`. Samples are request data: viewers never get them (`drop_samples`).
+
+## 13. Step forms (UX-12)
 
 * **Placeholders in plain-text fields.** `render_text_refs` (the approval `message` and `title`, the router `prompt`, the End `outcome.label`) fills `{input.field}`, `{<step id>.field}` and `{foreach.item}`. It also takes a wording prefix: `{table:input.order}` (a record as `Label: value` rows), `{joined:n1.items}` (a list joined with commas) and `{count:n1.items}` (how many). They read exactly like the template variables `table_x`, `joined_x`, `count_x` (`huf.ai.graph.templates.render_marked`). In an approval request the message is written as one sentence ("Name: Ada Lovelace Email: ada@example.com"), never JSON.
 * **Approvers who do not exist.** Saving or publishing lists `approver_users` that no enabled user has as something to finish (`UNKNOWN_APPROVER`, "no one here is called ..."). A run does not re-check people (`validate_flow(..., check_people=False)`), so a test run of a draft may name anyone. The editor offers people through `huf.ai.flow.catalog.form_options_api.search_flow_users` and checks saved names with `check_flow_users`.

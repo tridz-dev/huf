@@ -78,7 +78,9 @@ export interface BackendNode {
     /** The author's note about the step. Never read by the engine. */
     _notes?: string;
     /** A saved example of the data this step receives (webhook trigger): <= 8 KB, secrets hidden, only editors get it back. */
-    _sample?: Record<string, unknown>;
+    _sample?: unknown;
+    /** When `_sample` was pinned (ISO time). */
+    _sample_at?: string;
 }
 
 export interface BackendDocPermission {

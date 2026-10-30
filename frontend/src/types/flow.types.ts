@@ -296,8 +296,13 @@ export interface FlowNodeData {
   runSummary?: string;
   /** What the card needs to know about its place in the flow, worked out once for the whole canvas (never written to the flow). */
   canvas?: CanvasNodeFacts;
-  /** A saved example of the data this step receives or returns (stored as `_sample`: <= 8 KB, secrets hidden, editors only). */
-  sample?: Record<string, unknown>;
+  /**
+   * A pinned example (stored as `_sample`: <= 8 KB, secrets hidden, editors only). A trigger: the request the flow starts
+   * with (an object). Any other step: what the step produced when it was tested, as the step gives it (an object, a list or text).
+   */
+  sample?: unknown;
+  /** When the sample was pinned (ISO time, stored as `_sample_at`). */
+  sampleAt?: string;
 }
 
 /** Per-step facts the canvas works out once for every card, so a card never walks the whole flow itself. */

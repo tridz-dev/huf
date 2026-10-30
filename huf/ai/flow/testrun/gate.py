@@ -12,13 +12,14 @@ output (see :mod:`~huf.ai.flow.testrun.simulate`).
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from typing import Any, Callable
 
 import frappe
 
 from huf.ai.flow.testrun import STORED_TEST
 from huf.ai.flow.testrun.effects import READS, tool_effect
-from huf.ai.flow.testrun.simulate import simulated_code, simulated_document, simulated_output
+from huf.ai.flow.testrun.simulate import simulated_code, simulated_document, simulated_output, simulated_state
 
 TEST_NOTE = "Test: you can approve this yourself"
 # Code steps run for real only in the throw-away scratch profile (it has no network and no site access).
@@ -27,6 +28,35 @@ REAL_CODE_PROFILE = "Flow Scratch"
 
 def is_test_run(flow_run) -> bool:
 	return str(getattr(flow_run, "run_mode", "") or "") == STORED_TEST
+
+
+# --------------------------------------------------------------------------- testing one step on its own (UX-16)
+
+_STEP_TEST_FLAG = "huf_step_test"
+
+
+@contextmanager
+def step_test_scope():
+	"""While open, everything that runs in this request is a test of ONE step: reads run, sends and changes are skipped.
+
+	There is no Flow Run behind such a test (nothing may show in the run history), so an agent's tools cannot learn
+	"this is a test" from a run record. They read this flag instead (:func:`agent_run_is_test`). "Save data for later"
+	steps are skipped too, inside a loop body as well.
+	"""
+	flags = frappe.local.flags
+	before = getattr(flags, _STEP_TEST_FLAG, False)
+	setattr(flags, _STEP_TEST_FLAG, True)
+	try:
+		yield
+	finally:
+		setattr(flags, _STEP_TEST_FLAG, before)
+
+
+def step_test_active() -> bool:
+	try:
+		return bool(getattr(frappe.local.flags, _STEP_TEST_FLAG, False))
+	except Exception:
+		return False
 
 
 def tool_type_of(tool_name: str) -> str | None:
@@ -71,6 +101,8 @@ def simulate_node(node: dict, resolve: Callable[[Any], Any]) -> dict | None:
 		return _success(simulated_output(tool_id, effect, args))
 	if ntype == "doc.create":
 		return _success(simulated_document(config.get("doctype")))
+	if ntype in ("state.set", "state.delete") and step_test_active():
+		return _success(simulated_state(ntype, config.get("key")))
 	if ntype == "code.run":
 		if (config.get("profile") or REAL_CODE_PROFILE) == REAL_CODE_PROFILE:
 			return None
@@ -89,7 +121,9 @@ def _run_context(ctx) -> dict:
 
 
 def agent_run_is_test(agent_run_id) -> bool:
-	"""True when this Agent Run belongs to a test run of a flow. Any doubt (no run id) is "not a test"."""
+	"""True when this Agent Run belongs to a test run of a flow, or runs inside a one-step test. Any doubt is "not a test"."""
+	if step_test_active():
+		return True
 	if not agent_run_id:
 		return False
 	try:

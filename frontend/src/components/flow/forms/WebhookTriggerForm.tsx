@@ -59,7 +59,7 @@ export function WebhookTriggerForm({ nodeId }: { nodeId: string }) {
     else toast.error("Couldn't copy. Select the text and copy it yourself.");
   };
 
-  const sample = node?.data.sample;
+  const sample = node?.data.sample as Record<string, unknown> | undefined;
   const setSample = (next: Record<string, unknown> | undefined) =>
     updateNodeData(nodeId, (data) => {
       const rest = { ...data } as FlowNodeData;
