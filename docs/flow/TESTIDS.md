@@ -33,7 +33,7 @@ Card title = node title = sidebar title (derived from `data/actions.ts` / `data/
 | `flow-node-<nodeId>` | Node wrapper (`data-node-type`, `data-incomplete="true|false"`) |
 | `flow-node-title-<nodeId>` | Node title |
 | `flow-node-subtitle-<nodeId>` | One line saying what the step does ("Send a message to #alerts"); full text in the tooltip |
-| `flow-node-status-<nodeId>` | The card's ONE status word (`data-status`: ready, needs-setup, not-connected, orphan, running, waiting, done, failed). Never wraps; cards are the same size in every state |
+| `flow-node-status-<nodeId>` | The card's ONE status word (`data-status`: ready, needs-setup, not-connected, orphan, running, waiting, done, failed, skipped). Under 80% zoom it is a coloured dot with the same test id and `aria-label`. Never wraps; cards are the same size in every state |
 | `flow-node-incomplete-<nodeId>` | Inner text of the status word when it is "Needs setup" |
 | `flow-node-marker-<nodeId>` | "Trigger" / "End" marker on trigger and end cards |
 | `flow-node-choose-trigger-<nodeId>` | "Choose a trigger" button on the empty trigger card (title "Choose what starts this flow") |
@@ -45,6 +45,10 @@ Card title = node title = sidebar title (derived from `data/actions.ts` / `data/
 | `flow-add-step-<nodeId>` | Add-step card after a plain step |
 | `flow-add-step-<nodeId>-<route>` | Add-step card for a branch (`true`, `false`, `approve`, `reject`, `body`, `option`, `timeout`) |
 | `flow-insert-step-<edgeId>` | "+" on an edge |
+| `flow-node-title-<nodeId>` / `data-lod` | The title; the card element carries `data-lod` = `full` (zoom 80% and up: icon, title, subtitle, status word), `compact` (50% to under 80%: icon, enlarged title, status dot) or `icon` (under 50%: an icon tile; the title shows on hover or focus in `flow-node-hover-<nodeId>`) |
+| `flow-node-hover-<nodeId>`, `flow-node-run-summary-<nodeId>` | Note under a card on hover/focus: the title of an icon tile and, with a run shown on the canvas, one line of what the step produced (or why it failed) |
+| `flow-run-overlay-chip`, `flow-run-overlay-hide` | "Showing this run" chip (top-left of the canvas) while a run is drawn on the canvas, and its Hide button. A run opened from history or `?run=<id>` stays drawn after the details close, until Hide, another run, or another flow |
+| `data-run="taken"/"untaken"` on `flow-edge-label-<edgeId>` | A connection the shown run went along (green line) or not (faded) |
 | `flow-edge-label-<edgeId>` | Branch name pill on a connection (Yes/No, Approved/Rejected/Timed out, For each item/When done, a router path in full, Next item on the loop-back line); 12px on screen at any zoom |
 
 ## Right sidebar (step panel frame, UX-8)
