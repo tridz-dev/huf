@@ -109,6 +109,8 @@ function failedLoopChildren(body: string[], loop: StoryStep, raw: string, make: 
   let at = made.findIndex((c) => c.status === 'failed');
   if (at < 0) at = made.findIndex((c) => c.output === null || c.output === undefined);
   if (at < 0) return made.filter((c) => c.output !== undefined && c.output !== null || c.status !== 'done');
+  // The failed step says why; the loop itself only says where it stopped (the same sentence twice reads as two problems).
+  if (stopped) loop.reason = `It stopped at ${item} because a step inside it did not work.`;
   return made.map((c, i) => {
     if (i < at) return c;
     if (i === at) {

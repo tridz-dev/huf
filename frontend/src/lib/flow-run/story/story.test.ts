@@ -216,6 +216,7 @@ describe('a loop that stopped part-way', () => {
     const loop = story.steps.find((s) => s.id === 'loop')!;
     expect(loop.status).toBe('failed');
     expect(loop.children!.map((c) => [c.id, c.status])).toEqual([['tidy', 'done'], ['price', 'failed'], ['send', 'skipped']]);
+    expect(loop.reason).toBe('It stopped at item 2 because a step inside it did not work.');
     expect(loop.children![1].reason).toBe('No price');
     expect(loop.children![1].footnote).toBe('Stopped at item 2');
     expect(loop.children![2].footnote).toBe('Not run for item 2');
