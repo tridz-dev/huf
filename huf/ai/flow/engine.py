@@ -69,6 +69,7 @@ from huf.ai.flow.orchestrator import (
 )
 from huf.ai.flow.support.redact import pinned_json
 from huf.ai.flow.support.tool_result import normalize_tool_result
+from huf.ai.flow.testrun import gate as test_gate, stored_mode
 from huf.ai.flow.support.turned_off import is_turned_off, turned_off_result
 from huf.ai.flow.tool_executor import execute as execute_tool
 from huf.ai.flow.tool_executor import tool_run_context
@@ -453,6 +454,7 @@ def create_flow_run(
 	payload: dict | None = None,
 	trigger_type: str = "Manual",
 	ignore_permissions: bool = False,
+	mode: str = "real",
 ) -> "frappe.Document":
 	"""
 	Create a new FlowRun document from a FlowDefinition. This is the public
@@ -470,6 +472,8 @@ def create_flow_run(
 	    payload: Initial trigger payload / input
 	    trigger_type: Manual / Webhook / Schedule / Doc Event / Gateway
 	    ignore_permissions: for trusted callers that already authorised the route (Gateway)
+	    mode: ``"real"`` or ``"test"``. A test run skips every step that would send or change something
+	        outside the flow (see :mod:`huf.ai.flow.testrun`); every later continuation reads it from the run.
 
 	Returns:
 	    Flow Run document
@@ -517,6 +521,7 @@ def create_flow_run(
 		"max_hops": max_hops,
 		"context_json": json.dumps(payload or {}),
 		"trigger_type": trigger_type,
+		"run_mode": stored_mode(mode),
 		"trigger_payload": json.dumps(payload or {}),
 		"conversation": conversation.name if conversation else None,
 		"started_at": now_datetime(),
@@ -1124,6 +1129,10 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 	if is_turned_off(node):
 		return turned_off_result()
 
+	if test_gate.is_test_run(flow_run):
+		simulated = test_gate.simulate_node(node, _context_of(flow_run, settings).resolve)
+		if simulated is not None:
+			return simulated
 	try:
 		return executor(flow_run, node, config, settings)
 	except TemplateError as exc:
@@ -1517,6 +1526,7 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 		"type": "approval",
 		"node_id": node.get("id"),
 		**waiting_fields(flow_run, node, render_text_refs(config.get("message", ""), ctx), ctx.data),
+		**test_gate.approval_extras(flow_run),
 		"approver_type": config.get("approver_type"),
 		"approver_role": config.get("approver_role"),
 		"approver_users": config.get("approver_users") or [],
@@ -1532,6 +1542,9 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 	):
 		return {"status": "waiting_approval"}  # the run finished meanwhile (operator action): do not revive it
 	commit_if_background()
+	if test_gate.is_test_run(flow_run):
+		test_gate.notify_test_owner(flow_run, waiting_data)  # a test sends no email and no Slack card
+		return {"status": "waiting_approval"}
 	_send_approval_notifications(flow_run, node, config, waiting_data)
 	flow_hooks.notify_approvers(flow_run)
 	return {"status": "waiting_approval"}

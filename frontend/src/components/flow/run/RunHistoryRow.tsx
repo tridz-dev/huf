@@ -3,7 +3,7 @@ import { startedLine } from '@/lib/flow-run/story/headline';
 import { runDuration } from '@/lib/flow-run/story/time';
 import { formatAbsoluteTime } from '@/lib/serverTime';
 import type { FlowRunSummary } from '@/services/flowApi';
-import { OutcomeChip, RunStatusPill } from './RunStatusBits';
+import { OutcomeChip, RunStatusPill, TestRunChip } from './RunStatusBits';
 
 interface RunHistoryRowProps {
   run: FlowRunSummary;
@@ -32,6 +32,7 @@ export function RunHistoryRow({ run, currentUser, onOpen, showFlow }: RunHistory
           {showFlow ? run.flow_name : friendlyRunTitle({ runNumber: run.run_number })}
         </span>
         <RunStatusPill status={run.status} stale={run.stale} testId={`flow-run-row-status-${run.name}`} />
+        {run.run_mode === 'Test' && <TestRunChip testId={`flow-run-test-chip-${run.name}`} />}
         {run.outcome && <OutcomeChip outcome={run.outcome} testId={`flow-run-row-outcome-${run.name}`} />}
       </div>
       <div className="mt-1 text-xs text-steel" data-testid={`flow-run-row-started-${run.name}`} title={formatAbsoluteTime(run.started_at)}>
