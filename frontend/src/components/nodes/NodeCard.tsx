@@ -29,6 +29,7 @@ const STATUS_STYLE: Record<CardStatusKind, { text: string; icon: LucideIcon | nu
   done: { text: 'text-good', icon: CheckCircle2 },
   failed: { text: 'text-destructive', icon: XCircle },
   skipped: { text: 'text-steel', icon: MinusCircle },
+  stopped: { text: 'text-steel', icon: MinusCircle },
 };
 
 /** Colour of the status dot shown when the card is too small for the status word. */
@@ -42,6 +43,7 @@ const DOT_STYLE: Record<CardStatusKind, string> = {
   done: 'bg-good',
   failed: 'bg-destructive',
   skipped: 'bg-steel-soft',
+  stopped: 'bg-steel-soft',
 };
 
 /** Test ids that existed before the status line was unified (docs/flow/TESTIDS.md); kept so they stay stable. */

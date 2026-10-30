@@ -9,7 +9,7 @@ import { toolLabel } from './flowIntegrations';
  */
 
 /** The single status vocabulary on cards. `kind` drives colour, `text` is the word shown. */
-export type CardStatusKind = 'ready' | 'needs-setup' | 'not-connected' | 'orphan' | 'running' | 'waiting' | 'done' | 'failed' | 'skipped';
+export type CardStatusKind = 'ready' | 'needs-setup' | 'not-connected' | 'orphan' | 'running' | 'waiting' | 'done' | 'failed' | 'skipped' | 'stopped';
 
 export interface CardStatus {
   kind: CardStatusKind;
@@ -26,6 +26,7 @@ export const CARD_STATUS_TEXT: Record<CardStatusKind, string> = {
   done: 'Done',
   failed: 'Failed',
   skipped: 'Skipped',
+  stopped: 'Stopped',
 };
 
 interface StatusInput {
@@ -40,13 +41,14 @@ export function cardStatus({ runStatus, incomplete, orphaned, notConnected }: St
   const kind: CardStatusKind =
     runStatus === 'running' ? 'running'
       : runStatus === 'skipped' ? 'skipped'
-        : runStatus === 'waiting' ? 'waiting'
-          : runStatus === 'error' ? 'failed'
-            : runStatus === 'success' ? 'done'
-              : notConnected ? 'not-connected'
-                : incomplete ? 'needs-setup'
-                  : orphaned ? 'orphan'
-                    : 'ready';
+        : runStatus === 'stopped' ? 'stopped'
+          : runStatus === 'waiting' ? 'waiting'
+            : runStatus === 'error' ? 'failed'
+              : runStatus === 'success' ? 'done'
+                : notConnected ? 'not-connected'
+                  : incomplete ? 'needs-setup'
+                    : orphaned ? 'orphan'
+                      : 'ready';
   return { kind, text: CARD_STATUS_TEXT[kind] };
 }
 

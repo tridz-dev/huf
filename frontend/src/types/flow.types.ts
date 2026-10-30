@@ -278,7 +278,7 @@ export interface FlowNodeData {
   /** The author's own note about the step (Settings tab). Shown to people, never read by the flow. */
   notes?: string;
   /** Live execution status — updated via Frappe Realtime events */
-  status?: 'idle' | 'running' | 'success' | 'error' | 'waiting' | 'skipped';
+  status?: 'idle' | 'running' | 'success' | 'error' | 'waiting' | 'skipped' | 'stopped';
   /** A run opened on the canvas: one plain line of what this step produced, shown on hover (never written to the flow). */
   runSummary?: string;
   /** What the card needs to know about its place in the flow, worked out once for the whole canvas (never written to the flow). */
@@ -290,7 +290,7 @@ export interface FlowNodeData {
 /** Per-step facts the canvas works out once for every card, so a card never walks the whole flow itself. */
 export interface CanvasNodeFacts {
   /** The word on the card ('ready', 'needs-setup'...) and its text. */
-  status: { kind: 'ready' | 'needs-setup' | 'not-connected' | 'orphan' | 'running' | 'waiting' | 'done' | 'failed' | 'skipped'; text: string };
+  status: { kind: 'ready' | 'needs-setup' | 'not-connected' | 'orphan' | 'running' | 'waiting' | 'done' | 'failed' | 'skipped' | 'stopped'; text: string };
   /** First thing missing in this step, for the tooltip of 'Needs setup'. */
   firstIssue: string | null;
   /** Nothing leads to this step. */
