@@ -119,6 +119,10 @@ def describe_step(node: dict) -> dict:
 	effect, simulated = READS, False
 	if ntype == "tool.call" and config.get("tool_id"):
 		effect = gate.effect_for_call(config["tool_id"], _literal_args(config.get("input")))
+		if effect == READS and decided_by_data(config["tool_id"], config.get("input")):
+			# The action (or HTTP method) is filled in from other data, so it is not known until the step runs.
+			# Say "changes" (simulated) in the preview rather than promise a harmless read.
+			effect = CHANGES
 		simulated = effect != READS
 	elif ntype in ("doc.create", "state.set", "state.delete"):
 		effect, simulated = CHANGES, True
@@ -132,6 +136,23 @@ def describe_step(node: dict) -> dict:
 		"approval": ntype == "human.approval",
 		"trigger": ntype.startswith("trigger."),
 	}
+
+
+def _is_literal(value: Any) -> bool:
+	"""True for a value typed in by the author; False for a reference or text with {placeholders} in it."""
+	if isinstance(value, dict):
+		return not ("$from" in value or "$template" in value)
+	if isinstance(value, str):
+		return "{" not in value and "$from" not in value
+	return True
+
+
+def decided_by_data(tool_id: str, value: Any) -> bool:
+	"""True when the setting that decides what a call does (``action``, or an HTTP ``method``) is filled in from other data."""
+	if not isinstance(value, dict):
+		return False
+	keys = ("action", "method") if tool_id == "http_request" else ("action",)
+	return any(key in value and not _is_literal(value[key]) for key in keys)
 
 
 def _literal_args(value: Any) -> dict:

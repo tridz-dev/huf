@@ -42,6 +42,14 @@ describe('RunFlowDialog', () => {
     await waitFor(() => expect(onRun).toHaveBeenCalledWith({ name: 'Ada Lovelace', amount: 120 }, 'test'));
   });
 
+  it('says code steps with network access are skipped in a test run', async () => {
+    getFlowDefinition.mockResolvedValue(definition([webhook]));
+    open();
+    await waitFor(() => expect(screen.getByTestId('flow-run-start')).not.toBeDisabled());
+    expect(screen.getByTestId('flow-run-mode-test-card')).toHaveTextContent('Code steps with network access are skipped in a test run.');
+    expect(screen.getByTestId('flow-run-mode-real-card')).not.toHaveTextContent('skipped in a test run');
+  });
+
   it('switches to a real run with a plain warning and a matching button', async () => {
     getFlowDefinition.mockResolvedValue(definition([webhook]));
     const onRun = open();

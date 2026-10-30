@@ -39,7 +39,7 @@ const MODES: Array<{ value: RunMode; title: string; text: string }> = [
   {
     value: 'test',
     title: 'Test run (nothing is sent)',
-    text: 'Looks things up for real. Emails, messages and changes to your records are skipped, and each one shows what it would have done.',
+    text: 'Looks things up for real. Emails, messages and changes to your records are skipped, and each one shows what it would have done. Code steps with network access are skipped in a test run.',
   },
   {
     value: 'real',
