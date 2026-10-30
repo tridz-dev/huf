@@ -213,7 +213,7 @@ export function ApprovalForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
           disabled={!canManage}
           hint={
             timeoutMs !== undefined
-              ? `After ${durationWords(timeoutMs / 1000, TIMEOUT_UNITS)} with no answer, the flow carries on along the "Timed out" path. Connect a step to that path.`
+              ? `After ${durationWords(timeoutMs / 1000, TIMEOUT_UNITS)} with no answer, the flow carries on along the "Timed out" path.${timeoutEdges.length > 0 ? '' : ' Connect a step to that path.'}`
               : 'Leave empty to wait as long as it takes. If you set a time, a "Timed out" path appears for what should happen then.'
           }
         />

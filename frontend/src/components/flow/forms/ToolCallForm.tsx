@@ -63,7 +63,8 @@ export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
   const schemaProps = asObj(schema.properties);
   const required = new Set(TOOL_REQUIRED_INPUT[toolId]?.map(([k]) => k) ?? (schema.required as string[] | undefined) ?? []);
   const cardId = actionCardId(cfg as { type?: unknown; tool_id?: unknown });
-  const cardToolIds = ACTION_CARD_CONTRACT[cardId]?.toolIds;
+  const contract = ACTION_CARD_CONTRACT[cardId];
+  const cardToolIds = contract?.toolIds ?? (contract?.toolId ? [contract.toolId] : undefined);
   const toolOptions = cardToolIds ? tools.filter((t) => cardToolIds.includes(t.value)) : tools;
   // A card that does one thing (Send email) needs no "what to do" choice; one that does several (Sheets) or the open-ended Call tool does.
   const showToolChoice = !isHttp && !(cardToolIds && cardToolIds.length === 1 && toolId === cardToolIds[0]);

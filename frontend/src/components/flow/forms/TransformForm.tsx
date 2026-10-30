@@ -21,7 +21,8 @@ const paramKind = (p: string) => (NUMBER_PARAMS.has(p) ? 'number' : p === 'ignor
 export function startingData(op: string, model: PickerModel): Record<string, unknown> {
   const spec = getTransformOp(op);
   const first = spec?.params[0];
-  const near = model.steps.find((s) => s.kind !== 'loop' && s.fields.length > 0) ?? model.steps.find((s) => s.kind === 'step');
+  // The step right before this one (the trigger when there is none).
+  const near = model.steps.find((s) => s.kind === 'step') ?? model.steps.find((s) => s.kind === 'trigger');
   if (!spec || !first || !near) return {};
   if (first === 'text') {
     const field = near.fields.find((f) => f.path && f.type === 'text' && !f.advanced_only);
