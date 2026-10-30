@@ -30,7 +30,8 @@ _SECRET_VALUE = re.compile(
 	r"|Bearer\s+[A-Za-z0-9._\-]{16,}|Basic\s+[A-Za-z0-9+/=]{16,}|eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{5,})"
 )
 MASK = "(hidden)"
-# Header-style names that only ever carry a credential: the key is removed from a sample altogether (not just its value).
+# Header-style names that only ever carry a credential. Their value is always hidden, at any depth, and a name/value pair
+# that names one hides its ``value`` (see :func:`secret_pair`).
 HEADER_KEYS = frozenset(
 	{
 		"authorization", "proxy-authorization", "cookie", "set-cookie", "x-huf-secret", "x-api-key", "api-key", "apikey",
@@ -68,9 +69,7 @@ def _trim(value, depth: int, max_list: int = MAX_LIST, max_text: int = MAX_TEXT)
 		for i, (key, item) in enumerate(value.items()):
 			if i >= MAX_KEYS:
 				break
-			if is_header_key(key):
-				continue  # credential headers are removed, at any depth
-			if is_secret_key(key) or (pair and key == "value"):
+			if is_header_key(key) or is_secret_key(key) or (pair and key == "value"):
 				out[str(key)] = MASK
 			else:
 				out[str(key)] = _trim(item, depth + 1, max_list, max_text)

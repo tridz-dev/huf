@@ -36,14 +36,15 @@ def _walk(value):
 
 
 class TestRedaction(IntegrationTestCase):
-	def test_header_style_names_are_removed_at_any_depth(self):
+	def test_header_style_names_never_show_their_value_at_any_depth(self):
 		body = {"name": "Ada", **{h: "s3cret-value" for h in HEADER_NAMES}, "meta": {"deep": {**{h: "s3cret-value" for h in HEADER_NAMES}, "ok": 1}}, "list": [{"Authorization": "x", "n": 1}]}
 		for fn in (redact_sample, lambda v: redact_output(v)[0]):
 			out = fn(body)
-			leaves = set(_walk(out))
+			self.assertNotIn("s3cret-value", set(_walk(out)))
 			for h in HEADER_NAMES:
-				self.assertNotIn(h, leaves)
-			self.assertNotIn("s3cret-value", leaves)
+				self.assertEqual(out[h], MASK, h)
+				self.assertEqual(out["meta"]["deep"][h], MASK, h)
+			self.assertEqual(out["list"][0]["Authorization"], MASK)
 			self.assertEqual((out["name"], out["meta"]["deep"]["ok"], out["list"][0]["n"]), ("Ada", 1, 1))
 
 	def test_credential_looking_keys_are_hidden_not_shown(self):
@@ -101,7 +102,7 @@ class TestLastWebhookRequest(IntegrationTestCase):
 		out = trigger_samples_api.get_last_webhook_request(self.flow_id)
 		self.assertTrue(out["found"])
 		text = json.dumps(out["sample"])
-		for leaked in ("tok-123", "Bearer", "sid=1", "hush", SECRET_TEXT, "Cookie", "x-huf-secret"):
+		for leaked in ("tok-123", "Bearer", "sid=1", "hush", SECRET_TEXT):
 			self.assertNotIn(leaked, text)
 		self.assertEqual(out["sample"]["customer"]["name"], "Ada")
 		self.assertEqual(out["sample"]["customer"]["token"], MASK)

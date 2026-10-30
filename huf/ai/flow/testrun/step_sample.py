@@ -57,9 +57,7 @@ def _shrink(value: Any, depth: int, max_text: int, max_list: int, cut: list) -> 
 			if i >= 60:
 				cut.append(True)
 				break
-			if is_header_key(key):
-				continue  # credential headers are removed, at any depth
-			if (is_secret_key(key) or (pair and key == "value")) and item not in (None, ""):
+			if (is_header_key(key) or is_secret_key(key) or (pair and key == "value")) and item not in (None, ""):
 				out[str(key)] = MASK
 			else:
 				out[str(key)] = _shrink(item, depth + 1, max_text, max_list, cut)

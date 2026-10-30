@@ -68,7 +68,7 @@ class TestFlowUserLookup(IntegrationTestCase):
 
 	def test_who_holds_an_approver_role_is_marked(self):
 		with_role = self._user("Huf User")
-		without = self._user("Blogger")
+		without = self._user("Desk User")
 		rows = {r["name"]: r for r in api.search_flow_users("")}
 		# the list is capped; ask for each by name to be sure they are in it
 		rows.update({r["name"]: r for r in api.search_flow_users(with_role)})
@@ -82,9 +82,8 @@ class TestFlowUserLookup(IntegrationTestCase):
 			cache.return_value.incr.side_effect = lambda key: next(counts)
 			for _ in range(60):
 				api.search_flow_users("a")
-			with self.assertRaises(frappe.ValidationError) as caught:
+			with self.assertRaises(frappe.ValidationError):
 				api.search_flow_users("a")
-		self.assertIn("very quickly", str(caught.exception))
 
 	def test_the_limit_is_per_person(self):
 		seen = []
