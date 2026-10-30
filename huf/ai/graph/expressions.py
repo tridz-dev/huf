@@ -29,6 +29,11 @@ What this module adds on top of that shape, per ``spec/graph-ir.md`` section 4.2
 - Operators: ``Eq, NotEq, Lt, LtE, Gt, GtE, In, NotIn, And, Or, Not, Add, Sub, Mult, Mod`` (carried
   over from ``flow/eval.py``) plus ``Div`` (null on division by zero, never raises -- see totality
   below) and ``UAdd``/``USub`` for signed literals. Still no ``Pow``, no bitwise operators.
+- A closed set of four **helper functions** (``number``, ``lower``, ``startswith``, ``endswith``; see
+  :data:`HELPERS`) is the only thing ``ast.Call`` may name. The callee must be a bare name from that set, with the
+  exact number of positional arguments; keywords, starred arguments, attribute callees and every other call are
+  still rejected at parse time. They exist so a rule builder can say "starts with", "ignore capital letters" and
+  "compare as numbers" without a general function surface. Each is total: wrong types give ``None`` / ``False``.
 - The only bare ``Name`` nodes ever in scope are the roots from section 4.1 (``input``, ``trigger``,
   ``row``, ``foreach``, or a ``<node_id>``); which names are actually bound is entirely up to the
   caller's ``bindings`` dict -- this module does not hardcode the root list.
@@ -143,6 +148,51 @@ _CMP_OPS: dict[type, Any] = {
 	ast.NotIn: lambda a, b: a not in b if isinstance(b, (list, tuple, dict, str, set)) else None,
 }
 
+# ----------------------------------------------------------------------------------------------
+# Helper functions: the only calls an expression may make (fixed names, fixed arity, total)
+# ----------------------------------------------------------------------------------------------
+
+_NUMBER_RE = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)$")
+
+
+def _h_number(value: Any) -> Any:
+	"""A number from a number or from text that is only a number (``"150"``, `` 2.5 ``); anything else is ``None``."""
+	if isinstance(value, bool):
+		return None
+	if isinstance(value, (int, float)):
+		return value
+	if isinstance(value, str):
+		text = value.strip()
+		if _NUMBER_RE.match(text):
+			try:
+				return float(text) if "." in text else int(text)
+			except (ValueError, OverflowError):
+				return None
+	return None
+
+
+def _h_lower(value: Any) -> Any:
+	"""Text in lower case (so two texts can be compared ignoring capital letters); other values are returned as they are."""
+	return value.lower() if isinstance(value, str) else value
+
+
+def _h_startswith(value: Any, prefix: Any) -> bool:
+	return isinstance(value, str) and isinstance(prefix, str) and value.startswith(prefix)
+
+
+def _h_endswith(value: Any, suffix: Any) -> bool:
+	return isinstance(value, str) and isinstance(suffix, str) and value.endswith(suffix)
+
+
+# name -> (function, number of positional arguments)
+HELPERS: dict[str, tuple[Any, int]] = {
+	"number": (_h_number, 1),
+	"lower": (_h_lower, 1),
+	"startswith": (_h_startswith, 2),
+	"endswith": (_h_endswith, 2),
+}
+
+
 # Explicit node-type allow-list. Anything not a key here (ast.Call, ast.Attribute, ast.Lambda,
 # comprehensions, ast.NamedExpr, ast.JoinedStr/FormattedValue, ast.Starred, ast.Import*, ...) is
 # rejected at parse time.
@@ -167,6 +217,7 @@ _ALLOWED_NODES: tuple[type, ...] = (
 	ast.List,
 	ast.Dict,
 	ast.Tuple,
+	ast.Call,
 	*_BIN_OPS.keys(),
 	*_CMP_OPS.keys(),
 )
@@ -213,6 +264,14 @@ def _validate_node(node: ast.AST, depth: int) -> None:
 
 	if isinstance(node, ast.Constant) and isinstance(node.value, (bytes, complex, type(...))):
 		raise ExpressionError(f"disallowed constant type: {type(node.value).__name__}")
+
+	if isinstance(node, ast.Call):
+		if not isinstance(node.func, ast.Name) or node.func.id not in HELPERS:
+			raise ExpressionError("disallowed expression element: Call")
+		if node.keywords or any(isinstance(a, ast.Starred) for a in node.args):
+			raise ExpressionError("disallowed expression element: Call")
+		if len(node.args) != HELPERS[node.func.id][1]:
+			raise ExpressionError(f"{node.func.id}() takes {HELPERS[node.func.id][1]} argument(s)")
 
 	for child in ast.iter_child_nodes(node):
 		_validate_node(child, depth + 1)
@@ -405,6 +464,13 @@ def _eval(node: ast.AST, env: dict) -> Any:
 
 	if isinstance(node, ast.Tuple):
 		return tuple(_eval(elt, env) for elt in node.elts)
+
+	if isinstance(node, ast.Call):
+		# parse_expression guarantees: a bare helper name, no keywords, the right number of arguments.
+		helper = HELPERS.get(node.func.id) if isinstance(node.func, ast.Name) else None
+		if helper is None:
+			return None
+		return helper[0](*(_eval(arg, env) for arg in node.args))
 
 	# Anything else should be unreachable post parse_expression, but stay total regardless.
 	return None
