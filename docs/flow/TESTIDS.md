@@ -133,7 +133,8 @@ Publishing a flow with unconnected integration steps shows a warning toast (`Som
 | `flow-run-dialog`, `flow-run-start` (label `Run test` / `Run for real`), `flow-run-cancel` | Run dialog opened by the Run button and the list card Run action |
 | `flow-run-mode`, `flow-run-mode-test`, `flow-run-mode-real` (radio, `data-state`), `flow-run-mode-test-card`, `flow-run-mode-real-card`, `flow-run-real-warning` | Run dialog: Test run (default) / Run for real and the warning shown for a real run |
 | `flow-run-form`, `flow-run-field-<field>` (`.` becomes `-`), `flow-run-use-last`, `flow-run-use-sample`, `flow-run-note`, `flow-run-loading`, `flow-run-payload-hint` | Run dialog: the form generated from the trigger's declared fields, 'Use last real request', 'Use sample' |
-| `flow-json-run-payload`, `-input`, `-toggle`, `-error`, `-format`, `-copy` (JsonArea) | Run dialog: the JSON view of the same details ('Edit as JSON' / 'Show as form'); replaces the old `flow-run-payload` / `flow-run-payload-error` |
+| `flow-json-run-payload`, `-input`, `-toggle`, `-error`, `-format`, `-copy` (JsonArea) | Run dialog: the JSON view of the same details ('Edit as JSON' / 'Show as form'); replaces the old `flow-run-payload` (the box) and its syntax error |
+| `flow-run-payload-error` | Run dialog: text that is valid JSON but not an object ('The input must be a JSON object'); the JSON area's own message covers broken JSON |
 | `flow-run-test-chip-<runId>` | Grey 'Test' chip in the Runs sheet |
 | `disabled-reason` | Wrapper around a control disabled for a view-only user; hover/focus shows the explanation |
 | `connection-indicator` (`data-status` = connecting / connected / offline) | Header dot for the live-updates connection |

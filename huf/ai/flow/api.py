@@ -490,6 +490,8 @@ _FLOW_RUN_LIST_FIELDS = [
 	"completed_at",
 	"modified",
 	"run_mode",
+	"outcome_label",
+	"outcome_tone",
 	"owner",
 	"creation",
 	"context_json",

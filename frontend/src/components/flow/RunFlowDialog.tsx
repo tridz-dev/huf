@@ -12,6 +12,7 @@ import { JsonArea } from '../common/JsonArea';
 import { cn } from '@/lib/utils';
 import { getFlowDefinition } from '@/services/flowApi';
 import { getLastWebhookRequest } from '@/services/flow/triggerApi';
+import { describeJsonProblem } from '@/lib/flow-run/jsonErrors';
 import { parsePayload, readLastPayload, rememberPayload, RUN_MODE_BUTTON, type RunMode } from '@/lib/flow-run/flowRunPayload';
 import { hasData, payloadFromForm, runFormFields, valuesFromPayload, type RunField, type RunFormValues } from '@/lib/flow-run/runForm';
 
@@ -257,6 +258,12 @@ export function RunFlowDialog({ open, flowId, flowName, onOpenChange, onRun }: R
                 onChange={editJson}
                 formView={hasForm ? formView : undefined}
               />
+            )}
+            {/* Text that is valid JSON but not an object ([1, 2], 5): the JSON area has nothing to say about it. */}
+            {error && !describeJsonProblem(text) && (
+              <p role="alert" data-testid="flow-run-payload-error" className="text-sm text-destructive">
+                {error}
+              </p>
             )}
             {!hasForm && !loading && !error && (
               <p className="text-meta text-muted-foreground" data-testid="flow-run-payload-hint">
