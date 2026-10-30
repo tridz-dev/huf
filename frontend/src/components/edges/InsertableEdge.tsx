@@ -6,6 +6,7 @@ import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { routeEdge, routeLoopBack, type Rect } from '@/lib/flow-graph/edgeRouting';
 import type { BranchTone } from '@/lib/flow/flowBranches';
 import type { FlowEdgeRoute } from '../../types/flow.types';
+import { counterScale } from '@/lib/flow-canvas/zoomLod';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 export interface InsertableEdgeData {
@@ -40,9 +41,10 @@ const DEFAULT_SIZE = { width: 236, height: 70 };
  * Places an overlay centred at a point on the canvas and keeps it at its normal size when the canvas is zoomed out
  * (a 12px label stays 12px on screen instead of shrinking with the steps).
  */
-const overlayStyle = (x: number, y: number, zoom: number, interactive = false): CSSProperties => ({
+const overlayStyle = (x: number, y: number, zoom: number, interactive = false, shrinkWhenZoomedIn = false): CSSProperties => ({
   position: 'absolute',
-  transform: `translate(${x}px, ${y}px) scale(${zoom < 1 ? Math.min(1 / zoom, 3) : 1}) translate(-50%, -50%)`,
+  // Names are 12px on screen at every zoom (they also shrink when zoomed in); buttons only grow when zoomed out so they stay easy to hit.
+  transform: `translate(${x}px, ${y}px) scale(${shrinkWhenZoomedIn ? counterScale(zoom) : zoom < 1 ? counterScale(zoom) : 1}) translate(-50%, -50%)`,
   ...(interactive ? { pointerEvents: 'all' as const } : {}),
 });
 
@@ -108,7 +110,7 @@ export const InsertableEdge = memo(
       : { ...style, stroke: 'var(--steel-soft)', strokeWidth: 1.75, ...(loopBack ? { strokeDasharray: '6 4' } : {}) };
     const pill = data?.pill;
     // Router paths all leave one dot: their names go partway along each line so they never pile up.
-    const scale = zoom < 1 ? Math.min(1 / zoom, 3) : 1;
+    const scale = Math.max(counterScale(zoom), 1);
     const pillBase = data?.route === 'option' ? routed.pointAt(Math.min(Math.max(routed.length * 0.4, 28 + 14 * scale), Math.max(routed.length - 40, 0))) : routed.pillAt;
     // A name sitting right under its step is pushed down as it is scaled up, so it never covers the step's edge.
     const pillPos = data?.route !== 'option' && pillBase.x === routed.points[0]?.x && pillBase.y < (routed.points[0]?.y ?? 0) + 24 ? { x: pillBase.x, y: pillBase.y + (scale - 1) * 8 } : pillBase;
@@ -135,7 +137,7 @@ export const InsertableEdge = memo(
               data-source={source}
               title={pill}
               onClick={() => data?.onSelect?.(id)}
-              style={overlayStyle(pillPos.x, pillPos.y, zoom, !data?.loopBack)}
+              style={overlayStyle(pillPos.x, pillPos.y, zoom, !data?.loopBack, true)}
               className={cn(
                 'max-w-[220px] cursor-pointer whitespace-normal break-words rounded-full border px-2.5 py-0.5 text-center text-xs font-medium leading-tight shadow-sm',
                 PILL_TONE[data?.tone ?? 'neutral'],

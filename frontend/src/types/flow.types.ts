@@ -278,7 +278,9 @@ export interface FlowNodeData {
   /** The author's own note about the step (Settings tab). Shown to people, never read by the flow. */
   notes?: string;
   /** Live execution status — updated via Frappe Realtime events */
-  status?: 'idle' | 'running' | 'success' | 'error' | 'waiting';
+  status?: 'idle' | 'running' | 'success' | 'error' | 'waiting' | 'skipped';
+  /** A run opened on the canvas: one plain line of what this step produced, shown on hover (never written to the flow). */
+  runSummary?: string;
   /** A saved example of the data this step receives or returns (stored as `_sample`: <= 8 KB, secrets hidden, editors only). */
   sample?: Record<string, unknown>;
 }

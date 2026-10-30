@@ -30,6 +30,8 @@ export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) =>
         iconClass="text-good"
         title={data.label}
         subtitle={END_SUBTITLE}
+        status={status}
+        runSummary={data.runSummary}
         frameClass={cn('border-good', selected && 'ring-2 ring-signal border-signal')}
         onDelete={
           canManage && selected

@@ -5,18 +5,18 @@ import type { ReactFlowInstance } from 'reactflow';
 import { Controls, MiniMap, useNodesInitialized, useReactFlow, useStore, useStoreApi, getNodesBounds } from 'reactflow';
 import { isInView, panToReveal } from '@/lib/flow/flowLayout';
 import { RENDER_ONLY_NODE_PREFIX } from '@/lib/flow-graph/flowCanvasGraph';
+import { FIT_MIN_READABLE, READABLE_STEP_LIMIT, ZOOM_MIN } from '@/lib/flow-canvas/zoomLod';
 
-/** Fit-to-view never zooms in past 100% (a 3-step flow stays at normal size) nor out past 25%. */
-export const FIT_VIEW_OPTIONS = { padding: 0.3, maxZoom: 1, minZoom: 0.25 } as const;
+/** Fit-to-view never zooms in past 100% (a 3-step flow stays at normal size) nor out past the canvas minimum. */
+export const FIT_VIEW_OPTIONS = { padding: 0.3, maxZoom: 1, minZoom: ZOOM_MIN } as const;
 
 /** Flows of at most this many steps are never fitted smaller than FIT_MIN_ZOOM (the view then starts at the top and scrolls). */
-const READABLE_STEP_LIMIT = 15;
-const FIT_MIN_ZOOM = 0.75;
-/** Bigger flows are fitted whole but not smaller than this. */
-const FIT_MIN_ZOOM_LARGE = 0.4;
+const FIT_MIN_ZOOM = FIT_MIN_READABLE;
+/** Bigger flows are fitted whole (down to the canvas minimum): the cards switch to icons and titles, so nothing is unreadable. */
+const FIT_MIN_ZOOM_LARGE = ZOOM_MIN;
 /** Narrowest a flow is fitted to keep it from running off the sides. */
 const FIT_MIN_ZOOM_NARROW = 0.5;
-const FIT_MIN_ZOOM_NARROW_LARGE = 0.3;
+const FIT_MIN_ZOOM_NARROW_LARGE = ZOOM_MIN;
 /** Room (px) above the flow for the buttons in the top-right corner, and at the sides and bottom. */
 export const FIT_TOP_INSET = 64;
 const FIT_SIDE_INSET = 40;

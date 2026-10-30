@@ -54,6 +54,8 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
         // The empty trigger is one short line and one button; it never shows the stored placeholder name.
         title={unset ? 'Start here' : data.label}
         subtitle={unset ? undefined : triggerSubtitle(data.triggerConfig)}
+        status={status}
+        runSummary={data.runSummary}
         frameClass={statusClasses}
         onDelete={canDelete ? handleDeleteClick : undefined}
         deleteLabel="Delete trigger"

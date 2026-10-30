@@ -26,6 +26,7 @@ import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
 import { DeleteStepDialog } from './flow/DeleteStepDialog';
 import { KeepSelectedVisible } from './flow/canvas/KeepSelectedVisible';
 import { FIT_VIEW_OPTIONS, FitViewAfterRemovalOrLayout, FlowControls, FlowMiniMap, KeepSelectedClearOfToolbar, keepCanvasUnscrolled } from './flow/canvas/canvasView';
+import { ZOOM_MAX, ZOOM_MIN } from '@/lib/flow-canvas/zoomLod';
 import { useRenderedGraph } from './flow/canvas/useRenderedGraph';
 import { FlowCanvasToolbar } from './flow/canvas/FlowCanvasToolbar';
 import { EdgeDeleteDialog } from './flow/canvas/EdgeDeleteDialog';
@@ -512,7 +513,8 @@ export function FlowCanvas({
         nodesConnectable={canManage}
         elementsSelectable
         fitViewOptions={FIT_VIEW_OPTIONS}
-        minZoom={FIT_VIEW_OPTIONS.minZoom}
+        minZoom={ZOOM_MIN}
+        maxZoom={ZOOM_MAX}
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
         className="bg-background w-full h-full [&_.react-flow__handle]:transition-shadow [&_.react-flow__handle]:after:absolute [&_.react-flow__handle]:after:-inset-2 [&_.react-flow__handle]:after:content-[''] [&_.react-flow__handle:hover]:!bg-signal [&_.react-flow__handle:hover]:shadow-[0_0_0_4px_color-mix(in_srgb,var(--signal)_30%,transparent)]"
         onScroll={keepCanvasUnscrolled}

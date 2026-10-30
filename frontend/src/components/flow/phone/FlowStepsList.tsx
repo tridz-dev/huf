@@ -16,6 +16,7 @@ const STATUS_TONE: Record<CardStatusKind, string> = {
   waiting: 'text-warning',
   done: 'text-good',
   failed: 'text-destructive',
+  skipped: 'text-steel',
 };
 
 /**

@@ -62,6 +62,8 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
         icon={cardIcon(data)}
         title={data.label}
         subtitle={actionSubtitle(data.actionConfig)}
+        status={status}
+        runSummary={data.runSummary}
         frameClass={frameClass}
         onDelete={canDelete ? handleDeleteClick : undefined}
         deleteLabel="Delete step"
