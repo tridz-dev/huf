@@ -24,8 +24,13 @@ def notify_failure(flow_run_name: str) -> None:
 def tool_gate(name, args_dict, run_ctx: dict, requires_confirmation: bool):
 	"""Gateway tool policy / confirm gate result string, or None to proceed (no-op outside gateway runs).
 
-	The run id comes from the trusted run context, never from LLM-supplied args.
+	The run id comes from the trusted run context, never from LLM-supplied args. An agent step of a test run
+	gets a simulated answer instead of running any tool that would send or change something.
 	"""
+	from huf.ai.flow.testrun.gate import agent_tool_gate
+
+	if (simulated := agent_tool_gate(name, args_dict, run_ctx)) is not None:
+		return simulated
 	from huf.ai.gateways import tool_policy
 
 	return tool_policy.check_tool_call(name, args_dict, run_ctx.get("agent_run_id"), requires_confirmation)

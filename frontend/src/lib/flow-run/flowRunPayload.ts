@@ -31,3 +31,12 @@ export function parsePayload(text: string): { value: Record<string, unknown> | n
   }
   return { value: parsed as Record<string, unknown>, error: null };
 }
+
+/** How a run starts. A test run reads for real but sends nothing and changes nothing outside the flow. */
+export type RunMode = 'test' | 'real';
+
+/** What the Run buttons are called, and what the Run dialog's own button says for each mode. */
+export const RUN_MODE_BUTTON: Record<RunMode, string> = { test: 'Run test', real: 'Run for real' };
+
+/** The one place the card / header Run label is decided (`Run test`: the dialog opens with Test run chosen). */
+export const RUN_BUTTON_LABEL = RUN_MODE_BUTTON.test;

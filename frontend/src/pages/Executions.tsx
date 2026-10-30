@@ -3,7 +3,7 @@ import { Activity, ArrowUpDown, Loader2 } from 'lucide-react';
 import { PageFrame } from '@/layouts/PageFrame';
 import { FilterBar, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
-import { StatusDot, type StatusDotVariant } from '@/components/dashboard/ledger/LedgerSection';
+import { StatusPill, type StatusKind } from '@/components/common/StatusPill';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useExecutionsAccess } from '@/hooks/permissions/useExecutionsAccess';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
@@ -33,9 +33,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ExecutionAnalyticsDashboard } from '@/components/executions/ExecutionAnalyticsDashboard';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import AnalyticsPage from '@/pages/AnalyticsPage';
 import { ExecutionsFlowRunsTab } from '@/components/executions/FlowRunsTab';
+import { ExecutionsTabsBar } from '@/components/executions/ExecutionsTabsBar';
 import { DEFAULT_RANGE, TIME_RANGE_MS, TIME_RANGE_OPTIONS } from '@/components/executions/executionsRange';
 import { fetchAgentRunsPage } from '@/components/executions/fetchAgentRunsPage';
 import { useFlowStepLabelsFor } from '@/hooks/flow/useFlowStepLabelsFor';
@@ -49,12 +50,12 @@ const DEFAULT_TAB: ExecutionsTab = 'runs';
 /** Columns whose values are numeric/temporal and read better right-aligned with tabular figures. */
 const RIGHT_ALIGNED_COLUMNS = new Set(['cost', 'cached_tokens', 'duration', 'started']);
 
-function getRunStatusDot(status?: string): { variant: StatusDotVariant; label: string } {
+function agentRunStatusKind(status?: string): StatusKind {
   const normalized = status?.toLowerCase() || '';
-  if (normalized === 'success') return { variant: 'ok', label: status || 'Success' };
-  if (normalized === 'failed') return { variant: 'fail', label: status || 'Failed' };
-  if (normalized === 'queued') return { variant: 'idle', label: status || 'Queued' };
-  return { variant: 'run', label: status || 'Started' };
+  if (normalized === 'success') return 'finished';
+  if (normalized === 'failed') return 'failed';
+  if (normalized === 'queued') return 'queued';
+  return 'running';
 }
 
 /** The "Runs" tab — this is the original Executions page body, unchanged. */
@@ -167,10 +168,10 @@ function ExecutionsRunsTab() {
   }, []);
 
   const statusOptions = [
-    { label: 'All status', value: 'all' },
-    { label: 'Started', value: 'Started' },
+    { label: 'All statuses', value: 'all' },
     { label: 'Queued', value: 'Queued' },
-    { label: 'Success', value: 'Success' },
+    { label: 'Running', value: 'Started' },
+    { label: 'Finished', value: 'Success' },
     { label: 'Failed', value: 'Failed' },
   ];
 
@@ -250,13 +251,7 @@ function ExecutionsRunsTab() {
         header: 'Status',
         cell: ({ row }) => {
           const status = row.getValue('status') as string;
-          const { variant, label } = getRunStatusDot(status);
-          return (
-            <div className="flex items-center gap-2">
-              <StatusDot variant={variant} />
-              <span className="font-body text-ui-text font-normal text-steel">{label}</span>
-            </div>
-          );
+          return <StatusPill kind={agentRunStatusKind(status)} />;
         },
       },
       {
@@ -362,9 +357,10 @@ function ExecutionsRunsTab() {
     <PageFrame
       title="Executions"
       badge={<ExperimentalBadge />}
+      tabs={<ExecutionsTabsBar active="runs" />}
       filters={
         <FilterBar
-          searchPlaceholder="Search executions using Agent Name"
+          searchPlaceholder="Search agent runs by agent name"
           searchValue={search}
           onSearchChange={(value) => {
             setSearch(value);
@@ -545,16 +541,11 @@ export default function Executions() {
 
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange} className="h-full flex flex-col">
-      <TabsList className="mx-6 mt-4 w-fit shrink-0">
-        <TabsTrigger value="runs">Runs</TabsTrigger>
-        {canSeeFlowRuns && <TabsTrigger value="flow-runs" data-testid="executions-tab-flow-runs">Flow runs</TabsTrigger>}
-        {canSeeAnalytics && <TabsTrigger value="analytics">Analytics</TabsTrigger>}
-      </TabsList>
       <TabsContent value="runs" className="flex-1 min-h-0">
         <ExecutionsRunsTab />
       </TabsContent>
       {canSeeFlowRuns && <TabsContent value="flow-runs" className="flex-1 min-h-0"><ExecutionsFlowRunsTab /></TabsContent>}
-      {canSeeAnalytics && <TabsContent value="analytics" className="flex-1 min-h-0"><AnalyticsPage /></TabsContent>}
+      {canSeeAnalytics && <TabsContent value="analytics" className="flex-1 min-h-0"><AnalyticsPage tabs={<ExecutionsTabsBar active="analytics" />} /></TabsContent>}
     </Tabs>
   );
 }

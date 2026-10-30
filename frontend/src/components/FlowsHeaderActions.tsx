@@ -24,9 +24,11 @@ import { useCodeFlowStatus } from '@/lib/flow-graph/useCodeFlowStatus';
 import { useConvertedProcedure } from './flow/canvas/useCanvasEffects';
 import { usePhoneFlowView } from './flow/phone/usePhoneFlowView';
 import { useRunParam } from '@/hooks/flow/useRunParam';
+import { useStepParam } from '@/hooks/flow/useStepParam';
 import { flowStatusKind, StatusPill } from './common/StatusPill';
 import { HIT_TARGET, useViewport } from '@/lib/ui/responsive';
 import { cn } from '@/lib/utils';
+import { RUN_BUTTON_LABEL } from '@/lib/flow-run/flowRunPayload';
 
 export { FlowToolbarTitle } from './flow/header/FlowToolbarTitle';
 
@@ -50,6 +52,7 @@ export function FlowsHeaderActions() {
   const [showSettings, setShowSettings] = useState(false);
   const [showConvert, setShowConvert] = useState(false);
   const [selectedRunId, setSelectedRunId] = useRunParam();
+  useStepParam();
   const phoneView = usePhoneFlowView();
   const convertedProcedure = useConvertedProcedure(isCompact && !isPhone ? activeFlow?.id : undefined, activeFlow?.version, saveState);
 
@@ -175,13 +178,13 @@ export function FlowsHeaderActions() {
           size="sm"
           className={hit}
           data-testid="flow-run"
-          aria-label={isPhone && !isPublished ? 'Run test' : 'Run'}
-          title="Run now: starts the flow once with the input you choose"
+          aria-label={RUN_BUTTON_LABEL}
+          title="Run a test: starts the flow once with the input you choose. Nothing is sent unless you choose Run for real"
           onClick={header.handleRun}
           disabled={!activeFlow || !canManage}
         >
           <Play className="w-4 h-4" />
-          {isPhone && !isPublished ? 'Run test' : 'Run'}
+          {RUN_BUTTON_LABEL}
         </Button>
       </DisabledReason>
 

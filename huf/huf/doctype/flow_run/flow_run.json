@@ -16,6 +16,7 @@
   "mode",
   "status",
   "trigger_type",
+  "run_mode",
   "execution_section",
   "current_node_id",
   "hop_count",
@@ -108,6 +109,17 @@
    "fieldtype": "Select",
    "label": "Trigger Type",
    "options": "Manual\nWebhook\nSchedule\nDoc Event\nGateway",
+   "read_only": 1
+  },
+  {
+   "default": "Real",
+   "description": "A test run reads for real but never sends or changes anything outside the flow.",
+   "fieldname": "run_mode",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Run Mode",
+   "options": "Real\nTest",
    "read_only": 1
   },
   {
