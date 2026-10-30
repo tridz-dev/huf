@@ -83,7 +83,12 @@ export function fitClearOfOverlays(rf: ReactFlowInstance, width: number, height:
     // Never cut the flow off at the sides (a phone is narrower than two branches): only its length may scroll.
     // (Only a canvas too narrow for two branches: a wider one keeps the readable minimum and the rest is a pan away.)
     if (zoom > fitW && width < NARROW_CANVAS) zoom = Math.max(fitW, steps <= READABLE_STEP_LIMIT ? FIT_MIN_ZOOM_NARROW : FIT_MIN_ZOOM_NARROW_LARGE);
-    const x = (width - bounds.width * zoom) / 2 - bounds.x * zoom;
+    let x = (width - bounds.width * zoom) / 2 - bounds.x * zoom;
+    // Wider than the canvas at the readable zoom: keep the main line (the trigger and what follows it) in the middle; the branches are a pan away.
+    if (bounds.width * zoom > availW) {
+      const anchor = nodes.find((n) => n.type === 'trigger') ?? nodes[0];
+      x = width / 2 - ((anchor.positionAbsolute?.x ?? anchor.position.x) + (anchor.width ?? 236) / 2) * zoom;
+    }
     const spare = availH - bounds.height * zoom;
     // Taller than the canvas at the smallest readable zoom: start at the top, the rest is a scroll away.
     const y = FIT_TOP_INSET + (spare > 0 ? Math.min(spare / 2, 24) : 0) - bounds.y * zoom;

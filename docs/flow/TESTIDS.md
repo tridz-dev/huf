@@ -225,7 +225,7 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 |---|---|
 | `flow-help`, `flow-help-popover`, `flow-help-shortcuts`, `flow-help-guide-link` | "?" button in the editor header, its popover (how a flow works, keyboard shortcuts) and the link to the full guide |
 | `flow-first-run-guide`, `flow-first-run-guide-close` | Coach mark anchored to the trigger (`data-placement` beside-trigger or below) on a flow with only a trigger (hidden for view-only users; closing it is remembered in the browser) |
-| `flow-minimap` | Overview map, bottom-left of the canvas (hidden under 8 steps and when the canvas is narrower than 640px) |
+| `rf__minimap` (React Flow keeps its own id; the `flow-minimap` prop is overridden) | Overview map, bottom-left of the canvas (hidden under 8 steps and when the canvas is narrower than 640px) |
 | `flow-palette-intro` | One-sentence intro under the "Choose what starts this flow" / "Add a step" title |
 | `flow-palette-empty` | Empty state of the palette search ("No steps match ..."), with `flow-palette-clear-search` ("Show all") |
 | `flow-palette-section-<category>` | A labelled palette section: agent (AI), control (Decide and repeat), people, data (Work with data), apps, advanced |
