@@ -200,3 +200,31 @@ describe('overlayFromRun', () => {
     expect(o.missing).toBeUndefined();
   });
 });
+
+describe('a loop that stopped part-way', () => {
+  const failedLoop = () => run({
+    status: 'Failed', current_node_id: 'loop',
+    last_error: "The step 'Each order' stopped at item 2: Look up price failed: no price",
+    // The step that failed recorded nothing; the one before it worked; the last one never ran this round (its data is from round 1).
+    context_json: { __node_outputs__: { t: { n: 1 }, loop: undefined, tidy: { ok: 1 }, price: null, send: { sent: true } } },
+    node_labels: { t: 'Webhook', loop: 'Each order', tidy: 'Tidy name', price: 'Look up price', send: 'Send note' },
+    step_meta: { t: { type: 'trigger.webhook' }, loop: { type: 'foreach', body: ['tidy', 'price', 'send'] }, tidy: { type: 'transform' }, price: { type: 'tool.call' }, send: { type: 'transform' } },
+  });
+
+  it('shows the step that failed as failed and the ones after it as not run, never a green check', () => {
+    const story = buildRunStory(failedLoop(), { titleOf: titleOf(failedLoop()) });
+    const loop = story.steps.find((s) => s.id === 'loop')!;
+    expect(loop.status).toBe('failed');
+    expect(loop.children!.map((c) => [c.id, c.status])).toEqual([['tidy', 'done'], ['price', 'failed'], ['send', 'skipped']]);
+    expect(loop.children![1].reason).toBe('No price');
+    expect(loop.children![1].footnote).toBe('Stopped at item 2');
+    expect(loop.children![2].footnote).toBe('Not run for item 2');
+    expect(loop.children![2].output).toBeUndefined();
+  });
+
+  it('gives the canvas the same states', () => {
+    const o = overlayFromRun(failedLoop());
+    expect(o.price.status).toBe('failed');
+    expect(o.send.status).toBe('skipped');
+  });
+});

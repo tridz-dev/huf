@@ -7,7 +7,7 @@ import { plainRunError } from './runErrors';
 import { stoppedByPerson, whoWords } from './runStatus';
 import { stepPhrase } from './stepWords';
 
-export type StepStatus = 'done' | 'failed' | 'waiting' | 'stopped';
+export type StepStatus = 'done' | 'failed' | 'waiting' | 'stopped' | 'skipped';
 
 export interface StoryStep {
   id: string;
@@ -97,6 +97,28 @@ interface BuildOptions {
   currentUser?: string | null;
 }
 
+/**
+ * The body steps of a loop that stopped part-way, as the last round saw them: the steps before the one that failed are done, the
+ * one that failed says so (with the loop's reason), and the ones after it did not run. Without this a step that had worked in an
+ * earlier round (or recorded nothing) was shown with a green check inside a failed loop.
+ */
+function failedLoopChildren(body: string[], loop: StoryStep, raw: string, make: (id: string) => StoryStep): StoryStep[] {
+  const made = body.map(make);
+  const stopped = /stopped at item (\d+): (.*)$/is.exec(raw);
+  const item = stopped ? `item ${stopped[1]}` : null;
+  let at = made.findIndex((c) => c.status === 'failed');
+  if (at < 0) at = made.findIndex((c) => c.output === null || c.output === undefined);
+  if (at < 0) return made.filter((c) => c.output !== undefined && c.output !== null || c.status !== 'done');
+  return made.map((c, i) => {
+    if (i < at) return c;
+    if (i === at) {
+      const reason = stopped ? plainRunError(stopped[2], c.title) : loop.reason;
+      return { ...c, status: 'failed' as const, phrase: stepPhrase(c.type, 'failed', c.title), output: undefined, hideOutput: true, sentence: undefined, facts: undefined, reason, footnote: item ? `Stopped at ${item}` : undefined };
+    }
+    return { ...c, status: 'skipped' as const, phrase: stepPhrase(c.type, 'skipped', c.title), output: undefined, hideOutput: true, sentence: undefined, facts: undefined, reason: undefined, footnote: item ? `Not run for ${item}` : undefined };
+  });
+}
+
 /** The run as a list of steps in plain words: loop bodies grouped under their loop, trigger input merged into step 1. */
 export function buildRunStory(run: FlowRunDetail, { titleOf, currentUser }: BuildOptions): RunStory {
   const { __node_outputs__: rawOutputs, ...input } = run.context_json ?? {};
@@ -166,6 +188,11 @@ export function buildRunStory(run: FlowRunDetail, { titleOf, currentUser }: Buil
       if (step.status === 'done') step.iterations = { count: results.length, results };
       step.hideOutput = true;
       if (step.children.some((c) => c.status === 'failed') && step.status === 'done') step.status = 'failed';
+      if (step.status === 'failed') {
+        const own = outputs[id];
+        const raw = isObj(own) && typeof own.error === 'string' && own.error ? own.error : run.last_error ?? '';
+        step.children = failedLoopChildren(body, step, raw, make);
+      }
     }
     steps.push(step);
   });

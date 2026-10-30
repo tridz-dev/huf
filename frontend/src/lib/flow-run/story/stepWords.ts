@@ -45,5 +45,6 @@ export function stepPhrase(type: string | undefined, status: StepStatus, title: 
   if (status === 'waiting') return WAITING[t] ?? 'Waiting';
   if (status === 'failed') return FAILED[t] ?? 'This step did not work';
   if (status === 'stopped') return 'Stopped';
+  if (status === 'skipped') return 'Did not run';
   return DONE[t] ?? title;
 }

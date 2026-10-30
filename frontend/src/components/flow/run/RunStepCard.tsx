@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle2, ChevronDown, ChevronRight, Clock, Square, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, Clock, MinusCircle, Square, XCircle } from 'lucide-react';
 import { RunError } from './RunError';
 import { HumanValue } from '@/components/common/HumanValue';
 import { RunStepOutput } from '@/components/flow/RunStepOutput';
@@ -24,9 +24,10 @@ const ICONS = {
   failed: <XCircle className="h-4 w-4 text-destructive" aria-hidden />,
   waiting: <Clock className="h-4 w-4 text-warning" aria-hidden />,
   stopped: <Square className="h-4 w-4 text-steel" aria-hidden />,
+  skipped: <MinusCircle className="h-4 w-4 text-steel-soft" aria-hidden />,
 } as const;
 
-const STATUS_WORD = { done: 'Done', failed: 'Failed', waiting: 'Waiting', stopped: 'Stopped' } as const;
+const STATUS_WORD = { done: 'Done', failed: 'Failed', waiting: 'Waiting', stopped: 'Stopped', skipped: 'Not run' } as const;
 
 function Iterations({ step }: { step: StoryStep }) {
   const [open, setOpen] = useState(false);
@@ -113,7 +114,7 @@ export function RunStepCard({ step, names, titleOf, toolIdOf, canManage, onOpenS
             dataReceived={step.receivedData}
           />
         )}
-        {step.footnote && <p className="mt-1 text-xs text-steel">{step.footnote}</p>}
+        {step.footnote && <p className="mt-1 text-xs text-steel" data-testid={`flow-run-step-note-${step.id}`}>{step.footnote}</p>}
       </div>
     </li>
   );
