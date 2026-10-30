@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import secrets
+from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -21,6 +22,13 @@ PHONE = "9988776655443322"
 APP_SECRET = "app-secret-" + "s" * 16
 BROKER_KEY = "hsk_brokerkey_" + "k" * 20
 MOD = "huf.ai.channels.embedded_signup"
+
+
+@contextmanager
+def patch_requests(fake):
+	"""``requests`` is imported by both the tenant and the broker module; fake it in each."""
+	with patch(f"{MOD}.tenant.requests", fake), patch(f"{MOD}.broker.requests", fake):
+		yield
 
 
 def resp(status=200, body=None):
@@ -142,7 +150,7 @@ class TestCompleteSignupDirect(_Base):
 
 	def run_signup(self, fake=None, **kw):
 		fake = fake or FakeRequests()
-		with patch(f"{MOD}.requests", fake):
+		with patch_requests(fake):
 			out = es.complete_signup(CODE, WABA, PHONE, **kw)
 		self.created.append(out["gateway"])
 		return out, fake
@@ -201,7 +209,7 @@ class TestCompleteSignupDirect(_Base):
 		configure()
 		fake = FakeRequests(oauth=resp(400, {"error": {"message": f"Invalid code {CODE} {APP_SECRET}", "code": 100}}))
 		before = frappe.db.count("Gateway")
-		with patch(f"{MOD}.requests", fake):
+		with patch_requests(fake):
 			with self.assertRaises(frappe.ValidationError) as cm:
 				es.complete_signup(CODE, WABA, PHONE, gateway_name="ES Never")
 		self.assertEqual(frappe.db.count("Gateway"), before)
@@ -213,7 +221,7 @@ class TestCompleteSignupDirect(_Base):
 		configure()
 		fake = FakeRequests()
 		fake.get = MagicMock(side_effect=RuntimeError(f"boom ?client_secret={APP_SECRET}&code={CODE}"))
-		with patch(f"{MOD}.requests", fake):
+		with patch_requests(fake):
 			with self.assertRaises(frappe.ValidationError) as cm:
 				es.complete_signup(CODE, WABA, PHONE)
 		self.assertNotIn(APP_SECRET, str(cm.exception))
@@ -248,7 +256,7 @@ class TestCompleteSignupDirect(_Base):
 	def test_broker_requires_https(self):
 		configure(mode="broker", broker_url="http://insecure.example/x", tenant_id="acme", broker_api_key=BROKER_KEY)
 		with patch.dict(frappe.conf, {"developer_mode": 0}):
-			with patch(f"{MOD}.requests", FakeRequests()):
+			with patch_requests(FakeRequests()):
 				with self.assertRaises(frappe.ValidationError):
 					es.complete_signup(CODE, WABA, PHONE)
 
@@ -276,7 +284,7 @@ class TestBrokerServer(_Base):
 			headers["X-Forwarded-Proto"] = "https"
 		frappe.local.request = SimpleNamespace(headers=headers, scheme="http", method="POST")
 		frappe.local.form_dict = frappe._dict(code=code, waba_id=WABA, cmd="x")
-		with patch(f"{MOD}.requests", fake or FakeRequests()), patch.dict(frappe.conf, {"developer_mode": 1 if developer else 0}):
+		with patch_requests(fake or FakeRequests()), patch.dict(frappe.conf, {"developer_mode": 1 if developer else 0}):
 			return es.broker_exchange()
 
 	def audit(self):
@@ -392,7 +400,7 @@ class TestBrokerForwarding(_Base):
 		headers = {"X-Hub-Signature-256": signature if signature is not None else _sig(secret, body)}
 		frappe.local.request = SimpleNamespace(method="POST", args={}, headers=headers, get_data=lambda: body)
 		frappe.local.response = frappe._dict()
-		with patch(f"{MOD}.frappe.enqueue") as enq:
+		with patch(f"{MOD}.broker.frappe.enqueue") as enq:
 			out = es.broker_webhook()
 		return out, enq
 
@@ -440,7 +448,7 @@ class TestBrokerForwarding(_Base):
 		fake = MagicMock()
 		fake.post.side_effect = [resp(503), resp(500), resp(200)]
 		sleeps = []
-		with patch(f"{MOD}.requests", fake):
+		with patch_requests(fake):
 			ok = es.forward_to_tenant("acme", CB_A, '{"entry":[]}', "sha256=ab", 1, sleep=sleeps.append)
 		self.assertTrue(ok)
 		self.assertEqual(fake.post.call_count, 3)
@@ -454,12 +462,12 @@ class TestBrokerForwarding(_Base):
 	def test_forward_job_gives_up_and_does_not_retry_4xx(self):
 		fake = MagicMock()
 		fake.post.return_value = resp(500)
-		with patch(f"{MOD}.requests", fake):
+		with patch_requests(fake):
 			self.assertFalse(es.forward_to_tenant("acme", CB_A, "{}", "sha256=ab", 1, sleep=lambda s: None))
 		self.assertEqual(fake.post.call_count, 3)
 		fake.post.reset_mock()
 		fake.post.return_value = resp(401)
-		with patch(f"{MOD}.requests", fake):
+		with patch_requests(fake):
 			self.assertFalse(es.forward_to_tenant("acme", CB_A, "{}", "sha256=ab", 1, sleep=lambda s: None))
 		self.assertEqual(fake.post.call_count, 1)
 
@@ -475,7 +483,7 @@ class TestBrokerForwarding(_Base):
 		frappe.local.request_ip = "10.9.9.9"
 		frappe.local.request = SimpleNamespace(headers={"X-Huf-Tenant": "beta", "Authorization": f"Bearer {key}", "X-Forwarded-Proto": "https"}, scheme="https", method="POST")
 		frappe.local.form_dict = frappe._dict(code=CODE, waba_id=WABA_A, cmd="x")
-		with patch(f"{MOD}.requests", FakeRequests()):
+		with patch_requests(FakeRequests()):
 			with self.assertRaises(frappe.PermissionError):
 				es.broker_exchange()
 		self.assertEqual(frappe.db.get_value(es.WABA_DOCTYPE, WABA_A, "tenant_id"), "acme")
@@ -487,7 +495,7 @@ class TestBrokerForwarding(_Base):
 		def call(cb):
 			frappe.local.request = SimpleNamespace(headers={"X-Huf-Tenant": "acme", "Authorization": f"Bearer {key}", "X-Forwarded-Proto": "https"}, scheme="https", method="POST")
 			frappe.local.form_dict = frappe._dict(code=CODE, waba_id=WABA_X, phone_number_id=PHONE, callback_url=cb, cmd="x")
-			with patch(f"{MOD}.requests", FakeRequests()):
+			with patch_requests(FakeRequests()):
 				return es.broker_exchange()
 
 		with self.assertRaises(frappe.ValidationError):

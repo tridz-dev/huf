@@ -12,7 +12,7 @@ from frappe.tests import IntegrationTestCase
 from huf.ai.channels import adapters
 from huf.ai.channels.adapters import lms
 from huf.ai.tools import _registry
-from huf.ai.channels import tools_lms
+from huf.ai.channels.tools import lms as tools_lms
 
 LMS_MISSING = {"success": False, "error": "lms_not_installed", "message": "LMS is not installed"}
 
@@ -261,10 +261,10 @@ class TestLmsToolRegistry(unittest.TestCase):
 		self.assertEqual(
 			names,
 			{
-				"lms_list_courses": "huf.ai.channels.tools_lms.lms_list_courses",
-				"lms_enroll": "huf.ai.channels.tools_lms.lms_enroll",
-				"lms_my_progress": "huf.ai.channels.tools_lms.lms_my_progress",
-				"lms_send_certificate": "huf.ai.channels.tools_lms.lms_send_certificate",
+				"lms_list_courses": "huf.ai.channels.tools.lms.lms_list_courses",
+				"lms_enroll": "huf.ai.channels.tools.lms.lms_enroll",
+				"lms_my_progress": "huf.ai.channels.tools.lms.lms_my_progress",
+				"lms_send_certificate": "huf.ai.channels.tools.lms.lms_send_certificate",
 			},
 		)
 		self.assertIn("lms_enroll", {t["tool_name"] for t in _registry.ALL_INTEGRATION_TOOLS})

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { listChannelGateways } from '@/services/channelGatewaysApi';
+import { listChannelGateways } from '@/services/channels/channelGatewaysApi';
 import { getSetupStatus } from '@/services/whatsappHealthApi';
 import type { ChannelKey } from './channelsMeta';
 import { useChannel } from './useChannelGateway';

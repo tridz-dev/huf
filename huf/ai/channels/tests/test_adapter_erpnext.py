@@ -8,11 +8,11 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.channels import tools_erp
+from huf.ai.channels.tools import erp as tools_erp
 from huf.ai.channels.adapters import ADAPTER_MODULES, get_adapter
 from huf.ai.channels.adapters import erpnext as erp
 
-ERP = "huf.ai.channels.tools_erp"
+ERP = "huf.ai.channels.tools.erp"
 
 
 class TestErpLogic(IntegrationTestCase):

@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TimeStamp } from '@/components/whatsapp/TimeStamp';
-import { listConversations, type ChannelConversation, type ConversationStatus } from '@/services/channelsApi';
+import { listConversations, type ChannelConversation, type ConversationStatus } from '@/services/channels/channelsApi';
 
 const STATUS_PILL: Record<ConversationStatus, { label: string; variant: 'pill-success' | 'pill-warning' | 'pill-neutral' }> = {
   ai: { label: 'AI', variant: 'pill-success' },

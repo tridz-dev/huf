@@ -7,7 +7,7 @@ import json
 import frappe
 from frappe import _
 
-from huf.ai.channels.rules import rule_errors
+from huf.ai.channels.automation.rules import rule_errors
 from huf.permissions import has_capability
 
 _FIELDS = ("rule_type", "match_value", "attribute", "target_type", "target", "priority", "enabled")
@@ -25,7 +25,7 @@ def get_rules(gateway: str) -> list[dict]:
 	return [{f: r.get(f) for f in _FIELDS} for r in (doc.get("routing_rules") or [])]
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_rules(gateway: str, rules) -> list[dict]:
 	_check()
 	if isinstance(rules, str):

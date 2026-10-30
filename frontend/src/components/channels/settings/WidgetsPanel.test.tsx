@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const api = vi.hoisted(() => ({ getClickToChat: vi.fn(), getWidgetSnippet: vi.fn() }));
-vi.mock('@/services/channelsRulesApi', () => api);
+vi.mock('@/services/channels/channelsRulesApi', () => api);
 
 import { WidgetsPanel } from './WidgetsPanel';
 import type { PanelProps } from './panels';

@@ -14,7 +14,8 @@ from typing import Any
 import frappe
 from frappe.utils import add_days, get_datetime
 
-from huf.ai.channels import reminder_policy, run_as
+from huf.ai.channels import run_as
+from huf.ai.channels.automation import reminder_policy
 from huf.ai.channels.adapters import lms
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.tools.whatsapp import _free_form_refusal

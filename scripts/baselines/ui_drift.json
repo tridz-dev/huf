@@ -314,9 +314,6 @@
     "components/hub/AutoGrowTextarea.tsx": {
       "raw_element": 1
     },
-    "components/hub/HubAskUser.tsx": {
-      "text_px": 2
-    },
     "components/hub/HubConversationView.tsx": {
       "text_px": 1
     },
@@ -531,9 +528,6 @@
       "inline_style": 1,
       "text_px": 1
     },
-    "components/whatsapp/AccessTab.tsx": {
-      "text_px": 1
-    },
     "components/whatsapp/BridgeUnavailable.tsx": {
       "text_px": 1
     },
@@ -545,10 +539,6 @@
       "text_px": 1
     },
     "components/whatsapp/MessageDetailSheet.tsx": {
-      "text_px": 1
-    },
-    "components/whatsapp/MessageLogTab.tsx": {
-      "raw_element": 2,
       "text_px": 1
     },
     "components/whatsapp/SendForms.tsx": {
@@ -706,8 +696,8 @@
     "fixed_height": 115,
     "hex_colour": 98,
     "inline_style": 48,
-    "raw_element": 76,
-    "text_px": 390
+    "raw_element": 74,
+    "text_px": 386
   },
   "version": 1
 }

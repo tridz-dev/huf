@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { getRateCard, saveRateCard, type RateRow } from '@/services/analyticsApi';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getRateCard, saveRateCard, type RateRow } from '@/services/channels/analyticsApi';
 
 const CATEGORIES = ['marketing', 'utility', 'authentication', 'service'];
 
@@ -34,21 +36,17 @@ export function RateCardEditor({ onSaved }: { onSaved?: () => void }) {
       <p className="text-xs text-steel">
         Enter rates from Meta&apos;s official rate card for your billing currency. Huf does not ship Meta prices.
       </p>
-      <label className="flex items-center gap-2 text-sm text-ink">
+      <Label className="flex items-center gap-2 text-ink">
         Currency
         <Input aria-label="Currency" className="w-24" value={currency} onChange={(e) => setCurrency(e.target.value)} />
-      </label>
+      </Label>
       {rows.map((r, i) => (
         <div key={i} className="flex flex-wrap items-center gap-2">
           <Input aria-label={`Market ${i + 1}`} className="w-24" placeholder="IN" value={r.market} onChange={(e) => patch(i, { market: e.target.value })} />
-          <select
-            aria-label={`Category ${i + 1}`}
-            className="rounded-md border border-line bg-panel px-2 py-1.5 text-sm text-ink"
-            value={r.category}
-            onChange={(e) => patch(i, { category: e.target.value })}
-          >
-            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
+          <Select value={r.category} onValueChange={(v) => patch(i, { category: v })}>
+            <SelectTrigger aria-label={`Category ${i + 1}`} className="w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+          </Select>
           <Input aria-label={`Rate ${i + 1}`} className="w-28" inputMode="decimal" value={r.rate ?? ''} onChange={(e) => patch(i, { rate: e.target.value === '' ? null : Number(e.target.value) })} />
           <Input aria-label={`Effective from ${i + 1}`} className="w-40" type="date" value={r.effective_from ?? ''} onChange={(e) => patch(i, { effective_from: e.target.value || null })} />
           <Button size="sm" variant="ghost" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}>Remove</Button>

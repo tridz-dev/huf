@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { ArrowLeft, SquareAsterisk } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { CHANNELS, channelEnabled, channelMeta } from './channelsMeta';
 import { sectionsFor, sectionHref } from './sections';
@@ -55,22 +56,24 @@ export function ChannelsRail() {
           );
         })}
         {gateways.length > 0 && (
-          <select
-            aria-label={meta.nounSingular.replace(/^./, (x) => x.toUpperCase())}
-            className="mt-2 w-full rounded-md border border-line bg-panel px-2 py-1.5 text-sm text-ink"
+          <Select
             value={gw ?? ''}
-            onChange={(e) => {
-              rememberGateway(e.target.value, channel);
-              navigate(`/channels/${channel}/n/${encodeURIComponent(e.target.value)}/home`);
+            onValueChange={(v) => {
+              rememberGateway(v, channel);
+              navigate(`/channels/${channel}/n/${encodeURIComponent(v)}/home`);
             }}
           >
-            {!gw && <option value="">Select a {meta.nounSingular}</option>}
-            {gateways.map((g) => (
-              <option key={g.name} value={g.name}>
-                {g.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger size="sm" className="mt-2" aria-label={meta.nounSingular.replace(/^./, (x) => x.toUpperCase())}>
+              <SelectValue placeholder={`Select a ${meta.nounSingular}`} />
+            </SelectTrigger>
+            <SelectContent>
+              {gateways.map((g) => (
+                <SelectItem key={g.name} value={g.name}>
+                  {g.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
       </div>
 

@@ -3,7 +3,8 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.channels import conversation as conv, rules, rules_api
+from huf.ai.channels import conversation as conv
+from huf.ai.channels.automation import rules, rules_api
 
 HANDLE = "15550001111"
 
@@ -160,7 +161,7 @@ class TestRoutingRuleTargets(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			rules_api.save_rules(self.gw, [self._row(match_value="")])
 		# first_message ignores match_value, so it is not required
-		from huf.ai.channels.rules import rule_errors
+		from huf.ai.channels.automation.rules import rule_errors
 
 		self.assertEqual(rule_errors([self._row(rule_type="first_message", match_value=None)]), [])
 		with self.assertRaises(frappe.ValidationError):

@@ -30,12 +30,10 @@ export interface PackResult { success: boolean; error?: string; results?: Record
 export interface FlowRow { name: string; flow_id: string; flow_name?: string; status?: string; categories?: string; last_synced?: string }
 export interface FlowResponseRow { name: string; flow?: string; conversation?: string; received_at?: string; flow_token?: string }
 
-const unwrap = (res: unknown) => (res && typeof res === 'object' && 'message' in res ? (res as { message: unknown }).message : res);
-
 async function run<T>(verb: 'get' | 'post', path: string, args: Record<string, unknown>): Promise<CommerceResult<T>> {
   try {
     const res = verb === 'post' ? await call.post(path, args) : await call.get(path, args);
-    const body = (unwrap(res) ?? {}) as T & { success?: boolean; error?: string };
+    const body = ((res && typeof res === 'object' && 'message' in res ? (res as { message: unknown }).message : res) ?? {}) as T & { success?: boolean; error?: string };
     return { ok: true, data: body };
   } catch (e) {
     return { ok: false, error: getFrappeErrorMessage(e) };
@@ -56,6 +54,6 @@ export const getOrder = (name: string) =>
 export const createPaymentLink = (order: string) =>
   run<{ success: boolean; url?: string; error?: string }>('post', 'huf.ai.channels.commerce.payments.create_order_payment_link', { order });
 export const submitTemplatesPack = (gateway: string) => run<PackResult>('post', 'huf.ai.channels.commerce.templates_pack.submit_templates_pack', { gateway });
-export const listWaFlows = (gateway: string, refresh = 1) => run<FlowRow[]>('get', 'huf.ai.channels.wa_flows.list_wa_flows', { gateway, refresh });
+export const listWaFlows = (gateway: string, refresh = 1) => run<FlowRow[]>('post', 'huf.ai.channels.wa_flows.list_wa_flows', { gateway, refresh });
 export const listFlowResponses = (gateway: string) =>
   getList<FlowResponseRow>('WhatsApp Flow Response', ['name', 'flow', 'conversation', 'received_at', 'flow_token'], { gateway }, 'received_at desc', 20);

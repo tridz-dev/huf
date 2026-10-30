@@ -9,9 +9,9 @@ vi.mock('@/services/whatsappHealthApi', async (orig) => ({
   getSetupStatus: vi.fn(),
   checkToken: vi.fn(),
 }));
-vi.mock('@/services/channelsApi', () => ({ listConversations: vi.fn() }));
+vi.mock('@/services/channels/channelsApi', () => ({ listConversations: vi.fn() }));
 import { getSetupStatus } from '@/services/whatsappHealthApi';
-import { listConversations } from '@/services/channelsApi';
+import { listConversations } from '@/services/channels/channelsApi';
 import { HomeDashboard } from './HomeDashboard';
 
 beforeEach(() => {

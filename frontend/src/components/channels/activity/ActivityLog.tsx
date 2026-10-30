@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -155,14 +156,14 @@ export function ActivityLog({ gateway, bridgeAvailable }: { gateway?: string; br
             options={(options?.solutions ?? []).map((x) => ({ value: x.name, label: x.title || x.name }))} />
         )}
         <Input value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} placeholder="Number" className="w-36 font-mono" aria-label="Contact number" />
-        <label className="flex items-center gap-1.5 text-xs text-steel">
+        <Label size="sm" tone="muted" weight="normal" className="flex items-center gap-1.5">
           From
           <Input type="date" value={filters.from} onChange={(e) => update({ from: e.target.value })} className="w-40" aria-label="From date" />
-        </label>
-        <label className="flex items-center gap-1.5 text-xs text-steel">
+        </Label>
+        <Label size="sm" tone="muted" weight="normal" className="flex items-center gap-1.5">
           To
           <Input type="date" value={filters.to} onChange={(e) => update({ to: e.target.value })} className="w-40" aria-label="To date" />
-        </label>
+        </Label>
         <Button variant="outline" size="sm" onClick={reset} disabled={active === 0 && !qInput && !phoneInput}>
           Reset{active > 0 ? ` (${active})` : ''}
         </Button>
@@ -229,7 +230,7 @@ export function ActivityLog({ gateway, bridgeAvailable }: { gateway?: string; br
                       {m.error && (
                         <div className="mt-1 space-y-0.5">
                           <ErrorBadge error={m.error} />
-                          <div className="max-w-48 text-[11px] text-steel">{errorInfo(m.error)?.hint}</div>
+                          <div className="max-w-48 text-micro text-steel">{errorInfo(m.error)?.hint}</div>
                         </div>
                       )}
                     </TableCell>

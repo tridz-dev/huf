@@ -13,7 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import type { EcosystemApp, EcosystemKey } from '@/services/channelsApi';
+import type { EcosystemApp, EcosystemKey } from '@/services/channels/channelsApi';
 
 export type ConnState = 'connected' | 'installed' | 'absent';
 

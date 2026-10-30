@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getAvailableAgents } from '@/services/gatewayApi';
 import { bindAgent } from './setupApi';
 
@@ -38,19 +39,18 @@ export function WhoAnswersStep({ gateway, onBound }: WhoAnswersStepProps) {
       <p className="text-sm text-steel">Pick the agent that replies when someone messages this number.</p>
       <div className="space-y-1.5">
         <Label htmlFor="wa-agent">Agent</Label>
-        <select
-          id="wa-agent"
-          value={agent}
-          onChange={(e) => setAgent(e.target.value)}
-          className="h-9 w-full rounded-md border border-line bg-paper px-2 text-sm text-ink"
-        >
-          <option value="">{agents === null ? 'Loading agents...' : 'Choose an agent'}</option>
-          {(agents ?? []).map((a) => (
-            <option key={a.name} value={a.name}>
-              {a.agent_name}
-            </option>
-          ))}
-        </select>
+        <Select value={agent} onValueChange={setAgent}>
+          <SelectTrigger id="wa-agent">
+            <SelectValue placeholder={agents === null ? 'Loading agents...' : 'Choose an agent'} />
+          </SelectTrigger>
+          <SelectContent>
+            {(agents ?? []).map((a) => (
+              <SelectItem key={a.name} value={a.name}>
+                {a.agent_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       {error && (
         <p role="alert" className="text-sm text-destructive">

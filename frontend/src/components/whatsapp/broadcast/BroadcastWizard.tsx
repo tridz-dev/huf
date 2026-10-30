@@ -4,6 +4,7 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field } from '@/components/ui/field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -443,12 +444,17 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
           ) : <p className="text-sm">Ready to send to <strong>{expected}</strong> recipients.</p>}
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">When to send</legend>
-            <div className="flex items-center gap-2">
-              <input type="radio" id="bc-send-now" name="bc-when" checked={!scheduleMode} onChange={() => setScheduleMode(false)} />
+            <RadioGroup
+              aria-label="When to send"
+              value={scheduleMode ? 'later' : 'now'}
+              onValueChange={(v) => setScheduleMode(v === 'later')}
+              className="flex items-center gap-2"
+            >
+              <RadioGroupItem value="now" id="bc-send-now" />
               <Label htmlFor="bc-send-now">Send now</Label>
-              <input type="radio" id="bc-send-later" name="bc-when" checked={scheduleMode} onChange={() => setScheduleMode(true)} />
+              <RadioGroupItem value="later" id="bc-send-later" />
               <Label htmlFor="bc-send-later">Schedule for</Label>
-            </div>
+            </RadioGroup>
             {scheduleMode ? (
               <div className="space-y-1">
                 <Input id="bc-schedule-at" type="datetime-local" aria-label="Schedule date and time" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />

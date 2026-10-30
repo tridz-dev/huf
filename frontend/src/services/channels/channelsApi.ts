@@ -94,7 +94,7 @@ export interface EcosystemApp {
 export type EcosystemKey = 'crm' | 'erpnext' | 'helpdesk' | 'lms' | 'ravan';
 export type Ecosystem = Record<EcosystemKey, EcosystemApp>;
 
-async function unwrapCall<T>(path: string, verb: 'get' | 'post', args: Record<string, unknown>): Promise<ChannelsResult<T>> {
+async function callChannels<T>(path: string, verb: 'get' | 'post', args: Record<string, unknown>): Promise<ChannelsResult<T>> {
   try {
     const res = verb === 'post' ? await call.post(path, args) : await call.get(path, args);
     const body = ((res && typeof res === 'object' && 'message' in res ? (res as { message: unknown }).message : res) ?? {}) as T & {
@@ -110,13 +110,13 @@ async function unwrapCall<T>(path: string, verb: 'get' | 'post', args: Record<st
 }
 
 export function getEcosystem() {
-  return unwrapCall<Ecosystem>('huf.ai.channels.ecosystem.get_ecosystem', 'get', {});
+  return callChannels<Ecosystem>('huf.ai.channels.ecosystem.get_ecosystem', 'get', {});
 }
 
 export function returnToAi(conversation: string) {
-  return unwrapCall<{ conversation_status?: string }>('huf.ai.channels.reply_api.return_to_ai', 'post', { conversation });
+  return callChannels<{ conversation_status?: string }>('huf.ai.channels.reply_api.return_to_ai', 'post', { conversation });
 }
 
 export function closeConversation(conversation: string) {
-  return unwrapCall<{ conversation_status?: string }>('huf.ai.channels.reply_api.close', 'post', { conversation });
+  return callChannels<{ conversation_status?: string }>('huf.ai.channels.reply_api.close', 'post', { conversation });
 }

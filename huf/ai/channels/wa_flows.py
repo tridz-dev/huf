@@ -56,7 +56,7 @@ def fetch_flows(gateway: str, http_get: Callable[..., Any] | None = None) -> lis
 	return rows
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def list_wa_flows(gateway: str, refresh: int | str = 1) -> list[dict]:
 	"""Admin: sync the WABA's Flows into the ``WhatsApp Flow Cache`` doctype and return them (``refresh=0`` = cache only)."""
 	return sync_flows(gateway, refresh)

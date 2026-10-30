@@ -51,7 +51,7 @@ def _rate_limit(user: str) -> None:
 		frappe.throw(_("Too many secret stashes; try again later."), frappe.TooManyRequestsError)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def stash_secret(values, purpose: str, gateway: str | None = None) -> dict[str, Any]:
 	"""Store secret values; return ``{"credentials_ref", "fields"}`` (never the values)."""
 	from huf.permissions import has_capability

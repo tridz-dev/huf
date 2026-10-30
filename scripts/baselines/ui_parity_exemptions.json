@@ -18,5 +18,10 @@
     "reason": "Server-to-server notification API invoked by flows/agents/integrations (programmatic send), not a user-configured setting; the UI configures the gateway that it uses.",
     "kind": "system",
     "owner": "gateways"
+  },
+  "gateway.routing_rules": {
+    "reason": "Child table with a dedicated React editor (Channels > Automations > Rules, components/channels/automations/RulesTab.tsx) that reads and writes it only through huf.ai.channels.automation.rules_api.get_rules/save_rules (ordered, validated as a whole), so the fieldname never appears in the UI.",
+    "kind": "system",
+    "owner": "channels"
   }
 }

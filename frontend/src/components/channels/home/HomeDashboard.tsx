@@ -6,7 +6,7 @@ import { ActivityCard } from '@/components/whatsapp/overview/ActivityCard';
 import { reasonMessage } from '@/components/whatsapp/overview/healthCopy';
 import { HealthBanner } from '@/components/whatsapp/overview/HealthBanner';
 import { TokenCard } from '@/components/whatsapp/overview/TokenCard';
-import { listConversations, type ConversationStatus } from '@/services/channelsApi';
+import { listConversations, type ConversationStatus } from '@/services/channels/channelsApi';
 import { getNumberSummary } from '@/services/solutionsApi';
 import type { NumberSummary } from '@/types/solutions';
 import { checkToken, getSetupStatus, type GatewayHealthStatus } from '@/services/whatsappHealthApi';

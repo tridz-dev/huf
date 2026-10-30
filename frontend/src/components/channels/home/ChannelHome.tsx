@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { healthLabel, type HealthState } from '@/services/whatsappHealthApi';
-import { listConversations, type ConversationStatus } from '@/services/channelsApi';
+import { listConversations, type ConversationStatus } from '@/services/channels/channelsApi';
 import { channelMeta, gatewayDetailHref } from '../channelsMeta';
 import { useChannel } from '../useChannelGateway';
 import { useGatewaySummary } from '../useGatewaySummary';

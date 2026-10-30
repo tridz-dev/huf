@@ -16,14 +16,24 @@ started like any other broadcast. The original is never reopened.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import frappe
 from frappe import _
+from frappe.rate_limiter import rate_limit
 from frappe.utils import get_datetime, now_datetime
 
 from huf.ai.gateway_adapters import whatsapp_errors as errors
-from huf.ai.whatsapp.broadcast import limits as broadcast_limits, runner
+from huf.ai.whatsapp.broadcast import limits as broadcast_limits, policy, runner
+from huf.ai.whatsapp.broadcast.api import (
+	_bridge_guard,
+	_broadcast_audit,
+	_is_api_key_caller,
+	_queued_count,
+	_require_broadcast_write,
+)
 from huf.ai.whatsapp.broadcast.checks import start_gate
+from huf.ai.whatsapp.management import _error
 
 BROADCAST = runner.BROADCAST
 RECIPIENT = runner.RECIPIENT
@@ -163,3 +173,68 @@ def retry_failed(broadcast: str) -> dict:
 	finally:
 		frappe.flags.in_broadcast_api = prev
 	return {"broadcast": new.name, "retried_from": broadcast, "added": result.get("added"), "skipped_total": result.get("skipped_total")}
+
+
+# --- API (whitelisted) ----------------------------------------------------------------------------
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=policy.rate("rate_start_broadcast"), seconds=60)
+@_bridge_guard
+def schedule_broadcast(
+	broadcast: str | None = None, scheduled_at: Any = None, confirm_count: Any = None, override_warnings: Any = None
+) -> dict[str, Any]:
+	"""Schedule a Draft broadcast to start at ``scheduled_at`` (site timezone). Same gate and confirmation as ``start_broadcast``."""
+	row = _require_broadcast_write(broadcast)
+	if row.get("error"):
+		return row
+	acknowledged = start_gate.parse_override_warnings(override_warnings)
+	if acknowledged is None:
+		return _error("invalid_override_warnings", "override_warnings must be a JSON list of warning codes.")
+	try:
+		frappe.utils.get_datetime(scheduled_at)
+	except Exception:
+		return _error("invalid_scheduled_at", "scheduled_at must be a date and time.")
+	queued = _queued_count(broadcast)
+	if queued <= 0:
+		return _error("no_recipients", "There are no queued recipients.")
+	if policy.get("require_typed_count") and not _is_api_key_caller():
+		if str(confirm_count if confirm_count is not None else "").strip() != str(queued):
+			return _error("confirm_mismatch", f"Type the number of queued recipients ({queued}) to confirm.")
+	try:
+		result = schedule(broadcast, scheduled_at, frappe.session.user, acknowledged)
+	except start_gate.StartRefused as exc:
+		return {"success": False, "error": exc.code, "message": str(exc), **exc.extra}
+	_broadcast_audit(broadcast, "scheduled", scheduled_at=result.get("scheduled_at"))
+	return {"success": True, **result}
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=policy.rate("rate_cancel_broadcast"), seconds=60)
+@_bridge_guard
+def unschedule_broadcast(broadcast: str | None = None) -> dict[str, Any]:
+	"""Return a Scheduled broadcast to Draft."""
+	row = _require_broadcast_write(broadcast)
+	if row.get("error"):
+		return row
+	try:
+		result = unschedule(broadcast)
+	except start_gate.StartRefused as exc:
+		return {"success": False, "error": exc.code, "message": str(exc), **exc.extra}
+	_broadcast_audit(broadcast, "unscheduled")
+	return {"success": True, **result}
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=policy.rate("rate_create_broadcast"), seconds=60)
+@_bridge_guard
+def retry_failed_recipients(broadcast: str | None = None) -> dict[str, Any]:
+	"""New Draft broadcast with the retryable failed recipients (never opted-out, allow-list or policy refusals)."""
+	row = _require_broadcast_write(broadcast)
+	if row.get("error"):
+		return row
+	try:
+		result = retry_failed(broadcast)
+	except start_gate.StartRefused as exc:
+		return {"success": False, "error": exc.code, "message": str(exc), **exc.extra}
+	_broadcast_audit(result["broadcast"], "retry_created", retried_from=broadcast, added=result.get("added"))
+	return {"success": True, **result}

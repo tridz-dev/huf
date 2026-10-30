@@ -6,8 +6,8 @@ import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('@/layouts/PageFrame', () => ({ PageFrame: ({ children }: never) => <div>{children}</div> }));
 vi.mock('@/contexts/PermissionsContext', () => ({ useIsHufAdmin: () => true }));
-vi.mock('@/services/channelsApi', () => ({ getEcosystem: vi.fn() }));
-import { getEcosystem } from '@/services/channelsApi';
+vi.mock('@/services/channels/channelsApi', () => ({ getEcosystem: vi.fn() }));
+import { getEcosystem } from '@/services/channels/channelsApi';
 import ConnectionsSection from '../sections/ConnectionsSection';
 
 beforeEach(() => {

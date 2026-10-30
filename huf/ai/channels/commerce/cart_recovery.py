@@ -9,7 +9,7 @@ from __future__ import annotations
 import frappe
 from frappe.utils import add_to_date, now_datetime
 
-from huf.ai.channels import reminder_policy
+from huf.ai.channels.automation import reminder_policy
 
 ORDER = "WhatsApp Order"
 TEMPLATE = "cart_reminder"

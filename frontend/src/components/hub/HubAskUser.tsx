@@ -8,7 +8,8 @@ import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { stashSecret } from '@/services/secretsApi';
+import { Label } from '@/components/ui/label';
+import { stashSecret } from '@/services/channels/secretsApi';
 
 export interface AskUserOption {
   id?: string;
@@ -191,7 +192,7 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
                       <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${active ? 'text-signal' : 'text-steel-soft'}`} />
                       <span className="min-w-0">
                         <span className={`block text-xs font-medium ${active ? 'text-ink' : 'text-steel'}`}>{opt.label}</span>
-                        {opt.description && <span className="block text-[11px] text-steel-soft">{opt.description}</span>}
+                        {opt.description && <span className="block text-micro text-steel-soft">{opt.description}</span>}
                       </span>
                     </Button>
                   );
@@ -236,7 +237,7 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
                 const inputId = `${baseId}-${field.id}`;
                 return (
                   <div key={field.id} className="grid gap-1">
-                    <label htmlFor={inputId} className="text-xs text-steel">{field.label}</label>
+                    <Label htmlFor={inputId} size="sm" tone="muted" weight="normal">{field.label}</Label>
                     <Input
                       id={inputId}
                       name={field.id}
@@ -298,7 +299,7 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
                       type="button"
                       variant="outline"
                       onClick={() => setText(s)}
-                      className="h-auto rounded-sm border-line bg-transparent px-2 py-1 text-[11px] font-normal text-steel hover:border-signal hover:bg-transparent hover:text-signal"
+                      className="h-auto rounded-sm border-line bg-transparent px-2 py-1 text-micro font-normal text-steel hover:border-signal hover:bg-transparent hover:text-signal"
                     >
                       {s}
                     </Button>

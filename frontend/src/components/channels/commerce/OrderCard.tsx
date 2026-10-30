@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ShoppingBag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
-import { listConversationOrders, type OrderRow } from '@/services/commerceApi';
+import { listConversationOrders, type OrderRow } from '@/services/channels/commerceApi';
 
 /** Compact order summary above a conversation's messages; renders nothing without orders. */
 export function OrderCard({ conversation }: { conversation: string }) {

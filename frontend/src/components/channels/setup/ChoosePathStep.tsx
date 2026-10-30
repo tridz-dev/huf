@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import type { CompleteSignupResult } from '@/services/embeddedSignupApi';
+import type { CompleteSignupResult } from '@/services/channels/embeddedSignupApi';
 import { EmbeddedSignupStep } from './EmbeddedSignupStep';
 
 export function ChoosePathStep({

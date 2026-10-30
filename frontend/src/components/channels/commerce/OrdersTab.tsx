@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { listOrders, type OrderRow } from '@/services/commerceApi';
+import { listOrders, type OrderRow } from '@/services/channels/commerceApi';
 import { OrderDrawer } from './OrderDrawer';
 
 export function OrdersTab({ gw }: { gw: string }) {

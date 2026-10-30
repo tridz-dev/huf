@@ -29,6 +29,7 @@ from frappe import _
 from frappe.utils.file_manager import save_file
 
 from huf.ai.transaction import commit_if_background
+from huf.permissions import can_read_file
 
 # Maximum accepted size for a decoded audio upload (25 MB).
 MAX_AUDIO_FILE_SIZE = 25 * 1024 * 1024
@@ -470,24 +471,6 @@ def resolve_stt_config(agent_name: str = None, model: str = None) -> dict:
     }
 
 
-def _can_read_file(file_doc) -> bool:
-    """Read check for a File that cannot be short-circuited by another app.
-
-    ``has_controller_permissions`` lets the last-registered ``has_permission``
-    hook for File return a conclusive True, which skips Frappe's own File
-    controller (owner / share / attached-doc rules). An installed app that
-    returns True ("no opinion") instead of None therefore turns every private
-    File into one any role-permitted user can read. Always also require
-    Frappe's File controller to agree.
-    """
-    from frappe.core.doctype.file.file import has_permission as file_controller_permission
-
-    return bool(
-        frappe.has_permission("File", "read", doc=file_doc)
-        and file_controller_permission(file_doc, "read", user=frappe.session.user)
-    )
-
-
 def _resolve_file_doc(file_id: str = None, file_url: str = None):
     """
     Resolve a Frappe File document from an ID or URL.
@@ -511,11 +494,8 @@ def _resolve_file_doc(file_id: str = None, file_url: str = None):
             file_name = file_url.replace("/files/", "")
             file_doc = frappe.get_doc("File", {"file_name": file_name})
 
-    if file_doc and not _can_read_file(file_doc):
-        frappe.throw(
-            _("Not permitted to read File {0}").format(file_doc.name),
-            frappe.PermissionError,
-        )
+    if file_doc and not can_read_file(file_doc):
+        frappe.throw(_("Not permitted to read File {0}").format(file_doc.name), frappe.PermissionError)
 
     return file_doc
 

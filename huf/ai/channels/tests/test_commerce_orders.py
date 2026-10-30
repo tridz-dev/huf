@@ -105,7 +105,7 @@ class TestOrderRecords(IntegrationTestCase):
 			patch(f"{OR}.erpnext_installed", return_value=True),
 			patch(f"{OR}.find_customer_by_phone", return_value={"customer": "CUST-A", "contact": "C"}),
 			patch("huf.ai.channels.conversation.get_or_create_conversation", return_value=conv),
-			patch("huf.ai.channels.tools_erp.create_order", return_value={"success": True, "order": "SO-9", "status": "Draft"}) as co,
+			patch("huf.ai.channels.tools.erp.create_order", return_value={"success": True, "order": "SO-9", "status": "Draft"}) as co,
 			patch(f"{OR}._create_whatsapp_order") as wo,
 		):
 			res = orders.handle_inbound_order("GW", ev, {"sender_id": "15550001111"})
@@ -139,7 +139,7 @@ class TestOrderRecords(IntegrationTestCase):
 			patch(f"{OR}.erpnext_installed", return_value=True),
 			patch(f"{OR}.find_customer_by_phone", return_value={"customer": "C"}),
 			patch("huf.ai.channels.conversation.get_or_create_conversation", return_value=conv),
-			patch("huf.ai.channels.tools_erp.create_order", side_effect=fake),
+			patch("huf.ai.channels.tools.erp.create_order", side_effect=fake),
 		):
 			orders.handle_inbound_order("GW", _event(), {"sender_id": "1"})
 		self.assertEqual(seen["conv"], "CONV1")

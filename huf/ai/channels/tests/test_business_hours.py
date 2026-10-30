@@ -5,7 +5,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.channels import hours
+from huf.ai.channels.automation import hours
 from huf.ai.channels.pipeline import Decision
 
 # 2026-11-02 is a Monday (UTC). Times below are UTC unless a test sets another site timezone.

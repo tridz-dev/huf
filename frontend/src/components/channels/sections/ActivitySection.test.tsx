@@ -15,10 +15,10 @@ vi.mock('@/services/whatsappApi', async (orig) => ({
   listMessageLog: vi.fn(),
   listMessageLogFilters: vi.fn(),
 }));
-vi.mock('@/services/channelsApi', () => ({ listConversations: vi.fn(), getConversation: vi.fn(), returnToAi: vi.fn(), closeConversation: vi.fn() }));
+vi.mock('@/services/channels/channelsApi', () => ({ listConversations: vi.fn(), getConversation: vi.fn(), returnToAi: vi.fn(), closeConversation: vi.fn() }));
 vi.mock('../useChannelGateway', () => ({ useChannelGateway: () => 'GW-1', useChannel: () => 'whatsapp' }));
 import { listMessageLog, listMessageLogFilters } from '@/services/whatsappApi';
-import { listConversations } from '@/services/channelsApi';
+import { listConversations } from '@/services/channels/channelsApi';
 import ActivitySection from './ActivitySection';
 
 const item = (name: string, event: string) => ({

@@ -77,7 +77,7 @@ def _create_draft_sales_order(conversation, items: list[dict]) -> dict | None:
 	"""Draft SO through the ERP tool path; None when ERPNext is absent, the customer unknown or the tool refuses."""
 	if not erpnext_installed() or not find_customer_by_phone(conversation.contact_handle):
 		return None
-	from huf.ai.channels import tools_erp
+	from huf.ai.channels.tools import erp as tools_erp
 
 	token = run_as.set_current_conversation(conversation.name)
 	try:

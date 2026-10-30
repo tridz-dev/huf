@@ -12,15 +12,16 @@ vi.mock('@/services/gatewayApi', () => ({
   getGateway: vi.fn().mockResolvedValue({ catalog_id: 'CAT1', payment_provider: 'razorpay', cart_recovery_hours: 2 }),
   updateGateway: vi.fn().mockResolvedValue({}),
 }));
-vi.mock('@/services/channelsApi', () => ({ getEcosystem: vi.fn() }));
-vi.mock('@/services/commerceApi', () => ({
+vi.mock('@/services/channels/channelsApi', () => ({ getEcosystem: vi.fn() }));
+vi.mock('@/services/channels/commerceApi', () => ({
   syncCatalogNow: vi.fn(), listOrders: vi.fn(), getOrder: vi.fn(), createPaymentLink: vi.fn(), submitTemplatesPack: vi.fn(),
   listWaFlows: vi.fn(), listFlowResponses: vi.fn(), listConversationOrders: vi.fn(),
 }));
-import { getEcosystem } from '@/services/channelsApi';
-import * as api from '@/services/commerceApi';
+import { getEcosystem } from '@/services/channels/channelsApi';
+import * as api from '@/services/channels/commerceApi';
 import CommerceSection from '../sections/CommerceSection';
 import { OrderCard } from './OrderCard';
+import { methodUrl } from '@/lib/api';
 import { copyText } from '@/lib/clipboard';
 
 const renderAt = (path: string) =>
@@ -81,7 +82,7 @@ describe('Commerce', () => {
   it('renders webhook URLs without secrets', async () => {
     renderAt('/channels/whatsapp/n/GW%201/commerce/payments');
     const rz = (await screen.findByLabelText('Razorpay webhook URL')) as HTMLInputElement;
-    expect(rz.value).toBe(`${window.location.origin}/api/method/huf.ai.channels.commerce.payments.razorpay_webhook?gateway=GW%201`);
+    expect(rz.value).toBe(`${window.location.origin}${methodUrl('huf.ai.channels.commerce.payments.razorpay_webhook')}?gateway=GW%201`);
     expect((screen.getByLabelText('Stripe webhook URL') as HTMLInputElement).value).toContain('stripe_webhook?gateway=GW%201');
   });
 

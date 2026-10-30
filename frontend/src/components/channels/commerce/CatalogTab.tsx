@@ -6,8 +6,8 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { updateGateway, type GatewayDoc } from '@/services/gatewayApi';
-import { syncCatalogNow, type SyncResult } from '@/services/commerceApi';
-import type { EcosystemApp } from '@/services/channelsApi';
+import { syncCatalogNow, type SyncResult } from '@/services/channels/commerceApi';
+import type { EcosystemApp } from '@/services/channels/channelsApi';
 import { ConnectionCard, CARDS } from '../connections/ConnectionCards';
 
 export interface TabProps {
