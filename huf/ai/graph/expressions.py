@@ -17,37 +17,28 @@ behaviour and T-01 pins it with tests):
   hard AST-depth cap (``MAX_EXPRESSION_DEPTH``) so a syntactically "allowed" but pathologically
   nested expression cannot be used to blow the recursion stack.
 
-What this module adds on top of that shape, per ``spec/graph-ir.md`` section 4.2:
+What this module adds, per ``spec/graph-ir.md`` section 4.2:
 
 - The evaluator returns the **value**, not ``bool(value)``. Boolean coercion happens only where the
   IR itself structurally requires a boolean (``condition``, ``applies_when``, ``validate``) --
   see :func:`evaluate_bool`.
 - ``ast.Subscript`` resolution gains **list-index support** (``row["items"][0]``), matching the
-  ``Reference`` path grammar in section 4.1 (:func:`resolve_path`) so the two mechanisms -- a
-  standalone ``{"$from": "..."}`` reference and a variable access embedded inside a larger
-  ``Expression`` -- stay conceptually identical.
+  ``Reference`` path grammar in section 4.1 (:func:`resolve_path`).
 - Operators: ``Eq, NotEq, Lt, LtE, Gt, GtE, In, NotIn, And, Or, Not, Add, Sub, Mult, Mod`` (carried
   over from ``flow/eval.py``) plus ``Div`` (null on division by zero, never raises -- see totality
   below) and ``UAdd``/``USub`` for signed literals. Still no ``Pow``, no bitwise operators.
-- A closed set of four **helper functions** (``number``, ``lower``, ``startswith``, ``endswith``; see
-  :data:`HELPERS`) is the only thing ``ast.Call`` may name. The callee must be a bare name from that set, with the
-  exact number of positional arguments; keywords, starred arguments, attribute callees and every other call are
-  still rejected at parse time. They exist so a rule builder can say "starts with", "ignore capital letters" and
-  "compare as numbers" without a general function surface. Each is total: wrong types give ``None`` / ``False``.
+- A closed set of four **helper functions** (``number``, ``lower``, ``startswith``, ``endswith``; :data:`HELPERS`)
+  is the only thing ``ast.Call`` may name (bare name, exact positional arity; everything else is rejected at parse
+  time). Each is total: wrong types give ``None`` / ``False``.
+- Arithmetic is resource-limited (``expr.limits``): no text/list repetition, integers below 10**18.
 - The only bare ``Name`` nodes ever in scope are the roots from section 4.1 (``input``, ``trigger``,
   ``row``, ``foreach``, or a ``<node_id>``); which names are actually bound is entirely up to the
   caller's ``bindings`` dict -- this module does not hardcode the root list.
 
-Totality (I2, I7): once an expression has been **parsed** (:func:`parse_expression`), evaluating it
-(:func:`evaluate_value` / :func:`evaluate_bool`) never raises for ordinary data. Missing keys and
-out-of-range list indices resolve to ``None``/``null`` (never ``KeyError``/``IndexError``), division
-by zero resolves to ``None`` (never ``ZeroDivisionError``), and type-mismatched comparisons or binary
-operations resolve to ``None`` (never ``TypeError``) -- EXCEPT where a boolean is structurally
-required, where a non-boolean/None result is coerced with Python truthiness exactly as
-``flow/eval.py`` does today (:func:`evaluate_bool`). Malformed or disallowed expressions are instead
-rejected **at parse time** with a typed :class:`ExpressionError` -- that is the one place this module
-is allowed to raise on bad input; nothing downstream of a successful :func:`parse_expression` call
-raises.
+Totality (I2, I7): once **parsed**, evaluating never raises for ordinary data: missing keys, bad indices, division by
+zero and type mismatches resolve to ``None``/``null``; :func:`evaluate_bool` coerces with Python truthiness exactly as
+``flow/eval.py`` does. Malformed or disallowed expressions are rejected **at parse time** with :class:`ExpressionError`
+(the one place this module raises on bad input). The one opt-in exception is ``raise_limits=True`` (resource limits).
 
 Public API:
 
@@ -57,22 +48,12 @@ Public API:
 - :func:`evaluate_value` -- runtime: ``(ParsedExpression, bindings) -> Any``, total, never raises.
 - :func:`evaluate_bool` -- runtime: ``(ParsedExpression, bindings) -> bool``, total, never raises.
   Use for ``condition.config.expression``, ``applies_when[]``, ``validate.assertions[].expression``.
-- :func:`evaluate_predicate` -- **the T-12 integration point.** ``(expression: str, row: dict) ->
-  bool``, total, never raises, parses AND evaluates in one call with a single ``row`` root binding.
-  ``huf/ai/graph/transforms.py`` (T-12) currently ships its own small ``eval_row_predicate`` AST
-  walker for exactly this shape (``filter``'s ``where: Expression``) because T-12 has no dependency
-  on T-13 and needed *something* self-contained. That duplication is not meant to ship long-term:
-  ``transforms.py`` is expected to replace its local ``eval_row_predicate`` with a call to
-  ``evaluate_predicate`` from this module (the two signatures match: ``(expression, row) -> bool``),
-  once T-13 lands and T-12 can take the dependency. See ``transforms.py``'s own comment block above
-  its evaluator for the acknowledgement.
+- :func:`evaluate_predicate` -- ``(expression: str, row: dict) -> bool``, total, never raises: parses AND
+  evaluates with a single ``row`` root binding. ``huf/ai/graph/transforms.py`` uses it for ``filter``/``sort``.
 - :func:`resolve_path` -- resolves a ``Reference`` path (section 4.1: ``root.segment...``, segments
   are ``.identifier`` or ``[integer]``) against a bindings dict. Total: any failure is ``None``.
 
-Explicitly NOT used: ``frappe.safe_eval`` / ``frappe.utils.safe_exec.get_safe_globals``. Both expose a
-far larger surface (string methods, ``frappe.utils`` helpers, safe builtins) than this trust boundary
-allows -- GT-03 calls this out as "far too permissive." This module's allow-list is deliberately much
-narrower.
+Explicitly NOT used: ``frappe.safe_eval`` (far larger surface than this trust boundary allows, per GT-03).
 """
 
 from __future__ import annotations
@@ -83,18 +64,28 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-MAX_EXPRESSION_LENGTH = 500
+try:
+	from huf.ai.graph.expr.limits import (
+		LIMIT_MESSAGE,
+		MAX_INT_MAGNITUDE,
+		MAX_SEQUENCE_RESULT,
+		ExpressionLimitError,
+		_check_int,
+		_check_result,
+		_safe_add,
+		_safe_mod,
+		_safe_mul,
+	)
+except ImportError:  # loaded by file path in a frappe-less sandbox (see tests/test_graph_expressions.py)
+	import importlib.util as _ilu
+	import os as _os
 
-# Resource caps for arithmetic (security round 2, DECISIONS 13). An editor controls the expression text
-# and run data controls the operands, so ``"x" * 10**9`` or ``[0] * 10**9`` (OOM kills the worker) must
-# never be computed. Repeating text/lists is refused outright; integers are limited in magnitude (so no
-# result can grow without bound); concatenation and results may not exceed ``MAX_SEQUENCE_RESULT``.
-MAX_INT_MAGNITUDE = 10**18
-MAX_SEQUENCE_RESULT = 1_000_000
-LIMIT_MESSAGE = (
-	"This check works with numbers or text that are too large to calculate safely. "
-	"Use smaller numbers, and do not repeat text or lists."
-)
+	_spec = _ilu.spec_from_file_location("huf_graph_expression_limits", _os.path.join(_os.path.dirname(__file__), "expr", "limits.py"))
+	_limits = _ilu.module_from_spec(_spec)
+	_spec.loader.exec_module(_limits)
+	globals().update({k: getattr(_limits, k) for k in ("LIMIT_MESSAGE", "MAX_INT_MAGNITUDE", "MAX_SEQUENCE_RESULT", "ExpressionLimitError", "_check_int", "_check_result", "_safe_add", "_safe_mod", "_safe_mul")})
+
+MAX_EXPRESSION_LENGTH = 500
 
 # Depth cap on the parsed AST (counting from the ``Expression`` root). Generous enough for any
 # realistic graph expression, tight enough that a deeply nested literal (``[[[[[...]]]]]``) cannot be
@@ -115,18 +106,6 @@ class ExpressionError(Exception):
 	Never raised by evaluation of an already-parsed expression -- that is the totality contract
 	this module exists to provide.
 	"""
-
-
-class ExpressionLimitError(Exception):
-	"""An arithmetic resource limit was hit (repeat text/list, huge number, too-long result, out of memory).
-
-	Raised inside evaluation only. :func:`evaluate_value` / :func:`evaluate_bool` stay total by default
-	(the answer is ``None`` / ``False``); callers that must fail the step instead (the flow engine) pass
-	``raise_limits=True`` and show ``str(exc)``, which is already plain language.
-	"""
-
-	def __init__(self, message: str = LIMIT_MESSAGE):
-		super().__init__(message)
 
 
 @dataclass(frozen=True)
@@ -150,46 +129,6 @@ def _safe_div(a: Any, b: Any) -> Any:
 		return a / b
 	except (ZeroDivisionError, TypeError):
 		return None
-
-
-def _is_sequence(value: Any) -> bool:
-	return isinstance(value, (str, bytes, list, tuple))
-
-
-def _is_int(value: Any) -> bool:
-	return isinstance(value, int) and not isinstance(value, bool)
-
-
-def _check_int(value: Any) -> None:
-	if _is_int(value) and abs(value) >= MAX_INT_MAGNITUDE:
-		raise ExpressionLimitError()
-
-
-def _check_result(value: Any) -> Any:
-	_check_int(value)
-	if _is_sequence(value) and len(value) > MAX_SEQUENCE_RESULT:
-		raise ExpressionLimitError()
-	return value
-
-
-def _safe_mul(a: Any, b: Any) -> Any:
-	# Repetition ("ab" * 3, [0] * n, True * "x") is how a short expression allocates gigabytes: refuse it.
-	if (_is_sequence(a) and isinstance(b, int)) or (_is_sequence(b) and isinstance(a, int)):
-		raise ExpressionLimitError()
-	return operator.mul(a, b)
-
-
-def _safe_mod(a: Any, b: Any) -> Any:
-	# ``"%999999999d" % 1`` is string formatting and allocates a giant string: text on the left is refused.
-	if isinstance(a, (str, bytes)):
-		raise ExpressionLimitError()
-	return operator.mod(a, b)
-
-
-def _safe_add(a: Any, b: Any) -> Any:
-	if _is_sequence(a) and _is_sequence(b) and len(a) + len(b) > MAX_SEQUENCE_RESULT:
-		raise ExpressionLimitError()
-	return operator.add(a, b)
 
 
 _BIN_OPS: dict[type, Any] = {
@@ -388,19 +327,10 @@ def evaluate_bool(parsed: ParsedExpression, bindings: dict, *, raise_limits: boo
 
 
 def evaluate_predicate(expression: str, row: dict) -> bool:
-	"""The T-12 integration point: evaluate a row predicate, total, returning ``bool``.
+	"""Evaluate a row predicate, total, returning ``bool`` (spec/graph-ir.md sections 4.1 and 5).
 
-	Parses ``expression`` and evaluates it with a single ``row`` root binding (spec/graph-ir.md
-	section 4.1: ``row`` is meaningful inside a ``filter``/``sort`` transform predicate, bound to
-	the current row). Total end-to-end: a malformed expression, a disallowed construct, an
-	over-length string, or any runtime evaluation problem all resolve to ``False`` rather than
-	raising -- matching the `filter` semantics table in spec/graph-ir.md section 5 ("a
-	raising/type-mismatched predicate resolves `false` for that row, never aborts the whole op").
-
-	This mirrors ``huf/ai/graph/transforms.py``'s local ``eval_row_predicate(expression, row) ->
-	bool`` exactly in signature and semantics -- T-12's ``filter`` op is expected to replace its own
-	small AST-walker copy with a call to this function once it can depend on T-13, to remove the
-	duplication both tasks' specs call out.
+	A malformed or disallowed expression, an over-length string or any runtime problem resolves to ``False`` rather
+	than raising: "a raising/type-mismatched predicate resolves `false` for that row, never aborts the whole op".
 	"""
 
 	if not isinstance(row, dict):

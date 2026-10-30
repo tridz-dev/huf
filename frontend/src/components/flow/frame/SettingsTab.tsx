@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, Copy } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/collapsible';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { Textarea } from '../../ui/textarea';
-import { Button } from '../../ui/button';
+import { JsonArea } from '../../common/JsonArea';
 import { FieldHint } from '../FieldHint';
 import { useFlowContext } from '../../../contexts/FlowContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
-import { copyText } from '@/lib/clipboard';
-import { toast } from '@/lib/toast';
 import { edgeRoute, serializeFlow } from '../../../services/flowSerializer';
 import { getFlowTools } from '../../../services/toolApi';
 import { nodeKind } from '@/lib/flow-graph/flowValidation';
@@ -146,25 +144,18 @@ function ViewAsJson({ node }: { node: FlowNode }) {
       <CollapsibleTrigger asChild data-testid="flow-view-as-json-toggle">
         <Pressable className="flex min-h-8 w-full items-center gap-1 rounded-md text-left text-xs font-medium text-muted-foreground hover:text-foreground">
           <ChevronRight className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-90')} aria-hidden />
-          View as JSON
+          Advanced
         </Pressable>
       </CollapsibleTrigger>
-      <CollapsibleContent className="mt-2 space-y-2">
-        <p className="text-meta text-muted-foreground">The step exactly as the flow stores it. For reading and copying only.</p>
-        <pre className="max-h-64 overflow-auto rounded-md border border-border bg-muted/40 p-2 font-mono text-eyebrow tracking-normal" data-testid="flow-view-as-json-text" tabIndex={0}>
-          {json}
-        </pre>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={async () => {
-            if (await copyText(json)) toast.success('Copied');
-            else toast.error("Couldn't copy. Select the text and copy it yourself.");
-          }}
-        >
-          <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy
-        </Button>
+      <CollapsibleContent className="mt-2">
+        <JsonArea
+          surfaceKey="step-stored"
+          title="This step as the flow stores it (JSON)"
+          help="For people who work with JSON. It is only here to read and copy: to change the step, use the Setup tab. Nothing you do here changes the flow."
+          value={json}
+          readOnly
+          textTestId="flow-view-as-json-text"
+        />
       </CollapsibleContent>
     </Collapsible>
   );

@@ -45,7 +45,7 @@ export function HttpJsonField({
         onChange={canManage ? edit : undefined}
         readOnly={!canManage}
         allowEmpty
-        placeholder={JSON.stringify(example, null, 2)}
+        placeholder={'Nothing here yet. Choose "Use an example" below to see how it looks.'}
         formView={
           isRowShaped(value) ? (
             <KeyValueRows value={value} onChange={onChange} nodeId={nodeId} testId={`flow-http-${surfaceKey}-rows`} disabled={!canManage} {...rows} />

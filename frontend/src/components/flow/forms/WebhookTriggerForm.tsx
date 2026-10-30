@@ -266,7 +266,7 @@ function SampleSection({ nodeId, sample, canEdit, flowId, onSample }: {
       {canEdit && !pasting && (
         <div className="mt-2 flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" data-testid="flow-webhook-paste-sample" onClick={startPaste}>
-            Paste a sample request
+            {sample ? 'Edit as JSON' : 'Paste a sample request'}
           </Button>
           <Button type="button" variant="outline" size="sm" disabled={loading || !flowId} data-testid="flow-webhook-use-last" onClick={useLast}>
             {loading ? 'Looking...' : 'Use last received request'}

@@ -30,7 +30,7 @@ const api = vi.hoisted(() => ({
 vi.mock('@/services/flow/stepTestApi', () => api);
 vi.mock('@/lib/flow-test/pollStepTest', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/flow-test/pollStepTest')>();
-  return { ...actual, pollStepTest: (first: never, options: object) => actual.pollStepTest(first, { ...options, intervalMs: 5, maxMs: 120 }) };
+  return { ...actual, pollStepTest: (first: never, options: object) => actual.pollStepTest(first, { ...(options as Parameters<typeof actual.pollStepTest>[1]), intervalMs: 5, maxMs: 120 }) };
 });
 const trig = vi.hoisted(() => ({ getLastWebhookRequest: vi.fn() }));
 vi.mock('@/services/flow/triggerApi', () => trig);
