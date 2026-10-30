@@ -18,6 +18,7 @@ from frappe.rate_limiter import rate_limit
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.api_support import require_permission
+from huf.ai.flow.runs.shape import extras_for_detail
 from huf.ai.flow.support.approval_card import build_card
 from huf.ai.flow.support.decision_rights import approval_decision_rights
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
@@ -417,6 +418,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 		"stale_after_minutes": STALE_RUN_MINUTES,
 		"can_decide": can_decide,
 		"cannot_decide_reason": cannot_decide_reason,
+		**extras_for_detail(doc, ctx),
 	}
 
 
@@ -477,20 +479,16 @@ _FLOW_RUN_LIST_FIELDS = [
 	"started_at",
 	"completed_at",
 	"modified",
+	"owner",
+	"creation",
+	"context_json",
 ]
 
 
 def _shape_run_rows(rows: list) -> list:
-	names = _flow_names(r.flow_id for r in rows)
-	can_fail = _can_mark_failed()
-	for r in rows:
-		r["flow_name"] = names.get(r.flow_id) or r.flow_id
-		r["stale"] = _is_stale(r.status, r.modified)
-		r["can_mark_failed"] = r["stale"] and can_fail
-		r["started_at"] = _utc_iso(r.started_at)
-		r["completed_at"] = _utc_iso(r.completed_at)
-		r["modified"] = _utc_iso(r.modified)
-	return rows
+	from huf.ai.flow.runs.shape import shape_list_rows
+
+	return shape_list_rows(rows, _flow_names(r.flow_id for r in rows), _can_mark_failed())
 
 
 @frappe.whitelist()

@@ -24,16 +24,25 @@ export interface RunStepOutputProps {
     toolId?: string;
     /** The trigger input when this is the first step, shown here instead of in a block of its own. */
     dataReceived?: unknown;
+    /** The step's data when its sentence already says everything: only the "{ } Raw" control is offered for it. */
+    rawOutput?: unknown;
 }
+
+const EXIT_WORDS: Record<string, string> = { Ok: 'Finished normally', Error: 'Stopped with an error', Timeout: 'Took too long and was stopped' };
 
 /**
  * What a finished step produced: a plain summary line for integration steps, labelled rows for everything else,
  * with the exact data behind "{ } Raw". Tokens and auth headers never reach the screen.
  */
-export function RunStepOutput({ stepId, output, reasonShown, failed, decisionShown, names, titleOf, toolId, dataReceived }: RunStepOutputProps) {
+export function RunStepOutput({ stepId, output, reasonShown, failed, decisionShown, names, titleOf, toolId, dataReceived, rawOutput }: RunStepOutputProps) {
     const shown = titleNodeIds(failed && reasonShown ? withoutFailureKeys(output) : output, titleOf);
     const merged = dataReceived !== undefined;
-    if (isEmpty(shown) && !(merged && humanize(dataReceived).kind !== 'empty')) return null;
+    if (isEmpty(shown) && !(merged && humanize(dataReceived).kind !== 'empty')) {
+        if (rawOutput === undefined || isEmpty(rawOutput)) return null;
+        return (
+            <HumanValue value={undefined} raw rawValue={redactSecrets(rawOutput)} testId={`flow-run-human-${stepId}`} rawTitle="Raw data of this step" rawTextTestId={`flow-run-step-output-${stepId}`} />
+        );
+    }
     const useInput = merged && humanize(shown).kind === 'empty';
     const safe = redactSecrets(useInput ? dataReceived : shown);
     const summary = failed ? null : summarizeToolOutput(toolId, output);
@@ -43,8 +52,7 @@ export function RunStepOutput({ stepId, output, reasonShown, failed, decisionSho
         return (
             <div className="mt-2 space-y-2" data-testid={`flow-run-step-output-${stepId}`}>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    Exit status
-                    <Badge variant={codeOut.exitStatus === 'Ok' ? 'success' : 'destructive'} data-testid="flow-code-output-exit">{codeOut.exitStatus}</Badge>
+                    <Badge variant={codeOut.exitStatus === 'Ok' ? 'success' : 'destructive'} data-testid="flow-code-output-exit">{EXIT_WORDS[codeOut.exitStatus] ?? codeOut.exitStatus}</Badge>
                 </div>
                 <div>
                     <div className="text-xs text-muted-foreground mb-1">Printed output</div>
@@ -96,7 +104,7 @@ export function RunStepOutput({ stepId, output, reasonShown, failed, decisionSho
     }
     return (
         <>
-            {merged && <div className="mt-2 text-xs text-muted-foreground" data-testid={`flow-run-received-${stepId}`}>Data received</div>}
+            {merged && <div className="mt-2 text-xs text-muted-foreground" data-testid={`flow-run-received-${stepId}`}>What came in</div>}
             {human}
         </>
     );
