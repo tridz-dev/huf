@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '../../ui/button';
 import { Label } from '../../ui/label';
@@ -70,7 +70,14 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
   const { canManage } = useFlowPermissions();
   const { activeFlow, updateNodeData } = useFlowContext();
   const { isPhone } = useViewport();
-  const editable = canManage && !disabled;
+  // A form switched off from outside (a phone only reads the step; view-only people) is read here too.
+  const wrap = useRef<HTMLDivElement>(null);
+  const [locked, setLocked] = useState(false);
+  useLayoutEffect(() => {
+    const now = !!wrap.current?.closest('fieldset:disabled');
+    setLocked((prev) => (prev === now ? prev : now));
+  });
+  const editable = canManage && !disabled && !locked;
   const { model, loading, refresh } = useDataCatalog(nodeId);
   const editor = useRef<ChipEditorHandle>(null);
 
@@ -169,7 +176,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
   const ph = placeholder ?? (nodeId ? DEFAULT_PLACEHOLDER : undefined);
 
   return (
-    <div className="space-y-1" data-testid={testId ? `-box` : undefined}>
+    <div ref={wrap} className="space-y-1" data-testid={testId ? `${testId}-box` : undefined}>
       {label ? (
         <Label htmlFor={inputId} size="sm" className="block min-w-0 truncate">
           {label}
@@ -181,7 +188,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
           <div
             className={cn(
               'relative flex rounded border border-input bg-transparent transition-colors focus-within:border-signal focus-within:ring-[3px] focus-within:ring-signal/[.14]',
-              !editable && 'opacity-70'
+              !canManage && 'opacity-70'
             )}
           >
             <ChipEditor
