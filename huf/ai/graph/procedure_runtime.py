@@ -70,7 +70,7 @@ from huf.ai.graph.executor import (
 	RoutingError,
 	RoutingMode,
 )
-from huf.ai.graph.expressions import evaluate_bool, parse_expression
+from huf.ai.graph.expressions import ExpressionLimitError, evaluate_bool, parse_expression
 from huf.ai.graph.idempotency import (
 	DEDUP_WINDOW_SECONDS,
 	derive_operation_key,
@@ -722,7 +722,10 @@ class _Runner:
 	def _handle_condition(self, node: NodeSpec, context: GraphContext, state: ExecutionState) -> Outcome:
 		bindings = context.reference_roots()
 		parsed = parse_expression(node.config["expression"])
-		truth = evaluate_bool(parsed, bindings)
+		try:
+			truth = evaluate_bool(parsed, bindings, raise_limits=True)
+		except ExpressionLimitError as exc:
+			return Outcome.failed(str(exc))
 		next_id = node.config["on_true"] if truth else node.config["on_false"]
 		return Outcome.succeeded(output=truth, next_node_id=next_id)
 
@@ -731,7 +734,11 @@ class _Runner:
 		failures = []
 		for assertion in node.config.get("assertions", []):
 			parsed = parse_expression(assertion["expression"])
-			if not evaluate_bool(parsed, bindings):
+			try:
+				passed = evaluate_bool(parsed, bindings, raise_limits=True)
+			except ExpressionLimitError as exc:
+				return Outcome.failed(str(exc))
+			if not passed:
 				failures.append({"code": assertion["code"], "message": assertion["message"]})
 		if failures:
 			# Hard gate (I7): a failed assertion fails the whole run rather than emitting a

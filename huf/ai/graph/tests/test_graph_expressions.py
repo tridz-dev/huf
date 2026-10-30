@@ -339,5 +339,115 @@ class TestResolvePath(unittest.TestCase):
 		self.assertEqual(expr.resolve_path({"trigger": {"x": 1}}, "trigger"), {"x": 1})
 
 
+class TestResourceLimits(unittest.TestCase):
+	"""Security round 2 (DECISIONS 13): no expression or run data may allocate unbounded memory."""
+
+	REFUSED = [
+		'"x" * 1000000000',
+		'1000000000 * "x"',
+		"[0] * 1000000000",
+		"(1, 2) * 99999999999",
+		'True * "abc"',
+		'"%999999999d" % 1',
+		'"ab" * 3',
+		"input['n'] * input['text']",
+		"input['text'] * input['n']",
+		"input['items'] * input['n']",
+		"1000000000000000000 + 1",
+		"999999999999 * 999999999999",
+		"-1000000000000000000 - 1",
+		"input['big'] + 1",
+		"input['big'] * 0",
+		"-input['big']",
+		"input['big'] - input['big']",
+	]
+	DATA = {"input": {"n": 10**9, "text": "ab", "items": [1, 2], "big": 10**40}}
+
+	def test_refused_resolve_none(self):
+		for src in self.REFUSED:
+			with self.subTest(src=src):
+				self.assertIsNone(ev(src, self.DATA))
+				self.assertFalse(evb(src, self.DATA))
+
+	def test_refused_raise_when_asked(self):
+		for src in self.REFUSED:
+			with self.subTest(src=src):
+				parsed = expr.parse_expression(src)
+				with self.assertRaises(expr.ExpressionLimitError):
+					expr.evaluate_value(parsed, self.DATA, raise_limits=True)
+				with self.assertRaises(expr.ExpressionLimitError):
+					expr.evaluate_bool(parsed, self.DATA, raise_limits=True)
+
+	def test_message_is_plain(self):
+		try:
+			expr.evaluate_value(expr.parse_expression('"x" * 99'), {}, raise_limits=True)
+		except expr.ExpressionLimitError as exc:
+			text = str(exc)
+		self.assertIn("too large", text)
+		self.assertNotIn("Traceback", text)
+		self.assertNotIn("MemoryError", text)
+
+	def test_memory_and_overflow_errors_are_caught(self):
+		original = expr._BIN_OPS[expr.ast.Add]
+		for exc_type in (MemoryError, OverflowError):
+			def boom(a, b, _t=exc_type):
+				raise _t()
+			expr._BIN_OPS[expr.ast.Add] = boom
+			try:
+				parsed = expr.parse_expression("1 + 2")
+				self.assertIsNone(expr.evaluate_value(parsed, {}))
+				with self.assertRaises(expr.ExpressionLimitError):
+					expr.evaluate_value(parsed, {}, raise_limits=True)
+			finally:
+				expr._BIN_OPS[expr.ast.Add] = original
+
+	def test_ordinary_arithmetic_still_works(self):
+		self.assertEqual(ev("3 * 4"), 12)
+		self.assertEqual(ev("2.5 * 2"), 5.0)
+		self.assertEqual(ev("999999999999999999 + 0"), 999999999999999999)
+		self.assertEqual(ev("input['a'] * input['b']", {"input": {"a": 6, "b": 7}}), 42)
+		self.assertEqual(ev('"ab" + "cd"'), "abcd")
+		self.assertEqual(ev("[1] + [2]"), [1, 2])
+		self.assertEqual(ev("7 % 4"), 3)
+		self.assertIsNone(ev("1000000000 * 1000000000"))  # exactly 10**18 is over the cap
+		self.assertEqual(ev("999999999 * 1000000000"), 999999999000000000)
+
+	def test_concatenation_is_capped(self):
+		big = "a" * (expr.MAX_SEQUENCE_RESULT // 2 + 1)
+		self.assertIsNone(ev("input['s'] + input['s']", {"input": {"s": big}}))
+		with self.assertRaises(expr.ExpressionLimitError):
+			expr.evaluate_value(expr.parse_expression("input['s'] + input['s']"), {"input": {"s": big}}, raise_limits=True)
+
+	def test_floats_never_raise(self):
+		self.assertEqual(ev("1e308 * 10"), float("inf"))
+		self.assertIsNone(ev("input['f'] * 2", {"input": {"f": 10**400}}))
+
+	def test_long_multiplication_chain_stays_bounded(self):
+		src = " * ".join(["999999"] * 30)  # would reach ~1e360 without the cap
+		self.assertIsNone(ev(src))
+
+	def test_fuzz_never_hangs_or_ooms(self):
+		import random
+		import time
+
+		rng = random.Random(1307)
+		atoms = ['"ab"', "[1, 2]", "(1,)", "3", "999999999999", "10", "0", "-7", "1.5", "True", "None", "input['t']", "input['n']", "input['l']"]
+		ops = ["*", "+", "-", "%", "/"]
+		data = {"input": {"t": "xyz", "n": 10**30, "l": [1] * 50}}
+		started = time.time()
+		for _ in range(4000):
+			size = rng.randint(2, 9)
+			src = str(rng.choice(atoms))
+			for _ in range(size):
+				src += f" {rng.choice(ops)} {rng.choice(atoms)}"
+			parsed = expr.parse_expression(src)
+			result = expr.evaluate_value(parsed, data)
+			if isinstance(result, (str, list, tuple)):
+				self.assertLessEqual(len(result), expr.MAX_SEQUENCE_RESULT)
+			if isinstance(result, int) and not isinstance(result, bool):
+				self.assertLess(abs(result), expr.MAX_INT_MAGNITUDE)
+		self.assertLess(time.time() - started, 10)
+
+
 if __name__ == "__main__":
 	unittest.main()

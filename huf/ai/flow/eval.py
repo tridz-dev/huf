@@ -12,6 +12,15 @@ import operator
 import frappe
 from frappe import _
 
+from huf.ai.graph.expressions import (
+	ExpressionLimitError,
+	_check_int,
+	_check_result,
+	_safe_add,
+	_safe_mod,
+	_safe_mul,
+)
+
 
 # Allowed comparison and binary operators
 SAFE_OPS = {
@@ -25,10 +34,10 @@ SAFE_OPS = {
 	ast.IsNot: operator.is_not,
 	ast.In: lambda a, b: a in b,
 	ast.NotIn: lambda a, b: a not in b,
-	ast.Add: operator.add,
+	ast.Add: _safe_add,
 	ast.Sub: operator.sub,
-	ast.Mult: operator.mul,
-	ast.Mod: operator.mod,
+	ast.Mult: _safe_mul,
+	ast.Mod: _safe_mod,
 	ast.And: None,  # handled specially
 	ast.Or: None,  # handled specially
 	ast.Not: operator.not_,
@@ -86,6 +95,8 @@ def safe_eval_expression(expression: str, context: dict) -> bool:
 		return bool(result)
 	except frappe.ValidationError:
 		raise
+	except ExpressionLimitError as e:
+		frappe.throw(str(e), frappe.ValidationError)
 	except Exception as e:
 		frappe.throw(_("Expression evaluation error: {0}").format(str(e)), frappe.ValidationError)
 
@@ -184,7 +195,12 @@ def _eval_node(node, env: dict):
 				frappe.ValidationError,
 			)
 		op_func = SAFE_OPS[op_type]
-		return op_func(left, right)
+		_check_int(left)
+		_check_int(right)
+		try:
+			return _check_result(op_func(left, right))
+		except (MemoryError, OverflowError):
+			raise ExpressionLimitError() from None
 
 	# If expression: a if cond else b
 	if isinstance(node, ast.IfExp):
