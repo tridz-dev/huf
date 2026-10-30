@@ -2,7 +2,7 @@ import type { Connection, Edge, Node } from 'reactflow';
 import { branchHandlesFor } from '../flow/flowBranches';
 import { branchColumnShift, subtreeIds } from '../flow/flowEdgeLabels';
 import { actionLabel } from '../flow/flowLabels';
-import { COLUMN_GAP } from '../flow/flowLayout';
+import { COLUMN_GAP, ROW_GAP } from '../flow/flowLayout';
 import { unreachableNodeIds } from '../flow/flowEdit';
 import { makeFlowEdge, edgeRoute } from '../../services/flowSerializer';
 import { actionOptions } from '../../data/actions';
@@ -111,7 +111,7 @@ export function ghostSpots(nodes: Node<FlowNodeData>[], openEnds: OpenEnd[], edg
     if (end.route === 'next' && back.has(end.nodeId)) continue;
     if (end.optional && end.nodeId !== selectedId) continue;
     let x = end.position.x + end.offset;
-    const y = end.position.y + 150;
+    const y = end.position.y + ROW_GAP;
     if (real.some((p) => Math.abs(p.x - x) < 230 && Math.abs(p.y - y) < 80)) continue;
     const dir = end.offset < 0 ? -1 : 1;
     let guard = 0;
@@ -217,7 +217,7 @@ export function addActionStep(
   const newNode: Node<FlowNodeData> = {
     id: newNodeId,
     type: isEnd ? 'end' : 'action',
-    position: { x: sourceNode.position.x + sideOffset, y: sourceNode.position.y + 150 },
+    position: { x: sourceNode.position.x + sideOffset, y: sourceNode.position.y + ROW_GAP },
     data: isEnd
       ? { label: actionLabel(actionId), nodeType: 'end', icon: option?.icon || 'CheckCircle2', configured: true, endConfig: {} }
       : {

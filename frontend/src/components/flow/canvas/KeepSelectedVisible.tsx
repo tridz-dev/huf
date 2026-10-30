@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useReactFlow, useStore } from 'reactflow';
 import { panToReveal } from '@/lib/flow/flowLayout';
+import { motionMs } from '@/lib/flow-canvas/tween';
 
 /** Marks a panel or sheet that sits over the right edge of the canvas, so the step that was just opened can be kept clear of it. */
 export const FLOW_PANEL_ATTR = 'data-flow-sheet-panel';
@@ -31,7 +32,7 @@ export function KeepSelectedVisible({ selectedNodeId }: { selectedNodeId: string
         height: node.height ?? 62,
       };
       const next = panToReveal(rect, vp, { width: visibleWidth, height });
-      if (next) rfRef.current.setViewport({ ...next, zoom: vp.zoom }, { duration: 200 });
+      if (next) rfRef.current.setViewport({ ...next, zoom: vp.zoom }, { duration: motionMs(200) });
     };
     // Again after the sheet has slid in: its width is only known once it is on screen.
     const timers = [setTimeout(pan, 140), setTimeout(pan, 560)];
