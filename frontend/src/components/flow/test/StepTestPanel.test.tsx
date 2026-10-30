@@ -15,6 +15,8 @@ const ctx = vi.hoisted(() => ({
 }));
 vi.mock('@/contexts/FlowContext', () => ({ useFlowContext: () => ctx.value }));
 vi.mock('@/hooks/flow/useFlowPermissions', () => ({ useFlowPermissions: () => ({ canManage: ctx.canManage }) }));
+const view = vi.hoisted(() => ({ isPhone: false }));
+vi.mock('@/lib/ui/responsive', () => ({ useViewport: () => ({ isPhone: view.isPhone, width: view.isPhone ? 390 : 1440 }) }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const api = vi.hoisted(() => ({
@@ -59,6 +61,7 @@ beforeEach(() => {
   forgetStepResult('flow-1', 't1');
   vi.clearAllMocks();
   ctx.canManage = true;
+  view.isPhone = false;
   ctx.value.hasUnsavedChanges = false;
   ctx.value.activeFlow = { id: 'flow-1', status: 'draft', nodes: [], edges: [] };
   resetAiConfirmed();
@@ -204,6 +207,13 @@ describe('Test tab: a step', () => {
     expect(screen.getByTestId('flow-step-test-viewonly').textContent).toContain('Ask a flow editor');
     expect(api.getStepTestInfo).not.toHaveBeenCalled();
     expect(screen.queryByText('x')).toBeNull();
+  });
+
+  it('does not offer testing on a phone', () => {
+    view.isPhone = true;
+    render(<StepTestPanel node={node()} active onOpenSetup={onSetup} />);
+    expect(screen.getByTestId('flow-step-test-phone').textContent).toContain('larger screen');
+    expect(api.getStepTestInfo).not.toHaveBeenCalled();
   });
 
   it('reads the sample data again each time the tab is opened', async () => {

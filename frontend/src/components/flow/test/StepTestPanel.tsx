@@ -6,6 +6,7 @@ import { HumanValue } from '@/components/common/HumanValue';
 import { useFlowContext } from '@/contexts/FlowContext';
 import { useFlowIssues } from '@/hooks/flow/useFlowIssues';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { useViewport } from '@/lib/ui/responsive';
 import { issuesForStep } from '../frame/frameIssues';
 import { useStepTest } from '@/hooks/flow/useStepTest';
 import {
@@ -38,6 +39,14 @@ const VIEW_ONLY = 'Only people who can edit this flow can test its steps or see 
  */
 export function StepTestPanel({ node, active, onOpenSetup }: Props) {
   const { canManage } = useFlowPermissions();
+  const { isPhone } = useViewport();
+  if (isPhone) {
+    return (
+      <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground" data-testid="flow-step-test-phone">
+        Testing a step works best on a larger screen. Open this flow on a computer to try its steps.
+      </p>
+    );
+  }
   if (!canManage) {
     return (
       <div className="flex items-start gap-3 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground" data-testid="flow-step-test-viewonly">
