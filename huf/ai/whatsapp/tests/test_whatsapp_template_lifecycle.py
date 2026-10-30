@@ -96,6 +96,13 @@ class LifecycleCase(fgc.FakeGraphCase):
 		account = self.account.name if account is None and self.account else account
 		return frappe.get_doc(STATE, bridge.state_key(account, docname))
 
+	def _agent(self, action, **kwargs):
+		"""Call the agent tool the way a run does: the run's gateway is bound server-side (never a tool argument)."""
+		# these tool actions manage the gateway's bridge account: point the run's gateway at it (rolled back with the test)
+		frappe.db.set_value("Gateway", self.direct_gateway.name, "whatsapp_account", self.account.name)
+		with wa_tool.trusted_gateway(self.direct_gateway.name):
+			return wa_tool.handle_action(action, **kwargs)
+
 	def _acct(self):
 		return {"account": self.account.name} if self.account else {}
 
@@ -299,7 +306,7 @@ class TestDrafts(LifecycleCase):
 		self._need_bridge()
 		frappe.flags.huf_current_agent_run_id = "RUN-LC-1"
 		with patch.object(wa_tool, "_server_flag", side_effect=lambda g, n: n == "allow_whatsapp_management"):
-			out = json.loads(wa_tool.handle_action(
+			out = json.loads(self._agent(
 				"create_template", auto_submit_templates=True, allow_whatsapp_management=True, **_payload(),
 			))  # LLM-supplied flags are discarded
 		self.assertTrue(out["success"], out)
@@ -308,20 +315,20 @@ class TestDrafts(LifecycleCase):
 		self.assertEqual(self.server.requests, [])
 		doc = frappe.get_doc(DRAFT, out["data"]["draft"])
 		self.assertEqual((doc.status, doc.requested_via, doc.agent_run, doc.whatsapp_account), ("Pending Review", "Agent run", "RUN-LC-1", self.account.name))
-		status = json.loads(wa_tool.handle_action("get_template_status", template_name=doc.name))
+		status = json.loads(self._agent("get_template_status", template_name=doc.name))
 		self.assertEqual(status["data"]["draft"]["status"], "Pending Review")
 
 	def test_agent_create_template_still_needs_management_flag(self):
 		self._need_bridge()
 		with patch.object(wa_tool, "_server_flag", return_value=False):
-			out = json.loads(wa_tool.handle_action("create_template", **_payload()))
+			out = json.loads(self._agent("create_template", **_payload()))
 		self.assertEqual(out["error"], "management_not_permitted")
 		self.assertEqual(frappe.db.count(DRAFT, {"template_name": "lc_promo"}), 0)  # scoped: a live bench may hold other drafts
 
 	def test_agent_auto_submit_server_flag_submits_directly(self):
 		self._need_bridge()
 		with patch.object(wa_tool, "_server_flag", return_value=True):
-			out = json.loads(wa_tool.handle_action("create_template", **_payload()))
+			out = json.loads(self._agent("create_template", **_payload()))
 		self.assertTrue(out["success"], out)
 		self.assertEqual(len(self.server.requests_to("POST", "/message_templates")), 1)
 		self.assertEqual(frappe.db.count(DRAFT, {"template_name": "lc_promo"}), 0)
@@ -331,11 +338,11 @@ class TestDrafts(LifecycleCase):
 		self.server.add_template("lc_rej", "en_US", "UTILITY", "REJECTED", rejected_reason="INVALID_FORMAT",
 			quality_score={"score": "RED"})
 		mgmt.sync_templates(account=self.account.name)
-		out = json.loads(wa_tool.handle_action("get_template_status", template_name="lc_rej-en_US"))["data"]
+		out = json.loads(self._agent("get_template_status", template_name="lc_rej-en_US"))["data"]
 		self.assertEqual((out["status"], out["reason"], out["quality"]), ("REJECTED", "INVALID_FORMAT", "RED"))
-		missing = json.loads(wa_tool.handle_action("get_template_status", template_name="nope"))
+		missing = json.loads(self._agent("get_template_status", template_name="nope"))
 		self.assertEqual(missing["error"], "not_found")
-		rows = json.loads(wa_tool.handle_action("list_templates"))["data"]
+		rows = json.loads(self._agent("list_templates"))["data"]
 		row = next(r for r in rows if r["name"] == "lc_rej-en_US")
 		self.assertEqual((row["status"], row["rejected_reason"]), ("REJECTED", "INVALID_FORMAT"))
 

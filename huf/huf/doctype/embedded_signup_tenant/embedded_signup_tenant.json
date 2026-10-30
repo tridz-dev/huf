@@ -1,0 +1,26 @@
+{
+ "actions": [],
+ "creation": "2026-10-29 12:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": ["tenant_id", "enabled", "site_url", "api_key_hash"],
+ "fields": [
+  {"fieldname": "tenant_id", "fieldtype": "Data", "in_list_view": 1, "label": "Tenant ID", "reqd": 1},
+  {"default": "1", "fieldname": "enabled", "fieldtype": "Check", "in_list_view": 1, "label": "Enabled"},
+  {"fieldname": "site_url", "fieldtype": "Data", "in_list_view": 1, "label": "Site URL"},
+  {"fieldname": "api_key_hash", "fieldtype": "Data", "label": "API Key Hash (SHA-256)", "read_only": 1}
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Embedded Signup Tenant",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

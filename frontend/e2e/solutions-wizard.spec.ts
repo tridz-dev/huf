@@ -108,7 +108,7 @@ test.describe('New solution wizard', () => {
     await options.nth(2).click();
     await expect(options.nth(2)).toContainText('Using');
     await expect(page.getByText('We suggest these settings for Take orders')).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Review on Main counter' })).toHaveAttribute('href', /\/whatsapp\?gateway=GW-1&tab=settings/);
+    await expect(page.getByRole('link', { name: 'Review on Main counter' })).toHaveAttribute('href', /\/channels\/whatsapp\/n\/GW-1\/settings\/connection/);
     await next(page);
 
     // Step 4: the test chat sends the draft (nothing saved yet).

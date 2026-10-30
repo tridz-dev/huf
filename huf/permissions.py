@@ -78,6 +78,8 @@ CAPABILITIES: dict[str, str] = {
 	"ssh.approve": "Approve SSH Executions",
 	# --- Docker Execution ---
 	"docker.run": "Run Docker Execution Tool",
+	# --- Channels ---
+	"channels.reply": "Reply to Channel Conversations",
 	# --- Developer Platform ---
 	"developer.access": "Access Developer Platform",
 	"developer.keys.manage": "Manage Developer API Keys",
@@ -348,3 +350,21 @@ def get_me() -> dict:
 		"huf_role": get_user_huf_role(user),
 		"capabilities": get_user_capabilities(user),
 	}
+
+
+def can_read_file(file_doc) -> bool:
+	"""Read check for a File that cannot be short-circuited by another app.
+
+	``has_controller_permissions`` lets the last-registered ``has_permission``
+	hook for File return a conclusive True, which skips Frappe's own File
+	controller (owner / share / attached-doc rules). An installed app that
+	returns True ("no opinion") instead of None therefore turns every private
+	File into one any role-permitted user can read. Always also require
+	Frappe's File controller to agree.
+	"""
+	from frappe.core.doctype.file.file import has_permission as file_controller_permission
+
+	return bool(
+		frappe.has_permission("File", "read", doc=file_doc)
+		and file_controller_permission(file_doc, "read", user=frappe.session.user)
+	)

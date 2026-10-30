@@ -38,7 +38,7 @@ PER_USER_LIMIT_REASON = "per_user_marketing_limit"
 
 OUTCOMES = ("sent", "failed", "deferred", "unknown", "skipped", "lost_claim")
 # pre-POST refusals (policy / validation) from the bridge that mean "do not message this contact"
-_SKIP_CODES = {"opted_out", "marketing_opted_out", "bsuid_recipient"}
+_SKIP_CODES = {"opted_out", "marketing_opted_out", "bsuid_recipient", "recipient_not_allowlisted"}
 _STARTED = ("sending", "sent", "delivered", "read", "unknown", "failed")
 
 
@@ -291,7 +291,19 @@ def send_one(recipient_name: str) -> str:
 	except Exception:
 		# the message is out; never leave the row claimable. Roll back and force unknown (+wamid) once more.
 		return _mark_unknown(recipient_name, "Sent, but the result could not be recorded.", wamid=wamid)
+	_apply_parked(wamid)
 	return "sent"
+
+
+def _apply_parked(wamid: str) -> None:
+	"""The wamid is committed: apply any status Meta delivered before that (status-before-commit race). Never raises."""
+	try:
+		from huf.ai.whatsapp.broadcast import status as broadcast_status
+
+		broadcast_status.apply_pending(wamid)
+		frappe.db.commit()
+	except Exception:
+		frappe.log_error(title="WhatsApp parked status apply failed", message=frappe.get_traceback())
 
 
 def _mark_unknown(name: str, message: str, wamid: str | None = None) -> str:

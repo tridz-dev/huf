@@ -218,20 +218,20 @@ class TestParseMessages(WhatsAppContractBase):
 	def test_nfm_reply_flow_response_compacted(self):
 		event = self.parse("interactive_nfm_reply.json").messages[0]
 		self.assertEqual(
-			event.message_text, '[Form response: flow] {"flow_token":"unused","city":"Bengaluru","note":"café 😀"}'
+			event.message_text, 'Form submitted: city=Bengaluru, note=café 😀'
 		)
 		self.assert_anchors_window(event, "interactive")
 
 	def test_nfm_reply_capped_at_2kb(self):
 		big = json.dumps({"k": "é" * 5000})
 		text = render_message_text({"type": "interactive", "interactive": {"type": "nfm_reply", "nfm_reply": {"name": "f", "response_json": big}}})
-		payload = text.split("] ", 1)[1]
+		payload = text.split(": ", 1)[1]
 		self.assertLessEqual(len(payload.encode("utf-8")), 2048)
 		self.assertTrue(payload.endswith("..."))
 
 	def test_nfm_reply_invalid_json_passes_through(self):
 		text = render_message_text({"type": "interactive", "interactive": {"type": "nfm_reply", "nfm_reply": {"response_json": "not json"}}})
-		self.assertEqual(text, "[Form response: flow] not json")
+		self.assertEqual(text, "Form submitted: not json")
 
 	def test_system_message(self):
 		event = self.parse("system_number_change.json").messages[0]

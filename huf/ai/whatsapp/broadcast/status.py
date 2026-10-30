@@ -11,8 +11,10 @@ try/except; a failure here must never break webhook ingest.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import frappe
 
@@ -24,7 +26,7 @@ MARKETING_STOP_CODE = 131050
 PER_USER_LIMIT_CODE = 131049
 PER_USER_LIMIT_REASON = "per_user_marketing_limit"
 # A stopped contact must not be messaged by a broadcast that has not finished.
-_LIVE_BROADCAST = ("Queued", "Running", "Paused")
+_LIVE_BROADCAST = ("Scheduled", "Queued", "Running", "Paused")
 
 # status -> (rank, column holding its timestamp)
 _RANK = {"queued": 0, "deferred": 0, "sending": 1, "unknown": 1.5, "sent": 2, "failed": 2.5, "delivered": 3, "read": 4}
@@ -32,10 +34,12 @@ _META = {"sent": ("sent", "sent_at"), "delivered": ("delivered", "delivered_at")
 
 
 def _when(timestamp: Any) -> datetime:
+	"""Meta's epoch as a naive datetime in the SITE timezone, like ``now_datetime()`` (the sender's ``sent_at``)."""
 	try:
 		ts = int(float(timestamp))
 		if ts > 0:
-			return datetime.fromtimestamp(ts)
+			tz = ZoneInfo(frappe.utils.get_system_timezone())
+			return datetime.fromtimestamp(ts, tz=tz).replace(tzinfo=None)
 	except (TypeError, ValueError, OverflowError, OSError):
 		pass
 	return frappe.utils.now_datetime()
@@ -218,9 +222,9 @@ def apply_user_stop(gateway: str, recipient: str) -> int:
 
 
 def apply_from_webhook(status: dict, gateway: str | None = None) -> None:
-	"""Mirror one Meta ``statuses[]`` entry onto its recipient row."""
+	"""Mirror one Meta ``statuses[]`` entry onto its recipient row; park it when the row has no wamid yet."""
 	try:
-		apply_status(
+		applied = apply_status(
 			status.get("id"),
 			str(status.get("status") or "").lower(),
 			status.get("timestamp"),
@@ -228,8 +232,100 @@ def apply_from_webhook(status: dict, gateway: str | None = None) -> None:
 			status.get("biz_opaque_callback_data"),
 			gateway=gateway or "",
 		)
+		if not applied:
+			_park_if_unmatched(status, gateway)
 	except Exception:
 		frappe.log_error(title="WhatsApp broadcast status failed", message=frappe.get_traceback())
+
+
+# --------------------------------------------------------------------------- parked statuses (status-before-commit race)
+# Meta can deliver sent/delivered/read 1-4s after the POST, before the sender committed the row's wamid. Such a
+# status is parked here and re-applied once the wamid is committed (send path) or by the */5 sweep; 24h expiry.
+
+PENDING = "WhatsApp Status Pending"
+PENDING_TTL_HOURS = 24
+_ACTIVE_WINDOW_MINUTES = 60
+
+
+def _broadcast_active(gateway: str) -> bool:
+	"""Only gateways with a live or just-finished broadcast can have a racing status (keeps chat statuses out)."""
+	return bool(
+		frappe.db.sql(
+			f"select 1 from `tab{BROADCAST}` where gateway=%s and (status in %s or modified >= %s) limit 1",
+			(gateway, _LIVE_BROADCAST, frappe.utils.add_to_date(frappe.utils.now_datetime(), minutes=-_ACTIVE_WINDOW_MINUTES)),
+		)
+	)
+
+
+def _park_if_unmatched(status: dict, gateway: str | None) -> bool:
+	wamid = status.get("id")
+	state = str(status.get("status") or "").lower()
+	if not wamid or not gateway or state not in _META:
+		return False
+	# a row exists (any gateway): the status was a replay/downgrade or another gateway's: never park
+	if _find_row(str(wamid), None, None) is not None:
+		return False
+	opaque = status.get("biz_opaque_callback_data")
+	if opaque and len(str(opaque)) <= 256 and frappe.db.exists(RECIPIENT, str(opaque)):
+		return False
+	if not _broadcast_active(gateway):
+		return False
+	if frappe.db.exists(PENDING, {"wamid": str(wamid), "status": state, "gateway": gateway}):
+		return False
+	errors = status.get("errors") if isinstance(status.get("errors"), list) else None
+	frappe.get_doc(
+		{
+			"doctype": PENDING,
+			"wamid": str(wamid)[:255],
+			"status": state,
+			"timestamp": str(status.get("timestamp") or "")[:32],
+			"gateway": gateway,
+			"opaque_ref": str(opaque)[:255] if opaque else None,
+			"errors": json.dumps(errors)[:20000] if errors else None,
+			"received_at": frappe.utils.now_datetime(),
+			"attempts": 0,
+		}
+	).insert(ignore_permissions=True, ignore_links=True)
+	return True
+
+
+def apply_pending(wamid: str | None = None) -> int:
+	"""Re-apply parked statuses (for one wamid, or all) and drop those whose row now exists or that expired.
+
+	Returns the number of statuses applied. Never raises. Does not commit: the caller owns the transaction."""
+	applied = 0
+	try:
+		filters: dict[str, Any] = {"wamid": wamid} if wamid else {}
+		rows = frappe.get_all(
+			PENDING,
+			filters=filters,
+			fields=["name", "wamid", "status", "timestamp", "gateway", "opaque_ref", "errors", "received_at", "attempts"],
+			order_by="received_at asc",
+			limit_page_length=500,
+		)
+		cutoff = frappe.utils.add_to_date(frappe.utils.now_datetime(), hours=-PENDING_TTL_HOURS)
+		for p in rows:
+			try:
+				errors = json.loads(p["errors"]) if p.get("errors") else None
+				if apply_status(p["wamid"], p["status"], p["timestamp"], errors, p.get("opaque_ref"), gateway=p.get("gateway") or ""):
+					applied += 1
+				if _find_row(p["wamid"], p.get("opaque_ref"), p.get("gateway") or "") is not None or (
+					p.get("received_at") and p["received_at"] < cutoff
+				):
+					frappe.db.delete(PENDING, {"name": p["name"]})
+				elif not wamid:
+					frappe.db.set_value(PENDING, p["name"], "attempts", int(p.get("attempts") or 0) + 1, update_modified=False)
+			except Exception:
+				frappe.log_error(title="WhatsApp parked status apply failed", message=frappe.get_traceback())
+	except Exception:
+		frappe.log_error(title="WhatsApp parked status sweep failed", message=frappe.get_traceback())
+	return applied
+
+
+def sweep_pending() -> None:
+	"""*/5 cron: re-apply every parked status and expire the old ones."""
+	apply_pending()
+	frappe.db.commit()
 
 
 def on_stop_keyword(gateway: str, sender_id: str) -> None:

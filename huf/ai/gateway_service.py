@@ -25,7 +25,6 @@ from frappe.utils import add_to_date, get_datetime, now_datetime
 
 from huf.ai.whatsapp import outbound_policy as policy
 from huf.ai.gateway_adapters import provider_hooks
-from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 from huf.ai.gateways.identity_policy import IDENTITY_REQUIRED_PROVIDERS, is_identity_required  # noqa: F401
 
 
@@ -220,6 +219,45 @@ def _record_reply_sent(event, provider_message_id) -> None:
             )
     except Exception:
         pass
+    _track_conversation_outbound(event)
+
+
+def _track_conversation_inbound(gateway_doc, event, context) -> None:
+    """Upsert the Channel Conversation for an inbound event (WhatsApp/Telegram/Slack/Teams). Never raises."""
+    try:
+        from huf.ai.channels import conversation as conv
+
+        channel = conv.channel_for_provider(gateway_doc.provider)
+        if not channel:
+            return
+        doc = conv.get_or_create_conversation(
+            gateway_doc.name, str(context.get("sender_id") or ""), channel=channel,
+            contact_name=str(context.get("sender_name") or "") or None,
+        )
+        if not doc:
+            return
+        conv.touch_inbound(doc, preview=context.get("message_text"))
+        event.db_set("channel_conversation", doc.name, update_modified=False)
+    except Exception:
+        try:
+            frappe.log_error(title="Channel Conversation inbound upsert failed")
+        except Exception:
+            pass  # tracking must never raise into ingest, even if logging itself fails
+
+
+def _track_conversation_outbound(event) -> None:
+    """Stamp last_outbound_at on the event's Channel Conversation. Never raises."""
+    try:
+        name = getattr(event, "channel_conversation", None)
+        if name and isinstance(name, str):
+            from huf.ai.channels import conversation as conv
+
+            conv.touch_outbound(name)
+    except Exception:
+        try:
+            frappe.log_error(title="Channel Conversation outbound upsert failed")
+        except Exception:
+            pass  # tracking must never raise into ingest, even if logging itself fails
 
 
 
@@ -746,6 +784,16 @@ def _record_opt_in_linked(gateway, sender_id: str) -> None:
         _record_opt_in(gateway, linked)
 
 
+def _record_inbound_consent(gateway, sender_id: str) -> None:
+    """Inbound START opt-in as a Gateway Consent row (source inbound). Never raises: ingest must not fail on it."""
+    try:
+        from huf.ai.whatsapp import account_events
+
+        account_events.record_inbound_opt_in(gateway.name, sender_id)
+    except Exception:
+        frappe.log_error(title="WhatsApp inbound opt-in consent not recorded", message=frappe.get_traceback())
+
+
 def _record_opt_in(gateway, sender_id: str) -> None:
     row = _live_sender_entry(gateway, sender_id)
     if not row or row["state"] != ENTRY_STATE_OPTED_OUT:
@@ -814,6 +862,8 @@ def _handle_consent_event(event, gateway, context: dict[str, Any]) -> dict | Non
     if state == ENTRY_STATE_OPTED_OUT:
         if _text_matches_keywords(gateway, text, "opt_in_keywords", DEFAULT_OPT_IN_KEYWORDS):
             _record_opt_in_linked(gateway, sender_id)
+            if gateway.provider == "WhatsApp":
+                _record_inbound_consent(gateway, sender_id)
             _send_plain_reply(gateway, sender_id, conversation_id, DEFAULT_OPT_IN_REPLY)
             return _reject_event(event, "Sender opted back in (START); no agent run")
         return _reject_event(event, "Sender has opted out")
@@ -1892,6 +1942,8 @@ def ingest_gateway_event(
         _reject_gateway_event(_hook_gateway, event, "Rejected", _filter_reason)
         return {"event_name": event.name, "status": "Rejected"}
 
+    _track_conversation_inbound(_hook_gateway, event, context)
+
     gw_hooks.call_all(gw_hooks.ON_EVENT_RECEIVED, _hook_gateway, event)
 
     return _continue_ingest(event, gateway_name, provider_event_id, context, verified_sender, filters_checked=True)
@@ -2023,10 +2075,37 @@ def _continue_ingest(
             )
         return _record_event(event, "unsupported_recorded: fixed reply, no run")
 
+    from huf.ai.channels.commerce.orders import handle_inbound_order
+
+    handle_inbound_order(gateway_name, event, context)  # inbound `order` carts only; no-op otherwise, never raises
+
     referral_tag, button_payload = _routing_inputs(event)
-    route = resolve_gateway_route(
-        gateway_name, context, referral_tag=referral_tag, button_payload=button_payload, commit_pin=True
-    )
+    from huf.ai.channels.pipeline import run_pre_route
+
+    pre = run_pre_route({"gateway": gateway_name, "event": event.name, "context": context})
+    if pre is not None and pre.action == "handoff":
+        from huf.ai.channels.handoff import handoff_from_decision
+
+        handoff_from_decision(gateway_name, event.name, context, pre.payload or {})
+        return _record_event(event, "pre_route_handoff")
+    if pre is not None and pre.action in ("reply", "handoff"):
+        text = str((pre.payload or {}).get("text") or "")
+        if text:
+            _send_plain_reply(
+                gateway,
+                str(context.get("sender_id") or ""),
+                str(context.get("conversation_id") or "") or None,
+                text,
+            )
+        return _record_event(event, f"pre_route_{pre.action}")
+    if pre is not None and pre.action == "drop":
+        return _record_event(event, "pre_route_drop")
+    if pre is not None and pre.action == "route" and (pre.payload or {}).get("target_type"):
+        route = {"status": "Queued", "binding": None, **pre.payload}
+    else:
+        route = resolve_gateway_route(
+            gateway_name, context, referral_tag=referral_tag, button_payload=button_payload, commit_pin=True
+        )
     if route["status"] == "Triage":
         return _send_triage_prompt(event, gateway, context, route)
     if route["status"] != "Queued":
@@ -2555,6 +2634,7 @@ def _process_gateway_event(event_name: str) -> dict:
             raise gw_hooks.GatewayHookDenied(gw_hooks.STRICT_DENIED_REASON)
         run_user = (
             gw_hooks.call_first(gw_hooks.RESOLVE_RUN_USER, gateway, event, strict=True)
+            or _gateway_run_as_user(gateway)
             or gateway.execution_user
         )
     except gw_hooks.GatewayHookDenied as denied:
@@ -2606,6 +2686,12 @@ def _process_gateway_event(event_name: str) -> dict:
             _reject_gateway_event(gateway, event, "Rejected", identity.reason)
             return {"event_name": event.name, "status": "Rejected"}
 
+    from huf.ai.channels import run_as as _run_as
+
+    _audit_conversation = getattr(event, "channel_conversation", None)
+    _audit_token = _run_as.set_current_conversation(
+        _audit_conversation if isinstance(_audit_conversation, str) else None
+    )
     try:
         frappe.set_user(run_user)
         event.db_set("status", "Running")
@@ -2787,7 +2873,14 @@ def _process_gateway_event(event_name: str) -> dict:
             except Exception:
                 pass
         raise
+    finally:
+        _run_as.reset_current_conversation(_audit_token)
 
+
+def _gateway_run_as_user(gateway) -> str | None:
+    """The Gateway's run_as_user when set (validated on save); None leaves behaviour unchanged."""
+    value = getattr(gateway, "run_as_user", None)
+    return value if isinstance(value, str) and value.strip() else None
 
 
 # -- WhatsApp reply pipeline ----------------------------------------------------
@@ -3218,109 +3311,3 @@ def purge_old_rejected_gateway_events(retention_days: int | None = None) -> int:
     days = retention_days if retention_days is not None else GATEWAY_EVENT_REJECTED_RETENTION_DAYS
     cutoff = add_to_date(now_datetime(), days=-days)
     return frappe.db.delete("Gateway Event", {"status": "Rejected", "received_at": ["<", cutoff]})
-
-
-def _provider_for_service(service: str) -> str | None:
-	"""The ``Gateway.provider`` option whose canonical id is ``service`` (None when it isn't a channel)."""
-	options = frappe.get_meta("Gateway").get_field("provider").options or ""
-	for option in options.split("\n"):
-		if option.strip() and provider_to_service_id(option.strip()) == service:
-			return option.strip()
-	return None
-
-
-@frappe.whitelist(methods=["GET"])
-def get_channel_agent_connection(integration_settings: str) -> dict:
-	"""Which gateways use this channel credential and which agent each one answers with."""
-	_require_gateway_admin()
-	service = frappe.db.get_value("Integration Settings", integration_settings, "service")
-	if not service:
-		frappe.throw(_("Channel credential {0} not found.").format(integration_settings))
-	gateways = frappe.get_all(
-		"Gateway",
-		filters={"integration_settings": integration_settings},
-		fields=["name", "is_enabled", "default_target_type", "default_agent", "default_flow"],
-		order_by="creation asc",
-	)
-	return {"service": service, "provider": _provider_for_service(service), "gateways": gateways}
-
-
-@frappe.whitelist(methods=["POST"])
-def connect_agent_to_channel(integration_settings: str, agent: str, gateway_name: str | None = None) -> dict:
-	"""Make ``agent`` answer messages on a channel credential, in one step.
-
-	Uses the credential's gateway (or ``gateway_name`` when several share it), creating one when there
-	is none, sets the agent as its default route and attaches the channel's tools to the agent. A new
-	gateway starts with the Pairing policy, so strangers still need approval.
-	"""
-	_require_gateway_admin()
-	if not frappe.db.exists("Agent", agent):
-		frappe.throw(_("Agent {0} not found.").format(agent))
-	if not frappe.has_permission("Agent", "write", doc=agent):
-		frappe.throw(_("You can't change agent {0}.").format(agent), frappe.PermissionError)
-	settings = frappe.get_doc("Integration Settings", integration_settings)
-	provider = _provider_for_service(settings.service)
-	if not provider:
-		frappe.throw(_("{0} is not a messaging channel.").format(settings.service))
-
-	filters: dict[str, Any] = {"integration_settings": settings.name}
-	if gateway_name:
-		filters["name"] = gateway_name
-	existing = frappe.get_all("Gateway", filters=filters, pluck="name", order_by="creation asc", limit=1)
-	created = not existing
-	if existing:
-		gateway = frappe.get_doc("Gateway", existing[0])
-		previous_agent = gateway.default_agent if gateway.default_target_type == "Agent" else None
-	else:
-		agent_label = frappe.db.get_value("Agent", agent, "agent_name") or agent
-		name = f"{provider} - {agent_label}"
-		if frappe.db.exists("Gateway", name):
-			name = f"{name} ({settings.name})"
-		gateway = frappe.get_doc(
-			{
-				"doctype": "Gateway",
-				"gateway_name": name,
-				"provider": provider,
-				"integration_settings": settings.name,
-				"is_enabled": 0,
-				"direct_policy": "Pairing",
-				"execution_user": frappe.session.user,
-			}
-		)
-		previous_agent = None
-	gateway.default_target_type = "Agent"
-	gateway.default_agent = agent
-	gateway.default_flow = None
-	gateway.flags.ignore_permissions = True
-	gateway.save()
-
-	enable_error = ""
-	if not gateway.is_enabled:
-		# Turn it on when everything it needs is in place; otherwise leave it off and say why.
-		try:
-			gateway.is_enabled = 1
-			gateway.save()
-		except frappe.ValidationError as exc:
-			frappe.clear_last_message()
-			gateway.reload()
-			enable_error = _redact_error_text(str(exc))
-
-	from huf.ai.tools.integration_utils import _get_tools_for_service
-
-	tool_names = [t["name"] for t in _get_tools_for_service(settings.service)]
-	agent_doc = frappe.get_doc("Agent", agent)
-	have = {row.tool for row in agent_doc.agent_tool or []}
-	added = [t for t in tool_names if t not in have]
-	for tool in added:
-		agent_doc.append("agent_tool", {"tool": tool})
-	if added:
-		agent_doc.save()
-
-	return {
-		"gateway": gateway.name,
-		"created": created,
-		"enabled": bool(gateway.is_enabled),
-		"enable_error": enable_error,
-		"previous_agent": previous_agent if previous_agent != agent else None,
-		"tools_added": len(added),
-	}

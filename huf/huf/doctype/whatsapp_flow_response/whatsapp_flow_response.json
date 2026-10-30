@@ -1,0 +1,26 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-10-29 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["gateway", "conversation", "flow", "flow_token", "received_at", "response"],
+ "fields": [
+  {"fieldname":"gateway","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"Gateway","options":"Gateway","reqd":1,"search_index":1},
+  {"fieldname":"conversation","fieldtype":"Link","in_list_view":1,"label":"Conversation","options":"Channel Conversation","search_index":1},
+  {"fieldname":"flow","fieldtype":"Link","label":"Flow","options":"WhatsApp Flow Cache"},
+  {"fieldname":"flow_token","fieldtype":"Data","label":"Flow token","length":255},
+  {"fieldname":"received_at","fieldtype":"Datetime","in_list_view":1,"label":"Received at"},
+  {"fieldname":"response","fieldtype":"JSON","label":"Response"}
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "Huf",
+ "name": "WhatsApp Flow Response",
+ "owner": "Administrator",
+ "permissions": [{"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1,"create":1,"delete":1}],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

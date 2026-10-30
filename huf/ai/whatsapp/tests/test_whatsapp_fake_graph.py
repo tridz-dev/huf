@@ -546,9 +546,10 @@ class TestBridgeMode(FakeGraphCase):
 			header_params=json.dumps(["A-100"]), button_params=json.dumps([{"index": 0, "sub_type": "url", "text": "A-100"}]),
 			gateway_name=self.bridge_gateway.name,
 		)
-		self.assertEqual(early["error"], "send_failed")
-		self.assertIn("APPROVED", early["message"])
-		self.server.violations.clear()  # expected rejection
+		# the outbound policy refuses a template that is not APPROVED locally, so nothing reaches Meta
+		self.assertEqual(early["error"], "template_not_approved")
+		self.assertIn("not approved", early["message"])
+		self.assertEqual(self.server.sent, [])
 
 		self.server.approve("fg_order_update")
 		synced = mgmt.sync_templates(account=self.account.name)
@@ -636,6 +637,8 @@ class TestBridgeMode(FakeGraphCase):
 		self.assertTrue(comps["HEADER"]["example"]["header_handle"][0].startswith("4:"))
 		self.assertEqual([b["type"] for b in comps["BUTTONS"]["buttons"]], ["QUICK_REPLY", "QUICK_REPLY"])
 		self.server.approve("fg_promo_image")
+		synced = mgmt.sync_templates(account=self.account.name)  # the local status gates sends: sync the approval first
+		self.assertTrue(synced["success"], synced)
 		# media header with no link is a structured error
 		no_link = mgmt.send_template_message(to=SENDER, template_name="fg_promo_image", body_params=json.dumps(["Ann"]), gateway_name=self.bridge_gateway.name)
 		# an IMAGE header falls back to the template's own sample link (frappe_whatsapp behaviour)
@@ -728,7 +731,7 @@ class TestBridgeMode(FakeGraphCase):
 		ok = json.loads(_tool("send_media", **args))
 		self.assertTrue(ok["success"], ok)
 		self.assertEqual(self.server.sent[-1]["type"], "image")
-		refused = json.loads(_tool("create_template", template_name="t_x", category="UTILITY", language_code="en_US", body="hi"))
+		refused = json.loads(_tool("create_template", gateway_name=self.bridge_gateway.name, template_name="t_x", category="UTILITY", language_code="en_US", body="hi"))
 		self.assertEqual(refused["error"], "management_not_permitted")
 
 	def test_inbound_media_download_via_bridge_account(self):

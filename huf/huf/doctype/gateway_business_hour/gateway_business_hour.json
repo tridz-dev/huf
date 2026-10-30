@@ -1,0 +1,20 @@
+{
+ "actions": [],
+ "creation": "2026-10-29 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["weekday", "start_time", "end_time"],
+ "fields": [
+  {"fieldname":"weekday","fieldtype":"Select","in_list_view":1,"label":"Weekday","options":"Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday\nSunday","reqd":1},
+  {"fieldname":"start_time","fieldtype":"Time","in_list_view":1,"label":"Start time","reqd":1},
+  {"fieldname":"end_time","fieldtype":"Time","in_list_view":1,"label":"End time","reqd":1}
+ ],
+ "istable": 1,
+ "module": "Huf",
+ "name": "Gateway Business Hour",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

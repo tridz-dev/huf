@@ -35,7 +35,7 @@ def _cached_tier(gateway: str) -> Optional[str]:
 	try:
 		from huf.ai.whatsapp.token_check import _result_key
 
-		cached = frappe.cache().get_value(_result_key(gateway))
+		cached = frappe.cache().get_value(_result_key(gateway), expires=True)
 		phone = cached.get("phone") if isinstance(cached, dict) else None
 		tier = phone.get("tier") if isinstance(phone, dict) else None
 		return tier if isinstance(tier, str) else None

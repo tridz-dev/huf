@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import pathlib
 import unittest
+import unittest.mock
 from unittest.mock import patch
 
 import frappe
@@ -150,10 +151,21 @@ class TestBehaviour(_Base):
 		with patch.object(api, "_require_gateway", return_value=None):
 			self.assertEqual(api.create_audience(**kw)["error"], "consent_not_attested")
 			policy.set_values({"require_consent_attestation": False})
-			with patch.object(api.frappe, "get_doc") as get_doc, patch.object(api, "_audit"), \
+			real_get_doc = frappe.get_doc
+			new_doc = unittest.mock.MagicMock()
+			new_doc.name = "A"
+
+			def fake_get_doc(*args, **kwargs):
+				# Only the new Audience is faked. policy.get() reads the settings through
+				# frappe.get_cached_doc -> frappe.get_doc and must see the real, just-saved row.
+				if args and isinstance(args[0], dict):
+					return new_doc
+				return real_get_doc(*args, **kwargs)
+
+			with patch.object(api.frappe, "get_doc", side_effect=fake_get_doc), patch.object(api, "_audit"), \
 					patch.object(api, "_view", return_value={}), patch.object(api, "_audience_row"):
-				get_doc.return_value.name = "A"
-				self.assertTrue(api.create_audience(**kw)["success"])
+				out = api.create_audience(**kw)
+				self.assertTrue(out.get("success"), out)
 
 	def test_rate_limits_follow_settings(self):
 		for key, default in (("rate_audience_read", 240), ("rate_audience_write", 60), ("rate_audience_import", 20)):

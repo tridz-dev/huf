@@ -38,10 +38,8 @@ from huf.ai.whatsapp.broadcast.checks import start_gate
 # Thin API over broadcast_recipients / broadcast_limits / broadcast_cost / broadcast_runner. Those
 # modules are imported lazily inside each function so that a problem there never breaks this module.
 #
-# Per-recipient retry of failed rows is deliberately NOT offered (no ``retry_failed_broadcast_recipients``):
-# a ``failed`` row is a permanent Meta verdict (invalid number, user stopped marketing, template or quality
-# problem) and ``unknown`` rows may already have been delivered, so re-sending either risks a duplicate or a
-# repeat spam signal. A second attempt is a new, separately attested broadcast to a corrected list.
+# Scheduling and retry (``retry_failed_recipients``: only retryable ``failed`` rows go into a NEW Draft that must be
+# attested and started again) live in ``broadcast.schedule``.
 
 _BROADCAST = "WhatsApp Broadcast"
 _BROADCAST_RECIPIENT = "WhatsApp Broadcast Recipient"
@@ -53,7 +51,7 @@ _BROADCAST_FIELDS = (
 	"name", "title", "status", "pause_reason", "gateway", "whatsapp_account", "template", "template_name",
 	"language_code", "category", "body_params", "header_params", "button_params", "consent_source",
 	"consent_attested", "consent_attested_by", "consent_attested_at", "max_recipients", "mps", "send_via",
-	"started_by", "started_at", "finished_at", "creation", "modified", *_BROADCAST_COUNT_FIELDS,
+	"scheduled_at", "started_by", "started_at", "finished_at", "creation", "modified", *_BROADCAST_COUNT_FIELDS,
 )
 
 
@@ -106,7 +104,7 @@ def _broadcast_view(row: dict[str, Any]) -> dict[str, Any]:
 				out[key] = json.loads(value)
 			except ValueError:
 				pass
-	for key in ("creation", "modified", "started_at", "finished_at", "consent_attested_at"):
+	for key in ("creation", "modified", "scheduled_at", "started_at", "finished_at", "consent_attested_at"):
 		out[key] = _iso(out.get(key))
 	return out
 
@@ -494,7 +492,9 @@ def pause_all_broadcasts(gateway: str | None = None) -> dict[str, Any]:
 	from huf.ai.whatsapp.broadcast import runner as broadcast_runner
 
 	result = broadcast_runner.pause_all(gateway, "kill_switch")
+	broadcast_runner.hold_scheduled(gateway)
 	for name in running:
 		_broadcast_audit(name, "pause_all", gateway=gateway)
 	frappe.logger(_BROADCAST_LOG).info(f"gateway={gateway} action=pause_all user={frappe.session.user} paused={len(running)}")
 	return {"success": True, "gateway": gateway, "paused": running, **(result if isinstance(result, dict) else {})}
+

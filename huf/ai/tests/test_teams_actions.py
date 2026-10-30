@@ -15,7 +15,11 @@ import _stub_env  # noqa: E402
 
 _stub_env.install()
 
-import pytest  # noqa: E402
+from huf.ai.tests.unit_support import SupportCase  # noqa: E402
+
+import pathlib as _pl  # noqa: E402
+
+_REPO = _pl.Path(__file__).resolve().parents[3]
 
 from huf.ai.gateways import hooks  # noqa: E402
 from huf.ai.gateways.teams.messaging import cards  # noqa: E402
@@ -155,8 +159,8 @@ class World:
 		self.enqueued = []
 
 
-@pytest.fixture
-def env(monkeypatch):
+def _fx_env(self):
+	monkeypatch = self.monkeypatch
 	ta = fresh_module()
 	w = World()
 	w.ta = ta
@@ -257,105 +261,37 @@ def is_card(b):
 # --- registration & routing ----------------------------------------------------------------
 
 
-def test_registered_priority_30_for_teams():
-	ta = fresh_module()
-	entries = [e for e in hooks._HANDLERS[hooks.PRE_INGEST_FILTER] if e[3] is ta.pre_ingest_card_action]
-	assert [(p, prov) for p, _s, prov, _f in entries] == [(30, "microsoft teams")]
-	assert tc.HOOK_PRIORITY_CARD_ACTION == 30
-	hooks.clear()
 
 
-def test_not_called_for_other_provider(env):
-	assert hooks.call_all(hooks.PRE_INGEST_FILTER, SimpleNamespace(provider="Slack"), {}) == []
 
 
-def test_non_card_activity_passes_through(env):
-	res, ov = click(env, act={"type": "message", "huf_kind": "message", "text": "hi"})
-	assert res is True and ov is None
 
 
-def test_untagged_invoke_passes_through(env):
-	res, ov = click(env, activity(tag=False))
-	assert res is True and ov is None and env.calls == []
 
 
-def test_forged_tag_value_other_kind_passes(env):
-	act = activity()
-	act["huf_kind"] = "message"
-	res, ov = click(env, act)
-	assert res is True and ov is None
 
 
-def test_dispatch_through_hooks_module(env):
-	env.local.gateway_response_override = None
-	res = hooks.call_all(hooks.PRE_INGEST_FILTER, GW, {"raw_payload": activity()})
-	assert res == [False] and env.calls[0][0] == "approve"
 
 
 # --- happy paths ----------------------------------------------------------------------------
 
 
-def test_approve_calls_api_as_clicker(env):
-	res, ov = click(env)
-	assert res is False
-	assert env.calls == [("approve", "AP-1", "ada@x.com", "Decided via Microsoft Teams")]
-	b = body(ov)
-	assert is_card(b) and b["statusCode"] == 200
-	assert "Approved by Ada Lovelace" in json.dumps(b)
-	assert "actions" not in b["value"]
 
 
-def test_reject_calls_reject_api(env):
-	click(env, verb=cards.VERB_REJECT)
-	assert env.calls[0][:3] == ("reject", "AP-1", "ada@x.com")
-	assert env.approvals["AP-1"].status == "Rejected"
 
 
-def test_session_marked_decided_with_decision(env):
-	click(env)
-	s = env.sessions["tas-1"]
-	assert (s["state"], s["decided_by"], s["decision"]) == ("Decided", "ada@x.com", "approve")
 
 
-def test_user_restored_after_success(env):
-	env.user = "Administrator"
-	click(env)
-	assert env.user == "Administrator" and env.users_during == ["ada@x.com"]
 
 
-def test_user_restored_after_permission_error(env):
-	env.fail_with = PermissionError_("no")
-	click(env)
-	assert env.user == "Administrator"
 
 
-def test_user_restored_after_generic_exception(env):
-	env.fail_with = RuntimeError("boom")
-	click(env)
-	assert env.user == "Administrator"
 
 
-def test_decision_from_verb_not_card_data(env):
-	act = activity(verb=cards.VERB_REJECT)
-	act["value"]["action"]["data"]["decision"] = "approve"
-	click(env, act)
-	assert env.calls[0][0] == "reject"
 
 
-def test_clicker_identity_not_taken_from_card_data(env):
-	act = activity(aad=AAD2)
-	act["value"]["action"]["data"]["user"] = "ada@x.com"
-	act["value"]["action"]["data"]["actor"] = "ada@x.com"
-	_r, ov = click(env, act)
-	assert env.calls == [] and env.sessions["tas-1"]["state"] == "Open"
-	assert not is_card(body(ov))
 
 
-def test_other_approver_with_rights_may_decide(env):
-	env.can_decide["eve@x.com"] = True
-	click(env, aad=AAD2)
-	assert env.calls[0][2] == "eve@x.com"
-	assert env.sessions["tas-1"]["decided_by"] == "eve@x.com"
 
 
 # --- refusals: no state change --------------------------------------------------------------
@@ -367,197 +303,61 @@ def assert_untouched(env):
 	assert env.approvals["AP-1"].status == "Pending"
 
 
-def test_wrong_user_refused(env):
-	_r, ov = click(env, aad=AAD2)
-	assert_untouched(env)
-	assert body(ov)["type"] == cards.MESSAGE_CONTENT_TYPE
-	assert body(ov)["value"] == env.ta.MSG_DENIED
 
 
-def test_unlinked_user_refused(env):
-	_r, ov = click(env, aad="00000000-0000-0000-0000-0000000000zz")
-	assert_untouched(env)
-	assert body(ov)["value"] == env.ta.MSG_UNLINKED
 
 
-def test_wrong_tenant_refused(env):
-	env.links[("other-tenant", AAD)] = "ada@x.com"
-	_r, ov = click(env, tenant="other-tenant")
-	assert_untouched(env)
-	assert body(ov)["value"] == env.ta.MSG_UNAVAILABLE
 
 
-def test_wrong_conversation_refused(env):
-	_r, ov = click(env, conv="a:someoneelse")
-	assert_untouched(env)
-	assert body(ov)["value"] == env.ta.MSG_UNAVAILABLE
 
 
-def test_conversation_thread_suffix_normalised(env):
-	click(env, conv=CONV + ";messageid=123")
-	assert env.calls and env.calls[0][0] == "approve"
 
 
-def test_wrong_gateway_refused(env):
-	env.sessions["tas-1"]["gateway"] = "gw2"
-	click(env)
-	assert_untouched(env)
 
 
-def test_unknown_session_refused(env):
-	_r, ov = click(env, session="nope")
-	assert body(ov)["value"] == env.ta.MSG_UNAVAILABLE and env.calls == []
 
 
-def test_wrong_kind_refused(env):
-	env.sessions["tas-1"]["kind"] = "approval:flow"
-	click(env)
-	assert_untouched(env)
 
 
-def test_unknown_verb_refused(env):
-	click(env, verb="delete_everything")
-	assert_untouched(env)
 
 
-def test_missing_session_in_data_refused(env):
-	act = activity()
-	act["value"]["action"]["data"] = {}
-	click(env, act)
-	assert_untouched(env)
 
 
-def test_malformed_value_refused(env):
-	act = activity()
-	act["value"] = "garbage"
-	res, ov = click(env, act)
-	assert res is False and body(ov)["type"] == cards.MESSAGE_CONTENT_TYPE
 
 
-def test_oversized_session_name_refused(env):
-	click(env, session="x" * 500)
-	assert_untouched(env)
 
 
-def test_expired_session_replaced_and_not_decided(env):
-	env.sessions["tas-1"]["expires_at"] = NOW - timedelta(seconds=1)
-	_r, ov = click(env)
-	assert env.calls == [] and env.sessions["tas-1"]["state"] == "Expired"
-	assert is_card(body(ov)) and env.ta.MSG_EXPIRED in json.dumps(body(ov))
 
 
-def test_already_decided_session_refused(env):
-	click(env)
-	env.calls.clear()
-	_r, ov = click(env)
-	assert env.calls == [] and env.ta.MSG_DECIDED in json.dumps(body(ov))
 
 
-def test_expired_state_session_refused(env):
-	env.sessions["tas-1"]["state"] = "Expired"
-	_r, ov = click(env)
-	assert env.calls == [] and env.ta.MSG_EXPIRED in json.dumps(body(ov))
 
 
-def test_permission_error_refusal_and_session_released(env):
-	env.fail_with = PermissionError_("denied")
-	_r, ov = click(env)
-	assert body(ov)["value"] == env.ta.MSG_DENIED
-	assert env.sessions["tas-1"]["state"] == "Open" and env.sessions["tas-1"]["decided_by"] is None
 
 
-def test_generic_failure_releases_session_no_detail_leak(env):
-	env.fail_with = RuntimeError("SECRET-DB-DETAIL")
-	_r, ov = click(env)
-	assert "SECRET" not in ov["body"] and body(ov)["value"] == env.ta.MSG_FAILED
-	assert env.sessions["tas-1"]["state"] == "Open"
 
 
-def test_failure_when_approval_no_longer_pending_closes_session(env):
-	def boom(name, comment=None):
-		env.approvals[name].status = "Expired"
-		raise ValueError("x")
-
-	sys.modules["huf.huf.doctype.agent_execution_approval.agent_execution_approval"].approve_execution = boom
-	_r, ov = click(env)
-	assert env.sessions["tas-1"]["state"] == "Decided" and env.sessions["tas-1"]["decision"] == "superseded"
-	assert env.ta.MSG_NOT_PENDING in json.dumps(body(ov))
 
 
-def test_handler_exception_yields_safe_refusal(env, monkeypatch):
-	monkeypatch.setattr(env.ta, "_handle", lambda *a: (_ for _ in ()).throw(RuntimeError("leak-me")))
-	res, ov = click(env)
-	assert res is False and "leak-me" not in ov["body"] and env.errors
 
 
-def test_refusal_has_no_restricted_content(env):
-	_r, ov = click(env, aad=AAD2)
-	text = ov["body"]
-	for word in ("job-1", "AP-1", "run", "req@x.com", "ada@x.com"):
-		assert word not in text.replace("not permitted", "")
 
 
-def test_unauthorised_approver_cannot_probe_state(env):
-	env.sessions["tas-1"]["state"] = "Decided"
-	_r, ov = click(env, aad=AAD2)
-	# a wrong user still learns only that the approval is decided, never who decided or what it was
-	assert "ada@x.com" not in ov["body"] and "AP-1" not in ov["body"]
 
 
 # --- atomicity -------------------------------------------------------------------------------
 
 
-def test_double_click_reentrant_exactly_one_decision(env):
-	env.can_decide["eve@x.com"] = True
-	inner = {}
-
-	def slow_approve(name, comment=None):
-		env.calls.append(("approve", name, env.user))
-		_r, inner["ov"] = click(env, aad=AAD2)  # second click arrives mid-decision
-		env.approvals[name].status = "Approved"
-
-	sys.modules["huf.huf.doctype.agent_execution_approval.agent_execution_approval"].approve_execution = slow_approve
-	click(env)
-	assert len([c for c in env.calls if c[0] == "approve"]) == 1
-	assert env.ta.MSG_DECIDED in json.dumps(body(inner["ov"]))
-	assert env.sessions["tas-1"]["decided_by"] == "ada@x.com"
 
 
-def test_two_consumers_threads_one_winner(env):
-	results = []
-	barrier = threading.Barrier(8)
-
-	def consumer(i):
-		barrier.wait()
-		results.append(env.ta.consume_session("tas-1", f"u{i}"))
-
-	threads = [threading.Thread(target=consumer, args=(i,)) for i in range(8)]
-	[t.start() for t in threads]
-	[t.join() for t in threads]
-	assert results.count("ok") == 1 and results.count("decided") == 7
 
 
-def test_consume_expired_marks_expired(env):
-	env.sessions["tas-1"]["expires_at"] = NOW
-	assert env.ta.consume_session("tas-1", "u") == "expired"
-	assert env.sessions["tas-1"]["state"] == "Expired"
 
 
-def test_consume_unknown(env):
-	assert env.ta.consume_session("zzz", "u") == "unknown"
 
 
-def test_release_only_for_same_actor(env):
-	env.ta.consume_session("tas-1", "ada@x.com")
-	assert env.ta.release_session("tas-1", "eve@x.com") is False
-	assert env.ta.release_session("tas-1", "ada@x.com") is True
-	assert env.sessions["tas-1"]["state"] == "Open"
 
 
-def test_release_refused_after_decision_recorded(env):
-	env.ta.consume_session("tas-1", "ada@x.com")
-	env.sessions["tas-1"]["decision"] = "approve"
-	assert env.ta.release_session("tas-1", "ada@x.com") is False
 
 
 # --- notify ----------------------------------------------------------------------------------
@@ -575,131 +375,41 @@ def setup_notify(env, monkeypatch, with_ref=True):
 	env.all_rows[("Gateway", "name")] = ["gw1"]
 
 
-def test_create_approval_card_enqueues_card_to_personal_chat(env, monkeypatch):
-	setup_notify(env, monkeypatch)
-	assert env.ta.create_approval_card(env.approvals["AP-1"], "ada@x.com") == 1
-	gw, snap, kind, payload, key = env.enq[0]
-	assert (gw, kind) == ("gw1", "card") and snap["conversation_id"] == CONV and snap["tenant_id"] == TENANT
-	card = payload["activity"]["attachments"][0]["content"]
-	sid = card["actions"][0]["data"]["session"]
-	assert env.sessions[sid]["intended_user"] == "ada@x.com" and env.sessions[sid]["tenant_id"] == TENANT
-	assert json.loads(env.sessions[sid]["payload"]) == {"kind": env.ta.KIND_EXECUTION, "name": "AP-1"}
-	assert payload["activity"]["text"]
 
 
-def test_create_approval_card_by_name(env, monkeypatch):
-	setup_notify(env, monkeypatch)
-	assert env.ta.create_approval_card("AP-1", "ada@x.com") == 1
 
 
-def test_no_reference_means_no_card(env, monkeypatch):
-	setup_notify(env, monkeypatch, with_ref=False)
-	assert env.ta.create_approval_card(env.approvals["AP-1"], "ada@x.com") == 0 and env.enq == []
 
 
-def test_unlinked_approver_skipped(env, monkeypatch):
-	setup_notify(env, monkeypatch)
-	assert env.ta.create_approval_card(env.approvals["AP-1"], "zed@x.com") == 0
 
 
-def test_skip_users(env, monkeypatch):
-	setup_notify(env, monkeypatch)
-	assert env.ta.create_approval_card(env.approvals["AP-1"], "Administrator") == 0
 
 
-def test_notify_deduped_per_approval_and_user(env, monkeypatch):
-	setup_notify(env, monkeypatch)
-	env.ta.create_approval_card(env.approvals["AP-1"], "ada@x.com")
-	assert env.ta.create_approval_card(env.approvals["AP-1"], "ada@x.com") == 0
-	assert len(env.enq) == 1
 
 
-def test_outbox_payload_has_no_secrets(env, monkeypatch):
-	setup_notify(env, monkeypatch)
-	env.ta.create_approval_card(env.approvals["AP-1"], "ada@x.com")
-	text = json.dumps(env.enq[0][3]).lower()
-	for word in ("password", "secret", "bearer", "token", "api_key", "ada@x.com", "req@x.com"):
-		assert word not in text
 
 
-def test_notify_approvers_enumerates_users_and_role_excluding_requester(env, monkeypatch):
-	setup_notify(env, monkeypatch)
-	doc = env.approvals["AP-1"]
-	doc.approver_users = [SimpleNamespace(user="ada@x.com"), SimpleNamespace(user="req@x.com")]
-	doc.approver_role = "Approver"
-	env.all_rows[("Has Role", "parent")] = ["ada@x.com", "bob@x.com"]
-	env.all_rows[("User", "name")] = ["ada@x.com", "bob@x.com"]
-	assert env.ta._execution_approvers(doc) == ["ada@x.com", "bob@x.com"]
-	assert env.ta.notify_approvers(doc) == 1
 
 
-def test_notify_skips_non_pending(env, monkeypatch):
-	setup_notify(env, monkeypatch)
-	env.approvals["AP-1"].status = "Approved"
-	assert env.ta.notify_approvers(env.approvals["AP-1"]) == 0
 
 
-def test_on_approval_inserted_enqueues_after_commit(env):
-	env.ta.on_approval_inserted(SimpleNamespace(name="AP-1"))
-	args, kw = env.enqueued[0]
-	assert args[0].endswith("teams.actions.notify_approvers_job")
-	assert kw["approval_name"] == "AP-1" and kw["enqueue_after_commit"] is True
 
 
-def test_on_approval_inserted_never_raises(env, monkeypatch):
-	monkeypatch.setattr(env.ta.frappe, "enqueue", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
-	env.ta.on_approval_inserted(SimpleNamespace(name="AP-1"))
-	assert env.errors
 
 
-def test_notify_job_never_raises(env):
-	env.ta.notify_approvers_job("missing")  # KeyError inside the fake get_doc is swallowed
-	assert env.errors
 
 
-def test_record_card_activity(env):
-	env.ta.record_card_activity("tas-1", "act-9")
-	assert env.sessions["tas-1"]["card_activity_id"] == "act-9"
 
 
 # --- doctype / hooks.py static ---------------------------------------------------------------
 
 
-def test_doctype_json_shape():
-	p = Path("huf/huf/doctype/teams_action_session/teams_action_session.json")
-	d = json.loads(p.read_text())
-	assert d["name"] == "Teams Action Session"
-	assert [x["role"] for x in d["permissions"]] == ["System Manager"]
-	fields = {f["fieldname"]: f for f in d["fields"]}
-	for name in ("gateway", "kind", "intended_user", "tenant_id", "conversation_id", "card_activity_id",
-		"payload", "state", "decided_by", "decision", "expires_at"):
-		assert name in fields
-	assert fields["state"]["options"].split("\n") == ["Open", "Decided", "Expired"]
-	py_compile.compile("huf/huf/doctype/teams_action_session/teams_action_session.py", doraise=True)
 
 
-def test_hooks_py_doc_events_is_list_with_both_handlers():
-	src = Path("huf/hooks.py").read_text()
-	py_compile.compile("huf/hooks.py", doraise=True)
-	tree = ast.parse(src)
-	value = None
-	for node in ast.walk(tree):
-		if isinstance(node, ast.Assign) and any(getattr(t, "id", "") == "doc_events" for t in node.targets):
-			value = ast.literal_eval(node.value)
-	entry = value["Agent Execution Approval"]["after_insert"]
-	assert isinstance(entry, list)
-	assert "huf.ai.gateways.approvals.on_approval_inserted" in entry
-	assert "huf.ai.gateways.teams.actions.on_approval_inserted" in entry
 
 
-def test_teams_actions_has_no_slack_imports():
-	src = Path("huf/ai/gateways/teams/actions.py").read_text()
-	assert "slack" not in src.lower().replace("slack's", "")
 
 
-def test_modules_compile():
-	for f in ("teams/actions.py", "teams/messaging/cards.py"):
-		py_compile.compile(f"huf/ai/gateways/{f}", doraise=True)
 
 
 # --- gateway_webhook response override (unit, with fakes) -----------------------------------
@@ -710,8 +420,8 @@ class FakeResponse:
 		self.body, self.status, self.mimetype = body, status, mimetype
 
 
-@pytest.fixture
-def wh(monkeypatch):
+def _fx_wh(self):
+	monkeypatch = self.monkeypatch
 	rl = ModuleType("frappe.rate_limiter")
 	rl.rate_limit = lambda **kw: (lambda fn: fn)
 	monkeypatch.setitem(sys.modules, "frappe.rate_limiter", rl)
@@ -757,87 +467,27 @@ def wh(monkeypatch):
 	return state
 
 
-def test_webhook_override_returned_as_response(wh):
-	override = {"status": 200, "body": json.dumps({"statusCode": 200}), "content_type": "application/json"}
-	wh.hook = lambda: setattr(wh.local, "gateway_response_override", override)
-	out = wh.gw.handle_gateway_webhook()
-	assert isinstance(out, FakeResponse) and out.status == 200 and out.mimetype == "application/json"
-	assert json.loads(out.body) == {"statusCode": 200}
-	assert wh.local.gateway_response_override is None
 
 
-def test_webhook_override_dict_body_serialised(wh):
-	wh.hook = lambda: setattr(wh.local, "gateway_response_override",
-		{"status": 201, "body": {"a": 1}, "content_type": "application/json"})
-	out = wh.gw.handle_gateway_webhook()
-	assert out.status == 201 and json.loads(out.body) == {"a": 1}
 
 
-def test_webhook_without_override_unchanged(wh):
-	assert wh.gw.handle_gateway_webhook() == {"success": True, "filtered": True}
 
 
-def test_webhook_stale_override_cleared_before_ingest(wh):
-	wh.local.gateway_response_override = {"status": 200, "body": "stale", "content_type": "text/plain"}
-	assert wh.gw.handle_gateway_webhook() == {"success": True, "filtered": True}
 
 
-def test_webhook_malformed_override_ignored(wh):
-	wh.hook = lambda: setattr(wh.local, "gateway_response_override", {"status": 200, "body": 42})
-	assert wh.gw.handle_gateway_webhook() == {"success": True, "filtered": True}
 
 
-def test_webhook_non_dict_override_ignored(wh):
-	wh.hook = lambda: setattr(wh.local, "gateway_response_override", "x")
-	assert wh.gw.handle_gateway_webhook() == {"success": True, "filtered": True}
 
 
-def test_webhook_override_not_honoured_when_verification_fails(wh):
-	wh.verified = False
-	wh.local.gateway_response_override = {"status": 200, "body": "x", "content_type": "text/plain"}
-	out = wh.gw.handle_gateway_webhook()
-	assert out == {"success": False, "error": "Provider verification failed"}
-	assert wh.local.response.http_status_code == 401 and wh.calls == []
 
 
-def test_end_to_end_handler_sets_override_through_webhook(wh, env):
-	def run_handler():
-		env.local = wh.local
-		env.ta.frappe.local = wh.local
-		env.ta.pre_ingest_card_action(GW, {"raw_payload": activity()})
-
-	wh.hook = run_handler
-	out = wh.gw.handle_gateway_webhook()
-	b = json.loads(out.body)
-	assert b["statusCode"] == 200 and b["type"] == cards.CARD_CONTENT_TYPE
 
 
 # --- T16: defence in depth, tenant verified by the handler itself ----------------------------
 
 
-def test_card_action_foreign_tenant_changes_nothing(env):
-	foreign = "00000000-0000-0000-0000-00000000ffff"
-	env.links[(foreign, AAD)] = "ada@x.com"  # even a (hypothetical) link must not help
-	res, ov = click(env, activity(tenant=foreign))
-	assert res is False
-	assert env.calls == [] and env.sessions["tas-1"]["state"] == "Open"
-	assert env.approvals["AP-1"].status == "Pending"
 
 
-def test_real_tenant_ok_fails_closed(env, monkeypatch):
-	ta = env.ta
-	monkeypatch.undo()  # drop the harness stub for _tenant_ok
-	teams_tenant = importlib.import_module("huf.ai.gateways.teams.tenant")
-	monkeypatch.setattr(teams_tenant, "is_tenant_allowed", lambda gw, t: t == TENANT)
-	assert ta._tenant_ok(GW, TENANT) is True
-	assert ta._tenant_ok(GW, "other") is False
-	assert ta._tenant_ok(GW, "") is False
-
-	def boom(gw, t):
-		raise RuntimeError("settings down")
-
-	monkeypatch.setattr(teams_tenant, "is_tenant_allowed", boom)
-	assert ta._tenant_ok(GW, TENANT) is False
 
 
 # --- T16: duplicate / redelivered card click gets a proper invoke body -------------------------
@@ -855,63 +505,581 @@ def _dup_setup(env, wh, monkeypatch, raw, result=None):
 	monkeypatch.setattr(env.ta.teams_identity, "resolve_user", lambda *a: "ada@x.com")
 
 
-def test_duplicate_click_decided_session_returns_decided_card(env, wh, monkeypatch):
-	env.sessions["tas-1"]["state"] = "Decided"
-	_dup_setup(env, wh, monkeypatch, activity())
-	out = wh.gw.handle_gateway_webhook()
-	assert isinstance(out, FakeResponse) and out.status == 200
-	b = json.loads(out.body)
-	assert b["statusCode"] == 200
-	assert MSG_in(b, env.ta.MSG_DECIDED)
-	assert env.calls == []  # nothing decided by a duplicate
 
 
-def test_duplicate_click_open_session_is_not_decided_and_gets_message(env, wh, monkeypatch):
-	_dup_setup(env, wh, monkeypatch, activity())
-	out = wh.gw.handle_gateway_webhook()
-	assert json.loads(out.body)["statusCode"] == 200
-	assert env.calls == [] and env.sessions["tas-1"]["state"] == "Open"
-	assert MSG_in(json.loads(out.body), env.ta.MSG_DUPLICATE)
 
 
-def test_duplicate_click_foreign_tenant_refused(env, wh, monkeypatch):
-	foreign = "00000000-0000-0000-0000-00000000ffff"
-	env.sessions["tas-1"]["state"] = "Decided"
-	_dup_setup(env, wh, monkeypatch, activity(tenant=foreign))
-	out = wh.gw.handle_gateway_webhook()
-	assert MSG_in(json.loads(out.body), env.ta.MSG_UNAVAILABLE)
 
 
-def test_duplicate_non_card_event_keeps_generic_json(env, wh, monkeypatch):
-	_dup_setup(env, wh, monkeypatch, {"type": "message", "huf_kind": "message"})
-	assert wh.gw.handle_gateway_webhook() == {"success": True, "duplicate": True, "event_name": "EVT-0"}
 
 
 def MSG_in(body, text):  # noqa: N802
 	return text in json.dumps(body)
 
 
-def test_webhook_adapter_built_with_gateway_name(monkeypatch):
-	rl = ModuleType("frappe.rate_limiter")
-	rl.rate_limit = lambda **kw: (lambda fn: fn)
-	monkeypatch.setitem(sys.modules, "frappe.rate_limiter", rl)
-	monkeypatch.delitem(sys.modules, "huf.ai.gateway_webhook", raising=False)
-	gw = importlib.import_module("huf.ai.gateway_webhook")
-	monkeypatch.delitem(sys.modules, "huf.ai.gateway_webhook", raising=False)
-	built = []
+class TestModule(SupportCase):
+	def test_registered_priority_30_for_teams(self):
+		ta = fresh_module()
+		entries = [e for e in hooks._HANDLERS[hooks.PRE_INGEST_FILTER] if e[3] is ta.pre_ingest_card_action]
+		assert [(p, prov) for p, _s, prov, _f in entries] == [(30, "microsoft teams")]
+		assert tc.HOOK_PRIORITY_CARD_ACTION == 30
+		hooks.clear()
 
-	class WithName:
-		def __init__(self, credentials, *, gateway_name=None):
-			built.append(("with", credentials, gateway_name))
+	def test_not_called_for_other_provider(self):
+		env = self.use(_fx_env)
+		assert hooks.call_all(hooks.PRE_INGEST_FILTER, SimpleNamespace(provider="Slack"), {}) == []
 
-	class Plain:
-		def __init__(self, credentials):
-			built.append(("plain", credentials))
+	def test_non_card_activity_passes_through(self):
+		env = self.use(_fx_env)
+		res, ov = click(env, act={"type": "message", "huf_kind": "message", "text": "hi"})
+		assert res is True and ov is None
 
-	monkeypatch.setattr(gw, "_gateway_credentials", lambda g: {"k": "v"})
-	g = SimpleNamespace(name="gw-7", provider="X")
-	monkeypatch.setattr(gw, "_adapter_class_for_provider", lambda p: WithName)
-	gw.get_gateway_adapter(g)
-	monkeypatch.setattr(gw, "_adapter_class_for_provider", lambda p: Plain)
-	gw.get_gateway_adapter(g)
-	assert built == [("with", {"k": "v"}, "gw-7"), ("plain", {"k": "v"})]
+	def test_untagged_invoke_passes_through(self):
+		env = self.use(_fx_env)
+		res, ov = click(env, activity(tag=False))
+		assert res is True and ov is None and env.calls == []
+
+	def test_forged_tag_value_other_kind_passes(self):
+		env = self.use(_fx_env)
+		act = activity()
+		act["huf_kind"] = "message"
+		res, ov = click(env, act)
+		assert res is True and ov is None
+
+	def test_dispatch_through_hooks_module(self):
+		env = self.use(_fx_env)
+		env.local.gateway_response_override = None
+		res = hooks.call_all(hooks.PRE_INGEST_FILTER, GW, {"raw_payload": activity()})
+		assert res == [False] and env.calls[0][0] == "approve"
+
+	def test_approve_calls_api_as_clicker(self):
+		env = self.use(_fx_env)
+		res, ov = click(env)
+		assert res is False
+		assert env.calls == [("approve", "AP-1", "ada@x.com", "Decided via Microsoft Teams")]
+		b = body(ov)
+		assert is_card(b) and b["statusCode"] == 200
+		assert "Approved by Ada Lovelace" in json.dumps(b)
+		assert "actions" not in b["value"]
+
+	def test_reject_calls_reject_api(self):
+		env = self.use(_fx_env)
+		click(env, verb=cards.VERB_REJECT)
+		assert env.calls[0][:3] == ("reject", "AP-1", "ada@x.com")
+		assert env.approvals["AP-1"].status == "Rejected"
+
+	def test_session_marked_decided_with_decision(self):
+		env = self.use(_fx_env)
+		click(env)
+		s = env.sessions["tas-1"]
+		assert (s["state"], s["decided_by"], s["decision"]) == ("Decided", "ada@x.com", "approve")
+
+	def test_user_restored_after_success(self):
+		env = self.use(_fx_env)
+		env.user = "Administrator"
+		click(env)
+		assert env.user == "Administrator" and env.users_during == ["ada@x.com"]
+
+	def test_user_restored_after_permission_error(self):
+		env = self.use(_fx_env)
+		env.fail_with = PermissionError_("no")
+		click(env)
+		assert env.user == "Administrator"
+
+	def test_user_restored_after_generic_exception(self):
+		env = self.use(_fx_env)
+		env.fail_with = RuntimeError("boom")
+		click(env)
+		assert env.user == "Administrator"
+
+	def test_decision_from_verb_not_card_data(self):
+		env = self.use(_fx_env)
+		act = activity(verb=cards.VERB_REJECT)
+		act["value"]["action"]["data"]["decision"] = "approve"
+		click(env, act)
+		assert env.calls[0][0] == "reject"
+
+	def test_clicker_identity_not_taken_from_card_data(self):
+		env = self.use(_fx_env)
+		act = activity(aad=AAD2)
+		act["value"]["action"]["data"]["user"] = "ada@x.com"
+		act["value"]["action"]["data"]["actor"] = "ada@x.com"
+		_r, ov = click(env, act)
+		assert env.calls == [] and env.sessions["tas-1"]["state"] == "Open"
+		assert not is_card(body(ov))
+
+	def test_other_approver_with_rights_may_decide(self):
+		env = self.use(_fx_env)
+		env.can_decide["eve@x.com"] = True
+		click(env, aad=AAD2)
+		assert env.calls[0][2] == "eve@x.com"
+		assert env.sessions["tas-1"]["decided_by"] == "eve@x.com"
+
+	def test_wrong_user_refused(self):
+		env = self.use(_fx_env)
+		_r, ov = click(env, aad=AAD2)
+		assert_untouched(env)
+		assert body(ov)["type"] == cards.MESSAGE_CONTENT_TYPE
+		assert body(ov)["value"] == env.ta.MSG_DENIED
+
+	def test_unlinked_user_refused(self):
+		env = self.use(_fx_env)
+		_r, ov = click(env, aad="00000000-0000-0000-0000-0000000000zz")
+		assert_untouched(env)
+		assert body(ov)["value"] == env.ta.MSG_UNLINKED
+
+	def test_wrong_tenant_refused(self):
+		env = self.use(_fx_env)
+		env.links[("other-tenant", AAD)] = "ada@x.com"
+		_r, ov = click(env, tenant="other-tenant")
+		assert_untouched(env)
+		assert body(ov)["value"] == env.ta.MSG_UNAVAILABLE
+
+	def test_wrong_conversation_refused(self):
+		env = self.use(_fx_env)
+		_r, ov = click(env, conv="a:someoneelse")
+		assert_untouched(env)
+		assert body(ov)["value"] == env.ta.MSG_UNAVAILABLE
+
+	def test_conversation_thread_suffix_normalised(self):
+		env = self.use(_fx_env)
+		click(env, conv=CONV + ";messageid=123")
+		assert env.calls and env.calls[0][0] == "approve"
+
+	def test_wrong_gateway_refused(self):
+		env = self.use(_fx_env)
+		env.sessions["tas-1"]["gateway"] = "gw2"
+		click(env)
+		assert_untouched(env)
+
+	def test_unknown_session_refused(self):
+		env = self.use(_fx_env)
+		_r, ov = click(env, session="nope")
+		assert body(ov)["value"] == env.ta.MSG_UNAVAILABLE and env.calls == []
+
+	def test_wrong_kind_refused(self):
+		env = self.use(_fx_env)
+		env.sessions["tas-1"]["kind"] = "approval:flow"
+		click(env)
+		assert_untouched(env)
+
+	def test_unknown_verb_refused(self):
+		env = self.use(_fx_env)
+		click(env, verb="delete_everything")
+		assert_untouched(env)
+
+	def test_missing_session_in_data_refused(self):
+		env = self.use(_fx_env)
+		act = activity()
+		act["value"]["action"]["data"] = {}
+		click(env, act)
+		assert_untouched(env)
+
+	def test_malformed_value_refused(self):
+		env = self.use(_fx_env)
+		act = activity()
+		act["value"] = "garbage"
+		res, ov = click(env, act)
+		assert res is False and body(ov)["type"] == cards.MESSAGE_CONTENT_TYPE
+
+	def test_oversized_session_name_refused(self):
+		env = self.use(_fx_env)
+		click(env, session="x" * 500)
+		assert_untouched(env)
+
+	def test_expired_session_replaced_and_not_decided(self):
+		env = self.use(_fx_env)
+		env.sessions["tas-1"]["expires_at"] = NOW - timedelta(seconds=1)
+		_r, ov = click(env)
+		assert env.calls == [] and env.sessions["tas-1"]["state"] == "Expired"
+		assert is_card(body(ov)) and env.ta.MSG_EXPIRED in json.dumps(body(ov))
+
+	def test_already_decided_session_refused(self):
+		env = self.use(_fx_env)
+		click(env)
+		env.calls.clear()
+		_r, ov = click(env)
+		assert env.calls == [] and env.ta.MSG_DECIDED in json.dumps(body(ov))
+
+	def test_expired_state_session_refused(self):
+		env = self.use(_fx_env)
+		env.sessions["tas-1"]["state"] = "Expired"
+		_r, ov = click(env)
+		assert env.calls == [] and env.ta.MSG_EXPIRED in json.dumps(body(ov))
+
+	def test_permission_error_refusal_and_session_released(self):
+		env = self.use(_fx_env)
+		env.fail_with = PermissionError_("denied")
+		_r, ov = click(env)
+		assert body(ov)["value"] == env.ta.MSG_DENIED
+		assert env.sessions["tas-1"]["state"] == "Open" and env.sessions["tas-1"]["decided_by"] is None
+
+	def test_generic_failure_releases_session_no_detail_leak(self):
+		env = self.use(_fx_env)
+		env.fail_with = RuntimeError("SECRET-DB-DETAIL")
+		_r, ov = click(env)
+		assert "SECRET" not in ov["body"] and body(ov)["value"] == env.ta.MSG_FAILED
+		assert env.sessions["tas-1"]["state"] == "Open"
+
+	def test_failure_when_approval_no_longer_pending_closes_session(self):
+		env = self.use(_fx_env)
+		def boom(name, comment=None):
+			env.approvals[name].status = "Expired"
+			raise ValueError("x")
+
+		sys.modules["huf.huf.doctype.agent_execution_approval.agent_execution_approval"].approve_execution = boom
+		_r, ov = click(env)
+		assert env.sessions["tas-1"]["state"] == "Decided" and env.sessions["tas-1"]["decision"] == "superseded"
+		assert env.ta.MSG_NOT_PENDING in json.dumps(body(ov))
+
+	def test_handler_exception_yields_safe_refusal(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		monkeypatch.setattr(env.ta, "_handle", lambda *a: (_ for _ in ()).throw(RuntimeError("leak-me")))
+		res, ov = click(env)
+		assert res is False and "leak-me" not in ov["body"] and env.errors
+
+	def test_refusal_has_no_restricted_content(self):
+		env = self.use(_fx_env)
+		_r, ov = click(env, aad=AAD2)
+		text = ov["body"]
+		for word in ("job-1", "AP-1", "run", "req@x.com", "ada@x.com"):
+			assert word not in text.replace("not permitted", "")
+
+	def test_unauthorised_approver_cannot_probe_state(self):
+		env = self.use(_fx_env)
+		env.sessions["tas-1"]["state"] = "Decided"
+		_r, ov = click(env, aad=AAD2)
+		# a wrong user still learns only that the approval is decided, never who decided or what it was
+		assert "ada@x.com" not in ov["body"] and "AP-1" not in ov["body"]
+
+	def test_double_click_reentrant_exactly_one_decision(self):
+		env = self.use(_fx_env)
+		env.can_decide["eve@x.com"] = True
+		inner = {}
+
+		def slow_approve(name, comment=None):
+			env.calls.append(("approve", name, env.user))
+			_r, inner["ov"] = click(env, aad=AAD2)  # second click arrives mid-decision
+			env.approvals[name].status = "Approved"
+
+		sys.modules["huf.huf.doctype.agent_execution_approval.agent_execution_approval"].approve_execution = slow_approve
+		click(env)
+		assert len([c for c in env.calls if c[0] == "approve"]) == 1
+		assert env.ta.MSG_DECIDED in json.dumps(body(inner["ov"]))
+		assert env.sessions["tas-1"]["decided_by"] == "ada@x.com"
+
+	def test_two_consumers_threads_one_winner(self):
+		env = self.use(_fx_env)
+		results = []
+		barrier = threading.Barrier(8)
+
+		def consumer(i):
+			barrier.wait()
+			results.append(env.ta.consume_session("tas-1", f"u{i}"))
+
+		threads = [threading.Thread(target=consumer, args=(i,)) for i in range(8)]
+		[t.start() for t in threads]
+		[t.join() for t in threads]
+		assert results.count("ok") == 1 and results.count("decided") == 7
+
+	def test_consume_expired_marks_expired(self):
+		env = self.use(_fx_env)
+		env.sessions["tas-1"]["expires_at"] = NOW
+		assert env.ta.consume_session("tas-1", "u") == "expired"
+		assert env.sessions["tas-1"]["state"] == "Expired"
+
+	def test_consume_unknown(self):
+		env = self.use(_fx_env)
+		assert env.ta.consume_session("zzz", "u") == "unknown"
+
+	def test_release_only_for_same_actor(self):
+		env = self.use(_fx_env)
+		env.ta.consume_session("tas-1", "ada@x.com")
+		assert env.ta.release_session("tas-1", "eve@x.com") is False
+		assert env.ta.release_session("tas-1", "ada@x.com") is True
+		assert env.sessions["tas-1"]["state"] == "Open"
+
+	def test_release_refused_after_decision_recorded(self):
+		env = self.use(_fx_env)
+		env.ta.consume_session("tas-1", "ada@x.com")
+		env.sessions["tas-1"]["decision"] = "approve"
+		assert env.ta.release_session("tas-1", "ada@x.com") is False
+
+	def test_create_approval_card_enqueues_card_to_personal_chat(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		setup_notify(env, monkeypatch)
+		assert env.ta.create_approval_card(env.approvals["AP-1"], "ada@x.com") == 1
+		gw, snap, kind, payload, key = env.enq[0]
+		assert (gw, kind) == ("gw1", "card") and snap["conversation_id"] == CONV and snap["tenant_id"] == TENANT
+		card = payload["activity"]["attachments"][0]["content"]
+		sid = card["actions"][0]["data"]["session"]
+		assert env.sessions[sid]["intended_user"] == "ada@x.com" and env.sessions[sid]["tenant_id"] == TENANT
+		assert json.loads(env.sessions[sid]["payload"]) == {"kind": env.ta.KIND_EXECUTION, "name": "AP-1"}
+		assert payload["activity"]["text"]
+
+	def test_create_approval_card_by_name(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		setup_notify(env, monkeypatch)
+		assert env.ta.create_approval_card("AP-1", "ada@x.com") == 1
+
+	def test_no_reference_means_no_card(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		setup_notify(env, monkeypatch, with_ref=False)
+		assert env.ta.create_approval_card(env.approvals["AP-1"], "ada@x.com") == 0 and env.enq == []
+
+	def test_unlinked_approver_skipped(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		setup_notify(env, monkeypatch)
+		assert env.ta.create_approval_card(env.approvals["AP-1"], "zed@x.com") == 0
+
+	def test_skip_users(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		setup_notify(env, monkeypatch)
+		assert env.ta.create_approval_card(env.approvals["AP-1"], "Administrator") == 0
+
+	def test_notify_deduped_per_approval_and_user(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		setup_notify(env, monkeypatch)
+		env.ta.create_approval_card(env.approvals["AP-1"], "ada@x.com")
+		assert env.ta.create_approval_card(env.approvals["AP-1"], "ada@x.com") == 0
+		assert len(env.enq) == 1
+
+	def test_outbox_payload_has_no_secrets(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		setup_notify(env, monkeypatch)
+		env.ta.create_approval_card(env.approvals["AP-1"], "ada@x.com")
+		text = json.dumps(env.enq[0][3]).lower()
+		for word in ("password", "secret", "bearer", "token", "api_key", "ada@x.com", "req@x.com"):
+			assert word not in text
+
+	def test_notify_approvers_enumerates_users_and_role_excluding_requester(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		setup_notify(env, monkeypatch)
+		doc = env.approvals["AP-1"]
+		doc.approver_users = [SimpleNamespace(user="ada@x.com"), SimpleNamespace(user="req@x.com")]
+		doc.approver_role = "Approver"
+		env.all_rows[("Has Role", "parent")] = ["ada@x.com", "bob@x.com"]
+		env.all_rows[("User", "name")] = ["ada@x.com", "bob@x.com"]
+		assert env.ta._execution_approvers(doc) == ["ada@x.com", "bob@x.com"]
+		assert env.ta.notify_approvers(doc) == 1
+
+	def test_notify_skips_non_pending(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		setup_notify(env, monkeypatch)
+		env.approvals["AP-1"].status = "Approved"
+		assert env.ta.notify_approvers(env.approvals["AP-1"]) == 0
+
+	def test_on_approval_inserted_enqueues_after_commit(self):
+		env = self.use(_fx_env)
+		env.ta.on_approval_inserted(SimpleNamespace(name="AP-1"))
+		args, kw = env.enqueued[0]
+		assert args[0].endswith("teams.actions.notify_approvers_job")
+		assert kw["approval_name"] == "AP-1" and kw["enqueue_after_commit"] is True
+
+	def test_on_approval_inserted_never_raises(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		monkeypatch.setattr(env.ta.frappe, "enqueue", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
+		env.ta.on_approval_inserted(SimpleNamespace(name="AP-1"))
+		assert env.errors
+
+	def test_notify_job_never_raises(self):
+		env = self.use(_fx_env)
+		env.ta.notify_approvers_job("missing")  # KeyError inside the fake get_doc is swallowed
+		assert env.errors
+
+	def test_record_card_activity(self):
+		env = self.use(_fx_env)
+		env.ta.record_card_activity("tas-1", "act-9")
+		assert env.sessions["tas-1"]["card_activity_id"] == "act-9"
+
+	def test_doctype_json_shape(self):
+		p = (_REPO / "huf/huf/doctype/teams_action_session/teams_action_session.json")
+		d = json.loads(p.read_text())
+		assert d["name"] == "Teams Action Session"
+		assert [x["role"] for x in d["permissions"]] == ["System Manager"]
+		fields = {f["fieldname"]: f for f in d["fields"]}
+		for name in ("gateway", "kind", "intended_user", "tenant_id", "conversation_id", "card_activity_id",
+			"payload", "state", "decided_by", "decision", "expires_at"):
+			assert name in fields
+		assert fields["state"]["options"].split("\n") == ["Open", "Decided", "Expired"]
+		py_compile.compile(str(_REPO / "huf/huf/doctype/teams_action_session/teams_action_session.py"), doraise=True)
+
+	def test_hooks_py_doc_events_is_list_with_both_handlers(self):
+		src = (_REPO / "huf/hooks.py").read_text()
+		py_compile.compile(str(_REPO / "huf/hooks.py"), doraise=True)
+		tree = ast.parse(src)
+		value = None
+		for node in ast.walk(tree):
+			if isinstance(node, ast.Assign) and any(getattr(t, "id", "") == "doc_events" for t in node.targets):
+				value = ast.literal_eval(node.value)
+		entry = value["Agent Execution Approval"]["after_insert"]
+		assert isinstance(entry, list)
+		assert "huf.ai.gateways.approvals.on_approval_inserted" in entry
+		assert "huf.ai.gateways.teams.actions.on_approval_inserted" in entry
+
+	def test_teams_actions_has_no_slack_imports(self):
+		src = (_REPO / "huf/ai/gateways/teams/actions.py").read_text()
+		assert "slack" not in src.lower().replace("slack's", "")
+
+	def test_modules_compile(self):
+		for f in ("teams/actions.py", "teams/messaging/cards.py"):
+			py_compile.compile(str(_REPO / f"huf/ai/gateways/{f}"), doraise=True)
+
+	def test_webhook_override_returned_as_response(self):
+		wh = self.use(_fx_wh)
+		override = {"status": 200, "body": json.dumps({"statusCode": 200}), "content_type": "application/json"}
+		wh.hook = lambda: setattr(wh.local, "gateway_response_override", override)
+		out = wh.gw.handle_gateway_webhook()
+		assert isinstance(out, FakeResponse) and out.status == 200 and out.mimetype == "application/json"
+		assert json.loads(out.body) == {"statusCode": 200}
+		assert wh.local.gateway_response_override is None
+
+	def test_webhook_override_dict_body_serialised(self):
+		wh = self.use(_fx_wh)
+		wh.hook = lambda: setattr(wh.local, "gateway_response_override",
+			{"status": 201, "body": {"a": 1}, "content_type": "application/json"})
+		out = wh.gw.handle_gateway_webhook()
+		assert out.status == 201 and json.loads(out.body) == {"a": 1}
+
+	def test_webhook_without_override_unchanged(self):
+		wh = self.use(_fx_wh)
+		assert wh.gw.handle_gateway_webhook() == {"success": True, "filtered": True}
+
+	def test_webhook_stale_override_cleared_before_ingest(self):
+		wh = self.use(_fx_wh)
+		wh.local.gateway_response_override = {"status": 200, "body": "stale", "content_type": "text/plain"}
+		assert wh.gw.handle_gateway_webhook() == {"success": True, "filtered": True}
+
+	def test_webhook_malformed_override_ignored(self):
+		wh = self.use(_fx_wh)
+		wh.hook = lambda: setattr(wh.local, "gateway_response_override", {"status": 200, "body": 42})
+		assert wh.gw.handle_gateway_webhook() == {"success": True, "filtered": True}
+
+	def test_webhook_non_dict_override_ignored(self):
+		wh = self.use(_fx_wh)
+		wh.hook = lambda: setattr(wh.local, "gateway_response_override", "x")
+		assert wh.gw.handle_gateway_webhook() == {"success": True, "filtered": True}
+
+	def test_webhook_override_not_honoured_when_verification_fails(self):
+		wh = self.use(_fx_wh)
+		wh.verified = False
+		wh.local.gateway_response_override = {"status": 200, "body": "x", "content_type": "text/plain"}
+		out = wh.gw.handle_gateway_webhook()
+		assert out == {"success": False, "error": "Provider verification failed"}
+		assert wh.local.response.http_status_code == 401 and wh.calls == []
+
+	def test_end_to_end_handler_sets_override_through_webhook(self):
+		wh = self.use(_fx_wh)
+		env = self.use(_fx_env)
+		def run_handler():
+			env.local = wh.local
+			env.ta.frappe.local = wh.local
+			env.ta.pre_ingest_card_action(GW, {"raw_payload": activity()})
+
+		wh.hook = run_handler
+		out = wh.gw.handle_gateway_webhook()
+		b = json.loads(out.body)
+		assert b["statusCode"] == 200 and b["type"] == cards.CARD_CONTENT_TYPE
+
+	def test_card_action_foreign_tenant_changes_nothing(self):
+		env = self.use(_fx_env)
+		foreign = "00000000-0000-0000-0000-00000000ffff"
+		env.links[(foreign, AAD)] = "ada@x.com"  # even a (hypothetical) link must not help
+		res, ov = click(env, activity(tenant=foreign))
+		assert res is False
+		assert env.calls == [] and env.sessions["tas-1"]["state"] == "Open"
+		assert env.approvals["AP-1"].status == "Pending"
+
+	def test_real_tenant_ok_fails_closed(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		ta = env.ta
+		monkeypatch.undo()  # drop the harness stub for _tenant_ok
+		teams_tenant = importlib.import_module("huf.ai.gateways.teams.tenant")
+		monkeypatch.setattr(teams_tenant, "is_tenant_allowed", lambda gw, t: t == TENANT)
+		assert ta._tenant_ok(GW, TENANT) is True
+		assert ta._tenant_ok(GW, "other") is False
+		assert ta._tenant_ok(GW, "") is False
+
+		def boom(gw, t):
+			raise RuntimeError("settings down")
+
+		monkeypatch.setattr(teams_tenant, "is_tenant_allowed", boom)
+		assert ta._tenant_ok(GW, TENANT) is False
+
+	def test_duplicate_click_decided_session_returns_decided_card(self):
+		env = self.use(_fx_env)
+		wh = self.use(_fx_wh)
+		monkeypatch = self.monkeypatch
+		env.sessions["tas-1"]["state"] = "Decided"
+		_dup_setup(env, wh, monkeypatch, activity())
+		out = wh.gw.handle_gateway_webhook()
+		assert isinstance(out, FakeResponse) and out.status == 200
+		b = json.loads(out.body)
+		assert b["statusCode"] == 200
+		assert MSG_in(b, env.ta.MSG_DECIDED)
+		assert env.calls == []  # nothing decided by a duplicate
+
+	def test_duplicate_click_open_session_is_not_decided_and_gets_message(self):
+		env = self.use(_fx_env)
+		wh = self.use(_fx_wh)
+		monkeypatch = self.monkeypatch
+		_dup_setup(env, wh, monkeypatch, activity())
+		out = wh.gw.handle_gateway_webhook()
+		assert json.loads(out.body)["statusCode"] == 200
+		assert env.calls == [] and env.sessions["tas-1"]["state"] == "Open"
+		assert MSG_in(json.loads(out.body), env.ta.MSG_DUPLICATE)
+
+	def test_duplicate_click_foreign_tenant_refused(self):
+		env = self.use(_fx_env)
+		wh = self.use(_fx_wh)
+		monkeypatch = self.monkeypatch
+		foreign = "00000000-0000-0000-0000-00000000ffff"
+		env.sessions["tas-1"]["state"] = "Decided"
+		_dup_setup(env, wh, monkeypatch, activity(tenant=foreign))
+		out = wh.gw.handle_gateway_webhook()
+		assert MSG_in(json.loads(out.body), env.ta.MSG_UNAVAILABLE)
+
+	def test_duplicate_non_card_event_keeps_generic_json(self):
+		env = self.use(_fx_env)
+		wh = self.use(_fx_wh)
+		monkeypatch = self.monkeypatch
+		_dup_setup(env, wh, monkeypatch, {"type": "message", "huf_kind": "message"})
+		assert wh.gw.handle_gateway_webhook() == {"success": True, "duplicate": True, "event_name": "EVT-0"}
+
+	def test_webhook_adapter_built_with_gateway_name(self):
+		monkeypatch = self.monkeypatch
+		rl = ModuleType("frappe.rate_limiter")
+		rl.rate_limit = lambda **kw: (lambda fn: fn)
+		monkeypatch.setitem(sys.modules, "frappe.rate_limiter", rl)
+		monkeypatch.delitem(sys.modules, "huf.ai.gateway_webhook", raising=False)
+		gw = importlib.import_module("huf.ai.gateway_webhook")
+		monkeypatch.delitem(sys.modules, "huf.ai.gateway_webhook", raising=False)
+		built = []
+
+		class WithName:
+			def __init__(self, credentials, *, gateway_name=None):
+				built.append(("with", credentials, gateway_name))
+
+		class Plain:
+			def __init__(self, credentials):
+				built.append(("plain", credentials))
+
+		monkeypatch.setattr(gw, "_gateway_credentials", lambda g: {"k": "v"})
+		g = SimpleNamespace(name="gw-7", provider="X")
+		monkeypatch.setattr(gw, "_adapter_class_for_provider", lambda p: WithName)
+		gw.get_gateway_adapter(g)
+		monkeypatch.setattr(gw, "_adapter_class_for_provider", lambda p: Plain)
+		gw.get_gateway_adapter(g)
+		assert built == [("with", {"k": "v"}, "gw-7"), ("plain", {"k": "v"})]

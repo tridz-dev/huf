@@ -96,6 +96,7 @@ function answer(url: string, req: any): any {
   if (meth.includes('get_logged_user')) return m('Administrator');
   if (meth.includes('huf.permissions.get_me')) return m({ user: 'Administrator', full_name: 'Administrator', huf_role: 'Huf Admin', capabilities: ['agent.use','agent.view_all','flows.use','chat.use','users.manage','roles.manage','system.providers.manage','system.integrations.manage','system.mcp.manage','data.tables.manage','data.records.view_own','data.records.view_all'] });
   if (meth.includes('get_count')) return m(3);
+  if (meth.includes('huf.ai.channels.api') && short === 'list_conversations') return m({ items: [], has_more: false });
   if (meth.includes('whatsapp.management') || meth.includes('gateway_service')) {
     const ms = (x: any) => m(x && typeof x === 'object' && !Array.isArray(x) ? { success: true, ...x } : x);
     switch (short) {
@@ -158,29 +159,30 @@ const click = async (page: Page, sel: string, opts: any = {}) => {
 };
 export type GeometryRoute = { id: string; path: string; act?: (p: Page) => Promise<void> };
 const S: Array<[string, string, ((p: Page) => Promise<void>)?]> = [
-  ['wa-overview', 'whatsapp?gateway=GW-1'],
-  ['wa-overview-blocked', 'whatsapp?gateway=GW-2'],
-  ['wa-messages', 'whatsapp?tab=messages&gateway=GW-1'],
-  ['wa-message-detail', 'whatsapp?tab=messages&gateway=GW-1', async (p: Page) => { await click(p, 'table tbody tr >> nth=2'); }],
-  ['wa-messages-send', 'whatsapp?tab=messages&gateway=GW-1&send=1'],
-  ['wa-templates', 'whatsapp?tab=templates&gateway=GW-1'],
-  ['wa-template-rejected', 'whatsapp?tab=templates&gateway=GW-1', async (p: Page) => { await click(p, 'text=payment_reminder'); }],
-  ['wa-template-send-dialog', 'whatsapp?tab=templates&gateway=GW-1', async (p: Page) => { await click(p, 'text=order_update'); await p.waitForTimeout(800); await click(p, 'button:has-text("Send"):not([disabled])'); }],
-  ['wa-drafts', 'whatsapp?tab=templates&gateway=GW-1', async (p: Page) => { await click(p, '[role=tab]:has-text("Drafts")'); }],
-  ['wa-draft-detail', 'whatsapp?tab=templates&gateway=GW-1', async (p: Page) => { await click(p, '[role=tab]:has-text("Drafts")'); await click(p, 'button:has-text("Review")'); }],
-  ['wa-wizard-type', 'whatsapp?tab=templates&gateway=GW-1&new=1'],
-  ['wa-wizard-write', 'whatsapp?tab=templates&gateway=GW-1&new=1', async (p: Page) => { await click(p, 'button:has-text("Next")'); }],
-  ['wa-wizard-write-filled', 'whatsapp?tab=templates&gateway=GW-1&new=1', async (p: Page) => {
+  ['wa-overview', 'channels/whatsapp/n/GW-1/home'],
+  ['wa-overview-blocked', 'channels/whatsapp/n/GW-2/home'],
+  // Activity opens on Conversations; the WhatsApp message log (and its detail sheet) sits behind the Messages toggle.
+  ['wa-messages', 'channels/whatsapp/n/GW-1/activity', async (p: Page) => { await click(p, '[role=group][aria-label="Activity view"] button:has-text("Messages")'); }],
+  ['wa-message-detail', 'channels/whatsapp/n/GW-1/activity', async (p: Page) => { await click(p, '[role=group][aria-label="Activity view"] button:has-text("Messages")'); await click(p, 'table tbody tr >> nth=2'); }],
+  ['wa-messages-send', 'channels/whatsapp/n/GW-1/activity?send=1', async (p: Page) => { await click(p, '[role=group][aria-label="Activity view"] button:has-text("Messages")'); }],
+  ['wa-templates', 'channels/whatsapp/n/GW-1/templates'],
+  ['wa-template-rejected', 'channels/whatsapp/n/GW-1/templates', async (p: Page) => { await click(p, 'text=payment_reminder'); }],
+  ['wa-template-send-dialog', 'channels/whatsapp/n/GW-1/templates', async (p: Page) => { await click(p, 'text=order_update'); await p.waitForTimeout(800); await click(p, 'button:has-text("Send"):not([disabled])'); }],
+  ['wa-drafts', 'channels/whatsapp/n/GW-1/templates', async (p: Page) => { await click(p, '[role=tab]:has-text("Drafts")'); }],
+  ['wa-draft-detail', 'channels/whatsapp/n/GW-1/templates', async (p: Page) => { await click(p, '[role=tab]:has-text("Drafts")'); await click(p, 'button:has-text("Review")'); }],
+  ['wa-wizard-type', 'channels/whatsapp/n/GW-1/templates?new=1'],
+  ['wa-wizard-write', 'channels/whatsapp/n/GW-1/templates?new=1', async (p: Page) => { await click(p, 'button:has-text("Next")'); }],
+  ['wa-wizard-write-filled', 'channels/whatsapp/n/GW-1/templates?new=1', async (p: Page) => {
     await click(p, 'button:has-text("Next")');
     const ins = p.locator('main input:visible'); const n = await ins.count();
     for (let i = 0; i < Math.min(n, 3); i++) { try { await ins.nth(i).fill(i ? 'Order {{1}}' : 'order_shipped'); } catch {} }
     const ta = p.locator('main textarea:visible'); if (await ta.count()) await ta.first().fill('Hi {{1}}, order {{2}} shipped.');
     await p.waitForTimeout(400);
   }],
-  ['wa-wizard-review', 'whatsapp?tab=templates&gateway=GW-1&edit=TPL-1', async (p: Page) => { await click(p, 'button:has-text("Next")'); }],
-  ['wa-wizard-edit', 'whatsapp?tab=templates&gateway=GW-1&edit=TPL-1'],
-  ['wa-access', 'whatsapp?tab=access&gateway=GW-1'],
-  ['wa-settings', 'whatsapp?tab=settings&gateway=GW-1'],
+  ['wa-wizard-review', 'channels/whatsapp/n/GW-1/templates?edit=TPL-1', async (p: Page) => { await click(p, 'button:has-text("Next")'); }],
+  ['wa-wizard-edit', 'channels/whatsapp/n/GW-1/templates?edit=TPL-1'],
+  ['wa-access', 'channels/whatsapp/n/GW-1/settings/access'],
+  ['wa-settings', 'channels/whatsapp/n/GW-1/settings/connection'],
   ['gw-list', 'gateways'],
   ['gw-add-setup', 'gateways', async (p: Page) => { await click(p, 'button:has-text("Add gateway")'); }],
   ['gw-pending-access', 'gateways', async (p: Page) => { await click(p, 'button:has-text("Pending access")'); }],

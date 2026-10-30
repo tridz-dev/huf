@@ -1,0 +1,59 @@
+"""Inbound pre-route hook pipeline.
+
+Hooks run once per real inbound event, before the route (agent/Solution) is chosen.
+Each hook is ``hook(context: dict) -> Decision | None``; the first Decision whose action is not
+"continue" wins. With no hooks registered the pipeline returns None and routing is unchanged.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+import frappe
+
+ACTIONS = ("continue", "reply", "route", "handoff", "drop")
+
+# Dotted paths of hook callables. Later WPs append here.
+PRE_ROUTE_HOOKS: list[str] = [
+	# Record-only hooks first: they never return a Decision, so later short-circuits cannot skip them.
+	"huf.ai.channels.widgets.ref_opt_in_hook",  # [ref:...] click-to-chat opt-in
+	"huf.ai.channels.wa_flows.flow_response_hook",  # nfm_reply form responses
+	"huf.ai.channels.handoff_hooks.handed_off_hook",  # handed-off chats skip the AI: first routing hook
+	"huf.ai.channels.automation.hours.business_hours_hook",
+	"huf.ai.channels.automation.rules.routing_rules_hook",
+]
+
+
+@dataclass
+class Decision:
+	action: str = "continue"
+	payload: dict[str, Any] = field(default_factory=dict)
+
+
+def _hook_paths() -> list[str]:
+	paths = list(PRE_ROUTE_HOOKS)
+	try:
+		for entry in frappe.get_hooks("huf_channel_pre_route") or []:
+			if entry not in paths:
+				paths.append(entry)
+	except Exception:
+		pass
+	return paths
+
+
+def run_pre_route(context: dict) -> Decision | None:
+	"""Run hooks in order; return the first non-"continue" Decision, else None."""
+	for path in _hook_paths():
+		try:
+			hook = frappe.get_attr(path)
+			decision = hook(context)
+		except Exception:
+			try:
+				frappe.log_error(title=f"huf pre-route hook failed: {path}")
+			except Exception:
+				pass  # a failing hook (or its logging) must never raise into ingest
+			continue
+		if isinstance(decision, Decision) and decision.action in ACTIONS and decision.action != "continue":
+			return decision
+	return None

@@ -107,7 +107,8 @@ const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
 const SolutionsPage = lazy(() => import('./pages/SolutionsPage'));
 const NewSolutionPage = lazy(() => import('./pages/NewSolutionPage'));
 const SolutionDetailPage = lazy(() => import('./pages/SolutionDetailPage'));
-const WhatsAppManagePage = lazy(() => import('./pages/WhatsAppManagePage'));
+const ChannelsRoutes = lazy(() => import('./components/channels/routes'));
+import { WhatsAppRedirect } from './components/channels/WhatsAppRedirect';
 const TelegramManagePage = lazy(() => import('./pages/TelegramManagePage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 const GeneralSettingsPage = lazy(() => import('./pages/GeneralSettingsPage'));
@@ -550,6 +551,16 @@ function AppShell() {
             }
           />
           <Route
+            path="/channels/*"
+            element={
+              <ProtectedRoute requiredCapability="system.integrations.manage">
+                <Suspense fallback={<PageLoader />}>
+                  <ChannelsRoutes />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/ui/chat/:chatId"
             element={
               <ProtectedRoute>
@@ -652,7 +663,6 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          <Route path="/channels/*" element={<Navigate to="/gateways" replace />} />
           <Route
             path="/settings"
             element={
@@ -835,18 +845,7 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/whatsapp"
-            element={
-              <ProtectedRoute requiredCapability="system.integrations.manage">
-                <UnifiedLayout>
-                  <Suspense fallback={<PageLoader />}>
-                    <WhatsAppManagePage />
-                  </Suspense>
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/whatsapp/*" element={<WhatsAppRedirect />} />
           <Route
             path="/telegram"
             element={

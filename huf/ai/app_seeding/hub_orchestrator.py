@@ -76,6 +76,10 @@ BUILDER_TOOL_NAMES = (
     "render_app_component",
     "resolve_recent_resource",
     "erpnext_list_reports",
+    "test_gateway_health",
+    "list_pairing_requests",
+    "approve_pairing_code",
+    "setup_gateway",
 )
 
 
@@ -236,7 +240,8 @@ def create_hub_orchestrator_agent() -> bool:
     return True
 
 
-INSTRUCTIONS_MARKER = "0. TRIAGE"
+# Bumped with the CHANNEL SETUP playbook so already-installed sites pick up the new instructions.
+INSTRUCTIONS_MARKER = "CHANNEL SETUP v2"
 
 
 def ensure_hub_orchestrator_instructions() -> bool:

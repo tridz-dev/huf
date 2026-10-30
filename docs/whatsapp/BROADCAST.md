@@ -2,7 +2,7 @@
 
 A WhatsApp Broadcast sends one approved template to a bounded list of recipients through the Meta WhatsApp Cloud API. The list is typed or pasted in, or built from saved, consented lists called audiences (section 15). It is an automation tool. It is not a campaign platform, a CRM, or an inbox: there is no scheduling, no A/B testing, and replies are not handled by the broadcast (they arrive through the normal inbound flow).
 
-**Principle.** Huf follows Meta's rules and nothing else is hard-wired. Every other limit Huf applies is a named, visible setting with a default, a range and a stated reason: Settings tab of the WhatsApp page, **Broadcast limits** (API: `get_broadcast_limits` / `update_broadcast_limits`, section 14). The full table is in [BROADCAST_LIMITS.md](BROADCAST_LIMITS.md), which is generated from the registry in `broadcast/policy.py`. Broadcasts do not use the agent recipient allowlist (section 2).
+**Principle.** Huf follows Meta's rules and nothing else is hard-wired. Every other limit Huf applies is a named, visible setting with a default, a range and a stated reason: Channels, a number's Broadcasts, Limits tab (`/channels/whatsapp/n/:gw/broadcasts/limits`), **Broadcast limits** (API: `get_broadcast_limits` / `update_broadcast_limits`, section 14). The full table is in [BROADCAST_LIMITS.md](BROADCAST_LIMITS.md), which is generated from the registry in `broadcast/policy.py`. Broadcasts do not use the agent recipient allowlist (section 2).
 
 This document describes the code as it is. Statements that depend on Meta behaviour that was not confirmed are listed in [section 11](#11-unverified-meta-facts). The live check plan is in [broadcast-live-verification.md](broadcast-live-verification.md). The operator summary is in the [gateway runbook](../gateways/whatsapp-runbook.md#10-broadcasts).
 
@@ -335,7 +335,7 @@ The code works without these, but they should be confirmed against Meta before r
 
 **Rule.** If Meta imposes it, Huf shows it read-only with the reason. If Huf adds it, it is a setting (or a safety, or a documented internal constant) with a default, a range and a note. Effective value = the broadcast's own value (only for `max_recipients_default`, via the broadcast's `max_recipients`, and `default_mps`, via its `mps`), then **WhatsApp Broadcast Settings**, then the default. A blank setting uses the default. The registry is `broadcast/policy.py`; [BROADCAST_LIMITS.md](BROADCAST_LIMITS.md) is generated from it (a test fails when the two drift) and lists every key, default, range and note. That table is the reference for numbers; this document does not repeat them.
 
-Where to see and change them: the **Settings** tab of the WhatsApp page, section **Broadcast limits** (one row per limit: effective value, default, who sets it, note, an input and reset for editable rows). Who can change them: System Manager or Huf Admin. The wizard's Preview step lists "Limits applied to this broadcast".
+Where to see and change them: the Channels, a number's Broadcasts, Limits tab (`/channels/whatsapp/n/:gw/broadcasts/limits`), **Broadcast limits** (one row per limit: effective value, default, who sets it, note, an input and reset for editable rows). Who can change them: System Manager or Huf Admin. The wizard's Preview step lists "Limits applied to this broadcast".
 
 ### Kinds and groups
 
@@ -487,7 +487,7 @@ Callers with read but not write permission on the gateway see phone numbers as t
 
 ### Wizard flow
 
-The **Audiences** tab of the WhatsApp page lists audiences, creates them with the consent form, imports with column mapping (invalid and skipped rows are listed with reasons), and shows members with tag and suppressed filters.
+The Channels, a number's Broadcasts, Audiences tab (`/channels/whatsapp/n/:gw/broadcasts/audiences`) lists audiences, creates them with the consent form, imports with column mapping (invalid and skipped rows are listed with reasons), and shows members with tag and suppressed filters.
 
 In the broadcast wizard the Recipients step offers two sources that can be combined: **Saved lists** (pick one or more audiences, each with an optional tag filter and an include/exclude toggle, with live counts for total, duplicates, excluded, opted out and final) and **Just for this broadcast** (paste or upload a CSV). Before the draft exists the counts come from `preview_audience_selection_for_gateway` using the chosen template's category; a list whose consent purposes do not cover the template category is shown as blocked and the step cannot continue. Adding recipients creates the draft, adds any pasted rows, then applies the lists with `set_broadcast_audiences`. If every list row comes from audiences with a recorded attester, the Consent step shows "Consent covered by" the list titles and skips the checkbox; pasted rows still need the broadcast's own attestation. Once recipients are added the step is locked; to change the lists, discard the draft and start again.
 

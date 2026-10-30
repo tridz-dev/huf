@@ -179,6 +179,12 @@ class TestSlackEventsHandler(unittest.TestCase):
 			p.start()
 			self.addCleanup(p.stop)
 
+		# When another module already imported the real `frappe.rate_limiter` (so the identity
+		# stub above was not installed), the real decorator needs an identity to bucket on.
+		_prev_ip = getattr(frappe.local, "request_ip", None)
+		frappe.local.request_ip = "127.0.0.1"
+		self.addCleanup(setattr, frappe.local, "request_ip", _prev_ip)
+
 	def _call(self, payload: dict | bytes, headers: dict | None = None, gateway_name=GATEWAY, sign_it=True):
 		body = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
 		if headers is None:
@@ -338,8 +344,9 @@ class TestSlackEventsHandler(unittest.TestCase):
 	def test_url_verification_returns_challenge_without_ingesting(self):
 		payload = {"type": "url_verification", "challenge": "abc123xyz"}
 		response = self._call(payload)
-		self.assertEqual(json.loads(response.body), {"challenge": "abc123xyz"})
-		self.assertEqual(response.status, 200)
+		body = response.body if hasattr(response, "body") else response.get_data(as_text=True)  # stub vs real werkzeug
+		self.assertEqual(json.loads(body), {"challenge": "abc123xyz"})
+		self.assertEqual(response.status_code if hasattr(response, "status_code") else response.status, 200)
 		self.ingest.assert_not_called()
 
 	# -- event dispatch --------------------------------------------------------

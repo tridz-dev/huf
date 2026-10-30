@@ -1,0 +1,23 @@
+{
+ "actions": [],
+ "creation": "2026-10-29 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["currency", "rows"],
+ "fields": [
+  {"fieldname": "currency", "fieldtype": "Data", "label": "Currency", "description": "Currency of the rates below, as published in Meta's rate card for your billing currency."},
+  {"fieldname": "rows", "fieldtype": "JSON", "label": "Rates", "description": "List of {market, category, rate, effective_from}. Fill only from Meta's official rate card."}
+ ],
+ "issingle": 1,
+ "modified": "2026-10-29 00:00:00.000000",
+ "module": "Huf",
+ "name": "Channel Rate Card",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "delete": 1, "read": 1, "role": "System Manager", "write": 1},
+  {"read": 1, "role": "Huf Admin", "write": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

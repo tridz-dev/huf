@@ -43,6 +43,7 @@ _PHONE_FIELDS = "display_phone_number,verified_name,quality_rating,messaging_lim
 
 MSG_EXPIRED = "The access token has expired or was revoked."
 MSG_PERMISSION = "The token can't access this phone number or business account."
+MSG_APP_SECRET = "The app secret doesn't match this token's app. Check the App Secret in Meta app settings (Settings > Basic)."
 MSG_TIMEOUT = "Meta didn't answer in time."
 MSG_GENERIC = "Meta returned an unexpected error."
 
@@ -94,6 +95,26 @@ def _error_of(status: int, body: dict) -> dict | None:
 	if status >= 400 or status in (301, 302, 303, 307, 308):
 		return {"code": status, "message": ""}
 	return None
+
+
+def _is_app_secret_mismatch(err: dict | None) -> bool:
+	"""Graph code 100 whose text names appsecret_proof: the saved App Secret is wrong for this token."""
+	if not isinstance(err, dict):
+		return False
+	return str(err.get("code")) == "100" and "appsecret_proof" in str(err.get("message") or "").lower()
+
+
+def _is_bad_app_signature(err: dict | None) -> bool:
+	"""Code 190 'signature' from debug_token: the App Secret (app token) is wrong, the input token may be fine."""
+	if not isinstance(err, dict):
+		return False
+	return str(err.get("code")) == "190" and "signature" in str(err.get("message") or "").lower()
+
+
+def _message_for_error(err: dict | None) -> str:
+	if _is_app_secret_mismatch(err):
+		return MSG_APP_SECRET
+	return _message_for((err or {}).get("code"))
 
 
 def _message_for(code: Any) -> str:
@@ -183,7 +204,10 @@ def run_check(creds: dict[str, Any], http_get: Callable[..., Any] = default_http
 			if not valid:
 				code = (err or {}).get("code")
 				out["error_code"] = code
-				out["message"] = _message_for(code) if err else MSG_EXPIRED
+				if not data and _is_bad_app_signature(err):
+					out["message"] = MSG_APP_SECRET
+				else:
+					out["message"] = _message_for_error(err) if err else MSG_EXPIRED
 				return out
 			if out["missing_scopes"]:
 				out["message"] = "The token is missing: " + ", ".join(out["missing_scopes"]) + "."
@@ -198,10 +222,10 @@ def run_check(creds: dict[str, Any], http_get: Callable[..., Any] = default_http
 				if not use_debug:
 					out["valid"] = False
 					out["error_code"] = err.get("code")
-					out["message"] = _message_for(err.get("code"))
+					out["message"] = _message_for_error(err)
 					return out
 				out["error_code"] = err.get("code")
-				out["message"] = _message_for(err.get("code"))
+				out["message"] = _message_for_error(err)
 			else:
 				out["phone"] = {
 					"display": body.get("display_phone_number"),
@@ -295,10 +319,10 @@ def check_token_for_gateway(
 		return {"success": False, "error_code": "gateway_not_found", "message": "Choose a WhatsApp gateway."}
 	cache = frappe.cache()
 	if not force:
-		cached = cache.get_value(_result_key(gateway_name))
+		cached = cache.get_value(_result_key(gateway_name), expires=True)
 		if cached:
 			return dict(cached, cached=True)
-	if cache.get_value(_stamp_key(gateway_name)):
+	if cache.get_value(_stamp_key(gateway_name), expires=True):
 		return {
 			"success": False,
 			"error_code": "rate_limited",

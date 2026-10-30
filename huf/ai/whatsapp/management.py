@@ -34,6 +34,7 @@ from huf.ai.gateway_adapters import whatsapp_calls as wcalls
 from huf.ai.gateway_adapters import whatsapp_messages as wm
 from huf.ai.gateway_adapters import whatsapp_templates as wt
 from huf.ai.gateway_adapters.whatsapp_bridge import BridgeError
+from huf.ai.whatsapp import setup_stage
 
 ADMIN_ROLES = ("System Manager", "Huf Admin")
 WHATSAPP_PROVIDER = "WhatsApp"
@@ -312,6 +313,7 @@ def _gateway_status(gateway: dict[str, Any], connector_available: bool | None = 
 			gateway, presence, connector_available=connector_available, mismatch=mismatch, app_id=app_id
 		)
 	)
+	payload["setup_stage"] = setup_stage.for_payload(payload)
 	return payload
 
 
@@ -322,7 +324,7 @@ def get_setup_status(gateway_name: str | None = None) -> dict[str, Any]:
 
 	With ``gateway_name``: ``{success, connector_available, gateway, accounts}`` where ``accounts``
 	holds only that gateway's own linked account. Without: ``{success, connector_available,
-	gateways: [{name, health, enabled}]}`` and nothing else.
+	gateways: [{name, health, enabled, setup_stage}]}`` and nothing else.
 	"""
 	_require_admin()
 	available = bridge.is_available()
@@ -336,7 +338,7 @@ def get_setup_status(gateway_name: str | None = None) -> dict[str, Any]:
 			row = dict(row)
 			row["whatsapp_account"] = _gateway_whatsapp_account(row["name"])
 			status = _gateway_status(row, available)
-			summary.append({"name": status["name"], "health": status["health"], "enabled": status["enabled"]})
+			summary.append({k: status[k] for k in ("name", "health", "enabled", "setup_stage")})
 		return {"success": True, "connector_available": available, "gateways": summary}
 
 	rows = frappe.get_all(
@@ -1622,7 +1624,7 @@ def list_message_log_filters(gateway_name: str | None = None) -> dict[str, Any]:
 
 
 def can_launch_whatsapp_app(user: str | None = None, app: dict | None = None, **_kwargs: Any) -> bool:
-	"""Launcher gate for the WhatsApp tile: an integrations admin AND at least one enabled WhatsApp gateway."""
+	"""Launcher gate for the WhatsApp tile: any integrations admin, even before the first gateway exists (the app hosts setup)."""
 	try:
 		user = user or frappe.session.user
 		if not user or user == "Guest":
@@ -1633,9 +1635,7 @@ def can_launch_whatsapp_app(user: str | None = None, app: dict | None = None, **
 			from huf.permissions import has_capability
 
 			allowed = bool(has_capability(user, "system.integrations.manage"))
-		if not allowed:
-			return False
-		return bool(frappe.db.exists("Gateway", {"provider": WHATSAPP_PROVIDER, "is_enabled": 1}))
+		return allowed
 	except Exception:
 		return False
 

@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field } from '@/components/ui/field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { errorText, listTemplates, type WhatsAppTemplate } from '@/services/whatsappApi';
-import { addBroadcastRecipients, attestBroadcastConsent, createBroadcast, deleteBroadcast, getBroadcastTemplateParams, previewBroadcast, startBroadcast, type AddRecipientsResult, type BroadcastPreview, type BroadcastRecipientInput, type BroadcastTemplateParams, type BroadcastTemplateVariable, toIssue, type BroadcastSendVia, adaptAddResult } from './broadcastApi';
+import { addBroadcastRecipients, attestBroadcastConsent, createBroadcast, deleteBroadcast, getBroadcastTemplateParams, previewBroadcast, startBroadcast, scheduleBroadcast, type AddRecipientsResult, type BroadcastPreview, type BroadcastRecipientInput, type BroadcastTemplateParams, type BroadcastTemplateVariable, toIssue, type BroadcastSendVia, adaptAddResult } from './broadcastApi';
+import { toSiteDatetime } from './broadcastModel';
 import type { AudienceSelectionItem, SelectionPreview } from '../audiences/audiencesApi';
 import { RecipientsStep } from './recipients/RecipientsStep';
 import { setBroadcastAudiences, type ConsentCover } from './recipients/audienceSelectionApi';
@@ -84,6 +87,8 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   const [source, setSource] = useState('');
   const [preview, setPreview] = useState<BroadcastPreview | null>(null);
   const [typed, setTyped] = useState('');
+  const [scheduleMode, setScheduleMode] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState('');
   const [broadcast, setBroadcast] = useState('');
   const [reviewing, setReviewing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -204,7 +209,9 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
 
   const start = async () => {
     setBusy(true); setErr('');
-    const res = await startBroadcast(broadcast, requireTyped ? typed.trim() : String(preview?.queued ?? ''), (preview?.warnings ?? []).map((w) => toIssue(w).code));
+    const confirmCount = requireTyped ? typed.trim() : String(preview?.queued ?? '');
+    const codes = (preview?.warnings ?? []).map((w) => toIssue(w).code);
+    const res = scheduleMode ? await scheduleBroadcast(broadcast, toSiteDatetime(scheduledAt), confirmCount, codes) : await startBroadcast(broadcast, confirmCount, codes);
     if (!res.success && (res.error === 'warnings_changed' || res.error === 'recipients_changed')) {
       // The situation changed since the preview: show the new list and ask again.
       const p = await previewBroadcast(broadcast);
@@ -215,7 +222,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
     setBusy(false);
     if (!res.success) { setErr(errorText(res)); return; }
     started.current = true;
-    toast.success('Broadcast started');
+    toast.success(scheduleMode ? 'Broadcast scheduled' : 'Broadcast started');
     onStarted(broadcast);
   };
 
@@ -407,7 +414,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
             </div>
           ) : null}
           {warnings.length ? (
-            <div role="alert" className="space-y-2 rounded-md border border-amber-500 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+            <Alert variant="warning" className="space-y-2">
               <p className="font-medium">Warnings</p>
               {warnings.map((w) => (
                 <div key={w.code} className="flex items-start gap-2">
@@ -415,7 +422,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
                   <Label htmlFor={`bc-ack-${w.code}`}><span>{w.message}</span> <span className="block text-xs">I understand, continue anyway.</span></Label>
                 </div>
               ))}
-            </div>
+            </Alert>
           ) : null}
           {blocking.length ? (
             <div role="alert" className="text-destructive">
@@ -435,6 +442,26 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
               <Input id="bc-confirm" inputMode="numeric" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
             </>
           ) : <p className="text-sm">Ready to send to <strong>{expected}</strong> recipients.</p>}
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">When to send</legend>
+            <RadioGroup
+              aria-label="When to send"
+              value={scheduleMode ? 'later' : 'now'}
+              onValueChange={(v) => setScheduleMode(v === 'later')}
+              className="flex items-center gap-2"
+            >
+              <RadioGroupItem value="now" id="bc-send-now" />
+              <Label htmlFor="bc-send-now">Send now</Label>
+              <RadioGroupItem value="later" id="bc-send-later" />
+              <Label htmlFor="bc-send-later">Schedule for</Label>
+            </RadioGroup>
+            {scheduleMode ? (
+              <div className="space-y-1">
+                <Input id="bc-schedule-at" type="datetime-local" aria-label="Schedule date and time" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
+                <p className="text-xs text-steel">Time is in the site timezone. The broadcast starts within 5 minutes of this time.</p>
+              </div>
+            ) : null}
+          </fieldset>
         </div>
       )}
 
@@ -445,7 +472,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
             {busy ? 'Working...' : step === 1 && reviewing ? 'Continue' : step === 1 ? 'Add recipients' : 'Next'}
           </Button>
         ) : (
-          <Button variant="destructive" disabled={busy || blocking.length > 0 || (requireTyped && typed.trim() !== expected) || !expected} onClick={() => void start()}>Start broadcast</Button>
+          <Button variant="destructive" disabled={busy || blocking.length > 0 || (requireTyped && typed.trim() !== expected) || !expected || (scheduleMode && !scheduledAt)} onClick={() => void start()}>{scheduleMode ? 'Schedule broadcast' : 'Start broadcast'}</Button>
         )}
       </div>
     </section>

@@ -8,7 +8,7 @@ COUNTED = ("queued", "sending", "sent", "delivered", "read", "failed", "deferred
 GUARDED_FIELDS = (
 	"consent_attested", "consent_attested_by", "consent_attested_at", "consent_source",
 	"gateway", "template", "whatsapp_account",
-	"status", "started_by", "started_at", "finished_at", "pause_reason", "resumed_by", "acknowledged_warnings",
+	"status", "scheduled_at", "scheduled_by", "started_by", "started_at", "finished_at", "pause_reason", "resumed_by", "acknowledged_warnings",
 	"max_recipients", "send_via", "mps",
 	"language_code", "body_params", "header_params", "button_params", "cost_estimate",
 	*COUNTED, "total",

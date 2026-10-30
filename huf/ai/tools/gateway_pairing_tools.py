@@ -16,11 +16,60 @@ from frappe.utils import now_datetime
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 
 
+def _require_integrations_manager() -> None:
+	"""Hub gateway tools are admin-only: the session user needs ``system.integrations.manage``.
+
+	Raises ``frappe.PermissionError``. Used by tools whose pre-existing contract is to raise
+	(``list_pairing_requests``).
+	"""
+	if _integrations_denial():
+		frappe.throw(_("Managing integrations is not permitted for this user."), frappe.PermissionError)
+
+
+def _integrations_denial() -> dict[str, Any] | None:
+	"""Return a denial result when the session user lacks ``system.integrations.manage``, else None.
+
+	Tools that return result dicts (``setup_gateway``, ``approve_pairing_code``, ``test_gateway_health``)
+	return this shape so the agent gets a normal tool result. The check runs before any read or write.
+	"""
+	from huf.permissions import has_capability
+
+	if has_capability(frappe.session.user, "system.integrations.manage"):
+		return None
+	return {
+		"success": False,
+		"error": _("Managing integrations is not permitted for this user."),
+		"permission_denied": True,
+	}
+
+
+_NON_SECRET_WHITELIST = {
+	"WhatsApp": {"phone_number_id", "waba_id", "business_account_id", "app_id", "display_phone_number", "display_name"},
+}
+_GENERIC_NON_SECRET = {"chat", "chat_id", "bot_username", "username", "display_name", "workspace", "team_id", "app_id"}
+
+
+def _redact_text(text: str) -> str:
+	from huf.ai.secrets import redact
+
+	return redact(str(text))
+
+
+def _disallowed_non_secret_keys(provider: str, fields: dict) -> list[str]:
+	"""Keys that are not whitelisted for the provider or look like secrets."""
+	from huf.ai.secrets import _SECRET_KEY_RE
+
+	allowed = _NON_SECRET_WHITELIST.get(provider, _GENERIC_NON_SECRET)
+	return [str(k) for k in fields if _SECRET_KEY_RE.search(str(k)) or str(k) not in allowed]
+
+
 def setup_gateway(
 	provider: str,
 	gateway_name: str,
-	credentials: dict[str, str],
+	credentials: dict[str, str] | None = None,
 	*,
+	credentials_ref: str | None = None,
+	non_secret_fields: dict[str, str] | None = None,
 	default_target_type: str = "Agent",
 	default_agent: str | None = None,
 	default_flow: str | None = None,
@@ -43,11 +92,40 @@ def setup_gateway(
 		room_policy: "Allow list", "Open", or "Disabled"
 		room_sender_policy: "Allow list" or "Open"
 		mention_required: Whether group messages require explicit @mentioning the bot
+		credentials_ref: Stash reference from ``huf.ai.secrets.stash_secret``; resolved (and consumed) server-side
+		non_secret_fields: Non-secret credential-row values (e.g. phone_number_id) merged with the stash
 		execution_user: User account to run agent/flow under (defaults to current session user)
 
 	Returns:
 		Dict containing setup result, webhook URL, and status details.
 	"""
+	from huf.ai.secrets import in_agent_tool_call, resolve_and_consume
+
+	if denied := _integrations_denial():
+		return denied
+	if credentials and in_agent_tool_call():
+		return {
+			"success": False,
+			"error": "Plaintext credentials are not accepted from an agent. Collect them with the secret form and pass credentials_ref.",
+		}
+	if non_secret_fields:
+		if not isinstance(non_secret_fields, dict):
+			return {"success": False, "error": "non_secret_fields must be an object."}
+		if bad := _disallowed_non_secret_keys(provider, non_secret_fields):
+			return {
+				"success": False,
+				"error": f"non_secret_fields keys not allowed for {provider}: {', '.join(bad)}. Secrets must go through the secret form.",
+			}
+	if credentials_ref:
+		if credentials:
+			return {"success": False, "error": "Pass either credentials or credentials_ref, not both."}
+		try:
+			credentials = resolve_and_consume(credentials_ref, frappe.session.user)
+		except (frappe.ValidationError, frappe.PermissionError) as exc:
+			return {"success": False, "error": _redact_text(str(exc))}
+	if non_secret_fields:
+		credentials = {**(credentials or {}), **{k: str(v) for k, v in non_secret_fields.items()}}
+
 	if not provider or not gateway_name or not credentials:
 		return {"success": False, "error": "Provider, gateway_name, and credentials are required."}
 
@@ -57,12 +135,12 @@ def setup_gateway(
 	try:
 		adapter_cls = _adapter_class_for_provider(provider)
 	except Exception as exc:
-		return {"success": False, "error": f"Unsupported or uninstalled channel provider '{provider}': {exc}"}
+		return {"success": False, "error": _redact_text(f"Unsupported or uninstalled channel provider '{provider}': {exc}")}
 
 	try:
 		adapter = adapter_cls(credentials)
 	except ValueError as exc:
-		return {"success": False, "error": f"Credential validation failed for {provider}: {exc}"}
+		return {"success": False, "error": _redact_text(f"Credential validation failed for {provider}: {exc}")}
 
 	# 2. Save Integration Settings
 	#
@@ -155,9 +233,9 @@ def setup_gateway(
 			if res_data.get("ok"):
 				auto_webhook_status = "Auto-configured with Telegram API"
 			else:
-				auto_webhook_status = f"Telegram setWebhook notice: {res_data.get('description')}"
+				auto_webhook_status = _redact_text(f"Telegram setWebhook notice: {res_data.get('description')}")
 		except Exception as e:
-			auto_webhook_status = f"Webhook auto-set attempted: {e}"
+			auto_webhook_status = _redact_text(f"Webhook auto-set attempted: {e}")
 
 	return {
 		"success": True,
@@ -183,6 +261,7 @@ def list_pairing_requests(gateway_name: str | None = None) -> list[dict[str, Any
 	Returns:
 		List of pending pairing request dictionaries
 	"""
+	_require_integrations_manager()
 	from huf.ai.gateway_service import _mask_code, _require_gateway_admin
 
 	_require_gateway_admin()
@@ -245,6 +324,8 @@ def approve_pairing_code(
 	Returns:
 		Dict with approval status and sender details
 	"""
+	if denied := _integrations_denial():
+		return denied
 	if not pairing_code_or_id:
 		return {"success": False, "error": "pairing_code_or_id is required."}
 
@@ -276,6 +357,8 @@ def test_gateway_health(gateway_name: str) -> dict[str, Any]:
 	Returns:
 		Health diagnostic report
 	"""
+	if denied := _integrations_denial():
+		return denied
 	if not frappe.db.exists("Gateway", gateway_name):
 		return {"success": False, "error": f"Gateway '{gateway_name}' does not exist."}
 

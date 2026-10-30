@@ -3,13 +3,14 @@ import { goto, waitForContent, mockOfflineApis } from './helpers';
 import { callsOf, makeNumberSummary, makeSolutionSummary, mockSolutionsApi } from './helpers/solutionsMocks';
 
 /**
- * WhatsApp console (/whatsapp) against a fully mocked backend: no Frappe, no Meta.
+ * Channels app (/channels/whatsapp) against a fully mocked backend: no Frappe, no Meta.
  * Every call under huf.ai.whatsapp.management / huf.ai.gateway_service is answered here, and the
  * requests the UI makes are recorded so the specs can assert what would have been sent.
  */
 
 const MGMT = '**/api/method/huf.ai.whatsapp.management.';
 const SERVICE = '**/api/method/huf.ai.gateway_service.';
+const CHANNELS = '**/api/method/huf.ai.channels.api.';
 
 const gateway = (name: string, over: Record<string, unknown> = {}) => ({
   name,
@@ -19,6 +20,7 @@ const gateway = (name: string, over: Record<string, unknown> = {}) => ({
   account_phone_mismatch: false,
   webhook_url: `https://example.test/hook?gateway_name=${name}`,
   health: 'healthy',
+  setup_stage: 'live',
   reasons: [],
   next_step: null,
   checklist: [{ code: 'credentials', state: 'done' }, { code: 'test_message', state: 'todo', action_url: '#test-message' }],
@@ -63,6 +65,11 @@ function body(request: { postData(): string | null; url(): string }): Record<str
   return Object.fromEntries(new URL(request.url()).searchParams);
 }
 
+/** Activity opens on Conversations; the raw WhatsApp message log sits behind the Messages toggle. */
+async function openMessages(page: Page) {
+  await page.getByRole('group', { name: 'Activity view' }).getByRole('button', { name: 'Messages' }).click();
+}
+
 interface WhatsAppMockOptions {
   connector?: boolean;
   access?: Record<string, unknown>[];
@@ -88,18 +95,23 @@ async function mockWhatsApp(page: Page, opts: WhatsAppMockOptions = {}) {
       return route.fulfill(ok(answer(args)));
     });
 
+  let tokenCheck: Record<string, unknown> | null = null;
   await handle('get_setup_status', (args) =>
     args.gateway_name
-      ? { success: true, connector_available: connector, accounts: [], gateway: gateway(String(args.gateway_name), opts.gatewayOver) }
+      ? { success: true, connector_available: connector, accounts: [], gateway: gateway(String(args.gateway_name), { token_check: tokenCheck, ...opts.gatewayOver }) }
       : {
           success: true, connector_available: connector,
           gateways: [{ name: 'GW-1', health: 'healthy', enabled: true }, { name: 'GW-2', health: 'blocked', enabled: true }],
         },
   );
-  await handle('check_token', () => ({
-    success: true, valid: true, token_type: 'SYSTEM_USER', expires_at: null, missing_scopes: [], waba_ids: [],
-    phone: { quality: 'GREEN' }, webhook_subscribed: true, checked_at: new Date().toISOString(), source: 'debug_token',
-  }));
+  await handle('check_token', () => {
+    // The status call reports the stored result of the last check, as the server does.
+    tokenCheck = {
+      valid: true, token_type: 'SYSTEM_USER', expires_at: null, missing_scopes: [], waba_ids: [],
+      phone: { quality: 'GREEN' }, webhook_subscribed: true, checked_at: new Date().toISOString(), source: 'debug_token',
+    };
+    return { success: true, ...tokenCheck };
+  });
   await handle('list_message_log_filters', () => ({ success: true, statuses: [], agents: [], templates: [], ...opts.logFilters }));
   await handle('list_message_log', (args) => ({
     success: true,
@@ -107,9 +119,10 @@ async function mockWhatsApp(page: Page, opts: WhatsAppMockOptions = {}) {
     next_cursor: null,
     has_more: false,
   }));
-  await handle('list_templates', () => ({ success: true, templates: opts.templates ?? [] }));
+  await handle('list_templates', () => (connector ? { success: true, templates: opts.templates ?? [] } : { success: false, error: 'bridge_unavailable' }));
   await handle('list_template_drafts', () => ({ success: true, drafts: [] }));
   await handle('get_template', (args) => ({ success: true, ...templateDetail(String(args.name)), ...opts.templateDetail }));
+  await handle('list_conversations', () => ({ items: [], has_more: false }), CHANNELS);
   await handle('send_text_message', () => ({ success: true, message_id: 'wamid.NEW' }));
   await handle('approve_gateway_pairing', () => {
     waiting = [];
@@ -128,37 +141,44 @@ const pending = [{
   pairing_code: 'PAIR-ABCD2345', state: 'Pending', creation: '2026-10-21 10:00:00',
 }];
 
-test.describe('WhatsApp console', () => {
+test.describe('Channels: WhatsApp', () => {
   test.beforeEach(async ({ page }) => {
     await mockOfflineApis(page);
     // The page also reads per-number Solutions data; answer it with an empty, harmless summary.
     await mockSolutionsApi(page);
   });
 
-  test('overview shows the gateway health and writes the gateway into the URL', async ({ page }) => {
+  test('/channels/whatsapp resolves to the first number Home and shows its health', async ({ page }) => {
     await mockWhatsApp(page);
-    await goto(page, '/whatsapp');
+    await goto(page, '/channels/whatsapp');
     await waitForContent(page);
-    await expect(page.getByRole('heading', { name: 'WhatsApp', level: 1 })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Overview' })).toHaveAttribute('data-state', 'active');
-    await expect(page.getByText(/steps? left/)).toBeVisible();
-    await expect(page).toHaveURL(/gateway=GW-1/);
-    for (const name of ['Messages', 'Templates', 'Access', 'Settings']) {
-      await expect(page.getByRole('tab', { name })).toBeVisible();
+    await expect(page).toHaveURL(/\/channels\/whatsapp\/n\/GW-1\/home/);
+    await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible();
+    await expect(page.getByText('Needs attention', { exact: true })).toBeVisible();
+    const rail = page.getByRole('navigation', { name: 'Channels' });
+    for (const name of ['Home', 'Activity', 'Broadcasts', 'Templates', 'Automations', 'Connections', 'Numbers', 'Settings']) {
+      await expect(rail.getByRole('link', { name })).toBeVisible();
     }
+  });
+
+  test('the legacy /whatsapp URL redirects into the Channels app', async ({ page }) => {
+    await mockWhatsApp(page);
+    await goto(page, ['/whatsapp', 'tab=messages&gateway=GW-2'].join('?'));
+    await expect(page).toHaveURL(/\/channels\/whatsapp\/n\/GW-2\/home/);
   });
 
   test('Check now runs the token check and shows the result', async ({ page }) => {
     const calls = await mockWhatsApp(page);
-    await goto(page, '/whatsapp?gateway=GW-1');
+    await goto(page, '/channels/whatsapp/n/GW-1/home');
     await page.getByRole('button', { name: 'Check now' }).click();
     await expect(page.getByText('Valid', { exact: true })).toBeVisible();
     expect(calls.filter((c) => c.method === 'check_token').map((c) => c.args.gateway_name)).toEqual(['GW-1']);
   });
 
-  test('messages tab lists the log of the chosen gateway and opens a detail sheet', async ({ page }) => {
+  test('activity lists the log of the chosen gateway and opens a detail sheet', async ({ page }) => {
     const calls = await mockWhatsApp(page);
-    await goto(page, '/whatsapp?tab=messages&gateway=GW-1');
+    await goto(page, '/channels/whatsapp/n/GW-1/activity');
+    await openMessages(page);
     await expect(page.getByText('hello m1')).toBeVisible();
     expect(calls.some((c) => c.method === 'list_message_log' && c.args.gateway_name === 'GW-1')).toBe(true);
     await page.getByText('hello m1').click();
@@ -169,7 +189,8 @@ test.describe('WhatsApp console', () => {
 
   test('a failed message explains the Meta error in plain words', async ({ page }) => {
     await mockWhatsApp(page);
-    await goto(page, '/whatsapp?tab=messages&gateway=GW-1');
+    await goto(page, '/channels/whatsapp/n/GW-1/activity');
+    await openMessages(page);
     await page.getByText('hello m2').click();
     const alert = page.getByRole('dialog').getByRole('alert');
     await expect(alert).toContainText('Window closed');
@@ -178,26 +199,25 @@ test.describe('WhatsApp console', () => {
 
   test('switching gateway reloads the log for the other gateway only', async ({ page }) => {
     const calls = await mockWhatsApp(page);
-    await goto(page, '/whatsapp?tab=messages&gateway=GW-2');
+    await goto(page, '/channels/whatsapp/n/GW-2/activity');
+    await openMessages(page);
     await expect(page.getByText('hello g2')).toBeVisible();
     await expect(page.getByText('hello m1')).toHaveCount(0);
     expect(calls.filter((c) => c.method === 'list_message_log').every((c) => c.args.gateway_name === 'GW-2')).toBe(true);
   });
 
-  test('the send panel posts a text message from the chosen gateway', async ({ page }) => {
+  test('activity is read-only: no send panel, even with the legacy ?send=1', async ({ page }) => {
     const calls = await mockWhatsApp(page);
-    await goto(page, '/whatsapp?tab=messages&gateway=GW-1&send=1');
-    await page.getByLabel('To', { exact: true }).fill('+15551234567');
-    await page.getByLabel('Message text').fill('hi from the console');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect.poll(() => calls.find((c) => c.method === 'send_text_message')?.args).toMatchObject({
-      gateway_name: 'GW-1', to: '+15551234567', text: 'hi from the console',
-    });
+    await goto(page, '/channels/whatsapp/n/GW-1/activity?send=1');
+    await openMessages(page);
+    await expect(page.getByText('hello m1')).toBeVisible();
+    await expect(page.getByLabel('Message text')).toHaveCount(0);
+    expect(calls.some((c) => c.method === 'send_text_message')).toBe(false);
   });
 
-  test('access tab approves a waiting sender', async ({ page }) => {
+  test('settings > access approves a waiting sender', async ({ page }) => {
     const calls = await mockWhatsApp(page, { access: pending });
-    await goto(page, '/whatsapp?tab=access&gateway=GW-1');
+    await goto(page, '/channels/whatsapp/n/GW-1/settings/access');
     await expect(page.getByText('15551234567')).toBeVisible();
     await expect(page.getByText('PAIR-ABCD2345')).toBeVisible();
     await page.getByRole('button', { name: 'Approve' }).click();
@@ -205,38 +225,39 @@ test.describe('WhatsApp console', () => {
     expect(calls.find((c) => c.method === 'approve_gateway_pairing')?.args).toMatchObject({ code_or_entry_name: 'GAE-1' });
   });
 
-  test('access tab declines a waiting sender', async ({ page }) => {
+  test('settings > access declines a waiting sender', async ({ page }) => {
     const calls = await mockWhatsApp(page, { access: pending });
-    await goto(page, '/whatsapp?tab=access&gateway=GW-1');
+    await goto(page, '/channels/whatsapp/n/GW-1/settings/access');
     await page.getByRole('button', { name: 'Decline' }).click();
     await expect(page.getByText('No one is waiting for approval.')).toBeVisible();
     expect(calls.find((c) => c.method === 'revoke_gateway_access_entry')?.args).toMatchObject({ entry_name: 'GAE-1' });
   });
 
-  test('without the connector the templates tab explains what is missing', async ({ page }) => {
+  test('without the connector Templates explains what is missing', async ({ page }) => {
     await mockWhatsApp(page, { connector: false });
-    await goto(page, '/whatsapp?tab=templates&gateway=GW-1');
+    await goto(page, '/channels/whatsapp/n/GW-1/templates');
     await expect(page.getByText('WhatsApp Business connector not installed')).toBeVisible();
   });
 
-  test('a failing status call shows an error with Retry', async ({ page }) => {
+  test('a failing status call shows an error on Home, and a reload recovers', async ({ page }) => {
     await mockWhatsApp(page);
-    let first = true;
+    let failing = true;
     await page.route(`${MGMT}get_setup_status{,?*}`, (route) => {
-      if (first) {
-        first = false;
+      // Only the per-number call fails; the site summary behind the rail keeps working.
+      if (failing && body(route.request()).gateway_name) {
         return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ message: { success: false, error: 'boom', message: 'Status is down' } }) });
       }
       return route.fallback();
     });
-    await goto(page, '/whatsapp');
-    await expect(page.getByText('Status is down')).toBeVisible();
-    await page.getByRole('button', { name: 'Retry' }).click();
-    await expect(page.getByRole('tab', { name: 'Messages' })).toBeVisible();
+    await goto(page, '/channels/whatsapp/n/GW-1/home');
+    await expect(page.getByText('Status is down').first()).toBeVisible();
+    failing = false;
+    await page.reload();
+    await expect(page.getByText('Needs attention', { exact: true })).toBeVisible();
   });
 });
 
-// --- Solutions on the WhatsApp page ------------------------------------------------------------
+// --- Solutions inside the Channels app ------------------------------------------------------------
 
 const orders = makeSolutionSummary();
 const care = makeSolutionSummary({ name: 'care', title: 'Care desk', purpose: 'support' });
@@ -269,30 +290,27 @@ const unusedRow = {
   template: 'Nobody uses me', shared: false, used_by: [], owner: null,
 };
 
-test.describe('WhatsApp console with Solutions', () => {
+test.describe('Channels: WhatsApp with Solutions', () => {
   test.beforeEach(async ({ page }) => {
     await mockOfflineApis(page);
   });
 
-  test('the header picker counts solutions per number', async ({ page }) => {
+  test('the rail number picker lists every number and switches to its Home', async ({ page }) => {
     await mockWhatsApp(page);
-    await mockSolutionsApi(page, {
-      numberSummaries: {
-        'GW-1': busyNumber(),
-        'GW-2': busyNumber({ gateway: 'GW-2', solutions: [{ name: 'orders', title: 'Order desk', status: 'Live', usage_pct: 5, sends_24h: 5 }] }),
-      },
-    });
-    await goto(page, '/whatsapp?gateway=GW-1');
-    await page.getByRole('combobox', { name: 'WhatsApp gateway' }).click();
-    await expect(page.getByRole('option', { name: /GW-1/ })).toContainText('· 2 solutions');
-    await expect(page.getByRole('option', { name: /GW-2/ })).toContainText('· 1 solution');
-    await expect(page.getByRole('option', { name: /GW-2/ })).not.toContainText('1 solutions');
+    await mockSolutionsApi(page);
+    await goto(page, '/channels/whatsapp/n/GW-1/home');
+    const picker = page.getByRole('combobox', { name: 'Number' });
+    await picker.click();
+    await expect(page.getByRole('option', { name: 'GW-1' })).toHaveCount(1);
+    await expect(page.getByRole('option', { name: 'GW-2' })).toHaveCount(1);
+    await page.getByRole('option', { name: 'GW-2' }).click();
+    await expect(page).toHaveURL(/\/channels\/whatsapp\/n\/GW-2\/home/);
   });
 
   test('overview lists the solutions on the number and the routing order', async ({ page }) => {
     await mockWhatsApp(page);
     const calls = await mockSolutionsApi(page, { numberSummaries: { 'GW-1': busyNumber() } });
-    await goto(page, '/whatsapp?gateway=GW-1');
+    await goto(page, '/channels/whatsapp/n/GW-1/automations/agents');
     await expect.poll(() => callsOf(calls, 'get_number_summary').map((c) => c.args.gateway)).toContain('GW-1');
 
     await expect(page.getByText('Solutions on this number', { exact: true })).toBeVisible();
@@ -318,7 +336,7 @@ test.describe('WhatsApp console with Solutions', () => {
   test('a number with no live solution says it replies to no one', async ({ page }) => {
     await mockWhatsApp(page);
     await mockSolutionsApi(page, { numberSummaries: { 'GW-1': busyNumber({ solutions: [{ name: 'care', title: 'Care desk', status: 'Paused', usage_pct: null, sends_24h: 0 }], routing_order: [] }) } });
-    await goto(page, '/whatsapp?gateway=GW-1');
+    await goto(page, '/channels/whatsapp/n/GW-1/automations/agents');
     await expect(page.getByText('This number replies to no one yet.')).toBeVisible();
     await expect(page.getByText('No rules')).toBeVisible();
   });
@@ -330,7 +348,7 @@ test.describe('WhatsApp console with Solutions', () => {
     await mockSolutionsApi(page, {
       numberSummaries: { 'GW-1': busyNumber({ quality: { rating: 'Medium', source: 'meta' }, blame: { solution: 'orders', share_pct: 91 } }) },
     });
-    await goto(page, '/whatsapp?gateway=GW-1');
+    await goto(page, '/channels/whatsapp/n/GW-1/home');
     const banner = page.getByRole('alert').filter({ hasText: 'Meta is rejecting some messages.' });
     await expect(banner).toContainText('Quality is medium.');
     await expect(banner).toContainText("Most of today's sends came from Order desk (91% of sends in the last 24 hours).");
@@ -342,8 +360,8 @@ test.describe('WhatsApp console with Solutions', () => {
     await mockSolutionsApi(page, {
       numberSummaries: { 'GW-1': busyNumber({ quality: { rating: 'High', source: 'meta' }, blame: { solution: 'orders', share_pct: 91 } }) },
     });
-    await goto(page, '/whatsapp?gateway=GW-1');
-    await expect(page.getByText('Solutions on this number', { exact: true })).toBeVisible();
+    await goto(page, '/channels/whatsapp/n/GW-1/home');
+    await expect(page.getByLabel('Counters')).toBeVisible();
     await expect(page.getByText(/Most of today's sends/)).toHaveCount(0);
   });
 
@@ -352,8 +370,8 @@ test.describe('WhatsApp console with Solutions', () => {
     await mockSolutionsApi(page, {
       handlers: { get_number_summary: () => ({ error: { code: 'not_permitted', message: 'No.' } }) },
     });
-    await goto(page, '/whatsapp?gateway=GW-1');
-    await expect(page.getByText(/steps? left/)).toBeVisible();
+    await goto(page, '/channels/whatsapp/n/GW-1/automations/agents');
+    await expect(page.getByRole('navigation', { name: 'Automation tabs' })).toBeVisible();
     await expect(page.getByText('Solutions on this number', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Routing order', { exact: true })).toHaveCount(0);
   });
@@ -361,7 +379,7 @@ test.describe('WhatsApp console with Solutions', () => {
   test('templates: Any solution filter, Used by chips and the Shared pill', async ({ page }) => {
     await mockWhatsApp(page, { templates: [sharedRow, ownRow, unusedRow] });
     await mockSolutionsApi(page, { solutions: [orders, care] });
-    await goto(page, '/whatsapp?tab=templates&gateway=GW-1');
+    await goto(page, '/channels/whatsapp/n/GW-1/templates');
     const list = page.getByRole('list').filter({ hasText: 'order_ready_pickup' });
     await expect(list.getByRole('listitem')).toHaveCount(3);
     const shared = list.getByRole('listitem').filter({ hasText: 'order_ready_pickup' });
@@ -386,7 +404,7 @@ test.describe('WhatsApp console with Solutions', () => {
   test('editing a shared template asks first: Cancel, Make a copy, Edit for everyone', async ({ page }) => {
     await mockWhatsApp(page, { templates: [sharedRow, ownRow] });
     await mockSolutionsApi(page, { solutions: [orders, care] });
-    await goto(page, '/whatsapp?tab=templates&gateway=GW-1');
+    await goto(page, '/channels/whatsapp/n/GW-1/templates');
     const edit = page.getByRole('button', { name: 'Edit and resubmit' });
     await edit.click();
     const dialog = page.getByRole('dialog');
@@ -404,7 +422,7 @@ test.describe('WhatsApp console with Solutions', () => {
     await expect(page).toHaveURL(/new=1/);
     await expect(page.getByRole('dialog')).toHaveCount(0);
 
-    await goto(page, '/whatsapp?tab=templates&gateway=GW-1');
+    await goto(page, '/channels/whatsapp/n/GW-1/templates');
     await page.getByRole('button', { name: 'Edit and resubmit' }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Edit for everyone' }).click();
     await expect(page).toHaveURL(/edit=tpl-order_ready_pickup/);
@@ -413,7 +431,7 @@ test.describe('WhatsApp console with Solutions', () => {
   test('editing a template used by one solution needs no warning', async ({ page }) => {
     await mockWhatsApp(page, { templates: [ownRow] });
     await mockSolutionsApi(page, { solutions: [orders, care] });
-    await goto(page, '/whatsapp?tab=templates&gateway=GW-1');
+    await goto(page, '/channels/whatsapp/n/GW-1/templates');
     await page.getByRole('button', { name: 'Edit and resubmit' }).click();
     await expect(page).toHaveURL(/edit=tpl-weekend_special/);
     await expect(page.getByText('This template is shared')).toHaveCount(0);
@@ -428,7 +446,8 @@ test.describe('WhatsApp console with Solutions', () => {
       ],
     });
     await mockSolutionsApi(page);
-    await goto(page, '/whatsapp?tab=messages&gateway=GW-1');
+    await goto(page, '/channels/whatsapp/n/GW-1/activity');
+    await openMessages(page);
     await expect(page.getByRole('columnheader', { name: 'Solution' })).toBeVisible();
     const m1 = page.getByRole('row').filter({ hasText: 'hello m1' });
     const m2 = page.getByRole('row').filter({ hasText: 'hello m2' });
@@ -446,7 +465,8 @@ test.describe('WhatsApp console with Solutions', () => {
   test('messages: servers without Solutions support show no Solution column or filter', async ({ page }) => {
     await mockWhatsApp(page);
     await mockSolutionsApi(page);
-    await goto(page, '/whatsapp?tab=messages&gateway=GW-1');
+    await goto(page, '/channels/whatsapp/n/GW-1/activity');
+    await openMessages(page);
     await expect(page.getByText('hello m1')).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Solution' })).toHaveCount(0);
     await expect(page.getByRole('combobox', { name: 'Solution' })).toHaveCount(0);

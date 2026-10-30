@@ -145,6 +145,7 @@ after_migrate = [
     "huf.install.after_migrate",
     "huf.ai.skills.hooks.sync_app_skills",
     "huf.install.seed_voice_engines",
+    "huf.ai.channels.run_as.ensure_all_audit_fields",
 ]
 
 # Uninstallation
@@ -265,6 +266,20 @@ doc_events = {
         "on_trash": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
         "after_delete": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
     },
+    "HD Ticket": {
+        "before_insert": ["huf.ai.channels.run_as.stamp_audit"],
+        "on_update": "huf.ai.channels.adapters.helpdesk.on_ticket_update",
+    },
+    "CRM Lead": {"before_insert": ["huf.ai.channels.run_as.stamp_audit"]},
+    "Sales Order": {"before_insert": ["huf.ai.channels.run_as.stamp_audit"]},
+    "Contact": {"before_insert": ["huf.ai.channels.run_as.stamp_audit"]},
+    "ToDo": {"before_insert": ["huf.ai.channels.run_as.stamp_audit"]},
+    "Communication": {
+        "after_insert": [
+            "huf.ai.gateway_adapters.email.on_communication_inserted",
+            "huf.ai.channels.handoff_hooks.communication_after_insert",
+        ],
+    },
     "WhatsApp Templates": {
         "before_validate": "huf.ai.gateway_adapters.whatsapp_template_guard.guard_template_write",
         "validate": "huf.ai.gateway_adapters.whatsapp_template_guard.guard_template_write",
@@ -312,9 +327,6 @@ doc_events = {
     "Knowledge Input": {
         "on_trash": "huf.ai.knowledge.hooks.on_knowledge_input_deleted",
     },
-    "Communication": {
-        "after_insert": "huf.ai.gateway_adapters.email.on_communication_inserted",
-    },
     "Agent Message": {
         "after_insert": "huf.ai.artifact_extraction.on_agent_message_change",
         "on_update": "huf.ai.artifact_extraction.on_agent_message_change",
@@ -341,6 +353,9 @@ scheduler_events = {
         "huf.ai.gateway_service.cleanup_stale_access_entries",
         "huf.ai.flow.state.purge_expired",
         "huf.ai.whatsapp.send_keys.purge_expired",
+        "huf.ai.secrets.purge_expired",
+        "huf.ai.channels.commerce.catalog.sync_all_catalogs",
+        "huf.ai.channels.tools.lms.send_lesson_reminders",
     ],
     "cron": {
         "*/1 * * * *": [
@@ -356,6 +371,8 @@ scheduler_events = {
             # Safety net: fail runs orphaned in 'Started' (stale > huf_stale_run_minutes (15) / huf_stale_run_minutes_background (60, non-stream)).
             "huf.ai.run_control.sweep_stale_runs",
             "huf.ai.whatsapp.broadcast.stale.resume_stale",
+            "huf.ai.whatsapp.broadcast.schedule.start_due",
+            "huf.ai.whatsapp.broadcast.status.sweep_pending",
         ],
         "*/15 * * * *": [
             "huf.ai.batch_poll.poll_pending_batch_jobs",
@@ -366,6 +383,7 @@ scheduler_events = {
         ]
     },
     "hourly": [
+        "huf.ai.channels.commerce.cart_recovery.run_cart_recovery",
         "huf.ai.mcp_client.auto_sync_mcp_server_tools",
         "huf.ai.mcp_oauth.auto_refresh_oauth_tokens",
         "huf.ai.meetings.meeting_recording.cleanup_stale_recordings",

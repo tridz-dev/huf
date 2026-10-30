@@ -36,7 +36,7 @@ PURPOSES = ("marketing", "utility", "events")
 _PURPOSE_FIELD = {"marketing": "purpose_marketing", "utility": "purpose_utility", "events": "purpose_events"}
 # Template category -> the consent purpose that must be on the audience.
 _CATEGORY_PURPOSE = {"MARKETING": "marketing", "UTILITY": "utility", "AUTHENTICATION": "utility"}
-ACTIVE_BROADCAST_STATUSES = ("Draft", "Queued", "Running", "Paused")
+ACTIVE_BROADCAST_STATUSES = ("Draft", "Scheduled", "Queued", "Running", "Paused")
 _TAG_SPLIT = re.compile(r"[,;|]")
 
 

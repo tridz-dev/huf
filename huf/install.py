@@ -538,12 +538,12 @@ def create_whatsapp_app():
 
 	Mirrors create_meeting_recorder_app: inserted once, then only the managed
 	fields are refreshed so an admin's hand-edit of ``enabled`` survives migrate.
-	Visibility is decided at request time by ``can_launch_whatsapp_app``.
+	Opens the Channels app (/huf/channels/whatsapp). Visibility is decided at request time by ``can_launch_whatsapp_app``.
 	"""
 	fields = {
 		"title": "WhatsApp",
-		"description": "Manage WhatsApp templates and see messages handled by your agents.",
-		"route": "/huf/whatsapp",
+		"description": "Set up and automate WhatsApp: AI agents, broadcasts, templates, handoff to Help Desk/CRM",
+		"route": "/huf/channels/whatsapp",
 		"icon": "message-circle",
 		"category": "Communicate",
 		"sort_order": 110,
