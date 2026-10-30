@@ -13,7 +13,7 @@ export function RunOverlayChip({ hidden, onToggle }: { hidden: boolean; onToggle
       data-shown={hidden ? 'false' : 'true'}
     >
       <span>{hidden ? 'Run colours are off' : 'Showing how this run went'}</span>
-      <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={onToggle} data-testid="flow-run-overlay-toggle" aria-pressed={!hidden}>
+      <Button variant="ghost" size="sm" className="gap-1 px-2 text-xs" onClick={onToggle} data-testid="flow-run-overlay-toggle" aria-pressed={!hidden}>
         {hidden ? <Eye className="h-3.5 w-3.5" aria-hidden /> : <EyeOff className="h-3.5 w-3.5" aria-hidden />}
         {hidden ? 'Show' : 'Hide'}
       </Button>

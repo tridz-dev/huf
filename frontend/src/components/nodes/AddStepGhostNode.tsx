@@ -8,6 +8,8 @@ import type { FlowEdgeRoute } from '../../types/flow.types';
 import { NODE_CARD_BASE, NODE_ICON_WELL, NODE_HANDLE } from './nodeStyles';
 import { cn } from '@/lib/utils';
 
+const growStyle = (scale: number) => ({ transform: `scale(${scale})` });
+
 export interface AddStepGhostNodeData {
   /** The node id that a newly added action should be attached after. */
   sourceNodeId: string;
@@ -58,7 +60,7 @@ export const AddStepGhostNode = memo(({ data }: NodeProps<AddStepGhostNodeData>)
         )}
       >
         {small ? (
-          <div className={cn(NODE_ICON_WELL, 'border border-dashed border-line bg-transparent text-muted-foreground')} style={{ transform: `scale(${grow})` }}>
+          <div className={cn(NODE_ICON_WELL, 'border border-dashed border-line bg-transparent text-muted-foreground')} style={growStyle(grow)}>
             <Plus className="w-4 h-4" />
           </div>
         ) : (

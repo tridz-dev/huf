@@ -32,6 +32,18 @@ export function tidyPositions(nodes: StepLike[], edges: ConnectionLike[]): Recor
   return autoLayout(nodes, ordered);
 }
 
+/**
+ * A graph saved without positions (a template, a copy made by a script, a flow written by hand) is laid out the way
+ * "Tidy layout" would; one that has them keeps them. Steps stacked on one spot count as having none.
+ */
+export function layoutWhenUnplaced<T extends StepLike>(nodes: T[], edges: ConnectionLike[], someMissing: boolean): T[] {
+  if (nodes.length < 2) return nodes;
+  const spots = new Set(nodes.map((n) => `${Math.round(n.position.x / 40)}:${Math.round(n.position.y / 40)}`));
+  if (!someMissing && spots.size === nodes.length) return nodes;
+  const positions = tidyPositions(nodes, edges);
+  return nodes.map((n) => ({ ...n, position: positions[n.id] ?? n.position }));
+}
+
 interface Box {
   x: number;
   y: number;

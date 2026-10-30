@@ -21,7 +21,7 @@ import type {
     ActionConfig, ActionType, Flow, FlowEdge, FlowEdgeRoute, FlowNode, FlowNodeData, FlowStatus, TriggerConfig,
 } from '@/types/flow.types';
 import type { BackendFlowGraph, BackendNode, BackendNodeType } from './flowApi';
-import { tidyPositions } from '../lib/flow/flowLayout';
+import { layoutWhenUnplaced } from '../lib/flow/flowLayout';
 import { defaultContract, deriveContract, placeholderFingerprint } from './flow/flowContract';
 
 export { defaultContract };
@@ -303,26 +303,13 @@ export function deserializeFlow(
         id: flowId,
         name: flowName,
         status: mapBackendStatusToFrontend(status),
-        nodes: placeNodes(graph.nodes.map((node, index) => deserializeNode(node, index)), graph, edges),
+        nodes: layoutWhenUnplaced(graph.nodes.map((node, index) => deserializeNode(node, index)), edges, graph.nodes.some((n) => !n._position)),
         edges,
         createdAt: new Date(),
         updatedAt: new Date(),
         // Version lives on the Flow Definition doctype record, not in the graph.
         version: 1,
     };
-}
-
-/**
- * A graph saved without positions (a template, a copy made by a script, a flow written by hand) is laid out the way
- * "Tidy layout" would; one that has them keeps them. Steps stacked on one spot count as having none.
- */
-function placeNodes(nodes: FlowNode[], graph: BackendFlowGraph, edges: FlowEdge[]): FlowNode[] {
-    if (nodes.length < 2) return nodes;
-    const spots = new Set(nodes.map((n) => `${Math.round(n.position.x / 40)}:${Math.round(n.position.y / 40)}`));
-    const missing = graph.nodes.some((n) => !n._position) || spots.size < nodes.length;
-    if (!missing) return nodes;
-    const positions = tidyPositions(nodes, edges);
-    return nodes.map((n) => ({ ...n, position: positions[n.id] ?? n.position }));
 }
 
 function deserializeNode(node: BackendNode, index: number): FlowNode {

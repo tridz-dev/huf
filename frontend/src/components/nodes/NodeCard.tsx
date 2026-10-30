@@ -132,6 +132,10 @@ interface NodeCardProps {
   titleWraps?: boolean;
 }
 
+/** Sizes that depend on the zoom (card content grows as the canvas shrinks): the one place geometry is set inline. */
+const sized = (style: CSSProperties): CSSProperties => style;
+const square = (px: number): CSSProperties => ({ width: px, height: px });
+
 /** Hover note under a card: the step's title when the card is only an icon, and what it produced in the shown run. */
 function HoverNote({ id, zoom, title, summary }: { id: string; zoom: number; title?: string; summary?: string }) {
   if (!title && !summary) return null;
@@ -169,7 +173,7 @@ export function NodeCard({ id, icon: Icon, iconClass, title, subtitle, frameClas
   const dot = (size: number) => (
     <span
       className={cn('inline-block shrink-0 rounded-full', DOT_STYLE[status.kind])}
-      style={{ width: size, height: size }}
+      style={square(size)}
       data-testid={`flow-node-status-${id}`}
       data-status={status.kind}
       role="img"
@@ -184,7 +188,7 @@ export function NodeCard({ id, icon: Icon, iconClass, title, subtitle, frameClas
       <div className="relative flex h-[100px] w-[236px] items-center justify-center" data-lod="icon">
         <div className={cn('flow-card group/card relative flex h-[100px] w-[120px] items-center justify-center rounded-2xl border bg-panel transition-colors duration-200', frameClass)}>
           <div className={cn('text-ink', iconClass)}>
-            <Icon style={{ width: size, height: size }} aria-hidden />
+            <Icon style={square(size)} aria-hidden />
           </div>
           <span className="absolute right-2 top-2">{dot(Math.round(Math.min(10 * counterScale(zoom), 28)))}</span>
           <HoverNote id={id} zoom={zoom} title={title} summary={runSummary} />
@@ -199,13 +203,13 @@ export function NodeCard({ id, icon: Icon, iconClass, title, subtitle, frameClas
     return (
       <Card className={cn(NODE_CARD_BASE, 'flow-card group/card !justify-center', frameClass)} data-lod="compact">
         {deleteButton}
-        <div className="flex min-w-0 items-center" style={{ gap: 10 * k }}>
-          <div className={cn(NODE_ICON_WELL, 'shrink-0 text-ink', iconClass)} style={{ width: 28 * k, height: 28 * k, borderRadius: 8 * k }}>
-            <Icon style={{ width: 20 * k, height: 20 * k }} aria-hidden />
+        <div className="flex min-w-0 items-center" style={sized({ gap: 10 * k })}>
+          <div className={cn(NODE_ICON_WELL, 'shrink-0 text-ink', iconClass)} style={sized({ width: 28 * k, height: 28 * k, borderRadius: 8 * k })}>
+            <Icon style={square(20 * k)} aria-hidden />
           </div>
           <div
             className="min-w-0 flex-1 line-clamp-2 break-words font-medium leading-tight text-card-foreground"
-            style={{ fontSize: 14 * k }}
+            style={sized({ fontSize: 14 * k })}
             title={title}
             data-testid={`flow-node-title-${id}`}
           >
