@@ -124,17 +124,21 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
     }
     return issues;
   }
-  if (node.data.nodeType === 'end') return issues;
+  if (node.data.nodeType === 'end') {
+    const label = asObj(asObj(node.data).endConfig).outcome;
+    if (typeof asObj(label).label === 'string' && String(asObj(label).label).length > 60) add('outcome', 'The outcome is too long. Keep it under 60 characters.');
+    return issues;
+  }
 
   const c = asObj(node.data.actionConfig);
   switch (kind) {
     case 'agent.run':
       if (isBlank(c.agent)) add('agent', 'Choose an agent.');
-      if (isBlank(c.prompt)) add('prompt', 'Write the prompt the agent should receive.');
+      if (isBlank(c.prompt)) add('prompt', 'Write what the agent should do.');
       break;
     case 'tool.call': {
       if (isBlank(c.tool_id)) {
-        add('tool_id', 'Choose a tool.');
+        add('tool_id', 'Choose what this step should do.');
         break;
       }
       const input = asObj(c.input);
@@ -179,7 +183,9 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       if (c.approver_type !== 'role' && c.approver_type !== 'user') add('approver_type', 'Choose who can approve.');
       if (c.approver_type === 'role' && isBlank(c.approver_role)) add('approver_role', 'Choose the role that can approve.');
       if (c.approver_type === 'user' && isBlank(c.approver_users)) add('approver_users', 'Enter at least one approver.');
-      if (typeof c.timeout_ms === 'number' && c.timeout_ms < 1) add('timeout_ms', 'The timeout must be at least 1 minute.');
+      if (typeof c.timeout_ms === 'number' && c.timeout_ms < 1) add('timeout_ms', 'The time limit must be at least 1 minute.');
+      if (typeof c.title === 'string' && c.title.length > 120) add('title', 'The title is too long. Keep it under 120 characters.');
+      if (Array.isArray(c.details) && c.details.some((d) => typeof asObj(d).label === 'string' && String(asObj(d).label).length > 60)) add('details', 'A label is too long. Keep each label under 60 characters.');
       missingBranches(node, out, c, add);
       break;
     case 'transform': {
