@@ -47,7 +47,7 @@ export function RunWaitingCard({ run, names, titleOf, busy, phone, onDecide, res
     const canDecide = run.can_decide !== false;
     return (
       <section className="rounded-lg border border-warning/40 bg-warning-tint/50 p-4" data-testid="flow-run-waiting">
-        <h3 className="text-sm font-semibold text-ink" data-testid="flow-run-waiting-heading">{canDecide ? 'Waiting for your decision' : 'Waiting for approval'}</h3>
+        <h3 className="text-sm font-semibold text-ink" data-testid="flow-run-waiting-heading">{canDecide ? 'Your decision is needed' : 'Waiting for the approvers'}</h3>
         {typeof waiting.headline === 'string' && waiting.headline && <p className="mt-1 text-base font-medium text-ink">{String(waiting.headline).replace(/^Approval needed:\s*/i, '')}</p>}
         {message && <p className="mt-1 text-sm text-ink" data-testid="flow-run-approval-message">{humanizeMessageText(message, { names })}</p>}
         {facts.length > 0 ? (
