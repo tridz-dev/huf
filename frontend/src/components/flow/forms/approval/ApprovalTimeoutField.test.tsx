@@ -42,6 +42,12 @@ describe('ApprovalTimeoutField', () => {
     expect(screen.getByTestId('flow-hint-approval-timeout').textContent).toContain('a "Timed out" path appears');
   });
 
+  it('explains the "No limit" placeholder: empty means waiting until someone answers', () => {
+    open();
+    expect(amount().placeholder).toBe('No limit');
+    expect(screen.getByTestId('flow-hint-approval-timeout').textContent).toContain('Leave empty to wait until someone answers');
+  });
+
   it('clearing the limit removes the Timed out connection, after asking when something is connected', async () => {
     flow.edges.push({ id: 't1', source: 'step', target: 'end', sourceHandle: 'timeout', data: { route: 'timeout' } });
     open(60000);

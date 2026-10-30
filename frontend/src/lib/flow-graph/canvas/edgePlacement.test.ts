@@ -45,4 +45,15 @@ describe('placing things over a connection', () => {
     const at = placeClear(size, [card, pill], prefer, controlCandidates(points, 130, size, prefer));
     expect(at).toEqual(prefer);
   });
+
+  it('moves the "+" off the name when the steps are only a few px apart', () => {
+    const above = { x: 0, y: 0, width: 236, height: 70 };
+    const below = { x: 0, y: 74, width: 236, height: 70 };
+    const points = [{ x: 118, y: 70 }, { x: 118, y: 74 }];
+    const pill = boxAt({ x: 118, y: 72 }, { width: 40, height: 20 });
+    const size = { width: 28, height: 28 };
+    const prefer = { x: 118, y: 72 };
+    const at = placeClear(size, [above, below, pill], prefer, controlCandidates(points, 4, size, prefer));
+    expect(overlapArea(boxAt(at, size), pill, 3)).toBe(0);
+  });
 });

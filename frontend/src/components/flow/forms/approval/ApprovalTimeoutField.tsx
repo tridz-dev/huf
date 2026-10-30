@@ -58,7 +58,7 @@ export function ApprovalTimeoutField({
         hint={
           timeoutMs !== undefined
             ? `After ${durationWords(timeoutMs / 1000, UNITS)} with no answer, the flow carries on along the "Timed out" path.${timedOut.length > 0 ? '' : ' Connect a step to that path.'}`
-            : 'Leave empty to wait as long as it takes. If you set a time, a "Timed out" path appears for what should happen then.'
+            : 'Leave empty to wait until someone answers. If you set a time, a "Timed out" path appears for what should happen then.'
         }
       />
       <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>

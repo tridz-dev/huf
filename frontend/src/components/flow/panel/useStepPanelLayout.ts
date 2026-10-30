@@ -31,10 +31,15 @@ export function useStepPanelLayout(root: RefObject<HTMLElement | null>, windowWi
     const rootEl = root.current;
     const docked = layout.mode === 'docked' && !!panelRef.current && !!rootEl;
     const doc = document.documentElement;
-    if (docked && rootEl) doc.style.setProperty('--flow-toast-shift', `${Math.round((rootEl.getBoundingClientRect().left - panelWidth) / 2)}px`);
-    else doc.style.removeProperty('--flow-toast-shift');
+    if (docked && rootEl) {
+      doc.style.setProperty('--flow-toast-shift', `${Math.round((rootEl.getBoundingClientRect().left - panelWidth) / 2)}px`);
+      doc.style.setProperty('--flow-toast-right', `${panelWidth + 16}px`);
+    } else {
+      doc.style.removeProperty('--flow-toast-shift');
+      doc.style.removeProperty('--flow-toast-right');
+    }
   });
-  useLayoutEffect(() => () => { document.documentElement.style.removeProperty('--flow-toast-shift'); }, []);
+  useLayoutEffect(() => () => { document.documentElement.style.removeProperty('--flow-toast-shift'); document.documentElement.style.removeProperty('--flow-toast-right'); }, []);
 
   const resize = useCallback((width: number) => setWanted(clampPanelWidth(width)), []);
   const commit = useCallback(() => setWanted((w) => { storePanelWidth(w); return w; }), []);

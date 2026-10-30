@@ -178,8 +178,10 @@ export const InsertableEdge = memo(
       const avoid = [...stepBoxes];
       if (end) avoid.push(loopBack ? { x: end.x - 2, y: end.y - 10, width: 24, height: 20 } : { x: end.x - 10, y: end.y - 18, width: 20, height: 22 });
       PLACED_PILLS.forEach((box) => avoid.push(box));
+      // This connection's own name too (it is only recorded after it has drawn once): with the steps 4px apart the "+" sat on it.
+      if (pill && !loopBack) avoid.push(boxAt(pillPos, pillSize));
       return placeClear(controlsSize, avoid, routed.controlsAt, controlCandidates(routed.points, routed.length, controlsSize, routed.controlsAt));
-    }, [showControls, routed, stepBoxes, loopBack, controlsSize]);
+    }, [showControls, routed, stepBoxes, loopBack, controlsSize, pill, pillPos, pillSize]);
 
     return (
       <>

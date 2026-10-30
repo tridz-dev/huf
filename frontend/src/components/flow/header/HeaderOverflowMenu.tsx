@@ -37,6 +37,8 @@ interface HeaderOverflowMenuProps {
   extra?: ReactNode;
   /** The phone has no tidy / convert: those are editing tools. */
   editTools: boolean;
+  /** 1201-1359px: the labelled buttons fit but the Help button does not, so the menu holds only "Help & shortcuts". */
+  helpOnly?: boolean;
 }
 
 /**
@@ -45,7 +47,7 @@ interface HeaderOverflowMenuProps {
  * menu (minus the editing tools) sits beside the Run button.
  */
 export function HeaderOverflowMenu({
-  statusKind, canManage, readOnlyReason, hasSteps, convertedProcedure, onOpenRuns, onOpenSettings, onTidy, onConvert, extra, editTools,
+  statusKind, canManage, readOnlyReason, hasSteps, convertedProcedure, onOpenRuns, onOpenSettings, onTidy, onConvert, extra, editTools, helpOnly = false,
 }: HeaderOverflowMenuProps) {
   const [showHelp, setShowHelp] = useState(false);
   const [showCodeApprovals, setShowCodeApprovals] = useState(false);
@@ -65,6 +67,11 @@ export function HeaderOverflowMenu({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[220px]" data-testid="flow-header-more-menu">
+          {helpOnly ? (
+            <DropdownMenuItem className={row} data-testid="flow-help" onSelect={() => setShowHelp(true)}>
+              <CircleHelp className="h-4 w-4" aria-hidden /> Help &amp; shortcuts
+            </DropdownMenuItem>
+          ) : (<>
           <DropdownMenuLabel className="flex items-center justify-between gap-3 font-normal text-steel">
             This flow is
             <StatusPill kind={statusKind} data-testid="flow-status-pill-menu" />
@@ -97,7 +104,7 @@ export function HeaderOverflowMenu({
             <Settings className="h-4 w-4" aria-hidden /> Flow settings
           </DropdownMenuItem>
           <DropdownMenuItem className={row} data-testid="flow-help" onSelect={() => setShowHelp(true)}>
-            <CircleHelp className="h-4 w-4" aria-hidden /> Help
+            <CircleHelp className="h-4 w-4" aria-hidden /> Help &amp; shortcuts
           </DropdownMenuItem>
           {editTools && (
             <DropdownMenuItem className={row} data-testid="flow-shortcuts" onSelect={() => openShortcuts(true)}>
@@ -125,6 +132,7 @@ export function HeaderOverflowMenu({
               <Sparkles className="h-4 w-4" aria-hidden /> Convert to procedure
             </DropdownMenuItem>
           )}
+          </>)}
         </DropdownMenuContent>
       </DropdownMenu>
       <FlowHelpDialog open={showHelp} onOpenChange={setShowHelp} />

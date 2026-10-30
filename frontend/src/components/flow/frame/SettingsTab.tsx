@@ -83,7 +83,7 @@ export function SettingsTab({ node }: { node: FlowNode }) {
             onChange={(e) => patchConfig({ timeout_ms: e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value, 10)) * 1000 })}
             placeholder="No limit"
           />
-          <FieldHint testId={`flow-field-${kind}-timeout_ms-help`}>How long to wait for the connected tool to answer.</FieldHint>
+          <FieldHint testId={`flow-field-${kind}-timeout_ms-help`}>How long to wait for the connected tool to answer. Leave empty for no limit.</FieldHint>
           <FieldError nodeId={node.id} kind={kind} field="timeout_ms" />
         </div>
       )}

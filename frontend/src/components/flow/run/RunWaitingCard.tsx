@@ -75,7 +75,7 @@ export function RunWaitingCard({ run, names, titleOf, busy, phone, onDecide, res
     <section className="rounded-lg border border-warning/40 bg-warning-tint/50 p-4" data-testid="flow-run-waiting-user">
       <h3 className="text-sm font-semibold text-ink">Waiting for your reply</h3>
       {/* The kind of wait ("user_input") and the step's id are internal words: the rows show only what the person needs; the raw data keeps all of it. */}
-      <HumanValue value={titleNodeIds(withoutInternalKeys(waiting), titleOf)} rawValue={titleNodeIds(waiting, titleOf)} names={names} testId="flow-run-human-waiting" raw rawTitle="Raw data of this wait" emptyText="This run is waiting for someone to continue it." className="mt-2" />
+      <HumanValue value={titleNodeIds(withoutInternalKeys(waiting), titleOf)} rawValue={titleNodeIds(waiting, titleOf)} rawCopyValue={waiting} names={names} testId="flow-run-human-waiting" raw rawTitle="Raw data of this wait" emptyText="This run is waiting for someone to continue it." className="mt-2" />
       <div className="mt-3 space-y-2">
         <JsonArea
           surfaceKey="run-resume"

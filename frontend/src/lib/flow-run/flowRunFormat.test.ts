@@ -60,12 +60,22 @@ describe('titleNodeIds', () => {
         });
     });
 
-    it('leaves unknown ids and unrelated keys alone and recurses', () => {
+    it('leaves unknown ids and unrelated keys alone', () => {
         expect(titleNodeIds({ node_id: 'zz', other: 'n2', nested: [{ next: 'n3' }] }, titleOf)).toEqual({
             node_id: 'zz',
             other: 'n2',
-            nested: [{ next: 'Escalate' }],
+            nested: [{ next: 'n3' }],
         });
+    });
+
+    it('never touches free text nested in the data, even when it looks like a step id', () => {
+        const data = { input: { target: 'n2', next: 'n3' }, items: [{ node_id: 'n2' }] };
+        expect(titleNodeIds(data, titleOf)).toEqual(data);
+    });
+
+    it('only changes a value that is a known step id (a title that equals its id changes nothing)', () => {
+        const same = (id: string) => (id === 'n2' ? 'n2' : null);
+        expect(titleNodeIds({ node_id: 'n2', next: 'Send the email' }, same)).toEqual({ node_id: 'n2', next: 'Send the email' });
     });
 });
 

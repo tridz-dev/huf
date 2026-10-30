@@ -607,6 +607,17 @@ body:has([role="dialog"][data-state="open"].inset-y-0.right-0) [data-sonner-toas
   transform: none !important;
   --width: min(356px, calc(38vw - 32px));
 }
+/* On a flow's canvas they sit bottom right (the overview map is bottom left): left of a docked step panel, and above the map
+   at the left when a sheet covers the right side. */
+[data-sonner-toaster][data-x-position="right"] {
+  right: var(--flow-toast-right, 16px) !important;
+}
+body:has([role="dialog"][data-state="open"].inset-y-0.right-0) [data-sonner-toaster][data-x-position="right"] {
+  right: auto !important;
+  left: 16px !important;
+  bottom: 172px !important;
+  --width: min(356px, calc(38vw - 32px));
+}
 @media (max-width: 767px) {
   [data-sonner-toaster][data-x-position="center"] {
     transform: none !important;
