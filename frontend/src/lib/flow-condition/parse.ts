@@ -278,6 +278,8 @@ function isRef(path: string): boolean {
 }
 
 function scalar(n: Node): ScalarOperand | null {
+  // "Ignore capital letters" writes a typed text as lower('Text').
+  if (n.k === 'call' && n.fn === 'lower' && n.args.length === 1 && n.args[0].k === 'str') return { kind: 'text', text: n.args[0].v };
   if (n.k === 'str') return { kind: 'text', text: n.v };
   if (n.k === 'num' && isNumberText(n.v)) return { kind: 'number', text: n.v };
   return null;

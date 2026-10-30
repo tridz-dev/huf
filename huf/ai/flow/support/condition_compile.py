@@ -40,7 +40,8 @@ is one of / is none of        ``F in [V1, V2]`` / ``F not in [V1, V2]``
 
 * ``numeric`` (comparing as numbers, for a number or a field value): ``number(F)`` replaces ``F`` and ``number(V)`` replaces
   a reference ``V``, so the text ``"150"`` from a form compares as 150 and text that is no number never matches.
-* ``ignoreCase`` (text only): ``lower(F)`` replaces ``F`` and the text value is written in lower case.
+* ``ignoreCase`` (text only): ``lower(F)`` replaces ``F`` and ``lower('text')`` replaces a text value (the text itself keeps the
+  capitals it was typed with).
 * Rules are joined with `` and `` (all) or `` or `` (any); a group is written in brackets, also when it holds one rule.
 """
 
@@ -199,7 +200,7 @@ def compile_rule(rule: dict) -> str | None:
 	def scalar(v: dict) -> str:
 		k = v["kind"]
 		if k == "text":
-			return py_string(v["text"].lower() if ignore_case else v["text"])
+			return f"lower({py_string(v['text'])})" if ignore_case else py_string(v["text"])
 		if k == "number":
 			return v["text"]
 		ref = reference_expression(v["ref"])

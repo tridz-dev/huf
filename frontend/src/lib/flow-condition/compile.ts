@@ -111,7 +111,7 @@ export function compileRule(rule: Rule): string | null {
   const { numeric, ignoreCase } = effectiveFlags(rule);
   const fieldSide = numeric ? `number(${field})` : ignoreCase ? `lower(${field})` : field;
   const scalar = (v: Operand): string => {
-    if (v.kind === 'text') return pyString(ignoreCase ? v.text.toLowerCase() : v.text);
+    if (v.kind === 'text') return ignoreCase ? `lower(${pyString(v.text)})` : pyString(v.text);
     if (v.kind === 'number') return v.text;
     if (v.kind === 'ref') {
       const r = referenceExpression(v.ref) as string;
@@ -165,9 +165,8 @@ export function canonicalModel(model: ConditionModel): ConditionModel {
     const { numeric, ignoreCase } = effectiveFlags(r);
     const out: Rule = { type: 'rule', field: r.field, op: r.op };
     if (needsValue(r.op) && r.value) {
-      const lowered = (v: ScalarOperand): ScalarOperand => (ignoreCase && v.kind === 'text' ? { kind: 'text', text: v.text.toLowerCase() } : v);
       out.value =
-        r.value.kind === 'list' ? { kind: 'list', items: r.value.items.map(lowered) } : r.value.kind === 'text' ? lowered(r.value) : r.value.kind === 'number' ? { kind: 'number', text: r.value.text } : { kind: 'ref', ref: r.value.ref };
+        r.value.kind === 'list' ? { kind: 'list', items: r.value.items.map((i) => ({ ...i })) } : r.value.kind === 'text' ? { kind: 'text', text: r.value.text } : r.value.kind === 'number' ? { kind: 'number', text: r.value.text } : { kind: 'ref', ref: r.value.ref };
     }
     if (numeric) out.numeric = true;
     if (ignoreCase) out.ignoreCase = true;
