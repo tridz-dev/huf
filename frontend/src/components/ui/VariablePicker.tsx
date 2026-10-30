@@ -82,7 +82,7 @@ export function VariablePicker({ onSelect, currentNodeId, scope = 'ancestors', a
                 align="start"
                 sideOffset={12}
                 collisionPadding={12}
-                className="w-[340px] max-w-[calc(100vw-24px)] p-0"
+                className="w-[340px] max-w-[calc(100vw-24px)] p-0 data-[state=closed]:!animate-none"
                 // The field that received the data takes focus (not the button), so the user can keep typing.
                 onCloseAutoFocus={(e) => e.preventDefault()}
             >
