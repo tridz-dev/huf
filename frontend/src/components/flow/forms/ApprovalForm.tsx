@@ -33,7 +33,7 @@ export function ApprovalForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
           className="min-h-[60px]"
           placeholder="Approve this refund?"
         />
-        <FieldHint testId="flow-hint-approval-message">What the approver reads. Say what is being approved and include the key facts with Insert data.</FieldHint>
+        <FieldHint testId="flow-hint-approval-message">What the approver reads. Say what is being approved and include the key facts with Use data.</FieldHint>
         <Err field="message" />
       </div>
       <div>
