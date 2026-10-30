@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { withShortcut } from './shortcuts/shortcutHints';
 import { getFlowDefinition } from '@/services/flowApi';
 import { getLastWebhookRequest } from '@/services/flow/triggerApi';
+import { describeJsonProblem } from '@/lib/flow-run/jsonErrors';
 import { parsePayload, readLastPayload, rememberPayload, RUN_MODE_BUTTON, type RunMode } from '@/lib/flow-run/flowRunPayload';
 import { hasData, payloadFromForm, runFormFields, valuesFromPayload, type RunField, type RunFormValues } from '@/lib/flow-run/runForm';
 
@@ -86,7 +87,8 @@ export function RunFlowDialog({ open, flowId, flowName, onOpenChange, onRun }: R
         setInputs(found);
         const start = hasData(remembered) ? remembered : found.sample ?? {};
         setValues(valuesFromPayload(found.fields, start));
-        setText(hasData(start) ? pretty(start) : '{}');
+        // What was typed last time comes back exactly as typed; a sample is shown pretty-printed.
+        setText(hasData(remembered) ? readLastPayload(flowId) : hasData(start) ? pretty(start) : '{}');
       })
       .finally(() => !cancelled && setLoading(false));
     return () => {
@@ -237,7 +239,7 @@ export function RunFlowDialog({ open, flowId, flowName, onOpenChange, onRun }: R
 
           <div className="grid gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="mr-auto text-sm font-medium">{hasForm ? 'Details' : 'Input data'}</h3>
+              <h3 className="mr-auto text-sm font-medium">What the flow starts with</h3>
               {inputs.isWebhook && (
                 <Button type="button" variant="outline" size="sm" onClick={useLastRequest} disabled={loading} data-testid="flow-run-use-last">
                   Use last real request
@@ -261,12 +263,18 @@ export function RunFlowDialog({ open, flowId, flowName, onOpenChange, onRun }: R
             ) : (
               <JsonArea
                 surfaceKey="run-payload"
-                title={hasForm ? 'Details as JSON' : 'Input data (JSON)'}
-                help={hasForm ? 'The same details as text, for people who work with JSON. Changing one changes the other.' : jsonHelp}
+                title={hasForm ? 'Details' : 'Input data (JSON)'}
+                help={hasForm ? 'Fill in the boxes. If you work with JSON, choose Edit as JSON to type the same details as text; changing one changes the other.' : jsonHelp}
                 value={text}
                 onChange={editJson}
                 formView={hasForm ? formView : undefined}
               />
+            )}
+            {/* Text that is valid JSON but not an object ([1, 2], 5): the JSON area has nothing to say about it. */}
+            {error && !describeJsonProblem(text) && (
+              <p role="alert" data-testid="flow-run-payload-error" className="text-sm text-destructive">
+                {error}
+              </p>
             )}
             {!hasForm && !loading && !error && (
               <p className="text-meta text-muted-foreground" data-testid="flow-run-payload-hint">

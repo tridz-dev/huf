@@ -33,7 +33,7 @@ Card title = node title = sidebar title (derived from `data/actions.ts` / `data/
 | `flow-node-<nodeId>` | Node wrapper (`data-node-type`, `data-incomplete="true|false"`) |
 | `flow-node-title-<nodeId>` | Node title |
 | `flow-node-subtitle-<nodeId>` | One line saying what the step does ("Send a message to #alerts"); full text in the tooltip |
-| `flow-node-status-<nodeId>` | The card's ONE status word (`data-status`: ready, needs-setup, not-connected, orphan, running, waiting, done, failed). Never wraps; cards are the same size in every state |
+| `flow-node-status-<nodeId>` | The card's ONE status word (`data-status`: ready, needs-setup, not-connected, orphan, running, waiting, done, failed, skipped). Under 80% zoom it is a coloured dot with the same test id and `aria-label`. Never wraps; cards are the same size in every state |
 | `flow-node-incomplete-<nodeId>` | Inner text of the status word when it is "Needs setup" |
 | `flow-node-marker-<nodeId>` | "Trigger" / "End" marker on trigger and end cards |
 | `flow-node-choose-trigger-<nodeId>` | "Choose a trigger" button on the empty trigger card (title "Choose what starts this flow") |
@@ -45,6 +45,10 @@ Card title = node title = sidebar title (derived from `data/actions.ts` / `data/
 | `flow-add-step-<nodeId>` | Add-step card after a plain step |
 | `flow-add-step-<nodeId>-<route>` | Add-step card for a branch (`true`, `false`, `approve`, `reject`, `body`, `option`, `timeout`) |
 | `flow-insert-step-<edgeId>` | "+" on an edge |
+| `flow-node-title-<nodeId>` / `data-lod` | The title; the card element carries `data-lod` = `full` (zoom 80% and up: icon, title, subtitle, status word), `compact` (50% to under 80%: icon, enlarged title, status dot) or `icon` (under 50%: an icon tile; the title shows on hover or focus in `flow-node-hover-<nodeId>`) |
+| `flow-node-hover-<nodeId>`, `flow-node-run-summary-<nodeId>` | Note under a card on hover/focus: the title of an icon tile and, with a run shown on the canvas, one line of what the step produced (or why it failed) |
+| `flow-run-overlay-chip`, `flow-run-overlay-hide` | "Showing this run" chip (top-left of the canvas) while a run is drawn on the canvas, and its Hide button. A run opened from history or `?run=<id>` stays drawn after the details close, until Hide, another run, or another flow |
+| `data-run="taken"/"untaken"` on `flow-edge-label-<edgeId>` | A connection the shown run went along (green line) or not (faded) |
 | `flow-edge-label-<edgeId>` | Branch name pill on a connection (Yes/No, Approved/Rejected/Timed out, For each item/When done, a router path in full, Next item on the loop-back line); 12px on screen at any zoom |
 
 ## Right sidebar (step panel frame, UX-8)
@@ -87,7 +91,7 @@ Dropdown options inside Selects: `flow-option-<name>`; Combobox options: `<field
 | `trigger.doc-event` | `doctype` (searchable list, `-search`, options `flow-field-trigger.doc-event-doctype-option-<name>`), `event` (options `flow-option-doc-event-<event>`); sentence `flow-data-sentence`, panel `flow-data-trigger`, `flow-doc-event-filter` (the "Only when... coming soon" note) |
 | trigger panel | `flow-trigger-apply`, `flow-trigger-clear`, `flow-trigger-disabled-reason` |
 | `agent.run` | `agent`, `prompt`, `prompt_bindings`; `flow-binding-<name>`; picker `flow-agent-run-variable-picker` (+ `-item-<ref>`) |
-| `tool.call` | `tool_id`, `input.<key>` (e.g. `input.to`, `input.subject`, `input.body`, `input.channel`, `input.text`, `input.url`, `input.method`, `input.headers`, `input.body`); every value control has a `-mode` select (`flow-field-tool.call-input.to-mode`) |
+| `tool.call` | `tool_id`, `input.<key>` (e.g. `input.to`, `input.subject`, `input.body`, `input.channel`, `input.text`, `input.url`, `input.method`, `input.headers`, `input.body`); every value control is a `DataInput` (typed text and chips in one box; its "+ Use data" button is `flow-field-tool.call-input.to-picker`, see UX-9 below) |
 | `router.llm` | `prompt`, `options` (list), `flow-router-path-label-<targetNodeId>`, `flow-router-path-<targetNodeId>`, `flow-router-no-paths`, `default` |
 | `condition` | `expression`; branches `flow-branch-true`, `flow-branch-false` |
 | `foreach` | `items`, `max_iterations`, `on_item_error` (`flow-option-loop-on-error-fail|skip`), `collect`; branches `flow-branch-body`, `flow-branch-next`; pickers `flow-loop-items-picker`, `flow-loop-collect-picker` |
@@ -129,7 +133,8 @@ Publishing a flow with unconnected integration steps shows a warning toast (`Som
 | `flow-run-dialog`, `flow-run-start` (label `Run test` / `Run for real`), `flow-run-cancel` | Run dialog opened by the Run button and the list card Run action |
 | `flow-run-mode`, `flow-run-mode-test`, `flow-run-mode-real` (radio, `data-state`), `flow-run-mode-test-card`, `flow-run-mode-real-card`, `flow-run-real-warning` | Run dialog: Test run (default) / Run for real and the warning shown for a real run |
 | `flow-run-form`, `flow-run-field-<field>` (`.` becomes `-`), `flow-run-use-last`, `flow-run-use-sample`, `flow-run-note`, `flow-run-loading`, `flow-run-payload-hint` | Run dialog: the form generated from the trigger's declared fields, 'Use last real request', 'Use sample' |
-| `flow-json-run-payload`, `-input`, `-toggle`, `-error`, `-format`, `-copy` (JsonArea) | Run dialog: the JSON view of the same details ('Edit as JSON' / 'Show as form'); replaces the old `flow-run-payload` / `flow-run-payload-error` |
+| `flow-json-run-payload`, `-input`, `-toggle`, `-error`, `-format`, `-copy` (JsonArea) | Run dialog: the JSON view of the same details ('Edit as JSON' / 'Show as form'); replaces the old `flow-run-payload` (the box) and its syntax error |
+| `flow-run-payload-error` | Run dialog: text that is valid JSON but not an object ('The input must be a JSON object'); the JSON area's own message covers broken JSON |
 | `flow-run-test-chip-<runId>` | Grey 'Test' chip in the Runs sheet |
 | `disabled-reason` | Wrapper around a control disabled for a view-only user; hover/focus shows the explanation |
 | `connection-indicator` (`data-status` = connecting / connected / offline) | Header dot for the live-updates connection |
@@ -201,7 +206,7 @@ Node type `code.run`, canvas type `code-run`, palette card `flow-card-code-run` 
 | `flow-code-profile-badge` | "Needs approval each run" badge, shown only for a profile whose approval mode is not Auto Approve |
 | `flow-code-timeout` | Time limit in seconds (capped at the profile's limit) |
 | `flow-code-inputs-add` | Add input button |
-| `flow-code-input-key-<i>`, `flow-code-input-value-<i>` | Name and value of input row `i` (value is a Flow value control: `-mode` and `-picker` suffixes as for other fields); remove with `flow-code-input-remove-<i>` |
+| `flow-code-input-key-<i>`, `flow-code-input-value-<i>` | Name and value of input row `i` (value is a `DataInput`: `-picker` suffix as for other fields); remove with `flow-code-input-remove-<i>` |
 | `flow-code-help` | "How your code runs" help (`<details>`) |
 | `flow-code-readonly-note` | "You need permission to run code to edit this step." (the form is then disabled) |
 | `flow-error-code.run-code`, `-profile`, `-timeout_s`, `-inputs` | Inline required-field errors |
@@ -225,7 +230,7 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 |---|---|
 | `flow-help`, `flow-help-popover`, `flow-help-shortcuts`, `flow-help-guide-link` | "?" button in the editor header, its popover (how a flow works, keyboard shortcuts) and the link to the full guide |
 | `flow-first-run-guide`, `flow-first-run-guide-close` | Coach mark anchored to the trigger (`data-placement` beside-trigger or below) on a flow with only a trigger (hidden for view-only users; closing it is remembered in the browser) |
-| `flow-minimap` | Overview map, bottom-left of the canvas (hidden under 8 steps and when the canvas is narrower than 640px) |
+| `rf__minimap` (React Flow keeps its own id; the `flow-minimap` prop is overridden) | Overview map, bottom-left of the canvas (hidden under 8 steps and when the canvas is narrower than 640px) |
 | `flow-palette-intro` | One-sentence intro under the "Choose what starts this flow" / "Add a step" title |
 | `flow-palette-empty` | Empty state of the palette search ("No steps match ..."), with `flow-palette-clear-search` ("Show all") |
 | `flow-palette-section-<category>` | A labelled palette section: agent (AI), control (Decide and repeat), people, data (Work with data), apps, advanced |
@@ -233,7 +238,7 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-card-desc-<cardId>` | The one-line "what does this step do" under a palette card |
 | `flow-config-hint` | Intro sentence of a step or trigger, inside the (i) popover in the panel header |
 | `flow-hint-<form>-<field>` | One-line hint under a field (for example `flow-hint-webhook-secret`, `flow-hint-loop-max`, `flow-hint-approval-timeout`, `flow-hint-transform-op`, `flow-hint-transform-example`, `flow-hint-condition`) |
-| `<field testid>-hint` | Hint under a value input (URL, Subject, Spreadsheet ID ...); `<field testid>-mode-help` explains Reference / Template / JSON |
+| `<field testid>-hint` | Hint under a value input (URL, Subject, Spreadsheet ID ...) |
 | `flow-condition-examples`, `flow-schedule-examples`, `flow-doc-event-explained` | Folded example lists (condition syntax, cron examples, what each Data event means) |
 | `flow-webhook-responses` | What 200 / 403 / 405 / 429 mean (inside the closed-by-default developer reference) |
 | `flow-hint-schedule-intro`, `flow-hint-schedule-every`, `flow-hint-schedule-monthday`, `flow-hint-schedule-zone`, `flow-hint-schedule-cron` | Schedule intro and field help |
@@ -292,6 +297,23 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-approval-group-<firstRunId>`, `flow-approval-group-heading` | Bell: identical requests grouped under "3 waiting: Order approval" (every request keeps its own `flow-approve-<runId>` / `flow-reject-<runId>`) |
 | `no-access-page`, `no-access-title`, `no-access-body`, `no-access-go-flows`, `no-access-go-hub` | "You don't have access to this page" (Hub, Flows, Executions, Settings, Agents, Dashboard) |
 
+## UX-9 Use data picker, chips, preview (`components/flow/data/*`)
+| testid | Where |
+|---|---|
+| `<field testid>` | The box of a `DataInput` (role textbox, contenteditable: typed text and chips). `fill` replaces everything; `value` / `value_matches` read its words (chips as "Customer > Name . New order"); the runner reads it with `readValue` |
+| `<field testid>-picker` | "+ Use data" button inside the box's right edge (also the `VariablePicker` button of prompt, condition and loop fields) |
+| `<field testid>-preview`, `-preview-text` | "What this will become: ..." line under a filled input that holds data, from examples; unknown parts read `[Customer name: no sample yet]` |
+| `<field testid>-hint`, `-box`, `-not-a-number`, `-use-text` | Hint line, wrapper, number field error ("Enter a number"), "Use plain text instead" under a JSON area that was opened by an old list/object value |
+| `<field testid>-yes`, `-no`, `-unset` | Options of a Yes/No field (`kind="yesno"`) |
+| `flow-json-<field testid with . and _ as ->-input` | The Advanced (JSON) text of a `kind="json"` field (JsonArea key = testid lower-cased, non-letters to `-`) |
+| `flow-use-data` | The picker panel (role dialog), beside the input; `flow-use-data-title`, `-back`, `-search` |
+| `flow-use-data-step-<stepId>` | Level 1: one row per step the field can read (trigger first, closest step next); the loop's item row has id `<loopId>:item` |
+| `flow-use-data-field-<path>` | Level 2: a field row (`path` is the reference, e.g. `input.customer.name`, `node_5.total`); `flow-use-data-sample` is its example text |
+| `flow-use-data-each`, `-first`, `-joined`, `-count` | Level 3 of a list: Each item (use in a loop) / First item / All items, joined with commas / How many items |
+| `flow-use-data-summary`, `-all`, `-result` | "Show as summary table" (object or first item), "Everything in X", "Its result" / "Everything this step produced" |
+| `flow-use-data-nosample`, `flow-use-data-last-request`, `flow-use-data-empty` | "No sample yet: run a test" panel, its "Use last real request" button (webhook trigger), empty message |
+| `flow-use-data-type-it`, `flow-use-data-typed` | "Can't find it? Type the field name" and its box (Enter inserts; `input.customer.name` or `customer.name` inside a step) |
+
 ## Run details as a story (UX-4)
 
 | Test id | What |
@@ -306,7 +328,7 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-run-stale`, `flow-run-stuck-for`, `flow-run-mark-failed` ("Stop run"), `flow-run-mark-failed-confirm`, `flow-run-queued`, `flow-run-cancel` | Stuck banner, queued note, stop/cancel actions |
 | `flow-run-details-fold` (`<details>`), `flow-run-details-toggle`, `flow-run-meta`, `flow-run-flow-name`, `flow-run-trigger`, `flow-run-started`, `flow-run-finished` (only when finished), `flow-run-duration`, `flow-run-step-count`, `flow-run-current-node`, `flow-run-id`, `flow-run-id-copy`, `flow-run-timezone-note` | "Details" fold (collapsed by default) |
 | `flow-run-back` | "Run history" link back to the list |
-| `flow-run-row-<runId>` (`data-run-status`), `flow-run-row-title-<runId>`, `flow-run-row-status-<runId>`, `flow-run-row-outcome-<runId>`, `flow-run-row-started-<runId>`, `flow-run-row-hint-<runId>` | Run history rows |
+| `flow-run-row-<runId>` (`data-run-status`), `flow-run-hist-title-<runId>`, `flow-run-hist-status-<runId>`, `flow-run-hist-outcome-<runId>`, `flow-run-hist-started-<runId>`, `flow-run-hist-hint-<runId>` | Run history rows |
 | `executions-tabs`, `executions-tab-runs` ("Agent runs"), `executions-tab-flow-runs` ("Flow runs"), `executions-tab-analytics`, `executions-tab-hint`, `page-frame-tabs`; `flow-run-exec-row-<runId>`, `flow-run-exec-title-<runId>`, `flow-run-exec-status-<runId>`, `flow-run-exec-outcome-<runId>` | Executions page |
 
 `useRunOverlay(runId)` (lib/flow-run/useRunOverlay.ts) returns `{ nodes: { [stepId]: { status: 'done'|'failed'|'waiting'|'stopped', summary } }, runStatus, currentNodeId, loading }` for the canvas.

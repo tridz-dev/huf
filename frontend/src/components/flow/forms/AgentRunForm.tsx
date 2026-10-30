@@ -74,7 +74,7 @@ export function AgentRunForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
           onChange={(e) => patch({ prompt: e.target.value })}
           placeholder="Summarise this support ticket in two sentences: {ticket}"
         />
-        <FieldHint testId="flow-hint-agent-run-prompt">Write the task as you would to a person. Use Insert data, or type {'{name}'}, to include data from the trigger or an earlier step.</FieldHint>
+        <FieldHint testId="flow-hint-agent-run-prompt">Write the task as you would to a person. Click + Use data, or type {'{name}'}, to include data from the trigger or an earlier step.</FieldHint>
         <Err field="prompt" />
       </div>
       {Object.keys(bindings).length > 0 && (

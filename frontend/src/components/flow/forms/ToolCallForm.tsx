@@ -20,6 +20,10 @@ const isEmptyValue = (v: unknown) => v === undefined || v === null || v === '' |
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
+/** Fields that hold a list or a set of named values (JSON area) and fields that hold a message (taller box). */
+const JSON_FIELDS = new Set(['data']);
+const LONG_FIELDS = new Set(['body', 'text', 'message', 'content']);
+
 export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps) {
   const input = asObj(cfg.input);
   const setInput = (key: string, value: unknown) => patch({ input: { ...input, [key]: value } });
@@ -72,6 +76,7 @@ export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
         optional={fld.optional}
         placeholder={fld.placeholder}
         hint={fld.hint}
+        kind={JSON_FIELDS.has(fld.key) ? 'json' : LONG_FIELDS.has(fld.key) ? 'longtext' : undefined}
         value={input[fld.key]}
         onChange={(v) => setInput(fld.key, v)}
       />
@@ -106,7 +111,7 @@ export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
       )}
       {isHttp ? (
         <>
-          <FlowValueInput id="http-url" nodeId={nodeId} testId={f('input.url')} label="URL" placeholder="https://api.example.com/items" hint="The full address, starting with https://. Use Insert data to add a value from an earlier step." value={input.url} onChange={(v) => setInput('url', v)} />
+          <FlowValueInput id="http-url" nodeId={nodeId} testId={f('input.url')} label="URL" placeholder="https://api.example.com/items" hint="The full address, starting with https://. Click + Use data to add a value from an earlier step." value={input.url} onChange={(v) => setInput('url', v)} />
           <Err field="input.url" />
           <div>
             <Label htmlFor="http-method" size="sm">Method</Label>
@@ -123,8 +128,8 @@ export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
             <FieldHint testId="flow-hint-http-method">GET reads data. POST, PUT and PATCH send the Body. DELETE removes something.</FieldHint>
           </div>
           <MoreOptions defaultOpen={Boolean(input.headers || input.body)}>
-          <FlowValueInput id="http-headers" nodeId={nodeId} testId={f('input.headers')} label="Headers" optional hint={'Extra request headers as JSON, for example {"Authorization": "Bearer your-key"}. Choose JSON as the value type.'} value={input.headers} onChange={(v) => setInput('headers', v)} />
-          <FlowValueInput id="http-body" nodeId={nodeId} testId={f('input.body')} label="Body" optional hint={'The data to send with POST, PUT or PATCH. For JSON, choose JSON as the value type, for example {"name": "Ada"}.'} value={input.body} onChange={(v) => setInput('body', v)} />
+          <FlowValueInput id="http-headers" nodeId={nodeId} testId={f('input.headers')} label="Headers" optional kind="json" hint={'Extra request headers, for example {"Authorization": "Bearer your-key"}.'} value={input.headers} onChange={(v) => setInput('headers', v)} />
+          <FlowValueInput id="http-body" nodeId={nodeId} testId={f('input.body')} label="Body" optional kind="json" hint={'The data to send with POST, PUT or PATCH, for example {"name": "Ada"}.'} value={input.body} onChange={(v) => setInput('body', v)} />
           </MoreOptions>
         </>
       ) : toolId && fields.length > 0 ? (

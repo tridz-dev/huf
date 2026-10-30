@@ -33,7 +33,8 @@ export function RunDetailsFold({ run, runId, siteZone, stepCount, lastStep, star
       <summary className="cursor-pointer select-none font-medium text-ink" data-testid="flow-run-details-toggle">Details</summary>
       <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2" data-testid="flow-run-meta">
         <Row label="Flow" testId="flow-run-flow-name">{run.flow_name || run.flow_id}</Row>
-        <Row label="Started by" testId="flow-run-trigger">{startedWords}</Row>
+        <Row label="Started by" testId="flow-run-started-by-row">{startedWords}</Row>
+        <Row label="Trigger" testId="flow-run-trigger">{run.trigger_type || 'Not available'}</Row>
         <Row label="Started" testId="flow-run-started">{formatAbsoluteTime(run.started_at)}</Row>
         {run.completed_at && <Row label="Finished" testId="flow-run-finished">{formatAbsoluteTime(run.completed_at)}</Row>}
         {took && <Row label="Took" testId="flow-run-duration">{took}</Row>}

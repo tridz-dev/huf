@@ -1,5 +1,5 @@
 /**
- * Which data a step may reference ("Insert data" picker). A step can only read the trigger and the
+ * Which data a step may reference ("Use data" picker). A step can only read the trigger and the
  * results of steps that ALWAYS ran before it: a step is offered only when every path from a trigger to
  * the current step goes through it (the save-time validator rejects anything else). Later steps, side
  * branches and the step itself never appear.

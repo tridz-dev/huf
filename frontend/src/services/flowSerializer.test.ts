@@ -465,11 +465,20 @@ describe('flowSerializer: sidecar fields and helpers', () => {
     expect(nodeOf(serializeFlow(fullCanvas()), 'n_prep')._disabled).toBeUndefined();
   });
 
-  it('auto-layouts nodes vertically when _position is absent', () => {
+  it('lays the steps out like Tidy layout when _position is absent (UX-18)', () => {
     const graph = serializeFlow(fullCanvas());
     graph.nodes.forEach((n) => { delete n._position; });
     const flow = deserializeFlow('f', 'F', 'Draft', graph);
-    expect(flow.nodes[2].position).toEqual({ x: 250, y: 300 });
+    const spots = new Set(flow.nodes.map((n) => `${n.position.x}:${n.position.y}`));
+    expect(spots.size).toBe(flow.nodes.length);
+    expect(flow.nodes[0].position).toEqual({ x: 250, y: 100 });
+  });
+
+  it('keeps the saved positions when every step has one', () => {
+    const graph = serializeFlow(fullCanvas());
+    const saved = graph.nodes.map((n) => n._position);
+    const flow = deserializeFlow('f', 'F', 'Draft', graph);
+    expect(flow.nodes.map((n) => n.position)).toEqual(saved);
   });
 
   it('handles an empty flow and a flow with no trigger', () => {

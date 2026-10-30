@@ -17,7 +17,7 @@ export function StateForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps
       {type === 'state-set' && (
         <>
           <div>
-            <FlowValueInput id="state-value" nodeId={nodeId} testId={f('value')} label="Value" hint="What to save. Use Insert data to save something from an earlier step." value={cfg.value} onChange={(v) => patch({ value: v })} />
+            <FlowValueInput id="state-value" nodeId={nodeId} testId={f('value')} label="Value" hint="What to save. Click + Use data to save something from an earlier step." value={cfg.value} onChange={(v) => patch({ value: v })} />
             <Err field="value" />
           </div>
           <div>

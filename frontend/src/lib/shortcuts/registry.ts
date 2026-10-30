@@ -31,6 +31,7 @@ export const SHORTCUTS: ShortcutDescriptor[] = [
   { id: 'flow-copy', binding: { key: 'c', mod: true }, description: 'Copy the selected steps', scope: 'Flow editor' },
   { id: 'flow-paste', binding: { key: 'v', mod: true }, description: 'Paste steps, also into another flow', scope: 'Flow editor' },
   { id: 'flow-select-all', binding: { key: 'a', mod: true }, description: 'Select every step', scope: 'Flow editor' },
+  { id: 'flow-arrows', binding: { key: 'ArrowDown' }, keys: ['Arrow keys'], description: 'Move from step to step (Enter opens it)', scope: 'Flow editor' },
   { id: 'flow-delete', binding: { key: 'Delete' }, description: 'Delete the selected step (asks first)', scope: 'Flow editor' },
   { id: 'flow-multi-click', binding: { key: 'Click', shift: true }, keys: ['Shift', 'Click'], description: 'Select several steps', scope: 'Flow editor' },
   { id: 'flow-multi-drag', binding: { key: 'Drag', shift: true }, keys: ['Shift', 'Drag'], description: 'Select steps with a box', scope: 'Flow editor' },

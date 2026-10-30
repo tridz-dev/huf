@@ -684,6 +684,27 @@
               "properties": {
                 "value": {
                   "$ref": "#/$defs/Value"
+                },
+                "outcome": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "Optional result of the run as the business sees it, shown as the run's headline instead of plain 'Finished'. Absent: 'Finished'.",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 60,
+                      "description": "What happened, in a few words: 'Approved', 'Rejected', 'Refund sent'. Placeholders like {trigger.name} are filled in. Absent: 'Finished'."
+                    },
+                    "tone": {
+                      "enum": [
+                        "good",
+                        "neutral",
+                        "bad"
+                      ],
+                      "description": "How it reads: good (green), neutral (grey) or bad (red). Absent: neutral."
+                    }
+                  }
                 }
               }
             }
@@ -879,6 +900,35 @@
                     "minLength": 1
                   },
                   "description": "User ids (emails) allowed to approve (approver_type 'user')."
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120,
+                  "description": "Optional headline of the approval card (the approver's bell, run page, email and Slack card). Placeholders like {trigger.name} are filled in. Absent: 'Approval needed: <flow name>'."
+                },
+                "details": {
+                  "type": "array",
+                  "maxItems": 6,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "value"
+                    ],
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 60,
+                        "description": "What the fact is called on the card. Absent: derived from the field."
+                      },
+                      "value": {
+                        "$ref": "#/$defs/Value"
+                      }
+                    }
+                  },
+                  "description": "Optional 'Show these details to the approver': up to 6 labelled facts on the approval card. Each value is usually a reference such as {\"$from\": \"trigger.amount\"}. Absent: the card picks the few most telling facts of the run's input."
                 }
               },
               "allOf": [

@@ -140,7 +140,7 @@ export function Section({ hint, children }: { title?: string; hint?: string; chi
 }
 
 /**
- * A multi-line text field with an "Insert data" picker that inserts the chosen reference text at the cursor.
+ * A multi-line text field with an "Use data" picker that inserts the chosen reference text at the cursor.
  * `format` turns the reference path into the text to insert (an expression name, or a `{placeholder}`).
  */
 export function PickerTextarea({
@@ -174,7 +174,7 @@ export function PickerTextarea({
     <div>
       <div className="flex justify-between items-center mb-1 min-h-7">
         <Label htmlFor={id} size="sm">{label}</Label>
-        <VariablePicker currentNodeId={nodeId} testId={pickerTestId} label={`Insert data into ${label}`} onSelect={(r) => insert(r)} />
+        <VariablePicker currentNodeId={nodeId} testId={pickerTestId} label={`Use data into ${label}`} onSelect={(r) => insert(r)} />
       </div>
       <Textarea
         id={id}

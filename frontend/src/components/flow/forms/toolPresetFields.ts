@@ -3,11 +3,11 @@ export const PRESET_FIELDS: Record<string, Array<{ key: string; label: string; o
   gmail_send_email: [
     { key: 'to', label: 'To', placeholder: 'name@example.com', hint: 'One address, or several separated by commas.' },
     { key: 'subject', label: 'Subject', hint: 'The subject line of the email.' },
-    { key: 'body', label: 'Body', hint: 'The message text. Use Insert data to add details from earlier steps.' },
+    { key: 'body', label: 'Body', hint: 'The message text. Click + Use data to add details from earlier steps.' },
   ],
   slack_send_message: [
     { key: 'channel', label: 'Channel', placeholder: '#general', hint: 'The channel name (like #general) or the channel ID. The bot must be invited to it.' },
-    { key: 'text', label: 'Message', hint: 'The text to post. Use Insert data to add details from earlier steps.' },
+    { key: 'text', label: 'Message', hint: 'The text to post. Click + Use data to add details from earlier steps.' },
   ],
   slack_send_thread_reply: [
     { key: 'channel', label: 'Channel', placeholder: '#general', hint: 'The channel name (like #general) or the channel ID. The bot must be invited to it.' },
@@ -21,7 +21,7 @@ export const PRESET_FIELDS: Record<string, Array<{ key: string; label: string; o
   gsheets_update: [
     { key: 'spreadsheet_id', label: 'Spreadsheet ID', placeholder: '1AbC...xYz', hint: 'In the sheet URL, the long text between /d/ and /edit.' },
     { key: 'range', label: 'Range', placeholder: 'Sheet1!A1:D20', hint: 'Where to write, starting cell first. Existing cells there are replaced.' },
-    { key: 'data', label: 'Data', hint: 'The rows to write, as a list of lists: [["Name","Amount"],["Ada",120]]. Choose JSON as the value type.' },
+    { key: 'data', label: 'Data', hint: 'The rows to write, as a list of lists: [["Name","Amount"],["Ada",120]].' },
   ],
   gsheets_create: [{ key: 'title', label: 'Title', hint: 'The name of the new spreadsheet.', placeholder: 'Weekly report' }],
   gdrive_list_files: [

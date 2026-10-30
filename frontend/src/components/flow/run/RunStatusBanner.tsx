@@ -44,8 +44,7 @@ export function RunStatusBanner({ run, canManage, onStop, onCancel }: RunStatusB
         <div className="flex items-start gap-3 rounded-lg border border-line bg-paper-deep p-4" data-testid="flow-run-queued">
           <Clock className="mt-0.5 h-4 w-4 shrink-0 text-steel" aria-hidden />
           <div className="min-w-0 flex-1 text-sm">
-            <p className="font-medium text-ink">Waiting for a worker</p>
-            <p className="mt-0.5 text-steel">This run is in line. It starts as soon as a worker is free. You do not need to do anything.</p>
+            <p className="text-ink">You do not need to do anything. If you no longer want this run, you can cancel it.</p>
             {canManage && (
               <Button size="sm" variant="outline" className="mt-3 max-[1023px]:min-h-11" data-testid="flow-run-cancel" onClick={() => setConfirm('cancel')}>
                 Cancel run
