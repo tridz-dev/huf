@@ -4,6 +4,7 @@ import { cloneSteps, copyLabel, remapIds, uniqueNodeId, type Graph } from './clo
 import { duplicateSteps } from './flowDuplicate';
 import { CLIPBOARD_KEY, buildClipboard, pasteSteps, readClipboard, sanitizeForClipboard, stripSecrets, writeClipboard } from './flowClipboard';
 import { edgeRoute, makeFlowEdge } from '../../services/flowSerializer';
+import { ROW_GAP } from '../flow/flowLayout';
 import type { FlowNode } from '../../types/flow.types';
 
 function rng(seed: number) {
@@ -82,13 +83,13 @@ describe('duplicate', () => {
     expect(r.addedIds).toHaveLength(1);
     const copy = r.nodes.find((n) => n.id === r.addedIds[0])!;
     expect(copy.data.label).toBe('Step s2 (copy)');
-    expect(copy.position.y).toBe(300 + 150);
+    expect(copy.position.y).toBe(300 + ROW_GAP);
     const into = r.edges.filter((e) => e.target === copy.id);
     const out = r.edges.filter((e) => e.source === copy.id);
     expect(into.map((e) => e.source)).toEqual(['s2']);
     expect(out.map((e) => e.target)).toEqual(['s3']);
     expect(r.edges.some((e) => e.source === 's2' && e.target === 's3')).toBe(false);
-    expect(r.nodes.find((n) => n.id === 's3')!.position.y).toBe(450 + 150);
+    expect(r.nodes.find((n) => n.id === 's3')!.position.y).toBe(450 + ROW_GAP);
     // original untouched
     expect(r.nodes.find((n) => n.id === 's2')).toEqual(g.nodes.find((n) => n.id === 's2'));
   });

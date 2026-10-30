@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { insertSpot, insertStep } from './insertStep';
 import { makeFlowEdge } from '../../services/flowSerializer';
+import { ROW_GAP } from '../flow/flowLayout';
 import type { FlowNode } from '../../types/flow.types';
 
 const n = (id: string, y: number, nodeType: 'trigger' | 'action' | 'end' = 'action', cfg?: Record<string, unknown>): FlowNode =>
@@ -15,8 +16,8 @@ describe('insertStep', () => {
     const out = insertStep(g, spot, 'transform', { type: 'transform', op: 'lower', input: {} }) as Exclude<ReturnType<typeof insertStep>, string | null>;
     expect(out.edges.find((e) => e.source === 'a')!.target).toBe(out.newId);
     expect(out.edges.find((e) => e.source === out.newId)!.target).toBe('b');
-    expect(out.nodes.find((x) => x.id === 'b')!.position.y).toBe(450);
-    expect(out.nodes.find((x) => x.id === out.newId)!.position.y).toBe(300);
+    expect(out.nodes.find((x) => x.id === 'b')!.position.y).toBe(300 + ROW_GAP);
+    expect(out.nodes.find((x) => x.id === out.newId)!.position.y).toBe(150 + ROW_GAP);
   });
 
   it('with nothing selected goes at the end of the flow', () => {
