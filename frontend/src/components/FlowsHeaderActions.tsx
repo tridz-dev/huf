@@ -35,6 +35,9 @@ import { HIT_TARGET, useViewport } from '@/lib/ui/responsive';
 import { cn } from '@/lib/utils';
 import { RUN_BUTTON_LABEL } from '@/lib/flow-run/flowRunPayload';
 
+/** The Help button fits from this width up; below it Help & shortcuts lives in the "..." menu. */
+const HELP_BUTTON_FROM = 1360;
+
 export { FlowToolbarTitle } from './flow/header/FlowToolbarTitle';
 
 /**
@@ -45,7 +48,7 @@ export { FlowToolbarTitle } from './flow/header/FlowToolbarTitle';
 export function FlowsHeaderActions() {
   const { activeFlow, saveState, hasUnsavedChanges, tidyLayout } = useFlowContext();
   const { canManage, canPublishSensitive, readOnlyReason } = useFlowPermissions();
-  const { isCompact, isPhone } = useViewport();
+  const { isCompact, isPhone, width } = useViewport();
   const header = useFlowHeaderActions();
   const isPublished = activeFlow?.status === 'active';
   // A Data trigger or a web request step needs an extra permission to publish; say why Publish is off.
@@ -214,6 +217,22 @@ export function FlowsHeaderActions() {
         </span>
       )}
       <DisabledReason reason={!canManage ? readOnlyReason : isPublished ? null : publishBlocked}>{publishButton}</DisabledReason>
+
+      {!isCompact && width < HELP_BUTTON_FROM && (
+        <HeaderOverflowMenu
+          helpOnly
+          statusKind={statusKind}
+          canManage={canManage}
+          readOnlyReason={readOnlyReason}
+          hasSteps={false}
+          convertedProcedure={null}
+          onOpenRuns={() => undefined}
+          onOpenSettings={() => undefined}
+          onTidy={() => undefined}
+          onConvert={() => undefined}
+          editTools
+        />
+      )}
 
       {isCompact && (
         <HeaderOverflowMenu

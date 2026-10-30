@@ -35,16 +35,20 @@ const EXIT_WORDS: Record<string, string> = { Ok: 'Finished normally', Error: 'St
  * with the exact data behind "{ } Raw". Tokens and auth headers never reach the screen.
  */
 export function RunStepOutput({ stepId, output, reasonShown, failed, decisionShown, names, titleOf, toolId, dataReceived, rawOutput }: RunStepOutputProps) {
-    const shown = titleNodeIds(failed && reasonShown ? withoutFailureKeys(output) : output, titleOf);
+    // Only a step that routes (router, condition, approval) names other steps in its result; a tool's answer is the other system's data.
+    const idTitles = toolId ? () => null : titleOf;
+    const original = failed && reasonShown ? withoutFailureKeys(output) : output;
+    const shown = titleNodeIds(original, idTitles);
     const merged = dataReceived !== undefined;
     if (isEmpty(shown) && !(merged && humanize(dataReceived).kind !== 'empty')) {
         if (rawOutput === undefined || isEmpty(rawOutput)) return null;
         return (
-            <HumanValue value={undefined} raw rawValue={redactSecrets(titleNodeIds(rawOutput, titleOf))} testId={`flow-run-human-${stepId}`} rawTitle="Raw data of this step" rawTextTestId={`flow-run-step-output-${stepId}`} />
+            <HumanValue value={undefined} raw rawValue={redactSecrets(titleNodeIds(rawOutput, idTitles))} rawCopyValue={redactSecrets(rawOutput)} testId={`flow-run-human-${stepId}`} rawTitle="Raw data of this step" rawTextTestId={`flow-run-step-output-${stepId}`} />
         );
     }
     const useInput = merged && humanize(shown).kind === 'empty';
     const safe = redactSecrets(useInput ? dataReceived : shown);
+    const safeOriginal = redactSecrets(useInput ? dataReceived : original);
     const summary = failed ? null : summarizeToolOutput(toolId, output);
     const codeOut = asCodeStepOutput(safe);
 
@@ -84,6 +88,7 @@ export function RunStepOutput({ stepId, output, reasonShown, failed, decisionSho
             hideKeys={decisionShown ? DECISION_KEYS : undefined}
             testId={`flow-run-human-${stepId}`}
             raw={typeof safe === 'object' && safe !== null}
+            rawCopyValue={safeOriginal}
             rawTitle="Raw data of this step"
             rawTextTestId={`flow-run-step-output-${stepId}`}
             className="mt-2"

@@ -20,6 +20,8 @@ export interface HumanValueProps extends HumanOptions {
   /** Offer a "{ } Raw" control that shows the exact data. `value` unless `rawValue` is given (e.g. secrets removed). */
   raw?: boolean;
   rawValue?: unknown;
+  /** The same data with the original ids, when `rawValue` shows step names in place of ids: Copy gives this one. */
+  rawCopyValue?: unknown;
   /** Title of the raw area. */
   rawTitle?: string;
   /** Test id wrapped around the raw JSON text (keeps older ids such as `flow-run-step-output-<id>` on the data). */
@@ -59,10 +61,16 @@ function NodeView({ node, root, path }: { node: HumanNode; root: string; path: s
   }
 }
 
-export function HumanValue({ value, testId = 'flow-human', raw = false, rawValue, rawTitle = 'Raw data', rawTextTestId, emptyText, className, ...opts }: HumanValueProps) {
+const TITLED_HELP = 'Step names are shown in place of internal ids. Copy gives the exact data, with the original ids. Nothing here can be edited.';
+
+export function HumanValue({ value, testId = 'flow-human', raw = false, rawValue, rawCopyValue, rawTitle = 'Raw data', rawTextTestId, emptyText, className, ...opts }: HumanValueProps) {
   const [showRaw, setShowRaw] = useState(false);
   const node = humanize(value, opts);
   const rawData = rawValue === undefined ? value : rawValue;
+  const asText = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v ?? null, null, 2));
+  const shownText = asText(rawData);
+  // Step names stand in for ids only when that changed the text; then Copy still gives the exact data.
+  const copyText = rawCopyValue !== undefined && asText(rawCopyValue) !== shownText ? asText(rawCopyValue) : undefined;
   return (
     <div className={cn('space-y-2', className)} data-testid={testId}>
       {node.kind === 'empty' ? (
@@ -86,8 +94,9 @@ export function HumanValue({ value, testId = 'flow-human', raw = false, rawValue
               className="mt-2"
               surfaceKey={`${testId}-raw`}
               title={rawTitle}
-              help="The exact data, as it was recorded. Nothing here can be edited."
-              value={typeof rawData === 'string' ? rawData : JSON.stringify(rawData ?? null, null, 2)}
+              help={copyText !== undefined ? TITLED_HELP : 'The exact data, as it was recorded. Nothing here can be edited.'}
+              value={shownText}
+              copyValue={copyText}
               readOnly
               textTestId={rawTextTestId}
             />

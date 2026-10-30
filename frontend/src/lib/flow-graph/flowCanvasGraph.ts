@@ -187,6 +187,9 @@ export function connectSteps(
   return { newEdges, updatedNodes };
 }
 
+/** Clear space (px) kept between the new card and a neighbour beside it, so the + and the branch pills between them have room. */
+export const MIN_CARD_GAP = 24;
+
 /**
  * The graph after adding an action step (or End) behind `sourceId` on `sourceRoute`; edges that left the source
  * on that route move onto the new step, and what followed (with everything below it) moves down one row. `null` when End would be put in front of another step.
@@ -241,7 +244,7 @@ export function addActionStep(
     // goes one column aside instead of on top of it.
     const dir = sideOffset < 0 ? -1 : 1;
     let guard = 0;
-    while (nodes.some((n) => Math.abs(n.position.x - newNode.position.x) < CARD_WIDTH - 6 && Math.abs(n.position.y - newNode.position.y) < 80) && guard++ < 8) {
+    while (nodes.some((n) => Math.abs(n.position.x - newNode.position.x) < CARD_WIDTH + MIN_CARD_GAP && Math.abs(n.position.y - newNode.position.y) < 80) && guard++ < 8) {
       newNode.position = { x: newNode.position.x + dir * COLUMN_GAP, y: newNode.position.y };
     }
   }

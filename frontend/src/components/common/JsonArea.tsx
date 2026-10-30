@@ -77,9 +77,11 @@ export interface JsonAreaProps {
   className?: string;
   /** Extra id wrapped around the text only (keeps older step-output ids pointing at the data). */
   textTestId?: string;
+  /** Read-only areas: what Copy puts on the clipboard when it must differ from the text shown. */
+  copyValue?: string;
 }
 
-export function JsonArea({ surfaceKey, title, help, value, onChange, readOnly = false, allowEmpty = true, formView, placeholder, className, textTestId }: JsonAreaProps) {
+export function JsonArea({ surfaceKey, title, help, value, onChange, readOnly = false, allowEmpty = true, formView, placeholder, className, textTestId, copyValue }: JsonAreaProps) {
   const base = `flow-json-${surfaceKey}`;
   const titleId = useId();
   const [mode, setMode] = useState<Mode>(() => (formView ? readMode(surfaceKey) ?? 'form' : 'json'));
@@ -99,7 +101,7 @@ export function JsonArea({ surfaceKey, title, help, value, onChange, readOnly = 
   };
 
   const copy = async () => {
-    if (await copyText(shown)) {
+    if (await copyText(copyValue ?? shown)) {
       setCopied(true);
       toast.success('Copied');
       setTimeout(() => setCopied(false), 1500);

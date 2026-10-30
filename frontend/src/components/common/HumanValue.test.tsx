@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+const copied = vi.fn<(text: string) => Promise<boolean>>(async () => true);
+vi.mock('@/lib/clipboard', () => ({ copyText: (t: string) => copied(t) }));
 
 import { HumanValue } from './HumanValue';
 
@@ -55,5 +57,20 @@ describe('HumanValue', () => {
   it('resolves step ids to titles', () => {
     render(<HumanValue value={{ chose: 'node_1793273127004' }} names={{ node_1793273127004: 'Approved' }} />);
     expect(screen.getByTestId('flow-human-value-chose')).toHaveTextContent('Approved');
+  });
+
+  it('shows step names in the raw view, says so, and Copy still gives the original ids', async () => {
+    render(<HumanValue value={{ chosen: 'Send the email' }} raw rawValue={{ node_id: 'Send the email' }} rawCopyValue={{ node_id: 'n2' }} />);
+    fireEvent.click(screen.getByTestId('flow-human-raw-toggle'));
+    expect(screen.getByTestId('flow-json-flow-human-raw-text')).toHaveTextContent('Send the email');
+    expect(screen.getByTestId('flow-json-flow-human-raw-help')).toHaveTextContent('Step names are shown in place of internal ids');
+    fireEvent.click(screen.getByTestId('flow-json-flow-human-raw-copy'));
+    await waitFor(() => expect(copied).toHaveBeenCalledWith(JSON.stringify({ node_id: 'n2' }, null, 2)));
+  });
+
+  it('keeps the usual help when nothing was renamed', () => {
+    render(<HumanValue value={order} raw rawCopyValue={order} />);
+    fireEvent.click(screen.getByTestId('flow-human-raw-toggle'));
+    expect(screen.getByTestId('flow-json-flow-human-raw-help')).toHaveTextContent('The exact data, as it was recorded');
   });
 });

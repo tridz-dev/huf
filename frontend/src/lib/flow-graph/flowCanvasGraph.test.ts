@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Edge, Node } from 'reactflow';
-import { addActionStep, branchPillText, computeOpenEnds, endSubtitles, ghostSpots, loopBacks, orphanNote } from './flowCanvasGraph';
+import { MIN_CARD_GAP, addActionStep, branchPillText, computeOpenEnds, endSubtitles, ghostSpots, loopBacks, orphanNote } from './flowCanvasGraph';
 import { edgeRoute, makeFlowEdge } from '../../services/flowSerializer';
 import { CARD_WIDTH, ROW_GAP } from '../flow/flowLayout';
 import type { FlowNodeData } from '../../types/flow.types';
@@ -124,5 +124,31 @@ describe('adding a step on a path that already has one', () => {
     const out = addActionStep(nodes.filter((n) => n.id !== 'no'), ed.filter((e) => e.target !== 'no'), 'c', 'false', 'transform', { type: 'transform' } as never);
     if (!out || out === 'end-in-front') throw new Error('expected a graph');
     expect(out.nodes.find((n) => n.id === 'yes')!.position).toEqual({ x: -145, y: 150 + ROW_GAP });
+  });
+});
+
+describe('a new step beside a neighbour', () => {
+  const setup = (gap: number) => {
+    const nodes = [node('t', 0, 0, 'trigger'), node('c', 0, 150, 'action', { type: 'condition' }), node('other', 145 + CARD_WIDTH + gap, 150 + ROW_GAP, 'action', { type: 'agent-run' })];
+    return { nodes, edges: edges(['t', 'c', 'next']) };
+  };
+  const placed = (gap: number) => {
+    const { nodes, edges: ed } = setup(gap);
+    const out = addActionStep(nodes, ed, 'c', 'false', 'transform', { type: 'transform' } as never);
+    if (!out || out === 'end-in-front') throw new Error('expected a graph');
+    return out.nodes[out.nodes.length - 1].position;
+  };
+
+  it('moves one column aside when it would leave less than the minimum clear gap', () => {
+    expect(MIN_CARD_GAP).toBeGreaterThanOrEqual(24);
+    for (const gap of [MIN_CARD_GAP - 14, 4]) {
+      const x = placed(gap).x;
+      expect(x).toBeGreaterThan(145);
+      expect(Math.abs(x - (145 + CARD_WIDTH + gap))).toBeGreaterThanOrEqual(CARD_WIDTH + MIN_CARD_GAP);
+    }
+  });
+
+  it('stays put when the neighbour leaves the clear gap', () => {
+    expect(placed(MIN_CARD_GAP).x).toBe(145);
   });
 });

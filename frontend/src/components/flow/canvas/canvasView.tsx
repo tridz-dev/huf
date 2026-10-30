@@ -63,6 +63,24 @@ function coveredByOverlays(width: number, height: number, withMinimap: boolean) 
   return { x: 0, y: height - boxHeight, width: boxWidth, height: boxHeight };
 }
 
+type View = { x: number; y: number; zoom: number };
+
+/** The view moved right just far enough that no step sits under `covered`; unchanged when that would push the flow out of the canvas. */
+export function shiftClearOfCorner(nodes: Node[], vp: View, covered: { x: number; y: number; width: number; height: number }, canvasWidth: number): View {
+  const rect = (n: Node) => {
+    const left = (n.positionAbsolute?.x ?? n.position.x) * vp.zoom + vp.x;
+    const top = (n.positionAbsolute?.y ?? n.position.y) * vp.zoom + vp.y;
+    return { left, right: left + (n.width ?? 236) * vp.zoom, top, bottom: top + (n.height ?? 62) * vp.zoom };
+  };
+  const rects = nodes.map(rect);
+  const under = rects.filter((r) => r.left < covered.x + covered.width && r.right > covered.x && r.top < covered.y + covered.height && r.bottom > covered.y);
+  if (under.length === 0) return vp;
+  const dx = covered.x + covered.width + 12 - Math.min(...under.map((r) => r.left));
+  const farRight = Math.max(...rects.map((r) => r.right));
+  // Moving right must not bring a step into the corner's rows from the left side, nor push the flow past the right edge.
+  return dx > 0 && farRight + dx <= canvasWidth - 16 ? { ...vp, x: vp.x + dx } : vp;
+}
+
 /**
  * Fits the whole flow with room for the top-right buttons above it, at most 100% and (up to 15 steps) never below 75%.
  * When a step or "Add step" card would still sit under the zoom buttons or the overview in the bottom-left corner, fits
@@ -102,6 +120,9 @@ export function fitClearOfOverlays(rf: ReactFlowInstance, width: number, height:
     });
   let vp = fit(0);
   if (hidden(vp)) vp = fit(covered.height + 16);
+  // Still under the corner: the readable zoom (15 steps or fewer) stops the flow from shrinking further, so make room at the side
+  // instead (the content scrolls), as long as the flow stays in the canvas. Nothing is shrunk below the floor.
+  if (hidden(vp)) vp = shiftClearOfCorner(nodes, vp, covered, width);
   rf.setViewport(vp, { duration: motionMs(duration) });
 }
 
@@ -127,9 +148,18 @@ const minimapColor = (node: Node): string => {
   return 'var(--muted-foreground)';
 };
 
+/** A minimap click shorter than about one viewport glides this long; a longer one jumps (a long animated pan zooms out and back in). */
+export const MINIMAP_GLIDE_MS = 150;
+
+/** Length (ms) of the view change for a click `distancePx` (screen px) from the current centre in a canvas `viewportPx` across: 0 when far, or when motion is reduced. */
+export function minimapMoveMs(distancePx: number, viewportPx: number): number {
+  return distancePx < viewportPx ? motionMs(MINIMAP_GLIDE_MS) : 0;
+}
+
 /** Overview map: drag its rectangle or click anywhere on it to move the canvas there; scroll on it to zoom. */
 export function FlowMiniMap({ stepCount }: { stepCount: number }) {
   const { setCenter, getZoom } = useReactFlow();
+  const store = useStoreApi();
   // In a narrow canvas (side panel open on a small window) the overview would sit under the top-right buttons.
   const canvasWidth = useStore((s) => s.width);
   if (stepCount < MINIMAP_MIN_STEPS || (canvasWidth && canvasWidth < MINIMAP_MIN_CANVAS_WIDTH)) return null;
@@ -139,8 +169,14 @@ export function FlowMiniMap({ stepCount }: { stepCount: number }) {
       ariaLabel="Flow overview"
       pannable
       zoomable
-      // A jump, not a glide: the animated pan zooms out and back in on a long way, so the view never settled where the person clicked.
-      onClick={(_event, position) => setCenter(position.x, position.y, { zoom: getZoom(), duration: 0 })}
+      // A short move glides; a long one jumps (the animated pan zooms out and back in over a long way, so the view never settled).
+      onClick={(_event, position) => {
+        const zoom = getZoom();
+        const { width, height, transform } = store.getState();
+        const [tx, ty] = transform ?? [Number.NaN, Number.NaN];
+        const distance = Math.hypot(position.x - (width / 2 - tx) / zoom, position.y - (height / 2 - ty) / zoom) * zoom;
+        setCenter(position.x, position.y, { zoom, duration: minimapMoveMs(distance, Math.max(width, height)) });
+      }}
       nodeColor={minimapColor}
       nodeBorderRadius={4}
       nodeStrokeWidth={0}

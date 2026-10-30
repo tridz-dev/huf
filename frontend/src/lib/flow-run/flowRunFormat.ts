@@ -21,17 +21,20 @@ export function describeDecision(output: unknown): string | null {
 const NODE_ID_KEYS = new Set(['node_id', 'next_node_id', 'next', 'on_true', 'on_false', 'timeout_next', 'resume_node', 'target']);
 
 /**
- * Copy of a step output where every value that points at another step shows that step's title instead of its id.
- * `titleOf` returns the title for a known step id and null for any other string, which stays as it is.
+ * Copy of a step result where each routing value (the keys above, on the result itself) that is the id of a known step shows that
+ * step's title instead. `titleOf` returns the title for a known step id and null for any other string. Only the top level is read:
+ * a result nested inside the data (a tool's answer, the person's own text) may use the same key names for something else, and a
+ * value that is not a known step id is left as it is.
  */
 export function titleNodeIds(value: unknown, titleOf: (id: string) => string | null): unknown {
     if (Array.isArray(value)) return value.map((v) => titleNodeIds(v, titleOf));
     if (!value || typeof value !== 'object') return value;
     return Object.fromEntries(
-        Object.entries(value as Record<string, unknown>).map(([k, v]) => [
-            k,
-            NODE_ID_KEYS.has(k) && typeof v === 'string' ? (titleOf(v) ?? v) : titleNodeIds(v, titleOf),
-        ]),
+        Object.entries(value as Record<string, unknown>).map(([k, v]) => {
+            if (!NODE_ID_KEYS.has(k) || typeof v !== 'string') return [k, v];
+            const title = titleOf(v);
+            return [k, title && title !== v ? title : v];
+        }),
     );
 }
 
