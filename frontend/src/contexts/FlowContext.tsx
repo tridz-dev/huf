@@ -337,11 +337,11 @@ export function FlowProvider({ children }: { children: ReactNode }) {
 
   // Put a snapshot from the history back (layoutRevision makes the canvas re-read it; selection and live status are not part of it).
   const restoreSnapshot = useCallback((snapshot: GraphSnapshot) => {
-    if (!activeFlowId) return;
     const current = activeFlowRef.current;
-    const liveStatus = new Map((current?.nodes ?? []).map(n => [n.id, n.data.status]));
+    if (!activeFlowId || !current) return;
+    const liveStatus = new Map(current.nodes.map(n => [n.id, n.data.status]));
     const nodes = snapshot.nodes.map(n => ({ ...n, selected: false, dragging: false, data: { ...n.data, status: liveStatus.get(n.id) ?? n.data.status } }));
-    const updated = { ...(current as Flow), nodes, edges: snapshot.edges };
+    const updated = { ...current, nodes, edges: snapshot.edges };
     activeFlowRef.current = updated;
     lastSyncedFlowRef.current = updated;
     setActiveFlowState(updated);
