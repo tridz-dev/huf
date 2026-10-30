@@ -48,6 +48,9 @@ export const RUN_STATUS_FILTERS = [
 /** A run that can still change on its own (so the lists keep refreshing). */
 export const isFinishedStatus = (status: string | null | undefined) => status === 'Success' || status === 'Failed' || status === 'Cancelled';
 
+/** "you" for the signed-in person, else the name or address as recorded. */
+export const whoWords = (by: string, currentUser?: string | null) => (currentUser && by === currentUser ? 'you' : by);
+
 /** Whether a stopped run was ended by a person ("Marked as failed by ..." / "Cancelled by ...") rather than failing by itself. */
 export function stoppedByPerson(lastError: string | null | undefined): { by: string; why: string } | null {
   const text = (lastError ?? '').trim();

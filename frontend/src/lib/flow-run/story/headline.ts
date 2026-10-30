@@ -1,6 +1,6 @@
 import type { FlowRunDetail } from '@/services/flowApi';
 import { formatDuration, friendlyClock, runDuration, spokenDuration, sinceMs } from './time';
-import { stoppedByPerson } from './runStatus';
+import { stoppedByPerson, whoWords } from './runStatus';
 
 export interface RunHeadlineText {
   /** The one sentence a person reads first. */
@@ -15,7 +15,7 @@ export function stuckMs(run: Pick<FlowRunDetail, 'stale' | 'modified_at' | 'star
 }
 
 /** The outcome sentence of a run, per state. */
-export function runHeadline(run: FlowRunDetail, now: number = Date.now()): RunHeadlineText {
+export function runHeadline(run: FlowRunDetail, now: number = Date.now(), currentUser?: string | null): RunHeadlineText {
   const status = run.status;
   if (run.stale) return { headline: `Stuck for ${spokenDuration(stuckMs(run, now))}`, sub: '' };
   if (status === 'Success') {
@@ -25,7 +25,7 @@ export function runHeadline(run: FlowRunDetail, now: number = Date.now()): RunHe
   }
   if (status === 'Failed') {
     const by = stoppedByPerson(run.last_error);
-    if (by) return { headline: `Stopped by ${by.by}`, sub: by.why };
+    if (by) return { headline: `Stopped by ${whoWords(by.by, currentUser)}`, sub: by.why };
     return { headline: 'This run stopped because a step failed', sub: '' };
   }
   if (status === 'Waiting Approval') return { headline: 'Waiting for approval', sub: '' };
