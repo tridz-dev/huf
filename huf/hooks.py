@@ -372,6 +372,7 @@ scheduler_events = {
             "huf.ai.run_control.sweep_stale_runs",
             "huf.ai.whatsapp.broadcast.stale.resume_stale",
             "huf.ai.whatsapp.broadcast.schedule.start_due",
+            "huf.ai.whatsapp.broadcast.status.sweep_pending",
         ],
         "*/15 * * * *": [
             "huf.ai.batch_poll.poll_pending_batch_jobs",
