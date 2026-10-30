@@ -45,10 +45,11 @@ export const CANVAS_CLASS = [
 ].join(' ');
 
 const MINIMAP_STYLE = {
-  width: 200,
-  height: 130,
-  marginLeft: 58,
-  marginBottom: 12,
+  width: 176,
+  height: 112,
+  // Clear of the zoom buttons (28 px wide, 10 px in): at least 20 px between them, and the same bottom edge as the buttons.
+  marginLeft: 62,
+  marginBottom: 24,
   borderRadius: 8,
   border: '1px solid var(--border)',
   boxShadow: '0 1px 3px color-mix(in srgb, var(--foreground) 12%, transparent)',
