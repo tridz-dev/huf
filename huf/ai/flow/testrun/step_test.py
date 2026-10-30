@@ -163,13 +163,18 @@ def _now_iso() -> str:
 	return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+_SIMULATED_KEYS = ("simulated", "summary", "note")
+
+
 def _success(node: dict, output: Any, started: float, **extra) -> dict:
 	safe, shortened = redact_output(output)
+	# A pinned sample of a skipped step keeps the sample fields later steps read, not the "Would ..." wording.
+	pinnable = {k: v for k, v in output.items() if k not in _SIMULATED_KEYS} if extra.get("mode") == "simulated" and isinstance(output, dict) else output
 	return {
 		"status": "success",
 		"output": safe,
 		"output_shortened": shortened,
-		"pin_value": pin_value(output),
+		"pin_value": pin_value(pinnable) if output is not None else None,
 		"duration_ms": int((time.monotonic() - started) * 1000),
 		"error": None,
 		"fix_hint": None,

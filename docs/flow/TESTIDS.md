@@ -70,7 +70,15 @@ The panel is `components/RightSidebar.tsx` + `components/flow/frame/*`. A step's
 | `flow-connection-needed`, `flow-connect-link-sidebar`, `flow-not-connected-sidebar`, `flow-connection-ok` | Top of Setup for integration steps: amber "Connect X to use this step" with a Connect button, or a calm "X is connected" |
 | `flow-node-orphan-note` | Setup note when nothing leads to the step |
 | `flow-more-options`, `flow-more-options-toggle` | Folded optional settings (`data-state` open/closed). Opens by itself when one has a value or when a field inside is jumped to |
-| `flow-step-test-placeholder`, `flow-step-test-sample`, `flow-step-test-run` | Test tab until UX-16 (sample input, "Test step" disabled with the reason "Coming soon") |
+| `flow-step-test` (root, `data-effect`), `flow-step-test-loading`, `-load-error`, `-retry`, `-viewonly`, `-ai-note`, `-ai-confirm` (+ `-yes`, `-no`) | Test tab states: loading, load error, view only (no server data), AI model note and the one-time confirm |
+| `flow-step-test-input`, `-part-<key>`, `-part-empty-<key>`, `-source-<key>` (`data-source`), `-source-edited`, `-value-<key>-*`, `-no-input` | "Sample input": one block per source (`input`, a step id, `item`) with its chip (From last run / From pinned sample / From trigger sample / Edited sample) |
+| `flow-step-test-edit`, `-reset`, `flow-json-step-test-sample-*`, `-sample-problem` | "Edit sample" (JsonArea) and its problem line |
+| `flow-step-test-run` (`data-simulated`), `-hint`, `-running`, `-run-error`, `-save-note` | The Test step / Test (simulated) button, its one-line explanation, progress, errors |
+| `flow-step-test-result` (`data-status`, `data-mode`), `-status`, `-simulated`, `-duration`, `-summary`, `-branch`, `-goes-to`, `-output-*` (HumanValue + `-raw-toggle`), `-shortened` | Result |
+| `flow-step-test-error`, `-fix`, `-open-setup` | Failed test: readable error, how to fix it, jump to Setup |
+| `flow-step-test-approval`, `-approval-title`, `-approval-facts`, `-approval-who` | Approval card preview |
+| `flow-step-pin`, `flow-step-pinned`, `flow-step-unpin`, `flow-step-pin-area`, `flow-step-pinned-only`, `flow-step-pinned-value-*` | Pin this output / "Pinned 5 min ago" / Unpin |
+| `flow-step-test-wait`, `-waiting`, `-last`, `-not-live`, `-docs`, `-doc-list`, `-doc-<name>`, `-tick`, `-trigger-sample`, `-trigger-empty`, `-trigger-note`, `-trigger-unset`, `-no-doctype` | Trigger Test tab: Wait for a test request, Use last received request, Pick a recent document, Simulate a tick |
 | `flow-settings-on-failure`, `flow-on-failure-value`, `flow-step-notes`, `flow-step-reference-name`, `flow-view-as-json`, `flow-view-as-json-toggle`, `flow-view-as-json-text` | Settings tab. The step's time limit lives here too: `flow-field-tool.call-timeout_ms` (connected tools only), `flow-field-human.approval-timeout_ms` |
 | `flow-trigger-type`, `flow-trigger-change`, `flow-hint-trigger-type` | Trigger row at the top of a trigger's Setup |
 | `flow-edge-config`, `flow-edge-meaning`, `flow-edge-label`, `flow-delete-confirm`, `flow-delete-cancel` | Connection panel and delete dialog |

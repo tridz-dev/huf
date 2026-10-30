@@ -225,7 +225,10 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
     if (node.data?.icon !== undefined) out._icon = node.data.icon;
     if (node.data?.disabled) out._disabled = true;
     if (node.data?.notes) out._notes = node.data.notes;
-    if (node.data?.sample !== undefined) out._sample = node.data.sample;
+    if (node.data?.sample !== undefined && node.data.sample !== null) {
+        out._sample = node.data.sample;
+        if (node.data.sampleAt) out._sample_at = node.data.sampleAt;
+    }
     return out;
 }
 
@@ -372,7 +375,7 @@ function buildNodeData(node: BackendNode): FlowNodeData {
         configured: isBackendNodeConfigured(node),
         ...(node._disabled === true ? { disabled: true } : {}),
         ...(typeof node._notes === 'string' && node._notes ? { notes: node._notes } : {}),
-        ...(node._sample && typeof node._sample === 'object' ? { sample: node._sample } : {}),
+        ...(node._sample !== undefined && node._sample !== null ? { sample: node._sample, ...(typeof node._sample_at === 'string' ? { sampleAt: node._sample_at } : {}) } : {}),
     };
 
     if (node.type === 'trigger.unset') {
