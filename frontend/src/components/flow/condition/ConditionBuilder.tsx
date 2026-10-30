@@ -52,7 +52,11 @@ interface BuilderProps {
  */
 export function ConditionBuilder({ nodeId, expression, onChange, disabled }: BuilderProps) {
   const { model: picker, loading, refresh } = useDataCatalog(nodeId);
-  const [state, setState] = useState<ConditionModel>(() => withIds(parseCondition(expression) ?? { match: 'all', items: [] }));
+  const [state, setState] = useState<ConditionModel>(() => {
+    const start = withIds(parseCondition(expression) ?? { match: 'all', items: [] });
+    // A step with no rule yet starts with one empty row, so the first thing to do is in front of the person.
+    return start.items.length === 0 && !disabled ? { ...start, items: [emptyRule()] } : start;
+  });
   const sent = useRef(expression);
 
   // Text changed from outside (undo, redo, another editor of the same step): read it again.
@@ -86,11 +90,15 @@ export function ConditionBuilder({ nodeId, expression, onChange, disabled }: Bui
 
   return (
     <div className="space-y-3" data-testid="flow-condition-builder">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-foreground">Yes when</span>
-        <MatchToggle value={state.match} onChange={(match) => commit({ ...state, match })} testId="flow-condition-match" label="Which rules must be true" disabled={disabled} />
-        <span className="text-xs text-muted-foreground">these rules are true</span>
-      </div>
+      {itemCount > 1 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-foreground">Yes when</span>
+          <MatchToggle value={state.match} onChange={(match) => commit({ ...state, match })} testId="flow-condition-match" label="Which rules must be true" disabled={disabled} />
+          <span className="text-xs text-muted-foreground">these rules are true</span>
+        </div>
+      ) : (
+        <p className="text-xs font-medium text-foreground">Yes when this is true</p>
+      )}
 
       <div className="space-y-2">
         {state.items.map((item, index) =>
