@@ -115,9 +115,9 @@ describe('duplicate', () => {
     const r = duplicateSteps(g, ['s1'], 3)!;
     const copy = r.nodes.find((n) => n.id === r.addedIds[0])!;
     expect(copy.data.sample).toBeUndefined();
-    expect((copy.data.actionConfig as { input: { to: string } }).input.to).toBe('a@b.c');
-    (copy.data.actionConfig as { input: { to: string } }).input.to = 'changed';
-    expect((g.nodes[1].data.actionConfig as { input: { to: string } }).input.to).toBe('a@b.c');
+    expect((copy.data.actionConfig as unknown as { input: { to: string } }).input.to).toBe('a@b.c');
+    (copy.data.actionConfig as unknown as { input: { to: string } }).input.to = 'changed';
+    expect((g.nodes[1].data.actionConfig as unknown as { input: { to: string } }).input.to).toBe('a@b.c');
   });
   it('several steps are copied together with the connections between them', () => {
     const r = duplicateSteps(chain(3), ['s1', 's2'], 11)!;

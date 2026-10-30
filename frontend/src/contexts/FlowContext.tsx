@@ -2,7 +2,9 @@ import { createContext, useContext, useState, useCallback, useEffect, useMemo, u
 import { toast } from '@/lib/toast';
 import { Flow, FlowMetadata, FlowNode, FlowEdge } from '../types/flow.types';
 import { flowService } from '../services/flowService';
-import { popSnapshot, pushSnapshot } from '../lib/flow-graph/flowUndoStack';
+import { useFlowHistory } from '../lib/flow-history/useFlowHistory';
+import { announce } from '../lib/flow-history/announce';
+import type { GraphChange, GraphSnapshot } from '../lib/flow-history/graphChange';
 import { tidyPositions } from '../lib/flow/flowLayout';
 import { followRenamedTarget } from '../lib/flow/flowEdgeLabels';
 import { removeStep, type RemoveStepMode } from '../lib/flow/flowEdit';
@@ -47,8 +49,14 @@ interface FlowContextType {
   tidyLayout: () => void;
   /** Bumped when steps are moved by the app (Tidy layout, its undo), so the canvas re-reads their positions. */
   layoutRevision: number;
+  /** Step back through edits (config, add, delete, move, connect, tidy). Bounded to 100 steps. */
   undo: () => void;
+  redo: () => void;
   canUndo: boolean;
+  canRedo: boolean;
+  /** What the next Undo / Redo would do, in words ("Moved a step"); undefined when there is nothing to do. */
+  undoLabel?: string;
+  redoLabel?: string;
   saveFlow: () => Promise<void>;
   /** Publish or unpublish a flow; the active flow and the list pick up the new status. */
   setFlowPublished: (flowId: string, published: boolean) => Promise<void>;
@@ -71,25 +79,20 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   // Ref to track last synced flow to prevent circular updates
   const lastSyncedFlowRef = useRef<Flow | null>(null);
   const activeFlowRef = useRef<Flow | null>(activeFlow);
-  // Applies an edit to the active flow and remembers it as synced, so the flowService echo is ignored.
-  const patchActive = useCallback((patch: (flow: Flow) => Partial<Flow>) => {
-    setActiveFlowState(prev => {
-      if (!prev) return prev;
-      const updated = { ...prev, ...patch(prev) };
-      lastSyncedFlowRef.current = updated;
-      return updated;
-    });
-  }, []);
+  // Applies an edit to the active flow, remembers it as synced (so the flowService echo is ignored) and records it in the
+  // undo history. The ref is updated right away: two edits in the same tick must build on each other.
+  const history = useFlowHistory();
+  const patchActive = useCallback((patch: (flow: Flow) => Partial<Flow>, hint?: Partial<GraphChange>) => {
+    const prev = activeFlowRef.current;
+    if (!prev) return;
+    const updated = { ...prev, ...patch(prev) };
+    history.record({ nodes: prev.nodes, edges: prev.edges }, { nodes: updated.nodes, edges: updated.edges }, hint);
+    activeFlowRef.current = updated;
+    lastSyncedFlowRef.current = updated;
+    setActiveFlowState(updated);
+  }, [history.record]);
 
-  // Undo history for node deletion. Full nodes+edges snapshots are taken before
-  // each delete and replayed verbatim on undo, so a restored node can never come
-  // back with dangling edges. Session-local only: cleared on flow switch and
-  // discarded on reload (not persisted undo).
-  // The stack lives in a ref so push/pop are plain synchronous mutations (no side
-  // effects inside state updaters); the state counter only drives canUndo.
-  const UNDO_STACK_LIMIT = 20;
-  const undoStackRef = useRef<{ nodes: FlowNode[]; edges: FlowEdge[] }[]>([]);
-  const [undoDepth, setUndoDepth] = useState(0);
+  // Steps of undo history live in useFlowHistory (session-local: cleared on flow switch, gone after a reload).
   const [layoutRevision, setLayoutRevision] = useState(0);
 
   // Sync ref with state
@@ -184,9 +187,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     // Never keep showing the previous flow while the next one loads: settings, Run and Publish would act on the wrong flow.
     if (activeFlowRef.current?.id !== flowId) setActiveFlowState(flowService.getCachedFlow(flowId));
     setSelectedNodeId(null);
-    undoStackRef.current = [];
-    setUndoDepth(0);
-  }, []);
+    history.reset();
+  }, [history.reset]);
 
 
   const createFlow = useCallback(async (name: string, category?: string) => {
@@ -304,7 +306,9 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     if (before) {
       // Keep the ref current right away: two edits in the same tick must build on each other.
       const updatedNodes = before.nodes.map(n => (n.id === nodeId ? { ...n, ...updates } : n));
-      activeFlowRef.current = { ...before, nodes: updatedNodes, ...(edgesChanged && renamedEdges ? { edges: renamedEdges } : {}) };
+      const after = { ...before, nodes: updatedNodes, ...(edgesChanged && renamedEdges ? { edges: renamedEdges } : {}) };
+      history.record({ nodes: before.nodes, edges: before.edges }, { nodes: after.nodes, edges: after.edges });
+      activeFlowRef.current = after;
     }
     setActiveFlowState(prev => {
       if (!prev) return prev;
@@ -318,7 +322,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     flowService.updateNode(activeFlowId, nodeId, updates);
     if (edgesChanged && renamedEdges) flowService.updateEdges(activeFlowId, renamedEdges);
     markUnsaved();
-  }, [activeFlowId, markUnsaved]);
+  }, [activeFlowId, markUnsaved, history.record]);
 
   const getNode = useCallback((nodeId: string) => activeFlowRef.current?.nodes.find(n => n.id === nodeId), []);
   const getFlow = useCallback(() => activeFlowRef.current, []);
@@ -329,32 +333,45 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNode(nodeId, { data: update(current.data) });
   }, [updateNode]);
 
-  // Restore a prior nodes+edges snapshot. Goes through the same context-level
-  // update as other structural mutations, so FlowCanvas's resync effect (keyed on
-  // node/edge counts) cancels any in-flight debounced push before re-syncing.
-  const restoreSnapshot = useCallback((snapshot: { nodes: FlowNode[]; edges: FlowEdge[] }) => {
+  // Put a snapshot from the history back. Goes through the same context-level update as other structural mutations, so
+  // FlowCanvas's resync effect (keyed on node/edge counts and layoutRevision) cancels any in-flight debounced push before re-syncing.
+  const restoreSnapshot = useCallback((snapshot: GraphSnapshot) => {
     if (!activeFlowId) return;
-    patchActive(() => ({ nodes: snapshot.nodes, edges: snapshot.edges }));
-    flowService.updateNodesAndEdges(activeFlowId, snapshot.nodes, snapshot.edges);
+    const current = activeFlowRef.current;
+    // Selection is view state and live run status comes from the server: neither travels with an older snapshot.
+    const liveStatus = new Map((current?.nodes ?? []).map(n => [n.id, n.data.status]));
+    const nodes = snapshot.nodes.map(n => ({ ...n, selected: false, dragging: false, data: { ...n.data, status: liveStatus.get(n.id) ?? n.data.status } }));
+    const updated = { ...(current as Flow), nodes, edges: snapshot.edges };
+    activeFlowRef.current = updated;
+    lastSyncedFlowRef.current = updated;
+    setActiveFlowState(updated);
+    flowService.updateNodesAndEdges(activeFlowId, nodes, snapshot.edges);
+    setSelectedNodeId(sel => (sel && nodes.some(n => n.id === sel) ? sel : null));
+    setSelectedEdgeId(sel => (sel && snapshot.edges.some(e => e.id === sel) ? sel : null));
     setLayoutRevision(v => v + 1);
     markUnsaved();
-  }, [activeFlowId, markUnsaved, patchActive]);
+  }, [activeFlowId, markUnsaved]);
 
-  const undo = useCallback(() => {
-    const { snapshot, rest } = popSnapshot(undoStackRef.current);
-    if (!snapshot) return;
-    undoStackRef.current = rest;
-    setUndoDepth(undoStackRef.current.length);
-    restoreSnapshot(snapshot);
-  }, [restoreSnapshot]);
+  const stepHistory = useCallback((direction: 'undo' | 'redo') => {
+    const current = activeFlowRef.current;
+    if (!current) return;
+    const step = direction === 'undo' ? history.undo({ nodes: current.nodes, edges: current.edges }) : history.redo({ nodes: current.nodes, edges: current.edges });
+    if (!step.snapshot) return;
+    restoreSnapshot(step.snapshot);
+    const what = (step.label ?? 'the last change').replace(/^./, c => c.toLowerCase());
+    const text = direction === 'undo' ? `Undid: ${what}` : `Redid: ${what}`;
+    announce(text);
+    toast(text, { id: 'flow-history-toast', duration: 2500 });
+  }, [history.undo, history.redo, restoreSnapshot]);
+
+  const undo = useCallback(() => stepHistory('undo'), [stepHistory]);
+  const redo = useCallback(() => stepHistory('redo'), [stepHistory]);
 
   const deleteNode = useCallback((nodeId: string, mode: RemoveStepMode = 'reconnect') => {
     if (!activeFlowId) return;
     const prev = activeFlowRef.current;
     if (!prev) return;
     const deletedNode = prev.nodes.find(n => n.id === nodeId);
-    undoStackRef.current = pushSnapshot(undoStackRef.current, { nodes: prev.nodes, edges: prev.edges }, UNDO_STACK_LIMIT);
-    setUndoDepth(undoStackRef.current.length);
     const { nodes: updatedNodes, edges: updatedEdges } = removeStep({ nodes: prev.nodes, edges: prev.edges }, nodeId, mode);
     const removedCount = prev.nodes.length - updatedNodes.length;
     patchActive(() => ({ nodes: updatedNodes, edges: updatedEdges }));
@@ -379,8 +396,6 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     if (!activeFlowId) return;
     const prev = activeFlowRef.current;
     if (!prev || !prev.edges.some(e => e.id === edgeId)) return;
-    undoStackRef.current = pushSnapshot(undoStackRef.current, { nodes: prev.nodes, edges: prev.edges }, UNDO_STACK_LIMIT);
-    setUndoDepth(undoStackRef.current.length);
     const updatedEdges = prev.edges.filter(e => e.id !== edgeId);
     patchActive(() => ({ edges: updatedEdges }));
     flowService.updateEdges(activeFlowId, updatedEdges);
@@ -398,9 +413,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     if (!prev || prev.nodes.length === 0) return;
     const positions = tidyPositions(prev.nodes, prev.edges);
     const updatedNodes = prev.nodes.map(n => ({ ...n, position: positions[n.id] ?? n.position }));
-    undoStackRef.current = pushSnapshot(undoStackRef.current, { nodes: prev.nodes, edges: prev.edges }, UNDO_STACK_LIMIT);
-    setUndoDepth(undoStackRef.current.length);
-    patchActive(() => ({ nodes: updatedNodes }));
+    patchActive(() => ({ nodes: updatedNodes }), { kind: 'layout', label: 'Tidied the layout', group: undefined });
     flowService.updateNodesAndEdges(activeFlowId, updatedNodes, prev.edges);
     setLayoutRevision(v => v + 1);
     markUnsaved();
@@ -455,7 +468,11 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     tidyLayout,
     layoutRevision,
     undo,
-    canUndo: undoDepth > 0,
+    redo,
+    canUndo: history.canUndo,
+    canRedo: history.canRedo,
+    undoLabel: history.undoLabel,
+    redoLabel: history.redoLabel,
     saveFlow,
     setFlowPublished,
     refreshFlows,
@@ -490,7 +507,11 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     tidyLayout,
     layoutRevision,
     undo,
-    undoDepth,
+    redo,
+    history.canUndo,
+    history.canRedo,
+    history.undoLabel,
+    history.redoLabel,
     saveFlow,
     setFlowPublished,
     refreshFlows,

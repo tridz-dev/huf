@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { CircleHelp, History, LayoutTemplate, MoreHorizontal, Settings, ShieldAlert, Sparkles } from 'lucide-react';
+import { CircleHelp, History, Keyboard, LayoutTemplate, MoreHorizontal, Redo2, Search, Settings, ShieldAlert, Sparkles, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -8,12 +8,17 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatusPill, type StatusKind } from '@/components/common/StatusPill';
 import { FlowHelpDialog } from '../FlowHelpPopover';
 import { ExecutionApprovalsBell } from '../../ExecutionApprovalsBell';
 import { usePermissions } from '@/contexts/PermissionsContext';
+import { useFlowContext } from '@/contexts/FlowContext';
+import { useShortcutsHelp } from '@/components/shortcuts/ShortcutsHelpContext';
+import { runFlowCommand } from '../shortcuts/flowCommands';
+import { shortcutText } from '../shortcuts/shortcutHints';
 import { HIT_TARGET } from '@/lib/ui/responsive';
 import { cn } from '@/lib/utils';
 
@@ -47,7 +52,10 @@ export function HeaderOverflowMenu({
   const [codeApprovals, setCodeApprovals] = useState(0);
   const { hasCapability } = usePermissions();
   const canApproveCode = hasCapability('execution.approve') || hasCapability('ssh.approve');
+  const { undo, redo, canUndo, canRedo, undoLabel, redoLabel } = useFlowContext();
+  const { setOpen: openShortcuts } = useShortcutsHelp();
   const row = cn('gap-2', HIT_TARGET);
+  const lower = (s?: string) => (s ? s.replace(/^./, (c) => c.toLowerCase()) : '');
   return (
     <>
       <DropdownMenu>
@@ -63,6 +71,25 @@ export function HeaderOverflowMenu({
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           {extra}
+          {editTools && canManage && (
+            <>
+              <DropdownMenuItem className={row} data-testid="flow-undo" disabled={!canUndo} title={canUndo ? `Undo: ${lower(undoLabel)}` : 'Nothing to undo yet'} onSelect={undo}>
+                <Undo2 className="h-4 w-4" aria-hidden /> Undo{canUndo && undoLabel ? <span className="truncate text-xs text-muted-foreground">{lower(undoLabel)}</span> : null}
+                <DropdownMenuShortcut>{shortcutText('flow-undo')}</DropdownMenuShortcut>
+              </DropdownMenuItem>
+              <DropdownMenuItem className={row} data-testid="flow-redo" disabled={!canRedo} title={canRedo ? `Redo: ${lower(redoLabel)}` : 'Nothing to redo'} onSelect={redo}>
+                <Redo2 className="h-4 w-4" aria-hidden /> Redo
+                <DropdownMenuShortcut>{shortcutText('flow-redo')}</DropdownMenuShortcut>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+          {editTools && (
+            <DropdownMenuItem className={row} data-testid="flow-palette-open" onSelect={() => runFlowCommand('palette')}>
+              <Search className="h-4 w-4" aria-hidden /> Search and commands
+              <DropdownMenuShortcut>{shortcutText('flow-palette')}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem className={row} data-testid="flow-runs" onSelect={onOpenRuns}>
             <History className="h-4 w-4" aria-hidden /> Run history
           </DropdownMenuItem>
@@ -72,6 +99,12 @@ export function HeaderOverflowMenu({
           <DropdownMenuItem className={row} data-testid="flow-help" onSelect={() => setShowHelp(true)}>
             <CircleHelp className="h-4 w-4" aria-hidden /> Help
           </DropdownMenuItem>
+          {editTools && (
+            <DropdownMenuItem className={row} data-testid="flow-shortcuts" onSelect={() => openShortcuts(true)}>
+              <Keyboard className="h-4 w-4" aria-hidden /> Keyboard shortcuts
+              <DropdownMenuShortcut>?</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
           {canApproveCode && (
             <DropdownMenuItem className={row} data-testid="flow-code-approvals" onSelect={() => setShowCodeApprovals(true)}>
               <ShieldAlert className="h-4 w-4" aria-hidden /> Code run approvals{codeApprovals > 0 ? ` (${codeApprovals})` : ''}

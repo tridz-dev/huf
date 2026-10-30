@@ -20,7 +20,8 @@ import { TriggerConfig, ActionConfig } from '../../types/flow.types';
 import type { ActionOption } from '../../types/modal.types';
 import { generateWebhookSecret } from '../../lib/flow-graph/flowWebhookUi';
 import { DEFAULT_PICKER, pickerToCron } from '../../lib/flow-graph/flowSchedule';
-import { CODE_RUN_ACTION, DEFAULT_CODE_PROFILE, DEFAULT_CODE_TIMEOUT_S } from '../../lib/flow-graph/codeFlow';
+import { CODE_RUN_ACTION } from '../../lib/flow-graph/codeFlow';
+import { defaultActionConfig } from '../../lib/flow/actionDefaults';
 import { useCodeFlowStatus } from '../../lib/flow-graph/useCodeFlowStatus';
 import { useFlowPermissions } from '../../hooks/flow/useFlowPermissions';
 
@@ -100,28 +101,7 @@ export function NodeSelectionModal({
   };
 
   const handleSelectAction = (actionId: string) => {
-    const tool = (tool_id: string, input: Record<string, unknown> = {}) => ({ type: 'tool-call', tool_id, input });
-    const configs: Record<string, Record<string, unknown>> = {
-      'agent-run': { type: 'agent-run', agent: '', prompt: '' },
-      'tool-call': tool(''),
-      condition: { type: 'condition', expression: '' },
-      router: { type: 'router', prompt: '' },
-      loop: { type: 'foreach', items: { $from: '' }, max_iterations: 100, on_item_error: 'fail', collect: { $from: '' } },
-      'human.approval': { type: 'human.approval', message: '' },
-      end: { type: 'end' },
-      'http-request': tool('http_request', { url: '', method: 'GET' }),
-      transform: { type: 'transform', op: 'lower', input: {} },
-      'state-get': { type: 'state-get', key: '' },
-      'state-set': { type: 'state-set', key: '', value: '' },
-      'state-delete': { type: 'state-delete', key: '' },
-      'doc-create': { type: 'doc-create', doctype: '', fields: {} },
-      'code-run': { type: 'code-run', code: '', profile: codeStatus?.default_profile || DEFAULT_CODE_PROFILE, inputs: {}, timeout_s: DEFAULT_CODE_TIMEOUT_S },
-      email: tool('gmail_send_email'),
-      slack: tool('slack_send_message'),
-      sheets: tool('gsheets_read'),
-      file: tool('gdrive_list_files'),
-    };
-    const config = (configs[actionId] ?? { type: undefined }) as unknown as ActionConfig;
+    const config = defaultActionConfig(actionId, codeStatus?.default_profile);
 
     onSaveAction?.(actionId, config);
     onClose();

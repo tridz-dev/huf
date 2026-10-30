@@ -11,16 +11,3 @@ export function canDisableStep(node: Pick<FlowNode, 'data'>): boolean {
 export function canDuplicateStep(node: Pick<FlowNode, 'data'>): boolean {
   return node.data.nodeType !== 'trigger';
 }
-
-/** An unconnected copy of a step, placed beside it. Nothing is shared with the original (a deep copy). */
-export function duplicateStep(node: FlowNode, now: number = Date.now()): FlowNode {
-  const copy = JSON.parse(JSON.stringify(node)) as FlowNode;
-  return {
-    ...copy,
-    id: `node_${now}`,
-    selected: false,
-    dragging: false,
-    position: { x: node.position.x + 48, y: node.position.y + 72 },
-    data: { ...copy.data, label: `${node.data.label} copy`, status: undefined },
-  };
-}

@@ -4,27 +4,6 @@ import { edgeRoute } from '../../../services/flowSerializer';
 import { onEdgeAction } from '@/lib/flow-graph/edgeActions';
 import type { FlowEdgeRoute } from '../../../types/flow.types';
 
-/** Keyboard undo (Cmd/Ctrl+Z). Skipped while focus is in a text field so it doesn't fight the input's own native undo. */
-export function useUndoShortcut(undo: () => void, canUndo: boolean) {
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isUndoCombo = (e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z';
-      if (!isUndoCombo) return;
-
-      const target = e.target as HTMLElement | null;
-      const tag = target?.tagName;
-      const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable;
-      if (isEditable || !canUndo) return;
-
-      e.preventDefault();
-      undo();
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undo, canUndo]);
-}
-
 /**
  * Persistent "was this saved as a Procedure?" indicator -- the save-time toast is one-shot, so without this a
  * user who saved with the checkbox on and then closed the toast has no way to tell whether a Procedure exists.

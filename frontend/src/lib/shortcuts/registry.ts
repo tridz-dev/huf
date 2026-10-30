@@ -1,13 +1,15 @@
 import type { ShortcutBinding } from './matching';
 import { getModifierKey, type Platform } from './platform';
 
-export type ShortcutScope = 'Global' | 'Chat' | 'Sidebar' | 'Playground';
+export type ShortcutScope = 'Global' | 'Flow editor' | 'Chat' | 'Sidebar' | 'Playground';
 
 export interface ShortcutDescriptor {
   id: string;
   binding: ShortcutBinding;
   description: string;
   scope: ShortcutScope;
+  /** Key labels to show instead of the binding (mouse gestures such as Shift + click). */
+  keys?: string[];
 }
 
 /**
@@ -18,6 +20,20 @@ export interface ShortcutDescriptor {
  * re-bound, to avoid double listeners.
  */
 export const SHORTCUTS: ShortcutDescriptor[] = [
+  // ── Flow editor ──────────────────────────────────────────────────────
+  { id: 'flow-palette', binding: { key: 'k', mod: true }, description: 'Search steps, flows and actions', scope: 'Flow editor' },
+  { id: 'flow-save', binding: { key: 's', mod: true }, description: 'Save the flow', scope: 'Flow editor' },
+  { id: 'flow-run', binding: { key: 'Enter', mod: true }, description: 'Run the flow', scope: 'Flow editor' },
+  { id: 'flow-undo', binding: { key: 'z', mod: true }, description: 'Undo', scope: 'Flow editor' },
+  { id: 'flow-redo', binding: { key: 'z', mod: true, shift: true }, description: 'Redo', scope: 'Flow editor' },
+  { id: 'flow-redo-alt', binding: { key: 'y', mod: true }, description: 'Redo (another way)', scope: 'Flow editor' },
+  { id: 'flow-duplicate', binding: { key: 'd', mod: true }, description: 'Duplicate the selected step', scope: 'Flow editor' },
+  { id: 'flow-copy', binding: { key: 'c', mod: true }, description: 'Copy the selected steps', scope: 'Flow editor' },
+  { id: 'flow-paste', binding: { key: 'v', mod: true }, description: 'Paste steps, also into another flow', scope: 'Flow editor' },
+  { id: 'flow-select-all', binding: { key: 'a', mod: true }, description: 'Select every step', scope: 'Flow editor' },
+  { id: 'flow-delete', binding: { key: 'Delete' }, description: 'Delete the selected step (asks first)', scope: 'Flow editor' },
+  { id: 'flow-multi-click', binding: { key: 'Click', shift: true }, keys: ['Shift', 'Click'], description: 'Select several steps', scope: 'Flow editor' },
+  { id: 'flow-multi-drag', binding: { key: 'Drag', shift: true }, keys: ['Shift', 'Drag'], description: 'Select steps with a box', scope: 'Flow editor' },
   {
     id: 'shortcuts-help',
     binding: { key: '?' },

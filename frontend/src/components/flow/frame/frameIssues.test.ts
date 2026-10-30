@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FlowIssue } from '@/lib/flow-graph/flowValidation';
 import { fieldSelector, finishText, groupByStep, issueTab, issuesForStep, stepsToFinish, stripText, tabsFor } from './frameIssues';
-import { canDisableStep, canDuplicateStep, duplicateStep } from './stepActions';
+import { canDisableStep, canDuplicateStep } from './stepActions';
 import type { FlowNode } from '../../../types/flow.types';
 
 const issue = (nodeId: string, field: string, message = `fix ${field}`): FlowIssue => ({ nodeId, nodeLabel: `Step ${nodeId}`, kind: 'agent.run', field, message });
@@ -56,16 +56,6 @@ describe('panel tabs', () => {
 });
 
 describe('step menu', () => {
-  it('duplicates a step next to the original, unconnected, without sharing data', () => {
-    const original = node({ actionConfig: { type: 'tool-call', tool_id: 'gmail_send_email', input: { to: 'a@b.co' } } });
-    const copy = duplicateStep(original, 123);
-    expect(copy.id).toBe('node_123');
-    expect(copy.data.label).toBe('Send email copy');
-    expect(copy.position).toEqual({ x: 58, y: 92 });
-    (copy.data.actionConfig as { input: Record<string, string> }).input.to = 'changed';
-    expect((original.data.actionConfig as { input: Record<string, string> }).input.to).toBe('a@b.co');
-  });
-
   it('only linear action steps can be turned off; triggers cannot be duplicated', () => {
     expect(canDisableStep(node({ actionConfig: { type: 'tool-call' } }))).toBe(true);
     expect(canDisableStep(node({ actionConfig: { type: 'condition' } }))).toBe(false);
