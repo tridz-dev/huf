@@ -2,7 +2,7 @@
 
 import json
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import frappe
 
@@ -53,11 +53,9 @@ class TestGateFailsClosed(unittest.TestCase):
 			self.assertTrue(gate.agent_run_is_test("AR-6"))
 
 	def test_an_unreadable_step_test_flag_means_test(self):
-		class Broken:
-			def __getattribute__(self, name):
-				raise RuntimeError("no local")
-
-		with patch.object(gate.frappe.local, "flags", Broken(), create=True), patch.object(gate, "_log_doubt") as logged:
+		fake = MagicMock()
+		type(fake.local).flags = PropertyMock(side_effect=RuntimeError("no local"))
+		with patch.object(gate, "frappe", fake), patch.object(gate, "_log_doubt") as logged:
 			self.assertTrue(gate.step_test_active())
 		logged.assert_called_once()
 
