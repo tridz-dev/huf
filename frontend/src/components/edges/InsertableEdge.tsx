@@ -50,6 +50,18 @@ const overlayStyle = (x: number, y: number, zoom: number, interactive = false, s
   ...(interactive ? { pointerEvents: 'all' as const } : {}),
 });
 
+/**
+ * Where a router path's name sits: right where the line turns down into its step (each path ends over its own column, so names
+ * never pile up), or partway along when the line is straight down.
+ */
+function optionPillPoint(routed: ReturnType<typeof routeEdge>, scale: number) {
+  const [first, ...rest] = routed.points;
+  const turn = rest.find((p, i) => i > 0 && Math.abs(p.y - rest[i - 1].y) < 0.5 && Math.abs(p.x - rest[i - 1].x) >= 40);
+  const run = turn ? rest[rest.indexOf(turn) - 1] : undefined;
+  if (turn && run && first) return { x: turn.x, y: turn.y };
+  return routed.pointAt(Math.max(Math.min(Math.max(routed.length * 0.4, 28 + 14 * scale), routed.length / 2), 10));
+}
+
 /** Every step on the canvas as a box, so lines can stay clear of them. */
 function useObstacles(): Map<string, Rect> {
   const internals = useStore((s) => s.nodeInternals);
@@ -116,7 +128,7 @@ export const InsertableEdge = memo(
     const pill = data?.pill;
     // Router paths all leave one dot: their names go partway along each line so they never pile up.
     const scale = Math.max(counterScale(zoom), 1);
-    const pillBase = data?.route === 'option' ? routed.pointAt(Math.min(Math.max(routed.length * 0.4, 28 + 14 * scale), Math.max(routed.length - 40, 0))) : routed.pillAt;
+    const pillBase = data?.route === 'option' ? optionPillPoint(routed, scale) : routed.pillAt;
     // A name sitting right under its step is pushed down as it is scaled up, so it never covers the step's edge.
     const pillPos = data?.route !== 'option' && pillBase.x === routed.points[0]?.x && pillBase.y < (routed.points[0]?.y ?? 0) + 24 ? { x: pillBase.x, y: pillBase.y + (scale - 1) * 8 } : pillBase;
     const showControls = canManage && (hovered || selected);
@@ -145,7 +157,7 @@ export const InsertableEdge = memo(
               onClick={() => data?.onSelect?.(id)}
               style={overlayStyle(pillPos.x, pillPos.y, zoom, !data?.loopBack, true)}
               className={cn(
-                'max-w-[220px] cursor-pointer whitespace-normal break-words rounded-full border px-2.5 py-0.5 text-center text-xs font-medium leading-tight shadow-sm',
+                'max-w-[220px] cursor-pointer whitespace-normal break-words rounded-full border px-2.5 py-px text-center text-xs font-medium leading-tight shadow-sm',
                 PILL_TONE[data?.tone ?? 'neutral'],
                 run === 'untaken' && 'opacity-50',
               )}

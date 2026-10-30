@@ -24,7 +24,8 @@ export interface LayoutEdge {
   order?: number;
 }
 
-export const ROW_GAP = 150;
+/** Distance between two rows: a 100px card, room for a 12px branch name (kept 12px on screen when zoomed out) and the arrow. */
+export const ROW_GAP = 160;
 /** Card width the layout plans for and the clear space kept between two cards side by side. */
 export const CARD_WIDTH = 236;
 export const CARD_GAP = 54;
@@ -36,6 +37,7 @@ export const ORIGIN_Y = 100;
 const LANE_WIDTH = 24;
 const LANE_GAP = 40;
 const SWEEPS = 6;
+const MAX_PASSES = 200;
 
 interface Item {
   key: string;
@@ -198,25 +200,35 @@ export function autoLayout(nodes: LayoutNode[], edges: LayoutEdge[]): Record<str
       item.x = x;
     });
   }
-  const settle = (l: number, neighbours: (i: Item) => string[]) => {
+  // Returns how far the row moved, so the passes can stop once the picture has stopped changing.
+  const settle = (l: number, neighbours: (i: Item) => string[]): number => {
     const row = layers[l];
-    if (row.length === 0) return;
+    if (row.length === 0) return 0;
     const want = row.map((k) => {
       const item = items.get(k) as Item;
       const ns = neighbours(item).map((n) => (items.get(n) as Item).x);
       return ns.length ? mean(ns) : item.x;
     });
     const gaps = row.slice(1).map((k, i) => gap(items.get(row[i]) as Item, items.get(k) as Item));
-    placeRow(want, gaps).forEach((x, i) => { (items.get(row[i]) as Item).x = x; });
+    let moved = 0;
+    placeRow(want, gaps).forEach((x, i) => {
+      const item = items.get(row[i]) as Item;
+      moved = Math.max(moved, Math.abs(item.x - x));
+      item.x = x;
+    });
+    return moved;
   };
-  const both = (i: Item) => [...i.up, ...i.down];
-  for (let pass = 0; pass < 8; pass++) {
-    for (let l = 1; l < layers.length; l++) settle(l, (i) => i.up);
-    for (let l = layers.length - 2; l >= 0; l--) settle(l, (i) => i.down);
+  // A step only leaves its place for what hangs below it when that is a fan or a join: a plain run (one step leading to one
+  // step that has no other way in) stays on one vertical line however lopsided the branches further down are.
+  const pulledByChildren = (i: Item) => (i.down.length === 1 && (items.get(i.down[0]) as Item).up.length === 1 ? [] : i.down);
+  // Down, then up: each row moves toward what it hangs from, then toward what hangs from it, until it settles.
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    let moved = 0;
+    for (let l = 1; l < layers.length; l++) moved = Math.max(moved, settle(l, (i) => i.up));
+    for (let l = layers.length - 2; l >= 0; l--) moved = Math.max(moved, settle(l, pulledByChildren));
+    if (moved < 0.25) break;
   }
-  for (let pass = 0; pass < 3; pass++) {
-    for (let l = 0; l < layers.length; l++) settle(l, both);
-  }
+  for (let l = 1; l < layers.length; l++) settle(l, (i) => i.up);
 
   // The first step stays where the flow starts so the picture does not drift sideways.
   const first = ids[0] ? (items.get(ids[0]) as Item).x : 0;
