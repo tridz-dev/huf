@@ -9,7 +9,7 @@ import { useViewport } from '@/lib/ui/responsive';
 import { getLastWebhookRequest } from '@/services/flow/triggerApi';
 import { cn } from '@/lib/utils';
 import {
-  chipNames, makeChip, parseValue, serializeValue, uniqueVariable, type Chip, type ParsedValue, type Segment,
+  chipBefore, chipNames, makeChip, parseValue, serializeValue, uniqueVariable, type Chip, type ParsedValue, type Segment,
 } from '@/lib/flow-data/chips';
 import { describeChip, previewOf, type PickerStep } from '@/lib/flow-data/model';
 import type { DataPick } from '@/lib/flow-data/types';
@@ -103,11 +103,14 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
 
   // ---- the picker ----
   const [open, setOpen] = useState(false);
+  const isOpen = useRef(false);
+  isOpen.current = open;
   const origin = useRef<{ by: 'button' | 'slash' | 'chip'; position: number; chipId?: string; picked: boolean }>({ by: 'button', position: 0, picked: false });
   const openPicker = (by: 'button' | 'slash' | 'chip', chipId?: string) => {
     const position = editor.current?.position() ?? 0;
     origin.current = { by, position, chipId, picked: false };
     refresh();
+    isOpen.current = true;
     setOpen(true);
   };
   const openFromSlash = (position: number) => {
@@ -116,12 +119,15 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
     return true;
   };
   const closePicker = (next: boolean) => {
+    if (!next && !isOpen.current) return; // asked twice (Esc and focus leaving): act once
+    isOpen.current = next;
     setOpen(next);
     if (!next && origin.current.by === 'slash' && !origin.current.picked) editor.current?.insertText('/', origin.current.position);
   };
 
   const onPick = (pick: DataPick) => {
     origin.current.picked = true;
+    isOpen.current = false;
     setOpen(false);
     if (accept === 'list') {
       const next = { $from: pick.ref };
@@ -137,7 +143,11 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
     chip.name = same ? same.chip.name : uniqueVariable(chip.name, taken);
     const { chipId, position } = origin.current;
     if (chipId) editor.current?.replace(chipId, chip);
-    else editor.current?.insert(chip, position);
+    else if (chipBefore(state.segments, position)) {
+      // Two chips side by side would read as one word ("Ada Lovelace450"): put a space between them.
+      editor.current?.insertText(' ', position);
+      editor.current?.insert(chip, position + 1);
+    } else editor.current?.insert(chip, position);
   };
 
   const fetchLast = async (step: PickerStep) => {
@@ -218,7 +228,8 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
           className="w-[340px] max-w-[calc(100vw-24px)] p-0"
           onCloseAutoFocus={(e) => {
             e.preventDefault();
-            editor.current?.focus();
+            // Not when the picker was opened again while this one was still fading out: that would pull the focus out of the new one.
+            if (!isOpen.current) editor.current?.focus();
           }}
         >
           <DataPicker model={model} accept={accept} onPick={onPick} onFetchLast={fetchLast} loading={loading} />
