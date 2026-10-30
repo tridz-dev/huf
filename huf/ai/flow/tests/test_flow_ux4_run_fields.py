@@ -62,6 +62,10 @@ class TestInputHint(unittest.TestCase):
 		ctx = {"__node_outputs__": {"a": 1}, "api_key": "k", "note": "  ", "items": [1, 2], "ok": True}
 		self.assertEqual(input_hint(ctx), "ok yes")
 
+	def test_skips_what_the_engine_adds_to_scheduled_runs(self):
+		ctx = {"scheduled_for": "2026-10-30 06:35:00", "trigger_node": "empty_trigger", "due": "2026-10-30", "amount": 5}
+		self.assertEqual(input_hint(ctx), "amount 5")
+
 	def test_empty_and_long(self):
 		self.assertEqual(input_hint({}), "")
 		self.assertEqual(input_hint(None), "")

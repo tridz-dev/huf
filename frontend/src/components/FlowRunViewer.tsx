@@ -73,7 +73,7 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
     useEffect(() => {
         if (!run || !story || shownFor.current === run.flow_run_id) return;
         shownFor.current = run.flow_run_id;
-        const target = bodyRef.current?.querySelector('[data-step-status="failed"], [data-step-status="waiting"]');
+        const target = bodyRef.current?.querySelector('[data-step-status="failed"]');
         target?.scrollIntoView?.({ block: 'nearest' });
     }, [run, story]);
     useEffect(() => { if (!runId) shownFor.current = null; }, [runId]);
