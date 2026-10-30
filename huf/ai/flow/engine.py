@@ -1525,7 +1525,7 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 	waiting_data = {
 		"type": "approval",
 		"node_id": node.get("id"),
-		**waiting_fields(flow_run, node, render_text_refs(config.get("message", ""), ctx), ctx.data),
+		**waiting_fields(flow_run, node, render_text_refs(config.get("message", ""), ctx), ctx.data, config, ctx, getattr(_run_context(settings), "definition", None)),
 		**test_gate.approval_extras(flow_run),
 		"approver_type": config.get("approver_type"),
 		"approver_role": config.get("approver_role"),

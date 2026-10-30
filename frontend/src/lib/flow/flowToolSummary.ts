@@ -52,6 +52,9 @@ function hostOf(url: unknown): string | null {
 
 /** One plain sentence for a finished integration step, or null when the tool has no summary. Never contains a link or secret. */
 export function summarizeToolOutput(toolId: string | undefined, output: unknown): string | null {
+  const skipped = reply(output);
+  // A test run skips steps that would send or change something; say so instead of claiming it was sent.
+  if (skipped?.simulated === true && typeof skipped.summary === 'string') return `${skipped.summary} (skipped in test)`;
   const tool = detectTool(toolId, output);
   if (!tool) return null;
   const r = reply(output);

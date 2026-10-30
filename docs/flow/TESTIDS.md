@@ -87,7 +87,7 @@ Dropdown options inside Selects: `flow-option-<name>`; Combobox options: `<field
 | `trigger.doc-event` | `doctype` (searchable list, `-search`, options `flow-field-trigger.doc-event-doctype-option-<name>`), `event` (options `flow-option-doc-event-<event>`); sentence `flow-data-sentence`, panel `flow-data-trigger`, `flow-doc-event-filter` (the "Only when... coming soon" note) |
 | trigger panel | `flow-trigger-apply`, `flow-trigger-clear`, `flow-trigger-disabled-reason` |
 | `agent.run` | `agent`, `prompt`, `prompt_bindings`; `flow-binding-<name>`; picker `flow-agent-run-variable-picker` (+ `-item-<ref>`) |
-| `tool.call` | `tool_id`, `input.<key>` (e.g. `input.to`, `input.subject`, `input.body`, `input.channel`, `input.text`, `input.url`, `input.method`, `input.headers`, `input.body`); every value control has a `-mode` select (`flow-field-tool.call-input.to-mode`) |
+| `tool.call` | `tool_id`, `input.<key>` (e.g. `input.to`, `input.subject`, `input.body`, `input.channel`, `input.text`, `input.url`, `input.method`, `input.headers`, `input.body`); every value control is a `DataInput` (typed text and chips in one box; its "+ Use data" button is `flow-field-tool.call-input.to-picker`, see UX-9 below) |
 | `router.llm` | `prompt`, `options` (list), `flow-router-path-label-<targetNodeId>`, `flow-router-path-<targetNodeId>`, `flow-router-no-paths`, `default` |
 | `condition` | `expression`; branches `flow-branch-true`, `flow-branch-false` |
 | `foreach` | `items`, `max_iterations`, `on_item_error` (`flow-option-loop-on-error-fail|skip`), `collect`; branches `flow-branch-body`, `flow-branch-next`; pickers `flow-loop-items-picker`, `flow-loop-collect-picker` |
@@ -201,7 +201,7 @@ Node type `code.run`, canvas type `code-run`, palette card `flow-card-code-run` 
 | `flow-code-profile-badge` | "Needs approval each run" badge, shown only for a profile whose approval mode is not Auto Approve |
 | `flow-code-timeout` | Time limit in seconds (capped at the profile's limit) |
 | `flow-code-inputs-add` | Add input button |
-| `flow-code-input-key-<i>`, `flow-code-input-value-<i>` | Name and value of input row `i` (value is a Flow value control: `-mode` and `-picker` suffixes as for other fields); remove with `flow-code-input-remove-<i>` |
+| `flow-code-input-key-<i>`, `flow-code-input-value-<i>` | Name and value of input row `i` (value is a `DataInput`: `-picker` suffix as for other fields); remove with `flow-code-input-remove-<i>` |
 | `flow-code-help` | "How your code runs" help (`<details>`) |
 | `flow-code-readonly-note` | "You need permission to run code to edit this step." (the form is then disabled) |
 | `flow-error-code.run-code`, `-profile`, `-timeout_s`, `-inputs` | Inline required-field errors |
@@ -233,7 +233,7 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-card-desc-<cardId>` | The one-line "what does this step do" under a palette card |
 | `flow-config-hint` | Intro sentence of a step or trigger, inside the (i) popover in the panel header |
 | `flow-hint-<form>-<field>` | One-line hint under a field (for example `flow-hint-webhook-secret`, `flow-hint-loop-max`, `flow-hint-approval-timeout`, `flow-hint-transform-op`, `flow-hint-transform-example`, `flow-hint-condition`) |
-| `<field testid>-hint` | Hint under a value input (URL, Subject, Spreadsheet ID ...); `<field testid>-mode-help` explains Reference / Template / JSON |
+| `<field testid>-hint` | Hint under a value input (URL, Subject, Spreadsheet ID ...) |
 | `flow-condition-examples`, `flow-schedule-examples`, `flow-doc-event-explained` | Folded example lists (condition syntax, cron examples, what each Data event means) |
 | `flow-webhook-responses` | What 200 / 403 / 405 / 429 mean (inside the closed-by-default developer reference) |
 | `flow-hint-schedule-intro`, `flow-hint-schedule-every`, `flow-hint-schedule-monthday`, `flow-hint-schedule-zone`, `flow-hint-schedule-cron` | Schedule intro and field help |
@@ -291,6 +291,23 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-run-decision-bar`, `flow-run-decision-inline`, `flow-run-cannot-decide`, `flow-run-back` | Run details: sticky Approve / Reject bar on a phone, the inline pair elsewhere, the sentence shown to someone who may not decide, the "Runs" back button |
 | `flow-approval-group-<firstRunId>`, `flow-approval-group-heading` | Bell: identical requests grouped under "3 waiting: Order approval" (every request keeps its own `flow-approve-<runId>` / `flow-reject-<runId>`) |
 | `no-access-page`, `no-access-title`, `no-access-body`, `no-access-go-flows`, `no-access-go-hub` | "You don't have access to this page" (Hub, Flows, Executions, Settings, Agents, Dashboard) |
+
+## UX-9 Use data picker, chips, preview (`components/flow/data/*`)
+| testid | Where |
+|---|---|
+| `<field testid>` | The box of a `DataInput` (role textbox, contenteditable: typed text and chips). `fill` replaces everything; `value` / `value_matches` read its words (chips as "Customer > Name . New order"); the runner reads it with `readValue` |
+| `<field testid>-picker` | "+ Use data" button inside the box's right edge (also the `VariablePicker` button of prompt, condition and loop fields) |
+| `<field testid>-preview`, `-preview-text` | "What this will become: ..." line under a filled input that holds data, from examples; unknown parts read `[Customer name: no sample yet]` |
+| `<field testid>-hint`, `-box`, `-not-a-number`, `-use-text` | Hint line, wrapper, number field error ("Enter a number"), "Use plain text instead" under a JSON area that was opened by an old list/object value |
+| `<field testid>-yes`, `-no`, `-unset` | Options of a Yes/No field (`kind="yesno"`) |
+| `flow-json-<field testid with . and _ as ->-input` | The Advanced (JSON) text of a `kind="json"` field (JsonArea key = testid lower-cased, non-letters to `-`) |
+| `flow-use-data` | The picker panel (role dialog), beside the input; `flow-use-data-title`, `-back`, `-search` |
+| `flow-use-data-step-<stepId>` | Level 1: one row per step the field can read (trigger first, closest step next); the loop's item row has id `<loopId>:item` |
+| `flow-use-data-field-<path>` | Level 2: a field row (`path` is the reference, e.g. `input.customer.name`, `node_5.total`); `flow-use-data-sample` is its example text |
+| `flow-use-data-each`, `-first`, `-joined`, `-count` | Level 3 of a list: Each item (use in a loop) / First item / All items, joined with commas / How many items |
+| `flow-use-data-summary`, `-all`, `-result` | "Show as summary table" (object or first item), "Everything in X", "Its result" / "Everything this step produced" |
+| `flow-use-data-nosample`, `flow-use-data-last-request`, `flow-use-data-empty` | "No sample yet: run a test" panel, its "Use last real request" button (webhook trigger), empty message |
+| `flow-use-data-type-it`, `flow-use-data-typed` | "Can't find it? Type the field name" and its box (Enter inserts; `input.customer.name` or `customer.name` inside a step) |
 
 ## Run details as a story (UX-4)
 
