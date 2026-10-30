@@ -1,79 +1,92 @@
-import { useMemo } from 'react';
+import { useState } from 'react';
+import { toast } from 'sonner';
 import { useFlowContext } from '../../contexts/FlowContext';
-import { availableReferences, type RefScope } from '../../lib/flow/flowRefs';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { useViewport } from '@/lib/ui/responsive';
+import { getLastWebhookRequest } from '@/services/flow/triggerApi';
+import { variableName } from '@/lib/flow-data/chips';
+import type { RefScope } from '../../lib/flow/flowRefs';
+import { DataPicker } from '../flow/data/DataPicker';
+import { invalidateDataCatalog, useDataCatalog } from '../flow/data/useDataCatalog';
+import type { PickerStep } from '@/lib/flow-data/model';
+import type { DataPick } from '@/lib/flow-data/types';
 import { Button } from './button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from './dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from './popover';
 
 interface VariablePickerProps {
     /**
-     * Called with a reference path (`input`, `trigger`, `foreach.item` or a step id) and a short name that is
-     * safe to use as a `{placeholder}` in a prompt or template.
+     * Called with a reference path (`input.customer.name`, a step id, `foreach.item`) and a short name that is safe to use as a
+     * `{placeholder}` in a prompt or template. Never a bare `input` or `trigger`.
      */
     onSelect: (reference: string, suggestedName: string) => void;
     /** Step the field belongs to: only the trigger and steps that always run before it are listed. */
     currentNodeId?: string | null;
     /** `loop-body`: the steps inside this loop (for a loop's "result to collect"). */
     scope?: RefScope;
+    /** `list`: the field takes a whole list (a loop's items). */
+    accept?: 'ref' | 'list';
     testId?: string;
-    /** Accessible name; defaults to "Insert data". */
+    /** Accessible name; defaults to "Use data". */
     label?: string;
 }
 
-/** Lets the user pick data from the trigger or an earlier step instead of typing a reference path. */
-export function VariablePicker({ onSelect, currentNodeId, scope = 'ancestors', testId = 'flow-variable-picker', label }: VariablePickerProps) {
-    const { activeFlow } = useFlowContext();
+/**
+ * "+ Use data" for a field that stores a reference or writes its own text around it (prompts, conditions, a loop's list).
+ * Same picker as the chip input: a step, then one of its fields with a real example. Fields that mix typed text and chips
+ * use `DataInput` instead.
+ */
+export function VariablePicker({ onSelect, currentNodeId, scope = 'ancestors', accept = 'ref', testId = 'flow-variable-picker', label }: VariablePickerProps) {
     const { canManage } = useFlowPermissions();
-
-    const entries = useMemo(
-        () => availableReferences(currentNodeId, activeFlow?.nodes ?? [], activeFlow?.edges ?? [], scope),
-        [activeFlow, currentNodeId, scope]
-    );
+    const { activeFlow, updateNodeData } = useFlowContext();
+    const { isPhone } = useViewport();
+    const [open, setOpen] = useState(false);
+    const { model, loading, refresh } = useDataCatalog(currentNodeId ?? undefined, scope);
 
     // View-only users cannot change a value, so there is nothing to insert into.
     if (!canManage) return null;
 
+    const pick = (p: DataPick) => {
+        setOpen(false);
+        onSelect(p.ref, variableName(p.label));
+    };
+    const fetchLast = async (step: PickerStep) => {
+        if (!activeFlow) return;
+        const last = await getLastWebhookRequest(activeFlow.id);
+        if (!last.found || !last.sample) {
+            toast.message('No request has reached this webhook yet. Send one, then try again.');
+            return;
+        }
+        updateNodeData(step.id, (data) => ({ ...data, sample: last.sample as Record<string, unknown> }));
+        invalidateDataCatalog();
+        toast.success('Now using the last real request as the example.');
+    };
+
     return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+        <Popover open={open} onOpenChange={(o) => { if (o) refresh(); setOpen(o); }}>
+            <PopoverTrigger asChild>
                 <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     className="h-7 text-xs px-2.5"
-                    title="Insert data from the trigger or an earlier step"
-                    aria-label={label ?? 'Insert data'}
+                    title="Use data from the trigger or an earlier step"
+                    aria-label={label ?? 'Use data'}
                     data-testid={testId}
                 >
-                    Insert data
+                    + Use data
                 </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-                align="end"
-                className="w-[240px] max-h-[300px] overflow-y-auto"
+            </PopoverTrigger>
+            <PopoverContent
+                side={isPhone ? 'top' : 'left'}
+                align="start"
+                sideOffset={12}
+                collisionPadding={12}
+                className="w-[340px] max-w-[calc(100vw-24px)] p-0"
                 // The field that received the data takes focus (not the button), so the user can keep typing.
                 onCloseAutoFocus={(e) => e.preventDefault()}
             >
-                <DropdownMenuLabel className="text-xs">Data you can use</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {entries.map((e) => (
-                    <DropdownMenuItem
-                        key={e.ref}
-                        className="text-xs cursor-pointer"
-                        data-testid={`${testId}-item-${e.ref}`}
-                        onSelect={() => onSelect(e.ref, e.name)}
-                    >
-                        {e.label}
-                    </DropdownMenuItem>
-                ))}
-            </DropdownMenuContent>
-        </DropdownMenu>
+                <DataPicker model={model} accept={accept} onPick={pick} onFetchLast={fetchLast} loading={loading} />
+            </PopoverContent>
+        </Popover>
     );
 }
