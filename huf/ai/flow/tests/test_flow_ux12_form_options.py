@@ -61,7 +61,12 @@ class TestFlowUsers(IntegrationTestCase):
 
 class TestApproverCheckOnPublish(IntegrationTestCase):
 	def _graph(self, users):
+		limits = {"max_nodes": 20, "max_rows": 1000, "max_output_bytes": 100000, "max_parallel_calls": 1, "max_foreach_iterations": 10,
+			"max_external_calls": 10, "max_writes": 5, "max_wall_time_ms": 60000, "fail_closed": True}
 		return {
+			"schema_version": "1.0.0", "profile": "flow", "fingerprint": "0" * 64, "entry": "t",
+			"contract": {"input_schema": {"type": "object"}, "output_schema": {"type": "object"}, "applies_when": [],
+				"permission_envelope": {"read": [], "write": [], "http": [], "code": "none"}, "limits": limits},
 			"nodes": [
 				{"id": "t", "type": "trigger.webhook", "config": {"method": "POST", "secret": "s" * 32}, "next": "ask"},
 				{
