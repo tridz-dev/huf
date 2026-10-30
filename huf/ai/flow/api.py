@@ -18,8 +18,8 @@ from frappe.rate_limiter import rate_limit
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.api_support import require_permission
-from huf.ai.flow.runs.access import can_access_run, require_run_access
-from huf.ai.flow.runs.shape import extras_for_detail
+from huf.ai.flow.runs.access import can_access_run, require_flow_read, require_run_access
+from huf.ai.flow.runs.shape import _STEP_TYPE_TITLES, extras_for_detail
 from huf.ai.flow.support.approval_card import api_card, build_card
 from huf.ai.flow.support.decision_rights import approval_decision_rights
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
@@ -98,19 +98,6 @@ def _is_stale(status: str | None, modified) -> bool:
 def _can_mark_failed() -> bool:
 	return "System Manager" in frappe.get_roles(frappe.session.user)
 
-
-# Step title shown when a saved step has no title of its own (flows written outside the editor).
-_STEP_TYPE_TITLES = {
-	"agent.run": "Run agent",
-	"tool.call": "Call tool",
-	"router.llm": "LLM Router",
-	"condition": "Condition (If/Else)",
-	"foreach": "Loop",
-	"human.approval": "Human in Loop",
-	"end": "End",
-	"transform": "Transform data",
-	"code.run": "Execute code",
-}
 
 
 def _node_labels(flow_id: str | None) -> dict:
@@ -341,8 +328,7 @@ def run_flow(
 	"""
 	if not frappe.has_permission("Flow Run", "create"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
-	if flow_id and frappe.db.exists("Flow Definition", flow_id) and not frappe.has_permission("Flow Definition", "read", doc=flow_id):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)  # starting a flow needs read on THAT flow
+	require_flow_read(flow_id)  # starting a flow needs read on THAT flow
 
 	# Parse payload
 	if isinstance(payload, str):
@@ -534,8 +520,7 @@ def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit:
 	if run_mode:
 		filters["run_mode"] = stored_mode(run_mode)
 
-	if flow_id and frappe.db.exists("Flow Definition", flow_id) and not frappe.has_permission("Flow Definition", "read", doc=flow_id):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	require_flow_read(flow_id)
 	# get_list, not get_all: runs of flows hidden from the caller by User Permissions stay out of the answer.
 	runs = frappe.get_list(
 		"Flow Run",
@@ -594,8 +579,7 @@ def list_flow_runs_page(
 		if matching:
 			or_filters.append(["flow_id", "in", matching])
 
-	if flow_id and frappe.db.exists("Flow Definition", flow_id) and not frappe.has_permission("Flow Definition", "read", doc=flow_id):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	require_flow_read(flow_id)
 	total = len(frappe.get_list("Flow Run", filters=filters, or_filters=or_filters, pluck="name", limit_page_length=0))
 	rows = frappe.get_list(
 		"Flow Run",

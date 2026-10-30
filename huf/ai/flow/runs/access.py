@@ -39,3 +39,9 @@ def require_run_access(flow_run_id: str, ptype: str = "read", flow_ptype: str | 
 	if not can_access_run(flow_run_id, ptype, flow_ptype):
 		frappe.throw(message or _("Not permitted"), frappe.PermissionError)
 	return frappe.db.get_value("Flow Run", flow_run_id, "flow_id")
+
+
+def require_flow_read(flow_id: str | None) -> None:
+	"""Raise unless the caller may read that flow (an unknown or empty id is left to the caller's own not-found handling)."""
+	if flow_id and frappe.db.exists("Flow Definition", flow_id) and not frappe.has_permission("Flow Definition", "read", doc=flow_id):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)

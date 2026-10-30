@@ -19,6 +19,19 @@ from bisect import bisect_right
 
 import frappe
 
+# Step title shown when a saved step has no title of its own (flows written outside the editor).
+_STEP_TYPE_TITLES = {
+	"agent.run": "Run agent",
+	"tool.call": "Call tool",
+	"router.llm": "LLM Router",
+	"condition": "Condition (If/Else)",
+	"foreach": "Loop",
+	"human.approval": "Human in Loop",
+	"end": "End",
+	"transform": "Transform data",
+	"code.run": "Execute code",
+}
+
 from huf.ai.flow.runs.outcome import stored_outcome
 
 _DECISION_OUTCOMES = {

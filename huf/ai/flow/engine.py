@@ -1731,10 +1731,8 @@ def _exec_condition(flow_run, node: dict, config: dict, settings: dict) -> dict:
 
 	try:
 		result = evaluate_bool(parse_expression(expression), ctx.reference_roots(), raise_limits=True)
-	except ExpressionLimitError as e:
-		return {"status": "failed", "error": str(e)}
 	except Exception as e:
-		return {"status": "failed", "error": "This condition could not be checked against the data it received. Check what you compare, and that earlier steps give it that data."}
+		return {"status": "failed", "error": str(e) if isinstance(e, ExpressionLimitError) else "This condition could not be checked against the data it received. Check what you compare, and that earlier steps give it that data."}
 
 	return {
 		"status": "success",
@@ -1924,12 +1922,10 @@ def _exec_validate(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		try:
 			parsed = parse_expression(assertion["expression"])
 			truthy = evaluate_bool(parsed, bindings, raise_limits=True)
-		except ExpressionLimitError as e:
-			return {"status": "failed", "error": f"{step_ref(node, True)}: {e}"}
 		except Exception as e:
 			return {
 				"status": "failed",
-				"error": f'{step_ref(node, True)} could not check one of its rules against the data it received. Check the rule.',
+				"error": f"{step_ref(node, True)}: {e}" if isinstance(e, ExpressionLimitError) else f'{step_ref(node, True)} could not check one of its rules against the data it received. Check the rule.',
 			}
 		if not truthy:
 			failures.append({"code": assertion["code"], "message": assertion["message"]})
