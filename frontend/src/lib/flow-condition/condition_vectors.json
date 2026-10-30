@@ -1,5 +1,5 @@
 {
-  "_about": "Golden vectors for the Condition builder: the same model must compile to the same text in Python (huf/ai/flow/support/condition_compile.py) and TypeScript (compile.ts). Every expression here also parses back to the model (parse.ts). Read by both test suites.",
+  "_about": "Golden vectors for the Condition builder: the same model must compile to the same text in Python (huf/ai/flow/support/condition/condition_compile.py) and TypeScript (compile.ts). Every expression here also parses back to the model (parse.ts). Read by both test suites.",
   "vectors": [
     {"name": "number more than", "expression": "number(input['amount']) > 100",
      "model": {"match": "all", "items": [{"type": "rule", "field": "input.amount", "op": "gt", "value": {"kind": "number", "text": "100"}, "numeric": true}]}},

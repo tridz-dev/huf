@@ -1,5 +1,5 @@
 /**
- * Rules -> condition expression text. Must give exactly the text `huf/ai/flow/support/condition_compile.py` gives;
+ * Rules -> condition expression text. Must give exactly the text `huf/ai/flow/support/condition/condition_compile.py` gives;
  * `condition_vectors.json` pins both. See that file's docstring for the shapes.
  */
 import { isOperator, needsValue } from './operators';

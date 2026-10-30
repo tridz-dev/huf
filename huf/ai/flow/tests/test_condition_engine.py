@@ -6,7 +6,7 @@ awkward data the screen allows: nothing at all, empty text, 0, text that is or i
 
 import unittest
 
-from huf.ai.flow.support import condition_compile as cc
+from huf.ai.flow.support.condition import condition_compile as cc
 from huf.ai.flow.tests.test_flow_engine import FakeFlowRun, _ctx, flow_engine
 
 

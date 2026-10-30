@@ -12,7 +12,7 @@ import sys
 import unittest
 
 try:
-	from huf.ai.flow.support import condition_compile as cc
+	from huf.ai.flow.support.condition import condition_compile as cc
 	from huf.ai.graph import expressions as expr
 except Exception:  # pragma: no cover - frappe-less environments
 	_HERE = os.path.dirname(os.path.abspath(__file__))
@@ -24,7 +24,7 @@ except Exception:  # pragma: no cover - frappe-less environments
 		spec.loader.exec_module(mod)
 		return mod
 
-	cc = _load("huf_condition_compile_standalone", "..", "support", "condition_compile.py")
+	cc = _load("huf_condition_compile_standalone", "..", "support", "condition", "condition_compile.py")
 	expr = _load("huf_graph_expressions_standalone", "..", "..", "graph", "expressions.py")
 
 _VECTORS = os.path.join(

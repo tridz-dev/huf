@@ -9,7 +9,7 @@ A Condition step stores one string, `config.expression`. The side panel edits **
 | `parse.ts` | text -> rules (`parseCondition`) |
 | `infer.ts` | typed text -> number or text, per operator |
 | `sentence.ts` | rules -> "Amount is more than 100 and Status is Paid" |
-| `huf/ai/flow/support/condition_compile.py` | The same compile in Python (tests; the engine does not need it) |
+| `huf/ai/flow/support/condition/condition_compile.py` | The same compile in Python (tests; the engine does not need it) |
 | `frontend/src/lib/flow-condition/condition_vectors.json` | Golden vectors read by both the vitest and the Python tests |
 | `huf/ai/graph/expressions.py` | The evaluator: four helpers `number`, `lower`, `startswith`, `endswith` were added (the only calls it accepts) |
 

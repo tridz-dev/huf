@@ -1,7 +1,7 @@
 /**
  * The rules a Condition step is built from (UX-13). The step stores one expression string; this model is what the
  * builder edits and what `compile.ts` turns into that string and `parse.ts` reads back from it.
- * Mirrors `huf/ai/flow/support/condition_compile.py` (the docstring there is the full description of the model).
+ * Mirrors `huf/ai/flow/support/condition/condition_compile.py` (the docstring there is the full description of the model).
  */
 
 export type Match = 'all' | 'any';
