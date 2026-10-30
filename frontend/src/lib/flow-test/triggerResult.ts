@@ -19,5 +19,6 @@ export function triggerResult(output: Record<string, unknown>, summary: string, 
     preview: null,
     goes_to: null,
     branch: null,
+    warnings: [],
   };
 }

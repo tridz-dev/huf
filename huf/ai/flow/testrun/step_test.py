@@ -249,12 +249,15 @@ def execute_step(flow_id: str, node_id: str, sample_input: Any = None) -> dict:
 		sample = clean_sample_input(sample_input) if sample_input is not None else None
 	except ValueError as exc:
 		return _failure(node, str(exc), started, **_meta(info, titles, node))
+	empty: list[str] = []
 	if sample is None:
 		from huf.ai.flow.catalog.api import _latest_run
 
-		sample = build_sample_input(graph, node_id, _latest_run(flow_id), titles)["sample_input"]
+		built = build_sample_input(graph, node_id, _latest_run(flow_id), titles)
+		sample = built["sample_input"]
+		empty = [p["title"] for p in built["parts"] if p["source"] == SOURCE_NONE]
 	stub = StepTestRun(flow_id)
-	meta = _meta(info, titles, node)
+	meta = {**_meta(info, titles, node), "warnings": [f"There is no sample for \"{t}\", so the step worked with empty data. Edit the sample, or run the flow once, to see a real answer." for t in empty]}
 	if info["approval"]:
 		return _success(node, None, started, **{**meta, "mode": "preview", "preview": _approval_preview(graph, node, sample, stub)})
 	if node.get("type") == "code.run":
@@ -269,7 +272,7 @@ def execute_step(flow_id: str, node_id: str, sample_input: Any = None) -> dict:
 
 
 def _meta(info: dict, titles: dict, node: dict) -> dict:
-	return {"effect": info["effect"], "calls_ai": info["calls_ai"], "mode": "real", "summary": None, "preview": None, "goes_to": None, "branch": None}
+	return {"effect": info["effect"], "calls_ai": info["calls_ai"], "mode": "real", "summary": None, "preview": None, "goes_to": None, "branch": None, "warnings": []}
 
 
 def _shape(node: dict, raw: dict, started: float, meta: dict, titles: dict) -> dict:

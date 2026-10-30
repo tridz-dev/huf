@@ -60,7 +60,7 @@ def test_step(flow_id: str, node_id: str, sample_input=None) -> dict:
 
 
 def _trigger_result(node: dict, data, started: float, mode: str, summary: str | None, error: str | None = None) -> dict:
-	meta = {"effect": "reads", "calls_ai": False, "mode": mode, "summary": summary, "preview": None, "goes_to": None, "branch": None}
+	meta = {"effect": "reads", "calls_ai": False, "mode": mode, "summary": summary, "preview": None, "goes_to": None, "branch": None, "warnings": []}
 	if error:
 		return st._failure(node, error, started, **meta)
 	return st._success(node, data, started, **meta)

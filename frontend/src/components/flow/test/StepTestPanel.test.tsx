@@ -43,7 +43,7 @@ const info = (over: Partial<StepTestInfo> = {}): StepTestInfo => ({
 
 const result = (over: Partial<StepTestResult> = {}): StepTestResult => ({
   status: 'success', mode: 'real', output: { total: 450 }, output_shortened: false, pin_value: { total: 450 }, duration_ms: 120, error: null, fix_hint: null,
-  tested_at: new Date().toISOString(), effect: 'reads', calls_ai: false, summary: null, preview: null, goes_to: null, branch: null, ...over,
+  tested_at: new Date().toISOString(), effect: 'reads', calls_ai: false, summary: null, preview: null, goes_to: null, branch: null, warnings: [], ...over,
 });
 
 const open = async (n = node(), over: Partial<StepTestInfo> = {}, active = true) => {

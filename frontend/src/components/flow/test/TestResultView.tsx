@@ -33,9 +33,17 @@ export function TestResultView({ result, pin, onOpenSetup, isTrigger }: { result
         )}
         {result.mode === 'simulated' && !failed && <Badge variant="pill-neutral" data-testid="flow-step-test-simulated">Nothing was sent</Badge>}
         <span className="text-meta text-muted-foreground" data-testid="flow-step-test-duration">
-          {[result.duration_ms > 0 ? `Took ${durationText(result.duration_ms)}` : '', `Tested ${ageText(result.tested_at)}`].filter(Boolean).join(' . ')}
+          {[result.duration_ms > 0 ? `Took ${durationText(result.duration_ms)}` : '', `Tested ${ageText(result.tested_at)}`].filter(Boolean).join(' · ')}
         </span>
       </div>
+
+      {result.warnings?.length > 0 && (
+        <ul className="space-y-1 rounded-md border border-warning/30 bg-warning-tint p-2.5 text-xs text-warning" data-testid="flow-step-test-warnings">
+          {result.warnings.map((w) => (
+            <li key={w} className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden /><span>{w}</span></li>
+          ))}
+        </ul>
+      )}
 
       {failed && (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm" data-testid="flow-step-test-error">

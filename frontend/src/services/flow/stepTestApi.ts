@@ -60,6 +60,8 @@ export interface StepTestResult {
   preview: ApprovalPreview | null;
   goes_to: string | null;
   branch: 'Yes' | 'No' | null;
+  /** Things worth knowing about this answer (a source with no sample). */
+  warnings: string[];
 }
 
 export interface RecentDocument {
