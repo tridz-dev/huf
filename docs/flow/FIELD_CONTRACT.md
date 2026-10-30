@@ -461,7 +461,7 @@ The example is valid with a classifier that marks `http_request` as an http tool
 **Templating and expressions**
 * `{{var}}` is NOT supported anywhere. In `agent.run.prompt`, `{name}` placeholders are filled from `prompt_bindings`; `{{`/`}}` are literal braces. Other dynamic values use `{"$from": ...}` or `{"$template": "...", "vars": {...}}`.
 * `router.llm.prompt` and `human.approval.message` are plain text: no placeholders are substituted.
-* `condition` expressions use `input[...]` roots (AST-restricted evaluator).
+* `condition` expressions use `input[...]` roots (AST-restricted evaluator). The only calls allowed are `number(x)`, `lower(x)`, `startswith(x, y)` and `endswith(x, y)` (fixed names and argument counts, total: wrong types give null / false). The Condition builder writes and reads exactly the shapes of `docs/flow/CONDITION.md`.
 
 **Approvals**
 * The `waiting` JSON of a paused run holds: `type` (`approval`), `node_id`, `message`, `approver_type` (`role`|`user`), `approver_role`, `approver_users`, `timeout_next`, `timeout_ms`, `timeout_at` (ISO). `get_pending_approvals` returns these (plus `title`/`instructions`/`approval_type` aliases for the current frontend).
