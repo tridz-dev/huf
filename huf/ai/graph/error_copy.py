@@ -319,7 +319,8 @@ _NOT_CONNECTED = re.compile(r"^(?P<label>.+?) is not connected[:.]\s*(?:add .+ i
 _REJECTED = re.compile(r"^(?P<label>.+?) rejected the saved credentials", re.I)
 _NEEDS_SCOPE = re.compile(r"^(?P<label>.+?) needs the .+ permission", re.I)
 _SLACK_AUTH = re.compile(r"\b(invalid_auth|not_authed|token_revoked|token_expired|account_inactive|no_permission)\b")
-_NO_SAVED_PASSWORD = re.compile(r"Password not found for (?P<doctype>.+?) (?P<name>.+) (?P<field>[a-z_]+)$")
+_NO_PROVIDER_KEY = re.compile(r"Password not found for AI Provider (?P<name>.+) api_key$")
+_NO_SAVED_PASSWORD = re.compile(r"Password not found for (?P<doctype>\S+) (?P<name>.+) (?P<field>[a-z_]+)$")
 _NOT_JSON = re.compile(r"is not JSON serializ?able", re.I)
 _PRIVATE_ADDRESS = re.compile(r"private/internal addresses are not allowed|private (or|and) internal address", re.I)
 
@@ -350,10 +351,11 @@ def plain_error(text: str | None) -> str:
 	m = _REJECTED.match(text)
 	if m:
 		return f"{m.group('label')} did not accept the saved connection. Reconnect it in Integrations."
+	m = _NO_PROVIDER_KEY.search(text)
+	if m:
+		return f"The AI provider {m.group('name')} has no key saved. Open AI Providers to add it."
 	m = _NO_SAVED_PASSWORD.search(text)
 	if m:
-		if m.group("doctype").lower() == "ai provider":
-			return f"The AI provider {m.group('name')} has no key saved. Open AI Providers to add it."
 		return f"The {m.group('doctype').lower()} {m.group('name')} has no {m.group('field').replace('_', ' ')} saved. Add it in its settings."
 	if _NOT_JSON.search(text):
 		return "A value could not be stored because it is not plain text, a number, yes/no, a list or a record. Use one of those."
