@@ -186,7 +186,7 @@ export function NodeCard({ id, icon: Icon, iconClass, title, subtitle, frameClas
     const size = tileIconSize(zoom);
     return (
       <div className="relative flex h-[100px] w-[236px] items-center justify-center" data-lod="icon">
-        <div className={cn('flow-card group/card relative flex h-[100px] w-[120px] items-center justify-center rounded-2xl border bg-panel transition-colors duration-200', frameClass)}>
+        <div className={cn('flow-card group/card relative flex h-[100px] w-[120px] items-center justify-center rounded-2xl border bg-paper-deep shadow-sm transition-colors duration-200', frameClass)}>
           <div className={cn('text-ink', iconClass)}>
             <Icon style={square(size)} aria-hidden />
           </div>

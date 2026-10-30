@@ -80,11 +80,13 @@ export function FlowCanvas({
   // 1200px and narrower: Tidy layout and Convert to procedure live in the header's "..." menu. A phone has no editing tools at all.
   const { isCompact, isPhone } = useViewport();
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
-  // A run opened from history or a link (?run=<id>) is drawn on the canvas; the person can switch its colours off.
+  // A run opened from history or a link (?run=<id>) is drawn on the canvas and stays drawn after its details are closed, so
+  // each step can be hovered for what it produced, until the person hides it, opens another run or leaves the flow.
   const [openRunId] = useRunParam();
-  const [runColoursOffFor, setRunColoursOffFor] = useState<string | null>(null);
-  const coloursOff = openRunId !== null && runColoursOffFor === openRunId;
-  const runOverlay = useRunOverlay(openRunId && !coloursOff ? openRunId : null);
+  const [shownRunId, setShownRunId] = useState<string | null>(null);
+  useEffect(() => { if (openRunId) setShownRunId(openRunId); }, [openRunId]);
+  useEffect(() => { setShownRunId(openRunId); }, [activeFlow?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const runOverlay = useRunOverlay(shownRunId);
   const deleteRef = useRef(deleteNode);
   deleteRef.current = deleteNode;
   const onDeleteNode = useCallback((nodeId: string) => deleteRef.current(nodeId), []);
@@ -574,9 +576,9 @@ export function FlowCanvas({
             }}
           />
         </Panel>
-        {openRunId && (
+        {runOverlay && (
           <Panel position="top-left" className="m-2">
-            <RunOverlayChip hidden={coloursOff} onToggle={() => setRunColoursOffFor(coloursOff ? null : openRunId)} />
+            <RunOverlayChip onHide={() => setShownRunId(null)} />
           </Panel>
         )}
         {!showLeftSidebar && (

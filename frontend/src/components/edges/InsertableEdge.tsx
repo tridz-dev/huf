@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, type CSSProperties } from 'react';
+import { memo, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { BaseEdge, EdgeLabelRenderer, EdgeProps, useStore } from 'reactflow';
 import { Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -43,22 +43,23 @@ const DEFAULT_SIZE = { width: 236, height: 70 };
  * Places an overlay centred at a point on the canvas and keeps it at its normal size when the canvas is zoomed out
  * (a 12px label stays 12px on screen instead of shrinking with the steps).
  */
-const overlayStyle = (x: number, y: number, zoom: number, interactive = false, shrinkWhenZoomedIn = false): CSSProperties => ({
+const overlayStyle = (x: number, y: number, zoom: number, interactive = false, shrinkWhenZoomedIn = false, maxScale?: number): CSSProperties => ({
   position: 'absolute',
   // Names are 12px on screen at every zoom (they also shrink when zoomed in); buttons only grow when zoomed out so they stay easy to hit.
-  transform: `translate(${x}px, ${y}px) scale(${shrinkWhenZoomedIn ? counterScale(zoom) : zoom < 1 ? counterScale(zoom) : 1}) translate(-50%, -50%)`,
+  transform: `translate(${x}px, ${y}px) scale(${shrinkWhenZoomedIn ? counterScale(zoom) : zoom < 1 ? counterScale(zoom, maxScale) : 1}) translate(-50%, -50%)`,
   ...(interactive ? { pointerEvents: 'all' as const } : {}),
 });
 
 /**
- * Where a router path's name sits: right where the line turns down into its step (each path ends over its own column, so names
- * never pile up), or partway along when the line is straight down.
+ * Where a branch name sits: right where the line turns down into its step (each branch ends over its own column, so names
+ * never pile up, however far the canvas is zoomed out), or just under the step it leaves when the line runs straight down.
  */
-function optionPillPoint(routed: ReturnType<typeof routeEdge>, scale: number) {
+function pillPoint(routed: ReturnType<typeof routeEdge>, scale: number, option: boolean) {
   const [first, ...rest] = routed.points;
   const turn = rest.find((p, i) => i > 0 && Math.abs(p.y - rest[i - 1].y) < 0.5 && Math.abs(p.x - rest[i - 1].x) >= 40);
   const run = turn ? rest[rest.indexOf(turn) - 1] : undefined;
   if (turn && run && first) return { x: turn.x, y: turn.y };
+  if (!option) return routed.pillAt;
   return routed.pointAt(Math.max(Math.min(Math.max(routed.length * 0.4, 28 + 14 * scale), routed.length / 2), 10));
 }
 
@@ -107,6 +108,11 @@ function ControlButton({ label, testId, onClick, className, children }: { label:
 export const InsertableEdge = memo(
   ({ id, source, target, sourceX, sourceY, targetX, targetY, style, markerEnd, data, selected }: EdgeProps<InsertableEdgeData>) => {
     const [hovered, setHovered] = useState(false);
+    // The buttons only take the pointer while shown (invisible ones must not catch clicks meant for the steps); a short grace
+    // period lets the pointer travel from the line onto them.
+    const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const hoverOn = () => { if (leaveTimer.current) clearTimeout(leaveTimer.current); setHovered(true); };
+    const hoverOff = () => { if (leaveTimer.current) clearTimeout(leaveTimer.current); leaveTimer.current = setTimeout(() => setHovered(false), 160); };
     const { canManage } = useFlowPermissions();
     const zoom = useStore((s) => s.transform[2]);
     const obstacles = useObstacles();
@@ -128,7 +134,7 @@ export const InsertableEdge = memo(
     const pill = data?.pill;
     // Router paths all leave one dot: their names go partway along each line so they never pile up.
     const scale = Math.max(counterScale(zoom), 1);
-    const pillBase = data?.route === 'option' ? optionPillPoint(routed, scale) : routed.pillAt;
+    const pillBase = loopBack ? routed.pillAt : pillPoint(routed, scale, data?.route === 'option');
     // A name sitting right under its step is pushed down as it is scaled up, so it never covers the step's edge.
     const pillPos = data?.route !== 'option' && pillBase.x === routed.points[0]?.x && pillBase.y < (routed.points[0]?.y ?? 0) + 24 ? { x: pillBase.x, y: pillBase.y + (scale - 1) * 8 } : pillBase;
     const showControls = canManage && (hovered || selected);
@@ -144,8 +150,8 @@ export const InsertableEdge = memo(
           stroke="transparent"
           strokeWidth={24}
           className="cursor-pointer"
-          onMouseEnter={() => setHovered(true)}
-          onMouseLeave={() => setHovered(false)}
+          onMouseEnter={hoverOn}
+          onMouseLeave={hoverOff}
           data-testid={`flow-edge-line-${id}`}
         />
         <EdgeLabelRenderer>
@@ -168,9 +174,9 @@ export const InsertableEdge = memo(
           ) : null}
           {canManage && (
             <div
-              style={overlayStyle(routed.controlsAt.x, routed.controlsAt.y, zoom, true)}
-              onMouseEnter={() => setHovered(true)}
-              onMouseLeave={() => setHovered(false)}
+              style={overlayStyle(routed.controlsAt.x, routed.controlsAt.y, zoom, showControls, false, 2.5)}
+              onMouseEnter={hoverOn}
+              onMouseLeave={hoverOff}
               className={cn('nodrag nopan z-10 flex items-center gap-1.5 transition-opacity duration-150', showControls ? 'opacity-100' : 'opacity-0 hover:opacity-100 focus-within:opacity-100')}
               data-testid={`flow-edge-controls-${id}`}
             >
