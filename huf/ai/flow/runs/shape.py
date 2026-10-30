@@ -27,7 +27,7 @@ _DECISION_OUTCOMES = {
 _TONES = {"good", "neutral", "bad"}
 _SECRET_WORDS = ("secret", "token", "password", "passwd", "api_key", "apikey", "authorization", "credential")
 # Facts the engine adds on its own (schedule runs): not something the person sent, and not worth a hint.
-_INTERNAL_WORDS = ("node", "scheduled", "trigger")
+_INTERNAL_WORDS = ("node", "scheduled", "trigger", "cron")
 _DATE_LIKE = re.compile(r"^\d{4}-\d{2}-\d{2}")
 NODE_OUTPUTS_KEY = "__node_outputs__"
 HINT_MAX_CHARS = 70
