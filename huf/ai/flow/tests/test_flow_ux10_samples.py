@@ -19,7 +19,7 @@ class TestRedactSample(unittest.TestCase):
 		out = redact_sample({"note": "x" * 1000, "items": list(range(50))})
 		self.assertEqual(len(out["note"]), 200)
 		self.assertTrue(out["note"].endswith("..."))
-		self.assertEqual(out["items"], [0, 1, 2, 3, 4])
+		self.assertEqual(out["items"], list(range(20)))  # UX-24: up to 20 items are kept (it used to be 5)
 
 	def test_whole_sample_fits_in_8kb(self):
 		huge = {f"field_{i}": "y" * 190 for i in range(300)}

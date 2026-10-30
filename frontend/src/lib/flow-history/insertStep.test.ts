@@ -17,7 +17,8 @@ describe('insertStep', () => {
     expect(out.edges.find((e) => e.source === 'a')!.target).toBe(out.newId);
     expect(out.edges.find((e) => e.source === out.newId)!.target).toBe('b');
     expect(out.nodes.find((x) => x.id === 'b')!.position.y).toBe(300 + ROW_GAP);
-    expect(out.nodes.find((x) => x.id === out.newId)!.position.y).toBe(150 + ROW_GAP);
+    // the new step takes the place the old one had; the old one is one row lower
+    expect(out.nodes.find((x) => x.id === out.newId)!.position.y).toBe(300);
   });
 
   it('with nothing selected goes at the end of the flow', () => {

@@ -27,7 +27,7 @@ export function runStatusPill({ status, stale }: RunStatusInput): RunStatusPill 
     case 'Waiting Code':
       return { kind: 'waiting_review' };
     case 'Waiting User':
-      return { kind: 'waiting_approval', label: 'Waiting for input' };
+      return { kind: 'waiting_approval', label: 'Waiting for your reply' };
     default:
       return { kind: 'running' };
   }
@@ -39,7 +39,7 @@ export const RUN_STATUS_FILTERS = [
   { label: 'Queued', value: 'Queued' },
   { label: 'Running', value: 'Running' },
   { label: 'Waiting for approval', value: 'Waiting Approval' },
-  { label: 'Waiting for input', value: 'Waiting User' },
+  { label: 'Waiting for your reply', value: 'Waiting User' },
   { label: 'Waiting for code review', value: 'Waiting Code' },
   { label: 'Finished', value: 'Success' },
   { label: 'Failed', value: 'Failed' },

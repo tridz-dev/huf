@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Edge, Node } from 'reactflow';
-import { branchPillText, computeOpenEnds, endSubtitles, ghostSpots, loopBacks, orphanNote } from './flowCanvasGraph';
-import { makeFlowEdge } from '../../services/flowSerializer';
+import { addActionStep, branchPillText, computeOpenEnds, endSubtitles, ghostSpots, loopBacks, orphanNote } from './flowCanvasGraph';
+import { edgeRoute, makeFlowEdge } from '../../services/flowSerializer';
+import { ROW_GAP } from '../flow/flowLayout';
 import type { FlowNodeData } from '../../types/flow.types';
 
 const node = (id: string, x: number, y: number, type: 'trigger' | 'action' | 'end', cfg?: Record<string, unknown>): Node<FlowNodeData> => ({
@@ -83,5 +84,34 @@ describe('orphanNote', () => {
   });
   it('says nothing for a reachable step', () => {
     expect(orphanNote('e', nodes, edges(['t', 'a', 'next'], ['a', 'e', 'true']))).toBeNull();
+  });
+});
+
+describe('adding a step on a path that already has one', () => {
+  const branchy = () => {
+    const nodes = [node('t', 0, 0, 'trigger'), node('c', 0, 150, 'action', { type: 'condition' }), node('yes', -145, 150 + ROW_GAP, 'action', { type: 'agent-run' }), node('yes2', -145, 150 + 2 * ROW_GAP, 'action', { type: 'agent-run' }), node('no', 145, 150 + ROW_GAP, 'end')];
+    return { nodes, edges: edges(['t', 'c', 'next'], ['c', 'yes', 'true'], ['yes', 'yes2', 'next'], ['c', 'no', 'false']) };
+  };
+
+  it('puts the new step in the branch slot and the old step behind it, one row lower', () => {
+    const { nodes, edges: ed } = branchy();
+    const out = addActionStep(nodes, ed, 'c', 'true', 'transform', { type: 'transform' } as never);
+    if (!out || out === 'end-in-front') throw new Error('expected a graph');
+    const added = out.nodes[out.nodes.length - 1];
+    const at = (id: string) => out.nodes.find((n) => n.id === id)!.position;
+    expect(added.position).toEqual({ x: -145, y: 150 + ROW_GAP }); // exactly where the old step was
+    expect(at('yes')).toEqual({ x: -145, y: 150 + 2 * ROW_GAP });
+    expect(at('yes2')).toEqual({ x: -145, y: 150 + 3 * ROW_GAP });
+    expect(at('no')).toEqual({ x: 145, y: 150 + ROW_GAP });
+    expect(out.edges.filter((e) => e.source === 'c' && edgeRoute(e) === 'true').map((e) => e.target)).toEqual([added.id]);
+    expect(out.edges.filter((e) => e.source === added.id).map((e) => e.target)).toEqual(['yes']);
+    expect(out.edges.filter((e) => e.source === 'yes').map((e) => e.target)).toEqual(['yes2']);
+  });
+
+  it('leaves everything where it is when the path is still empty', () => {
+    const { nodes, edges: ed } = branchy();
+    const out = addActionStep(nodes.filter((n) => n.id !== 'no'), ed.filter((e) => e.target !== 'no'), 'c', 'false', 'transform', { type: 'transform' } as never);
+    if (!out || out === 'end-in-front') throw new Error('expected a graph');
+    expect(out.nodes.find((n) => n.id === 'yes')!.position).toEqual({ x: -145, y: 150 + ROW_GAP });
   });
 });

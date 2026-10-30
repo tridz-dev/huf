@@ -54,10 +54,10 @@ def redact_text(text) -> str:
 
 def specific_message(kind: str, provider: str | None = None, model: str | None = None) -> str | None:
 	"""Plain-English, provider-specific reason for a failure kind (None when kind has no specific wording)."""
-	who = f"The {provider} key" if provider else "The provider key"
+	who = f'The AI provider "{provider}"' if provider else "The AI provider"
 	prov = provider or "the provider"
 	if kind == "auth":
-		return f"{who} was rejected: check the provider key in AI Providers."
+		return f"{who} did not accept its key. Open AI Providers to check it."
 	if kind == "model_not_found":
 		m = f" '{model.split('/', 1)[-1]}'" if model else ""
 		return f"The model{m} was not found at {prov}: check the model name on the agent."

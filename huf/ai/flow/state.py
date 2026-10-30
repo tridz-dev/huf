@@ -37,10 +37,10 @@ class FlowStateError(ValueError):
 
 def normalize_key(key: Any) -> str:
 	if isinstance(key, bool) or not isinstance(key, (str, int)):
-		raise FlowStateError("state key must be a string or integer")
+		raise FlowStateError("The name to save this under must be text or a number.")
 	text = str(key)
 	if not text or len(text) > MAX_KEY_CHARS:
-		raise FlowStateError(f"state key must be 1-{MAX_KEY_CHARS} characters")
+		raise FlowStateError(f"The name to save this under must be between 1 and {MAX_KEY_CHARS} characters long.")
 	return text
 
 
@@ -48,7 +48,7 @@ def normalize_ttl(ttl_seconds: Any) -> int:
 	if ttl_seconds is None:
 		return DEFAULT_TTL_SECONDS
 	if isinstance(ttl_seconds, bool) or not isinstance(ttl_seconds, int) or not 0 < ttl_seconds <= MAX_TTL_SECONDS:
-		raise FlowStateError(f"ttl_seconds must be an integer between 1 and {MAX_TTL_SECONDS}")
+		raise FlowStateError(f"How long to keep this must be a whole number of seconds between 1 and {MAX_TTL_SECONDS}.")
 	return ttl_seconds
 
 
@@ -56,9 +56,9 @@ def encode_value(value: Any) -> str:
 	try:
 		encoded = json.dumps(value)
 	except (TypeError, ValueError) as exc:
-		raise FlowStateError(f"state value is not JSON serialisable: {exc}") from exc
+		raise FlowStateError("The value to save cannot be stored. Save text, numbers, yes/no values, lists or records only.") from exc
 	if len(encoded.encode("utf-8")) > MAX_VALUE_BYTES:
-		raise FlowStateError(f"state value exceeds {MAX_VALUE_BYTES} bytes")
+		raise FlowStateError(f"The value to save is too large ({MAX_VALUE_BYTES // 1024} KB is the most). Save less data.")
 	return encoded
 
 
@@ -69,7 +69,7 @@ def state_name(flow_id: str, key: str) -> str:
 
 def _scope(flow_id: Any, key: Any) -> tuple[str, str, str]:
 	if not flow_id or not isinstance(flow_id, str):
-		raise FlowStateError("flow state needs the running flow's id")
+		raise FlowStateError("Saved data can only be used while a flow is running.")
 	key = normalize_key(key)
 	return flow_id, key, state_name(flow_id, key)
 

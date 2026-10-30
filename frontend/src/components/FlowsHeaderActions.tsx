@@ -253,7 +253,7 @@ export function FlowsHeaderActions() {
       />
 
       {activeFlow && (
-        <FlowRunHistory flowId={activeFlow.id} open={showHistory} onOpenChange={setShowHistory} onSelectRun={setSelectedRunId} />
+        <FlowRunHistory flowId={activeFlow.id} open={showHistory} onOpenChange={setShowHistory} onSelectRun={setSelectedRunId} onRunTest={() => { setShowHistory(false); void header.handleRun(); }} />
       )}
       <FlowRunViewer
         runId={selectedRunId}

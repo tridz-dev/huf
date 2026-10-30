@@ -395,3 +395,7 @@ Every value box is a `DataInput`: its id is `flow-field-<kind>-<field>` (`-picke
 | `flow-end-outcome`, `flow-field-output-outcome-label`, `flow-end-tone` (radiogroup), `flow-end-tone-<good\|neutral\|bad>`, `flow-end-preview`, `flow-end-preview-chip` (`data-tone`), `flow-end-preview-headline`, `flow-more-options-end`, `flow-field-output-value` | End: the outcome ("Approved", Good / Neutral / Bad) with a preview of the run headline; the result folded under More options |
 | `flow-code-editor`, `flow-code-example`, `flow-code-profile`, `flow-code-input-key-<i>` / `-value-<i>` / `-remove-<i>`, `flow-code-inputs-add`, `flow-more-options-code`, `flow-code-timeout` | Execute code: the code, "Start from an example", data for the code, the time limit folded away |
 | `flow-run-test-pill` | The grey "Test run" pill beside the status in run details (the history rows keep `flow-run-test-chip-<runId>`, "Test") |
+| `flow-run-history-run-test` | Empty run history: the "Run test" button (editors only; closes the history and opens the Run dialog) |
+| `flow-node-delete-title`, `flow-node-delete-list` | Delete step dialog: the question ("Delete 3 steps?") and, for several selected steps, the list of their names |
+| `flow-use-data-loading` | The "Loading examples" line of the data picker (never shown under "No sample yet") |
+| `flow-run-step-note-<stepId>` | Small grey note under a run step ("Stopped at item 2", "Not run for item 2"); a step that did not run in a failed loop has `data-step-status="skipped"` |

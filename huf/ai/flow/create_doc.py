@@ -48,33 +48,33 @@ def allowed_doctypes(conf: Any) -> list[str]:
 
 def check_doctype(doctype: Any, allowed: Iterable[str]) -> str:
 	if not isinstance(doctype, str) or not doctype:
-		raise CreateDocError("doc.create needs a literal doctype string")
+		raise CreateDocError("Choose which kind of record this step should create.")
 	if doctype not in list(allowed):
 		raise CreateDocError(
-			f"doctype {doctype!r} is not in the doc.create allow-list (site config {CONF_KEY})"
+			f'This step is not allowed to create "{doctype}" records on this site. Choose another kind of record, or ask an admin to allow it.'
 		)
 	return doctype
 
 
 def validate_fields(meta_fields: Iterable[Any], fields: Any) -> dict:
 	if not isinstance(fields, dict):
-		raise CreateDocError("doc.create fields must be an object")
+		raise CreateDocError("The details for the new record are not filled in correctly. Open the step and set each field again.")
 	if len(fields) > MAX_FIELDS:
-		raise CreateDocError(f"doc.create accepts at most {MAX_FIELDS} fields")
+		raise CreateDocError(f"A step can fill in at most {MAX_FIELDS} fields of a new record. Remove some of them.")
 	by_name = {f.fieldname: f for f in meta_fields}
 	out = {}
 	for key, value in fields.items():
 		if key in SYSTEM_FIELDS:
-			raise CreateDocError(f"field {key!r} cannot be set by doc.create")
+			raise CreateDocError(f'The field "{key}" is set by the system, so this step cannot fill it in. Remove it from the step.')
 		field = by_name.get(key)
 		if field is None:
-			raise CreateDocError(f"unknown field {key!r}")
+			raise CreateDocError(f'This kind of record has no field called "{key}". Open the step and pick the fields again.')
 		if getattr(field, "read_only", 0) or field.fieldtype in BLOCKED_FIELDTYPES:
-			raise CreateDocError(f"field {key!r} ({field.fieldtype}) cannot be set by doc.create")
+			raise CreateDocError(f'The field "{key}" cannot be filled in by a flow. Remove it from the step.')
 		if value is not None and not isinstance(value, (str, int, float, bool)):
-			raise CreateDocError(f"field {key!r} must be a scalar value")
+			raise CreateDocError(f'The field "{key}" needs a single text, number or yes/no value, not a list or a record. Pick a single value.')
 		if isinstance(value, str) and len(value) > MAX_FIELD_CHARS:
-			raise CreateDocError(f"field {key!r} exceeds {MAX_FIELD_CHARS} characters")
+			raise CreateDocError(f'The value for "{key}" is longer than {MAX_FIELD_CHARS} characters. Use a shorter value.')
 		out[key] = value
 	return out
 

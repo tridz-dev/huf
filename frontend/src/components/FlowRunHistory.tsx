@@ -11,15 +11,18 @@ import { RunHistoryRow } from './flow/run/RunHistoryRow';
 import { useUser } from '@/contexts/UserContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { useViewport } from '@/lib/ui/responsive';
+import { RUN_BUTTON_LABEL } from '@/lib/flow-run/flowRunPayload';
 
 interface FlowRunHistoryProps {
     flowId: string;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSelectRun: (runId: string) => void;
+    /** Opens the Run dialog (the flow is tried once, nothing is sent). Offered to editors when there is no run yet. */
+    onRunTest?: () => void;
 }
 
-export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: FlowRunHistoryProps) {
+export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun, onRunTest }: FlowRunHistoryProps) {
     const siteZone = useSiteTimezone();
     const { canManage } = useFlowPermissions();
     const { isPhone } = useViewport();
@@ -102,9 +105,16 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
                         </div>
                     ) : runs.length === 0 ? (
                         <div className="text-center p-8 text-sm text-muted-foreground bg-muted/30 rounded-lg border border-dashed" data-testid="flow-run-history-empty">
-                            {canManage
-                                ? 'No runs found for this flow yet. Press Run to try it now, or publish it so its trigger starts it.'
-                                : 'No runs yet. Runs show up here once the flow has been started.'}
+                            <p>
+                                {canManage
+                                    ? 'No runs found for this flow yet. Run a test to try it now, or publish it so its trigger starts it.'
+                                    : 'No runs yet. Runs show up here once the flow has been started.'}
+                            </p>
+                            {canManage && onRunTest && (
+                                <Button size="sm" className="mt-4 gap-2" onClick={onRunTest} data-testid="flow-run-history-run-test">
+                                    <PlayCircle className="h-4 w-4" aria-hidden /> {RUN_BUTTON_LABEL}
+                                </Button>
+                            )}
                         </div>
                     ) : (
                         runs.map((run) => (

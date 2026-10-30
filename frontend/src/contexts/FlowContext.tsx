@@ -3,12 +3,13 @@ import { toast } from '@/lib/toast';
 import { Flow, FlowMetadata, FlowNode, FlowEdge } from '../types/flow.types';
 import { flowService } from '../services/flowService';
 import { useFlowHistory } from '../lib/flow-history/useFlowHistory';
-import { removedDescription } from '../lib/flow-history/historyText';
 import { useHistoryStepper } from '../lib/flow-history/useHistoryStepper';
 import type { GraphChange, GraphSnapshot } from '../lib/flow-history/graphChange';
 import { tidyPositions } from '../lib/flow/flowLayout';
 import { followRenamedTarget } from '../lib/flow/flowEdgeLabels';
-import { removeStep, type RemoveStepMode } from '../lib/flow/flowEdit';
+import { type RemoveStepMode } from '../lib/flow/flowEdit';
+import { flushPendingWrites } from '../lib/flow-graph/canvas/pendingWrites';
+import { useStepDeletion } from './useStepDeletion';
 import { announceConversion, flowsEqual } from '../lib/flow-graph/flowSync';
 import { useFlowRealtimeStatus } from '../hooks/flow/useFlowRealtimeStatus';
 
@@ -43,6 +44,8 @@ interface FlowContextType {
   getFlow: () => Flow | null; // latest committed flow, even before React re-renders with it
   /** Remove a step. Default `reconnect` joins the step before it to the step after it; `cascade` also removes what only it led to. */
   deleteNode: (nodeId: string, mode?: RemoveStepMode) => void;
+  /** Remove several steps at once: one change, one Undo. */
+  deleteNodes: (nodeIds: string[], mode?: RemoveStepMode) => void;
   /** Remove one connection between two steps. */
   deleteEdge: (edgeId: string) => void;
   addEdge: (edge: FlowEdge) => void;
@@ -354,22 +357,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
 
   const { undo, redo } = useHistoryStepper({ getFlow, undoStep: undoHistory, redoStep: redoHistory, restore: restoreSnapshot });
 
-  const deleteNode = useCallback((nodeId: string, mode: RemoveStepMode = 'reconnect') => {
-    if (!activeFlowId) return;
-    const prev = activeFlowRef.current;
-    if (!prev) return;
-    const deletedNode = prev.nodes.find(n => n.id === nodeId);
-    const { nodes: updatedNodes, edges: updatedEdges } = removeStep({ nodes: prev.nodes, edges: prev.edges }, nodeId, mode);
-    const removedCount = prev.nodes.length - updatedNodes.length;
-    patchActive(() => ({ nodes: updatedNodes, edges: updatedEdges }));
-    flowService.updateNodesAndEdges(activeFlowId, updatedNodes, updatedEdges);
-    if (selectedNodeId && !updatedNodes.some(n => n.id === selectedNodeId)) {
-      setSelectedNodeId(null);
-    }
-    markUnsaved();
-    const label = (deletedNode?.data as { label?: string } | undefined)?.label;
-    toast('Node deleted', { description: removedDescription(label, removedCount), action: { label: 'Undo', onClick: () => undo() } });
-  }, [activeFlowId, selectedNodeId, markUnsaved, undo, patchActive]);
+  const { deleteNode, deleteNodes } = useStepDeletion({ activeFlowId, activeFlowRef, patchActive, markUnsaved, undo, selectedNodeId, setSelectedNodeId });
 
   const deleteEdge = useCallback((edgeId: string) => {
     if (!activeFlowId) return;
@@ -388,6 +376,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
 
   const tidyLayout = useCallback(() => {
     if (!activeFlowId) return;
+    flushPendingWrites(); // a drag made a moment ago is laid out too, and is not written over the result
     const prev = activeFlowRef.current;
     if (!prev || prev.nodes.length === 0) return;
     const positions = tidyPositions(prev.nodes, prev.edges);
@@ -442,6 +431,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     getNode,
     getFlow,
     deleteNode,
+    deleteNodes,
     deleteEdge,
     addEdge,
     tidyLayout,
@@ -481,6 +471,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     getNode,
     getFlow,
     deleteNode,
+    deleteNodes,
     deleteEdge,
     addEdge,
     tidyLayout,

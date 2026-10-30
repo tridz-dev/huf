@@ -6,7 +6,7 @@ import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
 import { RunStatusPill, OutcomeChip } from '@/components/flow/run/RunStatusBits';
 import { ExecutionsTabsBar } from './ExecutionsTabsBar';
 import { RUN_STATUS_FILTERS, isFinishedStatus } from '@/lib/flow-run/story/runStatus';
-import { friendlyRunTitle, startedByWords } from '@/lib/flow-run/humanize';
+import { friendlyRunTitle, startedByWords, triggerLabel } from '@/lib/flow-run/humanize';
 import { friendlyClock, runDuration } from '@/lib/flow-run/story/time';
 import { useUser } from '@/contexts/UserContext';
 import { useSearchParams } from 'react-router-dom';
@@ -198,7 +198,7 @@ export function ExecutionsFlowRunsTab() {
                     </TableCell>
                     <TableCell className="font-body text-ui-text font-normal text-steel">
                       <div>{who.charAt(0).toUpperCase() + who.slice(1)}</div>
-                      <div className="text-meta text-steel-soft" data-testid={`flow-run-exec-trigger-${run.name}`}>{run.trigger_type || ''}</div>
+                      <div className="text-meta text-steel-soft" data-testid={`flow-run-exec-trigger-${run.name}`}>{triggerLabel(run.trigger_type)}</div>
                     </TableCell>
                     <TableCell className="text-right font-body text-ui-text tabular-nums text-steel">
                       {run.status === 'Success' || run.status === 'Failed' ? runDuration(run.started_at, run.completed_at) || '-' : '-'}

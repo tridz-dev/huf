@@ -3,7 +3,7 @@ import { flowService } from '../../../services/flowService';
 import { edgeRoute } from '../../../services/flowSerializer';
 import { onAddStepRequest, onEdgeAction } from '@/lib/flow-graph/edgeActions';
 import type { FlowEdgeRoute } from '../../../types/flow.types';
-import type { Node } from 'reactflow';
+import type { Edge, Node } from 'reactflow';
 import { blendPositions, motionMs, runFrames } from '@/lib/flow-canvas/tween';
 
 /** Length (ms) of the glide steps make to their places after Tidy layout (and its Undo). */
@@ -28,6 +28,19 @@ export function glideNodes<T extends Node>(current: T[], target: T[], setNodes: 
     const at = blendPositions(from, to, t);
     setNodes(t >= 1 ? target : target.map((n) => ({ ...n, position: at[n.id] })));
   }, onDone);
+}
+
+/** Hands a change the canvas is still holding back (moves wait 50 ms so a drag is one write) to `write` now. */
+export function flushPendingUpdate(
+  timer: { current: ReturnType<typeof setTimeout> | null },
+  pending: { current: { nodes?: Node[]; edges?: Edge[] } | null },
+  write: (nodes?: Node[], edges?: Edge[]) => void,
+) {
+  if (timer.current) clearTimeout(timer.current);
+  timer.current = null;
+  const held = pending.current;
+  pending.current = null;
+  if (held) write(held.nodes, held.edges);
 }
 
 /**
