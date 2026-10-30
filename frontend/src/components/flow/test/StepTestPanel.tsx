@@ -4,7 +4,9 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { HumanValue } from '@/components/common/HumanValue';
 import { useFlowContext } from '@/contexts/FlowContext';
+import { useFlowIssues } from '@/hooks/flow/useFlowIssues';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { issuesForStep } from '../frame/frameIssues';
 import { useStepTest } from '@/hooks/flow/useStepTest';
 import {
   AI_NOTE,
@@ -61,6 +63,8 @@ function EditableTest({ node, active, onOpenSetup }: Props) {
     wasActive.current = active;
   }, [active]);
 
+  const issues = useFlowIssues();
+  const unfinished = issuesForStep(issues, node.id);
   const t = useStepTest(flowId, node.id, opened, openCount);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState('');
@@ -164,6 +168,13 @@ function EditableTest({ node, active, onOpenSetup }: Props) {
         <div className="flex items-start gap-2 rounded-md border border-signal/30 bg-signal/5 p-2.5 text-xs" data-testid="flow-step-test-ai-note">
           <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-signal-ink" aria-hidden />
           <span><span className="font-medium">{AI_NOTE}.</span> A test asks it for real, so it can use a little of your AI credit.</span>
+        </div>
+      )}
+
+      {unfinished.length > 0 && !isTrigger && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-warning/30 bg-warning-tint p-2.5 text-xs text-warning" data-testid="flow-step-test-unfinished">
+          <span className="min-w-0 flex-1 break-words">This step is not finished yet: {unfinished[0].message.replace(/\.$/, '')}. A test may fail until it is.</span>
+          <Button type="button" variant="outline" size="sm" onClick={onOpenSetup} data-testid="flow-step-test-unfinished-fix">Open Setup</Button>
         </div>
       )}
 

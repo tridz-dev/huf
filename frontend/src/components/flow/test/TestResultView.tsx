@@ -6,6 +6,13 @@ import { StatusPill } from '@/components/common/StatusPill';
 import { ageText, durationText } from '@/lib/flow-test/testModel';
 import type { StepTestResult } from '@/services/flow/stepTestApi';
 
+/** A skipped step's output without the "Would ..." wording (that sentence is shown above it). */
+function shownOutput(result: StepTestResult): unknown {
+  const out = result.output;
+  if (result.mode !== 'simulated' || !out || typeof out !== 'object' || Array.isArray(out)) return out;
+  return Object.fromEntries(Object.entries(out as Record<string, unknown>).filter(([key]) => !['simulated', 'summary', 'note'].includes(key)));
+}
+
 export interface PinState {
   /** The step already has a pinned sample (and when it was pinned). */
   pinned: boolean;
@@ -82,6 +89,7 @@ export function TestResultView({ result, pin, onOpenSetup, isTrigger }: { result
 
       {preview && (
         <div className="rounded-md border border-border bg-muted/30 p-3 text-sm" data-testid="flow-step-test-approval">
+          <p className="mb-1.5 text-meta text-muted-foreground">What the approver would see</p>
           <p className="font-medium break-words" data-testid="flow-step-test-approval-title">{preview.title}</p>
           {preview.note && <p className="mt-1 text-xs text-muted-foreground break-words">{preview.note}</p>}
           {preview.facts.length > 0 && (
@@ -102,7 +110,8 @@ export function TestResultView({ result, pin, onOpenSetup, isTrigger }: { result
         <div>
           <h4 className="mb-1.5 text-xs font-medium text-muted-foreground">{isTrigger ? 'What the flow starts with' : 'Output'}</h4>
           <HumanValue
-            value={result.output}
+            value={shownOutput(result)}
+            rawValue={result.output}
             raw
             rawTitle="Raw output"
             testId="flow-step-test-output"

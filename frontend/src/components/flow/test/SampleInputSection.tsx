@@ -35,7 +35,7 @@ export function SampleInputSection({
       <div className="mb-2 flex items-center gap-2">
         <h3 id="step-test-input-title" className="mr-auto text-sm font-medium">Sample input</h3>
         {edited && <Badge variant="pill-warning" data-testid="flow-step-test-source-edited">{SOURCE_LABEL.edited}</Badge>}
-        {canEdit && (
+        {canEdit && (parts.length > 0 || editing) && (
           <Button type="button" variant="ghost" size="sm" onClick={onToggleEdit} aria-pressed={editing} data-testid="flow-step-test-edit">
             {editing ? 'Show as rows' : 'Edit sample'}
           </Button>

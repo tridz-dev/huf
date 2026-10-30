@@ -6,7 +6,7 @@ import type { StepTestInfo, StepTestResult } from '@/services/flow/stepTestApi';
 
 const ctx = vi.hoisted(() => ({
   value: {
-    activeFlow: { id: 'flow-1', status: 'draft' as string },
+    activeFlow: { id: 'flow-1', status: 'draft' as string, nodes: [] as unknown[], edges: [] as unknown[] },
     hasUnsavedChanges: false,
     saveFlow: vi.fn(async () => undefined),
     updateNodeData: vi.fn(),
@@ -60,7 +60,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   ctx.canManage = true;
   ctx.value.hasUnsavedChanges = false;
-  ctx.value.activeFlow = { id: 'flow-1', status: 'draft' };
+  ctx.value.activeFlow = { id: 'flow-1', status: 'draft', nodes: [], edges: [] };
   resetAiConfirmed();
 });
 afterEach(cleanup);

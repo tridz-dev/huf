@@ -90,8 +90,20 @@ def pin_value(value: Any) -> Any:
 
 def references(node: dict) -> set[str]:
 	"""Words in the step's settings that may name data: ``$from`` roots, ``input``, ``trigger``, step ids in expressions."""
-	text = json.dumps(node.get("config") or {}, default=str)
-	return set(re.findall(r"[A-Za-z_][A-Za-z0-9_\-]*", text))
+	words: set[str] = set()
+
+	def walk(value: Any) -> None:
+		if isinstance(value, dict):
+			for item in value.values():  # setting names ("input", "value") are not data; only their values can be
+				walk(item)
+		elif isinstance(value, (list, tuple)):
+			for item in value:
+				walk(item)
+		elif isinstance(value, str):
+			words.update(re.findall(r"[A-Za-z_][A-Za-z0-9_\-]*", value))
+
+	walk(node.get("config") or {})
+	return words
 
 
 def _part(key: str, title: str, kind: str, source: str, value: Any, ran_at: Any = None) -> dict:

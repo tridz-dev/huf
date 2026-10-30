@@ -112,6 +112,10 @@ class TestRealAndSimulated(Base):
 		self.assertEqual(out["summary"], "Would send email to ada@example.com")
 		self.assertTrue(out["output"]["simulated"])
 
+	def test_a_pinned_copy_of_a_skipped_step_keeps_the_sample_fields_not_the_wording(self):
+		out = api.test_step(self.flow_id, "mail")
+		self.assertEqual(out["pin_value"], {"id": "sample-0001", "threadId": "sample-0001", "labelIds": ["SENT"]})
+
 	def test_a_read_tool_runs_for_real(self):
 		graph = _graph({"email": "ada@example.com"}, [{"id": "look", "type": "tool.call", "config": {"tool_id": "gsheets_read", "input": {"spreadsheet_id": "abc"}}, "next": "end"}])
 		self._flow(graph)
@@ -202,6 +206,18 @@ class TestSampleInput(Base):
 	def test_only_the_steps_this_step_reads_are_listed(self):
 		self._flow(_graph({"total": 1}))
 		self.assertEqual([p["key"] for p in api.get_step_test_info(self.flow_id, "cond")["parts"]], ["input"])
+
+	def test_setting_names_are_not_data(self):
+		graph = _graph({"total": 1}, [{"id": "look", "type": "tool.call", "config": {"tool_id": "list_agents", "input": {}}, "next": "end"}])
+		self._flow(graph)
+		self.assertEqual(api.get_step_test_info(self.flow_id, "look")["parts"], [])
+
+	def test_a_result_warns_when_the_sample_was_empty(self):
+		self._flow(_graph())
+		out = api.test_step(self.flow_id, "cond")
+		self.assertEqual(len(out["warnings"]), 1)
+		self.assertIn("no sample", out["warnings"][0])
+		self.assertEqual(api.test_step(self.flow_id, "cond", {"input": {"total": 1}})["warnings"], [])
 
 	def test_info_says_how_the_step_behaves(self):
 		self._flow(_graph({"total": 1}))

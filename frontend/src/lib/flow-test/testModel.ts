@@ -30,7 +30,7 @@ export function testButtonLabel(b: Pick<StepBehaviour, 'simulated'>): string {
 export function testButtonHint(b: StepBehaviour): string {
   if (b.approval) return 'Nothing is sent. This shows the card the approver would see.';
   if (b.simulated) return 'Nothing is sent. The test shows what would happen.';
-  if (b.calls_ai) return 'This step calls the AI model, so a test can use a little of your AI credit.';
+  if (b.calls_ai) return 'Asks the AI model for real. Anything the agent would send or change is skipped.';
   return 'Nothing is sent or changed. The step only reads and works with the sample.';
 }
 
