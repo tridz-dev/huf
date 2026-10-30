@@ -48,10 +48,10 @@ export const TRANSFORM_HELP: Record<string, TransformHelp> = {
   replace: { summary: 'Replaces part of the text with other text.', example: 'Replace "-" with " " in "a-b-c" gives "a b c".' },
   contains: { summary: 'Gives true when the text includes the words you look for, otherwise false.', example: '"order #42" contains "#42" gives true.' },
   starts_with: { summary: 'Gives true when the text begins with the words you give, otherwise false.', example: '"INV-1001" starts with "INV-" gives true.' },
-  split_first: { summary: 'Keeps only the first part of the text, split at a separator (a space by default).', example: '"Ada Lovelace" gives "Ada".' },
-  regex_extract: { summary: 'Pulls out the first piece of text that matches a pattern.', example: 'Pattern "[0-9]+" on "order 4521 shipped" gives "4521".' },
-  concat: { summary: 'Joins several values into one piece of text.', example: 'Parts ["a","b","c"] with separator "-" gives "a-b-c".' },
-  select: { summary: 'Keeps only some fields of each row.', example: 'Fields ["name"] on [{"name":"Ada","age":36}] gives [{"name":"Ada"}].' },
+  split_first: { summary: 'Keeps only the first part of the text, split at the first space (or at the characters you choose).', example: '"Ada Lovelace" gives "Ada".' },
+  regex_extract: { summary: 'Pulls out the first piece of text that fits a search pattern.', example: 'Pattern "[0-9]+" on "order 4521 shipped" gives "4521".' },
+  concat: { summary: 'Joins several values into one piece of text.', example: 'The parts "a", "b" and "c" with "-" between them give "a-b-c".' },
+  select: { summary: 'Keeps only some fields of each row.', example: 'Keeping only "name" turns the row "Ada, age 36" into "Ada".' },
   filter: { summary: 'Keeps only the rows that pass a check. Write the check with row, for example row[\'amount\'] > 100.', example: "Rows with amounts 50 and 150, check row['amount'] > 100, keeps the 150 row." },
   sort: { summary: 'Puts the rows in order by one field.', example: 'Sort by "age", ascending: 20, 31, 45.' },
   limit: { summary: 'Keeps only the first few rows.', example: 'Count 2 on 5 rows keeps the first 2.' },
@@ -61,7 +61,7 @@ export const TRANSFORM_HELP: Record<string, TransformHelp> = {
   lookup: { summary: 'Adds the matching row from another list to each row.', example: 'Add the customer row (as "customer") to every order.' },
   batch: { summary: 'Splits rows into groups of a fixed size.', example: 'Size 2 on 5 rows gives groups of 2, 2 and 1.' },
   distinct: { summary: 'Removes duplicate rows (compares one field, or the whole row).', example: 'Distinct on "email" keeps one row per email.' },
-  coalesce: { summary: 'Gives the first value in the list that is not empty.', example: '[null, "", "backup"] gives "backup".' },
+  coalesce: { summary: 'Gives the first value in the list that is not empty.', example: 'Trying (empty), (empty) and "backup" gives "backup".' },
 };
 
 export interface ParamHelp {
@@ -71,35 +71,35 @@ export interface ParamHelp {
 }
 
 const PARAMS: Record<string, ParamHelp> = {
-  text: { label: 'Text', hint: 'The text to work on. Pick data from the trigger or an earlier step.', placeholder: 'Hello World' },
+  text: { label: 'Text', hint: 'The text to work on. Use + Use data to take it from the trigger or an earlier step.', placeholder: 'Choose with + Use data, or type it' },
   find: { label: 'Text to find', hint: 'The words to look for. Cannot be empty.', placeholder: '-' },
-  with: { label: 'Replace with', hint: 'What to put in their place. Leave empty to remove the found text.', placeholder: ' ' },
+  with: { label: 'Replace with', hint: 'What to put in their place. Leave empty to remove the found text.', placeholder: 'Nothing: removes the text' },
   count: { label: 'How many', hint: 'A whole number.', placeholder: '5' },
   needle: { label: 'Look for', hint: 'The words to look for inside the text.', placeholder: '#42' },
   ignore_case: { label: 'Ignore capital letters', hint: 'Choose Yes to treat "A" and "a" as the same. Leave it not set for exact matching.' },
   prefix: { label: 'Starts with', hint: 'The words the text should begin with.', placeholder: 'INV-' },
-  separator: { label: 'Separator', hint: 'The characters between parts. Leave empty to use a space.', placeholder: ',' },
-  pattern: { label: 'Pattern', hint: 'A regular expression. For example [0-9]+ finds the first number.', placeholder: '[0-9]+' },
-  group: { label: 'Group number', hint: 'Which bracketed part of the pattern to return. Leave empty for the whole match.', placeholder: '0' },
-  default: { label: 'If nothing matches', hint: 'What to return when there is no match. Leave empty for nothing.', placeholder: 'unknown' },
-  parts: { label: 'Parts to join', hint: 'A list, for example ["a","b"], or pick a list from an earlier step.', placeholder: '["a","b","c"]' },
-  fields: { label: 'Fields to keep', hint: 'A list of field names.', placeholder: '["name","email"]' },
-  rows: { label: 'Rows', hint: 'A list of records, usually from an earlier step. Pick it with Use data.', placeholder: '[{"name":"Ada"}]' },
-  where: { label: 'Keep rows where', hint: "A check written with row, for example row['amount'] > 100.", placeholder: "row['amount'] > 100" },
+  separator: { label: 'Split at', hint: 'The characters to split at. Leave empty to split at the first space.', placeholder: 'A space' },
+  pattern: { label: 'What to look for', hint: 'Written as a search pattern. For example [0-9]+ finds the first number, and [A-Z]{3} finds three capital letters in a row.', placeholder: '[0-9]+' },
+  group: { label: 'Which part to keep', hint: 'If your pattern has bracketed parts, the number of the part to keep (1 is the first). Leave empty to keep everything that matched.', placeholder: 'Everything that matched' },
+  default: { label: 'If nothing is found', hint: 'What to give back when nothing matches. Leave empty for nothing.', placeholder: 'Nothing' },
+  parts: { label: 'Parts to join', hint: 'The pieces of text to put together, in order. Use + Use data in a piece to take it from an earlier step.', placeholder: 'A piece of text' },
+  fields: { label: 'Fields to keep', hint: 'The names of the fields to keep, one per row. For example name and email.', placeholder: 'name' },
+  rows: { label: 'Rows', hint: 'A list of records from an earlier step, like the items of an order. Pick it with + Use data.', placeholder: 'Choose a list with + Use data' },
+  where: { label: 'Keep rows where', hint: "A check for one row, for example row['amount'] > 100 keeps the rows whose amount is above 100.", placeholder: "row['amount'] > 100" },
   key: { label: 'Field', hint: 'The field to use, for example city or customer.name.', placeholder: 'city' },
-  order: { label: 'Order', hint: 'asc for smallest first (default), desc for largest first.', placeholder: 'asc' },
-  op: { label: 'What to calculate', hint: 'One of count, sum, avg, min, max.', placeholder: 'sum' },
+  order: { label: 'Order', hint: 'Type asc for smallest first (the usual), desc for largest first.', placeholder: 'asc' },
+  op: { label: 'What to calculate', hint: 'Type one of: count, sum, avg (average), min (smallest), max (largest).', placeholder: 'sum' },
   field: { label: 'Field', hint: 'The field to calculate on. Not needed for count.', placeholder: 'amount' },
-  left: { label: 'First list', hint: 'The rows to keep.', placeholder: '[{"id":1}]' },
-  right: { label: 'Second list', hint: 'The rows to match against.', placeholder: '[{"id":1,"name":"Ada"}]' },
+  left: { label: 'First list', hint: 'The rows to keep. Pick a list from an earlier step.', placeholder: 'Choose a list with + Use data' },
+  right: { label: 'Second list', hint: 'The rows to match against. Pick another list from an earlier step.', placeholder: 'Choose a list with + Use data' },
   left_key: { label: 'Field in the first list', hint: 'The field to compare.', placeholder: 'customer_id' },
   right_key: { label: 'Field in the second list', hint: 'The field it must equal.', placeholder: 'id' },
   how: { label: 'Keep', hint: 'inner keeps only matches (default). left keeps every row of the first list.', placeholder: 'inner' },
-  from: { label: 'Rows to look in', hint: 'The list that holds the extra information.', placeholder: '[{"id":1,"name":"Ada"}]' },
+  from: { label: 'List to look in', hint: 'The list that holds the extra information.', placeholder: 'Choose a list with + Use data' },
   on: { label: 'Field in the lookup list', hint: 'The field that must equal the field above. Leave empty to use the same name.', placeholder: 'id' },
   as: { label: 'Save the match as', hint: 'The new field that gets the matching row.', placeholder: 'customer' },
   size: { label: 'Group size', hint: 'How many rows in each group.', placeholder: '10' },
-  values: { label: 'Values', hint: 'A list. The first value that is not empty is returned.', placeholder: '[null, "backup"]' },
+  values: { label: 'Values to try', hint: 'The first one that is not empty is used, so put the best choice first.', placeholder: 'A value' },
 };
 
 /** Per-operation wording where the same field name means something different. */
@@ -110,8 +110,8 @@ const PARAM_OVERRIDES: Record<string, Partial<Record<string, ParamHelp>>> = {
   group_by: { key: { label: 'Group by field', hint: 'Rows with the same value in this field end up together.', placeholder: 'city' } },
   distinct: { key: { label: 'Compare field', hint: 'Rows with the same value here count as duplicates. Leave empty to compare whole rows.', placeholder: 'email' } },
   lookup: { key: { label: 'Field in each row', hint: 'The field in your rows that points to the other list.', placeholder: 'customer_id' } },
-  concat: { separator: { label: 'Separator', hint: 'The characters put between the parts. Leave empty for none.', placeholder: ', ' } },
-  coalesce: { values: { label: 'Values', hint: 'A list of values. The first one that is not empty wins.', placeholder: '[null, "backup"]' } },
+  concat: { separator: { label: 'Put between the parts', hint: 'The characters to put between the parts, for example a comma and a space. Leave empty for nothing.', placeholder: 'Nothing' } },
+  coalesce: { values: { label: 'Values to try', hint: 'The first one that is not empty wins, so put the best choice first.', placeholder: 'A value' } },
 };
 
 export function transformParamHelp(op: string | undefined, param: string): ParamHelp {
@@ -187,7 +187,7 @@ export const LOOP_HELP =
 
 export const INTEGRATION_NEEDS: Record<string, string> = {
   email: 'Needs Gmail to be connected in Integrations. It sends from that account.',
-  slack: 'Needs Slack to be connected in Integrations, and the bot invited to the channel.',
+  slack: 'Needs Slack to be connected in Integrations. Add the Huf app to the channel in Slack first.',
   sheets: 'Needs Google Sheets to be connected in Integrations.',
   file: 'Needs Google Drive to be connected in Integrations.',
 };

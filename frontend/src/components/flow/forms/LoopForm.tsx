@@ -2,61 +2,71 @@ import { FieldHint } from '../FieldHint';
 import { Input } from '../../ui/input';
 import { LOOP_HELP } from '@/lib/flow/flowHelp';
 import { Label } from '../../ui/label';
+import { MoreOptions } from '../frame/MoreOptions';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { VariablePicker } from '../../ui/VariablePicker';
-import { type ActionFormProps, asObj, BranchRows, Section, str } from './formKit';
+import { type ActionFormProps, BranchRows, Section, str } from './formKit';
+import { ValueField } from './fields';
 
 export function LoopForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps) {
-
-  const itemsRef = str(asObj(cfg.items).$from);
-  const collectRef = str(asObj(cfg.collect).$from);
   return (
     <Section title={title} hint={LOOP_HELP}>
-      <div>
-        <div className="flex justify-between items-center mb-1">
-          <Label htmlFor="loop-items" size="sm">List to loop over</Label>
-          <VariablePicker currentNodeId={nodeId} testId="flow-loop-items-picker" accept="list" onSelect={(ref) => patch({ items: { $from: ref } })} />
+      <ValueField
+        field="items"
+        f={f}
+        Err={Err}
+        nodeId={nodeId}
+        label="List to go through"
+        hintTestId="flow-hint-loop-items"
+        accept="list"
+        placeholder="Choose a list with + Use data"
+        hint="A list from the trigger or an earlier step, like the items of an order. The steps on the 'For each item' path run once for every entry."
+        value={cfg.items}
+        onChange={(v) => patch({ items: v === '' ? undefined : v })}
+      />
+      <ValueField
+        field="collect"
+        f={f}
+        Err={Err}
+        nodeId={nodeId}
+        label="Result to collect"
+        hintTestId="flow-hint-loop-collect"
+        accept="one"
+        scope="loop-body"
+        placeholder="Choose a step inside the loop"
+        hint="After each item, this is added to a list. When the loop is done, the next step gets that whole list. Pick the result of a step inside the loop, or the current item."
+        value={cfg.collect}
+        onChange={(v) => patch({ collect: v === '' ? undefined : v })}
+      />
+      <MoreOptions defaultOpen={typeof cfg.max_iterations !== 'number' || !str(cfg.on_item_error)} testId="flow-more-options-loop">
+        <div>
+          <Label htmlFor="loop-max" size="sm">Most items to go through</Label>
+          <Input
+            id="loop-max"
+            data-testid={f('max_iterations')}
+            type="number"
+            min={0}
+            value={typeof cfg.max_iterations === 'number' ? cfg.max_iterations : ''}
+            placeholder="10"
+            onChange={(e) => patch({ max_iterations: e.target.value === '' ? undefined : parseInt(e.target.value, 10) })}
+          />
+          <FieldHint testId="flow-hint-loop-max">A safety limit. If the list is longer than this, the loop stops with a message instead of running.</FieldHint>
+          <Err field="max_iterations" />
         </div>
-        <Input id="loop-items" data-testid={f('items')} className="font-mono text-xs" value={itemsRef} onChange={(e) => patch({ items: { $from: e.target.value } })} placeholder="input.recipients" />
-        <FieldHint testId="flow-hint-loop-items">A list from the trigger or an earlier step, for example input.recipients. Click + Use data to pick it.</FieldHint>
-        <Err field="items" />
-      </div>
-      <div>
-        <Label htmlFor="loop-max" size="sm">Maximum items to process</Label>
-        <Input
-          id="loop-max"
-          data-testid={f('max_iterations')}
-          type="number"
-          min={0}
-          value={typeof cfg.max_iterations === 'number' ? cfg.max_iterations : ''}
-          onChange={(e) => patch({ max_iterations: e.target.value === '' ? undefined : parseInt(e.target.value, 10) })}
-        />
-        <FieldHint testId="flow-hint-loop-max">Safety limit. If the list has more items than this, the loop fails instead of running.</FieldHint>
-        <Err field="max_iterations" />
-      </div>
-      <div>
-        <Label htmlFor="loop-on-error" size="sm">If one item fails</Label>
-        <Select value={str(cfg.on_item_error)} onValueChange={(v) => patch({ on_item_error: v })}>
-          <SelectTrigger id="loop-on-error" data-testid={f('on_item_error')}>
-            <SelectValue placeholder="Choose..." />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="fail" data-testid="flow-option-loop-on-error-fail">Stop the flow</SelectItem>
-            <SelectItem value="skip" data-testid="flow-option-loop-on-error-skip">Skip that item</SelectItem>
-          </SelectContent>
-        </Select>
-        <FieldHint testId="flow-hint-loop-on-error">Stop the flow ends the run at the first failing item. Skip that item carries on with the rest.</FieldHint>
-        <Err field="on_item_error" />
-      </div>
-      <div>
-        <div className="flex justify-between items-center mb-1">
-          <Label htmlFor="loop-collect" size="sm">Result to collect from each item</Label>
-          <VariablePicker currentNodeId={nodeId} scope="loop-body" testId="flow-loop-collect-picker" onSelect={(ref) => patch({ collect: { $from: ref } })} />
+        <div>
+          <Label htmlFor="loop-on-error" size="sm">If one item fails</Label>
+          <Select value={str(cfg.on_item_error)} onValueChange={(v) => patch({ on_item_error: v })}>
+            <SelectTrigger id="loop-on-error" data-testid={f('on_item_error')}>
+              <SelectValue placeholder="Choose..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="fail" description="The whole flow stops at the first item that fails." data-testid="flow-option-loop-on-error-fail">Stop the whole flow</SelectItem>
+              <SelectItem value="skip" description="That item is left out and the rest carry on." data-testid="flow-option-loop-on-error-skip">Skip it and keep going</SelectItem>
+            </SelectContent>
+          </Select>
+          <FieldHint testId="flow-hint-loop-on-error">Choose what happens when the steps inside the loop fail for one item.</FieldHint>
+          <Err field="on_item_error" />
         </div>
-        <Input id="loop-collect" data-testid={f('collect')} className="font-mono text-xs" value={collectRef} onChange={(e) => patch({ collect: { $from: e.target.value } })} placeholder="node_1234.value" />
-        <FieldHint testId="flow-hint-loop-collect">After each item, this value is added to a list. When the loop is done, the next step receives that list. Pick a step inside the loop with Use data.</FieldHint>
-        <Err field="collect" />
-      </div>
+      </MoreOptions>
       <BranchRows nodeId={nodeId} cfgType="foreach" cfg={cfg} />
       <Err field="branch.body" />
     </Section>

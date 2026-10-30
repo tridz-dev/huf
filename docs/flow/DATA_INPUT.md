@@ -1,6 +1,6 @@
 # DataInput: the one input for a value in a flow step (UX-9)
 
-`components/flow/data/DataInput.tsx`. Typed text and data from earlier steps live in one box. Nobody chooses a "mode": what is stored is worked out from what is on screen. The old `FlowValueInput` is now a thin wrapper over it.
+`components/flow/data/DataInput.tsx`. Typed text and data from earlier steps live in one box. Nobody chooses a "mode": what is stored is worked out from what is on screen. (The old `FlowValueInput` wrapper is gone: every step form uses `DataInput`, directly or through `ValueField` in `components/flow/forms/fields.tsx`.)
 
 ```tsx
 import { DataInput } from '@/components/flow/data/DataInput';
@@ -26,7 +26,7 @@ import { DataInput } from '@/components/flow/data/DataInput';
 | `json` | the JSON area titled "Advanced (JSON)" (Format, Copy, live error) | the parsed list/object; half-typed JSON is kept as text |
 | `yesno` | Yes / No / Not set choice | `true`, `false` or absent |
 
-Extra props: `id`, `label`, `optional`, `disabled`, and `accept="list"` for a field that takes a whole list (a loop's items, a transform's rows): the picker then shows lists only and a pick sets `{$from: <list>}` directly.
+Extra props: `id`, `label`, `optional`, `disabled`, and `accept`: `"list"` for a field that takes a whole list (a loop's items, a transform's rows): the picker then shows lists only and a pick sets `{$from: <list>}` directly; `"one"` for a field that takes exactly one thing from an earlier step (a loop's "result to collect"). Both are pick-only (typing does nothing, because a reference is stored). `scope="loop-body"` lists the steps inside the loop.
 
 A value that is a list or an object (an old flow, or JSON typed before) opens as "Advanced (JSON)" automatically; "Use plain text instead" turns it back into text.
 
@@ -54,7 +54,7 @@ A value that is a list or an object (an old flow, or JSON typed before) opens as
 1. Replace `<FlowValueInput ...>` with `<DataInput ... />` (same props, plus `kind`; keep `testId`, so the box, `-picker`, `-preview` ids stay).
 2. A field that holds a list or a set of named values: `kind="json"`. A list from an earlier step: `accept="list"`. A number: `kind="number"`. Yes/No: `kind="yesno"`.
 3. Remove hint text that talks about modes, `$from`, `{name}` or "Choose JSON as the value type".
-4. Text that the form writes itself around a reference (approval message, router prompt, agent prompt, condition) keeps `VariablePicker` (`components/ui/VariablePicker.tsx`): `onSelect(ref, suggestedName)`, `accept="ref"` (default) or `"list"`, `scope="loop-body"` for a loop's result to collect. It opens the same picker. Move those to `DataInput` when their stored form allows a template.
+4. A field whose stored form is a plain string with placeholders, not a `Value` (the approval message and title, the router's question, the End outcome label: `{input.customer.name}`; also `{table:x}`, `{joined:x}`, `{count:x}`), is edited with the same chip box through `lib/flow-data/textRefs.ts` (`toTextRefs` / `fromTextRefs`). The agent's prompt, stored as `prompt` plus `prompt_bindings`, goes through `promptToValue` / `valueToPrompt`. `forms/useAsValue.ts` keeps the box from redrawing while typing. The server fills the placeholders in with `render_text_refs`, which understands the three wordings (`huf/ai/flow/support/router_text.py`).
 5. Journeys: `type` works on the box (`fill`); `expect value` / `value_matches` read its words (chips as "Customer > Name . New order"); to put data in, click `<testId>-picker`, then `flow-use-data-type-it`, type `input.customer.name` in `flow-use-data-typed`, press Enter. `fix/ux9/update_old_journeys.py` shows the rewrite.
 
 ## Server

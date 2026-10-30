@@ -30,7 +30,7 @@ export const TRANSFORM_OPS: TransformOpSpec[] = [
   { name: 'lower', label: 'Make lowercase', group: 'text', section: 'change-text', params: ['text'] },
   { name: 'upper', label: 'Make uppercase', group: 'text', section: 'change-text', params: ['text'] },
   { name: 'trim', label: 'Remove extra spaces', group: 'text', section: 'change-text', params: ['text'] },
-  { name: 'replace', label: 'Replace text', group: 'text', section: 'change-text', params: ['text', 'find', 'with', 'count'], optional: ['count'] },
+  { name: 'replace', label: 'Replace text', group: 'text', section: 'change-text', params: ['text', 'find', 'with', 'count'], optional: ['with', 'count'] },
   { name: 'split_first', label: 'Take the first part', group: 'text', section: 'change-text', params: ['text', 'separator'], optional: ['separator'] },
   { name: 'concat', label: 'Join text together', group: 'text', section: 'change-text', params: ['parts', 'separator'], optional: ['separator'] },
   { name: 'contains', label: 'Contains the words', group: 'text', section: 'find-in-text', params: ['text', 'needle', 'ignore_case'], optional: ['ignore_case'] },

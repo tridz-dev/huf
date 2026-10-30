@@ -22,10 +22,10 @@ export function OutcomeChip({ outcome, className, testId = 'flow-run-outcome' }:
 }
 
 /** The grey "Test" chip on a run that skipped everything that would send or change something. */
-export function TestRunChip({ className, testId = 'flow-run-test-chip' }: { className?: string; testId?: string }) {
+export function TestRunChip({ className, testId = 'flow-run-test-chip', label = 'Test' }: { className?: string; testId?: string; label?: string }) {
   return (
     <Badge variant="pill-neutral" className={cn('shrink-0 whitespace-nowrap px-2 py-0.5', className)} title="A test run: nothing was sent or changed" data-testid={testId}>
-      Test
+      {label}
     </Badge>
   );
 }
