@@ -43,21 +43,29 @@ ITEM_TITLE = "The item being worked on"
 # --------------------------------------------------------------------------- redaction
 
 
-def _shrink(value: Any, depth: int, max_text: int, max_list: int) -> Any:
+def _shrink(value: Any, depth: int, max_text: int, max_list: int, cut: list) -> Any:
+	"""A safe copy: secrets masked, text and lists shortened. ``cut`` collects True when something was left out."""
 	if depth > MAX_DEPTH:
+		cut.append(True)
 		return "..."
 	if isinstance(value, dict):
 		out = {}
 		for i, (key, item) in enumerate(value.items()):
 			if i >= 60:
+				cut.append(True)
 				break
-			out[str(key)] = MASK if _SECRET_KEY.search(str(key)) and item not in (None, "") else _shrink(item, depth + 1, max_text, max_list)
+			out[str(key)] = MASK if _SECRET_KEY.search(str(key)) and item not in (None, "") else _shrink(item, depth + 1, max_text, max_list, cut)
 		return out
 	if isinstance(value, (list, tuple)):
-		return [_shrink(item, depth + 1, max_text, max_list) for item in list(value)[:max_list]]
+		if len(value) > max_list:
+			cut.append(True)
+		return [_shrink(item, depth + 1, max_text, max_list, cut) for item in list(value)[:max_list]]
 	if isinstance(value, str):
 		text = _SECRET_VALUE.sub(MASK, value)
-		return text if len(text) <= max_text else text[: max_text - 3] + "..."
+		if len(text) > max_text:
+			cut.append(True)
+			return text[: max_text - 3] + "..."
+		return text
 	if value is None or isinstance(value, (bool, int, float)):
 		return value
 	return str(value)[:max_text]
@@ -71,9 +79,10 @@ def redact_output(value: Any, max_bytes: int = MAX_OUTPUT_BYTES) -> tuple[Any, b
 	"""``(safe copy, was_shortened)``: secrets hidden, long text and big lists shortened, at most ``max_bytes`` as JSON."""
 	value = json.loads(json.dumps(value, default=str)) if value is not None else None
 	for max_text, max_list in ((4000, 100), (1000, 40), (300, 15), (120, 5)):
-		safe = _shrink(value, 0, max_text, max_list)
+		cut: list = []
+		safe = _shrink(value, 0, max_text, max_list, cut)
 		if _size(safe) <= max_bytes:
-			return safe, safe != value
+			return safe, bool(cut) or (max_text, max_list) != (4000, 100)
 	return {"note": "The result is too large to show."}, True
 
 

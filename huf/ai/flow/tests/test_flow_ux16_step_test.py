@@ -256,6 +256,34 @@ class TestAgentAndLimits(Base):
 			with self.assertRaises(frappe.ValidationError):
 				api.test_step(self.flow_id, "cond")
 
+	def test_a_slow_step_runs_in_a_job_and_the_answer_comes_back(self):
+		self._flow(_graph({"x": 1}, [{"id": "ai", "type": "agent.run", "config": {"agent": "Some Agent", "prompt": "Say hi"}, "next": "end"}]))
+		fake = {"success": True, "response": "Hi there", "agent_run_id": None}
+
+		def worker(method, **kw):  # the queue picks the job up at once
+			self.assertEqual((method, kw["queue"], kw["timeout"]), ("huf.ai.flow.testrun.step_test.run_job", "short", 30))
+			st.run_job(kw["token"], kw["flow_id"], kw["node_id"], kw["sample_input"], kw["deadline"])
+
+		frappe.flags.in_test = False
+		try:
+			with patch("frappe.enqueue", side_effect=worker) as enq, patch("huf.ai.agent.integration.run_agent_sync", return_value=fake):
+				out = api.test_step(self.flow_id, "ai")
+		finally:
+			frappe.flags.in_test = True
+		enq.assert_called_once()
+		self.assertEqual((out["status"], out["output"]), ("success", "Hi there"))
+
+	def test_a_busy_queue_is_said_plainly_not_as_a_timeout(self):
+		self._flow(_graph({"x": 1}, [{"id": "ai", "type": "agent.run", "config": {"agent": "Some Agent", "prompt": "Say hi"}, "next": "end"}]))
+		frappe.flags.in_test = False
+		try:
+			with patch("frappe.enqueue"), patch.object(st, "START_WAIT_S", 0.2):
+				out = api.test_step(self.flow_id, "ai")
+		finally:
+			frappe.flags.in_test = True
+		self.assertEqual(out["status"], "failed")
+		self.assertIn("background worker is busy", out["error"])
+
 	def test_a_bad_sample_is_a_plain_failure(self):
 		self._flow(_graph({"total": 1}))
 		out = api.test_step(self.flow_id, "cond", {"input": [1, 2]})
@@ -270,6 +298,10 @@ class TestRedaction(IntegrationTestCase):
 		self.assertEqual(out["nested"]["Authorization"], MASK)
 		self.assertNotIn("sk-abc", out["note"])
 		self.assertEqual(out["ok"], 1)
+
+	def test_hiding_a_secret_is_not_shortening(self):
+		self.assertFalse(redact_output({"password": "x", "name": "Ada"})[1])
+		self.assertTrue(redact_output({"items": list(range(500))})[1])
 
 	def test_output_is_capped_at_64kb(self):
 		huge = {f"k{i}": "z" * 3000 for i in range(80)}

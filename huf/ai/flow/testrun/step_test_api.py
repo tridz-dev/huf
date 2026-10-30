@@ -16,7 +16,7 @@ import frappe
 from frappe import _
 
 from huf.ai.flow.testrun import step_test as st
-from huf.ai.flow.testrun.step_sample import SOURCE_NONE, build_sample_input, clean_sample_input, pin_value, redact_output
+from huf.ai.flow.testrun.step_sample import build_sample_input, clean_sample_input, redact_output
 
 RECENT_DOCUMENTS = 5
 _TRIGGER_KINDS = {"trigger.webhook": "webhook", "trigger.schedule": "schedule", "trigger.doc-event": "doc-event", "trigger.unset": "unset"}

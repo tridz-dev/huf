@@ -239,7 +239,7 @@ function EditableTest({ node, active, onOpenSetup }: Props) {
             <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3 text-sm" role="alertdialog" aria-label="Ask the AI model?" data-testid="flow-step-test-ai-confirm">
               <p>This asks the AI model for real and can use a little of your AI credit. You will not be asked again in this browser.</p>
               <div className="flex gap-2">
-                <Button type="button" size="sm" onClick={onConfirmAi} data-testid="flow-step-test-ai-confirm-yes">Test anyway</Button>
+                <Button type="button" size="sm" autoFocus onClick={onConfirmAi} data-testid="flow-step-test-ai-confirm-yes">Test anyway</Button>
                 <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmAi(false)} data-testid="flow-step-test-ai-confirm-no">Cancel</Button>
               </div>
             </div>

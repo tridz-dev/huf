@@ -25,7 +25,7 @@ from frappe import _
 
 from huf.ai.flow.catalog import fields as cat
 from huf.ai.flow.testrun import gate
-from huf.ai.flow.testrun.effects import CHANGES, READS, SENDS
+from huf.ai.flow.testrun.effects import CHANGES, READS
 from huf.ai.flow.testrun.step_sample import SOURCE_NONE, build_sample_input, clean_sample_input, pin_value, redact_output
 from huf.ai.graph.error_copy import describe_exception
 
@@ -36,6 +36,8 @@ AI_TYPES = ("agent.run", "router.llm")
 #: Steps that can take long: they run in a background job that the queue stops at STEP_TIMEOUT_S.
 SLOW_TYPES = ("agent.run", "router.llm", "foreach", "tool.call")
 RESULT_TTL_S = 300
+#: How long a request waits for the background worker to pick the job up before it says so.
+START_WAIT_S = 10
 
 
 class StepTestRun:
@@ -68,13 +70,6 @@ class StepTestRun:
 
 
 # --------------------------------------------------------------------------- permission and limits
-
-
-def check_editor(flow_id: str) -> None:
-	if not flow_id or not frappe.db.exists("Flow Definition", flow_id):
-		frappe.throw(_("Flow not found"), frappe.DoesNotExistError)
-	if not frappe.has_permission("Flow Definition", "write", doc=flow_id):
-		frappe.throw(_("Only people who can edit this flow can test its steps."), frappe.PermissionError)
 
 
 def check_rate(user: str | None = None, limit: int = RATE_LIMIT) -> None:
@@ -304,6 +299,7 @@ def run_job(token: str, flow_id: str, node_id: str, sample_input: Any, deadline:
 	"""Background-job body: run the step and leave the result where the request that started it is waiting."""
 	if time.time() > deadline:
 		return
+	frappe.cache().set(result_key(token) + ":started", 1, ex=RESULT_TTL_S)
 	try:
 		result = execute_step(flow_id, node_id, sample_input)
 	except Exception as exc:
@@ -343,11 +339,14 @@ def run_with_limit(flow_id: str, node_id: str, sample_input: Any) -> dict:
 		sample_input=sample_input,
 		deadline=deadline,
 	)
+	meta = _meta(describe_step(node), {}, node)
+	begin = time.time()
 	while time.time() < deadline:
 		raw = frappe.cache().get(result_key(token))
 		if raw:
 			frappe.cache().delete(result_key(token))
 			return json.loads(raw if isinstance(raw, str) else raw.decode())
+		if time.time() - begin > START_WAIT_S and not frappe.cache().get(result_key(token) + ":started"):
+			return _failure(node, "The test could not start because the background worker is busy. Try again in a moment.", started, **meta)
 		time.sleep(0.3)
-	meta = _meta(describe_step(node), {}, node)
 	return _failure(node, f"This step took longer than {STEP_TIMEOUT_S} seconds, so the test was stopped.", started, **meta)
