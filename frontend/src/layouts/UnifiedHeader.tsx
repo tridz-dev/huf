@@ -10,6 +10,7 @@ import {
   BreadcrumbSeparator,
 } from '../components/ui/breadcrumb';
 import { BreadcrumbItem as BreadcrumbItemType } from './UnifiedLayout';
+import { useViewport } from '@/lib/ui/responsive';
 import { ApprovalsBell } from '../components/ApprovalsBell';
 import { ExecutionApprovalsBell } from '../components/ExecutionApprovalsBell';
 import { usePermissions } from '../contexts/PermissionsContext';
@@ -97,6 +98,7 @@ export function AncestryCrumb({
 export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftContent, stackOnPhone }: UnifiedHeaderProps) {
   const location = useLocation();
   const { hasCapability } = usePermissions();
+  const { isCompact } = useViewport();
 
   const getPageTitle = () => {
     const path = location.pathname;
@@ -163,10 +165,9 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
       <div className={cn('flex items-center gap-2', stackOnPhone && 'max-md:basis-full max-md:justify-end')}>
         {/* Approvals are only asked for by people who use flows: for anyone else the server would refuse every poll. */}
         {hasCapability('flows.use') && <ApprovalsBell />}
-        {(hasCapability('execution.approve') || hasCapability('ssh.approve')) && (
-          // Code-run approvals: in the flow editor they move into the header's "..." menu at 1200px and narrower (no room beside Run and Publish).
-          <span className={cn('contents', stackOnPhone && 'max-[1200px]:hidden')}><ExecutionApprovalsBell /></span>
-        )}
+        {/* Code-run approvals: in the flow editor they move into the header's "..." menu at 1200px and narrower (no room beside Run and Publish).
+            Mounted in one place only: a bell hidden by CSS would still poll the server next to the one in the menu. */}
+        {(hasCapability('execution.approve') || hasCapability('ssh.approve')) && !(stackOnPhone && isCompact) && <ExecutionApprovalsBell />}
         {actions}
       </div>
     </div>

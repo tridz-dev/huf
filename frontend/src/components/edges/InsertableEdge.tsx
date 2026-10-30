@@ -1,12 +1,13 @@
-import { memo, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { memo, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { BaseEdge, EdgeLabelRenderer, EdgeProps, useStore } from 'reactflow';
 import { Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { routeEdge, routeLoopBack, type Rect } from '@/lib/flow-graph/edgeRouting';
+import { PLACED_PILLS, boxAt, controlCandidates, pillCandidates, placeClear, type Size } from '@/lib/flow-graph/edgePlacement';
 import type { BranchTone } from '@/lib/flow/flowBranches';
 import type { FlowEdgeRoute } from '../../types/flow.types';
-import { counterScale } from '@/lib/flow-canvas/zoomLod';
+import { counterScale, lodForZoom } from '@/lib/flow-canvas/zoomLod';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 export interface InsertableEdgeData {
@@ -38,15 +39,22 @@ const PILL_TONE: Record<BranchTone, string> = {
 
 const GHOST_LINE: CSSProperties = { stroke: 'var(--steel-soft)', strokeWidth: 1.5, strokeDasharray: '4 4', opacity: 0.7 };
 const DEFAULT_SIZE = { width: 236, height: 70 };
+/** The "+" and remove buttons: 28px round, 6px apart (h-7 w-7, gap-1.5). */
+const BUTTON_PX = 28;
+const BUTTON_GAP_PX = 6;
+/** Width of a step shown as an icon tile (under 50% zoom), centred in the step's box (see NodeCard). */
+const TILE_WIDTH = 120;
+
 
 /**
- * Places an overlay centred at a point on the canvas and keeps it at its normal size when the canvas is zoomed out
- * (a 12px label stays 12px on screen instead of shrinking with the steps).
+ * Places an overlay centred at a point on the canvas at `scale` times its normal size (a 12px label is made 12px on screen when
+ * the canvas is zoomed out instead of shrinking with the steps).
  */
-const overlayStyle = (x: number, y: number, zoom: number, interactive = false, shrinkWhenZoomedIn = false, maxScale?: number): CSSProperties => ({
+const overlayStyle = (x: number, y: number, scale: number, interactive = false): CSSProperties => ({
   position: 'absolute',
-  // Names are 12px on screen at every zoom (they also shrink when zoomed in); buttons only grow when zoomed out so they stay easy to hit.
-  transform: `translate(${x}px, ${y}px) scale(${shrinkWhenZoomedIn ? counterScale(zoom) : zoom < 1 ? counterScale(zoom, maxScale) : 1}) translate(-50%, -50%)`,
+  // Scale around the top-left corner: the centre of the overlay then lands exactly on (x, y) at every zoom (around the middle it drifted away from it when scaled).
+  transformOrigin: '0 0',
+  transform: `translate(${x}px, ${y}px) scale(${scale}) translate(-50%, -50%)`,
   ...(interactive ? { pointerEvents: 'all' as const } : {}),
 });
 
@@ -136,8 +144,42 @@ export const InsertableEdge = memo(
     const scale = Math.max(counterScale(zoom), 1);
     const pillBase = loopBack ? routed.pillAt : pillPoint(routed, scale, data?.route === 'option');
     // A name sitting right under its step is pushed down as it is scaled up, so it never covers the step's edge.
-    const pillPos = data?.route !== 'option' && pillBase.x === routed.points[0]?.x && pillBase.y < (routed.points[0]?.y ?? 0) + 24 ? { x: pillBase.x, y: pillBase.y + (scale - 1) * 8 } : pillBase;
+    const pillWanted = data?.route !== 'option' && pillBase.x === routed.points[0]?.x && pillBase.y < (routed.points[0]?.y ?? 0) + 24 ? { x: pillBase.x, y: pillBase.y + (scale - 1) * 8 } : pillBase;
+    // The name's size on the canvas (its own size on screen, scaled like the name itself), so it can be kept off the steps.
+    const pillRef = useRef<HTMLDivElement>(null);
+    const [pillCss, setPillCss] = useState<Size | null>(null);
+    useLayoutEffect(() => {
+      const el = pillRef.current;
+      if (el && el.offsetWidth > 0 && (!pillCss || Math.abs(pillCss.width - el.offsetWidth) > 0.5 || Math.abs(pillCss.height - el.offsetHeight) > 0.5)) setPillCss({ width: el.offsetWidth, height: el.offsetHeight });
+    }, [pill, pillCss]);
+    const pillScale = counterScale(zoom);
+    const pillSize = useMemo<Size>(() => ({ width: (pillCss?.width ?? Math.min(220, 8 * (pill?.length ?? 0) + 22)) * pillScale, height: (pillCss?.height ?? 20) * pillScale }), [pillCss, pill, pillScale]);
+    // What of each step is drawn: an icon tile is narrower than the box the step takes, so names and buttons may sit beside it.
+    const lod = lodForZoom(zoom);
+    const stepBoxes = useMemo(() => [...obstacles.values()].map((r) => (lod === 'icon' ? { ...r, x: r.x + (r.width - TILE_WIDTH) / 2, width: TILE_WIDTH } : r)), [obstacles, lod]);
+    const pillPos = useMemo(
+      () => (pill && !loopBack ? placeClear(pillSize, stepBoxes, pillWanted, pillCandidates(pillWanted)) : pillWanted),
+      [pill, loopBack, pillSize, stepBoxes, pillWanted.x, pillWanted.y], // eslint-disable-line react-hooks/exhaustive-deps
+    );
+    useLayoutEffect(() => {
+      if (!pill || loopBack) return undefined;
+      PLACED_PILLS.set(id, boxAt(pillPos, pillSize));
+      return () => { PLACED_PILLS.delete(id); };
+    }, [id, pill, loopBack, pillPos, pillSize]);
     const showControls = canManage && (hovered || selected);
+    // The buttons keep off the name, the steps and the arrow head: further along the line, or beside it when the line is full.
+    const buttons = selected && !loopBack ? 2 : 1;
+    // About 22px across on screen when zoomed out (up to 2.5 times their size), so they fit the gap between two steps more often.
+    const buttonScale = zoom < 1 ? Math.max(Math.min(counterScale(zoom, 2.5), 22 / (BUTTON_PX * zoom)), 1) : 1;
+    const controlsSize = useMemo<Size>(() => ({ width: (buttons * BUTTON_PX + (buttons - 1) * BUTTON_GAP_PX) * buttonScale, height: BUTTON_PX * buttonScale }), [buttons, buttonScale]);
+    const controlsPos = useMemo(() => {
+      if (!showControls) return routed.controlsAt;
+      const end = routed.points[routed.points.length - 1];
+      const avoid = [...stepBoxes];
+      if (end) avoid.push(loopBack ? { x: end.x - 2, y: end.y - 10, width: 24, height: 20 } : { x: end.x - 10, y: end.y - 18, width: 20, height: 22 });
+      PLACED_PILLS.forEach((box) => avoid.push(box));
+      return placeClear(controlsSize, avoid, routed.controlsAt, controlCandidates(routed.points, routed.length, controlsSize, routed.controlsAt));
+    }, [showControls, routed, stepBoxes, loopBack, pill, pillPos, pillSize, controlsSize]);
 
     return (
       <>
@@ -157,11 +199,14 @@ export const InsertableEdge = memo(
         <EdgeLabelRenderer>
           {pill ? (
             <div
+              ref={pillRef}
               data-testid={`flow-edge-label-${id}`}
               data-source={source}
               title={pill}
               onClick={() => data?.onSelect?.(id)}
-              style={overlayStyle(pillPos.x, pillPos.y, zoom, !data?.loopBack, true)}
+              onMouseEnter={hoverOn}
+              onMouseLeave={hoverOff}
+              style={overlayStyle(pillPos.x, pillPos.y, pillScale, !data?.loopBack)}
               className={cn(
                 'max-w-[220px] cursor-pointer whitespace-normal break-words rounded-full border px-2.5 py-px text-center text-xs font-medium leading-tight shadow-sm',
                 PILL_TONE[data?.tone ?? 'neutral'],
@@ -174,7 +219,7 @@ export const InsertableEdge = memo(
           ) : null}
           {canManage && (
             <div
-              style={overlayStyle(routed.controlsAt.x, routed.controlsAt.y, zoom, showControls, false, 2.5)}
+              style={overlayStyle(controlsPos.x, controlsPos.y, buttonScale, showControls)}
               onMouseEnter={hoverOn}
               onMouseLeave={hoverOff}
               className={cn('nodrag nopan z-10 flex items-center gap-1.5 transition-opacity duration-150', showControls ? 'opacity-100' : 'opacity-0 hover:opacity-100 focus-within:opacity-100')}
