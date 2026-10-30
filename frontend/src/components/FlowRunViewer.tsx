@@ -19,7 +19,7 @@ import { useUser } from '@/contexts/UserContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { RunDecisionBar } from './flow/decision/RunDecisionBar';
 import { useViewport } from '@/lib/ui/responsive';
-import { OutcomeChip, RunStatusPill } from './flow/run/RunStatusBits';
+import { OutcomeChip, RunStatusPill, TestRunChip } from './flow/run/RunStatusBits';
 import { RunStepCard } from './flow/run/RunStepCard';
 import { RunStatusBanner } from './flow/run/RunStatusBanner';
 import { RunWaitingCard } from './flow/run/RunWaitingCard';
@@ -193,6 +193,7 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
                             <div className="flex flex-wrap items-center gap-2">
                                 <RunStatusPill status={run.status} stale={run.stale} />
                                 {run.outcome && <OutcomeChip outcome={run.outcome} />}
+                                {run.run_mode === 'Test' && <TestRunChip label="Test run" testId="flow-run-test-pill" />}
                             </div>
                             <h2 className="mt-2 text-lg font-semibold leading-snug text-ink" data-testid="flow-run-headline-text">{headline.headline}</h2>
                             {headline.sub && <p className="mt-0.5 text-sm text-steel" data-testid="flow-run-headline-sub">{headline.sub}</p>}

@@ -22,6 +22,8 @@ interface ChipEditorProps {
   describe: (chip: Chip) => ChipInfo;
   onSegments: (segments: Segment[]) => void;
   multiline: boolean;
+  /** Chips only: the person picks data, typing does nothing (a field that stores a reference). */
+  pickOnly?: boolean;
   editable: boolean;
   placeholder?: string;
   id?: string;
@@ -41,7 +43,7 @@ interface ChipEditorProps {
  * from the segment list, not from the screen.
  */
 export const ChipEditor = forwardRef<ChipEditorHandle, ChipEditorProps>(function ChipEditor(
-  { segments, drawKey, describe, onSegments, multiline, editable, placeholder, id, testId, ariaLabel, ariaDescribedBy, inputMode, onSlash, onChipClick, className },
+  { segments, drawKey, describe, onSegments, multiline, pickOnly, editable, placeholder, id, testId, ariaLabel, ariaDescribedBy, inputMode, onSlash, onChipClick, className },
   ref
 ) {
   const root = useRef<HTMLDivElement>(null);
@@ -157,6 +159,10 @@ export const ChipEditor = forwardRef<ChipEditorHandle, ChipEditorProps>(function
       if ((before === '' || /\s$/.test(before)) && collapsed && handlers.current.onSlash(at)) e.preventDefault();
       return;
     }
+    if (pickOnly && e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      return;
+    }
     if (!collapsed) return;
     if (e.key === 'Backspace' || e.key === 'Delete') {
       const segs = readSegments(el, chips.current);
@@ -171,7 +177,7 @@ export const ChipEditor = forwardRef<ChipEditorHandle, ChipEditorProps>(function
 
   const onPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     e.preventDefault();
-    if (editable) typeText(e.clipboardData.getData('text/plain'));
+    if (editable && !pickOnly) typeText(e.clipboardData.getData('text/plain'));
   };
 
   const onClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -236,6 +242,7 @@ export const ChipEditor = forwardRef<ChipEditorHandle, ChipEditorProps>(function
       onInput={onInput}
       onKeyDown={onKeyDown}
       onPaste={onPaste}
+      onBeforeInput={(e) => { if (pickOnly && (e.nativeEvent as InputEvent).inputType?.startsWith('insert')) e.preventDefault(); }}
       onClick={onClick}
       onDrop={(e) => e.preventDefault()}
     />

@@ -22,7 +22,7 @@ import type {
 } from '@/types/flow.types';
 import type { BackendFlowGraph, BackendNode, BackendNodeType } from './flowApi';
 import { layoutWhenUnplaced } from '../lib/flow/flowLayout';
-import { defaultContract, deriveContract, placeholderFingerprint } from './flow/flowContract';
+import { endOutcomeConfig } from './flow/endOutcome'; import { defaultContract, deriveContract, placeholderFingerprint } from './flow/flowContract';
 
 export { defaultContract };
 
@@ -190,7 +190,7 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
         case 'human.approval':
             setIf('approve_next', first('approve'));
             setIf('reject_next', first('reject'));
-            setIf('timeout_next', first('timeout'));
+            setIf('timeout_next', config.timeout_ms ? first('timeout') : undefined); // a Timed out path exists only with a time limit
             break;
         case 'foreach': {
             const seen = new Set<string>();
@@ -268,8 +268,8 @@ function extractNodeConfig(node: FlowNode, backendType: BackendNodeType): Record
     let config: Record<string, unknown> = {};
 
     if (backendType === 'output') {
-        const value = data?.endConfig?.value;
-        return value === undefined ? {} : { value };
+        const { value, outcome } = data?.endConfig ?? {};
+        return { ...(value === undefined ? {} : { value }), ...endOutcomeConfig(outcome) };
     }
     if (backendType === 'trigger.unset') return {};
 
@@ -386,7 +386,7 @@ function buildNodeData(node: BackendNode): FlowNodeData {
             : node.type === 'trigger.doc-event' ? 'doc-event' : 'webhook';
         base.triggerConfig = { type, ...node.config } as TriggerConfig;
     } else if (frontendType === 'end') {
-        base.endConfig = { ...(node.config.value !== undefined ? { value: node.config.value } : {}) };
+        base.endConfig = { ...(node.config.value !== undefined ? { value: node.config.value } : {}), ...endOutcomeConfig(node.config.outcome) };
     } else {
         const config: Record<string, unknown> = { ...node.config };
         for (const key of ROUTING_KEYS[node.type] ?? []) delete config[key];

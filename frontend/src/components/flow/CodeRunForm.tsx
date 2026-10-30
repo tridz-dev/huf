@@ -5,7 +5,8 @@ import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { FlowValueInput } from '../FlowValueInput';
+import { DataInput } from './data/DataInput';
+import { MoreOptions } from './frame/MoreOptions';
 import {
   CODE_NO_PERMISSION_NOTE,
   DEFAULT_CODE_TIMEOUT_S,
@@ -19,6 +20,8 @@ import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import type { CodeFlowProfile } from '@/services/flow/codeFlowApi';
 
 type Cfg = Record<string, unknown>;
+
+const EXAMPLE_CODE = 'name = inputs.get("name", "there")\nprint("Hello " + str(name))\nresult = {"greeting": "Hello " + str(name)}';
 
 const asObj = (v: unknown): Cfg => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Cfg) : {});
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -117,6 +120,11 @@ export function CodeRunFields({ nodeId, cfg, patch, Err }: CodeRunFieldsProps) {
         {size > MAX_CODE_BYTES * 0.8 && (
           <p className="mt-1 text-micro text-muted-foreground">{Math.round(size / 1024)} KB of 64 KB used</p>
         )}
+        {code.trim() === '' && !noPermission && (
+          <Button type="button" variant="ghost" size="sm" className="mt-1 text-muted-foreground" data-testid="flow-code-example" onClick={() => patch({ code: EXAMPLE_CODE })}>
+            Start from an example
+          </Button>
+        )}
         <Err field="code" />
       </div>
       <Help />
@@ -149,30 +157,10 @@ export function CodeRunFields({ nodeId, cfg, patch, Err }: CodeRunFieldsProps) {
         )}
         <Err field="profile" />
       </div>
-      <div>
-        <Label htmlFor="code-run-timeout" size="sm">Time limit (seconds)</Label>
-        <Input
-          id="code-run-timeout"
-          data-testid="flow-code-timeout"
-          type="number"
-          min={1}
-          max={maxTimeout || undefined}
-          value={timeout}
-          placeholder={String(status?.default_timeout_s ?? DEFAULT_CODE_TIMEOUT_S)}
-          onChange={(e) => {
-            if (e.target.value === '') return patch({ timeout_s: undefined });
-            const n = parseInt(e.target.value, 10);
-            if (Number.isNaN(n)) return;
-            patch({ timeout_s: clampTimeout(n, maxTimeout) });
-          }}
-        />
-        {maxTimeout > 0 && <p className="mt-1 text-micro text-muted-foreground">Up to {maxTimeout} seconds for this profile.</p>}
-        <Err field="timeout_s" />
-      </div>
       <div className="space-y-2">
-        <Label size="sm">Inputs for your code</Label>
+        <Label size="sm">Data for your code</Label>
         {entries.length === 0 && (
-          <p className="text-xs text-muted-foreground">No inputs yet. Add one to use data from the trigger or an earlier step as <code>inputs[&apos;name&apos;]</code>.</p>
+          <p className="text-xs text-muted-foreground">None yet. Add one to hand data from the trigger or an earlier step to your code, as <code>inputs[&apos;name&apos;]</code>.</p>
         )}
         {entries.map(([name, val], i) => (
           <div key={i} className="space-y-2 rounded-md border bg-muted/20 p-3">
@@ -202,7 +190,7 @@ export function CodeRunFields({ nodeId, cfg, patch, Err }: CodeRunFieldsProps) {
                 ×
               </Button>
             </div>
-            <FlowValueInput
+            <DataInput
               id={`code-input-${i}-value`}
               nodeId={nodeId}
               testId={`flow-code-input-value-${i}`}
@@ -223,10 +211,32 @@ export function CodeRunFields({ nodeId, cfg, patch, Err }: CodeRunFieldsProps) {
             patch({ inputs: { ...inputs, [`input_${n}`]: '' } });
           }}
         >
-          Add input
+          Add data for the code
         </Button>
         <Err field="inputs" />
       </div>
+      <MoreOptions defaultOpen={timeout !== ''} testId="flow-more-options-code">
+      <div>
+        <Label htmlFor="code-run-timeout" size="sm">Stop the code after (seconds, optional)</Label>
+        <Input
+          id="code-run-timeout"
+          data-testid="flow-code-timeout"
+          type="number"
+          min={1}
+          max={maxTimeout || undefined}
+          value={timeout}
+          placeholder={String(status?.default_timeout_s ?? DEFAULT_CODE_TIMEOUT_S)}
+          onChange={(e) => {
+            if (e.target.value === '') return patch({ timeout_s: undefined });
+            const n = parseInt(e.target.value, 10);
+            if (Number.isNaN(n)) return;
+            patch({ timeout_s: clampTimeout(n, maxTimeout) });
+          }}
+        />
+        {maxTimeout > 0 && <p className="mt-1 text-micro text-muted-foreground">Up to {maxTimeout} seconds for this profile.</p>}
+        <Err field="timeout_s" />
+      </div>
+      </MoreOptions>
     </fieldset>
   );
 }
