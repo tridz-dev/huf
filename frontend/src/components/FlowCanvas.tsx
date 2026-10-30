@@ -94,6 +94,8 @@ export function FlowCanvas({
   const onDeleteNode = useCallback((nodeId: string) => deleteRef.current(nodeId), []);
   // Delete / Backspace on a selected step asks first (the click-to-delete buttons already do).
   const [keyboardDeleteId, setKeyboardDeleteId] = useState<string | null>(null);
+  // Two or more selected steps: Delete asks once for all of them.
+  const [keyboardDeleteIds, setKeyboardDeleteIds] = useState<string[]>([]);
   // Same for a selected connection: the button on the line and the Delete key both ask first.
   const [edgeDeleteId, setEdgeDeleteId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<Node<FlowNodeData>[]>([]);
@@ -305,7 +307,8 @@ export function FlowCanvas({
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable || target?.closest('[role="dialog"], [role="alertdialog"], [role="combobox"], [role="listbox"], [role="menu"]')) return;
       // Only when the user is on the canvas (or nowhere in particular), never in another part of the page.
       if (target && target !== document.body && !target.closest('[data-testid="flow-canvas"]')) return;
-      const node = nodes.find((n) => n.selected && !n.id.startsWith(RENDER_ONLY_NODE_PREFIX)) ?? nodes.find((n) => n.id === selectedNodeId);
+      const picked = nodes.filter((n) => n.selected && !n.id.startsWith(RENDER_ONLY_NODE_PREFIX));
+      const node = picked[0] ?? nodes.find((n) => n.id === selectedNodeId);
       if (!node) {
         // No step selected: Delete removes the selected connection (after asking).
         const edge = edges.find((ed) => ed.selected && !ed.id.startsWith(RENDER_ONLY_EDGE_PREFIX)) ?? edges.find((ed) => ed.id === selectedEdgeId);
@@ -313,6 +316,14 @@ export function FlowCanvas({
           e.preventDefault();
           setEdgeDeleteId(edge.id);
         }
+        return;
+      }
+      if (picked.length > 1) {
+        const deletable = picked.filter((n) => n.data.status !== 'running' && n.data.status !== 'waiting');
+        if (deletable.length === 0) return;
+        e.preventDefault();
+        if (deletable.length === 1) setKeyboardDeleteId(deletable[0].id);
+        else setKeyboardDeleteIds(deletable.map((n) => n.id));
         return;
       }
       if (node.data.status === 'running' || node.data.status === 'waiting') return;
@@ -641,7 +652,7 @@ export function FlowCanvas({
         onConfirm={deleteEdge}
       />
 
-      <DeleteStepDialog nodeId={keyboardDeleteId} onOpenChange={(open) => !open && setKeyboardDeleteId(null)} />
+      <DeleteStepDialog nodeId={keyboardDeleteId} nodeIds={keyboardDeleteIds} onOpenChange={(open) => { if (!open) { setKeyboardDeleteId(null); setKeyboardDeleteIds([]); } }} />
 
       {activeFlow && (
         <ConvertToProcedureDialog

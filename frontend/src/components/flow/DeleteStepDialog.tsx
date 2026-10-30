@@ -16,6 +16,8 @@ import { outgoingEdges, removeStep, type RemoveStepMode } from '../../lib/flow/f
 
 interface DeleteStepDialogProps {
   nodeId: string | null;
+  /** Several selected steps to remove together ("Delete 3 steps?", one Undo). Used instead of `nodeId` when it holds two or more. */
+  nodeIds?: string[];
   onOpenChange: (open: boolean) => void;
 }
 
@@ -23,8 +25,10 @@ interface DeleteStepDialogProps {
  * Confirms removing a step. A step with something after it asks how to treat the rest of the path:
  * reconnect around it (the default) or remove everything that only it led to.
  */
-export function DeleteStepDialog({ nodeId, onOpenChange }: DeleteStepDialogProps) {
-  const { activeFlow, deleteNode } = useFlowContext();
+export function DeleteStepDialog({ nodeId, nodeIds, onOpenChange }: DeleteStepDialogProps) {
+  const { activeFlow, deleteNode, deleteNodes } = useFlowContext();
+  const several = nodeIds && nodeIds.length > 1 ? nodeIds : null;
+  const names = several ? several.map((id) => activeFlow?.nodes.find((n) => n.id === id)?.data.label).filter((l): l is string => !!l) : [];
   const [mode, setMode] = useState<RemoveStepMode>('reconnect');
   const node = nodeId ? activeFlow?.nodes.find((n) => n.id === nodeId) : undefined;
   const followers = useMemo(() => (nodeId && activeFlow ? outgoingEdges(activeFlow.edges, nodeId) : []), [nodeId, activeFlow]);
@@ -42,15 +46,21 @@ export function DeleteStepDialog({ nodeId, onOpenChange }: DeleteStepDialogProps
   const bridgeable = followers.length === 1;
 
   return (
-    <AlertDialog open={nodeId !== null} onOpenChange={onOpenChange}>
+    <AlertDialog open={nodeId !== null || several !== null} onOpenChange={onOpenChange}>
       <AlertDialogContent onClick={(e) => e.stopPropagation()} data-testid="flow-node-delete-dialog">
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete "{node?.data.label ?? 'this step'}"?</AlertDialogTitle>
+          <AlertDialogTitle data-testid="flow-node-delete-title">{several ? `Delete ${several.length} steps?` : `Delete "${node?.data.label ?? 'this step'}"?`}</AlertDialogTitle>
           <AlertDialogDescription>
-            Its settings and connections will be removed. You can undo this right after.
+            {several ? 'Their settings and connections will be removed. You can undo this right after, and all of them come back together.' : 'Its settings and connections will be removed. You can undo this right after.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        {isMiddle && (
+        {several && names.length > 0 && (
+          <ul className="list-disc space-y-0.5 pl-5 text-sm text-ink" data-testid="flow-node-delete-list">
+            {names.slice(0, 6).map((name, i) => <li key={`${name}-${i}`}>{name}</li>)}
+            {names.length > 6 && <li className="list-none text-muted-foreground">and {names.length - 6} more</li>}
+          </ul>
+        )}
+        {!several && isMiddle && (
           <RadioGroup value={mode} onValueChange={(v) => setMode(v as RemoveStepMode)} className="gap-3" data-testid="flow-delete-mode">
             <div className="flex items-start gap-2">
               <RadioGroupItem value="reconnect" id="flow-delete-reconnect" data-testid="flow-delete-mode-reconnect" className="mt-0.5" />
@@ -82,7 +92,8 @@ export function DeleteStepDialog({ nodeId, onOpenChange }: DeleteStepDialogProps
             data-testid="flow-node-delete-confirm"
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             onClick={() => {
-              if (nodeId) deleteNode(nodeId, mode);
+              if (several) deleteNodes(several, 'reconnect');
+              else if (nodeId) deleteNode(nodeId, mode);
               onOpenChange(false);
             }}
           >

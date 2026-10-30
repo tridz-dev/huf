@@ -8,7 +8,8 @@ import { useHistoryStepper } from '../lib/flow-history/useHistoryStepper';
 import type { GraphChange, GraphSnapshot } from '../lib/flow-history/graphChange';
 import { tidyPositions } from '../lib/flow/flowLayout';
 import { followRenamedTarget } from '../lib/flow/flowEdgeLabels';
-import { removeStep, type RemoveStepMode } from '../lib/flow/flowEdit';
+import { type RemoveStepMode } from '../lib/flow/flowEdit';
+import { removeSteps } from '../lib/flow-graph/removeSteps';
 import { announceConversion, flowsEqual } from '../lib/flow-graph/flowSync';
 import { useFlowRealtimeStatus } from '../hooks/flow/useFlowRealtimeStatus';
 
@@ -43,6 +44,8 @@ interface FlowContextType {
   getFlow: () => Flow | null; // latest committed flow, even before React re-renders with it
   /** Remove a step. Default `reconnect` joins the step before it to the step after it; `cascade` also removes what only it led to. */
   deleteNode: (nodeId: string, mode?: RemoveStepMode) => void;
+  /** Remove several steps at once: one change, one Undo. */
+  deleteNodes: (nodeIds: string[], mode?: RemoveStepMode) => void;
   /** Remove one connection between two steps. */
   deleteEdge: (edgeId: string) => void;
   addEdge: (edge: FlowEdge) => void;
@@ -354,12 +357,12 @@ export function FlowProvider({ children }: { children: ReactNode }) {
 
   const { undo, redo } = useHistoryStepper({ getFlow, undoStep: undoHistory, redoStep: redoHistory, restore: restoreSnapshot });
 
-  const deleteNode = useCallback((nodeId: string, mode: RemoveStepMode = 'reconnect') => {
-    if (!activeFlowId) return;
+  const deleteNodes = useCallback((nodeIds: string[], mode: RemoveStepMode = 'reconnect') => {
+    if (!activeFlowId || nodeIds.length === 0) return;
     const prev = activeFlowRef.current;
     if (!prev) return;
-    const deletedNode = prev.nodes.find(n => n.id === nodeId);
-    const { nodes: updatedNodes, edges: updatedEdges } = removeStep({ nodes: prev.nodes, edges: prev.edges }, nodeId, mode);
+    const first = prev.nodes.find(n => n.id === nodeIds[0]);
+    const { nodes: updatedNodes, edges: updatedEdges } = removeSteps({ nodes: prev.nodes, edges: prev.edges }, nodeIds, mode);
     const removedCount = prev.nodes.length - updatedNodes.length;
     patchActive(() => ({ nodes: updatedNodes, edges: updatedEdges }));
     flowService.updateNodesAndEdges(activeFlowId, updatedNodes, updatedEdges);
@@ -367,9 +370,13 @@ export function FlowProvider({ children }: { children: ReactNode }) {
       setSelectedNodeId(null);
     }
     markUnsaved();
-    const label = (deletedNode?.data as { label?: string } | undefined)?.label;
-    toast('Node deleted', { description: removedDescription(label, removedCount), action: { label: 'Undo', onClick: () => undo() } });
+    const label = (first?.data as { label?: string } | undefined)?.label;
+    const undoAction = { label: 'Undo', onClick: () => undo() };
+    if (nodeIds.length > 1) toast(`${removedCount} steps deleted`, { description: 'They were removed from the flow. Undo puts them all back.', action: undoAction });
+    else toast('Node deleted', { description: removedDescription(label, removedCount), action: undoAction });
   }, [activeFlowId, selectedNodeId, markUnsaved, undo, patchActive]);
+
+  const deleteNode = useCallback((nodeId: string, mode: RemoveStepMode = 'reconnect') => deleteNodes([nodeId], mode), [deleteNodes]);
 
   const deleteEdge = useCallback((edgeId: string) => {
     if (!activeFlowId) return;
@@ -442,6 +449,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     getNode,
     getFlow,
     deleteNode,
+    deleteNodes,
     deleteEdge,
     addEdge,
     tidyLayout,
@@ -481,6 +489,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     getNode,
     getFlow,
     deleteNode,
+    deleteNodes,
     deleteEdge,
     addEdge,
     tidyLayout,

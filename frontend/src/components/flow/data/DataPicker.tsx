@@ -204,7 +204,8 @@ export function DataPicker({ model, accept, onPick, onFetchLast, loading }: Data
             ) : null}
           </div>
         ) : null}
-        {loading ? <p className="p-2 text-meta text-muted-foreground">Loading examples…</p> : null}
+        {/* Never under "No sample yet": that answer is already final for this step, a loading line below it only flashes. */}
+        {loading && !showNoSample ? <p className="p-2 text-meta text-muted-foreground" data-testid="flow-use-data-loading">Loading examples…</p> : null}
       </div>
       {view.kind === 'steps' || (step && view.kind === 'fields') ? (
         <div className="border-t border-border p-2">
