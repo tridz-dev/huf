@@ -19,17 +19,19 @@ import re
 from typing import Any
 
 from huf.ai.flow.catalog import fields as cat
-from huf.ai.flow.support.trigger_sample import MASK, MAX_SAMPLE_BYTES, redact_sample
+from huf.ai.flow.support.trigger_sample import (
+	MASK,
+	MAX_SAMPLE_BYTES,
+	hide_secret_values,
+	is_header_key,
+	is_secret_key,
+	redact_sample,
+	secret_pair,
+)
 
 MAX_OUTPUT_BYTES = 64 * 1024
 MAX_PART_BYTES = 16 * 1024
 MAX_DEPTH = 8
-_SECRET_KEY = re.compile(r"pass(word|wd)?|secret|token|authorization|api[_-]?key|credential|cookie|signature|private", re.I)
-# Values that look like credentials even when the key around them is harmless ("value": "sk-...").
-_SECRET_VALUE = re.compile(
-	r"(sk-[A-Za-z0-9_\-]{16,}|xox[abprs]-[A-Za-z0-9\-]{10,}|gh[pousr]_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_\-]{30,}"
-	r"|Bearer\s+[A-Za-z0-9._\-]{16,}|eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{5,})"
-)
 
 SOURCE_PINNED = "pinned"
 SOURCE_TRIGGER_SAMPLE = "trigger_sample"
@@ -50,18 +52,24 @@ def _shrink(value: Any, depth: int, max_text: int, max_list: int, cut: list) -> 
 		return "..."
 	if isinstance(value, dict):
 		out = {}
+		pair = secret_pair(value)
 		for i, (key, item) in enumerate(value.items()):
 			if i >= 60:
 				cut.append(True)
 				break
-			out[str(key)] = MASK if _SECRET_KEY.search(str(key)) and item not in (None, "") else _shrink(item, depth + 1, max_text, max_list, cut)
+			if is_header_key(key):
+				continue  # credential headers are removed, at any depth
+			if (is_secret_key(key) or (pair and key == "value")) and item not in (None, ""):
+				out[str(key)] = MASK
+			else:
+				out[str(key)] = _shrink(item, depth + 1, max_text, max_list, cut)
 		return out
 	if isinstance(value, (list, tuple)):
 		if len(value) > max_list:
 			cut.append(True)
 		return [_shrink(item, depth + 1, max_text, max_list, cut) for item in list(value)[:max_list]]
 	if isinstance(value, str):
-		text = _SECRET_VALUE.sub(MASK, value)
+		text = hide_secret_values(value)
 		if len(text) > max_text:
 			cut.append(True)
 			return text[: max_text - 3] + "..."

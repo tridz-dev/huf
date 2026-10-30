@@ -19,8 +19,44 @@ MAX_LIST = 20
 LIMITS = ((MAX_LIST, MAX_TEXT), (10, 120), (5, 80))
 MAX_KEYS = 40
 
-_SECRET_KEY = re.compile(r"pass(word|wd)?|secret|token|authorization|api[_-]?key|credential|cookie|signature|private", re.I)
+_SECRET_KEY = re.compile(
+	r"pass(word|wd)?|secret|token|authorization|api[_-]?key|credential|cookie|signature|private|bearer|jwt|csrf|xsrf"
+	r"|session[_-]?(id|key)|access[_-]?key|(^|[_\-\s.])auth($|[_\-\s.])|^sid$",
+	re.I,
+)
+# Values that look like credentials even when the key around them is harmless ("value": "sk-...", "note": "Bearer ...").
+_SECRET_VALUE = re.compile(
+	r"(sk-[A-Za-z0-9_\-]{16,}|xox[abprs]-[A-Za-z0-9\-]{10,}|gh[pousr]_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_\-]{30,}"
+	r"|Bearer\s+[A-Za-z0-9._\-]{16,}|Basic\s+[A-Za-z0-9+/=]{16,}|eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{5,})"
+)
 MASK = "(hidden)"
+# Header-style names that only ever carry a credential: the key is removed from a sample altogether (not just its value).
+HEADER_KEYS = frozenset(
+	{
+		"authorization", "proxy-authorization", "cookie", "set-cookie", "x-huf-secret", "x-api-key", "api-key", "apikey",
+		"x-auth-token", "x-access-token", "x-csrf-token", "x-xsrf-token", "x-session-id", "x-slack-signature",
+	}
+)
+_PAIR_NAME_KEYS = ("name", "key", "header", "field", "id")
+
+
+def is_header_key(key) -> bool:
+	return str(key).strip().lower().replace("_", "-") in HEADER_KEYS
+
+
+def is_secret_key(key) -> bool:
+	return bool(_SECRET_KEY.search(str(key)))
+
+
+def secret_pair(value) -> bool:
+	"""``{"name": "Authorization", "value": "Bearer ..."}``: a header or setting written as a name/value pair."""
+	if not isinstance(value, dict) or "value" not in value:
+		return False
+	return any(isinstance(value.get(k), str) and (is_header_key(value[k]) or is_secret_key(value[k])) for k in _PAIR_NAME_KEYS)
+
+
+def hide_secret_values(text: str) -> str:
+	return _SECRET_VALUE.sub(MASK, text)
 
 
 def _trim(value, depth: int, max_list: int = MAX_LIST, max_text: int = MAX_TEXT):
@@ -28,14 +64,21 @@ def _trim(value, depth: int, max_list: int = MAX_LIST, max_text: int = MAX_TEXT)
 		return "..."
 	if isinstance(value, dict):
 		out = {}
+		pair = secret_pair(value)
 		for i, (key, item) in enumerate(value.items()):
 			if i >= MAX_KEYS:
 				break
-			out[str(key)] = MASK if _SECRET_KEY.search(str(key)) else _trim(item, depth + 1, max_list, max_text)
+			if is_header_key(key):
+				continue  # credential headers are removed, at any depth
+			if is_secret_key(key) or (pair and key == "value"):
+				out[str(key)] = MASK
+			else:
+				out[str(key)] = _trim(item, depth + 1, max_list, max_text)
 		return out
 	if isinstance(value, (list, tuple)):
 		return [_trim(item, depth + 1, max_list, max_text) for item in list(value)[:max_list]]
 	if isinstance(value, str):
+		value = hide_secret_values(value)
 		return value if len(value) <= max_text else value[: max_text - 3] + "..."
 	if value is None or isinstance(value, (bool, int, float)):
 		return value
