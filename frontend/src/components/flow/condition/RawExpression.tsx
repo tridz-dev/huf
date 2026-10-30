@@ -32,7 +32,7 @@ export function RawExpression({ nodeId, value, onChange, testId, canEdit, handWr
         value={value}
         onChange={onChange}
         format={(ref) => ref.replace(/\.(\w+)/g, "['$1']")}
-        className="min-h-[60px]"
+        className="min-h-[120px]"
         mono
         placeholder="input['amount'] > 100"
       />
