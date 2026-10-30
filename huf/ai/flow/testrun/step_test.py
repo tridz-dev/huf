@@ -28,6 +28,7 @@ from huf.ai.flow.catalog import fields as cat
 from huf.ai.flow.testrun import gate
 from huf.ai.flow.testrun.effects import CHANGES, READS
 from huf.ai.flow.testrun.step_sample import SOURCE_NONE, build_sample_input, clean_sample_input, pin_value, redact_output
+from huf.ai.flow.support.trigger_sample import hide_secret_values
 from huf.ai.graph.error_copy import describe_exception
 
 STEP_TIMEOUT_S = 30
@@ -203,6 +204,7 @@ def _success(node: dict, output: Any, started: float, **extra) -> dict:
 
 
 def _failure(node: dict, error: str, started: float, **extra) -> dict:
+	error = hide_secret_values(str(error))
 	return {
 		"status": "failed",
 		"output": None,

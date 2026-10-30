@@ -18,7 +18,7 @@ from typing import Any, Callable
 import frappe
 
 from huf.ai.flow.testrun import STORED_TEST
-from huf.ai.flow.testrun.effects import READS, tool_effect
+from huf.ai.flow.testrun.effects import CHANGES, READS, tool_effect
 from huf.ai.flow.testrun.simulate import simulated_code, simulated_document, simulated_output, simulated_state
 
 TEST_NOTE = "Test: you can approve this yourself"
@@ -108,6 +108,9 @@ def simulate_node(node: dict, resolve: Callable[[Any], Any]) -> dict | None:
 			_log_doubt(f"resolving the inputs of {tool_id}", exc)
 			args = _literal_args(config.get("input"))
 		effect = effect_for_call(tool_id, args)
+		if effect == READS and _decided_by_data(tool_id, config.get("input")):
+			# The action (or HTTP method) comes from other data and could not be resolved: fail closed, like describe_step.
+			effect = CHANGES
 		if effect == READS:
 			return None
 		return _success(simulated_output(tool_id, effect, args))
@@ -148,6 +151,12 @@ def code_profile_is_scratch(profile: Any) -> bool:
 		except ValueError:
 			return False
 	return (row.get("filesystem_policy") or "Scratch Only") in ("Scratch Only", "None") and not row.get("network_policy") and not modules
+
+
+def _decided_by_data(tool_id: str, value: Any) -> bool:
+	from huf.ai.flow.testrun.step_test import decided_by_data
+
+	return decided_by_data(tool_id, value)
 
 
 def _literal_args(value: Any) -> dict:

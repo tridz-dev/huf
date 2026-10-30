@@ -70,7 +70,8 @@ def get_step_test_result(token: str) -> dict:
 	raw = st._cache_text(frappe.cache().get(st.result_key(token) + ":meta"))
 	meta = json.loads(raw) if raw else None
 	if not meta:
-		return st.poll_result(token)  # expired or never existed: a plain failure, nothing about anyone else's test
+		# Expired or never existed. Never fall through to the result: without the meta there is no owner to check.
+		return st._failure({}, "This test is no longer available. Run it again.", time.monotonic())
 	if meta.get("user") != frappe.session.user:
 		frappe.throw(_("This test belongs to someone else."), frappe.PermissionError)
 	_editor_node(meta["flow_id"], meta["node_id"])
