@@ -326,8 +326,11 @@ class TestTriggers(Base):
 		for i in range(7):
 			doc = frappe.get_doc({"doctype": "ToDo", "description": f"_ux16 {i}"}).insert(ignore_permissions=True)
 			self._docs.append(("ToDo", doc.name))
+		html = frappe.get_doc({"doctype": "ToDo", "description": '<div class="ql-editor read-mode"><p>_ux16 html</p></div>'}).insert(ignore_permissions=True)
+		self._docs.append(("ToDo", html.name))
 		docs = api.list_recent_documents(self.flow_id, "t")["documents"]
 		self.assertEqual(len(docs), 5)
+		self.assertEqual(docs[0]["title"], "_ux16 html")
 		sample = api.get_document_sample(self.flow_id, "t", docs[0]["name"])["sample"]
 		self.assertTrue(sample["description"].startswith("_ux16"))
 		self.assertNotIn("_trigger", sample)

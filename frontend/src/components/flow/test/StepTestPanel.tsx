@@ -85,7 +85,7 @@ function EditableTest({ node, active, onOpenSetup }: Props) {
     const value = result.pin_value;
     if (value === undefined || value === null) return;
     updateNodeData(node.id, (data) => ({ ...data, sample: value, sampleAt: new Date().toISOString() }) as FlowNodeData);
-    toast.success('Pinned. The steps after this one now show these values as examples.');
+    toast.success('Pinned. Save the flow to keep it; the steps after this one then show these values as examples.');
   };
   const unpin = () => {
     updateNodeData(node.id, (data) => {
@@ -184,7 +184,11 @@ function EditableTest({ node, active, onOpenSetup }: Props) {
             <h3 id="step-test-trigger-title" className="mb-2 text-sm font-medium">Data this flow starts with</h3>
             {pinned ? (
               <div className="rounded-md border border-border bg-card p-3" data-testid="flow-step-test-trigger-sample">
-                <div className="mb-2"><SourceChip source="trigger_sample" partKey="trigger" /></div>
+                <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <SourceChip source="trigger_sample" partKey="trigger" />
+                  {node.data.sampleAt && <span className="text-meta text-muted-foreground" data-testid="flow-step-test-trigger-pinned">Pinned {ageText(node.data.sampleAt)}</span>}
+                  <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={unpin} data-testid="flow-step-unpin-trigger">Unpin</Button>
+                </div>
                 <HumanValue value={node.data.sample} testId="flow-step-test-value-trigger" />
               </div>
             ) : (
@@ -247,7 +251,7 @@ function EditableTest({ node, active, onOpenSetup }: Props) {
           <TestResultView result={t.result} pin={pinState} onOpenSetup={onOpenSetup} isTrigger={isTrigger} />
         </section>
       ) : (
-        <PinnedOnly pinned={pinned} at={node.data.sampleAt} sample={isTrigger ? undefined : node.data.sample} onUnpin={unpin} />
+        !isTrigger && <PinnedOnly pinned={pinned} at={node.data.sampleAt} sample={node.data.sample} onUnpin={unpin} />
       )}
       {hasUnsavedChanges && !isTrigger && (
         <p className="text-meta text-muted-foreground" data-testid="flow-step-test-save-note">Your latest changes are saved first, so the test uses what you see.</p>

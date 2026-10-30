@@ -105,6 +105,15 @@ def _doc_trigger(flow_id: str, node_id: str) -> tuple[dict, str]:
 	return node, doctype
 
 
+def _plain_title(value, fallback: str) -> str:
+	"""A document's title as a person reads it: no markup (a text editor field stores HTML), one line, at most 80 characters."""
+	from frappe.utils import strip_html
+
+	text = " ".join(strip_html(str(value or "")).split())
+	text = text if len(text) <= 80 else text[:79].rstrip() + "…"
+	return text or fallback
+
+
 @frappe.whitelist()
 def list_recent_documents(flow_id: str, node_id: str) -> dict:
 	"""The five most recently changed documents of the watched type that the caller may open."""
@@ -114,7 +123,7 @@ def list_recent_documents(flow_id: str, node_id: str) -> dict:
 	title_field = frappe.get_meta(doctype).title_field
 	fields = ["name", "modified"] + ([title_field] if title_field and title_field != "name" else [])
 	rows = frappe.get_list(doctype, fields=fields, order_by="modified desc", limit_page_length=RECENT_DOCUMENTS)
-	docs = [{"name": r["name"], "title": str(r.get(title_field) or r["name"]) if title_field else r["name"], "modified": str(r["modified"])} for r in rows]
+	docs = [{"name": r["name"], "title": _plain_title(r.get(title_field) if title_field else None, r["name"]), "modified": str(r["modified"])} for r in rows]
 	return {"doctype": doctype, "documents": docs}
 
 
