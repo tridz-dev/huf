@@ -146,7 +146,7 @@ export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
                 ))}
               </SelectContent>
             </Select>
-            <FieldHint testId="flow-hint-http-method">{HTTP_METHODS.find((m) => m.value === (str(input.method) || 'GET'))?.help} Most services want GET to read and POST to send.</FieldHint>
+            <FieldHint testId="flow-hint-http-method">{HTTP_METHODS.find((m) => m.value === (str(input.method) || 'GET'))?.help} GET reads; POST, PUT and PATCH send the request body; DELETE removes.</FieldHint>
           </div>
           <MoreOptions defaultOpen={Boolean(!isEmptyValue(input.headers) || !isEmptyValue(input.body))}>
             <HttpJsonField
