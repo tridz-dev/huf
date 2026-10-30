@@ -3,10 +3,13 @@ import type { WhatsAppResult } from '@/services/whatsappApi';
 
 const WRITE = 'huf.ai.whatsapp.broadcast.api';
 const READ = 'huf.ai.whatsapp.broadcast.api_read';
+const SCHEDULE = 'huf.ai.whatsapp.broadcast.schedule';
+const SCHEDULE_METHODS = new Set(['schedule_broadcast', 'unschedule_broadcast', 'retry_failed_recipients']);
 const READ_METHODS = new Set(['list_broadcasts', 'get_broadcast', 'get_broadcast_template_params', 'list_broadcast_recipients']);
 
 async function broadcastCall<T>(method: string, args: Record<string, unknown>, verb: 'get' | 'post'): Promise<WhatsAppResult<T>> {
-  const path = `${READ_METHODS.has(method) ? READ : WRITE}.${method}`;
+  const base = READ_METHODS.has(method) ? READ : SCHEDULE_METHODS.has(method) ? SCHEDULE : WRITE;
+  const path = `${base}.${method}`;
   try {
     const out = await apiCall<Record<string, unknown> | null>(path, args, { verb: verb === 'get' ? 'GET' : 'POST' });
     return { ...(out && typeof out === 'object' ? out : {}), success: true } as WhatsAppResult<T>;

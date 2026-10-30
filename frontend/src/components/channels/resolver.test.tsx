@@ -6,7 +6,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 const api = vi.hoisted(() => ({ getSetupStatus: vi.fn() }));
 const list = vi.hoisted(() => ({ listChannelGateways: vi.fn() }));
 vi.mock('@/services/whatsappHealthApi', async (orig) => ({ ...(await orig<object>()), ...api }));
-vi.mock('@/services/channelGatewaysApi', () => list);
+vi.mock('@/services/channels/channelGatewaysApi', () => list);
 
 vi.mock('@/contexts/UserContext', () => ({ useUser: () => ({ user: { name: 'ops@example.com' } }) }));
 

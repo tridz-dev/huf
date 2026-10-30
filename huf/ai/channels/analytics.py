@@ -75,7 +75,7 @@ def get_rate_card() -> dict:
 	return {"currency": doc.currency or "", "rows": rows}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_rate_card(currency: str, rows) -> dict:
 	_check()
 	currency = (currency or "").strip().upper()

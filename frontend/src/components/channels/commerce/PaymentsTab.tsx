@@ -5,6 +5,7 @@ import { CopyField } from '@/components/ui/copy-field';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { methodUrl } from '@/lib/api';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { updateGateway, type GatewayDoc } from '@/services/gatewayApi';
 import type { TabProps } from './CatalogTab';
@@ -17,7 +18,7 @@ const PROVIDERS = [
 ];
 
 export const webhookUrl = (origin: string, provider: 'razorpay' | 'stripe', gw: string) =>
-  `${origin}/api/method/huf.ai.channels.commerce.payments.${provider}_webhook?gateway=${encodeURIComponent(gw)}`;
+  `${origin}${methodUrl(`huf.ai.channels.commerce.payments.${provider}_webhook`)}?gateway=${encodeURIComponent(gw)}`;
 
 export function PaymentsTab({ gw, gateway, onSaved }: TabProps) {
   const [provider, setProvider] = useState(String(gateway?.payment_provider || 'none'));

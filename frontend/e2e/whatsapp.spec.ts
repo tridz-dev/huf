@@ -300,9 +300,10 @@ test.describe('Channels: WhatsApp with Solutions', () => {
     await mockSolutionsApi(page);
     await goto(page, '/channels/whatsapp/n/GW-1/home');
     const picker = page.getByRole('combobox', { name: 'Number' });
-    await expect(picker.getByRole('option', { name: 'GW-1' })).toHaveCount(1);
-    await expect(picker.getByRole('option', { name: 'GW-2' })).toHaveCount(1);
-    await picker.selectOption('GW-2');
+    await picker.click();
+    await expect(page.getByRole('option', { name: 'GW-1' })).toHaveCount(1);
+    await expect(page.getByRole('option', { name: 'GW-2' })).toHaveCount(1);
+    await page.getByRole('option', { name: 'GW-2' }).click();
     await expect(page).toHaveURL(/\/channels\/whatsapp\/n\/GW-2\/home/);
   });
 

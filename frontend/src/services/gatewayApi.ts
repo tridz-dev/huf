@@ -112,7 +112,7 @@ export interface ConnectAgentResult {
 
 /** Which gateways use a channel credential and the agent each one answers with. */
 export async function getChannelAgentConnection(integrationSettings: string): Promise<ChannelAgentConnection> {
-  const result = await call.get('huf.ai.gateway_service.get_channel_agent_connection', {
+  const result = await call.get('huf.ai.gateway_core.agent_connect.get_channel_agent_connection', {
     integration_settings: integrationSettings,
   });
   return result.message as ChannelAgentConnection;
@@ -124,7 +124,7 @@ export async function connectAgentToChannel(params: {
   agent: string;
   gatewayName?: string;
 }): Promise<ConnectAgentResult> {
-  const result = await call.post('huf.ai.gateway_service.connect_agent_to_channel', {
+  const result = await call.post('huf.ai.gateway_core.agent_connect.connect_agent_to_channel', {
     integration_settings: params.integrationSettings,
     agent: params.agent,
     gateway_name: params.gatewayName,

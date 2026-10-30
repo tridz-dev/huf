@@ -1,9 +1,7 @@
+import { unwrapEnvelope as unwrap } from '@/lib/api';
 import { call } from '@/lib/frappe-sdk';
 
 const BASE = 'huf.ai.channels.embedded_signup';
-
-const unwrap = <T>(res: unknown): T =>
-  (res && typeof res === 'object' && 'message' in res ? (res as { message: T }).message : res) as T;
 
 export interface SignupConfig {
   enabled: boolean;

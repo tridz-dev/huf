@@ -8,7 +8,7 @@ import {
   getSignupConfig,
   type CompleteSignupResult,
   type SignupConfig,
-} from '@/services/embeddedSignupApi';
+} from '@/services/channels/embeddedSignupApi';
 
 const SDK_URL = 'https://connect.facebook.net/en_US/sdk.js';
 const FB_ORIGIN = /^https:\/\/([a-z0-9-]+\.)*facebook\.com$/;

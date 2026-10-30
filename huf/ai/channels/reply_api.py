@@ -81,7 +81,7 @@ def deliver_reply(conversation, text=None, template=None, params=None, attachmen
 	from huf.ai.whatsapp import outbound_policy as policy
 
 	if category == "marketing":
-		from huf.ai.channels import reminder_policy
+		from huf.ai.channels.automation import reminder_policy
 
 		if reminder_policy.kill_switch_active(doc.gateway):
 			return _result("refused", error="emergency_stop", message="Marketing sends are stopped")

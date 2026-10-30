@@ -6,11 +6,12 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { updateGateway, type GatewayDoc } from '@/services/gatewayApi';
-import { submitTemplatesPack, type PackResult } from '@/services/commerceApi';
+import { submitTemplatesPack, type PackResult } from '@/services/channels/commerceApi';
 import type { TabProps } from './CatalogTab';
 
 export function CommerceAutomationsTab({ gw, gateway, onSaved }: TabProps) {
   const [hours, setHours] = useState(String(gateway?.cart_recovery_hours ?? 0));
+  const [lmsTpl, setLmsTpl] = useState(String(gateway?.lms_reminder_template ?? ''));
   const [busy, setBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -20,8 +21,8 @@ export function CommerceAutomationsTab({ gw, gateway, onSaved }: TabProps) {
     setBusy(true);
     setError('');
     try {
-      await updateGateway(gw, { cart_recovery_hours: Math.max(0, Math.floor(Number(hours) || 0)) } as unknown as Partial<GatewayDoc>);
-      toast.success('Cart recovery saved');
+      await updateGateway(gw, { cart_recovery_hours: Math.max(0, Math.floor(Number(hours) || 0)), lms_reminder_template: lmsTpl.trim() } as unknown as Partial<GatewayDoc>);
+      toast.success('Automations saved');
       onSaved();
     } catch (e) {
       setError(getFrappeErrorMessage(e));
@@ -42,6 +43,9 @@ export function CommerceAutomationsTab({ gw, gateway, onSaved }: TabProps) {
     <div className="flex max-w-xl flex-col gap-4">
       <Field label="Cart recovery after (hours)" hint="One cart_reminder template for Draft orders still unpaid after this long. 0 = off.">
         <Input type="number" min={0} value={hours} onChange={(e) => setHours(e.target.value)} />
+      </Field>
+      <Field label="LMS reminder template" hint="Approved template for LMS lesson reminders; body variable 1 is the course title. Empty = no reminders from this number.">
+        <Input value={lmsTpl} onChange={(e) => setLmsTpl(e.target.value)} />
       </Field>
       <div><Button size="sm" disabled={busy} onClick={() => void save()}>Save</Button></div>
       <section aria-label="Utility templates pack" className="space-y-2 rounded-sm border border-line p-3">

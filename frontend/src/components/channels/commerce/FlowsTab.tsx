@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { listFlowResponses, listWaFlows, type FlowResponseRow, type FlowRow } from '@/services/commerceApi';
+import { listFlowResponses, listWaFlows, type FlowResponseRow, type FlowRow } from '@/services/channels/commerceApi';
 
 export function FlowsTab({ gw }: { gw: string }) {
   const [flows, setFlows] = useState<FlowRow[] | null>(null);

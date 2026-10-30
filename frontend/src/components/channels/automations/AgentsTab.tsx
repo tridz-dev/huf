@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { RoutingOrderCard } from '@/components/whatsapp/overview/RoutingOrderCard';
 import { SolutionsOnNumberCard } from '@/components/whatsapp/overview/SolutionsOnNumberCard';
+import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { getNumberSummary, pauseSolution, resumeSolution } from '@/services/solutionsApi';
@@ -28,10 +29,10 @@ export function AgentsTab({ gw }: { gw: string }) {
       <SolutionsOnNumberCard gateway={gw} summary={summary} />
       <div className="flex flex-wrap gap-4 text-sm">
         {summary.solutions.map((s) => (
-          <label key={s.name} className="flex items-center gap-2 text-ink">
+          <Label key={s.name} weight="normal" className="flex items-center gap-2 text-ink">
             <Switch aria-label={`${s.title} live`} checked={s.status === 'Live'} onCheckedChange={(c) => void toggle(s.name, c)} />
             {s.title}: {s.status === 'Live' ? 'Live' : 'Off'}
-          </label>
+          </Label>
         ))}
       </div>
       <RoutingOrderCard summary={summary} />

@@ -1,6 +1,7 @@
+import { unwrapEnvelope as unwrap } from '@/lib/api';
 import { call } from '@/lib/frappe-sdk';
 
-const BASE = 'huf.ai.channels.rules_api';
+const BASE = 'huf.ai.channels.automation.rules_api';
 
 export type RuleType = 'keyword' | 'first_message' | 'contact_attribute' | 'fallback';
 export type RuleTargetType = 'solution' | 'agent' | 'human';
@@ -14,9 +15,6 @@ export interface RoutingRule {
   priority: number;
   enabled: 0 | 1;
 }
-
-const unwrap = <T>(res: unknown): T =>
-  (res && typeof res === 'object' && 'message' in res ? (res as { message: T }).message : res) as T;
 
 export async function getRules(gateway: string): Promise<RoutingRule[]> {
   return unwrap<RoutingRule[]>(await call.get(`${BASE}.get_rules`, { gateway })) ?? [];

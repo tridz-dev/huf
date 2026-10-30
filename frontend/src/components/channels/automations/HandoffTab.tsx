@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { updateGateway, type GatewayDoc } from '@/services/gatewayApi';
-import { getEcosystemApps, type EcosystemApps } from '@/services/channelsRulesApi';
+import { getEcosystemApps, type EcosystemApps } from '@/services/channels/channelsRulesApi';
 
 export interface HandoffTabProps {
   gw: string;

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 const api = vi.hoisted(() => ({ getSignupConfig: vi.fn(), completeSignup: vi.fn() }));
-vi.mock('@/services/embeddedSignupApi', () => api);
+vi.mock('@/services/channels/embeddedSignupApi', () => api);
 
 import { EmbeddedSignupStep, isFacebookOrigin, parseSignupMessage } from './EmbeddedSignupStep';
 

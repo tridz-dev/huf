@@ -8,7 +8,7 @@ const api = vi.hoisted(() => ({
   getNumberSummary: vi.fn(), listSolutions: vi.fn(), getAgents: vi.fn(),
 }));
 vi.mock('@/services/gatewayApi', async (orig) => ({ ...(await orig<object>()), getGateway: api.getGateway, updateGateway: api.updateGateway }));
-vi.mock('@/services/channelsRulesApi', async (orig) => ({ ...(await orig<object>()), getRules: api.getRules, saveRules: api.saveRules, getEcosystemApps: api.getEco }));
+vi.mock('@/services/channels/channelsRulesApi', async (orig) => ({ ...(await orig<object>()), getRules: api.getRules, saveRules: api.saveRules, getEcosystemApps: api.getEco }));
 vi.mock('@/services/solutionsApi', async (orig) => ({ ...(await orig<object>()), getNumberSummary: api.getNumberSummary, listSolutions: api.listSolutions }));
 vi.mock('@/services/agentApi', async (orig) => ({ ...(await orig<object>()), getAgents: api.getAgents }));
 vi.mock('@/layouts/PageFrame', () => ({ PageFrame: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));

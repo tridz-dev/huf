@@ -5,7 +5,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { PageFrame } from '@/layouts/PageFrame';
 import { RateCardEditor } from '../analytics/RateCardEditor';
 import { useChannelGateway } from '../useChannelGateway';
-import { getAnalytics, type Analytics } from '@/services/analyticsApi';
+import { getAnalytics, type Analytics } from '@/services/channels/analyticsApi';
 
 const RANGES = [7, 30, 90] as const;
 const chartConfig = {
@@ -95,9 +95,9 @@ export default function AnalyticsSection() {
                 {(['sent', 'delivered', 'read', 'failed'] as const).map((k) => (
                   <li key={k} className="flex items-center gap-3 text-sm">
                     <span className="w-20 capitalize text-steel">{k}</span>
-                    <span className="h-2 flex-1 rounded bg-paper-deep">
-                      <span className={`block h-2 rounded ${k === 'failed' ? 'bg-destructive' : 'bg-signal'}`} style={{ width: `${(f![k] / max) * 100}%` }} />
-                    </span>
+                    <svg aria-hidden className="h-2 flex-1 overflow-hidden rounded bg-paper-deep" preserveAspectRatio="none">
+                      <rect height="100%" width={`${(f![k] / max) * 100}%`} className={k === 'failed' ? 'fill-destructive' : 'fill-signal'} />
+                    </svg>
                     <span className="w-12 text-right text-ink">{f![k]}</span>
                   </li>
                 ))}

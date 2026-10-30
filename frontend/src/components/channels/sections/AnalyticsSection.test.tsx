@@ -5,14 +5,14 @@ import { render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('@/layouts/PageFrame', () => ({ PageFrame: ({ children, actions }: never) => <div>{actions}{children}</div> }));
 vi.mock('../useChannelGateway', () => ({ useChannelGateway: () => 'GW-1' }));
-vi.mock('@/services/analyticsApi', () => ({ getAnalytics: vi.fn(), getRateCard: vi.fn(), saveRateCard: vi.fn() }));
+vi.mock('@/services/channels/analyticsApi', () => ({ getAnalytics: vi.fn(), getRateCard: vi.fn(), saveRateCard: vi.fn() }));
 vi.mock('@/components/ui/chart', () => ({
   ChartContainer: ({ children }: never) => <div>{children}</div>,
   ChartTooltip: () => null,
   ChartTooltipContent: () => null,
 }));
 vi.mock('recharts', () => ({ Bar: () => null, BarChart: () => null, CartesianGrid: () => null, XAxis: () => null, YAxis: () => null }));
-import { getAnalytics, getRateCard } from '@/services/analyticsApi';
+import { getAnalytics, getRateCard } from '@/services/channels/analyticsApi';
 import AnalyticsSection from './AnalyticsSection';
 
 const data = (amount: number | null) => ({

@@ -1,4 +1,4 @@
-import type { RoutingRule } from '@/services/channelsRulesApi';
+import type { RoutingRule } from '@/services/channels/channelsRulesApi';
 
 export const RULE_TYPES = [
   { value: 'keyword', label: 'Keyword' },

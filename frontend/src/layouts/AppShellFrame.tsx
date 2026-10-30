@@ -72,9 +72,9 @@ function ShellBody({ rail, topbar, children }: AppShellFrameProps) {
         <header className="flex h-[60px] shrink-0 items-center gap-3 border-b border-line bg-panel px-4">
           <Button
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             data-sidebar="trigger"
-            className="h-7 w-7 text-steel hover:bg-transparent hover:text-ink"
+            className="text-steel hover:bg-transparent hover:text-ink"
             onClick={toggle}
           >
             <PanelLeft />

@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { copyText } from '@/lib/clipboard';
-import { createPaymentLink, getOrder, type OrderDetail } from '@/services/commerceApi';
+import { createPaymentLink, getOrder, type OrderDetail } from '@/services/channels/commerceApi';
 
 export function OrderDrawer({ name, onClose, onChanged }: { name: string | null; onClose: () => void; onChanged?: () => void }) {
   const [order, setOrder] = useState<OrderDetail | null>(null);

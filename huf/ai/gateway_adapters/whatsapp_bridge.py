@@ -2719,8 +2719,7 @@ def _edit_blocked_key(account: Any, name: str) -> str:
 
 def _edit_blocked_until(account: Any, name: str) -> str | None:
 	try:
-		# expires=True: do not memoise a miss in frappe.local.cache (it would hide the value set later in the same request)
-		return frappe.cache().get_value(_edit_blocked_key(account, name), expires=True) or None
+		return frappe.cache().get_value(_edit_blocked_key(account, name), expires=True) or None  # expires=True: no local-cache memo of a miss
 	except Exception:
 		return None
 

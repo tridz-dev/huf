@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('@/services/secretsApi', () => ({ stashSecret: vi.fn() }));
-import { stashSecret } from '@/services/secretsApi';
+vi.mock('@/services/channels/secretsApi', () => ({ stashSecret: vi.fn() }));
+import { stashSecret } from '@/services/channels/secretsApi';
 import { HubAskUser, type AskUserPayload } from './HubAskUser';
 
 const stash = vi.mocked(stashSecret);

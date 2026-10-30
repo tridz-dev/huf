@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { PageFrame } from '@/layouts/PageFrame';
 import { useIsHufAdmin } from '@/contexts/PermissionsContext';
-import { getEcosystem, type Ecosystem } from '@/services/channelsApi';
+import { getEcosystem, type Ecosystem } from '@/services/channels/channelsApi';
 import { CARDS, ConnectionCard, LmsCard, RavanCard } from '../connections/ConnectionCards';
 
 export default function ConnectionsSection() {

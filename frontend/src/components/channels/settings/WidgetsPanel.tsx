@@ -6,8 +6,8 @@ import { CopyField } from '@/components/ui/copy-field';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
-import { encodeQr, qrToSvg } from '@/lib/qr';
-import { getClickToChat, getWidgetSnippet, type ClickToChat } from '@/services/channelsRulesApi';
+import { encodeQr, qrToSvg } from '@/components/channels/settings/qr';
+import { getClickToChat, getWidgetSnippet, type ClickToChat } from '@/services/channels/channelsRulesApi';
 import type { PanelProps } from './panels';
 
 export function WidgetsPanel({ gw, health }: PanelProps) {

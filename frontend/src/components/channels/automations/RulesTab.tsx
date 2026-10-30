@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
-import { getRules, saveRules, type RoutingRule, type RuleTargetType, type RuleType } from '@/services/channelsRulesApi';
+import { getRules, saveRules, type RoutingRule, type RuleTargetType, type RuleType } from '@/services/channels/channelsRulesApi';
 import { move, newRule, renumber, RULE_TYPES, TARGET_TYPES, validateRules } from './rulesModel';
 
 export interface TargetOption { value: string; label: string }
@@ -71,22 +71,22 @@ export function RulesTab({ gw, solutions, agents }: RulesTabProps) {
                   <td className="py-1 pr-2 text-steel">{i + 1}</td>
                   <td className="py-1 pr-2">
                     <Select value={r.rule_type} onValueChange={(v) => patch(i, { rule_type: v as RuleType })}>
-                      <SelectTrigger aria-label={`Rule ${i + 1} type`} className="h-8 w-40"><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={`Rule ${i + 1} type`} size="sm" className="w-40"><SelectValue /></SelectTrigger>
                       <SelectContent>{RULE_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
                     </Select>
                   </td>
-                  <td className="py-1 pr-2"><Input aria-label={`Rule ${i + 1} match`} className="h-8" value={r.match_value ?? ''} disabled={r.rule_type === 'fallback'} onChange={(e) => patch(i, { match_value: e.target.value })} /></td>
-                  <td className="py-1 pr-2"><Input aria-label={`Rule ${i + 1} attribute`} className="h-8" value={r.attribute ?? ''} disabled={r.rule_type !== 'contact_attribute'} onChange={(e) => patch(i, { attribute: e.target.value })} /></td>
+                  <td className="py-1 pr-2"><Input aria-label={`Rule ${i + 1} match`} size="sm" value={r.match_value ?? ''} disabled={r.rule_type === 'fallback'} onChange={(e) => patch(i, { match_value: e.target.value })} /></td>
+                  <td className="py-1 pr-2"><Input aria-label={`Rule ${i + 1} attribute`} size="sm" value={r.attribute ?? ''} disabled={r.rule_type !== 'contact_attribute'} onChange={(e) => patch(i, { attribute: e.target.value })} /></td>
                   <td className="py-1 pr-2">
                     <Select value={r.target_type} onValueChange={(v) => patch(i, { target_type: v as RuleTargetType, target: '' })}>
-                      <SelectTrigger aria-label={`Rule ${i + 1} target type`} className="h-8 w-32"><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={`Rule ${i + 1} target type`} size="sm" className="w-32"><SelectValue /></SelectTrigger>
                       <SelectContent>{TARGET_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
                     </Select>
                   </td>
                   <td className="py-1 pr-2">
                     {r.target_type === 'human' ? <span className="text-xs text-steel">A person</span> : (
                       <Select value={r.target || undefined} onValueChange={(v) => patch(i, { target: v })}>
-                        <SelectTrigger aria-label={`Rule ${i + 1} target`} className="h-8 w-48"><SelectValue placeholder="Choose..." /></SelectTrigger>
+                        <SelectTrigger aria-label={`Rule ${i + 1} target`} size="sm" className="w-48"><SelectValue placeholder="Choose..." /></SelectTrigger>
                         <SelectContent>{options(r.target_type).map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
                       </Select>
                     )}

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
-import { getSignupSettings, saveSignupSettings, type SignupSettings } from '@/services/embeddedSignupApi';
+import { getSignupSettings, saveSignupSettings, type SignupSettings } from '@/services/channels/embeddedSignupApi';
 
 const MODES = [
   { value: 'direct', label: 'Direct (this site owns the Facebook app)' },

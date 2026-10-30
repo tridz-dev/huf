@@ -355,7 +355,7 @@ scheduler_events = {
         "huf.ai.whatsapp.send_keys.purge_expired",
         "huf.ai.secrets.purge_expired",
         "huf.ai.channels.commerce.catalog.sync_all_catalogs",
-        "huf.ai.channels.tools_lms.send_lesson_reminders",
+        "huf.ai.channels.tools.lms.send_lesson_reminders",
     ],
     "cron": {
         "*/1 * * * *": [

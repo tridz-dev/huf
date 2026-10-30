@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { PageFrame } from '@/layouts/PageFrame';
 import { useIsHufAdmin } from '@/contexts/PermissionsContext';
 import { cn } from '@/lib/utils';
-import { getEcosystem, type EcosystemApp } from '@/services/channelsApi';
+import { getEcosystem, type EcosystemApp } from '@/services/channels/channelsApi';
 import { getGateway } from '@/services/gatewayApi';
 import { useChannel, useChannelGateway } from '../useChannelGateway';
 import { CatalogTab } from '../commerce/CatalogTab';

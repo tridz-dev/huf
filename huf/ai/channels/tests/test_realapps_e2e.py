@@ -176,7 +176,7 @@ class TestErpRealFlow(IntegrationTestCase):
 			).insert(ignore_permissions=True)
 
 	def test_create_order_makes_draft_sales_order(self):
-		from huf.ai.channels import tools_erp
+		from huf.ai.channels.tools import erp as tools_erp
 
 		token = run_as.set_current_conversation(self.conv.name)
 		try:
@@ -225,7 +225,7 @@ class TestLmsRealFlow(IntegrationTestCase):
 		).insert(ignore_permissions=True).name
 
 	def _enroll(self, course):
-		from huf.ai.channels import tools_lms
+		from huf.ai.channels.tools import lms as tools_lms
 
 		frappe.set_user(self.runner)
 		token = run_as.set_current_conversation(self.conv.name)

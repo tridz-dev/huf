@@ -20,8 +20,8 @@ PRE_ROUTE_HOOKS: list[str] = [
 	"huf.ai.channels.widgets.ref_opt_in_hook",  # [ref:...] click-to-chat opt-in
 	"huf.ai.channels.wa_flows.flow_response_hook",  # nfm_reply form responses
 	"huf.ai.channels.handoff_hooks.handed_off_hook",  # handed-off chats skip the AI: first routing hook
-	"huf.ai.channels.hours.business_hours_hook",
-	"huf.ai.channels.rules.routing_rules_hook",
+	"huf.ai.channels.automation.hours.business_hours_hook",
+	"huf.ai.channels.automation.rules.routing_rules_hook",
 ]
 
 

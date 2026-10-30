@@ -12,7 +12,7 @@ import {
   type ConversationDetail,
   type ConversationMessage,
   type ConversationToolCall,
-} from '@/services/channelsApi';
+} from '@/services/channels/channelsApi';
 
 const slug = (doctype: string) => doctype.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
 export const deskHref = (doctype: string, name: string) => `/app/${slug(doctype)}/${encodeURIComponent(name)}`;
@@ -70,7 +70,7 @@ export function ConversationThread({ name, onChanged }: { name: string; onChange
         {conv?.handoff_doctype && conv.handoff_name && (
           <a
             href={deskHref(conv.handoff_doctype, conv.handoff_name)}
-            className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink"
+            className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 font-mono text-micro text-ink"
           >
             Open in {APP_LABEL[conv.handoff_doctype] ?? conv.handoff_doctype} <ExternalLink className="h-3 w-3" aria-hidden />
           </a>
@@ -93,18 +93,18 @@ export function ConversationThread({ name, onChanged }: { name: string; onChange
               <div className={out ? 'flex justify-end' : 'flex justify-start'}>
                 <div className={`max-w-[80%] rounded-sm border border-line px-3 py-2 text-sm text-ink ${out ? 'bg-paper-deep' : 'bg-card'}`}>
                   {ai && (
-                    <div className="mb-1 flex items-center gap-1 text-[11px] text-steel">
+                    <div className="mb-1 flex items-center gap-1 text-micro text-steel">
                       <SquareAsterisk className="h-3 w-3" aria-hidden /> {m.agent || 'Agent'}
                     </div>
                   )}
                   <div className="whitespace-pre-wrap break-words">{m.text}</div>
-                  <div className="mt-1 text-[11px] text-steel"><TimeStamp value={m.creation} /></div>
+                  <div className="mt-1 text-micro text-steel"><TimeStamp value={m.creation} /></div>
                 </div>
               </div>
               {m.agent_run && lastOfRun.get(m.agent_run) === i && (
                 <div className="mt-1 flex flex-wrap gap-1">
                   {tools.filter((t) => t.agent_run === m.agent_run).map((t) => (
-                    <span key={t.name} data-tool-call className="rounded-sm border border-line bg-paper-deep px-1.5 py-0.5 font-mono text-[11px] text-steel">
+                    <span key={t.name} data-tool-call className="rounded-sm border border-line bg-paper-deep px-1.5 py-0.5 font-mono text-micro text-steel">
                       {t.tool} · {t.status}
                     </span>
                   ))}
