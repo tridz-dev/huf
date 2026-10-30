@@ -61,7 +61,7 @@ class TestDetailsFacts(unittest.TestCase):
 
 class TestCardShape(unittest.TestCase):
 	def test_api_card_has_exactly_title_facts_note_and_test_note(self):
-		waiting = {"message": "Please check it.", "facts": [{"label": "Amount", "value": "120"}], "title": "Refund for Ada", "headline": "Refund for Ada"}
+		waiting = {"message": "Please check it.", "facts": [{"label": "Amount", "value": "120"}], "card_title": "Refund for Ada", "headline": "Refund for Ada"}
 		card = approval_card.api_card("Refund review", waiting)
 		self.assertEqual(card, {"title": "Refund for Ada", "facts": [{"label": "Amount", "value": "120"}], "note": "Please check it.", "test_note": None})
 
@@ -132,13 +132,13 @@ class TestOnABench(WP11Base):
 	def test_the_chosen_details_and_title_end_up_on_the_pause(self):
 		run = self._waiting_run(title="Refund for {input.customer.name}", details=[{"value": {"$from": "input.amount"}}, {"label": "Who", "value": {"$from": "input.customer.name"}}])
 		waiting = json.loads(run.waiting)
-		self.assertEqual(waiting["title"], "Refund for Ada Lovelace")
+		self.assertEqual(waiting["card_title"], "Refund for Ada Lovelace")
 		self.assertEqual(waiting["facts"], [{"label": "Order amount", "value": "120"}, {"label": "Who", "value": "Ada Lovelace"}])
 
 	def test_without_details_the_card_picks_the_telling_facts_as_before(self):
 		run = self._waiting_run()
 		waiting = json.loads(run.waiting)
-		self.assertIsNone(waiting["title"])
+		self.assertIsNone(waiting["card_title"])
 		labels = [f["label"] for f in waiting["facts"]]
 		self.assertIn("Customer", labels)
 		self.assertIn("Order amount", labels)  # the flow declares that title for the field

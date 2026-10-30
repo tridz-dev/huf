@@ -57,7 +57,7 @@ def build_card(flow_name: str | None, waiting: dict | None) -> dict:
 	facts = [f for f in (waiting.get("facts") or []) if isinstance(f, dict) and f.get("label") and f.get("value")]
 	lead = humanize.approval_lead(name, waiting.get("message"))
 	facts_text = humanize.facts_sentence(facts)
-	title = (waiting.get("title") or "").strip() or waiting.get("headline") or humanize.approval_headline(name)
+	title = (waiting.get("card_title") or "").strip() or waiting.get("headline") or humanize.approval_headline(name)
 	test_note = waiting.get("test_note") if waiting.get("test_run") else None
 	sentence = humanize.approval_sentence(name, waiting.get("step_title"), waiting.get("message"), facts)
 	return {
@@ -161,7 +161,7 @@ def waiting_fields(flow_run, node: dict, rendered_message: str, payload: dict, c
 	return {
 		"message": humanize.approval_lead(name, rendered_message),
 		"headline": title or humanize.approval_headline(name),
-		"title": title or None,
+		"card_title": title or None,
 		"flow_name": name,
 		"step_title": step_title(node),
 		"facts": facts,
