@@ -19,7 +19,7 @@ export function ExecutionsTabsBar({ active }: { active: Tab }) {
         {canSeeFlowRuns && <TabsTrigger value="flow-runs" title={EXPLAINED['flow-runs']} data-testid="executions-tab-flow-runs">Flow runs</TabsTrigger>}
         {canSeeAnalytics && <TabsTrigger value="analytics" title={EXPLAINED.analytics} data-testid="executions-tab-analytics">Analytics</TabsTrigger>}
       </TabsList>
-      <p className="hidden min-w-0 truncate text-meta text-steel sm:block" data-testid="executions-tab-hint">{EXPLAINED[active]}</p>
+      <p className="min-w-0 basis-full text-meta text-steel sm:basis-auto sm:truncate" data-testid="executions-tab-hint">{EXPLAINED[active]}</p>
     </>
   );
 }
