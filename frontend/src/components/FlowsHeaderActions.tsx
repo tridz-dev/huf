@@ -123,7 +123,7 @@ export function FlowsHeaderActions() {
   );
 
   return (
-    <div className="flex items-center gap-2 max-[1359px]:gap-1">
+    <div className="flex items-center gap-2 max-[1499px]:gap-1">
       {/* Save state (bare dot + text, no chip background). Nothing is edited on a phone, so it has none. */}
       {showSaveState && (
         <div className="mr-1 flex items-center gap-1.5 text-muted-foreground" data-testid="flow-save-state">
