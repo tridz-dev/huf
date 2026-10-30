@@ -17,13 +17,12 @@ const withIds = (m: ConditionModel): ConditionModel => ({
 
 function MatchToggle({ value, onChange, testId, label, disabled }: { value: Match; onChange: (m: Match) => void; testId: string; label: string; disabled?: boolean }) {
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex rounded-md border border-border p-0.5" data-testid={testId}>
+    <div role="group" aria-label={label} className="inline-flex rounded-md border border-border p-0.5" data-testid={testId}>
       {(['all', 'any'] as const).map((m) => (
         <button
           key={m}
           type="button"
-          role="radio"
-          aria-checked={value === m}
+          aria-pressed={value === m}
           disabled={disabled}
           data-testid={`${testId}-${m}`}
           onClick={() => onChange(m)}

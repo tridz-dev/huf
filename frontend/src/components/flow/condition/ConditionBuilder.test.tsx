@@ -41,7 +41,7 @@ describe('ConditionBuilder', () => {
     expect((screen.getByTestId('flow-condition-row-0-value') as HTMLInputElement).value).toBe('100');
     expect((screen.getByTestId('flow-condition-row-1-value') as HTMLInputElement).value).toBe('Paid');
     expect(screen.getByTestId('flow-condition-sentence-text').textContent).toBe('Amount is more than 100 and Status is Paid');
-    expect(screen.getByTestId('flow-condition-match-all').getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByTestId('flow-condition-match-all').getAttribute('aria-pressed')).toBe('true');
   });
 
   it('starts an empty step with one empty row and no text', () => {
@@ -93,7 +93,7 @@ describe('ConditionBuilder', () => {
 
   it('shows a group read from the text, and a group with one rule keeps its brackets', () => {
     render(<Host initial="input['a'] == 'x' and (input['status'] == 'Paid' or input['status'] == 'Shipped')" onText={() => {}} />);
-    expect(screen.getByTestId('flow-condition-group-1-match-any').getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByTestId('flow-condition-group-1-match-any').getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByTestId('flow-condition-group-1-row-1-value')).toBeTruthy();
   });
 
