@@ -14,7 +14,6 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
 import { Button } from './ui/button';
-import { actionHasConfiguredContent } from '../lib/flow/flowNodeConfigured';
 import { TriggerNode } from './nodes/TriggerNode';
 import { ActionNode } from './nodes/ActionNode';
 import { EndNode } from './nodes/EndNode';
@@ -34,8 +33,9 @@ import { useRunOverlay } from '../lib/flow-graph/runOverlay';
 import { useRunParam } from '../hooks/flow/useRunParam';
 import { FlowCanvasToolbar } from './flow/canvas/FlowCanvasToolbar';
 import { EdgeDeleteDialog } from './flow/canvas/EdgeDeleteDialog';
-import { registerPendingFlush } from '../lib/flow-graph/pendingWrites';
-import { glideNodes, useConvertedProcedure, useEdgeActions } from './flow/canvas/useCanvasEffects';
+import { registerPendingFlush } from '../lib/flow-graph/canvas/pendingWrites';
+import { flushPendingUpdate, glideNodes, useConvertedProcedure, useEdgeActions } from './flow/canvas/useCanvasEffects';
+import { useCanvasDeleteKey } from './flow/canvas/useCanvasDeleteKey';
 import { FlowShortcuts } from './flow/shortcuts/FlowShortcuts';
 import { connectionProblem } from '../lib/flow/flowEdit';
 import { useFlowContext } from '../contexts/FlowContext';
@@ -94,8 +94,7 @@ export function FlowCanvas({
   deleteRef.current = deleteNode;
   const onDeleteNode = useCallback((nodeId: string) => deleteRef.current(nodeId), []);
   // Delete / Backspace on a selected step asks first (the click-to-delete buttons already do).
-  const [keyboardDeleteId, setKeyboardDeleteId] = useState<string | null>(null);
-  // Two or more selected steps: Delete asks once for all of them.
+  // The steps Delete is asking about (one, or all the selected ones at once).
   const [keyboardDeleteIds, setKeyboardDeleteIds] = useState<string[]>([]);
   // Same for a selected connection: the button on the line and the Delete key both ask first.
   const [edgeDeleteId, setEdgeDeleteId] = useState<string | null>(null);
@@ -183,20 +182,12 @@ export function FlowCanvas({
     }, 50); // 50ms debounce
   }, [activeFlow, nodes, edges, updateNodesAndEdges]);
 
-  // Write a move or connection that is still waiting out its 50 ms right now. Tidy layout calls this first (through
-  // flushPendingWrites) so a drag made a moment earlier is part of what it lays out and is not written over it afterwards.
+  // Tidy layout writes a move that is still waiting out its 50 ms first (see flow-graph/canvas/pendingWrites).
   const edgesRef = useRef(edges);
   edgesRef.current = edges;
-  const flushNow = useCallback(() => {
-    if (updateTimeoutRef.current) {
-      clearTimeout(updateTimeoutRef.current);
-      updateTimeoutRef.current = null;
-    }
-    const pending = pendingUpdateRef.current;
-    pendingUpdateRef.current = null;
-    if (pending && activeFlow && !isSyncingFromProps.current) updateNodesAndEdges(pending.nodes ?? nodesRef.current, pending.edges ?? edgesRef.current);
-  }, [activeFlow, updateNodesAndEdges]);
-  useEffect(() => registerPendingFlush(flushNow), [flushNow]);
+  useEffect(() => registerPendingFlush(() => {
+    if (activeFlow && !isSyncingFromProps.current) flushPendingUpdate(updateTimeoutRef, pendingUpdateRef, (n, e) => updateNodesAndEdges(n ?? nodesRef.current, e ?? edgesRef.current));
+  }), [activeFlow, updateNodesAndEdges]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -314,49 +305,7 @@ export function FlowCanvas({
     [setSelectedEdge]
   );
 
-  const onCanvasKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (!canManage) return;
-      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-      const target = e.target as HTMLElement | null;
-      const tag = target?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable || target?.closest('[role="dialog"], [role="alertdialog"], [role="combobox"], [role="listbox"], [role="menu"]')) return;
-      // Only when the user is on the canvas (or nowhere in particular), never in another part of the page.
-      if (target && target !== document.body && !target.closest('[data-testid="flow-canvas"]')) return;
-      const picked = nodes.filter((n) => n.selected && !n.id.startsWith(RENDER_ONLY_NODE_PREFIX));
-      const node = picked[0] ?? nodes.find((n) => n.id === selectedNodeId);
-      if (!node) {
-        // No step selected: Delete removes the selected connection (after asking).
-        const edge = edges.find((ed) => ed.selected && !ed.id.startsWith(RENDER_ONLY_EDGE_PREFIX)) ?? edges.find((ed) => ed.id === selectedEdgeId);
-        if (edge) {
-          e.preventDefault();
-          setEdgeDeleteId(edge.id);
-        }
-        return;
-      }
-      if (picked.length > 1) {
-        const deletable = picked.filter((n) => n.data.status !== 'running' && n.data.status !== 'waiting');
-        if (deletable.length === 0) return;
-        e.preventDefault();
-        if (deletable.length === 1) setKeyboardDeleteId(deletable[0].id);
-        else setKeyboardDeleteIds(deletable.map((n) => n.id));
-        return;
-      }
-      if (node.data.status === 'running' || node.data.status === 'waiting') return;
-      e.preventDefault();
-      if (node.data.nodeType === 'action' && !actionHasConfiguredContent(node.data)) {
-        deleteNode(node.id);
-        return;
-      }
-      setKeyboardDeleteId(node.id);
-    },
-    [canManage, nodes, edges, selectedNodeId, selectedEdgeId, deleteNode]
-  );
-
-  useEffect(() => {
-    window.addEventListener('keydown', onCanvasKeyDown);
-    return () => window.removeEventListener('keydown', onCanvasKeyDown);
-  }, [onCanvasKeyDown]);
+  useCanvasDeleteKey({ canManage, nodes, edges, selectedNodeId, selectedEdgeId, deleteNode, askDeleteSteps: setKeyboardDeleteIds, askDeleteEdge: setEdgeDeleteId });
 
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
@@ -668,7 +617,7 @@ export function FlowCanvas({
         onConfirm={deleteEdge}
       />
 
-      <DeleteStepDialog nodeId={keyboardDeleteId} nodeIds={keyboardDeleteIds} onOpenChange={(open) => { if (!open) { setKeyboardDeleteId(null); setKeyboardDeleteIds([]); } }} />
+      <DeleteStepDialog nodeId={null} nodeIds={keyboardDeleteIds} onOpenChange={(open) => !open && setKeyboardDeleteIds([])} />
 
       {activeFlow && (
         <ConvertToProcedureDialog

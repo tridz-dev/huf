@@ -3,14 +3,13 @@ import { toast } from '@/lib/toast';
 import { Flow, FlowMetadata, FlowNode, FlowEdge } from '../types/flow.types';
 import { flowService } from '../services/flowService';
 import { useFlowHistory } from '../lib/flow-history/useFlowHistory';
-import { removedDescription } from '../lib/flow-history/historyText';
 import { useHistoryStepper } from '../lib/flow-history/useHistoryStepper';
 import type { GraphChange, GraphSnapshot } from '../lib/flow-history/graphChange';
 import { tidyPositions } from '../lib/flow/flowLayout';
 import { followRenamedTarget } from '../lib/flow/flowEdgeLabels';
 import { type RemoveStepMode } from '../lib/flow/flowEdit';
-import { removeSteps } from '../lib/flow-graph/removeSteps';
-import { flushPendingWrites } from '../lib/flow-graph/pendingWrites';
+import { flushPendingWrites } from '../lib/flow-graph/canvas/pendingWrites';
+import { useStepDeletion } from './useStepDeletion';
 import { announceConversion, flowsEqual } from '../lib/flow-graph/flowSync';
 import { useFlowRealtimeStatus } from '../hooks/flow/useFlowRealtimeStatus';
 
@@ -358,26 +357,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
 
   const { undo, redo } = useHistoryStepper({ getFlow, undoStep: undoHistory, redoStep: redoHistory, restore: restoreSnapshot });
 
-  const deleteNodes = useCallback((nodeIds: string[], mode: RemoveStepMode = 'reconnect') => {
-    if (!activeFlowId || nodeIds.length === 0) return;
-    const prev = activeFlowRef.current;
-    if (!prev) return;
-    const first = prev.nodes.find(n => n.id === nodeIds[0]);
-    const { nodes: updatedNodes, edges: updatedEdges } = removeSteps({ nodes: prev.nodes, edges: prev.edges }, nodeIds, mode);
-    const removedCount = prev.nodes.length - updatedNodes.length;
-    patchActive(() => ({ nodes: updatedNodes, edges: updatedEdges }));
-    flowService.updateNodesAndEdges(activeFlowId, updatedNodes, updatedEdges);
-    if (selectedNodeId && !updatedNodes.some(n => n.id === selectedNodeId)) {
-      setSelectedNodeId(null);
-    }
-    markUnsaved();
-    const label = (first?.data as { label?: string } | undefined)?.label;
-    const undoAction = { label: 'Undo', onClick: () => undo() };
-    if (nodeIds.length > 1) toast(`${removedCount} steps deleted`, { description: 'They were removed from the flow. Undo puts them all back.', action: undoAction });
-    else toast('Node deleted', { description: removedDescription(label, removedCount), action: undoAction });
-  }, [activeFlowId, selectedNodeId, markUnsaved, undo, patchActive]);
-
-  const deleteNode = useCallback((nodeId: string, mode: RemoveStepMode = 'reconnect') => deleteNodes([nodeId], mode), [deleteNodes]);
+  const { deleteNode, deleteNodes } = useStepDeletion({ activeFlowId, activeFlowRef, patchActive, markUnsaved, undo, selectedNodeId, setSelectedNodeId });
 
   const deleteEdge = useCallback((edgeId: string) => {
     if (!activeFlowId) return;

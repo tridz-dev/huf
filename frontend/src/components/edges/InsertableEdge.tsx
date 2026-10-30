@@ -4,7 +4,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { routeEdge, routeLoopBack, type Rect } from '@/lib/flow-graph/edgeRouting';
-import { PLACED_PILLS, boxAt, controlCandidates, pillCandidates, placeClear, type Size } from '@/lib/flow-graph/edgePlacement';
+import { PLACED_PILLS, boxAt, controlCandidates, pillCandidates, placeClear, type Size } from '@/lib/flow-graph/canvas/edgePlacement';
 import type { BranchTone } from '@/lib/flow/flowBranches';
 import type { FlowEdgeRoute } from '../../types/flow.types';
 import { counterScale, lodForZoom } from '@/lib/flow-canvas/zoomLod';
@@ -179,7 +179,7 @@ export const InsertableEdge = memo(
       if (end) avoid.push(loopBack ? { x: end.x - 2, y: end.y - 10, width: 24, height: 20 } : { x: end.x - 10, y: end.y - 18, width: 20, height: 22 });
       PLACED_PILLS.forEach((box) => avoid.push(box));
       return placeClear(controlsSize, avoid, routed.controlsAt, controlCandidates(routed.points, routed.length, controlsSize, routed.controlsAt));
-    }, [showControls, routed, stepBoxes, loopBack, pill, pillPos, pillSize, controlsSize]);
+    }, [showControls, routed, stepBoxes, loopBack, controlsSize]);
 
     return (
       <>

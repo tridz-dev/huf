@@ -1,4 +1,4 @@
-import { removeStep, type FlowGraphLike, type RemoveStepMode } from '../flow/flowEdit';
+import { removeStep, type FlowGraphLike, type RemoveStepMode } from '../../flow/flowEdit';
 
 /**
  * Remove several steps in one go (Delete with a group of steps selected): each is taken out the way a single delete would,

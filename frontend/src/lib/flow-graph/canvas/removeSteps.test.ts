@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { removeSteps } from './removeSteps';
-import { makeFlowEdge } from '../../services/flowSerializer';
-import type { FlowNode } from '../../types/flow.types';
+import { makeFlowEdge } from '../../../services/flowSerializer';
+import type { FlowNode } from '../../../types/flow.types';
 
 const n = (id: string, nodeType: 'trigger' | 'action' | 'end' = 'action'): FlowNode =>
   ({ id, type: nodeType, position: { x: 0, y: 0 }, data: { label: id, nodeType, configured: true } }) as FlowNode;

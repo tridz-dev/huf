@@ -25,9 +25,10 @@ interface DeleteStepDialogProps {
  * Confirms removing a step. A step with something after it asks how to treat the rest of the path:
  * reconnect around it (the default) or remove everything that only it led to.
  */
-export function DeleteStepDialog({ nodeId, nodeIds, onOpenChange }: DeleteStepDialogProps) {
+export function DeleteStepDialog({ nodeId: nodeIdProp, nodeIds, onOpenChange }: DeleteStepDialogProps) {
   const { activeFlow, deleteNode, deleteNodes } = useFlowContext();
   const several = nodeIds && nodeIds.length > 1 ? nodeIds : null;
+  const nodeId = nodeIdProp ?? (nodeIds?.length === 1 ? nodeIds[0] : null);
   const names = several ? several.map((id) => activeFlow?.nodes.find((n) => n.id === id)?.data.label).filter((l): l is string => !!l) : [];
   const [mode, setMode] = useState<RemoveStepMode>('reconnect');
   const node = nodeId ? activeFlow?.nodes.find((n) => n.id === nodeId) : undefined;

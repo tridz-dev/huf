@@ -4,7 +4,7 @@
  * free and slides along the connection's channel when it is not; the buttons keep their spot on the last stretch when it is
  * free and otherwise move along the line or just beside it, always off the pill.
  */
-import type { Pt, Rect } from './edgeRouting';
+import type { Pt, Rect } from '../edgeRouting';
 
 export interface Size {
   width: number;
