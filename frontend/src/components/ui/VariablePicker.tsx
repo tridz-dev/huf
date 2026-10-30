@@ -50,12 +50,11 @@ export function VariablePicker({ onSelect, currentNodeId, scope = 'ancestors', a
         setOpen(false);
         onSelect(p.ref, variableName(p.label));
     };
-    const fetchLast = async (step: PickerStep) => {
+    const fetchLast = async (step: PickerStep): Promise<string | void> => {
         if (!activeFlow) return;
         const last = await getLastWebhookRequest(activeFlow.id);
         if (!last.found || !last.sample) {
-            toast.message('No request has reached this webhook yet. Send one, then try again.');
-            return;
+            return 'No request has reached this webhook yet. Send one, then try again.';
         }
         updateNodeData(step.id, (data) => ({ ...data, sample: last.sample as Record<string, unknown> }));
         invalidateDataCatalog();

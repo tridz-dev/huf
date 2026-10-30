@@ -42,7 +42,7 @@ describe('plainRunError', () => {
     expect(plainRunError("PermissionError: absolute path '/etc/passwd' is outside the sandbox workspace")).toMatch(/^The code tried to open a file it is not allowed to use \(\/etc\/passwd\)/);
     expect(plainRunError("ImportError: Import of module 'socket' is not permitted by execution profile policy")).toMatch(/^The code tried to use "socket"/);
     expect(plainRunError('state.set: another run was saving the same key at that moment. Run it again.')).toBe('Another run was saving the same value at that moment. Run it again.');
-    expect(plainRunError('Execution approval rejected by maria@example.com.')).toBe('Maria@example.com did not approve running this code.');
+    expect(plainRunError('Execution approval rejected by maria@example.com.')).toBe('maria@example.com did not approve running this code.');
   });
   it('drops the call to action the button now carries', () => {
     expect(plainRunError('Google Sheets is not connected. Connect it in Integrations.')).toBe('Google Sheets is not connected.');

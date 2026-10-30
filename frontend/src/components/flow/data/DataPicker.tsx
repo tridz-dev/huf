@@ -13,7 +13,8 @@ interface DataPickerProps {
   accept: Accept;
   onPick: (pick: DataPick) => void;
   /** Gets the last real request for the trigger and keeps it as the example. */
-  onFetchLast: (step: PickerStep) => Promise<void>;
+  /** Resolves to a sentence to show under the button when there is nothing to use yet. */
+  onFetchLast: (step: PickerStep) => Promise<string | void>;
   loading?: boolean;
 }
 
@@ -45,6 +46,7 @@ export function DataPicker({ model, accept, onPick, onFetchLast, loading }: Data
   const [typing, setTyping] = useState(false);
   const [typed, setTyped] = useState('');
   const [fetching, setFetching] = useState(false);
+  const [fetchNotice, setFetchNotice] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const listId = useId();
 
@@ -104,8 +106,10 @@ export function DataPicker({ model, accept, onPick, onFetchLast, loading }: Data
   const fetchLast = async () => {
     if (!step) return;
     setFetching(true);
+    setFetchNotice('');
     try {
-      await onFetchLast(step);
+      const notice = await onFetchLast(step);
+      setFetchNotice(typeof notice === 'string' ? notice : '');
     } finally {
       setFetching(false);
     }
@@ -202,6 +206,7 @@ export function DataPicker({ model, accept, onPick, onFetchLast, loading }: Data
                 {fetching ? 'Looking…' : 'Use last real request'}
               </Button>
             ) : null}
+            {fetchNotice ? <p className="text-meta text-foreground" role="status" data-testid="flow-use-data-last-request-notice">{fetchNotice}</p> : null}
           </div>
         ) : null}
         {/* Never under "No sample yet": that answer is already final for this step, a loading line below it only flashes. */}

@@ -50,6 +50,18 @@ describe('AgentSettingsPage (Code and skills)', () => {
     expect(screen.queryByTestId('skill-sources-json-toggle')).toBeNull();
   });
 
+  it('tells a manager the code switch is already on, not that an administrator still has to allow it', async () => {
+    status.value = { can_manage: false, allowed: true, server_switch: true } as CodeFlowStatus;
+    render(<AgentSettingsPage />);
+    expect((await screen.findByTestId('settings-code-in-flows-status')).textContent).toBe('Code can run on this site.');
+  });
+
+  it('tells a manager an administrator still has to allow code when the switch is off', async () => {
+    status.value = { can_manage: false, allowed: false, server_switch: true } as CodeFlowStatus;
+    render(<AgentSettingsPage />);
+    expect((await screen.findByTestId('settings-code-in-flows-status')).textContent).toMatch(/once a system administrator allows it/);
+  });
+
   it('says plainly when the server does not allow code', async () => {
     status.value = { can_manage: true, allowed: false, server_switch: false } as CodeFlowStatus;
     render(<AgentSettingsPage />);

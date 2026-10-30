@@ -6,6 +6,12 @@ import {
 
 const round = (v: unknown) => serializeValue(parseValue(v));
 
+describe('a fresh step with nothing chosen yet', () => {
+  it('is an empty field, not a chip pointing at a deleted step', () => {
+    expect(parseValue({ $from: '' }).segments).toEqual([]);
+  });
+});
+
 describe('stored forms round trip', () => {
   const cases: Array<[string, unknown]> = [
     ['empty text', ''],

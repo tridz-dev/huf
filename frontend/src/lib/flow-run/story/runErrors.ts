@@ -32,5 +32,7 @@ export function plainRunError(message: string | null | undefined, stepTitle?: st
     if (m) text = text.replace(re, make(m));
   }
   text = text.replace(/\s*Connect it in Integrations\.?$/i, '').trim();
+  // A sentence that starts with an address or user name ("ada@example.com did not approve...") keeps it as typed.
+  if (/^[^\s@]+@\S+/.test(text)) return text;
   return text.charAt(0).toUpperCase() + text.slice(1);
 }

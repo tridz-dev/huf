@@ -95,6 +95,18 @@ def _rebinding_resolver(first, then):
 
 
 class TestHttpRequestTool(SupportCase):
+	def test_step_timeout_is_used_for_the_request(self):
+		env = self.use(_fx_env)
+		env.responses.append(FakeResponse(200, b"{}"))
+		run(url="https://ok.example.com/", timeout_seconds=7)
+		assert env.calls[0][2]["timeout"] == 7
+
+	def test_default_timeout_without_step_limit(self):
+		env = self.use(_fx_env)
+		env.responses.append(FakeResponse(200, b"{}"))
+		run(url="https://ok.example.com/")
+		assert env.calls[0][2]["timeout"] == 30
+
 	def test_ssrf_blocked(self):
 		for url in ["http://127.0.0.1/x", "http://169.254.169.254/latest/meta-data", "file:///etc/passwd", "http://[::1]/"]:
 			with self.subTest(url=url):

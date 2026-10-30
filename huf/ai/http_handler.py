@@ -46,7 +46,7 @@ def _http_request(method, url, **kwargs):
 
 @rate_limit(key="tool_name", limit=100, seconds=60)
 @frappe.whitelist(allow_guest=True)
-def handle_http_request(method, url, headers=None, params=None, data=None, json_data=None, tool_name=None):
+def handle_http_request(method, url, headers=None, params=None, data=None, json_data=None, tool_name=None, timeout=None):
 	"""
 	Generic HTTP request handler with support for tool-defined headers
 	"""
@@ -142,7 +142,7 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 		request_kwargs = {
 			"headers": final_headers,
 			"params": params or {},
-			"timeout": 30,
+			"timeout": timeout or 30,
 			"stream": True,  # Stream response body to enforce size cap during read
 		}
 
@@ -343,7 +343,16 @@ def _coerce_mapping(value, label):
 	return None, f"{label} must be a JSON object"
 
 
-def http_request(url, method="GET", headers=None, body=None):
+def _timeout_value(seconds):
+	"""A flow step's "Stop waiting after" limit in seconds, or None for the 30 s default."""
+	try:
+		value = float(seconds)
+	except (TypeError, ValueError):
+		return None
+	return min(value, 600.0) if value > 0 else None
+
+
+def http_request(url, method="GET", headers=None, body=None, timeout_seconds=None):
 	"""Built-in ``http_request`` tool: thin, safe wrapper over ``handle_http_request``.
 
 	Reuses its SSRF guard (public IPs only, http/https only), manual redirect
@@ -392,6 +401,7 @@ def http_request(url, method="GET", headers=None, body=None):
 		data=data,
 		json_data=json_data,
 		tool_name=HTTP_TOOL_NAME,
+		timeout=_timeout_value(timeout_seconds),
 	)
 
 	if not isinstance(result, dict):
