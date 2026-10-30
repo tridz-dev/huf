@@ -88,10 +88,13 @@ class TestFlowUserLookup(IntegrationTestCase):
 	def test_the_limit_is_per_person(self):
 		other = self._user("Huf Manager")
 		seen = []
-		with patch("frappe.cache") as cache:
+		with patch("frappe.cache") as cache, patch("frappe.has_permission", return_value=True):
 			cache.return_value.incr.side_effect = lambda key: (seen.append(key), 1)[1]
 			api._need_flow_edit_and_rate()
-			frappe.set_user(other)
-			api._need_flow_edit_and_rate()
+			frappe.local.session.user = other  # the key is per person; roles are not what is under test here
+			try:
+				api._need_flow_edit_and_rate()
+			finally:
+				frappe.local.session.user = "Administrator"
 		self.assertEqual(len(set(seen)), 2)
 		self.assertEqual(api.USER_LOOKUP_LIMIT, 60)
