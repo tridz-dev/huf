@@ -4,11 +4,11 @@ import { flowService } from '../services/flowService';
 import type { FlowRunSummary } from '../services/flowApi';
 import { Loader2, RefreshCw, PlayCircle } from 'lucide-react';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
-import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
-import { formatTimeAgo } from '@/utils/time';
-import { flowRunStatusLabel } from '@/lib/flow-run/flowRunFormat';
-import { runTimesSentence } from '@/lib/flow-run/flowTimeZone';
+import { useSiteTimezone } from '@/lib/serverTime';
+import { browserZone, describeZone, sameZone } from '@/lib/flow-run/flowTimeZone';
+import { isFinishedStatus } from '@/lib/flow-run/story/runStatus';
+import { RunHistoryRow } from './flow/run/RunHistoryRow';
+import { useUser } from '@/contexts/UserContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { useViewport } from '@/lib/ui/responsive';
 
@@ -23,6 +23,7 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
     const siteZone = useSiteTimezone();
     const { canManage } = useFlowPermissions();
     const { isPhone } = useViewport();
+    const { user } = useUser();
     const [runs, setRuns] = useState<FlowRunSummary[]>([]);
     const [loading, setLoading] = useState(false);
     const [loadFailed, setLoadFailed] = useState(false);
@@ -55,7 +56,7 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
     // Live updates (socket) are not always available. While the sheet is open, poll quietly so runs started elsewhere
     // (schedule, webhook, document events) show up without a manual refresh; faster while a run is unfinished
     // (queued, running or waiting, e.g. for an approval answered elsewhere). Paused while the browser tab is hidden.
-    const hasActiveRun = runs.some((r) => !['Success', 'Failed', 'Cancelled'].includes(r.status));
+    const hasActiveRun = runs.some((r) => !isFinishedStatus(r.status));
     useEffect(() => {
         if (!open) return;
         const tick = () => {
@@ -83,9 +84,11 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
                         </Button>
                     </div>
                     <SheetDescription>
-                        Recent runs of this flow, newest first. Select one to see what each step did.
+                        Recent runs of this flow, newest first. Pick one to see what happened, step by step.
                     </SheetDescription>
-                    <p className="text-meta text-muted-foreground" data-testid="flow-run-history-timezone">{runTimesSentence(siteZone)}</p>
+                    {siteZone && !sameZone(browserZone(), siteZone) && (
+                        <p className="text-meta text-muted-foreground" data-testid="flow-run-history-timezone">Times are in your time zone ({describeZone(browserZone())}), not the site's ({describeZone(siteZone)}).</p>
+                    )}
                 </SheetHeader>
 
                 <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-5" data-testid="flow-run-history-body">
@@ -105,41 +108,15 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
                         </div>
                     ) : (
                         runs.map((run) => (
-                            <div
+                            <RunHistoryRow
                                 key={run.name}
-                                data-testid={`flow-run-row-${run.name}`}
-                                data-run-status={run.status}
-                                className="p-3 border rounded-md hover:bg-muted/50 cursor-pointer transition-colors"
-                                onClick={() => {
+                                run={run}
+                                currentUser={user?.name}
+                                onOpen={() => {
                                     onSelectRun(run.name);
                                     onOpenChange(false);
                                 }}
-                            >
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="font-medium text-sm truncate pr-2" title={run.name}>
-                                        {run.name}
-                                    </div>
-                                    <div className="flex shrink-0 items-center gap-1.5">
-                                        {run.run_mode === 'Test' && (
-                                            <Badge variant="outline" className="text-muted-foreground" title="A test run: nothing was sent or changed" data-testid={`flow-run-test-chip-${run.name}`}>
-                                                Test
-                                            </Badge>
-                                        )}
-                                        <Badge
-                                            variant={
-                                                run.status === 'Success' ? 'default' :
-                                                    run.status === 'Failed' ? 'destructive' : 'secondary'
-                                            }
-                                        >
-                                            {flowRunStatusLabel(run.status)}
-                                        </Badge>
-                                    </div>
-                                </div>
-                                <div className="text-xs text-muted-foreground flex justify-between items-center">
-                                    <span className="truncate max-w-[150px]">Trigger: {run.trigger_type}</span>
-                                    {run.started_at && <span title={formatTimeAgo(run.started_at)}>{formatAbsoluteTime(run.started_at)}</span>}
-                                </div>
-                            </div>
+                            />
                         ))
                     )}
                 </div>

@@ -1,4 +1,5 @@
 import { db, call } from '@/lib/frappe-sdk';
+import type { RunStepMeta, RunStoryFields } from './flow/flowRunStoryTypes';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
 
@@ -115,7 +116,8 @@ export interface BackendContract {
 }
 
 /** Flow Run summary (from list endpoint) */
-export interface FlowRunSummary {
+export interface FlowRunSummary extends RunStoryFields {
+        input_hint?: string;
     name: string;
     flow_id: string;
     flow_version: number;
@@ -136,7 +138,10 @@ export interface FlowRunSummary {
 }
 
 /** Flow Run detail (from get endpoint) */
-export interface FlowRunDetail {
+export interface FlowRunDetail extends RunStoryFields {
+    step_meta?: Record<string, RunStepMeta>;
+    /** UTC ISO string: the last time the run changed (how long a stuck run has been stuck). */
+    modified_at?: string | null;
     flow_run_id: string;
     flow_id: string;
     flow_name: string;

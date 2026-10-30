@@ -24,6 +24,7 @@ import { useCodeFlowStatus } from '@/lib/flow-graph/useCodeFlowStatus';
 import { useConvertedProcedure } from './flow/canvas/useCanvasEffects';
 import { usePhoneFlowView } from './flow/phone/usePhoneFlowView';
 import { useRunParam } from '@/hooks/flow/useRunParam';
+import { useStepParam } from '@/hooks/flow/useStepParam';
 import { flowStatusKind, StatusPill } from './common/StatusPill';
 import { HIT_TARGET, useViewport } from '@/lib/ui/responsive';
 import { cn } from '@/lib/utils';
@@ -51,6 +52,7 @@ export function FlowsHeaderActions() {
   const [showSettings, setShowSettings] = useState(false);
   const [showConvert, setShowConvert] = useState(false);
   const [selectedRunId, setSelectedRunId] = useRunParam();
+  useStepParam();
   const phoneView = usePhoneFlowView();
   const convertedProcedure = useConvertedProcedure(isCompact && !isPhone ? activeFlow?.id : undefined, activeFlow?.version, saveState);
 

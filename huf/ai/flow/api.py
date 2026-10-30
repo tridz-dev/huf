@@ -18,10 +18,10 @@ from frappe.rate_limiter import rate_limit
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.api_support import require_permission
+from huf.ai.flow.runs.shape import extras_for_detail
 from huf.ai.flow.support.approval_card import build_card
 from huf.ai.flow.support.decision_rights import approval_decision_rights
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
-from huf.ai.flow.run_view.shape import RUN_LIST_FIELDS
 from huf.ai.flow.support.redact import definition_for_user
 from huf.ai.flow.testrun import normalize_mode, stored_mode
 from huf.ai.flow.testrun.effects import tool_effect
@@ -428,6 +428,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 		"stale_after_minutes": STALE_RUN_MINUTES,
 		"can_decide": can_decide,
 		"cannot_decide_reason": cannot_decide_reason,
+		**extras_for_detail(doc, ctx),
 	}
 
 
@@ -476,17 +477,29 @@ def mark_flow_run_failed(flow_run_id: str) -> dict:
 	return {"flow_run_id": doc.name, "status": doc.status}
 
 
+_FLOW_RUN_LIST_FIELDS = [
+	"name",
+	"flow_id",
+	"flow_version",
+	"mode",
+	"status",
+	"current_node_id",
+	"hop_count",
+	"trigger_type",
+	"started_at",
+	"completed_at",
+	"modified",
+	"run_mode",
+	"owner",
+	"creation",
+	"context_json",
+]
+
+
 def _shape_run_rows(rows: list) -> list:
-	names = _flow_names(r.flow_id for r in rows)
-	can_fail = _can_mark_failed()
-	for r in rows:
-		r["flow_name"] = names.get(r.flow_id) or r.flow_id
-		r["stale"] = _is_stale(r.status, r.modified)
-		r["can_mark_failed"] = r["stale"] and can_fail
-		r["started_at"] = _utc_iso(r.started_at)
-		r["completed_at"] = _utc_iso(r.completed_at)
-		r["modified"] = _utc_iso(r.modified)
-	return rows
+	from huf.ai.flow.runs.shape import shape_list_rows
+
+	return shape_list_rows(rows, _flow_names(r.flow_id for r in rows), _can_mark_failed())
 
 
 @frappe.whitelist()
@@ -518,7 +531,7 @@ def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit:
 	runs = frappe.get_all(
 		"Flow Run",
 		filters=filters,
-		fields=RUN_LIST_FIELDS,
+		fields=_FLOW_RUN_LIST_FIELDS,
 		order_by="modified desc",
 		limit_page_length=limit,
 	)
@@ -577,7 +590,7 @@ def list_flow_runs_page(
 		"Flow Run",
 		filters=filters,
 		or_filters=or_filters,
-		fields=RUN_LIST_FIELDS,
+		fields=_FLOW_RUN_LIST_FIELDS,
 		order_by="started_at desc, creation desc",
 		limit_start=start,
 		limit_page_length=limit,

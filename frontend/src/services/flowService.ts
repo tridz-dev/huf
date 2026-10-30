@@ -8,6 +8,7 @@
  * minimal changes. Methods that were synchronous are now async.
  */
 
+import { cancelFlowRun as apiCancelFlowRun } from './flow/flowRunActionsApi';
 import { Flow, FlowMetadata, FlowNode, FlowEdge, FlowStatus } from '../types/flow.types';
 import {
   getFlowDefinitions,
@@ -246,6 +247,10 @@ class FlowService {
 
   async markFlowRunFailed(flowRunId: string) {
     return apiMarkFlowRunFailed(flowRunId);
+  }
+
+  async cancelFlowRun(flowRunId: string) {
+    return apiCancelFlowRun(flowRunId);
   }
 
   // ─── Local-only mutation helpers (update cache, notify) ────────────

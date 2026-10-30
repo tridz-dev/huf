@@ -253,7 +253,7 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 ## UX-2 humanize core (HumanValue, JsonArea, friendly run title)
 | testid | Where |
 |---|---|
-| `flow-run-title` (`data-run-id`) | Run details header: "Run #N · started by you · 2 mins ago" (never the internal id) |
+| `flow-run-title` (`data-run-id`) | Run details header: "Run #N · <flow name>" (never the internal id) |
 | `flow-run-human-<nodeId>` | A step's output as labelled rows (HumanValue root); `flow-run-human-input` for the data a run started with |
 | `<root>-row-<path>`, `<root>-label-<path>`, `<root>-value-<path>` | One labelled row of HumanValue; `<path>` is the dotted key path (`customer.name`, `lines.0.qty`) |
 | `<root>-list-<path>` (+ `-toggle`, `-count` "N items", `-items`, `-item-<i>`, `-show-more`) | A list: collapsed "N items · first few", opens to one card per item |
@@ -291,3 +291,22 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-run-decision-bar`, `flow-run-decision-inline`, `flow-run-cannot-decide`, `flow-run-back` | Run details: sticky Approve / Reject bar on a phone, the inline pair elsewhere, the sentence shown to someone who may not decide, the "Runs" back button |
 | `flow-approval-group-<firstRunId>`, `flow-approval-group-heading` | Bell: identical requests grouped under "3 waiting: Order approval" (every request keeps its own `flow-approve-<runId>` / `flow-reject-<runId>`) |
 | `no-access-page`, `no-access-title`, `no-access-body`, `no-access-go-flows`, `no-access-go-hub` | "You don't have access to this page" (Hub, Flows, Executions, Settings, Agents, Dashboard) |
+
+## Run details as a story (UX-4)
+
+| Test id | What |
+|---|---|
+| `flow-run-started-by` | "Started by you · 5:15 PM" under the title |
+| `flow-run-headline`, `flow-run-headline-text`, `flow-run-headline-sub`, `flow-run-status` (StatusPill), `flow-run-outcome` (`data-tone`) | Outcome sentence, state pill from the one status set, outcome chip |
+| `flow-run-timeline`, `flow-run-step-<id>` (`data-step-status` done/failed/waiting/stopped), `flow-run-step-phrase-<id>`, `flow-run-step-title-<id>`, `flow-run-decision-<id>` (one-line sentence of the step) | The step cards |
+| `flow-run-human-<id>` (+ `-raw-toggle`), `flow-run-step-output-<id>` (raw data) | A step's labelled rows and its "{ } Raw" toggle |
+| `flow-run-error` (exactly one per failed run), `flow-run-step-error-<id>`, `flow-run-fix-<id>` ("Fix this step", "Open this step" for read-only people), `flow-run-step-connect-<id>` | The one error and its actions |
+| `flow-run-iterations-<loopId>`, `flow-run-iterations-toggle-<loopId>`, `flow-run-iterations-list-<loopId>`, `flow-run-children-<loopId>` | Loop: "N iterations", per-round results, body steps |
+| `flow-run-waiting`, `flow-run-waiting-heading`, `flow-run-approval-facts`, `flow-run-waiting-since`, `flow-run-approve` / `flow-run-reject` | Waiting card above the steps |
+| `flow-run-stale`, `flow-run-stuck-for`, `flow-run-mark-failed` ("Stop run"), `flow-run-mark-failed-confirm`, `flow-run-queued`, `flow-run-cancel` | Stuck banner, queued note, stop/cancel actions |
+| `flow-run-details-fold` (`<details>`), `flow-run-details-toggle`, `flow-run-meta`, `flow-run-flow-name`, `flow-run-trigger`, `flow-run-started`, `flow-run-finished` (only when finished), `flow-run-duration`, `flow-run-step-count`, `flow-run-current-node`, `flow-run-id`, `flow-run-id-copy`, `flow-run-timezone-note` | "Details" fold (collapsed by default) |
+| `flow-run-back` | "Run history" link back to the list |
+| `flow-run-row-<runId>` (`data-run-status`), `flow-run-row-title-<runId>`, `flow-run-row-status-<runId>`, `flow-run-row-outcome-<runId>`, `flow-run-row-started-<runId>`, `flow-run-row-hint-<runId>` | Run history rows |
+| `executions-tabs`, `executions-tab-runs` ("Agent runs"), `executions-tab-flow-runs` ("Flow runs"), `executions-tab-analytics`, `executions-tab-hint`, `page-frame-tabs`; `flow-run-exec-row-<runId>`, `flow-run-exec-title-<runId>`, `flow-run-exec-status-<runId>`, `flow-run-exec-outcome-<runId>` | Executions page |
+
+`useRunOverlay(runId)` (lib/flow-run/useRunOverlay.ts) returns `{ nodes: { [stepId]: { status: 'done'|'failed'|'waiting'|'stopped', summary } }, runStatus, currentNodeId, loading }` for the canvas.
