@@ -55,7 +55,7 @@ describe('statuses', () => {
     expect(runStatusPill({ status: 'Failed' }).kind).toBe('failed');
     expect(runStatusPill({ status: 'Running', stale: true }).kind).toBe('stuck');
     expect(runStatusPill({ status: 'Waiting Code' }).kind).toBe('waiting_review');
-    expect(runStatusPill({ status: 'Waiting User' }).label).toBe('Waiting for input');
+    expect(runStatusPill({ status: 'Waiting User' }).label).toBe('Waiting for your reply');
   });
   it('tells a person-ended run from a failure', () => {
     expect(stoppedByPerson('Marked as failed by Administrator: the run was stuck in Running.')?.by).toBe('Administrator');
