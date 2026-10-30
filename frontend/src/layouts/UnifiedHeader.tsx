@@ -141,7 +141,7 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
   const hasAncestry = !!breadcrumbs && breadcrumbs.length >= 2;
 
   return (
-    <div className={cn('flex flex-1 items-center justify-between', stackOnPhone && 'flex-wrap gap-y-1 max-md:py-1')}>
+    <div className={cn('flex min-w-0 flex-1 items-center justify-between', stackOnPhone && 'gap-y-1 max-md:flex-wrap max-md:py-1')}>
       <div className={cn('flex min-w-0 items-center gap-2', stackOnPhone && 'max-md:basis-full')}>
         {leftContent ? (
           leftContent
@@ -162,7 +162,7 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
         </div>
       </div> */}
 
-      <div className={cn('flex items-center gap-2', stackOnPhone && 'max-md:basis-full max-md:justify-end')}>
+      <div className={cn('flex shrink-0 items-center gap-2', stackOnPhone && 'max-md:basis-full max-md:justify-end')}>
         {/* Approvals are only asked for by people who use flows: for anyone else the server would refuse every poll. */}
         {hasCapability('flows.use') && <ApprovalsBell />}
         {/* Code-run approvals: in the flow editor they move into the header's "..." menu at 1200px and narrower (no room beside Run and Publish).
