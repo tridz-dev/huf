@@ -160,10 +160,42 @@ describe('sentence', () => {
     expect(describeCondition(m, label)).toBe('Amount is more than 100 and Status is Paid');
   });
   it('says any / groups / empty / lists / other fields', () => {
-    expect(describeCondition(parseCondition("input['status'] in ['Paid', 'Shipped'] or input['amount'] <= 5") as ConditionModel, label)).toBe('Status is one of Paid or Shipped or Amount is at most 5');
+    expect(describeCondition(parseCondition("input['status'] in ['Paid', 'Shipped'] or input['amount'] <= 5") as ConditionModel, label)).toBe('Status is one of Paid, Shipped or Amount is at most 5');
     expect(describeCondition(parseCondition("input['amount'] > 1 and (input['status'] == 'a' or input['status'] == 'b')") as ConditionModel, label)).toBe('Amount is more than 1 and (Status is a or Status is b)');
     expect(describeCondition(parseCondition("number(input['amount']) > number(input['limit'])") as ConditionModel, label)).toBe('Amount is more than Limit');
     expect(describeCondition(parseCondition("input['status'] in [None, '', [], {}]") as ConditionModel, label)).toBe('Status is empty');
     expect(describeCondition({ match: 'all', items: [] }, label)).toBeNull();
+  });
+});
+
+import { operandFromText, withOperator, withTypedValue } from './infer';
+
+describe('typed values', () => {
+  it('a number-looking value is a number for operators that compare', () => {
+    expect(operandFromText('gt', '100')).toEqual({ value: { kind: 'number', text: '100' }, numeric: true });
+    expect(operandFromText('is', ' 42 ')).toEqual({ value: { kind: 'number', text: '42' }, numeric: true });
+    expect(operandFromText('is', '007')).toEqual({ value: { kind: 'text', text: '007' }, numeric: false });
+    expect(operandFromText('is', 'abc').value).toEqual({ kind: 'text', text: 'abc' });
+    expect(operandFromText('gt', 'abc').numeric).toBe(false);
+    expect(operandFromText('contains', '100').value).toEqual({ kind: 'text', text: '100' });
+    expect(operandFromText('starts_with', '12').numeric).toBe(false);
+  });
+  it('a list value splits on commas and trims', () => {
+    expect(operandFromText('one_of', 'IN, US ,,')).toEqual({ value: { kind: 'list', items: [{ kind: 'text', text: 'IN' }, { kind: 'text', text: 'US' }] }, numeric: false });
+    expect(operandFromText('one_of', '1, 2').numeric).toBe(true);
+    expect(operandFromText('one_of', '1, a').numeric).toBe(false);
+  });
+  it('changing the operator reads the typed text again', () => {
+    const r = withTypedValue({ type: 'rule', field: 'input.a', op: 'contains' }, '100');
+    expect(r.value).toEqual({ kind: 'text', text: '100' });
+    const g = withOperator(r, 'gt');
+    expect(g.value).toEqual({ kind: 'number', text: '100' });
+    expect(g.numeric).toBe(true);
+    expect(withOperator(g, 'one_of').value).toEqual({ kind: 'list', items: [{ kind: 'number', text: '100' }] });
+    expect(compileCondition({ match: 'all', items: [g] })).toBe("number(input['a']) > 100");
+  });
+  it('keeps the typed text while it is half typed', () => {
+    const r = withTypedValue({ type: 'rule', field: 'input.a', op: 'one_of' }, 'IN, ');
+    expect(r.raw).toBe('IN, ');
   });
 });

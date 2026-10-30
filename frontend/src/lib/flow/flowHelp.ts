@@ -125,10 +125,14 @@ export const CONDITION_EXAMPLES: Array<{ text: string; meaning: string }> = [
   { text: "input['status'] == 'paid'", meaning: 'a text value equals "paid" (use quotes for text)' },
   { text: "input['country'] in ['IN', 'US']", meaning: 'the value is one of a list' },
   { text: "input['vip'] and input['total'] >= 500", meaning: 'both must be true (use "or" for either, "not" to flip)' },
+  { text: "startswith(input['sku'], 'AB-')", meaning: 'the text begins with AB- (also endswith)' },
+  { text: "lower(input['status']) == 'paid'", meaning: 'ignores capital letters: Paid, PAID and paid all match' },
+  { text: "number(input['amount']) > 100", meaning: 'treats text such as 150 from a form as a number' },
+  { text: "input['note'] not in [None, '']", meaning: 'the field is not empty' },
 ];
 
 const CONDITION_SYNTAX =
-  "Compare with ==, !=, >, >=, <, <= or in, and combine checks with and, or, not.";
+  "Compare with ==, !=, >, >=, <, <= or in, and combine checks with and, or, not. Also available: lower(), number(), startswith() and endswith().";
 
 /** Help under the Condition box. Only people who can edit are told about the Use data button. */
 export function conditionHelp(canEdit: boolean): string {

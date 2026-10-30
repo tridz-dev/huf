@@ -8,8 +8,7 @@ export function describeCondition(model: ConditionModel, labelOf: (ref: string) 
     if (!v) return '';
     if (v.kind === 'ref') return labelOf(v.ref);
     if (v.kind === 'list') {
-      const parts = v.items.map((i) => i.text);
-      return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} or ${parts[parts.length - 1]}` : parts[0] ?? '';
+      return v.items.map((i) => i.text).join(', ');
     }
     return v.text;
   };
