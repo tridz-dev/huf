@@ -23,6 +23,7 @@ from huf.ai.flow.support.approval_card import build_card
 from huf.ai.flow.support.decision_rights import approval_decision_rights
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
 from huf.ai.flow.support.redact import definition_for_user
+from huf.ai.flow.testrun import normalize_mode, stored_mode
 
 
 # ---------------------------------------------------------------------------
@@ -323,6 +324,7 @@ def unpublish_flow(flow_id: str) -> dict:
 def run_flow(
 	flow_id: str,
 	payload: str | dict | None = None,
+	mode: str = "real",
 ) -> dict:
 	"""
 	Start a new flow run.
@@ -330,6 +332,7 @@ def run_flow(
 	Args:
 	    flow_id: Flow ID to run
 	    payload: Initial input (JSON string or dict)
+	    mode: ``"real"`` (default) or ``"test"``: a test run reads for real but sends and changes nothing
 
 	Returns:
 	    dict with flow_run_id, status, current_node_id
@@ -344,6 +347,10 @@ def run_flow(
 		except (json.JSONDecodeError, TypeError):
 			payload = {}
 	payload = payload or {}
+	try:
+		mode = normalize_mode(mode)
+	except ValueError as exc:
+		frappe.throw(_(str(exc)))
 
 	from huf.ai.flow.engine import create_flow_run, run_flow as engine_run_flow
 
@@ -351,6 +358,7 @@ def run_flow(
 		flow_id=flow_id,
 		payload=payload,
 		trigger_type="Manual",
+		mode=mode,
 	)
 
 	# Run synchronously for now; can be enqueued for background execution later
@@ -401,6 +409,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 		"flow_name": _flow_names([doc.flow_id]).get(doc.flow_id) or doc.flow_id,
 		"flow_version": doc.flow_version,
 		"mode": doc.mode,
+		"run_mode": doc.run_mode,
 		"status": doc.status,
 		"trigger_type": doc.trigger_type,
 		"current_node_id": doc.current_node_id,
@@ -479,6 +488,7 @@ _FLOW_RUN_LIST_FIELDS = [
 	"started_at",
 	"completed_at",
 	"modified",
+	"run_mode",
 	"owner",
 	"creation",
 	"context_json",
@@ -492,7 +502,7 @@ def _shape_run_rows(rows: list) -> list:
 
 
 @frappe.whitelist()
-def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit: int = 20) -> list:
+def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit: int = 20, run_mode: str | None = None) -> list:
 	"""
 	List flow runs with optional filters.
 
@@ -500,6 +510,7 @@ def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit:
 	    flow_id: Filter by flow_id
 	    status: Filter by status
 	    limit: Max results (default 20)
+	    run_mode: ``"real"`` or ``"test"`` to list only those runs (default: both)
 
 	Returns:
 	    list of flow run summaries (times are UTC ISO strings)
@@ -513,6 +524,8 @@ def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit:
 		filters["flow_id"] = flow_id
 	if status:
 		filters["status"] = status
+	if run_mode:
+		filters["run_mode"] = stored_mode(run_mode)
 
 	runs = frappe.get_all(
 		"Flow Run",
@@ -885,97 +898,7 @@ def get_node_schemas() -> dict:
 	return build_node_schemas()
 
 
-@frappe.whitelist()
-def list_flow_tools() -> list:
-	"""
-	List all tools available to flow tool-call nodes: built-in Agent Tool
-	Function records plus tools exposed by enabled MCP Server documents.
-
-	Each dict:
-	    {
-	        "name": str,
-	        "label": str,
-	        "description": str,
-	        "source": "builtin" | "mcp",
-	        "mcp_server": str | None,
-	        "params_json_schema": dict,
-	    }
-
-	Returns:
-	    list[dict]
-	"""
-	if not frappe.has_permission("Agent Tool Function", "read"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
-
-	tools = []
-
-	# Built-in tools: Agent Tool Function.params is the authoritative JSON
-	# Schema source (see huf/ai/sdk_tools.py:create_agent_tools, which is the
-	# only code path that actually builds runtime tools from this doctype).
-	# The "parameters" child table (Agent Function Params) is not read by
-	# any conversion code in the app and is treated as stale/unused here.
-	for row in frappe.get_all(
-		"Agent Tool Function",
-		fields=["name", "tool_name", "description", "params"],
-		# Flow/Procedure runs have no Agent Execution Profile, so a Code Execution tool is
-		# refused on every call (PermissionAwareToolRegistry._allows_code_execution); don't offer it.
-		filters={"types": ["!=", "Code Execution"]},
-	):
-		params_json_schema = {}
-		if row.params:
-			try:
-				params_json_schema = json.loads(row.params)
-			except (json.JSONDecodeError, TypeError):
-				params_json_schema = {}
-
-		tools.append({
-			"name": row.tool_name,
-			"label": row.tool_name,
-			"description": row.description or "",
-			"source": "builtin",
-			"mcp_server": None,
-			"params_json_schema": params_json_schema if isinstance(params_json_schema, dict) else {},
-		})
-
-	# MCP tools: each enabled "MCP Server" document caches its tools in the
-	# "tools" child table (MCP Server Tool: tool_name, description,
-	# parameters JSON, enabled). "mcp_server" below is the MCP Server
-	# document name (server_name, since autoname is field:server_name),
-	# matching the identifier huf.ai.mcp_client.execute_mcp_tool expects
-	# for its server_name argument.
-	mcp_servers = frappe.get_all(
-		"MCP Server",
-		filters={"enabled": 1},
-		fields=["name", "tool_namespace"],
-	)
-	for server in mcp_servers:
-		tool_rows = frappe.get_all(
-			"MCP Server Tool",
-			filters={"parent": server.name, "parenttype": "MCP Server", "enabled": 1},
-			fields=["tool_name", "description", "parameters"],
-		)
-		for tool_row in tool_rows:
-			params_json_schema = {}
-			if tool_row.parameters:
-				try:
-					params_json_schema = json.loads(tool_row.parameters)
-				except (json.JSONDecodeError, TypeError):
-					params_json_schema = {}
-
-			label = tool_row.tool_name
-			if server.tool_namespace:
-				label = f"{server.tool_namespace}.{tool_row.tool_name}"
-
-			tools.append({
-				"name": tool_row.tool_name,
-				"label": label,
-				"description": tool_row.description or "",
-				"source": "mcp",
-				"mcp_server": server.name,
-				"params_json_schema": params_json_schema if isinstance(params_json_schema, dict) else {},
-			})
-
-	return tools
+from huf.ai.flow.listing.tools import list_flow_tools  # noqa: E402,F401  (whitelisted endpoint; lives in listing/ to keep this file small)
 
 
 # ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import { toast } from '@/lib/toast';
 import { humanizeFlowError, validateFlow } from '@/lib/flow-graph/flowValidation';
 import { setChecklistOpen } from '../frame/frameStore';
 import { reportFlowRun } from '@/lib/flow-run/flowRunToast';
+import type { RunMode } from '@/lib/flow-run/flowRunPayload';
 
 /**
  * What the editor header's buttons do (save, run, publish, unpublish) and the state they need. One place, so the full header,
@@ -50,10 +51,10 @@ export function useFlowHeaderActions() {
     setShowRunDialog(true);
   };
 
-  const startRun = async (payload: Record<string, unknown>) => {
+  const startRun = async (payload: Record<string, unknown>, mode: RunMode) => {
     if (!activeFlow) return;
     try {
-      reportFlowRun(await runFlow(activeFlow.id, payload));
+      reportFlowRun(await runFlow(activeFlow.id, payload, mode), mode);
     } catch (err) {
       toast.error('Could not run the flow', { description: humanizeFlowError(err) });
     }

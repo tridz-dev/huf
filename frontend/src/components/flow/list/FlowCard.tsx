@@ -14,14 +14,15 @@ import { NODE_ICONS } from '@/components/nodes/nodeIcons';
 import { triggerOptions } from '@/data/triggers';
 import { formatTimeAgo } from '@/utils/time';
 import { cn } from '@/lib/utils';
+import { RUN_BUTTON_LABEL } from '@/lib/flow-run/flowRunPayload';
 import {
   cardDescription, cardStatusKind, descriptionIsGenerated, lastRunLine, runStatusKind, stepsText, triggerLine, visibleCategory,
 } from '@/lib/flow-list/flowListSummary';
 import type { FlowCard as FlowCardData } from '@/services/flow/flowCardsApi';
 import { FlowStepStrip } from './FlowStepStrip';
 
-/** What the play button is called. "Run" opens the Run dialog today; UX-14 turns it into "Run test". */
-export const FLOW_CARD_RUN_LABEL = 'Run';
+/** What the play button is called: the Run dialog opens with Test run chosen. */
+export const FLOW_CARD_RUN_LABEL = RUN_BUTTON_LABEL;
 
 interface FlowCardProps {
   card: FlowCardData;
@@ -129,7 +130,7 @@ export function FlowCard({ card, canManage, canCreate, onOpen, onRun, onSettings
             variant="outline"
             className="gap-1.5"
             onClick={onRun}
-            title="Run this flow now"
+            title="Run a test of this flow: nothing is sent unless you choose Run for real"
             data-testid="flow-card-run"
           >
             <Play className="h-3.5 w-3.5" aria-hidden />
