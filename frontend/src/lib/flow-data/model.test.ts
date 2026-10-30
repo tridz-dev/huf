@@ -88,7 +88,7 @@ describe('chips in words', () => {
     expect(describeChip(chip('input.items[0].sku'), model)).toMatchObject({ label: 'Items > First item > SKU', sample: 'A-1' });
   });
   it('words for the list verbs', () => {
-    expect(describeChip(chip('input.items', 'count'), model)).toMatchObject({ label: 'How many Items', sample: '2' });
+    expect(describeChip(chip('input.items', 'count'), model)).toMatchObject({ label: 'How many items', sample: '2' });
     expect(describeChip(chip('input.items', 'joined'), model).sample).toContain(',');
   });
   it('a deleted step is a missing chip', () => {

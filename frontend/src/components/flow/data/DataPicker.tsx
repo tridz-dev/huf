@@ -51,8 +51,12 @@ export function DataPicker({ model, accept, onPick, onFetchLast, loading }: Data
   const safeActive = Math.min(active, Math.max(rows.length - 1, 0));
   const firstEnabled = rows.findIndex((r) => !r.disabled);
 
-  useEffect(() => setActive(Math.max(firstEnabled, 0)), [view, query, firstEnabled]);
-  useEffect(() => document.getElementById(`${listId}-${safeActive}`)?.scrollIntoView({ block: 'nearest' }), [safeActive, listId]);
+  useEffect(() => {
+    setActive(Math.max(firstEnabled, 0));
+  }, [view, query, firstEnabled]);
+  useEffect(() => {
+    document.getElementById(`${listId}-${safeActive}`)?.scrollIntoView({ block: 'nearest' });
+  }, [safeActive, listId]);
 
   const go = (next: PickerView) => {
     setView(next);
@@ -179,7 +183,7 @@ export function DataPicker({ model, accept, onPick, onFetchLast, loading }: Data
             <p className="text-ui-text">No sample yet: run a test</p>
             <p className="text-meta text-muted-foreground">
               {step.canFetchLast
-                ? 'Send your webhook a request once, then use it here to see its fields. Or pick the real one it already received.'
+                ? 'Send your webhook a request, or use the last real one it received, to see its fields here.'
                 : step.kind === 'trigger'
                   ? 'Run the flow once and the data it started with shows up here.'
                   : 'Run the flow once and what this step produced shows up here.'}

@@ -21,7 +21,7 @@ export function JsonDataInput({ value, onChange, hint, testId, id, label, option
   };
 
   return (
-    <div className="space-y-1" data-testid={testId ? `${testId}-field` : undefined}>
+    <div className="space-y-1" data-testid={testId ? `-box` : undefined}>
       {label ? <Label size="sm" className="block min-w-0 truncate">{label}{optional ? ' (optional)' : ''}</Label> : null}
       <JsonArea
         surfaceKey={key}

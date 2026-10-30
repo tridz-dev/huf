@@ -158,14 +158,20 @@ function tailLabel(path: string): string {
     .join(' > ');
 }
 
+/** The last part of a field's name, lower-cased unless it is an acronym ("Items" -> "items", "SKU" stays). */
+const lastWord = (label: string) => {
+  const part = label.split(' > ').pop() ?? label;
+  return part.replace(/\b([A-Z])([a-z])/g, (_m, a: string, b: string) => `${a.toLowerCase()}${b}`);
+};
+
 const MODE_LABEL: Record<PickMode, (l: string) => string> = {
   summary: (l) => `Summary of ${l}`,
-  joined: (l) => `All ${l}, joined`,
-  count: (l) => `How many ${l}`,
+  joined: (l) => `All ${lastWord(l)}, joined`,
+  count: (l) => `How many ${lastWord(l)}`,
 };
 
 export function describeChip(chip: Chip, model: PickerModel): ChipInfo {
-  const wrap = (label: string) => (chip.mode ? MODE_LABEL[chip.mode](label.toLowerCase() === label ? label : label) : label);
+  const wrap = (label: string) => (chip.mode ? MODE_LABEL[chip.mode](label) : label);
   if (chip.unbound) return { label: 'Choose data', stepTitle: '', sample: '', missing: false, opaque: true };
   if (chip.raw !== undefined) return { label: 'Custom value', stepTitle: '', sample: '', missing: false, opaque: true };
   const ref = chip.ref;

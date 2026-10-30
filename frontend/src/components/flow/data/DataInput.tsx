@@ -108,6 +108,11 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
     refresh();
     setOpen(true);
   };
+  const openFromSlash = (position: number) => {
+    openPicker('slash');
+    origin.current.position = position;
+    return true;
+  };
   const closePicker = (next: boolean) => {
     setOpen(next);
     if (!next && origin.current.by === 'slash' && !origin.current.picked) editor.current?.insertText('/', origin.current.position);
@@ -151,7 +156,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
   const ph = placeholder ?? (nodeId ? DEFAULT_PLACEHOLDER : undefined);
 
   return (
-    <div className="space-y-1" data-testid={testId ? `${testId}-field` : undefined}>
+    <div className="space-y-1" data-testid={testId ? `-box` : undefined}>
       {label ? (
         <Label htmlFor={inputId} size="sm" className="block min-w-0 truncate">
           {label}
@@ -180,7 +185,7 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
               ariaLabel={label}
               ariaDescribedBy={[hint ? hintId : '', preview ? previewId : ''].filter(Boolean).join(' ') || undefined}
               inputMode={kind === 'number' ? 'decimal' : kind === 'url' ? 'url' : 'text'}
-              onSlash={editable && nodeId ? (position) => (openPicker('slash'), (origin.current.position = position), true) : undefined}
+              onSlash={editable && nodeId ? (position) => openFromSlash(position) : undefined}
               onChipClick={nodeId ? (chip) => openPicker('chip', chip.id) : undefined}
               className={cn('flex-1', editable && nodeId && 'pr-[5.5rem]')}
             />

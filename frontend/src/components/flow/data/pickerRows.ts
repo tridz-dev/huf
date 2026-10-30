@@ -33,14 +33,6 @@ export type Accept = 'value' | 'list' | 'ref';
 
 const parentOf = (path: string) => path.replace(/(\.[^.[\]]+|\[\d+\])$/, '');
 
-/** A field that sits directly under the step (not inside another thing). */
-function topLevel(step: PickerStep, field: CatalogField): boolean {
-  const p = field.path;
-  if (!p) return false;
-  if (p === step.root || p === 'foreach.item' || p === 'foreach.index') return true;
-  return parentOf(p) === step.root;
-}
-
 const find = (model: PickerModel, id: string) => model.steps.find((s) => s.id === id);
 const fieldAt = (step: PickerStep, path: string) => step.fields.find((f) => f.path === path);
 
@@ -124,7 +116,7 @@ export function viewRows(view: PickerView, model: PickerModel, accept: Accept): 
   const step = find(model, view.stepId);
   if (!step) return [];
   if (view.kind === 'fields') {
-    const shown = accept === 'list' ? step.fields.filter((f) => f.type === 'list' && f.path) : step.fields.filter((f) => topLevel(step, f));
+    const shown = accept === 'list' ? step.fields.filter((f) => f.type === 'list' && f.path) : step.fields.filter((f) => f.path && !f.advanced_only);
     const rows = shown.map((f) => fieldRow(step, f, accept, false));
     // A reference may be a step's whole result (a loop collects what its steps produced).
     if (accept === 'ref' && step.kind === 'step') {
