@@ -54,7 +54,7 @@ export const AddStepGhostNode = memo(({ data }: NodeProps<AddStepGhostNodeData>)
         className={cn(
           NODE_CARD_BASE,
           small && 'items-center',
-          'h-[72px] border-dashed border-steel-soft bg-panel/40 shadow-none cursor-pointer hover:border-steel-soft hover:bg-panel/60 transition-colors'
+          'h-[72px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 border-dashed border-steel-soft bg-panel/40 shadow-none cursor-pointer hover:border-steel-soft hover:bg-panel/60 transition-colors'
         )}
       >
         {small ? (

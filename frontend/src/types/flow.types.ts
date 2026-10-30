@@ -281,8 +281,22 @@ export interface FlowNodeData {
   status?: 'idle' | 'running' | 'success' | 'error' | 'waiting' | 'skipped';
   /** A run opened on the canvas: one plain line of what this step produced, shown on hover (never written to the flow). */
   runSummary?: string;
+  /** What the card needs to know about its place in the flow, worked out once for the whole canvas (never written to the flow). */
+  canvas?: CanvasNodeFacts;
   /** A saved example of the data this step receives or returns (stored as `_sample`: <= 8 KB, secrets hidden, editors only). */
   sample?: Record<string, unknown>;
+}
+
+/** Per-step facts the canvas works out once for every card, so a card never walks the whole flow itself. */
+export interface CanvasNodeFacts {
+  /** The word on the card ('ready', 'needs-setup'...) and its text. */
+  status: { kind: 'ready' | 'needs-setup' | 'not-connected' | 'orphan' | 'running' | 'waiting' | 'done' | 'failed' | 'skipped'; text: string };
+  /** First thing missing in this step, for the tooltip of 'Needs setup'. */
+  firstIssue: string | null;
+  /** Nothing leads to this step. */
+  orphaned: boolean;
+  /** Remove this step (asks first when it has settings). */
+  onDelete?: (nodeId: string) => void;
 }
 
 export type FlowNode = ReactFlowNode<FlowNodeData>;

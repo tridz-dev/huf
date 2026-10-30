@@ -182,7 +182,7 @@ export function NodeCard({ id, icon: Icon, iconClass, title, subtitle, frameClas
     const size = tileIconSize(zoom);
     return (
       <div className="relative flex h-[100px] w-[236px] items-center justify-center" data-lod="icon">
-        <div className={cn('group/card relative flex h-[100px] w-[120px] items-center justify-center rounded-2xl border bg-panel transition-colors duration-200', frameClass)}>
+        <div className={cn('flow-card group/card relative flex h-[100px] w-[120px] items-center justify-center rounded-2xl border bg-panel transition-colors duration-200', frameClass)}>
           <div className={cn('text-ink', iconClass)}>
             <Icon style={{ width: size, height: size }} aria-hidden />
           </div>
@@ -197,7 +197,7 @@ export function NodeCard({ id, icon: Icon, iconClass, title, subtitle, frameClas
   if (lod === 'compact') {
     const k = compactGrowth(zoom);
     return (
-      <Card className={cn(NODE_CARD_BASE, 'group/card !justify-center', frameClass)} data-lod="compact">
+      <Card className={cn(NODE_CARD_BASE, 'flow-card group/card !justify-center', frameClass)} data-lod="compact">
         {deleteButton}
         <div className="flex min-w-0 items-center" style={{ gap: 10 * k }}>
           <div className={cn(NODE_ICON_WELL, 'shrink-0 text-ink', iconClass)} style={{ width: 28 * k, height: 28 * k, borderRadius: 8 * k }}>
@@ -219,7 +219,7 @@ export function NodeCard({ id, icon: Icon, iconClass, title, subtitle, frameClas
   }
 
   return (
-    <Card className={cn(NODE_CARD_BASE, 'group/card', frameClass)} data-lod="full">
+    <Card className={cn(NODE_CARD_BASE, 'flow-card group/card', frameClass)} data-lod="full">
       {deleteButton}
       <div className="flex min-w-0 items-start gap-2.5">
         <div className={cn(NODE_ICON_WELL, 'shrink-0 text-ink', iconClass)}>

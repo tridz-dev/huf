@@ -29,6 +29,20 @@ const MINIMAP_MIN_STEPS = 8;
 /** Narrowest canvas (px) that still has room for the overview next to the toolbar buttons. */
 const MINIMAP_MIN_CANVAS_WIDTH = 640;
 
+/**
+ * Classes of the canvas itself: bigger hit areas and a glow on the connection dots, a clear focus ring on the step that has
+ * keyboard focus (on its card, not the invisible box around it), and the step under the pointer or focus drawn above its neighbours.
+ */
+const FOCUS_CARD = '[&_.react-flow__node:focus-visible_.flow-card]';
+export const CANVAS_CLASS = [
+  'bg-background w-full h-full',
+  "[&_.react-flow__handle]:transition-shadow [&_.react-flow__handle]:after:absolute [&_.react-flow__handle]:after:-inset-2 [&_.react-flow__handle]:after:content-['']",
+  '[&_.react-flow__handle:hover]:!bg-signal [&_.react-flow__handle:hover]:shadow-[0_0_0_4px_color-mix(in_srgb,var(--signal)_30%,transparent)]',
+  '[&_.react-flow__node:focus-visible]:outline-none',
+  `${FOCUS_CARD}:ring-2 ${FOCUS_CARD}:ring-signal ${FOCUS_CARD}:ring-offset-2 ${FOCUS_CARD}:ring-offset-background`,
+  '[&_.react-flow__node:hover]:!z-[1000] [&_.react-flow__node:focus-visible]:!z-[1000]',
+].join(' ');
+
 const MINIMAP_STYLE = {
   width: 200,
   height: 130,
@@ -81,7 +95,7 @@ export function fitClearOfOverlays(rf: ReactFlowInstance, width: number, height:
     });
   let vp = fit(0);
   if (hidden(vp)) vp = fit(covered.height + 16);
-  rf.setViewport(vp, { duration });
+  rf.setViewport(vp, { duration: motionMs(duration) });
 }
 
 /** Zoom buttons whose "fit view" also keeps the flow clear of the overview. */
@@ -90,6 +104,21 @@ export function FlowControls({ className }: { className?: string }) {
   const store = useStoreApi();
   return <Controls fitViewOptions={FIT_VIEW_OPTIONS} className={className} onFitView={() => { const { width, height } = store.getState(); fitClearOfOverlays(rf, width, height); }} />;
 }
+
+/** Colour of a step on the overview: its run result when a run is shown, else what kind of step it is. */
+const minimapColor = (node: Node): string => {
+  switch ((node.data as { status?: string } | undefined)?.status) {
+    case 'error': return 'var(--destructive)';
+    case 'success': return 'var(--good)';
+    case 'running': return 'var(--signal)';
+    case 'waiting': return 'var(--warning)';
+    case 'skipped': return 'var(--steel-soft)';
+    default: break;
+  }
+  if (node.type === 'trigger') return 'var(--primary)';
+  if (node.type === 'end') return 'var(--good)';
+  return 'var(--muted-foreground)';
+};
 
 /** Overview map: drag its rectangle or click anywhere on it to move the canvas there; scroll on it to zoom. */
 export function FlowMiniMap({ stepCount }: { stepCount: number }) {
@@ -103,12 +132,11 @@ export function FlowMiniMap({ stepCount }: { stepCount: number }) {
       ariaLabel="Flow overview"
       pannable
       zoomable
-      onClick={(_event, position) => setCenter(position.x, position.y, { zoom: getZoom() })}
-      nodeColor={(node) => {
-        if (node.type === 'trigger') return 'var(--primary)';
-        if (node.type === 'end') return 'var(--good)';
-        return 'var(--muted)';
-      }}
+      onClick={(_event, position) => setCenter(position.x, position.y, { zoom: getZoom(), duration: motionMs(250) })}
+      nodeColor={minimapColor}
+      nodeBorderRadius={4}
+      nodeStrokeWidth={0}
+      maskColor="color-mix(in srgb, var(--foreground) 8%, transparent)"
       className="!bg-background !border-border"
       data-testid="flow-minimap"
       // Sits to the right of the zoom controls (bottom-left), big enough to read, and can be dragged and zoomed.
@@ -164,7 +192,7 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
         const top = Math.min(...rects.map((r) => r.y));
         const bounds = { x: left, y: top, width: Math.max(...rects.map((r) => r.x + r.width)) - left, height: Math.max(...rects.map((r) => r.y + r.height)) - top };
         const next = panToReveal(bounds, getViewport(), { width, height }, undefined, coveredByOverlays(width, height, nodeCount >= MINIMAP_MIN_STEPS));
-        if (next) setViewport({ ...next, zoom: getViewport().zoom }, { duration: 200 });
+        if (next) setViewport({ ...next, zoom: getViewport().zoom }, { duration: motionMs(200) });
       }, 150);
       return () => clearTimeout(timer);
     }
@@ -219,7 +247,7 @@ export function KeepSelectedClearOfToolbar({ selectedNodeId }: { selectedNodeId:
       if (!node) return;
       const vp = rfRef.current.getViewport();
       const top = (node.positionAbsolute?.y ?? node.position.y) * vp.zoom + vp.y;
-      if (top < FIT_TOP_INSET - 8) rfRef.current.setViewport({ ...vp, y: vp.y + (FIT_TOP_INSET - top) }, { duration: 150 });
+      if (top < FIT_TOP_INSET - 8) rfRef.current.setViewport({ ...vp, y: vp.y + (FIT_TOP_INSET - top) }, { duration: motionMs(150) });
     }, 80);
     return () => clearTimeout(timer);
   }, [selectedNodeId]);

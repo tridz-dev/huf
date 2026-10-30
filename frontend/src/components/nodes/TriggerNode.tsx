@@ -13,24 +13,22 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../ui/alert-dialog';
-import { useFlowContext } from '../../contexts/FlowContext';
 import { NODE_HANDLE, getExecutionStatusClasses } from './nodeStyles';
-import { validateNode } from '../../lib/flow-graph/flowValidation';
-import { cardStatus, triggerSubtitle } from '../../lib/flow/flowNodeCard';
+import { triggerSubtitle } from '../../lib/flow/flowNodeCard';
 import { cardIcon } from './nodeIcons';
 import { CardStatusLine, NodeCard } from './NodeCard';
 
 type TriggerNodeProps = NodeProps<FlowNodeData>;
 
 export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
-  const { deleteNode, activeFlow } = useFlowContext();
   const { canManage } = useFlowPermissions();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const incomplete = validateNode({ id, data }, activeFlow?.edges ?? []);
+  const facts = data.canvas;
+  const status = facts?.status ?? { kind: 'ready' as const, text: 'Ready' };
+  const needsSetup = status.kind === 'needs-setup' || Boolean(facts?.firstIssue);
   const unset = !data.triggerConfig?.type;
-  const status = cardStatus({ runStatus: data.status, incomplete: incomplete.length > 0, orphaned: false, notConnected: false });
   const statusClasses = getExecutionStatusClasses(data.status, selected, {
-    unconfigured: incomplete.length > 0 || unset,
+    unconfigured: needsSetup || unset,
   });
 
   // A trigger only becomes `configured` after the user saves it in the trigger
@@ -40,13 +38,13 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
     if (data.configured) {
       setShowDeleteConfirm(true);
     } else {
-      deleteNode(id);
+      facts?.onDelete?.(id);
     }
   };
 
   const canDelete = canManage && selected && data.status !== 'running' && data.status !== 'waiting';
   return (
-    <div className="relative" data-testid={`flow-node-${id}`} data-node-type={data.triggerConfig?.type ?? 'unset'} data-incomplete={incomplete.length > 0 ? 'true' : 'false'}>
+    <div className="relative" data-testid={`flow-node-${id}`} data-node-type={data.triggerConfig?.type ?? 'unset'} data-incomplete={needsSetup ? 'true' : 'false'}>
       <NodeCard
         id={id}
         icon={cardIcon(data)}
@@ -68,7 +66,7 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
             <CardStatusLine
               id={id}
               status={status}
-              title={status.kind === 'needs-setup' ? incomplete[0]?.message ?? 'Select this trigger to set it up' : undefined}
+              title={status.kind === 'needs-setup' ? facts?.firstIssue ?? 'Select this trigger to set it up' : undefined}
               marker={unset ? undefined : { text: 'Trigger', testId: `flow-node-marker-${id}` }}
             />
           )
@@ -96,7 +94,7 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
               data-testid="flow-node-delete-confirm"
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                deleteNode(id);
+                facts?.onDelete?.(id);
                 setShowDeleteConfirm(false);
               }}
             >

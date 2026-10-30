@@ -23,6 +23,8 @@ export interface InsertableEdgeData {
   onRemove?: (edgeId: string) => void;
   /** Select this connection (the name pill is a click target too). */
   onSelect?: (edgeId: string) => void;
+  /** A run opened on the canvas: the line it went along (green) or did not (faded). */
+  run?: 'taken' | 'untaken';
 }
 
 /** Colour family per branch kind: green yes/approved, red no/rejected/failed, amber timed out, grey otherwise. */
@@ -105,9 +107,12 @@ export const InsertableEdge = memo(
       return routeEdge({ x: sourceX, y: sourceY }, { x: targetX, y: targetY }, all);
     }, [obstacles, loopBack, target, sourceX, sourceY, targetX, targetY]);
 
+    const run = data?.run;
     const lineStyle = selected
       ? { ...style, stroke: 'var(--signal)', strokeWidth: 2.5 }
-      : { ...style, stroke: 'var(--steel-soft)', strokeWidth: 1.75, ...(loopBack ? { strokeDasharray: '6 4' } : {}) };
+      : run === 'taken'
+        ? { ...style, stroke: 'var(--good)', strokeWidth: 3, ...(loopBack ? { strokeDasharray: '6 4' } : {}) }
+        : { ...style, stroke: 'var(--steel-soft)', strokeWidth: 1.75, ...(run === 'untaken' ? { opacity: 0.4 } : {}), ...(loopBack ? { strokeDasharray: '6 4' } : {}) };
     const pill = data?.pill;
     // Router paths all leave one dot: their names go partway along each line so they never pile up.
     const scale = Math.max(counterScale(zoom), 1);
@@ -119,6 +124,7 @@ export const InsertableEdge = memo(
     return (
       <>
         <BaseEdge id={id} path={routed.path} style={lineStyle} markerEnd={markerEnd} interactionWidth={24} />
+        {run === 'taken' && <title>{'This run went this way'}</title>}
         {/* Wider, invisible hit area so the hover affordance is easy to reach. */}
         <path
           d={routed.path}
@@ -141,7 +147,9 @@ export const InsertableEdge = memo(
               className={cn(
                 'max-w-[220px] cursor-pointer whitespace-normal break-words rounded-full border px-2.5 py-0.5 text-center text-xs font-medium leading-tight shadow-sm',
                 PILL_TONE[data?.tone ?? 'neutral'],
+                run === 'untaken' && 'opacity-50',
               )}
+              data-run={run}
             >
               {pill}
             </div>

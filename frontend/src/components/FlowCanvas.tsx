@@ -25,9 +25,13 @@ import { FlowNodeRail, NODE_RAIL_ACTION_CATEGORY, NodeRailCategory } from './Flo
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
 import { DeleteStepDialog } from './flow/DeleteStepDialog';
 import { KeepSelectedVisible } from './flow/canvas/KeepSelectedVisible';
-import { FIT_VIEW_OPTIONS, FitViewAfterRemovalOrLayout, FlowControls, FlowMiniMap, KeepSelectedClearOfToolbar, keepCanvasUnscrolled } from './flow/canvas/canvasView';
+import { CANVAS_CLASS, FIT_VIEW_OPTIONS, FitViewAfterRemovalOrLayout, FlowControls, FlowMiniMap, KeepSelectedClearOfToolbar, keepCanvasUnscrolled } from './flow/canvas/canvasView';
 import { ZOOM_MAX, ZOOM_MIN } from '@/lib/flow-canvas/zoomLod';
 import { useRenderedGraph } from './flow/canvas/useRenderedGraph';
+import { useArrowNavigation } from './flow/canvas/useArrowNavigation';
+import { RunOverlayChip } from './flow/canvas/RunOverlayChip';
+import { useRunOverlay } from '../lib/flow-graph/runOverlay';
+import { useRunParam } from '../hooks/flow/useRunParam';
 import { FlowCanvasToolbar } from './flow/canvas/FlowCanvasToolbar';
 import { EdgeDeleteDialog } from './flow/canvas/EdgeDeleteDialog';
 import { glideNodes, useConvertedProcedure, useEdgeActions, useUndoShortcut } from './flow/canvas/useCanvasEffects';
@@ -76,6 +80,14 @@ export function FlowCanvas({
   // 1200px and narrower: Tidy layout and Convert to procedure live in the header's "..." menu. A phone has no editing tools at all.
   const { isCompact, isPhone } = useViewport();
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
+  // A run opened from history or a link (?run=<id>) is drawn on the canvas; the person can switch its colours off.
+  const [openRunId] = useRunParam();
+  const [runColoursOffFor, setRunColoursOffFor] = useState<string | null>(null);
+  const coloursOff = openRunId !== null && runColoursOffFor === openRunId;
+  const runOverlay = useRunOverlay(openRunId && !coloursOff ? openRunId : null);
+  const deleteRef = useRef(deleteNode);
+  deleteRef.current = deleteNode;
+  const onDeleteNode = useCallback((nodeId: string) => deleteRef.current(nodeId), []);
   // Delete / Backspace on a selected step asks first (the click-to-delete buttons already do).
   const [keyboardDeleteId, setKeyboardDeleteId] = useState<string | null>(null);
   // Same for a selected connection: the button on the line and the Delete key both ask first.
@@ -133,6 +145,7 @@ export function FlowCanvas({
   }, [activeFlow?.id, activeFlow?.version, activeFlow?.nodes.length, activeFlow?.edges.length, layoutRevision]); // Re-sync on ID/version change OR structural changes (add/delete)
 
   useUndoShortcut(undo, canUndo);
+  useArrowNavigation(nodes, edges);
 
   const convertedProcedure = useConvertedProcedure(activeFlow?.id, activeFlow?.version, saveState);
 
@@ -484,7 +497,7 @@ export function FlowCanvas({
   useEdgeActions(edges, handleAddNode, setEdgeDeleteId);
 
   // On-screen-only extras (Add step cards, the loop's return line, End subtitles) are never written back to the flow.
-  const { renderedNodes, renderedEdges } = useRenderedGraph({ canManage, nodes, edges, openEnds, selectedNodeId, selectedEdgeId, onSelectEdge: setSelectedEdge, onAddNode: handleAddNode, onRemoveEdge: setEdgeDeleteId });
+  const { renderedNodes, renderedEdges } = useRenderedGraph({ canManage, nodes, edges, openEnds, selectedNodeId, selectedEdgeId, onSelectEdge: setSelectedEdge, onAddNode: handleAddNode, onRemoveEdge: setEdgeDeleteId, overlay: runOverlay, onDeleteNode });
 
   if (!activeFlow) {
     return (
@@ -528,7 +541,7 @@ export function FlowCanvas({
         minZoom={ZOOM_MIN}
         maxZoom={ZOOM_MAX}
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
-        className="bg-background w-full h-full [&_.react-flow__handle]:transition-shadow [&_.react-flow__handle]:after:absolute [&_.react-flow__handle]:after:-inset-2 [&_.react-flow__handle]:after:content-[''] [&_.react-flow__handle:hover]:!bg-signal [&_.react-flow__handle:hover]:shadow-[0_0_0_4px_color-mix(in_srgb,var(--signal)_30%,transparent)]"
+        className={CANVAS_CLASS}
         onScroll={keepCanvasUnscrolled}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={2} color="color-mix(in srgb, var(--muted-foreground) 35%, transparent)" />
@@ -561,6 +574,11 @@ export function FlowCanvas({
             }}
           />
         </Panel>
+        {openRunId && (
+          <Panel position="top-left" className="m-2">
+            <RunOverlayChip hidden={coloursOff} onToggle={() => setRunColoursOffFor(coloursOff ? null : openRunId)} />
+          </Panel>
+        )}
         {!showLeftSidebar && (
           <Panel position="top-left" className="m-2">
             <Button
