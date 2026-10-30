@@ -34,7 +34,8 @@ import { useRunOverlay } from '../lib/flow-graph/runOverlay';
 import { useRunParam } from '../hooks/flow/useRunParam';
 import { FlowCanvasToolbar } from './flow/canvas/FlowCanvasToolbar';
 import { EdgeDeleteDialog } from './flow/canvas/EdgeDeleteDialog';
-import { glideNodes, useConvertedProcedure, useEdgeActions, useUndoShortcut } from './flow/canvas/useCanvasEffects';
+import { glideNodes, useConvertedProcedure, useEdgeActions } from './flow/canvas/useCanvasEffects';
+import { FlowShortcuts } from './flow/shortcuts/FlowShortcuts';
 import { connectionProblem } from '../lib/flow/flowEdit';
 import { useFlowContext } from '../contexts/FlowContext';
 import { RENDER_ONLY_EDGE_PREFIX, RENDER_ONLY_NODE_PREFIX, addActionStep, computeOpenEnds, connectSteps, connectionRoute } from '../lib/flow-graph/flowCanvasGraph';
@@ -46,6 +47,9 @@ import { ensureToolSchemasLoaded } from '../lib/flow/flowToolSchemas';
 import { triggerLabel } from '../lib/flow/flowLabels';
 import { FlowNodeData, TriggerConfig, ActionConfig, FlowEdgeRoute } from '../types/flow.types';
 import type { ActionOption } from '../types/modal.types';
+
+/** Shift-click (or Cmd/Ctrl-click) adds a step to the selection; Shift-drag on the background draws a selection box. */
+const MULTI_SELECT_KEYS = ['Shift', 'Meta', 'Control'];
 
 interface FlowCanvasProps {
   showLeftSidebar: boolean;
@@ -71,8 +75,6 @@ export function FlowCanvas({
     setSelectedEdge,
     deleteEdge,
     saveState,
-    undo,
-    canUndo,
     tidyLayout,
     layoutRevision,
   } = useFlowContext();
@@ -146,7 +148,6 @@ export function FlowCanvas({
     }
   }, [activeFlow?.id, activeFlow?.version, activeFlow?.nodes.length, activeFlow?.edges.length, layoutRevision]); // Re-sync on ID/version change OR structural changes (add/delete)
 
-  useUndoShortcut(undo, canUndo);
   useArrowNavigation(nodes, edges);
 
   const convertedProcedure = useConvertedProcedure(activeFlow?.id, activeFlow?.version, saveState);
@@ -536,6 +537,7 @@ export function FlowCanvas({
         nodeTypes={nodeTypesWithAddButton}
         edgeTypes={edgeTypesWithInsert}
         deleteKeyCode={null}
+        multiSelectionKeyCode={MULTI_SELECT_KEYS}
         nodesDraggable={canManage}
         nodesConnectable={canManage}
         elementsSelectable
@@ -552,6 +554,7 @@ export function FlowCanvas({
         <FlowMiniMap stepCount={nodes.length} />
         <KeepSelectedClearOfToolbar selectedNodeId={selectedNodeId} />
         <KeepSelectedVisible selectedNodeId={selectedNodeId} />
+        <FlowShortcuts />
         <FitViewAfterRemovalOrLayout flowId={activeFlow?.id} nodeCount={activeFlow?.nodes.length ?? 0} edgeCount={activeFlow?.edges.length ?? 0} layoutRevision={layoutRevision} />
         {canManage && !isPhone && !selectedNodeId && nodes.length <= 1 && <FirstRunGuide />}
         <Panel position="top-right" className="m-2">

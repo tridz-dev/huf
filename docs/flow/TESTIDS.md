@@ -62,7 +62,7 @@ The panel is `components/RightSidebar.tsx` + `components/flow/frame/*`. A step's
 | `flow-node-title-input` | The step name (editable in place; the only place the name is shown or typed). `flow-sidebar-title` no longer exists |
 | `flow-sidebar-kind` | Small grey kind under the name ("Trigger", "End", "If / else") |
 | `flow-step-info`, `flow-config-hint` | The (i) beside the kind and its popover with the longer explanation of the step |
-| `flow-step-menu`, `flow-step-menu-content`, `flow-step-duplicate`, `flow-step-disable`, `flow-sidebar-delete` | `...` menu: Duplicate, Disable / Turn on (linear action steps only), Delete (red). A disabled step has `data-disabled="true"` on its card |
+| `flow-step-menu`, `flow-step-menu-content`, `flow-step-duplicate`, `flow-step-copy`, `flow-step-disable`, `flow-sidebar-delete` | `...` menu: Duplicate (not on a trigger), Copy, Disable / Turn on (linear action steps only), Delete (red); Duplicate and Copy show their keyboard hint. A disabled step has `data-disabled="true"` on its card |
 | `flow-sidebar-close` | Close (panel variant only; the phone sheet has its own) |
 | `flow-status-strip` (`data-state` = `todo`/`ready`/`off`) | 36px strip: "2 things to finish >" (amber button; jumps to the first one and focuses it) or "Ready" |
 | `flow-sidebar-tabs`, `flow-sidebar-tab-setup`, `flow-sidebar-tab-test`, `flow-sidebar-tab-settings` | Tabs. Triggers: Setup + Test. End: no tabs (Setup only). `flow-sidebar-tab-<name>-dot` = something to finish in that tab (always Setup for required fields) |
@@ -332,3 +332,18 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `executions-tabs`, `executions-tab-runs` ("Agent runs"), `executions-tab-flow-runs` ("Flow runs"), `executions-tab-analytics`, `executions-tab-hint`, `page-frame-tabs`; `flow-run-exec-row-<runId>`, `flow-run-exec-title-<runId>`, `flow-run-exec-status-<runId>`, `flow-run-exec-outcome-<runId>` | Executions page |
 
 `useRunOverlay(runId)` (lib/flow-run/useRunOverlay.ts) returns `{ nodes: { [stepId]: { status: 'done'|'failed'|'waiting'|'stopped', summary } }, runStatus, currentNodeId, loading }` for the canvas.
+
+## Keyboard, undo and the Cmd+K palette (UX-19)
+| testid | What |
+|---|---|
+| `flow-history-buttons` (group), `flow-undo`, `flow-redo` | Undo / Redo in the header above 1200px (tooltip names the change: "Undo: edited ... (⌘Z)"); at 1200px and narrower the same ids are items of the `...` menu (`flow-header-more-menu`). Hidden on a phone |
+| `flow-palette-open`, `flow-shortcuts` | `...` menu items "Search and commands" and "Keyboard shortcuts" (not on a phone) |
+| `flow-palette` (dialog, `data-state`), `flow-palette-input`, `flow-palette-list`, `flow-palette-no-results` | Cmd/Ctrl+K palette |
+| `flow-palette-add` (group), `flow-palette-add-<actionId>` (e.g. `-email`, `-human.approval`) | "Add a step after ..." (behind the selected step, else at the end) |
+| `flow-palette-goto` (group), `flow-palette-goto-<nodeId>` | "Go to a step": selects it and opens its panel |
+| `flow-palette-actions` (group), `flow-palette-action-<id>` (`save`, `publish`, `run`, `tidy`, `undo`, `redo`, `duplicate`, `copy`, `paste`, `settings`, `runs`, `help`, `shortcuts`) | Editor actions |
+| `flow-palette-flows` (group: "Recent flows" with an empty search, "Open a flow" while typing), `flow-palette-flow-<flowId>` | Other flows |
+| `flow-live-region` (`role=status`, `aria-live=polite`) | Screen-reader announcements: "Step duplicated", "Undid: ...", "Redid: ...", "2 steps pasted" |
+| `shortcuts-dialog`, `shortcuts-group-flow-editor` | The `?` dialog; inside a flow its "Flow editor" group comes first (not listed on a phone) |
+
+Shortcuts (Cmd and Ctrl both work): K palette, S save, Enter run a test (again inside the Run box starts it), Z undo, Shift+Z / Y redo, D duplicate, C copy, V paste (also into another flow, via localStorage `huf.flow.clipboard.v1`), A select every step, Shift+click / Shift+drag select several steps. Text fields keep their own Z / C / V.

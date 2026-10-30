@@ -23,6 +23,10 @@ import { codePublishBlockedReason } from '@/lib/flow-graph/codeFlow';
 import { useCodeFlowStatus } from '@/lib/flow-graph/useCodeFlowStatus';
 import { useConvertedProcedure } from './flow/canvas/useCanvasEffects';
 import { usePhoneFlowView } from './flow/phone/usePhoneFlowView';
+import { UndoRedoButtons } from './flow/header/UndoRedoButtons';
+import { useFlowCommand } from './flow/shortcuts/flowCommands';
+import { withShortcut } from './flow/shortcuts/shortcutHints';
+import { toast } from '@/lib/toast';
 import { useRunParam } from '@/hooks/flow/useRunParam';
 import { useStepParam } from '@/hooks/flow/useStepParam';
 import { flowStatusKind, StatusPill } from './common/StatusPill';
@@ -70,6 +74,18 @@ export function FlowsHeaderActions() {
       navigate({ pathname: location.pathname, search: '' }, { replace: true });
     }
   };
+
+  // The keyboard shortcuts and the Cmd+K palette ask the header to do these (see flow/shortcuts/flowCommands).
+  const editorKeys = canManage && !isPhone;
+  useFlowCommand('save', () => (hasUnsavedChanges ? void header.handleSaveDraft() : toast('Everything is saved', { id: 'flow-save-toast', duration: 2000 })), editorKeys);
+  useFlowCommand('run', () => void header.handleRun(), editorKeys);
+  useFlowCommand('publish', () => {
+    if (isPublished) toast.info('This flow is already live');
+    else if (publishBlocked) toast.info('Publishing is off', { description: publishBlocked });
+    else void header.handlePublish();
+  }, editorKeys);
+  useFlowCommand('settings', () => setShowSettings(true), !isPhone);
+  useFlowCommand('runs', () => setShowHistory(true), !isPhone);
 
   const issues = useFlowIssues();
   // The status word changes with the count: hold it while a button is pressed (see useFrozenWhilePressed).
@@ -128,6 +144,8 @@ export function FlowsHeaderActions() {
 
       {isPhone && canManage && <FlowChecklist live={isPublished} separator={false} />}
 
+      {canManage && !isPhone && !isCompact && <UndoRedoButtons />}
+
       {!isCompact && <FlowHelpPopover />}
 
       {/* Save Draft Button: a label from 1200px up, an icon (with its name for screen readers) when narrow */}
@@ -139,7 +157,7 @@ export function FlowsHeaderActions() {
             className={hit}
             data-testid="flow-save"
             aria-label="Save"
-            title="Save your changes (Ctrl/Cmd+S)"
+            title={withShortcut('Save your changes', 'flow-save')}
             onClick={header.handleSaveDraft}
             disabled={!activeFlow || saveState === 'saving' || !hasUnsavedChanges}
           >
@@ -179,7 +197,7 @@ export function FlowsHeaderActions() {
           className={hit}
           data-testid="flow-run"
           aria-label={RUN_BUTTON_LABEL}
-          title="Run a test: starts the flow once with the input you choose. Nothing is sent unless you choose Run for real"
+          title={withShortcut('Run a test: starts the flow once with the input you choose. Nothing is sent unless you choose Run for real', 'flow-run')}
           onClick={header.handleRun}
           disabled={!activeFlow || !canManage}
         >

@@ -236,6 +236,8 @@ export function keepCanvasUnscrolled(event: UIEvent<HTMLDivElement>) {
  * canvas showed none selected, with no delete button on it and the keyboard focus lost.
  */
 export function withSelection<T extends Node>(nodes: T[], selectedNodeId: string | null): T[] {
+  // Several steps picked on purpose (shift-click, a selection box, select all) stay selected while the open step is one of them.
+  if (selectedNodeId && nodes.filter((n) => n.selected).length > 1 && nodes.some((n) => n.id === selectedNodeId && n.selected)) return nodes;
   return nodes.map((n) => ((n.selected ?? false) === (n.id === selectedNodeId) ? n : { ...n, selected: n.id === selectedNodeId }));
 }
 
