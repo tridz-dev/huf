@@ -54,6 +54,10 @@ class Base(IntegrationTestCase):
 		frappe.set_user("Administrator")
 		self._docs = []
 		self.flow_id = None
+		# The real counter lives in Redis and survives between test runs: only the rate-limit test uses it.
+		self._rate = patch.object(st, "check_rate")
+		self._rate.start()
+		self.addCleanup(self._rate.stop)
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
@@ -249,6 +253,7 @@ class TestAgentAndLimits(Base):
 
 	def test_the_twenty_first_test_in_a_minute_is_refused(self):
 		self._flow(_graph({"total": 1}))
+		self._rate.stop()
 		with patch("frappe.cache") as cache:
 			cache.return_value.incr.side_effect = list(range(1, 30))
 			for _ in range(20):
@@ -363,7 +368,7 @@ class TestTriggers(Base):
 		docs = api.list_recent_documents(self.flow_id, "t")["documents"]
 		self.assertEqual(len(docs), 5)
 		self.assertEqual(docs[0]["title"], "_ux16 html")
-		sample = api.get_document_sample(self.flow_id, "t", docs[0]["name"])["sample"]
+		sample = api.get_document_sample(self.flow_id, "t", docs[1]["name"])["sample"]
 		self.assertTrue(sample["description"].startswith("_ux16"))
 		self.assertNotIn("_trigger", sample)
 		self.assertEqual(api.test_step(self.flow_id, "t")["status"], "success")
