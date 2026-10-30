@@ -25,6 +25,9 @@ import { RunStatusBanner } from './flow/run/RunStatusBanner';
 import { RunWaitingCard } from './flow/run/RunWaitingCard';
 import { RunDetailsFold } from './flow/run/RunDetailsFold';
 import { RunInputBlocks } from './flow/run/RunInputBlocks';
+import { RunError } from './flow/run/RunError';
+import { plainRunError } from '@/lib/flow-run/story/runErrors';
+import { stoppedByPerson } from '@/lib/flow-run/story/runStatus';
 
 interface FlowRunViewerProps {
     runId: string | null;
@@ -194,6 +197,10 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
                             <h2 className="mt-2 text-lg font-semibold leading-snug text-ink" data-testid="flow-run-headline-text">{headline.headline}</h2>
                             {headline.sub && <p className="mt-0.5 text-sm text-steel" data-testid="flow-run-headline-sub">{headline.sub}</p>}
                         </div>
+
+                        {run.status === 'Failed' && run.last_error && !stoppedByPerson(run.last_error) && !story.steps.some((s) => s.status === 'failed' || s.children?.some((c) => c.status === 'failed')) && (
+                            <RunError reason={plainRunError(run.last_error)} canManage={canManage} />
+                        )}
 
                         <RunStatusBanner run={run} canManage={canManage} onStop={handleStop} onCancel={handleCancel} />
 

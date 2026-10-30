@@ -1,11 +1,8 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { CheckCircle2, ChevronDown, ChevronRight, Clock, Square, XCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { RunError } from './RunError';
 import { HumanValue } from '@/components/common/HumanValue';
 import { RunStepOutput } from '@/components/flow/RunStepOutput';
-import { connectPath, notConnectedService } from '@/lib/flow/flowIntegrations';
-import { notConnectedName } from '@/lib/flow-run/story/headline';
 import { redactSecrets } from '@/lib/flow/flowToolSummary';
 import type { StoryStep } from '@/lib/flow-run/story/runSteps';
 import { cn } from '@/lib/utils';
@@ -30,27 +27,6 @@ const ICONS = {
 } as const;
 
 const STATUS_WORD = { done: 'Done', failed: 'Failed', waiting: 'Waiting', stopped: 'Stopped' } as const;
-
-/** One failed step's single error: a plain message, and the way to fix it. */
-function StepError({ step, canManage, onOpenStep }: Pick<RunStepCardProps, 'step' | 'canManage' | 'onOpenStep'>) {
-  const service = canManage ? notConnectedService(step.reason) : undefined;
-  const name = notConnectedName(step.reason);
-  return (
-    <div className="mt-2 rounded-md border-l-2 border-destructive bg-destructive/5 px-3 py-2" data-testid="flow-run-error">
-      <p className="text-sm text-ink" data-testid={`flow-run-step-error-${step.id}`}>{step.reason}</p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Button type="button" size="sm" variant="outline" className="max-[1023px]:min-h-11" data-testid={`flow-run-fix-${step.id}`} onClick={() => onOpenStep(step.id)}>
-          {canManage ? 'Fix this step' : 'Open this step'}
-        </Button>
-        {service && (
-          <Button asChild size="sm" variant="outline" className="max-[1023px]:min-h-11">
-            <Link to={connectPath(service)} data-testid={`flow-run-step-connect-${step.id}`}>Connect {name ?? 'it'}</Link>
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function Iterations({ step }: { step: StoryStep }) {
   const [open, setOpen] = useState(false);
@@ -110,7 +86,7 @@ export function RunStepCard({ step, names, titleOf, toolIdOf, canManage, onOpenS
         {step.facts?.map((f) => (
           <p key={f.label} className="mt-0.5 text-sm text-steel"><span className="text-xs">{f.label}: </span>{f.value}</p>
         ))}
-        {failed && step.reason && <StepError step={step} canManage={canManage} onOpenStep={onOpenStep} />}
+        {failed && step.reason && <RunError reason={step.reason} stepId={step.id} canManage={canManage} onOpenStep={onOpenStep} />}
         {step.status === 'stopped' && step.reason && <p className="mt-1 text-sm text-steel" data-testid={`flow-run-stopped-${step.id}`}>{step.reason}</p>}
         {step.iterations && <Iterations step={step} />}
         {step.children && step.children.length > 0 && (

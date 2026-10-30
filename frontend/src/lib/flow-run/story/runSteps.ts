@@ -160,7 +160,7 @@ export function buildRunStory(run: FlowRunDetail, { titleOf }: BuildOptions): Ru
     if (step.type === 'foreach' && body) {
       step.children = body.filter((b) => ids.includes(b)).map(make);
       const results = isObj(outputs[id]) && Array.isArray((outputs[id] as { result?: unknown }).result) ? ((outputs[id] as { result: unknown[] }).result) : Array.isArray(outputs[id]) ? (outputs[id] as unknown[]) : [];
-      step.iterations = { count: results.length, results };
+      if (step.status === 'done') step.iterations = { count: results.length, results };
       step.hideOutput = true;
       if (step.children.some((c) => c.status === 'failed') && step.status === 'done') step.status = 'failed';
     }
