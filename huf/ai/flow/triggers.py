@@ -21,6 +21,8 @@ from datetime import datetime, timedelta, timezone
 
 import frappe
 
+from huf.ai.flow.catalog.links import LINK_KEY, linked_values
+
 WEBHOOK_TYPE = "trigger.webhook"
 SCHEDULE_TYPE = "trigger.schedule"
 DOC_EVENT_TYPE = "trigger.doc-event"
@@ -417,6 +419,9 @@ def build_doc_event_payload(doc, owner: str, event: str | None = None) -> dict:
 	"""
 	data = json.loads(frappe.as_json(doc.as_dict()))
 	payload = _filter_payload_row(data, doc.doctype, owner)
+	links = linked_values(doc, owner, _filter_payload_row)
+	if links:
+		payload[LINK_KEY] = links
 	payload["_trigger"] = {
 		"doctype": doc.doctype,
 		"docname": doc.name,

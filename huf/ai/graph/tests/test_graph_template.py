@@ -70,5 +70,32 @@ class TestResolve(unittest.TestCase):
 		self.assertEqual(GraphContext({}).resolve({"$template": 3, "vars": {}}), {"$template": 3, "vars": {}})
 
 
+class TestSummaryMarkers(unittest.TestCase):
+	"""The "Use data" picker asks for a wording of a list or object through the variable-name prefix (UX-9)."""
+
+	order = {"customer": "Ada Lovelace", "total": 450, "status": "paid"}
+
+	def test_table_prefix_writes_rows_one_per_line(self):
+		out = render_template("{table_order}", {"table_order": self.order})
+		self.assertEqual(out.splitlines(), ["Customer: Ada Lovelace", "Total: 450", "Status: paid"])
+		self.assertNotIn("{", out)
+
+	def test_joined_prefix_joins_items_with_commas(self):
+		self.assertEqual(render_template("Items: {joined_items}", {"joined_items": ["Tea", "Cake", "Jam"]}), "Items: Tea, Cake, Jam")
+		self.assertEqual(render_template("{joined_items}", {"joined_items": [{"name": "A"}, {"name": "B"}]}), "A, B")
+
+	def test_count_prefix_counts_items(self):
+		self.assertEqual(render_template("{count_items} items", {"count_items": [1, 2, 3]}), "3 items")
+
+	def test_prefix_on_a_plain_value_changes_nothing(self):
+		self.assertEqual(render_template("{count_orders}|{table_x}|{joined_y}", {"count_orders": 7, "table_x": "t", "joined_y": "j"}), "7|t|j")
+
+	def test_resolve_applies_markers_for_a_reference(self):
+		ctx = GraphContext({"trigger_x": 1})
+		ctx.record_output("n1", {"items": [{"name": "A"}, {"name": "B"}]})
+		value = {"$template": "Bought {joined_items} ({count_items})", "vars": {"joined_items": {"$from": "n1.items"}, "count_items": {"$from": "n1.items"}}}
+		self.assertEqual(ctx.resolve(value), "Bought A, B (2)")
+
+
 if __name__ == "__main__":
 	unittest.main()

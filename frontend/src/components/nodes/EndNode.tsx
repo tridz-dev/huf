@@ -2,20 +2,16 @@ import { memo } from 'react';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { FlowNodeData } from '../../types/flow.types';
-import { useFlowContext } from '../../contexts/FlowContext';
 import { cn } from '@/lib/utils';
-import { orphanNote } from '../../lib/flow-graph/flowCanvasGraph';
-import { cardStatus, END_SUBTITLE } from '../../lib/flow/flowNodeCard';
+import { END_SUBTITLE } from '../../lib/flow/flowNodeCard';
 import { cardIcon } from './nodeIcons';
 import { CardStatusLine, NodeCard } from './NodeCard';
 
 /** An end step: same card as every other step, marked "End" and outlined in green so it is never mistaken for a middle step. */
 export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) => {
-  const { deleteNode, activeFlow } = useFlowContext();
   const { canManage } = useFlowPermissions();
-  // Only a step with no line into it: one with a line from a cut-off part is not "nothing leads here".
-  const orphaned = activeFlow ? orphanNote(id, activeFlow.nodes, activeFlow.edges) === 'Nothing leads to this step' : false;
-  const status = cardStatus({ runStatus: data.status, incomplete: false, orphaned, notConnected: false });
+  const facts = data.canvas;
+  const status = facts?.status ?? { kind: 'ready' as const, text: 'Ready' };
   return (
     <div className="relative" data-testid={`flow-node-${id}`} data-node-type="end">
       <Handle
@@ -30,12 +26,14 @@ export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) =>
         iconClass="text-good"
         title={data.label}
         subtitle={END_SUBTITLE}
+        status={status}
+        runSummary={data.runSummary}
         frameClass={cn('border-good', selected && 'ring-2 ring-signal border-signal')}
         onDelete={
           canManage && selected
             ? (e) => {
                 e.stopPropagation();
-                deleteNode(id);
+                facts?.onDelete?.(id);
               }
             : undefined
         }

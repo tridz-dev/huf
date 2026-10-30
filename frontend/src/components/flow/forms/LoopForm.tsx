@@ -15,10 +15,10 @@ export function LoopForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps)
       <div>
         <div className="flex justify-between items-center mb-1">
           <Label htmlFor="loop-items" size="sm">List to loop over</Label>
-          <VariablePicker currentNodeId={nodeId} testId="flow-loop-items-picker" onSelect={(ref) => patch({ items: { $from: ref } })} />
+          <VariablePicker currentNodeId={nodeId} testId="flow-loop-items-picker" accept="list" onSelect={(ref) => patch({ items: { $from: ref } })} />
         </div>
         <Input id="loop-items" data-testid={f('items')} className="font-mono text-xs" value={itemsRef} onChange={(e) => patch({ items: { $from: e.target.value } })} placeholder="input.recipients" />
-        <FieldHint testId="flow-hint-loop-items">A list from the trigger or an earlier step, for example input.recipients. Use Insert data to pick it.</FieldHint>
+        <FieldHint testId="flow-hint-loop-items">A list from the trigger or an earlier step, for example input.recipients. Click + Use data to pick it.</FieldHint>
         <Err field="items" />
       </div>
       <div>
@@ -54,7 +54,7 @@ export function LoopForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps)
           <VariablePicker currentNodeId={nodeId} scope="loop-body" testId="flow-loop-collect-picker" onSelect={(ref) => patch({ collect: { $from: ref } })} />
         </div>
         <Input id="loop-collect" data-testid={f('collect')} className="font-mono text-xs" value={collectRef} onChange={(e) => patch({ collect: { $from: e.target.value } })} placeholder="node_1234.value" />
-        <FieldHint testId="flow-hint-loop-collect">After each item, this value is added to a list. When the loop is done, the next step receives that list. Pick a step inside the loop with Insert data.</FieldHint>
+        <FieldHint testId="flow-hint-loop-collect">After each item, this value is added to a list. When the loop is done, the next step receives that list. Pick a step inside the loop with Use data.</FieldHint>
         <Err field="collect" />
       </div>
       <BranchRows nodeId={nodeId} cfgType="foreach" cfg={cfg} />

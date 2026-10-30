@@ -87,13 +87,13 @@ export function PageFrame({
         )}
 
         {tabs && (
-          <div className={cn('shrink-0 flex items-center gap-4 px-6 pb-1', !filters && 'border-b border-line')} data-testid="page-frame-tabs">
+          <div className={cn('shrink-0 flex flex-wrap items-center gap-x-4 gap-y-1 px-6 pb-1', !filters && 'border-b border-line')} data-testid="page-frame-tabs">
             {tabs}
           </div>
         )}
 
         {filters && (
-          <div className="h-10 shrink-0 flex items-stretch border-b border-line px-6">
+          <div className="min-h-10 shrink-0 flex items-stretch border-b border-line px-6 max-sm:py-1">
             {filters}
           </div>
         )}

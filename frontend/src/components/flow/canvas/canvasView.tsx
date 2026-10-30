@@ -5,18 +5,21 @@ import type { ReactFlowInstance } from 'reactflow';
 import { Controls, MiniMap, useNodesInitialized, useReactFlow, useStore, useStoreApi, getNodesBounds } from 'reactflow';
 import { isInView, panToReveal } from '@/lib/flow/flowLayout';
 import { RENDER_ONLY_NODE_PREFIX } from '@/lib/flow-graph/flowCanvasGraph';
+import { motionMs } from '@/lib/flow-canvas/tween';
+import { TIDY_GLIDE_MS } from './useCanvasEffects';
+import { FIT_MIN_READABLE, READABLE_STEP_LIMIT, ZOOM_MIN } from '@/lib/flow-canvas/zoomLod';
 
-/** Fit-to-view never zooms in past 100% (a 3-step flow stays at normal size) nor out past 25%. */
-export const FIT_VIEW_OPTIONS = { padding: 0.3, maxZoom: 1, minZoom: 0.25 } as const;
+/** Fit-to-view never zooms in past 100% (a 3-step flow stays at normal size) nor out past the canvas minimum. */
+export const FIT_VIEW_OPTIONS = { padding: 0.3, maxZoom: 1, minZoom: ZOOM_MIN } as const;
 
 /** Flows of at most this many steps are never fitted smaller than FIT_MIN_ZOOM (the view then starts at the top and scrolls). */
-const READABLE_STEP_LIMIT = 15;
-const FIT_MIN_ZOOM = 0.75;
-/** Bigger flows are fitted whole but not smaller than this. */
-const FIT_MIN_ZOOM_LARGE = 0.4;
+const FIT_MIN_ZOOM = FIT_MIN_READABLE;
+/** Bigger flows are fitted whole (down to the canvas minimum): the cards switch to icons and titles, so nothing is unreadable. */
+const FIT_MIN_ZOOM_LARGE = ZOOM_MIN;
 /** Narrowest a flow is fitted to keep it from running off the sides. */
 const FIT_MIN_ZOOM_NARROW = 0.5;
-const FIT_MIN_ZOOM_NARROW_LARGE = 0.3;
+const NARROW_CANVAS = 560;
+const FIT_MIN_ZOOM_NARROW_LARGE = ZOOM_MIN;
 /** Room (px) above the flow for the buttons in the top-right corner, and at the sides and bottom. */
 export const FIT_TOP_INSET = 64;
 const FIT_SIDE_INSET = 40;
@@ -26,6 +29,20 @@ const FIT_BOTTOM_INSET = 24;
 const MINIMAP_MIN_STEPS = 8;
 /** Narrowest canvas (px) that still has room for the overview next to the toolbar buttons. */
 const MINIMAP_MIN_CANVAS_WIDTH = 640;
+
+/**
+ * Classes of the canvas itself: bigger hit areas and a glow on the connection dots, a clear focus ring on the step that has
+ * keyboard focus (on its card, not the invisible box around it), and the step under the pointer or focus drawn above its neighbours.
+ */
+const FOCUS_CARD = '[&_.react-flow__node:focus-visible_.flow-card]';
+export const CANVAS_CLASS = [
+  'bg-background w-full h-full',
+  "[&_.react-flow__handle]:transition-shadow [&_.react-flow__handle]:after:absolute [&_.react-flow__handle]:after:-inset-2 [&_.react-flow__handle]:after:content-['']",
+  '[&_.react-flow__handle:hover]:!bg-signal [&_.react-flow__handle:hover]:shadow-[0_0_0_4px_color-mix(in_srgb,var(--signal)_30%,transparent)]',
+  '[&_.react-flow__node:focus-visible]:outline-none',
+  `${FOCUS_CARD}:ring-2 ${FOCUS_CARD}:ring-signal ${FOCUS_CARD}:ring-offset-2 ${FOCUS_CARD}:ring-offset-background`,
+  '[&_.react-flow__node:hover]:!z-[1000] [&_.react-flow__node:focus-visible]:!z-[1000]',
+].join(' ');
 
 const MINIMAP_STYLE = {
   width: 200,
@@ -64,8 +81,14 @@ export function fitClearOfOverlays(rf: ReactFlowInstance, width: number, height:
     const fitW = availW / bounds.width;
     let zoom = Math.min(1, Math.max(minZoom, Math.min(fitW, availH / bounds.height)));
     // Never cut the flow off at the sides (a phone is narrower than two branches): only its length may scroll.
-    if (zoom > fitW) zoom = Math.max(fitW, steps <= READABLE_STEP_LIMIT ? FIT_MIN_ZOOM_NARROW : FIT_MIN_ZOOM_NARROW_LARGE);
-    const x = (width - bounds.width * zoom) / 2 - bounds.x * zoom;
+    // (Only a canvas too narrow for two branches: a wider one keeps the readable minimum and the rest is a pan away.)
+    if (zoom > fitW && width < NARROW_CANVAS) zoom = Math.max(fitW, steps <= READABLE_STEP_LIMIT ? FIT_MIN_ZOOM_NARROW : FIT_MIN_ZOOM_NARROW_LARGE);
+    let x = (width - bounds.width * zoom) / 2 - bounds.x * zoom;
+    // Wider than the canvas at the readable zoom: keep the main line (the trigger and what follows it) in the middle; the branches are a pan away.
+    if (bounds.width * zoom > availW) {
+      const anchor = nodes.find((n) => n.type === 'trigger') ?? nodes[0];
+      x = width / 2 - ((anchor.positionAbsolute?.x ?? anchor.position.x) + (anchor.width ?? 236) / 2) * zoom;
+    }
     const spare = availH - bounds.height * zoom;
     // Taller than the canvas at the smallest readable zoom: start at the top, the rest is a scroll away.
     const y = FIT_TOP_INSET + (spare > 0 ? Math.min(spare / 2, 24) : 0) - bounds.y * zoom;
@@ -79,7 +102,7 @@ export function fitClearOfOverlays(rf: ReactFlowInstance, width: number, height:
     });
   let vp = fit(0);
   if (hidden(vp)) vp = fit(covered.height + 16);
-  rf.setViewport(vp, { duration });
+  rf.setViewport(vp, { duration: motionMs(duration) });
 }
 
 /** Zoom buttons whose "fit view" also keeps the flow clear of the overview. */
@@ -88,6 +111,21 @@ export function FlowControls({ className }: { className?: string }) {
   const store = useStoreApi();
   return <Controls fitViewOptions={FIT_VIEW_OPTIONS} className={className} onFitView={() => { const { width, height } = store.getState(); fitClearOfOverlays(rf, width, height); }} />;
 }
+
+/** Colour of a step on the overview: its run result when a run is shown, else what kind of step it is. */
+const minimapColor = (node: Node): string => {
+  switch ((node.data as { status?: string } | undefined)?.status) {
+    case 'error': return 'var(--destructive)';
+    case 'success': return 'var(--good)';
+    case 'running': return 'var(--signal)';
+    case 'waiting': return 'var(--warning)';
+    case 'skipped': return 'var(--steel-soft)';
+    default: break;
+  }
+  if (node.type === 'trigger') return 'var(--primary)';
+  if (node.type === 'end') return 'var(--good)';
+  return 'var(--muted-foreground)';
+};
 
 /** Overview map: drag its rectangle or click anywhere on it to move the canvas there; scroll on it to zoom. */
 export function FlowMiniMap({ stepCount }: { stepCount: number }) {
@@ -101,12 +139,11 @@ export function FlowMiniMap({ stepCount }: { stepCount: number }) {
       ariaLabel="Flow overview"
       pannable
       zoomable
-      onClick={(_event, position) => setCenter(position.x, position.y, { zoom: getZoom() })}
-      nodeColor={(node) => {
-        if (node.type === 'trigger') return 'var(--primary)';
-        if (node.type === 'end') return 'var(--good)';
-        return 'var(--muted)';
-      }}
+      onClick={(_event, position) => setCenter(position.x, position.y, { zoom: getZoom(), duration: motionMs(250) })}
+      nodeColor={minimapColor}
+      nodeBorderRadius={4}
+      nodeStrokeWidth={0}
+      maskColor="color-mix(in srgb, var(--foreground) 8%, transparent)"
       className="!bg-background !border-border"
       data-testid="flow-minimap"
       // Sits to the right of the zoom controls (bottom-left), big enough to read, and can be dragged and zoomed.
@@ -162,19 +199,21 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
         const top = Math.min(...rects.map((r) => r.y));
         const bounds = { x: left, y: top, width: Math.max(...rects.map((r) => r.x + r.width)) - left, height: Math.max(...rects.map((r) => r.y + r.height)) - top };
         const next = panToReveal(bounds, getViewport(), { width, height }, undefined, coveredByOverlays(width, height, nodeCount >= MINIMAP_MIN_STEPS));
-        if (next) setViewport({ ...next, zoom: getViewport().zoom }, { duration: 200 });
+        if (next) setViewport({ ...next, zoom: getViewport().zoom }, { duration: motionMs(200) });
       }, 150);
       return () => clearTimeout(timer);
     }
     const removed = nodeCount < previous.nodeCount || edgeCount < previous.edgeCount;
     if (!removed && layoutRevision === previous.layoutRevision) return;
+    // Tidy layout (or its Undo) always re-fits, once the steps have glided to their places; a removal only when something is out of sight.
+    const relaid = layoutRevision !== previous.layoutRevision;
     const timer = setTimeout(() => {
       const nodes = getNodes();
       const { width, height } = store.getState();
-      if (nodes.length > 0 && width > 0 && isInView(getNodesBounds(nodes), getViewport(), { width, height })) return;
+      if (!relaid && nodes.length > 0 && width > 0 && isInView(getNodesBounds(nodes), getViewport(), { width, height })) return;
       const { width: w, height: h } = store.getState();
-      fitClearOfOverlays(rfRef.current, w, h, 200);
-    }, 60);
+      fitClearOfOverlays(rfRef.current, w, h, motionMs(260));
+    }, relaid ? motionMs(TIDY_GLIDE_MS) + 40 : 60);
     return () => clearTimeout(timer);
   }, [flowId, nodeCount, edgeCount, layoutRevision, getNodes, getViewport, setViewport, store]);
   return null;
@@ -215,7 +254,7 @@ export function KeepSelectedClearOfToolbar({ selectedNodeId }: { selectedNodeId:
       if (!node) return;
       const vp = rfRef.current.getViewport();
       const top = (node.positionAbsolute?.y ?? node.position.y) * vp.zoom + vp.y;
-      if (top < FIT_TOP_INSET - 8) rfRef.current.setViewport({ ...vp, y: vp.y + (FIT_TOP_INSET - top) }, { duration: 150 });
+      if (top < FIT_TOP_INSET - 8) rfRef.current.setViewport({ ...vp, y: vp.y + (FIT_TOP_INSET - top) }, { duration: motionMs(150) });
     }, 80);
     return () => clearTimeout(timer);
   }, [selectedNodeId]);

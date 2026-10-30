@@ -23,9 +23,9 @@ describe('flow help copy', () => {
   it('explains every data event', () => {
     for (const e of DOC_EVENTS) expect(DOC_EVENT_HELP[e]).toBeTruthy();
   });
-  it('mentions Insert data only for people who can edit', () => {
-    expect(conditionHelp(true)).toMatch(/Insert data/);
-    expect(conditionHelp(false)).not.toMatch(/Insert data/);
+  it('mentions Use data only for people who can edit', () => {
+    expect(conditionHelp(true)).toMatch(/Use data/);
+    expect(conditionHelp(false)).not.toMatch(/Use data/);
     expect(CONDITION_EXAMPLES.length).toBeGreaterThan(2);
   });
 });
