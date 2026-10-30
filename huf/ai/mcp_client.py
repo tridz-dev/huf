@@ -30,6 +30,7 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
+from huf.ai.flow.testrun.gate import agent_tool_gate
 from huf.ai.mcp_support.errors import (
     _extract_retry_after_seconds,
     _format_mcp_error,
@@ -329,8 +330,8 @@ def _create_mcp_function_tool(mcp_server, tool_def: dict, seen_names: set[str] |
                     ctx = None
                 
                 args_dict = json.loads(args_json or "{}")
-                
-                # Execute the tool on the MCP server
+                if (simulated := agent_tool_gate(original_tool_name, args_dict, ctx)) is not None:
+                    return simulated  # a test run never calls an MCP tool that could send or change something
                 result = await execute_mcp_tool(
                     server_name=server_name,
                     tool_name=original_tool_name,
@@ -380,7 +381,7 @@ async def execute_mcp_tool(
     Execute a tool call on an MCP server and return the result.
     
     This function handles the actual MCP protocol communication.
-    
+
     Args:
         server_name: Name of the MCP Server document
         tool_name: Name of the tool to execute
@@ -388,7 +389,6 @@ async def execute_mcp_tool(
         approved: Set only by a caller that already holds a human approval (a flow
             tool node marked ``approved``). Tools marked Requires Approval are
             refused unless this is true.
-    
     Returns:
         The result from the MCP tool execution
     """

@@ -21,7 +21,10 @@ from huf.ai.api_support import require_permission
 from huf.ai.flow.support.approval_card import build_card
 from huf.ai.flow.support.decision_rights import approval_decision_rights
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
+from huf.ai.flow.run_view.shape import RUN_LIST_FIELDS
 from huf.ai.flow.support.redact import definition_for_user
+from huf.ai.flow.testrun import normalize_mode, stored_mode
+from huf.ai.flow.testrun.effects import tool_effect
 
 
 # ---------------------------------------------------------------------------
@@ -322,6 +325,7 @@ def unpublish_flow(flow_id: str) -> dict:
 def run_flow(
 	flow_id: str,
 	payload: str | dict | None = None,
+	mode: str = "real",
 ) -> dict:
 	"""
 	Start a new flow run.
@@ -329,6 +333,7 @@ def run_flow(
 	Args:
 	    flow_id: Flow ID to run
 	    payload: Initial input (JSON string or dict)
+	    mode: ``"real"`` (default) or ``"test"``: a test run reads for real but sends and changes nothing
 
 	Returns:
 	    dict with flow_run_id, status, current_node_id
@@ -343,6 +348,10 @@ def run_flow(
 		except (json.JSONDecodeError, TypeError):
 			payload = {}
 	payload = payload or {}
+	try:
+		mode = normalize_mode(mode)
+	except ValueError as exc:
+		frappe.throw(_(str(exc)))
 
 	from huf.ai.flow.engine import create_flow_run, run_flow as engine_run_flow
 
@@ -350,6 +359,7 @@ def run_flow(
 		flow_id=flow_id,
 		payload=payload,
 		trigger_type="Manual",
+		mode=mode,
 	)
 
 	# Run synchronously for now; can be enqueued for background execution later
@@ -400,6 +410,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 		"flow_name": _flow_names([doc.flow_id]).get(doc.flow_id) or doc.flow_id,
 		"flow_version": doc.flow_version,
 		"mode": doc.mode,
+		"run_mode": doc.run_mode,
 		"status": doc.status,
 		"trigger_type": doc.trigger_type,
 		"current_node_id": doc.current_node_id,
@@ -465,21 +476,6 @@ def mark_flow_run_failed(flow_run_id: str) -> dict:
 	return {"flow_run_id": doc.name, "status": doc.status}
 
 
-_FLOW_RUN_LIST_FIELDS = [
-	"name",
-	"flow_id",
-	"flow_version",
-	"mode",
-	"status",
-	"current_node_id",
-	"hop_count",
-	"trigger_type",
-	"started_at",
-	"completed_at",
-	"modified",
-]
-
-
 def _shape_run_rows(rows: list) -> list:
 	names = _flow_names(r.flow_id for r in rows)
 	can_fail = _can_mark_failed()
@@ -494,7 +490,7 @@ def _shape_run_rows(rows: list) -> list:
 
 
 @frappe.whitelist()
-def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit: int = 20) -> list:
+def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit: int = 20, run_mode: str | None = None) -> list:
 	"""
 	List flow runs with optional filters.
 
@@ -502,6 +498,7 @@ def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit:
 	    flow_id: Filter by flow_id
 	    status: Filter by status
 	    limit: Max results (default 20)
+	    run_mode: ``"real"`` or ``"test"`` to list only those runs (default: both)
 
 	Returns:
 	    list of flow run summaries (times are UTC ISO strings)
@@ -515,11 +512,13 @@ def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit:
 		filters["flow_id"] = flow_id
 	if status:
 		filters["status"] = status
+	if run_mode:
+		filters["run_mode"] = stored_mode(run_mode)
 
 	runs = frappe.get_all(
 		"Flow Run",
 		filters=filters,
-		fields=_FLOW_RUN_LIST_FIELDS,
+		fields=RUN_LIST_FIELDS,
 		order_by="modified desc",
 		limit_page_length=limit,
 	)
@@ -578,7 +577,7 @@ def list_flow_runs_page(
 		"Flow Run",
 		filters=filters,
 		or_filters=or_filters,
-		fields=_FLOW_RUN_LIST_FIELDS,
+		fields=RUN_LIST_FIELDS,
 		order_by="started_at desc, creation desc",
 		limit_start=start,
 		limit_page_length=limit,
@@ -899,6 +898,7 @@ def list_flow_tools() -> list:
 	        "label": str,
 	        "description": str,
 	        "source": "builtin" | "mcp",
+	        "effect": "reads" | "changes" | "sends",   # what a test run does with it
 	        "mcp_server": str | None,
 	        "params_json_schema": dict,
 	    }
@@ -918,7 +918,7 @@ def list_flow_tools() -> list:
 	# any conversion code in the app and is treated as stale/unused here.
 	for row in frappe.get_all(
 		"Agent Tool Function",
-		fields=["name", "tool_name", "description", "params"],
+		fields=["name", "tool_name", "description", "params", "types"],
 		# Flow/Procedure runs have no Agent Execution Profile, so a Code Execution tool is
 		# refused on every call (PermissionAwareToolRegistry._allows_code_execution); don't offer it.
 		filters={"types": ["!=", "Code Execution"]},
@@ -935,6 +935,7 @@ def list_flow_tools() -> list:
 			"label": row.tool_name,
 			"description": row.description or "",
 			"source": "builtin",
+			"effect": tool_effect(row.tool_name, None, row.types),
 			"mcp_server": None,
 			"params_json_schema": params_json_schema if isinstance(params_json_schema, dict) else {},
 		})
@@ -973,6 +974,7 @@ def list_flow_tools() -> list:
 				"label": label,
 				"description": tool_row.description or "",
 				"source": "mcp",
+				"effect": "changes",
 				"mcp_server": server.name,
 				"params_json_schema": params_json_schema if isinstance(params_json_schema, dict) else {},
 			})

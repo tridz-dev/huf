@@ -218,8 +218,8 @@ class FlowService {
   }
 
   /** Run a flow via the backend */
-  async runFlow(flowId: string, payload?: Record<string, unknown>): Promise<{ flow_run_id: string; status: string }> {
-    return apiRunFlow(flowId, payload);
+  async runFlow(flowId: string, payload?: Record<string, unknown>, mode: 'test' | 'real' = 'real'): Promise<{ flow_run_id: string; status: string }> {
+    return apiRunFlow(flowId, payload, mode);
   }
 
   // ─── Flow Run API Wrappers ──────────────────────────────────────────

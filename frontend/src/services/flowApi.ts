@@ -120,6 +120,7 @@ export interface FlowRunSummary {
     flow_id: string;
     flow_version: number;
     mode: string;
+    run_mode?: 'Real' | 'Test';
     status: 'Queued' | 'Running' | 'Waiting Approval' | 'Waiting User' | 'Waiting Code' | 'Success' | 'Failed';
     current_node_id: string;
     hop_count: number;
@@ -141,6 +142,7 @@ export interface FlowRunDetail {
     flow_name: string;
     flow_version: number;
     mode: string;
+    run_mode?: 'Real' | 'Test';
     status: string;
     trigger_type: string;
     current_node_id: string;
@@ -320,14 +322,12 @@ export async function unpublishFlow(flowId: string): Promise<{ flow_id: string; 
 }
 
 /** Run a flow (start new execution) */
-export async function runFlow(
-    flowId: string,
-    payload?: Record<string, unknown>
-): Promise<{ flow_run_id: string; status: string; current_node_id: string }> {
+export async function runFlow(flowId: string, payload?: Record<string, unknown>, mode: 'test' | 'real' = 'real'): Promise<{ flow_run_id: string; status: string; current_node_id: string }> {
     try {
         const result = await call.post('huf.ai.flow.api.run_flow', {
             flow_id: flowId,
             payload: payload ? JSON.stringify(payload) : undefined,
+            mode,
         });
         return result.message as { flow_run_id: string; status: string; current_node_id: string };
     } catch (error) {
@@ -348,16 +348,13 @@ export async function getFlowRun(flowRunId: string): Promise<FlowRunDetail> {
 }
 
 /** List flow runs with optional filters */
-export async function listFlowRuns(
-    flowId?: string,
-    status?: string,
-    limit?: number
-): Promise<FlowRunSummary[]> {
+export async function listFlowRuns(flowId?: string, status?: string, limit?: number, runMode?: 'test' | 'real'): Promise<FlowRunSummary[]> {
     try {
         const result = await call.get('huf.ai.flow.api.list_flow_runs', {
             flow_id: flowId,
             status,
             limit: limit || 20,
+            run_mode: runMode,
         });
         return result.message as FlowRunSummary[];
     } catch (error) {

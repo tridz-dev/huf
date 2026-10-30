@@ -119,14 +119,21 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
                                     <div className="font-medium text-sm truncate pr-2" title={run.name}>
                                         {run.name}
                                     </div>
-                                    <Badge
-                                        variant={
-                                            run.status === 'Success' ? 'default' :
-                                                run.status === 'Failed' ? 'destructive' : 'secondary'
-                                        }
-                                    >
-                                        {flowRunStatusLabel(run.status)}
-                                    </Badge>
+                                    <div className="flex shrink-0 items-center gap-1.5">
+                                        {run.run_mode === 'Test' && (
+                                            <Badge variant="outline" className="text-muted-foreground" title="A test run: nothing was sent or changed" data-testid={`flow-run-test-chip-${run.name}`}>
+                                                Test
+                                            </Badge>
+                                        )}
+                                        <Badge
+                                            variant={
+                                                run.status === 'Success' ? 'default' :
+                                                    run.status === 'Failed' ? 'destructive' : 'secondary'
+                                            }
+                                        >
+                                            {flowRunStatusLabel(run.status)}
+                                        </Badge>
+                                    </div>
                                 </div>
                                 <div className="text-xs text-muted-foreground flex justify-between items-center">
                                     <span className="truncate max-w-[150px]">Trigger: {run.trigger_type}</span>
