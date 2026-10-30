@@ -537,6 +537,9 @@ export function FlowCanvas({
         nodeTypes={nodeTypesWithAddButton}
         edgeTypes={edgeTypesWithInsert}
         deleteKeyCode={null}
+        // Space is React Flow's "hold to pan" key by default; it listens on the whole page and blocks Space on every button,
+        // checkbox and switch beside the canvas (the step panel). Panning is done with the mouse, the wheel and the fit button.
+        panActivationKeyCode={null}
         multiSelectionKeyCode={MULTI_SELECT_KEYS}
         nodesDraggable={canManage}
         nodesConnectable={canManage}
