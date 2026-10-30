@@ -196,7 +196,10 @@ export function ExecutionsFlowRunsTab() {
                         {run.outcome && <OutcomeChip outcome={run.outcome} testId={`flow-run-exec-outcome-${run.name}`} />}
                       </div>
                     </TableCell>
-                    <TableCell className="font-body text-ui-text font-normal text-steel">{who.charAt(0).toUpperCase() + who.slice(1)}</TableCell>
+                    <TableCell className="font-body text-ui-text font-normal text-steel">
+                      <div>{who.charAt(0).toUpperCase() + who.slice(1)}</div>
+                      <div className="text-meta text-steel-soft" data-testid={`flow-run-exec-trigger-${run.name}`}>{run.trigger_type || ''}</div>
+                    </TableCell>
                     <TableCell className="text-right font-body text-ui-text tabular-nums text-steel">
                       {run.status === 'Success' || run.status === 'Failed' ? runDuration(run.started_at, run.completed_at) || '-' : '-'}
                     </TableCell>
