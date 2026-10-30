@@ -319,7 +319,20 @@ _NOT_CONNECTED = re.compile(r"^(?P<label>.+?) is not connected[:.]\s*(?:add .+ i
 _REJECTED = re.compile(r"^(?P<label>.+?) rejected the saved credentials", re.I)
 _NEEDS_SCOPE = re.compile(r"^(?P<label>.+?) needs the .+ permission", re.I)
 _SLACK_AUTH = re.compile(r"\b(invalid_auth|not_authed|token_revoked|token_expired|account_inactive|no_permission)\b")
+_NO_SAVED_PASSWORD = re.compile(r"Password not found for (?P<doctype>.+?) (?P<name>.+) (?P<field>[a-z_]+)$")
+_NOT_JSON = re.compile(r"is not JSON serializ?able", re.I)
 _PRIVATE_ADDRESS = re.compile(r"private/internal addresses are not allowed|private (or|and) internal address", re.I)
+
+
+# Raw Python messages that reach a flow through tools and code -> what it means for the person.
+_PYTHON_MESSAGES: list[tuple[re.Pattern, str]] = [
+	(re.compile(r"'NoneType' object (?:has no attribute|is not subscriptable|is not iterable)"), "A step used data that was empty. Check that the earlier step gives it a value."),
+	(re.compile(r"list index out of range"), "A step asked for an item past the end of a list. Check how many items there are first."),
+	(re.compile(r"object is not subscriptable|object is not iterable|object is not callable"), "A step was given data in a different shape than it expected. Check what the earlier step gives it."),
+	(re.compile(r"unsupported operand type\(s\)|can only concatenate|must be str, not|not supported between instances"), "A step mixed up kinds of values, such as text and numbers. Convert them first."),
+	(re.compile(r"unhashable type"), "A step was given a list or a record where it needs a single value."),
+	(re.compile(r"invalid literal for int|could not convert string to float"), "A step expected a number but got text. Check the value it is given."),
+]
 
 
 def plain_error(text: str | None) -> str:
@@ -337,6 +350,16 @@ def plain_error(text: str | None) -> str:
 	m = _REJECTED.match(text)
 	if m:
 		return f"{m.group('label')} did not accept the saved connection. Reconnect it in Integrations."
+	m = _NO_SAVED_PASSWORD.search(text)
+	if m:
+		if m.group("doctype").lower() == "ai provider":
+			return f"The AI provider {m.group('name')} has no key saved. Open AI Providers to add it."
+		return f"The {m.group('doctype').lower()} {m.group('name')} has no {m.group('field').replace('_', ' ')} saved. Add it in its settings."
+	if _NOT_JSON.search(text):
+		return "A value could not be stored because it is not plain text, a number, yes/no, a list or a record. Use one of those."
+	for pattern, sentence in _PYTHON_MESSAGES:
+		if pattern.search(text):
+			return sentence
 	m = _NEEDS_SCOPE.match(text)
 	if m:
 		return f"{m.group('label')} needs another permission. Reconnect it in Integrations and accept everything it asks for."

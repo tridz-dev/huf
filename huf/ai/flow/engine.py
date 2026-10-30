@@ -70,6 +70,7 @@ from huf.ai.flow.orchestrator import (
 )
 from huf.ai.flow.support.redact import pinned_json
 from huf.ai.flow.support.tool_result import normalize_tool_result
+from huf.ai.flow.support.plain.transform_text import plain_transform_error
 from huf.ai.flow.testrun import gate as test_gate, stored_mode
 from huf.ai.flow.support.turned_off import is_turned_off, turned_off_result
 from huf.ai.flow.tool_executor import execute as execute_tool
@@ -493,7 +494,7 @@ def create_flow_run(
 	try:
 		entry_node = select_entry_node(defn, trigger_type)
 	except ValueError as exc:
-		frappe.throw(_("This flow cannot be started. {0}").format(str(exc)))
+		frappe.throw(_("This flow cannot be started. {0}").format(plain_error(str(exc))))
 
 	from huf.ai.flow import code_node
 
@@ -1138,7 +1139,7 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 		return executor(flow_run, node, config, settings)
 	except TemplateError as exc:
 		# Authoring error in a {"$template": ...} value: fail this node (so on_error applies).
-		return {"status": "failed", "error": str(exc)}
+		return {"status": "failed", "error": plain_error(str(exc))}
 
 
 def _exec_trigger_webhook(flow_run, node: dict, config: dict, settings: dict) -> dict:
@@ -1763,7 +1764,9 @@ def _exec_transform(flow_run, node: dict, config: dict, settings: dict) -> dict:
 
 	if not result.ok:
 		err = result.error
-		return {"status": "failed", "error": plain_error(err.message) if err else "This step could not change the data it received. Check its settings."}
+		if not err:
+			return {"status": "failed", "error": "This step could not change the data it received. Check its settings."}
+		return {"status": "failed", "error": plain_transform_error(step_ref(node, True), err.code, err.message, err.op)}
 
 	return {"status": "success", "result": result.value, "output": result.value}
 

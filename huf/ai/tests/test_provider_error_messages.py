@@ -22,14 +22,15 @@ class TestProviderErrorMessages(unittest.TestCase):
 	def test_auth_401(self):
 		e = _raise(litellm.AuthenticationError("Incorrect API key sk-abcdefghijklmnopqrstuv", "openai", "gpt-x"))
 		self.assertEqual(e.kind, "auth")
-		self.assertIn("The OpenAI key was rejected", e.public_message)
+		self.assertIn("did not accept its key", e.public_message)
+		self.assertIn("openai", e.public_message.lower())
 		self.assertIn("AI Providers", e.public_message)
 		self.assertNotIn("sk-", e.public_message)
 
 	def test_auth_403(self):
 		e = _raise(litellm.PermissionDeniedError("forbidden", "openai", "gpt-x", response=_resp(403)))
 		self.assertEqual(e.kind, "auth")
-		self.assertIn("key was rejected", e.public_message)
+		self.assertIn("did not accept its key", e.public_message)
 
 	def test_rate_limit_429(self):
 		e = _raise(litellm.RateLimitError("Too many requests", "openai", "gpt-x"))
