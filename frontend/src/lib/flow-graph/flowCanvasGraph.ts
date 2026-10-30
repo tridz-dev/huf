@@ -233,6 +233,9 @@ export function addActionStep(
   // Edges that left the source on the same route move onto the new node (insertion mid-chain).
   const moving = edges.filter((e) => e.source === sourceId && edgeRoute(e) === sourceRoute);
   if (isEnd && moving.length > 0) return 'end-in-front';
+  // The new step takes the place of the step that was there (same column, same row); that one moves down a row below.
+  const displacedFirst = moving.length > 0 ? nodes.find((n) => n.id === moving[0].target) : undefined;
+  if (displacedFirst) newNode.position = { x: displacedFirst.position.x, y: displacedFirst.position.y };
   const rest = edges.filter((e) => !moving.includes(e));
   const firstHandle = branchHandlesFor((config as { type?: string }).type)[0];
   const movedRoute: FlowEdgeRoute =

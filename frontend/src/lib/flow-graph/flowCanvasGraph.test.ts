@@ -99,7 +99,7 @@ describe('adding a step on a path that already has one', () => {
     if (!out || out === 'end-in-front') throw new Error('expected a graph');
     const added = out.nodes[out.nodes.length - 1];
     const at = (id: string) => out.nodes.find((n) => n.id === id)!.position;
-    expect(added.position).toEqual({ x: -145, y: 150 + ROW_GAP });
+    expect(added.position).toEqual({ x: -145, y: 150 + ROW_GAP }); // exactly where the old step was
     expect(at('yes')).toEqual({ x: -145, y: 150 + 2 * ROW_GAP });
     expect(at('yes2')).toEqual({ x: -145, y: 150 + 3 * ROW_GAP });
     expect(at('no')).toEqual({ x: 145, y: 150 + ROW_GAP });
