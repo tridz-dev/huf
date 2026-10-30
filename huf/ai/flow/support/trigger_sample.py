@@ -67,4 +67,23 @@ def drop_samples(graph):
 	for node in (list(nodes.values()) if isinstance(nodes, dict) else nodes or []):
 		if isinstance(node, dict):
 			node.pop("_sample", None)
+			node.pop("_sample_at", None)
 	return stripped
+
+
+def cap_node_samples(graph) -> bool:
+	"""Shrink any ``_sample`` that is over the limit or holds a secret, in place. True when something changed.
+
+	Samples arrive from the editor, which already trims them; this is the server's own guarantee that no definition
+	stores more than 8 KB per step or a password someone pasted in.
+	"""
+	nodes = graph.get("nodes") if isinstance(graph, dict) else None
+	changed = False
+	for node in (list(nodes.values()) if isinstance(nodes, dict) else nodes or []):
+		if not isinstance(node, dict) or node.get("_sample") is None:
+			continue
+		safe = redact_sample(node["_sample"])
+		if safe != node["_sample"]:
+			node["_sample"] = safe
+			changed = True
+	return changed

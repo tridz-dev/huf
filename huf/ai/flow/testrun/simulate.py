@@ -105,3 +105,11 @@ def simulated_code(profile: Any) -> dict:
 		"truncated": False,
 	}
 
+
+
+def simulated_state(node_type: str, key: Any = None) -> dict:
+	"""What a skipped "Save data for later" / "Forget saved data" step hands to later steps."""
+	what = str(key).strip() if isinstance(key, str) and key.strip() and not key.strip().startswith("{") else ""
+	if node_type == "state.delete":
+		return {"simulated": True, "summary": f"Would forget the saved data \"{what}\"" if what else "Would forget saved data", "note": NOTE, "deleted": True}
+	return {"simulated": True, "summary": f"Would save data for later as \"{what}\"" if what else "Would save data for later", "note": NOTE, "stored": True}

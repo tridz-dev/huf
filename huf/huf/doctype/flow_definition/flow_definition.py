@@ -154,6 +154,11 @@ class FlowDefinition(Document):
 		if not result.ok:
 			frappe.throw(describe_errors(defn, result.errors), title=_("This flow cannot be saved yet"))
 
+		from huf.ai.flow.support.trigger_sample import cap_node_samples
+
+		if cap_node_samples(defn):  # a pinned sample never keeps a secret or more than 8 KB
+			self.definition_json = json.dumps(defn) if isinstance(self.definition_json, str) else defn
+
 		from huf.ai.flow.support.router_text import text_ref_warnings
 
 		warnings = text_ref_warnings(defn)

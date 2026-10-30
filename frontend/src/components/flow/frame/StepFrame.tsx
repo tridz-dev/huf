@@ -15,7 +15,7 @@ import { focusFieldIn } from './focusField';
 import { SettingsTab } from './SettingsTab';
 import { StatusStrip } from './StatusStrip';
 import { StepHeader } from './StepHeader';
-import { StepTestPlaceholder } from './TestTab';
+import { StepTestTab } from './TestTab';
 import { TriggerTypeRow } from './TriggerTypeRow';
 import { useFlowIssues } from '@/hooks/flow/useFlowIssues';
 
@@ -133,7 +133,7 @@ export function StepFrame({ node, onClose, onDelete }: { node: FlowNode; onClose
           </div>
           {tabs.includes('test') && (
             <div role="tabpanel" id={`${tabIds.test}-panel`} aria-labelledby={tabIds.test} hidden={tab !== 'test'} data-testid="flow-tab-test">
-              <StepTestPlaceholder nodeId={node.id} isTrigger={node.data.nodeType === 'trigger'} />
+              <StepTestTab key={node.id} node={node} active={tab === 'test'} onOpenSetup={() => setTab('setup')} />
             </div>
           )}
           {tabs.includes('settings') && (

@@ -148,7 +148,7 @@ def build_catalog(graph: dict, node_id: str, flow_id: str, run: dict | None) -> 
 		node = by_id.get(pid)
 		if not node or str(node.get("type", "")).startswith("trigger."):
 			continue
-		pinned = node.get("_sample") if isinstance(node.get("_sample"), dict) else None
+		pinned = node.get("_sample")  # a pinned test output: any JSON value (an agent's reply is text, a lookup a list)
 		output = outputs.get(pid)
 		sample = pinned if pinned is not None else output
 		fields = cat.infer_fields(redact_sample(sample), pid) if sample not in (None, "") else []
