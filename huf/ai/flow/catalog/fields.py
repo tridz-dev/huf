@@ -12,7 +12,7 @@ A *field* is ``{path, label, type, sample, list?, advanced_only?}``:
 * ``label`` is the plain name (``Customer > Name`` for something inside another thing).
 * ``type`` is ``text``, ``number``, ``yes_no``, ``date``, ``object`` or ``list``.
 * ``sample`` is the real value for a scalar and a short sentence for an object or a list (never JSON).
-* ``list`` (lists only) is ``{count, item_type, item_fields}``; item fields carry paths *relative to one item*.
+* ``list`` (lists only) is ``{count, item_type, item_texts, item_fields}``; item fields carry paths *relative to one item*.
 
 Samples are trimmed and have secrets hidden before they get here (``trigger_sample.redact_sample``); this module caps
 the depth, the number of fields and the size of what it returns again, so one odd payload cannot flood the picker.
@@ -83,6 +83,8 @@ def sample_for(value: Any, labels: Mapping[str, str] | None = None) -> Any:
 def _list_info(items: list, path: str, labels: Mapping[str, str] | None) -> dict:
 	first = next((i for i in items if i is not None), None)
 	info: dict = {"count": len(items), "item_type": value_type(first) if first is not None else "text", "item_fields": []}
+	texts = [sample_for(i, labels) for i in items[:5] if i is not None]
+	info["item_texts"] = [str(t) for t in texts if t is not None]
 	if isinstance(first, Mapping):
 		info["item_fields"] = _fields(first, "", 0, labels, [], MAX_ITEM_FIELDS, with_lists=False)
 	return info
