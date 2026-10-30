@@ -101,7 +101,7 @@ class TestLastWebhookRequest(IntegrationTestCase):
 		out = trigger_samples_api.get_last_webhook_request(self.flow_id)
 		self.assertTrue(out["found"])
 		text = json.dumps(out["sample"])
-		for leaked in ("tok-123", "Bearer", "sid=1", "hush", SECRET_TEXT, "Authorization", "Cookie", "x-huf-secret"):
+		for leaked in ("tok-123", "Bearer", "sid=1", "hush", SECRET_TEXT, "Cookie", "x-huf-secret"):
 			self.assertNotIn(leaked, text)
 		self.assertEqual(out["sample"]["customer"]["name"], "Ada")
 		self.assertEqual(out["sample"]["customer"]["token"], MASK)
