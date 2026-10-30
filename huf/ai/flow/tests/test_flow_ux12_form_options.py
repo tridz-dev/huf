@@ -66,7 +66,7 @@ class TestApproverCheckOnPublish(IntegrationTestCase):
 		return {
 			"schema_version": "1.0.0", "profile": "flow", "fingerprint": "0" * 64, "entry": "t",
 			"contract": {"input_schema": {"type": "object"}, "output_schema": {"type": "object"}, "applies_when": [],
-				"permission_envelope": {"read": [], "write": [], "http": [], "code": "none"}, "limits": limits},
+				"permission_envelope": {"read": [], "write": [], "http": "none", "code": "none"}, "limits": limits},
 			"nodes": [
 				{"id": "t", "type": "trigger.webhook", "config": {"method": "POST", "secret": "s" * 32}, "next": "ask"},
 				{
