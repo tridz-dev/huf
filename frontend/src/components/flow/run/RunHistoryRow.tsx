@@ -28,17 +28,17 @@ export function RunHistoryRow({ run, currentUser, onOpen, showFlow }: RunHistory
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="text-sm font-medium text-ink" data-testid={`flow-run-row-title-${run.name}`}>
+        <span className="text-sm font-medium text-ink" data-testid={`flow-run-hist-title-${run.name}`}>
           {showFlow ? run.flow_name : friendlyRunTitle({ runNumber: run.run_number })}
         </span>
-        <RunStatusPill status={run.status} stale={run.stale} testId={`flow-run-row-status-${run.name}`} />
+        <RunStatusPill status={run.status} stale={run.stale} testId={`flow-run-hist-status-${run.name}`} />
         {run.run_mode === 'Test' && <TestRunChip testId={`flow-run-test-chip-${run.name}`} />}
-        {run.outcome && <OutcomeChip outcome={run.outcome} testId={`flow-run-row-outcome-${run.name}`} />}
+        {run.outcome && <OutcomeChip outcome={run.outcome} testId={`flow-run-hist-outcome-${run.name}`} />}
       </div>
-      <div className="mt-1 text-xs text-steel" data-testid={`flow-run-row-started-${run.name}`} title={formatAbsoluteTime(run.started_at)}>
+      <div className="mt-1 text-xs text-steel" data-testid={`flow-run-hist-started-${run.name}`} title={formatAbsoluteTime(run.started_at)}>
         {showFlow && run.run_number ? `Run #${run.run_number} · ` : ''}{startedLine(who, run.started_at)}{took && run.status === 'Success' ? ` · ${took}` : ''}
       </div>
-      {run.input_hint && <div className="mt-0.5 truncate text-xs text-steel" data-testid={`flow-run-row-hint-${run.name}`} title={run.input_hint}>{run.input_hint}</div>}
+      {run.input_hint && <div className="mt-0.5 truncate text-xs text-steel" data-testid={`flow-run-hist-hint-${run.name}`} title={run.input_hint}>{run.input_hint}</div>}
     </div>
   );
 }

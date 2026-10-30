@@ -327,7 +327,7 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-run-stale`, `flow-run-stuck-for`, `flow-run-mark-failed` ("Stop run"), `flow-run-mark-failed-confirm`, `flow-run-queued`, `flow-run-cancel` | Stuck banner, queued note, stop/cancel actions |
 | `flow-run-details-fold` (`<details>`), `flow-run-details-toggle`, `flow-run-meta`, `flow-run-flow-name`, `flow-run-trigger`, `flow-run-started`, `flow-run-finished` (only when finished), `flow-run-duration`, `flow-run-step-count`, `flow-run-current-node`, `flow-run-id`, `flow-run-id-copy`, `flow-run-timezone-note` | "Details" fold (collapsed by default) |
 | `flow-run-back` | "Run history" link back to the list |
-| `flow-run-row-<runId>` (`data-run-status`), `flow-run-row-title-<runId>`, `flow-run-row-status-<runId>`, `flow-run-row-outcome-<runId>`, `flow-run-row-started-<runId>`, `flow-run-row-hint-<runId>` | Run history rows |
+| `flow-run-row-<runId>` (`data-run-status`), `flow-run-hist-title-<runId>`, `flow-run-hist-status-<runId>`, `flow-run-hist-outcome-<runId>`, `flow-run-hist-started-<runId>`, `flow-run-hist-hint-<runId>` | Run history rows |
 | `executions-tabs`, `executions-tab-runs` ("Agent runs"), `executions-tab-flow-runs` ("Flow runs"), `executions-tab-analytics`, `executions-tab-hint`, `page-frame-tabs`; `flow-run-exec-row-<runId>`, `flow-run-exec-title-<runId>`, `flow-run-exec-status-<runId>`, `flow-run-exec-outcome-<runId>` | Executions page |
 
 `useRunOverlay(runId)` (lib/flow-run/useRunOverlay.ts) returns `{ nodes: { [stepId]: { status: 'done'|'failed'|'waiting'|'stopped', summary } }, runStatus, currentNodeId, loading }` for the canvas.
