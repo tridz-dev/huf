@@ -20,6 +20,8 @@ interface PageFrameProps {
    * 92px total page-chrome budget, so keep it to a single dense row.
    */
   filters?: ReactNode;
+  /** Tabs of a page that hosts several lists (Executions): a row directly under the title, above the filters. */
+  tabs?: ReactNode;
   children: ReactNode;
   className?: string;
   scrollRef?: RefObject<HTMLDivElement>;
@@ -41,6 +43,7 @@ export function PageFrame({
   meta,
   actions,
   filters,
+  tabs,
   children,
   className,
   scrollRef,
@@ -80,6 +83,12 @@ export function PageFrame({
               )}
             </div>
             {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+          </div>
+        )}
+
+        {tabs && (
+          <div className={cn('shrink-0 flex items-center gap-4 px-6 pb-1', !filters && 'border-b border-line')} data-testid="page-frame-tabs">
+            {tabs}
           </div>
         )}
 

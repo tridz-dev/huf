@@ -3,40 +3,27 @@ import { Activity, Loader2 } from 'lucide-react';
 import { PageFrame } from '@/layouts/PageFrame';
 import { FilterBar, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
-import { StatusDot, type StatusDotVariant } from '@/components/dashboard/ledger/LedgerSection';
+import { RunStatusPill, OutcomeChip } from '@/components/flow/run/RunStatusBits';
+import { ExecutionsTabsBar } from './ExecutionsTabsBar';
+import { RUN_STATUS_FILTERS, isFinishedStatus } from '@/lib/flow-run/story/runStatus';
+import { friendlyRunTitle, startedByWords } from '@/lib/flow-run/humanize';
+import { friendlyClock, runDuration } from '@/lib/flow-run/story/time';
+import { useUser } from '@/contexts/UserContext';
 import { useSearchParams } from 'react-router-dom';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { listFlowRunsPage, type FlowRunSummary } from '@/services/flowApi';
-import { formatTimeAgo, calculateDuration } from '@/utils/time';
+import { formatTimeAgo } from '@/utils/time';
 import { formatAbsoluteTime, useSiteTimezone } from '@/lib/serverTime';
-import { flowRunStatusLabel } from '@/lib/flow-run/flowRunFormat';
 import { useRunParam } from '@/hooks/flow/useRunParam';
 import { FlowRunViewer } from '@/components/FlowRunViewer';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DEFAULT_RANGE, TIME_RANGE_MS, TIME_RANGE_OPTIONS } from './executionsRange';
 
-const FLOW_RUN_STATUS_OPTIONS = [
-  { label: 'All status', value: 'all' },
-  { label: 'Queued', value: 'Queued' },
-  { label: 'Running', value: 'Running' },
-  { label: 'Waiting Approval', value: 'Waiting Approval' },
-  { label: 'Waiting User', value: 'Waiting User' },
-  { label: 'Waiting for code', value: 'Waiting Code' },
-  { label: 'Success', value: 'Success' },
-  { label: 'Failed', value: 'Failed' },
-];
-
-function getFlowRunStatusDot(status?: string): { variant: StatusDotVariant; label: string } {
-  if (status === 'Success') return { variant: 'ok', label: status };
-  if (status === 'Failed') return { variant: 'fail', label: status };
-  if (status === 'Queued') return { variant: 'idle', label: status };
-  return { variant: 'run', label: flowRunStatusLabel(status) || 'Running' };
-}
-
 /** The "Flow runs" tab: every Flow Run, newest first; a row opens the same Run details sheet as the flow canvas. */
 export function ExecutionsFlowRunsTab() {
   useSiteTimezone();
+  const { user } = useUser();
   const [searchParams, setSearchParams] = useSearchParams();
   const [openRunId, setOpenRunId] = useRunParam();
 
@@ -62,7 +49,7 @@ export function ExecutionsFlowRunsTab() {
     });
 
   // Runs still in flight change on their own (and approvals expire elsewhere): refresh the first page quietly.
-  const hasActive = items.some((r) => !['Success', 'Failed'].includes(r.status));
+  const hasActive = items.some((r) => !isFinishedStatus(r.status));
   const [refreshTick, setRefreshTick] = useState(0);
   useEffect(() => {
     if (!hasActive) return;
@@ -72,7 +59,7 @@ export function ExecutionsFlowRunsTab() {
   const [liveRows, setLiveRows] = useState<Record<string, FlowRunSummary>>({});
   useEffect(() => {
     if (refreshTick === 0) return;
-    const wanted = items.filter((r) => !['Success', 'Failed'].includes(r.status)).map((r) => r.name);
+    const wanted = items.filter((r) => !isFinishedStatus(r.status)).map((r) => r.name);
     if (wanted.length === 0) return;
     listFlowRunsPage({ limit: 50 }).then((page) => {
       setLiveRows((prev) => {
@@ -118,9 +105,10 @@ export function ExecutionsFlowRunsTab() {
     <PageFrame
       title="Executions"
       badge={<ExperimentalBadge />}
+      tabs={<ExecutionsTabsBar active="flow-runs" />}
       filters={
         <FilterBar
-          searchPlaceholder="Search flow runs by flow name or run id"
+          searchPlaceholder="Search by flow name"
           searchValue={search}
           onSearchChange={(value) => {
             setSearch(value);
@@ -130,7 +118,7 @@ export function ExecutionsFlowRunsTab() {
             {
               label: 'Status',
               value: filters.status || 'all',
-              options: FLOW_RUN_STATUS_OPTIONS,
+              options: RUN_STATUS_FILTERS,
               onChange: (value) => {
                 setFilter('status', value);
                 updateParams({ status: value });
@@ -179,40 +167,41 @@ export function ExecutionsFlowRunsTab() {
             <TableHeader>
               <TableRow>
                 <TableHead className={headClass}>Flow</TableHead>
-                <TableHead className={headClass}>Status</TableHead>
-                <TableHead className={headClass}>Trigger</TableHead>
-                <TableHead className={cn(headClass, 'text-right')}>Duration</TableHead>
+                <TableHead className={headClass}>Result</TableHead>
+                <TableHead className={headClass}>Started by</TableHead>
+                <TableHead className={cn(headClass, 'text-right')}>Took</TableHead>
                 <TableHead className={cn(headClass, 'text-right')}>Started</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((run) => {
-                const { variant, label } = getFlowRunStatusDot(run.status);
+                const who = startedByWords({ triggerType: run.trigger_type, owner: run.started_by, ownerName: run.started_by_name, currentUser: user?.name });
                 return (
                   <TableRow
                     key={run.name}
                     data-testid={`flow-run-exec-row-${run.name}`}
                     data-run-status={run.status}
-                    className="h-11 cursor-pointer hover:bg-paper-deep"
+                    className="min-h-11 cursor-pointer hover:bg-paper-deep"
                     onClick={() => setOpenRunId(run.name)}
                   >
                     <TableCell>
                       <div className="font-body text-ui-text text-ink">{run.flow_name}</div>
-                      <div className="font-mono text-meta text-steel-soft">{run.name}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <StatusDot variant={variant} />
-                        <span className="font-body text-ui-text font-normal text-steel">{label}</span>
-                        {run.stale && <span className="font-body text-meta text-warning">Looks stuck</span>}
+                      <div className="font-body text-meta text-steel-soft" data-testid={`flow-run-exec-title-${run.name}`}>
+                        {friendlyRunTitle({ runNumber: run.run_number })}{run.input_hint ? ` · ${run.input_hint}` : ''}
                       </div>
                     </TableCell>
-                    <TableCell className="font-body text-ui-text font-normal text-steel">{run.trigger_type || 'Not available'}</TableCell>
-                    <TableCell className="text-right font-mono text-xs tabular-nums text-steel">
-                      {calculateDuration(run.started_at, run.completed_at)}
+                    <TableCell>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <RunStatusPill status={run.status} stale={run.stale} testId={`flow-run-exec-status-${run.name}`} />
+                        {run.outcome && <OutcomeChip outcome={run.outcome} testId={`flow-run-exec-outcome-${run.name}`} />}
+                      </div>
                     </TableCell>
-                    <TableCell className="text-right font-mono text-xs tabular-nums text-steel" title={formatTimeAgo(run.started_at)}>
-                      {formatAbsoluteTime(run.started_at)}
+                    <TableCell className="font-body text-ui-text font-normal text-steel">{who.charAt(0).toUpperCase() + who.slice(1)}</TableCell>
+                    <TableCell className="text-right font-body text-ui-text tabular-nums text-steel">
+                      {run.status === 'Success' || run.status === 'Failed' ? runDuration(run.started_at, run.completed_at) || '-' : '-'}
+                    </TableCell>
+                    <TableCell className="text-right font-body text-ui-text tabular-nums text-steel" title={`${formatAbsoluteTime(run.started_at)} (${formatTimeAgo(run.started_at)})`}>
+                      {friendlyClock(run.started_at)}
                     </TableCell>
                   </TableRow>
                 );

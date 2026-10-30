@@ -9,6 +9,7 @@ import { FlowsListHeaderActions } from '../components/FlowsListHeaderActions';
 import { Button } from '../components/ui/button';
 import { toast } from '@/lib/toast';
 import { reportFlowRun } from '@/lib/flow-run/flowRunToast';
+import type { RunMode } from '@/lib/flow-run/flowRunPayload';
 import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
 import { FLOW_GUIDE_URL } from '@/lib/flow/flowHelp';
 import { runFlow } from '../services/flowApi';
@@ -145,10 +146,10 @@ function FlowListPage() {
     setCategory('all');
   };
 
-  const handleRun = async (payload: Record<string, unknown>) => {
+  const handleRun = async (payload: Record<string, unknown>, mode: RunMode) => {
     if (!runTarget) return;
     try {
-      reportFlowRun(await runFlow(runTarget.id, payload));
+      reportFlowRun(await runFlow(runTarget.id, payload, mode), mode);
       refresh();
     } catch (err) {
       toast.error('Could not run the flow', { description: humanizeFlowError(err) });

@@ -23,7 +23,7 @@ export const SHORTCUTS: ShortcutDescriptor[] = [
   // ── Flow editor ──────────────────────────────────────────────────────
   { id: 'flow-palette', binding: { key: 'k', mod: true }, description: 'Search steps, flows and actions', scope: 'Flow editor' },
   { id: 'flow-save', binding: { key: 's', mod: true }, description: 'Save the flow', scope: 'Flow editor' },
-  { id: 'flow-run', binding: { key: 'Enter', mod: true }, description: 'Run the flow', scope: 'Flow editor' },
+  { id: 'flow-run', binding: { key: 'Enter', mod: true }, description: 'Run a test of the flow (press again in the box to start it)', scope: 'Flow editor' },
   { id: 'flow-undo', binding: { key: 'z', mod: true }, description: 'Undo', scope: 'Flow editor' },
   { id: 'flow-redo', binding: { key: 'z', mod: true, shift: true }, description: 'Redo', scope: 'Flow editor' },
   { id: 'flow-redo-alt', binding: { key: 'y', mod: true }, description: 'Redo (another way)', scope: 'Flow editor' },

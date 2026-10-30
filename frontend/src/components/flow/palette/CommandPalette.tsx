@@ -20,6 +20,7 @@ import { useFlowStepActions } from '../shortcuts/useFlowStepActions';
 import { StatusPill, flowStatusKind } from '@/components/common/StatusPill';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
+import { RUN_BUTTON_LABEL } from '@/lib/flow-run/flowRunPayload';
 import { paletteFilter } from './paletteFilter';
 
 interface CommandPaletteProps {
@@ -147,7 +148,7 @@ export function FlowCommandPalette({ open, onOpenChange, getSelectedIds, onOpenH
                 <PaletteAction id="save" icon={Save} label="Save" shortcut="flow-save" hint={hasUnsavedChanges ? undefined : 'Nothing new to save'} onSelect={run(() => runFlowCommand('save'))} className={row} />
               )}
               {canManage && !isLive && <PaletteAction id="publish" icon={Upload} label="Publish" onSelect={run(() => runFlowCommand('publish'))} className={row} />}
-              {canManage && <PaletteAction id="run" icon={Play} label="Run the flow" shortcut="flow-run" onSelect={run(() => runFlowCommand('run'))} className={row} />}
+              {canManage && <PaletteAction id="run" icon={Play} label={RUN_BUTTON_LABEL} hint="Starts the flow once with sample input" shortcut="flow-run" onSelect={run(() => runFlowCommand('run'))} className={row} />}
               {canManage && nodes.length > 1 && <PaletteAction id="tidy" icon={LayoutTemplate} label="Tidy layout" hint="Line the steps up neatly" onSelect={run(tidyLayout)} className={row} />}
               {canManage && canUndo && <PaletteAction id="undo" icon={Undo2} label="Undo" hint={undoLabel} shortcut="flow-undo" onSelect={run(undo)} className={row} />}
               {canManage && canRedo && <PaletteAction id="redo" icon={Redo2} label="Redo" hint={redoLabel} shortcut="flow-redo" onSelect={run(redo)} className={row} />}
