@@ -70,12 +70,10 @@ def _size(value: Any) -> int:
 def redact_output(value: Any, max_bytes: int = MAX_OUTPUT_BYTES) -> tuple[Any, bool]:
 	"""``(safe copy, was_shortened)``: secrets hidden, long text and big lists shortened, at most ``max_bytes`` as JSON."""
 	value = json.loads(json.dumps(value, default=str)) if value is not None else None
-	shortened = False
 	for max_text, max_list in ((4000, 100), (1000, 40), (300, 15), (120, 5)):
 		safe = _shrink(value, 0, max_text, max_list)
 		if _size(safe) <= max_bytes:
 			return safe, safe != value
-		shortened = True
 	return {"note": "The result is too large to show."}, True
 
 

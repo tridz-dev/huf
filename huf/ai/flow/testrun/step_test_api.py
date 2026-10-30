@@ -49,7 +49,7 @@ def get_step_test_info(flow_id: str, node_id: str) -> dict:
 @frappe.whitelist(methods=["POST"])
 def test_step(flow_id: str, node_id: str, sample_input=None) -> dict:
 	"""Run ONE step against sample data and return what it did. Nothing is sent or changed outside the flow."""
-	graph, node = _editor_node(flow_id, node_id)
+	_, node = _editor_node(flow_id, node_id)
 	st.check_rate()
 	if str(node.get("type", "")).startswith("trigger."):
 		return _test_trigger(flow_id, node, sample_input)
