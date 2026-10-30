@@ -261,33 +261,113 @@ class TestAgentAndLimits(Base):
 			with self.assertRaises(frappe.ValidationError):
 				api.test_step(self.flow_id, "cond")
 
-	def test_a_slow_step_runs_in_a_job_and_the_answer_comes_back(self):
-		self._flow(_graph({"x": 1}, [{"id": "ai", "type": "agent.run", "config": {"agent": "Some Agent", "prompt": "Say hi"}, "next": "end"}]))
+	def _slow_flow(self):
+		return self._flow(_graph({"x": 1}, [{"id": "ai", "type": "agent.run", "config": {"agent": "Some Agent", "prompt": "Say hi"}, "next": "end"}]))
+
+	def test_a_slow_step_returns_a_token_at_once_and_the_answer_is_polled(self):
+		"""Security round 2 (DECISIONS 13): the request never waits for the queue."""
+		self._slow_flow()
 		fake = {"success": True, "response": "Hi there", "agent_run_id": None}
-
-		def worker(method, **kw):  # the queue picks the job up at once
-			self.assertEqual((method, kw["queue"], kw["timeout"]), ("huf.ai.flow.testrun.step_test.run_job", "short", 30))
-			st.run_job(kw["token"], kw["flow_id"], kw["node_id"], kw["sample_input"], kw["deadline"])
-
 		frappe.flags.in_test = False
 		try:
-			with patch("frappe.enqueue", side_effect=worker) as enq, patch("huf.ai.agent.integration.run_agent_sync", return_value=fake):
-				out = api.test_step(self.flow_id, "ai")
+			with patch("frappe.enqueue") as enq, patch("time.sleep") as nap:
+				first = api.test_step(self.flow_id, "ai")
+				nap.assert_not_called()
+			kw = enq.call_args.kwargs
+			self.assertEqual((enq.call_args.args[0], kw["queue"], kw["timeout"]), ("huf.ai.flow.testrun.step_test.run_job", "short", 30))
+			self.assertEqual(first["status"], "running")
+			self.assertRegex(first["token"], r"^[0-9a-f]{32}$")
+			self.assertEqual(first["poll_after_ms"], 1000)
+			# nothing yet: still running
+			self.assertEqual(api.get_step_test_result(first["token"])["status"], "running")
+			with patch("huf.ai.agent.integration.run_agent_sync", return_value=fake):
+				st.run_job(kw["token"], kw["flow_id"], kw["node_id"], kw["sample_input"], kw["deadline"])
+			out = api.get_step_test_result(first["token"])
+			again = api.get_step_test_result(first["token"])  # kept for 5 minutes, not consumed
 		finally:
 			frappe.flags.in_test = True
-		enq.assert_called_once()
-		self.assertEqual((out["status"], out["output"]), ("success", "Hi there"))
+		self.assertEqual((out["status"], out["output"], out["calls_ai"]), ("success", "Hi there", True))
+		self.assertEqual(again["output"], "Hi there")
 
-	def test_a_busy_queue_is_said_plainly_not_as_a_timeout(self):
-		self._flow(_graph({"x": 1}, [{"id": "ai", "type": "agent.run", "config": {"agent": "Some Agent", "prompt": "Say hi"}, "next": "end"}]))
+	def test_the_result_is_kept_five_minutes_and_redacted(self):
+		self._slow_flow()
+		fake = {"success": True, "response": {"api_key": "abc", "note": "ok"}, "agent_run_id": None}
 		frappe.flags.in_test = False
 		try:
-			with patch("frappe.enqueue"), patch.object(st, "START_WAIT_S", 0.2):
-				out = api.test_step(self.flow_id, "ai")
+			with patch("frappe.enqueue") as enq:
+				first = api.test_step(self.flow_id, "ai")
+			kw = enq.call_args.kwargs
+			with patch("huf.ai.agent.integration.run_agent_sync", return_value=fake):
+				st.run_job(kw["token"], kw["flow_id"], kw["node_id"], kw["sample_input"], kw["deadline"])
+			out = api.get_step_test_result(first["token"])
+		finally:
+			frappe.flags.in_test = True
+		self.assertEqual(st.RESULT_TTL_S, 300)
+		self.assertEqual(out["output"]["api_key"], MASK)
+
+	def test_a_busy_queue_is_said_plainly_not_as_a_timeout(self):
+		self._slow_flow()
+		frappe.flags.in_test = False
+		try:
+			with patch("frappe.enqueue"):
+				first = api.test_step(self.flow_id, "ai")
+			with patch.object(st, "START_WAIT_S", -1):
+				out = api.get_step_test_result(first["token"])
 		finally:
 			frappe.flags.in_test = True
 		self.assertEqual(out["status"], "failed")
 		self.assertIn("background worker is busy", out["error"])
+
+	def test_polling_belongs_to_the_person_who_started_the_test(self):
+		self._slow_flow()
+		other = make_user("uiv-ux25-other@example.com", roles=["System Manager"])
+		self._docs.append(("User", other.name))
+		frappe.flags.in_test = False
+		try:
+			with patch("frappe.enqueue"):
+				first = api.test_step(self.flow_id, "ai")
+			frappe.set_user(other.name)
+			with self.assertRaises(frappe.PermissionError):
+				api.get_step_test_result(first["token"])
+		finally:
+			frappe.flags.in_test = True
+			frappe.set_user("Administrator")
+
+	def test_polling_needs_edit_permission_on_the_flow_and_ignores_bad_tokens(self):
+		self._slow_flow()
+		frappe.flags.in_test = False
+		try:
+			with patch("frappe.enqueue"):
+				first = api.test_step(self.flow_id, "ai")
+			with patch("frappe.has_permission", return_value=False):
+				with self.assertRaises(frappe.PermissionError):
+					api.get_step_test_result(first["token"])
+		finally:
+			frappe.flags.in_test = True
+		with self.assertRaises(frappe.DoesNotExistError):
+			api.get_step_test_result("../etc/passwd")
+		unknown = api.get_step_test_result("0" * 32)
+		self.assertEqual(unknown["status"], "failed")
+		self.assertIn("no longer available", unknown["error"])
+
+	def test_a_step_past_the_time_limit_says_so(self):
+		self._slow_flow()
+		frappe.flags.in_test = False
+		try:
+			with patch("frappe.enqueue"):
+				first = api.test_step(self.flow_id, "ai")
+			with patch("time.time", return_value=__import__("time").time() + 100):
+				out = api.get_step_test_result(first["token"])
+		finally:
+			frappe.flags.in_test = True
+		self.assertEqual(out["status"], "failed")
+		self.assertIn("longer than 30 seconds", out["error"])
+
+	def test_a_quick_step_still_answers_in_the_request(self):
+		self._flow(_graph({"total": 500}))
+		out = api.test_step(self.flow_id, "cond")
+		self.assertEqual(out["status"], "success")
+		self.assertNotIn("token", out)
 
 	def test_a_bad_sample_is_a_plain_failure(self):
 		self._flow(_graph({"total": 1}))

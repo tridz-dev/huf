@@ -42,6 +42,14 @@ describe('RunFlowDialog', () => {
     await waitFor(() => expect(onRun).toHaveBeenCalledWith({ name: 'Ada Lovelace', amount: 120 }, 'test'));
   });
 
+  it('says code steps with network access are skipped in a test run', async () => {
+    getFlowDefinition.mockResolvedValue(definition([webhook]));
+    open();
+    await waitFor(() => expect(screen.getByTestId('flow-run-start')).not.toBeDisabled());
+    expect(screen.getByTestId('flow-run-mode-test-card')).toHaveTextContent('Code steps with network access are skipped in a test run.');
+    expect(screen.getByTestId('flow-run-mode-real-card')).not.toHaveTextContent('skipped in a test run');
+  });
+
   it('switches to a real run with a plain warning and a matching button', async () => {
     getFlowDefinition.mockResolvedValue(definition([webhook]));
     const onRun = open();
@@ -79,6 +87,8 @@ describe('RunFlowDialog', () => {
   it('offers plain JSON when the flow does not declare its fields, and blocks Run on invalid JSON', async () => {
     getFlowDefinition.mockResolvedValue(definition([{ id: 't', type: 'trigger.schedule', config: {} }]));
     open();
+    expect(screen.queryByTestId('flow-json-run-payload-input')).toBeNull(); // raw JSON is not shown until asked for
+    fireEvent.click(await screen.findByTestId('flow-run-advanced'));
     const box = await screen.findByTestId('flow-json-run-payload-input');
     expect(screen.queryByTestId('flow-run-use-last')).toBeNull();
     fireEvent.change(box, { target: { value: '{"a": ' } });
@@ -91,6 +101,7 @@ describe('RunFlowDialog', () => {
   it('says so when the text is valid JSON but not an object', async () => {
     getFlowDefinition.mockResolvedValue(definition([{ id: 't', type: 'trigger.schedule', config: {} }]));
     open();
+    fireEvent.click(await screen.findByTestId('flow-run-advanced'));
     const box = await screen.findByTestId('flow-json-run-payload-input');
     fireEvent.change(box, { target: { value: '[1, 2]' } });
     expect(screen.getByTestId('flow-run-payload-error')).toHaveTextContent('JSON object');

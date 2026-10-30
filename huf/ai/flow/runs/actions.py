@@ -8,18 +8,18 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
+from huf.ai.flow.runs.access import require_run_access
+
 
 @frappe.whitelist(methods=["POST"])
 def cancel_flow_run(flow_run_id: str) -> dict:
-	"""Stop a run that is still queued (it never started). Needs permission to edit flows.
+	"""Stop a run that is still queued (it never started). Needs permission to edit THE FLOW this run belongs to.
 
 	The run is recorded as stopped by the person who cancelled it. A run that a worker already picked up, or
 	that finished meanwhile, is left alone with a plain message.
 	"""
-	if not frappe.has_permission("Flow Definition", "write"):
-		frappe.throw(_("Only people who can edit flows can cancel a run."), frappe.PermissionError)
-	if not frappe.db.exists("Flow Run", flow_run_id):
-		frappe.throw(_("Run not found"), frappe.DoesNotExistError)
+	# Edit rights on this run's own flow (not "can edit some flow"), and write on the run itself.
+	require_run_access(flow_run_id, "write", "write", _("Only people who can edit this flow can cancel its runs."))
 
 	from huf.ai.flow import engine
 

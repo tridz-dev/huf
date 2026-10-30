@@ -22,10 +22,16 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 const api = vi.hoisted(() => ({
   getStepTestInfo: vi.fn(),
   testStep: vi.fn(),
+  getStepTestResult: vi.fn(),
+  isStepTestPending: (value: { status: string }) => value.status === 'running',
   listRecentDocuments: vi.fn(),
   getDocumentSample: vi.fn(),
 }));
 vi.mock('@/services/flow/stepTestApi', () => api);
+vi.mock('@/lib/flow-test/pollStepTest', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/flow-test/pollStepTest')>();
+  return { ...actual, pollStepTest: (first: never, options: object) => actual.pollStepTest(first, { ...(options as Parameters<typeof actual.pollStepTest>[1]), intervalMs: 5, maxMs: 120 }) };
+});
 const trig = vi.hoisted(() => ({ getLastWebhookRequest: vi.fn() }));
 vi.mock('@/services/flow/triggerApi', () => trig);
 
@@ -80,6 +86,39 @@ describe('Test tab: a step', () => {
     expect(screen.getByTestId('flow-step-test-status').textContent).toContain('Succeeded');
     expect(screen.getByTestId('flow-step-test-duration').textContent).toContain('120 ms');
     expect(screen.getByTestId('flow-step-test-output-raw-toggle')).toBeTruthy();
+  });
+
+  it('waits for a slow step in the background: a token first, then the answer', async () => {
+    await open();
+    api.testStep.mockResolvedValue({ status: 'running', token: 't'.repeat(32), poll_after_ms: 1000, wait_up_to_s: 35 });
+    api.getStepTestResult
+      .mockResolvedValueOnce({ status: 'running', token: 't'.repeat(32), poll_after_ms: 1000, wait_up_to_s: 35 })
+      .mockResolvedValue(result({ output: 'Hello from the agent' }));
+    fireEvent.click(screen.getByTestId('flow-step-test-run'));
+    await screen.findByTestId('flow-step-test-result');
+    expect(api.getStepTestResult).toHaveBeenCalledWith('t'.repeat(32));
+    expect(api.getStepTestResult.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('says the background worker is busy when no answer ever comes', async () => {
+    await open();
+    api.testStep.mockResolvedValue({ status: 'running', token: 'u'.repeat(32), poll_after_ms: 1000, wait_up_to_s: 35 });
+    api.getStepTestResult.mockResolvedValue({ status: 'running', token: 'u'.repeat(32), poll_after_ms: 1000, wait_up_to_s: 35 });
+    fireEvent.click(screen.getByTestId('flow-step-test-run'));
+    await waitFor(() => expect(document.body.textContent).toContain('The background worker is busy: try again'));
+  });
+
+  it('stops asking when the person leaves the step', async () => {
+    const view2 = await open();
+    api.testStep.mockResolvedValue({ status: 'running', token: 'v'.repeat(32), poll_after_ms: 1000, wait_up_to_s: 35 });
+    api.getStepTestResult.mockResolvedValue({ status: 'running', token: 'v'.repeat(32), poll_after_ms: 1000, wait_up_to_s: 35 });
+    fireEvent.click(screen.getByTestId('flow-step-test-run'));
+    await waitFor(() => expect(api.getStepTestResult).toHaveBeenCalled());
+    view2?.unmount?.();
+    cleanup();
+    const calls = api.getStepTestResult.mock.calls.length;
+    await new Promise((r) => setTimeout(r, 60));
+    expect(api.getStepTestResult.mock.calls.length - calls).toBeLessThanOrEqual(1);
   });
 
   it('names the button "Test (simulated)" for a step that sends and says nothing is sent', async () => {

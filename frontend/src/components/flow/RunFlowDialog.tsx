@@ -39,7 +39,7 @@ const MODES: Array<{ value: RunMode; title: string; text: string }> = [
   {
     value: 'test',
     title: 'Test run (nothing is sent)',
-    text: 'Looks things up for real. Emails, messages and changes to your records are skipped, and each one shows what it would have done.',
+    text: 'Looks things up for real. Emails, messages and changes to your records are skipped, and each one shows what it would have done. Code steps with network access are skipped in a test run.',
   },
   {
     value: 'real',
@@ -70,11 +70,13 @@ export function RunFlowDialog({ open, flowId, flowName, onOpenChange, onRun }: R
   const [values, setValues] = useState<RunFormValues>({});
   const [note, setNote] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   useEffect(() => {
     if (!open || !flowId) return;
     let cancelled = false;
     setMode('test');
+    setAdvancedOpen(false);
     setNote(null);
     setLoading(true);
     const remembered = parsePayload(readLastPayload(flowId)).value;
@@ -261,14 +263,26 @@ export function RunFlowDialog({ open, flowId, flowName, onOpenChange, onRun }: R
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading the details this flow expects…
               </div>
             ) : (
-              <JsonArea
-                surfaceKey="run-payload"
-                title={hasForm ? 'Details' : 'Input data (JSON)'}
-                help={hasForm ? 'Fill in the boxes. If you work with JSON, choose Edit as JSON to type the same details as text; changing one changes the other.' : jsonHelp}
-                value={text}
-                onChange={editJson}
-                formView={hasForm ? formView : undefined}
-              />
+              hasForm || advancedOpen || hasData(parsed.value ?? {}) || !!error ? (
+                <JsonArea
+                  surfaceKey="run-payload"
+                  title={hasForm ? 'Details' : 'Input data (JSON)'}
+                  help={hasForm ? 'Fill in the boxes. If you work with JSON, choose Edit as JSON to type the same details as text; changing one changes the other.' : jsonHelp}
+                  value={text}
+                  onChange={editJson}
+                  formView={hasForm ? formView : undefined}
+                />
+              ) : (
+                // A flow that does not say what it expects has no boxes to fill in: raw JSON stays behind an "Advanced" link.
+                <button
+                  type="button"
+                  className="w-fit text-left text-xs font-medium text-primary underline"
+                  onClick={() => setAdvancedOpen(true)}
+                  data-testid="flow-run-advanced"
+                >
+                  Advanced: give the flow some details as JSON
+                </button>
+              )
             )}
             {/* Text that is valid JSON but not an object ([1, 2], 5): the JSON area has nothing to say about it. */}
             {error && !describeJsonProblem(text) && (

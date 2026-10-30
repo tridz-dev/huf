@@ -2,6 +2,9 @@
 
 * ``get_step_test_info(flow_id, node_id)``: how the step behaves when tested and the sample data it would receive.
 * ``test_step(flow_id, node_id, sample_input=None)``: run it. See :mod:`huf.ai.flow.testrun.step_test` for the rules.
+  A slow step (AI, web reads, loops) returns ``{"status": "running", "token": ...}`` at once.
+* ``get_step_test_result(token)``: the answer for such a token (same result shape, or ``running`` again). Only the person
+  who started the test, and only while they can still edit the flow; the answer is kept 5 minutes.
 * ``list_recent_documents`` / ``get_document_sample``: a data trigger's "Pick a recent document".
 
 Testing never creates a Flow Run, so nothing shows up in the run history. Result shape: FIELD_CONTRACT.md section 12.
@@ -9,6 +12,7 @@ Testing never creates a Flow Run, so nothing shows up in the run history. Result
 
 from __future__ import annotations
 
+import json
 import time
 from datetime import datetime, timezone
 
@@ -54,6 +58,23 @@ def test_step(flow_id: str, node_id: str, sample_input=None) -> dict:
 	if str(node.get("type", "")).startswith("trigger."):
 		return _test_trigger(flow_id, node, sample_input)
 	return st.run_with_limit(flow_id, node_id, sample_input)
+
+
+@frappe.whitelist()
+def get_step_test_result(token: str) -> dict:
+	"""Poll a slow step test. Same permission as ``test_step`` plus: it must be the test of the person asking."""
+	import re
+
+	if not isinstance(token, str) or not re.fullmatch(r"[0-9a-f]{32}", token):
+		frappe.throw(_("This test is no longer available. Run it again."), frappe.DoesNotExistError)
+	raw = st._cache_text(frappe.cache().get(st.result_key(token) + ":meta"))
+	meta = json.loads(raw) if raw else None
+	if not meta:
+		return st.poll_result(token)  # expired or never existed: a plain failure, nothing about anyone else's test
+	if meta.get("user") != frappe.session.user:
+		frappe.throw(_("This test belongs to someone else."), frappe.PermissionError)
+	_editor_node(meta["flow_id"], meta["node_id"])
+	return st.poll_result(token)
 
 
 # --------------------------------------------------------------------------- triggers

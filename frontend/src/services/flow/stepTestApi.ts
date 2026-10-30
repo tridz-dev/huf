@@ -64,6 +64,16 @@ export interface StepTestResult {
   warnings: string[];
 }
 
+/** A slow step (AI, web reads, loops) answers at once with a token; the page then asks `getStepTestResult` once a second. */
+export interface StepTestPending {
+  status: 'running';
+  token: string;
+  poll_after_ms: number;
+  wait_up_to_s: number;
+}
+
+export const isStepTestPending = (value: StepTestResult | StepTestPending): value is StepTestPending => value.status === 'running';
+
 export interface RecentDocument {
   name: string;
   title: string;
@@ -79,10 +89,19 @@ export async function getStepTestInfo(flowId: string, nodeId: string): Promise<S
   }
 }
 
-export async function testStep(flowId: string, nodeId: string, sampleInput?: StepSampleInput | Record<string, unknown>): Promise<StepTestResult> {
+export async function testStep(flowId: string, nodeId: string, sampleInput?: StepSampleInput | Record<string, unknown>): Promise<StepTestResult | StepTestPending> {
   try {
     const result = await call.post(`${NS}.test_step`, { flow_id: flowId, node_id: nodeId, ...(sampleInput ? { sample_input: sampleInput } : {}) });
-    return result.message as StepTestResult;
+    return result.message as StepTestResult | StepTestPending;
+  } catch (error) {
+    handleFrappeError(error, 'The test could not run');
+  }
+}
+
+export async function getStepTestResult(token: string): Promise<StepTestResult | StepTestPending> {
+  try {
+    const result = await call.post(`${NS}.get_step_test_result`, { token });
+    return result.message as StepTestResult | StepTestPending;
   } catch (error) {
     handleFrappeError(error, 'The test could not run');
   }

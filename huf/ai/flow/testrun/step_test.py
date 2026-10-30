@@ -9,7 +9,8 @@ Rules, in one place:
 * No Flow Run is created, so nothing shows up in a flow's run history. The step runs against :class:`StepTestRun`,
   a stand-in that keeps whatever the executors want to store on a run in memory.
 * The step may take 30 seconds at most. Steps that can be slow (AI, web reads, loops) run in a background job that the
-  queue stops at 30 seconds; quick steps run in the request.
+  queue stops at 30 seconds; the request returns a token at once and the page polls ``get_step_test_result``. Quick
+  steps run in the request.
 * The output is shown with secrets hidden and at most 64 KB.
 """
 
@@ -38,6 +39,8 @@ SLOW_TYPES = ("agent.run", "router.llm", "foreach", "tool.call")
 RESULT_TTL_S = 300
 #: How long a request waits for the background worker to pick the job up before it says so.
 START_WAIT_S = 10
+#: How often the page asks for the answer of a queued test.
+POLL_AFTER_MS = 1000
 
 
 class StepTestRun:
@@ -116,6 +119,10 @@ def describe_step(node: dict) -> dict:
 	effect, simulated = READS, False
 	if ntype == "tool.call" and config.get("tool_id"):
 		effect = gate.effect_for_call(config["tool_id"], _literal_args(config.get("input")))
+		if effect == READS and decided_by_data(config["tool_id"], config.get("input")):
+			# The action (or HTTP method) is filled in from other data, so it is not known until the step runs.
+			# Say "changes" (simulated) in the preview rather than promise a harmless read.
+			effect = CHANGES
 		simulated = effect != READS
 	elif ntype in ("doc.create", "state.set", "state.delete"):
 		effect, simulated = CHANGES, True
@@ -129,6 +136,23 @@ def describe_step(node: dict) -> dict:
 		"approval": ntype == "human.approval",
 		"trigger": ntype.startswith("trigger."),
 	}
+
+
+def _is_literal(value: Any) -> bool:
+	"""True for a value typed in by the author; False for a reference or text with {placeholders} in it."""
+	if isinstance(value, dict):
+		return not ("$from" in value or "$template" in value)
+	if isinstance(value, str):
+		return "{" not in value and "$from" not in value
+	return True
+
+
+def decided_by_data(tool_id: str, value: Any) -> bool:
+	"""True when the setting that decides what a call does (``action``, or an HTTP ``method``) is filled in from other data."""
+	if not isinstance(value, dict):
+		return False
+	keys = ("action", "method") if tool_id == "http_request" else ("action",)
+	return any(key in value and not _is_literal(value[key]) for key in keys)
 
 
 def _literal_args(value: Any) -> dict:
@@ -317,8 +341,18 @@ def needs_job(node: dict) -> bool:
 	return True
 
 
+def _cache_text(raw) -> str | None:
+	if raw is None:
+		return None
+	return raw.decode() if isinstance(raw, (bytes, bytearray)) else str(raw)
+
+
 def run_with_limit(flow_id: str, node_id: str, sample_input: Any) -> dict:
-	"""Quick steps run here; slow ones run in a background job and are stopped after STEP_TIMEOUT_S."""
+	"""Quick steps run here and answer at once. A slow step is queued and the request returns a token straight away.
+
+	Nothing in the request waits for the queue (an earlier version sleep-polled for up to 35 seconds inside the HTTP
+	request and starved the web workers). The page asks ``get_step_test_result(token)`` once a second instead.
+	"""
 	node = find_node(load_graph(flow_id), node_id)
 	inline = frappe.flags.in_test or frappe.flags.get("huf_step_test_inline") or not needs_job(node)
 	if inline:
@@ -326,8 +360,10 @@ def run_with_limit(flow_id: str, node_id: str, sample_input: Any) -> dict:
 	import uuid
 
 	token = uuid.uuid4().hex
-	started = time.monotonic()
-	deadline = time.time() + STEP_TIMEOUT_S + 5
+	now = time.time()
+	deadline = now + STEP_TIMEOUT_S + 5
+	meta = {"user": frappe.session.user, "flow_id": flow_id, "node_id": node_id, "enqueued_at": now, "deadline": deadline}
+	frappe.cache().set(result_key(token) + ":meta", json.dumps(meta), ex=RESULT_TTL_S)
 	frappe.enqueue(
 		"huf.ai.flow.testrun.step_test.run_job",
 		queue="short",
@@ -339,14 +375,30 @@ def run_with_limit(flow_id: str, node_id: str, sample_input: Any) -> dict:
 		sample_input=sample_input,
 		deadline=deadline,
 	)
-	meta = _meta(describe_step(node), {}, node)
-	begin = time.time()
-	while time.time() < deadline:
-		raw = frappe.cache().get(result_key(token))
-		if raw:
-			frappe.cache().delete(result_key(token))
-			return json.loads(raw if isinstance(raw, str) else raw.decode())
-		if time.time() - begin > START_WAIT_S and not frappe.cache().get(result_key(token) + ":started"):
-			return _failure(node, "The test could not start because the background worker is busy. Try again in a moment.", started, **meta)
-		time.sleep(0.3)
-	return _failure(node, f"This step took longer than {STEP_TIMEOUT_S} seconds, so the test was stopped.", started, **meta)
+	return {**_pending(token), **_meta(describe_step(node), {}, node)}
+
+
+def _pending(token: str) -> dict:
+	return {"status": "running", "token": token, "poll_after_ms": POLL_AFTER_MS, "wait_up_to_s": STEP_TIMEOUT_S + 5}
+
+
+def poll_result(token: str) -> dict:
+	"""The answer for ``token`` if it is ready, ``{"status": "running"}`` while it is not, a plain failure if it never will be.
+
+	Only the person who started the test may read it (the caller has already checked they may still edit the flow).
+	"""
+	started = time.monotonic()
+	raw = _cache_text(frappe.cache().get(result_key(token)))
+	if raw:
+		return json.loads(raw)
+	meta_raw = _cache_text(frappe.cache().get(result_key(token) + ":meta"))
+	if not meta_raw:
+		return _failure({}, "This test is no longer available. Run it again.", started)
+	meta = json.loads(meta_raw)
+	node = {"id": meta["node_id"]}
+	now = time.time()
+	if now > meta["deadline"]:
+		return _failure(node, f"This step took longer than {STEP_TIMEOUT_S} seconds, so the test was stopped.", started)
+	if now - meta["enqueued_at"] > START_WAIT_S and not frappe.cache().get(result_key(token) + ":started"):
+		return _failure(node, "The test could not start because the background worker is busy. Try again in a moment.", started)
+	return _pending(token)

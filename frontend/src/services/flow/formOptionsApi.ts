@@ -22,7 +22,11 @@ export interface CreateDocField {
 /** A person who can be named as an approver. */
 export interface FlowUser {
   name: string;
+  /** Their sign-in address, the only other thing the server tells an editor about a person. */
+  email?: string;
   full_name: string;
+  /** True when the person holds one of the approver roles (absent when the server could not tell). */
+  has_approver_role?: boolean;
   /** "Ada Lovelace (ada@example.com)" */
   label: string;
 }

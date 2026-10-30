@@ -166,7 +166,7 @@ def test_connection(service: str, setting: str | None = None, credentials: str |
 	credentials: optional values typed on the form (used instead of saved ones, never stored).
 	Returns ``{status, code, message, account?, checked_at?}``. status is Connected | Rejected | Not connected;
 	code is ok | no_credentials | missing_credentials | rejected | missing_permission | unreachable.
-	When only saved credentials were checked, the answer is also kept on the integration (not for ``unreachable``).
+	When only saved credentials were checked by someone who can edit that integration, the answer is also kept on the integration (not for ``unreachable``, and never for a read-only caller).
 	"""
 	frappe.only_for(ALLOWED_ROLES)
 	if service not in _TESTERS:
@@ -208,7 +208,9 @@ def test_connection(service: str, setting: str | None = None, credentials: str |
 		frappe.log_error(title=f"{label} test connection")
 		return {"status": "Rejected", "code": "unreachable", "message": f"Could not check {label}. The details are in the error log."}
 
-	if setting and not typed:
+	if setting and not typed and frappe.has_permission("Integration Settings", "write", doc=setting):
+		# Only someone who may edit this integration changes its stored health. A read-only caller gets the answer
+		# (no ``checked_at``, so the screen does not claim a saved check) but leaves the record as it was.
 		_remember_check(setting, result)
 		result["checked_at"] = str(now_datetime())
 	return result

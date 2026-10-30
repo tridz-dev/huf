@@ -37,7 +37,7 @@ export function SampleInputSection({
         {edited && <Badge variant="pill-warning" data-testid="flow-step-test-source-edited">{SOURCE_LABEL.edited}</Badge>}
         {canEdit && (parts.length > 0 || editing) && (
           <Button type="button" variant="ghost" size="sm" onClick={onToggleEdit} aria-pressed={editing} data-testid="flow-step-test-edit">
-            {editing ? 'Show as rows' : 'Edit sample'}
+            {editing ? 'Show as rows' : 'Edit as JSON'}
           </Button>
         )}
       </div>

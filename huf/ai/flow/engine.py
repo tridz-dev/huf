@@ -94,7 +94,7 @@ from huf.ai.graph.error_copy import (
 	approval_timeout_message, describe_exception, describe_run_error, no_route_message, plain_error,
 	step_failed_sentence, step_ref, step_title, tool_timeout_message,
 )
-from huf.ai.graph.expressions import evaluate_bool, parse_expression
+from huf.ai.graph.expressions import ExpressionLimitError, evaluate_bool, parse_expression
 from huf.ai.graph.transforms import Limits as TransformLimits
 from huf.ai.graph.templates import TemplateError, render_template
 from huf.ai.graph.transforms import run_transform
@@ -1730,7 +1730,9 @@ def _exec_condition(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	ctx = _context_of(flow_run, settings)
 
 	try:
-		result = evaluate_bool(parse_expression(expression), ctx.reference_roots())
+		result = evaluate_bool(parse_expression(expression), ctx.reference_roots(), raise_limits=True)
+	except ExpressionLimitError as e:
+		return {"status": "failed", "error": str(e)}
 	except Exception as e:
 		return {"status": "failed", "error": "This condition could not be checked against the data it received. Check what you compare, and that earlier steps give it that data."}
 
@@ -1921,7 +1923,9 @@ def _exec_validate(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	for assertion in config.get("assertions", []):
 		try:
 			parsed = parse_expression(assertion["expression"])
-			truthy = evaluate_bool(parsed, bindings)
+			truthy = evaluate_bool(parsed, bindings, raise_limits=True)
+		except ExpressionLimitError as e:
+			return {"status": "failed", "error": f"{step_ref(node, True)}: {e}"}
 		except Exception as e:
 			return {
 				"status": "failed",
