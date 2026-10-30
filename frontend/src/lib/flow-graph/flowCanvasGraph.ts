@@ -189,7 +189,7 @@ export function connectSteps(
 
 /**
  * The graph after adding an action step (or End) behind `sourceId` on `sourceRoute`; edges that left the source
- * on that route move onto the new step. `null` when End would be put in front of another step.
+ * on that route move onto the new step, and what followed (with everything below it) moves down one row. `null` when End would be put in front of another step.
  */
 export function addActionStep(
   nodes: Node<FlowNodeData>[],
@@ -245,7 +245,11 @@ export function addActionStep(
     makeFlowEdge(sourceId, newNodeId, sourceRoute, { label: newNode.data.label, index: rest.filter((e) => e.source === sourceId && edgeRoute(e) === sourceRoute).length }),
     ...moving.map((e, i) => makeFlowEdge(newNodeId, e.target, movedRoute, { label: nodes.find((n) => n.id === e.target)?.data.label, index: i })),
   ];
-  return { nodes: [...nodes, newNode], edges: newEdges };
+  // The step that used to follow (and everything below it) moves down one row so the new card never sits on it.
+  const shifted = new Set<string>();
+  for (const e of moving) for (const id of subtreeIds(e.target, newEdges)) if (id !== newNodeId && id !== sourceId) shifted.add(id);
+  const moved = nodes.map((n) => (shifted.has(n.id) ? { ...n, position: { x: n.position.x, y: n.position.y + ROW_GAP } } : n));
+  return { nodes: [...moved, newNode], edges: newEdges };
 }
 
 /** Connection handle -> route (`next` when the handle has no name). */

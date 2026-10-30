@@ -3,9 +3,6 @@
  * "Add step" cards on the canvas; what used to follow the chosen spot moves down one row so the new card never sits on it.
  */
 import { addActionStep, computeOpenEnds } from '../flow-graph/flowCanvasGraph';
-import { subtreeIds } from '../flow/flowEdgeLabels';
-import { ROW_GAP } from '../flow/flowLayout';
-import { edgeRoute } from '../../services/flowSerializer';
 import { branchHandlesFor } from '../flow/flowBranches';
 import type { ActionConfig, FlowEdgeRoute } from '../../types/flow.types';
 import type { Graph } from './cloneSteps';
@@ -41,12 +38,10 @@ export interface InsertResult extends Graph {
 }
 
 export function insertStep(graph: Graph, spot: InsertSpot, actionId: string, config: ActionConfig): InsertResult | 'end-in-front' | null {
-  const displaced = graph.edges.filter((e) => e.source === spot.sourceId && edgeRoute(e) === spot.route).map((e) => e.target);
   const added = addActionStep(graph.nodes, graph.edges, spot.sourceId, spot.route, actionId, config);
   if (!added || added === 'end-in-front') return added;
   const newNode = added.nodes[added.nodes.length - 1];
-  const moving = new Set<string>();
-  for (const target of displaced) for (const id of subtreeIds(target, added.edges)) if (id !== newNode.id) moving.add(id);
-  const nodes = added.nodes.map((n) => (moving.has(n.id) ? { ...n, position: { x: n.position.x, y: n.position.y + ROW_GAP } } : { ...n, selected: n.id === newNode.id }));
+  // addActionStep already moved what followed down a row.
+  const nodes = added.nodes.map((n) => ({ ...n, selected: n.id === newNode.id }));
   return { nodes, edges: added.edges, newId: newNode.id };
 }
