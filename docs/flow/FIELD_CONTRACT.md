@@ -80,7 +80,7 @@ Every node may also carry `_sample` (UI extra like `_label`): a trimmed example 
 | File Operations | `tool.call` | `tool_id` one of `gdrive_list_files` (`limit`, `query`), `gdrive_search_files` (`query`*), `gdrive_get_file` (`file_id`*) |
 | Slack | `tool.call` | `tool_id` `slack_send_message`; `input` `{channel*, text*}` (also `slack_send_thread_reply` with `thread_ts`*) |
 | Google Sheets | `tool.call` | `tool_id` `gsheets_read` (`spreadsheet_id`*, `range`), `gsheets_update` (`spreadsheet_id`*, `range`*, `data`*), `gsheets_create` (`title`*) |
-| End | `output` | `value`* Value. No `next` key at all (not even null). |
+| End | `output` | `value`* Value, `outcome` `{label?: string 1-60, tone?: good/neutral/bad}` (section 11.3). No `next` key at all (not even null). |
 | Get / Set / Delete state | `state.get` / `state.set` / `state.delete` | get: `key`* Value, `default` Value; set: `key`*, `value`*, `ttl_seconds` int 1-2592000 or Value; delete: `key`* |
 | Create document | `doc.create` | `doctype`* string literal (must be in site allow-list `huf_flow_create_doc_doctypes`), `fields`* object of Value |
 | (assertions) | `validate` | `assertions`* array (min 1) of `{expression*, code*, message*}` |
@@ -550,3 +550,11 @@ A run is **Real** (default) or **Test**. `Flow Run.run_mode` (Select `Real` | `T
 * **Title.** `title` rendered, else "Approval needed: <flow name>". **Note.** The step's `message` (rendered), else "<flow name> is waiting for your decision."
 * **API.** `get_flow_run` returns `approval_card` while the run waits for approval (else `null`); every row of `get_pending_approvals` returns it too. Exactly: `{"title": str, "facts": [{"label": str, "value": str}], "note": str, "test_note": str | null}`. `test_note` is "Test: you can approve this yourself" for a test run. `get_pending_approvals` also keeps `title`, `message` (one sentence: note, facts and, in a test, the test note) and `facts` for the existing bell.
 * Email subject and bell entry are the title; the body is the note, then a table of facts, then the "Review and decide" link. The Slack card is the title, the note and one "Label: value" line per fact. No run id, step id, JSON or raw reference ever appears in any of them. A test run sends no email and no Slack card.
+
+### 11.3 End outcome (`output.outcome`)
+
+An `output` (End) node may declare `outcome: {label, tone}`: how the run reads to the business ("Approved", "Rejected", "Refund sent"). `label` is 1-60 characters (`{input.field}` placeholders are filled in when the run ends; absent: "Finished"), `tone` is `good` (green), `neutral` (grey, the default) or `bad` (red). Both are optional; `outcome: {}` means "Finished", neutral.
+
+* **Recorded.** When the run reaches that End step the engine writes `Flow Run.outcome_label` and `Flow Run.outcome_tone` (a test run records it too). An End without `outcome` records nothing.
+* **Served.** `get_flow_run`, `list_flow_runs` and `list_flow_runs_page` return `outcome: {"label": str, "tone": "good"|"neutral"|"bad"} | null` for a finished (Success) run: the recorded outcome first, else (End without outcome) what an approver decided ("Approved" good, "Rejected" bad, "Timed out" neutral), else null. A Failed or unfinished run has no outcome; the status says it. The row fields `outcome_label` / `outcome_tone` are not part of the response.
+* **Showing it.** The run headline uses the label ("Rejected", bad tone) with the small "Run finished" line under it; the outcome chip beside the status in Run history and Executions uses the same label and tone.

@@ -19,6 +19,8 @@ from bisect import bisect_right
 
 import frappe
 
+from huf.ai.flow.runs.outcome import stored_outcome
+
 _DECISION_OUTCOMES = {
 	"approved": ("Approved", "good"),
 	"rejected": ("Rejected", "bad"),
@@ -139,7 +141,7 @@ def extras_for_detail(doc, ctx: dict) -> dict:
 	meta = step_meta_from(defn)
 	return {
 		"step_meta": meta,
-		"outcome": compute_outcome(doc.status, doc.current_node_id, ctx, meta),
+		"outcome": (stored_outcome(doc) if doc.status == "Success" else None) or compute_outcome(doc.status, doc.current_node_id, ctx, meta),
 		"started_by": doc.owner,
 		"started_by_name": _full_name(doc.owner),
 		"run_number": run_number(doc.flow_id, doc.creation),
@@ -183,5 +185,8 @@ def shape_list_rows(rows: list, names: dict, can_fail: bool) -> list:
 		r["started_by_name"] = people.get(r["started_by"])
 		r["run_number"] = bisect_right(by_flow[r.flow_id], creation) if creation is not None else None
 		r["input_hint"] = input_hint(ctx)
-		r["outcome"] = compute_outcome(r.status, r.current_node_id, ctx, metas.get(r.flow_id, {}))
+		recorded = stored_outcome(r) if r.status == "Success" else None
+		r["outcome"] = recorded or compute_outcome(r.status, r.current_node_id, ctx, metas.get(r.flow_id, {}))
+		r.pop("outcome_label", None)
+		r.pop("outcome_tone", None)
 	return rows

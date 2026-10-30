@@ -50,6 +50,7 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
+from huf.ai.flow.runs.outcome import record_outcome
 from huf.ai.flow.support.approval_card import waiting_fields
 from huf.ai.flow.support.approval_notifications import _clear_flow_notifications, _send_approval_notifications
 from huf.ai.flow.support.approvers import approval_expired, check_approver
@@ -1970,6 +1971,7 @@ def _exec_output(flow_run, node: dict, config: dict, settings: dict) -> dict:
 					"error": f'The result of {step_ref(node)} has {len(field_value)} rows in "{key}", but the limit is {budget.max_rows}. Send fewer rows.',
 				}
 
+	record_outcome(flow_run, config.get("outcome"), ctx)
 	return {"status": "success", "output": value, "result": value}
 
 
