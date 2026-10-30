@@ -32,6 +32,15 @@ export function RunWaitingCard({ run, names, titleOf, busy, phone, onDecide, res
   const since = run.modified_at ?? run.started_at;
   const sinceLine = since ? `Waiting since ${friendlyClock(since)} (${formatDuration(sinceMs(since))})` : '';
 
+  if (waiting.type === 'code' && run.approval_lapsed) {
+    return (
+      <section className="rounded-lg border border-border bg-muted/40 p-4" data-testid="flow-run-waiting">
+        <h3 className="text-sm font-semibold text-ink">The approval expired</h3>
+        <p className="mt-1 text-sm text-ink" data-testid="run-waiting-code-note">Nobody answered the code approval in time, so it no longer shows in the approvals bell and this run will not continue by itself.</p>
+      </section>
+    );
+  }
+
   if (waiting.type === 'code') {
     return (
       <section className="rounded-lg border border-warning/40 bg-warning-tint/50 p-4" data-testid="flow-run-waiting">

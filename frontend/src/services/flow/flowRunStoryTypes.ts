@@ -13,6 +13,8 @@ export interface RunStepMeta {
 
 /** Fields the run list and the run details both carry, for the run story. */
 export interface RunStoryFields {
+    /** A code approval behind a Waiting Code run has passed its expiry (display only; the row stays Pending). */
+    approval_lapsed?: boolean;
     started_by?: string | null;
     started_by_name?: string | null;
     /** The run's place in its flow's history, oldest first. */

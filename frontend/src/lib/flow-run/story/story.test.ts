@@ -229,3 +229,13 @@ describe('a loop that stopped part-way', () => {
     expect(o.send.status).toBe('skipped');
   });
 });
+
+import { runStatusPill as _rsp } from './runStatus';
+import { runHeadline as _rh } from './headline';
+describe('ux30 lapsed approval', () => {
+  it('reads Expired, not waiting', () => {
+    expect(_rsp({ status: 'Waiting Code', lapsed: true }).kind).toBe('expired');
+    expect(_rsp({ status: 'Waiting Code' }).kind).toBe('waiting_review');
+    expect(_rh({ status: 'Waiting Code', approval_lapsed: true } as never).headline).toBe('The approval expired');
+  });
+});

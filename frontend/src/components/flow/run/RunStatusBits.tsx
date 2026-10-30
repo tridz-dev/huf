@@ -5,8 +5,8 @@ import type { RunOutcome } from '@/services/flow/flowRunStoryTypes';
 import { cn } from '@/lib/utils';
 
 /** The run's state in the one status set (Finished, Failed, Stuck...). */
-export function RunStatusPill({ status, stale, className, testId = 'flow-run-status' }: RunStatusInput & { className?: string; testId?: string }) {
-  const { kind, label } = runStatusPill({ status, stale });
+export function RunStatusPill({ status, stale, lapsed, className, testId = 'flow-run-status' }: RunStatusInput & { className?: string; testId?: string }) {
+  const { kind, label } = runStatusPill({ status, stale, lapsed });
   return <StatusPill kind={kind} label={label} className={className} data-testid={testId} />;
 }
 

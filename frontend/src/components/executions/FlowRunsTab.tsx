@@ -192,7 +192,7 @@ export function ExecutionsFlowRunsTab() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <RunStatusPill status={run.status} stale={run.stale} testId={`flow-run-exec-status-${run.name}`} />
+                        <RunStatusPill status={run.status} stale={run.stale} lapsed={run.approval_lapsed} testId={`flow-run-exec-status-${run.name}`} />
                         {run.outcome && <OutcomeChip outcome={run.outcome} testId={`flow-run-exec-outcome-${run.name}`} />}
                       </div>
                     </TableCell>

@@ -44,12 +44,33 @@ def _http_request(method, url, **kwargs):
     # allow_redirects is forced off by _send's callers; this helper never follows redirects blindly.
     return _send(method, url, ips, **request_kwargs)
 
+MAX_TIMEOUT = 600
+
+
+def _clamp_timeout(value):
+	"""Seconds in [1, 600]; None, non-numeric, NaN and inf fall back to the 30 s default."""
+	try:
+		seconds = float(value)
+	except (TypeError, ValueError):
+		return DEFAULT_TIMEOUT
+	if seconds != seconds or seconds in (float("inf"), float("-inf")):
+		return DEFAULT_TIMEOUT
+	return min(max(seconds, 1), MAX_TIMEOUT)
+
+
 @rate_limit(key="tool_name", limit=100, seconds=60)
 @frappe.whitelist(allow_guest=True)
-def handle_http_request(method, url, headers=None, params=None, data=None, json_data=None, tool_name=None, timeout=None):
+def handle_http_request(method, url, headers=None, params=None, data=None, json_data=None, tool_name=None):
 	"""
-	Generic HTTP request handler with support for tool-defined headers
+	Generic HTTP request handler with support for tool-defined headers.
+
+	No timeout parameter here: this endpoint is reachable by guests, so the limit is
+	not caller-controlled. Server-side code passes one through ``_run_http_request``.
 	"""
+	return _run_http_request(method, url, headers, params, data, json_data, tool_name)
+
+
+def _run_http_request(method, url, headers=None, params=None, data=None, json_data=None, tool_name=None, timeout=None):
 	# Check agent.use capability (guest sessions are exempt)
 	if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
 		frappe.throw(
@@ -142,7 +163,7 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 		request_kwargs = {
 			"headers": final_headers,
 			"params": params or {},
-			"timeout": timeout or 30,
+			"timeout": _clamp_timeout(timeout),
 			"stream": True,  # Stream response body to enforce size cap during read
 		}
 
@@ -393,8 +414,7 @@ def http_request(url, method="GET", headers=None, body=None, timeout_seconds=Non
 
 	# Call the undecorated function: the rate limiter is keyed to web requests and
 	# this runs inside a worker. Guard behaviour is unchanged.
-	inner = getattr(handle_http_request, "__wrapped__", handle_http_request)
-	result = inner(
+	result = _run_http_request(
 		method,
 		url,
 		headers=req_headers,

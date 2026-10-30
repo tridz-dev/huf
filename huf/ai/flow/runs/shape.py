@@ -165,6 +165,7 @@ def extras_for_detail(doc, ctx: dict) -> dict:
 	return {
 		"step_meta": meta,
 		"outcome": (stored_outcome(doc) if doc.status == "Success" else None) or compute_outcome(doc.status, doc.current_node_id, ctx, meta),
+		"approval_lapsed": approval_lapsed(doc.status, _load_json(doc.waiting)),
 		"started_by": doc.owner,
 		"started_by_name": _full_name(doc.owner),
 		"run_number": run_number(doc.flow_id, doc.creation),
@@ -176,6 +177,25 @@ def _modified_iso(value):
 	from huf.ai.flow.api import _utc_iso
 
 	return _utc_iso(value)
+
+
+def approval_lapsed(status, waiting) -> bool:
+	"""True for a run parked on a code approval whose ``expires_on`` has passed.
+
+	Display only: the approval row stays Pending (nothing sweeps it), so the run would read
+	"waiting" forever. Reads never write.
+	"""
+	if status != "Waiting Code" or not isinstance(waiting, dict) or not waiting.get("approval"):
+		return False
+	deadline = waiting.get("timeout_at")
+	if not deadline:
+		return False
+	try:
+		from frappe.utils import get_datetime, now_datetime
+
+		return get_datetime(deadline) < now_datetime()
+	except Exception:
+		return False
 
 
 def shape_list_rows(rows: list, names: dict, can_fail: bool) -> list:
@@ -197,6 +217,7 @@ def shape_list_rows(rows: list, names: dict, can_fail: bool) -> list:
 			people[r.owner] = _full_name(r.owner)
 	for r in rows:
 		ctx = _load_json(r.pop("context_json", None))
+		r["approval_lapsed"] = approval_lapsed(r.status, _load_json(r.pop("waiting", None)))
 		creation = r.pop("creation", None)
 		r["flow_name"] = names.get(r.flow_id) or r.flow_id
 		r["stale"] = _is_stale(r.status, r.modified)

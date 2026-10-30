@@ -500,3 +500,62 @@ class TestRateLimitingDecoratorST075(unittest.TestCase):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class TestGuestTimeoutClamp(unittest.TestCase):
+	"""ux30: a guest cannot choose the request timeout."""
+
+	def _call(self, **kwargs):
+		with patch("frappe.session") as session, patch("frappe.get_doc") as get_doc, \
+			patch("huf.ai.http_handler.resolve_public_ips", return_value=(["93.184.216.34"], None)), \
+			patch("huf.ai.http_handler._send") as send:
+			session.user = "Guest"
+			doc = Mock()
+			doc.base_url = ""
+			doc.http_headers = []
+			doc.allowed_for_guest = True
+			get_doc.return_value = doc
+			resp = Mock()
+			resp.status_code = 200
+			resp.headers = {}
+			resp.iter_content = Mock(return_value=[b"{}"])
+			send.return_value = resp
+			handle_http_request("GET", "https://api.example.com/", tool_name="t", **kwargs)
+			return send.call_args.kwargs["timeout"] if send.call_args.kwargs else send.call_args[1]["timeout"]
+
+	def test_timeout_is_not_a_whitelisted_parameter(self):
+		with self.assertRaises(TypeError):
+			self._call(timeout=100000)
+
+	def test_guest_call_uses_default(self):
+		self.assertEqual(self._call(), 30)
+
+	def test_clamp_helper(self):
+		from huf.ai.http_handler import _clamp_timeout
+		self.assertEqual(_clamp_timeout(100000), 600)
+		self.assertEqual(_clamp_timeout(-5), 1)
+		self.assertEqual(_clamp_timeout("abc"), 30)
+		self.assertEqual(_clamp_timeout("12"), 12)
+		self.assertEqual(_clamp_timeout(None), 30)
+		self.assertEqual(_clamp_timeout(float("nan")), 30)
+		self.assertEqual(_clamp_timeout(float("inf")), 30)
+
+	def test_internal_runner_clamps_huge_negative_string(self):
+		from huf.ai.http_handler import _run_http_request
+		for raw, want in ((100000, 600), (-1, 1), ("junk", 30)):
+			with patch("frappe.session") as session, patch("frappe.get_doc") as get_doc, \
+				patch("huf.ai.http_handler.resolve_public_ips", return_value=(["93.184.216.34"], None)), \
+				patch("huf.ai.http_handler._send") as send:
+				session.user = "Guest"
+				doc = Mock()
+				doc.base_url = ""
+				doc.http_headers = []
+				doc.allowed_for_guest = True
+				get_doc.return_value = doc
+				resp = Mock()
+				resp.status_code = 200
+				resp.headers = {}
+				resp.iter_content = Mock(return_value=[b"{}"])
+				send.return_value = resp
+				_run_http_request("GET", "https://api.example.com/", tool_name="t", timeout=raw)
+				self.assertEqual(send.call_args.kwargs["timeout"], want)

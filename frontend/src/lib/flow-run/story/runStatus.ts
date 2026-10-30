@@ -4,6 +4,8 @@ import type { StatusKind } from '@/components/common/StatusPill';
 export interface RunStatusInput {
   status: string | null | undefined;
   stale?: boolean;
+  /** A code approval behind a Waiting Code run has passed its expiry. */
+  lapsed?: boolean;
 }
 
 export interface RunStatusPill {
@@ -13,7 +15,8 @@ export interface RunStatusPill {
 }
 
 /** A stored run status in the one status set: Queued, Running, Waiting..., Finished, Failed, Stuck. */
-export function runStatusPill({ status, stale }: RunStatusInput): RunStatusPill {
+export function runStatusPill({ status, stale, lapsed }: RunStatusInput): RunStatusPill {
+  if (lapsed && status === 'Waiting Code') return { kind: 'expired' };
   if (stale && (status === 'Queued' || status === 'Running')) return { kind: 'stuck' };
   switch (status) {
     case 'Success':

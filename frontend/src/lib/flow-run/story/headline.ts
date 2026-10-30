@@ -29,6 +29,7 @@ export function runHeadline(run: FlowRunDetail, now: number = Date.now(), curren
     return { headline: 'This run stopped because a step failed', sub: '' };
   }
   if (status === 'Waiting Approval') return { headline: 'Waiting for approval', sub: '' };
+  if (status === 'Waiting Code' && run.approval_lapsed) return { headline: 'The approval expired', sub: 'Nobody answered in time, so this run will not continue by itself. Start the flow again to retry.' };
   if (status === 'Waiting Code') return { headline: 'Waiting for a code review', sub: 'It continues by itself once the code has been approved.' };
   if (status === 'Waiting User') return { headline: 'Waiting for someone to continue it', sub: '' };
   if (status === 'Queued') return { headline: 'Waiting for a worker', sub: 'It is in line and starts as soon as a worker is free.' };

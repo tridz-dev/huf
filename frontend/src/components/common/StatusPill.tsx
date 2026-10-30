@@ -10,6 +10,7 @@ import type { FlowStatus } from '@/types/flow.types';
  */
 export type StatusKind =
   | 'draft'
+  | 'expired'
   | 'live'
   | 'has_problems'
   | 'archived'
@@ -45,6 +46,7 @@ export const STATUS_SPECS: Record<StatusKind, StatusSpec> = {
   stuck: { label: 'Stuck', variant: 'pill-warning', icon: AlertTriangle },
   approved: { label: 'Approved', variant: 'pill-success', icon: null },
   rejected: { label: 'Rejected', variant: 'pill-danger', icon: null },
+  expired: { label: 'Expired', variant: 'pill-neutral', icon: Clock },
   timed_out: { label: 'Timed out', variant: 'pill-neutral', icon: null },
 };
 

@@ -17,6 +17,9 @@ import { FieldError } from '../forms/formKit';
 import { ApprovalTimeoutField } from '../forms/approval/ApprovalTimeoutField';
 import { Pressable } from './Pressable';
 
+/** Whole seconds, at least 1; a Web request step stops at 600 (what the server allows). */
+const clampSeconds = (n: number, web: boolean) => (Number.isFinite(n) ? Math.min(Math.max(1, n), web ? 600 : Infinity) : 1);
+
 type Cfg = Record<string, unknown>;
 
 /**
@@ -79,14 +82,15 @@ export function SettingsTab({ node }: { node: FlowNode }) {
             data-testid={`flow-field-${kind}-timeout_ms`}
             type="number"
             min={1}
+            max={isWebRequest ? 600 : undefined}
             disabled={!canManage}
             value={toolSeconds}
-            onChange={(e) => patchConfig({ timeout_ms: e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value, 10)) * 1000 })}
+            onChange={(e) => patchConfig({ timeout_ms: e.target.value === '' ? undefined : clampSeconds(parseInt(e.target.value, 10), isWebRequest) * 1000 })}
             placeholder={isWebRequest ? '30' : 'No limit'}
           />
           <FieldHint testId={`flow-field-${kind}-timeout_ms-help`}>
             {isWebRequest
-              ? 'How long to wait for the website to answer before this step fails. Leave empty to wait up to 30 seconds.'
+              ? 'How long to wait for the website to answer before this step fails. Leave empty to wait up to 30 seconds. The longest you can set is 10 minutes (600 seconds).'
               : 'How long to wait for the connected tool to answer. Leave empty for no limit.'}
           </FieldHint>
           <FieldError nodeId={node.id} kind={kind} field="timeout_ms" />

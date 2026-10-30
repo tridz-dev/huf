@@ -191,7 +191,7 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
                     <div className="space-y-5 pb-6">
                         <div data-testid="flow-run-headline">
                             <div className="flex flex-wrap items-center gap-2">
-                                <RunStatusPill status={run.status} stale={run.stale} />
+                                <RunStatusPill status={run.status} stale={run.stale} lapsed={run.approval_lapsed} />
                                 {run.outcome && <OutcomeChip outcome={run.outcome} />}
                                 {run.run_mode === 'Test' && <TestRunChip label="Test run" testId="flow-run-test-pill" />}
                             </div>

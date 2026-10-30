@@ -484,7 +484,7 @@ _FLOW_RUN_LIST_FIELDS = [
 	"outcome_tone",
 	"owner",
 	"creation",
-	"context_json",
+	"context_json", "waiting",
 ]
 
 

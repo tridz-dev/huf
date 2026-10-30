@@ -31,7 +31,7 @@ export function RunHistoryRow({ run, currentUser, onOpen, showFlow }: RunHistory
         <span className="text-sm font-medium text-ink" data-testid={`flow-run-hist-title-${run.name}`}>
           {showFlow ? run.flow_name : friendlyRunTitle({ runNumber: run.run_number })}
         </span>
-        <RunStatusPill status={run.status} stale={run.stale} testId={`flow-run-hist-status-${run.name}`} />
+        <RunStatusPill status={run.status} stale={run.stale} lapsed={run.approval_lapsed} testId={`flow-run-hist-status-${run.name}`} />
         {run.run_mode === 'Test' && <TestRunChip testId={`flow-run-test-chip-${run.name}`} />}
         {run.outcome && <OutcomeChip outcome={run.outcome} testId={`flow-run-hist-outcome-${run.name}`} />}
       </div>

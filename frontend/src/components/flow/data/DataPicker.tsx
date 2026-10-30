@@ -206,7 +206,7 @@ export function DataPicker({ model, accept, onPick, onFetchLast, loading }: Data
                 {fetching ? 'Looking…' : 'Use last real request'}
               </Button>
             ) : null}
-            {fetchNotice ? <p className="text-meta text-foreground" role="status" data-testid="flow-use-data-last-request-notice">{fetchNotice}</p> : null}
+            {fetchNotice ? <p className="text-meta text-muted-foreground" role="status" data-testid="flow-use-data-last-request-notice">{fetchNotice}</p> : null}
           </div>
         ) : null}
         {/* Never under "No sample yet": that answer is already final for this step, a loading line below it only flashes. */}
