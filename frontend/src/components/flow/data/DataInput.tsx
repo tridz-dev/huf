@@ -16,9 +16,10 @@ import type { DataPick } from '@/lib/flow-data/types';
 import { ChipEditor, type ChipEditorHandle } from './ChipEditor';
 import { DataPicker } from './DataPicker';
 import { JsonDataInput } from './JsonDataInput';
+import { YesNoInput } from './YesNoInput';
 import { invalidateDataCatalog, useDataCatalog } from './useDataCatalog';
 
-export type DataKind = 'text' | 'longtext' | 'number' | 'url' | 'json';
+export type DataKind = 'text' | 'longtext' | 'number' | 'url' | 'json' | 'yesno';
 
 export interface DataInputProps {
   value: unknown;
@@ -48,6 +49,7 @@ const DEFAULT_PLACEHOLDER = 'Type, or press / to use data';
  */
 export function DataInput(props: DataInputProps) {
   const { kind = 'text', value } = props;
+  if (kind === 'yesno') return <YesNoInput {...props} />;
   const isOther = parseValue(kind === 'number' && typeof value === 'number' ? String(value) : value).form === 'other';
   // Once a box is in JSON it stays there while it is being edited (half-typed JSON is not a list yet).
   const [asJson, setAsJson] = useState(isOther);

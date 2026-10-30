@@ -73,7 +73,7 @@ const PARAMS: Record<string, ParamHelp> = {
   with: { label: 'Replace with', hint: 'What to put in their place. Leave empty to remove the found text.', placeholder: ' ' },
   count: { label: 'How many', hint: 'A whole number.', placeholder: '5' },
   needle: { label: 'Look for', hint: 'The words to look for inside the text.', placeholder: '#42' },
-  ignore_case: { label: 'Ignore capital letters', hint: 'Type true to treat "A" and "a" as the same. Leave empty for exact matching.', placeholder: 'true' },
+  ignore_case: { label: 'Ignore capital letters', hint: 'Choose Yes to treat "A" and "a" as the same. Leave it not set for exact matching.' },
   prefix: { label: 'Starts with', hint: 'The words the text should begin with.', placeholder: 'INV-' },
   separator: { label: 'Separator', hint: 'The characters between parts. Leave empty to use a space.', placeholder: ',' },
   pattern: { label: 'Pattern', hint: 'A regular expression. For example [0-9]+ finds the first number.', placeholder: '[0-9]+' },

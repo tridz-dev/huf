@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FlowEdge, FlowNode } from '@/types/flow.types';
 import { buildPickerModel } from '@/lib/flow-data/model';
-import { parentView, searchRows, viewRows, viewTitle } from './pickerRows';
+import { parentView, resolveTyped, searchRows, viewRows, viewTitle } from './pickerRows';
 
 const node = (id: string, label: string, nodeType: 'trigger' | 'action' | 'end', extra: Record<string, unknown> = {}): FlowNode =>
   ({ id, type: nodeType, position: { x: 0, y: 0 }, data: { label, nodeType, configured: true, ...extra } }) as FlowNode;
@@ -94,5 +94,25 @@ describe('search and navigation', () => {
     const m = buildPickerModel(loopNodes, loopEdges, 'p', catalog);
     expect(m.steps.map((s) => s.title)).toContain('This loop: current item');
     expect(viewRows({ kind: 'list', stepId: 't', path: 'input.items' }, m, 'value')[0]).toMatchObject({ action: { pick: { ref: 'foreach.item' } } });
+  });
+});
+
+describe('typed names', () => {
+  const step = model.steps[0];
+  it('a full reference that starts at an offered step is used as it is', () => {
+    expect(resolveTyped('input.customer.name', model)).toMatchObject({ ref: 'input.customer.name', stepId: 't', stepTitle: 'Webhook', label: 'Name' });
+    expect(resolveTyped('a.tier', model)).toMatchObject({ ref: 'a.tier', stepId: 'a' });
+  });
+  it('inside a step a short name starts at that step', () => {
+    expect(resolveTyped('customer.name', model, step)?.ref).toBe('input.customer.name');
+    expect(resolveTyped('order total', model, step)?.ref).toBe('input.order_total');
+  });
+  it('never a bare input or trigger, nothing odd, nothing from a step that is not offered', () => {
+    expect(resolveTyped('input', model)).toBeNull();
+    expect(resolveTyped('input', model, step)?.ref).toBe('input.input');
+    expect(resolveTyped('', model, step)).toBeNull();
+    expect(resolveTyped('customer.name', model)).toBeNull();
+    expect(resolveTyped('m.value', model)).toBeNull();
+    expect(resolveTyped('a-b.c', model, step)).toBeNull();
   });
 });

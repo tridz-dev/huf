@@ -2,7 +2,8 @@
  * What the "Use data" picker shows at each level, as plain rows. Pure, so the wording and the choices are tested without a screen.
  * Level 1 steps -> level 2 a step's fields -> (a thing with parts) its parts -> (a list) what to do with the items.
  */
-import { sampleText } from '@/lib/flow-data/infer';
+import { isValidRef } from '@/lib/flow-data/chips';
+import { sampleText, sentenceLabel } from '@/lib/flow-data/infer';
 import type { PickerModel, PickerStep } from '@/lib/flow-data/model';
 import type { CatalogField, DataPick, PickMode } from '@/lib/flow-data/types';
 
@@ -151,4 +152,21 @@ export function parentView(view: PickerView): PickerView {
   if (view.kind === 'fields') return { kind: 'steps' };
   if (view.kind === 'item') return { kind: 'list', stepId: view.stepId, path: view.path.replace(/\[0\]$/, '') };
   return { kind: 'fields', stepId: view.stepId };
+}
+
+/**
+ * Data typed by hand ("Can't find it? Type the field name"). A full reference (`input.customer.name`, `n_5.total`) is used as it is when
+ * it starts at the trigger, the loop or a step the picker offers; inside a step's fields a short name (`customer.name`) starts at that
+ * step. A bare `input` or `trigger` is never accepted: it would hand over everything the trigger sent.
+ */
+export function resolveTyped(text: string, model: PickerModel, step?: PickerStep): DataPick | null {
+  const typed = text.trim().replace(/\s+/g, '_');
+  if (!typed) return null;
+  const roots = new Map(model.steps.map((s) => [s.root, s]));
+  const full = roots.get(typed.split(/[.[]/)[0]) ?? (typed.startsWith('foreach.') ? model.steps.find((s) => s.kind === 'loop') : undefined);
+  const startsHere = full && typed.length > full.root.length && isValidRef(typed) && typed !== full.root;
+  const ref = startsHere ? typed : step ? `${step.root}.${typed}` : '';
+  const owner = startsHere ? full : step;
+  if (!owner || !isValidRef(ref) || ref === owner.root) return null;
+  return { ref, label: sentenceLabel(ref.split(/[.[]/).filter(Boolean).pop() ?? ref), stepTitle: owner.chipTitle, stepId: owner.id };
 }

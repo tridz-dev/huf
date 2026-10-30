@@ -4,11 +4,9 @@ import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { cardIcon } from '../../nodes/nodeIcons';
 import { cn } from '@/lib/utils';
-import { isValidRef } from '@/lib/flow-data/chips';
-import { sentenceLabel } from '@/lib/flow-data/infer';
 import type { PickerModel, PickerStep } from '@/lib/flow-data/model';
 import type { DataPick } from '@/lib/flow-data/types';
-import { parentView, searchRows, viewRows, viewTitle, type Accept, type PickerRow, type PickerView } from './pickerRows';
+import { parentView, resolveTyped, searchRows, viewRows, viewTitle, type Accept, type PickerRow, type PickerView } from './pickerRows';
 
 interface DataPickerProps {
   model: PickerModel;
@@ -72,6 +70,7 @@ export function DataPicker({ model, accept, onPick, onFetchLast, loading }: Data
   const back = () => go(parentView(view));
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.target as HTMLElement).dataset.role === 'typed') return;
     const move = (d: number) => {
       e.preventDefault();
       let i = safeActive;
@@ -105,11 +104,9 @@ export function DataPicker({ model, accept, onPick, onFetchLast, loading }: Data
     }
   };
 
-  const typedRef = step && typed.trim() ? `${step.root}.${typed.trim().replace(/\s+/g, '_')}` : '';
-  const typedOk = isValidRef(typedRef);
+  const typedPick = resolveTyped(typed, model, step);
   const submitTyped = () => {
-    if (!step || !typedOk) return;
-    onPick({ ref: typedRef, label: sentenceLabel(typed.trim().split('.').pop() ?? typed), stepTitle: step.chipTitle, stepId: step.id });
+    if (typedPick) onPick(typedPick);
   };
 
   const showNoSample = Boolean(step && !query && view.kind === 'fields' && !step.hasSample && step.kind !== 'loop');
@@ -197,7 +194,7 @@ export function DataPicker({ model, accept, onPick, onFetchLast, loading }: Data
         ) : null}
         {loading ? <p className="p-2 text-meta text-muted-foreground">Loading examples…</p> : null}
       </div>
-      {step && view.kind === 'fields' ? (
+      {view.kind === 'steps' || (step && view.kind === 'fields') ? (
         <div className="border-t border-border p-2">
           {typing ? (
             <div className="space-y-1">
@@ -216,7 +213,7 @@ export function DataPicker({ model, accept, onPick, onFetchLast, loading }: Data
                 aria-label="Field name"
                 data-testid="flow-use-data-typed"
               />
-              <p className="text-meta text-muted-foreground">{typed && !typedOk ? 'Use letters, numbers and dots, like customer.name.' : 'Type the name as it appears in the data, then press Enter.'}</p>
+              <p className="text-meta text-muted-foreground">{typed && !typedPick ? (view.kind === 'steps' ? 'Start with the step, like input.customer.name.' : 'Use letters, numbers and dots, like customer.name.') : 'Type the name as it appears in the data, then press Enter.'}</p>
             </div>
           ) : (
             <Button type="button" variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" onClick={() => setTyping(true)} data-testid="flow-use-data-type-it">
