@@ -22,8 +22,7 @@ import type {
 } from '@/types/flow.types';
 import type { BackendFlowGraph, BackendNode, BackendNodeType } from './flowApi';
 import { layoutWhenUnplaced } from '../lib/flow/flowLayout';
-import { endOutcomeConfig } from './flow/endOutcome';
-import { defaultContract, deriveContract, placeholderFingerprint } from './flow/flowContract';
+import { endOutcomeConfig } from './flow/endOutcome'; import { defaultContract, deriveContract, placeholderFingerprint } from './flow/flowContract';
 
 export { defaultContract };
 
