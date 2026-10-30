@@ -57,3 +57,44 @@ class TestFlowUsers(IntegrationTestCase):
 
 	def test_check_accepts_comma_text(self):
 		self.assertEqual([r["name"] for r in api.check_flow_users("Administrator, ")], ["Administrator"])
+
+
+class TestApproverCheckOnPublish(IntegrationTestCase):
+	def _graph(self, users):
+		return {
+			"nodes": [
+				{"id": "t", "type": "trigger.webhook", "config": {"method": "POST", "secret": "s" * 32}, "next": "ask"},
+				{
+					"id": "ask", "type": "human.approval", "_label": "Wait for approval",
+					"config": {"message": "ok?", "approver_type": "user", "approver_users": users, "approve_next": "e1", "reject_next": "e2"},
+				},
+				{"id": "e1", "type": "output", "config": {"value": None}},
+				{"id": "e2", "type": "output", "config": {"value": None}},
+			],
+		}
+
+	def test_a_typo_is_listed_as_something_to_finish_with_a_plain_sentence(self):
+		from huf.ai.graph.validation.flow_validation import _unknown_approver_issues
+
+		issues = _unknown_approver_issues(self._graph(["Administrator", "Administrtor"])["nodes"][1])
+		self.assertEqual(len(issues), 1)
+		self.assertIn('no one here is called "Administrtor"', issues[0].message)
+		self.assertNotIn("ask", issues[0].message.replace("Wait for approval", ""))  # no step id
+
+	def test_real_people_and_roles_pass(self):
+		from huf.ai.graph.validation.flow_validation import _unknown_approver_issues
+
+		self.assertEqual(_unknown_approver_issues(self._graph(["Administrator"])["nodes"][1]), [])
+		role = self._graph(["x"])["nodes"][1]
+		role["config"].update(approver_type="role", approver_role="System Manager")
+		self.assertEqual(_unknown_approver_issues(role), [])
+
+	def test_running_a_flow_does_not_re_check_people(self):
+		"""A test run of a draft may name anyone; only saving and publishing look people up."""
+		from huf.ai.graph.validation.flow_validation import validate_flow
+
+		defn = self._graph(["nobody.at.all@example.com"])
+		with_people = validate_flow(defn, "publish")
+		without = validate_flow(defn, "publish", check_people=False)
+		self.assertTrue(any(i.code == "UNKNOWN_APPROVER" for i in with_people.issues))
+		self.assertFalse(any(i.code == "UNKNOWN_APPROVER" for i in without.issues))

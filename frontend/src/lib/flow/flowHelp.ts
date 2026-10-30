@@ -71,7 +71,7 @@ export interface ParamHelp {
 }
 
 const PARAMS: Record<string, ParamHelp> = {
-  text: { label: 'Text', hint: 'The text to work on. We start you off with data from the step before; change it with + Use data.', placeholder: 'Choose with + Use data, or type it' },
+  text: { label: 'Text', hint: 'The text to work on. Use + Use data to take it from the trigger or an earlier step.', placeholder: 'Choose with + Use data, or type it' },
   find: { label: 'Text to find', hint: 'The words to look for. Cannot be empty.', placeholder: '-' },
   with: { label: 'Replace with', hint: 'What to put in their place. Leave empty to remove the found text.', placeholder: 'Nothing: removes the text' },
   count: { label: 'How many', hint: 'A whole number.', placeholder: '5' },
