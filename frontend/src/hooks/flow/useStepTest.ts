@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getStepTestInfo, testStep, type StepSampleInput, type StepTestInfo, type StepTestResult } from '@/services/flow/stepTestApi';
+import { pollStepTest } from '@/lib/flow-test/pollStepTest';
+import { getStepTestInfo, getStepTestResult, isStepTestPending, testStep, type StepSampleInput, type StepTestInfo, type StepTestResult } from '@/services/flow/stepTestApi';
 
 /** The last result per step, kept while the editor is open so leaving the Test tab (or the step) does not lose it. */
 const lastResults = new Map<string, StepTestResult>();
@@ -25,6 +26,15 @@ export function useStepTest(flowId: string | undefined, nodeId: string, enabled:
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const seq = useRef(0);
+  // Bumped when the hook unmounts or the step changes: a test still being waited on stops asking and stores nothing.
+  const generation = useRef(0);
+  useEffect(() => {
+    generation.current += 1;
+    const mine = generation.current;
+    return () => {
+      if (generation.current === mine) generation.current += 1;
+    };
+  }, [flowId, nodeId]);
 
   const reload = useCallback(async () => {
     if (!flowId || !enabled) return;
@@ -56,17 +66,21 @@ export function useStepTest(flowId: string | undefined, nodeId: string, enabled:
   const run = useCallback(
     async (sample?: StepSampleInput | Record<string, unknown>) => {
       if (!flowId) return null;
+      const mine = generation.current;
+      const cancelled = () => generation.current !== mine;
       setRunning(true);
       setRunError(null);
       try {
-        const next = await testStep(flowId, nodeId, sample);
+        const started = await testStep(flowId, nodeId, sample);
+        const next = isStepTestPending(started) ? await pollStepTest(started, { fetchResult: getStepTestResult, isCancelled: cancelled }) : started;
+        if (!next || cancelled()) return null;
         store(next);
         return next;
       } catch (error) {
-        setRunError(messageOf(error, 'The test could not run. Try again.'));
+        if (!cancelled()) setRunError(messageOf(error, 'The test could not run. Try again.'));
         return null;
       } finally {
-        setRunning(false);
+        if (generation.current === mine) setRunning(false);
       }
     },
     [flowId, nodeId, store]
