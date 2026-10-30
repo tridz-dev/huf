@@ -94,19 +94,69 @@ def get_create_document_fields(doctype: str) -> list[dict]:
 	return settable_fields(frappe.get_meta(doctype).fields)
 
 
-def _user_row(row: dict) -> dict:
+#: Looking people up is limited per person (they type into a search box: a handful of calls a minute is normal).
+USER_LOOKUP_LIMIT = 60
+USER_LOOKUP_WINDOW_S = 60
+
+
+def _need_flow_edit_and_rate() -> None:
+	"""People lookup is for the people who build flows (write on flows), and a person may ask 60 times a minute.
+
+	Read access to a flow is not enough: the answer is the sign-in address of colleagues, which a viewer has no reason to see.
+	"""
+	import time
+
+	if not frappe.has_permission("Flow Definition", "write"):
+		frappe.throw(_("Only people who can edit flows can look up approvers."), frappe.PermissionError)
+	key = f"huf:flow-user-lookup:{frappe.local.site}:{frappe.session.user}:{int(time.time() // USER_LOOKUP_WINDOW_S)}"
+	try:
+		cache = frappe.cache()
+		count = cache.incr(key)
+		if count == 1:
+			cache.expire(key, USER_LOOKUP_WINDOW_S + 5)
+	except Exception:
+		return  # a cache hiccup must not stop people building flows
+	if count > USER_LOOKUP_LIMIT:
+		frappe.throw(_("You are looking people up very quickly. Wait a minute, then try again."), frappe.ValidationError)
+
+
+def approver_role_names() -> list[str]:
+	"""The roles that make someone an approver in a Human Approval step (Huf's own approver-capable roles). Empty if unknown."""
+	try:
+		from huf.ai.flow.api import _HUF_APPROVER_ROLES
+
+		return list(_HUF_APPROVER_ROLES)
+	except Exception:
+		return []
+
+
+def _holders(names: list[str]) -> set[str]:
+	"""Which of ``names`` hold at least one approver role (one query)."""
+	roles = approver_role_names()
+	if not names or not roles:
+		return set()
+	rows = frappe.get_all("Has Role", filters={"parent": ("in", names), "parenttype": "User", "role": ("in", roles)}, pluck="parent", ignore_permissions=True, limit_page_length=0)
+	return set(rows)
+
+
+def _user_row(row: dict, holders: set[str] | None = None) -> dict:
+	"""Only a name and an address. ``has_approver_role`` tells the form who would actually be allowed to approve."""
 	full = " ".join(str(row.get("full_name") or "").split())
-	return {"name": row["name"], "full_name": full or row["name"], "label": f"{full} ({row['name']})" if full and full != row["name"] else row["name"]}
+	email = row.get("email") or row["name"]
+	out = {"name": row["name"], "email": email, "full_name": full or row["name"], "label": f"{full} ({email})" if full and full != email else email}
+	if holders is not None:
+		out["has_approver_role"] = row["name"] in holders
+	return out
 
 
 @frappe.whitelist()
 def search_flow_users(query: str = "", limit: int = MAX_USERS) -> list[dict]:
-	"""People who can be named as approvers: enabled, signed-in users (never Guest). ``[{name, full_name, label}]``.
+	"""People who can be named as approvers: enabled, signed-in users (never Guest). ``[{name, email, full_name, label, has_approver_role}]``.
 
-	Anyone who can open flows may look people up here (the answer is only a name and the full name), because choosing an
-	approver must not need the right to read the whole User list.
+	For people who can edit flows only (viewers get a 403), at most 60 lookups a minute each, and nothing but a name and
+	an address comes back. ``has_approver_role`` is true for someone who holds one of the approver roles.
 	"""
-	_need_flow_read()
+	_need_flow_edit_and_rate()
 	limit = max(1, min(int(limit or MAX_USERS), 50))
 	text = " ".join(str(query or "").split())[:80]
 	filters: dict = {"enabled": 1, "name": ("not in", ["Guest"]), "user_type": "System User"}
@@ -115,16 +165,20 @@ def search_flow_users(query: str = "", limit: int = MAX_USERS) -> list[dict]:
 		like = f"%{text}%"
 		or_filters = [["name", "like", like], ["full_name", "like", like]]
 	rows = frappe.get_all(
-		"User", filters=filters, or_filters=or_filters, fields=["name", "full_name"],
+		"User", filters=filters, or_filters=or_filters, fields=["name", "full_name", "email"],
 		order_by="full_name asc, name asc", limit_page_length=limit, ignore_permissions=True,
 	)
-	return [_user_row(r) for r in rows]
+	holders = _holders([r["name"] for r in rows])
+	return [_user_row(r, holders) for r in rows]
 
 
 @frappe.whitelist()
 def check_flow_users(users) -> list[dict]:
-	"""For each name in ``users``: ``{name, found, full_name}``. ``found`` is False for a name nobody has (a typo)."""
-	_need_flow_read()
+	"""For each name in ``users``: ``{name, found, full_name}``. ``found`` is False for a name nobody has (a typo).
+
+	Same rules as :func:`search_flow_users`: editors only, rate limited. Only enabled people count as found.
+	"""
+	_need_flow_edit_and_rate()
 	if isinstance(users, str):
 		import json
 

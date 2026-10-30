@@ -31,7 +31,8 @@ export function ApproverUsersField({
   const key = value.join('\n');
   useEffect(() => {
     const todo = value.filter((v) => !(v in known));
-    if (todo.length === 0) return;
+    // Looking people up is for editors; a read-only viewer just sees the saved names.
+    if (todo.length === 0 || disabled) return;
     let live = true;
     checkFlowUsers(todo)
       .then((rows) => live && setKnown((k) => ({ ...k, ...Object.fromEntries(rows.map((r, i) => [todo[i], r])) })))
@@ -114,7 +115,8 @@ export function ApproverUsersField({
               {found.map((u, i) => (
                 <li key={u.name} role="option" aria-selected={i === active} className={cn('cursor-pointer rounded px-2 py-1.5', i === active && 'bg-accent')} data-testid={`${testId}-option-${u.name}`} onMouseDown={(e) => { e.preventDefault(); add(u); }}>
                   <div className="truncate">{u.full_name}</div>
-                  {u.full_name !== u.name && <div className="truncate text-meta text-muted-foreground">{u.name}</div>}
+                  {(u.email ?? u.name) !== u.full_name && <div className="truncate text-meta text-muted-foreground">{u.email ?? u.name}</div>}
+                  {u.has_approver_role === false && <div className="text-meta text-muted-foreground" data-testid={`${testId}-norole-${u.name}`}>Has no approver role yet</div>}
                 </li>
               ))}
               {busy && found.length === 0 && <li className="px-2 py-1.5 text-muted-foreground">Looking...</li>}
