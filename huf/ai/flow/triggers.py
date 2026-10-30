@@ -21,6 +21,8 @@ from datetime import datetime, timedelta, timezone
 
 import frappe
 
+from huf.ai.flow.support.doc_fields import LINK_KEY, link_targets, plain_fields
+
 WEBHOOK_TYPE = "trigger.webhook"
 SCHEDULE_TYPE = "trigger.schedule"
 DOC_EVENT_TYPE = "trigger.doc-event"
@@ -406,6 +408,31 @@ def _filter_payload_row(row: dict, doctype: str, owner: str, parenttype: str | N
 	return out
 
 
+def _linked_values(doc, owner: str) -> dict:
+	"""Plain fields of the records a document links to, so a flow can read "Customer > Credit limit".
+
+	``{link fieldname: {field: value}}`` for the first few Link fields, only for records ``owner`` may open and only the
+	fields the "Use data" picker offers (``doc_fields.plain_fields``). Never raises: a missing link is just left out.
+	"""
+	out: dict = {}
+	try:
+		for fieldname, _label, linked_doctype in link_targets(frappe.get_meta(doc.doctype).fields):
+			name = doc.get(fieldname)
+			if not name or not isinstance(name, str):
+				continue
+			try:
+				if not frappe.has_permission(linked_doctype, "read", doc=name, user=owner):
+					continue
+				row = _filter_payload_row(json.loads(frappe.as_json(frappe.get_cached_doc(linked_doctype, name).as_dict())), linked_doctype, owner)
+				wanted = {df.fieldname for df in plain_fields(frappe.get_meta(linked_doctype).fields)}
+				out[fieldname] = {k: v for k, v in row.items() if k in wanted and not isinstance(v, (dict, list))}
+			except Exception:
+				continue
+	except Exception:
+		return {}
+	return out
+
+
 def build_doc_event_payload(doc, owner: str, event: str | None = None) -> dict:
 	"""The payload a doc-event flow run starts with: the document as ``owner`` may read it.
 
@@ -417,6 +444,9 @@ def build_doc_event_payload(doc, owner: str, event: str | None = None) -> dict:
 	"""
 	data = json.loads(frappe.as_json(doc.as_dict()))
 	payload = _filter_payload_row(data, doc.doctype, owner)
+	links = _linked_values(doc, owner)
+	if links:
+		payload[LINK_KEY] = links
 	payload["_trigger"] = {
 		"doctype": doc.doctype,
 		"docname": doc.name,
