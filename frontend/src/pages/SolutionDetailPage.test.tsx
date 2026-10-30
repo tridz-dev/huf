@@ -192,7 +192,7 @@ describe('SolutionDetailPage', () => {
     renderAt('/solutions/orders?tab=templates');
     expect(await screen.findByText('templates for gw1')).toBeInTheDocument();
     expect(seen.templates.at(-1)).toMatchObject({ gateway: 'gw1', scopeSolution: 'orders' });
-    expect(screen.getByRole('link', { name: 'Settings > WhatsApp' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Channels > Templates' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Number')).toBeNull();
   });
 

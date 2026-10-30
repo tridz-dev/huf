@@ -6,7 +6,7 @@
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai import gateway_service as gsvc
+from huf.ai.gateway_core import agent_connect
 from huf.testing.factories import make_agent, make_ai_provider_and_model
 
 
@@ -47,7 +47,7 @@ class TestConnectAgentToChannel(IntegrationTestCase):
 
 	def test_creates_a_pairing_gateway_routed_to_the_agent(self):
 		agent = self.agents[0].name
-		result = gsvc.connect_agent_to_channel(self.settings.name, agent)
+		result = agent_connect.connect_agent_to_channel(self.settings.name, agent)
 
 		self.assertTrue(result["created"])
 		gateway = frappe.get_doc("Gateway", result["gateway"])
@@ -62,8 +62,8 @@ class TestConnectAgentToChannel(IntegrationTestCase):
 		self.assertTrue(whatsapp_tools <= self._tools(agent))
 
 	def test_reconnecting_replaces_the_agent_on_the_same_gateway(self):
-		first = gsvc.connect_agent_to_channel(self.settings.name, self.agents[0].name)
-		second = gsvc.connect_agent_to_channel(self.settings.name, self.agents[1].name)
+		first = agent_connect.connect_agent_to_channel(self.settings.name, self.agents[0].name)
+		second = agent_connect.connect_agent_to_channel(self.settings.name, self.agents[1].name)
 
 		self.assertFalse(second["created"])
 		self.assertEqual(second["gateway"], first["gateway"])
@@ -73,14 +73,14 @@ class TestConnectAgentToChannel(IntegrationTestCase):
 
 	def test_tools_are_not_attached_twice(self):
 		agent = self.agents[0].name
-		gsvc.connect_agent_to_channel(self.settings.name, agent)
-		again = gsvc.connect_agent_to_channel(self.settings.name, agent)
+		agent_connect.connect_agent_to_channel(self.settings.name, agent)
+		again = agent_connect.connect_agent_to_channel(self.settings.name, agent)
 		self.assertEqual(again["tools_added"], 0)
 		self.assertIsNone(again["previous_agent"])
 
 	def test_connection_lists_the_gateway_and_its_agent(self):
-		result = gsvc.connect_agent_to_channel(self.settings.name, self.agents[0].name)
-		info = gsvc.get_channel_agent_connection(self.settings.name)
+		result = agent_connect.connect_agent_to_channel(self.settings.name, self.agents[0].name)
+		info = agent_connect.get_channel_agent_connection(self.settings.name)
 		self.assertEqual(info["provider"], "WhatsApp")
 		self.assertEqual([g["name"] for g in info["gateways"]], [result["gateway"]])
 		self.assertEqual(info["gateways"][0]["default_agent"], self.agents[0].name)
@@ -92,6 +92,6 @@ class TestConnectAgentToChannel(IntegrationTestCase):
 		).insert(ignore_permissions=True)
 		try:
 			with self.assertRaises(frappe.ValidationError):
-				gsvc.connect_agent_to_channel(other.name, self.agents[0].name)
+				agent_connect.connect_agent_to_channel(other.name, self.agents[0].name)
 		finally:
 			frappe.db.delete("Integration Settings", {"name": other.name})

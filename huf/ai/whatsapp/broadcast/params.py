@@ -14,10 +14,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-LOCATION_TEXT_MAX = 1000
-URL_SUFFIX_MAX = 2000
-COPY_CODE_MAX = 15
-HEADER_TEXT_MAX = 60
+from huf.ai.whatsapp.broadcast import policy
+
 _CODE_RE = re.compile(r"^[A-Za-z0-9]+$")
 
 
@@ -34,9 +32,10 @@ def location_error(item: dict[str, Any]) -> str | None:
 		return "latitude must be a number between -90 and 90"
 	if _num(item.get("longitude"), -180, 180) is None:
 		return "longitude must be a number between -180 and 180"
+	cap = policy.get("location_text_max")
 	for key in ("name", "address"):
-		if len(str(item.get(key) or "")) > LOCATION_TEXT_MAX:
-			return f"location {key} is limited to {LOCATION_TEXT_MAX} characters"
+		if len(str(item.get(key) or "")) > cap:
+			return f"location {key} is limited to {cap} characters"
 	return None
 
 
@@ -56,8 +55,9 @@ def header_error(header: Any) -> str | None:
 			text = item.strip()
 			if text.lower().startswith("http://"):
 				return "a media header link must start with https://"
-			if not text.lower().startswith("https://") and len(text) > HEADER_TEXT_MAX:
-				return f"header text is limited to {HEADER_TEXT_MAX} characters"
+			cap = policy.get("header_text_max")
+			if not text.lower().startswith("https://") and len(text) > cap:
+				return f"header text is limited to {cap} characters"
 	return None
 
 
@@ -68,12 +68,14 @@ def button_error(buttons: Any) -> str | None:
 		kind = str(item.get("sub_type") or item.get("type") or "url").lower()
 		if kind == "copy_code":
 			code = str(item.get("code") if item.get("code") is not None else item.get("text") or "")
-			if not code or len(code) > COPY_CODE_MAX or not _CODE_RE.match(code):
-				return f"a copy code needs 1 to {COPY_CODE_MAX} letters or digits"
+			cap = policy.get("copy_code_max")
+			if not code or len(code) > cap or not _CODE_RE.match(code):
+				return f"a copy code needs 1 to {cap} letters or digits"
 		elif kind == "url":
 			text = str(item.get("text") or "")
-			if "://" in text or len(text) > URL_SUFFIX_MAX:
-				return f"a link suffix must not include a scheme and is limited to {URL_SUFFIX_MAX} characters"
+			cap = policy.get("url_suffix_max")
+			if "://" in text or len(text) > cap:
+				return f"a link suffix must not include a scheme and is limited to {cap} characters"
 	return None
 
 

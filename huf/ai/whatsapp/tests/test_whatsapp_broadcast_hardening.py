@@ -15,6 +15,7 @@ if isinstance(frappe, MagicMock):
 	frappe.PermissionError = PermissionError
 
 from huf.ai.whatsapp.broadcast import recipients as br  # noqa: E402
+from huf.ai.whatsapp.broadcast import policy  # noqa: E402
 from huf.ai.whatsapp.broadcast import api as mgmt
 from huf.ai.whatsapp.broadcast import api_read as mgmt_read  # noqa: E402
 from huf.huf.doctype.whatsapp_broadcast import whatsapp_broadcast as wb  # noqa: E402
@@ -43,18 +44,18 @@ class TestPrepareCeilings(unittest.TestCase):
 		self.assertEqual(res["skipped_total"], 5)
 
 	def test_row_ceiling_stops_skipped_inserts(self):
-		res, ins = self._run(["1555000%04d" % i for i in range(3)], cap=10, total=br.MAX_ROWS_PER_BROADCAST - 1, reason="opted_out")
+		res, ins = self._run(["1555000%04d" % i for i in range(3)], cap=10, total=policy.get("max_rows_per_broadcast") - 1, reason="opted_out")
 		self.assertEqual(len(ins), 1)
 		self.assertEqual([s["reason"] for s in res["skipped"]], ["opted_out", "row_ceiling", "row_ceiling"])
 
 	def test_returned_lists_capped_with_totals(self):
 		rows = ["bad%d" % i for i in range(300)]
 		res, _ = self._run(rows)
-		self.assertEqual(len(res["invalid"]), br.RETURNED_LIST_LIMIT)
+		self.assertEqual(len(res["invalid"]), policy.get("returned_list_limit"))
 		self.assertEqual(res["invalid_total"], 300)
 
 	def test_cap_clamped_to_ceiling(self):
-		res, ins = self._run(["15550000001"], cap=10**9, active=br.MAX_RECIPIENTS_CEILING)
+		res, ins = self._run(["15550000001"], cap=10**9, active=policy.get("max_recipients_ceiling"))
 		self.assertEqual(ins, [])
 		self.assertEqual(res["skipped"][0]["reason"], "max_recipients")
 
@@ -83,11 +84,11 @@ class _Base(unittest.TestCase):
 
 class TestIntakeLimits(_Base):
 	def test_csv_too_large(self):
-		res = mgmt.add_broadcast_recipients(BC, csv_text="a" * (br.MAX_CSV_BYTES + 1))
+		res = mgmt.add_broadcast_recipients(BC, csv_text="a" * (policy.get("max_csv_mb") * 1024 * 1024 + 1))
 		self.assertEqual(res["error"], "csv_too_large")
 
 	def test_too_many_recipients(self):
-		res = mgmt.add_broadcast_recipients(BC, recipients=json.dumps(["1"] * (br.MAX_ROWS_PER_REQUEST + 1)))
+		res = mgmt.add_broadcast_recipients(BC, recipients=json.dumps(["1"] * (policy.get("max_rows_per_request") + 1)))
 		self.assertEqual(res["error"], "too_many_recipients")
 
 	def test_create_max_recipients_ceiling(self):
@@ -95,7 +96,7 @@ class TestIntakeLimits(_Base):
 		patch.object(mgmt, "_gateway_whatsapp_account", return_value="ACC").start()
 		patch.object(mgmt.bridge, "_template_docname", return_value="t-en").start()
 		self.frappe.db.get_value.return_value = {"name": "t-en", "whatsapp_account": "ACC", "status": "APPROVED", "category": "UTILITY"}
-		res = mgmt.create_broadcast(GW, "t", "T", max_recipients=br.MAX_RECIPIENTS_CEILING + 1)
+		res = mgmt.create_broadcast(GW, "t", "T", max_recipients=policy.get("max_recipients_ceiling") + 1)
 		self.assertEqual(res["error"], "invalid_max_recipients")
 
 	def test_create_inserts_with_ignore_permissions_and_sets_flag(self):

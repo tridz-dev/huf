@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_errors as errors
+from huf.ai.whatsapp.broadcast import policy as bpolicy
 from huf.ai.whatsapp.broadcast import send as bs
 from huf.ai.whatsapp import outbound_policy as policy
 
@@ -38,7 +39,7 @@ class _Store:
 		self.write_hook = None
 
 	def claim(self, name):
-		if self.row["status"] in ("queued", "deferred") and self.row["attempts"] < bs.MAX_ATTEMPTS:
+		if self.row["status"] in ("queued", "deferred") and self.row["attempts"] < bpolicy.get("max_attempts"):
 			self.row["status"] = "sending"
 			self.row["attempts"] += 1
 			return True

@@ -568,10 +568,10 @@ class TestWhatsAppAppTile(_Base):
 		doc = frappe.get_doc("HUF App", {"app_id": "whatsapp"})
 		self.assertEqual(
 			(doc.title, doc.route, doc.source_app, doc.launch_mode, doc.category, doc.enabled),
-			("WhatsApp", "/huf/whatsapp", "huf", "Route", "Communicate", 1),
+			("WhatsApp", "/huf/channels/whatsapp", "huf", "Route", "Communicate", 1),
 		)
 		self.assertEqual(doc.permission_method, "huf.ai.whatsapp.management.can_launch_whatsapp_app")
-		self.assertEqual(doc.description, "Manage WhatsApp templates and see messages handled by your agents.")
+		self.assertEqual(doc.description, "Set up and automate WhatsApp: AI agents, broadcasts, templates, handoff to Help Desk/CRM")
 		frappe.db.set_value("HUF App", doc.name, {"enabled": 0, "title": "Hand edited"})
 		install.create_whatsapp_app()
 		again = frappe.get_doc("HUF App", doc.name)
@@ -588,7 +588,7 @@ class TestWhatsAppAppTile(_Base):
 	def test_permission_method_truth_table(self):
 		can = mgmt.can_launch_whatsapp_app
 		frappe.db.set_value("Gateway", {"provider": "WhatsApp"}, "is_enabled", 0)
-		self.assertFalse(can("Administrator", {}), "no enabled WhatsApp gateway")
+		self.assertTrue(can("Administrator", {}), "admins can launch with zero enabled gateways (setup lives in the app)")
 		gw = self.make_gateway("T")
 		self.assertTrue(can("Administrator", {}))
 		self.assertTrue(can(user="Administrator", app={"app_id": "whatsapp"}))
@@ -602,9 +602,10 @@ class TestWhatsAppAppTile(_Base):
 		with patch("huf.permissions.has_capability", return_value=True):
 			self.assertTrue(can(PLAIN_USER, {}), "integrations capability")
 		frappe.db.set_value("Gateway", gw.name, "is_enabled", 0)
-		self.assertFalse(can("Administrator", {}))
+		self.assertTrue(can("Administrator", {}), "disabled gateway does not hide the tile from admins")
 		frappe.db.set_value("Gateway", gw.name, {"is_enabled": 1, "provider": "Telegram"})
-		self.assertFalse(can("Administrator", {}), "only WhatsApp gateways count")
+		self.assertTrue(can("Administrator", {}), "gateway provider is irrelevant to the admin gate")
+		self.assertFalse(can(PLAIN_USER, {}), "non-admin without the capability stays out, gateways or not")
 
 	def test_permission_method_never_raises(self):
 		with patch.object(mgmt.frappe, "get_roles", side_effect=RuntimeError("boom")):

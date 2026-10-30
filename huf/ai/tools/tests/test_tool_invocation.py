@@ -61,7 +61,7 @@ def _install_standalone_frappe_stub():
 
 _install_standalone_frappe_stub()
 
-from huf.ai.tools import invocation as ti  # noqa: E402 -- must follow the stub install above
+from huf.ai.tools import call_telemetry, invocation as ti  # noqa: E402 -- must follow the stub install above
 
 
 class _FakeSession:
@@ -146,6 +146,10 @@ class _FrappeDoubleTestCase(unittest.TestCase):
 		patcher = patch.object(ti, "frappe", self.frappe)
 		patcher.start()
 		self.addCleanup(patcher.stop)
+		# Telemetry helpers live in huf.ai.tools.call_telemetry and import frappe themselves.
+		telemetry_patcher = patch.object(call_telemetry, "frappe", self.frappe)
+		telemetry_patcher.start()
+		self.addCleanup(telemetry_patcher.stop)
 		# Many tests below assign ``ti.get_function_from_name`` directly; restore it for every
 		# subclass so a stub handler can never leak into later tests that run real tools.
 		self.addCleanup(setattr, ti, "get_function_from_name", ti.get_function_from_name)

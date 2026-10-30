@@ -1,0 +1,19 @@
+{
+ "actions": [],
+ "creation": "2026-10-29 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["holiday_date", "description"],
+ "fields": [
+  {"fieldname":"holiday_date","fieldtype":"Date","in_list_view":1,"label":"Date","reqd":1},
+  {"fieldname":"description","fieldtype":"Data","in_list_view":1,"label":"Description"}
+ ],
+ "istable": 1,
+ "module": "Huf",
+ "name": "Gateway Holiday",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -3,10 +3,13 @@ import type { WhatsAppResult } from '@/services/whatsappApi';
 
 const WRITE = 'huf.ai.whatsapp.broadcast.api';
 const READ = 'huf.ai.whatsapp.broadcast.api_read';
+const SCHEDULE = 'huf.ai.whatsapp.broadcast.schedule';
+const SCHEDULE_METHODS = new Set(['schedule_broadcast', 'unschedule_broadcast', 'retry_failed_recipients']);
 const READ_METHODS = new Set(['list_broadcasts', 'get_broadcast', 'get_broadcast_template_params', 'list_broadcast_recipients']);
 
 async function broadcastCall<T>(method: string, args: Record<string, unknown>, verb: 'get' | 'post'): Promise<WhatsAppResult<T>> {
-  const path = `${READ_METHODS.has(method) ? READ : WRITE}.${method}`;
+  const base = READ_METHODS.has(method) ? READ : SCHEDULE_METHODS.has(method) ? SCHEDULE : WRITE;
+  const path = `${base}.${method}`;
   try {
     const out = await apiCall<Record<string, unknown> | null>(path, args, { verb: verb === 'get' ? 'GET' : 'POST' });
     return { ...(out && typeof out === 'object' ? out : {}), success: true } as WhatsAppResult<T>;
@@ -17,7 +20,7 @@ async function broadcastCall<T>(method: string, args: Record<string, unknown>, v
 
 // ---- Broadcast ------------------------------------------------------------
 
-export type BroadcastStatus = 'Draft' | 'Queued' | 'Running' | 'Paused' | 'Completed' | 'Cancelled' | 'Failed';
+export type BroadcastStatus = 'Draft' | 'Scheduled' | 'Queued' | 'Running' | 'Paused' | 'Completed' | 'Cancelled' | 'Failed';
 export type BroadcastRecipientStatus =
   'queued' | 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | 'deferred' | 'unknown' | 'skipped';
 
@@ -38,6 +41,7 @@ export interface Broadcast {
   consent_attested?: number;
   max_recipients?: number | null;
   mps?: number | null;
+  scheduled_at?: string | null;
   started_by?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
@@ -90,10 +94,22 @@ export interface BroadcastPreview {
   template_status?: string | null;
   within_limit: boolean | null;
   remaining_24h: number | null;
-  warnings: string[];
-  blocking: string[];
+  warnings: BroadcastIssue[];
+  blocking: BroadcastIssue[];
+  /** Keys (see get_broadcast_limits) of the limits that affected this broadcast. */
+  limits_in_effect: string[];
   cost: BroadcastCost | null;
   confirm_required: boolean;
+}
+
+/** A blocking reason or an overridable warning. `code` is what start_broadcast's override_warnings takes. */
+export interface BroadcastIssue { code: string; message: string; limit_key?: string | null }
+
+/** Contract items are `{code,message,limit_key}`; a bare string is tolerated and used as both code and message. */
+export function toIssue(x: unknown): BroadcastIssue {
+  if (typeof x === 'string') return { code: x, message: x, limit_key: null };
+  const o = (x ?? {}) as Partial<BroadcastIssue>;
+  return { code: String(o.code ?? o.message ?? ''), message: String(o.message ?? o.code ?? ''), limit_key: o.limit_key ?? null };
 }
 
 export interface BroadcastRecipientInput {
@@ -152,8 +168,9 @@ export function adaptPreview(r: Record<string, any>): BroadcastPreview {
     template_status: l.template_status ?? null,
     within_limit: l.within_limit ?? null,
     remaining_24h: l.remaining_24h ?? null,
-    warnings: Array.isArray(l.warnings) ? l.warnings : [],
-    blocking: Array.isArray(l.blocking) ? l.blocking : [],
+    warnings: (Array.isArray(l.warnings) ? l.warnings : []).map(toIssue),
+    blocking: (Array.isArray(l.blocking) ? l.blocking : []).map(toIssue),
+    limits_in_effect: (Array.isArray(r.limits_in_effect) ? r.limits_in_effect : Array.isArray(l.limits_in_effect) ? l.limits_in_effect : []).map(String),
     cost: r.cost ?? null,
     confirm_required: !!r.confirm_required,
   };
@@ -234,8 +251,19 @@ export const attestBroadcastConsent = (broadcast: string, consentSource: string)
 export const previewBroadcast = (broadcast: string) =>
   mapOk(broadcastCall<Record<string, any>>('preview_broadcast', { broadcast }, 'post'), (r) => ({ preview: adaptPreview(r) }));
 
-export const startBroadcast = (broadcast: string, confirmCount: string | number) =>
-  broadcastCall<Mutated & { queued?: number }>('start_broadcast', { broadcast, confirm_count: String(confirmCount) }, 'post');
+/** `overrideWarnings` = codes of the warnings the operator acknowledged; the server rejects the start (`warnings_changed`) if they no longer match. */
+export const startBroadcast = (broadcast: string, confirmCount: string | number, overrideWarnings: string[] = []) =>
+  broadcastCall<Mutated & { queued?: number; warnings?: unknown[] }>(
+    'start_broadcast', { broadcast, confirm_count: String(confirmCount), override_warnings: JSON.stringify(overrideWarnings) }, 'post');
+
+/** `scheduledAt` is 'YYYY-MM-DD HH:mm:ss' in the SITE timezone. */
+export const scheduleBroadcast = (broadcast: string, scheduledAt: string, confirmCount: string | number, overrideWarnings: string[] = []) =>
+  broadcastCall<Mutated & { scheduled_at?: string }>(
+    'schedule_broadcast', { broadcast, scheduled_at: scheduledAt, confirm_count: String(confirmCount), override_warnings: JSON.stringify(overrideWarnings) }, 'post');
+export const unscheduleBroadcast = (broadcast: string) => broadcastCall<Mutated>('unschedule_broadcast', { broadcast }, 'post');
+/** Creates a new Draft with the retryable failed recipients; returns its name in `broadcast`. */
+export const retryFailedRecipients = (broadcast: string) =>
+  broadcastCall<{ broadcast?: string; retried_from?: string; added?: number }>('retry_failed_recipients', { broadcast }, 'post');
 
 export const pauseBroadcast = (broadcast: string) => broadcastCall<Mutated>('pause_broadcast', { broadcast }, 'post');
 export const resumeBroadcast = (broadcast: string) => broadcastCall<Mutated>('resume_broadcast', { broadcast }, 'post');

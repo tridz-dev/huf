@@ -401,7 +401,7 @@ def _cached_token_check(gateway_name: str) -> dict[str, Any] | None:
 	try:
 		from huf.ai.whatsapp.token_check import _result_key
 
-		cached = frappe.cache().get_value(_result_key(gateway_name))
+		cached = frappe.cache().get_value(_result_key(gateway_name), expires=True)
 	except Exception:
 		return None
 	if isinstance(cached, dict) and cached.get("valid") in (True, False):

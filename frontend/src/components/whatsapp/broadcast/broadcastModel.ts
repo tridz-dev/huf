@@ -12,3 +12,6 @@ export function progressPercent(b: Broadcast): number {
 export const COUNT_KEYS = ['queued', 'sending', 'sent', 'delivered', 'read', 'failed', 'deferred', 'unknown', 'skipped'] as const;
 
 export const isActive = (s: BroadcastStatus) => ACTIVE_STATUSES.includes(s);
+
+/** `<input type="datetime-local">` value -> 'YYYY-MM-DD HH:mm:ss' (the server reads it in the site timezone). */
+export const toSiteDatetime = (v: string) => (v ? `${v.replace('T', ' ')}${v.length === 16 ? ':00' : ''}` : '');

@@ -7,6 +7,7 @@ Only persistence edges are faked.
 
 from __future__ import annotations
 
+import datetime as _dt
 import importlib
 import os
 import sys
@@ -14,7 +15,7 @@ import types
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import pytest
+from huf.ai.tests.unit_support import MonkeyPatch, SupportCase  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, "testing"))
 import _stub_env  # noqa: E402
@@ -61,8 +62,8 @@ CTX = {"sender_id": "U1", "conversation_id": "C1", "thread_id": "T1", "message_t
 RAW = {"tenant": "t-123", "k": "v"}
 
 
-class TestIngestFilterSeam:
-	def setup_method(self):
+class TestIngestFilterSeam(SupportCase):
+	def setUp(self):
 		hooks.clear()
 		self.stored = {}
 		self.events = []
@@ -88,7 +89,7 @@ class TestIngestFilterSeam:
 			self.admitted.append(dict(context))
 			return True, ""
 
-		def route(gw_name, context):
+		def route(gw_name, context, **kw):
 			self.routed.append(dict(context))
 			return {"status": "Queued", "target_type": "Agent", "agent": "A1", "binding": None}
 
@@ -97,6 +98,7 @@ class TestIngestFilterSeam:
 			patch.object(frappe.db, "get_value", side_effect=get_value),
 			patch.object(frappe, "get_doc", side_effect=get_doc),
 			patch.object(frappe, "enqueue"),
+			patch.object(gs, "now_datetime", side_effect=_dt.datetime.now),
 			patch.object(gs, "_admission", side_effect=admission),
 			patch.object(gs, "resolve_gateway_route", side_effect=route),
 			patch.object(hooks, "register_all"),
@@ -107,7 +109,7 @@ class TestIngestFilterSeam:
 		frappe.flags.gateway_filter_reason = None
 		hooks.register(hooks.ON_EVENT_REJECTED, lambda *a: self.rejected.append(a))
 
-	def teardown_method(self):
+	def tearDown(self):
 		for p in self._patches:
 			p.stop()
 		hooks.clear()
@@ -233,16 +235,16 @@ def _teams_activity(text, tenant=_HOME, fixture="personal_message", kind="messag
 	return act
 
 
-class TestTeamsFilterComposition:
+class TestTeamsFilterComposition(SupportCase):
 	_ingest = TestIngestFilterSeam._ingest
 
-	def setup_method(self):
-		TestIngestFilterSeam.setup_method(self)
+	def setUp(self):
+		TestIngestFilterSeam.setUp(self)
 		self.gateway.provider = "Microsoft Teams"
 		self.order = []
 		self.tokens = []
 		self.outbox = []
-		self.pm = pytest.MonkeyPatch()
+		self.pm = MonkeyPatch()
 		self.tt = importlib.import_module("huf.ai.gateways.teams.tenant")
 		self.th = importlib.import_module("huf.ai.gateways.teams.messaging.help")
 		self.ta = importlib.import_module("huf.ai.gateways.teams.actions")
@@ -260,9 +262,9 @@ class TestTeamsFilterComposition:
 		self.pm.setattr(self.ta, "_handle", lambda *a, **k: self.order.append("card") or {})
 		self.pm.setattr(self.ta.frappe, "local", SimpleNamespace(), raising=False)
 
-	def teardown_method(self):
+	def tearDown(self):
 		self.pm.undo()
-		TestIngestFilterSeam.teardown_method(self)
+		TestIngestFilterSeam.tearDown(self)
 
 	def _teams(self, eid, text, **kw):
 		raw = _teams_activity(text, **kw)
@@ -270,14 +272,18 @@ class TestTeamsFilterComposition:
 			GATEWAY, eid, {**CTX, "message_text": text}, verified_sender=True, raw_payload=raw
 		)
 
-	@pytest.mark.parametrize("text", ["connect", "help", "status"])
-	def test_foreign_tenant_command_gets_no_reply_no_token_and_is_rejected(self, text):
-		res = self._teams("x-" + text, text, tenant=_FOREIGN)
-		assert res == {"event_name": "EVT-1", "status": "Rejected"}
-		assert self.outbox == [] and self.tokens == []
-		assert self.events[0].db_set.call_args[0][0] == {
-			"status": "Rejected", "error_message": "tenant_not_allowed"}
-		assert self.rejected[0][3] == "tenant_not_allowed"
+	def test_foreign_tenant_command_gets_no_reply_no_token_and_is_rejected(self):
+		for text in ["connect", "help", "status"]:
+			with self.subTest(text=text):
+				self.reset_fixtures()
+				self.tearDown()  # pytest re-ran setup_method for each parametrized case
+				self.setUp()
+				res = self._teams("x-" + text, text, tenant=_FOREIGN)
+				assert res == {"event_name": "EVT-1", "status": "Rejected"}, res
+				assert self.outbox == [] and self.tokens == []
+				assert self.events[0].db_set.call_args[0][0] == {
+					"status": "Rejected", "error_message": "tenant_not_allowed"}
+				assert self.rejected[0][3] == "tenant_not_allowed"
 
 	def test_allowed_tenant_command_still_answered(self):
 		self.pm.setattr(self.th, "_snapshot", lambda gw, meta: {"service_url": "https://x"})

@@ -68,6 +68,7 @@ from huf.ai.whatsapp import send_file as send_file
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_messages as wm
 from huf.ai.gateway_adapters import whatsapp_templates as wt
+from huf.ai.tools.whatsapp_messages import list_messages as _list_messages
 
 META_GRAPH_URL = f"https://graph.facebook.com/{bridge.GRAPH_DEFAULT_VERSION}"
 
@@ -115,10 +116,8 @@ _GATEWAY_FLAG_FIELDS = {
 _BOUND_KWARGS = ("gateway_name", "whatsapp_account")
 _SEND_ACTIONS = {
 	"send_message", "send_media", "send_voice_note", "send_location", "send_contact", "send_reaction",
-	"send_template", "create_template", *_MEDIA_ACTIONS, *_INTERACTIVE_ACTIONS,
+	"send_template", "create_template", *_MEDIA_ACTIONS, *_INTERACTIVE_ACTIONS, "send_products",
 }
-_LIST_DEFAULT_LIMIT = 20
-_LIST_MAX_LIMIT = 50
 
 
 _trusted_gateway: contextvars.ContextVar = contextvars.ContextVar("huf_whatsapp_trusted_gateway", default="")
@@ -414,6 +413,10 @@ def _dispatch(action: str, kwargs: dict) -> str:
 		return _send_reaction(kwargs)
 	elif action in _INTERACTIVE_ACTIONS:
 		return _send_interactive(kwargs, _INTERACTIVE_ACTIONS[action])
+	elif action == "send_products":
+		from huf.ai.channels.commerce import messages as commerce_messages
+
+		return commerce_messages.deliver(kwargs, _deliver_typed)
 	elif action == "send_template":
 		return _send_template(kwargs)
 	elif action == "list_messages":
@@ -589,8 +592,22 @@ def _is_opted_out(kwargs: dict, recipient: str) -> bool:
 		return True  # fail closed
 
 
+def _allowlist_refusal(recipient: str) -> Optional[str]:
+	"""Site allow-list (``wa_outbound_allowlist``) for sends that bypass the outbound policy choke point."""
+	from huf.ai.whatsapp import outbound_policy as policy
+
+	try:
+		policy.check_allowlist(recipient)
+	except policy.OutboundRefused as e:
+		return _refused(e.code, str(e))
+	return None
+
+
 def _free_form_refusal(kwargs: dict, recipient: str, what: str) -> Optional[str]:
-	"""Server-side gate of every free-form non-text send: opt-out, then window / allow_proactive."""
+	"""Server-side gate of every free-form non-text send: allow-list, opt-out, then window / allow_proactive."""
+	refusal = _allowlist_refusal(recipient)
+	if refusal:
+		return refusal
 	if _is_opted_out(kwargs, recipient):
 		return _refused("opted_out", "This contact opted out (STOP); no messages are sent until they opt back in (START).")
 	if _is_proactive_send(kwargs, recipient) and not (
@@ -863,6 +880,9 @@ def _send_template(kwargs: dict) -> str:
 	if header_params is None or button_params is None:
 		return _error("'header_params' and 'button_params' must be lists (or JSON lists)")
 
+	refusal = _allowlist_refusal(recipient)
+	if refusal:
+		return refusal
 	if _is_opted_out(kwargs, recipient):
 		return _refused("opted_out", "This contact opted out (STOP); no messages are sent until they opt back in (START).")
 	if bridge.is_bsuid(recipient):
@@ -928,43 +948,6 @@ def _send_template(kwargs: dict) -> str:
 		return _success(data)
 	except Exception as e:
 		return _error(f"Failed to send WhatsApp template: {str(e)}")
-
-
-def _clamp_limit(value: Any) -> int:
-	try:
-		number = int(value)
-	except (TypeError, ValueError):
-		number = _LIST_DEFAULT_LIMIT
-	return max(1, min(number, _LIST_MAX_LIMIT))
-
-
-def _list_messages(kwargs: dict) -> str:
-	"""Messages exchanged with ONE contact through the run's own gateway (newest first, cursor paged).
-
-	Built on ``list_message_log`` so it is gateway scoped and permission checked for the run user;
-	each item carries the wamid in ``message_id``.
-	"""
-	contact = bridge.normalize_phone(kwargs.get("to") or kwargs.get("recipient") or kwargs.get("phone_number") or "")
-	if not contact:
-		return _refused("contact_required", "Name the contact ('to') whose messages should be listed.")
-	from huf.ai.whatsapp import management as mgmt
-
-	try:
-		result = mgmt.list_message_log(
-			gateway_name=kwargs["gateway_name"],
-			phone=contact,
-			cursor=(kwargs.get("cursor") or "").strip() or None,
-			limit=_clamp_limit(kwargs.get("limit")),
-		)
-	except frappe.PermissionError:
-		return _refused("permission_denied", "Not permitted to read WhatsApp messages")
-	except Exception as e:
-		return _error(f"Failed to fetch WhatsApp messages: {str(e)}")
-	if not result.get("success"):
-		return json.dumps(result, default=str)
-	return _success(
-		{"items": result.get("items") or [], "next_cursor": result.get("next_cursor"), "has_more": bool(result.get("has_more"))}
-	)
 
 
 def _get_account_info(kwargs: dict) -> str:

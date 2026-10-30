@@ -51,7 +51,7 @@ class TestCeilingForGateway(unittest.TestCase):
 class TestCachedTier(unittest.TestCase):
 	def test_reads_tier_from_token_check_cache(self):
 		class C:
-			def get_value(self, key):
+			def get_value(self, key, **_kw):
 				return {"valid": True, "phone": {"tier": "TIER_10K"}}
 
 		with patch("frappe.cache", return_value=C()):
@@ -63,7 +63,7 @@ class TestCachedTier(unittest.TestCase):
 
 	def test_phone_missing_is_none(self):
 		class C:
-			def get_value(self, key):
+			def get_value(self, key, **_kw):
 				return {"valid": True, "phone": None}
 
 		with patch("frappe.cache", return_value=C()):

@@ -19,11 +19,15 @@ TPL_OK = {"status": "APPROVED", "category": "UTILITY"}
 LIMIT_OK = {"tier": "TIER_250", "max_unique_24h": 250, "quality": "GREEN", "mps": None, "raw": {}}
 
 
+def _codes(issues):
+	return [i["code"] for i in issues]
+
+
 class _FakeCache:
 	def __init__(self):
 		self.store = {}
 
-	def get_value(self, key):
+	def get_value(self, key, **_kw):
 		return self.store.get(key)
 
 	def set_value(self, key, value, expires_in_sec=None):
@@ -138,6 +142,7 @@ class _PreviewBase(unittest.TestCase):
 			patch.object(bl, "_recipient_counts", side_effect=lambda _b: dict(self.counts)),
 			patch.object(bl, "_queued_numbers", side_effect=lambda _b: list(self.queued_numbers)),
 			patch.object(bl, "_running_others", return_value=[]),
+			patch.object(bl, "_gateway_disconnected", return_value=None),
 			patch.object(bl, "_used_24h", return_value=0),
 			patch.object(bl, "get_messaging_limit", return_value=dict(LIMIT_OK)),
 			patch.object(bl, "template_requirements", side_effect=lambda _t: self.requirements),
@@ -167,27 +172,29 @@ class TestPreview(_PreviewBase):
 	def test_template_not_approved_blocks(self):
 		with patch.object(bl, "_template_row", return_value={"status": "PAUSED", "category": "MARKETING"}):
 			out = self._preview()
-		self.assertIn("template_not_approved:PAUSED", out["blocking"])
+		self.assertEqual(_codes(out["blocking"]), ["template_not_approved"])
 
 	def test_marketing_us_plus_one_warns_with_count(self):
 		self.queued_numbers = ["14155550100", "14155550101", "447700900123"]
 		self.counts = {"queued": 3}
 		with patch.object(bl, "_template_row", return_value={"status": "APPROVED", "category": "MARKETING"}):
 			out = self._preview()
-		self.assertTrue(any("2 queued recipient(s) are US +1" in w for w in out["warnings"]))
+		self.assertTrue(any("2 queued recipient(s) are US +1" in w["message"] for w in out["warnings"]))
 
 	def test_non_marketing_us_numbers_do_not_warn(self):
 		self.queued_numbers = ["14155550100"]
 		self.counts = {"queued": 1}
 		out = self._preview()
-		self.assertFalse(any("US +1" in w for w in out["warnings"]))
+		self.assertFalse(any("US +1" in w["message"] for w in out["warnings"]))
 
-	def test_budget_exceeded_blocks_when_limit_known(self):
+	def test_budget_exceeded_is_a_warning_not_a_block(self):
 		with patch.object(bl, "_used_24h", return_value=245):
 			out = self._preview()
 		self.assertFalse(out["within_limit"])
 		self.assertEqual(out["remaining_24h"], 5)
-		self.assertTrue(any(b.startswith("recipients_exceed_24h_budget") for b in out["blocking"]))
+		self.assertEqual(_codes(out["warnings"]), ["over_budget"])
+		self.assertEqual(out["blocking"], [])
+		self.assertEqual(out["warnings"][0]["limit_key"], "messaging_tier_24h")
 
 	def test_unknown_limit_warns_and_within_limit_is_none(self):
 		with patch.object(bl, "get_messaging_limit", return_value=bl._empty()):
@@ -195,7 +202,7 @@ class TestPreview(_PreviewBase):
 		self.assertIsNone(out["within_limit"])
 		self.assertIsNone(out["remaining_24h"])
 		self.assertEqual(out["blocking"], [])
-		self.assertTrue(any("Messaging limit is unknown" in w for w in out["warnings"]))
+		self.assertEqual(_codes(out["warnings"]), ["tier_unknown"])
 
 	def test_unlimited_tier_has_no_cap(self):
 		unlimited = {"tier": bl.UNLIMITED, "max_unique_24h": None, "quality": "GREEN", "mps": None, "raw": {}}
@@ -204,33 +211,35 @@ class TestPreview(_PreviewBase):
 		self.assertTrue(out["within_limit"])
 		self.assertIsNone(out["remaining_24h"])
 
-	def test_quality_red_blocks_yellow_warns(self):
+	def test_quality_red_and_yellow_are_warnings(self):
 		with patch.object(bl, "get_messaging_limit", return_value=dict(LIMIT_OK, quality="RED")):
-			self.assertIn("quality_red", self._preview()["blocking"])
+			out = self._preview()
+		self.assertEqual(_codes(out["warnings"]), ["quality_red"])
+		self.assertEqual(out["blocking"], [])
 		with patch.object(bl, "get_messaging_limit", return_value=dict(LIMIT_OK, quality="YELLOW")):
 			out = self._preview()
-		self.assertNotIn("quality_red", out["blocking"])
-		self.assertTrue(any("YELLOW" in w for w in out["warnings"]))
+		self.assertEqual(_codes(out["warnings"]), ["quality_yellow"])
+		self.assertEqual(out["blocking"], [])
 
 	def test_other_running_broadcast_blocks(self):
 		with patch.object(bl, "_running_others", return_value=["BCAST-00009"]):
 			out = self._preview()
-		self.assertIn("another_broadcast_running:BCAST-00009", out["blocking"])
+		self.assertEqual(_codes(out["blocking"]), ["another_broadcast_running"])
 
 	def test_consent_not_attested_blocks(self):
 		with patch.object(bl, "_broadcast_row", return_value=dict(PREVIEW_OK, consent_attested=0)):
 			out = self._preview()
-		self.assertIn("consent_not_attested", out["blocking"])
+		self.assertEqual(_codes(out["blocking"]), ["consent_not_attested"])
 
 	def test_missing_broadcast_blocks(self):
 		with patch.object(bl, "_broadcast_row", return_value=None):
 			out = self._preview()
-		self.assertEqual(out["blocking"], ["broadcast_not_found"])
+		self.assertEqual(_codes(out["blocking"]), ["broadcast_not_found"])
 
 	def test_unexpected_error_never_raises(self):
 		with patch.object(bl, "_recipient_counts", side_effect=RuntimeError("db down")):
 			out = self._preview()
-		self.assertEqual(out["blocking"], ["preview_failed"])
+		self.assertEqual(_codes(out["blocking"]), ["preview_failed"])
 
 
 class TestPreviewTemplateParams(_PreviewBase):
@@ -246,7 +255,8 @@ class TestPreviewTemplateParams(_PreviewBase):
 	def test_missing_named_value_blocks(self):
 		self.requirements = self._named()
 		out = self._preview()
-		self.assertIn("10 recipients are missing values for template variables: first_name", out["blocking"])
+		self.assertEqual(_codes(out["blocking"]), ["missing_params"])
+		self.assertIn("10 recipients are missing values for template variables: first_name", out["blocking"][0]["message"])
 
 	def test_default_params_clear_block(self):
 		self.requirements = self._named()

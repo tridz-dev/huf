@@ -1,13 +1,15 @@
+import datetime as _dt
+import pathlib
 import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-sys.path.insert(0, "huf/testing")
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()
 
-import pytest  # noqa: E402
+from huf.ai.tests.unit_support import SupportCase  # noqa: E402
 
 from huf.ai.gateways import hooks, reliability  # noqa: E402
 from huf.ai.gateways.slack.api import SlackApiError  # noqa: E402
@@ -17,8 +19,7 @@ gateway_webhook = None
 gateway_service = None
 
 
-@pytest.fixture(scope="module", autouse=True)
-def _heavy_modules():
+def _fx_heavy_modules(self):
 	"""Import gateway_webhook/gateway_service under temporary stubs; restore sys.modules after."""
 	import importlib
 	import types
@@ -78,15 +79,15 @@ class FakeCache:
 	def __init__(self):
 		self.d = {}
 
-	def get_value(self, k):
+	def get_value(self, k, **_kw):
 		return self.d.get(k)
 
 	def set_value(self, k, v, expires_in_sec=None):
 		self.d[k] = v
 
 
-@pytest.fixture
-def env(monkeypatch):
+def _fx_env(self):
+	monkeypatch = self.monkeypatch
 	cache = FakeCache()
 	monkeypatch.setattr(reliability.frappe, "cache", lambda: cache, raising=False)
 	sent = []
@@ -115,32 +116,12 @@ def ev(name="GE-1", **kw):
 GW = SimpleNamespace(provider="Slack")
 
 
-# ---- failure notice ----
-def test_failure_notice_has_ref_and_no_error_text(env):
-	reliability.on_run_failure(GW, ev(), "agent", RuntimeError("secret traceback xoxb-1"))
-	assert len(env.sent) == 1
-	conv, thread, text = env.sent[0]
-	assert (conv, thread) == ("C1", "111.1")
-	assert "GE-1" in text and "secret" not in text and "xoxb" not in text
 
 
-def test_failure_notice_flow_kind(env):
-	reliability.on_run_failure(GW, ev("GE-F"), "flow", ValueError("x"))
-	assert len(env.sent) == 1
 
 
-def test_failure_notice_at_most_once(env):
-	for _ in range(3):
-		reliability.on_run_failure(GW, ev(), "agent", RuntimeError("x"))
-	assert len(env.sent) == 1
 
 
-def test_failure_notice_never_raises_on_send_error(monkeypatch, env):
-	import importlib
-
-	ctx = importlib.import_module("huf.ai.gateways.slack.context")
-	monkeypatch.setattr(ctx, "get_slack_api", MagicMock(side_effect=RuntimeError("boom")))
-	reliability.on_run_failure(GW, ev(), "agent", RuntimeError("x"))
 
 
 # ---- S8: Slack notices are private (never the channel/thread) ----
@@ -169,76 +150,31 @@ def _api_fixture(monkeypatch, eph_fails=False, dm_fails=False):
 	return calls
 
 
-def test_slack_notice_is_ephemeral_to_sender_in_thread(env, monkeypatch):
-	calls = _api_fixture(monkeypatch)
-	reliability.on_event_rejected(GW, ev(), "Rejected", hooks.USER_VISIBLE_PREFIX + "link: https://x/y")
-	assert calls.eph == [("C1", "U1", "111.1", "link: https://x/y")]
-	assert calls.dm == [] and env.public == []
 
 
-def test_slack_notice_falls_back_to_dm(env, monkeypatch):
-	calls = _api_fixture(monkeypatch, eph_fails=True)
-	reliability.on_event_rejected(GW, ev(), "Rejected", hooks.USER_VISIBLE_PREFIX + "secret link")
-	assert calls.opened == [["U1"]] and calls.dm == [("D9", "secret link")]
-	assert env.public == []
 
 
-def test_slack_notice_nothing_public_when_both_fail(env, monkeypatch):
-	_api_fixture(monkeypatch, eph_fails=True, dm_fails=True)
-	reliability.on_event_rejected(GW, ev(), "Rejected", hooks.USER_VISIBLE_PREFIX + "secret link")
-	assert env.public == []
 
 
-def test_non_slack_provider_keeps_reply_path(env):
-	reliability.on_event_rejected(
-		SimpleNamespace(provider="Telegram"), ev(), "Rejected", hooks.USER_VISIBLE_PREFIX + "hello"
-	)
-	assert env.public == ["hello"] and env.sent == []
 
 
-def test_failure_notice_never_raises_on_cache_error(monkeypatch, env):
-	monkeypatch.setattr(reliability.frappe, "cache", MagicMock(side_effect=RuntimeError("redis")))
-	reliability.on_run_failure(GW, ev(), "agent", RuntimeError("x"))
-	assert env.sent == []
 
 
-def test_no_notice_without_conversation(env):
-	reliability.on_run_failure(GW, ev(conversation_id=""), "agent", RuntimeError("x"))
-	assert env.sent == []
 
 
-# ---- rejection ----
-def test_rejected_user_visible_reason_sent_without_prefix(env):
-	reliability.on_event_rejected(GW, ev(), "Rejected", hooks.USER_VISIBLE_PREFIX + "Please use a thread.")
-	assert env.sent[0][2] == "Please use a thread."
 
 
-def test_rejected_internal_reason_hidden(env):
-	reliability.on_event_rejected(GW, ev(), "Rejected", "sender not in allow-list")
-	reliability.on_event_rejected(GW, ev("GE-2"), "Rejected", "pairing required")
-	assert env.sent == []
 
 
-def test_unrouted_friendly_with_ref(env):
-	reliability.on_event_rejected(GW, ev(), "Unrouted", "no route for channel")
-	text = env.sent[0][2]
-	assert "GE-1" in text and "no route" not in text and "not set up" in text
 
 
-def test_rejected_notice_once(env):
-	reliability.on_event_rejected(GW, ev(), "Unrouted", "r")
-	reliability.on_event_rejected(GW, ev(), "Unrouted", "r")
-	assert len(env.sent) == 1
 
 
-def test_rejected_empty_visible_reason_ignored(env):
-	reliability.on_event_rejected(GW, ev(), "Rejected", hooks.USER_VISIBLE_PREFIX)
-	assert env.sent == []
 
 
 # ---- ack reaction ----
-@pytest.fixture
-def api(monkeypatch):
+def _fx_api(self):
+	monkeypatch = self.monkeypatch
 	a = MagicMock()
 	import huf.ai.gateways.slack.context as sc
 
@@ -246,49 +182,16 @@ def api(monkeypatch):
 	return a
 
 
-def test_reaction_added_on_start(api):
-	reliability.slack_on_run_start(GW, ev(), "agent")
-	api.add_reaction.assert_called_once_with("C1", "222.3", "hourglass_flowing_sand")
 
 
-def test_reaction_removed_on_success_and_failure(api):
-	reliability.slack_on_run_end(GW, ev(), "agent", "resp")
-	reliability.slack_on_run_end(GW, ev(), "agent", RuntimeError())
-	assert api.remove_reaction.call_count == 2
 
 
-@pytest.mark.parametrize("bad", ["", "nocolon", "C1:", ":1.2", "C1:abc", None])
-def test_reaction_parse_fallback(api, bad):
-	reliability.slack_on_run_start(GW, ev(provider_event_id=bad), "agent")
-	api.add_reaction.assert_not_called()
 
 
-def test_reaction_errors_swallowed(api):
-	api.add_reaction.side_effect = SlackApiError("reactions.add", "missing_scope", 200)
-	reliability.slack_on_run_start(GW, ev(), "agent")
-	api.remove_reaction.side_effect = SlackApiError("reactions.remove", "no_reaction", 200)
-	reliability.slack_on_run_end(GW, ev(), "agent")
 
 
-def test_reaction_no_token_swallowed(monkeypatch):
-	import huf.ai.gateways.slack.context as sc
-
-	monkeypatch.setattr(sc, "get_slack_api", MagicMock(side_effect=ValueError("no token")))
-	reliability.slack_on_run_start(GW, ev(), "agent")
 
 
-def test_hook_registration():
-	hooks.clear()
-	import importlib
-
-	importlib.reload(reliability)
-	slack = hooks._matching(hooks.ON_RUN_START, (GW,))
-	other = hooks._matching(hooks.ON_RUN_START, (SimpleNamespace(provider="Telegram"),))
-	assert reliability.slack_on_run_start in slack and reliability.slack_on_run_start not in other
-	tg = SimpleNamespace(provider="Telegram")
-	assert reliability.on_run_failure in hooks._matching(hooks.ON_RUN_FAILURE, (tg,))
-	assert reliability.on_event_rejected in hooks._matching(hooks.ON_EVENT_REJECTED, (GW,))
-	hooks.clear()
 
 
 # ---- outbound retry ----
@@ -305,8 +208,8 @@ class Adapter:
 		return o
 
 
-@pytest.fixture
-def send(monkeypatch):
+def _fx_send(self):
+	monkeypatch = self.monkeypatch
 	def run(adapter, **kw):
 		monkeypatch.setattr(gateway_webhook, "get_gateway_adapter", lambda g, *a, **k: adapter)
 		sleeps = []
@@ -320,135 +223,298 @@ def send(monkeypatch):
 	return run
 
 
-def test_retry_then_success_exponential(send):
-	ad = Adapter(SlackApiError("m", "http_503", 503), SlackApiError("m", "http_502", 502), "RCPT")
-	r, sleeps = send(ad)
-	assert r == "RCPT" and ad.calls == 3 and sleeps == [1.0, 2.0]
+_AUTOUSE = (_fx_heavy_modules,)
 
 
-def test_max_three_attempts(send):
-	ad = Adapter(*[SlackApiError("m", "http_500", 500) for _ in range(5)])
-	r, sleeps = send(ad)
-	assert isinstance(r, SlackApiError) and ad.calls == 3 and len(sleeps) == 2
+class TestModule(SupportCase):
+	# ---- failure notice ----
+	def test_failure_notice_has_ref_and_no_error_text(self):
+		env = self.use(_fx_env)
+		reliability.on_run_failure(GW, ev(), "agent", RuntimeError("secret traceback xoxb-1"))
+		assert len(env.sent) == 1
+		conv, thread, text = env.sent[0]
+		assert (conv, thread) == ("C1", "111.1")
+		assert "GE-1" in text and "secret" not in text and "xoxb" not in text
 
+	def test_failure_notice_flow_kind(self):
+		env = self.use(_fx_env)
+		reliability.on_run_failure(GW, ev("GE-F"), "flow", ValueError("x"))
+		assert len(env.sent) == 1
 
-@pytest.mark.parametrize("code", ["invalid_auth", "channel_not_found", "not_in_channel", "is_archived"])
-def test_permanent_not_retried(send, code):
-	ad = Adapter(ValueError(f"Slack chat.postMessage failed: {code}"), "X")
-	r, sleeps = send(ad)
-	assert isinstance(r, ValueError) and ad.calls == 1 and sleeps == []
+	def test_failure_notice_at_most_once(self):
+		env = self.use(_fx_env)
+		for _ in range(3):
+			reliability.on_run_failure(GW, ev(), "agent", RuntimeError("x"))
+		assert len(env.sent) == 1
 
+	def test_failure_notice_never_raises_on_send_error(self):
+		monkeypatch = self.monkeypatch
+		env = self.use(_fx_env)
+		import importlib
 
-def test_adapter_valueerror_ratelimited_retried(send):
-	ad = Adapter(ValueError("Slack chat.postMessage failed: ratelimited"), "OK")
-	r, _ = send(ad)
-	assert r == "OK" and ad.calls == 2
+		ctx = importlib.import_module("huf.ai.gateways.slack.context")
+		monkeypatch.setattr(ctx, "get_slack_api", MagicMock(side_effect=RuntimeError("boom")))
+		reliability.on_run_failure(GW, ev(), "agent", RuntimeError("x"))
 
+	def test_slack_notice_is_ephemeral_to_sender_in_thread(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		calls = _api_fixture(monkeypatch)
+		reliability.on_event_rejected(GW, ev(), "Rejected", hooks.USER_VISIBLE_PREFIX + "link: https://x/y")
+		assert calls.eph == [("C1", "U1", "111.1", "link: https://x/y")]
+		assert calls.dm == [] and env.public == []
 
-def test_timeout_retried(send):
-	ad = Adapter(TimeoutError(), "OK")
-	r, _ = send(ad)
-	assert r == "OK"
+	def test_slack_notice_falls_back_to_dm(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		calls = _api_fixture(monkeypatch, eph_fails=True)
+		reliability.on_event_rejected(GW, ev(), "Rejected", hooks.USER_VISIBLE_PREFIX + "secret link")
+		assert calls.opened == [["U1"]] and calls.dm == [("D9", "secret link")]
+		assert env.public == []
 
+	def test_slack_notice_nothing_public_when_both_fail(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		_api_fixture(monkeypatch, eph_fails=True, dm_fails=True)
+		reliability.on_event_rejected(GW, ev(), "Rejected", hooks.USER_VISIBLE_PREFIX + "secret link")
+		assert env.public == []
 
-def test_retry_after_honoured(send):
-	err = SlackApiError("m", "ratelimited", 429)
-	err.retry_after = 7
-	r, sleeps = send(Adapter(err, "OK"))
-	assert sleeps == [7.0]
+	def test_non_slack_provider_keeps_reply_path(self):
+		env = self.use(_fx_env)
+		reliability.on_event_rejected(
+			SimpleNamespace(provider="Telegram"), ev(), "Rejected", hooks.USER_VISIBLE_PREFIX + "hello"
+		)
+		assert env.public == ["hello"] and env.sent == []
 
+	def test_failure_notice_never_raises_on_cache_error(self):
+		monkeypatch = self.monkeypatch
+		env = self.use(_fx_env)
+		monkeypatch.setattr(reliability.frappe, "cache", MagicMock(side_effect=RuntimeError("redis")))
+		reliability.on_run_failure(GW, ev(), "agent", RuntimeError("x"))
+		assert env.sent == []
 
-def test_retry_after_capped(send):
-	err = SlackApiError("m", "ratelimited", 429)
-	err.retry_after = 9999
-	_, sleeps = send(Adapter(err, "OK"))
-	assert sleeps == [gateway_webhook.SEND_MAX_DELAY]
+	def test_no_notice_without_conversation(self):
+		env = self.use(_fx_env)
+		reliability.on_run_failure(GW, ev(conversation_id=""), "agent", RuntimeError("x"))
+		assert env.sent == []
 
+	# ---- rejection ----
+	def test_rejected_user_visible_reason_sent_without_prefix(self):
+		env = self.use(_fx_env)
+		reliability.on_event_rejected(GW, ev(), "Rejected", hooks.USER_VISIBLE_PREFIX + "Please use a thread.")
+		assert env.sent[0][2] == "Please use a thread."
 
-def test_http_error_response_status(send):
-	class HTTPError(Exception):
-		response = SimpleNamespace(status_code=503, headers={"Retry-After": "3"})
+	def test_rejected_internal_reason_hidden(self):
+		env = self.use(_fx_env)
+		reliability.on_event_rejected(GW, ev(), "Rejected", "sender not in allow-list")
+		reliability.on_event_rejected(GW, ev("GE-2"), "Rejected", "pairing required")
+		assert env.sent == []
 
-	r, sleeps = send(Adapter(HTTPError(), "OK"))
-	assert r == "OK" and sleeps == [3.0]
-	class Bad(Exception):
-		response = SimpleNamespace(status_code=404, headers={})
+	def test_unrouted_friendly_with_ref(self):
+		env = self.use(_fx_env)
+		reliability.on_event_rejected(GW, ev(), "Unrouted", "no route for channel")
+		text = env.sent[0][2]
+		assert "GE-1" in text and "no route" not in text and "not set up" in text
 
-	ad = Adapter(Bad(), "OK")
-	r, _ = send(ad)
-	assert isinstance(r, Bad) and ad.calls == 1
+	def test_rejected_notice_once(self):
+		env = self.use(_fx_env)
+		reliability.on_event_rejected(GW, ev(), "Unrouted", "r")
+		reliability.on_event_rejected(GW, ev(), "Unrouted", "r")
+		assert len(env.sent) == 1
 
+	def test_rejected_empty_visible_reason_ignored(self):
+		env = self.use(_fx_env)
+		reliability.on_event_rejected(GW, ev(), "Rejected", hooks.USER_VISIBLE_PREFIX)
+		assert env.sent == []
 
-def test_no_resend_after_success(send):
-	ad = Adapter("RCPT", "SECOND")
-	r, sleeps = send(ad)
-	assert r == "RCPT" and ad.calls == 1 and sleeps == []
+	def test_reaction_added_on_start(self):
+		api = self.use(_fx_api)
+		reliability.slack_on_run_start(GW, ev(), "agent")
+		api.add_reaction.assert_called_once_with("C1", "222.3", "hourglass_flowing_sand")
 
+	def test_reaction_removed_on_success_and_failure(self):
+		api = self.use(_fx_api)
+		reliability.slack_on_run_end(GW, ev(), "agent", "resp")
+		reliability.slack_on_run_end(GW, ev(), "agent", RuntimeError())
+		assert api.remove_reaction.call_count == 2
 
-def test_adapter_lookup_error_not_retried(monkeypatch):
-	monkeypatch.setattr(gateway_webhook, "get_gateway_adapter", MagicMock(side_effect=RuntimeError("none")))
-	with pytest.raises(RuntimeError):
-		gateway_webhook.send_gateway_reply(GW, SimpleNamespace(conversation_id="c", thread_id=""), "x")
+	def test_reaction_parse_fallback(self):
+		for bad in ["", "nocolon", "C1:", ":1.2", "C1:abc", None]:
+			with self.subTest(bad=bad):
+				self.reset_fixtures()
+				api = self.use(_fx_api)
+				reliability.slack_on_run_start(GW, ev(provider_event_id=bad), "agent")
+				api.add_reaction.assert_not_called()
 
+	def test_reaction_errors_swallowed(self):
+		api = self.use(_fx_api)
+		api.add_reaction.side_effect = SlackApiError("reactions.add", "missing_scope", 200)
+		reliability.slack_on_run_start(GW, ev(), "agent")
+		api.remove_reaction.side_effect = SlackApiError("reactions.remove", "no_reaction", 200)
+		reliability.slack_on_run_end(GW, ev(), "agent")
 
-# ---- run idempotency ----
-def test_redelivered_event_not_queued_is_noop(monkeypatch):
-	if gateway_service is None:
-		pytest.skip("gateway_service not importable in stub env")
+	def test_reaction_no_token_swallowed(self):
+		monkeypatch = self.monkeypatch
+		import huf.ai.gateways.slack.context as sc
 
-	for status in ("Running", "Succeeded", "Failed", "Rejected"):
-		doc = SimpleNamespace(name="GE-9", status=status)
-		get_doc = MagicMock(return_value=doc)
-		monkeypatch.setattr(gateway_service.frappe, "get_doc", get_doc)
-		assert gateway_service.process_gateway_event("GE-9") == {"event_name": "GE-9", "status": status}
-		get_doc.assert_called_once_with("Gateway Event", "GE-9")
+		monkeypatch.setattr(sc, "get_slack_api", MagicMock(side_effect=ValueError("no token")))
+		reliability.slack_on_run_start(GW, ev(), "agent")
 
+	def test_hook_registration(self):
+		hooks.clear()
+		import importlib
 
-def test_run_idempotency_key_format_documented():
-	import inspect
+		importlib.reload(reliability)
+		slack = hooks._matching(hooks.ON_RUN_START, (GW,))
+		other = hooks._matching(hooks.ON_RUN_START, (SimpleNamespace(provider="Telegram"),))
+		assert reliability.slack_on_run_start in slack and reliability.slack_on_run_start not in other
+		tg = SimpleNamespace(provider="Telegram")
+		assert reliability.on_run_failure in hooks._matching(hooks.ON_RUN_FAILURE, (tg,))
+		assert reliability.on_event_rejected in hooks._matching(hooks.ON_EVENT_REJECTED, (GW,))
+		hooks.clear()
 
-	if gateway_service is None:
-		pytest.skip("gateway_service not importable in stub env")
+	def test_retry_then_success_exponential(self):
+		send = self.use(_fx_send)
+		ad = Adapter(SlackApiError("m", "http_503", 503), SlackApiError("m", "http_502", 502), "RCPT")
+		r, sleeps = send(ad)
+		assert r == "RCPT" and ad.calls == 3 and sleeps == [1.0, 2.0]
 
-	src = inspect.getsource(gateway_service)
-	assert 'client_idempotency_key=f"gateway-event:{event.name}"' in src
+	def test_max_three_attempts(self):
+		send = self.use(_fx_send)
+		ad = Adapter(*[SlackApiError("m", "http_500", 500) for _ in range(5)])
+		r, sleeps = send(ad)
+		assert isinstance(r, SlackApiError) and ad.calls == 3 and len(sleeps) == 2
 
+	def test_permanent_not_retried(self):
+		for code in ["invalid_auth", "channel_not_found", "not_in_channel", "is_archived"]:
+			with self.subTest(code=code):
+				self.reset_fixtures()
+				send = self.use(_fx_send)
+				ad = Adapter(ValueError(f"Slack chat.postMessage failed: {code}"), "X")
+				r, sleeps = send(ad)
+				assert isinstance(r, ValueError) and ad.calls == 1 and sleeps == []
 
-def test_unapproved_room_gets_one_private_hint_per_channel(env):
-	reason = reliability.ROOM_NOT_APPROVED_REASON
-	reliability.on_event_rejected(GW, ev("GE-1"), "Rejected", reason)
-	reliability.on_event_rejected(GW, ev("GE-2"), "Rejected", reason)
-	assert len(env.sent) == 1 and "admin" in env.sent[0][2].lower()
+	def test_adapter_valueerror_ratelimited_retried(self):
+		send = self.use(_fx_send)
+		ad = Adapter(ValueError("Slack chat.postMessage failed: ratelimited"), "OK")
+		r, _ = send(ad)
+		assert r == "OK" and ad.calls == 2
 
+	def test_timeout_retried(self):
+		send = self.use(_fx_send)
+		ad = Adapter(TimeoutError(), "OK")
+		r, _ = send(ad)
+		assert r == "OK"
 
-def test_unapproved_direct_message_stays_silent(env):
-	reliability.on_event_rejected(GW, ev(conversation_id="D1"), "Rejected", reliability.ROOM_NOT_APPROVED_REASON)
-	assert env.sent == []
+	def test_retry_after_honoured(self):
+		send = self.use(_fx_send)
+		err = SlackApiError("m", "ratelimited", 429)
+		err.retry_after = 7
+		r, sleeps = send(Adapter(err, "OK"))
+		assert sleeps == [7.0]
 
+	def test_retry_after_capped(self):
+		send = self.use(_fx_send)
+		err = SlackApiError("m", "ratelimited", 429)
+		err.retry_after = 9999
+		_, sleeps = send(Adapter(err, "OK"))
+		assert sleeps == [gateway_webhook.SEND_MAX_DELAY]
 
-def test_notice_thread_rules():
-	assert reliability._notice_thread("D1", "1.1", "1.1") is None
-	assert reliability._notice_thread("C1", "1.1", "1.1") is None  # top-level message: own ts is not a real thread
-	assert reliability._notice_thread("C1", "1.1", "2.2") == "1.1"  # reply inside a real thread
+	def test_http_error_response_status(self):
+		send = self.use(_fx_send)
+		class HTTPError(Exception):
+			response = SimpleNamespace(status_code=503, headers={"Retry-After": "3"})
 
+		r, sleeps = send(Adapter(HTTPError(), "OK"))
+		assert r == "OK" and sleeps == [3.0]
+		class Bad(Exception):
+			response = SimpleNamespace(status_code=404, headers={})
 
-def test_unapproved_room_hint_is_posted_top_level_for_top_level_message(env):
-	reliability.on_event_rejected(GW, ev(thread_id="222.3", provider_event_id="C1:222.3"), "Rejected",
-		reliability.ROOM_NOT_APPROVED_REASON)
-	assert env.sent and env.sent[0][1] in (None, "")
+		ad = Adapter(Bad(), "OK")
+		r, _ = send(ad)
+		assert isinstance(r, Bad) and ad.calls == 1
 
+	def test_no_resend_after_success(self):
+		send = self.use(_fx_send)
+		ad = Adapter("RCPT", "SECOND")
+		r, sleeps = send(ad)
+		assert r == "RCPT" and ad.calls == 1 and sleeps == []
 
-def test_replayed_event_runs_pre_ingest_filters_and_is_rejected(monkeypatch):
-	"""Reaper / dead-letter replay (filters_checked=False) must not bypass the tenant filter."""
-	if gateway_service is None:
-		pytest.skip("gateway_service not importable in stub env")
-	rejected = []
-	gw = SimpleNamespace(name="gw1", provider="Microsoft Teams", is_enabled=1)
-	monkeypatch.setattr(gateway_service.frappe, "get_doc", lambda *a, **k: gw, raising=False)
-	monkeypatch.setattr(gateway_service.frappe, "flags", SimpleNamespace(gateway_filter_reason=None), raising=False)
-	monkeypatch.setattr(hooks, "register_all", lambda: None)
-	monkeypatch.setattr(hooks, "call_filters", lambda hook, g, ctx: False)
-	monkeypatch.setattr(gateway_service, "_reject_gateway_event", lambda g, e, s, r: rejected.append((s, r)))
-	event = SimpleNamespace(name="GE-9", raw_payload='{"channelData": {"tenant": {"id": "x"}}}')
-	out = gateway_service._continue_ingest(event, "gw1", "pid", {"kind": "message"}, True)
-	assert out["status"] == "Rejected" and rejected == [("Rejected", "Dropped by an ingest filter")]
+	def test_adapter_lookup_error_not_retried(self):
+		monkeypatch = self.monkeypatch
+		monkeypatch.setattr(gateway_webhook, "get_gateway_adapter", MagicMock(side_effect=RuntimeError("none")))
+		with self.assertRaises(RuntimeError):
+			gateway_webhook.send_gateway_reply(GW, SimpleNamespace(conversation_id="c", thread_id=""), "x")
+
+	# ---- run idempotency ----
+	def test_redelivered_event_not_queued_is_noop(self):
+		monkeypatch = self.monkeypatch
+		if gateway_service is None:
+			self.skipTest("gateway_service not importable in stub env")
+
+		real_get_doc = gateway_service.frappe.get_doc  # before the loop: monkeypatch wraps it each pass
+		for status in ("Running", "Succeeded", "Failed", "Rejected"):
+			doc = SimpleNamespace(name="GE-9", status=status)
+			def fake_get_doc(*args, **kwargs):
+				# Only the event is faked; frappe internals (System Settings for the reaper's clock)
+				# go through get_doc too and need the real thing.
+				if args[:2] == ("Gateway Event", "GE-9"):
+					return doc
+				return real_get_doc(*args, **kwargs)
+
+			get_doc = MagicMock(side_effect=fake_get_doc)
+			monkeypatch.setattr(gateway_service.frappe, "get_doc", get_doc)
+			monkeypatch.setattr(gateway_service, "now_datetime", _dt.datetime.now)
+			monkeypatch.setattr("frappe.utils.data.now_datetime", _dt.datetime.now)
+			monkeypatch.setattr(gateway_service.frappe, "log_error", lambda *a, **k: None, raising=False)
+			assert gateway_service.process_gateway_event("GE-9") == {"event_name": "GE-9", "status": status}
+			event_calls = [c for c in get_doc.call_args_list if c.args[:1] == ("Gateway Event",)]
+			assert [c.args for c in event_calls] == [("Gateway Event", "GE-9")]
+
+	def test_run_idempotency_key_format_documented(self):
+		import inspect
+
+		if gateway_service is None:
+			self.skipTest("gateway_service not importable in stub env")
+
+		src = inspect.getsource(gateway_service)
+		assert 'client_idempotency_key=f"gateway-event:{event.name}"' in src
+
+	def test_unapproved_room_gets_one_private_hint_per_channel(self):
+		env = self.use(_fx_env)
+		reason = reliability.ROOM_NOT_APPROVED_REASON
+		reliability.on_event_rejected(GW, ev("GE-1"), "Rejected", reason)
+		reliability.on_event_rejected(GW, ev("GE-2"), "Rejected", reason)
+		assert len(env.sent) == 1 and "admin" in env.sent[0][2].lower()
+
+	def test_unapproved_direct_message_stays_silent(self):
+		env = self.use(_fx_env)
+		reliability.on_event_rejected(GW, ev(conversation_id="D1"), "Rejected", reliability.ROOM_NOT_APPROVED_REASON)
+		assert env.sent == []
+
+	def test_notice_thread_rules(self):
+		assert reliability._notice_thread("D1", "1.1", "1.1") is None
+		assert reliability._notice_thread("C1", "1.1", "1.1") is None  # top-level message: own ts is not a real thread
+		assert reliability._notice_thread("C1", "1.1", "2.2") == "1.1"  # reply inside a real thread
+
+	def test_unapproved_room_hint_is_posted_top_level_for_top_level_message(self):
+		env = self.use(_fx_env)
+		reliability.on_event_rejected(GW, ev(thread_id="222.3", provider_event_id="C1:222.3"), "Rejected",
+			reliability.ROOM_NOT_APPROVED_REASON)
+		assert env.sent and env.sent[0][1] in (None, "")
+
+	def test_replayed_event_runs_pre_ingest_filters_and_is_rejected(self):
+		"""Reaper / dead-letter replay (filters_checked=False) must not bypass the tenant filter."""
+		monkeypatch = self.monkeypatch
+		if gateway_service is None:
+			self.skipTest("gateway_service not importable in stub env")
+		rejected = []
+		gw = SimpleNamespace(name="gw1", provider="Microsoft Teams", is_enabled=1)
+		monkeypatch.setattr(gateway_service.frappe, "get_doc", lambda *a, **k: gw, raising=False)
+		monkeypatch.setattr(gateway_service.frappe, "flags", SimpleNamespace(gateway_filter_reason=None), raising=False)
+		monkeypatch.setattr(hooks, "register_all", lambda: None)
+		monkeypatch.setattr(hooks, "call_filters", lambda hook, g, ctx: False)
+		monkeypatch.setattr(gateway_service, "_reject_gateway_event", lambda g, e, s, r: rejected.append((s, r)))
+		event = SimpleNamespace(name="GE-9", raw_payload='{"channelData": {"tenant": {"id": "x"}}}')
+		out = gateway_service._continue_ingest(event, "gw1", "pid", {"kind": "message"}, True)
+		assert out["status"] == "Rejected" and rejected == [("Rejected", "Dropped by an ingest filter")]

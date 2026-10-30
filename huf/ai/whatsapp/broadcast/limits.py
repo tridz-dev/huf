@@ -5,12 +5,15 @@
 
 ``get_messaging_limit`` reads one phone-number node with the gateway's own credentials
 (``token_check.resolve_credentials`` mirrors the gateway adapter; ``token_check._call`` is the
-same Graph call path used by the token check). Results are cached 10 minutes. Failures
+same Graph call path used by the token check). Results are cached for ``limits_cache_ttl_seconds`` (policy). Failures
 of any kind return all-None and are never raised, so a Meta outage can never break a
 broadcast preview. The token is never returned, logged or cached.
 
 ``preview`` combines that limit with the Broadcast's own rows and template and returns
-``warnings`` (advisory) and ``blocking`` (start must not proceed).
+``warnings`` (overridable: the operator acknowledges each ``code`` at start) and ``blocking``
+(start must not proceed). Both are lists of ``{code, message, limit_key}``; ``limits_in_effect``
+lists the registry keys that shaped this broadcast. Consent and the one-running-per-gateway rule
+are only *reported* here; ``runner.start`` enforces them under a row lock.
 
 Meta facts used (checked 2026-10-27 against developers.facebook.com docs):
 * Field ``whatsapp_business_manager_messaging_limit`` on the phone-number node, read with
@@ -37,9 +40,10 @@ import frappe
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.whatsapp import token_check as tc
+from huf.ai.whatsapp.broadcast import policy
+from huf.ai.whatsapp.broadcast.checks import audience_check
 
 LOGGER = "huf.whatsapp.broadcast"
-CACHE_TTL_SECONDS = 600
 LIMIT_FIELD = "whatsapp_business_manager_messaging_limit"
 FIELDS = f"{LIMIT_FIELD},quality_rating,throughput"
 UNLIMITED = "TIER_UNLIMITED"
@@ -119,13 +123,13 @@ def get_messaging_limit(gateway: str) -> dict[str, Any]:
 		if not gateway or not frappe.db.exists("Gateway", gateway):
 			return _empty()
 		cache = frappe.cache()
-		cached = cache.get_value(_cache_key(gateway))
+		cached = cache.get_value(_cache_key(gateway), expires=True)
 		if isinstance(cached, dict):
 			return dict(cached)
 		result = _fetch(gateway)
 		if result is None:
 			return _empty()
-		cache.set_value(_cache_key(gateway), result, expires_in_sec=CACHE_TTL_SECONDS)
+		cache.set_value(_cache_key(gateway), result, expires_in_sec=int(policy.get("limits_cache_ttl_seconds")))
 		return dict(result)
 	except Exception as exc:  # noqa: BLE001 - class name only; messages can carry URLs or tokens
 		frappe.logger(LOGGER).warning("messaging limit unavailable (%s)", type(exc).__name__)
@@ -143,7 +147,7 @@ def _broadcast_row(broadcast: str) -> dict[str, Any] | None:
 	return frappe.db.get_value(
 		"WhatsApp Broadcast",
 		broadcast,
-		["gateway", "template", "consent_attested", "body_params", "header_params", "button_params"],
+		["gateway", "template", "consent_attested", "body_params", "header_params", "button_params", "max_recipients"],
 		as_dict=True,
 	)
 
@@ -170,21 +174,59 @@ def _queued_numbers(broadcast: str) -> list[str]:
 	return [str(r[0] or "") for r in rows]
 
 
-def _running_others(gateway: str, broadcast: str) -> list[str]:
+def _running_others(gateway: str, broadcast: str, locked: bool = False) -> list[str]:
+	"""Other Running broadcasts on the gateway; ``locked`` = locking read (sees just-committed starts)."""
 	rows = frappe.db.sql(
 		"select name from `tabWhatsApp Broadcast` "
-		"where gateway=%s and status='Running' and name!=%s order by name",
+		"where gateway=%s and status='Running' and name!=%s order by name" + (" for update" if locked else ""),
 		(gateway, broadcast),
 	)
 	return [str(r[0]) for r in rows]
 
 
-def _used_24h(gateway: str) -> int:
-	"""Unique recipients already started in the last 24h by ANY broadcast on this gateway."""
+def _used_24h(gateway: str, broadcast: str | None = None, others: list[str] | None = None) -> int:
+	"""Unique recipients that count against the gateway's 24h budget.
+
+	Counted: started in the last 24h by ANY broadcast on the gateway. Reserved: recipients still
+	waiting (queued, or deferred for retry) in the OTHER Running broadcasts ``others``, so two
+	concurrent broadcasts cannot both claim the same remaining budget. Rows held for the next
+	window (``next_attempt_at`` in the future) reserve nothing. One recipient counts once."""
+	now = now_datetime()
+	params: dict[str, Any] = {"gateway": gateway, "cutoff": add_to_date(now, hours=-24), "now": now}
+	reserved = ""
+	if others:
+		marks = ",".join(f"%(o{i})s" for i in range(len(others)))
+		params.update({f"o{i}": name for i, name in enumerate(others)})
+		reserved = (
+			"union select r.recipient from `tabWhatsApp Broadcast Recipient` r "
+			f"where r.broadcast in ({marks}) and (r.status = 'deferred' or "
+			"(r.status = 'queued' and (r.next_attempt_at is null or r.next_attempt_at <= %(now)s)))"
+		)
+	row = frappe.db.sql(
+		f"""
+		select count(*) from (
+		  select r.recipient
+		  from `tabWhatsApp Broadcast Recipient` r
+		  join `tabWhatsApp Broadcast` b on b.name = r.broadcast
+		  where b.gateway = %(gateway)s
+		    and (
+		      (r.status in ('sent','delivered','read','unknown') and r.sent_at >= %(cutoff)s)
+		      or (r.status = 'sending' and r.modified >= %(cutoff)s)
+		    )
+		  {reserved}
+		) u
+		""",
+		params,
+	)
+	return int(row[0][0]) if row else 0
+
+
+def oldest_counted_send(gateway: str):
+	"""Time of the oldest send inside the 24h budget window on this gateway (None when nothing counts)."""
 	cutoff = add_to_date(now_datetime(), hours=-24)
 	row = frappe.db.sql(
 		"""
-		select count(distinct r.recipient)
+		select min(coalesce(r.sent_at, r.modified))
 		from `tabWhatsApp Broadcast Recipient` r
 		join `tabWhatsApp Broadcast` b on b.name = r.broadcast
 		where b.gateway = %(gateway)s
@@ -195,133 +237,11 @@ def _used_24h(gateway: str) -> int:
 		""",
 		{"gateway": gateway, "cutoff": cutoff},
 	)
-	return int(row[0][0]) if row else 0
+	return row[0][0] if row and row[0][0] else None
 
 
-# ---------------------------------------------------------------- template parameters
-
-
-def _loads(value: Any) -> Any:
-	"""Same decoding as broadcast_send._json (JSON string -> value, blank -> None)."""
-	from huf.ai.whatsapp.broadcast.send import _json
-
-	return _json(value)
-
-
-def _samples(account: str | None, template: str, view: dict[str, Any]) -> dict[str, str]:
-	"""``{variable: sample}`` for the body, from the Template Extra (named_samples / components_json)."""
-	from huf.ai.gateway_adapters import whatsapp_template_guard as guard
-
-	try:
-		extra = guard.get_extra(account, template) or {}
-	except Exception:  # noqa: BLE001
-		extra = {}
-	out: dict[str, str] = {}
-	for item in extra.get("named_samples") or []:
-		if isinstance(item, dict) and item.get("name"):
-			out[str(item["name"])] = str(item.get("example") or "")
-	if not out:
-		for comp in extra.get("components_json") or []:
-			if isinstance(comp, dict) and str(comp.get("type") or "").upper() == "BODY":
-				rows = (comp.get("example") or {}).get("body_text") or []
-				for i, val in enumerate(rows[0] if rows else []):
-					out[str(i + 1)] = str(val)
-	return out
-
-
-def template_requirements(template: str) -> dict[str, Any] | None:
-	"""What a send of WhatsApp Templates row ``template`` needs, derived with the bridge's own helpers.
-
-	``{"tpl", "view", "parameter_format", "body": [{name|index, sample}], "header": {...}|None,
-	"buttons": [...]}`` or None when the row does not exist.
-	"""
-	from huf.ai.gateway_adapters import whatsapp_bridge as bridge
-	from huf.ai.gateway_adapters import whatsapp_templates as wt
-
-	tpl = bridge._template_row(template or "")
-	if not tpl:
-		return None
-	view = bridge._send_view(tpl)
-	tv = wt._template_view(view)
-	named = tv["fmt"] == "NAMED"
-	samples = _samples(tpl.get("whatsapp_account"), template, view)
-	body = [
-		({"name": v, "sample": samples.get(v)} if named else {"index": int(v), "sample": samples.get(v)})
-		for v in tv["body_vars"]
-	]
-	htype = tv["header_type"]
-	header: dict[str, Any] | None = None
-	if htype in ("", "TEXT") and tv["header_vars"]:
-		v = tv["header_vars"][0]
-		header = {"type": "TEXT", "required": True, ("name" if named else "index"): v if named else int(v), "sample": None}
-	elif htype in wt.MEDIA_HEADER_TYPES:
-		has_default = htype == "IMAGE" and wt.is_http_url(str(tpl.get("sample") or ""))
-		header = {"type": htype, "required": not has_default}
-	elif htype == "LOCATION":
-		header = {"type": htype, "required": True}
-	buttons = []
-	for i, b in enumerate(tpl.get("buttons") or []):
-		kind = b.get("button_type")
-		if kind == "Visit Website" and b.get("url_type") == "Dynamic":
-			buttons.append({"index": i, "sub_type": "url", "required": True, "label": b.get("button_label")})
-		elif kind == wt.DOCTYPE_BUTTON_TYPE["COPY_CODE"]:
-			buttons.append({"index": i, "sub_type": "copy_code", "required": True, "label": b.get("button_label")})
-		elif kind == "Quick Reply":
-			buttons.append({"index": i, "sub_type": "quick_reply", "required": False, "label": b.get("button_label")})
-	return {
-		"tpl": tpl, "view": view, "parameter_format": tv["fmt"], "tv": tv,
-		"body": body, "header": header, "buttons": buttons,
-	}
-
-
-def send_problems(req: dict[str, Any], body: Any, header: Any, button: Any) -> dict[str, list[str]]:
-	"""What the send of one recipient would be refused for, using the same validation as ``bridge.send_template``.
-
-	``{"missing": [labels], "extra": [labels], "invalid": [messages]}`` (all empty when the send would pass).
-	"""
-	from huf.ai.gateway_adapters import whatsapp_bridge as bridge
-	from huf.ai.gateway_adapters import whatsapp_templates as wt
-
-	tpl, view, tv = req["tpl"], req["view"], req["tv"]
-	button_list = button if isinstance(button, list) else ([button] if button else [])
-	other, copy_comps, errors = bridge.split_copy_code_params(button_list)
-	header_raw = bridge._header_list(header, True)
-	components, build_errors = wt.build_send_components(view, body, header_raw, other)
-	errors += build_errors
-	seen = {(e["field"], e["code"]) for e in errors}
-	errors += [
-		e for e in bridge._check_send_against_template(tpl, view, body, header_raw, other, copy_comps)
-		if (e["field"], e["code"]) not in seen
-	]
-	if tv["header_type"] in wt.MEDIA_HEADER_TYPES and not any(c.get("type") == "header" for c in components):
-		if not (tv["header_type"] == "IMAGE" and wt.is_http_url(str(tpl.get("sample") or ""))):
-			errors.append(wt._e("header_params", "required", f"This template has an {tv['header_type']} header; provide a media link."))
-
-	named = tv["fmt"] == "NAMED"
-	names = list(tv["body_vars"])
-	given = list(body.values()) if isinstance(body, dict) else list(body or [])
-	missing: list[str] = []
-	extra: list[str] = []
-	invalid: list[str] = []
-	for e in errors:
-		field, code, msg = e["field"], e["code"], e.get("message", "")
-		if code == "param_missing":
-			missing.append(field.split(".", 1)[-1])
-		elif code == "param_count_mismatch" and field == "body_params":
-			if len(given) < len(names):
-				missing += names[len(given):] if not isinstance(body, dict) or not named else names
-			else:
-				extra.append(f"{len(given) - len(names)} extra body value(s)")
-		elif code == "param_unknown":
-			extra.append(field.split(".", 1)[-1])
-		elif code in ("not_expected", "unexpected"):
-			extra.append(field)
-		elif code == "required":
-			missing.append("header" if field.startswith("header") else field.replace("_params", ""))
-		else:
-			invalid.append(msg or f"{field}: {code}")
-	dedupe = lambda xs: list(dict.fromkeys(xs))  # noqa: E731
-	return {"missing": dedupe(missing), "extra": dedupe(extra), "invalid": dedupe(invalid)}
+# template parameters: see template_check (re-exported here)
+from huf.ai.whatsapp.broadcast.checks.template_check import _loads, _samples, send_problems, template_requirements  # noqa: E402,F401
 
 
 def _queued_params(broadcast: str) -> list[tuple[str | None, int]]:
@@ -334,7 +254,19 @@ def _queued_params(broadcast: str) -> list[tuple[str | None, int]]:
 	return [(r[0], int(r[1])) for r in rows]
 
 
-def _check_params(b: dict[str, Any], broadcast: str, blocking: list[str], warnings: list[str]) -> None:
+def _issue(code: str, message: str, limit_key: str | None = None) -> dict[str, Any]:
+	return {"code": code, "message": message, "limit_key": limit_key}
+
+
+def _gateway_disconnected(gateway: str) -> str | None:
+	"""Reason text when the gateway's WhatsApp account is Disconnected (sends are refused), else None."""
+	row = frappe.db.get_value("Gateway", gateway, ["connection_state", "connection_reason"], as_dict=True) or {}
+	if row.get("connection_state") != "Disconnected":
+		return None
+	return str(row.get("connection_reason") or "This WhatsApp account is disconnected; reconnect it before sending.")
+
+
+def _check_params(b: dict[str, Any], broadcast: str, blocking: list[dict[str, Any]]) -> None:
 	"""Block when a queued/deferred recipient would be refused at send time for its template parameters."""
 	req = template_requirements(b.get("template") or "")
 	if not req:
@@ -359,61 +291,104 @@ def _check_params(b: dict[str, Any], broadcast: str, blocking: list[str], warnin
 			invalid += found["invalid"]
 	uniq = lambda xs: ", ".join(dict.fromkeys(xs))  # noqa: E731
 	if n_missing:
-		blocking.append(f"{n_missing} recipients are missing values for template variables: {uniq(missing)}")
+		blocking.append(_issue("missing_params", f"{n_missing} recipients are missing values for template variables: {uniq(missing)}"))
 	if n_extra:
 		# the bridge refuses these too (param_unknown / count mismatch), so they block rather than warn
-		blocking.append(f"{n_extra} recipients carry values the template does not use: {uniq(extra)}")
+		blocking.append(_issue("missing_params", f"{n_extra} recipients carry values the template does not use: {uniq(extra)}"))
 	if n_invalid:
-		blocking.append(f"{n_invalid} recipients have invalid template values: {uniq(invalid)}")
+		blocking.append(_issue("missing_params", f"{n_invalid} recipients have invalid template values: {uniq(invalid)}"))
 
 
-def _fill(broadcast: str, out: dict[str, Any]) -> None:
+def _fill(broadcast: str, out: dict[str, Any], locked: bool = False) -> None:
 	b = _broadcast_row(broadcast)
 	if not b:
-		out["blocking"].append("broadcast_not_found")
+		out["blocking"].append(_issue("broadcast_not_found", "This broadcast does not exist."))
 		return
-	warnings: list[str] = out["warnings"]
-	blocking: list[str] = out["blocking"]
+	warnings: list[dict[str, Any]] = out["warnings"]
+	blocking: list[dict[str, Any]] = out["blocking"]
+	in_effect: set[str] = set()
 
 	counts = _recipient_counts(broadcast)
 	out["recipients"] = sum(counts.values())
 	out["queued"] = counts.get("queued", 0)
 	out["skipped"] = counts.get("skipped", 0)
+	if policy.resolve("max_recipients_default", b)[1] != "default":  # the broadcast's own cap OR a saved setting
+		in_effect.add("max_recipients_default")
+	if out["queued"] + counts.get("deferred", 0) <= 0:
+		blocking.append(_issue("no_recipients", "There are no recipients waiting to be sent."))
 
 	tpl = _template_row(b.get("template") or "")
 	if not tpl:
-		blocking.append("template_not_found")
+		blocking.append(_issue("template_unavailable", "The template for this broadcast no longer exists."))
 	else:
 		tpl_status = str(tpl.get("status") or "").strip().upper()
 		out["template_status"] = tpl_status or None
 		out["category"] = str(tpl.get("category") or "").strip().upper() or None
+		in_effect.add("template_approved_only")
 		if tpl_status != "APPROVED":
-			blocking.append(f"template_not_approved:{tpl_status or 'unknown'}")
+			blocking.append(_issue(
+				"template_not_approved",
+				f"The template is {tpl_status.lower() or 'not approved'}; Meta only delivers approved templates.",
+				"template_approved_only",
+			))
 
 	if tpl:
-		_check_params(b, broadcast, blocking, warnings)
+		_check_params(b, broadcast, blocking)
+		blocking.extend(audience_check.purpose_issues(broadcast, out["category"]))
 
 	if out["category"] == "MARKETING":
 		us = [n for n in _queued_numbers(broadcast) if _is_us_plus_one(n)]
 		if us:
-			warnings.append(
-				f"{len(us)} queued recipient(s) are US +1 numbers; "
-				"WhatsApp does not deliver marketing templates to them."
-			)
+			in_effect.add("us_plus_one_marketing")
+			warnings.append(_issue(
+				"us_plus_one_marketing",
+				f"{len(us)} queued recipient(s) are US +1 numbers; WhatsApp does not deliver marketing templates to them.",
+				"us_plus_one_marketing",
+			))
 
-	if not b.get("consent_attested"):
-		blocking.append("consent_not_attested")
+	if policy.get("require_consent_attestation"):
+		in_effect.add("require_consent_attestation")
+		if not b.get("consent_attested"):
+			blocking.append(_issue(
+				"consent_not_attested", "Confirm that these recipients opted in before sending.", "require_consent_attestation"
+			))
 
 	gateway = b.get("gateway") or ""
-	others = _running_others(gateway, broadcast)
-	if others:
-		blocking.append("another_broadcast_running:" + ",".join(others))
+	reason = _gateway_disconnected(gateway) if gateway else None
+	if reason:
+		blocking.append(_issue("gateway_disconnected", reason))
+
+	others = _running_others(gateway, broadcast, locked)
+	cap = policy.concurrency_cap()
+	key = "one_active_per_gateway" if policy.get("one_active_per_gateway") else "concurrent_broadcast_max"
+	if cap is not None:
+		in_effect.add(key)
+	if cap is not None and len(others) >= cap:
+		blocking.append(_issue(
+			"another_broadcast_running",
+			("Another broadcast is already sending from this gateway: " if cap == 1
+				else f"This gateway already runs {len(others)} broadcasts (limit {cap}): ") + ", ".join(others),
+			key,
+		))
+	elif others:
+		warnings.append(_issue(
+			"other_broadcast_running",
+			"Other broadcasts are sending from this gateway at the same time and share its sending speed: "
+			+ ", ".join(others),
+			"one_active_per_gateway",
+		))
 
 	limit = get_messaging_limit(gateway)
+	if limit["quality"]:
+		in_effect.add("quality_rating")
 	if limit["quality"] == "RED":
-		blocking.append("quality_red")
+		warnings.append(_issue(
+			"quality_red",
+			"Number quality is RED. Sending more can lower your messaging limit or get the number restricted.",
+			"quality_rating",
+		))
 	elif limit["quality"] == "YELLOW":
-		warnings.append("Number quality is YELLOW; sends may be throttled.")
+		warnings.append(_issue("quality_yellow", "Number quality is YELLOW; sends may be throttled.", "quality_rating"))
 
 	if limit["tier"] == UNLIMITED:
 		out["remaining_24h"] = None
@@ -421,16 +396,26 @@ def _fill(broadcast: str, out: dict[str, Any]) -> None:
 	elif limit["max_unique_24h"] is None:
 		out["remaining_24h"] = None
 		out["within_limit"] = None
-		warnings.append("Messaging limit is unknown; the 24h budget was not checked.")
+		in_effect.add("messaging_tier_24h")
+		warnings.append(_issue(
+			"tier_unknown", "Messaging limit is unknown; the 24h budget was not checked.", "messaging_tier_24h"
+		))
 	else:
-		remaining = max(limit["max_unique_24h"] - _used_24h(gateway), 0)
+		in_effect.add("messaging_tier_24h")
+		remaining = max(limit["max_unique_24h"] - _used_24h(gateway, broadcast, others), 0)
 		out["remaining_24h"] = remaining
 		out["within_limit"] = out["queued"] <= remaining
 		if not out["within_limit"]:
-			blocking.append(f"recipients_exceed_24h_budget:{out['queued']}>{remaining}")
+			warnings.append(_issue(
+				"over_budget",
+				f"{out['queued']} recipients are queued but only {remaining} fit in your 24-hour messaging limit. "
+				f"Continuing sends the first {remaining} now and holds the rest for the next 24 hours.",
+				"messaging_tier_24h",
+			))
+	out["limits_in_effect"] = sorted(in_effect)
 
 
-def preview(broadcast: str) -> dict[str, Any]:
+def preview(broadcast: str, locked: bool = False) -> dict[str, Any]:
 	"""Pre-start check of a Broadcast. Never raises; unexpected errors become a blocking entry."""
 	out: dict[str, Any] = {
 		"recipients": 0,
@@ -442,10 +427,11 @@ def preview(broadcast: str) -> dict[str, Any]:
 		"remaining_24h": None,
 		"warnings": [],
 		"blocking": [],
+		"limits_in_effect": [],
 	}
 	try:
-		_fill(broadcast or "", out)
+		_fill(broadcast or "", out, locked)
 	except Exception as exc:  # noqa: BLE001 - class name only
 		frappe.logger(LOGGER).warning("broadcast preview failed (%s)", type(exc).__name__)
-		out["blocking"].append("preview_failed")
+		out["blocking"].append(_issue("preview_failed", "The pre-start check failed; try again."))
 	return out

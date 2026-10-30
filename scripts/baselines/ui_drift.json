@@ -1,9 +1,5 @@
 {
   "files": {
-    "components/FlowsHeaderActions.tsx": {
-      "fixed_height": 2,
-      "text_px": 5
-    },
     "components/FlowsSidebarContent.tsx": {
       "fixed_height": 2
     },
@@ -20,10 +16,6 @@
       "fixed_height": 1,
       "raw_element": 1,
       "text_px": 1
-    },
-    "components/RightSidebar.tsx": {
-      "inline_style": 1,
-      "text_px": 6
     },
     "components/agent/AdvancedTab.tsx": {
       "hex_colour": 2,
@@ -303,9 +295,6 @@
     "components/hub/AutoGrowTextarea.tsx": {
       "raw_element": 1
     },
-    "components/hub/HubAskUser.tsx": {
-      "text_px": 2
-    },
     "components/hub/HubConversationView.tsx": {
       "text_px": 1
     },
@@ -518,10 +507,6 @@
     "components/whatsapp/MessageDetailSheet.tsx": {
       "text_px": 1
     },
-    "components/whatsapp/MessageLogTab.tsx": {
-      "raw_element": 2,
-      "text_px": 1
-    },
     "components/whatsapp/SendForms.tsx": {
       "raw_element": 4
     },
@@ -673,11 +658,11 @@
     }
   },
   "totals": {
-    "fixed_height": 108,
+    "fixed_height": 106,
     "hex_colour": 98,
-    "inline_style": 45,
-    "raw_element": 76,
-    "text_px": 363
+    "inline_style": 44,
+    "raw_element": 74,
+    "text_px": 349
   },
   "version": 1
 }

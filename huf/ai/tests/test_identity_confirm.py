@@ -16,7 +16,7 @@ _stub_env.install()
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
 import frappe  # noqa: E402
-import pytest  # noqa: E402
+from huf.ai.tests.unit_support import SupportCase  # noqa: E402
 
 TARGETS = ("huf.ai.gateways.slack_interactivity", "huf.ai.gateways.slack.identity_confirm", "huf.ai.gateways.slack.identity")
 
@@ -78,8 +78,8 @@ class FakeDb:
 		self.sets.append((name, vals))
 
 
-@pytest.fixture
-def env(monkeypatch):
+def _fx_env(self):
+	monkeypatch = self.monkeypatch
 	rows = {"L1": {"name": "L1", "gateway": "GW", "team_id": "T1", "external_id": "U1",
 		"state": "Pending", "user": "alice@x.com"}}
 	monkeypatch.setattr(frappe, "db", FakeDb(rows), raising=False)
@@ -102,62 +102,64 @@ def payload(user="U1", team="T1"):
 	return {"user": {"id": user}, "team": {"id": team}}
 
 
-def test_handler_registered_without_actor_requirement():
-	assert si.get_action_handler.__name__  # registry present
-	assert si._HANDLERS["idlink:"] is ic.handle_click
-	assert si._actor_optional("idlink:abc") is True
-	assert si._actor_optional("approval:x") is False
+class TestModule(SupportCase):
+	def test_handler_registered_without_actor_requirement(self):
+		assert si.get_action_handler.__name__  # registry present
+		assert si._HANDLERS["idlink:"] is ic.handle_click
+		assert si._actor_optional("idlink:abc") is True
+		assert si._actor_optional("approval:x") is False
 
+	def test_send_confirmation_dm_with_buttons(self):
+		monkeypatch = self.monkeypatch
+		created = {}
+		monkeypatch.setattr(si, "create_action_session",
+			lambda gw, kind, payload, **kw: created.update(kind=kind, payload=payload, **kw) or "S1")
+		dm = []
+		monkeypatch.setattr(ic, "_send_dm", lambda gw, ext, text, blocks: dm.append((ext, text, blocks)))
+		monkeypatch.setattr(frappe, "db", FakeDb({}), raising=False)
+		assert ic.send_confirmation(GW, "L1", "T1", "U1", "alice@x.com") == "S1"
+		assert created["kind"] == "idlink:" and created["intended_slack_user"] == "U1"
+		assert created["payload"]["link"] == "L1"
+		ext, text, blocks = dm[0]
+		assert ext == "U1" and "Alice Example" in repr(blocks) and "If not, ignore this." in repr(blocks)
+		assert "Yes, link it" in repr(blocks) and "No" in repr(blocks)
 
-def test_send_confirmation_dm_with_buttons(monkeypatch):
-	created = {}
-	monkeypatch.setattr(si, "create_action_session",
-		lambda gw, kind, payload, **kw: created.update(kind=kind, payload=payload, **kw) or "S1")
-	dm = []
-	monkeypatch.setattr(ic, "_send_dm", lambda gw, ext, text, blocks: dm.append((ext, text, blocks)))
-	monkeypatch.setattr(frappe, "db", FakeDb({}), raising=False)
-	assert ic.send_confirmation(GW, "L1", "T1", "U1", "alice@x.com") == "S1"
-	assert created["kind"] == "idlink:" and created["intended_slack_user"] == "U1"
-	assert created["payload"]["link"] == "L1"
-	ext, text, blocks = dm[0]
-	assert ext == "U1" and "Alice Example" in repr(blocks) and "If not, ignore this." in repr(blocks)
-	assert "Yes, link it" in repr(blocks) and "No" in repr(blocks)
+	def test_yes_by_same_slack_user_links(self):
+		env = self.use(_fx_env)
+		out = ic.handle_click(GW, session(), None, payload())
+		assert out["text"] == ic.MSG_LINKED
+		assert env["L1"]["state"] == "Linked"
 
+	def test_no_revokes(self):
+		env = self.use(_fx_env)
+		out = ic.handle_click(GW, session("reject"), None, payload())
+		assert out["text"] == ic.MSG_REVOKED and env["L1"]["state"] == "Revoked"
 
-def test_yes_by_same_slack_user_links(env):
-	out = ic.handle_click(GW, session(), None, payload())
-	assert out["text"] == ic.MSG_LINKED
-	assert env["L1"]["state"] == "Linked"
+	def test_different_slack_user_cannot_confirm(self):
+		env = self.use(_fx_env)
+		out = ic.handle_click(GW, session(), None, payload(user="U2"))
+		assert out["text"] == ic.MSG_INVALID and env["L1"]["state"] == "Pending"
 
+	def test_wrong_team_cannot_confirm(self):
+		env = self.use(_fx_env)
+		out = ic.handle_click(GW, session(), None, payload(team="T2"))
+		assert out["text"] == ic.MSG_INVALID and env["L1"]["state"] == "Pending"
 
-def test_no_revokes(env):
-	out = ic.handle_click(GW, session("reject"), None, payload())
-	assert out["text"] == ic.MSG_REVOKED and env["L1"]["state"] == "Revoked"
+	def test_link_for_other_person_not_flipped(self):
+		env = self.use(_fx_env)
+		env["L1"]["external_id"] = "U9"
+		out = ic.handle_click(GW, session(), None, payload())
+		assert out["text"] == ic.MSG_INVALID and env["L1"]["state"] == "Pending"
 
+	def test_already_linked_elsewhere_revokes_pending(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		monkeypatch.setattr(ident, "_find_link", lambda g, t, e: SimpleNamespace(name="L0", user="bob@x.com"))
+		out = ic.handle_click(GW, session(), None, payload())
+		assert out["text"] == ic.MSG_INVALID and env["L1"]["state"] == "Revoked"
 
-def test_different_slack_user_cannot_confirm(env):
-	out = ic.handle_click(GW, session(), None, payload(user="U2"))
-	assert out["text"] == ic.MSG_INVALID and env["L1"]["state"] == "Pending"
-
-
-def test_wrong_team_cannot_confirm(env):
-	out = ic.handle_click(GW, session(), None, payload(team="T2"))
-	assert out["text"] == ic.MSG_INVALID and env["L1"]["state"] == "Pending"
-
-
-def test_link_for_other_person_not_flipped(env):
-	env["L1"]["external_id"] = "U9"
-	out = ic.handle_click(GW, session(), None, payload())
-	assert out["text"] == ic.MSG_INVALID and env["L1"]["state"] == "Pending"
-
-
-def test_already_linked_elsewhere_revokes_pending(env, monkeypatch):
-	monkeypatch.setattr(ident, "_find_link", lambda g, t, e: SimpleNamespace(name="L0", user="bob@x.com"))
-	out = ic.handle_click(GW, session(), None, payload())
-	assert out["text"] == ic.MSG_INVALID and env["L1"]["state"] == "Revoked"
-
-
-def test_non_pending_not_flipped(env):
-	env["L1"]["state"] = "Revoked"
-	out = ic.handle_click(GW, session(), None, payload())
-	assert out["text"] == ic.MSG_INVALID and env["L1"]["state"] == "Revoked"
+	def test_non_pending_not_flipped(self):
+		env = self.use(_fx_env)
+		env["L1"]["state"] = "Revoked"
+		out = ic.handle_click(GW, session(), None, payload())
+		assert out["text"] == ic.MSG_INVALID and env["L1"]["state"] == "Revoked"

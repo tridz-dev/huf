@@ -282,7 +282,7 @@ test.describe('Solution detail', () => {
     await expect(page.getByRole('button', { name: 'Sync' })).toHaveCount(0);
     await expect(page.getByRole('tab', { name: /Drafts awaiting approval/ })).toHaveCount(0);
     await expect(page.getByRole('combobox', { name: 'Filter by solution' })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: /Settings > WhatsApp/ })).toHaveAttribute('href', /\/whatsapp\?tab=templates&gateway=GW-1/);
+    await expect(page.getByRole('link', { name: /Channels > Templates/ })).toHaveAttribute('href', /\/channels\/whatsapp\/n\/GW-1\/templates/);
   });
 
   test('conversations tab filters between this solution and all inboxes', async ({ page }) => {

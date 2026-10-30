@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   TelegramAppError, actConfirm, authenticate, getToken, me, parseEnvelope, resetTelegramAppSession, search,

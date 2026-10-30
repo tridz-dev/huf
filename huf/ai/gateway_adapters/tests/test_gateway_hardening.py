@@ -25,6 +25,10 @@ class TestUniqueRaceIsDuplicate(unittest.TestCase):
 		def fake_get_doc(*args, **kwargs):
 			if args and isinstance(args[0], dict) and args[0].get("doctype") == "Gateway Event":
 				return doc
+			if args and args[0] == "Gateway":
+				# ingest loads the Gateway for the pre-ingest filter hooks before inserting the
+				# event; no real Gateway "GW" exists here, a stand-in with no filters is enough.
+				return MagicMock()
 			return real_get_doc(*args, **kwargs)
 
 		real_get_value = frappe.db.get_value
@@ -250,7 +254,11 @@ class TestPairingFixes(unittest.TestCase):
 		with (
 			patch.object(gateway_service.frappe, "form_dict", {}),
 			patch.object(gateway_service.frappe, "session", SimpleNamespace(user="a@x.com")),
-			patch.object(gateway_service.frappe, "local", SimpleNamespace(response_headers=headers)),
+			patch.object(
+				gateway_service.frappe,
+				"local",
+				SimpleNamespace(response_headers=headers, flags=SimpleNamespace(in_test=True)),
+			),
 			patch.object(
 				gateway_service, "_approve_rate_limited", side_effect=frappe.RateLimitExceededError("x")
 			),

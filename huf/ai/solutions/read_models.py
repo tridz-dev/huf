@@ -79,7 +79,7 @@ def _cached_phone(gateway: str) -> dict:
 	try:
 		from huf.ai.whatsapp.token_check import _result_key
 
-		cached = frappe.cache().get_value(_result_key(gateway))
+		cached = frappe.cache().get_value(_result_key(gateway), expires=True)
 		phone = cached.get("phone") if isinstance(cached, dict) else None
 		return phone if isinstance(phone, dict) else {}
 	except Exception:

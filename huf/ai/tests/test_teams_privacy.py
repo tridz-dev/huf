@@ -2,16 +2,17 @@
 
 import importlib
 import json
+import pathlib
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-sys.path.insert(0, "huf/testing")
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "testing"))
 import _stub_env  # noqa: E402
 
 _stub_env.install()
 
-import pytest  # noqa: E402
+from huf.ai.tests.unit_support import SupportCase  # noqa: E402
 
 from huf.ai.gateway_adapters.teams import TeamsGatewayAdapter  # noqa: E402
 from huf.ai.gateway_adapters.types import GatewayReply  # noqa: E402
@@ -81,8 +82,8 @@ class Env:
 		return self.ref_rows
 
 
-@pytest.fixture
-def env(monkeypatch):
+def _fx_env(self):
+	monkeypatch = self.monkeypatch
 	e = Env()
 	monkeypatch.setattr(tp, "frappe", SimpleNamespace(cache=lambda: e.cache, get_all=e.get_all))
 	monkeypatch.setattr(tp.teams_tenant, "get_settings", lambda g: {"private_output_policy": e.policy})
@@ -132,150 +133,44 @@ def all_text(env):
 	return json.dumps(env.enqueued)
 
 
-# ---- conversation key -----------------------------------------------------------------
-def test_key_channel_per_user():
-	a = tp.resolve_conversation_key(GW, ev())
-	act = load("channel_mention")
-	act["from"]["aadObjectId"] = AAD2
-	b = tp.resolve_conversation_key(GW, ev(raw_payload=act))
-	assert a == f"teams:{TENANT}:1700000000100:{AAD}"
-	assert b == f"teams:{TENANT}:1700000000100:{AAD2}"
-	assert a != b
 
 
-def test_key_group_chat_per_user():
-	act = load("group_chat_message")
-	k = tp.resolve_conversation_key(GW, ev(raw_payload=act))
-	conv = act["conversation"]["id"].split(";messageid=")[0]
-	assert k == f"teams:{TENANT}:{conv}:{AAD}"
-	act["from"]["aadObjectId"] = AAD2
-	assert tp.resolve_conversation_key(GW, ev(raw_payload=act)) != k
 
 
-def test_key_personal():
-	act = load("personal_message")
-	k = tp.resolve_conversation_key(GW, ev("personal_message"))
-	assert k == f"teams:{TENANT}:{act['conversation']['id']}"
 
 
-def test_key_raw_payload_json_string():
-	e = ev(raw_payload=json.dumps(load("channel_mention")))
-	assert tp.resolve_conversation_key(GW, e).endswith(f":{AAD}")
 
 
-def test_key_none_when_not_derivable():
-	assert tp.resolve_conversation_key(GW, ev(raw_payload=None)) is None
-	act = load("channel_mention")
-	del act["from"]["aadObjectId"]
-	assert tp.resolve_conversation_key(GW, ev(raw_payload=act)) is None
 
 
-@pytest.mark.parametrize("raw", [None, "", "not json", "[]", 5, {"conversation": None}, {"from": 1}])
-def test_never_raises_on_malformed(env, raw):
-	e = ev(raw_payload=raw)
-	assert tp.resolve_conversation_key(GW, e) is None
-	assert tp.resolve_reply_target(GW, e, "x") in (None, tp.UNUSABLE_TARGET)
 
 
-# ---- classification -------------------------------------------------------------------
-def test_touched_by_record_tool(env):
-	env.tool_rows = [{"tool": "get_list"}]
-	assert tp.run_touched_records("RUN-1") is True
 
 
-def test_allowlisted_tools_do_not_touch(env):
-	env.tool_rows = [{"tool": "Calculator"}, {"tool": "search_knowledge"}]
-	assert tp.run_touched_records("RUN-1") is False
 
 
-def test_mixed_tools_touch(env):
-	env.tool_rows = [{"tool": "calculator"}, {"tool": "update_document"}]
-	assert tp.run_touched_records("RUN-1") is True
 
 
-def test_no_tools_no_run_not_touched(env):
-	assert tp.run_touched_records("RUN-1") is False
-	assert tp.run_touched_records(None) is False
 
 
-def test_lookup_error_counts_as_touched(env):
-	env.tool_error = True
-	assert tp.run_touched_records("RUN-1") is True
 
 
-# ---- policies -------------------------------------------------------------------------
-def test_policy_always_private_redirects(env):
-	env.policy = "Always private"
-	env.refs[(TENANT, AAD)] = {"conversation_id": PERSONAL}
-	assert tp.resolve_reply_target(GW, ev(), "hi") == PERSONAL
 
 
-def test_policy_records_touched_redirects(env):
-	env.refs[(TENANT, AAD)] = {"conversation_id": PERSONAL}
-	env.tool_rows = [{"tool": "get_document"}]
-	assert tp.resolve_reply_target(GW, ev(), "hi") == PERSONAL
 
 
-def test_policy_records_not_touched_stays(env):
-	env.tool_rows = [{"tool": "calculator"}]
-	assert tp.resolve_reply_target(GW, ev(), "hi") is None
-	assert env.enqueued == []
 
 
-def test_policy_channel_stays_even_with_records(env):
-	env.policy = "Channel"
-	env.tool_rows = [{"tool": "get_document"}]
-	assert tp.resolve_reply_target(GW, ev(), "hi") is None
 
 
-def test_policy_unreadable_is_private(env, monkeypatch):
-	def boom(g):
-		raise RuntimeError("x")
-
-	monkeypatch.setattr(tp.teams_tenant, "get_settings", boom)
-	env.refs[(TENANT, AAD)] = {"conversation_id": PERSONAL}
-	assert tp.resolve_reply_target(GW, ev(), "hi") == PERSONAL
 
 
-@pytest.mark.parametrize("policy", ["Always private", "Private when records touched", "Channel"])
-def test_personal_chat_never_redirects(env, policy):
-	env.policy = policy
-	env.tool_rows = [{"tool": "get_document"}]
-	e = ev("personal_message", thread_id=None)
-	assert tp.resolve_reply_target(GW, e, "hi") is None
-	assert env.enqueued == []
 
 
-def test_group_chat_is_room(env):
-	env.policy = "Always private"
-	env.refs[(TENANT, AAD)] = {"conversation_id": PERSONAL}
-	assert tp.resolve_reply_target(GW, ev("group_chat_message"), "hi") == PERSONAL
 
 
-# ---- redirect success -----------------------------------------------------------------
-def test_redirect_success_note_and_thread_cleared(env):
-	env.policy = "Always private"
-	env.refs[(TENANT, AAD)] = {"conversation_id": PERSONAL}
-	e = ev()
-	assert tp.resolve_reply_target(GW, e, SECRET_ANSWER) == PERSONAL
-	assert e.thread_id is None
-	assert len(env.enqueued) == 1
-	n = env.enqueued[0]
-	assert n["payload"]["activity"]["text"] == tp.ACK_TEXT
-	assert n["snapshot"]["conversation_id"] == f"{CHANNEL};messageid=1700000000100"
-	assert SECRET_ANSWER not in all_text(env)
-	assert env.create_calls == []
 
 
-def test_creates_personal_conversation_for_linked_user(env):
-	env.policy = "Always private"
-	e = ev()
-	assert tp.resolve_reply_target(GW, e, "x") == PERSONAL
-	assert len(env.create_calls) == 1
-	assert env.create_calls[0][:4] == (SVC, TENANT, "28:00000000-0000-0000-0000-0000000000b1", AAD)
-	assert len(env.upserts) == 1 and env.upserts[0].conversation_id == PERSONAL
-	assert env.upserts[0].conversation_type == "personal"
-	assert e.thread_id is None
 
 
 # ---- fail closed ----------------------------------------------------------------------
@@ -286,119 +181,267 @@ def _assert_failed_closed(env, e, got):
 	assert SECRET_ANSWER not in all_text(env)
 
 
-def test_fail_closed_unlinked_user(env):
-	env.policy = "Always private"
-	env.linked = {}
-	e = ev()
-	_assert_failed_closed(env, e, tp.resolve_reply_target(GW, e, SECRET_ANSWER))
-	assert env.create_calls == []
+class TestModule(SupportCase):
+	# ---- conversation key -----------------------------------------------------------------
+	def test_key_channel_per_user(self):
+		a = tp.resolve_conversation_key(GW, ev())
+		act = load("channel_mention")
+		act["from"]["aadObjectId"] = AAD2
+		b = tp.resolve_conversation_key(GW, ev(raw_payload=act))
+		assert a == f"teams:{TENANT}:1700000000100:{AAD}"
+		assert b == f"teams:{TENANT}:1700000000100:{AAD2}"
+		assert a != b
 
+	def test_key_group_chat_per_user(self):
+		act = load("group_chat_message")
+		k = tp.resolve_conversation_key(GW, ev(raw_payload=act))
+		conv = act["conversation"]["id"].split(";messageid=")[0]
+		assert k == f"teams:{TENANT}:{conv}:{AAD}"
+		act["from"]["aadObjectId"] = AAD2
+		assert tp.resolve_conversation_key(GW, ev(raw_payload=act)) != k
 
-def test_fail_closed_create_returns_nothing(env):
-	env.policy = "Always private"
-	env.create_result = None
-	e = ev()
-	_assert_failed_closed(env, e, tp.resolve_reply_target(GW, e, SECRET_ANSWER))
+	def test_key_personal(self):
+		act = load("personal_message")
+		k = tp.resolve_conversation_key(GW, ev("personal_message"))
+		assert k == f"teams:{TENANT}:{act['conversation']['id']}"
 
+	def test_key_raw_payload_json_string(self):
+		e = ev(raw_payload=json.dumps(load("channel_mention")))
+		assert tp.resolve_conversation_key(GW, e).endswith(f":{AAD}")
 
-def test_fail_closed_create_raises(env):
-	env.policy = "Always private"
-	env.create_result = RuntimeError("403")
-	e = ev()
-	_assert_failed_closed(env, e, tp.resolve_reply_target(GW, e, SECRET_ANSWER))
+	def test_key_none_when_not_derivable(self):
+		assert tp.resolve_conversation_key(GW, ev(raw_payload=None)) is None
+		act = load("channel_mention")
+		del act["from"]["aadObjectId"]
+		assert tp.resolve_conversation_key(GW, ev(raw_payload=act)) is None
 
+	def test_never_raises_on_malformed(self):
+		for raw in [None, "", "not json", "[]", 5, {"conversation": None}, {"from": 1}]:
+			with self.subTest(raw=raw):
+				self.reset_fixtures()
+				env = self.use(_fx_env)
+				e = ev(raw_payload=raw)
+				assert tp.resolve_conversation_key(GW, e) is None
+				assert tp.resolve_reply_target(GW, e, "x") in (None, tp.UNUSABLE_TARGET)
 
-def test_fail_closed_no_service_url(env):
-	env.policy = "Always private"
-	env.ref_rows = []
-	act = load("channel_mention")
-	act["serviceUrl"] = ""
-	e = ev(raw_payload=act)
-	_assert_failed_closed(env, e, tp.resolve_reply_target(GW, e, SECRET_ANSWER))
+	# ---- classification -------------------------------------------------------------------
+	def test_touched_by_record_tool(self):
+		env = self.use(_fx_env)
+		env.tool_rows = [{"tool": "get_list"}]
+		assert tp.run_touched_records("RUN-1") is True
 
+	def test_allowlisted_tools_do_not_touch(self):
+		env = self.use(_fx_env)
+		env.tool_rows = [{"tool": "Calculator"}, {"tool": "search_knowledge"}]
+		assert tp.run_touched_records("RUN-1") is False
 
-def test_fail_closed_even_if_note_enqueue_fails(env, monkeypatch):
-	env.policy = "Always private"
-	env.linked = {}
+	def test_mixed_tools_touch(self):
+		env = self.use(_fx_env)
+		env.tool_rows = [{"tool": "calculator"}, {"tool": "update_document"}]
+		assert tp.run_touched_records("RUN-1") is True
 
-	def boom(*a, **k):
-		raise RuntimeError("outbox down")
+	def test_no_tools_no_run_not_touched(self):
+		env = self.use(_fx_env)
+		assert tp.run_touched_records("RUN-1") is False
+		assert tp.run_touched_records(None) is False
 
-	monkeypatch.setattr(tp.teams_outbox, "enqueue", boom)
-	e = ev()
-	assert tp.resolve_reply_target(GW, e, "x") == tp.UNUSABLE_TARGET
+	def test_lookup_error_counts_as_touched(self):
+		env = self.use(_fx_env)
+		env.tool_error = True
+		assert tp.run_touched_records("RUN-1") is True
 
+	# ---- policies -------------------------------------------------------------------------
+	def test_policy_always_private_redirects(self):
+		env = self.use(_fx_env)
+		env.policy = "Always private"
+		env.refs[(TENANT, AAD)] = {"conversation_id": PERSONAL}
+		assert tp.resolve_reply_target(GW, ev(), "hi") == PERSONAL
 
-def test_real_adapter_send_never_enqueues_answer_for_channel(env):
-	env.policy = "Always private"
-	env.linked = {}
-	e = ev()
-	target = tp.resolve_reply_target(GW, e, SECRET_ANSWER)
-	sent = []
-	outbox = SimpleNamespace(enqueue=lambda gw, snap, kind, payload, key: sent.append((snap, payload)) or "n")
-	channel_row = {
-		"name": "ref1", "conversation_id": CHANNEL, "conversation_type": "channel",
-		"service_url": SVC, "tenant_id": TENANT, "gateway": "gw1",
-	}  # fmt: skip
+	def test_policy_records_touched_redirects(self):
+		env = self.use(_fx_env)
+		env.refs[(TENANT, AAD)] = {"conversation_id": PERSONAL}
+		env.tool_rows = [{"tool": "get_document"}]
+		assert tp.resolve_reply_target(GW, ev(), "hi") == PERSONAL
 
-	def lookup(conversation_id, gateway, app_id):
-		base = conversation_id.split(";messageid=", 1)[0]
-		return channel_row if base == CHANNEL else None
+	def test_policy_records_not_touched_stays(self):
+		env = self.use(_fx_env)
+		env.tool_rows = [{"tool": "calculator"}]
+		assert tp.resolve_reply_target(GW, ev(), "hi") is None
+		assert env.enqueued == []
 
-	adapter = TeamsGatewayAdapter(
-		{"app_id": "app", "app_password": "pw", "tenant_id": TENANT},
-		gateway_name="gw1",
-		reference_lookup=lookup,
-		outbox=outbox,
-	)
-	with pytest.raises(ValueError):
-		adapter.send_reply(GatewayReply(conversation_id=target, text=SECRET_ANSWER, thread_id=e.thread_id))
-	assert sent == []
-	assert SECRET_ANSWER not in all_text(env)
+	def test_policy_channel_stays_even_with_records(self):
+		env = self.use(_fx_env)
+		env.policy = "Channel"
+		env.tool_rows = [{"tool": "get_document"}]
+		assert tp.resolve_reply_target(GW, ev(), "hi") is None
 
+	def test_policy_unreadable_is_private(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		def boom(g):
+			raise RuntimeError("x")
 
-# ---- mark_sensitive -------------------------------------------------------------------
-def test_mark_sensitive_lifecycle(env):
-	e = ev()
-	assert tp.is_marked_sensitive(e) is False
-	tp.mark_sensitive(e, "pii")
-	assert tp.is_marked_sensitive(e) is True
-	tp.clear_sensitive(e)
-	assert tp.is_marked_sensitive(e) is False
+		monkeypatch.setattr(tp.teams_tenant, "get_settings", boom)
+		env.refs[(TENANT, AAD)] = {"conversation_id": PERSONAL}
+		assert tp.resolve_reply_target(GW, ev(), "hi") == PERSONAL
 
+	def test_personal_chat_never_redirects(self):
+		for policy in ["Always private", "Private when records touched", "Channel"]:
+			with self.subTest(policy=policy):
+				self.reset_fixtures()
+				env = self.use(_fx_env)
+				env.policy = policy
+				env.tool_rows = [{"tool": "get_document"}]
+				e = ev("personal_message", thread_id=None)
+				assert tp.resolve_reply_target(GW, e, "hi") is None
+				assert env.enqueued == []
 
-def test_mark_sensitive_by_name_and_by_run(env):
-	tp.mark_sensitive("EVT-1")
-	assert tp.is_marked_sensitive(ev()) is True
-	tp.clear_sensitive("EVT-1")
-	tp.mark_sensitive("RUN-1")
-	assert tp.is_marked_sensitive(ev()) is True
+	def test_group_chat_is_room(self):
+		env = self.use(_fx_env)
+		env.policy = "Always private"
+		env.refs[(TENANT, AAD)] = {"conversation_id": PERSONAL}
+		assert tp.resolve_reply_target(GW, ev("group_chat_message"), "hi") == PERSONAL
 
+	# ---- redirect success -----------------------------------------------------------------
+	def test_redirect_success_note_and_thread_cleared(self):
+		env = self.use(_fx_env)
+		env.policy = "Always private"
+		env.refs[(TENANT, AAD)] = {"conversation_id": PERSONAL}
+		e = ev()
+		assert tp.resolve_reply_target(GW, e, SECRET_ANSWER) == PERSONAL
+		assert e.thread_id is None
+		assert len(env.enqueued) == 1
+		n = env.enqueued[0]
+		assert n["payload"]["activity"]["text"] == tp.ACK_TEXT
+		assert n["snapshot"]["conversation_id"] == f"{CHANNEL};messageid=1700000000100"
+		assert SECRET_ANSWER not in all_text(env)
+		assert env.create_calls == []
 
-def test_marked_sensitive_redirects_under_channel_policy(env):
-	env.policy = "Channel"
-	env.refs[(TENANT, AAD)] = {"conversation_id": PERSONAL}
-	e = ev()
-	tp.mark_sensitive(e)
-	assert tp.resolve_reply_target(GW, e, "x") == PERSONAL
+	def test_creates_personal_conversation_for_linked_user(self):
+		env = self.use(_fx_env)
+		env.policy = "Always private"
+		e = ev()
+		assert tp.resolve_reply_target(GW, e, "x") == PERSONAL
+		assert len(env.create_calls) == 1
+		assert env.create_calls[0][:4] == (SVC, TENANT, "28:00000000-0000-0000-0000-0000000000b1", AAD)
+		assert len(env.upserts) == 1 and env.upserts[0].conversation_id == PERSONAL
+		assert env.upserts[0].conversation_type == "personal"
+		assert e.thread_id is None
 
+	def test_fail_closed_unlinked_user(self):
+		env = self.use(_fx_env)
+		env.policy = "Always private"
+		env.linked = {}
+		e = ev()
+		_assert_failed_closed(env, e, tp.resolve_reply_target(GW, e, SECRET_ANSWER))
+		assert env.create_calls == []
 
-def test_mark_sensitive_never_raises(monkeypatch):
-	monkeypatch.setattr(tp, "frappe", SimpleNamespace(cache=lambda: (_ for _ in ()).throw(RuntimeError())))
-	tp.mark_sensitive("x")
-	assert tp.is_marked_sensitive("x") is False
+	def test_fail_closed_create_returns_nothing(self):
+		env = self.use(_fx_env)
+		env.policy = "Always private"
+		env.create_result = None
+		e = ev()
+		_assert_failed_closed(env, e, tp.resolve_reply_target(GW, e, SECRET_ANSWER))
 
+	def test_fail_closed_create_raises(self):
+		env = self.use(_fx_env)
+		env.policy = "Always private"
+		env.create_result = RuntimeError("403")
+		e = ev()
+		_assert_failed_closed(env, e, tp.resolve_reply_target(GW, e, SECRET_ANSWER))
 
-# ---- registration ---------------------------------------------------------------------
-def test_handlers_registered_for_teams_provider():
-	hooks.clear()
-	try:
-		tp.register()
-		kinds = {h: [p for _pr, _s, p, f in hooks._HANDLERS[h]] for h in hooks._HANDLERS}
-		assert kinds[hooks.RESOLVE_CONVERSATION_KEY] == ["microsoft teams"]
-		assert kinds[hooks.RESOLVE_REPLY_TARGET] == ["microsoft teams"]
-		assert hooks.call_first(hooks.RESOLVE_CONVERSATION_KEY, GW, ev()).startswith("teams:")
-		slack = SimpleNamespace(name="s", provider="Slack")
-		assert hooks.call_first(hooks.RESOLVE_CONVERSATION_KEY, slack, ev()) is None
-	finally:
+	def test_fail_closed_no_service_url(self):
+		env = self.use(_fx_env)
+		env.policy = "Always private"
+		env.ref_rows = []
+		act = load("channel_mention")
+		act["serviceUrl"] = ""
+		e = ev(raw_payload=act)
+		_assert_failed_closed(env, e, tp.resolve_reply_target(GW, e, SECRET_ANSWER))
+
+	def test_fail_closed_even_if_note_enqueue_fails(self):
+		env = self.use(_fx_env)
+		monkeypatch = self.monkeypatch
+		env.policy = "Always private"
+		env.linked = {}
+
+		def boom(*a, **k):
+			raise RuntimeError("outbox down")
+
+		monkeypatch.setattr(tp.teams_outbox, "enqueue", boom)
+		e = ev()
+		assert tp.resolve_reply_target(GW, e, "x") == tp.UNUSABLE_TARGET
+
+	def test_real_adapter_send_never_enqueues_answer_for_channel(self):
+		env = self.use(_fx_env)
+		env.policy = "Always private"
+		env.linked = {}
+		e = ev()
+		target = tp.resolve_reply_target(GW, e, SECRET_ANSWER)
+		sent = []
+		outbox = SimpleNamespace(enqueue=lambda gw, snap, kind, payload, key: sent.append((snap, payload)) or "n")
+		channel_row = {
+			"name": "ref1", "conversation_id": CHANNEL, "conversation_type": "channel",
+			"service_url": SVC, "tenant_id": TENANT, "gateway": "gw1",
+		}  # fmt: skip
+
+		def lookup(conversation_id, gateway, app_id):
+			base = conversation_id.split(";messageid=", 1)[0]
+			return channel_row if base == CHANNEL else None
+
+		adapter = TeamsGatewayAdapter(
+			{"app_id": "app", "app_password": "pw", "tenant_id": TENANT},
+			gateway_name="gw1",
+			reference_lookup=lookup,
+			outbox=outbox,
+		)
+		with self.assertRaises(ValueError):
+			adapter.send_reply(GatewayReply(conversation_id=target, text=SECRET_ANSWER, thread_id=e.thread_id))
+		assert sent == []
+		assert SECRET_ANSWER not in all_text(env)
+
+	# ---- mark_sensitive -------------------------------------------------------------------
+	def test_mark_sensitive_lifecycle(self):
+		env = self.use(_fx_env)
+		e = ev()
+		assert tp.is_marked_sensitive(e) is False
+		tp.mark_sensitive(e, "pii")
+		assert tp.is_marked_sensitive(e) is True
+		tp.clear_sensitive(e)
+		assert tp.is_marked_sensitive(e) is False
+
+	def test_mark_sensitive_by_name_and_by_run(self):
+		env = self.use(_fx_env)
+		tp.mark_sensitive("EVT-1")
+		assert tp.is_marked_sensitive(ev()) is True
+		tp.clear_sensitive("EVT-1")
+		tp.mark_sensitive("RUN-1")
+		assert tp.is_marked_sensitive(ev()) is True
+
+	def test_marked_sensitive_redirects_under_channel_policy(self):
+		env = self.use(_fx_env)
+		env.policy = "Channel"
+		env.refs[(TENANT, AAD)] = {"conversation_id": PERSONAL}
+		e = ev()
+		tp.mark_sensitive(e)
+		assert tp.resolve_reply_target(GW, e, "x") == PERSONAL
+
+	def test_mark_sensitive_never_raises(self):
+		monkeypatch = self.monkeypatch
+		monkeypatch.setattr(tp, "frappe", SimpleNamespace(cache=lambda: (_ for _ in ()).throw(RuntimeError())))
+		tp.mark_sensitive("x")
+		assert tp.is_marked_sensitive("x") is False
+
+	# ---- registration ---------------------------------------------------------------------
+	def test_handlers_registered_for_teams_provider(self):
 		hooks.clear()
+		try:
+			tp.register()
+			kinds = {h: [p for _pr, _s, p, f in hooks._HANDLERS[h]] for h in hooks._HANDLERS}
+			assert kinds[hooks.RESOLVE_CONVERSATION_KEY] == ["microsoft teams"]
+			assert kinds[hooks.RESOLVE_REPLY_TARGET] == ["microsoft teams"]
+			assert hooks.call_first(hooks.RESOLVE_CONVERSATION_KEY, GW, ev()).startswith("teams:")
+			slack = SimpleNamespace(name="s", provider="Slack")
+			assert hooks.call_first(hooks.RESOLVE_CONVERSATION_KEY, slack, ev()) is None
+		finally:
+			hooks.clear()

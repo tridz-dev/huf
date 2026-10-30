@@ -48,10 +48,15 @@ class TestRunGatewayBinding(unittest.TestCase):
 			seen.update(kwargs)
 			return "{}"
 
+		def fake_idempotent_send(action, kwargs, gateway_name):
+			# The durable send-key claim inserts a row linked to the Gateway; "GW-OWN" is not a real
+			# Gateway, so run the dispatch step directly and keep the test about argument binding.
+			return fake_send(kwargs)
+
 		with patch.object(whatsapp, "_run_gateway", return_value="GW-OWN"), patch.object(
 			whatsapp, "_authorize", return_value=None
 		), patch.object(whatsapp, "_scope_refusal", return_value=None), patch.object(
-			whatsapp, "_send_message", side_effect=fake_send
+			whatsapp, "_idempotent_send", side_effect=fake_idempotent_send
 		):
 			whatsapp.handle_action("send_message", to="1", message="x", gateway_name="GW-OTHER", whatsapp_account="WA-OTHER")
 		self.assertEqual(seen["gateway_name"], "GW-OWN")
@@ -222,11 +227,20 @@ class TestListMessages(unittest.TestCase):
 
 
 class TestGatewayValidation(unittest.TestCase):
+	def setUp(self):
+		# frappe.throw() translates its message. On a cold site cache the first translation load would
+		# otherwise happen inside a test that has frappe.db.get_value/exists mocked, and it leaves the
+		# shared Redis connection out of step for the rest of the process (later cache reads then
+		# return the wrong replies). Warm it here, with the real db, before any mock is active.
+		frappe._("warm translation cache")
+		frappe.get_meta("Gateway")
+
 	def _gw(self, **fields):
 		from huf.huf.doctype.gateway.gateway import Gateway
 
 		gw = Gateway.__new__(Gateway)
-		base = {"provider": "WhatsApp", "is_enabled": 1, "name": "GW-B", "whatsapp_account": "WA-1"}
+		base = {"provider": "WhatsApp", "is_enabled": 1, "name": "GW-B", "whatsapp_account": "WA-1",
+			"whatsapp_business_account_id": "WABA-1"}
 		base.update(fields)
 		gw.__dict__.update(base)
 		gw.get = lambda key, default=None: base.get(key, default)

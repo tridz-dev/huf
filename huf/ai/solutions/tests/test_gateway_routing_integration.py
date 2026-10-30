@@ -107,7 +107,12 @@ class TestSolutionRouting(_Base):
 		r = self.ingest("zzz")
 		self.assertEqual(r["status"], "Unrouted")
 		self.assertEqual(self.ev(r).status, "Unrouted")
-		self.assertEqual(self.sent(), [])
+		# No agent run and no pin; the reliability hook (gateways/reliability.py) intentionally
+		# sends exactly one friendly "not set up" reply carrying the event reference.
+		from huf.ai.gateways.reliability import UNROUTED_TEXT
+
+		self.assertEqual(self.sent(), [UNROUTED_TEXT.format(ref=r["event_name"])])
+		self.assertIsNone(a.get_pin(self.gw, "u1"))
 
 	def test_legacy_binding_works_and_does_not_pin(self):
 		self.sol("Orders", value="order", priority=5)

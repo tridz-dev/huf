@@ -11,6 +11,7 @@ Each entry is a dict with:
 
 from huf.ai.tools import telegram_admin_spec, telegram_tool_spec
 from huf.ai.tools.integration.registry_entries import with_service as _with_service
+from huf.ai.tools.channel_specs import CHANNEL_TOOLS, COMMERCE_TOOLS, HANDOFF_TOOLS, LMS_TOOLS  # noqa: F401 (re-exported)
 
 # Array parameters whose elements are objects (the doctype row has no item-type field, so the schema
 # builders look the fieldname up here instead of declaring every array as an array of strings).
@@ -72,24 +73,6 @@ RECIPIENT_TOOLS = [
 		"parameters": [
 			_p("service", required=True, description="The service name, e.g. 'telegram', 'slack', 'discord'"),
 			_p("recipient_name", required=True, description="Human-friendly recipient name as stored in Integration Settings, e.g. 'John Doe'"),
-		],
-	},
-]
-
-HANDOFF_TOOLS = [
-	{
-		"tool_name": "handoff_to_solution",
-		"description": (
-			"Hand the current gateway chat over to another Live solution. From the next message on, the contact is "
-			"served by that solution. Sends no message itself; tell the contact what is happening in your own reply. "
-			"Only works inside a gateway conversation. Arguments: solution (the solution name or title), "
-			"reason (optional, short)."
-		),
-		"function_path": "huf.ai.tools.handoff.handle_handoff_to_solution",
-		"category": "Communication Tools",
-		"parameters": [
-			_p("solution", required=True, description="Name or title of the Live solution to hand this chat to"),
-			_p("reason", description="Optional short reason for the handoff"),
 		],
 	},
 ]
@@ -2856,3 +2839,4 @@ ALL_INTEGRATION_TOOLS = (
 	+ _with_service(SERP_YOUTUBE_TOOLS, "serpapi")
 	+ FRAPPE_CLOUD_TOOLS  # entries already declare service="frappe_cloud"
 )
+ALL_INTEGRATION_TOOLS = (*ALL_INTEGRATION_TOOLS, *CHANNEL_TOOLS)

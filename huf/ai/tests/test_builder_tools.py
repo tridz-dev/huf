@@ -737,13 +737,16 @@ class TestTableRowTools(IntegrationTestCase):
 		self.assertEqual(preview["diff"]["data"]["title"], "json")
 
 	def test_list_rows(self):
-		row = builder.add_table_row(self.TABLE_NAME, {"title": "listed", "status": "Open"}, confirm=True)
-		result = builder.list_table_rows(self.TABLE_NAME, filters={"status": "Open"})
+		# Unique title: the list is a bounded (limit 20) page and the temp table
+		# can hold leftover committed rows, so pin the page to this test's row.
+		title = f"listed-{frappe.generate_hash(length=8)}"
+		row = builder.add_table_row(self.TABLE_NAME, {"title": title, "status": "Open"}, confirm=True)
+		result = builder.list_table_rows(self.TABLE_NAME, filters={"status": "Open", "title": title})
 		self.assertEqual(result["doctype"], self.DOCTYPE_NAME)
 		self.assertGreaterEqual(result["total"], 1)
 		self.assertIn(row["row"], [r["name"] for r in result["rows"]])
 
-		filtered = builder.list_table_rows(self.TABLE_NAME, filters={"status": "Closed"})
+		filtered = builder.list_table_rows(self.TABLE_NAME, filters={"status": "Closed", "title": title})
 		self.assertNotIn(row["row"], [r["name"] for r in filtered["rows"]])
 
 	def test_update_row_two_phase(self):

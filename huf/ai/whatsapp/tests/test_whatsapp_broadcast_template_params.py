@@ -82,11 +82,11 @@ class TestMergeAndPreview(unittest.TestCase):
 	BC = {"gateway": "GW", "template": "t", "consent_attested": 1, "body_params": None, "header_params": None, "button_params": None}
 
 	def _run(self, bc, rows, tpl=NAMED_TPL):
-		blocking, warnings = [], []
+		blocking = []
 		with patch.object(bridge, "_template_row", return_value=dict(tpl)), patch.object(guard, "get_extra", return_value=EXTRA), \
 			patch.object(bl, "_queued_params", return_value=rows):
-			bl._check_params(bc, "B", blocking, warnings)
-		return blocking, warnings
+			bl._check_params(bc, "B", blocking)
+		return [b["message"] for b in blocking], []
 
 	def test_no_params_anywhere_blocks_with_count(self):
 		blocking, _ = self._run(dict(self.BC), [(None, 3)])

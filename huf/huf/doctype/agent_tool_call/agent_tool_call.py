@@ -6,4 +6,11 @@ from frappe.model.document import Document
 
 
 class AgentToolCall(Document):
-	pass
+	def validate(self):
+		# Credentials must never persist in run logs (see huf.ai.secrets).
+		from huf.ai.secrets import redact_json_field
+
+		for fieldname in ("tool_args", "tool_result", "error_message"):
+			value = self.get(fieldname)
+			if value:
+				self.set(fieldname, redact_json_field(value))

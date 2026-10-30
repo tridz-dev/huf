@@ -3,7 +3,7 @@ import sys
 import types
 from types import SimpleNamespace
 
-import pytest
+from huf.ai.tests.unit_support import SupportCase  # noqa: E402
 
 from huf.ai.gateways.slack import recipients as rcp
 from huf.ai.tools.gateways import handoff as tool
@@ -91,8 +91,8 @@ class World:
 		return []
 
 
-@pytest.fixture
-def world(monkeypatch):
+def _fx_world(self):
+	monkeypatch = self.monkeypatch
 	w = World()
 	fake = SimpleNamespace(
 		db=SimpleNamespace(get_value=w.get_value, exists=lambda *a, **k: True),
@@ -123,160 +123,162 @@ def run(**kw):
 	return json.loads(tool.handle_gateway_handoff(**kw))
 
 
-def test_tool_definition():
-	t = tool.GATEWAY_HANDOFF_TOOLS[0]
-	assert t["tool_name"] == "gateway_handoff"
-	assert t["function_path"] == "huf.ai.tools.gateways.handoff.handle_gateway_handoff"
+class TestModule(SupportCase):
+	def test_tool_definition(self):
+		t = tool.GATEWAY_HANDOFF_TOOLS[0]
+		assert t["tool_name"] == "gateway_handoff"
+		assert t["function_path"] == "huf.ai.tools.gateways.handoff.handle_gateway_handoff"
 
+	def test_user_assignee_creates_todo(self):
+		world = self.use(_fx_world)
+		out = run()
+		assert out["success"] is True and out["todos"] == ["TODO-1"]
+		todo = world.todos[0]
+		assert todo["allocated_to"] == "alice@x.com"
+		assert todo["reference_type"] == "Gateway Event" and todo["reference_name"] == "GE-1"
+		assert "Customer wants a refund" in todo["description"]
 
-def test_user_assignee_creates_todo(world):
-	out = run()
-	assert out["success"] is True and out["todos"] == ["TODO-1"]
-	todo = world.todos[0]
-	assert todo["allocated_to"] == "alice@x.com"
-	assert todo["reference_type"] == "Gateway Event" and todo["reference_name"] == "GE-1"
-	assert "Customer wants a refund" in todo["description"]
+	def test_json_shape(self):
+		world = self.use(_fx_world)
+		out = run()
+		assert set(["success", "todos", "notified", "skipped"]) <= set(out)
 
+	def test_role_creates_one_per_enabled_user(self):
+		world = self.use(_fx_world)
+		out = run(assignee={"role": "Support"})
+		assert sorted(t["allocated_to"] for t in world.todos) == ["alice@x.com", "bob@x.com"]
+		assert len(out["todos"]) == 2
+		assert any(s["recipient"] == "off@x.com" for s in out["skipped"])
 
-def test_json_shape(world):
-	out = run()
-	assert set(["success", "todos", "notified", "skipped"]) <= set(out)
+	def test_role_cap(self):
+		world = self.use(_fx_world)
+		world.roles["Big"] = [f"u{i}@x.com" for i in range(8)]
+		world.users.update({f"u{i}@x.com": 1 for i in range(8)})
+		out = run(assignee={"role": "Big"})
+		assert len(out["todos"]) == 5
+		assert sum("cap" in s["reason"] for s in out["skipped"]) == 3
 
+	def test_empty_role(self):
+		world = self.use(_fx_world)
+		out = run(assignee={"role": "Nobody"})
+		assert out["success"] is False and world.todos == []
 
-def test_role_creates_one_per_enabled_user(world):
-	out = run(assignee={"role": "Support"})
-	assert sorted(t["allocated_to"] for t in world.todos) == ["alice@x.com", "bob@x.com"]
-	assert len(out["todos"]) == 2
-	assert any(s["recipient"] == "off@x.com" for s in out["skipped"])
+	def test_unsupported_assignee_kind(self):
+		world = self.use(_fx_world)
+		out = run(assignee={"channel": "C123"})
+		assert out["success"] is False and world.todos == []
 
+	def test_bad_assignee_json(self):
+		world = self.use(_fx_world)
+		assert run(assignee="not json")["success"] is False
 
-def test_role_cap(world):
-	world.roles["Big"] = [f"u{i}@x.com" for i in range(8)]
-	world.users.update({f"u{i}@x.com": 1 for i in range(8)})
-	out = run(assignee={"role": "Big"})
-	assert len(out["todos"]) == 5
-	assert sum("cap" in s["reason"] for s in out["skipped"]) == 3
+	def test_disabled_user_rejected(self):
+		world = self.use(_fx_world)
+		assert run(assignee={"user": "off@x.com"})["success"] is False
 
+	def test_permission_denied_up_front(self):
+		world = self.use(_fx_world)
+		world.can_create = False
+		out = run()
+		assert out["success"] is False and "permission" in out["error"] and world.todos == []
 
-def test_empty_role(world):
-	out = run(assignee={"role": "Nobody"})
-	assert out["success"] is False and world.todos == []
+	def test_permission_error_on_insert(self):
+		world = self.use(_fx_world)
+		world.insert_error = PermErr()
+		out = run()
+		assert out["success"] is False and out["todos"] == []
+		assert out["skipped"][0]["reason"].startswith("no permission")
 
+	def test_dedupe_existing_todo_for_event(self):
+		world = self.use(_fx_world)
+		run()
+		again = run()
+		assert len(world.todos) == 1
+		assert again["todos"] == [] and again["success"] is True
+		assert "already handed off" in again["skipped"][0]["reason"]
 
-def test_unsupported_assignee_kind(world):
-	out = run(assignee={"channel": "C123"})
-	assert out["success"] is False and world.todos == []
+	def test_dedupe_cache_without_event(self):
+		world = self.use(_fx_world)
+		world.origin = False
+		run()
+		run()
+		assert len(world.todos) == 1
 
+	def test_failed_insert_releases_claim(self):
+		world = self.use(_fx_world)
+		world.insert_error = RuntimeError("db")
+		run()
+		world.insert_error = None
+		assert run()["todos"] == ["TODO-1"]
 
-def test_bad_assignee_json(world):
-	assert run(assignee="not json")["success"] is False
+	def test_notify_linked(self):
+		world = self.use(_fx_world)
+		out = run()
+		assert out["notified"] == ["alice@x.com"]
+		assert world.posts[0][0] == "DUALICE" and "TODO-1" in world.posts[0][1]
 
+	def test_notify_unlinked_skipped(self):
+		world = self.use(_fx_world)
+		out = run(assignee={"user": "bob@x.com"})
+		assert out["notified"] == [] and len(out["todos"]) == 1
+		assert "no linked Slack identity" in out["skipped"][0]["reason"]
+		assert world.posts == []
 
-def test_disabled_user_rejected(world):
-	assert run(assignee={"user": "off@x.com"})["success"] is False
+	def test_ack_in_thread(self):
+		world = self.use(_fx_world)
+		out = run()
+		assert out["acknowledged"] is True
+		conv, text = world.acks[0]
+		assert conv == "C1" and "Alice A" in text and "TODO-1" in text
 
+	def test_ack_does_not_leak_message_body(self):
+		world = self.use(_fx_world)
+		run(reason="secret reason")
+		assert "secret reason" not in world.acks[0][1]
 
-def test_permission_denied_up_front(world):
-	world.can_create = False
-	out = run()
-	assert out["success"] is False and "permission" in out["error"] and world.todos == []
+	def test_no_gateway_context_todo_only(self):
+		world = self.use(_fx_world)
+		world.origin = False
+		out = run()
+		assert out["todos"] == ["TODO-1"] and out["notified"] == []
+		assert world.acks == [] and world.posts == []
+		assert "reference_type" not in world.todos[0]
 
+	def test_no_ack_when_nothing_created(self):
+		world = self.use(_fx_world)
+		world.can_create = False
+		run()
+		assert world.acks == []
 
-def test_permission_error_on_insert(world):
-	world.insert_error = PermErr()
-	out = run()
-	assert out["success"] is False and out["todos"] == []
-	assert out["skipped"][0]["reason"].startswith("no permission")
+	def test_summary_and_reason_capped(self):
+		world = self.use(_fx_world)
+		run(summary="s" * 2000, reason="r" * 2000)
+		desc = world.todos[0]["description"]
+		assert len(desc) < tool.MAX_SUMMARY_CHARS + tool.MAX_REASON_CHARS + 100
+		assert desc.count("...") == 2
 
+	def test_slack_text_escaped(self):
+		world = self.use(_fx_world)
+		run(summary="<!channel> hi <@U1> & co")
+		text = world.posts[0][1]
+		assert "<!channel>" not in text and "&lt;!channel&gt;" in text and "&amp;" in text
 
-def test_dedupe_existing_todo_for_event(world):
-	run()
-	again = run()
-	assert len(world.todos) == 1
-	assert again["todos"] == [] and again["success"] is True
-	assert "already handed off" in again["skipped"][0]["reason"]
+	def test_due_date(self):
+		world = self.use(_fx_world)
+		run(due_in_days=3)
+		assert world.todos[0]["date"]
+		run(assignee={"user": "bob@x.com"}, due_in_days="bad")
+		assert "date" not in world.todos[1]
 
+	def test_empty_summary(self):
+		world = self.use(_fx_world)
+		out = run(summary="   ")
+		assert out["success"] is False and world.todos == []
 
-def test_dedupe_cache_without_event(world):
-	world.origin = False
-	run()
-	run()
-	assert len(world.todos) == 1
-
-
-def test_failed_insert_releases_claim(world):
-	world.insert_error = RuntimeError("db")
-	run()
-	world.insert_error = None
-	assert run()["todos"] == ["TODO-1"]
-
-
-def test_notify_linked(world):
-	out = run()
-	assert out["notified"] == ["alice@x.com"]
-	assert world.posts[0][0] == "DUALICE" and "TODO-1" in world.posts[0][1]
-
-
-def test_notify_unlinked_skipped(world):
-	out = run(assignee={"user": "bob@x.com"})
-	assert out["notified"] == [] and len(out["todos"]) == 1
-	assert "no linked Slack identity" in out["skipped"][0]["reason"]
-	assert world.posts == []
-
-
-def test_ack_in_thread(world):
-	out = run()
-	assert out["acknowledged"] is True
-	conv, text = world.acks[0]
-	assert conv == "C1" and "Alice A" in text and "TODO-1" in text
-
-
-def test_ack_does_not_leak_message_body(world):
-	run(reason="secret reason")
-	assert "secret reason" not in world.acks[0][1]
-
-
-def test_no_gateway_context_todo_only(world):
-	world.origin = False
-	out = run()
-	assert out["todos"] == ["TODO-1"] and out["notified"] == []
-	assert world.acks == [] and world.posts == []
-	assert "reference_type" not in world.todos[0]
-
-
-def test_no_ack_when_nothing_created(world):
-	world.can_create = False
-	run()
-	assert world.acks == []
-
-
-def test_summary_and_reason_capped(world):
-	run(summary="s" * 2000, reason="r" * 2000)
-	desc = world.todos[0]["description"]
-	assert len(desc) < tool.MAX_SUMMARY_CHARS + tool.MAX_REASON_CHARS + 100
-	assert desc.count("...") == 2
-
-
-def test_slack_text_escaped(world):
-	run(summary="<!channel> hi <@U1> & co")
-	text = world.posts[0][1]
-	assert "<!channel>" not in text and "&lt;!channel&gt;" in text and "&amp;" in text
-
-
-def test_due_date(world):
-	run(due_in_days=3)
-	assert world.todos[0]["date"]
-	run(assignee={"user": "bob@x.com"}, due_in_days="bad")
-	assert "date" not in world.todos[1]
-
-
-def test_empty_summary(world):
-	out = run(summary="   ")
-	assert out["success"] is False and world.todos == []
-
-
-def test_never_raises(world, monkeypatch):
-	monkeypatch.setattr(tool, "_assignees", lambda a: 1 / 0)
-	out = json.loads(tool.handle_gateway_handoff({"user": "a"}, "x"))
-	assert out["success"] is False and "Traceback" not in json.dumps(out)
-	assert world.logged
+	def test_never_raises(self):
+		world = self.use(_fx_world)
+		monkeypatch = self.monkeypatch
+		monkeypatch.setattr(tool, "_assignees", lambda a: 1 / 0)
+		out = json.loads(tool.handle_gateway_handoff({"user": "a"}, "x"))
+		assert out["success"] is False and "Traceback" not in json.dumps(out)
+		assert world.logged

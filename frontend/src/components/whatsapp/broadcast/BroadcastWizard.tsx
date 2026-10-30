@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field } from '@/components/ui/field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { errorText, listTemplates, type WhatsAppTemplate } from '@/services/whatsappApi';
-import { addBroadcastRecipients, attestBroadcastConsent, createBroadcast, deleteBroadcast, getBroadcastTemplateParams, previewBroadcast, startBroadcast, type AddRecipientsResult, type BroadcastPreview, type BroadcastRecipientInput, type BroadcastTemplateParams, type BroadcastTemplateVariable, type BroadcastSendVia } from './broadcastApi';
+import { addBroadcastRecipients, attestBroadcastConsent, createBroadcast, deleteBroadcast, getBroadcastTemplateParams, previewBroadcast, startBroadcast, scheduleBroadcast, type AddRecipientsResult, type BroadcastPreview, type BroadcastRecipientInput, type BroadcastTemplateParams, type BroadcastTemplateVariable, toIssue, type BroadcastSendVia, adaptAddResult } from './broadcastApi';
+import { toSiteDatetime } from './broadcastModel';
+import type { AudienceSelectionItem, SelectionPreview } from '../audiences/audiencesApi';
+import { RecipientsStep } from './recipients/RecipientsStep';
+import { setBroadcastAudiences, type ConsentCover } from './recipients/audienceSelectionApi';
+import { getBroadcastLimits, limitFlag, limitNumber, type BroadcastLimit } from './limitsApi';
 
 const varKey = (v: BroadcastTemplateVariable, i: number) => (v.name ?? String(v.index ?? i + 1));
 
@@ -71,10 +77,18 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   const [text, setText] = useState('');
   const [csv, setCsv] = useState<string | null>(null);
   const [result, setResult] = useState<AddRecipientsResult | null>(null);
+  const [selection, setSelection] = useState<AudienceSelectionItem[]>([]);
+  const [audPreview, setAudPreview] = useState<SelectionPreview | null>(null);
+  const [listsResult, setListsResult] = useState<AddRecipientsResult | null>(null);
+  const [cover, setCover] = useState<ConsentCover | null>(null);
+  const manualDone = useRef(false);
+  const manualAdded = useRef(0);
   const [consent, setConsent] = useState(false);
   const [source, setSource] = useState('');
   const [preview, setPreview] = useState<BroadcastPreview | null>(null);
   const [typed, setTyped] = useState('');
+  const [scheduleMode, setScheduleMode] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState('');
   const [broadcast, setBroadcast] = useState('');
   const [reviewing, setReviewing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -85,6 +99,19 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
   const [buttonValues, setButtonValues] = useState<Record<number, string>>({});
   const [location, setLocation] = useState<LocationValue>(EMPTY_LOCATION);
   const started = useRef(false);
+  const [limits, setLimits] = useState<BroadcastLimit[] | null>(null);
+  const [acked, setAcked] = useState<Record<string, boolean>>({});
+  // Fallbacks equal the registry defaults, used only while the limits are unreadable.
+  const locationMax = limitNumber(limits, 'location_text_max', 1000);
+  const urlSuffixMax = limitNumber(limits, 'url_suffix_max', 200);
+  const copyCodeMax = limitNumber(limits, 'copy_code_max', 15);
+  const requireTyped = limitFlag(limits, 'require_typed_count', true);
+
+  useEffect(() => {
+    let live = true;
+    void getBroadcastLimits().then((res) => { if (live && res.success) setLimits(res.limits); });
+    return () => { live = false; };
+  }, [gateway]);
 
   useEffect(() => {
     void listTemplates(gateway, 'APPROVED').then((res) => {
@@ -143,32 +170,59 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
       setBroadcast(id);
     }
     const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-    const res = await addBroadcastRecipients(id, csv !== null ? { csvText: csv } : hasHeaderRow(text) ? { csvText: text } : { recipients: parseRecipientLines(lines, named, vars) });
-    if (!res.success) return fail(res);
-    setResult(res);
+    let added = 0;
+    if ((csv !== null || lines.length) && !manualDone.current) {
+      const res = await addBroadcastRecipients(id, csv !== null ? { csvText: csv } : hasHeaderRow(text) ? { csvText: text } : { recipients: parseRecipientLines(lines, named, vars) });
+      if (!res.success) return fail(res);
+      manualDone.current = true;
+      manualAdded.current = res.added;
+      setResult(res);
+    }
+    // Lists go in after the manual rows so the consent cover is computed over everything.
+    if (selection.length) {
+      const res = await setBroadcastAudiences(id, selection);
+      if (!res.success) return fail(res);
+      if (res.blocked.length) return fail({ success: false, error: 'audience_purpose_mismatch', message: res.blocked.map((b) => b.message).join(' ') });
+      setListsResult(adaptAddResult(res));
+      setCover(res.consent);
+      added += res.added;
+    }
     setBusy(false);
-    setReviewing(res.added > 0);
+    setReviewing(added + manualAdded.current > 0);
     return true;
   };
 
   const submitConsent = async (): Promise<boolean> => {
     setBusy(true); setErr('');
-    const a = await attestBroadcastConsent(broadcast, source.trim());
-    if (!a.success) return fail(a);
+    if (!covered) {
+      const a = await attestBroadcastConsent(broadcast, source.trim());
+      if (!a.success) return fail(a);
+    }
     const p = await previewBroadcast(broadcast);
     if (!p.success) return fail(p);
     setPreview(p.preview);
+    setAcked({});
+    void getBroadcastLimits(broadcast).then((res) => { if (res.success) setLimits(res.limits); });
     setBusy(false);
     return true;
   };
 
   const start = async () => {
     setBusy(true); setErr('');
-    const res = await startBroadcast(broadcast, typed.trim());
+    const confirmCount = requireTyped ? typed.trim() : String(preview?.queued ?? '');
+    const codes = (preview?.warnings ?? []).map((w) => toIssue(w).code);
+    const res = scheduleMode ? await scheduleBroadcast(broadcast, toSiteDatetime(scheduledAt), confirmCount, codes) : await startBroadcast(broadcast, confirmCount, codes);
+    if (!res.success && (res.error === 'warnings_changed' || res.error === 'recipients_changed')) {
+      // The situation changed since the preview: show the new list and ask again.
+      const p = await previewBroadcast(broadcast);
+      if (p.success) { setPreview(p.preview); setAcked({}); setStep(3); }
+      setBusy(false); setErr(res.error === 'recipients_changed' ? 'The recipient list changed since you reviewed this broadcast. Please review it again.' : 'Something changed since you reviewed this broadcast. Please review the warnings again.');
+      return;
+    }
     setBusy(false);
     if (!res.success) { setErr(errorText(res)); return; }
     started.current = true;
-    toast.success('Broadcast started');
+    toast.success(scheduleMode ? 'Broadcast scheduled' : 'Broadcast started');
     onStarted(broadcast);
   };
 
@@ -189,12 +243,16 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
     setText('');
   };
 
-  const blocking = preview?.blocking ?? [];
+  const covered = !!cover?.satisfied;
+  const blocking = (preview?.blocking ?? []).map(toIssue);
+  const warnings = (preview?.warnings ?? []).map(toIssue);
+  const allAcked = warnings.every((w) => acked[w.code]);
+  const applied = (preview?.limits_in_effect ?? []).map((k) => limits?.find((l) => l.key === k)).filter((l): l is BroadcastLimit => !!l);
   const expected = preview ? String(preview.queued) : '';
   const canNext = [
     !!tpl && paramsReady,
-    (csv !== null || text.trim().length > 0) && !busy,
-    consent && source.trim().length > 0 && !busy,
+    (csv !== null || text.trim().length > 0 || selection.length > 0) && !(audPreview?.blocked.length) && !busy,
+    (covered || (consent && source.trim().length > 0)) && !busy,
   ][step];
 
   const next = async () => {
@@ -271,10 +329,10 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
                   {(p) => <Input {...p} inputMode="decimal" value={location.longitude} onChange={(e) => setLocation((l) => ({ ...l, longitude: e.target.value }))} />}
                 </Field>
                 <Field label="Place name (optional)" id="bc-loc-name">
-                  {(p) => <Input {...p} maxLength={1000} value={location.name} onChange={(e) => setLocation((l) => ({ ...l, name: e.target.value }))} />}
+                  {(p) => <Input {...p} maxLength={locationMax} value={location.name} onChange={(e) => setLocation((l) => ({ ...l, name: e.target.value }))} />}
                 </Field>
                 <Field label="Address (optional)" id="bc-loc-address">
-                  {(p) => <Input {...p} maxLength={1000} value={location.address} onChange={(e) => setLocation((l) => ({ ...l, address: e.target.value }))} />}
+                  {(p) => <Input {...p} maxLength={locationMax} value={location.address} onChange={(e) => setLocation((l) => ({ ...l, address: e.target.value }))} />}
                 </Field>
               </div>
             </fieldset>
@@ -282,7 +340,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
           {urlButtons.map((b) => (
             <div key={b.index} className="space-y-1">
               <Label htmlFor={`bc-btn-${b.index}`}>{b.sub_type === 'copy_code' ? 'Coupon code' : 'Link suffix'} for button {b.label ? `"${b.label}"` : b.index + 1}{b.required ? '' : ' (optional)'}</Label>
-              <Input id={`bc-btn-${b.index}`} value={buttonValues[b.index] ?? ''} maxLength={b.sub_type === 'copy_code' ? 15 : 200} onChange={(e) => setButtonValues((v) => ({ ...v, [b.index]: e.target.value }))} />
+              <Input id={`bc-btn-${b.index}`} value={buttonValues[b.index] ?? ''} maxLength={b.sub_type === 'copy_code' ? copyCodeMax : urlSuffixMax} onChange={(e) => setButtonValues((v) => ({ ...v, [b.index]: e.target.value }))} />
             </div>
           ))}
           {isMarketing ? (
@@ -305,41 +363,21 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
         </div>
       )}
 
-      {(step === 1) && (
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <Label htmlFor="bc-recipients">Recipients (one phone number per line)</Label>
-            <Textarea id="bc-recipients" rows={8} value={text} disabled={reviewing || csv !== null} onChange={(e) => setText(e.target.value)} placeholder="+14155550101" />
-            <p className="text-xs text-steel">
-              {vars.length > 0
-                ? `Columns: phone, ${vars.map((v, i) => varKey(v, i)).join(', ')} (comma or tab separated). Missing values use the defaults from step 1.`
-                : 'Columns: phone.'}
-              {extraColumns.length ? ` For per-recipient values, start with a header line such as phone,${extraColumns.join(',')}; an empty cell uses the default.` : ''}
-            </p>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="bc-csv">Or upload a CSV (header: phone)</Label>
-            <Input id="bc-csv" type="file" accept=".csv,text/csv" disabled={reviewing} onChange={(e) => void onFile(e.target.files?.[0])} />
-            {csv !== null ? <p className="text-xs text-steel">CSV loaded ({csv.split('\n').length - 1} rows)</p> : null}
-          </div>
-          {result ? (
-            <div role="status" className="rounded-md border p-3 text-sm">
-              <p><strong>{result.added}</strong> recipients added.</p>
-              {result.invalidTotal ? (
-                <div><p>{result.invalidTotal} invalid{result.invalidTotal > result.invalid.length ? ` (showing ${result.invalid.length})` : ''}:</p>
-                  <ul className="list-disc pl-5">{result.invalid.map((x, i) => <li key={i}>{x.recipient ?? ''}{x.reason ? `: ${x.reason}` : ''}</li>)}</ul></div>
-              ) : null}
-              {result.skippedTotal ? (
-                <div><p>{result.skippedTotal} skipped{result.skippedTotal > result.skipped.length ? ` (showing ${result.skipped.length})` : ''}:</p>
-                  <ul className="list-disc pl-5">{result.skipped.map((x, i) => <li key={i}>{x.recipient}: {x.reason}</li>)}</ul></div>
-              ) : null}
-              {result.added === 0 ? <p className="text-destructive">No valid recipients. Fix the list and try again.</p> : null}
-            </div>
-          ) : null}
-        </div>
+      {step === 1 && (
+        <RecipientsStep
+          gateway={gateway} templateCategory={tpl?.category} selection={selection} onSelection={setSelection}
+          onAudiencePreview={setAudPreview} text={text} onText={setText} csv={csv} onFile={(f) => void onFile(f)}
+          locked={reviewing} result={result} listsResult={listsResult}
+          columnsHint={`${vars.length > 0
+            ? `Columns: phone, ${vars.map((v, i) => varKey(v, i)).join(', ')} (comma or tab separated). Missing values use the defaults from step 1.`
+            : 'Columns: phone.'}${extraColumns.length ? ` For per-recipient values, start with a header line such as phone,${extraColumns.join(',')}; an empty cell uses the default.` : ''}`}
+        />
       )}
 
       {step === 2 && (
+        covered ? (
+          <p role="status" className="text-sm">Consent covered by: {cover?.audiences.map((a) => a.title ?? a.audience).join(', ')}. Each list was confirmed when it was created, so there is nothing more to confirm here.</p>
+        ) : (
         <div className="space-y-3">
           <div className="flex items-start gap-2">
             <Checkbox id="bc-consent" checked={consent} onCheckedChange={(v) => setConsent(v === true)} />
@@ -350,6 +388,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
             <Input id="bc-source" value={source} onChange={(e) => setSource(e.target.value)} />
           </div>
         </div>
+        )
       )}
 
       {step === 3 && preview && (
@@ -366,13 +405,29 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
           {preview.cost?.warnings?.length ? (
             <ul className="list-disc pl-5 text-xs text-steel">{preview.cost.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
           ) : null}
-          {preview.warnings.length ? (
-            <div role="alert" className="rounded-md border border-amber-500 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950 dark:text-amber-100"><p className="font-medium">Warnings</p><ul className="list-disc pl-5">{preview.warnings.map((w) => <li key={w}>{w}</li>)}</ul></div>
+          {applied.length ? (
+            <div aria-label="Limits applied to this broadcast" role="group" className="rounded-md border p-3">
+              <p className="font-medium">Limits applied to this broadcast</p>
+              <ul className="list-disc pl-5 text-xs text-steel">
+                {applied.map((l) => <li key={l.key}>{l.label}: {l.effective === null ? (l.kind === 'meta' ? 'not known yet' : 'no limit') : typeof l.effective === 'boolean' ? (l.effective ? 'on' : 'off') : `${l.effective}${l.unit ? ` ${l.unit}` : ''}`}</li>)}
+              </ul>
+            </div>
+          ) : null}
+          {warnings.length ? (
+            <Alert variant="warning" className="space-y-2">
+              <p className="font-medium">Warnings</p>
+              {warnings.map((w) => (
+                <div key={w.code} className="flex items-start gap-2">
+                  <Checkbox id={`bc-ack-${w.code}`} checked={!!acked[w.code]} onCheckedChange={(v) => setAcked((a) => ({ ...a, [w.code]: v === true }))} />
+                  <Label htmlFor={`bc-ack-${w.code}`}><span>{w.message}</span> <span className="block text-xs">I understand, continue anyway.</span></Label>
+                </div>
+              ))}
+            </Alert>
           ) : null}
           {blocking.length ? (
             <div role="alert" className="text-destructive">
               <p className="font-medium">Cannot start</p>
-              <ul className="list-disc pl-5">{blocking.map((w) => <li key={w}>{w}</li>)}</ul>
+              <ul className="list-disc pl-5">{blocking.map((w) => <li key={w.code}>{w.message}</li>)}</ul>
               <p className="mt-1 text-xs text-steel">The template values are fixed once recipients are added. Discard this draft and start again with the missing values.</p>
             </div>
           ) : null}
@@ -381,19 +436,43 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
 
       {step === 4 && preview && (
         <div className="space-y-2">
-          <Label htmlFor="bc-confirm">Type {expected} to confirm sending to {expected} recipients</Label>
-          <Input id="bc-confirm" inputMode="numeric" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+          {requireTyped ? (
+            <>
+              <Label htmlFor="bc-confirm">Type {expected} to confirm sending to {expected} recipients</Label>
+              <Input id="bc-confirm" inputMode="numeric" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+            </>
+          ) : <p className="text-sm">Ready to send to <strong>{expected}</strong> recipients.</p>}
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">When to send</legend>
+            <RadioGroup
+              aria-label="When to send"
+              value={scheduleMode ? 'later' : 'now'}
+              onValueChange={(v) => setScheduleMode(v === 'later')}
+              className="flex items-center gap-2"
+            >
+              <RadioGroupItem value="now" id="bc-send-now" />
+              <Label htmlFor="bc-send-now">Send now</Label>
+              <RadioGroupItem value="later" id="bc-send-later" />
+              <Label htmlFor="bc-send-later">Schedule for</Label>
+            </RadioGroup>
+            {scheduleMode ? (
+              <div className="space-y-1">
+                <Input id="bc-schedule-at" type="datetime-local" aria-label="Schedule date and time" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
+                <p className="text-xs text-steel">Time is in the site timezone. The broadcast starts within 5 minutes of this time.</p>
+              </div>
+            ) : null}
+          </fieldset>
         </div>
       )}
 
       <div className="flex justify-between">
         <Button variant="outline" disabled={busy || step === 0 || (!!broadcast && step <= 2)} onClick={() => setStep((s) => s - 1)}>Back</Button>
         {step < 4 ? (
-          <Button disabled={busy || (step === 1 && reviewing ? false : step === 3 ? blocking.length > 0 : !canNext)} onClick={() => (step === 1 && reviewing) ? setStep(2) : step === 3 ? setStep(4) : void next()}>
+          <Button disabled={busy || (step === 1 && reviewing ? false : step === 3 ? blocking.length > 0 || !allAcked : !canNext)} onClick={() => (step === 1 && reviewing) ? setStep(2) : step === 3 ? setStep(4) : void next()}>
             {busy ? 'Working...' : step === 1 && reviewing ? 'Continue' : step === 1 ? 'Add recipients' : 'Next'}
           </Button>
         ) : (
-          <Button variant="destructive" disabled={busy || blocking.length > 0 || typed.trim() !== expected || !expected} onClick={() => void start()}>Start broadcast</Button>
+          <Button variant="destructive" disabled={busy || blocking.length > 0 || (requireTyped && typed.trim() !== expected) || !expected || (scheduleMode && !scheduledAt)} onClick={() => void start()}>{scheduleMode ? 'Schedule broadcast' : 'Start broadcast'}</Button>
         )}
       </div>
     </section>

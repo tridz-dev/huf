@@ -12,6 +12,7 @@ from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.whatsapp.broadcast import runner as runner
 from huf.ai.whatsapp.broadcast import stale
+from huf.ai.whatsapp.tests.broadcast_policy_helper import limit_override
 from huf.ai.whatsapp.tests.test_whatsapp_broadcast_runner import GW, USER, B, R, _Base, _preview
 
 
@@ -126,7 +127,7 @@ class TestFixes(_Base):
 			return "sent"
 
 		patch.object(runner.broadcast_send, "send_one", side_effect=_send).start()
-		with patch.object(runner, "HEARTBEAT_EVERY_SENDS", 1):
+		with limit_override(heartbeat_every_sends=1):
 			res = runner.tick(b)
 		self.assertEqual(res["result"], "lock_lost")
 		raw = frappe.cache().get(runner._lock_key(b))
@@ -135,9 +136,7 @@ class TestFixes(_Base):
 	def test_heartbeat_refreshes_ttl_during_batch(self):
 		b = self.running(n=6)
 		self.fake_send()
-		with patch.object(runner, "_heartbeat", wraps=runner._heartbeat) as hb, patch.object(
-			runner, "HEARTBEAT_EVERY_SENDS", 2
-		):
+		with patch.object(runner, "_heartbeat", wraps=runner._heartbeat) as hb, limit_override(heartbeat_every_sends=2):
 			runner.tick(b)
 		self.assertGreaterEqual(hb.call_count, 3)  # more than the single end-of-batch beat
 
@@ -177,7 +176,7 @@ class TestFixes(_Base):
 			return "sent"
 
 		patch.object(runner.broadcast_send, "send_one", side_effect=_send).start()
-		with patch.object(runner, "PERM_RECHECK_EVERY_SENDS", 1):
+		with limit_override(perm_recheck_every_sends=1):
 			res = runner.tick(b)
 		self.assertEqual((res["result"], res["reason"]), ("paused", "permission_lost"))
 		self.assertEqual(calls["n"], 2)
@@ -191,10 +190,24 @@ class TestFixes(_Base):
 		runner.resume(b)
 		self.assertIn(frappe.session.user, authorized)
 		self.assertEqual(self.st(b, "started_by"), "Guest")  # provenance kept
-		self.assertTrue(frappe.db.exists("Comment", {"reference_doctype": B, "reference_name": b,
-													  "content": f"resumed_by: {frappe.session.user}"}))
+		self.assertEqual(self.st(b, "resumed_by"), frappe.session.user)
+		# a Comment cannot change who the runner acts as
+		frappe.get_doc({"doctype": "Comment", "comment_type": "Info", "reference_doctype": B, "reference_name": b,
+						"content": "resumed_by: Administrator-forged"}).insert(ignore_permissions=True)
+		self.assertEqual(runner._runner_user(b, "Guest"), frappe.session.user)
 		self.enqueue.assert_called_with(b, user=frappe.session.user)
 		self.assertEqual(runner._runner_user(b, "Guest"), frappe.session.user)
+
+	def test_resumed_by_and_acknowledged_warnings_cannot_be_written_around_the_api(self):
+		b = self.make(status="Paused", started_by="Guest")
+		for field, value in (("resumed_by", "Administrator"), ("acknowledged_warnings", '["quality_red"]')):
+			frappe.flags.in_broadcast_api = False
+			doc = frappe.get_doc(B, b)
+			doc.flags.ignore_links = True  # the fixture's Gateway row does not exist; the guard is what is under test
+			doc.set(field, value)
+			with self.assertRaises(frappe.PermissionError):
+				doc.save(ignore_permissions=True)
+			frappe.db.rollback()
 
 	def test_resume_denied_when_resumer_lacks_write_even_if_starter_had_it(self):
 		b = self.make(status="Paused")
@@ -210,7 +223,7 @@ class TestFixes(_Base):
 			frappe.db.set_value(R, name, "status", "sent")
 			return "sent"
 		patch.object(runner.broadcast_send, "send_one", side_effect=_send).start()
-		with patch.object(runner, "TICK_BUDGET_SECONDS", -1):
+		with limit_override(tick_budget_seconds=-1):
 			runner.tick(b, user=USER)
 		self.enqueue.assert_called_once_with(b, continuation=True, user=USER)
 		runner.tick(b, user=USER)

@@ -30,7 +30,8 @@ def _claim(kind: str, event_name: str) -> bool:
 	try:
 		key = f"huf:gw_notice:{kind}:{event_name}"
 		cache = frappe.cache()
-		if cache.get_value(key):
+		# expires=True: a miss is otherwise memoised in frappe.local.cache and hides the set_value below.
+		if cache.get_value(key, expires=True):
 			return False
 		cache.set_value(key, 1, expires_in_sec=NOTICE_TTL_SEC)
 		return True

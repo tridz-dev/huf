@@ -86,7 +86,8 @@ class FakeFrappe:
 		self.recounted = []
 		self.log_error = MagicMock()
 		self.get_traceback = lambda: "tb"
-		self.utils = SimpleNamespace(now_datetime=lambda: "NOW")
+		# webhook times (_when) are site-timezone now (FIX-STATUS-RACE), so the fake needs the site tz lookup
+		self.utils = SimpleNamespace(now_datetime=lambda: "NOW", get_system_timezone=lambda: "UTC")
 
 	def get_all(self, doctype, filters=None, fields=None, limit_page_length=None):
 		key, value = next(iter(filters.items()))

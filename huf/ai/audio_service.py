@@ -29,6 +29,7 @@ from frappe import _
 from frappe.utils.file_manager import save_file
 
 from huf.ai.transaction import commit_if_background
+from huf.permissions import can_read_file
 
 # Maximum accepted size for a decoded audio upload (25 MB).
 MAX_AUDIO_FILE_SIZE = 25 * 1024 * 1024
@@ -493,11 +494,8 @@ def _resolve_file_doc(file_id: str = None, file_url: str = None):
             file_name = file_url.replace("/files/", "")
             file_doc = frappe.get_doc("File", {"file_name": file_name})
 
-    if file_doc and not frappe.has_permission("File", "read", doc=file_doc):
-        frappe.throw(
-            _("Not permitted to read File {0}").format(file_doc.name),
-            frappe.PermissionError,
-        )
+    if file_doc and not can_read_file(file_doc):
+        frappe.throw(_("Not permitted to read File {0}").format(file_doc.name), frappe.PermissionError)
 
     return file_doc
 

@@ -8,7 +8,7 @@ import { Field } from '@/components/ui/field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { errorText, type WhatsAppResult } from '@/services/whatsappApi';
-import { cancelBroadcast, deleteBroadcast, getBroadcast, listBroadcastRecipients, pauseBroadcast, removeBroadcastRecipient, resumeBroadcast, type Broadcast, type BroadcastRecipient } from './broadcastApi';
+import { cancelBroadcast, deleteBroadcast, getBroadcast, listBroadcastRecipients, pauseBroadcast, removeBroadcastRecipient, resumeBroadcast, retryFailedRecipients, unscheduleBroadcast, type Broadcast, type BroadcastRecipient } from './broadcastApi';
 import { LoadError } from '../BridgeUnavailable';
 import { COUNT_KEYS, isActive, POLL_MS, progressPercent } from './broadcastModel';
 import { useBroadcastRealtime, type BroadcastProgress } from './useBroadcastRealtime';
@@ -70,6 +70,14 @@ export function BroadcastDetail({ name, onBack }: { name: string; onBack: () => 
     await load();
   };
 
+  const retry = async () => {
+    setBusy(true);
+    const res = await retryFailedRecipients(name);
+    setBusy(false);
+    if (res.success) toast.success(`Created a draft with ${res.added ?? 0} recipients to retry: ${res.broadcast ?? ''}`);
+    else toast.error(errorText(res));
+  };
+
   const remove = async (r: BroadcastRecipient) => {
     setBusy(true);
     const res = await removeBroadcastRecipient(name, r.recipient);
@@ -101,7 +109,7 @@ export function BroadcastDetail({ name, onBack }: { name: string; onBack: () => 
         {b.pause_reason ? <span className="text-xs text-steel">Paused: {b.pause_reason}</span> : null}
         {active ? (
           <span className="ml-auto flex items-center gap-1 text-xs text-steel" role="status" aria-label={live ? 'Live updates' : 'Updating by polling'}>
-            <span aria-hidden className={`inline-block size-2 rounded-full ${live ? 'bg-green-500' : 'bg-muted-foreground'}`} />
+            <span aria-hidden className={`inline-block size-2 rounded-full ${live ? 'bg-good' : 'bg-muted-foreground'}`} />
             {live ? 'Live' : 'Polling'}
           </span>
         ) : null}
@@ -127,7 +135,16 @@ export function BroadcastDetail({ name, onBack }: { name: string; onBack: () => 
           <Button variant="outline" disabled={busy} onClick={() => act(pauseBroadcast, 'Broadcast paused')}>Pause</Button>
         ) : null}
         {b.status === 'Paused' ? <Button disabled={busy} onClick={() => act(resumeBroadcast, 'Broadcast resumed')}>Resume</Button> : null}
-        {['Running', 'Queued', 'Paused', 'Draft'].includes(b.status) ? (
+        {b.status === 'Scheduled' ? (
+          <>
+            <span className="self-center text-sm text-ink">Scheduled for {b.scheduled_at ?? ''} (site time)</span>
+            <Button variant="outline" disabled={busy} onClick={() => act(unscheduleBroadcast, 'Broadcast unscheduled')}>Unschedule</Button>
+          </>
+        ) : null}
+        {b.failed > 0 && ['Completed', 'Cancelled', 'Paused', 'Failed'].includes(b.status) ? (
+          <Button variant="outline" disabled={busy} onClick={() => void retry()}>Retry failed ({b.failed})</Button>
+        ) : null}
+        {['Running', 'Queued', 'Paused', 'Draft', 'Scheduled'].includes(b.status) ? (
           confirmCancel ? (
             <span className="flex items-center gap-2" role="group" aria-label="Confirm cancel">
               <span className="text-sm">Cancel this broadcast? Unsent messages will be skipped.</span>
