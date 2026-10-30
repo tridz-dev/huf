@@ -17,6 +17,13 @@ interface DataPickerProps {
   loading?: boolean;
 }
 
+const SOURCE_WORDS = {
+  pinned: 'Showing the example saved on this step',
+  last_run: 'Showing real data from the last run',
+  doctype: 'Showing a recent record',
+  none: '',
+} as const;
+
 function StepIcon({ step }: { step: PickerStep }) {
   const Icon = step.kind === 'loop' ? Repeat : step.node ? cardIcon(step.node.data) : Search;
   return (
@@ -136,6 +143,11 @@ export function DataPicker({ model, accept, onPick, onFetchLast, loading }: Data
           data-testid="flow-use-data-search"
         />
       </div>
+      {step && view.kind === 'fields' && step.hasSample && !query ? (
+        <p className="border-b border-border px-3 py-1.5 text-meta text-muted-foreground" data-testid="flow-use-data-source">
+          {SOURCE_WORDS[step.source]}
+        </p>
+      ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto p-1" role="listbox" id={listId} aria-label="Data you can use">
         {rows.map((r, i) => (
           <button
