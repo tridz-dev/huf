@@ -28,7 +28,7 @@ export const CHANNEL_SECTIONS: ChannelSection[] = [
 export function sectionsFor(channel: string = 'whatsapp'): ChannelSection[] {
   const meta = channelMeta(channel);
   return CHANNEL_SECTIONS.filter((s) => meta.key === 'whatsapp' || !s.whatsappOnly).map((s) =>
-    s.key === 'numbers' ? { ...s, label: meta.noun } : s
+    s.key === 'numbers' ? { ...s, label: meta.noun, icon: meta.key === 'whatsapp' ? s.icon : meta.icon } : s
   );
 }
 

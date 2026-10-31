@@ -107,7 +107,7 @@ function WhatsAppSettings({ gw }: { gw: string | undefined }) {
   const { section: raw } = useParams<{ section?: string }>();
   const section = resolveSection(raw);
   const { status, gateway, error, reload, runTokenCheck, tokenCheck } = useSettingsData(gw);
-  const base = gw ? `/channels/whatsapp/n/${encodeURIComponent(gw)}/settings` : '';
+  const base = gw ? `/channels/whatsapp/n/${encodeURIComponent(gw)}/settings` : '/channels/whatsapp/settings';
   const Panel = PANELS[section];
   const health = status?.gateway;
 
@@ -130,7 +130,8 @@ function WhatsAppSettings({ gw }: { gw: string | undefined }) {
           ))}
         </nav>
         <div className="min-w-0 flex-1">
-          {!gw && <p className="text-sm text-steel">Pick a number to see its settings.</p>}
+          {!gw && section === 'facebook' && <FacebookSignupPanel />}
+          {!gw && section !== 'facebook' && <p className="text-sm text-steel">Pick a number to see its settings.</p>}
           {gw && error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           {gw && !error && !health && <p className="text-sm text-steel">Loading...</p>}
           {gw && health && (

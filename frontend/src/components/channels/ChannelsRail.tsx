@@ -78,6 +78,11 @@ export function ChannelsRail() {
       </div>
 
       <ul className="flex-1 space-y-0.5 overflow-y-auto p-2">
+        {!gw && (
+          <li role="note" className="px-3 pb-2 text-xs text-steel">
+            Connect your first {meta.nounSingular} to unlock the other pages.
+          </li>
+        )}
         {sectionsFor(channel).map((s) => {
           const gatewayless = s.key === 'numbers';
           const disabled = !gw && !gatewayless;
@@ -85,7 +90,12 @@ export function ChannelsRail() {
           if (disabled) {
             return (
               <li key={s.key}>
-                <span aria-disabled="true" className="flex items-center gap-2.5 px-3 py-2 text-sm text-steel-soft">
+                <span
+                  aria-disabled="true"
+                  data-testid={`rail-disabled-${s.key}`}
+                  title={`Connect your first ${meta.nounSingular} to use ${s.label}`}
+                  className="flex cursor-not-allowed items-center gap-2.5 px-3 py-2 text-sm text-steel-soft opacity-50"
+                >
                   <Icon className="h-4 w-4" />
                   {s.label}
                 </span>

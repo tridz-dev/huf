@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -23,6 +23,8 @@ vi.mock('@/components/whatsapp/broadcast/BroadcastWizard', () => ({
 vi.mock('@/components/whatsapp/broadcast/BroadcastDetail', () => ({
   BroadcastDetail: (p: { name: string; onBack: () => void }) => <div>detail {p.name}<button onClick={p.onBack}>back</button></div>,
 }));
+const health = vi.hoisted(() => ({ getSetupStatus: vi.fn() }));
+vi.mock('@/services/whatsappHealthApi', async (orig) => ({ ...(await orig<object>()), ...health }));
 vi.mock('@/components/whatsapp/broadcast/BroadcastTab', () => ({ EmergencyStop: () => <div>emergency</div> }));
 
 import TemplatesSection from './TemplatesSection';
@@ -51,8 +53,10 @@ describe('Templates route', () => {
 });
 
 describe('Broadcast sub-routes', () => {
+  beforeEach(() => health.getSetupStatus.mockResolvedValue({ ok: true, data: { success: true, gateway: { name: 'g1' } } }));
   it('list -> new -> detail -> back', async () => {
     render(app('/n/g1/broadcasts'));
+    await screen.findByText('emergency');
     expect(screen.getByText('emergency')).toBeTruthy();
     await userEvent.click(screen.getByText('new'));
     expect(screen.getByTestId('loc').textContent).toBe('/n/g1/broadcasts/new');
@@ -64,7 +68,15 @@ describe('Broadcast sub-routes', () => {
   });
   it('opens detail from list', async () => {
     render(app('/n/g1/broadcasts'));
-    await userEvent.click(screen.getByText('open'));
+    await userEvent.click(await screen.findByText('open'));
     expect(screen.getByTestId('loc').textContent).toBe('/n/g1/broadcasts/BC-1');
+  });
+  it('with a missing number hides New broadcast and Stop all, and explains with a link', async () => {
+    health.getSetupStatus.mockResolvedValue({ ok: true, data: { success: true } });
+    render(app('/n/ghost/broadcasts'));
+    expect(await screen.findByText(/not available yet/i)).toBeTruthy();
+    expect(screen.queryByText('new')).toBeNull();
+    expect(screen.queryByText('emergency')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Connect a number' }).getAttribute('href')).toBe('/channels/whatsapp/setup');
   });
 });

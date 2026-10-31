@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useInRouterContext } from 'react-router-dom';
+import { useIsHufAdmin } from '@/contexts/PermissionsContext';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CopyField } from '@/components/ui/copy-field';
@@ -12,6 +14,9 @@ import {
 
 const SDK_URL = 'https://connect.facebook.net/en_US/sdk.js';
 const FB_ORIGIN = /^https:\/\/([a-z0-9-]+\.)*facebook\.com$/;
+
+/** Site-wide panel; reachable before any number exists. */
+export const FB_SETTINGS_HREF = '/channels/whatsapp/settings/facebook';
 
 export interface EmbeddedSignupData {
   waba_id: string;
@@ -93,6 +98,7 @@ export interface EmbeddedSignupStepProps {
 }
 
 export function EmbeddedSignupStep({ gatewayName, onConnected }: EmbeddedSignupStepProps) {
+  const isAdmin = useIsHufAdmin();
   const [config, setConfig] = useState<SignupConfig | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -194,6 +200,7 @@ export function EmbeddedSignupStep({ gatewayName, onConnected }: EmbeddedSignupS
   }
 
   const enabled = !!config?.enabled;
+  const inRouter = useInRouterContext();
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
@@ -208,7 +215,15 @@ export function EmbeddedSignupStep({ gatewayName, onConnected }: EmbeddedSignupS
       </div>
       {loaded && !enabled && (
         <p id="fb-state" className="mt-2 text-xs text-steel">
-          Not configured. An admin can set this up under Settings, Facebook signup.
+          Not configured. {isAdmin ? (
+            inRouter ? (
+              <>You can turn it on in <Link className="underline" to={FB_SETTINGS_HREF}>Settings, Facebook signup</Link>.</>
+            ) : (
+              <>You can turn it on in Settings, Facebook signup.</>
+            )
+          ) : (
+            <>Ask a Huf admin on your team to turn on Facebook signup. Meanwhile you can connect with your own details below.</>
+          )}
         </p>
       )}
       {error && (
