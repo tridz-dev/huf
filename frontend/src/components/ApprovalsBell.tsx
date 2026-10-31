@@ -123,7 +123,7 @@ export function ApprovalsBell() {
     <Popover onOpenChange={(open) => { if (open) void fetchApprovals(); }}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent align="end" className="w-[min(360px,calc(100vw-1rem))] p-0" data-testid="flow-approvals-panel">
-        <div className="px-4 py-3 border-b text-sm font-semibold">Pending approvals</div>
+        <div className="px-4 py-3 border-b text-sm font-semibold">{count > 0 ? `Pending approvals (${count})` : 'Pending approvals'}</div>
         {body}
       </PopoverContent>
     </Popover>

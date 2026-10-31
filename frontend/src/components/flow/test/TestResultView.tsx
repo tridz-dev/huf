@@ -5,12 +5,28 @@ import { HumanValue } from '@/components/common/HumanValue';
 import { StatusPill } from '@/components/common/StatusPill';
 import { GATEWAY_LABELS, isGatewayOutput, splitGatewayOutput } from '@/lib/flow-test/gatewayResult';
 import { ageText, durationText } from '@/lib/flow-test/testModel';
+import { describeCron } from '@/lib/flow-trigger/scheduleText';
+import { formatAbsoluteTime } from '@/lib/serverTime';
 import type { StepTestResult } from '@/services/flow/stepTestApi';
 
 /** A skipped step's output without the "Would ..." wording (that sentence is shown above it). */
+/** A simulated schedule tick in plain words: when it fired and the schedule as a sentence, not the step id or the cron text. */
+export function scheduleTickRows(out: Record<string, unknown>): Record<string, string> | null {
+  if (!('scheduled_for' in out && 'trigger_node' in out && 'cron' in out)) return null;
+  const when = typeof out.scheduled_for === 'string' ? formatAbsoluteTime(out.scheduled_for) : '';
+  const rows: Record<string, string> = {};
+  if (when) rows['When it fires'] = when;
+  const cron = typeof out.cron === 'string' ? out.cron : '';
+  const text = cron ? describeCron(cron) : '';
+  if (text && !text.startsWith('No valid')) rows.Schedule = `Runs ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+  return rows;
+}
+
 function shownOutput(result: StepTestResult): unknown {
   const out = result.output;
   if (result.mode !== 'simulated' || !out || typeof out !== 'object' || Array.isArray(out)) return out;
+  const tick = scheduleTickRows(out as Record<string, unknown>);
+  if (tick) return tick;
   return Object.fromEntries(Object.entries(out as Record<string, unknown>).filter(([key]) => !['simulated', 'summary', 'note'].includes(key)));
 }
 

@@ -18,6 +18,7 @@ import {
 
 interface ConvertToProcedureDialogProps {
   flowId: string;
+  flowName?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -28,7 +29,7 @@ interface ConvertToProcedureDialogProps {
  * reduction. Converting always creates a Draft the user still has to review and enable
  * elsewhere -- this dialog never activates anything.
  */
-export function ConvertToProcedureDialog({ flowId, open, onOpenChange }: ConvertToProcedureDialogProps) {
+export function ConvertToProcedureDialog({ flowId, flowName, open, onOpenChange }: ConvertToProcedureDialogProps) {
   const [loading, setLoading] = useState(false);
   const [converting, setConverting] = useState(false);
   const [analysis, setAnalysis] = useState<FlowConversionAnalysis | null>(null);
@@ -48,9 +49,9 @@ export function ConvertToProcedureDialog({ flowId, open, onOpenChange }: Convert
   const handleConvert = async () => {
     setConverting(true);
     try {
-      const result = await convertFlowToProcedure(flowId);
+      await convertFlowToProcedure(flowId);
       toast.success('Procedure created as a draft', {
-        description: `Review "${result.procedure_id}" before enabling it.`,
+        description: flowName ? `Review the new procedure for "${flowName}" before enabling it.` : 'Review the new procedure before enabling it.',
       });
       onOpenChange(false);
     } catch {

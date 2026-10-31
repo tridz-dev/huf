@@ -54,7 +54,7 @@ export function useFlowHeaderActions() {
   const startRun = async (payload: Record<string, unknown>, mode: RunMode) => {
     if (!activeFlow) return;
     try {
-      reportFlowRun(await runFlow(activeFlow.id, payload, mode), mode);
+      await reportFlowRun(await runFlow(activeFlow.id, payload, mode), mode, activeFlow.name);
     } catch (err) {
       toast.error('Could not run the flow', { description: humanizeFlowError(err) });
     }

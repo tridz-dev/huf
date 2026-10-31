@@ -149,7 +149,7 @@ function FlowListPage() {
   const handleRun = async (payload: Record<string, unknown>, mode: RunMode) => {
     if (!runTarget) return;
     try {
-      reportFlowRun(await runFlow(runTarget.id, payload, mode), mode);
+      await reportFlowRun(await runFlow(runTarget.id, payload, mode), mode, runTarget.name);
       refresh();
     } catch (err) {
       toast.error('Could not run the flow', { description: humanizeFlowError(err) });
