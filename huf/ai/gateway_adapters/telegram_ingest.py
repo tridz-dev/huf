@@ -21,6 +21,12 @@ from typing import Any
 import frappe
 
 from huf.ai.gateway_adapters.telegram_inbound import TelegramUpdate, media_refs, to_event
+from huf.ai.gateway_adapters.trigger_extras.telegram_fields import (  # noqa: F401  (extra_fields is the hook)
+	_message,
+	_raw,
+	extra_fields,
+	meta_of as _meta,
+)
 
 # Bot API getFile hard limit.
 MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
@@ -62,20 +68,6 @@ def classify(parsed: TelegramUpdate) -> str:
 
 def _ack(kind: str, note: str = "") -> dict:
 	return {"success": True, "ignored": kind, "note": note}
-
-
-def _meta(parsed: TelegramUpdate) -> dict[str, Any]:
-	meta = {
-		"update_kind": parsed.kind,
-		"chat_type": parsed.chat_type,
-		"is_bot": parsed.is_bot,
-		"message_thread_id": parsed.message_thread_id,
-		"business_connection_id": parsed.business_connection_id,
-		"sender_business_bot": parsed.sender_business_bot,
-		"start_payload": parsed.start_payload,
-		"callback_query_id": parsed.callback_query_id,
-	}
-	return {k: v for k, v in meta.items() if v not in ("", False, None)}
 
 
 def _handle_block_change(gateway, parsed: TelegramUpdate) -> dict:
@@ -256,6 +248,7 @@ def _dispatch(gateway, adapter, request, parsed: TelegramUpdate) -> dict | None:
 	if parsed.kind == "message_reaction_count":
 		return _ack(parsed.kind)
 	edit_message_id = ""
+	button_data = ""
 	if parsed.kind == "callback_query":
 		from huf.ai.gateway_adapters import telegram_buttons
 
@@ -272,6 +265,8 @@ def _dispatch(gateway, adapter, request, parsed: TelegramUpdate) -> dict | None:
 			)
 			return _ack("callback_query", decision["reason"])
 		edit_message_id = decision["edit_message_id"]
+		button = telegram_buttons.decode_payload(payload)
+		button_data = button["id"] if button else payload  # what the button was built with, not the label swapped into the text
 		parsed = replace(parsed, text=decision["text"])
 	parsed = _with_addressing(gateway, adapter, parsed)
 	try:
@@ -283,7 +278,7 @@ def _dispatch(gateway, adapter, request, parsed: TelegramUpdate) -> dict | None:
 	raw = dict(event.raw_payload)
 	raw["telegram_meta"] = {
 		**_meta(parsed),
-		"callback_data": parsed.text if parsed.kind == "callback_query" else "",
+		"callback_data": button_data if parsed.kind == "callback_query" else "",
 		**({"edit_message_id": edit_message_id} if edit_message_id else {}),
 	}
 	result = ingest_gateway_event(
@@ -301,47 +296,9 @@ def _dispatch(gateway, adapter, request, parsed: TelegramUpdate) -> dict | None:
 # -- event-row helpers (hooks) ---------------------------------------------------------------
 
 
-def _raw(event) -> dict:
-	raw = event.get("raw_payload") if hasattr(event, "get") else getattr(event, "raw_payload", None)
-	if isinstance(raw, (str, bytes)):
-		try:
-			raw = json.loads(raw)
-		except ValueError:
-			return {}
-	return raw if isinstance(raw, dict) else {}
-
-
-def _message(raw: dict) -> dict:
-	for key in ("message", "edited_message", "channel_post", "edited_channel_post"):
-		if isinstance(raw.get(key), dict):
-			return raw[key]
-	return {}
-
-
 def inbound_media_type(event) -> str | None:
 	refs = media_refs(_message(_raw(event)))
 	return _MEDIA_TYPE.get(refs[0]["kind"]) if refs else None
-
-
-def extra_fields(event, gateway, sender) -> dict:
-	raw = _raw(event)
-	meta = raw.get("telegram_meta") or {}
-	msg = _message(raw) or (raw.get("callback_query") or {}).get("message") or {}
-	chat = msg.get("chat") or {}
-	return {
-		k: v
-		for k, v in {
-			"telegram_user_id": sender,
-			"telegram_chat_id": str(chat.get("id") or event.conversation_id or ""),
-			"telegram_chat_type": meta.get("chat_type") or chat.get("type") or "",
-			"message_thread_id": meta.get("message_thread_id") or "",
-			"business_connection_id": meta.get("business_connection_id") or "",
-			"sender_is_bot": bool(meta.get("is_bot")),
-			"callback_query_id": meta.get("callback_query_id") or "",
-			"callback_data": meta.get("callback_data") or "",
-		}.items()
-		if v not in ("", None)
-	}
 
 
 def _typing_failure_kind(exc: Exception) -> str:

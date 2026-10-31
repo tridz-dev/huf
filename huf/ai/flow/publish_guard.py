@@ -1,11 +1,12 @@
 # Copyright (c) 2026, Huf and contributors
 # For license information, please see license.txt
 
-"""Who may publish a flow that reads documents or calls out to the web.
+"""Who may publish a flow that reads documents, calls out to the web or starts from chat messages.
 
 A flow always runs as its owner. Two kinds of step turn that into a way to move data out of the
 system: a document-event trigger (the flow receives every matching document the owner can read) and
-a web request step (``http_request``, or a tool of type GET / POST). Publishing a flow that has one
+a web request step (``http_request``, or a tool of type GET / POST), and a chat trigger (messages from anyone who writes
+to the channel start the flow). Publishing a flow that has one
 of them therefore needs the ``flows.publish_sensitive`` capability, which Huf Manager and Huf Admin
 (System Manager) hold by default. Other flows are published by anyone who may write flows.
 
@@ -20,6 +21,8 @@ import json
 import frappe
 from frappe import _
 
+from huf.ai.flow.gateways.registry import GATEWAY_NODE_TYPES
+
 SENSITIVE_CAPABILITY = "flows.publish_sensitive"
 
 DOC_EVENT_TYPE = "trigger.doc-event"
@@ -33,6 +36,7 @@ CODE_RUN_TYPE = "code.run"
 DOC_EVENT_LABEL = "a document-event trigger"
 WEB_REQUEST_LABEL = "a web request step"
 CODE_LABEL = "an Execute code step"
+CHAT_LABEL = "a chat trigger"
 
 
 def _is_web_tool(tool_id) -> bool:
@@ -60,6 +64,10 @@ def sensitive_nodes(defn) -> list[dict]:
 		elif node.get("type") == TOOL_CALL_TYPE and _is_web_tool(config.get("tool_id")):
 			label = WEB_REQUEST_LABEL
 			shape = {"tool_id": config.get("tool_id"), "input": config.get("input")}
+		elif node.get("type") in GATEWAY_NODE_TYPES:
+			# Messages from strangers start the flow as its owner: same care as a document trigger.
+			label = CHAT_LABEL
+			shape = {"gateway": config.get("gateway"), "params": config.get("params")}
 		elif node.get("type") == CODE_RUN_TYPE:
 			from huf.ai.flow.code_node import fingerprint
 
@@ -112,6 +120,9 @@ def check_can_publish(defn, previous_defn=None, user: str | None = None) -> None
 	from huf.ai.flow import code_node
 
 	code_node.check_publish(defn, previous_defn, user)
+	from huf.ai.flow.gateways.authority import check_gateway_authority
+
+	check_gateway_authority(defn, user)
 	current = sensitive_nodes(defn)
 	if not current:
 		return

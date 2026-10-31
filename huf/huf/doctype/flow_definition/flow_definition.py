@@ -171,7 +171,10 @@ class FlowDefinition(Document):
 		return defn
 
 	def _validate_gateway_authority(self, defn: dict):
-		"""A node may bind a WhatsApp gateway (``config.gateway``) only if the saving user can write to it."""
+		"""A node may bind a Gateway (``config.gateway``) only if the saving user can write to it. Chat triggers
+		also need a Gateway of the right channel and, once Active, an owner who can use it (warnings never block)."""
+		from huf.ai.flow.gateways import authority
+
 		for node in (defn.get("nodes") or []) if isinstance(defn, dict) else []:
 			config = node.get("config") if isinstance(node, dict) else None
 			gateway = str((config or {}).get("gateway") or "").strip() if isinstance(config, dict) else ""
@@ -182,6 +185,18 @@ class FlowDefinition(Document):
 					_("Node {0}: you need write access to Gateway {1} to bind it.").format(node.get("id"), gateway),
 					frappe.PermissionError,
 				)
+		authority.check_gateway_authority(defn, owner=self.owner if self.status == "Active" else None)
+		warning = authority.double_reply_warning(defn)
+		if warning:
+			frappe.msgprint(warning, title=_("Check this flow"), indicator="orange")
+
+	@staticmethod
+	def _gateway_trigger_problems(defn: dict) -> list[str]:
+		"""Option problems that need the channel's provider; the plain ones are already in the activation rules."""
+		from huf.ai.flow.gateways import authority
+
+		plain = set(collect_activation_problems(defn))
+		return [p for p in authority.trigger_problems(defn) if p not in plain]
 
 	@staticmethod
 	def _doc_event_problems(defn: dict) -> list[str]:
@@ -246,7 +261,7 @@ class FlowDefinition(Document):
 		every problem in a single message rather than failing on the first."""
 		if self.status != "Active":
 			return
-		problems = collect_activation_problems(defn) + self._doc_event_problems(defn)
+		problems = collect_activation_problems(defn) + self._doc_event_problems(defn) + self._gateway_trigger_problems(defn)
 		if problems:
 			frappe.throw(
 				_("Flow cannot be Active: {0}").format("; ".join(problems)),
