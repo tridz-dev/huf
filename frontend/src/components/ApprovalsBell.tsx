@@ -12,9 +12,12 @@ import { useSiteTimezone } from '@/lib/serverTime';
 import { decisionMovedRun } from '@/lib/flow-run/flowRunDecision';
 import { ApprovalsList } from './flow/decision/ApprovalsList';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
+import { cn } from '@/lib/utils';
 import { useViewport } from '@/lib/ui/responsive';
 
 const REFRESH_INTERVAL_MS = 60000;
+/** Requests the popover shows whole before "Show all". */
+export const POPOVER_PREVIEW = 4;
 const FLOW_EVENTS = ['frappe:flow_paused', 'frappe:flow_completed', 'frappe:flow_error'];
 
 
@@ -23,6 +26,7 @@ export function ApprovalsBell() {
   const { isAuthenticated } = useUser();
   const { isPhone } = useViewport();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   useSiteTimezone();
 
   const fetchApprovals = useCallback(async () => {
@@ -94,12 +98,27 @@ export function ApprovalsBell() {
       )}
     </Button>
   );
+  // A popover shows the first few requests whole; "Show all" opens the rest in a list that scrolls (visible bar, fade at the foot).
+  const shown = !isPhone && !showAll && count > POPOVER_PREVIEW ? approvals.slice(0, POPOVER_PREVIEW) : approvals;
+  const scrolls = !isPhone && count > 0;
   const body = count === 0 ? (
     <div className="px-4 py-6 text-center text-sm text-muted-foreground">No approvals waiting</div>
   ) : (
-    <div className="max-h-[min(30rem,70dvh)] overflow-y-auto max-sm:max-h-none">
-      <ApprovalsList approvals={approvals} deciding={deciding} onDecide={decide} large={isPhone} onNavigate={() => setSheetOpen(false)} />
-    </div>
+    <>
+      <div
+        className={cn('min-h-0 max-sm:max-h-none', scrolls && 'approvals-scroll max-h-[calc(min(var(--radix-popover-content-available-height,100dvh),100dvh-6rem)-7rem)] overflow-y-auto overscroll-contain')}
+        data-testid="flow-approvals-list"
+      >
+        <ApprovalsList approvals={shown} deciding={deciding} onDecide={decide} large={isPhone} onNavigate={() => setSheetOpen(false)} />
+      </div>
+      {!isPhone && count > POPOVER_PREVIEW && (
+        <div className="border-t px-2 py-2">
+          <Button variant="ghost" size="sm" className="w-full" data-testid="flow-approvals-show-all" onClick={() => setShowAll((v) => !v)}>
+            {showAll ? 'Show fewer' : `Show all ${count} waiting`}
+          </Button>
+        </div>
+      )}
+    </>
   );
 
   // A phone gets a full-width sheet from the bottom; a bigger screen a popover under the bell.
@@ -120,10 +139,10 @@ export function ApprovalsBell() {
     );
   }
   return (
-    <Popover onOpenChange={(open) => { if (open) void fetchApprovals(); }}>
+    <Popover onOpenChange={(open) => { if (open) { void fetchApprovals(); setShowAll(false); } }}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent align="end" className="w-[min(360px,calc(100vw-1rem))] p-0" data-testid="flow-approvals-panel">
-        <div className="px-4 py-3 border-b text-sm font-semibold">{count > 0 ? `Pending approvals (${count})` : 'Pending approvals'}</div>
+      <PopoverContent align="end" className="flex max-h-[var(--radix-popover-content-available-height)] w-[min(360px,calc(100vw-1rem))] flex-col overflow-hidden p-0" data-testid="flow-approvals-panel">
+        <div className="shrink-0 px-4 py-3 border-b text-sm font-semibold">{count > 0 ? `Pending approvals (${count})` : 'Pending approvals'}</div>
         {body}
       </PopoverContent>
     </Popover>
