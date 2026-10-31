@@ -490,17 +490,17 @@ def create_flow_run(
 		frappe.throw(_("This flow has no trigger yet. Choose what starts it, then run it again."))
 
 	check_runnable(defn)  # a draft may be saved half-built; a run needs every step finished (UX-17)
-
 	try:
 		entry_node = select_entry_node(defn, trigger_type, payload)
 	except ValueError as exc:
 		frappe.throw(_("This flow cannot be started. {0}").format(plain_error(str(exc))))
 
 	from huf.ai.flow import code_node
+	from huf.ai.flow.gateways.dispatch import require_live_for_gateway
 
-	if code_node.code_nodes(defn) and defn_doc.status != "Active":
-		# Code runs only from a published flow: the code and profile a run uses are the ones an
-		# authorised person published, never an unpublished draft.
+	if trigger_type == "Gateway" and (payload or {}).get("gateway_event"):
+		require_live_for_gateway(defn_doc.status)  # TOCTOU: a message may only start a flow that is still Active
+	if code_node.code_nodes(defn) and defn_doc.status != "Active":  # code runs only from a published flow
 		frappe.throw(_("Publish this flow before running it: it has an Execute code step."))
 
 	version = PinnedVersion.pin(defn)

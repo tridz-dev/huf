@@ -89,7 +89,8 @@ def get_last_gateway_message(flow_id: str, node_id: str) -> dict:
 	gateway = str((node.get("config") or {}).get("gateway") or "")
 	if not gateway:
 		return {"found": False, "sample": None, "received_at": None, "real": True}
-	if not frappe.has_permission("Gateway", "read", doc=gateway):
+	# Same bar as binding a flow to the channel: customer text is shown only to editors who may write the Gateway.
+	if not frappe.has_permission("Gateway", "write", doc=gateway):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 	rows = frappe.get_all(
 		"Flow Run",

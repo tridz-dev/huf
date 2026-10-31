@@ -108,6 +108,36 @@ def _save_whatsapp_media(event, gateway, frappe=frappe) -> list[str]:
     return saved
 
 
+MEDIA_SAVED_TTL = 7200
+
+
+def save_event_media(event, gateway, hook, frappe=frappe) -> list[str]:
+    """Run the provider ``media_save`` hook once per event.
+
+    A ``media saved`` marker is set after the hook returns. Files already attached to the event are reused only when
+    that marker is set (a Flow start that falls through to the default agent asks twice). Without the marker, files
+    found on the event come from an interrupted earlier try, so the hook runs again and downloads the rest."""
+    key = f"huf_gw_media_saved:{event.name}"
+    try:
+        saved_before = bool(frappe.cache.get_value(key))
+        existing = frappe.get_all(
+            "File",
+            filters={"attached_to_doctype": "Gateway Event", "attached_to_name": event.name},
+            pluck="file_url",
+            order_by="creation asc",
+        )
+    except Exception:
+        saved_before, existing = False, []
+    if saved_before and all(isinstance(u, str) and u for u in existing):
+        return list(existing)
+    urls = hook(event, gateway)
+    try:
+        frappe.cache.set_value(key, 1, expires_in_sec=MEDIA_SAVED_TTL)
+    except Exception:
+        pass
+    return urls
+
+
 def _describe_attachments(raw_payload: Any) -> str:
     """Best-effort, provider-agnostic sniff of stored raw payload for attachments.
 

@@ -350,27 +350,12 @@ def _normalize_sender_for_provider(provider: str | None, entry_type: str, extern
 
 # Names re-imported below from huf.ai.gateway_core.* stay importable here on purpose: tests and callers
 # patch/read them as ``huf.ai.gateway_service.<name>``. Do not prune the noqa re-exports.
-from huf.ai.gateway_core.media import _MEDIA_SAFE_NAME, _MIME_EXTENSIONS, _media_file_name  # noqa: F401
+from huf.ai.gateway_core.media import _MEDIA_SAFE_NAME, _MIME_EXTENSIONS, _media_file_name, save_event_media  # noqa: F401
 
 def _save_event_media(event, gateway) -> list[str]:
-    """Provider ``media_save`` hook; no hook = no inbound media is saved."""
+    """Provider ``media_save`` hook; no hook = no inbound media is saved. Reuse rules: ``gateway_core.media``."""
     hook = provider_hooks.get(gateway.provider, "media_save")
-    if hook is None:
-        return []
-    # Idempotent: a Flow start that falls through to the default agent saves media first (before the gate),
-    # then the agent path asks again; reuse the files already attached to this event instead of downloading twice.
-    try:
-        existing = frappe.get_all(
-            "File",
-            filters={"attached_to_doctype": "Gateway Event", "attached_to_name": event.name},
-            pluck="file_url",
-            order_by="creation asc",
-        )
-    except Exception:
-        existing = []
-    if existing and all(isinstance(u, str) and u for u in existing):
-        return list(existing)
-    return hook(event, gateway)
+    return [] if hook is None else save_event_media(event, gateway, hook, frappe)
 
 
 from huf.ai.gateway_core.media import _describe_attachments  # noqa: F401
@@ -1741,7 +1726,8 @@ _REQUEUE_TTL = 7200
 
 
 class ConversationBusy(Exception):
-    """The sender's conversation stayed busy for the whole retry budget; the event is re-queued."""
+    """The conversation stayed busy for the whole retry budget; the event is re-queued after ``retry_delay`` seconds."""
+    retry_delay: float = 0
 
 
 def _is_busy_conversation_error(exc: BaseException) -> bool:
@@ -1772,7 +1758,7 @@ def _run_agent_serialised(run_fn, *, lock_key: str, **kwargs):
             pass
 
 
-def _requeue_busy_event(event, error: str) -> dict:
+def _requeue_busy_event(event, error: str, delay: float = 0) -> dict:
     """Leave the event Queued for another worker pass; fail it only after a bounded number of requeues."""
     key = f"huf_gw_requeue:{event.name}"
     count = int(frappe.cache.get_value(key) or 0) + 1
@@ -1794,6 +1780,7 @@ def _requeue_busy_event(event, error: str) -> dict:
         queue="default",
         timeout=_PROCESS_JOB_TIMEOUT,
         event_name=event.name,
+        not_before=_epoch() + delay if delay else None,
         enqueue_after_commit=True,
     )
     return {"event_name": event.name, "status": "Queued", "requeued": count}
@@ -2596,8 +2583,18 @@ def finish_flow_event(flow_run_name: str, status: str, reply_text: str | None = 
             pass
 
 
-def process_gateway_event(event_name: str) -> dict:
-    """Run one queued event, then make sure its terminal state is committed and verified."""
+def process_gateway_event(event_name: str, not_before: float | None = None) -> dict:
+    """Run one queued event, then make sure its terminal state is committed (``not_before``: delayed re-queue)."""
+    if not_before and not_before > _epoch():
+        _sleep(min(not_before - _epoch(), _RETRY_POLL_SECONDS))
+        frappe.enqueue(
+            "huf.ai.gateway_service.process_gateway_event",
+            queue="default",
+            timeout=_PROCESS_JOB_TIMEOUT,
+            event_name=event_name,
+            not_before=not_before,
+        )
+        return {"event_name": event_name, "deferred": True}
     reap_stuck_gateway_events()
     result = _process_gateway_event(event_name)
     _persist_terminal_state(event_name, result)
@@ -2847,7 +2844,7 @@ def _process_gateway_event(event_name: str) -> dict:
 
         raise frappe.ValidationError(_("Gateway event has no valid target."))
     except ConversationBusy as busy:
-        return _requeue_busy_event(event, str(busy))
+        return _requeue_busy_event(event, str(busy), busy.retry_delay)
     except Exception as run_error:
         message = _redact_error_text(frappe.get_traceback())
         # GW-06: a failure here (e.g. send_gateway_reply raising after a

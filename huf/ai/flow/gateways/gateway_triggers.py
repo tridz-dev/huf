@@ -58,8 +58,10 @@ def _is_sender(allowed: list[str], payload: dict) -> bool:
 	ids.discard("")
 	nums = {_digits(i) for i in ids if _digits(i)}
 	for entry in allowed:
-		low = entry.lower().lstrip("@+")
-		if low in ids or (_digits(entry) and _digits(entry) in nums and _digits(entry) == _digits(low)):
+		if entry.lower().lstrip("@+") in ids:
+			return True
+		# A phone-like entry ("+1 555-000-1111") matches on its digits; a name that merely contains digits does not.
+		if re.fullmatch(r"\+?[\d\s().-]+", entry.strip()) and _digits(entry) in nums:
 			return True
 	return False
 
@@ -199,21 +201,34 @@ def rate_cap_of(value) -> int:
 def over_rate_cap(flow_id: str, gateway: str, sender, cap_value=None) -> bool:
 	"""Count one run for (flow, gateway, sender) in the current hour; True when it goes over the cap.
 
-	A Redis failure never blocks a message (the gateway's own sender limit still applies)."""
+	Deliberate fail-open: a Redis failure is logged and never blocks a message (the gateway's own sender limit still
+	applies). The sender is hashed in the key, so no phone number or user id sits in Redis."""
 	cap = rate_cap_of(cap_value)
 	if cap <= 0 or not sender:
 		return False
 	try:
+		import hashlib
 		import time
 
 		import frappe
 
+		who = hashlib.sha256(str(sender).encode()).hexdigest()[:16]
 		bucket = int(time.time() // RATE_WINDOW_SECONDS)
-		key = f"huf:gwtrig-rate:{frappe.local.site}:{flow_id}:{gateway}:{sender}:{bucket}"
+		key = f"huf:gwtrig-rate:{frappe.local.site}:{flow_id}:{gateway}:{who}:{bucket}"
 		cache = frappe.cache()
 		count = int(cache.incr(key))
 		if count == 1:
 			cache.expire(key, RATE_WINDOW_SECONDS + 5)
 		return count > cap
 	except Exception:
+		_log_fail_open()
 		return False
+
+
+def _log_fail_open() -> None:
+	try:
+		import frappe
+
+		frappe.logger("huf").warning("Gateway trigger rate cap skipped: cache unavailable (fail-open)")
+	except Exception:
+		pass

@@ -79,17 +79,18 @@ def run_gate(d, *, status="Active", owner_problem=None, busy=False, requeues=0, 
 	row = {"status": status, "owner": "o@x.com", "definition_json": json.dumps(d)}
 	busy_mod = types.ModuleType("huf.ai.gateway_service")
 	busy_mod.ConversationBusy = type("ConversationBusy", (Exception,), {})
+	fake_cache = SimpleNamespace(get_value=lambda key: requeues if key == "huf_gw_requeue:GWE-1" else 0)
 	with patch.object(dispatch, "_flow_row", return_value=row), patch.object(
 		dispatch, "owner_problem", return_value=owner_problem
-	), patch.object(dispatch, "conversation_is_busy", return_value=busy), patch.object(
-		dispatch, "_requeue_count", return_value=requeues
-	), patch.object(dispatch, "over_rate_cap", return_value=over_cap) as cap, patch.object(
-		dispatch.time, "sleep"
-	), patch.dict(sys.modules, {"huf.ai.gateway_service": busy_mod}):
+	), patch.object(dispatch, "conversation_is_busy", return_value=busy), patch(
+		"frappe.cache", lambda: fake_cache
+	), patch.object(dispatch, "over_rate_cap", return_value=over_cap) as cap, patch.dict(
+		sys.modules, {"huf.ai.gateway_service": busy_mod}
+	):
 		try:
 			return dispatch.gate_flow_start(event, GW, pl or payload()), cap, busy_mod
-		except busy_mod.ConversationBusy:
-			return "BUSY", cap, busy_mod
+		except busy_mod.ConversationBusy as exc:
+			return ("BUSY", exc.retry_delay), cap, busy_mod
 
 
 class TestGate(unittest.TestCase):
@@ -120,10 +121,16 @@ class TestGate(unittest.TestCase):
 		self.assertIsNone(note)
 		cap.assert_not_called()
 
-	def test_busy_conversation_requeues_then_runs(self):
-		self.assertEqual(run_gate(self.D, busy=True)[0], "BUSY")
-		(note, _), _, _ = run_gate(self.D, busy=True, requeues=dispatch.BUSY_REQUEUE_LIMIT)
-		self.assertIsNone(note)  # bounded: after the limit the run goes ahead
+	def test_busy_conversation_requeues_with_a_delay_and_never_sleeps(self):
+		self.assertFalse(hasattr(dispatch, "time"))  # no time.sleep in the gate: the worker is never held
+		got = run_gate(self.D, busy=True, requeues=dispatch.BUSY_REQUEUE_LIMIT - 1)[0]
+		self.assertEqual(got, ("BUSY", dispatch.BUSY_RETRY_DELAY_SECONDS))
+
+	def test_busy_at_the_requeue_limit_falls_through_instead_of_a_parallel_run(self):
+		got, cap, _ = run_gate(self.D, busy=True, requeues=dispatch.BUSY_REQUEUE_LIMIT)
+		self.assertEqual(got, (dispatch.NOTE_BUSY, False))
+		self.assertEqual(dispatch.NOTE_BUSY, "Skipped: conversation busy")
+		cap.assert_not_called()
 
 	def test_busy_does_not_count_the_rate_cap(self):
 		_, cap, _ = run_gate(self.D, busy=True)
@@ -263,20 +270,61 @@ class TestEngineSelectEntryNode(unittest.TestCase):
 
 
 class TestMediaSaveIdempotent(unittest.TestCase):
-	"""Fall-through to the default agent asks for media twice (flow start, then agent path): download once."""
+	"""Fall-through to the default agent asks for media twice (flow start, then agent path): download once.
+	A retry after a partial save (no marker) downloads the rest."""
 
-	def test_reuses_files_already_attached_to_the_event(self):
+	def run_save(self, *, marker, existing, urls=("/private/files/new.ogg",)):
 		from huf.ai import gateway_service as svc
 
 		calls = []
-		hook = lambda event, gateway: calls.append(1) or ["/private/files/new.ogg"]  # noqa: E731
-		event = types.SimpleNamespace(name="GE-1")
-		gw = types.SimpleNamespace(provider="WhatsApp")
-		with patch.object(svc.provider_hooks, "get", return_value=hook), patch(
-			"frappe.get_all", return_value=["/private/files/old.ogg"]
+		hook = lambda event, gateway: calls.append(1) or list(urls)  # noqa: E731
+		cache = SimpleNamespace(get_value=lambda key: 1 if marker else None, set_value=MagicMock())
+		with patch.object(svc.provider_hooks, "get", return_value=hook), patch("frappe.get_all", return_value=existing), patch(
+			"frappe.cache", cache
 		):
-			self.assertEqual(svc._save_event_media(event, gw), ["/private/files/old.ogg"])
-		self.assertEqual(calls, [])
-		with patch.object(svc.provider_hooks, "get", return_value=hook), patch("frappe.get_all", return_value=[]):
-			self.assertEqual(svc._save_event_media(event, gw), ["/private/files/new.ogg"])
-		self.assertEqual(calls, [1])
+			out = svc._save_event_media(types.SimpleNamespace(name="GE-1"), types.SimpleNamespace(provider="WhatsApp"))
+		return out, calls, cache
+
+	def test_reuses_files_when_the_media_saved_marker_is_set(self):
+		out, calls, _ = self.run_save(marker=True, existing=["/private/files/old.ogg"])
+		self.assertEqual((out, calls), (["/private/files/old.ogg"], []))
+
+	def test_partial_save_without_marker_downloads_the_rest(self):
+		out, calls, cache = self.run_save(marker=False, existing=["/private/files/old.ogg"], urls=["/private/files/old.ogg", "/private/files/b.png"])
+		self.assertEqual((out, calls), (["/private/files/old.ogg", "/private/files/b.png"], [1]))
+		cache.set_value.assert_called_once()  # the marker is set once the hook has run
+
+	def test_nothing_saved_yet_runs_the_hook(self):
+		out, calls, _ = self.run_save(marker=False, existing=[])
+		self.assertEqual((out, calls), (["/private/files/new.ogg"], [1]))
+
+
+class TestDelayedRequeue(unittest.TestCase):
+	"""The busy requeue is a delayed enqueue (``not_before``); an early job hops back instead of holding a worker."""
+
+	def test_requeue_passes_the_delay_as_not_before(self):
+		from huf.ai import gateway_service as svc
+
+		event = MagicMock(name="event")
+		event.name = "GWE-1"
+		cache = MagicMock()
+		cache.get_value.return_value = 0
+		with patch("frappe.cache", cache), patch("frappe.db.rollback"), patch.object(svc, "_commit_unless_testing"), patch.object(
+			svc, "_epoch", return_value=1000.0
+		), patch("frappe.enqueue") as enqueue:
+			svc._requeue_busy_event(event, "busy", 2.0)
+			self.assertEqual(enqueue.call_args.kwargs["not_before"], 1002.0)
+			svc._requeue_busy_event(event, "busy")
+			self.assertIsNone(enqueue.call_args.kwargs["not_before"])
+
+	def test_early_job_re_enqueues_without_processing(self):
+		from huf.ai import gateway_service as svc
+
+		with patch.object(svc, "_epoch", return_value=1000.0), patch.object(svc, "_sleep") as slept, patch(
+			"frappe.enqueue"
+		) as enqueue, patch.object(svc, "_process_gateway_event") as process:
+			out = svc.process_gateway_event("GWE-1", not_before=1002.0)
+		self.assertTrue(out["deferred"])
+		process.assert_not_called()
+		self.assertEqual(enqueue.call_args.kwargs["not_before"], 1002.0)
+		self.assertLessEqual(slept.call_args.args[0], svc._RETRY_POLL_SECONDS)  # a short hop, never the whole delay

@@ -77,6 +77,7 @@ class TestMatches(unittest.TestCase):
 		self.ok(cfg(only_senders=["asha_k"]), msg(username="Asha_K"))
 		self.ok(cfg(only_senders=["@asha_k"]), msg(username="asha_k"))
 		self.no(cfg(only_senders=["15559999999"]), msg())
+		self.no(cfg(only_senders=["user1555"]), msg(sender_id="1555"))  # a name with digits is not a number
 
 	def test_message_kinds_and_attachment(self):
 		self.ok(cfg(message_kinds=["text", "voice"]), msg())
@@ -188,6 +189,32 @@ class TestRateCap(unittest.TestCase):
 			other = gt.over_rate_cap("F", "G", "someone-else", 2)
 		self.assertEqual(results, [False, False, True])
 		self.assertFalse(other)
+
+	def test_key_holds_a_hash_of_the_sender_not_the_sender(self):
+		keys = []
+
+		class Cache:
+			def incr(self, key):
+				keys.append(key)
+				return 1
+
+			def expire(self, key, ttl):
+				pass
+
+		with patch("frappe.cache", return_value=Cache()):
+			gt.over_rate_cap("F", "G", "15550001111", 2)
+		self.assertEqual(len(keys), 1)
+		self.assertNotIn("15550001111", keys[0])
+		self.assertRegex(keys[0], r":[0-9a-f]{16}:\d+$")
+
+	def test_redis_error_fails_open_and_is_logged(self):
+		class Broken:
+			def incr(self, key):
+				raise ConnectionError("redis down")
+
+		with patch("frappe.cache", return_value=Broken()), patch.object(gt, "_log_fail_open") as logged:
+			self.assertFalse(gt.over_rate_cap("F", "G", "s", 1))
+		logged.assert_called_once()
 
 
 if __name__ == "__main__":

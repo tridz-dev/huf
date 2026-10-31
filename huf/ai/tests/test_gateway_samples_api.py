@@ -116,9 +116,9 @@ class TestApi(unittest.TestCase):
 			self.node["config"]["gateway"] = ""
 			self.assertFalse(samples_api.get_last_gateway_message("f1", "t1")["found"])
 
-	def test_gateway_read_permission_needed_for_real_messages(self):
+	def test_gateway_write_permission_needed_for_real_messages(self):
 		def perm(doctype, ptype=None, doc=None, **kw):
-			return doctype != "Gateway"
+			return not (doctype == "Gateway" and ptype == "write")  # read alone is not enough
 
 		with mock.patch.object(samples_api.frappe, "has_permission", side_effect=perm), self.assertRaises(_Throw):
 			samples_api.get_last_gateway_message("f1", "t1")

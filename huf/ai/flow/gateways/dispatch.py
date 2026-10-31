@@ -8,7 +8,6 @@ same Flow). ``pick_gateway_entry`` is the entry-node rule used by ``engine.selec
 from __future__ import annotations
 
 import json
-import time
 
 from huf.ai.flow.gateways.transcript import transcript_for_attachments, trigger_wants_transcript
 from huf.ai.flow.gateways.gateway_triggers import GATEWAY_NODE_TYPES, matches, over_rate_cap, param_map
@@ -18,7 +17,8 @@ NOTE_NOT_LIVE = "Skipped: flow is not live"
 NOTE_OWNER = "Skipped: the flow's owner can no longer run it from this channel"
 NOTE_NO_MATCH = "Skipped: did not match the flow's filters"
 NOTE_RATE = "Skipped: rate limit"
-BUSY_WAIT_SECONDS = 2.0
+NOTE_BUSY = "Skipped: conversation busy"
+BUSY_RETRY_DELAY_SECONDS = 2.0  # delayed re-queue; the worker is never held
 BUSY_REQUEUE_LIMIT = 25  # same bound as gateway_service._REQUEUE_MAX
 
 
@@ -154,11 +154,13 @@ def gate_flow_start(event, gateway, payload: dict) -> tuple[str | None, bool]:
 	node = next((n for n in defn.get("nodes", []) if isinstance(n, dict) and n.get("id") == node_id), {})
 	params = param_map(node.get("config"))
 	if not params.get("allow_parallel") and conversation_is_busy(gateway.name, event.conversation_id, event.name):
-		if _requeue_count(event.name) < BUSY_REQUEUE_LIMIT:
-			from huf.ai.gateway_service import ConversationBusy
+		if _requeue_count(event.name) >= BUSY_REQUEUE_LIMIT:
+			return NOTE_BUSY, False  # never a parallel run: the message goes to the default agent / Unrouted
+		from huf.ai.gateway_service import ConversationBusy
 
-			time.sleep(BUSY_WAIT_SECONDS)
-			raise ConversationBusy("An earlier run of this conversation is still running")
+		busy = ConversationBusy("An earlier run of this conversation is still running")
+		busy.retry_delay = BUSY_RETRY_DELAY_SECONDS
+		raise busy
 	if over_rate_cap(event.target_flow, gateway.name, payload.get("sender_id"), params.get("max_runs_per_sender_per_hour")):
 		return NOTE_RATE, False
 	return None, trigger_wants_transcript(node)
@@ -189,3 +191,12 @@ def add_transcript(payload: dict, gateway) -> None:
 			payload["transcript"] = text
 	except Exception:
 		return
+
+
+def require_live_for_gateway(status: str | None) -> None:
+	"""Re-check, inside ``create_flow_run`` and on the definition row it just read, that a gateway-started Flow is
+	Active: the gate checked earlier, and an unpublish between the two must not start a run (TOCTOU)."""
+	if status != "Active":
+		import frappe
+
+		frappe.throw(NOTE_NOT_LIVE, frappe.ValidationError)
