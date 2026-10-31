@@ -36,3 +36,19 @@ export function setupStep(stage: string | null | undefined): number | null {
   if (!stage || stage === 'live' || stage === 'off') return null;
   return STAGE_STEP[stage] ?? null;
 }
+
+const STAGE_LABEL: Record<string, string> = {
+  not_connected: 'Not connected yet',
+  connected_unverified: 'Connected, not tested yet',
+  receiving: 'Receiving messages',
+  live_unrouted: 'Live, nobody answers yet',
+  live: 'Live',
+  blocked: 'Blocked',
+  degraded: 'Having problems',
+  off: 'Turned off',
+};
+
+/** Plain words for a setup stage code; unknown codes get a neutral label, never the raw code. */
+export function stageLabel(stage: string | null | undefined): string {
+  return (stage && STAGE_LABEL[stage]) || 'Setting up';
+}
