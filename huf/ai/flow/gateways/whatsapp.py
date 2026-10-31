@@ -23,6 +23,7 @@ def params() -> list[dict]:
 
 def fields() -> list[dict]:
 	return [
+		field("provider", "Channel type", "text", PROVIDER, advanced=True),
 		field("wa_id", "WhatsApp number", "text", "15550001111", sensitive=True, advanced=True),
 		field("button_id", "Button chosen (id)", "text", "", advanced=True),
 		field("button_title", "Button chosen", "text", ""),

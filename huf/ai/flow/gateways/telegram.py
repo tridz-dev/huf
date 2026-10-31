@@ -29,6 +29,7 @@ def params() -> list[dict]:
 
 def fields() -> list[dict]:
 	return [
+		field("provider", "Channel type", "text", PROVIDER, advanced=True),
 		field("telegram_user_id", "Telegram user id", "text", "1001", sensitive=True, advanced=True),
 		field("telegram_chat_id", "Telegram chat id", "text", "1001", advanced=True),
 		field("telegram_chat_type", "Chat type", "text", "private"),

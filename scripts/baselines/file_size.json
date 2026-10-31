@@ -56,7 +56,7 @@
     "huf/ai/conversation_manager.py": 704,
     "huf/ai/desktop/executor.py": 2785,
     "huf/ai/flow/api.py": 1324,
-    "huf/ai/flow/engine.py": 2375,
+    "huf/ai/flow/engine.py": 2374,
     "huf/ai/gateway_adapters/telegram_business.py": 613,
     "huf/ai/gateway_adapters/telegram_buttons.py": 693,
     "huf/ai/gateway_adapters/telegram_format.py": 558,

@@ -1124,9 +1124,7 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 	node_type = node.get("type")
 	config = node.get("config", {})
 
-	executor = _NODE_EXECUTORS.get(node_type)
-	if not executor:
-		frappe.throw(_("Unknown node type: {0}").format(node_type))
+	executor = _NODE_EXECUTORS.get(node_type) or frappe.throw(_("Unknown node type: {0}").format(node_type))
 
 	if is_turned_off(node):
 		return turned_off_result()
@@ -1143,7 +1141,7 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 
 
 def _exec_trigger_webhook(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""Execute trigger.webhook node - mostly a passthrough for UI clarity."""
+	"""Execute a trigger.webhook (or chat trigger: gateway, whatsapp, telegram) node - a passthrough for UI clarity."""
 	ctx = _context_of(flow_run, settings)
 	return {"status": "success", "output": ctx.as_dict()}
 
@@ -2078,6 +2076,7 @@ _NODE_EXECUTORS = {
 	"trigger.schedule": _exec_trigger_schedule,
 	"trigger.unset": _exec_trigger_unset,
 	"trigger.doc-event": _exec_trigger_doc_event,
+	**dict.fromkeys(("trigger.gateway", "trigger.whatsapp", "trigger.telegram"), _exec_trigger_webhook),
 	"agent.run": _exec_agent_run,
 	"tool.call": _exec_tool_call,
 	"router.llm": _exec_router_llm,
