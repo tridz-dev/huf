@@ -206,7 +206,7 @@ class TestTranscript(unittest.TestCase):
 		with patch.dict(sys.modules, {"huf.ai.audio_service": out}), patch("frappe.db.get_value", return_value="FILE-1"):
 			dispatch.add_transcript(p, GW)
 		self.assertIn("&lt;b&gt;now&lt;/b&gt;", p["transcript"])
-		self.assertIn("voice_transcript", p["transcript"])
+		self.assertIn("voice note", p["transcript"])
 		text = payload(attachments=["/files/a.png"])
 		dispatch.add_transcript(text, GW)
 		self.assertNotIn("transcript", text)
