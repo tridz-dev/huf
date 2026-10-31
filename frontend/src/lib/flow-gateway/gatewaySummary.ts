@@ -17,11 +17,11 @@ function quoted(list: string[]): string {
 const get = (params: readonly GatewayParam[] | undefined, key: string) => params?.find((p) => p.key === key)?.value;
 
 /** The one filter worth a line on the card, in plain words; null when the trigger takes every message. */
-export function filterSummary(config: Cfg): string | null {
+export function filterSummary(config: Cfg, compact = false): string | null {
   const keywords = words(get(config.params, 'keywords'));
-  if (keywords.length) return `Only messages that contain ${quoted(keywords)}`;
+  if (keywords.length) return compact ? `Contains ${quoted(keywords)}` : `Only messages that contain ${quoted(keywords)}`;
   const starts = words(get(config.params, 'starts_with'));
-  if (starts.length) return `Only messages that start with ${quoted(starts)}`;
+  if (starts.length) return compact ? `Starts with ${quoted(starts)}` : `Only messages that start with ${quoted(starts)}`;
   const commands = words(get(config.params, 'commands'));
   if (commands.length) return `Only ${commands.slice(0, 3).map((c) => `/${c.replace(/^\//, '')}`).join(', ')}${commands.length > 3 ? ' and more' : ''}`;
   const buttons = words(get(config.params, 'button_reply_ids')).concat(words(get(config.params, 'button_payloads')));
@@ -35,12 +35,17 @@ export function filterSummary(config: Cfg): string | null {
 }
 
 /** "When someone messages Support (WhatsApp)" on the card; with a filter, the filter instead; unset: "Pick a WhatsApp number". */
-export function gatewaySubtitle(kind: GatewayKindId, config: Cfg, gateways?: readonly GatewayChoice[] | null): string {
+export function gatewaySubtitle(kind: GatewayKindId, config: Cfg, gateways?: readonly GatewayChoice[] | null, compact = false): string {
   if (!config.gateway?.trim()) return pickPrompt(kind);
-  const filter = filterSummary(config);
-  if (filter) return `${gatewayDisplayName(config.gateway, gateways)} · ${filter}`;
+  const filter = filterSummary(config, compact);
+  // On the narrow card the filter must fit two lines: shorter filter words and no "(never sends)" style note after the channel name.
+  if (filter) return `${compact ? gatewayDisplayName(config.gateway, gateways).replace(/\s*\([^)]*\)\s*$/, '') : gatewayDisplayName(config.gateway, gateways)} · ${filter}`;
   const word = channelWord(kind, config.gateway, gateways);
-  return `When someone messages ${gatewayDisplayName(config.gateway, gateways)}${word ? ` (${word})` : ''}`;
+  const name = gatewayDisplayName(config.gateway, gateways);
+  // On the card the channel word and a "(never sends)" style note are left out: they only push the name off the two lines.
+  const plain = name.replace(/\s*\([^)]*\)\s*$/, '');
+  if (compact && plain !== name) return `When someone messages ${plain}`;
+  return `When someone messages ${name}${word ? ` (${word})` : ''}`;
 }
 
 /** "someone messages Support on WhatsApp" for lists and the publish dialog. */

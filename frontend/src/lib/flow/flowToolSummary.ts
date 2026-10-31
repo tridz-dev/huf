@@ -50,6 +50,15 @@ function hostOf(url: unknown): string | null {
   }
 }
 
+/** A simulated tool answer ({simulated: true, summary}) at the top or one level down (an End step shows the previous step's data): its summary and note. */
+export function findSimulated(output: unknown): { summary: string; note: string | null } | null {
+  const hit = (v: unknown) => (isObj(v) && v.simulated === true && typeof v.summary === 'string' ? v : null);
+  let found = hit(output) ?? hit(reply(output));
+  if (!found && isObj(output)) found = Object.values(output).map(hit).find(Boolean) ?? null;
+  if (!found) return null;
+  return { summary: found.summary as string, note: typeof found.note === 'string' ? found.note : null };
+}
+
 /** One plain sentence for a finished integration step, or null when the tool has no summary. Never contains a link or secret. */
 export function summarizeToolOutput(toolId: string | undefined, output: unknown): string | null {
   const skipped = reply(output);

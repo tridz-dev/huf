@@ -57,7 +57,7 @@ export function GatewayParamField({ spec, value, onChange, error, disabled }: Pr
     case 'multiselect': {
       const picked = words(value);
       control = (
-        <div className="space-y-1.5" data-testid={id} role="group" aria-label={spec.label}>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5" data-testid={id} role="group" aria-label={spec.label}>
           {spec.options.map((o) => (
             <Label key={o.value} className="flex items-center gap-2 text-sm font-normal" data-testid={`${id}-option-${o.value}`}>
               <Checkbox

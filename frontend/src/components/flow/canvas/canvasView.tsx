@@ -206,6 +206,13 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
   const store = useStoreApi();
   const last = useRef<{ flowId?: string; nodeCount: number; edgeCount: number; layoutRevision: number } | null>(null);
   const knownIds = useRef<Set<string>>(new Set());
+  const revealTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => revealTimers.current.forEach(clearTimeout), []);
+  // Keep the memory of which steps were on the canvas fresh after every settled change, so "new" always means "added by the last action".
+  useEffect(() => {
+    const t = setTimeout(() => { knownIds.current = new Set(rfRef.current.getNodes().map((n) => n.id)); }, 400);
+    return () => clearTimeout(t);
+  }, [flowId, nodeCount, edgeCount]);
   // The first fit of a flow, as soon as every step is measured (and once more a moment later, when the "Add step" cards have settled).
   const firstFitFor = useRef<string | undefined>(undefined);
   const initialized = useNodesInitialized();
@@ -221,7 +228,8 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
     const previous = last.current;
     last.current = { flowId, nodeCount, edgeCount, layoutRevision };
     // Ids as of the last settled view; the canvas store catches up with a change a moment after props change.
-    const before = knownIds.current;
+    // (The first settle can run before the steps are loaded, so an empty memory is filled from the canvas as it is right now.)
+    const before = knownIds.current.size > 0 ? knownIds.current : new Set(getNodes().map((n) => n.id));
     const remember = () => { knownIds.current = new Set(getNodes().map((n) => n.id)); };
     // The first render of a flow is fitted by <ReactFlow fitView>; only later edits come here.
     if (!previous || previous.flowId !== flowId) {
@@ -229,26 +237,37 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
       return () => clearTimeout(settle);
     }
     if (nodeCount > previous.nodeCount && edgeCount >= previous.edgeCount) {
-      const timer = setTimeout(() => {
+      let freshIds: string[] = [];
+      const reveal = (first: boolean) => {
         const { width, height } = store.getState();
-        const fresh = getNodes().filter((n) => !before.has(n.id));
-        remember();
+        const all = getNodes();
+        if (first) {
+          freshIds = all.filter((n) => !before.has(n.id)).map((n) => n.id);
+          remember();
+        }
+        const fresh = all.filter((n) => freshIds.includes(n.id));
         if (fresh.length === 0 || width <= 0 || before.size === 0) return;
+        // A small flow that no longer fits (a copy and its "Add step" cards land beside the original): show all of it instead of cutting the original off.
+        if (realSteps(all) <= READABLE_STEP_LIMIT && !isInView(getNodesBounds(all), getViewport(), { width, height })) {
+          // Everything (the original, its copies and their "Add step" cards) in one view, even if that means a smaller zoom than the usual readable floor.
+          const b = getNodesBounds(all);
+          const zoom = Math.min(1, Math.max(FIT_MIN_ZOOM_NARROW, Math.min((width - 2 * FIT_SIDE_INSET) / b.width, (height - FIT_TOP_INSET - FIT_BOTTOM_INSET) / b.height)));
+          setViewport({ x: (width - b.width * zoom) / 2 - b.x * zoom, y: FIT_TOP_INSET - b.y * zoom, zoom }, { duration: motionMs(260) });
+          return;
+        }
         // A card that has not been measured yet counts with the usual card size.
         const rects = fresh.map((n) => ({ x: n.position.x, y: n.position.y, width: n.width ?? 236, height: n.height ?? 62 }));
         const left = Math.min(...rects.map((r) => r.x));
         const top = Math.min(...rects.map((r) => r.y));
         const bounds = { x: left, y: top, width: Math.max(...rects.map((r) => r.x + r.width)) - left, height: Math.max(...rects.map((r) => r.y + r.height)) - top };
-        // A small flow that no longer fits (a copy and its "Add step" cards land beside the original): show all of it instead of cutting the original off.
-        const all = getNodes();
-        if (realSteps(all) <= READABLE_STEP_LIMIT && !isInView(getNodesBounds(all), getViewport(), { width, height })) {
-          fitClearOfOverlays(rfRef.current, width, height, motionMs(260));
-          return;
-        }
         const next = panToReveal(bounds, getViewport(), { width, height }, undefined, coveredByOverlays(width, height, nodeCount >= MINIMAP_MIN_STEPS));
         if (next) setViewport({ ...next, zoom: getViewport().zoom }, { duration: motionMs(200) });
-      }, 150);
-      return () => clearTimeout(timer);
+      };
+      // These timers must outlive a re-render (the effect re-runs whenever the React Flow helpers change identity), so they are not cleared by this effect's cleanup.
+      revealTimers.current.forEach(clearTimeout);
+      // The side panel for the new copy opens a moment later and narrows the canvas: look again once it has.
+      revealTimers.current = [setTimeout(() => reveal(true), 150), setTimeout(() => reveal(false), 700)];
+      return;
     }
     const removed = nodeCount < previous.nodeCount || edgeCount < previous.edgeCount;
     if (!removed && layoutRevision === previous.layoutRevision) return;

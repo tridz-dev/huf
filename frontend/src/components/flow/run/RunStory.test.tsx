@@ -100,3 +100,13 @@ describe('status bits', () => {
     expect(screen.getByTestId('flow-run-outcome')).toHaveAttribute('data-tone', 'bad');
   });
 });
+
+describe('simulated output on a later step', () => {
+  it('shows the sentence and keeps thread/label ids behind the raw control', () => {
+    const out = { mail: { simulated: true, summary: 'Would send email to a@b.invalid', note: 'Skipped in a test run: nothing was sent or changed.', id: 'sample-0001', thread_id: 'sample-0001', label_ids: ['SENT'] } };
+    card({ ...base, id: 'e1', type: 'end', title: 'Ended', status: 'done', hideOutput: false, reason: undefined, output: out } as StoryStep);
+    expect(screen.getByTestId('flow-run-summary-e1')).toHaveTextContent('Would send email to a@b.invalid (skipped in test)');
+    expect(screen.queryByText('Thread ID')).toBeNull();
+    expect(screen.queryByText('Label Ids')).toBeNull();
+  });
+});
