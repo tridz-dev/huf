@@ -29,7 +29,7 @@ export function CodeBlock({ title, text, testId }: { title: string; text: string
           {copied ? 'Copied' : 'Copy'}
         </Button>
       </div>
-      <pre className="overflow-x-auto whitespace-pre-wrap p-3 [overflow-wrap:anywhere] font-mono text-xs leading-relaxed" tabIndex={0} data-testid={testId}>{text}</pre>
+      <pre className="whitespace-pre-wrap p-3 [overflow-wrap:anywhere] font-mono text-xs leading-relaxed" tabIndex={0} data-testid={testId}>{text}</pre>
     </div>
   );
 }

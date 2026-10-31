@@ -303,3 +303,32 @@ export function KeepSelectedClearOfToolbar({ selectedNodeId }: { selectedNodeId:
   }, [selectedNodeId]);
   return null;
 }
+
+/** Marks the run details sheet, which lies over the right part of the canvas while a run is open. */
+export const FLOW_RUN_SHEET_ATTR = 'data-flow-run-sheet';
+
+/**
+ * While the run details sheet is open it covers the right 44-62% of the canvas, with the step that failed or finished often
+ * behind it (final2-04). The flow is fitted again into the part the sheet leaves free. Closing the sheet leaves the view as
+ * it is: the whole flow is still on screen, just to the left.
+ */
+export function KeepRunClearOfSheet({ runOpen }: { runOpen: boolean }) {
+  const rf = useReactFlow();
+  const rfRef = useRef(rf);
+  rfRef.current = rf;
+  const width = useStore((s) => s.width);
+  const height = useStore((s) => s.height);
+  useEffect(() => {
+    if (!runOpen || !width || !height) return;
+    const fit = () => {
+      const sheet = document.querySelector<HTMLElement>(`[${FLOW_RUN_SHEET_ATTR}]`);
+      const canvas = document.querySelector('.react-flow')?.getBoundingClientRect();
+      // The sheet lies against the right edge of the window (its slide-in does not change its layout width).
+      const covered = sheet && canvas ? Math.max(0, canvas.right - (window.innerWidth - sheet.offsetWidth)) : 0;
+      if (covered > 0 && covered < width - 200) fitClearOfOverlays(rfRef.current, width - covered, height, 200);
+    };
+    const timer = setTimeout(fit, 200);
+    return () => clearTimeout(timer);
+  }, [runOpen, width, height]);
+  return null;
+}

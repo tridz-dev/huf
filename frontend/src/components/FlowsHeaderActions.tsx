@@ -121,8 +121,7 @@ export function FlowsHeaderActions() {
       disabled={!activeFlow || header.isPublishing || !canManage || !!publishBlocked}
     >
       {header.isPublishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-      {/* On a phone the header has no room for the word: icon only, still named for screen readers (final2-03: Publish ran off the edge). */}
-      <span className={isPhone ? 'sr-only' : undefined}>Publish</span>
+      Publish
     </Button>
   );
 
