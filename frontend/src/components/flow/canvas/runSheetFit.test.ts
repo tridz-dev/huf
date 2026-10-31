@@ -9,7 +9,7 @@ vi.mock('reactflow', () => ({
     return { x: l, y: t, width: Math.max(...ns.map((n) => n.position.x + (n.width ?? 0))) - l, height: Math.max(...ns.map((n) => n.position.y + (n.height ?? 0))) - t };
   },
 }));
-import { fitClearOfOverlays } from './canvasView';
+import { fitClearOfOverlays, freeWidthBesideSheet } from './canvasView';
 
 const node = (id: string, x: number, y: number, type = 'step'): Node => ({ id, type, position: { x, y }, positionAbsolute: { x, y }, width: 236, height: 100, data: {} });
 
@@ -25,5 +25,14 @@ describe('ux44: the flow fits into the part the run sheet leaves free', () => {
     expect(vp.zoom).toBeGreaterThanOrEqual(0.5);
     expect(left).toBeGreaterThanOrEqual(0);
     expect(right).toBeLessThanOrEqual(504);
+  });
+
+  it('measures the free width from the canvas rect and the sheet edge with a 24 px gap, whatever offsets the canvas has', () => {
+    // Canvas starts 56 px in (palette strip), the sheet starts at x=760: the flow must end at 736.
+    const free = freeWidthBesideSheet({ left: 56, right: 1280 }, 760, 1224);
+    expect(free).not.toBeNull();
+    // fit keeps 40 px each side: right edge of content = free - 40 (canvas coords) = sheetLeft - gap - canvas.left
+    expect(free! - 40 + 56).toBe(736);
+    expect(freeWidthBesideSheet({ left: 0, right: 600 }, 700, 600)).toBeNull();
   });
 });

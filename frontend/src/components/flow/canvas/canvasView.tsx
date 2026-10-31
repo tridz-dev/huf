@@ -332,6 +332,20 @@ export function KeepSelectedClearOfToolbar({ selectedNodeId }: { selectedNodeId:
 /** Marks the run details sheet, which lies over the right part of the canvas while a run is open. */
 export const FLOW_RUN_SHEET_ATTR = 'data-flow-run-sheet';
 
+/** Space kept between the flow and the run sheet's left edge. */
+export const RUN_SHEET_GAP = 24;
+
+/**
+ * Width to fit the flow into so that its right edge ends `gap` px before the sheet. Measured from the real boxes: the canvas pane's
+ * rect and the sheet's left edge (not the window width), so a palette strip or any other offset of the canvas is accounted for.
+ * fitClearOfOverlays keeps FIT_SIDE_INSET at each side, which is added back here so the gap is the visible distance. null: the sheet does not cover the canvas.
+ */
+export function freeWidthBesideSheet(canvas: { left: number; right: number }, sheetLeft: number, canvasWidth: number, gap = RUN_SHEET_GAP): number | null {
+  const covered = Math.max(0, canvas.right - sheetLeft);
+  if (covered <= 0 || covered >= canvasWidth - 200) return null;
+  return Math.max(sheetLeft - canvas.left - gap + FIT_SIDE_INSET, 1);
+}
+
 /**
  * While the run details sheet is open it covers the right 44-62% of the canvas, with the step that failed or finished often
  * behind it (final2-04). The flow is fitted again into the part the sheet leaves free. Closing the sheet fits the flow into
@@ -362,14 +376,17 @@ export function KeepRunClearOfSheet({ runOpen }: { runOpen: boolean }) {
       if (!width || !height || nodes.length === 0 || nodes.some((n) => !n.width)) return;
       const sheet = document.querySelector<HTMLElement>(`[${FLOW_RUN_SHEET_ATTR}]`);
       const canvas = document.querySelector('.react-flow')?.getBoundingClientRect();
-      // The sheet lies against the right edge of the window (its slide-in does not change its layout width).
-      const covered = sheet && canvas ? Math.max(0, canvas.right - (window.innerWidth - sheet.offsetWidth)) : 0;
-      if (covered <= 0 || covered >= width - 200) return;
+      // The sheet lies against the right edge of the window (its slide-in does not change its layout width), so its left edge is
+      // window width minus its width; the free area is measured from the canvas pane's own rect.
+      if (!sheet || !canvas) return;
+      const sheetLeft = window.innerWidth - sheet.offsetWidth;
+      const free = freeWidthBesideSheet(canvas, sheetLeft, width);
+      if (free === null) return;
+      const covered = canvas.right - sheetLeft;
       const vp = rfRef.current.getViewport();
-      const free = width - covered;
       const right = Math.max(...nodes.map((n) => ((n.positionAbsolute?.x ?? n.position.x) + (n.width ?? 236)) * vp.zoom + vp.x));
       const key = `${covered}|${width}|${height}|${nodes.length}`;
-      if (key === lastKey && right <= free) return;
+      if (key === lastKey && right <= free - FIT_SIDE_INSET + RUN_SHEET_GAP) return;
       lastKey = key;
       fitted.current = true;
       fitClearOfOverlays(rfRef.current, free, height, 150);
