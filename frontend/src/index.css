@@ -618,6 +618,18 @@ body:has([role="dialog"][data-state="open"].inset-y-0.right-0) [data-sonner-toas
   bottom: 172px !important;
   --width: min(356px, calc(38vw - 32px));
 }
+/* A toast that is still on screen when a centred dialog opens (an error, or one with an Undo button; "saved" toasts are cleared when a
+   dialog opens) moves to the free strip beside the dialog (at most 720px wide), so it never covers the dialog's buttons. From
+   1280px up the strip is wide enough; on a narrower window it stays where it was. */
+@media (min-width: 1280px) {
+  body:not(:has([role="dialog"][data-state="open"].inset-y-0.right-0)):has([role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]) [data-sonner-toaster] {
+    right: 16px !important;
+    left: auto !important;
+    bottom: 24px !important;
+    transform: none !important;
+    --width: min(356px, calc((100vw - 720px) / 2 - 32px));
+  }
+}
 @media (max-width: 767px) {
   [data-sonner-toaster][data-x-position="center"] {
     transform: none !important;
