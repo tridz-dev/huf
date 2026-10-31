@@ -23,8 +23,8 @@ import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { FlowNodeRail, NODE_RAIL_ACTION_CATEGORY, NodeRailCategory } from './FlowNodeRail';
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
 import { DeleteStepDialog } from './flow/DeleteStepDialog';
-import { KeepSelectedVisible } from './flow/canvas/KeepSelectedVisible';
-import { CANVAS_CLASS, FIT_VIEW_OPTIONS, FitViewAfterRemovalOrLayout, FlowControls, FlowMiniMap, KeepSelectedClearOfToolbar, keepCanvasUnscrolled } from './flow/canvas/canvasView';
+import { KeepSelectedVisible, FLOW_TOOLBAR_ATTR } from './flow/canvas/KeepSelectedVisible';
+import { CANVAS_CLASS, FIT_VIEW_OPTIONS, FitViewAfterRemovalOrLayout, FlowControls, FlowMiniMap, KeepRunClearOfSheet, KeepSelectedClearOfToolbar, keepCanvasUnscrolled } from './flow/canvas/canvasView';
 import { ZOOM_MAX, ZOOM_MIN } from '@/lib/flow-canvas/zoomLod';
 import { useRenderedGraph } from './flow/canvas/useRenderedGraph';
 import { useArrowNavigation } from './flow/canvas/useArrowNavigation';
@@ -515,11 +515,11 @@ export function FlowCanvas({
         <FlowControls className="!bottom-6 !rounded-lg !border !border-line !overflow-hidden !shadow-sm" />
         <FlowMiniMap stepCount={nodes.length} />
         <KeepSelectedClearOfToolbar selectedNodeId={selectedNodeId} />
-        <KeepSelectedVisible selectedNodeId={selectedNodeId} />
+        <KeepSelectedVisible selectedNodeId={selectedNodeId} /><KeepRunClearOfSheet runOpen={!!openRunId} />
         <FlowShortcuts />
         <FitViewAfterRemovalOrLayout flowId={activeFlow?.id} nodeCount={activeFlow?.nodes.length ?? 0} edgeCount={activeFlow?.edges.length ?? 0} layoutRevision={layoutRevision} />
         {canManage && !isPhone && !selectedNodeId && nodes.length <= 1 && <FirstRunGuide />}
-        <Panel position="top-right" className="m-2">
+        <Panel position="top-right" className="m-2" {...{ [FLOW_TOOLBAR_ATTR]: '' }}>
           <FlowCanvasToolbar
             canManage={canManage}
             readOnlyReason={readOnlyReason}

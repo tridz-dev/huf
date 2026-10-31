@@ -104,6 +104,20 @@ export function roundedPath(points: Pt[], radius = CORNER_RADIUS): string {
   return `${d} L ${last.x} ${last.y}`;
 }
 
+/** A straight line shorter than this is "short": a step sits right under its source. */
+export const SHORT_LINE = STUB * 2;
+/** On a short line the name sits this far above the arrow head. */
+const SHORT_LINE_FROM_END = 21;
+/**
+ * Where a name sits on a short straight line (a step right under this one: a sibling turns sideways just under its source): just
+ * above the arrow head, so the sibling's level run passes over the name, not through it. null when the line is not short.
+ * The one rule for both the plain pill (`pillAt`) and the router option names drawn by InsertableEdge (final2-02).
+ */
+export function shortLinePill(points: Pt[]): Pt | null {
+  if (points.length !== 2 || length(points) >= SHORT_LINE) return null;
+  return pointAlong(points, Math.max(length(points) - SHORT_LINE_FROM_END, 10));
+}
+
 /** Where the branch name pill sits: a little way along the first horizontal run, else on the first stretch. */
 function pillPoint(points: Pt[]): Pt {
   const first = points[0];
@@ -115,10 +129,8 @@ function pillPoint(points: Pt[]): Pt {
     const offset = Math.min(Math.abs(run.x - channelStart.x) / 2, 64);
     return { x: channelStart.x + dir * offset, y: channelStart.y };
   }
-  // A short straight line (a step right under this one, 4 steps apart: a sibling turns sideways just under its source): the name
-  // sits just above the arrow head, so the sibling's level run passes over it, not through it.
-  const last = points[points.length - 1];
-  if (points.length === 2 && last && last.y - first.y < STUB * 2) return { x: first.x, y: first.y + Math.max(STUB / 2, last.y - first.y - 19) };
+  const short = shortLinePill(points);
+  if (short) return short;
   return { x: first.x, y: first.y + STUB / 2 };
 }
 

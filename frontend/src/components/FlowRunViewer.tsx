@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { FLOW_RUN_SHEET_ATTR } from './flow/canvas/canvasView';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 import { flowService } from '../services/flowService';
 import { Button } from './ui/button';
@@ -165,7 +166,7 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
 
     return (
         <Sheet open={!!runId} onOpenChange={(open) => !open && onClose()}>
-            <SheetContent side={isPhone ? 'bottom' : 'right'} className="flex w-full max-w-full flex-col gap-0 overflow-hidden p-0 max-sm:h-[92dvh] max-sm:rounded-t-xl sm:w-[clamp(420px,62vw,640px)] sm:max-w-none" data-testid="flow-run-details">
+            <SheetContent side={isPhone ? 'bottom' : 'right'} className="flex w-full max-w-full flex-col gap-0 overflow-hidden p-0 max-sm:h-[92dvh] max-sm:rounded-t-xl sm:w-[clamp(420px,62vw,640px)] sm:max-w-none" {...{ [FLOW_RUN_SHEET_ATTR]: '' }} data-testid="flow-run-details">
                 <SheetHeader className="shrink-0 border-b border-border bg-background px-4 pb-4 pt-4 pr-12 sm:px-6 sm:pt-6" data-testid="flow-run-details-header">
                     {onBack && (
                         <Button type="button" variant="ghost" size="sm" className="-ml-2 mb-1 w-fit gap-1.5 px-2 max-[1023px]:min-h-11" data-testid="flow-run-back" onClick={onBack}>

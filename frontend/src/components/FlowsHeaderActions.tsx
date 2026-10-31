@@ -8,6 +8,7 @@ import { FlowRunViewer } from './FlowRunViewer';
 import { FlowSettingsModal } from './modals/FlowSettingsModal';
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
 import { FlowChecklist } from './flow/frame/FlowChecklist';
+import { finishText } from './flow/frame/frameIssues';
 import { useFlowIssues } from '@/hooks/flow/useFlowIssues';
 import { useFrozenWhilePressed } from '@/hooks/flow/useFrozenWhilePressed';
 import { RunFlowDialog } from './flow/RunFlowDialog';
@@ -121,8 +122,7 @@ export function FlowsHeaderActions() {
       disabled={!activeFlow || header.isPublishing || !canManage || !!publishBlocked}
     >
       {header.isPublishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-      {/* On a phone the header has no room for the word: icon only, still named for screen readers (final2-03: Publish ran off the edge). */}
-      <span className={isPhone ? 'sr-only' : undefined}>Publish</span>
+      Publish
     </Button>
   );
 
@@ -147,7 +147,7 @@ export function FlowsHeaderActions() {
         </div>
       )}
 
-      {isPhone && canManage && <FlowChecklist live={isPublished} separator={false} />}
+      {isPhone && canManage && <FlowChecklist live={isPublished} separator={false} menuOnly className="absolute" />}
 
       {canManage && !isPhone && !isCompact && <UndoRedoButtons />}
 
@@ -247,6 +247,7 @@ export function FlowsHeaderActions() {
           onTidy={tidyLayout}
           onConvert={() => setShowConvert(true)}
           editTools={!isPhone}
+          checklistText={isPhone && canManage ? finishText(issues) : ''}
           extra={isPhone ? phoneView.menuItem : undefined}
         />
       )}

@@ -3,7 +3,7 @@ import { BaseEdge, EdgeLabelRenderer, EdgeProps, useStore } from 'reactflow';
 import { Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
-import { routeEdge, routeLoopBack, type Rect } from '@/lib/flow-graph/edgeRouting';
+import { routeEdge, routeLoopBack, shortLinePill, type Rect } from '@/lib/flow-graph/edgeRouting';
 import { PLACED_PILLS, boxAt, controlCandidates, forgetPill, forgetRuns, levelRuns, recordRuns, runsOfOthers, getPlacedVersion, pillCandidates, pillsBefore, placeClear, recordPill, subscribePlaced, type Size } from '@/lib/flow-graph/canvas/edgePlacement';
 import type { BranchTone } from '@/lib/flow/flowBranches';
 import type { FlowEdgeRoute } from '../../types/flow.types';
@@ -76,9 +76,8 @@ function pillPoint(routed: ReturnType<typeof routeEdge>, scale: number, option: 
   const run = turn ? rest[rest.indexOf(turn) - 1] : undefined;
   if (turn && run && first) return { x: turn.x, y: turn.y };
   if (!option) return routed.pillAt;
-  // A short straight line (a step right under this one, a sibling turns sideways just under the source): the name sits just above
-  // the arrow head, below the sibling's level run (final2-02).
-  if (routed.points.length === 2 && routed.length < 64) return routed.pointAt(Math.max(routed.length - 21, 10));
+  const short = shortLinePill(routed.points); // a short straight line: one rule with the plain name (edgeRouting)
+  if (short) return short;
   return routed.pointAt(Math.max(Math.min(Math.max(routed.length * 0.4, 28 + 14 * scale), routed.length / 2), 10));
 }
 

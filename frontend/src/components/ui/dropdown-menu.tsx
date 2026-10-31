@@ -10,9 +10,92 @@ import { useClosingGuard, withGuard } from '@/hooks/useClosingGuard';
 
 import { cn } from '@/lib/utils';
 
-const DropdownMenu = DropdownMenuPrimitive.Root;
+/**
+ * The menu keeps its own open state (controlled or not) so Tab can close it from inside, and remembers its trigger and which
+ * way Tab was pressed, so focus can move on to the next (Shift+Tab: previous) tabbable item after the trigger.
+ */
+interface MenuContext {
+  close: () => void;
+  triggerRef: React.MutableRefObject<HTMLElement | null>;
+  tabDirection: React.MutableRefObject<1 | -1 | 0>;
+}
+const MenuCtx = React.createContext<MenuContext | null>(null);
 
-const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
+function DropdownMenu({ open, defaultOpen, onOpenChange, ...props }: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Root>) {
+  const [inner, setInner] = React.useState(defaultOpen ?? false);
+  const controlled = open !== undefined;
+  const isOpen = controlled ? open : inner;
+  const change = React.useCallback(
+    (next: boolean) => {
+      if (!controlled) setInner(next);
+      onOpenChange?.(next);
+    },
+    [controlled, onOpenChange]
+  );
+  const triggerRef = React.useRef<HTMLElement | null>(null);
+  const tabDirection = React.useRef<1 | -1 | 0>(0);
+  const ctx = React.useMemo<MenuContext>(() => ({ close: () => change(false), triggerRef, tabDirection }), [change]);
+  return (
+    <MenuCtx.Provider value={ctx}>
+      <DropdownMenuPrimitive.Root open={isOpen} onOpenChange={change} {...props} />
+    </MenuCtx.Provider>
+  );
+}
+
+const DropdownMenuTrigger = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Trigger>
+>(({ ...props }, forwardedRef) => {
+  const ctx = React.useContext(MenuCtx);
+  const ref = React.useCallback(
+    (node: HTMLButtonElement | null) => {
+      if (ctx) ctx.triggerRef.current = node;
+      if (typeof forwardedRef === 'function') forwardedRef(node);
+      else if (forwardedRef) forwardedRef.current = node;
+    },
+    [ctx, forwardedRef]
+  );
+  return <DropdownMenuPrimitive.Trigger ref={ref} {...props} />;
+});
+DropdownMenuTrigger.displayName = DropdownMenuPrimitive.Trigger.displayName;
+
+const TABBABLE = 'a[href], button, input, select, textarea, summary, [tabindex], [contenteditable="true"]';
+
+/** The tabbable element after (dir 1) or before (dir -1) `from` in page order, skipping hidden, disabled and menu contents. */
+export function tabbableNeighbour(from: HTMLElement, dir: 1 | -1): HTMLElement | null {
+  const all = Array.from(document.querySelectorAll<HTMLElement>(TABBABLE)).filter((el) => {
+    if (el !== from && el.closest('[role="menu"], [data-radix-popper-content-wrapper]')) return false;
+    if ((el as HTMLButtonElement).disabled || el.tabIndex < 0 || el.closest('[inert], [aria-hidden="true"]')) return false;
+    return el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+  });
+  const at = all.indexOf(from);
+  return at < 0 ? null : all[at + dir] ?? null;
+}
+
+/** Tab inside an open menu: close the whole menu (submenus too) and remember the direction for onCloseAutoFocus. */
+function useTabLeaves() {
+  const ctx = React.useContext(MenuCtx);
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (event.defaultPrevented || event.key !== 'Tab' || !ctx) return;
+    event.preventDefault();
+    event.stopPropagation();
+    ctx.tabDirection.current = event.shiftKey ? -1 : 1;
+    ctx.close();
+  };
+  const onCloseAutoFocus = (event: Event) => {
+    const dir = ctx?.tabDirection.current ?? 0;
+    if (!ctx || dir === 0) return;
+    ctx.tabDirection.current = 0;
+    const trigger = ctx.triggerRef.current;
+    const target = trigger ? tabbableNeighbour(trigger, dir) : null;
+    // No neighbour (the trigger is the last or first tabbable thing): Radix puts focus back on the trigger, as for Escape.
+    if (target) {
+      event.preventDefault();
+      target.focus();
+    }
+  };
+  return { onKeyDown, onCloseAutoFocus };
+}
 
 const DropdownMenuGroup = DropdownMenuPrimitive.Group;
 
@@ -47,36 +130,47 @@ DropdownMenuSubTrigger.displayName =
 const DropdownMenuSubContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
->(({ className, ...props }, ref) => (
+>(({ className, onKeyDown, ...props }, ref) => {
+  const leave = useTabLeaves();
+  return (
   <DropdownMenuPrimitive.SubContent
     ref={ref}
+    onKeyDown={(event) => {
+      onKeyDown?.(event);
+      leave.onKeyDown(event);
+    }}
     className={cn(
       'z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
       className
     )}
     {...props}
   />
-));
+  );
+});
 DropdownMenuSubContent.displayName =
   DropdownMenuPrimitive.SubContent.displayName;
 
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, onInteractOutside, onKeyDown, ...props }, forwardedRef) => {
+>(({ className, sideOffset = 4, onInteractOutside, onKeyDown, onCloseAutoFocus, ...props }, forwardedRef) => {
   const { ref, guard } = useClosingGuard(forwardedRef);
+  const leave = useTabLeaves();
   return (
   <DropdownMenuPrimitive.Portal>
     <DropdownMenuPrimitive.Content
       ref={ref}
       sideOffset={sideOffset}
       onInteractOutside={withGuard(onInteractOutside, guard)}
-      // Radix swallows Tab inside a menu, so Tab left the menu open with the page behind it inert. Tab leaves the menu like Escape does.
+      // Radix swallows Tab inside a menu, which left the menu open with the page behind it inert. Tab closes the menu and moves
+      // focus on to the next tabbable item after the trigger (Shift+Tab: the previous one).
       onKeyDown={(event) => {
         onKeyDown?.(event);
-        if (!event.defaultPrevented && event.key === 'Tab') {
-          event.currentTarget.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-        }
+        leave.onKeyDown(event);
+      }}
+      onCloseAutoFocus={(event) => {
+        onCloseAutoFocus?.(event);
+        if (!event.defaultPrevented) leave.onCloseAutoFocus(event);
       }}
       className={cn(
         'z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md',

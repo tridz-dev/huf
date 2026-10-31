@@ -14,7 +14,7 @@ Stable `data-testid` hooks for live UI journeys. Field names are the contract co
 | `flow-canvas` | Canvas root |
 | `flow-save`, `flow-run`, `flow-publish`, `flow-runs`, `flow-settings` | Toolbar buttons. `flow-publish` is disabled, with the reason in the `disabled-reason` tooltip, for a user without `flows.publish_sensitive` when the flow has a Data trigger or a web request step |
 | `flow-save-state` | Saved / Unsaved indicator |
-| `flow-validation-summary` | "N steps to finish" button beside "Saved" (only while something is unfinished). Opens the checklist `flow-issues-popover`; Run and Publish open it too instead of failing |
+| `flow-validation-summary` | "N steps to finish" button beside "Saved" (only while something is unfinished). Opens the checklist `flow-issues-popover`; Run and Publish open it too instead of failing. On a phone there is no button (no room beside Run and Publish): the "..." menu (`flow-header-more-menu`) holds the entry `flow-validation-summary-menu`, which opens the same checklist |
 | `flow-add-trigger` | Add trigger button (when the flow has no trigger) |
 | `flow-rail-trigger`, `flow-rail-agent`, `flow-rail-condition`, `flow-rail-tool`, `flow-rail-data` | Left palette rail |
 
