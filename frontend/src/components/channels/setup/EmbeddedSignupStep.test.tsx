@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { PermissionsContext } from '@/contexts/PermissionsContext';
 
 const api = vi.hoisted(() => ({ getSignupConfig: vi.fn(), completeSignup: vi.fn() }));
 vi.mock('@/services/channels/embeddedSignupApi', () => api);
@@ -65,6 +67,26 @@ describe('EmbeddedSignupStep', () => {
     await flush();
     expect(screen.getByRole('button', { name: /connect with facebook/i })).toBeDisabled();
     expect(screen.getByText(/not configured/i)).toBeInTheDocument();
+  });
+
+  const off = () => api.getSignupConfig.mockResolvedValue({ enabled: false, app_id: '', config_id: '', graph_version: 'v21.0' });
+  const asRole = (hufRole: string) => (
+    <PermissionsContext.Provider value={{ hufRole } as never}>
+      <MemoryRouter><EmbeddedSignupStep onConnected={vi.fn()} /></MemoryRouter>
+    </PermissionsContext.Provider>
+  );
+  it('links admins to Facebook signup settings', async () => {
+    off();
+    render(asRole('Huf Admin'));
+    await flush();
+    expect(screen.getByRole('link', { name: /facebook signup/i }).getAttribute('href')).toBe('/channels/whatsapp/settings/facebook');
+  });
+  it('tells non-admins to ask a Huf admin, with no link', async () => {
+    off();
+    render(asRole('Huf User'));
+    await flush();
+    expect(screen.getByText(/ask a huf admin/i)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /facebook signup/i })).toBeNull();
   });
 
   it('does not load the SDK script before click', async () => {
