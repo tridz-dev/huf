@@ -84,7 +84,7 @@ export function buildPickerModel(nodes: FlowNode[], edges: Edge[], nodeId: strin
       hasSample: fields.length > 0,
       source: local ? 'pinned' : gatewaySpec ? 'example' : server?.source ?? 'none',
       root: 'input',
-      canFetchLast: kind === 'webhook',
+      canFetchLast: kind === 'webhook' || isGatewayKindId(kind),
       doctype: server?.doctype ?? (trigger.data.triggerConfig as { doctype?: string } | undefined)?.doctype ?? null,
     });
   }

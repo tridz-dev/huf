@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { useFlowContext } from '../../contexts/FlowContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { useViewport } from '@/lib/ui/responsive';
-import { getLastWebhookRequest } from '@/services/flow/triggerApi';
+import { fetchLastSample } from '@/lib/flow-data/fetchLast';
 import { variableName } from '@/lib/flow-data/chips';
 import type { RefScope } from '../../lib/flow/flowRefs';
 import { DataPicker } from '../flow/data/DataPicker';
@@ -52,13 +52,11 @@ export function VariablePicker({ onSelect, currentNodeId, scope = 'ancestors', a
     };
     const fetchLast = async (step: PickerStep): Promise<string | void> => {
         if (!activeFlow) return;
-        const last = await getLastWebhookRequest(activeFlow.id);
-        if (!last.found || !last.sample) {
-            return 'No request has reached this webhook yet. Send one, then try again.';
-        }
+        const last = await fetchLastSample(activeFlow.id, step);
+        if (!last.sample) return last.notice;
         updateNodeData(step.id, (data) => ({ ...data, sample: last.sample as Record<string, unknown> }));
         invalidateDataCatalog();
-        toast.success('Now using the last real request as the example.');
+        toast.success(`Now using the last real ${last.noun} as the example.`);
     };
 
     return (

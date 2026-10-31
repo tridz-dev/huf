@@ -355,7 +355,22 @@ from huf.ai.gateway_core.media import _MEDIA_SAFE_NAME, _MIME_EXTENSIONS, _media
 def _save_event_media(event, gateway) -> list[str]:
     """Provider ``media_save`` hook; no hook = no inbound media is saved."""
     hook = provider_hooks.get(gateway.provider, "media_save")
-    return hook(event, gateway) if hook is not None else []
+    if hook is None:
+        return []
+    # Idempotent: a Flow start that falls through to the default agent saves media first (before the gate),
+    # then the agent path asks again; reuse the files already attached to this event instead of downloading twice.
+    try:
+        existing = frappe.get_all(
+            "File",
+            filters={"attached_to_doctype": "Gateway Event", "attached_to_name": event.name},
+            pluck="file_url",
+            order_by="creation asc",
+        )
+    except Exception:
+        existing = []
+    if existing and all(isinstance(u, str) and u for u in existing):
+        return list(existing)
+    return hook(event, gateway)
 
 
 from huf.ai.gateway_core.media import _describe_attachments  # noqa: F401

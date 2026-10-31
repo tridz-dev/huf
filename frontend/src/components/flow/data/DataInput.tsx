@@ -6,7 +6,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '../../ui/popover';
 import { useFlowContext } from '@/contexts/FlowContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { useViewport } from '@/lib/ui/responsive';
-import { getLastWebhookRequest } from '@/services/flow/triggerApi';
+import { fetchLastSample } from '@/lib/flow-data/fetchLast';
 import { cn } from '@/lib/utils';
 import type { RefScope } from '@/lib/flow/flowRefs';
 import {
@@ -173,13 +173,11 @@ function ChipField({ value, onChange, nodeId, kind = 'text', placeholder, hint, 
 
   const fetchLast = async (step: PickerStep): Promise<string | void> => {
     if (!activeFlow) return;
-    const last = await getLastWebhookRequest(activeFlow.id);
-    if (!last.found || !last.sample) {
-      return 'No request has reached this webhook yet. Send one, then try again.';
-    }
+    const last = await fetchLastSample(activeFlow.id, step);
+    if (!last.sample) return last.notice;
     updateNodeData(step.id, (data) => ({ ...data, sample: last.sample as Record<string, unknown> }));
     invalidateDataCatalog();
-    toast.success('Now using the last real request as the example.');
+    toast.success(`Now using the last real ${last.noun} as the example.`);
   };
 
   const notANumber = kind === 'number' && typeof value === 'string' && value.trim() !== '';

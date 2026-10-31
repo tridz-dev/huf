@@ -177,3 +177,11 @@ describe('run title', () => {
     expect(friendlyRunTitle({})).toBe('Run');
   });
 });
+
+describe('chat message starter', () => {
+  it('names the sender first and masks the number', () => {
+    expect(startedByWords({ triggerType: 'Gateway', input: { provider: 'WhatsApp', display_name: 'Asha', sender_id: '919876543210' } })).toBe('a WhatsApp message from Asha (••••3210)');
+    expect(startedByWords({ triggerType: 'Gateway', input: { provider: 'Telegram', sender_id: '12345678' } })).toBe('a Telegram message from ••••5678');
+    expect(startedByWords({ triggerType: 'Gateway' })).toBe('a chat message');
+  });
+});

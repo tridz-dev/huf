@@ -94,7 +94,7 @@ describe('GatewayTriggerForm', () => {
     fireEvent.click(screen.getByTestId('flow-param-keywords-add'));
     await flush();
     expect(saved.params).toEqual([{ key: 'keywords', value: ['order'] }]);
-    expect(screen.getByTestId('flow-gateway-filter-summary').textContent).toBe("Only messages that contain 'order'");
+    expect(screen.getByTestId('flow-gateway-filter-summary').textContent).toBe('Support · Only messages that contain "order"');
     fireEvent.change(screen.getByTestId('flow-param-keywords'), { target: { value: 'refund, help' } });
     fireEvent.keyDown(screen.getByTestId('flow-param-keywords'), { key: 'Enter' });
     await flush();

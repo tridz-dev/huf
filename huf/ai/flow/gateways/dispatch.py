@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import time
 
+from huf.ai.flow.gateways.transcript import transcript_for_attachments, trigger_wants_transcript
 from huf.ai.flow.gateways.gateway_triggers import GATEWAY_NODE_TYPES, matches, over_rate_cap, param_map
 
 SENSITIVE_CAPABILITY = "flows.publish_sensitive"
@@ -160,7 +161,7 @@ def gate_flow_start(event, gateway, payload: dict) -> tuple[str | None, bool]:
 			raise ConversationBusy("An earlier run of this conversation is still running")
 	if over_rate_cap(event.target_flow, gateway.name, payload.get("sender_id"), params.get("max_runs_per_sender_per_hour")):
 		return NOTE_RATE, False
-	return None, wants_voice(params)
+	return None, trigger_wants_transcript(node)
 
 
 def wants_voice(params: dict) -> bool:
@@ -172,22 +173,19 @@ def wants_voice(params: dict) -> bool:
 def add_transcript(payload: dict, gateway) -> None:
 	"""Fill ``input.transcript`` from the saved voice file by speech to text. Best effort, never raises.
 
-	Runs inside the enqueued job, never in the webhook. The text is customer-provided, so it is wrapped as untrusted."""
+	Called from the start path, which runs inside the queued event job (never the webhook request). The text is
+	customer-provided, so ``transcript_for_attachments`` returns it wrapped as untrusted."""
 	if payload.get("message_type") not in ("voice", "audio") or not payload.get("attachments"):
 		return
 	try:
 		import frappe
 
-		from huf.ai.audio_service import transcribe_audio_file
-		from huf.ai.gateways.safety import wrap_untrusted
-
 		agent = getattr(gateway, "default_agent", None)
 		file_name = frappe.db.get_value("File", {"file_url": payload["attachments"][0]}, "name")
 		if not (agent and file_name):
 			return
-		out = transcribe_audio_file(file_id=file_name, agent_name=agent) or {}
-		text = str(out.get("transcript") or "").strip() if out.get("success") else ""
+		text = transcript_for_attachments([file_name], agent, payload.get("language"))
 		if text:
-			payload["transcript"] = wrap_untrusted(text, "voice_transcript", max_chars=4000)
+			payload["transcript"] = text
 	except Exception:
 		return

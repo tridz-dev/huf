@@ -1,4 +1,5 @@
 import { formatAbsoluteTime, parseServerDate } from '@/lib/serverTime';
+import { gatewayStarter } from './gatewayStory';
 import { htmlToText } from '@/lib/flow-run/flowRunDoc';
 
 /**
@@ -344,12 +345,12 @@ export function triggerLabel(triggerType: string | null | undefined): string {
 }
 
 /** Who started a run, in words: the person ("you" for the viewer), or what fired it. */
-export function startedByWords(args: { triggerType?: string | null; owner?: string | null; ownerName?: string | null; currentUser?: string | null }): string {
+export function startedByWords(args: { triggerType?: string | null; owner?: string | null; ownerName?: string | null; currentUser?: string | null; input?: unknown }): string {
   const t = (args.triggerType || '').toLowerCase();
   if (t.includes('webhook')) return 'a webhook';
   if (t.includes('schedule')) return 'a schedule';
   if (t.includes('doc') || t.includes('data') || t.includes('event')) return 'a data change';
-  if (t.includes('gateway')) return 'a chat message';
+  if (t.includes('gateway')) return gatewayStarter(args.input);
   if (args.owner && args.currentUser && args.owner === args.currentUser) return 'you';
   return args.ownerName || args.owner || 'someone';
 }

@@ -63,8 +63,8 @@ describe('picker model for a chat trigger', () => {
     expect(model.steps[0].fields.find((f) => f.path === 'input.text')!.sample).toBe('Hello');
   });
 
-  it('does not offer "last real request" (that is the webhook) until the chat sample endpoint is wired', () => {
-    expect(buildPickerModel([trig(), step], edges, 'a', null, 'ancestors', FIXTURE_REGISTRY).steps[0].canFetchLast).toBe(false);
+  it('offers the last real message (served by the messages endpoint, not the webhook one)', () => {
+    expect(buildPickerModel([trig(), step], edges, 'a', null, 'ancestors', FIXTURE_REGISTRY).steps[0].canFetchLast).toBe(true);
   });
 
   it('without a registry (viewer, failed load) falls back to the sample or the server catalog', () => {

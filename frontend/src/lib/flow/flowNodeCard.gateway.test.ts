@@ -13,7 +13,7 @@ const gws = FIXTURE_REGISTRY.gateways;
 describe('chat trigger card', () => {
   it('reads "When someone messages Support (WhatsApp)", or the filter, or asks for the number', () => {
     expect(triggerSubtitle({ type: 'whatsapp', gateway: 'Support WhatsApp' }, gws)).toBe('When someone messages Support (WhatsApp)');
-    expect(triggerSubtitle({ type: 'whatsapp', gateway: 'Support WhatsApp', params: [{ key: 'keywords', value: ['order'] }] }, gws)).toBe("Only messages that contain 'order'");
+    expect(triggerSubtitle({ type: 'whatsapp', gateway: 'Support WhatsApp', params: [{ key: 'keywords', value: ['order'] }] }, gws)).toBe('Support · Only messages that contain "order"');
     expect(triggerSubtitle({ type: 'whatsapp' })).toBe('Pick a WhatsApp number');
   });
 

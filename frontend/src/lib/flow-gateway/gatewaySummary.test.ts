@@ -19,15 +19,15 @@ describe('card subtitle', () => {
   });
 
   it('shows the filter instead when there is one', () => {
-    expect(gatewaySubtitle('whatsapp', { gateway: 'Support WhatsApp', params: [{ key: 'keywords', value: ['order'] }] }, gws)).toBe("Only messages that contain 'order'");
+    expect(gatewaySubtitle('whatsapp', { gateway: 'Support WhatsApp', params: [{ key: 'keywords', value: ['order'] }] }, gws)).toBe('Support · Only messages that contain "order"');
   });
 });
 
 describe('filterSummary', () => {
   it('reads like a sentence', () => {
-    expect(filterSummary({ params: [{ key: 'keywords', value: ['order', 'refund'] }] })).toBe("Only messages that contain 'order' or 'refund'");
-    expect(filterSummary({ params: [{ key: 'keywords', value: ['a', 'b', 'c', 'd'] }] })).toBe("Only messages that contain 'a', 'b' or 'c' or more");
-    expect(filterSummary({ params: [{ key: 'starts_with', value: 'Hi' }] })).toBe("Only messages that start with 'Hi'");
+    expect(filterSummary({ params: [{ key: 'keywords', value: ['order', 'refund'] }] })).toBe('Only messages that contain "order" or "refund"');
+    expect(filterSummary({ params: [{ key: 'keywords', value: ['a', 'b', 'c', 'd'] }] })).toBe('Only messages that contain "a", "b" or "c" or more');
+    expect(filterSummary({ params: [{ key: 'starts_with', value: 'Hi' }] })).toBe('Only messages that start with "Hi"');
     expect(filterSummary({ params: [{ key: 'commands', value: ['start', '/help'] }] })).toBe('Only /start, /help');
     expect(filterSummary({ params: [{ key: 'message_kinds', value: ['voice'] }] })).toBe('Only voice messages');
     expect(filterSummary({ params: [{ key: 'only_senders', value: ['Asha'] }] })).toBe('Only messages from Asha');

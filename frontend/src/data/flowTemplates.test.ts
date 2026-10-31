@@ -56,3 +56,19 @@ describe('flow templates catalog', () => {
     expect(templateSteps(FLOW_TEMPLATES.find((t) => t.id === 'post-to-slack')!)[0]).toEqual({ type: 'tool.call', tool_id: 'slack_send_message' });
   });
 });
+
+describe('chat templates', () => {
+  it('start from a WhatsApp or Telegram message with the channel left blank for the gallery to ask', () => {
+    for (const id of ['whatsapp-agent-reply', 'telegram-keyword-reply']) {
+      const t = FLOW_TEMPLATES.find((x) => x.id === id)!;
+      expect(t).toBeDefined();
+      const trigger = t.graph.nodes.find((n) => n.type.startsWith('trigger.'))!;
+      expect(trigger.config.gateway).toBe('');
+      expect(t.graph.nodes.map((n) => n.type)).toEqual([trigger.type, 'agent.run', 'output']);
+      const end = t.graph.nodes.find((n) => n.type === 'output')!;
+      expect((end.config as { outcome?: { label: string } }).outcome?.label).toMatch(/Answered/);
+    }
+    expect(templateTrigger(FLOW_TEMPLATES.find((t) => t.id === 'whatsapp-agent-reply')!)).toBe('whatsapp');
+    expect(templateTrigger(FLOW_TEMPLATES.find((t) => t.id === 'telegram-keyword-reply')!)).toBe('telegram');
+  });
+});

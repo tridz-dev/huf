@@ -137,5 +137,20 @@ def build_payload(event, gateway, attachments: list[str], extra_fields=None) -> 
 		"interactive_reply": {"id": reply.get("id"), "title": reply.get("title")} if reply else None,
 	}
 	if extra_fields is not None:
-		payload.update(extra_fields(event, gateway, sender) or {})
+		merge_extras(payload, extra_fields(event, gateway, sender) or {})
 	return payload
+
+
+def _is_empty(value) -> bool:
+	return value is None or value == "" or value == [] or value == {}
+
+
+def merge_extras(payload: dict, extras: dict) -> None:
+	"""Provider extras refine the generic keys: a provider value wins only when it is non-empty.
+
+	An empty provider value (None, "", [], {}) never blanks a generic value that was already derived
+	(``display_name``, ``language``, ``is_room``, ``mentioned``, ``kind``...). ``False`` and ``0`` are real values."""
+	for key, value in extras.items():
+		if key in payload and not _is_empty(payload[key]) and _is_empty(value):
+			continue
+		payload[key] = value

@@ -2,8 +2,11 @@ import { Link } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { Label } from '../../ui/label';
 import { CHANNELS } from '../../channels/channelsMeta';
-import { channelNoun, gatewaysForKind, pickPrompt, type GatewayKindId } from '@/lib/flow-gateway/gatewayWords';
+import { channelNoun, connectWords, gatewaysForKind, pickPrompt, type GatewayKindId } from '@/lib/flow-gateway/gatewayWords';
 import type { GatewayChoice } from '@/lib/flow-gateway/gatewayTrigger.types';
+
+/** "whatsapp" -> "WhatsApp": the channel's own display name, never a raw provider id. */
+const providerName = (provider: string): string => CHANNELS.find((c) => c.key === provider.toLowerCase() || c.label.toLowerCase() === provider.toLowerCase())?.label ?? provider;
 
 interface Props {
   kind: GatewayKindId;
@@ -29,11 +32,12 @@ export function GatewayChooser({ kind, value, gateways, onChange, disabled }: Pr
           className="inline-block text-sm font-medium text-primary underline underline-offset-2"
           data-testid="flow-gateway-connect"
         >
-          {kind === 'telegram' ? 'Connect a bot' : kind === 'whatsapp' ? 'Connect a number' : 'Connect a channel'}
+          {connectWords(kind)}
         </Link>
       </div>
     );
   }
+  const staleName = (gateways.find((g) => g.name === value)?.label || 'A channel that is no longer available') + (gateways.some((g) => g.name === value) ? ' (not available)' : '');
   const known = options.some((g) => g.name === value);
   return (
     <div data-testid="flow-gateway-chooser">
@@ -47,12 +51,12 @@ export function GatewayChooser({ kind, value, gateways, onChange, disabled }: Pr
             {options.map((g) => (
               <SelectItem key={g.name} value={g.name} data-testid={`flow-option-gateway-${g.name}`}>
                 {g.label}
-                {kind === 'gateway' && g.provider ? ` (${g.provider})` : ''}
-                {g.enabled ? '' : ' - switched off'}
+                {kind === 'gateway' && g.provider ? ` (${providerName(g.provider)})` : ''}
+                {g.enabled ? '' : ' (switched off)'}
               </SelectItem>
             ))}
             {value && !known ? (
-              <SelectItem value={value} data-testid={`flow-option-gateway-${value}`}>{value} (not available)</SelectItem>
+              <SelectItem value={value} data-testid={`flow-option-gateway-${value}`}>{staleName}</SelectItem>
             ) : null}
           </SelectContent>
         </Select>
