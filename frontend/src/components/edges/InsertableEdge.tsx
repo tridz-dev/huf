@@ -71,6 +71,9 @@ function pillPoint(routed: ReturnType<typeof routeEdge>, scale: number, option: 
   const run = turn ? rest[rest.indexOf(turn) - 1] : undefined;
   if (turn && run && first) return { x: turn.x, y: turn.y };
   if (!option) return routed.pillAt;
+  // A short straight line (a step right under this one, a sibling turns sideways just under the source): the name sits just above
+  // the arrow head, below the sibling's level run (final2-02).
+  if (routed.points.length === 2 && routed.length < 64) return routed.pointAt(Math.max(routed.length - 21, 10));
   return routed.pointAt(Math.max(Math.min(Math.max(routed.length * 0.4, 28 + 14 * scale), routed.length / 2), 10));
 }
 
