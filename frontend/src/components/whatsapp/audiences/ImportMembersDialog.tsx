@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { reasonText } from '../broadcast/plainText';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -45,7 +46,7 @@ function Examples({ label, rows, total }: { label: string; rows?: ImportExample[
     <div className="text-xs">
       <p className="font-medium">{label} ({total > rows.length ? `showing ${rows.length} of ${total}` : total})</p>
       <ul className="list-disc pl-5">
-        {rows.map((r, i) => <li key={i}>{r.row ? `Row ${r.row}: ` : ''}{r.recipient ?? ''}{r.reason ? ` - ${r.reason}` : ''}</li>)}
+        {rows.map((r, i) => <li key={i}>{r.row ? `Row ${r.row}: ` : ''}{r.recipient ?? ''}{r.reason ? ` - ${reasonText(r.reason)}` : ''}</li>)}
       </ul>
     </div>
   );

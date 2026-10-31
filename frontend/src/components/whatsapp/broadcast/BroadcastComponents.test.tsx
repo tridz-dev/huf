@@ -83,7 +83,9 @@ describe('BroadcastDetail', () => {
   it('shows counts, error codes and pauses', async () => {
     m.pauseBroadcast.mockResolvedValue(ok({}));
     render(<BroadcastDetail name="BCAST-1" onBack={vi.fn()} />);
-    expect(await screen.findByText('131026')).toBeInTheDocument();
+    expect(await screen.findByText('undeliverable')).toBeInTheDocument();
+    expect(screen.queryByText('131026')).toBeNull();
+    expect(screen.queryByText('Error code')).toBeNull();
     expect(screen.getByTestId('count-sent')).toHaveTextContent('3');
     expect(screen.getByRole('progressbar', { name: 'Broadcast progress' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Pause' }));
@@ -91,7 +93,7 @@ describe('BroadcastDetail', () => {
   });
   it('filters recipients by status', async () => {
     render(<BroadcastDetail name="BCAST-1" onBack={vi.fn()} />);
-    await screen.findByText('131026');
+    await screen.findByText('undeliverable');
     await pick(userEvent, 'Status', 'failed');
     await waitFor(() => expect(m.listBroadcastRecipients).toHaveBeenLastCalledWith('BCAST-1', { status: 'failed', limit: 100 }));
   });
@@ -99,7 +101,7 @@ describe('BroadcastDetail', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       render(<BroadcastDetail name="BCAST-1" onBack={vi.fn()} />);
-      await screen.findByText('131026');
+      await screen.findByText('undeliverable');
       const n = m.getBroadcast.mock.calls.length;
       await act(async () => { await vi.advanceTimersByTimeAsync(5100); });
       expect(m.getBroadcast.mock.calls.length).toBeGreaterThan(n);
@@ -164,8 +166,8 @@ describe('BroadcastWizard', () => {
     await user.type(screen.getByLabelText(/Recipients/), '1555000111{enter}1555000222');
     await user.click(screen.getByRole('button', { name: 'Add recipients' }));
     expect(await screen.findByText(/recipients added/)).toBeInTheDocument();
-    expect(screen.getByText(/abc: invalid_number/)).toBeInTheDocument();
-    expect(screen.getByText(/opted_out/)).toBeInTheDocument();
+    expect(screen.getByText(/abc: Not a valid phone number/)).toBeInTheDocument();
+    expect(screen.getByText(/Asked not to receive messages/)).toBeInTheDocument();
     expect(screen.getByText(/700 skipped \(showing 1\)/)).toBeInTheDocument();
     expect(screen.getByText(/1 invalid:/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Continue' }));
@@ -335,7 +337,7 @@ describe('BroadcastDetail draft management', () => {
   });
   it('does not offer remove or delete once started', async () => {
     render(<BroadcastDetail name="BCAST-1" onBack={vi.fn()} />);
-    await screen.findByText('131026');
+    await screen.findByText('undeliverable');
     expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Delete draft' })).toBeNull();
   });

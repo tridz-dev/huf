@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { failureDetail, reasonText, recipientStatusLabel } from './plainText';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -106,7 +107,7 @@ export function BroadcastDetail({ name, onBack }: { name: string; onBack: () => 
         <h2 className="text-base font-semibold text-ink">{b.title || b.name}</h2>
         <Badge variant="outline">{b.status}</Badge>
         {b.send_via === 'marketing_messages' ? <Badge variant="secondary">Marketing Messages API</Badge> : <Badge variant="outline">Cloud API</Badge>}
-        {b.pause_reason ? <span className="text-xs text-steel">Paused: {b.pause_reason}</span> : null}
+        {b.pause_reason ? <span className="text-xs text-steel">Paused: {reasonText(b.pause_reason)}</span> : null}
         {active ? (
           <span className="ml-auto flex items-center gap-1 text-xs text-steel" role="status" aria-label={live ? 'Live updates' : 'Updating by polling'}>
             <span aria-hidden className={`inline-block size-2 rounded-full ${live ? 'bg-good' : 'bg-muted-foreground'}`} />
@@ -184,17 +185,16 @@ export function BroadcastDetail({ name, onBack }: { name: string; onBack: () => 
       </Field>
       <Table aria-label="Recipients">
         <TableHeader>
-          <TableRow><TableHead>Recipient</TableHead><TableHead>Status</TableHead><TableHead>Error code</TableHead><TableHead>Detail</TableHead>{b.status === 'Draft' ? <TableHead><span className="sr-only">Actions</span></TableHead> : null}</TableRow>
+          <TableRow><TableHead>Recipient</TableHead><TableHead>Status</TableHead><TableHead>Detail</TableHead>{b.status === 'Draft' ? <TableHead><span className="sr-only">Actions</span></TableHead> : null}</TableRow>
         </TableHeader>
         <TableBody>
           {rows.length === 0 ? (
-            <TableRow><TableCell colSpan={b.status === 'Draft' ? 5 : 4} className="text-center text-steel">No recipients</TableCell></TableRow>
+            <TableRow><TableCell colSpan={b.status === 'Draft' ? 4 : 3} className="text-center text-steel">No recipients</TableCell></TableRow>
           ) : rows.map((r) => (
             <TableRow key={r.name}>
               <TableCell>{r.recipient}</TableCell>
-              <TableCell>{r.status}</TableCell>
-              <TableCell>{r.error_code ?? ''}</TableCell>
-              <TableCell>{r.error_message || r.skip_reason || ''}</TableCell>
+              <TableCell>{recipientStatusLabel(r.status)}</TableCell>
+              <TableCell>{failureDetail(r.error_message, r.error_code) || reasonText(r.skip_reason)}</TableCell>
               {b.status === 'Draft' ? (
                 <TableCell className="text-right">
                   <Button variant="ghost" size="sm" disabled={busy} aria-label={`Remove ${r.recipient}`} onClick={() => void remove(r)}>Remove</Button>

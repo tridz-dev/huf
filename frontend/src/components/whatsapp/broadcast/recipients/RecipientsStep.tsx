@@ -1,4 +1,5 @@
 import { Input } from '@/components/ui/input';
+import { reasonText } from '../plainText';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { AudiencePicker } from '../../audiences/AudiencePicker';
@@ -12,11 +13,11 @@ export function ResultBlock({ result, label }: { result: AddRecipientsResult; la
       <p><strong>{result.added}</strong> recipients added{label ? ` ${label}` : ''}.</p>
       {result.invalidTotal ? (
         <div><p>{result.invalidTotal} invalid{result.invalidTotal > result.invalid.length ? ` (showing ${result.invalid.length})` : ''}:</p>
-          <ul className="list-disc pl-5">{result.invalid.map((x, i) => <li key={i}>{x.recipient ?? ''}{x.reason ? `: ${x.reason}` : ''}</li>)}</ul></div>
+          <ul className="list-disc pl-5">{result.invalid.map((x, i) => <li key={i}>{x.recipient ?? ''}{x.reason ? `: ${reasonText(x.reason)}` : ''}</li>)}</ul></div>
       ) : null}
       {result.skippedTotal ? (
         <div><p>{result.skippedTotal} skipped{result.skippedTotal > result.skipped.length ? ` (showing ${result.skipped.length})` : ''}:</p>
-          <ul className="list-disc pl-5">{result.skipped.map((x, i) => <li key={i}>{x.recipient}: {x.reason}</li>)}</ul></div>
+          <ul className="list-disc pl-5">{result.skipped.map((x, i) => <li key={i}>{x.recipient}: {reasonText(x.reason)}</li>)}</ul></div>
       ) : null}
     </div>
   );
