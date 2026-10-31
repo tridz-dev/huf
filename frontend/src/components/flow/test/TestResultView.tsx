@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { HumanValue } from '@/components/common/HumanValue';
 import { StatusPill } from '@/components/common/StatusPill';
+import { GATEWAY_LABELS, isGatewayOutput, splitGatewayOutput } from '@/lib/flow-test/gatewayResult';
 import { ageText, durationText } from '@/lib/flow-test/testModel';
 import type { StepTestResult } from '@/services/flow/stepTestApi';
 
@@ -29,6 +30,7 @@ export interface PinState {
 export function TestResultView({ result, pin, onOpenSetup, isTrigger }: { result: StepTestResult; pin: PinState; onOpenSetup: () => void; isTrigger: boolean }) {
   const failed = result.status === 'failed';
   const preview = result.preview;
+  const chat = isTrigger && isGatewayOutput(result.output) ? splitGatewayOutput(result.output) : null;
   const canPin = !failed && result.mode !== 'preview' && result.pin_value !== null && result.pin_value !== undefined;
   return (
     <div className="space-y-3" data-testid="flow-step-test-result" data-status={result.status} data-mode={result.mode}>
@@ -110,13 +112,20 @@ export function TestResultView({ result, pin, onOpenSetup, isTrigger }: { result
         <div>
           <h4 className="mb-1.5 text-xs font-medium text-muted-foreground">{isTrigger ? 'What the flow starts with' : 'Output'}</h4>
           <HumanValue
-            value={shownOutput(result)}
+            value={chat ? chat.main : shownOutput(result)}
             rawValue={result.output}
             raw
             rawTitle="Raw output"
             testId="flow-step-test-output"
             emptyText="This step did not hand any data to the next step."
+            labels={chat ? GATEWAY_LABELS : undefined}
           />
+          {chat && Object.keys(chat.details).length > 0 && (
+            <details className="mt-2 text-xs" data-testid="flow-step-test-details">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Details</summary>
+              <HumanValue value={chat.details} labels={GATEWAY_LABELS} testId="flow-step-test-details-rows" className="mt-2" />
+            </details>
+          )}
           {result.output_shortened && <p className="mt-1 text-meta text-muted-foreground" data-testid="flow-step-test-shortened">Long values were shortened here.</p>}
         </div>
       )}

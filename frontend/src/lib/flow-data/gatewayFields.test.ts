@@ -26,9 +26,10 @@ describe('gatewayPickerFields', () => {
   it('keeps ids out of the lists people pick from', () => {
     expect(get('input.sender_id').advanced_only).toBe(true);
     expect(get('input.gateway_event').advanced_only).toBe(true);
+    expect(get('input.kind').advanced_only).toBe(true);
     expect(get('input.text').advanced_only).toBeUndefined();
     const shown = fields.filter((f) => !f.advanced_only).map((f) => f.label);
-    expect(shown.join(' ')).not.toMatch(/\bid\b|record/i);
+    expect(shown.join(' ')).not.toMatch(/\bid\b|record|event kind/i);
   });
 
   it('prefers the last real message, field by field', () => {

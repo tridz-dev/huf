@@ -9,6 +9,9 @@ import type { CatalogField, FieldType } from './types';
  */
 const TYPE: Record<GatewayPayloadType, FieldType> = { text: 'text', number: 'number', yes_no: 'yes_no', list: 'list', datetime: 'date', record: 'text' };
 
+/** Plumbing a person never needs ("Event kind"): advanced pickers only, the server registry stays untouched. */
+const PLUMBING = new Set(['input.kind']);
+
 const fieldName = (path: string) => path.replace(/^input\./, '');
 
 function toField(f: GatewayPayloadField, example: Record<string, unknown> | undefined): CatalogField {
@@ -22,7 +25,7 @@ function toField(f: GatewayPayloadField, example: Record<string, unknown> | unde
   } else {
     out.sample = sampleOf(value);
   }
-  if (f.advanced) out.advanced_only = true;
+  if (f.advanced || PLUMBING.has(f.path)) out.advanced_only = true;
   if (f.customer_provided) out.untrusted = true;
   return out;
 }

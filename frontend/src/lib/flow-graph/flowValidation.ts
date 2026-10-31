@@ -13,7 +13,7 @@ import { edgeRoute } from '../../services/flowSerializer';
 import { TRIGGER_TO_NODE_TYPE } from '../../services/flow/serializerTables';
 import { gatewayTriggerIssues } from '../flow-gateway/gatewayProblems';
 import { isGatewayKindId } from '../flow-gateway/gatewayWords';
-import { peekGatewayRegistry } from '../flow-gateway/registryStore';
+import { peekIssueRegistry } from '../flow-gateway/registryStore';
 import { unreachableNodeIds } from '../flow/flowEdit';
 import { MAX_CODE_BYTES } from './codeFlow';
 import type { FlowEdge, FlowNode } from '../../types/flow.types';
@@ -125,7 +125,7 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
     const chat = c.type;
     if (isGatewayKindId(chat)) {
       // Draft and publish share this list: a draft saves anyway, publish is blocked until it is empty.
-      for (const i of gatewayTriggerIssues(chat, c, peekGatewayRegistry())) add(i.field, i.message);
+      for (const i of gatewayTriggerIssues(chat, c, peekIssueRegistry())) add(i.field, i.message);
     }
     if (kind === 'trigger.doc-event') {
       if (isBlank(c.doctype)) add('doctype', 'Choose a document type.');

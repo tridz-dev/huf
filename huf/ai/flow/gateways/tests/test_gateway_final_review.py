@@ -90,3 +90,26 @@ class TestNonAdminGatewayChecks(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			create_flow_run(flow_id=self.flow_id, payload=payload, trigger_type="Gateway", ignore_permissions=True)
 		self.assertFalse(frappe.db.exists("Flow Run", {"flow_id": self.flow_id}))
+
+
+class TestGatewayStates(TestNonAdminGatewayChecks):
+	"""A view-only person's card must know a channel is switched off (gw-wp4-01 gap)."""
+
+	def test_states_report_off_and_only_what_was_asked(self):
+		from huf.ai.flow.gateways.api import get_gateway_states
+
+		rows = get_gateway_states(json.dumps([self.gateway, "no-such-channel"]))
+		self.assertEqual([r["name"] for r in rows], [self.gateway])
+		self.assertIs(rows[0]["enabled"], False)
+		self.assertEqual(set(rows[0]), {"name", "label", "provider", "enabled", "connection_state"})
+		self.assertEqual(get_gateway_states([]), [])
+
+	def test_states_refuse_guests(self):
+		from huf.ai.flow.gateways.api import get_gateway_states
+
+		frappe.set_user("Guest")
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				get_gateway_states([self.gateway])
+		finally:
+			frappe.set_user("Administrator")
