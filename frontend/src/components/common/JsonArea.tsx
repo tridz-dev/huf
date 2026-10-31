@@ -116,7 +116,7 @@ export function JsonArea({ surfaceKey, title, help, value, onChange, readOnly = 
   };
 
   return (
-    <div className={cn('rounded-md border border-line bg-panel', className)} data-testid={base} data-mode={mode}>
+    <div className={cn('min-w-0 max-w-full rounded-md border border-line bg-panel', className)} data-testid={base} data-mode={mode}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line px-3 py-2">
         <h4 id={titleId} className="mr-auto text-sm font-medium text-ink">{title}</h4>
         {mode === 'json' && !readOnly && (
@@ -144,7 +144,7 @@ export function JsonArea({ surfaceKey, title, help, value, onChange, readOnly = 
           <div data-testid={textTestId}>
             <pre
               aria-labelledby={titleId}
-              className={cn('overflow-x-auto whitespace-pre rounded bg-muted p-2 font-mono text-xs leading-relaxed', folded && 'max-h-[17rem] overflow-hidden')}
+              className={cn('overflow-x-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded bg-muted p-2 font-mono text-xs leading-relaxed', folded && 'max-h-[17rem] overflow-hidden')}
               data-testid={`${base}-text`}
             >
               {highlightJson(shown)}

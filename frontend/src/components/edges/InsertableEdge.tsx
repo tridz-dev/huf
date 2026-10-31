@@ -38,7 +38,7 @@ const PILL_TONE: Record<BranchTone, string> = {
 };
 
 /** Names keep a hand's breadth apart, not just off each other (a 5px air gap each side). */
-const breathe = (r: Rect): Rect => ({ x: r.x - 5, y: r.y - 5, width: r.width + 10, height: r.height + 10 });
+const breathe = (r: Rect): Rect => ({ x: r.x - 8, y: r.y - 5, width: r.width + 16, height: r.height + 10 });
 
 const GHOST_LINE: CSSProperties = { stroke: 'var(--steel-soft)', strokeWidth: 1.5, strokeDasharray: '4 4', opacity: 0.7 };
 const DEFAULT_SIZE = { width: 236, height: 70 };

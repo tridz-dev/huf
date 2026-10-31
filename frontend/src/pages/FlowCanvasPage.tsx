@@ -95,11 +95,16 @@ export function FlowCanvasPage() {
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 overflow-hidden">
           {showSteps ? (
-            <div className="relative flex-1 overflow-hidden">
-              <FlowStepsList />
-              <Button type="button" variant="outline" className="absolute bottom-4 right-4 min-h-11 bg-panel shadow-sm" data-testid="flow-phone-show-map" onClick={() => setPhoneFlowView('map')}>
-                Show map
-              </Button>
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+              <div className="min-h-0 flex-1">
+                <FlowStepsList />
+              </div>
+              {/* Its own bar under the list (final2-03): a button floating over the list sat on top of the last rows. */}
+              <div className="flex shrink-0 justify-end border-t border-line bg-background px-4 py-2" data-testid="flow-phone-map-bar">
+                <Button type="button" variant="outline" className="min-h-11 bg-panel shadow-sm" data-testid="flow-phone-show-map" onClick={() => setPhoneFlowView('map')}>
+                  Show map
+                </Button>
+              </div>
             </div>
           ) : (
             <FlowCanvas

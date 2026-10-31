@@ -5,7 +5,8 @@ import { Button } from '../ui/button';
 import { copyText } from '@/lib/clipboard';
 
 /**
- * A short command or snippet for developers: monospace, never wrapped inside a word (it scrolls sideways instead),
+ * A short command or snippet for developers: monospace, wrapped at spaces and, for a token longer than the box (a web
+ * address), anywhere, so no line is ever cut at the right edge (final2-05; the Copy button copies the exact text),
  * with a labelled Copy button. Test ids: `<testId>` (the text), `<testId>-copy`.
  */
 export function CodeBlock({ title, text, testId }: { title: string; text: string; testId: string }) {
@@ -28,7 +29,7 @@ export function CodeBlock({ title, text, testId }: { title: string; text: string
           {copied ? 'Copied' : 'Copy'}
         </Button>
       </div>
-      <pre className="overflow-x-auto whitespace-pre p-3 font-mono text-xs leading-relaxed" tabIndex={0} data-testid={testId}>{text}</pre>
+      <pre className="overflow-x-auto whitespace-pre-wrap p-3 [overflow-wrap:anywhere] font-mono text-xs leading-relaxed" tabIndex={0} data-testid={testId}>{text}</pre>
     </div>
   );
 }
