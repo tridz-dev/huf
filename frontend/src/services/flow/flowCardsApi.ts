@@ -3,8 +3,11 @@ import { handleFrappeError } from '@/lib/frappe-error';
 
 /** What starts a flow, as the Flows list receives it (no secrets: the webhook secret never comes with it). */
 export interface FlowCardTrigger {
-    type: 'webhook' | 'schedule' | 'doc-event' | 'unset';
+    type: 'webhook' | 'schedule' | 'doc-event' | 'gateway' | 'whatsapp' | 'telegram' | 'unset';
     method?: string;
+    /** Chat triggers: the Gateway name, and the plain label the server resolved for it (no credentials). */
+    gateway?: string;
+    gateway_label?: string;
     cron?: string;
     doctype?: string;
     event?: string;

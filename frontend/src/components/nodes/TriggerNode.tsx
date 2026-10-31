@@ -15,6 +15,8 @@ import {
 } from '../ui/alert-dialog';
 import { NODE_HANDLE, getExecutionStatusClasses } from './nodeStyles';
 import { triggerSubtitle } from '../../lib/flow/flowNodeCard';
+import { isGatewayKindId } from '../../lib/flow-gateway/gatewayWords';
+import { useGatewayRegistry } from '../../hooks/flow/useGatewayRegistry';
 import { cardIcon } from './nodeIcons';
 import { CardStatusLine, NodeCard } from './NodeCard';
 
@@ -27,6 +29,8 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
   const status = facts?.status ?? { kind: 'ready' as const, text: 'Ready' };
   const needsSetup = status.kind === 'needs-setup' || Boolean(facts?.firstIssue);
   const unset = !data.triggerConfig?.type;
+  // A chat trigger names its channel by the label the server knows; that needs the channel list (loaded once).
+  const { registry } = useGatewayRegistry(isGatewayKindId(data.triggerConfig?.type));
   const statusClasses = getExecutionStatusClasses(data.status, selected, {
     unconfigured: needsSetup || unset,
   });
@@ -51,7 +55,7 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
         iconClass={unset ? 'text-signal' : undefined}
         // The empty trigger is one short line and one button; it never shows the stored placeholder name.
         title={unset ? 'Start here' : data.label}
-        subtitle={unset ? undefined : triggerSubtitle(data.triggerConfig)}
+        subtitle={unset ? undefined : triggerSubtitle(data.triggerConfig, registry?.gateways)}
         status={status}
         runSummary={data.runSummary}
         frameClass={statusClasses}

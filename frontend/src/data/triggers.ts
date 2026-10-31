@@ -25,5 +25,32 @@ export const triggerOptions: TriggerOption[] = [
     icon: 'Database',
     category: 'highlight',
     tab: 'explore'
+  },
+  {
+    id: 'gateway',
+    name: 'A chat message',
+    nodeTitle: 'Chat message',
+    description: 'Starts when someone sends a message to one of your connected chat channels.',
+    icon: 'MessageSquare',
+    category: 'highlight',
+    tab: 'explore'
+  },
+  {
+    id: 'whatsapp',
+    name: 'A WhatsApp message',
+    nodeTitle: 'WhatsApp message',
+    description: 'Starts when someone sends a message to one of your WhatsApp numbers.',
+    icon: 'MessageCircle',
+    category: 'highlight',
+    tab: 'explore'
+  },
+  {
+    id: 'telegram',
+    name: 'A Telegram message',
+    nodeTitle: 'Telegram message',
+    description: 'Starts when someone sends a message to one of your Telegram bots.',
+    icon: 'Send',
+    category: 'highlight',
+    tab: 'explore'
   }
 ];

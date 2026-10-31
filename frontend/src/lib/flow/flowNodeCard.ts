@@ -1,7 +1,10 @@
-import type { ActionConfig, FlowNodeData, TriggerConfig } from '../../types/flow.types';
+import type { ActionConfig, FlowNodeData, GatewayTriggerUiConfig, TriggerConfig } from '../../types/flow.types';
 import { describeCron } from '../flow-trigger/scheduleText';
 import { getTransformOp } from '../flow-graph/flowTransformOps';
 import { toolLabel } from './flowIntegrations';
+import { gatewaySubtitle } from '../flow-gateway/gatewaySummary';
+import { isGatewayKindId } from '../flow-gateway/gatewayWords';
+import type { GatewayChoice } from '../flow-gateway/gatewayTrigger.types';
 
 /**
  * What a canvas card says besides its title: one plain-words subtitle (what the step does) and ONE status word.
@@ -75,7 +78,8 @@ const DOC_EVENT_WORD: Record<string, string> = {
   on_trash: 'deleted',
 };
 
-export function triggerSubtitle(cfg: TriggerConfig | undefined): string {
+export function triggerSubtitle(cfg: TriggerConfig | undefined, gateways?: readonly GatewayChoice[] | null): string {
+  if (cfg && isGatewayKindId(cfg.type)) return gatewaySubtitle(cfg.type, cfg as GatewayTriggerUiConfig, gateways);
   switch (cfg?.type) {
     case 'webhook':
       return 'Runs on a web request';

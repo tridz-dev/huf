@@ -9,6 +9,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { startSummary } from '@/lib/flow-list/flowPublishSummary';
+import { gatewayStopLine } from '@/lib/flow-gateway/gatewaySummary';
+import { peekGatewayRegistry } from '@/lib/flow-gateway/registryStore';
+import type { GatewayTriggerUiConfig } from '@/types/flow.types';
 import type { TriggerConfig } from '@/types/flow.types';
 
 interface UnpublishFlowDialogProps {
@@ -27,6 +30,7 @@ export function UnpublishFlowDialog({ open, onOpenChange, flowName, trigger, bus
     start.kind === 'webhook' ? 'Requests to its web address are refused.'
       : start.kind === 'schedule' ? 'Its schedule stops starting it.'
         : start.kind === 'doc-event' ? 'Record changes stop starting it.'
+          : start.kind === 'chat' ? gatewayStopLine(trigger as GatewayTriggerUiConfig, peekGatewayRegistry()?.gateways)
           : 'Nothing starts it by itself any more.';
   return (
     <AlertDialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>

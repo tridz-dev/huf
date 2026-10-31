@@ -71,6 +71,19 @@ Starts the flow when something is added, changed or deleted in your data, for ex
 - The details of the record are available to the steps that follow.
 - Common errors: choosing an event the document type never fires; forgetting to publish.
 
+### A chat message (WhatsApp, Telegram or another channel)
+
+Starts the flow when someone sends a message to one of your connected channels. Choose "A WhatsApp message" or "A Telegram message" for that channel, or "A chat message" to pick from every channel you have.
+
+- First choose the number or bot. If you have only one it is chosen for you. If none is connected yet the card says so and links to "Connect a number" / "Connect a bot"; you can keep building and finish later.
+- Then, under "Only start for some messages", choose which messages start it. Leave everything empty to start for every message. Examples: only messages that contain "order" or "refund" (capital letters do not matter), only voice notes, only the /start command (Telegram), only when someone presses a chosen button (WhatsApp), only messages from certain people.
+- "More options" holds the rarely used ones: the most runs per person per hour (30 unless you change it), and handling several messages from one chat at the same time.
+- This can only narrow what the channel already lets in. People who ask to stop messages never start it, and a reply sent more than 24 hours after a WhatsApp message needs an approved template.
+- The card under the trigger reads "When someone messages Support (WhatsApp)", or says what it is limited to ("Only messages that contain 'order'"). With no channel chosen it says "Pick a WhatsApp number".
+- Data for later steps ("Use data from > Trigger: WhatsApp message"): Message text, Sender name, Kind of message, Files, Received at, and for WhatsApp the Button chosen and Ad details, for Telegram the Command and the text after it. Ids are not listed. Message text and Sender name are typed by the sender, so they are marked "Typed by the sender" and are treated as untrusted when an AI step reads them.
+- Saving never blocks: a draft with no channel chosen saves, and reopens still showing "Pick a WhatsApp number". Publishing needs a channel and the permission to publish flows that answer chat messages (the same permission as Data triggers and web requests). Ask an admin if Publish is greyed out.
+- Common errors: the channel is switched off or was disconnected; the flow is not published (a draft never answers); the filter is narrower than expected.
+
 ## Steps
 
 ### Run agent

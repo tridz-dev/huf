@@ -22,6 +22,7 @@ const SOURCE_WORDS = {
   pinned: 'Showing the example saved on this step',
   last_run: 'Showing real data from the last run',
   doctype: 'Showing a recent record',
+  example: 'Showing an example message',
   none: '',
 } as const;
 

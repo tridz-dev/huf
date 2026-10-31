@@ -45,7 +45,7 @@ import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { FirstRunGuide } from './flow/FirstRunGuide';
 import { useViewport } from '@/lib/ui/responsive';
 import { ensureToolSchemasLoaded } from '../lib/flow/flowToolSchemas';
-import { triggerLabel } from '../lib/flow/flowLabels';
+import { triggerStepFields } from '../lib/flow/flowLabels';
 import { FlowNodeData, TriggerConfig, ActionConfig, FlowEdgeRoute } from '../types/flow.types';
 import type { ActionOption } from '../types/modal.types';
 
@@ -322,29 +322,15 @@ export function FlowCanvas({
 
   const handleSaveTriggerConfig = useCallback(
     (config: TriggerConfig) => {
-      const iconMap: Record<string, string> = {
-        webhook: 'Webhook',
-        schedule: 'Clock',
-        'doc-event': 'Database'
-      };
-      const labelMap: Record<string, string> = {
-        webhook: triggerLabel('webhook'),
-        schedule: triggerLabel('schedule'),
-        'doc-event': triggerLabel('doc-event')
-      };
-
       if (currentNodeId) {
         const node = nodes.find((n) => n.id === currentNodeId);
         if (node) {
           updateNode(currentNodeId, {
             data: {
               ...node.data,
-              label: labelMap[config.type || 'webhook'] || 'Trigger',
-              icon: iconMap[config.type || 'webhook'],
+              ...triggerStepFields(config),
               // Drop the "Select a trigger" hint of the placeholder once a trigger is chosen.
-              description: undefined,
-              configured: true,
-              triggerConfig: config
+              description: undefined
             }
           });
         }
@@ -356,11 +342,8 @@ export function FlowCanvas({
           type: 'trigger',
           position: { x: 250, y: 100 },
           data: {
-            label: labelMap[config.type || 'webhook'] || 'Trigger',
             nodeType: 'trigger',
-            icon: iconMap[config.type || 'webhook'],
-            configured: true,
-            triggerConfig: config
+            ...triggerStepFields(config)
           }
         };
 

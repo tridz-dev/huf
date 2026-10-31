@@ -1,5 +1,7 @@
 import { actionOptions } from '../../data/actions';
 import { triggerOptions } from '../../data/triggers';
+import { triggerIsConfigured } from '../flow-gateway/gatewayDefaults';
+import type { TriggerConfig } from '../../types/flow.types';
 
 /**
  * One name per step kind: the palette card name is the node title and the sidebar title.
@@ -12,6 +14,16 @@ export function actionLabel(actionId: string): string {
 export function triggerLabel(triggerId: string | undefined): string {
   const option = triggerOptions.find((t) => t.id === triggerId);
   return option?.nodeTitle ?? option?.name ?? 'What starts the flow';
+}
+
+/** Palette icon name of a trigger kind (the webhook's when nothing is chosen). */
+export function triggerIcon(triggerId: string | undefined): string {
+  return triggerOptions.find((t) => t.id === triggerId)?.icon ?? 'Webhook';
+}
+
+/** The fields of a trigger step that follow from its config: its title, icon and whether it is set up. */
+export function triggerStepFields(config: TriggerConfig) {
+  return { label: triggerLabel(config.type), icon: triggerIcon(config.type), configured: triggerIsConfigured(config), triggerConfig: config };
 }
 
 const TOOL_CARD: Record<string, string> = {

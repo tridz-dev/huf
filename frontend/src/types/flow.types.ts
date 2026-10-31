@@ -10,7 +10,10 @@ export type NodeType =
 export type TriggerType =
   | 'webhook'
   | 'schedule'
-  | 'doc-event';
+  | 'doc-event'
+  | 'gateway'
+  | 'whatsapp'
+  | 'telegram';
 
 /**
  * Value (FIELD_CONTRACT section 2): literal, `{$from}` reference, `{$template, vars}`,
@@ -87,10 +90,20 @@ export interface DocEventTriggerConfig {
   event?: DocEventName;
 }
 
+/** A chat message starts the flow: `trigger.gateway`, `trigger.whatsapp` or `trigger.telegram` (same shape, see lib/flow-gateway). */
+export interface GatewayTriggerUiConfig {
+  type: 'gateway' | 'whatsapp' | 'telegram';
+  /** The Gateway record (a number or bot). Blank in a draft; publishing needs it. */
+  gateway?: string;
+  /** Filters as `{key, value}` pairs; labels and choices come from the server registry. */
+  params?: Array<{ key: string; value: string | number | boolean | string[] | null }>;
+}
+
 export type TriggerConfig =
   | WebhookTriggerConfig
   | ScheduleTriggerConfig
   | DocEventTriggerConfig
+  | GatewayTriggerUiConfig
   | { type: undefined };
 
 // ─── Action configs ───────────────────────────────────────────────────
