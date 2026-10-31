@@ -303,3 +303,49 @@ export function KeepSelectedClearOfToolbar({ selectedNodeId }: { selectedNodeId:
   }, [selectedNodeId]);
   return null;
 }
+
+/** Marks the run details sheet, which lies over the right part of the canvas while a run is open. */
+export const FLOW_RUN_SHEET_ATTR = 'data-flow-run-sheet';
+
+/**
+ * While the run details sheet is open it covers the right 44-62% of the canvas, with the step that failed or finished often
+ * behind it (final2-04). The flow is fitted again into the part the sheet leaves free. Closing the sheet leaves the view as
+ * it is: the whole flow is still on screen, just to the left.
+ */
+export function KeepRunClearOfSheet({ runOpen }: { runOpen: boolean }) {
+  const rf = useReactFlow();
+  const rfRef = useRef(rf);
+  rfRef.current = rf;
+  const store = useStoreApi();
+  const width = useStore((s) => s.width);
+  const height = useStore((s) => s.height);
+  // Not before the steps have been measured: React Flow fits the whole canvas once at the start and that would undo this.
+  const ready = useNodesInitialized();
+  useEffect(() => {
+    if (!runOpen || !ready || !width || !height) return;
+    const fit = () => {
+      const sheet = document.querySelector<HTMLElement>(`[${FLOW_RUN_SHEET_ATTR}]`);
+      const canvas = document.querySelector('.react-flow')?.getBoundingClientRect();
+      // The sheet lies against the right edge of the window (its slide-in does not change its layout width).
+      const covered = sheet && canvas ? Math.max(0, canvas.right - (window.innerWidth - sheet.offsetWidth)) : 0;
+      if (covered > 0 && covered < width - 200) fitClearOfOverlays(rfRef.current, width - covered, height, 150);
+    };
+    // For the first 2.5 s the flow is fitted again whenever the view moves and then stays still for a moment (the canvas fits
+    // itself once when it opens, after this has run). Later the person's own panning is left alone.
+    let debounce: ReturnType<typeof setTimeout> | undefined;
+    const kick = () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(fit, 120);
+    };
+    const first = setTimeout(fit, 150);
+    const unsubscribe = store.subscribe((state, prev) => { if (state.transform !== prev.transform) kick(); });
+    const stop = setTimeout(() => { unsubscribe(); }, 2500);
+    return () => {
+      clearTimeout(first);
+      clearTimeout(stop);
+      if (debounce) clearTimeout(debounce);
+      unsubscribe();
+    };
+  }, [runOpen, ready, width, height, store]);
+  return null;
+}

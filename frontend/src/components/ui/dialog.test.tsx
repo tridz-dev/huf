@@ -33,12 +33,22 @@ describe('repair-c-01: a closed dialog releases the page at once', () => {
     const overlay = document.querySelector('.bg-black\\/\\[\\.28\\]') as HTMLElement;
     expect(content.className).not.toMatch(/animate-out/);
     expect(overlay.className).not.toMatch(/animate-out/);
+    expect(content.className).toMatch(/motion-reduce:!animate-none/);
+    expect(overlay.className).toMatch(/motion-reduce:!animate-none/);
   });
 
-  it('final2-04: opening a dialog clears leftover toasts', () => {
+  it('final2-04: opening a dialog clears passive toasts but keeps errors and Undo toasts', () => {
+    const ok = toast.success('Saved');
+    const info = toast.info('Heads up');
+    const err = toast.error('Could not save');
+    const undo = toast('Deleted', { action: { label: 'Undo', onClick: () => undefined } });
     const dismiss = vi.spyOn(toast, 'dismiss');
     render(<Probe />);
-    expect(dismiss).toHaveBeenCalled();
+    const gone = dismiss.mock.calls.map((c) => c[0]);
+    expect(gone).toContain(ok);
+    expect(gone).toContain(info);
+    expect(gone).not.toContain(err);
+    expect(gone).not.toContain(undo);
     dismiss.mockRestore();
   });
 

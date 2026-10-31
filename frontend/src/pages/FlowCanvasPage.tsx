@@ -100,7 +100,7 @@ export function FlowCanvasPage() {
                 <FlowStepsList />
               </div>
               {/* Its own bar under the list (final2-03): a button floating over the list sat on top of the last rows. */}
-              <div className="flex shrink-0 justify-end border-t border-line bg-background px-4 py-2" data-testid="flow-phone-map-bar">
+              <div className="flex shrink-0 justify-end border-t border-line bg-background px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]" data-testid="flow-phone-map-bar">
                 <Button type="button" variant="outline" className="min-h-11 bg-panel shadow-sm" data-testid="flow-phone-show-map" onClick={() => setPhoneFlowView('map')}>
                   Show map
                 </Button>

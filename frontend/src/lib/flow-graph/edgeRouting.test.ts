@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { roundedPath, routeEdge, routeLoopBack, segmentHitsRect, type Pt, type Rect } from './edgeRouting';
+import { roundedPath, routeEdge, routeLoopBack, segmentHitsRect, shortLinePill, type Pt, type Rect } from './edgeRouting';
 
 const box = (x: number, y: number, width = 236, height = 70): Rect => ({ x, y, width, height });
 const hitsAny = (points: Pt[], rects: Rect[], skip: Rect[] = []) =>
@@ -78,6 +78,20 @@ describe('final2-02: a short straight line names itself under the sibling that t
   });
   it('a long straight line keeps its name 16px under the step', () => {
     expect(routeEdge({ x: 118, y: 70 }, { x: 118, y: 220 }, []).pillAt.y).toBe(86);
+  });
+});
+
+describe('ux41: one rule for a name on a short straight line', () => {
+  it('shortLinePill is the pillAt of a short line, 21px above the arrow head, and null for a long or bent line', () => {
+    const short = routeEdge({ x: 118, y: 100 }, { x: 118, y: 150 }, []);
+    expect(shortLinePill(short.points)).toEqual(short.pillAt);
+    expect(short.pillAt.y).toBe(100 + 50 - 21);
+    expect(shortLinePill(routeEdge({ x: 118, y: 70 }, { x: 118, y: 220 }, []).points)).toBeNull();
+    expect(shortLinePill(routeEdge({ x: 118, y: 100 }, { x: 420, y: 330 }, []).points)).toBeNull();
+  });
+  it('the cut-off is the same for the plain name and the option name (62px: short, 64px: not)', () => {
+    expect(shortLinePill(routeEdge({ x: 0, y: 0 }, { x: 0, y: 63 }, []).points)).not.toBeNull();
+    expect(shortLinePill(routeEdge({ x: 0, y: 0 }, { x: 0, y: 64 }, []).points)).toBeNull();
   });
 });
 

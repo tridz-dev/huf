@@ -1,7 +1,7 @@
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Cross2Icon } from '@radix-ui/react-icons';
-import { toast } from 'sonner';
+import { dismissPassiveToasts } from '@/lib/ui/dismissPassiveToasts';
 
 import { cn } from '@/lib/utils';
 
@@ -25,7 +25,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'fixed inset-0 z-50 bg-black/[.28] backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:fade-in-0',
+      'fixed inset-0 z-50 bg-black/[.28] backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:motion-reduce:!animate-none data-[state=open]:fade-in-0',
       className
     )}
     {...props}
@@ -37,10 +37,10 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => {
-  // final2-04: a toast left over from the last action sat on the new dialog's bottom edge (the Danger zone was clipped). A dialog is
-  // the thing to read now, so it starts with a clear screen.
+  // final2-04: a "saved" toast left over from the last action sat on the new dialog's bottom edge (the Danger zone was clipped).
+  // Passive toasts go; an error or a toast with a button (Undo) stays.
   React.useEffect(() => {
-    toast.dismiss?.(); // optional: test doubles of sonner have no dismiss
+    dismissPassiveToasts();
   }, []);
   return (
   <DialogPortal>
@@ -48,7 +48,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed inset-0 z-50 grid w-full max-w-[100vw] gap-4 border-0 bg-background p-6 shadow-[0_24px_60px_-20px_rgba(0,0,0,.28)] duration-200 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-[16px] max-h-[100dvh] overflow-y-auto sm:inset-auto sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:max-w-[720px] sm:max-h-[calc(100vh-48px)] sm:h-auto sm:rounded-[16px] sm:border',
+        'fixed inset-0 z-50 grid w-full max-w-[100vw] gap-4 border-0 bg-background p-6 shadow-[0_24px_60px_-20px_rgba(0,0,0,.28)] duration-200 data-[state=open]:animate-in data-[state=open]:motion-reduce:!animate-none data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-[16px] max-h-[100dvh] overflow-y-auto sm:inset-auto sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:max-w-[720px] sm:max-h-[calc(100vh-48px)] sm:h-auto sm:rounded-[16px] sm:border',
         className
       )}
       {...props}
