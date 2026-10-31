@@ -41,4 +41,17 @@ describe('GatewayTest', () => {
     fireEvent.click(screen.getByTestId('flow-step-test-gateway-last'));
     await waitFor(() => expect(screen.getByTestId('flow-step-test-trigger-note').textContent).toContain('No message has started this flow'));
   });
+
+  it('folds internal fields under Advanced and still uses them', () => {
+    const onResult = vi.fn();
+    render(<GatewayTest flowId="f" nodeId="t" kind="whatsapp" onResult={onResult} />);
+    expect(screen.getByTestId('flow-step-test-gateway-field-text')).toBeTruthy();
+    expect(screen.queryByTestId('flow-step-test-gateway-field-kind')).toBeNull();
+    expect(screen.queryByText('Hours since their last message')).toBeNull();
+    fireEvent.click(screen.getByTestId('flow-step-test-gateway-advanced-toggle'));
+    expect(screen.getByTestId('flow-step-test-gateway-field-kind')).toBeTruthy();
+    expect(screen.getByTestId('flow-step-test-gateway-field-hours_since_last_customer_message')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('flow-step-test-gateway-use'));
+    expect(onResult.mock.calls[0][0].output).toMatchObject({ kind: 'message', hours_since_last_customer_message: 0 });
+  });
 });

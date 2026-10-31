@@ -6,6 +6,7 @@ import { isToolUnconnected, useIntegrationStatus } from '@/lib/flow/flowIntegrat
 import { validateNode } from '@/lib/flow-graph/flowValidation';
 import { orphanNote } from '@/lib/flow-graph/flowCanvasGraph';
 import type { CanvasNodeFacts, FlowNodeData } from '@/types/flow.types';
+import { useGatewayRegistry } from '@/hooks/flow/useGatewayRegistry';
 import { CARD_STATUS_OF, type RunOverlay } from '@/lib/flow-graph/runOverlay';
 
 type Step = Node<FlowNodeData>;
@@ -29,6 +30,7 @@ interface Cached {
   edges: unknown;
   firstIssue: string | null;
   issueCount: number;
+  registry: unknown;
 }
 
 /**
@@ -38,6 +40,8 @@ interface Cached {
  */
 export function useNodeFacts(nodes: Step[], edges: Edge[], overlay: RunOverlay | null, onDelete: (nodeId: string) => void): Map<string, CanvasNodeFacts> {
   const integration = useIntegrationStatus();
+  // A chat trigger's checklist reads the channel list ("switched off"): recompute when it arrives.
+  const { registry } = useGatewayRegistry(false);
   const issues = useRef(new Map<string, Cached>());
   const facts = useRef(new Map<string, CanvasNodeFacts>());
   const reach = useRef<{ edges: unknown; ids: string; set: Set<string> } | null>(null);
@@ -50,9 +54,9 @@ export function useNodeFacts(nodes: Step[], edges: Edge[], overlay: RunOverlay |
     const next = new Map<string, CanvasNodeFacts>();
     for (const n of nodes) {
       let cached = issues.current.get(n.id);
-      if (!cached || cached.data !== n.data || cached.edges !== edges) {
+      if (!cached || cached.data !== n.data || cached.edges !== edges || cached.registry !== registry) {
         const found = validateNode({ id: n.id, data: n.data }, edges);
-        cached = { data: n.data, edges, firstIssue: found[0]?.message ?? null, issueCount: found.length };
+        cached = { data: n.data, edges, firstIssue: found[0]?.message ?? null, issueCount: found.length, registry };
         issues.current.set(n.id, cached);
       }
       const noLineIn = unreachable.has(n.id) && orphanNote(n.id, nodes, edges) === 'Nothing leads to this step';
@@ -77,5 +81,5 @@ export function useNodeFacts(nodes: Step[], edges: Edge[], overlay: RunOverlay |
       next.set(n.id, fact);
     }
     return next;
-  }, [nodes, edges, overlay, integration, onDelete]);
+  }, [nodes, edges, overlay, integration, onDelete, registry]);
 }

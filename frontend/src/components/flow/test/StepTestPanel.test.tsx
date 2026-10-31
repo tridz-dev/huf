@@ -34,6 +34,7 @@ vi.mock('@/lib/flow-test/pollStepTest', async (importOriginal) => {
 });
 const trig = vi.hoisted(() => ({ getLastWebhookRequest: vi.fn() }));
 vi.mock('@/services/flow/triggerApi', () => trig);
+vi.mock('@/hooks/flow/useGatewayRegistry', () => ({ useGatewayRegistry: () => ({ registry: null, loading: false, failed: false, reload: () => undefined }) }));
 
 import { StepTestPanel } from './StepTestPanel';
 import { forgetStepResult } from '@/hooks/flow/useStepTest';
@@ -268,6 +269,17 @@ describe('Test tab: a step', () => {
 describe('Test tab: a trigger', () => {
   const trigger = (data: Partial<FlowNode['data']> = {}) => node({ nodeType: 'trigger', label: 'New order', ...data }, 't1');
   const tinfo = (kind: StepTestInfo['trigger_kind'], over: Partial<StepTestInfo> = {}) => ({ trigger: true, trigger_kind: kind, parts: [], node_id: 't1', ...over });
+
+  it('reads the editor, not the saved flow: a chat trigger just added still shows its Test tab', async () => {
+    await open(trigger({ triggerConfig: { type: 'whatsapp' } as never }), tinfo('unset'));
+    expect(screen.queryByTestId('flow-step-test-trigger-unset')).toBeNull();
+    expect(screen.getByTestId('flow-step-test-gateway')).toBeTruthy();
+  });
+
+  it('still asks to choose a trigger when the editor has none either', async () => {
+    await open(trigger(), tinfo('unset'));
+    expect(screen.getByTestId('flow-step-test-trigger-unset')).toBeTruthy();
+  });
 
   it('uses the last received request and pins it', async () => {
     await open(trigger(), tinfo('webhook'));

@@ -58,7 +58,7 @@ describe('GatewayTriggerForm', () => {
     open('whatsapp');
     expect(screen.getByText('Which WhatsApp number?')).toBeTruthy();
     expect(screen.getByTestId('flow-gateway-select').textContent).toContain('Pick a WhatsApp number');
-    expect(screen.getByTestId('flow-gateway-filter-summary').textContent).toBe('Pick a WhatsApp number');
+    expect(screen.queryByTestId('flow-gateway-filter-summary')).toBeNull(); // the picker already says it
     expect(screen.getByTestId('flow-param-keywords')).toBeTruthy();
     expect(screen.queryByTestId('flow-param-chat_scope')).toBeNull(); // WhatsApp has no groups
     expect(screen.getByTestId('flow-param-first_message_only')).toBeTruthy();

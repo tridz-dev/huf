@@ -36,6 +36,7 @@ const GENERIC_FIELDS = [
   field('sender_id', 'Sender id', '15550001111', { advanced: true, sensitive: true }),
   field('conversation_id', 'Conversation id', '15550001111', { advanced: true }),
   field('gateway_event', 'Message record', 'GWE-0001', { advanced: true }),
+  field('kind', 'Event kind', 'message'),
 ];
 const SAMPLE = { text: 'Hi, is my order ready?', display_name: 'Asha', message_type: 'text', attachments: [], received_at: '2026-01-15 17:15:00', is_room: false, sender_id: '15550001111' };
 
@@ -52,7 +53,7 @@ export const FIXTURE_REGISTRY: GatewayRegistry = {
       [...GENERIC_PARAMS.filter((p) => !['chat_scope', 'only_when_mentioned'].includes(p.key)),
         param({ key: 'button_reply_ids', label: 'Only when they press this button', type: 'tags' }),
         param({ key: 'first_message_only', label: 'Only their first message', type: 'boolean', default: false })],
-      [...GENERIC_FIELDS, field('button_title', 'Button chosen', ''), field('referral', 'Ad details', '', { type: 'record' })]),
+      [...GENERIC_FIELDS, field('button_title', 'Button chosen', ''), field('hours_since_last_customer_message', 'Hours since their last message', 0, { type: 'number' }), field('referral', 'Ad details', '', { type: 'record' })]),
     'trigger.telegram': spec('trigger.telegram', 'Telegram', 'Telegram',
       [...GENERIC_PARAMS, param({ key: 'commands', label: 'Only these commands', type: 'tags', help: 'For example /start.' }),
         param({ key: 'include_edits', label: 'Also start when a message is edited', type: 'boolean', default: false, section: 'more' })],

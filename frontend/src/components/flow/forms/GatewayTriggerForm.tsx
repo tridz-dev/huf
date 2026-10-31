@@ -60,6 +60,11 @@ export function GatewayTriggerForm({ nodeId, kind }: { nodeId: string; kind: Gat
         <div>
           <GatewayChooser kind={kind} value={gateway} gateways={registry.gateways} disabled={!canManage} onChange={(name) => patch({ gateway: name })} />
           <shell.Err field="gateway" />
+          {gateway.trim() ? (
+            <p className="mt-1.5 text-xs text-muted-foreground" data-testid="flow-gateway-filter-summary">
+              {gatewaySubtitle(kind, { gateway, params }, registry.gateways)}
+            </p>
+          ) : null}
         </div>
       ) : failed ? (
         <div className="space-y-2" role="alert" data-testid="flow-gateway-load-failed">
@@ -69,12 +74,6 @@ export function GatewayTriggerForm({ nodeId, kind }: { nodeId: string; kind: Gat
       ) : (
         <p className="text-sm text-muted-foreground" data-testid="flow-gateway-loading">{loading ? 'Loading your channels…' : ''}</p>
       )}
-
-      {registry ? (
-        <p className="rounded-md bg-muted/50 px-2.5 py-2 text-sm" data-testid="flow-gateway-filter-summary">
-          {gatewaySubtitle(kind, { gateway, params }, registry.gateways)}
-        </p>
-      ) : null}
 
       {spec ? (
         <>

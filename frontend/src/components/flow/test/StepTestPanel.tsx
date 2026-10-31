@@ -58,6 +58,10 @@ export function StepTestPanel({ node, active, onOpenSetup }: Props) {
   return <EditableTest node={node} active={active} onOpenSetup={onOpenSetup} />;
 }
 
+const EDITOR_KINDS = ['webhook', 'schedule', 'doc-event', 'gateway', 'whatsapp', 'telegram'] as const;
+/** What the editor holds now (a trigger just added is not saved yet, so the server still calls it unset). */
+const editorTriggerKind = (type: string | undefined) => EDITOR_KINDS.find((k) => k === type);
+
 function EditableTest({ node, active, onOpenSetup }: Props) {
   const { activeFlow, hasUnsavedChanges, saveFlow, updateNodeData } = useFlowContext();
   const flowId = activeFlow?.id;
@@ -209,7 +213,7 @@ function EditableTest({ node, active, onOpenSetup }: Props) {
           <TriggerTestSection
             flowId={flowId}
             nodeId={node.id}
-            kind={info.trigger_kind}
+            kind={editorTriggerKind(node.data.triggerConfig?.type) ?? info.trigger_kind}
             doctype={info.doctype}
             live={live}
             running={busy}

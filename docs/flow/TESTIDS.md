@@ -425,5 +425,6 @@ One form serves "A chat message" (`gateway`), "A WhatsApp message" (`whatsapp`) 
 | `flow-use-data-field-input.<name>` | Data picker rows of a chat trigger, e.g. `input.text` ("Message text"); ids such as `input.sender_id` are never listed |
 | `flow-step-test-gateway` (root), `flow-step-test-gateway-last`, `flow-step-test-gateway-sample`, `flow-step-test-gateway-note` | Chat trigger Test tab: root, "Use last real message", "Use a sample message", "Nothing is sent." |
 | `flow-step-test-gateway-form`, `flow-step-test-gateway-field-<name>`, `flow-step-test-gateway-use` | The editable sample (one plain field per non-advanced `input.<name>`) and "Use this message" |
+| `flow-step-test-gateway-advanced`, `flow-step-test-gateway-advanced-toggle`, `flow-step-test-gateway-advanced-body` | "Advanced" fold of the sample form: internal fields (Event kind, Hours since their last message) |
 | `flow-use-data-last-request` | In the data picker: webhooks ("Use last real request") and chat triggers ("Use last real message") |
 | `flow-run-started-by` | For a chat run reads "Started by a WhatsApp message from Asha (••••3210) · 5:15 PM" |
