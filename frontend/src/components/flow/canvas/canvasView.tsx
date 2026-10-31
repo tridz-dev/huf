@@ -318,8 +318,10 @@ export function KeepRunClearOfSheet({ runOpen }: { runOpen: boolean }) {
   rfRef.current = rf;
   const width = useStore((s) => s.width);
   const height = useStore((s) => s.height);
+  // Not before the steps have been measured: React Flow fits the whole canvas once at the start and that would undo this.
+  const ready = useNodesInitialized();
   useEffect(() => {
-    if (!runOpen || !width || !height) return;
+    if (!runOpen || !ready || !width || !height) return;
     const fit = () => {
       const sheet = document.querySelector<HTMLElement>(`[${FLOW_RUN_SHEET_ATTR}]`);
       const canvas = document.querySelector('.react-flow')?.getBoundingClientRect();
@@ -327,8 +329,9 @@ export function KeepRunClearOfSheet({ runOpen }: { runOpen: boolean }) {
       const covered = sheet && canvas ? Math.max(0, canvas.right - (window.innerWidth - sheet.offsetWidth)) : 0;
       if (covered > 0 && covered < width - 200) fitClearOfOverlays(rfRef.current, width - covered, height, 200);
     };
-    const timer = setTimeout(fit, 200);
-    return () => clearTimeout(timer);
-  }, [runOpen, width, height]);
+    // Twice: the sheet's width is only known once it is on screen, and the first fit of the canvas may still be running.
+    const timers = [setTimeout(fit, 250), setTimeout(fit, 900)];
+    return () => timers.forEach(clearTimeout);
+  }, [runOpen, ready, width, height]);
   return null;
 }
