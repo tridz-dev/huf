@@ -223,6 +223,19 @@ def _minimal_examples():
 	ex["doc.create"] = _wrap({"type": "doc.create", "config": {"doctype": "ToDo", "fields": {"description": "d"}}}, write=["ToDo"])
 	ex["output"] = _graph([WEBHOOK | {"next": "x"}, {"id": "x", "type": "output", "config": {"value": {"$from": "input.a"}}}], "t")
 	ex["trigger.unset"] = _graph([{"id": "t", "type": "trigger.unset", "config": {}, "next": "end"}, OUT], "t")
+	for _kind in ("gateway", "whatsapp", "telegram"):
+		ex[f"trigger.{_kind}"] = _graph(
+			[
+				{
+					"id": "t",
+					"type": f"trigger.{_kind}",
+					"config": {"gateway": "Support", "params": [{"key": "keywords", "value": ["order"]}]},
+					"next": "end",
+				},
+				OUT,
+			],
+			"t",
+		)
 	return ex
 
 

@@ -53,8 +53,14 @@ attributes: `input['amount'] > 100`, not `input.amount` and not `context["x"]`.
 | Data (doc event) | `trigger.doc-event` | `doctype` | string | yes | min length 1, literal |
 | | | `event` | string | yes | enum `after_insert`, `on_update`, `on_submit`, `on_cancel`, `on_trash` |
 | (placeholder, not runnable) | `trigger.unset` | none | | | empty config; cannot activate |
+| Chat message (any channel) | `trigger.gateway` | `gateway` | string | publish only | name of a Gateway record; blank in a draft, required when the flow is made live; never a credential. The caller needs write access to that Gateway |
+| | | `params` | array | no | `[{key, value}]`, at most 40, closed items. `key` is `^[a-z][a-z0-9_]*$`; `value` is text (max 500), number, boolean, list of words (max 50, each max 200) or null. Keys, labels and choices come from the registry (`huf/ai/flow/gateways`, served by `get_gateway_trigger_registry`), never from the flow; unknown keys and wrong value types are refused when the flow is made live, a draft keeps them |
+| WhatsApp message | `trigger.whatsapp` | `gateway`, `params` | | | same shape; the Gateway must be a WhatsApp one (checked by the server) |
+| Telegram message | `trigger.telegram` | `gateway`, `params` | | | same shape; the Gateway must be a Telegram one (checked by the server) |
 
 Notes:
+* **Trigger data is always `input.<field>`.** `input` is the whole payload the run started with, for every trigger (webhook body, schedule, doc event, chat message). There is no populated `trigger` root: `{"$from": "trigger.x"}` and `{trigger.x}` resolve to nothing, so docs, pickers and templates must never show them. A chat trigger's fields (`input.text`, `input.display_name`, `input.sender_id`, ...) are declared once in the registry `payload_fields`.
+* A chat trigger only narrows what the channel and its route already let in; it cannot widen access. The `only_senders` filter compares the sender id the provider reports, so on a channel without signed webhooks it can be spoofed: use it to focus a flow, not as a security boundary.
 * `auth`, `apiKey`, `webhook_key`, `intervalType`, `interval`, `cronExpression`, `schedule_name`, `timezone` (the key is `time_zone`), `filters`, `PUT`, `DELETE`, `on_delete` are all invalid. The UI compiles any "every N hours/days" picker to a cron string before saving. The optional `time_zone` is consumed by `run_due_schedule_flows`, which reads each cron on that zone's clock.
 
 Every node may also carry `_sample` (UI extra like `_label`) and `_sample_at` (ISO time it was pinned): a pinned example, at most 8 KB, passwords and keys hidden. On a trigger it is the data the flow starts with (an object: a sample request). On any other step it is what the step **produced** when it was tested, as the step gives it (an object, a list or text; see section 12). Only people who can edit the flow get it back from the server; run snapshots never keep it, a copy of a flow drops it, and the server shrinks an oversized `_sample` on every save.
@@ -88,7 +94,7 @@ Every node may also carry `_sample` (UI extra like `_label`) and `_sample_at` (I
 `tool.call` UI presets (Email, Slack, Sheets, File, HTTP, Code) are `tool.call` and carry ONLY
 `tool_id`/`input` (+ optional `timeout_ms`, `approved`). The legacy `tool_name`, `args`,
 `parameters`, `output.save_result_to_context`, `mcp_server`, `agent_name`, `gateway` keys are rejected by the schema.
-`router.llm.prompt` and `human.approval.message` are plain strings; `{input.field}`, `{trigger.x}`, `{<node_id>.field}` and `{foreach.item}` placeholders in them are filled in at run time (`engine.render_text_refs`); a placeholder that does not resolve is left as written.
+`router.llm.prompt` and `human.approval.message` are plain strings; `{input.field}`, `{<node_id>.field}` and `{foreach.item}` placeholders in them are filled in at run time (`engine.render_text_refs`); a placeholder that does not resolve is left as written.
 Results are read by later nodes as `{"$from": "<node_id>"}` (or `<node_id>.field`); there is no
 "save result to context key".
 
