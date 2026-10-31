@@ -423,17 +423,14 @@ TRIGGER_NODE_TYPES = {
 	"Webhook": "trigger.webhook",
 	"Schedule": "trigger.schedule",
 	"Doc Event": "trigger.doc-event",
+	"Gateway": ("trigger.gateway", "trigger.whatsapp", "trigger.telegram"),
 }
 
 
-def select_entry_node(defn: dict, trigger_type: str = "Manual") -> str:
-	"""The node id a new run starts at.
-
-	``entry`` is one node id or, when the flow starts from triggers, an array
-	(one id per trigger). A Webhook / Schedule / Doc Event run starts at the
-	trigger node of that type; a Manual or Gateway run (and a flow whose entry
-	is not a trigger at all) starts at the first entry. Fails closed when the
-	flow only has triggers of other types.
+def select_entry_node(defn: dict, trigger_type: str = "Manual", event: dict | None = None) -> str:
+	"""The node id a new run starts at (``entry`` is one id or one per trigger).
+	Webhook / Schedule / Doc Event runs start at their trigger node; a Gateway run at the first gateway trigger matching
+	``event`` (the run payload), else the first entry; Manual at the first entry. Fails closed when no trigger fits.
 	"""
 	entry = defn.get("entry")
 	entries = [entry] if isinstance(entry, str) else [e for e in (entry or []) if isinstance(e, str)]
@@ -443,6 +440,9 @@ def select_entry_node(defn: dict, trigger_type: str = "Manual") -> str:
 	if wanted is None:
 		return entries[0]
 	types = {n.get("id"): n.get("type") for n in defn.get("nodes", []) if isinstance(n, dict)}
+	if trigger_type == "Gateway":
+		from huf.ai.flow.gateways.dispatch import pick_gateway_entry
+		return pick_gateway_entry(defn, entries, types, event)
 	for node_id in entries:
 		if types.get(node_id) == wanted:
 			return node_id
@@ -492,7 +492,7 @@ def create_flow_run(
 	check_runnable(defn)  # a draft may be saved half-built; a run needs every step finished (UX-17)
 
 	try:
-		entry_node = select_entry_node(defn, trigger_type)
+		entry_node = select_entry_node(defn, trigger_type, payload)
 	except ValueError as exc:
 		frappe.throw(_("This flow cannot be started. {0}").format(plain_error(str(exc))))
 
