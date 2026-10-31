@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FileText, Loader2, Radio, Timer } from 'lucide-react';
+import { GatewayTest } from './GatewayTest';
 import { Button } from '@/components/ui/button';
 import { triggerResult } from '@/lib/flow-test/triggerResult';
 import { ageText } from '@/lib/flow-test/testModel';
@@ -13,7 +14,7 @@ const WAIT_LIMIT_MS = 60_000;
 interface Props {
   flowId: string;
   nodeId: string;
-  kind: 'webhook' | 'schedule' | 'doc-event' | 'unset' | null;
+  kind: 'webhook' | 'schedule' | 'doc-event' | 'unset' | 'gateway' | 'whatsapp' | 'telegram' | null;
   doctype?: string | null;
   live: boolean;
   running: boolean;
@@ -36,6 +37,10 @@ export function TriggerTestSection(props: Props) {
       return <DocumentTest {...props} />;
     case 'schedule':
       return <ScheduleTest {...props} />;
+    case 'gateway':
+    case 'whatsapp':
+    case 'telegram':
+      return <GatewayTest flowId={props.flowId} nodeId={props.nodeId} kind={props.kind} onResult={props.onResult} />;
     default:
       return (
         <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground" data-testid="flow-step-test-trigger-unset">

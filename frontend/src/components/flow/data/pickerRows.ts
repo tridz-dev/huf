@@ -41,7 +41,7 @@ const pick = (step: PickerStep, ref: string, label: string, mode?: PickMode): Ro
 
 function fieldRow(step: PickerStep, f: CatalogField, accept: Accept, showStep: boolean): PickerRow {
   const sample = sampleText(f.sample, f.type);
-  const base = { key: `${step.id}:${f.path}`, testId: `flow-use-data-field-${f.path}`, title: f.label, step, subtitle: showStep ? step.chipTitle : f.untrusted ? 'Typed by the sender' : undefined };
+  const base = { key: `${step.id}:${f.path}`, testId: `flow-use-data-field-${f.path}`, title: f.label, step, subtitle: [showStep ? step.chipTitle : '', f.untrusted ? 'Typed by the sender' : ''].filter(Boolean).join(' · ') || undefined };
   if (f.type === 'list') {
     const count = f.list?.count ?? 0;
     const title = `${f.label} (${count})`;

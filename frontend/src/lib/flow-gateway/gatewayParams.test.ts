@@ -1,3 +1,4 @@
+import type { GatewayParamSpec } from './gatewayTrigger.types';
 import { describe, expect, it } from 'vitest';
 import { FIXTURE_REGISTRY } from './registryFixture';
 import { hasCustomValue, isEmptyParam, isParamVisible, paramValue, visibleParams, withParam } from './gatewayParams';
@@ -49,5 +50,14 @@ describe('paramValue and visibility', () => {
     expect(hasCustomValue([{ key: 'allow_parallel', value: true }], by('allow_parallel'))).toBe(true);
     expect(isEmptyParam(false)).toBe(false);
     expect(isEmptyParam([])).toBe(true);
+  });
+});
+
+describe('withParam compares arrays by contents', () => {
+  it('drops a list that repeats the default', async () => {
+    const { withParam } = await import('./gatewayParams');
+    const spec = { key: 'k', label: 'K', help: '', type: 'tags', options: [], required: false, default: ['a'], multiple: false, show_when: null, section: 'setup' } as unknown as GatewayParamSpec;
+    expect(withParam([], spec, ['a'])).toEqual([]);
+    expect(withParam([], spec, ['a', 'b'])).toEqual([{ key: 'k', value: ['a', 'b'] }]);
   });
 });

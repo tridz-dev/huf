@@ -2,6 +2,10 @@ import type { GatewayChoice, GatewayParam, GatewayParamSpec, GatewayRegistry, Ga
 import { GATEWAY_TRIGGER_KINDS } from './triggerKinds';
 import { channelNoun, gatewaysForKind, pickPrompt, type GatewayKindId } from './gatewayWords';
 
+/** "WhatsApp", "Telegram" or "a channel": what to connect. */
+const connectWord = (kind: GatewayKindId): string => (kind === 'whatsapp' ? 'WhatsApp' : kind === 'telegram' ? 'Telegram' : 'a channel');
+const capitalised = (text: string): string => text.replace(/^./, (c) => c.toUpperCase()).replace(/^WhatsApp number$/, 'Number').replace(/^Telegram bot$/, 'Bot');
+
 export interface GatewayIssue {
   /** `gateway`, or `params.<key>` for a filter. */
   field: string;
@@ -79,13 +83,15 @@ export function gatewayTriggerIssues(kind: GatewayKindId, config: GatewayConfigL
   const out: GatewayIssue[] = [];
   const name = (config.gateway ?? '').trim();
   if (!name) {
-    out.push({ field: 'gateway', message: `${pickPrompt(kind)}.` });
+    const none = registry && gatewaysForKind(kind, registry.gateways).length === 0;
+    out.push({ field: 'gateway', message: none ? `Connect ${connectWord(kind)} first.` : `${pickPrompt(kind)}.` });
   } else if (registry) {
     const wanted = GATEWAY_TRIGGER_KINDS.find((k) => k.id === kind)?.provider;
     const choice: GatewayChoice | undefined = registry.gateways.find((g) => g.name === name);
     if (!choice) out.push({ field: 'gateway', message: `This ${channelNoun(kind)} is not available to you. ${pickPrompt(kind)} from the list.` });
     else if (wanted && choice.provider !== wanted) out.push({ field: 'gateway', message: `That is not a ${channelNoun(kind)}. ${pickPrompt(kind)}.` });
     else if (!gatewaysForKind(kind, registry.gateways).some((g) => g.name === name)) out.push({ field: 'gateway', message: `${pickPrompt(kind)}.` });
+    else if (!choice.enabled) out.push({ field: 'gateway', message: `${capitalised(channelNoun(kind))} is switched off. Switch it on, or pick another.` });
   }
   const nodeType = GATEWAY_TRIGGER_KINDS.find((k) => k.id === kind)!.nodeType;
   const spec = registry?.specs[nodeType];

@@ -30,7 +30,7 @@ export interface StepTestInfo {
   simulated: boolean;
   approval: boolean;
   trigger: boolean;
-  trigger_kind: 'webhook' | 'schedule' | 'doc-event' | 'unset' | null;
+  trigger_kind: 'webhook' | 'schedule' | 'doc-event' | 'unset' | 'gateway' | 'whatsapp' | 'telegram' | null;
   doctype?: string | null;
   parts: StepTestPart[];
   sample_input: StepSampleInput;

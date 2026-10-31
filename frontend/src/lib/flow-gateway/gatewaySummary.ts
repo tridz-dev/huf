@@ -9,7 +9,7 @@ interface Cfg {
 
 const words = (v: GatewayParamValue | undefined): string[] => (Array.isArray(v) ? v.filter((w) => w.trim()) : typeof v === 'string' && v.trim() ? [v.trim()] : []);
 function quoted(list: string[]): string {
-  const q = list.slice(0, 3).map((w) => `'${w}'`);
+  const q = list.slice(0, 3).map((w) => `"${w.length > 24 ? `${w.slice(0, 23)}…` : w}"`);
   if (q.length === 1) return q[0];
   const last = q.pop();
   return `${q.join(', ')} or ${last}${list.length > 3 ? ' or more' : ''}`;
@@ -29,7 +29,7 @@ export function filterSummary(config: Cfg): string | null {
   const kinds = words(get(config.params, 'message_kinds'));
   if (kinds.length) return `Only ${kinds.slice(0, 2).join(' and ')} messages${kinds.length > 2 ? ' and more' : ''}`;
   const senders = words(get(config.params, 'only_senders'));
-  if (senders.length) return `Only messages from ${senders.length === 1 ? senders[0] : `${senders.length} people`}`;
+  if (senders.length) return `Only messages from ${senders.length === 1 ? (senders[0].length > 24 ? `${senders[0].slice(0, 23)}…` : senders[0]) : `${senders.length} people`}`;
   const others = (config.params ?? []).filter((p) => !isEmptyParam(p.value) && !['max_runs_per_sender_per_hour', 'allow_parallel', 'ignore_bots'].includes(p.key));
   return others.length ? 'Only some messages' : null;
 }
@@ -38,7 +38,7 @@ export function filterSummary(config: Cfg): string | null {
 export function gatewaySubtitle(kind: GatewayKindId, config: Cfg, gateways?: readonly GatewayChoice[] | null): string {
   if (!config.gateway?.trim()) return pickPrompt(kind);
   const filter = filterSummary(config);
-  if (filter) return filter;
+  if (filter) return `${gatewayDisplayName(config.gateway, gateways)} · ${filter}`;
   const word = channelWord(kind, config.gateway, gateways);
   return `When someone messages ${gatewayDisplayName(config.gateway, gateways)}${word ? ` (${word})` : ''}`;
 }

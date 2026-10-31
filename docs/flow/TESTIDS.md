@@ -423,4 +423,7 @@ One form serves "A chat message" (`gateway`), "A WhatsApp message" (`whatsapp`) 
 | `flow-gateway-notes` | Read-only facts under the options (STOP words, 24 hour window) |
 | `flow-error-trigger.gateway-gateway`, `flow-error-trigger.whatsapp-gateway`, `flow-error-trigger.telegram-gateway` | Required-field message when no channel is chosen |
 | `flow-use-data-field-input.<name>` | Data picker rows of a chat trigger, e.g. `input.text` ("Message text"); ids such as `input.sender_id` are never listed |
-| (planned, WP4) `flow-step-test-gateway-last`, `flow-step-test-gateway-sample`, `flow-step-test-gateway-note` | Test tab: last real message, sample message, "Nothing is sent." |
+| `flow-step-test-gateway` (root), `flow-step-test-gateway-last`, `flow-step-test-gateway-sample`, `flow-step-test-gateway-note` | Chat trigger Test tab: root, "Use last real message", "Use a sample message", "Nothing is sent." |
+| `flow-step-test-gateway-form`, `flow-step-test-gateway-field-<name>`, `flow-step-test-gateway-use` | The editable sample (one plain field per non-advanced `input.<name>`) and "Use this message" |
+| `flow-use-data-last-request` | In the data picker: webhooks ("Use last real request") and chat triggers ("Use last real message") |
+| `flow-run-started-by` | For a chat run reads "Started by a WhatsApp message from Asha (••••3210) · 5:15 PM" |

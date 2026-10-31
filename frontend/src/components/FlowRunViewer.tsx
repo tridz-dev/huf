@@ -65,7 +65,7 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const story = useMemo(() => (run ? buildRunStory(run, { titleOf, currentUser: user?.name }) : null), [run, activeFlow, user?.name]);
 
-    const startedWords = run ? startedByWords({ triggerType: run.trigger_type, owner: run.started_by ?? identity?.started_by, ownerName: run.started_by_name ?? identity?.started_by_name, currentUser: user?.name }) : '';
+    const startedWords = run ? startedByWords({ triggerType: run.trigger_type, owner: run.started_by ?? identity?.started_by, ownerName: run.started_by_name ?? identity?.started_by_name, currentUser: user?.name, input: run.context_json }) : '';
     const runTitle = friendlyRunTitle({ runNumber: run?.run_number ?? identity?.run_number });
 
     // The step that needs attention (failed or waiting) is brought into view once the run is shown.

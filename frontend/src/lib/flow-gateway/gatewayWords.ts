@@ -14,6 +14,9 @@ export function channelNoun(id: GatewayKindId): string {
   return id === 'whatsapp' ? 'WhatsApp number' : id === 'telegram' ? 'Telegram bot' : 'channel';
 }
 
+/** The one wording of the "connect one" link, on the picker card and in the form. */
+export const connectWords = (id: GatewayKindId): string => (id === 'telegram' ? 'Connect a bot' : id === 'whatsapp' ? 'Connect a number' : 'Connect a channel');
+
 /** "Pick a WhatsApp number" / "Pick a Telegram bot" / "Pick a channel". */
 export const pickPrompt = (id: GatewayKindId): string => `Pick a ${channelNoun(id)}`;
 

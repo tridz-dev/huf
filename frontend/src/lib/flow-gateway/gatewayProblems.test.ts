@@ -48,3 +48,12 @@ describe('paramIssues', () => {
     expect(paramIssues(needy, [])[0].message).toBe('Fill in "Only these people".');
   });
 });
+
+describe('things to finish for the channel', () => {
+  const none = { ...FIXTURE_REGISTRY, gateways: [] };
+  it('says Connect WhatsApp when none is connected, and that a switched-off number is off', () => {
+    expect(gatewayTriggerIssues('whatsapp', {}, none)[0].message).toBe('Connect WhatsApp first.');
+    const off = { ...FIXTURE_REGISTRY, gateways: FIXTURE_REGISTRY.gateways.map((g) => (g.name === 'Support WhatsApp' ? { ...g, enabled: false } : g)) };
+    expect(gatewayTriggerIssues('whatsapp', { gateway: 'Support WhatsApp' }, off)[0].message).toBe('Number is switched off. Switch it on, or pick another.');
+  });
+});

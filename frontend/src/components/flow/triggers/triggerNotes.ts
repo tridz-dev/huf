@@ -7,5 +7,5 @@ export const TRIGGER_NOTES: Record<GatewayKindId, string[]> = {
     'People who reply STOP never start this.',
     'A reply sent more than 24 hours after their message needs an approved template.',
   ],
-  telegram: ['In groups the bot only sees every message when its privacy mode is off or it is an admin.'],
+  telegram: ['In groups the bot only sees every message when its privacy mode is off (change it in BotFather) or it is an admin.'],
 };

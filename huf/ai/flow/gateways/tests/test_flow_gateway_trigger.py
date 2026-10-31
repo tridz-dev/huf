@@ -212,6 +212,19 @@ class TestTranscript(unittest.TestCase):
 		self.assertNotIn("transcript", text)
 
 
+class TestMergeExtras(unittest.TestCase):
+	def test_provider_value_wins_only_when_non_empty(self):
+		from huf.ai.flow.gateways.gateway_payload import merge_extras
+
+		p = {"display_name": "Asha", "language": "en", "is_room": True, "kind": "message", "new": None}
+		merge_extras(p, {"display_name": "", "language": None, "is_room": False, "kind": "callback", "new": "x", "tags": []})
+		self.assertEqual(p["display_name"], "Asha")
+		self.assertEqual(p["language"], "en")
+		self.assertFalse(p["is_room"])  # False is a real provider value
+		self.assertEqual(p["kind"], "callback")
+		self.assertEqual(p["new"], "x")
+
+
 if __name__ == "__main__":
 	unittest.main()
 
@@ -247,3 +260,23 @@ class TestEngineSelectEntryNode(unittest.TestCase):
 		d = defn({"id": "t_web", "type": "trigger.webhook", "config": {}}, {"id": "t_cron", "type": "trigger.schedule", "config": {}})
 		self.assertEqual(self.engine.select_entry_node(d, "Schedule"), "t_cron")
 		self.assertEqual(self.engine.select_entry_node(d, "Manual"), "t_web")
+
+
+class TestMediaSaveIdempotent(unittest.TestCase):
+	"""Fall-through to the default agent asks for media twice (flow start, then agent path): download once."""
+
+	def test_reuses_files_already_attached_to_the_event(self):
+		from huf.ai import gateway_service as svc
+
+		calls = []
+		hook = lambda event, gateway: calls.append(1) or ["/private/files/new.ogg"]  # noqa: E731
+		event = types.SimpleNamespace(name="GE-1")
+		gw = types.SimpleNamespace(provider="WhatsApp")
+		with patch.object(svc.provider_hooks, "get", return_value=hook), patch(
+			"frappe.get_all", return_value=["/private/files/old.ogg"]
+		):
+			self.assertEqual(svc._save_event_media(event, gw), ["/private/files/old.ogg"])
+		self.assertEqual(calls, [])
+		with patch.object(svc.provider_hooks, "get", return_value=hook), patch("frappe.get_all", return_value=[]):
+			self.assertEqual(svc._save_event_media(event, gw), ["/private/files/new.ogg"])
+		self.assertEqual(calls, [1])

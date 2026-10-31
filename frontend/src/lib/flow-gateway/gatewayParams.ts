@@ -15,9 +15,15 @@ export function paramValue(params: readonly GatewayParam[] | undefined, spec: Ga
  * The params list after one control changed. A value equal to the default, or an empty one, removes the entry: the
  * flow only stores what the person actually set, and an empty list is never kept.
  */
+/** Equal by contents, so a fresh `[]` or `['a']` array counts as the default it repeats. */
+export function sameValue(a: GatewayParamValue | undefined, b: GatewayParamValue | undefined): boolean {
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((x, i) => x === b[i]);
+  return a === b;
+}
+
 export function withParam(params: readonly GatewayParam[] | undefined, spec: GatewayParamSpec, value: GatewayParamValue): GatewayParam[] {
   const rest = (params ?? []).filter((p) => p.key !== spec.key);
-  if (value === spec.default || isEmptyParam(value)) return rest;
+  if (sameValue(value, spec.default) || isEmptyParam(value)) return rest;
   return [...rest, { key: spec.key, value }];
 }
 
@@ -36,5 +42,5 @@ export function visibleParams(spec: GatewayTriggerSpec, params: readonly Gateway
 
 /** Whether a param still holds a non-default value (used to open "More options" when something is set in it). */
 export function hasCustomValue(params: readonly GatewayParam[] | undefined, spec: GatewayParamSpec): boolean {
-  return !!params?.some((p) => p.key === spec.key && !isEmptyParam(p.value) && p.value !== spec.default);
+  return !!params?.some((p) => p.key === spec.key && !isEmptyParam(p.value) && !sameValue(p.value, spec.default));
 }

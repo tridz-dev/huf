@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { CHANNELS } from '../../channels/channelsMeta';
-import { channelNoun, gatewaysForKind, type GatewayKindId } from '@/lib/flow-gateway/gatewayWords';
+import { channelNoun, connectWords, gatewaysForKind, type GatewayKindId } from '@/lib/flow-gateway/gatewayWords';
 import type { GatewayChoice } from '@/lib/flow-gateway/gatewayTrigger.types';
 
 /**
@@ -15,7 +15,7 @@ export function TriggerConnectHint({ kind, gateways }: { kind: GatewayKindId; ga
       No {channelNoun(kind)} is connected yet.{' '}
       {channel ? (
         <Link to={channel.setupHref} className="font-medium text-primary underline underline-offset-2" data-testid={`flow-card-connect-link-${kind}`}>
-          Connect {channel.label}
+          {connectWords(kind)}
         </Link>
       ) : null}
     </p>
