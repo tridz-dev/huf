@@ -112,6 +112,7 @@ interface Box {
  * (a rect taller or wider than the canvas is aligned to its top-left). Null when it is already fully visible.
  * `covered` is an overlay drawn on the canvas (screen px, canvas origin: the overview and zoom buttons bottom-left): a rect
  * that would sit under it is lifted until it clears the overlay, as long as its top stays in view.
+ * `topInset` (screen px) is the strip along the top that a toolbar floats over: a box is brought below it, not under it.
  */
 export function panToReveal(
   rect: Box,
@@ -119,6 +120,7 @@ export function panToReveal(
   size: { width: number; height: number },
   pad = 24,
   covered?: Box,
+  topInset = 0,
 ): { x: number; y: number } | null {
   const screen = (vp: { x: number; y: number; zoom: number }) => ({
     left: rect.x * vp.zoom + vp.x,
@@ -131,14 +133,14 @@ export function panToReveal(
     const r = screen(vp);
     return r.left < covered.x + covered.width && r.left + r.w > covered.x && r.top < covered.y + covered.height && r.top + r.h > covered.y;
   };
-  if (isInView(rect, viewport, size) && !under(viewport)) return null;
+  if (isInView(rect, viewport, size, { top: topInset, side: 0, bottom: 0 }) && !under(viewport)) return null;
   const { left, top, w, h } = screen(viewport);
   const shift = (start: number, len: number, avail: number): number => {
     if (len + 2 * pad > avail || start < pad) return pad - start;
     if (start + len > avail - pad) return avail - pad - (start + len);
     return 0;
   };
-  const moved = { ...viewport, x: viewport.x + shift(left, w, size.width), y: viewport.y + shift(top, h, size.height) };
+  const moved = { ...viewport, x: viewport.x + shift(left, w, size.width), y: viewport.y + shift(top - topInset, h, size.height - topInset) };
   if (covered && under(moved)) {
     const r = screen(moved);
     const lift = covered.y - pad - (r.top + r.h);

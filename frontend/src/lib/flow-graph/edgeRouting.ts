@@ -93,8 +93,11 @@ export function roundedPath(points: Pt[], radius = CORNER_RADIUS): string {
     const inLen = Math.abs(cur.x - prev.x) + Math.abs(cur.y - prev.y);
     const outLen = Math.abs(next.x - cur.x) + Math.abs(next.y - cur.y);
     const r = Math.min(radius, inLen / 2, outLen / 2);
-    const start = { x: cur.x - Math.sign(cur.x - prev.x) * r, y: cur.y - Math.sign(cur.y - prev.y) * r };
-    const end = { x: cur.x + Math.sign(next.x - cur.x) * r, y: cur.y + Math.sign(next.y - cur.y) * r };
+    // A run that is level (or upright) to within half a pixel has no direction: coordinates come out of the layout with float
+    // noise (384 vs 384.00002), and Math.sign of that noise turned a level run into a slanted one.
+    const dir = (v: number) => (Math.abs(v) < 0.5 ? 0 : Math.sign(v));
+    const start = { x: cur.x - dir(cur.x - prev.x) * r, y: cur.y - dir(cur.y - prev.y) * r };
+    const end = { x: cur.x + dir(next.x - cur.x) * r, y: cur.y + dir(next.y - cur.y) * r };
     d += ` L ${start.x} ${start.y} Q ${cur.x} ${cur.y} ${end.x} ${end.y}`;
   }
   const last = points[points.length - 1];
@@ -112,6 +115,10 @@ function pillPoint(points: Pt[]): Pt {
     const offset = Math.min(Math.abs(run.x - channelStart.x) / 2, 64);
     return { x: channelStart.x + dir * offset, y: channelStart.y };
   }
+  // A short straight line (a step right under this one, 4 steps apart: a sibling turns sideways just under its source): the name
+  // sits just above the arrow head, so the sibling's level run passes over it, not through it.
+  const last = points[points.length - 1];
+  if (points.length === 2 && last && last.y - first.y < STUB * 2) return { x: first.x, y: first.y + Math.max(STUB / 2, last.y - first.y - 19) };
   return { x: first.x, y: first.y + STUB / 2 };
 }
 

@@ -75,6 +75,11 @@ describe('panToReveal', () => {
     const r = panToReveal({ x: 100, y: 500, width: 200, height: 60 }, { x: 0, y: 0, zoom: 1 }, size, 24, covered);
     expect(r).toEqual({ x: 0, y: -(560 - (450 - 24)) });
   });
+  it('final2-03: brings a box that sits under the floating toolbar down below it', () => {
+    const r = panToReveal({ x: 100, y: 10, width: 200, height: 60 }, { x: 0, y: 0, zoom: 1 }, size, 24, undefined, 56);
+    expect(r).toEqual({ x: 0, y: 56 + 24 - 10 });
+    expect(panToReveal({ x: 100, y: 100, width: 200, height: 60 }, { x: 0, y: 0, zoom: 1 }, size, 24, undefined, 56)).toBeNull();
+  });
   it('leaves a box that is clear of the overlays alone', () => {
     const covered = { x: 0, y: 450, width: 270, height: 150 };
     expect(panToReveal({ x: 400, y: 500, width: 200, height: 60 }, { x: 0, y: 0, zoom: 1 }, size, 24, covered)).toBeNull();
