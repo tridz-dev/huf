@@ -1,4 +1,4 @@
-import { Activity, ChartLine, FileText, House, Megaphone, Phone, Plug, Settings, ShoppingBag, Workflow, type LucideIcon } from 'lucide-react';
+import { Activity, Building2, MessageSquare, Slack, ChartLine, FileText, House, Megaphone, Phone, Plug, Settings, ShoppingBag, Workflow, type LucideIcon } from 'lucide-react';
 import { channelMeta } from './channelsMeta';
 
 export interface ChannelSection {
@@ -24,11 +24,14 @@ export const CHANNEL_SECTIONS: ChannelSection[] = [
   { key: 'settings', label: 'Settings', path: 'settings', icon: Settings },
 ];
 
+/** Each channel's gateway-list entry has its own icon, distinct from the channel switcher's (never Bot or SquareAsterisk). */
+const NUMBERS_ICON: Record<string, LucideIcon> = { whatsapp: Phone, telegram: MessageSquare, slack: Slack, teams: Building2 };
+
 /** Sections that apply to a channel; the gateway list is named per channel (Numbers/Bots/Workspaces). */
 export function sectionsFor(channel: string = 'whatsapp'): ChannelSection[] {
   const meta = channelMeta(channel);
   return CHANNEL_SECTIONS.filter((s) => meta.key === 'whatsapp' || !s.whatsappOnly).map((s) =>
-    s.key === 'numbers' ? { ...s, label: meta.noun, icon: meta.key === 'whatsapp' ? s.icon : meta.icon } : s
+    s.key === 'numbers' ? { ...s, label: meta.noun, icon: NUMBERS_ICON[meta.key] ?? s.icon } : s
   );
 }
 

@@ -81,6 +81,13 @@ describe('EmbeddedSignupStep', () => {
     await flush();
     expect(screen.getByRole('link', { name: /facebook signup/i }).getAttribute('href')).toBe('/channels/whatsapp/settings/facebook');
   });
+  it('defaults to non-admin outside a provider', async () => {
+    off();
+    render(<EmbeddedSignupStep onConnected={vi.fn()} />);
+    await flush();
+    expect(screen.getByText(/ask a huf admin on your team to turn on connect with facebook/i)).toBeInTheDocument();
+    expect(screen.getByText(/connect using your own meta app below/i)).toBeInTheDocument();
+  });
   it('tells non-admins to ask a Huf admin, with no link', async () => {
     off();
     render(asRole('Huf User'));

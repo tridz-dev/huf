@@ -79,4 +79,13 @@ describe('Broadcast sub-routes', () => {
     expect(screen.queryByText('emergency')).toBeNull();
     expect(screen.getByRole('link', { name: 'Connect a number' }).getAttribute('href')).toBe('/channels/whatsapp/setup');
   });
+  it('on a failed lookup shows a retry, no Connect link, and recovers', async () => {
+    health.getSetupStatus.mockResolvedValueOnce({ ok: false, error: 'boom' });
+    render(app('/n/g1/broadcasts'));
+    expect(await screen.findByText(/couldn't load Broadcasts/i)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Connect a number' })).toBeNull();
+    health.getSetupStatus.mockResolvedValue({ ok: true, data: { success: true, gateway: { name: 'g1' } } });
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('emergency')).toBeTruthy();
+  });
 });

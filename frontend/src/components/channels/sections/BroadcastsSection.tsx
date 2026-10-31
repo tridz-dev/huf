@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, NavLink, Outlet, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { AudiencesPage } from '@/components/whatsapp/audiences/AudiencesPage';
 import { BroadcastLimits } from '@/components/whatsapp/broadcast/BroadcastLimits';
 import { PageFrame } from '@/layouts/PageFrame';
@@ -45,28 +46,41 @@ function TabsLayout({ gateway }: { gateway: string }) {
   );
 }
 
-/** 'missing' = the number does not exist (or cannot be checked), so nothing here can work. */
-function useGatewayExists(gateway: string): 'loading' | 'ok' | 'missing' {
-  const [state, setState] = useState<'loading' | 'ok' | 'missing'>('loading');
+type GatewayCheck = 'loading' | 'ok' | 'missing' | 'error';
+
+/** 'missing' = the lookup worked and the number is not there; 'error' = the lookup itself failed (retry). */
+function useGatewayExists(gateway: string): { state: GatewayCheck; retry: () => void } {
+  const [state, setState] = useState<GatewayCheck>('loading');
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let live = true;
-    setState('loading');
+    setState((s) => (s === 'ok' && attempt === 0 ? s : 'loading'));
     void getSetupStatus(gateway).then((r) => {
-      if (live) setState(r.ok && r.data.gateway ? 'ok' : 'missing');
+      if (!live) return;
+      setState(!r.ok ? 'error' : r.data.gateway ? 'ok' : 'missing');
     });
     return () => {
       live = false;
     };
-  }, [gateway]);
-  return state;
+  }, [gateway, attempt]);
+  return { state, retry: () => setAttempt((n) => n + 1) };
 }
 
 export function BroadcastsUnavailable() {
   return (
     <div role="status" className="space-y-2 rounded-md border border-line p-6 text-sm">
       <p className="font-medium text-ink">Broadcasts are not available yet</p>
-      <p className="text-steel">This number could not be found, so there is nothing to send from. Connect a WhatsApp number first.</p>
+      <p className="text-steel">This number could not be found, so there is nothing to send from.</p>
       <Link className="text-primary underline" to="/channels/whatsapp/setup">Connect a number</Link>
+    </div>
+  );
+}
+
+function BroadcastsLoadError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div role="alert" className="space-y-3 rounded-md border border-line p-6 text-sm">
+      <p className="text-steel">We couldn't load Broadcasts right now. Check your connection and try again.</p>
+      <Button size="sm" variant="outline" onClick={onRetry}>Try again</Button>
     </div>
   );
 }
@@ -76,9 +90,15 @@ export default function BroadcastsSection() {
   const gateway = useChannelGateway() ?? '';
   const navigate = useNavigate();
   const [refresh, setRefresh] = useState(0);
-  const exists = useGatewayExists(gateway);
+  const { state: exists, retry } = useGatewayExists(gateway);
   if (exists !== 'ok') {
-    return <PageFrame title="Broadcasts">{exists === 'missing' ? <BroadcastsUnavailable /> : <p className="p-5 text-sm text-steel">Loading...</p>}</PageFrame>;
+    return (
+      <PageFrame title="Broadcasts">
+        {exists === 'missing' && <BroadcastsUnavailable />}
+        {exists === 'error' && <BroadcastsLoadError onRetry={retry} />}
+        {exists === 'loading' && <p role="status" className="p-5 text-sm text-steel">Loading…</p>}
+      </PageFrame>
+    );
   }
   return (
     <PageFrame title="Broadcasts">

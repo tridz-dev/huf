@@ -114,6 +114,7 @@ function WhatsAppSettings({ gw }: { gw: string | undefined }) {
   return (
     <PageFrame title="Settings">
       <div className="flex flex-col gap-4 p-5 md:flex-row">
+        {gw && (
         <nav aria-label="Settings sections" className="flex shrink-0 gap-1 overflow-x-auto md:w-48 md:flex-col">
           {SETTINGS_SECTIONS.map((s) => (
             <Link
@@ -129,9 +130,9 @@ function WhatsAppSettings({ gw }: { gw: string | undefined }) {
             </Link>
           ))}
         </nav>
+        )}
         <div className="min-w-0 flex-1">
-          {!gw && section === 'facebook' && <FacebookSignupPanel />}
-          {!gw && section !== 'facebook' && <p className="text-sm text-steel">Pick a number to see its settings.</p>}
+          {!gw && <FacebookSignupPanel />}
           {gw && error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           {gw && !error && !health && <p className="text-sm text-steel">Loading...</p>}
           {gw && health && (

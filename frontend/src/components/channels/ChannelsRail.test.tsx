@@ -111,7 +111,10 @@ describe('ChannelsRail', () => {
     expect(home.getAttribute('aria-disabled')).toBe('true');
     expect(home.getAttribute('title')).toMatch(/connect your first number/i);
     expect(screen.queryByRole('link', { name: 'Home' })).toBeNull();
-    expect(screen.getByRole('note').textContent).toMatch(/connect your first number/i);
+    expect(home.getAttribute('aria-describedby')).toBe('rail-disabled-note');
+    expect(document.getElementById('rail-disabled-note')?.textContent).toMatch(/connect your first number/i);
+    expect(screen.queryByRole('note')).toBeNull();
+    expect(home.className).not.toMatch(/opacity-50/);
   });
 
   it('uses the channel icon, not the phone, for Bots', async () => {
@@ -119,5 +122,8 @@ describe('ChannelsRail', () => {
     const icon = (c: string) => sectionsFor(c).find((s) => s.key === 'numbers')!.icon;
     expect(icon('telegram')).not.toBe(icon('whatsapp'));
     expect(icon('slack')).not.toBe(icon('whatsapp'));
+    const { CHANNELS } = await import('./channelsMeta');
+    for (const c of CHANNELS.filter((x) => x.key !== 'slack')) expect(icon(c.key)).not.toBe(c.icon);
+    expect(icon('telegram')).not.toBe(icon('teams'));
   });
 });

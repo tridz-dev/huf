@@ -99,6 +99,7 @@ export interface EmbeddedSignupStepProps {
 
 export function EmbeddedSignupStep({ gatewayName, onConnected }: EmbeddedSignupStepProps) {
   const isAdmin = useIsHufAdmin();
+  const inRouter = useInRouterContext();
   const [config, setConfig] = useState<SignupConfig | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -200,7 +201,6 @@ export function EmbeddedSignupStep({ gatewayName, onConnected }: EmbeddedSignupS
   }
 
   const enabled = !!config?.enabled;
-  const inRouter = useInRouterContext();
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
@@ -217,12 +217,12 @@ export function EmbeddedSignupStep({ gatewayName, onConnected }: EmbeddedSignupS
         <p id="fb-state" className="mt-2 text-xs text-steel">
           Not configured. {isAdmin ? (
             inRouter ? (
-              <>You can turn it on in <Link className="underline" to={FB_SETTINGS_HREF}>Settings, Facebook signup</Link>.</>
+              <>Turn it on in <Link className="underline" to={FB_SETTINGS_HREF}>Settings › Facebook signup</Link>.</>
             ) : (
-              <>You can turn it on in Settings, Facebook signup.</>
+              <>Turn it on in Settings › Facebook signup.</>
             )
           ) : (
-            <>Ask a Huf admin on your team to turn on Facebook signup. Meanwhile you can connect with your own details below.</>
+            <>Ask a Huf admin on your team to turn on Connect with Facebook. Until then, you can connect using your own Meta app below.</>
           )}
         </p>
       )}
