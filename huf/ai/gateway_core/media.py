@@ -117,12 +117,12 @@ def save_event_media(event, gateway, hook, frappe=frappe) -> list[str]:
     A ``media saved`` marker is set after the hook returns. Files already attached to the event are reused only when
     that marker is set (a Flow start that falls through to the default agent asks twice). Without the marker, files
     found on the event come from an interrupted earlier try, so the hook runs again and downloads the rest."""
-    key = f"huf_gw_media_saved:{event.name}"
+    key = f"huf_gw_media_saved:{getattr(event, 'name', '')}"
     try:
         saved_before = bool(frappe.cache.get_value(key))
         existing = frappe.get_all(
             "File",
-            filters={"attached_to_doctype": "Gateway Event", "attached_to_name": event.name},
+            filters={"attached_to_doctype": "Gateway Event", "attached_to_name": getattr(event, "name", "")},
             pluck="file_url",
             order_by="creation asc",
         )
