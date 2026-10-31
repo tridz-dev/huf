@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { CircleHelp, History, Keyboard, LayoutTemplate, MoreHorizontal, Redo2, Search, Settings, ShieldAlert, Sparkles, Undo2 } from 'lucide-react';
+import { AlertCircle, CircleHelp, History, Keyboard, LayoutTemplate, MoreHorizontal, Redo2, Search, Settings, ShieldAlert, Sparkles, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,6 +17,7 @@ import { ExecutionApprovalsBell } from '../../ExecutionApprovalsBell';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { useFlowContext } from '@/contexts/FlowContext';
 import { useShortcutsHelp } from '@/components/shortcuts/ShortcutsHelpContext';
+import { setChecklistOpen } from '../frame/frameStore';
 import { runFlowCommand } from '../shortcuts/flowCommands';
 import { shortcutText } from '../shortcuts/shortcutHints';
 import { HIT_TARGET } from '@/lib/ui/responsive';
@@ -33,6 +34,8 @@ interface HeaderOverflowMenuProps {
   onOpenSettings: () => void;
   onTidy: () => void;
   onConvert: () => void;
+  /** The phone has no room for the "N steps to finish" button: when set, the menu holds it as its first entry. */
+  checklistText?: string;
   /** Extra first entries (the phone's "Show map / Show steps"). */
   extra?: ReactNode;
   /** The phone has no tidy / convert: those are editing tools. */
@@ -47,8 +50,9 @@ interface HeaderOverflowMenuProps {
  * menu (minus the editing tools) sits beside the Run button.
  */
 export function HeaderOverflowMenu({
-  statusKind, canManage, readOnlyReason, hasSteps, convertedProcedure, onOpenRuns, onOpenSettings, onTidy, onConvert, extra, editTools, helpOnly = false,
+  statusKind, canManage, readOnlyReason, hasSteps, convertedProcedure, onOpenRuns, onOpenSettings, onTidy, onConvert, extra, editTools, helpOnly = false, checklistText = '',
 }: HeaderOverflowMenuProps) {
+  const openingChecklist = useRef(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showCodeApprovals, setShowCodeApprovals] = useState(false);
   const [codeApprovals, setCodeApprovals] = useState(0);
@@ -66,7 +70,18 @@ export function HeaderOverflowMenu({
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-[220px]" data-testid="flow-header-more-menu">
+        <DropdownMenuContent
+          align="end"
+          className="min-w-[220px]"
+          data-testid="flow-header-more-menu"
+          // Focus must not go back to the "..." button while the list opens: that would close the list at once.
+          onCloseAutoFocus={(event) => {
+            if (openingChecklist.current) {
+              openingChecklist.current = false;
+              event.preventDefault();
+            }
+          }}
+        >
           {helpOnly ? (
             <DropdownMenuItem className={row} data-testid="flow-help" onSelect={() => setShowHelp(true)}>
               <CircleHelp className="h-4 w-4" aria-hidden /> Help &amp; shortcuts
@@ -77,6 +92,18 @@ export function HeaderOverflowMenu({
             <StatusPill kind={statusKind} data-testid="flow-status-pill-menu" />
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          {checklistText && (
+            <DropdownMenuItem
+              className={cn(row, 'text-warning')}
+              data-testid="flow-validation-summary-menu"
+              onSelect={() => {
+                openingChecklist.current = true;
+                setTimeout(() => setChecklistOpen(true), 0);
+              }}
+            >
+              <AlertCircle className="h-4 w-4" aria-hidden /> {checklistText}
+            </DropdownMenuItem>
+          )}
           {extra}
           {editTools && canManage && (
             <>

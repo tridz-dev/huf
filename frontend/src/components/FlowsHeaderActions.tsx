@@ -8,6 +8,7 @@ import { FlowRunViewer } from './FlowRunViewer';
 import { FlowSettingsModal } from './modals/FlowSettingsModal';
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
 import { FlowChecklist } from './flow/frame/FlowChecklist';
+import { finishText } from './flow/frame/frameIssues';
 import { useFlowIssues } from '@/hooks/flow/useFlowIssues';
 import { useFrozenWhilePressed } from '@/hooks/flow/useFrozenWhilePressed';
 import { RunFlowDialog } from './flow/RunFlowDialog';
@@ -146,7 +147,7 @@ export function FlowsHeaderActions() {
         </div>
       )}
 
-      {isPhone && canManage && <FlowChecklist live={isPublished} separator={false} />}
+      {isPhone && canManage && <FlowChecklist live={isPublished} separator={false} menuOnly />}
 
       {canManage && !isPhone && !isCompact && <UndoRedoButtons />}
 
@@ -246,6 +247,7 @@ export function FlowsHeaderActions() {
           onTidy={tidyLayout}
           onConvert={() => setShowConvert(true)}
           editTools={!isPhone}
+          checklistText={isPhone && canManage ? finishText(issues) : ''}
           extra={isPhone ? phoneView.menuItem : undefined}
         />
       )}

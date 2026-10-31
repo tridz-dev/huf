@@ -11,9 +11,9 @@ import { useFrozenWhilePressed } from '@/hooks/flow/useFrozenWhilePressed';
 /**
  * "3 steps to finish": opens the list of everything left to finish in the flow, each with a Fix button that selects
  * the step and puts the cursor in the field. Saving never waits for this list; Run and Publish open it instead of
- * failing quietly.
+ * failing quietly. `menuOnly` (a phone: the header has no room) draws no button; the list opens from the "..." menu and anchors here.
  */
-export function FlowChecklist({ live, className, separator = true }: { live: boolean; className?: string; separator?: boolean }) {
+export function FlowChecklist({ live, className, separator = true, menuOnly = false }: { live: boolean; className?: string; separator?: boolean; menuOnly?: boolean }) {
   const issues = useFlowIssues();
   const open = useFrame((s) => s.checklistOpen);
   const { setSelectedNode } = useFlowContext();
@@ -26,7 +26,7 @@ export function FlowChecklist({ live, className, separator = true }: { live: boo
     <Popover open={open && issues.length > 0} onOpenChange={setChecklistOpen}>
       <PopoverAnchor asChild>
         <span className={cn('inline-flex items-center gap-1.5', className)}>
-          {shownText !== '' && (
+          {shownText !== '' && !menuOnly && (
             <>
               {separator && <span aria-hidden className="text-muted-foreground/60">&middot;</span>}
               <PopoverTrigger asChild>
