@@ -147,7 +147,7 @@ export function FlowsHeaderActions() {
         </div>
       )}
 
-      {isPhone && canManage && <FlowChecklist live={isPublished} separator={false} menuOnly />}
+      {isPhone && canManage && <FlowChecklist live={isPublished} separator={false} menuOnly className="absolute" />}
 
       {canManage && !isPhone && !isCompact && <UndoRedoButtons />}
 
