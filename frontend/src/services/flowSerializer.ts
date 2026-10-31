@@ -22,6 +22,7 @@ import type {
 } from '@/types/flow.types';
 import type { BackendFlowGraph, BackendNode, BackendNodeType } from './flowApi';
 import { layoutWhenUnplaced } from '../lib/flow/flowLayout';
+import { REQUIRED_CONFIG_KEYS, getDefaultIcon, getDefaultLabel } from './flow/serializerTables';
 import { endOutcomeConfig } from './flow/endOutcome'; import { defaultContract, deriveContract, placeholderFingerprint } from './flow/flowContract';
 
 export { defaultContract };
@@ -330,30 +331,6 @@ function mapBackendNodeTypeToFrontend(backendType: string): string {
     return 'action';
 }
 
-/**
- * Config keys that must be non-blank for a node to count as configured.
- * Mirrors the required string fields in graph_ir.schema.json.
- */
-const REQUIRED_CONFIG_KEYS: Partial<Record<string, string[]>> = {
-    'trigger.webhook': ['method', 'secret'],
-    'trigger.schedule': ['cron'],
-    'trigger.doc-event': ['doctype', 'event'],
-    'agent.run': ['agent', 'prompt'],
-    'tool.call': ['tool_id'],
-    'router.llm': ['prompt'],
-    'router.decision': ['policy'],
-    'human.approval': ['message'],
-    'condition': ['expression'],
-    'foreach': ['items'],
-    'validate': ['assertions'],
-    'state.get': ['key'],
-    'state.set': ['key'],
-    'state.delete': ['key'],
-    'doc.create': ['doctype'],
-    'code.run': ['code', 'profile'],
-    'transform': ['op'],
-};
-
 /** Computed from the real stored config, so the "unconfigured" warning survives reload. */
 export function isBackendNodeConfigured(node: BackendNode): boolean {
     if (node.type === 'trigger.unset') return false;
@@ -398,56 +375,6 @@ function buildNodeData(node: BackendNode): FlowNodeData {
     }
 
     return base;
-}
-
-function getDefaultLabel(backendType: string): string {
-    const labels: Record<string, string> = {
-        'trigger.webhook': 'Webhook trigger',
-        'trigger.schedule': 'Schedule trigger',
-        'trigger.doc-event': 'Document event trigger',
-        'trigger.unset': 'Select trigger',
-        'agent.run': 'Run agent',
-        'tool.call': 'Call tool',
-        'router.llm': 'LLM router',
-        'router.decision': 'Decision router',
-        'human.approval': 'Human approval',
-        'condition': 'Condition (IF)',
-        'transform': 'Transform data',
-        'foreach': 'Loop',
-        'validate': 'Validate',
-        'state.get': 'Get state',
-        'state.set': 'Set state',
-        'state.delete': 'Delete state',
-        'doc.create': 'Create document',
-        'code.run': 'Execute code',
-        'output': 'End',
-    };
-    return labels[backendType] || backendType;
-}
-
-function getDefaultIcon(backendType: string): string {
-    const icons: Record<string, string> = {
-        'trigger.webhook': 'Webhook',
-        'trigger.schedule': 'Clock',
-        'trigger.doc-event': 'Database',
-        'trigger.unset': 'CircleDashed',
-        'agent.run': 'SquareAsterisk',
-        'tool.call': 'Play',
-        'router.llm': 'GitBranch',
-        'router.decision': 'GitBranch',
-        'human.approval': 'UserCheck',
-        'condition': 'GitBranch',
-        'transform': 'Repeat',
-        'foreach': 'RotateCw',
-        'validate': 'ShieldCheck',
-        'state.get': 'Database',
-        'state.set': 'Save',
-        'state.delete': 'Trash2',
-        'doc.create': 'FilePlus',
-        'code.run': 'Terminal',
-        'output': 'CheckCircle2',
-    };
-    return icons[backendType] || 'Play';
 }
 
 export function mapBackendStatusToFrontend(status: string): FlowStatus {
