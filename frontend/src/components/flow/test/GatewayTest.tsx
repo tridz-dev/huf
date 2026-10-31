@@ -23,6 +23,9 @@ const messageOf = (error: unknown, fallback: string) => (error instanceof Error 
 const fieldKey = (f: GatewayPayloadField) => f.path.replace(/^input\./, '');
 /** Only plain, short, non-secret things a person would type in a pretend message. */
 const editable = (f: GatewayPayloadField) => !f.advanced && !f.sensitive && (f.type === 'text' || f.type === 'number');
+const ALWAYS = new Set(['text', 'display_name']);
+/** The pretend message lists what a sample really has (plus the message and the sender), not every field a channel could ever send. */
+const shown = (f: GatewayPayloadField) => ALWAYS.has(f.path.replace(/^input\./, '')) || (f.sample !== '' && f.sample !== null && f.sample !== undefined);
 
 /**
  * Test tab of a chat trigger (WhatsApp, Telegram, any channel). It never sends and never records a message: it fills
@@ -31,7 +34,7 @@ const editable = (f: GatewayPayloadField) => !f.advanced && !f.sensitive && (f.t
 export function GatewayTest({ flowId, nodeId, kind, onResult }: Props) {
   const { registry } = useGatewayRegistry();
   const spec = registry?.specs[GATEWAY_TRIGGER_KINDS.find((k) => k.id === kind)?.nodeType ?? 'trigger.gateway'];
-  const fields = useMemo(() => (spec?.payload_fields ?? []).filter(editable), [spec]);
+  const fields = useMemo(() => (spec?.payload_fields ?? []).filter((f) => editable(f) && shown(f)), [spec]);
   const [base, setBase] = useState<Record<string, unknown> | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<'sample' | 'last' | null>(null);
@@ -97,6 +100,7 @@ export function GatewayTest({ flowId, nodeId, kind, onResult }: Props) {
           Use a sample message
         </Button>
       </div>
+      <p className="text-xs text-muted-foreground" data-testid="flow-step-test-gateway-note">Nothing is sent. This only shows the data the steps after it would get.</p>
       {fields.length > 0 && (
         <div className="space-y-2 rounded-md border border-border p-3" data-testid="flow-step-test-gateway-form">
           {fields.map((f) => (
@@ -108,7 +112,6 @@ export function GatewayTest({ flowId, nodeId, kind, onResult }: Props) {
           <Button type="button" size="sm" onClick={useEdited} data-testid="flow-step-test-gateway-use">Use this message</Button>
         </div>
       )}
-      <p className="text-xs text-muted-foreground" data-testid="flow-step-test-gateway-note">Nothing is sent. This only shows the data the steps after it would get.</p>
       {note && <p role="status" className="text-xs text-muted-foreground" data-testid="flow-step-test-trigger-note">{note}</p>}
     </div>
   );
