@@ -299,7 +299,7 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-name` | The flow name in the header (tooltip carries the whole name) |
 | `flow-step-panel` (`data-width`), `flow-panel-resizer` | Docked step panel and its grab bar (role separator, 300-480, arrow keys, remembered) |
 | `flow-step-sheet`, `flow-sheet-back` | Step settings as a sheet (under ~900px and on a phone) and its "Back to the flow" control; `flow-phone-read-only-note` on a phone |
-| `flow-phone-banner`, `flow-phone-view-steps`, `flow-phone-show-map` | Phone: the "Editing steps works best on a larger screen" note with View steps, and the Show map button |
+| `flow-phone-banner`, `flow-phone-view-steps`, `flow-phone-show-map`, `flow-phone-map-bar` | Phone: the "Editing steps works best on a larger screen" note with View steps, and the Show map button in its own bar under the steps list |
 | `flow-steps-list`, `flow-step-card-<nodeId>` (+ `-title-`, `-summary-`, `-status-`), `flow-step-branch-<nodeId>` | Phone steps list: one card per step in reading order (icon, title, one line, status); branch name above the first step of a branch |
 | `flow-run-decision-bar`, `flow-run-decision-inline`, `flow-run-cannot-decide`, `flow-run-back` | Run details: sticky Approve / Reject bar on a phone, the inline pair elsewhere, the sentence shown to someone who may not decide, the "Runs" back button |
 | `flow-approval-group-<firstRunId>`, `flow-approval-group-heading` | Bell: identical requests grouped under "3 waiting: Order approval" (every request keeps its own `flow-approve-<runId>` / `flow-reject-<runId>`) |

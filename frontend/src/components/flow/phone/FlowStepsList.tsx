@@ -30,7 +30,7 @@ export function FlowStepsList() {
   if (!activeFlow) return null;
   const byId = new Map(activeFlow.nodes.map((n) => [n.id, n]));
   return (
-    <div className="h-full overflow-y-auto bg-background px-4 pb-24 pt-3" data-testid="flow-steps-list">
+    <div className="h-full overflow-y-auto bg-background px-4 pb-4 pt-3" data-testid="flow-steps-list">
       <h2 className="sr-only">Steps</h2>
       <ol className="space-y-2">
         {steps.map((step) => {

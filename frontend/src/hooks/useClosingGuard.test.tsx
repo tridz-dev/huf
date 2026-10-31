@@ -128,6 +128,15 @@ describe('useClosingGuard in a real dropdown menu', () => {
     expect(document.querySelector('[data-testid="content"]')).toBeNull();
   });
 
+  it('the Tab key pressed inside the menu closes it (Radix alone swallows Tab and leaves it open)', async () => {
+    render(<Harness />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+    expect(state()).toBe('open');
+    fireEvent.keyDown(document.querySelector('[data-testid="content"]')!, { key: 'Tab' });
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+    expect(document.querySelector('[data-testid="content"]')).toBeNull();
+  });
+
   it('Tab out (focus moves outside) closes it, even after an earlier press that began while it was fading', async () => {
     fakeFade();
     render(<Harness />);

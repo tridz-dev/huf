@@ -52,6 +52,39 @@ export function forgetPill(id: string): void {
 }
 
 /**
+ * The level runs of every connection (thin boxes), by connection id: a name keeps off the runs of OTHER connections (a router's
+ * second branch turns sideways right under the first one's name; final2-02). Written when a connection routes, read by names.
+ */
+export const PLACED_RUNS = new Map<string, Rect[]>();
+export function recordRuns(id: string, runs: Rect[]): void {
+  const prev = PLACED_RUNS.get(id);
+  if (prev && prev.length === runs.length && prev.every((r, i) => sameRect(r, runs[i]))) return;
+  PLACED_RUNS.set(id, runs);
+  placedChanged();
+}
+export function forgetRuns(id: string): void {
+  if (PLACED_RUNS.delete(id)) placedChanged();
+}
+/** Level runs of the connections other than `id`. */
+export function runsOfOthers(id: string): Rect[] {
+  const out: Rect[] = [];
+  PLACED_RUNS.forEach((runs, other) => {
+    if (other !== id) out.push(...runs);
+  });
+  return out;
+}
+/** The level runs of a route as boxes 3px thick (runs shorter than 8px are the rounded corners, not runs). */
+export function levelRuns(points: Pt[]): Rect[] {
+  const out: Rect[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    if (Math.abs(a.y - b.y) < 0.5 && Math.abs(a.x - b.x) >= 8) out.push({ x: Math.min(a.x, b.x), y: a.y - 1.5, width: Math.abs(a.x - b.x), height: 3 });
+  }
+  return out;
+}
+
+/**
  * The names already placed by connections that come before `id`. A name only steps aside for these (never for later ones), so two
  * names that meet cannot keep pushing each other: the first stays, the second moves up or down off it.
  */

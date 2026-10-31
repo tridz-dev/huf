@@ -3,6 +3,9 @@ import { useReactFlow, useStore } from 'reactflow';
 import { panToReveal } from '@/lib/flow/flowLayout';
 import { motionMs } from '@/lib/flow-canvas/tween';
 
+/** Height of the strip the floating Tidy layout / Convert buttons take at the top of the canvas (final2-03). */
+const TOOLBAR_CLEARANCE = 56;
+
 /** Marks a panel or sheet that sits over the right edge of the canvas, so the step that was just opened can be kept clear of it. */
 export const FLOW_PANEL_ATTR = 'data-flow-sheet-panel';
 
@@ -31,7 +34,7 @@ export function KeepSelectedVisible({ selectedNodeId }: { selectedNodeId: string
         width: node.width ?? 236,
         height: node.height ?? 62,
       };
-      const next = panToReveal(rect, vp, { width: visibleWidth, height });
+      const next = panToReveal(rect, vp, { width: visibleWidth, height }, 24, undefined, TOOLBAR_CLEARANCE);
       if (next) rfRef.current.setViewport({ ...next, zoom: vp.zoom }, { duration: motionMs(200) });
     };
     // Again after the sheet has slid in: its width is only known once it is on screen.

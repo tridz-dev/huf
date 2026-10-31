@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLACED_PILLS, boxAt, forgetPill, getPlacedVersion, controlCandidates, overlapArea, pillCandidates, pillsBefore, placeClear, recordPill } from './edgePlacement';
+import { PLACED_PILLS, boxAt, forgetPill, getPlacedVersion, controlCandidates, overlapArea, levelRuns, recordRuns, forgetRuns, runsOfOthers, pillCandidates, pillsBefore, placeClear, recordPill } from './edgePlacement';
 
 const card = { x: 0, y: 0, width: 236, height: 70 };
 
@@ -84,5 +84,23 @@ describe('names that meet (w1cap-05)', () => {
     forgetPill('a');
     expect(getPlacedVersion()).toBe(v + 2);
     PLACED_PILLS.clear();
+  });
+});
+
+describe('final2-02: a name keeps off the level runs of other connections', () => {
+  it('levelRuns lists only the level stretches (corners do not count)', () => {
+    const runs = levelRuns([{ x: 100, y: 0 }, { x: 100, y: 14 }, { x: 300, y: 14 }, { x: 300, y: 80 }]);
+    expect(runs).toEqual([{ x: 100, y: 12.5, width: 200, height: 3 }]);
+  });
+  it('a name is placed off another connection\'s run, and ignores its own', () => {
+    recordRuns('a', levelRuns([{ x: 100, y: 0 }, { x: 100, y: 14 }, { x: 300, y: 14 }]));
+    expect(runsOfOthers('a')).toEqual([]);
+    const others = runsOfOthers('b');
+    expect(others.length).toBe(1);
+    const size = { width: 50, height: 20 };
+    const spot = placeClear(size, others, { x: 150, y: 14 }, pillCandidates({ x: 150, y: 14 }));
+    expect(overlapArea(boxAt(spot, size), others[0], 3)).toBe(0);
+    forgetRuns('a');
+    expect(runsOfOthers('b')).toEqual([]);
   });
 });
