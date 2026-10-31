@@ -1,7 +1,7 @@
 import { db, call } from '@/lib/frappe-sdk';
+import type { RunStepMeta, RunStoryFields } from './flow/flowRunStoryTypes';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
-import type { FlowTriggerSummary, SetFlowTriggerArgs } from '@/lib/flowTrigger';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -10,6 +10,8 @@ export interface FlowDefinitionListItem {
     name: string;
     flow_id: string;
     flow_name: string;
+    description?: string;
+    category?: string;
     status: 'Draft' | 'Active' | 'Archived';
     version: number;
     schema_version: number;
@@ -20,6 +22,8 @@ export interface FlowDefinitionListItem {
 export interface FlowDefinitionDoc {
     flow_id: string;
     flow_name: string;
+    description?: string;
+    category?: string;
     status: 'Draft' | 'Active' | 'Archived';
     version: number;
     /** Graph-IR schema_version, e.g. "1.0.0" -- a string, not an int (huf/ai/graph/graph_ir.schema.json). */
@@ -50,10 +54,10 @@ export interface BackendFlowGraph {
 }
 
 export type BackendNodeType =
-    | 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event' | 'trigger.unset'
-    | 'agent.run' | 'tool.call' | 'router.llm' | 'human.approval'
-    | 'condition' | 'http_request' | 'transform' | 'loop' | 'output'
-    | 'state.get' | 'state.set' | 'state.delete' | 'doc.create';
+    | 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event' | 'trigger.unset' | 'trigger.gateway' | 'trigger.whatsapp' | 'trigger.telegram'
+    | 'agent.run' | 'tool.call' | 'router.llm' | 'router.decision' | 'human.approval'
+    | 'condition' | 'transform' | 'foreach' | 'validate' | 'output'
+    | 'state.get' | 'state.set' | 'state.delete' | 'doc.create' | 'code.run';
 
 export interface BackendNode {
     id: string;
@@ -63,12 +67,20 @@ export interface BackendNode {
     next?: string | null;
     /** Node to route to if this node raises. Absent/null means an error here fails the run. */
     on_error?: string | null;
-    /** Frontend-only: stored for visual layout, ignored by engine */
+    /** Node-level UI extras (NodeCommon permits extra keys; engine ignores them, reads only `_label` for run logs). */
     _position?: { x: number; y: number };
     /** Frontend-only: visual label */
     _label?: string;
     /** Frontend-only: icon name */
     _icon?: string;
+    /** Turned off: the engine skips the step and carries on with `next`. */
+    _disabled?: boolean;
+    /** The author's note about the step. Never read by the engine. */
+    _notes?: string;
+    /** A saved example of the data this step receives (webhook trigger): <= 8 KB, secrets hidden, only editors get it back. */
+    _sample?: unknown;
+    /** When `_sample` was pinned (ISO time). */
+    _sample_at?: string;
 }
 
 export interface BackendDocPermission {
@@ -105,69 +117,71 @@ export interface BackendContract {
     limits: BackendResourceLimits;
 }
 
-/** @deprecated Pre-migration edge shape. No longer part of BackendFlowGraph -- kept only
- * so the frontend's own React Flow edge model (FlowEdgeData) can still describe an
- * edge's routing intent (always/on_success/on_failure/expression) before it gets
- * folded into a node's `next`/`on_error`/self-routing config at serialize time. */
-export interface BackendEdge {
-    id: string;
-    from: string;
-    to: string;
-    type: 'always' | 'on_success' | 'on_failure' | 'expression';
-    priority?: number;
-    condition?: string;
-    meta?: Record<string, unknown>;
-}
-
-/** @deprecated Flow-level run settings no longer fit in the graph-IR document
- * (additionalProperties: false leaves no room for a `settings` key). Kept as the type
- * of `Flow.settings`, a frontend/local-only field the engine now defaults instead
- * (huf.ai.flow.engine.DEFAULT_MAX_HOPS, etc.) -- see flowSerializer.ts. */
-export interface BackendSettings {
-    mode?: 'normal' | 'agentic';
-    max_hops?: number;
-    orchestrator_agent?: string;
-    orchestrator_call_policy?: string;
-    conversation_mode?: 'flow_shared' | 'per_node';
-}
-
 /** Flow Run summary (from list endpoint) */
-export interface FlowRunSummary {
+export interface FlowRunSummary extends RunStoryFields {
+        input_hint?: string;
     name: string;
     flow_id: string;
     flow_version: number;
     mode: string;
-    status: 'Queued' | 'Running' | 'Waiting Approval' | 'Waiting User' | 'Success' | 'Failed';
+    run_mode?: 'Real' | 'Test';
+    status: 'Queued' | 'Running' | 'Waiting Approval' | 'Waiting User' | 'Waiting Code' | 'Success' | 'Failed';
     current_node_id: string;
     hop_count: number;
     trigger_type: string;
+    /** Display name of the flow (flow_id when the definition is gone). */
+    flow_name: string;
+    /** Queued/Running and unchanged for a long time: the worker is probably gone. */
+    stale: boolean;
+    can_mark_failed: boolean;
+    /** UTC ISO strings. */
     started_at: string | null;
     completed_at: string | null;
 }
 
 /** Flow Run detail (from get endpoint) */
-export interface FlowRunDetail {
+export interface FlowRunDetail extends RunStoryFields {
+    step_meta?: Record<string, RunStepMeta>;
+    /** UTC ISO string: the last time the run changed (how long a stuck run has been stuck). */
+    modified_at?: string | null;
     flow_run_id: string;
     flow_id: string;
+    flow_name: string;
     flow_version: number;
     mode: string;
+    run_mode?: 'Real' | 'Test';
     status: string;
+    trigger_type: string;
     current_node_id: string;
     hop_count: number;
     context_json: Record<string, unknown>;
     waiting: Record<string, unknown>;
+    /** Step titles by node id, from the flow's saved definition. */
+    node_labels: Record<string, string>;
+    /** Document event that started a Data trigger run (e.g. on_submit); null for other triggers. */
+    trigger_event?: string | null;
     last_error: string | null;
     last_agent_run: string | null;
+    /** UTC ISO strings. */
     started_at: string | null;
     completed_at: string | null;
+    stale: boolean;
+    can_mark_failed: boolean;
+    stale_after_minutes: number;
+    /** The signed-in person may approve or reject this run (only meaningful while it waits for approval). */
+    can_decide?: boolean;
+    /** Why not, when they may not. */
+    cannot_decide_reason?: string | null;
 }
 
 /** Pending human approval (from get_pending_approvals endpoint) */
 export interface PendingApproval {
     flow_run_id: string;
     flow_id: string;
+    flow_name?: string;
     current_node_id: string;
     title: string;
+    message?: string;
     instructions: string;
     approval_type: string;
     started_at: string | null;
@@ -178,17 +192,34 @@ export interface PendingApproval {
 // ─── Flow Definition APIs ────────────────────────────────────────────
 
 const FLOW_LIST_FIELDS = [
-    'name', 'flow_id', 'flow_name', 'status',
+    'name', 'flow_id', 'flow_name', 'description', 'category', 'status',
     'version', 'schema_version', 'modified',
 ];
 
-/** List all flow definitions */
-export async function getFlowDefinitions(): Promise<FlowDefinitionListItem[]> {
+/** What the Flows list may ask the server to narrow down by, so older flows stay reachable when there are many. */
+export interface FlowListQuery {
+    search?: string;
+    /** Backend status: Draft, Active or Archived. */
+    status?: string;
+    /** Category name, matched without regard to capitals. */
+    category?: string;
+}
+
+/** The most flows the list loads at once. */
+export const FLOW_LIST_LIMIT = 100;
+
+/** List flow definitions, newest change first, at most FLOW_LIST_LIMIT. */
+export async function getFlowDefinitions(query: FlowListQuery = {}): Promise<FlowDefinitionListItem[]> {
     try {
+        const filters: Array<[string, '=' | 'like', string]> = [];
+        if (query.search?.trim()) filters.push(['flow_name', 'like', `%${query.search.trim()}%`]);
+        if (query.status) filters.push(['status', '=', query.status]);
+        if (query.category) filters.push(['category', 'like', query.category]);
         const flows = await db.getDocList(doctype['Flow Definition'], {
             fields: FLOW_LIST_FIELDS,
+            filters,
             orderBy: { field: 'modified', order: 'desc' },
-            limit: 100,
+            limit: FLOW_LIST_LIMIT,
         });
         return flows as FlowDefinitionListItem[];
     } catch (error) {
@@ -236,48 +267,10 @@ export async function deleteFlowDefinition(flowId: string): Promise<void> {
 /** Update flow name or status (DocType field update) */
 export async function updateFlowDefinitionFields(
     flowId: string,
-    fields: { flow_name?: string; status?: string }
+    fields: { flow_name?: string; description?: string; category?: string; status?: string }
 ): Promise<void> {
     try {
         await db.updateDoc(doctype['Flow Definition'], flowId, fields);
-    } catch (error) {
-        handleFrappeError(error, `Error updating flow ${flowId}`);
-    }
-}
-
-/** Outcome of the "create a procedure from this flow on save" checkbox, as recorded on
- * the Flow Definition doc. `get_flow_definition`/`save_flow_definition` don't expose
- * these fields, so they're read straight off the doctype via the SDK. */
-export interface FlowConversionStatus {
-    auto_convert_to_procedure: boolean;
-    /** Human-readable outcome of the last conversion attempt (success or refusal reason). */
-    conversion_note: string | null;
-    /** Name of the Draft Agent Procedure created/refreshed from this flow, if any. */
-    converted_procedure: string | null;
-}
-
-/** Fetch the current auto-convert checkbox value and the outcome of the last conversion
- * attempt (set asynchronously by the backend after save -- see flow_definition.py's
- * _maybe_convert_to_procedure). */
-export async function getFlowConversionStatus(flowId: string): Promise<FlowConversionStatus> {
-    try {
-        const doc = await db.getDoc(doctype['Flow Definition'], flowId);
-        return {
-            auto_convert_to_procedure: Boolean(doc.auto_convert_to_procedure),
-            conversion_note: (doc.conversion_note as string) || null,
-            converted_procedure: (doc.converted_procedure as string) || null,
-        };
-    } catch (error) {
-        handleFrappeError(error, `Error fetching conversion status for flow ${flowId}`);
-    }
-}
-
-/** Toggle the "create a procedure from this flow on save" checkbox */
-export async function updateFlowAutoConvert(flowId: string, autoConvert: boolean): Promise<void> {
-    try {
-        await db.updateDoc(doctype['Flow Definition'], flowId, {
-            auto_convert_to_procedure: autoConvert ? 1 : 0,
-        });
     } catch (error) {
         handleFrappeError(error, `Error updating flow ${flowId}`);
     }
@@ -293,14 +286,50 @@ export async function getNodeSchemas(): Promise<Record<string, unknown>> {
     }
 }
 
+/** Roles that can be chosen as approvers (Huf roles first; no All/Guest/Administrator or desk-only roles). */
+export async function getApproverRoles(): Promise<Array<{ name: string; group: 'Huf' | 'Other' }>> {
+    try {
+        const result = await call.get('huf.ai.flow.api.get_approver_roles');
+        return (result.message as Array<{ name: string; group: 'Huf' | 'Other' }>) ?? [];
+    } catch (error) {
+        handleFrappeError(error, 'Error fetching approver roles');
+    }
+}
+
 // ─── Flow Run APIs ───────────────────────────────────────────────────
 
+/** Whether a document type can be submitted (and cancelled): only then do those Data trigger events exist. */
+export async function getTriggerDoctypeInfo(doctype: string): Promise<{ doctype: string; is_submittable: boolean }> {
+    try {
+        const result = await call.post('huf.ai.flow.api.get_trigger_doctype_info', { doctype });
+        return result.message as { doctype: string; is_submittable: boolean };
+    } catch (error) {
+        handleFrappeError(error, `Error loading document type ${doctype}`);
+    }
+}
+
+/** Publish a flow (status Active): its triggers start firing. */
+export async function publishFlow(flowId: string): Promise<{ flow_id: string; status: string }> {
+    try {
+        const result = await call.post('huf.ai.flow.api.publish_flow', { flow_id: flowId });
+        return result.message as { flow_id: string; status: string };
+    } catch (error) {
+        handleFrappeError(error, `Error publishing flow ${flowId}`);
+    }
+}
+
+/** Take a published flow back to Draft: webhook calls are refused and schedule / document triggers stop firing. */
+export async function unpublishFlow(flowId: string): Promise<{ flow_id: string; status: string }> {
+    try {
+        const result = await call.post('huf.ai.flow.api.unpublish_flow', { flow_id: flowId });
+        return result.message as { flow_id: string; status: string };
+    } catch (error) {
+        handleFrappeError(error, `Error unpublishing flow ${flowId}`);
+    }
+}
+
 /** Run a flow (start new execution) */
-export async function runFlow(
-    flowId: string,
-    payload?: Record<string, unknown>,
-    mode?: string
-): Promise<{ flow_run_id: string; status: string; current_node_id: string }> {
+export async function runFlow(flowId: string, payload?: Record<string, unknown>, mode: 'test' | 'real' = 'real'): Promise<{ flow_run_id: string; status: string; current_node_id: string }> {
     try {
         const result = await call.post('huf.ai.flow.api.run_flow', {
             flow_id: flowId,
@@ -326,20 +355,68 @@ export async function getFlowRun(flowRunId: string): Promise<FlowRunDetail> {
 }
 
 /** List flow runs with optional filters */
-export async function listFlowRuns(
-    flowId?: string,
-    status?: string,
-    limit?: number
-): Promise<FlowRunSummary[]> {
+export async function listFlowRuns(flowId?: string, status?: string, limit?: number, runMode?: 'test' | 'real'): Promise<FlowRunSummary[]> {
     try {
         const result = await call.get('huf.ai.flow.api.list_flow_runs', {
             flow_id: flowId,
             status,
             limit: limit || 20,
+            run_mode: runMode,
         });
         return result.message as FlowRunSummary[];
     } catch (error) {
         handleFrappeError(error, 'Error listing flow runs');
+    }
+}
+
+export interface FlowRunsPage {
+    items: FlowRunSummary[];
+    total: number;
+}
+
+/** Page of Flow Runs across all flows (Executions page). `fromDate` is a UTC ISO string. */
+export async function listFlowRunsPage(params: {
+    status?: string;
+    search?: string;
+    fromDate?: string;
+    start?: number;
+    limit?: number;
+}): Promise<FlowRunsPage> {
+    try {
+        const result = await call.get('huf.ai.flow.api.list_flow_runs_page', {
+            status: params.status,
+            search: params.search || undefined,
+            from_date: params.fromDate,
+            start: params.start ?? 0,
+            limit: params.limit ?? 20,
+        });
+        return result.message as FlowRunsPage;
+    } catch (error) {
+        handleFrappeError(error, 'Error listing flow runs');
+    }
+}
+
+/** "Flow: <name> > <step title>" for Agent Runs made by flow steps; null where unknown. */
+export async function getFlowStepLabels(
+    items: Array<{ flow_run: string; flow_node_id?: string | null }>
+): Promise<Array<string | null>> {
+    try {
+        const result = await call.post('huf.ai.flow.api.get_flow_step_labels', {
+            items: JSON.stringify(items),
+        });
+        return result.message as Array<string | null>;
+    } catch {
+        return items.map(() => null);
+    }
+}
+
+/** System Manager only: fail a run stuck in Queued/Running. */
+export async function markFlowRunFailed(flowRunId: string): Promise<{ flow_run_id: string; status: string }> {
+    try {
+        const result = await call.post('huf.ai.flow.api.mark_flow_run_failed', { flow_run_id: flowRunId });
+        return result.message as { flow_run_id: string; status: string };
+    } catch (error) {
+        handleFrappeError(error, `Error marking flow run ${flowRunId} as failed`);
     }
 }
 
@@ -401,79 +478,22 @@ export async function getPendingApprovals(): Promise<PendingApproval[]> {
     }
 }
 
-// ─── Flow -> Procedure conversion ───────────────────────────────────────
+// ─── Integration connection status (Slack / Gmail / Drive / Sheets steps) ───
 
-/** Preview of converting a flow into a deterministic procedure */
-export interface FlowConversionAnalysis {
-    convertible: boolean;
-    reason?: string;
-    reads?: string[];
-    writes?: string[];
-    atomic_operations?: number;
-    estimated_round_trip_reduction_pct?: number;
+export interface FlowIntegrationStatus {
+    label: string;
+    connected: boolean;
 }
 
-/** Result of actually creating the procedure from a flow */
-export interface FlowConversionResult extends FlowConversionAnalysis {
-    name: string;
-    procedure_id: string;
-    version: number;
-    status: string;
-    tier: string;
-}
-
-/** Read-only preview: is this flow convertible, and what would it look like? Creates nothing. */
-export async function analyzeFlowConversion(flowId: string): Promise<FlowConversionAnalysis> {
+/** Which integrations the flow builder's steps use and whether each has credentials. */
+export async function getFlowIntegrationStatus(): Promise<Record<string, FlowIntegrationStatus>> {
     try {
-        const result = await call.get('huf.ai.flow.api.analyze_flow_conversion', {
-            flow_id: flowId,
-        });
-        return result.message as FlowConversionAnalysis;
-    } catch (error) {
-        handleFrappeError(error, `Error analyzing flow ${flowId} for conversion`);
+        const result = await call.get('huf.ai.flow.integrations.get_flow_integration_status');
+        return (result.message ?? {}) as Record<string, FlowIntegrationStatus>;
+    } catch {
+        // Advisory only: without it the builder simply shows no "Not connected" badges.
+        return {};
     }
 }
 
-/** Convert a deterministic flow into a Draft procedure. Never activates it. */
-export async function convertFlowToProcedure(flowId: string): Promise<FlowConversionResult> {
-    try {
-        const result = await call.post('huf.ai.flow.api.convert_flow_to_procedure', {
-            flow_id: flowId,
-        });
-        return result.message as FlowConversionResult;
-    } catch (error) {
-        handleFrappeError(error, `Error converting flow ${flowId} to a procedure`);
-    }
-}
-
-// ─── Flow trigger APIs (schedule / doc-event) ────────────────────────
-
-/** Create or replace the flow's schedule / doc-event trigger. Converts the flow to a Draft
- * procedure if needed; the returned summary says whether the Automation is actually Active. */
-export async function setFlowTrigger(args: SetFlowTriggerArgs): Promise<FlowTriggerSummary> {
-    try {
-        const result = await call.post('huf.ai.flow.api.set_flow_trigger', { ...args });
-        return result.message as FlowTriggerSummary;
-    } catch (error) {
-        handleFrappeError(error, `Error setting trigger for flow ${args.flow_id}`);
-    }
-}
-
-/** The flow's current trigger summary, or null if it has none. */
-export async function getFlowTrigger(flowId: string): Promise<FlowTriggerSummary | null> {
-    try {
-        const result = await call.get('huf.ai.flow.api.get_flow_trigger', { flow_id: flowId });
-        return (result.message as FlowTriggerSummary | null) ?? null;
-    } catch (error) {
-        handleFrappeError(error, `Error fetching trigger for flow ${flowId}`);
-    }
-}
-
-/** Remove the flow's trigger (the converted procedure is kept). */
-export async function clearFlowTrigger(flowId: string): Promise<void> {
-    try {
-        await call.post('huf.ai.flow.api.clear_flow_trigger', { flow_id: flowId });
-    } catch (error) {
-        handleFrappeError(error, `Error clearing trigger for flow ${flowId}`);
-    }
-}
+export * from './flow/flowConversionApi';

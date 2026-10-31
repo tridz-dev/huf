@@ -87,10 +87,10 @@ class TestFlowFailureSemantics(IntegrationTestCase):
 			"fingerprint": "0" * 64,
 			"entry": "start",
 			"nodes": [
-				{"id": "start", "type": "trigger.webhook", "config": {"method": "POST"}, "next": "fail"},
+				{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}, "next": "fail"},
 				failing,
 				*(
-					{"id": node_id, "type": "trigger.webhook", "config": {"method": "POST"}}
+					{"id": node_id, "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}}
 					for node_id in terminal_ids
 				),
 			],
@@ -109,7 +109,7 @@ class TestFlowFailureSemantics(IntegrationTestCase):
 		flow_id = f"_test-flow-failure-{frappe.generate_hash(length=8)}"
 		saved = flow_api.save_flow_definition(flow_id, definition)
 		self._names["Flow Definition"].append(saved["flow_id"])
-		flow_run = create_flow_run(flow_id=flow_id, payload={}, trigger_type="Doc Event")
+		flow_run = create_flow_run(flow_id=flow_id, payload={}, trigger_type="Webhook")
 		self._names["Flow Run"].append(flow_run.name)
 		failed_tool_result = {"success": False, "error": "simulated tool failure"}
 		with patch("huf.ai.flow.engine.execute_tool", return_value=failed_tool_result):
@@ -140,11 +140,12 @@ class TestFlowFailureSemantics(IntegrationTestCase):
 		self.assertIn("fail", flow_run.last_error)
 		self.assertIn("simulated tool failure", flow_run.last_error)
 
-	def test_d_always_edge_runs_cleanup_but_run_is_failed(self):
-		"""(d) The always edge is still followed (cleanup runs) yet the run ends Failed."""
+	def test_d_downstream_node_of_a_failed_step_never_runs(self):
+		"""(d) Flows have no ``always`` edge: a failed step's ``next`` is not followed, the run stops
+		at the failed step and ends Failed."""
 		flow_run = self._run({"next": "after"}, ["after"])
 
-		self.assertEqual(flow_run.current_node_id, "after")
+		self.assertEqual(flow_run.current_node_id, "fail")
 		self.assertEqual(flow_run.status, "Failed")
 		self.assertTrue(flow_run.last_error)
 

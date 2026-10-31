@@ -17,20 +17,34 @@ Features:
 Uses LiteLLM's experimental MCP client for underlying MCP protocol handling.
 """
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import contextvars
 import json
 from contextlib import AsyncExitStack
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
-from agents import FunctionTool
-
+from huf.ai.flow.testrun.gate import agent_tool_gate
+from huf.ai.mcp_support.errors import (
+    _extract_retry_after_seconds,
+    _format_mcp_error,
+    _has_status_code,
+    _is_generic_mcp_error,
+    _is_retryable_status,
+    _is_timeout_error,
+)
 from huf.ai.transaction import commit_if_background
+
+if TYPE_CHECKING:
+    # Imported lazily where a tool is built: the agents SDK costs ~1 s to import, and a Flow tool step
+    # only needs the light server lookup in this module.
+    from agents import FunctionTool
 
 
 # MCP Tool prefix to identify MCP-sourced tools during execution
@@ -316,8 +330,8 @@ def _create_mcp_function_tool(mcp_server, tool_def: dict, seen_names: set[str] |
                     ctx = None
                 
                 args_dict = json.loads(args_json or "{}")
-                
-                # Execute the tool on the MCP server
+                if (simulated := agent_tool_gate(original_tool_name, args_dict, ctx)) is not None:
+                    return simulated  # a test run never calls an MCP tool that could send or change something
                 result = await execute_mcp_tool(
                     server_name=server_name,
                     tool_name=original_tool_name,
@@ -336,6 +350,8 @@ def _create_mcp_function_tool(mcp_server, tool_def: dict, seen_names: set[str] |
         # Sanitize tool name for OpenAI compatibility
         safe_name = _safe_tool_name(mcp_server, tool_name)
         safe_name = _dedupe_tool_name(safe_name, seen_names)
+
+        from agents import FunctionTool
 
         tool = FunctionTool(
             name=safe_name,
@@ -365,7 +381,7 @@ async def execute_mcp_tool(
     Execute a tool call on an MCP server and return the result.
     
     This function handles the actual MCP protocol communication.
-    
+
     Args:
         server_name: Name of the MCP Server document
         tool_name: Name of the tool to execute
@@ -373,7 +389,6 @@ async def execute_mcp_tool(
         approved: Set only by a caller that already holds a human approval (a flow
             tool node marked ``approved``). Tools marked Requires Approval are
             refused unless this is true.
-    
     Returns:
         The result from the MCP tool execution
     """
@@ -397,29 +412,6 @@ async def execute_mcp_tool(
 
 from typing import Callable, Any
 
-def _has_status_code(exc, code: str) -> bool:
-    if code in str(exc):
-        return True
-    if hasattr(exc, "exceptions"):
-        for sub_exc in exc.exceptions:
-            if _has_status_code(sub_exc, code):
-                return True
-    return False
-
-def _format_mcp_error(exc) -> str:
-    import httpx
-    if hasattr(exc, "exceptions"):
-        return " | ".join(_format_mcp_error(e) for e in exc.exceptions)
-    if isinstance(exc, httpx.HTTPStatusError):
-        msg = str(exc)
-        try:
-            if hasattr(exc.response, "text") and exc.response.text:
-                msg += f" (Response: {exc.response.text})"
-        except (AttributeError, ValueError, RuntimeError):
-            pass # Ignore if streaming response not read
-        return msg
-    return str(exc)
-
 # Bounded exponential backoff parameters for 429 / 5xx retries.
 _MCP_RETRY_MAX_ATTEMPTS = 5
 _MCP_GENERIC_RETRY_MAX_ATTEMPTS = 3
@@ -427,60 +419,10 @@ _MCP_RETRY_BASE_DELAY_SECONDS = 1
 _MCP_RETRY_MAX_DELAY_SECONDS = 60
 
 
-def _is_timeout_error(exc) -> bool:
-    """True if `exc` (or a sub-exception) is a timeout; the server may have acted on the request."""
-    if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
-        return True
-    if type(exc).__name__ in ("ReadTimeout", "TimeoutException", "WriteTimeout", "PoolTimeout", "ConnectTimeout"):
-        return True
-    return any(_is_timeout_error(e) for e in getattr(exc, "exceptions", ()) or ())
-
-
-def _is_retryable_status(exc) -> bool:
-    """True if `exc` (or any of its sub-exceptions, e.g. an ExceptionGroup)
-    carries an HTTP 429 or 5xx status code."""
-    if _has_status_code(exc, "429"):
-        return True
-    return any(_has_status_code(exc, str(code)) for code in range(500, 600))
-
-
-def _extract_retry_after_seconds(exc) -> float | None:
-    """Best-effort extraction of a `Retry-After` header (seconds) from `exc`.
-
-    Looks at `exc.response.headers` (the shape `httpx.HTTPStatusError` and
-    similar exceptions carry) and recurses into `exc.exceptions` for
-    exception groups. Returns None if no usable header is found.
-    """
-    response = getattr(exc, "response", None)
-    if response is not None:
-        headers = getattr(response, "headers", None) or {}
-        retry_after = headers.get("Retry-After") or headers.get("retry-after")
-        if retry_after:
-            try:
-                return max(0.0, float(retry_after))
-            except (TypeError, ValueError):
-                pass
-
-    if hasattr(exc, "exceptions"):
-        for sub_exc in exc.exceptions:
-            value = _extract_retry_after_seconds(sub_exc)
-            if value is not None:
-                return value
-
-    return None
-
-
 _NEEDS_OAUTH_MESSAGE = (
     "OAuth sign-in required: this MCP server needs you to sign in. "
     "Open the MCP Server form and click 'Connect' to authorize it."
 )
-
-
-def _is_generic_mcp_error(exc) -> bool:
-    """mcp>=2 reports HTTP failures (e.g. 401) as a status-less MCPError."""
-    if "Server returned an error response" in str(exc):
-        return True
-    return any(_is_generic_mcp_error(e) for e in getattr(exc, "exceptions", ()) or ())
 
 
 def _probe_unauthorized(mcp_server, headers) -> bool:

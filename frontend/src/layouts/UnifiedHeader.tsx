@@ -10,10 +10,12 @@ import {
   BreadcrumbSeparator,
 } from '../components/ui/breadcrumb';
 import { BreadcrumbItem as BreadcrumbItemType } from './UnifiedLayout';
+import { useViewport } from '@/lib/ui/responsive';
 import { ApprovalsBell } from '../components/ApprovalsBell';
 import { ExecutionApprovalsBell } from '../components/ExecutionApprovalsBell';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { SOLUTIONS_WORD } from '../components/solutions/labels';
+import { cn } from '../lib/utils';
 
 interface UnifiedHeaderProps {
   actions?: ReactNode;
@@ -21,6 +23,8 @@ interface UnifiedHeaderProps {
   showCurrentCrumb?: boolean;
   /** Overrides the left-hand ancestry-crumb/page-title zone entirely when provided. */
   leftContent?: ReactNode;
+  /** On a phone the title gets a row of its own and the actions a second row (the flow editor header). */
+  stackOnPhone?: boolean;
 }
 
 /**
@@ -91,9 +95,10 @@ export function AncestryCrumb({
   );
 }
 
-export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftContent }: UnifiedHeaderProps) {
+export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftContent, stackOnPhone }: UnifiedHeaderProps) {
   const location = useLocation();
   const { hasCapability } = usePermissions();
+  const { isCompact } = useViewport();
 
   const getPageTitle = () => {
     const path = location.pathname;
@@ -135,8 +140,8 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
   const hasAncestry = !!breadcrumbs && breadcrumbs.length >= 2;
 
   return (
-    <div className="flex items-center justify-between flex-1">
-      <div className="flex items-center gap-2 min-w-0">
+    <div className={cn('flex min-w-0 flex-1 items-center justify-between', stackOnPhone && 'gap-y-1 max-md:flex-wrap max-md:py-1')}>
+      <div className={cn('flex min-w-0 items-center gap-2', stackOnPhone && 'max-md:basis-full')}>
         {leftContent ? (
           leftContent
         ) : hasAncestry ? (
@@ -156,11 +161,12 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
         </div>
       </div> */}
 
-      <div className="flex items-center gap-2">
-        <ApprovalsBell />
-        {(hasCapability('execution.approve') || hasCapability('ssh.approve')) && (
-          <ExecutionApprovalsBell />
-        )}
+      <div className={cn('flex shrink-0 items-center gap-2', stackOnPhone && 'max-md:basis-full max-md:justify-end')}>
+        {/* Approvals are only asked for by people who use flows: for anyone else the server would refuse every poll. */}
+        {hasCapability('flows.use') && <ApprovalsBell />}
+        {/* Code-run approvals: in the flow editor they move into the header's "..." menu at 1200px and narrower (no room beside Run and Publish).
+            Mounted in one place only: a bell hidden by CSS would still poll the server next to the one in the menu. */}
+        {(hasCapability('execution.approve') || hasCapability('ssh.approve')) && !(stackOnPhone && isCompact) && <ExecutionApprovalsBell />}
         {actions}
       </div>
     </div>

@@ -23,12 +23,6 @@ flow_tool_definitions = [
 				"description": "Initial payload/input for the flow (JSON object or string)",
 				"required": 0,
 			},
-			{
-				"parameter_name": "mode",
-				"type": "string",
-				"description": "Execution mode override: 'normal' or 'agentic'",
-				"required": 0,
-			},
 		],
 	},
 	{

@@ -1,3 +1,4 @@
+import { ConnectionIndicator } from './common/ConnectionIndicator';
 import * as React from "react"
 import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Layers, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, MessageCircle, Send, Keyboard, SlidersHorizontal, Boxes, type LucideIcon } from "lucide-react"
 import { SOLUTIONS_WORD } from "@/components/solutions/labels"
@@ -7,6 +8,7 @@ import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import { AppSidebarHeader } from "@/components/app-sidebar-header"
 import { usePermissions } from "@/contexts/PermissionsContext"
+import { PAGE_ACCESS } from "@/lib/permissions/pageAccess"
 import { fetchDocCountQuiet } from "@/services/utilsApi"
 import { doctype } from "@/data/doctypes"
 import { ShortcutKey } from "@/components/ui/shortcut-key"
@@ -33,7 +35,7 @@ export const dashboardNavItems = [
     title: "Hub",
     url: "/",
     icon: Home,
-    capability: null,
+    capability: PAGE_ACCESS.hub as unknown as string[],
   },
 ]
 
@@ -142,7 +144,7 @@ export const operateNavItems = [
 		title: "Dashboard",
 		url: "/dashboard",
 		icon: ChartColumnIncreasing,
-		capability: null,
+		capability: PAGE_ACCESS.dashboard,
 	},
 	{
 		title: "Executions",
@@ -214,7 +216,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [agentCount, setAgentCount] = React.useState<number | undefined>(undefined)
   const { setOpen: setShortcutsHelpOpen } = useShortcutsHelp()
 
+  // Only people whose role reads agents ask for the count; everyone else would get a refusal in the background.
+  const canSeeAgents = !isLoading && hasCapability("agent.use")
   React.useEffect(() => {
+    if (!canSeeAgents) return
     let cancelled = false
     fetchDocCountQuiet(doctype.Agent).then((count) => {
       if (!cancelled) {
@@ -224,7 +229,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [canSeeAgents])
 
 	const isPathInItems = (items: { url: string }[]) =>
 		items.some(
@@ -331,6 +336,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenuItem>
           </SidebarMenu>
         )}
+        <div className="px-4 py-1 flex justify-end group-data-[collapsible=icon]:justify-center">
+          <ConnectionIndicator />
+        </div>
         <NavUser />
       </SidebarFooter>
       <SidebarRail />

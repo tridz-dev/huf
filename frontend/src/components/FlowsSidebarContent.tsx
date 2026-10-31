@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 export function FlowsSidebarContent() {
   const { flows, activeFlowId, setActiveFlow, createFlow, deleteFlow, updateFlowName } = useFlowContext();
@@ -105,6 +105,7 @@ export function FlowsSidebarContent() {
                   >
                     <Button
                       variant="ghost"
+                      data-testid={`flow-sidebar-item-${flow.id}`}
                       className={`h-auto flex-1 justify-start rounded-md px-2 py-1.5 text-sm font-normal text-sidebar-foreground text-left ${
                         activeFlowId === flow.id
                           ? 'bg-panel text-ink border-l-2 border-signal'

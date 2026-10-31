@@ -126,7 +126,7 @@ class TestNodes(unittest.TestCase):
 	def test_bad_key_fails_node(self):
 		r = _exec(flow_engine._exec_state_set, "state.set", {"key": {"$from": "input.missing"}, "value": 1})
 		self.assertEqual(r["status"], "failed")
-		self.assertIn("key", r["error"])
+		self.assertIn("name to save", r["error"])
 
 	def test_registered(self):
 		for t in ("state.get", "state.set", "state.delete"):

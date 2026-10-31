@@ -6,7 +6,9 @@ from frappe.model.document import Document
 from frappe.utils import now_datetime
 
 from huf.ai import system_records
-from huf.ai.graph.validator import FLOW_NODE_TYPES, validate_flow_graph
+from huf.ai.graph.validation.flow_validation import validate_flow
+from huf.ai.graph.error_copy import describe_errors
+from huf.ai.graph.validator import FLOW_NODE_TYPES, MODE_DRAFT, MODE_PUBLISH
 from huf.ai.transaction import commit_if_background
 from huf.huf.doctype.flow_definition.activation_rules import collect_activation_problems
 
@@ -40,6 +42,8 @@ class FlowDefinition(Document):
 	def validate(self):
 		defn = self._validate_definition_json()
 		self._validate_activation(defn)
+		self._validate_code_edit(defn)
+		self._validate_sensitive_publish(defn)
 		self._validate_gateway_authority(defn)
 		self.updated_by = frappe.session.user
 		self.updated_at = now_datetime()
@@ -51,21 +55,7 @@ class FlowDefinition(Document):
 			self.version = (self.version or 0) + 1
 
 	def on_update(self):
-		self._pause_flow_trigger_if_inactive()
 		self._maybe_convert_to_procedure()
-
-	def _pause_flow_trigger_if_inactive(self):
-		"""A Flow that is no longer Active must not keep firing through its schedule /
-		doc-event trigger Automation (set_flow_trigger): pause it. Graph edits are
-		surfaced separately as ``stale`` on the trigger summary."""
-		if self.status == "Active":
-			return
-		from huf.ai.flow.api import _flow_automation_name
-
-		automation = _flow_automation_name(self.flow_id)
-		if frappe.db.get_value("Automation", automation, "status") == "Active":
-			frappe.db.set_value("Automation", automation, "status", "Paused")
-			frappe.cache().delete_key("huf:doc_event_automation_triggers")
 
 	def on_trash(self):
 		system_records.guard_delete(self)
@@ -157,13 +147,23 @@ class FlowDefinition(Document):
 		except (json.JSONDecodeError, TypeError) as e:
 			frappe.throw(_("Invalid JSON in definition: {0}").format(str(e)))
 
-		result = validate_flow_graph(defn)
+		# Saving never blocks on an unfinished flow (UX-17): a draft only has to be structurally sound.
+		# A flow that is Active must be finished, because its triggers start runs from what is stored.
+		# (The Active check is _validate_activation, which runs next.)
+		result = validate_flow(defn, MODE_DRAFT)
 		if not result.ok:
-			frappe.throw(
-				_("Definition JSON does not conform to the graph-IR Flow profile: {0}").format(
-					"; ".join(str(err) for err in result.errors)
-				)
-			)
+			frappe.throw(describe_errors(defn, result.errors), title=_("This flow cannot be saved yet"))
+
+		from huf.ai.flow.support.trigger_sample import cap_node_samples
+
+		if cap_node_samples(defn):  # a pinned sample never keeps a secret or more than 8 KB
+			self.definition_json = json.dumps(defn) if isinstance(self.definition_json, str) else defn
+
+		from huf.ai.flow.support.router_text import text_ref_warnings
+
+		warnings = text_ref_warnings(defn)
+		if warnings:  # never blocks the save; tells the author what will be left empty at run time
+			frappe.msgprint("<br>".join(warnings), title=_("Check this flow"), indicator="orange")
 
 		# schema_version is a schema-validated const ("1.0.0") at this point; store it
 		# verbatim rather than re-deriving or defaulting it.
@@ -171,7 +171,10 @@ class FlowDefinition(Document):
 		return defn
 
 	def _validate_gateway_authority(self, defn: dict):
-		"""A node may bind a WhatsApp gateway (``config.gateway``) only if the saving user can write to it."""
+		"""A node may bind a Gateway (``config.gateway``) only if the saving user can write to it. Chat triggers
+		also need a Gateway of the right channel and, once Active, an owner who can use it (warnings never block)."""
+		from huf.ai.flow.gateways import authority
+
 		for node in (defn.get("nodes") or []) if isinstance(defn, dict) else []:
 			config = node.get("config") if isinstance(node, dict) else None
 			gateway = str((config or {}).get("gateway") or "").strip() if isinstance(config, dict) else ""
@@ -182,15 +185,93 @@ class FlowDefinition(Document):
 					_("Node {0}: you need write access to Gateway {1} to bind it.").format(node.get("id"), gateway),
 					frappe.PermissionError,
 				)
+		authority.check_gateway_authority(defn, owner=self.owner if self.status == "Active" else None)
+		warning = authority.double_reply_warning(defn)
+		if warning:
+			frappe.msgprint(warning, title=_("Check this flow"), indicator="orange")
+
+	@staticmethod
+	def _gateway_trigger_problems(defn: dict) -> list[str]:
+		"""Option problems that need the channel's provider; the plain ones are already in the activation rules."""
+		from huf.ai.flow.gateways import authority
+
+		plain = set(collect_activation_problems(defn))
+		return [p for p in authority.trigger_problems(defn) if p not in plain]
+
+	@staticmethod
+	def _doc_event_problems(defn: dict) -> list[str]:
+		"""Submit / cancel events only exist for submittable document types; anything else would never fire."""
+		problems = []
+		for node in (defn.get("nodes") or []) if isinstance(defn, dict) else []:
+			if not isinstance(node, dict) or node.get("type") != "trigger.doc-event":
+				continue
+			config = node.get("config") or {}
+			doctype, event = config.get("doctype"), config.get("event")
+			if event not in ("on_submit", "on_cancel") or not doctype or not frappe.db.exists("DocType", doctype):
+				continue
+			if not frappe.get_meta(doctype).is_submittable:
+				problems.append(
+					_("trigger {0}: {1} cannot be submitted or cancelled, so \"{2}\" never fires").format(
+						repr(node.get("id")), doctype, event
+					)
+				)
+		return problems
+
+	def _validate_code_edit(self, defn: dict):
+		"""Adding or changing an Execute code step needs ``flows.execute_code``, in a draft too, so nobody
+		without it writes the code an admin later publishes."""
+		flags = frappe.flags
+		if getattr(flags, "in_install", False) or getattr(flags, "in_migrate", False) or getattr(flags, "in_patch", False):
+			return
+		from huf.ai.flow.code_node import check_edit, code_nodes
+
+		if not code_nodes(defn):
+			return
+		before = self.get_doc_before_save() if not self.is_new() else None
+		previous = None
+		if before is not None:
+			try:
+				previous = json.loads(before.definition_json) if isinstance(before.definition_json, str) else before.definition_json
+			except (json.JSONDecodeError, TypeError):
+				previous = None
+		check_edit(defn, previous)
+
+	def _validate_sensitive_publish(self, defn: dict):
+		"""A flow with a document-event trigger or a web request step can only be Active if the saving
+		user may publish such flows (see ``huf.ai.flow.publish_guard``). Steps that are unchanged from
+		the already-Active version do not need it again, so unrelated edits stay possible."""
+		if self.status != "Active":
+			return
+		flags = frappe.flags
+		if getattr(flags, "in_install", False) or getattr(flags, "in_migrate", False) or getattr(flags, "in_patch", False):
+			return
+		from huf.ai.flow.publish_guard import check_can_publish
+
+		previous = None
+		before = self.get_doc_before_save() if not self.is_new() else None
+		if before is not None and before.status == "Active":
+			try:
+				previous = json.loads(before.definition_json) if isinstance(before.definition_json, str) else before.definition_json
+			except (json.JSONDecodeError, TypeError):
+				previous = None
+		check_can_publish(defn, previous)
 
 	def _validate_activation(self, defn: dict):
 		"""Active flows must be runnable: Draft/Archived saves stay permissive. Reports
 		every problem in a single message rather than failing on the first."""
 		if self.status != "Active":
 			return
-		problems = collect_activation_problems(defn)
+		problems = collect_activation_problems(defn) + self._doc_event_problems(defn) + self._gateway_trigger_problems(defn)
 		if problems:
 			frappe.throw(
 				_("Flow cannot be Active: {0}").format("; ".join(problems)),
+				title=_("Flow is not ready to activate"),
+			)
+		# Whatever else keeps the flow from running (a loop of links, a value from a step that has not run yet,
+		# a short secret): the same publish-mode check a run makes.
+		finished = validate_flow(defn, MODE_PUBLISH)
+		if not finished.ok:
+			frappe.throw(
+				_("Flow cannot be Active: {0}").format(" ".join(finished.messages(defn))),
 				title=_("Flow is not ready to activate"),
 			)

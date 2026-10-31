@@ -97,7 +97,7 @@ def _deterministic_flow_nodes() -> list[dict]:
 		{
 			"id": "trigger",
 			"type": "trigger.webhook",
-			"config": {"method": "POST"},
+			"config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"},
 			"next": "fetch",
 		},
 		{
@@ -205,7 +205,7 @@ class TestAnalyzeConversion(unittest.TestCase):
 
 	def test_router_llm_node_is_refused_by_name(self):
 		nodes = [
-			{"id": "trigger", "type": "trigger.webhook", "config": {"method": "POST"}, "next": "route"},
+			{"id": "trigger", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}, "next": "route"},
 			{
 				"id": "route",
 				"type": "router.llm",
@@ -220,11 +220,11 @@ class TestAnalyzeConversion(unittest.TestCase):
 
 	def test_human_approval_node_is_refused_by_name(self):
 		nodes = [
-			{"id": "trigger", "type": "trigger.webhook", "config": {"method": "POST"}, "next": "approve"},
+			{"id": "trigger", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}, "next": "approve"},
 			{
 				"id": "approve",
 				"type": "human.approval",
-				"config": {"message": "ok?", "approve_next": "done", "reject_next": "done"},
+				"config": {"message": "ok?", "approve_next": "done", "reject_next": "done", "approver_type": "role", "approver_role": "System Manager"},
 			},
 			{"id": "done", "type": "output", "config": {"value": {"$from": "input"}}},
 		]
@@ -240,7 +240,7 @@ class TestAnalyzeConversion(unittest.TestCase):
 		self.assertIn("trigger", result.reason.lower())
 
 	def test_trigger_with_no_next_is_refused(self):
-		nodes = [{"id": "trigger", "type": "trigger.webhook", "config": {"method": "POST"}}]
+		nodes = [{"id": "trigger", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}}]
 		graph = _flow_graph(nodes, entry="trigger")
 		result = analyze_conversion(graph, classify_tool=_fake_classify_tool)
 		self.assertFalse(result.convertible)
@@ -257,7 +257,7 @@ class TestAnalyzeConversion(unittest.TestCase):
 
 	def test_write_flow_converts_with_writes_in_summary(self):
 		nodes = [
-			{"id": "trigger", "type": "trigger.webhook", "config": {"method": "POST"}, "next": "upsert"},
+			{"id": "trigger", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}, "next": "upsert"},
 			{
 				"id": "upsert",
 				"type": "tool.call",
@@ -284,7 +284,7 @@ class TestAnalyzeConversion(unittest.TestCase):
 
 	def test_multi_step_flow_reports_a_reduction_estimate(self):
 		nodes = [
-			{"id": "trigger", "type": "trigger.webhook", "config": {"method": "POST"}, "next": "a"},
+			{"id": "trigger", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}, "next": "a"},
 			{"id": "a", "type": "tool.call", "config": {"tool_id": "get_customer", "input": {}}, "next": "b"},
 			{
 				"id": "b",

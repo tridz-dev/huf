@@ -83,7 +83,7 @@ build-backend = "flit_core.buildapi"
 
 # These dependencies are only installed when developer mode is enabled
 [tool.bench.dev-dependencies]
-# package_name = "~=1.1.0"
+pytest = ">=7.0"
 
 [tool.bench.frappe-dependencies]
 frappe = ">=15.0.0"
@@ -126,3 +126,8 @@ typing-modules = ["frappe.types.DF"]
 quote-style = "double"
 indent-style = "tab"
 docstring-code-format = true
+
+[tool.pytest.ini_options]
+# Bench-less pytest: stub `frappe` only when it is not importable (see scripts/pytest_frappe_stub.py).
+pythonpath = ["."]
+addopts = "-p scripts.pytest_frappe_stub"

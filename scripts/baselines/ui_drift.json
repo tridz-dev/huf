@@ -1,16 +1,5 @@
 {
   "files": {
-    "components/FlowCanvas.tsx": {
-      "fixed_height": 3,
-      "inline_style": 1
-    },
-    "components/FlowValueInput.tsx": {
-      "text_px": 2
-    },
-    "components/FlowsHeaderActions.tsx": {
-      "fixed_height": 2,
-      "text_px": 5
-    },
     "components/FlowsSidebarContent.tsx": {
       "fixed_height": 2
     },
@@ -27,11 +16,6 @@
       "fixed_height": 1,
       "raw_element": 1,
       "text_px": 1
-    },
-    "components/RightSidebar.tsx": {
-      "fixed_height": 1,
-      "inline_style": 1,
-      "text_px": 10
     },
     "components/agent/AdvancedTab.tsx": {
       "hex_colour": 2,
@@ -299,9 +283,6 @@
       "fixed_height": 5,
       "text_px": 1
     },
-    "components/edges/InsertableEdge.tsx": {
-      "inline_style": 1
-    },
     "components/execution-profile/ExecutionProfilePermissionCard.tsx": {
       "fixed_height": 1
     },
@@ -351,23 +332,9 @@
     "components/memory/MemoryCard.tsx": {
       "fixed_height": 1
     },
-    "components/modals/NodeSelectionModal.tsx": {
-      "inline_style": 1,
-      "text_px": 1
-    },
     "components/nav-user.tsx": {
       "inline_style": 1,
       "text_px": 2
-    },
-    "components/nodes/ActionNode.tsx": {
-      "fixed_height": 1
-    },
-    "components/nodes/EndNode.tsx": {
-      "fixed_height": 1
-    },
-    "components/nodes/TriggerNode.tsx": {
-      "fixed_height": 1,
-      "text_px": 1
     },
     "components/playground/CompareView.tsx": {
       "raw_element": 1,
@@ -481,8 +448,7 @@
       "text_px": 3
     },
     "components/ui/VariablePicker.tsx": {
-      "fixed_height": 1,
-      "text_px": 1
+      "fixed_height": 1
     },
     "components/ui/badge.tsx": {
       "text_px": 5
@@ -596,7 +562,7 @@
     },
     "pages/AgentRunDetailPage.tsx": {
       "fixed_height": 4,
-      "text_px": 8
+      "text_px": 2
     },
     "pages/AgentSummaryPromptFormPage.tsx": {
       "fixed_height": 1
@@ -638,8 +604,7 @@
       "text_px": 8
     },
     "pages/Executions.tsx": {
-      "fixed_height": 4,
-      "text_px": 11
+      "fixed_height": 4
     },
     "pages/GatewaysPage.tsx": {
       "text_px": 2
@@ -693,11 +658,11 @@
     }
   },
   "totals": {
-    "fixed_height": 115,
+    "fixed_height": 106,
     "hex_colour": 98,
-    "inline_style": 48,
+    "inline_style": 44,
     "raw_element": 74,
-    "text_px": 386
+    "text_px": 349
   },
   "version": 1
 }

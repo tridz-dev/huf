@@ -12,6 +12,7 @@ Covers:
 - webhook endpoint signature/token validation
 """
 
+import inspect
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -154,7 +155,7 @@ class TestSetUserRestoreGuards(IntegrationTestCase):
         try:
             with patch("frappe.set_user", side_effect=self._tracking_set_user) as mock_set_user:
                 # The initiating user must exist for identity resolution to switch to it.
-                with patch("frappe.db.exists", return_value=True), patch("huf.ai.agent.hooks.run_agent_sync"):
+                with patch("frappe.db.exists", return_value=True), patch("huf.ai.agent.integration.run_agent_sync"):
                     run_agent_for_doc(
                         doc={"doctype": "Note", "name": "TEST-001"},
                         agent_name="test-agent",
@@ -300,10 +301,14 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
 
         defn_doc = SimpleNamespace(
             status="Active",
-            definition_json='{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook","config":{"auth":"correct-key"}}]}',
+            definition_json='{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook","config":{"method":"POST","secret":"correct-key-0123456789abcdefghijklmn"}}]}',
         )
 
-        mock_request = frappe._dict(args={"webhook_key": "wrong-key"}, get_data=lambda **kw: b"{}")
+        mock_request = frappe._dict(
+            args={"secret": "correct-key-0123456789abcdefghijklmn"},
+            headers={"X-Huf-Secret": "wrong-key"},
+            get_data=lambda **kw: b"{}",
+        )
         # patch.object restores the original frappe.request proxy; assigning None would leave every later
         # test (and the webhook tests) without a request binding.
         _request_patch = patch.object(frappe, "request", mock_request)
@@ -311,9 +316,11 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
         self.addCleanup(_request_patch.stop)
         try:
             with patch("frappe.db.exists", return_value=True):
-                with patch("frappe.get_doc", return_value=defn_doc):
+                with patch(
+                    "frappe.db.get_value", return_value=("Active", "owner", defn_doc.definition_json)
+                ):
                     with self.assertRaises(frappe.AuthenticationError):
-                        flow_webhook("flow-1", webhook_key="wrong-key")
+                        inspect.unwrap(flow_webhook)("flow-1")
         finally:
             pass
 
@@ -323,7 +330,7 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
 
         definition_json = (
             '{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook",'
-            '"config":{"auth":"correct-key"}}]}'
+            '"config":{"secret":"correct-key-0123"}}]}'
         )
         defn_doc = SimpleNamespace(status="Active", definition_json=definition_json, owner="flow-owner")
         flow_run = SimpleNamespace(name="FLOW-RUN-1", status="Queued")
@@ -356,17 +363,13 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
         finally:
             pass
 
-    def test_clean_flow_webhook_rejects_ambiguous_key_without_flow_id(self):
+    def test_clean_flow_webhook_requires_flow_id_and_never_resolves_by_secret(self):
         from huf.ai.flow.api import flow_webhook_clean
 
-        definition_json = (
-            '{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook",'
-            '"config":{"auth":"shared-key"}}]}'
-        )
         mock_request = frappe._dict(
             args={},
             form={},
-            headers={"X-Webhook-Secret": "shared-key"},
+            headers={"X-Huf-Secret": "shared-key"},
             get_data=lambda **kw: b"{}",
         )
         # patch.object restores the original frappe.request proxy; assigning None would leave every later
@@ -374,15 +377,26 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
         _request_patch = patch.object(frappe, "request", mock_request)
         _request_patch.start()
         self.addCleanup(_request_patch.stop)
-        try:
-            with patch(
-                "frappe.get_all",
-                return_value=[
-                    {"name": "flow-1", "definition_json": definition_json},
-                    {"name": "flow-2", "definition_json": definition_json},
-                ],
-            ):
-                with self.assertRaises(Exception):
-                    flow_webhook_clean()
-        finally:
-            pass
+        with patch("frappe.get_all") as get_all:
+            with self.assertRaises(frappe.AuthenticationError):
+                inspect.unwrap(flow_webhook_clean)()
+            # no flow is looked up by its secret
+            get_all.assert_not_called()
+
+    def test_flow_webhook_ignores_query_secret(self):
+        """A secret in the URL is not accepted, even when it is the right one."""
+        from huf.ai.flow.api import flow_webhook
+
+        secret = "correct-key-0123456789abcdefghijklmnop"
+        defn_doc = SimpleNamespace(
+            status="Active",
+            definition_json='{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook","config":{"method":"POST","secret":"%s"}}]}' % secret,
+        )
+        mock_request = frappe._dict(args={"secret": secret}, headers={}, get_data=lambda **kw: b"{}")
+        _request_patch = patch.object(frappe, "request", mock_request)
+        _request_patch.start()
+        self.addCleanup(_request_patch.stop)
+        with patch("frappe.db.exists", return_value=True):
+            with patch("frappe.db.get_value", return_value=("Active", "owner", defn_doc.definition_json)):
+                with self.assertRaises(frappe.AuthenticationError):
+                    inspect.unwrap(flow_webhook)("flow-1")

@@ -45,6 +45,8 @@ interface ItemCardProps {
   status?: {
     label: string;
     variant?: BadgeVariant;
+    /** Replaces the dot + word (for example a StatusPill). `label` stays the accessible text. */
+    node?: ReactNode;
   };
   metadata?: MetadataItem[];
   badges?: Array<{ label: ReactNode; variant?: BadgeVariant }>;
@@ -82,7 +84,7 @@ export function ItemCard({
       ) : null}
       <div className="flex flex-col flex-1">
         <CardHeader className="pb-3">
-          <CardTitle className="line-clamp-1 flex items-center gap-2 text-body-text font-semibold">
+          <CardTitle className={`flex min-w-0 items-center gap-2 text-body-text font-semibold ${status ? 'pr-24' : ''}`}>
             {avatarColor && (
               <span
                 className="w-3 h-3 rounded-sm shrink-0 border border-border"
@@ -91,15 +93,19 @@ export function ItemCard({
               />
             )}
             {TitleIcon && <TitleIcon className="w-5 h-5 shrink-0 text-steel-soft" />}
-            {title}
+            <span className="min-w-0 truncate" title={title}>{title}</span>
           </CardTitle>
           {description && (
             <CardDescription className="text-steel text-ui-text line-clamp-2 min-h-[2.5rem]">{description}</CardDescription>
           )}
           {status && (
             <CardAction className="top-5 flex items-center gap-2">
-              <StatusDot variant={badgeVariantToStatusDot(status.variant)} />
-              <span className="font-body text-[13px] font-medium text-steel">{status.label}</span>
+              {status.node ?? (
+                <>
+                  <StatusDot variant={badgeVariantToStatusDot(status.variant)} />
+                  <span className="font-body text-[13px] font-medium text-steel">{status.label}</span>
+                </>
+              )}
             </CardAction>
           )}
         </CardHeader>
@@ -113,7 +119,7 @@ export function ItemCard({
                     key={index}
                     className="flex items-center justify-between text-sm leading-tight"
                   >
-                    <div className="flex items-center gap-1 font-mono text-eyebrow uppercase text-steel-soft">
+                    <div className="flex items-center gap-1 font-mono text-eyebrow uppercase text-steel">
                       {item.icon && <item.icon className="w-3 h-3" />}
                       <span>{item.label}</span>
                     </div>

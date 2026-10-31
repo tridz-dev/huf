@@ -7,6 +7,7 @@
  "engine": "InnoDB",
  "field_order": [
   "service",
+  "display_label",
   "column_break_1",
   "is_active",
   "is_default",
@@ -24,7 +25,12 @@
   "telegram_last_webhook_setup",
   "section_break_2",
   "last_used",
-  "last_error"
+  "last_error",
+  "section_break_test",
+  "last_test_status",
+  "last_test_at",
+  "last_test_message",
+  "account_label"
  ],
  "fields": [
   {
@@ -34,6 +40,13 @@
    "label": "Integration Service",
    "options": "Integration Service",
    "reqd": 1
+  },
+  {
+   "description": "A name you choose for this connection, such as Marketing Slack. Leave empty to use the service name and account.",
+   "fieldname": "display_label",
+   "fieldtype": "Data",
+   "label": "Label",
+   "length": 80
   },
   {
    "fieldname": "column_break_1",
@@ -146,6 +159,36 @@
    "fieldname": "last_error",
    "fieldtype": "Small Text",
    "label": "Last Error",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_test",
+   "fieldtype": "Section Break",
+   "label": "Last connection check"
+  },
+  {
+   "fieldname": "last_test_status",
+   "fieldtype": "Select",
+   "label": "Last Check Result",
+   "options": "\nConnected\nRejected\nNot connected",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_test_at",
+   "fieldtype": "Datetime",
+   "label": "Last Checked",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_test_message",
+   "fieldtype": "Small Text",
+   "label": "Last Check Message",
+   "read_only": 1
+  },
+  {
+   "fieldname": "account_label",
+   "fieldtype": "Data",
+   "label": "Connected As",
    "read_only": 1
   }
  ],

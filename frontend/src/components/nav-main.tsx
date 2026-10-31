@@ -69,7 +69,7 @@ export function NavMain({
                         </span>
                       )}
                       {typeof item.count === 'number' && (
-                        <span className="font-mono text-[10.5px] text-steel-soft">
+                        <span className="font-mono text-[10.5px] text-steel">
                           {item.count}
                         </span>
                       )}

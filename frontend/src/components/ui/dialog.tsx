@@ -1,6 +1,7 @@
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Cross2Icon } from '@radix-ui/react-icons';
+import { dismissPassiveToasts } from '@/lib/ui/dismissPassiveToasts';
 
 import { cn } from '@/lib/utils';
 
@@ -12,6 +13,11 @@ const DialogPortal = DialogPrimitive.Portal;
 
 const DialogClose = DialogPrimitive.Close;
 
+/*
+ * repair-c-01: no exit animation on purpose. While a closing dialog fades out, Radix keeps it mounted: its overlay still catches
+ * clicks and <body> keeps pointer-events:none, so a click right after "Save" (while the "saved" toast already shows) was swallowed.
+ * Without a closing animation the dialog unmounts and releases the page in the same frame.
+ */
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
@@ -19,7 +25,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'fixed inset-0 z-50 bg-black/[.28] backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+      'fixed inset-0 z-50 bg-black/[.28] backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:motion-reduce:!animate-none data-[state=open]:fade-in-0',
       className
     )}
     {...props}
@@ -30,13 +36,19 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => {
+  // final2-04: a "saved" toast left over from the last action sat on the new dialog's bottom edge (the Danger zone was clipped).
+  // Passive toasts go; an error or a toast with a button (Undo) stays.
+  React.useEffect(() => {
+    dismissPassiveToasts();
+  }, []);
+  return (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed inset-0 z-50 grid w-full max-w-[100vw] gap-4 border-0 bg-background p-6 shadow-[0_24px_60px_-20px_rgba(0,0,0,.28)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-[16px] max-h-[100dvh] sm:inset-auto sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:max-w-[720px] sm:max-h-[85vh] sm:h-auto sm:rounded-[16px] sm:border',
+        'fixed inset-0 z-50 grid w-full max-w-[100vw] gap-4 border-0 bg-background p-6 shadow-[0_24px_60px_-20px_rgba(0,0,0,.28)] duration-200 data-[state=open]:animate-in data-[state=open]:motion-reduce:!animate-none data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-[16px] max-h-[100dvh] overflow-y-auto sm:inset-auto sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:max-w-[720px] sm:max-h-[calc(100vh-48px)] sm:h-auto sm:rounded-[16px] sm:border',
         className
       )}
       {...props}
@@ -48,7 +60,8 @@ const DialogContent = React.forwardRef<
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPortal>
-));
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({

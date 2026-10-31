@@ -13,14 +13,12 @@ Test classes and their bench requirements
 ------------------------------------------
 Frappe-free (plain pytest / stubbed frappe via huf/ai/tests/conftest.py,
 no live bench, no DB):
-    - TestResolveContextPath
     - TestFromReferenceResolution
     - TestResolveRecursive
     - TestEvaluateEdges
     - TestExecCondition
     - TestExecTransform
-    - TestExecLoopNode
-    - TestExecEnd
+    - TestExecForeach
     - TestExecTriggerWebhook
     - TestExecToolCallInterpolation   (mocks frappe.db.get_value / execute_tool;
                                         no real DB)
@@ -52,8 +50,10 @@ criteria as-is once the fix lands. Everywhere else, we simply do not assert on
 the defective path.
 """
 
+import contextlib
 import json
 import sys
+import types
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -94,6 +94,13 @@ if isinstance(sys.modules.get("frappe"), MagicMock):
 
 from huf.ai.flow import engine as flow_engine
 from huf.ai.graph.executor import GraphContext
+
+# Another test module may have imported the engine before the identity `whitelist` above was
+# installed, leaving MagicMock-wrapped public functions; re-execute the module once so they are real.
+if isinstance(sys.modules.get("frappe"), MagicMock) and isinstance(flow_engine.approve_flow_run, MagicMock):
+	import importlib
+
+	importlib.reload(flow_engine)
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +154,40 @@ class FakeFlowRun:
 		pass
 
 
+def _fake_transition(flow_run, values, *, from_statuses=None, not_from_statuses=None, bump_hop=False):
+	"""Stand-in for ``engine._transition_run`` (a conditional SQL UPDATE) on a FakeFlowRun."""
+	status = getattr(flow_run, "status", None)
+	if from_statuses and status not in from_statuses:
+		return False
+	if not_from_statuses and status in not_from_statuses:
+		return False
+	flow_run.db_set(dict(values))
+	if bump_hop:
+		flow_run.hop_count = (flow_run.hop_count or 0) + 1
+	return True
+
+
+_transition_patch = patch.object(flow_engine, "_transition_run", _fake_transition)
+
+
+def setUpModule():
+	_transition_patch.start()
+
+
+def tearDownModule():
+	_transition_patch.stop()
+
+
+@contextlib.contextmanager
+def _no_mcp():
+	"""A built-in tool call without the optional heavy imports (agents SDK, whatsapp/cryptography)."""
+	fake = types.ModuleType("huf.ai.mcp_client")
+	fake.find_unique_mcp_server_for_tool = lambda name: None
+	with patch.dict(sys.modules, {"huf.ai.mcp_client": fake}), \
+		patch.object(flow_engine, "_bound_gateway", lambda *a, **k: contextlib.nullcontext()):
+		yield
+
+
 def _ctx(flow_run, **overrides):
 	"""Convenience: set a flow run's context_json from a plain dict."""
 	data = dict(overrides)
@@ -157,27 +198,6 @@ def _ctx(flow_run, **overrides):
 # ---------------------------------------------------------------------------
 # Pure string / path helpers
 # ---------------------------------------------------------------------------
-
-
-class TestResolveContextPath(unittest.TestCase):
-	"""`_resolve_context_path` -- dotted-path lookup into a context dict."""
-
-	def test_top_level_key(self):
-		self.assertEqual(flow_engine._resolve_context_path({"a": 1}, "a"), 1)
-
-	def test_nested_dotted_path(self):
-		ctx = {"user": {"profile": {"email": "a@example.com"}}}
-		self.assertEqual(flow_engine._resolve_context_path(ctx, "user.profile.email"), "a@example.com")
-
-	def test_missing_key_returns_none(self):
-		self.assertIsNone(flow_engine._resolve_context_path({"a": 1}, "b"))
-
-	def test_missing_intermediate_key_returns_none(self):
-		self.assertIsNone(flow_engine._resolve_context_path({"a": {}}, "a.b.c"))
-
-	def test_path_through_non_dict_returns_none(self):
-		# 'a' resolves to a string, so trying to go deeper ('a.b') must not raise.
-		self.assertIsNone(flow_engine._resolve_context_path({"a": "hello"}, "a.b"))
 
 
 class TestFromReferenceResolution(unittest.TestCase):
@@ -263,10 +283,22 @@ class TestEvaluateEdges(unittest.TestCase):
 		flow_run = self._run()
 		self.assertIsNone(flow_engine._evaluate_edges(flow_run, "n1", {"status": "success"}, []))
 
-	def test_always_edge_taken_unconditionally(self):
+	def test_always_edge_taken_on_success(self):
 		flow_run = self._run()
 		edges = [{"from": "n1", "to": "n2", "type": "always"}]
-		self.assertEqual(flow_engine._evaluate_edges(flow_run, "n1", {"status": "failed"}, edges), "n2")
+		self.assertEqual(flow_engine._evaluate_edges(flow_run, "n1", {"status": "success"}, edges), "n2")
+
+	def test_next_is_not_followed_when_the_node_failed(self):
+		flow_run = self._run()
+		edges = [{"from": "n1", "to": "n2", "type": "always"}]
+		self.assertIsNone(flow_engine._evaluate_edges(flow_run, "n1", {"status": "failed"}, edges))
+
+	def test_on_error_wins_over_next_for_a_failed_node(self):
+		flow_run = self._run()
+		nodes = [{"id": "n1", "type": "transform", "config": {}, "next": "n2", "on_error": "err"}]
+		edges = flow_engine.edges_from_nodes(nodes)
+		self.assertEqual(flow_engine._evaluate_edges(flow_run, "n1", {"status": "failed"}, edges), "err")
+		self.assertEqual(flow_engine._evaluate_edges(flow_run, "n1", {"status": "success"}, edges), "n2")
 
 	def test_on_success_taken_when_status_success(self):
 		flow_run = self._run()
@@ -288,71 +320,16 @@ class TestEvaluateEdges(unittest.TestCase):
 		edges = [{"from": "n1", "to": "n2", "type": "on_failure"}]
 		self.assertIsNone(flow_engine._evaluate_edges(flow_run, "n1", {"status": "success"}, edges))
 
-	def test_expression_edge_taken_when_true(self):
-		flow_run = self._run({"score": 90})
-		edges = [{"from": "n1", "to": "n2", "type": "expression", "condition": "context['score'] > 50"}]
-		self.assertEqual(flow_engine._evaluate_edges(flow_run, "n1", {"status": "success"}, edges), "n2")
-
-	def test_expression_edge_not_taken_when_false(self):
-		flow_run = self._run({"score": 10})
-		edges = [{"from": "n1", "to": "n2", "type": "expression", "condition": "context['score'] > 50"}]
-		self.assertIsNone(flow_engine._evaluate_edges(flow_run, "n1", {"status": "success"}, edges))
-
-	def test_default_edge_type_is_always(self):
+	def test_outcome_edges_are_never_followed_generically(self):
 		flow_run = self._run()
-		edges = [{"from": "n1", "to": "n2"}]  # no explicit 'type'
-		self.assertEqual(flow_engine._evaluate_edges(flow_run, "n1", {"status": "failed"}, edges), "n2")
+		edges = [{"from": "n1", "to": "n2", "type": "outcome", "meta": {"outcome": "approved"}}]
+		self.assertIsNone(flow_engine._evaluate_edges(flow_run, "n1", {"status": "success"}, edges))
+		self.assertIsNone(flow_engine._evaluate_edges(flow_run, "n1", {"status": "failed"}, edges))
 
 	def test_edges_from_other_nodes_are_ignored(self):
 		flow_run = self._run()
 		edges = [{"from": "other", "to": "n9", "type": "always"}]
 		self.assertIsNone(flow_engine._evaluate_edges(flow_run, "n1", {"status": "success"}, edges))
-
-	def test_higher_priority_edge_wins_regardless_of_list_order(self):
-		flow_run = self._run()
-		edges = [
-			{"from": "n1", "to": "low", "type": "always", "priority": 1},
-			{"from": "n1", "to": "high", "type": "always", "priority": 10},
-		]
-		self.assertEqual(flow_engine._evaluate_edges(flow_run, "n1", {"status": "success"}, edges), "high")
-
-	def test_priority_ties_fall_through_to_first_matching_type(self):
-		# Same priority: a non-matching on_success edge must not block a
-		# later (in list order) always edge from being reached.
-		flow_run = self._run()
-		edges = [
-			{"from": "n1", "to": "unmatched", "type": "on_success", "priority": 5},
-			{"from": "n1", "to": "fallback", "type": "always", "priority": 5},
-		]
-		self.assertEqual(flow_engine._evaluate_edges(flow_run, "n1", {"status": "failed"}, edges), "fallback")
-
-	def test_missing_priority_defaults_to_zero(self):
-		flow_run = self._run()
-		edges = [
-			{"from": "n1", "to": "explicit_zero", "type": "always", "priority": 0},
-			{"from": "n1", "to": "no_priority_field", "type": "on_failure"},
-		]
-		# on_failure doesn't match (status success), so the explicit-priority
-		# always edge (priority 0, same as the default) must win.
-		self.assertEqual(flow_engine._evaluate_edges(flow_run, "n1", {"status": "success"}, edges), "explicit_zero")
-
-	def test_expression_error_is_swallowed_and_edge_skipped(self):
-		flow_run = self._run({})
-		edges = [
-			{"from": "n1", "to": "bad", "type": "expression", "condition": "context['missing'].foo"},
-			{"from": "n1", "to": "fallback", "type": "always", "priority": -1},
-		]
-		# A raising expression must not abort edge evaluation -- it should be
-		# treated as non-matching and evaluation should continue to the next edge.
-		#
-		# frappe.log_error is patched out deliberately: the swallow path writes an
-		# Error Log document, and inserting one outside a normal request lifecycle
-		# fails on an uninitialised frappe.flags.currently_saving. The behaviour under
-		# test is "the exception is swallowed and the next edge is tried", not whether
-		# the log write itself succeeds.
-		with patch.object(flow_engine.frappe, "log_error"):
-			result = flow_engine._evaluate_edges(flow_run, "n1", {"status": "success"}, edges)
-		self.assertEqual(result, "fallback")
 
 
 # ---------------------------------------------------------------------------
@@ -361,50 +338,43 @@ class TestEvaluateEdges(unittest.TestCase):
 
 
 class TestExecCondition(unittest.TestCase):
-	def test_true_branch_routes_to_true_node(self):
+	def test_true_branch_routes_to_on_true(self):
 		flow_run = FakeFlowRun()
 		_ctx(flow_run, flag=True)
-		config = {"expression": "context['flag']", "on_true": "t", "on_false": "f"}
+		config = {"expression": "input['flag']", "on_true": "t", "on_false": "f"}
 		result = flow_engine._exec_condition(flow_run, {}, config, {})
 		self.assertEqual(result["status"], "success")
 		self.assertEqual(result["next_node_id"], "t")
 		self.assertEqual(result["branch"], "true")
 
-	def test_false_branch_routes_to_false_node(self):
+	def test_false_branch_routes_to_on_false(self):
 		flow_run = FakeFlowRun()
 		_ctx(flow_run, flag=False)
-		config = {"expression": "context['flag']", "on_true": "t", "on_false": "f"}
+		config = {"expression": "input['flag']", "on_true": "t", "on_false": "f"}
 		result = flow_engine._exec_condition(flow_run, {}, config, {})
 		self.assertEqual(result["next_node_id"], "f")
 		self.assertEqual(result["branch"], "false")
 
-	def test_missing_branch_target_yields_no_next_node(self):
+	def test_comparison_expression(self):
 		flow_run = FakeFlowRun()
-		_ctx(flow_run, flag=True)
-		config = {"expression": "context['flag']", "on_true": "t"}  # no on_false
-		result = flow_engine._exec_condition(flow_run, {}, config, {})
-		# flag is True -> chosen branch is true_node, which IS set, so this
-		# should route normally; flip to confirm the "chosen branch absent" path:
-		self.assertEqual(result["next_node_id"], "t")
+		_ctx(flow_run, amount=150)
+		config = {"expression": "input['amount'] > 100", "on_true": "t", "on_false": "f"}
+		self.assertEqual(flow_engine._exec_condition(flow_run, {}, config, {})["next_node_id"], "t")
 
 	def test_missing_expression_fails(self):
 		flow_run = FakeFlowRun()
-		result = flow_engine._exec_condition(flow_run, {}, {"on_true": "t"}, {})
+		result = flow_engine._exec_condition(flow_run, {}, {"on_true": "t", "on_false": "f"}, {})
 		self.assertEqual(result["status"], "failed")
 
-	def test_missing_both_targets_fails(self):
+	def test_missing_a_target_fails(self):
 		flow_run = FakeFlowRun()
-		result = flow_engine._exec_condition(flow_run, {}, {"expression": "True"}, {})
+		result = flow_engine._exec_condition(flow_run, {}, {"expression": "True", "on_true": "t"}, {})
 		self.assertEqual(result["status"], "failed")
 
-	def test_chosen_branch_without_target_completes_with_no_next_node(self):
+	def test_bad_expression_fails(self):
 		flow_run = FakeFlowRun()
-		_ctx(flow_run, flag=False)
-		# Only on_true configured; expression evaluates false -> on_false is None.
-		config = {"expression": "context['flag']", "on_true": "t"}
-		result = flow_engine._exec_condition(flow_run, {}, config, {})
-		self.assertEqual(result["status"], "success")
-		self.assertIsNone(result["next_node_id"])
+		config = {"expression": "__import__('os')", "on_true": "t", "on_false": "f"}
+		self.assertEqual(flow_engine._exec_condition(flow_run, {}, config, {})["status"], "failed")
 
 
 class TestExecTransform(unittest.TestCase):
@@ -454,67 +424,94 @@ class TestExecTransform(unittest.TestCase):
 		self.assertEqual(result["status"], "failed")
 
 
-class TestExecLoopNode(unittest.TestCase):
-	def test_first_iteration_sets_item_and_returns_loop_node(self):
-		flow_run = FakeFlowRun()
-		_ctx(flow_run, items=["a", "b"])
-		config = {"iterate_over": "items", "loop_node": "body", "done_node": "done"}
-		result = flow_engine._exec_loop_node(flow_run, {}, config, {})
-		self.assertEqual(result["next_node_id"], "body")
-		new_ctx = json.loads(flow_run.context_json)
-		self.assertEqual(new_ctx["loop_item"], "a")
-		self.assertEqual(new_ctx["loop_index"], 1)
+def _flow_ctx(defn, flow_run):
+	"""A FlowRunContext over a pinned copy of ``defn`` (what run_flow builds)."""
+	from huf.ai.graph.executor import PinnedVersion
 
-	def test_iteration_completes_and_routes_to_done_node(self):
-		flow_run = FakeFlowRun()
-		_ctx(flow_run, items=["a"], loop_index=1)
-		config = {"iterate_over": "items", "loop_node": "body", "done_node": "done"}
-		result = flow_engine._exec_loop_node(flow_run, {}, config, {})
-		self.assertEqual(result["next_node_id"], "done")
-		new_ctx = json.loads(flow_run.context_json)
-		self.assertNotIn("loop_item", new_ctx)
-		self.assertNotIn("loop_index", new_ctx)
+	return flow_engine._build_run_context(flow_run, PinnedVersion.pin(defn))
 
-	def test_missing_iterate_over_fails(self):
-		flow_run = FakeFlowRun()
-		_ctx(flow_run)
-		result = flow_engine._exec_loop_node(flow_run, {}, {}, {})
-		self.assertEqual(result["status"], "failed")
 
-	def test_non_list_target_fails(self):
-		flow_run = FakeFlowRun()
-		_ctx(flow_run, items="not-a-list")
-		result = flow_engine._exec_loop_node(flow_run, {}, {"iterate_over": "items"}, {})
-		self.assertEqual(result["status"], "failed")
+def _drive(defn, flow_run):
+	"""Run a schema-shaped graph through the real ``_execute_loop``."""
+	run_ctx = _flow_ctx(defn, flow_run)
+	nodes_map = {n["id"]: n for n in defn["nodes"]}
+	with patch.object(flow_engine, "_publish_flow_event"), patch.object(flow_engine, "commit_if_background"):
+		flow_engine._execute_loop(flow_run, nodes_map, run_ctx.edges, run_ctx)
+	return run_ctx
 
-	def test_custom_item_and_index_keys(self):
-		flow_run = FakeFlowRun()
-		_ctx(flow_run, rows=[1, 2, 3])
-		config = {
-			"iterate_over": "rows",
-			"item_key": "current_row",
-			"index_key": "row_idx",
-			"loop_node": "body",
-			"done_node": "done",
+
+def _out(node_id, value=1):
+	return {"id": node_id, "type": "output", "config": {"value": value}}
+
+
+class TestExecForeach(unittest.TestCase):
+	def _defn(self, items_ref=None, **loop_cfg):
+		cfg = {
+			"items": items_ref or {"$from": "input.items"},
+			"body": ["body"],
+			"max_iterations": 10,
+			"on_item_error": "fail",
+			"collect": {"$from": "body"},
 		}
-		flow_engine._exec_loop_node(flow_run, {}, config, {})
-		new_ctx = json.loads(flow_run.context_json)
-		self.assertEqual(new_ctx["current_row"], 1)
-		self.assertEqual(new_ctx["row_idx"], 1)
+		cfg.update(loop_cfg)
+		return {
+			"entry": "loop",
+			"nodes": [
+				{"id": "loop", "type": "foreach", "config": cfg, "next": "finish"},
+				{
+					"id": "body",
+					"type": "transform",
+					"config": {"op": "upper", "input": {"text": {"$from": "foreach.item"}}},
+				},
+				_out("finish", {"$from": "loop"}),
+			],
+			"contract": {"limits": {"max_foreach_iterations": 200}},
+		}
 
-	def test_max_iterations_safety_cap_routes_to_done_node(self):
-		flow_run = FakeFlowRun()
-		_ctx(flow_run, items=list(range(10)), loop_index=5)
-		config = {"iterate_over": "items", "loop_node": "body", "done_node": "done", "max_iterations": 5}
-		result = flow_engine._exec_loop_node(flow_run, {}, config, {})
-		self.assertEqual(result["next_node_id"], "done")
+	def test_body_runs_per_item_collects_and_done_edge_continues(self):
+		flow_run = FakeFlowRun(current_node_id="loop", max_hops=10)
+		_ctx(flow_run, items=["a", "b", "c"])
+		run_ctx = _drive(self._defn(), flow_run)
+		self.assertEqual(flow_run.status, "Success")
+		self.assertEqual(run_ctx.context.node_outputs["loop"], ["A", "B", "C"])
+		self.assertEqual(run_ctx.context.node_outputs["finish"], ["A", "B", "C"])
 
+	def test_item_var_and_index_var_are_bound_during_body_and_restored(self):
+		defn = self._defn(item_var="row", index_var="i")
+		defn["nodes"][1]["config"]["input"] = {"text": {"$from": "input.row"}}
+		flow_run = FakeFlowRun(current_node_id="loop", max_hops=10)
+		_ctx(flow_run, items=["x", "y"])
+		run_ctx = _drive(defn, flow_run)
+		self.assertEqual(run_ctx.context.node_outputs["loop"], ["X", "Y"])
+		self.assertNotIn("row", run_ctx.context.data)
+		self.assertNotIn("i", run_ctx.context.data)
 
-class TestExecEnd(unittest.TestCase):
-	def test_end_node_reports_success(self):
-		flow_run = FakeFlowRun()
-		result = flow_engine._exec_end(flow_run, {}, {}, {})
-		self.assertEqual(result["status"], "success")
+	def test_on_item_error_fail_fails_the_run(self):
+		flow_run = FakeFlowRun(current_node_id="loop", max_hops=10)
+		_ctx(flow_run, items=["a", {"x": 1}])  # upper() of an object fails
+		_drive(self._defn(), flow_run)
+		self.assertEqual(flow_run.status, "Failed")
+		self.assertIn("item 2", flow_run.last_error)
+
+	def test_on_item_error_skip_drops_the_item_and_continues(self):
+		flow_run = FakeFlowRun(current_node_id="loop", max_hops=10)
+		_ctx(flow_run, items=["a", {"x": 1}, "c"])
+		run_ctx = _drive(self._defn(on_item_error="skip"), flow_run)
+		self.assertEqual(flow_run.status, "Success")
+		self.assertEqual(run_ctx.context.node_outputs["loop"], ["A", "C"])
+
+	def test_more_items_than_max_iterations_fails(self):
+		flow_run = FakeFlowRun(current_node_id="loop", max_hops=10)
+		_ctx(flow_run, items=[1, 2, 3])
+		_drive(self._defn(max_iterations=2), flow_run)
+		self.assertEqual(flow_run.status, "Failed")
+		self.assertIn("its limit is 2", flow_run.last_error)
+
+	def test_non_list_items_fails(self):
+		flow_run = FakeFlowRun(current_node_id="loop", max_hops=10)
+		_ctx(flow_run, items="nope")
+		_drive(self._defn(), flow_run)
+		self.assertEqual(flow_run.status, "Failed")
 
 
 class TestExecTriggerWebhook(unittest.TestCase):
@@ -529,6 +526,18 @@ class TestExecTriggerWebhook(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # tool.call: exercised through the real executor with frappe surface mocked
 # ---------------------------------------------------------------------------
+
+class TestChatTriggersRun(unittest.TestCase):
+	"""A gateway-routed run starts at the chat trigger node, so the engine must be able to execute it."""
+
+	def test_chat_triggers_have_a_passthrough_executor(self):
+		for node_type in ("trigger.gateway", "trigger.whatsapp", "trigger.telegram"):
+			flow_run = FakeFlowRun()
+			payload = _ctx(flow_run, text="hi")
+			result = flow_engine._execute_node(flow_run, {"id": "t", "type": node_type, "config": {}}, {})
+			self.assertEqual(result["status"], "success", node_type)
+			self.assertEqual(result["output"], payload, node_type)
+
 
 
 class TestExecToolCallInterpolation(unittest.TestCase):
@@ -546,7 +555,7 @@ class TestExecToolCallInterpolation(unittest.TestCase):
 	def _run_tool_call(self, ctx, args, tool_result=None):
 		flow_run = FakeFlowRun()
 		_ctx(flow_run, **ctx)
-		config = {"tool_name": "demo_tool", "args": args}
+		config = {"tool_id": "demo_tool", "input": args}
 		captured = {}
 
 		def fake_execute(tool_name, call_args):
@@ -558,16 +567,16 @@ class TestExecToolCallInterpolation(unittest.TestCase):
 		fake_tool_call_doc = MagicMock()
 
 		with patch.object(flow_engine, "frappe") as fake_frappe, \
+			_no_mcp(), \
 			patch.object(flow_engine, "execute_tool", side_effect=fake_execute), \
 			patch.object(flow_engine, "_create_flow_agent_run", return_value=fake_run_doc):
-			fake_frappe.db.get_value.return_value = None  # not an MCP tool
 			fake_frappe.get_doc.return_value = fake_tool_call_doc
 			flow_engine._exec_tool_call(flow_run, {"id": "n1"}, config, {})
 
 		return captured
 
 	def test_flat_key_reference_resolves(self):
-		captured = self._run_tool_call({"name": "Ada"}, {"greeting": {"$from": "context.name"}})
+		captured = self._run_tool_call({"name": "Ada"}, {"greeting": {"$from": "input.name"}})
 		self.assertEqual(captured["args"]["greeting"], "Ada")
 
 	def test_dotted_path_reference_resolves(self):
@@ -583,6 +592,103 @@ class TestExecToolCallInterpolation(unittest.TestCase):
 		)
 		self.assertEqual(captured["args"]["to"], "a@b.com")
 
+	def test_template_value_resolves(self):
+		captured = self._run_tool_call(
+			{"name": "Ada"},
+			{"text": {"$template": "Hi {n}", "vars": {"n": {"$from": "input.name"}}}},
+		)
+		self.assertEqual(captured["args"]["text"], "Hi Ada")
+
+	def test_web_request_step_limit_becomes_request_timeout(self):
+		flow_run = FakeFlowRun()
+		_ctx(flow_run)
+		captured = {}
+
+		def fake_execute(tool_name, call_args):
+			captured["args"] = call_args
+			return {"success": True, "result": "ok"}
+
+		with patch.object(flow_engine, "frappe") as fake_frappe, \
+			_no_mcp(), \
+			patch.object(flow_engine, "execute_tool", side_effect=fake_execute), \
+			patch.object(flow_engine, "_create_flow_agent_run", return_value=MagicMock()):
+			fake_frappe.get_doc.return_value = MagicMock()
+			flow_engine._exec_tool_call(
+				flow_run, {"id": "n1"}, {"tool_id": "http_request", "input": {"url": "https://x.example"}, "timeout_ms": 12000}, {}
+			)
+		self.assertEqual(captured["args"]["timeout_seconds"], 12.0)
+
+	def test_legacy_names_are_not_read(self):
+		flow_run = FakeFlowRun()
+		with patch.object(flow_engine, "execute_tool") as ex:
+			result = flow_engine._exec_tool_call(
+				flow_run, {"id": "n1"}, {"tool_name": "demo", "args": {"a": 1}}, {}
+			)
+		self.assertEqual(result["status"], "failed")
+		ex.assert_not_called()
+
+
+class TestNormalizeToolResult(unittest.TestCase):
+	def test_plain_success_envelope(self):
+		out = flow_engine.normalize_tool_result({"success": True, "result": {"id": 1}})
+		self.assertTrue(out["success"])
+		self.assertEqual(out["result"], {"id": 1})
+
+	def test_json_string_with_success_false_is_a_failure(self):
+		raw = {"success": True, "result": json.dumps({"success": False, "error": "no such channel"})}
+		out = flow_engine.normalize_tool_result(raw)
+		self.assertFalse(out["success"])
+		self.assertEqual(out["error"], "no such channel")
+
+	def test_json_string_with_error_key_is_a_failure(self):
+		raw = {"success": True, "result": '{"error": "quota exceeded"}'}
+		out = flow_engine.normalize_tool_result(raw)
+		self.assertFalse(out["success"])
+		self.assertIn("quota", out["error"])
+
+	def test_dict_result_with_error_key_is_a_failure(self):
+		out = flow_engine.normalize_tool_result({"success": True, "result": {"error": "bad"}})
+		self.assertFalse(out["success"])
+
+	def test_json_string_success_is_parsed_for_downstream_fields(self):
+		out = flow_engine.normalize_tool_result({"success": True, "result": '{"success": true, "id": 7}'})
+		self.assertTrue(out["success"])
+		self.assertEqual(out["result"]["id"], 7)
+
+	def test_envelope_failure_keeps_its_error(self):
+		out = flow_engine.normalize_tool_result({"success": False, "error": "boom"})
+		self.assertFalse(out["success"])
+		self.assertEqual(out["error"], "boom")
+
+	def test_non_json_text_result_is_success(self):
+		out = flow_engine.normalize_tool_result({"success": True, "result": "sent"})
+		self.assertTrue(out["success"])
+		self.assertEqual(out["result"], "sent")
+
+	def test_unwrapped_value(self):
+		self.assertTrue(flow_engine.normalize_tool_result("hello")["success"])
+		self.assertFalse(flow_engine.normalize_tool_result({"success": False})["success"])
+
+
+class TestExecToolCallFailureDetection(unittest.TestCase):
+	def _run(self, tool_return):
+		flow_run = FakeFlowRun()
+		with patch.object(flow_engine, "frappe"), _no_mcp(), \
+			patch.object(flow_engine, "commit_if_background"), \
+			patch.object(flow_engine, "execute_tool", return_value=tool_return), \
+			patch.object(flow_engine, "_create_flow_agent_run", return_value=MagicMock()):
+			return flow_engine._exec_tool_call(flow_run, {"id": "n1"}, {"tool_id": "t", "input": {}}, {})
+
+	def test_tool_json_failure_marks_node_failed(self):
+		out = self._run({"success": True, "result": '{"success": false, "error": "denied"}'})
+		self.assertEqual(out["status"], "failed")
+		self.assertEqual(out["error"], "denied")
+
+	def test_clean_result_stays_green_and_is_the_node_output(self):
+		out = self._run({"success": True, "result": '{"ok": 1}'})
+		self.assertEqual(out["status"], "success")
+		self.assertEqual(out["result"], {"ok": 1})
+
 
 # ---------------------------------------------------------------------------
 # approve_flow_run: its own inline routing + meta.outcome convention
@@ -590,23 +696,25 @@ class TestExecToolCallInterpolation(unittest.TestCase):
 
 
 class TestApproveFlowRunRouting(unittest.TestCase):
-	"""approve_flow_run has a SEPARATE routing implementation from
-	`_evaluate_edges`: it first looks for an edge whose `meta.outcome` equals
-	the decision string ("approved"/"rejected"); only for "approved" does it
-	fall back to `_evaluate_edges`. Rejection with no explicit edge must FAIL
-	the run rather than silently falling back to success-edge routing.
+	"""approve_flow_run routes by the human.approval node's own ``approve_next`` /
+	``reject_next`` (outcome-labelled edges), checks the approver first (fail closed,
+	for both decisions), and stores the decision record as the node's output.
 	"""
 
-	def _defn(self, edges):
+	def _defn(self, approve_next="next_ok", reject_next="next_no", **cfg):
+		config = {"message": "ok?", "approve_next": approve_next, "reject_next": reject_next}
+		config.update(cfg)
 		return {
 			"id": "test-flow",
 			"entry": "approval",
-			"nodes": [],
-			"edges": edges,
-			"settings": {},
+			"nodes": [
+				{"id": "approval", "type": "human.approval", "config": config},
+				_out("next_ok"),
+				_out("next_no"),
+			],
 		}
 
-	def _invoke(self, flow_run, edges, decision, comment=None, roles=None, session_user="Administrator"):
+	def _invoke(self, flow_run, defn, decision, comment=None, roles=None, session_user="someone@example.com"):
 		fake_frappe = MagicMock()
 		fake_frappe.session.user = session_user
 		fake_frappe.get_roles.return_value = roles or []
@@ -621,94 +729,184 @@ class TestApproveFlowRunRouting(unittest.TestCase):
 
 		with patch.object(flow_engine, "frappe", fake_frappe), \
 			patch.object(flow_engine, "_", lambda s: s), \
-			patch.object(flow_engine, "load_definition", return_value=self._defn(edges)), \
+			patch.object(flow_engine, "load_definition", return_value=defn), \
 			patch.object(flow_engine, "run_flow") as fake_run_flow, \
-			patch.object(flow_engine, "_clear_flow_notifications"):
+			patch.object(flow_engine, "commit_if_background"), \
+			patch.object(flow_engine, "_clear_flow_notifications"), \
+			patch.object(flow_engine, "_publish_flow_event"), \
+			patch.object(flow_engine.flow_hooks, "notify_failure"):
 			flow_engine.approve_flow_run(flow_run.name, decision, comment)
 		return fake_run_flow
 
-	def _waiting_flow_run(self, store_key="approval", approval_type="role", approver_role=None):
+	def _waiting_flow_run(self, approver_type="role", approver_role="System Manager", approver_users=None):
 		flow_run = FakeFlowRun(
 			status="Waiting Approval",
 			current_node_id="approval",
 			waiting=json.dumps(
 				{
-					"store_decision_in_context": store_key,
-					"approval_type": approval_type,
+					"type": "approval",
+					"node_id": "approval",
+					"approver_type": approver_type,
 					"approver_role": approver_role,
+					"approver_users": approver_users or [],
 				}
 			),
 		)
 		_ctx(flow_run)
 		return flow_run
 
-	def test_explicit_approved_outcome_edge_wins(self):
+	def test_approved_routes_to_approve_next(self):
 		flow_run = self._waiting_flow_run()
-		edges = [
-			{"from": "approval", "to": "next_ok", "meta": {"outcome": "approved"}},
-			{"from": "approval", "to": "next_fallback", "type": "always"},
-		]
-		fake_run_flow = self._invoke(flow_run, edges, "approved")
+		fake_run_flow = self._invoke(flow_run, self._defn(), "approved", roles=["System Manager"])
 		self.assertEqual(flow_run.current_node_id, "next_ok")
 		self.assertEqual(flow_run.status, "Running")
 		fake_run_flow.assert_called_once_with(flow_run.name)
 
-	def test_explicit_rejected_outcome_edge_wins(self):
+	def test_rejected_routes_to_reject_next(self):
 		flow_run = self._waiting_flow_run()
-		edges = [{"from": "approval", "to": "rejection_path", "meta": {"outcome": "rejected"}}]
-		self._invoke(flow_run, edges, "rejected", comment="not good")
-		self.assertEqual(flow_run.current_node_id, "rejection_path")
+		self._invoke(flow_run, self._defn(), "rejected", comment="not good", roles=["System Manager"])
+		self.assertEqual(flow_run.current_node_id, "next_no")
 		self.assertEqual(flow_run.status, "Running")
 
-	def test_approved_with_no_outcome_edge_falls_back_to_evaluate_edges(self):
+	def test_invalid_decision_is_refused(self):
 		flow_run = self._waiting_flow_run()
-		edges = [{"from": "approval", "to": "generic_next", "type": "on_success"}]
-		self._invoke(flow_run, edges, "approved")
-		self.assertEqual(flow_run.current_node_id, "generic_next")
+		with self.assertRaises(Exception):
+			self._invoke(flow_run, self._defn(), "maybe", roles=["System Manager"])
+		self.assertEqual(flow_run.status, "Waiting Approval")
 
-	def test_rejected_with_no_explicit_edge_fails_the_run_not_routes(self):
-		"""This is the surprising branch: rejection must NOT fall back to
-		`_evaluate_edges` (which would route it down a success-shaped path).
-		With no explicit 'rejected' outcome edge, the run must simply fail."""
+	def test_decision_record_is_the_approval_nodes_output_and_survives_a_reload(self):
 		flow_run = self._waiting_flow_run()
-		edges = [{"from": "approval", "to": "success_path", "type": "on_success"}]
-		self._invoke(flow_run, edges, "rejected", comment="nope")
-		self.assertEqual(flow_run.status, "Failed")
-		self.assertIn("nope", flow_run.last_error)
-		self.assertIsNone(flow_run.waiting)
-
-	def test_approved_with_no_outgoing_edges_completes_gracefully(self):
-		flow_run = self._waiting_flow_run()
-		self._invoke(flow_run, [], "approved")
-		self.assertEqual(flow_run.status, "Success")
-
-	def test_decision_is_stored_in_context_under_configured_key(self):
-		flow_run = self._waiting_flow_run(store_key="my_decision")
-		edges = [{"from": "approval", "to": "next", "meta": {"outcome": "approved"}}]
-		self._invoke(flow_run, edges, "approved", comment="lgtm")
-		stored_ctx = json.loads(flow_run.context_json)
-		self.assertEqual(stored_ctx["my_decision"]["decision"], "approved")
-		self.assertEqual(stored_ctx["my_decision"]["comment"], "lgtm")
+		self._invoke(flow_run, self._defn(), "approved", comment="lgtm", roles=["System Manager"], session_user="boss")
+		stored = json.loads(flow_run.context_json)[flow_engine.NODE_OUTPUTS_KEY]["approval"]
+		self.assertEqual(stored["decision"], "approved")
+		self.assertEqual(stored["comment"], "lgtm")
+		self.assertEqual(stored["decided_by"], "boss")
+		# the next run_flow builds a fresh context from context_json: the output is still addressable
+		reloaded = flow_engine.load_context(flow_run.context_json)
+		self.assertEqual(reloaded.resolve({"$from": "approval.decision"}), "approved")
+		self.assertNotIn(flow_engine.NODE_OUTPUTS_KEY, reloaded.data)
 
 	def test_hop_count_increments_on_routed_approval(self):
 		flow_run = self._waiting_flow_run()
 		flow_run.hop_count = 3
-		edges = [{"from": "approval", "to": "next", "meta": {"outcome": "approved"}}]
-		self._invoke(flow_run, edges, "approved")
+		self._invoke(flow_run, self._defn(), "approved", roles=["System Manager"])
 		self.assertEqual(flow_run.hop_count, 4)
 
 	def test_not_waiting_approval_raises(self):
 		flow_run = FakeFlowRun(status="Running")
 		with self.assertRaises(Exception):
-			self._invoke(flow_run, [], "approved")
+			self._invoke(flow_run, self._defn(), "approved")
 
-	def test_role_permission_denied_blocks_routing(self):
-		flow_run = self._waiting_flow_run(approval_type="role", approver_role="Flow Approver")
-		edges = [{"from": "approval", "to": "next", "meta": {"outcome": "approved"}}]
-		with self.assertRaises(PermissionError):
-			self._invoke(flow_run, edges, "approved", roles=["Some Other Role"])
-		# Permission must be checked BEFORE any routing/context mutation happens.
+	def test_role_permission_denied_blocks_routing_for_approve_and_reject(self):
+		for decision in ("approved", "rejected"):
+			flow_run = self._waiting_flow_run(approver_type="role", approver_role="Flow Approver")
+			with self.assertRaises(PermissionError):
+				self._invoke(flow_run, self._defn(), decision, roles=["Some Other Role"])
+			# Permission is checked BEFORE any routing/context mutation happens.
+			self.assertEqual(flow_run.status, "Waiting Approval")
+			self.assertEqual(flow_run.context_json, "{}")
+
+	def test_no_declared_approver_only_system_manager_may_decide(self):
+		for decision in ("approved", "rejected"):
+			flow_run = self._waiting_flow_run(approver_type=None, approver_role=None)
+			with self.assertRaises(PermissionError):
+				self._invoke(flow_run, self._defn(), decision, roles=["Flow Approver", "Desk User"])
+			self.assertEqual(flow_run.status, "Waiting Approval")
+		flow_run = self._waiting_flow_run(approver_type=None, approver_role=None)
+		self._invoke(flow_run, self._defn(), "rejected", roles=["System Manager"])
+		self.assertEqual(flow_run.current_node_id, "next_no")
+
+	def test_resume_flow_run_cannot_bypass_the_approver_check(self):
+		flow_run = self._waiting_flow_run()
+		fake_frappe = MagicMock()
+		fake_frappe.get_doc.return_value = flow_run
+		fake_frappe.PermissionError = PermissionError
+		fake_frappe.throw.side_effect = lambda msg, exc=Exception: (_ for _ in ()).throw(exc(msg))
+		with patch.object(flow_engine, "frappe", fake_frappe), patch.object(flow_engine, "_", lambda s: s):
+			with self.assertRaises(PermissionError):
+				flow_engine.resume_flow_run(flow_run.name)
 		self.assertEqual(flow_run.status, "Waiting Approval")
+
+
+class TestCheckApprover(unittest.TestCase):
+	"""Pure fail-closed approver policy (contract section 3, human.approval)."""
+
+	def test_role_requires_that_role(self):
+		w = {"approver_type": "role", "approver_role": "Accounts Manager"}
+		self.assertIsNone(flow_engine.check_approver(w, "u", ["Accounts Manager"]))
+		self.assertIsNotNone(flow_engine.check_approver(w, "u", ["System Manager"]))
+
+	def test_user_requires_listed_user(self):
+		w = {"approver_type": "user", "approver_users": ["a@x.com", "b@x.com"]}
+		self.assertIsNone(flow_engine.check_approver(w, "b@x.com", []))
+		self.assertIsNotNone(flow_engine.check_approver(w, "c@x.com", ["System Manager"]))
+
+	def test_absent_type_is_system_manager_only(self):
+		self.assertIsNone(flow_engine.check_approver({}, "u", ["System Manager"]))
+		self.assertIsNotNone(flow_engine.check_approver({}, "u", ["Desk User"]))
+		self.assertIsNotNone(flow_engine.check_approver(None, "u", []))
+
+	def test_role_type_with_missing_role_fails_closed(self):
+		self.assertIsNotNone(flow_engine.check_approver({"approver_type": "role"}, "u", ["Desk User"]))
+
+	def test_user_type_with_empty_list_fails_closed(self):
+		w = {"approver_type": "user", "approver_users": []}
+		self.assertIsNotNone(flow_engine.check_approver(w, "anyone", ["Desk User"]))
+		self.assertIsNone(flow_engine.check_approver(w, "anyone", ["System Manager"]))
+
+	def test_unknown_type_is_system_manager_only(self):
+		w = {"approver_type": "anyone"}
+		self.assertIsNotNone(flow_engine.check_approver(w, "u", ["Desk User"]))
+
+	def test_legacy_approval_type_key_is_ignored(self):
+		w = {"approval_type": "user", "approver_users": ["a@x.com"]}
+		self.assertIsNotNone(flow_engine.check_approver(w, "a@x.com", ["Desk User"]))
+
+
+class TestApprovalTimeout(unittest.TestCase):
+	def test_expired_only_after_deadline(self):
+		from datetime import datetime
+
+		w = {"timeout_at": "2026-01-01T10:00:00"}
+		self.assertFalse(flow_engine.approval_expired(w, datetime(2026, 1, 1, 9, 59)))
+		self.assertTrue(flow_engine.approval_expired(w, datetime(2026, 1, 1, 10, 0)))
+		self.assertFalse(flow_engine.approval_expired({}, datetime(2030, 1, 1)))
+
+
+class TestExecHumanApproval(unittest.TestCase):
+	def test_pause_records_schema_fields_and_node_outputs(self):
+		flow_run = FakeFlowRun(current_node_id="approval", status="Running")
+		_ctx(flow_run, foo="bar")
+		node = {"id": "approval", "type": "human.approval"}
+		config = {
+			"message": "Approve?",
+			"approve_next": "a",
+			"reject_next": "r",
+			"timeout_next": "t",
+			"timeout_ms": 1000,
+			"approver_type": "user",
+			"approver_users": ["a@x.com"],
+		}
+		ctx = GraphContext({"foo": "bar"})
+		ctx.record_output("earlier", {"v": 1})
+		run_ctx = flow_engine.FlowRunContext({}, flow_run=flow_run, context=ctx)
+		import datetime as _dt
+		with patch.object(flow_engine, "commit_if_background"), \
+			patch.object(flow_engine, "now_datetime", lambda: _dt.datetime(2026, 1, 1)), \
+			patch.object(flow_engine, "_send_approval_notifications"), \
+			patch.object(flow_engine.flow_hooks, "notify_approvers"):
+			out = flow_engine._exec_human_approval(flow_run, node, config, run_ctx)
+		self.assertEqual(out, {"status": "waiting_approval"})
+		self.assertEqual(flow_run.status, "Waiting Approval")
+		waiting = json.loads(flow_run.waiting)
+		self.assertEqual(waiting["approver_type"], "user")
+		self.assertEqual(waiting["approver_users"], ["a@x.com"])
+		self.assertEqual(waiting["timeout_next"], "t")
+		self.assertEqual(waiting["message"], "Approve?")
+		self.assertTrue(waiting["timeout_at"])
+		for legacy in ("approval_type", "store_decision_in_context", "title", "instructions"):
+			self.assertNotIn(legacy, waiting)
+		self.assertEqual(json.loads(flow_run.context_json)[flow_engine.NODE_OUTPUTS_KEY], {"earlier": {"v": 1}})
 
 
 # ---------------------------------------------------------------------------
@@ -720,16 +918,16 @@ class TestHopLimitAndEndCompletion(unittest.TestCase):
 	def test_hop_limit_trip_fails_the_run(self):
 		flow_run = FakeFlowRun(current_node_id="n1", hop_count=5, max_hops=5)
 		_ctx(flow_run)
-		nodes_map = {"n1": {"id": "n1", "type": "end", "config": {}}}
+		nodes_map = {"n1": _out("n1")}
 		with patch.object(flow_engine, "_publish_flow_event"):
 			flow_engine._execute_loop(flow_run, nodes_map, [], {})
 		self.assertEqual(flow_run.status, "Failed")
-		self.assertIn("Hop limit", flow_run.last_error)
+		self.assertIn("took more than 5 steps", flow_run.last_error)
 
 	def test_end_node_completes_run_successfully(self):
 		flow_run = FakeFlowRun(current_node_id="n1", hop_count=0, max_hops=10)
 		_ctx(flow_run)
-		nodes_map = {"n1": {"id": "n1", "type": "end", "config": {}}}
+		nodes_map = {"n1": _out("n1")}
 		with patch.object(flow_engine, "_publish_flow_event"):
 			flow_engine._execute_loop(flow_run, nodes_map, [], {})
 		self.assertEqual(flow_run.status, "Success")
@@ -741,13 +939,13 @@ class TestHopLimitAndEndCompletion(unittest.TestCase):
 		with patch.object(flow_engine, "_publish_flow_event"):
 			flow_engine._execute_loop(flow_run, {}, [], {})
 		self.assertEqual(flow_run.status, "Failed")
-		self.assertIn("missing", flow_run.last_error)
+		self.assertIn("no longer exists", flow_run.last_error)
 
 	def test_normal_mode_advances_via_evaluate_edges_between_nodes(self):
 		flow_run = FakeFlowRun(current_node_id="n1", hop_count=0, max_hops=10, mode="Normal")
 		_ctx(flow_run)
 		nodes_map = {
-			"n1": {"id": "n1", "type": "end", "config": {}},
+			"n1": _out("n1"),
 		}
 		edges = []  # end node completes before edges are even consulted
 		with patch.object(flow_engine, "_publish_flow_event"):
@@ -766,10 +964,10 @@ class TestHopLimitAndEndCompletion(unittest.TestCase):
 		flow_run = FakeFlowRun(current_node_id="n1", hop_count=0, max_hops=10, mode="Normal")
 		_ctx(flow_run)
 		nodes_map = {
-			"n1": {"id": "n1", "type": "transform", "config": {"op": "coalesce", "input": {"values": []}}},
-			"n2": {"id": "n2", "type": "end", "config": {}},
+			"n1": {"id": "n1", "type": "transform", "config": {"op": "coalesce", "input": {"values": []}}, "next": "n2"},
+			"n2": _out("n2"),
 		}
-		edges = [{"from": "n1", "to": "n2", "type": "always"}]
+		edges = flow_engine.edges_from_nodes(list(nodes_map.values()))
 		with patch.object(flow_engine, "_publish_flow_event"):
 			flow_engine._execute_loop(flow_run, nodes_map, edges, {})
 		self.assertEqual(flow_run.hop_count, 2)
@@ -803,7 +1001,7 @@ class TestFailedNodeWithNoSuccessorFailsRun(unittest.TestCase):
 			node["on_error"] = on_error
 		nodes_map = {"n1": node}
 		if on_error:
-			nodes_map[on_error] = {"id": on_error, "type": "end", "config": {}}
+			nodes_map[on_error] = _out(on_error)
 
 		def fake_execute_tool(tool_name, call_args):
 			return {"success": False, "error": "boom"}
@@ -811,13 +1009,14 @@ class TestFailedNodeWithNoSuccessorFailsRun(unittest.TestCase):
 		fake_run_doc = MagicMock()
 		fake_tool_call_doc = MagicMock()
 
-		with patch.object(flow_engine, "frappe") as fake_frappe, \
+		with patch.object(flow_engine, "frappe") as fake_frappe, _no_mcp(), \
 			patch.object(flow_engine, "execute_tool", side_effect=fake_execute_tool), \
 			patch.object(flow_engine, "_create_flow_agent_run", return_value=fake_run_doc), \
-			patch.object(flow_engine, "_publish_flow_event"):
-			fake_frappe.db.get_value.return_value = None  # not an MCP tool
+			patch.object(flow_engine, "_publish_flow_event"), \
+			patch.object(flow_engine, "commit_if_background"), \
+			patch.object(flow_engine.flow_hooks, "notify_failure"):
 			fake_frappe.get_doc.return_value = fake_tool_call_doc
-			flow_engine._execute_loop(flow_run, nodes_map, [], {})
+			flow_engine._execute_loop(flow_run, nodes_map, flow_engine.edges_from_nodes(list(nodes_map.values())), {})
 
 		return flow_run
 
@@ -867,7 +1066,7 @@ class TestKnownDefects(unittest.TestCase):
 			"id": "test-flow",
 			"version": 1,
 			"entry": "n1",
-			"nodes": [{"id": "n1", "type": "end", "config": {}}],
+			"nodes": [_out("n1")],
 			"edges": [],
 			"settings": {},
 		}
@@ -906,7 +1105,7 @@ class TestKnownDefects(unittest.TestCase):
 			flow_engine.resume_flow_run(flow_run.name)
 
 		# Intended: the node type actually executed should be the one from the
-		# PINNED version (v1's "end"), so the run should have completed via the
+		# PINNED version (v1's output node), so the run should have completed via the
 		# end node, not been left failing against a v2-shaped condition node.
 		self.assertEqual(flow_run.status, "Success")
 
@@ -922,23 +1121,27 @@ class TestKnownDefects(unittest.TestCase):
 		items = list(range(150))
 		flow_run = FakeFlowRun(current_node_id="loop", hop_count=0, max_hops=flow_engine.DEFAULT_MAX_HOPS)
 		_ctx(flow_run, items=items)
-		nodes_map = {
-			"loop": {
-				"id": "loop",
-				"type": "loop",
-				"config": {
-					"iterate_over": "items",
-					"loop_node": "body",
-					"done_node": "finish",
-					"max_iterations": 1000,
+		defn = {
+			"entry": "loop",
+			"nodes": [
+				{
+					"id": "loop",
+					"type": "foreach",
+					"config": {
+						"items": {"$from": "input.items"},
+						"body": ["body"],
+						"max_iterations": 1000,
+						"on_item_error": "fail",
+						"collect": {"$from": "body"},
+					},
+					"next": "finish",
 				},
-			},
-			"body": {"id": "body", "type": "transform", "config": {"op": "coalesce", "input": {"values": []}}},
-			"finish": {"id": "finish", "type": "end", "config": {}},
+				{"id": "body", "type": "transform", "config": {"op": "coalesce", "input": {"values": [1]}}},
+				_out("finish"),
+			],
+			"contract": {"limits": {"max_foreach_iterations": 1000}},
 		}
-		edges = [{"from": "body", "to": "loop", "type": "always"}]
-		with patch.object(flow_engine, "_publish_flow_event"):
-			flow_engine._execute_loop(flow_run, nodes_map, edges, {})
+		_drive(defn, flow_run)
 		self.assertEqual(flow_run.status, "Success")
 
 	def test_concurrent_resumes_do_not_double_advance_the_cursor(self):
@@ -976,10 +1179,10 @@ class TestKnownDefects(unittest.TestCase):
 		flow_run.db_set = tracking_db_set
 
 		nodes_map = {
-			"n1": {"id": "n1", "type": "transform", "config": {"op": "coalesce", "input": {"values": []}}},
-			"n2": {"id": "n2", "type": "end", "config": {}},
+			"n1": {"id": "n1", "type": "transform", "config": {"op": "coalesce", "input": {"values": []}}, "next": "n2"},
+			"n2": _out("n2"),
 		}
-		edges = [{"from": "n1", "to": "n2", "type": "always"}]
+		edges = flow_engine.edges_from_nodes(list(nodes_map.values()))
 
 		# ...and both drive the loop forward from the same starting snapshot.
 		with patch.object(flow_engine, "_publish_flow_event"):

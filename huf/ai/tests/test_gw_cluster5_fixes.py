@@ -40,7 +40,7 @@ from huf.install import _adapter_required_credentials, register_integration_serv
 # provider_id (== Integration Service.service_name for these) -> extra
 # credentials validated outside the adapter's own credential_schema.
 _ADAPTER_BACKED_SERVICES = {
-	"slack": [("signing_secret", True)],
+	"slack": [("signing_secret", False)],
 	"telegram": [],
 	"whatsapp": [],
 	"messenger": [],
@@ -90,14 +90,16 @@ class TestCredentialSchemaConsistency(unittest.TestCase):
 					f"has drifted from {service_name}'s adapter credential_schema",
 				)
 
-	def test_slack_requires_signing_secret(self):
-		"""GW-13: signing_secret must be a required credential for slack."""
-		creds = _adapter_required_credentials(
-			"slack", [{"key": "signing_secret", "label": "Slack Signing Secret", "required": True}]
-		)
+	def test_slack_signing_secret_is_optional_for_the_integration(self):
+		"""No Slack tool uses the signing secret; only receiving events does."""
+		from huf.install import _EXTRA_REQUIRED_CREDENTIALS
+
+		creds = _adapter_required_credentials("slack", _EXTRA_REQUIRED_CREDENTIALS["slack"])
 		by_key = {c["key"]: c for c in creds}
 		self.assertIn("signing_secret", by_key)
-		self.assertTrue(by_key["signing_secret"]["required"])
+		self.assertFalse(by_key["signing_secret"]["required"])
+		self.assertEqual(by_key["signing_secret"]["description"], "Only needed to receive Slack events")
+		self.assertTrue(by_key["token"]["required"])
 
 	def test_telegram_requires_webhook_secret(self):
 		"""GW-14: telegram's webhook_secret was missing entirely from the seed."""

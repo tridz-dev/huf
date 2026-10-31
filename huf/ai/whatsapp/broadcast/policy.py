@@ -59,14 +59,14 @@ def _rate(key: str, label: str, default: int) -> Limit:
 
 LIMITS: tuple[Limit, ...] = (
 	# ---- Meta (read-only)
-	Limit("template_approved_only", "Templates must be approved", True, "meta", "meta", note="Meta only delivers APPROVED templates to start a conversation."),
+	Limit("template_approved_only", "Templates must be approved", True, "meta", "meta", note="WhatsApp only delivers templates that have been approved when you start a conversation."),
 	Limit("messaging_tier_24h", "Unique contacts per 24 hours", None, "meta", "meta", "contacts", note="Set by your WhatsApp messaging tier (250, 1K, 10K, 100K, unlimited). Read live from Meta when a broadcast is chosen."),
 	Limit("quality_rating", "Number quality rating", None, "meta", "meta", note="Set by Meta from user feedback; a low rating can reduce your tier."),
-	Limit("marketing_stop_131050", "Contacts who stopped marketing", True, "meta", "meta", note="Meta rejects marketing messages to contacts who chose to stop them (error 131050); they are skipped."),
+	Limit("marketing_stop_131050", "Contacts who stopped marketing", True, "meta", "meta", note="WhatsApp does not deliver marketing messages to people who chose to stop them; they are skipped."),
 	Limit("opt_out_stop", "STOP replies", True, "meta", "meta", note="Contacts who reply STOP are never messaged again until they opt back in."),
 	Limit("bsuid_refused", "Username-only contacts", True, "internal", "recipients", note="Meta allows messaging a business-scoped user ID (recipient field, from a number in the same business portfolio; not for one-tap, zero-tap or copy-code authentication templates). Huf does not send by user ID yet, so these contacts are skipped; send to the phone number."),
 	Limit("us_plus_one_marketing", "US (+1) marketing", True, "meta", "meta", note="Meta does not deliver marketing templates to US phone numbers (+1 with a US area code; Canadian +1 numbers are not affected)."),
-	Limit("per_user_marketing_limit_131049", "Per-contact marketing cap", True, "meta", "meta", note="Meta limits how many marketing messages one person receives (error 131049); that contact is skipped."),
+	Limit("per_user_marketing_limit_131049", "Per-contact marketing cap", True, "meta", "meta", note="WhatsApp limits how many marketing messages one person receives; that person is skipped."),
 	Limit("header_text_max", "Header text length", 60, "meta", "meta", "characters", note="Template header text is limited to 60 characters."),
 	Limit("copy_code_max", "Copy-code length", 15, "meta", "meta", "characters", note="Huf allows up to 15 letters or digits. Meta's template docs give up to 20 characters for the button example; the send-time limit was not confirmed, so Huf keeps the lower value.", verified=False),
 	Limit("max_phone_digits", "Phone number length", 15, "meta", "meta", "digits", note="E.164 allows at most 15 digits."),

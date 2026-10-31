@@ -32,7 +32,7 @@ from urllib.parse import quote, urljoin, urlparse
 import frappe
 import frappe.utils
 
-from huf.ai.whatsapp import outbound_policy as policy
+from huf.ai.whatsapp import outbound_policy as policy, template_plain
 from huf.ai.gateway_adapters import whatsapp_messages as wm
 from huf.ai.gateway_adapters import whatsapp_templates as wt
 
@@ -2705,7 +2705,7 @@ def edit_quota(status: str, edit_log: Any, now: datetime | None = None, blocked_
 			out["editable"] = True
 	else:
 		out.update(editable_reason="status_not_editable",
-			editable_message=f"A template with status {status or 'UNKNOWN'} cannot be edited (only APPROVED, REJECTED or PAUSED).")
+			editable_message=template_plain.not_editable_text(status))
 	until = _parse_ts(blocked_until) if blocked_until else None
 	if out["editable"] and until and until > now:
 		out.update(editable=False, editable_reason="edit_blocked", edit_blocked_until=until.isoformat(),

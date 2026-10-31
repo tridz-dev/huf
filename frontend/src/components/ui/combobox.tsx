@@ -32,6 +32,8 @@ export interface ComboboxProps {
    * assistive tech cannot pair the two.
    */
   id?: string;
+  /** Stable hook for end-to-end tests; rendered as data-testid on the trigger. */
+  testId?: string;
   options: ComboboxOption[];
   value?: string;
   onValueChange?: (value: string) => void;
@@ -52,6 +54,7 @@ export interface ComboboxProps {
 
 export function Combobox({
   id,
+  testId,
   options,
   value,
 
@@ -85,6 +88,7 @@ export function Combobox({
       <PopoverTrigger asChild>
         <Button
           id={id}
+          data-testid={testId}
           variant="outline"
           size={size}
           role="combobox"
@@ -113,6 +117,7 @@ export function Combobox({
                 <CommandItem
                   key={option.value}
                   value={option.value}
+                  data-testid={testId ? `${testId}-option-${option.value}` : undefined}
                   onSelect={() => {
                    if (option.action) {
                      option.action();

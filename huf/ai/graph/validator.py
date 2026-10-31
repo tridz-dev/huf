@@ -71,17 +71,25 @@ graph-level problem), a field path, and a human message -- never a bare boolean.
 
 from __future__ import annotations
 
-import dataclasses
-import json
-import os
 import re
 from collections.abc import Iterator
 from typing import Any
 
-from jsonschema import Draft202012Validator
 
 from huf.ai.graph import transforms
 from huf.ai.graph.expressions import ExpressionError, parse_expression
+from huf.ai.graph.validation.result import GraphValidationError, ValidationError, ValidationResult
+from huf.ai.graph.validation.schema_stage import (  # noqa: F401 -- re-exported: other modules import these from here
+	GRAPH_IR_SCHEMA,
+	MODE_DRAFT,
+	MODE_PUBLISH,
+	_PROFILE_SCHEMA_DEF,
+	_check_schema,
+	_field_from_path,
+	_leaf_message,
+	_node_defs_by_type,
+	_node_id_from_path,
+)
 from huf.ai.graph.permissions import (
 	ToolClassifier,
 	compute_static_envelope,
@@ -99,15 +107,6 @@ from huf.ai.graph.permissions import (
 # here is regenerated automatically. This is the same document, byte for byte, as the
 # canonical spec file -- only the embedding is new.
 # --------------------------------------------------------------------------------------
-
-
-# The Graph IR schema is the contract shared by the validator, the Agent Procedure DocType and
-# Flow. It lives beside this module as a data file so there is exactly ONE copy in the app -- an
-# embedded literal here would be a second copy of the contract, free to drift from the first.
-_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "graph_ir.schema.json")
-
-with open(_SCHEMA_PATH, encoding="utf-8") as _f:
-	GRAPH_IR_SCHEMA: dict = json.load(_f)
 
 
 # --------------------------------------------------------------------------------------
@@ -132,20 +131,18 @@ FLOW_ONLY_NODE_TYPES: frozenset[str] = frozenset(
 		"state.set",
 		"state.delete",
 		"doc.create",
+		"code.run",
 	}
-)
+) | {"trigger.gateway", "trigger.whatsapp", "trigger.telegram"}  # chat triggers: huf/ai/flow/gateways
 
-FLOW_NODE_TYPES: frozenset[str] = PROCEDURE_NODE_TYPES | FLOW_ONLY_NODE_TYPES
+# ``parallel`` is a Procedure-only node: Flow has no concurrent branches.
+FLOW_NODE_TYPES: frozenset[str] = (PROCEDURE_NODE_TYPES - {"parallel"}) | FLOW_ONLY_NODE_TYPES
 
 _PROFILE_NODE_TYPES: dict[str, frozenset[str]] = {
 	"procedure": PROCEDURE_NODE_TYPES,
 	"flow": FLOW_NODE_TYPES,
 }
 
-_PROFILE_SCHEMA_DEF: dict[str, str] = {
-	"procedure": "ProcedureGraph",
-	"flow": "FlowGraph",
-}
 
 # Policy ceilings for contract.limits (requirement 6: "within policy", not merely "present").
 # The schema only enforces open-ended minimums (e.g. max_nodes >= 1); these are T-24's own
@@ -168,61 +165,10 @@ _REFERENCE_ROOT_RE = re.compile(r"^(input|trigger|row|foreach\.(?:item|index)|[a
 
 
 # --------------------------------------------------------------------------------------
-# Result types -- every rejection is a specific, actionable reason, never a bare boolean.
-# --------------------------------------------------------------------------------------
-
-
-@dataclasses.dataclass(frozen=True)
-class ValidationError:
-	"""One specific, actionable reason a graph was rejected.
-
-	``node_id`` is ``None`` for a graph-level problem (e.g. a missing ``contract``).
-	``field`` is a dotted/indexed path relative to the node (or the graph root when
-	``node_id`` is ``None``), e.g. ``"config.tool_id"`` or ``"contract.limits.max_rows"``.
-	"""
-
-	code: str
-	node_id: str | None
-	field: str | None
-	message: str
-
-	def __str__(self) -> str:  # pragma: no cover -- convenience only
-		where = self.node_id or "<graph>"
-		if self.field:
-			where = f"{where}.{self.field}"
-		return f"[{self.code}] {where}: {self.message}"
-
-
-@dataclasses.dataclass(frozen=True)
-class ValidationResult:
-	"""Outcome of :func:`validate_graph`. ``envelope`` is populated only when ``ok`` is true --
-	a graph that fails validation never gets a derived permission envelope, since deriving one
-	from a structurally broken document would itself be a claim this module cannot stand behind.
-	"""
-
-	ok: bool
-	profile: str
-	errors: tuple[ValidationError, ...] = ()
-	envelope: dict | None = None
-
-	def raise_if_invalid(self) -> None:
-		if not self.ok:
-			raise GraphValidationError(self)
-
-
-class GraphValidationError(Exception):
-	"""Raised by :meth:`ValidationResult.raise_if_invalid`. Carries the full result, including
-	every :class:`ValidationError`, not just the first -- a caller that only wants "did it pass"
-	can catch this and stop; a caller building a review UI can read ``.result.errors``."""
-
-	def __init__(self, result: ValidationResult):
-		self.result = result
-		super().__init__("; ".join(str(err) for err in result.errors) or "graph validation failed")
-
-
-# --------------------------------------------------------------------------------------
 # Entry point
 # --------------------------------------------------------------------------------------
+
+
 
 
 def validate_graph(
@@ -230,6 +176,7 @@ def validate_graph(
 	profile: str,
 	*,
 	classify_tool: ToolClassifier = default_tool_classifier,
+	mode: str = MODE_PUBLISH,
 ) -> ValidationResult:
 	"""Validate ``graph`` against ``profile`` ("procedure" or "flow"). See module docstring for
 	the full check list. Returns a :class:`ValidationResult`; never raises for an invalid graph
@@ -261,7 +208,8 @@ def validate_graph(
 			errors=(ValidationError("NOT_AN_OBJECT", None, None, "graph document must be a JSON object"),),
 		)
 
-	schema_errors = _check_schema(graph, profile)
+	draft = mode == MODE_DRAFT
+	schema_errors = _check_schema(graph, profile, draft=draft)
 	if schema_errors:
 		# A schema-invalid document cannot be trusted for any further structural analysis
 		# (missing "nodes", non-dict nodes, non-string ids, ...) -- fail closed immediately.
@@ -273,6 +221,12 @@ def validate_graph(
 	errors: list[ValidationError] = []
 	errors.extend(_check_profile_node_types(nodes, profile))
 	errors.extend(_check_control_flow_targets(graph, nodes_by_id))
+	if draft:
+		# A half-built flow may have loose steps, loops of links, unfinished values and tools whose closure is not
+		# known yet; those are reported as things to finish (see huf.ai.graph.validation.flow_validation), not as a
+		# reason to refuse the save.
+		errors.extend(_check_limits_policy(graph))
+		return ValidationResult(ok=not errors, profile=profile, errors=tuple(errors))
 	errors.extend(_check_reachability(graph, nodes_by_id))
 	errors.extend(_check_acyclic(graph, nodes_by_id))
 	errors.extend(_check_tool_ids_literal(nodes))
@@ -308,58 +262,6 @@ def validate_procedure_graph(graph: dict, **kwargs: Any) -> ValidationResult:
 def validate_flow_graph(graph: dict, **kwargs: Any) -> ValidationResult:
 	"""Convenience wrapper: ``validate_graph(graph, "flow", **kwargs)``."""
 	return validate_graph(graph, "flow", **kwargs)
-
-
-# --------------------------------------------------------------------------------------
-# 1. Schema conformance
-# --------------------------------------------------------------------------------------
-
-
-def _check_schema(graph: dict, profile: str) -> list[ValidationError]:
-	def_name = _PROFILE_SCHEMA_DEF[profile]
-	subschema = {"$defs": GRAPH_IR_SCHEMA["$defs"], "$ref": f"#/$defs/{def_name}"}
-	validator = Draft202012Validator(subschema)
-	errors: list[ValidationError] = []
-	for err in sorted(validator.iter_errors(graph), key=lambda e: [str(p) for p in e.path]):
-		path = list(err.path)
-		errors.append(
-			ValidationError(
-				code="SCHEMA",
-				node_id=_node_id_from_path(graph, path),
-				field=_field_from_path(path),
-				message=_describe_schema_error(err),
-			)
-		)
-	return errors
-
-
-def _describe_schema_error(err) -> str:
-	"""jsonschema's ``oneOf``/``anyOf`` failures report only "not valid under any schema" at the
-	top level, with the actually-useful detail buried in ``.context``. Recurse into the deepest
-	(most specific) sub-error so the message names the real problem (e.g. "'tool_id' is not of
-	type 'string'") instead of the generic wrapper.
-	"""
-	if err.context:
-		best = max(err.context, key=lambda sub: len(list(sub.absolute_path)))
-		return _describe_schema_error(best)
-	return err.message
-
-
-def _node_id_from_path(graph: dict, path: list) -> str | None:
-	if len(path) >= 2 and path[0] == "nodes" and isinstance(path[1], int):
-		nodes = graph.get("nodes") or []
-		idx = path[1]
-		if 0 <= idx < len(nodes) and isinstance(nodes[idx], dict):
-			return nodes[idx].get("id") or f"nodes[{idx}]"
-	return None
-
-
-def _field_from_path(path: list) -> str | None:
-	if len(path) > 2 and path[0] == "nodes":
-		return ".".join(str(p) for p in path[2:])
-	if path:
-		return ".".join(str(p) for p in path)
-	return None
 
 
 # --------------------------------------------------------------------------------------

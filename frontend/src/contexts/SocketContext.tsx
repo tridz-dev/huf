@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Socket } from 'socket.io-client';
-import { toast } from 'sonner';
 import { createFrappeSocket } from '../utils/socket';
 
 type FrappeWindow = Window & {
@@ -9,17 +8,24 @@ type FrappeWindow = Window & {
 
 const SocketContext = createContext<Socket | null>(null);
 
+/** Live-updates connection state, shown as one quiet indicator in the header instead of an error toast. */
+export type SocketStatus = 'connecting' | 'connected' | 'offline';
+
+const SocketStatusContext = createContext<SocketStatus>('connecting');
+
 export function useSocket(): Socket | null {
   return useContext(SocketContext);
 }
 
+export function useSocketStatus(): SocketStatus {
+  return useContext(SocketStatusContext);
+}
+
 export function SocketProvider({ children }: { children: ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [status, setStatus] = useState<SocketStatus>('connecting');
 
   useEffect(() => {
-    const connectionDescription =
-      'Some features may be disabled or not work as expected. Please refresh the page to retry.';
-
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let cleanupConnection: (() => void) | undefined;
@@ -42,11 +48,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
           retryTimer = setTimeout(() => tryConnect(attemptsLeft - 1), 250);
           return;
         }
-        toast.error('Socket connection failed', {
-          id: 'socket-connection-failed',
-          description: connectionDescription,
-          duration: 5000,
-        });
+        setStatus('offline');
         console.warn('Site name not available, socket connection will be skipped');
         return;
       }
@@ -63,19 +65,17 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
       connection.on('connect', () => {
         console.log('✅ Connected to Frappe websocket!');
+        setStatus('connected');
       });
 
       connection.on('connect_error', (error) => {
         console.error('❌ Socket connection error:', error, '— attempted URL:', attemptedUrl);
-        toast.error('Socket connection failed', {
-          id: 'socket-connection-failed',
-          description: connectionDescription,
-          duration: 5000,
-        });
+        setStatus('offline');
       });
 
       connection.on('disconnect', (reason) => {
         console.warn('⚠️ Socket disconnected:', reason);
+        setStatus('offline');
       });
 
       connection.on('tool_call_started', (data) => {
@@ -115,5 +115,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  return <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>;
+  return (
+    <SocketContext.Provider value={socket}>
+      <SocketStatusContext.Provider value={status}>{children}</SocketStatusContext.Provider>
+    </SocketContext.Provider>
+  );
 }

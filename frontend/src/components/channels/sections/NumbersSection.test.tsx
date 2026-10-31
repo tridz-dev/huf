@@ -18,7 +18,7 @@ describe('NumbersSection', () => {
     render(<MemoryRouter><NumbersSection /></MemoryRouter>);
     expect(screen.getByText('GW-1')).toBeTruthy();
     expect(screen.getByText('Working')).toBeTruthy();
-    expect(screen.getByText('live')).toBeTruthy();
+    expect(screen.getByText('Live')).toBeTruthy();
     expect(screen.getByText('Add number').closest('a')?.getAttribute('href')).toBe('/channels/whatsapp/setup');
   });
 });

@@ -10,12 +10,164 @@ Provides REST-style APIs for:
 
 from __future__ import annotations
 
-import hmac
 import json
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.rate_limiter import rate_limit
+from frappe.utils import add_to_date, now_datetime
+
+from huf.ai.api_support import require_permission
+from huf.ai.flow.runs.access import can_access_run, require_flow_read, require_run_access
+from huf.ai.flow.runs.shape import _STEP_TYPE_TITLES, extras_for_detail
+from huf.ai.flow.support.approval_card import api_card, build_card
+from huf.ai.flow.support.decision_rights import approval_decision_rights
+from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
+from huf.ai.flow.support.redact import definition_for_user
+from huf.ai.flow.testrun import normalize_mode, stored_mode
+
+
+# ---------------------------------------------------------------------------
+# Time helpers
+#
+# Frappe stores and returns datetimes as naive strings in the *site* time zone
+# (System Settings -> Time Zone). Browsers cannot know that zone, so everything
+# this module sends to the UI is converted to a time-zone-aware UTC ISO string.
+# ---------------------------------------------------------------------------
+
+# A Queued/Running Flow Run that has not changed for this long is offered
+# "Mark as failed" to System Managers (the worker that owned it is gone).
+STALE_RUN_MINUTES = 15
+STALE_STATUSES = ("Queued", "Running")
+
+
+def _utc_iso(value) -> str | None:
+	"""Naive site-time-zone datetime (or its string) -> ``2026-10-28T01:45:00Z``. None stays None."""
+	if not value:
+		return None
+	from datetime import timezone
+
+	from frappe.utils import get_datetime, get_system_timezone
+
+	try:
+		import zoneinfo
+
+		dt = get_datetime(value)
+		if dt.tzinfo is None:
+			dt = dt.replace(tzinfo=zoneinfo.ZoneInfo(get_system_timezone()))
+		return dt.astimezone(timezone.utc).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+	except Exception:
+		return str(value)
+
+
+def _expire_overdue_approvals(flow_run_id: str | None = None) -> None:
+	"""Lazy approval expiry: an approval whose deadline has passed is routed on its timeout edge
+	before it is read, so the answer never depends on the scheduler tick alone.
+
+	One run (``flow_run_id``) or every overdue run. The continuation is queued to a worker. A
+	failure here must never break the read.
+	"""
+	try:
+		from huf.ai.flow import engine, triggers
+
+		if flow_run_id:
+			waiting = frappe.db.get_value("Flow Run", {"name": flow_run_id, "status": "Waiting Approval"}, "waiting")
+			if not waiting:
+				return
+			try:
+				data = json.loads(waiting)
+			except (TypeError, ValueError):
+				return
+			if isinstance(data, dict) and engine.approval_expired(data, now_datetime()):
+				engine.expire_approval(flow_run_id, enqueue=True)
+		else:
+			triggers.expire_due_approvals(enqueue=True)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Flow lazy approval expiry")
+
+
+def _is_stale(status: str | None, modified) -> bool:
+	"""True for a Queued/Running run whose last change is older than STALE_RUN_MINUTES."""
+	if status not in STALE_STATUSES or not modified:
+		return False
+	from frappe.utils import get_datetime
+
+	return get_datetime(modified) < add_to_date(now_datetime(), minutes=-STALE_RUN_MINUTES)
+
+
+def _can_mark_failed() -> bool:
+	return "System Manager" in frappe.get_roles(frappe.session.user)
+
+
+
+def _node_labels(flow_id: str | None) -> dict:
+	"""``{node_id: step title}`` from the flow's saved definition (UI titles live in ``_label``)."""
+	if not flow_id or not frappe.db.exists("Flow Definition", flow_id):
+		return {}
+	raw = frappe.db.get_value("Flow Definition", flow_id, "definition_json")
+	try:
+		defn = json.loads(raw) if isinstance(raw, str) else (raw or {})
+	except (json.JSONDecodeError, TypeError):
+		return {}
+	nodes = defn.get("nodes") if isinstance(defn, dict) else None
+	if isinstance(nodes, dict):
+		nodes = [{"id": k, **(v or {})} for k, v in nodes.items()]
+	return {
+		n["id"]: (n.get("_label") or _STEP_TYPE_TITLES.get(n.get("type")) or n["id"])
+		for n in (nodes or [])
+		if isinstance(n, dict) and n.get("id")
+	}
+
+
+def _trigger_event(doc, payload: dict) -> str | None:
+	"""Document event (``after_insert``, ``on_submit``...) that started a Doc Event run, read from the flow's data trigger.
+
+	The event is not part of the document payload, so it comes from the data trigger of the flow's definition that
+	matches the document type (the definition the run was pinned to when there is one).
+	"""
+	if doc.trigger_type != "Doc Event":
+		return None
+	raw = doc.pinned_definition or frappe.db.get_value("Flow Definition", doc.flow_id, "definition_json")
+	try:
+		defn = json.loads(raw) if isinstance(raw, str) else (raw or {})
+	except (json.JSONDecodeError, TypeError):
+		return None
+	if isinstance(defn, dict) and isinstance(defn.get("graph"), dict):
+		defn = defn["graph"]  # a pinned definition wraps the graph with its fingerprint
+	nodes = defn.get("nodes") if isinstance(defn, dict) else None
+	if isinstance(nodes, dict):
+		nodes = [{"id": k, **(v or {})} for k, v in nodes.items()]
+	triggers = [
+		n.get("config") or {}
+		for n in (nodes or [])
+		if isinstance(n, dict) and n.get("type") == "trigger.doc-event"
+	]
+	doctype = payload.get("doctype") if isinstance(payload, dict) else None
+	for cfg in triggers:
+		if cfg.get("doctype") == doctype and cfg.get("event"):
+			return cfg["event"]
+	return next((c["event"] for c in triggers if c.get("event")), None)
+
+
+def _flow_names(flow_ids) -> dict:
+	flow_ids = list({f for f in flow_ids if f})
+	if not flow_ids:
+		return {}
+	return {
+		r.flow_id: r.flow_name
+		for r in frappe.get_all(
+			"Flow Definition", filters={"flow_id": ["in", flow_ids]}, fields=["flow_id", "flow_name"]
+		)
+	}
+
+
+@frappe.whitelist()
+def get_site_timezone() -> str:
+	"""IANA name of the site time zone (System Settings), for rendering naive Frappe datetimes."""
+	from frappe.utils import get_system_timezone
+
+	require_permission(frappe.session.user != "Guest", "Login required")
+	return get_system_timezone()
 
 
 # ---------------------------------------------------------------------------
@@ -25,40 +177,30 @@ from frappe.utils import now_datetime
 
 @frappe.whitelist()
 def get_flow_definition(flow_id: str) -> dict:
-	"""
-	Get a flow definition.
-
-	Args:
-	    flow_id: Flow ID
-
-	Returns:
-	    dict with definition_json, version, status
-	"""
+	"""A flow: definition_json, version, status. Whoever cannot write the flow gets its webhook secret hidden (``secret: null``, ``secret_hidden: true``)."""
 	if not frappe.has_permission("Flow Definition", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 	doc = frappe.get_doc("Flow Definition", flow_id)
+	doc.check_permission("read")
 	return {
 		"flow_id": doc.flow_id,
 		"flow_name": doc.flow_name,
-		"definition_json": json.loads(doc.definition_json) if isinstance(doc.definition_json, str) else doc.definition_json,
+		"description": doc.description or "",
+		"category": doc.category or "",
+		"definition_json": definition_for_user(doc),
 		"version": doc.version,
 		"schema_version": doc.schema_version,
 		"status": doc.status,
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 	"""
-	Save/update a flow definition. Validates schema and bumps version.
+	Save/update a flow definition. A draft may be unfinished; a live flow must be finished. Bumps version.
 
-	Args:
-	    flow_id: Flow ID
-	    definition_json: Full graph JSON (string or dict)
-
-	Returns:
-	    dict with version number
+	Returns: dict with the version number and how many things are left to finish.
 	"""
 	if not frappe.has_permission("Flow Definition", "write"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
@@ -84,7 +226,82 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 		)
 		doc.insert()
 
-	return {"flow_id": doc.flow_id, "version": doc.version}
+	from huf.ai.graph.validation.flow_validation import unfinished_count
+	from huf.ai.flow.support.router_text import text_ref_warnings_for
+
+	warnings = text_ref_warnings_for(definition_json)
+	unfinished = unfinished_count(definition_json)
+	return {"flow_id": doc.flow_id, "version": doc.version, "warnings": warnings, "unfinished": unfinished}
+
+
+@frappe.whitelist()
+def get_trigger_doctypes() -> list[dict]:
+	"""Document types the current user may pick for a "When a document changes" trigger: ones they can read.
+
+	Returns ``[{name, label, group, module}]`` (``group``: common / yours / apps) ordered for a picker. Child tables, single
+	doctypes, Huf's own bookkeeping and the system's plumbing (permissions, tokens, logs) are left out. Read from the
+	permission tables, so flow editors who are not System Managers get a list too.
+	"""
+	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
+
+	from frappe.permissions import get_doctypes_with_read
+
+	from huf.ai.flow.support.doctype_catalog import build_catalog
+	from huf.ai.flow.triggers import HUF_MODULE, RECURSION_SKIP_DOCTYPES
+
+	readable = [d for d in get_doctypes_with_read() if d not in RECURSION_SKIP_DOCTYPES]
+	if not readable:
+		return []
+	rows = frappe.get_all(
+		"DocType",
+		filters={"name": ("in", readable), "istable": 0, "issingle": 0, "module": ("!=", HUF_MODULE)},
+		fields=["name", "module", "custom"],
+		limit_page_length=0,
+		ignore_permissions=True,
+	)
+	return build_catalog(rows)
+
+
+@frappe.whitelist()
+def get_trigger_doctype_info(doctype: str) -> dict:
+	"""What a Data trigger needs to know about a document type: whether it can be submitted (and so cancelled)."""
+	if not doctype or not frappe.db.exists("DocType", doctype):
+		frappe.throw(_("Document type {0} was not found").format(doctype), frappe.DoesNotExistError)
+	if not frappe.has_permission(doctype, "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	return {"doctype": doctype, "is_submittable": bool(frappe.get_meta(doctype).is_submittable)}
+
+
+def _set_flow_status(flow_id: str, status: str) -> dict:
+	"""Switch a Flow Definition between Draft and Active; the write permission is checked on the document."""
+	if not frappe.db.exists("Flow Definition", flow_id):
+		frappe.throw(_("Flow {0} was not found").format(flow_id), frappe.DoesNotExistError)
+	doc = frappe.get_doc("Flow Definition", flow_id)
+	if not frappe.has_permission("Flow Definition", "write", doc=doc):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if doc.status != status:
+		doc.status = status
+		doc.save()
+	# Publishing / unpublishing changes which flows document events may start; do not wait for the cache to expire.
+	from huf.ai.flow.triggers import clear_trigger_cache
+
+	clear_trigger_cache()
+	return {"flow_id": doc.flow_id, "status": doc.status}
+
+
+@frappe.whitelist(methods=["POST"])
+def publish_flow(flow_id: str) -> dict:
+	"""Publish a flow (status Active): its triggers start firing. Refused with a readable message if the flow is not runnable."""
+	return _set_flow_status(flow_id, "Active")
+
+
+@frappe.whitelist(methods=["POST"])
+def unpublish_flow(flow_id: str) -> dict:
+	"""Take a published flow back to Draft: webhook calls are refused and schedule / document-event triggers stop firing.
+
+	Runs already in progress finish; nothing is deleted. Publish again to restore the triggers.
+	"""
+	return _set_flow_status(flow_id, "Draft")
 
 
 # ---------------------------------------------------------------------------
@@ -96,8 +313,7 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 def run_flow(
 	flow_id: str,
 	payload: str | dict | None = None,
-	mode: str | None = None,
-	conversation_mode: str | None = None,
+	mode: str = "real",
 ) -> dict:
 	"""
 	Start a new flow run.
@@ -105,14 +321,14 @@ def run_flow(
 	Args:
 	    flow_id: Flow ID to run
 	    payload: Initial input (JSON string or dict)
-	    mode: Optional mode override (normal/agentic)
-	    conversation_mode: Optional conversation_mode override
+	    mode: ``"real"`` (default) or ``"test"``: a test run reads for real but sends and changes nothing
 
 	Returns:
 	    dict with flow_run_id, status, current_node_id
 	"""
 	if not frappe.has_permission("Flow Run", "create"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	require_flow_read(flow_id)  # starting a flow needs read on THAT flow
 
 	# Parse payload
 	if isinstance(payload, str):
@@ -121,15 +337,18 @@ def run_flow(
 		except (json.JSONDecodeError, TypeError):
 			payload = {}
 	payload = payload or {}
+	try:
+		mode = normalize_mode(mode)
+	except ValueError as exc:
+		frappe.throw(_(str(exc)))
 
 	from huf.ai.flow.engine import create_flow_run, run_flow as engine_run_flow
 
 	flow_run = create_flow_run(
 		flow_id=flow_id,
 		payload=payload,
-		mode=mode,
-		conversation_mode=conversation_mode,
 		trigger_type="Manual",
+		mode=mode,
 	)
 
 	# Run synchronously for now; can be enqueued for background execution later
@@ -155,9 +374,9 @@ def get_flow_run(flow_run_id: str) -> dict:
 	Returns:
 	    dict with status, current_node_id, context_json, waiting state
 	"""
-	if not frappe.has_permission("Flow Run", "read"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	require_run_access(flow_run_id, "read")
 
+	_expire_overdue_approvals(flow_run_id)
 	doc = frappe.get_doc("Flow Run", flow_run_id)
 	ctx = {}
 	try:
@@ -171,25 +390,112 @@ def get_flow_run(flow_run_id: str) -> dict:
 	except (json.JSONDecodeError, TypeError):
 		pass
 
+	stale = _is_stale(doc.status, doc.modified)
+	can_decide, cannot_decide_reason = approval_decision_rights(doc.status, waiting)
 	return {
 		"flow_run_id": doc.name,
 		"flow_id": doc.flow_id,
+		"flow_name": _flow_names([doc.flow_id]).get(doc.flow_id) or doc.flow_id,
 		"flow_version": doc.flow_version,
 		"mode": doc.mode,
+		"run_mode": doc.run_mode,
 		"status": doc.status,
+		"trigger_type": doc.trigger_type,
 		"current_node_id": doc.current_node_id,
 		"hop_count": doc.hop_count,
 		"context_json": ctx,
 		"waiting": waiting,
+		"node_labels": _node_labels(doc.flow_id),
+		"trigger_event": _trigger_event(doc, ctx),
 		"last_error": doc.last_error,
 		"last_agent_run": doc.last_agent_run,
-		"started_at": str(doc.started_at) if doc.started_at else None,
-		"completed_at": str(doc.completed_at) if doc.completed_at else None,
+		"started_at": _utc_iso(doc.started_at),
+		"completed_at": _utc_iso(doc.completed_at),
+		"stale": stale,
+		"can_mark_failed": stale and _can_mark_failed(),
+		"stale_after_minutes": STALE_RUN_MINUTES,
+		"can_decide": can_decide,
+		"cannot_decide_reason": cannot_decide_reason,
+		"approval_card": api_card(_flow_names([doc.flow_id]).get(doc.flow_id), waiting, doc.flow_id) if doc.status == "Waiting Approval" else None,
+		**extras_for_detail(doc, ctx),
 	}
 
 
 @frappe.whitelist()
-def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit: int = 20) -> list:
+def mark_flow_run_failed(flow_run_id: str) -> dict:
+	"""Fail a Flow Run that is stuck in Queued/Running (System Manager only).
+
+	Only a run that has not changed for ``STALE_RUN_MINUTES`` can be failed this way; a run that is
+	really progressing, or already finished, is left alone with a clear message.
+	"""
+	if not _can_mark_failed():
+		frappe.throw(_("Only a System Manager can mark a run as failed."), frappe.PermissionError)
+	if not frappe.db.exists("Flow Run", flow_run_id):
+		frappe.throw(_("Flow Run '{0}' not found").format(flow_run_id), frappe.DoesNotExistError)
+	require_run_access(flow_run_id, "write", "write")  # on this run and its flow, not just the role
+
+	from huf.ai.flow import engine
+
+	# Same lock a live worker holds while it advances the run: if it is held, the run is not stuck.
+	if not engine._acquire_run_lock(flow_run_id):
+		frappe.throw(_("This run is being worked on right now, so it cannot be marked as failed."))
+	try:
+		doc = frappe.get_doc("Flow Run", flow_run_id)
+		if doc.status not in STALE_STATUSES:
+			frappe.throw(
+				_("This run is {0}, so it cannot be marked as failed. Only runs stuck in Queued or Running can.").format(
+					doc.status
+				)
+			)
+		if not _is_stale(doc.status, doc.modified):
+			frappe.throw(
+				_("This run changed less than {0} minutes ago and may still be working. Try again later.").format(
+					STALE_RUN_MINUTES
+				)
+			)
+
+		# Conditional on the run not being finished: a worker that completed it meanwhile wins.
+		failed = engine._fail_flow_run(
+			doc, _("Marked as failed by {0}: the run was stuck in {1}.").format(frappe.session.user, doc.status)
+		)
+		if not failed:
+			frappe.throw(_("This run has already finished, so it was left as it is."))
+		frappe.db.commit()  # nosemgrep -- the change must be durable before the lock is released
+	finally:
+		engine._release_run_lock(flow_run_id)
+	doc.reload()
+	return {"flow_run_id": doc.name, "status": doc.status}
+
+
+_FLOW_RUN_LIST_FIELDS = [
+	"name",
+	"flow_id",
+	"flow_version",
+	"mode",
+	"status",
+	"current_node_id",
+	"hop_count",
+	"trigger_type",
+	"started_at",
+	"completed_at",
+	"modified",
+	"run_mode",
+	"outcome_label",
+	"outcome_tone",
+	"owner",
+	"creation",
+	"context_json", "waiting",
+]
+
+
+def _shape_run_rows(rows: list) -> list:
+	from huf.ai.flow.runs.shape import shape_list_rows
+
+	return shape_list_rows(rows, _flow_names(r.flow_id for r in rows), _can_mark_failed())
+
+
+@frappe.whitelist()
+def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit: int = 20, run_mode: str | None = None) -> list:
 	"""
 	List flow runs with optional filters.
 
@@ -197,39 +503,127 @@ def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit:
 	    flow_id: Filter by flow_id
 	    status: Filter by status
 	    limit: Max results (default 20)
+	    run_mode: ``"real"`` or ``"test"`` to list only those runs (default: both)
 
 	Returns:
-	    list of flow run summaries
+	    list of flow run summaries (times are UTC ISO strings)
 	"""
 	if not frappe.has_permission("Flow Run", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
+	_expire_overdue_approvals()
 	filters = {}
 	if flow_id:
 		filters["flow_id"] = flow_id
 	if status:
 		filters["status"] = status
+	if run_mode:
+		filters["run_mode"] = stored_mode(run_mode)
 
-	runs = frappe.get_all(
+	require_flow_read(flow_id)
+	# get_list, not get_all: runs of flows hidden from the caller by User Permissions stay out of the answer.
+	runs = frappe.get_list(
 		"Flow Run",
 		filters=filters,
-		fields=[
-			"name",
-			"flow_id",
-			"flow_version",
-			"mode",
-			"status",
-			"current_node_id",
-			"hop_count",
-			"trigger_type",
-			"started_at",
-			"completed_at",
-		],
+		fields=_FLOW_RUN_LIST_FIELDS,
 		order_by="modified desc",
 		limit_page_length=limit,
 	)
 
-	return runs
+	return _shape_run_rows(runs)
+
+
+@frappe.whitelist()
+def list_flow_runs_page(
+	status: str | None = None,
+	flow_id: str | None = None,
+	search: str | None = None,
+	from_date: str | None = None,
+	start: int = 0,
+	limit: int = 20,
+) -> dict:
+	"""Paged Flow Run list across all flows for the Executions page.
+
+	``from_date`` is a UTC ISO string (what a browser sends); it is converted to the site time zone
+	before comparing with the stored naive ``started_at``. ``search`` matches flow name or run id.
+	Returns ``{"items": [...], "total": n}``.
+	"""
+	if not frappe.has_permission("Flow Run", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	_expire_overdue_approvals()
+	start, limit = max(int(start or 0), 0), min(max(int(limit or 20), 1), 200)
+	filters: list = []
+	if status and status != "all":
+		filters.append(["status", "=", status])
+	if flow_id:
+		filters.append(["flow_id", "=", flow_id])
+	if from_date:
+		from frappe.utils import convert_utc_to_system_timezone, get_datetime
+
+		dt = get_datetime(from_date)
+		if dt.tzinfo is not None:
+			dt = convert_utc_to_system_timezone(dt).replace(tzinfo=None)
+		filters.append(["started_at", ">=", dt])
+
+	or_filters = None
+	if search and search.strip():
+		term = f"%{search.strip()}%"
+		matching = [
+			r.flow_id
+			for r in frappe.get_all(
+				"Flow Definition", filters={"flow_name": ["like", term]}, fields=["flow_id"], limit_page_length=500
+			)
+		]
+		or_filters = [["name", "like", term]]
+		if matching:
+			or_filters.append(["flow_id", "in", matching])
+
+	require_flow_read(flow_id)
+	total = len(frappe.get_list("Flow Run", filters=filters, or_filters=or_filters, pluck="name", limit_page_length=0))
+	rows = frappe.get_list(
+		"Flow Run",
+		filters=filters,
+		or_filters=or_filters,
+		fields=_FLOW_RUN_LIST_FIELDS,
+		order_by="started_at desc, creation desc",
+		limit_start=start,
+		limit_page_length=limit,
+	)
+	return {"items": _shape_run_rows(rows), "total": total}
+
+
+@frappe.whitelist()
+def get_flow_step_labels(items: str | list) -> list:
+	"""Readable "Flow: <name> > <step title>" labels for Agent Runs made by flow steps.
+
+	``items`` is a list of ``{"flow_run": ..., "flow_node_id": ...}``; the result is aligned with it
+	(``None`` where the run or flow is unknown).
+	"""
+	if not frappe.has_permission("Flow Run", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if isinstance(items, str):
+		items = json.loads(items or "[]")
+
+	run_flow_ids = {}
+	for run_name in {i.get("flow_run") for i in items if i.get("flow_run")}:
+		if not can_access_run(run_name, "read"):
+			continue  # a run the caller may not open gets no label (None), same as an unknown run
+		run_flow_ids[run_name] = frappe.db.get_value("Flow Run", run_name, "flow_id")
+	names = _flow_names(run_flow_ids.values())
+	labels = {fid: _node_labels(fid) for fid in set(run_flow_ids.values()) if fid}
+
+	out = []
+	for i in items:
+		fid = run_flow_ids.get(i.get("flow_run"))
+		if not fid:
+			out.append(None)
+			continue
+		node_id = i.get("flow_node_id")
+		step = labels.get(fid, {}).get(node_id) or node_id
+		flow = names.get(fid) or fid
+		out.append(f"Flow: {flow} > {step}" if step else f"Flow: {flow}")
+	return out
 
 
 # ---------------------------------------------------------------------------
@@ -249,8 +643,7 @@ def resume_flow_run(flow_run_id: str, input: str | dict | None = None) -> dict:
 	Returns:
 	    dict with status and current_node_id
 	"""
-	if not frappe.has_permission("Flow Run", "write"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	require_run_access(flow_run_id, "write")
 
 	# Parse input
 	if isinstance(input, str):
@@ -271,58 +664,47 @@ def resume_flow_run(flow_run_id: str, input: str | dict | None = None) -> dict:
 	}
 
 
-@frappe.whitelist()
+def _decide_flow_run(flow_run_id: str, decision: str, comment: str | None) -> dict:
+	"""Shared approve/reject path.
+
+	Authorisation is the engine's approver check (declared role / users; System Manager when none
+	is declared) -- Flow Run read/write permission is deliberately not what gates a decision.
+	The check runs here first so the caller gets a precise error, and again inside the engine
+	before anything is mutated.
+	"""
+	require_permission(frappe.session.user != "Guest", "Login required")
+	if not frappe.db.exists("Flow Run", flow_run_id):
+		frappe.throw(_("This run could not be found. It may have been deleted."), frappe.DoesNotExistError)
+
+	from huf.ai.flow import engine
+
+	flow_run = frappe.get_doc("Flow Run", flow_run_id)
+	if flow_run.status != "Waiting Approval":
+		frappe.throw(_("This run is not waiting for approval any more."))
+	engine.verify_approval_permission(flow_run)
+
+	engine.approve_flow_run(flow_run_id, decision=decision, comment=comment)
+
+	doc = frappe.get_doc("Flow Run", flow_run_id)
+	if not engine.run_moved_on(doc, flow_run):  # never confirm a decision that changed nothing
+		frappe.throw(_(engine.DECISION_NOT_SAVED))
+	return {
+		"flow_run_id": doc.name,
+		"status": doc.status,
+		"current_node_id": doc.current_node_id,
+	}
+
+
+@frappe.whitelist(methods=["POST"])
 def approve_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
-	"""
-	Approve a flow run waiting for approval.
-
-	Args:
-	    flow_run_id: Flow Run name
-	    comment: Optional comment
-
-	Returns:
-	    dict with status and current_node_id
-	"""
-	if not frappe.has_permission("Flow Run", "read"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
-
-	from huf.ai.flow.engine import approve_flow_run as engine_approve
-
-	engine_approve(flow_run_id, decision="approved", comment=comment)
-
-	doc = frappe.get_doc("Flow Run", flow_run_id)
-	return {
-		"flow_run_id": doc.name,
-		"status": doc.status,
-		"current_node_id": doc.current_node_id,
-	}
+	"""Approve a flow run waiting for approval (caller must be a permitted approver)."""
+	return _decide_flow_run(flow_run_id, "approved", comment)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def reject_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
-	"""
-	Reject a flow run waiting for approval.
-
-	Args:
-	    flow_run_id: Flow Run name
-	    comment: Optional comment
-
-	Returns:
-	    dict with status and current_node_id
-	"""
-	if not frappe.has_permission("Flow Run", "write"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
-
-	from huf.ai.flow.engine import approve_flow_run as engine_approve
-
-	engine_approve(flow_run_id, decision="rejected", comment=comment)
-
-	doc = frappe.get_doc("Flow Run", flow_run_id)
-	return {
-		"flow_run_id": doc.name,
-		"status": doc.status,
-		"current_node_id": doc.current_node_id,
-	}
+	"""Reject a flow run waiting for approval (caller must be a permitted approver)."""
+	return _decide_flow_run(flow_run_id, "rejected", comment)
 
 
 # ---------------------------------------------------------------------------
@@ -330,44 +712,8 @@ def reject_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _webhook_key_is_valid(defn: dict, webhook_key: str | None) -> bool:
-	"""Return True only if the flow's entry node is a webhook trigger with a
-	non-empty configured auth key that matches webhook_key (constant-time).
-
-	Fails closed: returns False if the entry node is missing, is not a
-	trigger.webhook, or has no/empty auth configured.
-	"""
-	entry_id = defn.get("entry")
-	entry_node = None
-	for n in defn.get("nodes", []):
-		if n.get("id") == entry_id and n.get("type") == "trigger.webhook":
-			entry_node = n
-			break
-
-	if entry_node is None:
-		return False
-
-	# The webhook auth key is written as "auth" by RightSidebar.tsx but as
-	# "apiKey" by NodeSelectionModal.tsx (frontend inconsistency, not a
-	# backend redundancy) - accept either so a webhook configured through
-	# either UI path can authenticate. "auth" takes precedence when both
-	# are somehow present.
-	node_config = entry_node.get("config", {})
-	expected_auth = node_config.get("auth") or node_config.get("apiKey")
-	if not expected_auth:
-		return False
-
-	return hmac.compare_digest(str(webhook_key or ""), str(expected_auth))
-
-
-def _webhook_entry_auth(defn: dict) -> str | None:
-	entry_id = defn.get("entry")
-	for node in defn.get("nodes", []):
-		if node.get("id") == entry_id and node.get("type") == "trigger.webhook":
-			node_config = node.get("config", {})
-			# See _webhook_key_is_valid for why both keys are checked.
-			return node_config.get("auth") or node_config.get("apiKey")
-	return None
+WEBHOOK_SECRET_HEADER = "X-Huf-Secret"
+WEBHOOK_FLOW_HEADER = "X-Huf-Flow-Id"
 
 
 def _request_headers() -> dict:
@@ -377,22 +723,20 @@ def _request_headers() -> dict:
 	return getattr(request, "headers", {}) or {}
 
 
-def _header_value(*names: str) -> str | None:
-	headers = _request_headers()
-	for name in names:
-		value = headers.get(name)
-		if value:
-			return value
-	return None
+def _request_method() -> str | None:
+	"""HTTP method of the current request, or None when not inside an HTTP request."""
+	request = getattr(frappe, "request", None)
+	method = getattr(request, "method", None) if request else None
+	return method.upper() if isinstance(method, str) else None
 
 
-def _bearer_token(value: str | None) -> str | None:
-	if not value:
-		return None
-	parts = value.split(None, 1)
-	if len(parts) == 2 and parts[0].lower() == "bearer":
-		return parts[1].strip() or None
-	return None
+def _presented_secret() -> str | None:
+	"""The webhook secret the caller sent: the ``X-Huf-Secret`` header only.
+
+	A secret in the URL ends up in access logs, browser history and proxies, so ``?secret=`` is not
+	accepted at all.
+	"""
+	return _request_headers().get(WEBHOOK_SECRET_HEADER) or None
 
 
 def _parse_webhook_payload() -> dict:
@@ -412,453 +756,122 @@ def _parse_webhook_payload() -> dict:
 		if frappe.request.form:
 			payload = dict(frappe.request.form)
 		else:
-			exclude = {"cmd", "flow_id", "webhook_key", "key", "secret", "token"}
+			exclude = {"cmd", "flow_id", "secret"}
 			payload = {k: v for k, v in frappe.local.form_dict.items() if k not in exclude}
 
 	return payload if isinstance(payload, dict) else {"payload": payload}
 
 
-def _extract_webhook_key(payload: dict | None = None, explicit_key: str | None = None) -> str | None:
-	if explicit_key:
-		return explicit_key
-
-	request = getattr(frappe, "request", None)
-	if request and getattr(request, "args", None):
-		for key in ("webhook_key", "key", "secret", "token"):
-			if request.args.get(key):
-				return request.args.get(key)
-
-	headers_key = _header_value(
-		"X-Webhook-Secret",
-		"X-Huf-Webhook-Key",
-		"X-Webhook-Key",
-		"X-Hub-Signature",
-	)
-	if headers_key:
-		return headers_key
-
-	bearer = _bearer_token(_header_value("Authorization"))
-	if bearer:
-		return bearer
-
-	if request and getattr(request, "form", None):
-		for key in ("webhook_key", "key", "secret", "token"):
-			if request.form.get(key):
-				return request.form.get(key)
-
-	if payload:
-		for key in ("webhook_key", "key", "secret", "token"):
-			if payload.get(key):
-				return payload.get(key)
-
-	return None
-
-
-def _extract_flow_id(payload: dict | None = None, explicit_flow_id: str | None = None) -> str | None:
+def _extract_flow_id(explicit_flow_id: str | None = None) -> str | None:
 	if explicit_flow_id:
 		return explicit_flow_id
-
 	request = getattr(frappe, "request", None)
 	if request and getattr(request, "args", None) and request.args.get("flow_id"):
 		return request.args.get("flow_id")
-
-	header_flow_id = _header_value("X-Huf-Flow-Id", "X-Flow-Id")
-	if header_flow_id:
-		return header_flow_id
-
-	if request and getattr(request, "form", None) and request.form.get("flow_id"):
-		return request.form.get("flow_id")
-
-	if payload and payload.get("flow_id"):
-		return payload.get("flow_id")
-
-	return None
+	return _request_headers().get(WEBHOOK_FLOW_HEADER) or None
 
 
-def _load_active_flow_definition(flow_id: str) -> tuple[object, dict]:
-	if not frappe.db.exists("Flow Definition", flow_id):
-		frappe.throw(_("Flow '{0}' not found").format(flow_id), frappe.DoesNotExistError)
+class WebhookDenied(frappe.AuthenticationError):
+	"""Rejected webhook call. Frappe answers with the exception's own ``http_status_code`` (401 for a
+	plain AuthenticationError, which also advertises an OAuth challenge), so pin it to 403."""
 
-	defn_doc = frappe.get_doc("Flow Definition", flow_id)
-	if defn_doc.status != "Active":
-		frappe.throw(_("Flow '{0}' is not active").format(flow_id))
-
-	defn = json.loads(defn_doc.definition_json) if isinstance(defn_doc.definition_json, str) else defn_doc.definition_json
-	return defn_doc, defn
+	http_status_code = 403
 
 
-def _resolve_flow_by_webhook_key(webhook_key: str | None) -> str:
-	if not webhook_key:
-		frappe.throw(_("Webhook key is required"), frappe.AuthenticationError)
+class WebhookMethodNotAllowed(frappe.PermissionError):
+	"""Wrong HTTP method for the webhook trigger: answer 405, not the 403 a PermissionError implies."""
 
-	matches = []
-	for row in frappe.get_all(
-		"Flow Definition",
-		filters={"status": "Active"},
-		fields=["name", "definition_json"],
-	):
-		name = row.get("name") if isinstance(row, dict) else row.name
-		definition_json = row.get("definition_json") if isinstance(row, dict) else row.definition_json
-		defn = json.loads(definition_json) if isinstance(definition_json, str) else definition_json
-		expected_auth = _webhook_entry_auth(defn or {})
-		if expected_auth and hmac.compare_digest(str(webhook_key), str(expected_auth)):
-			matches.append(name)
-
-	if not matches:
-		frappe.throw(_("Invalid webhook key"), frappe.AuthenticationError)
-	if len(matches) > 1:
-		frappe.throw(_("Webhook key matches multiple active flows; provide flow_id"))
-	return matches[0]
+	http_status_code = 405
 
 
-def _run_flow_webhook(flow_id: str, webhook_key: str | None, payload: dict | None = None) -> dict:
-	defn_doc, defn = _load_active_flow_definition(flow_id)
+def _webhook_denied():
+	"""Single generic rejection so a caller cannot tell unknown, inactive and wrong-secret flows apart."""
+	frappe.throw(_("Webhook request not permitted"), WebhookDenied)
 
-	# Validate webhook auth - mandatory, fail closed.
-	if not _webhook_key_is_valid(defn, webhook_key):
-		frappe.throw(_("Invalid webhook key"), frappe.AuthenticationError)
 
-	# Switch execution identity to the flow owner so the run does not execute as Guest.
-	# GW-11: identity resolution for this trigger surface is routed through the
-	# shared resolve_run_identity_and_authorize() helper. The webhook-key check
-	# above already authorizes this trigger, so authorized is always True here --
-	# this call only resolves who the run executes as, matching prior behavior.
+def _verify_webhook_secret(definition_json, secret: str | None):
+	"""Verify the presented secret against the flow's ``trigger.webhook`` node(s), then its HTTP method.
+
+	The secret compare is constant time (``hmac.compare_digest`` in ``match_webhook_trigger``) and
+	fails closed. Returns ``(node, reason)``; ``node`` is None on rejection.
+	"""
+	from huf.ai.flow.triggers import match_webhook_trigger, parse_definition
+
+	return match_webhook_trigger(parse_definition(definition_json), secret, _request_method())
+
+
+def _run_flow_webhook(flow_id: str | None, secret: str | None, payload: dict | None = None) -> dict:
+	from huf.ai.flow.triggers import start_flow_run
+
+	if not flow_id or not frappe.db.exists("Flow Definition", flow_id):
+		_webhook_denied()
+	status, owner, definition_json = frappe.db.get_value(
+		"Flow Definition", flow_id, ["status", "owner", "definition_json"]
+	)
+	# Disabled / unpublished flows never accept webhooks.
+	if status != "Active":
+		_webhook_denied()
+
+	node, reason = _verify_webhook_secret(definition_json, secret)
+	if node is None:
+		if reason == "bad_method":
+			frappe.throw(_("Webhook method not allowed"), WebhookMethodNotAllowed)
+		_webhook_denied()
+
+	# Execute as the flow owner, never Guest. The secret check above authorises the trigger;
+	# resolve_run_identity_and_authorize only resolves who the run executes as.
 	from huf.ai.agent.access import TRIGGER_FLOW_WEBHOOK, resolve_run_identity_and_authorize
 
-	identity = resolve_run_identity_and_authorize(
-		None,
-		TRIGGER_FLOW_WEBHOOK,
-		{"owner": defn_doc.owner},
-	)
-	frappe.set_user(identity.run_as_user)
+	identity = resolve_run_identity_and_authorize(None, TRIGGER_FLOW_WEBHOOK, {"owner": owner})
 
 	if payload is None:
 		payload = _parse_webhook_payload()
 
-	from huf.ai.flow.engine import create_flow_run, run_flow as engine_run_flow
-
-	flow_run = create_flow_run(
-		flow_id=flow_id,
-		payload=payload,
-		trigger_type="Webhook",
+	flow_run = start_flow_run(
+		flow_id,
+		payload,
+		"Webhook",
+		trigger_node_id=node["id"],
+		user=identity.run_as_user,
+		enqueue=True,
+		commit_first=True,
 	)
+	return {"flow_run_id": flow_run.name, "status": flow_run.status}
 
-	# Run in background for webhooks
-	frappe.enqueue(
-		"huf.ai.flow.engine.run_flow",
-		queue="default",
-		flow_run_name=flow_run.name,
-	)
 
-	return {
-		"flow_run_id": flow_run.name,
-		"status": flow_run.status,
-	}
+#: Webhook endpoints are public, so they are throttled per caller address before anything else runs.
+#: Over the limit Frappe answers 429 with a generic message, whatever the flow or secret.
+WEBHOOK_RATE_LIMIT = 60
+WEBHOOK_RATE_WINDOW_SECONDS = 60
 
 
 @frappe.whitelist(allow_guest=True)
-def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
+@rate_limit(limit=WEBHOOK_RATE_LIMIT, seconds=WEBHOOK_RATE_WINDOW_SECONDS)
+def flow_webhook(flow_id: str | None = None) -> dict:
 	"""
 	Webhook trigger endpoint for flows.
 
-	Validates webhook auth and starts a flow run.
-
-	Args:
-	    flow_id: Flow ID to trigger
-	    webhook_key: Authentication key
-
-	Returns:
-	    dict with flow_run_id and status
+	The flow is named by ``flow_id`` (argument, ``?flow_id=`` or the ``X-Huf-Flow-Id`` header) and the
+	caller authenticates with that flow's ``trigger.webhook`` secret, sent ONLY as the ``X-Huf-Secret``
+	header (constant-time compare, fails closed; ``?secret=`` is not accepted). The HTTP method must
+	equal the node's configured ``method``. Only Active flows accept webhooks. An unknown flow, an
+	inactive flow and a wrong or missing secret all get the same 403. At most 60 calls a minute per
+	caller address, then 429.
 	"""
-	# Frappe's make_form_dict drops query string arguments if the request has a JSON body.
-	# We must manually extract webhook_key from request.args if it's missing.
-	if webhook_key is None and getattr(frappe, "request", None) and frappe.request.args:
-		webhook_key = frappe.request.args.get("webhook_key")
-
-	return _run_flow_webhook(flow_id, webhook_key)
+	return _run_flow_webhook(_extract_flow_id(flow_id), _presented_secret())
 
 
 @frappe.whitelist(allow_guest=True)
-def flow_webhook_clean(flow_id: str | None = None, webhook_key: str | None = None) -> dict:
+@rate_limit(limit=WEBHOOK_RATE_LIMIT, seconds=WEBHOOK_RATE_WINDOW_SECONDS)
+def flow_webhook_clean(flow_id: str | None = None) -> dict:
 	"""
-	Clean URL webhook receiver for providers that reject query parameters.
+	Webhook receiver for providers that cannot put the flow id in a query string.
 
-	Key resolution is intentionally versatile while still failing closed:
-	- Frappe Cloud/Press: X-Webhook-Secret header.
-	- Huf/native callers: X-Huf-Webhook-Key or X-Huf-Flow-Id headers.
-	- Generic providers: Authorization: Bearer <key>, form fields, JSON body, or legacy args.
-
-	If flow_id is omitted, Huf resolves it by finding exactly one active
-	trigger.webhook flow whose configured auth matches the resolved key.
+	Same rules as :func:`flow_webhook`: the secret comes from the ``X-Huf-Secret`` header only, and
+	the flow must be named (argument, ``?flow_id=`` or the ``X-Huf-Flow-Id`` header). A flow is never
+	looked up by its secret.
 	"""
-	payload = _parse_webhook_payload()
-	resolved_key = _extract_webhook_key(payload, webhook_key)
-	resolved_flow_id = _extract_flow_id(payload, flow_id) or _resolve_flow_by_webhook_key(resolved_key)
-	return _run_flow_webhook(resolved_flow_id, resolved_key, payload)
-
-
-# ---------------------------------------------------------------------------
-# Flow triggers (schedule / doc event) -- an Automation bound to the Flow's Procedure
-# ---------------------------------------------------------------------------
-#
-# Flow triggers are not a separate scheduler: a Flow with a schedule or doc-event trigger
-# is converted to an Agent Procedure (the run path in use) and an Automation that targets
-# that Procedure carries the trigger, so it fires through the same dispatchers
-# (automation.scheduler.run_due_automations / automation.hooks.run_hooked_automations).
-# The Automation is only Active once the Procedure is Testing/Active -- conversion never
-# activates a Procedure (I8), so a fresh trigger sits in Draft until a human enables it.
-
-_FLOW_TRIGGER_TYPES = {"schedule": "Schedule", "doc_event": "Doc Event", "doc event": "Doc Event"}
-_FLOW_AUTOMATION_PREFIX = "Flow Trigger: "
-
-
-def _flow_automation_name(flow_id: str) -> str:
-	return f"{_FLOW_AUTOMATION_PREFIX}{flow_id}"
-
-
-def _flow_trigger_row(automation_name: str):
-	name = frappe.db.get_value("Automation Trigger", {"automation": automation_name}, "name")
-	return frappe.get_doc("Automation Trigger", name) if name else None
-
-
-def _graph_matches_fingerprint(procedure_graph: dict, procedure) -> bool:
-	"""True when the converted Flow graph hashes to the bound procedure row's fingerprint."""
-	from huf.ai.procedure.versioning import compute_fingerprint
-
-	graph = dict(procedure_graph)
-	graph["profile"] = "procedure"
-	graph["schema_version"] = procedure.schema_version or graph.get("schema_version") or "1.0.0"
-	return compute_fingerprint(graph) == procedure.fingerprint
-
-
-def _flow_trigger_is_stale(flow_id: str, procedure_name: str) -> bool:
-	"""True when the Flow's current graph no longer matches the procedure the trigger is bound to."""
-	from huf.ai.procedure.conversion import analyze_conversion
-
-	bound = frappe.db.get_value(
-		"Agent Procedure", procedure_name, ["name", "fingerprint", "schema_version"], as_dict=True
-	)
-	if not bound:
-		return True
-	try:
-		_doc, flow_graph = _load_flow_graph(flow_id)
-		result = analyze_conversion(flow_graph)
-	except Exception:  # noqa: BLE001 -- an unreadable/unconvertible flow cannot match
-		return True
-	return not result.convertible or not _graph_matches_fingerprint(result.procedure_graph, bound)
-
-
-def _ensure_flow_procedure(flow_id: str) -> str:
-	"""Return the name of an Agent Procedure version matching the Flow's current
-	definition, converting (a new immutable Draft version) only if none does."""
-	from huf.ai.procedure.conversion import analyze_conversion
-
-	_doc, flow_graph = _load_flow_graph(flow_id)
-	result = analyze_conversion(flow_graph)
-	if not result.convertible:
-		frappe.throw(
-			_("Flow '{0}' cannot take a schedule or doc-event trigger: {1}").format(flow_id, result.reason),
-			title=_("Flow Is Not Convertible"),
-		)
-
-	procedure_id = f"{flow_id}-procedure"
-	latest = frappe.db.get_value(
-		"Agent Procedure",
-		{"procedure_id": procedure_id},
-		["name", "fingerprint", "schema_version"],
-		order_by="version desc",
-		as_dict=True,
-	)
-	if latest and _graph_matches_fingerprint(result.procedure_graph, latest):
-		return latest.name
-
-	return convert_flow_to_procedure(flow_id, procedure_id=procedure_id)["name"]
-
-
-def _flow_trigger_summary(flow_id: str) -> dict | None:
-	automation_name = _flow_automation_name(flow_id)
-	if not frappe.db.exists("Automation", automation_name):
-		return None
-	automation = frappe.get_doc("Automation", automation_name)
-	trigger = _flow_trigger_row(automation_name)
-	if not trigger:
-		return None
-	procedure_status = frappe.db.get_value("Agent Procedure", automation.procedure, "status")
-	out = {
-		"flow_id": flow_id,
-		"trigger_type": trigger.trigger_type,
-		"automation": automation.name,
-		"automation_trigger": trigger.name,
-		"automation_status": automation.status,
-		"procedure": automation.procedure,
-		"procedure_status": procedure_status,
-		"enabled": bool(automation.status == "Active" and not trigger.disabled),
-		"stale": _flow_trigger_is_stale(flow_id, automation.procedure),
-		"next_run": str(trigger.next_execution) if trigger.next_execution else None,
-		"last_run": str(trigger.last_execution) if trigger.last_execution else None,
-	}
-	if automation.status != "Active":
-		out["activation_required"] = _(
-			"Procedure {0} is {1}. Enable it (Testing or Active) and activate the automation for this trigger to fire."
-		).format(automation.procedure, procedure_status)
-	if trigger.trigger_type == "Schedule":
-		out.update(
-			schedule_type=trigger.schedule_type,
-			cron=trigger.cron_expression,
-		)
-	else:
-		out.update(
-			reference_doctype=trigger.reference_doctype,
-			doc_event=trigger.doc_event,
-			condition=trigger.condition,
-		)
-	return out
-
-
-@frappe.whitelist()
-def set_flow_trigger(
-	flow_id: str,
-	trigger_type: str,
-	cron: str | None = None,
-	reference_doctype: str | None = None,
-	doc_event: str | None = None,
-	condition: str | None = None,
-	run_as_user: str | None = None,
-	disabled: int = 0,
-) -> dict:
-	"""Create or replace the single schedule / doc-event trigger of a Flow.
-
-	Converts the Flow to an Agent Procedure if needed (refusing, with the conversion's
-	reason, when the Flow contains agent.run / router.llm / human.approval), then
-	creates/updates an Automation targeting that Procedure plus its Automation Trigger.
-
-	Args:
-	    flow_id: Flow Definition name.
-	    trigger_type: "schedule" or "doc_event".
-	    cron: for schedule -- a 5-part cron expression (evaluated in system time). Cron
-	        only: the Flow's trigger.schedule node config needs ``cron``, so interval
-	        schedules could not be mirrored into it.
-	    reference_doctype / doc_event / condition: for doc_event.
-	    run_as_user: identity the Procedure runs as (default: the caller).
-
-	Returns:
-	    the get_flow_trigger() summary, including ``next_run`` for schedules.
-	"""
-	if not frappe.has_permission("Flow Definition", "write"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
-	if not frappe.has_permission("Automation", "write") or not frappe.has_permission("Automation Trigger", "write"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
-	if not frappe.db.exists("Flow Definition", flow_id):
-		frappe.throw(_("Flow '{0}' not found").format(flow_id), frappe.DoesNotExistError)
-	if not frappe.has_permission("Flow Definition", "write", flow_id):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
-
-	resolved_type = _FLOW_TRIGGER_TYPES.get((trigger_type or "").strip().lower())
-	if not resolved_type:
-		frappe.throw(_("trigger_type must be 'schedule' or 'doc_event'"))
-
-	trigger_fields: dict = {"trigger_type": resolved_type}
-	if resolved_type == "Schedule":
-		if not cron:
-			frappe.throw(_("A schedule trigger needs a cron expression."))
-		if len(cron.split()) != 5:
-			frappe.throw(_("Invalid cron expression. Expected 5 parts (minute hour day month day_of_week)."))
-		trigger_fields.update(schedule_type="Cron", cron_expression=cron)
-		trigger_fields["next_execution"] = None
-	else:
-		if not reference_doctype or not doc_event:
-			frappe.throw(_("A doc_event trigger needs reference_doctype and doc_event."))
-		if not frappe.db.exists("DocType", reference_doctype):
-			frappe.throw(_("DocType '{0}' not found").format(reference_doctype))
-		from huf.ai.automation.hooks import SUPPORTED_DOC_EVENTS
-
-		if doc_event not in SUPPORTED_DOC_EVENTS:
-			frappe.throw(_("Unsupported doc_event '{0}'").format(doc_event))
-		trigger_fields.update(reference_doctype=reference_doctype, doc_event=doc_event, condition=condition or None)
-
-	procedure_name = _ensure_flow_procedure(flow_id)
-	procedure_status = frappe.db.get_value("Agent Procedure", procedure_name, "status")
-	from huf.huf.doctype.automation.automation import RUNNABLE_PROCEDURE_STATUSES
-
-	automation_name = _flow_automation_name(flow_id)
-	automation_fields = {
-		"target_type": "Agent Procedure",
-		"procedure": procedure_name,
-		"agent": None,
-		"run_as_user": run_as_user or frappe.session.user,
-		# Only a runnable procedure on an Active flow may fire; Draft/Archived flows stay Draft.
-		"status": "Active"
-		if procedure_status in RUNNABLE_PROCEDURE_STATUSES
-		and frappe.db.get_value("Flow Definition", flow_id, "status") == "Active"
-		else "Draft",
-	}
-	if frappe.db.exists("Automation", automation_name):
-		automation = frappe.get_doc("Automation", automation_name)
-		automation.update(automation_fields)
-		automation.save()
-	else:
-		automation = frappe.get_doc(
-			{"doctype": "Automation", "automation_name": automation_name, **automation_fields}
-		)
-		automation.insert()
-
-	trigger = _flow_trigger_row(automation_name)
-	if trigger:
-		# A trigger type change must not leave the old type's fields behind.
-		for fieldname in (
-			"schedule_type", "cron_expression", "scheduled_interval", "interval_count",
-			"next_execution", "reference_doctype", "doc_event", "condition",
-		):
-			trigger.set(fieldname, None)
-		trigger.update({**trigger_fields, "disabled": int(bool(disabled))})
-		trigger.save()
-	else:
-		trigger = frappe.get_doc(
-			{
-				"doctype": "Automation Trigger",
-				"trigger_name": f"{flow_id} trigger",
-				"automation": automation_name,
-				"disabled": int(bool(disabled)),
-				**trigger_fields,
-			}
-		)
-		trigger.insert()
-	frappe.cache().delete_key("huf:doc_event_automation_triggers")
-
-	return _flow_trigger_summary(flow_id)
-
-
-@frappe.whitelist()
-def get_flow_trigger(flow_id: str) -> dict | None:
-	"""Return the Flow's schedule / doc-event trigger summary, or None if it has none."""
-	if not frappe.has_permission("Flow Definition", "read"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
-	return _flow_trigger_summary(flow_id)
-
-
-@frappe.whitelist()
-def clear_flow_trigger(flow_id: str) -> dict:
-	"""Remove the Flow's trigger (its Automation and Automation Trigger). The Procedure stays."""
-	if not frappe.has_permission("Flow Definition", "write"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
-
-	automation_name = _flow_automation_name(flow_id)
-	if not frappe.db.exists("Automation", automation_name):
-		return {"status": "not_found", "flow_id": flow_id}
-
-	# Procedure runs are history: keep them, drop only their link to the trigger/automation
-	# so the delete is not blocked by Frappe's linked-document check.
-	frappe.db.set_value(
-		"Agent Procedure Run",
-		{"automation": automation_name},
-		{"automation": None, "automation_trigger": None},
-		update_modified=False,
-	)
-	for trigger_name in frappe.get_all("Automation Trigger", {"automation": automation_name}, pluck="name"):
-		frappe.delete_doc("Automation Trigger", trigger_name)
-	frappe.delete_doc("Automation", automation_name)
-	frappe.cache().delete_key("huf:doc_event_automation_triggers")
-	return {"status": "cleared", "flow_id": flow_id}
+	return _run_flow_webhook(_extract_flow_id(flow_id), _presented_secret())
 
 
 # ---------------------------------------------------------------------------
@@ -869,266 +882,20 @@ def clear_flow_trigger(flow_id: str) -> dict:
 @frappe.whitelist()
 def get_node_schemas() -> dict:
 	"""
-	Return JSON schema definitions for all available flow node types.
-
-	This endpoint enables schema-driven UI construction. The frontend can
-	query this to dynamically build configuration forms instead of
-	hardcoding TypeScript interfaces per node type.
+	Return field definitions for every flow node type, generated from the graph IR schema
+	(``huf/ai/graph/graph_ir.schema.json``, the source of truth; see docs/flow/FIELD_CONTRACT.md).
 
 	Returns:
-	    dict keyed by backend node type, each containing:
-	        label (str): Display name
-	        icon (str): Default icon name
-	        category (str): Category for grouping in UI
-	        description (str): Short description
-	        has_backend (bool): Whether this node type has a backend executor
-	        config_schema (list): List of field definitions for config form
+	    dict keyed by node type; each value has label, icon, category, description, has_backend,
+	    routing ({next, on_error}: whether the node may carry those pointers), config_schema (list of
+	    field descriptors: name, label, type, required, options/min/max/default) and json_schema
+	    (the raw config JSON schema).
 	"""
-	return {
-		"trigger.webhook": {
-			"label": "Webhook Trigger",
-			"icon": "Webhook",
-			"category": "trigger",
-			"description": "Start flow from an incoming webhook",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "auth", "label": "Auth Key", "type": "string", "description": "Optional authentication key"},
-				{"name": "method", "label": "HTTP Method", "type": "select", "options": ["GET", "POST", "PUT", "DELETE"], "default": "POST"},
-			],
-		},
-		"trigger.schedule": {
-			"label": "Schedule Trigger",
-			"icon": "Clock",
-			"category": "trigger",
-			"description": "Start flow on a scheduled interval (cron)",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "cron", "label": "Cron Expression", "type": "string", "required": True, "description": "Cron expression e.g., */5 * * * * for every 5 minutes"},
-				{"name": "schedule_name", "label": "Schedule Name", "type": "string", "description": "Optional name for this schedule"},
-				{"name": "timezone", "label": "Timezone", "type": "string", "default": "UTC", "description": "Timezone for schedule execution"},
-			],
-		},
-		"trigger.doc-event": {
-			"label": "Doc Event Trigger",
-			"icon": "FileText",
-			"category": "trigger",
-			"description": "Start flow when a document event occurs (create, update, delete)",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "doctype", "label": "DocType", "type": "doctype_select", "required": True, "description": "DocType to listen on (e.g., Sales Invoice, ToDo)"},
-				{"name": "event", "label": "Event", "type": "select", "options": ["after_insert", "on_update", "on_submit", "on_cancel", "on_delete"], "required": True, "description": "Document event to trigger on"},
-				{"name": "filters", "label": "Filters", "type": "json", "description": "Optional JSON filters to match documents (e.g., {\"status\": \"Draft\"})"},
-			],
-		},
-		"agent.run": {
-			"label": "Run Agent",
-			"icon": "Bot",
-			"category": "ai",
-			"description": "Execute a HUF AI agent",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "agent_name", "label": "Agent", "type": "agent_select", "required": True},
-				{"name": "input.prompt_template", "label": "Prompt Template", "type": "text"},
-				{"name": "conversation_mode", "label": "Conversation Mode", "type": "select", "options": ["flow_shared", "isolated"], "default": "flow_shared"},
-				{"name": "input.inject_flow_context", "label": "Inject Flow Context", "type": "boolean", "default": False},
-				{"name": "output.save_response_to_context", "label": "Save Response To", "type": "string", "description": "Context key for result"},
-			],
-		},
-		"tool.call": {
-			"label": "Call Tool",
-			"icon": "Wrench",
-			"category": "ai",
-			"description": "Execute a tool function deterministically",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "tool_name", "label": "Tool", "type": "tool_select", "required": True},
-				{"name": "args", "label": "Arguments", "type": "dynamic_args", "description": "Loaded from tool definition"},
-				{"name": "output.save_result_to_context", "label": "Save Result To", "type": "string", "description": "Context key for result"},
-			],
-		},
-		"router.llm": {
-			"label": "LLM Router",
-			"icon": "GitBranch",
-			"category": "control",
-			"description": "Route flow using LLM-based decision making",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "router_agent_name", "label": "Routing Agent", "type": "agent_select", "required": True},
-				{"name": "conversation_mode", "label": "Conversation Mode", "type": "select", "options": ["flow_shared", "isolated"], "default": "flow_shared"},
-			],
-		},
-		"human.approval": {
-			"label": "Human Approval",
-			"icon": "UserCheck",
-			"category": "control",
-			"description": "Pause flow for human approval decision",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "title", "label": "Title", "type": "string", "default": "Approval Required"},
-				{"name": "instructions", "label": "Instructions", "type": "text"},
-				{"name": "context_summary", "label": "Context Summary", "type": "text", "description": "Summary shown to the approver"},
-				{"name": "approval_type", "label": "Approval Type", "type": "select", "options": ["role", "user"], "default": "role"},
-				{"name": "approver_role", "label": "Approver Role", "type": "role_select", "show_if": {"field": "approval_type", "value": "role"}},
-				{"name": "approver_users", "label": "Approver Users", "type": "string", "show_if": {"field": "approval_type", "value": "user"}},
-				{"name": "reference_doctype", "label": "Reference DocType", "type": "doctype_select", "description": "Link approval to a specific document type"},
-				{"name": "reference_name", "label": "Reference Document", "type": "string", "description": "Document name"},
-				{"name": "store_decision_in_context", "label": "Store Decision Key", "type": "string", "default": "approval"},
-			],
-		},
-		"condition": {
-			"label": "Condition (IF)",
-			"icon": "GitFork",
-			"category": "control",
-			"description": "Branch flow based on a boolean expression (True/False)",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "expression", "label": "Condition Expression", "type": "expression", "required": True, "description": "e.g., context[\"status\"] == \"approved\""},
-				{"name": "true_node", "label": "True Branch (Node ID)", "type": "node_select", "description": "Node to go to if condition is true"},
-				{"name": "false_node", "label": "False Branch (Node ID)", "type": "node_select", "description": "Node to go to if condition is false"},
-			],
-		},
-		"http_request": {
-			"label": "HTTP Request",
-			"icon": "Globe",
-			"category": "integration",
-			"description": "Make an HTTP request to an external API",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "url", "label": "URL", "type": "string", "required": True},
-				{"name": "method", "label": "Method", "type": "select", "options": ["GET", "POST", "PUT", "PATCH", "DELETE"], "default": "GET"},
-				{"name": "headers", "label": "Headers", "type": "json", "description": "Request headers as JSON object"},
-				{"name": "body", "label": "Body", "type": "json", "description": "Request body (POST/PUT only)"},
-				{"name": "timeout", "label": "Timeout (seconds)", "type": "number", "default": 30},
-				{"name": "save_result_to_context", "label": "Save Result To", "type": "string", "description": "Context key for result"},
-			],
-		},
-		"transform": {
-			"label": "Transform Data",
-			"icon": "Repeat",
-			"category": "transform",
-			"description": "Map, copy, or template data between context variables",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "transformations", "label": "Transformations", "type": "transform_list", "description": "List of {source_field, target_field, operation}"},
-			],
-		},
-		"loop": {
-			"label": "Loop",
-			"icon": "RotateCw",
-			"category": "control",
-			"description": "Iterate over a list in context",
-			"has_backend": True,
-			"config_schema": [
-				{"name": "iterate_over", "label": "Iterate Over", "type": "string", "required": True, "description": "Context key containing the array"},
-				{"name": "item_key", "label": "Item Variable", "type": "string", "default": "loop_item", "description": "Context key for current item"},
-				{"name": "index_key", "label": "Index Variable", "type": "string", "default": "loop_index"},
-				{"name": "loop_node", "label": "Loop Body Node", "type": "node_select", "description": "Node to execute per iteration"},
-				{"name": "done_node", "label": "Done Node", "type": "node_select", "description": "Node to go to when iteration completes"},
-				{"name": "max_iterations", "label": "Max Iterations", "type": "number", "default": 100},
-			],
-		},
-		"end": {
-			"label": "End",
-			"icon": "CheckCircle2",
-			"category": "control",
-			"description": "Mark flow as completed",
-			"has_backend": True,
-			"config_schema": [],
-		},
-	}
+	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
+	return build_node_schemas()
 
 
-@frappe.whitelist()
-def list_flow_tools() -> list:
-	"""
-	List all tools available to flow tool-call nodes: built-in Agent Tool
-	Function records plus tools exposed by enabled MCP Server documents.
-
-	Each dict:
-	    {
-	        "name": str,
-	        "label": str,
-	        "description": str,
-	        "source": "builtin" | "mcp",
-	        "mcp_server": str | None,
-	        "params_json_schema": dict,
-	    }
-
-	Returns:
-	    list[dict]
-	"""
-	if not frappe.has_permission("Agent Tool Function", "read"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
-
-	tools = []
-
-	# Built-in tools: Agent Tool Function.params is the authoritative JSON
-	# Schema source (see huf/ai/sdk_tools.py:create_agent_tools, which is the
-	# only code path that actually builds runtime tools from this doctype).
-	# The "parameters" child table (Agent Function Params) is not read by
-	# any conversion code in the app and is treated as stale/unused here.
-	for row in frappe.get_all(
-		"Agent Tool Function",
-		fields=["name", "tool_name", "description", "params"],
-		# Flow/Procedure runs have no Agent Execution Profile, so a Code Execution tool is
-		# refused on every call (PermissionAwareToolRegistry._allows_code_execution); don't offer it.
-		filters={"types": ["!=", "Code Execution"]},
-	):
-		params_json_schema = {}
-		if row.params:
-			try:
-				params_json_schema = json.loads(row.params)
-			except (json.JSONDecodeError, TypeError):
-				params_json_schema = {}
-
-		tools.append({
-			"name": row.tool_name,
-			"label": row.tool_name,
-			"description": row.description or "",
-			"source": "builtin",
-			"mcp_server": None,
-			"params_json_schema": params_json_schema if isinstance(params_json_schema, dict) else {},
-		})
-
-	# MCP tools: each enabled "MCP Server" document caches its tools in the
-	# "tools" child table (MCP Server Tool: tool_name, description,
-	# parameters JSON, enabled). "mcp_server" below is the MCP Server
-	# document name (server_name, since autoname is field:server_name),
-	# matching the identifier huf.ai.mcp_client.execute_mcp_tool expects
-	# for its server_name argument.
-	mcp_servers = frappe.get_all(
-		"MCP Server",
-		filters={"enabled": 1},
-		fields=["name", "tool_namespace"],
-	)
-	for server in mcp_servers:
-		tool_rows = frappe.get_all(
-			"MCP Server Tool",
-			filters={"parent": server.name, "parenttype": "MCP Server", "enabled": 1},
-			fields=["tool_name", "description", "parameters"],
-		)
-		for tool_row in tool_rows:
-			params_json_schema = {}
-			if tool_row.parameters:
-				try:
-					params_json_schema = json.loads(tool_row.parameters)
-				except (json.JSONDecodeError, TypeError):
-					params_json_schema = {}
-
-			label = tool_row.tool_name
-			if server.tool_namespace:
-				label = f"{server.tool_namespace}.{tool_row.tool_name}"
-
-			tools.append({
-				"name": tool_row.tool_name,
-				"label": label,
-				"description": tool_row.description or "",
-				"source": "mcp",
-				"mcp_server": server.name,
-				"params_json_schema": params_json_schema if isinstance(params_json_schema, dict) else {},
-			})
-
-	return tools
+from huf.ai.flow.listing.tools import list_flow_tools  # noqa: E402,F401  (whitelisted endpoint; lives in listing/ to keep this file small)
 
 
 # ---------------------------------------------------------------------------
@@ -1137,14 +904,13 @@ def list_flow_tools() -> list:
 
 
 @frappe.whitelist()
-def handle_run_flow(flow_id: str, payload: str | dict | None = None, mode: str | None = None, **kwargs) -> dict:
+def handle_run_flow(flow_id: str, payload: str | dict | None = None, **kwargs) -> dict:
 	"""
 	Agent tool: Start a flow from within an agent.
 
 	Args:
 	    flow_id: Flow ID to run
 	    payload: Initial payload (dict or JSON string)
-	    mode: Optional mode override
 
 	Returns:
 	    dict with flow_run_id, status, message
@@ -1161,7 +927,7 @@ def handle_run_flow(flow_id: str, payload: str | dict | None = None, mode: str |
 
 		from huf.ai.flow.engine import create_flow_run, run_flow as engine_run_flow
 
-		flow_run = create_flow_run(flow_id=flow_id, payload=payload or {}, mode=mode)
+		flow_run = create_flow_run(flow_id=flow_id, payload=payload or {})
 		
 		# Execute synchronously so Chat agents can receive the result instead of just a queued message
 		engine_run_flow(flow_run.name)
@@ -1190,10 +956,11 @@ def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 	Returns:
 	    dict with status, context summary, waiting state
 	"""
-	if not frappe.has_permission("Flow Run", "read"):
+	if not can_access_run(flow_run_id, "read"):
 		return {"error": "Insufficient permissions to view flow runs"}
 
 	try:
+		_expire_overdue_approvals(flow_run_id)
 		doc = frappe.get_doc("Flow Run", flow_run_id)
 		ctx = {}
 		try:
@@ -1231,7 +998,7 @@ def handle_resume_flow_run(flow_run_id: str, input: dict | None = None, **kwargs
 	Returns:
 	    dict with updated status
 	"""
-	if not frappe.has_permission("Flow Run", "write"):
+	if not can_access_run(flow_run_id, "write"):
 		return {"error": "Insufficient permissions to resume flow runs"}
 
 	try:
@@ -1263,15 +1030,14 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 	Returns:
 	    dict with updated status
 	"""
-	if not frappe.has_permission("Flow Run", "read"):
+	if not can_access_run(flow_run_id, "read"):
 		return {"error": "Insufficient permissions to approve flow runs"}
 
 	try:
-		from huf.ai.flow.engine import approve_flow_run as engine_approve, _verify_approval_permission
+		from huf.ai.flow.engine import approve_flow_run as engine_approve, verify_approval_permission
 
 		doc = frappe.get_doc("Flow Run", flow_run_id)
-		waiting = json.loads(doc.waiting) if doc.waiting else {}
-		_verify_approval_permission(waiting)
+		verify_approval_permission(doc)
 
 		engine_approve(flow_run_id, decision=decision, comment=comment)
 		doc.reload()
@@ -1291,28 +1057,24 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 # ---------------------------------------------------------------------------
 
 
-# Re-enabled 2026-08-07. This was disabled on 2026-08-02 on the belief that it
-# returned 403 even for Administrator. That was a misdiagnosis: the 403 came
-# from an expired session (Frappe answers Guest with "not whitelisted"), not
-# from the permission check below. Verified over HTTP with a live Administrator
-# session — the endpoint answers 200 with a normal list.
+# The endpoint answers Administrator normally (verified over HTTP). An earlier 403 report came from an
+# expired session (Frappe answers Guest with "not whitelisted"), not from the permission check below.
 # ---------------------------------------------------------------------------
 @frappe.whitelist()
 def get_pending_approvals(limit: int = 50) -> list:
 	"""
-	Get list of flow runs waiting for approval that the current user can approve.
-	
-	This endpoint is used by the Approval Inbox feature to show users
-	all pending approvals that require their attention.
-	
+	Get list of flow runs waiting for approval that the current user can approve (used by the Approval Inbox).
 	Args:
 	    limit: Maximum number of results (default 50)
-	
 	Returns:
 	    list of pending approval items with flow details
 	"""
 	if not frappe.has_permission("Flow Run", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	_expire_overdue_approvals()
+
+	from huf.ai.flow import engine
 
 	user = frappe.session.user
 	user_roles = set(frappe.get_roles(user))
@@ -1335,6 +1097,15 @@ def get_pending_approvals(limit: int = 50) -> list:
 		limit_page_length=limit,
 	)
 
+	flow_names = {
+		row.flow_id: row.flow_name
+		for row in frappe.get_all(
+			"Flow Definition",
+			filters={"flow_id": ["in", list({r.flow_id for r in pending_runs})]},
+			fields=["flow_id", "flow_name"],
+		)
+	} if pending_runs else {}
+
 	results = []
 
 	for run in pending_runs:
@@ -1343,36 +1114,38 @@ def get_pending_approvals(limit: int = 50) -> list:
 		except (json.JSONDecodeError, TypeError):
 			waiting = {}
 
-		approval_type = waiting.get("approval_type", "role")
-		can_approve = False
+		# Same fail-closed rule as deciding: only runs the current user may decide are listed.
+		if engine.check_approver(waiting, user, user_roles) is not None:
+			continue
 
-		# Check if current user can approve this flow run
-		if approval_type == "role":
-			approver_role = waiting.get("approver_role")
-			if approver_role and approver_role in user_roles:
-				can_approve = True
-		elif approval_type in ("user", "users"):
-			approver_users = waiting.get("approver_users", [])
-			if isinstance(approver_users, str):
-				approver_users = [u.strip() for u in approver_users.split(",") if u.strip()]
-			if user in approver_users:
-				can_approve = True
-
-		if can_approve:
-			results.append({
-				"flow_run_id": run.name,
-				"flow_id": run.flow_id,
-				"flow_version": run.flow_version,
-				"current_node_id": run.current_node_id,
-				"title": waiting.get("title", "Approval Required"),
-				"instructions": waiting.get("instructions", ""),
-				"approval_type": approval_type,
-				"approver_role": waiting.get("approver_role"),
-				"approver_users": waiting.get("approver_users", []),
-				"started_at": str(run.started_at) if run.started_at else None,
-				"waiting_since": str(run.modified) if run.modified else None,
-				"view_link": f"/huf/flows/{run.flow_id}?run={run.name}",
-			})
+		approver_type = waiting.get("approver_type")
+		flow_name = flow_names.get(run.flow_id)
+		card = build_card(flow_name if flow_name and flow_name != run.flow_id else None, waiting)
+		results.append({
+			"flow_run_id": run.name,
+			"flow_id": run.flow_id,
+			"flow_name": flow_names.get(run.flow_id) or run.flow_id,
+			"flow_version": run.flow_version,
+			"current_node_id": run.current_node_id,
+			"node_id": waiting.get("node_id") or run.current_node_id,
+			# The bell prints title/message as they are: a headline, then one sentence with the key facts.
+			"title": card["headline"],
+			"headline": card["headline"],
+			"message": card["sentence"],
+			"instructions": card["sentence"],
+			"facts": card["facts"],
+			"approval_card": api_card(flow_name, waiting, run.flow_id),
+			"approver_type": approver_type,
+			"approval_type": approver_type,
+			"approver_role": waiting.get("approver_role"),
+			"approver_users": waiting.get("approver_users") or [],
+			"timeout_next": waiting.get("timeout_next"),
+			"timeout_ms": waiting.get("timeout_ms"),
+			"timeout_at": waiting.get("timeout_at"),
+			"started_at": _utc_iso(run.started_at),
+			"waiting_since": _utc_iso(run.modified),
+			"view_link": f"/huf/flows/{run.flow_id}?run={run.name}",
+		})
 
 	return results
 
@@ -1424,7 +1197,7 @@ def analyze_flow_conversion(flow_id: str) -> dict:
 	return {"convertible": True, **result.summary.as_dict()}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def convert_flow_to_procedure(flow_id: str, procedure_id: str | None = None) -> dict:
 	"""
 	Convert a deterministic Flow into a Draft Agent Procedure.
@@ -1489,3 +1262,63 @@ def convert_flow_to_procedure(flow_id: str, procedure_id: str | None = None) -> 
 		"tier": procedure.tier,
 		**result.summary.as_dict(),
 	}
+
+
+# ---------------------------------------------------------------------------
+# Approver roles
+# ---------------------------------------------------------------------------
+
+# Roles Frappe assigns automatically or reserves for the framework: nobody can be asked to
+# "hold" them, so offering them as an approver is a trap (All/Guest match everyone or no one).
+_AUTOMATIC_ROLES = frozenset({"All", "Guest", "Administrator"})
+
+# Desk-only utility roles shipped by the Frappe framework. They gate Desk features (reports,
+# scripts, dashboards, ...) and say nothing about who may approve a business step.
+_DESK_ONLY_SYSTEM_ROLES = frozenset(
+	{
+		"Desk User",
+		"Report Manager",
+		"Script Manager",
+		"Dashboard Manager",
+		"Workspace Manager",
+		"Prepared Report User",
+		"Translator",
+		"Inbox User",
+		"Newsletter Manager",
+		"Knowledge Base Contributor",
+		"Knowledge Base Editor",
+		"Blogger",
+		"Website Manager",
+		"Maintenance Manager",
+		"Maintenance User",
+	}
+)
+
+# Huf's own approver-capable roles, in display order. ``Huf Admin`` is backed by System Manager
+# (huf.permissions.HUF_ROLE_FRAPPE_ROLE_MAP), so System Manager is what a person actually holds.
+_HUF_APPROVER_ROLES = ("System Manager", "Huf Manager", "Huf User", "Huf Viewer")
+_HUF_HIDDEN_ROLES = frozenset({"Huf Admin", "Huf Gateway User"})
+
+
+@frappe.whitelist()
+def get_approver_roles() -> list[dict]:
+	"""Roles a Flow author may pick for a Human Approval step.
+
+	Huf roles come first, then every other enabled role (custom and app-defined business roles),
+	without the automatic roles (All, Guest, Administrator) and the framework's desk-only roles.
+	Returns ``[{name, group}]`` with ``group`` ``"Huf"`` or ``"Other"``.
+	"""
+	# Read is enough: a read-only viewer opening a flow still needs the names to show the saved role.
+	if not frappe.has_permission("Flow Definition", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	rows = frappe.get_all("Role", filters={"disabled": 0}, fields=["name"], order_by="name asc", limit_page_length=0)
+	available = {row.name for row in rows}
+	hidden = _AUTOMATIC_ROLES | _DESK_ONLY_SYSTEM_ROLES | _HUF_HIDDEN_ROLES
+
+	result = [{"name": name, "group": "Huf"} for name in _HUF_APPROVER_ROLES if name in available]
+	huf = {item["name"] for item in result}
+	result.extend(
+		{"name": row.name, "group": "Other"} for row in rows if row.name not in huf and row.name not in hidden
+	)
+	return result

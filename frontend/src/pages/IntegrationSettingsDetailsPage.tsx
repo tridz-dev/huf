@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bot } from 'lucide-react';
+import { Bot, Loader2, PlugZap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -11,18 +11,25 @@ import { DeleteSettingDialog } from './integration-settings/DeleteSettingDialog'
 import { IntegrationHeader } from '@/components/integrations/IntegrationHeader';
 import { AddIntegrationToAgentModal } from '@/components/integrations/AddIntegrationToAgentModal';
 import { ConnectChannelAgentModal } from '@/components/integrations/ConnectChannelAgentModal';
-import { GeneralTab } from '@/components/integrations/GeneralTab';
-import { CredentialsTab } from '@/components/integrations/CredentialsTab';
+import { CredentialsSection } from '@/components/integrations/connection/CredentialsSection';
+import { OptionsCard } from '@/components/integrations/connection/OptionsCard';
+import { ConnectionStatusLine } from '@/components/integrations/connection/ConnectionStatusLine';
+import { useIntegrationTabs } from '@/components/integrations/connection/useIntegrationTabs';
+import { metaFrom, useConnectionTest, type ConnectionMeta } from '@/components/integrations/connection/useConnectionTest';
+import { IntegrationSetupGuide } from '@/components/integrations/IntegrationSetupGuide';
 import { RecipientsTab } from '@/components/integrations/RecipientsTab';
 import { ChannelTab } from '@/components/integrations/ChannelTab';
 import { integrationFormSchema, type IntegrationFormValues } from '@/components/integrations/types';
 import {
   createIntegrationSetting,
   deleteIntegrationSetting,
+  clearIntegrationError,
   getIntegrationService,
   getIntegrationSetting,
   updateIntegrationSetting,
 } from '@/services/integrationApi';
+import { getServiceIdentity } from '@/data/serviceIdentity';
+import { deriveStatus, integrationHealth, integrationTitle, isTestable, plainProblem } from '@/lib/integrations/health';
 import {
   buildCredentialsPayload,
   parseRequiredCredentials,
@@ -30,7 +37,7 @@ import {
   type IntegrationSettingsDoc,
 } from '@/types/integration.types';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
-import { createFormSubmitHandler, type TabFieldMapping } from '@/utils/formValidation';
+import { createFormSubmitHandler } from '@/utils/formValidation';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 interface IntegrationSettingsDetailsPageProps {
@@ -66,15 +73,14 @@ export function IntegrationSettingsDetailsPage({
   const [credentialSchema, setCredentialSchema] = useState<CredentialSchemaItem[]>([]);
   const [serviceCategory, setServiceCategory] = useState<string>('');
   const [serviceSurface, setServiceSurface] = useState<string>('');
-  const [docMeta, setDocMeta] = useState({
-    lastUsed: undefined as string | undefined,
-    lastError: undefined as string | undefined,
-  });
+  const [docMeta, setDocMeta] = useState<ConnectionMeta>(() => metaFrom({}));
+  const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set());
 
   const form = useForm<IntegrationFormValues>({
     resolver: zodResolver(integrationFormSchema),
     defaultValues: {
       service: initialService,
+      display_label: '',
       is_active: true,
       is_default: false,
       credentialValues: {},
@@ -87,97 +93,13 @@ export function IntegrationSettingsDetailsPage({
   const watchService = form.watch('service');
   const watchIsActive = form.watch('is_active');
   const watchIsDefault = form.watch('is_default');
+  const watchCredentials = form.watch('credentialValues');
   const isDirty = form.formState.isDirty;
 
-  const tabConfig = useMemo(() => {
-    const base: Record<string, { label: string; fields: string[]; default: boolean; disabled: boolean }> = {
-      general: {
-        label: 'General',
-        fields: ['service', 'is_active', 'is_default'],
-        default: true,
-        disabled: false,
-      },
-      credentials: {
-        label: 'Credentials',
-        fields: ['credentialValues'],
-        default: false,
-        disabled: false,
-      },
-    };
-
-    if (serviceCategory === 'Communication') {
-      base.recipients = {
-        label: 'Recipients',
-        fields: ['recipients'],
-        default: false,
-        disabled: false,
-      };
-    }
-
-    // CL-04: Telegram no longer gets its own tab. Every Gateway-surface
-    // provider, Telegram included, is configured entirely from the generic
-    // Channel tab below (routing, admission policy, webhook URL, and for
-    // Telegram specifically, the "Setup Webhook" convenience action).
-    if (surface === 'Gateway') {
-      base.channel = {
-        label: 'Channel',
-        fields: [],
-        default: false,
-        disabled: false,
-      };
-    }
-
-    return base;
-  }, [isNew, initialService, watchService, serviceCategory, surface]);
-
-  const validTabs = useMemo(() => Object.keys(tabConfig), [tabConfig]);
-  const defaultTab = useMemo(
-    () => Object.entries(tabConfig).find(([, config]) => config.default)?.[0] || validTabs[0],
-    [tabConfig, validTabs],
+  const { tabConfig, validTabs, tabFieldMapping, tabLabels, activeTab, setActiveTab, handleTabChange } = useIntegrationTabs(
+    serviceCategory,
+    surface,
   );
-  const tabFieldMapping: TabFieldMapping = useMemo(
-    () => Object.fromEntries(
-      Object.entries(tabConfig).map(([key, config]) => [key, [...config.fields]]),
-    ),
-    [tabConfig],
-  );
-  const tabLabels = useMemo(
-    () => Object.fromEntries(
-      Object.entries(tabConfig).map(([key, config]) => [key, config.label]),
-    ),
-    [tabConfig],
-  );
-
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    const hashFromUrl = window.location.hash.slice(1);
-    return hashFromUrl && validTabs.includes(hashFromUrl) ? hashFromUrl : defaultTab;
-  });
-
-  useEffect(() => {
-    if (!validTabs.includes(activeTab)) {
-      setActiveTab(defaultTab);
-    }
-  }, [validTabs, activeTab, defaultTab]);
-
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hashFromUrl = window.location.hash.slice(1);
-      const tab = hashFromUrl && validTabs.includes(hashFromUrl) ? hashFromUrl : defaultTab;
-      setActiveTab(tab);
-    };
-
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [defaultTab, validTabs]);
-
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
-    if (value === defaultTab) {
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    } else {
-      window.location.hash = value;
-    }
-  };
 
   const loadServiceSchema = useCallback(async (serviceName: string) => {
     if (!serviceName) return;
@@ -200,6 +122,7 @@ export function IntegrationSettingsDetailsPage({
       }
       form.reset({
         service: initialService,
+        display_label: '',
         is_active: true,
         is_default: false,
         credentialValues: {},
@@ -223,6 +146,7 @@ export function IntegrationSettingsDetailsPage({
 
         form.reset({
           service: data.service,
+          display_label: data.display_label ?? '',
           is_active: data.is_active === 1,
           is_default: data.is_default === 1,
           credentialValues: credValues,
@@ -236,10 +160,9 @@ export function IntegrationSettingsDetailsPage({
           telegram_auto_setup_webhook: data.telegram_auto_setup_webhook !== 0,
         });
 
-        setDocMeta({
-          lastUsed: data.last_used,
-          lastError: data.last_error,
-        });
+        setSavedKeys(new Set((data.credentials ?? []).filter((c) => Boolean(c.value)).map((c) => c.key)));
+        setDocMeta(metaFrom(data));
+        setLive(null);
 
         return schemaPromise;
       })
@@ -248,6 +171,14 @@ export function IntegrationSettingsDetailsPage({
       })
       .finally(() => setLoading(false));
   }, [isNew, initialService, settingId, form, navigate, loadServiceSchema, listRoute, noun]);
+
+  const { testing, live, setLive, runTest } = useConnectionTest({
+    form,
+    isNew,
+    settingId,
+    ready: !loading && Boolean(serviceSurface),
+    setDocMeta,
+  });
 
   const validateCredentials = (
     values: IntegrationFormValues,
@@ -258,6 +189,8 @@ export function IntegrationSettingsDetailsPage({
 
     for (const item of schema) {
       if (item.required && !values.credentialValues[item.key]?.trim()) {
+        form.setError(`credentialValues.${item.key}` as `credentialValues.${string}`, { message: `${item.label} is required` });
+        form.setFocus(`credentialValues.${item.key}` as `credentialValues.${string}`);
         toast.error(`${item.label} is required`);
         return false;
       }
@@ -266,6 +199,7 @@ export function IntegrationSettingsDetailsPage({
   };
 
   const onSubmit = useCallback(async (values: IntegrationFormValues) => {
+    setLive(null);
     if (!validateCredentials(values, credentialSchema, isNew)) {
       return;
     }
@@ -287,6 +221,7 @@ export function IntegrationSettingsDetailsPage({
 
       const payload: Partial<IntegrationSettingsDoc> = {
         service: values.service,
+        display_label: (values.display_label ?? '').trim(),
         is_active: values.is_active ? 1 : 0,
         is_default: values.is_default ? 1 : 0,
         credentials,
@@ -307,7 +242,7 @@ export function IntegrationSettingsDetailsPage({
       if (isNew) {
         const created = await createIntegrationSetting(payload);
         toast.success(`${nounTitle} created successfully`);
-        navigate(`${listRoute}/${encodeURIComponent(created.name)}`, { replace: true });
+        navigate(`${listRoute}/${encodeURIComponent(created.name)}`, { replace: true, state: { autoTest: true } });
       } else if (settingId) {
         const updated = await updateIntegrationSetting(settingId, payload);
         toast.success(`${nounTitle} updated successfully`);
@@ -322,17 +257,20 @@ export function IntegrationSettingsDetailsPage({
           credentialValues: credValues,
         });
 
-        setDocMeta({
-          lastUsed: updated.last_used,
-          lastError: updated.last_error,
-        });
+        setDocMeta(metaFrom(updated));
+        const typedKeys = Object.entries(values.credentialValues ?? {}).filter(([, v]) => (v ?? '').trim() !== '').map(([k]) => k);
+        if (typedKeys.length) {
+          setSavedKeys((prev) => new Set([...prev, ...typedKeys]));
+          // New credentials: check them straight away so the page never shows an old answer for them.
+          if (isTestable(values.service)) void runTest();
+        }
       }
     } catch (error) {
       toast.error(getFrappeErrorMessage(error) || `Failed to save ${noun}`);
     } finally {
       setSaving(false);
     }
-  }, [credentialSchema, form, isNew, navigate, settingId, listRoute, noun, nounTitle]);
+  }, [credentialSchema, form, isNew, navigate, settingId, listRoute, noun, nounTitle, runTest]);
 
   const handleFormSubmit = useMemo(
     () => createFormSubmitHandler(form, activeTab, tabFieldMapping, tabLabels, onSubmit),
@@ -372,77 +310,138 @@ export function IntegrationSettingsDetailsPage({
   }
 
   const displayService = watchService || initialService;
+  const serviceTitle = getServiceIdentity(displayService).title;
   const showGatewayHint = surface === 'Integration' && !isNew && serviceSurface === 'Gateway';
   // Messaging channels connect an agent as the one that answers; other integrations attach tools.
   const isChannel = serviceSurface === 'Gateway' && Boolean(settingId) && !isNew;
   const tabCols = validTabs.length;
+  const testable = isTestable(displayService);
+  const hasTyped = Object.values(watchCredentials ?? {}).some((v) => typeof v === 'string' && v.trim() !== '');
+  const pageTitle = isNew
+    ? `New ${serviceTitle} ${noun}`
+    : integrationTitle({ service: displayService, display_label: docMeta.displayLabel, account_label: docMeta.accountLabel });
+
+  const savedDoc = {
+    service: displayService,
+    // An inactive connection that was tested still shows what the test said; "Switched off" is in the subtitle.
+    is_active: (watchIsActive || docMeta.testStatus ? 1 : 0) as 0 | 1,
+    last_error: docMeta.lastError,
+    last_test_status: docMeta.testStatus,
+    last_test_message: docMeta.testMessage,
+    account_label: docMeta.accountLabel,
+  };
+  const { health, fixLabel } = deriveStatus(savedDoc, live, isNew);
+
+  // After a refused or empty check the check itself says what is wrong; the step error would only repeat it.
+  const showLastProblem = !live && docMeta.testStatus !== 'Rejected' && docMeta.testStatus !== 'Not connected';
+
+  const openCredentials = () => {
+    setActiveTab('connection');
+    requestAnimationFrame(() => {
+      document.getElementById('integration-credentials')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const keys = credentialSchema.map((item) => item.key);
+      const first = keys.find((k) => !savedKeys.has(k)) ?? keys[0];
+      if (first) form.setFocus(`credentialValues.${first}` as `credentialValues.${string}`);
+    });
+  };
+
+  const dismissProblem = async () => {
+    if (!settingId) return;
+    try {
+      await clearIntegrationError(settingId);
+      setDocMeta((prev) => ({ ...prev, lastError: undefined }));
+    } catch (error) {
+      toast.error(getFrappeErrorMessage(error) || 'Could not clear the message');
+    }
+  };
+
+  const statusLine =
+    health || testing ? (
+      <ConnectionStatusLine
+        health={health ?? integrationHealth({ ...savedDoc, last_test_status: '' })}
+        checkedAt={live ? undefined : docMeta.testAt}
+        unsaved={live?.unsaved}
+        testing={testing}
+        fixLabel={fixLabel}
+        onFix={openCredentials}
+        lastProblem={showLastProblem ? plainProblem(docMeta.lastError) || undefined : undefined}
+        onDismissProblem={dismissProblem}
+      />
+    ) : null;
 
   return (
     <div className="h-full overflow-auto">
       <div className="p-6 space-y-6 max-w-6xl mx-auto">
         <IntegrationHeader
-          title={settingId && !isNew ? settingId : ''}
-          service={displayService}
-          isActive={watchIsActive}
-          isDefault={watchIsDefault}
+          title={pageTitle}
+          subtitle={isNew ? undefined : [pageTitle.startsWith(serviceTitle) ? '' : serviceTitle, watchIsActive ? '' : 'Switched off', watchIsDefault ? 'Used by default' : ''].filter(Boolean).join(' · ') || undefined}
           isNew={isNew}
-          noun={nounTitle}
           showSaveButton={showSaveButton}
           saving={saving}
           deleting={deleting}
           onSave={handleFormSubmit}
           onDelete={!isNew ? () => setDeleteDialogOpen(true) : undefined}
+          status={statusLine}
         >
+          {testable && (
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => void runTest()}
+              disabled={testing || (isNew && !hasTyped)}
+              title={isNew && !hasTyped ? 'Enter your credentials first' : undefined}
+              data-testid="integration-test-connection"
+            >
+              {testing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlugZap className="mr-2 h-4 w-4" />}
+              Test connection
+            </Button>
+          )}
           {!isNew && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => setAddToAgentOpen(true)}
               type="button"
+              data-testid="integration-use-in-agent"
             >
               <Bot className="w-4 h-4 mr-2" />
-              {isChannel ? 'Connect agent' : 'Add to Agent'}
+              Use in agent
             </Button>
           )}
         </IntegrationHeader>
 
-        {showGatewayHint && (
-          <div className="flex flex-col gap-2 rounded-md border bg-muted/40 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">
-              To receive messages from this channel, add a gateway and link these credentials to it.
-            </p>
-            <Button type="button" variant="outline" size="sm" onClick={() => navigate('/gateways')}>
-              Go to Gateways
-            </Button>
-          </div>
-        )}
-
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList layout="grid" cols={tabCols}>
-                {Object.entries(tabConfig).map(([tabKey, config]) => (
-                  <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
-                    {config.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+              {tabCols > 1 && (
+                <TabsList layout="grid" cols={tabCols}>
+                  {Object.entries(tabConfig).map(([tabKey, config]) => (
+                    <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
+                      {config.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              )}
 
-              <TabsContent value="general" className="space-y-4">
-                <GeneralTab
-                  form={form}
-                  isNew={isNew}
-                  lastUsed={docMeta.lastUsed}
-                  lastError={docMeta.lastError}
-                />
-              </TabsContent>
-
-              <TabsContent value="credentials" className="space-y-4">
-                <CredentialsTab form={form} schema={credentialSchema} isNew={isNew} />
+              <TabsContent value="connection" className="space-y-4">
+                <CredentialsSection form={form} schema={credentialSchema} isNew={isNew} savedKeys={savedKeys} />
+                <IntegrationSetupGuide service={displayService} />
+                <OptionsCard form={form} />
+                {showGatewayHint && (
+                  <div className="flex flex-col gap-2 rounded-md border bg-muted/40 p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      To receive {serviceTitle} messages in Huf, connect it to a gateway.
+                    </p>
+                    <Button type="button" variant="outline" size="sm" onClick={() => navigate('/gateways')}>
+                      Go to Gateways
+                    </Button>
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="recipients" className="space-y-4">
-                <RecipientsTab form={form} />
+                <RecipientsTab form={form} service={displayService} settingId={settingId && !isNew ? settingId : undefined} />
               </TabsContent>
 
               {'channel' in tabConfig && (
@@ -463,7 +462,7 @@ export function IntegrationSettingsDetailsPage({
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         noun={noun}
-        settingId={settingId}
+        settingId={isNew ? settingId : pageTitle}
         deleting={deleting}
         onConfirm={handleDelete}
       />

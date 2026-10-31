@@ -12,6 +12,8 @@ vi.mock('@/components/whatsapp/TemplatesTab', () => ({ TemplatesTab: () => <div>
 vi.mock('@/components/whatsapp/broadcast/BroadcastList', () => ({ BroadcastList: () => <div>broadcast list</div> }));
 vi.mock('@/components/whatsapp/broadcast/BroadcastTab', () => ({ EmergencyStop: () => <div>emergency</div> }));
 
+vi.mock('./sections/SetupSection', () => ({ default: () => <div>setup page</div> }));
+
 import { ChannelsRoutes } from './routes';
 
 beforeAll(() => {
@@ -99,5 +101,35 @@ describe('ChannelsRail', () => {
     expect(screen.queryByRole('link', { name: 'Broadcasts' })).toBeNull();
     expect(screen.getByText('Channels', { selector: 'span' })).toBeTruthy();
     expect(screen.getByText('Telegram', { selector: 'span' })).toBeTruthy();
+  });
+
+  it('with no number, section entries are disabled with help text; Bots keeps a non-phone icon', async () => {
+    list.listChannelGateways.mockResolvedValue({ ok: true, data: [] });
+    api.getSetupStatus.mockResolvedValue({ ok: true, data: { success: true, connector_available: true, gateways: [] } });
+    open('/channels/whatsapp/setup');
+    const home = await screen.findByTestId('rail-disabled-home');
+    expect(home.getAttribute('aria-disabled')).toBe('true');
+    expect(home.getAttribute('title')).toMatch(/connect your first number/i);
+    expect(screen.queryByRole('link', { name: 'Home' })).toBeNull();
+    expect(home.getAttribute('aria-describedby')).toBe('rail-disabled-note');
+    expect(document.getElementById('rail-disabled-note')?.textContent).toMatch(/connect your first number/i);
+    expect(screen.queryByRole('note')).toBeNull();
+    expect(home.className).not.toMatch(/opacity-50/);
+  });
+
+  it('on the Numbers page with a number connected, asks to pick one instead of connecting the first', async () => {
+    open('/channels/whatsapp/numbers');
+    const note = await screen.findByText(/pick a number/i);
+    expect(note.textContent).not.toMatch(/connect your first/i);
+  });
+
+  it('uses the channel icon, not the phone, for Bots', async () => {
+    const { sectionsFor } = await import('./sections');
+    const icon = (c: string) => sectionsFor(c).find((s) => s.key === 'numbers')!.icon;
+    expect(icon('telegram')).not.toBe(icon('whatsapp'));
+    expect(icon('slack')).not.toBe(icon('whatsapp'));
+    const { CHANNELS } = await import('./channelsMeta');
+    for (const c of CHANNELS.filter((x) => x.key !== 'slack')) expect(icon(c.key)).not.toBe(c.icon);
+    expect(icon('telegram')).not.toBe(icon('teams'));
   });
 });

@@ -20,6 +20,7 @@ import { CredentialsCard } from '@/components/whatsapp/overview/CredentialsCard'
 import { PolicySection } from '@/components/whatsapp/overview/PolicySection';
 import { AccessTab } from '@/components/whatsapp/AccessTab';
 import { WhatsAppChannelSettings } from '@/components/integrations/WhatsAppChannelSettings';
+import { titleCase } from '@/components/whatsapp/templateModel';
 import { validateRunAs, WEEKDAYS, type BusinessHourRow, type BusinessHolidayRow, type GatewayFull } from './model';
 
 const save = (name: string, patch: Record<string, unknown>) => updateGateway(name, patch as Partial<GatewayDoc>);
@@ -53,7 +54,7 @@ export function ConnectionPanel({ health, accounts, credentialsHref }: PanelProp
           <dl className="grid gap-3 sm:grid-cols-2">
             <div><dt className="text-xs text-steel">Status</dt><dd className="text-sm text-ink">{health.enabled ? 'On' : 'Off'}</dd></div>
             <div><dt className="text-xs text-steel">Linked WhatsApp account</dt>
-              <dd className="text-sm text-ink">{health.whatsapp_account || 'None'}{account?.status ? ` (${account.status})` : ''}</dd></div>
+              <dd className="text-sm text-ink">{health.whatsapp_account || 'None'}{account?.status ? ` (${titleCase(account.status)})` : ''}</dd></div>
           </dl>
         </CardContent>
       </Card>

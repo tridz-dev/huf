@@ -100,10 +100,17 @@ class TestToolCallSchemaExecutorConsistency(unittest.TestCase):
 			captured["args"] = call_args
 			return {"success": True, "result": "ok"}
 
+		import contextlib
+		import sys
+		import types
+
+		fake_mcp = types.ModuleType("huf.ai.mcp_client")
+		fake_mcp.find_unique_mcp_server_for_tool = lambda name: None
 		with patch.object(flow_engine, "frappe") as fake_frappe, \
+			patch.dict(sys.modules, {"huf.ai.mcp_client": fake_mcp}), \
+			patch.object(flow_engine, "_bound_gateway", lambda *a, **k: contextlib.nullcontext()), \
 			patch.object(flow_engine, "execute_tool", side_effect=fake_execute_tool), \
 			patch.object(flow_engine, "_create_flow_agent_run", return_value=MagicMock()):
-			fake_frappe.db.get_value.return_value = None  # not an MCP tool
 			fake_frappe.get_doc.return_value = MagicMock()
 			result = flow_engine._exec_tool_call(flow_run, {"id": "n1"}, config, {})
 
@@ -119,22 +126,17 @@ class TestToolCallSchemaExecutorConsistency(unittest.TestCase):
 		self.assertEqual(captured.get("args"), {"x": 1})
 		self.assertEqual(result["status"], "success")
 
-	def test_legacy_tool_name_args_shape_still_works(self):
-		"""tool_name/args predates the schema and can never be saved through
-		FlowDefinition.validate() any more, but a Flow Run pins whatever
-		graph it started with (F-1) -- a run created before this migration
-		may still carry the old shape. Keep it working as a read-only
-		fallback."""
+	def test_legacy_tool_name_args_shape_is_not_read(self):
+		"""Pre-release: no aliases. ``tool_name``/``args`` are not schema fields."""
 		result, captured = self._run({"tool_name": "demo_tool", "args": {"x": 1}})
 
-		self.assertEqual(captured.get("tool_name"), "demo_tool")
-		self.assertEqual(captured.get("args"), {"x": 1})
-		self.assertEqual(result["status"], "success")
+		self.assertEqual(result["status"], "failed")
+		self.assertEqual(captured, {})
 
 	def test_missing_tool_id_fails_with_actionable_message(self):
 		result, captured = self._run({"input": {}})
 		self.assertEqual(result["status"], "failed")
-		self.assertIn("tool_id", result["error"])
+		self.assertIn("Choose which action", result["error"])
 		self.assertEqual(captured, {})
 
 
@@ -218,7 +220,7 @@ class TestSavedFlowInvokesRealTool(unittest.TestCase):
 				{
 					"id": "start",
 					"type": "trigger.webhook",
-					"config": {"method": "POST"},
+					"config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"},
 					"next": "call",
 				},
 				{

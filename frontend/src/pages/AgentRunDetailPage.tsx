@@ -1,12 +1,11 @@
-import { useEffect, useState, useMemo, type ReactNode } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowUpDown, Loader2, AlertTriangle, Copy, Check } from 'lucide-react';
+import { ArrowUpDown, Loader2, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { PageFrame } from '@/layouts/PageFrame';
-import { cn } from '@/lib/utils';
 import type { AgentRunDoc } from '@/services/agentRunApi';
 import { getAgentRuns } from '@/services/agentRunApi';
 import { checkCacheableModels } from '@/services/agentApi';
@@ -34,99 +33,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { copyText } from '@/lib/clipboard';
-/** One row of the Overview / Tokens & Cost definition list. */
-function DefinitionRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
-  return (
-    <div className="flex h-[26px] items-center justify-between gap-4">
-      <span className="text-[13px] text-steel shrink-0">{label}</span>
-      <span
-        className={cn(
-          'text-[13px] tabular-nums truncate text-right text-ink',
-          mono && 'font-mono'
-        )}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-/** A labeled column of DefinitionRows, headed by a mono uppercase eyebrow. */
-function DefinitionColumn({ heading, children }: { heading: string; children: ReactNode }) {
-  return (
-    <div>
-      <div className="font-mono text-[10px] uppercase tracking-widest text-steel pb-1.5">{heading}</div>
-      <div className="divide-y divide-line">{children}</div>
-    </div>
-  );
-}
-
-/** One field in the Context panel's four-column stat row: 11px label over a 13px value. */
-function ContextStat({
-  label,
-  value,
-  capitalize,
-}: {
-  label: string;
-  value: ReactNode;
-  capitalize?: boolean;
-}) {
-  return (
-    <div className="min-w-0">
-      <div className="text-[11px] text-steel truncate">{label}</div>
-      <div className={cn('text-[13px] tabular-nums text-ink truncate', capitalize && 'capitalize')}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-/** Prompt/Response panel: title + copy button, content in a mono box. */
-function CopyableTextPanel({
-  title,
-  content,
-  emptyText,
-}: {
-  title: string;
-  content?: string | null;
-  emptyText: string;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    if (!content) return;
-    try {
-      if (!(await copyText(content))) throw new Error('Copy failed');
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch (error) {
-      console.error('Failed to copy to clipboard:', error);
-    }
-  };
-
-  return (
-    <div className="rounded-lg border border-line bg-panel p-4">
-      <div className="flex items-center justify-between gap-2 pb-2">
-        <h3 className="text-[13px] font-[590] text-ink">{title}</h3>
-        <button
-          type="button"
-          onClick={handleCopy}
-          disabled={!content}
-          aria-label={`Copy ${title.toLowerCase()}`}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-steel transition-colors hover:bg-paper-deep hover:text-ink disabled:pointer-events-none disabled:opacity-40"
-        >
-          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-        </button>
-      </div>
-      <div className="max-h-[320px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-paper-deep p-3 font-mono text-xs leading-[1.6] text-ink">
-        {content || emptyText}
-      </div>
-    </div>
-  );
-}
-
+import { getFlowStepLabels } from '@/services/flowApi';
+import { ContextStat, CopyableTextPanel, DefinitionColumn, DefinitionRow } from '@/components/executions/RunDetailParts';
+import { humanizeToolPrompt } from '@/lib/flow/flowIntegrations';
 interface AgentRunDetail extends AgentRunDoc {
+  flow_id?: string | null;
   prompt?: string;
   response?: string;
   provider?: string;
@@ -165,6 +76,7 @@ function AgentRunDetailPage() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [isSilentDegradation, setIsSilentDegradation] = useState(false);
   const [contextMetrics, setContextMetrics] = useState<RunContextMetricsResponse | null>(null);
+  const [flowLabel, setFlowLabel] = useState<string | null>(null);
 
   useEffect(() => {
     if (!runId) {
@@ -177,6 +89,11 @@ function AgentRunDetailPage() {
       const data = await fetchAgentRunDetail(runId);
       setRun(data);
       setLoading(false);
+      setFlowLabel(null);
+      if (data?.flow_run) {
+        const [label] = await getFlowStepLabels([{ flow_run: data.flow_run, flow_node_id: data.flow_node_id }]);
+        setFlowLabel(label);
+      }
     })();
 
     (async () => {
@@ -395,6 +312,7 @@ function AgentRunDetailPage() {
   }
 
   const status = run.status || 'Unknown';
+  const isFlowStep = Boolean(run.flow_run);
   const duration = calculateDuration(run.start_time ?? null, run.end_time ?? null);
   const startedAt = run.start_time ? formatTimeAgo(run.start_time) : 'Not available';
 
@@ -413,23 +331,43 @@ function AgentRunDetailPage() {
 
         <div className="rounded-lg border border-line bg-panel p-5">
           <div className="flex flex-wrap items-center gap-3 pb-4">
-            <h2 className="text-[17px] font-[600] text-ink">Agent run</h2>
+            <h2 className="text-[17px] font-[600] text-ink">{isFlowStep ? 'Flow step run' : 'Agent run'}</h2>
             <Badge variant={getAgentRunStatusVariant(run.status)}>{status}</Badge>
-            <span className="text-[13px] text-steel">{run.agent || 'Unknown agent'}</span>
+            <span className="text-[13px] text-steel" data-testid="agent-run-source">
+              {isFlowStep ? flowLabel || 'Flow step' : run.agent || 'Unknown agent'}
+            </span>
           </div>
 
           <div className="grid gap-x-10 gap-y-4 md:grid-cols-2">
             <DefinitionColumn heading="Overview">
-              <DefinitionRow
-                label="Agent"
-                value={
-                  <Link to={`/agents/${run.agent}`} className="hover:text-signal">
-                    {run.agent || 'Unknown'}
-                  </Link>
-                }
-              />
-              <DefinitionRow label="Provider" value={run.provider || 'Unknown'} />
-              <DefinitionRow label="Model" value={run.model || 'Unknown'} mono />
+              {isFlowStep && (
+                <DefinitionRow
+                  label="Flow run"
+                  value={
+                    <Link
+                      to={`/flows/${run.flow_id}?run=${encodeURIComponent(run.flow_run as string)}`}
+                      className="text-signal underline-offset-2 hover:underline"
+                      data-testid="agent-run-flow-run-link"
+                    >
+                      {flowLabel || run.flow_run}
+                    </Link>
+                  }
+                />
+              )}
+              {!(isFlowStep && !run.agent) && (
+                <>
+                  <DefinitionRow
+                    label="Agent"
+                    value={
+                      <Link to={`/agents/${run.agent}`} className="hover:text-signal">
+                        {run.agent || 'Unknown'}
+                      </Link>
+                    }
+                  />
+                  <DefinitionRow label="Provider" value={run.provider || 'Unknown'} />
+                  <DefinitionRow label="Model" value={run.model || 'Unknown'} mono />
+                </>
+              )}
               <DefinitionRow label="Started" value={startedAt} />
               <DefinitionRow label="Duration" value={duration} />
               <DefinitionRow
@@ -535,7 +473,7 @@ function AgentRunDetailPage() {
         )}
 
         <div className="grid gap-4 md:grid-cols-2">
-          <CopyableTextPanel title="Prompt" content={run.prompt} emptyText="No prompt recorded." />
+          <CopyableTextPanel title="Prompt" content={humanizeToolPrompt(run.prompt)} emptyText="No prompt recorded." />
           <CopyableTextPanel title="Response" content={run.response} emptyText="No response recorded." />
         </div>
 

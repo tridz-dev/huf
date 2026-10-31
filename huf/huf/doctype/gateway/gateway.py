@@ -28,6 +28,10 @@ class Gateway(Document):
             frappe.throw(_("Choose a default agent or clear the default route."))
         if self.default_target_type == "Flow" and not self.default_flow:
             frappe.throw(_("Choose a default flow or clear the default route."))
+        if self.default_target_type == "Flow":
+            from huf.ai.flow.gateways.route_warning import warn_if_flow_not_live
+
+            warn_if_flow_not_live(self.default_flow)  # Q11: warn, never refuse
         if self.direct_policy == "Open" and not is_identity_required(self.provider):
             frappe.throw(_("Public direct-message gateways are not available in this release."))
 

@@ -112,7 +112,7 @@ class TestToolCallSendsWithoutLLMTurn(IntegrationTestCase):
 				{
 					"id": "start",
 					"type": "trigger.webhook",
-					"config": {"method": "POST"},
+					"config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"},
 					"next": "send",
 				},
 				{
@@ -169,7 +169,7 @@ class TestToolCallSendsWithoutLLMTurn(IntegrationTestCase):
 			# trigger_type at all, so this is a faithful stand-in for "an
 			# Automation triggered this Flow" without needing a real Agent
 			# Trigger/Doc Event wiring in this test.
-			flow_run = create_flow_run(flow_id=flow_id, payload={}, trigger_type="Doc Event")
+			flow_run = create_flow_run(flow_id=flow_id, payload={}, trigger_type="Webhook")
 			self._track("Flow Run", flow_run.name)
 			engine_run_flow(flow_run.name)
 

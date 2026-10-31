@@ -8,6 +8,7 @@
  * minimal changes. Methods that were synchronous are now async.
  */
 
+import { cancelFlowRun as apiCancelFlowRun } from './flow/flowRunActionsApi';
 import { Flow, FlowMetadata, FlowNode, FlowEdge, FlowStatus } from '../types/flow.types';
 import {
   getFlowDefinitions,
@@ -22,6 +23,9 @@ import {
   approveFlowRun as apiApproveFlowRun,
   rejectFlowRun as apiRejectFlowRun,
   resumeFlowRun as apiResumeFlowRun,
+  markFlowRunFailed as apiMarkFlowRunFailed,
+  publishFlow as apiPublishFlow,
+  unpublishFlow as apiUnpublishFlow,
 } from './flowApi';
 import type { FlowRunSummary, FlowRunDetail } from './flowApi';
 import { serializeFlow, deserializeFlow, mapBackendStatusToFrontend, defaultContract } from './flowSerializer';
@@ -50,9 +54,9 @@ class FlowService {
     return items.map(item => ({
       id: item.flow_id,
       name: item.flow_name,
-      description: undefined,
+      description: item.description || undefined,
       status: mapBackendStatusToFrontend(item.status),
-      category: undefined,
+      category: item.category || undefined,
       nodeCount: 0, // Will be populated when flow is loaded individually
       createdAt: new Date(item.modified),
       updatedAt: new Date(item.modified),
@@ -70,6 +74,9 @@ class FlowService {
         : doc.definition_json;
 
       const flow = deserializeFlow(doc.flow_id, doc.flow_name, doc.status, graph);
+      // Name, description and category live on the Flow Definition record, not in the graph.
+      flow.description = doc.description || '';
+      flow.category = doc.category || 'Uncategorized';
       this.flowCache.set(id, flow);
       return flow;
     } catch {
@@ -101,7 +108,7 @@ class FlowService {
           config: {},
           next: null,
           _position: { x: 250, y: 100 },
-          _label: 'Select trigger',
+          _label: 'Choose what starts this flow',
           _icon: 'CircleDashed',
         },
       ],
@@ -109,11 +116,13 @@ class FlowService {
     };
 
     await saveFlowDefinition(flowId, defaultGraph);
+    // The first save names the record after its id; store the real name and category.
+    await updateFlowDefinitionFields(flowId, { flow_name: name, category: category || 'Uncategorized' });
 
     const newFlow: Flow = {
       id: flowId,
       name,
-      description: 'New automation flow',
+      description: '',
       status: 'draft',
       category: category || 'Uncategorized',
       nodes: [
@@ -122,9 +131,9 @@ class FlowService {
           type: 'trigger',
           position: { x: 250, y: 100 },
           data: {
-            label: 'Select trigger',
+            label: 'Choose what starts this flow',
             nodeType: 'trigger',
-            description: 'Select a trigger',
+            description: 'Choose what starts this flow',
             configured: false,
           },
         },
@@ -154,43 +163,34 @@ class FlowService {
     return getFlowConversionStatus(id);
   }
 
-  /** Update a flow locally and save to backend */
+  /**
+   * Change a flow's name, description or category: only those record fields are written. The steps are NOT saved
+   * here (that is the editor's Save), so unfinished edits can never make this call fail, and nothing is saved
+   * behind the person's back.
+   */
   async updateFlow(id: string, updates: Partial<Flow>): Promise<Flow | null> {
-    const flow = this.flowCache.get(id);
-    if (!flow) return null;
-
-    // Keep DocType fields in sync when renaming
-    if (typeof updates.name === 'string' && updates.name.trim()) {
-      await updateFlowDefinitionFields(id, { flow_name: updates.name });
+    const fields: { flow_name?: string; description?: string; category?: string } = {};
+    if (typeof updates.name === 'string' && updates.name.trim()) fields.flow_name = updates.name;
+    if (typeof updates.description === 'string') fields.description = updates.description;
+    if (typeof updates.category === 'string') fields.category = updates.category;
+    if (Object.keys(fields).length) {
+      await updateFlowDefinitionFields(id, fields);
     }
 
-    const updatedFlow: Flow = {
-      ...flow,
-      ...updates,
-      updatedAt: new Date(),
-      version: flow.version + 1,
-    };
-
+    const flow = this.flowCache.get(id);
+    if (!flow) return null;
+    const updatedFlow: Flow = { ...flow, ...updates, updatedAt: new Date() };
     this.flowCache.set(id, updatedFlow);
     this.notifyListeners();
-
-    // Save to backend
-    const graph = serializeFlow(updatedFlow);
-    await saveFlowDefinition(id, graph);
-
     return updatedFlow;
   }
 
-  /** Delete a flow from the backend */
+  /** Delete a flow from the backend. A refusal (not allowed, still in use) is thrown so the caller can say so. */
   async deleteFlow(id: string): Promise<boolean> {
-    try {
-      await deleteFlowDefinition(id);
-      this.flowCache.delete(id);
-      this.notifyListeners();
-      return true;
-    } catch {
-      return false;
-    }
+    await deleteFlowDefinition(id);
+    this.flowCache.delete(id);
+    this.notifyListeners();
+    return true;
   }
 
   /** Update flow name (backend + cache) */
@@ -211,9 +211,16 @@ class FlowService {
     return this.updateFlowLocal(id, { status });
   }
 
+  /** Publish (status Active) or unpublish (back to Draft) a flow, then mirror the status in the cache. */
+  async setPublished(id: string, published: boolean): Promise<Flow | null> {
+    if (published) await apiPublishFlow(id);
+    else await apiUnpublishFlow(id);
+    return this.updateFlowLocal(id, { status: published ? 'active' : 'draft' });
+  }
+
   /** Run a flow via the backend */
-  async runFlow(flowId: string, payload?: Record<string, unknown>): Promise<{ flow_run_id: string; status: string }> {
-    return apiRunFlow(flowId, payload);
+  async runFlow(flowId: string, payload?: Record<string, unknown>, mode: 'test' | 'real' = 'real'): Promise<{ flow_run_id: string; status: string }> {
+    return apiRunFlow(flowId, payload, mode);
   }
 
   // ─── Flow Run API Wrappers ──────────────────────────────────────────
@@ -236,6 +243,14 @@ class FlowService {
 
   async resumeFlowRun(flowRunId: string, input?: Record<string, unknown>) {
     return apiResumeFlowRun(flowRunId, input);
+  }
+
+  async markFlowRunFailed(flowRunId: string) {
+    return apiMarkFlowRunFailed(flowRunId);
+  }
+
+  async cancelFlowRun(flowRunId: string) {
+    return apiCancelFlowRun(flowRunId);
   }
 
   // ─── Local-only mutation helpers (update cache, notify) ────────────

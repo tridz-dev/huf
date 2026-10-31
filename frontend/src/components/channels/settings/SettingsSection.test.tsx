@@ -47,6 +47,15 @@ describe('Settings sections', () => {
     open(path);
     expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
   });
+  it('with no number shows a single Facebook panel and no section tabs', async () => {
+    render(
+      <MemoryRouter initialEntries={['/channels/whatsapp/settings/credentials']}>
+        <Routes><Route path="/channels/whatsapp/settings/:section?" element={<SettingsSection />} /></Routes>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.queryByText(/pick a number/i)).toBeNull());
+    expect(screen.queryByRole('navigation', { name: 'Settings sections' })).toBeNull();
+  });
   it('renders replies', async () => {
     open('/replies');
     expect(await screen.findByRole('button', { name: 'Save' })).toBeInTheDocument();

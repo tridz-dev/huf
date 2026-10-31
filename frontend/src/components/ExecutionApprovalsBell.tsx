@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ShieldAlert } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import {
@@ -11,6 +12,7 @@ import {
 } from '../services/executionApi';
 import type { PendingExecutionApproval } from '../services/executionApi';
 import { useUser } from '../contexts/UserContext';
+import { parseServerDate, useSiteTimezone } from '@/lib/serverTime';
 
 const REFRESH_INTERVAL_MS = 60000;
 /** Recompute expiry urgency independently of the fetch cycle so the
@@ -18,6 +20,10 @@ const REFRESH_INTERVAL_MS = 60000;
 const TICK_INTERVAL_MS = 30000;
 /** Below this remaining time, an approval is flagged as urgent (24h TTL). */
 const URGENT_THRESHOLD_MS = 60 * 60 * 1000;
+
+const CAPABILITY_LABELS: Record<string, string> = {
+  'code_execution.run': 'Run Python code',
+};
 
 const EXECUTION_KIND_LABELS: Record<string, string> = {
   code_execution: 'Code execution',
@@ -29,7 +35,7 @@ function executionKindLabel(kind: string): string {
 }
 
 function formatExpiry(expiresOn: string, now: number): { label: string; urgent: boolean; expired: boolean } {
-  const expiresAt = new Date(expiresOn).getTime();
+  const expiresAt = parseServerDate(expiresOn)?.getTime() ?? Number.NaN;
   if (Number.isNaN(expiresAt)) {
     return { label: 'Expiry unknown', urgent: false, expired: false };
   }
@@ -55,7 +61,17 @@ function formatExpiry(expiresOn: string, now: number): { label: string; urgent: 
   return { label: `Expires in ${diffDays} day${diffDays === 1 ? '' : 's'}`, urgent, expired: false };
 }
 
-export function ExecutionApprovalsBell() {
+interface ExecutionApprovalsBellProps {
+  /** `dialog`: no icon button, just the list in a dialog (the editor header's "..." menu opens it). */
+  variant?: 'icon' | 'dialog';
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Reports how many requests wait (for the menu entry). */
+  onCount?: (count: number) => void;
+}
+
+export function ExecutionApprovalsBell({ variant = 'icon', open, onOpenChange, onCount }: ExecutionApprovalsBellProps = {}) {
+  useSiteTimezone();
   const [approvals, setApprovals] = useState<PendingExecutionApproval[]>([]);
   const [now, setNow] = useState(() => Date.now());
   const [decidingName, setDecidingName] = useState<string | null>(null);
@@ -108,11 +124,79 @@ export function ExecutionApprovalsBell() {
   };
 
   const count = approvals.length;
+  useEffect(() => onCount?.(count), [count, onCount]);
+
+  const panel = (
+    <>
+        <div className="px-4 py-3 border-b text-sm font-semibold">Pending execution approvals</div>
+        {count === 0 ? (
+          <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+            No executions waiting
+          </div>
+        ) : (
+          <div className="max-h-80 overflow-y-auto divide-y">
+            {approvals.map((approval) => {
+              const expiry = formatExpiry(approval.expires_on, now);
+              const deciding = decidingName === approval.name;
+              return (
+                <div key={approval.name} className="px-4 py-3 space-y-2" data-testid={`execution-approval-${approval.name}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge variant="pill-neutral">{executionKindLabel(approval.execution_kind)}</Badge>
+                    <Badge variant={expiry.urgent ? 'pill-danger' : 'pill-warning'}>
+                      {expiry.label}
+                    </Badge>
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium">{CAPABILITY_LABELS[approval.requested_capability] ?? approval.requested_capability}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {approval.flow_label ?? (approval.agent_name ? `${approval.agent_name}` : 'Unknown agent')}
+                      {approval.requested_by ? ` · requested by ${approval.requested_by}` : ''}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={deciding}
+                      data-testid={`execution-approve-${approval.name}`}
+                      onClick={() => handleApprove(approval.name)}
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={deciding}
+                      data-testid={`execution-reject-${approval.name}`}
+                      onClick={() => handleReject(approval.name)}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </>
+  );
+
+  // In a narrow editor header the bell lives in the "..." menu: the same list in a dialog, no icon button of its own.
+  if (variant === 'dialog') {
+    return (
+      <Dialog open={!!open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-[420px] p-0" data-testid="execution-approvals-dialog">
+          <DialogTitle className="sr-only">Pending execution approvals</DialogTitle>
+          {panel}
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label="Pending execution approvals">
+        <Button variant="ghost" size="icon" className="relative" aria-label="Pending execution approvals" data-testid="execution-approvals-bell">
           <ShieldAlert className="w-4 h-4" />
           {count > 0 && (
             <Badge
@@ -125,54 +209,7 @@ export function ExecutionApprovalsBell() {
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
-        <div className="px-4 py-3 border-b text-sm font-semibold">Pending execution approvals</div>
-        {count === 0 ? (
-          <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-            No executions waiting
-          </div>
-        ) : (
-          <div className="max-h-80 overflow-y-auto divide-y">
-            {approvals.map((approval) => {
-              const expiry = formatExpiry(approval.expires_on, now);
-              const deciding = decidingName === approval.name;
-              return (
-                <div key={approval.name} className="px-4 py-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <Badge variant="pill-neutral">{executionKindLabel(approval.execution_kind)}</Badge>
-                    <Badge variant={expiry.urgent ? 'pill-danger' : 'pill-warning'}>
-                      {expiry.label}
-                    </Badge>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium">{approval.requested_capability}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {approval.agent_name ? `${approval.agent_name}` : 'Unknown agent'}
-                      {approval.requested_by ? ` · requested by ${approval.requested_by}` : ''}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={deciding}
-                      onClick={() => handleApprove(approval.name)}
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={deciding}
-                      onClick={() => handleReject(approval.name)}
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {panel}
       </PopoverContent>
     </Popover>
   );

@@ -22,12 +22,15 @@ export function ManagerLink({ url, businessId, showId = true }: { url?: string; 
         </a>
       </Button>
       {showId && businessId && (
-        <span className="flex items-center gap-1 text-[11px] text-steel">
-          Account ID <span className="font-mono text-ink">{businessId}</span>
-          <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="Copy account ID" onClick={copy}>
-            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-          </Button>
-        </span>
+        <details className="text-[11px] text-steel">
+          <summary className="cursor-pointer">Details</summary>
+          <span className="mt-1 flex items-center gap-1">
+            Account ID <span className="font-mono text-ink">{businessId}</span>
+            <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="Copy account ID" onClick={copy}>
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            </Button>
+          </span>
+        </details>
       )}
     </div>
   );

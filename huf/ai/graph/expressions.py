@@ -17,32 +17,28 @@ behaviour and T-01 pins it with tests):
   hard AST-depth cap (``MAX_EXPRESSION_DEPTH``) so a syntactically "allowed" but pathologically
   nested expression cannot be used to blow the recursion stack.
 
-What this module adds on top of that shape, per ``spec/graph-ir.md`` section 4.2:
+What this module adds, per ``spec/graph-ir.md`` section 4.2:
 
 - The evaluator returns the **value**, not ``bool(value)``. Boolean coercion happens only where the
   IR itself structurally requires a boolean (``condition``, ``applies_when``, ``validate``) --
   see :func:`evaluate_bool`.
 - ``ast.Subscript`` resolution gains **list-index support** (``row["items"][0]``), matching the
-  ``Reference`` path grammar in section 4.1 (:func:`resolve_path`) so the two mechanisms -- a
-  standalone ``{"$from": "..."}`` reference and a variable access embedded inside a larger
-  ``Expression`` -- stay conceptually identical.
+  ``Reference`` path grammar in section 4.1 (:func:`resolve_path`).
 - Operators: ``Eq, NotEq, Lt, LtE, Gt, GtE, In, NotIn, And, Or, Not, Add, Sub, Mult, Mod`` (carried
   over from ``flow/eval.py``) plus ``Div`` (null on division by zero, never raises -- see totality
   below) and ``UAdd``/``USub`` for signed literals. Still no ``Pow``, no bitwise operators.
+- A closed set of four **helper functions** (``number``, ``lower``, ``startswith``, ``endswith``; :data:`HELPERS`)
+  is the only thing ``ast.Call`` may name (bare name, exact positional arity; everything else is rejected at parse
+  time). Each is total: wrong types give ``None`` / ``False``.
+- Arithmetic is resource-limited (``expr.limits``): no text/list repetition, integers below 10**18.
 - The only bare ``Name`` nodes ever in scope are the roots from section 4.1 (``input``, ``trigger``,
   ``row``, ``foreach``, or a ``<node_id>``); which names are actually bound is entirely up to the
   caller's ``bindings`` dict -- this module does not hardcode the root list.
 
-Totality (I2, I7): once an expression has been **parsed** (:func:`parse_expression`), evaluating it
-(:func:`evaluate_value` / :func:`evaluate_bool`) never raises for ordinary data. Missing keys and
-out-of-range list indices resolve to ``None``/``null`` (never ``KeyError``/``IndexError``), division
-by zero resolves to ``None`` (never ``ZeroDivisionError``), and type-mismatched comparisons or binary
-operations resolve to ``None`` (never ``TypeError``) -- EXCEPT where a boolean is structurally
-required, where a non-boolean/None result is coerced with Python truthiness exactly as
-``flow/eval.py`` does today (:func:`evaluate_bool`). Malformed or disallowed expressions are instead
-rejected **at parse time** with a typed :class:`ExpressionError` -- that is the one place this module
-is allowed to raise on bad input; nothing downstream of a successful :func:`parse_expression` call
-raises.
+Totality (I2, I7): once **parsed**, evaluating never raises for ordinary data: missing keys, bad indices, division by
+zero and type mismatches resolve to ``None``/``null``; :func:`evaluate_bool` coerces with Python truthiness exactly as
+``flow/eval.py`` does. Malformed or disallowed expressions are rejected **at parse time** with :class:`ExpressionError`
+(the one place this module raises on bad input). The one opt-in exception is ``raise_limits=True`` (resource limits).
 
 Public API:
 
@@ -52,22 +48,12 @@ Public API:
 - :func:`evaluate_value` -- runtime: ``(ParsedExpression, bindings) -> Any``, total, never raises.
 - :func:`evaluate_bool` -- runtime: ``(ParsedExpression, bindings) -> bool``, total, never raises.
   Use for ``condition.config.expression``, ``applies_when[]``, ``validate.assertions[].expression``.
-- :func:`evaluate_predicate` -- **the T-12 integration point.** ``(expression: str, row: dict) ->
-  bool``, total, never raises, parses AND evaluates in one call with a single ``row`` root binding.
-  ``huf/ai/graph/transforms.py`` (T-12) currently ships its own small ``eval_row_predicate`` AST
-  walker for exactly this shape (``filter``'s ``where: Expression``) because T-12 has no dependency
-  on T-13 and needed *something* self-contained. That duplication is not meant to ship long-term:
-  ``transforms.py`` is expected to replace its local ``eval_row_predicate`` with a call to
-  ``evaluate_predicate`` from this module (the two signatures match: ``(expression, row) -> bool``),
-  once T-13 lands and T-12 can take the dependency. See ``transforms.py``'s own comment block above
-  its evaluator for the acknowledgement.
+- :func:`evaluate_predicate` -- ``(expression: str, row: dict) -> bool``, total, never raises: parses AND
+  evaluates with a single ``row`` root binding. ``huf/ai/graph/transforms.py`` uses it for ``filter``/``sort``.
 - :func:`resolve_path` -- resolves a ``Reference`` path (section 4.1: ``root.segment...``, segments
   are ``.identifier`` or ``[integer]``) against a bindings dict. Total: any failure is ``None``.
 
-Explicitly NOT used: ``frappe.safe_eval`` / ``frappe.utils.safe_exec.get_safe_globals``. Both expose a
-far larger surface (string methods, ``frappe.utils`` helpers, safe builtins) than this trust boundary
-allows -- GT-03 calls this out as "far too permissive." This module's allow-list is deliberately much
-narrower.
+Explicitly NOT used: ``frappe.safe_eval`` (far larger surface than this trust boundary allows, per GT-03).
 """
 
 from __future__ import annotations
@@ -77,6 +63,27 @@ import operator
 import re
 from dataclasses import dataclass
 from typing import Any
+
+try:
+	from huf.ai.graph.expr.limits import (
+		LIMIT_MESSAGE,
+		MAX_INT_MAGNITUDE,
+		MAX_SEQUENCE_RESULT,
+		ExpressionLimitError,
+		_check_int,
+		_check_result,
+		_safe_add,
+		_safe_mod,
+		_safe_mul,
+	)
+except ImportError:  # loaded by file path in a frappe-less sandbox (see tests/test_graph_expressions.py)
+	import importlib.util as _ilu
+	import os as _os
+
+	_spec = _ilu.spec_from_file_location("huf_graph_expression_limits", _os.path.join(_os.path.dirname(__file__), "expr", "limits.py"))
+	_limits = _ilu.module_from_spec(_spec)
+	_spec.loader.exec_module(_limits)
+	globals().update({k: getattr(_limits, k) for k in ("LIMIT_MESSAGE", "MAX_INT_MAGNITUDE", "MAX_SEQUENCE_RESULT", "ExpressionLimitError", "_check_int", "_check_result", "_safe_add", "_safe_mod", "_safe_mul")})
 
 MAX_EXPRESSION_LENGTH = 500
 
@@ -125,10 +132,10 @@ def _safe_div(a: Any, b: Any) -> Any:
 
 
 _BIN_OPS: dict[type, Any] = {
-	ast.Add: operator.add,
+	ast.Add: _safe_add,
 	ast.Sub: operator.sub,
-	ast.Mult: operator.mul,
-	ast.Mod: operator.mod,
+	ast.Mult: _safe_mul,
+	ast.Mod: _safe_mod,
 	ast.Div: _safe_div,
 }
 
@@ -142,6 +149,51 @@ _CMP_OPS: dict[type, Any] = {
 	ast.In: lambda a, b: a in b if isinstance(b, (list, tuple, dict, str, set)) else None,
 	ast.NotIn: lambda a, b: a not in b if isinstance(b, (list, tuple, dict, str, set)) else None,
 }
+
+# ----------------------------------------------------------------------------------------------
+# Helper functions: the only calls an expression may make (fixed names, fixed arity, total)
+# ----------------------------------------------------------------------------------------------
+
+_NUMBER_RE = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)$")
+
+
+def _h_number(value: Any) -> Any:
+	"""A number from a number or from text that is only a number (``"150"``, `` 2.5 ``); anything else is ``None``."""
+	if isinstance(value, bool):
+		return None
+	if isinstance(value, (int, float)):
+		return value
+	if isinstance(value, str):
+		text = value.strip()
+		if len(text) <= 64 and _NUMBER_RE.match(text):
+			try:
+				return float(text) if "." in text else int(text)
+			except (ValueError, OverflowError):
+				return None
+	return None
+
+
+def _h_lower(value: Any) -> Any:
+	"""Text in lower case (so two texts can be compared ignoring capital letters); other values are returned as they are."""
+	return value.lower() if isinstance(value, str) else value
+
+
+def _h_startswith(value: Any, prefix: Any) -> bool:
+	return isinstance(value, str) and isinstance(prefix, str) and value.startswith(prefix)
+
+
+def _h_endswith(value: Any, suffix: Any) -> bool:
+	return isinstance(value, str) and isinstance(suffix, str) and value.endswith(suffix)
+
+
+# name -> (function, number of positional arguments)
+HELPERS: dict[str, tuple[Any, int]] = {
+	"number": (_h_number, 1),
+	"lower": (_h_lower, 1),
+	"startswith": (_h_startswith, 2),
+	"endswith": (_h_endswith, 2),
+}
+
 
 # Explicit node-type allow-list. Anything not a key here (ast.Call, ast.Attribute, ast.Lambda,
 # comprehensions, ast.NamedExpr, ast.JoinedStr/FormattedValue, ast.Starred, ast.Import*, ...) is
@@ -167,6 +219,7 @@ _ALLOWED_NODES: tuple[type, ...] = (
 	ast.List,
 	ast.Dict,
 	ast.Tuple,
+	ast.Call,
 	*_BIN_OPS.keys(),
 	*_CMP_OPS.keys(),
 )
@@ -214,6 +267,14 @@ def _validate_node(node: ast.AST, depth: int) -> None:
 	if isinstance(node, ast.Constant) and isinstance(node.value, (bytes, complex, type(...))):
 		raise ExpressionError(f"disallowed constant type: {type(node.value).__name__}")
 
+	if isinstance(node, ast.Call):
+		if not isinstance(node.func, ast.Name) or node.func.id not in HELPERS:
+			raise ExpressionError("disallowed expression element: Call")
+		if node.keywords or any(isinstance(a, ast.Starred) for a in node.args):
+			raise ExpressionError("disallowed expression element: Call")
+		if len(node.args) != HELPERS[node.func.id][1]:
+			raise ExpressionError(f"{node.func.id}() takes {HELPERS[node.func.id][1]} argument(s)")
+
 	for child in ast.iter_child_nodes(node):
 		_validate_node(child, depth + 1)
 
@@ -223,20 +284,32 @@ def _validate_node(node: ast.AST, depth: int) -> None:
 # ----------------------------------------------------------------------------------------------
 
 
-def evaluate_value(parsed: ParsedExpression, bindings: dict) -> Any:
+def evaluate_value(parsed: ParsedExpression, bindings: dict, *, raise_limits: bool = False) -> Any:
 	"""Evaluate a parsed expression against ``bindings``, returning the raw value.
 
 	Total: never raises. Any runtime problem (unknown name, type-mismatched operator, division by
 	zero, bad subscript) resolves to ``None`` rather than propagating.
+
+	The single exception is opt-in: with ``raise_limits=True`` a hit resource limit (repeating text or
+	lists, numbers of 10**18 or more, results over a million items, out of memory) raises
+	:class:`ExpressionLimitError` so the caller can fail the step with its plain message.
 	"""
 
 	try:
 		return _eval(parsed._tree, bindings if isinstance(bindings, dict) else {})
+	except ExpressionLimitError:
+		if raise_limits:
+			raise
+		return None
+	except (MemoryError, OverflowError):
+		if raise_limits:
+			raise ExpressionLimitError() from None
+		return None
 	except Exception:
 		return None
 
 
-def evaluate_bool(parsed: ParsedExpression, bindings: dict) -> bool:
+def evaluate_bool(parsed: ParsedExpression, bindings: dict, *, raise_limits: bool = False) -> bool:
 	"""Evaluate a parsed expression, coercing the result to ``bool`` with Python truthiness.
 
 	Use this -- never :func:`evaluate_value` -- for ``condition.config.expression``,
@@ -246,25 +319,18 @@ def evaluate_bool(parsed: ParsedExpression, bindings: dict) -> bool:
 	"""
 
 	try:
-		return bool(evaluate_value(parsed, bindings))
+		return bool(evaluate_value(parsed, bindings, raise_limits=raise_limits))
+	except ExpressionLimitError:
+		raise
 	except Exception:
 		return False
 
 
 def evaluate_predicate(expression: str, row: dict) -> bool:
-	"""The T-12 integration point: evaluate a row predicate, total, returning ``bool``.
+	"""Evaluate a row predicate, total, returning ``bool`` (spec/graph-ir.md sections 4.1 and 5).
 
-	Parses ``expression`` and evaluates it with a single ``row`` root binding (spec/graph-ir.md
-	section 4.1: ``row`` is meaningful inside a ``filter``/``sort`` transform predicate, bound to
-	the current row). Total end-to-end: a malformed expression, a disallowed construct, an
-	over-length string, or any runtime evaluation problem all resolve to ``False`` rather than
-	raising -- matching the `filter` semantics table in spec/graph-ir.md section 5 ("a
-	raising/type-mismatched predicate resolves `false` for that row, never aborts the whole op").
-
-	This mirrors ``huf/ai/graph/transforms.py``'s local ``eval_row_predicate(expression, row) ->
-	bool`` exactly in signature and semantics -- T-12's ``filter`` op is expected to replace its own
-	small AST-walker copy with a call to this function once it can depend on T-13, to remove the
-	duplication both tasks' specs call out.
+	A malformed or disallowed expression, an over-length string or any runtime problem resolves to ``False`` rather
+	than raising: "a raising/type-mismatched predicate resolves `false` for that row, never aborts the whole op".
 	"""
 
 	if not isinstance(row, dict):
@@ -371,13 +437,14 @@ def _eval(node: ast.AST, env: dict) -> Any:
 
 	if isinstance(node, ast.UnaryOp):
 		operand = _eval(node.operand, env)
+		_check_int(operand)
 		try:
 			if isinstance(node.op, ast.Not):
 				return not operand
 			if isinstance(node.op, ast.USub):
-				return -operand
+				return _check_result(-operand)
 			if isinstance(node.op, ast.UAdd):
-				return +operand
+				return _check_result(+operand)
 		except TypeError:
 			return None
 		return None
@@ -388,10 +455,14 @@ def _eval(node: ast.AST, env: dict) -> Any:
 		op_func = _BIN_OPS.get(type(node.op))
 		if op_func is None:
 			return None
+		_check_int(left)
+		_check_int(right)
 		try:
-			return op_func(left, right)
+			return _check_result(op_func(left, right))
 		except (TypeError, ZeroDivisionError):
 			return None
+		except (MemoryError, OverflowError):
+			raise ExpressionLimitError() from None
 
 	if isinstance(node, ast.IfExp):
 		test = _eval(node.test, env)
@@ -405,6 +476,13 @@ def _eval(node: ast.AST, env: dict) -> Any:
 
 	if isinstance(node, ast.Tuple):
 		return tuple(_eval(elt, env) for elt in node.elts)
+
+	if isinstance(node, ast.Call):
+		# parse_expression guarantees: a bare helper name, no keywords, the right number of arguments.
+		helper = HELPERS.get(node.func.id) if isinstance(node.func, ast.Name) else None
+		if helper is None:
+			return None
+		return helper[0](*(_eval(arg, env) for arg in node.args))
 
 	# Anything else should be unreachable post parse_expression, but stay total regardless.
 	return None

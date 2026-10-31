@@ -41,6 +41,7 @@ export function ChannelsRoutes() {
             <Route index element={<GatewayResolver />} />
             <Route path="setup" element={<Setup />} />
             <Route path="numbers" element={<Numbers />} />
+            <Route path="settings/:section?" element={<Settings />} />
             <Route path="n/:gw">
               <Route index element={<Navigate to="home" replace />} />
               <Route path="home" element={<Home />} />

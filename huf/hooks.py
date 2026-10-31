@@ -253,17 +253,18 @@ doc_events = {
     "*": {
         "validate": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
         "before_insert": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "after_insert": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "after_insert": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations", "huf.ai.flow.triggers.run_doc_event_flows"],
         "before_save": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
         "after_save": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
         "before_submit": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
         "after_submit": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
         "before_cancel": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "on_submit": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "on_update": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "on_cancel": ["huf.ai.flow.triggers.run_doc_event_flows"],
+        "on_submit": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations", "huf.ai.flow.triggers.run_doc_event_flows"],
+        "on_update": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations", "huf.ai.flow.triggers.run_doc_event_flows"],
         "before_rename": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
         "after_rename": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
-        "on_trash": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
+        "on_trash": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations", "huf.ai.flow.triggers.run_doc_event_flows"],
         "after_delete": ["huf.ai.agent.hooks.run_hooked_agents", "huf.ai.automation.hooks.run_hooked_automations"],
     },
     "HD Ticket": {
@@ -291,8 +292,12 @@ doc_events = {
         "on_update": [
             "huf.huf.doctype.huf_user_role.huf_user_role.sync_from_frappe_user",
             "huf.huf.doctype.huf_user_role.huf_user_role.grant_default_huf_roles",
+            # an owner who is disabled or loses a role must stop triggering document-event flows now
+            "huf.ai.flow.triggers.clear_trigger_cache",
         ],
+        "on_trash": "huf.ai.flow.triggers.clear_trigger_cache",
     },
+    "Has Role": {"after_insert": "huf.ai.flow.triggers.clear_trigger_cache", "on_trash": "huf.ai.flow.triggers.clear_trigger_cache"},
     "Telegram Admin Binding": {
         "on_update": "huf.ai.telegram_web_access_enforce.on_binding_update",
         "on_trash": "huf.ai.telegram_web_access_enforce.on_binding_trash",
@@ -300,6 +305,7 @@ doc_events = {
     "Flow Run": {
         "on_update": "huf.ai.gateways.flow_reply.on_flow_run_update",
     },
+    "Flow Definition": {"after_insert": "huf.ai.flow.triggers.clear_trigger_cache", "on_update": "huf.ai.flow.triggers.clear_trigger_cache", "on_trash": "huf.ai.flow.triggers.clear_trigger_cache"},
     "Agent Execution Approval": {
         "after_insert": [
             "huf.ai.gateways.approvals.on_approval_inserted",
@@ -352,6 +358,8 @@ scheduler_events = {
         "huf.ai.gateway_service.purge_old_rejected_gateway_events",
         "huf.ai.gateway_service.cleanup_stale_access_entries",
         "huf.ai.flow.state.purge_expired",
+        # Leftover scratch folders of Execute code steps (a step removes its own; this is for killed workers).
+        "huf.ai.flow.code_node.purge_scratch",
         "huf.ai.whatsapp.send_keys.purge_expired",
         "huf.ai.secrets.purge_expired",
         "huf.ai.channels.commerce.catalog.sync_all_catalogs",
@@ -362,6 +370,10 @@ scheduler_events = {
             "huf.ai.orchestration.scheduler.process_orchestrations",
             "huf.ai.agent.integration.recover_stalled_agent_runs",
             "huf.ai.gateways.teams.outbox.retry_due",
+            "huf.ai.flow.triggers.run_due_schedule_flows",
+            "huf.ai.flow.triggers.expire_due_approvals",
+            # Flow runs parked on an Execute code step: continue finished ones, give up on lost ones.
+            "huf.ai.flow.code_node.sweep_code_waits",
         ],
         "*/10 * * * *": [
             "huf.ai.gateway_service.reap_stuck_gateway_events",
@@ -371,6 +383,8 @@ scheduler_events = {
             # Safety net: fail runs orphaned in 'Started' (stale > huf_stale_run_minutes (15) / huf_stale_run_minutes_background (60, non-stream)).
             "huf.ai.run_control.sweep_stale_runs",
             "huf.ai.whatsapp.broadcast.stale.resume_stale",
+            # Flow Runs whose worker stopped (Queued/Running with no change for 30 min) -> Failed.
+            "huf.ai.flow.engine.sweep_stale_runs",
             "huf.ai.whatsapp.broadcast.schedule.start_due",
             "huf.ai.whatsapp.broadcast.status.sweep_pending",
         ],

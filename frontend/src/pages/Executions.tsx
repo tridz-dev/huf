@@ -3,11 +3,13 @@ import { Activity, ArrowUpDown, Loader2 } from 'lucide-react';
 import { PageFrame } from '@/layouts/PageFrame';
 import { FilterBar, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
-import { StatusDot, type StatusDotVariant } from '@/components/dashboard/ledger/LedgerSection';
+import { StatusPill, type StatusKind } from '@/components/common/StatusPill';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useExecutionsAccess } from '@/hooks/permissions/useExecutionsAccess';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { getAgentRuns, type AgentRunDoc } from '@/services/agentRunApi';
+import type { AgentRunDoc } from '@/services/agentRunApi';
 import { formatTimeAgo, calculateDuration } from '@/utils/time';
+import { useSiteTimezone } from '@/lib/serverTime';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { db } from '@/lib/frappe-sdk';
@@ -31,45 +33,35 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ExecutionAnalyticsDashboard } from '@/components/executions/ExecutionAnalyticsDashboard';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import AnalyticsPage from '@/pages/AnalyticsPage';
-
-const DEFAULT_RANGE = '24h';
+import { ExecutionsFlowRunsTab } from '@/components/executions/FlowRunsTab';
+import { ExecutionsTabsBar } from '@/components/executions/ExecutionsTabsBar';
+import { DEFAULT_RANGE, TIME_RANGE_MS, TIME_RANGE_OPTIONS } from '@/components/executions/executionsRange';
+import { fetchAgentRunsPage } from '@/components/executions/fetchAgentRunsPage';
+import { useFlowStepLabelsFor } from '@/hooks/flow/useFlowStepLabelsFor';
 
 /** Sub-tabs hosted on this page — kept in the URL so a link like
  * `/executions?tab=analytics` opens directly on the Analytics tab. */
-const EXECUTIONS_TABS = ['runs', 'analytics'] as const;
+const EXECUTIONS_TABS = ['runs', 'flow-runs', 'analytics'] as const;
 type ExecutionsTab = (typeof EXECUTIONS_TABS)[number];
 const DEFAULT_TAB: ExecutionsTab = 'runs';
-
-const TIME_RANGE_OPTIONS = [
-  { label: 'Last 24h', value: '24h' },
-  { label: 'Last 7d', value: '7d' },
-  { label: 'Last 30d', value: '30d' },
-  { label: 'All time', value: 'all' },
-];
-
-/** Window length in ms for each range option; `null` means unbounded ("All time"). */
-const TIME_RANGE_MS: Record<string, number | null> = {
-  '24h': 24 * 60 * 60 * 1000,
-  '7d': 7 * 24 * 60 * 60 * 1000,
-  '30d': 30 * 24 * 60 * 60 * 1000,
-  all: null,
-};
 
 /** Columns whose values are numeric/temporal and read better right-aligned with tabular figures. */
 const RIGHT_ALIGNED_COLUMNS = new Set(['cost', 'cached_tokens', 'duration', 'started']);
 
-function getRunStatusDot(status?: string): { variant: StatusDotVariant; label: string } {
+function agentRunStatusKind(status?: string): StatusKind {
   const normalized = status?.toLowerCase() || '';
-  if (normalized === 'success') return { variant: 'ok', label: status || 'Success' };
-  if (normalized === 'failed') return { variant: 'fail', label: status || 'Failed' };
-  if (normalized === 'queued') return { variant: 'idle', label: status || 'Queued' };
-  return { variant: 'run', label: status || 'Started' };
+  if (normalized === 'success') return 'finished';
+  if (normalized === 'failed') return 'failed';
+  if (normalized === 'queued') return 'queued';
+  return 'running';
 }
 
 /** The "Runs" tab — this is the original Executions page body, unchanged. */
 function ExecutionsRunsTab() {
+  const { canSeeAnalytics } = useExecutionsAccess(); // analytics are only for people who see all agents
+  useSiteTimezone();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [agents, setAgents] = useState<Array<{ name: string }>>([]);
@@ -97,47 +89,15 @@ function ExecutionsRunsTab() {
     },
     AgentRunDoc
   >({
-    fetchFn: async (params) => {
-      // `range` is only present in params once a non-default value is picked
-      // (setFilter drops the key when it equals the "no-op" sentinel — here
-      // that's the not-yet-initialized state, so an absent range still means
-      // "use the default window", same as the Status/Agent filters below).
-      const rangeKey = params.range ?? DEFAULT_RANGE;
-      const rangeMs = TIME_RANGE_MS[rangeKey] ?? TIME_RANGE_MS[DEFAULT_RANGE];
-      const runFilters: Array<[string, string, unknown]> = [['is_child', '=', '0']];
-      if (rangeMs) {
-        runFilters.push(['start_time', '>=', new Date(Date.now() - rangeMs).toISOString()]);
-      }
-
-      const response = await getAgentRuns({
-        page: params.page,
-        limit: params.limit,
-        start: params.start,
-        search: params.search,
-        status: params.status as 'Started' | 'Queued' | 'Success' | 'Failed' | 'all' | undefined,
-        agents: params.agents ? params.agents.split(',').filter(Boolean) : undefined,
-        filters: runFilters,
-      });
-
-      if (Array.isArray(response)) {
-        return {
-          data: response,
-          hasMore: false,
-          total: response.length,
-        };
-      }
-
-      return {
-        data: response.items,
-        hasMore: response.hasMore,
-        total: response.total,
-      };
-    },
+    fetchFn: fetchAgentRunsPage,
     initialParams: {},
     pageSize: 20,
     debounceMs: 300,
     autoLoad: true,
   });
+
+  // Runs made by a flow step carry no agent of their own: name them "Flow: <flow name> > <step title>".
+  const flowLabels = useFlowStepLabelsFor(runs);
 
   // Initialize filters from URL on mount
   useEffect(() => {
@@ -208,10 +168,10 @@ function ExecutionsRunsTab() {
   }, []);
 
   const statusOptions = [
-    { label: 'All status', value: 'all' },
-    { label: 'Started', value: 'Started' },
+    { label: 'All statuses', value: 'all' },
     { label: 'Queued', value: 'Queued' },
-    { label: 'Success', value: 'Success' },
+    { label: 'Running', value: 'Started' },
+    { label: 'Finished', value: 'Success' },
     { label: 'Failed', value: 'Failed' },
   ];
 
@@ -247,16 +207,26 @@ function ExecutionsRunsTab() {
             <Button
               variant="ghost"
               onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-              className="h-8 px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
+              className="h-8 px-2 font-mono text-eyebrow uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
             >
               Agent
               <ArrowUpDown className="ml-2 h-4 w-4" />
             </Button>
           );
         },
-        cell: ({ row }) => (
-          <div className="font-body text-[13px] font-medium text-ink">{row.getValue('agent') || 'Unknown Agent'}</div>
-        ),
+        cell: ({ row }) => {
+          const flowLabel = flowLabels[row.original.name];
+          const agent = row.getValue('agent') as string | undefined;
+          if (flowLabel) {
+            return (
+              <div data-testid={`execution-flow-label-${row.original.name}`}>
+                <div className="font-body text-ui-text text-ink">{flowLabel}</div>
+                {agent && <div className="font-body text-xs text-steel">{agent}</div>}
+              </div>
+            );
+          }
+          return <div className="font-body text-ui-text text-ink">{agent || (row.original.flow_run ? 'Flow step (flow no longer exists)' : 'Unknown Agent')}</div>;
+        },
       },
       {
         accessorKey: 'name',
@@ -265,7 +235,7 @@ function ExecutionsRunsTab() {
             <Button
               variant="ghost"
               onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-              className="h-8 px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
+              className="h-8 px-2 font-mono text-eyebrow uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
             >
               Run ID
               <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -273,7 +243,7 @@ function ExecutionsRunsTab() {
           );
         },
         cell: ({ row }) => (
-          <div className="font-mono text-[12px] text-steel">{row.getValue('name')}</div>
+          <div className="font-mono text-xs text-steel">{row.getValue('name')}</div>
         ),
       },
       {
@@ -281,13 +251,7 @@ function ExecutionsRunsTab() {
         header: 'Status',
         cell: ({ row }) => {
           const status = row.getValue('status') as string;
-          const { variant, label } = getRunStatusDot(status);
-          return (
-            <div className="flex items-center gap-2">
-              <StatusDot variant={variant} />
-              <span className="font-body text-[13px] text-steel">{label}</span>
-            </div>
-          );
+          return <StatusPill kind={agentRunStatusKind(status)} />;
         },
       },
       {
@@ -296,7 +260,7 @@ function ExecutionsRunsTab() {
         cell: ({ row }) => {
           const cost = row.original.cost;
           return (
-            <div className="text-right font-mono text-[12px] tabular-nums text-steel">
+            <div className="text-right font-mono text-xs tabular-nums text-steel">
               {typeof cost === 'number' ? `$${cost.toFixed(6)}` : 'Not available'}
             </div>
           );
@@ -310,7 +274,7 @@ function ExecutionsRunsTab() {
               <Button
                 variant="ghost"
                 onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                className="h-8 px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
+                className="h-8 px-2 font-mono text-eyebrow uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
               >
                 Cached tokens
                 <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -324,7 +288,7 @@ function ExecutionsRunsTab() {
           return (
             <div
               className={cn(
-                'text-right font-mono text-[12px] tabular-nums',
+                'text-right font-mono text-xs tabular-nums',
                 isZero ? 'text-steel-soft/60' : 'text-steel'
               )}
             >
@@ -343,7 +307,7 @@ function ExecutionsRunsTab() {
         header: () => <div className="text-right">Duration</div>,
         cell: ({ row }) => {
           const duration = calculateDuration(row.original.start_time ?? null, row.original.end_time ?? null);
-          return <div className="text-right font-mono text-[12px] tabular-nums text-steel">{duration}</div>;
+          return <div className="text-right font-mono text-xs tabular-nums text-steel">{duration}</div>;
         },
       },
       {
@@ -354,7 +318,7 @@ function ExecutionsRunsTab() {
               <Button
                 variant="ghost"
                 onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                className="h-8 px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
+                className="h-8 px-2 font-mono text-eyebrow uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
               >
                 Started
                 <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -364,7 +328,7 @@ function ExecutionsRunsTab() {
         },
         cell: ({ row }) => {
           const timeAgo = formatTimeAgo(row.original.start_time ?? null);
-          return <div className="text-right font-mono text-[12px] tabular-nums text-steel">{timeAgo}</div>;
+          return <div className="text-right font-mono text-xs tabular-nums text-steel">{timeAgo}</div>;
         },
         sortingFn: (rowA, rowB) => {
           const timeA = rowA.original.start_time ? new Date(rowA.original.start_time).getTime() : 0;
@@ -373,7 +337,7 @@ function ExecutionsRunsTab() {
         },
       },
     ],
-    []
+    [flowLabels]
   );
 
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -393,9 +357,10 @@ function ExecutionsRunsTab() {
     <PageFrame
       title="Executions"
       badge={<ExperimentalBadge />}
+      tabs={<ExecutionsTabsBar active="runs" />}
       filters={
         <FilterBar
-          searchPlaceholder="Search executions using Agent Name"
+          searchPlaceholder="Search agent runs by agent name"
           searchValue={search}
           onSearchChange={(value) => {
             setSearch(value);
@@ -450,7 +415,7 @@ function ExecutionsRunsTab() {
         live in the same frame instead of two separately-bordered blocks.
       */}
       <div className="w-full rounded-lg border border-line bg-panel overflow-hidden">
-        <ExecutionAnalyticsDashboard fromDate={analyticsFromDate} granularity={analyticsGranularity} />
+        {canSeeAnalytics && <ExecutionAnalyticsDashboard fromDate={analyticsFromDate} granularity={analyticsGranularity} listedRunCount={initialLoading ? undefined : total} />}
         <div className="border-t border-line">
           {initialLoading ? (
             <div className="flex items-center justify-center py-12">
@@ -553,12 +518,11 @@ function ExecutionsRunsTab() {
  */
 export default function Executions() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { canSeeAnalytics, canSeeFlowRuns, allows } = useExecutionsAccess();
 
   const tabFromUrl = searchParams.get('tab');
-  const activeTab: ExecutionsTab =
-    tabFromUrl && (EXECUTIONS_TABS as readonly string[]).includes(tabFromUrl)
-      ? (tabFromUrl as ExecutionsTab)
-      : DEFAULT_TAB;
+  const requestedTab = tabFromUrl && (EXECUTIONS_TABS as readonly string[]).includes(tabFromUrl) ? (tabFromUrl as ExecutionsTab) : DEFAULT_TAB;
+  const activeTab: ExecutionsTab = allows(requestedTab) ? requestedTab : DEFAULT_TAB; // a tab this role cannot read falls back to the runs
 
   const handleTabChange = (value: string) => {
     setSearchParams(
@@ -577,16 +541,11 @@ export default function Executions() {
 
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange} className="h-full flex flex-col">
-      <TabsList className="mx-6 mt-4 w-fit shrink-0">
-        <TabsTrigger value="runs">Runs</TabsTrigger>
-        <TabsTrigger value="analytics">Analytics</TabsTrigger>
-      </TabsList>
       <TabsContent value="runs" className="flex-1 min-h-0">
         <ExecutionsRunsTab />
       </TabsContent>
-      <TabsContent value="analytics" className="flex-1 min-h-0">
-        <AnalyticsPage />
-      </TabsContent>
+      {canSeeFlowRuns && <TabsContent value="flow-runs" className="flex-1 min-h-0"><ExecutionsFlowRunsTab /></TabsContent>}
+      {canSeeAnalytics && <TabsContent value="analytics" className="flex-1 min-h-0"><AnalyticsPage tabs={<ExecutionsTabsBar active="analytics" />} /></TabsContent>}
     </Tabs>
   );
 }

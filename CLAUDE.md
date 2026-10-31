@@ -468,7 +468,8 @@ status = frappe.call('huf.ai.flow.api.get_flow_run', flow_run_id='FR-00001')
 frappe.call('huf.ai.flow.api.approve_flow_run', flow_run_id='FR-00001', comment='Looks good')
 
 # Webhook trigger (external)
-# POST /api/method/huf.ai.flow.api.flow_webhook?flow_id=my-flow&webhook_key=secret
+# POST /api/method/huf.ai.flow.api.flow_webhook?flow_id=my-flow
+# Header: X-Huf-Secret: <trigger.webhook config.secret>  (header only, never ?secret=; constant-time compare, fails closed; 60/min per IP then 429)
 ```
 
 ## Security Considerations

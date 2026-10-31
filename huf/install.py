@@ -9,6 +9,7 @@ import json
 
 import frappe
 
+from huf.install_presets import create_default_execution_profiles, create_default_memory_policies  # noqa: F401
 from huf.utils import is_frappe_16
 
 logger = frappe.logger("huf")
@@ -157,12 +158,45 @@ def after_install():
 		)
 
 
+#: Frappe's scheduler wakes every ``scheduler_tick_interval`` seconds (default 240). Flow approval
+#: timeouts and "every minute" schedules are only as precise as that tick, so Huf wants 60.
+FLOW_SCHEDULER_TICK_SECONDS = 60
+
+
+def ensure_scheduler_tick():
+	"""Set ``scheduler_tick_interval`` to 60 s when the bench has not chosen a value.
+
+	Frappe reads the tick in the bench-wide scheduler process, which has no site context, so only
+	``common_site_config.json`` is honoured: a value in a site's ``site_config.json`` is ignored.
+	An explicit value already in the common config is respected. The running ``bench schedule``
+	process reads the value at start, so it must be restarted once for a change to apply.
+	"""
+	try:
+		import json
+		import os
+
+		from frappe.installer import update_site_config
+
+		path = os.path.join(frappe.local.sites_path or "sites", "common_site_config.json")
+		with open(path) as fh:
+			if json.load(fh).get("scheduler_tick_interval"):
+				return
+		update_site_config("scheduler_tick_interval", FLOW_SCHEDULER_TICK_SECONDS, site_config_path=path)
+		frappe.logger("huf").info(
+			"Set scheduler_tick_interval=%s in common_site_config.json (restart the scheduler to apply)",
+			FLOW_SCHEDULER_TICK_SECONDS,
+		)
+	except Exception:
+		frappe.log_error(title="huf after_migrate: scheduler_tick_interval not set", message=frappe.get_traceback())
+
+
 def after_migrate():
 	"""
 	Called after app migration.
 	Syncs all discovered tools from all installed apps.
 	"""
 	create_huf_roles()
+	ensure_scheduler_tick()
 	try:
 		from huf.ai.document_search import ensure_fulltext_indexes
 
@@ -1154,7 +1188,13 @@ def _adapter_required_credentials(provider_id, extra_fields=None):
 # (see huf/huf/doctype/gateway/gateway.py) and consumed by slack_events.py, not by
 # SlackGatewayAdapter itself, so it can't be discovered from credential_schema alone.
 _EXTRA_REQUIRED_CREDENTIALS = {
-	"slack": [{"key": "signing_secret", "label": "Slack Signing Secret", "required": True}],
+	# Optional: no Slack tool uses it; only needed to receive Slack events (Gateway still enforces it).
+	"slack": [{
+		"key": "signing_secret",
+		"label": "Slack Signing Secret",
+		"required": False,
+		"description": "Only needed to receive Slack events",
+	}],
 }
 
 
@@ -1581,78 +1621,5 @@ def create_code_execution_tools():
 		tool_doc.save(ignore_permissions=True)
 	else:
 		tool_doc.insert(ignore_permissions=True)
-
-	frappe.db.commit()
-
-
-def create_default_memory_policies():
-	"""Create default Memory Policy presets."""
-	presets = [
-		{"policy_name": "Conservative", "description": "Nothing is captured automatically. Memory is written only via explicit tool calls and always needs human approval before it's used, so it's a safe default for agents handling sensitive or high-stakes conversations.", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 1, "default_status": "Draft", "inject_mode": "Relevant Only", "max_records": 5, "token_budget": 1500, "auto_promote_to_knowledge": 0, "allow_agent_write": 0},
-		{"policy_name": "Conversational", "description": "For chat agents that should remember users across sessions with minimal friction. Every run is reviewed in the background and captured facts/preferences are injected into every future conversation automatically, no approval step.", "scope_type": "Agent", "capture_mode": "Automatic", "approval_required": 0, "default_status": "Draft", "inject_mode": "Always", "max_records": 10, "token_budget": 2000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
-		{"policy_name": "Research", "description": "For agents doing extended research or knowledge work. The agent proposes what's worth remembering after each run, retrieval is narrowed to what's relevant to the current turn, and a larger token budget supports longer-running context.", "scope_type": "Agent", "capture_mode": "Agent Suggested", "approval_required": 0, "default_status": "Active", "inject_mode": "Relevant Only", "max_records": 20, "token_budget": 4000, "auto_promote_to_knowledge": 0, "promotion_min_confidence": 0.5, "promotion_min_importance": 0.5, "allow_agent_write": 1},
-		{"policy_name": "Operational", "description": "For task/ops agents where memory should stay out of the way. Nothing is captured or injected automatically — the agent can write memory via a tool call and pull it back only when it explicitly searches for it.", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 0, "default_status": "Active", "inject_mode": "Tool Only", "max_records": 10, "token_budget": 1000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
-	]
-	for preset in presets:
-		if frappe.db.exists("Memory Policy", preset["policy_name"]):
-			continue
-		try:
-			doc = frappe.new_doc("Memory Policy")
-			doc.update(preset)
-			doc.insert(ignore_permissions=True)
-		except Exception as e:
-			frappe.log_error(
-				title="Memory Policy Creation",
-				message=f"Error creating memory policy {preset['policy_name']}: {str(e)}",
-			)
-
-	frappe.db.commit()
-
-
-def create_default_execution_profiles():
-	"""Create default Execution Profile presets shipped with Huf."""
-	profiles = [
-		{
-			"profile_name": "Restricted",
-			"approval_mode": "Ask Every Time",
-			"is_builtin": 1,
-			"filesystem_policy": "Scratch Only",
-			"max_wall_time_s": 30,
-			"max_cpu_seconds": 30,
-			"max_memory_mb": 256,
-			"max_output_bytes": 1048576,
-		},
-		{
-			"profile_name": "Trusted",
-			"approval_mode": "Auto Approve",
-			"is_builtin": 1,
-			"filesystem_policy": "Scratch Only",
-			"max_wall_time_s": 60,
-			"max_cpu_seconds": 60,
-			"max_memory_mb": 512,
-			"max_output_bytes": 2097152,
-		},
-		{
-			"profile_name": "Blocked",
-			"approval_mode": "Never Allow",
-			"is_builtin": 1,
-			"filesystem_policy": "None",
-			"max_wall_time_s": 5,
-			"max_cpu_seconds": 5,
-			"max_memory_mb": 128,
-			"max_output_bytes": 65536,
-		},
-	]
-	for profile in profiles:
-		if frappe.db.exists("Execution Profile", profile["profile_name"]):
-			continue
-		try:
-			doc = frappe.new_doc("Execution Profile")
-			doc.update(profile)
-			doc.insert(ignore_permissions=True)
-		except Exception as e:
-			logger.warning(
-				f"Failed to create default execution profile {profile['profile_name']}: {e!s}"
-			)
 
 	frappe.db.commit()

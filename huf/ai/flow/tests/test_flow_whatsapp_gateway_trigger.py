@@ -3,8 +3,9 @@
 
 """A WhatsApp gateway routed to a Flow, and a Flow sending WhatsApp.
 
-There is no ``trigger.whatsapp`` node. The only gateway trigger is a Gateway route/default whose target is
-a Flow: ``process_gateway_event`` then starts a Flow Run (``trigger_type == "Gateway"``) whose payload is
+A Gateway route/default whose target is an Active Flow starts it (a flow without a gateway trigger node keeps
+starting at its first entry; ``trigger.gateway|whatsapp|telegram`` nodes add filters, see
+``huf/ai/flow/gateways/tests/test_flow_gateway_trigger.py``): ``process_gateway_event`` then starts a Flow Run (``trigger_type == "Gateway"``) whose payload is
 ``{"gateway_event", "message", "gateway", "sender_id", "conversation_id"}`` so a Flow can address a reply and key
 per-conversation state (``input.sender_id`` / ``input.conversation_id``).
 
@@ -82,7 +83,7 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 			"fingerprint": "0" * 64,
 			"entry": "start",
 			"nodes": [
-				{"id": "start", "type": "trigger.webhook", "config": {"method": "POST"}, "next": "send"},
+				{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}, "next": "send"},
 				{"id": "send", "type": "tool.call", "config": {"tool_id": self.tool.tool_name, "input": tool_input}},
 			],
 			"contract": {
@@ -94,6 +95,7 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 			},
 		}
 		flow_api.save_flow_definition(flow_id, definition)
+		frappe.db.set_value("Flow Definition", flow_id, "status", "Active")  # a routed flow must be live
 		return flow_id
 
 	def _route_gateway_a_to(self, flow_id):
@@ -227,7 +229,7 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 			"fingerprint": "0" * 64,
 			"entry": "start",
 			"nodes": [
-				{"id": "start", "type": "trigger.webhook", "config": {"method": "POST"}, "next": "out"},
+				{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}, "next": "out"},
 				{"id": "out", "type": "output", "config": {"value": value}},
 			],
 			"contract": {

@@ -435,6 +435,17 @@
 }
 
 @layer components {
+  /* A list that scrolls on purpose (the approvals popover): the bar stays visible and a soft fade shows there is more below. */
+  .approvals-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--steel-soft) transparent;
+    background:
+      linear-gradient(var(--popover), var(--popover)) 0 0 / 100% 12px no-repeat local,
+      linear-gradient(to top, rgb(0 0 0 / 0.12), transparent) 0 100% / 100% 12px no-repeat scroll;
+  }
+  .approvals-scroll::-webkit-scrollbar-thumb {
+    background-color: var(--steel-soft);
+  }
   /* Sonner Toast — HUF design system vars */
 
   [data-sonner-toaster],
@@ -592,4 +603,51 @@
 .starter-btn:hover {
   background: var(--paper-deep);
   border-color: var(--line-dark);
+}
+
+/* Toasts are bottom-centre. They must never cover a panel:
+   - a side sheet (run details, run history, step settings as a sheet) is open on the right and at most 62% of the window wide,
+     so the toasts keep to the 38% on its left;
+   - the step panel docked beside the canvas shifts them to the middle of the canvas (the editor sets --flow-toast-shift). */
+[data-sonner-toaster][data-x-position="center"] {
+  transform: translateX(calc(-50% + var(--flow-toast-shift, 0px)));
+}
+body:has([role="dialog"][data-state="open"].inset-y-0.right-0) [data-sonner-toaster][data-x-position="center"] {
+  right: auto !important;
+  left: 16px !important;
+  transform: none !important;
+  --width: min(356px, calc(38vw - 32px));
+}
+/* On a flow's canvas they sit bottom right (the overview map is bottom left): left of a docked step panel, and above the map
+   at the left when a sheet covers the right side. */
+[data-sonner-toaster][data-x-position="right"] {
+  right: var(--flow-toast-right, 16px) !important;
+}
+body:has([role="dialog"][data-state="open"].inset-y-0.right-0) [data-sonner-toaster][data-x-position="right"] {
+  right: auto !important;
+  left: 16px !important;
+  bottom: 172px !important;
+  --width: min(356px, calc(38vw - 32px));
+}
+/* A toast that is still on screen when a centred dialog opens (an error, or one with an Undo button; "saved" toasts are cleared when a
+   dialog opens) moves to the free strip beside the dialog (at most 720px wide), so it never covers the dialog's buttons. From
+   1280px up the strip is wide enough; on a narrower window it stays where it was. */
+@media (min-width: 1280px) {
+  body:not(:has([role="dialog"][data-state="open"].inset-y-0.right-0)):has([role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]) [data-sonner-toaster] {
+    right: 16px !important;
+    left: auto !important;
+    bottom: 24px !important;
+    transform: none !important;
+    --width: min(356px, calc((100vw - 720px) / 2 - 32px));
+  }
+}
+@media (max-width: 767px) {
+  [data-sonner-toaster][data-x-position="center"] {
+    transform: none !important;
+  }
+  body:has([role="dialog"][data-state="open"].inset-y-0.right-0) [data-sonner-toaster][data-x-position="center"] {
+    left: var(--mobile-offset-left, 16px) !important;
+    right: var(--mobile-offset-right, 16px) !important;
+    --width: 100%;
+  }
 }

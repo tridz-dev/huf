@@ -1,71 +1,90 @@
-import { useMemo } from 'react';
+import { useState } from 'react';
+import { toast } from 'sonner';
 import { useFlowContext } from '../../contexts/FlowContext';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { useViewport } from '@/lib/ui/responsive';
+import { fetchLastSample } from '@/lib/flow-data/fetchLast';
+import { variableName } from '@/lib/flow-data/chips';
+import type { RefScope } from '../../lib/flow/flowRefs';
+import { DataPicker } from '../flow/data/DataPicker';
+import { invalidateDataCatalog, useDataCatalog } from '../flow/data/useDataCatalog';
+import type { PickerStep } from '@/lib/flow-data/model';
+import type { DataPick } from '@/lib/flow-data/types';
 import { Button } from './button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from './dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from './popover';
 
 interface VariablePickerProps {
-    onSelect: (variable: string) => void;
+    /**
+     * Called with a reference path (`input.customer.name`, a step id, `foreach.item`) and a short name that is safe to use as a
+     * `{placeholder}` in a prompt or template. Never a bare `input` or `trigger`.
+     */
+    onSelect: (reference: string, suggestedName: string) => void;
+    /** Step the field belongs to: only the trigger and steps that always run before it are listed. */
+    currentNodeId?: string | null;
+    /** `loop-body`: the steps inside this loop (for a loop's "result to collect"). */
+    scope?: RefScope;
+    /** `list`: the field takes a whole list (a loop's items). */
+    accept?: 'ref' | 'list';
+    testId?: string;
+    /** Accessible name; defaults to "Use data". */
+    label?: string;
 }
 
-export function VariablePicker({ onSelect }: VariablePickerProps) {
-    const { activeFlow } = useFlowContext();
+/**
+ * "+ Use data" for a field that stores a reference or writes its own text around it (prompts, conditions, a loop's list).
+ * Same picker as the chip input: a step, then one of its fields with a real example. Fields that mix typed text and chips
+ * use `DataInput` instead.
+ */
+export function VariablePicker({ onSelect, currentNodeId, scope = 'ancestors', accept = 'ref', testId = 'flow-variable-picker', label }: VariablePickerProps) {
+    const { canManage } = useFlowPermissions();
+    const { activeFlow, updateNodeData } = useFlowContext();
+    const { isPhone } = useViewport();
+    const [open, setOpen] = useState(false);
+    const [openCount, setOpenCount] = useState(0);
+    const { model, loading, refresh } = useDataCatalog(currentNodeId ?? undefined, scope);
 
-    const variables = useMemo(() => {
-        const vars = ['trigger_payload'];
-        if (!activeFlow) return vars;
+    // View-only users cannot change a value, so there is nothing to insert into.
+    if (!canManage) return null;
 
-        activeFlow.nodes.forEach(node => {
-            if (node.data.actionConfig) {
-                const ac = node.data.actionConfig as {
-                    save_response_to_context?: string;
-                    save_result_to_context?: string;
-                    output?: { save_result_to_context?: string };
-                    store_decision_in_context?: string;
-                };
-                if (ac.save_response_to_context) vars.push(ac.save_response_to_context);
-                if (ac.save_result_to_context) vars.push(ac.save_result_to_context);
-                if (ac.output?.save_result_to_context) vars.push(ac.output.save_result_to_context);
-                if (ac.store_decision_in_context) vars.push(ac.store_decision_in_context);
-            }
-        });
-
-        return [...new Set(vars)].filter(Boolean);
-    }, [activeFlow]);
+    const pick = (p: DataPick) => {
+        setOpen(false);
+        onSelect(p.ref, variableName(p.label));
+    };
+    const fetchLast = async (step: PickerStep): Promise<string | void> => {
+        if (!activeFlow) return;
+        const last = await fetchLastSample(activeFlow.id, step);
+        if (!last.sample) return last.notice;
+        updateNodeData(step.id, (data) => ({ ...data, sample: last.sample as Record<string, unknown> }));
+        invalidateDataCatalog();
+        toast.success(`Now using the last real ${last.noun} as the example.`);
+    };
 
     return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 font-mono" title="Insert variable">
-                    {'{x}'} Variables
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[200px] max-h-[300px] overflow-y-auto">
-                <DropdownMenuLabel className="text-xs">Available Variables</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {variables.map(v => (
-                    <DropdownMenuItem
-                        key={v}
-                        className="text-xs font-mono cursor-pointer"
-                        onSelect={() => onSelect(`{{${v}}}`)}
-                    >
-                        {v}
-                    </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                    className="text-xs text-muted-foreground italic cursor-pointer"
-                    onSelect={() => onSelect(`{{context.}}`)}
+        <Popover open={open} onOpenChange={(o) => { if (o) { refresh(); setOpenCount((c) => c + 1); } setOpen(o); }}>
+            <PopoverTrigger asChild>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs px-2.5"
+                    title="Use data from the trigger or an earlier step"
+                    aria-label={label ?? 'Use data'}
+                    data-testid={testId}
                 >
-                    Custom...
-                </DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
+                    + Use data
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent
+                side={isPhone ? 'top' : 'left'}
+                align="start"
+                sideOffset={12}
+                collisionPadding={12}
+                className="w-[340px] max-w-[calc(100vw-24px)] p-0 data-[state=closed]:!animate-none"
+                // The field that received the data takes focus (not the button), so the user can keep typing.
+                onCloseAutoFocus={(e) => e.preventDefault()}
+            >
+                <DataPicker key={openCount} model={model} accept={accept} onPick={pick} onFetchLast={fetchLast} loading={loading} />
+            </PopoverContent>
+        </Popover>
     );
 }

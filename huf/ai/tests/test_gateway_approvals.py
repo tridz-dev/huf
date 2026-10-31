@@ -246,7 +246,7 @@ class TestNotify(Base):
 
 	def test_flow_run_notify(self):
 		fr = SimpleNamespace(name="FR-1", waiting=json.dumps(
-			{"approval_type": "users", "approver_users": ["alice@x.com"]}))
+			{"approver_type": "user", "approver_users": ["alice@x.com"]}))
 		self.assertEqual(ap.notify_flow_run_approvers(fr), 1)
 		self.assertEqual(self.w.sessions[0]["kind"], "approval:flow")
 		self.assertEqual(self.w.sessions[0]["payload"]["name"], "FR-1")

@@ -93,10 +93,14 @@ class TestNodeTypeAllowListMatchesSchemaIntent(unittest.TestCase):
 	plus the six Flow-only ones -- output/foreach/parallel/validate are Procedure types,
 	so they are (and must remain) Flow-usable too."""
 
-	def test_output_foreach_parallel_validate_are_flow_usable(self):
-		for node_type in ("output", "foreach", "parallel", "validate"):
+	def test_output_foreach_validate_are_flow_usable(self):
+		for node_type in ("output", "foreach", "validate"):
 			self.assertIn(node_type, PROCEDURE_NODE_TYPES)
 			self.assertIn(node_type, FLOW_NODE_TYPES)
+
+	def test_parallel_is_procedure_only(self):
+		self.assertIn("parallel", PROCEDURE_NODE_TYPES)
+		self.assertNotIn("parallel", FLOW_NODE_TYPES)
 
 	def test_every_flow_node_type_has_an_executor(self):
 		missing = sorted(FLOW_NODE_TYPES - set(flow_engine._NODE_EXECUTORS))
@@ -216,46 +220,13 @@ class TestExecForeach(unittest.TestCase):
 		result = flow_engine._exec_foreach(_FakeFlowRun(), foreach_node, foreach_node["config"], settings)
 
 		self.assertEqual(result["status"], "failed")
-		self.assertIn("max_iterations", result["error"])
+		self.assertIn("its limit is 2", result["error"])
 
 
-class TestExecParallel(unittest.TestCase):
-	def test_runs_every_branch_to_completion(self):
-		branch_a = {
-			"id": "a1",
-			"type": "transform",
-			"config": {"op": "coalesce", "input": {"values": [{"$from": "input.x"}]}},
-		}
-		branch_b = {
-			"id": "b1",
-			"type": "transform",
-			"config": {"op": "coalesce", "input": {"values": [{"$from": "input.y"}]}},
-		}
-		parallel_node = {
-			"id": "fan_out",
-			"type": "parallel",
-			"config": {"branches": [["a1"], ["b1"]], "join": "all"},
-		}
-		settings = _settings_for([parallel_node, branch_a, branch_b], data={"x": 1, "y": 2})
-
-		result = flow_engine._exec_parallel(_FakeFlowRun(), parallel_node, parallel_node["config"], settings)
-
-		self.assertEqual(result["status"], "success")
-		self.assertEqual(result["result"]["branches_completed"], 2)
-
-	def test_one_failing_branch_fails_the_node(self):
-		branch_a = {"id": "a1", "type": "transform", "config": {"op": "coalesce", "input": {"values": []}}}
-		branch_b = {"id": "b1", "type": "transform", "config": {"op": "not_a_real_op", "input": {}}}
-		parallel_node = {
-			"id": "fan_out",
-			"type": "parallel",
-			"config": {"branches": [["a1"], ["b1"]], "join": "all"},
-		}
-		settings = _settings_for([parallel_node, branch_a, branch_b], data={})
-
-		result = flow_engine._exec_parallel(_FakeFlowRun(), parallel_node, parallel_node["config"], settings)
-
-		self.assertEqual(result["status"], "failed")
+class TestParallelRemoved(unittest.TestCase):
+	def test_parallel_is_not_a_flow_executor(self):
+		self.assertNotIn("parallel", flow_engine._NODE_EXECUTORS)
+		self.assertFalse(hasattr(flow_engine, "_exec_parallel"))
 
 
 if __name__ == "__main__":
@@ -267,4 +238,4 @@ class TestTriggerUnsetExecutor(unittest.TestCase):
 		node = {"id": "start", "type": "trigger.unset", "config": {}}
 		result = flow_engine._exec_trigger_unset(_FakeFlowRun(), node, {}, _settings_for([node]))
 		self.assertEqual(result["status"], "failed")
-		self.assertIn("not runnable", result["error"])
+		self.assertIn("no trigger yet", result["error"])

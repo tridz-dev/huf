@@ -30,13 +30,11 @@ queue="code-execution")`` is sufficient as long as a worker listens on it.
 from __future__ import annotations
 
 import hashlib
-import ipaddress
 import json
 import os
 import shutil
 import tempfile
 from typing import Any
-from urllib.parse import urlparse
 
 import frappe
 from frappe.utils.data import add_to_date, now_datetime
@@ -46,8 +44,12 @@ def get_files_path(is_private: bool = True) -> str:
 	return frappe.get_site_path("private" if is_private else "public", "files")
 
 from huf.ai.context_artifacts import create_context_artifact
-from huf.ai.http_handler import handle_http_request
-from huf.ai.tools.functions import get_report_result
+from huf.ai.tools.execution.broker import (  # noqa: F401
+	_authorize_egress,
+	_make_broker_handler,
+	_rule_host_matches,
+	_rule_port_matches,
+)
 from huf.ai.tools.execution_sandbox import (
 	DEFAULT_MAX_OUTPUT_BYTES,
 	DEFAULT_WALL_TIME_S,
@@ -85,6 +87,10 @@ ARTIFACT_TEXT_INLINE_BYTES = 2000
 #: Subdirectory of the site's private files area holding per-conversation
 #: shared directories (alongside the knowledge system's artifacts).
 _SHARED_DIR_SUBDIR = "code_execution"
+
+#: Subdirectory of the site's private files area holding one throwaway scratch folder per Flow
+#: step (``huf_scratch/<flow run>/<node>``), removed as soon as the step ends and swept daily.
+SCRATCH_SUBDIR = "huf_scratch"
 
 
 # ---------------------------------------------------------------------------
@@ -565,8 +571,56 @@ def run_python(
 	if profile.filesystem_policy == "Shared Directory":
 		_resolve_shared_dir_limit_mb(agent)
 
+	return _dispatch(
+		code,
+		profile,
+		acting_user,
+		{
+			"agent_run": _name_of(agent_run),
+			"conversation": _name_of(conversation),
+			"tool": kwargs.get("tool_name") or _TOOL_NAME,
+			"call_id": kwargs.get("call_id") or kwargs.get("tool_call_id"),
+		},
+	)
+
+
+def _dispatch(
+	code: str,
+	profile: Any,
+	acting_user: str,
+	audit_links: dict,
+	*,
+	inputs: dict | None = None,
+	flow_ref: dict | None = None,
+	approval_ttl_hours: int | None = None,
+	wall_cap_s: int | None = None,
+) -> dict:
+	"""Shared core of both entry points: audit row, approval parking, enqueue.
+
+	The caller (``run_python`` for an agent, ``run_flow_code`` for a Flow step) has already
+	enforced its own gates (site switch, capability, agent / flow switches, profile enabled).
+	What is common is everything from the profile snapshot on:
+
+	* snapshot the Execution Profile and hash the code (the raw code is never stored on the
+	  audit row; only ``code_ref``);
+	* create exactly one ``Agent Tool Call`` audit row, linked through ``audit_links``
+	  (``agent_run`` / ``conversation`` / ``tool`` / ``call_id``);
+	* ``Never Allow`` -> fail the row and raise ``PermissionError``;
+	* ``Ask Every Time`` -> park behind an ``Agent Execution Approval`` (the resumable payload,
+	  including ``inputs`` and ``flow_ref``, is held in Redis, never in the database);
+	* ``Auto Approve`` -> enqueue.
+
+	``inputs`` (flow path only) is JSON data handed to the code as the ``inputs`` variable;
+	``flow_ref`` (``{"flow_run", "node_id"}``) tells the worker where to put the scratch folder
+	and whom to nudge when the call finishes. ``wall_cap_s`` lowers the profile's wall limit for
+	this one call.
+	"""
 	# 5/6. Snapshot + code hash (raw code is never stored on the audit row).
 	snapshot = _build_profile_snapshot(profile)
+	if wall_cap_s:
+		# A Flow step may ask for less time than its profile allows, never more.
+		limits = snapshot["limits"]
+		limits["max_wall_time_s"] = min(int(limits.get("max_wall_time_s") or wall_cap_s), int(wall_cap_s))
 	code_ref = _sha256(code)
 
 	# 7. Create the audit record (Started). ``tool_args`` references the hash,
@@ -576,13 +630,13 @@ def run_python(
 	call = frappe.get_doc(
 		{
 			"doctype": "Agent Tool Call",
-			"agent_run": _name_of(agent_run),
-			"conversation": _name_of(conversation),
-			"tool": kwargs.get("tool_name") or _TOOL_NAME,
+			"agent_run": audit_links.get("agent_run"),
+			"conversation": audit_links.get("conversation"),
+			"tool": audit_links.get("tool") or _TOOL_NAME,
 			"is_mcp_tool": 0,
 			"tool_args": json.dumps({"code_ref": code_ref}),
 			"status": "Started",
-			"call_id": kwargs.get("call_id") or kwargs.get("tool_call_id"),
+			"call_id": audit_links.get("call_id"),
 			"execution_profile": profile.name,
 			"execution_profile_snapshot": snapshot,
 			"code_ref": code_ref,
@@ -604,6 +658,7 @@ def run_python(
 
 	# 8b. Ask Every Time — park behind an approval record, do NOT enqueue.
 	if approval_mode == "Ask Every Time":
+		ttl_hours = approval_ttl_hours or _APPROVAL_TTL_HOURS
 		# ``ignore_permissions=True`` is intentional and security-relevant: the
 		# dispatcher is a trusted internal path that has already enforced the
 		# kill switch + ``code_execution.run`` capability + agent/profile gates,
@@ -620,7 +675,7 @@ def run_python(
 				"requested_capability": _capability_summary(profile),
 				"code_ref": code_ref,
 				"status": "Pending",
-				"expires_on": add_to_date(now_datetime(), hours=_APPROVAL_TTL_HOURS),
+				"expires_on": add_to_date(now_datetime(), hours=ttl_hours),
 				"requested_by": acting_user,
 			}
 		)
@@ -642,7 +697,13 @@ def run_python(
 		# approver. A lapsed hold fails closed (the approval lapses to
 		# Expired); rejection/expiry finalize the audit row without enqueueing.
 		stash_pending_execution(
-			approval.name, code=code, profile_snapshot=snapshot, acting_user=acting_user
+			approval.name,
+			code=code,
+			profile_snapshot=snapshot,
+			acting_user=acting_user,
+			inputs=inputs,
+			flow_ref=flow_ref,
+			ttl_hours=ttl_hours,
 		)
 
 		# ``Agent Tool Call.status`` has no dedicated "waiting" option; "Queued"
@@ -658,15 +719,18 @@ def run_python(
 			"status": "Pending Approval",
 			"agent_tool_call": call.name,
 			"approval": approval.name,
+			"expires_on": approval.expires_on,
 			"code_ref": code_ref,
 			"message": "Execution paused pending approval.",
 		}
 
-	# 8c. Auto Approve (default) — enqueue immediately.
-	enqueue_execution(call.name, code, snapshot, acting_user=acting_user)
-
+	# 8c. Auto Approve (default) — enqueue immediately. The row is marked Queued first: a fast
+	#     worker (or an in-process run) must not have its outcome overwritten by this write.
 	call.status = "Queued"
 	call.save(ignore_permissions=True)
+	enqueue_execution(
+		call.name, code, snapshot, acting_user=acting_user, inputs=inputs, flow_ref=flow_ref
+	)
 
 	return {
 		"success": True,
@@ -674,6 +738,72 @@ def run_python(
 		"agent_tool_call": call.name,
 		"code_ref": code_ref,
 	}
+
+
+def run_flow_code(
+	flow_run: Any,
+	node: dict,
+	code: str,
+	profile_name: str,
+	inputs: dict | None = None,
+	timeout_s: int | None = None,
+) -> dict:
+	"""Dispatch the code of one published ``code.run`` Flow step.
+
+	The caller (the Flow engine) has already checked both switches, the flow owner's
+	capabilities and the step's size / profile rules (``huf.ai.flow.code_node``); the two gates
+	every execution path shares are repeated here as defence in depth. ``code`` and
+	``profile_name`` MUST come from the run's pinned definition, never from run input;
+	``inputs`` is plain data for the code.
+
+	Exactly one ``Agent Tool Call`` audit row is written (profile snapshot + code hash), linked to
+	the step's ``Agent Run`` (and so to the Flow Run). Returns the dispatch dict of
+	:func:`_dispatch` plus ``agent_run``; raises ``PermissionError`` / ``ValidationError`` with a
+	plain message when the run is not allowed.
+	"""
+	from uuid import uuid4
+
+	if not _is_site_enabled():
+		frappe.throw("Python code execution is disabled on this site.", frappe.ValidationError)
+	acting_user = frappe.session.user
+	if not has_capability(acting_user, "code_execution.run"):
+		frappe.throw("You do not have permission to run Python code.", frappe.PermissionError)
+
+	profile = frappe.get_doc("Execution Profile", profile_name)
+	if profile.disabled:
+		frappe.throw("The selected Execution Profile is disabled.", frappe.ValidationError)
+	if profile.filesystem_policy == "Shared Directory":
+		frappe.throw(
+			"A Shared Directory profile needs an agent conversation, which a Flow step does not have. "
+			"Pick a profile with a scratch folder.",
+			frappe.ValidationError,
+		)
+
+	from huf.ai.flow.engine import _create_flow_agent_run
+
+	run_doc = _create_flow_agent_run(
+		flow_run=flow_run,
+		node=node,
+		run_kind="tool",
+		prompt=f"Execute code ({profile.name}), {len((code or '').encode('utf-8'))} bytes",
+	)
+	flow_ref = {"flow_run": flow_run.name, "node_id": node.get("id")}
+	out = _dispatch(
+		code,
+		profile,
+		acting_user,
+		{
+			"agent_run": run_doc.name,
+			"conversation": getattr(flow_run, "conversation", None),
+			"tool": _TOOL_NAME,
+			"call_id": f"call_{uuid4().hex[:12]}",
+		},
+		inputs=inputs or {},
+		flow_ref=flow_ref,
+		wall_cap_s=timeout_s,
+	)
+	out["agent_run"] = run_doc.name
+	return out
 
 
 # ---------------------------------------------------------------------------
@@ -686,6 +816,8 @@ def enqueue_execution(
 	code: str,
 	profile_snapshot: dict,
 	acting_user: str | None = None,
+	inputs: dict | None = None,
+	flow_ref: dict | None = None,
 ) -> None:
 	"""Enqueue :func:`execute_job` on the ``code-execution`` RQ queue.
 
@@ -696,19 +828,32 @@ def enqueue_execution(
 	impersonates it for every broker call — the worker itself runs as a
 	privileged/system user and must never leak that identity into the broker.
 	When it is missing the broker denies every call (fail closed).
+
+	A Flow step (``flow_ref`` set) goes to the queue named by the site config
+	``huf_flow_code_queue`` (default ``long``, which every standard deployment already works), and
+	is enqueued only after the caller's transaction commits, so the run is already parked in
+	``Waiting Code`` when the worker finishes. ``inputs`` is plain JSON data for the code.
 	"""
 	limits = (profile_snapshot or {}).get("limits") or {}
 	wall = int(limits.get("max_wall_time_s") or DEFAULT_WALL_TIME_S)
 
+	kwargs = {}
+	queue = "code-execution"
+	if flow_ref:
+		queue = str(frappe.conf.get("huf_flow_code_queue") or "long")
+		kwargs["enqueue_after_commit"] = True
 	frappe.enqueue(
 		"huf.ai.tools.code_execution.execute_job",
-		queue="code-execution",
+		queue=queue,
 		timeout=wall + RQ_WALL_GRACE_S,
 		agent_tool_call_name=agent_tool_call_name,
 		code=code,
 		profile_snapshot=profile_snapshot,
 		acting_user=acting_user,
+		inputs=inputs,
+		flow_ref=flow_ref,
 		now=bool(getattr(frappe.flags, "in_test", False)),
+		**kwargs,
 	)
 
 
@@ -741,11 +886,18 @@ def _pending_execution_key(approval_name: str) -> str:
 
 
 def stash_pending_execution(
-	approval_name: str, *, code: str, profile_snapshot: dict, acting_user: str | None
+	approval_name: str,
+	*,
+	code: str,
+	profile_snapshot: dict,
+	acting_user: str | None,
+	inputs: dict | None = None,
+	flow_ref: dict | None = None,
+	ttl_hours: int | None = None,
 ) -> None:
 	"""Hold the resumable dispatch payload for a parked execution in Redis.
 
-	Called by :func:`run_python` right after the ``Agent Execution Approval``
+	Called by :func:`_dispatch` right after the ``Agent Execution Approval``
 	row is inserted. The TTL mirrors the approval's ``expires_on`` so the hold
 	never outlives the window in which the approval is actionable. The payload
 	is the only place the raw code survives between park and approval; nothing
@@ -756,11 +908,13 @@ def stash_pending_execution(
 		"code_ref": _sha256(code),
 		"profile_snapshot": profile_snapshot or {},
 		"acting_user": acting_user,
+		"inputs": inputs,
+		"flow_ref": flow_ref,
 	}
 	frappe.cache().set_value(
 		_pending_execution_key(approval_name),
-		json.dumps(payload),
-		expires_in_sec=_APPROVAL_TTL_HOURS * 3600,
+		json.dumps(payload, default=str),
+		expires_in_sec=(ttl_hours or _APPROVAL_TTL_HOURS) * 3600,
 	)
 
 
@@ -814,10 +968,14 @@ def load_pending_execution(approval_doc) -> dict:
 		)
 
 	snapshot = payload.get("profile_snapshot")
+	inputs = payload.get("inputs")
+	flow_ref = payload.get("flow_ref")
 	return {
 		"code": code,
 		"profile_snapshot": snapshot if isinstance(snapshot, dict) else {},
 		"acting_user": acting_user,
+		"inputs": inputs if isinstance(inputs, dict) else None,
+		"flow_ref": flow_ref if isinstance(flow_ref, dict) else None,
 	}
 
 
@@ -839,439 +997,10 @@ def enqueue_approved_execution(approval_doc, payload: dict) -> None:
 		payload["code"],
 		payload["profile_snapshot"],
 		acting_user=payload["acting_user"],
+		inputs=payload.get("inputs"),
+		flow_ref=payload.get("flow_ref"),
 	)
 	clear_pending_execution(approval_doc.name)
-
-
-# ---------------------------------------------------------------------------
-# E4 — Broker RPC (Phase 4a)
-#
-# Sandboxed code holds no ambient Frappe access. Every side effect round-trips
-# over the control socket into the ``broker_handler`` closure built by
-# :func:`_make_broker_handler`, which (1) authorizes the call against the
-# IMMUTABLE profile snapshot (never the live profile) and the acting user's
-# own Frappe permissions, then (2) executes it impersonating ``acting_user``
-# captured at dispatch time — never the RQ worker's default user.
-#
-# Authorization order for every call (fail closed at every step):
-#   a. The capability must be known to the broker AND present in the snapshot's
-#      ``permissions`` rows.
-#   b. For ``doc.*``/``report.run`` the requested doctype (for reports: the
-#      report's ``ref_doctype``) must be covered by a granting row — an
-#      unscoped row (``reference_doctype`` empty) covers everything; a scoped
-#      row covers only its doctype.
-#   c. Write capabilities (``doc.create``, ``doc.update``, ``email.send``) are
-#      rejected when every applicable row is flagged ``is_read_only``.
-#      (Steps b/c are applied to the rows applicable to THIS request, so a
-#      read-only-scoped row can never be satisfied by an unrelated writable
-#      row on the same capability.)
-#   d. For ``doc.*``/``report.run`` the acting user must pass
-#      ``frappe.has_permission(doctype, ptype, user=acting_user)``
-#      (``read`` for read/get_list/report, ``create`` for create, ``write``
-#      for update) — the same two-layer check as
-#      ``PermissionAwareToolRegistry._can_use_tool``.
-#   e. For ``http.request`` the target host/port/scheme must match a rule of
-#      the ``Network Access Policy`` named in the snapshot; no policy ⇒ deny.
-#      The request itself goes through
-#      ``huf.ai.http_handler.handle_http_request``, which applies the SSRF
-#      guard and re-validates every redirect hop.
-# ---------------------------------------------------------------------------
-
-#: Document capabilities the broker understands.
-_DOC_CAPABILITIES = frozenset({"doc.read", "doc.get_list", "doc.create", "doc.update"})
-
-#: Capabilities rejected when the granting permission row is ``is_read_only``.
-_WRITE_CAPABILITIES = frozenset({"doc.create", "doc.update", "email.send"})
-
-#: ``frappe.has_permission`` ptype enforced per document/report capability.
-_CAPABILITY_PTYPE = {
-	"doc.read": "read",
-	"doc.get_list": "read",
-	"doc.create": "create",
-	"doc.update": "write",
-	"report.run": "read",
-}
-
-#: Hard cap on rows returned by ``doc.get_list`` regardless of the requested
-#: limit, so one call cannot flood the control socket / child memory.
-MAX_BROKER_LIST_LIMIT = 500
-
-
-def _make_broker_handler(profile_snapshot: dict, acting_user: str | None):
-	"""Build the ``broker_handler`` closure injected into ``run_sandboxed``.
-
-	The closure authorizes every sandbox broker call against the immutable
-	``profile_snapshot`` (never the live profile) and dispatches it
-	impersonating ``acting_user``. It NEVER raises: any failure becomes
-	``(False, "<ExceptionType>: <msg>")`` so a broker bug cannot crash the
-	worker or leak a traceback into sandbox output beyond a summary.
-
-	Authorized calls (denials excluded) are counted per capability on the
-	returned closure's ``call_counts`` attribute, which the worker folds into
-	the audit record (arguments and results are never counted or stored).
-	"""
-	permissions = list((profile_snapshot or {}).get("permissions") or [])
-	network_policy = (profile_snapshot or {}).get("network_policy") or None
-	call_counts: dict[str, int] = {}
-	site = frappe.local.site
-
-	def _authorize(capability: Any, params: dict) -> str | None:
-		"""Return None when the call may proceed, else a denial reason."""
-		if not acting_user:
-			return "broker is unavailable (no acting user recorded for this execution)"
-		if not isinstance(capability, str) or not capability:
-			return "malformed broker request: missing capability"
-		if capability not in _DISPATCHERS:
-			return f"unknown capability '{capability}'"
-
-		rows = [r for r in permissions if r.get("capability") == capability]
-		if not rows:
-			return f"capability '{capability}' not granted by profile"
-
-		# (b) Doctype scoping + (d) has_permission for document/report caps.
-		# ``email.send``/``http.request`` carry no doctype target; a
-		# ``reference_doctype`` set on their rows is ignored by design.
-		if capability in _DOC_CAPABILITIES:
-			target = params.get("doctype")
-			if not isinstance(target, str) or not target:
-				return f"{capability} requires a 'doctype' string"
-			rows = _scoped_rows(rows, target)
-			if not rows:
-				return f"capability '{capability}' not granted for doctype '{target}'"
-			ptype = _CAPABILITY_PTYPE[capability]
-			if not frappe.has_permission(target, ptype, user=acting_user):
-				return f"user '{acting_user}' lacks {ptype} permission on '{target}'"
-		elif capability == "report.run":
-			report_name = params.get("report_name")
-			if not isinstance(report_name, str) or not report_name:
-				return "report.run requires a 'report_name' string"
-			# A missing report raises DoesNotExistError → denial via the wrapper.
-			report = frappe.get_doc("Report", report_name)
-			ref_doctype = getattr(report, "ref_doctype", None)
-			rows = _scoped_rows(rows, ref_doctype)
-			if not rows:
-				return f"capability 'report.run' not granted for doctype '{ref_doctype}'"
-			if not frappe.has_permission("Report", "read", doc=report_name, user=acting_user):
-				return f"user '{acting_user}' lacks read permission on Report '{report_name}'"
-
-		# (c) Read-only rows cannot drive writes.
-		if capability in _WRITE_CAPABILITIES and all(bool(r.get("is_read_only")) for r in rows):
-			return f"capability '{capability}' is granted read-only by this profile"
-
-		# (e) Network policy gate for HTTP egress (runs before the SSRF guard).
-		if capability == "http.request":
-			return _authorize_egress(params, network_policy)
-
-		return None
-
-	def broker_handler(capability, params):
-		"""Wire entrypoint: authorize → count → impersonate → dispatch."""
-		try:
-			denial = _authorize(capability, params)
-			if denial:
-				return False, denial
-			call_counts[capability] = call_counts.get(capability, 0) + 1
-			previous_user = frappe.session.user
-			frappe.set_user(acting_user)
-			try:
-				result = _DISPATCHERS[capability](params)
-			finally:
-				frappe.set_user(previous_user)
-			return True, _json_safe(result)
-		except Exception as exc:  # noqa: BLE001 - broker must never crash the worker
-			frappe.log_error(title="Huf Code Execution Broker", message=f"broker call {capability!r} failed: {exc}")
-			return False, f"{type(exc).__name__}: {exc}"
-
-	def _thread_start():
-		"""Establish frappe context for the broker's own OS thread.
-
-		``broker_handler`` runs on the daemon thread spawned by
-		``run_sandboxed`` for the lifetime of one execution, not on the RQ
-		job's main thread. ``frappe.local`` is a ``werkzeug.local.Local``
-		keyed by OS thread identity, so that thread starts with no
-		site/db/session context of its own — every frappe.* call inside
-		``broker_handler`` (has_permission, get_doc, set_user, log_error)
-		would otherwise fail. Called once by the thread before it services
-		any request.
-		"""
-		frappe.init(site=site)
-		frappe.connect()
-
-	def _thread_end():
-		"""Tear down the broker thread's frappe context (closes its DB connection)."""
-		frappe.destroy()
-
-	broker_handler.call_counts = call_counts
-	broker_handler.thread_start = _thread_start
-	broker_handler.thread_end = _thread_end
-	return broker_handler
-
-
-def _scoped_rows(rows: list, target_doctype: str | None) -> list:
-	"""Keep permission rows whose scope covers ``target_doctype``.
-
-	An unscoped row (no ``reference_doctype``) covers every doctype; a scoped
-	row covers only its exact doctype.
-	"""
-	return [
-		row
-		for row in rows
-		if not row.get("reference_doctype") or row.get("reference_doctype") == target_doctype
-	]
-
-
-def _authorize_egress(params: dict, network_policy: str | None) -> str | None:
-	"""Network-policy gate for ``http.request`` (runs before the SSRF guard).
-
-	Returns None when the target is permitted by the policy named in the
-	snapshot, else a denial reason. Fails closed: no policy on the profile, an
-	unparseable URL, a missing policy document, or no matching rule all deny.
-	"""
-	if not network_policy:
-		return "http.request denied: the profile names no network policy (egress disabled)"
-
-	url = params.get("url")
-	if not isinstance(url, str) or not url:
-		return "http.request requires a 'url' string"
-
-	parsed = urlparse(url)
-	scheme = (parsed.scheme or "").lower()
-	if scheme not in ("http", "https"):
-		return f"http.request denied: scheme '{parsed.scheme or '(none)'}' is not allowed"
-	if not parsed.hostname:
-		return "http.request denied: URL has no hostname"
-	try:
-		port = parsed.port or (443 if scheme == "https" else 80)
-	except ValueError:
-		return "http.request denied: invalid port in URL"
-
-	try:
-		policy = frappe.get_doc("Network Access Policy", network_policy)
-	except Exception:
-		return f"http.request denied: network policy '{network_policy}' not found"
-
-	for rule in policy.rules or []:
-		if not _rule_host_matches(rule.host_or_cidr, parsed.hostname):
-			continue
-		if not _rule_port_matches(rule.port_range, port):
-			continue
-		protocol = (rule.protocol or "").strip().lower()
-		if protocol and protocol != scheme:
-			continue
-		return None
-
-	return (
-		f"http.request denied: {scheme}://{parsed.hostname}:{port} "
-		f"is not allowed by network policy '{network_policy}'"
-	)
-
-
-def _rule_host_matches(host_or_cidr: str | None, host: str) -> bool:
-	"""Match a rule's ``host_or_cidr`` against the request host.
-
-	Exact case-insensitive hostname match, or — when the rule parses as an IP
-	network — containment of a request host that is itself an IP literal. No
-	DNS resolution happens here (the SSRF guard resolves separately), so a
-	CIDR rule never matches a hostname, and a hostname rule never matches an
-	IP. No wildcard/subdomain matching in v1.
-	"""
-	spec = (host_or_cidr or "").strip()
-	if not spec or not host:
-		return False
-	try:
-		network = ipaddress.ip_network(spec, strict=False)
-	except ValueError:
-		network = None
-	if network is not None:
-		try:
-			address = ipaddress.ip_address(host)
-		except ValueError:
-			return False
-		return address in network
-	return host.lower() == spec.lower()
-
-
-def _rule_port_matches(port_range: str | None, port: int) -> bool:
-	"""Match a rule's ``port_range`` (``"80"``, ``"8000-9000"``, comma lists).
-
-	An empty spec imposes no port constraint. An unparseable spec matches
-	nothing (fail closed).
-	"""
-	spec = (port_range or "").strip()
-	if not spec:
-		return True
-	for part in spec.split(","):
-		part = part.strip()
-		if not part:
-			continue
-		lo, sep, hi = part.partition("-")
-		try:
-			if sep:
-				if int(lo) <= port <= int(hi):
-					return True
-			elif int(part) == port:
-				return True
-		except ValueError:
-			continue
-	return False
-
-
-def _require_str(params: dict, key: str, capability: str) -> str:
-	"""Fetch a non-empty string param or raise a clear ``ValueError``."""
-	value = params.get(key)
-	if not isinstance(value, str) or not value:
-		raise ValueError(f"{capability} requires a '{key}' string")
-	return value
-
-
-def _validate_str_list(value: Any, key: str, capability: str) -> list | None:
-	"""Validate an optional list-of-strings param (``fields``)."""
-	if value is None:
-		return None
-	if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-		raise ValueError(f"{capability} '{key}' must be a list of strings")
-	return value
-
-
-def _validate_limit(value: Any, capability: str) -> int | None:
-	"""Validate an optional integer ``limit`` param."""
-	if value is None:
-		return None
-	if isinstance(value, bool) or not isinstance(value, int | float | str):
-		raise ValueError(f"{capability} 'limit' must be an integer")
-	try:
-		return int(value)
-	except (TypeError, ValueError):
-		raise ValueError(f"{capability} 'limit' must be an integer") from None
-
-
-def _op_doc_read(params: dict) -> dict:
-	doctype = _require_str(params, "doctype", "doc.read")
-	name = _require_str(params, "name", "doc.read")
-	fields = _validate_str_list(params.get("fields"), "fields", "doc.read")
-	doc = frappe.get_doc(doctype, name)
-	data = doc.as_dict()
-	if fields:
-		keep = set(fields)
-		data = {key: value for key, value in data.items() if key in keep}
-	return data
-
-
-def _op_doc_get_list(params: dict) -> list:
-	doctype = _require_str(params, "doctype", "doc.get_list")
-	filters = params.get("filters")
-	if filters is not None and not isinstance(filters, dict | list):
-		raise ValueError("doc.get_list 'filters' must be a dict or list")
-	fields = _validate_str_list(params.get("fields"), "fields", "doc.get_list")
-	limit = _validate_limit(params.get("limit"), "doc.get_list")
-	# ``frappe.get_list`` (not ``get_all``) is deliberate: running under the
-	# impersonated acting user, it applies that user's record-level
-	# permissions (permission query conditions) on top of the doctype check.
-	return frappe.get_list(
-		doctype,
-		filters=filters or None,
-		fields=fields or None,
-		limit_page_length=min(limit or 20, MAX_BROKER_LIST_LIMIT),
-	)
-
-
-def _op_doc_create(params: dict) -> dict:
-	doctype = _require_str(params, "doctype", "doc.create")
-	values = params.get("values")
-	if not isinstance(values, dict):
-		raise ValueError("doc.create 'values' must be a dict of field values")
-	# The authorized target is ``doctype`` from ``params`` (checked by
-	# ``_authorize`` against the profile snapshot). ``values`` is fully
-	# sandbox-controlled, so a smuggled "doctype" key inside it must never
-	# override the authorized target — doctype is applied last, deliberately.
-	doc = frappe.get_doc({**values, "doctype": doctype})
-	doc.insert()
-	return {"doctype": doctype, "name": doc.name}
-
-
-def _op_doc_update(params: dict) -> dict:
-	doctype = _require_str(params, "doctype", "doc.update")
-	name = _require_str(params, "name", "doc.update")
-	values = params.get("values")
-	if not isinstance(values, dict):
-		raise ValueError("doc.update 'values' must be a dict of field values")
-	# Strip any attacker-supplied doctype/name from values so the update
-	# can never retarget a different, unauthorized document.
-	safe_values = {k: v for k, v in values.items() if k not in ("doctype", "name")}
-	doc = frappe.get_doc(doctype, name)
-	doc.update(safe_values)
-	doc.save()
-	return {"doctype": doctype, "name": doc.name}
-
-
-def _op_email_send(params: dict) -> dict:
-	recipients = params.get("recipients")
-	if isinstance(recipients, str):
-		recipients = [recipients]
-	if (
-		not isinstance(recipients, list)
-		or not recipients
-		or not all(isinstance(r, str) and r for r in recipients)
-	):
-		raise ValueError("email.send 'recipients' must be a non-empty list of addresses")
-	subject = _require_str(params, "subject", "email.send")
-	message = _require_str(params, "message", "email.send")
-	frappe.sendmail(recipients=recipients, subject=subject, message=message)
-	return {"queued": True, "recipients": recipients}
-
-
-def _op_http_request(params: dict) -> dict:
-	method = _require_str(params, "method", "http.request").upper()
-	url = _require_str(params, "url", "http.request")
-	# The network-policy gate already ran in authorization; ``handle_http_request``
-	# applies the SSRF guard to the URL and re-validates every redirect hop.
-	# NOTE (known v1 limitation): redirect hops are SSRF-checked but NOT
-	# re-checked against the Network Access Policy — a redirect can egress to a
-	# host outside the policy. Flagged for Phase 4b/5 hardening rather than
-	# hand-rolling a redirect loop here (the SSRF helper must stay the single
-	# owner of HTTP egress).
-	return handle_http_request(
-		method,
-		url,
-		headers=params.get("headers"),
-		params=params.get("params"),
-		data=params.get("data"),
-		json_data=params.get("json_data"),
-	)
-
-
-def _op_report_run(params: dict) -> dict:
-	report_name = _require_str(params, "report_name", "report.run")
-	filters = params.get("filters")
-	if filters is not None and not isinstance(filters, dict):
-		raise ValueError("report.run 'filters' must be a dict")
-	limit = _validate_limit(params.get("limit"), "report.run")
-	# Dispatch runs under ``frappe.set_user(acting_user)``, so
-	# ``frappe.session.user`` IS the acting user here; the codebase's report
-	# runner forwards it so user-level permissions apply to the report data.
-	return get_report_result(
-		report_name, filters=filters, limit=limit, user=frappe.session.user
-	)
-
-
-_DISPATCHERS = {
-	"doc.read": _op_doc_read,
-	"doc.get_list": _op_doc_get_list,
-	"doc.create": _op_doc_create,
-	"doc.update": _op_doc_update,
-	"email.send": _op_email_send,
-	"http.request": _op_http_request,
-	"report.run": _op_report_run,
-}
-
-
-def _json_safe(value: Any) -> Any:
-	"""Round-trip a broker result through JSON so it is always wire-serializable.
-
-	Frappe values such as ``datetime`` are stringified (``default=str``),
-	matching how Frappe's own JSON responses serialize them.
-	"""
-	return json.loads(json.dumps(value, default=str))
 
 
 # ---------------------------------------------------------------------------
@@ -1305,6 +1034,8 @@ def execute_job(
 	code: str,
 	profile_snapshot: dict,
 	acting_user: str | None = None,
+	inputs: dict | None = None,
+	flow_ref: dict | None = None,
 ) -> None:
 	"""RQ worker: run the sandboxed interpreter and record the outcome.
 
@@ -1321,10 +1052,55 @@ def execute_job(
 	    snapshotted before the run; after the run (always, via ``finally``) it
 	    is cap-checked again and new/changed files are written back as
 	    ``Agent Context Artifact`` records.
-	  * "Scratch Only" — the Phase-3 throwaway temp directory, discarded after.
+	  * "Scratch Only" — a throwaway directory, always deleted afterwards. For a Flow step
+	    (``flow_ref``) it is ``<site>/private/files/huf_scratch/<flow run>/<node>``; for an agent a
+	    temp directory.
 	  * "None" — no filesystem access; ``run_sandboxed`` gets ``scratch_dir=None``.
+
+	A Flow step (``flow_ref``) also gets ``inputs`` as the ``inputs`` variable, has its ``result``
+	variable captured, and, whatever the outcome, schedules the continuation of the parked Flow Run
+	once the audit row is final.
 	"""
+	try:
+		_run_job(agent_tool_call_name, code, profile_snapshot, acting_user, inputs, flow_ref)
+	finally:
+		if flow_ref:
+			from huf.ai.flow import code_node
+
+			code_node.schedule_continue(flow_ref.get("flow_run"))
+
+
+def _flow_scratch_dir(flow_ref: dict) -> str:
+	"""The private scratch folder of one Flow step; created here, removed by the caller."""
+	path = os.path.join(
+		get_files_path(is_private=True),
+		SCRATCH_SUBDIR,
+		_conversation_dir_key(flow_ref.get("flow_run")),
+		_conversation_dir_key(flow_ref.get("node_id")),
+	)
+	os.makedirs(path, exist_ok=True)
+	return path
+
+
+def _remove_flow_scratch(path: str) -> None:
+	shutil.rmtree(path, ignore_errors=True)
+	try:
+		os.rmdir(os.path.dirname(path))  # the run's folder, once its last step folder is gone
+	except OSError:
+		pass
+
+
+def _run_job(
+	agent_tool_call_name: str,
+	code: str,
+	profile_snapshot: dict,
+	acting_user: str | None,
+	inputs: dict | None,
+	flow_ref: dict | None,
+) -> None:
 	call = frappe.get_doc("Agent Tool Call", agent_tool_call_name)
+	if flow_ref and call.status in ("Completed", "Failed"):
+		return  # the step was already given up on (nobody picked it up in time): never run it late
 	limits = (profile_snapshot or {}).get("limits") or {}
 	max_output = int(limits.get("max_output_bytes") or DEFAULT_MAX_OUTPUT_BYTES)
 	filesystem_policy = (profile_snapshot or {}).get("filesystem_policy") or "None"
@@ -1345,6 +1121,7 @@ def execute_job(
 	broker_handler = _make_broker_handler(profile_snapshot, acting_user)
 
 	scratch_dir = None
+	flow_scratch = None
 	shared_ctx = None
 	if filesystem_policy == "Shared Directory":
 		shared_ctx = _prepare_shared_dir(call)
@@ -1353,8 +1130,12 @@ def execute_job(
 			return
 		mount_dir = shared_ctx["dir"]
 	elif filesystem_policy == "Scratch Only":
-		scratch_dir = tempfile.mkdtemp(prefix="huf-exec-")
-		mount_dir = scratch_dir
+		if flow_ref:
+			flow_scratch = _flow_scratch_dir(flow_ref)
+			mount_dir = flow_scratch
+		else:
+			scratch_dir = tempfile.mkdtemp(prefix="huf-exec-")
+			mount_dir = scratch_dir
 	else:  # "None": no filesystem mounted; the child exposes no file I/O
 		mount_dir = None
 
@@ -1367,8 +1148,12 @@ def execute_job(
 			broker_handler=broker_handler,
 			broker_thread_start=broker_handler.thread_start,
 			broker_thread_end=broker_handler.thread_end,
+			inputs=(inputs or {}) if flow_ref else None,
+			capture_result=bool(flow_ref),
 		)
-		_apply_result(call, result, max_output, broker_calls=broker_handler.call_counts)
+		_apply_result(
+			call, result, max_output, broker_calls=broker_handler.call_counts, flow=bool(flow_ref)
+		)
 	except Exception as exc:  # noqa: BLE001 - never leave the row stuck at Started
 		call.status = "Failed"
 		call.exit_status = "Error"
@@ -1386,12 +1171,22 @@ def execute_job(
 			_finalize_shared_dir(call, shared_ctx)
 		if scratch_dir is not None:
 			shutil.rmtree(scratch_dir, ignore_errors=True)
+		if flow_scratch is not None:
+			_remove_flow_scratch(flow_scratch)
 
 
 def _apply_result(
-	call, result: ExecutionResult, max_output: int, broker_calls: dict | None = None
+	call,
+	result: ExecutionResult,
+	max_output: int,
+	broker_calls: dict | None = None,
+	flow: bool = False,
 ) -> None:
-	"""Map an :class:`ExecutionResult` onto the ``Agent Tool Call`` audit row."""
+	"""Map an :class:`ExecutionResult` onto the ``Agent Tool Call`` audit row.
+
+	A Flow step stores its whole step output on the row (``stdout``, ``result``, ``exit_status``,
+	``truncated``) so the Flow Run can build the node output from the audit row alone.
+	"""
 	ok = result.exit_status == "Ok"
 
 	call.status = "Completed" if ok else "Failed"
@@ -1408,7 +1203,15 @@ def _apply_result(
 	}
 	# Match the codebase convention of wrapping scalar tool output as
 	# {"output": "..."} (see ``agent_integration.process_tool_call``).
-	call.tool_result = {"output": _truncate(result.stdout, max_output) or ""}
+	if flow:
+		call.tool_result = {
+			"stdout": result.stdout or "",
+			"result": result.result,
+			"exit_status": result.exit_status,
+			"truncated": bool(result.output_truncated or result.result_truncated),
+		}
+	else:
+		call.tool_result = {"output": _truncate(result.stdout, max_output) or ""}
 
 	if not ok:
 		call.error_message = _truncate(result.stderr, 60000)

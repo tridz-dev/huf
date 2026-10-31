@@ -40,20 +40,20 @@ def triage_graph():
 	sender = {"$from": "input.sender_id"}
 	key = {"$template": "wa:{s}", "vars": {"s": sender}}
 	nodes = [
-		{"id": "start", "type": "trigger.webhook", "config": {"method": "POST"}, "next": "trim"},
+		{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}, "next": "trim"},
 		{"id": "trim", "type": "transform", "config": {"op": "trim", "input": {"text": {"$from": "input.message"}}}, "next": "lower"},
 		{"id": "lower", "type": "transform", "config": {"op": "lower", "input": {"text": {"$from": "trim"}}}, "next": "get_state"},
 		{"id": "get_state", "type": "state.get", "config": {"key": key}, "next": "cond_awaiting"},
 		{
 			"id": "cond_awaiting",
 			"type": "condition",
-			"config": {"expression": 'context["outputs"]["get_state"]["found"]', "on_true": "extract_num", "on_false": "has_refund"},
+			"config": {"expression": 'get_state["found"]', "on_true": "extract_num", "on_false": "has_refund"},
 		},
 		{"id": "extract_num", "type": "transform", "config": {"op": "regex_extract", "input": {"text": {"$from": "lower"}, "pattern": "\\d+"}}, "next": "cond_num"},
 		{
 			"id": "cond_num",
 			"type": "condition",
-			"config": {"expression": 'context["outputs"]["extract_num"] != None', "on_true": "create_todo", "on_false": "reply_ask"},
+			"config": {"expression": 'extract_num != None', "on_true": "create_todo", "on_false": "reply_ask"},
 		},
 		{
 			"id": "create_todo",
@@ -75,7 +75,7 @@ def triage_graph():
 		{
 			"id": "cond_refund",
 			"type": "condition",
-			"config": {"expression": 'context["outputs"]["has_refund"] == True', "on_true": "remember", "on_false": "reply_default"},
+			"config": {"expression": 'has_refund == True', "on_true": "remember", "on_false": "reply_default"},
 		},
 		{
 			"id": "remember",

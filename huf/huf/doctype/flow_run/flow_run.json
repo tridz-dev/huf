@@ -16,6 +16,7 @@
   "mode",
   "status",
   "trigger_type",
+  "run_mode",
   "execution_section",
   "current_node_id",
   "hop_count",
@@ -29,11 +30,14 @@
   "waiting_section",
   "waiting",
   "last_error",
+  "outcome_label",
+  "outcome_tone",
   "timing_tab",
   "started_at",
   "column_break_tm1",
   "completed_at",
   "gateway_event",
+  "replied_via_tool",
   "requester_external_id",
   "requester_user"
  ],
@@ -99,7 +103,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
-   "options": "Queued\nRunning\nWaiting Approval\nWaiting User\nSuccess\nFailed",
+   "options": "Queued\nRunning\nWaiting Approval\nWaiting User\nWaiting Code\nSuccess\nFailed",
    "read_only": 1
   },
   {
@@ -108,6 +112,17 @@
    "fieldtype": "Select",
    "label": "Trigger Type",
    "options": "Manual\nWebhook\nSchedule\nDoc Event\nGateway",
+   "read_only": 1
+  },
+  {
+   "default": "Real",
+   "description": "A test run reads for real but never sends or changes anything outside the flow.",
+   "fieldname": "run_mode",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Run Mode",
+   "options": "Real\nTest",
    "read_only": 1
   },
   {
@@ -189,6 +204,20 @@
    "read_only": 1
   },
   {
+   "description": "What the run came to for the business, from the End step's outcome ('Approved', 'Rejected'...).",
+   "fieldname": "outcome_label",
+   "fieldtype": "Data",
+   "label": "Outcome",
+   "read_only": 1
+  },
+  {
+   "fieldname": "outcome_tone",
+   "fieldtype": "Select",
+   "label": "Outcome Tone",
+   "options": "\ngood\nneutral\nbad",
+   "read_only": 1
+  },
+  {
    "fieldname": "timing_tab",
    "fieldtype": "Tab Break",
    "label": "Timing"
@@ -228,11 +257,20 @@
    "label": "Requester user",
    "options": "User",
    "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "Set when a reply tool already answered the chat message, so the End output is not sent again.",
+   "fieldname": "replied_via_tool",
+   "fieldtype": "Check",
+   "label": "Replied via tool",
+   "no_copy": 1,
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-18 10:00:00.000000",
+ "modified": "2026-10-28 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Flow Run",

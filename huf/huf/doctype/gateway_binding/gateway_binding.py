@@ -54,3 +54,7 @@ class GatewayBinding(Document):
             frappe.throw(_("Choose an agent for an Agent route."))
         if self.target_type == "Flow" and not self.flow:
             frappe.throw(_("Choose a flow for a Flow route."))
+        if self.target_type == "Flow":
+            from huf.ai.flow.gateways.route_warning import warn_if_flow_not_live
+
+            warn_if_flow_not_live(self.flow)  # Q11: warn, never refuse
