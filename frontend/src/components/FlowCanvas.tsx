@@ -603,11 +603,7 @@ export function FlowCanvas({
       <DeleteStepDialog nodeId={null} nodeIds={keyboardDeleteIds} onOpenChange={(open) => !open && setKeyboardDeleteIds([])} />
 
       {activeFlow && (
-        <ConvertToProcedureDialog
-          flowId={activeFlow.id}
-          open={isConvertDialogOpen}
-          onOpenChange={setIsConvertDialogOpen}
-        />
+        <ConvertToProcedureDialog flowId={activeFlow.id} flowName={activeFlow.name} open={isConvertDialogOpen} onOpenChange={setIsConvertDialogOpen} />
       )}
     </div>
   );

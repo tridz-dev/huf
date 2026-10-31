@@ -239,6 +239,12 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
         const left = Math.min(...rects.map((r) => r.x));
         const top = Math.min(...rects.map((r) => r.y));
         const bounds = { x: left, y: top, width: Math.max(...rects.map((r) => r.x + r.width)) - left, height: Math.max(...rects.map((r) => r.y + r.height)) - top };
+        // A small flow that no longer fits (a copy and its "Add step" cards land beside the original): show all of it instead of cutting the original off.
+        const all = getNodes();
+        if (realSteps(all) <= READABLE_STEP_LIMIT && !isInView(getNodesBounds(all), getViewport(), { width, height })) {
+          fitClearOfOverlays(rfRef.current, width, height, motionMs(260));
+          return;
+        }
         const next = panToReveal(bounds, getViewport(), { width, height }, undefined, coveredByOverlays(width, height, nodeCount >= MINIMAP_MIN_STEPS));
         if (next) setViewport({ ...next, zoom: getViewport().zoom }, { duration: motionMs(200) });
       }, 150);

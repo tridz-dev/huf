@@ -47,6 +47,9 @@ export function ApprovalsList({ approvals, deciding, onDecide, large, onNavigate
                         {approval.flow_name || approval.flow_id}
                       </div>
                     )}
+                    {heading && group.items.length > 1 && (
+                      <div className="text-xs font-medium text-muted-foreground" data-testid={`flow-approval-ordinal-${approval.flow_run_id}`}>Request {index + 1} of {group.items.length}</div>
+                    )}
                     {heading && <span className="sr-only" data-testid={`flow-approval-flow-${approval.flow_run_id}`}>{approval.flow_name || approval.flow_id}</span>}
                     {sentence ? (
                       <div className={cn('text-sm text-foreground break-words', !heading && 'mt-0.5')} data-testid={`flow-approval-message-${approval.flow_run_id}`}>

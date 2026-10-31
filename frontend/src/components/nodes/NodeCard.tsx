@@ -240,7 +240,7 @@ export function NodeCard({ id, icon: Icon, iconClass, title, subtitle, frameClas
             {title}
           </div>
           {subtitle && (
-            <div className="truncate text-xs leading-snug text-muted-foreground" title={subtitle} data-testid={`flow-node-subtitle-${id}`}>
+            <div className="line-clamp-2 break-words text-xs leading-snug text-muted-foreground" title={subtitle} data-testid={`flow-node-subtitle-${id}`}>
               {subtitle}
             </div>
           )}

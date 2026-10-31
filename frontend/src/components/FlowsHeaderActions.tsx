@@ -291,7 +291,7 @@ export function FlowsHeaderActions() {
       />
       <FlowSettingsModal open={showSettings} onClose={handleCloseSettings} />
       {activeFlow && isCompact && !isPhone && (
-        <ConvertToProcedureDialog flowId={activeFlow.id} open={showConvert} onOpenChange={setShowConvert} />
+        <ConvertToProcedureDialog flowId={activeFlow.id} flowName={activeFlow.name} open={showConvert} onOpenChange={setShowConvert} />
       )}
     </div>
   );
