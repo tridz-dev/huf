@@ -16,7 +16,7 @@ const ACRONYMS = new Set(['id', 'url', 'uri', 'sku', 'api', 'ip', 'ui', 'pdf', '
 /** Keys the server adds to documents or the engine adds to its bookkeeping: they are never part of what a person entered. */
 const HIDDEN_KEYS = new Set([
   'doctype', 'docstatus', 'idx', 'owner', 'creation', 'modified', 'modified_by', 'parent', 'parentfield', 'parenttype',
-  'amended_from', 'naming_series', '__unsaved', '_trigger', '_user_tags', '_comments', '_assign', '_liked_by',
+  'amended_from', 'naming_series', 'thread_id', 'threadId', 'label_ids', 'labelIds', 'message_id', 'messageId', '__unsaved', '_trigger', '_user_tags', '_comments', '_assign', '_liked_by',
 ]);
 
 /** Keys that name an item best, used as the heading of a list item card and first in a one-line sentence. */

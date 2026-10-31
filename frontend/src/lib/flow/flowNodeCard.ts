@@ -79,7 +79,7 @@ const DOC_EVENT_WORD: Record<string, string> = {
 };
 
 export function triggerSubtitle(cfg: TriggerConfig | undefined, gateways?: readonly GatewayChoice[] | null): string {
-  if (cfg && isGatewayKindId(cfg.type)) return gatewaySubtitle(cfg.type, cfg as GatewayTriggerUiConfig, gateways);
+  if (cfg && isGatewayKindId(cfg.type)) return gatewaySubtitle(cfg.type, cfg as GatewayTriggerUiConfig, gateways, true);
   switch (cfg?.type) {
     case 'webhook':
       return 'Runs on a web request';
