@@ -69,7 +69,7 @@
     "huf/ai/gateway_adapters/whatsapp_call_flow.py": 632,
     "huf/ai/gateway_adapters/whatsapp_messages.py": 841,
     "huf/ai/gateway_adapters/whatsapp_templates.py": 874,
-    "huf/ai/gateway_service.py": 3313,
+    "huf/ai/gateway_service.py": 3310,
     "huf/ai/gateway_webhook.py": 964,
     "huf/ai/graph/executor.py": 844,
     "huf/ai/graph/procedure_runtime.py": 1484,
