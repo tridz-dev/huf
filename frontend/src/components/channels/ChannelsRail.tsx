@@ -79,7 +79,9 @@ export function ChannelsRail() {
 
       {!gw && (
         <p id="rail-disabled-note" className="px-5 pt-2 text-xs text-steel">
-          Connect your first {meta.nounSingular} to unlock the other pages.
+          {gateways.length === 0
+            ? `Connect your first ${meta.nounSingular} to unlock the other pages.`
+            : `Pick a ${meta.nounSingular} above to open the other pages.`}
         </p>
       )}
       <ul className="flex-1 space-y-0.5 overflow-y-auto p-2">
@@ -94,7 +96,7 @@ export function ChannelsRail() {
                   aria-disabled="true"
                   aria-describedby="rail-disabled-note"
                   data-testid={`rail-disabled-${s.key}`}
-                  title={`Connect your first ${meta.nounSingular} to use ${s.label}`}
+                  title={gateways.length === 0 ? `Connect your first ${meta.nounSingular} to use ${s.label}` : `Pick a ${meta.nounSingular} to use ${s.label}`}
                   className="flex cursor-not-allowed items-center gap-2.5 px-3 py-2 text-sm text-steel-soft"
                 >
                   <Icon className="h-4 w-4" />

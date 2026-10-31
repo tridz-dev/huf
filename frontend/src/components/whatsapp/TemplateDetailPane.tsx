@@ -30,7 +30,7 @@ interface Props {
 }
 
 function categoryLabel(c?: string) {
-  return c === 'MARKETING' ? 'Marketing' : c === 'UTILITY' ? 'Utility' : c === 'AUTHENTICATION' ? 'Authentication' : c || '-';
+  return c === 'MARKETING' ? 'Marketing' : c === 'UTILITY' ? 'Order and account updates' : c === 'AUTHENTICATION' ? 'Authentication' : c || '-';
 }
 
 const HEADER_LABEL: Record<string, string> = {

@@ -84,7 +84,9 @@ describe('BroadcastDetail', () => {
     m.pauseBroadcast.mockResolvedValue(ok({}));
     render(<BroadcastDetail name="BCAST-1" onBack={vi.fn()} />);
     expect(await screen.findByText('undeliverable')).toBeInTheDocument();
-    expect(screen.queryByText('131026')).toBeNull();
+    expect(screen.getByText('This number is not on WhatsApp.')).toBeInTheDocument();
+    expect(screen.getByText('WhatsApp error code 131026')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy details' })).toBeInTheDocument();
     expect(screen.queryByText('Error code')).toBeNull();
     expect(screen.getByTestId('count-sent')).toHaveTextContent('3');
     expect(screen.getByRole('progressbar', { name: 'Broadcast progress' })).toBeInTheDocument();

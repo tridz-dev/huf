@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { failureDetail, reasonText, recipientStatusLabel } from './plainText';
+import { copyText } from '@/lib/clipboard';
+import { failureDetail, failureDetailsText, reasonText, recipientStatusLabel } from './plainText';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -194,7 +195,7 @@ export function BroadcastDetail({ name, onBack }: { name: string; onBack: () => 
             <TableRow key={r.name}>
               <TableCell>{r.recipient}</TableCell>
               <TableCell>{recipientStatusLabel(r.status)}</TableCell>
-              <TableCell>{failureDetail(r.error_message, r.error_code) || reasonText(r.skip_reason)}</TableCell>
+              <TableCell>{failureDetail(r.error_message, r.error_code) || reasonText(r.skip_reason)}{r.error_code || r.error_message ? <FailureDetails r={r} /> : null}</TableCell>
               {b.status === 'Draft' ? (
                 <TableCell className="text-right">
                   <Button variant="ghost" size="sm" disabled={busy} aria-label={`Remove ${r.recipient}`} onClick={() => void remove(r)}>Remove</Button>
@@ -208,5 +209,19 @@ export function BroadcastDetail({ name, onBack }: { name: string; onBack: () => 
         <Button variant="outline" onClick={() => setLimit((n) => n + PAGE)}>Show more</Button>
       ) : null}
     </section>
+  );
+}
+
+/** Small disclosure on a failed row: the WhatsApp error code and message, with a copy button for support. */
+function FailureDetails({ r }: { r: BroadcastRecipient }) {
+  return (
+    <details className="mt-1 text-xs text-steel">
+      <summary className="cursor-pointer">Details</summary>
+      <div className="mt-1 space-y-1">
+        {r.error_code ? <p>WhatsApp error code {r.error_code}</p> : null}
+        {r.error_message ? <p>{r.error_message}</p> : null}
+        <Button variant="outline" size="sm" onClick={() => void copyText(failureDetailsText(r)).then((ok) => (ok ? toast.success('Details copied') : toast.error('Could not copy')))}>Copy details</Button>
+      </div>
+    </details>
   );
 }

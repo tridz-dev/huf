@@ -11,6 +11,6 @@ _STATUS_PLAIN = {
 def not_editable_text(status):
 	"""Plain-language reason a template cannot be edited (no raw Meta status words)."""
 	key = str(status or "").upper().replace(" ", "_")
-	state = _STATUS_PLAIN.get(key) or (key.replace("_", " ").lower() if key else "")
+	state = _STATUS_PLAIN.get(key)
 	lead = f"This template is {state}, so it can't be edited right now." if state else "This template can't be edited right now."
 	return f"{lead} You can edit approved, rejected or paused templates."

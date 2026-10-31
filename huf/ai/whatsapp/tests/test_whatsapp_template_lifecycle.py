@@ -73,11 +73,12 @@ class TestPureHelpers(unittest.TestCase):
 
 	def test_not_editable_message_is_plain_language(self):
 		now = datetime(2026, 1, 1, tzinfo=timezone.utc)
-		for status, phrase in (("PENDING", "in review by WhatsApp"), ("IN_APPEAL", "in appeal"), ("PENDING_DELETION", "pending deletion")):
+		for status, phrase in (("PENDING", "in review by WhatsApp"), ("IN_APPEAL", "in appeal"), ("PENDING_DELETION", "This template can't be edited right now.")):
 			msg = bridge.edit_quota(status, [], now)["editable_message"]
 			self.assertIn(phrase, msg)
 			self.assertNotRegex(msg, r"[A-Z]{4,}")
 		self.assertNotRegex(bridge.edit_quota("", [], now)["editable_message"], r"UNKNOWN|None")
+		self.assertNotIn("pending deletion", bridge.edit_quota("PENDING_DELETION", [], now)["editable_message"])
 
 	def test_manager_url_has_no_invented_params(self):
 		self.assertEqual(

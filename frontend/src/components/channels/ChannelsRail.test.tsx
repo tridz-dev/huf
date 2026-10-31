@@ -117,6 +117,12 @@ describe('ChannelsRail', () => {
     expect(home.className).not.toMatch(/opacity-50/);
   });
 
+  it('on the Numbers page with a number connected, asks to pick one instead of connecting the first', async () => {
+    open('/channels/whatsapp/numbers');
+    const note = await screen.findByText(/pick a number/i);
+    expect(note.textContent).not.toMatch(/connect your first/i);
+  });
+
   it('uses the channel icon, not the phone, for Bots', async () => {
     const { sectionsFor } = await import('./sections');
     const icon = (c: string) => sectionsFor(c).find((s) => s.key === 'numbers')!.icon;

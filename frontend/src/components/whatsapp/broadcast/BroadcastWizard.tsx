@@ -370,7 +370,9 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
           onAudiencePreview={setAudPreview} text={text} onText={setText} csv={csv} onFile={(f) => void onFile(f)}
           locked={reviewing} result={result} listsResult={listsResult}
           columnsHint={`${vars.length > 0
-            ? `Columns: phone, ${vars.map((v, i) => varKey(v, i)).join(', ')} (comma or tab separated). Missing values use the defaults from step 1.`
+            ? `${vars.every((v) => v.name)
+              ? `Columns: phone, ${vars.map((v, i) => varKey(v, i)).join(', ')} (comma or tab separated).`
+              : 'Columns: phone, then one column per value in your message (comma or tab separated).'} Missing values use the defaults from step 1.`
             : 'Columns: phone.'}${extraColumns.length ? ` For per-recipient values, start with a header line such as phone,${extraColumns.join(',')}; an empty cell uses the default.` : ''}`}
         />
       )}

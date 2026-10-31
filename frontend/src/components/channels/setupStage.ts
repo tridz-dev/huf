@@ -39,12 +39,12 @@ export function setupStep(stage: string | null | undefined): number | null {
 
 const STAGE_LABEL: Record<string, string> = {
   not_connected: 'Not connected yet',
-  connected_unverified: 'Connected, not tested yet',
+  connected_unverified: 'Connected, send a test message',
   receiving: 'Receiving messages',
-  live_unrouted: 'Live, nobody answers yet',
+  live_unrouted: 'Live, no one is set to reply',
   live: 'Live',
   blocked: 'Blocked',
-  degraded: 'Having problems',
+  degraded: 'Has problems',
   off: 'Turned off',
 };
 

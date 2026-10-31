@@ -58,7 +58,7 @@ export function AudiencesPage({ gateway }: { gateway: string }) {
                 <p className="text-xs text-steel">
                   {`${a.member_count} contacts${a.suppressed_count ? `, ${a.suppressed_count} opted out` : ''} · ${a.consent_source}`}
                 </p>
-                <div className="mt-1 space-x-1">{a.consent_purposes.map((p) => <Badge key={p} variant="secondary">{CONSENT_PURPOSES.find((x) => x.value === p)?.label ?? 'Other'}</Badge>)}</div>
+                <div className="mt-1 space-x-1">{a.consent_purposes.map((p) => <Badge key={p} variant="secondary" className="normal-case tracking-normal">{CONSENT_PURPOSES.find((x) => x.value === p)?.label ?? 'Other'}</Badge>)}</div>
               </div>
               <div className="flex gap-1">
                 <Button variant="outline" size="sm" onClick={() => setOpen(open === a.name ? null : a.name)}>
