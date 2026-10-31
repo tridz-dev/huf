@@ -79,3 +79,28 @@ describe('ApprovalsBell decisions', () => {
     expect(text).not.toMatch(/[{}"]|null|2026-10-29T/);
   });
 });
+
+describe('ApprovalsBell long list (ux44)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('shows the first requests whole, then "Show all" opens the rest in a scrolling list', async () => {
+    vi.mocked(getPendingApprovals).mockResolvedValue(Array.from({ length: 9 }, (_, i) => item(`r${i}`)));
+    await openBell();
+    await screen.findByTestId('flow-approval-r0');
+    expect(screen.getByTestId('flow-approval-r3')).toBeInTheDocument();
+    expect(screen.queryByTestId('flow-approval-r4')).toBeNull();
+    const list = screen.getByTestId('flow-approvals-list');
+    expect(list.className).toContain('approvals-scroll');
+    expect(list.className).toContain('overflow-y-auto');
+    fireEvent.click(screen.getByTestId('flow-approvals-show-all'));
+    expect(screen.getByTestId('flow-approval-r8')).toBeInTheDocument();
+    expect(screen.getByTestId('flow-approvals-show-all')).toHaveTextContent('Show fewer');
+  });
+
+  it('has no "Show all" button for a short list', async () => {
+    vi.mocked(getPendingApprovals).mockResolvedValue([item('r1'), item('r2')]);
+    await openBell();
+    await screen.findByTestId('flow-approval-r2');
+    expect(screen.queryByTestId('flow-approvals-show-all')).toBeNull();
+  });
+});

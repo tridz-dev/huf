@@ -435,6 +435,17 @@
 }
 
 @layer components {
+  /* A list that scrolls on purpose (the approvals popover): the bar stays visible and a soft fade shows there is more below. */
+  .approvals-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--steel-soft) transparent;
+    background:
+      linear-gradient(var(--popover), var(--popover)) 0 0 / 100% 12px no-repeat local,
+      linear-gradient(to top, rgb(0 0 0 / 0.12), transparent) 0 100% / 100% 12px no-repeat scroll;
+  }
+  .approvals-scroll::-webkit-scrollbar-thumb {
+    background-color: var(--steel-soft);
+  }
   /* Sonner Toast — HUF design system vars */
 
   [data-sonner-toaster],

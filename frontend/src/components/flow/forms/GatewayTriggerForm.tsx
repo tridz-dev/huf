@@ -90,8 +90,8 @@ export function GatewayTriggerForm({ nodeId, kind }: { nodeId: string; kind: Gat
             {setup.map(field)}
           </div>
           {more.length > 0 ? (
-            <Collapsible open={moreShown} onOpenChange={setMoreOpen} data-testid="flow-gateway-more">
-              <CollapsibleTrigger className="flex items-center gap-1 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="flow-gateway-more-toggle">
+            <Collapsible open={moreShown} onOpenChange={setMoreOpen} className="contents" data-testid="flow-gateway-more">
+              <CollapsibleTrigger className="sticky bottom-0 z-10 flex w-full items-center gap-1 border-t bg-background py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="flow-gateway-more-toggle">
                 <ChevronRight className={`h-4 w-4 transition-transform ${moreShown ? 'rotate-90' : ''}`} aria-hidden />
                 More options
               </CollapsibleTrigger>

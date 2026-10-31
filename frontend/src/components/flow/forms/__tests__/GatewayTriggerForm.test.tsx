@@ -54,6 +54,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('GatewayTriggerForm', () => {
+  it('ux44: "More options" stays pinned to the foot of the panel so it is visible without scrolling', () => {
+    open('whatsapp');
+    const toggle = screen.getByTestId('flow-gateway-more-toggle');
+    expect(toggle.className).toContain('sticky');
+    expect(toggle.className).toContain('bottom-0');
+    // The folded section's own wrapper adds no box, so the button sticks inside the whole form.
+    expect(screen.getByTestId('flow-gateway-more').className).toContain('contents');
+  });
+
   it('asks for the number first, in plain words, and shows only the options the server describes for WhatsApp', () => {
     open('whatsapp');
     expect(screen.getByText('Which WhatsApp number?')).toBeTruthy();
