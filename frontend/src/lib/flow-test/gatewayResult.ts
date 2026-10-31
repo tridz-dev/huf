@@ -2,11 +2,11 @@
  * A chat trigger's test result for a person: friendly row names, and the bookkeeping fields (record names, ids,
  * the raw event kind) in a separate "Details" group so the main rows are only what the customer sent.
  */
-const DETAIL_KEYS = ['gateway_event', 'wa_id', 'kind', 'message_id', 'thread_id', 'conversation_id', 'sender_id', 'provider', 'reply_to_message_id'];
+const DETAIL_KEYS = ['message', 'gateway_event', 'wa_id', 'kind', 'message_id', 'thread_id', 'conversation_id', 'sender_id', 'provider', 'reply_to_message_id'];
 
 export const GATEWAY_LABELS: Record<string, string> = {
   text: 'Message text',
-  message: 'Message text',
+  message: 'Message',
   display_name: 'Sender name',
   gateway: 'Channel',
   message_type: 'Kind of message',
@@ -26,6 +26,8 @@ export const GATEWAY_LABELS: Record<string, string> = {
   sender_id: 'Sender',
   provider: 'Channel type',
   reply_to_message_id: 'Replying to',
+  forwarded: 'Forwarded',
+  hours_since_last_customer_message: 'Hours since their last message',
 };
 
 export interface GatewayResultSplit {
