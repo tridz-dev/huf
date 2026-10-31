@@ -78,6 +78,13 @@ function monthPhrase(f: CronFields): string {
   return `in ${joinList(names)}`;
 }
 
+/** Example times of an "every N hours" schedule, counted from midnight at the chosen minute: "00:30, 03:30, 06:30". */
+export const hoursExample = (every: number, minute: number) => [0, 1, 2].map((i) => clock(i * every, minute)).join(', ');
+
+/** The line under "Run it every": the same times the summary names, so the two never disagree. */
+export const hoursHelper = (every: number, minute: number) =>
+  `Counted from midnight, so ${every === 1 ? 'every hour' : `${every} hours`} means ${hoursExample(every, minute)} and so on.`;
+
 /** Sentence for any valid cron. Friendly shapes keep short, familiar wording; everything else is spelled out. */
 export function describeCron(cron: string | undefined): string {
   if (cronProblem(cron)) return 'No valid schedule yet.';
@@ -89,7 +96,7 @@ export function describeCron(cron: string | undefined): string {
       return p.every === 1 ? 'Every minute' : `Every ${p.every} minutes`;
     case 'hours': {
       if (p.every === 1) return p.minute === 0 ? 'Every hour, on the hour' : `Every hour at minute ${pad(p.minute)}`;
-      const sample = [0, 1, 2].map((i) => clock(i * p.every, p.minute)).join(', ');
+      const sample = hoursExample(p.every, p.minute);
       return `Every ${p.every} hours from midnight (${sample} and so on)`;
     }
     case 'daily':

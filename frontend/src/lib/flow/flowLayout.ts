@@ -32,14 +32,32 @@ export function tidyPositions(nodes: StepLike[], edges: ConnectionLike[]): Recor
   return autoLayout(nodes, ordered);
 }
 
+/** A card is about 100px tall; two cards side by side closer than this leave no room for a line, a name or the "+" between them. */
+const CARD_HEIGHT = 100;
+const MIN_SIDE_GAP = 24;
+
+/** True when two steps sit side by side with less than MIN_SIDE_GAP between them (or on top of each other). */
+export function hasCrowdedSteps(nodes: Array<{ position: { x: number; y: number } }>): boolean {
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i].position;
+      const b = nodes[j].position;
+      const sameRow = Math.abs(a.y - b.y) < CARD_HEIGHT;
+      if (sameRow && Math.abs(a.x - b.x) < CARD_WIDTH + MIN_SIDE_GAP) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * A graph saved without positions (a template, a copy made by a script, a flow written by hand) is laid out the way
- * "Tidy layout" would; one that has them keeps them. Steps stacked on one spot count as having none.
+ * "Tidy layout" would; one that has them keeps them. Steps stacked on one spot, or squeezed less than 24px apart side by side, count as having none.
  */
 export function layoutWhenUnplaced<T extends StepLike>(nodes: T[], edges: ConnectionLike[], someMissing: boolean): T[] {
   if (nodes.length < 2) return nodes;
   const spots = new Set(nodes.map((n) => `${Math.round(n.position.x / 40)}:${Math.round(n.position.y / 40)}`));
-  if (!someMissing && spots.size === nodes.length) return nodes;
+  // Stacked, or squeezed so close that no line or name fits between two cards (a saved gap of 4px): lay it out again.
+  if (!someMissing && spots.size === nodes.length && !hasCrowdedSteps(nodes)) return nodes;
   const positions = tidyPositions(nodes, edges);
   return nodes.map((n) => ({ ...n, position: positions[n.id] ?? n.position }));
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseCron } from '../flow-trigger/cronFields';
 import { HOUR_STEPS, MINUTE_STEPS, DEFAULT_PICKER, cronProblem, cronToPicker, pickerForKind, pickerToCron } from './flowSchedule';
-import { clock, describeCron, fixedClockTime, hourWord } from '../flow-trigger/scheduleText';
+import { clock, describeCron, fixedClockTime, hourWord, hoursHelper } from '../flow-trigger/scheduleText';
 import { clockInOtherZone, formatWall, instantOf, nextRuns, wallIn } from '../flow-trigger/scheduleRuns';
 
 describe('pickerToCron', () => {
@@ -100,6 +100,12 @@ describe('describeCron', () => {
     expect(describeCron('0 9 * * 0,6')).toBe('Every Saturday and Sunday at 09:00');
     expect(describeCron('')).toBe('No valid schedule yet.');
     expect(describeCron('61 25 * * *')).toBe('No valid schedule yet.');
+  });
+
+  it('w1cap-04: the helper under the box names the same times as the summary, also for minute 30', () => {
+    expect(hoursHelper(3, 0)).toBe('Counted from midnight, so 3 hours means 00:00, 03:00, 06:00 and so on.');
+    expect(hoursHelper(3, 30)).toContain('00:30, 03:30, 06:30');
+    expect(describeCron('30 */3 * * *')).toContain('00:30, 03:30, 06:30');
   });
 
   it('B8: hours are described as from midnight, and a stored 15-hour step tells the truth', () => {

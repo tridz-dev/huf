@@ -51,3 +51,17 @@ describe('routeLoopBack', () => {
     expect(hitsAny(routed.points.slice(1), [body])).toBe(false);
   });
 });
+
+describe('w1cap-05: a sideways run keeps off the arrow of a sibling that goes straight down', () => {
+  const triage: Pt = { x: 118, y: 100 };
+  const below: Rect = { x: 0, y: 150, width: 236, height: 100 };
+  it('turns sooner when a step sits 50px under the source', () => {
+    const routed = routeEdge(triage, { x: 420, y: 330 }, [below, { x: 302, y: 330, width: 236, height: 100 }]);
+    expect(routed.points[1].y).toBeLessThanOrEqual(triage.y + 16);
+    expect(routed.points[1].y).toBeLessThan(below.y - 30);
+  });
+  it('keeps the usual distance when there is room', () => {
+    const routed = routeEdge(triage, { x: 420, y: 330 }, [{ x: 302, y: 330, width: 236, height: 100 }]);
+    expect(routed.points[1].y).toBe(triage.y + 32);
+  });
+});

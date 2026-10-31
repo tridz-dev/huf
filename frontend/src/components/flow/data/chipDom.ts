@@ -7,7 +7,7 @@ import type { Chip, Segment } from '@/lib/flow-data/chips';
 import { normalize } from '@/lib/flow-data/chips';
 import type { ChipInfo } from '@/lib/flow-data/model';
 
-const CHIP_BASE = 'mx-0.5 inline-flex max-w-full cursor-pointer select-none items-baseline gap-1 rounded-md border px-1.5 text-meta leading-5 align-baseline';
+const CHIP_BASE = 'mx-0.5 inline-flex max-w-full cursor-pointer select-none items-baseline gap-1 rounded-md border px-1.5 text-meta leading-5 align-baseline text-left';
 const CHIP_TONE = {
   ok: 'border-border bg-muted text-foreground hover:border-signal',
   missing: 'border-destructive bg-destructive-tint text-destructive',
@@ -22,13 +22,14 @@ export function chipElement(chip: Chip, info: ChipInfo, editable: boolean): HTML
   el.dataset.chip = chip.id;
   el.contentEditable = 'false';
   el.className = `${CHIP_BASE} ${info.missing ? CHIP_TONE.missing : info.opaque ? CHIP_TONE.opaque : CHIP_TONE.ok}`;
-  el.title = chipTitle(info);
   const text = info.missing ? `Missing: ${info.stepTitle}` : info.stepTitle ? `${info.label} · ${info.stepTitle}` : info.label;
+  // The full name is always on hover, even when a narrow box has to wrap it over two lines.
+  el.title = `${text}. ${chipTitle(info)}`;
   el.setAttribute('aria-label', `${text}${info.sample ? `. Example: ${info.sample}` : ''}. Press Enter to change.`);
   el.setAttribute('role', 'button');
   el.tabIndex = -1;
   const label = document.createElement('span');
-  label.className = 'min-w-0 truncate';
+  label.className = 'min-w-0 whitespace-normal break-words';
   label.textContent = text;
   el.append(label);
   if (editable) {

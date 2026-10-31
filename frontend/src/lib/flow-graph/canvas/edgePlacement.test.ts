@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boxAt, controlCandidates, overlapArea, pillCandidates, placeClear } from './edgePlacement';
+import { PLACED_PILLS, boxAt, forgetPill, getPlacedVersion, controlCandidates, overlapArea, pillCandidates, pillsBefore, placeClear, recordPill } from './edgePlacement';
 
 const card = { x: 0, y: 0, width: 236, height: 70 };
 
@@ -55,5 +55,34 @@ describe('placing things over a connection', () => {
     const prefer = { x: 118, y: 72 };
     const at = placeClear(size, [above, below, pill], prefer, controlCandidates(points, 4, size, prefer));
     expect(overlapArea(boxAt(at, size), pill, 3)).toBe(0);
+  });
+});
+
+describe('names that meet (w1cap-05)', () => {
+  it('a name keeps off the names of the connections before it, never the ones after', () => {
+    PLACED_PILLS.clear();
+    recordPill('a-approved', { x: 100, y: 200, width: 70, height: 20 });
+    recordPill('b-rejected', { x: 130, y: 200, width: 70, height: 20 });
+    expect(pillsBefore('b-rejected')).toEqual([{ x: 100, y: 200, width: 70, height: 20 }]);
+    expect(pillsBefore('a-approved')).toEqual([]);
+    const size = { width: 70, height: 20 };
+    const prefer = { x: 165, y: 210 };
+    const spot = placeClear(size, pillsBefore('b-rejected'), prefer, pillCandidates(prefer));
+    const box = boxAt(spot, size);
+    expect(overlapArea(box, { x: 100, y: 200, width: 70, height: 20 })).toBe(0);
+    PLACED_PILLS.clear();
+  });
+
+  it('recording a name that did not move does not wake the others (no endless re-placing)', () => {
+    PLACED_PILLS.clear();
+    recordPill('a', { x: 10, y: 10, width: 50, height: 20 });
+    const v = getPlacedVersion();
+    recordPill('a', { x: 10.2, y: 10, width: 50, height: 20 });
+    expect(getPlacedVersion()).toBe(v);
+    recordPill('a', { x: 40, y: 10, width: 50, height: 20 });
+    expect(getPlacedVersion()).toBe(v + 1);
+    forgetPill('a');
+    expect(getPlacedVersion()).toBe(v + 2);
+    PLACED_PILLS.clear();
   });
 });

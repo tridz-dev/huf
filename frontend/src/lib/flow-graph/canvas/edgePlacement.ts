@@ -25,6 +25,44 @@ const PILL_REACH_X = 160;
  */
 export const PLACED_PILLS = new Map<string, Rect>();
 
+let placedVersion = 0;
+const placedListeners = new Set<() => void>();
+export const subscribePlaced = (fn: () => void) => {
+  placedListeners.add(fn);
+  return () => {
+    placedListeners.delete(fn);
+  };
+};
+export const getPlacedVersion = () => placedVersion;
+const placedChanged = () => {
+  placedVersion++;
+  placedListeners.forEach((fn) => fn());
+};
+const sameRect = (a: Rect, b: Rect) => Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5 && Math.abs(a.width - b.width) < 0.5 && Math.abs(a.height - b.height) < 0.5;
+
+/** Record where a name pill sits. Connections drawn later (by id) re-place their own name when it lands on this one. */
+export function recordPill(id: string, box: Rect): void {
+  const prev = PLACED_PILLS.get(id);
+  if (prev && sameRect(prev, box)) return;
+  PLACED_PILLS.set(id, box);
+  placedChanged();
+}
+export function forgetPill(id: string): void {
+  if (PLACED_PILLS.delete(id)) placedChanged();
+}
+
+/**
+ * The names already placed by connections that come before `id`. A name only steps aside for these (never for later ones), so two
+ * names that meet cannot keep pushing each other: the first stays, the second moves up or down off it.
+ */
+export function pillsBefore(id: string): Rect[] {
+  const out: Rect[] = [];
+  PLACED_PILLS.forEach((box, other) => {
+    if (other < id) out.push(box);
+  });
+  return out;
+}
+
 export const boxAt = (c: Pt, s: Size): Rect => ({ x: c.x - s.width / 2, y: c.y - s.height / 2, width: s.width, height: s.height });
 
 /** Area of the part of `a` that lies on `b` (b grown by `pad` on every side). */

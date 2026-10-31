@@ -10,7 +10,7 @@ import type { FlowNode, TriggerConfig } from '../../../types/flow.types';
 
 const TRIGGER_ICONS: Record<string, string> = { webhook: 'Webhook', schedule: 'Clock', 'doc-event': 'Database' };
 
-/** Which trigger starts the flow, with the button to change it. An unset trigger asks for a choice instead. */
+/** Which trigger starts the flow, with the button to change it. An unset trigger shows nothing here: the form below holds the one button to choose. */
 export function TriggerTypeRow({ node }: { node: FlowNode }) {
   const { updateNode } = useFlowContext();
   const { canManage } = useFlowPermissions();
@@ -32,21 +32,7 @@ export function TriggerTypeRow({ node }: { node: FlowNode }) {
             </Button>
           )}
         </div>
-      ) : (
-        <div className="space-y-2 rounded-md border border-dashed border-border p-3">
-          <div className="text-sm" data-testid="flow-trigger-type">
-            <span className="text-muted-foreground">Not set up yet</span>
-          </div>
-          <p className="text-meta leading-snug text-muted-foreground" data-testid="flow-hint-trigger-type">
-            The trigger decides when the flow starts. Choose one to continue.
-          </p>
-          {canManage && (
-            <Button size="sm" data-testid="flow-trigger-change" onClick={() => setChoosing(true)}>
-              Choose a trigger
-            </Button>
-          )}
-        </div>
-      )}
+      ) : null}
       <NodeSelectionModal
         open={choosing}
         mode="trigger"

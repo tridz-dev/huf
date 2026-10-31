@@ -16,7 +16,7 @@ import {
   type ScheduleKind,
   type SchedulePicker,
 } from '@/lib/flow-graph/flowSchedule';
-import { clock, describeCron, fixedClockTime } from '@/lib/flow-trigger/scheduleText';
+import { clock, describeCron, fixedClockTime, hoursHelper } from '@/lib/flow-trigger/scheduleText';
 import { clockInOtherZone, formatWall, nextRuns } from '@/lib/flow-trigger/scheduleRuns';
 import { useSiteTimezone } from '@/lib/serverTime';
 import { allTimeZones, browserTimeNote, browserZone, describeZone } from '@/lib/flow-run/flowTimeZone';
@@ -184,7 +184,7 @@ export function ScheduleEditor({ cron, timeZone, onChange, onZoneChange, disable
               ))}
             </SelectContent>
           </Select>
-          {picker.kind === 'hours' && <FieldHint testId="flow-hint-schedule-every">Counted from midnight, so 3 hours means 00:00, 03:00, 06:00 and so on.</FieldHint>}
+          {picker.kind === 'hours' && <FieldHint testId="flow-hint-schedule-every">{hoursHelper(picker.every, picker.minute)}</FieldHint>}
         </div>
       )}
       {picker.kind === 'hours' && (
