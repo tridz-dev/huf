@@ -70,6 +70,7 @@ describe('shiftClearOfCorner', () => {
   });
   it('leaves the view alone when nothing is under it, or the flow would leave the canvas', () => {
     expect(shiftClearOfCorner([n('a', 400, 600)], { x: 0, y: 0, zoom: 0.75 }, covered, 1000)).toEqual({ x: 0, y: 0, zoom: 0.75 });
-    expect(shiftClearOfCorner([n('b', 20, 600), n('c', 600, 0)], { x: 0, y: 0, zoom: 1 }, covered, 900).x).toBe(0);
+    expect(shiftClearOfCorner([n('c', 600, 0), n('b', 20, 600)], { x: 0, y: 0, zoom: 1 }, covered, 800).x).toBe(0);
+    expect(shiftClearOfCorner([n('a', 100, 0), n('b', 20, 600), n('c', 900, 0)], { x: 0, y: 0, zoom: 1 }, covered, 800).x).toBeGreaterThan(0);
   });
 });

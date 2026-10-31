@@ -5,7 +5,7 @@
  */
 import { generateWebhookSecret } from '../flow-graph/flowWebhookUi';
 import type { FlowNode } from '../../types/flow.types';
-import { cloneSteps, type Graph } from './cloneSteps';
+import { clearOfSteps, cloneSteps, type Graph } from './cloneSteps';
 
 export const CLIPBOARD_KEY = 'huf.flow.clipboard.v1';
 
@@ -144,7 +144,7 @@ export function pasteSteps(payload: ClipboardPayload, target: Graph, flowId: str
     },
   });
   return {
-    nodes: [...target.nodes.map((n) => ({ ...n, selected: false })), ...clone.nodes.map((n) => ({ ...n, selected: true }))],
+    nodes: [...target.nodes.map((n) => ({ ...n, selected: false })), ...clearOfSteps(clone.nodes, target.nodes).map((n) => ({ ...n, selected: true }))],
     edges: [...target.edges, ...clone.edges],
     addedIds: usable.map((n) => clone.idMap.get(n.id) as string),
     skippedTrigger,
