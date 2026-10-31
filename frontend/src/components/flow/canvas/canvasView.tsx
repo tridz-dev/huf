@@ -208,6 +208,11 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
   const knownIds = useRef<Set<string>>(new Set());
   const revealTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => () => revealTimers.current.forEach(clearTimeout), []);
+  // Keep the memory of which steps were on the canvas fresh after every settled change, so "new" always means "added by the last action".
+  useEffect(() => {
+    const t = setTimeout(() => { knownIds.current = new Set(rfRef.current.getNodes().map((n) => n.id)); }, 400);
+    return () => clearTimeout(t);
+  }, [flowId, nodeCount, edgeCount]);
   // The first fit of a flow, as soon as every step is measured (and once more a moment later, when the "Add step" cards have settled).
   const firstFitFor = useRef<string | undefined>(undefined);
   const initialized = useNodesInitialized();
@@ -223,7 +228,8 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
     const previous = last.current;
     last.current = { flowId, nodeCount, edgeCount, layoutRevision };
     // Ids as of the last settled view; the canvas store catches up with a change a moment after props change.
-    const before = knownIds.current;
+    // (The first settle can run before the steps are loaded, so an empty memory is filled from the canvas as it is right now.)
+    const before = knownIds.current.size > 0 ? knownIds.current : new Set(getNodes().map((n) => n.id));
     const remember = () => { knownIds.current = new Set(getNodes().map((n) => n.id)); };
     // The first render of a flow is fitted by <ReactFlow fitView>; only later edits come here.
     if (!previous || previous.flowId !== flowId) {
@@ -240,7 +246,6 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
           remember();
         }
         const fresh = all.filter((n) => freshIds.includes(n.id));
-        console.log('UX43', first, fresh.length, width, before.size, realSteps(all), JSON.stringify(getNodesBounds(all)), JSON.stringify(getViewport()));
         if (fresh.length === 0 || width <= 0 || before.size === 0) return;
         // A small flow that no longer fits (a copy and its "Add step" cards land beside the original): show all of it instead of cutting the original off.
         if (realSteps(all) <= READABLE_STEP_LIMIT && !isInView(getNodesBounds(all), getViewport(), { width, height })) {
