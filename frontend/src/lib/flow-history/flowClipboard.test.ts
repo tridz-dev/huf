@@ -103,7 +103,7 @@ describe('duplicate', () => {
     expect(r.wiredAfter).toBeUndefined();
     expect(r.edges).toHaveLength(g.edges.length);
     const copy = r.nodes.find((n) => n.id === r.addedIds[0])!;
-    expect(copy.position).toEqual({ x: 148, y: 222 });
+    expect(copy.position).toEqual({ x: 148 + 284, y: 222 });
   });
   it('leaves the trigger alone: a flow has one', () => {
     const r = duplicateSteps(chain(1), ['trg'], 1)!;
@@ -204,9 +204,9 @@ describe('copy and paste (property style)', () => {
     const payload = buildClipboard(g, ['s1'], 'A', 1)!;
     const same = pasteSteps(payload, g, 'A', 5, 0);
     const copy = same.nodes.find((n) => n.id === same.addedIds[0])!;
-    expect(copy.position).toEqual({ x: 148, y: 222 });
+    expect(copy.position).toEqual({ x: 148 + 284, y: 222 });
     const again = pasteSteps(payload, g, 'A', 6, 1);
-    expect(again.nodes.find((n) => n.id === again.addedIds[0])!.position).toEqual({ x: 196, y: 294 });
+    expect(again.nodes.find((n) => n.id === again.addedIds[0])!.position).toEqual({ x: 196 + 284, y: 294 });
     const elsewhere = pasteSteps(payload, { nodes: [trigger()], edges: [] }, 'B', 7, 0);
     const moved = elsewhere.nodes.find((n) => n.id === elsewhere.addedIds[0])!;
     expect(moved.position.x).toBe(100 + 236 + 80);

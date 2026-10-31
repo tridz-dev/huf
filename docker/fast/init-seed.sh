@@ -146,7 +146,7 @@ if [[ "${SEED_STRATEGY}" == "sql" ]]; then
   done
 
   log "Creating database, user and grants..."
-  mysql -h "${DB_HOST}" -u root -p"${DB_ROOT_PASSWORD}" <<EOF
+  MYSQL_PWD="${DB_ROOT_PASSWORD}" mysql -h "${DB_HOST}" -u root <<EOF
 CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS '${DB_NAME}'@'%' IDENTIFIED BY '${DB_PASSWORD}';
 GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_NAME}'@'%';
@@ -154,7 +154,7 @@ FLUSH PRIVILEGES;
 EOF
 
   log "Restoring SQL dump..."
-  zcat "${SQL_FILE}" | mysql -h "${DB_HOST}" -u root -p"${DB_ROOT_PASSWORD}" "${DB_NAME}"
+  zcat "${SQL_FILE}" | MYSQL_PWD="${DB_ROOT_PASSWORD}" mysql -h "${DB_HOST}" -u root "${DB_NAME}"
   log "SQL restore complete."
 
 elif [[ "${SEED_STRATEGY}" == "physical" ]]; then

@@ -115,3 +115,33 @@ export function cloneSteps(source: Graph, ids: string[], takenIds: Iterable<stri
     });
   return { nodes, edges, idMap };
 }
+
+/** What a step takes on the canvas when its real size is not known yet (width of a card, a tall card's height). */
+const BOX = { width: 236, height: 110 };
+/** Space (px) kept between a copy and any other step. */
+const CLEAR = 16;
+const NUDGE = 24;
+/** One column over: a card and the gap beside it. */
+const COLUMN = 284;
+
+/**
+ * Moves copies off the steps they would land on, so a duplicate or a paste never sits on top of a card: first a little further
+ * down, otherwise one column to the right (or two), keeping the copies' places relative to each other. The smallest move that
+ * clears every step wins. When nothing clears (a very full canvas) the copies stay where they were put.
+ */
+export function clearOfSteps(copies: FlowNode[], others: FlowNode[]): FlowNode[] {
+  const box = (n: FlowNode) => ({ x: n.position.x, y: n.position.y, w: n.width ?? BOX.width, h: n.height ?? BOX.height });
+  const hits = (dx: number, dy: number) => copies.some((c) => {
+    const a = box(c);
+    return others.some((o) => {
+      const b = box(o);
+      return a.x + dx < b.x + b.w + CLEAR && a.x + dx + a.w + CLEAR > b.x && a.y + dy < b.y + b.h + CLEAR && a.y + dy + a.h + CLEAR > b.y;
+    });
+  });
+  if (!hits(0, 0)) return copies;
+  const tries: Array<{ dx: number; dy: number; cost: number }> = [];
+  for (const dx of [0, COLUMN, 2 * COLUMN]) for (let dy = 0; dy <= 12 * NUDGE; dy += NUDGE) tries.push({ dx, dy, cost: dy + dx * 0.3 });
+  const best = tries.sort((a, b) => a.cost - b.cost).find((t) => !hits(t.dx, t.dy));
+  if (!best) return copies;
+  return copies.map((c) => ({ ...c, position: { x: c.position.x + best.dx, y: c.position.y + best.dy } }));
+}

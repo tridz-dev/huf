@@ -165,7 +165,7 @@ if [[ "${FIRST_BOOT}" == "1" ]]; then
   if [[ "${DB_ROOT_PASSWORD}" == "${BAKED_DEFAULT_ROOT_PASSWORD}" ]]; then
     NEW_ROOT_PASSWORD="$(gen_secret)"
     log "Rotating MariaDB root password..."
-    mysql -h "${DB_HOST}" -uroot -p"${DB_ROOT_PASSWORD}" \
+    MYSQL_PWD="${DB_ROOT_PASSWORD}" mysql -h "${DB_HOST}" -uroot \
       -e "ALTER USER 'root'@'%' IDENTIFIED BY '${NEW_ROOT_PASSWORD}'; FLUSH PRIVILEGES;"
     DB_ROOT_PASSWORD="${NEW_ROOT_PASSWORD}"
   else

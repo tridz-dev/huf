@@ -7,7 +7,7 @@ import { branchHandlesFor } from '../flow/flowBranches';
 import { subtreeIds } from '../flow/flowEdgeLabels';
 import { ROW_GAP } from '../flow/flowLayout';
 import type { FlowEdge, FlowNode } from '../../types/flow.types';
-import { cloneSteps, type Graph } from './cloneSteps';
+import { clearOfSteps, cloneSteps, type Graph } from './cloneSteps';
 
 /** Where a copy that is not wired in lands, relative to its original. */
 export const COPY_OFFSET = { x: 48, y: 72 } as const;
@@ -71,7 +71,7 @@ export function duplicateSteps(graph: Graph, ids: string[], now: number): Duplic
     adjust: withoutSample,
   });
   return {
-    nodes: [...graph.nodes, ...clone.nodes],
+    nodes: [...graph.nodes, ...clearOfSteps(clone.nodes, graph.nodes)],
     edges: [...graph.edges, ...clone.edges],
     addedIds: steps.map((id) => clone.idMap.get(id) as string),
     skippedTrigger,

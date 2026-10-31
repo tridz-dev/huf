@@ -12,10 +12,20 @@ describe('groupApprovals', () => {
     expect(groups[0].items.map((i) => i.flow_run_id)).toEqual(['a', 'b', 'c']);
     expect(groupHeading(groups[0])).toBe('3 waiting: Order approval');
   });
-  it('keeps different wording or flows apart', () => {
-    const words = new Map([['a', 'x'], ['b', 'y'], ['c', 'x']]);
-    const groups = groupApprovals([item('a'), item('b'), item('c', 'refund', 'Refunds')], (i) => words.get(i.flow_run_id) ?? 'x');
-    expect(groups.map((g) => g.items.length)).toEqual([1, 1, 1]);
-    expect(groupHeading(groups[0])).toBeNull();
+  it('groups by flow wherever the rows sit, keeping each row its own words when they differ', () => {
+    const words = new Map([['a', 'x'], ['b', 'y'], ['c', 'x'], ['d', 'x']]);
+    const groups = groupApprovals(
+      [item('a'), item('d', 'refund', 'Refunds'), item('b'), item('c')],
+      (i) => words.get(i.flow_run_id) ?? 'x',
+    );
+    expect(groups.map((g) => g.items.map((i) => i.flow_run_id))).toEqual([['a', 'b', 'c'], ['d']]);
+    expect(groups[0].sentence).toBe('');
+    expect(groups[0].sentences).toEqual(['x', 'y', 'x']);
+    expect(groupHeading(groups[0])).toBe('3 waiting: Order approval');
+    expect(groupHeading(groups[1])).toBeNull();
+  });
+  it('keeps flows apart even with the same words and time', () => {
+    const groups = groupApprovals([item('a'), item('b', 'refund', 'Refunds')], () => 'Approve?');
+    expect(groups).toHaveLength(2);
   });
 });
