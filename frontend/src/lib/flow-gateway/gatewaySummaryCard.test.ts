@@ -13,3 +13,10 @@ describe('gatewaySubtitle on the card', () => {
     expect(text).toContain(' · ');
   });
 });
+
+describe('gatewaySubtitle on the card without a filter', () => {
+  it('drops the channel word and the note after the name', () => {
+    const text = gatewaySubtitle('whatsapp' as never, { gateway: 'Demo WhatsApp (never sends)', params: [] } as never, null, true);
+    expect(text).toBe('When someone messages Demo WhatsApp');
+  });
+});

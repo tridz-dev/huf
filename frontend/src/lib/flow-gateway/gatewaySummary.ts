@@ -41,7 +41,11 @@ export function gatewaySubtitle(kind: GatewayKindId, config: Cfg, gateways?: rea
   // On the narrow card the filter must fit two lines: shorter filter words and no "(never sends)" style note after the channel name.
   if (filter) return `${compact ? gatewayDisplayName(config.gateway, gateways).replace(/\s*\([^)]*\)\s*$/, '') : gatewayDisplayName(config.gateway, gateways)} · ${filter}`;
   const word = channelWord(kind, config.gateway, gateways);
-  return `When someone messages ${gatewayDisplayName(config.gateway, gateways)}${word ? ` (${word})` : ''}`;
+  const name = gatewayDisplayName(config.gateway, gateways);
+  // On the card the channel word and a "(never sends)" style note are left out: they only push the name off the two lines.
+  const plain = name.replace(/\s*\([^)]*\)\s*$/, '');
+  if (compact && plain !== name) return `When someone messages ${plain}`;
+  return `When someone messages ${name}${word ? ` (${word})` : ''}`;
 }
 
 /** "someone messages Support on WhatsApp" for lists and the publish dialog. */

@@ -41,5 +41,6 @@ describe('FitViewAfterRemovalOrLayout after a duplicate', () => {
     rerender(<FitViewAfterRemovalOrLayout flowId="f" nodeCount={3} edgeCount={1} layoutRevision={0} />); // an unrelated re-render must not cancel the reveal
     vi.advanceTimersByTime(1000);
     expect(setViewport).toHaveBeenCalled();
+    expect(setViewport.mock.calls.at(-1)?.[0].zoom).toBeLessThan(1); // everything in one view
   });
 });
