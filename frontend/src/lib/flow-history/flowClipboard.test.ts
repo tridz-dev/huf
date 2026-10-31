@@ -77,6 +77,16 @@ describe('stripSecrets', () => {
 });
 
 describe('duplicate', () => {
+  it('moves unwired (offset) copies clear of other steps but never nudges a layout-placed wired copy', () => {
+    const g = chain(3);
+    const wired = duplicateSteps(g, ['s2'], 1)!;
+    expect(wired.nodes.find((n) => n.id === wired.addedIds[0])!.position.y).toBe(300 + ROW_GAP);
+    const multi = duplicateSteps(g, ['s1', 's2'], 2)!;
+    const copies = multi.nodes.filter((n) => multi.addedIds.includes(n.id));
+    const others = multi.nodes.filter((n) => !multi.addedIds.includes(n.id));
+    const overlaps = copies.some((c) => others.some((o) => Math.abs(c.position.x - o.position.x) < 236 && Math.abs(c.position.y - o.position.y) < 62));
+    expect(overlaps).toBe(false);
+  });
   it('wires a copy behind a linear step and pushes what followed it down', () => {
     const g = chain(3);
     const r = duplicateSteps(g, ['s2'], 5000)!;
