@@ -79,7 +79,7 @@ export function AudiencePicker({ gateway, value, onChange, broadcast, onPreview,
     <div className="space-y-3">
       <Field label="Add an audience" id="aud-pick">
         {(p) => (
-          <Select value={adding || undefined} onValueChange={(v) => { setAdding(''); onChange([...value, { audience: v, tags: [], tag_filter_mode: 'any', exclude: false }]); }}>
+          <Select key={value.length} value={adding || undefined} onValueChange={(v) => { setAdding(''); onChange([...value, { audience: v, tags: [], tag_filter_mode: 'any', exclude: false }]); }}>
             <SelectTrigger {...p} className="w-full" aria-label="Add an audience"><SelectValue placeholder="Choose an audience" /></SelectTrigger>
             <SelectContent>
               {available.map((a) => <SelectItem key={a.name} value={a.name}>{a.title} ({a.member_count})</SelectItem>)}

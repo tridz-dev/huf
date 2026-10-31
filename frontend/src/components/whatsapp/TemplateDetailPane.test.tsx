@@ -60,7 +60,7 @@ describe('TemplateDetailPane', () => {
   it("says when Meta changed the template's category", async () => {
     vi.mocked(getTemplate).mockResolvedValue({ ...detail, category: 'MARKETING', previous_category: 'UTILITY', category_changed_by_meta: true } as never);
     render(pane());
-    expect(await screen.findByText(/Meta changed this template's category from utility to marketing/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Meta changed this template's category from order and account updates to marketing/i)).toBeInTheDocument();
   });
 
   it('shows no category notice when nothing was reclassified', async () => {

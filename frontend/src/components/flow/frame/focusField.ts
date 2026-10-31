@@ -8,7 +8,7 @@ export function findFieldElement(root: ParentNode, kind: string, field: string):
   if (direct) return direct;
   // Paths between steps and the trigger choice have their own places.
   if (field.startsWith('branch.')) return root.querySelector<HTMLElement>('[data-testid="flow-branches"]');
-  if (field === 'type') return root.querySelector<HTMLElement>('[data-testid="flow-trigger-change"]');
+  if (field === 'type') return root.querySelector<HTMLElement>('[data-testid="flow-trigger-change"], [data-testid="flow-trigger-choose"]');
   if (field === 'connection') return null;
   const anchor = root.querySelector<HTMLElement>(`[data-testid="flow-error-${kind}-${field}"]`);
   return anchor?.previousElementSibling instanceof HTMLElement ? anchor.previousElementSibling : anchor;

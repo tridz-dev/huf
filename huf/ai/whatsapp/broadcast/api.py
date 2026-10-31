@@ -175,7 +175,7 @@ def create_broadcast(
 	if not tpl or tpl.get("whatsapp_account") != account:
 		return _error("template_not_found", "Template not found on this gateway's WhatsApp account.")
 	if str(tpl.get("status") or "").upper() != "APPROVED":
-		return _error("template_not_approved", f"Template status is {tpl.get('status') or 'unknown'}; only APPROVED templates can be broadcast.")
+		return _error("template_not_approved", "Only approved templates can be broadcast. Wait for WhatsApp to approve this one, or pick another.")
 	send_via = (send_via or "messages").strip()
 	if send_via not in ("messages", "marketing_messages"):
 		return _error("invalid_send_via", "send_via must be 'messages' or 'marketing_messages'.")

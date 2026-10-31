@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COLUMN_GAP, ROW_GAP, isInView, tidyPositions } from './flowLayout';
+import { COLUMN_GAP, ROW_GAP, hasCrowdedSteps, isInView, layoutWhenUnplaced, tidyPositions } from './flowLayout';
 
 const n = (id: string, x = 0, y = 0) => ({ id, position: { x, y } });
 
@@ -78,5 +78,46 @@ describe('panToReveal', () => {
   it('leaves a box that is clear of the overlays alone', () => {
     const covered = { x: 0, y: 450, width: 270, height: 150 };
     expect(panToReveal({ x: 400, y: 500, width: 200, height: 60 }, { x: 0, y: 0, zoom: 1 }, size, 24, covered)).toBeNull();
+  });
+});
+
+describe('w1cap-05: steps squeezed side by side', () => {
+  it('spots two cards 4px apart (the Loop demo) and not a normal branch pair', () => {
+    expect(hasCrowdedSteps([n('a', 130, 400), n('b', 370, 400)])).toBe(true);
+    expect(hasCrowdedSteps([n('a', 130, 400), n('b', 130 + COLUMN_GAP, 400)])).toBe(false);
+    expect(hasCrowdedSteps([n('a', 250, 250), n('b', 250, 250 + ROW_GAP)])).toBe(false);
+  });
+
+  it('needs a real overlap on both axes, not just two top-left corners that are close', () => {
+    // Same column, 130px apart: the corners are near but the boxes (100px tall) do not touch.
+    expect(hasCrowdedSteps([n('a', 250, 250), n('b', 250, 380)])).toBe(false);
+    // 100px apart horizontally is far less than a card width, yet a whole row above is clear.
+    expect(hasCrowdedSteps([n('a', 250, 250), n('b', 350, 250 + 200)])).toBe(false);
+    // Boxes really overlapping on both axes.
+    expect(hasCrowdedSteps([n('a', 250, 250), n('b', 350, 300)])).toBe(true);
+    // Side by side with the old 24px gap but not touching: left alone.
+    expect(hasCrowdedSteps([n('a', 130, 400), n('b', 130 + 236 + 20, 400)])).toBe(false);
+  });
+
+  it('re-tidies only the group that holds the crowded cards; other groups keep their saved spots', () => {
+    const edges = [
+      { source: 't', target: 'a' }, { source: 't', target: 'b' },
+      { source: 'x', target: 'y' },
+    ];
+    const nodes = [n('t', 250, 250), n('a', 130, 400), n('b', 370, 400), n('x', 1200, 250), n('y', 1213, 411)];
+    const out = layoutWhenUnplaced(nodes, edges, false);
+    expect(out[3].position).toEqual({ x: 1200, y: 250 });
+    expect(out[4].position).toEqual({ x: 1213, y: 411 });
+    expect(Math.abs(out[2].position.x - out[1].position.x)).toBeGreaterThanOrEqual(COLUMN_GAP);
+    expect(Math.min(...out.slice(0, 3).map((o) => o.position.x))).toBe(130); // same top-left corner as before
+  });
+
+  it('lays a squeezed flow out again on load, and leaves a roomy one alone', () => {
+    const edges = [{ source: 't', target: 'a' }, { source: 't', target: 'b' }];
+    const squeezed = [n('t', 250, 250), n('a', 130, 400), n('b', 370, 400)];
+    const out = layoutWhenUnplaced(squeezed, edges, false);
+    expect(Math.abs(out[2].position.x - out[1].position.x)).toBeGreaterThanOrEqual(COLUMN_GAP);
+    const roomy = [n('t', 250, 250), n('a', 100, 400), n('b', 100 + COLUMN_GAP, 400)];
+    expect(layoutWhenUnplaced(roomy, edges, false)).toBe(roomy);
   });
 });

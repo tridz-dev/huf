@@ -146,12 +146,23 @@ function finish(points: Pt[]): RoutedEdge {
 }
 
 /**
+ * How far below its source a line may turn sideways: STUB, unless a step sits right under the source (a sibling branch that
+ * goes straight down). Then the sideways run would meet that line's arrow head, so it turns sooner and stays about 36px
+ * (arrow plus air) above the step.
+ */
+function turnOffset(src: Pt, obstacles: Rect[]): number {
+  let gap = Infinity;
+  for (const r of obstacles) if (r.y > src.y + 1 && r.x <= src.x && src.x <= r.x + r.width) gap = Math.min(gap, r.y - src.y);
+  return Math.min(STUB, Math.max(14, gap - 36));
+}
+
+/**
  * Route from the bottom of a source step (`src`) to the top of a target step (`tgt`).
  * `obstacles` are all the steps on the canvas (the two ends included).
  */
 export function routeEdge(src: Pt, tgt: Pt, obstacles: Rect[]): RoutedEdge {
   const forward = tgt.y - src.y >= STUB * 2;
-  const y1 = forward ? src.y + STUB : src.y + STUB;
+  const y1 = src.y + turnOffset(src, obstacles);
   const y2 = forward ? Math.max(y1, tgt.y - STUB) : tgt.y - STUB;
 
   if (same(src.x, tgt.x) && forward) {

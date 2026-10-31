@@ -9,6 +9,7 @@ import { healthLabel, type HealthState } from '@/services/whatsappHealthApi';
 import { channelMeta } from '../channelsMeta';
 import { useChannel } from '../useChannelGateway';
 import { useGatewaySummary } from '../useGatewaySummary';
+import { stageLabel } from '../setupStage';
 
 const PILL: Record<string, 'pill-success' | 'pill-warning' | 'pill-danger' | 'pill-neutral'> = {
   healthy: 'pill-success',
@@ -48,7 +49,7 @@ export default function NumbersSection() {
                     </div>
                     {number && <div className="font-mono text-xs text-steel">{number}</div>}
                     <div className="flex flex-wrap items-center gap-2 text-xs text-steel">
-                      {g.setup_stage && <Badge variant="chip" size="sm">{g.setup_stage}</Badge>}
+                      {g.setup_stage && <Badge variant="chip" size="sm">{stageLabel(g.setup_stage)}</Badge>}
                       <span>{g.enabled ? 'Enabled' : 'Turned off'}</span>
                     </div>
                     <Link

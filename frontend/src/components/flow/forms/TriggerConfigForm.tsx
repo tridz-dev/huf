@@ -26,14 +26,14 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
     return (
       <div className="mt-3 space-y-3" data-testid="flow-trigger-unset">
         <p className="text-sm text-muted-foreground">
-          Every flow starts with one thing that makes it run: a request from another app, a time you choose, a change to your data, or a chat message.
+          Nothing starts this flow yet. Pick what makes it run: a request from another app, a time you set, a change to your data, or a chat message.
         </p>
         {canManage ? (
           <Button type="button" className="w-full" data-testid="flow-trigger-choose" onClick={() => setChoosing(true)}>
             Choose what starts this flow
           </Button>
         ) : (
-          <p className="text-xs text-muted-foreground">Nothing starts this flow yet. Ask a flow editor to choose.</p>
+          <p className="text-xs text-muted-foreground">Ask a flow editor to choose what starts it.</p>
         )}
         <NodeSelectionModal
           open={choosing}

@@ -1,10 +1,10 @@
-import { memo, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { memo, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { BaseEdge, EdgeLabelRenderer, EdgeProps, useStore } from 'reactflow';
 import { Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { routeEdge, routeLoopBack, type Rect } from '@/lib/flow-graph/edgeRouting';
-import { PLACED_PILLS, boxAt, controlCandidates, pillCandidates, placeClear, type Size } from '@/lib/flow-graph/canvas/edgePlacement';
+import { PLACED_PILLS, boxAt, controlCandidates, forgetPill, getPlacedVersion, pillCandidates, pillsBefore, placeClear, recordPill, subscribePlaced, type Size } from '@/lib/flow-graph/canvas/edgePlacement';
 import type { BranchTone } from '@/lib/flow/flowBranches';
 import type { FlowEdgeRoute } from '../../types/flow.types';
 import { counterScale, lodForZoom } from '@/lib/flow-canvas/zoomLod';
@@ -36,6 +36,9 @@ const PILL_TONE: Record<BranchTone, string> = {
   loop: 'border-line-dark bg-paper-deep text-ink-soft',
   neutral: 'border-line-dark bg-panel text-ink-soft',
 };
+
+/** Names keep a hand's breadth apart, not just off each other (a 5px air gap each side). */
+const breathe = (r: Rect): Rect => ({ x: r.x - 5, y: r.y - 5, width: r.width + 10, height: r.height + 10 });
 
 const GHOST_LINE: CSSProperties = { stroke: 'var(--steel-soft)', strokeWidth: 1.5, strokeDasharray: '4 4', opacity: 0.7 };
 const DEFAULT_SIZE = { width: 236, height: 70 };
@@ -157,15 +160,23 @@ export const InsertableEdge = memo(
     // What of each step is drawn: an icon tile is narrower than the box the step takes, so names and buttons may sit beside it.
     const lod = lodForZoom(zoom);
     const stepBoxes = useMemo(() => [...obstacles.values()].map((r) => (lod === 'icon' ? { ...r, x: r.x + (r.width - TILE_WIDTH) / 2, width: TILE_WIDTH } : r)), [obstacles, lod]);
+    // Two branch names side by side ("Approved" and "Rejected" over steps close together) must not sit on each other: a name
+    // keeps off the names of the connections before it.
+    const placedVersion = useSyncExternalStore(subscribePlaced, getPlacedVersion);
     const pillPos = useMemo(
-      () => (pill && !loopBack ? placeClear(pillSize, stepBoxes, pillWanted, pillCandidates(pillWanted)) : pillWanted),
-      [pill, loopBack, pillSize, stepBoxes, pillWanted.x, pillWanted.y], // eslint-disable-line react-hooks/exhaustive-deps
+      () => (pill && !loopBack ? placeClear(pillSize, [...stepBoxes, ...pillsBefore(id).map(breathe)], pillWanted, pillCandidates(pillWanted)) : pillWanted),
+      [id, pill, loopBack, pillSize, stepBoxes, pillWanted.x, pillWanted.y, placedVersion], // eslint-disable-line react-hooks/exhaustive-deps
     );
+    // Recorded by value (not by object), and only forgotten when the name goes away: a name that did not move must not tell
+    // the others to place themselves again, or they would answer each other forever.
     useLayoutEffect(() => {
-      if (!pill || loopBack) return undefined;
-      PLACED_PILLS.set(id, boxAt(pillPos, pillSize));
-      return () => { PLACED_PILLS.delete(id); };
-    }, [id, pill, loopBack, pillPos, pillSize]);
+      if (!pill || loopBack) {
+        forgetPill(id);
+        return;
+      }
+      recordPill(id, boxAt({ x: pillPos.x, y: pillPos.y }, { width: pillSize.width, height: pillSize.height }));
+    }, [id, pill, loopBack, pillPos.x, pillPos.y, pillSize.width, pillSize.height]);
+    useLayoutEffect(() => () => forgetPill(id), [id]);
     const showControls = canManage && (hovered || selected);
     // The buttons keep off the name, the steps and the arrow head: further along the line, or beside it when the line is full.
     const buttons = selected && !loopBack ? 2 : 1;

@@ -12,14 +12,14 @@ raising it lets it continue. Speed settings are read when each work slice starts
 
 | Key | Limit | Type | Default | Range | Unit | Note |
 | --- | --- | --- | --- | --- | --- | --- |
-| `template_approved_only` | Templates must be approved | Set by Meta | on | - | - | Meta only delivers APPROVED templates to start a conversation. |
+| `template_approved_only` | Templates must be approved | Set by Meta | on | - | - | WhatsApp only delivers templates that have been approved when you start a conversation. |
 | `messaging_tier_24h` | Unique contacts per 24 hours | Set by Meta | - | - | contacts | Set by your WhatsApp messaging tier (250, 1K, 10K, 100K, unlimited). Read live from Meta when a broadcast is chosen. |
 | `quality_rating` | Number quality rating | Set by Meta | - | - | - | Set by Meta from user feedback; a low rating can reduce your tier. |
-| `marketing_stop_131050` | Contacts who stopped marketing | Set by Meta | on | - | - | Meta rejects marketing messages to contacts who chose to stop them (error 131050); they are skipped. |
+| `marketing_stop_131050` | Contacts who stopped marketing | Set by Meta | on | - | - | WhatsApp does not deliver marketing messages to people who chose to stop them; they are skipped. |
 | `opt_out_stop` | STOP replies | Set by Meta | on | - | - | Contacts who reply STOP are never messaged again until they opt back in. |
 | `bsuid_refused` | Username-only contacts | Internal | on | - | - | Meta allows messaging a business-scoped user ID (recipient field, from a number in the same business portfolio; not for one-tap, zero-tap or copy-code authentication templates). Huf does not send by user ID yet, so these contacts are skipped; send to the phone number. |
 | `us_plus_one_marketing` | US (+1) marketing | Set by Meta | on | - | - | Meta does not deliver marketing templates to US phone numbers (+1 with a US area code; Canadian +1 numbers are not affected). |
-| `per_user_marketing_limit_131049` | Per-contact marketing cap | Set by Meta | on | - | - | Meta limits how many marketing messages one person receives (error 131049); that contact is skipped. |
+| `per_user_marketing_limit_131049` | Per-contact marketing cap | Set by Meta | on | - | - | WhatsApp limits how many marketing messages one person receives; that person is skipped. |
 | `header_text_max` | Header text length | Set by Meta | 60 | - | characters | Template header text is limited to 60 characters. |
 | `copy_code_max` | Copy-code length | Set by Meta | 15 | - | characters | Huf allows up to 15 letters or digits. Meta's template docs give up to 20 characters for the button example; the send-time limit was not confirmed, so Huf keeps the lower value. (Not verified against Meta's documentation.) |
 | `max_phone_digits` | Phone number length | Set by Meta | 15 | - | digits | E.164 allows at most 15 digits. |

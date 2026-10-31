@@ -228,6 +228,7 @@ export function statusToastText(template: string, status?: string): { text: stri
 /** "MARKETING" -> "Marketing"; any category WhatsApp adds later reads the same way. */
 export function categoryLabel(category?: string | null): string {
   const c = (category || '').trim();
+  if (c.toLowerCase() === 'utility') return 'Order and account updates';
   return c ? c.charAt(0).toUpperCase() + c.slice(1).toLowerCase() : '';
 }
 

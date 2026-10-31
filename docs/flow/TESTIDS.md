@@ -80,7 +80,7 @@ The panel is `components/RightSidebar.tsx` + `components/flow/frame/*`. A step's
 | `flow-step-pin`, `flow-step-pinned`, `flow-step-unpin`, `flow-step-pin-area`, `flow-step-pinned-only`, `flow-step-pinned-value-*` | Pin this output / "Pinned 5 min ago" / Unpin |
 | `flow-step-test-wait`, `-waiting`, `-last`, `-not-live`, `-docs`, `-doc-list`, `-doc-<name>`, `-tick`, `-trigger-sample`, `-trigger-empty`, `-trigger-note`, `-trigger-unset`, `-no-doctype` | Trigger Test tab: Wait for a test request, Use last received request, Pick a recent document, Simulate a tick |
 | `flow-settings-on-failure`, `flow-on-failure-value`, `flow-step-notes`, `flow-step-reference-name`, `flow-view-as-json` (the collapsed "Advanced" disclosure), `flow-view-as-json-toggle`, `flow-view-as-json-text` (read-only JsonArea `flow-json-step-stored-*`) | Settings tab. The step's time limit lives here too: `flow-field-tool.call-timeout_ms` (connected tools only), `flow-field-human.approval-timeout_ms` |
-| `flow-trigger-type`, `flow-trigger-change`, `flow-hint-trigger-type` | Trigger row at the top of a trigger's Setup |
+| `flow-trigger-type`, `flow-trigger-change` | Trigger row at the top of a trigger's Setup. Both exist only once a trigger is chosen; an unset trigger shows `flow-trigger-unset` / `flow-trigger-choose` instead. `flow-hint-trigger-type` was removed |
 | `flow-edge-config`, `flow-edge-meaning`, `flow-edge-label`, `flow-delete-confirm`, `flow-delete-cancel` | Connection panel and delete dialog |
 | `flow-branches`, `flow-branch-<route>`, `flow-branch-<route>-empty` | "Where each path goes" |
 
@@ -251,7 +251,7 @@ Publish is disabled (reason in `disabled-reason`) when the flow has an Execute c
 | `flow-webhook-responses` | What 200 / 403 / 405 / 429 mean (inside the closed-by-default developer reference) |
 | `flow-hint-schedule-intro`, `flow-hint-schedule-every`, `flow-hint-schedule-monthday`, `flow-hint-schedule-zone`, `flow-hint-schedule-cron` | Schedule intro and field help |
 | `flow-hint-doc-event-intro`, `flow-hint-doc-event-doctype`, `flow-hint-doc-event-event` | Data trigger help |
-| `flow-hint-trigger-type`, `flow-sidebar-empty-hint` | Sidebar help lines (the Step name help and the "Steps after this one" footer were removed) |
+| `flow-sidebar-empty-hint` | Sidebar help lines (the Step name help and the "Steps after this one" footer were removed) |
 | `flow-settings-name-hint`, `flow-settings-description-hint`, `flow-settings-category-hint` | Settings dialog hints |
 | `flow-run-payload-hint` | Run dialog help under the input box |
 | `flow-run-history-header`, `flow-run-history-body`, `flow-run-history-timezone` | Sticky header, scrolling body and time zone note of the Runs sheet |

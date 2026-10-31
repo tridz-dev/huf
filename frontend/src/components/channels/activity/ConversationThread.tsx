@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { titleCase } from '@/components/whatsapp/templateModel';
 import { ExternalLink, Loader2, SquareAsterisk } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -105,7 +106,7 @@ export function ConversationThread({ name, onChanged }: { name: string; onChange
                 <div className="mt-1 flex flex-wrap gap-1">
                   {tools.filter((t) => t.agent_run === m.agent_run).map((t) => (
                     <span key={t.name} data-tool-call className="rounded-sm border border-line bg-paper-deep px-1.5 py-0.5 font-mono text-micro text-steel">
-                      {t.tool} · {t.status}
+                      {t.tool} · {titleCase(t.status ?? '')}
                     </span>
                   ))}
                 </div>

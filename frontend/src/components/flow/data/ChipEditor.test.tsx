@@ -26,7 +26,11 @@ describe('ChipEditor', () => {
     const el = box.querySelector('[data-chip]') as HTMLElement;
     expect(box.textContent).toContain('Hi ');
     expect(el.textContent).toContain('Customer name · New order');
-    expect(el.title).toBe('Ada Lovelace (example)');
+    expect(el.title).toBe('Customer name · New order. Ada Lovelace (example)');
+    // A long name wraps instead of being cut with an ellipsis, so the source ("New order") stays readable.
+    const label = el.firstElementChild as HTMLElement;
+    expect(label.className).toContain('break-words');
+    expect(label.className).not.toContain('truncate');
     expect(box.dataset.empty).toBe('false');
   });
 

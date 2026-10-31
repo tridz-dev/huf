@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { categoryLabel, costWarningText } from './plainText';
 import { toast } from 'sonner';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -292,7 +293,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
           </Field>
           {tpl ? (
             <p className="text-sm text-steel">
-              Category: <strong>{tpl.category ?? 'unknown'}</strong>.
+              Category: <strong>{categoryLabel(tpl.category)}</strong>.
               {(tpl.category ?? '').toUpperCase() === 'MARKETING'
                 ? ' Marketing messages are billed per delivered message and are limited to contacts who opted in to marketing.'
                 : ''}
@@ -369,7 +370,9 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
           onAudiencePreview={setAudPreview} text={text} onText={setText} csv={csv} onFile={(f) => void onFile(f)}
           locked={reviewing} result={result} listsResult={listsResult}
           columnsHint={`${vars.length > 0
-            ? `Columns: phone, ${vars.map((v, i) => varKey(v, i)).join(', ')} (comma or tab separated). Missing values use the defaults from step 1.`
+            ? `${vars.every((v) => v.name)
+              ? `Columns: phone, ${vars.map((v, i) => varKey(v, i)).join(', ')} (comma or tab separated).`
+              : 'Columns: phone, then one column per value in your message (comma or tab separated).'} Missing values use the defaults from step 1.`
             : 'Columns: phone.'}${extraColumns.length ? ` For per-recipient values, start with a header line such as phone,${extraColumns.join(',')}; an empty cell uses the default.` : ''}`}
         />
       )}
@@ -393,7 +396,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
 
       {step === 3 && preview && (
         <div className="space-y-2 text-sm">
-          <p>Recipients: <strong>{preview.recipients}</strong> ({preview.queued} will send, {preview.skipped} skipped). Category: {preview.category ?? 'unknown'}.{isMarketing ? ` Sending via ${sendVia === 'marketing_messages' ? 'Marketing Messages API' : 'Cloud API'}.` : ''}</p>
+          <p>Recipients: <strong>{preview.recipients}</strong> ({preview.queued} will send, {preview.skipped} skipped). Category: {categoryLabel(preview.category)}.{isMarketing ? ` Sending via ${sendVia === 'marketing_messages' ? 'Marketing Messages API' : 'Cloud API'}.` : ''}</p>
           <p>
             Messaging limit: {preview.within_limit === null ? 'unknown' : preview.within_limit ? 'within limit' : 'over limit'}
             {preview.remaining_24h !== null ? ` (${preview.remaining_24h} remaining in 24h)` : ''}.
@@ -403,7 +406,7 @@ export function BroadcastWizard({ gateway, onClose, onStarted }: { gateway: stri
             {preview.cost?.disclaimer ? <span className="text-xs text-steel"> {preview.cost.disclaimer}</span> : null}
           </p>
           {preview.cost?.warnings?.length ? (
-            <ul className="list-disc pl-5 text-xs text-steel">{preview.cost.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+            <ul className="list-disc pl-5 text-xs text-steel">{preview.cost.warnings.map((w) => <li key={w}>{costWarningText(w)}</li>)}</ul>
           ) : null}
           {applied.length ? (
             <div aria-label="Limits applied to this broadcast" role="group" className="rounded-md border p-3">
