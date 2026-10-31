@@ -23,7 +23,7 @@ import { str, useNodeForm } from './formKit';
 export function GatewayTriggerForm({ nodeId, kind }: { nodeId: string; kind: GatewayKindId }) {
   const { cfg, patch, shell } = useNodeForm(nodeId, 'triggerConfig');
   const { canManage } = useFlowPermissions();
-  const { registry, loading, failed, reload } = useGatewayRegistry();
+  const { registry, loading, failed, reload } = useGatewayRegistry(canManage);
   const nodeType = GATEWAY_TRIGGER_KINDS.find((k) => k.id === kind)!.nodeType;
   const spec = registry?.specs[nodeType];
   const params: GatewayParam[] = Array.isArray(cfg.params) ? (cfg.params as GatewayParam[]) : [];
@@ -56,7 +56,12 @@ export function GatewayTriggerForm({ nodeId, kind }: { nodeId: string; kind: Gat
         Starts the flow when someone sends a message. What they wrote, who sent it and any files are available to the steps that follow.
       </p>
 
-      {registry ? (
+      {!canManage && !registry ? (
+        <div className="space-y-1" data-testid="flow-gateway-readonly">
+          <p className="text-sm" data-testid="flow-gateway-filter-summary">{gateway.trim() ? gatewaySubtitle(kind, { gateway, params }, null) : 'No channel is chosen yet.'}</p>
+          <p className="text-xs text-muted-foreground">You can see which messages start this flow. Only people who can edit the flow can change it.</p>
+        </div>
+      ) : registry ? (
         <div>
           <GatewayChooser kind={kind} value={gateway} gateways={registry.gateways} disabled={!canManage} onChange={(name) => patch({ gateway: name })} />
           <shell.Err field="gateway" />

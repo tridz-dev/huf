@@ -29,8 +29,8 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
   const status = facts?.status ?? { kind: 'ready' as const, text: 'Ready' };
   const needsSetup = status.kind === 'needs-setup' || Boolean(facts?.firstIssue);
   const unset = !data.triggerConfig?.type;
-  // A chat trigger names its channel by the label the server knows; that needs the channel list (loaded once).
-  const { registry } = useGatewayRegistry(isGatewayKindId(data.triggerConfig?.type));
+  // A chat trigger names its channel by the label the server knows; that needs the channel list (loaded once, editors only).
+  const { registry } = useGatewayRegistry(isGatewayKindId(data.triggerConfig?.type) && canManage);
   const statusClasses = getExecutionStatusClasses(data.status, selected, {
     unconfigured: needsSetup || unset,
   });

@@ -174,6 +174,16 @@ describe('GatewayTriggerForm', () => {
     expect(screen.getByTestId('flow-param-has_attachment').hasAttribute('disabled')).toBe(true);
   });
 
+  it('a viewer (the server refuses the channel list) still reads which messages start the flow, with no error and nothing to change', () => {
+    canManage = false;
+    registryState = { registry: null, loading: false, failed: true, reload: vi.fn() };
+    open('whatsapp', { gateway: 'Support WhatsApp', params: [{ key: 'keywords', value: ['order'] }] });
+    expect(screen.getByTestId('flow-gateway-filter-summary').textContent).toBe('Support WhatsApp · Only messages that contain "order"');
+    expect(screen.queryByTestId('flow-gateway-load-failed')).toBeNull();
+    expect(screen.queryByTestId('flow-gateway-select')).toBeNull();
+    expect(screen.queryByTestId('flow-gateway-retry')).toBeNull();
+  });
+
   it('the trigger panel routes the three kinds to this form', () => {
     for (const kind of ['gateway', 'whatsapp', 'telegram'] as const) {
       nodes = [{ id: 't', type: 'trigger', position: { x: 0, y: 0 }, data: { label: 'T', nodeType: 'trigger', icon: 'x', triggerConfig: { type: kind } } as FlowNodeData }];
