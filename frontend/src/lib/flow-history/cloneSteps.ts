@@ -126,8 +126,8 @@ const COLUMN = 284;
 
 /**
  * Moves copies off the steps they would land on, so a duplicate or a paste never sits on top of a card: first a little further
- * down, otherwise one column to the right (or two), keeping the copies' places relative to each other. The smallest move that
- * clears every step wins. When nothing clears (a very full canvas) the copies stay where they were put.
+ * down (up to 3 steps of 24px), otherwise one column to the right (then two), otherwise further down up to 288px, keeping the
+ * copies' places relative to each other. The first move that clears every step wins. When nothing clears the copies stay as placed.
  */
 export function clearOfSteps(copies: FlowNode[], others: FlowNode[]): FlowNode[] {
   const box = (n: FlowNode) => ({ x: n.position.x, y: n.position.y, w: n.width ?? BOX.width, h: n.height ?? BOX.height });
@@ -139,9 +139,12 @@ export function clearOfSteps(copies: FlowNode[], others: FlowNode[]): FlowNode[]
     });
   });
   if (!hits(0, 0)) return copies;
-  const tries: Array<{ dx: number; dy: number; cost: number }> = [];
-  for (const dx of [0, COLUMN, 2 * COLUMN]) for (let dy = 0; dy <= 12 * NUDGE; dy += NUDGE) tries.push({ dx, dy, cost: dy + dx * 0.3 });
-  const best = tries.sort((a, b) => a.cost - b.cost).find((t) => !hits(t.dx, t.dy));
+  // Order of preference: a short nudge down (3 steps), then one column right (then two), then further down up to 12 steps.
+  const tries: Array<{ dx: number; dy: number }> = [];
+  for (let dy = 0; dy <= 3 * NUDGE; dy += NUDGE) tries.push({ dx: 0, dy });
+  for (const dx of [COLUMN, 2 * COLUMN]) for (let dy = 0; dy <= 3 * NUDGE; dy += NUDGE) tries.push({ dx, dy });
+  for (let dy = 4 * NUDGE; dy <= 12 * NUDGE; dy += NUDGE) tries.push({ dx: 0, dy });
+  const best = tries.find((t) => !hits(t.dx, t.dy));
   if (!best) return copies;
   return copies.map((c) => ({ ...c, position: { x: c.position.x + best.dx, y: c.position.y + best.dy } }));
 }

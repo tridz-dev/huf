@@ -78,10 +78,11 @@ export function shiftClearOfCorner(nodes: Node[], vp: View, covered: { x: number
   if (under.length === 0) return vp;
   const dx = covered.x + covered.width + 12 - Math.min(...under.map((r) => r.left));
   // Left padding for the overview: the flow moves right until nothing sits under it. A wide flow may then reach past the right
-  // edge (its branches were a pan away already); only the trigger, where the flow starts, must stay fully in view.
-  const anchor = nodes.findIndex((n) => n.type === 'trigger');
-  const start = rects[anchor >= 0 ? anchor : 0];
-  return dx > 0 && start.right + dx <= canvasWidth - 16 ? { ...vp, x: vp.x + dx } : vp;
+  // edge (its branches were a pan away already), but not by more than half of its width: then the view is left alone.
+  const flowLeft = Math.min(...rects.map((r) => r.left));
+  const flowRight = Math.max(...rects.map((r) => r.right));
+  const pastEdge = Math.max(0, flowRight + dx - (canvasWidth - 16));
+  return dx > 0 && pastEdge <= (flowRight - flowLeft) / 2 ? { ...vp, x: vp.x + dx } : vp;
 }
 
 /**

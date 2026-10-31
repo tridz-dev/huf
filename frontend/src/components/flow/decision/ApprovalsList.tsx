@@ -32,9 +32,13 @@ export function ApprovalsList({ approvals, deciding, onDecide, large, onNavigate
         return (
           <div key={group.key} data-testid={`flow-approval-group-${group.items[0].flow_run_id}`} className="px-4 py-3">
             {heading && <div className="mb-1 text-sm font-semibold" data-testid="flow-approval-group-heading">{heading}</div>}
+            {heading && group.sentence && (
+              <div className="mb-1 text-sm text-foreground break-words" data-testid={`flow-approval-group-message-${group.items[0].flow_run_id}`}>{group.sentence}</div>
+            )}
             <div className={cn('space-y-3', heading && 'divide-y [&>*]:pt-3 [&>*:first-child]:pt-0')}>
               {group.items.map((approval, index) => {
-                const sentence = group.sentence || group.sentences[index];
+                // Identical sentences are shown once under the heading; different ones keep their own text on the row.
+                const sentence = heading && group.sentence ? '' : group.sentence || group.sentences[index];
                 return (
                 <div key={approval.flow_run_id} className="space-y-2" data-testid={`flow-approval-${approval.flow_run_id}`}>
                   <div>
@@ -48,7 +52,7 @@ export function ApprovalsList({ approvals, deciding, onDecide, large, onNavigate
                       <div className={cn('text-sm text-foreground break-words', !heading && 'mt-0.5')} data-testid={`flow-approval-message-${approval.flow_run_id}`}>
                         {sentence}
                       </div>
-                    ) : (
+                    ) : heading && group.sentence ? null : (
                       <div className="mt-0.5 text-sm text-muted-foreground">Approval needed</div>
                     )}
                     {approval.waiting_since && (

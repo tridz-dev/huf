@@ -229,7 +229,6 @@ export const ChipEditor = forwardRef<ChipEditorHandle, ChipEditorProps>(function
       aria-label={ariaLabel}
       aria-describedby={ariaDescribedBy}
       aria-readonly={!editable}
-      aria-disabled={editable ? undefined : true}
       contentEditable={editable}
       suppressContentEditableWarning
       inputMode={inputMode}
