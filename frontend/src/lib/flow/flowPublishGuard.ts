@@ -1,6 +1,7 @@
 import type { FlowNode } from '@/types/flow.types';
+import { isGatewayKindId } from '../flow-gateway/gatewayWords';
 
-/** Capability needed to publish a flow that has a Data trigger or a web request step (mirrors the server rule). */
+/** Capability needed to publish a flow that has a Data trigger, a chat-message trigger or a web request step (mirrors the server rule). */
 export const PUBLISH_SENSITIVE_CAPABILITY = 'flows.publish_sensitive';
 
 const HTTP_TOOL_ID = 'http_request';
@@ -11,6 +12,7 @@ export function sensitiveFlowFeatures(nodes: FlowNode[]): string[] {
   for (const node of nodes) {
     const data = node.data;
     if (data?.triggerConfig?.type === 'doc-event' && !found.includes('a Data trigger')) found.push('a Data trigger');
+    if (isGatewayKindId(data?.triggerConfig?.type) && !found.includes('a chat-message trigger')) found.push('a chat-message trigger');
     const action = data?.actionConfig;
     if (action?.type === 'tool-call' && action.tool_id === HTTP_TOOL_ID && !found.includes('a web request step')) {
       found.push('a web request step');
@@ -24,5 +26,5 @@ export function publishBlockedReason(nodes: FlowNode[], canPublishSensitive: boo
   if (canPublishSensitive) return null;
   const features = sensitiveFlowFeatures(nodes);
   if (!features.length) return null;
-  return `This flow has ${features.join(' and ')}. Only people allowed to publish flows that read data or send web requests can publish it. Ask an admin to publish it for you.`;
+  return `This flow has ${features.join(' and ')}. Only people allowed to publish flows that read data, answer chat messages or send web requests can publish it. Ask an admin to publish it for you.`;
 }

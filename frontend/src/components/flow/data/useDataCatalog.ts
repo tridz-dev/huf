@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFlowContext } from '@/contexts/FlowContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { getDataCatalog } from '@/services/flow/catalogApi';
+import { useGatewayRegistry } from '@/hooks/flow/useGatewayRegistry';
+import { isGatewayKindId } from '@/lib/flow-gateway/gatewayWords';
 import type { RefScope } from '@/lib/flow/flowRefs';
 import { buildPickerModel, type PickerModel } from '@/lib/flow-data/model';
 import type { DataCatalog } from '@/lib/flow-data/types';
@@ -65,6 +67,8 @@ export function useDataCatalog(nodeId: string | undefined, scope: RefScope = 'an
   const catalog = flowId && nodeId ? cache.get(keyOf(flowId, nodeId))?.data ?? null : null;
   const nodes = activeFlow?.nodes;
   const edges = activeFlow?.edges;
-  const model = useMemo(() => buildPickerModel(nodes ?? [], edges ?? [], nodeId, catalog, scope), [nodes, edges, nodeId, catalog, scope]);
+  const chatTrigger = isGatewayKindId(nodes?.find((n) => n.data.nodeType === 'trigger')?.data.triggerConfig?.type);
+  const { registry } = useGatewayRegistry(chatTrigger && canManage);
+  const model = useMemo(() => buildPickerModel(nodes ?? [], edges ?? [], nodeId, catalog, scope, registry), [nodes, edges, nodeId, catalog, scope, registry]);
   return { model, loading, refresh };
 }

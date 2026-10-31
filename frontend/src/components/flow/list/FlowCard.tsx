@@ -37,11 +37,7 @@ interface FlowCardProps {
   onDelete: () => void;
 }
 
-const TRIGGER_ICON: Record<string, string | undefined> = {
-  webhook: triggerOptions.find((t) => t.id === 'webhook')?.icon,
-  schedule: triggerOptions.find((t) => t.id === 'schedule')?.icon,
-  'doc-event': triggerOptions.find((t) => t.id === 'doc-event')?.icon,
-};
+const TRIGGER_ICON: Record<string, string | undefined> = Object.fromEntries(triggerOptions.map((t) => [t.id, t.icon]));
 
 /**
  * One flow in the list: a clean title (two lines at most, full name on hover), what it does in plain words, what

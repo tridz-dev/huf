@@ -22,7 +22,7 @@ Stable `data-testid` hooks for live UI journeys. Field names are the contract co
 `flow-trigger-modal`, `flow-action-modal`, `flow-modal-add-trigger`, `flow-modal-cancel`.
 Trigger modal: one list of cards (no tab bar, no search); the chosen card has `data-selected="true"` and a check `flow-card-check-<id>`; hint line `flow-trigger-hint` always takes its space. Empty trigger: card button `flow-node-choose-trigger-<nodeId>` and side-panel button `flow-trigger-choose` (panel `flow-trigger-unset`) both open `flow-trigger-modal`.
 Cards: `flow-card-<id>` with ids
-`webhook`, `schedule`, `doc-event` (triggers) and
+`webhook`, `schedule`, `doc-event`, `gateway`, `whatsapp`, `telegram` (triggers) and
 `agent-run`, `tool-call`, `router`, `condition`, `loop`, `human.approval`, `transform`, `state-get`,
 `state-set`, `state-delete`, `doc-create`, `email`, `http-request`, `file`, `slack`, `sheets` (steps), and `code-run` (Execute code: only offered when the server allows code in Flows and the user holds `flows.execute_code`, see wp19 below).
 Card title = node title = sidebar title (derived from `data/actions.ts` / `data/triggers.ts`).
@@ -399,3 +399,28 @@ Every value box is a `DataInput`: its id is `flow-field-<kind>-<field>` (`-picke
 | `flow-node-delete-title`, `flow-node-delete-list` | Delete step dialog: the question ("Delete 3 steps?") and, for several selected steps, the list of their names |
 | `flow-use-data-loading` | The "Loading examples" line of the data picker (never shown under "No sample yet") |
 | `flow-run-step-note-<stepId>` | Small grey note under a run step ("Stopped at item 2", "Not run for item 2"); a step that did not run in a failed loop has `data-step-status="skipped"` |
+
+## Chat triggers (gateway triggers, `components/flow/forms/GatewayTriggerForm.tsx`, `components/flow/triggers/*`)
+One form serves "A chat message" (`gateway`), "A WhatsApp message" (`whatsapp`) and "A Telegram message" (`telegram`); the options come from the server registry, so a new option or channel needs no new ids except `flow-param-<key>`.
+| id | What |
+|---|---|
+| `flow-card-gateway`, `flow-card-whatsapp`, `flow-card-telegram` | Trigger chooser cards |
+| `flow-card-connect-<kind>`, `flow-card-connect-link-<kind>` | Under a WhatsApp or Telegram card when none is connected: the note and the link to connect one (`<kind>` = `whatsapp`, `telegram`) |
+| `flow-gateway-trigger-<kind>` | The Setup form root (`gateway`, `whatsapp`, `telegram`) |
+| `flow-hint-gateway-intro`, `flow-hint-gateway-narrow` | Intro line and the "only start for some messages" line |
+| `flow-gateway-chooser`, `flow-gateway-select` | The number / bot / channel picker (a select) |
+| `flow-option-gateway-<name>` | One choice in that picker (`<name>` = the stored channel name) |
+| `flow-gateway-none`, `flow-gateway-connect` | "No WhatsApp number is connected yet" block and its "Connect a number" / "Connect a bot" link |
+| `flow-gateway-loading`, `flow-gateway-load-failed`, `flow-gateway-retry` | Channel list loading, failed, and Try again |
+| `flow-gateway-filter-summary` | The one-line summary of what starts the flow (also the canvas card subtitle) |
+| `flow-gateway-options` | The options block ("Only start for some messages") |
+| `flow-param-<key>` | The control of one option (`keywords`, `starts_with`, `message_kinds`, `chat_scope`, `ignore_bots`, ...). A word list's text box is `flow-param-<key>` too |
+| `flow-param-<key>-row`, `flow-param-<key>-help`, `flow-param-<key>-error` | Row, help line and problem message of one option |
+| `flow-param-<key>-add` | Add button of a word list (keywords, commands, people) |
+| `flow-param-<key>-editor`, `flow-param-<key>-word-<i>`, `flow-param-<key>-remove-<i>` | A word list, its i-th word, and that word's remove button |
+| `flow-param-<key>-option-<value>` | One choice of a multiple-choice or select option |
+| `flow-gateway-more`, `flow-gateway-more-toggle`, `flow-gateway-more-body` | "More options" folded section: root, toggle, body |
+| `flow-gateway-notes` | Read-only facts under the options (STOP words, 24 hour window) |
+| `flow-error-trigger.gateway-gateway`, `flow-error-trigger.whatsapp-gateway`, `flow-error-trigger.telegram-gateway` | Required-field message when no channel is chosen |
+| `flow-use-data-field-input.<name>` | Data picker rows of a chat trigger, e.g. `input.text` ("Message text"); ids such as `input.sender_id` are never listed |
+| (planned, WP4) `flow-step-test-gateway-last`, `flow-step-test-gateway-sample`, `flow-step-test-gateway-note` | Test tab: last real message, sample message, "Nothing is sent." |

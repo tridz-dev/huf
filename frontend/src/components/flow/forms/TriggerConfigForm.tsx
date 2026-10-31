@@ -4,9 +4,11 @@ import { NodeSelectionModal } from '../../modals/NodeSelectionModal';
 import { DataTriggerForm } from './DataTriggerForm';
 import { ScheduleTriggerForm } from './ScheduleTriggerForm';
 import { WebhookTriggerForm } from './WebhookTriggerForm';
+import { GatewayTriggerForm } from './GatewayTriggerForm';
+import { TelegramTriggerForm } from '../triggers/TelegramTriggerForm';
+import { WhatsAppTriggerForm } from '../triggers/WhatsAppTriggerForm';
 import { Section } from './formKit';
-import { triggerLabel } from '@/lib/flow/flowLabels';
-import { triggerOptions } from '@/data/triggers';
+import { triggerLabel, triggerStepFields } from '@/lib/flow/flowLabels';
 import { useFlowContext } from '@/contexts/FlowContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { type TriggerConfig } from '@/types/flow.types';
@@ -24,7 +26,7 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
     return (
       <div className="mt-3 space-y-3" data-testid="flow-trigger-unset">
         <p className="text-sm text-muted-foreground">
-          Every flow starts with one thing that makes it run: a request from another app, a time you choose, or a change to your data.
+          Every flow starts with one thing that makes it run: a request from another app, a time you choose, a change to your data, or a chat message.
         </p>
         {canManage ? (
           <Button type="button" className="w-full" data-testid="flow-trigger-choose" onClick={() => setChoosing(true)}>
@@ -41,10 +43,7 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
             updateNode(node.id, {
               data: {
                 ...node.data,
-                label: triggerLabel(config.type),
-                icon: triggerOptions.find((t) => t.id === config.type)?.icon ?? 'Webhook',
-                configured: true,
-                triggerConfig: config,
+                ...triggerStepFields(config),
               },
             });
             setChoosing(false);
@@ -56,7 +55,12 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
 
   return (
     <Section title={triggerLabel(type)}>
-      {type === 'webhook' ? <WebhookTriggerForm nodeId={nodeId} /> : type === 'schedule' ? <ScheduleTriggerForm nodeId={nodeId} /> : <DataTriggerForm nodeId={nodeId} />}
+      {type === 'webhook' ? <WebhookTriggerForm nodeId={nodeId} />
+        : type === 'schedule' ? <ScheduleTriggerForm nodeId={nodeId} />
+        : type === 'whatsapp' ? <WhatsAppTriggerForm nodeId={nodeId} />
+        : type === 'telegram' ? <TelegramTriggerForm nodeId={nodeId} />
+        : type === 'gateway' ? <GatewayTriggerForm nodeId={nodeId} kind="gateway" />
+        : <DataTriggerForm nodeId={nodeId} />}
     </Section>
   );
 }
