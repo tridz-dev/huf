@@ -1,6 +1,6 @@
 """Editor endpoint for the chat trigger nodes: the registry (forms and data names) and the channels the caller may use.
 
-Skeleton (WP1): the registry part is final; ``gateways`` rows carry an empty ``connection_state`` until WP2b fills it.
+``connection_state`` is the channel's own Connected / Degraded / Disconnected.
 """
 
 import frappe
@@ -18,14 +18,14 @@ def get_gateway_trigger_registry() -> dict:
 	"""
 	require_permission(frappe.has_permission("Flow Definition", "write"), "Not permitted")
 	registry = get_registry()
-	rows = frappe.get_all("Gateway", fields=["name", "gateway_name", "provider", "is_enabled"], order_by="gateway_name asc")
+	rows = frappe.get_all("Gateway", fields=["name", "gateway_name", "provider", "is_enabled", "connection_state"], order_by="gateway_name asc")
 	registry["gateways"] = [
 		{
 			"name": row.name,
 			"label": row.gateway_name or row.name,
 			"provider": row.provider,
 			"enabled": bool(row.is_enabled),
-			"connection_state": "",
+			"connection_state": row.connection_state or "",
 		}
 		for row in rows
 		if frappe.has_permission("Gateway", "write", doc=row.name)
