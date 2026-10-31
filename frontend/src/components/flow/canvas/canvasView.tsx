@@ -240,6 +240,7 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
           remember();
         }
         const fresh = all.filter((n) => freshIds.includes(n.id));
+        console.log('UX43', first, fresh.length, width, before.size, realSteps(all), JSON.stringify(getNodesBounds(all)), JSON.stringify(getViewport()));
         if (fresh.length === 0 || width <= 0 || before.size === 0) return;
         // A small flow that no longer fits (a copy and its "Add step" cards land beside the original): show all of it instead of cutting the original off.
         if (realSteps(all) <= READABLE_STEP_LIMIT && !isInView(getNodesBounds(all), getViewport(), { width, height })) {
