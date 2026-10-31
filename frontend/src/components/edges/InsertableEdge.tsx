@@ -4,7 +4,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { routeEdge, routeLoopBack, type Rect } from '@/lib/flow-graph/edgeRouting';
-import { PLACED_PILLS, boxAt, controlCandidates, forgetPill, getPlacedVersion, pillCandidates, pillsBefore, placeClear, recordPill, subscribePlaced, type Size } from '@/lib/flow-graph/canvas/edgePlacement';
+import { PLACED_PILLS, boxAt, controlCandidates, forgetPill, forgetRuns, levelRuns, recordRuns, runsOfOthers, getPlacedVersion, pillCandidates, pillsBefore, placeClear, recordPill, subscribePlaced, type Size } from '@/lib/flow-graph/canvas/edgePlacement';
 import type { BranchTone } from '@/lib/flow/flowBranches';
 import type { FlowEdgeRoute } from '../../types/flow.types';
 import { counterScale, lodForZoom } from '@/lib/flow-canvas/zoomLod';
@@ -38,6 +38,11 @@ const PILL_TONE: Record<BranchTone, string> = {
 };
 
 /** Names keep a hand's breadth apart, not just off each other (a 5px air gap each side). */
+/** The arrow head at the end of a route, so a name never sits on it. */
+const arrowHeadBox = (points: { x: number; y: number }[]): Rect[] => {
+  const end = points[points.length - 1];
+  return end ? [{ x: end.x - 7, y: end.y - 11, width: 14, height: 11 }] : [];
+};
 const breathe = (r: Rect): Rect => ({ x: r.x - 8, y: r.y - 5, width: r.width + 16, height: r.height + 10 });
 
 const GHOST_LINE: CSSProperties = { stroke: 'var(--steel-soft)', strokeWidth: 1.5, strokeDasharray: '4 4', opacity: 0.7 };
@@ -167,8 +172,8 @@ export const InsertableEdge = memo(
     // keeps off the names of the connections before it.
     const placedVersion = useSyncExternalStore(subscribePlaced, getPlacedVersion);
     const pillPos = useMemo(
-      () => (pill && !loopBack ? placeClear(pillSize, [...stepBoxes, ...pillsBefore(id).map(breathe)], pillWanted, pillCandidates(pillWanted)) : pillWanted),
-      [id, pill, loopBack, pillSize, stepBoxes, pillWanted.x, pillWanted.y, placedVersion], // eslint-disable-line react-hooks/exhaustive-deps
+      () => (pill && !loopBack ? placeClear(pillSize, [...stepBoxes, ...pillsBefore(id).map(breathe), ...runsOfOthers(id), ...arrowHeadBox(routed.points)], pillWanted, pillCandidates(pillWanted)) : pillWanted),
+      [id, pill, loopBack, pillSize, stepBoxes, routed, pillWanted.x, pillWanted.y, placedVersion], // eslint-disable-line react-hooks/exhaustive-deps
     );
     // Recorded by value (not by object), and only forgotten when the name goes away: a name that did not move must not tell
     // the others to place themselves again, or they would answer each other forever.
@@ -180,6 +185,11 @@ export const InsertableEdge = memo(
       recordPill(id, boxAt({ x: pillPos.x, y: pillPos.y }, { width: pillSize.width, height: pillSize.height }));
     }, [id, pill, loopBack, pillPos.x, pillPos.y, pillSize.width, pillSize.height]);
     useLayoutEffect(() => () => forgetPill(id), [id]);
+    // Other names keep off this connection's level runs.
+    useLayoutEffect(() => {
+      recordRuns(id, levelRuns(routed.points));
+    }, [id, routed]);
+    useLayoutEffect(() => () => forgetRuns(id), [id]);
     const showControls = canManage && (hovered || selected);
     // The buttons keep off the name, the steps and the arrow head: further along the line, or beside it when the line is full.
     const buttons = selected && !loopBack ? 2 : 1;
