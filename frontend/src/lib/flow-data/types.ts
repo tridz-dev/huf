@@ -21,9 +21,11 @@ export interface CatalogField {
   sample?: string | number | boolean | null;
   list?: ListInfo;
   advanced_only?: boolean;
+  /** Typed by an outside person (a chat sender): when it feeds an AI step it is treated as untrusted. */
+  untrusted?: boolean;
 }
 
-export type SampleSource = 'pinned' | 'last_run' | 'doctype' | 'none';
+export type SampleSource = 'pinned' | 'last_run' | 'doctype' | 'example' | 'none';
 
 export interface CatalogStep {
   id: string;
@@ -36,7 +38,7 @@ export interface CatalogStep {
   ran_at: string | null;
   fields: CatalogField[];
   has_sample: boolean;
-  kind?: 'webhook' | 'schedule' | 'doc-event' | 'unset';
+  kind?: 'webhook' | 'schedule' | 'doc-event' | 'gateway' | 'whatsapp' | 'telegram' | 'unset';
   last_request_available?: boolean;
   doctype?: string | null;
 }

@@ -37,10 +37,10 @@ export function templateSteps(template: FlowTemplate): FlowCardStep[] {
     });
 }
 
-/** Type of the trigger a template starts with: webhook, schedule or doc-event. */
-export function templateTrigger(template: FlowTemplate): 'webhook' | 'schedule' | 'doc-event' {
+/** Type of the trigger a template starts with: webhook, schedule, doc-event, or a chat message (gateway, whatsapp, telegram). */
+export function templateTrigger(template: FlowTemplate): 'webhook' | 'schedule' | 'doc-event' | 'gateway' | 'whatsapp' | 'telegram' {
   const trigger = template.graph.nodes.find((n) => n.type.startsWith('trigger.'));
-  return (trigger?.type.split('.')[1] ?? 'webhook') as 'webhook' | 'schedule' | 'doc-event';
+  return (trigger?.type.split('.')[1] ?? 'webhook') as ReturnType<typeof templateTrigger>;
 }
 
 export const TEMPLATE_GROUPS: FlowTemplate['group'][] = ['Starter', 'AI', 'People', 'Connected apps'];

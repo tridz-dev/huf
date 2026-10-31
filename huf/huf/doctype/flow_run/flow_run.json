@@ -37,6 +37,7 @@
   "column_break_tm1",
   "completed_at",
   "gateway_event",
+  "replied_via_tool",
   "requester_external_id",
   "requester_user"
  ],
@@ -255,6 +256,15 @@
    "fieldtype": "Link",
    "label": "Requester user",
    "options": "User",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "Set when a reply tool already answered the chat message, so the End output is not sent again.",
+   "fieldname": "replied_via_tool",
+   "fieldtype": "Check",
+   "label": "Replied via tool",
+   "no_copy": 1,
    "read_only": 1
   }
  ],

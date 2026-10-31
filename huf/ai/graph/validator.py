@@ -133,7 +133,7 @@ FLOW_ONLY_NODE_TYPES: frozenset[str] = frozenset(
 		"doc.create",
 		"code.run",
 	}
-)
+) | {"trigger.gateway", "trigger.whatsapp", "trigger.telegram"}  # chat triggers: huf/ai/flow/gateways
 
 # ``parallel`` is a Procedure-only node: Flow has no concurrent branches.
 FLOW_NODE_TYPES: frozenset[str] = (PROCEDURE_NODE_TYPES - {"parallel"}) | FLOW_ONLY_NODE_TYPES

@@ -2,6 +2,8 @@ import { actionOptions } from '@/data/actions';
 import { describeCron } from '@/lib/flow-trigger/scheduleText';
 import { actionCardId } from '@/lib/flow/flowLabels';
 import type { StatusKind } from '@/components/common/StatusPill';
+import { gatewayPhrase } from '@/lib/flow-gateway/gatewaySummary';
+import { isGatewayKindId } from '@/lib/flow-gateway/gatewayWords';
 import type { FlowCard, FlowCardLastRun, FlowCardStep, FlowCardTrigger } from '@/services/flow/flowCardsApi';
 
 /**
@@ -19,6 +21,10 @@ const DOC_EVENT_WORD: Record<string, string> = {
 
 /** "a web request arrives", "every day at 09:00", "a ToDo is created": finishes the sentence "Starts when ...". */
 export function triggerPhrase(trigger: FlowCardTrigger | undefined): { text: string; scheduled: boolean } | null {
+  if (trigger && isGatewayKindId(trigger.type)) {
+    // "someone messages Support on WhatsApp": the label the server resolved, never the record id of the channel.
+    return { text: gatewayPhrase(trigger.type, { gateway: trigger.gateway_label || trigger.gateway }), scheduled: false };
+  }
   switch (trigger?.type) {
     case 'webhook':
       return { text: 'a web request arrives', scheduled: false };

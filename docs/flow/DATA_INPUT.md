@@ -33,7 +33,7 @@ A value that is a list or an object (an old flow, or JSON typed before) opens as
 ## What the person sees
 - "+ Use data" in the box's right edge, or type `/` at the start of a word. The picker opens BESIDE the box (left of the step panel; above it on a phone), never over it.
 - Level 1: steps by icon and title, "Trigger: Webhook" first, then the closest step. A search box on top searches every field by name or example.
-- Level 2: the step's fields by name with a real example ("Customer > Name  Ada Lovelace"). Nothing has run yet: "No sample yet: run a test", with "Use last real request" for a webhook.
+- Level 2: the step's fields by name with a real example ("Customer > Name  Ada Lovelace"). Nothing has run yet: "No sample yet: run a test", with "Use last real request" for a webhook and "Use last real message" for a chat trigger (WhatsApp, Telegram). The chat one asks `samples_api.get_last_gateway_message`, not the webhook endpoint; numbers are masked and ids never listed. Without a real message the registry's sample is used. Decision: masking covers phone numbers only; free text a customer wrote is shown unmasked, and only to people who can edit the Flow AND write the Gateway (the same bar as binding a flow to it).
 - A list: Each item (use in a loop) / First item / All items, joined with commas / How many items. Something with parts: "Show as summary table".
 - Each pick is a chip "Customer > Name . New order" at the caret; the example shows on hover. Click a chip to change its field, `x` or Backspace removes it, a deleted step shows a red "Missing: step deleted".
 - Under the box: "What this will become: Hi Ada Lovelace", from examples; unknown parts read `[Customer name: no sample yet]`. Never JSON.

@@ -14,7 +14,7 @@ import frappe
 from frappe import _
 
 from huf.ai.flow.catalog import fields as cat
-from huf.ai.flow.catalog import doc_fields
+from huf.ai.flow.catalog import doc_fields, gateway_fields
 from huf.ai.flow.support.trigger_sample import redact_sample
 
 NODE_OUTPUTS_KEY = "__node_outputs__"
@@ -27,8 +27,12 @@ TYPE_TITLES = {
 	"foreach": "Loop", "human.approval": "Wait for approval", "output": "End", "transform": "Change data", "code.run": "Run code",
 	"state.get": "Use saved data", "state.set": "Save data for later", "state.delete": "Forget saved data", "doc.create": "Create a record",
 	"trigger.webhook": "Webhook", "trigger.schedule": "Schedule", "trigger.doc-event": "A document changes", "trigger.unset": "Trigger",
+	"trigger.gateway": "A chat message", "trigger.whatsapp": "A WhatsApp message", "trigger.telegram": "A Telegram message",
 }
-TRIGGER_WORDS = {WEBHOOK: "webhook", "trigger.schedule": "schedule", DOC_EVENT: "doc-event"}
+TRIGGER_WORDS = {
+	WEBHOOK: "webhook", "trigger.schedule": "schedule", DOC_EVENT: "doc-event",
+	"trigger.gateway": "gateway", "trigger.whatsapp": "whatsapp", "trigger.telegram": "telegram",
+}
 
 
 def _json(raw):
@@ -124,6 +128,13 @@ def _trigger_step(graph: dict, flow_id: str, run: dict | None) -> dict | None:
 			fields, record, source = _doctype_fields(doctype, pinned or payload)
 			step.update(fields=fields, has_sample=bool(record), source="pinned" if pinned else source)
 			step["ran_at"] = str(run["creation"]) if run and source == "last_run" else None
+		return step
+	if gateway_fields.is_gateway_trigger(node):
+		# Fields come from the registry (labels, examples); a real message can be fetched on demand (masked, editors only).
+		gateway = (node.get("config") or {}).get("gateway")
+		provider = frappe.db.get_value("Gateway", gateway, "provider") if gateway else None
+		step.update(fields=gateway_fields.trigger_fields(node, provider), source="doctype", has_sample=True)
+		step["last_request_available"] = bool(frappe.db.exists("Flow Run", {"flow_id": flow_id, "trigger_type": "Gateway"}))
 		return step
 	if pinned:
 		step.update(fields=cat.infer_fields(pinned, "input", root_label="What the trigger sent"), source="pinned", has_sample=True)

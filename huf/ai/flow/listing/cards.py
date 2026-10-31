@@ -34,6 +34,10 @@ _TRIGGER_KEYS = {
 	"trigger.webhook": ("method",),
 	"trigger.schedule": ("cron",),
 	"trigger.doc-event": ("doctype", "event"),
+	# The channel's name only: no credentials, ids or filter values.
+	"trigger.gateway": ("gateway",),
+	"trigger.whatsapp": ("gateway",),
+	"trigger.telegram": ("gateway",),
 }
 
 
@@ -214,9 +218,21 @@ def list_flow_cards(
 
 	from huf.ai.flow.api import _utc_iso
 
+	summaries = {row.name: summarize_definition(graphs.get(row.name, {})) for row in rows}
+	wanted = sorted({s["trigger"]["gateway"] for s in summaries.values() if s["trigger"].get("gateway")})
+	# A plain label only: the channels this person may read, by display name (no credentials or config).
+	channel_labels = (
+		{r.name: (r.gateway_name or "") for r in frappe.get_list("Gateway", filters={"name": ["in", wanted]}, fields=["name", "gateway_name"])}
+		if wanted
+		else {}
+	)
 	items = []
 	for row in rows:
-		summary = summarize_definition(graphs.get(row.name, {}))
+		summary = summaries[row.name]
+		gateway = summary["trigger"].get("gateway")
+		if gateway:
+			# A plain label only (the channel's display name, never credentials or the record id).
+			summary["trigger"]["gateway_label"] = channel_labels.get(gateway) or ""
 		items.append(
 			{
 				"flow_id": row.flow_id,

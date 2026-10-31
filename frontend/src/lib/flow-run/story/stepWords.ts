@@ -3,6 +3,9 @@ import type { StepStatus } from './runSteps';
 /** What a step did, in the past tense, per step type; and what it is doing while it waits. */
 const DONE: Record<string, string> = {
   'trigger.webhook': 'Received a webhook',
+  'trigger.gateway': 'Received a chat message',
+  'trigger.whatsapp': 'Received a WhatsApp message',
+  'trigger.telegram': 'Received a Telegram message',
   'trigger.schedule': 'Started on its schedule',
   'trigger.doc-event': 'A document changed',
   'trigger.manual': 'Started by hand',
@@ -31,6 +34,9 @@ const WAITING: Record<string, string> = {
 
 const FAILED: Record<string, string> = {
   'trigger.webhook': 'Could not read the webhook',
+  'trigger.gateway': 'Could not read the message',
+  'trigger.whatsapp': 'Could not read the message',
+  'trigger.telegram': 'Could not read the message',
   'agent.run': 'The agent could not answer',
   'tool.call': 'The tool did not work',
   'router.llm': 'Could not choose a path',

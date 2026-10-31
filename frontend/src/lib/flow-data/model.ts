@@ -4,6 +4,10 @@
  */
 import { enclosingLoops, guaranteedPredecessors, loopBodyNodes, type RefScope } from '../flow/flowRefs';
 import type { FlowEdge, FlowNode } from '../../types/flow.types';
+import { gatewayPickerFields } from './gatewayFields';
+import { isGatewayKindId } from '../flow-gateway/gatewayWords';
+import { GATEWAY_TRIGGER_KINDS } from '../flow-gateway/triggerKinds';
+import type { GatewayRegistry } from '../flow-gateway/gatewayTrigger.types';
 import { inferFields, sampleText, sentenceLabel } from './infer';
 import type { CatalogField, CatalogStep, DataCatalog, ListInfo, DataPick, PickMode, SampleSource } from './types';
 import type { Chip, Segment } from './chips';
@@ -60,14 +64,16 @@ const serverStep = (catalog: DataCatalog | null, id: string): CatalogStep | unde
 
 const asRecord = (v: unknown): Record<string, unknown> | undefined => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined);
 
-export function buildPickerModel(nodes: FlowNode[], edges: Edge[], nodeId: string | null | undefined, catalog: DataCatalog | null, scope: RefScope = 'ancestors'): PickerModel {
+export function buildPickerModel(nodes: FlowNode[], edges: Edge[], nodeId: string | null | undefined, catalog: DataCatalog | null, scope: RefScope = 'ancestors', registry: GatewayRegistry | null = null): PickerModel {
   const steps: PickerStep[] = [];
   const trigger = scope === 'ancestors' ? nodes.find((n) => n.data.nodeType === 'trigger') : undefined;
   if (trigger) {
     const server = serverStep(catalog, trigger.id);
     const local = asRecord(trigger.data.sample);
-    const fields = local ? inferFields(local, 'input', 'What the trigger sent') : server?.fields ?? [];
     const kind = (trigger.data.triggerConfig as { type?: string } | undefined)?.type;
+    // A chat trigger is described by the server registry (friendly names), not guessed from a sample's keys.
+    const gatewaySpec = isGatewayKindId(kind) ? registry?.specs[GATEWAY_TRIGGER_KINDS.find((k) => k.id === kind)!.nodeType] : undefined;
+    const fields = gatewaySpec ? gatewayPickerFields(gatewaySpec, local) : local ? inferFields(local, 'input', 'What the trigger sent') : server?.fields ?? [];
     steps.push({
       id: trigger.id,
       title: `Trigger: ${trigger.data.label}`,
@@ -76,9 +82,9 @@ export function buildPickerModel(nodes: FlowNode[], edges: Edge[], nodeId: strin
       node: trigger,
       fields,
       hasSample: fields.length > 0,
-      source: local ? 'pinned' : server?.source ?? 'none',
+      source: local ? 'pinned' : gatewaySpec ? 'example' : server?.source ?? 'none',
       root: 'input',
-      canFetchLast: kind === 'webhook',
+      canFetchLast: kind === 'webhook' || isGatewayKindId(kind),
       doctype: server?.doctype ?? (trigger.data.triggerConfig as { doctype?: string } | undefined)?.doctype ?? null,
     });
   }

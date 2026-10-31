@@ -1152,5 +1152,197 @@
         }
       }
     }
+  },
+  {
+    "id": "whatsapp-agent-reply",
+    "name": "Answer WhatsApp questions with an agent",
+    "description": "When someone messages your WhatsApp number, an agent writes the answer and it is sent back.",
+    "group": "Connected apps",
+    "graph": {
+      "schema_version": "1.0.0",
+      "profile": "flow",
+      "fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+      "entry": [
+        "empty_trigger"
+      ],
+      "nodes": [
+        {
+          "id": "empty_trigger",
+          "type": "trigger.whatsapp",
+          "config": {
+            "gateway": "",
+            "params": []
+          },
+          "next": "answer",
+          "_label": "WhatsApp message",
+          "_position": {
+            "x": 250,
+            "y": 100
+          }
+        },
+        {
+          "id": "answer",
+          "type": "agent.run",
+          "config": {
+            "agent": "",
+            "prompt": "Answer this customer's question in a few short, friendly sentences. Customer: {sender}. Message: {message}",
+            "prompt_bindings": {
+              "message": {
+                "$from": "input.text"
+              },
+              "sender": {
+                "$from": "input.display_name"
+              }
+            }
+          },
+          "next": "reply",
+          "_label": "Answer the question",
+          "_position": {
+            "x": 250,
+            "y": 250
+          }
+        },
+        {
+          "id": "reply",
+          "type": "output",
+          "config": {
+            "value": {
+              "$from": "answer"
+            },
+            "outcome": {
+              "label": "Answered on WhatsApp",
+              "tone": "good"
+            }
+          },
+          "_label": "Reply",
+          "_position": {
+            "x": 250,
+            "y": 400
+          }
+        }
+      ],
+      "contract": {
+        "input_schema": {
+          "type": "object"
+        },
+        "output_schema": {
+          "type": "object"
+        },
+        "applies_when": [],
+        "permission_envelope": {
+          "read": [],
+          "write": [],
+          "http": "none",
+          "code": "none"
+        },
+        "limits": {
+          "max_nodes": 200,
+          "max_rows": 10000,
+          "max_output_bytes": 1000000,
+          "max_parallel_calls": 4,
+          "max_foreach_iterations": 1000,
+          "max_external_calls": 200,
+          "max_writes": 100,
+          "max_wall_time_ms": 300000,
+          "fail_closed": true
+        }
+      }
+    }
+  },
+  {
+    "id": "telegram-keyword-reply",
+    "name": "Telegram keyword auto-reply",
+    "description": "When a message to your Telegram bot contains a keyword you choose, an agent replies.",
+    "group": "Connected apps",
+    "graph": {
+      "schema_version": "1.0.0",
+      "profile": "flow",
+      "fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+      "entry": [
+        "empty_trigger"
+      ],
+      "nodes": [
+        {
+          "id": "empty_trigger",
+          "type": "trigger.telegram",
+          "config": {
+            "gateway": "",
+            "params": []
+          },
+          "next": "answer",
+          "_label": "Telegram message",
+          "_position": {
+            "x": 250,
+            "y": 100
+          }
+        },
+        {
+          "id": "answer",
+          "type": "agent.run",
+          "config": {
+            "agent": "",
+            "prompt": "Reply briefly and politely to this message. Person: {sender}. Message: {message}",
+            "prompt_bindings": {
+              "message": {
+                "$from": "input.text"
+              },
+              "sender": {
+                "$from": "input.display_name"
+              }
+            }
+          },
+          "next": "reply",
+          "_label": "Write the reply",
+          "_position": {
+            "x": 250,
+            "y": 250
+          }
+        },
+        {
+          "id": "reply",
+          "type": "output",
+          "config": {
+            "value": {
+              "$from": "answer"
+            },
+            "outcome": {
+              "label": "Answered on Telegram",
+              "tone": "good"
+            }
+          },
+          "_label": "Reply",
+          "_position": {
+            "x": 250,
+            "y": 400
+          }
+        }
+      ],
+      "contract": {
+        "input_schema": {
+          "type": "object"
+        },
+        "output_schema": {
+          "type": "object"
+        },
+        "applies_when": [],
+        "permission_envelope": {
+          "read": [],
+          "write": [],
+          "http": "none",
+          "code": "none"
+        },
+        "limits": {
+          "max_nodes": 200,
+          "max_rows": 10000,
+          "max_output_bytes": 1000000,
+          "max_parallel_calls": 4,
+          "max_foreach_iterations": 1000,
+          "max_external_calls": 200,
+          "max_writes": 100,
+          "max_wall_time_ms": 300000,
+          "fail_closed": true
+        }
+      }
+    }
   }
 ]

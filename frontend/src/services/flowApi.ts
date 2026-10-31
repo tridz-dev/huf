@@ -54,7 +54,7 @@ export interface BackendFlowGraph {
 }
 
 export type BackendNodeType =
-    | 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event' | 'trigger.unset'
+    | 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event' | 'trigger.unset' | 'trigger.gateway' | 'trigger.whatsapp' | 'trigger.telegram'
     | 'agent.run' | 'tool.call' | 'router.llm' | 'router.decision' | 'human.approval'
     | 'condition' | 'transform' | 'foreach' | 'validate' | 'output'
     | 'state.get' | 'state.set' | 'state.delete' | 'doc.create' | 'code.run';

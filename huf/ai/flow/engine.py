@@ -423,17 +423,14 @@ TRIGGER_NODE_TYPES = {
 	"Webhook": "trigger.webhook",
 	"Schedule": "trigger.schedule",
 	"Doc Event": "trigger.doc-event",
+	"Gateway": ("trigger.gateway", "trigger.whatsapp", "trigger.telegram"),
 }
 
 
-def select_entry_node(defn: dict, trigger_type: str = "Manual") -> str:
-	"""The node id a new run starts at.
-
-	``entry`` is one node id or, when the flow starts from triggers, an array
-	(one id per trigger). A Webhook / Schedule / Doc Event run starts at the
-	trigger node of that type; a Manual or Gateway run (and a flow whose entry
-	is not a trigger at all) starts at the first entry. Fails closed when the
-	flow only has triggers of other types.
+def select_entry_node(defn: dict, trigger_type: str = "Manual", event: dict | None = None) -> str:
+	"""The node id a new run starts at (``entry`` is one id or one per trigger).
+	Webhook / Schedule / Doc Event runs start at their trigger node; a Gateway run at the first gateway trigger matching
+	``event`` (the run payload), else the first entry; Manual at the first entry. Fails closed when no trigger fits.
 	"""
 	entry = defn.get("entry")
 	entries = [entry] if isinstance(entry, str) else [e for e in (entry or []) if isinstance(e, str)]
@@ -443,6 +440,9 @@ def select_entry_node(defn: dict, trigger_type: str = "Manual") -> str:
 	if wanted is None:
 		return entries[0]
 	types = {n.get("id"): n.get("type") for n in defn.get("nodes", []) if isinstance(n, dict)}
+	if trigger_type == "Gateway":
+		from huf.ai.flow.gateways.dispatch import pick_gateway_entry
+		return pick_gateway_entry(defn, entries, types, event)
 	for node_id in entries:
 		if types.get(node_id) == wanted:
 			return node_id
@@ -490,17 +490,17 @@ def create_flow_run(
 		frappe.throw(_("This flow has no trigger yet. Choose what starts it, then run it again."))
 
 	check_runnable(defn)  # a draft may be saved half-built; a run needs every step finished (UX-17)
-
 	try:
-		entry_node = select_entry_node(defn, trigger_type)
+		entry_node = select_entry_node(defn, trigger_type, payload)
 	except ValueError as exc:
 		frappe.throw(_("This flow cannot be started. {0}").format(plain_error(str(exc))))
 
 	from huf.ai.flow import code_node
+	from huf.ai.flow.gateways.dispatch import require_live_for_gateway
 
-	if code_node.code_nodes(defn) and defn_doc.status != "Active":
-		# Code runs only from a published flow: the code and profile a run uses are the ones an
-		# authorised person published, never an unpublished draft.
+	if trigger_type == "Gateway" and (payload or {}).get("gateway_event"):
+		require_live_for_gateway(defn_doc.status)  # TOCTOU: a message may only start a flow that is still Active
+	if code_node.code_nodes(defn) and defn_doc.status != "Active":  # code runs only from a published flow
 		frappe.throw(_("Publish this flow before running it: it has an Execute code step."))
 
 	version = PinnedVersion.pin(defn)
@@ -1124,9 +1124,7 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 	node_type = node.get("type")
 	config = node.get("config", {})
 
-	executor = _NODE_EXECUTORS.get(node_type)
-	if not executor:
-		frappe.throw(_("Unknown node type: {0}").format(node_type))
+	executor = _NODE_EXECUTORS.get(node_type) or frappe.throw(_("Unknown node type: {0}").format(node_type))
 
 	if is_turned_off(node):
 		return turned_off_result()
@@ -1143,7 +1141,7 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 
 
 def _exec_trigger_webhook(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""Execute trigger.webhook node - mostly a passthrough for UI clarity."""
+	"""Execute a trigger.webhook (or chat trigger: gateway, whatsapp, telegram) node - a passthrough for UI clarity."""
 	ctx = _context_of(flow_run, settings)
 	return {"status": "success", "output": ctx.as_dict()}
 
@@ -2078,6 +2076,7 @@ _NODE_EXECUTORS = {
 	"trigger.schedule": _exec_trigger_schedule,
 	"trigger.unset": _exec_trigger_unset,
 	"trigger.doc-event": _exec_trigger_doc_event,
+	**dict.fromkeys(("trigger.gateway", "trigger.whatsapp", "trigger.telegram"), _exec_trigger_webhook),
 	"agent.run": _exec_agent_run,
 	"tool.call": _exec_tool_call,
 	"router.llm": _exec_router_llm,

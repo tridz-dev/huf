@@ -81,7 +81,18 @@ def consent_required():
 
 @_hook("extra_event_fields")
 def extra_event_fields(event, gateway, sender):
-	return {"wa_id": sender}
+	"""Structured fields for a flow trigger (button, ad, location, contacts, order...); see ``trigger_extras``."""
+	from huf.ai.gateway_adapters.trigger_extras import whatsapp_fields as wf
+
+	extras = wf.message_extras(wf.load_raw(event), sender)
+	extras["wa_id"] = sender
+	try:
+		hours = wf.hours_since_previous(gateway.name, sender, event.get("received_at"))
+	except Exception:
+		hours = None
+	if hours is not None:
+		extras["hours_since_last_customer_message"] = hours
+	return extras
 
 
 @_hook("recover_reply_parts")

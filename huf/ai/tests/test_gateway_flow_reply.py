@@ -35,6 +35,7 @@ class World:
 		self.sent = []
 		self.cache = FakeCache()
 		self.logged = []
+		self.flagged = []  # Flow Run.replied_via_tool writes
 
 	def get_value(self, doctype, name, fields=None, as_dict=False):
 		if doctype == "Agent Run":
@@ -50,7 +51,11 @@ def _fx_world(self):
 	monkeypatch = self.monkeypatch
 	w = World()
 	fake_frappe = SimpleNamespace(
-		db=SimpleNamespace(get_value=w.get_value),
+		db=SimpleNamespace(
+			get_value=w.get_value,
+			exists=lambda doctype, name=None: doctype == "Flow Run" and name in w.runs,
+			set_value=lambda *a, **k: w.flagged.append(a),
+		),
 		get_doc=w.get_doc,
 		cache=lambda: w.cache,
 		log_error=lambda *a, **k: w.logged.append(a),
@@ -115,6 +120,7 @@ class TestModule(SupportCase):
 		out = json.loads(tool.handle_gateway_reply("hello", flow_run_id="FR-1"))
 		assert out["success"] is True
 		assert world.sent == [("GW-1", "C1", "T1", "hello")]
+		assert world.flagged == [("Flow Run", "FR-1", "replied_via_tool", 1)]
 
 	def test_tool_resolves_via_agent_run(self):
 		world = self.use(_fx_world)

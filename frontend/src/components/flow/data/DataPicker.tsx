@@ -1,3 +1,4 @@
+import { isGatewayKindId } from '@/lib/flow-gateway/gatewayWords';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronRight, Repeat, Search } from 'lucide-react';
 import { Button } from '../../ui/button';
@@ -22,6 +23,7 @@ const SOURCE_WORDS = {
   pinned: 'Showing the example saved on this step',
   last_run: 'Showing real data from the last run',
   doctype: 'Showing a recent record',
+  example: 'Showing an example message',
   none: '',
 } as const;
 
@@ -120,6 +122,7 @@ export function DataPicker({ model, accept, onPick, onFetchLast, loading }: Data
     if (typedPick) onPick(typedPick);
   };
 
+  const chatStep = isGatewayKindId((step?.node?.data.triggerConfig as { type?: string } | undefined)?.type);
   const showNoSample = Boolean(step && !query && view.kind === 'fields' && !step.hasSample && step.kind !== 'loop');
 
   return (
@@ -196,14 +199,16 @@ export function DataPicker({ model, accept, onPick, onFetchLast, loading }: Data
             <p className="text-ui-text">No sample yet: run a test</p>
             <p className="text-meta text-muted-foreground">
               {step.canFetchLast
-                ? 'Send your webhook a request, or use the last real one it received, to see its fields here.'
+                ? chatStep
+                  ? 'Use the last real message this flow received, or run a test with a sample message, to see its fields here.'
+                  : 'Send your webhook a request, or use the last real one it received, to see its fields here.'
                 : step.kind === 'trigger'
                   ? 'Run the flow once and the data it started with shows up here.'
                   : 'Run the flow once and what this step produced shows up here.'}
             </p>
             {step.canFetchLast ? (
               <Button type="button" size="sm" variant="outline" disabled={fetching} onClick={fetchLast} data-testid="flow-use-data-last-request">
-                {fetching ? 'Looking…' : 'Use last real request'}
+                {fetching ? 'Looking…' : chatStep ? 'Use last real message' : 'Use last real request'}
               </Button>
             ) : null}
             {fetchNotice ? <p className="text-meta text-muted-foreground" role="status" data-testid="flow-use-data-last-request-notice">{fetchNotice}</p> : null}

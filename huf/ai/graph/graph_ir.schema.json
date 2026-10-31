@@ -1104,6 +1104,116 @@
         }
       ]
     },
+    "GatewayParam": {
+      "description": "One option of a chat trigger: a key from the gateway trigger registry and its value. Labels, types and choices live in the registry (huf.ai.flow.gateways), never in the flow.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "value"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "maxLength": 64
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 500
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "maxItems": 50,
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "GatewayTriggerConfig": {
+      "description": "Shared config of trigger.gateway, trigger.whatsapp and trigger.telegram. 'gateway' names a Gateway record (may be blank in a draft; publishing requires it). It never holds a credential. 'params' are checked against the registry when the flow is made live.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gateway": {
+          "type": "string",
+          "maxLength": 140
+        },
+        "params": {
+          "type": "array",
+          "maxItems": 40,
+          "items": {
+            "$ref": "#/$defs/GatewayParam"
+          }
+        }
+      }
+    },
+    "TriggerGatewayNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "trigger.gateway"
+            },
+            "config": {
+              "$ref": "#/$defs/GatewayTriggerConfig"
+            }
+          }
+        }
+      ]
+    },
+    "TriggerWhatsappNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "trigger.whatsapp"
+            },
+            "config": {
+              "$ref": "#/$defs/GatewayTriggerConfig"
+            }
+          }
+        }
+      ]
+    },
+    "TriggerTelegramNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "trigger.telegram"
+            },
+            "config": {
+              "$ref": "#/$defs/GatewayTriggerConfig"
+            }
+          }
+        }
+      ]
+    },
     "FlowNode": {
       "oneOf": [
         {
@@ -1147,6 +1257,15 @@
         },
         {
           "$ref": "#/$defs/TriggerUnsetNode"
+        },
+        {
+          "$ref": "#/$defs/TriggerGatewayNode"
+        },
+        {
+          "$ref": "#/$defs/TriggerWhatsappNode"
+        },
+        {
+          "$ref": "#/$defs/TriggerTelegramNode"
         },
         {
           "$ref": "#/$defs/StateGetNode"

@@ -527,6 +527,18 @@ class TestExecTriggerWebhook(unittest.TestCase):
 # tool.call: exercised through the real executor with frappe surface mocked
 # ---------------------------------------------------------------------------
 
+class TestChatTriggersRun(unittest.TestCase):
+	"""A gateway-routed run starts at the chat trigger node, so the engine must be able to execute it."""
+
+	def test_chat_triggers_have_a_passthrough_executor(self):
+		for node_type in ("trigger.gateway", "trigger.whatsapp", "trigger.telegram"):
+			flow_run = FakeFlowRun()
+			payload = _ctx(flow_run, text="hi")
+			result = flow_engine._execute_node(flow_run, {"id": "t", "type": node_type, "config": {}}, {})
+			self.assertEqual(result["status"], "success", node_type)
+			self.assertEqual(result["output"], payload, node_type)
+
+
 
 class TestExecToolCallInterpolation(unittest.TestCase):
 	"""tool.call's arg substitution -- one of the four ``{{...}}``

@@ -23,7 +23,7 @@ from huf.ai.flow.testrun import step_test as st
 from huf.ai.flow.testrun.step_sample import build_sample_input, clean_sample_input, redact_output
 
 RECENT_DOCUMENTS = 5
-_TRIGGER_KINDS = {"trigger.webhook": "webhook", "trigger.schedule": "schedule", "trigger.doc-event": "doc-event", "trigger.unset": "unset"}
+_TRIGGER_KINDS = {"trigger.webhook": "webhook", "trigger.schedule": "schedule", "trigger.doc-event": "doc-event", "trigger.unset": "unset", "trigger.gateway": "gateway", "trigger.whatsapp": "whatsapp", "trigger.telegram": "telegram"}
 
 
 def _editor_node(flow_id: str, node_id: str) -> tuple[dict, dict]:
@@ -109,6 +109,13 @@ def _test_trigger(flow_id: str, node: dict, sample_input) -> dict:
 				return _trigger_result(node, None, started, "real", None, "No request has reached this web address yet. Send one to it, or use Wait for a test request.")
 			given = last["sample"]
 		return _trigger_result(node, given, started, "real", "The last request this flow received")
+	if ntype in _TRIGGER_KINDS and _TRIGGER_KINDS[ntype] in ("gateway", "whatsapp", "telegram"):
+		# A chat trigger test never sends and never records a Gateway Event: it hands on a sample (or the editor's pick).
+		from huf.ai.flow.gateways.samples_api import safe_message, sample_for_node
+
+		return _trigger_result(
+			node, safe_message(given) if given is not None else sample_for_node(node), started, "simulated", "A sample message. Nothing is sent."
+		)
 	if ntype == "trigger.doc-event":
 		if given is None:
 			docs = list_recent_documents(flow_id, node["id"])["documents"]

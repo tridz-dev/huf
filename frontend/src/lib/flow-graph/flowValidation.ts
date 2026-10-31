@@ -10,6 +10,10 @@ import { cronProblem } from './flowSchedule';
 import { secretProblem } from './flowWebhookUi';
 import { requiredInputsFor } from '../flow/flowToolSchemas';
 import { edgeRoute } from '../../services/flowSerializer';
+import { TRIGGER_TO_NODE_TYPE } from '../../services/flow/serializerTables';
+import { gatewayTriggerIssues } from '../flow-gateway/gatewayProblems';
+import { isGatewayKindId } from '../flow-gateway/gatewayWords';
+import { peekIssueRegistry } from '../flow-gateway/registryStore';
 import { unreachableNodeIds } from '../flow/flowEdit';
 import { MAX_CODE_BYTES } from './codeFlow';
 import type { FlowEdge, FlowNode } from '../../types/flow.types';
@@ -40,7 +44,7 @@ export function nodeKind(node: NodeLike): string {
   if (d.nodeType === 'end') return 'output';
   if (d.nodeType === 'trigger') {
     const t = (d.triggerConfig as Cfg | undefined)?.type;
-    return t === 'webhook' ? 'trigger.webhook' : t === 'schedule' ? 'trigger.schedule' : t === 'doc-event' ? 'trigger.doc-event' : 'trigger.unset';
+    return (typeof t === 'string' && TRIGGER_TO_NODE_TYPE[t as keyof typeof TRIGGER_TO_NODE_TYPE]) || 'trigger.unset';
   }
   const t = (d.actionConfig as Cfg | undefined)?.type;
   switch (t) {
@@ -117,6 +121,11 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
     if (kind === 'trigger.schedule') {
       const p = cronProblem(c.cron as string | undefined);
       if (p) add('cron', p);
+    }
+    const chat = c.type;
+    if (isGatewayKindId(chat)) {
+      // Draft and publish share this list: a draft saves anyway, publish is blocked until it is empty.
+      for (const i of gatewayTriggerIssues(chat, c, peekIssueRegistry())) add(i.field, i.message);
     }
     if (kind === 'trigger.doc-event') {
       if (isBlank(c.doctype)) add('doctype', 'Choose a document type.');

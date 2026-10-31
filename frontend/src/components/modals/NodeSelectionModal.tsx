@@ -24,6 +24,10 @@ import { CODE_RUN_ACTION } from '../../lib/flow-graph/codeFlow';
 import { defaultActionConfig } from '../../lib/flow-history/actionDefaults';
 import { useCodeFlowStatus } from '../../lib/flow-graph/useCodeFlowStatus';
 import { useFlowPermissions } from '../../hooks/flow/useFlowPermissions';
+import { useGatewayRegistry } from '../../hooks/flow/useGatewayRegistry';
+import { newGatewayConfig } from '../../lib/flow-gateway/gatewayDefaults';
+import { isGatewayKindId } from '../../lib/flow-gateway/gatewayWords';
+import { TriggerConnectHint } from '../flow/triggers/TriggerConnectHint';
 
 interface NodeSelectionModalProps {
   open: boolean;
@@ -51,6 +55,8 @@ export function NodeSelectionModal({
   const { status: codeStatus } = useCodeFlowStatus();
   const { canExecuteCode } = useFlowPermissions();
   const codeAvailable = Boolean(codeStatus?.available) && canExecuteCode;
+  // The channels are only needed (and only readable by flow editors) while the trigger chooser is open.
+  const { registry } = useGatewayRegistry(open && mode === 'trigger');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<string | null>(
     initialTriggerConfig?.type || null
@@ -95,6 +101,8 @@ export function NodeSelectionModal({
     } else if (triggerId === 'doc-event') {
       // "created" is the most common choice, so a fresh form has nothing to fix.
       setTriggerConfig({ type: 'doc-event', event: 'after_insert' });
+    } else if (isGatewayKindId(triggerId)) {
+      setTriggerConfig(newGatewayConfig(triggerId, registry?.gateways));
     } else {
       setTriggerConfig({ type: undefined });
     }
@@ -166,7 +174,7 @@ export function NodeSelectionModal({
       <Search className="h-6 w-6 text-steel-soft" aria-hidden />
       <p className="text-sm font-medium">No {isTrigger ? 'triggers' : 'steps'} match "{searchQuery.trim()}"</p>
       <p className="text-sm text-steel">
-        {isTrigger ? 'Try "web", "schedule" or "document".' : 'Try "email", "agent" or "if".'}
+        {isTrigger ? 'Try "web", "schedule", "document" or "message".' : 'Try "email", "agent" or "if".'}
       </p>
       <Button variant="outline" size="sm" data-testid="flow-palette-clear-search" onClick={() => setSearchQuery('')}>
         Show all
@@ -206,7 +214,12 @@ export function NodeSelectionModal({
             <div className="flex-1">
               {nothingFound ? emptyState : (
                 <div className="grid grid-cols-1 gap-3" data-testid="flow-trigger-palette">
-                  {highlightTriggers.map((trigger) => renderTile(trigger, () => handleSelectTrigger(trigger.id), selectedItem === trigger.id))}
+                  {highlightTriggers.map((trigger) => (
+                    <div key={trigger.id}>
+                      {renderTile(trigger, () => handleSelectTrigger(trigger.id), selectedItem === trigger.id)}
+                      {isGatewayKindId(trigger.id) && <TriggerConnectHint kind={trigger.id} gateways={registry?.gateways ?? null} />}
+                    </div>
+                  ))}
                 </div>
               )}
               {/* Always there, so choosing a card never pushes the buttons down. */}

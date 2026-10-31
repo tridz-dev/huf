@@ -5,10 +5,8 @@ import { Label } from '../../ui/label';
 import { NodeSelectionModal } from '../../modals/NodeSelectionModal';
 import { useFlowContext } from '../../../contexts/FlowContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
-import { triggerLabel } from '@/lib/flow/flowLabels';
+import { triggerLabel, triggerStepFields } from '@/lib/flow/flowLabels';
 import type { FlowNode, TriggerConfig } from '../../../types/flow.types';
-
-const TRIGGER_ICONS: Record<string, string> = { webhook: 'Webhook', schedule: 'Clock', 'doc-event': 'Database' };
 
 /** Which trigger starts the flow, with the button to change it. An unset trigger shows nothing here: the form below holds the one button to choose. */
 export function TriggerTypeRow({ node }: { node: FlowNode }) {
@@ -41,10 +39,7 @@ export function TriggerTypeRow({ node }: { node: FlowNode }) {
           updateNode(node.id, {
             data: {
               ...node.data,
-              label: triggerLabel(config.type),
-              icon: TRIGGER_ICONS[config.type || 'webhook'],
-              configured: true,
-              triggerConfig: config,
+              ...triggerStepFields(config),
             },
           });
           setChoosing(false);

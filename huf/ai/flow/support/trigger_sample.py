@@ -10,6 +10,9 @@ from __future__ import annotations
 import json
 import re
 
+from huf.ai.flow.gateways.phone_mask import mask_sample
+
+CHAT_TRIGGER_TYPES = ("trigger.gateway", "trigger.whatsapp", "trigger.telegram")
 MAX_SAMPLE_BYTES = 8 * 1024
 MAX_DEPTH = 6
 MAX_TEXT = 200
@@ -134,6 +137,8 @@ def cap_node_samples(graph) -> bool:
 		if not isinstance(node, dict) or node.get("_sample") is None:
 			continue
 		safe = redact_sample(node["_sample"])
+		if node.get("type") in CHAT_TRIGGER_TYPES:
+			safe = mask_sample(safe)  # a pinned real chat message never keeps a full phone number
 		if safe != node["_sample"]:
 			node["_sample"] = safe
 			changed = True

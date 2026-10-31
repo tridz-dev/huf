@@ -350,12 +350,12 @@ def _normalize_sender_for_provider(provider: str | None, entry_type: str, extern
 
 # Names re-imported below from huf.ai.gateway_core.* stay importable here on purpose: tests and callers
 # patch/read them as ``huf.ai.gateway_service.<name>``. Do not prune the noqa re-exports.
-from huf.ai.gateway_core.media import _MEDIA_SAFE_NAME, _MIME_EXTENSIONS, _media_file_name  # noqa: F401
+from huf.ai.gateway_core.media import _MEDIA_SAFE_NAME, _MIME_EXTENSIONS, _media_file_name, save_event_media  # noqa: F401
 
 def _save_event_media(event, gateway) -> list[str]:
-    """Provider ``media_save`` hook; no hook = no inbound media is saved."""
+    """Provider ``media_save`` hook; no hook = no inbound media is saved. Reuse rules: ``gateway_core.media``."""
     hook = provider_hooks.get(gateway.provider, "media_save")
-    return hook(event, gateway) if hook is not None else []
+    return [] if hook is None else save_event_media(event, gateway, hook, frappe)
 
 
 from huf.ai.gateway_core.media import _describe_attachments  # noqa: F401
@@ -1726,7 +1726,8 @@ _REQUEUE_TTL = 7200
 
 
 class ConversationBusy(Exception):
-    """The sender's conversation stayed busy for the whole retry budget; the event is re-queued."""
+    """The conversation stayed busy for the whole retry budget; the event is re-queued after ``retry_delay`` seconds."""
+    retry_delay: float = 0
 
 
 def _is_busy_conversation_error(exc: BaseException) -> bool:
@@ -1757,7 +1758,7 @@ def _run_agent_serialised(run_fn, *, lock_key: str, **kwargs):
             pass
 
 
-def _requeue_busy_event(event, error: str) -> dict:
+def _requeue_busy_event(event, error: str, delay: float = 0) -> dict:
     """Leave the event Queued for another worker pass; fail it only after a bounded number of requeues."""
     key = f"huf_gw_requeue:{event.name}"
     count = int(frappe.cache.get_value(key) or 0) + 1
@@ -1779,6 +1780,7 @@ def _requeue_busy_event(event, error: str) -> dict:
         queue="default",
         timeout=_PROCESS_JOB_TIMEOUT,
         event_name=event.name,
+        not_before=_epoch() + delay if delay else None,
         enqueue_after_commit=True,
     )
     return {"event_name": event.name, "status": "Queued", "requeued": count}
@@ -2490,38 +2492,10 @@ def _persist_terminal_state(event_name: str, result: Any) -> None:
 
 
 def _flow_trigger_payload(event, gateway, attachments: list[str]) -> dict:
-    """What a Flow gets for a gateway message: who, where, what, media and reply context."""
-    try:
-        raw = event.raw_payload
-        raw = json.loads(raw) if isinstance(raw, str) else raw
-    except Exception:
-        raw = None
-    message = raw.get("message") if isinstance(raw, dict) and isinstance(raw.get("message"), dict) else {}
-    msg_type = str(message.get("type") or "text")
-    context = message.get("context") if isinstance(message.get("context"), dict) else {}
-    interactive = message.get("interactive") if isinstance(message.get("interactive"), dict) else {}
-    reply = interactive.get("button_reply") or interactive.get("list_reply") or {}
-    sender = str(event.sender_id or "")
-    payload = {
-        "gateway_event": event.name,
-        "gateway": gateway.name,
-        "provider": gateway.provider,
-        "sender_id": sender,
-        "wa_id": "",
-        "conversation_id": event.conversation_id,
-        "thread_id": event.thread_id,
-        "message_id": event.provider_event_id,
-        "message": event.message_text,
-        "text": event.message_text,
-        "message_type": msg_type,
-        "attachments": list(attachments),
-        "reply_to_message_id": str(context.get("id") or "") or None,
-        "interactive_reply": {"id": reply.get("id"), "title": reply.get("title")} if reply else None,
-    }
-    extra = provider_hooks.get(gateway.provider, "extra_event_fields")
-    if extra is not None:
-        payload.update(extra(event, gateway, sender) or {})
-    return payload
+    """What a Flow gets for a gateway message (see ``huf.ai.flow.gateways.gateway_payload``)."""
+    from huf.ai.flow.gateways.gateway_payload import build_payload
+
+    return build_payload(event, gateway, attachments, provider_hooks.get(gateway.provider, "extra_event_fields"))
 
 
 def _start_flow_for_event(event, gateway) -> dict:
@@ -2532,12 +2506,20 @@ def _start_flow_for_event(event, gateway) -> dict:
     if existing:
         event.db_set("status", "Running")
         return {"event_name": event.name, "status": "Running", "flow_run_id": existing}
+    from huf.ai.flow.gateways import dispatch
+
     attachments = _save_event_media(event, gateway)
+    payload = _flow_trigger_payload(event, gateway, attachments)
+    skip_note, wants_voice = dispatch.gate_flow_start(event, gateway, payload)
+    if skip_note:
+        return dispatch.fall_through(event, gateway, skip_note)
+    if wants_voice:
+        dispatch.add_transcript(payload, gateway)
     # Route authorisation already happened (enabled gateway, flow bound by an admin), so the run is
     # created on the gateway's behalf: the execution user needs no Huf User role.
     flow_run = create_flow_run(
         flow_id=event.target_flow,
-        payload=_flow_trigger_payload(event, gateway, attachments),
+        payload=payload,
         trigger_type="Gateway",
         ignore_permissions=True,
     )
@@ -2577,6 +2559,9 @@ def finish_flow_event(flow_run_name: str, status: str, reply_text: str | None = 
         _commit_unless_testing()
         gateway = frappe.get_doc("Gateway", event.gateway)
         text = (reply_text or "").strip()
+        if text and frappe.db.get_value("Flow Run", flow_run_name, "replied_via_tool"):
+            event.db_set({"status": "Succeeded", "reply_status": "suppressed", "error_message": "already replied"})
+            return
         if not text or _is_no_reply(text):
             event.db_set({"status": "Succeeded", **({"reply_status": "suppressed"} if text else {})})
             return
@@ -2598,8 +2583,18 @@ def finish_flow_event(flow_run_name: str, status: str, reply_text: str | None = 
             pass
 
 
-def process_gateway_event(event_name: str) -> dict:
-    """Run one queued event, then make sure its terminal state is committed and verified."""
+def process_gateway_event(event_name: str, not_before: float | None = None) -> dict:
+    """Run one queued event, then make sure its terminal state is committed (``not_before``: delayed re-queue)."""
+    if not_before and not_before > _epoch():
+        _sleep(min(not_before - _epoch(), _RETRY_POLL_SECONDS))
+        frappe.enqueue(
+            "huf.ai.gateway_service.process_gateway_event",
+            queue="default",
+            timeout=_PROCESS_JOB_TIMEOUT,
+            event_name=event_name,
+            not_before=not_before,
+        )
+        return {"event_name": event_name, "deferred": True}
     reap_stuck_gateway_events()
     result = _process_gateway_event(event_name)
     _persist_terminal_state(event_name, result)
@@ -2842,12 +2837,14 @@ def _process_gateway_event(event_name: str) -> dict:
 
         if event.target_type == "Flow":
             flow_started = _start_flow_for_event(event, gateway)
+            if flow_started.get("skipped"):
+                return flow_started
             gw_hooks.call_all(gw_hooks.ON_RUN_SUCCESS, gateway, event, kind, flow_started)
             return flow_started
 
         raise frappe.ValidationError(_("Gateway event has no valid target."))
     except ConversationBusy as busy:
-        return _requeue_busy_event(event, str(busy))
+        return _requeue_busy_event(event, str(busy), busy.retry_delay)
     except Exception as run_error:
         message = _redact_error_text(frappe.get_traceback())
         # GW-06: a failure here (e.g. send_gateway_reply raising after a

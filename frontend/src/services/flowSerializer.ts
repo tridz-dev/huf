@@ -22,6 +22,7 @@ import type {
 } from '@/types/flow.types';
 import type { BackendFlowGraph, BackendNode, BackendNodeType } from './flowApi';
 import { layoutWhenUnplaced } from '../lib/flow/flowLayout';
+import { NODE_TYPE_TO_TRIGGER, REQUIRED_CONFIG_KEYS, TRIGGER_CONFIG_KEYS, TRIGGER_TO_NODE_TYPE, gatewayConfigOut, getDefaultIcon, getDefaultLabel } from './flow/serializerTables';
 import { endOutcomeConfig } from './flow/endOutcome'; import { defaultContract, deriveContract, placeholderFingerprint } from './flow/flowContract';
 
 export { defaultContract };
@@ -237,13 +238,9 @@ function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNodeType {
     if (nodeType === 'end') return 'output';
 
     if (nodeType === 'trigger') {
-        switch (node.data?.triggerConfig?.type) {
-            case 'schedule': return 'trigger.schedule';
-            case 'doc-event': return 'trigger.doc-event';
-            case 'webhook': return 'trigger.webhook';
-            // No trigger chosen yet (fresh flow): never invent a webhook.
-            default: return 'trigger.unset';
-        }
+        // No trigger chosen yet (fresh flow), or a kind with no entry: never invent a webhook.
+        const kind = node.data?.triggerConfig?.type;
+        return (kind && TRIGGER_TO_NODE_TYPE[kind] || 'trigger.unset') as BackendNodeType;
     }
 
     const cfg = node.data?.actionConfig;
@@ -275,9 +272,9 @@ function extractNodeConfig(node: FlowNode, backendType: BackendNodeType): Record
 
     if (backendType.startsWith('trigger.')) {
         config = plainConfig((data?.triggerConfig ?? {}) as Record<string, unknown>);
-        const allowed = backendType === 'trigger.webhook' ? ['method', 'secret']
-            : backendType === 'trigger.schedule' ? ['cron', 'time_zone'] : ['doctype', 'event'];
-        return Object.fromEntries(Object.entries(config).filter(([k]) => allowed.includes(k)));
+        const allowed = TRIGGER_CONFIG_KEYS[backendType] ?? [];
+        const kept = Object.fromEntries(Object.entries(config).filter(([k]) => allowed.includes(k)));
+        return allowed.includes('params') ? gatewayConfigOut(kept) : kept;
     }
 
     if (data?.actionConfig?.type) {
@@ -330,30 +327,6 @@ function mapBackendNodeTypeToFrontend(backendType: string): string {
     return 'action';
 }
 
-/**
- * Config keys that must be non-blank for a node to count as configured.
- * Mirrors the required string fields in graph_ir.schema.json.
- */
-const REQUIRED_CONFIG_KEYS: Partial<Record<string, string[]>> = {
-    'trigger.webhook': ['method', 'secret'],
-    'trigger.schedule': ['cron'],
-    'trigger.doc-event': ['doctype', 'event'],
-    'agent.run': ['agent', 'prompt'],
-    'tool.call': ['tool_id'],
-    'router.llm': ['prompt'],
-    'router.decision': ['policy'],
-    'human.approval': ['message'],
-    'condition': ['expression'],
-    'foreach': ['items'],
-    'validate': ['assertions'],
-    'state.get': ['key'],
-    'state.set': ['key'],
-    'state.delete': ['key'],
-    'doc.create': ['doctype'],
-    'code.run': ['code', 'profile'],
-    'transform': ['op'],
-};
-
 /** Computed from the real stored config, so the "unconfigured" warning survives reload. */
 export function isBackendNodeConfigured(node: BackendNode): boolean {
     if (node.type === 'trigger.unset') return false;
@@ -382,9 +355,8 @@ function buildNodeData(node: BackendNode): FlowNodeData {
         base.description = 'Select a trigger';
         base.triggerConfig = { type: undefined };
     } else if (frontendType === 'trigger') {
-        const type = node.type === 'trigger.schedule' ? 'schedule'
-            : node.type === 'trigger.doc-event' ? 'doc-event' : 'webhook';
-        base.triggerConfig = { type, ...node.config } as TriggerConfig;
+        const type = NODE_TYPE_TO_TRIGGER[node.type];
+        base.triggerConfig = (type ? { type, ...node.config } : { type: undefined }) as TriggerConfig;
     } else if (frontendType === 'end') {
         base.endConfig = { ...(node.config.value !== undefined ? { value: node.config.value } : {}), ...endOutcomeConfig(node.config.outcome) };
     } else {
@@ -398,56 +370,6 @@ function buildNodeData(node: BackendNode): FlowNodeData {
     }
 
     return base;
-}
-
-function getDefaultLabel(backendType: string): string {
-    const labels: Record<string, string> = {
-        'trigger.webhook': 'Webhook trigger',
-        'trigger.schedule': 'Schedule trigger',
-        'trigger.doc-event': 'Document event trigger',
-        'trigger.unset': 'Select trigger',
-        'agent.run': 'Run agent',
-        'tool.call': 'Call tool',
-        'router.llm': 'LLM router',
-        'router.decision': 'Decision router',
-        'human.approval': 'Human approval',
-        'condition': 'Condition (IF)',
-        'transform': 'Transform data',
-        'foreach': 'Loop',
-        'validate': 'Validate',
-        'state.get': 'Get state',
-        'state.set': 'Set state',
-        'state.delete': 'Delete state',
-        'doc.create': 'Create document',
-        'code.run': 'Execute code',
-        'output': 'End',
-    };
-    return labels[backendType] || backendType;
-}
-
-function getDefaultIcon(backendType: string): string {
-    const icons: Record<string, string> = {
-        'trigger.webhook': 'Webhook',
-        'trigger.schedule': 'Clock',
-        'trigger.doc-event': 'Database',
-        'trigger.unset': 'CircleDashed',
-        'agent.run': 'SquareAsterisk',
-        'tool.call': 'Play',
-        'router.llm': 'GitBranch',
-        'router.decision': 'GitBranch',
-        'human.approval': 'UserCheck',
-        'condition': 'GitBranch',
-        'transform': 'Repeat',
-        'foreach': 'RotateCw',
-        'validate': 'ShieldCheck',
-        'state.get': 'Database',
-        'state.set': 'Save',
-        'state.delete': 'Trash2',
-        'doc.create': 'FilePlus',
-        'code.run': 'Terminal',
-        'output': 'CheckCircle2',
-    };
-    return icons[backendType] || 'Play';
 }
 
 export function mapBackendStatusToFrontend(status: string): FlowStatus {
