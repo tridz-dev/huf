@@ -25,7 +25,7 @@ const fieldKey = (f: GatewayPayloadField) => f.path.replace(/^input\./, '');
 const editable = (f: GatewayPayloadField) => !f.advanced && !f.sensitive && (f.type === 'text' || f.type === 'number');
 const ALWAYS = new Set(['text', 'display_name']);
 /** The pretend message lists what a sample really has (plus the message and the sender), not every field a channel could ever send. */
-const shown = (f: GatewayPayloadField) => ALWAYS.has(f.path.replace(/^input\./, '')) || (f.sample !== '' && f.sample !== null && f.sample !== undefined);
+const hasValue = (v: unknown) => v !== '' && v !== null && v !== undefined;
 
 /**
  * Test tab of a chat trigger (WhatsApp, Telegram, any channel). It never sends and never records a message: it fills
@@ -34,15 +34,18 @@ const shown = (f: GatewayPayloadField) => ALWAYS.has(f.path.replace(/^input\./, 
 export function GatewayTest({ flowId, nodeId, kind, onResult }: Props) {
   const { registry } = useGatewayRegistry();
   const spec = registry?.specs[GATEWAY_TRIGGER_KINDS.find((k) => k.id === kind)?.nodeType ?? 'trigger.gateway'];
-  const fields = useMemo(() => (spec?.payload_fields ?? []).filter((f) => editable(f) && shown(f)), [spec]);
   const [base, setBase] = useState<Record<string, unknown> | null>(null);
+  const fields = useMemo(
+    () => (spec?.payload_fields ?? []).filter((f) => editable(f) && (ALWAYS.has(fieldKey(f)) || hasValue((base ?? {})[fieldKey(f)] ?? f.sample))),
+    [spec, base],
+  );
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<'sample' | 'last' | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
   const load = (sample: Record<string, unknown>) => {
     setBase(sample);
-    setValues(Object.fromEntries(fields.map((f) => [fieldKey(f), String(sample[fieldKey(f)] ?? '')])));
+    setValues(Object.fromEntries((spec?.payload_fields ?? []).filter(editable).map((f) => [fieldKey(f), String(sample[fieldKey(f)] ?? '')])));
   };
   useEffect(() => {
     if (!base && spec) load(Object.fromEntries(spec.payload_fields.map((f) => [fieldKey(f), f.sample])));

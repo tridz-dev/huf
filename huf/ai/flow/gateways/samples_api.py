@@ -35,7 +35,31 @@ def sample_for_node(node: dict) -> dict:
 	sample = dict(spec["sample_payload"])
 	if (node.get("config") or {}).get("gateway"):
 		sample["gateway"] = node["config"]["gateway"]
+	_fit_filters(sample, (node.get("config") or {}).get("params"))
 	return mask_sample(sample)
+
+
+def _words(params, key) -> list[str]:
+	for item in params or []:
+		if isinstance(item, dict) and item.get("key") == key and isinstance(item.get("value"), list):
+			return [str(w).strip() for w in item["value"] if str(w).strip()]
+	return []
+
+
+def _fit_filters(sample: dict, params) -> None:
+	"""Make the example pass the trigger's own word filters, so a test shows what a matching message looks like."""
+	commands = _words(params, "commands")
+	if commands:
+		command = commands[0].lstrip("/")
+		sample["command"] = command
+		sample["command_args"] = sample.get("command_args") or "hello"
+		sample["text"] = f"/{command} {sample['command_args']}"
+		sample["message"] = sample["text"]
+		return
+	keywords = _words(params, "keywords")
+	if keywords and not any(k.lower() in str(sample.get("text") or "").lower() for k in keywords):
+		sample["text"] = f"{keywords[0]}: {sample.get('text') or ''}".strip()
+		sample["message"] = sample["text"]
 
 
 def _gateway_node(flow_id: str, node_id: str) -> dict:
