@@ -21,14 +21,33 @@ export function useClosingGuard<T extends HTMLElement>(forwarded: React.Forwarde
     [forwarded]
   );
   React.useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const rearm = () => {
+      if (timer) clearTimeout(timer);
+      timer = undefined;
+      wasOpen.current = true;
+    };
     const note = () => {
       wasOpen.current = own.current?.dataset.state !== 'closed';
+      // The answer is only meant for the outside-click check of THIS press. Forget it right after the click (touch presses
+      // are judged on click) and, whatever happens, after a second, so a later Tab or focus change is never affected.
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(rearm, 1000);
     };
+    const afterClick = () => setTimeout(rearm, 0);
     document.addEventListener('pointerdown', note, true);
-    return () => document.removeEventListener('pointerdown', note, true);
+    document.addEventListener('click', afterClick, true);
+    document.addEventListener('pointercancel', rearm, true);
+    return () => {
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('pointerdown', note, true);
+      document.removeEventListener('click', afterClick, true);
+      document.removeEventListener('pointercancel', rearm, true);
+    };
   }, []);
+  // Only a pointer press can be "the click that reopens me". A focus-outside event (Tab) must still dismiss.
   const guard = React.useCallback((event: Event) => {
-    if (!wasOpen.current) event.preventDefault();
+    if (event.type === 'dismissableLayer.pointerDownOutside' && !wasOpen.current) event.preventDefault();
   }, []);
   return { ref, guard };
 }

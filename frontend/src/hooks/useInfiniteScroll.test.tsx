@@ -7,10 +7,12 @@ type Params = { search?: string; status?: string };
 
 function deferred<T>() {
   let resolve!: (v: T) => void;
-  const promise = new Promise<T>((r) => {
-    resolve = r;
+  let reject!: (e: Error) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 describe('useInfiniteScroll first-page races', () => {
@@ -48,5 +50,29 @@ describe('useInfiniteScroll first-page races', () => {
     act(() => result.current.setSearch('uiv-wp5'));
     await waitFor(() => expect(result.current.items).toEqual(['uiv-wp5']));
     expect(seen).toEqual([undefined, 'uiv-wp5']);
+  });
+
+  it('settles loading when the newer request fails, and ignores the older answer that arrives afterwards', async () => {
+    const calls: Array<{ status?: string; d: ReturnType<typeof deferred<{ data: string[]; hasMore: boolean; total: number }>> }> = [];
+    const fetchFn = (params: Params) => {
+      const d = deferred<{ data: string[]; hasMore: boolean; total: number }>();
+      calls.push({ status: params.status, d });
+      return d.promise;
+    };
+    const { result } = renderHook(() => useInfiniteScroll<Params, string>({ fetchFn, initialParams: {}, debounceMs: 20 }));
+    act(() => result.current.setFilter('status', 'Failed'));
+    await waitFor(() => expect(calls).toHaveLength(2));
+    expect(result.current.loading).toBe(true);
+    await act(async () => {
+      calls[1].d.reject(new Error('boom'));
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.initialLoading).toBe(false);
+    expect(result.current.error?.message).toBe('boom');
+    await act(async () => {
+      calls[0].d.resolve({ data: ['stale'], hasMore: false, total: 1 });
+    });
+    expect(result.current.items).toEqual([]);
+    expect(result.current.loading).toBe(false);
   });
 });

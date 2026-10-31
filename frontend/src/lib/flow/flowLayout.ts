@@ -32,34 +32,72 @@ export function tidyPositions(nodes: StepLike[], edges: ConnectionLike[]): Recor
   return autoLayout(nodes, ordered);
 }
 
-/** A card is about 100px tall; two cards side by side closer than this leave no room for a line, a name or the "+" between them. */
+/** A card is about 100px tall. */
 const CARD_HEIGHT = 100;
-const MIN_SIDE_GAP = 24;
+/** Cards whose boxes overlap vertically AND come within this many px of each other (or overlap) horizontally leave no room for a line, a name or the "+" between them. Cards stacked one above the other are not crowded: the line runs in the gap. */
+const OVERLAP_SLACK = 4;
 
-/** True when two steps sit side by side with less than MIN_SIDE_GAP between them (or on top of each other). */
-export function hasCrowdedSteps(nodes: Array<{ position: { x: number; y: number } }>): boolean {
+/** Ids of steps whose boxes overlap another step's box (within OVERLAP_SLACK on both the horizontal and the vertical axis). */
+export function crowdedStepIds(nodes: Array<{ id: string; position: { x: number; y: number } }>): Set<string> {
+  const out = new Set<string>();
   for (let i = 0; i < nodes.length; i++) {
     for (let j = i + 1; j < nodes.length; j++) {
       const a = nodes[i].position;
       const b = nodes[j].position;
-      const sameRow = Math.abs(a.y - b.y) < CARD_HEIGHT;
-      if (sameRow && Math.abs(a.x - b.x) < CARD_WIDTH + MIN_SIDE_GAP) return true;
+      const horizontalGap = Math.abs(a.x - b.x) - CARD_WIDTH;
+      const verticalGap = Math.abs(a.y - b.y) - CARD_HEIGHT;
+      if (horizontalGap <= OVERLAP_SLACK && verticalGap < 0) {
+        out.add(nodes[i].id);
+        out.add(nodes[j].id);
+      }
     }
   }
-  return false;
+  return out;
+}
+
+/** True when at least two step boxes overlap (see crowdedStepIds). */
+export function hasCrowdedSteps(nodes: Array<{ id?: string; position: { x: number; y: number } }>): boolean {
+  return crowdedStepIds(nodes.map((n, i) => ({ id: n.id ?? String(i), position: n.position }))).size > 0;
 }
 
 /**
  * A graph saved without positions (a template, a copy made by a script, a flow written by hand) is laid out the way
- * "Tidy layout" would; one that has them keeps them. Steps stacked on one spot, or squeezed less than 24px apart side by side, count as having none.
+ * "Tidy layout" would; one that has them keeps them. Steps stacked on one spot count as having none.
+ * Steps whose boxes overlap in an otherwise placed graph are different: only the connected group that holds them is laid out
+ * again (and put back at its old top-left corner); every other step keeps its saved position, so an unrelated edit that
+ * saves the flow never rewrites positions of cards that were fine.
  */
 export function layoutWhenUnplaced<T extends StepLike>(nodes: T[], edges: ConnectionLike[], someMissing: boolean): T[] {
   if (nodes.length < 2) return nodes;
   const spots = new Set(nodes.map((n) => `${Math.round(n.position.x / 40)}:${Math.round(n.position.y / 40)}`));
-  // Stacked, or squeezed so close that no line or name fits between two cards (a saved gap of 4px): lay it out again.
-  if (!someMissing && spots.size === nodes.length && !hasCrowdedSteps(nodes)) return nodes;
-  const positions = tidyPositions(nodes, edges);
-  return nodes.map((n) => ({ ...n, position: positions[n.id] ?? n.position }));
+  if (someMissing || spots.size !== nodes.length) {
+    const positions = tidyPositions(nodes, edges);
+    return nodes.map((n) => ({ ...n, position: positions[n.id] ?? n.position }));
+  }
+  const crowded = crowdedStepIds(nodes);
+  if (crowded.size === 0) return nodes;
+  // The connected group(s) that hold a crowded step.
+  const group = new Set(crowded);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const e of edges) {
+      if (group.has(e.source) !== group.has(e.target)) {
+        group.add(e.source);
+        group.add(e.target);
+        grew = true;
+      }
+    }
+  }
+  const inGroup = nodes.filter((n) => group.has(n.id));
+  const groupEdges = edges.filter((e) => group.has(e.source) && group.has(e.target));
+  const positions = tidyPositions(inGroup, groupEdges);
+  const minOf = (pts: Array<{ x: number; y: number }>) => ({ x: Math.min(...pts.map((p) => p.x)), y: Math.min(...pts.map((p) => p.y)) });
+  const before = minOf(inGroup.map((n) => n.position));
+  const after = minOf(inGroup.map((n) => positions[n.id] ?? n.position));
+  return nodes.map((n) => {
+    const p = group.has(n.id) ? positions[n.id] : undefined;
+    return p ? { ...n, position: { x: p.x - after.x + before.x, y: p.y - after.y + before.y } } : n;
+  });
 }
 
 interface Box {
