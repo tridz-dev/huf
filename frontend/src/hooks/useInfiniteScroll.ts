@@ -160,6 +160,22 @@ export interface UseInfiniteScrollReturn<TItem> {
  * Reusable hook for infinite scrolling with pagination, search, and filters
  * Uses Intersection Observer API for efficient scroll detection
  *
+ * @example
+ * ```tsx
+ * const { items, hasMore, loading, search, setSearch, setFilter, scrollRef, sentinelRef } = useInfiniteScroll({
+ *   fetchFn: async (p) => {
+ *     const r = await getAgents({ page: p.page, limit: p.limit, search: p.search });
+ *     return { data: r.items, hasMore: r.hasMore, total: r.total };
+ *   },
+ *   pageSize: 20,
+ * });
+ * return (
+ *   <div ref={scrollRef} className="overflow-auto">
+ *     {items.map((item) => <Item key={item.id} {...item} />)}
+ *     {hasMore && <div ref={sentinelRef} className="h-4" />}
+ *   </div>
+ * );
+ * ```
  */
 export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
   fetchFn,

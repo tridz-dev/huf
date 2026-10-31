@@ -153,7 +153,7 @@ function finish(points: Pt[]): RoutedEdge {
 function turnOffset(src: Pt, obstacles: Rect[]): number {
   let gap = Infinity;
   for (const r of obstacles) if (r.y > src.y + 1 && r.x <= src.x && src.x <= r.x + r.width) gap = Math.min(gap, r.y - src.y);
-  return Math.min(STUB, Math.max(12, gap - 36));
+  return Math.min(STUB, Math.max(14, gap - 36));
 }
 
 /**
