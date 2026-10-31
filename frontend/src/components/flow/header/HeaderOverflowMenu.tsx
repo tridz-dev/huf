@@ -74,11 +74,13 @@ export function HeaderOverflowMenu({
           align="end"
           className="min-w-[220px]"
           data-testid="flow-header-more-menu"
-          // Focus must not go back to the "..." button while the list opens: that would close the list at once.
+          // The list opens once the menu is gone (a popover opened while the menu still has focus is dismissed by it), and focus
+          // does not go back to the "..." button then: that would close the list at once.
           onCloseAutoFocus={(event) => {
             if (openingChecklist.current) {
               openingChecklist.current = false;
               event.preventDefault();
+              setChecklistOpen(true);
             }
           }}
         >
@@ -98,7 +100,6 @@ export function HeaderOverflowMenu({
               data-testid="flow-validation-summary-menu"
               onSelect={() => {
                 openingChecklist.current = true;
-                setTimeout(() => setChecklistOpen(true), 0);
               }}
             >
               <AlertCircle className="h-4 w-4" aria-hidden /> {checklistText}
