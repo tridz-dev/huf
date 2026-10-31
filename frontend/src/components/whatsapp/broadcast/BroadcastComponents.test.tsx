@@ -231,6 +231,16 @@ describe('BroadcastWizard', () => {
     expect(w.closest('[role="alert"]')).not.toBeNull();
   });
 
+  it('explains an unavailable price estimate in plain words, without the internal code', async () => {
+    m.previewBroadcast.mockResolvedValue(ok({ preview: preview({ cost: { currency: 'USD', total: null, disclaimer: '', warnings: ['rate_unavailable:utility:US'] } }) }));
+    const user = userEvent.setup();
+    render(<BroadcastWizard gateway="G" onClose={vi.fn()} onStarted={vi.fn()} />);
+    await toPreview(user);
+    expect(await screen.findByText(/price estimate is not available yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/rate_unavailable/)).toBeNull();
+    expect(screen.queryByText(/utility:US/)).toBeNull();
+  });
+
   it('blocking items disable proceeding', async () => {
     m.previewBroadcast.mockResolvedValue(ok({ preview: preview({ blocking: ['Template is paused'] }) }));
     const user = userEvent.setup();

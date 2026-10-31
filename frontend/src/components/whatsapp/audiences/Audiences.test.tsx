@@ -63,6 +63,8 @@ describe('AudiencesPage', () => {
     const user = userEvent.setup();
     render(<AudiencesPage gateway="G" />);
     expect((await screen.findAllByText(/12 contacts, 2 opted out/))[0]).toBeTruthy();
+    expect(screen.getAllByText('Marketing').length).toBeGreaterThan(0);
+    expect(screen.queryByText('marketing')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'New audience' }));
     await user.type(await screen.findByLabelText(/^Name/), 'Fresh');
     await user.click(screen.getByRole('button', { name: 'Create audience' }));
