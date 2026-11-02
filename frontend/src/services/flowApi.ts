@@ -430,7 +430,6 @@ export async function approveFlowRun(
             flow_run_id: flowRunId,
             comment,
         });
-        announceRunChanged(flowRunId);
         return result.message as { flow_run_id: string; status: string; current_node_id: string };
     } catch (error) {
         handleFrappeError(error, `Error approving flow run ${flowRunId}`);
@@ -447,7 +446,6 @@ export async function rejectFlowRun(
             flow_run_id: flowRunId,
             comment,
         });
-        announceRunChanged(flowRunId);
         return result.message as { flow_run_id: string; status: string; current_node_id: string };
     } catch (error) {
         handleFrappeError(error, `Error rejecting flow run ${flowRunId}`);
@@ -464,7 +462,6 @@ export async function resumeFlowRun(
             flow_run_id: flowRunId,
             input: input ? JSON.stringify(input) : undefined,
         });
-        announceRunChanged(flowRunId);
         return result.message as { flow_run_id: string; status: string; current_node_id: string };
     } catch (error) {
         handleFrappeError(error, `Error resuming flow run ${flowRunId}`);

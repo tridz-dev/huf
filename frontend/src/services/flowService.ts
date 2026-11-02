@@ -8,6 +8,7 @@
  * minimal changes. Methods that were synchronous are now async.
  */
 
+import { announceRunChanged } from '@/lib/flow-run/runChanged';
 import { cancelFlowRun as apiCancelFlowRun } from './flow/flowRunActionsApi';
 import { Flow, FlowMetadata, FlowNode, FlowEdge, FlowStatus } from '../types/flow.types';
 import {
@@ -234,15 +235,21 @@ class FlowService {
   }
 
   async approveFlowRun(flowRunId: string, comment?: string) {
-    return apiApproveFlowRun(flowRunId, comment);
+    const answer = await apiApproveFlowRun(flowRunId, comment);
+    announceRunChanged(flowRunId);
+    return answer;
   }
 
   async rejectFlowRun(flowRunId: string, comment?: string) {
-    return apiRejectFlowRun(flowRunId, comment);
+    const answer = await apiRejectFlowRun(flowRunId, comment);
+    announceRunChanged(flowRunId);
+    return answer;
   }
 
   async resumeFlowRun(flowRunId: string, input?: Record<string, unknown>) {
-    return apiResumeFlowRun(flowRunId, input);
+    const answer = await apiResumeFlowRun(flowRunId, input);
+    announceRunChanged(flowRunId);
+    return answer;
   }
 
   async markFlowRunFailed(flowRunId: string) {
