@@ -219,7 +219,9 @@ export function FitViewAfterRemovalOrLayout({ flowId, nodeCount, edgeCount, layo
   useEffect(() => {
     if (!flowId || !initialized || firstFitFor.current === flowId) return;
     firstFitFor.current = flowId;
-    const fitNow = () => { const { width, height } = store.getState(); fitClearOfOverlays(rfRef.current, width, height); };
+    // A run sheet that is already open (a reloaded run link) is respected here too: otherwise this fit and KeepRunClearOfSheet
+    // take turns, and the flow flips between the two sizes for a second (a screenshot in that moment shows it under the sheet).
+    const fitNow = () => { const { width, height } = store.getState(); fitClearOfOverlays(rfRef.current, freeCanvasWidth(width), height); };
     fitNow();
     const timer = setTimeout(() => { if (firstFitFor.current === flowId) fitNow(); }, 350);
     return () => clearTimeout(timer);
@@ -344,6 +346,14 @@ export function freeWidthBesideSheet(canvas: { left: number; right: number }, sh
   const covered = Math.max(0, canvas.right - sheetLeft);
   if (covered <= 0 || covered >= canvasWidth - 200) return null;
   return Math.max(sheetLeft - canvas.left - gap + FIT_SIDE_INSET, 1);
+}
+
+/** Canvas width left free beside the open run sheet, or the whole width when no sheet lies over the canvas. */
+export function freeCanvasWidth(canvasWidth: number): number {
+  const sheet = document.querySelector<HTMLElement>(`[${FLOW_RUN_SHEET_ATTR}]`);
+  const canvas = document.querySelector('.react-flow')?.getBoundingClientRect();
+  if (!sheet || !canvas) return canvasWidth;
+  return freeWidthBesideSheet(canvas, window.innerWidth - sheet.offsetWidth, canvasWidth) ?? canvasWidth;
 }
 
 /**
