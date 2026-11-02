@@ -1,0 +1,64 @@
+{
+  "_comment": "Meta WhatsApp per-message rate card for broadcast cost estimates. Rates are null because they could NOT be verified from Meta's official pages at retrieval time (the rate card is published as per-currency CSV/PDF files that were not retrievable). Fill a rate only from the official rate card, with the source and date updated. Null rate => estimate total is null and a warning is emitted.",
+  "source_url": "https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing",
+  "rate_card_url": "https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/rate-cards",
+  "retrieved": "2026-10-27",
+  "effective": "2026-10-01",
+  "currency": "USD",
+  "rates_verified": false,
+  "unit": "per delivered message, by recipient country calling code and message category",
+  "disclaimer": "Estimate only. Billing is by Meta: charges are per delivered message at the rate card for the recipient's country and the template category, may differ from this estimate, and may change at quarter starts. Taxes, currency conversion and provider markups are not included.",
+  "categories": ["marketing", "utility", "authentication"],
+  "rates": {
+    "marketing": {
+      "IN": null,
+      "US": null,
+      "GB": null,
+      "BR": null,
+      "ID": null,
+      "MX": null,
+      "AE": null,
+      "DE": null,
+      "FR": null,
+      "ES": null,
+      "SA": null,
+      "NG": null,
+      "ZA": null
+    },
+    "utility": {
+      "IN": null,
+      "US": null,
+      "GB": null,
+      "BR": null,
+      "ID": null,
+      "MX": null,
+      "AE": null,
+      "DE": null,
+      "FR": null,
+      "ES": null,
+      "SA": null,
+      "NG": null,
+      "ZA": null
+    },
+    "authentication": {}
+  },
+  "dialling_codes": {
+    "1": "US",
+    "27": "ZA",
+    "33": "FR",
+    "34": "ES",
+    "44": "GB",
+    "49": "DE",
+    "52": "MX",
+    "55": "BR",
+    "62": "ID",
+    "91": "IN",
+    "234": "NG",
+    "966": "SA",
+    "971": "AE"
+  },
+  "notes": [
+    "Dialling code +1 is shared by the US and Canada and other NANP countries; it is mapped to US only. Non-US NANP numbers will be mis-marketed as US until a finer mapping exists.",
+    "Only the markets listed in rates are covered. Any other dialling code maps to its market code if listed in dialling_codes, otherwise to UNKNOWN; both produce a warning."
+  ]
+}

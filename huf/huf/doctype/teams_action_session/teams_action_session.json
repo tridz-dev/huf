@@ -1,0 +1,40 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-10-27 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "gateway",
+  "kind",
+  "state",
+  "expires_at",
+  "intended_user",
+  "tenant_id",
+  "conversation_id",
+  "card_activity_id",
+  "payload",
+  "decided_by",
+  "decision"
+ ],
+ "fields": [
+  {"fieldname": "gateway", "fieldtype": "Link", "label": "Gateway", "options": "Gateway", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "kind", "fieldtype": "Data", "label": "Kind", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "state", "fieldtype": "Select", "label": "State", "options": "Open\nDecided\nExpired", "default": "Open", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "expires_at", "fieldtype": "Datetime", "label": "Expires at", "reqd": 1},
+  {"fieldname": "intended_user", "fieldtype": "Link", "label": "Intended user", "options": "User"},
+  {"fieldname": "tenant_id", "fieldtype": "Data", "label": "Tenant ID"},
+  {"fieldname": "conversation_id", "fieldtype": "Data", "label": "Conversation ID"},
+  {"fieldname": "card_activity_id", "fieldtype": "Data", "label": "Card activity ID"},
+  {"fieldname": "payload", "fieldtype": "JSON", "label": "Payload"},
+  {"fieldname": "decided_by", "fieldtype": "Link", "label": "Decided by", "options": "User", "read_only": 1},
+  {"fieldname": "decision", "fieldtype": "Data", "label": "Decision", "read_only": 1}
+ ],
+ "module": "Huf",
+ "name": "Teams Action Session",
+ "permissions": [
+  {"create": 1, "delete": 1, "read": 1, "role": "System Manager", "write": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

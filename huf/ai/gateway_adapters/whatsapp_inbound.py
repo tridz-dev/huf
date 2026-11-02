@@ -10,6 +10,7 @@ frappe_whatsapp mirror (``whatsapp_bridge.record_incoming``) so both agree.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 MAX_CONTACTS = 5
@@ -126,20 +127,32 @@ def render_order(order: Any) -> str:
 	return f"{text} {note}" if note else text
 
 
-def render_form_response(nfm: Any) -> str:
-	nfm = _dict(nfm)
-	name = cap(nfm.get("name"), _NAME_CAP) or "flow"
-	raw = nfm.get("response_json")
-	compact = ""
-	if isinstance(raw, (dict, list)):
-		compact = json.dumps(raw, ensure_ascii=False, separators=(",", ":"))
-	elif isinstance(raw, str) and raw.strip():
+def parse_form_response(nfm: Any) -> dict:
+	"""``response_json`` of an nfm_reply as a dict (``{}`` when absent; a non-object value is kept under ``_raw``)."""
+	raw = _dict(nfm).get("response_json")
+	if isinstance(raw, str) and raw.strip():
 		try:
-			compact = json.dumps(json.loads(raw), ensure_ascii=False, separators=(",", ":"))
+			raw = json.loads(raw)
 		except ValueError:
-			compact = raw.strip()
-	head = f"[Form response: {name}]"
-	return f"{head} {cap_bytes(compact, MAX_FORM_BYTES)}" if compact else head
+			return {"_raw": raw.strip()}
+	if isinstance(raw, dict):
+		return raw
+	return {"_raw": raw} if raw else {}
+
+
+def render_form_response(nfm: Any) -> str:
+	"""Agent-readable summary: ``Form submitted: key=value, ...`` (the flow token is not shown)."""
+	data = parse_form_response(nfm)
+	if "_raw" in data:
+		body = str(data["_raw"]) if not isinstance(data["_raw"], (dict, list)) else json.dumps(data["_raw"], ensure_ascii=False)
+	else:
+		body = ", ".join(
+			f"{k}={v if isinstance(v, str) else json.dumps(v, ensure_ascii=False, separators=(',', ':'))}"
+			for k, v in data.items()
+			if k != "flow_token"
+		)
+	head = "Form submitted:"
+	return f"{head} {cap_bytes(body, MAX_FORM_BYTES)}" if body else "Form submitted"
 
 
 def render_interactive(interactive: Any) -> str:
@@ -157,6 +170,51 @@ def render_interactive(interactive: Any) -> str:
 		)
 		return f"[Product: {label}]" if label else "[Product]"
 	return "[interactive message]"
+
+
+_REF_RE = re.compile(r"(?<![A-Za-z0-9_-])ref:([A-Za-z0-9_-]{1,64})", re.IGNORECASE)
+
+
+def extract_referral_tag(message: dict, text: str) -> str:
+	"""Routing tag for an inbound message, or "".
+
+	Convention: the Click-to-WhatsApp ad id (``referral.source_id``) wins; otherwise the
+	first ``ref:<tag>`` token in the text (case-insensitive, tag chars ``[A-Za-z0-9_-]``,
+	1-64 long). ``#tag`` is not a tag. The token is left in the text.
+	"""
+	referral = _dict(_dict(message).get("referral"))
+	source_id = str(referral.get("source_id") or "").strip()
+	if source_id:
+		return source_id
+	match = _REF_RE.search(text or "")
+	return match.group(1) if match else ""
+
+
+def extract_button_payload(msg: Any) -> str:
+	"""Structured payload of a template quick-reply button or an interactive button/list reply."""
+	msg = _dict(msg)
+	if msg.get("type") == "button":
+		return str(_dict(msg.get("button")).get("payload") or "")
+	if msg.get("type") == "interactive":
+		interactive = _dict(msg.get("interactive"))
+		for key in ("button_reply", "list_reply"):
+			if key in interactive:
+				return str(_dict(interactive[key]).get("id") or "")
+	return ""
+
+
+def parse_button_payload(raw: str) -> dict | None:
+	"""Parse ``sol:<solution>|<free>`` into ``{"solution", "free"}``; None for any other format.
+
+	Only the first ``|`` splits; ``free`` may be empty or contain further ``|``.
+	"""
+	if not isinstance(raw, str) or not raw.startswith("sol:"):
+		return None
+	solution, _, free = raw[4:].partition("|")
+	solution = solution.strip()
+	if not solution:
+		return None
+	return {"solution": solution, "free": free}
 
 
 def render_system(system: Any) -> str:

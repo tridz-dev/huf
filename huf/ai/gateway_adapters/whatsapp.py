@@ -16,8 +16,8 @@ from dataclasses import dataclass
 from typing import Any
 
 import frappe
-from huf.ai import whatsapp_account_events as account_events_mod
-from huf.ai import whatsapp_outbound_policy as policy
+from huf.ai.whatsapp import account_events as account_events_mod
+from huf.ai.whatsapp import outbound_policy as policy
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_calls as wc
 from huf.ai.gateway_adapters import whatsapp_errors as we
@@ -67,71 +67,13 @@ def _log_info(line: str) -> None:
 		pass
 
 
-class WhatsAppWindowClosed(frappe.ValidationError):
-	"""The 24h customer-service window is closed and no template fallback is configured."""
-
-
-class WhatsAppFallbackUnavailable(WhatsAppWindowClosed):
-	"""The window is closed and the configured fallback template cannot be sent.
-
-	Subclasses :class:`WhatsAppWindowClosed` so every caller that already treats a closed window as
-	"not sendable right now" handles it. ``code`` is the stable machine-readable reason (a refusal is a
-	raised typed error, not a delivery: ``OutboundDelivery`` requires a real provider message id).
-	"""
-
-	def __init__(self, message: str, code: str):
-		super().__init__(message)
-		self.code = code
-
-
-class WhatsAppSendError(ValueError):
-	"""A Graph send failed. ``classification`` is the :func:`whatsapp_errors.classify` result."""
-
-	def __init__(self, message: str, classification: dict[str, Any] | None = None):
-		super().__init__(message)
-		self.classification = classification or we.classify(message)
-
-
-class WhatsAppPartsError(Exception):
-	"""A multi-part text reply stopped part-way.
-
-	``sent_ids`` are the wamids already accepted by Meta (in order), ``remaining`` the formatted
-	parts still to send, ``cause`` the original error. Retry the SEND with ``remaining`` only.
-	"""
-
-	def __init__(self, cause: BaseException, sent_ids: list[str], remaining: list[str]):
-		super().__init__(str(cause))
-		self.cause = cause
-		self.sent_ids = list(sent_ids)
-		self.remaining = list(remaining)
-
-
-def classify_send_exception(exc: BaseException) -> dict[str, Any]:
-	"""Classify whatever a WhatsApp send path raised (parts error, bridge error, Graph error, timeout)."""
-	if isinstance(exc, WhatsAppPartsError):
-		return classify_send_exception(exc.cause)
-	if isinstance(exc, WhatsAppWindowClosed):
-		return we.classify((None, {"error": {"code": 131047, "message": str(exc)}}))
-	if isinstance(exc, WhatsAppSendError):
-		return exc.classification
-	if isinstance(exc, bridge.BridgeError):
-		payload = exc.payload if isinstance(exc.payload, dict) else {}
-		code = payload.get("graph_code")
-		if code is not None or payload.get("kind"):
-			base = we.classify((None, {"error": {"code": code, "message": payload.get("message") or ""}})) if code is not None else {}
-			return {
-				"code": code,
-				"subcode": payload.get("subcode"),
-				"kind": payload.get("kind") or base.get("kind") or "unknown",
-				"retryable": bool(payload.get("retryable", base.get("retryable"))),
-				"retry_after_hint": base.get("retry_after_hint"),
-				"operator_text": payload.get("operator_text") or base.get("operator_text") or "",
-				"user_msg": payload.get("user_msg"),
-				"message": payload.get("message") or "",
-				"http_status": base.get("http_status"),
-			}
-		return we.classify(str(payload.get("message") or payload.get("error") or exc))
-	return we.classify(exc)
+from huf.ai.gateway_adapters.whatsapp_parts.send_errors import (  # noqa: F401
+	WhatsAppFallbackUnavailable,
+	WhatsAppPartsError,
+	WhatsAppSendError,
+	WhatsAppWindowClosed,
+	classify_send_exception,
+)
 
 
 @dataclass(frozen=True)
@@ -159,12 +101,40 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 	provider_id = "whatsapp"
 	credential_schema = GatewayCredentialSchema(
 		(
-			GatewayCredentialField("phone_number_id", "Phone Number ID", secret=False),
-			GatewayCredentialField("access_token", "Meta Permanent/System Access Token"),
-			GatewayCredentialField("webhook_verify_token", "Webhook Verify Token"),
-			GatewayCredentialField("app_secret", "Meta App Secret (for HMAC signature verification)", required=True),
+			GatewayCredentialField(
+				"phone_number_id", "Phone Number ID", secret=False,
+				description="Meta app > WhatsApp > API setup, under the phone number.",
+			),
+			GatewayCredentialField(
+				"business_account_id", "WhatsApp Business Account ID", secret=False,
+				description="Meta app > WhatsApp > API setup, next to the phone number ID.",
+			),
+			GatewayCredentialField(
+				"app_id", "Meta App ID", secret=False,
+				description="Meta app dashboard > App settings > Basic.",
+			),
+			GatewayCredentialField(
+				"access_token", "Permanent Access Token",
+				description="A system user token from Meta Business settings, with WhatsApp messaging and management access.",
+			),
+			GatewayCredentialField(
+				"app_secret", "Meta App Secret",
+				description="Meta app dashboard > App settings > Basic. Used to confirm messages really come from Meta.",
+			),
+			GatewayCredentialField(
+				"webhook_verify_token", "Webhook Verify Token",
+				description="Any phrase you choose. Paste the same phrase into Meta when you add the webhook URL.",
+			),
+			GatewayCredentialField(
+				"graph_api_version", "Graph API Version", required=False, secret=False,
+				description=f"Optional. Defaults to {bridge.GRAPH_DEFAULT_VERSION}.",
+			),
 		)
 	)
+	# Needed to receive and send. The rest of the schema is required when the credential is saved
+	# (it feeds templates, account linking and webhook subscription) but older gateways created
+	# before those fields existed must keep running.
+	runtime_credentials = ("phone_number_id", "access_token", "webhook_verify_token", "app_secret")
 	capabilities = GatewayCapabilities(
 		frozenset({"webhook"}),
 		supports_text_reply=True,
@@ -180,7 +150,7 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		http_post: Callable[..., Any] = _requests_post,
 		gateway_context: Mapping[str, Any] | None = None,
 	) -> None:
-		missing = self.credential_schema.missing_required(credentials)
+		missing = [key for key in self.runtime_credentials if not str(credentials.get(key) or "").strip()]
 		if missing:
 			raise ValueError(f"WhatsApp adapter is missing required credentials: {', '.join(missing)}")
 		self._phone_number_id = str(credentials["phone_number_id"]).strip()
@@ -206,6 +176,9 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 			else None
 		)
 		self._contact_name = str(ctx.get("contact_name") or "").strip()
+		# Optional: attribute template sends (e.g. the fallback template) to a run / solution for usage tracking.
+		self._run_id = str(ctx.get("run_id") or "").strip()
+		self._solution = str(ctx.get("solution") or "").strip()
 		self._preview_url = str(ctx.get("preview_url") or "").strip().lower() == "on"
 
 	# ------------------------------------------------------------------ ingress
@@ -413,6 +386,9 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		if bsuid:
 			raw["bsuid"] = bsuid  # kept next to the phone key for a later identity merge
 		referral = msg.get("referral") if isinstance(msg.get("referral"), dict) else {}
+		referral_tag = inbound.extract_referral_tag(msg, message_text)  # before the ad prefix is added
+		if referral_tag:
+			raw["referral_tag"] = referral_tag
 		if referral:
 			raw["referral"] = {
 				k: referral[k]
@@ -422,6 +398,9 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 			headline = inbound.cap(referral.get("headline"), 120)
 			if headline and kind == "message":
 				message_text = f"[Ad referral: {headline}] {message_text}"
+		button_payload = inbound.extract_button_payload(msg)
+		if button_payload:
+			raw["button_payload"] = button_payload
 		if kind == "reaction":
 			# Meta: a reaction is not a customer-service-window opener (UNVERIFIED in docs).
 			# bridge.window_state must skip rows whose raw_payload.kind == "reaction".
@@ -767,8 +746,13 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		trusted: bool = False,
 		header_params: list | tuple | dict | None = None,
 		button_params: list | tuple | None = None,
+		run_id: str | None = None,
+		solution: str | None = None,
 	) -> OutboundDelivery:
 		"""Send an approved template (always allowed, window-independent).
+
+		``run_id`` / ``solution`` (optional; default to the adapter context) attribute the send to a Solution
+		for template usage tracking.
 
 		``body_params``: an ordered list, or (NAMED templates) ``{name: value}`` / ``[{name, value}]``; named
 		values are sent with ``parameter_name``. ``header_params``: a text variable string, a ``{"type", "link"}``
@@ -782,10 +766,15 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		header_arg: Any = header_params if isinstance(header_params, dict) else list(header_params or [])
 		self._guard(to)
 		if self._bridge_mode():
+			usage: dict[str, Any] = {}
+			if run_id or self._run_id:
+				usage["run_id"] = run_id or self._run_id
+			if solution or self._solution:
+				usage["solution"] = solution or self._solution
 			result = bridge.send_template(
 				self._account, to, template_name, params, header_params=header_arg,
 				trusted=trusted, language_code=language_code, button_params=list(button_params or []),
-				gateway_name=self._gateway_name or None,
+				gateway_name=self._gateway_name or None, **usage,
 			)
 			return _delivery_from_bridge(result)
 		components, errors = direct_send_components(params, header_arg, list(button_params or []))

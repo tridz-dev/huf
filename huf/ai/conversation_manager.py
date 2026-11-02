@@ -1,109 +1,19 @@
-import frappe
-from frappe import _
-from frappe.utils import now
-
-from huf.permissions import has_capability
 import json
 from collections import defaultdict
 from typing import Any
 
+import frappe
+from frappe import _
+from frappe.utils import now
 
-def _is_tool_message(msg) -> bool:
-    """Return True if the context message represents a tool result."""
-    return isinstance(msg, dict) and msg.get("role") == "tool"
-
-
-def _tool_call_ids_from_assistant(msg: dict) -> list:
-    """Extract tool_call ids from an assistant message."""
-    if not isinstance(msg, dict):
-        return []
-    ids = []
-    for tc in msg.get("tool_calls") or []:
-        tc_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
-        if tc_id:
-            ids.append(tc_id)
-    return ids
-
-
-def _tool_call_group_intervals(history: list) -> list:
-    """
-    Return intervals (start_index, end_index) of assistant/tool-call groups.
-    A group starts at the assistant message that declared a tool_call and ends
-    at the last matching role='tool' result message.
-    """
-    if not history:
-        return []
-
-    declarations = {}
-    for idx, msg in enumerate(history):
-        if isinstance(msg, dict) and msg.get("role") == "assistant":
-            for cid in _tool_call_ids_from_assistant(msg):
-                if cid not in declarations:
-                    declarations[cid] = idx
-
-    intervals = []
-    seen = set()
-    for idx, msg in enumerate(history):
-        if isinstance(msg, dict) and msg.get("role") == "tool":
-            cid = msg.get("tool_call_id")
-            if cid and cid in declarations and cid not in seen:
-                start = declarations[cid]
-                intervals.append((start, idx))
-                seen.add(cid)
-    return intervals
-
-
-def safe_history_slice(history: list, limit: int) -> list:
-    """
-    Return the last `limit` messages without splitting tool-call pairs.
-
-    OpenAI requires every role='tool' message to follow an assistant message
-    that declared the matching tool_call. A naive slice can drop the assistant
-    message while keeping its tool results, causing BadRequestError. This
-    helper shifts the cut point backward until it no longer starts inside a
-    tool-call result group.
-    """
-    if not history or len(history) <= limit:
-        return history
-
-    intervals = _tool_call_group_intervals(history)
-
-    cut_index = len(history) - limit
-    # Move cut point backward while it would start inside an open tool-call group
-    while cut_index > 0:
-        inside = any(start < cut_index <= end for start, end in intervals)
-        if not inside:
-            break
-        cut_index -= 1
-
-    return history[cut_index:]
-
-
-def safe_history_split(history: list, split_index: int) -> tuple:
-    """
-    Split history into (left, right) at a boundary that does not break
-    assistant/tool-call pairs. The right (remaining) part is guaranteed not
-    to start with an orphaned tool message.
-    """
-    if not history:
-        return [], []
-
-    if split_index <= 0:
-        return [], list(history)
-
-    if split_index >= len(history):
-        return list(history), []
-
-    intervals = _tool_call_group_intervals(history)
-
-    # Move split backward while it would leave the right side starting inside a group
-    while split_index > 0:
-        inside = any(start < split_index <= end for start, end in intervals)
-        if not inside:
-            break
-        split_index -= 1
-
-    return history[:split_index], history[split_index:]
+from huf.ai.conversation.history import (  # noqa: F401
+    _is_tool_message,
+    _tool_call_group_intervals,
+    _tool_call_ids_from_assistant,
+    safe_history_slice,
+    safe_history_split,
+)
+from huf.permissions import has_capability
 
 
 def _synthesize_assistant_tool_call(tool_call_id: str, conversation_name: str | None) -> dict | None:
@@ -341,10 +251,28 @@ class ConversationManager:
         else:
             self.session_id = f"{channel}:{frappe.session.user}"
 
-    def create_new_conversation(self, title=None, project=None, host=None):
+    def _stamp_solution(self, solution=None):
+        """The solution to stamp on a new conversation: the explicit one, else (``gateway:<name>`` channels)
+        the chat's current assignment. Never raises; None when unknown."""
+        if solution:
+            return solution
+        channel = str(self.channel or "")
+        if not (channel.startswith("gateway:") and self.external_id):
+            return None
+        try:
+            from huf.ai.solutions import assignment
+
+            return assignment.current_solution(channel.split(":", 1)[1], self.external_id)
+        except Exception:
+            return None
+
+    def create_new_conversation(self, title=None, project=None, host=None, solution=None):
         """Always create a fresh conversation.
 
-        ``host`` (server-side callers only, see ``huf.ai.desktop_sessions``) is
+        ``solution`` (optional) stamps ``Agent Conversation.solution``; when omitted on a ``gateway:<name>``
+        channel the chat's current assignment is used. Lookup keys are never affected.
+
+        ``host`` (server-side callers only, see ``huf.ai.desktop.sessions``) is
         ``{device_id, workspace_fingerprint, label}``: it makes the conversation desktop-hosted.
         """
         title = title or f"Conversation with {self.agent_name}"
@@ -361,6 +289,9 @@ class ConversationManager:
             "model": frappe.db.get_value("Agent", self.agent_name, "model"),
             "project": project
         })
+        stamped = self._stamp_solution(solution)
+        if stamped:
+            conv.solution = stamped
         if host:
             conv.update({
                 "execution_host": "desktop",
@@ -377,13 +308,13 @@ class ConversationManager:
         conv.insert()
         return conv
 
-    def get_or_create_conversation(self, title=None, conversation_id=None, project=None):
+    def get_or_create_conversation(self, title=None, conversation_id=None, project=None, solution=None):
         """Get active conversation or create new one.
 
         ``project`` only takes effect when a brand-new Agent Conversation is
         created here; an existing conversation (found by ``conversation_id``
         or by the active session lookup) keeps whatever project it already
-        has.
+        has. ``solution`` stamps only a conversation created here (see ``create_new_conversation``).
         """
         if conversation_id:
             # An explicit conversation_id is authoritative: a missing id and an
@@ -391,7 +322,10 @@ class ConversationManager:
             # callers can enumerate conversation ids (existence oracle).
             try:
                 conversation = frappe.get_doc("Agent Conversation", conversation_id)
-                accessible = conversation.agent == self.agent_name and (
+                # A Flow's shared conversation is created by the engine before any agent is known
+                # (agent unset), so the steps of that flow may all join it.
+                joins_flow = not conversation.agent and (conversation.session_id or "").startswith("flow:")
+                accessible = (conversation.agent == self.agent_name or joins_flow) and (
                     conversation.owner == frappe.session.user
                     or conversation.session_id == self.session_id
                     or has_capability(frappe.session.user, "chat.view_all")
@@ -438,6 +372,9 @@ class ConversationManager:
             "model": frappe.db.get_value("Agent", self.agent_name, "model"),
             "project": project
         })
+        stamped = self._stamp_solution(solution)
+        if stamped:
+            conv.solution = stamped
         if not frappe.has_permission("Agent Conversation", "create"):
             frappe.throw(
                 _("Not permitted to create Agent Conversation"),
@@ -641,8 +578,63 @@ class ConversationManager:
         stored_tool_calls = msg.get("tool_calls")
         msg_kind = msg.get("kind")
 
+        # Tool result message (combined UI mutation pattern from streaming).
+        if msg_kind == "Tool Result" and role_mapped == "assistant":
+            # Must run BEFORE the generic assistant tool-call branch: a combined
+            # row carries tool_calls/tool_call_id too, and falling into that
+            # branch emitted only the declaration (no tool message), which
+            # repair_message_sequence then dropped as unfulfilled.
+            call_id, tool_name, tool_args = self._resolve_tool_call_details(
+                stored_tool_call_id, tool_call_link
+            )
+            stored_calls = []
+            if stored_tool_calls:
+                try:
+                    parsed = (
+                        json.loads(stored_tool_calls)
+                        if isinstance(stored_tool_calls, str)
+                        else stored_tool_calls
+                    )
+                    if isinstance(parsed, dict):
+                        parsed = [parsed]
+                    if isinstance(parsed, list):
+                        stored_calls = [c for c in parsed if isinstance(c, dict)]
+                except (json.JSONDecodeError, TypeError):
+                    stored_calls = []
+            if (
+                policy == "include_full"
+                and isinstance(content, str)
+                and "**Tool Result:**" in content
+            ):
+                content = content.split("**Tool Result:**", 1)[1].strip()
+            if not stored_calls:
+                stored_calls = [{}]
+            # Replay EVERY declared call of a combined row so each keeps its tool message. The row stores one
+            # result: it belongs to the call matching ``tool_call_id`` (else the first); the others get a
+            # placeholder so the declaration is never left unfulfilled.
+            primary = next(
+                (i for i, c in enumerate(stored_calls) if stored_tool_call_id and c.get("id") == stored_tool_call_id),
+                0,
+            )
+            declared, tool_msgs = [], []
+            for i, stored_call in enumerate(stored_calls):
+                fn = stored_call.get("function") or {}
+                cid = stored_call.get("id") or (call_id if i == primary else f"{call_id}_{i}")
+                name = fn.get("name") or (tool_name if i == primary else "tool")
+                targs = fn.get("arguments") or (tool_args if i == primary else "{}")
+                declared.append({"id": cid, "type": "function", "function": {"name": name, "arguments": targs}})
+                tool_msgs.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": cid,
+                        "name": name,
+                        "content": content if i == primary else "[result not stored in this history row]",
+                    }
+                )
+            return [{"role": "assistant", "content": None, "tool_calls": declared}, *tool_msgs]
+
         # Assistant message that issued one or more tool calls.
-        if role_mapped == "assistant" and (
+        if role_mapped == "assistant" and msg_kind != "Tool Result" and (
             msg_kind == "Tool Call"
             or tool_call_link
             or stored_tool_call_id
@@ -682,30 +674,6 @@ class ConversationManager:
                     "content": None,
                     "tool_calls": tool_calls,
                 }
-
-        # Tool result message (combined UI mutation pattern from streaming).
-        if msg_kind == "Tool Result" and role_mapped == "assistant":
-            call_id, tool_name, tool_args = self._resolve_tool_call_details(
-                stored_tool_call_id, tool_call_link
-            )
-            assistant_msg = {
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [
-                    {
-                        "id": call_id,
-                        "type": "function",
-                        "function": {"name": tool_name, "arguments": tool_args},
-                    }
-                ],
-            }
-            tool_msg = {
-                "role": "tool",
-                "tool_call_id": call_id,
-                "name": tool_name,
-                "content": content,
-            }
-            return [assistant_msg, tool_msg]
 
         # Separate tool result message.
         if role_mapped == "tool":

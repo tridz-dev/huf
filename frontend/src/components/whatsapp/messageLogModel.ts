@@ -8,12 +8,13 @@ export interface MessageLogFilters {
   status: string;
   agent: string;
   template: string;
+  solution: string;
   phone: string;
   from: string;
   to: string;
 }
 
-export const EMPTY_FILTERS: MessageLogFilters = { q: '', direction: '', status: '', agent: '', template: '', phone: '', from: '', to: '' };
+export const EMPTY_FILTERS: MessageLogFilters = { q: '', direction: '', status: '', agent: '', template: '', solution: '', phone: '', from: '', to: '' };
 
 const FILTER_KEYS = Object.keys(EMPTY_FILTERS) as (keyof MessageLogFilters)[];
 
@@ -47,6 +48,7 @@ export function filtersToQuery(filters: MessageLogFilters): MessageLogQuery {
   if (filters.status) query.status = filters.status;
   if (filters.agent) query.agent = filters.agent;
   if (filters.template) query.template = filters.template;
+  if (filters.solution) query.solution = filters.solution;
   if (filters.phone.trim()) query.phone = filters.phone.trim();
   if (filters.q.trim()) query.q = filters.q.trim();
   if (filters.from) query.date_from = filters.from;

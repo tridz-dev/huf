@@ -16,7 +16,7 @@ from typing import Any
 import frappe
 from frappe.rate_limiter import rate_limit
 
-from huf.ai.tool_registry import PermissionAwareToolRegistry
+from huf.ai.tools.registry import PermissionAwareToolRegistry
 from huf.ai.voice.engines.base import VoiceEngine
 
 SESSION_CACHE_KEY_PREFIX = "huf:voice:realtime:session:"

@@ -12,7 +12,7 @@ different capability requirements:
   automatically on message save, exactly like chart/mermaid/html
   artifacts. This is injected UNCONDITIONALLY whenever allow_chat is set,
   the same way CHART_ARTIFACT_INSTRUCTIONS and AI_ELEMENT_INSTRUCTIONS
-  are (see their call site in huf.ai.agent_integration). Without this, an
+  are (see their call site in huf.ai.agent.integration). Without this, an
   agent with no document tools linked has no way to know the artifact
   type exists at all, and falls back to whatever it knows from training -
   observed in practice as the model dumping a raw python-docx script

@@ -15,6 +15,12 @@ import { extendTailwindMerge } from 'tailwind-merge';
 const cnMerge = extendTailwindMerge({
   extend: {
     classGroups: {
+      // Custom font-size utilities from tailwind.config.js `fontSize`. Without
+      // these, tailwind-merge reads `text-micro` as a text COLOUR and drops it
+      // when a real colour class (text-steel) follows, or vice versa.
+      'font-size': [
+        { text: ['display', 'title', 'subtitle', 'micro', 'body-text', 'ui-text', 'meta', 'eyebrow'] },
+      ],
       // Each classGroup entry must mirror tailwind-merge's own default-config
       // shape: `<groupId>: [{ <groupId>: [suffixes...] }]`. The inner object
       // key is what actually gets walked into the class-name trie (`h-` +
@@ -33,4 +39,38 @@ const cnMerge = extendTailwindMerge({
 
 export function cn(...inputs: ClassValue[]) {
   return cnMerge(clsx(inputs));
+}
+
+/**
+ * Run independent promises together without one denial/failure taking the
+ * rest down with it (the failure mode of a plain `Promise.all` when one
+ * branch is a 403-denied API call). Each slot resolves to its value on
+ * success or `undefined` on failure; `onError` is called per failed slot so
+ * callers can toast or log without losing the others.
+ */
+export async function settleAll<T extends readonly unknown[]>(
+  promises: readonly [...{ [K in keyof T]: Promise<T[K]> }],
+  onError?: (index: number, error: unknown) => void,
+): Promise<{ [K in keyof T]: T[K] | undefined }> {
+  const results = await Promise.allSettled(promises);
+  return results.map((result, index) => {
+    if (result.status === 'fulfilled') {
+      return result.value;
+    }
+    onError?.(index, result.reason);
+    return undefined;
+  }) as { [K in keyof T]: T[K] | undefined };
+}
+
+/**
+ * The visible text of a sidebar button is hidden when the sidebar is collapsed to icons: keep the control
+ * named for assistive tech by falling back to its tooltip text as the accessible name.
+ */
+export function nameWhenCollapsed<P extends { 'aria-label'?: string }>(
+  props: P,
+  collapsed: boolean,
+  tooltip: string | { children?: unknown } | undefined,
+): P {
+  const text = typeof tooltip === 'string' ? tooltip : typeof tooltip?.children === 'string' ? tooltip.children : undefined;
+  return { ...props, 'aria-label': props['aria-label'] ?? (collapsed ? text : undefined) };
 }

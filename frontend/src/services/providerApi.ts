@@ -431,4 +431,3 @@ export async function getModalityOptions(): Promise<string[]> {
     return ['Text', 'Image', 'Text-to-Speech', 'Transcription', 'Embeddings']; // Fallback
   }
 }
-

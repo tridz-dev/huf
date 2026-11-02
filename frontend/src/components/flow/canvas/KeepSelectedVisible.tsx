@@ -1,0 +1,51 @@
+import { useEffect, useRef } from 'react';
+import { useReactFlow, useStore } from 'reactflow';
+import { panToReveal } from '@/lib/flow/flowLayout';
+import { motionMs } from '@/lib/flow-canvas/tween';
+
+/** Marks the strip of floating buttons (Tidy layout, Convert, panel toggle) at the top of the canvas. */
+export const FLOW_TOOLBAR_ATTR = 'data-flow-toolbar';
+
+/** How far down the canvas the floating strip reaches (its bottom edge, margin included); 0 when it shows nothing (a phone). */
+function toolbarClearance(): number {
+  const el = document.querySelector<HTMLElement>(`[${FLOW_TOOLBAR_ATTR}]`);
+  return el && el.offsetHeight > 0 ? el.offsetTop + el.offsetHeight : 0;
+}
+
+/** Marks a panel or sheet that sits over the right edge of the canvas, so the step that was just opened can be kept clear of it. */
+export const FLOW_PANEL_ATTR = 'data-flow-sheet-panel';
+
+/**
+ * When a step is selected, or the canvas gets narrower because the step panel opened or was dragged wider, moves the view just
+ * enough (zoom unchanged) that the selected step is fully visible in the part of the canvas no panel covers.
+ */
+export function KeepSelectedVisible({ selectedNodeId }: { selectedNodeId: string | null }) {
+  const rf = useReactFlow();
+  const rfRef = useRef(rf);
+  rfRef.current = rf;
+  const width = useStore((s) => s.width);
+  const height = useStore((s) => s.height);
+  useEffect(() => {
+    if (!selectedNodeId || !width || !height) return;
+    const pan = () => {
+      const node = rfRef.current.getNode(selectedNodeId);
+      if (!node) return;
+      // A sheet laid over the canvas covers its right side; a docked panel has already narrowed the canvas itself.
+      const covered = document.querySelector<HTMLElement>(`[${FLOW_PANEL_ATTR}]`)?.offsetWidth ?? 0;
+      const visibleWidth = Math.max(width - covered, 200);
+      const vp = rfRef.current.getViewport();
+      const rect = {
+        x: node.positionAbsolute?.x ?? node.position.x,
+        y: node.positionAbsolute?.y ?? node.position.y,
+        width: node.width ?? 236,
+        height: node.height ?? 62,
+      };
+      const next = panToReveal(rect, vp, { width: visibleWidth, height }, 24, undefined, toolbarClearance());
+      if (next) rfRef.current.setViewport({ ...next, zoom: vp.zoom }, { duration: motionMs(200) });
+    };
+    // Again after the sheet has slid in: its width is only known once it is on screen.
+    const timers = [setTimeout(pan, 140), setTimeout(pan, 560)];
+    return () => timers.forEach(clearTimeout);
+  }, [selectedNodeId, width, height]);
+  return null;
+}

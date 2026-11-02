@@ -1,0 +1,4 @@
+{
+  "_comment": "Known remaining form-geometry failures. Entries may only be removed (MAX_ALLOWLIST in form-geometry.spec.ts is the ceiling; a stale entry fails the test).",
+  "entries": []
+}

@@ -5,7 +5,7 @@
 
 Requires a real site (frappe.tests.IntegrationTestCase) -- exercises DB-level uniqueness
 checks and Document.validate() through real inserts, which the frappe-free
-huf.ai.tests.test_procedure_binding module (unit tests against the runtime exposure
+huf.ai.procedure.tests.test_procedure_binding module (unit tests against the runtime exposure
 logic) cannot.
 
 Run with:

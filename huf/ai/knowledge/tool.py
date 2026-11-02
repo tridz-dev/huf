@@ -3,6 +3,7 @@
 import frappe
 from typing import Optional
 
+from huf.ai.gateways.safety import CITATION_RULE, untrusted_preamble, wrap_untrusted
 from .retriever import knowledge_search, get_search_diagnostics
 
 
@@ -178,14 +179,20 @@ def handle_knowledge_search(
 			output.append(f"Search results from '{knowledge_source}':")
 		else:
 			output.append(f"Search results across sources: {', '.join(target_sources)}")
+		output.append(untrusted_preamble() + " " + CITATION_RULE)
 		output.append("")
 
 		for i, result in enumerate(results, 1):
-			output.append(f"## Result {i}: {result.get('title', 'Untitled')}")
-			output.append(f"Source: {result['source']}")
+			output.append(f"## Result {i}")
 			output.append(f"Score: {result['score']:.3f}")
-			output.append("")
-			output.append(result["text"])
+			output.append(
+				wrap_untrusted(
+					result["text"],
+					result["source"],
+					title=result.get("title") or "Untitled",
+					ref=result.get("ref"),
+				)
+			)
 			output.append("")
 			output.append("---")
 			output.append("")

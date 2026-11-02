@@ -21,6 +21,7 @@ import type {
   AutomationTriggerAttachment,
   AutomationTriggerType,
 } from '@/types/automation.types';
+import { copyText } from '@/lib/clipboard';
 
 /**
  * Automation-scoped trigger data as edited in the form: same shape as the
@@ -49,7 +50,7 @@ export interface TriggerEditorProps {
   permissions: TriggerEditorPermissions;
 }
 
-const WEBHOOK_ENDPOINT_PATH = '/api/method/huf.ai.automation_webhook.handle_automation_webhook';
+const WEBHOOK_ENDPOINT_PATH = '/api/method/huf.ai.automation.webhook.handle_automation_webhook';
 
 /**
  * Editor for a single Automation Trigger's fields, keyed off `trigger_type`.
@@ -88,18 +89,16 @@ export function TriggerEditor({ trigger, onChange, permissions }: TriggerEditorP
   const handleCopyWebhookUrl = () => {
     if (!trigger.webhook_slug) return;
     const url = `${window.location.origin}${WEBHOOK_ENDPOINT_PATH}?slug=${encodeURIComponent(trigger.webhook_slug)}`;
-    navigator.clipboard
-      .writeText(url)
-      .then(() => toast.success('Webhook URL copied'))
-      .catch(() => toast.error('Could not copy webhook URL'));
+    void copyText(url).then((ok) =>
+      ok ? toast.success('Webhook URL copied') : toast.error('Could not copy webhook URL'),
+    );
   };
 
   const handleCopyWebhookKey = () => {
     if (!trigger.webhook_key) return;
-    navigator.clipboard
-      .writeText(trigger.webhook_key)
-      .then(() => toast.success('Webhook key copied'))
-      .catch(() => toast.error('Could not copy webhook key'));
+    void copyText(trigger.webhook_key).then((ok) =>
+      ok ? toast.success('Webhook key copied') : toast.error('Could not copy webhook key'),
+    );
   };
 
   return (

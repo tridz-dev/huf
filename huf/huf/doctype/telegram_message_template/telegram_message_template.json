@@ -1,0 +1,149 @@
+{
+ "actions": [],
+ "autoname": "field:template_name",
+ "creation": "2026-10-23 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "template_name",
+  "gateway",
+  "is_active",
+  "column_break_a",
+  "language",
+  "parse_mode",
+  "description",
+  "section_content",
+  "body",
+  "variables",
+  "section_media",
+  "media_type",
+  "media",
+  "buttons_json",
+  "last_used_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "template_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Template name",
+   "reqd": 1,
+   "unique": 1,
+   "description": "Short name agents and automations use to send this template. Lowercase letters, digits, dashes and underscores."
+  },
+  {
+   "fieldname": "gateway",
+   "fieldtype": "Link",
+   "label": "Gateway",
+   "options": "Gateway",
+   "description": "Limit this template to one Telegram gateway. Leave empty to allow all Telegram gateways."
+  },
+  {
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "default": "1",
+   "in_list_view": 1,
+   "label": "Active"
+  },
+  {
+   "fieldname": "column_break_a",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "language",
+   "fieldtype": "Data",
+   "label": "Language",
+   "description": "Optional language code, for example en or pt-BR."
+  },
+  {
+   "fieldname": "parse_mode",
+   "fieldtype": "Select",
+   "default": "HTML",
+   "label": "Text formatting",
+   "options": "Plain\nHTML\nMarkdownV2"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description",
+   "description": "What this template is for. Shown to agents choosing a template."
+  },
+  {
+   "fieldname": "section_content",
+   "fieldtype": "Section Break",
+   "label": "Message"
+  },
+  {
+   "fieldname": "body",
+   "fieldtype": "Long Text",
+   "label": "Message text",
+   "description": "The message. Use {{name}} to insert a variable."
+  },
+  {
+   "fieldname": "variables",
+   "fieldtype": "Table",
+   "label": "Variables",
+   "options": "Telegram Template Variable"
+  },
+  {
+   "fieldname": "section_media",
+   "fieldtype": "Section Break",
+   "label": "Media and buttons"
+  },
+  {
+   "fieldname": "media_type",
+   "fieldtype": "Select",
+   "default": "none",
+   "label": "Media type",
+   "options": "none\nphoto\nvideo\nanimation\ndocument\naudio\nvoice\nsticker"
+  },
+  {
+   "fieldname": "media",
+   "fieldtype": "Attach",
+   "label": "Media file",
+   "depends_on": "eval:doc.media_type && doc.media_type!=\"none\"",
+   "mandatory_depends_on": "eval:doc.media_type && doc.media_type!=\"none\"",
+   "description": "File sent with the message."
+  },
+  {
+   "fieldname": "buttons_json",
+   "fieldtype": "Code",
+   "options": "JSON",
+   "label": "Buttons",
+   "description": "Optional buttons, in the same JSON format agents use for telegram-buttons."
+  },
+  {
+   "fieldname": "last_used_at",
+   "fieldtype": "Datetime",
+   "label": "Last used",
+   "read_only": 1,
+   "no_copy": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-10-23 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Telegram Message Template",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 import type { GatewayHealthStatus } from '@/services/whatsappHealthApi';
 import { HealthBanner } from './HealthBanner';
+import { numberSummary } from './fixturesSolutions';
 
 function gw(over: Partial<GatewayHealthStatus> = {}): GatewayHealthStatus {
 	return {
@@ -135,5 +136,39 @@ describe('HealthBanner', () => {
 		expect(screen.queryByText('Token valid')).toBeNull();
 		expect(screen.getByText('Token rejected').className).toMatch(/destructive/);
 		expect(screen.getByText('Credentials').className).toMatch(/destructive/);
+	});
+
+	describe('solution blame', () => {
+		const renderBanner = (health: 'healthy' | 'degraded', summary = numberSummary()) =>
+			render(
+				<MemoryRouter>
+					<HealthBanner gateway={gw({ health })} onCheck={vi.fn()} numberSummary={summary} />
+				</MemoryRouter>
+			);
+
+		it('names the solution behind most sends when quality is not healthy, without claiming cause', () => {
+			renderBanner('degraded');
+			expect(screen.getByRole('link', { name: 'Orders' })).toHaveAttribute('href', '/solutions/orders');
+			expect(screen.getByText(/Most of today's sends came from/)).toBeInTheDocument();
+			expect(screen.getByText(/91% of sends/)).toBeInTheDocument();
+			expect(screen.getByText(/Quality is medium/)).toBeInTheDocument();
+			expect(screen.queryByText(/caused/i)).not.toBeInTheDocument();
+		});
+
+		it('shows nothing about blame or rating when healthy and quality is good', () => {
+			renderBanner('healthy', numberSummary({ quality: { rating: 'High', source: 'meta' } }));
+			expect(screen.queryByText(/Most of today's sends/)).not.toBeInTheDocument();
+		});
+
+		it('shows no rating text when quality source is unknown', () => {
+			renderBanner('degraded', numberSummary({ quality: { rating: 'Low', source: 'unknown' } }));
+			expect(screen.queryByText(/Quality is/)).not.toBeInTheDocument();
+			expect(screen.getByText(/Most of today's sends/)).toBeInTheDocument();
+		});
+
+		it('omits the blame line when there is no blame', () => {
+			renderBanner('degraded', numberSummary({ blame: null }));
+			expect(screen.queryByText(/Most of today's sends/)).not.toBeInTheDocument();
+		});
 	});
 });

@@ -6,7 +6,8 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { PanelLeft } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
-import { cn } from "@/lib/utils"
+import { useSidebarOpenState } from "@/hooks/permissions/useSidebarOpenState"
+import { cn, nameWhenCollapsed } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
@@ -24,9 +25,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
-const SIDEBAR_STORAGE_KEY = "sidebar:state"
 const SIDEBAR_WIDTH = "15.5rem"
-const SIDEBAR_WIDTH_MOBILE = "18rem"
+const SIDEBAR_WIDTH_MOBILE = "min(85vw, 20rem)"
 const SIDEBAR_WIDTH_ICON = "4rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
@@ -55,6 +55,8 @@ export const SidebarProvider = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> & {
     defaultOpen?: boolean
+    /** Window width (px) at or below which the navigation is the icon rail on its own, until the person opens it. */
+    collapseBelow?: number
     open?: boolean
     onOpenChange?: (open: boolean) => void
   }
@@ -62,6 +64,7 @@ export const SidebarProvider = React.forwardRef<
   (
     {
       defaultOpen = true,
+      collapseBelow,
       open: openProp,
       onOpenChange: setOpenProp,
       className,
@@ -74,32 +77,7 @@ export const SidebarProvider = React.forwardRef<
     const isMobile = useIsMobile()
     const [openMobile, setOpenMobile] = React.useState(false)
 
-    const [_open, _setOpen] = React.useState(() => {
-      try {
-        const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY)
-        return stored !== null ? stored === "true" : defaultOpen
-      } catch {
-        return defaultOpen
-      }
-    })
-    const open = openProp ?? _open
-    const setOpen = React.useCallback(
-      (value: boolean | ((value: boolean) => boolean)) => {
-        const openState = typeof value === "function" ? value(open) : value
-        if (setOpenProp) {
-          setOpenProp(openState)
-        } else {
-          _setOpen(openState)
-        }
-
-        try {
-          localStorage.setItem(SIDEBAR_STORAGE_KEY, String(openState))
-        } catch {
-          void 0
-        }
-      },
-      [setOpenProp, open]
-    )
+    const [open, setOpen] = useSidebarOpenState(defaultOpen, collapseBelow, openProp, setOpenProp)
 
     const toggleSidebar = React.useCallback(() => {
       return isMobile
@@ -479,7 +457,7 @@ export const SidebarGroupLabel = React.forwardRef<
       ref={ref}
       data-sidebar="group-label"
       className={cn(
-        "flex h-6 shrink-0 items-center rounded-md px-2 font-mono text-eyebrow uppercase text-steel-soft outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
+        "flex h-6 shrink-0 items-center rounded-md px-2 font-mono text-eyebrow uppercase text-steel outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
         "group-data-[collapsible=icon]:hidden",
         className
       )}
@@ -620,7 +598,7 @@ export const SidebarMenuButton = React.forwardRef<
           state === "collapsed" &&
             "h-[34px] w-[38px] justify-center gap-0 rounded-[9px] p-0 [&>svg]:size-[18px]",
         )}
-        {...props}
+        {...nameWhenCollapsed(props, state === "collapsed", tooltip)}
       />
     )
 

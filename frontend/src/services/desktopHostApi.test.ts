@@ -90,14 +90,14 @@ describe('endpoints', () => {
     get.mockResolvedValue({ message: [{ device_id: 'd1', label: 'L', online: true, last_seen: 1, remote_control: true, mode: 'ask' }] });
     const hosts = await listDesktopHosts();
     expect(hosts).toHaveLength(1);
-    expect(get).toHaveBeenCalledWith('huf.ai.desktop_sessions.list_desktop_hosts');
+    expect(get).toHaveBeenCalledWith('huf.ai.desktop.sessions.list_desktop_hosts');
   });
 
   it('setDesktopPermissionMode returns the confirmed mode', async () => {
     post.mockResolvedValue({ message: { ok: true, applied_mode: 'full', device_id: 'd1' } });
     const r = await setDesktopPermissionMode('d1', 'full');
     expect(r).toEqual({ ok: true, appliedMode: 'full' });
-    expect(post).toHaveBeenCalledWith('huf.ai.desktop_sessions.set_desktop_permission_mode', {
+    expect(post).toHaveBeenCalledWith('huf.ai.desktop.sessions.set_desktop_permission_mode', {
       device_id: 'd1',
       mode: 'full',
     });

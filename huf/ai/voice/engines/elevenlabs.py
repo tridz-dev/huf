@@ -14,7 +14,7 @@ import frappe
 import requests
 from frappe.rate_limiter import rate_limit
 
-from huf.ai.tool_registry import PermissionAwareToolRegistry
+from huf.ai.tools.registry import PermissionAwareToolRegistry
 from huf.ai.voice.engines.base import VoiceEngine
 
 SETTINGS_DOCTYPE = "Elevenlabs Settings"

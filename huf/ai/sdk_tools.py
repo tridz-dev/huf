@@ -11,6 +11,7 @@ from frappe import _
 
 from huf.ai.conversation_data_tools import *
 from huf.ai.conversation_data_tools import _load_state
+from huf.ai.gateways.slack.flow_hooks import tool_executed, tool_gate
 from huf.ai.handlers.agent_runner import *
 
 # Re-export handler functions so existing function_path strings and imports keep working.
@@ -20,18 +21,19 @@ from huf.ai.handlers.crud import *
 from huf.ai.handlers.crud import _sanitize_for_doctype
 from huf.ai.handlers.media import *
 from huf.ai.handlers.media import _resolve_tts_config
-from huf.ai.tool_invocation import (
+from huf.ai.desktop.run_pin import pin_run_identity as _pin_run_identity
+from huf.ai.tools.invocation import (
     CLIENT_SIDE_TOOL_FUNCTION_PATH,
     CLIENT_SIDE_TOOL_TYPE,
     DYNAMIC_FUNCTION_PATH_TYPES,
     TYPE_TO_FUNCTION_PATH,
     build_extra_args,
 )
-from huf.ai.tool_invocation import (
+from huf.ai.tools.invocation import (
     check_tool_permission as _check_tool_permission,
 )
-from huf.ai.tool_registry import PermissionAwareToolRegistry
-from huf.ai.tool_types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES
+from huf.ai.tools.registry import PermissionAwareToolRegistry
+from huf.ai.tools.types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES
 from huf.ai.tools.perplexity import handle_perplexity_search
 
 logger = frappe.logger("huf")
@@ -103,35 +105,7 @@ def _pin_code_execution_identity(args_dict: dict, ctx) -> dict:
     return args_dict
 
 
-def _pin_run_identity(args_dict: dict, ctx, nonce: str = None) -> dict:
-    """Overwrite (never default) the run identity args from the server-side run context.
-
-    Used by tools that must not trust the model for who/what run they act on
-    (Desktop Workspace tools): ``agent_run_id`` and ``conversation_id`` come only from
-    the run context, and ``call_id`` is derived deterministically from the run and the
-    SDK ``tool_call_id`` so a redelivered or retried call dedupes. Anything the model
-    sent for these keys is discarded.
-    """
-    from huf.ai.desktop_executor import derive_call_id
-
-    huf_ctx = _frappe_run_context_dict(ctx)
-    for key in ("agent_run_id", "conversation_id"):
-        args_dict.pop(key, None)
-        if huf_ctx.get(key):
-            args_dict[key] = huf_ctx[key]
-    args_dict.pop("call_id", None)
-    args_dict.pop("_dx_pin", None)  # minted below by the caller, never taken from the model
-    tool_call_id = getattr(ctx, "tool_call_id", None)
-    if tool_call_id and args_dict.get("agent_run_id"):
-        args_dict["call_id"] = derive_call_id(args_dict["agent_run_id"], tool_call_id, nonce)
-    # The exact LLM-issued id, sent on its own so the desktop can join its feed to the chat row.
-    args_dict.pop("tool_call_id", None)
-    if tool_call_id and isinstance(tool_call_id, str):
-        args_dict["tool_call_id"] = tool_call_id[:256]
-    return args_dict
-
-
-# _check_tool_permission moved to huf.ai.tool_invocation.check_tool_permission
+# _check_tool_permission moved to huf.ai.tools.invocation.check_tool_permission
 # (T-10) so the deterministic tool path shares the same guest/mutating-type
 # gate; imported above as _check_tool_permission to keep this call site
 # unchanged. The old signature accepted an unused `context` positional arg
@@ -223,7 +197,7 @@ SKILL_CATALOG_MAX_CHARS = 12_000
 
 def _attached_server_skill_names(agent) -> set:
     """Normalised names of the ACTIVE server skills attached to ``agent`` (server skills win)."""
-    from huf.ai.desktop_executor import normalize_catalog_name
+    from huf.ai.desktop.executor import normalize_catalog_name
 
     names = set()
     try:
@@ -239,7 +213,7 @@ def _attached_server_skill_names(agent) -> set:
 
 def _skill_read_description(base: str, visible: list) -> str:
     """The base description plus the (capped, re-sanitised) local skill catalog."""
-    from huf.ai.desktop_executor import SKILL_DESCRIPTION_MAX_CHARS, sanitize_text
+    from huf.ai.desktop.executor import SKILL_DESCRIPTION_MAX_CHARS, sanitize_text
 
     lines, used = [], 0
     for entry in visible:
@@ -265,7 +239,7 @@ def _build_desktop_tools(function_docs, desktop_ctx, agent=None) -> list:
     """Build the attached desktop tool groups for a run pinned to a live executor.
 
     Returns [] unless desktop_ctx carries an executor_id whose lease is live and
-    owned by the ctx user (huf.ai.desktop_executor.resolve_desktop_ctx). The
+    owned by the ctx user (huf.ai.desktop.executor.resolve_desktop_ctx). The
     pinned _dx_* values come from the server-side lease, and overwrite anything
     the LLM passes (extra_args are applied after the LLM's args).
 
@@ -284,7 +258,7 @@ def _build_desktop_tools(function_docs, desktop_ctx, agent=None) -> list:
         return []
 
     try:
-        from huf.ai.desktop_executor import is_lease_live, resolve_desktop_ctx
+        from huf.ai.desktop.executor import is_lease_live, resolve_desktop_ctx
 
         if not is_lease_live(executor_id):
             return []
@@ -309,7 +283,7 @@ def _build_desktop_tools(function_docs, desktop_ctx, agent=None) -> list:
 
     # The agent's desktop access ceiling: a capability that is ``off`` removes its tools from the
     # model's list. The pinned (signed) policy wins; an unpinned ctx reads it from the agent.
-    from huf.ai import desktop_policy
+    from huf.ai.desktop import policy as desktop_policy
 
     policy = desktop_policy.sanitize_policy(desktop_ctx.get("agent_policy"))
     if policy is None:
@@ -334,7 +308,7 @@ def _build_desktop_tools(function_docs, desktop_ctx, agent=None) -> list:
         description = function_doc.description
         tool_extra = dict(extra_args)
         if group == "processes":
-            from huf.ai.desktop_executor import lease_capabilities
+            from huf.ai.desktop.executor import lease_capabilities
             from huf.ai.tools._registry import DESKTOP_PROCESS_CAPABILITY
 
             if lease_caps is None:
@@ -414,8 +388,8 @@ def _build_local_mcp_tools(mcp_docs, desktop_ctx, executor_id, agent, extra_args
     ``DESKTOP_LOCAL_MCP_CAPABILITY``. The agent name, server and tool of every tool are pinned
     here (``_dx_*`` overwrite whatever the model sends).
     """
-    from huf.ai import desktop_mcp
-    from huf.ai.desktop_executor import get_catalog, lease_capabilities, sanitize_text
+    from huf.ai.desktop import mcp as desktop_mcp
+    from huf.ai.desktop.executor import get_catalog, lease_capabilities, sanitize_text
     from huf.ai.tools._registry import DESKTOP_LOCAL_MCP_CAPABILITY, DESKTOP_LOCAL_MCP_TOOLS
 
     catalog = get_catalog(executor_id, desktop_ctx.get("catalog_hash"))
@@ -433,7 +407,7 @@ def _build_local_mcp_tools(mcp_docs, desktop_ctx, executor_id, agent, extra_args
     built = []
 
     def allowed(name):
-        from huf.ai import desktop_policy
+        from huf.ai.desktop import policy as desktop_policy
 
         return set(DESKTOP_LOCAL_MCP_CAPABILITY[name]) <= caps and desktop_policy.tool_allowed(policy, name)
 
@@ -507,7 +481,7 @@ def _local_skills_state(desktop_ctx, executor_id, agent):
     Empty visible list when no catalog is pinned, the pinned catalog expired, or every local
     skill is shadowed by an attached server skill of the same name.
     """
-    from huf.ai.desktop_executor import get_catalog, lease_capabilities
+    from huf.ai.desktop.executor import get_catalog, lease_capabilities
 
     caps = lease_capabilities(executor_id)
     catalog = get_catalog(executor_id, desktop_ctx.get("catalog_hash"))
@@ -589,7 +563,7 @@ def create_agent_tools(agent, model_name: str = None, desktop_ctx: dict | None =
                     # fetch its schema) until the model discovers it.
                     continue
 
-            # Resolution moved to huf.ai.tool_invocation (T-10): one
+            # Resolution moved to huf.ai.tools.invocation (T-10): one
             # type->function_path map shared with the deterministic tool
             # path, instead of a hand-duplicated if/elif chain. Behavior is
             # identical to the chain this replaced -- Custom
@@ -627,7 +601,7 @@ def create_agent_tools(agent, model_name: str = None, desktop_ctx: dict | None =
                     del params["additionalProperties"]
 
                 # extra_args derivation moved to
-                # huf.ai.tool_invocation.build_extra_args (T-10) -- same
+                # huf.ai.tools.invocation.build_extra_args (T-10) -- same
                 # branches, same values. GET/POST's tool_name is deliberately
                 # NOT taken from there: this file injects it via the
                 # dedicated `_function.__name__ in [...]` check below
@@ -658,6 +632,7 @@ def create_agent_tools(agent, model_name: str = None, desktop_ctx: dict | None =
                     tool_type=function_doc.types,
                     allowed_for_guest=bool(function_doc.allowed_for_guest),
                     blocking=is_blocking,
+                    requires_confirmation=bool(getattr(function_doc, "requires_confirmation", 0)),
                 )
 
                 if tool:
@@ -879,6 +854,7 @@ def create_function_tool(
     tool_type: str = None,
     allowed_for_guest: bool = False,
     blocking: bool = False,
+    requires_confirmation: bool = False,
     pin_run_context: bool = False,
 ) -> FunctionTool:
     """
@@ -912,13 +888,11 @@ def create_function_tool(
 
     if not function:
         return None
-
     try:
         _extra_args = extra_args or {}
         _function = function
 
         async def on_invoke_tool(ctx=None, args_json: str = None) -> str:
-
             # Permission check before execution
             if tool_type:
                 perm_check = _check_tool_permission(tool_type, allowed_for_guest=allowed_for_guest)
@@ -931,12 +905,11 @@ def create_function_tool(
                     ctx = None
 
                 args_dict = json.loads(args_json or "{}")
-
                 _merge_run_context(args_dict, ctx)
                 if pin_run_context:
                     # N7: one nonce per SDK invocation, so a provider reusing a tool_call_id
                     # in a later invocation never reads this one's cached result.
-                    from huf.ai.desktop_executor import mint_invocation_nonce
+                    from huf.ai.desktop.executor import mint_invocation_nonce
 
                     _pin_run_identity(args_dict, ctx, mint_invocation_nonce())
 
@@ -959,8 +932,9 @@ def create_function_tool(
                         args_dict.get("_dx_user"),
                     )
 
-                if "ignore_permissions" in args_dict:
-                    del args_dict["ignore_permissions"]
+                args_dict.pop("ignore_permissions", None)
+                if (_gate := tool_gate(name, args_dict, _frappe_run_context_dict(ctx), requires_confirmation)) is not None:
+                    return _gate  # gateway tool policy / confirm gate
 
                 if allowed_for_guest and frappe.session.user == "Guest":
                     if tool_type in _GUEST_DOCTYPE_PINNED_TYPES and not _extra_args.get("reference_doctype"):
@@ -1022,14 +996,13 @@ def create_function_tool(
                         result = await asyncio.to_thread(_function, **call_kwargs)
                 else:
                     result = _function(**call_kwargs)
-
                 # Handle async functions
                 if asyncio.iscoroutine(result):
                     result = await result
 
                 if hasattr(result, "as_dict") and callable(getattr(result, "as_dict", None)):
                     result = result.as_dict()
-
+                tool_executed(name, _frappe_run_context_dict(ctx))
                 return json.dumps(result, default=str) if isinstance(result, (dict, list)) else str(result)
 
             except Exception as e:
@@ -1037,6 +1010,15 @@ def create_function_tool(
                     f"Error in on_invoke_tool for tool '{name}': {e!s}\n{frappe.get_traceback()}"
                 )
                 return json.dumps({"error": str(e)})
+
+        _inner_invoke_tool = on_invoke_tool
+
+        async def on_invoke_tool(ctx=None, args_json: str = None) -> str:
+            # Mark agent tool execution so credential-taking tools can refuse plaintext secrets.
+            from huf.ai.secrets import agent_tool_context
+
+            with agent_tool_context():
+                return await _inner_invoke_tool(ctx, args_json)
 
         safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', (name or ""))
         if len(safe_name) > 128:
@@ -1083,7 +1065,7 @@ def get_function_from_name(tool_name: str, tool_type: str | None = None) -> Call
     """
 
     if tool_type == "App Provided":
-        from huf.ai.tool_registry import get_hook_declared_function_paths
+        from huf.ai.tools.registry import get_hook_declared_function_paths
         if tool_name not in get_hook_declared_function_paths():
             frappe.logger("huf").debug(
                 f"App Provided function path not in hook allow-set: {tool_name}"

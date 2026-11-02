@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import ReactFlow, {
   Background,
-  Controls,
-  MiniMap,
-  addEdge,
   Connection,
   Edge,
   NodeChange,
@@ -13,23 +9,48 @@ import ReactFlow, {
   applyEdgeChanges,
   Node,
   Panel,
-  BackgroundVariant
+  BackgroundVariant,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { PanelLeftOpen, PanelRightOpen, Maximize2, Plus, Sparkles } from 'lucide-react';
+import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
 import { Button } from './ui/button';
 import { TriggerNode } from './nodes/TriggerNode';
 import { ActionNode } from './nodes/ActionNode';
 import { EndNode } from './nodes/EndNode';
-import { AddStepGhostNode, AddStepGhostNodeData } from './nodes/AddStepGhostNode';
-import { InsertableEdge, InsertableEdgeData } from './edges/InsertableEdge';
+import { AddStepGhostNode } from './nodes/AddStepGhostNode';
+import { InsertableEdge, GhostEdge } from './edges/InsertableEdge';
 import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { FlowNodeRail, NODE_RAIL_ACTION_CATEGORY, NodeRailCategory } from './FlowNodeRail';
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
+import { DeleteStepDialog } from './flow/DeleteStepDialog';
+import { KeepSelectedVisible, FLOW_TOOLBAR_ATTR } from './flow/canvas/KeepSelectedVisible';
+import { CANVAS_CLASS, FIT_VIEW_OPTIONS, FitViewAfterRemovalOrLayout, FlowControls, FlowMiniMap, KeepRunClearOfSheet, KeepSelectedClearOfToolbar, keepCanvasUnscrolled } from './flow/canvas/canvasView';
+import { ZOOM_MAX, ZOOM_MIN } from '@/lib/flow-canvas/zoomLod';
+import { useRenderedGraph } from './flow/canvas/useRenderedGraph';
+import { useArrowNavigation } from './flow/canvas/useArrowNavigation';
+import { RunOverlayChip } from './flow/canvas/RunOverlayChip';
+import { useRunOverlay } from '../lib/flow-graph/runOverlay';
+import { useRunParam } from '../hooks/flow/useRunParam';
+import { FlowCanvasToolbar } from './flow/canvas/FlowCanvasToolbar';
+import { EdgeDeleteDialog } from './flow/canvas/EdgeDeleteDialog';
+import { registerPendingFlush } from '../lib/flow-graph/canvas/pendingWrites';
+import { flushPendingUpdate, glideNodes, useConvertedProcedure, useEdgeActions } from './flow/canvas/useCanvasEffects';
+import { useCanvasDeleteKey } from './flow/canvas/useCanvasDeleteKey';
+import { FlowShortcuts } from './flow/shortcuts/FlowShortcuts';
+import { connectionProblem } from '../lib/flow/flowEdit';
 import { useFlowContext } from '../contexts/FlowContext';
-import { flowService } from '../services/flowService';
-import { FlowNodeData, TriggerConfig, ActionConfig } from '../types/flow.types';
+import { RENDER_ONLY_EDGE_PREFIX, RENDER_ONLY_NODE_PREFIX, addActionStep, computeOpenEnds, connectSteps, connectionRoute } from '../lib/flow-graph/flowCanvasGraph';
+import { toast } from '@/lib/toast';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { FirstRunGuide } from './flow/FirstRunGuide';
+import { useViewport } from '@/lib/ui/responsive';
+import { ensureToolSchemasLoaded } from '../lib/flow/flowToolSchemas';
+import { triggerStepFields } from '../lib/flow/flowLabels';
+import { FlowNodeData, TriggerConfig, ActionConfig, FlowEdgeRoute } from '../types/flow.types';
 import type { ActionOption } from '../types/modal.types';
+
+/** Shift-click (or Cmd/Ctrl-click) adds a step to the selection; Shift-drag on the background draws a selection box. */
+const MULTI_SELECT_KEYS = ['Shift', 'Meta', 'Control'];
 
 interface FlowCanvasProps {
   showLeftSidebar: boolean;
@@ -48,27 +69,58 @@ export function FlowCanvas({
     activeFlow,
     updateNodesAndEdges,
     updateNode,
+    deleteNode,
     selectedNodeId,
+    selectedEdgeId,
     setSelectedNode,
     setSelectedEdge,
+    deleteEdge,
     saveState,
-    undo,
-    canUndo
+    tidyLayout,
+    layoutRevision,
   } = useFlowContext();
+  const { canManage, readOnlyReason } = useFlowPermissions();
+  // 1200px and narrower: Tidy layout and Convert to procedure live in the header's "..." menu. A phone has no editing tools at all.
+  const { isCompact, isPhone } = useViewport();
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
+  // A run opened from history or a link (?run=<id>) is drawn on the canvas and stays drawn after its details are closed, so
+  // each step can be hovered for what it produced, until the person hides it, opens another run or leaves the flow.
+  const [openRunId] = useRunParam();
+  const [shownRunId, setShownRunId] = useState<string | null>(null);
+  useEffect(() => { if (openRunId) setShownRunId(openRunId); }, [openRunId]);
+  useEffect(() => { setShownRunId(openRunId); }, [activeFlow?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const runOverlay = useRunOverlay(shownRunId);
+  const deleteRef = useRef(deleteNode);
+  deleteRef.current = deleteNode;
+  const onDeleteNode = useCallback((nodeId: string) => deleteRef.current(nodeId), []);
+  // Delete / Backspace on a selected step asks first (the click-to-delete buttons already do).
+  // The steps Delete is asking about (one, or all the selected ones at once).
+  const [keyboardDeleteIds, setKeyboardDeleteIds] = useState<string[]>([]);
+  // Same for a selected connection: the button on the line and the Delete key both ask first.
+  const [edgeDeleteId, setEdgeDeleteId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<Node<FlowNodeData>[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'trigger' | 'action'>('trigger');
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
   const [sourceNodeForAction, setSourceNodeForAction] = useState<string | null>(null);
+  const [sourceRouteForAction, setSourceRouteForAction] = useState<FlowEdgeRoute>('next');
   const [modalActionCategory, setModalActionCategory] = useState<ActionOption['category'] | null>(null);
 
   // Track if we're currently syncing from props to prevent feedback loops
   const isSyncingFromProps = useRef(false);
+  const stopGlide = useRef<(() => void) | null>(null);
+  const lastLayoutRevision = useRef(layoutRevision);
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
   // Track pending updates to batch them
   const pendingUpdateRef = useRef<{ nodes?: Node<FlowNodeData>[]; edges?: Edge[] } | null>(null);
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Learn each tool's required inputs so validation can block incomplete tool steps.
+  useEffect(() => {
+    void ensureToolSchemasLoaded();
+  }, []);
 
   // Sync from activeFlow to local state when flow changes (not on every node/edge update)
   useEffect(() => {
@@ -82,60 +134,25 @@ export function FlowCanvas({
       pendingUpdateRef.current = null;
 
       isSyncingFromProps.current = true;
-      setNodes(activeFlow.nodes);
+      stopGlide.current?.();
+      stopGlide.current = null;
+      const tidied = lastLayoutRevision.current !== layoutRevision;
+      lastLayoutRevision.current = layoutRevision;
+      // Tidy layout and its Undo: the steps glide to their new places.
+      const glide = tidied ? glideNodes(nodesRef.current, activeFlow.nodes, setNodes, () => { isSyncingFromProps.current = false; stopGlide.current = null; }) : null;
+      stopGlide.current = glide;
+      if (!glide) setNodes(activeFlow.nodes);
       setEdges(activeFlow.edges);
       // Clear the guard after React has processed the batched state updates
-      requestAnimationFrame(() => {
+      if (!glide) requestAnimationFrame(() => {
         isSyncingFromProps.current = false;
       });
     }
-  }, [activeFlow?.id, activeFlow?.version, activeFlow?.nodes.length, activeFlow?.edges.length]); // Re-sync on ID/version change OR structural changes (add/delete)
+  }, [activeFlow?.id, activeFlow?.version, activeFlow?.nodes.length, activeFlow?.edges.length, layoutRevision]); // Re-sync on ID/version change OR structural changes (add/delete)
 
-  // Keyboard undo (Cmd/Ctrl+Z). Scoped to node deletion for now (see
-  // FlowContext.undo). The "Undo" action on the delete toast is the primary,
-  // discoverable path; this is the shortcut on top of it. Skipped while focus is in
-  // a text field so it doesn't fight the input's own native undo.
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isUndoCombo = (e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z';
-      if (!isUndoCombo) return;
+  useArrowNavigation(nodes, edges);
 
-      const target = e.target as HTMLElement | null;
-      const tag = target?.tagName;
-      const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable;
-      if (isEditable || !canUndo) return;
-
-      e.preventDefault();
-      undo();
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undo, canUndo]);
-
-  // Persistent "was this saved as a Procedure?" indicator -- the save-time toast is
-  // one-shot, so without this a user who saved with the checkbox on and then closed
-  // the toast (or is looking at the flow later) has no way to tell whether a
-  // Procedure exists, or find it, short of guessing its name on the Procedures page.
-  const [convertedProcedure, setConvertedProcedure] = useState<string | null>(null);
-  useEffect(() => {
-    if (!activeFlow?.id) {
-      setConvertedProcedure(null);
-      return;
-    }
-    let cancelled = false;
-    flowService.getConversionStatus(activeFlow.id).then((status) => {
-      if (!cancelled) setConvertedProcedure(status.converted_procedure);
-    }).catch(() => {
-      if (!cancelled) setConvertedProcedure(null);
-    });
-    return () => {
-      cancelled = true;
-    };
-    // Re-check after every save completes (saveState -> 'saved'), not just on
-    // version bump -- the auto-convert checkbox's own conversion can complete
-    // slightly after the flow doc save itself resolves.
-  }, [activeFlow?.id, activeFlow?.version, saveState]);
+  const convertedProcedure = useConvertedProcedure(activeFlow?.id, activeFlow?.version, saveState);
 
   // Debounced update to context to batch rapid changes
   const scheduleContextUpdate = useCallback((newNodes?: Node<FlowNodeData>[], newEdges?: Edge[]) => {
@@ -165,12 +182,20 @@ export function FlowCanvas({
     }, 50); // 50ms debounce
   }, [activeFlow, nodes, edges, updateNodesAndEdges]);
 
+  // Tidy layout writes a move that is still waiting out its 50 ms first (see flow-graph/canvas/pendingWrites).
+  const edgesRef = useRef(edges);
+  edgesRef.current = edges;
+  useEffect(() => registerPendingFlush(() => {
+    if (activeFlow && !isSyncingFromProps.current) flushPendingUpdate(updateTimeoutRef, pendingUpdateRef, (n, e) => updateNodesAndEdges(n ?? nodesRef.current, e ?? edgesRef.current));
+  }), [activeFlow, updateNodesAndEdges]);
+
   // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
       if (updateTimeoutRef.current) {
         clearTimeout(updateTimeoutRef.current);
       }
+      stopGlide.current?.();
     };
   }, []);
 
@@ -184,20 +209,36 @@ export function FlowCanvas({
       // the flow "unsaved" even though nothing real changed. Drop them here.
       const realChanges = changes.filter((change) => {
         const changeId = 'id' in change ? change.id : undefined;
-        return !changeId || !changeId.startsWith('ghost-');
+        if (!canManage && change.type !== 'select' && change.type !== 'dimensions') return false; // view-only: nothing moves or goes away
+        return !changeId || !changeId.startsWith(RENDER_ONLY_NODE_PREFIX);
       });
       if (realChanges.length === 0) return;
+
+      // Keyboard selection (Tab to a step, Enter) opens that step's settings like a click does.
+      const picked = realChanges.find((c) => c.type === 'select' && c.selected);
+      if (picked && 'id' in picked && picked.id !== selectedNodeId) setSelectedNode(picked.id);
+
+      // Measurements and selection are view state, not edits. React Flow can emit them
+      // after the post-save re-sync guard has cleared, which flipped a just-saved flow
+      // back to "Unsaved", so only real edits (move, add, remove, replace) schedule a write.
+      // A plain click ends with a position change that carries no new position: that is not a move either.
+      const isEdit = realChanges.some(
+        (change) =>
+          change.type !== 'dimensions' &&
+          change.type !== 'select' &&
+          !(change.type === 'position' && change.position === undefined)
+      );
 
       setNodes((nds) => {
         const updatedNodes = applyNodeChanges(realChanges, nds);
         // Schedule context update (debounced)
-        if (!isSyncingFromProps.current) {
+        if (isEdit && !isSyncingFromProps.current) {
           scheduleContextUpdate(updatedNodes, undefined);
         }
         return updatedNodes;
       });
     },
-    [scheduleContextUpdate]
+    [canManage, scheduleContextUpdate, selectedNodeId, setSelectedNode]
   );
 
   const onEdgesChange = useCallback(
@@ -207,46 +248,54 @@ export function FlowCanvas({
       // Filter their change events out before they can dirty the flow.
       const realChanges = changes.filter((change) => {
         const changeId = 'id' in change ? change.id : undefined;
-        return !changeId || !changeId.startsWith('edge-ghost-');
+        if (!canManage && change.type !== 'select') return false;
+        return !changeId || !changeId.startsWith(RENDER_ONLY_EDGE_PREFIX);
       });
       if (realChanges.length === 0) return;
+      // Selecting or deselecting an edge is view state, not an edit.
+      const isEdgeEdit = realChanges.some((change) => change.type !== 'select');
 
       setEdges((eds) => {
         const updatedEdges = applyEdgeChanges(realChanges, eds);
         // Schedule context update (debounced)
-        if (!isSyncingFromProps.current) {
+        if (isEdgeEdit && !isSyncingFromProps.current) {
           scheduleContextUpdate(undefined, updatedEdges);
         }
         return updatedEdges;
       });
     },
-    [scheduleContextUpdate]
+    [canManage, scheduleContextUpdate]
   );
 
   const onConnect = useCallback(
     (connection: Connection) => {
-      setEdges((eds) => {
-        const newEdges = addEdge(connection, eds);
-        // Schedule context update (debounced)
-        if (!isSyncingFromProps.current) {
-          scheduleContextUpdate(undefined, newEdges);
-        }
-        return newEdges;
-      });
+      if (!canManage || !connection.source || !connection.target) return;
+      const source = connection.source;
+      const target = connection.target;
+      const route = connectionRoute(connection);
+      const problem = connectionProblem({ nodes, edges }, { source, target, route });
+      if (problem) {
+        toast.error("Can't connect these steps", { description: problem, id: 'flow-connection-refused' });
+        return;
+      }
+      const { newEdges, updatedNodes } = connectSteps(nodes, edges, source, target, route);
+      if (updatedNodes) setNodes(updatedNodes);
+      setEdges(newEdges);
+      if (!isSyncingFromProps.current) scheduleContextUpdate(updatedNodes, newEdges);
     },
-    [scheduleContextUpdate]
+    [canManage, scheduleContextUpdate, nodes, edges]
   );
 
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node<FlowNodeData>) => {
       setSelectedNode(node.id);
-      if (node.data.nodeType === 'trigger') {
+      if (canManage && node.data.nodeType === 'trigger' && !node.data.triggerConfig?.type) {
         setCurrentNodeId(node.id);
         setModalMode('trigger');
         setIsModalOpen(true);
       }
     },
-    [setSelectedNode]
+    [canManage, setSelectedNode]
   );
 
   const onEdgeClick = useCallback(
@@ -256,13 +305,16 @@ export function FlowCanvas({
     [setSelectedEdge]
   );
 
+  useCanvasDeleteKey({ canManage, nodes, edges, selectedNodeId, selectedEdgeId, deleteNode, askDeleteSteps: setKeyboardDeleteIds, askDeleteEdge: setEdgeDeleteId });
+
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
     setSelectedEdge(null);
   }, [setSelectedNode, setSelectedEdge]);
 
-  const handleAddNode = useCallback((sourceNodeId: string) => {
+  const handleAddNode = useCallback((sourceNodeId: string, route: FlowEdgeRoute = 'next') => {
     setSourceNodeForAction(sourceNodeId);
+    setSourceRouteForAction(route);
     setModalActionCategory(null);
     setModalMode('action');
     setIsModalOpen(true);
@@ -270,30 +322,15 @@ export function FlowCanvas({
 
   const handleSaveTriggerConfig = useCallback(
     (config: TriggerConfig) => {
-      const iconMap: Record<string, string> = {
-        webhook: 'Webhook',
-        schedule: 'Clock',
-        'doc-event': 'Database',
-        'app-trigger': 'Mail'
-      };
-
-      const labelMap: Record<string, string> = {
-        webhook: 'Webhook',
-        schedule: 'Schedule',
-        'doc-event': 'Doc Event',
-        'app-trigger': 'App Trigger'
-      };
-
       if (currentNodeId) {
         const node = nodes.find((n) => n.id === currentNodeId);
         if (node) {
           updateNode(currentNodeId, {
             data: {
               ...node.data,
-              label: labelMap[config.type || 'webhook'] || 'Trigger',
-              icon: iconMap[config.type || 'webhook'],
-              configured: true,
-              triggerConfig: config
+              ...triggerStepFields(config),
+              // Drop the "Select a trigger" hint of the placeholder once a trigger is chosen.
+              description: undefined
             }
           });
         }
@@ -305,11 +342,8 @@ export function FlowCanvas({
           type: 'trigger',
           position: { x: 250, y: 100 },
           data: {
-            label: labelMap[config.type || 'webhook'] || 'Trigger',
             nodeType: 'trigger',
-            icon: iconMap[config.type || 'webhook'],
-            configured: true,
-            triggerConfig: config
+            ...triggerStepFields(config)
           }
         };
 
@@ -326,109 +360,26 @@ export function FlowCanvas({
   );
 
   const handleSelectAction = useCallback(
-    (actionType: string, config: ActionConfig) => {
+    (actionId: string, config: ActionConfig) => {
       if (!sourceNodeForAction) return;
+      const sourceId = sourceNodeForAction;
+      const sourceRoute = sourceRouteForAction;
+      const added = addActionStep(nodes, edges, sourceId, sourceRoute, actionId, config);
+      if (!added) return;
+      if (added === 'end-in-front') {
+        toast.error('End can only finish a path', { description: 'Add it at the open end of a path, not in front of another step.' });
+        return;
+      }
+      setNodes(added.nodes);
+      setEdges(added.edges);
+      if (!isSyncingFromProps.current) updateNodesAndEdges(added.nodes, added.edges);
 
-      setNodes((currentNodes) => {
-        setEdges((currentEdges) => {
-          const sourceNode = currentNodes.find((n) => n.id === sourceNodeForAction);
-          if (!sourceNode) return currentEdges;
-
-          const newNodeId = `node_${Date.now()}`;
-          const iconMap: Record<string, string> = {
-            'agent-run': 'Bot',
-            'tool-call': 'Wrench',
-            transform: 'Repeat',
-            router: 'GitBranch',
-            loop: 'RotateCw',
-            'human.approval': 'UserCheck',
-            'state-get': 'Database',
-            'state-set': 'Save',
-            'state-delete': 'Trash2',
-            'doc-create': 'FilePlus',
-            code: 'Code',
-            email: 'Mail',
-            webhook: 'Webhook',
-            file: 'FileText',
-            date: 'Calendar'
-          };
-
-          const labelMap: Record<string, string> = {
-            'agent-run': 'Run agent',
-            'tool-call': 'Call tool',
-            transform: 'Transform data',
-            router: 'Router',
-            loop: 'Loop',
-            'human.approval': 'Human in loop',
-            'state-get': 'Get state',
-            'state-set': 'Set state',
-            'state-delete': 'Delete state',
-            'doc-create': 'Create document',
-            code: 'Execute code',
-            email: 'Send email',
-            file: 'File operations',
-            // Previously missing, so these nodes fell through to the generic
-            // 'Action' fallback below and the canvas showed no indication of
-            // what the step actually did — a Condition node simply read
-            // "Action". 'webhook' and 'date' are gone: those cards were
-            // removed (HTTP Request supersedes webhook; no date tool exists).
-            condition: 'Condition',
-            'http-request': 'HTTP Request',
-            slack: 'Slack',
-            sheets: 'Google Sheets'
-          };
-
-          const newNode: Node<FlowNodeData> = {
-            id: newNodeId,
-            type: 'action',
-            position: {
-              x: sourceNode.position.x,
-              y: sourceNode.position.y + 150
-            },
-            data: {
-              label: labelMap[actionType] || 'Action',
-              nodeType: 'action',
-              icon: iconMap[actionType] || 'Play',
-              configured: true,
-              actionConfig: config
-            }
-          };
-
-          const targetEdges = currentEdges.filter((e) => e.source === sourceNodeForAction);
-          const newEdges = currentEdges.filter((e) => e.source !== sourceNodeForAction);
-
-          newEdges.push({
-            id: `edge-${Date.now()}`,
-            source: sourceNodeForAction,
-            target: newNodeId,
-            type: 'default'
-          });
-
-          targetEdges.forEach((edge) => {
-            newEdges.push({
-              ...edge,
-              id: `edge-${Date.now()}-${Math.random()}`,
-              source: newNodeId
-            });
-          });
-
-          const updatedNodes = [...currentNodes, newNode];
-
-          // Direct update to context (not debounced) for explicit user actions
-          if (!isSyncingFromProps.current) {
-            updateNodesAndEdges(updatedNodes, newEdges);
-          }
-
-          setIsModalOpen(false);
-          setSourceNodeForAction(null);
-          setModalActionCategory(null);
-
-          return newEdges;
-        });
-        return currentNodes;
-      });
+      setIsModalOpen(false);
+      setSourceNodeForAction(null);
+      setModalActionCategory(null);
+      setSourceRouteForAction('next');
     },
-    [sourceNodeForAction, updateNodesAndEdges]
+    [sourceNodeForAction, sourceRouteForAction, nodes, edges, updateNodesAndEdges]
   );
 
   const nodeTypesWithAddButton = useMemo(
@@ -441,15 +392,14 @@ export function FlowCanvas({
     []
   );
 
-  const edgeTypesWithInsert = useMemo(() => ({ insertable: InsertableEdge }), []);
+  const edgeTypesWithInsert = useMemo(() => ({ insertable: InsertableEdge, ghost: GhostEdge }), []);
 
-  // Every node with no outgoing edge — the open ends of the graph, and the
-  // only places a new step can be appended without rewiring by hand.
+  const openEnds = useMemo(() => computeOpenEnds(nodes, edges), [nodes, edges]);
+
   const leafNodes = useMemo(() => {
-    if (nodes.length === 0) return [];
-    const sourceIds = new Set(edges.map((e) => e.source));
-    return nodes.filter((n) => n.data.nodeType !== 'end' && !sourceIds.has(n.id));
-  }, [nodes, edges]);
+    const ids = new Set(openEnds.map((o) => o.nodeId));
+    return nodes.filter((n) => ids.has(n.id));
+  }, [nodes, openEnds]);
 
   // Where a rail click inserts: after the selected node when there is one
   // (handleSelectAction rewires the downstream edge), otherwise at the last
@@ -473,7 +423,7 @@ export function FlowCanvas({
         return 'tool';
       case 'condition':
       case 'router':
-      case 'loop':
+      case 'foreach':
         return 'condition';
       default:
         return null;
@@ -498,62 +448,18 @@ export function FlowCanvas({
       }
       if (!insertionSourceId) return;
       setSourceNodeForAction(insertionSourceId);
+      setSourceRouteForAction(openEnds.find((o) => o.nodeId === insertionSourceId)?.route ?? 'next');
       setModalActionCategory(NODE_RAIL_ACTION_CATEGORY[category]);
       setModalMode('action');
       setIsModalOpen(true);
     },
-    [nodes, insertionSourceId]
+    [nodes, insertionSourceId, openEnds]
   );
 
-  // Persistent "Add step" ghost card trailing the end of each open branch
-  // (i.e. every node with no outgoing edge). Purely a render-time affordance —
-  // it is never written back to the flow's nodes/edges via updateNodesAndEdges.
-  const ghostNodes = useMemo<Node<AddStepGhostNodeData>[]>(() => {
-    return leafNodes.map((leaf) => ({
-      id: `ghost-${leaf.id}`,
-      type: 'addStep',
-      position: { x: leaf.position.x, y: leaf.position.y + 150 },
-      draggable: false,
-      selectable: false,
-      connectable: false,
-      data: { sourceNodeId: leaf.id, onAddNode: handleAddNode }
-    }));
-  }, [leafNodes, handleAddNode]);
+  useEdgeActions(edges, handleAddNode, setEdgeDeleteId);
 
-  const ghostEdges = useMemo<Edge[]>(
-    () =>
-      ghostNodes.map((ghost) => ({
-        id: `edge-${ghost.id}`,
-        source: ghost.data.sourceNodeId,
-        target: ghost.id,
-        type: 'default',
-        selectable: false,
-        focusable: false
-      })),
-    [ghostNodes]
-  );
-
-  const renderedNodes = useMemo(
-    () => [...nodes, ...(ghostNodes as unknown as Node<FlowNodeData>[])],
-    [nodes, ghostNodes]
-  );
-
-  // Real edges get the hover "+" insert affordance (mid-chain insertion);
-  // ghost edges (leading to the trailing "Add step" card) render as plain
-  // edges since that leaf already has its own persistent affordance.
-  const insertableEdges = useMemo<Edge<InsertableEdgeData>[]>(
-    () =>
-      edges.map((edge) => ({
-        ...edge,
-        type: 'insertable',
-        data: { sourceNodeId: edge.source, onInsertNode: handleAddNode }
-      })),
-    [edges, handleAddNode]
-  );
-  const renderedEdges = useMemo(
-    () => [...insertableEdges, ...ghostEdges],
-    [insertableEdges, ghostEdges]
-  );
+  // On-screen-only extras (Add step cards, the loop's return line, End subtitles) are never written back to the flow.
+  const { renderedNodes, renderedEdges } = useRenderedGraph({ canManage, nodes, edges, openEnds, selectedNodeId, selectedEdgeId, onSelectEdge: setSelectedEdge, onAddNode: handleAddNode, onRemoveEdge: setEdgeDeleteId, overlay: runOverlay, onDeleteNode });
 
   if (!activeFlow) {
     return (
@@ -569,12 +475,14 @@ export function FlowCanvas({
   }
 
   return (
-    <div className="flex-1 flex w-full h-full overflow-hidden">
+    <div className="flex-1 flex w-full h-full overflow-hidden" data-testid="flow-canvas">
+      {canManage && !isPhone && (
       <FlowNodeRail
         activeCategory={railActiveCategory}
         disabledCategories={railDisabledCategories}
         onSelect={handleRailSelect}
       />
+      )}
       <div className="relative flex-1 h-full min-w-0">
       <ReactFlow
         nodes={renderedNodes}
@@ -587,81 +495,65 @@ export function FlowCanvas({
         onPaneClick={onPaneClick}
         nodeTypes={nodeTypesWithAddButton}
         edgeTypes={edgeTypesWithInsert}
-        fitView
-        fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
+        deleteKeyCode={null}
+        // Space is React Flow's "hold to pan" key by default; it listens on the whole page and blocks Space on every button,
+        // checkbox and switch beside the canvas (the step panel). Panning is done with the mouse, the wheel and the fit button.
+        panActivationKeyCode={null}
+        multiSelectionKeyCode={MULTI_SELECT_KEYS}
+        nodesDraggable={canManage}
+        nodesConnectable={canManage}
+        elementsSelectable
+        fitViewOptions={FIT_VIEW_OPTIONS}
+        minZoom={ZOOM_MIN}
+        maxZoom={ZOOM_MAX}
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
-        className="bg-background w-full h-full"
+        className={CANVAS_CLASS}
+        onScroll={keepCanvasUnscrolled}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={2} color="color-mix(in srgb, var(--muted-foreground) 35%, transparent)" />
         {/* showInteractive (lock toggle button) defaults to true, so it's already shown */}
-        <Controls className="!bottom-6 !rounded-lg !border !border-line !overflow-hidden !shadow-sm" />
-        <MiniMap
-          nodeColor={(node) => {
-            if (node.type === 'trigger') return 'var(--primary)';
-            if (node.type === 'end') return 'var(--good)';
-            return 'var(--muted)';
-          }}
-          className="!bg-background !border-border !bottom-6"
-          style={{ width: 120, height: 80, borderRadius: 8, border: '1px solid var(--border)', boxShadow: '0 1px 3px color-mix(in srgb, var(--foreground) 12%, transparent)' }}
-        />
-        <Panel position="top-right" className="m-2">
-          <div className="flex gap-2">
-            {!nodes.some(n => n.data.nodeType === 'trigger') && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => {
-                  setModalMode('trigger');
-                  setCurrentNodeId(null);
-                  setIsModalOpen(true);
-                }}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add trigger
-              </Button>
-            )}
-            {activeFlow && convertedProcedure && (
-              <Link to={`/procedures/${convertedProcedure}`}>
-                <Button variant="outline" size="sm">
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Saved as procedure
-                </Button>
-              </Link>
-            )}
-            {activeFlow && !convertedProcedure && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsConvertDialogOpen(true)}
-              >
-                <Sparkles className="w-4 h-4 mr-2" />
-                Convert to procedure
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-10 w-10"
-              onClick={() => {
-                if (showLeftSidebar || showRightSidebar) {
-                  onToggleLeftSidebar();
-                  onToggleRightSidebar();
-                } else {
-                  onToggleLeftSidebar();
-                  onToggleRightSidebar();
-                }
-              }}
-            >
-              <Maximize2 className="w-4 h-4" />
-            </Button>
-          </div>
+        <FlowControls className="!bottom-6 !rounded-lg !border !border-line !overflow-hidden !shadow-sm" />
+        <FlowMiniMap stepCount={nodes.length} />
+        <KeepSelectedClearOfToolbar selectedNodeId={selectedNodeId} />
+        <KeepSelectedVisible selectedNodeId={selectedNodeId} /><KeepRunClearOfSheet runOpen={!!openRunId} />
+        <FlowShortcuts />
+        <FitViewAfterRemovalOrLayout flowId={activeFlow?.id} nodeCount={activeFlow?.nodes.length ?? 0} edgeCount={activeFlow?.edges.length ?? 0} layoutRevision={layoutRevision} />
+        {canManage && !isPhone && !selectedNodeId && nodes.length <= 1 && <FirstRunGuide />}
+        <Panel position="top-right" className="m-2" {...{ [FLOW_TOOLBAR_ATTR]: '' }}>
+          <FlowCanvasToolbar
+            canManage={canManage}
+            readOnlyReason={readOnlyReason}
+            hasTrigger={nodes.some((n) => n.data.nodeType === 'trigger')}
+            hasSteps={nodes.length > 1}
+            editTools={!isCompact}
+            phone={isPhone}
+            convertedProcedure={convertedProcedure}
+            onAddTrigger={() => {
+              setModalMode('trigger');
+              setCurrentNodeId(null);
+              setIsModalOpen(true);
+            }}
+            onTidy={tidyLayout}
+            onConvert={() => setIsConvertDialogOpen(true)}
+            onTogglePanels={() => {
+              onToggleLeftSidebar();
+              onToggleRightSidebar();
+            }}
+          />
         </Panel>
+        {runOverlay && (
+          <Panel position="top-left" className="m-2">
+            <RunOverlayChip onHide={() => setShownRunId(null)} />
+          </Panel>
+        )}
         {!showLeftSidebar && (
-          <Panel position="bottom-left" className="mb-4">
+          <Panel position="top-left" className="m-2">
             <Button
               variant="outline"
               size="icon"
-              className="h-10 w-10"
+              className="h-control-lg w-control-lg"
+              aria-label="Show the flow list"
+              title="Show the flow list"
               onClick={onToggleLeftSidebar}
             >
               <PanelLeftOpen className="w-4 h-4" />
@@ -673,7 +565,10 @@ export function FlowCanvas({
             <Button
               variant="outline"
               size="icon"
-              className="h-10 w-10"
+              className="h-control-lg w-control-lg"
+              aria-label="Show step settings"
+              title="Show step settings"
+              data-testid="flow-open-settings"
               onClick={onToggleRightSidebar}
             >
               <PanelRightOpen className="w-4 h-4" />
@@ -697,12 +592,18 @@ export function FlowCanvas({
         onSaveAction={handleSelectAction}
       />
 
+      <EdgeDeleteDialog
+        edgeId={edgeDeleteId}
+        nodes={nodes}
+        edges={edges}
+        onCancel={() => setEdgeDeleteId(null)}
+        onConfirm={deleteEdge}
+      />
+
+      <DeleteStepDialog nodeId={null} nodeIds={keyboardDeleteIds} onOpenChange={(open) => !open && setKeyboardDeleteIds([])} />
+
       {activeFlow && (
-        <ConvertToProcedureDialog
-          flowId={activeFlow.id}
-          open={isConvertDialogOpen}
-          onOpenChange={setIsConvertDialogOpen}
-        />
+        <ConvertToProcedureDialog flowId={activeFlow.id} flowName={activeFlow.name} open={isConvertDialogOpen} onOpenChange={setIsConvertDialogOpen} />
       )}
     </div>
   );

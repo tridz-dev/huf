@@ -291,7 +291,7 @@ class TestProviderErrorSanitization(IntegrationTestCase):
         )
         self.assertEqual(
             message,
-            "The selected model is no longer available from this provider. Choose a different model and try again.",
+            "The model 'gemini-2.5-flash' was not found at the provider: check the model name on the agent.",
         )
 
     def test_generic_provider_message_hides_litellm_branding(self):

@@ -43,7 +43,7 @@ function MediaHeader({ header }: { header: Exclude<PreviewHeader, { kind: 'text'
   if (header.kind === 'video') {
     return (
       <div className={box} data-testid="header-video">
-        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-ink/60 text-panel">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/60 text-primary-foreground">
           <Play className="h-5 w-5" />
         </span>
       </div>

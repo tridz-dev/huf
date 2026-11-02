@@ -10,6 +10,8 @@ export interface MeResponse {
   full_name: string;
   huf_role: string | null;
   capabilities: string[];
+  /** Granted by the Huf Role but refused by the server (flows.create / flows.manage without the matching Frappe role). */
+  withheld_capabilities?: string[];
 }
 
 export interface HufUser {
@@ -41,7 +43,7 @@ export async function getMe(): Promise<MeResponse> {
   } catch (error) {
     handleFrappeError(error, 'Error loading user permissions');
     // Return a safe fallback so the UI doesn't crash on error
-    return { user: '', full_name: '', huf_role: null, capabilities: [] };
+    return { user: '', full_name: '', huf_role: null, capabilities: [], withheld_capabilities: [] };
   }
 }
 

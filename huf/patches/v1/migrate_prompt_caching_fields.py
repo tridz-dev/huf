@@ -11,7 +11,7 @@ def execute():
 	one old field is non-null/non-zero.
 
 	The old fields remain in the database schema but are no longer used by the runtime.
-	See agent_config_api.py, litellm.py, context_segments.py, and agent.js for runtime removals.
+	See agent/config_api.py, litellm.py, context_segments.py, and agent.js for runtime removals.
 	"""
 
 	if not frappe.db.has_column("Agent", "prompt_cache_mode"):

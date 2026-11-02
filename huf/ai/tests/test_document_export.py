@@ -258,7 +258,7 @@ class TestDesktopDocumentGuidance(unittest.TestCase):
 	def test_agent_integration_injects_workspace_rule_by_write_tool(self):
 		import inspect
 
-		from huf.ai import agent_integration
+		from huf.ai.agent import integration as agent_integration
 
 		src = inspect.getsource(agent_integration)
 		self.assertIn('"desktop_write_file" in {tool.name for tool in self.tools}', src)
@@ -267,7 +267,7 @@ class TestDesktopDocumentGuidance(unittest.TestCase):
 	def test_agent_integration_injects_by_skill_tool_presence(self):
 		import inspect
 
-		from huf.ai import agent_integration
+		from huf.ai.agent import integration as agent_integration
 
 		src = inspect.getsource(agent_integration)
 		self.assertIn('"desktop_skill_run" in {tool.name for tool in self.tools}', src)

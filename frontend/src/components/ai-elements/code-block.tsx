@@ -21,6 +21,7 @@ import "prismjs/components/prism-bash.js";
 import "prismjs/components/prism-json.js";
 import "prismjs/components/prism-yaml.js";
 import "prismjs/components/prism-sql.js";
+import { copyText } from '@/lib/clipboard';
 
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
   code: string;
@@ -122,7 +123,7 @@ export const CodeBlockCopyButton = ({
     }
 
     try {
-      await navigator.clipboard.writeText(code);
+      if (!(await copyText(code))) throw new Error('Copy failed');
       setIsCopied(true);
       onCopy?.();
       setTimeout(() => setIsCopied(false), timeout);

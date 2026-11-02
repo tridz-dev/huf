@@ -32,7 +32,7 @@ from urllib.parse import quote, urljoin, urlparse
 import frappe
 import frappe.utils
 
-from huf.ai import whatsapp_outbound_policy as policy
+from huf.ai.whatsapp import outbound_policy as policy, template_plain
 from huf.ai.gateway_adapters import whatsapp_messages as wm
 from huf.ai.gateway_adapters import whatsapp_templates as wt
 
@@ -256,7 +256,7 @@ def _may_bypass(trusted: bool) -> bool:
 
 
 def _refuse_if_disconnected(acct: dict[str, Any]) -> None:
-	from huf.ai import whatsapp_account_events as _ae
+	from huf.ai.whatsapp import account_events as _ae
 
 	if (refusal := _ae.send_refusal(acct.get("phone_id"))):
 		raise BridgeError(refusal)
@@ -713,14 +713,16 @@ def _graph_err(error: str, resp_or_exc: Any, **extra: Any) -> dict[str, Any]:
 	)
 
 
-def _graph_post_message(acct: dict[str, Any], data: dict[str, Any], http_post: Callable[..., Any] | None = None) -> str:
-	"""POST a ``/messages`` body with the account credentials; returns the wamid or raises BridgeError."""
-	from huf.ai import whatsapp_account_events as _ae
+def _graph_post(
+	acct: dict[str, Any], data: dict[str, Any], http_post: Callable[..., Any] | None = None, marketing_api: bool = False
+) -> dict[str, Any]:
+	"""POST to ``/messages`` (``/marketing_messages`` if ``marketing_api``); returns ``{"wamid", "message_status"}`` or raises BridgeError."""
+	from huf.ai.whatsapp import account_events as _ae
 
 	if (refusal := _ae.send_refusal(acct.get("phone_id"))):
 		raise BridgeError(refusal)
 	http_post = http_post or _default_post
-	url = f"{acct['url']}/{acct['version']}/{acct['phone_id']}/messages"
+	url = f"{acct['url']}/{acct['version']}/{acct['phone_id']}/{'marketing_messages' if marketing_api else 'messages'}"
 	try:
 		resp = http_post(
 			url,
@@ -734,9 +736,28 @@ def _graph_post_message(acct: dict[str, Any], data: dict[str, Any], http_post: C
 	if isinstance(status, int) and status >= 400:
 		raise BridgeError({**_graph_err("send_failed", resp), "message": graph_error_message(resp)})
 	try:
-		return str(resp.json()["messages"][0]["id"])
+		first = resp.json()["messages"][0]
+		wamid = str(first["id"])
 	except Exception as exc:
 		raise BridgeError(_err("send_failed", message="Unexpected response from WhatsApp.")) from exc
+	ms = first.get("message_status") if isinstance(first, dict) else None
+	return {"wamid": wamid, "message_status": str(ms) if ms else None}
+
+
+def _graph_post_message(acct: dict[str, Any], data: dict[str, Any], http_post: Callable[..., Any] | None = None) -> str:
+	"""POST a ``/messages`` body with the account credentials; returns the wamid or raises BridgeError."""
+	return _graph_post(acct, data, http_post)["wamid"]
+
+
+OPAQUE_REF_MAX = 256
+
+
+def _clean_opaque_ref(ref: Any) -> str | None:
+	"""``biz_opaque_callback_data``: stripped, at most 256 chars; None if empty."""
+	if ref is None:
+		return None
+	text = str(ref).strip()[:OPAQUE_REF_MAX]
+	return text or None
 
 
 def _template_row(docname: str) -> dict[str, Any] | None:
@@ -920,10 +941,18 @@ def send_template(
 	button_params: list | None = None,
 	http_post: Callable[..., Any] | None = None,
 	gateway_name: str | None = None,
+	run_id: str | None = None,
+	solution: str | None = None,
+	force_graph: bool = False,
+	opaque_ref: str | None = None,
+	marketing_api: bool = False,
 ) -> dict[str, Any]:
-	"""Send an approved template.
+	"""Send an approved template. ``force_graph`` always posts to Graph (returns ``wamid`` and ``message_status``),
+	``opaque_ref`` is echoed on status webhooks, ``marketing_api`` uses the Marketing Messages endpoint.
 
-	Goes through :mod:`huf.ai.whatsapp_outbound_policy` first: a STOPped contact, a BSUID recipient, a
+	``run_id`` / ``solution`` (optional) attribute the send to a Solution for template usage tracking.
+
+	Goes through :mod:`huf.ai.whatsapp.outbound_policy` first: a STOPped contact, a BSUID recipient, a
 	template that is not APPROVED and marketing to a contact who stopped marketing are refused with a
 	``BridgeError`` whose ``error`` is the policy code. ``gateway_name`` scopes the checks; without it
 	every Gateway linked to the account is checked.
@@ -991,7 +1020,9 @@ def send_template(
 	else:
 		body_map = {str(i + 1): p for i, p in enumerate(params)}
 
-	if named or any(c.get("type") in ("header", "button") for c in components) or (tpl and _has_dynamic_url(tpl)):
+	if marketing_api and not force_graph:
+		raise BridgeError(_err("invalid_request", message="marketing_api requires force_graph."))
+	if force_graph or named or any(c.get("type") in ("header", "button") for c in components) or (tpl and _has_dynamic_url(tpl)):
 		if not _may_bypass(trusted) and not frappe.has_permission("WhatsApp Message", "create"):
 			raise frappe.PermissionError("Not permitted to send WhatsApp messages")
 		template_payload: dict[str, Any] = {
@@ -1000,17 +1031,20 @@ def send_template(
 		}
 		if components:
 			template_payload["components"] = components
-		wamid = _graph_post_message(
-			acct,
-			{
-				"messaging_product": "whatsapp",
-				"recipient_type": "individual",
-				"to": normalize_phone(to),
-				"type": "template",
-				"template": template_payload,
-			},
-			http_post,
-		)
+		payload: dict[str, Any] = {
+			"messaging_product": "whatsapp",
+			"recipient_type": "individual",
+			"to": normalize_phone(to),
+			"type": "template",
+			"template": template_payload,
+		}
+		if (ref := _clean_opaque_ref(opaque_ref)):
+			payload["biz_opaque_callback_data"] = ref
+		if force_graph:
+			posted = _graph_post(acct, payload, http_post, marketing_api=marketing_api)
+		else:
+			posted = {"wamid": _graph_post_message(acct, payload, http_post), "message_status": None}
+		wamid = posted["wamid"]
 		mirror: dict[str, Any] = {"template_parameters": ",".join(params)}
 		if body_map:
 			mirror["body_param"] = json.dumps(body_map)
@@ -1022,7 +1056,9 @@ def send_template(
 			elif hp.get("type") in ("image", "video", "document"):
 				mirror["attach"] = (hp.get(hp["type"]) or {}).get("link")
 		result = _mirror_template_send(acct, docname, to, wamid, mirror, trusted)
-		policy.note_template_sent(account_name, to, gateway_name)
+		result["wamid"] = wamid
+		result["message_status"] = posted["message_status"]
+		policy.note_template_sent(account_name, to, gateway_name, *_usage_args(tpl, template_name, language_code, run_id, solution))
 		return result
 
 	values: dict[str, Any] = {
@@ -1048,8 +1084,24 @@ def send_template(
 		raise
 	except Exception as exc:
 		raise BridgeError(_err("send_failed", message=_redact(exc))) from exc
-	policy.note_template_sent(account_name, to, gateway_name)
+	policy.note_template_sent(account_name, to, gateway_name, *_usage_args(tpl, template_name, language_code, run_id, solution))
 	return _readback(doc)
+
+
+def _usage_args(
+	tpl: dict[str, Any] | None, template_name: str, language_code: str | None, run_id: str | None, solution: str | None
+) -> tuple[str | None, str | None, str | None]:
+	"""``(Meta template name, language, solution)`` for template usage; the solution comes from the Agent Run when not given."""
+	try:
+		sol = solution
+		if not sol and run_id:
+			from huf.ai.solutions.template_usage import solution_for_run
+
+			sol = solution_for_run(run_id)
+		name = (tpl or {}).get("actual_name") or (tpl or {}).get("template_name") or template_name
+		return name, (tpl or {}).get("language_code") or language_code, sol or None
+	except Exception:
+		return None, None, None
 
 
 def _has_dynamic_url(tpl: dict[str, Any]) -> bool:
@@ -1188,7 +1240,7 @@ def send_media(
 # ---------------------------------------------------------------------------
 def _post_typed_message(acct: dict[str, Any], data: dict[str, Any], http_post: Callable[..., Any] | None = None) -> str:
 	"""POST a ``/messages`` body; returns the wamid or raises BridgeError carrying the structured Graph error."""
-	from huf.ai import whatsapp_account_events as _ae
+	from huf.ai.whatsapp import account_events as _ae
 
 	if (refusal := _ae.send_refusal(acct.get("phone_id"))):
 		raise BridgeError(refusal)
@@ -2562,7 +2614,16 @@ def record_template_state(
 
 
 def record_template_webhook(update: dict[str, Any], account: str | None = None) -> str | None:
-	"""State update from a parsed ``message_template_*`` webhook change (see gateway_webhook)."""
+	"""State update from a parsed ``message_template_*`` webhook change (see gateway_webhook); also pauses
+	Running broadcasts that use a template that was paused, disabled, rejected or flagged."""
+	from huf.ai.whatsapp.broadcast.status import pause_on_template_update
+
+	result = _record_template_webhook(update, account)
+	pause_on_template_update(update, account)
+	return result
+
+
+def _record_template_webhook(update: dict[str, Any], account: str | None = None) -> str | None:
 	try:
 		kind = update.get("kind") or (
 			"quality" if "new_quality_score" in update else "category" if "new_category" in update else "status"
@@ -2644,7 +2705,7 @@ def edit_quota(status: str, edit_log: Any, now: datetime | None = None, blocked_
 			out["editable"] = True
 	else:
 		out.update(editable_reason="status_not_editable",
-			editable_message=f"A template with status {status or 'UNKNOWN'} cannot be edited (only APPROVED, REJECTED or PAUSED).")
+			editable_message=template_plain.not_editable_text(status))
 	until = _parse_ts(blocked_until) if blocked_until else None
 	if out["editable"] and until and until > now:
 		out.update(editable=False, editable_reason="edit_blocked", edit_blocked_until=until.isoformat(),
@@ -2658,7 +2719,7 @@ def _edit_blocked_key(account: Any, name: str) -> str:
 
 def _edit_blocked_until(account: Any, name: str) -> str | None:
 	try:
-		return frappe.cache().get_value(_edit_blocked_key(account, name)) or None
+		return frappe.cache().get_value(_edit_blocked_key(account, name), expires=True) or None  # expires=True: no local-cache memo of a miss
 	except Exception:
 		return None
 

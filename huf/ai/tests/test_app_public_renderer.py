@@ -2,7 +2,7 @@
 Unit tests for huf.ai.app_public_renderer.HufAppPublicRenderer.
 
 No existing page-renderer test exists in huf/ai/tests/ to model this on, so
-these follow huf.ai.tests.test_agent_access's shape instead (pure unit tests
+these follow huf.ai.agent.tests.test_agent_access's shape instead (pure unit tests
 against mocked frappe APIs, no live Frappe site/bench required) rather than
 huf.ai.tests.test_app_builder_tools's IntegrationTestCase shape, since the
 renderer under test only touches frappe.db.get_value/frappe.get_doc and the

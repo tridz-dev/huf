@@ -9,6 +9,7 @@ export const recipientRowSchema = z.object({
 
 export const integrationFormSchema = z.object({
   service: z.string().min(1, 'Service is required'),
+  display_label: z.string().max(80).optional(),
   is_active: z.boolean(),
   is_default: z.boolean(),
   credentialValues: z.record(z.string(), z.string().optional()),

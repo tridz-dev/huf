@@ -10,6 +10,7 @@ import {
 import { Separator } from '../components/ui/separator';
 import { ShortcutsHelpProvider } from '../components/shortcuts/ShortcutsHelpContext';
 import { cn } from '../lib/utils';
+import { NAV_COLLAPSE_AT } from '../lib/ui/responsive';
 
 export interface BreadcrumbItem {
   label: string;
@@ -97,7 +98,7 @@ export function UnifiedLayout({ children, hideHeader, hideRail, headerActions, b
 
   return (
     <ShortcutsHelpProvider>
-      <SidebarProvider defaultOpen={defaultOpen}>
+      <SidebarProvider defaultOpen={defaultOpen} collapseBelow={NAV_COLLAPSE_AT}>
         {!hideRail && <AppSidebar />}
         <SidebarInset className="h-svh max-h-svh overflow-hidden">
           {!hideHeader && !framed && (
@@ -105,7 +106,7 @@ export function UnifiedLayout({ children, hideHeader, hideRail, headerActions, b
               className={cn(
                 'flex shrink-0 items-center gap-2 transition-[width,height] ease-linear border-b border-line bg-panel',
                 compact
-                  ? 'h-[46px] group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-[46px]'
+                  ? 'min-h-[46px] md:h-[46px] md:group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-[46px]'
                   : 'h-[60px] group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-[60px]',
               )}
             >
@@ -117,6 +118,7 @@ export function UnifiedLayout({ children, hideHeader, hideRail, headerActions, b
                   breadcrumbs={breadcrumbs}
                   leftContent={leftContent}
                   showCurrentCrumb={showCurrentCrumb}
+                  stackOnPhone={compact}
                 />
               </div>
             </header>

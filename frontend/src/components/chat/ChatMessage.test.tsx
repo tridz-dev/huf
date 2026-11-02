@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// Component tests for ChatMessage (see docs/testing/CURRENT_STATE.md §6 for
+// Component tests for ChatMessage (see the CURRENT_STATE audit (archived in the workspace) §6 for
 // the behavioral contracts these pin down) plus a render-list duplicate-id
 // test against ChatMessageList's rendering path. Follows the jsdom +
 // Testing Library pattern established in components/ui/badge.test.tsx.
@@ -281,7 +281,7 @@ describe('ChatMessage — lifecycle run-status states render distinguishably', (
 });
 
 describe('ChatMessage list rendering — duplicate message ids are NOT deduplicated', () => {
-	// This documents actual current behavior (per docs/testing/CURRENT_STATE.md
+	// This documents actual current behavior (per the CURRENT_STATE audit (archived in the workspace)
 	// §6): nothing in the render path keys/dedupes by id before mapping to
 	// JSX. If a hypothetical persistence bug produced two Agent Messages with
 	// the same id in the messages array, React would render two separate DOM

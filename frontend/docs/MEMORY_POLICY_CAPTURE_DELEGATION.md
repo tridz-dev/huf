@@ -45,7 +45,7 @@ per-turn cost.
 
 ## How it's implemented
 
-1. `huf/ai/agent_integration.py`, in `run_agent_sync`: immediately after a run
+1. `huf/ai/agent/integration.py`, in `run_agent_sync`: immediately after a run
    is marked `"status": "Success"`, `frappe.enqueue`s
    `huf.ai.memory_tools.extract_memory_from_run(run_id=...)`
    (`enqueue_after_commit=True`, `queue="default"`). This call is

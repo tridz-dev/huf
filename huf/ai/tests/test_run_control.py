@@ -111,7 +111,7 @@ class TestCancelFinalizesNotLiveRun(TestRunControl):
 
 	def test_not_live_started_run_is_finalized(self):
 		with self._user("a@x.com"), self._db2(self._row("Started")), patch(
-			"huf.ai.agent_integration._guarded_fail_started_run"
+			"huf.ai.agent.integration._guarded_fail_started_run"
 		) as fail, patch.object(rc, "mark_cancelled_tool_calls") as mark:
 			r = rc.cancel_agent_run("R1")
 		fail.assert_called_once_with("R1", rc.CANCELLED_BY_USER)
@@ -123,7 +123,7 @@ class TestCancelFinalizesNotLiveRun(TestRunControl):
 	def test_immediate_finalize_error_is_logged_not_raised(self):
 		logger = MagicMock()
 		with self._user("a@x.com"), self._db2(self._row("Started")), patch(
-			"huf.ai.agent_integration._guarded_fail_started_run", side_effect=RuntimeError("boom")
+			"huf.ai.agent.integration._guarded_fail_started_run", side_effect=RuntimeError("boom")
 		), patch.object(rc, "mark_cancelled_tool_calls"), patch.object(rc.frappe, "logger", return_value=logger):
 			r = rc.cancel_agent_run("R1")
 		self.assertEqual(r["run_id"], "R1")
@@ -133,7 +133,7 @@ class TestCancelFinalizesNotLiveRun(TestRunControl):
 	def test_live_run_only_sets_marker(self):
 		rc.touch_run_alive("R1")
 		with self._user("a@x.com"), self._db2(self._row("Started")), patch(
-			"huf.ai.agent_integration._guarded_fail_started_run"
+			"huf.ai.agent.integration._guarded_fail_started_run"
 		) as fail, patch.object(rc, "mark_cancelled_tool_calls") as mark:
 			r = rc.cancel_agent_run("R1")
 		fail.assert_not_called()
@@ -151,7 +151,7 @@ class TestCancelFinalizesNotLiveRun(TestRunControl):
 
 	def test_young_not_live_run_only_sets_marker(self):
 		with self._user("a@x.com"), self._db2(self._aged_row(3), "Started"), patch(
-			"huf.ai.agent_integration._guarded_fail_started_run"
+			"huf.ai.agent.integration._guarded_fail_started_run"
 		) as fail, patch.object(rc, "mark_cancelled_tool_calls") as mark:
 			r = rc.cancel_agent_run("R1")
 		fail.assert_not_called()
@@ -161,7 +161,7 @@ class TestCancelFinalizesNotLiveRun(TestRunControl):
 
 	def test_old_not_live_run_is_finalized(self):
 		with self._user("a@x.com"), self._db2(self._aged_row(120)), patch(
-			"huf.ai.agent_integration._guarded_fail_started_run", return_value=True
+			"huf.ai.agent.integration._guarded_fail_started_run", return_value=True
 		) as fail, patch.object(rc, "mark_cancelled_tool_calls") as mark:
 			r = rc.cancel_agent_run("R1")
 		fail.assert_called_once_with("R1", rc.CANCELLED_BY_USER)
@@ -172,7 +172,7 @@ class TestCancelFinalizesNotLiveRun(TestRunControl):
 		row = self._aged_row(120)
 		row.execution_mode = "sync"
 		with self._user("a@x.com"), self._db2(row, "Started"), patch(
-			"huf.ai.agent_integration._guarded_fail_started_run"
+			"huf.ai.agent.integration._guarded_fail_started_run"
 		) as fail, patch.object(rc, "mark_cancelled_tool_calls") as mark:
 			r = rc.cancel_agent_run("R1")
 		fail.assert_not_called()
@@ -183,14 +183,14 @@ class TestCancelFinalizesNotLiveRun(TestRunControl):
 
 	def test_lost_race_does_not_touch_tool_rows(self):
 		with self._user("a@x.com"), self._db2(self._row("Started"), "Success"), patch(
-			"huf.ai.agent_integration._guarded_fail_started_run", return_value=False
+			"huf.ai.agent.integration._guarded_fail_started_run", return_value=False
 		), patch.object(rc, "mark_cancelled_tool_calls") as mark:
 			r = rc.cancel_agent_run("R1")
 		mark.assert_not_called()
 		self.assertEqual(r["status"], "Success")
 
 	def test_guarded_fail_returns_false_when_not_started(self):
-		from huf.ai import agent_integration as ai
+		from huf.ai.agent import integration as ai
 
 		db = MagicMock()
 		db._cursor.rowcount = 0
@@ -202,7 +202,7 @@ class TestCancelFinalizesNotLiveRun(TestRunControl):
 
 	def test_finished_run_is_noop(self):
 		with self._user("a@x.com"), self._db2(self._row("Failed")), patch(
-			"huf.ai.agent_integration._guarded_fail_started_run"
+			"huf.ai.agent.integration._guarded_fail_started_run"
 		) as fail:
 			r = rc.cancel_agent_run("R1")
 		fail.assert_not_called()
@@ -228,7 +228,7 @@ class TestCancelRedisDown(TestCancelFinalizesNotLiveRun):
 
 	def test_old_run_finalized_without_marker(self):
 		with self._user("a@x.com"), self._db2(self._row("Started")), patch(
-			"huf.ai.agent_integration._guarded_fail_started_run", return_value=True
+			"huf.ai.agent.integration._guarded_fail_started_run", return_value=True
 		) as fail, patch.object(rc, "mark_cancelled_tool_calls") as mark:
 			r = rc.cancel_agent_run("R1")
 		fail.assert_called_once_with("R1", rc.CANCELLED_BY_USER)
@@ -239,7 +239,7 @@ class TestCancelRedisDown(TestCancelFinalizesNotLiveRun):
 	def test_old_non_stream_run_not_finalized_when_redis_down(self):
 		row = self._row("Started", execution_mode="sync")
 		with self._user("a@x.com"), self._db2(row, "Started"), patch(
-			"huf.ai.agent_integration._guarded_fail_started_run"
+			"huf.ai.agent.integration._guarded_fail_started_run"
 		) as fail, patch.object(rc, "mark_cancelled_tool_calls") as mark:
 			r = rc.cancel_agent_run("R1")
 		fail.assert_not_called()
@@ -249,7 +249,7 @@ class TestCancelRedisDown(TestCancelFinalizesNotLiveRun):
 
 	def test_young_run_not_finalized_and_not_requested(self):
 		with self._user("a@x.com"), self._db2(self._aged_row(3), "Started"), patch(
-			"huf.ai.agent_integration._guarded_fail_started_run"
+			"huf.ai.agent.integration._guarded_fail_started_run"
 		) as fail:
 			r = rc.cancel_agent_run("R1")
 		fail.assert_not_called()
@@ -258,7 +258,7 @@ class TestCancelRedisDown(TestCancelFinalizesNotLiveRun):
 
 	def test_lost_finalize_race_not_requested(self):
 		with self._user("a@x.com"), self._db2(self._row("Started"), "Started"), patch(
-			"huf.ai.agent_integration._guarded_fail_started_run", return_value=False
+			"huf.ai.agent.integration._guarded_fail_started_run", return_value=False
 		), patch.object(rc, "mark_cancelled_tool_calls") as mark:
 			r = rc.cancel_agent_run("R1")
 		mark.assert_not_called()
@@ -492,7 +492,7 @@ class TestRendererFinalizesOnDisconnect(unittest.TestCase):
 	def test_renderer_acloses_async_gen_after_terminal_error_chunk(self):
 		import inspect
 
-		from huf.ai import agent_stream_renderer as r
+		from huf.ai.agent import stream_renderer as r
 
 		src = inspect.getsource(r)
 		self.assertIn("async_gen.aclose()", src)
@@ -640,7 +640,7 @@ class TestGuardedFinishStartedRun(unittest.TestCase):
 	"""_guarded_finish_started_run must only finalize runs still 'Started'."""
 
 	def _run(self, status, rowcount):
-		from huf.ai import agent_integration as ai
+		from huf.ai.agent import integration as ai
 
 		db = MagicMock()
 		db._cursor.rowcount = rowcount
@@ -676,7 +676,7 @@ class TestSyncPathFinalWritesGuarded(unittest.TestCase):
 	def test_sync_final_writes_use_guard(self):
 		import inspect
 
-		from huf.ai import agent_integration as ai
+		from huf.ai.agent import integration as ai
 
 		src = inspect.getsource(ai._execute_agent_run)
 		self.assertIn('_guarded_finish_started_run(\n            run_doc.name, "Success"', src)
@@ -685,7 +685,7 @@ class TestSyncPathFinalWritesGuarded(unittest.TestCase):
 		self.assertNotIn('"Agent Run", run_doc.name, run_update', src)
 
 	def test_late_success_cannot_overwrite_failed_and_keeps_fields(self):
-		from huf.ai import agent_integration as ai
+		from huf.ai.agent import integration as ai
 
 		db = MagicMock()
 		db._cursor.rowcount = 0
@@ -889,15 +889,15 @@ class TestCancelQueuedRun(TestRunControl):
 
 	def test_queued_run_failed_immediately(self):
 		with self._user("a@x.com"), self._db3(self._row("Queued")), patch(
-			"huf.ai.agent_integration._guarded_fail_queued_run", return_value=True
-		) as fq, patch("huf.ai.agent_integration._execute_agent_run") as execute:
+			"huf.ai.agent.integration._guarded_fail_queued_run", return_value=True
+		) as fq, patch("huf.ai.agent.integration._execute_agent_run") as execute:
 			r = rc.cancel_agent_run("R1")
 		fq.assert_called_once_with("R1", rc.CANCELLED_BY_USER)
 		execute.assert_not_called()
 		self.assertEqual(r, {"run_id": "R1", "status": "Failed", "cancel_requested": True})
 
 	def test_queued_guarded_update_sql(self):
-		import huf.ai.agent_integration as ai
+		import huf.ai.agent.integration as ai
 
 		db = MagicMock()
 		db._cursor.rowcount = 1
@@ -913,7 +913,7 @@ class TestCancelQueuedRun(TestRunControl):
 
 	def test_queued_cancel_also_writes_marker(self):
 		with self._user("a@x.com"), self._db3(self._row("Queued")), patch(
-			"huf.ai.agent_integration._guarded_fail_queued_run", return_value=True
+			"huf.ai.agent.integration._guarded_fail_queued_run", return_value=True
 		):
 			r = rc.cancel_agent_run("R1")
 		self.assertEqual(r["status"], "Failed")
@@ -922,7 +922,7 @@ class TestCancelQueuedRun(TestRunControl):
 	def test_queued_cancel_marker_failure_still_succeeds(self):
 		self.cache.set_value.side_effect = RuntimeError("redis down")
 		with self._user("a@x.com"), self._db3(self._row("Queued")), patch(
-			"huf.ai.agent_integration._guarded_fail_queued_run", return_value=True
+			"huf.ai.agent.integration._guarded_fail_queued_run", return_value=True
 		):
 			r = rc.cancel_agent_run("R1")
 		self.assertEqual(r, {"run_id": "R1", "status": "Failed", "cancel_requested": True})
@@ -930,8 +930,8 @@ class TestCancelQueuedRun(TestRunControl):
 	def test_queued_lost_race_falls_back_to_marker(self):
 		# Drainer started the run between the read and the guarded UPDATE: marker path, status Started.
 		with self._user("a@x.com"), self._db3(self._row("Queued"), "Started"), patch(
-			"huf.ai.agent_integration._guarded_fail_queued_run", return_value=False
-		), patch("huf.ai.agent_integration._guarded_fail_started_run") as fs:
+			"huf.ai.agent.integration._guarded_fail_queued_run", return_value=False
+		), patch("huf.ai.agent.integration._guarded_fail_started_run") as fs:
 			r = rc.cancel_agent_run("R1")
 		fs.assert_not_called()  # young/live stream logic untouched for non-Started rows
 		self.assertTrue(rc.is_run_cancelled("R1"))
@@ -940,8 +940,8 @@ class TestCancelQueuedRun(TestRunControl):
 
 	def test_started_run_does_not_use_queued_path(self):
 		with self._user("a@x.com"), self._db3(self._row("Started")), patch(
-			"huf.ai.agent_integration._guarded_fail_queued_run"
-		) as fq, patch("huf.ai.agent_integration._guarded_fail_started_run", return_value=True), patch.object(
+			"huf.ai.agent.integration._guarded_fail_queued_run"
+		) as fq, patch("huf.ai.agent.integration._guarded_fail_started_run", return_value=True), patch.object(
 			rc, "mark_cancelled_tool_calls"
 		):
 			r = rc.cancel_agent_run("R1")
@@ -952,7 +952,7 @@ class TestCancelQueuedRun(TestRunControl):
 
 class TestDrainSkipsCancelledRun(unittest.TestCase):
 	def test_cancelled_marker_at_pickup_fails_not_executes(self):
-		import huf.ai.agent_integration as ai
+		import huf.ai.agent.integration as ai
 
 		run = SimpleNamespace(name="R1", conversation="C1", runtime_context="{}")
 		with patch.object(rc, "is_run_cancelled", return_value=True), patch.object(
@@ -966,7 +966,7 @@ class TestDrainSkipsCancelledRun(unittest.TestCase):
 		hb.assert_not_called()
 
 	def test_not_cancelled_still_executes(self):
-		import huf.ai.agent_integration as ai
+		import huf.ai.agent.integration as ai
 
 		run = SimpleNamespace(name="R1", conversation="C1", runtime_context="{}")
 		with patch.object(rc, "is_run_cancelled", return_value=False), patch.object(
@@ -983,7 +983,7 @@ class TestDrainSkipsCancelledRun(unittest.TestCase):
 
 class TestPartialReplySaveIsolated(unittest.TestCase):
 	def test_add_message_raising_does_not_propagate(self):
-		import huf.ai.agent_integration as ai
+		import huf.ai.agent.integration as ai
 
 		cm = MagicMock()
 		cm.add_message.side_effect = RuntimeError("db gone")
@@ -991,7 +991,7 @@ class TestPartialReplySaveIsolated(unittest.TestCase):
 		cm.add_message.assert_called_once()
 
 	def test_add_message_ok(self):
-		import huf.ai.agent_integration as ai
+		import huf.ai.agent.integration as ai
 
 		cm = MagicMock()
 		self.assertTrue(ai._save_partial_reply(cm, MagicMock(), "hi", "p", "m", "agent", "R1"))

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Button } from "../ui/button";
 import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
+import { copyText } from '@/lib/clipboard';
 
 export function CopyButton({ content}: { content: string}) {
   const [copied, setCopied] = useState(false);
@@ -20,10 +21,7 @@ export function CopyButton({ content}: { content: string}) {
     }
 
     try {
-      if (!navigator?.clipboard) {
-        throw new Error('Clipboard API not available');
-      }
-      await navigator.clipboard.writeText(content);
+      if (!(await copyText(content))) throw new Error('Copy failed');
       setCopied(true);
       toast.success('Response copied');
     } catch (error) {

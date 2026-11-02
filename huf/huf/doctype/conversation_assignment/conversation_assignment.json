@@ -1,0 +1,28 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-10-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["gateway", "contact", "solution", "expires_at", "set_by", "source_binding", "triage_pending_until"],
+ "fields": [
+  {"fieldname":"gateway","fieldtype":"Link","in_list_view":1,"label":"Gateway","options":"Gateway","reqd":1,"search_index":1},
+  {"fieldname":"contact","fieldtype":"Data","in_list_view":1,"label":"Contact","length":255,"reqd":1,"search_index":1},
+  {"fieldname":"solution","fieldtype":"Link","in_list_view":1,"label":"Solution","options":"Solution","reqd":1},
+  {"fieldname":"expires_at","fieldtype":"Datetime","label":"Expires at"},
+  {"fieldname":"set_by","fieldtype":"Select","label":"Set by","options":"rule\ntriage\nhandoff\nreferral"},
+  {"fieldname":"source_binding","fieldtype":"Link","label":"Source binding","options":"Gateway Binding"},
+  {"fieldname":"triage_pending_until","fieldtype":"Datetime","label":"Triage pending until"}
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "Huf",
+ "name": "Conversation Assignment",
+ "owner": "Administrator",
+ "permissions": [{"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1}],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

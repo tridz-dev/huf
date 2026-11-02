@@ -27,18 +27,18 @@ class TestMaintenanceEndpointAuthorization(unittest.TestCase):
         self.patcher_session.stop()
         self.patcher_throw.stop()
 
-    # ST-06.1 Tests: automation_scheduler.py - remove @frappe.whitelist()
-    @patch('huf.ai.automation_scheduler.now_datetime')
-    @patch('huf.ai.automation_scheduler.frappe.get_all')
-    @patch('huf.ai.automation_scheduler.frappe.db.exists')
-    @patch('huf.ai.automation_scheduler.automation_runtime_is_new')
+    # ST-06.1 Tests: automation/scheduler.py - remove @frappe.whitelist()
+    @patch('huf.ai.automation.scheduler.now_datetime')
+    @patch('huf.ai.automation.scheduler.frappe.get_all')
+    @patch('huf.ai.automation.scheduler.frappe.db.exists')
+    @patch('huf.ai.automation.scheduler.automation_runtime_is_new')
     def test_st06_1_run_due_automations_not_whitelisted(
         self, mock_runtime_new, mock_db_exists, mock_get_all, mock_now
     ):
         """ST-06.1: run_due_automations should not be whitelisted for HTTP access."""
         # This test verifies the decorator is removed by checking that
         # the function exists and can be called directly.
-        from huf.ai import automation_scheduler
+        from huf.ai.automation import scheduler as automation_scheduler
 
         self.assertTrue(hasattr(automation_scheduler, 'run_due_automations'))
         # Verify the function itself doesn't have a whitelist decorator
@@ -48,14 +48,14 @@ class TestMaintenanceEndpointAuthorization(unittest.TestCase):
             '__self__'  # Would indicate a bound method decorator
         ))
 
-    # ST-06.2 Tests: tool_registry.py - require System Manager
+    # ST-06.2 Tests: huf/ai/tools/registry.py - require System Manager
     @patch('frappe.only_for')
-    @patch('huf.ai.tool_registry.get_tools_by_app')
+    @patch('huf.ai.tools.registry.get_tools_by_app')
     def test_st06_2_sync_discovered_tools_system_manager_only(
         self, mock_get_tools, mock_only_for
     ):
         """ST-06.2: sync_discovered_tools should require System Manager role."""
-        from huf.ai import tool_registry
+        from huf.ai.tools import registry as tool_registry
 
         # Set up mock to raise PermissionError when not System Manager
         def only_for_side_effect(role):
@@ -311,7 +311,7 @@ class TestMaintenanceEndpointAuthorization(unittest.TestCase):
 
         self.assertTrue(_is_safe_url("https://example.com/mcp"))
 
-    # ST-06.7 Tests: automation_app_event.py - keep read gate, add initiating_user
+    # ST-06.7 Tests: automation/app_event.py - keep read gate, add initiating_user
     @patch('frappe.session')
     @patch('frappe.has_permission')
     @patch('frappe.throw')
@@ -319,7 +319,7 @@ class TestMaintenanceEndpointAuthorization(unittest.TestCase):
         self, mock_throw, mock_has_permission, mock_session
     ):
         """ST-06.7: trigger_app_event should gate on Automation read permission."""
-        from huf.ai import automation_app_event
+        from huf.ai.automation import app_event as automation_app_event
 
         mock_session.user = "test_user"
         mock_has_permission.return_value = False
@@ -333,8 +333,8 @@ class TestMaintenanceEndpointAuthorization(unittest.TestCase):
     @patch('frappe.session')
     @patch('frappe.has_permission')
     @patch('frappe.get_all')
-    @patch('huf.ai.automation_app_event.run_automation')
-    @patch('huf.ai.automation_app_event.automation_runtime_is_new')
+    @patch('huf.ai.automation.app_event.run_automation')
+    @patch('huf.ai.automation.app_event.automation_runtime_is_new')
     def test_st06_7_trigger_app_event_passes_initiating_user(
         self,
         mock_runtime_new,
@@ -344,7 +344,7 @@ class TestMaintenanceEndpointAuthorization(unittest.TestCase):
         mock_session,
     ):
         """ST-06.7: trigger_app_event should pass initiating_user to run_automation."""
-        from huf.ai import automation_app_event
+        from huf.ai.automation import app_event as automation_app_event
 
         mock_session.user = "test_user@example.com"
         mock_has_permission.return_value = True
@@ -372,15 +372,15 @@ class TestMaintenanceEndpointAuthorization(unittest.TestCase):
             '__self__'
         ))
 
-    # ST-06.9 Tests: automation_webhook.py - verify existing guard works
+    # ST-06.9 Tests: automation/webhook.py - verify existing guard works
     @patch('frappe.get_doc')
     @patch('frappe.throw')
-    @patch('huf.ai.automation_runner.frappe.get_roles')
+    @patch('huf.ai.automation.runner.frappe.get_roles')
     def test_st06_9_webhook_run_as_user_guard_fires(
         self, mock_get_roles, mock_throw, mock_get_doc
     ):
         """ST-06.9: webhook's run_automation should use existing _check_run_as_user_permission guard."""
-        from huf.ai.automation_runner import run_automation
+        from huf.ai.automation.runner import run_automation
 
         # Create an Automation where owner lacks System Manager
         # and run_as_user != owner (the violation condition)
@@ -414,13 +414,13 @@ class TestMaintenanceEndpointAuthorization(unittest.TestCase):
         self.assertEqual(args[1], frappe.PermissionError)
 
     @patch('frappe.get_doc')
-    @patch('huf.ai.automation_runner.frappe.get_roles')
-    @patch('huf.ai.automation_runner._execute')
+    @patch('huf.ai.automation.runner.frappe.get_roles')
+    @patch('huf.ai.automation.runner._execute')
     def test_st06_9_webhook_run_as_user_allowed_for_owner(
         self, mock_execute, mock_get_roles, mock_get_doc
     ):
         """ST-06.9: webhook automation should proceed when run_as_user == owner."""
-        from huf.ai.automation_runner import run_automation
+        from huf.ai.automation.runner import run_automation
 
         mock_automation = Mock()
         mock_automation.name = "test_auto"

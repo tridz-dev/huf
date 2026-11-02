@@ -17,6 +17,13 @@ import frappe
 class TestAppProvidedToolValidation(unittest.TestCase):
 	"""Test ST-05.1: App Provided tool paths validated against hook allow-set."""
 
+	def setUp(self):
+		# Saving a doc checks permissions; do not depend on whichever user an earlier test left
+		# as the session user (test order changes whenever test modules move).
+		previous_user = frappe.session.user
+		frappe.set_user("Administrator")
+		self.addCleanup(frappe.set_user, previous_user)
+
 	def test_app_provided_in_allow_set_passes(self):
 		"""
 		App Provided tool whose function_path is in the hook allow-set

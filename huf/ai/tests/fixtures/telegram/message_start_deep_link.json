@@ -1,0 +1,27 @@
+{
+  "update_id": 1004,
+  "message": {
+    "message_id": 10,
+    "from": {
+      "id": 111,
+      "is_bot": false,
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "chat": {
+      "id": 111,
+      "type": "private",
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "date": 1760000000,
+    "text": "/start pair_ABC123",
+    "entities": [
+      {
+        "type": "bot_command",
+        "offset": 0,
+        "length": 6
+      }
+    ]
+  }
+}

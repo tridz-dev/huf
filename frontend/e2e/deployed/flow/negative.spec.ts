@@ -201,9 +201,9 @@ test.describe('flow builder negative cases (does the UI stop broken flows?)', ()
     const approvalCfg = (approvalNode?.config ?? {}) as Record<string, unknown>;
     expect(approvalCfg.approver_role ?? '').toBe('');
 
-    // These four empty fields are exactly the guards flow_engine.py rejects
+    // These four empty fields are exactly the guards flow/engine.py rejects
     // at RUN time (agent.run:513, tool.call:573, http_request:960 — the
-    // approval guard is role-membership at huf/ai/flow_engine.py:1435, which
+    // approval guard is role-membership at huf/ai/flow/engine.py:1435, which
     // fires only if approver_role is non-empty; an empty approver_role is
     // itself accepted by the engine and produces an approval nobody can
     // ever satisfy — arguably worse than a save-time rejection).

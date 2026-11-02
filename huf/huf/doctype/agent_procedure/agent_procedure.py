@@ -31,7 +31,7 @@ from frappe.model.document import Document
 from frappe.utils import now_datetime
 
 from huf.ai import system_records
-from huf.ai.procedure_versioning import (
+from huf.ai.procedure.versioning import (
 	CONTENT_FIELDS,
 	FlowOnlyNodeError,
 	assert_no_flow_only_nodes,

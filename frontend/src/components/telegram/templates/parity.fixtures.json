@@ -1,0 +1,160 @@
+[
+	{
+		"id": "substitute_default_and_typed",
+		"template": {
+			"parse_mode": "HTML",
+			"body": "{{greet}} {{ name }}!",
+			"variables": [
+				{
+					"variable": "greet",
+					"default_value": "Hello"
+				}
+			]
+		},
+		"values": {
+			"name": "Ann"
+		},
+		"text": "Hello Ann!",
+		"missing": [],
+		"split": false
+	},
+	{
+		"id": "blank_value_is_unset",
+		"template": {
+			"parse_mode": "HTML",
+			"body": "Hi {{name}}",
+			"variables": [
+				{
+					"variable": "name",
+					"default_value": "friend"
+				}
+			]
+		},
+		"values": {
+			"name": ""
+		},
+		"text": "Hi friend",
+		"missing": [],
+		"split": false
+	},
+	{
+		"id": "missing_is_empty_and_reported",
+		"template": {
+			"parse_mode": "HTML",
+			"body": "a {{x}} b {{y}} {{x}}"
+		},
+		"values": {},
+		"text": "a  b",
+		"missing": [
+			"x",
+			"y"
+		],
+		"split": false
+	},
+	{
+		"id": "html_value_escaped",
+		"template": {
+			"parse_mode": "HTML",
+			"body": "<b>{{x}}</b>"
+		},
+		"values": {
+			"x": "<b>&"
+		},
+		"text": "<b>&lt;b&gt;&amp;</b>",
+		"missing": [],
+		"split": false
+	},
+	{
+		"id": "html_attribute_value_quote_escaped",
+		"template": {
+			"parse_mode": "HTML",
+			"body": "<a href=\"{{u}}\">go</a> {{u}}"
+		},
+		"values": {
+			"u": "a\" b"
+		},
+		"text": "<a href=\"a&quot; b\">go</a> a\" b",
+		"missing": [],
+		"split": false
+	},
+	{
+		"id": "url_filter_encodes",
+		"template": {
+			"parse_mode": "HTML",
+			"body": "<a href=\"https://x.io/?q={{q|url}}\">s</a>"
+		},
+		"values": {
+			"q": "a&b=c d"
+		},
+		"text": "<a href=\"https://x.io/?q=a%26b%3Dc%20d\">s</a>",
+		"missing": [],
+		"split": false
+	},
+	{
+		"id": "markdownv2_escaped",
+		"template": {
+			"parse_mode": "MarkdownV2",
+			"body": "*{{x}}*"
+		},
+		"values": {
+			"x": "a_b.c!"
+		},
+		"text": "*a\\_b\\.c\\!*",
+		"missing": [],
+		"split": false
+	},
+	{
+		"id": "plain_not_escaped",
+		"template": {
+			"parse_mode": "Plain",
+			"body": "{{x}}"
+		},
+		"values": {
+			"x": "<b>"
+		},
+		"text": "<b>",
+		"missing": [],
+		"split": false
+	},
+	{
+		"id": "media_short_caption_one_message",
+		"template": {
+			"parse_mode": "HTML",
+			"body": "Hi",
+			"media_type": "photo",
+			"media": "https://x/y.jpg"
+		},
+		"values": {},
+		"text": "Hi",
+		"missing": [],
+		"split": false
+	},
+	{
+		"id": "media_long_text_splits",
+		"template": {
+			"parse_mode": "HTML",
+			"body": "{{long}}",
+			"media_type": "photo",
+			"media": "https://x/y.jpg"
+		},
+		"values": {
+			"long": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+		},
+		"text": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+		"missing": [],
+		"split": true
+	},
+	{
+		"id": "sticker_text_splits",
+		"template": {
+			"parse_mode": "HTML",
+			"body": "Hi",
+			"media_type": "sticker",
+			"media": "STICKERID"
+		},
+		"values": {},
+		"text": "Hi",
+		"missing": [],
+		"split": true
+	}
+]

@@ -3,17 +3,30 @@
 
 import unittest
 from types import SimpleNamespace
+
 from huf.ai.reasoning import (
-    ReasoningPolicy,
     ReasoningCapabilities,
+    ReasoningPolicy,
     ReasoningResolution,
+    build_reasoning_kwargs,
     detect_model_capabilities,
     resolve_reasoning,
-    build_reasoning_kwargs,
 )
 
 
 class TestReasoningLayer(unittest.TestCase):
+
+    def test_adaptive_regex_matches_bedrock_and_vertex_ids(self):
+        from huf.ai.reasoning import rejects_sampling_params, requires_adaptive_thinking
+
+        for name in (
+            "claude-opus-5", "anthropic/claude-sonnet-5-20260101", "bedrock/us.anthropic.claude-opus-5-v1:0",
+            "bedrock/anthropic.claude-sonnet-5", "vertex_ai/claude-opus-5@20260101", "claude-5",
+        ):
+            self.assertTrue(requires_adaptive_thinking(name), name)
+            self.assertTrue(rejects_sampling_params(name), name)
+        for name in ("claude-sonnet-4-5", "bedrock/us.anthropic.claude-sonnet-4-5-v1:0", "gpt-5", "my-claude-5", ""):
+            self.assertFalse(requires_adaptive_thinking(name), name)
 
     def test_policy_parsing(self):
         p = ReasoningPolicy.from_dict({"reasoning_mode": "On", "reasoning_effort": "High", "reasoning_budget_tokens": 8192})

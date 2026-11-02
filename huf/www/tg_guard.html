@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Verification</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;padding:24px;background:var(--tg-theme-bg-color,#fff);color:var(--tg-theme-text-color,#111);text-align:center}
+h2{margin:0 0 6px;font-size:20px}
+p{margin:0 0 18px;color:var(--tg-theme-hint-color,#666)}
+#q{font-size:22px;margin:18px 0}
+.opts{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.opts button{font-size:34px;padding:10px 16px;border-radius:12px;border:1px solid var(--tg-theme-hint-color,#ccc);background:transparent}
+input{font-size:22px;width:120px;text-align:center;padding:8px;border-radius:10px;border:1px solid var(--tg-theme-hint-color,#ccc)}
+.go{margin-top:16px;font-size:17px;padding:10px 28px;border:0;border-radius:10px;background:var(--tg-theme-button-color,#2481cc);color:var(--tg-theme-button-text-color,#fff)}
+#msg{margin-top:16px;min-height:22px}
+</style>
+</head>
+<body>
+<h2 id="title">Quick check</h2>
+<p id="sub">Please confirm you are human to join.</p>
+<div id="q"></div>
+<div id="box"></div>
+<div id="msg"></div>
+<script>
+(function () {
+  var tg = window.Telegram && window.Telegram.WebApp;
+  var params = new URLSearchParams(location.search);
+  var gw = params.get("g") || "", nonce = params.get("n") || "";
+  var msg = document.getElementById("msg"), box = document.getElementById("box"), q = document.getElementById("q");
+  if (tg) { tg.ready(); tg.expand(); }
+  function post(method, data) {
+    var body = new URLSearchParams(data);
+    return fetch("/api/method/huf.ai.telegram_guard." + method, {
+      method: "POST", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: body
+    }).then(function (r) { return r.json(); }).then(function (j) { return j.message || {ok: false, message: "Error"}; });
+  }
+  function finish(text) { box.innerHTML = ""; q.textContent = ""; msg.textContent = text; if (tg) setTimeout(function () { tg.close(); }, 1500); }
+  function send(answer) {
+    post("guard_answer", {gateway: gw, nonce: nonce, init_data: tg.initData, answer: answer}).then(function (r) {
+      if (r.done) { finish(r.message); } else { msg.textContent = r.message || "Try again."; }
+    }).catch(function () { msg.textContent = "Network error. Try again."; });
+  }
+  if (!tg || !tg.initData || !gw || !nonce) { msg.textContent = "Open this page from Telegram."; return; }
+  post("guard_challenge", {gateway: gw, nonce: nonce, init_data: tg.initData}).then(function (r) {
+    if (!r.ok) { finish(r.message || "Verification failed or expired."); return; }
+    if (r.chat_title) { document.getElementById("title").textContent = "Join " + r.chat_title; }
+    q.textContent = r.prompt;
+    if (r.kind === "emoji") {
+      var d = document.createElement("div"); d.className = "opts";
+      r.options.forEach(function (o) {
+        var b = document.createElement("button"); b.textContent = o; b.onclick = function () { send(o); }; d.appendChild(b);
+      });
+      box.appendChild(d);
+    } else {
+      var i = document.createElement("input"); i.inputMode = "numeric"; i.autocomplete = "off"; i.maxLength = 4;
+      var b = document.createElement("button"); b.className = "go"; b.textContent = "Verify";
+      b.onclick = function () { send(i.value); };
+      box.appendChild(i); box.appendChild(document.createElement("br")); box.appendChild(b);
+    }
+  }).catch(function () { msg.textContent = "Network error."; });
+})();
+</script>
+</body>
+</html>

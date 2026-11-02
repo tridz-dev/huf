@@ -1,5 +1,5 @@
 """
-Unit tests for huf.ai.agent_access.resolve_run_identity_and_authorize.
+Unit tests for huf.ai.agent.access.resolve_run_identity_and_authorize.
 
 Track-Item: GW-11 — these tests exercise the single shared "resolve who runs
 this agent, and are they allowed to" helper directly across all four trigger
@@ -17,7 +17,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from huf.ai.agent_access import (
+from huf.ai.agent.access import (
     TRIGGER_DIRECT_API,
     TRIGGER_DOC_EVENT,
     TRIGGER_FLOW_WEBHOOK,
@@ -42,7 +42,7 @@ class TestDirectApiSurface(unittest.TestCase):
 
     def test_entitled_user_with_capability_is_authorized(self):
         agent_doc = _make_agent(owner="owner@example.com")
-        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+        with patch("huf.ai.agent.access.frappe.get_roles", return_value=[]), patch(
             "huf.permissions.has_capability", return_value=True
         ):
             result = resolve_run_identity_and_authorize(
@@ -54,7 +54,7 @@ class TestDirectApiSurface(unittest.TestCase):
 
     def test_non_entitled_user_is_rejected(self):
         agent_doc = _make_agent(owner="owner@example.com")
-        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+        with patch("huf.ai.agent.access.frappe.get_roles", return_value=[]), patch(
             "huf.permissions.has_capability", return_value=False
         ):
             result = resolve_run_identity_and_authorize(
@@ -65,7 +65,7 @@ class TestDirectApiSurface(unittest.TestCase):
 
     def test_entitled_user_missing_agent_use_capability_is_rejected(self):
         agent_doc = _make_agent(owner="owner@example.com")
-        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+        with patch("huf.ai.agent.access.frappe.get_roles", return_value=[]), patch(
             "huf.permissions.has_capability", return_value=False
         ):
             result = resolve_run_identity_and_authorize(
@@ -76,7 +76,7 @@ class TestDirectApiSurface(unittest.TestCase):
 
     def test_guest_on_allow_guest_agent_is_authorized_without_capability_check(self):
         agent_doc = _make_agent(allow_guest=True)
-        with patch("huf.ai.agent_access.frappe.get_roles") as mock_get_roles, patch(
+        with patch("huf.ai.agent.access.frappe.get_roles") as mock_get_roles, patch(
             "huf.permissions.has_capability"
         ) as mock_has_capability:
             result = resolve_run_identity_and_authorize(
@@ -96,7 +96,7 @@ class TestGatewaySurface(unittest.TestCase):
 
     def test_entitled_execution_user_is_authorized(self):
         agent_doc = _make_agent(name="Support Agent", owner="gateway-bot")
-        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]):
+        with patch("huf.ai.agent.access.frappe.get_roles", return_value=[]):
             result = resolve_run_identity_and_authorize(
                 agent_doc,
                 TRIGGER_GATEWAY,
@@ -107,7 +107,7 @@ class TestGatewaySurface(unittest.TestCase):
 
     def test_non_entitled_execution_user_is_rejected_with_named_reason(self):
         agent_doc = _make_agent(name="Support Agent", owner="someone-else@example.com")
-        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+        with patch("huf.ai.agent.access.frappe.get_roles", return_value=[]), patch(
             "huf.permissions.has_capability", return_value=False
         ):
             result = resolve_run_identity_and_authorize(
@@ -131,7 +131,7 @@ class TestGatewaySurface(unittest.TestCase):
         """Regression guard: allow_guest=1 must not admit an arbitrary named
         principal via the gateway surface -- that was the exact GW-08 bug."""
         agent_doc = _make_agent(name="Support Agent", owner="someone-else@example.com", allow_guest=True)
-        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+        with patch("huf.ai.agent.access.frappe.get_roles", return_value=[]), patch(
             "huf.permissions.has_capability", return_value=False
         ):
             result = resolve_run_identity_and_authorize(
@@ -184,7 +184,7 @@ class TestDocEventSurface(unittest.TestCase):
     # gets a chance to substitute anything. So these three tests patch the
     # whole `frappe` reference inside agent_access, matching the pattern
     # test_gateway_service.py already uses for the same reason.
-    @patch("huf.ai.agent_access.frappe")
+    @patch("huf.ai.agent.access.frappe")
     def test_initiating_user_matching_current_user_is_a_no_op(self, mock_frappe):
         result = resolve_run_identity_and_authorize(
             None,
@@ -194,7 +194,7 @@ class TestDocEventSurface(unittest.TestCase):
         self.assertEqual(result.run_as_user, "same@example.com")
         mock_frappe.db.exists.assert_not_called()
 
-    @patch("huf.ai.agent_access.frappe")
+    @patch("huf.ai.agent.access.frappe")
     def test_existing_initiating_user_is_used(self, mock_frappe):
         mock_frappe.db.exists.return_value = True
         result = resolve_run_identity_and_authorize(
@@ -206,10 +206,10 @@ class TestDocEventSurface(unittest.TestCase):
         self.assertEqual(result.run_as_user, "human@example.com")
         self.assertFalse(result.fallback_applied)
 
-    @patch("huf.ai.agent_access.frappe")
+    @patch("huf.ai.agent.access.frappe")
     def test_deleted_initiating_user_falls_back_and_logs(self, mock_frappe):
         """GW-11 fold-in: this fallback used to be completely silent (audit
-        finding, agent_hooks.py:145-149). It must now log something."""
+        finding, agent/hooks.py:145-149). It must now log something."""
         mock_frappe.db.exists.return_value = False
         result = resolve_run_identity_and_authorize(
             None,
@@ -224,7 +224,7 @@ class TestDocEventSurface(unittest.TestCase):
 
 
 class TestUnknownTriggerSurface(unittest.TestCase):
-    @patch("huf.ai.agent_access.frappe")
+    @patch("huf.ai.agent.access.frappe")
     def test_unknown_trigger_surface_throws(self, mock_frappe):
         mock_frappe.throw.side_effect = RuntimeError
         with self.assertRaises(RuntimeError):

@@ -1,208 +1,136 @@
-import { useEffect, useState, type KeyboardEvent } from 'react';
-import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle, Settings, Pencil } from 'lucide-react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle, Settings, CircleOff } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
 import { useFlowContext } from '../contexts/FlowContext';
-import { runFlow, updateFlowDefinitionFields } from '../services/flowApi';
-import { toast } from 'sonner';
 import { FlowRunHistory } from './FlowRunHistory';
 import { FlowRunViewer } from './FlowRunViewer';
 import { FlowSettingsModal } from './modals/FlowSettingsModal';
+import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
+import { FlowChecklist } from './flow/frame/FlowChecklist';
+import { finishText } from './flow/frame/frameIssues';
+import { useFlowIssues } from '@/hooks/flow/useFlowIssues';
+import { useFrozenWhilePressed } from '@/hooks/flow/useFrozenWhilePressed';
+import { RunFlowDialog } from './flow/RunFlowDialog';
+import { PublishFlowDialog } from './flow/publish/PublishFlowDialog';
+import { UnpublishFlowDialog } from './flow/publish/UnpublishFlowDialog';
+import { FlowHelpPopover } from './flow/FlowHelpPopover';
+import { DisabledReason } from './flow/DisabledReason';
+import { HeaderOverflowMenu } from './flow/header/HeaderOverflowMenu';
+import { useFlowHeaderActions } from './flow/header/useFlowHeaderActions';
+import { showSaveStatus } from './flow/header/saveStatus';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { publishBlockedReason } from '@/lib/flow/flowPublishGuard';
+import { codePublishBlockedReason } from '@/lib/flow-graph/codeFlow';
+import { useCodeFlowStatus } from '@/lib/flow-graph/useCodeFlowStatus';
+import { useConvertedProcedure } from './flow/canvas/useCanvasEffects';
+import { usePhoneFlowView } from './flow/phone/usePhoneFlowView';
+import { UndoRedoButtons } from './flow/header/UndoRedoButtons';
+import { useFlowCommand } from './flow/shortcuts/flowCommands';
+import { withShortcut } from './flow/shortcuts/shortcutHints';
+import { toast } from '@/lib/toast';
+import { useRunParam } from '@/hooks/flow/useRunParam';
+import { useStepParam } from '@/hooks/flow/useStepParam';
+import { flowStatusKind, StatusPill } from './common/StatusPill';
+import { HIT_TARGET, useViewport } from '@/lib/ui/responsive';
+import { cn } from '@/lib/utils';
+import { RUN_BUTTON_LABEL } from '@/lib/flow-run/flowRunPayload';
+
+/** The Help button fits from this width up; below it Help & shortcuts lives in the "..." menu. */
+const HELP_BUTTON_FROM = 1360;
+
+export { FlowToolbarTitle } from './flow/header/FlowToolbarTitle';
 
 /**
- * Left-aligned "Flows > flow name [pencil]" control for the flow canvas
- * toolbar. Replaces the floating InlineEditName panel that used to sit over
- * the canvas — this renders in the toolbar row itself instead, reusing the
- * same rename plumbing (`activeFlow.name` + `updateFlowName`).
+ * The editor's header buttons. Above 1200px everything is on show; at 1200px and narrower Help, Run history, Flow settings,
+ * Tidy layout, Convert to procedure and the status move into a "..." menu, leaving the save state, Save, a labelled Run and a
+ * labelled Publish. On a phone the editing buttons go and Run (or "Run test" on a draft), Publish and "..." remain.
  */
-export function FlowToolbarTitle() {
-  const { activeFlow, updateFlowName } = useFlowContext();
-  const [isEditing, setIsEditing] = useState(false);
-  const [draftName, setDraftName] = useState('');
-
-  if (!activeFlow) {
-    return (
-      <span className="text-[13px] text-steel truncate">Flows</span>
-    );
-  }
-
-  const startEditing = () => {
-    setDraftName(activeFlow.name);
-    setIsEditing(true);
-  };
-
-  const commit = () => {
-    setIsEditing(false);
-    const trimmed = draftName.trim();
-    if (trimmed && trimmed !== activeFlow.name) {
-      void updateFlowName(activeFlow.id, trimmed);
-    }
-  };
-
-  const revert = () => {
-    setIsEditing(false);
-  };
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      commit();
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      revert();
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-1.5 min-w-0">
-      <Link to="/flows" className="text-[13px] text-steel hover:text-ink shrink-0 transition-colors">
-        Flows
-      </Link>
-      <span className="text-[13px] text-steel shrink-0">/</span>
-      {isEditing ? (
-        <Input
-          value={draftName}
-          onChange={(event) => setDraftName(event.target.value)}
-          onBlur={commit}
-          onKeyDown={handleKeyDown}
-          autoFocus
-          className="h-6 text-[13px] font-medium text-ink border-0 px-1 py-0 focus-visible:ring-1 min-w-0 max-w-[240px]"
-        />
-      ) : (
-        <span className="text-[13px] font-medium text-ink truncate max-w-[240px]">
-          {activeFlow.name || 'Untitled flow'}
-        </span>
-      )}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label="Edit flow name"
-        onClick={startEditing}
-        disabled={isEditing}
-        className="h-6 w-6 shrink-0 text-steel hover:text-ink"
-      >
-        <Pencil className="h-3.5 w-3.5" />
-      </Button>
-    </div>
-  );
-}
-
 export function FlowsHeaderActions() {
-  const { activeFlow, saveState, hasUnsavedChanges, saveFlow } = useFlowContext();
-  const [isRunning, setIsRunning] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
+  const { activeFlow, saveState, hasUnsavedChanges, tidyLayout } = useFlowContext();
+  const { canManage, canPublishSensitive, readOnlyReason } = useFlowPermissions();
+  const { isCompact, isPhone, width } = useViewport();
+  const header = useFlowHeaderActions();
+  const isPublished = activeFlow?.status === 'active';
+  // A Data trigger or a web request step needs an extra permission to publish; say why Publish is off.
+  const { status: codeStatus } = useCodeFlowStatus();
+  const publishBlocked =
+    publishBlockedReason(activeFlow?.nodes ?? [], canPublishSensitive) ??
+    codePublishBlockedReason(activeFlow?.nodes ?? [], codeStatus);
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [showConvert, setShowConvert] = useState(false);
+  const [selectedRunId, setSelectedRunId] = useRunParam();
+  useStepParam();
+  const phoneView = usePhoneFlowView();
+  const convertedProcedure = useConvertedProcedure(isCompact && !isPhone ? activeFlow?.id : undefined, activeFlow?.version, saveState);
 
   const location = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const sp = new URLSearchParams(location.search);
-    const runFromUrl = sp.get('run');
-    if (runFromUrl) {
-      setSelectedRunId(runFromUrl);
-    }
-  }, [location.search]);
-
-  const openSettingsFromUrl = () => {
-    const sp = new URLSearchParams(location.search);
-    return sp.get('settings') === '1';
-  };
-
-  useEffect(() => {
-    if (openSettingsFromUrl()) setShowSettings(true);
+    if (new URLSearchParams(location.search).get('settings') === '1') setShowSettings(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
   const handleCloseSettings = () => {
     setShowSettings(false);
-    const sp = new URLSearchParams(location.search);
-    if (sp.has('settings')) {
+    if (new URLSearchParams(location.search).has('settings')) {
       navigate({ pathname: location.pathname, search: '' }, { replace: true });
     }
   };
 
-  const handleRun = async () => {
-    if (!activeFlow) return;
+  // The keyboard shortcuts and the Cmd+K palette ask the header to do these (see flow/shortcuts/flowCommands).
+  const editorKeys = canManage && !isPhone;
+  useFlowCommand('save', () => (hasUnsavedChanges ? void header.handleSaveDraft() : toast('Everything is saved', { id: 'flow-save-toast', duration: 2000 })), editorKeys);
+  useFlowCommand('run', () => void header.handleRun(), editorKeys);
+  useFlowCommand('publish', () => {
+    if (isPublished) toast.info('This flow is already live');
+    else if (publishBlocked) toast.info('Publishing is off', { description: publishBlocked });
+    else void header.handlePublish();
+  }, editorKeys);
+  useFlowCommand('settings', () => setShowSettings(true), !isPhone);
+  useFlowCommand('runs', () => setShowHistory(true), !isPhone);
 
-    // Auto-save if there are unsaved changes
-    if (hasUnsavedChanges) {
-      try {
-        await saveFlow();
-      } catch (err) {
-        toast.error('Failed to save before running', { description: err instanceof Error ? err.message : 'Unknown error' });
-        return;
-      }
-    }
+  const issues = useFlowIssues();
+  // The status word changes with the count: hold it while a button is pressed (see useFrozenWhilePressed).
+  const statusKind = flowStatusKind(activeFlow?.status, useFrozenWhilePressed(issues.length));
+  const hit = cn('gap-2', HIT_TARGET);
+  const showSaveState = showSaveStatus({ hasFlow: !!activeFlow, isPhone, canManage });
 
-    setIsRunning(true);
-    try {
-      const result = await runFlow(activeFlow.id);
-      // run_flow executes the flow SYNCHRONOUSLY and returns its final status,
-      // so a resolved promise does not mean the run succeeded. Reporting
-      // "Flow run started" unconditionally told users a run was fine when it
-      // had already failed; surface the real outcome instead.
-      if (result.status === 'Failed') {
-        toast.error('Flow run failed', {
-          description: `Run ID: ${result.flow_run_id} — open Runs for the error`,
-        });
-      } else if (result.status && result.status.startsWith('Waiting')) {
-        toast.info('Flow run is waiting', {
-          description: `${result.status} — Run ID: ${result.flow_run_id}`,
-        });
-      } else {
-        toast.success('Flow run started', { description: `Run ID: ${result.flow_run_id}` });
-      }
-    } catch (err) {
-      toast.error('Failed to run flow', { description: err instanceof Error ? err.message : 'Unknown error' });
-    } finally {
-      setIsRunning(false);
-    }
-  };
-
-  const handleSaveDraft = async () => {
-    try {
-      await saveFlow();
-      toast.success('Flow saved');
-    } catch (err) {
-      toast.error('Failed to save', { description: err instanceof Error ? err.message : 'Unknown error' });
-    }
-  };
-
-  const handlePublish = async () => {
-    if (!activeFlow) return;
-
-    // Auto-save if there are unsaved changes
-    if (hasUnsavedChanges) {
-      try {
-        await saveFlow();
-      } catch (err) {
-        toast.error('Failed to save before publishing', { description: err instanceof Error ? err.message : 'Unknown error' });
-        return;
-      }
-    }
-
-    setIsPublishing(true);
-    try {
-      // Mark as Active
-      await updateFlowDefinitionFields(activeFlow.id, { status: 'Active' });
-      toast.success('Flow published successfully');
-    } catch (err) {
-      toast.error('Failed to publish flow', { description: err instanceof Error ? err.message : 'Unknown error' });
-    } finally {
-      setIsPublishing(false);
-    }
-  };
+  const publishButton = isPublished ? (
+    <Button
+      variant="outline"
+      size="sm"
+      className={hit}
+      data-testid="flow-unpublish"
+      title="Unpublish: turn the triggers off. The flow becomes a draft again"
+      onClick={() => header.setShowUnpublish(true)}
+      disabled={!activeFlow || header.isUnpublishing || !canManage}
+    >
+      <CircleOff className="w-4 h-4" />
+      Unpublish
+    </Button>
+  ) : (
+    <Button
+      variant={isPhone ? 'outline' : 'display'}
+      size="sm"
+      className={hit}
+      data-testid="flow-publish"
+      title="Publish: turn the trigger on so the flow starts by itself (webhook calls, schedule or record changes)"
+      onClick={header.handlePublish}
+      disabled={!activeFlow || header.isPublishing || !canManage || !!publishBlocked}
+    >
+      {header.isPublishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+      Publish
+    </Button>
+  );
 
   return (
-    <div className="flex items-center gap-2">
-      {/* Save State Indicator (bare dot + text, no chip background) */}
-      {activeFlow && (
-        <div className="flex items-center gap-1.5 mr-2 text-muted-foreground">
+    <div className="flex items-center gap-2 max-[1499px]:gap-1">
+      {/* Save state (bare dot + text, no chip background). Nothing is edited on a phone, so it has none. */}
+      {showSaveState && (
+        <div className="mr-1 flex items-center gap-1.5 text-muted-foreground" data-testid="flow-save-state">
           {saveState === 'saving' ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           ) : saveState === 'error' ? (
@@ -213,93 +141,158 @@ export function FlowsHeaderActions() {
             <CheckCircle2 className="w-3.5 h-3.5 text-good" />
           )}
           <span className="text-xs font-medium">
-            {saveState === 'saving' ? 'Saving...' :
-              saveState === 'error' ? 'Save Failed' :
-                hasUnsavedChanges ? 'Unsaved' : 'Saved'}
+            {saveState === 'saving' ? 'Saving...' : saveState === 'error' ? 'Save Failed' : hasUnsavedChanges ? 'Unsaved' : 'Saved'}
           </span>
+          {canManage && <FlowChecklist live={isPublished} />}
         </div>
       )}
 
-      {/* Save Draft Button */}
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-2"
-        onClick={handleSaveDraft}
-        disabled={!activeFlow || saveState === 'saving' || !hasUnsavedChanges}
-      >
-        <Save className="w-4 h-4" />
-        <span>Save</span>
-      </Button>
+      {isPhone && canManage && <FlowChecklist live={isPublished} separator={false} menuOnly className="absolute" />}
 
-      {/* Runs Button */}
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-2"
-        onClick={() => setShowHistory(true)}
-        disabled={!activeFlow}
-      >
-        <History className="w-4 h-4" />
-        <span>Runs</span>
-      </Button>
+      {canManage && !isPhone && !isCompact && <UndoRedoButtons />}
 
-      {/* Settings Button */}
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-2"
-        onClick={() => setShowSettings(true)}
-        disabled={!activeFlow}
-      >
-        <Settings className="w-4 h-4" />
-        <span>Settings</span>
-      </Button>
+      {!isCompact && <FlowHelpPopover />}
 
-      {/* Run Button */}
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-2"
-        onClick={handleRun}
-        disabled={!activeFlow || isRunning}
-      >
-        {isRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-        <span>Run</span>
-      </Button>
+      {/* Save Draft Button: a label from 1200px up, an icon (with its name for screen readers) when narrow */}
+      {!isPhone && (
+        <DisabledReason reason={canManage ? null : readOnlyReason}>
+          <Button
+            variant="outline"
+            size="sm"
+            className={hit}
+            data-testid="flow-save"
+            aria-label="Save"
+            title={withShortcut('Save your changes', 'flow-save')}
+            onClick={header.handleSaveDraft}
+            disabled={!activeFlow || saveState === 'saving' || !hasUnsavedChanges}
+          >
+            <Save className="w-4 h-4" />
+            {!isCompact && 'Save'}
+          </Button>
+        </DisabledReason>
+      )}
 
-      {/* Publish Button */}
-      <Button
-        variant="display"
-        size="sm"
-        className="gap-2"
-        onClick={handlePublish}
-        disabled={!activeFlow || isPublishing}
-      >
-        {isPublishing ? (
-          <Loader2 className="w-4 h-4 animate-spin" />
-        ) : (
-          <Upload className="w-4 h-4" />
-        )}
-        <span>Publish</span>
-      </Button>
+      {!isCompact && (
+        <>
+          <Button variant="outline" size="sm" className={hit} data-testid="flow-runs" aria-label="Runs" title="Runs: see every run of this flow and what each step did" onClick={() => setShowHistory(true)} disabled={!activeFlow}>
+            <History className="w-4 h-4" />
+            <span className="hidden min-[1440px]:inline">Runs</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className={hit}
+            data-testid="flow-settings"
+            aria-label="Settings"
+            title={canManage ? 'Settings: name, description and category' : 'Settings: see the name, description and category'}
+            onClick={() => setShowSettings(true)}
+            disabled={!activeFlow}
+          >
+            <Settings className="w-4 h-4" />
+            <span className="hidden min-[1440px]:inline">Settings</span>
+          </Button>
+        </>
+      )}
+
+      {/* Run: always labelled. A draft's run is a test: nothing is turned on. */}
+      <DisabledReason reason={canManage ? null : readOnlyReason}>
+        <Button
+          variant={isPhone ? 'default' : 'outline'}
+          size="sm"
+          className={hit}
+          data-testid="flow-run"
+          aria-label={RUN_BUTTON_LABEL}
+          title={withShortcut('Run a test: starts the flow once with the input you choose. Nothing is sent unless you choose Run for real', 'flow-run')}
+          onClick={header.handleRun}
+          disabled={!activeFlow || !canManage}
+        >
+          <Play className="w-4 h-4" />
+          {RUN_BUTTON_LABEL}
+        </Button>
+      </DisabledReason>
+
+      {/* Publish / Unpublish: always labelled */}
+      {activeFlow && !isCompact && (
+        <span data-testid={isPublished ? 'flow-published-badge' : 'flow-draft-badge'} className="inline-flex">
+          <StatusPill kind={statusKind} data-testid="flow-status-pill" title={isPublished ? 'Live: the trigger is on' : 'Draft: the trigger is off until you publish'} />
+        </span>
+      )}
+      <DisabledReason reason={!canManage ? readOnlyReason : isPublished ? null : publishBlocked}>{publishButton}</DisabledReason>
+
+      {!isCompact && width < HELP_BUTTON_FROM && (
+        <HeaderOverflowMenu
+          helpOnly
+          statusKind={statusKind}
+          canManage={canManage}
+          readOnlyReason={readOnlyReason}
+          hasSteps={false}
+          convertedProcedure={null}
+          onOpenRuns={() => undefined}
+          onOpenSettings={() => undefined}
+          onTidy={() => undefined}
+          onConvert={() => undefined}
+          editTools
+        />
+      )}
+
+      {isCompact && (
+        <HeaderOverflowMenu
+          statusKind={statusKind}
+          canManage={canManage}
+          readOnlyReason={readOnlyReason}
+          hasSteps={(activeFlow?.nodes.length ?? 0) > 1}
+          convertedProcedure={convertedProcedure}
+          onOpenRuns={() => setShowHistory(true)}
+          onOpenSettings={() => setShowSettings(true)}
+          onTidy={tidyLayout}
+          onConvert={() => setShowConvert(true)}
+          editTools={!isPhone}
+          checklistText={isPhone && canManage ? finishText(issues) : ''}
+          extra={isPhone ? phoneView.menuItem : undefined}
+        />
+      )}
 
       {activeFlow && (
-        <FlowRunHistory
+        <PublishFlowDialog
+          open={header.showPublish}
+          onOpenChange={header.setShowPublish}
           flowId={activeFlow.id}
-          open={showHistory}
-          onOpenChange={setShowHistory}
-          onSelectRun={setSelectedRunId}
+          flowName={activeFlow.name}
+          trigger={activeFlow.nodes.find((n) => n.data.nodeType === 'trigger')?.data.triggerConfig}
+          steps={activeFlow.nodes}
+          problems={issues.map((i) => ({ title: i.nodeLabel, message: i.message }))}
+          publishing={header.isPublishing}
+          onConfirm={() => void header.confirmPublish()}
         />
+      )}
+      <UnpublishFlowDialog
+        open={header.showUnpublish}
+        onOpenChange={header.setShowUnpublish}
+        flowName={activeFlow?.name ?? ''}
+        trigger={activeFlow?.nodes.find((n) => n.data.nodeType === 'trigger')?.data.triggerConfig}
+        busy={header.isUnpublishing}
+        onConfirm={() => void header.handleUnpublish()}
+      />
+
+      {activeFlow && (
+        <FlowRunHistory flowId={activeFlow.id} open={showHistory} onOpenChange={setShowHistory} onSelectRun={setSelectedRunId} onRunTest={() => { setShowHistory(false); void header.handleRun(); }} />
       )}
       <FlowRunViewer
         runId={selectedRunId}
         onClose={() => setSelectedRunId(null)}
+        onBack={activeFlow ? () => { setSelectedRunId(null); setShowHistory(true); } : undefined}
       />
-      <FlowSettingsModal
-        open={showSettings}
-        onClose={handleCloseSettings}
+      <RunFlowDialog
+        open={header.showRunDialog}
+        flowId={activeFlow?.id ?? null}
+        flowName={activeFlow?.name}
+        onOpenChange={header.setShowRunDialog}
+        onRun={header.startRun}
       />
+      <FlowSettingsModal open={showSettings} onClose={handleCloseSettings} />
+      {activeFlow && isCompact && !isPhone && (
+        <ConvertToProcedureDialog flowId={activeFlow.id} flowName={activeFlow.name} open={showConvert} onOpenChange={setShowConvert} />
+      )}
     </div>
   );
 }

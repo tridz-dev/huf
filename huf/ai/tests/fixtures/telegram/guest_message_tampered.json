@@ -1,0 +1,10 @@
+{
+  "update_id": 2002,
+  "guest_message": {
+    "message_id": 56,
+    "from": {"id": 777, "is_bot": false, "first_name": "Gus"},
+    "chat": {"id": -1009988, "type": "supergroup"},
+    "date": 1760000000,
+    "text": "no query id"
+  }
+}

@@ -26,6 +26,7 @@ import { CopyIcon, CheckIcon, ExternalLink } from 'lucide-react';
 import type { FrappeFieldMeta, FrappeViewPayload } from '@/types/artifact.types';
 import { isDisplayField } from './frappeFieldFormat';
 import { deskFormUrl } from './frappeDeskUrl';
+import { copyText } from '@/lib/clipboard';
 
 export interface FrappeFormViewProps {
 	payload: FrappeViewPayload;
@@ -82,7 +83,7 @@ export function FrappeFormView({ payload }: FrappeFormViewProps) {
 			values,
 		});
 		try {
-			await navigator.clipboard.writeText(JSON.stringify(values, null, 2));
+			if (!(await copyText(JSON.stringify(values, null, 2)))) throw new Error('Copy failed');
 			setCopied(true);
 			setTimeout(() => setCopied(false), 2000);
 		} catch (err) {

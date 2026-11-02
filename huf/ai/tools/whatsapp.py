@@ -20,7 +20,7 @@ WhatsApp gateway (a chat run, a flow run, a forged context) is refused with
 ``gateway_context_required``; there is no fallback to a default account or to the first
 Integration Settings row. Sends are authorised for the run's own gateway (the gateway admitted the sender), so its execution
 user needs no Gateway write; template creation still requires write authority
-(``whatsapp_management._send_authority``); reads require Gateway read authority.
+(``huf.ai.whatsapp.management._send_authority``); reads require Gateway read authority.
 
 Privilege gating (A8)
 ---------------------
@@ -58,15 +58,17 @@ written. The tool never switches the session user.
 import contextvars
 import json
 from contextlib import contextmanager
-from typing import Optional, Any
+from typing import Any, Optional
 
 import frappe
 import requests
 
-from huf.ai import whatsapp_send_file as send_file
+from huf.ai import run_delivery
+from huf.ai.whatsapp import send_file as send_file
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_messages as wm
 from huf.ai.gateway_adapters import whatsapp_templates as wt
+from huf.ai.tools.whatsapp_messages import list_messages as _list_messages
 
 META_GRAPH_URL = f"https://graph.facebook.com/{bridge.GRAPH_DEFAULT_VERSION}"
 
@@ -114,10 +116,8 @@ _GATEWAY_FLAG_FIELDS = {
 _BOUND_KWARGS = ("gateway_name", "whatsapp_account")
 _SEND_ACTIONS = {
 	"send_message", "send_media", "send_voice_note", "send_location", "send_contact", "send_reaction",
-	"send_template", "create_template", *_MEDIA_ACTIONS, *_INTERACTIVE_ACTIONS,
+	"send_template", "create_template", *_MEDIA_ACTIONS, *_INTERACTIVE_ACTIONS, "send_products",
 }
-_LIST_DEFAULT_LIMIT = 20
-_LIST_MAX_LIMIT = 50
 
 
 _trusted_gateway: contextvars.ContextVar = contextvars.ContextVar("huf_whatsapp_trusted_gateway", default="")
@@ -229,7 +229,7 @@ def _authorize(action: str, gateway_name: str) -> Optional[str]:
 	gateway's execution user needs no Gateway write. Template management (``create_template``) keeps
 	requiring real write authority; every other action requires read.
 	"""
-	from huf.ai import whatsapp_management as mgmt
+	from huf.ai.whatsapp import management as mgmt
 
 	try:
 		if action == "create_template":
@@ -253,7 +253,7 @@ def _gateway_phone_id(gateway_name: str) -> str:
 
 def _disconnect_refusal(gateway_name: str) -> Optional[str]:
 	"""The normal JSON refusal when the run gateway's number is Disconnected, else None."""
-	from huf.ai import whatsapp_account_events as _ae
+	from huf.ai.whatsapp import account_events as _ae
 
 	refusal = _ae.send_refusal(_gateway_phone_id(gateway_name))
 	return json.dumps(refusal, default=str) if refusal else None
@@ -320,11 +320,21 @@ def _mark_outreach(gateway_name: str, kwargs: dict, raw: str) -> None:
 			return
 		if _has_entry(gateway_name, recipient):
 			return
-		from huf.ai import whatsapp_outbound_policy as policy
+		from huf.ai.whatsapp import outbound_policy as policy
 
 		policy.record_template_outreach(gateway_name, recipient)
 	except Exception:
 		frappe.log_error(title="WhatsApp outreach marker not recorded")
+
+
+def _run_solution(run_id: Optional[str]) -> Optional[str]:
+	"""The solution the current Agent Run belongs to (None for a trusted flow run or when unknown)."""
+	if not run_id:
+		return None
+	try:
+		return frappe.db.get_value("Agent Run", run_id, "solution") or None
+	except Exception:
+		return None
 
 
 def _scope_refusal(kwargs: dict, gateway_name: str) -> Optional[str]:
@@ -334,7 +344,7 @@ def _scope_refusal(kwargs: dict, gateway_name: str) -> Optional[str]:
 	gets no wider reach than the gateway's configured scope. Fills ``to`` with the current contact when
 	left out.
 	"""
-	from huf.ai import whatsapp_send_scope as send_scope
+	from huf.ai.whatsapp import send_scope as send_scope
 
 	run_id = _effective_run_id()
 	if not _recipient(kwargs):
@@ -344,12 +354,14 @@ def _scope_refusal(kwargs: dict, gateway_name: str) -> Optional[str]:
 	recipient = _recipient(kwargs)
 	if not recipient:
 		return None  # the send itself reports the missing recipient
-	return send_scope.check_recipient(gateway_name, run_id, recipient, contact=_trusted_contact.get())
+	solution = _run_solution(run_id)
+	extra = {"solution": solution} if solution else {}
+	return send_scope.check_recipient(gateway_name, run_id, recipient, contact=_trusted_contact.get(), **extra)
 
 
 def _idempotent_send(action: str, kwargs: dict, gateway_name: str) -> str:
-	"""Run a send at most once per idempotency key (durable; see ``huf.ai.whatsapp_send_keys``)."""
-	from huf.ai import whatsapp_send_keys as send_keys
+	"""Run a send at most once per idempotency key (durable; see ``huf.ai.whatsapp.send_keys``)."""
+	from huf.ai.whatsapp import send_keys as send_keys
 
 	try:
 		explicit = send_keys.explicit_key(kwargs)
@@ -368,12 +380,20 @@ def _idempotent_send(action: str, kwargs: dict, gateway_name: str) -> str:
 
 def _capped_dispatch(action: str, kwargs: dict, gateway_name: str, run_id: Optional[str]) -> str:
 	"""Run the send unless it would exceed the gateway's per-run / per-day cap (checked after the claim)."""
-	from huf.ai import whatsapp_send_scope as send_scope
+	from huf.ai.whatsapp import send_scope as send_scope
 
-	refusal = send_scope.check_caps(gateway_name, run_id)
+	solution = _run_solution(run_id)
+	refusal = send_scope.check_caps(gateway_name, run_id, **({"solution": solution} if solution else {}))
 	if refusal:
 		return refusal
-	return _dispatch(action, kwargs)
+	raw = _dispatch(action, kwargs)
+	if action.startswith("send_") and action != "send_reaction":
+		try:
+			if json.loads(raw).get("success"):
+				run_delivery.mark(run_id)
+		except Exception:
+			pass
+	return raw
 
 
 def _dispatch(action: str, kwargs: dict) -> str:
@@ -393,6 +413,10 @@ def _dispatch(action: str, kwargs: dict) -> str:
 		return _send_reaction(kwargs)
 	elif action in _INTERACTIVE_ACTIONS:
 		return _send_interactive(kwargs, _INTERACTIVE_ACTIONS[action])
+	elif action == "send_products":
+		from huf.ai.channels.commerce import messages as commerce_messages
+
+		return commerce_messages.deliver(kwargs, _deliver_typed)
 	elif action == "send_template":
 		return _send_template(kwargs)
 	elif action == "list_messages":
@@ -568,8 +592,22 @@ def _is_opted_out(kwargs: dict, recipient: str) -> bool:
 		return True  # fail closed
 
 
+def _allowlist_refusal(recipient: str) -> Optional[str]:
+	"""Site allow-list (``wa_outbound_allowlist``) for sends that bypass the outbound policy choke point."""
+	from huf.ai.whatsapp import outbound_policy as policy
+
+	try:
+		policy.check_allowlist(recipient)
+	except policy.OutboundRefused as e:
+		return _refused(e.code, str(e))
+	return None
+
+
 def _free_form_refusal(kwargs: dict, recipient: str, what: str) -> Optional[str]:
-	"""Server-side gate of every free-form non-text send: opt-out, then window / allow_proactive."""
+	"""Server-side gate of every free-form non-text send: allow-list, opt-out, then window / allow_proactive."""
+	refusal = _allowlist_refusal(recipient)
+	if refusal:
+		return refusal
 	if _is_opted_out(kwargs, recipient):
 		return _refused("opted_out", "This contact opted out (STOP); no messages are sent until they opt back in (START).")
 	if _is_proactive_send(kwargs, recipient) and not (
@@ -842,6 +880,9 @@ def _send_template(kwargs: dict) -> str:
 	if header_params is None or button_params is None:
 		return _error("'header_params' and 'button_params' must be lists (or JSON lists)")
 
+	refusal = _allowlist_refusal(recipient)
+	if refusal:
+		return refusal
 	if _is_opted_out(kwargs, recipient):
 		return _refused("opted_out", "This contact opted out (STOP); no messages are sent until they opt back in (START).")
 	if bridge.is_bsuid(recipient):
@@ -857,6 +898,9 @@ def _send_template(kwargs: dict) -> str:
 				extra["button_params"] = button_params
 			if kwargs.get("language_code"):
 				extra["language_code"] = language_code
+			run_id = _effective_run_id()
+			if run_id:
+				extra["run_id"] = run_id
 			res = bridge.send_template(acct["name"], recipient, template_name, _body_values(parameters), **extra)
 		except bridge.BridgeError as e:
 			return json.dumps(e.payload, default=str)
@@ -904,43 +948,6 @@ def _send_template(kwargs: dict) -> str:
 		return _success(data)
 	except Exception as e:
 		return _error(f"Failed to send WhatsApp template: {str(e)}")
-
-
-def _clamp_limit(value: Any) -> int:
-	try:
-		number = int(value)
-	except (TypeError, ValueError):
-		number = _LIST_DEFAULT_LIMIT
-	return max(1, min(number, _LIST_MAX_LIMIT))
-
-
-def _list_messages(kwargs: dict) -> str:
-	"""Messages exchanged with ONE contact through the run's own gateway (newest first, cursor paged).
-
-	Built on ``list_message_log`` so it is gateway scoped and permission checked for the run user;
-	each item carries the wamid in ``message_id``.
-	"""
-	contact = bridge.normalize_phone(kwargs.get("to") or kwargs.get("recipient") or kwargs.get("phone_number") or "")
-	if not contact:
-		return _refused("contact_required", "Name the contact ('to') whose messages should be listed.")
-	from huf.ai import whatsapp_management as mgmt
-
-	try:
-		result = mgmt.list_message_log(
-			gateway_name=kwargs["gateway_name"],
-			phone=contact,
-			cursor=(kwargs.get("cursor") or "").strip() or None,
-			limit=_clamp_limit(kwargs.get("limit")),
-		)
-	except frappe.PermissionError:
-		return _refused("permission_denied", "Not permitted to read WhatsApp messages")
-	except Exception as e:
-		return _error(f"Failed to fetch WhatsApp messages: {str(e)}")
-	if not result.get("success"):
-		return json.dumps(result, default=str)
-	return _success(
-		{"items": result.get("items") or [], "next_cursor": result.get("next_cursor"), "has_more": bool(result.get("has_more"))}
-	)
 
 
 def _get_account_info(kwargs: dict) -> str:
@@ -995,7 +1002,7 @@ def _create_template_draft(acct: dict, payload: dict, gateway_name: str) -> str:
 	on the run gateway is re-checked here, right at the bypass.
 	"""
 	try:
-		from huf.ai import whatsapp_management as mgmt
+		from huf.ai.whatsapp import management as mgmt
 
 		refused = mgmt._send_authority(gateway_name)
 		if refused:

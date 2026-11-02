@@ -1,0 +1,26 @@
+{
+  "update_id": 1009,
+  "message_reaction": {
+    "chat": {
+      "id": 111,
+      "type": "private",
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "message_id": 55,
+    "user": {
+      "id": 111,
+      "is_bot": false,
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "date": 1760000000,
+    "old_reaction": [
+      {
+        "type": "emoji",
+        "emoji": "👍"
+      }
+    ],
+    "new_reaction": []
+  }
+}

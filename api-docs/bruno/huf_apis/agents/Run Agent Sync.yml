@@ -5,7 +5,7 @@ info:
 
 http:
   method: POST
-  url: "{{BASE_URL}}/api/method/huf.ai.agent_integration.run_agent_sync?agent_name={{Agent_Name}}&prompt={{Prompt}}"
+  url: "{{BASE_URL}}/api/method/huf.ai.agent.integration.run_agent_sync?agent_name={{Agent_Name}}&prompt={{Prompt}}"
   params:
     - name: agent_name
       value: "{{Agent_Name}}"

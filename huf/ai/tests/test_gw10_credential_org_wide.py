@@ -10,7 +10,7 @@ See: the GW-10-decision note in the IntegrationsGatewaysAudit workspace track
 
 import frappe
 from frappe.tests import IntegrationTestCase
-from huf.ai.tests.factories import ensure_ai_model
+from huf.testing.factories import ensure_ai_model
 from huf.ai.tools.credentials import require_credential, update_last_error
 
 
@@ -101,7 +101,7 @@ class TestGW10OrgWideCredentialScope(IntegrationTestCase):
 			"tool_name": self.tool_name,
 			"tool_type": "Miscellaneous",
 			"types": "Custom Function",
-			"function_path": "huf.ai.test_tools.echo",
+			"function_path": "huf.testing.tool_testing.echo",
 			"description": "Test tool for GW-10 credential resolution",
 			"owner": "Administrator",
 			"disabled": 0,

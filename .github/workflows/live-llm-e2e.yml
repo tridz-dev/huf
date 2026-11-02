@@ -13,7 +13,7 @@ name: Live LLM E2E (manual, opt-in)
 # `new-chat-gets-a-real-reply` (deployed/chat.spec.ts) is the one spec in
 # this repo's whole E2E suite that talks to a live external LLM; it is
 # inherently rate-limit/latency-flaky by nature of hitting a real provider
-# (see docs/testing/CURRENT_STATE.md's P4.3 note), which is exactly why it
+# (see the archived CURRENT_STATE audit's P4.3 note), which is exactly why it
 # lives here instead of blocking `e2e-tests.yml` (the mocked/offline suite
 # every PR runs).
 on:

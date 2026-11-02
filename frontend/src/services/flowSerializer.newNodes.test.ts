@@ -30,6 +30,8 @@ const CASES: Array<[string, BackendNode]> = [
   ['state.set', { id: 'n', type: 'state.set', config: { key: TEMPLATE, value: { $from: 'a.b' }, ttl_seconds: 3600 }, next: 'o' }],
   ['state.delete', { id: 'n', type: 'state.delete', config: { key: 'k' }, next: 'o' }],
   ['doc.create', { id: 'n', type: 'doc.create', config: { doctype: 'ToDo', fields: { description: TEMPLATE, status: 'Open' } }, next: 'o' }],
+  ['code.run', { id: 'n', type: 'code.run', config: { code: "print('hi')\nresult = inputs['n'] * 2", profile: 'Flow Scratch', inputs: { n: { $from: 'input.n' }, label: 'x' }, timeout_s: 20 }, next: 'o' }],
+  ['code.run without timeout', { id: 'n', type: 'code.run', config: { code: 'result = 1', profile: 'Flow Scratch', inputs: {} }, next: 'o' }],
   ['transform lower', { id: 'n', type: 'transform', config: { op: 'lower', input: { text: { $from: 'input.text' } } }, next: 'o' }],
   ['transform replace', { id: 'n', type: 'transform', config: { op: 'replace', input: { text: 'a', find: 'a', with: 'b', count: 1 } }, next: 'o' }],
   ['transform concat', { id: 'n', type: 'transform', config: { op: 'concat', input: { parts: ['a', { $from: 'x.y' }], separator: '-' } }, next: 'o' }],
@@ -53,12 +55,24 @@ describe('new node round trip', () => {
     expect(serializeFlow(flow).nodes[0].type).toBe('future.node');
   });
 
+  it('code.run always serialises inputs as an object and drops an unset time limit', () => {
+    const flow = deserializeFlow('f1', 'F', 'Draft', graph([{ id: 'n', type: 'code.run', config: { code: 'result = 1', profile: 'Flow Scratch' }, next: 'o' }, { id: 'o', type: 'output', config: {} }]));
+    const cfg = flow.nodes[0].data.actionConfig as { type: string; timeout_s?: number };
+    expect(cfg.type).toBe('code-run');
+    const got = serializeFlow(flow).nodes[0];
+    expect(got.config).toEqual({ code: 'result = 1', profile: 'Flow Scratch', inputs: {} });
+  });
+
   it('flags new nodes unconfigured until required fields are set', () => {
     const flow = deserializeFlow('f1', 'F', 'Draft', graph([
       { id: 'a', type: 'state.get', config: {} },
       { id: 'b', type: 'doc.create', config: { doctype: 'ToDo', fields: {} } },
+      { id: 'c', type: 'code.run', config: { code: '', profile: 'Flow Scratch', inputs: {} } },
+      { id: 'd', type: 'code.run', config: { code: 'result = 1', profile: 'Flow Scratch', inputs: {} } },
     ]));
     expect(flow.nodes[0].data.configured).toBe(false);
     expect(flow.nodes[1].data.configured).toBe(true);
+    expect(flow.nodes[2].data.configured).toBe(false);
+    expect(flow.nodes[3].data.configured).toBe(true);
   });
 });

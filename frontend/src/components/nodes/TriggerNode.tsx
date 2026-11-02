@@ -1,8 +1,7 @@
 import { memo, useState } from 'react';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { AlertCircle, Zap, Webhook, Clock, Database, Mail, CircleDashed, Trash2, Loader2, CheckCircle2, XCircle, type LucideIcon } from 'lucide-react';
 import { FlowNodeData } from '../../types/flow.types';
-import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import {
   AlertDialog,
@@ -14,27 +13,26 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../ui/alert-dialog';
-import { useFlowContext } from '../../contexts/FlowContext';
-import { NODE_CARD_BASE, NODE_HANDLE, NODE_ICON_WELL, getExecutionStatusClasses } from './nodeStyles';
-import { cn } from '@/lib/utils';
-
-const iconMap: Record<string, LucideIcon> = {
-  Webhook,
-  Clock,
-  Database,
-  Mail,
-  CircleDashed,
-  Zap
-};
+import { NODE_HANDLE, getExecutionStatusClasses } from './nodeStyles';
+import { triggerSubtitle } from '../../lib/flow/flowNodeCard';
+import { isGatewayKindId } from '../../lib/flow-gateway/gatewayWords';
+import { useGatewayRegistry } from '../../hooks/flow/useGatewayRegistry';
+import { cardIcon } from './nodeIcons';
+import { CardStatusLine, NodeCard } from './NodeCard';
 
 type TriggerNodeProps = NodeProps<FlowNodeData>;
 
 export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
-  const { deleteNode } = useFlowContext();
+  const { canManage } = useFlowPermissions();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const Icon = data.icon && iconMap[data.icon] ? iconMap[data.icon] : Zap;
+  const facts = data.canvas;
+  const status = facts?.status ?? { kind: 'ready' as const, text: 'Ready' };
+  const needsSetup = status.kind === 'needs-setup' || Boolean(facts?.firstIssue);
+  const unset = !data.triggerConfig?.type;
+  // A chat trigger names its channel by the label the server knows; that needs the channel list (loaded once, editors only).
+  const { registry } = useGatewayRegistry(isGatewayKindId(data.triggerConfig?.type) && canManage);
   const statusClasses = getExecutionStatusClasses(data.status, selected, {
-    unconfigured: !data.configured,
+    unconfigured: needsSetup || unset,
   });
 
   // A trigger only becomes `configured` after the user saves it in the trigger
@@ -44,72 +42,49 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
     if (data.configured) {
       setShowDeleteConfirm(true);
     } else {
-      deleteNode(id);
+      facts?.onDelete?.(id);
     }
   };
 
+  const canDelete = canManage && selected && data.status !== 'running' && data.status !== 'waiting';
   return (
-    <div className="relative">
-      <Card className={cn(NODE_CARD_BASE, statusClasses)}>
-        {selected && data.status !== 'running' && data.status !== 'waiting' && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            onClick={handleDeleteClick}
-            title="Delete node"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </Button>
-        )}
-        <div className="flex items-center gap-3 pr-6">
-          <div
-            className={cn(
-              NODE_ICON_WELL,
-              data.configured ? 'text-ink' : 'text-signal'
-            )}
-          >
-            {data.status === 'running' ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : data.status === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 text-good" />
-            ) : data.status === 'error' ? (
-              <XCircle className="w-5 h-5 text-destructive" />
-            ) : data.status === 'waiting' ? (
-              <Clock className="w-5 h-5 text-signal" />
-            ) : (
-              <Icon className="w-5 h-5" />
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <div className="text-sm font-medium text-card-foreground truncate">
-                {data.label}
-              </div>
-              {!data.configured && (
-                <AlertCircle className="w-4 h-4 text-signal flex-shrink-0" />
-              )}
-            </div>
-            {data.description && (
-              <div className="text-xs text-muted-foreground">{data.description}</div>
-            )}
-            {!data.configured && (
-              <div className="text-xs text-signal-ink mt-1">Click to configure</div>
-            )}
-          </div>
-          <span className="ml-auto flex-shrink-0 rounded border border-line bg-panel/60 font-mono uppercase tracking-wider text-steel-soft font-medium px-1.5 py-0.5 text-[9px]">
-            Trigger
-          </span>
-        </div>
-      </Card>
+    <div className="relative" data-testid={`flow-node-${id}`} data-node-type={data.triggerConfig?.type ?? 'unset'} data-incomplete={needsSetup ? 'true' : 'false'}>
+      <NodeCard
+        id={id}
+        icon={cardIcon(data)}
+        iconClass={unset ? 'text-signal' : undefined}
+        // The empty trigger is one short line and one button; it never shows the stored placeholder name.
+        title={unset ? 'Start here' : data.label}
+        subtitle={unset ? undefined : triggerSubtitle(data.triggerConfig, registry?.gateways)}
+        status={status}
+        runSummary={data.runSummary}
+        frameClass={statusClasses}
+        onDelete={canDelete ? handleDeleteClick : undefined}
+        deleteLabel="Delete trigger"
+        footer={
+          unset && canManage ? (
+            <Button size="sm" className="mt-1 w-full whitespace-nowrap px-2 text-xs" data-testid={`flow-node-choose-trigger-${id}`}>
+              Choose what starts this flow
+            </Button>
+          ) : (
+            <CardStatusLine
+              id={id}
+              status={status}
+              title={status.kind === 'needs-setup' ? facts?.firstIssue ?? 'Select this trigger to set it up' : undefined}
+              marker={unset ? undefined : { text: 'Trigger', testId: `flow-node-marker-${id}` }}
+            />
+          )
+        }
+      />
       <Handle
+        data-testid={`flow-handle-${id}`}
         type="source"
         position={Position.Bottom}
         className={NODE_HANDLE}
       />
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()} data-testid="flow-node-delete-dialog">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete "{data.label}"?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -120,9 +95,10 @@ export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              data-testid="flow-node-delete-confirm"
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                deleteNode(id);
+                facts?.onDelete?.(id);
                 setShowDeleteConfirm(false);
               }}
             >

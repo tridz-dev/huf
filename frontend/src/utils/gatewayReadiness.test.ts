@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { getGatewayReadiness } from './gatewayReadiness';
 import type { GatewayDoc } from '@/services/gatewayApi';
+import type { SlackSetupStatus } from '@/services/gateways/slackSetupApi';
+import type { TeamsCheckStatus, TeamsDiagnosis } from '@/services/gateways/teamsApi';
 
 describe('gatewayReadiness', () => {
   it('returns ready=true and blockingCount=0 for fully configured gateway', () => {
@@ -102,5 +104,105 @@ describe('gatewayReadiness', () => {
     expect(result.ready).toBe(false);
     const enabledItem = result.items.find((item) => item.id === 'enabled');
     expect(enabledItem?.done).toBe(false);
+  });
+
+  describe('Slack', () => {
+    const base = {
+      provider: 'Slack',
+      integration_settings: 'gw-integration-1',
+      default_target_type: 'Agent',
+      is_enabled: 1,
+    } as unknown as GatewayDoc;
+    const okStatus: SlackSetupStatus = {
+      verified: true,
+      checked_at: '2026-01-01T00:00:00+00:00',
+      request_url_verified: true,
+      checks: [
+        { id: 'token_present', ok: true, plain_title: 'Bot token added', detail: '', how_to_fix: '' },
+        { id: 'request_url', ok: true, plain_title: 'Request URL', detail: '', how_to_fix: '' },
+        { id: 'slack_connect', ok: true, plain_title: 'Shared channels', detail: '', how_to_fix: '', informational: true },
+      ],
+    };
+
+    it('lists Slack items as not done without blocking when no check result is available', () => {
+      const result = getGatewayReadiness(base);
+      expect(result.ready).toBe(true);
+      expect(result.items.find((i) => i.id === 'slack-connection')?.done).toBe(false);
+      expect(result.items.find((i) => i.id === 'slack-request-url')?.done).toBe(false);
+    });
+
+    it('is ready when the cached check passed and the Request URL is confirmed', () => {
+      const result = getGatewayReadiness(base, { slackSetup: okStatus });
+      expect(result.ready).toBe(true);
+      expect(result.items.filter((i) => i.id.startsWith('slack-')).every((i) => i.done)).toBe(true);
+    });
+
+    it('blocks when a check failed', () => {
+      const failed: SlackSetupStatus = {
+        ...okStatus,
+        checks: [{ id: 'scopes', ok: false, plain_title: 'Scopes', detail: 'Missing: x', how_to_fix: '' }],
+      };
+      const result = getGatewayReadiness(base, { slackSetup: failed });
+      expect(result.ready).toBe(false);
+      expect(result.items.find((i) => i.id === 'slack-connection')?.done).toBe(false);
+    });
+
+    it('blocks when Slack has not confirmed the Request URL', () => {
+      const result = getGatewayReadiness(base, { slackSetup: { ...okStatus, request_url_verified: false } });
+      expect(result.ready).toBe(false);
+      expect(result.blockingCount).toBe(1);
+    });
+
+    it('blocks when the status has never been checked', () => {
+      const never: SlackSetupStatus = { verified: false, checked_at: null, checks: [], request_url_verified: false };
+      expect(getGatewayReadiness(base, { slackSetup: never }).blockingCount).toBe(2);
+    });
+
+    it('does not add Slack items to other providers', () => {
+      const wa = { ...base, provider: 'WhatsApp' } as GatewayDoc;
+      const result = getGatewayReadiness(wa, { slackSetup: okStatus });
+      expect(result.items.some((i) => i.id.startsWith('slack-'))).toBe(false);
+    });
+  });
+
+  describe('Microsoft Teams', () => {
+    const teams = {
+      provider: 'Microsoft Teams',
+      integration_settings: 'i',
+      default_target_type: 'agent',
+      is_enabled: 1,
+    } as unknown as GatewayDoc;
+    const diag = (statuses: Record<string, TeamsCheckStatus>): TeamsDiagnosis => ({
+      gateway: 'g',
+      summary: { pass: 0, warn: 0, fail: 0, info: 0 },
+      checks: Object.entries(statuses).map(([id, status]) => ({ id, status, title: id, detail: '', how_to_fix: '' })),
+    });
+
+    it('lists Teams items as not done before any check without blocking', () => {
+      const result = getGatewayReadiness(teams);
+      expect(result.items.find((i) => i.id === 'teams-token')?.done).toBe(false);
+      expect(result.ready).toBe(true);
+    });
+
+    it('is ready when credentials and token pass, inbound is informational', () => {
+      const result = getGatewayReadiness(teams, {
+        teamsDiagnosis: diag({ credentials_present: 'pass', token_acquisition: 'pass', last_inbound: 'warn' }),
+      });
+      expect(result.ready).toBe(true);
+      expect(result.items.find((i) => i.id === 'teams-last-inbound')?.done).toBe(false);
+    });
+
+    it('blocks when the token check fails', () => {
+      const result = getGatewayReadiness(teams, {
+        teamsDiagnosis: diag({ credentials_present: 'pass', token_acquisition: 'fail' }),
+      });
+      expect(result.ready).toBe(false);
+      expect(result.blockingCount).toBe(1);
+    });
+
+    it('does not add Teams items to other providers', () => {
+      const slack = { ...teams, provider: 'Slack' } as GatewayDoc;
+      expect(getGatewayReadiness(slack).items.some((i) => i.id.startsWith('teams-'))).toBe(false);
+    });
   });
 });

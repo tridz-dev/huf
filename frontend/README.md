@@ -39,11 +39,9 @@ Visit `http://localhost:5173` to see the app running.
 ## 📚 Documentation
 
 - **[Agents.md](./Agents.md)** - Complete platform documentation
-- **[docs/CONTRIBUTE.md](./docs/CONTRIBUTE.md)** - Contributing guide & UI framework usage
-- **[docs/QUICK_START.md](./docs/QUICK_START.md)** - Quick reference for framework components
-- **[docs/DASHBOARD_FRAMEWORK.md](./docs/DASHBOARD_FRAMEWORK.md)** - Detailed framework documentation
-- **[docs/FEATURES.md](./docs/FEATURES.md)** - Flow builder features
-- **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - System architecture
+- **[docs/HUF_PERMISSIONS.md](./docs/HUF_PERMISSIONS.md)** - Huf roles and capabilities
+- **[docs/MEMORY_POLICY_CAPTURE_DELEGATION.md](./docs/MEMORY_POLICY_CAPTURE_DELEGATION.md)** - Memory policy capture delegation
+- **[../CONTRIBUTING.md](../CONTRIBUTING.md)** - Contributing guide
 
 ## 🏗️ Tech Stack
 
@@ -107,8 +105,6 @@ export function MyPage() {
 ```
 
 **That's it!** A complete page with search, responsive grid, and consistent styling in ~20 lines.
-
-See **[docs/CONTRIBUTE.md](./docs/CONTRIBUTE.md)** for detailed examples.
 
 ## 🎨 Dashboard Framework
 
@@ -180,16 +176,14 @@ import { usePageData } from '@/hooks/dashboard/usePageData';
 
 ## 🎓 Learning Resources
 
-1. **Start Here**: Read [docs/CONTRIBUTE.md](./docs/CONTRIBUTE.md)
-2. **Quick Reference**: Check [docs/QUICK_START.md](./docs/QUICK_START.md)
-3. **Deep Dive**: Review [docs/DASHBOARD_FRAMEWORK.md](./docs/DASHBOARD_FRAMEWORK.md)
-4. **Examples**: See `AgentsPage.tsx` and `HomePage.tsx`
+1. **Start Here**: Read [../CONTRIBUTING.md](../CONTRIBUTING.md)
+2. **Examples**: See `AgentsPage.tsx` and `HomePage.tsx`
 
 ## 🤝 Contributing
 
 We welcome contributions! Here's how to get started:
 
-1. Read the [Contributing Guide](./docs/CONTRIBUTE.md)
+1. Read the [Contributing Guide](../CONTRIBUTING.md)
 2. Check existing pages for patterns
 3. Follow the code style guidelines
 4. Run tests before submitting
@@ -208,7 +202,7 @@ touch src/pages/MyPage.tsx
 npm run build
 ```
 
-See [docs/CONTRIBUTE.md](./docs/CONTRIBUTE.md) for detailed instructions.
+See [../CONTRIBUTING.md](../CONTRIBUTING.md) for detailed instructions.
 
 ## 📊 Project Stats
 
@@ -315,7 +309,7 @@ AGPL License - feel free to use this in your own projects!
 
 - **Documentation**: Check `docs/` folder
 - **Examples**: See `src/pages/AgentsPage.tsx`
-- **Contributing**: Read `docs/CONTRIBUTE.md`
+- **Contributing**: Read `../CONTRIBUTING.md`
 - **Issues**: Create a GitHub issue
 
 ## 🙏 Acknowledgments

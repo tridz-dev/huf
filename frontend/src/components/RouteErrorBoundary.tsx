@@ -3,6 +3,17 @@ import { useRouteError } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 
 const RELOAD_FLAG = 'huf:chunk-reload';
+/** One automatic reload per minute: a chunk that is still missing after it must show the Reload screen, not loop. */
+const RELOAD_WINDOW_MS = 60_000;
+
+function reloadedRecently(): boolean {
+	try {
+		const at = Number(sessionStorage.getItem(RELOAD_FLAG));
+		return Number.isFinite(at) && at > 0 && Date.now() - at < RELOAD_WINDOW_MS;
+	} catch {
+		return false;
+	}
+}
 
 /** True for stale-chunk errors after a frontend redeploy (old tab, new hashes). */
 function isChunkLoadError(error: unknown): boolean {
@@ -20,28 +31,31 @@ function isChunkLoadError(error: unknown): boolean {
 export function RouteErrorBoundary() {
 	const error = useRouteError();
 	const chunkError = isChunkLoadError(error);
-	const alreadyRetried =
-		typeof sessionStorage !== 'undefined' && sessionStorage.getItem(RELOAD_FLAG) === '1';
+	const alreadyRetried = reloadedRecently();
 
 	useEffect(() => {
 		if (!chunkError || alreadyRetried) return;
-		sessionStorage.setItem(RELOAD_FLAG, '1');
+		try {
+			sessionStorage.setItem(RELOAD_FLAG, String(Date.now()));
+		} catch {
+			/* sessionStorage unavailable */
+		}
 		window.location.reload();
 	}, [chunkError, alreadyRetried]);
 
 	if (chunkError) {
 		return (
-			<div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-paper text-center px-6">
+			<div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-paper text-center px-6" data-testid="chunk-error-screen">
 				<p className="text-sm text-ink font-medium">
-					{alreadyRetried ? 'A new version is available.' : 'Updating to the latest version…'}
+					{alreadyRetried ? 'Something went wrong' : 'Updating to the latest version…'}
 				</p>
 				{alreadyRetried && (
 					<>
 						<p className="text-xs text-steel max-w-sm">
-							The app was updated in the background. Refresh once to load the latest version.
+							A part of the app could not be loaded, usually because it was updated in the background. Reload to get the latest version.
 						</p>
 						<Button size="sm" onClick={() => window.location.reload()}>
-							Refresh
+							Reload
 						</Button>
 					</>
 				)}
@@ -51,7 +65,7 @@ export function RouteErrorBoundary() {
 
 	return (
 		<div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-paper text-center px-6">
-			<p className="text-sm text-ink font-medium">Something went wrong.</p>
+			<p className="text-sm text-ink font-medium">Something went wrong</p>
 			<p className="text-xs text-steel max-w-md break-words">
 				{(error as { message?: string })?.message || 'Unexpected error'}
 			</p>
@@ -62,11 +76,13 @@ export function RouteErrorBoundary() {
 	);
 }
 
-/** Clear the reload guard once the app has loaded healthy. Call from AppShell. */
+/** Forget the reload guard once the app has stayed healthy for a while (not at mount: the page chunk may still fail). */
 export function clearChunkReloadFlag() {
-	try {
-		sessionStorage.removeItem(RELOAD_FLAG);
-	} catch {
-		/* sessionStorage unavailable */
-	}
+	window.setTimeout(() => {
+		try {
+			sessionStorage.removeItem(RELOAD_FLAG);
+		} catch {
+			/* sessionStorage unavailable */
+		}
+	}, RELOAD_WINDOW_MS);
 }

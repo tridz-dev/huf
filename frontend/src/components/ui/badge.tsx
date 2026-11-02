@@ -24,6 +24,7 @@ const badgeVariants = cva(
         'pill-warning': 'rounded-full border-transparent bg-warning-tint text-warning font-sans normal-case tracking-normal text-[11px] font-medium',
         'pill-danger': 'rounded-full border-transparent bg-destructive-tint text-destructive font-sans normal-case tracking-normal text-[11px] font-medium',
         'pill-neutral': 'rounded-full border-transparent bg-paper-deep text-steel font-sans normal-case tracking-normal text-[11px] font-medium',
+        'pill-info': 'rounded-full border-transparent bg-signal/10 text-signal-ink font-sans normal-case tracking-normal text-meta font-medium',
         chip: 'rounded-sm border-transparent bg-paper-deep text-steel font-mono normal-case tracking-normal',
       },
       // 30 callsites overrode Badge's size, nearly all with text-xs or

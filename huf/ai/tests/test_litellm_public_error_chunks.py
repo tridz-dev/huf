@@ -34,6 +34,7 @@ def _patches(api_key="test-key"):
         patch("huf.ai.providers.litellm.resolve_capabilities", return_value=Mock(min_cacheable_tokens=1)),
         patch("huf.ai.providers.litellm.model_supports_prompt_caching", return_value=True),
         patch("huf.ai.providers.litellm.serialize_tools", return_value=None),
+        patch("huf.ai.providers.litellm.run_delivery.current_run_delivered", return_value=False),
         patch("huf.ai.providers.litellm.repair_message_sequence", side_effect=lambda messages, conversation_name: messages),
         patch("huf.ai.providers.litellm.trim_messages", side_effect=lambda messages, model: messages),
         patch("huf.ai.providers.litellm._resolve_api_base", return_value=None),
@@ -153,6 +154,15 @@ class TestPublicErrorChunks(unittest.TestCase):
         self.assertEqual(len(errs), 1)
         self.assertIs(errs[0].get("public"), True)
         self.assertIn("returned an empty response", errs[0]["error"])
+
+    def test_empty_response_text_names_model_and_blames_ollama_only_for_ollama(self):
+        from huf.ai.providers.litellm import _empty_response_message
+
+        other = _empty_response_message("anthropic/claude-haiku-5-5")
+        self.assertIn("anthropic/claude-haiku-5-5", other)
+        self.assertNotIn("ollama", other.lower())
+        self.assertNotIn("gpt-oss", other)
+        self.assertIn("ollama_chat/", _empty_response_message("ollama/gpt-oss:20b"))
 
     def test_tool_loop_is_public(self):
         async def loop(**kw):

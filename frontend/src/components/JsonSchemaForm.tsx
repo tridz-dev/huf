@@ -145,7 +145,7 @@ function PrimitiveField({
   required,
   value,
   onChange,
-  showVariablePicker = true,
+  showVariablePicker = false,
 }: {
   fieldKey: string;
   schema: JSONSchema;

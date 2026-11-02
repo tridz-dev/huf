@@ -6,7 +6,7 @@ import frappe
 from frappe import client
 from frappe import _
 
-from huf.ai.tool_functions import (
+from huf.ai.tools.functions import (
     get_documents,
     create_documents,
     update_documents,
@@ -20,7 +20,7 @@ from huf.ai.tool_functions import (
     send_email,
 )
 from huf.ai.transaction import commit_if_background
-from huf.ai.tool_doctype_guard import _check_doctype_allowed
+from huf.ai.tools.doctype_guard import _check_doctype_allowed
 
 logger = frappe.logger("huf")
 

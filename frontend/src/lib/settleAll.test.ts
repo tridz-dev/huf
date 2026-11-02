@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { settleAll } from './settleAll';
+import { settleAll } from './utils';
 
 describe('settleAll', () => {
   it('resolves every slot when all promises succeed', async () => {

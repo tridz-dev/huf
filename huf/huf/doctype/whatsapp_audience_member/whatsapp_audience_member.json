@@ -1,0 +1,115 @@
+{
+ "actions": [],
+ "creation": "2026-10-28 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "audience",
+  "recipient",
+  "display_name",
+  "params",
+  "tags",
+  "consent_source",
+  "consent_at",
+  "source",
+  "added_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "audience",
+   "fieldtype": "Link",
+   "label": "Audience",
+   "options": "WhatsApp Audience",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "recipient",
+   "fieldtype": "Data",
+   "label": "Recipient",
+   "length": 40,
+   "reqd": 1,
+   "in_list_view": 1,
+   "search_index": 1,
+   "set_only_once": 1,
+   "description": "Digits-only E.164 phone."
+  },
+  {
+   "fieldname": "display_name",
+   "fieldtype": "Data",
+   "label": "Name",
+   "length": 140,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "params",
+   "fieldtype": "JSON",
+   "label": "Default template values",
+   "description": "{body:[...], header:[...], button:[...]}"
+  },
+  {
+   "fieldname": "tags",
+   "fieldtype": "JSON",
+   "label": "Tags",
+   "description": "JSON list of strings."
+  },
+  {
+   "fieldname": "consent_source",
+   "fieldtype": "Data",
+   "label": "Consent source (this contact)",
+   "length": 255
+  },
+  {
+   "fieldname": "consent_at",
+   "fieldtype": "Datetime",
+   "label": "Consent given at (this contact)"
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Data",
+   "label": "Added by",
+   "length": 60
+  },
+  {
+   "fieldname": "added_at",
+   "fieldtype": "Datetime",
+   "label": "Added at"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-28 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "WhatsApp Audience Member",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Admin",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "recipient"
+}

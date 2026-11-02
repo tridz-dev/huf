@@ -1706,7 +1706,7 @@ export function AgentFormPage() {
 
         // The Enabled/Disabled toggle sits outside any tab's own fields and
         // the backend only ever accepts it as part of the "general" section
-        // (huf/ai/agent_config_api.py's AGENT_SECTIONS) - so saving from any
+        // (huf/ai/agent/config_api.py's AGENT_SECTIONS) - so saving from any
         // other tab must persist it via its own general-section call instead
         // of silently dropping it, which is what happened before this fix
         // (see the AuthDebug workspace track, "Bug D").

@@ -3,12 +3,12 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from huf.ai.agent_integration import _emit_conversation_title_updated, generate_conversation_title
+from huf.ai.agent.integration import _emit_conversation_title_updated, generate_conversation_title
 
 
 class TestConversationTitleAutonaming(unittest.TestCase):
-	@patch("huf.ai.agent_integration.frappe.publish_realtime")
-	@patch("huf.ai.agent_integration.frappe.db.get_value")
+	@patch("huf.ai.agent.integration.frappe.publish_realtime")
+	@patch("huf.ai.agent.integration.frappe.db.get_value")
 	def test_emit_conversation_title_updated_publishes_event(self, mock_get_value, mock_publish):
 		mock_get_value.return_value = "user@example.com"
 
@@ -24,13 +24,13 @@ class TestConversationTitleAutonaming(unittest.TestCase):
 			user="user@example.com",
 		)
 
-	@patch("huf.ai.agent_integration._emit_conversation_title_updated")
-	@patch("huf.ai.agent_integration._run_async_safely")
-	@patch("huf.ai.agent_integration.frappe.db.commit")
-	@patch("huf.ai.agent_integration.frappe.db.set_value")
-	@patch("huf.ai.agent_integration.frappe.get_doc")
-	@patch("huf.ai.agent_integration.ConversationManager")
-	@patch("huf.ai.agent_integration.frappe.db.get_value")
+	@patch("huf.ai.agent.integration._emit_conversation_title_updated")
+	@patch("huf.ai.agent.integration._run_async_safely")
+	@patch("huf.ai.agent.integration.frappe.db.commit")
+	@patch("huf.ai.agent.integration.frappe.db.set_value")
+	@patch("huf.ai.agent.integration.frappe.get_doc")
+	@patch("huf.ai.agent.integration.ConversationManager")
+	@patch("huf.ai.agent.integration.frappe.db.get_value")
 	def test_generate_conversation_title_emits_realtime_event(
 		self,
 		mock_get_value,
@@ -54,8 +54,8 @@ class TestConversationTitleAutonaming(unittest.TestCase):
 		mock_commit.assert_called_once()
 		mock_emit.assert_called_once_with("CONV-0001", "Invoice help")
 
-	@patch("huf.ai.agent_integration._emit_conversation_title_updated")
-	@patch("huf.ai.agent_integration.frappe.db.get_value")
+	@patch("huf.ai.agent.integration._emit_conversation_title_updated")
+	@patch("huf.ai.agent.integration.frappe.db.get_value")
 	def test_generate_conversation_title_skips_custom_titles(self, mock_get_value, mock_emit):
 		mock_get_value.return_value = "Already renamed"
 

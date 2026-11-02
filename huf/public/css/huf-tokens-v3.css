@@ -15,8 +15,8 @@
  * instead of the three-typeface display/body/mono split. It is a
  * meaningfully different visual language, not an incremental tweak —
  * treat as a proposal to react to, not something to merge silently.
- * See docs/design-system-v3-apple-quiet-review.md for the full
- * component-by-component comparison against v2.0 and the list of gaps.
+ * A component-by-component comparison against v2.0 was written up in the
+ * design-system review (archived in the workspace).
  *
  * Usage (once/if adopted):
  *   <link rel="stylesheet" href="/assets/huf/css/huf-tokens-v3.css">

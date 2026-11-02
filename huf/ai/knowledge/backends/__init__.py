@@ -47,6 +47,7 @@ class ChunkResult:
 	score: float = 0.0
 	source: str | None = None
 	metadata: dict[str, Any] | None = None
+	ref: str | None = None  # record/URL reference for citations
 
 
 class KnowledgeBackend(ABC):

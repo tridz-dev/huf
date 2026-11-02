@@ -9,7 +9,7 @@ Covers:
   error) when no Video-modality AI Model is configured. This tool's actual
   provider generation call is intentionally unimplemented (see the
   NotImplementedError + docstring in huf/ai/handlers/media.py and
-  docs/hub-orchestrator-unified-builder-plan.md Phase 10), so no test here
+  the hub-orchestrator unified builder plan (archived in the workspace) Phase 10), so no test here
   asserts a successful video generation — that would be testing a lie.
 
 Run with:

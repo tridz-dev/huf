@@ -2,14 +2,14 @@
 
 Thin wrappers around the existing conversation machinery in
 `huf.ai.conversation_manager.ConversationManager` and
-`huf.ai.agent_chat.get_history` - ownership checks and history retrieval
+`huf.ai.agent.chat.get_history` - ownership checks and history retrieval
 are delegated entirely to that existing code, not reimplemented here.
 """
 
 import frappe
 
-from huf.ai.agent_access import assert_agent_access
-from huf.ai.agent_chat import get_history
+from huf.ai.agent.access import assert_agent_access
+from huf.ai.agent.chat import get_history
 from huf.ai.conversation_manager import ConversationManager
 from huf.api.v1.context import RequestContext
 from huf.api.v1.errors import NotFoundError
@@ -38,8 +38,8 @@ def _to_public_shape(conv_doc) -> dict:
 def _owns_conversation(conv_doc, user: str) -> bool:
 	"""Whether `user` is the owner of `conv_doc` (or a System Manager).
 
-	Mirrors `huf.ai.agent_chat._assert_owns_conversation` / the ownership
-	check in `huf.ai.agent_chat.get_history`, but returns a bool instead of
+	Mirrors `huf.ai.agent.chat._assert_owns_conversation` / the ownership
+	check in `huf.ai.agent.chat.get_history`, but returns a bool instead of
 	raising so callers can convert a failure into `NotFoundError` (no
 	existence leak) rather than a `PermissionError`.
 	"""

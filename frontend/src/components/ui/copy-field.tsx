@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { copyText } from '@/lib/clipboard';
 
 export interface CopyFieldProps {
 	label: string;
@@ -13,14 +14,6 @@ export interface CopyFieldProps {
 	masked?: boolean;
 }
 
-async function writeToClipboard(text: string): Promise<boolean> {
-	try {
-		await navigator.clipboard.writeText(text);
-		return true;
-	} catch {
-		return false;
-	}
-}
 
 export function CopyField({ label, value, masked = false }: CopyFieldProps) {
 	const id = useId();
@@ -29,7 +22,7 @@ export function CopyField({ label, value, masked = false }: CopyFieldProps) {
 	const hidden = masked && !revealed;
 
 	const copy = async () => {
-		if (await writeToClipboard(value)) {
+		if (await copyText(value)) {
 			setCopied(true);
 			toast.success('Copied');
 			setTimeout(() => setCopied(false), 1500);

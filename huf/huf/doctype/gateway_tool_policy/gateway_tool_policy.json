@@ -1,0 +1,28 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-10-27 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "gateway",
+  "scope",
+  "mode",
+  "tools",
+  "allow_cross_channel_send"
+ ],
+ "fields": [
+  {"fieldname": "gateway", "fieldtype": "Link", "label": "Gateway", "options": "Gateway", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "scope", "fieldtype": "Data", "label": "Channel / Conversation ID", "description": "Leave blank for a gateway-wide policy. A channel-scoped policy overrides the gateway-wide one for that conversation.", "in_list_view": 1},
+  {"fieldname": "mode", "fieldtype": "Select", "label": "Mode", "options": "Allow list\nDeny list", "default": "Allow list", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "tools", "fieldtype": "Small Text", "label": "Tools", "description": "Tool names, one per line (or comma separated)."},
+  {"fieldname": "allow_cross_channel_send", "fieldtype": "Check", "label": "Allow Slack send to another channel after a Slack read", "default": "0"}
+ ],
+ "module": "Huf",
+ "name": "Gateway Tool Policy",
+ "permissions": [
+  {"create": 1, "delete": 1, "read": 1, "role": "System Manager", "write": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

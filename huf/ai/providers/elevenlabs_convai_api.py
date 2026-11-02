@@ -172,7 +172,7 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
         )
         return {"status": "error", "message": "Internal Agent not found"}
 
-    from huf.ai.agent_access import assert_agent_access
+    from huf.ai.agent.access import assert_agent_access
 
     agent_doc = frappe.get_doc("Agent", agent_name)
     try:

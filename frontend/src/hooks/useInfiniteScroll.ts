@@ -162,39 +162,17 @@ export interface UseInfiniteScrollReturn<TItem> {
  *
  * @example
  * ```tsx
- * const {
- *   items,
- *   hasMore,
- *   loading,
- *   search,
- *   setSearch,
- *   filters,
- *   setFilter,
- *   scrollRef,
- *   sentinelRef,
- * } = useInfiniteScroll({
- *   fetchFn: async (params) => {
- *     const response = await getAgents({
- *       page: params.page,
- *       limit: params.limit,
- *       search: params.search,
- *     });
- *     return {
- *       data: response.items,
- *       hasMore: response.hasMore,
- *       total: response.total,
- *     };
+ * const { items, hasMore, loading, search, setSearch, setFilter, scrollRef, sentinelRef } = useInfiniteScroll({
+ *   fetchFn: async (p) => {
+ *     const r = await getAgents({ page: p.page, limit: p.limit, search: p.search });
+ *     return { data: r.items, hasMore: r.hasMore, total: r.total };
  *   },
- *   initialParams: {},
  *   pageSize: 20,
  * });
- *
  * return (
  *   <div ref={scrollRef} className="overflow-auto">
- *     {items.map(item => <Item key={item.id} {...item} />)}
- *     Sentinel element at the bottom:
+ *     {items.map((item) => <Item key={item.id} {...item} />)}
  *     {hasMore && <div ref={sentinelRef} className="h-4" />}
- *     {loadingMore && <LoadingSpinner />}
  *   </div>
  * );
  * ```
@@ -224,6 +202,10 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
 
   const currentPageRef = useRef(0);
   const isFetchingRef = useRef(false);
+  // Every first-page load gets a number. A newer one (the search or a filter changed while an
+  // older request was still in flight) supersedes it: the older answer is dropped, never shown.
+  const requestSeqRef = useRef(0);
+  const inflightFirstPageRef = useRef<string | null>(null);
   // Prevent "enabled" effect from re-fetching forever when API returns empty lists.
   // Reset this when params change / reset() is called.
   const didFetchAtLeastOnceRef = useRef(false);
@@ -256,7 +238,15 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
   // Fetch data function
   const fetchData = useCallback(
     async (append = false) => {
-      if (!isEnabled || isFetchingRef.current) return;
+      // A page append never overlaps another request; a first-page load always goes ahead,
+      // otherwise a search typed or a filter restored while the first load runs is silently lost.
+      if (!isEnabled || (append && isFetchingRef.current)) return;
+      // Same first-page request already on its way (two effects ask in the same render): keep it.
+      const firstPageKey = append ? null : JSON.stringify([initialParamsRef.current, debouncedSearch, debouncedFilters]);
+      if (!append && isFetchingRef.current && inflightFirstPageRef.current === firstPageKey) return;
+      if (!append) inflightFirstPageRef.current = firstPageKey;
+      const seq = append ? requestSeqRef.current : ++requestSeqRef.current;
+      const superseded = () => seq !== requestSeqRef.current;
 
       try {
         isFetchingRef.current = true;
@@ -294,6 +284,7 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
         }
 
         const response = await fetchFnRef.current(params);
+        if (superseded()) return;
 
         if (append) {
           setItems((prev) =>
@@ -339,16 +330,20 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
           });
         }
       } catch (err) {
+        if (superseded()) return;
         const error = err instanceof Error ? err : new Error('Failed to fetch data');
         setError(error);
         setItems([]);
         setHasMore(false);
         setTotal(undefined); // Reset total on error
       } finally {
-        setLoading(false);
-        setInitialLoading(false);
-        setLoadingMore(false);
-        isFetchingRef.current = false;
+        if (!superseded()) {
+          setLoading(false);
+          setInitialLoading(false);
+          setLoadingMore(false);
+          isFetchingRef.current = false;
+          inflightFirstPageRef.current = null;
+        }
       }
     },
     [

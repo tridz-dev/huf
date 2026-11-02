@@ -1,0 +1,22 @@
+{
+ "actions": [],
+ "creation": "2026-10-29 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["retailer_id", "item_name", "qty", "price", "currency"],
+ "fields": [
+  {"fieldname":"retailer_id","fieldtype":"Data","in_list_view":1,"label":"Retailer ID","length":140,"reqd":1},
+  {"fieldname":"item_name","fieldtype":"Data","in_list_view":1,"label":"Item name","length":255},
+  {"default":"1","fieldname":"qty","fieldtype":"Float","in_list_view":1,"label":"Qty"},
+  {"fieldname":"price","fieldtype":"Float","in_list_view":1,"label":"Price"},
+  {"fieldname":"currency","fieldtype":"Data","label":"Currency","length":8}
+ ],
+ "istable": 1,
+ "module": "Huf",
+ "name": "WhatsApp Order Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

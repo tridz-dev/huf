@@ -13,9 +13,13 @@ import json
 import frappe
 from frappe import _
 
+from huf.ai.tools.ask_user_secret import _secret_block_extras, _normalize_secret_question
 from huf.ai.tools.builder import _as_bool
 
-ASK_USER_KINDS = ("yes_no", "single_choice", "multi_choice", "input", "textarea")
+ASK_USER_KINDS = ("yes_no", "single_choice", "multi_choice", "input", "textarea", "secret")
+
+# Form-only kind: masked fields whose values are stashed server-side, never sent to chat.
+_SECRET_KIND = "secret"
 
 # Kinds that require a non-empty options list.
 _CHOICE_KINDS = ("single_choice", "multi_choice")
@@ -90,6 +94,7 @@ def _clean_options(raw_options):
 
 MAX_QUESTIONS = 10
 MAX_OPTIONS = 12
+MAX_SECRET_FIELDS = 10
 # Upper bound for any single free-text field (question text, option label, title, ...).
 MAX_TEXT_LENGTH = 500
 
@@ -178,7 +183,27 @@ ASK_USER_PARAMS_SCHEMA = {
 					"kind": {
 						"type": "string",
 						"enum": list(ASK_USER_KINDS),
-						"description": "Optional; inferred from options/allow_multiple when omitted",
+						"description": "Optional; inferred from options/allow_multiple when omitted. "
+						"'secret' collects masked credentials via 'fields'.",
+					},
+					"fields": {
+						"type": "array",
+						"minItems": 1,
+						"maxItems": MAX_SECRET_FIELDS,
+						"description": "Only for kind 'secret': the masked inputs. Values are stored "
+						"server-side and never enter the chat.",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {"type": "string", "description": "Unique field id, e.g. 'access_token'"},
+								"label": {"type": "string", "description": "Label shown above the input"},
+							},
+							"required": ["id", "label"],
+						},
+					},
+					"purpose": {
+						"type": "string",
+						"description": "Only for kind 'secret': why the secret is needed; defaults to the question text",
 					},
 				},
 				"required": ["id", "text"],
@@ -289,6 +314,10 @@ def normalize_questions(questions) -> tuple[list[dict], list[str]]:
 			qid = f"{qid}_{index + 1}"
 		seen.add(qid)
 
+		if raw.get("kind") == _SECRET_KIND:
+			cleaned.append(_normalize_secret_question(raw, qid, text, index))
+			continue
+
 		options, bad_icons = _normalize_question_options(
 			_parse_json_list(raw.get("options"), f"questions[{index}].options"), index
 		)
@@ -365,6 +394,7 @@ def ask_user(
 				"kind": q["kind"],
 				"options": q["options"],
 				"allow_free_text": q["allow_free_text"],
+				**_secret_block_extras(q),
 			},
 			ensure_ascii=False,
 		)
@@ -411,6 +441,8 @@ def _legacy_single(question, kind, options, allow_free_text, suggested_answers, 
 	if not question:
 		_usage_error(_("'question' is required."))
 
+	if kind == _SECRET_KIND:
+		_usage_error(_("kind 'secret' needs the questions form with a 'fields' list."))
 	if kind not in ASK_USER_KINDS:
 		_usage_error(_("'kind' must be one of: {0}.").format(", ".join(ASK_USER_KINDS)))
 

@@ -10,10 +10,12 @@ Run with:
   bench --site <site> run-tests --app huf --module huf.huf.doctype.agent_procedure_run.test_agent_procedure_run
 """
 
+import unittest
+
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai import procedure_lock
+from huf.ai.procedure import lock as procedure_lock
 from huf.ai.transaction import commit_if_background
 
 
@@ -70,6 +72,18 @@ class _FlagsSafeIntegrationTestCase(IntegrationTestCase):
 	issue in this repo -- ``huf/ai/tests/test_code_execution_broker_permissions.py`` is quarantined
 	for exactly this reason. Initialising the flag is preferable to quarantining the tests.
 	"""
+
+	@classmethod
+	def setUpClass(cls):
+		# Environment, not a product defect: Gateway has an optional Link to the frappe_whatsapp doctype
+		# "WhatsApp Account", and the framework's test-record generator follows every Link of the doctypes
+		# these tests touch. On a site without frappe_whatsapp it fails before the first test runs.
+		if not frappe.db.exists("DocType", "WhatsApp Account"):
+			raise unittest.SkipTest(
+				"the frappe_whatsapp app is not installed on this site (doctype 'WhatsApp Account' is missing), "
+				"which the framework's test-record generator needs through the Gateway link"
+			)
+		super().setUpClass()
 
 	def setUp(self):
 		super().setUp()
@@ -168,8 +182,8 @@ class TestAgentProcedureRunPinning(_FlagsSafeIntegrationTestCase):
 
 
 class TestAgentProcedureRunLock(_FlagsSafeIntegrationTestCase):
-	"""Exercises the real frappe.cache()-backed lock (huf.ai.procedure_lock) against
-	an actual run name -- huf.ai.tests.test_procedure_lock covers the pure logic with a
+	"""Exercises the real frappe.cache()-backed lock (huf.ai.procedure.lock) against
+	an actual run name -- huf.ai.procedure.tests.test_procedure_lock covers the pure logic with a
 	fake cache; this proves the same module works against the real cache backend."""
 
 	def setUp(self):

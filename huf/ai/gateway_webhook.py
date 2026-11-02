@@ -15,9 +15,10 @@ import frappe
 from frappe import _
 from frappe.rate_limiter import rate_limit
 
+from huf.ai.gateway_adapters import provider_hooks
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 from huf.ai.gateway_adapters.registered import get_adapter_class
-
+from huf.ai.whatsapp.broadcast import status as broadcast_status
 
 EXEMPT_AUTH_ROUTES: frozenset[str] = frozenset(
 	{
@@ -178,6 +179,8 @@ def _gateway_credentials(gateway) -> dict[str, str]:
 	for row in settings.credentials or []:
 		if row.key:
 			credentials[row.key] = row.get_password("value") or ""
+	if getattr(gateway, "provider", None) == "Telegram" and getattr(gateway, "telegram_test_environment", 0):
+		credentials["test_environment"] = "1"  # read by the Telegram adapter/clients; not a secret
 	return credentials
 
 
@@ -201,24 +204,14 @@ def _fallback_params(gateway, contact_name: str):
 	return None
 
 
+from huf.ai.gateways.teams.webhook import SEND_MAX_ATTEMPTS, SEND_MAX_DELAY, adapter_kwargs, finish_response, send_with_retry  # noqa: E402,F401
+
+
 def get_gateway_adapter(gateway, contact_name: str = ""):
 	"""Instantiate the configured adapter without exposing stored credentials."""
 	adapter_class = _adapter_class_for_provider(gateway.provider)
 	credentials = _gateway_credentials(gateway)
-	if gateway.provider == "WhatsApp":
-		return adapter_class(
-			credentials,
-			gateway_context={
-				"gateway_name": gateway.name,
-				"whatsapp_account": (gateway.get("whatsapp_account") or "").strip(),
-				"fallback_template": (gateway.get("fallback_template") or "").strip(),
-				"fallback_template_language": (gateway.get("fallback_template_language") or "").strip(),
-				"fallback_template_params": _fallback_params(gateway, contact_name),
-				"contact_name": contact_name,
-				"preview_url": (gateway.get("preview_url") or "").strip(),
-			},
-		)
-	return adapter_class(credentials)
+	return adapter_class(credentials, **adapter_kwargs(adapter_class, gateway, contact_name, provider_hooks))
 
 
 def _inbound_request():
@@ -364,11 +357,20 @@ def _record_webhook_signal(gateway, field: str) -> None:
 		pass
 
 
-def _is_whatsapp(gateway) -> bool:
-	return str(getattr(gateway, "provider", "") or "") == "WhatsApp"
+def _has_webhook_signals(gateway) -> bool:
+	"""Whether the provider records verify/signature health timestamps (registered hook)."""
+	hook = provider_hooks.get(getattr(gateway, "provider", ""), "webhook_signals")
+	return bool(hook()) if hook is not None else False
 
 
-def _record_failed_status(gateway_name: str, status: dict) -> None:
+def _record_failed_status(gateway_name: str, status: dict, provider: str | None = None) -> None:
+	"""Record a failed outbound delivery status through the provider's ``failed_status`` hook."""
+	hook = provider_hooks.get(provider, "failed_status")
+	if hook is not None:
+		hook(gateway_name, status)
+
+
+def _record_failed_status_whatsapp(gateway_name: str, status: dict) -> None:
 	"""A failed outbound delivery must be visible even when nothing is forwarded (direct mode)."""
 	try:
 		errors = status.get("errors") if isinstance(status.get("errors"), list) else []
@@ -442,12 +444,20 @@ def _update_reply_status(gateway_name: str, status: dict) -> None:
 _LAST_EVENT_THROTTLE_SECONDS = 60
 
 
+def _is_lock_error(exc: BaseException) -> bool:
+	return isinstance(exc, (frappe.QueryDeadlockError, frappe.QueryTimeoutError)) or "deadlock" in str(exc).lower()
+
+
 def touch_last_event(gateway) -> None:
 	"""Stamp ``Gateway.last_event_at`` on a successful inbound ingest or reply, at most once a minute.
 
-	``gateway`` is a Gateway doc (its loaded value drives the throttle) or a name. Cheap ``db_set`` without
-	touching ``modified``; never raises and never commits.
+	``gateway`` is a Gateway doc (its loaded value drives the throttle) or a name. Cheap ``set_value`` without
+	touching ``modified``; never raises and never commits. Callers that just wrote terminal event state commit
+	it first, so a deadlock here (two workers stamping the same Gateway row) cannot roll that state back.
+	Lock errors are retried briefly, then logged at WARNING by type name only.
 	"""
+	import time
+
 	try:
 		now = frappe.utils.now_datetime()
 		name = gateway if isinstance(gateway, str) else gateway.name
@@ -456,11 +466,21 @@ def touch_last_event(gateway) -> None:
 			last = frappe.utils.get_datetime(last)
 			if 0 <= (now - last).total_seconds() < _LAST_EVENT_THROTTLE_SECONDS:
 				return
-		frappe.db.set_value("Gateway", name, "last_event_at", now, update_modified=False)
+		for attempt in range(3):
+			try:
+				frappe.db.set_value("Gateway", name, "last_event_at", now, update_modified=False)
+				break
+			except Exception as exc:
+				if not _is_lock_error(exc) or attempt == 2:
+					raise
+				time.sleep(0.05 * (attempt + 1))
 		if not isinstance(gateway, str):
 			gateway.set("last_event_at", now)
-	except Exception:
-		pass
+	except Exception as exc:
+		try:
+			frappe.logger("huf.gateway").warning("touch_last_event failed: %s", type(exc).__name__)
+		except Exception:
+			pass
 
 
 def _record_unknown_phone_ids(gateway_name: str, phone_ids) -> None:
@@ -621,9 +641,9 @@ def _apply_account_events(events, gateway_name: str) -> int:
 	"""account_update / user_preferences: applied to the receiving gateway only, no Gateway Event row (WP-11)."""
 	if not events:
 		return 0
-	from huf.ai import whatsapp_account_events
+	from huf.ai.whatsapp import account_events
 
-	return whatsapp_account_events.apply_account_events(events, gateway_name)
+	return account_events.apply_account_events(events, gateway_name)
 
 
 def _deferral_key(gateway_name: str, request) -> str:
@@ -752,8 +772,9 @@ def _handle_batched_payload(gateway, adapter, request) -> dict:
 	if not deferred:
 		for status in parsed.statuses:
 			_update_reply_status(gateway.name, status)
+			broadcast_status.apply_from_webhook(status, gateway.name)
 			if str(status.get("status") or "").lower() == "failed":
-				_record_failed_status(gateway.name, status)
+				_record_failed_status(gateway.name, status, getattr(gateway, "provider", None))
 		routed_updates = [update for update in parsed.template_updates if _record_template_update(update, gateway.name)]
 		call_results = _handle_calls(gateway, getattr(parsed, "calls", ()) or ())
 		account_applied = _apply_account_events(getattr(parsed, "account_events", ()) or (), gateway.name)
@@ -846,11 +867,11 @@ def handle_gateway_webhook() -> dict | None:
 		try:
 			challenge = adapter.verify_url(request) or ""
 		except frappe.PermissionError:
-			if _is_whatsapp(gateway):
+			if _has_webhook_signals(gateway):
 				_record_webhook_signal(gateway, "last_signature_failure_at")
 			frappe.local.response.http_status_code = 403
 			return {"success": False, "error": "Webhook verification failed"}
-		if _is_whatsapp(gateway):
+		if _has_webhook_signals(gateway):
 			_record_webhook_signal(gateway, "last_verify_ok_at")
 		_text_response(challenge)
 		return None
@@ -865,14 +886,21 @@ def handle_gateway_webhook() -> dict | None:
 	if not adapter.verify_inbound(request):
 		if batched:
 			_ingest_rate_gate()  # forged/unsigned traffic still consumes the budget
-		if _is_whatsapp(gateway):
+		if _has_webhook_signals(gateway):
 			_record_webhook_signal(gateway, "last_signature_failure_at")
 		frappe.local.response.http_status_code = 401
 		return {"success": False, "error": "Provider verification failed"}
 	if batched:
 		return _handle_batched_payload(gateway, adapter, request)
 
+	ingest_hook = provider_hooks.get(gateway.provider, "ingest_update")
+	if ingest_hook is not None:
+		handled = ingest_hook(gateway, adapter, request)
+		if handled is not None:
+			return handled
+
 	event = adapter.normalize_inbound(request)
+	frappe.local.gateway_response_override = None  # never inherit a stale override
 	result = ingest_gateway_event(
 		gateway.name,
 		event.provider_event_id,
@@ -880,6 +908,9 @@ def handle_gateway_webhook() -> dict | None:
 		verified_sender=True,
 		raw_payload=dict(event.raw_payload),
 	)
+	response = finish_response(frappe, gateway, event, result)
+	if response is not None:
+		return response
 	if not result.get("duplicate"):
 		touch_last_event(gateway)
 	return {"success": True, **result}
@@ -896,30 +927,19 @@ def event_contact_name(event) -> str:
 	return str(raw.get("contact_name") or "").strip() if isinstance(raw, dict) else ""
 
 
-def send_gateway_reply(gateway, event, text: str):
-	"""Deliver one completed Agent response through the same verified gateway."""
+def send_gateway_reply(gateway, event, text: str, *, sleep=None, max_attempts: int = SEND_MAX_ATTEMPTS):
+	"""Deliver one completed Agent response through the same verified gateway (transient errors retried)."""
 	from huf.ai.gateway_adapters.types import GatewayReply
 
 	adapter = get_gateway_adapter(gateway, event_contact_name(event))
-	if gateway.provider == "WhatsApp":
-		# A2: WhatsApp never fragments conversations by thread; the reply quotes
-		# the inbound wamid, which is the event's provider_event_id.
-		return adapter.send_reply(
-			GatewayReply(
-				conversation_id=event.conversation_id,
-				text=text,
-				thread_id=None,
-				reply_to_provider_message_id=event.provider_event_id or None,
-			)
-		)
-	return adapter.send_reply(
-		GatewayReply(
-			conversation_id=event.conversation_id,
-			text=text,
-			thread_id=event.thread_id or None,
-			reply_to_provider_message_id=event.thread_id or None,
-		)
-	)
+	target_hook = provider_hooks.get(gateway.provider, "reply_target")
+	if target_hook is not None:
+		thread_id, reply_to = target_hook(event)
+	else:
+		thread_id = event.thread_id or None
+		reply_to = event.thread_id or None
+	reply = GatewayReply(event.conversation_id, text, thread_id, reply_to)
+	return send_with_retry(adapter, reply, sleep, max_attempts)
 
 
 def send_gateway_parts(gateway, event, parts: list[str], *, quote: bool = True):
@@ -928,17 +948,17 @@ def send_gateway_parts(gateway, event, parts: list[str], *, quote: bool = True):
 	``quote`` puts the reply-to context on the first part only; pass False when an earlier part was
 	already delivered. Raises ``WhatsAppPartsError`` carrying what was sent and what remains.
 	"""
-	adapter = get_gateway_adapter(gateway, event_contact_name(event))
-	return adapter.send_text_parts(
-		event.conversation_id, list(parts), (event.provider_event_id or None) if quote else None
-	)
+	return provider_hooks.call(gateway.provider, "send_parts", gateway, event, parts, quote)
 
 
 def mark_gateway_read_typing(gateway, event) -> bool:
 	"""Best-effort read receipt + typing indicator for the inbound message. Never raises."""
 	try:
-		if not _is_whatsapp(gateway) or not event.provider_event_id:
+		if not event.provider_event_id:
 			return False
-		return bool(get_gateway_adapter(gateway).mark_read_typing(event.provider_event_id))
+		hook = provider_hooks.get(gateway.provider, "mark_read_typing")
+		if hook is None:
+			return False
+		return bool(hook(get_gateway_adapter(gateway), event.provider_event_id))
 	except Exception:
 		return False

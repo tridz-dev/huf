@@ -1,0 +1,93 @@
+# Copyright (c) 2026, Huf and contributors
+# For license information, please see license.txt
+
+import frappe
+from frappe.model.document import Document
+from frappe.utils import get_datetime, now_datetime
+
+PURPOSE_FIELDS = ("purpose_marketing", "purpose_utility", "purpose_events")
+# Written only by the audience API / membership code (``in_audience_api``, or raw set_value which skips validate).
+API_ONLY_FIELDS = ("is_adhoc", "member_count", "suppressed_count")
+
+
+class WhatsAppAudience(Document):
+	"""A consented list of WhatsApp contacts. Opt-out is NOT stored here: it stays in the gateway's
+	consent records and is looked up when the list is used."""
+
+	def _check_api_only(self):
+		"""Creating an audience and its counters/ad-hoc flag go through the audience API (it records the attestation)."""
+		if getattr(frappe.flags, "in_audience_api", False):
+			return
+		if self.is_new():
+			frappe.throw("Audiences can only be created through the audience API.", frappe.PermissionError)
+		for field in API_ONLY_FIELDS:
+			if self.has_value_changed(field):
+				frappe.throw(f"{field} can only be changed through the audience API.", frappe.PermissionError)
+
+	def validate(self):
+		self._check_api_only()
+		self.title = (self.title or "").strip()
+		self.consent_source = (self.consent_source or "").strip()
+		if not self.title:
+			frappe.throw("An audience needs a title.")
+		if not self.consent_source:
+			frappe.throw("Say where consent for this list was collected.")
+		if self.is_new():
+			self._stamp_attestation()
+		else:
+			self._check_immutable()
+			self._check_referenced_rename()
+			self._check_consent_source()
+
+	def _stamp_attestation(self):
+		# Always server-side: whatever the client sent is overwritten.
+		self.consent_attested_by = frappe.session.user
+		self.consent_attested_at = now_datetime()
+		if self.default_consent_at and get_datetime(self.default_consent_at) > get_datetime(self.consent_attested_at):
+			frappe.throw("The consent date cannot be in the future.")
+
+	def _check_immutable(self):
+		before = self.get_doc_before_save()
+		if not before:
+			return
+		for field in ("consent_attested_by", "consent_attested_at", "default_consent_at", "gateway", "consent_basis"):
+			if _norm(before.get(field)) != _norm(self.get(field)):
+				frappe.throw(f"{self.meta.get_label(field)} cannot be changed after the audience is created.")
+		for field in PURPOSE_FIELDS:
+			if self.get(field) and not before.get(field):
+				frappe.throw("Consent purposes can be narrowed but not widened. Create a new audience for a new purpose.")
+
+	def _check_referenced_rename(self):
+		before = self.get_doc_before_save()
+		if before and before.title != self.title:
+			from huf.ai.whatsapp.broadcast.audiences import membership as aud
+
+			aud.assert_not_in_use(self.name, "renamed")
+
+	def _check_consent_source(self):
+		"""The consent text is evidence: frozen while a live broadcast uses it or one relied on it."""
+		before = self.get_doc_before_save()
+		if not before or _norm(before.consent_source) == _norm(self.consent_source):
+			return
+		from huf.ai.whatsapp.broadcast.audiences import membership as aud
+
+		aud.assert_not_in_use(self.name, "given a new consent source")
+		covered = aud.attested_covered_broadcasts(self.name)
+		if covered:
+			frappe.throw(
+				"The consent source cannot be changed: it was relied on as consent for "
+				+ ", ".join(covered[:5])
+				+ ". Create a new audience instead."
+			)
+
+	def on_trash(self):
+		from huf.ai.whatsapp.broadcast.audiences import membership as aud
+
+		aud.assert_not_in_use(self.name, "deleted")
+		frappe.flags.in_audience_api = True
+		for name in frappe.get_all("WhatsApp Audience Member", {"audience": self.name}, pluck="name", limit_page_length=0):
+			frappe.delete_doc("WhatsApp Audience Member", name, ignore_permissions=True, force=True)
+
+
+def _norm(value):
+	return "" if value in (None, "") else str(value)

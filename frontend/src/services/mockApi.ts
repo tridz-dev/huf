@@ -10,6 +10,9 @@ import {
 	MOCK_PROVIDER_OPENAI,
 } from "@/data/ai";
 
+import { FIXTURE_REGISTRY } from "@/lib/flow-gateway/registryFixture";
+import type { GatewayRegistry } from "@/lib/flow-gateway/gatewayTrigger.types";
+
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const providers: AIProvider[] = [
@@ -245,6 +248,12 @@ export const mockApi = {
     list: async (): Promise<AgentRun[]> => {
       await delay(100);
       return mockRuns;
+    },
+  },
+  gatewayTriggers: {
+    registry: async (): Promise<GatewayRegistry> => {
+      await delay(100);
+      return FIXTURE_REGISTRY;
     },
   },
 };

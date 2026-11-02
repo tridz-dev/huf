@@ -1,7 +1,7 @@
 import json, requests, asyncio, random
 from types import SimpleNamespace
 import frappe
-from huf.ai.tool_serializer import serialize_tools
+from huf.ai.tools.serializer import serialize_tools
 from huf.ai.providers.errors import ProviderError
 
 class SimpleResult:

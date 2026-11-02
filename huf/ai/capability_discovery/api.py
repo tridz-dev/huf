@@ -8,7 +8,7 @@ Permission gate: capability discovery exposes implementation details (app
 manifests, whitelisted function paths, DocType/event internals) that plan
 §18.1 says should be restricted to admins. This reuses the same
 System-Manager-or-Huf-Admin/Manager gate already used by
-huf.ai.agent_run_analytics_api._require_analytics_access, rather than
+huf.ai.agent.run_analytics_api._require_analytics_access, rather than
 inventing new permission logic.
 """
 
@@ -23,7 +23,7 @@ def _require_capability_discovery_access():
 
 	Allowed: System Manager (Frappe role), or Huf Admin / Huf Manager
 	(Huf capability role). Mirrors the gate in
-	huf.ai.agent_run_analytics_api._require_analytics_access.
+	huf.ai.agent.run_analytics_api._require_analytics_access.
 	"""
 	user = frappe.session.user
 	if "System Manager" in frappe.get_roles(user):

@@ -1,0 +1,38 @@
+{
+  "update_id": 1016,
+  "message": {
+    "message_id": 10,
+    "from": {
+      "id": 111,
+      "is_bot": false,
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "chat": {
+      "id": 111,
+      "type": "private",
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "date": 1760000000,
+    "poll": {
+      "id": "p1",
+      "question": "Lunch?",
+      "options": [
+        {
+          "text": "Pizza",
+          "voter_count": 0
+        },
+        {
+          "text": "Sushi",
+          "voter_count": 0
+        }
+      ],
+      "total_voter_count": 0,
+      "is_closed": false,
+      "is_anonymous": true,
+      "type": "regular",
+      "allows_multiple_answers": false
+    }
+  }
+}

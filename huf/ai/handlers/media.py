@@ -121,7 +121,7 @@ async def handle_generate_image(
     # It only takes effect if a future refactor converts this handler to a
     # sync wrapper (see ST-R4.2, Audit F-33, review item 21). Tracked as an
     # OPEN finding, not closed, until that refactor lands.
-    from huf.ai.agent_access import assert_agent_access
+    from huf.ai.agent.access import assert_agent_access
     agent_doc = frappe.get_doc("Agent", agent_name)
     assert_agent_access(agent_doc, frappe.session.user, for_execution=True)
 
@@ -401,7 +401,7 @@ async def handle_ocr_document(
     # It only takes effect if a future refactor converts this handler to a
     # sync wrapper (see ST-R4.2, Audit F-33, review item 21). Tracked as an
     # OPEN finding, not closed, until that refactor lands.
-    from huf.ai.agent_access import assert_agent_access
+    from huf.ai.agent.access import assert_agent_access
     agent_doc = frappe.get_doc("Agent", agent_name)
     assert_agent_access(agent_doc, frappe.session.user, for_execution=True)
 
@@ -785,7 +785,7 @@ async def handle_generate_audio(
     # It only takes effect if a future refactor converts this handler to a
     # sync wrapper (see ST-R4.2, Audit F-33, review item 21). Tracked as an
     # OPEN finding, not closed, until that refactor lands.
-    from huf.ai.agent_access import assert_agent_access
+    from huf.ai.agent.access import assert_agent_access
     _guard_agent_doc = frappe.get_doc("Agent", agent_name)
     assert_agent_access(_guard_agent_doc, frappe.session.user, for_execution=True)
 
@@ -1048,7 +1048,7 @@ async def handle_transcribe_audio(
     # It only takes effect if a future refactor converts this handler to a
     # sync wrapper (see ST-R4.2, Audit F-33, review item 21). Tracked as an
     # OPEN finding, not closed, until that refactor lands.
-    from huf.ai.agent_access import assert_agent_access
+    from huf.ai.agent.access import assert_agent_access
     agent_doc = frappe.get_doc("Agent", agent_name)
     assert_agent_access(agent_doc, frappe.session.user, for_execution=True)
 
@@ -1099,7 +1099,7 @@ async def handle_generate_video(
     """
     Generate a video using the agent's configured provider and video generation model.
 
-    STATUS (honest scoping, see docs/hub-orchestrator-unified-builder-plan.md
+    STATUS (honest scoping, see the hub-orchestrator unified builder plan (archived in the workspace)
     section A.4 and Phase 10): as of litellm==1.95.0 (the version pinned/
     installed for this app) there is NO generic ``litellm.video_generation``
     (or equivalent) call, unlike ``litellm.image_generation``. Video
@@ -1133,7 +1133,7 @@ async def handle_generate_video(
     # It only takes effect if a future refactor converts this handler to a
     # sync wrapper (see ST-R4.2, Audit F-33, review item 21). Tracked as an
     # OPEN finding, not closed, until that refactor lands.
-    from huf.ai.agent_access import assert_agent_access
+    from huf.ai.agent.access import assert_agent_access
     _guard_agent_doc = frappe.get_doc("Agent", agent_name)
     assert_agent_access(_guard_agent_doc, frappe.session.user, for_execution=True)
 
@@ -1188,7 +1188,7 @@ async def handle_generate_video(
             "implemented for any provider. An AI Model with 'Video' "
             f"modality ('{video_model}') was resolved, but no provider "
             "API integration exists to actually generate the video. "
-            "See docs/hub-orchestrator-unified-builder-plan.md Phase 10."
+            "See the hub-orchestrator unified builder plan (archived in the workspace) Phase 10."
         )
 
     except NotImplementedError as e:

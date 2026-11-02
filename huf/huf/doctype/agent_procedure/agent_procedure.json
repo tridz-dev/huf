@@ -256,7 +256,7 @@
   },
   {
    "default": "Not Requested",
-   "description": "Manual-approval gate for write Procedures (is_read_only=0). Read-only Procedures don't need this -- they bind directly. Only System Manager/Huf Manager can move this to Approved/Rejected (see huf.ai.procedure_approval_api).",
+   "description": "Manual-approval gate for write Procedures (is_read_only=0). Read-only Procedures don't need this -- they bind directly. Only System Manager/Huf Manager can move this to Approved/Rejected (see huf.ai.procedure.approval_api).",
    "fieldname": "approval_status",
    "fieldtype": "Select",
    "in_list_view": 1,
@@ -265,7 +265,7 @@
    "options": "Not Requested\nPending Review\nApproved\nRejected"
   },
   {
-   "description": "Set by huf.ai.procedure_approval_api.approve_procedure -- never set directly.",
+   "description": "Set by huf.ai.procedure.approval_api.approve_procedure -- never set directly.",
    "fieldname": "approved_by",
    "fieldtype": "Link",
    "label": "Approved By",
@@ -277,7 +277,7 @@
    "fieldtype": "Column Break"
   },
   {
-   "description": "Set by huf.ai.procedure_approval_api.approve_procedure -- never set directly.",
+   "description": "Set by huf.ai.procedure.approval_api.approve_procedure -- never set directly.",
    "fieldname": "approved_at",
    "fieldtype": "Datetime",
    "label": "Approved At",

@@ -12,12 +12,12 @@ AGENT-GOLDEN-002, ...) that each:
     1. Construct a minimal deterministic world: a fake ``agent`` object
        carrying exactly the attributes real product code reads off a real
        `Agent` doc for a provider call (`agent_name`, `provider`, `model`,
-       `instructions`, `max_turns` — see `huf/ai/agent_integration.py:499`
+       `instructions`, `max_turns` — see `huf/ai/agent/integration.py:499`
        and `huf/ai/providers/litellm.py:688`), wired to provider
        "test_provider" with the right `__TEST_SCENARIO__:<NAME>` marker
-       (see `huf/ai/providers/test_provider.py`'s module docstring for the
+       (see `huf/ai/providers/stub_provider.py`'s module docstring for the
        full triggering-mechanism contract).
-    2. Call `huf.ai.providers.test_provider.run()` directly (this is the
+    2. Call `huf.ai.providers.stub_provider.run()` directly (this is the
        exact function `huf.ai.providers.litellm.run()` delegates to for
        `provider.lower() == "test_provider"`, awaited from the same real
        call site a real provider call is — see that module's docstring for
@@ -25,17 +25,17 @@ AGENT-GOLDEN-002, ...) that each:
     3. Capture the actual returned `SimpleResult`-shaped object (or the
        raised exception, for the failure scenario) plus a synthesized
        Agent-Run-lifecycle trace matching the documented execution steps in
-       `agent_integration.py::_execute_agent_run` (history fetch -> provider
+       `agent/integration.py::_execute_agent_run` (history fetch -> provider
        invocation -> tool-call-loop persistence over `result.new_items` ->
        usage/cost persistence -> final message persist).
-    4. Normalize that trace via `huf.ai.tests.golden_trace.normalize_trace`
+    4. Normalize that trace via `huf.testing.golden_trace.normalize_trace`
        and compare it against a versioned snapshot file in
-       `huf/ai/tests/golden_traces/<SCENARIO_ID>.json`.
+       `huf/testing/golden_traces/<SCENARIO_ID>.json`.
 
 WHY NOT THE REAL `_execute_agent_run`/`run_agent_sync` ORCHESTRATION
 ----------------------------------------------------------------------
 There is no live Frappe bench in this worktree today (see
-`docs/testing/CURRENT_STATE.md`) — `_execute_agent_run` needs a real
+the CURRENT_STATE audit (archived in the workspace)) — `_execute_agent_run` needs a real
 Frappe DB (`frappe.get_doc`, `Agent Run`/`Agent Message` inserts, redis
 locks, realtime socket emission). This harness deliberately stops at the
 level that IS realistically testable without one: the provider call itself,
@@ -46,10 +46,10 @@ not asserted as "this is what the DB would literally contain."
 FOLLOW-UP (not in this pass)
 ------------------------------
 Once a bench exists, a second pass should:
-    - Use `huf.ai.tests.factories.make_agent`/`make_agent_conversation`/
+    - Use `huf.testing.factories.make_agent`/`make_agent_conversation`/
       `make_agent_run` to build REAL doc rows (still wired to provider
       "test_provider" so scenarios stay deterministic).
-    - Drive the REAL `huf.ai.agent_integration.run_agent_sync`/
+    - Drive the REAL `huf.ai.agent.integration.run_agent_sync`/
       `_execute_agent_run` path (as an `IntegrationTestCase`, per this
       repo's existing test convention, see `huf/huf/doctype/agent/
       test_agent.py`).
@@ -60,7 +60,7 @@ Once a bench exists, a second pass should:
       to change, only how the raw trace is assembled.
     - Replace the synthesized `state_transitions` list with the real
       `agent_run_status` realtime lifecycle events emitted by
-      `_emit_run_lifecycle_event` (`agent_integration.py:535`).
+      `_emit_run_lifecycle_event` (`agent/integration.py:535`).
 
 RUNNING THIS FILE
 ------------------
@@ -70,7 +70,7 @@ not touch a DB) and is runnable directly:
     python3 -m unittest huf.ai.tests.test_golden_scenarios -v
 
 The FIRST run in a fresh checkout writes the initial snapshot files under
-`huf/ai/tests/golden_traces/*.json` if they do not yet exist (this is
+`huf/testing/golden_traces/*.json` if they do not yet exist (this is
 intentional and logged loudly — see `_compare_or_write_snapshot` below).
 Every subsequent run compares against the committed snapshot and fails
 loudly with a full diff on any drift, per GOAL.md section 7: "A changed
@@ -86,15 +86,15 @@ import sys
 import unittest
 from types import ModuleType, SimpleNamespace
 
-_GOLDEN_TRACES_DIR = os.path.join(os.path.dirname(__file__), "golden_traces")
+_GOLDEN_TRACES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "testing", "golden_traces")
 _HUF_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def _bootstrap_bare_environment():
-    """This worktree has no live Frappe bench (see docs/testing/CURRENT_STATE.md
+    """This worktree has no live Frappe bench (see the CURRENT_STATE audit (archived in the workspace)
     and this file's module docstring). `huf/__init__.py` does an unconditional
     `import frappe` at package-import time, and
-    `huf.ai.providers.test_provider`'s error scenarios lazily
+    `huf.ai.providers.stub_provider`'s error scenarios lazily
     `from huf.ai.providers.litellm import ProviderUnavailableError` — which in
     turn pulls in the real `litellm` pip package plus a long transitive chain
     of `huf.ai.*` modules that themselves import `frappe`. None of that is
@@ -102,21 +102,21 @@ def _bootstrap_bare_environment():
 
     If a real `frappe` install IS available (the future bench-backed pass,
     or CI), this function is a complete no-op: the `import frappe` probe
-    below succeeds and nothing is stubbed, so `huf.ai.providers.test_provider`
+    below succeeds and nothing is stubbed, so `huf.ai.providers.stub_provider`
     and `huf.ai.providers.litellm` import and behave exactly as real product
     code.
 
     Otherwise, we pre-seed `sys.modules` with minimal stand-ins so that
     `huf`/`huf.ai`/`huf.ai.providers` resolve to their REAL on-disk packages
-    (via `__path__`, so `test_provider.py`'s actual file is still what gets
-    imported and executed — nothing about `test_provider.py`'s own logic is
+    (via `__path__`, so `stub_provider.py`'s actual file is still what gets
+    imported and executed — nothing about `stub_provider.py`'s own logic is
     faked), while short-circuiting the one transitive dependency this
     harness's scenarios actually touch: `huf.ai.providers.litellm`'s
     `ProviderUnavailableError` class, stood in with an identical
     `(public_message, log_message=None)` shape (see that class's real
-    definition cited in `huf/ai/providers/test_provider.py`'s module
+    definition cited in `huf/ai/providers/stub_provider.py`'s module
     docstring, "Error scenarios" section). This does NOT change what
-    `test_provider.py` does — it only lets Python resolve one import name
+    `stub_provider.py` does — it only lets Python resolve one import name
     without needing the real `litellm` pip package or the rest of `huf.ai`'s
     transitive import graph, which this harness's provider-level scenarios
     do not exercise.
@@ -138,7 +138,7 @@ def _bootstrap_bare_environment():
     _stub_package("huf", _HUF_ROOT)
     _stub_package("huf.ai", os.path.join(_HUF_ROOT, "ai"))
     _stub_package("huf.ai.providers", os.path.join(_HUF_ROOT, "ai", "providers"))
-    _stub_package("huf.ai.tests", os.path.join(_HUF_ROOT, "ai", "tests"))
+    _stub_package("huf.testing", os.path.join(_HUF_ROOT, "testing"))
 
     if "huf.ai.providers.litellm" not in sys.modules:
         fake_litellm_provider = ModuleType("huf.ai.providers.litellm")
@@ -146,7 +146,7 @@ def _bootstrap_bare_environment():
         class ProviderUnavailableError(Exception):
             """Stand-in for the real `huf.ai.providers.litellm.ProviderUnavailableError`
             (see that class's real definition/contract cited in
-            `test_provider.py`'s module docstring) — same
+            `stub_provider.py`'s module docstring) — same
             `(public_message, log_message=None)` shape, same two readable
             attributes. Only used so this bare-environment harness can
             exercise `TEST_PROVIDER_500` without the real `litellm` pip
@@ -163,8 +163,8 @@ def _bootstrap_bare_environment():
 
 _bootstrap_bare_environment()
 
-from huf.ai.providers import test_provider  # noqa: E402
-from huf.ai.tests.golden_trace import normalize_trace, to_json  # noqa: E402
+from huf.ai.providers import stub_provider  # noqa: E402
+from huf.testing.golden_trace import normalize_trace, to_json  # noqa: E402
 
 
 def _make_fake_agent(agent_name, instructions, max_turns=10):
@@ -183,15 +183,15 @@ def _make_fake_agent(agent_name, instructions, max_turns=10):
 
 
 def _run_provider(agent, prompt, context=None):
-    """Call `test_provider.run()` synchronously (it's a coroutine function;
+    """Call `stub_provider.run()` synchronously (it's a coroutine function;
     there is no running event loop in a plain unittest run)."""
-    return asyncio.run(test_provider.run(agent, prompt, agent.provider, agent.model, context=context))
+    return asyncio.run(stub_provider.run(agent, prompt, agent.provider, agent.model, context=context))
 
 
 def _synthesize_messages(agent, prompt, result):
     """Synthesize the Agent-Message-shaped rows a real `_execute_agent_run`
     would persist for this provider call, per the documented sequence in
-    `agent_integration.py`: a user message, then one (kind="Tool Call")
+    `agent/integration.py`: a user message, then one (kind="Tool Call")
     message per tool_call_item/tool_call_output_item pair in
     `result.new_items`, then the final assistant message. This is a
     synthesis of the documented persistence contract, not a real DB read —
@@ -233,7 +233,7 @@ def _synthesize_messages(agent, prompt, result):
 
 def _synthesize_state_transitions(has_tool_calls, succeeded):
     """Synthesize the state-transition sequence a real Agent Run goes
-    through, per the documented lifecycle in `agent_integration.py` (queue
+    through, per the documented lifecycle in `agent/integration.py` (queue
     -> start -> [tool_call -> tool_result]* -> complete, or -> failed)."""
     transitions = ["queued", "started"]
     if has_tool_calls:

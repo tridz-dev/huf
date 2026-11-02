@@ -2,7 +2,7 @@
 # For license information, please see license.txt
 
 """Regression test for ST-R1.4: the salvage `finally` block in
-`huf.ai.agent_integration.run_agent_stream` (~lines 3637-3672 on
+`huf.ai.agent.integration.run_agent_stream` (~lines 3637-3672 on
 origin/develop) already writes `status="Success"` with partial text when
 `full_response` is non-empty, and `status="Failed"` with "Stream
 disconnected before response was generated" when it is empty -- but that
@@ -28,7 +28,7 @@ import asyncio
 import unittest
 from unittest.mock import MagicMock, patch
 
-from huf.ai import agent_integration
+from huf.ai.agent import integration as agent_integration
 
 
 class _FakeProviderStream:

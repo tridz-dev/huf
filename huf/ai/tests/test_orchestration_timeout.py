@@ -41,11 +41,11 @@ if not _REAL_FRAPPE and "frappe.utils" not in sys.modules:
 	sys.modules["frappe.utils"] = utils_mock
 	sys.modules["frappe"].utils = utils_mock
 
-# huf.ai.agent_integration is imported by orchestrator.py; stub run_agent_sync
+# huf.ai.agent.integration is imported by orchestrator.py; stub run_agent_sync
 # so importing the module under test doesn't pull in the whole agent stack.
-if not _REAL_FRAPPE and "huf.ai.agent_integration" not in sys.modules:
+if not _REAL_FRAPPE and "huf.ai.agent.integration" not in sys.modules:
 	agent_integration_mock = MagicMock()
-	sys.modules["huf.ai.agent_integration"] = agent_integration_mock
+	sys.modules["huf.ai.agent.integration"] = agent_integration_mock
 
 if not _REAL_FRAPPE and "huf.ai.orchestration.planning" not in sys.modules:
 	planning_mock = MagicMock()

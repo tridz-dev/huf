@@ -1,0 +1,11 @@
+{
+  "update_id": 2001,
+  "guest_message": {
+    "message_id": 55,
+    "guest_query_id": "gq-abc123",
+    "from": {"id": 777, "is_bot": false, "first_name": "Gus", "last_name": "Guest"},
+    "chat": {"id": -1009988, "type": "supergroup", "title": "Elsewhere"},
+    "date": 1760000000,
+    "text": "@mybot what is 2+2?"
+  }
+}

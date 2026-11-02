@@ -28,7 +28,7 @@ agentic trajectory or a real ERPNext bench -- callers (tests, and eventually a b
 Frappe job) supply :class:`RunMetrics` for both the agentic and deterministic side of each
 run. In this track's own tests those metrics come from the T-23/T-30/T-40 benchmark layer,
 which is SIMULATED (hand-written fake tool invokers standing in for a live bench -- see
-``huf/ai/tests/test_procedure_runtime.py`` and ``test_procedure_runtime_benchmark4.py``).
+``huf/ai/procedure/tests/test_procedure_runtime.py`` and ``test_procedure_runtime_benchmark4.py``).
 Any number produced by running *this module's own test suite* is therefore illustrative of
 the comparison mechanism, not a measurement of production token/latency behaviour. A report
 built from :func:`aggregate_runs` carries this in ``NRunReport.simulated`` -- callers must set

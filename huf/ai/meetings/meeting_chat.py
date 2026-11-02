@@ -16,7 +16,7 @@ import frappe
 from frappe import _
 from frappe.rate_limiter import rate_limit
 
-from huf.ai.agent_integration import run_agent_sync
+from huf.ai.agent.integration import run_agent_sync
 from huf.ai.meetings.meeting_api import _get_meeting
 from huf.ai.meetings.meeting_summary import SUMMARY_AGENT
 from huf.ai.meetings.meeting_transcription import (

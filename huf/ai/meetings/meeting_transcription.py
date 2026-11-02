@@ -205,7 +205,7 @@ def _chunk_progress(meeting_name: str) -> tuple:
 def _emit_processing_status(meeting_name: str, status: str):
     """Publish a ``meeting_processing_status`` realtime event to the meeting owner.
 
-    Mirrors ``huf.ai.agent_integration._emit_conversation_title_updated``: the
+    Mirrors ``huf.ai.agent.integration._emit_conversation_title_updated``: the
     job runs off the request/session context, so the target user is resolved
     from the record's owner rather than ``frappe.session.user``, and any
     publish failure is swallowed as a non-critical UI notification.

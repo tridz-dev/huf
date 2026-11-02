@@ -1,76 +1,275 @@
-import { memo, useState } from 'react';
-import { BaseEdge, EdgeLabelRenderer, EdgeProps, getBezierPath } from 'reactflow';
-import { Plus } from 'lucide-react';
+import { memo, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { BaseEdge, EdgeLabelRenderer, EdgeProps, useStore } from 'reactflow';
+import { Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { routeEdge, routeLoopBack, shortLinePill, type Rect } from '@/lib/flow-graph/edgeRouting';
+import { PLACED_PILLS, boxAt, controlCandidates, forgetPill, forgetRuns, levelRuns, recordRuns, runsOfOthers, getPlacedVersion, pillCandidates, pillsBefore, placeClear, recordPill, subscribePlaced, type Size } from '@/lib/flow-graph/canvas/edgePlacement';
+import type { BranchTone } from '@/lib/flow/flowBranches';
+import type { FlowEdgeRoute } from '../../types/flow.types';
+import { counterScale, lodForZoom } from '@/lib/flow-canvas/zoomLod';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 export interface InsertableEdgeData {
   /** The node id a newly inserted action should be attached after (the edge's source). */
   sourceNodeId: string;
-  onInsertNode?: (sourceNodeId: string) => void;
+  route?: FlowEdgeRoute;
+  /** Plain name of the branch ("Yes", "Approved", a router path), drawn as a pill near the step it leaves. */
+  pill?: string | null;
+  tone?: BranchTone;
+  /** Render-only line from the last step of a loop's body back to the loop. */
+  loopBack?: boolean;
+  onInsertNode?: (sourceNodeId: string, route?: FlowEdgeRoute) => void;
+  /** Ask to remove this connection (the canvas confirms first). */
+  onRemove?: (edgeId: string) => void;
+  /** Select this connection (the name pill is a click target too). */
+  onSelect?: (edgeId: string) => void;
+  /** A run opened on the canvas: the line it went along (green) or did not (faded). */
+  run?: 'taken' | 'untaken';
+}
+
+/** Colour family per branch kind: green yes/approved, red no/rejected/failed, amber timed out, grey otherwise. */
+const PILL_TONE: Record<BranchTone, string> = {
+  good: 'border-good/40 bg-good-tint text-good',
+  bad: 'border-destructive/40 bg-destructive-tint text-destructive',
+  warn: 'border-signal/50 bg-panel text-signal-ink',
+  loop: 'border-line-dark bg-paper-deep text-ink-soft',
+  neutral: 'border-line-dark bg-panel text-ink-soft',
+};
+
+/** Names keep a hand's breadth apart, not just off each other (a 5px air gap each side). */
+/** The arrow head at the end of a route, so a name never sits on it. */
+const arrowHeadBox = (points: { x: number; y: number }[]): Rect[] => {
+  const end = points[points.length - 1];
+  return end ? [{ x: end.x - 7, y: end.y - 11, width: 14, height: 11 }] : [];
+};
+const breathe = (r: Rect): Rect => ({ x: r.x - 8, y: r.y - 5, width: r.width + 16, height: r.height + 10 });
+
+const GHOST_LINE: CSSProperties = { stroke: 'var(--steel-soft)', strokeWidth: 1.5, strokeDasharray: '4 4', opacity: 0.7 };
+const DEFAULT_SIZE = { width: 236, height: 70 };
+/** The "+" and remove buttons: 28px round, 6px apart (h-7 w-7, gap-1.5). */
+const BUTTON_PX = 28;
+const BUTTON_GAP_PX = 6;
+/** Width of a step shown as an icon tile (under 50% zoom), centred in the step's box (see NodeCard). */
+const TILE_WIDTH = 120;
+
+
+/**
+ * Places an overlay centred at a point on the canvas at `scale` times its normal size (a 12px label is made 12px on screen when
+ * the canvas is zoomed out instead of shrinking with the steps).
+ */
+const overlayStyle = (x: number, y: number, scale: number, interactive = false): CSSProperties => ({
+  position: 'absolute',
+  // Scale around the top-left corner: the centre of the overlay then lands exactly on (x, y) at every zoom (around the middle it drifted away from it when scaled).
+  transformOrigin: '0 0',
+  transform: `translate(${x}px, ${y}px) scale(${scale}) translate(-50%, -50%)`,
+  ...(interactive ? { pointerEvents: 'all' as const } : {}),
+});
+
+/**
+ * Where a branch name sits: right where the line turns down into its step (each branch ends over its own column, so names
+ * never pile up, however far the canvas is zoomed out), or just under the step it leaves when the line runs straight down.
+ */
+function pillPoint(routed: ReturnType<typeof routeEdge>, scale: number, option: boolean) {
+  const [first, ...rest] = routed.points;
+  const turn = rest.find((p, i) => i > 0 && Math.abs(p.y - rest[i - 1].y) < 0.5 && Math.abs(p.x - rest[i - 1].x) >= 40);
+  const run = turn ? rest[rest.indexOf(turn) - 1] : undefined;
+  if (turn && run && first) return { x: turn.x, y: turn.y };
+  if (!option) return routed.pillAt;
+  const short = shortLinePill(routed.points); // a short straight line: one rule with the plain name (edgeRouting)
+  if (short) return short;
+  return routed.pointAt(Math.max(Math.min(Math.max(routed.length * 0.4, 28 + 14 * scale), routed.length / 2), 10));
+}
+
+/** Every step on the canvas as a box, so lines can stay clear of them. */
+function useObstacles(): Map<string, Rect> {
+  const internals = useStore((s) => s.nodeInternals);
+  return useMemo(() => {
+    const out = new Map<string, Rect>();
+    internals.forEach((n, id) => {
+      const p = n.positionAbsolute ?? n.position;
+      out.set(id, { x: p.x, y: p.y, width: n.width ?? DEFAULT_SIZE.width, height: n.height ?? DEFAULT_SIZE.height });
+    });
+    return out;
+  }, [internals]);
+}
+
+function ControlButton({ label, testId, onClick, className, children }: { label: string; testId: string; onClick: () => void; className?: string; children: React.ReactNode }) {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={label}
+            data-testid={testId}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick();
+            }}
+            className={cn('flex h-7 w-7 items-center justify-center rounded-full border border-line-dark bg-panel shadow-sm transition-colors', className)}
+          >
+            {children}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 
 /**
- * Edge between two real, already-connected nodes. Renders like a normal
- * edge at rest; on hover (or focus) it reveals a small "+" button at the
- * midpoint that inserts a new action node between the two endpoints,
- * reusing the same insertion logic as the trailing "Add step" ghost card
- * (`onAddNode`/`handleSelectAction` re-parents the downstream edge).
+ * Edge between two real, already-connected nodes. Orthogonal line that stays clear of every other step, a pill with
+ * the plain branch name next to the step it leaves, and (on hover or when selected) a "+" that inserts a step on the
+ * line and a button that removes the connection.
  */
 export const InsertableEdge = memo(
-  ({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, markerEnd, data }: EdgeProps<InsertableEdgeData>) => {
+  ({ id, source, target, sourceX, sourceY, targetX, targetY, style, markerEnd, data, selected }: EdgeProps<InsertableEdgeData>) => {
     const [hovered, setHovered] = useState(false);
-    const [edgePath, labelX, labelY] = getBezierPath({
-      sourceX,
-      sourceY,
-      sourcePosition,
-      targetX,
-      targetY,
-      targetPosition
-    });
+    // The buttons only take the pointer while shown (invisible ones must not catch clicks meant for the steps); a short grace
+    // period lets the pointer travel from the line onto them.
+    const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const hoverOn = () => { if (leaveTimer.current) clearTimeout(leaveTimer.current); setHovered(true); };
+    const hoverOff = () => { if (leaveTimer.current) clearTimeout(leaveTimer.current); leaveTimer.current = setTimeout(() => setHovered(false), 160); };
+    const { canManage } = useFlowPermissions();
+    const zoom = useStore((s) => s.transform[2]);
+    const obstacles = useObstacles();
+    const loopBack = data?.loopBack === true;
+
+    const routed = useMemo(() => {
+      const all = [...obstacles.values()];
+      const loop = obstacles.get(target);
+      if (loopBack && loop) return routeLoopBack({ x: sourceX, y: sourceY }, loop, all);
+      return routeEdge({ x: sourceX, y: sourceY }, { x: targetX, y: targetY }, all);
+    }, [obstacles, loopBack, target, sourceX, sourceY, targetX, targetY]);
+
+    const run = data?.run;
+    const lineStyle = selected
+      ? { ...style, stroke: 'var(--signal)', strokeWidth: 2.5 }
+      : run === 'taken'
+        ? { ...style, stroke: 'var(--good)', strokeWidth: 3, ...(loopBack ? { strokeDasharray: '6 4' } : {}) }
+        : { ...style, stroke: 'var(--steel-soft)', strokeWidth: 1.75, ...(run === 'untaken' ? { opacity: 0.4 } : {}), ...(loopBack ? { strokeDasharray: '6 4' } : {}) };
+    const pill = data?.pill;
+    // Router paths all leave one dot: their names go partway along each line so they never pile up.
+    const scale = Math.max(counterScale(zoom), 1);
+    const pillBase = loopBack ? routed.pillAt : pillPoint(routed, scale, data?.route === 'option');
+    // A name sitting right under its step is pushed down as it is scaled up, so it never covers the step's edge.
+    const pillWanted = data?.route !== 'option' && pillBase.x === routed.points[0]?.x && pillBase.y < (routed.points[0]?.y ?? 0) + 24 ? { x: pillBase.x, y: pillBase.y + (scale - 1) * 8 } : pillBase;
+    // The name's size on the canvas (its own size on screen, scaled like the name itself), so it can be kept off the steps.
+    const pillRef = useRef<HTMLDivElement>(null);
+    const [pillCss, setPillCss] = useState<Size | null>(null);
+    useLayoutEffect(() => {
+      const el = pillRef.current;
+      if (el && el.offsetWidth > 0 && (!pillCss || Math.abs(pillCss.width - el.offsetWidth) > 0.5 || Math.abs(pillCss.height - el.offsetHeight) > 0.5)) setPillCss({ width: el.offsetWidth, height: el.offsetHeight });
+    }, [pill, pillCss]);
+    const pillScale = counterScale(zoom);
+    const pillSize = useMemo<Size>(() => ({ width: (pillCss?.width ?? Math.min(220, 8 * (pill?.length ?? 0) + 22)) * pillScale, height: (pillCss?.height ?? 20) * pillScale }), [pillCss, pill, pillScale]);
+    // What of each step is drawn: an icon tile is narrower than the box the step takes, so names and buttons may sit beside it.
+    const lod = lodForZoom(zoom);
+    const stepBoxes = useMemo(() => [...obstacles.values()].map((r) => (lod === 'icon' ? { ...r, x: r.x + (r.width - TILE_WIDTH) / 2, width: TILE_WIDTH } : r)), [obstacles, lod]);
+    // Two branch names side by side ("Approved" and "Rejected" over steps close together) must not sit on each other: a name
+    // keeps off the names of the connections before it.
+    const placedVersion = useSyncExternalStore(subscribePlaced, getPlacedVersion);
+    const pillPos = useMemo(
+      () => (pill && !loopBack ? placeClear(pillSize, [...stepBoxes, ...pillsBefore(id).map(breathe), ...runsOfOthers(id), ...arrowHeadBox(routed.points)], pillWanted, pillCandidates(pillWanted)) : pillWanted),
+      [id, pill, loopBack, pillSize, stepBoxes, routed, pillWanted.x, pillWanted.y, placedVersion], // eslint-disable-line react-hooks/exhaustive-deps
+    );
+    // Recorded by value (not by object), and only forgotten when the name goes away: a name that did not move must not tell
+    // the others to place themselves again, or they would answer each other forever.
+    useLayoutEffect(() => {
+      if (!pill || loopBack) {
+        forgetPill(id);
+        return;
+      }
+      recordPill(id, boxAt({ x: pillPos.x, y: pillPos.y }, { width: pillSize.width, height: pillSize.height }));
+    }, [id, pill, loopBack, pillPos.x, pillPos.y, pillSize.width, pillSize.height]);
+    useLayoutEffect(() => () => forgetPill(id), [id]);
+    // Other names keep off this connection's level runs.
+    useLayoutEffect(() => {
+      recordRuns(id, levelRuns(routed.points));
+    }, [id, routed]);
+    useLayoutEffect(() => () => forgetRuns(id), [id]);
+    const showControls = canManage && (hovered || selected);
+    // The buttons keep off the name, the steps and the arrow head: further along the line, or beside it when the line is full.
+    const buttons = selected && !loopBack ? 2 : 1;
+    // About 22px across on screen when zoomed out (up to 2.5 times their size), so they fit the gap between two steps more often.
+    const buttonScale = zoom < 1 ? Math.max(Math.min(counterScale(zoom, 2.5), 22 / (BUTTON_PX * zoom)), 1) : 1;
+    const controlsSize = useMemo<Size>(() => ({ width: (buttons * BUTTON_PX + (buttons - 1) * BUTTON_GAP_PX) * buttonScale, height: BUTTON_PX * buttonScale }), [buttons, buttonScale]);
+    const controlsPos = useMemo(() => {
+      if (!showControls) return routed.controlsAt;
+      const end = routed.points[routed.points.length - 1];
+      const avoid = [...stepBoxes];
+      if (end) avoid.push(loopBack ? { x: end.x - 2, y: end.y - 10, width: 24, height: 20 } : { x: end.x - 10, y: end.y - 18, width: 20, height: 22 });
+      PLACED_PILLS.forEach((box) => avoid.push(box));
+      // This connection's own name too (it is only recorded after it has drawn once): with the steps 4px apart the "+" sat on it.
+      if (pill && !loopBack) avoid.push(boxAt(pillPos, pillSize));
+      return placeClear(controlsSize, avoid, routed.controlsAt, controlCandidates(routed.points, routed.length, controlsSize, routed.controlsAt));
+    }, [showControls, routed, stepBoxes, loopBack, controlsSize, pill, pillPos, pillSize]);
 
     return (
       <>
-        <BaseEdge id={id} path={edgePath} style={style} markerEnd={markerEnd} />
+        <BaseEdge id={id} path={routed.path} style={lineStyle} markerEnd={markerEnd} interactionWidth={24} />
+        {run === 'taken' && <title>{'This run went this way'}</title>}
         {/* Wider, invisible hit area so the hover affordance is easy to reach. */}
         <path
-          d={edgePath}
+          d={routed.path}
           fill="none"
           stroke="transparent"
-          strokeWidth={20}
+          strokeWidth={24}
           className="cursor-pointer"
-          onMouseEnter={() => setHovered(true)}
-          onMouseLeave={() => setHovered(false)}
-          onClick={(e) => {
-            e.stopPropagation();
-            data?.onInsertNode?.(data.sourceNodeId);
-          }}
+          onMouseEnter={hoverOn}
+          onMouseLeave={hoverOff}
+          data-testid={`flow-edge-line-${id}`}
         />
         <EdgeLabelRenderer>
-          <div
-            style={{
-              position: 'absolute',
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
-              pointerEvents: 'all'
-            }}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-          >
-            <button
-              type="button"
-              aria-label="Insert step"
-              onClick={(e) => {
-                e.stopPropagation();
-                data?.onInsertNode?.(data.sourceNodeId);
-              }}
+          {pill ? (
+            <div
+              ref={pillRef}
+              data-testid={`flow-edge-label-${id}`}
+              data-source={source}
+              title={pill}
+              onClick={() => data?.onSelect?.(id)}
+              onMouseEnter={hoverOn}
+              onMouseLeave={hoverOff}
+              style={overlayStyle(pillPos.x, pillPos.y, pillScale, !data?.loopBack)}
               className={cn(
-                'flex items-center justify-center w-5 h-5 rounded-full border border-line bg-panel text-muted-foreground shadow-sm transition-all duration-150',
-                'hover:border-steel-soft hover:text-ink hover:scale-110',
-                hovered ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'
+                'max-w-[220px] cursor-pointer whitespace-normal break-words rounded-full border px-2.5 py-px text-center text-xs font-medium leading-tight shadow-sm',
+                PILL_TONE[data?.tone ?? 'neutral'],
+                run === 'untaken' && 'opacity-50',
               )}
+              data-run={run}
             >
-              <Plus className="w-3 h-3" />
-            </button>
-          </div>
+              {pill}
+            </div>
+          ) : null}
+          {canManage && (
+            <div
+              style={overlayStyle(controlsPos.x, controlsPos.y, buttonScale, showControls)}
+              onMouseEnter={hoverOn}
+              onMouseLeave={hoverOff}
+              className={cn('nodrag nopan z-10 flex items-center gap-1.5 transition-opacity duration-150', showControls ? 'opacity-100' : 'opacity-0 hover:opacity-100 focus-within:opacity-100')}
+              data-testid={`flow-edge-controls-${id}`}
+            >
+              <ControlButton
+                label="Add a step here"
+                testId={`flow-insert-step-${id}`}
+                onClick={() => data?.onInsertNode?.(data.sourceNodeId, data.route)}
+                className="text-muted-foreground hover:border-steel-soft hover:text-ink"
+              >
+                <Plus className="h-4 w-4" />
+              </ControlButton>
+              {selected && !loopBack && (
+                <ControlButton
+                  label="Remove connection"
+                  testId={`flow-edge-remove-${id}`}
+                  onClick={() => data?.onRemove?.(id)}
+                  className="text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </ControlButton>
+              )}
+            </div>
+          )}
         </EdgeLabelRenderer>
       </>
     );
@@ -78,3 +277,12 @@ export const InsertableEdge = memo(
 );
 
 InsertableEdge.displayName = 'InsertableEdge';
+
+/** Plain, render-only line to an "Add step" card: dashed and quiet, routed like the real ones. */
+export const GhostEdge = memo(({ id, sourceX, sourceY, targetX, targetY }: EdgeProps) => {
+  const obstacles = useObstacles();
+  const routed = useMemo(() => routeEdge({ x: sourceX, y: sourceY }, { x: targetX, y: targetY }, [...obstacles.values()]), [obstacles, sourceX, sourceY, targetX, targetY]);
+  return <BaseEdge id={id} path={routed.path} style={GHOST_LINE} />;
+});
+
+GhostEdge.displayName = 'GhostEdge';

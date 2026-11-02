@@ -1,0 +1,24 @@
+{
+ "actions": [],
+ "creation": "2026-10-29 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["rule_type", "match_value", "attribute", "target_type", "target", "priority", "enabled"],
+ "fields": [
+  {"fieldname":"rule_type","fieldtype":"Select","in_list_view":1,"label":"Rule type","options":"keyword\nfirst_message\ncontact_attribute\nfallback","reqd":1},
+  {"fieldname":"match_value","fieldtype":"Data","in_list_view":1,"label":"Match value"},
+  {"fieldname":"attribute","fieldtype":"Data","label":"Attribute"},
+  {"fieldname":"target_type","fieldtype":"Select","in_list_view":1,"label":"Target type","options":"solution\nagent\nhuman","reqd":1},
+  {"fieldname":"target","fieldtype":"Data","in_list_view":1,"label":"Target"},
+  {"default":"0","fieldname":"priority","fieldtype":"Int","in_list_view":1,"label":"Priority"},
+  {"default":"1","fieldname":"enabled","fieldtype":"Check","in_list_view":1,"label":"Enabled"}
+ ],
+ "istable": 1,
+ "module": "Huf",
+ "name": "Gateway Routing Rule",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

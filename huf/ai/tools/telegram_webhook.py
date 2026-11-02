@@ -178,7 +178,7 @@ def process_telegram_update(settings_name: str, update: dict):
 
             # Fallback for old way if no gateway configured at all
             try:
-                from huf.ai.agent_integration import run_agent_sync
+                from huf.ai.agent.integration import run_agent_sync
 
                 result = run_agent_sync(
                     agent_name=agent_name,

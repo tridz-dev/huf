@@ -23,6 +23,11 @@ export interface ExecutionAnalyticsDashboardProps {
   fromDate?: string;
   /** Rollup granularity to query — hour for short windows, day for longer ones. */
   granularity?: 'hour' | 'day';
+  /**
+   * Number of runs the list below currently matches. The other tiles come from aggregate buckets that
+   * refresh every few minutes, so the Runs tile uses the list's own count to always agree with the rows.
+   */
+  listedRunCount?: number;
 }
 
 /**
@@ -33,7 +38,7 @@ export interface ExecutionAnalyticsDashboardProps {
  * for its filter row and data grid, so a second "Execution analytics"
  * label here would just be redundant chrome.
  */
-export function ExecutionAnalyticsDashboard({ fromDate, granularity }: ExecutionAnalyticsDashboardProps) {
+export function ExecutionAnalyticsDashboard({ fromDate, granularity, listedRunCount }: ExecutionAnalyticsDashboardProps) {
   const [data, setData] = useState<ExecutionAnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -61,9 +66,10 @@ export function ExecutionAnalyticsDashboard({ fromDate, granularity }: Execution
     <div>
       <GaugeRow className="rounded-none border-0">
         <MetricGauge
+          testId="executions-runs-tile"
           label="Runs"
-          value={number.format(summary.run_count)}
-          info={`${summary.success_count} successful · ${summary.failed_count} failed`}
+          value={number.format(listedRunCount ?? summary.run_count)}
+          info={listedRunCount !== undefined ? 'Runs in the list below' : `${summary.success_count} successful · ${summary.failed_count} failed`}
         />
         {summary.cache_ratio === null ? (
           <EmptyMetric label="Cache ratio" caption="No completed runs in this period." />

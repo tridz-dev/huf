@@ -30,6 +30,7 @@ ACTION_SCOPES = {
 	"responses:create": "agents:run",
 	"responses:stream": "agents:run",
 	"runs:get": "conversations:read",
+	"channels:reply": "channels:reply",
 }
 
 

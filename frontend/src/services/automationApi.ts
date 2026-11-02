@@ -25,7 +25,7 @@ export interface ListAutomationsParams {
  */
 export async function listAutomations(params: ListAutomationsParams = {}): Promise<Automation[]> {
   try {
-    const result = await call.get('huf.ai.automation_api.list_automations', {
+    const result = await call.get('huf.ai.automation.api.list_automations', {
       agent: params.agent ?? undefined,
       status: params.status ?? undefined,
     });
@@ -41,7 +41,7 @@ export async function listAutomations(params: ListAutomationsParams = {}): Promi
  */
 export async function getAutomation(automation: string): Promise<Automation | undefined> {
   try {
-    const result = await call.get('huf.ai.automation_api.get_automation', { automation });
+    const result = await call.get('huf.ai.automation.api.get_automation', { automation });
     return (result?.message ?? result) as Automation;
   } catch (error) {
     handleFrappeError(error, 'Error fetching automation');
@@ -71,7 +71,7 @@ export async function draftAutomationFromConversation(
   conversationName: string
 ): Promise<ConversationAutomationDraft | undefined> {
   try {
-    const result = await call.post('huf.ai.automation_api.draft_automation_from_conversation', {
+    const result = await call.post('huf.ai.automation.api.draft_automation_from_conversation', {
       conversation_name: conversationName,
     });
     return (result?.message ?? result) as ConversationAutomationDraft;
@@ -101,7 +101,7 @@ export interface CreateAutomationParams {
  */
 export async function createAutomation(params: CreateAutomationParams): Promise<Automation> {
   try {
-    const result = await call.post('huf.ai.automation_api.create_automation', {
+    const result = await call.post('huf.ai.automation.api.create_automation', {
       automation_name: params.automation_name,
       agent: params.agent,
       instruction: params.instruction,
@@ -144,12 +144,12 @@ export interface UpdateAutomationParams {
 
 /**
  * Update an existing Automation. Only known, explicit fields are accepted
- * server-side (see huf.ai.automation_service._UPDATABLE_FIELDS).
+ * server-side (see huf.ai.automation.service._UPDATABLE_FIELDS).
  */
 export async function updateAutomation(params: UpdateAutomationParams): Promise<Automation> {
   try {
     const { automation, ...fields } = params;
-    const result = await call.post('huf.ai.automation_api.update_automation', {
+    const result = await call.post('huf.ai.automation.api.update_automation', {
       automation,
       ...fields,
     });
@@ -165,7 +165,7 @@ export async function updateAutomation(params: UpdateAutomationParams): Promise<
  */
 export async function archiveAutomation(automation: string): Promise<Automation> {
   try {
-    const result = await call.post('huf.ai.automation_api.archive_automation', { automation });
+    const result = await call.post('huf.ai.automation.api.archive_automation', { automation });
     return (result?.message ?? result) as Automation;
   } catch (error) {
     handleFrappeError(error, 'Error archiving automation');
@@ -178,7 +178,7 @@ export async function archiveAutomation(automation: string): Promise<Automation>
  */
 export async function deleteAutomation(automation: string): Promise<DeleteAutomationResponse> {
   try {
-    const result = await call.post('huf.ai.automation_api.delete_automation', { automation });
+    const result = await call.post('huf.ai.automation.api.delete_automation', { automation });
     return (result?.message ?? result) as DeleteAutomationResponse;
   } catch (error) {
     handleFrappeError(error, 'Error deleting automation');
@@ -191,7 +191,7 @@ export async function deleteAutomation(automation: string): Promise<DeleteAutoma
  */
 export async function runAutomationNow(automation: string): Promise<RunAutomationNowResponse> {
   try {
-    const result = await call.post('huf.ai.automation_api.run_automation_now', { automation });
+    const result = await call.post('huf.ai.automation.api.run_automation_now', { automation });
     return (result?.message ?? result) as RunAutomationNowResponse;
   } catch (error) {
     handleFrappeError(error, 'Error running automation');
@@ -204,7 +204,7 @@ export async function runAutomationNow(automation: string): Promise<RunAutomatio
  */
 export async function pauseAutomation(automation: string): Promise<Automation> {
   try {
-    const result = await call.post('huf.ai.automation_api.pause_automation', { automation });
+    const result = await call.post('huf.ai.automation.api.pause_automation', { automation });
     return (result?.message ?? result) as Automation;
   } catch (error) {
     handleFrappeError(error, 'Error pausing automation');
@@ -217,7 +217,7 @@ export async function pauseAutomation(automation: string): Promise<Automation> {
  */
 export async function resumeAutomation(automation: string): Promise<Automation> {
   try {
-    const result = await call.post('huf.ai.automation_api.resume_automation', { automation });
+    const result = await call.post('huf.ai.automation.api.resume_automation', { automation });
     return (result?.message ?? result) as Automation;
   } catch (error) {
     handleFrappeError(error, 'Error resuming automation');
@@ -234,7 +234,7 @@ export async function resumeAutomation(automation: string): Promise<Automation> 
  */
 export async function listTriggers(automation: string): Promise<AutomationTriggerSummary[]> {
   try {
-    const result = await call.get('huf.ai.automation_api.list_triggers', { automation });
+    const result = await call.get('huf.ai.automation.api.list_triggers', { automation });
     return (result?.message ?? result) as AutomationTriggerSummary[];
   } catch (error) {
     handleFrappeError(error, 'Error fetching triggers');
@@ -265,7 +265,7 @@ export interface CreateTriggerParams {
   prompt_field_mode?: string;
   condition?: string;
   // Doc Event child table. NOTE: as of this writing,
-  // huf.ai.automation_api's `_TRIGGER_FIELDS` (both create_trigger and
+  // huf.ai.automation.api's `_TRIGGER_FIELDS` (both create_trigger and
   // update_trigger use it) does not include `file_attachments`, so this
   // value is silently dropped server-side today -- included here so the
   // client contract is correct once that backend gap is closed. Flagged
@@ -296,7 +296,7 @@ export interface CreateTriggerParams {
 export async function createTrigger(params: CreateTriggerParams): Promise<AutomationTrigger> {
   try {
     const { automation, trigger_type, ...fields } = params;
-    const result = await call.post('huf.ai.automation_api.create_trigger', {
+    const result = await call.post('huf.ai.automation.api.create_trigger', {
       automation,
       trigger_type,
       ...fields,
@@ -314,12 +314,12 @@ export interface UpdateTriggerParams extends Omit<CreateTriggerParams, 'automati
 
 /**
  * Update an existing Automation Trigger. `automation` cannot be reassigned
- * through this endpoint (matches huf.ai.automation_api.update_trigger).
+ * through this endpoint (matches huf.ai.automation.api.update_trigger).
  */
 export async function updateTrigger(params: UpdateTriggerParams): Promise<AutomationTrigger> {
   try {
     const { trigger, ...fields } = params;
-    const result = await call.post('huf.ai.automation_api.update_trigger', {
+    const result = await call.post('huf.ai.automation.api.update_trigger', {
       trigger,
       ...fields,
     });
@@ -335,7 +335,7 @@ export async function updateTrigger(params: UpdateTriggerParams): Promise<Automa
  */
 export async function deleteTrigger(trigger: string): Promise<DeleteTriggerResponse> {
   try {
-    const result = await call.post('huf.ai.automation_api.delete_trigger', { trigger });
+    const result = await call.post('huf.ai.automation.api.delete_trigger', { trigger });
     return (result?.message ?? result) as DeleteTriggerResponse;
   } catch (error) {
     handleFrappeError(error, 'Error deleting trigger');
@@ -349,7 +349,7 @@ export async function deleteTrigger(trigger: string): Promise<DeleteTriggerRespo
  */
 export async function listScheduledAutomations(): Promise<ScheduledAutomationSummary[]> {
   try {
-    const result = await call.get('huf.ai.automation_api.list_scheduled_automations');
+    const result = await call.get('huf.ai.automation.api.list_scheduled_automations');
     return (result?.message ?? result) as ScheduledAutomationSummary[];
   } catch (error) {
     handleFrappeError(error, 'Error fetching scheduled automations');
@@ -367,7 +367,7 @@ export interface AutomationRuntimeModeResponse {
  */
 export async function getAutomationRuntimeMode(): Promise<AutomationRuntimeModeResponse> {
   try {
-    const result = await call.get('huf.ai.automation_api.get_automation_runtime_mode');
+    const result = await call.get('huf.ai.automation.api.get_automation_runtime_mode');
     return (result?.message ?? result) as AutomationRuntimeModeResponse;
   } catch (error) {
     handleFrappeError(error, 'Error fetching automation runtime mode');

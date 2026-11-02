@@ -24,7 +24,7 @@ test('a failed run shows its error text in the run viewer', async ({ page, baseU
   });
   expect(created.ok(), `create failed: ${await created.text()}`).toBeTruthy();
 
-  const run = await api.post('/api/method/huf.ai.flow_api.run_flow', { data: { flow_id: flowId } });
+  const run = await api.post('/api/method/huf.ai.flow.api.run_flow', { data: { flow_id: flowId } });
   expect(run.ok(), `run failed: ${await run.text()}`).toBeTruthy();
   const runId = (await run.json()).message.flow_run_id;
 

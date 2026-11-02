@@ -7,6 +7,8 @@ agents must not invent their own ad-hoc test commands. That entry point is:
 ./scripts/huf-verify.sh <target> [--base <ref>]
 ```
 
+For running tests by hand (bench `run-tests`, Vitest, Playwright) and where test files belong, see `CONTRIBUTING.md`.
+
 ## Targets
 
 | Target | What it runs | Needs a bench? |
@@ -60,7 +62,8 @@ the authoritative version):
 - `frontend/**` changed → `frontend` (typecheck + unit + build + design parity)
 - `huf/**/*.py` changed → `backend`, scoped to
   `huf/ai/tests/test_<basename>.py` as a `--module` if that 1:1 test file
-  exists, else the full `--app huf` suite
+  exists, else the full `--app huf` suite. WhatsApp modules under
+  `huf/ai/whatsapp/<x>.py` map first to `huf/ai/whatsapp/tests/test_whatsapp_<x>.py`
 - Nothing recognized → falls back to `quick`
 
 Override the base ref with `--base <ref>` or `HUF_VERIFY_BASE`.

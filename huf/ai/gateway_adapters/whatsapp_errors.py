@@ -6,7 +6,7 @@ tuple, requests-style exception or response, or a string) into one dict:
 	code, subcode, kind, retryable, retry_after_hint, operator_text, user_msg, message,
 	http_status
 
-``kind`` is one of: auth, informational, rate_limited, pair_rate_limited, window_closed, template,
+``kind`` is one of: auth, informational, rate_limited, pair_rate_limited, window_closed, pacing_dropped, template,
 media, recipient, permission, param, server, timeout, unknown.
 
 ``backoff_seconds(kind, attempt)`` and ``is_permanent(classification)`` form the retry
@@ -37,6 +37,7 @@ KINDS = (
 	"template",
 	"media",
 	"recipient",
+	"pacing_dropped",
 	"permission",
 	"param",
 	"server",
@@ -74,6 +75,10 @@ _CODES: dict[int, tuple[str, bool, float | None, str]] = {
 	80007: ("rate_limited", True, None, "WhatsApp Business Account rate limit reached. Retry with backoff."),  # V
 	130429: ("rate_limited", True, None, "Cloud API throughput limit reached. Retry with backoff and smooth the send rate."),  # V
 	131056: ("pair_rate_limited", True, PAIR_RATE_LIMIT_DELAY_SECONDS, "Too many messages to this same recipient too fast. Wait a few seconds; other recipients are unaffected."),  # V
+	131050: ("recipient", False, None, "The recipient stopped marketing messages from this business. Do not retry; suppress them from marketing sends."),  # V
+	# 135000: Meta's error-code page calls it a generic request-parameter error; Meta's pacing docs (and the
+	# broadcast research) say held messages dropped by portfolio pacing fail with it. Treated as a pause signal.
+	135000: ("pacing_dropped", False, None, "A held message was dropped (portfolio pacing / request error). Pause sending and review account notices in WhatsApp Manager."),  # U
 	131049: ("rate_limited", False, 86400.0, "Meta limited marketing/engagement messages to this recipient. Wait at least 24 hours; do not retry automatically."),  # V
 	# --- window / recipient
 	131047: ("window_closed", False, None, "More than 24 hours since the customer's last message. Send an approved template message instead."),  # V
@@ -381,3 +386,30 @@ def backoff_seconds(kind: Any, attempt: int, rng: Any = None) -> float | None:
 def should_retry(classification: dict[str, Any], attempt: int, max_attempts: int = MAX_ATTEMPTS) -> bool:
 	"""True when the error is retryable and ``attempt`` (1-based, attempts made) is below the cap."""
 	return (not is_permanent(classification)) and attempt < max_attempts
+
+
+# ---------------------------------------------------------------- broadcast helpers
+
+# 132015 template paused, 132016 template disabled, 135000 pacing drop, 131042 payment problem.
+_PAUSE_CODES = frozenset({132015, 132016, 135000, 131042})
+
+
+def _code_of(x: Any) -> int | None:
+	if isinstance(x, dict):
+		return _to_int(x.get("code"))
+	return _to_int(x)
+
+
+def is_pause_signal(code: Any) -> bool:
+	"""True when a broadcast should pause on this error (code int or classification dict)."""
+	return _code_of(code) in _PAUSE_CODES
+
+
+def should_defer_24h(code: Any) -> bool:
+	"""True for 131049 (per-user marketing limit): never retry sooner than 24h. Broadcasts treat it as terminal (skipped) rather than rescheduling."""
+	return _code_of(code) == 131049
+
+
+def is_marketing_stop(code: Any) -> bool:
+	"""True for 131050: the caller records a marketing stop consent for the recipient."""
+	return _code_of(code) == 131050

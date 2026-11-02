@@ -804,7 +804,7 @@ def validate_app_capabilities(capabilities: dict, agent_doc) -> list:
 		# huf/huf/doctype/agent/agent.json). Until such a field exists, this
 		# capability can never be meaningfully validated, so we fail closed
 		# rather than pretend it passed. See
-		# docs/hub-orchestrator-unified-builder-plan.md Phase 10 and
+		# the hub-orchestrator unified builder plan (archived in the workspace) Phase 10 and
 		# the hub-orchestrator-app-builder-todo note (workspace).
 		errors.append(
 			"App capability 'video_output' cannot be validated yet: the "

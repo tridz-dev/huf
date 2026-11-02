@@ -11,7 +11,7 @@ from frappe.tests import IntegrationTestCase
 
 import asyncio
 
-from huf.ai.agent_integration import run_agent_sync, run_agent_stream
+from huf.ai.agent.integration import run_agent_sync, run_agent_stream
 from huf.ai.sdk_tools import _load_state as sdk_load_state
 from huf.ai.conversation_data_tools import _load_state as cd_load_state
 
@@ -125,12 +125,12 @@ class TestAgentSyncConversationData(IntegrationTestCase):
 
         with patch("frappe.get_doc", side_effect=get_doc), \
              patch("frappe.log_error"), \
-             patch("huf.ai.agent_integration.AgentManager") as mock_manager, \
-             patch("huf.ai.agent_integration.ConversationManager", return_value=conv_manager_mock), \
-             patch("huf.ai.agent_integration._is_user_allowed", return_value=True), \
-             patch("huf.ai.agent_integration.build_knowledge_context", return_value=None), \
-             patch("huf.ai.agent_integration._run_async_safely", return_value=SimpleNamespace(final_output="ok", usage=None)), \
-             patch("huf.ai.agent_integration.transaction_checkpoint"), \
+             patch("huf.ai.agent.integration.AgentManager") as mock_manager, \
+             patch("huf.ai.agent.integration.ConversationManager", return_value=conv_manager_mock), \
+             patch("huf.ai.agent.integration._is_user_allowed", return_value=True), \
+             patch("huf.ai.agent.integration.build_knowledge_context", return_value=None), \
+             patch("huf.ai.agent.integration._run_async_safely", return_value=SimpleNamespace(final_output="ok", usage=None)), \
+             patch("huf.ai.agent.integration.transaction_checkpoint"), \
              patch("frappe.db.set_value"), \
              patch("frappe.db.sql"), \
              patch("frappe.enqueue"), \
@@ -191,12 +191,12 @@ class TestAgentSyncConversationData(IntegrationTestCase):
 
         with patch("frappe.get_doc", side_effect=get_doc), \
              patch("frappe.log_error"), \
-             patch("huf.ai.agent_integration.AgentManager") as mock_manager, \
-             patch("huf.ai.agent_integration.ConversationManager", return_value=conv_manager_mock), \
-             patch("huf.ai.agent_integration._is_user_allowed", return_value=True), \
-             patch("huf.ai.agent_integration.build_knowledge_context", return_value=None), \
-             patch("huf.ai.agent_integration.RunProvider.run_stream", return_value=fake_stream()), \
-             patch("huf.ai.agent_integration.transaction_checkpoint"), \
+             patch("huf.ai.agent.integration.AgentManager") as mock_manager, \
+             patch("huf.ai.agent.integration.ConversationManager", return_value=conv_manager_mock), \
+             patch("huf.ai.agent.integration._is_user_allowed", return_value=True), \
+             patch("huf.ai.agent.integration.build_knowledge_context", return_value=None), \
+             patch("huf.ai.agent.integration.RunProvider.run_stream", return_value=fake_stream()), \
+             patch("huf.ai.agent.integration.transaction_checkpoint"), \
              patch("frappe.db.set_value"), \
              patch("frappe.db.sql"), \
              patch("frappe.enqueue"), \

@@ -1,0 +1,50 @@
+{
+  "type": "message",
+  "id": "1700000000101",
+  "timestamp": "2026-01-01T10:00:00.0000000Z",
+  "localTimestamp": "2026-01-01T10:00:00.0000000+00:00",
+  "serviceUrl": "https://smba.trafficmanager.net/amer/",
+  "channelId": "msteams",
+  "from": {
+    "id": "29:1fakeuser",
+    "name": "Ada Example",
+    "aadObjectId": "00000000-0000-0000-0000-0000000000u1"
+  },
+  "conversation": {
+    "conversationType": "channel",
+    "tenantId": "00000000-0000-0000-0000-00000000aaaa",
+    "id": "19:fakechannel@thread.tacv2;messageid=1700000000100",
+    "isGroup": true
+  },
+  "recipient": {
+    "id": "28:00000000-0000-0000-0000-0000000000b1",
+    "name": "Huf Bot"
+  },
+  "textFormat": "plain",
+  "locale": "en-US",
+  "text": "<at>Huf Bot</at> summarise open tickets",
+  "channelData": {
+    "tenant": {
+      "id": "00000000-0000-0000-0000-00000000aaaa"
+    },
+    "team": {
+      "id": "19:faketeam@thread.tacv2",
+      "name": "Ops"
+    },
+    "channel": {
+      "id": "19:fakechannel@thread.tacv2",
+      "name": "General"
+    }
+  },
+  "entities": [
+    {
+      "type": "mention",
+      "text": "<at>Huf Bot</at>",
+      "mentioned": {
+        "id": "28:00000000-0000-0000-0000-0000000000b1",
+        "name": "Huf Bot"
+      }
+    }
+  ],
+  "replyToId": "1700000000100"
+}

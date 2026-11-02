@@ -1,21 +1,17 @@
+// The Huf web app ships no service worker (an offline cache kept serving old builds after a deploy).
+// Registering /huf/sw.js 404'd on every load, so nothing registers it any more. Older builds did register
+// one, and that worker could keep a stale shell alive in a returning browser: remove it and its caches once.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/huf/sw.js', { scope: '/huf/' }).catch((error) => {
-      console.error('Failed to register Huf service worker', error);
-    });
-  });
-
-  // Paired with workbox's skipWaiting/clientsClaim (see vite.config.ts): when
-  // a new service worker takes control of this page, the JS/CSS the page
-  // already loaded is from the OLD bundle and won't update on its own.
-  // Reload once so the app picks up the new bundle automatically instead of
-  // requiring the user to manually refresh (often twice) to see a new
-  // deploy. `refreshing` guards against a reload loop if the controller
-  // changes more than once in a session.
-  let refreshing = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (refreshing) return;
-    refreshing = true;
-    window.location.reload();
+    navigator.serviceWorker
+      .getRegistrations()
+      .then((registrations) => Promise.all(registrations.filter((r) => r.scope.includes('/huf/')).map((r) => r.unregister())))
+      .catch(() => undefined);
+    if ('caches' in window) {
+      caches
+        .keys()
+        .then((keys) => Promise.all(keys.filter((k) => /workbox|huf/i.test(k)).map((k) => caches.delete(k))))
+        .catch(() => undefined);
+    }
   });
 }

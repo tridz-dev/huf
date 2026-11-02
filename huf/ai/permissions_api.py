@@ -122,7 +122,12 @@ def invite_user(email: str, full_name: str, huf_role: str) -> dict:
 			"send_welcome_email": 0,
 			"user_type": "System User",
 		})
-		user_doc.insert()
+		# The invite picks the Huf role below; don't let the default grant pick one first.
+		frappe.flags.huf_skip_default_roles = True
+		try:
+			user_doc.insert()
+		finally:
+			frappe.flags.huf_skip_default_roles = False
 
 	# Create Huf User Role (controller syncs the Frappe role).
 	if frappe.db.exists("Huf User Role", {"user": email}):
@@ -140,6 +145,9 @@ def invite_user(email: str, full_name: str, huf_role: str) -> dict:
 	})
 	doc.insert()
 
+	from huf.huf.doctype.huf_user_role.huf_user_role import ensure_default_huf_roles
+
+	ensure_default_huf_roles(email)  # the gateway role every System User gets
 	return doc.as_dict()
 
 

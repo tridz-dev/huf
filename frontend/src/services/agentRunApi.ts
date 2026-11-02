@@ -20,6 +20,10 @@ export interface AgentRunDoc {
   cost?: number | null;
   cost_source?: string | null;
   is_child?: number | boolean;
+  /** Set when the run was made by a Flow step (a tool call, agent or router). */
+  flow_run?: string | null;
+  flow_node_id?: string | null;
+  run_kind?: string | null;
 }
 
 /**
@@ -114,7 +118,7 @@ export async function getAgentRuns(
     // Backward compatibility: if no params, return simple array
     if (!params) {
       const runs = await db.getDocList(doctype['Agent Run'], {
-        fields: ['name', 'agent', 'start_time', 'end_time', 'status', 'is_child', 'cached_tokens', 'cost'],
+        fields: ['name', 'agent', 'start_time', 'end_time', 'status', 'is_child', 'cached_tokens', 'cost', 'flow_run', 'flow_node_id', 'run_kind'],
         limit: 1000,
         orderBy: { field: 'creation', order: 'desc' },
       });
@@ -152,7 +156,7 @@ export async function getAgentRuns(
 
     // Fetch data
     const runs = await db.getDocList(doctype['Agent Run'], {
-      fields: ['name', 'agent', 'start_time', 'end_time', 'status', 'is_child', 'cached_tokens', 'cost'],
+      fields: ['name', 'agent', 'start_time', 'end_time', 'status', 'is_child', 'cached_tokens', 'cost', 'flow_run', 'flow_node_id', 'run_kind'],
       filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
       limit: limit + 1, // Fetch one extra to check if there's more
       ...(start > 0 && { limit_start: start }),

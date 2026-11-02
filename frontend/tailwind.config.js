@@ -104,6 +104,7 @@ export default {
         'control-sm':    'var(--control-px-sm)',
         'control-lg':    'var(--control-px-lg)',
         'control-y':     'var(--control-py)',
+        'field-gap':     'var(--field-gap)',
         'chat-turn':     'var(--chat-turn-gap)',
         'chat-rail':     'var(--chat-rail-w)',
       },
@@ -111,9 +112,13 @@ export default {
         'control-sm': 'var(--control-h-sm)',
         'control-md': 'var(--control-h-md)',
         'control-lg': 'var(--control-h-lg)',
+        'field-label': 'var(--field-label-h)',
         'chat-row':    'var(--chat-row-h)',
         'chat-header': 'var(--chat-header-h)',
         'chat-footer': 'var(--chat-footer-h)',
+      },
+      minHeight: {
+        'field-note': 'var(--field-note-h)',
       },
       width: {
         'control-sm': 'var(--control-h-sm)',

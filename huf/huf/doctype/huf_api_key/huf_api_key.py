@@ -55,6 +55,7 @@ ALLOWED_SCOPES = frozenset(
 		"files:write",
 		"voice:use",
 		"ocr:use",
+		"channels:reply",
 	]
 )
 

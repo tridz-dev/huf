@@ -8,6 +8,8 @@ Installation hooks for Huf app
 import json
 
 import frappe
+
+from huf.install_presets import create_default_execution_profiles, create_default_memory_policies  # noqa: F401
 from huf.utils import is_frappe_16
 
 logger = frappe.logger("huf")
@@ -122,7 +124,7 @@ def after_install():
     sync_tool_types()
     sync_default_tool_categories()
     seed_skill_categories()
-    from huf.ai.tool_registry import sync_discovered_tools
+    from huf.ai.tools.registry import sync_discovered_tools
     sync_discovered_tools(use_cache=False)
     frappe.db.commit()
     """
@@ -130,8 +132,9 @@ def after_install():
 	Checks if litellm is installed and provides helpful message if not.
 	"""
     try:
-        import litellm
         from importlib.metadata import version as get_installed_version
+
+        import litellm
 
         litellm_version = get_installed_version("litellm")
         compromised_versions = {"1.82.7", "1.82.8"}
@@ -155,12 +158,45 @@ def after_install():
 		)
 
 
+#: Frappe's scheduler wakes every ``scheduler_tick_interval`` seconds (default 240). Flow approval
+#: timeouts and "every minute" schedules are only as precise as that tick, so Huf wants 60.
+FLOW_SCHEDULER_TICK_SECONDS = 60
+
+
+def ensure_scheduler_tick():
+	"""Set ``scheduler_tick_interval`` to 60 s when the bench has not chosen a value.
+
+	Frappe reads the tick in the bench-wide scheduler process, which has no site context, so only
+	``common_site_config.json`` is honoured: a value in a site's ``site_config.json`` is ignored.
+	An explicit value already in the common config is respected. The running ``bench schedule``
+	process reads the value at start, so it must be restarted once for a change to apply.
+	"""
+	try:
+		import json
+		import os
+
+		from frappe.installer import update_site_config
+
+		path = os.path.join(frappe.local.sites_path or "sites", "common_site_config.json")
+		with open(path) as fh:
+			if json.load(fh).get("scheduler_tick_interval"):
+				return
+		update_site_config("scheduler_tick_interval", FLOW_SCHEDULER_TICK_SECONDS, site_config_path=path)
+		frappe.logger("huf").info(
+			"Set scheduler_tick_interval=%s in common_site_config.json (restart the scheduler to apply)",
+			FLOW_SCHEDULER_TICK_SECONDS,
+		)
+	except Exception:
+		frappe.log_error(title="huf after_migrate: scheduler_tick_interval not set", message=frappe.get_traceback())
+
+
 def after_migrate():
 	"""
 	Called after app migration.
 	Syncs all discovered tools from all installed apps.
 	"""
 	create_huf_roles()
+	ensure_scheduler_tick()
 	try:
 		from huf.ai.document_search import ensure_fulltext_indexes
 
@@ -194,11 +230,18 @@ def after_migrate():
 		sync_tool_types()
 		sync_default_tool_categories()
 		seed_skill_categories()
-		from huf.ai.tool_registry import sync_discovered_tools
+		from huf.ai.tools.registry import sync_discovered_tools
 		result = sync_discovered_tools(use_cache=False)  # Full scan (apps_to_scan=None)
 		logger.info(
 			f"Synced tools after migrate: {result.get('total_tools', 0)} tools from {len(result.get('synced_apps', []))} apps"
 		)
+		if result.get("error_count"):
+			# A tool that fails import/validation is silently skipped by the sync,
+			# so a new registry block (e.g. telegram_admin) would just not appear.
+			frappe.log_error(
+				title="Tool sync after migrate had errors",
+				message="\n".join(result.get("errors", [])),
+			)
 	except Exception as e:
 		logger.warning(f"Failed to sync tools after migrate: {e!s}")
 
@@ -380,25 +423,11 @@ def create_design_system_skill():
 		logger.warning(f"Failed to seed HUF Design System Reference skill: {e!s}")
 
 
-MEETING_SUMMARY_AGENT_NAME = "Meeting Summary Agent"
-
-MEETING_SUMMARY_PREFERRED_MODELS = [
-	"gemini-flash-lite-latest",
-	"gemini-flash-latest",
-	"gemini-3.5-flash-lite",
-]
-
-MEETING_SUMMARY_INSTRUCTIONS = """You turn a raw meeting transcript into a structured Markdown summary.
-
-Output exactly these Markdown sections, in this order:
-1. `## Headline` — one sentence capturing what the meeting was about.
-2. `## Key Points` — a bullet list of the main discussion points.
-3. `## Decisions` — a bullet list of decisions that were made. If none were made, write "None identified."
-4. `## Action Items` — a bullet list of concrete follow-up actions, with an owner if the transcript names one. If there are none, write "None identified."
-
-Base the summary only on the transcript and any meeting title, description, or participants provided. Do not invent details that are not in the transcript.
-
-If asked, in a follow-up chat message, to revise the summary, output the complete revised summary again in the same four-section Markdown format — never a partial diff or just the changed section."""
+from huf.setup_data.meeting_summary import (  # noqa: F401
+	MEETING_SUMMARY_AGENT_NAME,
+	MEETING_SUMMARY_INSTRUCTIONS,
+	MEETING_SUMMARY_PREFERRED_MODELS,
+)
 
 
 def _meeting_summary_model():
@@ -543,12 +572,12 @@ def create_whatsapp_app():
 
 	Mirrors create_meeting_recorder_app: inserted once, then only the managed
 	fields are refreshed so an admin's hand-edit of ``enabled`` survives migrate.
-	Visibility is decided at request time by ``can_launch_whatsapp_app``.
+	Opens the Channels app (/huf/channels/whatsapp). Visibility is decided at request time by ``can_launch_whatsapp_app``.
 	"""
 	fields = {
 		"title": "WhatsApp",
-		"description": "Manage WhatsApp templates and see messages handled by your agents.",
-		"route": "/huf/whatsapp",
+		"description": "Set up and automate WhatsApp: AI agents, broadcasts, templates, handoff to Help Desk/CRM",
+		"route": "/huf/channels/whatsapp",
 		"icon": "message-circle",
 		"category": "Communicate",
 		"sort_order": 110,
@@ -556,7 +585,7 @@ def create_whatsapp_app():
 		"enabled": 1,
 		"sync_status": "Active",
 		"source_app": "huf",
-		"permission_method": "huf.ai.whatsapp_management.can_launch_whatsapp_app",
+		"permission_method": "huf.ai.whatsapp.management.can_launch_whatsapp_app",
 	}
 
 	existing_name = frappe.db.get_value("HUF App", {"app_id": WHATSAPP_APP_ID}, "name")
@@ -1017,6 +1046,11 @@ def create_huf_roles():
 	#    don't already have a Huf User Role record.
 	_migrate_existing_system_managers()
 
+	# 6. Every System User gets Huf's default roles (Huf Manager + Huf Gateway User), never a downgrade.
+	from huf.huf.doctype.huf_user_role.huf_user_role import grant_default_roles_to_system_users
+
+	grant_default_roles_to_system_users()
+
 	frappe.db.commit()
 
 
@@ -1058,7 +1092,7 @@ def create_flow_tools():
         tool_type_doc.name1 = "Workflow Tools"
         tool_type_doc.insert()
         
-    from huf.ai.flow_tools import flow_tool_definitions
+    from huf.ai.flow.tools import flow_tool_definitions
     
     for tool_def in flow_tool_definitions:
         tool_name = tool_def["tool_name"]
@@ -1137,10 +1171,14 @@ def _adapter_required_credentials(provider_id, extra_fields=None):
 	from huf.ai.gateway_adapters.registered import get_adapter_class
 
 	adapter_cls = get_adapter_class(provider_id)
-	fields = [
-		{"key": f.key, "label": f.label, "required": f.required}
-		for f in adapter_cls.credential_schema.fields
-	]
+	fields = []
+	for f in adapter_cls.credential_schema.fields:
+		item = {"key": f.key, "label": f.label, "required": f.required}
+		if not f.secret:
+			item["secret"] = False
+		if f.description:
+			item["description"] = f.description
+		fields.append(item)
 	fields.extend(extra_fields or [])
 	return fields
 
@@ -1150,7 +1188,13 @@ def _adapter_required_credentials(provider_id, extra_fields=None):
 # (see huf/huf/doctype/gateway/gateway.py) and consumed by slack_events.py, not by
 # SlackGatewayAdapter itself, so it can't be discovered from credential_schema alone.
 _EXTRA_REQUIRED_CREDENTIALS = {
-	"slack": [{"key": "signing_secret", "label": "Slack Signing Secret", "required": True}],
+	# Optional: no Slack tool uses it; only needed to receive Slack events (Gateway still enforces it).
+	"slack": [{
+		"key": "signing_secret",
+		"label": "Slack Signing Secret",
+		"required": False,
+		"description": "Only needed to receive Slack events",
+	}],
 }
 
 
@@ -1577,78 +1621,5 @@ def create_code_execution_tools():
 		tool_doc.save(ignore_permissions=True)
 	else:
 		tool_doc.insert(ignore_permissions=True)
-
-	frappe.db.commit()
-
-
-def create_default_memory_policies():
-	"""Create default Memory Policy presets."""
-	presets = [
-		{"policy_name": "Conservative", "description": "Nothing is captured automatically. Memory is written only via explicit tool calls and always needs human approval before it's used, so it's a safe default for agents handling sensitive or high-stakes conversations.", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 1, "default_status": "Draft", "inject_mode": "Relevant Only", "max_records": 5, "token_budget": 1500, "auto_promote_to_knowledge": 0, "allow_agent_write": 0},
-		{"policy_name": "Conversational", "description": "For chat agents that should remember users across sessions with minimal friction. Every run is reviewed in the background and captured facts/preferences are injected into every future conversation automatically, no approval step.", "scope_type": "Agent", "capture_mode": "Automatic", "approval_required": 0, "default_status": "Draft", "inject_mode": "Always", "max_records": 10, "token_budget": 2000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
-		{"policy_name": "Research", "description": "For agents doing extended research or knowledge work. The agent proposes what's worth remembering after each run, retrieval is narrowed to what's relevant to the current turn, and a larger token budget supports longer-running context.", "scope_type": "Agent", "capture_mode": "Agent Suggested", "approval_required": 0, "default_status": "Active", "inject_mode": "Relevant Only", "max_records": 20, "token_budget": 4000, "auto_promote_to_knowledge": 0, "promotion_min_confidence": 0.5, "promotion_min_importance": 0.5, "allow_agent_write": 1},
-		{"policy_name": "Operational", "description": "For task/ops agents where memory should stay out of the way. Nothing is captured or injected automatically — the agent can write memory via a tool call and pull it back only when it explicitly searches for it.", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 0, "default_status": "Active", "inject_mode": "Tool Only", "max_records": 10, "token_budget": 1000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
-	]
-	for preset in presets:
-		if frappe.db.exists("Memory Policy", preset["policy_name"]):
-			continue
-		try:
-			doc = frappe.new_doc("Memory Policy")
-			doc.update(preset)
-			doc.insert(ignore_permissions=True)
-		except Exception as e:
-			frappe.log_error(
-				title="Memory Policy Creation",
-				message=f"Error creating memory policy {preset['policy_name']}: {str(e)}",
-			)
-
-	frappe.db.commit()
-
-
-def create_default_execution_profiles():
-	"""Create default Execution Profile presets shipped with Huf."""
-	profiles = [
-		{
-			"profile_name": "Restricted",
-			"approval_mode": "Ask Every Time",
-			"is_builtin": 1,
-			"filesystem_policy": "Scratch Only",
-			"max_wall_time_s": 30,
-			"max_cpu_seconds": 30,
-			"max_memory_mb": 256,
-			"max_output_bytes": 1048576,
-		},
-		{
-			"profile_name": "Trusted",
-			"approval_mode": "Auto Approve",
-			"is_builtin": 1,
-			"filesystem_policy": "Scratch Only",
-			"max_wall_time_s": 60,
-			"max_cpu_seconds": 60,
-			"max_memory_mb": 512,
-			"max_output_bytes": 2097152,
-		},
-		{
-			"profile_name": "Blocked",
-			"approval_mode": "Never Allow",
-			"is_builtin": 1,
-			"filesystem_policy": "None",
-			"max_wall_time_s": 5,
-			"max_cpu_seconds": 5,
-			"max_memory_mb": 128,
-			"max_output_bytes": 65536,
-		},
-	]
-	for profile in profiles:
-		if frappe.db.exists("Execution Profile", profile["profile_name"]):
-			continue
-		try:
-			doc = frappe.new_doc("Execution Profile")
-			doc.update(profile)
-			doc.insert(ignore_permissions=True)
-		except Exception as e:
-			logger.warning(
-				f"Failed to create default execution profile {profile['profile_name']}: {e!s}"
-			)
 
 	frappe.db.commit()

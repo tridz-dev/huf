@@ -1,0 +1,39 @@
+{
+  "update_id": 1032,
+  "message": {
+    "message_id": 10,
+    "from": {
+      "id": 111,
+      "is_bot": false,
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "chat": {
+      "id": 111,
+      "type": "private",
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "date": 1760000000,
+    "text": "agree",
+    "reply_to_message": {
+      "message_id": 9,
+      "from": {
+        "id": 222,
+        "is_bot": false,
+        "first_name": "Bob",
+        "username": "bobby"
+      },
+      "chat": {
+        "id": 111,
+        "type": "private"
+      },
+      "date": 1759999000,
+      "text": "We ship on Friday. Please confirm."
+    },
+    "quote": {
+      "text": "ship on Friday",
+      "position": 3
+    }
+  }
+}

@@ -89,7 +89,6 @@ Out of scope (left as explicit TODOs):
 
 from __future__ import annotations
 
-import hashlib
 import io
 import json
 import operator
@@ -105,6 +104,16 @@ import threading
 import time
 import traceback
 from dataclasses import asdict, dataclass
+
+from huf.ai.tools.execution.workspace_dir import (  # noqa: F401
+	MAX_SHARED_DIR_FILES,
+	DirCapExceeded,
+	_iter_workspace_entries,
+	check_dir_caps,
+	diff_dir_snapshots,
+	measure_dir,
+	snapshot_dir,
+)
 
 # ---------------------------------------------------------------------------
 # Fixed, non-profile limits (defence-in-depth defaults).
@@ -141,11 +150,6 @@ CONTROL_FD_PAYLOAD_KEY = "control_fd"
 #: (profile filesystem policy "None") and the child exposes no ``open``.
 WORKDIR_PAYLOAD_KEY = "workdir"
 
-#: Hard cap on the number of files a mounted workspace may hold. Enforced in
-#: the child at file-create time (see :func:`_make_workdir_open`) and by the
-#: worker before and after every execution, so a per-conversation shared
-#: directory stays bounded no matter how long the conversation runs.
-MAX_SHARED_DIR_FILES = 50
 
 #: Attribute names blocked even though RestrictedPython's underscore rule does
 #: not catch them. ``str.format`` / ``"{0.__class__}".format(x)`` is a classic
@@ -153,23 +157,6 @@ MAX_SHARED_DIR_FILES = 50
 #: reason. f-strings and ``str()`` keep working (they do not route through
 #: attribute access), so legitimate formatting is unaffected.
 _DENIED_ATTRS = frozenset({"format", "format_map"})
-
-#: Environment-variable name fragments (case-insensitive) that are stripped from
-#: the child process environment. The child cannot read ``os.environ`` anyway
-#: (``import os`` is blocked and ``os`` is not in the globals), but pruning is a
-#: cheap extra layer against accidental leakage via a future broker bug.
-_SECRET_ENV_FRAGMENTS = (
-	"SECRET",
-	"TOKEN",
-	"PASSWORD",
-	"PRIVATE_KEY",
-	"API_KEY",
-	"DATABASE_URL",
-	"DB_PASSWORD",
-	"REDIS_URL",
-	"OPENAI_API_KEY",
-	"ANTHROPIC_API_KEY",
-)
 
 
 @dataclass
@@ -184,135 +171,14 @@ class ExecutionResult:
 	mem_mb_peak: float | None
 	output_bytes: int
 	limits_hit: bool
+	#: Flow path only (``capture_result``): the JSON-safe value of the ``result`` variable, and
+	#: whether it (or stdout) was cut at the output cap.
+	result: object = None
+	result_truncated: bool = False
+	output_truncated: bool = False
 
 	def to_dict(self) -> dict:
 		return asdict(self)
-
-
-# ---------------------------------------------------------------------------
-# Workspace directory primitives (frappe-free, Phase 4b)
-#
-# The mounted workspace is a FLAT directory of regular files. These helpers
-# measure it, snapshot it, diff two snapshots, and enforce the size/file-count
-# caps. They are used by the frappe-side worker around every execution and by
-# the standalone smoke tests, and they keep this module bench-independent.
-# ---------------------------------------------------------------------------
-
-
-class DirCapExceeded(Exception):
-	"""Raised when a mounted workspace breaches its size or file-count cap.
-
-	Carries the measured values so the worker can write an informative audit
-	message without re-measuring the directory.
-	"""
-
-	def __init__(self, message, *, total_bytes, file_count, max_bytes, max_files):
-		super().__init__(message)
-		self.total_bytes = total_bytes
-		self.file_count = file_count
-		self.max_bytes = max_bytes
-		self.max_files = max_files
-
-
-def _iter_workspace_entries(path):
-	"""Yield the non-directory entries of the (flat) workspace.
-
-	Subdirectories are skipped, not recursed: the workspace contract is a flat
-	namespace, and a planted subdirectory must not let unbounded content hide
-	from measurement.
-	"""
-	with os.scandir(path) as it:
-		for entry in it:
-			if entry.is_dir(follow_symlinks=False):
-				continue
-			yield entry
-
-
-def measure_dir(path: str) -> tuple[int, int]:
-	"""Return ``(total_bytes, file_count)`` for a mounted workspace.
-
-	Every non-directory entry counts toward ``file_count``; only regular files
-	contribute bytes. A symlink's target size is never followed (it may point
-	outside the workspace).
-	"""
-	total_bytes = 0
-	file_count = 0
-	for entry in _iter_workspace_entries(path):
-		file_count += 1
-		if entry.is_file(follow_symlinks=False):
-			total_bytes += entry.stat(follow_symlinks=False).st_size
-	return total_bytes, file_count
-
-
-def check_dir_caps(path: str, max_bytes: int, max_files: int = MAX_SHARED_DIR_FILES) -> tuple[int, int]:
-	"""Enforce the workspace size/file-count caps; return the measured usage.
-
-	Raises :class:`DirCapExceeded` when either cap is breached. The worker runs
-	this before dispatch (a pre-existing dir may already be over cap) and after
-	execution (the run may have produced an over-cap dir). It never deletes
-	anything — the caller fails the call and records ``limits_hit``.
-	"""
-	max_bytes = int(max_bytes or 0)
-	max_files = int(max_files or MAX_SHARED_DIR_FILES)
-	total_bytes, file_count = measure_dir(path)
-	if max_bytes > 0 and total_bytes > max_bytes:
-		raise DirCapExceeded(
-			f"shared directory holds {total_bytes} bytes, exceeding the {max_bytes}-byte cap",
-			total_bytes=total_bytes,
-			file_count=file_count,
-			max_bytes=max_bytes,
-			max_files=max_files,
-		)
-	if file_count > max_files:
-		raise DirCapExceeded(
-			f"shared directory holds {file_count} files, exceeding the {max_files}-file cap",
-			total_bytes=total_bytes,
-			file_count=file_count,
-			max_bytes=max_bytes,
-			max_files=max_files,
-		)
-	return total_bytes, file_count
-
-
-def snapshot_dir(path: str) -> dict:
-	"""Return ``{name: (size, sha256)}`` for the workspace's regular files.
-
-	Content-hashed, not mtime-based: a ``touch`` that leaves the bytes
-	identical must not resurface a file as "changed" on write-back, and only a
-	content difference is artifact-worthy. Symlinks and subdirectories are
-	excluded — seeds are materialized as plain copies and the sandbox ``open``
-	cannot create symlinks, so regular files are the only artifact-worthy
-	entries.
-	"""
-	snapshot = {}
-	for entry in _iter_workspace_entries(path):
-		if not entry.is_file(follow_symlinks=False):
-			continue
-		full = os.path.join(path, entry.name)
-		digest = hashlib.sha256()
-		size = 0
-		with open(full, "rb") as fh:
-			for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-				size += len(chunk)
-				digest.update(chunk)
-		snapshot[entry.name] = (size, digest.hexdigest())
-	return snapshot
-
-
-def diff_dir_snapshots(before: dict, after: dict) -> tuple[list, list]:
-	"""Compare two :func:`snapshot_dir` results; return ``(new, changed)``.
-
-	``new``: names present only in ``after``. ``changed``: names in both whose
-	(size, hash) differs. Deletions (names only in ``before``) are deliberately
-	not reported — a removed file has nothing to write back, and its earlier
-	artifact record stays as conversation history. Both lists are sorted for
-	deterministic audit output.
-	"""
-	before = before or {}
-	after = after or {}
-	new = sorted(name for name in after if name not in before)
-	changed = sorted(name for name in after if name in before and before[name] != after[name])
-	return new, changed
 
 
 # ---------------------------------------------------------------------------
@@ -801,6 +667,7 @@ def _build_globals(
 	control_fd: int | None = None,
 	workdir: str | None = None,
 	allowed_modules: list[str] | None = None,
+	inputs: dict | None = None,
 ) -> dict:
 	"""Assemble the curated globals dict for ``exec``.
 
@@ -841,6 +708,11 @@ def _build_globals(
 
 	if workdir:
 		globals_dict["__builtins__"]["open"] = _make_workdir_open(workdir)
+
+	if inputs is not None:
+		# Flow path: the step's mapped inputs, as plain data. Code gets values, never a way to
+		# change what runs (the code and the profile come from the published definition).
+		globals_dict["inputs"] = inputs
 
 	if control_fd is not None:
 		client = _BrokerClient(control_fd)
@@ -900,6 +772,23 @@ def _start_memory_watchdog(max_memory_mb: int):
 		return None
 
 
+def _jsonable_capped(value, max_bytes: int):
+	"""``(json_safe_value, truncated)``: ``value`` round-tripped through JSON, cut at ``max_bytes``.
+
+	Anything JSON cannot represent becomes its string form (``default=str``). A value whose JSON text
+	is longer than the cap is returned as the first ``max_bytes`` bytes of that text (a string) and
+	flagged, so a step can never store an unbounded result.
+	"""
+	try:
+		text = json.dumps(value, default=str)
+	except (TypeError, ValueError, RecursionError):
+		text = json.dumps(str(value))
+	raw = text.encode("utf-8", "replace")
+	if len(raw) > max_bytes:
+		return raw[:max_bytes].decode("utf-8", "replace"), True
+	return json.loads(text), False
+
+
 def _run_user_code(
 	code: str,
 	max_output_bytes: int,
@@ -907,6 +796,8 @@ def _run_user_code(
 	control_fd: int | None = None,
 	workdir: str | None = None,
 	allowed_modules: list[str] | None = None,
+	inputs: dict | None = None,
+	capture_result: bool = False,
 ) -> dict:
 	"""Compile + execute ``code`` in the (already rlimit-ed) child process.
 
@@ -949,7 +840,7 @@ def _run_user_code(
 		warnings.filterwarnings("ignore", message=".*never reads 'printed' variable.*")
 
 		globals_dict = _build_globals(
-			control_fd=control_fd, workdir=workdir, allowed_modules=allowed_modules
+			control_fd=control_fd, workdir=workdir, allowed_modules=allowed_modules, inputs=inputs
 		)
 		locals_dict: dict = {}
 
@@ -963,6 +854,9 @@ def _run_user_code(
 			"stderr": "",
 			"limits_hit": _CAPTURE_BUF.hit,
 		}
+		if capture_result:
+			value = locals_dict.get("result", globals_dict.get("result"))
+			result["result"], result["result_truncated"] = _jsonable_capped(value, max_output_bytes)
 	except MemoryError as exc:
 		result = {
 			"exit_status": "OOM",
@@ -1022,6 +916,7 @@ def _run_user_code(
 			"stderr": "[huf-exec] no result produced",
 			"limits_hit": False,
 		}
+	result["output_truncated"] = bool(_CAPTURE_BUF is not None and _CAPTURE_BUF.hit)
 	return result
 
 
@@ -1065,6 +960,10 @@ def _child_main(argv: list[str]) -> int:
 	max_output_bytes = int(payload.get("max_output_bytes") or DEFAULT_MAX_OUTPUT_BYTES)
 	max_memory_mb = int(limits.get("max_memory_mb") or 0)
 	allowed_modules = payload.get("allowed_modules") or []
+	inputs = payload.get("inputs")
+	if inputs is not None and not isinstance(inputs, dict):
+		inputs = None
+	capture_result = bool(payload.get("capture_result"))
 
 	control_fd = payload.get(CONTROL_FD_PAYLOAD_KEY)
 	if control_fd is not None:
@@ -1089,6 +988,8 @@ def _child_main(argv: list[str]) -> int:
 		control_fd=control_fd,
 		workdir=workdir,
 		allowed_modules=allowed_modules,
+		inputs=inputs,
+		capture_result=capture_result,
 	)
 	result["output_bytes"] = len((result.get("stdout") or "").encode("utf-8", "replace"))
 
@@ -1102,13 +1003,27 @@ def _child_main(argv: list[str]) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _sanitize_child_env() -> dict:
-	"""Return the child environment with secret-looking variables removed."""
-	env = dict(os.environ)
-	for key in list(env):
-		upper = key.upper()
-		if any(fragment in upper for fragment in _SECRET_ENV_FRAGMENTS):
-			env.pop(key, None)
+#: Environment variables the child may inherit. An allow-list, not a deny-list: the worker's
+#: environment can carry anything an operator exported (Redis / database URLs, API keys, cloud
+#: credentials) and a name-fragment filter cannot know them all. Sandboxed code cannot read its own
+#: environment today (``os`` is not importable), but the child must never be handed secrets.
+_CHILD_ENV_ALLOWLIST = frozenset(
+	{"PATH", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ", "VIRTUAL_ENV", "PYTHONPATH", "PYTHONHASHSEED"}
+)
+
+
+def _sanitize_child_env(home: str | None = None) -> dict:
+	"""The child environment: the allow-list above, a throwaway ``HOME``, single-threaded math libraries.
+
+	Nothing from ``site_config`` / ``common_site_config`` (database, Redis, encryption key) is ever
+	passed down: Frappe keeps those in files, not in the environment, and whatever the operator did
+	export is dropped unless it is listed in ``_CHILD_ENV_ALLOWLIST``.
+	"""
+	env = {key: value for key, value in os.environ.items() if key in _CHILD_ENV_ALLOWLIST}
+	env.setdefault("PATH", "/usr/local/bin:/usr/bin:/bin")
+	env["HOME"] = home or tempfile.gettempdir()
+	env["PYTHONNOUSERSITE"] = "1"
+	env["PYTHONDONTWRITEBYTECODE"] = "1"
 	# Single-thread BLAS/OpenMP math libraries to avoid huge mmap virtual memory
 	# allocations that fail under RLIMIT_AS or cause thread thrashing in sandboxes.
 	env["OPENBLAS_NUM_THREADS"] = "1"
@@ -1243,6 +1158,8 @@ def run_sandboxed(
 	broker_handler=None,
 	broker_thread_start=None,
 	broker_thread_end=None,
+	inputs: dict | None = None,
+	capture_result: bool = False,
 ) -> ExecutionResult:
 	"""Run ``code`` in an isolated subprocess and return an :class:`ExecutionResult`.
 
@@ -1291,6 +1208,8 @@ def run_sandboxed(
 			broker_handler,
 			broker_thread_start,
 			broker_thread_end,
+			inputs,
+			capture_result,
 		)
 	finally:
 		shutil.rmtree(bookkeeping_dir, ignore_errors=True)
@@ -1306,6 +1225,8 @@ def _supervise_child(
 	broker_handler=None,
 	broker_thread_start=None,
 	broker_thread_end=None,
+	inputs: dict | None = None,
+	capture_result: bool = False,
 ) -> ExecutionResult:
 	"""Launch + supervise the isolated child (body of :func:`run_sandboxed`).
 
@@ -1328,6 +1249,10 @@ def _supervise_child(
 		"max_output_bytes": max_output_bytes,
 		"allowed_modules": allowed_modules or [],
 	}
+	if inputs is not None:
+		payload["inputs"] = inputs
+	if capture_result:
+		payload["capture_result"] = True
 	if child_sock is not None:
 		payload[CONTROL_FD_PAYLOAD_KEY] = child_sock.fileno()
 	if mounted_dir is not None:
@@ -1344,7 +1269,7 @@ def _supervise_child(
 
 	popen_kwargs = {
 		"cwd": work_dir,
-		"env": _sanitize_child_env(),
+		"env": _sanitize_child_env(bookkeeping_dir),
 		"stdout": subprocess.PIPE,
 		"stderr": subprocess.PIPE,
 	}
@@ -1432,8 +1357,10 @@ def _supervise_child(
 
 	if isinstance(parsed, dict) and "exit_status" in parsed:
 		out = parsed.get("stdout") or ""
+		output_truncated = bool(parsed.get("output_truncated"))
 		if len(out.encode("utf-8", "replace")) > max_output_bytes:
 			out = out.encode("utf-8", "replace")[:max_output_bytes].decode("utf-8", "replace")
+			output_truncated = True
 		limits_hit = bool(parsed.get("limits_hit"))
 		return ExecutionResult(
 			exit_status=parsed.get("exit_status") or "Error",
@@ -1444,6 +1371,9 @@ def _supervise_child(
 			mem_mb_peak=mem_mb_peak,
 			output_bytes=len(out.encode("utf-8", "replace")),
 			limits_hit=limits_hit,
+			result=parsed.get("result"),
+			result_truncated=bool(parsed.get("result_truncated")),
+			output_truncated=output_truncated,
 		)
 
 	# No structured result: the child crashed or was killed by a signal.

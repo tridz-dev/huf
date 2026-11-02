@@ -37,7 +37,7 @@ def run_planning(agent_name, user_prompt, provider, model, conversation_id=None)
     Returns:
         str: The plan as a numbered list, or empty string on failure
     """
-    from huf.ai.agent_integration import run_agent_sync
+    from huf.ai.agent.integration import run_agent_sync
 
     planning_message = f"{PLANNING_PROMPT}\n\n{user_prompt}"
 

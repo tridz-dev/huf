@@ -1,0 +1,11 @@
+{
+  "update_id": 1030,
+  "business_message": {
+    "message_id": 7,
+    "business_connection_id": "bc-1",
+    "from": {"id": 111, "is_bot": false, "first_name": "Jane"},
+    "chat": {"id": 111, "type": "private", "first_name": "Jane"},
+    "date": 1760000000,
+    "text": "hi via business"
+  }
+}

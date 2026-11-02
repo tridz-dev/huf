@@ -17,7 +17,7 @@ import json
 import unittest
 from unittest.mock import MagicMock, call, patch
 
-from huf.ai.agent_integration import (
+from huf.ai.agent.integration import (
     _conversation_lock_key,
     _execute_agent_run,
     _next_run_sequence,
@@ -25,10 +25,10 @@ from huf.ai.agent_integration import (
     recover_stalled_agent_runs,
     run_agent_sync,
 )
-from huf.ai import agent_chat
-from huf.ai import agent_scheduler
+from huf.ai.agent import chat as agent_chat
+from huf.ai.agent import scheduler as agent_scheduler
 from huf.ai.orchestration.planning import run_planning
-from huf.ai.flow_engine import _exec_agent_run
+from huf.ai.flow.engine import _exec_agent_run
 
 
 def _make_agent_doc(**overrides):
@@ -116,9 +116,9 @@ class TestQueueFirstRuns(unittest.TestCase):
         ]
 
     @unittest.skip("quarantined pending RegressionCI triage - mock.insert() call-arg assertion mismatch, unrelated to this branch's changes")
-    @patch("huf.ai.agent_integration._execute_agent_run")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._execute_agent_run")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_default_run_is_queued(self, mock_frappe, mock_cm_cls, mock_execute):
         mock_frappe.session.user = "test@example.com"
         mock_frappe.get_doc.side_effect = self._get_doc_side_effect()
@@ -143,7 +143,7 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_execute.assert_not_called()
         mock_frappe.enqueue.assert_called_once()
         enqueue_args, enqueue_kwargs = mock_frappe.enqueue.call_args
-        self.assertEqual(enqueue_args[0], "huf.ai.agent_integration._run_queued_agent")
+        self.assertEqual(enqueue_args[0], "huf.ai.agent.integration._run_queued_agent")
         self.assertEqual(enqueue_kwargs["conversation_id"], "CONV-TEST-0001")
         self.assertNotIn("run_id", enqueue_kwargs)
         self.assertTrue(enqueue_kwargs["is_async"])
@@ -152,9 +152,9 @@ class TestQueueFirstRuns(unittest.TestCase):
         # A "Queued" lifecycle event is emitted (canonical doctype spelling).
         self.assertIn("Queued", self._published_statuses(mock_frappe))
 
-    @patch("huf.ai.agent_integration._execute_agent_run")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._execute_agent_run")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_now_override_executes_synchronously(self, mock_frappe, mock_cm_cls, mock_execute):
         mock_frappe.session.user = "test@example.com"
         mock_frappe.get_doc.side_effect = self._get_doc_side_effect()
@@ -185,9 +185,9 @@ class TestQueueFirstRuns(unittest.TestCase):
             _conversation_lock_key("CONV-TEST-0001")
         )
 
-    @patch("huf.ai.agent_integration._execute_agent_run")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._execute_agent_run")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_run_immediately_agent_executes_synchronously(self, mock_frappe, mock_cm_cls, mock_execute):
         mock_frappe.session.user = "test@example.com"
         agent_doc = _make_agent_doc(run_immediately=1)
@@ -207,10 +207,10 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.conv_manager.add_message.assert_called_once()
         self.assertEqual(self.conv_manager.add_message.call_args.args[1], "user")
 
-    @patch("huf.ai.agent_integration._next_queued_run")
-    @patch("huf.ai.agent_integration._execute_agent_run")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._next_queued_run")
+    @patch("huf.ai.agent.integration._execute_agent_run")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_queued_worker_adds_one_user_message_before_executing(self, mock_frappe, mock_cm_cls, mock_execute, mock_next):
         mock_frappe.session.user = "worker@example.com"
         mock_frappe.get_doc.side_effect = self._get_doc_side_effect()
@@ -247,10 +247,10 @@ class TestQueueFirstRuns(unittest.TestCase):
             "agent_run_conv_CONV-TEST-0001"
         )
 
-    @patch("huf.ai.agent_integration._next_queued_run")
-    @patch("huf.ai.agent_integration._execute_agent_run")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._next_queued_run")
+    @patch("huf.ai.agent.integration._execute_agent_run")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_queued_worker_exits_when_lock_busy(self, mock_frappe, mock_cm_cls, mock_execute, mock_next):
         """A second drainer finding the lock held must exit immediately and not
         re-enqueue; the holder is responsible for draining all queued runs."""
@@ -268,10 +268,10 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.conv_manager.add_message.assert_not_called()
         mock_frappe.cache.return_value.delete.assert_not_called()
 
-    @patch("huf.ai.agent_integration._next_queued_run")
-    @patch("huf.ai.agent_integration._execute_agent_run")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._next_queued_run")
+    @patch("huf.ai.agent.integration._execute_agent_run")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_queued_worker_never_duplicates_user_message(self, mock_frappe, mock_cm_cls, mock_execute, mock_next):
         mock_frappe.session.user = "worker@example.com"
         mock_frappe.get_doc.side_effect = self._get_doc_side_effect()
@@ -288,9 +288,9 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_execute.assert_called_once()
 
     @patch("huf.ai.run_control.is_run_cancelled", return_value=False)
-    @patch("huf.ai.agent_integration.AgentManager")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration.AgentManager")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_pickup_guarded_start_changing_no_row_does_not_execute(
         self, mock_frappe, mock_cm_cls, mock_manager_cls, _mock_cancelled
     ):
@@ -314,10 +314,10 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.assertIn("status='Queued'", sql)
 
     @patch("huf.ai.run_control.is_run_cancelled", return_value=True)
-    @patch("huf.ai.agent_integration._guarded_fail_started_run", return_value=True)
-    @patch("huf.ai.agent_integration.AgentManager")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._guarded_fail_started_run", return_value=True)
+    @patch("huf.ai.agent.integration.AgentManager")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_cancel_marker_before_execution_fails_run(
         self, mock_frappe, mock_cm_cls, mock_manager_cls, mock_fail_started, _mock_cancelled
     ):
@@ -337,9 +337,9 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_fail_started.assert_called_once_with("AR-TEST-0001", "Cancelled by user")
         mock_manager_cls.assert_not_called()
 
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration.frappe")
     def test_guarded_fail_queued_run_emits_to_run_owner(self, mock_frappe):
-        from huf.ai.agent_integration import _guarded_fail_queued_run
+        from huf.ai.agent.integration import _guarded_fail_queued_run
 
         mock_frappe.session.user = "admin@example.com"
         mock_frappe.db._cursor.rowcount = 1
@@ -349,10 +349,10 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.assertTrue(_guarded_fail_queued_run("AR-TEST-0001", "Cancelled by user"))
         self.assertEqual(mock_frappe.publish_realtime.call_args.kwargs["user"], "owner@example.com")
 
-    @patch("huf.ai.agent_integration._next_queued_run")
-    @patch("huf.ai.agent_integration._execute_agent_run")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._next_queued_run")
+    @patch("huf.ai.agent.integration._execute_agent_run")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_queued_worker_skips_run_that_left_queued_state(self, mock_frappe, mock_cm_cls, mock_execute, mock_next):
         mock_frappe.session.user = "worker@example.com"
         self.run_doc.status = "Success"  # picked up/cancelled elsewhere
@@ -369,10 +369,10 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.conv_manager.add_message.assert_not_called()
         mock_frappe.cache.return_value.delete.assert_called_once()
 
-    @patch("huf.ai.agent_integration._next_queued_run")
-    @patch("huf.ai.agent_integration._execute_agent_run")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._next_queued_run")
+    @patch("huf.ai.agent.integration._execute_agent_run")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_queued_worker_skips_user_message_for_silent_trigger(self, mock_frappe, mock_cm_cls, mock_execute, mock_next):
         mock_frappe.session.user = "worker@example.com"
         self.run_doc.prompt = "[SILENT_TRIGGER] background task done"
@@ -391,11 +391,11 @@ class TestQueueFirstRuns(unittest.TestCase):
 
     @unittest.skip("quarantined pending RegressionCI triage - mock composition yields a non-string error ('sequence item 0: expected str instance, MagicMock found'), unrelated to this branch's changes")
     @patch("huf.ai.knowledge.context_builder.build_knowledge_context", return_value=None)
-    @patch("huf.ai.agent_integration._run_async_safely")
-    @patch("huf.ai.agent_integration.RunProvider")
-    @patch("huf.ai.agent_integration.AgentManager")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._run_async_safely")
+    @patch("huf.ai.agent.integration.RunProvider")
+    @patch("huf.ai.agent.integration.AgentManager")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_execute_run_reuses_precreated_run(
         self,
         mock_frappe,
@@ -454,7 +454,7 @@ class TestQueueFirstRuns(unittest.TestCase):
     # Caller compatibility (QFR-06)
     # ------------------------------------------------------------------
 
-    @patch("huf.ai.agent_integration.run_agent_sync")
+    @patch("huf.ai.agent.integration.run_agent_sync")
     def test_planning_caller_passes_now_true(self, mock_run):
         """A representative synchronous consumer must force direct execution."""
         mock_run.return_value = {"success": True, "response": "1. do the thing"}
@@ -470,9 +470,9 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_run.assert_called_once()
         self.assertTrue(mock_run.call_args.kwargs.get("now"))
 
-    @patch("huf.ai.agent_chat.frappe")
-    @patch("huf.ai.agent_chat.ConversationManager")
-    @patch("huf.ai.agent_chat.run_agent_sync")
+    @patch("huf.ai.agent.chat.frappe")
+    @patch("huf.ai.agent.chat.ConversationManager")
+    @patch("huf.ai.agent.chat.run_agent_sync")
     def test_new_conversation_returns_queued_ack(self, mock_run, mock_cm_cls, mock_frappe):
         """Web-facing chat endpoints queue by default and surface the queued ack."""
         conversation = MagicMock()
@@ -502,8 +502,8 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_run.assert_called_once()
         self.assertNotIn("now", mock_run.call_args.kwargs)
 
-    @patch("huf.ai.agent_chat.frappe")
-    @patch("huf.ai.agent_chat.run_agent_sync")
+    @patch("huf.ai.agent.chat.frappe")
+    @patch("huf.ai.agent.chat.run_agent_sync")
     def test_send_message_to_conversation_returns_queued_ack(self, mock_run, mock_frappe):
         """Continuing a conversation also queues by default."""
         conv_doc = MagicMock()
@@ -533,8 +533,8 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_run.assert_called_once()
         self.assertNotIn("now", mock_run.call_args.kwargs)
 
-    @patch("huf.ai.flow_engine.frappe")
-    @patch("huf.ai.agent_integration.run_agent_sync")
+    @patch("huf.ai.flow.engine.frappe")
+    @patch("huf.ai.agent.integration.run_agent_sync")
     def test_flow_engine_agent_node_forces_now_true(self, mock_run, mock_frappe):
         """Flow engine agent nodes must keep direct execution inside the flow worker."""
         flow_run = MagicMock()
@@ -561,10 +561,10 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_run.assert_called_once()
         self.assertTrue(mock_run.call_args.kwargs.get("now"))
 
-    @patch("huf.ai.agent_scheduler.automation_runtime_is_new", return_value=False)
+    @patch("huf.ai.agent.scheduler.automation_runtime_is_new", return_value=False)
     @patch("huf.ai.prompt_resolver.resolve_prompt")
-    @patch("huf.ai.agent_scheduler.frappe")
-    @patch("huf.ai.agent_scheduler.run_agent_sync")
+    @patch("huf.ai.agent.scheduler.frappe")
+    @patch("huf.ai.agent.scheduler.run_agent_sync")
     def test_scheduler_submits_queued_run(self, mock_run, mock_frappe, mock_resolve_prompt, mock_runtime_is_new):
         """Legacy scheduler (site pins automation_trigger_runtime to "legacy"):
         scheduled triggers are background workers; they hand runs to the queue."""
@@ -605,7 +605,7 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_run.assert_not_called()
         mock_frappe.enqueue.assert_called_once()
         self.assertEqual(
-            mock_frappe.enqueue.call_args.args[0], "huf.ai.agent_scheduler.execute_scheduled_agent"
+            mock_frappe.enqueue.call_args.args[0], "huf.ai.agent.scheduler.execute_scheduled_agent"
         )
 
         # The worker job then hands the run to the queue (no synchronous "now").
@@ -620,12 +620,12 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.assertNotIn("now", mock_run.call_args.kwargs)
         self.assertEqual(mock_run.call_args.args, ("Scheduled Agent", "scheduled prompt", "Test Provider", "test-model"))
 
-    @patch("huf.ai.agent_scheduler.automation_runtime_is_new", return_value=True)
-    @patch("huf.ai.agent_scheduler.frappe")
-    @patch("huf.ai.agent_scheduler.run_agent_sync")
+    @patch("huf.ai.agent.scheduler.automation_runtime_is_new", return_value=True)
+    @patch("huf.ai.agent.scheduler.frappe")
+    @patch("huf.ai.agent.scheduler.run_agent_sync")
     def test_legacy_scheduler_no_ops_under_new_runtime(self, mock_run, mock_frappe, mock_runtime_is_new):
         """Legacy scheduler no-ops under the default "new" automation runtime,
-        leaving run_due_automations (huf.ai.automation_scheduler) as the sole executor."""
+        leaving run_due_automations (huf.ai.automation.scheduler) as the sole executor."""
         agent_scheduler.run_scheduled_agents()
 
         mock_run.assert_not_called()
@@ -648,7 +648,7 @@ class TestQueueFirstRuns(unittest.TestCase):
         return events
 
     def test_canonical_run_status_mapping(self):
-        from huf.ai.agent_integration import _canonical_run_status
+        from huf.ai.agent.integration import _canonical_run_status
 
         self.assertEqual(_canonical_run_status("queued"), "Queued")
         self.assertEqual(_canonical_run_status("started"), "Started")
@@ -659,9 +659,9 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.assertEqual(_canonical_run_status("custom"), "custom")
         self.assertIsNone(_canonical_run_status(None))
 
-    @patch("huf.ai.agent_integration._execute_agent_run")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._execute_agent_run")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_queued_event_matches_frontend_contract(self, mock_frappe, mock_cm_cls, mock_execute):
         """The queued acknowledgement event uses the canonical status and
         carries every field the frontend AgentRunStatusEvent union reads."""
@@ -682,11 +682,11 @@ class TestQueueFirstRuns(unittest.TestCase):
 
     @patch("huf.ai.knowledge.context_builder.build_knowledge_context", return_value=None)
     @unittest.skip("quarantined pending RegressionCI triage - depends on test_execute_run_reuses_precreated_run's mock setup, same root cause, unrelated to this branch's changes")
-    @patch("huf.ai.agent_integration._run_async_safely")
-    @patch("huf.ai.agent_integration.RunProvider")
-    @patch("huf.ai.agent_integration.AgentManager")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._run_async_safely")
+    @patch("huf.ai.agent.integration.RunProvider")
+    @patch("huf.ai.agent.integration.AgentManager")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_success_event_carries_response_and_message_id(
         self,
         mock_frappe,
@@ -732,9 +732,9 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.assertEqual(event["agent_run_id"], "AR-TEST-0001")
         self.assertEqual(event["conversation_id"], "CONV-TEST-0001")
 
-    @patch("huf.ai.agent_integration._execute_agent_run")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._execute_agent_run")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_lock_exhaustion_no_longer_reenqueues(self, mock_frappe, mock_cm_cls, mock_execute):
         """The old sleep+re-enqueue path is gone; a busy lock means another
         drainer is active and this job exits without side effects."""
@@ -770,9 +770,9 @@ class TestQueueFirstRuns(unittest.TestCase):
         doc.agent_orchestration = None
         return doc
 
-    @patch("huf.ai.agent_integration._execute_agent_run")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._execute_agent_run")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_drain_loop_processes_runs_in_sequence_order(self, mock_frappe, mock_cm_cls, mock_execute):
         """A single drainer executes queued runs for a conversation in the
         order of their per-conversation sequence numbers, not arrival order."""
@@ -807,16 +807,16 @@ class TestQueueFirstRuns(unittest.TestCase):
             call_order.append(kwargs["run_id"])
             return {"success": True}
 
-        with patch("huf.ai.agent_integration._next_queued_run", side_effect=fake_next_queued_run):
-            with patch("huf.ai.agent_integration.frappe.get_doc", side_effect=fake_get_doc):
+        with patch("huf.ai.agent.integration._next_queued_run", side_effect=fake_next_queued_run):
+            with patch("huf.ai.agent.integration.frappe.get_doc", side_effect=fake_get_doc):
                 mock_execute.side_effect = fake_execute
                 _run_queued_agent(conversation_id="CONV-TEST-0001")
 
         self.assertEqual(call_order, ["AR-1", "AR-2", "AR-3"])
 
-    @patch("huf.ai.agent_integration._execute_agent_run")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._execute_agent_run")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_drain_loop_picks_up_runs_submitted_mid_drain(self, mock_frappe, mock_cm_cls, mock_execute):
         """A run submitted while a drainer is executing an earlier run is still
         picked up by the same drainer before it releases the lock."""
@@ -852,14 +852,14 @@ class TestQueueFirstRuns(unittest.TestCase):
                 run_docs["AR-2"] = self._make_run_doc("AR-2", 2)
             return {"success": True}
 
-        with patch("huf.ai.agent_integration._next_queued_run", side_effect=fake_next_queued_run):
-            with patch("huf.ai.agent_integration.frappe.get_doc", side_effect=fake_get_doc):
+        with patch("huf.ai.agent.integration._next_queued_run", side_effect=fake_next_queued_run):
+            with patch("huf.ai.agent.integration.frappe.get_doc", side_effect=fake_get_doc):
                 mock_execute.side_effect = fake_execute
                 _run_queued_agent(conversation_id="CONV-TEST-0001")
 
         self.assertEqual(call_order, ["AR-1", "AR-2"])
 
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration.frappe")
     def test_next_run_sequence_uses_redis_incr(self, mock_frappe):
         mock_frappe.cache.return_value.incr.return_value = 42
 
@@ -870,9 +870,9 @@ class TestQueueFirstRuns(unittest.TestCase):
             "agent_run_seq:CONV-SEQ-001"
         )
 
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration.frappe")
     def test_lifecycle_event_includes_sequence(self, mock_frappe):
-        from huf.ai.agent_integration import _emit_run_lifecycle_event
+        from huf.ai.agent.integration import _emit_run_lifecycle_event
 
         run_doc = MagicMock()
         run_doc.name = "AR-TEST-0001"
@@ -887,9 +887,9 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.assertEqual(event["sequence"], 7)
         self.assertEqual(event["status"], "Queued")
 
-    @patch("huf.ai.agent_integration._execute_agent_run")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._execute_agent_run")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_direct_path_refuses_when_queued_runs_pending(self, mock_frappe, mock_cm_cls, mock_execute):
         """The direct-execution override must not jump ahead of queued runs for
         the same conversation."""
@@ -907,9 +907,9 @@ class TestQueueFirstRuns(unittest.TestCase):
 
         mock_execute.assert_not_called()
 
-    @patch("huf.ai.agent_integration._enqueue_drain")
-    @patch("huf.ai.agent_integration._reset_run_to_queued")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._enqueue_drain")
+    @patch("huf.ai.agent.integration._reset_run_to_queued")
+    @patch("huf.ai.agent.integration.frappe")
     def test_recovery_resets_stale_started_run(self, mock_frappe, mock_reset, mock_enqueue_drain):
         """A Started run whose lock has expired is recovered back to Queued and
         a drainer is enqueued."""
@@ -928,9 +928,9 @@ class TestQueueFirstRuns(unittest.TestCase):
         )
         mock_enqueue_drain.assert_called_once_with("CONV-STALE-001")
 
-    @patch("huf.ai.agent_integration._enqueue_drain")
-    @patch("huf.ai.agent_integration._reset_run_to_queued")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._enqueue_drain")
+    @patch("huf.ai.agent.integration._reset_run_to_queued")
+    @patch("huf.ai.agent.integration.frappe")
     def test_recovery_resets_all_stale_started_runs_per_conversation(
         self, mock_frappe, mock_reset, mock_enqueue_drain
     ):
@@ -971,8 +971,8 @@ class TestQueueFirstRuns(unittest.TestCase):
             [call("CONV-STALE-A"), call("CONV-STALE-B")],
         )
 
-    @patch("huf.ai.agent_integration._enqueue_drain")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._enqueue_drain")
+    @patch("huf.ai.agent.integration.frappe")
     def test_recovery_skips_alive_runs(self, mock_frappe, mock_enqueue_drain):
         """A Started run whose lock TTL is still positive is not recovered."""
         mock_frappe.session.user = "Administrator"
@@ -986,11 +986,11 @@ class TestQueueFirstRuns(unittest.TestCase):
 
         mock_enqueue_drain.assert_not_called()
 
-    @patch("huf.ai.agent_integration._RunHeartbeat")
-    @patch("huf.ai.agent_integration._next_queued_run")
-    @patch("huf.ai.agent_integration._execute_agent_run")
-    @patch("huf.ai.agent_integration.ConversationManager")
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration._RunHeartbeat")
+    @patch("huf.ai.agent.integration._next_queued_run")
+    @patch("huf.ai.agent.integration._execute_agent_run")
+    @patch("huf.ai.agent.integration.ConversationManager")
+    @patch("huf.ai.agent.integration.frappe")
     def test_drain_run_starts_heartbeat(self, mock_frappe, mock_cm_cls, mock_execute, mock_next, mock_heartbeat_cls):
         """Each drained run runs with a heartbeat that refreshes the lock TTL."""
         mock_frappe.session.user = "worker@example.com"
@@ -1016,9 +1016,9 @@ class TestQueueFirstRuns(unittest.TestCase):
     # Status/result endpoint and API overrides
     # ------------------------------------------------------------------
 
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration.frappe")
     def test_get_agent_run_status_returns_result(self, mock_frappe):
-        from huf.ai.agent_integration import get_agent_run_status
+        from huf.ai.agent.integration import get_agent_run_status
 
         mock_frappe.session.user = "test@example.com"
 
@@ -1051,9 +1051,9 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.assertEqual(result["conversation_id"], "CONV-TEST-0001")
         self.assertEqual(result["agent_run_id"], "AR-TEST-0001")
 
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration.frappe")
     def test_get_agent_run_status_marks_in_flight_run_as_queued(self, mock_frappe):
-        from huf.ai.agent_integration import get_agent_run_status
+        from huf.ai.agent.integration import get_agent_run_status
 
         mock_frappe.session.user = "test@example.com"
 
@@ -1077,11 +1077,11 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.assertIsNone(result["response"])
         self.assertIsNone(result["agent_message_id"])
 
-    @patch("huf.ai.agent_integration.frappe")
+    @patch("huf.ai.agent.integration.frappe")
     def test_get_agent_run_status_denies_guest_for_private_agent(self, mock_frappe):
         import frappe as real_frappe
 
-        from huf.ai.agent_integration import get_agent_run_status
+        from huf.ai.agent.integration import get_agent_run_status
 
         mock_frappe.session.user = "Guest"
         mock_frappe.throw.side_effect = real_frappe.PermissionError("denied")
@@ -1118,8 +1118,8 @@ class TestQueueFirstRuns(unittest.TestCase):
     # File/audio flow: one user message, files reach the run
     # ------------------------------------------------------------------
 
-    @patch("huf.ai.agent_chat.frappe")
-    @patch("huf.ai.agent_chat.run_agent_sync")
+    @patch("huf.ai.agent.chat.frappe")
+    @patch("huf.ai.agent.chat.run_agent_sync")
     def test_send_message_forwards_skip_user_message_and_files(self, mock_run, mock_frappe):
         conv_doc = MagicMock()
         conv_doc.is_active = True
@@ -1147,9 +1147,9 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.assertIs(kwargs["skip_user_message"], True)
         self.assertEqual(kwargs["files"], files)
 
-    @patch("huf.ai.agent_chat.frappe")
-    @patch("huf.ai.agent_chat.ConversationManager")
-    @patch("huf.ai.agent_chat.run_agent_sync")
+    @patch("huf.ai.agent.chat.frappe")
+    @patch("huf.ai.agent.chat.ConversationManager")
+    @patch("huf.ai.agent.chat.run_agent_sync")
     def test_new_conversation_forwards_skip_user_message_and_files(
         self, mock_run, mock_cm_cls, mock_frappe
     ):

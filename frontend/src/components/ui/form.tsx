@@ -12,8 +12,14 @@ import {
 
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
+import { FIELD_LABEL_SLOT, FIELD_NOTE } from '@/components/ui/field';
 
 const Form = FormProvider;
+
+// cn()'s tailwind-merge does not know `text-micro` is a font size and drops it
+// when a text-<color> class follows, so resolve the colour/override first and
+// prepend the shared note tokens afterwards.
+const withNote = (...classes: Parameters<typeof cn>) => `${FIELD_NOTE} ${cn(...classes)}`;
 
 type FormFieldContextValue<
   TFieldValues extends FieldValues = FieldValues,
@@ -78,7 +84,7 @@ const FormItem = React.forwardRef<
 
   return (
     <FormItemContext.Provider value={{ id }}>
-      <div ref={ref} className={cn('space-y-2', className)} {...props} />
+      <div ref={ref} className={cn('flex min-w-0 flex-col', className)} {...props} />
     </FormItemContext.Provider>
   );
 });
@@ -93,7 +99,7 @@ const FormLabel = React.forwardRef<
   return (
     <Label
       ref={ref}
-      className={cn(error && 'text-destructive', className)}
+      className={cn(FIELD_LABEL_SLOT, error && 'text-destructive', className)}
       htmlFor={formItemId}
       {...props}
     />
@@ -140,7 +146,7 @@ const FormDescription = React.forwardRef<
     <p
       ref={ref}
       id={formDescriptionId}
-      className={cn('text-[0.8rem] text-muted-foreground', className)}
+      className={withNote('text-steel', className)}
       {...props}
     />
   );
@@ -162,7 +168,8 @@ const FormMessage = React.forwardRef<
     <p
       ref={ref}
       id={formMessageId}
-      className={cn('text-[0.8rem] font-medium text-destructive', className)}
+      role={error ? 'alert' : undefined}
+      className={withNote('text-destructive', className)}
       {...props}
     >
       {body}

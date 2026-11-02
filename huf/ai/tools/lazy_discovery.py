@@ -9,7 +9,7 @@ import json
 
 import frappe
 
-from huf.ai.tool_registry import PermissionAwareToolRegistry
+from huf.ai.tools.registry import PermissionAwareToolRegistry
 from huf.ai.conversation_data_tools import _load_state
 from huf.ai.graph.procedure_binding import (
     get_bound_procedures_for_agent,

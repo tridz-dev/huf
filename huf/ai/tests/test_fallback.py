@@ -3,7 +3,7 @@
 
 """Tests for huf.ai.graph.fallback (T-32).
 
-Frappe-free, mirroring huf.ai.tests.test_procedure_runtime: :func:`execute_procedure` is
+Frappe-free, mirroring huf.ai.procedure.tests.test_procedure_runtime: :func:`execute_procedure` is
 driven directly with a hand-written ``FakeInvoker`` (no frappe, no bench) to produce a real
 ``ProcedureOutcome``, which is then fed into ``huf.ai.graph.fallback``'s builders. This
 proves the fallback module against genuine runtime output, not a hand-rolled stand-in for
@@ -16,7 +16,7 @@ Two things this file exists to prove, per T-32's acceptance criteria:
    per node type below.
 2. Applicability rejection performs provably ZERO side effects: zero tool invocations
    (the stand-in for "zero Agent Tool Call records" in this frappe-free harness -- the
-   real ``Agent Tool Call`` doctype is only written by ``huf.ai.tool_invocation`` when a
+   real ``Agent Tool Call`` doctype is only written by ``huf.ai.tools.invocation`` when a
    tool is actually invoked, so "the fake invoker was never called" is the frappe-free
    proof of the same fact) and the NOT_APPLICABLE payload's shape itself carries no
    partial-state keys at all.
@@ -32,9 +32,9 @@ from unittest.mock import MagicMock
 
 
 def _install_standalone_frappe_stub():
-	"""See huf.ai.tests.test_graph_permissions._install_standalone_frappe_stub -- same
+	"""See huf.ai.graph.tests.test_graph_permissions._install_standalone_frappe_stub -- same
 	underlying gap: this module transitively imports huf.ai.graph.permissions, which
-	imports huf.ai.tool_registry, which does ``from frappe.utils import now_datetime`` at
+	imports huf.ai.tools.registry, which does ``from frappe.utils import now_datetime`` at
 	top level. conftest.py's stub runs too late for the same reason documented there, so
 	this file installs its own narrow stub before any ``huf.*`` import, exactly like
 	test_graph_permissions.py.

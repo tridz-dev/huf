@@ -4,14 +4,14 @@
 """
 _Test P34 AI Provider / AI Model P0 regression suite (Layer B, real Frappe).
 
-Covers the P0 findings for CURRENT_STATE.md section 5 ("Provider / model /
+Covers the P0 findings for CURRENT_STATE audit section 5 ("Provider / model /
 LLM gateway"): AI Provider/AI Model CRUD round-trips, the `provider_name`
 whitespace validation asymmetry (blocked on insert, warn-only on edit for
 existing records), local-LLM `api_key`/`api_base_url` validation, the
 paired-custom-pricing requirement on AI Model, and the actual
 delete-a-linked-Provider behavior.
 
-Uses `huf.ai.tests.factories` (`make_ai_provider`, `make_ai_model`,
+Uses `huf.testing.factories` (`make_ai_provider`, `make_ai_model`,
 `make_ai_provider_and_model`) rather than duplicating fixture logic — see
 that module's docstring for the documented `provider_name` single-word
 default fix this suite relies on.
@@ -24,7 +24,7 @@ bench in this environment) — self-verified only via `python3 -m py_compile`.
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.tests.factories import make_ai_model, make_ai_provider, make_ai_provider_and_model
+from huf.testing.factories import make_ai_model, make_ai_provider, make_ai_provider_and_model
 
 
 class TestProviderModelP0(IntegrationTestCase):

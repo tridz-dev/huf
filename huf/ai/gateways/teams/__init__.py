@@ -1,0 +1,1 @@
+"""Microsoft Teams gateway modules."""

@@ -18,6 +18,7 @@ Run with:
     bench --site <site> run-tests --app huf --module huf.ai.tests.test_transcribe_file_permission
 """
 import frappe
+from frappe.core.doctype.file.file import has_permission as file_controller_permission
 from frappe.utils.file_manager import save_file
 
 from frappe.tests import IntegrationTestCase
@@ -97,7 +98,12 @@ class TestTranscribeFilePermission(IntegrationTestCase):
 		file_id = self._make_private_file_as(user_a)
 
 		frappe.set_user(user_b)
-		self.assertFalse(frappe.has_permission("File", "read", doc=file_id))
+		# Frappe's own File controller rule. (frappe.has_permission can be
+		# short-circuited to True by another installed app's File hook, e.g.
+		# lms.file_has_permission returning True instead of None.)
+		self.assertFalse(
+			file_controller_permission(frappe.get_doc("File", file_id), "read", user=user_b)
+		)
 
 		with self.assertRaises(frappe.PermissionError):
 			audio_service._resolve_file_doc(file_id=file_id)

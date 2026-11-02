@@ -78,7 +78,9 @@ export default AgentsPage;
 
 function AgentsPage() {
   const navigate = useNavigate();
-  const { hufRole } = usePermissions();
+  const { hufRole, hasCapability } = usePermissions();
+  // The "New agent" button, in the header and on the empty page, is for people who may create agents.
+  const canCreate = hasCapability('agent.create');
   // Backend maps Administrator / System Manager to the "Huf Admin" Huf role.
   const isAdmin = hufRole === 'Huf Admin';
 
@@ -151,7 +153,7 @@ function AgentsPage() {
   return (
     <PageFrame
       title="Agents"
-      actions={<Button onClick={() => navigate('/agents/new')}>New agent</Button>}
+      actions={canCreate ? <Button onClick={() => navigate('/agents/new')}>New agent</Button> : undefined}
       filters={
         <FilterBar
           searchPlaceholder="Search agents..."
@@ -205,8 +207,8 @@ function AgentsPage() {
               variant="create"
               icon={Users}
               title="No agents"
-              description="Create an agent to get started."
-              action={{ label: 'New agent', onClick: () => navigate('/agents/new') }}
+              description={canCreate ? 'Create an agent to get started.' : 'No agents are shared with you yet. Ask a teammate to share one, or ask your administrator for access to create agents.'}
+              action={canCreate ? { label: 'New agent', onClick: () => navigate('/agents/new') } : undefined}
             />
           )
         }

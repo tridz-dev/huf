@@ -167,7 +167,7 @@ test.describe.serial('flow builder scenario: webhook -> agent -> condition -> tw
       await canvas.settle();
 
       // --- 5. Wire the condition's true/false routing (config-driven, not
-      // edge-driven — see huf/ai/flow_engine.py _exec_condition) --------
+      // edge-driven — see huf/ai/flow/engine.py _exec_condition) --------
       await canvas.selectNode('Condition (If/Else)');
       await page.locator('#condition-expr').fill('context.get("approved") == True');
       await sidebar.fillField('True Branch', 'Path True');
@@ -223,7 +223,7 @@ test.describe.serial('flow builder scenario: webhook -> agent -> condition -> tw
       // for construction (the flow itself was built 100% through the UI
       // above). Expected to fail at the Agent step because no AI Provider
       // on this bench has a configured api_key (verified beforehand).
-      const webhookPath = `/api/method/huf.ai.flow_api.flow_webhook?flow_id=${flowId}&webhook_key=scenario-main-key`;
+      const webhookPath = `/api/method/huf.ai.flow.api.flow_webhook?flow_id=${flowId}&webhook_key=scenario-main-key`;
       const runRes = await api.post(webhookPath, {
         data: { approved: true, name: 'World' },
       });
@@ -352,7 +352,7 @@ test.describe.serial('flow builder scenario: webhook -> agent -> condition -> tw
       await selectors.canvas.headerActionsGroup(page).getByRole('button', { name: /^publish$/i }).click();
       await expect(page.getByText(/published successfully/i)).toBeVisible({ timeout: 10000 }).catch(() => {});
 
-      const webhookPath = `/api/method/huf.ai.flow_api.flow_webhook?flow_id=${flowId}&webhook_key=scenario-engine-key`;
+      const webhookPath = `/api/method/huf.ai.flow.api.flow_webhook?flow_id=${flowId}&webhook_key=scenario-engine-key`;
 
       // --- Run 1: approved = true -> True branch should execute ---------
       const trueRes = await api.post(webhookPath, { data: { approved: true } });

@@ -1,3 +1,5 @@
+import { parseServerDate } from "@/lib/serverTime";
+
 /**
  * Formats a date string or Date object into a human-readable "time ago" string
  * Examples: "5 mins ago", "2 hours ago", "3 days ago", "2 weeks ago", "1 month ago"
@@ -9,10 +11,10 @@ export function formatTimeAgo(date: string | Date | null | undefined): string {
   if (!date) return 'Never';
   
   try {
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    const dateObj = parseServerDate(date);
     
     // Check if date is valid
-    if (isNaN(dateObj.getTime())) {
+    if (!dateObj) {
       return 'Never';
     }
     
@@ -81,11 +83,11 @@ export function calculateDuration(
   }
 
   try {
-    const start = new Date(startTime);
-    const end = new Date(endTime);
+    const start = parseServerDate(startTime);
+    const end = parseServerDate(endTime);
 
     // Check if dates are valid
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    if (!start || !end) {
       return 'Not available';
     }
 

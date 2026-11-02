@@ -3,7 +3,7 @@
 
 """Unit tests for ``FlowDefinition._validate_definition_json`` (shared graph-IR migration).
 
-Frappe-free by design, mirroring ``huf/ai/tests/test_procedure_conversion.py``:
+Frappe-free by design, mirroring ``huf/ai/procedure/tests/test_procedure_conversion.py``:
 ``huf.huf.doctype.flow_definition.flow_definition`` imports ``frappe`` at module load
 time, and ``huf.ai.graph.validator`` (which it now delegates validation to) imports
 ``huf.ai.graph.permissions``, whose ``default_tool_classifier`` calls
@@ -118,7 +118,7 @@ def _valid_flow_definition() -> dict:
 			{
 				"id": "start",
 				"type": "trigger.webhook",
-				"config": {"method": "POST"},
+				"config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"},
 				"next": "finish",
 			},
 			{
@@ -141,7 +141,7 @@ def _old_shape_definition() -> dict:
 		"version": 1,
 		"entry": "start",
 		"nodes": [
-			{"id": "start", "type": "trigger.webhook", "config": {"method": "POST"}},
+			{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": "test-webhook-secret-0123456789abcdef"}},
 			{"id": "finish", "type": "end", "config": {}},
 		],
 		"edges": [{"from": "start", "to": "finish", "type": "always"}],
@@ -176,7 +176,8 @@ class TestFlowDefinitionValidation(unittest.TestCase):
 		# message that prove it was actually rejected for being the old shape, not
 		# some unrelated reason.
 		message = str(ctx.exception)
-		self.assertIn("graph-IR", message)
+		self.assertIn("flow definition is incomplete", message)
+		self.assertNotIn("[SCHEMA]", message)
 
 	def test_rejects_stray_old_format_keys_even_with_new_required_fields_present(self):
 		"""A definition that supplies every new-IR required key *and* still carries a

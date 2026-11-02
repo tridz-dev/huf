@@ -18,7 +18,7 @@ the queue-first bookkeeping (Agent Run status/lifecycle) that a real,
 interactively-run agent conversation gets -- it is readable message history
 only, not a full replica of a live chat run. This writeback never calls
 `run_agent_sync`/`run_automation` and never touches the conversation lock (see
-`agent_integration.py`'s `_conversation_lock_key`); it only inserts plain
+`agent/integration.py`'s `_conversation_lock_key`); it only inserts plain
 Document records, so it carries none of the deadlock risk that path has. It
 is best-effort and wrapped in its own try/except so a failure here never
 prevents `result_summary`/`estimated_cost`/`completed_at` from being saved.
@@ -29,7 +29,7 @@ from uuid import uuid4
 import frappe
 from frappe.utils import now_datetime
 
-from huf.ai.agent_integration import _run_async_safely
+from huf.ai.agent.integration import _run_async_safely
 from huf.ai.cost_calculator import calculate_cost
 
 _RESULT_SAMPLE_SIZE = 5

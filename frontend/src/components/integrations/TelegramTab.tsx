@@ -97,9 +97,9 @@ export function TelegramTab({
         render={({ field }) => (
           <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
             <div className="space-y-0.5">
-              <FormLabel>Auto setup webhook on save</FormLabel>
+              <FormLabel>Connect to Telegram on save</FormLabel>
               <FormDescription>
-                Automatically call setWebhook when this document is saved
+                Tell Telegram where to send messages whenever you save this gateway
               </FormDescription>
             </div>
             <FormControl>
@@ -111,7 +111,7 @@ export function TelegramTab({
 
       <div className="space-y-4 rounded-lg border p-4 bg-muted/30">
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <h3 className="text-sm font-medium">Webhook Configuration</h3>
+          <h3 className="text-sm font-medium">Connection</h3>
           <Button
             type="button"
             variant="outline"
@@ -120,7 +120,7 @@ export function TelegramTab({
             disabled={settingUpWebhook}
           >
             <RefreshCw className={cn('w-4 h-4 mr-2', settingUpWebhook && 'animate-spin')} />
-            {settingUpWebhook ? 'Setting up...' : 'Setup Webhook'}
+            {settingUpWebhook ? 'Setting up...' : 'Connect to Telegram'}
           </Button>
         </div>
 
@@ -130,18 +130,18 @@ export function TelegramTab({
 
         {!isHttps && webhookUrl && (
           <p className="text-sm text-destructive">
-            Telegram requires a public HTTPS URL. The current webhook URL may not work on localhost.
+            Telegram requires a public HTTPS URL. This address may not work on localhost.
           </p>
         )}
 
         <div className="space-y-2">
-          <FormLabel>Webhook URL</FormLabel>
+          <FormLabel>Address Telegram sends messages to</FormLabel>
           <Input readOnly value={webhookUrl || ''} className="bg-muted font-mono text-xs" />
         </div>
 
         {lastWebhookSetup && (
           <p className="text-xs text-muted-foreground">
-            Last setup attempt: {new Date(lastWebhookSetup).toLocaleString()}
+            Last connection attempt: {new Date(lastWebhookSetup).toLocaleString()}
           </p>
         )}
       </div>

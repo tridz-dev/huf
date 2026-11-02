@@ -63,7 +63,7 @@ export async function deleteFlowByName(api: APIRequestContext, docName: string):
 
 /** Fetch a Flow Run doc (status/error) for outcome assertions. */
 export async function getFlowRun(api: APIRequestContext, flowRunId: string): Promise<FlowRunDetail> {
-  const res = await api.get('/api/method/huf.ai.flow_api.get_flow_run', {
+  const res = await api.get('/api/method/huf.ai.flow.api.get_flow_run', {
     params: { flow_run_id: flowRunId },
   });
   if (!res.ok()) throw new Error(`getFlowRun(${flowRunId}) failed: ${res.status()} ${await res.text()}`);
@@ -96,7 +96,7 @@ export interface FlowDefinitionDoc {
 
 /** Fetch the saved Flow Definition (parsed definition_json) via the same whitelisted method the app uses. */
 export async function getFlowDefinition(api: APIRequestContext, flowId: string): Promise<FlowDefinitionDoc> {
-  const res = await api.get('/api/method/huf.ai.flow_api.get_flow_definition', {
+  const res = await api.get('/api/method/huf.ai.flow.api.get_flow_definition', {
     params: { flow_id: flowId },
   });
   if (!res.ok()) throw new Error(`getFlowDefinition(${flowId}) failed: ${res.status()} ${await res.text()}`);
@@ -112,7 +112,7 @@ export async function saveFlowDefinition(
   flowId: string,
   definitionJson: Record<string, unknown>,
 ): Promise<void> {
-  const res = await api.post('/api/method/huf.ai.flow_api.save_flow_definition', {
+  const res = await api.post('/api/method/huf.ai.flow.api.save_flow_definition', {
     data: { flow_id: flowId, definition_json: JSON.stringify(definitionJson) },
   });
   if (!res.ok()) throw new Error(`saveFlowDefinition(${flowId}) failed: ${res.status()} ${await res.text()}`);
@@ -137,7 +137,7 @@ export async function runFlowApi(
 ): Promise<{ flow_run_id: string; status: string; current_node_id: string }> {
   // A Draft flow cannot run at all, so make sure it is Active first.
   await activateFlowApi(api, flowId);
-  const res = await api.post('/api/method/huf.ai.flow_api.run_flow', {
+  const res = await api.post('/api/method/huf.ai.flow.api.run_flow', {
     data: { flow_id: flowId },
   });
   if (!res.ok()) throw new Error(`runFlowApi(${flowId}) failed: ${res.status()} ${await res.text()}`);

@@ -1,0 +1,187 @@
+{
+ "actions": [],
+ "autoname": "WAUD-.#####",
+ "creation": "2026-10-28 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "gateway",
+  "title",
+  "description",
+  "is_adhoc",
+  "section_consent",
+  "consent_source",
+  "consent_basis",
+  "consent_purposes_section",
+  "purpose_marketing",
+  "purpose_utility",
+  "purpose_events",
+  "default_consent_at",
+  "section_attest",
+  "consent_attested_by",
+  "consent_attested_at",
+  "section_counts",
+  "member_count",
+  "suppressed_count"
+ ],
+ "fields": [
+  {
+   "fieldname": "gateway",
+   "fieldtype": "Link",
+   "label": "Gateway",
+   "options": "Gateway",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "length": 140,
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "is_adhoc",
+   "fieldtype": "Check",
+   "label": "Only for one broadcast",
+   "default": "0",
+   "read_only": 1,
+   "set_only_once": 1,
+   "description": "Hidden from the audience library."
+  },
+  {
+   "fieldname": "section_consent",
+   "fieldtype": "Section Break",
+   "label": "Consent"
+  },
+  {
+   "fieldname": "consent_source",
+   "fieldtype": "Data",
+   "label": "Where consent was collected",
+   "length": 255,
+   "reqd": 1,
+   "description": "For example: website sign-up form, checkout opt-in, in-store card."
+  },
+  {
+   "fieldname": "consent_basis",
+   "fieldtype": "Select",
+   "label": "How consent was collected",
+   "options": "opt-in form\ncheckout\nin-store\ninbound message\nimport with attestation",
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "consent_purposes_section",
+   "fieldtype": "Section Break",
+   "label": "What these contacts agreed to"
+  },
+  {
+   "fieldname": "purpose_marketing",
+   "fieldtype": "Check",
+   "label": "Marketing messages",
+   "default": "0"
+  },
+  {
+   "fieldname": "purpose_utility",
+   "fieldtype": "Check",
+   "label": "Updates and utility messages",
+   "default": "0"
+  },
+  {
+   "fieldname": "purpose_events",
+   "fieldtype": "Check",
+   "label": "Events and reminders",
+   "default": "0"
+  },
+  {
+   "fieldname": "default_consent_at",
+   "fieldtype": "Datetime",
+   "label": "Consent given at",
+   "set_only_once": 1,
+   "description": "Default for members without their own date. Cannot be in the future."
+  },
+  {
+   "fieldname": "section_attest",
+   "fieldtype": "Section Break",
+   "label": "Attestation"
+  },
+  {
+   "fieldname": "consent_attested_by",
+   "fieldtype": "Link",
+   "label": "Attested by",
+   "options": "User",
+   "read_only": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "consent_attested_at",
+   "fieldtype": "Datetime",
+   "label": "Attested at",
+   "read_only": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "section_counts",
+   "fieldtype": "Section Break",
+   "label": "Counts"
+  },
+  {
+   "fieldname": "member_count",
+   "fieldtype": "Int",
+   "label": "Members",
+   "read_only": 1,
+   "default": "0",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "suppressed_count",
+   "fieldtype": "Int",
+   "label": "Suppressed (opted out)",
+   "read_only": 1,
+   "default": "0"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-28 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "WhatsApp Audience",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Admin",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+}

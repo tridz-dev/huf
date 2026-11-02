@@ -12,15 +12,20 @@ from __future__ import annotations
 
 from collections import deque
 
+from huf.ai.flow.gateways.registry import gateway_trigger_problems
+from huf.ai.flow.support.schedule_rules import cron_problem, time_zone_problem
 from huf.ai.graph.validator import _control_flow_targets, _entry_roots
 
 UNSET_TRIGGER_TYPE = "trigger.unset"
 
 # Required, non-blank string config keys per node type (mirrors graph_ir.schema.json).
 REQUIRED_CONFIG_KEYS: dict[str, tuple[str, ...]] = {
-	"trigger.webhook": ("method",),
+	"trigger.webhook": ("method", "secret"),
 	"trigger.schedule": ("cron",),
 	"trigger.doc-event": ("doctype", "event"),
+	"trigger.gateway": ("gateway",),
+	"trigger.whatsapp": ("gateway",),
+	"trigger.telegram": ("gateway",),
 	"agent.run": ("agent", "prompt"),
 	"tool.call": ("tool_id",),
 	"router.llm": ("prompt",),
@@ -60,6 +65,18 @@ def collect_activation_problems(defn: dict) -> list[str]:
 		for key in REQUIRED_CONFIG_KEYS.get(n.get("type"), ()):
 			if _is_blank(config.get(key)):
 				problems.append(f"node {n.get('id')!r} ({n.get('type')}): required config {key!r} is empty")
+
+	for n in nodes:
+		if n.get("type") != "trigger.schedule":
+			continue
+		config = n.get("config") or {}
+		# A blank cron is already reported above; only a malformed one needs its own sentence.
+		issues = [] if _is_blank(config.get("cron")) else [cron_problem(config.get("cron"))]
+		for issue in issues + [time_zone_problem(config.get("time_zone"))]:
+			if issue:
+				problems.append(f"node {n.get('id')!r} (trigger.schedule): {issue}")
+
+	problems.extend(gateway_trigger_problems(defn))
 
 	for n in nodes:
 		for field, target in _control_flow_targets(n):

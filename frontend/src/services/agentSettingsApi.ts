@@ -10,6 +10,8 @@ export interface AgentSettingsDoc {
   default_model?: string | null;
   skill_destinations?: string | null;
   last_skill_scans?: string | null;
+  /** 1 when Flows may run Python code in a sandbox (System Manager only; off by default). */
+  allow_code_in_flows?: 0 | 1;
 }
 
 export async function getAgentSettings(): Promise<AgentSettingsDoc | undefined> {

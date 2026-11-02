@@ -129,6 +129,11 @@ def _finalize_tool_call(doc: Document, error_message: str) -> None:
 	call.error_message = error_message
 	call.save(ignore_permissions=True)
 
+	# A Flow step parked behind this approval is waiting for exactly this outcome.
+	from huf.ai.flow.code_node import on_call_closed
+
+	on_call_closed(call.name)
+
 
 def _mark_expired(doc: Document) -> None:
 	"""Lapse an undecided approval: Expired + finalize the parked tool call.

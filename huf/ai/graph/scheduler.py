@@ -18,7 +18,7 @@ draws a hard line:
   walking a branch's own :class:`~huf.ai.graph.executor.GraphExecutor` over a *private copy*
   of the run's :class:`~huf.ai.graph.executor.GraphContext`, and calling the injected
   ``tool_invoker`` (which, in the frappe-facing caller, still ends up inside
-  ``huf.ai.tool_invocation.invoke_tool_sync`` -- see the caveat in
+  ``huf.ai.tools.invocation.invoke_tool_sync`` -- see the caveat in
   ``huf/ai/graph/procedure_runtime.py``'s module docstring: this scheduler does not change
   T-23's existing rule that ``execute_procedure`` itself never imports ``frappe``. A caller
   that wires a real, frappe-backed ``tool_invoker`` into concurrent branches is taking on
@@ -84,7 +84,7 @@ BOUNDS ENFORCED HERE (all fail closed -- I7)
   ``tool_id`` (created lazily under a lock), acquired around every ``tool.call`` invocation
   regardless of whether it runs on the main thread or a worker thread, capped at
   ``contract.limits.max_tool_concurrency``.
-* Per-connector limits: this codebase's tool metadata (``huf/ai/tool_invocation.py``,
+* Per-connector limits: this codebase's tool metadata (``huf/ai/tools/invocation.py``,
   ``huf/ai/graph/permissions.py``) has no connector/API identifier distinct from
   ``tool_id`` as of T-30 -- there is no ``connector_id`` or similar field on a Tool
   Function/registered tool. Per-tool concurrency above is therefore also this

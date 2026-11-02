@@ -2,6 +2,7 @@ import * as React from 'react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 
 import { cn } from '@/lib/utils';
+import { useClosingGuard, withGuard } from '@/hooks/useClosingGuard';
 
 const Popover = PopoverPrimitive.Root;
 
@@ -12,10 +13,13 @@ const PopoverAnchor = PopoverPrimitive.Anchor;
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = 'center', sideOffset = 4, ...props }, ref) => (
+>(({ className, align = 'center', sideOffset = 4, onInteractOutside, ...props }, forwardedRef) => {
+  const { ref, guard } = useClosingGuard(forwardedRef);
+  return (
   <PopoverPrimitive.Portal>
     <PopoverPrimitive.Content
       ref={ref}
+      onInteractOutside={withGuard(onInteractOutside, guard)}
       align={align}
       sideOffset={sideOffset}
       className={cn(
@@ -25,7 +29,8 @@ const PopoverContent = React.forwardRef<
       {...props}
     />
   </PopoverPrimitive.Portal>
-));
+  );
+});
 PopoverContent.displayName = PopoverPrimitive.Content.displayName;
 
 export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor };

@@ -1,37 +1,23 @@
 import { useState } from 'react';
-import { Plus, Loader2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Plus } from 'lucide-react';
 import { Button } from './ui/button';
-import { useFlowContext } from '../contexts/FlowContext';
-import { toast } from 'sonner';
+import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
+import { NewFlowDialog } from './flow/list/NewFlowDialog';
 
+/** The list's one primary action. It opens the chooser: start from scratch, or copy a ready-made template. */
 export function FlowsListHeaderActions() {
-  const navigate = useNavigate();
-  const { createFlow } = useFlowContext();
-  const [creating, setCreating] = useState(false);
+  const [open, setOpen] = useState(false);
+  const { canCreate } = useFlowPermissions();
 
-  const handleNewFlow = async () => {
-    try {
-      setCreating(true);
-      const newFlow = await createFlow('New Flow', 'Uncategorized');
-      navigate(`/flows/${newFlow.id}`);
-    } catch (err) {
-      toast.error('Failed to create flow', {
-        description: err instanceof Error ? err.message : 'Unknown error',
-      });
-    } finally {
-      setCreating(false);
-    }
-  };
+  if (!canCreate) return null;
 
   return (
-    <Button variant="display" onClick={handleNewFlow} size="sm" disabled={creating}>
-      {creating ? (
-        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-      ) : (
+    <>
+      <Button variant="display" data-testid="flow-new" onClick={() => setOpen(true)} size="sm">
         <Plus className="w-4 h-4 mr-2" />
-      )}
-      {creating ? 'Creating...' : 'New Flow'}
-    </Button>
+        New flow
+      </Button>
+      <NewFlowDialog open={open} onOpenChange={setOpen} />
+    </>
   );
 }

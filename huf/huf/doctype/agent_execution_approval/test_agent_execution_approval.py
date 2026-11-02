@@ -370,6 +370,22 @@ class TestAgentExecutionApproval(unittest.TestCase):
 		self.assertEqual(call.status, "Failed")
 		self.assertFalse(self._hold_exists(approval.name))
 
+	def test_lapsed_pending_approval_is_not_listed_but_stays_pending(self):
+		from huf.ai.execution_api import get_pending_agent_execution_approvals
+
+		requester = self._make_user(roles=("Huf User",))
+		approver = self._make_user(roles=("Huf Manager",))
+		_, live = self._make_parked_pair_directly(requester, expires_in_hours=2, code="print('live')")
+		_, lapsed = self._make_parked_pair_directly(requester, expires_in_hours=-1, code="print('lapsed')")
+
+		frappe.set_user(approver)
+		listed = {row["name"] for row in get_pending_agent_execution_approvals()}
+		self.assertIn(live.name, listed)
+		self.assertNotIn(lapsed.name, listed)
+		frappe.set_user("Administrator")
+		lapsed.reload()
+		self.assertEqual(lapsed.status, "Pending")  # lapses to Expired lazily, when somebody tries to decide it
+
 	def test_unauthorized_user_cannot_decide(self):
 		requester = self._make_user(roles=("Huf User",))
 		outsider = self._make_user(roles=("Huf User",))

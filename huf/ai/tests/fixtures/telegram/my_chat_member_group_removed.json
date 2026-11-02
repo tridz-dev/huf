@@ -1,0 +1,33 @@
+{
+  "update_id": 2003,
+  "my_chat_member": {
+    "chat": {
+      "id": -1001234,
+      "type": "supergroup",
+      "title": "Huf Guests"
+    },
+    "from": {
+      "id": 9,
+      "is_bot": false,
+      "first_name": "Admin"
+    },
+    "date": 1760000000,
+    "old_chat_member": {
+      "status": "member",
+      "user": {
+        "id": 42,
+        "is_bot": true,
+        "first_name": "Huf"
+      }
+    },
+    "new_chat_member": {
+      "status": "kicked",
+      "user": {
+        "id": 42,
+        "is_bot": true,
+        "first_name": "Huf"
+      },
+      "until_date": 0
+    }
+  }
+}

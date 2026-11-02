@@ -11,7 +11,7 @@ def execute():
 	Agent Run gained flat columns for the metrics that used to live only inside the
 	usage_snapshot JSON blob, so they can finally be summed/filtered in SQL. Of those
 	new columns, only three were ever actually recorded historically, because
-	agent_integration.py only ever wrote these keys into usage_snapshot:
+	agent/integration.py only ever wrote these keys into usage_snapshot:
 
 	  - cache_creation_tokens         <- usage_snapshot.cache_creation_tokens
 	  - total_tokens                  <- usage_snapshot.total_tokens

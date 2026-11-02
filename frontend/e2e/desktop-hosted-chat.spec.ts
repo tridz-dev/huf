@@ -38,7 +38,7 @@ async function mockHostedChat(page: Page, host: Record<string, unknown> = {}) {
   await page.route('**/api/resource/Agent?**', (r) => r.fulfill(json({ data: [AGENT] })));
   await page.route('**/api/resource/Agent%20Conversation/conv-1**', (r) => r.fulfill(json({ data: HOSTED })));
   await page.route('**/api/resource/Agent%20Conversation?**', (r) => r.fulfill(json({ data: [HOSTED] })));
-  await page.route('**/api/method/huf.ai.desktop_sessions.list_desktop_hosts**', (r) =>
+  await page.route('**/api/method/huf.ai.desktop.sessions.list_desktop_hosts**', (r) =>
     r.fulfill(
       json({
         message: [
@@ -78,7 +78,7 @@ test.describe('Desktop-hosted chat', () => {
   test('changing the permission mode shows the mode the desktop confirmed', async ({ page }) => {
     await mockHostedChat(page);
     let body: { device_id?: string; mode?: string } = {};
-    await page.route('**/api/method/huf.ai.desktop_sessions.set_desktop_permission_mode**', (r) => {
+    await page.route('**/api/method/huf.ai.desktop.sessions.set_desktop_permission_mode**', (r) => {
       body = r.request().postDataJSON();
       return r.fulfill(json({ message: { ok: true, applied_mode: 'full', device_id: 'dev1' } }));
     });
@@ -94,7 +94,7 @@ test.describe('Desktop-hosted chat', () => {
 
   test('a refused mode change is shown, not hidden', async ({ page }) => {
     await mockHostedChat(page);
-    await page.route('**/api/method/huf.ai.desktop_sessions.set_desktop_permission_mode**', (r) =>
+    await page.route('**/api/method/huf.ai.desktop.sessions.set_desktop_permission_mode**', (r) =>
       r.fulfill(json({ message: { ok: false, error: { code: 'mode_not_applied', message: 'no', applied_mode: 'ask' } } })),
     );
     await goto(page, '/chat/conv-1');
@@ -107,7 +107,7 @@ test.describe('Desktop-hosted chat', () => {
   test('desktop_offline puts a banner above the composer and Retry resends', async ({ page }) => {
     await mockHostedChat(page);
     let calls = 0;
-    await page.route('**/api/method/huf.ai.agent_chat.send_message_to_conversation**', (r) => {
+    await page.route('**/api/method/huf.ai.agent.chat.send_message_to_conversation**', (r) => {
       calls += 1;
       if (calls === 1) {
         return r.fulfill(
@@ -147,14 +147,14 @@ test.describe('Desktop-hosted chat', () => {
   test('workspace_changed offers a rebind that resends', async ({ page }) => {
     await mockHostedChat(page);
     let sends = 0;
-    await page.route('**/api/method/huf.ai.agent_chat.send_message_to_conversation**', (r) => {
+    await page.route('**/api/method/huf.ai.agent.chat.send_message_to_conversation**', (r) => {
       sends += 1;
       return sends === 1
         ? r.fulfill(json({ message: { success: false, code: 'workspace_changed', error: 'workspace_changed', message: 'x', conversation_id: 'conv-1' } }))
         : r.fulfill(json({ message: { success: true, queued: true, status: 'Queued', conversation_id: 'conv-1', agent_run_id: 'run-2', sequence: 2 } }));
     });
     let rebound = false;
-    await page.route('**/api/method/huf.ai.desktop_sessions.rebind_desktop_conversation**', (r) => {
+    await page.route('**/api/method/huf.ai.desktop.sessions.rebind_desktop_conversation**', (r) => {
       rebound = true;
       return r.fulfill(json({ message: { ok: true, conversation: 'conv-1', host_label: 'Laptop - other' } }));
     });
@@ -171,7 +171,7 @@ test.describe('Desktop-hosted chat', () => {
 
   test('remote_disabled by the desktop tells the user to enable remote control there', async ({ page }) => {
     await mockHostedChat(page);
-    await page.route('**/api/method/huf.ai.agent_chat.send_message_to_conversation**', (r) =>
+    await page.route('**/api/method/huf.ai.agent.chat.send_message_to_conversation**', (r) =>
       r.fulfill(json({ message: { success: false, code: 'remote_disabled', error: 'remote_disabled', message: 'x', disabled_by: 'desktop' } })),
     );
     await goto(page, '/chat/conv-1');
@@ -184,7 +184,7 @@ test.describe('Desktop-hosted chat', () => {
 
   test('remote_disabled by the agent links to the agent permissions', async ({ page }) => {
     await mockHostedChat(page);
-    await page.route('**/api/method/huf.ai.agent_chat.send_message_to_conversation**', (r) =>
+    await page.route('**/api/method/huf.ai.agent.chat.send_message_to_conversation**', (r) =>
       r.fulfill(json({ message: { success: false, code: 'remote_disabled', error: 'remote_disabled', message: 'x', disabled_by: 'agent' } })),
     );
     await goto(page, '/chat/conv-1');

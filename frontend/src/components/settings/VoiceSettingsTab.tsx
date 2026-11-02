@@ -25,7 +25,7 @@ import {
 import { getProviders } from '@/services/providerApi';
 import type { AIProvider } from '@/types/agent.types';
 import type { ElevenlabsSettingsDoc, HttpProviderSettingsDoc } from '@/types/integration.types';
-import { settleAll } from '@/lib/settleAll';
+import { settleAll } from '@/lib/utils';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 
 export { VoiceSettingsTab };

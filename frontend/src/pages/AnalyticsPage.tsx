@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Activity, ArrowUpDown } from 'lucide-react';
 import { PageFrame } from '@/layouts/PageFrame';
@@ -83,7 +83,7 @@ interface BreakdownRow extends ExecutionAnalyticsSummary {
 
 const ENTITY_DIMENSIONS: ReadonlySet<AnalyticsDimension> = new Set(['agent', 'provider', 'model']);
 
-export default function AnalyticsPage() {
+export default function AnalyticsPage({ tabs }: { tabs?: ReactNode } = {}) {
   const navigate = useNavigate();
   const [dimension, setDimension] = useState<AnalyticsDimension>('provider');
   const [window, setWindow] = useState<TimeWindow>('7d');
@@ -246,7 +246,8 @@ export default function AnalyticsPage() {
 
   return (
     <PageFrame
-      title="Analytics"
+      title={tabs ? 'Executions' : 'Analytics'}
+      tabs={tabs}
       badge={<ExperimentalBadge />}
       meta={freshnessLabel}
       filters={

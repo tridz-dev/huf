@@ -174,7 +174,7 @@ def load_all_skill_tools(agent_doc, user: str) -> list[FunctionTool]:
 
     # Lazy imports to avoid circular dependencies between sdk_tools and loader.
     from huf.ai.sdk_tools import create_function_tool
-    from huf.ai.tool_registry import PermissionAwareToolRegistry
+    from huf.ai.tools.registry import PermissionAwareToolRegistry
 
     if not _skill_doctypes_exist():
         return tools

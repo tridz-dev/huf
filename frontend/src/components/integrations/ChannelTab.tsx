@@ -1,46 +1,38 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Check, Copy, RefreshCw, ShieldCheck, Trash2, Send, Loader2 } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Field } from '@/components/ui/field';
 import { Switch } from '@/components/ui/switch';
 import {
   deleteGateway,
   getAvailableAgents,
   getAvailableFlows,
+  getGateway,
   getGateways,
   getGatewayReadinessPreview,
   updateGateway,
   type GatewayDoc,
-  type GatewayPolicy,
   type GatewayReadinessPreview,
+  WHATSAPP_GATEWAY_FIELDS,
 } from '@/services/gatewayApi';
+import { ProviderPanels } from '@/components/gateway/ProviderPanels';
+import { CONNECTOR_NEEDED } from '@/components/whatsapp/BridgeUnavailable';
+import { getSetupStatus } from '@/services/whatsappHealthApi';
 import { getGatewayReadiness } from '@/utils/gatewayReadiness';
-import { getGatewayWebhookUrl } from '@/utils/gatewayWebhook';
 import { getIntegrationSetting, setupTelegramWebhook } from '@/services/integrationApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
-import { call } from '@/lib/frappe-sdk';
+import { DeleteGatewayDialog } from './channel/DeleteGatewayDialog';
+import { ConnectionStatus } from './channel/ConnectionStatus';
+import { SlackPolicySection, slackSaveFields } from './channel/SlackPolicySection';
+import { DirectPolicySection } from './channel/DirectPolicySection';
+import { RoomPolicySection } from './channel/RoomPolicySection';
+import { RoutingTargetSection } from './channel/RoutingTargetSection';
+import { TestMessageSection } from './channel/TestMessageSection';
+import { WebhookSection, type TelegramWebhookState } from './channel/WebhookSection';
 
 interface ChannelTabProps {
   /** Name of the Integration Settings record this channel's credentials live on. */
@@ -56,26 +48,20 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
   const [gateway, setGateway] = useState<GatewayDoc | null>(null);
   const [agents, setAgents] = useState<{ name: string; agent_name: string }[]>([]);
   const [flows, setFlows] = useState<{ name: string; title: string }[]>([]);
-  const [copied, setCopied] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [serverReadiness, setReadiness] = useState<GatewayReadinessPreview | null>(null);
   const [readinessLoading, setReadinessLoading] = useState(false);
+  // WhatsApp: whether the WhatsApp connector app (templates, message history) is installed.
+  const [connectorAvailable, setConnectorAvailable] = useState<boolean | null>(null);
   // CL-04: Telegram used to have its own separate tab (TelegramTab.tsx) duplicating
   // most of this tab with different field names (telegram_agent instead of
   // default_agent/default_flow) and its own webhook flow. That tab is now removed;
   // its one genuinely provider-specific piece -- the "Setup Webhook" convenience
   // button, which calls Telegram's setWebhook via the Integration Settings record --
   // lives here instead, gated on provider === 'Telegram'.
-  const [telegramWebhook, setTelegramWebhook] = useState<{
-    url?: string;
-    status?: string;
-    lastSetup?: string;
-  }>({});
+  const [telegramWebhook, setTelegramWebhook] = useState<TelegramWebhookState>({});
   const [settingUpWebhook, setSettingUpWebhook] = useState(false);
-  const [testRecipientId, setTestRecipientId] = useState('');
-  const [testSending, setTestSending] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const load = useCallback(async () => {
     if (!settingId) return;
@@ -87,7 +73,12 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
         getAvailableFlows(),
       ]);
       const linked = gateways.find((g) => g.integration_settings === settingId) || null;
-      setGateway(linked);
+      // The list only carries summary columns; the editor needs every field.
+      setGateway(linked ? await getGateway(linked.name) : null);
+      if (linked?.provider === 'WhatsApp') {
+        const status = await getSetupStatus();
+        setConnectorAvailable(status.ok ? status.data.connector_available : null);
+      }
       setAgents(agentList);
       setFlows(flowList);
 
@@ -130,7 +121,7 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
     try {
       const preview = await getGatewayReadinessPreview(gatewayName);
       setReadiness(preview);
-    } catch (error) {
+    } catch {
       // GW-15: this is a server-verified check on top of the local heuristic
       // below, not a replacement for it -- if the endpoint is unreachable we
       // just fall back to the local, less complete checklist rather than
@@ -170,9 +161,16 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
         room_sender_policy: gateway.room_sender_policy,
         mention_required: gateway.mention_required,
         pairing_ttl_minutes: gateway.pairing_ttl_minutes,
+        pairing_reply_enabled: gateway.pairing_reply_enabled,
+        pairing_pending_limit: gateway.pairing_pending_limit,
+        pairing_reply_daily_limit: gateway.pairing_reply_daily_limit,
         default_target_type: gateway.default_target_type,
         default_agent: gateway.default_agent || '',
         default_flow: gateway.default_flow || '',
+        ...slackSaveFields(gateway),
+        ...(gateway.provider === 'WhatsApp'
+          ? Object.fromEntries(WHATSAPP_GATEWAY_FIELDS.map((field) => [field, gateway[field] ?? null]))
+          : {}),
       });
       setGateway((prev) => (prev ? { ...prev, ...updated } : updated));
       loadReadiness(updated.name);
@@ -182,14 +180,6 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleCopyWebhook = () => {
-    if (!gateway) return;
-    navigator.clipboard.writeText(getGatewayWebhookUrl(gateway.name, gateway.provider));
-    setCopied(true);
-    toast.success('Webhook URL copied');
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDeleteGateway = async () => {
@@ -208,42 +198,6 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
     } finally {
       setDeleting(false);
       setDeleteDialogOpen(false);
-    }
-  };
-
-  const handleTestSend = async () => {
-    if (!gateway || !testRecipientId.trim()) {
-      toast.error('Enter a test recipient ID');
-      return;
-    }
-
-    setTestSending(true);
-    setTestResult(null);
-    try {
-      const result = await call.post('huf.ai.gateway_service.test_gateway_send', {
-        gateway_name: gateway.name,
-        test_recipient_id: testRecipientId.trim(),
-      });
-
-      setTestResult({
-        success: result.success,
-        message: result.message,
-      });
-
-      if (result.success) {
-        toast.success('Test message sent successfully');
-      } else {
-        toast.error(result.message);
-      }
-    } catch (error) {
-      const errorMsg = getFrappeErrorMessage(error) || 'Failed to send test message';
-      setTestResult({
-        success: false,
-        message: errorMsg,
-      });
-      toast.error(errorMsg);
-    } finally {
-      setTestSending(false);
     }
   };
 
@@ -269,8 +223,8 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
         <h3 className="text-sm font-medium">No gateway configured yet</h3>
         <p className="text-sm text-muted-foreground">
           This channel isn&apos;t connected to a gateway yet, so it can&apos;t receive incoming
-          messages. Create a gateway for this channel from the Gateways page and connect it to
-          these credentials.
+          messages. Press Use in agent above to pick the agent that answers it, and a gateway is
+          created for you.
         </p>
       </div>
     );
@@ -282,13 +236,23 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
   // never shows nothing.
   const localReadiness = getGatewayReadiness(gateway);
   const ready = serverReadiness ? serverReadiness.ready : localReadiness.ready;
-  const blockingCount = serverReadiness ? serverReadiness.blocking_count : localReadiness.blockingCount;
+  const rawBlockingCount = serverReadiness ? serverReadiness.blocking_count : localReadiness.blockingCount;
+  // The count can be missing if the server payload shape drifts; derive it from
+  // the checks, and hide the banner rather than print "undefined".
+  const blockingCount: number | undefined =
+    typeof rawBlockingCount === 'number' && Number.isFinite(rawBlockingCount)
+      ? rawBlockingCount
+      : serverReadiness && Array.isArray(serverReadiness.checks)
+        ? serverReadiness.checks.filter((item) => !item.done).length
+        : undefined;
+  const showReadinessBanner = ready || typeof blockingCount === 'number';
   const outstandingItems = serverReadiness
-    ? serverReadiness.checks.filter((item) => !item.done)
+    ? (serverReadiness.checks ?? []).filter((item) => !item.done)
     : localReadiness.items.filter((item) => !item.done && item.id !== 'receiving-traffic');
 
   return (
     <div className="space-y-6 rounded-lg border p-6">
+      {showReadinessBanner && (
       <Alert variant={ready ? 'success' : 'warning'}>
         {ready ? (
           <ShieldCheck className="h-4 w-4" />
@@ -315,6 +279,7 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
           </AlertDescription>
         )}
       </Alert>
+      )}
 
       <div className="flex items-center justify-between rounded-lg border p-4">
         <div className="space-y-0.5">
@@ -329,279 +294,65 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
         />
       </div>
 
-      <div className="space-y-1">
-        <label className="text-sm font-medium">Run as user</label>
+      <Field
+        label="Run as user"
+        hint="Least-privileged user this channel runs agents and flows as. Required while enabled — never use an administrator account."
+      >
         <Input
           value={gateway.execution_user || ''}
           onChange={(e) => handleFieldChange({ execution_user: e.target.value })}
           placeholder="e.g. gateway-service@yourcompany.com"
         />
-        <p className="text-xs text-muted-foreground">
-          Least-privileged user this channel runs agents and flows as. Required while enabled —
-          never use an administrator account.
-        </p>
-      </div>
+      </Field>
 
-      <div className="grid gap-3 rounded-lg border p-4">
-        <p className="text-sm font-medium">Routing target</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Target type</label>
-            <Select
-              value={gateway.default_target_type || '__none'}
-              onValueChange={(v) =>
-                handleFieldChange({
-                  default_target_type: (v === '__none' ? '' : v) as GatewayDoc['default_target_type'],
-                })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none">None</SelectItem>
-                <SelectItem value="Agent">Agent</SelectItem>
-                <SelectItem value="Flow">Flow</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      <ConnectionStatus gateway={gateway} />
 
-          {gateway.default_target_type === 'Agent' && (
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Agent</label>
-              <Select
-                value={gateway.default_agent || '__none'}
-                onValueChange={(v) => handleFieldChange({ default_agent: v === '__none' ? '' : v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none">Choose an agent…</SelectItem>
-                  {agents.map((a) => (
-                    <SelectItem key={a.name} value={a.name}>
-                      {a.agent_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+      <RoutingTargetSection gateway={gateway} agents={agents} flows={flows} onChange={handleFieldChange} />
 
-          {gateway.default_target_type === 'Flow' && (
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Flow</label>
-              <Select
-                value={gateway.default_flow || '__none'}
-                onValueChange={(v) => handleFieldChange({ default_flow: v === '__none' ? '' : v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none">Choose a flow…</SelectItem>
-                  {flows.map((f) => (
-                    <SelectItem key={f.name} value={f.name}>
-                      {f.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        </div>
-      </div>
+      <DirectPolicySection gateway={gateway} onChange={handleFieldChange} />
 
-      <div className="space-y-1">
-        <label className="text-sm font-medium">Direct message policy</label>
-        <Select
-          value={gateway.direct_policy || 'Pairing'}
-          onValueChange={(v) => handleFieldChange({ direct_policy: v as GatewayPolicy })}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Allow list">Allow list — require an approved contact</SelectItem>
-            <SelectItem value="Pairing">Pairing — require approval for new senders</SelectItem>
-            <SelectItem value="Disabled">Disabled — reject direct messages</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <SlackPolicySection gateway={gateway} onChange={handleFieldChange} />
 
       {/* GW-18: room/group-chat admission policy. These fields already exist on
-          the Gateway doctype and were being fetched, but had no editor here. */}
-      <div className="grid gap-3 rounded-lg border p-4">
-        <p className="text-sm font-medium">Room &amp; group chat admission</p>
-        <p className="text-xs text-muted-foreground">
-          Controls how this channel admits messages from rooms, channels, or group chats
-          (as opposed to one-on-one direct messages, which use the policy above).
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Room policy</label>
-            <Select
-              value={gateway.room_policy || 'Allow list'}
-              onValueChange={(v) => handleFieldChange({ room_policy: v as GatewayPolicy })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Allow list">Allow list — require an approved room</SelectItem>
-                <SelectItem value="Disabled">Disabled — reject room messages</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Sender policy within a room</label>
-            <Select
-              value={gateway.room_sender_policy || 'Allow list'}
-              onValueChange={(v) => handleFieldChange({ room_sender_policy: v as GatewayPolicy })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Allow list">Allow list — require an approved sender</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Pairing code lifetime (minutes)</label>
-            <Input
-              type="number"
-              min={1}
-              value={gateway.pairing_ttl_minutes ?? 60}
-              onChange={(e) =>
-                handleFieldChange({ pairing_ttl_minutes: e.target.value ? Number(e.target.value) : undefined })
-              }
-            />
-          </div>
-          <div className="flex items-end justify-between rounded-lg border p-3">
-            <div className="space-y-0.5">
-              <p className="text-xs font-medium">Require @mention in rooms</p>
-              <p className="text-[11px] text-muted-foreground">
-                Only respond when the bot is explicitly mentioned
-              </p>
-            </div>
-            <Switch
-              checked={Boolean(gateway.mention_required)}
-              onCheckedChange={(checked) => handleFieldChange({ mention_required: checked ? 1 : 0 })}
-            />
-          </div>
-        </div>
-      </div>
+          the Gateway doctype and were being fetched, but had no editor here.
+          WhatsApp has no rooms, so the block is hidden there. */}
+      {gateway.provider !== 'WhatsApp' && (
+        <RoomPolicySection gateway={gateway} onChange={handleFieldChange} />
+      )}
 
-      <div className="space-y-2 rounded-lg border p-4">
-        <p className="text-sm font-medium">Test message</p>
-        <p className="text-xs text-muted-foreground">
-          Send a test message to verify your channel configuration and credentials are working.
-        </p>
-        <div className="flex items-end gap-2">
-          <div className="flex-1">
-            <Input
-              placeholder="Enter test recipient ID (e.g., user ID, chat ID, phone)"
-              value={testRecipientId}
-              onChange={(e) => setTestRecipientId(e.target.value)}
-              disabled={testSending}
-            />
+      {gateway.provider === 'WhatsApp' && (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-4 text-xs text-muted-foreground">
+            <span>
+              {gateway.whatsapp_account ? (
+                <>
+                  Templates and message history use the WhatsApp account{' '}
+                  <span className="font-medium text-foreground">{gateway.whatsapp_account}</span>, kept in step
+                  with this channel&apos;s credentials.
+                </>
+              ) : connectorAvailable === false ? (
+                `${CONNECTOR_NEEDED}. Replies, voice notes and the agent work without it.`
+              ) : (
+                'Save the credentials to link this number to its WhatsApp account for templates and message history.'
+              )}
+            </span>
+            <Button type="button" variant="outline" size="sm" onClick={() => navigate(`/channels/whatsapp/n/${encodeURIComponent(gateway.name)}/settings`)}>
+              Manage in Channels
+            </Button>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={handleTestSend}
-            disabled={testSending || !testRecipientId.trim() || !gateway.is_enabled}
-          >
-            {testSending ? (
-              <>
-                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> Sending
-              </>
-            ) : (
-              <>
-                <Send className="mr-1 h-3.5 w-3.5" /> Send
-              </>
-            )}
-          </Button>
-        </div>
-        {testResult && (
-          <div
-            className={`rounded text-xs p-2 ${
-              testResult.success
-                ? 'bg-success/10 text-success border border-success/30'
-                : 'bg-destructive/10 text-destructive border border-destructive/30'
-            }`}
-          >
-            {testResult.message}
-          </div>
-        )}
-      </div>
+        </>
+      )}
 
-      <div className="space-y-2 rounded-lg border p-4">
-        <p className="text-sm font-medium">Inbound webhook URL</p>
-        <p className="text-xs text-muted-foreground">
-          Paste this URL into the channel provider&apos;s configuration (e.g. Meta Developer
-          Console).
-        </p>
-        <div className="flex items-center gap-2">
-          <Input readOnly className="font-mono text-xs" value={getGatewayWebhookUrl(gateway.name, gateway.provider)} />
-          <Button type="button" size="sm" variant="outline" onClick={handleCopyWebhook}>
-            {copied ? (
-              <>
-                <Check className="mr-1 h-3.5 w-3.5" /> Copied
-              </>
-            ) : (
-              <>
-                <Copy className="mr-1 h-3.5 w-3.5" /> Copy
-              </>
-            )}
-          </Button>
-        </div>
+      <TestMessageSection gateway={gateway} />
 
-        {gateway.provider === 'Telegram' && (
-          <div className="mt-3 space-y-2 border-t pt-3">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <p className="text-xs text-muted-foreground">
-                Telegram also needs its webhook registered with the Bot API before it starts
-                delivering messages.
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleSetupTelegramWebhook}
-                disabled={settingUpWebhook}
-              >
-                <RefreshCw className={cn('mr-1.5 h-3.5 w-3.5', settingUpWebhook && 'animate-spin')} />
-                {settingUpWebhook ? 'Setting up...' : 'Setup Webhook'}
-              </Button>
-            </div>
-            {telegramWebhook.status && (
-              <Badge
-                variant={
-                  telegramWebhook.status.toLowerCase().includes('fail') ||
-                  telegramWebhook.status.toLowerCase().includes('error')
-                    ? 'destructive'
-                    : telegramWebhook.status.toLowerCase().includes('configured') ||
-                      telegramWebhook.status.toLowerCase().includes('already')
-                    ? 'success'
-                    : 'secondary'
-                }
-              >
-                {telegramWebhook.status}
-              </Badge>
-            )}
-            {telegramWebhook.lastSetup && (
-              <p className="text-xs text-muted-foreground">
-                Last setup attempt: {new Date(telegramWebhook.lastSetup).toLocaleString()}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
+      <WebhookSection
+        gateway={gateway}
+        telegramWebhook={telegramWebhook}
+        settingUpWebhook={settingUpWebhook}
+        onSetupTelegramWebhook={handleSetupTelegramWebhook}
+      />
+
+      <ProviderPanels gateway={gateway} />
 
       <div className="flex items-center justify-between">
         <Button
@@ -616,28 +367,13 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
         </Button>
       </div>
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this gateway?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This permanently removes the &quot;{gateway.gateway_name}&quot; gateway and stops it from
-              receiving messages. The connected credentials are not deleted and can be reused by another
-              gateway.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteGateway}
-              disabled={deleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleting ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteGatewayDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        gatewayName={gateway.gateway_name}
+        deleting={deleting}
+        onConfirm={handleDeleteGateway}
+      />
     </div>
   );
 }

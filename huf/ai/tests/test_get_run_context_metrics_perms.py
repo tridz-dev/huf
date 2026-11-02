@@ -70,7 +70,7 @@ class TestGetRunContextMetricsPerms(IntegrationTestCase):
 				frappe.session.user = "alice@example.com"
 				frappe.set_user("alice@example.com")
 
-				from huf.ai.agent_run_context_api import get_run_context_metrics
+				from huf.ai.agent.run_context_api import get_run_context_metrics
 				# Should not raise, and should find the previous run
 				result = get_run_context_metrics(current_run_doc.name)
 				assert result is not None
@@ -124,7 +124,7 @@ class TestGetRunContextMetricsPerms(IntegrationTestCase):
 				frappe.session.user = "alice@example.com"
 				frappe.set_user("alice@example.com")
 
-				from huf.ai.agent_run_context_api import get_run_context_metrics
+				from huf.ai.agent.run_context_api import get_run_context_metrics
 				# Should not raise, and should not use bob's previous run
 				result = get_run_context_metrics(current_run_doc.name)
 				assert result is not None

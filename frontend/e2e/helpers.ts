@@ -116,7 +116,7 @@ export async function mockOfflineApis(page: Page) {
   // unconditionally once `data` is truthy — an array is truthy too, so it
   // renders past the loading state straight into a crash. Needs its own
   // well-shaped mock.
-  await page.route('**/api/method/huf.ai.agent_run_analytics_api.get_execution_analytics**', (route) =>
+  await page.route('**/api/method/huf.ai.agent.run_analytics_api.get_execution_analytics**', (route) =>
     route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({

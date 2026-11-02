@@ -3,7 +3,7 @@ import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useLocati
 import { AnimatePresence, motion } from 'motion/react';
 import { UserProvider } from './contexts/UserContext';
 import { PermissionsProvider, usePermissions } from './contexts/PermissionsContext';
-import { ProtectedRoute } from './components/ProtectedRoute';
+import { ProtectedRoute, PAGE_ACCESS, PAGE_ACCESS_ANY } from './components/ProtectedRoute';
 import { AuthenticatingPage } from './components/AuthenticatingPage';
 import { FlowProvider } from './contexts/FlowContext';
 import { ModalProvider } from './contexts/ModalContext';
@@ -19,6 +19,7 @@ import { AgentSummaryPromptsHeaderActions } from './components/AgentSummaryPromp
 import { ExecutionProfilesHeaderActions } from './components/ExecutionProfilesHeaderActions';
 import { SSHConnectionsHeaderActions } from './components/SSHConnectionsHeaderActions';
 import { PageLoader } from './components/PageLoader';
+import { LinkAccountRoute } from './components/gateway/gatewayRoutes';
 import { DataHeaderActions } from './components/DataHeaderActions';
 import { MeetingsHeaderActions } from './components/meetings/MeetingsHeaderActions';
 import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
@@ -94,9 +95,7 @@ const IntegrationSettingsListingPageWrapper = lazy(
 const IntegrationSettingsDetailsPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsDetailsPageWrapper'),
 );
-const GatewayDetailsPageWrapper = lazy(
-  () => import('./pages/GatewayDetailsPageWrapper'),
-);
+const GatewayDetailsPageWrapper = lazy(() => import('./pages/GatewayDetailsPageWrapper'));
 const IntegrationServicesListingPageWrapper = lazy(
   () => import('./pages/IntegrationServicesListingPageWrapper'),
 );
@@ -105,7 +104,12 @@ const IntegrationServiceFormPageWrapper = lazy(
 );
 const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
-const WhatsAppManagePage = lazy(() => import('./pages/WhatsAppManagePage'));
+const SolutionsPage = lazy(() => import('./pages/SolutionsPage'));
+const NewSolutionPage = lazy(() => import('./pages/NewSolutionPage'));
+const SolutionDetailPage = lazy(() => import('./pages/SolutionDetailPage'));
+const ChannelsRoutes = lazy(() => import('./components/channels/routes'));
+import { WhatsAppRedirect } from './components/channels/WhatsAppRedirect';
+const TelegramManagePage = lazy(() => import('./pages/TelegramManagePage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 const GeneralSettingsPage = lazy(() => import('./pages/GeneralSettingsPage'));
 const DeveloperSettingsPage = lazy(() => import('./pages/DeveloperSettingsPage'));
@@ -118,6 +122,7 @@ import {
   checkStreamingAvailable,
   setStreamingAvailable,
 } from './services/streamChatApi';
+const TelegramAppPage = lazy(() => import('./pages/TelegramAppPage'));
 const MembersPage = lazy(() => import('./pages/MembersPage'));
 const HufRoleFormPage = lazy(() => import('./pages/HufRoleFormPage'));
 
@@ -169,7 +174,7 @@ function AppShell() {
           <Route
             path="/"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.hub} pageName="The Hub">
                 <UnifiedLayout hideHeader>
                   <Suspense fallback={<PageLoader />}>
                     <HubSimplePage />
@@ -181,7 +186,7 @@ function AppShell() {
           <Route
             path="/dashboard"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.dashboard} pageName="The dashboard">
                 <UnifiedLayout headerActions={<HomeHeaderActions />}>
                   <Suspense fallback={<PageLoader />}>
                     <HomePage />
@@ -205,7 +210,7 @@ function AppShell() {
           <Route
             path="/agents"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.agents} pageName="Agents">
                 <UnifiedLayout headerActions={<AgentsHeaderActions />}>
                   <Suspense fallback={<PageLoader />}>
                     <AgentsPage />
@@ -217,7 +222,7 @@ function AppShell() {
           <Route
             path="/agents/:id"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.agents} pageName="Agents">
                 <Suspense fallback={<PageLoader />}>
                   <AgentFormPageWrapper />
                 </Suspense>
@@ -438,7 +443,7 @@ function AppShell() {
           <Route
             path="/flows"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.flows} pageName="Flows">
                 <FlowProvider>
                   <UnifiedLayout headerActions={<FlowsListHeaderActions />}>
                     <Suspense fallback={<PageLoader />}>
@@ -452,7 +457,7 @@ function AppShell() {
           <Route
             path="/flows/:flowId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.flows} pageName="Flows">
                 <FlowProvider>
                   <ModalProvider>
                     <Suspense fallback={<PageLoader />}>
@@ -546,6 +551,16 @@ function AppShell() {
             }
           />
           <Route
+            path="/channels/*"
+            element={
+              <ProtectedRoute requiredCapability="system.integrations.manage">
+                <Suspense fallback={<PageLoader />}>
+                  <ChannelsRoutes />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/ui/chat/:chatId"
             element={
               <ProtectedRoute>
@@ -558,7 +573,7 @@ function AppShell() {
           <Route
             path="/executions"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.executions} pageName="Executions">
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <Executions />
@@ -583,7 +598,7 @@ function AppShell() {
           <Route
             path="/executions/:runId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.executions} pageName="Executions">
                 <Suspense fallback={<PageLoader />}>
                   <AgentRunDetailPageWrapper />
                 </Suspense>
@@ -648,11 +663,10 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          <Route path="/channels/*" element={<Navigate to="/gateways" replace />} />
           <Route
             path="/settings"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS.settings} pageName="Settings">
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <AgentSettingsPage />
@@ -664,7 +678,7 @@ function AppShell() {
           <Route
             path="/settings/general"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS_ANY} pageName="Settings">
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <GeneralSettingsPage />
@@ -676,7 +690,7 @@ function AppShell() {
           <Route
             path="/settings/developer"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability={PAGE_ACCESS_ANY} pageName="Settings">
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <DeveloperSettingsPage />
@@ -796,12 +810,49 @@ function AppShell() {
             }
           />
           <Route
-            path="/whatsapp"
+            path="/solutions"
             element={
               <ProtectedRoute requiredCapability="system.integrations.manage">
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
-                    <WhatsAppManagePage />
+                    <SolutionsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/solutions/new"
+            element={
+              <ProtectedRoute requiredCapability="system.integrations.manage">
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <NewSolutionPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/solutions/:name"
+            element={
+              <ProtectedRoute requiredCapability="system.integrations.manage">
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <SolutionDetailPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/whatsapp/*" element={<WhatsAppRedirect />} />
+          <Route
+            path="/telegram"
+            element={
+              <ProtectedRoute requiredCapability="system.integrations.manage">
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <TelegramManagePage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
@@ -913,6 +964,7 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
+          <Route path="/link-account" element={<LinkAccountRoute />} />
           <Route
             path="/members"
             element={
@@ -963,7 +1015,18 @@ function AppShell() {
 }
 
 const router = createBrowserRouter(
-  [{ path: '*', element: <AppShell />, errorElement: <RouteErrorBoundary /> }],
+  [
+    {
+      path: 'tg-app',
+      element: (
+        <Suspense fallback={null}>
+          <TelegramAppPage />
+        </Suspense>
+      ),
+      errorElement: <RouteErrorBoundary />,
+    },
+    { path: '*', element: <AppShell />, errorElement: <RouteErrorBoundary /> },
+  ],
   { basename: '/huf' },
 );
 

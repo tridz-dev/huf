@@ -33,7 +33,7 @@ class Automation(Document):
 		"""Only a System Manager may set ``run_as_user`` to anyone but themselves.
 
 		Records who set it (``run_as_set_by``) so the fire-time check in
-		automation_runner authorises the run identity against the user who chose
+		automation.runner authorises the run identity against the user who chose
 		it, not merely the (possibly more privileged) owner. Without this a Huf
 		Manager could edit a System Manager's automation and point it at
 		Administrator.
@@ -84,12 +84,12 @@ class Automation(Document):
 		"""Block non-admins from creating/editing an Automation that targets
 		a locked system agent.
 
-		Lives here, not only in huf/ai/automation_api.py's whitelisted
+		Lives here, not only in huf/ai/automation/api.py's whitelisted
 		wrappers, because a generic Frappe REST/RPC call (e.g. a direct
 		POST/PUT to /api/resource/Automation, or any other caller with plain
 		doctype "write"/"create" permission on Automation -- Huf Manager has
 		both by default) bypasses those wrappers entirely and goes straight
-		through this controller. automation_api.py's guard is real defense
+		through this controller. automation/api.py's guard is real defense
 		in depth for the whitelisted path, but this is the one that actually
 		closes the gap for every path, mirroring how
 		Agent._validate_system_agent_immutability() itself lives in the

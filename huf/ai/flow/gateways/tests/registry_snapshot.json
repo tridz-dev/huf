@@ -1,0 +1,1610 @@
+{
+  "limits": {
+    "max_item_text": 200,
+    "max_list_items": 50,
+    "max_params": 40,
+    "max_text": 500
+  },
+  "specs": {
+    "trigger.gateway": {
+      "event_kinds": [
+        {
+          "label": "A message",
+          "value": "message"
+        }
+      ],
+      "label": "Chat",
+      "node_type": "trigger.gateway",
+      "params": [
+        {
+          "default": null,
+          "help": "Leave empty to answer everyone the channel lets in. Names shown here can be faked on channels that do not sign their messages.",
+          "key": "only_senders",
+          "label": "Only these people",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "people"
+        },
+        {
+          "default": null,
+          "help": "Leave empty for every kind.",
+          "key": "message_kinds",
+          "label": "Only these kinds of message",
+          "multiple": false,
+          "options": [
+            {
+              "label": "Text",
+              "value": "text"
+            },
+            {
+              "label": "Photo",
+              "value": "image"
+            },
+            {
+              "label": "Audio file",
+              "value": "audio"
+            },
+            {
+              "label": "Voice note",
+              "value": "voice"
+            },
+            {
+              "label": "Video",
+              "value": "video"
+            },
+            {
+              "label": "File",
+              "value": "document"
+            },
+            {
+              "label": "Sticker",
+              "value": "sticker"
+            },
+            {
+              "label": "Location",
+              "value": "location"
+            },
+            {
+              "label": "Contact card",
+              "value": "contact"
+            },
+            {
+              "label": "Button chosen",
+              "value": "button_reply"
+            },
+            {
+              "label": "List item chosen",
+              "value": "list_reply"
+            },
+            {
+              "label": "Order",
+              "value": "order"
+            },
+            {
+              "label": "Something else",
+              "value": "other"
+            }
+          ],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "multiselect"
+        },
+        {
+          "default": null,
+          "help": "Any of these words. Capital letters do not matter.",
+          "key": "keywords",
+          "label": "Only messages that contain",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "tags"
+        },
+        {
+          "default": null,
+          "help": "",
+          "key": "starts_with",
+          "label": "Only messages that start with",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "text"
+        },
+        {
+          "default": "both",
+          "help": "",
+          "key": "chat_scope",
+          "label": "Where",
+          "multiple": false,
+          "options": [
+            {
+              "label": "One-to-one chats",
+              "value": "direct"
+            },
+            {
+              "label": "Groups",
+              "value": "groups"
+            },
+            {
+              "label": "Both",
+              "value": "both"
+            }
+          ],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "select"
+        },
+        {
+          "default": false,
+          "help": "",
+          "key": "only_when_mentioned",
+          "label": "Only when the bot is mentioned",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": {
+            "in": [
+              "groups",
+              "both"
+            ],
+            "key": "chat_scope"
+          },
+          "type": "boolean"
+        },
+        {
+          "default": false,
+          "help": "",
+          "key": "has_attachment",
+          "label": "Only messages with a file",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "boolean"
+        },
+        {
+          "default": true,
+          "help": "",
+          "key": "ignore_bots",
+          "label": "Ignore messages from other bots",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "boolean"
+        },
+        {
+          "default": 30,
+          "help": "Further messages from the same person that hour are skipped.",
+          "key": "max_runs_per_sender_per_hour",
+          "label": "Most runs per person per hour",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "more",
+          "show_when": null,
+          "type": "number"
+        },
+        {
+          "default": false,
+          "help": "Off by default so answers to one chat keep their order.",
+          "key": "allow_parallel",
+          "label": "Handle several messages from one chat at the same time",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "more",
+          "show_when": null,
+          "type": "boolean"
+        }
+      ],
+      "payload_fields": [
+        {
+          "advanced": false,
+          "customer_provided": true,
+          "label": "Message text",
+          "path": "input.text",
+          "sample": "Hi, is my order ready?",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": true,
+          "label": "Message text (same as above)",
+          "path": "input.message",
+          "sample": "Hi, is my order ready?",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": true,
+          "label": "Sender name",
+          "path": "input.display_name",
+          "sample": "Asha",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Sender id",
+          "path": "input.sender_id",
+          "sample": "15550001111",
+          "sensitive": true,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Kind of message",
+          "path": "input.message_type",
+          "sample": "text",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Event kind",
+          "path": "input.kind",
+          "sample": "message",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Files",
+          "path": "input.attachments",
+          "sample": [],
+          "sensitive": false,
+          "type": "list"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Received at",
+          "path": "input.received_at",
+          "sample": "2026-01-15 17:15:00",
+          "sensitive": false,
+          "type": "datetime"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "In a group",
+          "path": "input.is_room",
+          "sample": false,
+          "sensitive": false,
+          "type": "yes_no"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Mentioned the bot",
+          "path": "input.mentioned",
+          "sample": false,
+          "sensitive": false,
+          "type": "yes_no"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Language",
+          "path": "input.language",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": true,
+          "label": "Voice note as text",
+          "path": "input.transcript",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Replying to",
+          "path": "input.reply_to_message_id",
+          "sample": null,
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Conversation id",
+          "path": "input.conversation_id",
+          "sample": "15550001111",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Thread id",
+          "path": "input.thread_id",
+          "sample": "15550001111",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Message id",
+          "path": "input.message_id",
+          "sample": "m-0001",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Channel record",
+          "path": "input.gateway",
+          "sample": "Support",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Channel type",
+          "path": "input.provider",
+          "sample": "Slack",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Message record",
+          "path": "input.gateway_event",
+          "sample": "GWE-0001",
+          "sensitive": false,
+          "type": "text"
+        }
+      ],
+      "provider": "",
+      "sample_payload": {
+        "attachments": [],
+        "conversation_id": "15550001111",
+        "display_name": "Asha",
+        "gateway": "Support",
+        "gateway_event": "GWE-0001",
+        "is_room": false,
+        "kind": "message",
+        "language": "",
+        "mentioned": false,
+        "message": "Hi, is my order ready?",
+        "message_id": "m-0001",
+        "message_type": "text",
+        "provider": "Slack",
+        "received_at": "2026-01-15 17:15:00",
+        "reply_to_message_id": null,
+        "sender_id": "15550001111",
+        "text": "Hi, is my order ready?",
+        "thread_id": "15550001111",
+        "transcript": ""
+      }
+    },
+    "trigger.telegram": {
+      "event_kinds": [
+        {
+          "label": "A Telegram message",
+          "value": "message"
+        },
+        {
+          "label": "A button tap",
+          "value": "callback"
+        }
+      ],
+      "label": "Telegram",
+      "node_type": "trigger.telegram",
+      "params": [
+        {
+          "default": null,
+          "help": "Leave empty to answer everyone the channel lets in. Names shown here can be faked on channels that do not sign their messages.",
+          "key": "only_senders",
+          "label": "Only these people",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "people"
+        },
+        {
+          "default": null,
+          "help": "Leave empty for every kind.",
+          "key": "message_kinds",
+          "label": "Only these kinds of message",
+          "multiple": false,
+          "options": [
+            {
+              "label": "Text",
+              "value": "text"
+            },
+            {
+              "label": "Photo",
+              "value": "image"
+            },
+            {
+              "label": "Audio file",
+              "value": "audio"
+            },
+            {
+              "label": "Voice note",
+              "value": "voice"
+            },
+            {
+              "label": "Video",
+              "value": "video"
+            },
+            {
+              "label": "File",
+              "value": "document"
+            },
+            {
+              "label": "Sticker",
+              "value": "sticker"
+            },
+            {
+              "label": "Location",
+              "value": "location"
+            },
+            {
+              "label": "Contact card",
+              "value": "contact"
+            },
+            {
+              "label": "Button chosen",
+              "value": "button_reply"
+            },
+            {
+              "label": "List item chosen",
+              "value": "list_reply"
+            },
+            {
+              "label": "Order",
+              "value": "order"
+            },
+            {
+              "label": "Something else",
+              "value": "other"
+            }
+          ],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "multiselect"
+        },
+        {
+          "default": null,
+          "help": "Any of these words. Capital letters do not matter.",
+          "key": "keywords",
+          "label": "Only messages that contain",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "tags"
+        },
+        {
+          "default": null,
+          "help": "",
+          "key": "starts_with",
+          "label": "Only messages that start with",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "text"
+        },
+        {
+          "default": "both",
+          "help": "",
+          "key": "chat_scope",
+          "label": "Where",
+          "multiple": false,
+          "options": [
+            {
+              "label": "One-to-one chats",
+              "value": "direct"
+            },
+            {
+              "label": "Groups",
+              "value": "groups"
+            },
+            {
+              "label": "Both",
+              "value": "both"
+            }
+          ],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "select"
+        },
+        {
+          "default": false,
+          "help": "",
+          "key": "only_when_mentioned",
+          "label": "Only when the bot is mentioned",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": {
+            "in": [
+              "groups",
+              "both"
+            ],
+            "key": "chat_scope"
+          },
+          "type": "boolean"
+        },
+        {
+          "default": false,
+          "help": "",
+          "key": "has_attachment",
+          "label": "Only messages with a file",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "boolean"
+        },
+        {
+          "default": true,
+          "help": "",
+          "key": "ignore_bots",
+          "label": "Ignore messages from other bots",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "boolean"
+        },
+        {
+          "default": 30,
+          "help": "Further messages from the same person that hour are skipped.",
+          "key": "max_runs_per_sender_per_hour",
+          "label": "Most runs per person per hour",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "more",
+          "show_when": null,
+          "type": "number"
+        },
+        {
+          "default": false,
+          "help": "Off by default so answers to one chat keep their order.",
+          "key": "allow_parallel",
+          "label": "Handle several messages from one chat at the same time",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "more",
+          "show_when": null,
+          "type": "boolean"
+        },
+        {
+          "default": null,
+          "help": "Chat ids or @names.",
+          "key": "only_chats",
+          "label": "Only these chats",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "tags"
+        },
+        {
+          "default": null,
+          "help": "",
+          "key": "chat_kinds",
+          "label": "Only these kinds of chat",
+          "multiple": false,
+          "options": [
+            {
+              "label": "Private chats",
+              "value": "private"
+            },
+            {
+              "label": "Groups",
+              "value": "group"
+            },
+            {
+              "label": "Large groups",
+              "value": "supergroup"
+            },
+            {
+              "label": "Channels",
+              "value": "channel"
+            }
+          ],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "multiselect"
+        },
+        {
+          "default": null,
+          "help": "Topic ids inside a group with topics.",
+          "key": "topics",
+          "label": "Only these topics",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "tags"
+        },
+        {
+          "default": null,
+          "help": "For example start or help, without the slash.",
+          "key": "commands",
+          "label": "Only these commands",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "tags"
+        },
+        {
+          "default": null,
+          "help": "",
+          "key": "callback_prefixes",
+          "label": "Only buttons whose value starts with",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "tags"
+        },
+        {
+          "default": null,
+          "help": "Language codes such as en or hi.",
+          "key": "language",
+          "label": "Only these languages",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "tags"
+        },
+        {
+          "default": false,
+          "help": "",
+          "key": "include_edits",
+          "label": "Also when a message is edited",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "more",
+          "show_when": null,
+          "type": "boolean"
+        },
+        {
+          "default": false,
+          "help": "",
+          "key": "include_channel_posts",
+          "label": "Also posts in channels",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "more",
+          "show_when": null,
+          "type": "boolean"
+        }
+      ],
+      "payload_fields": [
+        {
+          "advanced": false,
+          "customer_provided": true,
+          "label": "Message text",
+          "path": "input.text",
+          "sample": "Hi, is my order ready?",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": true,
+          "label": "Message text (same as above)",
+          "path": "input.message",
+          "sample": "Hi, is my order ready?",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": true,
+          "label": "Sender name",
+          "path": "input.display_name",
+          "sample": "Asha",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Sender id",
+          "path": "input.sender_id",
+          "sample": "15550001111",
+          "sensitive": true,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Kind of message",
+          "path": "input.message_type",
+          "sample": "text",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Event kind",
+          "path": "input.kind",
+          "sample": "message",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Files",
+          "path": "input.attachments",
+          "sample": [],
+          "sensitive": false,
+          "type": "list"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Received at",
+          "path": "input.received_at",
+          "sample": "2026-01-15 17:15:00",
+          "sensitive": false,
+          "type": "datetime"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "In a group",
+          "path": "input.is_room",
+          "sample": false,
+          "sensitive": false,
+          "type": "yes_no"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Mentioned the bot",
+          "path": "input.mentioned",
+          "sample": false,
+          "sensitive": false,
+          "type": "yes_no"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Language",
+          "path": "input.language",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": true,
+          "label": "Voice note as text",
+          "path": "input.transcript",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Replying to",
+          "path": "input.reply_to_message_id",
+          "sample": null,
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Conversation id",
+          "path": "input.conversation_id",
+          "sample": "15550001111",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Thread id",
+          "path": "input.thread_id",
+          "sample": "15550001111",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Message id",
+          "path": "input.message_id",
+          "sample": "m-0001",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Channel record",
+          "path": "input.gateway",
+          "sample": "Support",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Channel type",
+          "path": "input.provider",
+          "sample": "Telegram",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Message record",
+          "path": "input.gateway_event",
+          "sample": "GWE-0001",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Telegram user id",
+          "path": "input.telegram_user_id",
+          "sample": "1001",
+          "sensitive": true,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Telegram chat id",
+          "path": "input.telegram_chat_id",
+          "sample": "1001",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Chat type",
+          "path": "input.telegram_chat_type",
+          "sample": "private",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Topic id (same as below)",
+          "path": "input.message_thread_id",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Topic",
+          "path": "input.topic_id",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Command",
+          "path": "input.command",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": true,
+          "label": "Text after the command",
+          "path": "input.command_args",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Button value",
+          "path": "input.callback_data",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Button tap id",
+          "path": "input.callback_query_id",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": true,
+          "label": "Username",
+          "path": "input.username",
+          "sample": "asha_k",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Edited message",
+          "path": "input.edited",
+          "sample": false,
+          "sensitive": false,
+          "type": "yes_no"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Channel post",
+          "path": "input.is_channel_post",
+          "sample": false,
+          "sensitive": false,
+          "type": "yes_no"
+        },
+        {
+          "advanced": false,
+          "customer_provided": true,
+          "label": "Mini App data",
+          "path": "input.web_app_data",
+          "sample": null,
+          "sensitive": false,
+          "type": "record"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Sent by a bot",
+          "path": "input.sender_is_bot",
+          "sample": false,
+          "sensitive": false,
+          "type": "yes_no"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Business connection id",
+          "path": "input.business_connection_id",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        }
+      ],
+      "provider": "Telegram",
+      "sample_payload": {
+        "attachments": [],
+        "business_connection_id": "",
+        "callback_data": "",
+        "callback_query_id": "",
+        "command": "",
+        "command_args": "",
+        "conversation_id": "15550001111",
+        "display_name": "Asha",
+        "edited": false,
+        "gateway": "Support",
+        "gateway_event": "GWE-0001",
+        "is_channel_post": false,
+        "is_room": false,
+        "kind": "message",
+        "language": "",
+        "mentioned": false,
+        "message": "Hi, is my order ready?",
+        "message_id": "m-0001",
+        "message_thread_id": "",
+        "message_type": "text",
+        "provider": "Telegram",
+        "received_at": "2026-01-15 17:15:00",
+        "reply_to_message_id": null,
+        "sender_id": "15550001111",
+        "sender_is_bot": false,
+        "telegram_chat_id": "1001",
+        "telegram_chat_type": "private",
+        "telegram_user_id": "1001",
+        "text": "Hi, is my order ready?",
+        "thread_id": "15550001111",
+        "topic_id": "",
+        "transcript": "",
+        "username": "asha_k",
+        "web_app_data": null
+      }
+    },
+    "trigger.whatsapp": {
+      "event_kinds": [
+        {
+          "label": "A WhatsApp message",
+          "value": "message"
+        }
+      ],
+      "label": "WhatsApp",
+      "node_type": "trigger.whatsapp",
+      "params": [
+        {
+          "default": null,
+          "help": "Leave empty to answer everyone the channel lets in. Names shown here can be faked on channels that do not sign their messages.",
+          "key": "only_senders",
+          "label": "Only these people",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "people"
+        },
+        {
+          "default": null,
+          "help": "Leave empty for every kind.",
+          "key": "message_kinds",
+          "label": "Only these kinds of message",
+          "multiple": false,
+          "options": [
+            {
+              "label": "Text",
+              "value": "text"
+            },
+            {
+              "label": "Photo",
+              "value": "image"
+            },
+            {
+              "label": "Audio file",
+              "value": "audio"
+            },
+            {
+              "label": "Voice note",
+              "value": "voice"
+            },
+            {
+              "label": "Video",
+              "value": "video"
+            },
+            {
+              "label": "File",
+              "value": "document"
+            },
+            {
+              "label": "Sticker",
+              "value": "sticker"
+            },
+            {
+              "label": "Location",
+              "value": "location"
+            },
+            {
+              "label": "Contact card",
+              "value": "contact"
+            },
+            {
+              "label": "Button chosen",
+              "value": "button_reply"
+            },
+            {
+              "label": "List item chosen",
+              "value": "list_reply"
+            },
+            {
+              "label": "Order",
+              "value": "order"
+            },
+            {
+              "label": "Something else",
+              "value": "other"
+            }
+          ],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "multiselect"
+        },
+        {
+          "default": null,
+          "help": "Any of these words. Capital letters do not matter.",
+          "key": "keywords",
+          "label": "Only messages that contain",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "tags"
+        },
+        {
+          "default": null,
+          "help": "",
+          "key": "starts_with",
+          "label": "Only messages that start with",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "text"
+        },
+        {
+          "default": false,
+          "help": "",
+          "key": "has_attachment",
+          "label": "Only messages with a file",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "boolean"
+        },
+        {
+          "default": true,
+          "help": "",
+          "key": "ignore_bots",
+          "label": "Ignore messages from other bots",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "boolean"
+        },
+        {
+          "default": 30,
+          "help": "Further messages from the same person that hour are skipped.",
+          "key": "max_runs_per_sender_per_hour",
+          "label": "Most runs per person per hour",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "more",
+          "show_when": null,
+          "type": "number"
+        },
+        {
+          "default": false,
+          "help": "Off by default so answers to one chat keep their order.",
+          "key": "allow_parallel",
+          "label": "Handle several messages from one chat at the same time",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "more",
+          "show_when": null,
+          "type": "boolean"
+        },
+        {
+          "default": null,
+          "help": "The button ids you set when you sent the buttons.",
+          "key": "button_reply_ids",
+          "label": "Only when this button was chosen",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "tags"
+        },
+        {
+          "default": null,
+          "help": "",
+          "key": "button_payloads",
+          "label": "Only these button values",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "tags"
+        },
+        {
+          "default": null,
+          "help": "",
+          "key": "ad_tags",
+          "label": "Only people who came from this ad or link",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "tags"
+        },
+        {
+          "default": false,
+          "help": "",
+          "key": "first_message_only",
+          "label": "Only a person's first message",
+          "multiple": false,
+          "options": [],
+          "required": false,
+          "section": "setup",
+          "show_when": null,
+          "type": "boolean"
+        }
+      ],
+      "payload_fields": [
+        {
+          "advanced": false,
+          "customer_provided": true,
+          "label": "Message text",
+          "path": "input.text",
+          "sample": "Hi, is my order ready?",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": true,
+          "label": "Message text (same as above)",
+          "path": "input.message",
+          "sample": "Hi, is my order ready?",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": true,
+          "label": "Sender name",
+          "path": "input.display_name",
+          "sample": "Asha",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Sender id",
+          "path": "input.sender_id",
+          "sample": "15550001111",
+          "sensitive": true,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Kind of message",
+          "path": "input.message_type",
+          "sample": "text",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Event kind",
+          "path": "input.kind",
+          "sample": "message",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Files",
+          "path": "input.attachments",
+          "sample": [],
+          "sensitive": false,
+          "type": "list"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Received at",
+          "path": "input.received_at",
+          "sample": "2026-01-15 17:15:00",
+          "sensitive": false,
+          "type": "datetime"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "In a group",
+          "path": "input.is_room",
+          "sample": false,
+          "sensitive": false,
+          "type": "yes_no"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Mentioned the bot",
+          "path": "input.mentioned",
+          "sample": false,
+          "sensitive": false,
+          "type": "yes_no"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Language",
+          "path": "input.language",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": true,
+          "label": "Voice note as text",
+          "path": "input.transcript",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Replying to",
+          "path": "input.reply_to_message_id",
+          "sample": null,
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Conversation id",
+          "path": "input.conversation_id",
+          "sample": "15550001111",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Thread id",
+          "path": "input.thread_id",
+          "sample": "15550001111",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Message id",
+          "path": "input.message_id",
+          "sample": "m-0001",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Channel record",
+          "path": "input.gateway",
+          "sample": "Support",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Channel type",
+          "path": "input.provider",
+          "sample": "WhatsApp",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Message record",
+          "path": "input.gateway_event",
+          "sample": "GWE-0001",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "WhatsApp number",
+          "path": "input.wa_id",
+          "sample": "15550001111",
+          "sensitive": true,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Button chosen (id)",
+          "path": "input.button_id",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Button chosen",
+          "path": "input.button_title",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Button value",
+          "path": "input.button_payload",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": true,
+          "customer_provided": false,
+          "label": "Button or list choice",
+          "path": "input.interactive_reply",
+          "sample": null,
+          "sensitive": false,
+          "type": "record"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Ad details",
+          "path": "input.referral",
+          "sample": null,
+          "sensitive": false,
+          "type": "record"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Ad or link tag",
+          "path": "input.referral_tag",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Forwarded message",
+          "path": "input.forwarded",
+          "sample": false,
+          "sensitive": false,
+          "type": "yes_no"
+        },
+        {
+          "advanced": false,
+          "customer_provided": true,
+          "label": "Name on the contact card",
+          "path": "input.contact_name",
+          "sample": "",
+          "sensitive": false,
+          "type": "text"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Location shared",
+          "path": "input.location",
+          "sample": null,
+          "sensitive": false,
+          "type": "record"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Contact cards shared",
+          "path": "input.contacts",
+          "sample": [],
+          "sensitive": false,
+          "type": "list"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Order placed",
+          "path": "input.order",
+          "sample": null,
+          "sensitive": false,
+          "type": "record"
+        },
+        {
+          "advanced": false,
+          "customer_provided": false,
+          "label": "Hours since their last message",
+          "path": "input.hours_since_last_customer_message",
+          "sample": 0,
+          "sensitive": false,
+          "type": "number"
+        }
+      ],
+      "provider": "WhatsApp",
+      "sample_payload": {
+        "attachments": [],
+        "button_id": "",
+        "button_payload": "",
+        "button_title": "",
+        "contact_name": "",
+        "contacts": [],
+        "conversation_id": "15550001111",
+        "display_name": "Asha",
+        "forwarded": false,
+        "gateway": "Support",
+        "gateway_event": "GWE-0001",
+        "hours_since_last_customer_message": 0,
+        "interactive_reply": null,
+        "is_room": false,
+        "kind": "message",
+        "language": "",
+        "location": null,
+        "mentioned": false,
+        "message": "Hi, is my order ready?",
+        "message_id": "m-0001",
+        "message_type": "text",
+        "order": null,
+        "provider": "WhatsApp",
+        "received_at": "2026-01-15 17:15:00",
+        "referral": null,
+        "referral_tag": "",
+        "reply_to_message_id": null,
+        "sender_id": "15550001111",
+        "text": "Hi, is my order ready?",
+        "thread_id": "15550001111",
+        "transcript": "",
+        "wa_id": "15550001111"
+      }
+    }
+  },
+  "version": 1
+}

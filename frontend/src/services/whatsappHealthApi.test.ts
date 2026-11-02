@@ -14,13 +14,13 @@ describe('getSetupStatus', () => {
     get.mockResolvedValue({ message: { success: true, connector_available: true } } as never);
     const res = await getSetupStatus('GW-1');
     expect(res).toEqual({ ok: true, data: { success: true, connector_available: true } });
-    expect(get).toHaveBeenCalledWith('huf.ai.whatsapp_management.get_setup_status', { gateway_name: 'GW-1' });
+    expect(get).toHaveBeenCalledWith('huf.ai.whatsapp.management.get_setup_status', { gateway_name: 'GW-1' });
   });
 
   it('asks for the site summary when no gateway is given', async () => {
     get.mockResolvedValue({ message: { success: true } } as never);
     await getSetupStatus();
-    expect(get).toHaveBeenCalledWith('huf.ai.whatsapp_management.get_setup_status', {});
+    expect(get).toHaveBeenCalledWith('huf.ai.whatsapp.management.get_setup_status', {});
   });
 
   it('accepts an unwrapped body', async () => {
@@ -48,7 +48,7 @@ describe('checkToken', () => {
   it('posts the gateway name', async () => {
     post.mockResolvedValue({ message: { success: true, valid: true } } as never);
     expect(await checkToken('GW-1')).toEqual({ ok: true, data: { success: true, valid: true } });
-    expect(post).toHaveBeenCalledWith('huf.ai.whatsapp_management.check_token', { gateway_name: 'GW-1' });
+    expect(post).toHaveBeenCalledWith('huf.ai.whatsapp.management.check_token', { gateway_name: 'GW-1' });
   });
 
   it('reports a rejected check as an error', async () => {

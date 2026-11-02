@@ -14,7 +14,7 @@ vi.mock('@/services/whatsappApi', async (orig) => {
   };
 });
 
-import { createTemplate, createTemplateDraft, editTemplate, errorText } from '@/services/whatsappApi';
+import { SharedTemplateError, createTemplate, createTemplateDraft, editTemplate, errorText } from '@/services/whatsappApi';
 import { emptyDraft, type TemplateWizardDraft } from '../template/draft';
 import { addButton, buttonBlocker, switchVariableType } from './draftActions';
 import { TemplateWizard } from './index';
@@ -247,7 +247,7 @@ describe('edit mode', () => {
     next();
     fireEvent.click(screen.getByRole('button', { name: 'Submit changes to WhatsApp' }));
     await waitFor(() => expect(onDone).toHaveBeenCalledWith({ kind: 'edited', name: 'order_update' }));
-    expect(edit).toHaveBeenCalledWith('tpl-1', expect.objectContaining({ template: 'Your order shipped' }));
+    expect(edit).toHaveBeenCalledWith('tpl-1', expect.objectContaining({ template: 'Your order shipped' }), undefined);
   });
 
   it('keeps a category error on the write step, since edit mode has no type step', async () => {
@@ -284,6 +284,62 @@ describe('edit mode', () => {
     expect(within(alert).getByText(/trace AbC123xyz/)).toBeInTheDocument();
     expect(within(alert).getByText(/did not use up an edit/)).toBeInTheDocument();
     expect(onDone).not.toHaveBeenCalled();
+  });
+});
+
+describe('shared template edit', () => {
+  const initial: TemplateWizardDraft = { ...emptyDraft('UTILITY'), name: 'order_update', language: 'en_US', body: 'Your order shipped' };
+  const usedBy = [{ solution: 'S1', title: 'Orders' }];
+  const submitEdit = () => {
+    next();
+    fireEvent.click(screen.getByRole('button', { name: 'Submit changes to WhatsApp' }));
+  };
+
+  it('catches SharedTemplateError, resets busy and reports it through onSharedConflict', async () => {
+    edit.mockRejectedValue(new SharedTemplateError(usedBy));
+    const onSharedConflict = vi.fn();
+    setup({ initial, docName: 'tpl-1', onSharedConflict });
+    submitEdit();
+    await waitFor(() => expect(onSharedConflict).toHaveBeenCalledWith(usedBy));
+    expect(screen.getByRole('button', { name: 'Submit changes to WhatsApp' })).toBeEnabled();
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('sends acknowledge_shared only when acknowledged', async () => {
+    edit.mockResolvedValue({ success: true, name: 'order_update', edits_left: 2 });
+    setup({ initial, docName: 'tpl-1', acknowledgeShared: true });
+    submitEdit();
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(edit).toHaveBeenCalledWith('tpl-1', expect.anything(), true);
+  });
+
+  it('does not acknowledge for an unshared edit', async () => {
+    edit.mockResolvedValue({ success: true, name: 'order_update', edits_left: 2 });
+    setup({ initial, docName: 'tpl-1' });
+    submitEdit();
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(edit).toHaveBeenCalledWith('tpl-1', expect.anything(), undefined);
+  });
+});
+
+describe('copy mode', () => {
+  const source: TemplateWizardDraft = { ...emptyDraft('UTILITY'), name: 'order_update', language: 'en_US', body: 'Your order shipped' };
+
+  it('opens in create mode prefilled with name_v2 and the source content', async () => {
+    draftApi.mockResolvedValue({ success: true, name: 'd1' } as never);
+    setup({ copyFrom: source, isAdmin: false });
+    expect(screen.getByRole('region', { name: 'Write it' })).toBeInTheDocument();
+    const name = screen.getByLabelText('Template name');
+    expect(name).toBeEnabled();
+    expect(name).toHaveValue('order_update_v2');
+    expect(screen.getByRole('combobox', { name: /Language/ })).toBeEnabled();
+    expect(screen.getByDisplayValue('Your order shipped')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeInTheDocument();
+    next();
+    fireEvent.click(screen.getByRole('button', { name: 'Request approval' }));
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith({ kind: 'draft', name: 'd1' }));
+    expect(draftApi).toHaveBeenCalledWith('gw', expect.objectContaining({ template_name: 'order_update_v2' }));
+    expect(edit).not.toHaveBeenCalled();
   });
 });
 

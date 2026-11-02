@@ -374,7 +374,52 @@
                 },
                 "recovery": {
                   "type": "string",
-                  "enum": ["retry", "resume", "abort", "compensate"]
+                  "enum": [
+                    "retry",
+                    "resume",
+                    "abort",
+                    "compensate"
+                  ]
+                },
+                "approved": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "FlowToolCallNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "tool.call"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "tool_id",
+                "input"
+              ],
+              "properties": {
+                "tool_id": {
+                  "$ref": "#/$defs/ToolId"
+                },
+                "input": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  }
+                },
+                "timeout_ms": {
+                  "type": "integer",
+                  "minimum": 1
                 },
                 "approved": {
                   "type": "boolean"
@@ -639,6 +684,27 @@
               "properties": {
                 "value": {
                   "$ref": "#/$defs/Value"
+                },
+                "outcome": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "Optional result of the run as the business sees it, shown as the run's headline instead of plain 'Finished'. Absent: 'Finished'.",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 60,
+                      "description": "What happened, in a few words: 'Approved', 'Rejected', 'Refund sent'. Placeholders like {trigger.name} are filled in. Absent: 'Finished'."
+                    },
+                    "tone": {
+                      "enum": [
+                        "good",
+                        "neutral",
+                        "bad"
+                      ],
+                      "description": "How it reads: good (green), neutral (grey) or bad (red). Absent: neutral."
+                    }
+                  }
                 }
               }
             }
@@ -760,6 +826,11 @@
                 },
                 "default": {
                   "$ref": "#/$defs/NodeId"
+                },
+                "model": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Name of the AI Model record the router asks. Absent means the first keyed provider's default chat model."
                 }
               }
             }
@@ -788,7 +859,8 @@
               "required": [
                 "message",
                 "approve_next",
-                "reject_next"
+                "reject_next",
+                "approver_type"
               ],
               "properties": {
                 "message": {
@@ -807,8 +879,104 @@
                 "timeout_ms": {
                   "type": "integer",
                   "minimum": 1
+                },
+                "approver_type": {
+                  "enum": [
+                    "role",
+                    "user"
+                  ],
+                  "description": "Who may decide (required). 'role' requires approver_role; 'user' requires a non-empty approver_users."
+                },
+                "approver_role": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Frappe Role name allowed to approve (approver_type 'role')."
+                },
+                "approver_users": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": "User ids (emails) allowed to approve (approver_type 'user')."
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120,
+                  "description": "Optional headline of the approval card (the approver's bell, run page, email and Slack card). Placeholders like {trigger.name} are filled in. Absent: 'Approval needed: <flow name>'."
+                },
+                "details": {
+                  "type": "array",
+                  "maxItems": 6,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "value"
+                    ],
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 60,
+                        "description": "What the fact is called on the card. Absent: derived from the field."
+                      },
+                      "value": {
+                        "$ref": "#/$defs/Value"
+                      }
+                    }
+                  },
+                  "description": "Optional 'Show these details to the approver': up to 6 labelled facts on the approval card. Each value is usually a reference such as {\"$from\": \"trigger.amount\"}. Absent: the card picks the few most telling facts of the run's input."
                 }
-              }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "required": [
+                      "approver_type"
+                    ],
+                    "properties": {
+                      "approver_type": {
+                        "const": "role"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "approver_role"
+                    ],
+                    "not": {
+                      "required": [
+                        "approver_users"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "required": [
+                      "approver_type"
+                    ],
+                    "properties": {
+                      "approver_type": {
+                        "const": "user"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "approver_users"
+                    ],
+                    "not": {
+                      "required": [
+                        "approver_role"
+                      ]
+                    }
+                  }
+                }
+              ]
             }
           }
         }
@@ -828,7 +996,8 @@
               "type": "object",
               "additionalProperties": false,
               "required": [
-                "method"
+                "method",
+                "secret"
               ],
               "properties": {
                 "method": {
@@ -836,6 +1005,12 @@
                     "GET",
                     "POST"
                   ]
+                },
+                "secret": {
+                  "type": "string",
+                  "minLength": 32,
+                  "maxLength": 256,
+                  "description": "Shared webhook secret (at least 32 characters). The receiver (huf.ai.flow.api) fails closed: a request is accepted only if the X-Huf-Secret header equals this value (constant-time compare)."
                 }
               }
             }
@@ -881,6 +1056,10 @@
                 "cron": {
                   "type": "string",
                   "minLength": 1
+                },
+                "time_zone": {
+                  "type": "string",
+                  "description": "IANA time zone the cron is read in, for example Asia/Kolkata. Absent means the site time zone."
                 }
               }
             }
@@ -925,10 +1104,120 @@
         }
       ]
     },
+    "GatewayParam": {
+      "description": "One option of a chat trigger: a key from the gateway trigger registry and its value. Labels, types and choices live in the registry (huf.ai.flow.gateways), never in the flow.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "value"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "maxLength": 64
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 500
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "maxItems": 50,
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "GatewayTriggerConfig": {
+      "description": "Shared config of trigger.gateway, trigger.whatsapp and trigger.telegram. 'gateway' names a Gateway record (may be blank in a draft; publishing requires it). It never holds a credential. 'params' are checked against the registry when the flow is made live.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gateway": {
+          "type": "string",
+          "maxLength": 140
+        },
+        "params": {
+          "type": "array",
+          "maxItems": 40,
+          "items": {
+            "$ref": "#/$defs/GatewayParam"
+          }
+        }
+      }
+    },
+    "TriggerGatewayNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "trigger.gateway"
+            },
+            "config": {
+              "$ref": "#/$defs/GatewayTriggerConfig"
+            }
+          }
+        }
+      ]
+    },
+    "TriggerWhatsappNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "trigger.whatsapp"
+            },
+            "config": {
+              "$ref": "#/$defs/GatewayTriggerConfig"
+            }
+          }
+        }
+      ]
+    },
+    "TriggerTelegramNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "trigger.telegram"
+            },
+            "config": {
+              "$ref": "#/$defs/GatewayTriggerConfig"
+            }
+          }
+        }
+      ]
+    },
     "FlowNode": {
       "oneOf": [
         {
-          "$ref": "#/$defs/ToolCallNode"
+          "$ref": "#/$defs/FlowToolCallNode"
         },
         {
           "$ref": "#/$defs/TransformNode"
@@ -938,9 +1227,6 @@
         },
         {
           "$ref": "#/$defs/ForeachNode"
-        },
-        {
-          "$ref": "#/$defs/ParallelNode"
         },
         {
           "$ref": "#/$defs/ValidateNode"
@@ -973,6 +1259,15 @@
           "$ref": "#/$defs/TriggerUnsetNode"
         },
         {
+          "$ref": "#/$defs/TriggerGatewayNode"
+        },
+        {
+          "$ref": "#/$defs/TriggerWhatsappNode"
+        },
+        {
+          "$ref": "#/$defs/TriggerTelegramNode"
+        },
+        {
           "$ref": "#/$defs/StateGetNode"
         },
         {
@@ -983,6 +1278,9 @@
         },
         {
           "$ref": "#/$defs/DocCreateNode"
+        },
+        {
+          "$ref": "#/$defs/CodeRunNode"
         }
       ]
     },
@@ -1256,6 +1554,52 @@
                   "additionalProperties": {
                     "$ref": "#/$defs/Value"
                   }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "CodeRunNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "code.run"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "code",
+                "profile"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Python source run in the sandbox. Read from the published definition only; at most 64 KB (checked at publish)."
+                },
+                "profile": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Name of an Execution Profile (enabled, not Never Allow, no Shared Directory)."
+                },
+                "inputs": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  },
+                  "description": "Values handed to the code as the `inputs` variable. Data only: never code, never the profile."
+                },
+                "timeout_s": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Wall-clock limit for this step; at most the profile's own limit."
                 }
               }
             }

@@ -7,8 +7,8 @@ Behaviour is taken from code; file references name the source of truth. Setup gu
 
 - Meta error 190 means the token is invalid or expired (`huf/ai/gateway_adapters/whatsapp_errors.py`).
 - Rotate the token in BOTH places: the gateway's integration credential `access_token` (used for agent replies) and the linked WhatsApp Account `token` (used by the bridge: confirmations, templates, management). If only one is refreshed, some sends work and others fail with 131005/190.
-- Token check: `check_token(gateway_name, force)` in `huf/ai/whatsapp_management.py` (POST, whitelisted).
-  It calls Meta `debug_token` and `subscribed_apps` (`huf/ai/whatsapp_token_check.py`). The result
+- Token check: `check_token(gateway_name, force)` in `huf/ai/whatsapp/management.py` (POST, whitelisted).
+  It calls Meta `debug_token` and `subscribed_apps` (`huf/ai/whatsapp/token_check.py`). The result
   is cached for 600 s and live checks are limited to one per 10 s. `force` bypasses the cache.
 - Health reads only the cached result. A rejected token raises `access_token_invalid` (error),
   blocks the `credentials` step and sets next step "Replace access token".
@@ -27,13 +27,13 @@ Behaviour is taken from code; file references name the source of truth. Setup gu
 - Gateway Events are created only for inbound messages, so the `messages` field must be subscribed.
   `no_events_yet` (warning) means Meta has not sent anything: check the callback URL and subscription.
 - `webhook` and `subscribed` checklist steps are inferred from Huf data (no Meta read API).
-- `subscribed_apps` and `debug_token` response shapes are marked UNVERIFIED in `whatsapp_token_check.py`.
+- `subscribed_apps` and `debug_token` response shapes are marked UNVERIFIED in `whatsapp/token_check.py`.
   If the app entry is missing, the check reports only that some app is subscribed.
 
 ## 3. Health states
 
 **Connection state** (`Gateway.connection_state`, set from Meta `account_update` webhooks in
-`huf/ai/whatsapp_account_events.py`; no Gateway Event is created, a Gateway comment is the audit):
+`huf/ai/whatsapp/account_events.py`; no Gateway Event is created, a Gateway comment is the audit):
 
 | State | Set by | Effect |
 |---|---|---|
@@ -43,7 +43,7 @@ Behaviour is taken from code; file references name the source of truth. Setup gu
 
 Any enabled gateway on a Disconnected number refuses sends (`send_refusal`). Only a later Meta event changes the state.
 
-**Health** (`evaluate` in `huf/ai/whatsapp_health.py`, a pure function over DB facts, no network):
+**Health** (`evaluate` in `huf/ai/whatsapp/health.py`, a pure function over DB facts, no network):
 
 | Health | Meaning |
 |---|---|
@@ -94,7 +94,7 @@ Handled at ingest by `_handle_consent_event` (`huf/ai/gateway_service.py`). What
 - STOP or START from a sender with no access entry is ignored, with no row and no reply.
 - Outbound sends check `is_opted_out`. The opt-out confirmation is exempt for that one send.
 - Meta `user_preferences` marketing stop/resume is stored as `Gateway Consent` rows
-  (`whatsapp_account_events.py`); `is_marketing_allowed` returns False when the latest value is `stop`.
+  (`whatsapp/account_events.py`); `is_marketing_allowed` returns False when the latest value is `stop`.
   That payload shape is marked UNVERIFIED in the code.
 
 ## 7. 24-hour window and fallback template
@@ -116,13 +116,13 @@ Handled at ingest by `_handle_consent_event` (`huf/ai/gateway_service.py`). What
 
 Gateway field **Voice note replies** (`voice_reply_mode`): `Off` (default), `Voice only` or `Text and voice`. It applies only when the customer's message was a voice note (audio with `voice: true`); anything else is answered with text as usual.
 
-- Needs `ffmpeg` on the server (converts the speech to Ogg/Opus mono). Install it on every worker host (`apt install ffmpeg`); it must include the `libopus` encoder (`ffmpeg -encoders | grep libopus`).
-- To check: the gateway health shows the warning `voice_reply_ffmpeg_missing` ("ffmpeg is missing, so replies go out as text") when voice replies are on and this host lacks ffmpeg or libopus. Saving the gateway shows the same warning. The check runs on the site host, so also verify on each worker host.
+- Nothing has to be installed on the server. Huf asks the speech provider for Opus; mono Ogg/Opus audio is sent as a voice note exactly as received. If a provider returns something else, Huf converts it only when this host happens to have ffmpeg with Opus; otherwise MP3, AAC, M4A or AMR is sent as an ordinary audio message (it plays, but without the voice-note look), and any other format (for example the WAV that Gemini returns) is sent as text.
+- There is no health warning for this and saving the gateway shows no alert. The kind of audio actually sent is not user-visible; check the WhatsApp chat.
 - The speech comes from the agent's own TTS model and voice (Agent `tts_model` / `tts_voice`) using that model's provider key.
 - Replies longer than 1500 characters (markdown removed) are sent as text only.
 - The usual gates apply: STOP opt-out, the 24-hour window (closed window: the text fallback path, including the fallback template), BSUID refusal.
 - `Voice only`: one voice note replaces the text. `Text and voice`: the text goes first, then the voice note (skipped if the text is still being retried).
-- Any failure (ffmpeg missing, no TTS model, provider error, send refused) is logged as a warning ("WhatsApp voice reply: ...") and the reply is sent as text. The reply is never lost.
+- Any failure (no TTS model, provider error, unsupported audio format, send refused) is logged as a warning ("WhatsApp voice reply: ...") and the reply is sent as text. The reply is never lost.
 - A replayed or retried event never sends a second voice note.
 
 ## 9. Triage order
@@ -132,3 +132,24 @@ Gateway field **Voice note replies** (`voice_reply_mode`): `Off` (default), `Voi
 3. Check `connection_state` and its reason.
 4. Review Failed events; replay dead letters with `retry_gateway_event` only after the cause is fixed.
 5. If events sit in Queued, Received or Running, confirm the reaper cron is running.
+
+## 10. Broadcasts
+
+Full design, API and limits: [WhatsApp Broadcast](../whatsapp/BROADCAST.md). Management methods are in `huf/ai/whatsapp/management.py`.
+
+- A broadcast sends one approved template to a bounded list, one request per recipient, through `POST /<PHONE_NUMBER_ID>/messages` (or `/marketing_messages` when `send_via=marketing_messages`, MARKETING templates only). It is automation only: no inbox, no scheduling.
+- Start is for `Draft` broadcasts only; a `Paused` one is resumed with `resume_broadcast` (records `resumed_by`; ticks run as the resumer). Adding recipients is Draft-only and resets the consent attestation, so attest again before start. Broadcast and Recipient rows cannot be changed through REST or the desk form, only through the broadcast API (Recipient permissions are read-only).
+- Limits: Huf follows Meta's rules only; every other limit is a visible setting (Channels, a number's Broadcasts, Limits tab (`/channels/whatsapp/n/:gw/broadcasts/limits`), **Broadcast limits**; API `get_broadcast_limits` / `update_broadcast_limits`, System Manager or Huf Admin to change). The full table is [BROADCAST_LIMITS.md](../whatsapp/BROADCAST_LIMITS.md). Broadcasts do not use the agent recipient allowlist.
+- Start needs: an `APPROVED` template, complete template values, a connected gateway, consent attested (by the broadcast or by its audiences), audiences collected for the template's purpose, at least one queued recipient, no other Running broadcast on the gateway (while `one_active_per_gateway` is on), write permission on the Gateway, and the typed recipient count (UI and session callers; API-key callers skip it). Preview returns `blocking` and `warnings` as `{code, message, limit_key}`. Number quality RED, quality YELLOW, an unknown tier and recipients above the 24-hour budget are warnings: the operator must pass exactly the current warning codes as `override_warnings` (the wizard shows an "I understand" box for each) or the start is refused with `warnings_changed`. With `over_budget` acknowledged, the first rows that fit are sent and the rest wait 24 hours. Resume re-runs the blocking checks, needs no acknowledgement and does not defer rows.
+- Recipient limits (defaults, all editable): `max_recipients_default` 1000, `max_recipients_ceiling` 10000 (`0` = no limit), 10000 recipients per request, CSV 2 MB, 50000 stored rows per broadcast, shortest phone number 8 digits.
+- Audiences (Channels, a number's Broadcasts, Audiences tab (`/channels/whatsapp/n/:gw/broadcasts/audiences`); full detail in BROADCAST.md section 15): a saved list with its own consent record (basis, source, purposes, attester and time set by the server and not editable), contacts with tags, import by CSV (large files in the background). A broadcast picks lists with include/exclude and tag filters; contacts are deduplicated and the first list wins. Opt-outs stay in the gateway's consent records per contact and sender number; members stay in the list and show as suppressed. The template category must match a list purpose (MARKETING needs `marketing`; UTILITY and AUTHENTICATION need `utility`), checked at preview and again at start. A list cannot be renamed or deleted while a Draft, Queued, Running or Paused broadcast uses it. Read-only users see phone numbers as the last four digits.
+- Recipient states: `queued`, `sending`, `sent`, `delivered`, `read`, `failed`, `deferred`, `unknown`, `skipped`. A row in `sending` for more than 10 minutes becomes `unknown` (cron `*/5 * * * *`, `resume_stale`, which also revives a Running broadcast that has no live tick).
+- `unknown` rows are never resent. Check them in WhatsApp Manager's message log. A later `delivered`, `read` or `failed` webhook updates them.
+- Failed rows are not retried by any action. A retryable error is retried until the row has made 5 attempts. To reach the same contacts again, create a new broadcast.
+- Skipped at intake or send: STOP (`opted_out`), marketing stop (`marketing_opted_out`), BSUID (`bsuid_recipient`), US/Canada `+1` numbers for MARKETING templates (`us_plus_one_marketing`), over the cap (`max_recipients`), cancelled (`cancelled`). A STOP keyword, a marketing stop from `user_preferences`, or a 131050 (on a send or in a status webhook) also skips that contact's queued and deferred rows in unfinished broadcasts. A 131049 (per-user marketing limit) is a terminal skip (`skipped`, reason `per_user_marketing_limit`); it is never resent. `deferred` is used for retryable errors and gateway disconnect only. A `sent` webhook resolves an `unknown` row.
+- The runner pauses (resume is manual) on: send errors 132015, 132016, 135000, 131042; a status webhook with 135000; a template webhook that marks the template paused, disabled or rejected, turns its quality RED or changes its category to MARKETING; gateway disconnected; template not approved or missing at send time; loss of the runner user's Gateway write permission; and the manual and kill-switch pauses. The reason is in `pause_reason`. 135000 is treated as a pause signal conservatively.
+- Kill switch: `pause_all_broadcasts(gateway)` (the "Stop all broadcasts" button) pauses every running broadcast on the gateway with reason `kill_switch`. Use it first when a template or number is in trouble.
+- Counters self-correct (after each chunk, at completion, every 5 minutes for Running broadcasts). To force a recount: `frappe.get_doc("WhatsApp Broadcast", name).recount(commit=True)` in a bench console.
+- Messaging limit: the preview reads `whatsapp_business_manager_messaging_limit`. If it is unknown the preview warns (`tier_unknown`) and the recipient cap is the only ceiling.
+- Costs: the preview shows cost as unavailable (`cost.total` null) until rates are filled in `huf/ai/whatsapp/broadcast/rates.json` from Meta's official rate card. Check Meta billing for real charges.
+- Live verification is described in [broadcast-live-verification.md](../whatsapp/broadcast-live-verification.md). Run it only against allow-listed test recipients.

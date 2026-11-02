@@ -9,7 +9,7 @@ import unittest
 
 import requests
 
-from huf.ai.tests.fake_graph import FakeGraph
+from huf.testing.fake_graph import FakeGraph
 
 MESSAGES_URL = "https://graph.facebook.com/v21.0/1234567890/messages"
 

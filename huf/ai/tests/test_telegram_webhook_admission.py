@@ -54,7 +54,7 @@ class TestTelegramWebhookGatewayAdmission(IntegrationTestCase):
 		), patch(
 			"huf.ai.gateway_service.ingest_gateway_event"
 		) as mock_ingest, patch(
-			"huf.ai.agent_integration.run_agent_sync"
+			"huf.ai.agent.integration.run_agent_sync"
 		) as mock_run_sync:
 			process_telegram_update("bot-settings", UPDATE)
 
@@ -75,7 +75,7 @@ class TestTelegramWebhookGatewayAdmission(IntegrationTestCase):
 		), patch(
 			"frappe.db.get_value", return_value=None
 		), patch(
-			"huf.ai.agent_integration.run_agent_sync"
+			"huf.ai.agent.integration.run_agent_sync"
 		) as mock_run_sync, patch(
 			"huf.ai.tools.telegram_webhook._send_telegram_message"
 		) as mock_send:
@@ -97,7 +97,7 @@ class TestTelegramWebhookGatewayAdmission(IntegrationTestCase):
 		), patch(
 			"frappe.db.get_value", return_value=None
 		), patch(
-			"huf.ai.agent_integration.run_agent_sync",
+			"huf.ai.agent.integration.run_agent_sync",
 			return_value={"response": "hi there"},
 		) as mock_run_sync, patch(
 			"huf.ai.tools.telegram_webhook._send_telegram_message"

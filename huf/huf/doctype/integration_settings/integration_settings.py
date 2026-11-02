@@ -28,14 +28,27 @@ class IntegrationSettings(Document):
 			frappe.throw("At least one credential is required")
 
 		self._ensure_telegram_webhook_config()
+
+		if self.service == "whatsapp":
+			from huf.ai.whatsapp.credential_sync import validate_credential
+
+			validate_credential(self)
 	
 	def on_update(self):
-		"""Optional auto-setup of Telegram webhook after save.
+		"""WhatsApp: check with Meta and sync the WhatsApp Account and gateways.
+
+		Telegram: optional auto-setup of the webhook after save.
 
 		To avoid Telegram rate limits (HTTP 429), setWebhook is only called when
 		the bot configuration actually changed or when the document is new, and
 		never more than once per cooldown period.
 		"""
+		if self.service == "whatsapp":
+			from huf.ai.whatsapp.credential_sync import on_credential_update
+
+			on_credential_update(self)
+			return
+
 		if not (self.service == "telegram" and self.is_active and self.telegram_auto_setup_webhook):
 			return
 

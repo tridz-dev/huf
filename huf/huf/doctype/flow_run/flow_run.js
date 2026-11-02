@@ -13,7 +13,7 @@ frappe.ui.form.on('Flow Run', {
                     }
                 ], (values) => {
                     frappe.call({
-                        method: 'huf.ai.flow_engine.approve_flow_run',
+                        method: 'huf.ai.flow.engine.approve_flow_run',
                         args: {
                             flow_run_name: frm.doc.name,
                             decision: 'approved',
@@ -39,7 +39,7 @@ frappe.ui.form.on('Flow Run', {
                     }
                 ], (values) => {
                     frappe.call({
-                        method: 'huf.ai.flow_engine.approve_flow_run',
+                        method: 'huf.ai.flow.engine.approve_flow_run',
                         args: {
                             flow_run_name: frm.doc.name,
                             decision: 'rejected',

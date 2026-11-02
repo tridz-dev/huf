@@ -63,7 +63,7 @@ def classify_media(filename: str, mime_type: str | None = None) -> str:
 
 def _ocr_document(file_id: str, agent_name: str) -> dict:
 	from huf.ai import sdk_tools
-	from huf.ai.agent_integration import _run_async_safely
+	from huf.ai.agent.integration import _run_async_safely
 
 	return _run_async_safely(
 		sdk_tools.handle_ocr_document(file_id=file_id, agent_name=agent_name, create_message=False)
@@ -89,6 +89,17 @@ def format_document_block(filename: str, text: str, file_hash: str = "n/a") -> s
 		"The following text was extracted from an attached file. Use this as context:\n\n"
 		f"--- File: {filename} (hash: {file_hash}) ---\n{text}\n"
 	)
+
+
+def _log_stt_failure(name, exc_type, message) -> None:
+	"""Warn (never raise) about a failed voice-note transcription; redacts secrets."""
+	try:
+		import re
+
+		msg = re.sub(r"(sk-[A-Za-z0-9_\-]{6,}|(?i:bearer)\s+\S+|(?i:api[_-]?key)[\"'=: ]+\S+)", "[redacted]", str(message or ""))[:300]
+		frappe.logger("huf").warning("Voice note transcription failed (%s): %s: %s", name, exc_type, msg)
+	except Exception:
+		pass
 
 
 def prepare_media_for_agent(entries, agent_name: str) -> PreparedMedia:
@@ -117,7 +128,10 @@ def prepare_media_for_agent(entries, agent_name: str) -> PreparedMedia:
 			try:
 				res = _transcribe_audio(file_id, agent_name) or {}
 				text = (res.get("transcript") or res.get("text") or "").strip() if res.get("success") else ""
-			except Exception:
+				if not text:
+					_log_stt_failure(name, "ProviderError", res.get("error"))
+			except Exception as exc:
+				_log_stt_failure(name, type(exc).__name__, str(exc))
 				text = ""
 			if text:
 				text, cut = cap_text(text, MAX_TRANSCRIPT_CHARS)

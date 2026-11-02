@@ -26,3 +26,18 @@ export function CategoryChangeBadge({ pending, to }: { pending?: boolean; to?: s
     </Badge>
   );
 }
+
+export function SharedPill({ shared }: { shared?: boolean }) {
+  return shared ? <Badge variant="pill-warning">Shared</Badge> : null;
+}
+
+/** "Used by" chips; renders nothing when the server sent no usage. */
+export function UsedByChips({ users }: { users?: { solution: string; title: string }[] }) {
+  if (!users || users.length === 0) return null;
+  return (
+    <span className="flex flex-wrap items-center gap-1" data-testid="used-by">
+      <span className="text-[10px] font-medium uppercase tracking-wide text-steel">Used by</span>
+      {users.map((u) => <Badge key={u.solution} variant="chip" size="sm">{u.title || u.solution}</Badge>)}
+    </span>
+  );
+}

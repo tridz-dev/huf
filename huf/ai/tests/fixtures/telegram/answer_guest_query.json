@@ -1,0 +1,9 @@
+{
+  "guest_query_id": "gq-abc123",
+  "result": {
+    "type": "article",
+    "id": "gq-abc123",
+    "title": "4",
+    "input_message_content": {"message_text": "4"}
+  }
+}

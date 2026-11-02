@@ -1,0 +1,39 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550783881",
+              "phone_number_id": "106540352242922"
+            },
+            "statuses": [
+              {
+                "id": "wamid.HBgMOTE5ODc2NTQzMjEwFQIAERgUM0VGNzJGMDIzRjgyMEMxRjkyBcastAA",
+                "status": "failed",
+                "timestamp": "1792000300",
+                "recipient_id": "919876543210",
+                "errors": [
+                  {
+                    "code": 131050,
+                    "title": "User stopped marketing",
+                    "message": "Recipient opted out of marketing messages",
+                    "error_data": {
+                      "details": "The recipient has stopped marketing messages from this business."
+                    }
+                  }
+                ],
+                "biz_opaque_callback_data": "bcast-0001-r0001"
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}

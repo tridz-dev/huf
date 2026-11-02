@@ -1,0 +1,18 @@
+{
+  "update_id": 1006,
+  "channel_post": {
+    "message_id": 7,
+    "sender_chat": {
+      "id": -1009999,
+      "type": "channel",
+      "title": "News"
+    },
+    "chat": {
+      "id": -1009999,
+      "type": "channel",
+      "title": "News"
+    },
+    "date": 1760000000,
+    "text": "Breaking"
+  }
+}

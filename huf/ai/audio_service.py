@@ -6,7 +6,7 @@ Canonical backend audio service for Huf.
 
 Single home for audio upload guardrails, STT configuration resolution,
 audio transcription, and audio user-message creation. Chat endpoints
-(``huf.ai.agent_chat``), the ``transcribe_audio`` agent tool
+(``huf.ai.agent.chat``), the ``transcribe_audio`` agent tool
 (``huf.ai.sdk_tools.handle_transcribe_audio``), and the public audio API
 (``huf.ai.audio_api``) are thin wrappers around these functions.
 
@@ -29,6 +29,7 @@ from frappe import _
 from frappe.utils.file_manager import save_file
 
 from huf.ai.transaction import commit_if_background
+from huf.permissions import can_read_file
 
 # Maximum accepted size for a decoded audio upload (25 MB).
 MAX_AUDIO_FILE_SIZE = 25 * 1024 * 1024
@@ -387,7 +388,7 @@ def resolve_stt_config(agent_name: str = None, model: str = None) -> dict:
             stt_provider_name = model_doc[0].provider
         elif "/" in model:
             provider_slug = model.split("/")[0]
-            provs = frappe.get_all("AI Provider", filters={"slug": provider_slug}, fields=["name"])
+            provs = frappe.get_all("AI Provider", filters={"provider_brand": {"gemini": "google", "vertex_ai": "google-vertex"}.get(provider_slug, provider_slug)}, fields=["name"])
             if provs:
                 stt_provider_name = provs[0].name
 
@@ -493,11 +494,8 @@ def _resolve_file_doc(file_id: str = None, file_url: str = None):
             file_name = file_url.replace("/files/", "")
             file_doc = frappe.get_doc("File", {"file_name": file_name})
 
-    if file_doc and not frappe.has_permission("File", "read", doc=file_doc):
-        frappe.throw(
-            _("Not permitted to read File {0}").format(file_doc.name),
-            frappe.PermissionError,
-        )
+    if file_doc and not can_read_file(file_doc):
+        frappe.throw(_("Not permitted to read File {0}").format(file_doc.name), frappe.PermissionError)
 
     return file_doc
 
@@ -612,6 +610,29 @@ def transcribe_audio_file(
         return {"success": False, "error": str(e)}
 
 
+# Container extensions STT providers (OpenAI: flac, mp3, mp4, mpeg, mpga,
+# m4a, ogg, wav, webm) reject although the bytes are a supported container.
+# Ogg/Opus voice notes (Telegram ``.oga``) are plain Ogg, so only the upload
+# name changes; the bytes are never transcoded.
+_STT_EXTENSION_ALIASES = {"oga": "ogg", "opus": "ogg"}
+_STT_EXTENSION_MIME = {
+    "ogg": "audio/ogg", "mp3": "audio/mpeg", "m4a": "audio/mp4",
+    "mp4": "audio/mp4", "wav": "audio/wav", "webm": "audio/webm",
+    "flac": "audio/flac",
+}
+
+
+def _stt_upload_name(file_path: str) -> tuple[str, str | None]:
+    """Return (upload filename, mime) with provider-rejected extensions normalised."""
+    base = os.path.basename(file_path)
+    stem, _, ext = base.rpartition(".")
+    ext = ext.lower()
+    if not stem:
+        return base, None
+    ext = _STT_EXTENSION_ALIASES.get(ext, ext)
+    return f"{stem}.{ext}", _STT_EXTENSION_MIME.get(ext)
+
+
 def _call_stt_provider(
     *,
     provider_name: str,
@@ -644,6 +665,7 @@ def _call_stt_provider(
 
         base64_audio = base64.b64encode(audio_data).decode("utf-8")
         audio_format = _get_file_extension(file_path) or "mp3"
+        audio_format = _STT_EXTENSION_ALIASES.get(audio_format, audio_format)
         if audio_format == "m4a":
             audio_format = "mp4"
 
@@ -679,7 +701,11 @@ def _call_stt_provider(
         transcription_params["language"] = language
 
     with open(file_path, "rb") as audio_file:
-        transcription_params["file"] = audio_file
+        upload_name, upload_mime = _stt_upload_name(file_path)
+        if upload_mime:
+            transcription_params["file"] = (upload_name, audio_file, upload_mime)
+        else:
+            transcription_params["file"] = audio_file
         try:
             response = litellm.transcription(**transcription_params)
         except Exception as e:

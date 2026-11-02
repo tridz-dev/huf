@@ -20,7 +20,7 @@ instead of a list, or a required key is absent from ``config.input`` entirely), 
 violation, not an ordinary-data edge case -- it is reported as a typed :class:`TransformError` in the
 returned :class:`TransformResult` (``ok=False``) so the calling node FAILS instead of silently
 succeeding with a wrong answer. This is the fix for the documented anti-pattern in
-``huf/ai/flow_engine.py``'s ``_exec_transform`` (:1065), which swallows per-transformation errors into
+``huf/ai/flow/engine.py``'s ``_exec_transform`` (:1065), which swallows per-transformation errors into
 a result *string* and still reports success.
 
 Determinism (I nothing-new, just good practice + explicit test requirement): every op produces the
@@ -109,7 +109,7 @@ ERR_UNKNOWN_OP = "unknown_op"
 # graph-ir.md section 4.1 defines the general reference grammar (root + "." segment | "[" int "]").
 # Transform "key"/"field" values are always relative to a single row (no root token), so this is a
 # narrower, purely-local variant: a dotted/bracketed path evaluated against one dict, total, missing
-# keys/out-of-range indices resolve to None rather than raising. This mirrors flow_eval.py's dict
+# keys/out-of-range indices resolve to None rather than raising. This mirrors flow/eval.py's dict
 # subscript behaviour, extended to list indices, but does NOT implement the full reference/expression
 # grammar owned by T-13 (huf/ai/graph/expressions.py) -- only what row-key resolution needs.
 # --------------------------------------------------------------------------------------------------

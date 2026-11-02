@@ -1,0 +1,28 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-10-30 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["wamid", "status", "timestamp", "gateway", "opaque_ref", "errors", "received_at", "attempts"],
+ "fields": [
+  {"fieldname":"wamid","fieldtype":"Data","in_list_view":1,"in_standard_filter":1,"label":"WAMID","length":255,"reqd":1,"search_index":1},
+  {"fieldname":"status","fieldtype":"Data","in_list_view":1,"label":"Status","length":32,"reqd":1},
+  {"fieldname":"timestamp","fieldtype":"Data","label":"Meta timestamp","length":32},
+  {"fieldname":"gateway","fieldtype":"Link","in_list_view":1,"label":"Gateway","options":"Gateway","search_index":1},
+  {"fieldname":"opaque_ref","fieldtype":"Data","label":"Opaque ref","length":255},
+  {"fieldname":"errors","fieldtype":"Small Text","label":"Errors (JSON)"},
+  {"fieldname":"received_at","fieldtype":"Datetime","in_list_view":1,"label":"Received at","search_index":1},
+  {"fieldname":"attempts","fieldtype":"Int","label":"Sweep attempts","default":"0"}
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "Huf",
+ "name": "WhatsApp Status Pending",
+ "owner": "Administrator",
+ "permissions": [{"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1,"create":1,"delete":1}],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -14,6 +14,7 @@ import { CodeBlock } from "./code-block";
 import { Video } from "./video";
 import { extractVideoFromToolResult } from "@/components/chat/videoDetection";
 import type { ExtendedToolState } from "./types";
+import { copyText } from '@/lib/clipboard';
 
 export type ToolProps = ComponentProps<typeof Collapsible>;
 
@@ -237,12 +238,8 @@ function summarizeValue(value: unknown, maxLen = 40): string {
 }
 
 async function copyJson(json: string): Promise<void> {
-  if (typeof window === "undefined" || !navigator?.clipboard?.writeText) return;
-  try {
-    await navigator.clipboard.writeText(json);
-  } catch {
-    // Clipboard unavailable or denied — silently no-op, this is a non-critical affordance.
-  }
+  // Clipboard unavailable or denied: silently no-op, this is a non-critical affordance.
+  await copyText(json);
 }
 
 function PayloadActions({

@@ -1,7 +1,7 @@
 """Shared graph execution core for the Procedure and Flow profiles.
 
 This module is the T-22 seam: one executor, two runtimes. ``FlowRuntime``
-(``huf/ai/flow_engine.py``) and ``ProcedureRuntime`` (T-23) are adapters over
+(``huf/ai/flow/engine.py``) and ``ProcedureRuntime`` (T-23) are adapters over
 ``GraphExecutor``; the executor itself knows nothing about Flow Run documents,
 Frappe, or persistence.
 

@@ -7,7 +7,7 @@ This module is the T-23 seam: it drives ``huf.ai.graph.executor.GraphExecutor`` 
 over a pinned Procedure graph, delegating every atomic operation to the module that
 already owns it:
 
-	tool.call  -> huf.ai.tool_invocation.invoke_tool_sync (T-10) -- permission checks and
+	tool.call  -> huf.ai.tools.invocation.invoke_tool_sync (T-10) -- permission checks and
 	              Agent Tool Call telemetry live there; this module never re-implements
 	              either (I5).
 	transform  -> huf.ai.graph.transforms.run_transform (T-12)
@@ -27,7 +27,7 @@ Two-layer split, deliberately:
   a database -- it is unit-testable with a hand-written fake invoker, standalone, with no
   bench (mirrors ``huf.ai.graph.transforms`` / ``huf.ai.graph.expressions``).
 * :func:`run_agent_procedure_run` is the frappe-facing entry point. It loads an
-  ``Agent Procedure Run`` document, takes the run lock (``huf.ai.procedure_lock``, GT-08),
+  ``Agent Procedure Run`` document, takes the run lock (``huf.ai.procedure.lock``, GT-08),
   builds the real ``tool_invoker`` (I1 authorization via ``huf.ai.graph.permissions`` +
   T-10 telemetry), records one ``Agent Procedure Step`` row per node visited, and updates
   the run's status/output. It is the only place in this module that touches Frappe.
@@ -1158,13 +1158,13 @@ _APPROVAL_PENDING_PREFIX = "approval_pending:"
 def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutcome":
 	"""Advance one ``Agent Procedure Run`` to completion.
 
-	Loads the run, takes ``huf.ai.procedure_lock.ProcedureRunLock`` (GT-08) -- refusing to
+	Loads the run, takes ``huf.ai.procedure.lock.ProcedureRunLock`` (GT-08) -- refusing to
 	advance if another worker already holds it, never retrying inline -- validates the
 	pinned graph (defence in depth; T-24's validator is expected to have already run at
 	activation time), executes it via :func:`execute_procedure` with a real ``tool_invoker``
 	that authorizes each call (I1, ``huf.ai.graph.permissions.authorize_tool_call``) and
 	emits exactly one ``Agent Tool Call`` telemetry record per invocation
-	(I5, ``huf.ai.tool_invocation.invoke_tool_sync(..., telemetry=True)``), records one
+	(I5, ``huf.ai.tools.invocation.invoke_tool_sync(..., telemetry=True)``), records one
 	``Agent Procedure Step`` child row per node visited, and writes the run's terminal
 	status/output/error back once.
 
@@ -1175,15 +1175,15 @@ def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutco
 	import frappe
 	from frappe.utils import now_datetime
 
-	from huf.ai import tool_invocation as _tool_invocation
+	from huf.ai.tools import invocation as _tool_invocation
 	from huf.ai.graph import permissions as _permissions
 	from huf.ai.graph.executor import fingerprint as _fingerprint
 	from huf.ai.graph.validator import validate_procedure_graph
-	from huf.ai.procedure_lock import ProcedureRunLock
+	from huf.ai.procedure.lock import ProcedureRunLock
 	from huf.ai.transaction import commit_if_background
 
 	from huf.ai.graph.cache import get_cached_result, set_cached_result
-	from huf.ai.procedure_versioning import verify_fingerprint
+	from huf.ai.procedure.versioning import verify_fingerprint
 
 	run = frappe.get_doc("Agent Procedure Run", run_name)
 

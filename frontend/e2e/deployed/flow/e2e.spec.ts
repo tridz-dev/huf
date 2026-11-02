@@ -82,7 +82,7 @@ test('build a branching flow end-to-end through the UI, then run it', async ({ p
 
     // ---- RUN ----
     await activateFlowApi(api, flowId);
-    const run = await api.post('/api/method/huf.ai.flow_api.run_flow', { data: { flow_id: flowId } });
+    const run = await api.post('/api/method/huf.ai.flow.api.run_flow', { data: { flow_id: flowId } });
     expect(run.ok(), `run_flow failed: ${await run.text()}`).toBeTruthy();
     const runId = (await run.json()).message.flow_run_id;
 

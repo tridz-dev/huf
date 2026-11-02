@@ -1,0 +1,29 @@
+{
+  "update_id": 1022,
+  "message": {
+    "message_id": 61,
+    "from": {
+      "id": 111,
+      "is_bot": false,
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "chat": {
+      "id": 111,
+      "type": "private",
+      "first_name": "Jane",
+      "username": "janedoe"
+    },
+    "date": 1760000000,
+    "media_group_id": "mg-77",
+    "caption": "album",
+    "photo": [
+      {
+        "file_id": "mg1",
+        "file_unique_id": "m1",
+        "width": 800,
+        "height": 800
+      }
+    ]
+  }
+}

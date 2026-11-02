@@ -89,7 +89,7 @@ export function ServiceCatalogModal({
         <DialogHeader>
           <DialogTitle>{kind === 'channels' ? 'Add Channel' : 'Add Integration'}</DialogTitle>
           <DialogDescription>
-            Choose a service to connect. Required credentials are shown for each integration.
+            Choose the service you want to connect.
           </DialogDescription>
         </DialogHeader>
 
@@ -128,7 +128,6 @@ export function ServiceCatalogModal({
                 const credSchema = parseRequiredCredentials(service.required_credentials);
                 const identity = getServiceIdentity(service.service_name);
                 const Icon = identity.icon;
-                const isGatewayService = (service.surface || 'Integration') === 'Gateway';
                 return (
                   <Card
                     key={service.name}
@@ -148,12 +147,9 @@ export function ServiceCatalogModal({
                       )}
                     </CardHeader>
                     <CardContent className="space-y-2">
-                      {kind === 'integrations' && isGatewayService && (
-                        <p className="text-xs text-primary">Can also receive messages once a gateway is added</p>
-                      )}
                       {credSchema.length > 0 && (
                         <p className="text-xs text-muted-foreground">
-                          Requires: {credSchema.map((c) => c.label).join(', ')}
+                          You will need {credSchema.length === 1 ? '1 detail' : `${credSchema.length} details`} from {identity.title}
                         </p>
                       )}
                       {service.documentation_url && (

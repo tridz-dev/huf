@@ -4,13 +4,13 @@
 """
 Tests for huf.ai.tools.render_tools — the render_mermaid/render_chart tool
 handlers that template structured JSON into the existing Mermaid/chart
-<artifact> markup, and for the agent_integration.py prompt-instruction
+<artifact> markup, and for the agent/integration.py prompt-instruction
 selection that swaps in the short "call the tool" instructions when
 render_mermaid/render_chart are attached to an agent.
 
 huf.ai.tools.render_tools has no frappe dependency (pure string/structural
 templating), so tests 1-6 run as plain unittest with no bench/site required.
-Test 7 exercises huf.ai.agent_integration, which imports frappe at module
+Test 7 exercises huf.ai.agent.integration, which imports frappe at module
 level and therefore does require a Frappe site to even import - see the
 docstring on TestPromptInstructionSelection for how that is handled.
 
@@ -174,12 +174,12 @@ class TestRenderChart(unittest.TestCase):
 
 
 class TestPromptInstructionSelection(unittest.TestCase):
-	"""Covers the agent_integration.py selection of
+	"""Covers the agent/integration.py selection of
 	CHART_ARTIFACT_INSTRUCTIONS_WITH_TOOL / MERMAID_ARTIFACT_INSTRUCTIONS_WITH_TOOL
 	vs. the full-length originals, based on whether render_chart/render_mermaid
 	are present in the agent's resolved tool list.
 
-	huf.ai.agent_integration imports frappe at module level, so it cannot even
+	huf.ai.agent.integration imports frappe at module level, so it cannot even
 	be imported without a Frappe site/bench (this sandbox has neither - no
 	`sites/` directory and no installed `frappe` package). This test therefore
 	drives AgentManager.create_agent() end to end via bench run-tests only;
@@ -199,7 +199,7 @@ class TestPromptInstructionSelection(unittest.TestCase):
 			)
 
 	def _make_manager(self, tool_names):
-		from huf.ai.agent_integration import AgentManager
+		from huf.ai.agent.integration import AgentManager
 
 		manager = AgentManager.__new__(AgentManager)
 		manager.agent_doc = mock.MagicMock()

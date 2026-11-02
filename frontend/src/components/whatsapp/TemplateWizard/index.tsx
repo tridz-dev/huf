@@ -8,6 +8,8 @@ import {
   createTemplateDraft,
   editTemplate,
   errorText,
+  SharedTemplateError,
+  type TemplateUser,
   type WhatsAppError,
 } from '@/services/whatsappApi';
 import { TemplatePreview } from '../TemplatePreview';
@@ -38,9 +40,13 @@ interface CommonProps {
 }
 
 interface CreateProps extends CommonProps {
+  /** Create mode prefilled from an existing template; the name becomes `<name>_v2`. */
+  copyFrom?: TemplateWizardDraft;
   initial?: undefined;
   docName?: undefined;
   editsLeft?: undefined;
+  acknowledgeShared?: undefined;
+  onSharedConflict?: undefined;
 }
 
 interface EditProps extends CommonProps {
@@ -50,6 +56,11 @@ interface EditProps extends CommonProps {
   docName: string;
   /** Edits WhatsApp still allows, when known. */
   editsLeft?: number | null;
+  copyFrom?: undefined;
+  /** True once the user accepted the shared-template warning; sent to the server as acknowledge_shared. */
+  acknowledgeShared?: boolean;
+  /** The server says other solutions use this template and the edit was not acknowledged. */
+  onSharedConflict?: (usedBy: TemplateUser[]) => void;
 }
 
 export type TemplateWizardProps = CreateProps | EditProps;
@@ -58,13 +69,15 @@ const WRITE = 1;
 const REVIEW = 2;
 
 export function TemplateWizard(props: TemplateWizardProps) {
-  const { gatewayName, isAdmin, requestApproval, onDone, onCancel, initial, docName, editsLeft } = props;
+  const { gatewayName, isAdmin, requestApproval, onDone, onCancel, initial, docName, editsLeft, copyFrom, acknowledgeShared, onSharedConflict } = props;
   const isEdit = initial !== undefined;
   const direct = isAdmin && !requestApproval;
 
-  const [step, setStep] = useState(isEdit ? WRITE : 0);
-  const [draft, setDraft] = useState<TemplateWizardDraft>(() => initial ?? emptyDraft());
-  const [kindId, setKindId] = useState(() => (initial ? `${initial.category.toLowerCase()}_default` : 'marketing_default'));
+  const [step, setStep] = useState(isEdit || copyFrom ? WRITE : 0);
+  const [draft, setDraft] = useState<TemplateWizardDraft>(() =>
+    initial ?? (copyFrom ? { ...copyFrom, name: `${copyFrom.name}_v2` } : emptyDraft()),
+  );
+  const [kindId, setKindId] = useState(() => ((initial ?? copyFrom) ? `${(initial ?? copyFrom)!.category.toLowerCase()}_default` : 'marketing_default'));
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
   const [attempts, setAttempts] = useState(0);
   const [serverFields, setServerFields] = useState<Record<string, string>>({});
@@ -131,12 +144,22 @@ export function TemplateWizard(props: TemplateWizardProps) {
     setBusy(true);
     setNotices([]);
     setDetail(undefined);
-    const res =
-      isEdit && docName
-        ? await editTemplate(docName, toEditPayload(draft))
-        : direct
-          ? await createTemplate(gatewayName, toCreatePayload(draft))
-          : await createTemplateDraft(gatewayName, toCreatePayload(draft));
+    let res: Awaited<ReturnType<typeof editTemplate>>;
+    try {
+      res =
+        isEdit && docName
+          ? await editTemplate(docName, toEditPayload(draft), acknowledgeShared)
+          : direct
+            ? await createTemplate(gatewayName, toCreatePayload(draft))
+            : await createTemplateDraft(gatewayName, toCreatePayload(draft));
+    } catch (err) {
+      setBusy(false);
+      if (err instanceof SharedTemplateError && onSharedConflict) {
+        onSharedConflict(err.usedBy);
+        return;
+      }
+      throw err;
+    }
     setBusy(false);
     if (res.success) {
       const resultKind = isEdit ? 'edited' : direct ? 'submitted' : 'draft';
