@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
 import { useSiteTimezone } from '@/lib/serverTime';
 import { decisionMovedRun } from '@/lib/flow-run/flowRunDecision';
+import { announceRunChanged } from '@/lib/flow-run/runChanged';
 import { ApprovalsList } from './flow/decision/ApprovalsList';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
 import { cn } from '@/lib/utils';
@@ -68,6 +69,7 @@ export function ApprovalsBell() {
     const approving = decision === 'approve';
     try {
       const answer = approving ? await approveFlowRun(flowRunId) : await rejectFlowRun(flowRunId);
+      announceRunChanged(flowRunId);
       if (decisionMovedRun(answer, approval.current_node_id)) {
         toast.success(approving ? 'Approved. The flow will continue.' : 'Rejected. The flow will follow its rejected path.');
       } else {

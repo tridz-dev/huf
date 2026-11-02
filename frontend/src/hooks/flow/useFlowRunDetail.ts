@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { flowService } from '../../services/flowService';
 import type { FlowRunDetail } from '../../services/flowApi';
+import { onRunChanged } from '../../lib/flow-run/runChanged';
+import { runCanStillChange } from '../../lib/flow-run/runCanStillChange';
 
 /** One flow run's details, refreshed every 2 s while the run can still change. */
 export function useFlowRunDetail(runId: string | null) {
@@ -23,9 +25,10 @@ export function useFlowRunDetail(runId: string | null) {
         fetchRun();
     }, [runId]);
 
-    // Same fallback as the run list: refresh while the run is still queued or running.
-    // A step waiting for code to finish (or be approved) moves on by itself, so keep refreshing there too.
-    const active = run?.status === 'Queued' || run?.status === 'Running' || run?.status === 'Waiting Code';
+    // Same fallback as the run list: refresh while the run is still queued, running or waiting for someone.
+    // A waiting step (code review, approval, a reply) is decided elsewhere (the run sheet, the bell, another person),
+    // so this copy of the run, which the canvas draws, must keep refreshing or it keeps showing "Waiting" after the run ended.
+    const active = runCanStillChange(run?.status);
     useEffect(() => {
         if (!runId || !active) return;
         const timer = setInterval(async () => {
@@ -38,6 +41,19 @@ export function useFlowRunDetail(runId: string | null) {
         }, 2000);
         return () => clearInterval(timer);
     }, [runId, active]);
+
+    // Decided or resumed from the run sheet or the bell: read the run again at once, not at the next tick.
+    useEffect(() => {
+        if (!runId) return;
+        return onRunChanged(runId, async () => {
+            try {
+                const data = await flowService.getFlowRun(runId);
+                if (data) setRun(data);
+            } catch (err) {
+                console.error(err);
+            }
+        });
+    }, [runId]);
 
     const refreshRun = async () => {
         if (!runId) return;
