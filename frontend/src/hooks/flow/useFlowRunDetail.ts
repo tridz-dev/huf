@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { flowService } from '../../services/flowService';
 import type { FlowRunDetail } from '../../services/flowApi';
+import { runCanStillChange } from '../../lib/flow-run/runCanStillChange';
 
 /** One flow run's details, refreshed every 2 s while the run can still change. */
 export function useFlowRunDetail(runId: string | null) {
@@ -23,9 +24,10 @@ export function useFlowRunDetail(runId: string | null) {
         fetchRun();
     }, [runId]);
 
-    // Same fallback as the run list: refresh while the run is still queued or running.
-    // A step waiting for code to finish (or be approved) moves on by itself, so keep refreshing there too.
-    const active = run?.status === 'Queued' || run?.status === 'Running' || run?.status === 'Waiting Code';
+    // Same fallback as the run list: refresh while the run is still queued, running or waiting for someone.
+    // A waiting step (code review, approval, a reply) is decided elsewhere (the run sheet, the bell, another person),
+    // so this copy of the run, which the canvas draws, must keep refreshing or it keeps showing "Waiting" after the run ended.
+    const active = runCanStillChange(run?.status);
     useEffect(() => {
         if (!runId || !active) return;
         const timer = setInterval(async () => {
