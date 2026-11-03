@@ -131,6 +131,32 @@ def _validate_route(route) -> str | None:
 	return None
 
 
+def _validate_scope(scope) -> str | None:
+	"""Return an error message if the PWA scope is not a safe site-local path."""
+	if not isinstance(scope, str) or not scope.startswith("/"):
+		return "scope must be an absolute site-local path beginning with '/'"
+	if "://" in scope:
+		return "scope must not contain a URL scheme (external URLs are not allowed)"
+	if ".." in scope:
+		return "scope must not contain '..'"
+	if re.search(r"\s", scope):
+		return "scope must not contain whitespace"
+	return None
+
+
+def _validate_manifest_url(manifest_url) -> str | None:
+	"""Return an error message if manifest_url is not a same-site path."""
+	if not isinstance(manifest_url, str) or not manifest_url.startswith("/"):
+		return "manifest_url must be a site-local path beginning with '/'"
+	if manifest_url.startswith("//"):
+		return "manifest_url must begin with exactly one '/' (protocol-relative URLs are not allowed)"
+	if "://" in manifest_url:
+		return "manifest_url must not contain a URL scheme (external URLs are not allowed)"
+	if re.search(r"\s", manifest_url):
+		return "manifest_url must not contain whitespace"
+	return None
+
+
 def _validate_icon(icon) -> str | None:
 	"""Return an error message if the icon is neither a site-local asset
 	path nor a plain icon identifier."""
@@ -323,6 +349,16 @@ def validate_manifest(data) -> tuple:
 		return None, "route is required"
 	if error := _validate_route(route):
 		return None, error
+
+	scope = data.get("scope")
+	if scope is not None and (not isinstance(scope, str) or scope.strip()):
+		if error := _validate_scope(scope.strip() if isinstance(scope, str) else scope):
+			return None, error
+
+	manifest_url = data.get("manifest_url")
+	if manifest_url is not None and (not isinstance(manifest_url, str) or manifest_url.strip()):
+		if error := _validate_manifest_url(manifest_url.strip() if isinstance(manifest_url, str) else manifest_url):
+			return None, error
 
 	icon = (data.get("icon") or "").strip()
 	if icon:

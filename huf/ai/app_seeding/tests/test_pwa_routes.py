@@ -30,7 +30,11 @@ from huf.ai.app_portal_renderer import (  # noqa: E402
 	static_content_type,
 	static_response_headers,
 )
-from huf.ai.app_seeding.apps_loader import _validate_static_routes  # noqa: E402
+from huf.ai.app_seeding.apps_loader import (  # noqa: E402
+	_validate_manifest_url,
+	_validate_scope,
+	_validate_static_routes,
+)
 
 
 class TestValidateStaticRoutes(unittest.TestCase):
@@ -41,6 +45,20 @@ class TestValidateStaticRoutes(unittest.TestCase):
 	def test_invalid(self):
 		for bad in (["../x"], ["a/../b"], ["/sw.js"], ["SW.js"], ["a b"], [1], "sw.js", ["a\\b"]):
 			self.assertIsNotNone(_validate_static_routes(bad), bad)
+
+
+class TestValidateScopeAndManifestUrl(unittest.TestCase):
+	def test_scope(self):
+		for ok in ("/order/", "/"):
+			self.assertIsNone(_validate_scope(ok), ok)
+		for bad in ("order/", "https://x.com/", "/a/../b", "/a b", "/a\tb", 5):
+			self.assertIsNotNone(_validate_scope(bad), bad)
+
+	def test_manifest_url(self):
+		for ok in ("/order/manifest.webmanifest", "/m.json?x=1"):
+			self.assertIsNone(_validate_manifest_url(ok), ok)
+		for bad in ("m.json", "//evil.com/m.json", "https://evil.com/m", "/a://b", "/a b", 5):
+			self.assertIsNotNone(_validate_manifest_url(bad), bad)
 
 
 class TestPathResolution(unittest.TestCase):

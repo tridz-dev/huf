@@ -35,10 +35,12 @@ like huf/www/huf.html does, with no second boot mechanism to maintain.
 
 import mimetypes
 import os
+from urllib.parse import quote
 
 import frappe
 from frappe.website.page_renderers.base_renderer import BaseRenderer
 
+from huf.ai.apps_api import _can_user_see
 from huf.ai.app_seeding.scanner import find_www_template_dir
 from huf.www.huf import build_boot_context
 
@@ -88,6 +90,47 @@ def static_response_headers(sub: str, route: str) -> dict:
 	return {}
 
 
+def portal_slash_redirect(raw_path: str, route: str) -> str | None:
+	"""Return ``route + '/'`` when the raw request path is the route without a
+	trailing slash (service worker scope needs the slash), else None. Pure."""
+	route = "/" + route.strip("/")
+	if route == "/":
+		return None
+	if raw_path == route:
+		return route + "/"
+	return None
+
+
+def portal_guest_login_url(route: str) -> str:
+	return "/login?redirect-to=" + quote("/" + route.strip("/") + "/", safe="/")
+
+
+def with_query_string(location: str, query_string) -> str:
+	"""Append the original query string (bytes or str) to ``location``. Pure."""
+	if isinstance(query_string, bytes):
+		query_string = query_string.decode("utf-8", "replace")
+	if query_string:
+		return location + "?" + query_string
+	return location
+
+
+def decide_portal_access(user: str, can_see: bool, raw_path: str, route: str) -> tuple[str, str | None]:
+	"""Decide what the HTML shell request should do. Pure.
+
+	Returns (action, location): "redirect" (302, login), "forbidden" (403),
+	"slash" (308, add trailing slash) or "render".
+	``can_see`` is only consulted for non-guests.
+	"""
+	if not user or user == "Guest":
+		return "redirect", portal_guest_login_url(route)
+	if not can_see:
+		return "forbidden", None
+	slash = portal_slash_redirect(raw_path, route)
+	if slash:
+		return "slash", slash
+	return "render", None
+
+
 def static_content_type(path: str) -> str:
 	if path.endswith(".webmanifest"):
 		return "application/manifest+json"
@@ -111,7 +154,7 @@ class HufAppPortalRenderer(BaseRenderer):
 	def can_render(self) -> bool:
 		return self._resolve_app() is not None
 
-	_FIELDS = ["name", "source_app", "www_template", "agent", "route", "static_routes"]
+	_FIELDS = ["name", "source_app", "www_template", "agent", "route", "static_routes", "enabled", "sync_status", "permission_method"]
 
 	def _resolve_app(self):
 		route = "/" + self.path.strip("/")
@@ -158,6 +201,24 @@ class HufAppPortalRenderer(BaseRenderer):
 				response.headers[key] = value
 			return response
 
+		user = frappe.session.user
+		can_see = False if user == "Guest" else bool(_can_user_see(dict(app), user))
+		raw_path = getattr(getattr(frappe, "request", None), "path", None) or self.path
+		action, location = decide_portal_access(user, can_see, raw_path, app.route)
+		if action in ("redirect", "slash"):
+			from werkzeug.wrappers import Response
+
+			if action == "slash":
+				query_string = getattr(getattr(frappe, "request", None), "query_string", None)
+				location = with_query_string(location, query_string)
+			response = Response("", status=302 if action == "redirect" else 308)
+			response.headers["Location"] = location
+			if action == "slash":
+				response.headers["Cache-Control"] = "no-store"
+			return response
+		if action == "forbidden":
+			raise frappe.PermissionError
+
 		template_dir = find_www_template_dir(app.source_app, app.www_template)
 		if template_dir is None:
 			# Manifest declared a www_template that resolved fine at sync
@@ -187,7 +248,9 @@ class HufAppPortalRenderer(BaseRenderer):
 			source = f.read()
 
 		html = frappe.render_template(source, context)
-		return self.build_response(html)
+		response = self.build_response(html)
+		response.headers["Cache-Control"] = "no-store"
+		return response
 
 	@staticmethod
 	def _apply_pymodule_context(source_app: str, www_template: str, context):
