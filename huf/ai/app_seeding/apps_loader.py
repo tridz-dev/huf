@@ -76,6 +76,10 @@ ALLOWED_FIELDS = {
 	"agent",
 	"www_template",
 	"delivery",
+	"theme_color",
+	"scope",
+	"manifest_url",
+	"static_routes",
 }
 
 STRING_FIELDS = (
@@ -92,7 +96,15 @@ STRING_FIELDS = (
 	"agent",
 	"www_template",
 	"delivery",
+	"theme_color",
+	"scope",
+	"manifest_url",
 )
+
+# static_routes: allowlist of file paths (relative to the app's www template
+# directory) that huf.ai.app_portal_renderer may serve at <route>/<path>
+# (PWA assets such as sw.js, manifest.webmanifest, icons).
+STATIC_ROUTE_PATTERN = re.compile(r"^[a-z0-9._/-]+$")
 
 # Declares how a HUF App is delivered to users; see doc/features/apps/manifest.md
 # and doc/features/apps/delivery-portal-vs-desk.md. Default preserves today's
@@ -116,6 +128,32 @@ def _validate_route(route) -> str | None:
 	for prefix in RESERVED_ROUTE_PREFIXES:
 		if route == prefix or route.startswith(prefix + "/"):
 			return f"route must not start with reserved prefix '{prefix}' (reserved for HUF's own routes)"
+	return None
+
+
+def _validate_scope(scope) -> str | None:
+	"""Return an error message if the PWA scope is not a safe site-local path."""
+	if not isinstance(scope, str) or not scope.startswith("/"):
+		return "scope must be an absolute site-local path beginning with '/'"
+	if "://" in scope:
+		return "scope must not contain a URL scheme (external URLs are not allowed)"
+	if ".." in scope:
+		return "scope must not contain '..'"
+	if re.search(r"\s", scope):
+		return "scope must not contain whitespace"
+	return None
+
+
+def _validate_manifest_url(manifest_url) -> str | None:
+	"""Return an error message if manifest_url is not a same-site path."""
+	if not isinstance(manifest_url, str) or not manifest_url.startswith("/"):
+		return "manifest_url must be a site-local path beginning with '/'"
+	if manifest_url.startswith("//"):
+		return "manifest_url must begin with exactly one '/' (protocol-relative URLs are not allowed)"
+	if "://" in manifest_url:
+		return "manifest_url must not contain a URL scheme (external URLs are not allowed)"
+	if re.search(r"\s", manifest_url):
+		return "manifest_url must not contain whitespace"
 	return None
 
 
@@ -159,6 +197,22 @@ def _validate_alias(alias) -> str | None:
 	"""
 	if not ALIAS_PATTERN.match(alias):
 		return "alias must match ^[a-z][a-z0-9_\\-]*$"
+	return None
+
+
+def _validate_static_routes(static_routes) -> str | None:
+	"""Return an error message unless static_routes is a list of safe relative
+	file paths (``^[a-z0-9._/-]+$``, no ``..``, not starting with ``/``).
+	"""
+	if not isinstance(static_routes, list):
+		return "static_routes must be a list of strings"
+	for entry in static_routes:
+		if not isinstance(entry, str):
+			return "static_routes must be a list of strings"
+		if not STATIC_ROUTE_PATTERN.match(entry):
+			return f"static_routes entry '{entry}' must match ^[a-z0-9._/-]+$"
+		if ".." in entry or entry.startswith("/"):
+			return f"static_routes entry '{entry}' must not contain '..' or start with '/'"
 	return None
 
 
@@ -296,6 +350,16 @@ def validate_manifest(data) -> tuple:
 	if error := _validate_route(route):
 		return None, error
 
+	scope = data.get("scope")
+	if scope is not None and (not isinstance(scope, str) or scope.strip()):
+		if error := _validate_scope(scope.strip() if isinstance(scope, str) else scope):
+			return None, error
+
+	manifest_url = data.get("manifest_url")
+	if manifest_url is not None and (not isinstance(manifest_url, str) or manifest_url.strip()):
+		if error := _validate_manifest_url(manifest_url.strip() if isinstance(manifest_url, str) else manifest_url):
+			return None, error
+
 	icon = (data.get("icon") or "").strip()
 	if icon:
 		if error := _validate_icon(icon):
@@ -343,6 +407,10 @@ def validate_manifest(data) -> tuple:
 		if error := _validate_www_template_shape(www_template):
 			return None, error
 
+	static_routes = data.get("static_routes", [])
+	if error := _validate_static_routes(static_routes):
+		return None, error
+
 	delivery = (data.get("delivery") or "").strip() or DEFAULT_DELIVERY
 	if delivery not in DELIVERY_MODES:
 		return None, f"delivery must be one of {', '.join(DELIVERY_MODES)}"
@@ -365,6 +433,11 @@ def validate_manifest(data) -> tuple:
 		"agent": agent,
 		"www_template": www_template,
 		"delivery": delivery,
+		"theme_color": (data.get("theme_color") or "").strip(),
+		"pwa_scope": (data.get("scope") or "").strip(),
+		"manifest_url": (data.get("manifest_url") or "").strip(),
+		# Stored newline-separated (Small Text).
+		"static_routes": "\n".join(r.strip() for r in static_routes),
 		# Stored on the DocType as a comma-joined string.
 		"exposed_tables": ",".join(t.strip() for t in exposed_tables),
 	}
