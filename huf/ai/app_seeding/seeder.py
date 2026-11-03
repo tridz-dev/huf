@@ -104,6 +104,12 @@ def on_app_installed(app_name):
         app_path = frappe.get_app_path(app_name)
         huf_dir = Path(app_path) / "huf"
         if huf_dir.is_dir():
+            # Tool Function rows must exist before agents link them.
+            try:
+                from huf.ai.tools.registry import sync_app_tools
+                sync_app_tools(app_name)
+            except Exception as e:
+                frappe.log_error(title="App Seeding Error", message=f"sync_app_tools failed for {app_name}: {e}")
             res = seed_app(app_name, huf_dir)
             if res.errors:
                 frappe.log_error(title="App Seeding", message=f"Seeding errors for {app_name}: {res.errors}")

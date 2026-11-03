@@ -33,6 +33,7 @@ template's own Jinja/JS can read `{{ boot }}` / `{{ csrf_token }}` exactly
 like huf/www/huf.html does, with no second boot mechanism to maintain.
 """
 
+import mimetypes
 import os
 
 import frappe
@@ -40,6 +41,59 @@ from frappe.website.page_renderers.base_renderer import BaseRenderer
 
 from huf.ai.app_seeding.scanner import find_www_template_dir
 from huf.www.huf import build_boot_context
+
+
+def split_static_route(path: str, route: str) -> str | None:
+	"""Return ``<sub>`` if ``path`` is ``<route>/<sub>`` (whole-segment match,
+	never a bare prefix), else None. Pure helper.
+	"""
+	path = "/" + path.strip("/")
+	route = "/" + route.strip("/")
+	if route == "/":
+		return None
+	head = route + "/"
+	if not path.startswith(head) or len(path) == len(head):
+		return None
+	return path[len(head):]
+
+
+def parse_static_routes(value) -> list[str]:
+	"""Parse the newline-separated ``static_routes`` field into a list."""
+	return [line.strip() for line in (value or "").splitlines() if line.strip()]
+
+
+def resolve_static_file(base_dir: str, sub: str, allowlist) -> str | None:
+	"""Return the absolute file path for ``sub`` under ``base_dir`` only if
+	``sub`` is exactly in ``allowlist``, has no traversal, and the real path
+	stays inside ``base_dir`` and is a regular file. Pure helper.
+	"""
+	if not sub or sub not in allowlist:
+		return None
+	if ".." in sub or sub.startswith("/") or "\\" in sub or "\0" in sub:
+		return None
+	base = os.path.realpath(base_dir)
+	full = os.path.realpath(os.path.join(base, sub))
+	if os.path.commonpath([base, full]) != base or not os.path.isfile(full):
+		return None
+	return full
+
+
+def static_response_headers(sub: str, route: str) -> dict:
+	"""Extra headers for a served static file (service worker needs scope)."""
+	if sub == "sw.js":
+		return {
+			"Service-Worker-Allowed": "/" + route.strip("/") + "/",
+			"Cache-Control": "no-cache",
+		}
+	return {}
+
+
+def static_content_type(path: str) -> str:
+	if path.endswith(".webmanifest"):
+		return "application/manifest+json"
+	if path.endswith(".js"):
+		return "application/javascript"
+	return mimetypes.guess_type(path)[0] or "application/octet-stream"
 
 
 class HufAppPortalRenderer(BaseRenderer):
@@ -57,19 +111,32 @@ class HufAppPortalRenderer(BaseRenderer):
 	def can_render(self) -> bool:
 		return self._resolve_app() is not None
 
+	_FIELDS = ["name", "source_app", "www_template", "agent", "route", "static_routes"]
+
 	def _resolve_app(self):
 		route = "/" + self.path.strip("/")
-		return frappe.db.get_value(
-			"HUF App",
-			{
-				"route": route,
-				"enabled": 1,
-				"sync_status": "Active",
-				"www_template": ["!=", ""],
-			},
-			["name", "source_app", "www_template", "agent"],
-			as_dict=True,
-		)
+		filters = {"enabled": 1, "sync_status": "Active", "www_template": ["!=", ""]}
+		app = frappe.db.get_value("HUF App", {**filters, "route": route}, self._FIELDS, as_dict=True)
+		if app:
+			self._static_file = None
+			return app
+		# `<route>/<sub>`: candidate routes are the path's parent prefixes.
+		parts = route.strip("/").split("/")
+		for i in range(len(parts) - 1, 0, -1):
+			prefix = "/" + "/".join(parts[:i])
+			sub = "/".join(parts[i:])
+			app = frappe.db.get_value("HUF App", {**filters, "route": prefix}, self._FIELDS, as_dict=True)
+			if not app:
+				continue
+			template_dir = find_www_template_dir(app.source_app, app.www_template)
+			if template_dir is None:
+				return None
+			full = resolve_static_file(str(template_dir), sub, parse_static_routes(app.static_routes))
+			if full:
+				self._static_file = (full, sub)
+				return app
+			return None
+		return None
 
 	def render(self):
 		app = self._resolve_app()
@@ -79,6 +146,17 @@ class HufAppPortalRenderer(BaseRenderer):
 			# concurrent disable/delete) -- degrade the same way every other
 			# "not actually servable" case in this renderer family does.
 			raise frappe.PageDoesNotExistError
+
+		static = getattr(self, "_static_file", None)
+		if static:
+			full, sub = static
+			from werkzeug.wrappers import Response
+
+			with open(full, "rb") as f:
+				response = Response(f.read(), status=200, mimetype=static_content_type(full))
+			for key, value in static_response_headers(sub, app.route).items():
+				response.headers[key] = value
+			return response
 
 		template_dir = find_www_template_dir(app.source_app, app.www_template)
 		if template_dir is None:
