@@ -40,7 +40,7 @@ def health():
         },
     }
 
-@frappe.whitelist()
+@frappe.whitelist(allow_guest=True)
 @rate_limit(limit=10, seconds=60)
 def get_signed_url():
     agent_id, api_key = _get_settings()
