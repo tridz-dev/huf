@@ -10,6 +10,7 @@
   "llm_configuration_section",
   "agent_name",
   "agent_modality",
+  "execution_mode",
   "provider",
   "provider_brand",
   "temperature",
@@ -186,6 +187,15 @@
    "label": "Modality",
    "options": "Text\nVoice\nBoth",
    "reqd": 1
+  },
+  {
+   "default": "Native",
+   "description": "Who supplies the intelligence for this agent. External modes are driven through the External Intelligence gateway instead of a configured provider.",
+   "fieldname": "execution_mode",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Execution Mode",
+   "options": "Native\nConnected External\nManaged External"
   },
   {
    "depends_on": "eval:doc.agent_modality != 'Voice'",
