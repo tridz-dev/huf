@@ -24,15 +24,22 @@ Modes:
 
 ## 2. Connecting
 
-1. **Create an External Agent Connection** in Huf. Set the user, the agent, and the policies that apply to this connection.
+1. **Create an External Agent Connection** in Huf. Set the user, the agent, and the policies that apply to this connection. The agent's Execution Mode must not be Native. A user can have only one enabled connection per agent.
 2. **Create an API key for that user.** In Frappe, open the user's settings and go to **API Access**, then generate the key and secret.
-3. **Register the Huf MCP endpoint** with the external agent:
+3. **Register the Huf MCP endpoint** with the external agent, as an HTTP MCP server, using the add-server command of your agent's MCP client:
 
-   ```bash
-   claude mcp add --transport http huf https://<site>/api/method/huf.ai.external.gateway.mcp --header "Authorization: token <api_key>:<api_secret>"
+   ```
+   URL:    https://<site>/api/method/huf.ai.external.gateway.mcp
+   Header: Authorization: token <api_key>:<api_secret>
    ```
 
    Replace `<site>`, `<api_key>` and `<api_secret>` with your values.
+
+**Authentication.** The endpoint accepts only a Frappe API key and secret, sent in the `Authorization: token <api_key>:<api_secret>` header. Cookie sessions are refused, and so are guest requests, so a browser that is logged in to Huf cannot be used to call the endpoint. OAuth is not supported yet.
+
+**Connection selection.** Send the `X-Huf-Connection` header, or a `?connection=` query parameter, with the connection name. It is needed only when the user has several enabled connections. With a single enabled connection it can be omitted.
+
+**Session selection.** Send `Mcp-Session-Id` to continue a specific session. Without it, `initialize` opens a new session. Any other method reuses the newest open (non-terminal) session on the connection, or creates one if none exists.
 
 Calls made through this endpoint act as the user who owns the API key. Revoking or disabling that user, or deleting the connection, stops access.
 
@@ -40,13 +47,13 @@ Calls made through this endpoint act as the user who owns the API key. Revoking 
 
 | Tool | Purpose |
 |------|---------|
-| `huf_discover` | List the connections and agents this user can attach to. |
-| `huf_context` | Return the context for the current session: agent instructions, state and recent history. |
+| `huf_discover` | List the Huf tools the session's agent permits under this connection. Each entry gives the tool's action class, the policy decision (allow, requires approval or deny) and its parameters. |
+| `huf_context` | Read recent conversation messages (`scope: "conversation"`, up to 50, default 20), or the agent's name, description and instructions (`scope: "agent"`). |
 | `huf_invoke` | Call a Huf tool on behalf of the session, subject to policy and approvals. |
-| `huf_surface` | Post a message or artifact into the Huf session so the user can see it. |
-| `huf_wait` | Wait briefly for new events, such as an approval decision or a user reply. |
-| `huf_report` | Record progress the external agent reports about its own work. |
-| `huf_complete` | Mark the session as completed, failed or cancelled with a summary. |
+| `huf_surface` | Create or update an interactive surface in the Huf session. `action` is `create` or `update`, and `spec` is an object that defines the surface. Returns the `surface_id`. |
+| `huf_wait` | Receive queued events: user messages and approval or cancel notices. Waits up to `timeout_seconds` (default 5, maximum 10) and returns early when events arrive. `timed_out` is true when none arrived. Poll again to keep listening. |
+| `huf_report` | Record progress, an observation or an artifact (`kind`) that the external agent reports about its own work. |
+| `huf_complete` | Finish the task with `status` `success` or `failed` and an optional `result` summary. Success completes the session and stores the result on the Agent Run. Failed marks the session as failed. |
 
 ## 4. Security model
 
@@ -59,7 +66,7 @@ Calls made through this endpoint act as the user who owns the API key. Revoking 
   Each class resolves to **Allow**, **Requires Approval** or **Deny** under the connection's policies.
 - **Approvals** are bound to the exact arguments of the call. They are single use and expire after 30 minutes. A decision can be made only in the Huf UI, never through the MCP channel.
 - **Idempotent replay**: a repeated request with the same idempotency key returns the original result and does not run the action again.
-- **Tool membership**: a connection can only invoke tools it has been granted.
+- **Tool membership**: `huf_discover` offers only tools on the session agent's tool list, and a connection can invoke only tools it has been granted.
 - **Guests are refused.** Requests from guest users do not get access.
 
 ## 5. Visibility
@@ -96,7 +103,7 @@ Completed, Failed and Cancelled sessions cannot change state again.
 
 Events for a session, such as user replies, approval decisions and cancellations, are stored durably in a mailbox. They are not lost if the external agent is disconnected.
 
-`huf_wait` returns after at most 10 seconds, even if nothing has arrived. The caller should poll again. Waiting is a convenience, not a guarantee of timely delivery.
+`huf_wait` returns queued events within at most 10 seconds (default 5), even if nothing has arrived. The caller should poll again. Waiting is a convenience, not a guarantee of timely delivery.
 
 ## 7. Not yet implemented
 

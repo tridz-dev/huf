@@ -7,6 +7,7 @@ from frappe import _
 from frappe.utils import add_to_date, get_datetime, now_datetime
 
 from huf.ai.agent.access import assert_agent_access
+from huf.ai.external import mailbox
 from huf.ai.external.states import (
 	ACTIVE,
 	CANCELLED,

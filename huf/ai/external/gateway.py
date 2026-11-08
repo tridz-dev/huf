@@ -3,19 +3,21 @@
 Served at ``/api/method/huf.ai.external.gateway.mcp``. Each request is a JSON-RPC 2.0 message
 from a client acting for one External Agent Connection of the signed-in user.
 
-Authentication: the caller must send a Frappe API token in the ``Authorization`` header
-(``Authorization: token <key>:<secret>``). Cookie sessions and Guest are refused, so a browser
-that happens to be logged in cannot be driven to call this endpoint. OAuth is a planned follow-up.
+Authentication: the caller must send a Frappe API token in the ``Authorization`` header, using the
+``token`` or ``bearer`` scheme (``Authorization: token <key>:<secret>``). Cookie sessions and Guest
+are refused, so a browser that happens to be logged in cannot be driven to call this endpoint.
+OAuth is a planned follow-up.
 
-Connection selection: ``X-Huf-Connection`` header or ``connection`` form parameter. When neither is
-given, the user's single enabled connection is used.
+Session selection: ``Mcp-Session-Id`` header carries the session token. When it is present, the
+session is loaded from it and its connection is derived from the session; ``X-Huf-Connection`` and
+the ``connection`` parameter are ignored. Without it, ``initialize`` opens a new session and any
+other method reuses the user's newest non-terminal session on the connection, creating one if none
+exists. The connection is chosen by ``X-Huf-Connection`` header or ``connection`` form parameter;
+when neither is given, the user's single enabled connection is used.
 
-Session selection: ``Mcp-Session-Id`` header carries the session token. Without it, ``initialize``
-opens a new session and any other method reuses the user's newest non-terminal session on the
-connection, creating one if none exists.
-
-Responses are JSON-RPC objects written as the whole response body. Notifications get HTTP 202 and
-no body. Permission failures are reported with a generic message and never leak exception text.
+Responses are JSON-RPC objects written as the whole response body. Notifications are processed for
+their side effects only: errors are logged, never returned, and the response is HTTP 202 with no
+body. Permission failures are reported with a generic message and never leak exception text.
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ INITIALIZE_METHOD = "initialize"
 MCP_RATE_LIMIT = 240
 MCP_RATE_WINDOW_SECONDS = 60
 NOT_PERMITTED = "Not permitted"
+AUTH_SCHEMES = ("token", "bearer")
 
 
 def _get_header(name: str) -> str | None:
@@ -47,9 +50,15 @@ def _respond(payload: dict | None, status: int = 200) -> None:
 
 
 def _require_token_auth() -> None:
+	"""Refuse Guest and cookie sessions; require an ``Authorization`` header with a token or bearer scheme."""
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Authentication required"), frappe.AuthenticationError)
-	if not _get_header("Authorization"):
+	header = _get_header("Authorization")
+	if not header:
+		frappe.throw(_("Authentication required"), frappe.AuthenticationError)
+	pieces = header.split()
+	scheme = pieces[0].lower() if pieces else ""
+	if scheme not in AUTH_SCHEMES:
 		frappe.throw(_("Authentication required"), frappe.AuthenticationError)
 
 

@@ -29,7 +29,7 @@ from huf.ai.external.jsonrpc import (
 	parse_request,
 )
 from huf.ai.external.policy import classify_tool, decide
-from huf.ai.external.states import ACTIVE, COMPLETED, FAILED, WAITING_INPUT
+from huf.ai.external.states import ACTIVE, COMPLETED, FAILED, WAITING_INPUT, can_transition
 
 PROTOCOL_VERSION = "2025-03-26"
 SERVER_INFO = {"name": "huf", "version": "1"}
@@ -101,7 +101,7 @@ def _tools_call(params: dict, session_doc) -> dict:
 	if not isinstance(arguments, dict):
 		raise JsonRpcError(INVALID_PARAMS, "Invalid params", method="tools/call")
 	if not isinstance(name, str) or name not in _HANDLERS:
-		raise JsonRpcError(METHOD_NOT_FOUND, "Unknown tool", method="tools/call")
+		raise JsonRpcError(INVALID_PARAMS, "Unknown tool", method="tools/call")
 
 	result = _run_handler(name, arguments, session_doc)
 	return {
@@ -115,8 +115,10 @@ def _run_handler(name: str, arguments: dict, session_doc) -> dict:
 		sessions.renew_lease(session_doc.name, owner=LEASE_OWNER, ttl_seconds=LEASE_TTL_SECONDS)
 		return _HANDLERS[name](session_doc, arguments)
 	except frappe.PermissionError:
+		frappe.db.rollback()
 		return {"status": "denied", "error": "Not permitted"}
 	except Exception:  # noqa: BLE001 - tool failures are reported to the caller, never tracebacks
+		frappe.db.rollback()
 		frappe.log_error(title="External agent MCP tool failed", message=f"tool={name}")
 		return {"status": "error", "error": "Internal error"}
 
@@ -267,7 +269,11 @@ def _surface(session_doc, arguments: dict) -> dict:
 	spec = arguments.get("spec")
 	if not isinstance(spec, dict):
 		return _invalid("spec must be an object")
-	surface_id = arguments.get("surface_id") or frappe.generate_hash(length=10)
+	surface_id = arguments.get("surface_id")
+	if surface_id is None or surface_id == "":
+		surface_id = frappe.generate_hash(length=10)
+	elif not isinstance(surface_id, str) or len(surface_id) > 64:
+		return _invalid("Invalid surface_id")
 	payload = {"action": action, "surface_id": surface_id, "spec": spec}
 
 	mailbox.post_event(session_doc.name, "from_agent", "surface", payload)
@@ -340,6 +346,11 @@ def _complete(session_doc, arguments: dict) -> dict:
 	if not isinstance(result, str):
 		return _invalid("result must be a string")
 
+	target = COMPLETED if status == "success" else FAILED
+	if not can_transition(_session_state(session_doc.name), target):
+		return _invalid("Session cannot be completed from its current state")
+
+	sessions.transition(session_doc.name, target)
 	mailbox.post_event(
 		session_doc.name,
 		"from_agent",
@@ -347,10 +358,7 @@ def _complete(session_doc, arguments: dict) -> dict:
 		{"status": status, "result": result},
 	)
 	if status == "success":
-		sessions.transition(session_doc.name, COMPLETED)
 		frappe.db.set_value(RUN_DOCTYPE, session_doc.agent_run, "response", result)
-	else:
-		sessions.transition(session_doc.name, FAILED)
 	return {"status": "ok"}
 
 

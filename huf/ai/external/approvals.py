@@ -154,6 +154,22 @@ def decide_approval(approval_name: str, approve: bool, comment: str | None = Non
 	):
 		_transition_session(session, states.ACTIVE)
 
+	# Tell the connected agent about the decision through its mailbox. Lazily imported, as with
+	# the sessions module above.
+	from huf.ai.external import mailbox
+
+	mailbox.post_event(
+		session,
+		"to_agent",
+		"approval_decided",
+		{
+			"approval": approval_name,
+			"tool_name": approval.tool_name,
+			"status": approval.status,
+		},
+		idempotency_key=f"approval-{approval_name}-{approval.status}",
+	)
+
 	return {"approval": approval_name, "status": approval.status, "session": session}
 
 
@@ -188,18 +204,19 @@ def expire_pending_approvals() -> None:
 	handled independently so one failure does not stop the sweep.
 	"""
 	now = now_datetime()
-	affected_sessions = [
-		row[0]
-		for row in frappe.db.sql(
-			"""
-			SELECT DISTINCT session FROM `tabExternal Action Approval`
-			WHERE status = %s AND expires_on < %s
-			""",
-			(STATUS_PENDING, now),
-		)
-	]
-	if not affected_sessions:
+	expired_rows = frappe.db.sql(
+		"""
+		SELECT name, session, tool_name FROM `tabExternal Action Approval`
+		WHERE status = %s AND expires_on < %s
+		""",
+		(STATUS_PENDING, now),
+	)
+	if not expired_rows:
 		return
+
+	expired_by_session: dict[str, list[tuple[str, str]]] = {}
+	for approval_name, session, tool_name in expired_rows:
+		expired_by_session.setdefault(session, []).append((approval_name, tool_name))
 
 	frappe.db.sql(
 		"""
@@ -210,8 +227,20 @@ def expire_pending_approvals() -> None:
 		(STATUS_EXPIRED, now, STATUS_PENDING, now),
 	)
 
-	for session in affected_sessions:
+	from huf.ai.external import mailbox
+
+	for session, expired_entries in expired_by_session.items():
 		try:
+			# Posted for every affected session, including those no longer waiting, so the agent
+			# always learns that its approval lapsed.
+			for approval_name, tool_name in expired_entries:
+				mailbox.post_event(
+					session,
+					"to_agent",
+					"approval_decided",
+					{"approval": approval_name, "tool_name": tool_name, "status": STATUS_EXPIRED},
+					idempotency_key=f"approval-{approval_name}-{STATUS_EXPIRED}",
+				)
 			state = frappe.db.get_value(SESSION_DOCTYPE, session, "state", for_update=True)
 			if state != states.WAITING_APPROVAL:
 				continue
