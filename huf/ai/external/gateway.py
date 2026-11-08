@@ -92,18 +92,7 @@ def _resolve_connection():
 	return _load_connection(candidates[0])
 
 
-def _resolve_session(request: dict, connection):
-	token = _get_header(SESSION_HEADER)
-	if token:
-		session = sessions.get_session_for_token(token.strip())
-		if session.connection != connection.name:
-			frappe.throw(NOT_PERMITTED, frappe.PermissionError)
-		return session
-
-	if request.get("method") == INITIALIZE_METHOD:
-		created = sessions.create_session(connection.name)
-		return frappe.get_doc(sessions.SESSION_DOCTYPE, created["session"])
-
+def _newest_open_session(connection):
 	newest = frappe.get_all(
 		sessions.SESSION_DOCTYPE,
 		filters={
@@ -117,9 +106,45 @@ def _resolve_session(request: dict, connection):
 	)
 	if newest:
 		return frappe.get_doc(sessions.SESSION_DOCTYPE, newest[0])
+	return None
 
-	created = sessions.create_session(connection.name)
-	return frappe.get_doc(sessions.SESSION_DOCTYPE, created["session"])
+
+def _resolve_context(request: dict, create_allowed: bool = True):
+	"""Return ``(connection, session)`` for a request.
+
+	With an ``Mcp-Session-Id`` header the session comes first and the connection is derived from it.
+	Without one, the connection is resolved from header, parameter or the single enabled connection,
+	and the session is the ``initialize`` session, the newest open one, or a new one. When
+	``create_allowed`` is False, no new session is created for a non-initialize request and the
+	session is ``None`` if none is open.
+	"""
+	token = _get_header(SESSION_HEADER)
+	if token:
+		session = sessions.get_session_for_token(token.strip())
+		return _load_connection(session.connection), session
+
+	connection = _resolve_connection()
+	if request.get("method") == INITIALIZE_METHOD:
+		created = sessions.create_session(connection.name)
+		return connection, frappe.get_doc(sessions.SESSION_DOCTYPE, created["session"])
+
+	session = _newest_open_session(connection)
+	if session is None and create_allowed:
+		created = sessions.create_session(connection.name)
+		session = frappe.get_doc(sessions.SESSION_DOCTYPE, created["session"])
+	return connection, session
+
+
+def _handle_notification(request: dict) -> None:
+	"""Process a notification for its side effects. Errors are logged, never returned."""
+	try:
+		connection, session_doc = _resolve_context(request, create_allowed=False)
+		if session_doc is None:
+			return
+		sessions.touch_connection(connection.name)
+		dispatch.handle_rpc(request, session_doc)
+	except Exception:  # noqa: BLE001 -- no response body for notifications; error is logged instead
+		frappe.log_error(title="External agent MCP notification failed")
 
 
 @frappe.whitelist(methods=["POST"])
@@ -133,10 +158,14 @@ def mcp() -> None:
 		_respond(jsonrpc.make_error(None, exc.code, exc.message))
 		return
 
+	if jsonrpc.is_notification(request):
+		_handle_notification(request)
+		_respond(None, status=202)
+		return
+
 	request_id = request.get("id")
 	try:
-		connection = _resolve_connection()
-		session_doc = _resolve_session(request, connection)
+		connection, session_doc = _resolve_context(request)
 		sessions.touch_connection(connection.name)
 		response = dispatch.handle_rpc(request, session_doc)
 	except jsonrpc.JsonRpcError as exc:

@@ -191,6 +191,17 @@ def cancel_session(session_name: str) -> None:
 	if is_terminal(state):
 		return
 	transition(session_name, CANCELLED)
+	# Posted after the transition, not before: the event is only announced once the cancel has
+	# actually happened, and post_event does not check session state, so the terminal state does not
+	# block it. The row lock it takes is already held by this transaction via transition(), so
+	# there is no extra lock wait.
+	mailbox.post_event(
+		session_name,
+		"to_agent",
+		"session_cancelled",
+		{"reason": "cancelled"},
+		idempotency_key=f"cancel-{session_name}",
+	)
 
 
 def renew_lease(session_name: str, owner: str, ttl_seconds: int = 60) -> None:
