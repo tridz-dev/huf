@@ -51,7 +51,7 @@ What the user does: add the server URL `https://<site>/api/method/huf.ai.externa
 
 How discovery works: an unauthenticated call gets HTTP 401 with `WWW-Authenticate: Bearer resource_metadata="https://<site>/api/method/huf.ai.external.oauth.protected_resource"`. That document names the gateway as the resource and the site as its authorization server; the client then reads `/.well-known/oauth-authorization-server` and registers or uses a client.
 
-Admin setup (once): open OAuth Settings and keep "Show Auth Server Metadata" on. "Enable Dynamic Client Registration" lets clients register themselves and may need to be enabled in OAuth Settings; otherwise create an OAuth Client with the client's redirect URI, token endpoint auth method None, scopes `all`. Dynamic clients get the consent screen at first login. The consent screen requires the site's frontend assets to be built (`bench build`).
+Admin setup (once): open OAuth Settings and keep "Show Auth Server Metadata" on. "Enable Dynamic Client Registration" is off by default (field `enable_dynamic_client_registration`); turn it on so clients can register themselves, otherwise create an OAuth Client with the client's redirect URI, token endpoint auth method None, scopes `all`. Dynamic clients get the consent screen at first login. The consent screen (Allow / Deny) renders only when the site's frontend assets are built (`bench build`); with Allow, the client receives an access token that the gateway accepts and runs as the signed-in user.
 
 Limits: Frappe does not bind a token to a resource and the gateway does not check scopes, so a token is as powerful as the user. Revoke access by deleting the token under OAuth Bearer Token.
 
