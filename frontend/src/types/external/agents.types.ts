@@ -9,6 +9,8 @@ export type ExternalRuntimeKind = 'claude_code' | 'codex' | 'other';
 
 export type ExternalConnectionMode = 'Connected' | 'Managed';
 
+export type ExternalHubTier = 'Off' | 'Build' | 'Admin';
+
 export type AgentExecutionMode = 'Native' | 'Connected External' | 'Managed External';
 
 export type ExternalSessionState =
@@ -30,7 +32,30 @@ export interface ExternalConnection {
   read_policy: ExternalPolicy;
   write_policy: ExternalPolicy;
   communicate_policy: ExternalPolicy;
+  hub_tier: ExternalHubTier;
   last_seen?: string | null;
+}
+
+export interface ConnectionTestResult {
+  ok: boolean;
+  agent: string | null;
+  tools: number;
+  enabled: boolean;
+  policy: {
+    read: ExternalPolicy;
+    write: ExternalPolicy;
+    communicate: ExternalPolicy;
+  };
+  hub_tier: ExternalHubTier;
+  problems: string[];
+}
+
+export interface ConnectionSnippets {
+  url: string;
+  header_name: string;
+  header_value_template: string;
+  connection_header: string;
+  connection: string;
 }
 
 export interface ExternalSession {
@@ -75,4 +100,5 @@ export interface CreateExternalConnectionInput {
   read_policy?: ExternalPolicy;
   write_policy?: ExternalPolicy;
   communicate_policy?: ExternalPolicy;
+  hub_tier?: ExternalHubTier;
 }

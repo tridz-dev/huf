@@ -10,6 +10,8 @@ import { handleFrappeError } from '@/lib/frappe-error';
 import type {
   AgentExecutionMode,
   ConnectableAgent,
+  ConnectionSnippets,
+  ConnectionTestResult,
   CreateExternalConnectionInput,
   ExternalApproval,
   ExternalConnection,
@@ -50,11 +52,39 @@ export async function createExternalConnection(input: CreateExternalConnectionIn
  */
 export async function updateExternalConnection(
   name: string,
-  patch: Partial<Pick<ExternalConnection, 'enabled' | 'read_policy' | 'write_policy' | 'communicate_policy'>>,
+  patch: Partial<
+    Pick<ExternalConnection, 'enabled' | 'read_policy' | 'write_policy' | 'communicate_policy' | 'hub_tier'>
+  >,
 ): Promise<ExternalConnection> {
   try {
     const response = await call.post(`${BASE}update_connection`, { name, ...patch });
     return response.message as ExternalConnection;
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}
+
+/**
+ * Check whether a connection is ready to use. Returns plain-language problems when it is not.
+ */
+export async function testExternalConnection(connection: string): Promise<ConnectionTestResult> {
+  try {
+    const response = await call.post(`${BASE}test_connection`, { connection });
+    return response.message as ConnectionTestResult;
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}
+
+/**
+ * Get the setup details (address and header format) for copying into a connected app
+ */
+export async function getConnectionSnippets(connection: string): Promise<ConnectionSnippets> {
+  try {
+    const response = await call.get(`${BASE}get_connection_snippets`, { connection });
+    return response.message as ConnectionSnippets;
   } catch (error) {
     handleFrappeError(error);
     throw error;

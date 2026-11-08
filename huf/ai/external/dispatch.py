@@ -9,11 +9,17 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from collections.abc import Callable
 
 import frappe
 
 from huf.ai.external import mailbox, sessions
-from huf.ai.external.capabilities import list_for_mcp
+from huf.ai.external.capabilities import (
+	HUB_TIERS,
+	hub_tier_required,
+	is_hub_capability,
+	list_for_mcp,
+)
 from huf.ai.external.invoke import (
 	BLOCKED_TOOL_TYPES,
 	DESKTOP_FUNCTION_PATH_PREFIX,
@@ -60,6 +66,8 @@ CONTEXT_LIMIT_MAX = 50
 REPORT_KINDS = ("progress", "observation", "artifact")
 COMPLETE_STATUSES = ("success", "failed")
 ERROR_STATUSES = ("error", "denied")
+HUB_TIER_OFF = "Off"
+HUB_TIER_ADMIN = "Admin"
 
 
 def handle_rpc(request: dict, session_doc) -> dict | None:
@@ -89,7 +97,7 @@ def _dispatch(method: str, params: dict, session_doc) -> dict:
 	if method == "ping":
 		return {}
 	if method == "tools/list":
-		return {"tools": list_for_mcp()}
+		return {"tools": list_for_mcp(_hub_tier(session_doc))}
 	if method == "tools/call":
 		return _tools_call(params, session_doc)
 	raise JsonRpcError(METHOD_NOT_FOUND, "Method not found", method=method)
@@ -102,20 +110,53 @@ def _tools_call(params: dict, session_doc) -> dict:
 		arguments = {}
 	if not isinstance(arguments, dict):
 		raise JsonRpcError(INVALID_PARAMS, "Invalid params", method="tools/call")
-	if not isinstance(name, str) or name not in _HANDLERS:
-		raise JsonRpcError(INVALID_PARAMS, "Unknown tool", method="tools/call")
+	if not isinstance(name, str):
+		raise _unknown_tool()
 
-	result = _run_handler(name, arguments, session_doc)
+	if is_hub_capability(name):
+		# The tier gate runs before anything else. A hidden hub tool answers exactly like a
+		# nonexistent one, so a connection cannot probe for tools above its tier.
+		tier = _hub_tier(session_doc)
+		if not _hub_tier_allows(name, tier):
+			raise _unknown_tool()
+		from huf.ai.external import hub
+
+		result = _run_guarded(name, session_doc, lambda: hub.dispatch_hub(name, arguments, session_doc, tier))
+	elif name in _HANDLERS:
+		result = _run_handler(name, arguments, session_doc)
+	else:
+		raise _unknown_tool()
+
 	return {
 		"content": [{"type": "text", "text": json.dumps(result, default=str)}],
 		"isError": result.get("status") in ERROR_STATUSES,
 	}
 
 
+def _unknown_tool() -> JsonRpcError:
+	return JsonRpcError(INVALID_PARAMS, "Unknown tool", method="tools/call")
+
+
+def _hub_tier(session_doc) -> str:
+	"""Return the connection's hub tier, or Off when the stored value is missing or unrecognised."""
+	tier = frappe.db.get_value(CONNECTION_DOCTYPE, session_doc.connection, "hub_tier") or HUB_TIER_OFF
+	return tier if tier in HUB_TIERS else HUB_TIER_OFF
+
+
+def _hub_tier_allows(name: str, tier: str) -> bool:
+	if tier == HUB_TIER_OFF:
+		return False
+	return tier == HUB_TIER_ADMIN or hub_tier_required(name) != HUB_TIER_ADMIN
+
+
 def _run_handler(name: str, arguments: dict, session_doc) -> dict:
+	return _run_guarded(name, session_doc, lambda: _HANDLERS[name](session_doc, arguments))
+
+
+def _run_guarded(name: str, session_doc, run: Callable[[], dict]) -> dict:
 	try:
 		sessions.renew_lease(session_doc.name, owner=LEASE_OWNER, ttl_seconds=LEASE_TTL_SECONDS)
-		return _HANDLERS[name](session_doc, arguments)
+		return run()
 	except frappe.PermissionError:
 		frappe.db.rollback()
 		return {"status": "denied", "error": "Not permitted"}
