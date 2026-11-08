@@ -9,6 +9,7 @@ protected-resource metadata document whose ``resource`` is the gateway URL itsel
 from __future__ import annotations
 
 import frappe
+from frappe.rate_limiter import rate_limit
 
 RESOURCE_PATH = "/api/method/huf.ai.external.gateway.mcp"
 METADATA_PATH = "/api/method/huf.ai.external.oauth.protected_resource"
@@ -46,6 +47,7 @@ def _configured_scopes() -> list[str]:
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET"])
+@rate_limit(limit=60, seconds=60)
 def protected_resource() -> None:
 	"""Serve the gateway's protected-resource metadata as the whole response body."""
 	frappe.local.allow_cors = "*"

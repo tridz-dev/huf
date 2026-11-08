@@ -51,7 +51,7 @@ What the user does: add the server URL `https://<site>/api/method/huf.ai.externa
 
 How discovery works: an unauthenticated call gets HTTP 401 with `WWW-Authenticate: Bearer resource_metadata="https://<site>/api/method/huf.ai.external.oauth.protected_resource"`. That document names the gateway as the resource and the site as its authorization server; the client then reads `/.well-known/oauth-authorization-server` and registers or uses a client.
 
-Admin setup (once): open OAuth Settings and keep "Show Auth Server Metadata" on. "Enable Dynamic Client Registration" (on by default in the version tested) lets clients register themselves; otherwise create an OAuth Client with the client's redirect URI, token endpoint auth method None, scopes `all`. Dynamic clients get the consent screen at first login. The consent screen needs the site's built assets (`bench build`).
+Admin setup (once): open OAuth Settings and keep "Show Auth Server Metadata" on. "Enable Dynamic Client Registration" lets clients register themselves and may need to be enabled in OAuth Settings; otherwise create an OAuth Client with the client's redirect URI, token endpoint auth method None, scopes `all`. Dynamic clients get the consent screen at first login. The consent screen requires the site's frontend assets to be built (`bench build`).
 
 Limits: Frappe does not bind a token to a resource and the gateway does not check scopes, so a token is as powerful as the user. Revoke access by deleting the token under OAuth Bearer Token.
 
@@ -67,6 +67,30 @@ Limits: Frappe does not bind a token to a resource and the gateway does not chec
 | `huf_report` | Record progress, an observation or an artifact (`kind`) that the external agent reports about its own work. |
 | `huf_complete` | Finish the task with `status` `success` or `failed` and an optional `result` summary. Success completes the session and stores the result on the Agent Run. Failed marks the session as failed. |
 
+### Builder tools (optional)
+
+Builder tools let the connected agent find, and with your approval create, Huf agents, tools, tables and apps. They are off by default. Set **Builder access** on the External Agent Connection to one of:
+
+- **Off** (default): no builder tools are offered.
+- **Build**: the finder tools and the create tools below.
+- **Admin**: everything in Build, plus app building.
+
+| Tool | Purpose | Minimum tier | Approval |
+|------|---------|--------------|----------|
+| `huf_find_agents` | Search the agents the user can see. Read only. | Build | Not needed |
+| `huf_find_tools` | Search the tools and site capabilities the user can see. Read only. | Build | Not needed |
+| `huf_find_tables` | Search the tables the user can read. Read only. | Build | Not needed |
+| `huf_create_agent` | Create an agent from a name and instructions, optionally with existing tools. | Build | Every call |
+| `huf_create_tool` | Create an agent tool from a spec. | Build | Every call |
+| `huf_create_table` | Create a Huf table from a spec. | Build | Every call |
+| `huf_build_app` | Draft, update or install a Huf app from a spec. | Admin | Every call |
+
+Hub tools above the connection's tier look nonexistent. They are left out of the tool list, and calling one returns the same error as any unknown tool name. Every builder call runs as the connection's user, with that user's roles and document permissions.
+
+Writes run only after you approve the exact call in the Huf UI. Approvals are single use and bound to the arguments, as described under Security model.
+
+Never exposed, at any tier: creating server or client scripts, running code, shell access, a generic record passthrough, user and role management, and secrets.
+
 ## 4. Security model
 
 - **Identity** comes from the authenticated Frappe user. The session token is held by the server. The model never supplies or chooses the identity or the token.
@@ -78,8 +102,9 @@ Limits: Frappe does not bind a token to a resource and the gateway does not chec
   Each class resolves to **Allow**, **Requires Approval** or **Deny** under the connection's policies.
 - **Approvals** are bound to the exact arguments of the call. They are single use and expire after 30 minutes. A decision can be made only in the Huf UI, never through the MCP channel.
 - **Idempotent replay**: a repeated request with the same idempotency key returns the original result and does not run the action again.
-- **Tool membership**: `huf_discover` offers only tools on the session agent's tool list, and a connection can invoke only tools it has been granted.
+- **Tool membership**: `huf_discover` offers only tools on the session agent's tool list, and a connection can invoke only tools it has been granted. Builder tools are additionally gated by the connection's Builder access.
 - **Guests are refused.** Requests from guest users do not get access.
+- **Public metadata.** The public OAuth metadata endpoint exposes only public information.
 
 ## 5. Visibility
 
