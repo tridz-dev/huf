@@ -15,6 +15,7 @@
   "read_policy",
   "write_policy",
   "communicate_policy",
+  "hub_tier",
   "last_seen"
  ],
  "fields": [
@@ -79,6 +80,14 @@
    "fieldtype": "Select",
    "label": "Communicate Policy",
    "options": "Allow\nRequires Approval\nDeny"
+  },
+  {
+   "default": "Off",
+   "description": "Lets the connected agent find and, with your approval, create agents, tools, tables and apps. Off by default.",
+   "fieldname": "hub_tier",
+   "fieldtype": "Select",
+   "label": "Builder access",
+   "options": "Off\nBuild\nAdmin"
   },
   {
    "fieldname": "last_seen",

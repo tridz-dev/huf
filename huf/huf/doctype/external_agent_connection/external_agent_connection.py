@@ -19,12 +19,27 @@ class ExternalAgentConnection(Document):
 		if not check_agent_access(agent_doc, self.user):
 			frappe.throw(_("This user cannot run the selected agent."))
 
+		self._validate_hub_tier()
+
 		if self.enabled:
 			filters = {"user": self.user, "agent": self.agent, "enabled": 1}
 			if self.name:
 				filters["name"] = ["!=", self.name]
 			if frappe.db.exists("External Agent Connection", filters):
 				frappe.throw(_("An enabled connection already exists for this user and agent."))
+
+	def _validate_hub_tier(self):
+		roles = frappe.get_roles(self.user)
+		is_system_manager = "System Manager" in roles
+
+		if self.hub_tier == "Admin" and not is_system_manager:
+			frappe.throw(_("Only a System Manager can enable Admin builder access."))
+
+		if self.hub_tier == "Build" and not is_system_manager:
+			from huf.permissions import has_capability
+
+			if not (has_capability(self.user, "agent.create") or has_capability(self.user, "agent.edit")):
+				frappe.throw(_("This user cannot build agents."))
 
 	def has_permission(self, permission_type=None, verbose=False):
 		user = frappe.session.user

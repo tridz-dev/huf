@@ -96,6 +96,21 @@ def request_approval(session: str, tool_name: str, action_class: str, args: dict
 		user=session_user,
 	)
 
+	try:
+		frappe.get_doc(
+			{
+				"doctype": "Notification Log",
+				"for_user": session_user,
+				"type": "Alert",
+				"subject": _("An agent needs your approval"),
+				"email_content": _("Tool: {0}").format(tool_name),
+				"document_type": APPROVAL_DOCTYPE,
+				"document_name": approval.name,
+			}
+		).insert(ignore_permissions=True)
+	except Exception:  # noqa: BLE001 -- a notification failure must never block the approval
+		frappe.log_error(title="Could not create approval notification")
+
 	return {"approval": approval.name, "status": STATUS_PENDING}
 
 
