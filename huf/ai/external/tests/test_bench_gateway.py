@@ -4,6 +4,7 @@ Run with ``bench --site <site> run-tests --module huf.ai.external.tests.test_ben
 Under plain pytest the repo conftest installs a mock ``frappe``; the whole module then skips.
 """
 
+import json
 import unittest
 from unittest.mock import MagicMock
 
@@ -74,7 +75,8 @@ class TestBenchGateway(_Base):
 			execution_mode="Connected External",
 		)
 		for tool_name in (READ_TOOL, WRITE_TOOL):
-			agent.append("agent_tool", {"tool": frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name})})
+			tool = frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name})
+			agent.append("agent_tool", {"tool": tool})
 		agent.save(ignore_permissions=True)
 
 		make(
@@ -139,7 +141,8 @@ class TestBenchGateway(_Base):
 			approvals.request_approval(self.session_name, WRITE_TOOL, "write", args)["approval"],
 			pending["approval"],
 		)
-		self.assertEqual(frappe.db.get_value("External Agent Session", self.session_name, "state"), "Waiting for Approval")
+		state = frappe.db.get_value("External Agent Session", self.session_name, "state")
+		self.assertEqual(state, "Waiting for Approval")
 
 		decided = approvals.decide_approval(pending["approval"], True)
 		self.assertEqual(decided["status"], "Approved")
@@ -152,7 +155,7 @@ class TestBenchGateway(_Base):
 	def test_invoke_read_tool_returns_rows(self):
 		from huf.ai.external.invoke import external_invoke
 
-		todo = frappe.get_doc({"doctype": "ToDo", "description": "bench read row", "allocated_to": USER}).insert(
+		todo = frappe.get_doc({"doctype": "ToDo", "description": "bench read row"}).insert(
 			ignore_permissions=True
 		)
 		result = external_invoke(self.session, READ_TOOL, {"fields": ["name", "description"], "limit": 100})
@@ -192,8 +195,6 @@ class TestBenchGateway(_Base):
 			{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": call}, self.session
 		)
 		self.assertFalse(found["result"]["isError"])
-		import json
-
 		tools = json.loads(found["result"]["content"][0]["text"])["tools"]
 		decisions = {tool["name"]: tool["decision"] for tool in tools}
 		self.assertEqual(decisions, {READ_TOOL: "allow", WRITE_TOOL: "approve"})
