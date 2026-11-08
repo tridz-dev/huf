@@ -34,6 +34,20 @@ class JsonRpcError(Exception):
 		return make_error(request_id, self.code, self.message, self.data)
 
 
+class _NonFiniteNumberError(ValueError):
+	"""Raised for NaN, Infinity or -Infinity constants, which are not valid JSON."""
+
+
+def _reject_non_finite(constant: str) -> None:
+	"""``json.loads`` hook: refuse the non-finite constants that Python's decoder accepts."""
+	raise _NonFiniteNumberError(constant)
+
+
+def _is_valid_request_id(value: Any) -> bool:
+	"""A request id must be a string, an integer (not a bool) or null."""
+	return value is None or isinstance(value, str) or (isinstance(value, int) and not isinstance(value, bool))
+
+
 def parse_request(body: str | bytes | dict) -> dict:
 	"""Validate a JSON-RPC 2.0 request and return its normalized form.
 
@@ -41,12 +55,15 @@ def parse_request(body: str | bytes | dict) -> dict:
 	The result always has ``jsonrpc``, ``method`` and ``params`` (``{}`` when
 	omitted or ``None``); ``id`` is included only when the request carried one.
 
+	JSON text containing ``NaN``, ``Infinity`` or ``-Infinity`` is a parse error.
+	A present ``id`` must be a string, an integer (not a bool) or null.
+
 	Raises ``JsonRpcError`` with ``PARSE_ERROR``, ``INVALID_REQUEST`` or
 	``INVALID_PARAMS`` when the request is malformed.
 	"""
 	if isinstance(body, (str, bytes)):
 		try:
-			req = json.loads(body)
+			req = json.loads(body, parse_constant=_reject_non_finite)
 		except ValueError as exc:
 			raise JsonRpcError(PARSE_ERROR, "Parse error") from exc
 	else:
@@ -61,6 +78,9 @@ def parse_request(body: str | bytes | dict) -> dict:
 	method = req.get("method")
 	if not isinstance(method, str) or not method:
 		raise JsonRpcError(INVALID_REQUEST, "Invalid Request")
+
+	if "id" in req and not _is_valid_request_id(req["id"]):
+		raise JsonRpcError(INVALID_REQUEST, "Invalid request id")
 
 	params = req.get("params")
 	if params is None:

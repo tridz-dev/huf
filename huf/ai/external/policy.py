@@ -50,6 +50,10 @@ def classify_tool(tool_type: str | None, function_path: str | None = None) -> st
 	"""
 	if tool_type in COMMUNICATE_TOOL_TYPES:
 		return "communicate"
+	# Path hints are plain substring matches, so they can over-match. That is deliberate:
+	# a hinted path is classed as "communicate" even when the tool type says read or write,
+	# so a false positive lands on the stricter policy (deny by default) rather than letting
+	# an outbound message slip through as a read or an ordinary write.
 	if function_path:
 		path = function_path.lower()
 		if any(hint in path for hint in COMMUNICATE_PATH_HINTS):

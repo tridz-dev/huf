@@ -91,6 +91,40 @@ def test_missing_or_bad_method_is_invalid_request(method):
 	assert exc_info.value.code == INVALID_REQUEST
 
 
+@pytest.mark.parametrize("request_id", ["x", 0, -5, None])
+def test_valid_id_types_are_accepted(request_id):
+	req = parse_request({"jsonrpc": "2.0", "method": "m", "id": request_id})
+	assert req["id"] == request_id
+
+
+@pytest.mark.parametrize("request_id", [1.5, 2.0, True, False, [1], {"a": 1}])
+def test_invalid_id_types_are_rejected(request_id):
+	with pytest.raises(JsonRpcError) as exc_info:
+		parse_request({"jsonrpc": "2.0", "method": "m", "id": request_id})
+	assert exc_info.value.code == INVALID_REQUEST
+	assert exc_info.value.message == "Invalid request id"
+
+
+def test_invalid_id_in_json_text_is_rejected():
+	with pytest.raises(JsonRpcError) as exc_info:
+		parse_request('{"jsonrpc": "2.0", "method": "m", "id": true}')
+	assert exc_info.value.code == INVALID_REQUEST
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_non_finite_constants_in_json_text_are_parse_errors(constant):
+	text = '{"jsonrpc": "2.0", "method": "m", "params": {"x": ' + constant + "}}"
+	with pytest.raises(JsonRpcError) as exc_info:
+		parse_request(text)
+	assert exc_info.value.code == PARSE_ERROR
+
+
+def test_non_finite_constant_in_id_position_is_parse_error():
+	with pytest.raises(JsonRpcError) as exc_info:
+		parse_request(b'{"jsonrpc": "2.0", "method": "m", "id": NaN}')
+	assert exc_info.value.code == PARSE_ERROR
+
+
 def test_absent_or_null_params_default_to_empty_dict():
 	absent = parse_request({"jsonrpc": "2.0", "method": "m"})
 	null = parse_request({"jsonrpc": "2.0", "method": "m", "params": None})

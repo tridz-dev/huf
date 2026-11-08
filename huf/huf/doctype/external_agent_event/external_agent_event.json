@@ -21,8 +21,7 @@
    "in_list_view": 1,
    "label": "Session",
    "options": "External Agent Session",
-   "reqd": 1,
-   "search_index": 1
+   "reqd": 1
   },
   {
    "fieldname": "seq",
@@ -62,8 +61,7 @@
   {
    "fieldname": "idempotency_key",
    "fieldtype": "Data",
-   "label": "Idempotency Key",
-   "search_index": 1
+   "label": "Idempotency Key"
   }
  ],
  "index_web_pages_for_search": 0,
@@ -72,7 +70,6 @@
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "External Agent Event",
- "naming_rule": "Random",
  "owner": "Administrator",
  "permissions": [
   {

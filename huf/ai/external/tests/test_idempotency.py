@@ -21,6 +21,13 @@ def test_different_inputs_produce_different_keys():
 	assert make_idempotency_key("s1", "tool", {"a": 1}, None) != base
 
 
+def test_separator_characters_in_values_do_not_collide():
+	# Joining raw parts with "|" would make these two different calls produce the same input.
+	pipe_in_session = make_idempotency_key("a|b", "c", None)
+	pipe_in_tool = make_idempotency_key("a", "b|c", None)
+	assert pipe_in_session != pipe_in_tool
+
+
 def test_none_args_equals_empty_dict_hash():
 	assert args_hash(None) == args_hash({})
 	assert make_idempotency_key("s", "t", None) == make_idempotency_key("s", "t", {})

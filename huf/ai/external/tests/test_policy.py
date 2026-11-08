@@ -30,7 +30,10 @@ def test_communicate_types_classify_as_communicate(tool_type):
 	assert classify_tool(tool_type) == "communicate"
 
 
-@pytest.mark.parametrize("tool_type", ["Create", "Update", "Delete", "Submit", "Run Script"])
+@pytest.mark.parametrize(
+	"tool_type",
+	["Create", "Update", "Delete", "Submit", "Run Script", "Create Document", "Update Document", "Delete Document", "PUT"],
+)
 def test_mutating_types_classify_as_write(tool_type):
 	assert classify_tool(tool_type) == "write"
 

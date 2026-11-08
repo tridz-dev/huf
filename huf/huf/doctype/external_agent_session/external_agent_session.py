@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import frappe
+from frappe import _
 from frappe.model.document import Document
+from frappe.utils import now_datetime
 
 
 class ExternalAgentSession(Document):
@@ -13,21 +15,21 @@ class ExternalAgentSession(Document):
 			self.session_token = frappe.generate_hash(length=40)
 
 	def validate(self):
-		if self.is_new():
-			return
+		from huf.ai.external.states import assert_transition, is_terminal
 
-		previous = self.get_doc_before_save()
-		if not previous:
-			return
+		previous = None if self.is_new() else self.get_doc_before_save()
+		acked_seq = self.acked_seq or 0
+		if acked_seq > (self.last_seq or 0) or (previous and acked_seq < (previous.acked_seq or 0)):
+			frappe.throw(_("Invalid acknowledgement sequence."))
 
-		old_state = previous.state
-		new_state = self.state
-		if old_state == new_state:
-			return
+		if previous and previous.state != self.state:
+			try:
+				assert_transition(previous.state, self.state)
+			except ValueError as exc:
+				frappe.throw(str(exc), frappe.ValidationError)
 
-		from huf.ai.external.states import assert_transition
-
-		assert_transition(old_state, new_state)
+		if is_terminal(self.state) and not self.ended_at:
+			self.ended_at = now_datetime()
 
 	def has_permission(self, permission_type=None, verbose=False):
 		user = frappe.session.user

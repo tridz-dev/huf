@@ -8,6 +8,18 @@ from frappe import _
 from frappe.model.document import Document
 
 _DECIDED_STATUSES = ("Approved", "Rejected")
+_TERMINAL_STATUSES = ("Approved", "Rejected", "Expired", "Consumed")
+
+
+def is_allowed_status_transition(previous: str | None, current: str | None) -> bool:
+	"""Return whether an approval may move from ``previous`` to ``current``.
+
+	Pending may move to any status. Once decided, a status is final, except that an
+	Approved approval may be Consumed exactly once.
+	"""
+	if previous == current or previous not in _TERMINAL_STATUSES:
+		return True
+	return previous == "Approved" and current == "Consumed"
 
 
 class ExternalActionApproval(Document):
@@ -32,6 +44,22 @@ class ExternalActionApproval(Document):
 		# approving from Huf is the intended flow.
 		if self.status in _DECIDED_STATUSES and not self.decided_by:
 			self.decided_by = frappe.session.user
+
+		if self.is_new():
+			self._verify_args_hash()
+			return
+
+		previous = self.get_doc_before_save()
+		if previous and not is_allowed_status_transition(previous.status, self.status):
+			frappe.throw(_("Approval status cannot change once decided."))
+
+	def _verify_args_hash(self):
+		import json
+
+		from huf.ai.external.idempotency import args_hash
+
+		if self.args_hash != args_hash(json.loads(self.args or "{}")):
+			frappe.throw(_("Approval does not match its arguments."))
 
 	def _session_user(self) -> str | None:
 		if not self.session:

@@ -15,6 +15,14 @@ IDENTITY_KEYS = (
 )
 
 
+def _normalize_key(key: Any) -> str:
+	"""Lowercase a key and drop ``-`` and ``_`` so spelling variants compare equal."""
+	return str(key).lower().replace("-", "").replace("_", "")
+
+
+_NORMALIZED_IDENTITY_KEYS = frozenset(_normalize_key(key) for key in IDENTITY_KEYS)
+
+
 def pin_external_identity(
 	args: dict[str, Any] | None,
 	*,
@@ -25,18 +33,22 @@ def pin_external_identity(
 ) -> dict[str, Any]:
 	"""Return a copy of tool ``args`` with identity fields set from server-side state.
 
-	Identity comes only from server-side session state, never from the model. Every key in
-	``IDENTITY_KEYS`` is removed from the copy regardless of its value (blank values included),
-	then the keyword values are written back when they are not None.
+	Identity comes only from server-side session state, never from the model. Any top-level
+	key that matches an entry in ``IDENTITY_KEYS`` is removed from the copy regardless of its
+	value (blank values included). Matching is case-insensitive and ignores ``-`` and ``_``,
+	so ``"User"``, ``"Agent_Run_Id"`` and ``"agent-name"`` are all stripped. The keyword values
+	are then written back under their canonical names when they are not None.
+
+	Only top-level keys are inspected. Nested values are the tool handler's responsibility.
 
 	This must run BEFORE the args reach ``invoke_tool_sync``, because its run-context merge
 	never overwrites a non-blank caller value.
 
 	The input mapping is never mutated.
 	"""
-	pinned: dict[str, Any] = dict(args or {})
-	for key in IDENTITY_KEYS:
-		pinned.pop(key, None)
+	pinned: dict[str, Any] = {
+		key: value for key, value in (args or {}).items() if _normalize_key(key) not in _NORMALIZED_IDENTITY_KEYS
+	}
 
 	trusted = {
 		"conversation_id": conversation_id,

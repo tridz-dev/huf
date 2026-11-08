@@ -80,6 +80,7 @@
    "fieldtype": "Data",
    "hidden": 1,
    "label": "Session Token",
+   "permlevel": 1,
    "read_only": 1,
    "unique": 1
   },
@@ -140,6 +141,12 @@
    "select": 1,
    "share": 1,
    "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 0
   }
  ],
  "row_format": "Dynamic",
