@@ -17,7 +17,7 @@ import type { ExternalEvent, ExternalSession } from '@/types/externalAgents.type
 const TRANSCRIPT_POLL_MS = 5_000;
 const TERMINAL_STATES: ReadonlyArray<ExternalSession['state']> = ['Completed', 'Failed', 'Cancelled'];
 
-export function isTerminalSessionState(state: ExternalSession['state']): boolean {
+function isTerminalSessionState(state: ExternalSession['state']): boolean {
   return TERMINAL_STATES.includes(state);
 }
 
@@ -99,18 +99,12 @@ export function SessionTranscriptDialog({ session, open, onOpenChange }: Session
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
 
-  // Keep the latest session object without re-running the poll every time the parent refreshes its list.
-  const sessionRef = useRef(session);
-  useEffect(() => {
-    sessionRef.current = session;
-  }, [session]);
-
   const sessionName = session.name;
   const isTerminal = isTerminalSessionState(session.state);
 
   const loadEvents = useCallback(async () => {
     try {
-      const rows = await getExternalSessionEvents(sessionRef.current, 200);
+      const rows = await getExternalSessionEvents(sessionName, 200);
       setEvents([...rows].sort((a, b) => a.seq - b.seq));
       setLoadError(false);
     } catch {
@@ -118,7 +112,7 @@ export function SessionTranscriptDialog({ session, open, onOpenChange }: Session
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [sessionName]);
 
   useEffect(() => {
     if (!open) return;
@@ -143,7 +137,7 @@ export function SessionTranscriptDialog({ session, open, onOpenChange }: Session
     const text = draft.trim();
     setSending(true);
     try {
-      await postExternalUserMessage(sessionRef.current, text);
+      await postExternalUserMessage(sessionName, text);
       setDraft('');
       await loadEvents();
     } catch (e) {

@@ -19,9 +19,10 @@ import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { cancelExternalSession, listExternalSessions } from '@/services/externalAgentsApi';
 import type { ExternalSession } from '@/types/externalAgents.types';
 import { formatTimeAgo } from '@/utils/time';
-import { SessionTranscriptDialog, isTerminalSessionState } from './SessionTranscriptDialog';
+import { SessionTranscriptDialog } from './SessionTranscriptDialog';
 
 const POLL_INTERVAL_MS = 10_000;
+const TERMINAL_STATES: ReadonlyArray<ExternalSession['state']> = ['Completed', 'Failed', 'Cancelled'];
 
 const STATE_BADGE_VARIANT: Record<ExternalSession['state'], BadgeProps['variant']> = {
   Active: 'success',
@@ -80,7 +81,7 @@ export function SessionsSection() {
     if (!cancelTarget) return;
     setCancelling(true);
     try {
-      await cancelExternalSession(cancelTarget);
+      await cancelExternalSession(cancelTarget.name);
       toast.success('Session cancelled');
       setCancelTarget(null);
       await refresh();
@@ -122,7 +123,7 @@ export function SessionsSection() {
               <ul className="divide-y">
                 {sessions.map((session) => {
                   const visibility = VISIBILITY_COPY[session.visibility_mode];
-                  const isTerminal = isTerminalSessionState(session.state);
+                  const isTerminal = TERMINAL_STATES.includes(session.state);
                   return (
                     <li
                       key={session.name}
