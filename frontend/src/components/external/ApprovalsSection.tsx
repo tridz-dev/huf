@@ -169,7 +169,7 @@ export function ApprovalsSection() {
     async (approval: ExternalApproval, approve: boolean) => {
       setDecisions((prev) => ({ ...prev, [approval.name]: approve ? 'approve' : 'decline' }));
       try {
-        await decideExternalApproval(approval, approve);
+        await decideExternalApproval(approval.name, approve);
         toast.success(approve ? 'Request approved' : 'Request declined');
       } catch {
         toast.error(

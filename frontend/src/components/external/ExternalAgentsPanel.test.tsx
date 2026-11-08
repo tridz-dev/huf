@@ -19,9 +19,10 @@ vi.mock('@/services/externalAgentsApi', () => ({
 import { ExternalAgentsPanel } from './ExternalAgentsPanel';
 
 describe('ExternalAgentsPanel', () => {
-  it('shows the approvals, connected agents and agent sessions sections', async () => {
+  it('shows the connected agents and agent sessions sections, and an empty approvals message', async () => {
     render(<ExternalAgentsPanel />);
-    expect(await screen.findByRole('heading', { name: 'Approvals' })).toBeTruthy();
+    // ApprovalsSection only renders its "Approvals" heading when requests are pending.
+    expect(await screen.findByText('Nothing waiting for your approval.')).toBeTruthy();
     expect(await screen.findByRole('heading', { name: 'Connected agents' })).toBeTruthy();
     expect(await screen.findByRole('heading', { name: 'Agent sessions' })).toBeTruthy();
   });
