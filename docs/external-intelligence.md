@@ -147,7 +147,7 @@ Events for a session, such as user replies, approval decisions and cancellations
 `scripts/external_runner/runner.py` lets you press **Send a task** in Huf and have a command on your own machine do the work. It is a small standard-library script that you run yourself. It uses the AI app already installed and logged in on that machine, with that app's own credentials. Huf never receives those credentials. This is user-operated, not a hosted service: Huf does not start, host or supervise the runner.
 
 1. Create an External Agent Connection and an API key for its user (see "Connecting").
-2. On the machine where your AI app is logged in, start the runner. Start it before sending a task, because it opens its own session and tasks are delivered to the newest open session:
+2. On the machine where your AI app is logged in, start the runner. Start it before sending a task where you can: the runner opens its own session, and a task assigned before it starts is picked up when it connects, not lost:
 
    ```
    export HUF_TOKEN=<api_key>:<api_secret>

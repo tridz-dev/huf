@@ -128,6 +128,12 @@ def _resolve_context(request: dict, create_allowed: bool = True):
 	connection = _resolve_connection()
 	if request.get("method") == INITIALIZE_METHOD:
 		created = sessions.create_session(connection.name)
+		try:
+			sessions.adopt_pending_tasks(connection.name, created["session"])
+		except Exception:  # noqa: BLE001 -- a task hand-off problem must not fail the handshake
+			frappe.log_error(
+				title="External agent task adoption failed", message=f"session={created['session']}"
+			)
 		# The token is handed to the client in this header only, never in the JSON body.
 		frappe.local.response_headers.set(SESSION_HEADER, created["token"])
 		return connection, frappe.get_doc(sessions.SESSION_DOCTYPE, created["session"])

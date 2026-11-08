@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import secrets
 
 import frappe
@@ -34,6 +35,7 @@ LEASE_SCANNED_STATES = (ACTIVE, WAITING_INPUT, WAITING_APPROVAL)
 LAST_SEEN_THROTTLE_SECONDS = 60
 MAX_TASK_PROMPT_LENGTH = 8000
 TASK_ASSIGNED_EVENT = "task_assigned"
+MAX_ADOPTED_TASKS = 20
 
 _CLOSED_MESSAGE = "Unknown or closed session"
 
@@ -153,6 +155,59 @@ def assign_task(connection_name: str, prompt: str) -> dict:
 		{"prompt": text, "assigned_by": frappe.session.user},
 	)
 	return {"session": session_name, "seq": event["seq"]}
+
+
+def adopt_pending_tasks(connection_name: str, new_session: str) -> int:
+	"""Move unacknowledged task hand-offs from older open sessions into ``new_session``.
+
+	A task assigned while no runner was connected waits in the session that was newest at the time,
+	where nothing reads it. When a new session opens, its ``task_assigned`` events that were never
+	acknowledged (Pending or Delivered) are re-posted into it, oldest first, and acknowledged in the
+	old session so they are not delivered twice. Only the current user's non-terminal sessions of this
+	connection are considered, and at most MAX_ADOPTED_TASKS events move per call. Returns the count.
+	"""
+	other_sessions = frappe.get_all(
+		SESSION_DOCTYPE,
+		filters={
+			"connection": connection_name,
+			"user": frappe.session.user,
+			"state": ["not in", list(TERMINAL_STATES)],
+			"name": ["!=", new_session],
+		},
+		pluck="name",
+	)
+	if not other_sessions:
+		return 0
+
+	pending = frappe.get_all(
+		mailbox.EVENT_DOCTYPE,
+		filters={
+			"session": ["in", other_sessions],
+			"direction": "to_agent",
+			"event_type": TASK_ASSIGNED_EVENT,
+			"status": ["in", ["Pending", "Delivered"]],
+		},
+		fields=["name", "payload"],
+		order_by="creation asc",
+		limit_page_length=MAX_ADOPTED_TASKS,
+	)
+
+	adopted = 0
+	for row in pending:
+		try:
+			payload = json.loads(row.payload or "{}")
+		except (TypeError, ValueError):
+			payload = {}
+		mailbox.post_event(
+			new_session,
+			"to_agent",
+			TASK_ASSIGNED_EVENT,
+			payload,
+			idempotency_key=f"adopted-{row.name}",
+		)
+		frappe.db.set_value(mailbox.EVENT_DOCTYPE, row.name, "status", "Acked")
+		adopted += 1
+	return adopted
 
 
 def get_session_for_token(token: str):
