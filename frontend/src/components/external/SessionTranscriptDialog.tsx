@@ -173,7 +173,7 @@ export function SessionTranscriptDialog({ session, open, onOpenChange }: Session
               }
             >
               {item.kind && (
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <p className="text-micro font-medium uppercase tracking-wide text-muted-foreground">
                   {item.kind}
                 </p>
               )}

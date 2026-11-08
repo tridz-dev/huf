@@ -99,6 +99,26 @@ def request_approval(session: str, tool_name: str, action_class: str, args: dict
 	return {"approval": approval.name, "status": STATUS_PENDING}
 
 
+def _release_session_after_expiry(session: str, approval_name: str) -> None:
+	"""Tell the agent an approval expired and return the session to ACTIVE if nothing else is pending."""
+	from huf.ai.external import mailbox
+
+	tool_name = frappe.db.get_value(APPROVAL_DOCTYPE, approval_name, "tool_name")
+	mailbox.post_event(
+		session,
+		"to_agent",
+		"approval_decided",
+		{"approval": approval_name, "tool_name": tool_name, "status": STATUS_EXPIRED},
+		idempotency_key=f"approval-{approval_name}-{STATUS_EXPIRED}",
+	)
+	still_pending = frappe.db.count(APPROVAL_DOCTYPE, {"session": session, "status": STATUS_PENDING})
+	if (
+		still_pending == 0
+		and frappe.db.get_value(SESSION_DOCTYPE, session, "state") == states.WAITING_APPROVAL
+	):
+		_transition_session(session, states.ACTIVE)
+
+
 def decide_approval(approval_name: str, approve: bool, comment: str | None = None) -> dict:
 	"""Approve or reject a Pending approval. Only the session's user or a System Manager may decide.
 
@@ -126,6 +146,7 @@ def decide_approval(approval_name: str, approve: bool, comment: str | None = Non
 	now = now_datetime()
 	if row.expires_on and row.expires_on < now:
 		frappe.db.set_value(APPROVAL_DOCTYPE, approval_name, "status", STATUS_EXPIRED)
+		_release_session_after_expiry(session, approval_name)
 		# Commit so the expiry survives the error raised below.
 		frappe.db.commit()  # nosemgrep: long-poll must persist the Expired status before raising
 		frappe.throw(_("Approval has expired"), frappe.ValidationError)

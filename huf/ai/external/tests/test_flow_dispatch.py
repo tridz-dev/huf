@@ -121,13 +121,6 @@ def test_non_object_arguments_are_invalid_params(session, arguments):
 	assert "result" not in response
 
 
-@pytest.mark.xfail(
-	strict=True,
-	reason=(
-		"tools/call uses `params.get('arguments') or {}`, so falsy non-object values such as [], 0, "
-		"false and '' are silently replaced with {} and accepted instead of rejected as INVALID_PARAMS"
-	),
-)
 @pytest.mark.parametrize("arguments", [[], 0, False, ""])
 def test_falsy_non_object_arguments_are_invalid_params(session, arguments):
 	response = call(session, "huf_discover", arguments)
@@ -303,13 +296,6 @@ def test_invoke_forwards_arguments_and_ignores_identity_keys_at_top_level(fake, 
 	assert tool_text(response) == {"status": "ok", "result": "sent"}
 
 
-@pytest.mark.xfail(
-	strict=True,
-	reason=(
-		"huf_invoke uses `arguments.get('arguments') or {}`, so a falsy non-object such as [] is "
-		"replaced with {} and forwarded instead of failing with 'arguments must be an object'"
-	),
-)
 def test_invoke_rejects_falsy_non_object_arguments(session, monkeypatch):
 	monkeypatch.setattr(dispatch, "external_invoke", lambda *_a, **_k: {"status": "ok"})
 

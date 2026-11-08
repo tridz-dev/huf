@@ -97,7 +97,9 @@ def _dispatch(method: str, params: dict, session_doc) -> dict:
 
 def _tools_call(params: dict, session_doc) -> dict:
 	name = params.get("name")
-	arguments = params.get("arguments") or {}
+	arguments = params.get("arguments")
+	if arguments is None:
+		arguments = {}
 	if not isinstance(arguments, dict):
 		raise JsonRpcError(INVALID_PARAMS, "Invalid params", method="tools/call")
 	if not isinstance(name, str) or name not in _HANDLERS:
@@ -253,7 +255,9 @@ def _invoke(session_doc, arguments: dict) -> dict:
 	tool_name = arguments.get("tool_name")
 	if not isinstance(tool_name, str) or not tool_name:
 		return _invalid("tool_name is required")
-	tool_args = arguments.get("arguments") or {}
+	tool_args = arguments.get("arguments")
+	if tool_args is None:
+		tool_args = {}
 	if not isinstance(tool_args, dict):
 		return _invalid("arguments must be an object")
 	client_call_id = arguments.get("client_call_id")
