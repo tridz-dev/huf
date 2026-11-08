@@ -175,6 +175,13 @@ def external_invoke(
 		)
 		result = invoke_tool_sync(tool_name, pinned, ctx=ctx, telemetry=True)
 	except Exception:  # noqa: BLE001 - never leak tracebacks to the caller
+		if approval_consumed:
+			try:
+				from huf.ai.external import approvals
+
+				approvals.consume_restore(session_doc.name, tool_name, args)
+			except Exception:  # noqa: BLE001, S110 - restoring is best effort
+				pass
 		frappe.log_error(title="External agent tool invocation failed")
 		return {"status": "error", "error": EXECUTION_ERROR}
 

@@ -39,14 +39,13 @@ def post_event(
 		raise _missing_session(session)
 
 	if idempotency_key:
-		existing = frappe.get_all(
-			EVENT_DOCTYPE,
-			filters={"session": session, "idempotency_key": idempotency_key},
-			fields=EVENT_FIELDS,
-			limit_page_length=1,
+		# Locking read after the session lock, so a concurrent insert under the same session is seen.
+		existing = frappe.db.sql(
+			"select name from `tabExternal Agent Event` where session=%s and idempotency_key=%s limit 1 for update",
+			(session, idempotency_key),
 		)
 		if existing:
-			return _event_dict(existing[0])
+			return _event_dict(frappe.get_doc(EVENT_DOCTYPE, existing[0][0]))
 
 	seq = next_seq(row[0])
 	doc = frappe.get_doc(
@@ -109,11 +108,12 @@ def ack(session: str, seq: int) -> int:
 
 	Bypasses doctype permissions; the caller must already have authorized the session.
 	"""
-	row = frappe.db.get_value(SESSION_DOCTYPE, session, ["acked_seq"], for_update=True)
+	row = frappe.db.get_value(SESSION_DOCTYPE, session, ["acked_seq", "last_seq"], for_update=True)
 	if row is None:
 		raise _missing_session(session)
 
-	acked = max(int(row[0] or 0), int(seq))
+	old_acked, last_seq = row
+	acked = max(int(old_acked or 0), min(int(seq), int(last_seq or 0)))
 	frappe.db.set_value(SESSION_DOCTYPE, session, "acked_seq", acked, update_modified=False)
 	frappe.db.sql(
 		"""
@@ -140,9 +140,11 @@ def wait_for_events(session: str, timeout_seconds: int | None = None) -> list[di
 	"""
 	wait = clamp_wait(timeout_seconds)
 	deadline = time.monotonic() + wait
+	# Commit earlier writes from this request so they are not discarded by the polling loop.
+	frappe.db.commit()
 	while True:
-		# Drop the REPEATABLE READ snapshot so each poll sees rows committed since the last one.
-		frappe.db.rollback()
+		# Commit ends the REPEATABLE READ snapshot so each poll sees rows committed since the last one.
+		frappe.db.commit()
 		events = fetch_pending(session)
 		# Commit the Delivered markings before handing the events to the caller.
 		frappe.db.commit()

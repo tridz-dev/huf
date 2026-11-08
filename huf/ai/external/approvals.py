@@ -182,8 +182,25 @@ def consume_approval(session: str, tool_name: str, args: dict | None) -> bool:
 
 
 def expire_pending_approvals() -> None:
-	"""Scheduler entry: mark Pending approvals whose expiry has passed as Expired."""
+	"""Scheduler entry: mark Pending approvals whose expiry has passed as Expired.
+
+	Sessions left with no Pending approvals while WAITING_APPROVAL return to ACTIVE. Each session is
+	handled independently so one failure does not stop the sweep.
+	"""
 	now = now_datetime()
+	affected_sessions = [
+		row[0]
+		for row in frappe.db.sql(
+			"""
+			SELECT DISTINCT session FROM `tabExternal Action Approval`
+			WHERE status = %s AND expires_on < %s
+			""",
+			(STATUS_PENDING, now),
+		)
+	]
+	if not affected_sessions:
+		return
+
 	frappe.db.sql(
 		"""
 		UPDATE `tabExternal Action Approval`
@@ -192,6 +209,45 @@ def expire_pending_approvals() -> None:
 		""",
 		(STATUS_EXPIRED, now, STATUS_PENDING, now),
 	)
+
+	for session in affected_sessions:
+		try:
+			state = frappe.db.get_value(SESSION_DOCTYPE, session, "state", for_update=True)
+			if state != states.WAITING_APPROVAL:
+				continue
+			still_pending = frappe.db.count(APPROVAL_DOCTYPE, {"session": session, "status": STATUS_PENDING})
+			if still_pending == 0:
+				_transition_session(session, states.ACTIVE)
+		except Exception:  # noqa: BLE001 -- per-session isolation, logged
+			frappe.log_error(f"Could not return external agent session {session} to Active after expiry")
+
+
+def consume_restore(session: str, tool_name: str, args: dict | None) -> bool:
+	"""Undo a consumption when the tool call failed before executing.
+
+	Sets the newest Consumed approval for this exact call back to Approved, provided its expiry is
+	still in the future. Returns True if an approval was restored.
+	"""
+	digest = args_hash(args)
+	rows = frappe.db.sql(
+		"""
+		SELECT name, expires_on FROM `tabExternal Action Approval`
+		WHERE session = %s AND tool_name = %s AND args_hash = %s AND status = %s
+		ORDER BY modified DESC
+		LIMIT 1
+		FOR UPDATE
+		""",
+		(session, tool_name, digest, STATUS_CONSUMED),
+	)
+	if not rows:
+		return False
+
+	name, expires_on = rows[0]
+	if not expires_on or expires_on <= now_datetime():
+		return False
+
+	frappe.db.set_value(APPROVAL_DOCTYPE, name, "status", STATUS_APPROVED)
+	return True
 
 
 def get_approval_state(session: str, tool_name: str, args: dict | None) -> str | None:
