@@ -127,7 +127,7 @@ def decide_approval(approval_name: str, approve: bool, comment: str | None = Non
 	if row.expires_on and row.expires_on < now:
 		frappe.db.set_value(APPROVAL_DOCTYPE, approval_name, "status", STATUS_EXPIRED)
 		# Commit so the expiry survives the error raised below.
-		frappe.db.commit()
+		frappe.db.commit()  # nosemgrep: long-poll must persist the Expired status before raising
 		frappe.throw(_("Approval has expired"), frappe.ValidationError)
 
 	approval = frappe.get_doc(APPROVAL_DOCTYPE, approval_name)

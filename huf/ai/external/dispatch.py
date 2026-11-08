@@ -291,7 +291,7 @@ def _wait(session_doc, arguments: dict) -> dict:
 		sessions.transition(session_doc.name, WAITING_INPUT)
 	# The wait polls in fresh transactions, which would discard uncommitted lease, ack and state
 	# writes, so persist them first.
-	frappe.db.commit()
+	frappe.db.commit()  # nosemgrep: release the snapshot so the wait loop sees new events
 
 	events = mailbox.wait_for_events(session_doc.name, arguments.get("timeout_seconds"))
 

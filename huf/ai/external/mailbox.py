@@ -141,13 +141,13 @@ def wait_for_events(session: str, timeout_seconds: int | None = None) -> list[di
 	wait = clamp_wait(timeout_seconds)
 	deadline = time.monotonic() + wait
 	# Commit earlier writes from this request so they are not discarded by the polling loop.
-	frappe.db.commit()
+	frappe.db.commit()  # nosemgrep: persist earlier writes before the bounded long-poll
 	while True:
 		# Commit ends the REPEATABLE READ snapshot so each poll sees rows committed since the last one.
-		frappe.db.commit()
+		frappe.db.commit()  # nosemgrep: refresh snapshot between polls
 		events = fetch_pending(session)
 		# Commit the Delivered markings before handing the events to the caller.
-		frappe.db.commit()
+		frappe.db.commit()  # nosemgrep: persist Delivered marks before returning
 		if events:
 			return events
 		remaining = deadline - time.monotonic()

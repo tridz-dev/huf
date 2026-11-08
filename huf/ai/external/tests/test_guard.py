@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from huf.ai.external.guard import NATIVE_MODE, assert_native_execution, is_native_mode
+from huf.ai.agent.access import NATIVE_MODE, assert_native_execution, is_native_mode
 
 
 @pytest.mark.parametrize("value", [None, "", NATIVE_MODE])

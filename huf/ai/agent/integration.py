@@ -29,7 +29,7 @@ from huf.ai.providers.errors import ProviderError, classify_status, redact_text
 from huf.ai.transaction import safe_commit, transaction_checkpoint
 from huf.ai.run_control import touch_run_alive
 from huf.ai.agent.access import (
-    assert_agent_access,
+    assert_agent_access, assert_native_execution,
     check_agent_access as _check_agent_access,
     resolve_run_identity_and_authorize,
     TRIGGER_DIRECT_API,
@@ -109,10 +109,7 @@ class AgentManager:
     desktop_ctx = None
 
     def __init__(self, agent_name, file_handler=None, provider_override=None, model_override=None, conversation_id=None, desktop_ctx=None):
-        self.agent_doc = frappe.get_cached_doc("Agent", agent_name)
-        from huf.ai.external.guard import assert_native_execution
-
-        assert_native_execution(self.agent_doc)
+        self.agent_doc = assert_native_execution(frappe.get_cached_doc("Agent", agent_name))
         self.conversation_id = conversation_id
         # Pinned Huf Desktop executor context (None for every non-desktop run).
         self.desktop_ctx = desktop_ctx

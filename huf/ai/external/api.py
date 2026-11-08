@@ -135,7 +135,7 @@ def list_connections(all_users=0) -> list[dict]:
 	)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_connection(
 	agent: str,
 	runtime_kind: str = "claude_code",
@@ -171,7 +171,7 @@ def create_connection(
 	return doc.name
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update_connection(
 	name: str,
 	enabled=None,
@@ -240,7 +240,7 @@ def get_session_events(session: str, limit=50) -> list[dict]:
 	]
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def post_user_message(session: str, text: str) -> dict:
 	_require_user()
 	row = _owned_session(session)
@@ -284,7 +284,7 @@ def list_pending_approvals(all_users=0) -> list[dict]:
 	]
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def decide(approval: str, approve=0, comment: str | None = None) -> dict:
 	_require_user()
 	session = frappe.db.get_value(APPROVAL_DOCTYPE, approval, "session") if approval else None
@@ -294,7 +294,7 @@ def decide(approval: str, approve=0, comment: str | None = None) -> dict:
 	return approvals.decide_approval(approval, bool(cint(approve)), comment)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def cancel(session: str) -> str:
 	_require_user()
 	_owned_session(session)
