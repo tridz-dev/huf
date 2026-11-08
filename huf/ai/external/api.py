@@ -138,6 +138,13 @@ def _owned_session(name: str):
 	return row
 
 
+@frappe.whitelist(methods=["POST"])
+def assign_task(connection: str, prompt: str) -> dict:
+	_require_user()
+	_owned_connection(connection)
+	return sessions.assign_task(connection, prompt)
+
+
 @frappe.whitelist()
 def list_connections(all_users=0) -> list[dict]:
 	_require_user()

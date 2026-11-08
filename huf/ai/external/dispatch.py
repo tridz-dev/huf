@@ -42,8 +42,9 @@ SERVER_INFO = {"name": "huf", "version": "1"}
 INSTRUCTIONS = (
 	"Use huf_discover to list the tools this connection may run, and huf_context to read the "
 	"conversation or agent. Run tools with huf_invoke. Use huf_wait to receive messages from the "
-	"user; it returns early when events arrive and reports timed_out otherwise. Send progress with "
-	"huf_report and finish with huf_complete."
+	"user; it returns early when events arrive and reports timed_out otherwise. When huf_wait returns "
+	"a task_assigned event, do that task with the available tools, report with huf_report, and finish "
+	"with huf_complete. Send progress with huf_report and finish with huf_complete."
 )
 
 LEASE_OWNER = "mcp"

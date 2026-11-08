@@ -14,6 +14,7 @@ from huf.ai.external.core.states import (
 	COMPLETED,
 	FAILED,
 	RUNTIME_OFFLINE,
+	TERMINAL_STATES,
 	WAITING_APPROVAL,
 	WAITING_INPUT,
 	assert_transition,
@@ -31,6 +32,8 @@ VISIBILITY_CONNECTED = "Connected"
 
 LEASE_SCANNED_STATES = (ACTIVE, WAITING_INPUT, WAITING_APPROVAL)
 LAST_SEEN_THROTTLE_SECONDS = 60
+MAX_TASK_PROMPT_LENGTH = 8000
+TASK_ASSIGNED_EVENT = "task_assigned"
 
 _CLOSED_MESSAGE = "Unknown or closed session"
 
@@ -101,6 +104,55 @@ def create_session(connection_name: str, native_session_id: str | None = None) -
 		"conversation": conversation.name,
 		"agent_run": agent_run.name,
 	}
+
+
+def _task_prompt(prompt) -> str:
+	if not isinstance(prompt, str):
+		frappe.throw(_("Task prompt must be text."), frappe.ValidationError)
+	text = prompt.strip()
+	if not 1 <= len(text) <= MAX_TASK_PROMPT_LENGTH:
+		frappe.throw(
+			_("Task prompt must be between 1 and {0} characters.").format(MAX_TASK_PROMPT_LENGTH),
+			frappe.ValidationError,
+		)
+	return text
+
+
+def _newest_open_session_name(connection_name: str) -> str | None:
+	"""Name of the newest non-terminal session of this connection for the current user, if any."""
+	names = frappe.get_all(
+		SESSION_DOCTYPE,
+		filters={
+			"connection": connection_name,
+			"user": frappe.session.user,
+			"state": ["not in", list(TERMINAL_STATES)],
+		},
+		pluck="name",
+		order_by="creation desc",
+		limit_page_length=1,
+	)
+	return names[0] if names else None
+
+
+def assign_task(connection_name: str, prompt: str) -> dict:
+	"""Hand a task from Huf to the connected agent through the session mailbox.
+
+	Reuses the newest open session of the connection, or creates one, then queues a
+	``task_assigned`` event for the agent. Only the connection's owner may assign work.
+	"""
+	connection = _check_connection(connection_name)
+	text = _task_prompt(prompt)
+	agent_doc = frappe.get_doc("Agent", connection.agent)
+	assert_agent_access(agent_doc, frappe.session.user)
+
+	session_name = _newest_open_session_name(connection_name) or create_session(connection_name)["session"]
+	event = mailbox.post_event(
+		session_name,
+		"to_agent",
+		TASK_ASSIGNED_EVENT,
+		{"prompt": text, "assigned_by": frappe.session.user},
+	)
+	return {"session": session_name, "seq": event["seq"]}
 
 
 def get_session_for_token(token: str):
