@@ -7,8 +7,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from huf.ai.external import dispatch, jsonrpc, mailbox, states
-from huf.ai.external.capabilities import capability_names
+from huf.ai.external import dispatch, mailbox
+from huf.ai.external.core import jsonrpc, states
+from huf.ai.external.core.capabilities import capability_names
 from huf.ai.external.tests.fake_frappe import FakeFrappe, patch_modules
 
 SESSION = "External Agent Session"

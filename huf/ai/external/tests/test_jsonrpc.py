@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from huf.ai.external.jsonrpc import (
+from huf.ai.external.core.jsonrpc import (
 	HUF_APPROVAL_REQUIRED,
 	HUF_DENIED,
 	INTERNAL_ERROR,

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from huf.ai.external.mailbox_logic import (
+from huf.ai.external.core.mailbox_logic import (
 	DEFAULT_WAIT_SECONDS,
 	MAX_WAIT_SECONDS,
 	POLL_INTERVAL_SECONDS,

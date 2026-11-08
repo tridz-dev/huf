@@ -6,8 +6,9 @@ from datetime import timedelta
 
 import pytest
 
-from huf.ai.external import mailbox, sessions, states
-from huf.ai.external.mailbox_logic import DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS
+from huf.ai.external import mailbox, sessions
+from huf.ai.external.core import states
+from huf.ai.external.core.mailbox_logic import DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS
 from huf.ai.external.tests.fake_frappe import DEFAULT_NOW, FakeFrappe, patch_modules
 
 SESSION = "External Agent Session"

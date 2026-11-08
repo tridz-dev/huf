@@ -16,9 +16,9 @@ import json
 
 import frappe
 
-from huf.ai.external.idempotency import make_idempotency_key
-from huf.ai.external.identity import pin_external_identity
-from huf.ai.external.policy import classify_tool, decide
+from huf.ai.external.core.idempotency import make_idempotency_key
+from huf.ai.external.core.identity import pin_external_identity
+from huf.ai.external.core.policy import classify_tool, decide
 from huf.ai.tools.invocation import (
 	RunContext,
 	check_tool_permission,

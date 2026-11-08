@@ -14,8 +14,8 @@ import frappe
 from frappe import _
 from frappe.utils import add_to_date, now_datetime
 
-from huf.ai.external import states
-from huf.ai.external.idempotency import args_hash, canonical_json
+from huf.ai.external.core import states
+from huf.ai.external.core.idempotency import args_hash, canonical_json
 
 APPROVAL_TTL_MINUTES = 30
 

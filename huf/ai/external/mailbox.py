@@ -7,7 +7,7 @@ from typing import Any
 
 import frappe
 
-from huf.ai.external.mailbox_logic import (
+from huf.ai.external.core.mailbox_logic import (
 	POLL_INTERVAL_SECONDS,
 	clamp_wait,
 	next_seq,

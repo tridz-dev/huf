@@ -5,7 +5,8 @@ import json
 
 import pytest
 
-from huf.ai.external import dispatch, hub, jsonrpc, states
+from huf.ai.external import dispatch, hub
+from huf.ai.external.core import jsonrpc, states
 from huf.ai.external.tests.fake_frappe import FakeFrappe, patch_modules
 
 SESSION = "External Agent Session"

@@ -7,7 +7,8 @@ from datetime import timedelta
 import pytest
 
 from huf.ai.agent import access
-from huf.ai.external import approvals, invoke, states
+from huf.ai.external import approvals, invoke
+from huf.ai.external.core import states
 from huf.ai.external.tests.fake_frappe import FakeFrappe, patch_modules
 
 APPROVAL = "External Action Approval"

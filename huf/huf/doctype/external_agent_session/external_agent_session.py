@@ -15,7 +15,7 @@ class ExternalAgentSession(Document):
 			self.session_token = frappe.generate_hash(length=40)
 
 	def validate(self):
-		from huf.ai.external.states import assert_transition, is_terminal
+		from huf.ai.external.core.states import assert_transition, is_terminal
 
 		previous = None if self.is_new() else self.get_doc_before_save()
 		acked_seq = self.acked_seq or 0

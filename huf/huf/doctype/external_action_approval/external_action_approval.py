@@ -56,7 +56,7 @@ class ExternalActionApproval(Document):
 	def _verify_args_hash(self):
 		import json
 
-		from huf.ai.external.idempotency import args_hash
+		from huf.ai.external.core.idempotency import args_hash
 
 		if self.args_hash != args_hash(json.loads(self.args or "{}")):
 			frappe.throw(_("Approval does not match its arguments."))

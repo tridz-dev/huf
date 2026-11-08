@@ -26,8 +26,9 @@ import frappe
 from frappe import _
 from frappe.rate_limiter import rate_limit
 
-from huf.ai.external import dispatch, jsonrpc, sessions
-from huf.ai.external.states import TERMINAL_STATES
+from huf.ai.external import dispatch, sessions
+from huf.ai.external.core import jsonrpc
+from huf.ai.external.core.states import TERMINAL_STATES
 
 CONNECTION_HEADER = "X-Huf-Connection"
 SESSION_HEADER = "Mcp-Session-Id"

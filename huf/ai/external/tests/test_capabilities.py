@@ -5,7 +5,7 @@ import re
 
 import pytest
 
-from huf.ai.external.capabilities import (
+from huf.ai.external.core.capabilities import (
 	CAPABILITIES,
 	HUB_CAPABILITIES,
 	HUB_TIERS,

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from huf.ai.external import states as s
+from huf.ai.external.core import states as s
 
 EXPECTED_EDGES = {
 	(s.ACTIVE, s.WAITING_INPUT),

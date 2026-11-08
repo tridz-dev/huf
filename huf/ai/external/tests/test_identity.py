@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from huf.ai.external.identity import IDENTITY_KEYS, pin_external_identity
+from huf.ai.external.core.identity import IDENTITY_KEYS, pin_external_identity
 
 
 def _pin(args, **overrides):

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from huf.ai.external.policy import (
+from huf.ai.external.core.policy import (
 	ALLOW,
 	COMMUNICATE_TOOL_TYPES,
 	DENY,

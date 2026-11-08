@@ -14,18 +14,13 @@ from collections.abc import Callable
 import frappe
 
 from huf.ai.external import mailbox, sessions
-from huf.ai.external.capabilities import (
+from huf.ai.external.core.capabilities import (
 	HUB_TIERS,
 	hub_tier_required,
 	is_hub_capability,
 	list_for_mcp,
 )
-from huf.ai.external.invoke import (
-	BLOCKED_TOOL_TYPES,
-	DESKTOP_FUNCTION_PATH_PREFIX,
-	external_invoke,
-)
-from huf.ai.external.jsonrpc import (
+from huf.ai.external.core.jsonrpc import (
 	INVALID_PARAMS,
 	METHOD_NOT_FOUND,
 	JsonRpcError,
@@ -34,8 +29,13 @@ from huf.ai.external.jsonrpc import (
 	make_result,
 	parse_request,
 )
-from huf.ai.external.policy import classify_tool, decide
-from huf.ai.external.states import ACTIVE, COMPLETED, FAILED, WAITING_INPUT, can_transition
+from huf.ai.external.core.policy import classify_tool, decide
+from huf.ai.external.core.states import ACTIVE, COMPLETED, FAILED, WAITING_INPUT, can_transition
+from huf.ai.external.invoke import (
+	BLOCKED_TOOL_TYPES,
+	DESKTOP_FUNCTION_PATH_PREFIX,
+	external_invoke,
+)
 
 PROTOCOL_VERSION = "2025-03-26"
 SERVER_INFO = {"name": "huf", "version": "1"}

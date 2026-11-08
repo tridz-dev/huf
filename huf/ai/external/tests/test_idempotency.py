@@ -1,7 +1,7 @@
 # ruff: noqa: S101
 from __future__ import annotations
 
-from huf.ai.external.idempotency import args_hash, canonical_json, make_idempotency_key
+from huf.ai.external.core.idempotency import args_hash, canonical_json, make_idempotency_key
 
 
 def test_dict_key_order_does_not_change_key():

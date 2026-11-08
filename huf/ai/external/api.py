@@ -16,7 +16,7 @@ from frappe import _
 from frappe.utils import cint, get_url, now_datetime
 
 from huf.ai.external import approvals, mailbox, sessions
-from huf.ai.external.states import (
+from huf.ai.external.core.states import (
 	ACTIVE,
 	RUNTIME_OFFLINE,
 	WAITING_APPROVAL,
