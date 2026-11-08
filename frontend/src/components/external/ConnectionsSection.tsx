@@ -22,14 +22,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import type { ConnectableAgent, ExternalConnection } from '@/types/externalAgents.types';
+import type { ConnectableAgent, ExternalConnection } from '@/types/external/agents.types';
 import {
   createExternalConnection,
   listConnectableAgents,
   listExternalConnections,
   setAgentExecutionMode,
   updateExternalConnection,
-} from '@/services/externalAgentsApi';
+} from '@/services/external/agentsApi';
 
 type Connection = ExternalConnection;
 type RuntimeKind = Connection['runtime_kind'];

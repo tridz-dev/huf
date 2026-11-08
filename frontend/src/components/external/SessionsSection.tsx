@@ -16,8 +16,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
-import { cancelExternalSession, listExternalSessions } from '@/services/externalAgentsApi';
-import type { ExternalSession } from '@/types/externalAgents.types';
+import { cancelExternalSession, listExternalSessions } from '@/services/external/agentsApi';
+import type { ExternalSession } from '@/types/external/agents.types';
 import { formatTimeAgo } from '@/utils/time';
 import { SessionTranscriptDialog } from './SessionTranscriptDialog';
 

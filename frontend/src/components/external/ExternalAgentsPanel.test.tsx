@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/services/externalAgentsApi', () => ({
+vi.mock('@/services/external/agentsApi', () => ({
   listExternalConnections: vi.fn(() => Promise.resolve([])),
   listExternalSessions: vi.fn(() => Promise.resolve([])),
   listPendingExternalApprovals: vi.fn(() => Promise.resolve([])),

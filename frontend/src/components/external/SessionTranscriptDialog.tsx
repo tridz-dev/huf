@@ -11,8 +11,8 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
-import { getExternalSessionEvents, postExternalUserMessage } from '@/services/externalAgentsApi';
-import type { ExternalEvent, ExternalSession } from '@/types/externalAgents.types';
+import { getExternalSessionEvents, postExternalUserMessage } from '@/services/external/agentsApi';
+import type { ExternalEvent, ExternalSession } from '@/types/external/agents.types';
 
 const TRANSCRIPT_POLL_MS = 5_000;
 const TERMINAL_STATES: ReadonlyArray<ExternalSession['state']> = ['Completed', 'Failed', 'Cancelled'];

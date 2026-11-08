@@ -15,8 +15,8 @@ import {
 import {
   decideExternalApproval,
   listPendingExternalApprovals,
-} from '@/services/externalAgentsApi';
-import type { ExternalApproval } from '@/types/externalAgents.types';
+} from '@/services/external/agentsApi';
+import type { ExternalApproval } from '@/types/external/agents.types';
 import { formatAbsoluteTime, parseServerDate } from '@/lib/serverTime';
 
 const POLL_INTERVAL_MS = 10000;

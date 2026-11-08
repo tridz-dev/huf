@@ -15,7 +15,7 @@ import type {
   ExternalConnection,
   ExternalEvent,
   ExternalSession,
-} from '@/types/externalAgents.types';
+} from '@/types/external/agents.types';
 
 const BASE = 'huf.ai.external.api.';
 
