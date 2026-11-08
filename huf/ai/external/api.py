@@ -13,7 +13,7 @@ import json
 
 import frappe
 from frappe import _
-from frappe.utils import cint, now_datetime
+from frappe.utils import cint, get_url, now_datetime
 
 from huf.ai.external import approvals, mailbox, sessions
 from huf.ai.external.states import (
@@ -36,6 +36,11 @@ POLICY_VALUES = ("Allow", "Requires Approval", "Deny")
 NATIVE_EXECUTION_MODE = "Native"
 EXECUTION_MODES = (NATIVE_EXECUTION_MODE, "Connected External", "Managed External")
 OPEN_SESSION_STATES = (ACTIVE, WAITING_INPUT, WAITING_APPROVAL, RUNTIME_OFFLINE)
+HUB_TIERS = ("Off", "Build", "Admin")
+DEFAULT_HUB_TIER = "Off"
+AGENT_TOOL_CHILD_DOCTYPE = "Agent Tool"
+TOOL_DOCTYPE = "Agent Tool Function"
+MCP_GATEWAY_PATH = "/api/method/huf.ai.external.gateway.mcp"
 
 MAX_TEXT_LENGTH = 8000
 MAX_LIST_LIMIT = 100
@@ -50,6 +55,7 @@ CONNECTION_FIELDS = [
 	"read_policy",
 	"write_policy",
 	"communicate_policy",
+	"hub_tier",
 	"last_seen",
 ]
 SESSION_FIELDS = [
@@ -153,6 +159,7 @@ def create_connection(
 	read_policy: str = "Allow",
 	write_policy: str = "Requires Approval",
 	communicate_policy: str = "Requires Approval",
+	hub_tier: str = DEFAULT_HUB_TIER,
 ) -> str:
 	_require_user()
 	if not agent:
@@ -162,6 +169,7 @@ def create_connection(
 	_validate_choice("read policy", read_policy, POLICY_VALUES)
 	_validate_choice("write policy", write_policy, POLICY_VALUES)
 	_validate_choice("communicate policy", communicate_policy, POLICY_VALUES)
+	_validate_choice("hub tier", hub_tier, HUB_TIERS)
 
 	# The connection is always owned by the signed-in user. validate() enforces agent access.
 	doc = frappe.get_doc(
@@ -175,6 +183,7 @@ def create_connection(
 			"read_policy": read_policy,
 			"write_policy": write_policy,
 			"communicate_policy": communicate_policy,
+			"hub_tier": hub_tier,
 		}
 	)
 	doc.insert(ignore_permissions=True)
@@ -188,6 +197,7 @@ def update_connection(
 	read_policy: str | None = None,
 	write_policy: str | None = None,
 	communicate_policy: str | None = None,
+	hub_tier: str | None = None,
 ) -> dict:
 	_require_user()
 	_owned_connection(name)
@@ -203,6 +213,9 @@ def update_connection(
 		if value is not None:
 			_validate_choice(label, value, POLICY_VALUES)
 			changes[field] = value
+	if hub_tier is not None:
+		_validate_choice("hub tier", hub_tier, HUB_TIERS)
+		changes["hub_tier"] = hub_tier
 
 	doc = frappe.get_doc(CONNECTION_DOCTYPE, name)
 	doc.update(changes)
@@ -363,3 +376,85 @@ def set_agent_execution_mode(agent: str, execution_mode: str) -> dict:
 
 	frappe.db.set_value(AGENT_DOCTYPE, agent, "execution_mode", execution_mode)
 	return {"agent": agent, "execution_mode": execution_mode}
+
+
+def _count_runnable_tools(agent: str, blocked_types) -> int:
+	"""Count the agent's attached tools whose type the gateway does not always refuse."""
+	tool_names = frappe.get_all(
+		AGENT_TOOL_CHILD_DOCTYPE,
+		filters={"parent": agent, "parenttype": AGENT_DOCTYPE, "parentfield": "agent_tool"},
+		pluck="tool",
+	)
+	tool_names = [name for name in tool_names if name]
+	if not tool_names:
+		return 0
+	tool_types = frappe.get_all(TOOL_DOCTYPE, filters={"name": ["in", tool_names]}, pluck="types")
+	return sum(1 for tool_type in tool_types if tool_type not in blocked_types)
+
+
+@frappe.whitelist(methods=["POST"])
+def test_connection(connection: str) -> dict:
+	"""Check whether a connection is ready to use, without opening a session or running a tool."""
+	from huf.ai.agent.access import check_agent_access
+	from huf.ai.external.invoke import BLOCKED_TOOL_TYPES
+
+	_require_user()
+	_owned_connection(connection)
+	row = frappe.db.get_value(
+		CONNECTION_DOCTYPE,
+		connection,
+		["agent", "enabled", "read_policy", "write_policy", "communicate_policy", "hub_tier"],
+		as_dict=True,
+	)
+
+	problems: list[str] = []
+	if not row.enabled:
+		problems.append(_("This connection is turned off."))
+
+	tool_count = 0
+	if not row.agent:
+		problems.append(_("No agent is attached to this connection."))
+	else:
+		agent = frappe.db.get_value(AGENT_DOCTYPE, row.agent, ["disabled", "execution_mode"], as_dict=True)
+		if not agent:
+			problems.append(_("The attached agent no longer exists."))
+		else:
+			if (agent.execution_mode or NATIVE_EXECUTION_MODE) == NATIVE_EXECUTION_MODE:
+				problems.append(_("The agent is not set to run externally."))
+			if agent.disabled:
+				problems.append(_("The agent is disabled."))
+			tool_count = _count_runnable_tools(row.agent, BLOCKED_TOOL_TYPES)
+			if not tool_count:
+				problems.append(_("No usable tools are attached to the agent."))
+			if not check_agent_access(frappe.get_doc(AGENT_DOCTYPE, row.agent), frappe.session.user):
+				problems.append(_("You do not have permission to run this agent."))
+
+	return {
+		"ok": not problems,
+		"agent": row.agent or None,
+		"tools": tool_count,
+		"enabled": bool(row.enabled),
+		"policy": {
+			"read": row.read_policy,
+			"write": row.write_policy,
+			"communicate": row.communicate_policy,
+		},
+		"hub_tier": row.hub_tier or DEFAULT_HUB_TIER,
+		"problems": problems,
+	}
+
+
+@frappe.whitelist()
+def get_connection_snippets(connection: str) -> dict:
+	"""Connection details for copy-paste MCP client setup. Contains placeholders, never a secret."""
+	from huf.ai.external.gateway import CONNECTION_HEADER
+
+	_require_user()
+	_owned_connection(connection)
+	return {
+		"url": get_url(MCP_GATEWAY_PATH),
+		"header_name": "Authorization",
+		"header_value_template": "token <api_key>:<api_secret>",
+		"connection_header": CONNECTION_HEADER,
+		"connection": connection,
+	}

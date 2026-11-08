@@ -282,7 +282,7 @@ HUB_CAPABILITIES: list[dict[str, Any]] = [
 			"properties": {
 				"action": {
 					"type": "string",
-					"enum": ["draft", "update", "install"],
+					"enum": ["create", "update", "install"],
 					"description": "Whether to draft, update or install the app.",
 				},
 				"app_id": {
@@ -332,9 +332,8 @@ def list_for_mcp(tier: str = "Off") -> list[dict[str, Any]]:
 	capabilities, and "Admin" adds every hub capability.
 	"""
 	if tier not in _TIER_RANK:
-		raise ValueError(f"Unknown hub tier: {tier!r}")
+		msg = f"Unknown hub tier: {tier!r}"
+		raise ValueError(msg)
 	rank = _TIER_RANK[tier]
-	visible = [
-		cap for cap in HUB_CAPABILITIES if _TIER_RANK[_HUB_TIER_REQUIRED[cap["name"]]] <= rank
-	]
+	visible = [cap for cap in HUB_CAPABILITIES if _TIER_RANK[_HUB_TIER_REQUIRED[cap["name"]]] <= rank]
 	return copy.deepcopy([*CAPABILITIES, *visible])
