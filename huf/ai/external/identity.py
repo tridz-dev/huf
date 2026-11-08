@@ -47,7 +47,9 @@ def pin_external_identity(
 	The input mapping is never mutated.
 	"""
 	pinned: dict[str, Any] = {
-		key: value for key, value in (args or {}).items() if _normalize_key(key) not in _NORMALIZED_IDENTITY_KEYS
+		key: value
+		for key, value in (args or {}).items()
+		if _normalize_key(key) not in _NORMALIZED_IDENTITY_KEYS
 	}
 
 	trusted = {

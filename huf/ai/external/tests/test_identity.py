@@ -62,7 +62,16 @@ def test_every_identity_key_is_removed_when_no_trusted_value_is_given():
 
 @pytest.mark.parametrize(
 	"key",
-	["User", "Agent_Run_Id", "agent-name", "SESSION-ID", "Conversation_Id", "Ignore-Permissions", "_DX_PIN", "dxpin"],
+	[
+		"User",
+		"Agent_Run_Id",
+		"agent-name",
+		"SESSION-ID",
+		"Conversation_Id",
+		"Ignore-Permissions",
+		"_DX_PIN",
+		"dxpin",
+	],
 )
 def test_identity_keys_match_case_and_separator_variants(key):
 	pinned = _pin({key: "model-value", "query": "keep me"})
