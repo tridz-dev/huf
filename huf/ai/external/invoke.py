@@ -5,6 +5,9 @@ from the model. The acting user comes from the authenticated session, the agent 
 list come from the session row and the Agent doctype, and the access policy comes from the
 External Agent Connection. Model-supplied args are passed through only after identity keys are
 pinned by ``pin_external_identity``.
+
+Standard-alias tools (create_document etc.) are intentionally not usable by external agents;
+only tools listed on the agent are allowed.
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ from huf.ai.tools.invocation import (
 )
 
 CONNECTION_DOCTYPE = "External Agent Connection"
+SESSION_DOCTYPE = "External Agent Session"
 EVENT_DOCTYPE = "External Agent Event"
 AGENT_TOOL_CHILD_DOCTYPE = "Agent Tool"
 
@@ -136,6 +140,10 @@ def external_invoke(
 		return {"status": "denied", "error": POLICY_ERROR, "action_class": action_class}
 
 	key = make_idempotency_key(session_doc.name, tool_name, args, client_call_id)
+	# Lock the session row and keep the transaction open through policy, approval, execution and
+	# post_event. A concurrent call with the same key blocks here, then hits the stored replay
+	# instead of running the tool a second time.
+	frappe.db.get_value(SESSION_DOCTYPE, session_doc.name, "state", for_update=True)
 	replay = _stored_replay(session_doc.name, key)
 	if replay is not None:
 		return replay
@@ -147,6 +155,7 @@ def external_invoke(
 			"approval": approval["approval"],
 			"action_class": action_class,
 		}
+	approval_consumed = decision == "approve"
 
 	call_id = key[:40]
 	try:

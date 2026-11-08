@@ -47,7 +47,10 @@ def request_approval(session: str, tool_name: str, action_class: str, args: dict
 
 	Returns ``{"approval": <name>, "status": "Pending"}``. If a Pending, unexpired approval already
 	exists for the same session, tool and args hash, that approval is returned instead of a new one.
+	The session row is locked first so concurrent first calls cannot both create an approval.
 	"""
+	frappe.db.get_value(SESSION_DOCTYPE, session, "state", for_update=True)
+
 	session_user = _session_user(session)
 	if not session_user:
 		frappe.throw(_("Unknown external agent session"), frappe.ValidationError)
@@ -115,7 +118,7 @@ def decide_approval(approval_name: str, approve: bool, comment: str | None = Non
 	session = row.session
 	session_user = _session_user(session)
 	if frappe.session.user != session_user and "System Manager" not in frappe.get_roles():
-		frappe.throw(_("You are not allowed to decide this approval"), exc=PermissionError)
+		frappe.throw(_("You are not allowed to decide this approval"), exc=frappe.PermissionError)
 
 	if row.status != STATUS_PENDING:
 		frappe.throw(_("Approval has already been decided"), frappe.ValidationError)
